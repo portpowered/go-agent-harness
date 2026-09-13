@@ -75,6 +75,22 @@
     },
     {
       "classification": "accepted-main integration",
+      "path": "agent-cli/internal/wire/rtc_runtime.go"
+    },
+    {
+      "classification": "accepted-main integration",
+      "path": "coverage-manifest/go-agent-runtime/services/rtctransport/internal/service/package.json"
+    },
+    {
+      "classification": "accepted-main integration",
+      "path": "coverage-manifest/go-agent-runtime/services/rtctransport/package.json"
+    },
+    {
+      "classification": "accepted-main integration",
+      "path": "coverage-manifest/go-agent-runtime/services/rtctransport/wire/package.json"
+    },
+    {
+      "classification": "accepted-main integration",
       "path": "coverage-manifest/go-agent-runtime/services/sessiondiagnostics/internal/service/package.json"
     },
     {
@@ -3067,22 +3083,6 @@
     },
     {
       "classification": "accepted-main integration",
-      "path": "docs/architecture/baselines/github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc/track_in.go.json"
-    },
-    {
-      "classification": "accepted-main integration",
-      "path": "docs/architecture/baselines/github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc/track_in_test.go.json"
-    },
-    {
-      "classification": "accepted-main integration",
-      "path": "docs/architecture/baselines/github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc/track_out.go.json"
-    },
-    {
-      "classification": "accepted-main integration",
-      "path": "docs/architecture/baselines/github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc/track_out_test.go.json"
-    },
-    {
-      "classification": "accepted-main integration",
       "path": "docs/architecture/baselines/github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/transporttest/conformance.go.json"
     },
     {
@@ -3595,6 +3595,30 @@
     },
     {
       "classification": "accepted-main integration",
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c116-centralize-rtc-track-transport/evidence.md"
+    },
+    {
+      "classification": "accepted-main integration",
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c116-centralize-rtc-track-transport/external-consumer/consumer_test.go"
+    },
+    {
+      "classification": "accepted-main integration",
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c116-centralize-rtc-track-transport/external-consumer/go.mod"
+    },
+    {
+      "classification": "accepted-main integration",
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c116-centralize-rtc-track-transport/external-consumer/go.sum"
+    },
+    {
+      "classification": "accepted-main integration",
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c116-centralize-rtc-track-transport/run.py"
+    },
+    {
+      "classification": "accepted-main integration",
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c116-centralize-rtc-track-transport/verify.py"
+    },
+    {
+      "classification": "accepted-main integration",
       "path": "docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/census.md"
     },
     {
@@ -3742,12 +3766,56 @@
       "path": "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/verify.py"
     },
     {
+      "classification": "accepted-main integration or preserved predecessor adoption",
+      "path": "go-agent-runtime/services/rooms/internal/lifecycle/participant_tracker.go"
+    },
+    {
+      "classification": "accepted-main integration or preserved predecessor adoption",
+      "path": "go-agent-runtime/services/rooms/internal/lifecycle/participant_tracker_test.go"
+    },
+    {
       "classification": "deterministic owned Wire/architecture reconciliation",
       "path": "go-agent-runtime/services/rooms/wire/participant_lifecycle.go"
     },
     {
       "classification": "deterministic owned Wire/architecture reconciliation",
       "path": "go-agent-runtime/services/rooms/wire/wire_gen.go"
+    },
+    {
+      "classification": "accepted-main integration",
+      "path": "go-agent-runtime/services/rtctransport/contract.go"
+    },
+    {
+      "classification": "accepted-main integration",
+      "path": "go-agent-runtime/services/rtctransport/internal/service/inbound.go"
+    },
+    {
+      "classification": "accepted-main integration",
+      "path": "go-agent-runtime/services/rtctransport/internal/service/outbound.go"
+    },
+    {
+      "classification": "accepted-main integration",
+      "path": "go-agent-runtime/services/rtctransport/internal/service/playout.go"
+    },
+    {
+      "classification": "accepted-main integration",
+      "path": "go-agent-runtime/services/rtctransport/internal/service/service.go"
+    },
+    {
+      "classification": "accepted-main integration",
+      "path": "go-agent-runtime/services/rtctransport/wire/ownership_test.go"
+    },
+    {
+      "classification": "accepted-main integration",
+      "path": "go-agent-runtime/services/rtctransport/wire/providers.go"
+    },
+    {
+      "classification": "accepted-main integration",
+      "path": "go-agent-runtime/services/rtctransport/wire/wire_gen.go"
+    },
+    {
+      "classification": "accepted-main integration",
+      "path": "go-agent-runtime/services/rtctransport/wire/wire_test.go"
     },
     {
       "classification": "accepted-main integration",
@@ -3820,6 +3888,22 @@
     {
       "classification": "accepted-main integration",
       "path": "go-agent-runtime/services/sessionduration/wire/wire_test.go"
+    },
+    {
+      "classification": "accepted-main integration",
+      "path": "go-llm-gateway/pkg/transport/rtc/track_in.go"
+    },
+    {
+      "classification": "accepted-main integration",
+      "path": "go-llm-gateway/pkg/transport/rtc/track_in_test.go"
+    },
+    {
+      "classification": "accepted-main integration",
+      "path": "go-llm-gateway/pkg/transport/rtc/track_out.go"
+    },
+    {
+      "classification": "accepted-main integration",
+      "path": "go-llm-gateway/pkg/transport/rtc/track_out_test.go"
     },
     {
       "classification": "accepted-main integration or preserved predecessor adoption",
@@ -3928,7 +4012,7 @@
     "go-agent-runtime/services/rooms/wire/participant_lifecycle.go"
   ],
   "manifest_baseline": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
-  "origin_main": "09c70f51243caeaf1184c4806b99bbf7749e3044",
+  "origin_main": "071b0abfd67501db61e3c1929971c6dd6e77eb62",
   "planning_main": "09c70f51243caeaf1184c4806b99bbf7749e3044",
   "preserved_candidate": "3e9aee5920e78126480d4fc438f688dc39216c1d",
   "project": "audio-runtime",
