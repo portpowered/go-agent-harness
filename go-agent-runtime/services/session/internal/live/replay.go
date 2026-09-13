@@ -13,6 +13,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
+type mediaRequirements struct{ inbound, outbound bool }
+
 // runCaptureTurns admits caller-owned finite audio into one persistent live
 // provider session. It shares the replay boundary helpers below because both
 // paths must serialize media and turn controls against provider responses.

@@ -1,0 +1,9 @@
+schema=audio-runtime.c127.pre-repair-causal-failure.v1
+source_revision=09c70f51243caeaf1184c4806b99bbf7749e3044
+source_state=unmodified current main
+temporary_harness=go-agent-runtime/services/session/internal/live/lifecycle_test.go
+command=rtk proxy go test ./go-agent-runtime/services/session/internal/live -run '^TestCapturingInferencerClaimsProviderMediaBeforeTerminalDrainReceive$' -count=1 -timeout=30s
+returncode=1
+timed_out=false
+failure=lifecycle_test.go:46: read provider media admitted during Receive: context deadline exceeded
+interpretation=provider media was not claimed before terminal-drain Receive; this temporary harness was removed after the failing-before proof
