@@ -7,7 +7,8 @@ This checkpoint belongs to the admitted `audio-runtime` project and task
 
 - Worktree: `/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c116-centralize-rtc-track-transport`
 - Branch: `codex/audio-runtime-c116-centralize-rtc-track-transport`
-- Candidate implementation checkpoint: `59c75f6d5b7bbeff9ff21b2048c5e32e10ea196e` (PR #500, https://github.com/portpowered/go-agent-harness/pull/500)
+- Tested implementation checkpoint: `59c75f6d5b7bbeff9ff21b2048c5e32e10ea196e` (PR #500, https://github.com/portpowered/go-agent-harness/pull/500)
+- Current PR #500 head before this evidence refresh: `26eb5977f986c0f54a5010e292f39c17c0071d8f`. The exact diff from the tested implementation checkpoint to that head is only this evidence file, so executable source, generated outputs, and gate inputs are unchanged. The checkpoint commit produced by this refresh is evidence-only for the same reason.
 - Accepted main: `3963bc3566da24f8214634c17a9d0f79a6724171`
 - Review-time `origin/main`: `b7d25ca6f0e9b94c62b193059160dfbf446ef1d6`
 - Startup revision: `8bdafc7f947a3a2c9856220abdc539437035bd21`
@@ -96,6 +97,11 @@ The following completed successfully:
   zero findings after the race-gate repair.
 - The strict gateway retirement count is `4 + 7 = 11`, below the accepted-main
   `453 + 418 = 871` threshold.
+- The exact rejected integration subtest was reproduced locally with
+  `go test ./test/integration -run
+  '^TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst$'
+  -count=1 -timeout=90s` and again with `-count=3 -timeout=180s`; both passed
+  (the repeated run reported six passing test executions).
 
 The prior static red is resolved on this checkpoint: the exact rtctransport
 Wire output is now policy-registered, the four retired gateway baseline
@@ -129,14 +135,47 @@ The C64/provider-audio high-rate tail loss and provider-burst deadline remain
 documented owner handoffs; this task did not edit C64/provider-media/device-
 pump paths and no duplicate full integration run was performed locally.
 
+## Current-head Script-CI reconciliation
+
+Script-CI run `34736407143`, job `103668520476`, evaluated PR #500 at head
+`26eb5977f986c0f54a5010e292f39c17c0071d8f` and rejected the required
+`CI (integration)` check
+([job log](https://github.com/portpowered/go-agent-harness/actions/runs/34736407143/job/103668520476)).
+The complete job log was read and saved while diagnosing the rejection. The
+only failing test was
+`TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst`.
+Its current failure evidence was `rendered_pcm=462240`, `nonzero_pcm=150871`,
+`expected_pcm=174391`, `final_marker=false`, with zero playback
+drop/overflow/discard counters; the remote playback wait reached the scenario
+deadline. The other integration regression suites in that job passed.
+
+The failing test and its device-runtime implementation are unchanged between
+`origin/main` and this branch. The C116 diff contains no C64 provider-media,
+device-pump, or device-server runtime paths; the changed source is limited to
+the admitted transport service, its Wire output, the narrow RTC adapter,
+gateway RTC retirement, and the transferred probe/compatibility callers. This
+proves the current red check is an excluded provider-audio/device-server
+residual, not an actionable C116 transport repair. C64's prior task is already
+terminal on `origin/main`, so the primary must route this residual to an active
+owner before C116 can make a valid changed-head resubmission.
+
+The correct handoff is therefore `CONTINUE`, not a claim of CI success: retain
+this task and PR #500, do not mutate excluded paths, and do not resubmit the
+unchanged candidate. After the primary routes and integrates the provider-
+audio repair, fetch the new `origin/main`, verify the required ancestry and
+branch identity, rerun the exact C116 focused and accumulated regressions, push
+the same task's changed head, and submit it to Script CI without polling.
+
 The live board still shows C79's separate PR and the C116 task remains the sole
 owner of this branch. C96 and C107 are terminal, but their excluded
 device/probe paths remain outside this task's manifest and were not mutated.
 
 ## Next action
 
-Push the merged and repaired candidate, update PR #500 with the exact source
-and gate evidence, and submit this same changed head to Script CI without
-polling it here. Fresh independent review, guarded merge, and the immutable
-engineering vertical probe remain open. Any exact-head CI rejection returns
-to this task for repair and resubmission.
+Primary action required: route the exact `test46/provider_burst` residual to an
+active provider-audio owner. Once that changed repair is integrated, this task
+must fetch and verify the new baseline, rerun its focused causal gates and
+accumulated regressions, then push the same PR #500 and submit the changed head
+to Script CI without polling. Fresh independent review, guarded merge, and the
+immutable engineering vertical probe remain open. Any exact-head rejection
+that touches C116 returns to this task for repair and resubmission.
