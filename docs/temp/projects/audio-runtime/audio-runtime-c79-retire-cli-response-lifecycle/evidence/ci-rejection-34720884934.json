@@ -1,0 +1,29 @@
+{
+  "schema": "audio-runtime-c79-ci-rejection/v1",
+  "run": "34720884934",
+  "head": "34816f5b0bce04cdff768322ba8bc0269ca63d32",
+  "job": "103626389155",
+  "check": "CI (integration)",
+  "status": "failure",
+  "step": "Run deterministic integration tests",
+  "command": "make test-integration",
+  "log": [
+    "agent-cli integration passed: ok github.com/portpowered/go-agent-harness/agent-cli/test/integration 299.925s",
+    "go-agent-loop functional suite failed 40 selectors through TestConcurrentSessionsCompleteScriptedTurns",
+    "session_concurrent_capacity_test.go:17: concurrent run did not finish within 2m0s (stuck sessions likely)",
+    "functional suite summary: discovered=95 executed=95 passed=55 failed=40 quarantined=0",
+    "audio-device-server integration and regression suites passed"
+  ],
+  "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+  "causal_comparison": {
+    "candidate_command": "go test ./go-agent-loop/test/functional/sessions -run '^TestConcurrentSessionsCompleteScriptedTurns$' -count=1 -timeout=130s",
+    "candidate_result": "pass in 2.216s",
+    "origin_main_command": "go test ./go-agent-loop/test/functional/sessions -run '^TestConcurrentSessionsCompleteScriptedTurns$' -count=1 -timeout=130s",
+    "origin_main_result": "pass in 2.218s",
+    "go_agent_loop_diff": "none in origin/main...candidate"
+  },
+  "classification": "not_reproduced_locally_out_of_scope_mainline_or_suite_flake",
+  "ownership": "not C79-owned; no go-agent-loop source repair is authorized or demonstrated by this failure",
+  "next_action": "submit the changed C79 candidate to the script CI gate; if this exact integration failure repeats, inspect the new hosted log and retain the same task for the scoped diagnosis",
+  "acceptance": "executor evidence only; no CI-green, review, merge, vertical-probe, or project-acceptance claim"
+}
