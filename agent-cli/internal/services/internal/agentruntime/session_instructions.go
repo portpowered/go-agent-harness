@@ -23,10 +23,7 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 }
 func runWithResolvedInstructions(ctx context.Context, opts SessionRunOptions, systemPrompt string, run func(SessionRunOptions) error) (runErr error) {
 	opts, coordinator := prepareSessionCapabilityCoordinator(opts)
-	defer func() {
-		closeSessionCapabilityIfNeeded(coordinator, &runErr)
-	}()
-
+	defer func() { closeSessionCapabilityIfNeeded(coordinator, &runErr) }()
 	if opts.ReplayPath != "" && opts.SessionInferencer == nil {
 		return run(opts)
 	}
@@ -35,9 +32,6 @@ func runWithResolvedInstructions(ctx context.Context, opts SessionRunOptions, sy
 		return err
 	}
 	return run(withResolvedSessionInstructions(opts, instructions))
-}
-func resolveSessionInstructions(opts SessionRunOptions, systemPrompt string) (string, error) {
-	return resolveInstructions(context.Background(), opts, systemPrompt)
 }
 func resolveInstructions(ctx context.Context, opts SessionRunOptions, systemPrompt string) (string, error) {
 	request := newSessionInstructionRequest(opts, systemPrompt)

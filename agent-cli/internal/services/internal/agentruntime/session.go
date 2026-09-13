@@ -33,6 +33,10 @@ func RunSession(ctx context.Context, out io.Writer, opts SessionRunOptions) (run
 	return plan.run(ctx, out)
 }
 
+func resolveSessionInstructions(opts SessionRunOptions, systemPrompt string) (string, error) {
+	return resolveInstructions(context.Background(), opts, systemPrompt)
+}
+
 // sessionInstructionsInferencer decorates caller-owned session seams without
 // changing their provider construction. The provider-aware runtime factory
 // handles the live provider path; injected sessions receive a generic session
