@@ -37,12 +37,12 @@ publication/retention paths are unchanged.
 - Pinned `make lint LINT_BASE=origin/main` exited `0` with `0 issues` across all `15` modules. Pinned `make staticcheck` using Staticcheck `2026.1` exited `0`.
 - `rtk proxy env CGO_ENABLED=0 go test ./agent-cli/test/integration -tags=nomicrophone -run '^TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle$' -count=1 -timeout=180s` exited `0` in `5.500s`.
 
-The candidate currently changes only the two owned service source/test files
-plus this owned evidence directory. No script-CI result, independent review,
-guarded merge, vertical probe or project acceptance is claimed. The next
-action is to commit the exact candidate and evidence, push the same branch,
-open/update its PR, and return `ACCEPTED` to the script-owned CI gate without
-polling.
+The candidate changes only the two owned service source/test files plus this
+owned evidence directory. No script-CI result, independent review, guarded
+merge, vertical probe or project acceptance is claimed. The code and evidence
+are checkpointed through `13c4a43a3ed94a30b9cf1bd776c86eeef5922297` and
+pushed to the existing PR; the next action is the executor `ACCEPTED` handoff
+to the script-owned CI gate without polling.
 
 ## Current-head static repair and handoff provenance
 
@@ -54,13 +54,15 @@ polling.
   Format, Wire, vet, lint, staticcheck, unit, race and the completed platform
   lanes were successful; the remaining CI lanes were still owned by the
   script gate at inspection.
-- Code checkpoint `7b75776b7b2f5a861c0a5dd93e2ad7882c2448ce` refactors only the
+- Code checkpoint `7b75776b7b2f5a861c0a5dd93e2ad7882c2448ce` refactors the
   owned `service_test.go` regression into three bounded scenario functions and
-  shared test helpers. It preserves the 100 simultaneous-ready trials, the
-  pre-canceled and cancellation-at-completion barriers, exact close-cause and
-  staged-path checks, and the one-call assertion. `service_test.go` is now
-  exactly `600` lines, and `make architecture-size-check` passes at `202`
-  packages, `1,940` files and `28,778` functions.
+  shared test helpers, with only non-semantic blank-line consolidation needed
+  to fit the existing file budget. It preserves the 100 simultaneous-ready
+  trials, the pre-canceled and cancellation-at-completion barriers, exact
+  close-cause and staged-path checks, and the one-call assertion.
+  `service_test.go` is now exactly `600` lines, and
+  `make architecture-size-check` passes at `202` packages, `1,940` files and
+  `28,778` functions.
 - On source checkpoint `7b75776b`, focused normal/race cancellation proof
   passed (`400` and `200` tests), the `nomicrophone` 100-trial coverpkg proof
   passed with `16.8%` sessiontrace-set coverage, full sessiontrace normal/race
