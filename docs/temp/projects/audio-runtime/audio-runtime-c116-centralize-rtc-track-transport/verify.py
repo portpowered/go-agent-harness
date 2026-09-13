@@ -34,6 +34,10 @@ OWNED_PREFIXES = (
     "go-agent-runtime/services/devices/wire/providers.go",
     "go-agent-runtime/services/devices/wire/wire_gen.go",
     "go-agent-runtime/services/rtctransport/",
+    "go-llm-gateway/pkg/transport/rtc/track_in.go",
+    "go-llm-gateway/pkg/transport/rtc/track_in_test.go",
+    "go-llm-gateway/pkg/transport/rtc/track_out.go",
+    "go-llm-gateway/pkg/transport/rtc/track_out_test.go",
 )
 
 
