@@ -63,7 +63,7 @@
     },
     "ancestry": {
       "branch": "codex/audio-runtime-c110-retire-cli-session-instruction-resolution",
-      "head": "ebca77c8ec21cbe4e412945f0114d0006627298e",
+      "head": "95aa12c801aed0a094d1dfa9078a2e819658b356",
       "origin_main": "915ed982d23f2e549e529ff43c4f370b4b51e394",
       "required_ancestors": {
         "accepted_main": {
@@ -227,7 +227,7 @@
     },
     "source_hashes": {
       "agent-cli/internal/services/internal/agentruntime/session_instructions.go": "aa3115b405a1c66ef977a85f43f1be22e348d3fd54c9e95114098febd0bb77fa",
-      "agent-cli/internal/services/internal/agentruntime/session_instructions_test.go": "a8b5106d667d1c7dea81f6b0aeca99b3a1397f64ba2cdd42eedfda934da9df0c",
+      "agent-cli/internal/services/internal/agentruntime/session_instructions_test.go": "40561a043d86a26f05c7343ad01f9521a72140816b78852d991ef78689f6bcf2",
       "agent-cli/internal/transport/cli/internal/livehost/request.go": "fe94c3c1116fa3ee989b37dee7436175eac4fc7b2661c8ba13248c0ce70b6e1e",
       "agent-cli/internal/transport/cli/internal/livehost/request_test.go": "44aa76867265ffc23ebf9b83bf5b3dc4f91beca4ecd4bccbed3b9596d657b240",
       "agent-cli/internal/transport/cli/session_observability.go": "ad98b191c8fab1462ea5f6b4849518ce360636ebc1c7844be0b10550b5cb1c74",

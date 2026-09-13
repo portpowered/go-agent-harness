@@ -40,16 +40,19 @@ claim CI, review, merge, or project-wide acceptance.
 ## Current implementation handoff
 
 The exact current executable-input checkpoint is
-`0f5aff70b04315a5daf4087e9f53c96f127e09dd`, with
-`origin/main=bd6a1289218d1bef1a3af36e64e9d4496062416f`. The bounded `run.py`
+`95aa12c801aed0a094d1dfa9078a2e819658b356`, with
+`origin/main=915ed982d23f2e549e529ff43c4f370b4b51e394`. The bounded `run.py`
 replay was accepted in
-`runs/run-20260913T151801Z-9525`; its nomicrophone YUI artifact is
-`9a8a3d752ecf57ea4a830db80276210671db8873c29d395414d879c88617c66b`, and
+`runs/run-20260913T162432Z-33439`; its nomicrophone YUI artifact is
+`b8f12ab21d7a8a14ebe200a7c0ea2e96e19ce21bf36700d354a892c2d9bc2a2f`, and
 the artifact, provenance, and run summary all bind to that tested source
-revision. The subsequent evidence ledger commits are docs-only descendants
-with unchanged executable-input hashes. The positive instruction/text-seed
-path, invalid pre-provider path, clean shutdown, and C16 audio/tool replay are
-recorded there.
+revision. The lifecycle repair prepares the capability coordinator before
+instruction resolution, so malformed resolution joins the cleanup error and
+closes the caller-owned capability exactly once; the focused regression also
+asserts that provider connection is never attempted. The subsequent evidence
+ledger commit is a docs-only descendant with unchanged executable-input
+hashes. The positive instruction/text-seed path, invalid pre-provider path,
+clean shutdown, and C16 audio/tool replay are recorded there.
 
 Focused session-instruction normal/race, CLI normal/race, the one-update
 provider regression, consumer, mutation, retirement, Wire,
