@@ -12,6 +12,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	runtimeDevicesWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
+	rtctransportwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rtctransport/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
@@ -95,7 +96,7 @@ func TestServiceRunVirtualProbeUsesInputAndOutputContracts(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 	var observedInstructions string
-	probeService := runtimeDevicesWire.NewProbeService(registry, nil)
+	probeService := runtimeDevicesWire.NewProbeService(registry, nil, rtctransportwire.NewService())
 	observation, err := probeService.Run(ctx, serviceDevices.DeviceProbeRequest{
 		Scenario:             serviceProbeScenario(),
 		CaptureTime:          700 * time.Millisecond,

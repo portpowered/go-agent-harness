@@ -16,7 +16,7 @@ func TestPublicWireTransportIsEmbeddableWithoutCLI(t *testing.T) {
 	source := &consumerSource{packet: &rtp.Packet{Header: rtp.Header{
 		Version: 2, SequenceNumber: 8, Timestamp: 99, SSRC: 7, PayloadType: 111,
 	}, Payload: []byte{1}}}
-	track, err := service.NewInboundTrack(source, decoder, rtctransport.DefaultInboundTrackConfig())
+	track, err := service.NewInboundTrack(source, decoder, rtctransport.InboundTrackConfig{})
 	if err != nil {
 		t.Fatalf("NewInboundTrack() error = %v", err)
 	}
@@ -25,7 +25,7 @@ func TestPublicWireTransportIsEmbeddableWithoutCLI(t *testing.T) {
 	if err != nil || len(frame.Samples) != 960 {
 		t.Fatalf("ReadFrame() = %d samples, %v; want one 20ms frame", len(frame.Samples), err)
 	}
-	if _, err := service.NewInboundTrack(nil, decoder, rtctransport.DefaultInboundTrackConfig()); !errors.Is(err, rtctransport.ErrNilInboundRTPTrack) {
+	if _, err := service.NewInboundTrack(nil, decoder, rtctransport.InboundTrackConfig{}); !errors.Is(err, rtctransport.ErrNilInboundRTPTrack) {
 		t.Fatalf("nil source error = %v", err)
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/file"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/media"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/probe"
+	rtctransport "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rtctransport"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer"
 	"github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
@@ -38,8 +39,8 @@ func NewFileService() devices2.Service {
 // NewProbeService assembles the reusable physical-device probe runner. The
 // application graph supplies provider session construction; this package owns
 // all negotiated media and device worker lifetimes.
-func NewProbeService(registry devices.DeviceRegistry, sessionFactory devices2.ProbeSessionFactory) devices2.ProbeService {
-	return deviceprobe.New(registry, sessionFactory)
+func NewProbeService(registry devices.DeviceRegistry, sessionFactory devices2.ProbeSessionFactory, transports ...rtctransport.Service) devices2.ProbeService {
+	return deviceprobe.New(registry, sessionFactory, transports...)
 }
 
 func newFactory(registry devices.DeviceRegistry) *composite.Factory {

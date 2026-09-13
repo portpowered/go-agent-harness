@@ -94,7 +94,7 @@ func normalizeOutboundFrame(config rtctransport.OutboundTrackConfig) (int, error
 	}
 	duration := config.FrameDuration
 	if duration == 0 {
-		duration = 20 * time.Millisecond
+		duration = rtctransport.DefaultInboundFrameDuration
 	}
 	if !validInboundDuration(duration) {
 		return 0, outboundConfigError("frame duration", duration, "want a legal Opus duration from 2.5 ms through 60 ms")
@@ -112,60 +112,95 @@ func (t *OutboundTrack) WriteFrame(ctx context.Context, frame sharedaudio.PCMFra
 		return err
 	}
 	defer finish()
-	if len(frame.Samples) == 0 {
-		return rtctransport.ErrOutboundEmptyFrame
+	if err := validateOutboundFrame(frame, t.sourceSamples); err != nil {
+		return err
 	}
-	if len(frame.Samples) != t.sourceSamples {
-		return wrapOutboundWithKind("frame", rtctransport.ErrOutboundFrameSize,
-			fmt.Errorf("got %d samples, want %d", len(frame.Samples), t.sourceSamples))
-	}
-
-	select {
-	case <-operationCtx.Done():
-		return wrapOutbound("write", contextCause(operationCtx))
-	case <-t.writeGate:
+	if err := t.acquireWriteGate(operationCtx); err != nil {
+		return err
 	}
 	defer func() { t.writeGate <- struct{}{} }()
 
 	if err := contextCauseIfDone(operationCtx); err != nil {
 		return wrapOutbound("write", err)
 	}
+	resampled, err := t.resampleFrame(operationCtx, frame)
+	if err != nil {
+		return err
+	}
+	packet, err := t.encodePacket(operationCtx, resampled)
+	if err != nil {
+		return err
+	}
+	if err := t.sendPacket(operationCtx, packet); err != nil {
+		return err
+	}
+	t.sequence++
+	t.timestamp += uint32(len(resampled))
+	t.mediaSamples += uint64(len(resampled))
+	return nil
+}
+
+func validateOutboundFrame(frame sharedaudio.PCMFrame, want int) error {
+	if len(frame.Samples) == 0 {
+		return rtctransport.ErrOutboundEmptyFrame
+	}
+	if len(frame.Samples) != want {
+		return wrapOutboundWithKind("frame", rtctransport.ErrOutboundFrameSize,
+			fmt.Errorf("got %d samples, want %d", len(frame.Samples), want))
+	}
+	return nil
+}
+
+func (t *OutboundTrack) acquireWriteGate(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return wrapOutbound("write", contextCause(ctx))
+	case <-t.writeGate:
+		return nil
+	}
+}
+
+func (t *OutboundTrack) resampleFrame(ctx context.Context, frame sharedaudio.PCMFrame) ([]int16, error) {
 	resampled, err := wavio.Resample(frame.Samples, t.sourceRate, rtctransport.OutboundRTPClockRate)
 	if err != nil {
-		return wrapOutbound("resample", err)
+		return nil, wrapOutbound("resample", err)
 	}
 	if len(resampled) == 0 || uint64(len(resampled)) > uint64(^uint32(0)) || uint64(len(resampled)) > ^uint64(0)-t.mediaSamples {
-		return rtctransport.ErrOutboundFrameTooLarge
+		return nil, rtctransport.ErrOutboundFrameTooLarge
 	}
-	if err := contextCauseIfDone(operationCtx); err != nil {
-		return wrapOutbound("resample", err)
+	if err := contextCauseIfDone(ctx); err != nil {
+		return nil, wrapOutbound("resample", err)
 	}
-	encoded, err := t.encoder.Encode(operationCtx, resampled)
+	return resampled, nil
+}
+
+func (t *OutboundTrack) encodePacket(ctx context.Context, samples []int16) (*rtp.Packet, error) {
+	encoded, err := t.encoder.Encode(ctx, samples)
 	if err != nil {
-		return wrapOutbound("encode", err)
+		return nil, wrapOutbound("encode", err)
 	}
 	if len(encoded) == 0 {
-		return wrapOutbound("encode", rtctransport.ErrOutboundEmptyPayload)
+		return nil, wrapOutbound("encode", rtctransport.ErrOutboundEmptyPayload)
 	}
-	packet := &rtp.Packet{
+	return &rtp.Packet{
 		Header: rtp.Header{
 			Version: 2, Marker: t.mediaSamples == 0, PayloadType: t.payloadType,
 			SequenceNumber: t.sequence, Timestamp: t.timestamp, SSRC: t.ssrc,
 		},
 		Payload: append([]byte(nil), encoded...),
-	}
-	if err := t.pacer.Wait(operationCtx, t.mediaSamples); err != nil {
+	}, nil
+}
+
+func (t *OutboundTrack) sendPacket(ctx context.Context, packet *rtp.Packet) error {
+	if err := t.pacer.Wait(ctx, t.mediaSamples); err != nil {
 		return wrapOutbound("pace", err)
 	}
-	if err := contextCauseIfDone(operationCtx); err != nil {
+	if err := contextCauseIfDone(ctx); err != nil {
 		return wrapOutbound("pace", err)
 	}
-	if err := t.writer.WriteRTP(operationCtx, packet); err != nil {
+	if err := t.writer.WriteRTP(ctx, packet); err != nil {
 		return wrapOutbound("write RTP", err)
 	}
-	t.sequence++
-	t.timestamp += uint32(len(resampled))
-	t.mediaSamples += uint64(len(resampled))
 	return nil
 }
 

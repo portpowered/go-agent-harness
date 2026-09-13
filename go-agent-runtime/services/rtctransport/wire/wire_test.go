@@ -1,4 +1,4 @@
-package rtctransport_test
+package wire
 
 import (
 	"context"
@@ -11,7 +11,6 @@ import (
 
 	"github.com/pion/rtp"
 	rtctransport "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rtctransport"
-	rtctransportwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rtctransport/wire"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
@@ -21,11 +20,15 @@ func TestInboundTransportOrdersPacketsAndUsesOnePLCFrameForOneGap(t *testing.T) 
 		testPacket(10, 1000, 1, 111, 1),
 		testPacket(12, 2920, 1, 111, 3),
 	}}
-	track, err := rtctransportwire.NewService().NewInboundTrack(source, decoder, rtctransport.DefaultInboundTrackConfig())
+	track, err := NewService().NewInboundTrack(source, decoder, rtctransport.InboundTrackConfig{})
 	if err != nil {
 		t.Fatalf("NewInboundTrack() error = %v", err)
 	}
-	defer track.Close()
+	defer func() {
+		if closeErr := track.Close(); closeErr != nil {
+			t.Errorf("Close() error = %v", closeErr)
+		}
+	}()
 
 	ctx := context.Background()
 	for index, want := range []int16{1, -7, 3} {
@@ -57,34 +60,41 @@ func TestInboundTransportRejectsNonV2AndImpossibleProgress(t *testing.T) {
 		{name: "payload change", packet: testPacket(2, 1960, 1, 112, 2), want: rtctransport.ErrInvalidInboundRTPPacket},
 	}
 	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			first := testPacket(1, 1000, 1, 111, 1)
-			if test.name == "non-v2" {
-				first = test.packet
-				first.Version = 1
-			}
-			packets := []*rtp.Packet{first}
-			if test.name != "non-v2" {
-				packets = append(packets, test.packet)
-			}
-			track, err := rtctransportwire.NewService().NewInboundTrack(
-				&testPacketSource{packets: packets}, &testDecoder{}, rtctransport.DefaultInboundTrackConfig(),
-			)
-			if err != nil {
-				t.Fatalf("NewInboundTrack() error = %v", err)
-			}
-			defer track.Close()
-			for {
-				_, readErr := track.ReadFrame(context.Background())
-				if readErr == nil {
-					continue
-				}
-				if !errors.Is(readErr, test.want) {
-					t.Fatalf("terminal error = %v, want errors.Is(..., %v)", readErr, test.want)
-				}
-				break
-			}
-		})
+		t.Run(test.name, func(t *testing.T) { testInboundRejection(t, test.name, test.packet, test.want) })
+	}
+}
+
+func testInboundRejection(t *testing.T, name string, packet *rtp.Packet, want error) {
+	t.Helper()
+	first := testPacket(1, 1000, 1, 111, 1)
+	if name == "non-v2" {
+		first = packet
+		first.Version = 1
+	}
+	packets := []*rtp.Packet{first}
+	if name != "non-v2" {
+		packets = append(packets, packet)
+	}
+	track, err := NewService().NewInboundTrack(
+		&testPacketSource{packets: packets}, &testDecoder{}, rtctransport.InboundTrackConfig{},
+	)
+	if err != nil {
+		t.Fatalf("NewInboundTrack() error = %v", err)
+	}
+	defer func() {
+		if closeErr := track.Close(); closeErr != nil {
+			t.Errorf("Close() error = %v", closeErr)
+		}
+	}()
+	for {
+		_, readErr := track.ReadFrame(context.Background())
+		if readErr == nil {
+			continue
+		}
+		if !errors.Is(readErr, want) {
+			t.Fatalf("terminal error = %v, want errors.Is(..., %v)", readErr, want)
+		}
+		return
 	}
 }
 
@@ -110,14 +120,18 @@ func TestOutboundTransportResamplesOwnsPacketsAndUsesMediaTimeline(t *testing.T)
 		offsets = append(offsets, offset)
 		return nil
 	})
-	track, err := rtctransportwire.NewService().NewOutboundTrack(rtctransport.OutboundTrackConfig{
+	track, err := NewService().NewOutboundTrack(rtctransport.OutboundTrackConfig{
 		SourceRate: 16000, Encoder: encoder, Writer: writer, Pacer: pacer,
 		InitialSequenceNumber: 9, InitialTimestamp: 700,
 	})
 	if err != nil {
 		t.Fatalf("NewOutboundTrack() error = %v", err)
 	}
-	defer track.Close()
+	defer func() {
+		if closeErr := track.Close(); closeErr != nil {
+			t.Errorf("Close() error = %v", closeErr)
+		}
+	}()
 
 	input := make([]int16, 320)
 	input[0] = 11
@@ -156,7 +170,7 @@ func TestOutboundTransportCommitsTimelineOnlyAfterSuccessfulWrite(t *testing.T) 
 	var packets []*rtp.Packet
 	writeCount := 0
 	writerErr := errors.New("writer failed")
-	track, err := rtctransportwire.NewService().NewOutboundTrack(rtctransport.OutboundTrackConfig{
+	track, err := NewService().NewOutboundTrack(rtctransport.OutboundTrackConfig{
 		SourceRate: 48000,
 		Encoder: rtctransport.OpusEncoderFunc(func(context.Context, []int16) ([]byte, error) {
 			return []byte{0x7f}, nil
@@ -175,7 +189,11 @@ func TestOutboundTransportCommitsTimelineOnlyAfterSuccessfulWrite(t *testing.T) 
 	if err != nil {
 		t.Fatalf("NewOutboundTrack() error = %v", err)
 	}
-	defer track.Close()
+	defer func() {
+		if closeErr := track.Close(); closeErr != nil {
+			t.Errorf("Close() error = %v", closeErr)
+		}
+	}()
 	frame := sharedaudio.PCMFrame{Samples: make([]int16, 960)}
 	if writeErr := track.WriteFrame(context.Background(), frame); !errors.Is(writeErr, writerErr) {
 		t.Fatalf("first WriteFrame() error = %v, want writer identity", writeErr)
@@ -194,7 +212,7 @@ func TestOutboundTransportCommitsTimelineOnlyAfterSuccessfulWrite(t *testing.T) 
 func TestOutboundTransportRejectsPartialFramesAndBoundsConcurrentWriters(t *testing.T) {
 	started := make(chan struct{})
 	var startedOnce sync.Once
-	track, err := rtctransportwire.NewService().NewOutboundTrack(rtctransport.OutboundTrackConfig{
+	track, err := NewService().NewOutboundTrack(rtctransport.OutboundTrackConfig{
 		SourceRate: 48000,
 		QueueDepth: 1,
 		Encoder: rtctransport.OpusEncoderFunc(func(context.Context, []int16) ([]byte, error) {
@@ -233,8 +251,8 @@ func TestOutboundTransportRejectsPartialFramesAndBoundsConcurrentWriters(t *test
 }
 
 func TestTransportConstructionRejectsInvalidDependencies(t *testing.T) {
-	service := rtctransportwire.NewService()
-	if _, err := service.NewInboundTrack(nil, &testDecoder{}, rtctransport.DefaultInboundTrackConfig()); !errors.Is(err, rtctransport.ErrNilInboundRTPTrack) {
+	service := NewService()
+	if _, err := service.NewInboundTrack(nil, &testDecoder{}, rtctransport.InboundTrackConfig{}); !errors.Is(err, rtctransport.ErrNilInboundRTPTrack) {
 		t.Fatalf("nil inbound source error = %v", err)
 	}
 	if _, err := service.NewOutboundTrack(rtctransport.OutboundTrackConfig{}); !errors.Is(err, rtctransport.ErrOutboundNilEncoder) {

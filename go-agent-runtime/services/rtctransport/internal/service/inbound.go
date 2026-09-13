@@ -99,11 +99,16 @@ func nilValue(value any) bool {
 	}
 	v := reflect.ValueOf(value)
 	switch v.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice, reflect.UnsafePointer:
 		return v.IsNil()
-	default:
+	case reflect.Invalid, reflect.Bool,
+		reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+		reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128,
+		reflect.Array, reflect.String, reflect.Struct:
 		return false
 	}
+	return false
 }
 
 type InboundTrack struct {
@@ -164,41 +169,54 @@ func (t *InboundTrack) readLoop() {
 			close(t.frames)
 			return
 		case event, ok := <-events:
-			if !ok {
-				close(t.frames)
+			if t.handlePacketEvent(&state, event, ok, &timer) {
 				return
-			}
-			if event.err != nil {
-				if err := state.flush(); err != nil {
-					t.finish(err)
-				} else {
-					t.finish(inboundTrackError(rtctransport.ErrInboundTrackSource, "read RTP", event.err))
-				}
-				return
-			}
-			if event.packet == nil {
-				t.finish(inboundTrackError(rtctransport.ErrInvalidInboundRTPPacket, "packet", errors.New("source returned nil without an error")))
-				return
-			}
-			if err := state.push(event.packet); err != nil {
-				if flushErr := state.flush(); flushErr != nil {
-					t.finish(flushErr)
-				} else {
-					t.finish(err)
-				}
-				return
-			}
-			if timer == nil && !state.started {
-				timer = t.config.newTimer(t.config.jitterDepth)
 			}
 		case <-timer:
-			if err := state.tick(); err != nil {
-				t.finish(err)
+			if t.handleTimer(&state, &timer) {
 				return
 			}
-			timer = t.config.newTimer(t.config.frameDuration)
 		}
 	}
+}
+
+func (t *InboundTrack) handlePacketEvent(state *inboundPlayout, event packetEvent, ok bool, timer *<-chan time.Time) bool {
+	if !ok {
+		close(t.frames)
+		return true
+	}
+	if event.err != nil {
+		return t.finishPacketEvent(state, event.err)
+	}
+	if event.packet == nil {
+		t.finish(inboundTrackError(rtctransport.ErrInvalidInboundRTPPacket, "packet", errors.New("source returned nil without an error")))
+		return true
+	}
+	if err := state.push(event.packet); err != nil {
+		return t.finishPacketEvent(state, err)
+	}
+	if *timer == nil && !state.started {
+		*timer = t.config.newTimer(t.config.jitterDepth)
+	}
+	return false
+}
+
+func (t *InboundTrack) finishPacketEvent(state *inboundPlayout, eventErr error) bool {
+	if err := state.flush(); err != nil {
+		t.finish(err)
+	} else {
+		t.finish(inboundTrackError(rtctransport.ErrInboundTrackSource, "read RTP", eventErr))
+	}
+	return true
+}
+
+func (t *InboundTrack) handleTimer(state *inboundPlayout, timer *<-chan time.Time) bool {
+	if err := state.tick(); err != nil {
+		t.finish(err)
+		return true
+	}
+	*timer = t.config.newTimer(t.config.frameDuration)
+	return false
 }
 
 func (t *InboundTrack) readSource(events chan<- packetEvent) {
@@ -238,6 +256,7 @@ func (t *InboundTrack) finish(err error) {
 	close(t.frames)
 }
 
+//nolint:contextcheck // nil context is normalized to the media API's documented background behavior.
 func (t *InboundTrack) ReadFrame(ctx context.Context) (sharedaudio.PCMFrame, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -281,166 +300,4 @@ func (t *InboundTrack) Close() error {
 		}
 	})
 	return t.closeErr
-}
-
-type inboundPlayout struct {
-	track                            *InboundTrack
-	packets                          map[int64]*rtp.Packet
-	have, started                    bool
-	baseSeq, minSeq, nextSeq, maxSeq int64
-	baseTimestamp                    uint32
-	ssrc                             uint32
-	payloadType                      uint8
-}
-
-func (s *inboundPlayout) push(packet *rtp.Packet) error {
-	if packet.Version != 2 {
-		return inboundTrackError(rtctransport.ErrInvalidInboundRTPPacket, "packet", fmt.Errorf("version %d: want RTP version 2", packet.Version))
-	}
-	if !s.have {
-		sequence := int64(packet.SequenceNumber)
-		s.have, s.baseSeq, s.minSeq, s.baseTimestamp, s.maxSeq = true, sequence, sequence, packet.Timestamp, sequence
-		s.ssrc, s.payloadType = packet.SSRC, packet.PayloadType
-	}
-	extended := unwrapSequence(packet.SequenceNumber, s.maxSeq)
-	if s.started && extended < s.nextSeq {
-		return nil
-	}
-	if _, exists := s.packets[extended]; exists {
-		return nil
-	}
-	if packet.SSRC != s.ssrc {
-		return inboundTrackError(rtctransport.ErrInvalidInboundRTPPacket, "packet", fmt.Errorf("SSRC %d changed within one audio track", packet.SSRC))
-	}
-	if packet.PayloadType != s.payloadType {
-		return inboundTrackError(rtctransport.ErrInvalidInboundRTPPacket, "packet", fmt.Errorf("payload type %d changed within one audio track", packet.PayloadType))
-	}
-	expected := s.expectedTimestamp(extended)
-	if packet.Timestamp != expected {
-		return inboundTrackError(rtctransport.ErrImpossibleRTPProgress, "RTP progress", fmt.Errorf("sequence %d timestamp %d: want %d", packet.SequenceNumber, packet.Timestamp, expected))
-	}
-	if !s.started {
-		if extended < s.minSeq {
-			if s.minSeq-extended > int64(s.track.config.jitterPackets) {
-				return inboundTrackError(rtctransport.ErrImpossibleRTPProgress, "RTP progress", fmt.Errorf("sequence %d exceeds initial jitter window", packet.SequenceNumber))
-			}
-			s.minSeq = extended
-		} else if extended > s.maxSeq {
-			if extended-s.maxSeq > int64(s.track.config.jitterPackets) {
-				return inboundTrackError(rtctransport.ErrImpossibleRTPProgress, "RTP progress", fmt.Errorf("sequence %d exceeds initial jitter window", packet.SequenceNumber))
-			}
-			s.maxSeq = extended
-		}
-	} else if extended-s.nextSeq > int64(s.track.config.jitterPackets) {
-		return inboundTrackError(rtctransport.ErrImpossibleRTPProgress, "RTP progress", fmt.Errorf("sequence %d exceeds jitter window", packet.SequenceNumber))
-	}
-	if extended > s.maxSeq {
-		s.maxSeq = extended
-	}
-	s.packets[extended] = clonePacket(packet)
-	return nil
-}
-
-func (s *inboundPlayout) tick() error {
-	if !s.started {
-		s.nextSeq = s.minSeq
-		s.started = true
-	}
-	return s.emitNext()
-}
-
-func (s *inboundPlayout) flush() error {
-	if len(s.packets) == 0 {
-		return nil
-	}
-	if !s.started {
-		s.nextSeq = s.minSeq
-		s.started = true
-	}
-	for s.nextSeq <= s.maxSeq {
-		if err := s.emitNext(); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (s *inboundPlayout) emitNext() error {
-	packet, exists := s.packets[s.nextSeq]
-	if exists {
-		delete(s.packets, s.nextSeq)
-	}
-	if !exists && !s.started {
-		return nil
-	}
-	var payload []byte
-	if exists {
-		payload = packet.Payload
-	}
-	samples, err := s.decode(payload, !exists)
-	if err != nil {
-		return err
-	}
-	if err := s.track.emit(samples); err != nil {
-		return err
-	}
-	s.nextSeq++
-	return nil
-}
-
-func (s *inboundPlayout) decode(payload []byte, plc bool) ([]int16, error) {
-	samples, err := func() ([]int16, error) {
-		if plc {
-			return s.track.decoder.DecodePLC()
-		}
-		return s.track.decoder.Decode(payload)
-	}()
-	if err != nil {
-		return nil, inboundTrackError(rtctransport.ErrInboundTrackDecode, "decode", err)
-	}
-	if len(samples) != s.track.config.codecSamples {
-		return nil, inboundTrackError(rtctransport.ErrInboundTrackFrame, "decode", fmt.Errorf("got %d samples, want %d", len(samples), s.track.config.codecSamples))
-	}
-	owned := append([]int16(nil), samples...)
-	if s.track.config.rate == rtctransport.CodecSampleRate {
-		return owned, nil
-	}
-	resampled, err := s.track.config.resample(owned, rtctransport.CodecSampleRate, s.track.config.rate)
-	if err != nil {
-		return nil, inboundTrackError(rtctransport.ErrInboundTrackResample, "resample", err)
-	}
-	if len(resampled) != s.track.config.outputSamples {
-		return nil, inboundTrackError(rtctransport.ErrInboundTrackFrame, "resample", fmt.Errorf("got %d samples, want %d", len(resampled), s.track.config.outputSamples))
-	}
-	return resampled, nil
-}
-
-func (s *inboundPlayout) expectedTimestamp(sequence int64) uint32 {
-	return uint32(int64(s.baseTimestamp) + (sequence-s.baseSeq)*int64(s.track.config.codecSamples))
-}
-
-func inboundTrackError(kind error, operation string, err error) *rtctransport.InboundTrackError {
-	return &rtctransport.InboundTrackError{Operation: operation, Kind: kind, Err: err}
-}
-
-func inboundConfigError(field string, observed any, reason string) error {
-	return inboundTrackError(rtctransport.ErrInvalidInboundTrackConfig, "configuration", fmt.Errorf("%s: got %v (%s)", field, observed, reason))
-}
-
-func unwrapSequence(sequence uint16, reference int64) int64 {
-	candidate := (reference &^ 0xffff) | int64(sequence)
-	delta := candidate - reference
-	if delta > 32767 {
-		candidate -= 65536
-	} else if delta < -32768 {
-		candidate += 65536
-	}
-	return candidate
-}
-
-func clonePacket(packet *rtp.Packet) *rtp.Packet {
-	cloned := *packet
-	cloned.Payload = append([]byte(nil), packet.Payload...)
-	cloned.CSRC = append([]uint32(nil), packet.CSRC...)
-	return &cloned
 }

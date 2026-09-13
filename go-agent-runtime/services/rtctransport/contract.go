@@ -26,29 +26,35 @@ const (
 	DefaultInboundJitterDepth    = 60 * time.Millisecond
 )
 
-var (
-	ErrInvalidInboundTrackConfig = errors.New("invalid inbound RTP audio track configuration")
-	ErrNilInboundRTPTrack        = errors.New("nil inbound RTP track")
-	ErrNilOpusDecoder            = errors.New("nil Opus decoder")
-	ErrUnsupportedOpusDecoder    = errors.New("unsupported Opus decoder seam")
-	ErrInvalidInboundRTPPacket   = errors.New("invalid inbound RTP packet")
-	ErrImpossibleRTPProgress     = errors.New("impossible RTP audio progress")
-	ErrInboundTrackSource        = errors.New("inbound RTP track source failed")
-	ErrInboundTrackDecode        = errors.New("inbound Opus decode failed")
-	ErrInboundTrackResample      = errors.New("inbound PCM resample failed")
-	ErrInboundTrackFrame         = errors.New("inbound PCM frame has invalid size")
-	ErrInboundTrackQueueOverflow = errors.New("inbound RTP audio track queue is full")
-	ErrInboundTrackClosed        = errors.New("inbound RTP audio track is closed")
+// Error is an immutable transport error identity. Constants keep the public
+// errors.Is targets stable without exposing mutable package variables.
+type Error string
 
-	ErrInvalidOutboundTrackConfig = errors.New("invalid outbound RTP audio track configuration")
-	ErrOutboundClosed             = errors.New("rtc outbound track is closed")
-	ErrOutboundEmptyFrame         = errors.New("rtc outbound PCM frame is empty")
-	ErrOutboundFrameSize          = errors.New("rtc outbound PCM frame has invalid size")
-	ErrOutboundNilEncoder         = errors.New("rtc outbound Opus encoder is nil")
-	ErrOutboundNilWriter          = errors.New("rtc outbound RTP writer is nil")
-	ErrOutboundEmptyPayload       = errors.New("rtc outbound encoder produced an empty payload")
-	ErrOutboundFrameTooLarge      = errors.New("rtc outbound PCM frame is too large")
-	ErrOutboundQueueOverflow      = errors.New("rtc outbound track queue is full")
+func (e Error) Error() string { return string(e) }
+
+const (
+	ErrInvalidInboundTrackConfig Error = "invalid inbound RTP audio track configuration"
+	ErrNilInboundRTPTrack        Error = "nil inbound RTP track"
+	ErrNilOpusDecoder            Error = "nil Opus decoder"
+	ErrUnsupportedOpusDecoder    Error = "unsupported Opus decoder seam"
+	ErrInvalidInboundRTPPacket   Error = "invalid inbound RTP packet"
+	ErrImpossibleRTPProgress     Error = "impossible RTP audio progress"
+	ErrInboundTrackSource        Error = "inbound RTP track source failed"
+	ErrInboundTrackDecode        Error = "inbound Opus decode failed"
+	ErrInboundTrackResample      Error = "inbound PCM resample failed"
+	ErrInboundTrackFrame         Error = "inbound PCM frame has invalid size"
+	ErrInboundTrackQueueOverflow Error = "inbound RTP audio track queue is full"
+	ErrInboundTrackClosed        Error = "inbound RTP audio track is closed"
+
+	ErrInvalidOutboundTrackConfig Error = "invalid outbound RTP audio track configuration"
+	ErrOutboundClosed             Error = "rtc outbound track is closed"
+	ErrOutboundEmptyFrame         Error = "rtc outbound PCM frame is empty"
+	ErrOutboundFrameSize          Error = "rtc outbound PCM frame has invalid size"
+	ErrOutboundNilEncoder         Error = "rtc outbound Opus encoder is nil"
+	ErrOutboundNilWriter          Error = "rtc outbound RTP writer is nil"
+	ErrOutboundEmptyPayload       Error = "rtc outbound encoder produced an empty payload"
+	ErrOutboundFrameTooLarge      Error = "rtc outbound PCM frame is too large"
+	ErrOutboundQueueOverflow      Error = "rtc outbound track queue is full"
 )
 
 // InboundTrackError adds a stable operation and error kind while preserving
@@ -108,13 +114,6 @@ type InboundTrackConfig struct {
 	JitterDepth   time.Duration
 	NewTimer      func(time.Duration) <-chan time.Time
 	Resample      func([]int16, int, int) ([]int16, error)
-}
-
-func DefaultInboundTrackConfig() InboundTrackConfig {
-	return InboundTrackConfig{
-		SampleRate: DefaultInboundLoopSampleRate, FrameDuration: DefaultInboundFrameDuration,
-		JitterDepth: DefaultInboundJitterDepth,
-	}
 }
 
 // InboundTrack is the caller-owned PCM receiver returned by Service.

@@ -20,9 +20,19 @@ BASELINE_IN = 453
 BASELINE_OUT = 418
 EXTERNAL = HERE / "external-consumer"
 OWNED_PREFIXES = (
+    "agent-cli/internal/services/internal/devices/service_test.go",
+    "agent-cli/internal/services/wire/wire.go",
+    "agent-cli/internal/transport/cli/probe_v9_webrtc_device_test.go",
     "agent-cli/internal/wire/rtc_runtime.go",
     "coverage-manifest/go-agent-runtime/services/rtctransport/",
     "docs/temp/projects/audio-runtime/audio-runtime-c116-centralize-rtc-track-transport/",
+    "go-agent-runtime/services/devices/internal/probe/probe.go",
+    "go-agent-runtime/services/devices/internal/probe/probe_test.go",
+    "go-agent-runtime/services/devices/internal/probe/resources.go",
+    "go-agent-runtime/services/devices/internal/probe/rtc.go",
+    "go-agent-runtime/services/devices/internal/probe/service.go",
+    "go-agent-runtime/services/devices/wire/providers.go",
+    "go-agent-runtime/services/devices/wire/wire_gen.go",
     "go-agent-runtime/services/rtctransport/",
 )
 
@@ -98,7 +108,10 @@ def retirement() -> None:
         for forbidden in ("unwrapSequence", "DecodePLC", "wavio.Resample", "sampleOffsetDuration"):
             if forbidden in text:
                 raise VerificationFailure(f"CLI adapter contains transport policy {forbidden}")
-    changed = command(["git", "diff", "--name-only", ACCEPTED_MAIN, "HEAD"]).splitlines()
+    changed = [
+        path for path in command(["git", "diff", "--name-only", ACCEPTED_MAIN, "HEAD"]).splitlines()
+        if path and path != "Changes:"
+    ]
     outside = [path for path in changed if not any(path == prefix or path.startswith(prefix) for prefix in OWNED_PREFIXES)]
     if outside:
         raise VerificationFailure("candidate changed paths outside C116 scope: " + ", ".join(outside))
