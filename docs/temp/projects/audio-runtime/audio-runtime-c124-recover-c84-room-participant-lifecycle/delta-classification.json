@@ -3677,6 +3677,10 @@
   },
   {
     "classification": "evidence relocation/refresh",
+    "path": "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/first-cause-review-repair.json"
+  },
+  {
+    "classification": "evidence relocation/refresh",
     "path": "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/mutation-double-close.json"
   },
   {

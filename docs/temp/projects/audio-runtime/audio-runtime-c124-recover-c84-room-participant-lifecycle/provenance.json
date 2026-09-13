@@ -3679,6 +3679,10 @@
     },
     {
       "classification": "evidence relocation/refresh",
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/first-cause-review-repair.json"
+    },
+    {
+      "classification": "evidence relocation/refresh",
       "path": "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/mutation-double-close.json"
     },
     {
@@ -3961,6 +3965,7 @@
     "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/external-consumer/go.mod",
     "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/external-consumer/go.sum",
     "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/external-consumer/participant_lifecycle_test.go",
+    "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/first-cause-review-repair.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/mutation-double-close.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/mutation-post-bound-tool.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/positive-replay-oracle-first-failure.json",
@@ -3993,6 +3998,7 @@
     "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/external-consumer/go.mod",
     "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/external-consumer/go.sum",
     "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/external-consumer/participant_lifecycle_test.go",
+    "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/first-cause-review-repair.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/mutation-double-close.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/mutation-post-bound-tool.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/positive-replay-oracle-first-failure.json",
