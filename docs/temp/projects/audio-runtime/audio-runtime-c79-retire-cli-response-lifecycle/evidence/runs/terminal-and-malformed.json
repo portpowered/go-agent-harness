@@ -1,10 +1,10 @@
 {
-  "aggregate_timeout_seconds": 240,
+  "aggregate_timeout_seconds": 300,
   "artifact": {
     "built_from_origin_main": "3963bc3566da24f8214634c17a9d0f79a6724171",
-    "built_from_revision": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
-    "bytes": 53103442,
-    "sha256": "a75c0f6eeed1b2130e67283f79bcb3b9982f5e5e4ea800e3066acae3d12fce2a"
+    "built_from_revision": "7dc1429319011477168cbffd2416f4ad59b356b5",
+    "bytes": 53103778,
+    "sha256": "67ebe768296f78eeb7db0e5010643cff7c2796b68c82854ce57f641968147a68"
   },
   "case": "terminal-and-malformed",
   "checks": [
@@ -13,35 +13,35 @@
         "go",
         "build",
         "-o",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/yui",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/yui",
         "./agent-cli/cmd/yui"
       ],
       "cleanup": {
         "kill_sent": false,
-        "process_group_id": 55194,
+        "process_group_id": 45599,
         "reaped": true,
         "survivors": false,
         "term_sent": false
       },
-      "elapsed_seconds": 4.353,
+      "elapsed_seconds": 6.596,
       "returncode": 0,
       "stderr": "",
       "stdout": ""
     },
     {
       "argv": [
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/yui",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/yui",
         "interaction",
         "--help"
       ],
       "cleanup": {
         "kill_sent": false,
-        "process_group_id": 55241,
+        "process_group_id": 45930,
         "reaped": true,
         "survivors": false,
         "term_sent": false
       },
-      "elapsed_seconds": 0.528,
+      "elapsed_seconds": 0.56,
       "returncode": 0,
       "stderr": "",
       "stdout": "Inspect provider-neutral gateway interactions.\n\nUse the replay subcommand to stream normalized PNIG fixture events as one JSON object per line without provider credentials or live network calls.\n\nUsage:\n  yui interaction [flags]\n  yui interaction [command]\n\nExamples:\n  yui interaction replay ./fixtures/example.interaction.json\n\nAvailable Commands:\n  replay      Replay a normalized interaction fixture as NDJSON\n\nFlags:\n  -h, --help   help for interaction\n\nGlobal Flags:\n      --allow-path stringArray   Additional filesystem-tool root (repeatable; relative to --workdir)\n  -C, --config-dir string        Directory for agent CLI config (default: ~/.agent-cli)\n      --log-to-stdout            Log to stdout/stderr instead of file (default: logs to file in config directory)\n  -v, --verbose count            Enable verbose output (use -v for info, -vv for debug)\n      --workdir string           Filesystem-tool workdir (default: the process current directory)\n\nUse \"yui interaction [command] --help\" for more information about a command.\n"
@@ -54,14 +54,14 @@
       ],
       "cleanup": {
         "kill_sent": true,
-        "process_group_id": 55244,
+        "process_group_id": 45940,
         "reaped": true,
         "survivors": false,
         "term_sent": true
       },
       "cleanup_verified": true,
       "control": "process-group-term-kill-reap",
-      "elapsed_seconds": 11.007,
+      "elapsed_seconds": 11.01,
       "expected_timeout": true,
       "observations": {
         "kill_sent": true,
@@ -77,21 +77,21 @@
     },
     {
       "argv": [
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/yui",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/yui",
         "--config-dir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/config",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/config",
         "session",
         "--replay",
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle/go-llm-gateway/pkg/testing/testdata/session-fixtures/session_healthy_multiturn_audio.session.json"
       ],
       "cleanup": {
         "kill_sent": false,
-        "process_group_id": 55354,
+        "process_group_id": 46054,
         "reaped": true,
         "survivors": false,
         "term_sent": false
       },
-      "elapsed_seconds": 0.062,
+      "elapsed_seconds": 0.055,
       "fixture": "go-llm-gateway/pkg/testing/testdata/session-fixtures/session_healthy_multiturn_audio.session.json",
       "fixture_provenance": {
         "bytes": 3433,
@@ -109,23 +109,23 @@
     },
     {
       "argv": [
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/yui",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/yui",
         "--config-dir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/tool/tool-config",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/tool/tool-config",
         "--workdir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/tool/tool-image",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/tool/tool-image",
         "session",
         "--replay",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/tool/tool-continuation.session.json",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/tool/tool-continuation.session.json",
         "--provider",
         "openai",
         "--model",
         "gpt-realtime",
-        "Please inspect the image at /var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/tool/tool-image/fixture.png without relying on its filename."
+        "Please inspect the image at /var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/tool/tool-image/fixture.png without relying on its filename."
       ],
       "cleanup": {
         "kill_sent": false,
-        "process_group_id": 55355,
+        "process_group_id": 46056,
         "reaped": true,
         "survivors": false,
         "term_sent": false
@@ -140,11 +140,11 @@
         "tool_calls": 1,
         "tool_results": 1
       },
-      "elapsed_seconds": 0.024,
-      "fixture": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/tool/tool-continuation.session.json",
+      "elapsed_seconds": 0.029,
+      "fixture": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/tool/tool-continuation.session.json",
       "fixture_provenance": {
         "bytes": 6979,
-        "sha256": "a96464b5061507ae255f395621ad5b9b123d223a0b9e2b2a00c5db5349c5e11e"
+        "sha256": "9ef0d9069998d471cd6aef5520f9489a61f1f7998f9a7db554358b255ae93a18"
       },
       "image_provenance": {
         "bytes": 82,
@@ -159,7 +159,7 @@
       },
       "returncode": 0,
       "stderr": "",
-      "stdout": "Filesystem scope: workdir=/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/tool/tool-image; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: read_image\nTool result: {\"version\":2,\"status\":\"success\",\"mime_type\":\"image/png\",\"byte_length\":82,\"sha256\":\"6e9dc04fbe72a6a58b226206c8779938002eb26c9302299190b8a2574e8672a5\",\"typed_projection\":\"input_image\"}\nAssistant: The image is a one-by-one image with a single indigo pixel.\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n",
+      "stdout": "Filesystem scope: workdir=/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/tool/tool-image; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: read_image\nTool result: {\"version\":2,\"status\":\"success\",\"mime_type\":\"image/png\",\"byte_length\":82,\"sha256\":\"6e9dc04fbe72a6a58b226206c8779938002eb26c9302299190b8a2574e8672a5\",\"typed_projection\":\"input_image\"}\nAssistant: The image is a one-by-one image with a single indigo pixel.\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n",
       "template_provenance": {
         "bytes": 6511,
         "sha256": "7dc5b54bc2ca32958f32b84e7cb694867bae92a3e593828101e94f9d6f898bc5"
@@ -167,16 +167,16 @@
     },
     {
       "argv": [
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/yui",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/yui",
         "--config-dir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/scheduled/scheduled-config",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/scheduled/scheduled-config",
         "session",
         "--replay",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/scheduled/scheduled-tool-continuation.session.json"
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/scheduled/scheduled-tool-continuation.session.json"
       ],
       "cleanup": {
         "kill_sent": false,
-        "process_group_id": 55356,
+        "process_group_id": 46058,
         "reaped": true,
         "survivors": false,
         "term_sent": false
@@ -194,8 +194,8 @@
         "tool_calls": 0,
         "tool_results": 0
       },
-      "elapsed_seconds": 0.066,
-      "fixture": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/scheduled/scheduled-tool-continuation.session.json",
+      "elapsed_seconds": 0.069,
+      "fixture": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/scheduled/scheduled-tool-continuation.session.json",
       "fixture_provenance": {
         "bytes": 72624,
         "sha256": "8030b1df99d8855a43796c3af09ee8ce8da5897374066578aa96b8532e02548b"
@@ -217,33 +217,33 @@
     },
     {
       "argv": [
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/yui",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/yui",
         "--config-dir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/tool/tool-config",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/tool/tool-config",
         "--workdir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/tool/tool-image",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/tool/tool-image",
         "session",
         "--replay",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/tool/tool-continuation-malformed.session.json",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/tool/tool-continuation-malformed.session.json",
         "--provider",
         "openai",
         "--model",
         "gpt-realtime",
-        "Please inspect the image at /var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/tool/tool-image/fixture.png without relying on its filename."
+        "Please inspect the image at /var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/tool/tool-image/fixture.png without relying on its filename."
       ],
       "cleanup": {
         "kill_sent": false,
-        "process_group_id": 55358,
+        "process_group_id": 46061,
         "reaped": true,
         "survivors": false,
         "term_sent": false
       },
-      "elapsed_seconds": 0.023,
+      "elapsed_seconds": 0.024,
       "expected_failure": true,
-      "fixture": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/tool/tool-continuation-malformed.session.json",
+      "fixture": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/tool/tool-continuation-malformed.session.json",
       "fixture_provenance": {
         "bytes": 6777,
-        "sha256": "d91d6e409fe1a538a17fb91f8059df4ce91b044b89c0bab15f8e2f55883811e2"
+        "sha256": "7e7ce5ab12d5fe0448a6a5ba51358b936ee20b2d63ea10c9ead9896a9b635b3f"
       },
       "observations": {
         "grounded_output_absent": true,
@@ -253,25 +253,25 @@
       },
       "returncode": 1,
       "stderr": "Error: session error: replay mismatch: expected event type \"conversation.item.create\" at sequence 9, actual event type \"conversation.item.create\" at sequence 9: JSON pointer /item/output: expected \"\", actual \"{\\\"version\\\":2,\\\"status\\...(truncated)\nreplay mismatch\nreplay mismatch: expected event type \"conversation.item.create\" at sequence 9, actual event type \"conversation.item.create\" at sequence 9: JSON pointer /item/output: expected \"\", actual \"{\\\"version\\\":2,\\\"status\\...(truncated)\nreplay mismatch\n",
-      "stdout": "Filesystem scope: workdir=/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/tool/tool-image; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: read_image\nTool result: {\"version\":2,\"status\":\"success\",\"mime_type\":\"image/png\",\"byte_length\":82,\"sha256\":\"6e9dc04fbe72a6a58b226206c8779938002eb26c9302299190b8a2574e8672a5\",\"typed_projection\":\"input_image\"}\n\n[session closed: provider_closed]\n[session terminal: classification=transport terminal_reason=provider_close terminal_provenance=session output_state=not_applicable]\nlive session terminated: session error: replay mismatch: expected event type \"conversation.item.create\" at sequence 9, actual event type \"conversation.item.create\" at sequence 9: JSON pointer /item/output: expected \"\", actual \"{\\\"version\\\":2,\\\"status\\...(truncated)\nreplay mismatch\nreplay mismatch: expected event type \"conversation.item.create\" at sequence 9, actual event type \"conversation.item.create\" at sequence 9: JSON pointer /item/output: expected \"\", actual \"{\\\"version\\\":2,\\\"status\\...(truncated)\nreplay mismatch\n"
+      "stdout": "Filesystem scope: workdir=/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/tool/tool-image; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: read_image\nTool result: {\"version\":2,\"status\":\"success\",\"mime_type\":\"image/png\",\"byte_length\":82,\"sha256\":\"6e9dc04fbe72a6a58b226206c8779938002eb26c9302299190b8a2574e8672a5\",\"typed_projection\":\"input_image\"}\n\n[session closed: provider_closed]\n[session terminal: classification=transport terminal_reason=provider_close terminal_provenance=session output_state=not_applicable]\nlive session terminated: session error: replay mismatch: expected event type \"conversation.item.create\" at sequence 9, actual event type \"conversation.item.create\" at sequence 9: JSON pointer /item/output: expected \"\", actual \"{\\\"version\\\":2,\\\"status\\...(truncated)\nreplay mismatch\nreplay mismatch: expected event type \"conversation.item.create\" at sequence 9, actual event type \"conversation.item.create\" at sequence 9: JSON pointer /item/output: expected \"\", actual \"{\\\"version\\\":2,\\\"status\\...(truncated)\nreplay mismatch\n"
     },
     {
       "argv": [
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/yui",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/yui",
         "--config-dir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/config",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/config",
         "session",
         "--replay",
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle/agent-cli/test/integration/testdata/openai_realtime_error.session.json"
       ],
       "cleanup": {
         "kill_sent": false,
-        "process_group_id": 55357,
+        "process_group_id": 46059,
         "reaped": true,
         "survivors": false,
         "term_sent": false
       },
-      "elapsed_seconds": 0.05,
+      "elapsed_seconds": 0.049,
       "expected_failure": true,
       "fixture": "agent-cli/test/integration/testdata/openai_realtime_error.session.json",
       "fixture_provenance": {
@@ -299,15 +299,15 @@
       ],
       "cleanup": {
         "kill_sent": false,
-        "process_group_id": 55359,
+        "process_group_id": 46063,
         "reaped": true,
         "survivors": false,
         "term_sent": false
       },
-      "elapsed_seconds": 0.346,
+      "elapsed_seconds": 0.355,
       "returncode": 0,
       "stderr": "",
-      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire\t0.170s\n"
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire\t0.161s\n"
     },
     {
       "argv": [
@@ -321,18 +321,18 @@
       ],
       "cleanup": {
         "kill_sent": false,
-        "process_group_id": 55366,
+        "process_group_id": 46070,
         "reaped": true,
         "survivors": false,
         "term_sent": false
       },
-      "elapsed_seconds": 3.578,
+      "elapsed_seconds": 3.632,
       "returncode": 0,
       "stderr": "",
-      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t2.105s\n"
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t2.104s\n"
     }
   ],
-  "child_timeout_seconds": 60,
+  "child_timeout_seconds": 90,
   "cleanup_control": {
     "argv": [
       "/opt/homebrew/opt/python@3.14/bin/python3.14",
@@ -341,14 +341,14 @@
     ],
     "cleanup": {
       "kill_sent": true,
-      "process_group_id": 55244,
+      "process_group_id": 45940,
       "reaped": true,
       "survivors": false,
       "term_sent": true
     },
     "cleanup_verified": true,
     "control": "process-group-term-kill-reap",
-    "elapsed_seconds": 11.007,
+    "elapsed_seconds": 11.01,
     "expected_timeout": true,
     "observations": {
       "kill_sent": true,
@@ -363,8 +363,8 @@
     "timeout": true
   },
   "credential_free": true,
-  "elapsed_seconds": 20.902,
-  "final_head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
+  "elapsed_seconds": 23.351,
+  "final_head": "7dc1429319011477168cbffd2416f4ad59b356b5",
   "final_head_matches_built_source": true,
   "fixtures": {
     "healthy": {
@@ -391,21 +391,21 @@
   "malformed_workflow": {
     "provider_error": {
       "argv": [
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/yui",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/yui",
         "--config-dir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/config",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/config",
         "session",
         "--replay",
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle/agent-cli/test/integration/testdata/openai_realtime_error.session.json"
       ],
       "cleanup": {
         "kill_sent": false,
-        "process_group_id": 55357,
+        "process_group_id": 46059,
         "reaped": true,
         "survivors": false,
         "term_sent": false
       },
-      "elapsed_seconds": 0.05,
+      "elapsed_seconds": 0.049,
       "expected_failure": true,
       "fixture": "agent-cli/test/integration/testdata/openai_realtime_error.session.json",
       "fixture_provenance": {
@@ -423,33 +423,33 @@
     },
     "tool_continuation": {
       "argv": [
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/yui",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/yui",
         "--config-dir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/tool/tool-config",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/tool/tool-config",
         "--workdir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/tool/tool-image",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/tool/tool-image",
         "session",
         "--replay",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/tool/tool-continuation-malformed.session.json",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/tool/tool-continuation-malformed.session.json",
         "--provider",
         "openai",
         "--model",
         "gpt-realtime",
-        "Please inspect the image at /var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/tool/tool-image/fixture.png without relying on its filename."
+        "Please inspect the image at /var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/tool/tool-image/fixture.png without relying on its filename."
       ],
       "cleanup": {
         "kill_sent": false,
-        "process_group_id": 55358,
+        "process_group_id": 46061,
         "reaped": true,
         "survivors": false,
         "term_sent": false
       },
-      "elapsed_seconds": 0.023,
+      "elapsed_seconds": 0.024,
       "expected_failure": true,
-      "fixture": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/tool/tool-continuation-malformed.session.json",
+      "fixture": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/tool/tool-continuation-malformed.session.json",
       "fixture_provenance": {
         "bytes": 6777,
-        "sha256": "d91d6e409fe1a538a17fb91f8059df4ce91b044b89c0bab15f8e2f55883811e2"
+        "sha256": "7e7ce5ab12d5fe0448a6a5ba51358b936ee20b2d63ea10c9ead9896a9b635b3f"
       },
       "observations": {
         "grounded_output_absent": true,
@@ -459,28 +459,28 @@
       },
       "returncode": 1,
       "stderr": "Error: session error: replay mismatch: expected event type \"conversation.item.create\" at sequence 9, actual event type \"conversation.item.create\" at sequence 9: JSON pointer /item/output: expected \"\", actual \"{\\\"version\\\":2,\\\"status\\...(truncated)\nreplay mismatch\nreplay mismatch: expected event type \"conversation.item.create\" at sequence 9, actual event type \"conversation.item.create\" at sequence 9: JSON pointer /item/output: expected \"\", actual \"{\\\"version\\\":2,\\\"status\\...(truncated)\nreplay mismatch\n",
-      "stdout": "Filesystem scope: workdir=/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/tool/tool-image; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: read_image\nTool result: {\"version\":2,\"status\":\"success\",\"mime_type\":\"image/png\",\"byte_length\":82,\"sha256\":\"6e9dc04fbe72a6a58b226206c8779938002eb26c9302299190b8a2574e8672a5\",\"typed_projection\":\"input_image\"}\n\n[session closed: provider_closed]\n[session terminal: classification=transport terminal_reason=provider_close terminal_provenance=session output_state=not_applicable]\nlive session terminated: session error: replay mismatch: expected event type \"conversation.item.create\" at sequence 9, actual event type \"conversation.item.create\" at sequence 9: JSON pointer /item/output: expected \"\", actual \"{\\\"version\\\":2,\\\"status\\...(truncated)\nreplay mismatch\nreplay mismatch: expected event type \"conversation.item.create\" at sequence 9, actual event type \"conversation.item.create\" at sequence 9: JSON pointer /item/output: expected \"\", actual \"{\\\"version\\\":2,\\\"status\\...(truncated)\nreplay mismatch\n"
+      "stdout": "Filesystem scope: workdir=/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/tool/tool-image; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: read_image\nTool result: {\"version\":2,\"status\":\"success\",\"mime_type\":\"image/png\",\"byte_length\":82,\"sha256\":\"6e9dc04fbe72a6a58b226206c8779938002eb26c9302299190b8a2574e8672a5\",\"typed_projection\":\"input_image\"}\n\n[session closed: provider_closed]\n[session terminal: classification=transport terminal_reason=provider_close terminal_provenance=session output_state=not_applicable]\nlive session terminated: session error: replay mismatch: expected event type \"conversation.item.create\" at sequence 9, actual event type \"conversation.item.create\" at sequence 9: JSON pointer /item/output: expected \"\", actual \"{\\\"version\\\":2,\\\"status\\...(truncated)\nreplay mismatch\nreplay mismatch: expected event type \"conversation.item.create\" at sequence 9, actual event type \"conversation.item.create\" at sequence 9: JSON pointer /item/output: expected \"\", actual \"{\\\"version\\\":2,\\\"status\\...(truncated)\nreplay mismatch\n"
     }
   },
   "schema": "audio-runtime-c79-replay/v2",
   "shipped_workflow": {
     "healthy": {
       "argv": [
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/yui",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/yui",
         "--config-dir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/config",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/config",
         "session",
         "--replay",
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle/go-llm-gateway/pkg/testing/testdata/session-fixtures/session_healthy_multiturn_audio.session.json"
       ],
       "cleanup": {
         "kill_sent": false,
-        "process_group_id": 55354,
+        "process_group_id": 46054,
         "reaped": true,
         "survivors": false,
         "term_sent": false
       },
-      "elapsed_seconds": 0.062,
+      "elapsed_seconds": 0.055,
       "fixture": "go-llm-gateway/pkg/testing/testdata/session-fixtures/session_healthy_multiturn_audio.session.json",
       "fixture_provenance": {
         "bytes": 3433,
@@ -498,16 +498,16 @@
     },
     "scheduled_follow_on": {
       "argv": [
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/yui",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/yui",
         "--config-dir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/scheduled/scheduled-config",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/scheduled/scheduled-config",
         "session",
         "--replay",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/scheduled/scheduled-tool-continuation.session.json"
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/scheduled/scheduled-tool-continuation.session.json"
       ],
       "cleanup": {
         "kill_sent": false,
-        "process_group_id": 55356,
+        "process_group_id": 46058,
         "reaped": true,
         "survivors": false,
         "term_sent": false
@@ -525,8 +525,8 @@
         "tool_calls": 0,
         "tool_results": 0
       },
-      "elapsed_seconds": 0.066,
-      "fixture": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/scheduled/scheduled-tool-continuation.session.json",
+      "elapsed_seconds": 0.069,
+      "fixture": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/scheduled/scheduled-tool-continuation.session.json",
       "fixture_provenance": {
         "bytes": 72624,
         "sha256": "8030b1df99d8855a43796c3af09ee8ce8da5897374066578aa96b8532e02548b"
@@ -548,23 +548,23 @@
     },
     "tool_continuation": {
       "argv": [
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/yui",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/yui",
         "--config-dir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/tool/tool-config",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/tool/tool-config",
         "--workdir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/tool/tool-image",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/tool/tool-image",
         "session",
         "--replay",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/tool/tool-continuation.session.json",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/tool/tool-continuation.session.json",
         "--provider",
         "openai",
         "--model",
         "gpt-realtime",
-        "Please inspect the image at /var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/tool/tool-image/fixture.png without relying on its filename."
+        "Please inspect the image at /var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/tool/tool-image/fixture.png without relying on its filename."
       ],
       "cleanup": {
         "kill_sent": false,
-        "process_group_id": 55355,
+        "process_group_id": 46056,
         "reaped": true,
         "survivors": false,
         "term_sent": false
@@ -579,11 +579,11 @@
         "tool_calls": 1,
         "tool_results": 1
       },
-      "elapsed_seconds": 0.024,
-      "fixture": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/tool/tool-continuation.session.json",
+      "elapsed_seconds": 0.029,
+      "fixture": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/tool/tool-continuation.session.json",
       "fixture_provenance": {
         "bytes": 6979,
-        "sha256": "a96464b5061507ae255f395621ad5b9b123d223a0b9e2b2a00c5db5349c5e11e"
+        "sha256": "9ef0d9069998d471cd6aef5520f9489a61f1f7998f9a7db554358b255ae93a18"
       },
       "image_provenance": {
         "bytes": 82,
@@ -598,7 +598,7 @@
       },
       "returncode": 0,
       "stderr": "",
-      "stdout": "Filesystem scope: workdir=/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-8dvr_50u/tool/tool-image; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: read_image\nTool result: {\"version\":2,\"status\":\"success\",\"mime_type\":\"image/png\",\"byte_length\":82,\"sha256\":\"6e9dc04fbe72a6a58b226206c8779938002eb26c9302299190b8a2574e8672a5\",\"typed_projection\":\"input_image\"}\nAssistant: The image is a one-by-one image with a single indigo pixel.\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n",
+      "stdout": "Filesystem scope: workdir=/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-hrspngmk/tool/tool-image; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: read_image\nTool result: {\"version\":2,\"status\":\"success\",\"mime_type\":\"image/png\",\"byte_length\":82,\"sha256\":\"6e9dc04fbe72a6a58b226206c8779938002eb26c9302299190b8a2574e8672a5\",\"typed_projection\":\"input_image\"}\nAssistant: The image is a one-by-one image with a single indigo pixel.\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n",
       "template_provenance": {
         "bytes": 6511,
         "sha256": "7dc5b54bc2ca32958f32b84e7cb694867bae92a3e593828101e94f9d6f898bc5"
@@ -610,10 +610,6 @@
     "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
     "go_version": "go version go1.26.7 darwin/arm64",
     "ignored_evidence_changes": [
-      " M docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-mutation-duplicate-scheduled-disposition.json",
-      " M docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-mutation-remove-continuation-owner.json",
-      " M docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-response-matrix.json",
-      " M docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-retirement-and-scope.json",
       " M docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/runs/scheduled-tool-continuation.json"
     ],
     "origin_main": "3963bc3566da24f8214634c17a9d0f79a6724171",
@@ -636,10 +632,10 @@
         "revision": "8bdafc7f947a3a2c9856220abdc539437035bd21"
       }
     },
-    "revision": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
+    "revision": "7dc1429319011477168cbffd2416f4ad59b356b5",
     "status": "",
     "tracked_input_count": 10530,
-    "tracked_input_sha256": "3ac7f2678d8185e6d3f199a410d8499dab1b71b56d4aeb090c9343cb81ded5a4",
+    "tracked_input_sha256": "1ce9272c53835204b7d571176d93292b73d7b5f15a8616b082b14fa4f09c9b4b",
     "tracked_non_file_paths": [
       "docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-59f370b/source-identity/source-repo",
       "docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-955efeb/source-identity/source-repo"
