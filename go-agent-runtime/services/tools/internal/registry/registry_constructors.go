@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audiocodec"
 	public "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	core "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display"
@@ -43,7 +44,20 @@ func NewToolRegistryWithPolicyAndSkillRoots(
 	skillRoots []string,
 	diagnosticWriter io.Writer,
 ) *ToolRegistry {
-	return newToolRegistry(options, display.DisplayCapability{}, nil, false, policy, true, skillRoots, diagnosticWriter)
+	return newToolRegistry(options, display.DisplayCapability{}, nil, false, policy, true, skillRoots, diagnosticWriter, nil)
+}
+
+// NewToolRegistryWithPolicyAndSkillRootsAndAudioCodec creates the policy-aware
+// registry with the host-neutral codec supplied by the service composition
+// boundary.
+func NewToolRegistryWithPolicyAndSkillRootsAndAudioCodec(
+	options RegistryOptions,
+	policy *filesystem.FilesystemPolicy,
+	skillRoots []string,
+	diagnosticWriter io.Writer,
+	codec audiocodec.Service,
+) *ToolRegistry {
+	return newToolRegistry(options, display.DisplayCapability{}, nil, false, policy, true, skillRoots, diagnosticWriter, codec)
 }
 
 // NewToolRegistryFromConfigWithDisplayCapability creates the session-specific
@@ -63,7 +77,7 @@ func NewToolRegistryWithDisplayCapability(
 	capability display.DisplayCapability,
 	surface display.DisplaySurface,
 ) *ToolRegistry {
-	return newToolRegistry(options, capability, surface, true, nil, false, nil, nil)
+	return newToolRegistry(options, capability, surface, true, nil, false, nil, nil, nil)
 }
 
 // NewToolRegistryFromConfigWithDisplayCapabilityAndPolicy is the session
@@ -75,7 +89,7 @@ func NewToolRegistryWithDisplayCapabilityAndPolicy(
 	surface display.DisplaySurface,
 	policy *filesystem.FilesystemPolicy,
 ) *ToolRegistry {
-	return newToolRegistry(options, capability, surface, true, policy, true, nil, nil)
+	return newToolRegistry(options, capability, surface, true, policy, true, nil, nil, nil)
 }
 
 // NewToolRegistryFromConfigWithDisplayCapabilityAndPolicyAndSkillRoots is the
@@ -91,7 +105,22 @@ func NewToolRegistryWithDisplayCapabilityAndPolicyAndSkillRoots(
 	skillRoots []string,
 	diagnosticWriter io.Writer,
 ) *ToolRegistry {
-	return newToolRegistry(options, capability, surface, true, policy, true, skillRoots, diagnosticWriter)
+	return newToolRegistry(options, capability, surface, true, policy, true, skillRoots, diagnosticWriter, nil)
+}
+
+// NewToolRegistryWithDisplayCapabilityAndPolicyAndSkillRootsAndAudioCodec is
+// the request-scoped constructor used when the host has composed the codec
+// service alongside the tools service.
+func NewToolRegistryWithDisplayCapabilityAndPolicyAndSkillRootsAndAudioCodec(
+	options RegistryOptions,
+	capability display.DisplayCapability,
+	surface display.DisplaySurface,
+	policy *filesystem.FilesystemPolicy,
+	skillRoots []string,
+	diagnosticWriter io.Writer,
+	codec audiocodec.Service,
+) *ToolRegistry {
+	return newToolRegistry(options, capability, surface, true, policy, true, skillRoots, diagnosticWriter, codec)
 }
 
 func newToolRegistry(
@@ -103,7 +132,9 @@ func newToolRegistry(
 	policyRequired bool,
 	skillRoots []string,
 	diagnosticWriter io.Writer,
+	audioCodecs ...audiocodec.Service,
 ) *ToolRegistry {
+	audioCodec := firstAudioCodec(audioCodecs)
 	policy = requireFilesystemPolicy(policy, policyRequired)
 	if diagnosticWriter == nil {
 		diagnosticWriter = io.Discard
@@ -111,14 +142,22 @@ func newToolRegistry(
 	registry := &ToolRegistry{
 		tools:            make(map[string]core.Tool),
 		diagnosticWriter: diagnosticWriter,
+		audioCodec:       audioCodec,
 	}
 	enabled := func(id string) bool { return SelectionEnabled(options.Selections, id) }
 	registerShellTool(registry, options.Exec, enabled, diagnosticWriter)
-	registerFilesystemTools(registry, enabled, policy)
+	registerFilesystemTools(registry, enabled, policy, audioCodec)
 	registerWebTools(registry, enabled)
 	registerDisplayTools(registry, enabled, gateDisplayTools, displayCapability, displaySurface)
 	registerUtilityTools(registry, enabled, skillRoots)
 	return registry
+}
+
+func firstAudioCodec(codecs []audiocodec.Service) audiocodec.Service {
+	if len(codecs) == 0 {
+		return nil
+	}
+	return codecs[0]
 }
 
 func requireFilesystemPolicy(policy *filesystem.FilesystemPolicy, required bool) *filesystem.FilesystemPolicy {
@@ -159,17 +198,17 @@ func registerShellTool(registry *ToolRegistry, policy public.ExecPolicy, enabled
 	registerTool(registry, shell.NewExecToolWithPolicyAndDiagnosticWriter("", false, policy, diagnosticWriter))
 }
 
-func registerFilesystemTools(registry *ToolRegistry, enabled func(string) bool, policy *filesystem.FilesystemPolicy) {
-	registerReadTools(registry, enabled, policy)
+func registerFilesystemTools(registry *ToolRegistry, enabled func(string) bool, policy *filesystem.FilesystemPolicy, audioCodec audiocodec.Service) {
+	registerReadTools(registry, enabled, policy, audioCodec)
 	registerWriteTools(registry, enabled, policy)
 }
 
-func registerReadTools(registry *ToolRegistry, enabled func(string) bool, policy *filesystem.FilesystemPolicy) {
+func registerReadTools(registry *ToolRegistry, enabled func(string) bool, policy *filesystem.FilesystemPolicy, audioCodec audiocodec.Service) {
 	if enabled("read_file") {
 		if policy != nil {
-			registerTool(registry, filesystem.NewReadFileToolWithPolicy(policy))
+			registerTool(registry, filesystem.NewReadFileToolWithPolicyAndAudioCodec(policy, audioCodec))
 		} else {
-			registerTool(registry, filesystem.NewReadFileTool("", false))
+			registerTool(registry, filesystem.NewReadFileToolWithAudioCodec("", false, audioCodec))
 		}
 	}
 	if enabled(filesystem.ReadImageToolID) {

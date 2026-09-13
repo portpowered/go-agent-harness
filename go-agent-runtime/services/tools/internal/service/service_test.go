@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audiocodec"
 	public "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
@@ -113,6 +114,65 @@ func TestDefaultCapabilityBindsSkillRootsPerRequest(t *testing.T) {
 	if got := resolve(secondRoot); !strings.Contains(got, "second request body") {
 		t.Fatalf("second bound skill = %q", got)
 	}
+}
+
+func TestDefaultCapabilityInjectsAudioCodecIntoReadFile(t *testing.T) {
+	workspace := t.TempDir()
+	path := filepath.Join(workspace, "sample.wav")
+	if err := os.WriteFile(path, []byte("encoded audio"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	codec := &serviceTestAudioCodec{}
+	capability, err := NewWithAudioCodec(codec).Resolve(context.Background(), public.Request{
+		WorkDir:        workspace,
+		UseDefaultTool: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	arguments, err := json.Marshal(map[string]string{"path": path})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := capability.Invoker.Invoke(context.Background(), public.Invocation{
+		ID:        "audio-call",
+		Name:      "read_file",
+		Arguments: string(arguments),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if codec.calls.Load() != 1 {
+		t.Fatalf("codec calls = %d, want one injected conversion", codec.calls.Load())
+	}
+	if len(result.ContentParts) != 1 {
+		t.Fatalf("content parts = %#v, want one audio part", result.ContentParts)
+	}
+	audio, ok := result.ContentParts[0].(messages.AudioPart)
+	if !ok || audio.MediaType != "audio/pcm" || len(audio.Bytes) == 0 {
+		t.Fatalf("audio result = %#v, want non-empty audio/pcm", result.ContentParts[0])
+	}
+}
+
+type serviceTestAudioCodec struct {
+	calls atomic.Int32
+}
+
+func (c *serviceTestAudioCodec) Convert(ctx context.Context, request audiocodec.Request) (audiocodec.Result, error) {
+	c.calls.Add(1)
+	if err := ctx.Err(); err != nil {
+		return audiocodec.Result{}, err
+	}
+	if len(request.Input) == 0 || request.Limits.MaxInputBytes != audiocodec.DefaultMaxInputBytes {
+		return audiocodec.Result{}, errors.New("filesystem adapter did not supply codec bounds")
+	}
+	return audiocodec.Result{
+		PCM16:       []byte{0, 0, 1, 0},
+		InputFormat: audiocodec.FormatWAV,
+		SampleRate:  audiocodec.PCM16SampleRate,
+		Channels:    audiocodec.PCM16Channels,
+		Encoding:    audiocodec.PCM16Encoding,
+	}, nil
 }
 
 type testExecutor struct{}

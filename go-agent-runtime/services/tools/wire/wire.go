@@ -10,6 +10,7 @@ package wire
 
 import (
 	"github.com/google/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audiocodec"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/policy"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/service"
@@ -19,6 +20,14 @@ import (
 // request by the returned service rather than during graph construction.
 func NewService() tools.Service {
 	wire.Build(service.New, wire.Bind(new(tools.Service), new(*service.Service)))
+	return nil
+}
+
+// NewServiceWithAudioCodec creates the tools service with a host-composed
+// codec. The dependency is a public contract so the reusable tools service
+// never imports another service's implementation or Wire package.
+func NewServiceWithAudioCodec(codec audiocodec.Service) tools.Service {
+	wire.Build(service.NewWithAudioCodec, wire.Bind(new(tools.Service), new(*service.Service)))
 	return nil
 }
 

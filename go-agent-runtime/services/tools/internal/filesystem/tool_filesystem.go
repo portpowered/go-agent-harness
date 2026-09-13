@@ -2,7 +2,6 @@ package filesystem
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"image"
 	_ "image/gif"
@@ -11,9 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audiocodec"
-	audiocodecwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audiocodec/wire"
 
 	_ "golang.org/x/image/webp"
 )
@@ -229,22 +225,4 @@ func imageToNative(path string, content []byte) ([]byte, string, error) {
 		}
 		return out.Bytes(), imageJPEGMediaType, nil
 	}
-}
-
-// audioToPCM16k converts audio file content to PCM 16kHz mono (s16le) using ffmpeg.
-func audioToPCM16k(ctx context.Context, content []byte) ([]byte, error) {
-	result, err := audiocodecwire.NewService().Convert(ctx, audiocodec.Request{
-		Input:      content,
-		FormatHint: "",
-		Limits: audiocodec.Limits{
-			MaxInputBytes:  audiocodec.DefaultMaxInputBytes,
-			MaxOutputBytes: audiocodec.DefaultMaxOutputBytes,
-			MaxStderrBytes: audiocodec.DefaultMaxStderrBytes,
-			MaxDuration:    audiocodec.DefaultMaxDuration,
-		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("ffmpeg convert to PCM 16kHz: %w", err)
-	}
-	return result.PCM16, nil
 }
