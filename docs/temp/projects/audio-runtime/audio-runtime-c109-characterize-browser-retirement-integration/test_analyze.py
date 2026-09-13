@@ -189,6 +189,14 @@ class PublicRunnerArgumentTests(unittest.TestCase):
             with self.assertRaises(RUNNER.PublicCheckError):
                 RUNNER.validate_output_path(output, caller_tree)
 
+    def test_short_platform_controls_precede_long_integration_stress(self) -> None:
+        labels = [item[3] for item in RUNNER.command_set("browser-audio-tool", Path("."), 90)]
+        devices = labels.index("accumulated session CI regressions race devices")
+        openai = labels.index("accumulated session CI regressions race openai")
+        stress = labels.index("accumulated session CI regressions race integration stress")
+        self.assertLess(devices, stress)
+        self.assertLess(openai, stress)
+
 
 class PublicRunnerCleanupTests(unittest.TestCase):
     def test_cleanup_reaps_surviving_group_after_leader_closes_stdout(self) -> None:
