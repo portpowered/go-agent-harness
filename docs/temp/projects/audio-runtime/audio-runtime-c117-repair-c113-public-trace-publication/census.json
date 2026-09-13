@@ -15,7 +15,7 @@
       "500",
       "--all"
     ],
-    "payload_sha256": "c507e8caf069c9c901ca714bec78e39b3fefd421f58b8ca6afe11a5d917efdec",
+    "payload_sha256": "4e377dd984ce2082b16af7b7e35a0a9588f951c584f23fb936448b656cdfbcd3",
     "rows": [
       {
         "baseRevision": null,
@@ -65,6 +65,21 @@
       {
         "baseRevision": null,
         "branch": null,
+        "content": null,
+        "last_output": null,
+        "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+        "rejection_feedback": null,
+        "state": {
+          "name": "init",
+          "type": "PROCESSING"
+        },
+        "workId": "work-review-278",
+        "workTypeName": "review",
+        "worktree": null
+      },
+      {
+        "baseRevision": null,
+        "branch": null,
         "content": [
           {
             "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle\", \"branch\": \"codex/audio-runtime-c79-retire-cli-response-lifecycle\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
@@ -75,7 +90,7 @@
         "name": "audio-runtime-c79-retire-cli-response-lifecycle",
         "rejection_feedback": null,
         "state": {
-          "name": "init",
+          "name": "in-review",
           "type": "PROCESSING"
         },
         "workId": "work-task-114",
@@ -100,21 +115,6 @@
         },
         "workId": "work-task-268",
         "workTypeName": "task",
-        "worktree": null
-      },
-      {
-        "baseRevision": null,
-        "branch": null,
-        "content": null,
-        "last_output": null,
-        "name": "audio-runtime-c112-retire-cli-session-trace-evidence",
-        "rejection_feedback": null,
-        "state": {
-          "name": "init",
-          "type": "PROCESSING"
-        },
-        "workId": "work-thoughts-274",
-        "workTypeName": "thoughts",
         "worktree": null
       },
       {
@@ -436,6 +436,26 @@
         "workId": "work-thoughts-257",
         "workTypeName": "thoughts",
         "worktree": null
+      },
+      {
+        "baseRevision": null,
+        "branch": null,
+        "content": [
+          {
+            "text": "{\"request\":{\"requestId\":\"audio-runtime-c118-session-terminal-diagnostics-retirement-20260913T0221Z\",\"type\":\"FACTORY_REQUEST_BATCH\",\"works\":[{\"name\":\"audio-runtime-c118-retire-cli-session-terminal-diagnostics\",\"workTypeName\":\"idea\",\"payload\":{\"project\":\"audio-runtime\",\"contractRevision\":\"audio-runtime-v1\",\"title\":\"Retire CLI session terminal diagnostics policy\",\"requestedOutcome\":\"Move the terminal precedence, provider/error classification, output-state selection, unresolved-continuation terminal metadata, final accounting and terminal metrics publication now implemented in agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go behind a thin public go-agent-runtime/services/sessionterminal contract, a private internal implementation and dedicated Wire construction. Preserve exactly-once terminal emission, cancellation precedence, typed error identity, terminal reason/output-state semantics, final byte/turn accounting and bounded clean shutdown. Delete the owned legacy production file and retire at least 180 accepted-main physical production lines; new runtime code, generated Wire, tests, fixtures, evidence and wrapper-only movement do not count. Keep any required CLI compatibility surface as decision-free adapters outside the deleted file. C107 characterization is evidence only and grants no mutation lease; independently re-verify every caller before mutation. Do not edit C79 response-lifecycle source, C110-C117 owned paths, or the two shared registry/baseline files while C79's lease is active. Checkpoint disjoint implementation now; after C79 guarded-merges, reconcile accepted main and obtain explicit ownership before applying only the demonstrated sessionterminal Wire registration and downward/stale architecture entries before changed-head script CI.\",\"sourcePlanRef\":\"factory/projects/audio-runtime/source-plan.md#governing-execution-plan\",\"ownedPaths\":[\"agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go\",\"agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal_test.go\",\"go-agent-runtime/services/sessionterminal/\",\"coverage-manifest/go-agent-runtime/services/sessionterminal/\",\"docs/temp/projects/audio-runtime/audio-runtime-c118-retire-cli-session-terminal-diagnostics/\"],\"verification\":\"First inventory every production caller of emitTerminal, emitUserCancelledTerminal, userCancellationOutputState, finish, finalAccounting and emitMetricsMatrix, and preserve a fail-closed scope/caller report against the admitted source revision. Add focused normal and race coverage for TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic, TestSessionProgressObserver_IgnoresNonTerminalProviderDiagnostic and TestSessionCancellation_RecordsTerminalDiagnosticOnce, plus a causal mutation that drops final failure or changes cancellation/output-state precedence and must fail. Add a GOWORK=off external consumer importing only services/sessionterminal and proving typed classifications, output state and accounting without CLI imports or hidden initialization. Run the credential-free shipped yui replay and cancellation/error workflows and scripts/test-session-ci-regressions.sh all, checking exactly one terminal diagnostic, correct terminal reason/output state, final accounting, observable output and clean shutdown. Enforce deletion of the owned legacy production file and at least 180 net accepted-main legacy physical lines without baseline increases. Keep the shared Wire/baseline checks blocked, not bypassed, until C79 releases ownership; then integrate accepted main, update only demonstrated sessionterminal entries, run current-head script CI, obtain fresh independent review and guarded merge. After merge the meta-planner must send a fresh immutable-executable Luna engineering scope=vertical probe for SERVICE, TRACE, REPLAY, FAILURES, QUALITY and PARITY, exercising the changed public terminal workflow and an existing audio/tool replay regression.\",\"remainingGateIDs\":[\"AUDIO\",\"DEVICE\",\"EMBED\",\"SERVICE\",\"TRACE\",\"REPLAY\",\"FAILURES\",\"QUALITY\",\"PARITY\"]}}],\"relations\":[]}}",
+            "type": "text"
+          }
+        ],
+        "last_output": null,
+        "name": "audio-runtime-c112-retire-cli-session-trace-evidence",
+        "rejection_feedback": null,
+        "state": {
+          "name": "complete",
+          "type": "TERMINAL"
+        },
+        "workId": "work-thoughts-274",
+        "workTypeName": "thoughts",
+        "worktree": null
       }
     ]
   },
@@ -644,14 +664,105 @@
         "headRefOid": "a9099ec555644517fc10f0d4ecbddd3f3cf7c56b",
         "number": 470,
         "state": "OPEN",
-        "statusCheckRollup": [],
+        "statusCheckRollup": [
+          {
+            "__typename": "CheckRun",
+            "completedAt": "2026-09-13T02:25:47Z",
+            "conclusion": "SUCCESS",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34732829282/job/103658697025",
+            "name": "CI (static)",
+            "startedAt": "2026-09-13T02:21:07Z",
+            "status": "COMPLETED",
+            "workflowName": "CI"
+          },
+          {
+            "__typename": "CheckRun",
+            "completedAt": "2026-09-13T02:23:07Z",
+            "conclusion": "SUCCESS",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34732829282/job/103658697090",
+            "name": "CI (unit)",
+            "startedAt": "2026-09-13T02:21:07Z",
+            "status": "COMPLETED",
+            "workflowName": "CI"
+          },
+          {
+            "__typename": "CheckRun",
+            "completedAt": "2026-09-13T02:32:26Z",
+            "conclusion": "SUCCESS",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34732829282/job/103658696990",
+            "name": "CI (integration)",
+            "startedAt": "2026-09-13T02:21:08Z",
+            "status": "COMPLETED",
+            "workflowName": "CI"
+          },
+          {
+            "__typename": "CheckRun",
+            "completedAt": "2026-09-13T02:31:24Z",
+            "conclusion": "SUCCESS",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34732829282/job/103658697078",
+            "name": "CI (coverage)",
+            "startedAt": "2026-09-13T02:21:07Z",
+            "status": "COMPLETED",
+            "workflowName": "CI"
+          },
+          {
+            "__typename": "CheckRun",
+            "completedAt": "2026-09-13T02:22:30Z",
+            "conclusion": "SUCCESS",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34732829282/job/103658697011",
+            "name": "CI (race)",
+            "startedAt": "2026-09-13T02:21:07Z",
+            "status": "COMPLETED",
+            "workflowName": "CI"
+          },
+          {
+            "__typename": "CheckRun",
+            "completedAt": "2026-09-13T02:30:55Z",
+            "conclusion": "SUCCESS",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34732829282/job/103658697024",
+            "name": "CI (hermetic)",
+            "startedAt": "2026-09-13T02:21:08Z",
+            "status": "COMPLETED",
+            "workflowName": "CI"
+          },
+          {
+            "__typename": "CheckRun",
+            "completedAt": "2026-09-13T02:22:04Z",
+            "conclusion": "SUCCESS",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34732829282/job/103658696928",
+            "name": "CI (WebMCP Chrome)",
+            "startedAt": "2026-09-13T02:21:11Z",
+            "status": "COMPLETED",
+            "workflowName": "CI"
+          },
+          {
+            "__typename": "CheckRun",
+            "completedAt": "2026-09-13T02:24:43Z",
+            "conclusion": "SUCCESS",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34732829282/job/103658697013",
+            "name": "CI (macOS audio release)",
+            "startedAt": "2026-09-13T02:21:11Z",
+            "status": "COMPLETED",
+            "workflowName": "CI"
+          },
+          {
+            "__typename": "CheckRun",
+            "completedAt": "2026-09-13T02:22:09Z",
+            "conclusion": "SUCCESS",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34732829282/job/103658697072",
+            "name": "CI (Windows audio portable)",
+            "startedAt": "2026-09-13T02:21:08Z",
+            "status": "COMPLETED",
+            "workflowName": "CI"
+          }
+        ],
         "title": "refactor: retire CLI response lifecycle",
         "url": "https://github.com/portpowered/go-agent-harness/pull/470"
       }
     },
     "work": "audio-runtime-c79-retire-cli-response-lifecycle"
   },
-  "current_head": "3963bc3566da24f8214634c17a9d0f79a6724171",
+  "current_head": "7f116013142762dee39acae21fd2cf104d2e0473",
   "host_source_and_test_paths": {
     "c108_artifacts_at_planning_main": [
       {

@@ -14,6 +14,7 @@
     "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/verify.py",
     "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/README.md",
     "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/admission.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/c108-source-base-and-checksums.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/census.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/pre-c112-scope.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/reproduce_c113.py",
@@ -30,12 +31,12 @@
       "SHA256SUMS"
     ],
     "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c117-repair-c113-public-trace-publication/docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps",
-    "elapsed_seconds": 0.029,
+    "elapsed_seconds": 0.024,
     "exit_code": 0,
     "timed_out": false
   },
-  "current_descendant": "ed13651aa961f486e6f1c36b8991d22e79534871",
-  "head": "57935430bddff04d5ffd9682b8e41b5e76b4951e",
+  "current_descendant": "7f116013142762dee39acae21fd2cf104d2e0473",
+  "head": "7f116013142762dee39acae21fd2cf104d2e0473",
   "integrated_base": "3963bc3566da24f8214634c17a9d0f79a6724171",
   "native_windows_hardware_and_acoustics": "OUT_OF_SCOPE_AND_NEVER_PASS",
   "negative_controls": "preserved; validated by the C108 verifier without rewriting C108 evidence on the C117 successor branch",

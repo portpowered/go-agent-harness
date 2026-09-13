@@ -141,7 +141,7 @@ def status_paths() -> list[str]:
 def validate_scope(paths: list[str], allowed: set[str]) -> None:
     outside = [path for path in sorted(set(paths)) if path not in allowed and not path.startswith(C117_REL + "/")]
     if outside:
-        raise EvidenceFailure("pre-C112 mutation outside run_trace_test.go and C117 evidence: " + ", ".join(outside))
+        raise EvidenceFailure("pre-C112 mutation outside owned C117 paths: " + ", ".join(outside))
 
 
 def read_factory_manifest() -> dict[str, Any]:
@@ -405,7 +405,7 @@ def pre_c112_scope() -> dict[str, Any]:
     for revision in (STARTUP_INTEGRATION, PLANNING_MAIN):
         if not exact_ancestor(revision, head):
             raise EvidenceFailure(f"pre-C112 candidate is missing required ancestry {revision}")
-    allowed = {C117_TEST}
+    allowed = {C117_TEST, C108_PROVENANCE, C108_VERIFIER, C108_SUMS}
     validate_scope(changed_paths(PLANNING_MAIN, head) + status_paths(), allowed)
     forbidden = [path for path in changed_paths(PLANNING_MAIN, head) + status_paths() if path.startswith("go-agent-runtime/services/sessiontrace/") or path in {"scripts/wire-packages.txt", "docs/architecture/architecture-size-baseline.json"}]
     if forbidden:
