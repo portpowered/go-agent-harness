@@ -1,0 +1,14 @@
+{
+  "candidate_revision": "c1b51a9f04c73efe9d82163acd469bf3df5c5f58",
+  "report": {
+    "baseline_lines": 529,
+    "baseline_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+    "baseline_sha256": "6af84c56c1a507bc9927b15a22b28a13b514dad3d40c467a3059bd8e58b119d2",
+    "branch": "codex/audio-runtime-c99-retire-cli-room-participant-planning",
+    "consumer": "?   \texample.com/audio-runtime-c99-roomplanning-consumer\t[no test files]\n",
+    "current_lines": 29,
+    "orchestration_unchanged": true,
+    "shared_lease_unchanged": true
+  },
+  "schema": "audio-runtime.c99.retirement.v1"
+}
