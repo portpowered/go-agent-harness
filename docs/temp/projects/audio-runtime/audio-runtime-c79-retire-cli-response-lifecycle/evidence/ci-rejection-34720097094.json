@@ -1,0 +1,18 @@
+{
+  "schema": "audio-runtime-c79-ci-rejection/v1",
+  "run": "34720097094",
+  "head": "996ce66ea7ca52f7f6c7c5229cdf54c97417a5c7",
+  "job": "103624263489",
+  "check": "CI (WebMCP Chrome)",
+  "status": "failure",
+  "step": "Run production-binary cross-process cancellation acceptance",
+  "command": "go test ./internal/webmcp/chrome -run '^TestWebMCPDirectCLIWithPinnedChromeCrossProcessCancel$' -count=1 -v",
+  "log": [
+    "acquire locked Chrome for Testing: Chrome for Testing fallback failed: manifest_unavailable",
+    "TestWebMCPDirectCLIWithPinnedChromeCrossProcessCancel failed after the bounded 30.00s acquisition wait"
+  ],
+  "classification": "external_prerequisite",
+  "ownership": "not C79-owned; no C79 source repair is demonstrated by this failure",
+  "next_action": "submit the changed C79 candidate to the script CI gate; CI owns the current-head check and any repeat infrastructure diagnosis",
+  "acceptance": "executor evidence only; no CI-green, review, merge, vertical-probe, or project-acceptance claim"
+}
