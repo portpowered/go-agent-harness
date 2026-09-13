@@ -59,6 +59,12 @@
       "output": "normal, coverage, and race modes all exited zero; race high-rate test46 trials passed"
     },
     {
+      "name": "out-of-lease browser reproduction",
+      "command": "rtk proxy go test ./agent-cli/internal/services/internal/agentruntime -run '^TestRunBrowserConversationInterruptsInFlightWorkAndPreservesDetachedTab$' -count=1 -timeout=60s",
+      "exit": 0,
+      "output": "ok; the exact browser interruption test passed in a standalone local run; prior broad CI coverage failure remains non-reproduced and out of the C127 lease"
+    },
+    {
       "name": "format and diff",
       "command": "rtk proxy make fmt; rtk proxy git diff --check",
       "exit": 0,
@@ -128,7 +134,7 @@
       "name": "public runner",
       "command": "rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c127-repair-current-main-terminal-drain-regression/run.py --mode public --case software-device-tool-drain --case credential-free-audio-tool-replay --child-timeout 60 --aggregate-timeout 300",
       "exit": 0,
-      "output": "public-run.json; source-pinned yui sha256=8e8db1f19527d10cc7ea53653db95a790f6852199784efe10e011be5f238ab1d; both cases emitted marker, continuation, fixture_complete/provider_close, 4800 PCM bytes, terminal_queue=0; aggregate_elapsed_ms=172"
+      "output": "public-run.json; candidate=d21d224b8394e913e31f70d074c4aac53bc30477; source-pinned yui sha256=8e8db1f19527d10cc7ea53653db95a790f6852199784efe10e011be5f238ab1d; both cases emitted marker, continuation, fixture_complete/provider_close, 4800 PCM bytes, terminal_queue=0; aggregate_elapsed_ms=281"
     },
     {
       "name": "public replay artifact",
