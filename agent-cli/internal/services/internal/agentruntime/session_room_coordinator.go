@@ -22,9 +22,7 @@ type roomCoordinator struct {
 	reason RoomTerminationReason
 	err    error
 	active map[string]*roomParticipantRuntime
-	// boundRuntimes preserves the participants captured at the bound until the
-	// grace window expires. A participant may retire from active while its
-	// already-started response still needs the force-phase cancellation.
+	// boundRuntimes preserves bound-start participants through grace.
 	boundRuntimes         []*roomParticipantRuntime
 	results               map[string]RoomParticipantResult
 	maxTurns              int
@@ -179,10 +177,7 @@ func (c *roomCoordinator) awaitBoundGrace() {
 	}
 }
 
-// forceBoundShutdown is the deliberate second phase of a bound stop. It
-// closes the session-loop cancellation signal before cancelling participant
-// contexts, so the loop can drain any already-queued terminal deltas through
-// its normal stop path.
+// forceBoundShutdown is the second phase of a bound stop before cancellation.
 func (c *roomCoordinator) forceBoundShutdown() {
 	if c == nil {
 		return
@@ -195,14 +190,7 @@ func (c *roomCoordinator) forceBoundShutdown() {
 		}
 		c.boundForced = true
 		var firstFailure error
-		runtimes := append([]*roomParticipantRuntime(nil), c.boundRuntimes...)
-		if len(runtimes) == 0 {
-			for _, runtime := range c.active {
-				if runtime != nil {
-					runtimes = append(runtimes, runtime)
-				}
-			}
-		}
+		runtimes := c.boundRuntimes
 		for _, runtime := range runtimes {
 			if runtime != nil {
 				if runtime.lifecycle != nil {
