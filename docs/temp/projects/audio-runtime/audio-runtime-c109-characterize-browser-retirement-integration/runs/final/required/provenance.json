@@ -4,7 +4,7 @@
     "acceptedMain": "dded566273b27f7146c4e630a0f23fb9402198da",
     "c61": "8d9ce4cb0b0654ac021b42651d9f69f6614922a2",
     "c83": "1bebaaa7ed3e47b4db24b82571000cd8e08b3048",
-    "reviewMain": "7640e6dada43591e68443d1bbc21bd3e155bfbeb"
+    "reviewMain": "c81dbab5939c79bbae35258796d65531e80cd476"
   },
   "candidates": {
     "c61": {
@@ -44,16 +44,38 @@
     "exit_code": 0,
     "output_retained": false,
     "reason": "fetch transport output is mutable; commit/ref identity is retained instead",
-    "resolved_origin_main": "915ed982d23f2e549e529ff43c4f370b4b51e394",
+    "resolved_origin_main": "4a1c399ccbb3d780be95eb04316e84b8f11a6646",
     "status": "passed"
   },
-  "fetchedOriginMain": "915ed982d23f2e549e529ff43c4f370b4b51e394",
+  "fetchedOriginMain": "4a1c399ccbb3d780be95eb04316e84b8f11a6646",
   "hostCheckout": {
-    "afterStatus": [],
-    "beforeStatus": [],
+    "afterStatus": [
+      "M docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/control/ledger.json",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/control/provenance.json",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/control/report.json",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/control/run-manifest.json",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/public/browser-audio-tool.json",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/public/malformed-or-canceled.json",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/required/ledger.json",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/required/provenance.json",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/required/report.json",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/required/run-manifest.json"
+    ],
+    "beforeStatus": [
+      "M docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/control/ledger.json",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/control/provenance.json",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/control/report.json",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/control/run-manifest.json",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/public/browser-audio-tool.json",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/public/malformed-or-canceled.json",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/required/ledger.json",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/required/provenance.json",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/required/report.json",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/required/run-manifest.json"
+    ],
     "branch": "codex/audio-runtime-c109-characterize-browser-retirement-integration",
     "changedStatusLines": [],
-    "head": "ca618fe68ef181b2c75ccf7efaada0cf2b328760",
+    "head": "1e2441a986203aae311dda0cef496eefc8b2b990",
     "scopeClean": true
   },
   "newerMainFetchedAndIntegrated": true,
@@ -139,7 +161,7 @@
       },
       {
         "name": "refs/remotes/origin/main",
-        "object": "915ed982d23f2e549e529ff43c4f370b4b51e394"
+        "object": "4a1c399ccbb3d780be95eb04316e84b8f11a6646"
       }
     ],
     "before": [
@@ -169,7 +191,7 @@
       },
       {
         "name": "refs/remotes/origin/main",
-        "object": "915ed982d23f2e549e529ff43c4f370b4b51e394"
+        "object": "4a1c399ccbb3d780be95eb04316e84b8f11a6646"
       }
     ],
     "candidateRefsUnchanged": true,
@@ -177,12 +199,12 @@
   },
   "refsUnchanged": true,
   "requestedAcceptedMain": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-  "reviewMain": "915ed982d23f2e549e529ff43c4f370b4b51e394",
+  "reviewMain": "4a1c399ccbb3d780be95eb04316e84b8f11a6646",
   "schema": "audio-runtime-c109-provenance-v2",
   "sourceBinding": {
     "cleanScripts": true,
-    "committedHead": "ca618fe68ef181b2c75ccf7efaada0cf2b328760",
-    "committedTree": "a17660c375aebee7b72b2864d51485a18d1d2487",
+    "committedHead": "1e2441a986203aae311dda0cef496eefc8b2b990",
+    "committedTree": "e3f57cd9a3f6cc05c6f87c33065e08a13423d662",
     "scripts": [
       {
         "head_blob": "46605eb4beb1d026b2e4b1b81a57b2fa83e08a69",
@@ -213,7 +235,18 @@
         "working_tree_sha256": "6ed6034e69fd17adc3988c932e9f09ed78e2a3283b755e51bd8c658628958b15"
       }
     ],
-    "statusAfter": [],
+    "statusAfter": [
+      "M docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/control/ledger.json",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/control/provenance.json",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/control/report.json",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/control/run-manifest.json",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/public/browser-audio-tool.json",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/public/malformed-or-canceled.json",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/required/ledger.json",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/required/provenance.json",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/required/report.json",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/required/run-manifest.json"
+    ],
     "statusBefore": []
   },
   "startupIntegrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
@@ -225,7 +258,7 @@
       {
         "branch": "refs/heads/codex/audio-runtime-c109-characterize-browser-retirement-integration",
         "detached": false,
-        "head": "ca618fe68ef181b2c75ccf7efaada0cf2b328760",
+        "head": "1e2441a986203aae311dda0cef496eefc8b2b990",
         "locked": false,
         "path": ".claude/worktrees/audio-runtime-c109-characterize-browser-retirement-integration",
         "prunable": "",

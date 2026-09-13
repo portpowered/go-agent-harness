@@ -11,11 +11,11 @@ The preserved candidate revisions are C61
 `8e8177c031a7b3b9322d712af19970e13fa7a1bc` and C83
 `22cc6769aaf06d1e2c1275b064cc7ec29de3e371`.
 The final provenance records the freshly fetched `origin/main` as the newer
-integrated review main; the current revalidation uses
-`915ed982d23f2e549e529ff43c4f370b4b51e394` and the branch diff relative to that
-review main remains C109-owned only. This is the accepted C127 repair mainline
-after its independent vertical repro; C109 does not duplicate its provider-
-audio repair.
+integrated review main; the latest revalidation uses
+`4a1c399ccbb3d780be95eb04316e84b8f11a6646` and the branch diff relative to
+that review main remains C109-owned only. This includes the accepted C127
+repair mainline after its independent vertical repro; C109 does not duplicate
+its provider-audio repair.
 The required and control synthetic rehearsals intentionally remain based on
 the admitted accepted main, as required by the PRD.  Because the newer review
 main deletes the architecture baseline that C61 still modifies, the final
@@ -52,6 +52,32 @@ The C79-owned `scripts/wire-packages.txt` and
 6,400-sample integration loss remains assigned to C79/provider audio and is
 not duplicated, repaired, or relabeled here.  C61 and C83 remain unmerged and
 unaccepted until their own task/review/CI gates are resolved.
+
+## Latest current-main recovery
+
+After review-63 required a current-main refresh, the executor fetched
+`origin/main=4a1c399ccbb3d780be95eb04316e84b8f11a6646` and integrated it into
+the preserved C109 branch as merge commit
+`1e2441a986203aae311dda0cef496eefc8b2b990` (parents
+`db2b2ce48d0f7bb9477a4e92769b990ea3254157` and
+`4a1c399ccbb3d780be95eb04316e84b8f11a6646`). The immutable accepted-main,
+C61, and C83 inputs remain `d4766c3d`, `8e8177c0`, and `22cc6769`; the
+preserved candidate refs and worktrees remained unchanged, and the startup
+integration revision remains `8bdafc7f`.
+
+Required and reverse-order analyzer rehearsals pass against the exact pinned
+inputs and bind to review main `4a1c399c`; the full verifier passes all eight
+checks and 20 negative fixtures. The fresh credential-free positive public
+matrix passes 18/18 in `279.779s` under `90/300` seconds; the malformed or
+canceled negative matrix passes 3/3 in `42.608s` under `60/180` seconds.
+Both reports preserve clean synthetic trees, credential scrubbing, observable
+software effects, and process-group cleanup. Final report hashes are retained
+in `runs/final`; the final verification SHA-256 is
+`03d30f46ee5e3c7ebeb9668f5023e4cbc4f23e4e121d3adae3e542ce41fe07e1`.
+
+This remains executor evidence only: the new head has not been submitted to
+script CI yet, and no CI-green, review, guarded merge, C61/C83 acceptance,
+vertical probe, hardware/acoustic proof, or project-completion claim is made.
 
 ## C127 accepted-main dependency recovery
 
