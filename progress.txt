@@ -4074,3 +4074,35 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   same PR `#435`, update its body with the repair/evidence map, then return
   `ACCEPTED` to the script-owned current-head CI gate without polling; retain
   this task through `CONTINUE` for any exact CI rejection or actionable repair.
+
+# C148 recovery ownership-return checkpoint — 2026-09-13T21:24:38Z
+
+- Admission was reverified for the sole `audio-runtime` project and task
+  `audio-runtime-c148-recover-c129-interactive-policy-adapter`; `prd.json` still
+  matches the isolated branch. The candidate is clean at the preserved C129
+  checkpoint `4459d56ef3213c2fdb173180b3f4f159bb2b89c0`; fetched
+  `origin/main=4a1c399ccbb3d780be95eb04316e84b8f11a6646`, startup integration
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, and predecessor ancestry remain
+  preserved. The C129 sibling worktree, PR 510 and historical evidence were not
+  mutated.
+- C148-owned policy/planning tests pass normally and under race; the public
+  external consumer passes with `GOWORK=off`; and `make test-regressions` passes
+  the agent-cli replay regressions plus all five gateway replay packages.
+- The unchanged provider-close oracle passes ten repeats at `GOMAXPROCS=1` but
+  fails one of ten at `GOMAXPROCS=2` and four of ten at `GOMAXPROCS=4`, waiting at
+  its unchanged line-338 gated-executor signal. Trace evidence shows the run
+  reaches provider-close handling before the executor observes the tool batch;
+  no deterministic policy error or policy initialization delay was found.
+  The unchanged room-duration oracle passed the latest ten-repeat
+  `CGO_ENABLED=0 -tags=nomicrophone` control but retains the inherited CI failure
+  and earlier intermittent zero-cancellation result.
+- The first causal boundaries are outside C148 `ownedPaths`: shared live close
+  handling in `go-agent-runtime/services/session/internal/live`, asynchronous
+  engine/tool scheduling in `go-agent-loop`, and room observation/timer
+  orchestration in `agent-cli/.../session_room_*`. No speculative code/test,
+  oracle/deadline, second-project or waiver mutation was made. The exact report
+  is `docs/temp/projects/audio-runtime/audio-runtime-c148-recover-c129-interactive-policy-adapter/reports/ownership-return.json`.
+- Required next action: obtain an explicit ownership transfer/expansion for the
+  shared session/agent-loop and room paths, or authorize a same-project follow-on
+  repair task; then rerun the unchanged oracles and repair only their demonstrated
+  first cause. No changed C148 candidate is submitted to PR 510 or SCRIPT CI.
