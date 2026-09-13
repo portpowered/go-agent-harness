@@ -37,6 +37,7 @@ INTEGRATED_BASE_REVISION = "3963bc3566da24f8214634c17a9d0f79a6724171"
 BASELINE = "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad"
 C117_BRANCH = "codex/audio-runtime-c117-repair-c113-public-trace-publication"
 C117_OWNED_REL = "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication"
+C146_OWNED_REL = "docs/temp/projects/audio-runtime/audio-runtime-c146-recover-c117-public-trace-publication"
 C117_SUCCESSOR_PATHS = {
     "agent-cli/internal/transport/cli/internal/livehost/run.go",
     "agent-cli/internal/transport/cli/internal/livehost/run_trace_test.go",
@@ -46,7 +47,7 @@ C117_SUCCESSOR_PATHS = {
     "agent-cli/internal/wire/wire.go",
     "agent-cli/internal/wire/wire_gen.go",
     C117_OWNED_REL,
-    "docs/temp/projects/audio-runtime/audio-runtime-c146-recover-c117-public-trace-publication",
+    C146_OWNED_REL,
 }
 PRODUCTION_ROOTS = ("agent-cli", "go-agent-loop", "go-agent-runtime", "go-llm-gateway")
 PRD = ROOT / "prd.json"
@@ -236,7 +237,7 @@ def c117_successor() -> bool:
 def path_is_owned(path: str) -> bool:
     if path == OWNED_REL or path.startswith(OWNED_REL + "/"):
         return True
-    if c117_successor() and (path in C117_SUCCESSOR_PATHS or path.startswith(C117_OWNED_REL + "/")):
+    if c117_successor() and (path in C117_SUCCESSOR_PATHS or path.startswith(C117_OWNED_REL + "/") or path.startswith(C146_OWNED_REL + "/")):
         return True
     return False
 

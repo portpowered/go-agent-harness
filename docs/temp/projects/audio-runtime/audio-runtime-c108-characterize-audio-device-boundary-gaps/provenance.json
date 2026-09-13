@@ -92,7 +92,7 @@
   "branch": "codex/audio-runtime-c117-repair-c113-public-trace-publication",
   "candidate_revision": "c1c69000d2d239415bdf5646f4f873e5305d4156",
   "contract_revision": "audio-runtime-v1",
-  "current_descendant_revision": "9808ce8b6a78fa3cd7a8265ec75272c94512cd43",
+  "current_descendant_revision": "bbc2711042c3cbd44042fe1e246169e1c24514f4",
   "factory_server": "http://127.0.0.1:7439",
   "factory_session": "~default",
   "fetch": {
@@ -103,7 +103,7 @@
       "main"
     ],
     "cwd": ".",
-    "elapsed_seconds": 0.552,
+    "elapsed_seconds": 0.487,
     "exit_code": 0,
     "stderr": "From https://github.com/portpowered/go-agent-harness\n * branch                main       -> FETCH_HEAD\nAuto packing the repository in background for optimum performance.\nSee \"git help gc\" for manual housekeeping.\nwarning: The last gc run reported the following. Please correct the root cause\nand remove /Users/abdifamily/work/harness/go-agent-harness/.git/worktrees/audio-runtime-c117-repair-c113-public-trace-publication/gc.log\nAutomatic cleanup will not be performed until the file is removed.\n\nwarning: There are too many unreachable loose objects; run 'git prune' to remove them.\n\n",
     "stdout": "",
@@ -3633,7 +3633,10 @@
     "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/runs/ci-rejection-34740329453.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/runs/package-budget-repair.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/runs/pre-c112-test.json",
-    "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/verify.py"
+    "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/verify.py",
+    "docs/temp/projects/audio-runtime/audio-runtime-c146-recover-c117-public-trace-publication/README.md",
+    "docs/temp/projects/audio-runtime/audio-runtime-c146-recover-c117-public-trace-publication/run.py",
+    "docs/temp/projects/audio-runtime/audio-runtime-c146-recover-c117-public-trace-publication/verify.py"
   ],
   "successor_changed_paths": [
     "agent-cli/internal/transport/cli/internal/livehost/run.go",
@@ -3654,7 +3657,10 @@
     "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/runs/ci-rejection-34740329453.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/runs/package-budget-repair.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/runs/pre-c112-test.json",
-    "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/verify.py"
+    "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/verify.py",
+    "docs/temp/projects/audio-runtime/audio-runtime-c146-recover-c117-public-trace-publication/README.md",
+    "docs/temp/projects/audio-runtime/audio-runtime-c146-recover-c117-public-trace-publication/run.py",
+    "docs/temp/projects/audio-runtime/audio-runtime-c146-recover-c117-public-trace-publication/verify.py"
   ],
   "successor_unexpected_paths": [],
   "toolchain": {
