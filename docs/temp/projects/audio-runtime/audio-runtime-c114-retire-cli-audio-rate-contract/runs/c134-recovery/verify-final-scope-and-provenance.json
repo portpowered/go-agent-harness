@@ -7,7 +7,7 @@
         "."
       ],
       "cwd": "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/external-consumer",
-      "elapsedSeconds": 0.072,
+      "elapsedSeconds": 0.121,
       "exitCode": 0,
       "label": "external-consumer",
       "stderr": "",
@@ -25,15 +25,15 @@
         "-timeout=240s"
       ],
       "cwd": ".",
-      "elapsedSeconds": 2.277,
+      "elapsedSeconds": 2.8,
       "exitCode": 0,
       "label": "cli-audio-regressions",
       "stderr": "",
-      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t0.822s\n",
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t0.977s\n",
       "timedOut": false
     }
   ],
-  "elapsedSeconds": 2.85,
+  "elapsedSeconds": 3.652,
   "mode": "final-scope-and-provenance",
   "scope": {
     "admission": {
@@ -49,7 +49,7 @@
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness"
       ],
       "cwd": ".",
-      "elapsedSeconds": 0.095,
+      "elapsedSeconds": 0.115,
       "exitCode": 0,
       "label": "admission",
       "stderr": "",
@@ -63,10 +63,15 @@
       "coverage-manifest/go-agent-runtime/services/audiorate/package.json",
       "coverage-manifest/go-agent-runtime/services/audiorate/wire/package.json",
       "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/README.md",
+      "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/c134-recovery-summary.json",
       "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/external-consumer/go.mod",
       "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/external-consumer/go.sum",
       "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/external-consumer/main.go",
       "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/run.py",
+      "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/runs/c134-recovery/run-cases.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/runs/c134-recovery/verify-final-scope-and-provenance.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/runs/c134-recovery/verify-positive-and-causal-negative-controls.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/runs/c134-recovery/verify-retirement-callers-and-c101-readonly.json",
       "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/runs/run-cases.json",
       "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/runs/verify-final-scope-and-provenance.json",
       "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/runs/verify-positive-and-causal-negative-controls.json",
@@ -81,7 +86,7 @@
       "go-agent-runtime/services/audiorate/wire/wire_gen.go",
       "go-agent-runtime/services/audiorate/wire/wire_test.go"
     ],
-    "head": "df48faf0030818f747a4731e361f11d7efc321fb",
+    "head": "b566cc8c22fb02a05d9e143ca3b47ea13be9273e",
     "legacy": {
       "agent-cli/internal/services/internal/agentruntime/session_audio_format.go": {
         "baselineLines": 84,
