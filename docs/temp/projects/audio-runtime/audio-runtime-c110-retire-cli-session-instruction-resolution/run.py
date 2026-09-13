@@ -34,6 +34,7 @@ OUTPUT_LIMIT = 1 << 20
 SOURCE_FILES = (
     "agent-cli/internal/services/internal/agentruntime/session_instructions.go",
     "agent-cli/internal/services/internal/agentruntime/session_instructions_c110_test.go",
+    "go-agent-runtime/services/session/instructions.go",
     "go-agent-runtime/services/sessioninstructions/contract.go",
     "go-agent-runtime/services/sessioninstructions/contract_test.go",
     "go-agent-runtime/services/sessioninstructions/service.go",
