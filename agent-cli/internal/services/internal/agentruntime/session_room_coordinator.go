@@ -642,7 +642,7 @@ func (c *roomCoordinator) finishParticipant(runtime *roomParticipantRuntime, rea
 		// lifecycle observation may carry the provider's raw error, but the
 		// result contract must not leak it or lose its participant context.
 		if observation.err != nil {
-			if _, hasParticipantFailure := roomErrors.AsParticipantFailure(err); !hasParticipantFailure {
+			if participantFailure, hasParticipantFailure := roomErrors.AsParticipantFailure(err); !hasParticipantFailure || participantFailure == nil {
 				err = observation.err
 			}
 		}

@@ -5,7 +5,7 @@ import "testing"
 func TestContractTypesRemainHostNeutral(t *testing.T) {
 	var _ ParticipantFailure = participantFailureProbe{}
 	var _ Service = serviceProbe{}
-	if _, ok := AsParticipantFailure(nil); ok {
+	if failure, ok := AsParticipantFailure(nil); ok || failure != nil {
 		t.Fatal("nil error unexpectedly exposed a participant failure")
 	}
 }
