@@ -295,6 +295,25 @@ func TestProcessRunnerUsesExecCommandWithoutHostDecoder(t *testing.T) {
 	}
 }
 
+func TestProcessRunnerPreservesOverflowTerminationFailure(t *testing.T) {
+	input := writeRunnerInput(t)
+	limits := defaultLimits()
+	limits.MaxOutputBytes = 2
+	terminationErr := errors.New("decoder termination failed")
+	process := &testCommand{
+		stdoutData:   []byte{0, 0, 1, 0},
+		terminateErr: terminationErr,
+	}
+	runner := testProcessRunner(process)
+	_, err := runner.run(context.Background(), input, limits)
+	if !errors.Is(err, audiocodec.ErrOutputTooLarge) || !errors.Is(err, terminationErr) || !errors.Is(err, audiocodec.ErrProcessWait) {
+		t.Fatalf("overflow termination error = %v, want output and termination identities", err)
+	}
+	if process.terminateCalls != 1 {
+		t.Fatalf("overflow terminate calls = %d, want 1", process.terminateCalls)
+	}
+}
+
 func TestExecCommandHelper(t *testing.T) {
 	if os.Getenv(execCommandHelperEnv) != "1" {
 		return
@@ -363,6 +382,7 @@ type testCommand struct {
 	waitErr        error
 	stdoutData     []byte
 	stderrData     []byte
+	terminateErr   error
 	terminateCalls int
 }
 
@@ -370,7 +390,7 @@ func (c *testCommand) setStdin(reader io.Reader)  { c.stdin = reader }
 func (c *testCommand) setStdout(writer io.Writer) { c.stdout = writer }
 func (c *testCommand) setStderr(writer io.Writer) { c.stderr = writer }
 func (c *testCommand) start() error               { return c.startErr }
-func (c *testCommand) terminate() error           { c.terminateCalls++; return nil }
+func (c *testCommand) terminate() error           { c.terminateCalls++; return c.terminateErr }
 func (c *testCommand) wait() error {
 	if len(c.stdoutData) != 0 {
 		if _, err := c.stdout.Write(c.stdoutData); err != nil {

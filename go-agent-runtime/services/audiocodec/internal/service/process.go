@@ -76,10 +76,16 @@ func (r *processRunner) run(ctx context.Context, inputPath string, limits audioc
 	defer cancel()
 	cmd := r.command(commandContext, path, "-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-i", inputPath, "-f", "s16le", "-ac", "1", "-ar", "16000", "-")
 	var terminateOnce sync.Once
+	var terminateErr error
+	var terminateErrMu sync.Mutex
 	terminate := func() {
 		terminateOnce.Do(func() {
 			cancel()
-			_ = cmd.terminate()
+			if err := cmd.terminate(); err != nil {
+				terminateErrMu.Lock()
+				terminateErr = err
+				terminateErrMu.Unlock()
+			}
 		})
 	}
 	stdout := newBoundedBuffer(limits.MaxOutputBytes)
@@ -96,7 +102,10 @@ func (r *processRunner) run(ctx context.Context, inputPath string, limits audioc
 		return runResult{}, newError(audiocodec.ErrorProcessStart, err, "start "+r.executable)
 	}
 	waitErr := cmd.wait()
-	if err := decoderLimitError(stdout, stderr); err != nil {
+	terminateErrMu.Lock()
+	decoderTerminateErr := terminateErr
+	terminateErrMu.Unlock()
+	if err := decoderLimitError(stdout, stderr, decoderTerminateErr); err != nil {
 		return runResult{}, err
 	}
 	if waitErr != nil {
@@ -105,14 +114,21 @@ func (r *processRunner) run(ctx context.Context, inputPath string, limits audioc
 	return runResult{stdout: stdout.Bytes()}, nil
 }
 
-func decoderLimitError(stdout, stderr *boundedBuffer) error {
+func decoderLimitError(stdout, stderr *boundedBuffer, terminateErr error) error {
+	var limitErr error
 	if stdout.exceeded {
-		return newError(audiocodec.ErrorOutputTooLarge, stdout.limitError(), "capture decoder stdout")
+		limitErr = newError(audiocodec.ErrorOutputTooLarge, stdout.limitError(), "capture decoder stdout")
 	}
-	if stderr.exceeded {
-		return newError(audiocodec.ErrorStderrTooLarge, stderr.limitError(), "capture decoder stderr")
+	if limitErr == nil && stderr.exceeded {
+		limitErr = newError(audiocodec.ErrorStderrTooLarge, stderr.limitError(), "capture decoder stderr")
 	}
-	return nil
+	if limitErr == nil {
+		return nil
+	}
+	if terminateErr == nil {
+		return limitErr
+	}
+	return errors.Join(limitErr, newError(audiocodec.ErrorProcessWait, terminateErr, "terminate decoder after output limit"))
 }
 
 func decoderWaitError(ctx context.Context, waitErr error, stderr *boundedBuffer, executable string) error {
