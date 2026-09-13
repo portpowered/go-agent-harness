@@ -247,6 +247,7 @@ func assembleLiveRequest(request serviceSession.Request, inputs requestInputs) r
 		// response cannot cancel the provider stream before later stdin audio
 		// reaches the same session.
 		FinishAfterResponse: !request.WaitForClose && (inputs.promptPresent || hasAudioInput(request) || len(inputs.openingParts) > 0 || inputs.replayFinish || request.AudioOutputPath != ""),
+		RateLimitRetry:      scheduledAudioRateLimitRetryPolicy(request),
 		ExpectedResponses:   expectedResponses(request, inputs.promptPresent, inputs.openingParts, inputs.openingResponse),
 	}
 	appendToolNames(&result, inputs.capabilities)
@@ -309,6 +310,16 @@ func openImages(paths []string, opener func([]string) ([]messages.ContentPart, e
 
 func hasAudioInput(request serviceSession.Request) bool {
 	return request.AudioInput.Present || len(request.AudioTurns) > 0
+}
+
+func scheduledAudioRateLimitRetryPolicy(request serviceSession.Request) runtimeSession.LiveRateLimitRetryPolicy {
+	if len(request.AudioTurns) == 0 {
+		return runtimeSession.LiveRateLimitRetryPolicy{}
+	}
+	// Explicit finite turns are caller-owned and replayable. Opt them into the
+	// runtime's bounded provider retry; ordinary live audio remains opt-in at
+	// its owning host because retrying an arbitrary turn can duplicate effects.
+	return runtimeSession.LiveRateLimitRetryPolicy{Enabled: true, MaxRetries: 1}
 }
 
 func buildReplayPlan(request serviceSession.Request, inspection *runtimeReplay.CaptureInspection, requestPrompt string, promptPresent bool) (*runtimeSession.LiveReplayPlan, string, bool, error) {
