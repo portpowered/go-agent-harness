@@ -73,6 +73,35 @@ def verify_c64(control: dict) -> None:
     require(control.get("render") == {"provider_samples": 9600, "admitted_samples": 6400, "consumed_samples": 6400, "rendered_samples": 6720, "queued_samples": 0, "underflow_samples": 320, "callback_count": 14, "shutdown": "complete"}, "C64 accounting changed")
 
 
+def verify_public(report: dict, head: str, origin_main: str) -> None:
+    require(report.get("schema") == "audio-runtime.c127.public-run.v1", "public report schema changed")
+    report_revision = report.get("candidate_revision")
+    require(isinstance(report_revision, str), "public report candidate revision is missing")
+    require(subprocess.run(["git", "merge-base", "--is-ancestor", report_revision, head], cwd=REPO_ROOT).returncode == 0, "public report candidate is not an ancestor of HEAD")
+    require(report.get("origin_main_at_run") == origin_main, "public report is not bound to fetched origin/main")
+    elapsed = report.get("bounds", {}).get("aggregate_elapsed_ms")
+    require(isinstance(elapsed, int) and elapsed <= 300000, "public aggregate bound exceeded")
+    cases = report.get("cases")
+    require(isinstance(cases, dict), "public cases are missing")
+    for case_name in ("software-device-tool-drain", "credential-free-audio-tool-replay"):
+        case = cases.get(case_name)
+        require(isinstance(case, dict), f"public case missing: {case_name}")
+        execution = require_process(case.get("execution"), f"public case {case_name}", 0)
+        require(execution.get("output_bounded") is True, f"public case {case_name} output was not bounded")
+        effects = case.get("effects")
+        require(isinstance(effects, dict), f"public effects missing: {case_name}")
+        require(effects.get("marker") == "PROBE_TOOL_MARKER_9182", f"public marker changed: {case_name}")
+        require(effects.get("continuation") == "strict replay continuation", f"public continuation changed: {case_name}")
+        require(effects.get("terminal") == "[session closed: fixture_complete]", f"public terminal changed: {case_name}")
+        require(effects.get("provider_terminal") == "provider_close", f"public provider terminal changed: {case_name}")
+        require(effects.get("output_pcm_bytes") == 4800, f"public PCM accounting changed: {case_name}")
+        require(effects.get("terminal_queue") == 0, f"public terminal queue changed: {case_name}")
+        artifact = case.get("artifact")
+        require(isinstance(artifact, dict), f"public artifact missing: {case_name}")
+        require(artifact.get("sha256") == "8e8db1f19527d10cc7ea53653db95a790f6852199784efe10e011be5f238ab1d", f"public artifact hash changed: {case_name}")
+        require(artifact.get("bytes") == 51101938, f"public artifact size changed: {case_name}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", required=True, choices=("first-divergence", "repair-and-exclusions", "strict-regressions-and-public-runtime", "final"))
@@ -117,6 +146,10 @@ def main() -> int:
     allowed_diff = set(filter(None, git_value("diff", "--name-only", "origin/main..HEAD").splitlines()))
     outside = [path for path in allowed_diff if path not in ALLOWED_EXACT and not path.startswith(ALLOWED_PREFIX)]
     require(not outside, "candidate changed paths outside the transferred C127 lease: " + ", ".join(sorted(outside)))
+    if args.mode in ("strict-regressions-and-public-runtime", "final"):
+        public_path = TASK_ROOT / "public-run.json"
+        require(public_path.is_file(), "public report is missing")
+        verify_public(json.loads(public_path.read_text(encoding="utf-8")), head, origin_main)
     print(f"C127 ordered causal verification passed: first divergence=rtc_forwarding, candidate={head}, origin/main={origin_main}")
     return 0
 
