@@ -333,9 +333,13 @@ def verify_scope() -> dict[str, Any]:
     # inherited evidence is not rewritten or misattributed to C146.
     diff_check = command(["git", "diff", "--check"], ROOT, 60)
     require(diff_check["exit_code"] == 0, "candidate has whitespace errors")
-    source = (ROOT / "agent-cli/internal/transport/cli/internal/livehost/run.go").read_text(encoding="utf-8")
-    require("go-agent-runtime/services/sessiontrace/internal" not in source, "livehost imports a private sessiontrace implementation")
-    require("RenderedSamplesUnavailable" in source, "render-unavailable boundary is not explicit")
+    host_sources = "\n".join(
+        (ROOT / path).read_text(encoding="utf-8")
+        for path in SOURCE_CODE_PATHS
+        if path.startswith("agent-cli/internal/transport/cli/internal/livehost/") and (ROOT / path).is_file()
+    )
+    require("go-agent-runtime/services/sessiontrace/internal" not in host_sources, "livehost imports a private sessiontrace implementation")
+    require("RenderedSamplesUnavailable" in host_sources, "render-unavailable boundary is not explicit")
     return {"changed_paths": paths, "diff_check": {key: value for key, value in diff_check.items() if key not in {"stdout", "stderr"}}}
 
 
