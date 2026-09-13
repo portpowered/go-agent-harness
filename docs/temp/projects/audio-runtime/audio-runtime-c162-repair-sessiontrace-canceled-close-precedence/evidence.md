@@ -8,7 +8,7 @@ Project: `audio-runtime`; contract: `audio-runtime-v1`; factory session: `~defau
 - `python3 "$FACTORY_ROOT/factory/scripts/project-control.py" verify-work --type task --name audio-runtime-c162-repair-sessiontrace-canceled-close-precedence` returned `{"status": "admitted", "project": "audio-runtime", "name": "audio-runtime-c162-repair-sessiontrace-canceled-close-precedence"}`.
 - `prd.json.branchName` is `codex/audio-runtime-c162-repair-sessiontrace-canceled-close-precedence`, matching this isolated worktree.
 - The worktree began clean at accepted/fetched PR 515 merge `97d3dcfb1e97a2611aa26b203a7f893442db4768`; `origin/main` resolved to the same revision. Required startup integration `8bdafc7f947a3a2c9856220abdc539437035bd21` and baseline `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad` are ancestors.
-- Canonical negative history is preserved: C153 `work-task-42` remains terminal and independent `work-review-53` remains failed. Its exact finding is retained: when `p.closed` and a pre-canceled context are both ready, `Finish` can return only the retained close-path error; its 100-trial observation was 50/100 failures. The review also identified stale C153 evidence heads `2b86e658` and `ed5dc6ed` relative to PR 515 head `1c044cd6`; C162 starts from the accepted PR 515 merge and will refresh its own evidence.
+- Canonical negative history is preserved: C153 `work-task-42` remains terminal and independent `work-review-53` remains failed. Its exact finding is retained: when `p.closed` and a pre-canceled context are both ready, `Finish` can return only the retained close-path error; its 100-trial observation was 50/100 failures. The review also identified stale C153 evidence heads `2b86e658` and `ed5dc6ed` relative to PR 515 head `1c044cd6`; those are historical negative-evidence identities only. C162 provenance is the accepted PR 515 merge `97d3dcfb1e97a2611aa26b203a7f893442db4768` and the current source checkpoint below.
 - The current board shows no other active writer on the two C162 service files. C162 owns only the two service files and this evidence directory; no peer path or predecessor checkpoint was changed.
 
 ## Failing-before: accepted-main causal regression
@@ -43,3 +43,34 @@ guarded merge, vertical probe or project acceptance is claimed. The next
 action is to commit the exact candidate and evidence, push the same branch,
 open/update its PR, and return `ACCEPTED` to the script-owned CI gate without
 polling.
+
+## Current-head static repair and handoff provenance
+
+- The latest canonical CI rejection is run `34786857773`, job `103803791131`,
+  at head `aaf4804ead2f0c8b9e4769eea0b5f53471b55cdb`. Its complete static log
+  reports exactly five architecture findings in the new regression: cognitive
+  complexity `49 > 20`, cyclomatic complexity `30 > 20`, file lines `653 >
+  600`, function lines `129 > 120`, and function statements `97 > 80`.
+  Format, Wire, vet, lint, staticcheck, unit, race and the completed platform
+  lanes were successful; the remaining CI lanes were still owned by the
+  script gate at inspection.
+- Code checkpoint `7b75776b7b2f5a861c0a5dd93e2ad7882c2448ce` refactors only the
+  owned `service_test.go` regression into three bounded scenario functions and
+  shared test helpers. It preserves the 100 simultaneous-ready trials, the
+  pre-canceled and cancellation-at-completion barriers, exact close-cause and
+  staged-path checks, and the one-call assertion. `service_test.go` is now
+  exactly `600` lines, and `make architecture-size-check` passes at `202`
+  packages, `1,940` files and `28,778` functions.
+- On source checkpoint `7b75776b`, focused normal/race cancellation proof
+  passed (`400` and `200` tests), the `nomicrophone` 100-trial coverpkg proof
+  passed with `16.8%` sessiontrace-set coverage, full sessiontrace normal/race
+  passed (`19` tests in `3` packages each), and full coverpkg passed with
+  `87.7%` internal-service / `1.8%` Wire coverage. Retained-path/redaction/
+  no-overwrite controls passed (`15` tests), targeted vet, Wire, fmt and diff
+  checks passed, pinned golangci-lint `v2.9.0` reported `0 issues` across `15`
+  modules, pinned staticcheck `2026.1` passed, and the credential-free
+  scheduled-audio replay passed in `4.789s`.
+- The later evidence-ledger update is documentation-only: no production
+  source or executable build input changes after `7b75776b`. The candidate
+  remains executor evidence only; script CI, independent review, guarded
+  merge, immutable vertical validation and project acceptance are open.
