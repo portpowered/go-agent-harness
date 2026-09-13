@@ -61,6 +61,25 @@
     "make wire-check: sessiontrace/wire/wire_gen.go is unregistered because scripts/wire-packages.txt is C79-owned",
     "make size-check: stale prepareTrace cognitive-complexity entry because docs/architecture/architecture-size-baseline.json is C79-owned"
   ],
+  "continuationValidation": {
+    "revision": "8b2983338ea449fd739994e8fbbc958581bd2e7b",
+    "fetchedOriginMain": "ea53be13ce5e4ef14fd8c89c695c21744a1f7686",
+    "originMainAncestor": false,
+    "focused": [
+      "sessiontrace normal: 24 tests across 3 packages passed",
+      "sessiontrace race: 20 tests across 3 packages passed",
+      "CLI trace normal: 25 tests passed",
+      "CLI trace race: 24 tests passed",
+      "GOWORK=off external consumer passed",
+      "accumulated normal session regressions COUNT=1 passed"
+    ],
+    "sharedGateDiagnostics": [
+      "make wire-check: exit 2, unregistered go-agent-runtime/services/sessiontrace/wire/wire_gen.go",
+      "make architecture-size-check: exit 2, stale prepareTrace baseline entry and generated-file-spoof for sessiontrace/wire/wire_gen.go"
+    ],
+    "ownership": "C79 work-task-25 remains in-review with PR #470 open; scripts/wire-packages.txt and docs/architecture/architecture-size-baseline.json were not edited",
+    "nextAction": "After C79 guarded merge and explicit lease release, integrate current origin/main and apply only the demonstrated sessiontrace Wire registration and downward prepareTrace baseline removal."
+  },
   "ownership": {
     "unchanged": [
       "agent-cli/internal/services/agentruntime/observations.go (C97-owned)",

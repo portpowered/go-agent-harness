@@ -36,3 +36,16 @@ Script CI, independent review, guarded merge, and the post-merge vertical
 probe remain external handoff gates. The C79-owned Wire registry and
 architecture-size baseline were not edited; their exact local findings are
 recorded in the evidence ledger.
+
+The latest same-task continuation at `8b2983338ea449fd739994e8fbbc958581bd2e7b`
+repeated the owned checks: sessiontrace normal `24` tests across 3 packages,
+sessiontrace race `20` tests across 3 packages, CLI trace normal `25`, CLI trace
+race `24`, the GOWORK=off consumer, and accumulated normal regressions at
+`COUNT=1` all passed. Fetched `origin/main` is
+`ea53be13ce5e4ef14fd8c89c695c21744a1f7686` and is not yet an ancestor. The
+shared gates still fail only on the C79-leased findings: Wire registration for
+`go-agent-runtime/services/sessiontrace/wire/wire_gen.go` and the stale
+`prepareTrace` architecture baseline/generated-file entries. C79
+`work-task-25` remains `in-review` with PR #470 open, so those files remain
+untouched. After C79’s guarded merge and explicit lease release, integrate
+current main and apply only those demonstrated downward/shared repairs.
