@@ -1,0 +1,93 @@
+{
+  "task": "audio-runtime-c101-retire-cli-provider-session-runtime",
+  "project": "audio-runtime",
+  "branch": "codex/audio-runtime-c101-retire-cli-provider-session-runtime",
+  "baselineRevision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+  "sourceReduction": {
+    "openai": {
+      "beforeLines": 259,
+      "afterLines": 100,
+      "beforeSha256": "499e9c92856e94192d8e462619deeb4d15246190d2b14effa09502c21ddb8198"
+    },
+    "grok": {
+      "beforeLines": 124,
+      "afterLines": 30,
+      "beforeSha256": "864fa8b8a3f889d883733a4c1b202e0630d0155ce34f03f32beb712085f788d5"
+    },
+    "legacyLinesBefore": 383,
+    "legacyLinesAfter": 130,
+    "reducedLines": 253
+  },
+  "deadHelperCleanup": {
+    "commit": "9498d570da9f4ed6e22075b3274db235eee34f4b",
+    "path": "agent-cli/internal/services/internal/agentruntime/session_replay.go",
+    "removedHelpers": [
+      "replayLoopMaxDuration",
+      "grokReplayCaptureHasSessionClose",
+      "captureHasEvent"
+    ],
+    "callerSearch": "repository-wide Go search and git grep: no callers remain",
+    "diffSha256FromBaseline": "ae480fb964f5883e2bd0fe06393f9433b416b3e110eb9a406ce2bfdad7bba2b8",
+    "addedLines": 0,
+    "scope": "exact deletion of the three helpers plus the now-unused time import; no other replay change"
+  },
+  "tests": {
+    "providerSession": "go test ./go-agent-runtime/services/providersession/... -count=1: 4 passed in 3 packages",
+    "providerSessionRace": "go test -race ./go-agent-runtime/services/providersession/... -count=3: 12 passed in 3 packages",
+    "externalConsumerGOWORKOff": "GOWORK=off go test ./... in the separate external-consumer module: passed",
+    "focusedNormal": "go test ./internal/services/internal/agentruntime -run 'ProviderSessionRuntimeService|Replay' -count=1: 118 passed",
+    "focusedRace": "go test -race ./agent-cli/internal/services/internal/agentruntime -run 'ProviderSessionRuntimeService|Replay' -count=1: 118 passed",
+    "accumulatedRace": "COUNT=1 scripts/test-session-ci-regressions.sh all: normal, coverage and race all packages passed",
+    "causalMutations": "verify.py positive-and-three-mutations: all three mutated candidates failed the causal oracle",
+    "cliProbe": "run.py: OpenAI replay, Grok replay, divergent replay negative, and non-provider smoke passed",
+    "retirementCensus": "verify.py retirement-and-owned-paths: branch, ancestry, manifest baseline, exact dead-helper diff/caller proof, 130 legacy lines and 253-line reduction passed",
+    "lint": "make lint: all modules passed pinned golangci-lint 2.9.0",
+    "vet": "go vet agentruntime packages: no issues found",
+    "embedding": "make embed-check: passed"
+  },
+  "coverage": {
+    "go-agent-runtime/services/providersession": "80.0%",
+    "go-agent-runtime/services/providersession/internal/service": "64.4%",
+    "go-agent-runtime/services/providersession/wire": "100.0%"
+  },
+  "latestVerification": {
+    "sourceRevision": "03bb682a300b11a5a18be5140902202656424bf5",
+    "verifiedAt": "2026-09-12T19:36:53Z",
+    "focused": {
+      "providersessionNormal": "go test ./go-agent-runtime/services/providersession/... -count=1: passed",
+      "providersessionRace": "go test -race ./go-agent-runtime/services/providersession/... -count=3: passed",
+      "agentRuntimeNormal": "go test ./agent-cli/internal/services/internal/agentruntime -run 'ProviderSessionRuntimeService|Replay' -count=1: passed",
+      "agentRuntimeRace": "go test -race ./agent-cli/internal/services/internal/agentruntime -run 'ProviderSessionRuntimeService|Replay' -count=1: passed"
+    },
+    "accumulatedRegressions": "COUNT=1 bash scripts/test-session-ci-regressions.sh all: normal, coverage and race passed, including expected divergence and PCM negative controls",
+    "causalMutations": "verify.py positive-and-three-mutations: positive control and all three intended negative oracles passed",
+    "retirementCensus": "verify.py retirement-and-owned-paths: exact helper diff/caller proof, 130 legacy lines and 253-line reduction passed"
+  },
+  "registration": "make coverage-registration: 179 workspace packages checked across 6 modules",
+  "localGateStatus": {
+    "architectureSizeCheck": "blocked by C79-owned baseline data",
+    "architectureIssues": [
+      "baseline-drift: agent-cli internal agentruntime package files 238 > maintained baseline 237",
+      "baseline-drift: internal/services/internal/agentruntime/session_replay.go 624 > maintained baseline 670",
+      "baseline-stale: removed planOpenAIReplayRuntime cognitive-complexity entry",
+      "baseline-stale: removed planOpenAIReplayRuntime cyclomatic entry",
+      "baseline-stale: removed planOpenAIReplayRuntime function-lines entry"
+    ],
+    "wireCheck": "blocked by C79-owned scripts/wire-packages.txt; go-agent-runtime/services/providersession/wire/wire_gen.go is unregistered",
+    "staticcheck": "make staticcheck: pinned 2026.1 passed across all modules after the bounded cleanup"
+  },
+  "ciRejection": {
+    "run": "34710642998",
+    "staticJob": "103598686291",
+    "integrationJob": "103598686275",
+    "ownedFinding": "no remaining C101 code finding; the exact static rejection is C79-leased Wire/architecture registry work, and integration is an unrelated go-agent-loop session-isolation timeout",
+    "peerOwnedFindingsPreserved": [
+      "one providersession Wire registration missing from scripts/wire-packages.txt",
+      "one agentruntime package-file baseline drift",
+      "one reduced session_replay.go architecture baseline entry",
+      "three stale planOpenAIReplayRuntime architecture entries",
+      "go-agent-loop functional session-isolation tests stuck at the 2-minute deadline"
+    ]
+  },
+  "nextAction": "After C79 releases scripts/wire-packages.txt and docs/architecture/architecture-size-baseline.json, integrate the accepted current main, apply only the demonstrated C101 Wire registration and architecture-baseline changes, rerun the bounded gates, commit/push the changed PR 489 head, and submit it to script CI without polling."
+}
