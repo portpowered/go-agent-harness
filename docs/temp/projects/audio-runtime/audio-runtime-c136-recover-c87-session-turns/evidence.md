@@ -59,3 +59,46 @@ fetch and integrate the accepted current main again, apply only the
 demonstrated sessionturns registry/baseline entries permitted by the manifest,
 rerun bounded focused/accumulated gates, and submit one changed head to script
 CI without polling. Repair any exact C136 rejection on this same task.
+
+## Exact-head causal and dependency recheck — 2026-09-13T16:13:18Z
+
+Admission was reverified with `project-control.py verify-work --type task
+--name audio-runtime-c136-recover-c87-session-turns`, returning `admitted` for
+the sole `audio-runtime/audio-runtime-v1` project. The isolated branch remains
+`codex/audio-runtime-c136-recover-c87-session-turns`, the worktree is clean, and
+`origin/main=915ed982d23f2e549e529ff43c4f370b4b51e394` is the accepted C127
+merge. Startup, planning-main, and current-main ancestry remain present; the
+historical C87 ref and PR 476 remain unchanged at `28b5a9b18f67a4343ef9e12141ad5e5fc84ef18f`.
+
+The exact candidate `4e67e8bce74a0c7b486d238912ff958d27e1540e` passed the
+bounded causal recheck: sessionturns normal/race `42/39` tests at count 3,
+deprecated CLI compatibility normal/race `6/2`, the separate `GOWORK=off`
+consumer, all three valid C136 verifier modes, and both bounded public
+credential-free audio/tool and interruption/tool cases (`3/3` tests each,
+output bounded, reaped, no survivors). The accumulated
+`COUNT=1 scripts/test-session-ci-regressions.sh all` matrix passed normal,
+coverage, and race, including 20 high-rate trials and retained negative
+controls. `make fmt`, focused vet, pinned staticcheck 2026.1, pinned
+golangci-lint 2.9.0, `make wire-check`, `go list -deps`, and `git diff --check`
+also pass.
+
+Two prerequisite findings remain explicitly unresolved and outside this lease.
+`make coverage-registration` fails only because the accepted C127 merge added
+the unregistered package
+`go-agent-runtime/services/session/internal/live/causal`; its manifest is not a
+C136-owned path. `make architecture-size-check` fails with exactly 13 deferred
+findings: the unregistered `sessionturns/wire/wire_gen.go` plus stale downward
+entries for `ErrEmptyTurn`, `ErrInvalidTurnDirection`, `ErrInvalidTurnTick`,
+`ErrMissingTurnInferencer`, `ErrSessionClosed`,
+`ErrSessionEndedWithActiveTurn`, `ErrTurnAlreadyActive`,
+`ErrTurnEndWithoutStart`, `ErrTurnMismatch`, `readTurnResponse`,
+`TestSessionTurns_FiveTurnsUseOnePersistentSessionAndExactLifecycle`, and
+`noTurnSetup`. No shared registry, architecture baseline, architecture policy,
+or C127-owned path was edited. No current-head CI result, independent review,
+guarded merge, vertical probe, or project acceptance is claimed.
+
+Next action: retain C136 and route the C127 coverage-manifest residual to its
+owner/primary while C110/C111/C112/C119 release their shared leases. Then fetch
+and integrate the released accepted main, add only the demonstrated sessionturns
+registry/baseline entries, rerun the bounded gates, and submit one changed head
+to script CI without polling.
