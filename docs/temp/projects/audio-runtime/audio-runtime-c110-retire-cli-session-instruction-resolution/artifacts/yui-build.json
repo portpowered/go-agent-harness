@@ -1,5 +1,5 @@
 {
-  "bytes": 51103746,
+  "bytes": 51122594,
   "path": "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/artifacts/yui",
   "process": {
     "argv": [
@@ -12,7 +12,7 @@
       "./agent-cli/cmd/yui"
     ],
     "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution",
-    "elapsed_seconds": 0.24844,
+    "elapsed_seconds": 6.015982,
     "exit_code": 0,
     "label": "yui-build",
     "output_exceeded": false,
@@ -24,7 +24,7 @@
     "timed_out": false,
     "timeout_seconds": 120.0
   },
-  "sha256": "c9ebf9643956304d64335958f9d8c650ad8061214c91f1481be6776652986025",
-  "source_revision": "7e8b84077b9064bb809cb49b3d7152fa03153e73",
+  "sha256": "662ee37170c70642baa44e6c942e2876f2f766349364471300b9b3714ba2095c",
+  "source_revision": "54857e3128d13775622a6504889c1c16a96486b7",
   "source_tree_scope": "C110 evidence build; no CI/review/merge claim"
 }
