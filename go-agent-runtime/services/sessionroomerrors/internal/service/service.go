@@ -30,6 +30,14 @@ func (s *Service) ParticipantFailure(request sessionroomerrors.ParticipantFailur
 	}
 }
 
+func (s *Service) ParticipantFailureID(err error) (string, bool) {
+	var failure sessionroomerrors.ParticipantFailure
+	if err == nil || !errors.As(err, &failure) || failure == nil {
+		return "", false
+	}
+	return failure.ParticipantID(), true
+}
+
 func (s *Service) ParticipantFailureReason(request sessionroomerrors.ParticipantFailureReasonRequest) string {
 	if cause := participantFailureCause(request.Error, request.Secrets); cause != "" {
 		return cause

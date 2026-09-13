@@ -55,6 +55,7 @@ type RoomFailureResult struct {
 // termination fallback, and stable failed-room results.
 type Service interface {
 	ParticipantFailure(ParticipantFailureRequest) error
+	ParticipantFailureID(error) (string, bool)
 	ParticipantFailureReason(ParticipantFailureReasonRequest) string
 	Sanitize(error, []string) string
 	FailureResult(error, []string) RoomFailureResult
