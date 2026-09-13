@@ -7,7 +7,7 @@
         "."
       ],
       "cwd": "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/external-consumer",
-      "elapsedSeconds": 0.163,
+      "elapsedSeconds": 0.123,
       "exitCode": 0,
       "label": "external-consumer",
       "stderr": "",
@@ -25,15 +25,15 @@
         "-timeout=180s"
       ],
       "cwd": ".",
-      "elapsedSeconds": 0.866,
+      "elapsedSeconds": 0.737,
       "exitCode": 0,
       "label": "audiorate-causal",
       "stderr": "",
-      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/audiorate\t0.172s [no tests to run]\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/audiorate/internal/service\t0.325s\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/audiorate/wire\t0.464s\n",
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/audiorate\t0.167s [no tests to run]\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/audiorate/internal/service\t0.313s\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/audiorate/wire\t0.456s\n",
       "timedOut": false
     }
   ],
-  "elapsedSeconds": 1.704,
+  "elapsedSeconds": 1.433,
   "mode": "positive-and-causal-negative-controls",
   "scope": {
     "admission": {
@@ -49,7 +49,7 @@
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness"
       ],
       "cwd": ".",
-      "elapsedSeconds": 0.109,
+      "elapsedSeconds": 0.129,
       "exitCode": 0,
       "label": "admission",
       "stderr": "",
@@ -81,7 +81,7 @@
       "go-agent-runtime/services/audiorate/wire/wire_gen.go",
       "go-agent-runtime/services/audiorate/wire/wire_test.go"
     ],
-    "head": "a66c08ae47762fbeda267bb6ab63d1e3d1b06e18",
+    "head": "9d07de6608f38219f83ed2491d18d9282799137f",
     "legacy": {
       "agent-cli/internal/services/internal/agentruntime/session_audio_format.go": {
         "baselineLines": 84,

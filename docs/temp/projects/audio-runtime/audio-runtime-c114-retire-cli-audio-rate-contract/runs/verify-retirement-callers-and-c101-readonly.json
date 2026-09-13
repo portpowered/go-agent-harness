@@ -11,15 +11,15 @@
         "-timeout=240s"
       ],
       "cwd": ".",
-      "elapsedSeconds": 2.92,
+      "elapsedSeconds": 3.249,
       "exitCode": 0,
       "label": "cli-audio-regressions",
       "stderr": "",
-      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t0.921s\n",
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t0.901s\n",
       "timedOut": false
     }
   ],
-  "elapsedSeconds": 3.597,
+  "elapsedSeconds": 3.857,
   "mode": "retirement-callers-and-c101-readonly",
   "scope": {
     "admission": {
@@ -35,7 +35,7 @@
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness"
       ],
       "cwd": ".",
-      "elapsedSeconds": 0.112,
+      "elapsedSeconds": 0.146,
       "exitCode": 0,
       "label": "admission",
       "stderr": "",
@@ -67,7 +67,7 @@
       "go-agent-runtime/services/audiorate/wire/wire_gen.go",
       "go-agent-runtime/services/audiorate/wire/wire_test.go"
     ],
-    "head": "a66c08ae47762fbeda267bb6ab63d1e3d1b06e18",
+    "head": "9d07de6608f38219f83ed2491d18d9282799137f",
     "legacy": {
       "agent-cli/internal/services/internal/agentruntime/session_audio_format.go": {
         "baselineLines": 84,
