@@ -1,0 +1,62 @@
+{
+  "source": {
+    "command": "gh run view 34676193333 --json databaseId,headSha,status,conclusion,event,workflowName,createdAt,updatedAt,url,jobs",
+    "run": {
+      "databaseId": 34676193333,
+      "headSha": "0054acadba5a3a297debbf3869fc71c0af84c722",
+      "status": "completed",
+      "conclusion": "failure",
+      "event": "pull_request",
+      "workflowName": "CI",
+      "createdAt": "2026-09-12T05:40:43Z",
+      "updatedAt": "2026-09-12T05:51:31Z",
+      "url": "https://github.com/portpowered/go-agent-harness/actions/runs/34676193333"
+    },
+    "failedJobs": [
+      {
+        "databaseId": 103506376436,
+        "name": "CI (integration)",
+        "status": "completed",
+        "conclusion": "failure",
+        "failedStep": "Run production-binary audio-device replay integration",
+        "url": "https://github.com/portpowered/go-agent-harness/actions/runs/34676193333/job/103506376436"
+      },
+      {
+        "databaseId": 103506376510,
+        "name": "CI (static)",
+        "status": "completed",
+        "conclusion": "failure",
+        "failedStep": "Verify service architecture and size budgets",
+        "url": "https://github.com/portpowered/go-agent-harness/actions/runs/34676193333/job/103506376510"
+      }
+    ]
+  },
+  "failedLogs": {
+    "103506376510": [
+      "make architecture-size-check",
+      "architecture gate failed with 8 issue(s)",
+      "baseline-stale session_replay.go: file-lines entry no longer describes a current violation; delete it",
+      "baseline-stale session_replay.go:loadReplaySessionAudioTurns: cognitive-complexity entry no longer describes a current violation; delete it",
+      "baseline-stale session_replay.go:loadReplaySessionAudioTurns: cyclomatic-complexity entry no longer describes a current violation; delete it",
+      "baseline-stale session_replay.go:loadReplaySessionConfiguration: cognitive-complexity entry no longer describes a current violation; delete it",
+      "baseline-stale session_replay.go:loadReplaySessionConfiguration: cyclomatic-complexity entry no longer describes a current violation; delete it",
+      "baseline-stale session_replay.go:loadReplaySessionConfiguration: function-lines entry no longer describes a current violation; delete it",
+      "baseline-stale session_replay.go:loadReplaySessionPrompt: cognitive-complexity entry no longer describes a current violation; delete it",
+      "baseline-stale session_replay.go:loadReplaySessionPrompt: cyclomatic-complexity entry no longer describes a current violation; delete it",
+      "Process completed with exit code 2"
+    ],
+    "103506376436": [
+      "make test-audio-device-server-integration",
+      "TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/captured_cadence: remote device rendered 167991/174391 compared samples (lost 6400, 96.3% retained)",
+      "TestAgentBinaryTest45HighRateToolAudioRegression/trial_17: remote device rendered 171191/177591 compared samples (lost 6400, 96.4% retained)",
+      "TestAgentBinaryTest46HighRateToolAudioRegression/trial_11: remote device rendered 167991/174391 compared samples (lost 6400, 96.3% retained)",
+      "provider={responsesSent:9 responseCreates:7 initialRequests:0 inputHistories:0 inputSamplesSeen:268559 toolResults:7 protocolError:}",
+      "Process completed with exit code 2"
+    ]
+  },
+  "factoryRejectionFeedback": "CI checks failed for PR #469 at head 0054acadba5a3a297debbf3869fc71c0af84c722: required checks failed on current head 0054acadba5a3a297debbf3869fc71c0af84c722: CI (static)=FAILURE; checks: CI (static)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34676193333/job/103506376510).",
+  "executorDisposition": {
+    "static": "reproduced exactly as the eight shared-baseline stale entries; no baseline edit is authorized while C61 holds the lease",
+    "integration": "not reproduced with YUI_AUDIO_STRESS=1: the exact parent test passed 93.160s, TestAgentBinaryTest45HighRateToolAudioRegression passed 12.856s, and TestAgentBinaryTest46HighRateToolAudioRegression passed 12.582s"
+  }
+}
