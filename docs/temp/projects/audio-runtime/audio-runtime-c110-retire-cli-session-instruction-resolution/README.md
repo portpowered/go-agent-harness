@@ -36,3 +36,22 @@ the text seed, and records the malformed/oversized pre-provider regression. Its
 child processes are process-group bounded and credential environment variables
 are removed. These artifacts are implementation evidence only; they do not
 claim CI, review, merge, or project-wide acceptance.
+
+## Current implementation handoff
+
+The executable-input checkpoint is `29e8ff57a76ca4bf02f30bbdab829dc274634846`,
+with `origin/main=bd6a1289218d1bef1a3af36e64e9d4496062416f). The bounded
+`run.py` replay was accepted in
+`runs/run-20260913T131916Z-14414`; its nomicrophone YUI artifact is
+`40fd2c92fa56ad58b572edceee84c6d73a24e43efca045071d392c632de4a531`, and
+the artifact, provenance, and run summary all bind to that source revision.
+The positive instruction/text-seed path, invalid pre-provider path, clean
+shutdown, and C16 audio/tool replay are recorded there.
+
+Focused session-instruction normal/race, CLI normal/race, consumer, mutation,
+retirement, Wire, architecture-size, coverage-registration, accumulated
+normal/coverage/race regressions, vet, pinned staticcheck, pinned lint, format,
+and diff gates passed. The known peer high-rate audio/tool finding remains
+preserved in its historical rejection record. The evidence-only checkpoint
+after the executable-input commit is handoff evidence, not CI/review/merge
+approval.
