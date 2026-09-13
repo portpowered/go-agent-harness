@@ -203,3 +203,15 @@ merges release the paths, fetch and integrate the then-accepted `origin/main`,
 add only the demonstrated sessionturns registry/baseline entries, rerun the
 bounded gates, and submit the changed same-task head to SCRIPT CI without
 polling.
+
+## Fresh main movement without shared-lease release — 2026-09-13T17:35:44Z
+
+After the focused checkpoint, a fresh `git fetch origin main` advanced
+`origin/main` to `4a1c399ccbb3d780be95eb04316e84b8f11a6646`, containing the
+guarded C118 merge. C110 PR #497, C111 PR #496, and C119 PR #505 remain open,
+so the C136 shared Wire/architecture-policy lease is still unreleased. C136
+did not merge this main revision, touch a shared path, or poll the in-flight
+peer checks. The same-task next action is unchanged: after all three remaining
+guarded merges release their paths, integrate the then-accepted main, apply
+only the demonstrated sessionturns registrations/deletions, rerun bounded
+gates, and submit the changed head to SCRIPT CI without polling.
