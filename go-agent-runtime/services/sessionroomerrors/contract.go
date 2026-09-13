@@ -3,8 +3,6 @@
 // stable diagnostic values without importing a CLI, provider, or device.
 package sessionroomerrors
 
-import "errors"
-
 // ParticipantFailure is the public identity projection carried by a wrapped
 // participant error. Its concrete implementation remains private to the
 // service package while errors.Is/errors.As still reach the original cause.
@@ -60,14 +58,4 @@ type Service interface {
 	ParticipantFailureReason(ParticipantFailureReasonRequest) string
 	Sanitize(error, []string) string
 	FailureResult(error, []string) RoomFailureResult
-}
-
-// AsParticipantFailure returns the first participant identity in an error
-// chain, including errors.Join and ordinary wrapping.
-func AsParticipantFailure(err error) (ParticipantFailure, bool) {
-	var failure ParticipantFailure
-	if err == nil || !errors.As(err, &failure) || failure == nil {
-		return nil, false
-	}
-	return failure, true
 }

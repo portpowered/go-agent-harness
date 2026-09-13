@@ -10,7 +10,6 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	roomErrors "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionroomerrors"
 )
 
 type roomCoordinator struct {
@@ -436,8 +435,8 @@ func (c *roomCoordinator) failedParticipantID() string {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if failure, ok := roomErrors.AsParticipantFailure(c.err); ok {
-		return failure.ParticipantID()
+	if participantID, ok := roomParticipantFailureID(c.err); ok {
+		return participantID
 	}
 	return ""
 }
@@ -642,9 +641,7 @@ func (c *roomCoordinator) finishParticipant(runtime *roomParticipantRuntime, rea
 		// lifecycle observation may carry the provider's raw error, but the
 		// result contract must not leak it or lose its participant context.
 		if observation.err != nil {
-			if participantFailure, hasParticipantFailure := roomErrors.AsParticipantFailure(err); !hasParticipantFailure || participantFailure == nil {
-				err = observation.err
-			}
+			err = preserveRoomObservationError(err, observation.err)
 		}
 	} else if observation.terminationDisposition == ParticipantTerminationDispositionDisconnected {
 		reason = ParticipantTerminationDisconnected

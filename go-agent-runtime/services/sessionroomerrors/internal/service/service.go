@@ -127,7 +127,14 @@ func sanitizeText(value string, secrets []string) string {
 	for _, secret := range sortedSecrets(secrets) {
 		value = strings.ReplaceAll(value, secret, "[REDACTED]")
 	}
-	for _, marker := range []string{
+	for _, marker := range credentialMarkers() {
+		value = redactCredentialMarker(value, marker)
+	}
+	return value
+}
+
+func credentialMarkers() []string {
+	return []string{
 		"authorization: bearer ",
 		"authorization=bearer ",
 		"authorization: ",
@@ -139,31 +146,26 @@ func sanitizeText(value string, secrets []string) string {
 		"api_key: ",
 		"api_key=",
 		"bearer ",
-	} {
-		for {
-			lower := strings.ToLower(value)
-			markerStart := strings.Index(lower, marker)
-			if markerStart < 0 {
-				break
-			}
-			markerEnd := markerStart + len(marker)
-			if strings.HasPrefix(value[markerEnd:], "[REDACTED]") {
-				break
-			}
-			end := markerEnd
-			for end < len(value) {
-				switch value[end] {
-				case ' ', '\t', '\r', '\n', ',', ';', ')', ']', '}':
-					goto tokenEnd
-				default:
-					end++
-				}
-			}
-		tokenEnd:
-			value = value[:markerEnd] + "[REDACTED]" + value[end:]
-		}
 	}
-	return value
+}
+
+func redactCredentialMarker(value, marker string) string {
+	for {
+		markerStart := strings.Index(strings.ToLower(value), marker)
+		if markerStart < 0 {
+			return value
+		}
+		markerEnd := markerStart + len(marker)
+		if strings.HasPrefix(value[markerEnd:], "[REDACTED]") {
+			return value
+		}
+		tokenEnd := strings.IndexAny(value[markerEnd:], " \t\r\n,;)]}")
+		if tokenEnd < 0 {
+			tokenEnd = len(value) - markerEnd
+		}
+		tokenEnd += markerEnd
+		value = value[:markerEnd] + "[REDACTED]" + value[tokenEnd:]
+	}
 }
 
 func sortedSecrets(secrets []string) []string {

@@ -1,6 +1,8 @@
 package agentruntime
 
 import (
+	"errors"
+
 	roomErrors "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionroomerrors"
 	roomErrorsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionroomerrors/wire"
 )
@@ -31,6 +33,32 @@ func roomFailureResult(err error, secrets []string) RoomResult {
 // Deprecated: use sessionroomerrors.Service.Sanitize.
 func sanitizeRoomError(err error, secrets []string) string {
 	return roomErrorService().Sanitize(err, secrets)
+}
+
+func roomParticipantFailureID(err error) (string, bool) {
+	failure, ok := roomParticipantFailureIdentity(err)
+	if !ok {
+		return "", false
+	}
+	return failure.ParticipantID(), true
+}
+
+func roomParticipantFailureIdentity(err error) (roomErrors.ParticipantFailure, bool) {
+	var failure roomErrors.ParticipantFailure
+	if err == nil || !errors.As(err, &failure) || failure == nil {
+		return nil, false
+	}
+	return failure, true
+}
+
+func preserveRoomObservationError(err, observation error) error {
+	if observation == nil {
+		return err
+	}
+	if failure, ok := roomParticipantFailureIdentity(err); ok && failure != nil {
+		return err
+	}
+	return observation
 }
 
 // Deprecated: this only adapts the CLI plan's already-resolved secret.

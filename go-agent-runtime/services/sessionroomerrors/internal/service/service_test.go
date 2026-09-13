@@ -31,7 +31,8 @@ func TestParticipantFailurePreservesIdentityAndCause(t *testing.T) {
 	if !errors.As(failure, &gotCause) || gotCause != cause {
 		t.Fatal("participant failure lost errors.As identity")
 	}
-	identity, ok := sessionroomerrors.AsParticipantFailure(failure)
+	var identity sessionroomerrors.ParticipantFailure
+	ok := errors.As(failure, &identity)
 	if !ok || identity.ParticipantID() != "agent-a" {
 		t.Fatalf("participant identity = %q, want agent-a", identity.ParticipantID())
 	}
@@ -132,8 +133,10 @@ func TestIndependentServicesRemainConcurrentAndIsolated(t *testing.T) {
 					ParticipantID: fmt.Sprintf("participant-%d", index),
 					Cause:         errors.New("failure"),
 				})
-				if identity, ok := sessionroomerrors.AsParticipantFailure(failure); !ok || identity.ParticipantID() != fmt.Sprintf("participant-%d", index) {
-					t.Errorf("identity = %q, ok=%v", identity.ParticipantID(), ok)
+				var identity sessionroomerrors.ParticipantFailure
+				want := fmt.Sprintf("participant-%d", index)
+				if !errors.As(failure, &identity) || identity == nil || identity.ParticipantID() != want {
+					t.Errorf("identity = %#v, want %q", identity, want)
 					return
 				}
 			}

@@ -1,11 +1,15 @@
 package sessionroomerrors
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 func TestContractTypesRemainHostNeutral(t *testing.T) {
 	var _ ParticipantFailure = participantFailureProbe{}
 	var _ Service = serviceProbe{}
-	if failure, ok := AsParticipantFailure(nil); ok || failure != nil {
+	var failure ParticipantFailure
+	if errors.As(nil, &failure) || failure != nil {
 		t.Fatal("nil error unexpectedly exposed a participant failure")
 	}
 }

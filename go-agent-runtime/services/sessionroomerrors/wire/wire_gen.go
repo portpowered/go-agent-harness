@@ -11,7 +11,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionroomerrors/internal/service"
 )
 
-// NewService constructs an independent room-error service.
+// Injectors from wire.go:
+
 func NewService() sessionroomerrors.Service {
 	serviceService := service.New()
 	return serviceService
