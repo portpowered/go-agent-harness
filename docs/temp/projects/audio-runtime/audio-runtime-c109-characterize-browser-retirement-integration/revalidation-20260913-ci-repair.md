@@ -1,5 +1,9 @@
 # C109 current-head hermetic rejection — 2026-09-13
 
+This evidence-only update is committed at C109 head `9e0ccd5e7a17a8385042e634f95cedd7cbcf2b46`.
+The CI run below tested its parent `ab0ada542`; the update changes no
+executable input or out-of-lease source and preserves that exact rejection.
+
 The exact current-head script-CI result for PR #495 was read from completed
 run `34754953782` at candidate `ab0ada54292b9682879a98fc3b470e3b8c30df6a`.
 The CI merge checkout was `5222672fe985c95f9f32128905fe687959887d0b`; the
