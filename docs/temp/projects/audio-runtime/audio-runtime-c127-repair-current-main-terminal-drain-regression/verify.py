@@ -75,7 +75,10 @@ def verify_c64(control: dict) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", required=True, choices=("first-divergence", "final"))
+    parser.add_argument("--mode", required=True, choices=("first-divergence", "repair-and-exclusions", "strict-regressions-and-public-runtime", "final"))
+    parser.add_argument("--require-current-unmodified", action="store_true")
+    parser.add_argument("--require-matched-control", action="store_true")
+    parser.add_argument("--base", default=PINNED_CURRENT_MAIN)
     parser.add_argument("--report", type=Path, default=TASK_ROOT / "causal-run.json")
     args = parser.parse_args()
     report = json.loads(args.report.read_text(encoding="utf-8"))

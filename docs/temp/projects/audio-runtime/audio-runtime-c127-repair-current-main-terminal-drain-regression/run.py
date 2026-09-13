@@ -260,6 +260,10 @@ def c64_control(deadline: float) -> dict[str, object]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--mode", choices=("characterize", "public"), default="characterize")
+    parser.add_argument("--current", default=PINNED_CURRENT_MAIN)
+    parser.add_argument("--control", default=ACCEPTED_C64)
+    parser.add_argument("--case", action="append", default=[])
     parser.add_argument("--output", type=Path, default=TASK_ROOT / "causal-run.json")
     parser.add_argument("--child-timeout", type=float, default=MAX_CHILD_SECONDS)
     parser.add_argument("--aggregate-timeout", type=float, default=MAX_AGGREGATE_SECONDS)
@@ -268,6 +272,8 @@ def main() -> int:
         raise SystemExit("child timeout must be in (0, 60]")
     if not 0 < args.aggregate_timeout <= MAX_AGGREGATE_SECONDS:
         raise SystemExit("aggregate timeout must be in (0, 600]")
+    if args.current != PINNED_CURRENT_MAIN or args.control != ACCEPTED_C64:
+        raise SystemExit("characterization revisions do not match the admitted C127 controls")
     if git_value("branch", "--show-current") != BRANCH:
         raise SystemExit("wrong isolated branch")
     if git_value("status", "--porcelain", "--untracked-files=all"):
