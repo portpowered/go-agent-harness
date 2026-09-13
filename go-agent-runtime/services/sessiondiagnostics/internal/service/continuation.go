@@ -12,13 +12,23 @@ func (r *reducer) toolCallLocked(event sessiondiagnostics.Event) sessiondiagnost
 	if callID == "" {
 		return sessiondiagnostics.Observation{}
 	}
+	responseID := strings.TrimSpace(event.ResponseID)
+	// A tool call is provider output owned by the active response. An explicit
+	// foreign response ID must never create a new continuation or rebind an
+	// existing call. Empty IDs remain compatible with legacy providers and can
+	// be enriched by a later identified boundary.
+	if !r.responseBelongsLocked(responseID) {
+		return sessiondiagnostics.Observation{ResponseID: responseID}
+	}
 	state := r.continuations[callID]
+	if state.ResponseID != "" && responseID != "" && state.ResponseID != responseID {
+		return sessiondiagnostics.Observation{ResponseID: responseID}
+	}
 	state.CallID = callID
 	if strings.TrimSpace(event.ToolName) != "" {
 		state.ToolName = strings.TrimSpace(event.ToolName)
 	}
-	responseID := strings.TrimSpace(event.ResponseID)
-	if responseID != "" && (state.ResponseID == "" || state.ResponseID == responseID) {
+	if responseID != "" && state.ResponseID == "" {
 		state.ResponseID = responseID
 	}
 	state.ProviderCallObserved = true
@@ -33,8 +43,17 @@ func (r *reducer) toolResultAcceptedLocked(callID string) sessiondiagnostics.Obs
 	if callID == "" {
 		return sessiondiagnostics.Observation{}
 	}
-	state := r.continuations[callID]
+	state, known := r.continuations[callID]
+	// A result may legitimately beat the provider tool-call delta, but only
+	// while a response lifecycle is active. A result on a fresh reducer is an
+	// orphan and must not manufacture continuation ownership.
+	if !known && !r.activeResponse {
+		return sessiondiagnostics.Observation{}
+	}
 	state.CallID = callID
+	if !known {
+		state.ResponseID = strings.TrimSpace(r.activeResponseID)
+	}
 	state.ResultAccepted = true
 	if continuationCanComplete(state) {
 		state.ContinuationComplete = true

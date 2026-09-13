@@ -124,6 +124,20 @@ func TestSessionProgressObserver_IgnoresNonTerminalProviderDiagnostic(t *testing
 	}
 }
 
+func TestSessionProgressObserver_RetainsRejectedAcceptedResultObligation(t *testing.T) {
+	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
+	if err := observer.lifecycle.Close(); err != nil {
+		t.Fatalf("close lifecycle: %v", err)
+	}
+
+	// A provider-send acknowledgement that arrives after the lifecycle has
+	// closed must not clear the adapter's unresolved obligation.
+	observer.noteToolResultAccepted("call-after-close")
+	if got := observer.unresolvedToolCallIDs(); len(got) != 1 || got[0] != "call-after-close" {
+		t.Fatalf("rejected accepted-result obligation = %v, want [call-after-close]", got)
+	}
+}
+
 // failureSignature is the identifying structured signature of one closed-set
 // failure mode: exact field values on the single canonical failure record.
 type failureSignature struct {

@@ -311,7 +311,16 @@ func (o *sessionProgressObserver) observeProviderToolCallStartForResponse(callID
 	if !enabled {
 		return
 	}
-	o.lifecycleEvent(sd.Event{Kind: sd.EventToolCall, CallID: callID, ToolName: name, ResponseID: responseID})
+	toolCall := o.lifecycleEvent(sd.Event{Kind: sd.EventToolCall, CallID: callID, ToolName: name, ResponseID: responseID})
+	if !toolCall.Accepted {
+		// Keep a rejected provider call visible to termination diagnostics without
+		// projecting it into the reducer as an owned continuation.
+		o.toolStateMu.Lock()
+		o.ensureToolStateLocked()
+		o.unresolvedToolCalls[callID] = struct{}{}
+		o.toolStateMu.Unlock()
+		return
+	}
 	accepted := o.continuationResultAccepted(callID)
 	o.toolStateMu.Lock()
 	o.ensureToolStateLocked()

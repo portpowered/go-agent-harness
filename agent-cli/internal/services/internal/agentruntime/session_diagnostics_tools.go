@@ -62,16 +62,33 @@ func (o *sessionProgressObserver) observeProviderToolCallWithID(callID, name str
 // provider-facing session send boundary reports success. Execution completion,
 // queueing, and rejected sends do not reach this method.
 func (o *sessionProgressObserver) noteToolResultAccepted(callID string) {
-	if o == nil || strings.TrimSpace(callID) == "" {
+	callID = strings.TrimSpace(callID)
+	if o == nil || callID == "" {
 		return
+	}
+	accepted := o.lifecycleEvent(sd.Event{Kind: sd.EventToolResultAccepted, CallID: callID}).Accepted
+	if !accepted {
+		// The provider send can complete before the first inbound response delta.
+		// Establish one provisional, untagged lifecycle for that legitimate
+		// handoff, then let the later tool-call event enrich it with its ID.
+		active, _ := o.observedResponseProjection()
+		if !active {
+			o.lifecycleEvent(sd.Event{Kind: sd.EventResponseOpen})
+			accepted = o.lifecycleEvent(sd.Event{Kind: sd.EventToolResultAccepted, CallID: callID}).Accepted
+		}
 	}
 	o.toolStateMu.Lock()
 	o.ensureToolStateLocked()
-	delete(o.unresolvedToolCalls, callID)
-	delete(o.toolResultRejections, callID)
 	lifecycleCh := o.toolLifecycleCh
+	if accepted {
+		delete(o.unresolvedToolCalls, callID)
+		delete(o.toolResultRejections, callID)
+	} else {
+		// Preserve the close/termination obligation when the reducer rejects the
+		// result (for example, after Close or an ownership violation).
+		o.unresolvedToolCalls[callID] = struct{}{}
+	}
 	o.toolStateMu.Unlock()
-	accepted := o.lifecycleEvent(sd.Event{Kind: sd.EventToolResultAccepted, CallID: callID}).Accepted
 
 	// One wake-up is enough even when several results are accepted before the
 	// session loop selects this branch: the close predicate observes the whole

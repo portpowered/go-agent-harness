@@ -197,6 +197,64 @@ func TestResponseContentRejectsUntaggedBoundaryAfterEnd(t *testing.T) {
 	}
 }
 
+func TestToolResultAcceptedRejectsOrphanWithoutActiveResponse(t *testing.T) {
+	service := NewService(sessiondiagnostics.Options{})
+	observation, err := service.Apply(context.Background(), sessiondiagnostics.Event{
+		Kind:   sessiondiagnostics.EventToolResultAccepted,
+		CallID: "orphan-call",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if observation.Accepted || len(service.Snapshot().ContinuationStates) != 0 {
+		t.Fatalf("orphan tool result mutated lifecycle: observation=%+v snapshot=%+v", observation, service.Snapshot())
+	}
+}
+
+func TestToolResultAcceptedAllowsEarlyResultWithinActiveResponse(t *testing.T) {
+	service := NewService(sessiondiagnostics.Options{})
+	ctx := context.Background()
+	apply := func(event sessiondiagnostics.Event) sessiondiagnostics.Observation {
+		t.Helper()
+		observation, err := service.Apply(ctx, event)
+		if err != nil {
+			t.Fatalf("apply %s: %v", event.Kind, err)
+		}
+		return observation
+	}
+
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseOpen, ResponseID: testResponseA})
+	if !apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventToolResultAccepted, CallID: "early-call"}).Accepted {
+		t.Fatal("early result was rejected within the active response")
+	}
+	if !apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventToolCall, ResponseID: testResponseA, CallID: "early-call", ToolName: "lookup"}).Accepted {
+		t.Fatal("late tool call did not enrich its accepted result")
+	}
+	state := service.Snapshot().ContinuationStates
+	if len(state) != 1 || !state[0].ProviderCallObserved || !state[0].ResultAccepted || state[0].ResponseID != testResponseA {
+		t.Fatalf("early result state = %+v, want one identified accepted call", state)
+	}
+}
+
+func TestToolCallRejectsForeignResponseIDWithoutCreatingContinuation(t *testing.T) {
+	service := NewService(sessiondiagnostics.Options{})
+	ctx := context.Background()
+	apply := func(event sessiondiagnostics.Event) sessiondiagnostics.Observation {
+		t.Helper()
+		observation, err := service.Apply(ctx, event)
+		if err != nil {
+			t.Fatalf("apply %s: %v", event.Kind, err)
+		}
+		return observation
+	}
+
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseOpen, ResponseID: testResponseA})
+	foreign := apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventToolCall, ResponseID: "response-foreign", CallID: "foreign-call", ToolName: "lookup"})
+	if foreign.Accepted || len(service.Snapshot().ContinuationStates) != 0 {
+		t.Fatalf("foreign tool call mutated active lifecycle: observation=%+v snapshot=%+v", foreign, service.Snapshot())
+	}
+}
+
 func TestToolAcknowledgementCannotBeAdmittedAsAssistantTurn(t *testing.T) {
 	service := NewService(sessiondiagnostics.Options{})
 	ctx := context.Background()
