@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "source_commit": "ddebb8f44346cde4c7e989a1880b8ffac6179df0",
+  "entries": [
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
+      "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe",
+      "file": "pkg/probe/acceptance.go",
+      "symbol": "ErrAcceptanceTerminalState",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
+      "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe",
+      "file": "pkg/probe/acceptance.go",
+      "symbol": "ErrObjectiveEvidenceAbsent",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
+      "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe",
+      "file": "pkg/probe/acceptance.go",
+      "symbol": "ErrObjectiveEvidenceMismatch",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
+      "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe",
+      "file": "pkg/probe/acceptance.go",
+      "symbol": "ErrSubjectiveRatingConfusing",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
+      "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe",
+      "file": "pkg/probe/acceptance.go",
+      "symbol": "ErrSubjectiveRatingInvalid",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
+      "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe",
+      "file": "pkg/probe/acceptance.go",
+      "symbol": "ErrSubjectiveRatingMissing",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    }
+  ]
+}
