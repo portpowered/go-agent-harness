@@ -1,0 +1,45 @@
+{
+  "candidate_revision": "c1b51a9f04c73efe9d82163acd469bf3df5c5f58",
+  "matrix": [
+    {
+      "mutations": [
+        {
+          "compiled": true,
+          "label": "replay-credential-consultation",
+          "output": "--- FAIL: TestPlanReplayNeverConsultsLiveSeams (0.00s)\n    service_test.go:72: replay consulted credentials\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/roomplanning/internal/service\t0.169s\nFAIL\n",
+          "rejected": true
+        },
+        {
+          "compiled": true,
+          "label": "admission-before-readiness",
+          "output": "--- FAIL: TestAwaitWaitsForReadinessAfterConnection (0.00s)\n    service_test.go:172: admission returned before readiness: <nil>\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/roomplanning/internal/service\t0.176s\nFAIL\n",
+          "rejected": true
+        },
+        {
+          "compiled": true,
+          "label": "whole-room-local-failure",
+          "output": "--- FAIL: TestRunRoom_StartupParticipantFailurePreservesViableParticipants (2.00s)\n    session_room_test.go:733: viable participants were not admitted: map[]\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t2.475s\nFAIL\n",
+          "rejected": true
+        }
+      ],
+      "positive": [
+        {
+          "label": "runtime-positive",
+          "returncode": 0,
+          "stdout": "Go test: 15 passed in 3 packages\n"
+        },
+        {
+          "label": "adapter-positive",
+          "returncode": 0,
+          "stdout": "Go test: 92 passed in 1 packages\n"
+        },
+        {
+          "label": "external-consumer",
+          "returncode": 0,
+          "stdout": "?   \texample.com/audio-runtime-c99-roomplanning-consumer\t[no test files]\n"
+        }
+      ]
+    }
+  ],
+  "schema": "audio-runtime.c99.mutations.v1"
+}
