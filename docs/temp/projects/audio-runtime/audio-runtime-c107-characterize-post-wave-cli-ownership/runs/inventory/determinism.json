@@ -12,13 +12,13 @@
     },
     "inventory.json": {
       "byte_identical_after_run_timestamp_normalization": true,
-      "first_sha256": "69c3b554cd7079fe7eb8c510848e2e60e4ca0247faae1a68ab672cf44d8991c9",
-      "second_sha256": "69c3b554cd7079fe7eb8c510848e2e60e4ca0247faae1a68ab672cf44d8991c9"
+      "first_sha256": "38ff5b0c8e0926d87e675500fb669aaee2cc99de23a066212a519a518d92ba5c",
+      "second_sha256": "38ff5b0c8e0926d87e675500fb669aaee2cc99de23a066212a519a518d92ba5c"
     },
     "inventory.md": {
       "byte_identical_after_run_timestamp_normalization": true,
-      "first_sha256": "3117d60d056708891c48818124590fa50c64c9d82e6792967aa25fea7102c15d",
-      "second_sha256": "3117d60d056708891c48818124590fa50c64c9d82e6792967aa25fea7102c15d"
+      "first_sha256": "26293a5320ee3ceb17ab58af4171e46d760c2dc3e12fe9e8151c1ea6992427aa",
+      "second_sha256": "26293a5320ee3ceb17ab58af4171e46d760c2dc3e12fe9e8151c1ea6992427aa"
     }
   },
   "normalization": "remove only run_timestamp keys; wall durations remain in analysis-run.json",
@@ -33,13 +33,13 @@
         "--source",
         "d4766c3dbbf2c198142047ead4449d58dd47d485",
         "--output-dir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-run-1-qjcycix7",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-run-1-11z0e42q",
         "--subtraction",
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership/docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/subtraction.json"
       ],
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership",
       "deadline_seconds": 240,
-      "elapsed_seconds": 10.055406,
+      "elapsed_seconds": 9.416361,
       "environment": {
         "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
         "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -52,7 +52,7 @@
       "label": "analyzer",
       "output_limited": false,
       "process_group_gone": true,
-      "process_group_id": 21465,
+      "process_group_id": 43021,
       "schema_version": "c107-command-run-v1",
       "stderr_bytes": 0,
       "stderr_path": "runs/inventory/analyzer.stderr",
@@ -71,13 +71,13 @@
         "--source",
         "d4766c3dbbf2c198142047ead4449d58dd47d485",
         "--output-dir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-run-2-rvecc7y1",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-run-2-vjmjojqn",
         "--subtraction",
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership/docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/subtraction.json"
       ],
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership",
       "deadline_seconds": 240,
-      "elapsed_seconds": 10.61393,
+      "elapsed_seconds": 11.701477,
       "environment": {
         "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
         "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -90,7 +90,7 @@
       "label": "analyzer",
       "output_limited": false,
       "process_group_gone": true,
-      "process_group_id": 21963,
+      "process_group_id": 43068,
       "schema_version": "c107-command-run-v1",
       "stderr_bytes": 0,
       "stderr_path": "runs/inventory/analyzer.stderr",

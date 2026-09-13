@@ -137,7 +137,7 @@
       "name": "audio-runtime-c108-characterize-audio-device-boundary-gaps",
       "rejection_feedback": "CI checks failed for PR #493 at head c75c87547ff52c416e0fadd92385958d4b24cc78: required checks failed on current head c75c87547ff52c416e0fadd92385958d4b24cc78: CI (integration)=FAILURE; checks: CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34724763555/job/103636855490). Return this task to the executor with the listed failures.",
       "state": {
-        "name": "init",
+        "name": "ci-pending",
         "type": "PROCESSING"
       },
       "work_id": "work-task-222",
@@ -203,7 +203,7 @@
       "name": "audio-runtime-c110-retire-cli-session-instruction-resolution",
       "rejection_feedback": "Reviewed PR #497 at head 877866206b1372d4ef5a5836344ab0a6fccc06d7; all nine required checks are green, and independent service/CLI tests, race tests, external consumer, Wire, and architecture checks pass. Actionable blockers remain: the diff violates C110 ownership and the active C79 lease by changing unowned runtime/transport files, session_playback_diagnostics.go, scripts/wire-packages.txt, and docs/architecture/architecture-size-baseline.json; restore those changes and integrate shared-file edits only after C79’s guarded merge. The 277-line CLI file shrinks to 73 only because 204 lines were moved into session_audio_dispatch.go; agentruntime production lines increase 41208→41217, so the required 190-line net retirement is not demonstrated. verify.py lacks the required retirement-and-owned-paths mode and its guard-mutations mode performs no mutations; required caller/lease/exclusion evidence, run.py, yui artifact, provenance hashes, text-seed/invalid-pre-provider/clean-shutdown/audio-tool-replay evidence are missing, while the ignored report is stale at 68 lines. Also fix cancellation handling after legacy Stat/ReadFile/SkillsSummary calls, retain final playback diagnostics when the session context is canceled during teardown, and preserve the removed exported session/wire.NewInstructionService compatibility API. Exact next action: executor restore the allowed path set, implement the real bounded fail-closed behavior and compatibility/lifecycle fixes, produce the required source-pinned evidence and causal mutants, then submit the repaired head to the script CI gate; no merge performed.",
       "state": {
-        "name": "init",
+        "name": "ci-pending",
         "type": "PROCESSING"
       },
       "work_id": "work-task-232",
@@ -705,11 +705,22 @@
       "work_type": "review"
     },
     {
+      "last_output": "",
+      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+      "rejection_feedback": "Independent service, race, external-consumer, adapter, integration, replay, and shipped-CLI checks passed. PR #470 head a8e45355fe495f58c3ba1078a80050492ae6f864 has all required checks green in run 34725100606. However every C79 evidence ledger and artifact records candidate 05a6ea5a39927d224fe81200a2698e68c0a25005, not the current head; runner/evidence logic changed afterward. Rebuild the exact-head artifact, rerun response/retirement/mutation and all three bounded replay cases, refresh provenance to a8e45355, commit/push, and submit the new head to SCRIPT CI without polling. Historical CI failures remain recorded and are not waived.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-250",
+      "work_type": "review"
+    },
+    {
       "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle\", \"branch\": \"codex/audio-runtime-c79-retire-cli-response-lifecycle\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
       "name": "audio-runtime-c79-retire-cli-response-lifecycle",
-      "rejection_feedback": "PR #470 head 40702f55 has all required checks green, and independent current-head tests, external consumer, healthy replay, and malformed replay passed. Prior lifecycle findings are repaired. Required evidence is stale: ledgers/replays point to b930e1f8, static evidence to 996ce66e, and artifact f222823d was built from b930; required ancestry pins are absent. run.py:174-194 lacks process-group TERM/KILL/reap and survivor checks. run.py:240-241 only runs a healthy audio fixture with no tool events, so shipped-binary tool continuation is unproven. Fix runner cleanup, add a credential-free shipped-yui tool-call/result/continuation/scheduled-follow-on fixture with output, diagnostics, malformed, and shutdown assertions. Rebuild at final HEAD; rerun all verify.py modes, both mutation negatives, and all three replay cases; record exact HEAD, artifact hash, required ancestry pins, fresh origin/main, clean status, and survivor results; commit/push, let script CI run without polling, then request fresh review. implementation-handoff.md is absent under FACTORY_ROOT.",
+      "rejection_feedback": "Independent service, race, external-consumer, adapter, integration, replay, and shipped-CLI checks passed. PR #470 head a8e45355fe495f58c3ba1078a80050492ae6f864 has all required checks green in run 34725100606. However every C79 evidence ledger and artifact records candidate 05a6ea5a39927d224fe81200a2698e68c0a25005, not the current head; runner/evidence logic changed afterward. Rebuild the exact-head artifact, rerun response/retirement/mutation and all three bounded replay cases, refresh provenance to a8e45355, commit/push, and submit the new head to SCRIPT CI without polling. Historical CI failures remain recorded and are not waived.",
       "state": {
-        "name": "in-review",
+        "name": "init",
         "type": "PROCESSING"
       },
       "work_id": "work-task-114",
@@ -914,6 +925,6 @@
       "work_type": "task"
     }
   ],
-  "observed_at": "2026-09-12T23:45:22Z",
+  "observed_at": "2026-09-12T23:54:53Z",
   "schema_version": "c107-previous-review-findings-v1"
 }

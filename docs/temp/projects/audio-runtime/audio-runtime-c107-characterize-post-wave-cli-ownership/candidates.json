@@ -54,7 +54,6 @@
       "agent-cli/internal/services/internal/agentruntime/session_live_observation.go",
       "agent-cli/internal/services/internal/agentruntime/session_live_setup.go",
       "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
-      "agent-cli/internal/services/internal/agentruntime/session_models.go",
       "agent-cli/internal/services/internal/agentruntime/session_options.go",
       "agent-cli/internal/services/internal/agentruntime/session_playback_diagnostics.go",
       "agent-cli/internal/services/internal/agentruntime/session_rate_limit_retry.go",
@@ -83,7 +82,6 @@
       "agent-cli/internal/services/internal/agentruntime/session_room_tools.go",
       "agent-cli/internal/services/internal/agentruntime/session_room_tracked_session.go",
       "agent-cli/internal/services/internal/agentruntime/session_runtime_grok.go",
-      "agent-cli/internal/services/internal/agentruntime/session_runtime_live.go",
       "agent-cli/internal/services/internal/agentruntime/session_runtime_observation.go",
       "agent-cli/internal/services/internal/agentruntime/session_runtime_openai.go",
       "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go",
@@ -96,7 +94,6 @@
       "agent-cli/internal/services/internal/agentruntime/session_tool_lifecycle.go",
       "agent-cli/internal/services/internal/agentruntime/session_tools.go",
       "agent-cli/internal/services/internal/agentruntime/session_turns.go",
-      "agent-cli/internal/services/internal/agentruntime/session_voices.go",
       "agent-cli/internal/services/internal/agentruntime/trace.go"
     ]
   },

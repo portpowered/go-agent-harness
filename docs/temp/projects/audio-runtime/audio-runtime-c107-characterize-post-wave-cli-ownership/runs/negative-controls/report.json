@@ -13,7 +13,7 @@
   },
   "pristine_validation": {
     "active_tasks": 6,
-    "owned_source_paths": 87,
+    "owned_source_paths": 84,
     "preserved_checkpoints": 52,
     "retirement_pr_numbers": [
       365,
@@ -70,7 +70,7 @@
       498
     ],
     "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-    "unsubtracted_source_paths": 20
+    "unsubtracted_source_paths": 23
   },
   "schema_version": "c107-negative-controls-v2",
   "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",

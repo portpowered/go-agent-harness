@@ -1,5 +1,5 @@
 {
-  "candidate_revision_at_run": "98352dfe20456b1db8bcb9e559fc44ddd8371e6d",
+  "candidate_revision_at_run": "f2df9cc7bc98773d8e6bcef2b712d150806a0086",
   "ci_polling": "not performed",
   "command": "COUNT=1 scripts/test-session-ci-regressions.sh all",
   "count": 1,
@@ -12,8 +12,8 @@
       "all"
     ],
     "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership",
-    "deadline_seconds": 363,
-    "elapsed_seconds": 164.5046,
+    "deadline_seconds": 366,
+    "elapsed_seconds": 163.374536,
     "environment": {
       "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
       "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -26,7 +26,7 @@
     "label": "session-ci-regressions-count-1-all",
     "output_limited": false,
     "process_group_gone": true,
-    "process_group_id": 32580,
+    "process_group_id": 49301,
     "schema_version": "c107-command-run-v1",
     "stderr_bytes": 0,
     "stderr_path": "runs/accumulated-regressions/session-ci-regressions-count-1-all.stderr",

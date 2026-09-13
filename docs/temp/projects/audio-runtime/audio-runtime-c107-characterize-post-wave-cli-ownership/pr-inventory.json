@@ -122,7 +122,7 @@
       "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
     ]
   ],
-  "observed_at": "2026-09-12T23:45:22Z",
+  "observed_at": "2026-09-12T23:54:53Z",
   "prs": [
     {
       "accepted_main_changed_production_paths": [],
@@ -2175,7 +2175,7 @@
         "go-agent-runtime/services/sessiondiagnostics/wire/wire_test.go",
         "scripts/wire-packages.txt"
       ],
-      "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
+      "head": "b2e3648d608919033649f54230db86efd2b7a121",
       "head_branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
       "is_retirement_checkpoint": true,
       "number": 470,
@@ -2224,7 +2224,7 @@
       "state": "OPEN",
       "task_name": "audio-runtime-c79-retire-cli-response-lifecycle",
       "task_state": {
-        "name": "in-review",
+        "name": "init",
         "type": "PROCESSING"
       },
       "task_work_id": "work-task-114",
@@ -4073,7 +4073,7 @@
         "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/report.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/verify.py"
       ],
-      "head": "c1c69000d2d239415bdf5646f4f873e5305d4156",
+      "head": "3124ffdbc0a6c6db82632cbba60c10fd6b106b39",
       "head_branch": "codex/audio-runtime-c108-characterize-audio-device-boundary-gaps",
       "is_retirement_checkpoint": true,
       "number": 493,
@@ -4112,7 +4112,7 @@
       "state": "OPEN",
       "task_name": "audio-runtime-c108-characterize-audio-device-boundary-gaps",
       "task_state": {
-        "name": "init",
+        "name": "ci-pending",
         "type": "PROCESSING"
       },
       "task_work_id": "work-task-222",
@@ -4187,7 +4187,7 @@
         "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/verification-summary.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/verify.py"
       ],
-      "head": "98352dfe20456b1db8bcb9e559fc44ddd8371e6d",
+      "head": "f2df9cc7bc98773d8e6bcef2b712d150806a0086",
       "head_branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
       "is_retirement_checkpoint": true,
       "number": 494,
@@ -4388,51 +4388,32 @@
     },
     {
       "accepted_main_changed_production_paths": [
-        "agent-cli/internal/services/internal/agentruntime/session_audio_dispatch.go",
-        "agent-cli/internal/services/internal/agentruntime/session_instructions.go",
-        "agent-cli/internal/services/internal/agentruntime/session_models.go",
-        "agent-cli/internal/services/internal/agentruntime/session_playback_diagnostics.go",
-        "agent-cli/internal/services/internal/agentruntime/session_runtime_live.go",
-        "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go",
-        "agent-cli/internal/services/internal/agentruntime/session_voices.go"
+        "agent-cli/internal/services/internal/agentruntime/session_instructions.go"
       ],
       "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
       "base_branch": "main",
       "draft": false,
       "files": [
-        "agent-cli/internal/services/internal/agentruntime/session_audio_dispatch.go",
-        "agent-cli/internal/services/internal/agentruntime/session_audio_format_test.go",
-        "agent-cli/internal/services/internal/agentruntime/session_capabilities_test.go",
-        "agent-cli/internal/services/internal/agentruntime/session_capture_claim_test.go",
         "agent-cli/internal/services/internal/agentruntime/session_instructions.go",
         "agent-cli/internal/services/internal/agentruntime/session_instructions_c110_test.go",
-        "agent-cli/internal/services/internal/agentruntime/session_interactive_policy_test.go",
-        "agent-cli/internal/services/internal/agentruntime/session_models.go",
-        "agent-cli/internal/services/internal/agentruntime/session_playback_diagnostics.go",
-        "agent-cli/internal/services/internal/agentruntime/session_runtime_live.go",
-        "agent-cli/internal/services/internal/agentruntime/session_runtime_live_test.go",
-        "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go",
-        "agent-cli/internal/services/internal/agentruntime/session_runtime_rtc_test.go",
-        "agent-cli/internal/services/internal/agentruntime/session_runtime_selection_test.go",
-        "agent-cli/internal/services/internal/agentruntime/session_scheduled_audio_policy_test.go",
-        "agent-cli/internal/services/internal/agentruntime/session_test.go",
-        "agent-cli/internal/services/internal/agentruntime/session_voices.go",
-        "agent-cli/internal/transport/cli/internal/livehost/request.go",
-        "agent-cli/internal/transport/cli/internal/livehost/request_test.go",
-        "agent-cli/internal/transport/cli/session_observability.go",
         "coverage-manifest/go-agent-runtime/services/sessioninstructions/internal/service/package.json",
         "coverage-manifest/go-agent-runtime/services/sessioninstructions/package.json",
         "coverage-manifest/go-agent-runtime/services/sessioninstructions/wire/package.json",
-        "docs/architecture/architecture-policy.json",
-        "docs/architecture/architecture-size-baseline.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/README.md",
         "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/admission.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/artifacts/yui-build.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/baseline.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/consumer/go.mod",
         "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/consumer/main.go",
+        "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/provenance.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/reports/c110-positive-and-guard-mutations.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/reports/c110-public-contract.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/reports/c110-retirement-and-owned-paths.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/run.py",
         "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/verify.py",
         "go-agent-runtime/services/session/instructions.go",
         "go-agent-runtime/services/session/internal/instructions/service.go",
+        "go-agent-runtime/services/session/internal/instructions/service_test.go",
         "go-agent-runtime/services/session/wire/providers.go",
         "go-agent-runtime/services/session/wire/wire_gen.go",
         "go-agent-runtime/services/sessioninstructions/contract.go",
@@ -4440,10 +4421,9 @@
         "go-agent-runtime/services/sessioninstructions/internal/service/service.go",
         "go-agent-runtime/services/sessioninstructions/internal/service/service_test.go",
         "go-agent-runtime/services/sessioninstructions/wire/wire.go",
-        "go-agent-runtime/services/sessioninstructions/wire/wire_gen.go",
-        "scripts/wire-packages.txt"
+        "go-agent-runtime/services/sessioninstructions/wire/wire_gen.go"
       ],
-      "head": "877866206b1372d4ef5a5836344ab0a6fccc06d7",
+      "head": "87d0bb9516c24ac59fca920f69636deb8efaea25",
       "head_branch": "codex/audio-runtime-c110-retire-cli-session-instruction-resolution",
       "is_retirement_checkpoint": true,
       "number": 497,
@@ -4474,17 +4454,10 @@
       ],
       "retirement_classification": {
         "accepted_main_target_paths": [
-          "agent-cli/internal/services/internal/agentruntime/session_audio_dispatch.go",
-          "agent-cli/internal/services/internal/agentruntime/session_instructions.go",
-          "agent-cli/internal/services/internal/agentruntime/session_models.go",
-          "agent-cli/internal/services/internal/agentruntime/session_playback_diagnostics.go",
-          "agent-cli/internal/services/internal/agentruntime/session_runtime_live.go",
-          "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go",
-          "agent-cli/internal/services/internal/agentruntime/session_voices.go"
+          "agent-cli/internal/services/internal/agentruntime/session_instructions.go"
         ],
         "title_branch_keywords": [
           "audio",
-          "extract",
           "retire",
           "runtime"
         ]
@@ -4492,11 +4465,11 @@
       "state": "OPEN",
       "task_name": "audio-runtime-c110-retire-cli-session-instruction-resolution",
       "task_state": {
-        "name": "init",
+        "name": "ci-pending",
         "type": "PROCESSING"
       },
       "task_work_id": "work-task-232",
-      "title": "refactor: extract reusable session instruction resolution",
+      "title": "refactor: retire CLI session instruction resolution",
       "url": "https://github.com/portpowered/go-agent-harness/pull/497"
     },
     {
