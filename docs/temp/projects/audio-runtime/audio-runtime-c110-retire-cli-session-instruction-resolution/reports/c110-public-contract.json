@@ -57,14 +57,14 @@
   "mode": "retirement-and-owned-paths",
   "retirement": {
     "agentruntime_production_lines": {
-      "candidate": 39423,
-      "origin_main": 39614,
+      "candidate": 39361,
+      "origin_main": 39552,
       "retired_lines": 191
     },
     "ancestry": {
       "branch": "codex/audio-runtime-c110-retire-cli-session-instruction-resolution",
-      "head": "95aa12c801aed0a094d1dfa9078a2e819658b356",
-      "origin_main": "915ed982d23f2e549e529ff43c4f370b4b51e394",
+      "head": "831ec692237a1e45449fb1a63b6c98cb74854ef4",
+      "origin_main": "b8650efd95f6a2e2e675a3dfd0969a9d311a877b",
       "required_ancestors": {
         "accepted_main": {
           "is_ancestor": true,
@@ -72,7 +72,7 @@
         },
         "origin_main": {
           "is_ancestor": true,
-          "revision": "915ed982d23f2e549e529ff43c4f370b4b51e394"
+          "revision": "b8650efd95f6a2e2e675a3dfd0969a9d311a877b"
         },
         "startup_ancestor": {
           "is_ancestor": true,
@@ -105,6 +105,7 @@
       "agent-cli/internal/transport/cli/internal/livehost/request.go",
       "agent-cli/internal/transport/cli/internal/livehost/request_test.go",
       "agent-cli/internal/transport/cli/session_observability.go",
+      "coverage-manifest/go-agent-runtime/services/session/internal/live/causal/package.json",
       "coverage-manifest/go-agent-runtime/services/sessioninstructions/internal/service/package.json",
       "coverage-manifest/go-agent-runtime/services/sessioninstructions/package.json",
       "coverage-manifest/go-agent-runtime/services/sessioninstructions/wire/package.json",
@@ -156,6 +157,7 @@
         "agent-cli/internal/transport/cli/internal/livehost/request_test.go",
         "agent-cli/internal/transport/cli/session_observability.go",
         "coverage-manifest/go-agent-runtime/services/session/internal/instructions/package.json",
+        "coverage-manifest/go-agent-runtime/services/session/internal/live/causal/package.json",
         "docs/architecture/architecture-policy.json",
         "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_instructions.go.json",
         "go-agent-runtime/services/session/instructions.go",
@@ -173,7 +175,7 @@
       "caller_evidence": [
         {
           "path": "agent-cli/internal/services/internal/agentruntime/service.go",
-          "sha256": "d3a1650dfb0a50b8cfcdf9376422d1e054f747a00e4b1951753cff6f9fca82b0",
+          "sha256": "7f716d7a96fcf1c9193064e1ffef77bc4c4513e74f69003fa42b559adad33372",
           "symbols": [
             "RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration",
             "RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration"
@@ -231,8 +233,9 @@
       "agent-cli/internal/transport/cli/internal/livehost/request.go": "fe94c3c1116fa3ee989b37dee7436175eac4fc7b2661c8ba13248c0ce70b6e1e",
       "agent-cli/internal/transport/cli/internal/livehost/request_test.go": "44aa76867265ffc23ebf9b83bf5b3dc4f91beca4ecd4bccbed3b9596d657b240",
       "agent-cli/internal/transport/cli/session_observability.go": "ad98b191c8fab1462ea5f6b4849518ce360636ebc1c7844be0b10550b5cb1c74",
-      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/run.py": "9cf88431ff41fb03ec02d36260e3b88f134c0e150984e09dd39d0bd540565354",
-      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/verify.py": "a94f3e679b111c6b80b0397b169fb95478d2f15a783981f1ff487cc54e0b5a92",
+      "coverage-manifest/go-agent-runtime/services/session/internal/live/causal/package.json": "1ed94ad13ad7b724f800616d113bb62e5d42d8a8ff77c0bb7b9682539233bb30",
+      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/run.py": "94e33d50ab1bcfc35aa44ea42dd835246b86fc19dcf8292ac7f6badb6b18d179",
+      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/verify.py": "50dc9ec3723290ebe51ed2073b0fdf628df14738304eeba8558f7350a2ccf469",
       "go-agent-runtime/services/session/instructions.go": "edae2ebe95d618f0c3fd13236e101772652350e97174ecd31cc6024c479bbff4",
       "go-agent-runtime/services/session/wire/providers.go": "60c9d605729c22916e6fae2ab7e90c29dd4590fb8f2c5dd0fec1014235c74ac7",
       "go-agent-runtime/services/session/wire/wire_gen.go": "ebffc2829a7c5497f57e845adb923e935f52d9ec97b78a5e5a1f23e35ef435cb",

@@ -39,24 +39,26 @@ claim CI, review, merge, or project-wide acceptance.
 
 ## Current implementation handoff
 
-The exact current executable-input checkpoint is
-`95aa12c801aed0a094d1dfa9078a2e819658b356`, with
-`origin/main=915ed982d23f2e549e529ff43c4f370b4b51e394`. The bounded `run.py`
-replay was accepted in
-`runs/run-20260913T162432Z-33439`; its nomicrophone YUI artifact is
-`b8f12ab21d7a8a14ebe200a7c0ea2e96e19ce21bf36700d354a892c2d9bc2a2f`, and
-the artifact, provenance, and run summary all bind to that tested source
-revision. The lifecycle repair prepares the capability coordinator before
-instruction resolution, so malformed resolution joins the cleanup error and
-closes the caller-owned capability exactly once; the focused regression also
-asserts that provider connection is never attempted. The subsequent evidence
-ledger commit is a docs-only descendant with unchanged executable-input
-hashes. The positive instruction/text-seed path, invalid pre-provider path,
+The exact executable-input checkpoint is
+`831ec692237a1e45449fb1a63b6c98cb74854ef4`, which includes the preserved
+C110 candidate merged with `origin/main=b8650efd95f6a2e2e675a3dfd0969a9d311a877b`
+and the demonstrated coverage exception for current main's test-only causal
+package. The bounded `run.py` replay was accepted in
+`runs/run-20260913T170344Z-15323`; its nomicrophone YUI artifact is
+`6a40d1b4b4dcbcf81802ad5f263ab84905f21ab7f337b07fa4b1cc4ff75e50fa`
+(51,162,914 bytes), and the artifact, provenance, and run summary all bind to
+that tested source revision. The lifecycle repair prepares the capability
+coordinator before instruction resolution, so malformed resolution joins the
+cleanup error and closes the caller-owned capability exactly once; the focused
+regression also asserts that provider connection is never attempted. The
+final evidence ledger is a docs-only descendant with unchanged executable
+inputs. The positive instruction/text-seed path, invalid pre-provider path,
 clean shutdown, and C16 audio/tool replay are recorded there.
 
 Focused session-instruction normal/race, CLI normal/race, the one-update
 provider regression, consumer, mutation, retirement, Wire,
-architecture-size, coverage-registration, accumulated normal/coverage/race
+architecture-size (201 packages, 1,936 files, 28,745 functions),
+coverage-registration (191 packages), accumulated normal/coverage/race
 regressions, vet, pinned staticcheck, pinned lint, format, and diff gates
 passed. The known peer high-rate audio/tool finding and the current
 peer-owned Windows audio-portable CI failure remain preserved as external
