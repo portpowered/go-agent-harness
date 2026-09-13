@@ -5,6 +5,9 @@ task `audio-runtime-c127-repair-current-main-terminal-drain-regression`.
 The implementation candidate is source checkpoint `bb88393e41ff93d3f1663b4085c8b03ac11baf6b`
 on branch
 `codex/audio-runtime-c127-repair-current-main-terminal-drain-regression`.
+The refreshed public evidence runner is checkpoint
+`5997399bb527744f35423665f575f64cc51c8fb5` and its report hash is
+`88d7f33f2ecdb6e2dc2e7fd86b2edc6eb1af8b8e08fcdd29df0b1313a3915736`.
 The isolated worktree is the worktree containing this file. The immutable
 current-main negative control is pinned at
 `09c70f51243caeaf1184c4806b99bbf7749e3044`; a fresh fetch resolved
@@ -56,7 +59,12 @@ digests and exact failure observations are in `causal-evidence.json`.
 The accepted C64 source-first failure and repaired control remain unchanged at
 `../audio-runtime-c64-provider-audio-terminal-drain-repair/negative-evidence.json`.
 
-There was no prior C127 review finding. The latest C118 review finding
+The prior C127 review finding identified stale and inconsistent
+`public-run.json`, `provenance.json`, and `verification-summary.json` revision
+and hash fields, and observed that both public cases used the same replay-only
+command rather than a distinct software-device route. This revision regenerates
+all three reports from the exact `5997399bb527744f35423665f575f64cc51c8fb5`
+runner checkpoint and records the two distinct command paths below. The latest C118 review finding
 (scheduled incomplete/continuation metadata being ignored by terminal
 finalization) belongs to C118's disjoint terminal-diagnostics paths; those
 paths and its checkpoint are unchanged. C51 review-27 and review-35 findings
@@ -109,12 +117,20 @@ The source-pinned `nomicrophone` YUI build from the candidate has SHA256
 (`51,101,938` bytes). The bounded public runner and the offline replay from
 that binary exited zero and emitted `PROBE_TOOL_MARKER_9182`, an ordered tool
 call/result, continuation text, provider-close terminal metadata, and 4,800
-bytes of output PCM with terminal queue zero. Artifact hashes are recorded in
-`provenance.json`, `verification-summary.json`, and `public-run.json`. The
-strict test45/test46 checks provide the separate software-device/tool process
-boundary proof. This remains software-device/offline replay evidence only; no
-credentials, live Realtime session, physical device, or acoustic claim was
-used.
+bytes of recorded output PCM with terminal queue zero. The regenerated public
+report (`public-run.json`, SHA256
+`88d7f33f2ecdb6e2dc2e7fd86b2edc6eb1af8b8e08fcdd29df0b1313a3915736`) ran in
+1,715 ms at candidate `5997399bb527744f35423665f575f64cc51c8fb5`. Its
+`software-device-tool-drain` command used the supported loopback
+`audio-device-server` and explicit `--audio-out-device=` route; the freshly
+built server (`4a6a17732f4bd8ec765cac866226c6c6463b9b4ecd1780bb73c1129fb16d1742`,
+8,658,210 bytes) rendered 5,280 samples with zero queued, dropped, overflow,
+discarded, or discard-event counts, and contained the exact 1,600-frame,
+16-kHz device-bound WAV PCM. Its `credential-free-audio-tool-replay` command
+used neither device flag. Artifact hashes and route evidence are recorded in
+`provenance.json`, `verification-summary.json`, and `public-run.json`. This
+remains software-device/offline replay evidence only; no credentials, live
+Realtime session, physical device, or acoustic claim was used.
 
 The bounded runner recorded process-group cleanup for every causal and public
 child. A final target-process check for `audio-device-server` was empty after

@@ -11,6 +11,7 @@
     "startupIntegration": "8bdafc7f947a3a2c9856220abdc539437035bd21",
     "acceptedC64Merge": "59af6325614d80173447fe2018a0471e27b4e7b1",
     "candidateImplementationRevision": "bb88393e41ff93d3f1663b4085c8b03ac11baf6b",
+    "evidenceRunnerRevision": "5997399bb527744f35423665f575f64cc51c8fb5",
     "candidateTree": "a621961a12e6d1e339c0e5898d2594e301d17db9",
     "candidateDiffSha256": "2b209f2bf52ab6f94050b934971aa43f68742aefe8379cc2b9ba3e8a94684a08",
     "candidateContainsFetchedOriginMain": true,
@@ -111,10 +112,40 @@
   },
   "publicRunner": {
     "path": "public-run.json",
-    "sha256": "7ee7ddc6e3e30fafefab332d745695141b7604e5582a280b15d18b6aa809851d",
-    "candidateRevision": "d672d3c55caaa02eb7a0425959684de735d34a61",
+    "sha256": "88d7f33f2ecdb6e2dc2e7fd86b2edc6eb1af8b8e08fcdd29df0b1313a3915736",
+    "candidateRevision": "5997399bb527744f35423665f575f64cc51c8fb5",
     "cases": ["software-device-tool-drain", "credential-free-audio-tool-replay"],
-    "aggregateElapsedMs": 172
+    "aggregateElapsedMs": 1715,
+    "routeEvidence": {
+      "software-device-tool-drain": {
+        "deviceServerSource": "agent-cli/cmd/audio-device-server",
+        "deviceServerSha256": "4a6a17732f4bd8ec765cac866226c6c6463b9b4ecd1780bb73c1129fb16d1742",
+        "deviceServerBytes": 8658210,
+        "audioDeviceServerFlag": true,
+        "audioOutputDeviceFlag": true,
+        "deviceOutputWav": {
+          "sampleRate": 16000,
+          "frames": 1600,
+          "pcmBytes": 3200,
+          "pcmSha256": "7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805",
+          "wavBytes": 3244,
+          "wavSha256": "961bd1b82b54dcc2ada46e1f913b6e78bab172f1e3f5190be93747e7fe1e18dc"
+        },
+        "renderedSamples": 5280,
+        "queuedSamples": 0,
+        "droppedSamples": 0,
+        "overflowEvents": 0,
+        "discardedSamples": 0,
+        "discardEvents": 0,
+        "exactDeviceOutputPcmContained": true,
+        "serverProcessReaped": true,
+        "serverProcessGroupAliveAfter": false
+      },
+      "credential-free-audio-tool-replay": {
+        "audioDeviceServerFlag": false,
+        "audioOutputDeviceFlag": false
+      }
+    }
   },
   "historicalCiEvidence": {
     "34748383831": {

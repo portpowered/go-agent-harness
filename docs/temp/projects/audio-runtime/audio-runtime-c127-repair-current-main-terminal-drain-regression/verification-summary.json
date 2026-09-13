@@ -134,7 +134,7 @@
       "name": "public runner",
       "command": "rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c127-repair-current-main-terminal-drain-regression/run.py --mode public --case software-device-tool-drain --case credential-free-audio-tool-replay --child-timeout 60 --aggregate-timeout 300",
       "exit": 0,
-      "output": "public-run.json; candidate=d21d224b8394e913e31f70d074c4aac53bc30477; source-pinned yui sha256=8e8db1f19527d10cc7ea53653db95a790f6852199784efe10e011be5f238ab1d; both cases emitted marker, continuation, fixture_complete/provider_close, 4800 PCM bytes, terminal_queue=0; aggregate_elapsed_ms=281"
+      "output": "public-run.json sha256=88d7f33f2ecdb6e2dc2e7fd86b2edc6eb1af8b8e08fcdd29df0b1313a3915736; candidate=5997399bb527744f35423665f575f64cc51c8fb5; source-pinned yui sha256=8e8db1f19527d10cc7ea53653db95a790f6852199784efe10e011be5f238ab1d; software-device case used loopback audio-device-server plus --audio-out-device= and rendered 5280 samples with zero queue/drop/overflow/discard counters; its 1600-frame device-bound WAV PCM was contained exactly; credential-free case used neither device route; both cases emitted marker, continuation, fixture_complete/provider_close, 4800 recorded PCM bytes, terminal_queue=0; aggregate_elapsed_ms=1715"
     },
     {
       "name": "public replay artifact",
@@ -167,6 +167,33 @@
     "terminalQueue": 0,
     "targetProcessCheckAfterRun": "empty",
     "mode": "offline credential-free replay; no live Realtime"
+  },
+  "publicRun": {
+    "path": "public-run.json",
+    "sha256": "88d7f33f2ecdb6e2dc2e7fd86b2edc6eb1af8b8e08fcdd29df0b1313a3915736",
+    "candidateRevision": "5997399bb527744f35423665f575f64cc51c8fb5",
+    "originMainAtRun": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
+    "aggregateElapsedMs": 1715,
+    "softwareDeviceRoute": {
+      "deviceServerSource": "agent-cli/cmd/audio-device-server",
+      "deviceServerSha256": "4a6a17732f4bd8ec765cac866226c6c6463b9b4ecd1780bb73c1129fb16d1742",
+      "deviceServerBytes": 8658210,
+      "deviceOutputWavFrames": 1600,
+      "deviceOutputWavPcmBytes": 3200,
+      "renderedSamples": 5280,
+      "exactDeviceOutputPcmContained": true,
+      "queuedSamples": 0,
+      "droppedSamples": 0,
+      "overflowEvents": 0,
+      "discardedSamples": 0,
+      "discardEvents": 0,
+      "serverProcessReaped": true,
+      "serverProcessGroupAliveAfter": false
+    },
+    "credentialFreeRoute": {
+      "audioDeviceServer": false,
+      "audioOutputDevice": false
+    }
   },
   "projectScope": "This is the C127 vertical only; no project-wide gate is claimed. Full changed-package coverage was attempted but remains a baseline-sensitive executor-owned failure as recorded above. Script CI and independent review were not polled or performed by the implementer."
 }
