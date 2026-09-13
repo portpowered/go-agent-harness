@@ -14,6 +14,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/composite"
 	filemedia "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/file"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/media"
+	deviceobservability "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/observability"
 	deviceprobe "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/probe"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
@@ -39,6 +40,13 @@ func NewFileService() devices.Service {
 // all negotiated media and device worker lifetimes.
 func NewProbeService(registry devicegw.DeviceRegistry, sessionFactory devices.ProbeSessionFactory) devices.ProbeService {
 	return deviceprobe.New(registry, sessionFactory)
+}
+
+// NewObserverService assembles invocation-owned playback/capture diagnostics
+// while exposing only the public observer contract to hosts and embedders.
+func NewObserverService(deps devices.ObserverDependencies) devices.ObserverService {
+	wire.Build(deviceobservability.New, wire.Bind(new(devices.ObserverService), new(*deviceobservability.Service)))
+	return nil
 }
 
 func newFactory(registry devicegw.DeviceRegistry) *composite.Factory {

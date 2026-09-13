@@ -1,0 +1,38 @@
+{
+  "schema": "audio-runtime.c76.verification-summary.v1",
+  "task": "audio-runtime-c76-retire-cli-playback-observability",
+  "tested_candidate_revision": "538531faebc07f2725ee8a93f06bc33f5b1cb46d",
+  "scoped_evidence_passed": true,
+  "architecture_gate": {
+    "status": "deferred",
+    "findings": [
+      "session_playback_diagnostics.go:fallbackPlaybackDiagnosticSink",
+      "session_playback_diagnostics.go:playbackMetricSamples"
+    ],
+    "owner": "audio-runtime-c61-retire-cli-browser-scenario-contract",
+    "action": "After C61 releases the shared baseline, delete only these demonstrated downward C76 entries and rerun architecture-size-check."
+  },
+  "focused": {
+    "private_observability_normal": "8 passed",
+    "private_observability_race_count_3": "24 passed",
+    "cli_normal": "10 passed",
+    "cli_race": "10 passed",
+    "devices_full_normal": "41 passed in 7 packages",
+    "devices_full_race": "41 passed in 7 packages",
+    "external_consumer_gowork_off_race": "passed"
+  },
+  "public": {
+    "external_consumer_gowork_off": "passed",
+    "room_participant_overflow": "passed",
+    "shipped_agent_audio_device_server": "passed",
+    "existing_c16_audio_tool_replay": "passed",
+    "audio_tool_pcm": "4800 bytes, sha256 0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502",
+    "interruption_pcm": "3840 bytes, sha256 6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22"
+  },
+  "external_gates": {
+    "script_ci": "not submitted",
+    "independent_review": "not requested",
+    "guarded_merge": "not completed",
+    "vertical_probe": "not authorized"
+  }
+}
