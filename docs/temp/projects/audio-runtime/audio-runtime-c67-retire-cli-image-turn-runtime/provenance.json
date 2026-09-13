@@ -1,0 +1,33 @@
+{
+  "schema": "audio-runtime-c67-provenance/v1",
+  "project": "audio-runtime",
+  "contract_revision": "audio-runtime-v1",
+  "work": "audio-runtime-c67-retire-cli-image-turn-runtime",
+  "branch": "codex/audio-runtime-c67-retire-cli-image-turn-runtime",
+  "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c67-retire-cli-image-turn-runtime",
+  "implementation_revision": "936948017130eb9c9d1c6a4b9cecef8e5e62cd2a",
+  "accepted_main_revision": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+  "manifest_baseline_revision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
+  "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+  "fetched_execution_review_main": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+  "legacy_production_file": "agent-cli/internal/services/internal/agentruntime/session_image.go",
+  "legacy_baseline_lines": 703,
+  "legacy_final_lines_at_checkpoint": 452,
+  "retired_physical_production_lines": 251,
+  "admission": {
+    "server": "http://127.0.0.1:7439",
+    "session": "~default",
+    "status": "admitted",
+    "project": "audio-runtime"
+  },
+  "claims": {
+    "script_ci_green": false,
+    "independent_review_green": false,
+    "guarded_merge_observed": false,
+    "vertical_probe_observed": false
+  },
+  "shared_gate_dependencies": [
+    "scripts/wire-packages.txt",
+    "docs/architecture/architecture-size-baseline.json"
+  ]
+}
