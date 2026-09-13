@@ -190,3 +190,33 @@ main, apply only the sessionturns generated-Wire registration and twelve
 demonstrated downward baseline deletions while preserving peers, rerun bounded
 gates, commit/push the changed same PR #513 head, and return `ACCEPTED` to
 SCRIPT CI without polling.
+
+## Exact lease and PR recheck — 2026-09-13T21:25:51Z
+
+Admission was reverified with `project-control.py verify-work --type task
+--name audio-runtime-c150-recover-c136-c87-session-turns --root
+"$FACTORY_ROOT"`, returning `admitted`. The canonical task remains
+`work-task-35` in `init/PROCESSING`; no review row exists. C150 is clean at
+`3d9e47400dbd0613c9b8d96b1ce5c605e6ef6a16`, with startup, inherited C136
+`7268f46a8c23cea480aecba621d49c01e4a30aac`, fresh accepted main
+`4a1c399ccbb3d780be95eb04316e84b8f11a6646`, and `origin/main` ancestry
+verified. C136 remains cleanly preserved at its original checkpoint with only
+the original 48-line evidence append dirty.
+
+The exact shared-path release is still unavailable. PR #497 (C110) is open at
+`a1dab09a990a96f08fc21fc2977b8f7dad4e5a98` with eight green checks and a
+Windows portable failure; PR #496 (C111) is open at
+`d014a3586368c37e20618481ee162e1b83db113f` with eight green checks and a
+coverage failure; PR #505 (C119) is open at
+`00f53923d61b32a27cf4d6ebc5bbf0b4c1ae6e3e` with all nine checks green but no
+independent review or guarded merge. None releases `scripts/wire-packages.txt`
+or `docs/architecture/architecture-policy.json`, so C150 made no shared-file
+mutation and did not resubmit the unchanged 13-finding candidate. The external
+WebMCP TempDir cleanup failure remains the recorded out-of-scope,
+non-reproduced result.
+
+Next action remains: after the three exact leases are released by guarded
+merges, fetch the then-current main, integrate it without rewriting C136/C87,
+apply only the sessionturns generated-Wire registration and twelve downward
+baseline deletions, rerun the bounded focused and accumulated gates, then push
+the changed same PR line and return `ACCEPTED` to SCRIPT CI without polling.
