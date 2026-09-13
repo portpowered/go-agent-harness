@@ -1,0 +1,50 @@
+{
+  "run": {
+    "id": 34785669810,
+    "head_sha": "aab19728058b5783a279aa2301681ab7da976585",
+    "url": "https://github.com/portpowered/go-agent-harness/actions/runs/34785669810"
+  },
+  "job": {
+    "id": 103800583639,
+    "name": "CI (static)",
+    "status": "completed",
+    "conclusion": "failure",
+    "head_sha": "aab19728058b5783a279aa2301681ab7da976585",
+    "started_at": "2026-09-13T22:04:16Z",
+    "completed_at": "2026-09-13T22:08:31Z",
+    "url": "https://github.com/portpowered/go-agent-harness/actions/runs/34785669810/job/103800583639"
+  },
+  "raw_log": {
+    "retrieved_at": "2026-09-13T22:31:43Z",
+    "line_count": 938,
+    "sha256": "791524d1c71c3a69315fa7c18ed497fb3eabe2eb917133217720cb1fec8c909b",
+    "temporary_path": "/tmp/c156-static-job-103800583639.log"
+  },
+  "board_feedback": "CI checks failed for PR #517 at head aab19728058b5783a279aa2301681ab7da976585: required checks failed on current head aab19728058b5783a279aa2301681ab7da976585: CI (static)=FAILURE; checks: CI (static)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34785669810/job/103800583639). Return this task to the executor with the listed failures.",
+  "findings": [
+    {
+      "check": "architecture-size-check",
+      "path": "agent-cli/internal/services/agentsession/coverage_c156_test.go",
+      "symbol": "TestC156AudioInTurnBargeContract",
+      "detail": "cognitive-complexity 25 > 20"
+    },
+    {
+      "check": "architecture-size-check",
+      "path": "agent-cli/internal/services/agentsession/coverage_c156_test.go",
+      "symbol": "TestC156VoiceContractIsOrderedAndCopyIsolated",
+      "detail": "cognitive-complexity 21 > 20"
+    },
+    {
+      "check": "golangci-lint",
+      "path": "agent-cli/internal/services/agentsession/coverage_c156_test.go",
+      "lines": [45, 53, 96],
+      "detail": "errorlint rejected direct error comparisons; use errors.Is"
+    },
+    {
+      "check": "golangci-lint",
+      "path": "agent-cli/internal/services/agentsession/coverage_c156_test.go",
+      "line": 335,
+      "detail": "goconst reported three repeated mutated string literals"
+    }
+  ]
+}
