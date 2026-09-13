@@ -216,3 +216,33 @@ peer-source or shared-registry change. This checkpoint still claims no
 CI-green result, candidate acceptance, C61/C83 fix/merge/probe, hardware or
 acoustic proof, or project completion. The next action is to push this exact
 owned evidence head, update PR #495, and return it to script CI without polling.
+
+## Surviving process-group cleanup repair
+
+The latest independent review reproduced a cleanup defect in `bounded()`: an
+exiting leader could close stdout while a silent descendant kept the process
+group alive, and pipe EOF skipped cleanup because the leader had already exited.
+The same admitted task repaired this in `run_public_checks.py` and added
+`PublicRunnerCleanupTests.test_cleanup_reaps_surviving_group_after_leader_closes_stdout`.
+
+The pre-repair runner at `8d8cfa68` returned `status=failed`,
+`timed_out=false`, `process_group_gone=false`, and both `term_sent` and
+`kill_sent` false for that control. The control harness then killed the
+intentionally retained group and verified it was gone. The repaired runner at
+`c3680d7` returns `status=timeout`, `timed_out=true`, sends TERM and KILL as
+needed, records `group_gone_after_cleanup=true`, and returns
+`process_group_gone=true`.
+
+The committed source HEAD is `a8409ebc` after integrating current
+`origin/main=071b0abf`. Focused `test_analyze.py` passes 4/4. Fresh positive
+public evidence passes 18/18 in 254.711s under 90/300 seconds; malformed or
+canceled evidence passes 3/3 in 31.847s under 60/180 seconds. Both reports
+are credential-free, tree-bound, and have clean process groups.
+`verify.py --mode all` passes all eight checks and all 19 negative fixtures.
+The updated runner, test, verification, positive-report and negative-report
+SHA-256 values are retained in the final bundle and source bindings.
+
+This remains software-only evidence. It does not claim C61/C83 repair, merge,
+review, acceptance, vertical validation, hardware/acoustic proof or project
+completion; the C79 provider-audio failure and all nine broad project gates
+remain open.

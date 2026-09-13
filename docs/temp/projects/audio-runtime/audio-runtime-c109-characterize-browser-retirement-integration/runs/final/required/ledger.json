@@ -17804,7 +17804,7 @@
       "go-agent-runtime/services/browserscenario/service.go",
       "go-agent-runtime/services/browserscenario/wire/wire.go"
     ],
-    "reviewMain": "09c70f51243caeaf1184c4806b99bbf7749e3044",
+    "reviewMain": "071b0abfd67501db61e3c1929971c6dd6e77eb62",
     "source_driven": true
   },
   "failClosedRules": [
