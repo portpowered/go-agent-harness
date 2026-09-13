@@ -18,8 +18,18 @@ func ff(v sf.Facts) *failureFacts {
 func pf(f *failureFacts) sf.Facts {
 	return sf.Facts{Classification: f.classification, TerminalReason: f.terminalReason, Provenance: f.provenance, OutputState: f.outputState, ErrorType: f.errorType, Code: f.code, FailingEvent: f.failingEvent}
 }
-func progress(o *observer) sf.Progress                      { return sfw.Progress(o.sawSessionOpen, o.turnsCompleted) }
-func (o *observer) failureSnapshot() *failureFacts          { return ff(fi(o).Failure.SnapshotFacts()) }
+func progress(o *observer) sf.Progress { return sfw.Progress(o.sawSessionOpen, o.turnsCompleted) }
+func (o *observer) failureSnapshot() *failureFacts {
+	if o == nil {
+		return nil
+	}
+	if facts := ff(fi(o).Failure.SnapshotFacts()); facts != nil {
+		return facts
+	}
+	o.livenessMu.Lock()
+	defer o.livenessMu.Unlock()
+	return o.failure
+}
 func (o *observer) clearFailure()                           { fi(o).Failure.Clear(); setFailure(o, nil) }
 func (o *observer) captureFailureFromError(v *m.ErrorValue) { fi(o).Failure.AcceptError(v) }
 func factsFromSessionRunError(err error) *failureFacts      { return ff(sfw.RunFacts(err)) }
@@ -27,34 +37,27 @@ func (o *observer) acceptFailureObservation(f *failureFacts, err error) bool {
 	return o != nil && f != nil && fi(o).Failure.Accept(pf(f), err)
 }
 func (o *observer) captureFailureFromClose(v *m.SessionCloseValue) {
-	if o == nil {
-		return
+	if o != nil {
+		fi(o).Failure.AcceptClose(v, progress(o))
 	}
-	fi(o).Failure.AcceptClose(v, progress(o))
 }
-func p(o *observer, kind sf.Projection, e string) *failureFacts {
+
+var projectionKinds = [...]sf.Projection{sf.ProjectionUnresolvedTool, sf.ProjectionImageContinuation, sf.ProjectionToolContinuation, sf.ProjectionScheduledAudio}
+
+func p(o *observer, kind int, e string) *failureFacts {
 	if o == nil {
 		return nil
 	}
-	return ff(sfw.Facts(kind, e, progress(o)))
+	return ff(sfw.Facts(projectionKinds[kind], e, progress(o)))
 }
-func (o *observer) unresolvedToolResultFailureFacts(e string) *failureFacts {
-	return p(o, sf.ProjectionUnresolvedTool, e)
-}
-func (o *observer) imageContinuationFailureFacts(e string) *failureFacts {
-	return p(o, sf.ProjectionImageContinuation, e)
-}
-func (o *observer) toolContinuationFailureFacts(e string) *failureFacts {
-	return p(o, sf.ProjectionToolContinuation, e)
-}
-func (o *observer) scheduledAudioFailureFacts(e string) *failureFacts {
-	return p(o, sf.ProjectionScheduledAudio, e)
-}
+func (o *observer) unresolvedToolResultFailureFacts(e string) *failureFacts { return p(o, 0, e) }
+func (o *observer) imageContinuationFailureFacts(e string) *failureFacts    { return p(o, 1, e) }
+func (o *observer) toolContinuationFailureFacts(e string) *failureFacts     { return p(o, 2, e) }
+func (o *observer) scheduledAudioFailureFacts(e string) *failureFacts       { return p(o, 3, e) }
 func (o *observer) emitToolCallRecord(v *m.ToolCallEndValue) {
-	if o == nil || o.sink == nil || v == nil {
-		return
+	if o != nil && o.sink != nil && v != nil {
+		fi(o).Failure.EmitUnsupportedTool(sf.ToolCall{Name: v.Name, ID: v.ToolCallID, TurnIndex: o.turnsCompleted + 1})
 	}
-	fi(o).Failure.EmitUnsupportedTool(sf.ToolCall{Name: v.Name, ID: v.ToolCallID, TurnIndex: o.turnsCompleted + 1})
 }
 func deriveOutputState(open bool, turns int) string { return sfw.OutputStateForProgress(open, turns) }
 func fi(o *observer) *sfw.Invocation {
@@ -77,9 +80,6 @@ func fi(o *observer) *sfw.Invocation {
 	return holder
 }
 func setFailure(o *observer, f *failureFacts) {
-	if o == nil {
-		return
-	}
 	o.livenessMu.Lock()
 	defer o.livenessMu.Unlock()
 	o.failure = f
