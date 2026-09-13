@@ -1,0 +1,201 @@
+{
+  "schema": "audio-runtime.c127.causal-evidence.v1",
+  "project": "audio-runtime",
+  "task": "audio-runtime-c127-repair-current-main-terminal-drain-regression",
+  "contractRevision": "audio-runtime-v1",
+  "branchName": "codex/audio-runtime-c127-repair-current-main-terminal-drain-regression",
+  "workId": "work-task-3",
+  "session": "~default",
+  "candidateImplementationRevision": "bb88393e41ff93d3f1663b4085c8b03ac11baf6b",
+  "source": {
+    "currentMain": "09c70f51243caeaf1184c4806b99bbf7749e3044",
+    "fetchedOriginMain": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
+    "startupIntegration": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+    "acceptedC64Merge": "59af6325614d80173447fe2018a0471e27b4e7b1",
+    "preservedC118Head": "4d5e0801c9df7c4f33a2498d0a20acf947b03992",
+    "originMainEqualsCurrentMain": false,
+    "candidateContainsFetchedOriginMain": true,
+    "ancestryChecks": {
+      "startupIntegration": true,
+      "currentMain": true,
+      "acceptedC64Merge": true,
+      "preservedC118Head": true,
+      "fetchedOriginMain": true
+    }
+  },
+  "admission": {
+    "command": "python3 $FACTORY_ROOT/factory/scripts/project-control.py verify-work --type task --name audio-runtime-c127-repair-current-main-terminal-drain-regression",
+    "result": {
+      "status": "admitted",
+      "project": "audio-runtime",
+      "name": "audio-runtime-c127-repair-current-main-terminal-drain-regression"
+    }
+  },
+  "immutableCiFailures": [
+    {
+      "runId": "34748383831",
+      "headSha": "a949546b612010767dde0e036bc1975cde7b7fd7",
+      "failedJob": "CI (integration): Run production-binary audio-device replay integration",
+      "occurrences": [
+        {
+          "test": "TestAgentBinaryTest45HighRateToolAudioRegression/trial_05",
+          "comparedSamples": 177591,
+          "renderedComparedSamples": 171191,
+          "missingSamples": 6400,
+          "droppedSamples": 0,
+          "overflowEvents": 0,
+          "discardedSamples": 0,
+          "discardEvents": 0,
+          "queuedSamples": 0,
+          "underflowSamples": 7360
+        }
+      ],
+      "metadataPath": "ci-run-34748383831.json",
+      "metadataSha256": "29ee0b4516fa5deaf41204612c6b34f18e87831ced7d373e1699f3e9b81ff6ae",
+      "failedLogPath": "ci-run-34748383831.failed.log",
+      "failedLogSha256": "bc2712fb84f05149d21b3dc8edefe48df413e75c781a746b65218722f40a6090"
+    },
+    {
+      "runId": "34749714271",
+      "headSha": "4d5e0801c9df7c4f33a2498d0a20acf947b03992",
+      "failedJob": "CI (integration): Run production-binary audio-device replay integration",
+      "occurrences": [
+        {
+          "test": "TestAgentBinaryTest45HighRateToolAudioRegression/trial_09",
+          "comparedSamples": 177591,
+          "renderedComparedSamples": 171191,
+          "missingSamples": 6400,
+          "droppedSamples": 0,
+          "overflowEvents": 0,
+          "discardedSamples": 0,
+          "discardEvents": 0,
+          "queuedSamples": 0,
+          "underflowSamples": 16960
+        },
+        {
+          "test": "TestAgentBinaryTest45HighRateToolAudioRegression/trial_02",
+          "comparedSamples": 177591,
+          "renderedComparedSamples": 171191,
+          "missingSamples": 6400,
+          "droppedSamples": 0,
+          "overflowEvents": 0,
+          "discardedSamples": 0,
+          "discardEvents": 0,
+          "queuedSamples": 0,
+          "underflowSamples": 6400
+        }
+      ],
+      "metadataPath": "ci-run-34749714271.json",
+      "metadataSha256": "709afd163de21aac77646b00af1498823c4b290ef3905e2e77096a4382495ae",
+      "failedLogPath": "ci-run-34749714271.failed.log",
+      "failedLogSha256": "8d2d6609098cc1826ffc7f721ee7e36d4e206e0c49c5dfa3e4375adc0b6ca2d7"
+    }
+  ],
+  "acceptedC64Control": {
+    "path": "../audio-runtime-c64-provider-audio-terminal-drain-repair/negative-evidence.json",
+    "sha256": "761128910b3d21e6e96f7487c2ed64bf85edeadad13e0e24ee7260e24df6e58a",
+    "sourceFirstFailure": {
+      "providerSamples": 9600,
+      "admittedSamples": 0,
+      "consumedSamples": 0,
+      "renderedSamples": 0,
+      "queuedSamples": 0,
+      "missingSamples": 6400,
+      "boundary": "provider-close-before-inbound-media-sealed-and-sink-pump-complete"
+    },
+    "repairedControl": {
+      "providerEvents": 17,
+      "toolCalls": 2,
+      "continuation": "two-tool",
+      "providerSamples": 9600,
+      "admittedSamples": 6400,
+      "consumedSamples": 6400,
+      "renderedSamples": 6720,
+      "queuedSamples": 0,
+      "underflowSamples": 320,
+      "callbackCount": 14,
+      "shutdown": "complete"
+    }
+  },
+  "causalMethod": {
+    "perProcessBoundSeconds": 60,
+    "aggregateBoundSeconds": 600,
+    "input": "same provider block ordering, tool continuation, final response and provider-close boundary; current-main failure was run against unmodified origin/main",
+    "orderedRun": {
+      "path": "causal-run.json",
+      "sha256": "8b2def019d23251f18e6a1efedf46cc2fc194622e095f230922947f50e3449cd",
+      "candidate": "rtc_forwarding -> provider_receipt -> sink_admission -> device_render -> response_terminal -> graceful_drain",
+      "currentMainFailure": "provider media admitted during Receive: context deadline exceeded",
+      "firstDivergence": "rtc_forwarding",
+      "aggregateElapsedMs": 17813,
+      "childCleanup": "all candidate, current-main, and accepted-C64 process groups reaped"
+    },
+    "preRepairEvidence": {
+      "path": "pre-repair-failure.txt",
+      "command": "go test ./go-agent-runtime/services/session/internal/live/causal -run ^TestTerminalDrainOrderedBoundaryTrace$ -count=1 -timeout=30s",
+      "returncode": 1,
+      "timedOut": false,
+      "failure": "read provider media admitted during Receive: context deadline exceeded"
+    },
+    "postRepairEvidence": {
+      "command": "go test -race ./go-agent-runtime/services/session/internal/live/causal -run ^TestTerminalDrainOrderedBoundaryTrace$ -count=3 -timeout=120s",
+      "returncode": 0,
+      "timedOut": false,
+      "result": "ok"
+    }
+  },
+  "boundaryMap": [
+    {
+      "boundary": "provider_receipt",
+      "citation": "go-llm-gateway/pkg/providers/openai/session_media.go:33-52,64-74,109-118",
+      "observation": "The provider prepares media for its read loop and releases it when Receive observes it is still unclaimed.",
+      "status": "present-before-and-after; claim timing changed"
+    },
+    {
+      "boundary": "response_terminal",
+      "citation": "immutable PR504 failed logs",
+      "observation": "The failed production runs reached the response/tool terminal path; the loss is one output block, not a missing tool continuation.",
+      "status": "not-earliest-divergence"
+    },
+    {
+      "boundary": "rtc_forwarding",
+      "citation": "go-agent-runtime/services/session/internal/live/service.go:352-366",
+      "observation": "Current main exposed Receive before provider RTC media claim; candidate claims immediately after ConnectSession and before Receive.",
+      "status": "earliest-divergence"
+    },
+    {
+      "boundary": "sink_admission",
+      "citation": "ci-run-34748383831.failed.log:8 and ci-run-34749714271.failed.log:8-10",
+      "observation": "DroppedSamples, OverflowEvents, DiscardedSamples, DiscardEvents and QueuedSamples were all zero.",
+      "status": "later-layer-rejected"
+    },
+    {
+      "boundary": "device_render",
+      "citation": "same immutable failed logs",
+      "observation": "The every-sample oracle observed 171191 of 177591 compared samples; underflow/zero-fill follows the missing block.",
+      "status": "downstream-symptom"
+    },
+    {
+      "boundary": "graceful_drain",
+      "citation": "accepted C64 control and PR504 terminal accounting",
+      "observation": "The C64 control drains to queue zero when media is claimed; current-main PR504 has queue zero but the output block was never admitted.",
+      "status": "not-earliest-divergence"
+    }
+  ],
+  "repair": {
+    "operation": "preclaim provider-owned RTC media before terminal-drain Receive",
+    "continuousOptionPreserved": true,
+    "productionQueuePolicyChanged": false,
+    "timeoutsChanged": false,
+    "pcmOracleChanged": false,
+    "cancellationIdentityChanged": false,
+    "excludedActivePathsUntouched": true
+  },
+  "cleanup": {
+    "earlierAbortedCharacterizationSurvivors": 3,
+    "exactPidsTerminated": [35130, 43255, 43257],
+    "finalTargetProcessCheck": "empty",
+    "postStrictIntegrationTargetProcessCheck": "empty",
+    "postPublicReplayProcessGroups": "reaped"
+  }
+}

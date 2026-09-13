@@ -24,7 +24,6 @@ const (
 const defaultSessionUpdatedTimeout = 30 * time.Second
 const defaultPlaybackDrainTimeout = 5 * time.Second
 
-type mediaRequirements struct{ inbound, outbound bool }
 type replayVirtualPlaybackController struct{}
 
 func (replayVirtualPlaybackController) StartPlayback(sharedaudio.PlaybackResponse) {}
@@ -341,16 +340,22 @@ func terminalDrainFactory(factory session.LiveInferencerFactory) session.LiveInf
 		if err != nil || inner == nil {
 			return inner, err
 		}
-		return terminalDrainInferencer{inner: inner}, nil
+		return terminalDrainInferencer{inner: inner, continuous: request.OutputAudioContinuous}, nil
 	}
 }
 
-type terminalDrainInferencer struct{ inner messages.SessionInferencer }
+type terminalDrainInferencer struct {
+	inner      messages.SessionInferencer
+	continuous bool
+}
 
 func (i terminalDrainInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
 	s, err := i.inner.ConnectSession(ctx)
 	if err != nil || s == nil {
 		return s, err
+	}
+	if provider, ok := s.(sharedaudio.MediaSession); ok {
+		captureMediaEndpoints(s, provider, i.continuous)
 	}
 	source := s.Receive()
 	capacity := defaultEventCapacity
@@ -385,10 +390,6 @@ func (s *terminalDrainSession) FlushOutbound(ctx context.Context) error {
 		return flusher.FlushOutbound(ctx)
 	}
 	return nil
-}
-func (s *terminalDrainSession) InitialSessionConfigSent() bool {
-	marker, ok := s.inner.(interface{ InitialSessionConfigSent() bool })
-	return ok && marker.InitialSessionConfigSent()
 }
 func (s *terminalDrainSession) TerminalError() error {
 	provider, ok := s.inner.(interface{ TerminalError() error })
