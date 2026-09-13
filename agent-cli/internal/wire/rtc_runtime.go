@@ -16,6 +16,8 @@ import (
 
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v4"
+	rtctransport "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rtctransport"
+	rtctransportwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rtctransport/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
@@ -29,8 +31,8 @@ const (
 )
 
 // productionRTCComposition owns the concrete protocol implementations used
-// by the generated CLI graph. The service only receives the narrow component
-// functions, so provider packages never need to import Pion types.
+// by the generated CLI graph; provider packages only receive narrow component
+// functions and never need to import Pion types.
 type productionRTCComposition struct {
 	mu        sync.Mutex
 	answerers map[*rtc.LoopbackEndpoint]*rtc.LoopbackEndpoint
@@ -54,10 +56,9 @@ func (c *productionRTCComposition) components() rtcontract.SessionRTCComponents 
 	}
 }
 
-// resolveSignaling supports the in-process loopback signaling endpoint used by
-// the shipped hermetic path. Other endpoint schemes fail as a typed signaling
-// error until an application-specific resolver is supplied through
-// WithSessionRTCComponents.
+// resolveSignaling supports in-process loopback signaling; other endpoint schemes
+// fail as a typed signaling error until an application-specific resolver is
+// supplied through WithSessionRTCComponents.
 func (c *productionRTCComposition) resolveSignaling(ctx context.Context, raw string) (rtc.Signaling, error) {
 	if ctx != nil {
 		if err := ctx.Err(); err != nil {
@@ -117,9 +118,8 @@ func openProductionRTCMediaSource(ctx context.Context, raw string) (sharedaudio.
 }
 
 type productionRTCDataPlane struct {
-	offerer  *rtc.LoopbackEndpoint
-	answerer *rtc.LoopbackEndpoint
-
+	offerer    *rtc.LoopbackEndpoint
+	answerer   *rtc.LoopbackEndpoint
 	clientPeer *webrtc.PeerConnection
 	serverPeer *webrtc.PeerConnection
 	data       *productionRTCConn
@@ -143,7 +143,7 @@ type productionRTCDataPlane struct {
 
 	attachMu     sync.Mutex
 	attached     bool
-	media        *rtc.OutboundTrack
+	media        rtctransport.OutboundTrack
 	mediaCancel  context.CancelFunc
 	mediaDone    chan struct{}
 	mediaErrMu   sync.Mutex
@@ -342,10 +342,10 @@ func (p *productionRTCDataPlane) AttachInboundMedia(ctx context.Context, source 
 	if err != nil {
 		return fmt.Errorf("create RTC inbound Opus encoder: %w", err)
 	}
-	outbound, err := rtc.NewOutboundTrack(rtc.OutboundTrackConfig{
+	outbound, err := rtctransportwire.NewService().NewOutboundTrack(rtctransport.OutboundTrackConfig{
 		SourceRate: codec.OpusSampleRate,
 		Encoder:    encoder,
-		Writer: rtc.RTPWriterFunc(func(writeCtx context.Context, packet *rtp.Packet) error {
+		Writer: rtctransport.RTPWriterFunc(func(writeCtx context.Context, packet *rtp.Packet) error {
 			select {
 			case <-writeCtx.Done():
 				return writeCtx.Err()
@@ -493,7 +493,7 @@ func (p *productionRTCDataPlane) failureValue() error {
 	return errors.New("RTC data plane failed")
 }
 
-func (p *productionRTCDataPlane) pumpInboundMedia(ctx context.Context, source sharedaudio.InboundMedia, outbound *rtc.OutboundTrack) {
+func (p *productionRTCDataPlane) pumpInboundMedia(ctx context.Context, source sharedaudio.InboundMedia, outbound rtctransport.OutboundTrack) {
 	defer close(p.mediaDone)
 	pending := make([]int16, 0, codec.OpusFrameSamples)
 	write := func(samples []int16) error {
