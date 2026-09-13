@@ -72,3 +72,22 @@ to be recorded below.
   claimed green. Fresh independent review and guarded merge remain external
   gates, and C143 must later integrate this guarded-merged repair on its own
   changed head.
+
+## Fresh executor recheck
+
+At `2026-09-13T21:35:29Z`, after fetching `origin/main`, the candidate remained
+clean at `1c044cd6f1d76db2015527b863e88cba16f32c76`; accepted `origin/main`
+`4a1c399ccbb3d780be95eb04316e84b8f11a6646` and startup integration
+`8bdafc7f947a3a2c9856220abdc539437035bd21` remained ancestors, and the remote
+branch resolved to the same head before this evidence-only checkpoint.
+
+- Causal retry, `rtk go test ./go-agent-runtime/services/sessiontrace/internal/service -run '^TestFinishCloseTimeoutRetainsStagedPath$' -count=50 -timeout=180s`, exited `0` (`50 passed`).
+- Accumulated focused normal and race checks exited `0` (`350` and `140` passed).
+- Full sessiontrace normal and race checks exited `0` (`15` passed in 3 packages each).
+- Hermetic `nomicrophone` package coverage exited `0` (`90.4%` internal service, `100.0%` Wire); the fresh coverprofile was written outside the repository.
+- Publish/redaction exited `0` (`5 passed`), targeted vet reported no issues, and `git diff --check` exited `0`.
+
+No implementation or unowned path changed after the bounded repair. This
+recheck adds no CI, review, merge, vertical, hardware/acoustic or project
+completion claim; the exact pushed candidate remains for script CI and fresh
+independent review.
