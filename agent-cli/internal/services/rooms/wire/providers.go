@@ -11,6 +11,7 @@ import (
 	"github.com/google/wire"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services/rooms/internal/launch"
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	roomevidencewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	runtimeWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
@@ -38,7 +39,7 @@ func NewService(deps Dependencies) runtimeRooms.Service {
 		media = runtimeWire.NewMediaFactory(deps.Devices)
 	}
 	runtimeService := runtimeWire.NewService(runtimeWire.Dependencies{
-		Live: deps.Live, Media: media, Clock: deps.Clock,
+		Live: deps.Live, Media: media, Clock: deps.Clock, Evidence: roomevidencewire.NewService(),
 	})
 	return &service{runtime: runtimeService, launch: launch.NewPlanner(deps.Registry)}
 }

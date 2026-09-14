@@ -9,6 +9,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer"
 )
 
@@ -59,8 +60,8 @@ type audioRecorder interface {
 // while allowing production evidence to retain source attribution from the
 // canonical mixer output.
 type latencyRecorder interface {
-	ObserveSpeakerAudio(string, []string, audio.PCMFrame)
-	ObservePeerAudio(string, string, audio.PCMFrame)
+	ObserveSpeakerAudio(string, []string, []byte)
+	ObservePeerAudio(string, string, []byte)
 }
 
 func newRoomGraph(parent context.Context, scheduler clock.TimerSource, format rooms.AudioFormat, participants []*activeParticipant, onError func(error), recorders ...audioRecorder) (*roomGraph, error) {
@@ -317,6 +318,6 @@ func (g *roomGraph) observePeerAudio(sources []string, targetID string, frame au
 		if sourceID == "" || sourceID == targetID {
 			continue
 		}
-		observer.ObservePeerAudio(sourceID, targetID, frame)
+		observer.ObservePeerAudio(sourceID, targetID, codec.EncodePCM16(append([]int16(nil), frame.Samples...)))
 	}
 }

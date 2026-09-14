@@ -8,6 +8,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer"
 )
 
@@ -329,7 +330,7 @@ func (f frameFanout) WriteFrame(ctx context.Context, frame audio.PCMFrame) error
 		f.recorder.RecordSource(f.sourceID, frame)
 	}
 	if observer, ok := f.recorder.(latencyRecorder); ok {
-		observer.ObserveSpeakerAudio(f.sourceID, f.targetIDs(targets), frame)
+		observer.ObserveSpeakerAudio(f.sourceID, f.targetIDs(targets), codec.EncodePCM16(append([]int16(nil), frame.Samples...)))
 	}
 	for _, target := range targets {
 		if target == nil {

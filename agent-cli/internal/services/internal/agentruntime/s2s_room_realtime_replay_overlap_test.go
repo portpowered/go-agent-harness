@@ -15,6 +15,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	roomevidencewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
@@ -136,7 +137,6 @@ func newRoomSpeechOverlapScenario(t *testing.T, peerOutput []byte) *roomSpeechOv
 		peerID:   peerCapture,
 		targetID: targetCapture,
 	})
-
 	configDir := t.TempDir()
 	writeSessionConfigFile(t, configDir, "model:\n  provider: openai\n")
 	credentials := map[string]string{
@@ -151,7 +151,6 @@ func newRoomSpeechOverlapScenario(t *testing.T, peerOutput []byte) *roomSpeechOv
 			{ID: targetID, SystemPrompt: "target system", Provider: config.ProviderOpenAI, Model: model, APIKeyEnv: "ROOM_TARGET_KEY", Tools: []string{}},
 		},
 	}
-
 	cadenceReady := make(chan *roomRealtimeReplayCadence, len(manifest.Participants))
 	mixerConfig := room.PCM16MixerConfig{
 		Format:            room.PCM16Format{SampleRate: 100, Channels: 1, FrameDuration: 20 * time.Millisecond},
@@ -176,6 +175,7 @@ func newRoomSpeechOverlapScenario(t *testing.T, peerOutput []byte) *roomSpeechOv
 
 	opts := RoomRunOptions{
 		Manifest:  manifest,
+		Evidence:  roomevidencewire.NewService(),
 		ConfigDir: configDir, ModelCatalog: testModelCatalog(),
 		BaseURL:     "wss://room-replay.invalid/v1/realtime",
 		MixerConfig: mixerConfig,
@@ -273,117 +273,7 @@ func newRoomSpeechOverlapScenario(t *testing.T, peerOutput []byte) *roomSpeechOv
 }
 
 func TestRunRoomWithResult_SpeechOverlapPreservesOrdinaryResponses(t *testing.T) {
-	t.Run("speech overlap", func(t *testing.T) {
-		scenario := newRoomSpeechOverlapScenario(t, []byte{0x20, 0x03, 0xe0, 0xfc})
-
-		scenario.targetCadence.Advance()
-		assertRoomSpeechOverlapAppend(t, scenario.harness.participant("target"), scenario.silence)
-		awaitRoomSpeechOverlapInput(t, scenario.targetInput, scenario.silence)
-		awaitRoomSpeechOverlapAudio(t, scenario.targetAudio, scenario.targetOutput)
-		awaitRoomSpeechOverlapFanout(t, scenario.fanouts, "target", "speaker", scenario.targetOutput)
-
-		// The speaker's first mixer frame is the target's response audio. Its
-		// scripted response then emits two speech-shaped frames to the target
-		// while the target response remains open.
-		scenario.peerCadence.Advance()
-		assertRoomSpeechOverlapAppend(t, scenario.harness.participant("speaker"), scenario.targetOutput)
-		awaitRoomSpeechOverlapAudio(t, scenario.peerAudio, scenario.peerOutput)
-		awaitRoomSpeechOverlapFanout(t, scenario.fanouts, "speaker", "target", scenario.peerOutput)
-
-		scenario.targetCadence.Advance()
-		awaitRoomSpeechOverlapInput(t, scenario.targetInput, scenario.expectedSpeech)
-		awaitRoomSpeechOverlapAudio(t, scenario.targetAudio, scenario.secondTargetOutput)
-		awaitRoomSpeechOverlapFanout(t, scenario.fanouts, "target", "speaker", scenario.secondTargetOutput)
-
-		// The peer response remains open until this target output reaches its
-		// mixer, then emits a second output frame while the target response is
-		// still waiting for its second peer frame.
-		scenario.peerCadence.Advance()
-		assertRoomSpeechOverlapAppend(t, scenario.harness.participant("speaker"), scenario.secondTargetOutput)
-		awaitRoomSpeechOverlapAudio(t, scenario.peerAudio, scenario.peerOutput)
-		awaitRoomSpeechOverlapFanout(t, scenario.fanouts, "speaker", "target", scenario.peerOutput)
-
-		// Both contentful peer frames are forwarded unchanged. The target
-		// response then completes normally, proving peer speech did not
-		// structurally suppress its own output or terminal boundary.
-		scenario.targetCadence.Advance()
-		assertRoomSpeechOverlapAppend(t, scenario.harness.participant("target"), scenario.expectedSpeech)
-		awaitRoomSpeechOverlapTargetEnd(t, scenario.targetEnds)
-		awaitRoomSpeechOverlapMessageEnd(t, scenario.speakerEnds, "speaker")
-
-		outcome := awaitRoomSpeechOverlapRun(t, scenario)
-		if outcome.err != nil {
-			t.Fatalf("speech-overlap room replay: %v", outcome.err)
-		}
-		if outcome.result.Reason != RoomTerminationMaxTurnsReached {
-			t.Fatalf("speech-overlap room termination = %q, want %q", outcome.result.Reason, RoomTerminationMaxTurnsReached)
-		}
-		for _, participantID := range []string{"speaker", "target"} {
-			participantResult, ok := outcome.result.Participants[participantID]
-			if !ok {
-				t.Fatalf("speech-overlap result missing participant %q", participantID)
-			}
-			if !participantResult.Connected || participantResult.TurnsCompleted != 1 {
-				t.Fatalf("speech-overlap participant %q result = %+v, want one normal completed turn", participantID, participantResult)
-			}
-			if err := scenario.harness.participant(participantID).dialer.Err(); err != nil {
-				t.Fatalf("speech-overlap participant %q strict wire: %v", participantID, err)
-			}
-		}
-
-		diagnosticCounts := map[string]int{}
-		for range []int{0, 1} {
-			select {
-			case participantID := <-scenario.diagnostic:
-				diagnosticCounts[participantID]++
-			case <-scenario.ctx.Done():
-				t.Fatalf("speech-overlap diagnostics did not report both normal turns: %v", scenario.ctx.Err())
-			}
-		}
-		if diagnosticCounts["speaker"] != 1 || diagnosticCounts["target"] != 1 {
-			t.Fatalf("speech-overlap diagnostic turns = %v, want one completed turn per participant", diagnosticCounts)
-		}
-
-		targetWrites := scenario.harness.participant("target").outboundSnapshot()
-		wantTypes := []string{"session.update", "input_audio_buffer.append", "input_audio_buffer.append", "input_audio_buffer.append"}
-		gotTypes := make([]string, 0, len(targetWrites))
-		for _, write := range targetWrites {
-			gotTypes = append(gotTypes, write.Type)
-		}
-		if !sameRoomReplayStrings(gotTypes, wantTypes) {
-			t.Fatalf("target overlap outbound types = %v, want %v", gotTypes, wantTypes)
-		}
-		wantAppends := [][]byte{scenario.silence, scenario.expectedSpeech, scenario.expectedSpeech}
-		appendWriteIndexes := []int{1, 2, 3}
-		for index, wantPCM := range wantAppends {
-			assertRoomSpeechOverlapWireAppendPayload(t, targetWrites[appendWriteIndexes[index]], wantPCM)
-		}
-		appendCount := 0
-		for _, write := range targetWrites {
-			if write.Type == "input_audio_buffer.append" {
-				appendCount++
-			}
-		}
-		if got := appendCount; got != len(wantAppends) {
-			t.Fatalf("target overlap append count = %d, want %d", got, len(wantAppends))
-		}
-		speakerWrites := scenario.harness.participant("speaker").outboundSnapshot()
-		if got := len(speakerWrites); got != 3 {
-			t.Fatalf("speaker overlap outbound count = %d, want session.update plus two appends", got)
-		}
-		for index, wantPCM := range [][]byte{scenario.targetOutput, scenario.secondTargetOutput} {
-			assertRoomSpeechOverlapWireAppendPayload(t, speakerWrites[index+1], wantPCM)
-		}
-		if got := countRoomReplayWireType(targetWrites, "response.cancel"); got != 0 {
-			t.Fatalf("target peer overlap response.cancel count = %d, want zero", got)
-		}
-		if got := scenario.harness.participant("target").inboundTypes(); !sameRoomReplayStrings(got, []string{
-			"session.created", "response.created", "response.output_audio.delta", "response.output_audio.delta",
-			"response.output_audio.done", "response.done",
-		}) {
-			t.Fatalf("target overlap inbound provider events = %v", got)
-		}
-	})
+	t.Run("speech overlap", runRoomSpeechOverlapContentful)
 
 	t.Run("digital silence remains non-interrupting", func(t *testing.T) {
 		// Silence is still forwarded, but never cancels an active response. This
@@ -426,7 +316,6 @@ func TestRunRoomWithResult_SpeechOverlapPreservesOrdinaryResponses(t *testing.T)
 		}
 	})
 }
-
 func TestRunRoomWithResult_BidirectionalOverlapRecordsPeerOnlyEvidence(t *testing.T) {
 	const (
 		aliceID = "alice"
@@ -438,7 +327,6 @@ func TestRunRoomWithResult_BidirectionalOverlapRecordsPeerOnlyEvidence(t *testin
 	alicePCM := []byte{0x21, 0x43, 0x65, 0x87}
 	bobPCM := []byte{0x10, 0x32, 0x54, 0x76}
 	silenceBase64 := base64.StdEncoding.EncodeToString(silence)
-
 	makeCapture := func(id string, ownPCM, peerPCM []byte) gwtesting.SessionCapture {
 		ownBase64 := base64.StdEncoding.EncodeToString(ownPCM)
 		peerBase64 := base64.StdEncoding.EncodeToString(peerPCM)
@@ -523,6 +411,7 @@ func TestRunRoomWithResult_BidirectionalOverlapRecordsPeerOnlyEvidence(t *testin
 
 	opts := RoomRunOptions{
 		Manifest:  manifest,
+		Evidence:  roomevidencewire.NewService(),
 		ConfigDir: configDir, ModelCatalog: testModelCatalog(),
 		OutputDir:   outputDir,
 		BaseURL:     "wss://room-replay.invalid/v1/realtime",
@@ -592,7 +481,6 @@ func TestRunRoomWithResult_BidirectionalOverlapRecordsPeerOnlyEvidence(t *testin
 			t.Fatalf("bidirectional room sessions did not open: %v", roomCtx.Err())
 		}
 	}
-
 	// Advance both participants into active responses before allowing either
 	// response's peer frame to arrive. This is the controlled overlap point.
 	aliceCadence.Advance()
@@ -684,11 +572,11 @@ func TestRunRoomWithResult_BidirectionalOverlapRecordsPeerOnlyEvidence(t *testin
 			t.Fatalf("bidirectional participant %q ingress summary = %v, want one delivered peer frame and no loss", check.id, summary.Fields)
 		}
 
-		participantManifest, ok := manifestFromRoomEvidence(t, outputDir, check.id)
+		participantManifest, ok := manifestFromRoomBundle(t, outputDir, check.id)
 		if !ok {
 			t.Fatalf("bidirectional room manifest is missing participant %q", check.id)
 		}
-		received := readRoomEvidenceFile(t, filepath.Join(outputDir, participantManifest.Artifacts.ReceivedPCM))
+		received := readRoomBundleFile(t, filepath.Join(outputDir, participantManifest.Artifacts.ReceivedPCM))
 		wantReceived := append([]byte(nil), silence...)
 		wantReceived = append(wantReceived, check.peerPCM...)
 		if !bytes.Equal(received, wantReceived) || bytes.Contains(received, check.ownPCM) {
@@ -711,8 +599,8 @@ func TestRunRoomWithResult_BidirectionalOverlapRecordsPeerOnlyEvidence(t *testin
 		}
 	}
 
-	manifestData := readRoomEvidenceFile(t, filepath.Join(outputDir, RoomEvidenceManifestPath))
-	var evidenceManifest roomEvidenceManifest
+	manifestData := readRoomBundleFile(t, filepath.Join(outputDir, roomBundleManifestPath))
+	var evidenceManifest roomBundleManifest
 	if err := json.Unmarshal(manifestData, &evidenceManifest); err != nil {
 		t.Fatalf("decode bidirectional room manifest: %v", err)
 	}
@@ -819,10 +707,10 @@ func countRoomReplayWireType(writes []roomRealtimeReplayWireMessage, want string
 	return count
 }
 
-func manifestFromRoomEvidence(t *testing.T, outputDir, participantID string) (roomEvidenceParticipantManifest, bool) {
+func manifestFromRoomBundle(t *testing.T, outputDir, participantID string) (roomBundleParticipantManifest, bool) {
 	t.Helper()
-	manifestData := readRoomEvidenceFile(t, filepath.Join(outputDir, RoomEvidenceManifestPath))
-	var manifest roomEvidenceManifest
+	manifestData := readRoomBundleFile(t, filepath.Join(outputDir, roomBundleManifestPath))
+	var manifest roomBundleManifest
 	if err := json.Unmarshal(manifestData, &manifest); err != nil {
 		t.Fatalf("decode room manifest for participant %q: %v", participantID, err)
 	}

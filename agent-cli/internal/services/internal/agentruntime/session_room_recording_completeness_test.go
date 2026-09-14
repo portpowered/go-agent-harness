@@ -101,8 +101,8 @@ waitFan:
 		t.Fatalf("room run returned an error: %v", got.err)
 	}
 
-	manifestData := readRoomEvidenceFile(t, filepath.Join(opts.OutputDir, RoomEvidenceManifestPath))
-	var manifest roomEvidenceManifest
+	manifestData := readRoomBundleFile(t, filepath.Join(opts.OutputDir, roomBundleManifestPath))
+	var manifest roomBundleManifest
 	if err := json.Unmarshal(manifestData, &manifest); err != nil {
 		t.Fatalf("decode room manifest: %v", err)
 	}
@@ -116,11 +116,11 @@ waitFan:
 	// (1) Both directions per participant.
 	aArtifacts := manifest.Participants["a"].Artifacts
 	bArtifacts := manifest.Participants["b"].Artifacts
-	sentA := readRoomEvidenceFile(t, filepath.Join(opts.OutputDir, aArtifacts.SentPCM))
+	sentA := readRoomBundleFile(t, filepath.Join(opts.OutputDir, aArtifacts.SentPCM))
 	if len(sentA) == 0 {
 		t.Fatal("a's sent.pcm is empty even though a spoke")
 	}
-	receivedB := readRoomEvidenceFile(t, filepath.Join(opts.OutputDir, bArtifacts.ReceivedPCM))
+	receivedB := readRoomBundleFile(t, filepath.Join(opts.OutputDir, bArtifacts.ReceivedPCM))
 	if len(receivedB) == 0 {
 		t.Fatal("b's received.pcm is empty even though the other participant (a) spoke")
 	}
@@ -136,16 +136,16 @@ waitFan:
 	}
 
 	// (2) every recorded event carries a wall-clock field.
-	deltaLines := readRoomEvidenceJSONLLines(t, filepath.Join(opts.OutputDir, aArtifacts.Deltas))
+	deltaLines := readRoomBundleJSONLLines(t, filepath.Join(opts.OutputDir, aArtifacts.Deltas))
 	if len(deltaLines) == 0 {
 		t.Fatal("a has no recorded delta events")
 	}
 	for _, line := range deltaLines {
-		assertRoomEvidenceWallClockFields(t, "delta", line)
+		assertRoomBundleWallClockFields(t, "delta", line)
 	}
-	diagnosticsLines := readRoomEvidenceJSONLLines(t, filepath.Join(opts.OutputDir, aArtifacts.Diagnostics))
+	diagnosticsLines := readRoomBundleJSONLLines(t, filepath.Join(opts.OutputDir, aArtifacts.Diagnostics))
 	for _, line := range diagnosticsLines {
-		assertRoomEvidenceWallClockFields(t, "diagnostic", line)
+		assertRoomBundleWallClockFields(t, "diagnostic", line)
 	}
 
 	// (3) room-timeline.jsonl is chronologically ordered and orders
@@ -153,7 +153,7 @@ waitFan:
 	// b's received_speech_start, which must land at or before a's
 	// speech_end -- i.e. b's received speech is contained within a's
 	// spoken segment, exactly as the scripted overlap requires.
-	timelineLines := readRoomEvidenceJSONLLines(t, filepath.Join(opts.OutputDir, manifest.RoomTimeline))
+	timelineLines := readRoomBundleJSONLLines(t, filepath.Join(opts.OutputDir, manifest.RoomTimeline))
 	if len(timelineLines) == 0 {
 		t.Fatal("room-timeline.jsonl is empty")
 	}
@@ -189,7 +189,7 @@ waitFan:
 	}
 
 	// (4) room-mix.wav duration matches the room's wall-clock span.
-	mixData := readRoomEvidenceFile(t, filepath.Join(opts.OutputDir, manifest.RoomMix))
+	mixData := readRoomBundleFile(t, filepath.Join(opts.OutputDir, manifest.RoomMix))
 	sampleRate, samples, err := wavio.Read(bytes.NewReader(mixData))
 	if err != nil {
 		t.Fatalf("decode room-mix.wav: %v", err)
@@ -209,7 +209,7 @@ waitFan:
 	}
 }
 
-func assertRoomEvidenceWallClockFields(t *testing.T, kind string, line json.RawMessage) {
+func assertRoomBundleWallClockFields(t *testing.T, kind string, line json.RawMessage) {
 	t.Helper()
 	var envelope map[string]any
 	if err := json.Unmarshal(line, &envelope); err != nil {

@@ -244,8 +244,8 @@ diagnosticsDrained:
 		}
 	}
 
-	manifestData := readRoomEvidenceFile(t, filepath.Join(outputDir, RoomEvidenceManifestPath))
-	var evidenceManifest roomEvidenceManifest
+	manifestData := readRoomBundleFile(t, filepath.Join(outputDir, roomBundleManifestPath))
+	var evidenceManifest roomBundleManifest
 	if err := json.Unmarshal(manifestData, &evidenceManifest); err != nil {
 		t.Fatalf("decode long-conversation run manifest: %v", err)
 	}
@@ -266,7 +266,7 @@ diagnosticsDrained:
 		}
 	}
 
-	timelineLines := readRoomEvidenceJSONLLines(t, filepath.Join(outputDir, evidenceManifest.RoomTimeline))
+	timelineLines := readRoomBundleJSONLLines(t, filepath.Join(outputDir, evidenceManifest.RoomTimeline))
 	if len(timelineLines) == 0 {
 		t.Fatal("long-conversation room timeline is empty")
 	}

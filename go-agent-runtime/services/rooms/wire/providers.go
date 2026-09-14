@@ -10,9 +10,9 @@ package wire
 
 import (
 	"github.com/google/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/errorpolicy"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/evidence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/planning"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/service"
@@ -21,9 +21,10 @@ import (
 )
 
 type Dependencies struct {
-	Live  session.LiveService
-	Media rooms.MediaFactory
-	Clock platformclock.Scheduler
+	Live     session.LiveService
+	Media    rooms.MediaFactory
+	Clock    platformclock.Scheduler
+	Evidence roomevidence.Service
 }
 
 func NewService(dependencies Dependencies) rooms.Service {
@@ -33,16 +34,17 @@ func NewService(dependencies Dependencies) rooms.Service {
 
 func newPlanner() planning.Planner { return planning.New() }
 
-func newEvidence() evidence.Loader { return evidence.New() }
+func newEvidence(dependencies Dependencies) roomevidence.Service { return dependencies.Evidence }
 
 func newFailureService() rooms.FailureService { return errorpolicy.New() }
 
 func newRunner(dependencies Dependencies, failure rooms.FailureService) lifecycle.Runner {
 	return lifecycle.New(lifecycle.Dependencies{
-		Live: dependencies.Live, Media: dependencies.Media, Clock: dependencies.Clock, Failure: failure,
+		Live: dependencies.Live, Media: dependencies.Media, Clock: dependencies.Clock,
+		Failure: failure, Evidence: dependencies.Evidence,
 	})
 }
 
-func newServiceDependencies(planner planning.Planner, evidenceLoader evidence.Loader, runner lifecycle.Runner) service.Dependencies {
-	return service.Dependencies{Planner: planner, Evidence: evidenceLoader, Runner: runner}
+func newServiceDependencies(planner planning.Planner, evidenceService roomevidence.Service, runner lifecycle.Runner) service.Dependencies {
+	return service.Dependencies{Planner: planner, Evidence: evidenceService, Runner: runner}
 }
