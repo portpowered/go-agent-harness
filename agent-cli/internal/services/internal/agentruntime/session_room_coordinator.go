@@ -18,10 +18,12 @@ type roomCoordinator struct {
 	boundCancellation chan struct{}
 	cancel            context.CancelFunc
 
-	mu                    sync.Mutex
-	reason                RoomTerminationReason
-	err                   error
-	active                map[string]*roomParticipantRuntime
+	mu     sync.Mutex
+	reason RoomTerminationReason
+	err    error
+	active map[string]*roomParticipantRuntime
+	// boundRuntimes preserves bound-start participants through grace.
+	boundRuntimes         []*roomParticipantRuntime
 	results               map[string]RoomParticipantResult
 	maxTurns              int
 	progress              chan struct{}
@@ -147,6 +149,7 @@ func (c *roomCoordinator) beginBoundShutdown(reason RoomTerminationReason, err e
 			runtime.lifecycle.markCoordinatorStopping(true, reason)
 		}
 	}
+	c.boundRuntimes = append(c.boundRuntimes[:0], runtimes...)
 	c.mu.Unlock()
 
 	c.closeAdmission()
@@ -174,10 +177,7 @@ func (c *roomCoordinator) awaitBoundGrace() {
 	}
 }
 
-// forceBoundShutdown is the deliberate second phase of a bound stop. It
-// closes the session-loop cancellation signal before cancelling participant
-// contexts, so the loop can drain any already-queued terminal deltas through
-// its normal stop path.
+// forceBoundShutdown is the second phase of a bound stop before cancellation.
 func (c *roomCoordinator) forceBoundShutdown() {
 	if c == nil {
 		return
@@ -190,11 +190,11 @@ func (c *roomCoordinator) forceBoundShutdown() {
 		}
 		c.boundForced = true
 		var firstFailure error
-		runtimes := make([]*roomParticipantRuntime, 0, len(c.active))
-		for _, runtime := range c.active {
+		runtimes := c.boundRuntimes
+		for _, runtime := range runtimes {
 			if runtime != nil {
-				runtimes = append(runtimes, runtime)
 				if runtime.lifecycle != nil {
+					// The bound-start mark remains authoritative through the grace window.
 					runtime.lifecycle.markBoundCancellation()
 					observation := runtime.lifecycle.terminalObservationSnapshot()
 					if firstFailure == nil && observation.failure {
