@@ -12,18 +12,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
-// ToolRunner executes tool calls asynchronously as an active participant.
-// It reads ToolBatchRequest from its inbox, executes all calls in parallel,
-// and writes results to DeltaOutbox as a structured delta sequence so the
-// ordering layer (GlobalOrdering) can assemble the tool result Messages.
-//
-// Streaming: tool result content is written to DeltaOutbox as a sequence of
-// MESSAGE.START → (TEXT.START / TEXT.DELTA / TEXT.END per result) → MESSAGE.END
-// deltas, matching the delta protocol used by ModelRunner. GlobalOrdering
-// assembles these into ToolOutputMessage entries on MESSAGE.END.
-//
-// Errors: a single ERROR delta is written to DeltaOutbox on execution failure
-// so the ordering layer can return the error via the normal error path.
+// ToolRunner executes tool calls asynchronously and emits ordered result deltas.
 type ToolRunner struct {
 	executor    messages.ToolExecutor
 	Inbox       *messages.TypedBuffer[messages.ToolBatchRequest]
@@ -31,15 +20,16 @@ type ToolRunner struct {
 
 	currentPassID int // LoopPassID from the current ToolBatchRequest
 
-	// admittedCallIDs is scoped to this runner, which is scoped to one agent
-	// loop/session. A provider may surface the same function call again after a
-	// delayed or lost result; once admitted, that call ID must never reach the
-	// executor a second time.
+	// admittedCallIDs is session-scoped and prevents duplicate call IDs.
 	admissionMu     sync.Mutex
 	admittedCallIDs map[string]struct{}
 
 	execMu     sync.Mutex
 	execCancel context.CancelFunc // cancel for the current per-execution context; nil when idle
+
+	dispatchMu     sync.Mutex
+	dispatchWake   chan struct{}
+	startedCallIDs map[string]struct{}
 
 	acknowledgementThreshold time.Duration
 	isLongRunningTool        func(string) bool
@@ -50,15 +40,14 @@ func NewToolRunner(executor messages.ToolExecutor, bufferCapacity int) *ToolRunn
 	return &ToolRunner{
 		executor:        executor,
 		admittedCallIDs: make(map[string]struct{}),
+		dispatchWake:    make(chan struct{}),
+		startedCallIDs:  make(map[string]struct{}),
 		Inbox:           messages.NewTypedBuffer[messages.ToolBatchRequest](bufferCapacity),
 		DeltaOutbox:     messages.NewTypedBuffer[messages.StreamMessage](bufferCapacity),
 	}
 }
 
-// ConfigureAcknowledgement enables a one-shot callback when at least one
-// admitted long-running call remains pending after the configured threshold.
-// It is configured before Run starts and is intentionally independent from the
-// tool executor's timeout policy.
+// ConfigureAcknowledgement enables a one-shot callback for pending long calls.
 func (r *ToolRunner) ConfigureAcknowledgement(threshold time.Duration, isLongRunning func(string) bool, send func(context.Context, []messages.ToolCall)) {
 	r.acknowledgementThreshold = threshold
 	r.isLongRunningTool = isLongRunning
@@ -74,16 +63,54 @@ func (r *ToolRunner) Run(ctx context.Context) error {
 	}
 }
 
-// CancelCurrentExecution cancels the per-execution context for the tool batch
-// that is currently in flight. The runner's outer goroutine continues running and
-// will block on the next Inbox.ReadBlocking call; only the active batch is failed.
-// Safe to call from any goroutine; no-op when no batch is in flight.
+// CancelCurrentExecution cancels the active batch, if any.
 func (r *ToolRunner) CancelCurrentExecution() {
 	r.execMu.Lock()
 	defer r.execMu.Unlock()
 	if r.execCancel != nil {
 		r.execCancel()
 	}
+}
+
+// WaitForCallsStarted waits until every non-empty call ID reaches the executor.
+func (r *ToolRunner) WaitForCallsStarted(ctx context.Context, calls []messages.ToolCall) error {
+	if r == nil {
+		return nil
+	}
+	if ctx == nil {
+		return errors.New("tool dispatch wait context is required")
+	}
+
+	expected := make(map[string]struct{}, len(calls))
+	for _, call := range calls {
+		if call.ID != "" {
+			expected[call.ID] = struct{}{}
+		}
+	}
+	for len(expected) > 0 {
+		r.dispatchMu.Lock()
+		allStarted := r.callsStarted(expected)
+		wake := r.dispatchWake
+		r.dispatchMu.Unlock()
+		if allStarted {
+			return nil
+		}
+		select {
+		case <-wake:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return nil
+}
+
+func (r *ToolRunner) callsStarted(expected map[string]struct{}) bool {
+	for callID := range expected {
+		if _, ok := r.startedCallIDs[callID]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func (r *ToolRunner) Tick(ctx context.Context) error {
@@ -240,11 +267,12 @@ func mustStreamID(prefix string) string {
 	return prefix + "-" + hex.EncodeToString(b)
 }
 
-// executeBatch runs all tool calls in parallel and collects results.
-// Results are returned in the same order as the input calls. A configured
-// acknowledgement timer observes the same result channel, so calls that finish
-// before the threshold never cause an acknowledgement and a batch emits at
-// most one acknowledgement request.
+type toolExecutionResult struct {
+	index    int
+	response messages.ToolCallResponse
+	err      error
+}
+
 func (r *ToolRunner) executeBatch(ctx context.Context, calls []messages.ToolCall) ([]messages.ToolCallResponse, error) {
 	calls = r.admitCalls(calls)
 	if len(calls) == 0 {
@@ -253,12 +281,7 @@ func (r *ToolRunner) executeBatch(ctx context.Context, calls []messages.ToolCall
 
 	results := make([]messages.ToolCallResponse, len(calls))
 	errs := make([]error, len(calls))
-	type executionResult struct {
-		index    int
-		response messages.ToolCallResponse
-		err      error
-	}
-	resultCh := make(chan executionResult, len(calls))
+	resultCh := make(chan toolExecutionResult, len(calls))
 	pendingLongRunning := make(map[int]messages.ToolCall)
 	for i, call := range calls {
 		if r.acknowledgementThreshold > 0 && r.isLongRunningTool != nil && r.isLongRunningTool(call.Name) {
@@ -267,10 +290,7 @@ func (r *ToolRunner) executeBatch(ctx context.Context, calls []messages.ToolCall
 	}
 
 	for i, tc := range calls {
-		go func(idx int, call messages.ToolCall) {
-			resp, err := r.executor.Execute(ctx, call)
-			resultCh <- executionResult{index: idx, response: resp, err: err}
-		}(i, tc)
+		go r.executeCall(ctx, resultCh, i, tc)
 	}
 
 	var acknowledgementTimer *time.Timer
@@ -327,11 +347,6 @@ func (r *ToolRunner) executeBatch(ctx context.Context, calls []messages.ToolCall
 	return results, nil
 }
 
-// admitCalls records provider call IDs before execution starts and removes
-// repeated IDs from the batch. The map belongs to the ToolRunner rather than
-// the provider adapter so every execution entry point shares one session-scoped
-// exactly-once boundary. Empty IDs remain executable for compatibility, but
-// cannot participate in correlation or duplicate suppression.
 func (r *ToolRunner) admitCalls(calls []messages.ToolCall) []messages.ToolCall {
 	if r == nil || len(calls) == 0 {
 		return calls
@@ -353,4 +368,28 @@ func (r *ToolRunner) admitCalls(calls []messages.ToolCall) []messages.ToolCall {
 		admitted = append(admitted, call)
 	}
 	return admitted
+}
+
+func (r *ToolRunner) executeCall(ctx context.Context, resultCh chan<- toolExecutionResult, idx int, call messages.ToolCall) {
+	r.markCallStarted(call)
+	resp, err := r.executor.Execute(ctx, call)
+	resultCh <- toolExecutionResult{index: idx, response: resp, err: err}
+}
+
+func (r *ToolRunner) markCallStarted(call messages.ToolCall) {
+	if r == nil || call.ID == "" {
+		return
+	}
+	r.dispatchMu.Lock()
+	if r.startedCallIDs == nil {
+		r.startedCallIDs = make(map[string]struct{})
+	}
+	r.startedCallIDs[call.ID] = struct{}{}
+	if r.dispatchWake == nil {
+		r.dispatchWake = make(chan struct{})
+	}
+	wake := r.dispatchWake
+	r.dispatchWake = make(chan struct{})
+	r.dispatchMu.Unlock()
+	close(wake)
 }
