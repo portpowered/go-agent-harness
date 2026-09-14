@@ -129,3 +129,29 @@ branch, update PR `#516` with the exact repair head and prior finding mapping,
 then return `ACCEPTED` to the script-owned current-head CI gate without
 polling. Retain C155 ownership through `CONTINUE` for any exact CI rejection
 or actionable review finding.
+
+## Current-main integration and revalidation — 2026-09-14T00:43:14Z
+
+- Fresh `git fetch origin main` resolved current `origin/main` to
+  `8490f8dcad63adde99036016e1e7ffd9ecf61e34`. The same C155 branch merged it
+  with non-ff commit `9c8256db236a9b557097204723d8baf0968d5ec7`; accepted main
+  `4a1c399ccbb3d780be95eb04316e84b8f11a6646`, startup integration
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, and current `origin/main` are
+  all ancestors. The host checkout and peer worktrees were not reset or
+  modified.
+- The clean owned diff against current `origin/main` remains limited to
+  `device_playback_adversarial_test.go` and the three C155 evidence files;
+  `device_virtual.go` and `device_virtual_test.go` are unchanged. Current
+  candidate `HEAD` is `9c8256db236a9b557097204723d8baf0968d5ec7` before this
+  evidence-only checkpoint.
+- Post-merge bounded controls all exited 0: causal subtest normal `200`, race
+  `100`, `GOMAXPROCS=1` `100`, and `GOMAXPROCS=8` `100`; adversarial scenarios
+  `04`-`20` `900` normal and full adversarial race `420`; typed/loopback `80`;
+  device package `2530` normal and `759` race; full gateway module `285`; and
+  gateway vet. `git diff --check` is clean.
+- This remains executor evidence only. No script-CI result, independent review,
+  guarded merge, vertical acceptance, physical/acoustic proof, C144 recovery or
+  project completion is claimed. The next action is commit and push this
+  changed branch, update PR `#516` with the exact head and ancestry, and return
+  `ACCEPTED` to the script-owned current-head gate without polling; retain C155
+  ownership through `CONTINUE` for any exact rejection or repair.

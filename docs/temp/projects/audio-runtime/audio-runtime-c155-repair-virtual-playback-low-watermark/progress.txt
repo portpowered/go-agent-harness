@@ -90,3 +90,29 @@ Static rejection repair checkpoint:
   recovery, hardware/acoustic proof and project completion remain open. The
   exact next action is commit this ledger checkpoint, push/update PR `#516`,
   and return `ACCEPTED` to the script-owned current-head gate without polling.
+
+# C155 current-main integration and bounded handoff revalidation 2026-09-14T00:43:14Z
+
+- Fresh `git fetch origin main` resolved `origin/main` to
+  `8490f8dcad63adde99036016e1e7ffd9ecf61e34`. The same C155 branch merged it
+  with non-ff commit `9c8256db236a9b557097204723d8baf0968d5ec7`; accepted main
+  `4a1c399ccbb3d780be95eb04316e84b8f11a6646`, startup integration
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, and current `origin/main` are
+  all ancestors. The isolated worktree remained clean before this evidence
+  update; no host or peer worktree was reset or changed.
+- The owned diff against current `origin/main` remains only the adversarial
+  test and C155 evidence; `device_virtual.go` and `device_virtual_test.go`
+  remain unchanged. Candidate source before this ledger checkpoint was
+  `9c8256db236a9b557097204723d8baf0968d5ec7`.
+- Post-merge bounded controls all exited 0: causal subtest normal `200`, race
+  `100`, `GOMAXPROCS=1` `100`, and `GOMAXPROCS=8` `100`; adversarial scenarios
+  `04`-`20` normal `900` and full adversarial race `420`; typed/loopback `80`;
+  device package normal `2530` and race `759`; full gateway module `285`; and
+  gateway vet. `git diff --check` is clean.
+- This is executor evidence only: no script-CI result or success claim,
+  independent review, guarded merge, C155 vertical acceptance, C144 recovery,
+  hardware/acoustic proof or project completion is claimed. Exact next action
+  is commit/push this evidence checkpoint, update PR `#516` with the exact
+  changed head and current-main ancestry, and return `ACCEPTED` to the
+  script-owned current-head gate without polling; retain C155 ownership through
+  `CONTINUE` for any exact rejection or actionable repair.
