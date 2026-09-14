@@ -121,15 +121,13 @@ func (s *Service) InspectCapture(ctx context.Context, path string) (replay.Captu
 		if !errors.Is(err, errSelfDrivingPlanUnavailable) {
 			return inspection, err
 		}
-		// A caller-driven capture is still a valid realtime artifact. The host
-		// may provide its own prompt/audio actions; only the optional
-		// self-driving actions are unavailable. Retain lifecycle metadata so a
-		// recorded provider close remains authoritative after those actions run.
-		metadata, metadataErr := replayLifecyclePlan(capturePath, loaded.Capture.Records)
-		if metadataErr != nil {
-			return inspection, metadataErr
+		// Preserve valid opening actions while leaving response-target correlation
+		// unavailable; the strict loader still rejects incomplete self-driving plans.
+		fallback, fallbackErr := replayCallerActionPlan(capturePath, loaded.Capture.Records)
+		if fallbackErr != nil {
+			return inspection, fallbackErr
 		}
-		inspection.LivePlan = &metadata
+		inspection.LivePlan = &fallback
 		return inspection, nil
 	}
 	if err != nil {
@@ -137,6 +135,38 @@ func (s *Service) InspectCapture(ctx context.Context, path string) (replay.Captu
 	}
 	inspection.LivePlan = &plan
 	return inspection, nil
+}
+
+func replayCallerActionPlan(path string, records []gatewaytesting.CapturedSessionEvent) (session.LiveReplayPlan, error) {
+	lifecycle, err := replayLifecyclePlan(path, records)
+	if err != nil {
+		return session.LiveReplayPlan{}, fmt.Errorf("live replay plan %s: %w", path, err)
+	}
+	actions, err := replayDriverActions(records)
+	if err != nil {
+		if errors.Is(err, errSelfDrivingPlanUnavailable) {
+			return lifecycle, nil
+		}
+		return session.LiveReplayPlan{}, fmt.Errorf("live replay plan %s: %w", path, err)
+	}
+	if len(actions) == 0 {
+		return lifecycle, nil
+	}
+	if actions[0].Type == replayCreateItem {
+		plan, ok, planErr := replayTextPlan(path, actions)
+		if planErr == nil && ok {
+			applyReplayLifecycle(&plan, lifecycle)
+			return plan, nil
+		}
+	}
+	if actions[0].Type == replayAppend {
+		plan, planErr := replayAudioPlan(path, actions)
+		if planErr == nil {
+			applyReplayLifecycle(&plan, lifecycle)
+			return plan, nil
+		}
+	}
+	return lifecycle, nil
 }
 
 func replayLifecyclePlan(path string, records []gatewaytesting.CapturedSessionEvent) (session.LiveReplayPlan, error) {
@@ -210,16 +240,30 @@ func replayActionsPlan(path string, actions []gatewaytesting.CapturedSessionEven
 func attachReplayResponseTarget(path string, records []gatewaytesting.CapturedSessionEvent, lifecycle, plan session.LiveReplayPlan) (session.LiveReplayPlan, error) {
 	responseTarget, interruptionReplacementExpected, err := replayCaptureResponseTarget(path, records)
 	if err != nil {
-		return session.LiveReplayPlan{}, err
+		if !errors.Is(err, replayResponseIdentityUnavailableError{}) {
+			return session.LiveReplayPlan{}, err
+		}
+		// A capture can remain a valid caller-driven realtime artifact even when
+		// its provider response boundaries cannot supply a self-driving target.
+		// Keep the strict error for LoadLivePlan, while InspectCapture preserves
+		// lifecycle metadata for callers that provide the turn actions.
+		return session.LiveReplayPlan{}, fmt.Errorf("%w: %w", errSelfDrivingPlanUnavailable, err)
+	}
+	applyReplayLifecycle(&plan, lifecycle)
+	plan.ExpectedResponses = responseTarget
+	plan.InterruptionReplacementExpected = interruptionReplacementExpected
+	return plan, nil
+}
+
+func applyReplayLifecycle(plan *session.LiveReplayPlan, lifecycle session.LiveReplayPlan) {
+	if plan == nil {
+		return
 	}
 	plan.WaitForSessionUpdated = lifecycle.WaitForSessionUpdated
 	plan.StopAfterResponse = lifecycle.StopAfterResponse
 	plan.ProviderCloseExpected = lifecycle.ProviderCloseExpected
-	plan.ExpectedResponses = responseTarget
-	plan.InterruptionReplacementExpected = interruptionReplacementExpected
 	plan.InputAudioSampleRate = lifecycle.InputAudioSampleRate
 	plan.OutputAudioSampleRate = lifecycle.OutputAudioSampleRate
-	return plan, nil
 }
 
 func loadReplayCapture(ctx context.Context, path string) (gatewaytesting.SessionCaptureReplayLoad, error) {
@@ -333,8 +377,18 @@ func replayTextPrompt(path string, record gatewaytesting.CapturedSessionEvent) (
 	if item.Type != "message" || item.Role != "user" {
 		return "", false, nil
 	}
-	if len(item.Content) != 1 || item.Content[0].Type != "input_text" || item.Content[0].Text == nil {
+	var prompt *string
+	for _, part := range item.Content {
+		if part.Type != "input_text" || part.Text == nil {
+			continue
+		}
+		if prompt != nil {
+			return "", false, fmt.Errorf("live replay plan %s: user item at sequence %d contains multiple input_text parts", path, record.Sequence)
+		}
+		prompt = part.Text
+	}
+	if prompt == nil {
 		return "", false, fmt.Errorf("live replay plan %s: user item at sequence %d must contain exactly one input_text part", path, record.Sequence)
 	}
-	return *item.Content[0].Text, true, nil
+	return *prompt, true, nil
 }

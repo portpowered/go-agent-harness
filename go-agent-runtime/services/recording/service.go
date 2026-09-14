@@ -230,6 +230,11 @@ type LiveEvidenceOptions struct {
 	// ProviderCapturePath is an optional explicit raw-capture destination, such
 	// as a separately requested --record file. Empty uses the private spool.
 	ProviderCapturePath string
+	// ProviderCaptureRequired marks a live-host recording whose bundle is
+	// incomplete when no raw provider capture is available. Semantic-only
+	// injected sessions leave this false so their public evidence contract
+	// remains independent of a provider wire writer.
+	ProviderCaptureRequired bool
 	// DisableProviderCaptureSidecar prevents a replayed provider capture from
 	// claiming the semantic sibling already owned by the source invocation.
 	// The raw ProviderCapturePath remains available for immutable bundle

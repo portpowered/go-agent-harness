@@ -764,8 +764,8 @@ func TestLiveRecordRuntimeScheduledAudioCompletesWithoutCapturedSessionClose(t *
 			outputArtifacts++
 		}
 	}
-	if inputArtifacts != 2 || outputArtifacts != 2 {
-		t.Fatalf("finalized audio artifacts = input:%d output:%d, want 2 each", inputArtifacts, outputArtifacts)
+	if inputArtifacts != 1 || outputArtifacts != 1 {
+		t.Fatalf("finalized audio artifacts = input:%d output:%d, want one append-only stream each", inputArtifacts, outputArtifacts)
 	}
 }
 
@@ -905,8 +905,8 @@ func TestLiveRecordRuntimeScheduledAudioContinuesAfterEmptyDirectoryResult(t *te
 			outputArtifacts++
 		}
 	}
-	if inputArtifacts != 3 || outputArtifacts != 3 {
-		t.Fatalf("finalized three-turn audio artifacts = input:%d output:%d, want 3 each", inputArtifacts, outputArtifacts)
+	if inputArtifacts != 1 || outputArtifacts != 1 {
+		t.Fatalf("finalized three-turn audio artifacts = input:%d output:%d, want one append-only stream each", inputArtifacts, outputArtifacts)
 	}
 }
 

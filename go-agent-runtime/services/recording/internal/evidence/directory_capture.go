@@ -136,11 +136,6 @@ func (r *directoryRecorder) processAudio(item directoryEvidenceItem) {
 		r.conversation.observeAudio(item.direction == session.LiveRecordClient, len(data), offset, segment)
 	}
 	r.latchProjectionError()
-	if item.frame.EndOfResponse && item.admission != "" {
-		if err := r.rotateAudioFile(item.direction); err != nil && r.workerErr == nil {
-			r.workerErr = recordingWriteError("close audio segment", err)
-		}
-	}
 }
 
 type audioWriteAttempt struct {
@@ -173,11 +168,6 @@ func (r *directoryRecorder) writeAudioAttempt(direction session.LiveRecordDirect
 		return attempt, errors.Join(recordingWriteError("write audio evidence", err), r.rollbackAudioAttempt(direction, file, offset, attempt.start, attempt.created, attempt.path))
 	}
 	*offset += uint64(len(data))
-	if direction == session.LiveRecordClient {
-		r.inputBytes += uint64(len(data))
-	} else {
-		r.outputBytes += uint64(len(data))
-	}
 	return attempt, nil
 }
 
@@ -189,30 +179,20 @@ func audioBoundary(item directoryEvidenceItem, segment string, offset uint64) ev
 }
 
 func (r *directoryRecorder) audioLocation(direction session.LiveRecordDirection) (string, uint64) {
-	index := len(r.outputPaths)
-	offset := r.outputBytes
-	if r.outputFile != nil {
-		index--
-	}
 	if direction == session.LiveRecordClient {
-		index = len(r.inputPaths)
-		offset = r.inputBytes
-		if r.inputFile != nil {
-			index--
-		}
-		return "audio/in-" + threeDigit(index) + ".pcm", offset
+		return "audio/in-000.pcm", r.inputBytes
 	}
-	return "audio/out-" + threeDigit(index) + ".pcm", offset
+	return "audio/out-000.pcm", r.outputBytes
 }
 
 func (r *directoryRecorder) audioFile(direction session.LiveRecordDirection) (*os.File, string, *uint64, error) {
-	file, paths, offset, name := &r.outputFile, &r.outputPaths, &r.outputSegmentBytes, "out"
+	file, paths, offset, name := &r.outputFile, &r.outputPaths, &r.outputBytes, "out"
 	if direction == session.LiveRecordClient {
-		file, paths, offset, name = &r.inputFile, &r.inputPaths, &r.inputSegmentBytes, "in"
+		file, paths, offset, name = &r.inputFile, &r.inputPaths, &r.inputBytes, "in"
 	}
-	segment := "audio/" + name + "-" + threeDigit(len(*paths)) + ".pcm"
+	segment := "audio/" + name + "-000.pcm"
 	if *file == nil {
-		path := filepath.Join(r.spool, name+"-"+threeDigit(len(*paths))+".pcm")
+		path := filepath.Join(r.spool, name+".pcm")
 		opened, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, evidenceFileMode)
 		if err != nil {
 			return nil, "", nil, recordingWriteError("create audio spool", err)

@@ -36,34 +36,32 @@ type directoryRecorder struct {
 	queue chan directoryEvidenceItem
 	done  chan struct{}
 
-	mu                 sync.Mutex
-	queuedBytes        int64
-	queuedItems        int64
-	closed             bool
-	recordErr          error
-	workerErr          error
-	sequence           uint64
-	client             *os.File
-	inputFile          *os.File
-	outputFile         *os.File
-	inputBytes         uint64
-	outputBytes        uint64
-	inputSegmentBytes  uint64
-	outputSegmentBytes uint64
-	sidecar            *os.File
-	sidecarWritten     bool
-	writeSpool         func(*os.File, []byte) error
-	agent              *os.File
-	clientPath         string
-	agentPath          string
-	inputPaths         []string
-	outputPaths        []string
-	runtimeAudio       bool
-	terminal           *transcript.RecordingTerminalSummary
-	conversation       evidenceConversation
-	browser            *browserEvidence
-	usageMu            sync.Mutex
-	usage              recording.ResourceUsage
+	mu             sync.Mutex
+	queuedBytes    int64
+	queuedItems    int64
+	closed         bool
+	recordErr      error
+	workerErr      error
+	sequence       uint64
+	client         *os.File
+	inputFile      *os.File
+	outputFile     *os.File
+	inputBytes     uint64
+	outputBytes    uint64
+	sidecar        *os.File
+	sidecarWritten bool
+	writeSpool     func(*os.File, []byte) error
+	agent          *os.File
+	clientPath     string
+	agentPath      string
+	inputPaths     []string
+	outputPaths    []string
+	runtimeAudio   bool
+	terminal       *transcript.RecordingTerminalSummary
+	conversation   evidenceConversation
+	browser        *browserEvidence
+	usageMu        sync.Mutex
+	usage          recording.ResourceUsage
 
 	finalizeOnce sync.Once
 	finalizeErr  error

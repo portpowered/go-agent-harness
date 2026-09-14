@@ -15,7 +15,6 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 )
 
 func (r *directoryRecorder) ProviderCapturePath() string {
@@ -36,7 +35,7 @@ func (r *directoryRecorder) providerArtifact() (transcript.RecordingArtifact, bo
 	path := r.ProviderCapturePath()
 	file, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
-		if r != nil && r.options.ProviderCapturePath == "" && (len(r.inputPaths) == 0 && len(r.outputPaths) == 0 || r.runtimeAudio) {
+		if r != nil && !r.options.ProviderCaptureRequired && r.options.ProviderCapturePath == "" && (len(r.inputPaths) == 0 && len(r.outputPaths) == 0 || r.runtimeAudio) {
 			// A semantic-only injected session may have no raw wire writer. Once
 			// PCM is observed, missing provider evidence is incomplete.
 			return transcript.RecordingArtifact{}, false, nil
@@ -184,21 +183,6 @@ func (r *directoryRecorder) ensureTranscriptFiles() error {
 	r.client, r.agent = client, agent
 	r.clientPath, r.agentPath = clientPath, agentPath
 	return nil
-}
-
-func (r *directoryRecorder) rotateAudioFile(direction session.LiveRecordDirection) error {
-	file, offset := &r.outputFile, &r.outputSegmentBytes
-	if direction == session.LiveRecordClient {
-		file, offset = &r.inputFile, &r.inputSegmentBytes
-	}
-	if *file == nil {
-		return nil
-	}
-	err := (*file).Sync()
-	err = errors.Join(err, (*file).Close())
-	*file = nil
-	*offset = 0
-	return err
 }
 
 // Media and normalized messages have independent consumers. Join their summary

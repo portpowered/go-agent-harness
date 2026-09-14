@@ -167,7 +167,7 @@ func runSessionWithImagesAndRecordingDirectory(ctx context.Context, out io.Write
 	}
 	defer cleanup()
 	configureImageAudioPlan(&plan, audioSource, opts.MaxDuration)
-	recorder, err := openSessionLiveRecorder(opts.SessionRunOptions, plan, directory)
+	recorder, err := openSessionLiveRecorder(opts.SessionRunOptions, plan, directory, opts.MaxDuration)
 	if err != nil {
 		return err
 	}
@@ -232,7 +232,7 @@ func runSessionWithRecordingDirectory(ctx context.Context, out io.Writer, opts S
 		defer func() { runErr = errors.Join(runErr, audioSource.Close()) }()
 		configureDirectoryAudioPlan(&plan, audioSource, maxDuration)
 	}
-	recorder, err := openSessionLiveRecorder(opts, plan, directory)
+	recorder, err := openSessionLiveRecorder(opts, plan, directory, maxDuration)
 	if err != nil {
 		return err
 	}

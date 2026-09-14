@@ -12,6 +12,7 @@ import (
 	runtimereplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	replaywire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
@@ -141,6 +142,8 @@ func planTurnReplay(opts SessionRunOptions, factory sessionRuntimeFactory, servi
 	var inferencer messages.SessionInferencer
 	if factory.newReplayInferencer != nil {
 		inferencer = factory.newReplayInferencer(opts.ReplayPath)
+	} else {
+		inferencer = testing.NewReplaySessionInferencer(opts.ReplayPath)
 	}
 	return sessionRuntimePlan{
 		mode: sessionRuntimeModeReplayGeneric, capturePath: opts.ReplayPath,
@@ -215,10 +218,21 @@ func drainReplayCapture(ctx context.Context, replay runtimereplay.CaptureReplay,
 }
 
 func drainReplayMessages(replay runtimereplay.CaptureReplay, renderer *sessionReplayRenderer) error {
-	for msg := range replay.Receive() {
-		if err := writeSessionReplayMessage(renderer, msg); err != nil {
-			return err
+	input := replay.Receive()
+	for {
+		select {
+		case msg, ok := <-input:
+			if !ok {
+				return replay.Err()
+			}
+			if err := writeSessionReplayMessage(renderer, msg); err != nil {
+				return err
+			}
+		default:
+			// CaptureReplay.Done reports completion, but its receive buffer is
+			// intentionally not closed. Drain the remaining admitted messages
+			// without waiting forever on an open compatibility channel.
+			return replay.Err()
 		}
 	}
-	return replay.Err()
 }

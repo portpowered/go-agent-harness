@@ -8,6 +8,14 @@ import (
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
+// replayResponseIdentityUnavailableError marks a capture whose response
+// boundary omits identity; its zero-state value is not mutable package state.
+type replayResponseIdentityUnavailableError struct{}
+
+func (replayResponseIdentityUnavailableError) Error() string {
+	return "replay response identity unavailable"
+}
+
 // replayCaptureResponseTarget derives finite completion from correlated
 // provider response identities. A cancelled interruption does not satisfy the
 // target when the capture contains a distinct replacement response.
@@ -153,11 +161,11 @@ func replayResponseRecord(path string, record gatewaytesting.CapturedSessionEven
 		return replayResponseBoundary{}, fmt.Errorf("live replay plan %s: %s at sequence %d has payload type %q", path, record.Type, record.Sequence, event.Type)
 	}
 	if event.Response == nil {
-		return replayResponseBoundary{}, fmt.Errorf("live replay plan %s: %s at sequence %d is missing its response object", path, record.Type, record.Sequence)
+		return replayResponseBoundary{}, fmt.Errorf("%w: live replay plan %s: %s at sequence %d is missing its response object", replayResponseIdentityUnavailableError{}, path, record.Type, record.Sequence)
 	}
 	responseID := strings.TrimSpace(event.Response.ID)
 	if responseID == "" {
-		return replayResponseBoundary{}, fmt.Errorf("live replay plan %s: %s at sequence %d is missing a response id", path, record.Type, record.Sequence)
+		return replayResponseBoundary{}, fmt.Errorf("%w: live replay plan %s: %s at sequence %d is missing a response id", replayResponseIdentityUnavailableError{}, path, record.Type, record.Sequence)
 	}
 	statusDetails := ""
 	if event.Response.StatusDetails != nil {

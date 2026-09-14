@@ -10,6 +10,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
@@ -186,7 +187,9 @@ type initialSessionUpdateConn struct {
 	waitForNextOutbound testing.ReplayOutboundPacer
 }
 
-func (c *initialSessionUpdateConn) ReadMessage() (int, []byte, error) { return c.inner.ReadMessage() }
+func (c *initialSessionUpdateConn) ReadMessage() (int, []byte, error) {
+	return c.inner.ReadMessage()
+}
 
 func (c *initialSessionUpdateConn) WriteMessage(messageType int, payload []byte) error {
 	c.mu.Lock()
@@ -212,7 +215,9 @@ func (c *initialSessionUpdateConn) WriteMessage(messageType int, payload []byte)
 	return c.inner.WriteMessage(messageType, payload)
 }
 
-func (c *initialSessionUpdateConn) Close() error { return c.inner.Close() }
+func (c *initialSessionUpdateConn) Close() error {
+	return c.inner.Close()
+}
 
 type replayInferencer struct{ inner messages.SessionInferencer }
 
@@ -221,11 +226,87 @@ func (i replayInferencer) ConnectSession(ctx context.Context) (messages.Session,
 	if err != nil || s == nil {
 		return s, err
 	}
-	return replaySession{Session: s}, nil
+	return &replaySession{Session: s}, nil
 }
 
 type replaySession struct{ messages.Session }
 
-func (s replaySession) Send(ctx context.Context, message messages.StreamMessage) bool {
-	return messages.SendSessionWithOutcome(ctx, s.Session, message).OK()
+var _ messages.SessionSendOutcomeSender = (*replaySession)(nil)
+
+func (s *replaySession) SendWithOutcome(ctx context.Context, message messages.StreamMessage) messages.SessionSendOutcome {
+	return messages.SendSessionWithOutcome(ctx, s.Session, message)
+}
+
+type replayCompleteMessageSender interface {
+	SendMessage(context.Context, messages.Message) bool
+}
+
+type replayCompleteMessageSenderWithoutResponse interface {
+	SendMessageWithoutResponse(context.Context, messages.Message) bool
+}
+
+func (s *replaySession) SendMessage(ctx context.Context, message messages.Message) bool {
+	sender, ok := s.Session.(replayCompleteMessageSender)
+	return ok && sender.SendMessage(ctx, message)
+}
+
+func (s *replaySession) SendMessageWithoutResponse(ctx context.Context, message messages.Message) bool {
+	sender, ok := s.Session.(replayCompleteMessageSenderWithoutResponse)
+	return ok && sender.SendMessageWithoutResponse(ctx, message)
+}
+
+func (s *replaySession) SupportsCompleteMessages() bool {
+	capabilities, ok := s.Session.(interface {
+		SupportsCompleteMessages() bool
+		SupportsCompleteMessagesWithoutResponse() bool
+	})
+	if ok {
+		return capabilities.SupportsCompleteMessages()
+	}
+	_, ok = s.Session.(replayCompleteMessageSender)
+	return ok
+}
+
+func (s *replaySession) SupportsCompleteMessagesWithoutResponse() bool {
+	capabilities, ok := s.Session.(interface {
+		SupportsCompleteMessages() bool
+		SupportsCompleteMessagesWithoutResponse() bool
+	})
+	if ok {
+		return capabilities.SupportsCompleteMessagesWithoutResponse()
+	}
+	_, ok = s.Session.(replayCompleteMessageSenderWithoutResponse)
+	return ok
+}
+
+func (s *replaySession) RTCMedia() sharedaudio.MediaEndpoints {
+	media, ok := s.Session.(sharedaudio.MediaSession)
+	if !ok {
+		return sharedaudio.MediaEndpoints{}
+	}
+	return media.RTCMedia()
+}
+
+func (s *replaySession) InputDrops() int64 {
+	counters, ok := s.Session.(messages.SessionDropCounters)
+	if !ok {
+		return 0
+	}
+	return counters.InputDrops()
+}
+
+func (s *replaySession) OutputDrops() int64 {
+	counters, ok := s.Session.(messages.SessionDropCounters)
+	if !ok {
+		return 0
+	}
+	return counters.OutputDrops()
+}
+
+func (s *replaySession) TerminalError() error {
+	terminal, ok := s.Session.(interface{ TerminalError() error })
+	if !ok {
+		return nil
+	}
+	return terminal.TerminalError()
 }

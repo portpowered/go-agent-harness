@@ -197,13 +197,22 @@ func openRecorder(request serviceSession.Request, liveRequest *runtimeSession.Li
 		Model:                         liveRequest.Model,
 		Credentials:                   credentials,
 		ProviderCapturePath:           liveProviderCapturePath(request.RecordPath, replayInputPath),
-		DisableProviderCaptureSidecar: replayInputPath != "" && request.RecordPath == "",
+		ProviderCaptureRequired:       liveProviderCaptureRequired(request, replayInputPath),
+		DisableProviderCaptureSidecar: liveProviderCaptureSidecarDisabled(request, replayInputPath),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("open live recording: %w", err)
 	}
 	configureLiveCapturePath(request, replayInputPath, recorder, liveRequest)
 	return traceLiveRecorderIfRequested(request, replayInputPath, recorder, liveRequest, deps)
+}
+
+func liveProviderCaptureRequired(request serviceSession.Request, replayInputPath string) bool {
+	return request.RecordDirectory != "" && replayInputPath == ""
+}
+
+func liveProviderCaptureSidecarDisabled(request serviceSession.Request, replayInputPath string) bool {
+	return replayInputPath != "" && request.RecordPath == ""
 }
 
 func traceLiveRecorderIfRequested(request serviceSession.Request, replayInputPath string, recorder runtimeSession.LiveRecorder, liveRequest *runtimeSession.LiveRequest, deps Dependencies) (runtimeSession.LiveRecorder, error) {

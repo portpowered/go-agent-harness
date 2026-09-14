@@ -29,12 +29,22 @@ func RunSession(ctx context.Context, out io.Writer, opts SessionRunOptions) (run
 	}
 	plan, err := planSessionRuntimeContext(ctx, opts)
 	if err != nil {
+		if strings.TrimSpace(opts.ReplayPath) != "" {
+			return fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
+		}
 		return err
 	}
 	return plan.run(ctx, out)
 }
 
-func openSessionLiveRecorder(opts SessionRunOptions, plan sessionRuntimePlan, destination string) (runtimesession.LiveRecorder, error) {
+func connectAudioOutputInferencer(i *sessionAudioOutputInferencer, ctx context.Context) (messages.Session, error) {
+	if i == nil || i.inner == nil {
+		return nil, errors.New("audio output session inferencer is unavailable")
+	}
+	return i.inner.ConnectSession(context.WithoutCancel(ctx))
+}
+
+func openSessionLiveRecorder(opts SessionRunOptions, plan sessionRuntimePlan, destination string, maxDuration time.Duration) (runtimesession.LiveRecorder, error) {
 	if strings.TrimSpace(destination) == "" {
 		return nil, nil
 	}
@@ -64,6 +74,10 @@ func openSessionLiveRecorder(opts SessionRunOptions, plan sessionRuntimePlan, de
 	}
 	if strings.TrimSpace(opts.RecordPath) != "" {
 		options.ProviderCapturePath = opts.RecordPath
+		// Positive max-duration runs own the sibling JSONL artifact through
+		// SessionDurationArtifactSet; the directory recorder must not create a
+		// second exclusive sidecar at the same path.
+		options.DisableProviderCaptureSidecar = maxDuration > 0
 	}
 	return service.OpenLiveEvidence(options)
 }

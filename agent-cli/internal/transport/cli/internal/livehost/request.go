@@ -268,7 +268,7 @@ func admitReplay(ctx context.Context, path string, inspection *runtimeReplay.Cap
 	}
 	loaded, err := service.InspectCapture(ctx, path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("replay session capture %s: %w", path, err)
 	}
 	if !loaded.IsRealtime() {
 		return nil, fmt.Errorf("replay capture %s is not a realtime session", path)

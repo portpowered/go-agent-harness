@@ -66,16 +66,18 @@ var observabilityReplies = []string{
 type observabilityLogEntry struct {
 	TurnIndex int `json:"turn_index"`
 	Input     struct {
-		Text          string   `json:"text"`
-		AudioBytes    uint64   `json:"audio_bytes"`
-		Committed     bool     `json:"committed"`
-		AudioSegments []string `json:"audio_segments"`
+		Text             string   `json:"text"`
+		AudioBytes       uint64   `json:"audio_bytes"`
+		AudioOffsetBytes uint64   `json:"audio_offset_bytes"`
+		Committed        bool     `json:"committed"`
+		AudioSegments    []string `json:"audio_segments"`
 	} `json:"input"`
 	Response struct {
-		Text          string   `json:"text"`
-		Complete      bool     `json:"complete"`
-		AudioBytes    uint64   `json:"audio_bytes"`
-		AudioSegments []string `json:"audio_segments"`
+		Text             string   `json:"text"`
+		Complete         bool     `json:"complete"`
+		AudioBytes       uint64   `json:"audio_bytes"`
+		AudioOffsetBytes uint64   `json:"audio_offset_bytes"`
+		AudioSegments    []string `json:"audio_segments"`
 	} `json:"response"`
 }
 
@@ -333,7 +335,7 @@ func assertConversationArtifactEvidence(root string, wantInputs, wantReplies []s
 		if len(entry.Input.AudioSegments) == 0 {
 			violations = append(violations, fmt.Errorf("turn %d: session log lists no recorded input audio segments", turn))
 		} else if index < len(referenceUtterances) {
-			inputAudio, readErr := readListedRecordingSegments(root, entry.Input.AudioSegments, entry.Input.AudioBytes)
+			inputAudio, readErr := readListedRecordingSegments(root, entry.Input.AudioSegments, entry.Input.AudioOffsetBytes, entry.Input.AudioBytes)
 			if readErr != nil {
 				violations = append(violations, fmt.Errorf("turn %d: input audio: %w", turn, readErr))
 			} else if !bytes.Equal(inputAudio, referenceUtterances[index]) {
@@ -350,7 +352,7 @@ func assertConversationArtifactEvidence(root string, wantInputs, wantReplies []s
 			violations = append(violations, fmt.Errorf("turn %d: session log lists no recorded output audio segments", turn))
 			continue
 		}
-		outputAudio, readErr := readListedRecordingSegments(root, entry.Response.AudioSegments, entry.Response.AudioBytes)
+		outputAudio, readErr := readListedRecordingSegments(root, entry.Response.AudioSegments, entry.Response.AudioOffsetBytes, entry.Response.AudioBytes)
 		if readErr != nil {
 			violations = append(violations, fmt.Errorf("turn %d: output audio: %w", turn, readErr))
 			continue
@@ -370,7 +372,7 @@ func assertConversationArtifactEvidence(root string, wantInputs, wantReplies []s
 
 // readListedRecordingSegments concatenates exactly the segment paths named by
 // one session-log entry and checks their total against that entry's byte count.
-func readListedRecordingSegments(dir string, segments []string, wantBytes uint64) ([]byte, error) {
+func readListedRecordingSegments(dir string, segments []string, offset, wantBytes uint64) ([]byte, error) {
 	var combined []byte
 	for _, relative := range segments {
 		clean := filepath.Clean(filepath.FromSlash(relative))
@@ -383,10 +385,10 @@ func readListedRecordingSegments(dir string, segments []string, wantBytes uint64
 		}
 		combined = append(combined, data...)
 	}
-	if uint64(len(combined)) != wantBytes {
-		return combined, fmt.Errorf("segments hold %d bytes, session log accounts %d", len(combined), wantBytes)
+	if offset > uint64(len(combined)) || wantBytes > uint64(len(combined))-offset {
+		return nil, fmt.Errorf("segments hold %d bytes, session log range [%d,%d) is unavailable", len(combined), offset, offset+wantBytes)
 	}
-	return combined, nil
+	return combined[offset : offset+wantBytes], nil
 }
 
 // verifyManifestHashes re-hashes every regular artifact listed by the
@@ -474,10 +476,6 @@ func truncateSessionLog(t *testing.T, path string, keep int) {
 	}
 }
 
-func silenceBytes(n int) []byte {
-	return make([]byte, n)
-}
-
 // TestSessionCommandConversationObservabilityProvesConversationFromArtifactsOnly
 // is the lane's proof of record: after one multi-turn replayed session
 // completes, the one recording bundle left by the CLI — read exclusively,
@@ -504,13 +502,36 @@ func TestSessionCommandConversationObservabilityNegativeControlFailsTruncatedArt
 
 	negativeRoot := filepath.Join(t.TempDir(), "negative")
 	copyArtifactTree(t, root, negativeRoot)
-	truncateSessionLog(t, filepath.Join(negativeRoot, "session-log.jsonl"), observabilityTurnCount-1)
-	redactedReplyPath := filepath.Join(negativeRoot, "audio", "out-001.pcm")
+	negativeLogPath := filepath.Join(negativeRoot, "session-log.jsonl")
+	negativeLog, err := os.ReadFile(negativeLogPath)
+	if err != nil {
+		t.Fatalf("read negative control session log: %v", err)
+	}
+	var negativeEntries []observabilityLogEntry
+	for _, line := range bytes.Split(bytes.TrimSpace(negativeLog), []byte("\n")) {
+		var entry observabilityLogEntry
+		if err := json.Unmarshal(line, &entry); err != nil {
+			t.Fatalf("decode negative control session log: %v", err)
+		}
+		negativeEntries = append(negativeEntries, entry)
+	}
+	if len(negativeEntries) < 2 {
+		t.Fatalf("negative control session log has %d entries, want turn 2", len(negativeEntries))
+	}
+	truncateSessionLog(t, negativeLogPath, observabilityTurnCount-1)
+	redactedReplyPath := filepath.Join(negativeRoot, "audio", "out-000.pcm")
 	replyAudio, err := os.ReadFile(redactedReplyPath)
 	if err != nil {
 		t.Fatalf("read negative control reply audio: %v", err)
 	}
-	if err := os.WriteFile(redactedReplyPath, silenceBytes(len(replyAudio)), 0o644); err != nil {
+	second := negativeEntries[1].Response
+	start, end := second.AudioOffsetBytes, second.AudioOffsetBytes+second.AudioBytes
+	if end > uint64(len(replyAudio)) {
+		t.Fatalf("negative control turn 2 audio range [%d,%d) exceeds %d bytes", start, end, len(replyAudio))
+	}
+	redacted := append([]byte(nil), replyAudio...)
+	clear(redacted[start:end])
+	if err := os.WriteFile(redactedReplyPath, redacted, 0o644); err != nil {
 		t.Fatalf("redact negative control reply audio: %v", err)
 	}
 

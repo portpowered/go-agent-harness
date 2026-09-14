@@ -148,9 +148,32 @@ func (o *sessionProgressObserver) recordLiveTerminalForRun(runErr error) {
 	if o == nil || o.liveRecorder == nil || o.liveTerminalRecorded() {
 		return
 	}
+	o.liveRecordingMu.Lock()
+	durationExpired := o.liveDurationExpired
+	o.liveRecordingMu.Unlock()
+	if durationExpired {
+		o.recordLiveTerminalContext(context.Background(), messages.NewSessionCloseValueWithTerminal("", "max_duration", "max_duration", messages.TerminalReason("max_duration"), messages.TerminalProvenanceLoop, messages.TerminalOutputPartial), runErr)
+		return
+	}
 	reason, provenance := sessionTerminalClassification(o, runErr)
 	outputState := deriveOutputState(o.sawSessionOpen, o.turnsCompleted)
 	o.recordLiveTerminal(messages.NewSessionCloseValueWithTerminal("", "", string(reason), reason, provenance, messages.TerminalOutputState(outputState)), runErr)
+}
+
+func (o *sessionProgressObserver) markLiveDurationExceeded() {
+	if o == nil {
+		return
+	}
+	o.liveRecordingMu.Lock()
+	o.liveDurationExpired = true
+	o.liveRecordingMu.Unlock()
+}
+
+func markLiveDurationFinish(planned *bool, value bool, observer *sessionProgressObserver) {
+	*planned = value
+	if value {
+		observer.markLiveDurationExceeded()
+	}
 }
 
 func (o *sessionProgressObserver) liveTerminalRecorded() bool {

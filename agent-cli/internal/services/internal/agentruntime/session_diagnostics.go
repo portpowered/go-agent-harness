@@ -217,20 +217,21 @@ type sessionProgressObserver struct {
 	// an otherwise valid completed response. Returning false keeps the raw
 	// stream event observable but prevents it from advancing completed-turn
 	// state or evidence.
-	turnAdmission      func(messages.StreamMessage) bool
-	runtime            *sessionRuntimeObservationRecorder
-	liveRecorder       session.LiveRecorder
-	recordingNow       func() time.Time
-	inputAudioRate     int
-	outputAudioRate    int
-	liveRecordingMu    sync.Mutex
-	liveRecordingErr   error
-	liveTerminalSeen   bool
-	cancellationIntent *SessionCancellationIntent
-	provider           string
-	model              string
-	sawSessionOpen     bool
-	sessionID          string
+	turnAdmission       func(messages.StreamMessage) bool
+	runtime             *sessionRuntimeObservationRecorder
+	liveRecorder        session.LiveRecorder
+	recordingNow        func() time.Time
+	inputAudioRate      int
+	outputAudioRate     int
+	liveRecordingMu     sync.Mutex
+	liveRecordingErr    error
+	liveTerminalSeen    bool
+	liveDurationExpired bool
+	cancellationIntent  *SessionCancellationIntent
+	provider            string
+	model               string
+	sawSessionOpen      bool
+	sessionID           string
 	// sessionUpdated is scoped to the current SESSION.OPEN round trip. A
 	// subsequent SESSION.OPEN resets it so an acknowledgement from an older
 	// connection cannot release a new connection's scheduled input.
