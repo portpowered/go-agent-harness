@@ -3,7 +3,6 @@ package agentruntime
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"reflect"
 	"strings"
@@ -172,7 +171,7 @@ func TestSessionDynamicToolPublisher_ReplacesDefinitionsInOneRunningSession(t *t
 	// redundant update.
 	waitForDynamicPublisherRefresh(t, ctx, refreshStarted)
 	bootstrap := readDynamicPublisherUpdate(t, ctx, session)
-	wantBootstrap := mergeSessionToolDefinitionBase(base, pageA)
+	wantBootstrap := dynamicPublisherMergedDefinitions(base, pageA)
 	if !reflect.DeepEqual(bootstrap, wantBootstrap) {
 		t.Fatalf("bootstrap provider tools = %#v, want %#v", bootstrap, wantBootstrap)
 	}
@@ -183,7 +182,7 @@ func TestSessionDynamicToolPublisher_ReplacesDefinitionsInOneRunningSession(t *t
 	events <- webmcp.BrokerEvent{Type: webmcp.BrokerEventSelected, Sequence: 1}
 	waitForDynamicPublisherRefresh(t, ctx, refreshStarted)
 	gotB := readDynamicPublisherUpdate(t, ctx, session)
-	wantB := mergeSessionToolDefinitionBase(base, pageB)
+	wantB := dynamicPublisherMergedDefinitions(base, pageB)
 	if !reflect.DeepEqual(gotB, wantB) {
 		t.Fatalf("A-to-B provider tools = %#v, want %#v", gotB, wantB)
 	}
@@ -194,7 +193,7 @@ func TestSessionDynamicToolPublisher_ReplacesDefinitionsInOneRunningSession(t *t
 	events <- webmcp.BrokerEvent{Type: webmcp.BrokerEventGenerationChanged, Sequence: 2}
 	waitForDynamicPublisherRefresh(t, ctx, refreshStarted)
 	gotA := readDynamicPublisherUpdate(t, ctx, session)
-	wantA := mergeSessionToolDefinitionBase(base, pageA)
+	wantA := dynamicPublisherMergedDefinitions(base, pageA)
 	if !reflect.DeepEqual(gotA, wantA) {
 		t.Fatalf("B-to-A provider tools = %#v, want %#v", gotA, wantA)
 	}
@@ -306,7 +305,7 @@ func TestSessionDynamicToolPublisher_CoalescesSelectionCatalogBurst(t *testing.T
 		t.Fatalf("timed out waiting for burst refresh: %v", ctx.Err())
 	}
 	got := readDynamicPublisherUpdate(t, ctx, session)
-	want := mergeSessionToolDefinitionBase(base, pageB)
+	want := dynamicPublisherMergedDefinitions(base, pageB)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("burst provider tools = %#v, want %#v", got, want)
 	}
@@ -646,9 +645,31 @@ func executeDynamicPublisherPageCall(t *testing.T, executor messages.ToolExecuto
 	return envelope
 }
 
+// The adapter test checks the public behavior at the existing CLI seam. The
+// canonical merge policy itself is tested through the runtime service.
+func dynamicPublisherMergedDefinitions(base, definitions []messages.ToolDefinition) []messages.ToolDefinition {
+	canonicalBase := messages.CanonicalToolDefinitions(base)
+	canonicalDefinitions := messages.CanonicalToolDefinitions(definitions)
+	if len(canonicalBase) == 0 {
+		return canonicalDefinitions
+	}
+	merged := append([]messages.ToolDefinition(nil), canonicalBase...)
+	baseNames := make(map[string]struct{}, len(canonicalBase))
+	for _, definition := range canonicalBase {
+		baseNames[definition.Name] = struct{}{}
+	}
+	for _, definition := range canonicalDefinitions {
+		if _, isBase := baseNames[definition.Name]; isBase {
+			continue
+		}
+		merged = append(merged, definition)
+	}
+	return messages.CanonicalToolDefinitions(merged)
+}
+
 func assertDynamicPublisherSurface(t *testing.T, got, base, page []messages.ToolDefinition, label string) {
 	t.Helper()
-	want := mergeSessionToolDefinitionBase(base, page)
+	want := dynamicPublisherMergedDefinitions(base, page)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("%s surface = %#v, want %#v", label, got, want)
 	}
@@ -697,167 +718,3 @@ func assertDynamicPublisherPresent(t *testing.T, definitions []messages.ToolDefi
 }
 
 var _ webmcp.Broker = (*dynamicPublisherCatalogBroker)(nil)
-
-func TestSessionDynamicToolPublisher_NoOpRefreshKeepsLastSuccessfulState(t *testing.T) {
-	base := []messages.ToolDefinition{dynamicPublisherTestDefinition("stable_tool", "stable")}
-	page := []messages.ToolDefinition{dynamicPublisherTestDefinition("page_tool", "page")}
-	publisher := newSessionDynamicToolPublisher(
-		base,
-		append(append([]messages.ToolDefinition(nil), base...), page...),
-		func(context.Context) <-chan webmcp.BrokerEvent { return make(chan webmcp.BrokerEvent) },
-		func(context.Context) ([]messages.ToolDefinition, error) {
-			return append([]messages.ToolDefinition(nil), page...), nil
-		},
-	)
-	if !publisher.consumeEvent(webmcp.BrokerEvent{Type: webmcp.BrokerEventCatalogChanged, Sequence: 9}) {
-		t.Fatal("first sequenced catalog event was not accepted")
-	}
-	if publisher.consumeEvent(webmcp.BrokerEvent{Type: webmcp.BrokerEventCatalogChanged, Sequence: 9}) {
-		t.Fatal("duplicate sequenced catalog event triggered a second refresh")
-	}
-
-	if err := publisher.refreshAndPublish(context.Background(), nil, "duplicate_event"); err != nil {
-		t.Fatalf("no-op refresh = %v, want nil", err)
-	}
-	state := publisher.stateSnapshot()
-	want := mergeSessionToolDefinitionBase(base, page)
-	if !reflect.DeepEqual(state.LastSuccessfulDefinitions, want) {
-		t.Fatalf("last successful definitions = %#v, want %#v", state.LastSuccessfulDefinitions, want)
-	}
-	if state.PublicationCount != 0 {
-		t.Fatalf("publication count = %d, want zero for unchanged canonical tools", state.PublicationCount)
-	}
-}
-
-func TestSessionToolDefinitionDigestIncludesCompleteParameterSchema(t *testing.T) {
-	first := dynamicPublisherTestDefinition("page_tool", "page")
-	first.ParameterSchema = json.RawMessage(`{"type":"object","properties":{"moves":{"type":"array","items":{"type":"string"}}}}`)
-	second := first
-	second.ParameterSchema = json.RawMessage(`{"type":"object","properties":{"moves":{"type":"array","items":{"type":"integer"}}}}`)
-
-	firstDigest, err := sessionToolDefinitionDigest([]messages.ToolDefinition{first})
-	if err != nil {
-		t.Fatalf("digest first definition: %v", err)
-	}
-	secondDigest, err := sessionToolDefinitionDigest([]messages.ToolDefinition{second})
-	if err != nil {
-		t.Fatalf("digest second definition: %v", err)
-	}
-	if firstDigest == secondDigest {
-		t.Fatalf("schema-only definition change did not change digest: %s", firstDigest)
-	}
-}
-
-func TestSessionDynamicToolPublisher_RejectsStaleGenerationNotifications(t *testing.T) {
-	base := []messages.ToolDefinition{dynamicPublisherTestDefinition("stable_tool", "stable")}
-	page := []messages.ToolDefinition{dynamicPublisherTestDefinition("page_tool", "page")}
-	publisher := newSessionDynamicToolPublisher(
-		base,
-		append(append([]messages.ToolDefinition(nil), base...), page...),
-		func(context.Context) <-chan webmcp.BrokerEvent { return make(chan webmcp.BrokerEvent) },
-		func(context.Context) ([]messages.ToolDefinition, error) {
-			return page, nil
-		},
-	)
-	definitions := mergeSessionToolDefinitionBase(base, page)
-	digest, err := sessionToolDefinitionDigest(definitions)
-	if err != nil {
-		t.Fatalf("published definition digest: %v", err)
-	}
-	published := sessionDynamicToolPublicationEvent{
-		browserID:  "browser",
-		targetID:   "tab",
-		generation: 4,
-		sequence:   10,
-	}
-	publisher.commitSuccessfulPublication(published, true, definitions, digest, true)
-
-	if publisher.consumeEvent(webmcp.BrokerEvent{
-		Type:       webmcp.BrokerEventCatalogChanged,
-		BrowserID:  published.browserID,
-		TargetID:   published.targetID,
-		Generation: 3,
-		Sequence:   11,
-	}) {
-		t.Fatal("stale generation notification was accepted")
-	}
-	if publisher.hasPending {
-		t.Fatal("stale generation notification left pending publication work")
-	}
-	state := publisher.stateSnapshot()
-	if state.LastSuccessfulGeneration != published.generation || state.LastSuccessfulEventSequence != published.sequence {
-		t.Fatalf("stale notification advanced last successful state = %#v", state)
-	}
-	if state.LatestEventSequence != 11 {
-		t.Fatalf("latest event sequence = %d, want 11 after observing stale event", state.LatestEventSequence)
-	}
-
-	if !publisher.consumeEvent(webmcp.BrokerEvent{
-		Type:       webmcp.BrokerEventGenerationChanged,
-		BrowserID:  published.browserID,
-		TargetID:   published.targetID,
-		Generation: 5,
-		Sequence:   12,
-	}) {
-		t.Fatal("newer generation notification was not accepted")
-	}
-	if publisher.consumeEvent(webmcp.BrokerEvent{
-		Type:       webmcp.BrokerEventCatalogChanged,
-		BrowserID:  published.browserID,
-		TargetID:   published.targetID,
-		Generation: 4,
-		Sequence:   13,
-	}) {
-		t.Fatal("out-of-order older generation replaced newer pending work")
-	}
-	if publisher.pending.generation != 5 {
-		t.Fatalf("pending generation = %d, want newer generation 5", publisher.pending.generation)
-	}
-}
-
-func TestSessionDynamicToolPublisher_RefreshFailureRetainsLastSuccessfulState(t *testing.T) {
-	base := []messages.ToolDefinition{dynamicPublisherTestDefinition("stable_tool", "stable")}
-	pageA := []messages.ToolDefinition{dynamicPublisherTestDefinition("page_a", "page A")}
-	pageB := []messages.ToolDefinition{dynamicPublisherTestDefinition("page_b", "page B")}
-	refreshErr := errors.New("catalog transport unavailable")
-	publisher := newSessionDynamicToolPublisher(
-		base,
-		append(append([]messages.ToolDefinition(nil), base...), pageA...),
-		func(context.Context) <-chan webmcp.BrokerEvent { return make(chan webmcp.BrokerEvent) },
-		func(context.Context) ([]messages.ToolDefinition, error) {
-			return pageB, refreshErr
-		},
-	)
-	publisher.consumeEvent(webmcp.BrokerEvent{
-		Type:       webmcp.BrokerEventCatalogChanged,
-		BrowserID:  "browser",
-		TargetID:   "tab",
-		Generation: 2,
-		Sequence:   7,
-	})
-
-	err := publisher.refreshAndPublish(context.Background(), nil, "broker_event")
-	if !errors.Is(err, ErrSessionDynamicToolPublication) || !errors.Is(err, refreshErr) {
-		t.Fatalf("refresh error = %v, want publication and catalog causes", err)
-	}
-	state := publisher.stateSnapshot()
-	want := mergeSessionToolDefinitionBase(base, pageA)
-	if !reflect.DeepEqual(state.LastSuccessfulDefinitions, want) {
-		t.Fatalf("failed refresh advanced definitions = %#v, want %#v", state.LastSuccessfulDefinitions, want)
-	}
-	if state.LatestEventSequence != 7 {
-		t.Fatalf("latest event sequence = %d, want 7", state.LatestEventSequence)
-	}
-	if state.LastSuccessfulGeneration != 0 || state.LastSuccessfulEventSequence != 0 {
-		t.Fatalf("failed refresh advanced successful generation state = %#v", state)
-	}
-	if !publisher.hasPending {
-		t.Fatal("failed refresh discarded pending generation before successful delivery")
-	}
-	if state.Lifecycle != SessionDynamicToolPublicationFailed || state.Err == nil {
-		t.Fatalf("failure state = %#v, want bounded failed lifecycle", state)
-	}
-	if len(err.Error()) > 420 {
-		t.Fatalf("failure diagnostic length = %d, want bounded output", len(err.Error()))
-	}
-}
