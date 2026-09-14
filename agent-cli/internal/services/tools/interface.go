@@ -9,6 +9,7 @@ import (
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeBrowser "github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation"
 )
 
 // CapabilityStatus is the lifecycle snapshot for an optional browser
@@ -34,7 +35,7 @@ type BrowserCapability struct {
 	Initialize        func(context.Context) error
 	Status            func() CapabilityStatus
 	BrowserWatch      func(context.Context) <-chan webmcp.BrokerEvent
-	BrowserEventWatch func(context.Context) <-chan webmcp.BrowserEvent
+	BrowserEventWatch func(context.Context) <-chan runtimeBrowser.BrowserEvent
 	Close             func() error
 }
 
@@ -53,7 +54,7 @@ type Capabilities struct {
 	Initialize                  func(context.Context) error
 	Status                      func() CapabilityStatus
 	BrowserWatch                func(context.Context) <-chan webmcp.BrokerEvent
-	BrowserEventWatch           func(context.Context) <-chan webmcp.BrowserEvent
+	BrowserEventWatch           func(context.Context) <-chan runtimeBrowser.BrowserEvent
 	Close                       func() error
 }
 
