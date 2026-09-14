@@ -1,0 +1,106 @@
+{
+  "schema": "audio-runtime.c176.recovery-evidence.v1",
+  "project": "audio-runtime",
+  "task": "audio-runtime-c176-recover-c159-provider-close-coverage-failure",
+  "branch": "codex/audio-runtime-c176-recover-c159-provider-close-coverage-failure",
+  "factorySession": "~default",
+  "admission": {
+    "command": "rtk proxy python3 factory/scripts/project-control.py verify-work --type task --name audio-runtime-c176-recover-c159-provider-close-coverage-failure --root $FACTORY_ROOT",
+    "result": {
+      "status": "admitted",
+      "project": "audio-runtime",
+      "name": "audio-runtime-c176-recover-c159-provider-close-coverage-failure"
+    }
+  },
+  "preservedC159": {
+    "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c159-repair-provider-close-tool-dispatch-ordering",
+    "branch": "codex/audio-runtime-c159-repair-provider-close-tool-dispatch-ordering",
+    "head": "28c5a841d3f0cc210af45b6b0cf6c66d95cc95d6",
+    "remoteHead": "28c5a841d3f0cc210af45b6b0cf6c66d95cc95d6",
+    "worktreeStatus": "clean",
+    "pullRequest": 518
+  },
+  "integration": {
+    "head": "b28fa10e670e870dd9a6f042041f1fc7bed14565",
+    "currentMain": "1b1c0296b9471b930c2b290f3bf6fa10559957de",
+    "planningMain": "2c79ec6a931c3e86944d6a625d0a5060b4f85aa0",
+    "startupIntegration": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+    "preservedC159Head": "28c5a841d3f0cc210af45b6b0cf6c66d95cc95d6",
+    "merge": "non-ff current-main merge at b28fa10e670e870dd9a6f042041f1fc7bed14565",
+    "ancestry": {
+      "startupIntegration": true,
+      "planningMain": true,
+      "currentMain": true,
+      "preservedC159Head": true
+    }
+  },
+  "immutableCiFailure": {
+    "workflowRun": 34789689157,
+    "coverageJob": 103811494813,
+    "ciMergeHead": "c9f40d6f",
+    "requiredLanes": "eight exact-head lanes passed; CI (coverage) failed",
+    "rawLog": "run-34789689157-job-103811494813.log",
+    "test": "TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst",
+    "deadlineSeconds": 42,
+    "finalMarker": false,
+    "renderedPCM": 461760,
+    "capturedPCM": 461760,
+    "nonzeroPCM": 150871,
+    "expectedPCM": 174391,
+    "callbacks": 962,
+    "playback": {
+      "queued": 0,
+      "dropped": 0,
+      "overflow": 0,
+      "discarded": 0,
+      "discardEvents": 0
+    },
+    "provider": {
+      "responsesSent": 9,
+      "responseCreates": 7,
+      "toolResults": 7,
+      "protocolError": ""
+    },
+    "shutdown": "child exited by signal killed only after the oracle deadline"
+  },
+  "reproduction": {
+    "status": "NON_REPRODUCED",
+    "sourceHeadForFullCoverage": "f94b564dd481206338fb1ea1dbdaf51c66680bcc",
+    "exactAgentCliCoverage": {
+      "command": "CGO_ENABLED=0 YUI_AUDIO_STRESS=1 go run ./cmd/testtimeout --timeout 480s --report-budget --label 'C176 exact agent-cli coverage reproduction' -- go test ./test/integration -count=1 -tags=nomicrophone -timeout 480s -coverpkg=github.com/portpowered/go-agent-harness/agent-cli/...,github.com/portpowered/go-agent-harness/go-agent-runtime/...",
+      "result": "pass; package 312.590s; coverage 29.0%; budget 65.6% consumed; classification success"
+    },
+    "repeatedProviderBurstCoverage": {
+      "command": "CGO_ENABLED=0 go test ./test/integration -count=5 -tags=nomicrophone -timeout 600s -run '^TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst$' -coverpkg=github.com/portpowered/go-agent-harness/agent-cli/...,github.com/portpowered/go-agent-harness/go-agent-runtime/...",
+      "result": "pass; 5/5; 62.112s"
+    },
+    "focusedNormal": {
+      "command": "CGO_ENABLED=0 go test ./test/integration -tags=nomicrophone -timeout 240s -run '^TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst$' -count=3",
+      "result": "pass; 3/3; 38.663s at final integrated head"
+    },
+    "focusedRace": {
+      "command": "CGO_ENABLED=0 go test -race ./test/integration -tags=nomicrophone -timeout 240s -run '^TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst$' -count=1",
+      "result": "pass; 20.445s"
+    },
+    "healthyControls": {
+      "test47ProviderBurst": "pass; 3/3; 24.168s",
+      "test48ProviderBurst": "pass; 3/3; 27.044s"
+    },
+    "ownedDispatchNormal": "pass; engine and participants ToolDispatch/CallsStarted/ToolRunner selectors count=5",
+    "ownedDispatchRace": "pass; engine and participants ToolDispatch/CallsStarted/ToolRunner selectors count=3",
+    "architectureSize": "pass; 202 packages, 1942 files, 28805 functions",
+    "diffCheck": "pass"
+  },
+  "causalBoundary": {
+    "firstObservedEvent": "remote device final-marker waiter expiry in session_tool_audio_remote_oracle_test.go; no engine/tool-runner publication event was captured",
+    "ownedFirstDivergence": null,
+    "countersShow": "provider completed 9 responses, 7 response creates, and 7 tool results; playback had zero queue/drop/overflow/discard loss but ended on an underflow frame",
+    "decision": "No production repair is justified before an engine/tool-runner publication or retirement divergence is observed. The unchanged provider-burst coverage failure is not reproduced locally."
+  },
+  "peerBoundary": {
+    "C127": "accepted causal evidence attributes its earlier loss to go-agent-runtime RTC forwarding at service.go:352-366, not this owned engine/tool-runner boundary",
+    "C155": "active work-task-46, branch codex/audio-runtime-c155-repair-virtual-playback-low-watermark, PR 516 head 39af197f3f6bedc252a69a454c214a5618e8f475; untouched",
+    "prohibitedPathsUntouched": true
+  },
+  "nextAction": "Retain C176 ownership and obtain one source-pinned reproduction that emits correlated engine publication, ToolRunner admission/start/completion, final-marker publication/retirement, and shutdown events. If the first divergent event lands in engine.go or tool_runner.go, make the smallest demonstrated repair and rerun focused normal/race/mutation controls; otherwise checkpoint the exact external owner and do not submit an unchanged candidate to CI."
+}

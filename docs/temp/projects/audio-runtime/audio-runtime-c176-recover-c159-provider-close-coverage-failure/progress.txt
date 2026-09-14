@@ -1,0 +1,35 @@
+# C176 recovery checkpoint — 2026-09-13
+
+- Admission was re-verified from FACTORY_ROOT for the sole `audio-runtime`
+  task. The isolated branch matches `prd.json`. `work-task-61` remains the
+  predecessor's terminal FAILED record with `runner returned failed outcome`;
+  C159's clean worktree and PR 518 head `28c5a841d3f0cc210af45b6b0cf6c66d95cc95d6`
+  were preserved.
+- The immutable CI rejection remains run `34789689157`, coverage job
+  `103811494813`: eight required lanes passed and the coverage lane failed only
+  `test46/provider_burst` at the unchanged 42-second deadline. The raw failure
+  counters and provider/tool counts are retained in the adjacent log file.
+- Fresh `origin/main` advanced to `1b1c0296b9471b930c2b290f3bf6fa10559957de`.
+  It was fetched and merged without rewriting this isolated branch at
+  `b28fa10e670e870dd9a6f042041f1fc7bed14565`; startup integration, planning
+  main, current main, and the C159 head are all ancestors.
+- The exact agent-cli coverage reproduction passed at the prior integrated
+  head (`312.590s`, `29.0%`, budget classification `success`). Five repeated
+  coverage-instrumented `test46/provider_burst` runs passed in `62.112s`.
+  At the final integrated head, the focused provider-burst oracle passed 3/3
+  in `38.663s`, the race control passed in `20.445s`, and matched healthy
+  test47/test48 provider-burst controls passed 3/3 each. Owned engine/tool
+  dispatch normal and race selectors passed; architecture-size passed at
+  `202/1942/28805`; `git diff --check` passed.
+- The first observed divergent signal remains downstream: the remote device
+  final-marker waiter expires with provider counts complete, zero playback
+  queue/drop/overflow/discard counters, and a final underflow frame. No
+  engine/tool-runner publication, admission, completion, or retirement event
+  was captured that would establish an owned first divergence. C127's accepted
+  RTC-forwarding diagnosis and active C155 low-watermark task remain distinct;
+  neither peer path was changed.
+- This is a non-reproduction checkpoint, not a repair or CI-green claim. No
+  production source, oracle, deadline, peer path, or predecessor checkpoint was
+  changed. Exact next action is to retain C176 ownership and obtain a
+  source-pinned causal reproduction with the missing engine/tool publication
+  events; only an owned demonstrated cause may produce a changed PR 518 head.
