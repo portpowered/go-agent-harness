@@ -4,15 +4,18 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
-	"unicode"
-
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/internal/latency"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
+	"unicode"
 )
 
 func newRecorder(options roomevidence.Options) (roomevidence.Recorder, error) {
@@ -53,6 +56,7 @@ func newRecorder(options roomevidence.Options) (roomevidence.Recorder, error) {
 		clock:                newClockState(startedAt, source),
 		mix:                  mix,
 		participants:         make(map[string]*participantRecorder, len(options.Manifest.Participants)),
+		captureSeen:          make(map[string]bool, len(options.Manifest.Participants)),
 		providerErrs:         make(map[string]struct{}, len(options.Manifest.Participants)),
 		participantRecordErr: make(map[string]error, len(options.Manifest.Participants)),
 		artifactRecordErr:    make(map[string]error),
@@ -62,6 +66,8 @@ func newRecorder(options roomevidence.Options) (roomevidence.Recorder, error) {
 		r.latency = options.LatencyRecorder
 	} else if options.Latency != nil {
 		r.latency = options.Latency.NewRecorder(source, format)
+	} else {
+		r.latency = latency.NewService().NewRecorder(source, format)
 	}
 	r.timeline, err = newJSONLWriter(filepath.Join(destination, roomevidence.TimelinePath))
 	if err != nil {
@@ -219,5 +225,131 @@ func normalizeParticipantKind(kind rooms.ParticipantKind) rooms.ParticipantKind 
 		return rooms.ParticipantKindHuman
 	default:
 		return value
+	}
+}
+
+func (r *recorder) RecordLiveEvent(participantID string, event session.LiveEvent) error {
+	if r == nil {
+		return roomevidence.ErrRecorderClosed
+	}
+	participantID = liveEventParticipantID(participantID, event)
+	r.markCaptureSeen(participantID)
+	fields := liveEventFields(event)
+	at := event.Timestamp.UTC()
+	if at.IsZero() {
+		at = r.clock.source.Now().UTC()
+	}
+	if err := r.writeTimelineAt(at, "live_"+normalizeLiveEventKind(event.Kind), participantID, fields); err != nil {
+		return err
+	}
+	r.observeLatencyEvent(participantID, event)
+	return nil
+}
+
+func liveEventParticipantID(participantID string, event session.LiveEvent) string {
+	participantID = strings.TrimSpace(participantID)
+	if participantID == "" {
+		return strings.TrimSpace(event.ParticipantID)
+	}
+	return participantID
+}
+
+func (r *recorder) markCaptureSeen(participantID string) {
+	if r == nil || participantID == "" {
+		return
+	}
+	r.mu.Lock()
+	r.captureSeen[participantID] = true
+	r.mu.Unlock()
+}
+
+func liveEventFields(event session.LiveEvent) map[string]string {
+	fields := map[string]string{}
+	if event.Sequence != 0 {
+		fields["sequence"] = strconv.FormatUint(event.Sequence, 10)
+	}
+	if event.SessionID != "" {
+		fields["session_id"] = event.SessionID
+	}
+	if event.ResponseID != "" {
+		fields["response_id"] = event.ResponseID
+	}
+	if event.ItemID != "" {
+		fields["item_id"] = event.ItemID
+	}
+	if event.ToolCallID != "" {
+		fields["tool_call_id"] = event.ToolCallID
+	}
+	if event.Role != "" {
+		fields["role"] = string(event.Role)
+	}
+	if event.Text != "" {
+		fields["text"] = event.Text
+	}
+	if event.Reason != "" {
+		fields["reason"] = event.Reason
+	}
+	if event.State != "" {
+		fields["state"] = event.State
+	}
+	if event.Dropped != 0 {
+		fields["dropped"] = strconv.FormatUint(event.Dropped, 10)
+	}
+	if event.Error != nil {
+		fields["error"] = fmt.Sprint(event.Error)
+	}
+	if event.Message != nil {
+		fields["message_type"] = string(event.Message.Type)
+	}
+	if event.Liveness != nil {
+		fields["classification"] = event.Liveness.Classification
+		fields["terminal_reason"] = string(event.Liveness.TerminalReason)
+		fields["terminal_provenance"] = string(event.Liveness.TerminalProvenance)
+		fields["output_state"] = string(event.Liveness.OutputState)
+	}
+	return fields
+}
+
+func normalizeLiveEventKind(kind string) string {
+	var builder strings.Builder
+	unsafe := false
+	for _, value := range strings.ToLower(strings.TrimSpace(kind)) {
+		if (value >= 'a' && value <= 'z') || (value >= '0' && value <= '9') || value == '_' {
+			builder.WriteRune(value)
+			unsafe = false
+		} else if !unsafe {
+			builder.WriteByte('_')
+			unsafe = true
+		}
+	}
+	return strings.Trim(builder.String(), "_")
+}
+
+func (r *recorder) observeLatencyEvent(participantID string, event session.LiveEvent) {
+	if r == nil || r.latency == nil || strings.TrimSpace(participantID) == "" {
+		return
+	}
+	kind := strings.ToLower(strings.TrimSpace(event.Kind))
+	if event.Message != nil {
+		kind = strings.ToLower(strings.TrimSpace(string(event.Message.Type)))
+	}
+	switch kind {
+	case "speech_stopped", "vad_speech_stopped":
+		r.latency.ObserveSpeechStopped(participantID)
+	case "input_commit", "input_item_added", "input_audio_buffer_committed":
+		r.latency.ObserveRuntime(participantID, rooms.LatencyObservation{Kind: rooms.LatencyObservationInputCommit, Timestamp: event.Timestamp})
+	case "response_create", "response_created":
+		r.latency.ObserveRuntime(participantID, rooms.LatencyObservation{Kind: rooms.LatencyObservationResponseCreate, ResponseID: event.ResponseID, Timestamp: event.Timestamp})
+	case "audio_delta":
+		if event.ResponseID == "" {
+			return
+		}
+		if withTimestamp, ok := r.latency.(interface {
+			ObserveProviderAudioAt(string, string, time.Time, uint64)
+		}); ok {
+			withTimestamp.ObserveProviderAudioAt(participantID, event.ResponseID, event.Timestamp, 0)
+			return
+		}
+		r.latency.ObserveProviderAudio(participantID, event.ResponseID)
 	}
 }

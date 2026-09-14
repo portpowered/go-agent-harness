@@ -6,8 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,6 +14,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	roomevidencewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
 )
 
 const (
@@ -26,114 +25,6 @@ const (
 	// its causal frame assertion observes all participants.
 	roomFanoutMaxDuration = 30 * time.Second
 )
-
-func cleanupRoomEvidence(t *testing.T, deltasFile *os.File, owner *roomEvidence) {
-	if err := errors.Join(deltasFile.Close(), owner.finalize(RoomResult{TerminationReason: RoomTerminationStopped}, nil, time.Now())); err != nil {
-		t.Errorf("room evidence cleanup: %v", err)
-	}
-}
-
-func TestObserveRoomParticipantStream_FansOutBeforeDurableAudioEvidence(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	targetMixer, err := room.NewPCM16Mixer(ctx, room.PCM16Format{
-		SampleRate:    1000,
-		Channels:      1,
-		FrameDuration: 20 * time.Millisecond,
-	})
-	if err != nil {
-		t.Fatalf("new target mixer: %v", err)
-	}
-	t.Cleanup(func() { _ = targetMixer.Close() })
-	if err := targetMixer.AddInput("source"); err != nil {
-		t.Fatalf("add source mixer input: %v", err)
-	}
-
-	manifest := room.Manifest{
-		SchemaVersion: room.SchemaVersion,
-		Room:          room.Room{MaxTurns: 1, MaxDuration: roomFanoutMaxDuration},
-		Participants:  []room.Participant{{ID: "source", Kind: room.ParticipantKindAgent}, {ID: "target", Kind: room.ParticipantKindAgent}},
-	}
-	owner, err := newRoomEvidence(t.TempDir(), manifest, room.DefaultPCM16Format(), nil, time.Now())
-	if err != nil {
-		t.Fatalf("create room evidence: %v", err)
-	}
-	participantEvidence := owner.participant("source")
-	deltasPath := filepath.Join(owner.destination, participantEvidence.artifacts.Deltas)
-	deltasFile, err := os.Open(deltasPath)
-	if err != nil {
-		t.Fatalf("open delta evidence: %v", err)
-	}
-	audioPath := filepath.Join(owner.destination, participantEvidence.artifacts.WAV)
-	t.Cleanup(func() { cleanupRoomEvidence(t, deltasFile, owner) })
-
-	source := &roomParticipantRuntime{
-		plan:      &roomParticipantPlan{manifest: room.Participant{ID: "source"}},
-		ctx:       ctx,
-		lifecycle: &roomParticipantLifecycle{},
-	}
-	target := &roomParticipantRuntime{
-		plan:      &roomParticipantPlan{manifest: room.Participant{ID: "target"}},
-		ctx:       ctx,
-		mixer:     targetMixer,
-		lifecycle: &roomParticipantLifecycle{},
-	}
-	coordinator := newRoomCoordinator(nil, 0, nil)
-	coordinator.addParticipant(source)
-	coordinator.addParticipant(target)
-
-	pcm := []byte{0x34, 0x12, 0x78, 0x56}
-	order := make([]string, 0, 2)
-	opts := RoomRunOptions{
-		OnAudioOutput: func(participantID string, got []byte) error {
-			if participantID != "source" || !bytes.Equal(got, pcm) {
-				t.Errorf("audio output = %q/%v, want source/%v", participantID, got, pcm)
-			}
-			order = append(order, "output")
-			return nil
-		},
-		onParticipantAudioFanned: func(sourceID, targetID string, got []byte) {
-			if sourceID != "source" || targetID != "target" || !bytes.Equal(got, pcm) {
-				t.Errorf("fanned audio = %q -> %q/%v, want source -> target/%v", sourceID, targetID, got, pcm)
-			}
-			info, statErr := deltasFile.Stat()
-			if statErr != nil {
-				t.Errorf("stat delta evidence before fanout callback: %v", statErr)
-			} else if info.Size() != 0 {
-				t.Errorf("delta evidence size before fanout = %d, want 0", info.Size())
-			}
-			order = append(order, "fanout")
-		},
-	}
-	observeRoomParticipantStream(
-		coordinator,
-		source,
-		opts,
-		owner,
-		participantEvidence,
-		messages.StreamMessage{
-			Type:       messages.StreamTypeAudioDelta,
-			Role:       messages.RoleAssistant,
-			ResponseID: "response-1",
-			Value:      messages.NewAudioDeltaValue(pcm),
-		},
-	)
-
-	if got, want := fmt.Sprint(order), "[output fanout]"; got != want {
-		t.Fatalf("critical path order = %s, want %s", got, want)
-	}
-	if info, statErr := deltasFile.Stat(); statErr != nil {
-		t.Fatalf("stat delta evidence after fanout: %v", statErr)
-	} else if info.Size() == 0 {
-		t.Fatal("delta evidence was not written after fanout")
-	}
-	if info, statErr := os.Stat(audioPath); statErr != nil {
-		t.Fatalf("stat audio evidence: %v", statErr)
-	} else if info.Size() <= 44 {
-		t.Fatalf("audio evidence size = %d, want WAV header plus PCM", info.Size())
-	}
-}
 
 func TestRunRoom_FansPCMToEveryOtherParticipant(t *testing.T) {
 	ids := []string{"a", "b", "c"}
@@ -1238,6 +1129,7 @@ func newRoomTestRunOptions(ids []string, inferencers map[string]*roomTestInferen
 		credentials["ROOM_"+strings.ToUpper(id)+"_KEY"] = "secret-" + id
 	}
 	opts := RoomRunOptions{
+		Evidence: roomevidencewire.NewService(),
 		Manifest: room.Manifest{
 			SchemaVersion: room.SchemaVersion,
 			Room:          room.Room{MaxDuration: 5 * time.Second},

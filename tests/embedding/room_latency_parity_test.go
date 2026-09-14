@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	roomevidencewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	roomswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
@@ -65,7 +66,7 @@ func newPublicRoomLatencyRun(t *testing.T) *publicRoomLatencyRun {
 		fanouts:        make(chan publicRoomLatencyFanout, 8),
 	}
 	run.provider = newPublicRoomLatencyProvider([]string{run.speakerID, run.listenerID}, run.clock)
-	run.roomService = roomswire.NewService(roomswire.Dependencies{Live: &publicRoomLatencyLiveService{provider: run.provider}, Clock: run.clock})
+	run.roomService = roomswire.NewService(roomswire.Dependencies{Live: &publicRoomLatencyLiveService{provider: run.provider}, Clock: run.clock, Evidence: roomevidencewire.NewService()})
 	run.manifest = runtimeRooms.Manifest{
 		SchemaVersion: runtimeRooms.SchemaVersion,
 		Room:          runtimeRooms.Room{MaxTurns: 2, MaxDuration: publicRoomLatencyTestTimeout},
@@ -188,20 +189,20 @@ func assertPublicRoomLatencyOutcome(t *testing.T, run *publicRoomLatencyRun, out
 
 func assertPublicRoomLatencyReport(t *testing.T, run *publicRoomLatencyRun) {
 	t.Helper()
-	report, err := roomswire.NewLatencyService().Report(run.outputDir)
+	report, err := roomevidencewire.NewLatencyService().Report(run.outputDir)
 	if err != nil {
 		t.Fatalf("read finalized room latency report: %v", err)
 	}
 	assertPublicRoomLatencyCounts(t, report)
 	assertPublicRoomLatencyTransitions(t, report)
-	bundle, err := roomswire.NewLatencyService().ReadBundle(filepath.Join(run.outputDir, runtimeRooms.RoomLatencyArtifactPath))
+	bundle, err := roomevidencewire.NewLatencyService().ReadBundle(filepath.Join(run.outputDir, runtimeRooms.RoomLatencyArtifactPath))
 	if err != nil {
 		t.Fatalf("read finalized latency bundle: %v", err)
 	}
 	if len(bundle.Events) == 0 {
 		t.Fatal("finalized latency bundle has no events")
 	}
-	derived, err := roomswire.NewLatencyService().AnalyzeBundle(bundle)
+	derived, err := roomevidencewire.NewLatencyService().AnalyzeBundle(bundle)
 	if err != nil {
 		t.Fatalf("reanalyze finalized latency bundle: %v", err)
 	}

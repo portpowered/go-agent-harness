@@ -14,6 +14,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	roomevidencewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
@@ -238,8 +239,8 @@ customerAudioRecorded:
 		}())
 	}
 
-	manifestData := readRoomEvidenceFile(t, filepath.Join(opts.OutputDir, RoomEvidenceManifestPath))
-	var manifest roomEvidenceManifest
+	manifestData := readRoomBundleFile(t, filepath.Join(opts.OutputDir, roomBundleManifestPath))
+	var manifest roomBundleManifest
 	if err := json.Unmarshal(manifestData, &manifest); err != nil {
 		t.Fatalf("decode finalized room manifest: %v", err)
 	}
@@ -257,10 +258,8 @@ customerAudioRecorded:
 	if err != nil {
 		t.Fatalf("read finalized room output: %v", err)
 	}
-	// Three per-participant artifacts (WAV/diagnostics/deltas) times two
-	// participants, plus the terminal manifest, room-mix.wav,
-	// room-timeline.jsonl, room-latency.json, and the participants/ directory
-	// holding sent.pcm/received.pcm.
+	// Per-participant artifacts plus the terminal manifest, mix, timelines, and
+	// participants directory are all expected.
 	if len(entries) != 11 {
 		t.Fatalf("finalized room output entries = %d, want 11: %v", len(entries), entries)
 	}
@@ -269,29 +268,29 @@ customerAudioRecorded:
 	}
 	for _, id := range []string{"customer", "agent"} {
 		participant := manifest.Participants[id]
-		sent := readRoomEvidenceFile(t, filepath.Join(opts.OutputDir, participant.Artifacts.SentPCM))
+		sent := readRoomBundleFile(t, filepath.Join(opts.OutputDir, participant.Artifacts.SentPCM))
 		if len(sent) == 0 || len(sent)%2 != 0 {
 			t.Fatalf("participant %q sent.pcm length = %d, want a non-empty, even PCM16 byte count", id, len(sent))
 		}
-		received := readRoomEvidenceFile(t, filepath.Join(opts.OutputDir, participant.Artifacts.ReceivedPCM))
+		received := readRoomBundleFile(t, filepath.Join(opts.OutputDir, participant.Artifacts.ReceivedPCM))
 		if len(received) == 0 {
 			t.Fatalf("participant %q received.pcm is empty, want mixed inbound audio", id)
 		}
 	}
-	if mixData := readRoomEvidenceFile(t, filepath.Join(opts.OutputDir, manifest.RoomMix)); len(mixData) == 0 {
+	if mixData := readRoomBundleFile(t, filepath.Join(opts.OutputDir, manifest.RoomMix)); len(mixData) == 0 {
 		t.Fatal("room-mix.wav is empty")
 	}
-	timelineLines := readRoomEvidenceJSONLLines(t, filepath.Join(opts.OutputDir, manifest.RoomTimeline))
+	timelineLines := readRoomBundleJSONLLines(t, filepath.Join(opts.OutputDir, manifest.RoomTimeline))
 	if len(timelineLines) == 0 {
 		t.Fatal("room-timeline.jsonl has no entries")
 	}
 	for id, participant := range manifest.Participants {
-		wavData := readRoomEvidenceFile(t, filepath.Join(opts.OutputDir, participant.Artifacts.WAV))
+		wavData := readRoomBundleFile(t, filepath.Join(opts.OutputDir, participant.Artifacts.WAV))
 		if _, _, err := wavio.Read(bytes.NewReader(wavData)); err != nil {
 			t.Fatalf("decode %q finalized WAV: %v", id, err)
 		}
 		for _, relativePath := range []string{participant.Artifacts.Diagnostics, participant.Artifacts.Deltas} {
-			data := readRoomEvidenceFile(t, filepath.Join(opts.OutputDir, relativePath))
+			data := readRoomBundleFile(t, filepath.Join(opts.OutputDir, relativePath))
 			if len(data) == 0 {
 				continue
 			}
@@ -528,6 +527,7 @@ func newRoomHumanRunOptions(registry *roomHumanTestRegistry, inferencer *roomTes
 			return "", false
 		},
 		DeviceRegistry: registry,
+		Evidence:       roomevidencewire.NewService(),
 		SessionInferencers: map[string]messages.SessionInferencer{
 			"agent": inferencer,
 		},

@@ -2,8 +2,8 @@ package wire
 
 import (
 	"encoding/json"
+	roomevidencewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
-	runtimeRoomsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
 )
 
 type roomReportingService struct{}
@@ -13,7 +13,7 @@ func NewRoomReportingService() runtimeRooms.ReportingService {
 }
 
 func (roomReportingService) LatencyReport(destination string) (json.RawMessage, error) {
-	report, err := runtimeRoomsWire.NewLatencyService().Report(destination)
+	report, err := roomevidencewire.NewLatencyService().Report(destination)
 	if err != nil {
 		return nil, err
 	}

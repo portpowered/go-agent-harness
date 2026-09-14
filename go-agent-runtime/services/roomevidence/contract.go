@@ -11,6 +11,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -86,6 +88,10 @@ type Service interface {
 	ValidateOutput(string) error
 	PrepareOutput(string) (string, error)
 	Open(Options) (Recorder, error)
+	LoadPlan(string) (RoomReplayPlan, error)
+	ValidateReplayOutput(RoomReplayPlan, string) error
+	ValidateEvidenceOutput(string) error
+	CreateFreshRunDirectory(string) (string, error)
 	Load(RoomReplayPlan) (RoomReplayAudioBundle, error)
 }
 
@@ -99,8 +105,12 @@ type Recorder interface {
 
 	RecordTimeline(string, string, map[string]string) error
 	RecordFinalTimeline(string, string, map[string]string) (time.Time, error)
+	RecordLiveEvent(string, session.LiveEvent) error
 	RecordProviderErrorTimeline(string, map[string]string) error
 	SetParticipantReady(rooms.RoomParticipantReady) error
+	SetParticipantTerminated(rooms.RoomParticipantResult) error
+	RecordSource(string, audio.PCMFrame)
+	RecordReceived(string, audio.PCMFrame)
 
 	ObserveSpeakerAudio(string, []string, []byte)
 	ObserveSpeechStopped(string)

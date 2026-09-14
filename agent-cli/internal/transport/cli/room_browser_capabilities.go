@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	roomEvidenceCLI "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/roomevidence"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -73,11 +74,11 @@ func validateRoomOutput(service runtimeRooms.Service, plans roomRunPlans, output
 		return nil
 	}
 	if plans.replayMode {
-		if err := service.ValidateReplayOutput(plans.replayPlan, outputDir); err != nil {
+		if err := roomEvidenceCLI.ValidateReplayOutput(service, plans.replayPlan, outputDir); err != nil {
 			return fmt.Errorf("validate --out %q: %w", outputDir, err)
 		}
 	}
-	if err := service.ValidateEvidenceOutput(outputDir); err != nil {
+	if err := roomEvidenceCLI.ValidateOutput(service, outputDir); err != nil {
 		return fmt.Errorf("validate --out %q: %w", outputDir, err)
 	}
 	return nil

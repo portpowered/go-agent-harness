@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 )
 
 const (
@@ -104,9 +105,8 @@ type roomAudioIngressTotals struct {
 
 // roomAudioIngressLedger aggregates contentful frame dispositions for one
 // target participant. It emits at most one first-observation record per
-// source/disposition/reason key, followed by one cumulative summary. This
-// keeps a broken peer or closed input from flooding the diagnostic sinks while
-// retaining exact byte and frame totals.
+// source/disposition/reason key and one cumulative summary while retaining
+// exact byte and frame totals without flooding sinks.
 type roomAudioIngressLedger struct {
 	participantID string
 	roomID        string
@@ -130,7 +130,7 @@ func newRoomAudioIngressLedger(participantID string, sink SessionDiagnosticSink)
 	}
 }
 
-func newRoomParticipantIngress(plan *roomParticipantPlan, opts RoomRunOptions, evidence *roomEvidence) *roomAudioIngressLedger {
+func newRoomParticipantIngress(plan *roomParticipantPlan, opts RoomRunOptions, evidence roomevidence.Recorder) *roomAudioIngressLedger {
 	if plan == nil {
 		return nil
 	}
@@ -464,9 +464,9 @@ func routeRoomPeerPCM(ctx context.Context, sourceID string, target *roomParticip
 	return writeErr
 }
 
-func evidenceParticipant(evidence *roomEvidence, participantID string) *roomParticipantEvidence {
+func evidenceParticipant(evidence roomevidence.Recorder, participantID string) roomevidence.ParticipantRecorder {
 	if evidence == nil {
 		return nil
 	}
-	return evidence.participant(participantID)
+	return evidence.Participant(participantID)
 }

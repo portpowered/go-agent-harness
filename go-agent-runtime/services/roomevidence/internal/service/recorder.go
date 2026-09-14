@@ -11,6 +11,8 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer"
 )
 
@@ -27,6 +29,7 @@ type recorder struct {
 	timelineMu  sync.Mutex
 
 	participants map[string]*participantRecorder
+	captureSeen  map[string]bool
 	providerErrs map[string]struct{}
 
 	mu                   sync.Mutex
@@ -143,7 +146,7 @@ func (r *recorder) writeTimelineLocked(at time.Time, event, participant string, 
 		return errors.New("room timeline sink is not initialized")
 	}
 	offset := formatOffset(r.startedAt, at)
-	entry := timelineRecord{TOffsetMS: offset, TUnixMS: at.UnixMilli(), Event: event, Participant: participant, Fields: cloneFields(fields)}
+	entry := timelineRecord{TOffsetMS: offset, TUnixMS: at.UnixMilli(), Event: event, Participant: participant, ParticipantID: participant, Fields: cloneFields(fields)}
 	if err := r.timeline.write(entry); err != nil {
 		wrapped := fmt.Errorf("record %s: %w", event, err)
 		r.recordError("", roomevidence.TimelinePath, wrapped)
@@ -192,6 +195,39 @@ func (r *recorder) SetParticipantReady(ready rooms.RoomParticipantReady) error {
 		}
 	}
 	return r.RecordTimeline("participant_ready", ready.ParticipantID, nil)
+}
+
+func (r *recorder) SetParticipantTerminated(value rooms.RoomParticipantResult) error {
+	if r == nil {
+		return roomevidence.ErrRecorderClosed
+	}
+	fields := map[string]string{
+		"reason": string(value.TerminationReason),
+		"turns":  fmt.Sprintf("%d", value.TurnsCompleted),
+	}
+	return r.RecordTimeline("participant_terminated", value.ParticipantID, fields)
+}
+
+func (r *recorder) RecordSource(participantID string, frame audio.PCMFrame) {
+	if r == nil {
+		return
+	}
+	participant := r.Participant(participantID)
+	if participant == nil {
+		return
+	}
+	_ = participant.ObserveSentAudio(codec.EncodePCM16(append([]int16(nil), frame.Samples...)))
+}
+
+func (r *recorder) RecordReceived(participantID string, frame audio.PCMFrame) {
+	if r == nil {
+		return
+	}
+	participant := r.Participant(participantID)
+	if participant == nil {
+		return
+	}
+	_ = participant.ObserveReceivedAudio(codec.EncodePCM16(append([]int16(nil), frame.Samples...)))
 }
 
 func (r *recorder) ObserveSpeakerAudio(sourceID string, targetIDs []string, pcm []byte) {

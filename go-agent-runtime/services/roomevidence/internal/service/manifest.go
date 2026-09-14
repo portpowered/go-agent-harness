@@ -2,6 +2,8 @@ package service
 
 import (
 	"errors"
+	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -13,11 +15,12 @@ import (
 )
 
 type timelineRecord struct {
-	TOffsetMS   float64           `json:"t_offset_ms"`
-	TUnixMS     int64             `json:"t_unix_ms"`
-	Event       string            `json:"event"`
-	Participant string            `json:"participant,omitempty"`
-	Fields      map[string]string `json:"fields,omitempty"`
+	TOffsetMS     float64           `json:"t_offset_ms"`
+	TUnixMS       int64             `json:"t_unix_ms"`
+	Event         string            `json:"event"`
+	Participant   string            `json:"participant,omitempty"`
+	ParticipantID string            `json:"participant_id,omitempty"`
+	Fields        map[string]string `json:"fields,omitempty"`
 }
 
 type diagnosticRecord struct {
@@ -206,8 +209,10 @@ func (r *recorder) writeManifest(result rooms.RoomResult, runErr error, endedAt 
 	}
 	manifest.Artifacts["room_mix"] = roomevidence.MixPath
 	manifest.Artifacts["room_timeline"] = roomevidence.TimelinePath
+	manifest.Artifacts["room_latency"] = roomevidence.LatencyPath
 	r.hashArtifactInto(manifest.ArtifactIntegrity, roomevidence.MixPath)
 	r.hashArtifactInto(manifest.ArtifactIntegrity, roomevidence.TimelinePath)
+	r.hashArtifactInto(manifest.ArtifactIntegrity, roomevidence.LatencyPath)
 	if runErr != nil {
 		manifest.Error = sanitizedError(runErr, r.secrets)
 	}
@@ -265,6 +270,18 @@ func (r *recorder) addParticipantArtifacts(manifest *roomManifest, id string, pa
 	if paths.Capture != "" {
 		manifest.Artifacts[id+".capture"] = paths.Capture
 		r.hashArtifactInto(manifest.ArtifactIntegrity, paths.Capture)
+		capturePath := filepath.Join(r.destination, filepath.FromSlash(paths.Capture))
+		r.mu.Lock()
+		captureExpected := r.captureSeen[id]
+		r.mu.Unlock()
+		if captureExpected {
+			if info, err := os.Lstat(capturePath); err != nil || info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+				if err == nil {
+					err = fmt.Errorf("capture artifact is not a regular file")
+				}
+				r.recordError(id, paths.Capture, fmt.Errorf("capture artifact unavailable: %w", err))
+			}
+		}
 	}
 }
 

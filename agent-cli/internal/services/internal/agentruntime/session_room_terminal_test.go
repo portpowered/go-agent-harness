@@ -12,6 +12,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
@@ -115,11 +116,11 @@ func TestRunRoom_FailureTerminalEvidenceIsAuthoritative(t *testing.T) {
 	}
 
 diagnosticsDrained:
-	manifestData := readRoomEvidenceFile(t, filepath.Join(opts.OutputDir, RoomEvidenceManifestPath))
+	manifestData := readRoomBundleFile(t, filepath.Join(opts.OutputDir, roomBundleManifestPath))
 	if strings.Contains(string(manifestData), secret) {
 		t.Fatalf("run manifest leaked provider secret: %s", manifestData)
 	}
-	var manifest roomEvidenceManifest
+	var manifest roomBundleManifest
 	if err := json.Unmarshal(manifestData, &manifest); err != nil {
 		t.Fatalf("decode run manifest: %v", err)
 	}
@@ -128,7 +129,7 @@ diagnosticsDrained:
 		t.Fatalf("manifest failed participant = %+v, result = %+v", manifestParticipant, failed)
 	}
 
-	timeline := readRoomEvidenceJSONLLines(t, filepath.Join(opts.OutputDir, RoomEvidenceTimelinePath))
+	timeline := readRoomBundleJSONLLines(t, filepath.Join(opts.OutputDir, roomevidence.TimelinePath))
 	var terminated *roomTimelineEntry
 	providerErrorSeen := false
 	for _, line := range timeline {
@@ -159,7 +160,7 @@ diagnosticsDrained:
 		}
 	}
 
-	failedDiagnostics := readRoomEvidenceJSONLLines(t, filepath.Join(opts.OutputDir, manifestParticipant.Artifacts.Diagnostics))
+	failedDiagnostics := readRoomBundleJSONLLines(t, filepath.Join(opts.OutputDir, manifestParticipant.Artifacts.Diagnostics))
 	failureCount := 0
 	for _, line := range failedDiagnostics {
 		var record selfPlayDiagnosticLine
@@ -400,8 +401,8 @@ func TestRoomCoordinator_FailureDuringGracePromotesRoomCause(t *testing.T) {
 
 func assertRoomParticipantTerminalManifestMatches(t *testing.T, outputDir string, result RoomResult) {
 	t.Helper()
-	manifestData := readRoomEvidenceFile(t, filepath.Join(outputDir, RoomEvidenceManifestPath))
-	var manifest roomEvidenceManifest
+	manifestData := readRoomBundleFile(t, filepath.Join(outputDir, roomBundleManifestPath))
+	var manifest roomBundleManifest
 	if err := json.Unmarshal(manifestData, &manifest); err != nil {
 		t.Fatalf("decode room terminal manifest: %v", err)
 	}
@@ -417,7 +418,7 @@ func assertRoomParticipantTerminalManifestMatches(t *testing.T, outputDir string
 
 	terminated := make(map[string]map[string]string, len(result.Participants))
 	bound := make(map[string]map[string]string, len(result.Participants))
-	for _, line := range readRoomEvidenceJSONLLines(t, filepath.Join(outputDir, RoomEvidenceTimelinePath)) {
+	for _, line := range readRoomBundleJSONLLines(t, filepath.Join(outputDir, roomevidence.TimelinePath)) {
 		var entry roomTimelineEntry
 		if err := json.Unmarshal(line, &entry); err != nil {
 			t.Fatalf("decode room terminal timeline: %v", err)

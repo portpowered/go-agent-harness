@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	roomevidencewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	roomswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
@@ -32,7 +33,8 @@ func TestExternalRoomRecordsNoCapturedSamplesTruthfully(t *testing.T) {
 	defer cancel()
 	scheduler := clock.NewDeterministic(time.Unix(123, 0), time.Millisecond)
 	host := roomswire.NewService(roomswire.Dependencies{
-		Clock: scheduler,
+		Clock:    scheduler,
+		Evidence: roomevidencewire.NewService(),
 		Media: rooms.MediaFactoryFunc(func(context.Context, rooms.Participant, rooms.AudioFormat) (rooms.MediaPorts, error) {
 			return rooms.MediaPorts{Capture: emptyRoomCapture{}}, nil
 		}),
@@ -482,7 +484,7 @@ func runEmbeddedBrowserRoom(t *testing.T, live session.LiveService, manifest roo
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	service := roomswire.NewService(roomswire.Dependencies{Live: live, Clock: clock.Real{}})
+	service := roomswire.NewService(roomswire.Dependencies{Live: live, Clock: clock.Real{}, Evidence: roomevidencewire.NewService()})
 	return service.Run(ctx, nil, rooms.RoomRunOptions{Manifest: manifest, BrowserCapabilitiesFactory: factory})
 }
 

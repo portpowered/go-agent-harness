@@ -11,7 +11,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/internal/service"
 )
 
-// NewService creates an inert room evidence factory.
+// Injectors from wire.go:
+
 func NewService() roomevidence.Service {
 	serviceService := service.New()
 	return serviceService

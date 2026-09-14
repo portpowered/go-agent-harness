@@ -10,7 +10,6 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/evidence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -96,25 +95,6 @@ func TestRunnerPassesOpeningPromptAndReplayCaptureToLive(t *testing.T) {
 		if request.Replay.Timing != session.LiveReplayTimingFast {
 			t.Errorf("%s replay timing = %q, want fast", request.SessionID, request.Replay.Timing)
 		}
-	}
-}
-
-func TestRunnerRecordsBoundedRoomEvidenceThroughGraphLifecycle(t *testing.T) {
-	service := &fakeLiveService{handles: map[string]*fakeLiveHandle{
-		"alice": newFakeLiveHandle(),
-		"bob":   newFakeLiveHandle(),
-	}}
-	output := t.TempDir()
-	runner := New(Dependencies{Live: service, Clock: platformclock.Real{}})
-	result, err := runner.Run(context.Background(), nil, rooms.RoomRunOptions{Manifest: testManifest(), OutputDir: output})
-	if err != nil {
-		t.Fatalf("Run error = %v", err)
-	}
-	if result.RecordingStatus != nil {
-		t.Fatalf("recording status = %+v, want healthy evidence", result.RecordingStatus)
-	}
-	if _, err := evidence.New().Load(output); err != nil {
-		t.Fatalf("load runner evidence: %v", err)
 	}
 }
 

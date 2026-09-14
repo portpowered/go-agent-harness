@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/evidence"
 	roommanifest "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/manifest"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -27,16 +27,18 @@ var (
 // MediaFactory is valid for headless provider sessions and keeps text-only
 // hosts free of device initialization.
 type Dependencies struct {
-	Live  session.LiveService
-	Media rooms.MediaFactory
-	Clock platformclock.Scheduler
+	Live     session.LiveService
+	Media    rooms.MediaFactory
+	Clock    platformclock.Scheduler
+	Evidence roomevidence.Service
 }
 
 type Runner struct {
-	live  session.LiveService
-	media rooms.MediaFactory
-	clock platformclock.Scheduler
-	now   func() time.Time
+	live     session.LiveService
+	media    rooms.MediaFactory
+	clock    platformclock.Scheduler
+	evidence roomevidence.Service
+	now      func() time.Time
 }
 
 func New(dependencies Dependencies) Runner {
@@ -44,7 +46,7 @@ func New(dependencies Dependencies) Runner {
 	if dependencies.Clock != nil {
 		now = dependencies.Clock.Now
 	}
-	return Runner{live: dependencies.Live, media: dependencies.Media, clock: dependencies.Clock, now: now}
+	return Runner{live: dependencies.Live, media: dependencies.Media, clock: dependencies.Clock, evidence: dependencies.Evidence, now: now}
 }
 
 func (r Runner) currentTime() time.Time {
@@ -148,7 +150,7 @@ func watchDurationBound(ctx context.Context, stop <-chan struct{}, state *runSta
 	}
 }
 
-func (r Runner) openParticipants(ctx, runCtx context.Context, state *runState, manifest rooms.Manifest, request rooms.RoomRunOptions, recorder *evidence.Recorder) {
+func (r Runner) openParticipants(ctx, runCtx context.Context, state *runState, manifest rooms.Manifest, request rooms.RoomRunOptions, recorder roomevidence.Recorder) {
 	for _, participant := range manifest.Participants {
 		if err := ctx.Err(); err != nil {
 			return
@@ -157,7 +159,7 @@ func (r Runner) openParticipants(ctx, runCtx context.Context, state *runState, m
 	}
 }
 
-func (r Runner) openOneParticipant(ctx context.Context, state *runState, participant rooms.Participant, request rooms.RoomRunOptions, recorder *evidence.Recorder) {
+func (r Runner) openOneParticipant(ctx context.Context, state *runState, participant rooms.Participant, request rooms.RoomRunOptions, recorder roomevidence.Recorder) {
 	active, err := r.openParticipant(ctx, state, participant, request, recorder)
 	if err != nil {
 		// Admission failures leave no viable participant runtime to retire. They
@@ -184,7 +186,7 @@ func (r Runner) openOneParticipant(ctx context.Context, state *runState, partici
 		state.add(active)
 	}
 	if recorder != nil {
-		recorder.RecordTimeline("participant_joined", participant.ID, map[string]string{"kind": string(roommanifest.NormalizeParticipantKind(participant.Kind))})
+		_ = recorder.RecordTimeline("participant_joined", participant.ID, map[string]string{"kind": string(roommanifest.NormalizeParticipantKind(participant.Kind))})
 	}
 	if request.OnParticipantReady != nil {
 		request.OnParticipantReady(rooms.RoomParticipantReady{
@@ -195,7 +197,7 @@ func (r Runner) openOneParticipant(ctx context.Context, state *runState, partici
 	}
 }
 
-func (r Runner) startGraph(ctx context.Context, state *runState, request rooms.RoomRunOptions, recorder *evidence.Recorder) *roomGraph {
+func (r Runner) startGraph(ctx context.Context, state *runState, request rooms.RoomRunOptions, recorder roomevidence.Recorder) *roomGraph {
 	active := state.snapshotActive()
 	if !needsRoomGraph(active) {
 		return nil
@@ -218,7 +220,7 @@ func (r Runner) startGraph(ctx context.Context, state *runState, request rooms.R
 	return graph
 }
 
-func (r Runner) finishRun(ctx context.Context, state *runState, graph *roomGraph, manifest rooms.Manifest, request rooms.RoomRunOptions, recorder *evidence.Recorder) (rooms.RoomResult, error) {
+func (r Runner) finishRun(ctx context.Context, state *runState, graph *roomGraph, manifest rooms.Manifest, request rooms.RoomRunOptions, recorder roomevidence.Recorder) (rooms.RoomResult, error) {
 	graphErr := error(nil)
 	if graph != nil {
 		graphErr = graph.Close()
@@ -247,7 +249,7 @@ func finishMissingParticipants(state *runState, result rooms.RoomResult, manifes
 	}
 }
 
-func (r Runner) finalizeRun(result rooms.RoomResult, runErr error, manifest rooms.Manifest, request rooms.RoomRunOptions, recorder *evidence.Recorder) (rooms.RoomResult, error) {
+func (r Runner) finalizeRun(result rooms.RoomResult, runErr error, manifest rooms.Manifest, request rooms.RoomRunOptions, recorder roomevidence.Recorder) (rooms.RoomResult, error) {
 	if request.OnParticipantTerminated != nil {
 		for _, participant := range manifest.Participants {
 			if value, ok := result.Participants[participant.ID]; ok {
@@ -259,69 +261,53 @@ func (r Runner) finalizeRun(result rooms.RoomResult, runErr error, manifest room
 		if finalizeErr := recorder.Finalize(result, runErr, r.currentTime()); finalizeErr != nil {
 			// Finalization failures are represented by the recorder's health
 			// projection; they must not replace the room's runtime result.
-			recorder.ApplyResult(&result)
+			recorder.ApplyRecordingHealth(&result)
 			return result, runErr
 		}
-		recorder.ApplyResult(&result)
+		recorder.ApplyRecordingHealth(&result)
 	}
 	return result, runErr
 }
 
-func (r Runner) newRecorder(request rooms.RoomRunOptions, manifest rooms.Manifest) (*evidence.Recorder, error) {
+func (r Runner) newRecorder(request rooms.RoomRunOptions, manifest rooms.Manifest) (roomevidence.Recorder, error) {
 	if strings.TrimSpace(request.OutputDir) == "" || !manifest.Room.RecordingEnabled() {
 		return nil, nil
 	}
-	return evidence.NewRecorder(request.OutputDir, manifest, request.AudioFormat, r.currentTime(), r.clock)
+	if r.evidence == nil {
+		return nil, rooms.ErrRoomServiceUnavailable
+	}
+	return r.evidence.Open(roomevidence.Options{Destination: request.OutputDir, Manifest: manifest, AudioFormat: request.AudioFormat, StartedAt: r.currentTime(), Clock: r.clock})
 }
 
-func installRecorder(request rooms.RoomRunOptions, recorder *evidence.Recorder) rooms.RoomRunOptions {
+func installRecorder(request rooms.RoomRunOptions, recorder roomevidence.Recorder) rooms.RoomRunOptions {
 	if recorder == nil {
 		return request
 	}
 	diagnosticCallback := request.OnDiagnostic
 	request.OnDiagnostic = func(participantID string, record rooms.RoomDiagnosticRecord) {
-		recorder.RecordDiagnostic(participantID, record)
+		if participant := recorder.Participant(participantID); participant != nil {
+			_ = participant.RecordDiagnostic(roomevidence.DiagnosticRecord{Event: record.Event, Fields: record.Fields, At: record.At})
+		}
 		if diagnosticCallback != nil {
 			diagnosticCallback(participantID, record)
 		}
 	}
 	readyCallback := request.OnParticipantReady
 	request.OnParticipantReady = func(value rooms.RoomParticipantReady) {
-		recorder.SetReady(value)
+		_ = recorder.SetParticipantReady(value)
 		if readyCallback != nil {
 			readyCallback(value)
 		}
 	}
 	terminatedCallback := request.OnParticipantTerminated
 	request.OnParticipantTerminated = func(value rooms.RoomParticipantResult) {
-		recorder.SetTerminated(value)
+		_ = recorder.SetParticipantTerminated(value)
 		if terminatedCallback != nil {
 			terminatedCallback(value)
 		}
 	}
 	request.EventSink = recordingEventSink{host: request.EventSink, recorder: recorder}
 	return request
-}
-
-type recordingEventSink struct {
-	host     rooms.EventSink
-	recorder *evidence.Recorder
-}
-
-func (s recordingEventSink) Publish(ctx context.Context, participantID string, event session.LiveEvent) error {
-	var hostErr error
-	if s.host != nil {
-		hostErr = s.host.Publish(ctx, participantID, event)
-	}
-	if s.recorder != nil {
-		// Recorder errors degrade evidence only. They must not interrupt a
-		// healthy provider session or stall the bounded live event drain.
-		if recordErr := s.recorder.Publish(ctx, participantID, event); recordErr != nil {
-			// Publish records enqueue and artifact failures in the recorder's
-			// health state. The host sink remains the only room-failure signal.
-		}
-	}
-	return hostErr
 }
 
 func diagnostic(event string, err error, now func() time.Time) rooms.RoomDiagnosticRecord {
