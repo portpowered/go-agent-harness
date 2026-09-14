@@ -22,7 +22,7 @@ func runBrowserConversation(ctx context.Context, request browserconversation.Run
 	}
 	defer execution.close()
 	execution.start(request)
-	execution.cleanup(request)
+	execution.cleanup(ctx, request)
 	return execution.finish(request)
 }
 
@@ -108,7 +108,7 @@ func (b *evidenceBroker) Invoke(ctx context.Context, request browserconversation
 	if err != nil {
 		return result, err
 	}
-	if step != nil && result.State == "completed" && isTerminal(result.State) && expectedState(step) != nil {
+	if step != nil && result.State == browserConversationInvocationCompleted && isTerminal(result.State) && expectedState(step) != nil {
 		b.observeOracle(ctx, step, browserconversation.BrowserConversationOracleAfter)
 	}
 	return result, nil
@@ -188,16 +188,16 @@ func (b *evidenceBroker) observeOracle(ctx context.Context, step *browserconvers
 		}
 		return
 	}
-	if err := b.run.ObserveOracleSnapshot(browserconversation.BrowserConversationOracleSnapshot{StepID: step.ID, PageID: transition.PageID, Phase: phase, State: state, Generation: b.generation()}); err != nil && b.tracker != nil {
+	if err := b.run.ObserveOracleSnapshot(browserconversation.BrowserConversationOracleSnapshot{StepID: step.ID, PageID: transition.PageID, Phase: phase, State: state, Generation: b.generation(ctx)}); err != nil && b.tracker != nil {
 		b.tracker.setError(err)
 	}
 }
 
-func (b *evidenceBroker) generation() uint64 {
+func (b *evidenceBroker) generation(ctx context.Context) uint64 {
 	if b == nil {
 		return 0
 	}
-	selected, err := b.inner.Selected(context.Background())
+	selected, err := b.inner.Selected(ctx)
 	if err != nil {
 		return 0
 	}
@@ -331,18 +331,18 @@ func safeText(value string) string {
 		} else {
 			builder.WriteRune(char)
 		}
-		if builder.Len() >= 256 {
+		if builder.Len() >= browserConversationMaxSafeTextBytes {
 			break
 		}
 	}
 	return strings.TrimSpace(builder.String())
 }
 
-func lifecycleOutcome(rootErr error, ctx context.Context) browserconversation.BrowserConversationLifecycleOutcome {
-	if errors.Is(rootErr, context.DeadlineExceeded) || (ctx != nil && errors.Is(ctx.Err(), context.DeadlineExceeded)) {
+func lifecycleOutcome(rootErr, contextErr error) browserconversation.BrowserConversationLifecycleOutcome {
+	if errors.Is(rootErr, context.DeadlineExceeded) || errors.Is(contextErr, context.DeadlineExceeded) {
 		return browserconversation.BrowserConversationLifecycleTimedOut
 	}
-	if errors.Is(rootErr, context.Canceled) || (ctx != nil && errors.Is(ctx.Err(), context.Canceled)) {
+	if errors.Is(rootErr, context.Canceled) || errors.Is(contextErr, context.Canceled) {
 		return browserconversation.BrowserConversationLifecycleCanceled
 	}
 	if rootErr != nil {

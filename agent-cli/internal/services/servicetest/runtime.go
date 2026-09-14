@@ -3,6 +3,10 @@
 package servicetest
 
 import (
+	"context"
+	"io"
+	"time"
+
 	sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	serviceDevices "github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices"
 	impl "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime"
@@ -28,12 +32,30 @@ var NewOpenAIRealtimeSessionInferencerWithOptions = impl.NewOpenAIRealtimeSessio
 var NewOpenAIRealtimeSessionInferencerWithToolsAndOptions = impl.NewOpenAIRealtimeSessionInferencerWithToolsAndOptions
 var NewGrokSessionInferencer = impl.NewGrokSessionInferencer
 var NewGrokSessionInferencerWithOptions = impl.NewGrokSessionInferencerWithOptions
-var PrepareRTCDeviceBindings = impl.PrepareRTCDeviceBindings
-var ValidateSessionAudioDeviceConflicts = serviceDevices.ValidateSessionAudioDeviceConflicts
-var RunSession = impl.RunSession
-var RunSessionWithInstructions = impl.RunSessionWithInstructions
-var RunSessionWithMaxDuration = impl.RunSessionWithMaxDuration
-var RunSessionWithMaxDurationClock = impl.RunSessionWithMaxDurationClock
+
+func PrepareRTCDeviceBindings(request RTCDeviceBindingRequest) (*RTCDeviceBinding, error) {
+	return impl.PrepareRTCDeviceBindings(request)
+}
+
+func ValidateSessionAudioDeviceConflicts(audioInFile, audioOutFile, audioInDevice, audioOutDevice bool) error {
+	return serviceDevices.ValidateSessionAudioDeviceConflicts(audioInFile, audioOutFile, audioInDevice, audioOutDevice)
+}
+
+func RunSession(ctx context.Context, out io.Writer, opts SessionRunOptions) error {
+	return impl.RunSession(ctx, out, opts)
+}
+
+func RunSessionWithInstructions(ctx context.Context, out io.Writer, opts SessionRunOptions, systemPrompt string) error {
+	return impl.RunSessionWithInstructions(ctx, out, opts, systemPrompt)
+}
+
+func RunSessionWithMaxDuration(ctx context.Context, out io.Writer, opts SessionRunOptions, maxDuration time.Duration) error {
+	return impl.RunSessionWithMaxDuration(ctx, out, opts, maxDuration)
+}
+
+func RunSessionWithMaxDurationClock(ctx context.Context, out io.Writer, opts SessionRunOptions, maxDuration time.Duration, durationClock SessionDurationClock) error {
+	return impl.RunSessionWithMaxDurationClock(ctx, out, opts, maxDuration, durationClock)
+}
 
 const ParticipantTerminationEnded = impl.ParticipantTerminationEnded
 const ParticipantTerminationError = impl.ParticipantTerminationError
@@ -41,6 +63,7 @@ const ParticipantTerminationError = impl.ParticipantTerminationError
 type InvalidOpenAIRealtimeVoiceError = sessioncontract.InvalidOpenAIRealtimeVoiceError
 type RTCMediaEndpoints = impl.RTCMediaEndpoints
 type RTCMediaSession = impl.RTCMediaSession
+type RTCDeviceBinding = impl.RTCDeviceBinding
 type RTCDeviceBindingRequest = impl.RTCDeviceBindingRequest
 type RTCDeviceBindingError = impl.RTCDeviceBindingError
 type ScheduledAudioInput = impl.ScheduledAudioInput
@@ -50,6 +73,7 @@ type SessionAudioInput = impl.SessionAudioInput
 type SessionTextSeed = impl.SessionTextSeed
 type SessionDiagnosticRecord = impl.SessionDiagnosticRecord
 type SessionDurationTimer = impl.SessionDurationTimer
+type SessionDurationClock = impl.SessionDurationClock
 type SessionImageContinuationError = impl.SessionImageContinuationError
 type SessionRTCComponents = impl.SessionRTCComponents
 type SessionRTCDataPlane = impl.SessionRTCDataPlane

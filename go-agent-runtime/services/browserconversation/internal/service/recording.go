@@ -16,6 +16,8 @@ const (
 	defaultRecorderEvents = 4096
 	defaultRecorderBytes  = 16 << 20
 	recorderCloseTimeout  = time.Second
+	maxRecordingTextBytes = 4096
+	recordingRedactedText = "[redacted]"
 )
 
 type recorder struct {
@@ -52,9 +54,6 @@ func newRecorder(request browserconversation.RecordingRequest) (browserconversat
 func (r *recorder) Start(ctx context.Context) {
 	if r == nil {
 		return
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	r.mu.Lock()
 	if r.started || r.closing || r.closed {
@@ -223,7 +222,7 @@ func safeRecordingJSON(raw json.RawMessage, credentials []string) any {
 		return nil
 	}
 	text := sanitizeRecordingText(string(raw), credentials)
-	if text == "[redacted]" {
+	if text == recordingRedactedText {
 		return text
 	}
 	var value any
@@ -238,11 +237,11 @@ func sanitizeRecordingText(value string, credentials []string) string {
 	for _, credential := range credentials {
 		credential = strings.TrimSpace(credential)
 		if credential != "" {
-			value = strings.ReplaceAll(value, credential, "[redacted]")
+			value = strings.ReplaceAll(value, credential, recordingRedactedText)
 		}
 	}
 	if browserConversationContainsCredentialMarker(value) {
-		return "[redacted]"
+		return recordingRedactedText
 	}
 	var builder strings.Builder
 	for _, char := range value {
@@ -251,7 +250,7 @@ func sanitizeRecordingText(value string, credentials []string) string {
 		} else {
 			builder.WriteRune(char)
 		}
-		if builder.Len() >= 4096 {
+		if builder.Len() >= maxRecordingTextBytes {
 			break
 		}
 	}

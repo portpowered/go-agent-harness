@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation"
 )
 
@@ -176,6 +177,65 @@ func (*Service) NewCommandValidator(config browserconversation.BrowserConversati
 	command.Dir = config.Dir
 	command.Env = append([]string(nil), config.Env...)
 	return command, nil
+}
+
+func (t *evidenceTracker) observe(message messages.StreamMessage) {
+	if t == nil || t.suppress(message) {
+		return
+	}
+	switch message.Type {
+	case messages.StreamTypeTranscriptEnd:
+		t.observeCustomerTurn(message)
+	case messages.StreamTypeMessageStart:
+		t.beginAssistantMessage()
+	case messages.StreamTypeTextDelta:
+		t.observeTextDelta(message)
+	case messages.StreamTypeMessageEnd:
+		t.observeAssistantTurn(message)
+	case messages.StreamTypeTextStart, messages.StreamTypeTextEnd,
+		messages.StreamTypeToolCallStart, messages.StreamTypeToolCallDelta, messages.StreamTypeToolCallEnd,
+		messages.StreamTypeAudioStart, messages.StreamTypeAudioDelta, messages.StreamTypeAudioEnd,
+		messages.StreamTypeImageStart, messages.StreamTypeImageDelta, messages.StreamTypeImageEnd,
+		messages.StreamTypeVideoStart, messages.StreamTypeVideoDelta, messages.StreamTypeVideoEnd,
+		messages.StreamTypeFileStart, messages.StreamTypeFileDelta, messages.StreamTypeFileEnd,
+		messages.StreamTypeEmbeddingStart, messages.StreamTypeEmbeddingDelta, messages.StreamTypeEmbeddingEnd,
+		messages.StreamTypeReasoningStart, messages.StreamTypeReasoningDelta, messages.StreamTypeReasoningEnd,
+		messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped,
+		messages.StreamTypeTranscriptStart, messages.StreamTypeTranscriptDelta,
+		messages.StreamTypeInputItemAdded, messages.StreamTypePong,
+		messages.StreamTypeSessionOpen, messages.StreamTypeSessionClose, messages.StreamTypeSessionCreated,
+		messages.StreamTypeSessionUpdated, messages.StreamTypeSessionUpdate,
+		messages.StreamTypeResponseCancel, messages.StreamTypeResponseCreate,
+		messages.StreamTypeRefusal, messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo,
+		messages.StreamTypeError, messages.StreamTypeSystemFullMessage:
+		return
+	}
+}
+
+func (t *evidenceTracker) noteLateEventLocked(message messages.StreamMessage) {
+	switch message.Type {
+	case messages.StreamTypeTranscriptEnd, messages.StreamTypeMessageStart, messages.StreamTypeTextDelta, messages.StreamTypeMessageEnd, messages.StreamTypeAudioDelta, messages.StreamTypeToolCallEnd, messages.StreamTypeToolCallStart:
+		t.suppressedLateEvents++
+		if err := t.run.ObserveInvocationPublication("late_event", t.inFlightInvocation, browserConversationInvocationCanceled, false); err != nil {
+			t.setErrorLocked(err)
+		}
+	case messages.StreamTypeTextStart, messages.StreamTypeTextEnd, messages.StreamTypeToolCallDelta,
+		messages.StreamTypeAudioStart, messages.StreamTypeAudioEnd,
+		messages.StreamTypeImageStart, messages.StreamTypeImageDelta, messages.StreamTypeImageEnd,
+		messages.StreamTypeVideoStart, messages.StreamTypeVideoDelta, messages.StreamTypeVideoEnd,
+		messages.StreamTypeFileStart, messages.StreamTypeFileDelta, messages.StreamTypeFileEnd,
+		messages.StreamTypeEmbeddingStart, messages.StreamTypeEmbeddingDelta, messages.StreamTypeEmbeddingEnd,
+		messages.StreamTypeReasoningStart, messages.StreamTypeReasoningDelta, messages.StreamTypeReasoningEnd,
+		messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped,
+		messages.StreamTypeTranscriptStart, messages.StreamTypeTranscriptDelta,
+		messages.StreamTypeInputItemAdded, messages.StreamTypePong,
+		messages.StreamTypeSessionOpen, messages.StreamTypeSessionClose, messages.StreamTypeSessionCreated,
+		messages.StreamTypeSessionUpdated, messages.StreamTypeSessionUpdate,
+		messages.StreamTypeResponseCancel, messages.StreamTypeResponseCreate,
+		messages.StreamTypeRefusal, messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo,
+		messages.StreamTypeError, messages.StreamTypeSystemFullMessage:
+		return
+	}
 }
 
 var _ browserconversation.Service = (*Service)(nil)

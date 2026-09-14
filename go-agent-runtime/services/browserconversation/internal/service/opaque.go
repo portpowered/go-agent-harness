@@ -40,7 +40,7 @@ func safeBrowserConversationText(value string) string {
 		return ""
 	}
 	if browserConversationContainsCredentialMarker(value) {
-		return "[redacted]"
+		return recordingRedactedText
 	}
 	var builder strings.Builder
 	for _, char := range value {

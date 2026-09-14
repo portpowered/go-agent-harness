@@ -116,7 +116,6 @@ func (t *evidenceTracker) readyInvocationStepLocked() string {
 }
 
 type browserConversationExecution struct {
-	ctx         context.Context
 	scenario    browserconversation.BrowserConversationScenario
 	normalAudio []browserconversation.ScheduledAudioInput
 	run         *browserconversation.BrowserConversationRun
@@ -130,9 +129,6 @@ type browserConversationExecution struct {
 }
 
 func newBrowserConversationExecution(ctx context.Context, request browserconversation.RunRequest) (*browserConversationExecution, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	scenario, err := request.Scenario.Admit()
 	if err != nil {
 		return nil, err
@@ -149,7 +145,7 @@ func newBrowserConversationExecution(ctx context.Context, request browserconvers
 	runContext, cancel := context.WithTimeout(ctx, scenario.RunTimeout)
 	tracker := newEvidenceTracker(run, scenario)
 	return &browserConversationExecution{
-		ctx: ctx, scenario: scenario, normalAudio: normalAudio, run: run,
+		scenario: scenario, normalAudio: normalAudio, run: run,
 		runContext: runContext, cancel: cancel, tracker: tracker,
 		interrupter: newInterruptionController(run, tracker, scenario, heldAudio),
 		lifecycle:   browserconversation.BrowserConversationLifecycleEvidence{Outcome: browserconversation.BrowserConversationLifecycleNotStarted},
@@ -234,23 +230,25 @@ func defaultCustomerNavigate(ctx context.Context, fixture browserconversation.Fi
 	return fixture.Navigate(ctx, navigation)
 }
 
-func (e *browserConversationExecution) cleanup(request browserconversation.RunRequest) {
+func (e *browserConversationExecution) cleanup(ctx context.Context, request browserconversation.RunRequest) {
 	if e == nil {
 		return
 	}
 	e.add(e.tracker.err())
 	if count := e.tracker.lateEventCount(); count > 0 {
-		_ = e.run.RecordCancellation(browserconversation.BrowserConversationCancellationEvidence{LateEventsSuppressed: count})
+		if err := e.run.RecordCancellation(browserconversation.BrowserConversationCancellationEvidence{LateEventsSuppressed: count}); err != nil {
+			e.add(err)
+		}
 	}
 	if e.fixture != nil {
-		e.cleanupFixture(request)
+		e.cleanupFixture(ctx, request)
 	}
 	e.add(e.tracker.err())
-	e.lifecycle.Outcome = lifecycleOutcome(e.rootErr, e.runContext)
+	e.lifecycle.Outcome = lifecycleOutcome(e.rootErr, e.runContext.Err())
 	e.add(e.run.RecordLifecycle(e.lifecycle))
 }
 
-func (e *browserConversationExecution) cleanupFixture(request browserconversation.RunRequest) {
+func (e *browserConversationExecution) cleanupFixture(ctx context.Context, request browserconversation.RunRequest) {
 	if closeErr := e.fixture.Close(); closeErr != nil {
 		e.add(errors.Join(browserconversation.ErrBrowserConversationCleanup, closeErr))
 	}
@@ -261,7 +259,8 @@ func (e *browserConversationExecution) cleanupFixture(request browserconversatio
 			return fixture.ProbeTab(ctx, pageID)
 		}
 	}
-	if health, err := probe(context.WithoutCancel(e.ctx), e.fixture, pageID); err != nil {
+	cleanupContext := context.WithoutCancel(ctx)
+	if health, err := probe(cleanupContext, e.fixture, pageID); err != nil {
 		e.add(errors.Join(browserconversation.ErrBrowserConversationCleanup, err))
 	} else {
 		e.lifecycle.ExternalBrowserID, e.lifecycle.ExternalTargetID = health.BrowserID, health.TargetID
@@ -270,7 +269,7 @@ func (e *browserConversationExecution) cleanupFixture(request browserconversatio
 		e.lifecycle.ExternalTabMutation = health.MutationSucceeded
 	}
 	if request.Oracle != nil {
-		state, err := request.Oracle.ReadState(context.WithoutCancel(e.ctx), pageID)
+		state, err := request.Oracle.ReadState(cleanupContext, pageID)
 		if err != nil {
 			e.add(errors.Join(browserconversation.ErrBrowserConversationCleanup, err))
 		} else {

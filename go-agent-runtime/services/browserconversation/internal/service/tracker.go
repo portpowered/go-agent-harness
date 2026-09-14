@@ -72,9 +72,6 @@ func (t *evidenceTracker) invocationStep(ctx context.Context) (string, error) {
 	if t == nil {
 		return "", errors.New("browser conversation evidence tracker is nil")
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	for {
 		t.mu.Lock()
 		if t.firstErr != nil {
@@ -114,22 +111,6 @@ func (t *evidenceTracker) stepHasInvocationLocked(stepID string) bool {
 		}
 	}
 	return false
-}
-
-func (t *evidenceTracker) observe(message messages.StreamMessage) {
-	if t == nil || t.suppress(message) {
-		return
-	}
-	switch message.Type {
-	case messages.StreamTypeTranscriptEnd:
-		t.observeCustomerTurn(message)
-	case messages.StreamTypeMessageStart:
-		t.beginAssistantMessage()
-	case messages.StreamTypeTextDelta:
-		t.observeTextDelta(message)
-	case messages.StreamTypeMessageEnd:
-		t.observeAssistantTurn(message)
-	}
 }
 
 func (t *evidenceTracker) suppress(message messages.StreamMessage) bool {
@@ -241,7 +222,10 @@ func (t *evidenceTracker) executeCancellation(action browserConversationCancelAc
 		t.setError(err)
 		return
 	}
-	_ = t.run.ObserveInvocationPublication("cancel", action.id, "canceled", true)
+	if err := t.run.ObserveInvocationPublication("cancel", action.id, browserConversationInvocationCanceled, true); err != nil {
+		t.setError(err)
+		return
+	}
 	if err := t.run.RecordCancellation(browserconversation.BrowserConversationCancellationEvidence{Requested: true, InvocationID: action.id, CancelStepID: action.step, Reason: action.reason}); err != nil {
 		t.setError(err)
 		return
@@ -307,14 +291,6 @@ func (t *evidenceTracker) nextStepLocked() *browserconversation.BrowserConversat
 		return nil
 	}
 	return &t.scenario.Steps[t.customerAt]
-}
-
-func (t *evidenceTracker) noteLateEventLocked(message messages.StreamMessage) {
-	switch message.Type {
-	case messages.StreamTypeTranscriptEnd, messages.StreamTypeMessageStart, messages.StreamTypeTextDelta, messages.StreamTypeMessageEnd, messages.StreamTypeAudioDelta, messages.StreamTypeToolCallEnd, messages.StreamTypeToolCallStart:
-		t.suppressedLateEvents++
-		_ = t.run.ObserveInvocationPublication("late_event", t.inFlightInvocation, "canceled", false)
-	}
 }
 
 func (t *evidenceTracker) lateEventCount() int {
