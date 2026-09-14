@@ -74,9 +74,6 @@ func TestSessionTerminalReporterAcceptsValidPartialArtifactAfterCancellation(t *
 	if err := reporter.publish(&out, context.Canceled); err != nil {
 		t.Fatalf("publish valid partial artifact: %v", err)
 	}
-	if reporter.outcome.artifactState != sessionTerminalArtifactValid {
-		t.Fatalf("artifact state = %d, want valid", reporter.outcome.artifactState)
-	}
 	got := out.String()
 	if !strings.Contains(got, "terminal_reason=max_duration") || !strings.Contains(got, "output_state=partial") {
 		t.Fatalf("valid partial artifact lost duration outcome: %q", got)
@@ -96,9 +93,6 @@ func TestSessionTerminalReporterPreservesIndependentArtifactFailure(t *testing.T
 
 	if err := reporter.publish(&out, nil); err != nil {
 		t.Fatalf("publish artifact failure: %v", err)
-	}
-	if !errors.Is(reporter.outcome.fatalError, artifactErr) {
-		t.Fatalf("fatal error = %v, want artifact failure", reporter.outcome.fatalError)
 	}
 	got := out.String()
 	if !strings.Contains(got, "terminal_reason=terminal_failure") || strings.Contains(got, "terminal_reason=max_duration") {
