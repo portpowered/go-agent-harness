@@ -506,14 +506,6 @@ func (s *durationTerminalDrainSession) end() {
 
 func (s *durationTerminalDrainSession) RTCMedia() audio.MediaEndpoints { return s.media }
 
-type durationTerminalDrainFailingOutbound struct{ err error }
-
-func (m *durationTerminalDrainFailingOutbound) WriteFrame(context.Context, audio.PCMFrame) error {
-	return m.err
-}
-
-func (*durationTerminalDrainFailingOutbound) Close() error { return nil }
-
 type durationTerminalDrainFailingWriter struct {
 	target    io.Writer
 	failAfter int

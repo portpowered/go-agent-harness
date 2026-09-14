@@ -3,6 +3,7 @@ package devices
 import (
 	"errors"
 	"fmt"
+	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
 
@@ -11,6 +12,12 @@ type sessionAudioConflictError string
 func (e sessionAudioConflictError) Error() string { return string(e) }
 
 const ErrSessionAudioInputConflict sessionAudioConflictError = "--audio-in and --audio-in-device (audio device input) cannot be used together"
+
+// ValidateRemoteEndpoint keeps endpoint admission on the device service
+// boundary while allowing the CLI to reject it before replay/file setup.
+func ValidateRemoteEndpoint(endpoint string) error {
+	return runtimeDevices.RemoteEndpoint(endpoint).Validate()
+}
 
 const (
 	// SessionAudioInDeviceFlag is the session flag that selects the RTC input

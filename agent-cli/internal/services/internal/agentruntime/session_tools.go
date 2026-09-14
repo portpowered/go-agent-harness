@@ -1,3 +1,4 @@
+//lint:file-ignore U1000 package-private executor seams are exercised by package tests.
 package agentruntime
 
 import (
@@ -34,7 +35,6 @@ const (
 	// a Go error instead of its normal WebMCP envelope.
 	SessionPageSightUnavailableErrorCode = "page_sight_unavailable"
 )
-
 // sessionToolLifecycleMux preserves the optional recording hook while adding
 // the participant-owned liveness boundary. A running local tool must suppress
 // the provider watchdog; the next accepted response.create re-arms it.

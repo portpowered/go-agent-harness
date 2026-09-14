@@ -414,15 +414,6 @@ type liveTerminalDrainFailingAudioSource struct {
 func (s *liveTerminalDrainFailingAudioSource) ReadFrame(context.Context, []int16) error { return s.err }
 func (*liveTerminalDrainFailingAudioSource) Close() error                               { return nil }
 
-type liveTerminalDrainFailingOutboundMedia struct {
-	err error
-}
-
-func (m *liveTerminalDrainFailingOutboundMedia) WriteFrame(context.Context, audio.PCMFrame) error {
-	return m.err
-}
-func (*liveTerminalDrainFailingOutboundMedia) Close() error { return nil }
-
 type liveTerminalDrainFailingWriter struct {
 	target    io.Writer
 	failAfter int

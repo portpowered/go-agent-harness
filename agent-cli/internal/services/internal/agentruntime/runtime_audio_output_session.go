@@ -103,7 +103,7 @@ func newRuntimeAudioOutputSession(ctx context.Context, inner messages.Session, o
 		closeRequested: make(chan struct{}),
 		innerCloseDone: make(chan struct{}),
 	}
-	go s.forward()
+	go s.forward(ctx)
 	return s
 }
 func (s *runtimeAudioOutputSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
@@ -170,44 +170,44 @@ func (s *runtimeAudioOutputSession) TerminalError() error {
 	return terminalSessionError(s.Session)
 }
 
-func (s *runtimeAudioOutputSession) forward() {
+func (s *runtimeAudioOutputSession) forward(ctx context.Context) {
 	defer func() {
 		s.closeInner()
 		close(s.done)
 	}()
 	input := s.Session.Receive()
 	for {
-		if s.ctx.Err() != nil {
-			s.drainAfterCancellation(input)
+		if ctx.Err() != nil {
+			s.drainAfterCancellation(ctx, input)
 			return
 		}
-		if s.forwardNext(input) {
+		if s.forwardNext(ctx, input) {
 			continue
 		}
-		if s.ctx.Err() != nil {
-			s.drainAfterCancellation(input)
+		if ctx.Err() != nil {
+			s.drainAfterCancellation(ctx, input)
 		} else {
 			select {
 			case <-s.closeRequested:
-				s.drainAfterCancellation(input)
+				s.drainAfterCancellation(ctx, input)
 			default:
 			}
 		}
 		return
 	}
 }
-func (s *runtimeAudioOutputSession) forwardNext(input *messages.TypedBuffer[messages.StreamMessage]) bool {
+func (s *runtimeAudioOutputSession) forwardNext(ctx context.Context, input *messages.TypedBuffer[messages.StreamMessage]) bool {
 	select {
 	case msg := <-input.Chan():
-		retainingCtx, cancel := context.WithTimeout(context.WithoutCancel(s.ctx), sessionStragglerDrainWallSafety)
+		retainingCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), sessionStragglerDrainWallSafety)
 		defer cancel()
-		return s.forwardMessageWithContext(retainingCtx, msg, s.ctx.Err() != nil)
+		return s.forwardMessageWithContext(retainingCtx, msg, ctx.Err() != nil)
 	case <-s.Session.Done():
-		if s.ctx.Err() == nil {
-			s.drain(input, s.ctx, false)
+		if ctx.Err() == nil {
+			s.drain(input, ctx, false)
 		}
 	case <-s.closeRequested:
-	case <-s.ctx.Done():
+	case <-ctx.Done():
 	}
 	return false
 }
@@ -222,9 +222,9 @@ func (s *runtimeAudioOutputSession) drain(input *messages.TypedBuffer[messages.S
 		}
 	}
 }
-func (s *runtimeAudioOutputSession) drainAfterCancellation(input *messages.TypedBuffer[messages.StreamMessage]) {
+func (s *runtimeAudioOutputSession) drainAfterCancellation(ctx context.Context, input *messages.TypedBuffer[messages.StreamMessage]) {
 	close(s.drainStarted)
-	retainCtx, cancel := context.WithTimeout(context.WithoutCancel(s.ctx), sessionStragglerDrainWallSafety)
+	retainCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), sessionStragglerDrainWallSafety)
 	defer cancel()
 	terminal := time.NewTimer(sessionStragglerDrainWallSafety)
 	defer terminal.Stop()

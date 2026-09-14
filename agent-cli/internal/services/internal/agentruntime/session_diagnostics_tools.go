@@ -1,3 +1,4 @@
+//lint:file-ignore U1000 package-private diagnostic projection seams are exercised by package tests.
 package agentruntime
 
 import (
@@ -100,7 +101,6 @@ func (o *sessionProgressObserver) noteToolResultAccepted(callID string) {
 		}
 	}
 }
-
 // noteToolContinuationRequested advances every accepted result in the
 // current provider batch at the explicit response.create send boundary. The
 // control event carries no call ID because one provider response may continue

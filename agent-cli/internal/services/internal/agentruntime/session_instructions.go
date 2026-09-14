@@ -159,7 +159,7 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 	if seed.Present {
 		plan.loop.Prompt = nextSessionTextWirePrompt()
 	}
-	audioOut, err := newRuntimeAudioOutputForPlan(&plan, audioPath, out, nil)
+	audioOut, err := newRuntimeAudioOutputForPlanContext(ctx, &plan, audioPath, out, nil)
 	if err != nil {
 		return fmt.Errorf("--audio-out %q: %w", audioPath, err)
 	}
@@ -210,11 +210,15 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 // CLI host edge; prompt selection, skills ordering, scope formatting and all
 // model-facing policy decisions live behind the runtime contract.
 func resolveSessionInstructions(opts SessionRunOptions, systemPrompt string) (string, error) {
+	return resolveSessionInstructionsContext(context.Background(), opts, systemPrompt)
+}
+
+func resolveSessionInstructionsContext(ctx context.Context, opts SessionRunOptions, systemPrompt string) (string, error) {
 	request, err := newSessionInstructionRequest(opts, systemPrompt)
 	if err != nil {
 		return "", err
 	}
-	result, err := runtimeSessionWire.NewInstructionService().Resolve(context.Background(), request)
+	result, err := runtimeSessionWire.NewInstructionService().Resolve(ctx, request)
 	if err != nil {
 		return "", err
 	}

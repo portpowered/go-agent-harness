@@ -14,10 +14,10 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
-// streamSessionAudioInput is the loop adapter for the public audio service.
+// pumpAudioInput is the loop adapter for the public audio service.
 // It translates bounded PCM frames and turn boundaries into loop messages;
 // framing, conversion, pacing and tail state stay in audioio.
-func streamSessionAudioInput(ctx context.Context, loop *agentloop.AgentLoop, source *runtimeAudioSource) (runErr error) {
+func pumpAudioInput(ctx context.Context, loop *agentloop.AgentLoop, source *runtimeAudioSource) (runErr error) {
 	if source == nil || source.source == nil {
 		return fmt.Errorf("audio input source is unavailable")
 	}
@@ -31,6 +31,7 @@ func streamSessionAudioInput(ctx context.Context, loop *agentloop.AgentLoop, sou
 	input, err := audioiowire.NewService().OpenInput(ctx, audioio.InputRequest{
 		Source: source.source, SourceRate: source.sourceRate, ProviderRate: source.providerRate,
 		Pace: source.paced, Continuous: source.continuous || source.reader != nil, PadFinalFrame: source.paced && !source.continuous, Scheduler: scheduler,
+		EmitBoundaryOnSilence: source.emitBoundaryOnSilence,
 		OnTurnBoundary: func(boundaryCtx context.Context) error {
 			return sendSessionAudioBoundary(boundaryCtx, loop, source)
 		},
@@ -38,7 +39,11 @@ func streamSessionAudioInput(ctx context.Context, loop *agentloop.AgentLoop, sou
 	if err != nil {
 		return &RuntimeAudioInputError{Kind: RuntimeAudioInputFormat, Path: source.path, Err: err}
 	}
-	defer input.Close()
+	defer func() {
+		if closeErr := input.Close(); closeErr != nil {
+			runErr = errors.Join(runErr, closeErr)
+		}
+	}()
 	err = input.Pump(ctx, &sessionAudioOutbound{loop: loop, source: source})
 	if errors.Is(err, audioio.ErrEmptyInput) {
 		return emptyRuntimeAudioInput(source.path)
@@ -50,7 +55,10 @@ func audioInputScheduler(source platformclock.Source, paced bool) platformclock.
 	if !paced {
 		return nil
 	}
-	scheduler, _ := platformclock.Ensure(source).(platformclock.Scheduler)
+	scheduler, ok := platformclock.Ensure(source).(platformclock.Scheduler)
+	if !ok {
+		return nil
+	}
 	return scheduler
 }
 
@@ -92,7 +100,7 @@ func sendSessionAudioBoundary(ctx context.Context, loop *agentloop.AgentLoop, so
 	if source.endOfTurn != nil {
 		if err := source.endOfTurn(ctx); err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-				err = fmt.Errorf("%w (%v)", ErrRuntimeAudioInputEndOfTurnLost, err)
+				err = errors.Join(ErrRuntimeAudioInputEndOfTurnLost, err)
 			}
 			return &RuntimeAudioInputError{Kind: RuntimeAudioInputSend, Path: source.path, Err: err}
 		}
@@ -100,7 +108,7 @@ func sendSessionAudioBoundary(ctx context.Context, loop *agentloop.AgentLoop, so
 		return &RuntimeAudioInputError{Kind: RuntimeAudioInputSend, Path: source.path, Err: errors.New("audio input loop is unavailable")}
 	} else if err := loop.SendSessionEvent(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd}); err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return &RuntimeAudioInputError{Kind: RuntimeAudioInputSend, Path: source.path, Err: fmt.Errorf("%w (%v)", ErrRuntimeAudioInputEndOfTurnLost, err)}
+			return &RuntimeAudioInputError{Kind: RuntimeAudioInputSend, Path: source.path, Err: errors.Join(ErrRuntimeAudioInputEndOfTurnLost, err)}
 		}
 		return &RuntimeAudioInputError{Kind: RuntimeAudioInputSend, Path: source.path, Err: err}
 	}

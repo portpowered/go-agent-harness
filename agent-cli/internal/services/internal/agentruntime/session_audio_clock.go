@@ -7,7 +7,7 @@ import (
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
-func newSessionTimer(source platformclock.Source, duration time.Duration) (platformclock.Timer, error) {
+func newAudioServiceTimer(source platformclock.Source, duration time.Duration) (platformclock.Timer, error) {
 	return wire.NewService().NewTimer(source, duration)
 }
 

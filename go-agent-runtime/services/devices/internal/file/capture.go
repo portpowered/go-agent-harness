@@ -14,7 +14,7 @@ import (
 // devices.Capture contract.
 type fileCapture struct{ input audioio.Input }
 
-func newCapture(request devices.FileInput, providerRate int, service audioio.Service) (*fileCapture, error) {
+func newCapture(ctx context.Context, request devices.FileInput, providerRate int, service audioio.Service) (*fileCapture, error) {
 	if request.Source == nil {
 		return nil, fmt.Errorf("%w: finite capture source is nil", devices.ErrInvalidRequest)
 	}
@@ -27,7 +27,7 @@ func newCapture(request devices.FileInput, providerRate int, service audioio.Ser
 	if service == nil {
 		return nil, fmt.Errorf("%w: audio service is unavailable", devices.ErrUnavailable)
 	}
-	input, err := service.OpenInput(context.Background(), audioio.InputRequest{
+	input, err := service.OpenInput(ctx, audioio.InputRequest{
 		Source: request.Source, SourceRate: request.SampleRate, ProviderRate: providerRate,
 		Pace: request.Pace, Continuous: request.Continuous, OnTurnBoundary: request.OnTurnBoundary,
 		Scheduler: request.Scheduler,

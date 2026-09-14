@@ -28,7 +28,7 @@ func newOutput(ctx context.Context, request audioio.OutputRequest) (audioio.Outp
 		return nil, errors.New("audio output sink is nil")
 	}
 	if ctx == nil {
-		ctx = context.Background()
+		return nil, errors.New("audio output context is required")
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err

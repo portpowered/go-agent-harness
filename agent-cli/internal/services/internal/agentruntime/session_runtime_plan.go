@@ -30,6 +30,7 @@ import (
 type sessionRuntimeMode string
 
 const (
+	defaultSessionAudioDevice                          = "default"
 	sessionRuntimeModeBareLive      sessionRuntimeMode = "bare-live"
 	sessionRuntimeModeInjectedLive  sessionRuntimeMode = "injected-live"
 	sessionRuntimeModeReplayGeneric sessionRuntimeMode = "replay-generic"
@@ -197,13 +198,13 @@ func (p sessionRuntimePlan) liveOutput(prefix string) (string, string) {
 	if sessionInputDeviceSelected(p.rtcDeviceRequest) {
 		inputDevice = p.rtcDeviceRequest.InputDevice
 		if inputDevice == "" {
-			inputDevice = "default"
+			inputDevice = defaultSessionAudioDevice
 		}
 	}
 	if sessionOutputDeviceSelected(p.rtcDeviceRequest) {
 		outputDevice = p.rtcDeviceRequest.OutputDevice
 		if outputDevice == "" {
-			outputDevice = "default"
+			outputDevice = defaultSessionAudioDevice
 		}
 	}
 	identity := fmt.Sprintf("provider=%s model=%s transport=%s input-device=%s output-device=%s", p.provider, p.model, transport, inputDevice, outputDevice)
@@ -301,7 +302,6 @@ func (p sessionRuntimePlan) configureLoopObserver(loop *sessionLoopOptions) {
 	obs.scheduleAudioInputs(p.audioInputs)
 	loop.observer = obs
 }
-
 func planSessionRuntime(opts SessionRunOptions) (sessionRuntimePlan, error) {
 	factory := opts.runtimeFactory
 	if !factory.configured() {
@@ -311,7 +311,7 @@ func planSessionRuntime(opts SessionRunOptions) (sessionRuntimePlan, error) {
 	}
 	return planSessionRuntimeWithFactory(opts, factory)
 }
-
+//lint:ignore U1000 package tests exercise the context-free planning seam.
 func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntimeFactory) (plan sessionRuntimePlan, planErr error) {
 	recordingClaim, err := ensureSessionRecordingClaim(&opts)
 	if err != nil {

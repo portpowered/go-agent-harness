@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -17,6 +18,7 @@ import (
 	selfhearing "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/selfhearing"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
@@ -32,6 +34,19 @@ var (
 	// class of playback error.
 	ErrPlaybackInput = errors.New("provider playback input failed")
 )
+
+// RemoteEndpoint is the opaque endpoint selector accepted by the device
+// service. Validate performs its side-effect-free admission check before a
+// host opens replay captures or media ports.
+type RemoteEndpoint string
+
+func (endpoint RemoteEndpoint) Validate() error {
+	if strings.TrimSpace(string(endpoint)) == "" {
+		return nil
+	}
+	_, err := devicegw.NewRemoteDeviceRegistry(string(endpoint))
+	return err
+}
 
 // Request is the normalized device admission input for one invocation. IDs
 // remain opaque strings at this boundary; the host or device implementation

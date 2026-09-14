@@ -72,9 +72,10 @@ type InputRequest struct {
 	// sources whose final quantum is shorter than audio.FrameSize. It is
 	// separate from Continuous because finite service callers may need exact
 	// count-aware tails instead.
-	PadFinalFrame  bool
-	OnTurnBoundary func(context.Context) error
-	Scheduler      clock.Scheduler
+	PadFinalFrame         bool
+	EmitBoundaryOnSilence bool
+	OnTurnBoundary        func(context.Context) error
+	Scheduler             clock.Scheduler
 }
 
 type OutputRequest struct {

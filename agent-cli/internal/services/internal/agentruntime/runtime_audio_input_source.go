@@ -67,7 +67,7 @@ func openRuntimeAudioInput(input RuntimeAudioInput) (*runtimeAudioSource, error)
 }
 
 func newInjectedAudioSource(input RuntimeAudioInput, sourceRate int) *runtimeAudioSource {
-	return &runtimeAudioSource{source: input.Source, path: input.Path, sourceRate: sourceRate, continuous: true, send: input.SendAudioInput, endOfTurn: input.SendEndOfTurn}
+	return &runtimeAudioSource{source: input.Source, path: input.Path, sourceRate: sourceRate, continuous: true, emitBoundaryOnSilence: input.EmitBoundaryOnSilence, send: input.SendAudioInput, endOfTurn: input.SendEndOfTurn}
 }
 
 func openWAVAudioInput(input RuntimeAudioInput) (*runtimeAudioSource, error) {
@@ -76,7 +76,7 @@ func openWAVAudioInput(input RuntimeAudioInput) (*runtimeAudioSource, error) {
 		return nil, err
 	}
 	wavRate := runtimeAudioSourceSampleRate(source, audio.SampleRate)
-	return &runtimeAudioSource{source: source, path: input.Path, sourceRate: wavRate, paced: true, send: input.SendAudioInput, endOfTurn: input.SendEndOfTurn}, nil
+	return &runtimeAudioSource{source: source, path: input.Path, sourceRate: wavRate, paced: true, emitBoundaryOnSilence: input.EmitBoundaryOnSilence, send: input.SendAudioInput, endOfTurn: input.SendEndOfTurn}, nil
 }
 
 func openStreamAudioInput(input RuntimeAudioInput) (*runtimeAudioSource, error) {
@@ -123,7 +123,9 @@ func prepareStdinAudioInput(input RuntimeAudioInput, stdin io.Reader) (io.Reader
 
 func closeOwnedInputOnError(path string, owned *os.File, err error) error {
 	if owned != nil {
-		_ = owned.Close()
+		if closeErr := owned.Close(); closeErr != nil {
+			err = errors.Join(err, closeErr)
+		}
 	}
 	return classifySessionAudioOpenError(path, err)
 }
@@ -134,14 +136,17 @@ func validateOpenedAudioPath(path string, source audio.AudioSource) error {
 	}
 	info, err := os.Stat(path)
 	if err != nil {
-		_ = source.Close()
+		if closeErr := source.Close(); closeErr != nil {
+			err = errors.Join(err, closeErr)
+		}
 		return classifySessionAudioOpenError(path, err)
 	}
 	if !info.IsDir() {
 		return nil
 	}
-	_ = source.Close()
-	return &RuntimeAudioInputError{Kind: RuntimeAudioInputUnreadable, Path: path, Err: fmt.Errorf("path is a directory; provide a .wav, .pcm, or .raw file")}
+	closeErr := source.Close()
+	pathErr := fmt.Errorf("path is a directory; provide a .wav, .pcm, or .raw file")
+	return &RuntimeAudioInputError{Kind: RuntimeAudioInputUnreadable, Path: path, Err: errors.Join(pathErr, closeErr)}
 }
 
 // prepareScheduledAudioInputs loads a finite sequence of audio files for one
@@ -149,13 +154,21 @@ func validateOpenedAudioPath(path string, source audio.AudioSource) error {
 // emits its MESSAGE.END boundary after the bytes so the next file is not
 // merged into the same provider response.
 func prepareScheduledAudioInputs(paths []string) ([]ScheduledAudioInput, error) {
+	return prepareScheduledAudioInputsContext(context.Background(), paths)
+}
+
+func prepareRuntimeAudioInputs(ctx context.Context, paths []string) ([]ScheduledAudioInput, error) {
+	return prepareScheduledAudioInputsContext(ctx, paths)
+}
+
+func prepareScheduledAudioInputsContext(ctx context.Context, paths []string) ([]ScheduledAudioInput, error) {
 	inputs := make([]ScheduledAudioInput, 0, len(paths))
 	for index, path := range paths {
 		input := RuntimeAudioInput{Path: path, Present: true}
 		if err := validateRuntimeAudioInput(input); err != nil {
 			return nil, err
 		}
-		pcm, sourceRate, err := readRuntimeAudioInputPCM(input)
+		pcm, sourceRate, err := readRuntimeAudioInputPCM(ctx, input)
 		if err != nil {
 			return nil, fmt.Errorf("load audio turn %d from %q: %w", index+1, path, err)
 		}
@@ -175,7 +188,7 @@ func prepareScheduledAudioInputs(paths []string) ([]ScheduledAudioInput, error) 
 // readRuntimeAudioInputPCM decodes one CLI audio input using the same source
 // implementation as --audio-in, but returns its normalized 16 kHz PCM bytes
 // for a scheduled persistent-session turn.
-func readRuntimeAudioInputPCM(input RuntimeAudioInput) (pcm []byte, sourceRate int, runErr error) {
+func readRuntimeAudioInputPCM(ctx context.Context, input RuntimeAudioInput) (pcm []byte, sourceRate int, runErr error) {
 	source, err := openRuntimeAudioInput(input)
 	if err != nil {
 		return nil, 0, err
@@ -190,7 +203,7 @@ func readRuntimeAudioInputPCM(input RuntimeAudioInput) (pcm []byte, sourceRate i
 	var encoded bytes.Buffer
 	for {
 		clear(frame)
-		if err := source.source.ReadFrame(context.Background(), frame); err != nil {
+		if err := source.source.ReadFrame(ctx, frame); err != nil {
 			if errors.Is(err, io.EOF) {
 				break
 			}
@@ -229,14 +242,15 @@ type runtimeAudioSource struct {
 	// at the encoded real-time rate. Synthetic test sources injected through
 	// the RuntimeAudioInput.Source seam are never paced so tests control
 	// their own timing.
-	paced      bool
-	continuous bool
-	send       func(context.Context, []byte) error
-	endOfTurn  func(context.Context) error
-	runtime    *sessionRuntimeObservationRecorder
-	clock      sharedclock.Source
-	once       sync.Once
-	err        error
+	paced                 bool
+	continuous            bool
+	emitBoundaryOnSilence bool
+	send                  func(context.Context, []byte) error
+	endOfTurn             func(context.Context) error
+	runtime               *sessionRuntimeObservationRecorder
+	clock                 sharedclock.Source
+	once                  sync.Once
+	err                   error
 }
 
 func (s *runtimeAudioSource) bindProviderRate(rate int) {

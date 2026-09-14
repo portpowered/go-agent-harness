@@ -13,7 +13,7 @@ import (
 // response boundaries and sink ownership are implemented by audioio.
 type filePlayback struct{ output audioio.Output }
 
-func newPlayback(request devices.FileOutput, providerRate int, service audioio.Service) (*filePlayback, error) {
+func newPlayback(ctx context.Context, request devices.FileOutput, providerRate int, service audioio.Service) (*filePlayback, error) {
 	if request.Sink == nil {
 		return nil, fmt.Errorf("%w: finite playback sink is nil", devices.ErrInvalidRequest)
 	}
@@ -23,7 +23,7 @@ func newPlayback(request devices.FileOutput, providerRate int, service audioio.S
 	if service == nil {
 		return nil, fmt.Errorf("%w: audio service is unavailable", devices.ErrUnavailable)
 	}
-	output, err := service.OpenOutput(context.Background(), audioio.OutputRequest{
+	output, err := service.OpenOutput(ctx, audioio.OutputRequest{
 		Sink: request.Sink, SinkRate: request.SampleRate, ProviderRate: providerRate,
 		Continuous: request.Continuous,
 	})

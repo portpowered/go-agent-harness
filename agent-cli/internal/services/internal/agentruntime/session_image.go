@@ -300,7 +300,7 @@ func attachSessionImageRuntime(plan sessionRuntimePlan, parts []messages.ImagePa
 }
 func runSessionImagePlan(ctx context.Context, out io.Writer, plan sessionRuntimePlan, opts SessionImageRunOptions, wirePrompt string) (runErr error) {
 	if opts.AudioOutPath != "" {
-		audioOut, err := newRuntimeAudioOutputForPlan(&plan, opts.AudioOutPath, out, nil)
+		audioOut, err := newRuntimeAudioOutputForPlanContext(ctx, &plan, opts.AudioOutPath, out, nil)
 		if err != nil {
 			return fmt.Errorf("--audio-out %q: %w", opts.AudioOutPath, err)
 		}

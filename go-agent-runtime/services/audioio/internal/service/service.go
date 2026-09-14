@@ -3,6 +3,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -20,7 +21,7 @@ func New() *Service { return &Service{} }
 
 func (s *Service) ResolveRates(ctx context.Context, request audioio.RateRequest) (audioio.RateResolution, error) {
 	if ctx == nil {
-		ctx = context.Background()
+		return audioio.RateResolution{}, errors.New("audio rate resolution context is required")
 	}
 	if err := ctx.Err(); err != nil {
 		return audioio.RateResolution{}, err
@@ -53,7 +54,7 @@ func (s *Service) ResolveRates(ctx context.Context, request audioio.RateRequest)
 
 func (s *Service) ConvertPCM16(ctx context.Context, request audioio.PCM16Request) ([]byte, error) {
 	if ctx == nil {
-		ctx = context.Background()
+		return nil, errors.New("audio PCM conversion context is required")
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err

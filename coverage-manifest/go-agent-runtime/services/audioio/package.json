@@ -1,0 +1,1 @@
+{"package":"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio","exception":"Host-neutral audio declarations and typed error contract; executable behavior is covered by the private service and Wire tests."}

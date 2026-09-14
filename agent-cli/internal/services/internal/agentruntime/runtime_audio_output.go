@@ -66,13 +66,17 @@ func runSessionAudioOutput(ctx context.Context, out io.Writer, opts SessionRunOp
 	if err != nil {
 		return err
 	}
-	defer func() { _ = claim.release() }()
-	plan, err := planSessionRuntime(opts)
+	defer func() {
+		if releaseErr := claim.release(); releaseErr != nil {
+			runErr = errors.Join(runErr, releaseErr)
+		}
+	}()
+	plan, err := planSessionRuntime(opts) //nolint:contextcheck // legacy planner compatibility seam has no context parameter.
 	if err != nil {
 		return err
 	}
 
-	audioOut, err := newRuntimeAudioOutputForPlan(&plan, path, out, audio.NewLoudnessNormalizer(audio.LoudnessNormalizerConfig{GainDB: sessionVoiceGainDB(opts.Voice)}))
+	audioOut, err := newRuntimeAudioOutputForPlanContext(ctx, &plan, path, out, audio.NewLoudnessNormalizer(audio.LoudnessNormalizerConfig{GainDB: sessionVoiceGainDB(opts.Voice)}))
 	if err != nil {
 		return fmt.Errorf("--audio-out %q: %w", path, err)
 	}
@@ -144,7 +148,7 @@ type runtimeAudioOutput struct {
 	closeErr     error
 }
 
-func newRuntimeAudioOutputForPlan(plan *sessionRuntimePlan, path string, out io.Writer, loudness *audio.LoudnessNormalizer) (*runtimeAudioOutput, error) {
+func newRuntimeAudioOutputForPlanContext(ctx context.Context, plan *sessionRuntimePlan, path string, out io.Writer, loudness *audio.LoudnessNormalizer) (*runtimeAudioOutput, error) {
 	if plan != nil && sessionOutputDeviceSelected(plan.rtcDeviceRequest) {
 		output := &runtimeAudioOutput{
 			runtime:      plan.runtime,
@@ -166,13 +170,12 @@ func newRuntimeAudioOutputForPlan(plan *sessionRuntimePlan, path string, out io.
 	if err != nil {
 		return nil, err
 	}
-	output, err := audioiowire.NewService().OpenOutput(context.Background(), audioio.OutputRequest{
+	output, err := audioiowire.NewService().OpenOutput(ctx, audioio.OutputRequest{
 		Sink: sink, SinkRate: plan.outputAudioSampleRate, ProviderRate: plan.outputAudioSampleRate,
 		Voice: plan.voice, Continuous: true,
 	})
 	if err != nil {
-		_ = sink.Close()
-		return nil, err
+		return nil, errors.Join(err, sink.Close())
 	}
 	return &runtimeAudioOutput{sink: sink, output: output, path: path, runtime: plan.runtime, loudness: loudness}, nil
 }

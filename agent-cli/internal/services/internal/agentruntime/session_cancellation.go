@@ -2,6 +2,7 @@ package agentruntime
 
 import (
 	"context"
+	"errors"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
@@ -22,7 +23,8 @@ func sessionSIGINTErrorOnly(err error) bool {
 	// RuntimeAudioInputError includes a kind sentinel in its Unwrap result.
 	// That sentinel describes the cancelled boundary, not an independent
 	// failure; inspect its underlying error instead.
-	if inputErr, ok := err.(*RuntimeAudioInputError); ok {
+	var inputErr *RuntimeAudioInputError
+	if errors.As(err, &inputErr) {
 		if inputErr == nil || inputErr.Err == nil {
 			return false
 		}

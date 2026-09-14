@@ -103,7 +103,9 @@ func TestDeviceServiceBindRTCPreservesTypedRegistryErrors(t *testing.T) {
 			binding, err := service.BindRTC(context.Background(), tc.request)
 			if err == nil || !errors.Is(err, tc.want) {
 				if binding != nil {
-					_ = binding.Close()
+					if closeErr := binding.Close(); closeErr != nil {
+						t.Errorf("close failed binding: %v", closeErr)
+					}
 				}
 				t.Fatalf("BindRTC error = %v, want errors.Is(%v)", err, tc.want)
 			}

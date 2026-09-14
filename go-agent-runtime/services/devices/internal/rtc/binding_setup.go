@@ -123,6 +123,8 @@ func openOutput(b *binding, registry devicegw.DeviceRegistry, request devices.RT
 	return nil
 }
 
+const bindingErrorBufferSize = 8
+
 func configureBinding(b *binding, request devices.RTCBindingRequest) error {
 	if err := configureFeedback(b, request); err != nil {
 		return err
@@ -131,7 +133,7 @@ func configureBinding(b *binding, request devices.RTCBindingRequest) error {
 		return err
 	}
 	configurePlayback(b, request)
-	b.inferencer = &inferencer{inner: request.Inferencer, binding: b, errors: make(chan error, 8)}
+	b.inferencer = &inferencer{inner: request.Inferencer, binding: b, errors: make(chan error, bindingErrorBufferSize)}
 	return nil
 }
 

@@ -6,7 +6,6 @@ import (
 	"io"
 	"reflect"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -81,27 +80,34 @@ func TestLocalFeedbackGateNonIntegralDeviceQuantumStaysMonotonic(t *testing.T) {
 		{name: "coreaudio_44k1", rate: 44100, samples: 480},
 		{name: "coreaudio_48k_variable_quantum", rate: 48000, samples: 683},
 	} {
-		t.Run(test.name, func(t *testing.T) {
-			gate, err := audio.NewPCM16FeedbackGate(selfhearing.DefaultSelfHearingConfig(), io.Discard, test.rate, test.rate)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer gate.Close()
-			frame := make([]int16, test.samples)
-			seed := feedbackSignal(0, 113)
-			for index := range frame {
-				frame[index] = seed[index%len(seed)]
-			}
-			for index := 0; index < 64; index++ {
-				if err := gate.WritePlayback(context.Background(), frame, func() error { return nil }); err != nil {
-					t.Fatalf("playback callback %d: %v", index, err)
-				}
-			}
-			want := time.Duration((int64(test.samples)*int64(time.Second)+int64(test.rate)/2)/int64(test.rate)) * 64
-			if gate.PlaybackPosition() != want {
-				t.Fatalf("playback position=%s, want %s", gate.PlaybackPosition(), want)
-			}
-		})
+		t.Run(test.name, func(t *testing.T) { assertNonIntegralFeedbackQuantum(t, test.rate, test.samples) })
+	}
+}
+
+func assertNonIntegralFeedbackQuantum(t *testing.T, rate, samples int) {
+	t.Helper()
+	gate, err := audio.NewPCM16FeedbackGate(selfhearing.DefaultSelfHearingConfig(), io.Discard, rate, rate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if closeErr := gate.Close(); closeErr != nil {
+			t.Errorf("close feedback gate: %v", closeErr)
+		}
+	})
+	frame := make([]int16, samples)
+	seed := feedbackSignal(0, 113)
+	for index := range frame {
+		frame[index] = seed[index%len(seed)]
+	}
+	for index := 0; index < 64; index++ {
+		if err := gate.WritePlayback(context.Background(), frame, func() error { return nil }); err != nil {
+			t.Fatalf("playback callback %d: %v", index, err)
+		}
+	}
+	want := time.Duration((int64(samples)*int64(time.Second)+int64(rate)/2)/int64(rate)) * 64
+	if gate.PlaybackPosition() != want {
+		t.Fatalf("playback position=%s, want %s", gate.PlaybackPosition(), want)
 	}
 }
 
@@ -115,7 +121,11 @@ func TestLocalFeedbackGateFeedbackConfirmedTracksWarningState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer gate.Close()
+	t.Cleanup(func() {
+		if closeErr := gate.Close(); closeErr != nil {
+			t.Errorf("close feedback gate: %v", closeErr)
+		}
+	})
 	if gate.FeedbackConfirmed() {
 		t.Fatal("feedback confirmed before evidence")
 	}
@@ -218,7 +228,12 @@ func TestLocalFeedbackGateBlockedWarningWriterCannotBlockMedia(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { close(release); _ = gate.Close() }()
+	t.Cleanup(func() {
+		close(release)
+		if closeErr := gate.Close(); closeErr != nil {
+			t.Errorf("close feedback gate: %v", closeErr)
+		}
+	})
 	for frameIndex := 0; frameIndex < 5; frameIndex++ {
 		if err := gate.WritePlayback(context.Background(), feedbackSignal(frameIndex, 17), func() error { return nil }); err != nil {
 			t.Fatal(err)
@@ -232,10 +247,16 @@ func TestLocalFeedbackGateBlockedWarningWriterCannotBlockMedia(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for warning writer")
 	}
-	mediaDone := make(chan struct{})
-	go func() { _, _ = gate.FilterCapture(context.Background(), feedbackSignal(5, 17)); close(mediaDone) }()
+	mediaDone := make(chan error, 1)
+	go func() {
+		_, filterErr := gate.FilterCapture(context.Background(), feedbackSignal(5, 17))
+		mediaDone <- filterErr
+	}()
 	select {
-	case <-mediaDone:
+	case filterErr := <-mediaDone:
+		if filterErr != nil {
+			t.Fatalf("capture classification failed: %v", filterErr)
+		}
 	case <-time.After(time.Second):
 		t.Fatal("capture classification blocked behind warning writer")
 	}
@@ -283,44 +304,6 @@ func (w blockingFeedbackWarningWriter) Write(data []byte) (int, error) {
 	return len(data), nil
 }
 
-type feedbackInbound struct {
-	frames chan audio.PCMFrame
-	done   chan struct{}
-	once   sync.Once
-}
-
-func newFeedbackInbound(capacity int) *feedbackInbound {
-	return &feedbackInbound{frames: make(chan audio.PCMFrame, capacity), done: make(chan struct{})}
-}
-func (m *feedbackInbound) ReadFrame(ctx context.Context) (audio.PCMFrame, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	select {
-	case frame := <-m.frames:
-		return frame, nil
-	default:
-	}
-	select {
-	case frame := <-m.frames:
-		return frame, nil
-	case <-m.done:
-		select {
-		case frame := <-m.frames:
-			return frame, nil
-		default:
-			return audio.PCMFrame{}, io.EOF
-		}
-	case <-ctx.Done():
-		return audio.PCMFrame{}, ctx.Err()
-	}
-}
-func (m *feedbackInbound) Close() error { m.once.Do(func() { close(m.done) }); return nil }
-func (m *feedbackInbound) push(samples []int16) {
-	m.frames <- audio.PCMFrame{Samples: append([]int16(nil), samples...)}
-}
-func (m *feedbackInbound) closeInput() { m.once.Do(func() { close(m.done) }) }
-
 type feedbackOutbound struct{ frames chan audio.PCMFrame }
 
 func (m *feedbackOutbound) WriteFrame(ctx context.Context, frame audio.PCMFrame) error {
@@ -333,7 +316,6 @@ func (m *feedbackOutbound) WriteFrame(ctx context.Context, frame audio.PCMFrame)
 }
 func (m *feedbackOutbound) Close() error { return nil }
 
-var _ audio.InboundMedia = (*feedbackInbound)(nil)
 var _ audio.OutboundMedia = (*feedbackOutbound)(nil)
 
 type testRTCBinding struct {

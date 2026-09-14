@@ -191,7 +191,7 @@ type SessionRTCRuntimeError struct {
 
 func (e *SessionRTCRuntimeError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return runtimeNilText
 	}
 	if e.Phase == "" {
 		return fmt.Sprintf("WebRTC session runtime: %v", e.Err)

@@ -43,13 +43,23 @@ func TestRTCBindingVirtualRegistryTrackRoundTrip(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(func() {
 		cancel()
-		_ = binding.Close()
-		_ = feed.Close()
-		_ = observe.Close()
+		if closeErr := binding.Close(); closeErr != nil {
+			t.Errorf("close binding: %v", closeErr)
+		}
+		if closeErr := feed.Close(); closeErr != nil {
+			t.Errorf("close feed: %v", closeErr)
+		}
+		if closeErr := observe.Close(); closeErr != nil {
+			t.Errorf("close observe: %v", closeErr)
+		}
 	})
 
 	assertRTCDeviceRoundtripIDs(t, registry)
-	t.Cleanup(func() { _ = peer.Close() })
+	t.Cleanup(func() {
+		if closeErr := peer.Close(); closeErr != nil {
+			t.Errorf("close peer: %v", closeErr)
+		}
+	})
 	providerSession, err := binding.Inferencer().ConnectSession(ctx)
 	if err != nil {
 		t.Fatalf("connect provider media session: %v", err)

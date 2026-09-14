@@ -45,12 +45,10 @@ func (i *inferencer) ConnectSession(ctx context.Context) (messages.Session, erro
 	}
 	media, ok := rtcMedia(s)
 	if !ok {
-		_ = s.Close()
-		return nil, &mediaError{err: ErrSessionMediaUnavailable}
+		return nil, errors.Join(&mediaError{err: ErrSessionMediaUnavailable}, s.Close())
 	}
 	if err := validateMedia(i.binding, media); err != nil {
-		_ = s.Close()
-		return nil, err
+		return nil, errors.Join(err, s.Close())
 	}
 	startMediaPumps(i, ctx, media)
 	return newBoundSession(s, i.binding, ctx), nil

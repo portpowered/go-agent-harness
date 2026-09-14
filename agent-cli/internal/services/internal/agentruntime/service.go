@@ -264,7 +264,7 @@ func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request)
 			}
 			return SessionRunOptions{}, errors.New("--audio-interrupt requires an enabled WebMCP session capability")
 		}
-		inputs, err := PrepareRuntimeAudioInputs(request.AudioInterrupts)
+		inputs, err := prepareRuntimeAudioInputs(ctx, request.AudioInterrupts)
 		if err != nil {
 			if options.CapabilityClose != nil {
 				_ = options.CapabilityClose()

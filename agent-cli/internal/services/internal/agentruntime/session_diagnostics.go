@@ -13,6 +13,7 @@ import (
 	"sync"
 )
 
+//lint:ignore U1000 retained names are part of package-test diagnostic compatibility.
 const (
 	// SessionDiagnosticEventFailure is emitted exactly once per terminal
 	// session failure with the canonical failure field map.

@@ -78,7 +78,7 @@ const sessionFirstTurnAckTimeout = 30 * time.Second
 const sessionScheduledAudioConfigTimeout = 30 * time.Second
 
 func awaitSessionFirstTurnWithClock(ctx context.Context, ack <-chan error, source platformclock.Source) error {
-	timer, err := newSessionTimer(source, sessionFirstTurnAckTimeout)
+	timer, err := newAudioServiceTimer(source, sessionFirstTurnAckTimeout)
 	if err != nil {
 		return err
 	}
@@ -597,7 +597,7 @@ func retryScheduledRateLimitedResponseWithClock(ctx context.Context, sessionDone
 	if !retry {
 		return nil
 	}
-	timer, err := newSessionTimer(source, delay)
+	timer, err := newAudioServiceTimer(source, delay)
 	if err != nil {
 		return err
 	}
@@ -748,7 +748,7 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 		}
 		audioErrCh := make(chan error, 1)
 		audioCh = audioErrCh
-		go func() { audioErrCh <- streamSessionAudioInput(audioCtx, loop, opts.AudioIn) }()
+		go func() { audioErrCh <- pumpAudioInput(audioCtx, loop, opts.AudioIn) }()
 	}
 	waitAudio := func() error {
 		if audioCh == nil {
@@ -820,7 +820,7 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 			timeout = sessionScheduledAudioConfigTimeout
 		}
 		var err error
-		sessionUpdatedTimer, err = newSessionTimer(opts.clockSource, timeout)
+		sessionUpdatedTimer, err = newAudioServiceTimer(opts.clockSource, timeout)
 		if err != nil {
 			// Keep setup inside the stream state machine so the shared
 			// termination boundary owns teardown and reports the error.

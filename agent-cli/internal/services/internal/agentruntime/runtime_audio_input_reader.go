@@ -95,30 +95,41 @@ func (r *sessionAudioReader) readInterruptibly(ctx context.Context, reader io.Re
 
 func (r *sessionAudioReader) readWithDeadline(ctx context.Context, reader io.Reader, deadliner deadlineAudioReader, destination []byte) (int, error) {
 	if err := deadliner.SetReadDeadline(time.Now().Add(sessionAudioReadDeadline)); err != nil {
-		if r.closeOnCancel {
-			if _, closeOK := reader.(io.Closer); closeOK {
-				return readAudioReaderWithCancellation(ctx, reader, r, destination)
-			}
-		}
-		return 0, errors.Join(
-			ErrRuntimeAudioInputUninterruptible,
-			fmt.Errorf("stdin read deadline setup failed: %w", err),
-		)
+		return r.handleDeadlineSetupFailure(ctx, reader, destination, err)
 	}
 	for {
 		count, readErr := reader.Read(destination)
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return count, ctxErr
 		}
-		if errors.Is(readErr, os.ErrDeadlineExceeded) && count == 0 {
+		if deadlineExpired(count, readErr) {
 			if err := renewAudioReadDeadline(deadliner); err != nil {
 				return 0, err
 			}
 			continue
 		}
-		_ = deadliner.SetReadDeadline(time.Time{})
-		return count, readErr
+		return count, clearReadDeadline(deadliner, readErr)
 	}
+}
+
+func (r *sessionAudioReader) handleDeadlineSetupFailure(ctx context.Context, reader io.Reader, destination []byte, err error) (int, error) {
+	if r.closeOnCancel {
+		if _, closeOK := reader.(io.Closer); closeOK {
+			return readAudioReaderWithCancellation(ctx, reader, r, destination)
+		}
+	}
+	return 0, errors.Join(ErrRuntimeAudioInputUninterruptible, fmt.Errorf("stdin read deadline setup failed: %w", err))
+}
+
+func deadlineExpired(count int, err error) bool {
+	return count == 0 && errors.Is(err, os.ErrDeadlineExceeded)
+}
+
+func clearReadDeadline(deadliner deadlineAudioReader, readErr error) error {
+	if err := deadliner.SetReadDeadline(time.Time{}); err != nil {
+		return errors.Join(readErr, fmt.Errorf("stdin read deadline clear failed: %w", err))
+	}
+	return readErr
 }
 
 func renewAudioReadDeadline(deadliner deadlineAudioReader) error {
@@ -163,8 +174,11 @@ func readAudioReaderWithCancellation(ctx context.Context, reader io.Reader, clos
 	case result := <-resultCh:
 		return result.count, result.err
 	case <-ctx.Done():
-		_ = closer.Close()
+		closeErr := closer.Close()
 		result := <-resultCh
+		if closeErr != nil {
+			return result.count, errors.Join(ctx.Err(), closeErr)
+		}
 		if result.count > 0 {
 			return result.count, ctx.Err()
 		}
@@ -172,8 +186,9 @@ func readAudioReaderWithCancellation(ctx context.Context, reader io.Reader, clos
 	}
 }
 
+//lint:ignore U1000 package tests exercise this compatibility seam.
 func streamRuntimeAudioInput(ctx context.Context, loop *agentloop.AgentLoop, source *runtimeAudioSource) (runErr error) {
-	return streamSessionAudioInput(ctx, loop, source)
+	return pumpAudioInput(ctx, loop, source)
 }
 
 // shouldStopAudioInputSessionLoop applies audio-aware stop rules. Before the
@@ -203,7 +218,7 @@ func hasAudioTerminalFailure(msg messages.StreamMessage, opts sessionLoopOptions
 }
 
 func shouldStopAfterAudioResponse(msg messages.StreamMessage, opts sessionLoopOptions) bool {
-	switch msg.Type {
+	switch msg.Type { //nolint:exhaustive // Only terminal message types affect the audio-owned stop decision.
 	case messages.StreamTypeMessageEnd:
 		if opts.observer != nil && !opts.observer.lastMessageEndAdmitted() {
 			return false
@@ -258,8 +273,7 @@ func openSessionWAVSource(path string) (audio.AudioSource, error) {
 	}
 	source, err := newSessionWAVSource(path, file)
 	if err != nil {
-		_ = file.Close()
-		return nil, err
+		return nil, errors.Join(err, file.Close())
 	}
 	return source, nil
 }

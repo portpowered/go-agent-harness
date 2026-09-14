@@ -26,7 +26,7 @@ type boundSession struct {
 
 func newBoundSession(session messages.Session, binding *binding, lifecycleCtx context.Context) *boundSession {
 	bound := &boundSession{Session: session, binding: binding, lifecycleCtx: lifecycleCtx}
-	bound.startReceiveForwarder()
+	bound.startReceiveForwarder(lifecycleCtx)
 	return bound
 }
 
@@ -44,7 +44,7 @@ func (s *boundSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
 	return s.Session.Receive()
 }
 
-func (s *boundSession) startReceiveForwarder() {
+func (s *boundSession) startReceiveForwarder(ctx context.Context) {
 	if s == nil || s.Session == nil {
 		return
 	}
@@ -55,19 +55,19 @@ func (s *boundSession) startReceiveForwarder() {
 	s.receive = messages.NewTypedBuffer[messages.StreamMessage](source.Cap())
 	s.forwardStop = make(chan struct{})
 	s.forwardDone = make(chan struct{})
-	go s.forwardMessages(source)
+	go s.forwardMessages(ctx, source)
 }
 
-func (s *boundSession) forwardMessages(source *messages.TypedBuffer[messages.StreamMessage]) {
+func (s *boundSession) forwardMessages(ctx context.Context, source *messages.TypedBuffer[messages.StreamMessage]) {
 	defer close(s.forwardDone)
 	for {
 		select {
 		case msg, ok := <-source.Chan():
-			if !ok || !s.forwardSessionMessage(msg) {
+			if !ok || !s.forwardSessionMessage(ctx, msg) {
 				return
 			}
 		case <-s.Session.Done():
-			s.drainMessages(source)
+			s.drainMessages(ctx, source)
 			return
 		case <-s.forwardStop:
 			return
@@ -75,20 +75,20 @@ func (s *boundSession) forwardMessages(source *messages.TypedBuffer[messages.Str
 	}
 }
 
-func (s *boundSession) drainMessages(source *messages.TypedBuffer[messages.StreamMessage]) {
+func (s *boundSession) drainMessages(ctx context.Context, source *messages.TypedBuffer[messages.StreamMessage]) {
 	for {
 		msg, ok := source.Read()
-		if !ok || !s.forwardSessionMessage(msg) {
+		if !ok || !s.forwardSessionMessage(ctx, msg) {
 			return
 		}
 	}
 }
 
-func (s *boundSession) forwardSessionMessage(msg messages.StreamMessage) bool {
+func (s *boundSession) forwardSessionMessage(ctx context.Context, msg messages.StreamMessage) bool {
 	if msg.Type == messages.StreamTypeSessionClose {
 		s.terminalObserved.Store(true)
 	}
-	return s.receive != nil && s.receive.WriteWaitContextOrDone(context.Background(), s.forwardStop, msg).OK()
+	return s.receive != nil && s.receive.WriteWaitContextOrDone(ctx, s.forwardStop, msg).OK()
 }
 
 func (s *boundSession) stopReceiveForwarder() {
@@ -134,7 +134,7 @@ func (s *boundSession) admissionOutcome(msg messages.StreamMessage) (messages.Se
 }
 
 func playbackCommand(kind messages.StreamMessageType) audio.PlaybackOperation {
-	switch kind {
+	switch kind { //nolint:exhaustive // Only response control messages have playback side effects.
 	case messages.StreamTypeResponseCancel:
 		return audio.PlaybackDiscard
 	case messages.StreamTypeResponseCreate:

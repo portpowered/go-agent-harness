@@ -33,11 +33,11 @@ func (f *Factory) Open(ctx context.Context, request devices.Request) (devices.Ha
 	if err != nil {
 		return nil, err
 	}
-	capture, err := f.openCapture(request, providerRate)
+	capture, err := f.openCapture(ctx, request, providerRate)
 	if err != nil {
 		return nil, err
 	}
-	playback, err := f.openPlayback(request, providerRate)
+	playback, err := f.openPlayback(ctx, request, providerRate)
 	if err != nil {
 		return nil, errors.Join(err, closeCapture(capture))
 	}
@@ -98,18 +98,18 @@ func normalizeRequest(request devices.Request) (int, error) {
 	return providerRate, nil
 }
 
-func (f *Factory) openCapture(request devices.Request, providerRate int) (*fileCapture, error) {
+func (f *Factory) openCapture(ctx context.Context, request devices.Request, providerRate int) (*fileCapture, error) {
 	if !request.CaptureEnabled {
 		return nil, nil
 	}
-	return newCapture(*request.FileInput, providerRate, f.audio)
+	return newCapture(ctx, *request.FileInput, providerRate, f.audio)
 }
 
-func (f *Factory) openPlayback(request devices.Request, providerRate int) (*filePlayback, error) {
+func (f *Factory) openPlayback(ctx context.Context, request devices.Request, providerRate int) (*filePlayback, error) {
 	if !request.PlaybackEnabled {
 		return nil, nil
 	}
-	return newPlayback(*request.FileOutput, providerRate, f.audio)
+	return newPlayback(ctx, *request.FileOutput, providerRate, f.audio)
 }
 
 func newHandle(capture *fileCapture, playback *filePlayback) devices.Handle {

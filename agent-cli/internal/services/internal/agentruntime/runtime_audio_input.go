@@ -41,6 +41,8 @@ func StartSessionAudioInterruptionsOnBrowserInvocation(
 // StartSessionAudioInterruptionsOnBrowserInvocation. An empty toolName keeps
 // the first-invocation behavior; otherwise only a matching dispatched browser
 // invocation releases the finite interruption audio.
+//
+//nolint:contextcheck // nil parent is normalized for compatibility.
 func StartSessionAudioInterruptionsOnBrowserTool(
 	parent context.Context,
 	events <-chan webmcp.BrokerEvent,
@@ -117,13 +119,16 @@ type RuntimeAudioInput struct {
 	// SendEndOfTurn is an optional deterministic service-test seam invoked
 	// once after the finite source reaches EOF. CLI callers leave it nil so
 	// the loop's SendSessionEvent carries the end-of-turn boundary.
-	SendEndOfTurn func(context.Context) error
-	Present       bool
-	DevicePresent bool
+	SendEndOfTurn         func(context.Context) error
+	EmitBoundaryOnSilence bool
+	Present               bool
+	DevicePresent         bool
 }
 
 // RuntimeAudioInputErrorKind identifies the failed session audio boundary.
 type RuntimeAudioInputErrorKind string
+
+const runtimeNilText = "<nil>"
 
 const (
 	RuntimeAudioInputEmpty      RuntimeAudioInputErrorKind = "empty"
@@ -167,7 +172,7 @@ type RuntimeAudioInputError struct {
 
 func (e *RuntimeAudioInputError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return runtimeNilText
 	}
 	if e.Err == nil {
 		return fmt.Sprintf("agent session --audio-in %q: %s", e.Path, e.Kind)
@@ -236,9 +241,9 @@ func RunSessionWithAudioInput(ctx context.Context, out io.Writer, opts SessionRu
 	if err != nil {
 		return err
 	}
-	defer func() { _ = claim.release() }()
+	defer func() { runErr = errors.Join(runErr, claim.release()) }()
 	opts.ClientOwnsAudioTurnBoundaries = true
-	return runSessionWithAudioInputPlan(ctx, out, input, "", SessionTextSeed{}, func() (sessionRuntimePlan, error) {
+	return runSessionWithAudioInputPlan(ctx, out, input, "", SessionTextSeed{}, func() (sessionRuntimePlan, error) { //nolint:contextcheck // legacy planner compatibility seam has no context parameter.
 		if err := validateSessionRunOptions(opts); err != nil {
 			return sessionRuntimePlan{}, err
 		}
@@ -289,13 +294,14 @@ func runSessionWithAudioInputAndOutput(ctx context.Context, out io.Writer, opts 
 	if err != nil {
 		return err
 	}
-	defer func() { _ = claim.release() }()
-	return runSessionWithAudioInputPlan(ctx, out, input, audioOutPath, seed, audioInputPlanFactory(opts, systemPrompt))
+	defer func() { runErr = errors.Join(runErr, claim.release()) }()
+	return runSessionWithAudioInputPlan(ctx, out, input, audioOutPath, seed, audioInputPlanFactory(ctx, opts, systemPrompt))
 }
 
 func prepareAudioInputOptions(opts *SessionRunOptions, input *RuntimeAudioInput, audioOutPath string, maxDuration time.Duration, seed SessionTextSeed) {
 	if audioOutPath != "" {
 		opts.AudioOutputRequested = true
+		input.EmitBoundaryOnSilence = true
 	}
 	if seed.Present {
 		opts.Prompt = seed.Value
@@ -305,16 +311,16 @@ func prepareAudioInputOptions(opts *SessionRunOptions, input *RuntimeAudioInput,
 	opts.ClientOwnsAudioTurnBoundaries = true
 }
 
-func audioInputPlanFactory(opts SessionRunOptions, systemPrompt string) func() (sessionRuntimePlan, error) {
+func audioInputPlanFactory(ctx context.Context, opts SessionRunOptions, systemPrompt string) func() (sessionRuntimePlan, error) {
 	if opts.ReplayPath != "" && (opts.SessionInferencer == nil || strings.TrimSpace(systemPrompt) == "") {
-		return func() (sessionRuntimePlan, error) { return planSessionRuntime(opts) }
+		return func() (sessionRuntimePlan, error) { return planSessionRuntime(opts) } //nolint:contextcheck // legacy planner compatibility seam has no context parameter.
 	}
 	return func() (sessionRuntimePlan, error) {
-		instructions, err := resolveSessionInstructions(opts, systemPrompt)
+		instructions, err := resolveSessionInstructionsContext(ctx, opts, systemPrompt)
 		if err != nil {
 			return sessionRuntimePlan{}, err
 		}
-		return planSessionWithResolvedInstructions(opts, instructions)
+		return planSessionWithResolvedInstructions(opts, instructions) //nolint:contextcheck // legacy planner compatibility seam has no context parameter.
 	}
 }
 
@@ -353,7 +359,7 @@ func runSessionWithAudioInputPlan(ctx context.Context, out io.Writer, input Runt
 	var audioWrapped *runtimeAudioOutputInferencer
 	if audioOutPath != "" {
 		var sinkErr error
-		audioOutput, sinkErr = newRuntimeAudioOutputForPlan(&plan, audioOutPath, out, nil)
+		audioOutput, sinkErr = newRuntimeAudioOutputForPlanContext(ctx, &plan, audioOutPath, out, nil)
 		if sinkErr != nil {
 			return fmt.Errorf("--audio-out %q: %w", audioOutPath, sinkErr)
 		}

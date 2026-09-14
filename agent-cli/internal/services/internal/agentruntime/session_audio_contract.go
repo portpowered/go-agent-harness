@@ -14,6 +14,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
 
+//lint:ignore U1000 package tests use this contract default.
 const sessionRealtimeAudioSampleRate = int(models.SampleRate24000)
 
 type ScheduledAudioInput = audioio.ScheduledAudioInput
@@ -31,6 +32,10 @@ type sessionAudioRequestProvider interface {
 }
 
 func resolveSessionSampleRate(opts SessionRunOptions, plan sessionRuntimePlan) (int, error) {
+	return resolveSessionSampleRateContext(context.Background(), opts, plan)
+}
+
+func resolveSessionSampleRateContext(ctx context.Context, opts SessionRunOptions, plan sessionRuntimePlan) (int, error) {
 	inputRate := plan.inputAudioSampleRate
 	outputRate := plan.outputAudioSampleRate
 	if requested, ok := plan.inferencer.(sessionAudioRequestProvider); ok {
@@ -42,7 +47,7 @@ func resolveSessionSampleRate(opts SessionRunOptions, plan sessionRuntimePlan) (
 			outputRate = int(config.OutputAudioSampleRate)
 		}
 	}
-	resolution, err := wire.NewService().ResolveRates(context.Background(), audioio.RateRequest{
+	resolution, err := wire.NewService().ResolveRates(ctx, audioio.RateRequest{
 		Provider:           plan.provider,
 		Replay:             opts.ReplayPath != "",
 		CapturedInputRate:  inputRate,
@@ -54,11 +59,16 @@ func resolveSessionSampleRate(opts SessionRunOptions, plan sessionRuntimePlan) (
 	return resolution.InputRate, nil
 }
 
+//lint:ignore U1000 package tests exercise the context-free compatibility seam.
 func configureSessionAudioContract(opts SessionRunOptions, plan *sessionRuntimePlan) error {
+	return configureSessionAudioContractContext(context.Background(), opts, plan)
+}
+
+func configureSessionAudioContractContext(ctx context.Context, opts SessionRunOptions, plan *sessionRuntimePlan) error {
 	if plan == nil {
 		return nil
 	}
-	rate, err := resolveSessionSampleRate(opts, *plan)
+	rate, err := resolveSessionSampleRateContext(ctx, opts, *plan)
 	if err != nil {
 		return err
 	}
@@ -74,10 +84,14 @@ func configureSessionAudioContract(opts SessionRunOptions, plan *sessionRuntimeP
 }
 
 func convertSessionPCM16(pcm []byte, sourceRate, providerRate int) ([]byte, error) {
+	return convertSessionPCM16Context(context.Background(), pcm, sourceRate, providerRate)
+}
+
+func convertSessionPCM16Context(ctx context.Context, pcm []byte, sourceRate, providerRate int) ([]byte, error) {
 	if providerRate == 0 {
 		providerRate = sourceRate
 	}
-	converted, err := wire.NewService().ConvertPCM16(context.Background(), audioio.PCM16Request{
+	converted, err := wire.NewService().ConvertPCM16(ctx, audioio.PCM16Request{
 		PCM: pcm, SourceRate: sourceRate, TargetRate: providerRate,
 	})
 	if err != nil {
@@ -86,13 +100,18 @@ func convertSessionPCM16(pcm []byte, sourceRate, providerRate int) ([]byte, erro
 	return converted, nil
 }
 
+//lint:ignore U1000 package tests exercise the context-free compatibility seam.
 func convertScheduledInputs(inputs []ScheduledAudioInput, providerRate int) ([]ScheduledAudioInput, error) {
+	return convertScheduledInputsContext(context.Background(), inputs, providerRate)
+}
+
+func convertScheduledInputsContext(ctx context.Context, inputs []ScheduledAudioInput, providerRate int) ([]ScheduledAudioInput, error) {
 	if inputs == nil {
 		return nil, nil
 	}
 	converted := make([]ScheduledAudioInput, len(inputs))
 	for index, input := range inputs {
-		pcm, err := convertSessionPCM16(input.PCM, input.SourceSampleRate, providerRate)
+		pcm, err := convertSessionPCM16Context(ctx, input.PCM, input.SourceSampleRate, providerRate)
 		if err != nil {
 			return nil, fmt.Errorf("convert scheduled audio input %d: %w", index+1, err)
 		}
@@ -107,7 +126,7 @@ func sendEventDrivenAudioInput(ctx context.Context, loop *agentloop.AgentLoop, o
 	if len(input.PCM) == 0 {
 		return errors.New("event-driven audio input is empty")
 	}
-	pcm, err := convertSessionPCM16(input.PCM, input.SourceSampleRate, opts.InputAudioSampleRate)
+	pcm, err := convertSessionPCM16Context(ctx, input.PCM, input.SourceSampleRate, opts.InputAudioSampleRate)
 	if err != nil {
 		return fmt.Errorf("convert event-driven audio input: %w", err)
 	}

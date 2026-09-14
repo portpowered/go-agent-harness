@@ -419,7 +419,7 @@ func runSessionWithRecordingDirectory(
 	var textOutput *sessionTextOutput
 	if audioOutPath != "" {
 		var sinkErr error
-		audioOutput, sinkErr = newRuntimeAudioOutputForPlan(&plan, audioOutPath, out, nil)
+		audioOutput, sinkErr = newRuntimeAudioOutputForPlanContext(ctx, &plan, audioOutPath, out, nil)
 		if sinkErr != nil {
 			return fmt.Errorf("--audio-out %q: %w", audioOutPath, sinkErr)
 		}
@@ -504,7 +504,7 @@ func validateSessionRecordingOptions(opts SessionRunOptions) error {
 	}
 	return validateSessionRunOptions(opts)
 }
-
+//lint:ignore U1000 package tests exercise the context-free recording seam.
 func planSessionForDirectoryRecording(opts SessionRunOptions) (sessionRuntimePlan, func(), error) {
 	return planSessionForDirectoryRecordingWithInstructions(opts, "", false)
 }
