@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 )
@@ -89,17 +90,17 @@ func TestVirtualPlaybackCapacityAdversarial(t *testing.T) {
 			t.Fatal(err)
 		}
 		primeVirtualPlayback(t, output, high)
-		wait := startCapacityWait(output, context.Background(), audio.FrameSize)
+		wait := startCapacityWaitAtBlocked(t, output, audio.FrameSize, low, high)
 		for output.PlaybackStats().QueuedSamples-audio.FrameSize > low {
-			if err := input.ReadSamples(context.Background(), make([]int16, audio.FrameSize)); err != nil {
+			if err := readCapacitySamples(t, input, output, "read-signal"); err != nil {
 				t.Fatal(err)
 			}
-			assertCapacityWaitBlocked(t, wait)
+			awaitCapacityWaitReblocked(t, wait, output, low)
 		}
-		if err := input.ReadSamples(context.Background(), make([]int16, audio.FrameSize)); err != nil {
+		if err := readCapacitySamples(t, input, output, "read-signal-final"); err != nil {
 			t.Fatal(err)
 		}
-		if err := awaitCapacityWait(t, wait); err != nil {
+		if err := awaitCapacityWaitAtThreshold(t, wait, output, low, high); err != nil {
 			t.Fatalf("wait at low watermark: %v", err)
 		}
 	})
@@ -320,6 +321,95 @@ func startCapacityWait(output *VirtualStream, ctx context.Context, samples int) 
 	done := make(chan error, 1)
 	go func() { done <- output.WaitForPlaybackCapacity(ctx, samples) }()
 	return done
+}
+
+type capacityWait struct {
+	done      <-chan error
+	reblocked <-chan struct{}
+}
+
+func startCapacityWaitAtBlocked(t *testing.T, output *VirtualStream, samples, low, high int) capacityWait {
+	t.Helper()
+	started := make(chan struct{})
+	waitContext := &capacityWaitStartedContext{
+		Context:   context.Background(),
+		started:   started,
+		reblocked: make(chan struct{}),
+	}
+	wait := startCapacityWait(output, waitContext, samples)
+	select {
+	case <-started:
+		queued := output.PlaybackStats().QueuedSamples
+		if queued != high {
+			t.Fatalf("waiter started at queued=%d, want high watermark %d", queued, high)
+		}
+		t.Logf("waiter-start queued=%d low=%d high=%d", queued, low, high)
+	case <-time.After(time.Second):
+		t.Fatal("capacity waiter did not reach its blocked select")
+	}
+	return capacityWait{done: wait, reblocked: waitContext.reblocked}
+}
+
+type capacityWaitStartedContext struct {
+	context.Context
+	started   chan struct{}
+	reblocked chan struct{}
+	once      sync.Once
+}
+
+func (c *capacityWaitStartedContext) Done() <-chan struct{} {
+	first := false
+	c.once.Do(func() {
+		close(c.started)
+		first = true
+	})
+	if !first {
+		c.reblocked <- struct{}{}
+	}
+	return c.Context.Done()
+}
+
+func readCapacitySamples(t *testing.T, input, output *VirtualStream, label string) error {
+	t.Helper()
+	before := output.PlaybackStats().QueuedSamples
+	if err := input.ReadSamples(context.Background(), make([]int16, audio.FrameSize)); err != nil {
+		return err
+	}
+	t.Logf("%s queued=%d->%d", label, before, output.PlaybackStats().QueuedSamples)
+	return nil
+}
+
+func awaitCapacityWaitReblocked(t *testing.T, wait capacityWait, output *VirtualStream, low int) {
+	t.Helper()
+	queued := output.PlaybackStats().QueuedSamples
+	if queued <= low {
+		t.Fatalf("above-low read ended at queued=%d, want above low watermark %d", queued, low)
+	}
+	select {
+	case err := <-wait.done:
+		t.Fatalf("capacity wait returned above low watermark at queued=%d: %v", queued, err)
+	case <-wait.reblocked:
+		t.Logf("waiter-reblock queued=%d", queued)
+	case <-time.After(time.Second):
+		t.Fatalf("capacity waiter did not reblock at queued=%d", queued)
+	}
+	assertCapacityWaitBlocked(t, wait.done)
+}
+
+func awaitCapacityWaitAtThreshold(t *testing.T, wait capacityWait, output *VirtualStream, low, high int) error {
+	t.Helper()
+	if err := awaitCapacityWait(t, wait.done); err != nil {
+		return err
+	}
+	queued := output.PlaybackStats().QueuedSamples
+	if queued > low {
+		return errors.New("capacity wait returned above low watermark")
+	}
+	if queued+audio.FrameSize > high {
+		return errors.New("capacity wait returned above incoming high-watermark limit")
+	}
+	t.Logf("waiter-return queued=%d", queued)
+	return nil
 }
 
 func assertCapacityWaitBlocked(t *testing.T, done <-chan error) {

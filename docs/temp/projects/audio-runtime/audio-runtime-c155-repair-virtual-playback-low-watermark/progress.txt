@@ -1,0 +1,164 @@
+2026-09-13
+
+Static rejection repair checkpoint:
+
+- The full static rejection for CI run `34783651640`, job `103795073680`, is retained as `ci-rejection-34783651640.json`: only the owned adversarial test drifted to `52/106/222/278` against its immutable `49/101/206/260` baseline; format, Wire, vet, lint and Staticcheck passed.
+- Repair commit `66aeb3b2bd787041149469bf2b56e5523d6dbb4f` retains the aggregate test's exact baseline metrics and moves only the deterministic waiter-start handshake into a helper. No production, baseline or unowned path changed.
+- Post-repair architecture-size passes (`202` packages, `1940` files, `28759` functions). The causal subtest passes normal `200`, race `100`, `GOMAXPROCS=1` `100`, and `GOMAXPROCS=8` `100`; adversarial normal/race `900/420`, typed/loopback `80`, device package normal/race `2530/759`, full gateway module `285`, vet, fmt, Wire, pinned lint, pinned Staticcheck and diff checks pass.
+- Fresh `origin/main` remains `4a1c399ccbb3d780be95eb04316e84b8f11a6646`; accepted main and startup integration `8bdafc7f947a3a2c9856220abdc539437035bd21` remain ancestors. The next action is commit this evidence update, push the same PR #516 changed head, and return `ACCEPTED` to the script-owned CI gate without polling; keep ownership for any exact rejection.
+
+- Admission verified from FACTORY_ROOT for the sole audio-runtime task; branch matches prd.json.
+- Fresh origin/main and accepted planning base are 4a1c399ccbb3d780be95eb04316e84b8f11a6646; startup integration revision is an ancestor.
+- No C155 review findings exist in the canonical factory server list.
+- Baseline exact subtest controls passed locally, but the predecessor Windows log showed the same test’s start/read ordering failure.
+- Temporary forced start-late control recorded a nil waiter result at queued=2400 above low=1920; the temporary file was removed.
+- Repaired subtest uses a standard context Done handshake to establish waiter throttling before reads. No production file changed.
+- Focused, race, scheduler, package, gateway, vet and diff checks passed.
+- Implementation checkpoint 87c38b48d7cec36ecb476ac44f0f27fcf97b05f0 was committed and pushed; PR #516 was opened from that exact head.
+- The evidence-only follow-up commit records this handoff without changing production behavior. The final pushed head is the exact SHA returned in the task response; script CI must run that head, including Windows portable, and owns all polling.
+
+# C155 current-head causal regression recheck 2026-09-13
+
+- After a fresh `git fetch origin main`, `origin/main` remains
+  `97d3dcfb1e97a2611aa26b203a7f893442db4768`. The current pushed source was
+  clean at `c54129831c4c4e48e96d6d5912a608358309ea89`; accepted main
+  `4a1c399ccbb3d780be95eb04316e84b8f11a6646`, startup integration
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, and current `origin/main` are
+  all ancestors. The owned diff remains limited to the adversarial test and
+  C155 evidence; `device_virtual.go` and `device_virtual_test.go` are
+  unchanged.
+- Fresh bounded controls on the current source all exited 0: causal subtest
+  `200` normal, `100` race, `100` with `GOMAXPROCS=1`, and `100` with
+  `GOMAXPROCS=8`; adversarial scenarios `04`-`20` `900` normal and `420`
+  race; and typed/loopback regressions `80`. `git diff --check` is clean.
+- This remains executor handoff evidence only. No script-CI, independent
+  review, guarded merge, vertical acceptance, physical/acoustic proof or
+  project completion is claimed. Exact next action is to commit/push this
+  evidence checkpoint, keep PR `#516` bound to the exact head, and return
+  `ACCEPTED` to the script-owned current-head gate without polling; retain
+  ownership through `CONTINUE` for any exact rejection or actionable repair.
+
+# C155 latest current-main integration and bounded recheck 2026-09-13
+
+- Fresh `git fetch origin main` resolved `origin/main` to
+  `2c79ec6a931c3e86944d6a625d0a5060b4f85aa0`. The same C155 branch merged it
+  with non-ff commit `9e08472a0`; accepted main
+  `4a1c399ccbb3d780be95eb04316e84b8f11a6646`, startup integration
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, and current `origin/main` are
+  all ancestors. The worktree remained isolated and no host or peer worktree
+  was reset or changed.
+- The shared-root C155 append was removed from `progress.txt`; the candidate
+  diff now keeps C155 evidence only under this owned directory. The executable
+  change remains limited to `device_playback_adversarial_test.go`; production
+  virtual-device code and all unowned paths are unchanged.
+- Post-merge focused controls all exited 0: causal subtest normal `200`, race
+  `100`, `GOMAXPROCS=1` `100`, `GOMAXPROCS=8` `100`; adversarial scenarios
+  `04`-`20` normal `900`; full adversarial race `420`; typed/loopback `80`;
+  device-package normal `285` and race `759`; full gateway module `285`; and
+  gateway vet. Architecture-size passed at `202` packages, `1941` files and
+  `28785` functions. `make fmt`, `make wire-check`, pinned Staticcheck,
+  pinned golangci-lint and `git diff --check` passed; lint reported `0 issues`
+  in every module.
+- This is executor evidence only: no script-CI result, independent review,
+  guarded merge, vertical acceptance, physical/acoustic proof or project
+  completion is claimed. The next action is commit and push this changed
+  branch, update PR `#516` with exact head/ancestry and this evidence, and
+  return `ACCEPTED` to the script-owned current-head gate without polling;
+  retain C155 ownership through `CONTINUE` for any exact rejection or repair.
+
+# C155 exact-head causal and accumulated revalidation 2026-09-13T23:42:40Z
+
+- Admission remains `admitted` for the sole `audio-runtime` project and task
+  `audio-runtime-c155-repair-virtual-playback-low-watermark`; the isolated
+  branch still matches `prd.json`. Fresh `origin/main` is
+  `2c79ec6a931c3e86944d6a625d0a5060b4f85aa0`, and the clean candidate
+  `e62378e32e2ed892ab2ef0315cb6277d4b73a7d6` contains accepted planning main
+  `4a1c399ccbb3d780be95eb04316e84b8f11a6646`, startup integration
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, and current main as ancestors.
+- Exact-head causal scheduling controls all exited 0: subtest 08 passed `200`
+  normal trials, `100` race trials, `100` at `GOMAXPROCS=1`, and `100` at
+  `GOMAXPROCS=8`. Accumulated device regressions all exited 0: adversarial
+  scenarios 04-20 passed `900` normal trials, the full adversarial race matrix
+  passed `420`, and typed/loopback regressions passed `80` trials.
+- The ordered evidence still proves the first read leaves the throttled waiter
+  above low (`2400`) and only the final read reaches low (`1920`); no production
+  virtual-device source, watermark, error identity, FIFO or lifecycle contract
+  changed. The owned diff remains only the adversarial test and C155 evidence;
+  `device_virtual.go` and `device_virtual_test.go` are unchanged.
+- This is executor evidence only. No script-CI polling or CI-success claim is
+  made; independent review, guarded merge, the C155 vertical probe, C144
+  recovery, hardware/acoustic proof and project completion remain open. The
+  exact next action is commit this ledger checkpoint, push/update PR `#516`,
+  and return `ACCEPTED` to the script-owned current-head gate without polling.
+
+# C155 current-main integration and bounded handoff revalidation 2026-09-14T00:43:14Z
+
+- Fresh `git fetch origin main` resolved `origin/main` to
+  `8490f8dcad63adde99036016e1e7ffd9ecf61e34`. The same C155 branch merged it
+  with non-ff commit `9c8256db236a9b557097204723d8baf0968d5ec7`; accepted main
+  `4a1c399ccbb3d780be95eb04316e84b8f11a6646`, startup integration
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, and current `origin/main` are
+  all ancestors. The isolated worktree remained clean before this evidence
+  update; no host or peer worktree was reset or changed.
+- The owned diff against current `origin/main` remains only the adversarial
+  test and C155 evidence; `device_virtual.go` and `device_virtual_test.go`
+  remain unchanged. Candidate source before this ledger checkpoint was
+  `9c8256db236a9b557097204723d8baf0968d5ec7`.
+- Post-merge bounded controls all exited 0: causal subtest normal `200`, race
+  `100`, `GOMAXPROCS=1` `100`, and `GOMAXPROCS=8` `100`; adversarial scenarios
+  `04`-`20` normal `900` and full adversarial race `420`; typed/loopback `80`;
+  device package normal `2530` and race `759`; full gateway module `285`; and
+  gateway vet. `git diff --check` is clean.
+- This is executor evidence only: no script-CI result or success claim,
+  independent review, guarded merge, C155 vertical acceptance, C144 recovery,
+  hardware/acoustic proof or project completion is claimed. Exact next action
+  is commit/push this evidence checkpoint, update PR `#516` with the exact
+  changed head and current-main ancestry, and return `ACCEPTED` to the
+  script-owned current-head gate without polling; retain C155 ownership through
+  `CONTINUE` for any exact rejection or actionable repair.
+
+# C155 current-main merge and latest coverage rejection characterization — 2026-09-14
+
+- A fresh `git fetch origin main` resolved current `origin/main` to
+  `1b1c0296b9471b930c2b290f3bf6fa10559957de`. The same isolated C155 branch
+  merged it with non-ff commit `36dca7604e26cd69fd42c3a4be7b2d4a38fc865e`;
+  accepted main `4a1c399ccbb3d780be95eb04316e84b8f11a6646`, startup integration
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, and current `origin/main` are
+  ancestors. No host or peer worktree was reset or modified.
+- The current branch is clean and its diff from `origin/main` remains limited
+  to `device_playback_adversarial_test.go` and the three C155 evidence files;
+  `device_virtual.go`, `device_virtual_test.go`, the provider, and the remote
+  integration files are unchanged.
+- The latest canonical CI rejection is run `34793645068`, coverage job
+  `103822470482`, against prior head
+  `39af197f3f6bedc252a69a454c214a5618e8f475`. The full job metadata is saved
+  at `/tmp/audio-runtime-c155-job-103822470482.json` and the complete job log
+  at `/tmp/audio-runtime-c155-job-103822470482.log`. Its only assertion
+  failure is the out-of-scope
+  `TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/slow_device`
+  at `session_tool_audio_remote_e2e_test.go:183`: the unchanged scenario
+  deadline expired with `rendered_pcm=319200`, `expected_pcm=174391`,
+  `final_marker=false`, zero queue/drop/overflow/discard counts, and the child
+  still running. Static, unit, race, hermetic, WebMCP Chrome, macOS audio
+  release and Windows portable jobs were green at that run snapshot; the
+  aggregate run was still settling when the coverage job failed.
+- The exact rejected remote subtest passes once in the normal topology and
+  once with focused `nomicrophone` coverage instrumentation (both exit 0;
+  scenario body about 18.2s). The prior review-117 room-duration finding also
+  passes `20` normal and `10` race repetitions on current source. These
+  controls establish non-reproduction, not a C155 repair; the failed remote
+  test and room paths are outside `prd.json.ownedPaths` and no C155 source
+  change can causally repair them.
+- Post-merge C155 evidence is green: causal subtest `200` normal and `100`
+  race trials; adversarial scenarios `04`-`20` `900` normal and full
+  adversarial race `420`; typed/loopback `80`; device package `2530` normal
+  and `759` race; full gateway `285`; gateway vet; architecture-size
+  `202/1941/28798`; Wire; and diff-check. No CI success, independent review,
+  guarded merge, vertical acceptance, hardware/acoustic proof or project
+  completion is claimed.
+- The merge is a required changed head for current-main handoff. Push
+  `36dca7604e26cd69fd42c3a4be7b2d4a38fc865e`, update PR `#516` with the exact
+  ancestry and failure mapping, and submit the changed head once to the
+  script-owned CI gate without polling. If the remote failure recurs, the
+  primary must route its exact owner/prerequisite; C155 must not edit or waive
+  the out-of-scope remote fixture.
