@@ -16,6 +16,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/errorpolicy"
 	roommanifest "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/manifest"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -35,6 +36,7 @@ type Dependencies struct {
 	Clock    platformclock.Scheduler
 	Failure  rooms.FailureService
 	Evidence roomevidence.Service
+	Tools    runtimeTools.Service
 }
 
 type Runner struct {
@@ -44,6 +46,7 @@ type Runner struct {
 	now      func() time.Time
 	failure  rooms.FailureService
 	evidence roomevidence.Service
+	tools    runtimeTools.Service
 }
 
 func New(dependencies Dependencies) Runner {
@@ -55,7 +58,7 @@ func New(dependencies Dependencies) Runner {
 	if failure == nil {
 		failure = errorpolicy.New()
 	}
-	return Runner{live: dependencies.Live, media: dependencies.Media, clock: dependencies.Clock, now: now, failure: failure, evidence: dependencies.Evidence}
+	return Runner{live: dependencies.Live, media: dependencies.Media, clock: dependencies.Clock, now: now, failure: failure, evidence: dependencies.Evidence, tools: dependencies.Tools}
 }
 
 func (r Runner) currentTime() time.Time {

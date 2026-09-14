@@ -8,6 +8,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
 const browserEventQueueCapacity = 16
@@ -138,3 +139,50 @@ func (h *browserCapabilityHandle) Close() error {
 	})
 	return h.closeErr
 }
+
+// roomCapabilityHandle keeps the tools service's composed lifecycle owner
+// intact while exposing the room browser observation stream through the live
+// session contract. Definitions and execution remain owned by the tools
+// service, including refresh-time static/browser composition.
+type roomCapabilityHandle struct {
+	inner runtimeTools.CapabilityHandle
+	watch func(context.Context) <-chan session.LiveCapabilityEvent
+	once  sync.Once
+	err   error
+}
+
+func newRoomCapabilityHandle(inner runtimeTools.CapabilityHandle, watch func(context.Context) <-chan session.LiveCapabilityEvent) *roomCapabilityHandle {
+	return &roomCapabilityHandle{inner: inner, watch: watch}
+}
+
+func (h *roomCapabilityHandle) Initialize(ctx context.Context) error {
+	if h == nil || h.inner == nil {
+		return nil
+	}
+	return h.inner.Initialize(ctx)
+}
+
+func (h *roomCapabilityHandle) RefreshDefinitions(ctx context.Context) ([]messages.ToolDefinition, error) {
+	if h == nil || h.inner == nil {
+		return nil, nil
+	}
+	return h.inner.RefreshDefinitions(ctx)
+}
+
+func (h *roomCapabilityHandle) BrowserWatch(ctx context.Context) <-chan session.LiveCapabilityEvent {
+	if h == nil || h.watch == nil {
+		return nil
+	}
+	return h.watch(ctx)
+}
+
+func (h *roomCapabilityHandle) Close() error {
+	if h == nil || h.inner == nil {
+		return nil
+	}
+	h.once.Do(func() { h.err = h.inner.Close() })
+	return h.err
+}
+
+var _ session.LiveCapabilityHandle = (*roomCapabilityHandle)(nil)
+var _ session.LiveCapabilityWatcher = (*roomCapabilityHandle)(nil)

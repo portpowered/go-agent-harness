@@ -8,6 +8,7 @@ import (
 // CloneLiveRequest detaches caller-owned request data before workers start.
 func CloneLiveRequest(request session.LiveRequest) session.LiveRequest {
 	request.ToolNames = append([]string(nil), request.ToolNames...)
+	request.ToolAllowPaths = append([]string(nil), request.ToolAllowPaths...)
 	request.OpeningContentParts = CloneContentParts(request.OpeningContentParts)
 	if request.TurnDetection != nil {
 		policy := *request.TurnDetection

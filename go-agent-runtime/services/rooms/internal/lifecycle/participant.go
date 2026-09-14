@@ -12,6 +12,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	roommanifest "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/manifest"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
 func (r Runner) openParticipant(ctx context.Context, state *runState, participant rooms.Participant, request rooms.RoomRunOptions, recorder roomevidence.Recorder) (*activeParticipant, error) {
@@ -81,6 +82,8 @@ func newLiveRequest(participant rooms.Participant) session.LiveRequest {
 }
 
 func (r Runner) configureCapabilities(ctx context.Context, participant rooms.Participant, request rooms.RoomRunOptions, liveRequest *session.LiveRequest) (func() error, error) {
+	liveRequest.ToolWorkDir = request.WorkDir
+	liveRequest.ToolAllowPaths = append([]string(nil), request.AllowPaths...)
 	if request.LiveCapabilitiesFactory != nil {
 		binding, err := request.LiveCapabilitiesFactory(ctx, *liveRequest)
 		if err != nil {
@@ -90,6 +93,52 @@ func (r Runner) configureCapabilities(ctx context.Context, participant rooms.Par
 		liveRequest.Capabilities = &binding
 		return release, nil
 	}
+	if r.tools == nil || (len(participant.Tools) == 0 && participant.BrowserTools == nil) {
+		return r.configureBrowserFallback(participant, request, liveRequest)
+	}
+	return r.configureRuntimeCapabilities(ctx, participant, request, liveRequest)
+}
+
+func (r Runner) configureRuntimeCapabilities(ctx context.Context, participant rooms.Participant, request rooms.RoomRunOptions, liveRequest *session.LiveRequest) (func() error, error) {
+	capabilityRequest := runtimeTools.Request{WorkDir: request.WorkDir, AllowPaths: append([]string(nil), request.AllowPaths...)}
+	if len(participant.Tools) > 0 {
+		capabilityRequest.Selections = roomToolSelections(participant.Tools)
+		capabilityRequest.UseDefaultTool = roomHasStaticTools(participant.Tools)
+	}
+	browser, browserWatchFn, err := r.resolveBrowserCapabilities(participant, request)
+	if err != nil {
+		return nil, err
+	}
+	capabilityRequest.Browser = browser
+	capability, err := r.tools.Resolve(ctx, capabilityRequest)
+	if err != nil {
+		return nil, fmt.Errorf("resolve participant capabilities: %w", err)
+	}
+	handle := newRoomCapabilityHandle(capability.Handle, browserWatchFn)
+	liveRequest.Capabilities = &session.LiveCapabilities{
+		Executor: capability.Executor, Definitions: append([]messages.ToolDefinition(nil), capability.Definitions...), Handle: handle,
+	}
+	return handle.Close, nil
+}
+
+func (r Runner) resolveBrowserCapabilities(participant rooms.Participant, request rooms.RoomRunOptions) (*runtimeTools.BrowserSurface, func(context.Context) <-chan session.LiveCapabilityEvent, error) {
+	if participant.BrowserTools == nil {
+		return nil, nil, nil
+	}
+	if request.BrowserCapabilitiesFactory == nil {
+		return nil, nil, fmt.Errorf("participant %q browser capabilities are unavailable", participant.ID)
+	}
+	browser, err := request.BrowserCapabilitiesFactory(participant)
+	if err != nil {
+		return nil, nil, fmt.Errorf("configure participant browser tools: %w", err)
+	}
+	return &runtimeTools.BrowserSurface{
+		Executor: browser.Executor, Definitions: append([]messages.ToolDefinition(nil), browser.Definitions...),
+		RefreshDefinitions: browser.RefreshToolDefinitions, Initialize: browser.Initialize, Close: browser.Close,
+	}, browserWatch(browser.BrowserWatch), nil
+}
+
+func (r Runner) configureBrowserFallback(participant rooms.Participant, request rooms.RoomRunOptions, liveRequest *session.LiveRequest) (func() error, error) {
 	if participant.BrowserTools == nil {
 		return nil, nil
 	}
@@ -105,6 +154,40 @@ func (r Runner) configureCapabilities(ctx context.Context, participant rooms.Par
 		Executor: browser.Executor, Definitions: append([]messages.ToolDefinition(nil), browser.Definitions...), Handle: owner,
 	}
 	return owner.Close, nil
+}
+
+func roomHasStaticTools(names []string) bool {
+	for _, name := range names {
+		switch name {
+		case runtimeTools.ExecToolID, runtimeTools.ReadFileToolID, runtimeTools.ReadImageToolID,
+			runtimeTools.WriteFileToolID, runtimeTools.EditFileToolID, runtimeTools.AppendFileToolID,
+			runtimeTools.ListDirToolID, runtimeTools.WebFetchToolID, runtimeTools.WebSearchToolID,
+			runtimeTools.ScreenToolID, runtimeTools.MouseToolID, runtimeTools.LoadSkillToolID,
+			runtimeTools.SleepToolID:
+			return true
+		}
+	}
+	return false
+}
+
+func roomToolSelections(names []string) []runtimeTools.ToolSelection {
+	requested := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		requested[name] = struct{}{}
+	}
+	ids := []string{
+		runtimeTools.ExecToolID, runtimeTools.ReadFileToolID, runtimeTools.ReadImageToolID,
+		runtimeTools.WriteFileToolID, runtimeTools.EditFileToolID, runtimeTools.AppendFileToolID,
+		runtimeTools.ListDirToolID, runtimeTools.WebFetchToolID, runtimeTools.WebSearchToolID,
+		runtimeTools.ScreenToolID, runtimeTools.MouseToolID, runtimeTools.LoadSkillToolID,
+		runtimeTools.SleepToolID,
+	}
+	selections := make([]runtimeTools.ToolSelection, 0, len(ids))
+	for _, id := range ids {
+		_, enabled := requested[id]
+		selections = append(selections, runtimeTools.ToolSelection{ID: id, Enabled: enabled})
+	}
+	return selections
 }
 
 func (r Runner) admitLive(ctx context.Context, state *runState, participant rooms.Participant, request rooms.RoomRunOptions, local rooms.MediaPorts, liveRequest session.LiveRequest, release func() error) (*activeParticipant, error) {

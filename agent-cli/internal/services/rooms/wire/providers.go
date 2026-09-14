@@ -15,6 +15,7 @@ import (
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	runtimeWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
@@ -28,6 +29,7 @@ type Dependencies struct {
 	Media    runtimeRooms.MediaFactory
 	Registry devicegw.DeviceRegistry
 	Clock    platformclock.Scheduler
+	Tools    runtimeTools.Service
 }
 
 // NewService returns the runtime room service with a CLI launch resolver. The
@@ -39,7 +41,7 @@ func NewService(deps Dependencies) runtimeRooms.Service {
 		media = runtimeWire.NewMediaFactory(deps.Devices)
 	}
 	runtimeService := runtimeWire.NewService(runtimeWire.Dependencies{
-		Live: deps.Live, Media: media, Clock: deps.Clock, Evidence: roomevidencewire.NewService(),
+		Live: deps.Live, Media: media, Clock: deps.Clock, Tools: deps.Tools, Evidence: roomevidencewire.NewService(),
 	})
 	return &service{runtime: runtimeService, launch: launch.NewPlanner(deps.Registry)}
 }

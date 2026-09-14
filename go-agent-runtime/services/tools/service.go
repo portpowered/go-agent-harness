@@ -173,6 +173,22 @@ type Request struct {
 	UseDefaultTool bool
 }
 
+// Built-in tool IDs are stable values so hosts can construct closed
+// participant selections without importing the registry implementation.
+const (
+	ExecToolID       = "exec"
+	ReadFileToolID   = "read_file"
+	WriteFileToolID  = "write_file"
+	EditFileToolID   = "edit_file"
+	AppendFileToolID = "append_file"
+	ListDirToolID    = "list_dir"
+	WebFetchToolID   = "web_fetch"
+	WebSearchToolID  = "web_search"
+	MouseToolID      = "mouse"
+	LoadSkillToolID  = "load_skill"
+	SleepToolID      = "sleep"
+)
+
 // BrowserSurface is the narrow browser boundary accepted by the reusable
 // tools service. Hosts own broker discovery, selection, event streams, and
 // platform adapters; the runtime owns composition of this surface with static

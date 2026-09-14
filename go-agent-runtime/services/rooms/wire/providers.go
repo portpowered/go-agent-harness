@@ -17,6 +17,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/planning"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/service"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -25,6 +26,7 @@ type Dependencies struct {
 	Media    rooms.MediaFactory
 	Clock    platformclock.Scheduler
 	Evidence roomevidence.Service
+	Tools    runtimeTools.Service
 }
 
 func NewService(dependencies Dependencies) rooms.Service {
@@ -41,7 +43,7 @@ func newFailureService() rooms.FailureService { return errorpolicy.New() }
 func newRunner(dependencies Dependencies, failure rooms.FailureService) lifecycle.Runner {
 	return lifecycle.New(lifecycle.Dependencies{
 		Live: dependencies.Live, Media: dependencies.Media, Clock: dependencies.Clock,
-		Failure: failure, Evidence: dependencies.Evidence,
+		Failure: failure, Evidence: dependencies.Evidence, Tools: dependencies.Tools,
 	})
 }
 

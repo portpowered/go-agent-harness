@@ -10,6 +10,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
@@ -109,6 +110,89 @@ func browserConfigForParityTest() *rooms.BrowserToolsConfig {
 		Limits: rooms.BrowserLimitsConfig{InvocationTimeout: 20 * time.Second},
 	}
 	return &config
+}
+
+func TestRunnerPassesStaticAndBrowserCapabilityInputsTogether(t *testing.T) {
+	service := &fakeLiveService{handles: map[string]*fakeLiveHandle{
+		"browser-agent": newFakeLiveHandle(), "plain-agent": newFakeLiveHandle(),
+	}}
+	toolService := &composingRoomToolsService{}
+	browserFactory := func(rooms.Participant) (rooms.BrowserCapabilities, error) {
+		return rooms.BrowserCapabilities{Executor: capabilityTestExecutor{}, Definitions: []messages.ToolDefinition{{Name: "read_page"}}}, nil
+	}
+	manifest := rooms.Manifest{
+		SchemaVersion: rooms.SchemaVersion, Room: rooms.Room{MaxTurns: 1},
+		Participants: []rooms.Participant{
+			{ID: "browser-agent", Kind: rooms.ParticipantKindAgent, SystemPrompt: "browser", OpeningPrompt: "start", Provider: "p", Model: "m", APIKeyEnv: "BROWSER_KEY", Tools: []string{"exec", "read_page"}, BrowserTools: browserConfigForParityTest()},
+			{ID: "plain-agent", Kind: rooms.ParticipantKindAgent, SystemPrompt: "plain", OpeningPrompt: "start", Provider: "p", Model: "m", APIKeyEnv: "PLAIN_KEY", Tools: []string{}},
+		},
+	}
+	runner := New(Dependencies{Live: service, Clock: platformclock.Real{}, Tools: toolService})
+	if _, err := runner.Run(context.Background(), nil, rooms.RoomRunOptions{Manifest: manifest, WorkDir: t.TempDir(), BrowserCapabilitiesFactory: browserFactory}); err != nil {
+		t.Fatalf("Run error = %v", err)
+	}
+	if !toolService.sawStatic || toolService.browserDefinitions != 1 {
+		t.Fatalf("tool request static=%t browser definitions=%d, want static plus one browser definition", toolService.sawStatic, toolService.browserDefinitions)
+	}
+	service.mu.Lock()
+	defer service.mu.Unlock()
+	for _, request := range service.requests {
+		if request.ParticipantID != "browser-agent" {
+			continue
+		}
+		seen := make(map[string]bool)
+		for _, definition := range request.Capabilities.Definitions {
+			seen[definition.Name] = true
+		}
+		if !seen["exec"] || !seen["read_page"] {
+			t.Fatalf("browser request definitions = %v, want static exec and browser read_page", seen)
+		}
+		return
+	}
+	t.Fatal("browser participant request was not captured")
+}
+
+type composingRoomToolsService struct {
+	sawStatic          bool
+	browserDefinitions int
+}
+
+func (s *composingRoomToolsService) Resolve(_ context.Context, request runtimeTools.Request) (runtimeTools.Capability, error) {
+	s.sawStatic = request.UseDefaultTool
+	if request.Browser != nil {
+		s.browserDefinitions = len(request.Browser.Definitions)
+	}
+	definitions := []messages.ToolDefinition{{Name: "exec"}}
+	if request.Browser != nil {
+		definitions = append(definitions, request.Browser.Definitions...)
+	}
+	return runtimeTools.Capability{Executor: capabilityTestExecutor{}, Definitions: definitions, Handle: roomTestCapabilityHandle{}}, nil
+}
+
+func (*composingRoomToolsService) BuildSkillsSummary(context.Context, runtimeTools.SkillSummaryRequest) (string, error) {
+	return "", nil
+}
+
+func (*composingRoomToolsService) BrowserContract() runtimeTools.BrowserContract { return nil }
+func (*composingRoomToolsService) NewCleanupCoordinator(...func() error) runtimeTools.CleanupCoordinator {
+	return nil
+}
+func (*composingRoomToolsService) NewCleanupCoordinatorWithTimeout(time.Duration, ...func() error) runtimeTools.CleanupCoordinator {
+	return nil
+}
+
+type roomTestCapabilityHandle struct{}
+
+func (roomTestCapabilityHandle) Initialize(context.Context) error { return nil }
+func (roomTestCapabilityHandle) RefreshDefinitions(context.Context) ([]messages.ToolDefinition, error) {
+	return []messages.ToolDefinition{{Name: "exec"}}, nil
+}
+func (roomTestCapabilityHandle) Close() error { return nil }
+
+type capabilityTestExecutor struct{}
+
+func (capabilityTestExecutor) Execute(_ context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
+	return messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name}, nil
 }
 
 type browserParityService struct {

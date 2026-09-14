@@ -57,15 +57,15 @@ func NewDeviceProbeService(registry devicegw.DeviceRegistry, sessionFactory serv
 // NewRoomService keeps room orchestration behind the public room contract. The
 // application graph supplies the live session and media ports explicitly;
 // registry remains a host-only input to CLI launch planning.
-func NewRoomService(live runtimeSession.LiveService, media runtimeRooms.MediaFactory, registry devicegw.DeviceRegistry, clockSource clock.Scheduler) runtimeRooms.Service {
-	return roomwire.NewService(roomwire.Dependencies{Live: live, Media: media, Registry: registry, Clock: clockSource})
+func NewRoomService(live runtimeSession.LiveService, media runtimeRooms.MediaFactory, registry devicegw.DeviceRegistry, clockSource clock.Scheduler, runtimeToolService runtimeTools.Service) runtimeRooms.Service {
+	return roomwire.NewService(roomwire.Dependencies{Live: live, Media: media, Registry: registry, Clock: clockSource, Tools: runtimeToolService})
 }
 
 // NewRoomServiceWithDevices lets application composition inject the complete
 // device service. The room adapter is constructed in the room service wire
 // package, keeping device registries and gateway workers out of room policy.
-func NewRoomServiceWithDevices(live runtimeSession.LiveService, deviceService runtimeDevices.Service, registry devicegw.DeviceRegistry, clockSource clock.Scheduler) runtimeRooms.Service {
-	return roomwire.NewService(roomwire.Dependencies{Live: live, Devices: deviceService, Registry: registry, Clock: clockSource})
+func NewRoomServiceWithDevices(live runtimeSession.LiveService, deviceService runtimeDevices.Service, registry devicegw.DeviceRegistry, clockSource clock.Scheduler, runtimeToolService runtimeTools.Service) runtimeRooms.Service {
+	return roomwire.NewService(roomwire.Dependencies{Live: live, Devices: deviceService, Registry: registry, Clock: clockSource, Tools: runtimeToolService})
 }
 
 var RoomSet = wire.NewSet(NewRoomServiceWithDevices) //nolint:gochecknoglobals // immutable Wire provider metadata
