@@ -25,6 +25,15 @@ func (p *participantRecorder) Artifacts() roomevidence.ArtifactPaths {
 }
 
 func (p *participantRecorder) RecordDiagnostic(record roomevidence.DiagnosticRecord) error {
+	if p == nil || p.owner == nil {
+		return roomevidence.ErrRecorderClosed
+	}
+	p.owner.operationMu.Lock()
+	defer p.owner.operationMu.Unlock()
+	return p.recordDiagnostic(record)
+}
+
+func (p *participantRecorder) recordDiagnostic(record roomevidence.DiagnosticRecord) error {
 	if err := p.openCheck(); err != nil {
 		return err
 	}
@@ -48,6 +57,15 @@ func (p *participantRecorder) RecordDiagnostic(record roomevidence.DiagnosticRec
 }
 
 func (p *participantRecorder) ObserveDelta(message messages.StreamMessage) error {
+	if p == nil || p.owner == nil {
+		return roomevidence.ErrRecorderClosed
+	}
+	p.owner.operationMu.Lock()
+	defer p.owner.operationMu.Unlock()
+	return p.observeDelta(message)
+}
+
+func (p *participantRecorder) observeDelta(message messages.StreamMessage) error {
 	if err := p.openCheck(); err != nil {
 		return err
 	}
@@ -66,6 +84,15 @@ func (p *participantRecorder) ObserveDelta(message messages.StreamMessage) error
 }
 
 func (p *participantRecorder) ObserveAudio(pcm []byte) error {
+	if p == nil || p.owner == nil {
+		return roomevidence.ErrRecorderClosed
+	}
+	p.owner.operationMu.Lock()
+	defer p.owner.operationMu.Unlock()
+	return p.observeAudio(pcm)
+}
+
+func (p *participantRecorder) observeAudio(pcm []byte) error {
 	if err := p.openCheck(); err != nil {
 		return err
 	}
@@ -76,10 +103,28 @@ func (p *participantRecorder) ObserveAudio(pcm []byte) error {
 }
 
 func (p *participantRecorder) ObserveSentAudio(pcm []byte) error {
-	return errors.Join(p.ObserveAudio(pcm), p.ObserveSentStream(pcm))
+	if p == nil || p.owner == nil {
+		return roomevidence.ErrRecorderClosed
+	}
+	p.owner.operationMu.Lock()
+	defer p.owner.operationMu.Unlock()
+	return errors.Join(p.observeAudio(pcm), p.observeSentStream(pcm))
 }
 
 func (p *participantRecorder) ObserveSentStream(pcm []byte) error {
+	if p == nil || p.owner == nil {
+		return roomevidence.ErrRecorderClosed
+	}
+	p.owner.operationMu.Lock()
+	defer p.owner.operationMu.Unlock()
+	return p.observeSentStream(pcm)
+}
+
+func (p *participantRecorder) observeSentAudio(pcm []byte) error {
+	return errors.Join(p.observeAudio(pcm), p.observeSentStream(pcm))
+}
+
+func (p *participantRecorder) observeSentStream(pcm []byte) error {
 	if err := p.openCheck(); err != nil {
 		return err
 	}
@@ -94,7 +139,7 @@ func (p *participantRecorder) ObserveSentStream(pcm []byte) error {
 		p.owner.recordError("", roomevidence.MixPath, mixErr)
 	}
 	if event := p.sentSpeech.transition(audio.PCM16HasSignal(pcm)); event != "" {
-		if err := p.owner.RecordTimeline("speech_"+event, p.id, nil); err != nil && !errors.Is(err, roomevidence.ErrFinalized) {
+		if _, err := p.owner.recordOpenTimeline("speech_"+event, p.id, nil); err != nil && !errors.Is(err, roomevidence.ErrFinalized) {
 			p.owner.recordError("", roomevidence.TimelinePath, err)
 		}
 	}
@@ -105,13 +150,32 @@ func (p *participantRecorder) CloseSentSpeechSegment() error {
 	if p == nil || p.sentSpeech == nil {
 		return nil
 	}
+	if p.owner == nil {
+		return roomevidence.ErrRecorderClosed
+	}
+	p.owner.operationMu.Lock()
+	defer p.owner.operationMu.Unlock()
+	return p.closeSentSpeechSegment()
+}
+
+func (p *participantRecorder) closeSentSpeechSegment() error {
 	if event := p.sentSpeech.transition(false); event != "" && p.owner != nil {
-		return p.owner.RecordTimeline("speech_"+event, p.id, nil)
+		_, err := p.owner.recordOpenTimeline("speech_"+event, p.id, nil)
+		return err
 	}
 	return nil
 }
 
 func (p *participantRecorder) ObserveReceivedAudio(pcm []byte) error {
+	if p == nil || p.owner == nil {
+		return roomevidence.ErrRecorderClosed
+	}
+	p.owner.operationMu.Lock()
+	defer p.owner.operationMu.Unlock()
+	return p.observeReceivedAudio(pcm)
+}
+
+func (p *participantRecorder) observeReceivedAudio(pcm []byte) error {
 	if err := p.openCheck(); err != nil {
 		return err
 	}
@@ -120,7 +184,8 @@ func (p *participantRecorder) ObserveReceivedAudio(pcm []byte) error {
 	}
 	writeErr := p.MarkError(p.artifacts.ReceivedPCM, p.receivedPCM.write(pcm))
 	if event := p.receivedSpeech.transition(audio.PCM16HasSignal(pcm)); event != "" {
-		return errors.Join(writeErr, p.owner.RecordTimeline("received_speech_"+event, p.id, nil))
+		_, timelineErr := p.owner.recordOpenTimeline("received_speech_"+event, p.id, nil)
+		return errors.Join(writeErr, timelineErr)
 	}
 	return writeErr
 }
@@ -129,9 +194,16 @@ func (p *participantRecorder) RecordAudioDropped(reason string, bytes int) error
 	if p == nil || p.owner == nil {
 		return roomevidence.ErrRecorderClosed
 	}
+	p.owner.operationMu.Lock()
+	defer p.owner.operationMu.Unlock()
+	return p.recordAudioDropped(reason, bytes)
+}
+
+func (p *participantRecorder) recordAudioDropped(reason string, bytes int) error {
 	fields := map[string]string{"reason": reason, "bytes": fmt.Sprintf("%d", bytes)}
-	err := p.RecordDiagnostic(roomevidence.DiagnosticRecord{Event: "room.audio.input_dropped", Fields: fields})
-	return errors.Join(err, p.owner.RecordTimeline("audio_input_dropped", p.id, fields))
+	err := p.recordDiagnostic(roomevidence.DiagnosticRecord{Event: "room.audio.input_dropped", Fields: fields})
+	_, timelineErr := p.owner.recordOpenTimeline("audio_input_dropped", p.id, fields)
+	return errors.Join(err, timelineErr)
 }
 
 func (p *participantRecorder) MarkError(artifact string, err error) error {

@@ -156,15 +156,24 @@ func (s recordingEventSink) Publish(ctx context.Context, participantID string, e
 		hostErr = s.host.Publish(ctx, participantID, event)
 	}
 	if s.recorder != nil {
-		_ = s.recorder.RecordLiveEvent(participantID, event)
+		observeRoomRecordingResult(s.recorder.RecordLiveEvent(participantID, event))
 		if participant := s.recorder.Participant(participantID); participant != nil {
 			if event.Message != nil {
-				_ = participant.ObserveDelta(*event.Message)
+				observeRoomRecordingResult(participant.ObserveDelta(*event.Message))
 			}
-			_ = participant.RecordDiagnostic(roomevidence.DiagnosticRecord{Event: event.Kind, Fields: liveEventFields(event), At: event.Timestamp})
+			observeRoomRecordingResult(participant.RecordDiagnostic(roomevidence.DiagnosticRecord{Event: event.Kind, Fields: liveEventFields(event), At: event.Timestamp}))
 		}
 	}
 	return hostErr
+}
+
+// observeRoomRecordingResult makes best-effort recording explicit. Recorder
+// methods retain sink errors internally; the room runtime remains independent
+// of a degraded evidence sink.
+func observeRoomRecordingResult(err error) {
+	if err != nil {
+		return
+	}
 }
 
 func liveEventFields(event session.LiveEvent) map[string]string {

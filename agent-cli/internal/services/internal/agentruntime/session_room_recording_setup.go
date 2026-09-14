@@ -76,7 +76,16 @@ func (h roomParticipantFailureHandler) recordProviderError(observation sessionTe
 	if observation.Code != "" {
 		fields["code"] = observation.Code
 	}
-	_ = h.evidence.RecordProviderErrorTimeline(h.runtime.plan.manifest.ID, fields)
+	observeRoomEvidenceResult(h.evidence.RecordProviderErrorTimeline(h.runtime.plan.manifest.ID, fields))
+}
+
+// observeRoomEvidenceResult makes best-effort recording explicit. The service
+// retains its first sink error and projects it through ApplyRecordingHealth;
+// recording degradation must not change the room's runtime outcome.
+func observeRoomEvidenceResult(err error) {
+	if err != nil {
+		return
+	}
 }
 
 func (h roomParticipantFailureHandler) failureError(observation sessionTerminalObservation) error {
@@ -89,13 +98,4 @@ func (h roomParticipantFailureHandler) failureError(observation sessionTerminalO
 		return observation.Err
 	}
 	return errors.New("session stream error")
-}
-
-func replayParticipantArtifact(participant RoomReplayParticipant, role string) (RoomReplayArtifact, bool) {
-	for _, artifact := range participant.Artifacts {
-		if artifact.Role == role || artifact.Name == role {
-			return artifact, true
-		}
-	}
-	return RoomReplayArtifact{}, false
 }

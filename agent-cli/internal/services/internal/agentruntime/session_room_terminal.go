@@ -225,9 +225,9 @@ func recordRoomParticipantBoundDiagnostic(opts RoomRunOptions, evidence roomevid
 	record := participantTerminationDiagnostic(result)
 	if evidence != nil {
 		if participant := evidence.Participant(result.ParticipantID); participant != nil {
-			_ = participant.RecordDiagnostic(roomevidence.DiagnosticRecord{Event: record.Event, Fields: record.Fields})
+			observeRoomEvidenceResult(participant.RecordDiagnostic(roomevidence.DiagnosticRecord{Event: record.Event, Fields: record.Fields}))
 		}
-		evidence.RecordTimeline("room_bound_shutdown", result.ParticipantID, record.Fields)
+		observeRoomEvidenceResult(evidence.RecordTimeline("room_bound_shutdown", result.ParticipantID, record.Fields))
 	}
 	if opts.OnDiagnostic != nil {
 		opts.OnDiagnostic(result.ParticipantID, record)

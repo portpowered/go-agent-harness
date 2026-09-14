@@ -232,6 +232,8 @@ func (r *recorder) RecordLiveEvent(participantID string, event session.LiveEvent
 	if r == nil {
 		return roomevidence.ErrRecorderClosed
 	}
+	r.operationMu.Lock()
+	defer r.operationMu.Unlock()
 	participantID = liveEventParticipantID(participantID, event)
 	r.markCaptureSeen(participantID)
 	fields := liveEventFields(event)

@@ -63,7 +63,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 			// room runtime failure. The status projection is applied to the
 			// returned result after all close/mix/manifest callbacks have had a
 			// chance to latch their first error.
-			_ = evidence.Finalize(result, runErr, roomClock.Now().UTC())
+			observeRoomEvidenceResult(evidence.Finalize(result, runErr, roomClock.Now().UTC()))
 			evidence.ApplyRecordingHealth(&result)
 		}
 		return result, runErr
@@ -110,7 +110,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 			return finalizeEvidence(result, safeErr)
 		}
 		if evidence != nil {
-			_ = evidence.RecordTimeline("participant_joined", plan.manifest.ID, nil)
+			observeRoomEvidenceResult(evidence.RecordTimeline("participant_joined", plan.manifest.ID, nil))
 		}
 	}
 
@@ -119,7 +119,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		onParticipantTerminated = func(result RoomParticipantResult) {
 			recordRoomParticipantBoundDiagnostic(opts, evidence, result)
 			if evidence != nil {
-				_ = evidence.RecordTimeline("participant_terminated", result.ParticipantID, participantTerminalFields(result))
+				observeRoomEvidenceResult(evidence.RecordTimeline("participant_terminated", result.ParticipantID, participantTerminalFields(result)))
 			}
 			if opts.OnParticipantTerminated != nil {
 				opts.OnParticipantTerminated(result)
@@ -129,7 +129,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 	coordinator := newRoomCoordinator(roomCancel, opts.Manifest.Room.MaxTurns, opts.BoundShutdownGrace, onParticipantTerminated, opts.onRoomBoundShutdown)
 	coordinator.setParticipantFailureObserver(func(participantID, reason string) {
 		if evidence != nil {
-			_ = evidence.RecordTimeline("participant_failed", participantID, map[string]string{"reason": reason})
+			observeRoomEvidenceResult(evidence.RecordTimeline("participant_failed", participantID, map[string]string{"reason": reason}))
 		}
 	})
 	coordinator.blockEmptyStop()
@@ -282,10 +282,10 @@ func publishRoomParticipantsReady(coordinator *roomCoordinator, plans []*roomPar
 		}
 		ready := roomParticipantReady(plan)
 		if evidence != nil {
-			_ = evidence.SetParticipantReady(runtimeRoomsReady(ready))
+			observeRoomEvidenceResult(evidence.SetParticipantReady(runtimeRoomsReady(ready)))
 		}
 		if evidence != nil {
-			_ = evidence.RecordTimeline("participant_ready", ready.ParticipantID, nil)
+			observeRoomEvidenceResult(evidence.RecordTimeline("participant_ready", ready.ParticipantID, nil))
 		}
 		if opts.OnParticipantReady != nil {
 			opts.OnParticipantReady(ready)

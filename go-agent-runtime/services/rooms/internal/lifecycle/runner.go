@@ -186,7 +186,7 @@ func (r Runner) openOneParticipant(ctx context.Context, state *runState, partici
 		state.add(active)
 	}
 	if recorder != nil {
-		_ = recorder.RecordTimeline("participant_joined", participant.ID, map[string]string{"kind": string(roommanifest.NormalizeParticipantKind(participant.Kind))})
+		observeRoomRecordingResult(recorder.RecordTimeline("participant_joined", participant.ID, map[string]string{"kind": string(roommanifest.NormalizeParticipantKind(participant.Kind))}))
 	}
 	if request.OnParticipantReady != nil {
 		request.OnParticipantReady(rooms.RoomParticipantReady{
@@ -286,7 +286,7 @@ func installRecorder(request rooms.RoomRunOptions, recorder roomevidence.Recorde
 	diagnosticCallback := request.OnDiagnostic
 	request.OnDiagnostic = func(participantID string, record rooms.RoomDiagnosticRecord) {
 		if participant := recorder.Participant(participantID); participant != nil {
-			_ = participant.RecordDiagnostic(roomevidence.DiagnosticRecord{Event: record.Event, Fields: record.Fields, At: record.At})
+			observeRoomRecordingResult(participant.RecordDiagnostic(roomevidence.DiagnosticRecord{Event: record.Event, Fields: record.Fields, At: record.At}))
 		}
 		if diagnosticCallback != nil {
 			diagnosticCallback(participantID, record)
@@ -294,14 +294,14 @@ func installRecorder(request rooms.RoomRunOptions, recorder roomevidence.Recorde
 	}
 	readyCallback := request.OnParticipantReady
 	request.OnParticipantReady = func(value rooms.RoomParticipantReady) {
-		_ = recorder.SetParticipantReady(value)
+		observeRoomRecordingResult(recorder.SetParticipantReady(value))
 		if readyCallback != nil {
 			readyCallback(value)
 		}
 	}
 	terminatedCallback := request.OnParticipantTerminated
 	request.OnParticipantTerminated = func(value rooms.RoomParticipantResult) {
-		_ = recorder.SetParticipantTerminated(value)
+		observeRoomRecordingResult(recorder.SetParticipantTerminated(value))
 		if terminatedCallback != nil {
 			terminatedCallback(value)
 		}

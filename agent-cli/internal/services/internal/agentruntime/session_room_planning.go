@@ -33,7 +33,7 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 		evidence = evidences[0]
 	}
 	if ctx == nil {
-		ctx = context.Background()
+		return nil, nil, errors.New("room participant planning requires a context")
 	}
 	filesystemPolicy := opts.FilesystemPolicy
 	if filesystemPolicy == nil {
@@ -256,7 +256,7 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 // replay runtime configuration.
 func buildRoomReplayParticipantPlans(ctx context.Context, replay RoomReplayPlan, opts RoomRunOptions) ([]*roomParticipantPlan, []string, error) {
 	if ctx == nil {
-		ctx = context.Background()
+		return nil, nil, errors.New("room replay participant planning requires a context")
 	}
 	manifest := replay.Manifest()
 	plans := make([]*roomParticipantPlan, 0, len(replay.Participants))

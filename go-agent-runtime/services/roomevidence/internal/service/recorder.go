@@ -33,6 +33,7 @@ type recorder struct {
 	providerErrs map[string]struct{}
 
 	mu                   sync.Mutex
+	operationMu          sync.Mutex
 	recordErr            error
 	participantRecordErr map[string]error
 	artifactRecordErr    map[string]error
@@ -111,6 +112,8 @@ func (r *recorder) RecordTimeline(event, participant string, fields map[string]s
 	if r == nil {
 		return roomevidence.ErrRecorderClosed
 	}
+	r.operationMu.Lock()
+	defer r.operationMu.Unlock()
 	_, err := r.recordOpenTimeline(event, participant, fields)
 	return err
 }
@@ -119,6 +122,8 @@ func (r *recorder) RecordFinalTimeline(event, participant string, fields map[str
 	if r == nil {
 		return time.Time{}, roomevidence.ErrRecorderClosed
 	}
+	r.operationMu.Lock()
+	defer r.operationMu.Unlock()
 	return r.recordOpenTimeline(event, participant, fields)
 }
 
@@ -159,6 +164,8 @@ func (r *recorder) RecordProviderErrorTimeline(participant string, fields map[st
 	if r == nil {
 		return roomevidence.ErrRecorderClosed
 	}
+	r.operationMu.Lock()
+	defer r.operationMu.Unlock()
 	r.mu.Lock()
 	if r.finalized {
 		r.mu.Unlock()
@@ -170,13 +177,16 @@ func (r *recorder) RecordProviderErrorTimeline(participant string, fields map[st
 	}
 	r.providerErrs[participant] = struct{}{}
 	r.mu.Unlock()
-	return r.RecordTimeline("provider_error", participant, fields)
+	_, err := r.recordOpenTimeline("provider_error", participant, fields)
+	return err
 }
 
 func (r *recorder) SetParticipantReady(ready rooms.RoomParticipantReady) error {
 	if r == nil {
 		return roomevidence.ErrRecorderClosed
 	}
+	r.operationMu.Lock()
+	defer r.operationMu.Unlock()
 	if err := r.checkOpen(); err != nil {
 		return err
 	}
@@ -194,44 +204,69 @@ func (r *recorder) SetParticipantReady(ready rooms.RoomParticipantReady) error {
 			r.manifest.Participants[index] = participant.manifest
 		}
 	}
-	return r.RecordTimeline("participant_ready", ready.ParticipantID, nil)
+	_, err := r.recordOpenTimeline("participant_ready", ready.ParticipantID, nil)
+	return err
 }
 
 func (r *recorder) SetParticipantTerminated(value rooms.RoomParticipantResult) error {
 	if r == nil {
 		return roomevidence.ErrRecorderClosed
 	}
+	r.operationMu.Lock()
+	defer r.operationMu.Unlock()
 	fields := map[string]string{
 		"reason": string(value.TerminationReason),
 		"turns":  fmt.Sprintf("%d", value.TurnsCompleted),
 	}
-	return r.RecordTimeline("participant_terminated", value.ParticipantID, fields)
+	_, err := r.recordOpenTimeline("participant_terminated", value.ParticipantID, fields)
+	return err
 }
 
 func (r *recorder) RecordSource(participantID string, frame audio.PCMFrame) {
 	if r == nil {
 		return
 	}
+	r.operationMu.Lock()
+	defer r.operationMu.Unlock()
 	participant := r.Participant(participantID)
 	if participant == nil {
 		return
 	}
-	_ = participant.ObserveSentAudio(codec.EncodePCM16(append([]int16(nil), frame.Samples...)))
+	participantRecorder, ok := participant.(*participantRecorder)
+	if !ok {
+		return
+	}
+	if err := participantRecorder.observeSentAudio(codec.EncodePCM16(append([]int16(nil), frame.Samples...))); err != nil {
+		r.recordError(participantID, participantRecorder.artifacts.SentPCM, err)
+	}
 }
 
 func (r *recorder) RecordReceived(participantID string, frame audio.PCMFrame) {
 	if r == nil {
 		return
 	}
+	r.operationMu.Lock()
+	defer r.operationMu.Unlock()
 	participant := r.Participant(participantID)
 	if participant == nil {
 		return
 	}
-	_ = participant.ObserveReceivedAudio(codec.EncodePCM16(append([]int16(nil), frame.Samples...)))
+	participantRecorder, ok := participant.(*participantRecorder)
+	if !ok {
+		return
+	}
+	if err := participantRecorder.observeReceivedAudio(codec.EncodePCM16(append([]int16(nil), frame.Samples...))); err != nil {
+		r.recordError(participantID, participantRecorder.artifacts.ReceivedPCM, err)
+	}
 }
 
 func (r *recorder) ObserveSpeakerAudio(sourceID string, targetIDs []string, pcm []byte) {
 	if r == nil || r.latency == nil {
+		return
+	}
+	r.operationMu.Lock()
+	defer r.operationMu.Unlock()
+	if r.checkOpen() != nil {
 		return
 	}
 	r.latency.ObserveSpeakerBytes(sourceID, targetIDs, len(pcm))
@@ -239,18 +274,33 @@ func (r *recorder) ObserveSpeakerAudio(sourceID string, targetIDs []string, pcm 
 
 func (r *recorder) ObserveSpeechStopped(participantID string) {
 	if r != nil && r.latency != nil {
+		r.operationMu.Lock()
+		defer r.operationMu.Unlock()
+		if r.checkOpen() != nil {
+			return
+		}
 		r.latency.ObserveSpeechStopped(participantID)
 	}
 }
 
 func (r *recorder) ObserveProviderAudio(participantID, responseID string) {
 	if r != nil && r.latency != nil {
+		r.operationMu.Lock()
+		defer r.operationMu.Unlock()
+		if r.checkOpen() != nil {
+			return
+		}
 		r.latency.ObserveProviderAudio(participantID, responseID)
 	}
 }
 
 func (r *recorder) ObservePeerAudio(sourceID, targetID string, pcm []byte) {
 	if r != nil && r.latency != nil {
+		r.operationMu.Lock()
+		defer r.operationMu.Unlock()
+		if r.checkOpen() != nil {
+			return
+		}
 		r.latency.ObservePeerBytes(sourceID, targetID, len(pcm))
 	}
 }
