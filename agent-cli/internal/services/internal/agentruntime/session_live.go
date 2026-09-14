@@ -14,6 +14,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	audiosubsystem "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems/audio"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -176,7 +178,7 @@ type sessionLoopOptions struct {
 
 	// InteractiveToolPolicy is the immutable per-session class and timeout
 	// snapshot paired with ToolDefinitions and ToolExecutor.
-	InteractiveToolPolicy *InteractiveToolPolicy
+	InteractiveToolPolicy runtimeTools.InteractiveToolPolicy
 	// ToolDefinitionBase is the immutable static and stable broker surface
 	// retained by the dynamic publisher while page definitions change.
 	ToolDefinitionBase []messages.ToolDefinition
@@ -190,6 +192,8 @@ type sessionLoopOptions struct {
 	// selects the production wall-clock timer; tests may provide a deterministic
 	// fake-clock implementation.
 	PublicationTimerFactory webmcp.TimerFactory
+	turnRuntime             sessionturn.Runtime
+	turnBrowser             sessionturn.BrowserRequest
 
 	// AdvertiseToolDefinitions sends the definitions through the generic
 	// SESSION.UPDATE seam used by injected sessions. Live provider-backed
@@ -270,8 +274,7 @@ type sessionLoopOptions struct {
 }
 
 // duplexSessionLoopOptions is the single duplex loop construction seam. Both
-// the plain and duration-bounded session runners build their loops here so an
-// injected executor enables tool execution exactly once per session.
+// session runners build their loops here so an injected executor is configured once.
 func duplexSessionLoopOptions(observedInferencer messages.SessionInferencer, opts sessionLoopOptions) []agentloop.Option {
 	loopOpts := []agentloop.Option{
 		agentloop.WithMode(engine.DuplexSession),
@@ -302,7 +305,8 @@ func duplexSessionLoopOptions(observedInferencer messages.SessionInferencer, opt
 			}(),
 		})))
 	}
-	if opts.ToolExecutor != nil {
+	toolExecutor := sessionLoopToolExecutor(opts)
+	if toolExecutor != nil {
 		if len(opts.ToolDefinitions) > 0 {
 			loopOpts = append(loopOpts,
 				agentloop.WithTools(opts.ToolDefinitions),
@@ -313,20 +317,13 @@ func duplexSessionLoopOptions(observedInferencer messages.SessionInferencer, opt
 				}))
 			}
 		}
-		loopOpts = append(loopOpts, agentloop.WithToolExecutor(newSessionToolExecutorWithInteractivePolicyAndObserverAndCancellationIntentAndDiagnostics(
-			opts.ToolExecutor,
-			opts.InteractiveToolPolicy,
-			opts.ToolExecutionTimeout,
-			composeSessionToolLifecycleObserver(opts.toolLifecycleObserver, opts.observer, opts.runtime),
-			opts.cancellationIntent,
-			opts.toolDiagnostics,
-		)))
+		loopOpts = append(loopOpts, agentloop.WithToolExecutor(toolExecutor))
 		if opts.InteractiveToolPolicy != nil {
 			policy := opts.InteractiveToolPolicy.Clone()
 			loopOpts = append(loopOpts, agentloop.WithToolAcknowledgementPolicy(agentloop.ToolAcknowledgementPolicy{
-				Threshold: policy.AcknowledgementThreshold,
+				Threshold: policy.Settings().AcknowledgementThreshold,
 				IsLongRunning: func(name string) bool {
-					return policy.ClassForTool(name) == InteractiveToolClassBoundedLongRunning
+					return policy.ClassForTool(name) == runtimeTools.InteractiveToolClassBoundedLongRunning
 				},
 			}))
 		}
@@ -746,9 +743,9 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 	// provider output drain can still run after the producer is quiesced.
 	audioCtx, cancelAudio := context.WithCancel(runCtx)
 	defer cancelAudio()
-	publisher, publisherErrors := startSessionDynamicToolPublisher(runCtx, loop, opts)
+	publisher, publisherErrors := startSessionTurnPublication(runCtx, loop, sessionInferencer, opts)
 	publisherErrors = mergeSessionErrorChannels(runCtx, publisherErrors, sessionLivenessErrorChannel(runCtx, opts.observer))
-	defer publisher.stop()
+	defer stopSessionTurnPublication(publisher)
 	if err := bindSessionLoopInputs(runCtx, audioCtx, loop, opts); err != nil {
 		return err
 	}
@@ -889,7 +886,7 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 		if msg.Type == messages.StreamTypeSessionCreated {
 			// SESSION.UPDATE is sent while handling SESSION.CREATED. Release
 			// dynamic publication only after that bootstrap boundary is observed.
-			publisher.markSessionReady()
+			markSessionTurnPublicationReady(publisher)
 		}
 		if msg.Type == messages.StreamTypeSessionOpen {
 			startSessionUpdatedTimer()

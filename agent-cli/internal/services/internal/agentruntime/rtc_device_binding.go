@@ -97,6 +97,18 @@ type RTCDeviceBindingRequest struct {
 	Observability observability.Dependencies
 }
 
+func ensureRTCDeviceBindingBuffers(binding *RTCDeviceBinding) error {
+	if binding == nil || binding.Source == nil || binding.Capture != nil {
+		return nil
+	}
+	capture, err := devicert.NewBufferedCapture(binding.Source)
+	if err != nil {
+		return fmt.Errorf("initialize RTC capture buffer: %w", err)
+	}
+	binding.Capture = capture
+	return nil
+}
+
 func (r RTCDeviceBindingRequest) inputSelected() bool {
 	return r.InputPresent || r.InputDevice != ""
 }

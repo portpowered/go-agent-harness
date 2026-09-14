@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 )
 
 // websocketReplaySessionInferencer keeps strict websocket replays on their
@@ -50,12 +51,12 @@ func (s *websocketReplaySession) SendWithOutcome(ctx context.Context, msg messag
 }
 
 func (s *websocketReplaySession) SendMessage(ctx context.Context, msg messages.Message) bool {
-	sender, ok := s.Session.(SessionImageMessageSender)
+	sender, ok := s.Session.(sessionturn.CompleteMessageSender)
 	return ok && sender.SendMessage(ctx, msg)
 }
 
 func (s *websocketReplaySession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
-	sender, ok := s.Session.(SessionImageMessageSenderWithoutResponse)
+	sender, ok := s.Session.(sessionturn.CompleteMessageWithoutResponseSender)
 	return ok && sender.SendMessageWithoutResponse(ctx, msg)
 }
 

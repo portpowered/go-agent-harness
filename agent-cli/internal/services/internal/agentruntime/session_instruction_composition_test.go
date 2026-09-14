@@ -583,9 +583,6 @@ func TestComposeSessionInstructionsRequiresHonestFilesystemRefusalHandling(t *te
 
 func sessionRequestFromPlanner(t *testing.T, inferencer messages.SessionInferencer) inference.SessionRequest {
 	t.Helper()
-	if image, ok := inferencer.(*sessionImageInferencer); ok {
-		inferencer = image.inner
-	}
 	requester, ok := inferencer.(interface {
 		Request() inference.SessionRequest
 	})

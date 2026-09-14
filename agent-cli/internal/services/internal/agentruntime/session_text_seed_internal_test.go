@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
+	sessionturnwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn/wire"
 )
 
 type capturingSeedSession struct {
@@ -47,12 +49,15 @@ func TestSessionTextSeedAdapterDelegatesReplacementToRuntimeService(t *testing.T
 	const seedValue = "Say hello in one short sentence."
 	const wirePrompt = "\x00agent-cli-session-text-seed:test:1"
 	capturing := &capturingSeedSession{done: make(chan struct{})}
-	inferencer := &sessionTextSeedInferencer{
-		inner:      &capturingSeedInferencer{session: capturing},
-		wirePrompt: wirePrompt,
-		value:      seedValue,
+	service := sessionturnwire.NewService(sessionturnwire.Dependencies{Allocator: sessionturn.AllocatorFunc(func() string { return wirePrompt })})
+	runtime, err := service.Prepare(context.Background(), sessionturn.Request{
+		SessionInferencer: &capturingSeedInferencer{session: capturing},
+		Seed:              sessionturn.Seed{Value: seedValue, Present: true},
+	})
+	if err != nil {
+		t.Fatalf("Prepare: %v", err)
 	}
-	session, err := inferencer.ConnectSession(context.Background())
+	session, err := runtime.Inferencer().ConnectSession(context.Background())
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}

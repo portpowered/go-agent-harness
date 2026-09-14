@@ -134,21 +134,21 @@ func RunSessionWithTextSeedAndMaxDuration(ctx context.Context, out io.Writer, op
 		return err
 	}
 
-	wirePrompt := nextSessionTextWirePrompt()
-	plan.loop.Prompt = wirePrompt
-	output := &sessionTextOutput{writer: out}
+	turnRuntime, err := prepareSessionTurnSeed(&plan, seed)
+	if err != nil {
+		return err
+	}
+	if turnRuntime == nil {
+		return errors.New("session turn runtime has no inferencer")
+	}
+	output := turnRuntime.NewOutput(out)
 	admission := newSessionDurationAdmission()
-	var inner messages.SessionInferencer
-	if plan.inferencer != nil {
+	var inner messages.SessionInferencer = plan.inferencer
+	if inner != nil {
 		// The seed substitution wrapper must sit INSIDE the admission
 		// boundary: the duration runner connects through admittedInferencer,
 		// so any wrapper composed outside it never observes the session and
 		// the sentinel prompt would leak onto the live wire.
-		inner = &sessionTextSeedInferencer{
-			inner:      plan.inferencer,
-			wirePrompt: wirePrompt,
-			value:      seed.Value,
-		}
 	}
 	admittedInferencer := &sessionDurationAdmissionInferencer{
 		inner:     inner,
@@ -163,7 +163,7 @@ func RunSessionWithTextSeedAndMaxDuration(ctx context.Context, out io.Writer, op
 		return err
 	}
 	err = runSessionDurationPlanWithAdmission(durationCtx, output, plan, maxDuration, durationClock, admittedInferencer)
-	return errors.Join(err, output.errorValue())
+	return errors.Join(err, output.Err())
 }
 
 func runSessionDurationPlan(ctx context.Context, out io.Writer, plan sessionRuntimePlan, maxDuration time.Duration, durationClock SessionDurationClock) error {

@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 )
 
 const sessionDurationAdmissionBufferCapacity = 1024
@@ -58,8 +59,7 @@ func (a *sessionDurationAdmission) admit(receive *messages.TypedBuffer[messages.
 
 // sessionDurationAdmissionInferencer inserts the admission boundary between
 // the provider session and the agent loop. The public Session interface exposes
-// a concrete receive buffer, so the wrapper forwards through its own buffer and
-// can stop admitting provider events without changing the shared interface.
+// a concrete receive buffer; the wrapper forwards through its own buffer.
 type sessionDurationAdmissionInferencer struct {
 	inner      messages.SessionInferencer
 	admission  *sessionDurationAdmission
@@ -200,14 +200,14 @@ func (s *sessionDurationAdmissionSession) SupportsResponseRequests() bool {
 // wrapped provider session. Duration admission must not hide the rich message
 // path used to deliver a tool result on the next model turn.
 func (s *sessionDurationAdmissionSession) SendMessage(ctx context.Context, msg messages.Message) bool {
-	sender, ok := s.inner.(SessionImageMessageSender)
+	sender, ok := s.inner.(sessionturn.CompleteMessageSender)
 	return ok && sender.SendMessage(ctx, msg)
 }
 
 // SendMessageWithoutResponse forwards deferred complete messages for callers
 // that batch more than one tool result before requesting the next response.
 func (s *sessionDurationAdmissionSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
-	sender, ok := s.inner.(SessionImageMessageSenderWithoutResponse)
+	sender, ok := s.inner.(sessionturn.CompleteMessageWithoutResponseSender)
 	return ok && sender.SendMessageWithoutResponse(ctx, msg)
 }
 

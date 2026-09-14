@@ -25,6 +25,8 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/sight"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
+	sessionturnwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
@@ -264,7 +266,7 @@ func runSessionWithImagesAndRecordingDirectory(
 		return err
 	}
 	opts.SessionRunOptions.sessionImageCapabilities = cloneSessionImageCapabilities(&metadata)
-	parts, err := PrepareSessionImageParts(paths, metadata)
+	parts, err := sessionturnwire.NewDefaultService().PrepareImageParts(paths, metadata)
 	if err != nil {
 		return err
 	}
@@ -412,36 +414,14 @@ func runSessionWithRecordingDirectory(
 			recording: recording,
 		}
 	}
+	turnRuntime, err := prepareSessionRecordingTurnRuntime(&plan, seed)
+	if err != nil {
+		return err
+	}
 
-	var audioOutput *sessionAudioOutput
-	var audioWrapper *sessionAudioOutputInferencer
-	var textOutput *sessionTextOutput
-	if audioOutPath != "" {
-		var sinkErr error
-		audioOutput, sinkErr = newSessionAudioOutputForPlan(&plan, audioOutPath, out, nil)
-		if sinkErr != nil {
-			return fmt.Errorf("--audio-out %q: %w", audioOutPath, sinkErr)
-		}
-		if plan.inferencer != nil {
-			wirePrompt := ""
-			if seed.Present {
-				wirePrompt = nextSessionTextWirePrompt()
-				plan.loop.Prompt = wirePrompt
-			}
-			audioWrapper = newSessionAudioOutputInferencer(plan.inferencer, audioOutput, wirePrompt, seed.Value)
-			plan.inferencer = audioWrapper
-		}
-	} else if seed.Present {
-		wirePrompt := nextSessionTextWirePrompt()
-		plan.loop.Prompt = wirePrompt
-		if plan.inferencer != nil {
-			textOutput = &sessionTextOutput{writer: out}
-			plan.inferencer = &sessionTextSeedInferencer{
-				inner:      plan.inferencer,
-				wirePrompt: wirePrompt,
-				value:      seed.Value,
-			}
-		}
+	audioOutput, audioWrapper, textOutput, err := prepareSessionRecordingOutputs(&plan, out, audioOutPath, seed, turnRuntime)
+	if err != nil {
+		return err
 	}
 
 	sessionOut := out
@@ -452,7 +432,7 @@ func runSessionWithRecordingDirectory(
 		sessionOut = io.Discard
 	}
 	if audioSource != nil {
-		// The duration runner predates the shared AudioIn producer. Keep the
+		// The duration runner predates the shared AudioIn producer; keep the
 		// audio-enabled path on the loop that starts and joins that producer;
 		// its MaxDuration timeout provides the same bounded session lifetime.
 		runErr = plan.run(ctx, sessionOut)
@@ -483,6 +463,9 @@ func runSessionWithRecordingDirectory(
 		if closeErr := audioOutput.close(); closeErr != nil {
 			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", audioOutPath, closeErr))
 		}
+	}
+	if textOutput != nil {
+		runErr = errors.Join(runErr, textOutput.Err())
 	}
 	return finalizeSessionDirectoryRecording(runErr, recording)
 }
@@ -517,7 +500,7 @@ func planSessionForDirectoryRecordingWithInstructions(opts SessionRunOptions, sy
 	if !withInstructions || (opts.ReplayPath != "" && opts.SessionInferencer == nil) {
 		plan, err = planSessionRuntime(planOpts)
 	} else {
-		instructions, instructionErr := resolveSessionInstructions(opts, systemPrompt)
+		instructions, instructionErr := sessionInstructionText(opts, systemPrompt)
 		if instructionErr != nil {
 			cleanup()
 			return sessionRuntimePlan{}, func() {}, instructionErr
@@ -782,12 +765,12 @@ func (s *sessionDirectoryRecordingSession) Send(ctx context.Context, msg message
 }
 
 func (s *sessionDirectoryRecordingSession) SendMessage(ctx context.Context, msg messages.Message) bool {
-	sender, ok := s.inner.(SessionImageMessageSender)
+	sender, ok := s.inner.(sessionturn.CompleteMessageSender)
 	return ok && sender.SendMessage(ctx, msg)
 }
 
 func (s *sessionDirectoryRecordingSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
-	sender, ok := s.inner.(SessionImageMessageSenderWithoutResponse)
+	sender, ok := s.inner.(sessionturn.CompleteMessageWithoutResponseSender)
 	return ok && sender.SendMessageWithoutResponse(ctx, msg)
 }
 

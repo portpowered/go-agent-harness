@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
+	sessionturnwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn/wire"
 )
 
 type compatibilitySession struct {
@@ -47,51 +49,58 @@ func (s *compatibilitySession) Close() error {
 	return nil
 }
 
-func TestDeprecatedSessionTurnsDelegatesToReusableRuntime(t *testing.T) {
+func TestSessionTurnRuntimeDelegatesToReusableRuntime(t *testing.T) {
 	provider := newCompatibilitySession()
-	var events []TurnEvent
-	session := NewSessionTurns(SessionTurnsOptions{
+	var events []sessionturn.TurnEvent
+	service := sessionturnwire.NewDefaultService()
+	runtime, err := service.Prepare(context.Background(), sessionturn.Request{
 		SessionInferencer: provider,
-		EventSink: func(event TurnEvent) {
+		EventSink: func(event sessionturn.TurnEvent) {
 			events = append(events, event)
 		},
 	})
-	if _, err := session.RunTurn(context.Background(), NewTextTurnInput("text"), TurnDirectionUser, 1, 2); err != nil {
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runtime.RunTurn(context.Background(), sessionturn.TurnRequest{Input: sessionturn.TurnInput{Text: "text"}, Direction: sessionturn.TurnDirectionUser, StartTick: 1, EndTick: 2}); err != nil {
 		t.Fatal(err)
 	}
 	audio := []byte{1, 2, 3}
-	if _, err := session.RunTurn(context.Background(), NewAudioTurnInput(audio, "audio/pcm"), TurnDirectionUser, 3, 4); err != nil {
+	if _, err := runtime.RunTurn(context.Background(), sessionturn.TurnRequest{Input: sessionturn.TurnInput{Audio: audio, MediaType: "audio/pcm"}, Direction: sessionturn.TurnDirectionUser, StartTick: 3, EndTick: 4}); err != nil {
 		t.Fatal(err)
 	}
 	audio[0] = 99
-	history := session.History()
-	if provider.connects != 1 || len(history) != 2 || session.NextTurnIndex() != 3 || len(events) != 4 {
-		t.Fatalf("connections/history/next/events = %d/%d/%d/%d", provider.connects, len(history), session.NextTurnIndex(), len(events))
+	history := runtime.History()
+	if provider.connects != 1 || len(history) != 2 || len(events) != 4 {
+		t.Fatalf("connections/history/events = %d/%d/%d", provider.connects, len(history), len(events))
 	}
 	if string(history[1].Input.Audio) != string([]byte{1, 2, 3}) || history[1].Response.TextContent() != "ack" {
 		t.Fatalf("history = %#v", history)
 	}
 	history[1].Input.Audio[0] = 77
-	if session.History()[1].Input.Audio[0] != 1 {
+	if runtime.History()[1].Input.Audio[0] != 1 {
 		t.Fatal("compatibility adapter returned aliased history")
 	}
-	if err := session.Close(); err != nil || provider.closeCall != 1 {
+	if err := runtime.Close(); err != nil || provider.closeCall != 1 {
 		t.Fatalf("close = %v, calls=%d", err, provider.closeCall)
 	}
-	if err := session.Close(); err != nil || provider.closeCall != 1 {
+	if err := runtime.Close(); err != nil || provider.closeCall != 1 {
 		t.Fatalf("repeated close = %v, calls=%d", err, provider.closeCall)
 	}
-	if _, err := session.StartTurn(NewTextTurnInput("closed"), TurnDirectionUser, 5); !errors.Is(err, ErrSessionClosed) {
-		t.Fatalf("closed adapter start = %v", err)
+	if _, err := runtime.RunTurn(context.Background(), sessionturn.TurnRequest{Input: sessionturn.TurnInput{Text: "closed"}, Direction: sessionturn.TurnDirectionUser, StartTick: 5, EndTick: 6}); !errors.Is(err, sessionturn.ErrSessionClosed) {
+		t.Fatalf("closed runtime start = %v", err)
 	}
 }
 
-func TestDeprecatedSessionTurnsRetainsTransitionErrors(t *testing.T) {
-	session := NewSessionTurns(SessionTurnsOptions{})
-	if _, err := session.StartTurn(NewTextTurnInput(" "), TurnDirectionUser, 1); !errors.Is(err, ErrEmptyTurn) {
+func TestSessionTurnRuntimeRetainsTransitionErrors(t *testing.T) {
+	runtime, err := sessionturnwire.NewDefaultService().Prepare(context.Background(), sessionturn.Request{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runtime.RunTurn(context.Background(), sessionturn.TurnRequest{Input: sessionturn.TurnInput{Text: " "}, Direction: sessionturn.TurnDirectionUser, StartTick: 1, EndTick: 2}); !errors.Is(err, sessionturn.ErrEmptyTurn) {
 		t.Fatalf("empty start = %v", err)
 	}
-	if _, err := session.EndTurn(0, "", messages.NewTextMessage(messages.RoleAssistant, "response"), 1); !errors.Is(err, ErrTurnEndWithoutStart) {
-		t.Fatalf("end without start = %v", err)
+	if err := runtime.Close(); err != nil {
+		t.Fatal(err)
 	}
 }

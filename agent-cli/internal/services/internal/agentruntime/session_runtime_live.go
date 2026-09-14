@@ -1,11 +1,14 @@
 package agentruntime
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
+	sessionturnwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn/wire"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
@@ -235,7 +238,18 @@ func planSessionWithResolvedInstructions(opts SessionRunOptions, instructions st
 	// instructions or tools are present; an empty instruction remains empty and
 	// does not synthesize a default prompt.
 	if opts.SessionInferencer != nil && plan.inferencer != nil && !useInitialProviderInstructions && (instructions != "" || len(opts.ToolDefinitions) > 0) {
-		plan.inferencer = newSessionInstructionsInferencer(plan.inferencer, instructions, opts.ToolDefinitions)
+		turnRuntime, prepareErr := sessionturnwire.NewDefaultService().Prepare(context.Background(), sessionturn.Request{
+			SessionInferencer: plan.inferencer,
+			InstructionsText:  instructions,
+			ToolExecutor:      plan.loop.ToolExecutor,
+			ToolDefinitions:   opts.ToolDefinitions,
+		})
+		if prepareErr != nil {
+			return sessionRuntimePlan{}, fmt.Errorf("prepare session-turn instructions: %w", prepareErr)
+		}
+		plan.turnRuntime = turnRuntime
+		plan.loop.turnRuntime = turnRuntime
+		plan.inferencer = turnRuntime.Inferencer()
 		// The wrapper above owns the complete injected-session configuration.
 		// Suppress ModelRunner's separate tool-only update, which otherwise races
 		// an identical second SESSION.UPDATE onto the provider wire.

@@ -306,7 +306,7 @@ func RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(c
 		if err := validateSessionRunOptions(opts); err != nil {
 			return sessionRuntimePlan{}, err
 		}
-		instructions, err := resolveSessionInstructions(opts, systemPrompt)
+		instructions, err := sessionInstructionText(opts, systemPrompt)
 		if err != nil {
 			return sessionRuntimePlan{}, err
 		}

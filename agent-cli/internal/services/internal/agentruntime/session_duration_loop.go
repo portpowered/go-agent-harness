@@ -85,9 +85,9 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	publisher, publisherErrors := startSessionDynamicToolPublisher(runCtx, loop, opts)
+	publisher, publisherErrors := startSessionTurnPublication(runCtx, loop, sessionInferencer, opts)
 	publisherErrors = mergeSessionErrorChannels(runCtx, publisherErrors, sessionLivenessErrorChannel(runCtx, opts.observer))
-	defer publisher.stop()
+	defer stopSessionTurnPublication(publisher)
 	if opts.loopReady != nil {
 		select {
 		case opts.loopReady <- loop:
@@ -242,7 +242,7 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 			// SESSION.CREATED. Release dynamic publication only after that
 			// provider bootstrap boundary has been processed, so a page
 			// update cannot overtake the initial configuration.
-			publisher.markSessionReady()
+			markSessionTurnPublicationReady(publisher)
 		}
 		if msg.Type == messages.StreamTypeSessionOpen {
 			if err := startSessionUpdatedTimer(); err != nil {
