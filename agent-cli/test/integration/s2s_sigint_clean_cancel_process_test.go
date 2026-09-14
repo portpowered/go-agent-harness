@@ -576,8 +576,8 @@ func assertSIGINTRecordingDirectory(t *testing.T, recordDir string) {
 	if err != nil {
 		t.Fatalf("read SIGINT recording directory: %v", err)
 	}
-	if len(entries) != 6 {
-		t.Fatalf("SIGINT recording top-level entries = %d, want six final entries (including audio-trace): %v", len(entries), entries)
+	if len(entries) != 7 {
+		t.Fatalf("SIGINT recording top-level entries = %d, want seven final entries (including audio-trace): %v", len(entries), entries)
 	}
 }
 func readSIGINTManifest(t *testing.T, recordDir string) transcript.RecordingManifest {
