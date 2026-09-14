@@ -1,14 +1,395 @@
-365-CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8297241Z --- FAIL: TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio (0.00s)
-366:CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8298765Z     --- FAIL: TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst (42.00s)
-367:CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8315170Z         session_tool_audio_remote_e2e_test.go:183: remote playback wait failed: remote playback did not reach final PCM marker before the scenario deadline: context deadline exceeded; remote timeout evidence: snapshot_error=<nil> rendered_pcm=461760 nonzero_pcm=150871 expected_pcm=174391 final_marker=false playback={queued:0 dropped:0 overflow:0 discarded:0 discard_events:0 callbacks:962 rendered:461760} capture={queued:0 captured:461760 dropped:0} trace_last={Tap:capture Sequence:961 ClockEpoch:0 SampleRate:16000 StartSample:461280 SampleCount:480 DeviceTick:961 HostMonoSamples:461280 QueueBefore:0 QueueAfter:480 Flags:[] FaultID: PayloadSHA256:3dc463a76fc170607c07b104c3cb531362ce7d6e10c1a34e0c0f370aeae08ce8} trace_render={Tap:render Sequence:961 ClockEpoch:0 SampleRate:16000 StartSample:461280 SampleCount:480 DeviceTick:961 HostMonoSamples:461280 QueueBefore:0 QueueAfter:0 Flags:[underflow] FaultID: PayloadSHA256:3dc463a76fc170607c07b104c3cb531362ce7d6e10c1a34e0c0f370aeae08ce8} trace_capture={Tap:capture Sequence:961 ClockEpoch:0 SampleRate:16000 StartSample:461280 SampleCount:480 DeviceTick:961 HostMonoSamples:461280 QueueBefore:0 QueueAfter:480 Flags:[] FaultID: PayloadSHA256:3dc463a76fc170607c07b104c3cb531362ce7d6e10c1a34e0c0f370aeae08ce8} expected_tool_calls=7 provider={responsesSent:9 responseCreates:7 initialRequests:0 inputHistories:0 inputSamplesSeen:692639 toolResults:7 protocolError:} child=exited: signal: killed stderr="" callback_advances=962
-368-CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8325618Z FAIL
---
-372-CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8332574Z FAIL
-373:CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:32.0689176Z agent-cli coverage exited with status 1: command=go "test" "./..." "-tags=nomicrophone" "-timeout" "480s" "-coverpkg=github.com/portpowered/go-agent-harness/agent-cli/...,github.com/portpowered/go-agent-harness/go-agent-runtime/..." "-coverprofile=../coverage/agent-cli.out" pid=2371
-374-CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:32.0691591Z Agent CLI coverage budget summary
---
-377-CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:32.0693965Z Configured timeout: 8m0s
-378:CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:32.0694534Z Consumed: 85.7%
-379-CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:32.0694975Z Remaining headroom: 1m8.528s (14.3%)
-380:CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:32.0695590Z Classification: test failure (non-timeout command exit)
-381-CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:32.0730753Z make: *** [Makefile:303: coverage] Error 1
+CI (coverage)	Set up job	﻿2026-09-13T23:30:18.4339582Z Current runner version: '2.337.0'
+CI (coverage)	Set up job	2026-09-13T23:30:18.4378547Z ##[group]Runner Image Provisioner
+CI (coverage)	Set up job	2026-09-13T23:30:18.4380777Z Hosted Compute Agent
+CI (coverage)	Set up job	2026-09-13T23:30:18.4381888Z Version: 20260828.587
+CI (coverage)	Set up job	2026-09-13T23:30:18.4383053Z Commit: abac92662cab4cc7352de4f9f9d2e2419aad9c29
+CI (coverage)	Set up job	2026-09-13T23:30:18.4384372Z Build Date: 2026-08-28T16:44:25Z
+CI (coverage)	Set up job	2026-09-13T23:30:18.4385550Z Worker ID: {bb9cffc0-2ed9-4baf-88bb-3080fed93c6b}
+CI (coverage)	Set up job	2026-09-13T23:30:18.4386865Z Azure Region: eastus
+CI (coverage)	Set up job	2026-09-13T23:30:18.4387827Z ##[endgroup]
+CI (coverage)	Set up job	2026-09-13T23:30:18.4391106Z ##[group]Operating System
+CI (coverage)	Set up job	2026-09-13T23:30:18.4392294Z Ubuntu
+CI (coverage)	Set up job	2026-09-13T23:30:18.4393197Z 24.04.5
+CI (coverage)	Set up job	2026-09-13T23:30:18.4394303Z LTS
+CI (coverage)	Set up job	2026-09-13T23:30:18.4395186Z ##[endgroup]
+CI (coverage)	Set up job	2026-09-13T23:30:18.4396077Z ##[group]Runner Image
+CI (coverage)	Set up job	2026-09-13T23:30:18.4397239Z Image: ubuntu-24.04
+CI (coverage)	Set up job	2026-09-13T23:30:18.4398200Z Version: 20260907.300.1
+CI (coverage)	Set up job	2026-09-13T23:30:18.4400441Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260907.300/images/ubuntu/Ubuntu2404-Readme.md
+CI (coverage)	Set up job	2026-09-13T23:30:18.4403615Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260907.300
+CI (coverage)	Set up job	2026-09-13T23:30:18.4405336Z ##[endgroup]
+CI (coverage)	Set up job	2026-09-13T23:30:18.4407264Z ##[group]GITHUB_TOKEN Permissions
+CI (coverage)	Set up job	2026-09-13T23:30:18.4411023Z Contents: read
+CI (coverage)	Set up job	2026-09-13T23:30:18.4412035Z Metadata: read
+CI (coverage)	Set up job	2026-09-13T23:30:18.4413085Z ##[endgroup]
+CI (coverage)	Set up job	2026-09-13T23:30:18.4416234Z Secret source: Actions
+CI (coverage)	Set up job	2026-09-13T23:30:18.4417910Z Cache mode: write
+CI (coverage)	Set up job	2026-09-13T23:30:18.4419599Z Prepare workflow directory
+CI (coverage)	Set up job	2026-09-13T23:30:18.4947295Z Prepare all required actions
+CI (coverage)	Set up job	2026-09-13T23:30:18.5028959Z Getting action download info
+CI (coverage)	Set up job	2026-09-13T23:30:18.7222365Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+CI (coverage)	Set up job	2026-09-13T23:30:18.8593189Z Download action repository 'actions/setup-go@v5' (SHA:40f1582b2485089dde7abd97c1529aa768e1baff)
+CI (coverage)	Set up job	2026-09-13T23:30:19.1477250Z Complete job name: CI (coverage)
+CI (coverage)	Check out repository	﻿2026-09-13T23:30:19.2319027Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+CI (coverage)	Check out repository	2026-09-13T23:30:19.2328736Z ##[group]Run actions/checkout@v4
+CI (coverage)	Check out repository	2026-09-13T23:30:19.2329511Z with:
+CI (coverage)	Check out repository	2026-09-13T23:30:19.2330224Z   repository: portpowered/go-agent-harness
+CI (coverage)	Check out repository	2026-09-13T23:30:19.2334104Z   token: ***
+CI (coverage)	Check out repository	2026-09-13T23:30:19.2334554Z   ssh-strict: true
+CI (coverage)	Check out repository	2026-09-13T23:30:19.2335004Z   ssh-user: git
+CI (coverage)	Check out repository	2026-09-13T23:30:19.2335504Z   persist-credentials: true
+CI (coverage)	Check out repository	2026-09-13T23:30:19.2336058Z   clean: true
+CI (coverage)	Check out repository	2026-09-13T23:30:19.2336567Z   sparse-checkout-cone-mode: true
+CI (coverage)	Check out repository	2026-09-13T23:30:19.2337099Z   fetch-depth: 1
+CI (coverage)	Check out repository	2026-09-13T23:30:19.2337535Z   fetch-tags: false
+CI (coverage)	Check out repository	2026-09-13T23:30:19.2337989Z   show-progress: true
+CI (coverage)	Check out repository	2026-09-13T23:30:19.2338439Z   lfs: false
+CI (coverage)	Check out repository	2026-09-13T23:30:19.2338852Z   submodules: false
+CI (coverage)	Check out repository	2026-09-13T23:30:19.2339378Z   set-safe-directory: true
+CI (coverage)	Check out repository	2026-09-13T23:30:19.2340043Z   allow-unsafe-pr-checkout: false
+CI (coverage)	Check out repository	2026-09-13T23:30:19.2340864Z ##[endgroup]
+CI (coverage)	Check out repository	2026-09-13T23:30:19.3466641Z Syncing repository: portpowered/go-agent-harness
+CI (coverage)	Check out repository	2026-09-13T23:30:19.3470825Z ##[group]Getting Git version info
+CI (coverage)	Check out repository	2026-09-13T23:30:19.3472208Z Working directory is '/home/runner/work/go-agent-harness/go-agent-harness'
+CI (coverage)	Check out repository	2026-09-13T23:30:19.3473951Z [command]/usr/bin/git version
+CI (coverage)	Check out repository	2026-09-13T23:30:19.3582159Z git version 2.55.0
+CI (coverage)	Check out repository	2026-09-13T23:30:19.3644300Z ##[endgroup]
+CI (coverage)	Check out repository	2026-09-13T23:30:19.3661148Z Temporarily overriding HOME='/home/runner/work/_temp/3c961897-c915-420c-ac1d-6c7210dccd3b' before making global git config changes
+CI (coverage)	Check out repository	2026-09-13T23:30:19.3662923Z Adding repository directory to the temporary git global config as a safe directory
+CI (coverage)	Check out repository	2026-09-13T23:30:19.3669388Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/go-agent-harness/go-agent-harness
+CI (coverage)	Check out repository	2026-09-13T23:30:19.3730255Z Deleting the contents of '/home/runner/work/go-agent-harness/go-agent-harness'
+CI (coverage)	Check out repository	2026-09-13T23:30:19.3735643Z ##[group]Initializing the repository
+CI (coverage)	Check out repository	2026-09-13T23:30:19.3742249Z [command]/usr/bin/git init /home/runner/work/go-agent-harness/go-agent-harness
+CI (coverage)	Check out repository	2026-09-13T23:30:19.3881382Z hint: Using 'master' as the name for the initial branch. This default branch name
+CI (coverage)	Check out repository	2026-09-13T23:30:19.3889049Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+CI (coverage)	Check out repository	2026-09-13T23:30:19.3893239Z hint: to use in all of your new repositories, which will suppress this warning,
+CI (coverage)	Check out repository	2026-09-13T23:30:19.3895100Z hint: call:
+CI (coverage)	Check out repository	2026-09-13T23:30:19.3896662Z hint:
+CI (coverage)	Check out repository	2026-09-13T23:30:19.3898589Z hint: 	git config --global init.defaultBranch <name>
+CI (coverage)	Check out repository	2026-09-13T23:30:19.3900577Z hint:
+CI (coverage)	Check out repository	2026-09-13T23:30:19.3901839Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+CI (coverage)	Check out repository	2026-09-13T23:30:19.3903676Z hint: 'development'. The just-created branch can be renamed via this command:
+CI (coverage)	Check out repository	2026-09-13T23:30:19.3905088Z hint:
+CI (coverage)	Check out repository	2026-09-13T23:30:19.3905945Z hint: 	git branch -m <name>
+CI (coverage)	Check out repository	2026-09-13T23:30:19.3907014Z hint:
+CI (coverage)	Check out repository	2026-09-13T23:30:19.3908268Z hint: Disable this message with "git config set advice.defaultBranchName false"
+CI (coverage)	Check out repository	2026-09-13T23:30:19.3923690Z Initialized empty Git repository in /home/runner/work/go-agent-harness/go-agent-harness/.git/
+CI (coverage)	Check out repository	2026-09-13T23:30:19.3927603Z [command]/usr/bin/git remote add origin https://github.com/portpowered/go-agent-harness
+CI (coverage)	Check out repository	2026-09-13T23:30:19.3968649Z ##[endgroup]
+CI (coverage)	Check out repository	2026-09-13T23:30:19.3971085Z ##[group]Disabling automatic garbage collection
+CI (coverage)	Check out repository	2026-09-13T23:30:19.3974091Z [command]/usr/bin/git config --local gc.auto 0
+CI (coverage)	Check out repository	2026-09-13T23:30:19.4017996Z ##[endgroup]
+CI (coverage)	Check out repository	2026-09-13T23:30:19.4019400Z ##[group]Setting up auth
+CI (coverage)	Check out repository	2026-09-13T23:30:19.4025968Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+CI (coverage)	Check out repository	2026-09-13T23:30:19.4068372Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+CI (coverage)	Check out repository	2026-09-13T23:30:19.4484043Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+CI (coverage)	Check out repository	2026-09-13T23:30:19.4531147Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+CI (coverage)	Check out repository	2026-09-13T23:30:19.4824717Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+CI (coverage)	Check out repository	2026-09-13T23:30:19.4884639Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+CI (coverage)	Check out repository	2026-09-13T23:30:19.5174646Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+CI (coverage)	Check out repository	2026-09-13T23:30:19.5263051Z ##[endgroup]
+CI (coverage)	Check out repository	2026-09-13T23:30:19.5264781Z ##[group]Fetching the repository
+CI (coverage)	Check out repository	2026-09-13T23:30:19.5267362Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +c9f40d6f0736fda8b489efdfb2457a479dde2b8b:refs/remotes/pull/518/merge
+CI (coverage)	Check out repository	2026-09-13T23:30:27.1001913Z From https://github.com/portpowered/go-agent-harness
+CI (coverage)	Check out repository	2026-09-13T23:30:27.1004061Z  * [new ref]         c9f40d6f0736fda8b489efdfb2457a479dde2b8b -> pull/518/merge
+CI (coverage)	Check out repository	2026-09-13T23:30:27.1017156Z ##[endgroup]
+CI (coverage)	Check out repository	2026-09-13T23:30:27.1018730Z ##[group]Determining the checkout info
+CI (coverage)	Check out repository	2026-09-13T23:30:27.1021284Z ##[endgroup]
+CI (coverage)	Check out repository	2026-09-13T23:30:27.1040865Z [command]/usr/bin/git sparse-checkout disable
+CI (coverage)	Check out repository	2026-09-13T23:30:27.1101028Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+CI (coverage)	Check out repository	2026-09-13T23:30:27.1153728Z ##[group]Checking out the ref
+CI (coverage)	Check out repository	2026-09-13T23:30:27.1159204Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/518/merge
+CI (coverage)	Check out repository	2026-09-13T23:30:28.1966215Z Updating files:  75% (8705/11497)
+CI (coverage)	Check out repository	2026-09-13T23:30:28.2109939Z Updating files:  76% (8738/11497)
+CI (coverage)	Check out repository	2026-09-13T23:30:28.2186904Z Updating files:  77% (8853/11497)
+CI (coverage)	Check out repository	2026-09-13T23:30:28.2238650Z Updating files:  78% (8968/11497)
+CI (coverage)	Check out repository	2026-09-13T23:30:28.2298478Z Updating files:  79% (9083/11497)
+CI (coverage)	Check out repository	2026-09-13T23:30:28.2439515Z Updating files:  80% (9198/11497)
+CI (coverage)	Check out repository	2026-09-13T23:30:28.2635152Z Updating files:  81% (9313/11497)
+CI (coverage)	Check out repository	2026-09-13T23:30:28.2745676Z Updating files:  82% (9428/11497)
+CI (coverage)	Check out repository	2026-09-13T23:30:28.2906042Z Updating files:  83% (9543/11497)
+CI (coverage)	Check out repository	2026-09-13T23:30:28.3079436Z Updating files:  84% (9658/11497)
+CI (coverage)	Check out repository	2026-09-13T23:30:28.3225965Z Updating files:  85% (9773/11497)
+CI (coverage)	Check out repository	2026-09-13T23:30:28.3312292Z Updating files:  86% (9888/11497)
+CI (coverage)	Check out repository	2026-09-13T23:30:28.3401132Z Updating files:  87% (10003/11497)
+CI (coverage)	Check out repository	2026-09-13T23:30:28.3512116Z Updating files:  88% (10118/11497)
+CI (coverage)	Check out repository	2026-09-13T23:30:28.3588265Z Updating files:  89% (10233/11497)
+CI (coverage)	Check out repository	2026-09-13T23:30:28.3672415Z Updating files:  90% (10348/11497)
+CI (coverage)	Check out repository	2026-09-13T23:30:28.3933592Z Updating files:  91% (10463/11497)
+CI (coverage)	Check out repository	2026-09-13T23:30:28.4013364Z Updating files:  92% (10578/11497)
+CI (coverage)	Check out repository	2026-09-13T23:30:28.4095300Z Updating files:  93% (10693/11497)
+CI (coverage)	Check out repository	2026-09-13T23:30:28.4167925Z Updating files:  94% (10808/11497)
+CI (coverage)	Check out repository	2026-09-13T23:30:28.4261300Z Updating files:  95% (10923/11497)
+CI (coverage)	Check out repository	2026-09-13T23:30:28.4334408Z Updating files:  96% (11038/11497)
+CI (coverage)	Check out repository	2026-09-13T23:30:28.4406502Z Updating files:  97% (11153/11497)
+CI (coverage)	Check out repository	2026-09-13T23:30:28.4502465Z Updating files:  98% (11268/11497)
+CI (coverage)	Check out repository	2026-09-13T23:30:28.4581066Z Updating files:  99% (11383/11497)
+CI (coverage)	Check out repository	2026-09-13T23:30:28.4581957Z Updating files: 100% (11497/11497)
+CI (coverage)	Check out repository	2026-09-13T23:30:28.4582519Z Updating files: 100% (11497/11497), done.
+CI (coverage)	Check out repository	2026-09-13T23:30:28.4782490Z Note: switching to 'refs/remotes/pull/518/merge'.
+CI (coverage)	Check out repository	2026-09-13T23:30:28.4783737Z 
+CI (coverage)	Check out repository	2026-09-13T23:30:28.4784003Z You are in 'detached HEAD' state. You can look around, make experimental
+CI (coverage)	Check out repository	2026-09-13T23:30:28.4784515Z changes and commit them, and you can discard any commits you make in this
+CI (coverage)	Check out repository	2026-09-13T23:30:28.4784997Z state without impacting any branches by switching back to a branch.
+CI (coverage)	Check out repository	2026-09-13T23:30:28.4785294Z 
+CI (coverage)	Check out repository	2026-09-13T23:30:28.4785488Z If you want to create a new branch to retain commits you create, you may
+CI (coverage)	Check out repository	2026-09-13T23:30:28.4785959Z do so (now or later) by using -c with the switch command. Example:
+CI (coverage)	Check out repository	2026-09-13T23:30:28.4786707Z 
+CI (coverage)	Check out repository	2026-09-13T23:30:28.4786826Z   git switch -c <new-branch-name>
+CI (coverage)	Check out repository	2026-09-13T23:30:28.4787003Z 
+CI (coverage)	Check out repository	2026-09-13T23:30:28.4787120Z Or undo this operation with:
+CI (coverage)	Check out repository	2026-09-13T23:30:28.4787282Z 
+CI (coverage)	Check out repository	2026-09-13T23:30:28.4787374Z   git switch -
+CI (coverage)	Check out repository	2026-09-13T23:30:28.4787505Z 
+CI (coverage)	Check out repository	2026-09-13T23:30:28.4787720Z Turn off this advice by setting config variable advice.detachedHead to false
+CI (coverage)	Check out repository	2026-09-13T23:30:28.4788035Z 
+CI (coverage)	Check out repository	2026-09-13T23:30:28.4788391Z HEAD is now at c9f40d6 Merge 28c5a841d3f0cc210af45b6b0cf6c66d95cc95d6 into 2c79ec6a931c3e86944d6a625d0a5060b4f85aa0
+CI (coverage)	Check out repository	2026-09-13T23:30:28.4853823Z ##[endgroup]
+CI (coverage)	Check out repository	2026-09-13T23:30:28.4918840Z [command]/usr/bin/git log -1 --format=%H
+CI (coverage)	Check out repository	2026-09-13T23:30:28.4960343Z c9f40d6f0736fda8b489efdfb2457a479dde2b8b
+CI (coverage)	Set up Go	﻿2026-09-13T23:30:28.5255926Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+CI (coverage)	Set up Go	2026-09-13T23:30:28.5257895Z ##[group]Run actions/setup-go@v5
+CI (coverage)	Set up Go	2026-09-13T23:30:28.5258169Z with:
+CI (coverage)	Set up Go	2026-09-13T23:30:28.5258381Z   go-version: 1.26.7
+CI (coverage)	Set up Go	2026-09-13T23:30:28.5258602Z   cache: true
+CI (coverage)	Set up Go	2026-09-13T23:30:28.5259402Z   cache-dependency-path: go.work.sum
+CI (coverage)	Set up Go	agent-cli/go.sum
+CI (coverage)	Set up Go	go-agent-loop/go.sum
+CI (coverage)	Set up Go	go-llm-gateway/go.sum
+CI (coverage)	Set up Go	go-audio/go.sum
+CI (coverage)	Set up Go	go-device-gateway/go.sum
+CI (coverage)	Set up Go	go-agent-runtime/go.sum
+CI (coverage)	Set up Go	tools/architecturegate/go.sum
+CI (coverage)	Set up Go	tests/embedding/go.sum
+CI (coverage)	Set up Go	
+CI (coverage)	Set up Go	2026-09-13T23:30:28.5260503Z   check-latest: false
+CI (coverage)	Set up Go	2026-09-13T23:30:28.5263154Z   token: ***
+CI (coverage)	Set up Go	2026-09-13T23:30:28.5263379Z ##[endgroup]
+CI (coverage)	Set up Go	2026-09-13T23:30:28.6716637Z Setup go version spec 1.26.7
+CI (coverage)	Set up Go	2026-09-13T23:30:28.6728519Z Attempting to download 1.26.7...
+CI (coverage)	Set up Go	2026-09-13T23:30:28.6848558Z (node:2258) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+CI (coverage)	Set up Go	2026-09-13T23:30:28.6849972Z (Use `node --trace-deprecation ...` to show where the warning was created)
+CI (coverage)	Set up Go	2026-09-13T23:30:29.1016307Z matching 1.26.7...
+CI (coverage)	Set up Go	2026-09-13T23:30:29.1052871Z Acquiring 1.26.7 from https://github.com/actions/go-versions/releases/download/1.26.7-32325178046/go-1.26.7-linux-x64.tar.gz
+CI (coverage)	Set up Go	2026-09-13T23:30:29.7685494Z Extracting Go...
+CI (coverage)	Set up Go	2026-09-13T23:30:29.7851080Z [command]/usr/bin/tar xz --warning=no-unknown-keyword --overwrite -C /home/runner/work/_temp/f59d747d-ef14-41c8-b17d-693ea1c4f868 -f /home/runner/work/_temp/0eb6d89a-4c88-45b8-bcf8-4734a1e2cef5
+CI (coverage)	Set up Go	2026-09-13T23:30:31.4516732Z Successfully extracted go to /home/runner/work/_temp/f59d747d-ef14-41c8-b17d-693ea1c4f868
+CI (coverage)	Set up Go	2026-09-13T23:30:31.4517749Z Adding to the cache ...
+CI (coverage)	Set up Go	2026-09-13T23:30:37.5263885Z Successfully cached go to /opt/hostedtoolcache/go/1.26.7/x64
+CI (coverage)	Set up Go	2026-09-13T23:30:37.5268869Z Added go to the path
+CI (coverage)	Set up Go	2026-09-13T23:30:37.5270469Z Successfully set up Go version 1.26.7
+CI (coverage)	Set up Go	2026-09-13T23:30:37.5532511Z [command]/opt/hostedtoolcache/go/1.26.7/x64/bin/go env GOMODCACHE
+CI (coverage)	Set up Go	2026-09-13T23:30:37.5580543Z [command]/opt/hostedtoolcache/go/1.26.7/x64/bin/go env GOCACHE
+CI (coverage)	Set up Go	2026-09-13T23:30:37.5633479Z /home/runner/go/pkg/mod
+CI (coverage)	Set up Go	2026-09-13T23:30:37.5655147Z /home/runner/.cache/go-build
+CI (coverage)	Set up Go	2026-09-13T23:30:37.6406460Z Cache hit for: setup-go-Linux-x64-ubuntu24-go-1.26.7-452240fe38adb059428305881a4f431b44a621f07db879f8a9f8107e18051550
+CI (coverage)	Set up Go	2026-09-13T23:30:37.6513537Z (node:2258) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+CI (coverage)	Set up Go	2026-09-13T23:30:38.5181114Z Received 193794498 of 193794498 (100.0%), 219.5 MBs/sec
+CI (coverage)	Set up Go	2026-09-13T23:30:38.5181874Z Cache Size: ~185 MB (193794498 B)
+CI (coverage)	Set up Go	2026-09-13T23:30:38.5218788Z [command]/usr/bin/tar -xf /home/runner/work/_temp/22d15401-253c-4837-8975-52b2ef4e3451/cache.tzst -P -C /home/runner/work/go-agent-harness/go-agent-harness --use-compress-program unzstd
+CI (coverage)	Set up Go	2026-09-13T23:30:40.2252543Z Cache restored successfully
+CI (coverage)	Set up Go	2026-09-13T23:30:40.2355634Z Cache restored from key: setup-go-Linux-x64-ubuntu24-go-1.26.7-452240fe38adb059428305881a4f431b44a621f07db879f8a9f8107e18051550
+CI (coverage)	Set up Go	2026-09-13T23:30:40.2384671Z go version go1.26.7 linux/amd64
+CI (coverage)	Set up Go	2026-09-13T23:30:40.2385043Z 
+CI (coverage)	Set up Go	2026-09-13T23:30:40.2385514Z ##[group]go env
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3268380Z AR='ar'
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3269003Z CC='gcc'
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3269516Z CGO_CFLAGS='-O2 -g'
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3270285Z CGO_CPPFLAGS=''
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3270734Z CGO_CXXFLAGS='-O2 -g'
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3271193Z CGO_ENABLED='1'
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3271615Z CGO_FFLAGS='-O2 -g'
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3272170Z CGO_LDFLAGS='-O2 -g'
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3272542Z CXX='g++'
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3272878Z GCCGO='gccgo'
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3273242Z GO111MODULE=''
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3273586Z GOAMD64='v1'
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3273912Z GOARCH='amd64'
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3274703Z GOAUTH='netrc'
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3275030Z GOBIN=''
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3275401Z GOCACHE='/home/runner/.cache/go-build'
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3275872Z GOCACHEPROG=''
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3276212Z GODEBUG=''
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3276581Z GOENV='/home/runner/.config/go/env'
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3277045Z GOEXE=''
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3278609Z GOEXPERIMENT=''
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3279015Z GOFIPS140='off'
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3279586Z GOFLAGS=''
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3281072Z GOGCCFLAGS='-fPIC -m64 -pthread -Wl,--no-gc-sections -fmessage-length=0 -ffile-prefix-map=/tmp/go-build182445147=/tmp/go-build -gno-record-gcc-switches'
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3282260Z GOHOSTARCH='amd64'
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3282694Z GOHOSTOS='linux'
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3283036Z GOINSECURE=''
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3283377Z GOMOD='/dev/null'
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3283766Z GOMODCACHE='/home/runner/go/pkg/mod'
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3284213Z GONOPROXY=''
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3284555Z GONOSUMDB=''
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3284877Z GOOS='linux'
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3285246Z GOPATH='/home/runner/go'
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3285634Z GOPRIVATE=''
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3286113Z GOPROXY='https://proxy.golang.org,direct'
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3286691Z GOROOT='/opt/hostedtoolcache/go/1.26.7/x64'
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3287503Z GOSUMDB='sum.golang.org'
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3287895Z GOTELEMETRY='local'
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3288331Z GOTELEMETRYDIR='/home/runner/.config/go/telemetry'
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3288826Z GOTMPDIR=''
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3289156Z GOTOOLCHAIN='auto'
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3290030Z GOTOOLDIR='/opt/hostedtoolcache/go/1.26.7/x64/pkg/tool/linux_amd64'
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3290668Z GOVCS=''
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3290998Z GOVERSION='go1.26.7'
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3291562Z GOWORK='/home/runner/work/go-agent-harness/go-agent-harness/go.work'
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3292226Z PKG_CONFIG='pkg-config'
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3292466Z 
+CI (coverage)	Set up Go	2026-09-13T23:30:40.3292986Z ##[endgroup]
+CI (coverage)	Run coverage profiles and coverage gate	﻿2026-09-13T23:30:40.3534687Z ##[group]Run make coverage
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:30:40.3535065Z [36;1mmake coverage[0m
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:30:40.3580416Z shell: /usr/bin/bash -e {0}
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:30:40.3580744Z ##[endgroup]
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:30:40.3730445Z ==> coverage agent-cli (target-wide timeout for ./test/integration: 480s)
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:31:28.2221913Z 	github.com/portpowered/go-agent-harness/agent-cli/cmd/agent		coverage: 0.0% of statements
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:31:28.6253957Z 	github.com/portpowered/go-agent-harness/agent-cli/cmd/audio-device-server		coverage: 0.0% of statements
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:31:28.6258538Z ok  	github.com/portpowered/go-agent-harness/agent-cli/cmd/room-latency-report	0.193s	coverage: 0.1% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:31:28.6264674Z ok  	github.com/portpowered/go-agent-harness/agent-cli/cmd/session-timing-report	0.171s	coverage: 0.0% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:31:28.7177887Z ok  	github.com/portpowered/go-agent-harness/agent-cli/cmd/testtimeout	0.226s	coverage: 0.2% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:31:28.7703412Z 	github.com/portpowered/go-agent-harness/agent-cli/cmd/testtiming		coverage: 0.0% of statements
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:31:28.8970487Z 	github.com/portpowered/go-agent-harness/agent-cli/cmd/yui		coverage: 0.0% of statements
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:31:29.8662261Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/acceptance	0.300s	coverage: 0.9% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:31:29.8666293Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/config	0.260s	coverage: 0.9% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:31:29.9273417Z 	github.com/portpowered/go-agent-harness/agent-cli/internal/execctx		coverage: 0.0% of statements
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:31:29.9658066Z 	github.com/portpowered/go-agent-harness/agent-cli/internal/flags		coverage: 0.0% of statements
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:31:30.0450258Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/input	0.174s	coverage: 0.2% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:31:30.1112659Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/logger	0.219s	coverage: 0.2% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:31:30.7460199Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/output	0.161s	coverage: 0.3% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:31:35.1152029Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/probe	1.615s	coverage: 6.6% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:31:35.1155931Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/probe/fault	0.169s	coverage: 0.6% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:31:35.1161063Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/probe/fleet	0.141s	coverage: 0.4% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:31:37.3722043Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/room	3.815s	coverage: 2.0% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:31:37.3751820Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services	0.191s	coverage: 1.9% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:31:37.3762330Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime	0.118s	coverage: 0.0% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:31:37.3780954Z ?   	github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime/transports	[no test files]
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:31:37.3822003Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession	0.129s	coverage: 0.1% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:31:37.3831862Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices	0.133s	coverage: 0.0% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:33:17.0216676Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime	79.387s	coverage: 31.8% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:33:17.0220636Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentsession	0.154s	coverage: 0.0% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:33:17.0223342Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/devices	0.941s	coverage: 0.7% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:33:17.0225556Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/tools	0.142s	coverage: 0.8% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:33:17.0227181Z ?   	github.com/portpowered/go-agent-harness/agent-cli/internal/services/probes	[no test files]
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:33:17.0228692Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/rooms	0.100s	coverage: 0.0% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:33:17.0230498Z 	github.com/portpowered/go-agent-harness/agent-cli/internal/services/rooms/internal/launch		coverage: 0.0% of statements
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:33:17.0231372Z 	github.com/portpowered/go-agent-harness/agent-cli/internal/services/rooms/wire		coverage: 0.0% of statements
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:33:17.0232159Z 	github.com/portpowered/go-agent-harness/agent-cli/internal/services/selfplay		coverage: 0.0% of statements
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:33:17.0232897Z ?   	github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest	[no test files]
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:33:17.0234079Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools	0.256s	coverage: 0.0% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:33:17.0236112Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools/internal/runtimeadapter	0.196s	coverage: 0.1% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:33:17.0237396Z 	github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools/wire		coverage: 0.0% of statements
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:33:17.0238168Z 	github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire		coverage: 0.0% of statements
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:33:17.0239507Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/sessiontiming	0.208s	coverage: 0.4% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:33:17.0240908Z 	github.com/portpowered/go-agent-harness/agent-cli/internal/sight		coverage: 0.0% of statements
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:33:17.0242033Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/skills	0.271s	coverage: 0.2% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:33:17.0243137Z 	github.com/portpowered/go-agent-harness/agent-cli/internal/sysinfo		coverage: 0.0% of statements
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:33:17.0244302Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/testtimeout	10.018s	coverage: 0.2% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:33:17.0245879Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/testtiming	0.348s	coverage: 0.1% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:33:17.0247428Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/tools	0.306s	coverage: 0.7% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:33:17.0249058Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli	21.184s	coverage: 31.5% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:33:17.0250999Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/events	10.356s	coverage: 3.8% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:33:17.0252735Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/livehost	0.140s	coverage: 0.8% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:33:17.0254367Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp	3.418s	coverage: 6.7% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:33:17.0255915Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome	4.658s	coverage: 3.1% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:33:17.0257506Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery	0.467s	coverage: 3.2% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:33:17.0259147Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/siteadapter	0.292s	coverage: 0.1% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:33:17.0261659Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit	0.451s	coverage: 7.8% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:33:17.0263267Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/tools	2.724s	coverage: 5.6% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:33:17.0264815Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/wire	0.917s	coverage: 6.1% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:33:17.0266507Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/workspace	0.548s	coverage: 0.3% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:33:17.0268105Z ok  	github.com/portpowered/go-agent-harness/agent-cli/test/functional	0.493s	coverage: 0.0% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:33:17.0270209Z ok  	github.com/portpowered/go-agent-harness/agent-cli/test/functional/parity	0.451s	coverage: 0.0% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8176747Z Error: replay interaction fixture "/tmp/TestInteractionReplay_InvalidFixtureReturnsActionableError3213211438/001/invalid.interaction.json": /tmp/TestInteractionReplay_InvalidFixtureReturnsActionableError3213211438/001/invalid.interaction.json: events[0].textDelta: is required for text.delta events
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8179349Z Usage:
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8180159Z   yui interaction replay <fixture-path> [flags]
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8180564Z 
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8180749Z Examples:
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8181307Z   yui interaction replay ./fixtures/example.interaction.json
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8181778Z 
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8181914Z Flags:
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8182306Z   -h, --help   help for replay
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8182617Z 
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8182766Z Global Flags:
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8183785Z       --allow-path stringArray   Additional filesystem-tool root (repeatable; relative to --workdir)
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8185020Z   -C, --config-dir string        Directory for agent CLI config (default: ~/.agent-cli)
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8186488Z       --log-to-stdout            Log to stdout/stderr instead of file (default: logs to file in config directory)
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8187715Z   -v, --verbose count            Enable verbose output (use -v for info, -vv for debug)
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8189010Z       --workdir string           Filesystem-tool workdir (default: the process current directory)
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8189870Z 
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8191658Z Error: replay session capture : run session loop: replay mismatch: expected event type "conversation.item.create" at sequence 3, actual event type "input_audio_buffer.append" at sequence 3: JSON pointer /audio: expected <missing>, actual "NAATABsAEAALAAoA5f8PABQ...(truncated)
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8193813Z replay mismatch
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8195587Z session transport: replay mismatch: expected event type "conversation.item.create" at sequence 3, actual event type "input_audio_buffer.append" at sequence 3: JSON pointer /audio: expected <missing>, actual "NAATABsAEAALAAoA5f8PABQ...(truncated)
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8197350Z replay mismatch
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8200626Z replay session capture : replay session capture /tmp/TestSessionCommandVisionDescribeWithoutImageFailsTypedReplay1592922750/001/vision-describe.session.json: replay mismatch: expected event type "conversation.item.create" at sequence 3, actual event type "input_audio_buffer.append" at sequence 3: JSON pointer /audio: expected <missing>, actual "NAATABsAEAALAAoA5f8PABQ...(truncated)
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8203793Z replay mismatch
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8205787Z Error: session error: replay mismatch: expected event type "conversation.item.create" at sequence 9, actual event type "conversation.item.create" at sequence 9: JSON pointer /item/output: expected "PROBE_TOOL_MARKER_9182\n...(truncated), actual "tool \"exec\" is not ava...(truncated)
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8207779Z replay mismatch
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8209598Z replay mismatch: expected event type "conversation.item.create" at sequence 9, actual event type "conversation.item.create" at sequence 9: JSON pointer /item/output: expected "PROBE_TOOL_MARKER_9182\n...(truncated), actual "tool \"exec\" is not ava...(truncated)
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8211956Z replay mismatch
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8214028Z Error: replay session capture /tmp/TestSessionCommand_ReplayMissingFileReturnsActionableError1894262194/001/missing.json: read session capture file: open /tmp/TestSessionCommand_ReplayMissingFileReturnsActionableError1894262194/001/missing.json: no such file or directory
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8216359Z Error: --record path "capture.txt" must end with .json
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8217565Z Error: openai realtime api key is missing (set AGENT_MODEL__OPENAI__API_KEY, pass --api-key, or configure the provider in config.yaml)
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8219345Z Error: grok API key is required for live session record mode (set AGENT_MODEL__GROK__API_KEY, pass --api-key, or configure model.grok.api_key in config.yaml)
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8221469Z Error: OpenAI model "gpt-4o" is not realtime-capable for agent session; supported realtime models: gpt-realtime, gpt-realtime-2.1-mini, gpt-realtime-2.1
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8223237Z Error: capture media pump: capture completion control "audio_commit" for turn 1: live provider rejected control "audio_commit"
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8225659Z session error: replay mismatch: expected event type "input_audio_buffer.append" at sequence 4, actual event type "input_audio_buffer.append" at sequence 4: JSON pointer /audio: expected "uIQGq1cqzGA=", actual "AABzAOUAVwHIATcCpQIQA3gD...(truncated)
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8227407Z replay mismatch
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8229055Z replay mismatch: expected event type "input_audio_buffer.append" at sequence 4, actual event type "input_audio_buffer.append" at sequence 4: JSON pointer /audio: expected "uIQGq1cqzGA=", actual "AABzAOUAVwHIATcCpQIQA3gD...(truncated)
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8231022Z replay mismatch
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8232072Z scheduled audio session ended before all turns completed: completed=0 dispatched=0 scheduled=2
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8263033Z capture completion control "audio_commit" for turn 1: live provider rejected control "audio_commit"
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8264618Z Error: invalid OpenAI Realtime voice "not-a-voice"; supported voices: alloy, ash, ballad, cedar, coral, echo, marin, sage, shimmer, verse
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8266384Z Filesystem scope: workdir=/home/runner/work/go-agent-harness/go-agent-harness/agent-cli/test/integration; additional_allowed_roots=none
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8269017Z Filesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8270986Z Tools: none
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8271926Z [session terminal: classification=terminal_failure terminal_reason=terminal_failure terminal_provenance=session output_state=none]
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8273220Z live session terminated: session error: Realtime fixture rejected request
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8274060Z Error: session error: Realtime fixture rejected request
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8275312Z Filesystem scope: workdir=/home/runner/work/go-agent-harness/go-agent-harness/agent-cli/test/integration; additional_allowed_roots=none
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8278107Z Filesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8280565Z Tools: none
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8280760Z 
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8280946Z [session closed: provider_closed]
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8281979Z [session terminal: classification=transport terminal_reason=provider_close terminal_provenance=provider output_state=none]
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8284494Z live session terminated: session error: replay mismatch: expected event type "conversation.item.create" at sequence 3, actual event type "conversation.item.create" at sequence 3: JSON pointer /item/content/0/text: expected "run the smoke replay", actual "wrong prompt"
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8286542Z replay mismatch
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8288113Z replay mismatch: expected event type "conversation.item.create" at sequence 3, actual event type "conversation.item.create" at sequence 3: JSON pointer /item/content/0/text: expected "run the smoke replay", actual "wrong prompt"
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8289864Z replay mismatch
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8291576Z Error: session error: replay mismatch: expected event type "conversation.item.create" at sequence 3, actual event type "conversation.item.create" at sequence 3: JSON pointer /item/content/0/text: expected "run the smoke replay", actual "wrong prompt"
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8293281Z replay mismatch
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8294882Z replay mismatch: expected event type "conversation.item.create" at sequence 3, actual event type "conversation.item.create" at sequence 3: JSON pointer /item/content/0/text: expected "run the smoke replay", actual "wrong prompt"
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8296533Z replay mismatch
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8297241Z --- FAIL: TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio (0.00s)
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8298765Z     --- FAIL: TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst (42.00s)
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8315170Z         session_tool_audio_remote_e2e_test.go:183: remote playback wait failed: remote playback did not reach final PCM marker before the scenario deadline: context deadline exceeded; remote timeout evidence: snapshot_error=<nil> rendered_pcm=461760 nonzero_pcm=150871 expected_pcm=174391 final_marker=false playback={queued:0 dropped:0 overflow:0 discarded:0 discard_events:0 callbacks:962 rendered:461760} capture={queued:0 captured:461760 dropped:0} trace_last={Tap:capture Sequence:961 ClockEpoch:0 SampleRate:16000 StartSample:461280 SampleCount:480 DeviceTick:961 HostMonoSamples:461280 QueueBefore:0 QueueAfter:480 Flags:[] FaultID: PayloadSHA256:3dc463a76fc170607c07b104c3cb531362ce7d6e10c1a34e0c0f370aeae08ce8} trace_render={Tap:render Sequence:961 ClockEpoch:0 SampleRate:16000 StartSample:461280 SampleCount:480 DeviceTick:961 HostMonoSamples:461280 QueueBefore:0 QueueAfter:0 Flags:[underflow] FaultID: PayloadSHA256:3dc463a76fc170607c07b104c3cb531362ce7d6e10c1a34e0c0f370aeae08ce8} trace_capture={Tap:capture Sequence:961 ClockEpoch:0 SampleRate:16000 StartSample:461280 SampleCount:480 DeviceTick:961 HostMonoSamples:461280 QueueBefore:0 QueueAfter:480 Flags:[] FaultID: PayloadSHA256:3dc463a76fc170607c07b104c3cb531362ce7d6e10c1a34e0c0f370aeae08ce8} expected_tool_calls=7 provider={responsesSent:9 responseCreates:7 initialRequests:0 inputHistories:0 inputSamplesSeen:692639 toolResults:7 protocolError:} child=exited: signal: killed stderr="" callback_advances=962
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8325618Z FAIL
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8326698Z coverage: 28.6% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8328148Z FAIL	github.com/portpowered/go-agent-harness/agent-cli/test/integration	311.820s
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8330684Z ok  	github.com/portpowered/go-agent-harness/agent-cli/test/integration/testcmd/mock-tool-agent	0.464s	coverage: 0.1% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:31.8332574Z FAIL
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:32.0689176Z agent-cli coverage exited with status 1: command=go "test" "./..." "-tags=nomicrophone" "-timeout" "480s" "-coverpkg=github.com/portpowered/go-agent-harness/agent-cli/...,github.com/portpowered/go-agent-harness/go-agent-runtime/..." "-coverprofile=../coverage/agent-cli.out" pid=2371
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:32.0691591Z Agent CLI coverage budget summary
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:32.0692731Z exit status 1
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:32.0693140Z Elapsed: 6m51.472s
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:32.0693965Z Configured timeout: 8m0s
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:32.0694534Z Consumed: 85.7%
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:32.0694975Z Remaining headroom: 1m8.528s (14.3%)
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:32.0695590Z Classification: test failure (non-timeout command exit)
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:32.0730753Z make: *** [Makefile:303: coverage] Error 1
+CI (coverage)	Run coverage profiles and coverage gate	2026-09-13T23:37:32.0749985Z ##[error]Process completed with exit code 2.
+CI (coverage)	Post Check out repository	﻿2026-09-13T23:37:32.0910588Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+CI (coverage)	Post Check out repository	2026-09-13T23:37:32.0911927Z Post job cleanup.
+CI (coverage)	Post Check out repository	2026-09-13T23:37:32.1860372Z [command]/usr/bin/git version
+CI (coverage)	Post Check out repository	2026-09-13T23:37:32.1909898Z git version 2.55.0
+CI (coverage)	Post Check out repository	2026-09-13T23:37:32.1953691Z Temporarily overriding HOME='/home/runner/work/_temp/e7a2dbca-9d63-4d4d-b9dd-5d0c59e73da1' before making global git config changes
+CI (coverage)	Post Check out repository	2026-09-13T23:37:32.1955214Z Adding repository directory to the temporary git global config as a safe directory
+CI (coverage)	Post Check out repository	2026-09-13T23:37:32.1959418Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/go-agent-harness/go-agent-harness
+CI (coverage)	Post Check out repository	2026-09-13T23:37:32.2010122Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+CI (coverage)	Post Check out repository	2026-09-13T23:37:32.2059022Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+CI (coverage)	Post Check out repository	2026-09-13T23:37:32.2344919Z fatal: No url found for submodule path 'docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-59f370b/source-identity/source-repo' in .gitmodules
+CI (coverage)	Post Check out repository	2026-09-13T23:37:32.2393826Z ##[warning]The process '/usr/bin/git' failed with exit code 128
+CI (coverage)	Complete job	﻿2026-09-13T23:37:32.2556856Z Cleaning up orphan processes
+CI (coverage)	Complete job	2026-09-13T23:37:32.2883952Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-go@v5. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
