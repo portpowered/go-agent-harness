@@ -1,0 +1,1 @@
+{"package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomterminal", "exception": "Provider-neutral declarations only; executable terminal policy is covered through the private implementation and the external consumer."}
