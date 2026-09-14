@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
+	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 )
 
 const (
@@ -135,14 +136,13 @@ func newRoomParticipantIngress(plan *roomParticipantPlan, opts RoomRunOptions, e
 		return nil
 	}
 	participantID := plan.manifest.ID
-	sink := combineDiagnosticSinks(roomParticipantDiagnosticSinks(
+	sink := sessiontracewire.CombineDiagnosticSinks(roomParticipantDiagnosticSinks(
 		plan,
 		opts,
 		evidenceParticipant(evidence, participantID),
 	)...)
 	return newRoomAudioIngressLedger(participantID, sink)
 }
-
 func notifyRoomParticipantMixerReady(opts RoomRunOptions, participantID string, mixer *room.PCM16Mixer) {
 	if opts.onParticipantMixerReady != nil {
 		opts.onParticipantMixerReady(participantID, mixer)

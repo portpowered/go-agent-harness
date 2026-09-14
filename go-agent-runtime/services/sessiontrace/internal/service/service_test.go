@@ -12,7 +12,9 @@ import (
 	"testing"
 	"time"
 
+	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/recording"
 )
@@ -27,6 +29,81 @@ func TestPrepareRequiresClockAndNoOpsWhenDisabled(t *testing.T) {
 	}
 }
 
+func TestRemoteRenderMonitorStopIsBoundedBeforeFinalPoll(t *testing.T) {
+	monitor := &remoteRenderMonitor{
+		endpoint: "not-an-endpoint",
+		observer: func(int, []int16) {},
+		cancel:   func() {},
+		done:     make(chan struct{}),
+	}
+	started := time.Now()
+	monitor.Stop()
+	if elapsed := time.Since(started); elapsed > 2*remoteRenderStopTimeout {
+		t.Fatalf("remote render stop took %s, want at most %s", elapsed, 2*remoteRenderStopTimeout)
+	}
+}
+
+func TestTraceDeviceAdapterEdgePolicies(t *testing.T) {
+	if wrapDeviceService(nil, sessiontrace.DeviceBinding{}) != nil {
+		t.Fatal("nil device service was wrapped")
+	}
+	if handle, err := (traceDeviceService{inner: &traceContractDeviceService{}}).Open(context.Background(), runtimeDevices.Request{}); err != nil || handle != nil {
+		t.Fatalf("nil device handle = %v, %v; want nil handle without error", handle, err)
+	}
+	if (&traceDeviceHandle{}).Media() != (runtimeDevices.MediaPorts{}) {
+		t.Fatal("empty trace handle exposed media ports")
+	}
+	var nilHandle *traceDeviceHandle
+	if err := nilHandle.Close(); err != nil {
+		t.Fatalf("nil trace handle close = %v", err)
+	}
+
+	capture := &traceContractCapture{}
+	wrappedCapture := &traceCapture{inner: capture}
+	if err := wrappedCapture.Close(); err != nil || capture.closeCount != 1 {
+		t.Fatalf("capture close = %v, count %d", err, capture.closeCount)
+	}
+	var observedRate int
+	outbound := &traceCaptureOutbound{
+		target: &traceContractOutbound{},
+		rate:   12_345,
+		observer: func(rate int, samples []int16) {
+			observedRate = rate
+			if !reflect.DeepEqual(samples, []int16{1, 2}) {
+				t.Fatalf("observed samples = %v", samples)
+			}
+		},
+	}
+	if err := outbound.WriteFrame(context.Background(), audio.PCMFrame{Samples: []int16{1, 2}}); err != nil {
+		t.Fatal(err)
+	}
+	if observedRate != 12_345 {
+		t.Fatalf("fallback observation rate = %d", observedRate)
+	}
+	if err := outbound.WriteFrame(context.Background(), audio.PCMFrame{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := outbound.Close(); err != nil {
+		t.Fatalf("outbound close = %v", err)
+	}
+	if err := (&traceCaptureOutbound{}).Close(); err != nil {
+		t.Fatalf("empty outbound close = %v", err)
+	}
+
+	if err := (&traceAudioSource{}).Close(); err != nil {
+		t.Fatalf("empty audio source close = %v", err)
+	}
+	if err := (&traceSampleSource{}).Close(); err != nil {
+		t.Fatalf("empty sample source close = %v", err)
+	}
+	var nilContext context.Context
+	if remoteRenderProbeContext(nilContext) == nil {
+		t.Fatal("nil remote probe context returned nil")
+	}
+	if _, err := newRemoteRenderMonitor(context.Background(), runtimeDevices.Request{}, nil, func(int, []int16) {}); err == nil {
+		t.Fatal("empty remote render request unexpectedly created a monitor")
+	}
+}
 func TestPrepareReportsStagingDirectoryFailure(t *testing.T) {
 	root := t.TempDir()
 	parent := filepath.Join(root, "not-a-directory")

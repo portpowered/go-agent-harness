@@ -9,6 +9,9 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	sessionterminalwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -26,15 +29,17 @@ func runAgentLoopSessionWithDurationAdmissionClock(ctx context.Context, out io.W
 	reporter := opts.terminalReporter
 	ownsReporter := reporter == nil
 	if reporter == nil {
-		reporter = newSessionTerminalReporter()
+		reporter = sessionterminalwire.NewReporter()
 		opts.terminalReporter = reporter
 	}
-	reporter.markRunStarted()
+	reporter.MarkRunStarted()
 	renderer := newSessionReplayRenderer(out, reporter)
 	runErr = runAgentLoopSessionWithDurationAdmissionClockStream(ctx, renderer, sessionInferencer, opts, maxDuration, durationClock, admittedInferencer)
 	runErr = scheduledAudioCompletionError(runErr, opts)
-	cleanSIGINT := sessionSIGINTCleanForObserver(runErr, opts.cancellationIntent, opts.observer)
-	runErr = opts.observer.finish(runErr)
+	cleanSIGINT := opts.observer != nil && opts.observer.CancellationClean(runErr)
+	if opts.observer != nil {
+		runErr = opts.observer.Finish(runErr)
+	}
 	if cleanSIGINT {
 		artifacts := sessionDurationArtifactsFromContext(ctx)
 		runErr = errors.Join(runErr, publishSessionUserCancellation(renderer, opts, func(out io.Writer, msg messages.StreamMessage) error {
@@ -45,7 +50,7 @@ func runAgentLoopSessionWithDurationAdmissionClock(ctx context.Context, out io.W
 		if err := renderer.finishTranscript(); err != nil {
 			runErr = errors.Join(runErr, err)
 		}
-		runErr = errors.Join(runErr, reporter.publish(out, runErr))
+		runErr = errors.Join(runErr, reporter.Publish(out, runErr))
 	}
 	return runErr
 }
@@ -72,11 +77,11 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 	observedInferencer := newObservedSessionInferencer(boundInferencer)
 	observedInferencer.progress = opts.observer
 	if opts.observer != nil {
-		opts.observer.setLivenessClock(opts.livenessClock)
-		opts.observer.setToolResultsEnabled(opts.ToolExecutor != nil)
+		opts.observer.SetLivenessClock(opts.livenessClock)
+		opts.observer.SetToolResultsEnabled(opts.ToolExecutor != nil)
 	}
 	if opts.observer != nil {
-		defer opts.observer.stopLiveness()
+		defer opts.observer.StopLiveness()
 	}
 	loop, err := agentloop.New(duplexSessionLoopOptions(observedInferencer, opts)...)
 	if err != nil {
@@ -86,7 +91,9 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	publisher, publisherErrors := startSessionDynamicToolPublisher(runCtx, loop, opts)
-	publisherErrors = mergeSessionErrorChannels(runCtx, publisherErrors, sessionLivenessErrorChannel(runCtx, opts.observer))
+	if opts.observer != nil {
+		publisherErrors = sessiontracewire.MergeErrorChannels(runCtx, publisherErrors, opts.observer.LivenessErrors(runCtx))
+	}
 	defer publisher.stop()
 	if opts.loopReady != nil {
 		select {
@@ -116,39 +123,14 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 
 	var terminationPlanned bool
 	var drainDevicePlayback bool
-	termination := sessionTerminationBoundary{
-		ctx:             ctx,
-		quiesceUpstream: opts.quiesceUpstream,
-		waitForStragglers: func(policy sessionStragglerDrainPolicy) error {
-			return waitForDurationSessionLoopStragglers(out, loop, policy, durationClock, terminationPlanned, &durationTerminalWritten, artifacts, opts.observer, terminalState)
-		},
-		stopOwnedResources: func() error {
-			var drainErr error
-			if drainDevicePlayback {
-				drainErr = observedInferencer.DrainSessionPlayback(ctx)
-			}
-			cancel()
-			providerErr := closeBareSessionIfNeeded(opts.BareLive, observedInferencer)
-			bindingErr := closeRTCDeviceBinding(opts.rtcDeviceBinding)
-			runTerminationErr := joinSessionTerminationErrors(waitRun(), nil)
-			admittedInferencer.waitForClose()
-			return errors.Join(drainErr, providerErr, runTerminationErr, bindingErr)
-		},
-		flushBuffered: func() error {
-			flushErr := flushBufferedDurationSessionLoopMessages(out, loop, terminationPlanned, &durationTerminalWritten, artifacts, opts.observer, terminalState)
-			if terminationPlanned && !terminalState.written() {
-				flushErr = errors.Join(flushErr, terminalState.writeObservedProviderTerminal(out, artifacts))
-			}
-			return flushErr
-		},
-	}
+	termination := newSessionDurationTerminationBoundary(ctx, out, loop, opts, durationClock, &terminationPlanned, &durationTerminalWritten, artifacts, terminalState, cancel, observedInferencer, admittedInferencer, &drainDevicePlayback, waitRun)
 
 	finish := func(planned bool, preferredErr error) error {
 		terminationPlanned = planned
 		drainDevicePlayback = !planned && preferredErr == nil && ctx.Err() == nil
-		terminationErr := termination.terminate(preferredErr)
+		terminationErr := termination.Terminate(preferredErr)
 		durationTerminalWritten = terminalState.written()
-		markSessionDurationExpiry(opts.terminalReporter, planned, terminalState.outputState())
+		opts.terminalReporter.MarkDurationExpiry(planned, terminalState.outputState())
 		sessionErr := observedInferencer.sessionFailure()
 		runtimeErr := admittedInferencer.runtimeError()
 		closeErr := admittedInferencer.closeError()
@@ -180,13 +162,13 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 		admittedInferencer.closeAdmission()
 		return finish(false, errors.New("session duration clock returned a nil timer"))
 	}
-	defer timer.Stop()
+	defer func() { timer.Stop() }()
 	timerCh := timer.C()
 
 	var sessionUpdatedTimer SessionDurationTimer
 	var sessionUpdatedTimeout <-chan time.Time
 	startSessionUpdatedTimer := func() error {
-		if !opts.RequireSessionUpdated || opts.observer == nil || !opts.observer.scheduledAudioAwaitingConfiguration() || sessionUpdatedTimer != nil {
+		if !opts.RequireSessionUpdated || opts.observer == nil || !opts.observer.ScheduledAudioAwaitingConfiguration() || sessionUpdatedTimer != nil {
 			return nil
 		}
 		timeout := opts.SessionUpdatedTimeout
@@ -213,7 +195,10 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 	promptSent := false
 	closeSent := false
 	closeAfterOpenPending := false
-	toolLifecycleEvents := opts.observer.toolLifecycleEvents()
+	var toolLifecycleEvents <-chan struct{}
+	if opts.observer != nil {
+		toolLifecycleEvents = opts.observer.ToolLifecycleEvents()
+	}
 
 	expire := func() error {
 		if durationExpired {
@@ -249,7 +234,7 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 				return result, err
 			}
 		}
-		if opts.observer != nil && opts.observer.scheduledAudioReady() {
+		if opts.observer != nil && opts.observer.ScheduledAudioReady() {
 			stopSessionUpdatedTimer()
 		}
 		return result, nil
@@ -274,7 +259,7 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 			// must re-check pending audio before checking whether the session
 			// can close; otherwise a completed continuation can leave the next
 			// scheduled turn waiting for an unrelated provider delta.
-			if err := opts.observer.dispatchScheduledInputs(runCtx, loop); err != nil {
+			if err := opts.observer.DispatchScheduledInputs(runCtx, loop); err != nil {
 				return finish(false, err)
 			}
 			state, closeErr := closePendingSessionIfReady(runCtx, loop, opts, sessionLoopMessageState{
@@ -373,7 +358,9 @@ func processDurationLoopMessage(ctx context.Context, sessionDone <-chan struct{}
 		}
 		result.durationTerminalWritten = terminalState.written()
 	}
-	opts.observer.observe(msg)
+	if opts.observer != nil {
+		opts.observer.Observe(msg)
+	}
 	if err := writeDurationSessionReplayMessage(out, msg, artifacts); err != nil {
 		return result, err
 	}
@@ -384,15 +371,8 @@ func processDurationLoopMessage(ctx context.Context, sessionDone <-chan struct{}
 	if msg.Type == messages.StreamTypeSessionOpen && !durationExpired {
 		if promptProvided && !result.promptSent {
 			result.promptSent = true
-			userMsg := messages.NewTextMessage(messages.RoleUser, opts.Prompt)
-			if err := loop.Send(ctx, []messages.Message{userMsg}); err != nil {
-				return result, fmt.Errorf("send session message: %w", err)
-			}
-			opts.observer.noteUserTextInput(opts.Prompt)
-			if opts.awaitFirstTurn != nil {
-				if err := awaitSessionFirstTurnWithClock(ctx, opts.awaitFirstTurn, opts.clockSource); err != nil {
-					return result, fmt.Errorf("send session first turn: %w", err)
-				}
+			if err := sendSessionOpenPrompt(ctx, loop, opts); err != nil {
+				return result, err
 			}
 		}
 		if opts.CloseAfterOpen && !promptProvided && !result.closeSent {
@@ -404,7 +384,7 @@ func processDurationLoopMessage(ctx context.Context, sessionDone <-chan struct{}
 	if err != nil {
 		return result, err
 	}
-	if !durationExpired && opts.CloseAfterOpen && promptProvided && msg.Type == messages.StreamTypeMessageEnd && !result.closeSent && (opts.observer == nil || opts.observer.lastMessageEndAdmitted()) {
+	if !durationExpired && opts.CloseAfterOpen && promptProvided && msg.Type == messages.StreamTypeMessageEnd && !result.closeSent && (opts.observer == nil || opts.observer.LastMessageEndAdmitted()) {
 		result.closeAfterOpenPending = true
 	}
 	state, err := closePendingSessionIfReady(ctx, loop, opts, sessionLoopMessageState{
@@ -424,7 +404,10 @@ func processDurationScheduledMessage(ctx context.Context, loop *agentloop.AgentL
 	if !shouldDispatchScheduledAudioForMessage(msg, opts.ScheduledAudioDispatch) {
 		return closeSent, nil
 	}
-	if err := opts.observer.dispatchScheduledInputs(ctx, loop); err != nil {
+	if opts.observer == nil {
+		return closeSent, nil
+	}
+	if err := opts.observer.DispatchScheduledInputs(ctx, loop); err != nil {
 		return closeSent, err
 	}
 	return closeSent, nil
@@ -455,7 +438,7 @@ func writeDurationSessionReplayMessage(out io.Writer, msg messages.StreamMessage
 // buffered after the loop's owned resources have stopped. Duration-specific
 // terminal and artifact state remains in the runtime service state rather than
 // in the shared termination boundary.
-func flushBufferedDurationSessionLoopMessages(out io.Writer, loop *agentloop.AgentLoop, planned bool, terminalWritten *bool, artifacts SessionDurationArtifactLifecycle, obs *sessionProgressObserver, terminalState *sessionDurationTerminalState) error {
+func flushBufferedDurationSessionLoopMessages(out io.Writer, loop *agentloop.AgentLoop, planned bool, terminalWritten *bool, artifacts SessionDurationArtifactLifecycle, obs sessiontrace.Observer, terminalState *sessionDurationTerminalState) error {
 	for {
 		msg, ok := loop.Deltas().Read()
 		if !ok {
@@ -470,7 +453,9 @@ func flushBufferedDurationSessionLoopMessages(out io.Writer, loop *agentloop.Age
 				continue
 			}
 		}
-		obs.observe(msg)
+		if obs != nil {
+			obs.Observe(msg)
+		}
 		if err := writeDurationSessionReplayMessage(out, msg, artifacts); err != nil {
 			return err
 		}
@@ -480,10 +465,9 @@ func flushBufferedDurationSessionLoopMessages(out io.Writer, loop *agentloop.Age
 // waitForDurationSessionLoopStragglers waits for provider deltas during the
 // required positive policy quiet period. Only the shared termination boundary
 // selects this waiting operation for terminal cleanup.
-func waitForDurationSessionLoopStragglers(out io.Writer, loop *agentloop.AgentLoop, policy sessionStragglerDrainPolicy, durationClock SessionDurationClock, planned bool, terminalWritten *bool, artifacts SessionDurationArtifactLifecycle, obs *sessionProgressObserver, terminalState *sessionDurationTerminalState) error {
-	quiet := policy.quietPeriod
+func waitForDurationSessionLoopStragglers(out io.Writer, loop *agentloop.AgentLoop, quiet time.Duration, durationClock SessionDurationClock, planned bool, terminalWritten *bool, artifacts SessionDurationArtifactLifecycle, obs sessiontrace.Observer, terminalState *sessionDurationTerminalState) error {
 	if quiet <= 0 {
-		return errInvalidSessionStragglerDrainPolicy
+		return errors.New("session straggler drain requires a positive quiet period")
 	}
 	if durationClock == nil {
 		return errors.New("session duration clock is required for straggler drain")
@@ -492,11 +476,7 @@ func waitForDurationSessionLoopStragglers(out io.Writer, loop *agentloop.AgentLo
 	if timer == nil {
 		return errors.New("session duration clock returned a nil straggler timer")
 	}
-	defer func() {
-		if timer != nil {
-			timer.Stop()
-		}
-	}()
+	defer func() { timer.Stop() }()
 	for {
 		select {
 		case msg, ok := <-loop.Deltas().Chan():
@@ -512,22 +492,33 @@ func waitForDurationSessionLoopStragglers(out io.Writer, loop *agentloop.AgentLo
 					continue
 				}
 			}
-			obs.observe(msg)
+			if obs != nil {
+				obs.Observe(msg)
+			}
 			if err := writeDurationSessionReplayMessage(out, msg, artifacts); err != nil {
 				return err
 			}
-			if !timer.Stop() {
-				select {
-				case <-timer.C():
-				default:
-				}
+			nextTimer, resetErr := resetDurationStragglerTimer(timer, durationClock, quiet)
+			if resetErr != nil {
+				return resetErr
 			}
-			timer = durationClock.NewTimer(quiet)
-			if timer == nil {
-				return errors.New("session duration clock returned a nil straggler timer")
-			}
+			timer = nextTimer
 		case <-timer.C():
 			return nil
 		}
 	}
+}
+
+func resetDurationStragglerTimer(timer SessionDurationTimer, durationClock SessionDurationClock, quiet time.Duration) (SessionDurationTimer, error) {
+	if !timer.Stop() {
+		select {
+		case <-timer.C():
+		default:
+		}
+	}
+	next := durationClock.NewTimer(quiet)
+	if next == nil {
+		return nil, errors.New("session duration clock returned a nil straggler timer")
+	}
+	return next, nil
 }

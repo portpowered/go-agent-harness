@@ -20,6 +20,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
@@ -313,13 +314,12 @@ type SessionRunOptions struct {
 	// timer clock from Clock when possible, otherwise the session uses the host
 	// clock. Deterministic callers can inject this seam without changing the
 	// runtime timestamp source.
-	LivenessClock SessionLivenessClock
+	LivenessClock sessiontrace.LivenessClock
 	// RuntimeObserver receives clock-stamped audio, turn, and terminal events
 	// from the session command. The terminal event carries the production-owned
 	// session-cumulative token totals and complete metrics snapshot. Nil keeps
 	// the runtime observationally silent.
 	RuntimeObserver SessionRuntimeObserver
-
 	// Diagnostics optionally receives one canonical structured record per
 	// terminal failure plus per-turn and tool-call records. Nil keeps runtime
 	// behavior byte-for-byte unchanged.
@@ -338,7 +338,7 @@ type SessionRunOptions struct {
 	StreamObserver SessionStreamObserver
 	// AudioInputs schedules user audio injections through the loop's existing
 	// audio-input seam, attributed to specific turns.
-	AudioInputs []ScheduledAudioInput
+	AudioInputs []sessiontrace.ScheduledAudioInput
 	// AudioInTurnBarge selects the explicit active-response dispatch policy for
 	// repeated --audio-in-turn inputs. False preserves the completion-gated
 	// serialized policy.
@@ -347,7 +347,7 @@ type SessionRunOptions struct {
 	// duplex loop as scheduled inputs. The browser conversation runner uses it
 	// for overlap audio that must be admitted only after an in-flight browser
 	// invocation is observed; it is intentionally not a second audio loop.
-	AudioInterruptions <-chan ScheduledAudioInput
+	AudioInterruptions <-chan sessiontrace.ScheduledAudioInput
 	// ClientOwnsAudioTurnBoundaries requests an explicit client-owned realtime
 	// audio turn contract for a finite --audio-in source. The source sends the
 	// MESSAGE.END boundary itself; provider VAD must not auto-commit the same

@@ -170,14 +170,6 @@ func reasoningEffort(cfg config.Config, request serviceSession.Request) string {
 	return ""
 }
 
-func cloneBool(value *bool) *bool {
-	if value == nil {
-		return nil
-	}
-	copy := *value
-	return &copy
-}
-
 func replayTiming(value string) runtimeSession.LiveReplayTiming {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "realtime", "recorded":

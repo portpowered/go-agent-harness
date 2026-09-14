@@ -1,11 +1,14 @@
 package agentruntime
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
@@ -13,6 +16,13 @@ import (
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
+
+func SessionRuntimeFactoryConfigured(factory SessionRuntimeFactory) bool { return factory.configured() }
+
+func RunSessionWithRuntimeFactory(ctx context.Context, out io.Writer, opts SessionRunOptions, factory SessionRuntimeFactory) error {
+	opts.runtimeFactory = factory
+	return RunSession(ctx, out, opts)
+}
 
 // planBareLiveSessionRuntime builds the alternate-free live voice path. The
 // resolver has already supplied the provider, model, credential, audio policy,
@@ -97,7 +107,7 @@ func planBrowserLiveSessionRuntime(opts SessionRunOptions, factory sessionRuntim
 		return sessionRuntimePlan{}, missingOwnedSessionDialerError(provider)
 	}
 
-	liveDialer = observeSessionWire(liveDialer, opts)
+	liveDialer = sessiontracewire.NewProviderWireDialer(liveDialer, opts.RuntimeObserver, opts.Clock)
 
 	var inferencer messages.SessionInferencer
 	switch provider {
@@ -173,7 +183,7 @@ func planLiveSessionRuntime(opts SessionRunOptions, factory sessionRuntimeFactor
 		return sessionRuntimePlan{}, missingOwnedSessionDialerError(provider)
 	}
 
-	liveDialer = observeSessionWire(liveDialer, opts)
+	liveDialer = sessiontracewire.NewProviderWireDialer(liveDialer, opts.RuntimeObserver, opts.Clock)
 
 	var inferencer messages.SessionInferencer
 	switch provider {

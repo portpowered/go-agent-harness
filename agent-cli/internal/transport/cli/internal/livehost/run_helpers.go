@@ -1,14 +1,132 @@
 package livehost
 
 import (
+	"context"
+	"errors"
 	"io"
+	"strings"
 
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	runtimeSessionTrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
+
+const liveCapabilityEventBuffer = 32
+
+type liveRunAdmission struct {
+	runner           runtimeSession.LiveRunner
+	liveRequest      runtimeSession.LiveRequest
+	credentials      []string
+	credentialsReady bool
+	traceRun         runtimeSessionTrace.Prepared
+}
+
+func prepareLiveRun(ctx context.Context, request serviceSession.Request, deps Dependencies) (liveRunAdmission, error) {
+	traceRequested := request.TraceAudio || strings.TrimSpace(request.RecordDirectory) != ""
+	if traceRequested && deps.TraceService == nil {
+		return liveRunAdmission{}, errors.New("live session trace service is unavailable")
+	}
+	runner, err := liveRunner(deps.LiveService)
+	if err != nil {
+		return liveRunAdmission{}, err
+	}
+	if deps.BuildRequest == nil {
+		return liveRunAdmission{}, errors.New("live request builder is unavailable")
+	}
+	liveRequest, err := deps.BuildRequest(ctx, request, deps.ReplayInspection)
+	if err != nil {
+		return liveRunAdmission{}, err
+	}
+	credentials, credentialsReady, err := resolveTraceCredentials(request, &liveRequest, deps, traceRequested)
+	if err != nil {
+		return liveRunAdmission{}, err
+	}
+	traceRun, err := prepareLiveTrace(request, liveRequest, deps, credentials)
+	if err != nil {
+		return liveRunAdmission{}, err
+	}
+	return liveRunAdmission{runner, liveRequest, credentials, credentialsReady, traceRun}, nil
+}
+
+// MapBrowserEvents adapts the CLI browser observer to the provider-neutral
+// live capability stream. The adapter owns a bounded queue and exits with the
+// invocation context so browser resources cannot outlive the session.
+func MapBrowserEvents(source func(context.Context) <-chan webmcp.BrowserEvent) func(context.Context) <-chan runtimeSession.LiveCapabilityEvent {
+	return mapCapabilityEvents(source, browserCapabilityEvent)
+}
+
+// MapBrokerEvents adapts the legacy broker observer to the same neutral live
+// capability stream while retaining its typed lifecycle state.
+func MapBrokerEvents(source func(context.Context) <-chan webmcp.BrokerEvent) func(context.Context) <-chan runtimeSession.LiveCapabilityEvent {
+	return mapCapabilityEvents(source, brokerCapabilityEvent)
+}
+
+func mapCapabilityEvents[Event any](source func(context.Context) <-chan Event, mapEvent func(Event) runtimeSession.LiveCapabilityEvent) func(context.Context) <-chan runtimeSession.LiveCapabilityEvent {
+	return func(ctx context.Context) <-chan runtimeSession.LiveCapabilityEvent {
+		if source == nil || mapEvent == nil || ctx == nil {
+			return nil
+		}
+		input := source(ctx)
+		if input == nil {
+			return nil
+		}
+		output := make(chan runtimeSession.LiveCapabilityEvent, liveCapabilityEventBuffer)
+		go forwardCapabilityEvents(ctx, input, output, mapEvent)
+		return output
+	}
+}
+
+func forwardCapabilityEvents[Event any](ctx context.Context, input <-chan Event, output chan<- runtimeSession.LiveCapabilityEvent, mapEvent func(Event) runtimeSession.LiveCapabilityEvent) {
+	defer close(output)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case event, ok := <-input:
+			if !ok {
+				return
+			}
+			mapped := mapEvent(event)
+			select {
+			case output <- mapped:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}
+}
+
+func browserCapabilityEvent(event webmcp.BrowserEvent) runtimeSession.LiveCapabilityEvent {
+	return runtimeSession.LiveCapabilityEvent{
+		Type: string(event.Type), Sequence: event.Sequence, Timestamp: event.At,
+		BrowserID: string(event.BrowserID), TargetID: string(event.TargetID),
+		Generation: event.Generation, PreviousGeneration: event.PreviousGeneration,
+		InvocationID: string(event.InvocationID), ToolName: event.ToolName,
+		Status: event.Status, ErrorCode: event.ErrorCode, Reason: event.Reason,
+		CatalogReady: event.CatalogReady, ToolCount: event.ToolCount, ToolCountKnown: event.ToolCountKnown,
+	}
+}
+
+func brokerCapabilityEvent(event webmcp.BrokerEvent) runtimeSession.LiveCapabilityEvent {
+	return runtimeSession.LiveCapabilityEvent{
+		Type: string(event.Type), Sequence: event.Sequence, Timestamp: event.At,
+		BrowserID: string(event.BrowserID), TargetID: string(event.TargetID),
+		Generation: event.Generation, InvocationID: string(event.InvocationID),
+		ToolName: event.ToolName, State: string(event.State), Reason: event.Reason,
+	}
+}
+
+func cloneBool(value *bool) *bool {
+	if value == nil {
+		return nil
+	}
+	copy := *value
+	return &copy
+}
 
 func selectFileDevices(physical, finite runtimeDevices.Service, deviceRequest runtimeDevices.Request, filePorts *FilePorts) (runtimeDevices.Service, runtimeDevices.Request) {
 	if filePorts == nil {

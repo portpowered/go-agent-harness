@@ -17,7 +17,10 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
-	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
+	sessionterminalwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	gwproviders "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
@@ -154,14 +157,14 @@ type sessionRuntimePlan struct {
 	flushCapture           func() error
 	flushCaptureTo         func(string) error
 	finalize               func(context.Context, io.Writer) error
-	replayCompletion       func(*sessionTerminalReporter)
+	replayCompletion       func(sessionterminal.Reporter)
 	diagnostics            SessionDiagnosticSink
 	metricsRecorder        metrics.Recorder
 	streamObserver         SessionStreamObserver
-	audioInputs            []ScheduledAudioInput
+	audioInputs            []sessiontrace.ScheduledAudioInput
 	scheduledAudioDispatch ScheduledAudioDispatchPolicy
 	clockSource            platformclock.Source
-	runtime                *sessionRuntimeObservationRecorder
+	runtime                sessiontrace.RuntimeRecorder
 	rtcRuntime             SessionRTCRuntime
 	closeSession           func() error
 	selection              SessionRuntimeSelection
@@ -205,16 +208,16 @@ func (p sessionRuntimePlan) liveOutput(binding *RTCDeviceBinding, prefix string)
 func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr error) {
 	reporter := p.loop.terminalReporter
 	if reporter == nil {
-		reporter = newSessionTerminalReporter()
+		reporter = sessionterminalwire.NewReporter()
 		p.loop.terminalReporter = reporter
 	}
 	finalizer := newSessionRuntimeFinalizer(p)
 	defer func() {
 		runErr = finalizer.finish(ctx, out, runErr)
-		if !sessionErrorHasIndependentFailure(runErr) && p.replayCompletion != nil {
+		if !sessionterminalwire.HasIndependentFailure(runErr) && p.replayCompletion != nil {
 			p.replayCompletion(reporter)
 		}
-		runErr = errors.Join(runErr, reporter.publish(out, runErr))
+		runErr = errors.Join(runErr, reporter.Publish(out, runErr))
 	}()
 	if p.replayIntegrityWarning != "" {
 		if _, err := fmt.Fprintln(out, p.replayIntegrityWarning); err != nil {
@@ -254,7 +257,7 @@ func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr erro
 	loop := p.loop
 	p.configureLoopObserver(&loop)
 	if p.inferencer != nil {
-		reporter.markRunStarted()
+		reporter.MarkRunStarted()
 		if err := runAgentLoopSession(ctx, loopOut, p.inferencer, loop); err != nil {
 			return wrapSessionRuntimeError(p, wrapSessionPhaseError("run session loop", err))
 		}
@@ -299,17 +302,23 @@ func (p sessionRuntimePlan) configureLoopObserver(loop *sessionLoopOptions) {
 	if loop == nil {
 		return
 	}
-	obs := newSessionProgressObserver(p.diagnostics, p.metricsRecorder, p.provider, p.model)
-	obs.streamObserver = p.streamObserver
-	obs.runtime = p.runtime
-	obs.livenessClock = loop.livenessClock
-	if obs.livenessClock == nil {
-		obs.livenessClock = sessionLivenessClockFromSource(p.clockSource)
+	obs := sessiontracewire.NewObserver(sessiontrace.NewObserverOptions{
+		Sink:                   p.diagnostics,
+		Recorder:               p.metricsRecorder,
+		Provider:               p.provider,
+		Model:                  p.model,
+		StreamObserver:         p.streamObserver,
+		RuntimeRecorder:        p.runtime,
+		TerminalService:        sessionterminalwire.NewService(),
+		CancellationIntent:     loop.cancellationIntent,
+		LivenessClock:          loop.livenessClock,
+		RequireSessionUpdated:  loop.RequireSessionUpdated,
+		ScheduledAudioDispatch: sessiontrace.ScheduledAudioDispatchPolicy(loop.ScheduledAudioDispatch),
+	})
+	if loop.livenessClock == nil {
+		obs.SetLivenessClock(sessiontracewire.LivenessClockFromSource(p.clockSource))
 	}
-	obs.cancellationIntent = loop.cancellationIntent
-	obs.requireSessionUpdated = loop.RequireSessionUpdated
-	obs.scheduledAudioDispatch = loop.ScheduledAudioDispatch
-	obs.scheduleAudioInputs(p.audioInputs)
+	obs.ScheduleAudioInputs(p.audioInputs)
 	loop.observer = obs
 }
 
@@ -391,12 +400,12 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	plan.scheduledAudioDispatch = scheduledAudioDispatch
 	plan.filesystemPolicy = opts.FilesystemPolicy
 	plan.clockSource = platformclock.Ensure(opts.Clock)
-	plan.runtime = newSessionRuntimeObservationRecorder(opts.RuntimeObserver, plan.clockSource)
+	plan.runtime = sessiontracewire.NewRuntimeRecorder(opts.RuntimeObserver, plan.clockSource)
 	plan.loop.runtime = plan.runtime
 	plan.loop.clockSource = plan.clockSource
 	plan.loop.livenessClock = opts.LivenessClock
 	if plan.loop.livenessClock == nil {
-		plan.loop.livenessClock = sessionLivenessClockFromSource(plan.clockSource)
+		plan.loop.livenessClock = sessiontracewire.LivenessClockFromSource(plan.clockSource)
 	}
 	plan.loop.BareLive = plan.loop.BareLive || opts.BareLive
 	plan.loop.cancellationIntent = opts.CancellationIntent
@@ -447,30 +456,19 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	if plan.rtcDeviceRequest.inputSelected() && plan.inputAudioSampleRate > 0 {
 		plan.rtcDeviceRequest.InputSampleRate = plan.inputAudioSampleRate
 	}
-	// The playback-overflow observer's sink is resolved (never trusted as-is)
-	// so an omitted SessionRunOptions.Diagnostics can no longer make a real
-	// device overflow invisible; see resolvePlaybackDiagnosticSink.
 	observabilityDependencies := opts.Observability
 	if observabilityDependencies.MetricSampler == nil && observabilityDependencies.Logger == nil {
 		observabilityDependencies = plan.rtcDeviceRequest.Observability
 	}
-	plan.rtcDeviceRequest.PlaybackObserver = combineRTCDevicePlaybackObservers(
-		plan.rtcDeviceRequest.PlaybackObserver,
-		sessionPlaybackDiagnosticObserver(resolvePlaybackDiagnosticSink(plan.diagnostics)),
-		sessionPlaybackObservabilityObserver(observabilityDependencies.MetricSampler, observabilityDependencies.Logger),
-	)
-	plan.rtcDeviceRequest.PlaybackReceiptObserver = combineRTCDevicePlaybackReceiptObservers(
-		plan.rtcDeviceRequest.PlaybackReceiptObserver,
-		func(receipt audio.PlaybackReceipt) {
-			if plan.runtime != nil {
-				plan.runtime.audioPlaybackReceipt(receipt)
-			}
-		},
-	)
-	plan.rtcDeviceRequest.CaptureObserver = combineRTCDeviceCaptureObservers(
-		plan.rtcDeviceRequest.CaptureObserver,
-		sessionCaptureObservabilityObserver(observabilityDependencies.MetricSampler, observabilityDependencies.Logger),
-	)
+	playbackDiagnostics := sessiontracewire.NewPlaybackDiagnostics(sessiontrace.PlaybackDiagnosticsOptions{
+		Sink:          plan.diagnostics,
+		MetricSampler: observabilityDependencies.MetricSampler,
+		Logger:        observabilityDependencies.Logger,
+		Runtime:       plan.runtime,
+	})
+	plan.rtcDeviceRequest.PlaybackObserver = playbackDiagnostics.PlaybackObserver(plan.rtcDeviceRequest.PlaybackObserver)
+	plan.rtcDeviceRequest.PlaybackReceiptObserver = playbackDiagnostics.PlaybackReceiptObserver(plan.rtcDeviceRequest.PlaybackReceiptObserver)
+	plan.rtcDeviceRequest.CaptureObserver = playbackDiagnostics.CaptureObserver(plan.rtcDeviceRequest.CaptureObserver)
 	plan.selection = selection
 	plan.transport = selection.Transport
 	plan.signalingEndpoint = selection.SignalingEndpoint

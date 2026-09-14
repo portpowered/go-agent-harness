@@ -13,6 +13,8 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	gwproviders "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
@@ -30,7 +32,7 @@ type sessionReplayMessageWriter interface {
 // transcripts can never be rendered as one utterance.
 type sessionReplayRenderer struct {
 	out              io.Writer
-	terminalReporter *sessionTerminalReporter
+	terminalReporter sessionterminal.Reporter
 
 	transcriptRole        messages.Role
 	pendingTranscriptRole messages.Role
@@ -48,8 +50,8 @@ type sessionReplayTranscriptState struct {
 	completed     bool
 }
 
-func newSessionReplayRenderer(out io.Writer, reporter ...*sessionTerminalReporter) *sessionReplayRenderer {
-	var terminalReporter *sessionTerminalReporter
+func newSessionReplayRenderer(out io.Writer, reporter ...sessionterminal.Reporter) *sessionReplayRenderer {
+	var terminalReporter sessionterminal.Reporter
 	if len(reporter) > 0 {
 		terminalReporter = reporter[0]
 	}
@@ -76,7 +78,7 @@ func (r *sessionReplayRenderer) Write(data []byte) (int, error) {
 
 func (r *sessionReplayRenderer) writeSessionReplayMessage(msg messages.StreamMessage) error {
 	if r.terminalReporter != nil && msg.Type != messages.StreamTypeSessionClose && msg.Type != messages.StreamTypeError {
-		r.terminalReporter.observeStreamMessage(msg, false)
+		r.terminalReporter.ObserveStreamMessage(msg, false)
 	}
 	switch value := msg.Value.(type) {
 	case *messages.TranscriptStartValue:
@@ -229,7 +231,7 @@ func (r *sessionReplayRenderer) writeSessionReplayMessage(msg messages.StreamMes
 			leadingNewline := !r.transcriptJustClosed
 			r.transcriptJustClosed = false
 			if r.terminalReporter != nil {
-				r.terminalReporter.observeStreamMessage(msg, leadingNewline)
+				r.terminalReporter.ObserveStreamMessage(msg, leadingNewline)
 				return nil
 			}
 			return writeSessionReplayClose(r.out, value, leadingNewline)
@@ -244,7 +246,7 @@ func (r *sessionReplayRenderer) writeSessionReplayMessage(msg messages.StreamMes
 				}
 			}
 			if r.terminalReporter != nil {
-				r.terminalReporter.observeStreamMessage(msg, !r.transcriptJustClosed)
+				r.terminalReporter.ObserveStreamMessage(msg, !r.transcriptJustClosed)
 			}
 			return writeSessionReplayMessageUnscoped(r.out, msg)
 		}
@@ -458,17 +460,9 @@ func sessionTerminalFields(classification string, reason messages.TerminalReason
 	return strings.Join(fields, " ")
 }
 
-// waitForSessionLoopStragglers waits for provider deltas until the required
-// positive policy quiet period elapses. The terminal boundary is the only
-// caller; buffered-only cleanup has its own explicitly named operation.
-func waitForSessionLoopStragglers(out io.Writer, loop *agentloop.AgentLoop, policy sessionStragglerDrainPolicy, obs *sessionProgressObserver) error {
-	return waitForSessionLoopStragglersWithContext(context.Background(), out, loop, policy, obs, nil)
-}
-
-func waitForSessionLoopStragglersWithContext(ctx context.Context, out io.Writer, loop *agentloop.AgentLoop, policy sessionStragglerDrainPolicy, obs *sessionProgressObserver, source platformclock.Source) error {
-	quiet := policy.quietPeriod
+func waitForSessionLoopStragglersWithContext(ctx context.Context, out io.Writer, loop *agentloop.AgentLoop, quiet time.Duration, obs sessiontrace.Observer, source platformclock.Source) error {
 	if quiet <= 0 {
-		return errInvalidSessionStragglerDrainPolicy
+		return errors.New("session straggler drain requires a positive quiet period")
 	}
 
 	idle, err := newSessionTimer(source, quiet)
@@ -483,7 +477,7 @@ func waitForSessionLoopStragglersWithContext(ctx context.Context, out io.Writer,
 	// its timer still determines the quiet boundary.
 	var wallSafety platformclock.Timer
 	if source != nil {
-		wallSafety = platformclock.Real{}.NewTimer(sessionStragglerDrainWallSafety)
+		wallSafety = platformclock.Real{}.NewTimer(sessionterminal.StragglerDrainWallSafety)
 	}
 	var wallSafetyC <-chan time.Time
 	if wallSafety != nil {
@@ -508,7 +502,7 @@ func waitForSessionLoopStragglersWithContext(ctx context.Context, out io.Writer,
 				return nil
 			}
 			if obs != nil {
-				obs.observe(msg)
+				obs.Observe(msg)
 			}
 			if err := writeSessionReplayMessage(out, msg); err != nil {
 				return err
@@ -537,7 +531,7 @@ func shouldStopSessionLoop(msg messages.StreamMessage, opts sessionLoopOptions) 
 		return true
 	}
 	if msg.Type == messages.StreamTypeMessageEnd && opts.observer != nil {
-		if opts.observer.hasTerminalToolContinuationFailure() || opts.observer.hasTerminalScheduledResponseFailure() {
+		if opts.observer.HasTerminalToolContinuationFailure() || opts.observer.HasTerminalScheduledResponseFailure() {
 			return true
 		}
 	}
@@ -553,18 +547,18 @@ func shouldStopSessionLoop(msg messages.StreamMessage, opts sessionLoopOptions) 
 	}
 	switch msg.Type {
 	case messages.StreamTypeMessageEnd:
-		if opts.observer != nil && !opts.observer.lastMessageEndAdmitted() {
+		if opts.observer != nil && !opts.observer.LastMessageEndAdmitted() {
 			return false
 		}
-		if opts.observer != nil && opts.observer.hasToolLifecycleObligation() {
+		if opts.observer != nil && opts.observer.HasToolLifecycleObligation() {
 			return false
 		}
-		if opts.CloseAfterScheduledAudio && opts.observer != nil && !opts.observer.scheduledAudioComplete() {
+		if opts.CloseAfterScheduledAudio && opts.observer != nil && !opts.observer.ScheduledAudioComplete() {
 			return false
 		}
 		return true
 	case messages.StreamTypeTextEnd:
-		if opts.observer != nil && opts.observer.hasToolLifecycleObligation() {
+		if opts.observer != nil && opts.observer.HasToolLifecycleObligation() {
 			return false
 		}
 		return true
@@ -578,14 +572,14 @@ func shouldStopSessionLoop(msg messages.StreamMessage, opts sessionLoopOptions) 
 // flushBufferedSessionLoopMessages renders only messages already buffered.
 // It never waits for a future provider message; the terminal boundary invokes
 // it only after owned resources have been stopped.
-func flushBufferedSessionLoopMessages(out io.Writer, loop *agentloop.AgentLoop, obs *sessionProgressObserver) error {
+func flushBufferedSessionLoopMessages(out io.Writer, loop *agentloop.AgentLoop, obs sessiontrace.Observer) error {
 	for {
 		msg, ok := loop.Deltas().Read()
 		if !ok {
 			return nil
 		}
 		if obs != nil {
-			obs.observe(msg)
+			obs.Observe(msg)
 		}
 		if err := writeSessionReplayMessage(out, msg); err != nil {
 			return err

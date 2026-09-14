@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	sharedclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"io"
 	"os"
@@ -81,12 +82,8 @@ func StartSessionAudioInterruptionsOnBrowserTool(
 				if event.Type != webmcp.BrokerEventInvocationCreated || event.State != webmcp.InvocationDispatched || event.InvocationID == "" || event.ToolName == "" || (toolName != "" && event.ToolName != toolName) {
 					continue
 				}
-				for _, input := range cloned {
-					select {
-					case out <- input:
-					case <-ctx.Done():
-						return
-					}
+				if !publishScheduledAudioInputs(ctx, out, cloned) {
+					return
 				}
 				return
 			}
@@ -571,7 +568,7 @@ type sessionAudioSource struct {
 	paced     bool
 	send      func(context.Context, []byte) error
 	endOfTurn func(context.Context) error
-	runtime   *sessionRuntimeObservationRecorder
+	runtime   sessiontrace.RuntimeRecorder
 	clock     sharedclock.Source
 	once      sync.Once
 	err       error
@@ -589,7 +586,7 @@ func (s *sessionAudioSource) bindContext(ctx context.Context) {
 	}
 }
 
-func (s *sessionAudioSource) bindRuntime(runtime *sessionRuntimeObservationRecorder, source sharedclock.Source) {
+func (s *sessionAudioSource) bindRuntime(runtime sessiontrace.RuntimeRecorder, source sharedclock.Source) {
 	if s != nil {
 		s.runtime = runtime
 		s.clock = source
@@ -893,7 +890,9 @@ func sendSessionAudioFrames(ctx context.Context, loop *agentloop.AgentLoop, sour
 		if err := send(ctx, pcm); err != nil {
 			return &SessionAudioInputError{Kind: SessionAudioInputSend, Path: source.path, Err: err}
 		}
-		source.runtime.audioInput(pcm)
+		if source.runtime != nil {
+			source.runtime.AudioInput(pcm)
+		}
 	}
 	return nil
 }
@@ -952,7 +951,7 @@ func shouldStopAudioInputSessionLoop(msg messages.StreamMessage, opts sessionLoo
 		return msg.Type == messages.StreamTypeSessionClose
 	}
 	if msg.Type == messages.StreamTypeMessageEnd && opts.observer != nil {
-		if opts.observer.hasTerminalToolContinuationFailure() || opts.observer.hasTerminalScheduledResponseFailure() {
+		if opts.observer.HasTerminalToolContinuationFailure() || opts.observer.HasTerminalScheduledResponseFailure() {
 			return true
 		}
 	}
@@ -961,11 +960,11 @@ func shouldStopAudioInputSessionLoop(msg messages.StreamMessage, opts sessionLoo
 	}
 	switch msg.Type {
 	case messages.StreamTypeMessageEnd:
-		if opts.observer != nil && !opts.observer.lastMessageEndAdmitted() {
+		if opts.observer != nil && !opts.observer.LastMessageEndAdmitted() {
 			return false
 		}
 		if opts.RequireAssistantResponse {
-			if msg.Role == messages.RoleTool || opts.observer == nil || !opts.observer.assistantResponseCompleted() {
+			if msg.Role == messages.RoleTool || opts.observer == nil || !opts.observer.AssistantResponseCompleted() {
 				return false
 			}
 		}

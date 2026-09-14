@@ -1,0 +1,124 @@
+{
+  "schema": "audio-runtime.c119.ci-rejection.v1",
+  "run": "34761314555",
+  "source_head": "a338dceb29bc39f95fd27700bad8d7803a4db318",
+  "failed_jobs": [
+    {
+      "job": "103734536659",
+      "name": "CI (coverage)",
+      "tests": [
+        {
+          "name": "TestSessionProgressObserver_WatchdogTimesOutExactlyOnce",
+          "expected": {
+            "classification": "silent_provider_timeout",
+            "failing_event": "SESSION.CONNECT",
+            "terminal_provenance": "session",
+            "terminal_reason": "terminal_failure",
+            "output_state": "none"
+          },
+          "actual": {
+            "classification": "unknown",
+            "failing_event": "SESSION.CONNECT",
+            "terminal_provenance": "cli",
+            "terminal_reason": "terminal_failure",
+            "output_state": "none"
+          }
+        },
+        {
+          "name": "TestSessionProgressObserver_ClassifiesExplicitEmptyPartialResponse",
+          "expected": {
+            "classification": "silent_provider_empty_response",
+            "failing_event": "MESSAGE.END",
+            "terminal_provenance": "session",
+            "terminal_reason": "terminal_failure",
+            "output_state": "none"
+          },
+          "actual": {
+            "classification": "unknown",
+            "failing_event": "SESSION.RUN",
+            "terminal_provenance": "cli",
+            "terminal_reason": "terminal_failure",
+            "output_state": "none"
+          }
+        }
+      ]
+    },
+    {
+      "job": "103734536697",
+      "name": "CI (hermetic)",
+      "tests": [
+        "TestSessionProgressObserver_WatchdogTimesOutExactlyOnce",
+        "TestSessionProgressObserver_ClassifiesExplicitEmptyPartialResponse"
+      ]
+    }
+  ],
+  "cause": "session_liveness.go still records the first watchdog and explicit-empty facts in the legacy observer.failure field. The new service snapshot was empty for those paths, so terminal emission fell back to generic CLI facts before the adapter bridge.",
+  "repair": {
+    "commits": [
+      "19393b9ec03db7ba05dcdb3de070a4b063c3c148",
+      "666e518d4c3016751c7915b7016956c604abc7fb"
+    ],
+    "description": "Keep the sessionfailure service first for normal state, then read the legacy liveness latch under livenessMu only when the service has no accepted facts. Preserve nil-safe forwarding, typed projection constants, the 86-line adapter limit, and unchanged callers.",
+    "adapter_lines": 86
+  },
+  "validation": {
+    "focused_normal": {
+      "command": "go test ./agent-cli/internal/services/internal/agentruntime -run targeted-c119-tests -count=1",
+      "exit_code": 0,
+      "passed": 13
+    },
+    "focused_race": {
+      "command": "go test -race ./agent-cli/internal/services/internal/agentruntime -run targeted-c119-tests -count=3",
+      "exit_code": 0,
+      "passed": 24
+    },
+    "service_normal": {
+      "exit_code": 0,
+      "passed": 54
+    },
+    "service_race": {
+      "exit_code": 0,
+      "passed": 5
+    },
+    "external_consumer": {
+      "command": "GOWORK=off go test ./... -count=1",
+      "exit_code": 0
+    },
+    "accumulated_regressions": {
+      "command": "COUNT=1 bash scripts/test-session-ci-regressions.sh all",
+      "exit_code": 0,
+      "modes": ["normal", "coverage", "race"]
+    },
+    "quality": {
+      "fmt": 0,
+      "vet": 0,
+      "lint": 0,
+      "staticcheck": 0,
+      "coverage_registration": 0,
+      "wire_check": 0,
+      "architecture_size": "198 packages, 1928 files, 28648 functions"
+    },
+    "public_replay": {
+      "artifact": "artifacts/run-1789310048-43348.json",
+      "binary_sha256": "67949e223de59d8114380afd3bc16dfc745a45c7188cbcb0e7bed0b1d1747ddc",
+      "status": "accepted",
+      "credential_free": true,
+      "realtime_sessions": 0,
+      "children_reaped": true
+    },
+    "final_verifier": {
+      "artifact": "artifacts/verify-52019.json",
+      "source_head": "d67705291b181fe0f98aee3415e51e91b3755c23",
+      "status": "accepted",
+      "causal_mutants_survived": false,
+      "scope_cleanup_exit_code": 0
+    }
+  },
+  "scope_cleanup": {
+    "initial_command": "verify.py --mode excluded-paths-and-adapter",
+    "initial_exit_code": 1,
+    "initial_error": "changed path outside C119 ownership: ['progress.txt']",
+    "checkpoint": "The root progress checkpoint is inherited from a338dceb2, remains recoverable in Git history, and is copied into this owned evidence and PR handoff. Its root-file diff is being removed without a reset or acceptance waiver before final verification."
+  },
+  "status": "executor-repair-ready; Script CI has not been polled or claimed green"
+}

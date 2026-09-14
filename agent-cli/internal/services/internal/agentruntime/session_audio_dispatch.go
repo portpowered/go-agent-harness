@@ -10,6 +10,17 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 )
 
+func publishScheduledAudioInputs(ctx context.Context, out chan<- ScheduledAudioInput, inputs []ScheduledAudioInput) bool {
+	for _, input := range inputs {
+		select {
+		case out <- input:
+		case <-ctx.Done():
+			return false
+		}
+	}
+	return true
+}
+
 func sendEventDrivenAudioInput(ctx context.Context, loop *agentloop.AgentLoop, opts sessionLoopOptions, input ScheduledAudioInput) error {
 	if len(input.PCM) == 0 {
 		return errors.New("event-driven audio input is empty")
@@ -22,7 +33,7 @@ func sendEventDrivenAudioInput(ctx context.Context, loop *agentloop.AgentLoop, o
 		return fmt.Errorf("send event-driven audio input: %w", err)
 	}
 	if opts.observer != nil {
-		opts.observer.account(metrics.DirectionInput, metrics.ModalityAudio, len(pcm))
+		opts.observer.Account(metrics.DirectionInput, metrics.ModalityAudio, len(pcm))
 	}
 	if !input.EndOfTurn {
 		return nil
@@ -31,7 +42,7 @@ func sendEventDrivenAudioInput(ctx context.Context, loop *agentloop.AgentLoop, o
 		return fmt.Errorf("send event-driven audio input end-of-turn: %w", err)
 	}
 	if opts.observer != nil {
-		opts.observer.armProviderProgress()
+		opts.observer.ArmProviderProgress()
 	}
 	return nil
 }

@@ -9,6 +9,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
@@ -26,7 +27,7 @@ func planGrokRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFactory
 	if liveDialer == nil {
 		return sessionRuntimePlan{}, missingOwnedSessionDialerError(sessionProviderGrok)
 	}
-	liveDialer = observeSessionWire(liveDialer, opts)
+	liveDialer = sessiontracewire.NewProviderWireDialer(liveDialer, opts.RuntimeObserver, opts.Clock)
 	recordingDialer := factory.newRecordingDialer(liveDialer, sessionProviderGrok, sessionCfg.Model)
 	sessionInferencer, err := factory.newGrokSessionInferencerForTools(sessionCfg, recordingDialer, opts.ToolDefinitions)
 	if err != nil {

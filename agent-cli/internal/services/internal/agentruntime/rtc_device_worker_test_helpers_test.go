@@ -5,7 +5,6 @@ import (
 	"sync"
 
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
 
 type recordingRTCOutboundMedia struct {
@@ -34,29 +33,5 @@ func (m *recordingRTCOutboundMedia) WriteFrame(_ context.Context, frame audio.PC
 }
 
 func (m *recordingRTCOutboundMedia) Close() error { return nil }
-
-func newRTCDeviceSinkRateRegistry(t interface {
-	Helper()
-	Fatal(...any)
-}, rate int) *devicegw.VirtualRegistry {
-	t.Helper()
-	capability := devicegw.VirtualCapability{
-		SampleRate: rate,
-		Channels:   audio.Channels,
-		BitDepth:   audio.DeviceBitDepthPCM16,
-		Format:     audio.DeviceEncodingPCM16,
-	}
-	registry, err := devicegw.NewVirtualRegistry(devicegw.VirtualBackendConfig{
-		Devices: []devicegw.VirtualDeviceConfig{
-			{ID: "input", Name: "Input", Direction: devicegw.DirectionInput, Capabilities: []devicegw.VirtualCapability{capability}, LoopbackID: "output"},
-			{ID: "output", Name: "Output", Direction: devicegw.DirectionOutput, Capabilities: []devicegw.VirtualCapability{capability}, LoopbackID: "input"},
-		},
-		Defaults: map[devicegw.Direction]string{devicegw.DirectionInput: "input", devicegw.DirectionOutput: "output"},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return registry
-}
 
 var _ audio.OutboundMedia = (*recordingRTCOutboundMedia)(nil)

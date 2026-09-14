@@ -1,16 +1,14 @@
 package agentruntime
 
-import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 import (
 	"context"
 	"errors"
 	"fmt"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	runtimeRoomsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
-	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	"sort"
 	"strings"
 	"sync"
@@ -37,26 +35,6 @@ type roomParticipantPlan struct {
 	participant           *roomParticipantRuntime
 	inputAudioSampleRate  int
 	capabilityCoordinator SessionCapabilityCoordinator
-}
-type roomParticipantRuntime struct {
-	plan             *roomParticipantPlan
-	ctx              context.Context
-	cancel           context.CancelFunc
-	admissionCtx     context.Context
-	admissionCancel  context.CancelFunc
-	loopReady        chan *agentloop.AgentLoop
-	participantDone  chan struct{}
-	mixerDone        chan struct{}
-	observerDone     chan struct{}
-	observerOnce     sync.Once
-	replayFrameAcks  chan struct{}
-	mixer            *room.PCM16Mixer
-	ingress          *roomAudioIngressLedger
-	input            *devicegw.DeviceSource
-	output           *devicegw.DeviceSink
-	lifecycle        *roomParticipantLifecycle
-	diagnosticSink   SessionDiagnosticSink
-	outboundLoudness *audio.LoudnessNormalizer
 }
 
 func (r *roomParticipantRuntime) markObserverDone() {
@@ -225,7 +203,7 @@ func (l *roomParticipantLifecycle) markParticipantFailure(err error) {
 }
 func (l *roomParticipantLifecycle) markLivenessFailure(err error) {
 	if backend := l.backendLifecycle(); backend != nil {
-		classification, reason, provenance, output := sessionLivenessMetadata(err)
+		classification, reason, provenance, output := sessiontracewire.LivenessMetadata(err)
 		backend.MarkLivenessFailure(err, runtimeRooms.ParticipantLivenessMetadata{
 			Classification: classification, TerminalReason: reason,
 			TerminalProvenance: provenance, OutputState: output,
@@ -246,7 +224,7 @@ func (l *roomParticipantLifecycle) observeTerminal(observation sessionTerminalOb
 	if backend == nil {
 		return false
 	}
-	return backend.ObserveTerminal(runtimeRooms.SessionTerminalObservation{ResponseID: observation.ResponseID, Classification: observation.Classification, TerminalReason: observation.TerminalReason, TerminalProvenance: observation.TerminalProvenance, OutputState: observation.OutputState, Err: observation.Err, Failure: observation.Failure, RoomBound: observation.RoomBound, Code: observation.Code, FailingEvent: observation.FailingEvent})
+	return backend.ObserveTerminal(runtimeRooms.SessionTerminalObservation{ResponseID: observation.ResponseID, Classification: observation.Classification, TerminalReason: string(observation.TerminalReason), TerminalProvenance: string(observation.TerminalProvenance), OutputState: string(observation.OutputState), Err: observation.Err, Failure: observation.Failure, RoomBound: observation.RoomBound, Code: observation.Code, FailingEvent: observation.FailingEvent})
 }
 func (l *roomParticipantLifecycle) observe(msg messages.StreamMessage) int {
 	if backend := l.backendLifecycle(); backend != nil {

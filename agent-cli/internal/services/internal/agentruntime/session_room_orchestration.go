@@ -14,6 +14,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	runtimeRoomsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
+	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
@@ -456,11 +457,10 @@ func normalizeRoomClockOptions(opts RoomRunOptions) (RoomRunOptions, platformclo
 	roomClock := platformclock.Ensure(opts.Clock)
 	opts.Clock = roomClock
 	if opts.LivenessClock == nil {
-		opts.LivenessClock = sessionLivenessClockFromSource(roomClock)
+		opts.LivenessClock = sessiontracewire.LivenessClockFromSource(roomClock)
 	}
 	return opts, roomClock
 }
-
 func roomParticipantReady(plan *roomParticipantPlan) RoomParticipantReady {
 	if plan == nil {
 		return RoomParticipantReady{}

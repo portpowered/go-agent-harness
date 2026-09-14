@@ -11,7 +11,10 @@ import (
 	"sync"
 	"time"
 
+	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/recording"
 )
 
@@ -76,6 +79,30 @@ type prepared struct {
 func (p *prepared) DeviceBinding() sessiontrace.DeviceBinding     { return p.binding }
 func (p *prepared) RuntimeObserver() sessiontrace.RuntimeObserver { return p.observer }
 func (p *prepared) StagedPath() string                            { return p.path }
+
+func (p *prepared) WrapLiveRecorder(inner session.LiveRecorder, request session.LiveRequest) session.LiveRecorder {
+	if p == nil {
+		return inner
+	}
+	return NewLiveRecorder(sessiontrace.LiveRecorderOptions{
+		Inner: inner, Observer: p.observer,
+		InputRate: request.InputAudioSampleRate, OutputRate: request.OutputAudioSampleRate,
+	})
+}
+
+func (p *prepared) WrapDeviceService(inner runtimeDevices.Service) runtimeDevices.Service {
+	if p == nil {
+		return inner
+	}
+	return wrapDeviceService(inner, p.binding)
+}
+
+func (p *prepared) WrapAudioSource(source audio.AudioSource, rate int) audio.AudioSource {
+	if p == nil {
+		return source
+	}
+	return wrapAudioSource(source, rate, p.binding.PreGateSamplesObserver)
+}
 
 func (p *prepared) Finish(ctx context.Context, bundle string, published bool) error {
 	if ctx == nil {

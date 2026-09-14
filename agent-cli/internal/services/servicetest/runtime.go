@@ -12,6 +12,8 @@ import runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/se
 
 import runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 
+import runtimeSessionTrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+
 const BrowserConversationAssistantTurn = impl.BrowserConversationAssistantTurn
 
 type BrowserConversationBrokerCall = impl.BrowserConversationBrokerCall
@@ -80,9 +82,9 @@ var ErrSessionAudioInputConflict = serviceDevices.ErrSessionAudioInputConflict
 var ErrSessionAudioOutputConflict = serviceDevices.ErrSessionAudioOutputConflict
 var ErrSessionAudioInTurnBargeRequiresSequence = impl.ErrSessionAudioInTurnBargeRequiresSequence
 var ErrSessionAudioResponseIncomplete = impl.ErrSessionAudioResponseIncomplete
-var ErrSessionImageContinuationIncomplete = impl.ErrSessionImageContinuationIncomplete
+var ErrSessionImageContinuationIncomplete = runtimeSession.ErrLiveImageContinuationIncomplete
 var ErrSessionScheduledAudioIncomplete = runtimeSession.ErrLiveScheduledAudioIncomplete
-var ErrSessionUnresolvedToolResults = sessioncontract.ErrSessionUnresolvedToolResults
+var ErrSessionUnresolvedToolResults = runtimeSessionTrace.ErrUnresolvedToolResults
 var EvaluateBrowserConversation = impl.EvaluateBrowserConversation
 
 type InvalidOpenAIRealtimeVoiceError = sessioncontract.InvalidOpenAIRealtimeVoiceError
@@ -145,6 +147,6 @@ type SessionToolDiagnostic = impl.SessionToolDiagnostic
 
 const SessionTransportWebRTC = impl.SessionTransportWebRTC
 
-type SessionUnresolvedToolResultsError = sessioncontract.SessionUnresolvedToolResultsError
+type SessionUnresolvedToolResultsError = runtimeSessionTrace.UnresolvedToolResultsError
 
 var WriteBrowserConversationReport = impl.WriteBrowserConversationReport
