@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
 	"testing"
 
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/planning"
@@ -30,7 +31,7 @@ func TestServicePublicContractHandlesUnavailableDependenciesAndBounds(t *testing
 
 	runtimeService := New(Dependencies{
 		Planner:  planning.New(),
-		Evidence: &evidenceStub{},
+		Evidence: wire.NewService(),
 		Runner:   lifecycle.New(lifecycle.Dependencies{}),
 	})
 	manifest := rooms.Manifest{
@@ -56,25 +57,18 @@ func TestServicePublicContractHandlesUnavailableDependenciesAndBounds(t *testing
 	if err := runtimeService.ValidateReplayOutput(rooms.RoomReplayPlan{}, "destination"); !errors.Is(err, rooms.ErrRoomServiceUnavailable) {
 		t.Fatalf("missing replay ValidateReplayOutput error = %v, want ErrRoomServiceUnavailable", err)
 	}
-	if err := runtimeService.ValidateEvidenceOutput("destination"); err != nil {
+	if err := runtimeService.ValidateEvidenceOutput(t.TempDir()); err != nil {
 		t.Fatalf("ValidateEvidenceOutput: %v", err)
 	}
-	runDir, err := runtimeService.CreateFreshRunDirectory("config")
+	configDir := t.TempDir()
+	runDir, err := runtimeService.CreateFreshRunDirectory(configDir)
 	if err != nil {
 		t.Fatalf("CreateFreshRunDirectory: %v", err)
 	}
-	if runDir != "fresh-run" {
-		t.Fatalf("fresh run directory = %q, want fresh-run", runDir)
+	if info, err := os.Stat(runDir); err != nil || !info.IsDir() {
+		t.Fatalf("fresh run directory stat = %v, info=%v", err, info)
 	}
 	if got := runtimeService.ReplayManifest(rooms.RoomReplayPlan{}); got.SchemaVersion != rooms.SchemaVersion {
 		t.Fatalf("ReplayManifest schema = %d, want %d", got.SchemaVersion, rooms.SchemaVersion)
 	}
 }
-
-type evidenceStub struct {
-	roomevidence.Service
-}
-
-func (*evidenceStub) ValidateEvidenceOutput(string) error { return nil }
-
-func (*evidenceStub) CreateFreshRunDirectory(string) (string, error) { return "fresh-run", nil }

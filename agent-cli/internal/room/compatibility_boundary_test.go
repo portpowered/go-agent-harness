@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestCompatibilityBoundaryNormalizesParticipantKinds(t *testing.T) {
+func TestCompatibilityBoundariesPreservePublicDefaultsAndFailures(t *testing.T) {
 	for _, test := range []struct {
 		input ParticipantKind
 		want  ParticipantKind
@@ -21,9 +21,7 @@ func TestCompatibilityBoundaryNormalizesParticipantKinds(t *testing.T) {
 			t.Fatalf("NormalizeParticipantKind(%q) = %q, want %q", test.input, got, test.want)
 		}
 	}
-}
 
-func TestNilMeshPreservesPublicClosedBehavior(t *testing.T) {
 	var nilMesh *Mesh
 	if nilMesh.Context() == nil {
 		t.Fatal("nil Mesh Context returned nil context")
@@ -60,18 +58,14 @@ func TestNilMeshPreservesPublicClosedBehavior(t *testing.T) {
 	if err := nilMesh.Close(); err != nil {
 		t.Fatalf("nil Mesh Close: %v", err)
 	}
-}
 
-func TestCompatibilityConstructorsRejectInvalidInputs(t *testing.T) {
 	if _, err := NewPairSpec("same", "same"); !errors.Is(err, ErrMeshInvalidPair) {
 		t.Fatalf("same-participant PairSpec error = %v, want ErrMeshInvalidPair", err)
 	}
 	if _, err := NewPCM16Mixer(context.Background(), DefaultPCM16Format(), DefaultPCM16Format()); !errors.Is(err, ErrMixerInvalidFormat) {
 		t.Fatalf("multiple mixer formats error = %v, want ErrMixerInvalidFormat", err)
 	}
-}
 
-func TestNilMixerPreservesPublicClosedBehavior(t *testing.T) {
 	var nilMixer *PCM16Mixer
 	if err := nilMixer.Advance(context.Background()); !errors.Is(err, ErrMixerClosed) {
 		t.Fatalf("nil mixer Advance error = %v, want ErrMixerClosed", err)
