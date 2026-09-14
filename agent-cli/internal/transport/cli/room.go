@@ -267,8 +267,7 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, r
 	defer stopSignals()
 
 	options := runtimeRooms.RoomRunOptions{
-		Manifest:   roomManifest,
-		Secrets:    append([]string(nil), plans.secrets...),
+		Manifest: roomManifest, Secrets: append([]string(nil), plans.secrets...),
 		ReplayPath: plans.replayPath,
 		OutputDir:  outputDir,
 		ConfigDir:  roomConfigDir(roomRunGlobalFlags(c)),
