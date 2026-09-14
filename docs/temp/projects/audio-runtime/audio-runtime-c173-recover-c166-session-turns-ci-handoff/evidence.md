@@ -20,9 +20,11 @@ board were read before action. Exact admission returned:
 The C173 worktree is clean on
 `codex/audio-runtime-c173-recover-c166-session-turns-ci-handoff`, matching
 `prd.json.branchName`. The tested source candidate was
-`2e6af0f09ce398d3ad99aed92b5e0d3d3b222932`; the current pushed head is the
-evidence-only descendant `8b0f599134a19db4db396c728882bf3d961c730e`, with no
-executable input changed between those revisions.
+`2e6af0f09ce398d3ad99aed92b5e0d3d3b222932`; the pushed descendants
+`8b0f599134a19db4db396c728882bf3d961c730e` and
+`95d09711245ab1323c60998302209adf93445abb` are evidence-only, with no
+executable input changed between those revisions. The final handoff verifies
+the exact current `HEAD` and remote PR SHA separately.
 It adopted C166 with a fast-forward to the preserved PR 513 head
 `034388127ab34f1ffc9e31000a14235eb4255741`, then merged the freshly fetched
 current `origin/main` `8490f8dcad63adde99036016e1e7ffd9ecf61e34` and its subsequent
@@ -69,6 +71,6 @@ required current-main ancestry. No session-turns causal defect or prior review
 finding was demonstrated; C166/C150 records report no prior PR review, and no
 new review row exists yet. Native Windows hardware/endpoints and physical
 acoustics remain out of scope, never PASS. The next state transition is the
-canonical SCRIPT CI gate on the genuinely changed pushed head
-`8b0f599134a19db4db396c728882bf3d961c730e`; CI owns polling and any exact
-rejection returns to this same task.
+canonical SCRIPT CI gate on the genuinely changed pushed head recorded by the
+final handoff verification; CI owns polling and any exact rejection returns to
+this same task.
