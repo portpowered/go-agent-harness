@@ -1,0 +1,61 @@
+{
+  "schema": "audio-runtime.c145.shipped-replay.v1",
+  "task": "audio-runtime-c145-recover-c111-tool-continuation-lifecycle",
+  "sourceRevision": "d5806b79a3e4638d618d38b43e37f7cd19eb6274",
+  "command": "rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c111-retire-cli-tool-continuation-lifecycle/run.py --case missing-tool-continuation --case corrupt-audio-delta --case non-tool-audio-regression --child-timeout 60 --aggregate-timeout 300",
+  "result": "accepted",
+  "durationSeconds": 37.670995,
+  "credentialFree": true,
+  "realtimeSessions": 0,
+  "rawReportSha256": "db90be672cabdf29f5f4c4de661f6a7f3bb714d65d5460c3c6e671150bb6b67c",
+  "binary": {
+    "sha256": "3211c626eebdf485def5a3e961f36d0b2c0801b8038f9a240749789898a96624",
+    "bytes": 51198802,
+    "sourcePinned": true,
+    "tags": ["nomicrophone", "trimpath"]
+  },
+  "causalTests": [
+    {
+      "name": "TestSessionToolResultConversationMissingContinuationIsBounded",
+      "result": "passed",
+      "durationSeconds": 16.417855,
+      "timedOut": false,
+      "reaped": true
+    },
+    {
+      "name": "TestSessionToolResultConversationCorruptAudioDeltaIsRejected",
+      "result": "passed",
+      "durationSeconds": 13.110625,
+      "timedOut": false,
+      "reaped": true
+    }
+  ],
+  "toolContinuation": {
+    "result": "passed",
+    "fixtureSha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
+    "audioBytes": 3244,
+    "marker": "PROBE_TOOL_MARKER_9182",
+    "continuation": "strict replay continuation",
+    "terminal": "fixture_complete",
+    "timedOut": false,
+    "reaped": true,
+    "outputCapped": false
+  },
+  "nonToolAudio": {
+    "result": "passed",
+    "fixtureSha256": "154477d4086c47f707441e19489dfa1a21d493475b4163e64a2833dca3f17206",
+    "audioBytes": 3404,
+    "terminal": "replay_complete",
+    "toolEvents": false,
+    "timedOut": false,
+    "reaped": true,
+    "outputCapped": false
+  },
+  "artifactHandling": {
+    "generatedByLegacyHelperInC111Namespace": true,
+    "relocatedOutOfC111Namespace": true,
+    "predecessorEvidenceNotOverwritten": true
+  },
+  "decision": "CONTINUE",
+  "nextAction": "Retain the candidate and scoped proof, but do not send it for fresh review while the exact peer-owned agentsession coverage floor remains red; after that prerequisite is released, rerun only the required current-head checks and submit the genuinely changed head."
+}

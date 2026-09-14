@@ -1,0 +1,110 @@
+{
+  "schema": "audio-runtime.c145.adoption-evidence.v1",
+  "task": "audio-runtime-c145-recover-c111-tool-continuation-lifecycle",
+  "taskWorkID": "work-task-25",
+  "project": "audio-runtime",
+  "contractRevision": "audio-runtime-v1",
+  "factorySession": "~default",
+  "server": "http://127.0.0.1:7439",
+  "taskBranch": "codex/audio-runtime-c145-recover-c111-tool-continuation-lifecycle",
+  "taskWorktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c145-recover-c111-tool-continuation-lifecycle",
+  "taskWorktreeHead": "4a1c399ccbb3d780be95eb04316e84b8f11a6646",
+  "implementationBranch": "codex/audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
+  "implementationWorktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
+  "implementationHeadBeforeRecovery": "a560583edb816b07d45ea16b3d995d864688a90f",
+  "implementationRemoteHeadBeforeRecovery": "c6d06a2a18d0452018214a5e9fb088a85d5928d1",
+  "pullRequest": {
+    "number": 496,
+    "state": "OPEN",
+    "baseBranch": "main",
+    "baseRevision": "b8650efd95f6a2e2e675a3dfd0969a9d311a877b",
+    "headBranch": "codex/audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
+    "headRevision": "c6d06a2a18d0452018214a5e9fb088a85d5928d1",
+    "mergeCommit": null,
+    "reviewCount": 0,
+    "commentCount": 0
+  },
+  "admission": {
+    "verifyWorkCommand": "project-control.py verify-work --type task --name audio-runtime-c145-recover-c111-tool-continuation-lifecycle",
+    "verifyWorkStatus": "admitted",
+    "admittedProject": "audio-runtime",
+    "admittedContractRevision": "audio-runtime-v1",
+    "secondProject": false,
+    "acceptanceWaiver": false,
+    "startupIntegrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+    "freshOriginMain": "4a1c399ccbb3d780be95eb04316e84b8f11a6646",
+    "startupIsAncestor": true,
+    "originMainIsAncestor": true,
+    "originMainFetched": true,
+    "resetUsed": false
+  },
+  "predecessor": {
+    "prd": "prd.json in the adopted C111 worktree",
+    "evidenceRoot": "docs/temp/projects/audio-runtime/audio-runtime-c111-retire-cli-tool-continuation-lifecycle/",
+    "dirtyFile": "docs/temp/projects/audio-runtime/audio-runtime-c111-retire-cli-tool-continuation-lifecycle/candidate-evidence.json",
+    "dirtyFileSha256BeforeRecovery": "47e845bf3fdf9fa9d5e338d8f159be0cf4983beeec1a52ed9ca36c44eba463c9",
+    "dirtyFileStatusBeforeRecovery": "modified; 35 insertions and 35 deletions",
+    "historicalNamespacePreserved": true,
+    "newEvidenceNamespace": "docs/temp/projects/audio-runtime/audio-runtime-c145-recover-c111-tool-continuation-lifecycle/",
+    "previousReviewFindings": [
+      {
+        "review": "work-review-22",
+        "head": "6a41574b",
+        "finding": "The adapter enriched a canonical error and joined a distinct legacy unresolved-results error; move compatibility identity to the public boundary so one unresolved snapshot yields one typed lifecycle error, and add an error-tree assertion.",
+        "repair": "e618a6a33"
+      },
+      {
+        "review": "work-review-29",
+        "head": "d4ab203",
+        "finding": "The duplicate and decision-bearing compatibility defect remained; explicit Deprecated markers and current integrated-main verifier/evidence/PR provenance were also required.",
+        "repair": "4921c3751f0"
+      }
+    ],
+    "noCurrentReviewRow": true,
+    "noCurrentReviewComments": true
+  },
+  "coverageRejection": {
+    "run": 34771659715,
+    "job": 103762236978,
+    "head": "c6d06a2a18d0452018214a5e9fb088a85d5928d1",
+    "status": "completed",
+    "conclusion": "failure",
+    "failedStep": "Run coverage profiles and coverage gate",
+    "logLines": 491,
+    "logSha256": "0209917850a83a92c5479422ee02175e2f84cc360b2011b3bd478657b2c05d2a",
+    "failure": {
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession",
+      "expectedMinimum": "80.00%",
+      "actual": "61.80%",
+      "delta": "-18.20%",
+      "makeResult": "make: *** [Makefile:303: coverage] Error 1"
+    },
+    "otherChecksPassed": [
+      "CI (hermetic)",
+      "CI (integration)",
+      "CI (race)",
+      "CI (WebMCP Chrome)",
+      "CI (macOS audio release)",
+      "CI (Windows audio portable)",
+      "CI (unit)",
+      "CI (static)"
+    ],
+    "completeLogRead": true,
+    "peerOwned": true,
+    "c145DiffTouchesPackage": false,
+    "c145ChangesCoverageFloor": false,
+    "waived": false,
+    "nextAction": "Reproduce make coverage once after the reconciled current-main checkpoint; repair only a demonstrated C145-owned cause or preserve this exact peer dependency."
+  },
+  "scope": {
+    "ownedPaths": [
+      "agent-cli/internal/services/internal/agentruntime/session_tool_lifecycle.go",
+      "go-agent-runtime/services/sessioncontinuation/",
+      "coverage-manifest/go-agent-runtime/services/sessioncontinuation/",
+      "docs/temp/projects/audio-runtime/audio-runtime-c111-retire-cli-tool-continuation-lifecycle/",
+      "docs/temp/projects/audio-runtime/audio-runtime-c145-recover-c111-tool-continuation-lifecycle/"
+    ],
+    "sharedFilesUntouched": true,
+    "implementationMutationBeforeAdoptionLedger": false
+  }
+}

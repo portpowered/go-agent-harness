@@ -11,6 +11,7 @@ import impl "github.com/portpowered/go-agent-harness/agent-cli/internal/services
 import runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 
 import runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+import runtimeContinuation "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessioncontinuation"
 
 const BrowserConversationAssistantTurn = impl.BrowserConversationAssistantTurn
 
@@ -80,9 +81,9 @@ var ErrSessionAudioInputConflict = serviceDevices.ErrSessionAudioInputConflict
 var ErrSessionAudioOutputConflict = serviceDevices.ErrSessionAudioOutputConflict
 var ErrSessionAudioInTurnBargeRequiresSequence = impl.ErrSessionAudioInTurnBargeRequiresSequence
 var ErrSessionAudioResponseIncomplete = impl.ErrSessionAudioResponseIncomplete
-var ErrSessionImageContinuationIncomplete = impl.ErrSessionImageContinuationIncomplete
+var ErrSessionImageContinuationIncomplete = runtimeSession.ErrLiveImageContinuationIncomplete
 var ErrSessionScheduledAudioIncomplete = runtimeSession.ErrLiveScheduledAudioIncomplete
-var ErrSessionUnresolvedToolResults = sessioncontract.ErrSessionUnresolvedToolResults
+var ErrSessionUnresolvedToolResults = runtimeContinuation.ErrSessionUnresolvedToolResults
 var EvaluateBrowserConversation = impl.EvaluateBrowserConversation
 
 type InvalidOpenAIRealtimeVoiceError = sessioncontract.InvalidOpenAIRealtimeVoiceError
@@ -128,7 +129,10 @@ const SessionDiagnosticFieldUnresolvedToolResultCount = impl.SessionDiagnosticFi
 
 type SessionDiagnosticRecord = impl.SessionDiagnosticRecord
 type SessionDurationTimer = impl.SessionDurationTimer
-type SessionImageContinuationError = impl.SessionImageContinuationError
+
+// Keep the test seam's historical view so both legacy session errors and the
+// new public contract's compatibility projection remain discoverable.
+type SessionImageContinuationError = runtimeSession.LiveImageContinuationError
 
 const SessionMaxDurationReason = impl.SessionMaxDurationReason
 
@@ -140,11 +144,11 @@ type SessionScheduledAudioIncompleteError = runtimeSession.LiveScheduledAudioInc
 
 const SessionSilentProviderTimeoutClassification = impl.SessionSilentProviderTimeoutClassification
 
-type SessionToolContinuationError = impl.SessionToolContinuationError
+type SessionToolContinuationError = runtimeSession.LiveToolContinuationError
 type SessionToolDiagnostic = impl.SessionToolDiagnostic
 
 const SessionTransportWebRTC = impl.SessionTransportWebRTC
 
-type SessionUnresolvedToolResultsError = sessioncontract.SessionUnresolvedToolResultsError
+type SessionUnresolvedToolResultsError = runtimeContinuation.SessionUnresolvedToolResultsError
 
 var WriteBrowserConversationReport = impl.WriteBrowserConversationReport

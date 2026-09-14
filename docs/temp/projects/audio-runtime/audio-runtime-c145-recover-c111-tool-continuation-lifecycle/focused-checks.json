@@ -1,0 +1,58 @@
+{
+  "schema": "audio-runtime.c145.focused-checks.v1",
+  "task": "audio-runtime-c145-recover-c111-tool-continuation-lifecycle",
+  "project": "audio-runtime",
+  "contractRevision": "audio-runtime-v1",
+  "implementationBranch": "codex/audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
+  "sourceRevision": "d5806b79a3e4638d618d38b43e37f7cd19eb6274",
+  "freshOriginMain": "4a1c399ccbb3d780be95eb04316e84b8f11a6646",
+  "checks": [
+    {
+      "command": "cd go-agent-runtime && GOWORK=off go test ./services/sessioncontinuation/... -count=5 -timeout=240s",
+      "result": "passed"
+    },
+    {
+      "command": "cd go-agent-runtime && GOWORK=off go test -race ./services/sessioncontinuation/... -count=5 -timeout=360s",
+      "result": "passed"
+    },
+    {
+      "command": "cd docs/temp/projects/audio-runtime/audio-runtime-c111-retire-cli-tool-continuation-lifecycle/external-consumer && GOWORK=off go test ./... -count=1 -timeout=120s",
+      "result": "passed"
+    },
+    {
+      "command": "cd agent-cli && GOWORK=off go test ./test/integration -run '<four accumulated C111 regressions>' -count=1 -timeout=360s",
+      "result": "passed",
+      "durationSeconds": 13.776
+    },
+    {
+      "command": "cd agent-cli && GOWORK=off go test -race ./test/integration -run '<four accumulated C111 regressions>' -count=3 -timeout=480s",
+      "result": "passed",
+      "durationSeconds": 22.467
+    },
+    {
+      "command": "make wire-check",
+      "result": "passed: 14 registered Wire packages regenerated"
+    },
+    {
+      "command": "make architecture-size-check",
+      "result": "passed: 205 packages, 1946 files, 28808 functions"
+    },
+    {
+      "command": "git diff --check",
+      "result": "passed"
+    }
+  ],
+  "historicalVerifier": {
+    "command": "C111 verify.py --mode positive-and-negative-controls and --mode retirement-and-owned-paths",
+    "result": "blocked-by-recovery-namespace",
+    "diagnostic": "changed path outside C111 ownership: docs/temp/projects/audio-runtime/audio-runtime-c145-recover-c111-tool-continuation-lifecycle/adoption-evidence.json",
+    "interpretation": "The predecessor verifier intentionally permits only the C111 namespace and cannot validate a C145 ledger committed beside the adopted branch. The verifier and C111 namespace were not edited; the underlying package, consumer, regression, Wire and architecture checks were run directly."
+  },
+  "predecessorPreservation": {
+    "dirtyCandidateEvidenceSha256": "47e845bf3fdf9fa9d5e338d8f159be0cf4983beeec1a52ed9ca36c44eba463c9",
+    "c111NamespaceNewArtifactsRemoved": true,
+    "c145NamespaceOnlyForNewEvidence": true
+  },
+  "decision": "CONTINUE",
+  "nextAction": "Keep the same task and branch checkpoint. Do not request independent review or claim acceptance until the peer-owned agentsession coverage floor is repaired/released; then rerun the exact coverage gate and only the current-head proof required by the changed candidate."
+}

@@ -1,0 +1,38 @@
+{
+  "schema": "audio-runtime.c111.ci-rejection.v1",
+  "run": 34766920601,
+  "url": "https://github.com/portpowered/go-agent-harness/actions/runs/34766920601",
+  "head": "6525d6c2518dcba1a9456d7587311370091432f9",
+  "conclusion": "failure",
+  "failedChecks": [
+    {
+      "name": "CI (coverage)",
+      "job": 103749418631,
+      "step": "Run coverage profiles and coverage gate",
+      "command": "make coverage",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession",
+      "expectedMinimum": "80.00%",
+      "actual": "61.80%",
+      "delta": "-18.20%",
+      "logExcerpt": [
+        "coverage gate found coverage floor violations:",
+        "- github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession: expected minimum 80.00%, actual 61.80%, delta -18.20%",
+        "exit status 1",
+        "make: *** [Makefile:303: coverage] Error 1"
+      ]
+    }
+  ],
+  "passedChecks": [
+    "CI (hermetic)",
+    "CI (integration)",
+    "CI (race)",
+    "WebMCP Chrome",
+    "macOS audio release",
+    "Windows audio portable",
+    "unit",
+    "static"
+  ],
+  "ownership": "The C111 diff against origin/main does not change agent-cli/internal/services/agentsession or the coverage floor. Do not lower the floor or edit this peer path; retain the exact rejection for the owning task/gate.",
+  "inspection": "The failed job log was inspected with gh run view 34766920601 --job 103749418631 --log-failed; no C111-owned source failure was shown.",
+  "claimedGreen": false
+}

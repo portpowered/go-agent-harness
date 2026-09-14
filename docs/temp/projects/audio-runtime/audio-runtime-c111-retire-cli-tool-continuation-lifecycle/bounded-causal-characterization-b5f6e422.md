@@ -1,0 +1,151 @@
+# C111 bounded CI-failure characterization
+
+Source revision: `b5f6e422883397f5a3b07a3c80a583f0d8003fd8`.
+
+## Coverage
+
+The previous exact-head Script CI run `34723920469` at `9712ed8b2a7879d08dd620eb0a64a895b7309e24` reported the unchanged coverage-floor failure:
+
+`github.com/portpowered/go-agent-harness/go-agent-runtime/services/session`: expected `80.00%`, actual `76.80%`, delta `-3.20%`.
+
+The current exact-head Script CI rerun `34729269748` at `b5f6e422` passed its coverage gate: `179` registered packages across `7` profiles. The current log also records the C111 package's expected package-local `0.0%` line because the package has no direct tests; that line is not the aggregate floor measurement. A standalone `go test ./services/session -cover` reproduced only that non-authoritative `0.0%` package-local observation and did not change code or coverage configuration. No coverage floor was lowered and no C110 path was absorbed.
+
+## High-rate integration
+
+The previous exact-head integration failure was limited to `TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst`: it timed out at `47.52s` before the final PCM marker, with rendered PCM `473280`, nonzero PCM `138391` versus expected `174391`, zero queue/drop/overflow/discard counters, `986` callbacks, `9` provider responses, `7` tool results, and a child still running.
+
+The prescribed bounded characterization command was run once against the current source:
+
+```text
+GOWORK=off go test ./test/integration -run '^TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst$' -count=1 -timeout=90s -v
+```
+
+It passed in `24.991s` total (`12.39s` subtest), with the named subtest reporting `PASS`, exit `0`, and no timeout. The former marker miss did not reproduce. No C111 continuation behavior change is demonstrated, so no C111 repair was made; the prior playback-drain observation remains separate C64 terminal-drain evidence if it recurs.
+
+## Current gate and next action
+
+The current PR #496 head `b5f6e422` has unit, race, integration, coverage, hermetic, WebMCP Chrome, macOS audio software, and Windows portable software checks green. Static fails only at `make wire-check` and `make architecture-size-check` because `go-agent-runtime/services/sessioncontinuation/wire/wire_gen.go` is not yet registered; C79/work-task-114 exclusively owns that shared registry and architecture baseline and has not released them. The isolated worktree remains clean and the shared paths remain untouched.
+
+After C79's reviewed guarded merge explicitly releases those files, fetch and merge the then-current `origin/main` without reset, apply only the demonstrated C111 Wire registration and any directly demonstrated downward baseline delta, rerun bounded gates, update PR #496, and submit that changed head to Script CI without polling. Until then, retain this same task and do not edit the shared files.
+
+## Fresh current-main revalidation
+
+After the no-reset merge of freshly fetched `origin/main` `071b0abfd67501db61e3c1929971c6dd6e77eb62`, source revision `eea5834ebe11d4bdb1a88d6bb369dcb2f7d75c25` passed the same bounded characterization:
+
+```text
+GOWORK=off go test ./test/integration -run '^TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst$' -count=1 -timeout=90s -v
+```
+
+The command exited `0` in `22.211s`; the named `provider_burst` subtest passed in `12.44s`, with the strict final PCM marker reached. The prior timeout did not reproduce, so no C111-owned repair was made; retain the separate C64 terminal-drain observation if it recurs. Post-merge public replay and the four accumulated C111 regressions also exited `0` with bounded, reaped process groups. Script CI remains the next external gate and is not claimed green.
+
+## Latest bounded executor rerun
+
+At candidate head `6a41574b4f8e0eb090a9d515839ed9d15f10ec95`, the same
+causal `test46/provider_burst` command passed in `22.586s` total, with the
+named subtest passing in `12.38s` and the strict final PCM marker reached. The
+accumulated `COUNT=1 bash scripts/test-session-ci-regressions.sh all` command
+also passed its normal, coverage, and race lanes, including all `20/20`
+high-rate trials and the four named C111 continuation regressions. No source
+repair was demonstrated or made; the worktree remains clean after the test
+runs. These are executor checks only and do not claim Script CI, review, merge,
+or acceptance.
+
+## Final integrated-main rerun
+
+After the no-reset merge `44747db8fca0a1f5e11ce9722b709976316b943a` of the
+fresh `origin/main` `bd6a1289218d1bef1a3af36e64e9d4496062416f`, the same causal
+command passed in `24.059s` total, with the named subtest passing in `12.55s`
+and the strict final PCM marker reached. The accumulated regression command
+passed again in normal, coverage, and race lanes, including `20/20` high-rate
+trials and the four named C111 continuation regressions. The integrated main
+change is outside C111 ownership; no C111 source repair was demonstrated or
+made. These are executor checks only and do not claim Script CI, review, merge,
+or acceptance.
+
+## Latest current-head Script CI rejection
+
+Script CI run `34761695693` rejected candidate head `6a75279f5d0cc812ced76b2a77ae430847853ee3` on two independent signals. The production-binary audio-device step failed `TestAgentBinaryTest46HighRateToolAudioRegression/trial_03` at `session_tool_audio_remote_e2e_test.go:219`: the remote device rendered `167991/174391` compared samples, losing `6400` samples (`96.3%` retained). The provider completed `9` responses, `7` response-create continuations, and `7` tool results with no protocol error; playback reported zero dropped, overflow, discarded, or queued samples, with `32` underflow events and `15360` underflow samples. The exact rejected-run record is `ci-rejection-34761695693.json`.
+
+The same run's coverage gate reported `github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession` at `61.80%` against its unchanged `80.00%` floor. `git diff origin/main...HEAD -- agent-cli/internal/services/agentsession` is empty, and the C111 diff also does not change the remote-audio test path. The high-rate test/device path is owned by the active C127 task; C111 does not lower the floor or absorb either unrelated repair.
+
+A bounded local attempt of the exact `trial_03` selector exited during setup because the fresh CLI reported `tool "webmcp_list_tabs" is not available in the current capability set` before the mock provider topology began (`responsesSent=1`, `responseCreates=0`, `toolResults=0`). This is not a causal reproduction of the CI loss and was not used to justify a source change. The C111-focused contract, race, consumer, four-regression, image-repair, and source-pinned replay checks all pass at `6a75279f`; the current CI residual remains preserved for the C127 owner and Script CI gate.
+
+## Latest current-head Script CI rejection
+
+Script CI run `34763400175` rejected candidate head `bf05d90c64b556f68834d7dfa3150ad8ba1c1931`. The complete run metadata and failed-check evidence are retained in `ci-rejection-34763400175.json`. Its integration job passed deterministic integration and failed only the production-binary audio-device step at `TestAgentBinaryTest46HighRateToolAudioRegression/trial_10`: the remote device rendered `167991/174391` compared samples, losing `6400` (`96.3%` retained), with `0` queued samples, `0` drops, `0` overflows, `0` discarded samples/events, `26` underflow events, and `12480` underflow/zero-filled samples. The provider reported `9` responses, `7` response creates, `7` tool results, `270719` input samples and no protocol error. This is the unchanged C127 terminal-drain path; no C111 continuation source or remote-audio test path changed.
+
+The same run's coverage job completed all package profiles and failed its unchanged floor gate on `github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession` at `61.80%` versus `80.00%`. A bounded local `GOWORK=off go test ./internal/services/agentsession -cover -count=1 -timeout=120s` reports the package's direct `0.0%` coverage, and `git diff origin/main...HEAD -- agent-cli/internal/services/agentsession` is empty; no C111 coverage or floor repair is demonstrated.
+
+The exact local stress characterization `GOWORK=off YUI_AUDIO_STRESS=1 go run ./cmd/testtimeout --timeout 120s -- go test ./test/integration -run '^TestAgentBinaryTest46HighRateToolAudioRegression/trial_10$' -count=1 -timeout 120s -v` passed in `11.193s` (subtest `1.40s`). It did not reproduce the remote loss and does not transfer C127 ownership or establish a C111 repair. Fresh C111 verifier modes and the source-pinned three-case replay also pass at `bf05d90c`; the candidate is ready for a changed evidence handoff to Script CI.
+
+## Current-head hermetic rejection
+
+The canonical board returned the same C111 task after Script CI run `34764898583`
+at head `c1b5f1cdfa24fd40f9d5c935f8ed59744bd599db`. The failed completed job was
+`CI (hermetic)`, job `103744017535`, step `Run hermetic test pipeline` from
+`make test-hermetic`; its 400-line log is retained by the exact SHA-256
+`60ed135f47794a0acfab2c0109343e3926867183a05fd9e1d69a813469e45663` in
+`ci-rejection-34764898583.json`. The only shown assertion failure was the
+unchanged peer test
+`agent-cli/internal/services/internal/agentruntime/session_audio_out_test.go:146`
+(`TestRunSessionWithAudioOut_PreservesNonFrameAlignedSplitDeltas`), which
+observed `14` bytes instead of the exact `974`-byte PCM16 stream. The broad
+integration package completed successfully before the hermetic target exited
+nonzero; coverage was still in progress when this failed job was inspected.
+
+The C111 diff against the PR base `bd6a1289218d1bef1a3af36e64e9d4496062416f`
+contains only `session_tool_lifecycle.go`; neither the audio-output implementation
+nor its test changed. The exact test passed `20/20` under `CGO_ENABLED=0` with
+`-tags=nomicrophone`, and `20/20` under the same bounded `-race` selector. No
+C111-owned cause is demonstrated, so no peer source, assertion, timeout, or
+ownership was changed. This rejection remains non-green Script CI evidence;
+submit the changed C111 evidence head to the same task gate without polling.
+
+## Final current-main characterization
+
+Fresh `origin/main` advanced to `915ed982d23f2e549e529ff43c4f370b4b51e394`; it
+was integrated into the candidate with the no-reset merge
+`342ddb41819596b6744bf443e5b964cc936be7f2`. Against that current-main base,
+the C111 verifier accepted both `positive-and-negative-controls` and
+`retirement-and-owned-paths`, the public replay accepted, the four accumulated
+continuation regressions passed, and the public contract/Wire tests passed in
+normal and race modes. The unchanged peer split-delta test passed `20/20` in
+both bounded normal and race characterization. The exact local
+`YUI_AUDIO_STRESS=1` `trial_10` also passed in `41.126s` total, with the named
+subtest passing in `1.96s`.
+
+The resulting final candidate diff against current `origin/main` still changes
+only the C111-owned lifecycle adapter and its owned contract/evidence paths;
+the earlier hermetic rejection remains recorded at pre-merge head `c1b5f1cdf`
+and does not establish a C111-owned cause. These are executor checks only;
+Script CI is the next external gate and is not claimed green.
+
+## Latest complete current-head Script CI rejection
+
+Script CI run `34766920601` rejected pre-registry candidate head
+`6525d6c2518dcba1a9456d7587311370091432f9` only on completed coverage job
+`103749418631` (`CI (coverage)`). Its exact failed log is retained in
+`ci-rejection-34766920601.json`:
+
+```text
+coverage gate found coverage floor violations:
+- github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession: expected minimum 80.00%, actual 61.80%, delta -18.20%
+exit status 1
+make: *** [Makefile:303: coverage] Error 1
+```
+
+Hermetic, integration, race, WebMCP Chrome, macOS audio release, Windows
+audio portable, unit, and static jobs completed successfully. The C111 diff
+against freshly integrated `origin/main` does not change
+`agent-cli/internal/services/agentsession` or the coverage floor, so this is
+not a C111 causal signal and no peer repair or waiver is justified. The
+current-main local `make coverage-registration` characterization likewise
+reports only unchanged C127 package
+`go-agent-runtime/services/session/internal/live/causal`; the pre-merge C111
+registration checkpoint passed 188 packages across 6 modules.
+
+After the released exact Wire registry entry was added, implementation head
+`d9e1458ecc4f129d041439ac6515e59b0851c8d6` passed both owned verifier modes,
+the four accumulated regressions, the GOWORK=off external consumer, and the
+credential-free three-case replay. Script CI remains the next external gate;
+these executor results do not claim CI green.
