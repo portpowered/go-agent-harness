@@ -69,6 +69,12 @@ func (s *replayResponseTargetState) observeCreated(path string, record gatewayte
 	if err != nil {
 		return err
 	}
+	if _, duplicate := s.createdResponses[response.ID]; duplicate {
+		return fmt.Errorf("live replay plan %s: duplicate response.created for response %q at sequence %d", path, response.ID, record.Sequence)
+	}
+	if s.currentResponseID != "" {
+		return fmt.Errorf("live replay plan %s: response.created at sequence %d for %q replaced active response %q before its terminal boundary", path, record.Sequence, response.ID, s.currentResponseID)
+	}
 	s.createdResponses[response.ID] = struct{}{}
 	s.currentResponseID = response.ID
 	if s.cancelledID != "" && response.ID != s.cancelledID {
@@ -105,6 +111,12 @@ func (s *replayResponseTargetState) observeDone(path string, record gatewaytesti
 }
 
 func (s *replayResponseTargetState) validateDone(path string, record gatewaytesting.CapturedSessionEvent, response replayResponseBoundary) error {
+	if s.currentResponseID == "" {
+		return fmt.Errorf("live replay plan %s: response.done at sequence %d has no active response for %q", path, record.Sequence, response.ID)
+	}
+	if response.ID != s.currentResponseID {
+		return fmt.Errorf("live replay plan %s: response.done at sequence %d for %q does not match active response %q", path, record.Sequence, response.ID, s.currentResponseID)
+	}
 	if _, duplicate := s.terminalResponses[response.ID]; duplicate {
 		return fmt.Errorf("live replay plan %s: duplicate response.done for response %q at sequence %d", path, response.ID, record.Sequence)
 	}
@@ -198,9 +210,10 @@ func replayObserveToolResponse(path string, record gatewaytesting.CapturedSessio
 		return nil
 	}
 	responseID := strings.TrimSpace(event.ResponseID)
-	if responseID == "" {
-		responseID = currentResponseID
+	if responseID != "" && responseID != currentResponseID {
+		return fmt.Errorf("live replay plan %s: %s at sequence %d response id %q does not match active response %q", path, record.Type, record.Sequence, responseID, currentResponseID)
 	}
+	responseID = currentResponseID
 	if responseID == "" {
 		return fmt.Errorf("live replay plan %s: function_call at sequence %d has no response id", path, record.Sequence)
 	}

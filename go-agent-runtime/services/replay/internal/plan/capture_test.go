@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -115,6 +116,54 @@ func TestPlannerDoesNotMarkCancelledOnlyReplayAsInterrupted(t *testing.T) {
 	}
 	if plan.InterruptionReplacementExpected {
 		t.Fatalf("cancelled-only plan=%+v, want no replacement boundary", plan)
+	}
+}
+
+func TestPlannerRejectsDuplicateAndMismatchedResponseIdentities(t *testing.T) {
+	tests := []struct {
+		name    string
+		records []gatewaytesting.CapturedSessionEvent
+		want    string
+	}{
+		{
+			name: "duplicate created",
+			records: []gatewaytesting.CapturedSessionEvent{
+				clientRecord(replayCreateItem, `{"type":"conversation.item.create","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"duplicate"}]}}`),
+				clientRecord(replayResponseCreate, `{"type":"response.create"}`),
+				serverRecord("response.created", `{"type":"response.created","response":{"id":"response-duplicate"}}`),
+				serverRecord("response.created", `{"type":"response.created","response":{"id":"response-duplicate"}}`),
+			},
+			want: "duplicate response.created",
+		},
+		{
+			name: "done does not match active response",
+			records: []gatewaytesting.CapturedSessionEvent{
+				clientRecord(replayCreateItem, `{"type":"conversation.item.create","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"mismatch"}]}}`),
+				clientRecord(replayResponseCreate, `{"type":"response.create"}`),
+				serverRecord("response.created", `{"type":"response.created","response":{"id":"response-active"}}`),
+				serverRecord("response.done", `{"type":"response.done","response":{"id":"response-other","status":"completed"}}`),
+			},
+			want: "does not match active response",
+		},
+		{
+			name: "tool item does not match active response",
+			records: []gatewaytesting.CapturedSessionEvent{
+				clientRecord(replayCreateItem, `{"type":"conversation.item.create","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"tool mismatch"}]}}`),
+				clientRecord(replayResponseCreate, `{"type":"response.create"}`),
+				serverRecord("response.created", `{"type":"response.created","response":{"id":"response-active"}}`),
+				serverRecord("response.output_item.added", `{"type":"response.output_item.added","response_id":"response-other","item":{"type":"function_call"}}`),
+			},
+			want: "does not match active response",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			path := writePlanCapture(t, test.records...)
+			_, err := New().LoadLivePlan(t.Context(), path)
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("LoadLivePlan error = %v, want %q", err, test.want)
+			}
+		})
 	}
 }
 
