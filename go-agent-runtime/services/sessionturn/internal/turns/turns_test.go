@@ -19,6 +19,18 @@ type testInferencer struct {
 	connects atomic.Int32
 }
 
+type blockingInferencer struct {
+	started chan struct{}
+	release chan struct{}
+	session messages.Session
+}
+
+func (i *blockingInferencer) ConnectSession(context.Context) (messages.Session, error) {
+	close(i.started)
+	<-i.release
+	return i.session, nil
+}
+
 func (i *testInferencer) ConnectSession(context.Context) (messages.Session, error) {
 	i.connects.Add(1)
 	return i.session, i.err
@@ -449,6 +461,47 @@ func TestServiceCloseIsSingleAndPreservesErrors(t *testing.T) {
 	missingInferencer := New(Dependencies{})
 	if _, err := missingInferencer.RunTurn(context.Background(), textInput("input"), sessionturn.TurnDirectionUser, 1, 2); !errors.Is(err, sessionturn.ErrMissingTurnInferencer) {
 		t.Fatalf("missing inferencer = %v", err)
+	}
+}
+
+func TestServiceCloseDoesNotWaitForBlockedConnectionAdmission(t *testing.T) {
+	provider := newTestSession()
+	inferencer := &blockingInferencer{started: make(chan struct{}), release: make(chan struct{}), session: provider}
+	service := New(Dependencies{SessionInferencer: inferencer})
+
+	connected := make(chan struct{})
+	go func() {
+		if _, err := service.sessionFor(context.Background()); err != nil {
+			close(connected)
+			return
+		}
+		close(connected)
+	}()
+	select {
+	case <-inferencer.started:
+	case <-time.After(time.Second):
+		t.Fatal("connection admission did not block")
+	}
+
+	closed := make(chan error, 1)
+	go func() { closed <- service.Close() }()
+	select {
+	case err := <-closed:
+		if err != nil {
+			t.Fatalf("Close = %v", err)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("Close waited for blocked connection admission")
+	}
+
+	close(inferencer.release)
+	select {
+	case <-connected:
+	case <-time.After(time.Second):
+		t.Fatal("blocked connection admission did not settle after release")
+	}
+	if provider.closeCall.Load() != 1 {
+		t.Fatalf("late connection close calls = %d, want 1", provider.closeCall.Load())
 	}
 }
 

@@ -2,11 +2,11 @@ package agentruntime
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
+	sessiontransport "github.com/portpowered/go-agent-harness/agent-cli/internal/transport"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	runtimeSessionWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
@@ -122,14 +122,9 @@ func prepareSessionRecordingOutputs(plan *sessionRuntimePlan, out io.Writer, aud
 
 func prepareSessionTurnRuntime(ctx context.Context, opts SessionRunOptions, plan *sessionRuntimePlan) error {
 	toolLifecycle := composeSessionToolLifecycleObserver(plan.loop.toolLifecycleObserver, plan.loop.observer, plan.runtime)
-	imageCapabilities, err := resolveSessionTurnImageCapabilities(opts, plan)
-	if err != nil {
-		return err
-	}
 	request := sessionturn.Request{
 		SessionInferencer: plan.inferencer,
 		ToolExecutor:      plan.loop.ToolExecutor,
-		ImageCapabilities: imageCapabilities,
 		InstructionsText:  opts.sessionInstructions,
 		Instructions: sessionturn.InstructionRequest{Composition: &runtimeSession.InstructionComposition{
 			ToolDefinitions:        append([]messages.ToolDefinition(nil), plan.loop.ToolDefinitions...),
@@ -151,32 +146,20 @@ func prepareSessionTurnRuntime(ctx context.Context, opts SessionRunOptions, plan
 		ToolDiagnostic: func(call messages.ToolCall, err error) {
 			recordSessionToolDiagnostic(opts.ToolDiagnostics, opts.ToolExecutor, call, err)
 		},
+		ImageCleanup: opts.sessionImageCleanup,
+	}
+	if opts.sessionImageRequest != nil {
+		request.Seed = opts.sessionImageRequest.Seed
+		request.Image = opts.sessionImageRequest.Image
+	}
+	if err := prepareSessionTurnImages(opts, plan, &request); err != nil {
+		return err
 	}
 	if opts.ReplayPath == "" || opts.SessionInferencer != nil {
 		request.ToolDefinitions = append([]messages.ToolDefinition(nil), plan.loop.ToolDefinitions...)
 	}
-	if opts.InteractiveToolPolicy != nil {
-		request.InteractiveToolPolicy = opts.InteractiveToolPolicy
-	} else {
-		settings, err := sessionInteractiveToolSettings(opts)
-		if err != nil {
-			return err
-		}
-		request.ToolPolicyRequest = &runtimeTools.InteractiveToolPolicyRequest{
-			Settings: runtimeTools.InteractiveToolPolicySettings{
-				FastReadTimeout:          settings.FastReadTimeout,
-				LongRunningTimeout:       settings.LongRunningTimeout,
-				AcknowledgementThreshold: settings.AcknowledgementThreshold,
-			},
-			Definitions:     plan.loop.ToolDefinitions,
-			BaseDefinitions: opts.ToolDefinitionBase,
-			ExplicitLongRunningNames: []string{
-				"webmcp_select_tab", "webmcp_invoke", "webmcp_list_tools", "webmcp_list_tabs",
-				"webmcp_get_context", "webmcp_cancel", "webmcp_list_cast_devices", "webmcp_cast_tab",
-				"webmcp_stop_casting",
-			},
-			DynamicLongRunning: opts.BrowserToolsInteractive,
-		}
+	if err := prepareSessionTurnPolicy(opts, &request); err != nil {
+		return err
 	}
 	turnRuntime, err := newSessionTurnService().Prepare(ctx, request)
 	if err != nil {
@@ -184,7 +167,7 @@ func prepareSessionTurnRuntime(ctx context.Context, opts SessionRunOptions, plan
 	}
 	plan.turnRuntime = turnRuntime
 	plan.loop.turnRuntime = turnRuntime
-	plan.loop.turnBrowser = sessionTurnBrowserRequest(opts.BrowserWatch, opts.RefreshToolDefinitions)
+	plan.loop.turnBrowser = sessiontransport.SessionTurnBrowserRequest(opts.BrowserWatch, opts.RefreshToolDefinitions)
 	plan.loop.ToolExecutor = turnRuntime.ToolExecutor()
 	plan.inferencer = turnRuntime.Inferencer()
 	if opts.SessionInferencer != nil && (opts.sessionInstructions != "" || len(opts.ToolDefinitions) != 0) {
@@ -193,51 +176,66 @@ func prepareSessionTurnRuntime(ctx context.Context, opts SessionRunOptions, plan
 	return nil
 }
 
-func resolveSessionTurnImageCapabilities(opts SessionRunOptions, plan *sessionRuntimePlan) (*sessionturn.ImageCapabilities, error) {
-	if !sessionHasTool(opts.ToolDefinitions, runtimeTools.ReadImageToolID) {
-		return nil, nil
+func prepareSessionTurnImages(opts SessionRunOptions, plan *sessionRuntimePlan, request *sessionturn.Request) error {
+	if opts.sessionImageCapabilities == nil && sessionHasTool(opts.ToolDefinitions, runtimeTools.ReadImageToolID) {
+		model := plan.model
+		if model == "" {
+			var err error
+			model, err = resolveSessionImageModel(opts)
+			if err != nil {
+				return err
+			}
+		}
+		configuredModel, err := loadSessionImageModelMetadata(opts.ConfigDir, model)
+		if err != nil {
+			return err
+		}
+		provider := plan.provider
+		if provider == "" {
+			provider = effectiveSessionProvider(opts)
+		}
+		request.ImageCapabilityRequest = &sessionturn.ImageCapabilityRequest{
+			Provider: provider, Model: model, ModelProvided: opts.ModelProvided,
+			ModelCatalog: opts.ModelCatalog, ConfiguredModel: configuredModel,
+		}
 	}
 	if opts.sessionImageCapabilities != nil {
 		capabilities := *opts.sessionImageCapabilities
 		capabilities.SupportedInputMIMETypes = append([]string(nil), capabilities.SupportedInputMIMETypes...)
-		return &capabilities, nil
+		request.ImageCapabilities = &capabilities
 	}
-	provider := plan.provider
-	if provider == "" {
-		provider = effectiveSessionProvider(opts)
-	}
-	model := plan.model
-	if model == "" {
-		var err error
-		model, err = resolveSessionImageModel(opts)
-		if err != nil {
-			return nil, err
+	return nil
+}
+
+func prepareSessionTurnPolicy(opts SessionRunOptions, request *sessionturn.Request) error {
+	if opts.InteractiveToolPolicy != nil {
+		request.InteractiveToolPolicy = opts.InteractiveToolPolicy
+	} else {
+		settings := runtimeTools.InteractiveToolPolicySettings{}
+		if opts.LoadedConfig != nil {
+			configured, err := opts.LoadedConfig.ResolveInteractiveToolConfig()
+			if err != nil {
+				return fmt.Errorf("resolve interactive tool policy: %w", err)
+			}
+			settings = runtimeTools.InteractiveToolPolicySettings{
+				FastReadTimeout:          configured.FastReadTimeout,
+				LongRunningTimeout:       configured.LongRunningTimeout,
+				AcknowledgementThreshold: configured.AcknowledgementThreshold,
+			}
 		}
+		request.ToolPolicySettings = &settings
+		request.ToolDefinitionBase = append([]messages.ToolDefinition(nil), opts.ToolDefinitionBase...)
+		request.DynamicToolPolicy = opts.BrowserToolsInteractive
 	}
-	configuredModel, err := loadSessionImageModelMetadata(opts.ConfigDir, model)
-	if err != nil {
-		return nil, err
-	}
-	resolved, err := newSessionTurnService().ResolveImageCapabilities(sessionturn.ImageCapabilityRequest{
-		Provider:        provider,
-		Model:           model,
-		ModelProvided:   opts.ModelProvided,
-		ModelCatalog:    opts.ModelCatalog,
-		ConfiguredModel: configuredModel,
-	})
-	if err == nil {
-		return &resolved, nil
-	}
-	var capabilityErr *sessionturn.ImageCapabilityError
-	if !errors.As(err, &capabilityErr) {
-		return nil, err
-	}
-	return &sessionturn.ImageCapabilities{Model: capabilityErr.Model}, nil
+	return nil
 }
 
 func prepareSessionRuntimeToolsAndAudio(ctx context.Context, opts SessionRunOptions, plan *sessionRuntimePlan) error {
 	if err := prepareSessionTurnRuntime(ctx, opts, plan); err != nil {
 		return err
+	}
+	if opts.sessionImageRequest != nil && opts.sessionImageRequest.Image != nil {
+		plan.loop.awaitFirstTurn = opts.sessionImageRequest.Image.FirstTurn
 	}
 	return configureSessionAudioContract(opts, plan)
 }

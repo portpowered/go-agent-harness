@@ -13,7 +13,6 @@ import (
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
-	runtimeSessionWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 )
 
@@ -210,11 +209,7 @@ func sessionInstructionText(ctx context.Context, opts SessionRunOptions, systemP
 	if err != nil {
 		return "", err
 	}
-	result, err := runtimeSessionWire.NewInstructionService().Resolve(ctx, request)
-	if err != nil {
-		return "", err
-	}
-	return result.Instructions, nil
+	return newSessionTurnService().ResolveInstructions(ctx, sessionturn.InstructionRequest{Request: request})
 }
 
 func newSessionInstructionRequest(opts SessionRunOptions, systemPrompt string) (runtimeSession.InstructionRequest, error) {
@@ -263,11 +258,17 @@ func (l sessionInstructionLoader) SkillsSummary() (string, error) {
 // service. Keeping this callable helper preserves the existing planner seams
 // without retaining a second policy implementation in the CLI.
 func composeSessionInstructions(opts SessionRunOptions, instructions string) string {
-	return runtimeSessionWire.NewInstructionService().Compose(runtimeSession.InstructionComposition{
-		Instructions:           instructions,
-		ToolDefinitions:        append([]messages.ToolDefinition(nil), opts.ToolDefinitions...),
-		BrowserCapabilityState: runtimeSession.BrowserCapabilityState(string(opts.BrowserCapabilityState)),
-		BrowserToolsEnabled:    opts.BrowserToolsEnabled,
-		PageSightToolID:        cliTools.PageSightToolID,
+	resolved, err := newSessionTurnService().ResolveInstructions(context.Background(), sessionturn.InstructionRequest{
+		Text: instructions,
+		Composition: &runtimeSession.InstructionComposition{
+			ToolDefinitions:        append([]messages.ToolDefinition(nil), opts.ToolDefinitions...),
+			BrowserCapabilityState: runtimeSession.BrowserCapabilityState(string(opts.BrowserCapabilityState)),
+			BrowserToolsEnabled:    opts.BrowserToolsEnabled,
+			PageSightToolID:        cliTools.PageSightToolID,
+		},
 	})
+	if err != nil {
+		return instructions
+	}
+	return resolved
 }

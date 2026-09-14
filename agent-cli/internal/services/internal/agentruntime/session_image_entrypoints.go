@@ -144,6 +144,8 @@ func planSessionImageRuntime(opts SessionRunOptions, parts []messages.ImagePart,
 }
 
 func planSessionImageRuntimeWithContext(ctx context.Context, opts SessionRunOptions, parts []messages.ImagePart, seed sessionturn.Seed, systemPrompt string, deferResponse bool) (sessionRuntimePlan, string, error) {
+	firstTurn := make(chan error, 1)
+	opts.sessionImageRequest = &sessionturn.Request{Seed: seed, Image: &sessionturn.ImageRequest{Parts: append([]messages.ImagePart(nil), parts...), DeferResponse: deferResponse, FirstTurn: firstTurn, PromptSentinel: sessionturn.ImageOnlyPrompt, DeferredInstruction: sessionturn.DeferredImageInstruction}}
 	var (
 		plan         sessionRuntimePlan
 		err          error
@@ -164,6 +166,7 @@ func planSessionImageRuntimeWithContext(ctx context.Context, opts SessionRunOpti
 }
 
 func planSessionImageRuntimeForDirectory(ctx context.Context, opts SessionRunOptions, parts []messages.ImagePart, seed sessionturn.Seed, systemPrompt string, deferResponse bool) (sessionRuntimePlan, string, func(), error) {
+	opts.sessionImageRequest = &sessionturn.Request{Seed: seed, Image: &sessionturn.ImageRequest{Parts: append([]messages.ImagePart(nil), parts...), DeferResponse: deferResponse, FirstTurn: make(chan error, 1), PromptSentinel: sessionturn.ImageOnlyPrompt, DeferredInstruction: sessionturn.DeferredImageInstruction}}
 	plan, cleanup, err := planSessionForDirectoryRecordingWithInstructions(ctx, opts, systemPrompt, true)
 	if err != nil {
 		return sessionRuntimePlan{}, "", func() {}, err
@@ -180,30 +183,12 @@ func attachSessionImageRuntime(ctx context.Context, plan sessionRuntimePlan, par
 	if plan.inferencer == nil {
 		return sessionRuntimePlan{}, "", errors.New("session image runtime has no session inferencer")
 	}
-	firstTurn := make(chan error, 1)
-	plan.loop.awaitFirstTurn = firstTurn
-	turnRuntime, err := newSessionTurnService().Prepare(ctx, sessionturn.Request{
-		SessionInferencer: plan.inferencer,
-		Seed:              seed,
-		Image: &sessionturn.ImageRequest{
-			Parts:               parts,
-			DeferResponse:       deferResponse,
-			FirstTurn:           firstTurn,
-			PromptSentinel:      sessionturn.ImageOnlyPrompt,
-			DeferredInstruction: sessionturn.DeferredImageInstruction,
-		},
-		ToolExecutor:    plan.loop.ToolExecutor,
-		ToolDefinitions: nil,
-		ImageCleanup:    imageCleanup,
-	})
-	if err != nil {
-		return sessionRuntimePlan{}, "", err
+	if plan.turnRuntime == nil {
+		return sessionRuntimePlan{}, "", errors.New("session image runtime has no turn service")
 	}
-	plan.turnRuntime = turnRuntime
-	plan.loop.turnRuntime = turnRuntime
-	plan.inferencer = turnRuntime.Inferencer()
+	plan.loop.turnRuntime = plan.turnRuntime
 	if seed.Present {
-		return plan, turnRuntime.WirePrompt(), nil
+		return plan, plan.turnRuntime.WirePrompt(), nil
 	}
 	if prompt == "" {
 		plan.loop.Prompt = sessionturn.ImageOnlyPrompt
@@ -291,17 +276,13 @@ func prepareSessionImageRun(ctx context.Context, opts SessionRunOptions, sourceP
 		return opts, nil, noOpSessionImageCleanup, err
 	}
 	turnService := newSessionTurnService()
-	metadata, err := turnService.ResolveImageCapabilities(sessionturn.ImageCapabilityRequest{
+	capabilityRequest := sessionturn.ImageCapabilityRequest{
 		Provider:        provider,
 		Model:           model,
 		ModelProvided:   opts.ModelProvided,
 		ModelCatalog:    opts.ModelCatalog,
 		ConfiguredModel: configuredModel,
-	})
-	if err != nil {
-		return opts, nil, noOpSessionImageCleanup, err
 	}
-	opts.sessionImageCapabilities = &metadata
 	stagingRoot := ""
 	if sessionHasTool(opts.ToolDefinitions, runtimeTools.ReadImageToolID) {
 		stagingRoot, err = sessionImageStagingConfigDir(opts.ConfigDir)
@@ -311,7 +292,7 @@ func prepareSessionImageRun(ctx context.Context, opts SessionRunOptions, sourceP
 	}
 	prepared, err := turnService.PrepareImage(ctx, sessionturn.ImagePreparationRequest{
 		SourcePaths:            sourcePaths,
-		Capabilities:           metadata,
+		CapabilityRequest:      &capabilityRequest,
 		StagingRoot:            stagingRoot,
 		ToolExecutor:           opts.ToolExecutor,
 		ToolDefinitions:        opts.ToolDefinitions,
@@ -323,6 +304,8 @@ func prepareSessionImageRun(ctx context.Context, opts SessionRunOptions, sourceP
 	opts.ToolExecutor = prepared.ToolExecutor
 	opts.ToolDefinitions = prepared.ToolDefinitions
 	opts.RefreshToolDefinitions = prepared.RefreshToolDefinitions
+	capabilities := prepared.Capabilities
+	opts.sessionImageCapabilities = &capabilities
 	if seed.Present {
 		opts.Prompt = seed.Value
 		opts.PromptProvided = true

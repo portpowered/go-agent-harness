@@ -211,19 +211,17 @@ type InstructionRequest struct {
 	Service     session.InstructionService
 	Request     session.InstructionRequest
 	Composition *session.InstructionComposition
+	Text        string
 }
-
 type ImageCapabilities struct {
 	Model                   string
 	SupportsImageInput      bool
 	SupportedInputMIMETypes []string
 }
-
 type ImageModelMetadata struct {
 	InputModalities         []string
 	SupportedInputMIMETypes []string
 }
-
 type ImageCapabilityRequest struct {
 	Provider        string
 	Model           string
@@ -238,13 +236,11 @@ const (
 	MaxImageTotalBytes = 32 << 20
 )
 
-// ImagePreparationRequest is the complete host-resolved input for one image
-// surface. The session-turn service validates the provider capability, reads
-// bounded image content, binds read_image to that same capability snapshot,
-// and stages a private copy when the tool is advertised.
+// ImagePreparationRequest is the complete host-resolved input for one image surface. The session-turn service validates the provider capability, reads bounded image content, binds read_image to that same capability snapshot, staging a private copy when the tool is advertised.
 type ImagePreparationRequest struct {
 	SourcePaths            []string
 	Capabilities           ImageCapabilities
+	CapabilityRequest      *ImageCapabilityRequest
 	StagingRoot            string
 	ToolExecutor           messages.ToolExecutor
 	ToolDefinitions        []messages.ToolDefinition
@@ -255,6 +251,7 @@ type ImagePreparationRequest struct {
 // cleanup function is idempotent when supplied by the staging implementation.
 type ImagePreparationResult struct {
 	Parts                  []messages.ImagePart
+	Capabilities           ImageCapabilities
 	ToolExecutor           messages.ToolExecutor
 	ToolDefinitions        []messages.ToolDefinition
 	RefreshToolDefinitions func(context.Context) ([]messages.ToolDefinition, error)
@@ -322,27 +319,28 @@ type Request struct {
 	SessionInferencer messages.SessionInferencer
 	EventSink         TurnEventSink
 
-	Seed             Seed
-	SeedAllocator    Allocator
-	Instructions     InstructionRequest
-	InstructionsText string
-	Image            *ImageRequest
-
-	ToolExecutor          messages.ToolExecutor
-	ToolDefinitions       []messages.ToolDefinition
-	ImageCapabilities     *ImageCapabilities
-	ToolDefinitionBase    []messages.ToolDefinition
-	ToolPolicyRequest     *tools.InteractiveToolPolicyRequest
-	InteractiveToolPolicy tools.InteractiveToolPolicy
-	ToolExecutionTimeout  time.Duration
-	ToolCallObserver      func(messages.ToolCall)
-	ToolResultObserver    func(messages.ToolCall, messages.ToolCallResponse, bool)
-	ToolDiagnostic        func(messages.ToolCall, error)
-	ToolFailurePresenter  func(messages.ToolCall, error) messages.ToolCallResponse
-
-	Browser      BrowserRequest
-	Output       io.Writer
-	ImageCleanup func() error
+	Seed                   Seed
+	SeedAllocator          Allocator
+	Instructions           InstructionRequest
+	InstructionsText       string
+	Image                  *ImageRequest
+	ToolExecutor           messages.ToolExecutor
+	ToolDefinitions        []messages.ToolDefinition
+	ToolPolicySettings     *tools.InteractiveToolPolicySettings
+	DynamicToolPolicy      bool
+	ImageCapabilities      *ImageCapabilities
+	ImageCapabilityRequest *ImageCapabilityRequest
+	ToolDefinitionBase     []messages.ToolDefinition
+	ToolPolicyRequest      *tools.InteractiveToolPolicyRequest
+	InteractiveToolPolicy  tools.InteractiveToolPolicy
+	ToolExecutionTimeout   time.Duration
+	ToolCallObserver       func(messages.ToolCall)
+	ToolResultObserver     func(messages.ToolCall, messages.ToolCallResponse, bool)
+	ToolDiagnostic         func(messages.ToolCall, error)
+	ToolFailurePresenter   func(messages.ToolCall, error) messages.ToolCallResponse
+	Browser                BrowserRequest
+	Output                 io.Writer
+	ImageCleanup           func() error
 }
 
 type Runtime interface {
@@ -359,9 +357,9 @@ type Runtime interface {
 	NewOutput(io.Writer) Output
 	Close() error
 }
-
 type Service interface {
 	Prepare(context.Context, Request) (Runtime, error)
+	ResolveInstructions(context.Context, InstructionRequest) (string, error)
 	ResolveImageCapabilities(ImageCapabilityRequest) (ImageCapabilities, error)
 	PrepareImageParts([]string, ImageCapabilities) ([]messages.ImagePart, error)
 	PrepareImage(context.Context, ImagePreparationRequest) (ImagePreparationResult, error)

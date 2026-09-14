@@ -361,11 +361,11 @@ type SessionRunOptions struct {
 	// stopping at the first completed turn. Defaults to false, which preserves
 	// the existing single-turn stop behavior byte-for-byte.
 	WaitForClose bool
-
 	// sessionImageCapabilities is resolved by the initial-image entry point and
 	// reused by read_image. Keeping it private keeps capability policy per session.
 	sessionImageCapabilities *sessionturn.ImageCapabilities
 	sessionImageCleanup      func() error
+	sessionImageRequest      *sessionturn.Request
 	sessionInstructions      string
 
 	// recordingClaim is acquired before provider construction and shared by

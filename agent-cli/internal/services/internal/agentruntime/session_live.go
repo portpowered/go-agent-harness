@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	sessiontransport "github.com/portpowered/go-agent-harness/agent-cli/internal/transport"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
@@ -743,13 +744,12 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 	// provider output drain can still run after the producer is quiesced.
 	audioCtx, cancelAudio := context.WithCancel(runCtx)
 	defer cancelAudio()
-	publisher, publisherErrors := startSessionTurnPublication(runCtx, loop, sessionInferencer, opts)
+	publisher, publisherErrors := sessiontransport.NewTurnAdapter(newSessionTurnService()).StartPublication(runCtx, loop, sessiontransport.TurnPublicationOptions{Runtime: opts.turnRuntime, Inferencer: sessionInferencer, ToolExecutor: opts.ToolExecutor, ToolDefinitions: opts.ToolDefinitions, InteractivePolicy: opts.InteractiveToolPolicy, ToolExecutionTimeout: opts.ToolExecutionTimeout, Browser: opts.turnBrowser, BrowserWatch: opts.BrowserWatch, RefreshToolDefinitions: opts.RefreshToolDefinitions, BaseDefinitions: opts.ToolDefinitionBase})
 	publisherErrors = mergeSessionErrorChannels(runCtx, publisherErrors, sessionLivenessErrorChannel(runCtx, opts.observer))
-	defer stopSessionTurnPublication(publisher)
+	defer sessiontransport.StopPublication(publisher)
 	if err := bindSessionLoopInputs(runCtx, audioCtx, loop, opts); err != nil {
 		return err
 	}
-
 	timeout, stopTimeout, err := sessionStreamDeadline(opts)
 	if err != nil {
 		return err
@@ -886,7 +886,7 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 		if msg.Type == messages.StreamTypeSessionCreated {
 			// SESSION.UPDATE is sent while handling SESSION.CREATED. Release
 			// dynamic publication only after that bootstrap boundary is observed.
-			markSessionTurnPublicationReady(publisher)
+			sessiontransport.MarkPublicationReady(publisher)
 		}
 		if msg.Type == messages.StreamTypeSessionOpen {
 			startSessionUpdatedTimer()

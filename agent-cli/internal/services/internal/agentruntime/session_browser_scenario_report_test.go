@@ -166,7 +166,10 @@ func TestBrowserConversationCommandValidatorReadsBoundedStructuredVerdict(t *tes
 	result := BrowserConversationResult{ScenarioID: "scenario", ScenarioName: "name", BrokerCalls: []BrowserConversationBrokerCall{
 		{Sequence: 1, Operation: BrowserConversationInvoke, InputJSON: `{"value":true}`, State: webmcp.InvocationCompleted, Terminal: true},
 	}}
-	validator, err := NewBrowserConversationCommandValidator([]string{os.Args[0], "-test.run=^TestBrowserConversationCommandValidatorReadsBoundedStructuredVerdict$"}, time.Second)
+	// The child is the race-instrumented test binary itself; its startup can
+	// exceed one second before the helper reads stdin. Keep the validator
+	// deadline bounded while allowing the credential-free helper to start.
+	validator, err := NewBrowserConversationCommandValidator([]string{os.Args[0], "-test.run=^TestBrowserConversationCommandValidatorReadsBoundedStructuredVerdict$"}, 2*time.Second)
 	if err != nil {
 		t.Fatalf("new command validator: %v", err)
 	}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -24,6 +25,14 @@ type toolExecutor struct {
 	observeResult func(messages.ToolCall, messages.ToolCallResponse, bool)
 	diagnose      func(messages.ToolCall, error)
 	present       func(messages.ToolCall, error) messages.ToolCallResponse
+	ctx           context.Context
+	cancel        context.CancelFunc
+	mu            sync.Mutex
+	closed        bool
+	activeCount   int
+	activeIdle    chan struct{}
+	closeOnce     sync.Once
+	closeErr      error
 }
 
 func (*toolExecutor) SessionTurnToolExecutor() {}
@@ -32,7 +41,10 @@ func newToolExecutor(inner messages.ToolExecutor, policy tools.InteractiveToolPo
 	if inner == nil {
 		return nil
 	}
-	return &toolExecutor{inner: inner, policy: clonePolicy(policy), timeout: timeout, observeCall: observeCall, observeResult: observeResult, diagnose: diagnose, present: present}
+	ctx, cancel := context.WithCancel(context.Background())
+	activeIdle := make(chan struct{})
+	close(activeIdle)
+	return &toolExecutor{inner: inner, policy: clonePolicy(policy), timeout: timeout, observeCall: observeCall, observeResult: observeResult, diagnose: diagnose, present: present, ctx: ctx, cancel: cancel, activeIdle: activeIdle}
 }
 
 func (e *toolExecutor) Execute(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
@@ -53,10 +65,27 @@ func (e *toolExecutor) Execute(ctx context.Context, call messages.ToolCall) (mes
 	if timeout <= 0 {
 		timeout = defaultToolExecutionTimeout
 	}
-	execCtx, cancel := context.WithTimeout(ctx, timeout)
+	callCtx, cancelCall := context.WithCancel(ctx)
+	stopClose := context.AfterFunc(e.ctx, cancelCall) //nolint:contextcheck // The separately owned executor lifetime must also cancel this caller-derived tool.
+	defer func() {
+		stopClose()
+		cancelCall()
+	}()
+	execCtx, cancel := context.WithTimeout(callCtx, timeout)
 	defer cancel()
 	resultCh := make(chan toolResult, 1)
+	e.mu.Lock()
+	if e.closed {
+		e.mu.Unlock()
+		return e.failed(call, sessionturn.ErrSessionClosed)
+	}
+	if e.activeCount == 0 {
+		e.activeIdle = make(chan struct{})
+	}
+	e.activeCount++
+	e.mu.Unlock()
 	go func() {
+		defer e.finishCall()
 		response, err := invokeTool(execCtx, e.inner, call)
 		resultCh <- toolResult{response: response, err: err}
 	}()
@@ -72,6 +101,38 @@ func (e *toolExecutor) Execute(ctx context.Context, call messages.ToolCall) (mes
 			return e.finish(call, messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name}, false, ctx.Err())
 		}
 		return e.failed(call, fmt.Errorf("%w after %s", errToolTimeout, timeout))
+	}
+}
+
+const toolShutdownTimeout = 500 * time.Millisecond
+
+func (e *toolExecutor) Close() error {
+	if e == nil {
+		return nil
+	}
+	e.closeOnce.Do(func() {
+		e.mu.Lock()
+		e.closed = true
+		if e.cancel != nil {
+			e.cancel()
+		}
+		idle := e.activeIdle
+		e.mu.Unlock()
+		select {
+		case <-idle:
+		case <-time.After(toolShutdownTimeout):
+			e.closeErr = fmt.Errorf("close session turn tools: %w", context.DeadlineExceeded)
+		}
+	})
+	return e.closeErr
+}
+
+func (e *toolExecutor) finishCall() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.activeCount--
+	if e.activeCount == 0 {
+		close(e.activeIdle)
 	}
 }
 

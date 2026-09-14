@@ -231,20 +231,21 @@ func (s *Service) sessionFor(ctx context.Context) (messages.Session, error) {
 		return nil, transitionError("run", context.Canceled)
 	}
 	s.connectionMu.Lock()
-	defer s.connectionMu.Unlock()
-
 	s.mu.RLock()
 	if s.closed {
 		s.mu.RUnlock()
+		s.connectionMu.Unlock()
 		return nil, transitionError("run", sessionturn.ErrSessionClosed)
 	}
 	if s.connection != nil {
 		connection := s.connection
 		s.mu.RUnlock()
+		s.connectionMu.Unlock()
 		return connection, nil
 	}
 	inferencer := s.inferencer
 	s.mu.RUnlock()
+	s.connectionMu.Unlock()
 	if inferencer == nil {
 		return nil, transitionError("run", sessionturn.ErrMissingTurnInferencer)
 	}
@@ -256,17 +257,28 @@ func (s *Service) sessionFor(ctx context.Context) (messages.Session, error) {
 		return nil, fmt.Errorf("connect turn session: %w", sessionturn.ErrMissingTurnSession)
 	}
 
+	s.connectionMu.Lock()
 	s.mu.Lock()
 	if s.closed {
 		s.mu.Unlock()
+		s.connectionMu.Unlock()
 		closedErr := transitionError("run", sessionturn.ErrSessionClosed)
-		if closeErr := connection.Close(); closeErr != nil {
+		if closeErr := closeConnectionBounded(connection); closeErr != nil {
 			return nil, errors.Join(closedErr, closeErr)
 		}
 		return nil, closedErr
 	}
+	if existing := s.connection; existing != nil {
+		s.mu.Unlock()
+		s.connectionMu.Unlock()
+		if closeErr := closeConnectionBounded(connection); closeErr != nil {
+			return nil, closeErr
+		}
+		return existing, nil
+	}
 	s.connection = connection
 	s.mu.Unlock()
+	s.connectionMu.Unlock()
 	return connection, nil
 }
 

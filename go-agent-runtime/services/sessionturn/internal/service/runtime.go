@@ -29,11 +29,25 @@ func New(deps Dependencies) *Service { return &Service{deps: deps} }
 
 var _ sessionturn.Service = (*Service)(nil)
 
+func (s *Service) ResolveInstructions(ctx context.Context, request sessionturn.InstructionRequest) (string, error) {
+	if ctx == nil {
+		return "", errors.New("session turn instruction context is required")
+	}
+	var instructionService session.InstructionService
+	if s != nil {
+		instructionService = s.deps.InstructionService
+	}
+	return resolveInstructionRequest(ctx, request, instructionService)
+}
+
 func (s *Service) Prepare(ctx context.Context, request sessionturn.Request) (sessionturn.Runtime, error) {
 	if ctx == nil {
 		return nil, errors.New("session turn preparation context is required")
 	}
 	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := s.prepareImageCapabilities(&request); err != nil {
 		return nil, err
 	}
 
@@ -42,16 +56,9 @@ func (s *Service) Prepare(ctx context.Context, request sessionturn.Request) (ses
 		allocator = s.deps.Allocator
 	}
 	seedService := seed.New(allocator)
-	policy := request.InteractiveToolPolicy
-	if policy == nil && request.ToolPolicyRequest != nil {
-		if s == nil || s.deps.PolicyFactory == nil {
-			return nil, errors.New("session turn policy factory is not configured")
-		}
-		var err error
-		policy, err = s.deps.PolicyFactory.Resolve(*request.ToolPolicyRequest)
-		if err != nil {
-			return nil, err
-		}
+	policy, err := s.resolvePolicy(request)
+	if err != nil {
+		return nil, err
 	}
 	var instructionService session.InstructionService
 	if s != nil {
@@ -78,6 +85,63 @@ func (s *Service) Prepare(ctx context.Context, request sessionturn.Request) (ses
 		continuation:    continuation,
 		imageCleanup:    request.ImageCleanup,
 	}, nil
+}
+
+func (s *Service) prepareImageCapabilities(request *sessionturn.Request) error {
+	if request == nil || request.ImageCapabilities != nil || request.ImageCapabilityRequest == nil {
+		return nil
+	}
+	capabilities, err := s.ResolveImageCapabilities(*request.ImageCapabilityRequest)
+	if err != nil {
+		var capabilityErr *sessionturn.ImageCapabilityError
+		if !errors.As(err, &capabilityErr) {
+			return err
+		}
+		capabilities = sessionturn.ImageCapabilities{Model: capabilityErr.Model}
+	}
+	request.ImageCapabilities = &capabilities
+	return nil
+}
+
+func (s *Service) resolvePolicy(request sessionturn.Request) (tools.InteractiveToolPolicy, error) {
+	policy := request.InteractiveToolPolicy
+	policyRequest := request.ToolPolicyRequest
+	if policy != nil {
+		return policy, nil
+	}
+	if policyRequest == nil && s != nil && s.deps.PolicyFactory != nil && requiresPolicy(request) {
+		settings := tools.InteractiveToolPolicySettings{}
+		if request.ToolPolicySettings != nil {
+			settings = *request.ToolPolicySettings
+		}
+		policyRequest = &tools.InteractiveToolPolicyRequest{
+			Settings:                 settings,
+			Definitions:              request.ToolDefinitions,
+			BaseDefinitions:          request.ToolDefinitionBase,
+			ExplicitLongRunningNames: defaultLongRunningToolNames(),
+			DynamicLongRunning:       request.DynamicToolPolicy,
+		}
+	}
+	if policyRequest == nil {
+		return nil, nil
+	}
+	if s == nil || s.deps.PolicyFactory == nil {
+		return nil, errors.New("session turn policy factory is not configured")
+	}
+	return s.deps.PolicyFactory.Resolve(*policyRequest)
+}
+
+func requiresPolicy(request sessionturn.Request) bool {
+	return request.ToolExecutor != nil || len(request.ToolDefinitions) != 0 ||
+		request.ToolPolicySettings != nil || len(request.ToolDefinitionBase) != 0 || request.DynamicToolPolicy
+}
+
+func defaultLongRunningToolNames() []string {
+	return []string{
+		"webmcp_select_tab", "webmcp_invoke", "webmcp_list_tools", "webmcp_list_tabs",
+		"webmcp_get_context", "webmcp_cancel", "webmcp_list_cast_devices", "webmcp_cast_tab",
+		"webmcp_stop_casting",
+	}
 }
 
 func (s *Service) prepareToolExecutor(request sessionturn.Request, policy tools.InteractiveToolPolicy) messages.ToolExecutor {
@@ -135,6 +199,9 @@ func applySeed(inferencer messages.SessionInferencer, requested sessionturn.Seed
 	if !requested.Present {
 		return "", inferencer, nil
 	}
+	if inferencer == nil {
+		return "", nil, sessionturn.ErrMissingTurnInferencer
+	}
 	wirePrompt := seedService.Allocate()
 	if wirePrompt == "" {
 		return "", nil, errors.New("session turn seed allocator returned an empty prompt")
@@ -143,23 +210,38 @@ func applySeed(inferencer messages.SessionInferencer, requested sessionturn.Seed
 }
 
 func resolveInstructions(ctx context.Context, request sessionturn.Request, instructionService session.InstructionService) (string, error) {
-	instructions := request.InstructionsText
-	service := request.Instructions.Service
-	if service != nil {
-		resolved, err := service.Resolve(ctx, request.Instructions.Request)
+	return resolveInstructionRequest(ctx, sessionturn.InstructionRequest{
+		Service:     request.Instructions.Service,
+		Request:     request.Instructions.Request,
+		Composition: request.Instructions.Composition,
+		Text:        request.InstructionsText,
+	}, instructionService)
+}
+
+func resolveInstructionRequest(ctx context.Context, request sessionturn.InstructionRequest, instructionService session.InstructionService) (string, error) {
+	instructions := request.Text
+	if instructions == "" {
+		instructions = request.Request.Prompt
+	}
+	service := request.Service
+	if service == nil {
+		service = instructionService
+	}
+	if service != nil && (request.Service != nil || (request.Composition == nil && request.Text == "")) {
+		resolved, err := service.Resolve(ctx, request.Request)
 		if err != nil {
 			return "", err
 		}
 		instructions = resolved.Instructions
 	}
-	if request.Instructions.Composition != nil {
+	if request.Composition != nil {
 		if service == nil {
 			service = instructionService
 		}
 		if service == nil {
 			return "", errors.New("session turn instruction service is not configured")
 		}
-		composition := *request.Instructions.Composition
+		composition := *request.Composition
 		composition.Instructions = instructions
 		instructions = service.Compose(composition)
 	}
@@ -232,6 +314,15 @@ func (r *runtime) Close() error {
 		}
 		if r.continuation != nil {
 			closeErr = errors.Join(closeErr, r.continuation.Close())
+		}
+		if closer, ok := r.toolExecutor.(interface{ Close() error }); ok {
+			// A tool deadline has already been projected as the correlated tool
+			// failure on the session stream. Do not turn a best-effort bounded
+			// executor drain into a second session failure while still retaining
+			// all other shutdown causes.
+			if err := closer.Close(); err != nil && !errors.Is(err, context.DeadlineExceeded) {
+				closeErr = errors.Join(closeErr, err)
+			}
 		}
 		closeErr = errors.Join(closeErr, r.turns.Close())
 		if r.imageCleanup != nil {

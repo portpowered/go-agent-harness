@@ -110,12 +110,21 @@ func (s *Service) PrepareImage(ctx context.Context, request sessionturn.ImagePre
 	if err := ctx.Err(); err != nil {
 		return sessionturn.ImagePreparationResult{}, err
 	}
-	parts, err := prepareImageParts(request.SourcePaths, request.Capabilities)
+	capabilities := request.Capabilities
+	if !capabilities.SupportsImageInput && request.CapabilityRequest != nil {
+		resolved, err := s.ResolveImageCapabilities(*request.CapabilityRequest)
+		if err != nil {
+			return sessionturn.ImagePreparationResult{}, err
+		}
+		capabilities = resolved
+	}
+	parts, err := prepareImageParts(request.SourcePaths, capabilities)
 	if err != nil {
 		return sessionturn.ImagePreparationResult{}, err
 	}
 	result := sessionturn.ImagePreparationResult{
 		Parts:                  cloneImageParts(parts),
+		Capabilities:           capabilities,
 		ToolExecutor:           request.ToolExecutor,
 		ToolDefinitions:        messages.CanonicalToolDefinitions(request.ToolDefinitions),
 		RefreshToolDefinitions: request.RefreshToolDefinitions,

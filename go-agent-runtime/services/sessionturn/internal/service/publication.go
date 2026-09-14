@@ -242,6 +242,9 @@ func (p *publication) consume(event sessionturn.BrowserEvent) bool {
 }
 
 func (p *publication) refreshAndPublish(ctx context.Context, phase string) error {
+	if err := ctx.Err(); err != nil {
+		return p.fail(phase+"_cancel", p.latestSequence(), err)
+	}
 	definitions, err := p.refresh(ctx)
 	if err != nil {
 		return p.fail(phase+"_refresh", p.latestSequence(), err)
@@ -256,8 +259,14 @@ func (p *publication) refreshAndPublish(ctx context.Context, phase string) error
 	event, hasEvent := p.pending, p.hasPending
 	p.mu.Unlock()
 	if !unchanged {
+		if err := ctx.Err(); err != nil {
+			return p.fail(phase+"_cancel", p.latestSequence(), err)
+		}
 		if err := p.publish(ctx, canonical); err != nil {
 			return p.fail(phase+"_publish", p.latestSequence(), err)
+		}
+		if err := ctx.Err(); err != nil {
+			return p.fail(phase+"_cancel", p.latestSequence(), err)
 		}
 		p.mu.Lock()
 		p.state.DefinitionDigest = digest
