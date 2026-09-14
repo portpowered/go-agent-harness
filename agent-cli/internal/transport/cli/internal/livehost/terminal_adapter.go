@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"reflect"
 
 	clioutput "github.com/portpowered/go-agent-harness/agent-cli/internal/output"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
@@ -36,25 +37,28 @@ func AdaptLiveTerminalError(err error) error {
 }
 
 func replaceLiveUnresolvedError(err error) error {
-	switch typed := err.(type) {
-	case *session.LiveUnresolvedToolResultsError:
-		return &sessiontrace.UnresolvedToolResultsError{CallIDs: typed.UnresolvedCallIDs()}
-	case interface{ Unwrap() []error }:
+	if reflect.TypeOf(err) == reflect.TypeOf((*session.LiveUnresolvedToolResultsError)(nil)) {
+		var typed *session.LiveUnresolvedToolResultsError
+		if errors.As(err, &typed) {
+			return &sessiontrace.UnresolvedToolResultsError{CallIDs: typed.UnresolvedCallIDs()}
+		}
+	}
+	if typed, ok := err.(interface{ Unwrap() []error }); ok {
 		causes := typed.Unwrap()
 		replaced := make([]error, len(causes))
 		for index, cause := range causes {
 			replaced[index] = replaceLiveUnresolvedError(cause)
 		}
 		return errors.Join(replaced...)
-	case interface{ Unwrap() error }:
+	}
+	if typed, ok := err.(interface{ Unwrap() error }); ok {
 		cause := typed.Unwrap()
 		if cause == nil {
 			return err
 		}
 		return liveTerminalError{message: err.Error(), cause: replaceLiveUnresolvedError(cause)}
-	default:
-		return err
 	}
+	return err
 }
 
 type liveTerminalError struct {
