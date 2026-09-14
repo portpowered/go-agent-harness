@@ -10,12 +10,14 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
+	sessionterminalwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
 // SessionMaxDurationReason is the stable terminal reason for a planned
 // duration cutoff.
-const SessionMaxDurationReason messages.TerminalReason = "max_duration"
+const SessionMaxDurationReason = sessionterminal.MaxDurationReason
 
 var ErrInvalidSessionMaxDuration = sessioncontract.ErrInvalidSessionMaxDuration
 
@@ -30,6 +32,13 @@ type SessionDurationTimer = platformclock.Timer
 // SessionDurationClock creates one timer for a positive session bound.
 type SessionDurationClock interface {
 	NewTimer(time.Duration) SessionDurationTimer
+}
+
+func joinSessionAudioOutputError(runErr error, path string, outputErr error) error {
+	if outputErr == nil || errors.Is(runErr, outputErr) {
+		return runErr
+	}
+	return errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", path, outputErr))
 }
 
 func sessionDurationClockFromSource(source platformclock.Source) (SessionDurationClock, error) {
@@ -194,7 +203,7 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 	artifacts := sessionDurationArtifactsFromContext(ctx)
 	reporter := plan.loop.terminalReporter
 	if reporter == nil {
-		reporter = newSessionTerminalReporter()
+		reporter = sessionterminalwire.NewReporter()
 		plan.loop.terminalReporter = reporter
 	}
 	finalizer := newSessionRuntimeFinalizer(plan)
@@ -205,11 +214,11 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 		runErr = finalizer.finish(ctx, out, runErr)
 		artifactErr := finalizeSessionDurationArtifacts(artifacts)
 		runErr = errors.Join(runErr, artifactErr)
-		reporter.recordArtifactFinalization(artifacts != nil, artifactErr)
-		if !sessionErrorHasIndependentFailure(runErr) && plan.replayCompletion != nil {
+		reporter.RecordArtifactFinalization(artifacts != nil, artifactErr)
+		if !sessionterminalwire.HasIndependentFailure(runErr) && plan.replayCompletion != nil {
 			plan.replayCompletion(reporter)
 		}
-		runErr = errors.Join(runErr, reporter.publish(out, runErr))
+		runErr = errors.Join(runErr, reporter.Publish(out, runErr))
 	}()
 	if plan.replayIntegrityWarning != "" {
 		if _, err := fmt.Fprintln(out, plan.replayIntegrityWarning); err != nil {
@@ -244,7 +253,7 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 	}
 	plan.configureLoopObserver(&plan.loop)
 	if plan.inferencer != nil {
-		reporter.markRunStarted()
+		reporter.MarkRunStarted()
 		runErr = runAgentLoopSessionWithDurationAdmissionClock(ctx, loopOut, plan.inferencer, plan.loop, maxDuration, durationClock, admittedInferencer)
 	}
 

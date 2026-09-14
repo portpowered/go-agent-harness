@@ -10,6 +10,8 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
+	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -17,7 +19,7 @@ import (
 
 // SessionReplayCompleteClassification is the terminal classification emitted
 // after a capture-derived replay consumes the complete ordered event stream.
-const SessionReplayCompleteClassification = "replay_complete"
+const SessionReplayCompleteClassification = sessionterminal.ReplayCompleteClassification
 
 func planOpenAIRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
 	sessionCfg, err := resolveOpenAIRealtimeSessionConfig(opts)
@@ -32,7 +34,7 @@ func planOpenAIRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 	if liveDialer == nil {
 		return sessionRuntimePlan{}, missingOwnedSessionDialerError(sessionProviderOpenAI)
 	}
-	liveDialer = observeSessionWire(liveDialer, opts)
+	liveDialer = sessiontracewire.NewProviderWireDialer(liveDialer, opts.RuntimeObserver, opts.Clock)
 	recordingDialer := factory.newRecordingDialer(liveDialer, sessionProviderOpenAI, sessionCfg.Model)
 	clientOwnedAudio := opts.ClientOwnsAudioTurnBoundaries || len(opts.AudioInputs) > 0
 	inputAudioTranscription := resolveInputAudioTranscriptionPolicy(opts, sessionProviderOpenAI, clientOwnedAudio || opts.RTCDeviceBinding.inputSelected())
@@ -173,8 +175,8 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 		plan.audioInputs = bareAudioTurns
 	}
 	if barePromptReplay || bareAudioTurnReplay {
-		plan.replayCompletion = func(reporter *sessionTerminalReporter) {
-			reporter.markReplayComplete()
+		plan.replayCompletion = func(reporter sessionterminal.Reporter) {
+			reporter.MarkReplayComplete()
 		}
 	}
 	return plan, nil
@@ -228,10 +230,6 @@ func replaySessionToolNames(path string, sequence int, session map[string]json.R
 
 func buildOpenAIRealtimeSessionInferencer(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer) (messages.SessionInferencer, error) {
 	return buildOpenAIRealtimeSessionInferencerWithInputAudioTranscription(sessionCfg, voice, dialer, models.InputAudioTranscriptionConfig{})
-}
-
-func buildOpenAIRealtimeSessionInferencerWithTools(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
-	return buildOpenAIRealtimeSessionInferencerWithToolsAndInputAudioTranscription(sessionCfg, voice, dialer, toolDefinitions, models.InputAudioTranscriptionConfig{})
 }
 
 func buildOpenAIRealtimeSessionInferencerWithInputAudioTranscription(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, inputAudioTranscription models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {

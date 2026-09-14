@@ -15,6 +15,9 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	sessionterminalwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
@@ -519,7 +522,7 @@ func runSelfPlayConversation(ctx context.Context, opts SelfPlayRunOptions, custo
 		defer bridgeWG.Done()
 		customerToAssistant.pumpWithObserver(bridgeCtx, assistantReady, func(err error) { stop.fail(err) }, "customer-to-assistant", func(pcm []byte) {
 			if side := evidence.side(1); side != nil && side.runtimeRecord != nil {
-				side.runtimeRecord.audioInput(pcm)
+				side.runtimeRecord.AudioInput(pcm)
 			}
 		})
 	}()
@@ -527,7 +530,7 @@ func runSelfPlayConversation(ctx context.Context, opts SelfPlayRunOptions, custo
 		defer bridgeWG.Done()
 		assistantToCustomer.pumpWithObserver(bridgeCtx, customerReady, func(err error) { stop.fail(err) }, "assistant-to-customer", func(pcm []byte) {
 			if side := evidence.side(0); side != nil && side.runtimeRecord != nil {
-				side.runtimeRecord.audioInput(pcm)
+				side.runtimeRecord.AudioInput(pcm)
 			}
 		})
 	}()
@@ -540,12 +543,11 @@ func runSelfPlayConversation(ctx context.Context, opts SelfPlayRunOptions, custo
 			evidence.fail(wrapped)
 			stop.fail(wrapped)
 		}
-		observer := newSessionProgressObserver(sideEvidence, nil, opts.Provider, opts.Model)
-		observer.runtime = sideEvidence.runtimeRecord
-		observer.turnAdmission = func(messages.StreamMessage) bool {
+		observer := sessiontracewire.NewObserver(sessiontrace.NewObserverOptions{Sink: sideEvidence, Provider: opts.Provider, Model: opts.Model, RuntimeRecorder: sideEvidence.runtimeRecord, TerminalService: sessionterminalwire.NewService()})
+		observer.SetTurnAdmission(func(messages.StreamMessage) bool {
 			return stop.recordTurn(side, opts.MaxTurns)
-		}
-		observer.streamObserver = selfPlayStreamObserver(ctx, name, sideEvidence, evidence, stop, output)
+		})
+		observer.SetStreamObserver(selfPlayStreamObserver(ctx, name, sideEvidence, evidence, stop, output))
 
 		err := runAgentLoopSession(ctx, io.Discard, inferencer, sessionLoopOptions{
 			Prompt:        prompt,
@@ -556,7 +558,7 @@ func runSelfPlayConversation(ctx context.Context, opts SelfPlayRunOptions, custo
 			runtime:       sideEvidence.runtimeRecord,
 			loopReady:     ready,
 			clockSource:   opts.clock,
-			livenessClock: sessionLivenessClockFromSource(opts.clock),
+			livenessClock: sessiontracewire.LivenessClockFromSource(opts.clock),
 		})
 		results <- selfPlaySideResult{name: name, err: err}
 	}
@@ -603,7 +605,6 @@ func runSelfPlayConversation(ctx context.Context, opts SelfPlayRunOptions, custo
 	finalizeErr := evidence.finalize(result, runErr, selfPlayNow(opts))
 	return result, errors.Join(runErr, finalizeErr)
 }
-
 func selfPlayStreamObserver(ctx context.Context, name string, sideEvidence *selfPlaySideEvidence, evidence *selfPlayEvidence, stop *selfPlayStopState, output *selfPlayPCMBridge) func(messages.StreamMessage) {
 	return func(msg messages.StreamMessage) {
 		if err := sideEvidence.observeStreamDelta(msg); err != nil {
@@ -628,11 +629,10 @@ func selfPlayStreamObserver(ctx context.Context, name string, sideEvidence *self
 			stop.fail(wrapped)
 		}
 		if sideEvidence.runtimeRecord != nil {
-			sideEvidence.runtimeRecord.audioOutputMessage(value.Content, msg)
+			sideEvidence.runtimeRecord.AudioOutputMessage(value.Content, msg)
 		}
 	}
 }
-
 func selfPlayNow(opts SelfPlayRunOptions) time.Time {
 	if opts.clock != nil {
 		return opts.clock.Now().UTC()

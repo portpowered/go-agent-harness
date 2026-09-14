@@ -309,7 +309,7 @@ var CliSet = wire.NewSet(
 	servicewire.RoomSet,
 	servicewire.SessionSet,
 	servicewire.NewReplayService,
-	servicewire.NewMetricsCollector,
+	servicewire.NewProbeMetrics,
 	provideDefaultRuntimeToolService,
 	provideRuntimeToolService,
 	sessionwire.NewFileStoreFactory,

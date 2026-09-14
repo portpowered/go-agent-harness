@@ -30,7 +30,7 @@ func TestSessionRecordingClaimConcurrentPlansHaveOneProviderBuilder(t *testing.T
 			dialerCalls.Add(1)
 			return &stubRuntimeDialer{id: "claim-test"}
 		},
-		newRecordingDialer: defaultSessionRuntimeFactory.newRecordingDialer,
+		newRecordingDialer: defaultSessionRuntimeFactory().newRecordingDialer,
 		newGrokSessionWithTools: func(_ config.GrokConfig, _ transport.Dialer, _ []messages.ToolDefinition) (messages.SessionInferencer, error) {
 			builderCalls.Add(1)
 			return &captureClaimNeverConnectInferencer{}, nil

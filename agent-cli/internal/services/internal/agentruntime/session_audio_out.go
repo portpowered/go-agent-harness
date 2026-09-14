@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
@@ -187,7 +189,7 @@ func RunSessionWithAudioOutAndTextSeedAndMaxDuration(ctx context.Context, out io
 
 type sessionAudioOutput struct {
 	sink         audio.AudioSink
-	runtime      *sessionRuntimeObservationRecorder
+	runtime      sessiontrace.RuntimeRecorder
 	deviceBound  bool
 	devicePath   string
 	deviceWriter io.Writer
@@ -446,7 +448,7 @@ func (o *sessionAudioOutput) writeDelta(ctx context.Context, content []byte, msg
 		return nil
 	}
 	if o.deviceBound {
-		o.runtime.audioOutputMessage(content, msg)
+		o.runtime.AudioOutputMessage(content, msg)
 		return nil
 	}
 	if err := codec.ValidatePCM16(content, codec.MaxPCM16Bytes); err != nil {
@@ -464,7 +466,7 @@ func (o *sessionAudioOutput) writeDelta(ctx context.Context, content []byte, msg
 	if err != nil {
 		return pcm16AudioDeltaError(len(content), err)
 	}
-	o.runtime.audioOutputMessage(content, msg)
+	o.runtime.AudioOutputMessage(content, msg)
 	writer, ok := o.sink.(interface {
 		WriteSamples(context.Context, []int16) error
 	})
@@ -626,7 +628,6 @@ func (s *sessionAudioOutputSession) replaceSeed(msg messages.StreamMessage) bool
 	if !ok || value.Content != s.wirePrompt {
 		return false
 	}
-
 	s.seedMu.Lock()
 	defer s.seedMu.Unlock()
 	if s.seedSent {
@@ -678,7 +679,7 @@ func (s *sessionAudioOutputSession) forward() {
 func (s *sessionAudioOutputSession) forwardNext(input *messages.TypedBuffer[messages.StreamMessage]) bool {
 	select {
 	case msg := <-input.Chan():
-		retainingCtx, cancel := context.WithTimeout(context.WithoutCancel(s.ctx), sessionStragglerDrainWallSafety)
+		retainingCtx, cancel := context.WithTimeout(context.WithoutCancel(s.ctx), sessionterminal.StragglerDrainWallSafety)
 		defer cancel()
 		return s.forwardMessageWithContext(retainingCtx, msg, s.ctx.Err() != nil)
 	case <-s.Session.Done():
@@ -703,9 +704,9 @@ func (s *sessionAudioOutputSession) drain(input *messages.TypedBuffer[messages.S
 }
 func (s *sessionAudioOutputSession) drainAfterCancellation(input *messages.TypedBuffer[messages.StreamMessage]) {
 	close(s.drainStarted)
-	retainCtx, cancel := context.WithTimeout(context.WithoutCancel(s.ctx), sessionStragglerDrainWallSafety)
+	retainCtx, cancel := context.WithTimeout(context.WithoutCancel(s.ctx), sessionterminal.StragglerDrainWallSafety)
 	defer cancel()
-	terminal := time.NewTimer(sessionStragglerDrainWallSafety)
+	terminal := time.NewTimer(sessionterminal.StragglerDrainWallSafety)
 	defer terminal.Stop()
 	for {
 		select {
@@ -737,7 +738,7 @@ func (s *sessionAudioOutputSession) drainAfterInnerClose(input *messages.TypedBu
 			if !s.forwardMessageWithContext(ctx, msg, true) {
 				return
 			}
-		case <-time.After(sessionStragglerDrainQuietPeriod):
+		case <-time.After(sessionterminal.StragglerDrainQuietPeriod):
 			return
 		case <-ctx.Done():
 			return
@@ -777,7 +778,6 @@ func (s *sessionAudioOutputSession) forwardMessageWithContext(ctx context.Contex
 			return false
 		}
 	}
-
 	for {
 		outcome := s.receive.WriteContext(ctx, msg)
 		if outcome.OK() {

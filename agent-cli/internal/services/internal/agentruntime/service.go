@@ -17,6 +17,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	sessiontrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
@@ -68,18 +69,16 @@ func (d *Dispatcher) Run(ctx context.Context, out io.Writer, request public.Requ
 	if err != nil {
 		return err
 	}
-	trace, err := prepareTrace(&request, &options, d.deps.Clock)
+	trace, err := d.setupTrace(request, &options)
 	if err != nil {
 		return err
 	}
 	if trace != nil {
-		defer func() { runErr = errors.Join(runErr, trace.finish(request.RecordDirectory, runErr == nil)) }()
+		bindPreparedTrace(&options, trace)
+		defer func() { runErr = finishPreparedTrace(ctx, request.RecordDirectory, trace, runErr) }()
 	}
-	if err := ctx.Err(); err != nil {
+	if err := validateSessionRunContext(ctx, out); err != nil {
 		return err
-	}
-	if out == nil {
-		return fmt.Errorf("session output is required")
 	}
 	if len(request.AudioTurns) > 0 {
 		if len(request.ImagePaths) > 0 {
@@ -164,6 +163,33 @@ func (d *Dispatcher) Run(ctx context.Context, out io.Writer, request public.Requ
 		ctx, out, options, request.AudioOutputPath, request.MaxDuration,
 		textSeed(request.TextSeed), request.SystemPrompt,
 	)
+}
+
+func validateSessionRunContext(ctx context.Context, out io.Writer) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if out == nil {
+		return fmt.Errorf("session output is required")
+	}
+	return nil
+}
+
+func (d *Dispatcher) setupTrace(request public.Request, options *SessionRunOptions) (sessiontrace.Prepared, error) {
+	return sessiontracewire.NewService().Prepare(sessiontrace.Request{
+		TraceAudio:      request.TraceAudio,
+		RecordDirectory: request.RecordDirectory,
+		Clock:           d.deps.Clock,
+		Credentials:     traceCredentials(&request),
+		RuntimeObserver: options.RuntimeObserver,
+		Device: sessiontrace.DeviceBinding{
+			PreGateSamplesObserver:     sessiontrace.CaptureSamplesObserver(options.RTCDeviceBinding.PreGateSamplesObserver),
+			UploadedSamplesObserver:    sessiontrace.CaptureSamplesObserver(options.RTCDeviceBinding.UploadedSamplesObserver),
+			PlaybackSamplesObserver:    sessiontrace.PlaybackSamplesObserver(options.RTCDeviceBinding.PlaybackSamplesObserver),
+			RenderedSamplesObserver:    sessiontrace.CaptureSamplesObserver(options.RTCDeviceBinding.RenderedSamplesObserver),
+			RenderedSamplesUnavailable: options.RTCDeviceBinding.RenderedSamplesUnavailable,
+		},
+	})
 }
 
 func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request) (SessionRunOptions, error) {

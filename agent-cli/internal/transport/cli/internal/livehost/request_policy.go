@@ -1,8 +1,6 @@
 package livehost
 
 import (
-	"encoding/json"
-	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -13,8 +11,6 @@ import (
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/recording"
-	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 const (
@@ -247,149 +243,4 @@ func appendToolNames(result *runtimeSession.LiveRequest, capabilities *runtimeSe
 	for _, definition := range capabilities.Definitions {
 		result.ToolNames = append(result.ToolNames, definition.Name)
 	}
-}
-
-func projectProviderCapture(trace *recording.Trace, path string) error {
-	if trace == nil {
-		return errors.New("live audio trace is unavailable")
-	}
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return errors.New("provider capture path is unavailable for live audio trace")
-	}
-	loaded, err := gatewaytesting.LoadSessionCaptureForReplay(path)
-	if err != nil {
-		return fmt.Errorf("load provider capture for audio trace: %w", err)
-	}
-	calls := make(map[string]string)
-	for _, event := range loaded.Capture.Records {
-		if err := projectProviderEvent(trace, event, calls); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func projectProviderEvent(trace *recording.Trace, event gatewaytesting.CapturedSessionEvent, calls map[string]string) error {
-	wire, err := traceWireEnvelope(event)
-	if err != nil {
-		return fmt.Errorf("project provider wire sequence %d: %w", event.Sequence, err)
-	}
-	kind := "provider_wire_receive"
-	if event.Direction == gatewaytesting.DirectionClientToServer {
-		kind = "provider_wire_send"
-	}
-	trace.ObserveRuntime(recording.RuntimeEvent{Kind: kind, Tick: uint64(event.Sequence), Clean: true, Payload: wire})
-	return projectProviderToolEvent(trace, event, calls)
-}
-
-func projectProviderToolEvent(trace *recording.Trace, event gatewaytesting.CapturedSessionEvent, calls map[string]string) error {
-	switch event.Type {
-	case "response.function_call_arguments.done":
-		callPayload, callID, callName, err := traceToolCall(event.Payload)
-		if err != nil {
-			return fmt.Errorf("project tool call sequence %d: %w", event.Sequence, err)
-		}
-		calls[callID] = callName
-		trace.ObserveRuntime(recording.RuntimeEvent{Kind: "tool_call", Tick: uint64(event.Sequence), Clean: true, Payload: callPayload})
-	case "conversation.item.create":
-		resultPayload, callID, ok, err := traceToolResult(event.Payload, calls)
-		if err != nil {
-			return fmt.Errorf("project tool result sequence %d: %w", event.Sequence, err)
-		}
-		if ok {
-			trace.ObserveRuntime(recording.RuntimeEvent{Kind: "tool_result", Tick: uint64(event.Sequence), Clean: true, Payload: resultPayload})
-			delete(calls, callID)
-		}
-	}
-	return nil
-}
-
-func traceWireEnvelope(event gatewaytesting.CapturedSessionEvent) ([]byte, error) {
-	payload := event.Payload
-	if len(payload) == 0 {
-		payload = event.Data
-	}
-	if len(payload) == 0 {
-		return nil, errors.New("provider payload is empty")
-	}
-	messageType := websocketTextMessage
-	var textPayload json.RawMessage
-	var binaryPayload []byte
-	if json.Valid(payload) {
-		textPayload = append(json.RawMessage(nil), payload...)
-	} else {
-		messageType = websocketBinaryMessage
-		binaryPayload = append([]byte(nil), payload...)
-	}
-	return json.Marshal(struct {
-		MessageType   int             `json:"message_type"`
-		Payload       json.RawMessage `json:"payload,omitempty"`
-		BinaryPayload []byte          `json:"binary_payload,omitempty"`
-	}{MessageType: messageType, Payload: textPayload, BinaryPayload: binaryPayload})
-}
-
-func traceToolCall(payload []byte) ([]byte, string, string, error) {
-	var raw struct {
-		CallID    string `json:"call_id"`
-		Name      string `json:"name"`
-		Arguments string `json:"arguments"`
-	}
-	if err := json.Unmarshal(payload, &raw); err != nil {
-		return nil, "", "", err
-	}
-	raw.CallID = strings.TrimSpace(raw.CallID)
-	raw.Name = strings.TrimSpace(raw.Name)
-	if raw.CallID == "" || raw.Name == "" || !json.Valid([]byte(raw.Arguments)) {
-		return nil, "", "", errors.New("function call identity or arguments are invalid")
-	}
-	encoded, err := json.Marshal(struct {
-		ID        string `json:"id"`
-		Name      string `json:"name"`
-		Arguments string `json:"arguments"`
-	}{ID: raw.CallID, Name: raw.Name, Arguments: raw.Arguments})
-	return encoded, raw.CallID, raw.Name, err
-}
-
-func traceToolResult(payload []byte, calls map[string]string) ([]byte, string, bool, error) {
-	var raw struct {
-		Item struct {
-			Type   string          `json:"type"`
-			CallID string          `json:"call_id"`
-			Output json.RawMessage `json:"output"`
-		} `json:"item"`
-	}
-	if err := json.Unmarshal(payload, &raw); err != nil {
-		return nil, "", false, err
-	}
-	if raw.Item.Type != "function_call_output" {
-		return nil, "", false, nil
-	}
-	callID := strings.TrimSpace(raw.Item.CallID)
-	name := strings.TrimSpace(calls[callID])
-	if callID == "" || name == "" || len(raw.Item.Output) == 0 {
-		return nil, "", false, errors.New("function call output identity is incomplete")
-	}
-	content := ""
-	if err := json.Unmarshal(raw.Item.Output, &content); err != nil {
-		if !json.Valid(raw.Item.Output) {
-			return nil, "", false, fmt.Errorf("function call output is invalid: %w", err)
-		}
-		content = string(raw.Item.Output)
-	}
-	encoded, err := json.Marshal(struct {
-		CallID   string `json:"call_id"`
-		Name     string `json:"name"`
-		Failed   bool   `json:"failed"`
-		Response struct {
-			ToolCallID string `json:"tool_call_id"`
-			Name       string `json:"name"`
-			Content    string `json:"content"`
-		} `json:"response"`
-	}{CallID: callID, Name: name, Response: struct {
-		ToolCallID string `json:"tool_call_id"`
-		Name       string `json:"name"`
-		Content    string `json:"content"`
-	}{ToolCallID: callID, Name: name, Content: content}})
-	return encoded, callID, true, err
 }

@@ -5,8 +5,6 @@ import (
 	"errors"
 	"io"
 	"strings"
-	"sync"
-	"sync/atomic"
 
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
@@ -58,8 +56,6 @@ type publicTraceRun struct {
 	prepared sessiontracePrepared
 	binding  runtimeSessionTrace.DeviceBinding
 	observer runtimeSessionTrace.RuntimeObserver
-
-	terminalOnce sync.Once
 }
 
 // sessiontracePrepared is kept as the narrow public contract used by the host.
@@ -99,33 +95,7 @@ func (r *publicTraceRun) finish(ctx context.Context, bundle string, published bo
 	if r == nil || r.prepared == nil {
 		return nil
 	}
-	r.observeTerminal(runErr)
 	return r.prepared.Finish(ctx, bundle, published)
-}
-
-func (r *publicTraceRun) observeTerminal(runErr error) {
-	if r == nil || r.observer == nil {
-		return
-	}
-	r.terminalOnce.Do(func() {
-		r.observer.ObserveSessionRuntime(runtimeSessionTrace.SessionRuntimeObservation{
-			Kind:  runtimeSessionTrace.SessionRuntimeObservationTerminal,
-			Clean: runErr == nil,
-			Error: traceErrorText(runErr),
-		})
-	})
-}
-
-func (r *publicTraceRun) wrapRecorder(inner runtimeSession.LiveRecorder, liveRequest runtimeSession.LiveRequest) runtimeSession.LiveRecorder {
-	return &publicTraceRecorder{
-		inner:      inner,
-		run:        r,
-		inputRate:  liveRequest.InputAudioSampleRate,
-		outputRate: liveRequest.OutputAudioSampleRate,
-		binding:    r.binding,
-		observer:   r.observer,
-		sequence:   new(atomic.Uint64),
-	}
 }
 
 func (r *publicTraceRun) wrapFilePorts(filePorts *FilePorts) {

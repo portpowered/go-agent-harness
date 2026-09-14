@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
@@ -61,7 +63,7 @@ type selfPlaySideEvidence struct {
 	diagnostics   *selfPlayJSONLWriter
 	streamDeltas  *selfPlayJSONLWriter
 	runtime       *selfPlayRuntimeEvidence
-	runtimeRecord *sessionRuntimeObservationRecorder
+	runtimeRecord sessiontrace.RuntimeRecorder
 	diagnosticErr func(error)
 	maxTurns      int
 }
@@ -168,12 +170,11 @@ func newSelfPlayEvidence(destination string, opts SelfPlayRunOptions, startedAt 
 			evidence.cleanupSetup()
 			return nil, fmt.Errorf("create %s stream evidence: %w", config.id, err)
 		}
-		side.runtimeRecord = newSessionRuntimeObservationRecorder(side.runtime, opts.clock)
+		side.runtimeRecord = sessiontracewire.NewRuntimeRecorder(side.runtime, opts.clock)
 		evidence.sides[index] = side
 	}
 	return evidence, nil
 }
-
 func (e *selfPlayEvidence) cleanupSetup() {
 	if e == nil {
 		return
@@ -200,7 +201,6 @@ func (e *selfPlayEvidence) cleanupSetup() {
 		}
 	}
 }
-
 func (e *selfPlayEvidence) side(index int) *selfPlaySideEvidence {
 	if e == nil || index < 0 || index >= len(e.sides) {
 		return nil

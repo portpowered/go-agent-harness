@@ -77,7 +77,7 @@ func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transp
 	v := wire2.NewDeviceProbeSessionFactory(modelCatalog)
 	v2 := wire2.NewDeviceProbeService(deviceRegistry, v)
 	v3 := wire2.NewSessionRuntimeFactory()
-	metricsCollector := wire2.NewMetricsCollector(clockSource, v3)
+	metricsCollector := wire2.NewProbeMetrics(clockSource, v3)
 	probeRunCommand := cli.NewProbeRunCommandWithDeviceService(deviceService, v2, metricsCollector)
 	probeGateCommand := cli.NewProbeGateCommand()
 	probeReportCommand := cli.NewProbeReportCommand()
@@ -370,7 +370,7 @@ func provideSessionDependencies(clockSource Clock, resolver tools.Service, runti
 
 // CliSet provides CLI commands, router, and root.
 var CliSet = wire4.NewSet(
-	FlagsSet, cli.NewRootCommand, cli.NewAskCommand, cli.NewChatCommand, cli.NewToolCommand, cli.NewInteractionCommand, cli.NewInteractionReplayCommand, cli.NewProbeCommand, wire2.DeviceSet, wire2.RoomSet, wire2.SessionSet, wire2.NewReplayService, wire2.NewMetricsCollector, provideDefaultRuntimeToolService,
+	FlagsSet, cli.NewRootCommand, cli.NewAskCommand, cli.NewChatCommand, cli.NewToolCommand, cli.NewInteractionCommand, cli.NewInteractionReplayCommand, cli.NewProbeCommand, wire2.DeviceSet, wire2.RoomSet, wire2.SessionSet, wire2.NewReplayService, wire2.NewProbeMetrics, provideDefaultRuntimeToolService,
 	provideRuntimeToolService, wire.NewFileStoreFactory, provideRecordingService,
 	provideProviderCaptureService,
 	provideSessionTraceService,

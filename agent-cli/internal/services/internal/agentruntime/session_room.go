@@ -1,14 +1,19 @@
 package agentruntime
 
 import (
+	"context"
+	"sync"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	runtimeProviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
@@ -25,6 +30,28 @@ const (
 	RoomTerminationMaxDurationReached RoomTerminationReason = "max_duration_reached"
 	RoomTerminationFailed             RoomTerminationReason = "failed"
 )
+
+type roomParticipantRuntime struct {
+	plan                *roomParticipantPlan
+	ctx                 context.Context
+	cancel              context.CancelFunc
+	admissionCtx        context.Context
+	admissionCancel     context.CancelFunc
+	loopReady           chan *agentloop.AgentLoop
+	participantDone     chan struct{}
+	mixerDone           chan struct{}
+	observerDone        chan struct{}
+	observerOnce        sync.Once
+	replayFrameAcks     chan struct{}
+	mixer               *room.PCM16Mixer
+	ingress             *roomAudioIngressLedger
+	input               *devicegw.DeviceSource
+	output              *devicegw.DeviceSink
+	lifecycle           *roomParticipantLifecycle
+	diagnosticSink      SessionDiagnosticSink
+	playbackDiagnostics sessiontrace.PlaybackDiagnostics
+	outboundLoudness    *audio.LoudnessNormalizer
+}
 
 // RoomStopReason is a descriptive alias used by callers that name the room
 // terminal state a stop reason.
@@ -197,7 +224,7 @@ type RoomRunOptions struct {
 	// Nil derives timers from Clock when possible, otherwise each participant
 	// uses the host timer. A shared deterministic clock keeps room tests and
 	// participant watchdogs on one controllable timeline.
-	LivenessClock SessionLivenessClock
+	LivenessClock sessiontrace.LivenessClock
 	// BoundShutdownGrace is the fixed room-bound drain window. A zero value
 	// selects the documented production default; tests may override it with a
 	// small positive duration to make the bounded drain deterministic.

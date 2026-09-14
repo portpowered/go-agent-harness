@@ -16,6 +16,8 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
@@ -26,7 +28,7 @@ type liveTerminalDrainFixture struct {
 	cancel context.CancelFunc
 
 	session   *liveTerminalDrainSession
-	observer  *sessionProgressObserver
+	observer  sessiontrace.Observer
 	opened    chan struct{}
 	openOnce  sync.Once
 	loopReady chan *agentloop.AgentLoop
@@ -226,12 +228,12 @@ func TestRunAgentLoopSessionTerminalOutcomesAlwaysDrainAcceptedDelta(t *testing.
 		{
 			name: "session updated timeout",
 			setup: func(f *liveTerminalDrainFixture) func() {
-				f.observer = newSessionProgressObserver(nil, nil, "test", "test")
+				f.observer = sessiontracewire.NewObserver(sessiontrace.NewObserverOptions{Provider: "test", Model: "test"})
 				f.options.observer = f.observer
 				f.options.RequireSessionUpdated = true
 				f.options.SessionUpdatedTimeout = 25 * time.Millisecond
-				f.observer.requireSessionUpdated = true
-				f.observer.scheduleAudioInputs([]ScheduledAudioInput{{AfterCompletedTurns: 0, PCM: []byte{1}}})
+				f.observer.SetRequireSessionUpdated(true)
+				f.observer.ScheduleAudioInputs([]ScheduledAudioInput{{AfterCompletedTurns: 0, PCM: []byte{1}}})
 				return func() { f.acceptedOutput() }
 			},
 			wantErr: ErrSessionScheduledAudioConfigTimeout,

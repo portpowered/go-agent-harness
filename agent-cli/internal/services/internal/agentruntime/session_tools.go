@@ -11,6 +11,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/sight"
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
@@ -40,16 +41,16 @@ const (
 // the provider watchdog; the next accepted response.create re-arms it.
 type sessionToolLifecycleMux struct {
 	recording sessionToolLifecycleObserver
-	progress  *sessionProgressObserver
-	runtime   *sessionRuntimeObservationRecorder
+	progress  sessiontrace.Observer
+	runtime   sessiontrace.RuntimeRecorder
 }
 
 func (m sessionToolLifecycleMux) observeToolCall(call messages.ToolCall) {
 	if m.runtime != nil {
-		m.runtime.observeToolCall(call)
+		m.runtime.ObserveToolCall(call)
 	}
 	if m.progress != nil {
-		m.progress.beginLocalToolExecution()
+		m.progress.BeginLocalToolExecution()
 	}
 	if m.recording != nil {
 		m.recording.observeToolCall(call)
@@ -58,17 +59,16 @@ func (m sessionToolLifecycleMux) observeToolCall(call messages.ToolCall) {
 
 func (m sessionToolLifecycleMux) observeToolResult(call messages.ToolCall, response messages.ToolCallResponse, failed bool) {
 	if m.runtime != nil {
-		m.runtime.observeToolResult(call, response, failed)
+		m.runtime.ObserveToolResult(call, response, failed)
 	}
 	if m.recording != nil {
 		m.recording.observeToolResult(call, response, failed)
 	}
 	if m.progress != nil {
-		m.progress.endLocalToolExecution()
+		m.progress.EndLocalToolExecution()
 	}
 }
-
-func composeSessionToolLifecycleObserver(recording sessionToolLifecycleObserver, progress *sessionProgressObserver, runtime *sessionRuntimeObservationRecorder) sessionToolLifecycleObserver {
+func composeSessionToolLifecycleObserver(recording sessionToolLifecycleObserver, progress sessiontrace.Observer, runtime sessiontrace.RuntimeRecorder) sessionToolLifecycleObserver {
 	if recording == nil && progress == nil && runtime == nil {
 		return nil
 	}

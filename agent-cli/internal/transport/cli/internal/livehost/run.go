@@ -7,7 +7,6 @@ import (
 	"io"
 	"strings"
 
-	cliOutput "github.com/portpowered/go-agent-harness/agent-cli/internal/output"
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeRecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
@@ -328,7 +327,6 @@ func liveRunOptions(out io.Writer, request serviceSession.Request, liveRequest r
 		deviceService = nil
 	}
 	deviceService = wrapTraceDeviceService(deviceService, traceRun)
-	renderer := cliOutput.NewLiveEventRenderer(request.ReplayPath != "")
 	return runtimeSession.LiveRunOptions{
 		Request:                 liveRequest,
 		Devices:                 deviceService,
@@ -339,7 +337,7 @@ func liveRunOptions(out io.Writer, request serviceSession.Request, liveRequest r
 		CaptureCompleteControls: captureCompleteControls(request, deps.CaptureComplete),
 		Events: runtimeSession.LiveEventSinkFunc(func(eventContext context.Context, event runtimeSession.LiveEvent) error {
 			eventOut := outputWriter(request, out)
-			if err := renderer.Render(eventContext, eventOut, event); err != nil {
+			if err := renderTerminalEvent(eventContext, eventOut, request.ReplayPath != "", event); err != nil {
 				return err
 			}
 			if request.StreamObserver != nil && event.Message != nil {

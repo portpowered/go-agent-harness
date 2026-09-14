@@ -35,8 +35,8 @@ func TestPlanOpenAIRecordPromptAudioOutputWithoutInputUsesRealtimeDuplexRate(t *
 		APIKey:               "test-key",
 		LoadedConfig:         loaded,
 	}, sessionRuntimeFactory{
-		newDefaultLiveDialer: defaultSessionRuntimeFactory.newDefaultLiveDialer,
-		newRecordingDialer:   defaultSessionRuntimeFactory.newRecordingDialer,
+		newDefaultLiveDialer: defaultSessionRuntimeFactory().newDefaultLiveDialer,
+		newRecordingDialer:   defaultSessionRuntimeFactory().newRecordingDialer,
 		newOpenAISessionWithTools: func(
 			config.OpenAIConfig,
 			string,
