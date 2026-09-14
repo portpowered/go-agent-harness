@@ -13,7 +13,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	audiosubsystem "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems/audio"
+	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -133,7 +133,7 @@ type sessionLoopOptions struct {
 	// AudioIn optionally streams a bounded file or stdin audio source into
 	// the loop after SESSION.OPEN. When nil, every session path behaves
 	// exactly as it did before audio input existed.
-	AudioIn *sessionAudioSource
+	AudioIn *runtimeAudioSource
 
 	// awaitFirstTurn optionally blocks the SESSION.OPEN handler until the
 	// session's first user turn (the realtime image turn) has been accepted
@@ -227,7 +227,7 @@ type sessionLoopOptions struct {
 
 	// rtcDeviceBinding is opened by the enclosing runtime plan and is started
 	// against the real session-owned media endpoints after ConnectSession.
-	rtcDeviceBinding *RTCDeviceBinding
+	rtcDeviceBinding runtimedevices.RTCBinding
 
 	// CloseAfterScheduledAudio requests a live scheduled-audio session close
 	// only after every queued input has produced a terminal assistant turn.
@@ -276,31 +276,6 @@ func duplexSessionLoopOptions(observedInferencer messages.SessionInferencer, opt
 	loopOpts := []agentloop.Option{
 		agentloop.WithMode(engine.DuplexSession),
 		agentloop.WithSessionInferencer(observedInferencer),
-	}
-	if binding := opts.rtcDeviceBinding; binding != nil && (binding.Capture != nil || binding.Sink != nil) {
-		// The subsystem observes the source handoff created by the binding and
-		// the sink's synchronized playback queue. Commands are admitted to the
-		// sink's bounded PlaybackCommands port; the device worker applies them
-		// independently of reasoning ticks.
-		var capture audiosubsystem.BufferPort
-		if binding.Capture != nil {
-			capture = binding.Capture.Control()
-		}
-		loopOpts = append(loopOpts, agentloop.WithAudioSubsystem(audiosubsystem.New(audiosubsystem.Ports{
-			Capture: capture,
-			Playback: func() audiosubsystem.BufferPort {
-				if binding.Sink == nil {
-					return nil
-				}
-				return binding.Sink.PlaybackBuffer()
-			}(),
-			Commands: func() audiosubsystem.CommandPort {
-				if binding.Sink == nil {
-					return nil
-				}
-				return binding.Sink.PlaybackCommands()
-			}(),
-		})))
 	}
 	if opts.ToolExecutor != nil {
 		if len(opts.ToolDefinitions) > 0 {
@@ -824,8 +799,7 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 		}
 		cancel()
 		providerErr := closeBareSessionIfNeeded(opts.BareLive, observedInferencer)
-		bindingErr := closeRTCDeviceBinding(opts.rtcDeviceBinding)
-		return errors.Join(drainErr, providerErr, joinSessionTerminationErrors(waitRun(), waitAudio()), bindingErr)
+		return errors.Join(drainErr, providerErr, joinSessionTerminationErrors(waitRun(), waitAudio()))
 	}
 	termination := newSessionLiveTerminationBoundary(ctx, quiesceUpstream, stopOwnedResources, out, loop, opts, observedInferencer)
 	terminate := termination.terminate

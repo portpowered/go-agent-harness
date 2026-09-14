@@ -750,7 +750,7 @@ func (c *roomCoordinator) finishParticipant(runtime *roomParticipantRuntime, rea
 	if runtime.output != nil {
 		cleanupErr = errors.Join(cleanupErr, boundedRoomCleanupOperation(cleanup, roomLifecycleWorkLabel(id, "output.device"), runtime.output.Close))
 		// A human participant's speaker queue is a raw *audio.DeviceSink with
-		// no SessionRunOptions/RTCDeviceBinding behind it, so it never reaches
+		// no SessionRunOptions/RTCBinding behind it, so it never reaches
 		// sessionPlaybackDiagnosticObserver; this is the participant-scoped
 		// equivalent, checked once the device has stopped accepting writes.
 		emitRoomParticipantPlaybackOverflowDiagnostic(id, runtime.output, runtime.diagnosticSink)

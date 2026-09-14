@@ -25,6 +25,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/sight"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
@@ -80,10 +81,10 @@ func RunSessionWithRecordingDirectoryAndInstructionsAndAudioInputAndOutputAndTex
 	audioOutPath string,
 	maxDuration time.Duration,
 	seed SessionTextSeed,
-	input SessionAudioInput,
+	input RuntimeAudioInput,
 	systemPrompt string,
 ) (runErr error) {
-	if !sessionAudioInputSelected(input) {
+	if !runtimeAudioInputSelected(input) {
 		return RunSessionWithRecordingDirectoryAndInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx, out, opts, directory, audioOutPath, maxDuration, seed, systemPrompt)
 	}
 	return runSessionWithRecordingDirectory(ctx, out, opts, directory, audioOutPath, maxDuration, seed, systemPrompt, true, &input)
@@ -218,9 +219,9 @@ func RunSessionWithImagesAndRecordingDirectoryAndAudioInput(
 	out io.Writer,
 	opts SessionImageRunOptions,
 	directory string,
-	input SessionAudioInput,
+	input RuntimeAudioInput,
 ) (runErr error) {
-	if !sessionAudioInputSelected(input) {
+	if !runtimeAudioInputSelected(input) {
 		return RunSessionWithImagesAndRecordingDirectory(ctx, out, opts, directory)
 	}
 	return runSessionWithImagesAndRecordingDirectory(ctx, out, opts, directory, &input)
@@ -231,7 +232,7 @@ func runSessionWithImagesAndRecordingDirectory(
 	out io.Writer,
 	opts SessionImageRunOptions,
 	directory string,
-	audioInput *SessionAudioInput,
+	audioInput *RuntimeAudioInput,
 ) (runErr error) {
 	var coordinator SessionCapabilityCoordinator
 	opts.SessionRunOptions, coordinator = prepareSessionCapabilityCoordinator(opts.SessionRunOptions)
@@ -278,12 +279,12 @@ func runSessionWithImagesAndRecordingDirectory(
 		return err
 	}
 	defer imageCleanup()
-	var audioSource *sessionAudioSource
+	var audioSource *runtimeAudioSource
 	if audioInput != nil {
-		if err := validateSessionAudioInput(*audioInput); err != nil {
+		if err := validateRuntimeAudioInput(*audioInput); err != nil {
 			return err
 		}
-		audioSource, err = openSessionAudioInput(*audioInput)
+		audioSource, err = openRuntimeAudioInput(*audioInput)
 		if err != nil {
 			return err
 		}
@@ -333,7 +334,7 @@ func runSessionWithRecordingDirectory(
 	seed SessionTextSeed,
 	systemPrompt string,
 	withInstructions bool,
-	audioInput *SessionAudioInput,
+	audioInput *RuntimeAudioInput,
 ) (runErr error) {
 	opts, coordinator := prepareSessionCapabilityCoordinator(opts)
 	defer func() {
@@ -377,12 +378,12 @@ func runSessionWithRecordingDirectory(
 	}
 	defer cleanup()
 
-	var audioSource *sessionAudioSource
+	var audioSource *runtimeAudioSource
 	if audioInput != nil {
-		if err := validateSessionAudioInput(*audioInput); err != nil {
+		if err := validateRuntimeAudioInput(*audioInput); err != nil {
 			return err
 		}
-		audioSource, err = openSessionAudioInput(*audioInput)
+		audioSource, err = openRuntimeAudioInput(*audioInput)
 		if err != nil {
 			return err
 		}
@@ -413,12 +414,12 @@ func runSessionWithRecordingDirectory(
 		}
 	}
 
-	var audioOutput *sessionAudioOutput
-	var audioWrapper *sessionAudioOutputInferencer
+	var audioOutput *runtimeAudioOutput
+	var audioWrapper *runtimeAudioOutputInferencer
 	var textOutput *sessionTextOutput
 	if audioOutPath != "" {
 		var sinkErr error
-		audioOutput, sinkErr = newSessionAudioOutputForPlan(&plan, audioOutPath, out, nil)
+		audioOutput, sinkErr = newRuntimeAudioOutputForPlan(&plan, audioOutPath, out, nil)
 		if sinkErr != nil {
 			return fmt.Errorf("--audio-out %q: %w", audioOutPath, sinkErr)
 		}
@@ -428,7 +429,7 @@ func runSessionWithRecordingDirectory(
 				wirePrompt = nextSessionTextWirePrompt()
 				plan.loop.Prompt = wirePrompt
 			}
-			audioWrapper = newSessionAudioOutputInferencer(plan.inferencer, audioOutput, wirePrompt, seed.Value)
+			audioWrapper = newRuntimeAudioOutputInferencer(plan.inferencer, audioOutput, wirePrompt, seed.Value)
 			plan.inferencer = audioWrapper
 		}
 	} else if seed.Present {
@@ -838,10 +839,9 @@ func (s *sessionDirectoryRecordingSession) Done() <-chan struct{} {
 	return s.inner.Done()
 }
 
-func (s *sessionDirectoryRecordingSession) rtcMedia() (RTCMediaEndpoints, bool) {
-	return rtcMediaFromSession(s.inner)
+func (s *sessionDirectoryRecordingSession) rtcMedia() (audio.MediaEndpoints, bool) {
+	return sessionMediaFromSession(s.inner)
 }
-
 func (s *sessionDirectoryRecordingSession) TerminalError() error {
 	return terminalSessionError(s.inner)
 }

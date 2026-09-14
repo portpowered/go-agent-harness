@@ -6,7 +6,11 @@ import (
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
 
-var ErrSessionAudioInputConflict = errors.New("--audio-in and --audio-in-device (audio device input) cannot be used together")
+type sessionAudioConflictError string
+
+func (e sessionAudioConflictError) Error() string { return string(e) }
+
+const ErrSessionAudioInputConflict sessionAudioConflictError = "--audio-in and --audio-in-device (audio device input) cannot be used together"
 
 const (
 	// SessionAudioInDeviceFlag is the session flag that selects the RTC input
@@ -23,7 +27,7 @@ const (
 // callers that classified the old output-selection conflict. File capture
 // and RTC device playback are now independent observations and are allowed
 // together, so new validation does not return this error.
-var ErrSessionAudioOutputConflict = errors.New("--audio-out and --audio-out-device (audio device output) cannot be used together")
+const ErrSessionAudioOutputConflict sessionAudioConflictError = "--audio-out and --audio-out-device (audio device output) cannot be used together"
 
 // SessionAudioDeviceConflictError describes a file/device selection conflict
 // while preserving both the direction-specific session error and the shared

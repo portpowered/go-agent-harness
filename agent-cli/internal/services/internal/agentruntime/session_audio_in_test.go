@@ -89,54 +89,54 @@ func TestRunSessionWithAudioInputPreflightMatrix(t *testing.T) {
 
 	cases := []struct {
 		name    string
-		input   agentruntime.SessionAudioInput
+		input   agentruntime.RuntimeAudioInput
 		wantIs  error
 		wantAny []error
 		wantMsg string
 	}{
 		{
 			name:    "empty path",
-			input:   agentruntime.SessionAudioInput{Present: true},
-			wantIs:  agentruntime.ErrSessionAudioInputEmpty,
+			input:   agentruntime.RuntimeAudioInput{Present: true},
+			wantIs:  agentruntime.ErrRuntimeAudioInputEmpty,
 			wantMsg: "path is empty",
 		},
 		{
 			name:    "missing file",
-			input:   agentruntime.SessionAudioInput{Path: missingPath, Present: true},
-			wantIs:  agentruntime.ErrSessionAudioInputMissing,
+			input:   agentruntime.RuntimeAudioInput{Path: missingPath, Present: true},
+			wantIs:  agentruntime.ErrRuntimeAudioInputMissing,
 			wantAny: []error{os.ErrNotExist},
 			wantMsg: missingPath,
 		},
 		{
 			name:    "unreadable directory",
-			input:   agentruntime.SessionAudioInput{Path: directoryPath, Present: true},
-			wantIs:  agentruntime.ErrSessionAudioInputUnreadable,
+			input:   agentruntime.RuntimeAudioInput{Path: directoryPath, Present: true},
+			wantIs:  agentruntime.ErrRuntimeAudioInputUnreadable,
 			wantMsg: "directory",
 		},
 		{
 			name:    "unreadable file",
-			input:   agentruntime.SessionAudioInput{Path: unreadablePath, Present: true},
-			wantIs:  agentruntime.ErrSessionAudioInputUnreadable,
+			input:   agentruntime.RuntimeAudioInput{Path: unreadablePath, Present: true},
+			wantIs:  agentruntime.ErrRuntimeAudioInputUnreadable,
 			wantMsg: unreadablePath,
 		},
 		{
 			name:    "rejected format",
-			input:   agentruntime.SessionAudioInput{Path: filepath.Join(t.TempDir(), "input.mp3"), Present: true},
-			wantIs:  agentruntime.ErrSessionAudioInputFormat,
+			input:   agentruntime.RuntimeAudioInput{Path: filepath.Join(t.TempDir(), "input.mp3"), Present: true},
+			wantIs:  agentruntime.ErrRuntimeAudioInputFormat,
 			wantAny: []error{audio.ErrUnsupportedFormat},
 			wantMsg: ".wav, .pcm, .raw",
 		},
 		{
 			name:    "rejected WAV format",
-			input:   agentruntime.SessionAudioInput{Path: corruptWAVPath, Present: true},
-			wantIs:  agentruntime.ErrSessionAudioInputFormat,
+			input:   agentruntime.RuntimeAudioInput{Path: corruptWAVPath, Present: true},
+			wantIs:  agentruntime.ErrRuntimeAudioInputFormat,
 			wantAny: []error{audio.ErrUnsupportedFormat},
 			wantMsg: "RIFF",
 		},
 		{
 			name:    "audio device conflict",
-			input:   agentruntime.SessionAudioInput{Path: validPath, Present: true, DevicePresent: true},
-			wantIs:  agentruntime.ErrSessionAudioInputConflict,
+			input:   agentruntime.RuntimeAudioInput{Path: validPath, Present: true, DevicePresent: true},
+			wantIs:  agentruntime.ErrRuntimeAudioInputConflict,
 			wantMsg: "audio device",
 		},
 	}
@@ -189,13 +189,13 @@ func TestRunSessionWithAudioInputRejectsEmptySourceBeforeCommit(t *testing.T) {
 	err := agentruntime.RunSessionWithAudioInput(context.Background(), io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        "synthetic.json",
 		SessionInferencer: inferencer,
-	}, agentruntime.SessionAudioInput{
+	}, agentruntime.RuntimeAudioInput{
 		Path:    "empty.wav",
 		Present: true,
 		Source:  audio.NewSliceSource(nil),
 	})
-	if err == nil || !errors.Is(err, agentruntime.ErrSessionAudioInputEmpty) {
-		t.Fatalf("empty source error = %v, want ErrSessionAudioInputEmpty", err)
+	if err == nil || !errors.Is(err, agentruntime.ErrRuntimeAudioInputEmpty) {
+		t.Fatalf("empty source error = %v, want ErrRuntimeAudioInputEmpty", err)
 	}
 	if !strings.Contains(err.Error(), "no audio frames") {
 		t.Fatalf("empty source error = %v, want an explicit no-frame explanation", err)
@@ -205,15 +205,15 @@ func TestRunSessionWithAudioInputRejectsEmptySourceBeforeCommit(t *testing.T) {
 	}
 }
 
-func TestPrepareSessionAudioInputsRejectsEmptyScheduledFile(t *testing.T) {
+func TestPrepareRuntimeAudioInputsRejectsEmptyScheduledFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "empty.raw")
 	if err := os.WriteFile(path, nil, 0o600); err != nil {
 		t.Fatalf("write empty scheduled audio fixture: %v", err)
 	}
 
-	inputs, err := agentruntime.PrepareSessionAudioInputs([]string{path})
-	if err == nil || !errors.Is(err, agentruntime.ErrSessionAudioInputEmpty) {
-		t.Fatalf("empty scheduled audio = inputs:%v err:%v, want ErrSessionAudioInputEmpty", inputs, err)
+	inputs, err := agentruntime.PrepareRuntimeAudioInputs([]string{path})
+	if err == nil || !errors.Is(err, agentruntime.ErrRuntimeAudioInputEmpty) {
+		t.Fatalf("empty scheduled audio = inputs:%v err:%v, want ErrRuntimeAudioInputEmpty", inputs, err)
 	}
 	if !strings.Contains(err.Error(), "turn 1") || !strings.Contains(err.Error(), "no audio frames") {
 		t.Fatalf("empty scheduled audio error = %v, want turn and no-frame context", err)
@@ -358,7 +358,7 @@ func TestSessionCommandAudioInputConflictUsesOwnerRegisteredDeviceFlag(t *testin
 	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), newInjectedSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}}), nil).Generate()
 	cmd.SetArgs([]string{"--replay", "synthetic.json", "--audio-in", validPath, "--audio-in-device", "virtual:input"})
 	err := cmd.ExecuteContext(context.Background())
-	if !errors.Is(err, agentruntime.ErrSessionAudioInputConflict) {
+	if !errors.Is(err, agentruntime.ErrRuntimeAudioInputConflict) {
 		t.Fatalf("command error = %v, want audio input conflict", err)
 	}
 	if inferencer.connects != 0 || inferencer.frames != 0 {
@@ -453,9 +453,9 @@ func TestSessionCommandAudioInputReadsRawStdin(t *testing.T) {
 	}
 }
 
-// committedSessionAudioInputWAVPath returns the committed non-empty audio
+// committedRuntimeAudioInputWAVPath returns the committed non-empty audio
 // fixture that drives every real-command audio-input replay proof.
-func committedSessionAudioInputWAVPath(t *testing.T) string {
+func committedRuntimeAudioInputWAVPath(t *testing.T) string {
 	t.Helper()
 	_, sourcePath, _, ok := runtime.Caller(0)
 	if !ok {
@@ -464,7 +464,7 @@ func committedSessionAudioInputWAVPath(t *testing.T) string {
 	return filepath.Join(filepath.Dir(sourcePath), "..", "..", "testdata", "session-audio-input", "utterance.wav")
 }
 
-func committedSessionAudioInputStreamCapturePath(t *testing.T) string {
+func committedRuntimeAudioInputStreamCapturePath(t *testing.T) string {
 	t.Helper()
 	_, sourcePath, _, ok := runtime.Caller(0)
 	if !ok {
@@ -473,14 +473,14 @@ func committedSessionAudioInputStreamCapturePath(t *testing.T) string {
 	return filepath.Join(filepath.Dir(sourcePath), "..", "..", "testdata", "session-audio-input", "utterance-stream.session.json")
 }
 
-func committedSessionAudioInputUpdate(record gwtesting.CapturedSessionEvent) gwtesting.CapturedSessionEvent {
+func committedRuntimeAudioInputUpdate(record gwtesting.CapturedSessionEvent) gwtesting.CapturedSessionEvent {
 	record.Payload = json.RawMessage(`{"session":{"model":"gpt-realtime","type":"realtime","audio":{"input":{"format":{"type":"audio/pcm","rate":16000}},"output":{"format":{"type":"audio/pcm","rate":16000}}}},"type":"session.update"}`)
 	return record
 }
 
 func TestSessionCommandAudioInputReplaysCommittedFixture(t *testing.T) {
-	wavPath := committedSessionAudioInputWAVPath(t)
-	capturePath := committedSessionAudioInputStreamCapturePath(t)
+	wavPath := committedRuntimeAudioInputWAVPath(t)
+	capturePath := committedRuntimeAudioInputStreamCapturePath(t)
 
 	// Duration-derived expectations come from the committed WAV's sample
 	// contract, never from runtime-generated samples.
@@ -530,7 +530,7 @@ func TestSessionCommandAudioInputReplaysCommittedFixture(t *testing.T) {
 	if len(baseCapture.Records) < 2 {
 		t.Fatalf("committed replay base fixture has %d records, want session update and created", len(baseCapture.Records))
 	}
-	records := []gwtesting.CapturedSessionEvent{committedSessionAudioInputUpdate(baseCapture.Records[0]), baseCapture.Records[1]}
+	records := []gwtesting.CapturedSessionEvent{committedRuntimeAudioInputUpdate(baseCapture.Records[0]), baseCapture.Records[1]}
 	for frameIndex := range expectedFrames {
 		payload, marshalErr := json.Marshal(map[string]string{
 			"type":  "input_audio_buffer.append",
@@ -637,12 +637,12 @@ func TestSessionCommandAudioInputReplaysCommittedFixture(t *testing.T) {
 // the same inferencer capture.
 func TestSessionCommandWithoutAudioInputDeliversZeroFrames(t *testing.T) {
 	baselineGoroutines := runtime.NumGoroutine()
-	capturePath := committedSessionAudioInputStreamCapturePath(t)
+	capturePath := committedRuntimeAudioInputStreamCapturePath(t)
 	recorded := gwtesting.NewRecordingSessionInferencer(gwtesting.NewReplaySessionInferencer(capturePath))
 	err := agentruntime.RunSessionWithAudioInput(context.Background(), io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        capturePath,
 		SessionInferencer: recorded,
-	}, agentruntime.SessionAudioInput{})
+	}, agentruntime.RuntimeAudioInput{})
 	if err != nil {
 		t.Fatalf("disconnected-hook session error = %v", err)
 	}
@@ -759,7 +759,7 @@ func TestRunSessionWithAudioInputAwaitsSendBeforeNextRead(t *testing.T) {
 		result <- agentruntime.RunSessionWithAudioInput(context.Background(), io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 			ReplayPath:        "synthetic.json",
 			SessionInferencer: signaledInferencer,
-		}, agentruntime.SessionAudioInput{
+		}, agentruntime.RuntimeAudioInput{
 			Path:           "gated.raw",
 			Present:        true,
 			Source:         source,
@@ -904,8 +904,8 @@ func TestRunSessionWithAudioInputRejectsUninterruptibleStdin(t *testing.T) {
 
 	select {
 	case err := <-result:
-		if !errors.Is(err, agentruntime.ErrSessionAudioInputUninterruptible) {
-			t.Fatalf("unsupported stdin error = %v, want ErrSessionAudioInputUninterruptible", err)
+		if !errors.Is(err, agentruntime.ErrRuntimeAudioInputUninterruptible) {
+			t.Fatalf("unsupported stdin error = %v, want ErrRuntimeAudioInputUninterruptible", err)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("unsupported blocking stdin left the session command blocked")
@@ -935,8 +935,8 @@ func TestRunSessionWithAudioInputRejectsFailedDeadlineStdin(t *testing.T) {
 
 	select {
 	case err := <-result:
-		if !errors.Is(err, agentruntime.ErrSessionAudioInputUninterruptible) {
-			t.Fatalf("failed-deadline stdin error = %v, want ErrSessionAudioInputUninterruptible", err)
+		if !errors.Is(err, agentruntime.ErrRuntimeAudioInputUninterruptible) {
+			t.Fatalf("failed-deadline stdin error = %v, want ErrRuntimeAudioInputUninterruptible", err)
 		}
 		if !errors.Is(err, wantDeadlineErr) {
 			t.Fatalf("failed-deadline stdin error = %v, want deadline error", err)
@@ -1001,7 +1001,7 @@ func TestRunSessionWithAudioInputTerminalErrorsCloseSourceExactlyOnce(t *testing
 				result <- agentruntime.RunSessionWithAudioInput(context.Background(), io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 					ReplayPath:        "synthetic.json",
 					SessionInferencer: signaledInferencer,
-				}, agentruntime.SessionAudioInput{
+				}, agentruntime.RuntimeAudioInput{
 					Path:           "test.raw",
 					Present:        true,
 					Source:         tc.source,

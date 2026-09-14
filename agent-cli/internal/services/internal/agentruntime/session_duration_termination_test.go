@@ -1,12 +1,9 @@
 package agentruntime
 
-import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-
 import (
 	"bytes"
 	"context"
 	"errors"
-	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
 	"io"
 	"strings"
 	"sync"
@@ -284,27 +281,11 @@ func TestRunAgentLoopSessionWithDurationTerminalOutcomesAlwaysDrainAcceptedDelta
 		{
 			name: "RTC pump failure",
 			setup: func(f *durationTerminalDrainFixture) func() {
-				registry, err := devicegw.NewVirtualRegistry(devicegw.DefaultVirtualBackendConfig())
-				if err != nil {
-					t.Fatalf("new virtual registry: %v", err)
-				}
-				source, err := devicert.NewRTCDeviceSource(registry, "virtual:input")
-				if err != nil {
-					t.Fatalf("open RTC source: %v", err)
-				}
-				feed, err := devicegw.NewDeviceSink(registry, "virtual:output")
-				if err != nil {
-					_ = source.Close()
-					t.Fatalf("open RTC feed: %v", err)
-				}
-				f.cleanup = append(f.cleanup, func() { _ = feed.Close() })
-				f.options.rtcDeviceBinding = &RTCDeviceBinding{Source: source}
-				f.inferencer.session.media.Outbound = &durationTerminalDrainFailingOutbound{err: pumpErr}
+				deviceErrors := make(chan error, 1)
+				f.options.rtcDeviceBinding = &testRTCBinding{errors: deviceErrors}
 				return func() {
 					f.acceptedOutput()
-					if err := feed.WriteFrame(context.Background(), make([]int16, audio.FrameSize)); err != nil {
-						t.Errorf("write RTC trigger frame: %v", err)
-					}
+					deviceErrors <- pumpErr
 				}
 			},
 			wantErr: pumpErr,

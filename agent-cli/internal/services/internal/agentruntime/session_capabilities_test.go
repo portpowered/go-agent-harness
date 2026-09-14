@@ -3,6 +3,7 @@ package agentruntime
 import (
 	"context"
 	"errors"
+	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"io"
 	"testing"
 )
@@ -47,7 +48,7 @@ func TestSessionDurationPlanClosesTransferredCapabilityOnPreflightExit(t *testin
 			closeCalls++
 			return nil
 		}),
-		rtcDeviceRequest: RTCDeviceBindingRequest{
+		rtcDeviceRequest: runtimedevices.RTCBindingRequest{
 			InputPresent: true,
 		},
 	}

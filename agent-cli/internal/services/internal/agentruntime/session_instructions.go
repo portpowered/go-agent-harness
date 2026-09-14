@@ -159,7 +159,7 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 	if seed.Present {
 		plan.loop.Prompt = nextSessionTextWirePrompt()
 	}
-	audioOut, err := newSessionAudioOutputForPlan(&plan, audioPath, out, nil)
+	audioOut, err := newRuntimeAudioOutputForPlan(&plan, audioPath, out, nil)
 	if err != nil {
 		return fmt.Errorf("--audio-out %q: %w", audioPath, err)
 	}
@@ -178,7 +178,7 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 		if seed.Present {
 			wirePrompt = plan.loop.Prompt
 		}
-		wrapped := newSessionAudioOutputInferencer(plan.inferencer, audioOut, wirePrompt, seed.Value)
+		wrapped := newRuntimeAudioOutputInferencer(plan.inferencer, audioOut, wirePrompt, seed.Value)
 		plan.inferencer = wrapped
 		if maxDuration == 0 {
 			runErr = plan.run(ctx, sessionOut)

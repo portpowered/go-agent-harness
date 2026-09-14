@@ -544,7 +544,7 @@ func TestRunSessionWithRecordingDirectoryUsesProductionAudioInput(t *testing.T) 
 		"",
 		0,
 		SessionTextSeed{},
-		SessionAudioInput{Path: inputPath, Present: true},
+		RuntimeAudioInput{Path: inputPath, Present: true},
 		"",
 	)
 	if err != nil {
@@ -719,7 +719,7 @@ func TestRunSessionWithImagesAndRecordingDirectoryPreservesImageTurn(t *testing.
 			SessionInferencer: inferencer,
 		},
 		ImagePaths: []string{imagePath},
-	}, destination, SessionAudioInput{Path: inputPath, Present: true})
+	}, destination, RuntimeAudioInput{Path: inputPath, Present: true})
 	if err != nil {
 		t.Fatalf("image recording run: %v", err)
 	}
@@ -809,7 +809,7 @@ func TestRunSessionWithRecordingDirectoryUsesRunnerAndPreservesPairedOutput(t *t
 	if err != nil {
 		t.Fatalf("plan unrecorded session: %v", err)
 	}
-	plainSource, err := openSessionAudioInput(SessionAudioInput{Path: inputPath, Present: true})
+	plainSource, err := openRuntimeAudioInput(RuntimeAudioInput{Path: inputPath, Present: true})
 	if err != nil {
 		t.Fatalf("open unrecorded audio input: %v", err)
 	}
@@ -830,7 +830,7 @@ func TestRunSessionWithRecordingDirectoryUsesRunnerAndPreservesPairedOutput(t *t
 		ConfigDir:         t.TempDir(),
 		Prompt:            "paired prompt",
 		SessionInferencer: recordedInferencer,
-	}, destination, "", 0, SessionTextSeed{}, SessionAudioInput{Path: inputPath, Present: true}, ""); err != nil {
+	}, destination, "", 0, SessionTextSeed{}, RuntimeAudioInput{Path: inputPath, Present: true}, ""); err != nil {
 		t.Fatalf("run recorded session: %v", err)
 	}
 	if recordedOutput.String() != plainOutput.String() {
@@ -1008,7 +1008,7 @@ func TestSessionRecordingFlagsRemainIndependentAndComposable(t *testing.T) {
 	directoryOnly := filepath.Join(t.TempDir(), "directory-only")
 	directoryInferencer := newSessionRecordingRunnerInferencerAfterAudioEnd(events)
 	var directoryOutput bytes.Buffer
-	if err := RunSessionWithRecordingDirectoryAndInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(context.Background(), &directoryOutput, baseOptions(directoryInferencer), directoryOnly, "", 0, SessionTextSeed{}, SessionAudioInput{Path: inputPath, Present: true}, ""); err != nil {
+	if err := RunSessionWithRecordingDirectoryAndInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(context.Background(), &directoryOutput, baseOptions(directoryInferencer), directoryOnly, "", 0, SessionTextSeed{}, RuntimeAudioInput{Path: inputPath, Present: true}, ""); err != nil {
 		t.Fatalf("directory-only run: %v", err)
 	}
 
@@ -1021,7 +1021,7 @@ func TestSessionRecordingFlagsRemainIndependentAndComposable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("plan fixture-only run: %v", err)
 	}
-	fixtureSource, err := openSessionAudioInput(SessionAudioInput{Path: inputPath, Present: true})
+	fixtureSource, err := openRuntimeAudioInput(RuntimeAudioInput{Path: inputPath, Present: true})
 	if err != nil {
 		t.Fatalf("open fixture-only audio input: %v", err)
 	}
@@ -1040,7 +1040,7 @@ func TestSessionRecordingFlagsRemainIndependentAndComposable(t *testing.T) {
 	var combinedOutput bytes.Buffer
 	combinedOptions := baseOptions(combinedInferencer)
 	combinedOptions.RecordPath = combinedFixture
-	if err := RunSessionWithRecordingDirectoryAndInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(context.Background(), &combinedOutput, combinedOptions, combinedDirectory, "", 0, SessionTextSeed{}, SessionAudioInput{Path: inputPath, Present: true}, ""); err != nil {
+	if err := RunSessionWithRecordingDirectoryAndInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(context.Background(), &combinedOutput, combinedOptions, combinedDirectory, "", 0, SessionTextSeed{}, RuntimeAudioInput{Path: inputPath, Present: true}, ""); err != nil {
 		t.Fatalf("combined run: %v", err)
 	}
 	if directoryOutput.String() != combinedOutput.String() || fixtureOutput.String() != combinedOutput.String() {

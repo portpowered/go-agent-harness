@@ -182,7 +182,7 @@ func TestFullFixtureStreamsEveryAppendBeforeEndOfTurn(t *testing.T) {
 					filepath.Join(t.TempDir(), "response.wav"),
 					60*time.Second,
 					agentruntime.SessionTextSeed{},
-					agentruntime.SessionAudioInput{
+					agentruntime.RuntimeAudioInput{
 						Path:    wavPath,
 						Present: true,
 					},

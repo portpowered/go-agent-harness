@@ -9,18 +9,19 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
-func TestStreamSessionAudioInputResamples16kHzAtProviderBoundary(t *testing.T) {
+func TestStreamRuntimeAudioInputResamples16kHzAtProviderBoundary(t *testing.T) {
 	samples := make([]int16, audio.FrameSize)
 	for index := range samples {
 		samples[index] = int16(index*11 - 2000)
 	}
 	var captured []byte
 	endOfTurn := false
-	source := &sessionAudioSource{
+	source := &runtimeAudioSource{
 		source:       audio.NewSliceSource(samples),
 		path:         "injected-16k",
 		sourceRate:   wavio.Rate16kHz,
@@ -35,7 +36,7 @@ func TestStreamSessionAudioInputResamples16kHzAtProviderBoundary(t *testing.T) {
 		},
 	}
 
-	if err := streamSessionAudioInput(context.Background(), nil, source); err != nil {
+	if err := streamRuntimeAudioInput(context.Background(), nil, source); err != nil {
 		t.Fatalf("stream input: %v", err)
 	}
 	if !endOfTurn {
@@ -78,17 +79,17 @@ func TestRoomProviderInputPCMResamples16kHzMixerTo24kHzContract(t *testing.T) {
 
 func TestConvertSessionAudioPCMIdentityAndFailures(t *testing.T) {
 	pcm := []byte{1, 2, 3, 4}
-	got, err := convertSessionAudioPCM(pcm, wavio.Rate24kHz, wavio.Rate24kHz)
+	got, err := convertSessionPCM16(pcm, wavio.Rate24kHz, wavio.Rate24kHz)
 	if err != nil {
 		t.Fatalf("identity conversion: %v", err)
 	}
 	if !bytes.Equal(got, pcm) || &got[0] != &pcm[0] {
 		t.Fatal("matched-rate conversion did not preserve byte identity")
 	}
-	if _, err := convertSessionAudioPCM([]byte{1}, wavio.Rate16kHz, wavio.Rate24kHz); !errors.Is(err, ErrSessionAudioPCM16Truncated) {
-		t.Fatalf("truncated PCM error = %v, want ErrSessionAudioPCM16Truncated", err)
+	if _, err := convertSessionPCM16([]byte{1}, wavio.Rate16kHz, wavio.Rate24kHz); !errors.Is(err, audioio.ErrPCM16Truncated) {
+		t.Fatalf("truncated PCM error = %v, want audioio.ErrPCM16Truncated", err)
 	}
-	if _, err := convertSessionAudioPCM(pcm, 22050, wavio.Rate24kHz); !errors.Is(err, wavio.ErrUnsupportedResampleRate) {
+	if _, err := convertSessionPCM16(pcm, 22050, wavio.Rate24kHz); !errors.Is(err, wavio.ErrUnsupportedResampleRate) {
 		t.Fatalf("unsupported rate error = %v, want ErrUnsupportedResampleRate", err)
 	}
 }
@@ -99,7 +100,7 @@ func TestConvertScheduledAudioInputsUsesDeclaredSourceRate(t *testing.T) {
 	for index := range samples {
 		binary.LittleEndian.PutUint16(pcm[index*2:], uint16(index))
 	}
-	converted, err := convertScheduledAudioInputs([]ScheduledAudioInput{{
+	converted, err := convertScheduledInputs([]ScheduledAudioInput{{
 		PCM:              pcm,
 		SourceSampleRate: wavio.Rate16kHz,
 		EndOfTurn:        true,

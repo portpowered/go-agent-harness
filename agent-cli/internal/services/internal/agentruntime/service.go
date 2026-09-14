@@ -15,6 +15,7 @@ import (
 	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	sessiontrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -33,6 +34,7 @@ type Dependencies struct {
 	SessionInferencer messages.SessionInferencer
 	ToolExecutor      messages.ToolExecutor
 	DeviceRegistry    devicegw.DeviceRegistry
+	DeviceService     runtimedevices.Service
 	RuntimeObserver   SessionRuntimeObserver
 	Observability     observability.Dependencies
 	ModelCatalog      runtimeproviders.ModelCatalog
@@ -42,8 +44,8 @@ type Dispatcher struct{ deps Dependencies }
 
 func New(deps Dependencies) *Dispatcher { return &Dispatcher{deps: deps} }
 
-func audioInput(input public.AudioInput) SessionAudioInput {
-	return SessionAudioInput{Path: input.Path, Stdin: input.Stdin, SourceSampleRate: input.SourceSampleRate, CloseStdinOnCancel: input.CloseStdinOnCancel, MaxDuration: input.MaxDuration, Present: input.Present, DevicePresent: input.DevicePresent}
+func audioInput(input public.AudioInput) RuntimeAudioInput {
+	return RuntimeAudioInput{Path: input.Path, Stdin: input.Stdin, SourceSampleRate: input.SourceSampleRate, CloseStdinOnCancel: input.CloseStdinOnCancel, MaxDuration: input.MaxDuration, Present: input.Present, DevicePresent: input.DevicePresent}
 }
 
 func textSeed(seed public.TextSeed) SessionTextSeed {
@@ -183,8 +185,9 @@ func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request)
 		CancellationIntent:   request.CancellationIntent,
 		ToolExecutionTimeout: request.ToolExecutionTimeout, Clock: d.deps.Clock,
 		RuntimeObserver: d.deps.RuntimeObserver, Diagnostics: request.Diagnostics, ToolDiagnostics: request.ToolDiagnostics,
+		DeviceService: d.deps.DeviceService,
 		Observability: d.deps.Observability, StreamObserver: request.StreamObserver,
-		RTCDeviceBinding: RTCDeviceBindingRequest{HoldToneConfig: request.HoldToneConfig, Observability: d.deps.Observability},
+		RTCBinding:       runtimedevices.RTCBindingRequest{HoldToneConfig: request.HoldToneConfig, RemoteEndpoint: request.AudioDeviceServer},
 		AudioInTurnBarge: request.AudioInTurnBarge, ClientOwnsAudioTurnBoundaries: request.ClientOwnsAudioTurnBoundaries,
 		SessionUpdatedTimeout: request.SessionUpdatedTimeout, WaitForClose: request.WaitForClose,
 		runtimeFactory: d.deps.PlanFactory,
@@ -195,23 +198,20 @@ func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request)
 	}
 	// Populate device selection before bare-session preflight so persisted
 	// defaults resolve without acquiring external resources.
-	options.RTCDeviceBinding.InputDevice = devicegw.DeviceID(request.AudioInputDevice)
-	options.RTCDeviceBinding.OutputDevice = devicegw.DeviceID(request.AudioOutputDevice)
-	options.RTCDeviceBinding.InputPresent = request.AudioInputDevicePresent
-	options.RTCDeviceBinding.OutputPresent = request.AudioOutputDevicePresent
-	options.RTCDeviceBinding.FeedbackWarningWriter = request.FeedbackWarningWriter
+	options.RTCBinding.InputDevice = request.AudioInputDevice
+	options.RTCBinding.OutputDevice = request.AudioOutputDevice
+	options.RTCBinding.InputPresent = request.AudioInputDevicePresent
+	options.RTCBinding.OutputPresent = request.AudioOutputDevicePresent
+	options.RTCBinding.FeedbackWarningWriter = request.FeedbackWarningWriter
 	if request.InteractiveDevices {
-		if !options.RTCDeviceBinding.InputPresent && options.RTCDeviceBinding.InputDevice == "" && request.LoadedConfig != nil && request.LoadedConfig.Session != nil {
-			options.RTCDeviceBinding.InputDevice = devicegw.DeviceID(request.LoadedConfig.Session.InputDevice)
+		if !options.RTCBinding.InputPresent && options.RTCBinding.InputDevice == "" && request.LoadedConfig != nil && request.LoadedConfig.Session != nil {
+			options.RTCBinding.InputDevice = request.LoadedConfig.Session.InputDevice
 		}
-		if !options.RTCDeviceBinding.OutputPresent && options.RTCDeviceBinding.OutputDevice == "" && request.LoadedConfig != nil && request.LoadedConfig.Session != nil {
-			options.RTCDeviceBinding.OutputDevice = devicegw.DeviceID(request.LoadedConfig.Session.OutputDevice)
+		if !options.RTCBinding.OutputPresent && options.RTCBinding.OutputDevice == "" && request.LoadedConfig != nil && request.LoadedConfig.Session != nil {
+			options.RTCBinding.OutputDevice = request.LoadedConfig.Session.OutputDevice
 		}
-		options.RTCDeviceBinding.InputPresent = true
-		options.RTCDeviceBinding.OutputPresent = true
-	}
-	if options.RTCDeviceBinding.Registry == nil {
-		options.RTCDeviceBinding.Registry = d.deps.DeviceRegistry
+		options.RTCBinding.InputPresent = true
+		options.RTCBinding.OutputPresent = true
 	}
 	if request.BareLive {
 		var err error
@@ -222,13 +222,6 @@ func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request)
 	}
 	if options.RTCRuntimeFactory == nil {
 		options.RTCRuntimeFactory = d.deps.RuntimeFactory
-	}
-	if request.AudioDeviceServer != "" {
-		registry, err := devicegw.NewRemoteDeviceRegistry(request.AudioDeviceServer)
-		if err != nil {
-			return SessionRunOptions{}, fmt.Errorf("connect audio device server: %w", err)
-		}
-		options.RTCDeviceBinding.Registry = registry
 	}
 	if request.LoadedConfig != nil {
 		options.LoadedConfig = applyToolVisibility(request.LoadedConfig, request.ComputerUse, request.ExperimentalTools, request.NoTerminalTools)
@@ -271,7 +264,7 @@ func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request)
 			}
 			return SessionRunOptions{}, errors.New("--audio-interrupt requires an enabled WebMCP session capability")
 		}
-		inputs, err := PrepareSessionAudioInputs(request.AudioInterrupts)
+		inputs, err := PrepareRuntimeAudioInputs(request.AudioInterrupts)
 		if err != nil {
 			if options.CapabilityClose != nil {
 				_ = options.CapabilityClose()
@@ -365,9 +358,9 @@ func traceCredentials(r *public.Request) []string {
 }
 
 func setTraceBinding(o *SessionRunOptions, b sessiontrace.DeviceBinding) {
-	o.RTCDeviceBinding.PreGateSamplesObserver = devicert.RTCDeviceCaptureSamplesObserver(b.PreGateSamplesObserver)
-	o.RTCDeviceBinding.UploadedSamplesObserver = devicert.RTCDeviceCaptureSamplesObserver(b.UploadedSamplesObserver)
-	o.RTCDeviceBinding.PlaybackSamplesObserver = devicert.RTCDevicePlaybackSamplesObserver(b.PlaybackSamplesObserver)
-	o.RTCDeviceBinding.RenderedSamplesObserver = devicert.RTCDeviceRenderedSamplesObserver(b.RenderedSamplesObserver)
-	o.RTCDeviceBinding.RenderedSamplesUnavailable = b.RenderedSamplesUnavailable
+	o.RTCBinding.PreGateSamplesObserver = devicert.RTCDeviceCaptureSamplesObserver(b.PreGateSamplesObserver)
+	o.RTCBinding.UploadedSamplesObserver = devicert.RTCDeviceCaptureSamplesObserver(b.UploadedSamplesObserver)
+	o.RTCBinding.PlaybackSamplesObserver = devicert.RTCDevicePlaybackSamplesObserver(b.PlaybackSamplesObserver)
+	o.RTCBinding.RenderedSamplesObserver = devicert.RTCDeviceRenderedSamplesObserver(b.RenderedSamplesObserver)
+	o.RTCBinding.RenderedSamplesUnavailable = b.RenderedSamplesUnavailable
 }

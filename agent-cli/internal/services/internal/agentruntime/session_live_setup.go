@@ -28,10 +28,6 @@ func prepareSessionStreamOutput(out io.Writer, opts *sessionLoopOptions) (io.Wri
 }
 
 func newObservedSessionLoop(inferencer messages.SessionInferencer, opts sessionLoopOptions) (*agentloop.AgentLoop, *observedSessionInferencer, <-chan error, error) {
-	inferencer, pumpErrors := bindRTCDeviceSessionInferencer(inferencer, opts.rtcDeviceBinding)
-	if err := ensureRTCDeviceBindingBuffers(opts.rtcDeviceBinding); err != nil {
-		return nil, nil, nil, err
-	}
 	observed := newObservedSessionInferencer(inferencer, opts.runtime)
 	observed.progress = opts.observer
 	if opts.observer != nil {
@@ -42,7 +38,11 @@ func newObservedSessionLoop(inferencer messages.SessionInferencer, opts sessionL
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("create session agent loop: %w", err)
 	}
-	return loop, observed, pumpErrors, nil
+	var deviceErrors <-chan error
+	if opts.rtcDeviceBinding != nil {
+		deviceErrors = opts.rtcDeviceBinding.Errors()
+	}
+	return loop, observed, deviceErrors, nil
 }
 
 func sessionStreamDeadline(opts sessionLoopOptions) (<-chan time.Time, func(), error) {

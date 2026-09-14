@@ -234,7 +234,7 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 		plan.tracker = newRoomConnectTrackingInferencer(plan.inferencer)
 		if usesProductionSessionFactory {
 			if _, injected := opts.SessionInferencers[participant.ID]; !injected {
-				rate, rateErr := resolveSessionAudioSampleRate(sessionOptions, sessionRuntimePlan{
+				rate, rateErr := resolveSessionSampleRate(sessionOptions, sessionRuntimePlan{
 					provider:   effectiveSessionProvider(sessionOptions),
 					inferencer: plan.inferencer,
 				})

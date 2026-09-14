@@ -9,7 +9,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
 
-func TestResolveInputAudioTranscriptionPolicyIsRequestScoped(t *testing.T) {
+func TestSessionInputTranscriptionPolicyIsRequestScoped(t *testing.T) {
 	cases := []struct {
 		name       string
 		provider   string
@@ -52,7 +52,7 @@ func TestResolveInputAudioTranscriptionPolicyIsRequestScoped(t *testing.T) {
 
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			got := resolveInputAudioTranscriptionPolicy(SessionRunOptions{ModelCatalog: testModelCatalog(),
+			got := sessionInputTranscriptionPolicy(SessionRunOptions{ModelCatalog: testModelCatalog(),
 				NoInputTranscription: testCase.noInput,
 				ReplayPath:           testCase.replay,
 			}, testCase.provider, testCase.audioInput)

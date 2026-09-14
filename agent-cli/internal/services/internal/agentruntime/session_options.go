@@ -19,6 +19,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
+	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
@@ -134,6 +135,10 @@ func (e *SessionRuntimeSelectionError) Unwrap() error {
 
 // SessionRunOptions contains the user-facing agent session command options.
 type SessionRunOptions struct {
+	// DeviceService is the injected service-owned RTC/device boundary. The
+	// registry field below remains only for compatibility with older test and
+	// probe paths that do not install the service graph.
+	DeviceService runtimedevices.Service
 	// runtimeFactory is installed by the private service composition root.
 	// It is intentionally unexported so transport requests cannot construct
 	// provider gateways or dialers.
@@ -233,10 +238,9 @@ type SessionRunOptions struct {
 	// MediaSource is the selected opaque external media-source identity. It is
 	// consumed by the WebRTC runtime only; it must remain empty for WebSocket.
 	MediaSource string
-	// RTCDeviceBinding carries optional registry-backed local audio selectors.
-	// The runtime opens these devices only after planning succeeds and before
-	// provider/peer setup begins.
-	RTCDeviceBinding RTCDeviceBindingRequest
+	// RTCBinding carries the public device-service request. The runtime
+	// opens these devices only after planning succeeds and before provider setup.
+	RTCBinding runtimedevices.RTCBindingRequest
 
 	// ToolExecutor optionally injects the composed session tool executor.
 	// When nil, duplex loop construction stays byte-for-byte identical to the
@@ -832,10 +836,7 @@ func NewLiveSessionInferencer(opts SessionRunOptions, instructions string) (mess
 		}
 		model = sessionCfg.Model
 		config = deviceProbeSessionConfig(model, instructions, models.AudioFormatPCM16, models.AudioFormatPCM16)
-		inputAudioTranscription := resolveInputAudioTranscriptionPolicy(opts, providerName, true)
-		if opts.InputAudioTranscription != nil {
-			inputAudioTranscription = *opts.InputAudioTranscription
-		}
+		inputAudioTranscription := sessionInputTranscriptionPolicy(opts, providerName, true)
 		config.InputAudioTranscription = &inputAudioTranscription
 		config.TurnDetection = cloneSessionTurnDetection(opts.TurnDetection)
 		config.Voice = opts.Voice
@@ -862,10 +863,7 @@ func NewLiveSessionInferencer(opts SessionRunOptions, instructions string) (mess
 		model = sessionCfg.Model
 		config = deviceProbeSessionConfig(model, instructions, models.AudioFormatPCM16, models.AudioFormatPCM16)
 		config.TurnDetection = cloneSessionTurnDetection(opts.TurnDetection)
-		inputAudioTranscription := resolveInputAudioTranscriptionPolicy(opts, providerName, true)
-		if opts.InputAudioTranscription != nil {
-			inputAudioTranscription = *opts.InputAudioTranscription
-		}
+		inputAudioTranscription := sessionInputTranscriptionPolicy(opts, providerName, true)
 		config.InputAudioTranscription = &inputAudioTranscription
 		config.Tools = append([]messages.ToolDefinition(nil), opts.ToolDefinitions...)
 		dialer, recorder := resolveSessionWebSocketDialer(opts, providerName, model, func() transport.Dialer { return grok.NewDefaultWebSocketDialer() })

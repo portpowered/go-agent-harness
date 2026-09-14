@@ -9,12 +9,15 @@ package devices
 import (
 	"context"
 	"errors"
+	"io"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
+	selfhearing "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/selfhearing"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
@@ -151,6 +154,50 @@ type Handle interface {
 // inert; registry access and worker startup happen only in Open.
 type Service interface {
 	Open(context.Context, Request) (Handle, error)
+	BindRTC(context.Context, RTCBindingRequest) (RTCBinding, error)
+}
+
+// RTCBindingRequest is the normalized, host-neutral RTC device request. The
+// service owns the registry and all device lifecycle decisions; callers pass
+// only selectors, negotiated rates and observation hooks.
+type RTCBindingRequest struct {
+	Inferencer                 messages.SessionInferencer
+	RemoteEndpoint             string
+	InputDevice                string
+	OutputDevice               string
+	InputPresent               bool
+	OutputPresent              bool
+	SelfHearingConfig          selfhearing.PCM16SelfHearingConfig
+	FeedbackWarningWriter      io.Writer
+	BypassSelfHearing          bool
+	InputSampleRate            int
+	OutputSampleRate           int
+	OutputVoice                string
+	HoldToneConfig             *audio.HoldToneConfig
+	PlaybackObserver           devicert.RTCDevicePlaybackObserver
+	PlaybackReceiptObserver    devicert.RTCDevicePlaybackReceiptObserver
+	PlaybackSamplesObserver    devicert.RTCDevicePlaybackSamplesObserver
+	PreGateSamplesObserver     devicert.RTCDeviceCaptureSamplesObserver
+	UploadedSamplesObserver    devicert.RTCDeviceCaptureSamplesObserver
+	RenderedSamplesObserver    devicert.RTCDeviceRenderedSamplesObserver
+	RenderedSamplesUnavailable func()
+	CaptureObserver            devicert.RTCDeviceCaptureObserver
+}
+
+// RTCBinding owns selected local devices and the provider-facing session
+// decorator. Its public surface intentionally exposes no concrete device or
+// mutable runtime state.
+type RTCBinding interface {
+	Inferencer() messages.SessionInferencer
+	Errors() <-chan error
+	Close() error
+}
+
+// RTCBindingDeviceSelection reports the concrete IDs acquired for enabled
+// directions. It is optional so the lifecycle contract remains usable by
+// bindings that do not expose registry metadata.
+type RTCBindingDeviceSelection interface {
+	SelectedDeviceIDs() (input, output string)
 }
 
 // ProbeRequest is the transport-neutral configuration for a live device

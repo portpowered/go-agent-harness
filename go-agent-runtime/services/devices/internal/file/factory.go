@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
@@ -17,11 +18,14 @@ const defaultProviderSampleRate = 24000
 
 // Factory adapts caller-opened audio ports to the public device service. It is
 // stateless and safe to reuse across invocations.
-type Factory struct{}
+type Factory struct{ audio audioio.Service }
 
-func NewFactory() *Factory { return &Factory{} }
+func NewFactory(service audioio.Service) *Factory { return &Factory{audio: service} }
 
 func (f *Factory) Open(ctx context.Context, request devices.Request) (devices.Handle, error) {
+	if f == nil || f.audio == nil {
+		return nil, fmt.Errorf("%w: audio service is unavailable", devices.ErrUnavailable)
+	}
 	if err := validateRequest(ctx, request); err != nil {
 		return nil, err
 	}
@@ -29,15 +33,19 @@ func (f *Factory) Open(ctx context.Context, request devices.Request) (devices.Ha
 	if err != nil {
 		return nil, err
 	}
-	capture, err := openCapture(request, providerRate)
+	capture, err := f.openCapture(request, providerRate)
 	if err != nil {
 		return nil, err
 	}
-	playback, err := openPlayback(request, providerRate)
+	playback, err := f.openPlayback(request, providerRate)
 	if err != nil {
 		return nil, errors.Join(err, closeCapture(capture))
 	}
 	return newHandle(capture, playback), nil
+}
+
+func (f *Factory) BindRTC(context.Context, devices.RTCBindingRequest) (devices.RTCBinding, error) {
+	return nil, devices.ErrUnavailable
 }
 
 func validateRequest(ctx context.Context, request devices.Request) error {
@@ -90,18 +98,18 @@ func normalizeRequest(request devices.Request) (int, error) {
 	return providerRate, nil
 }
 
-func openCapture(request devices.Request, providerRate int) (*fileCapture, error) {
+func (f *Factory) openCapture(request devices.Request, providerRate int) (*fileCapture, error) {
 	if !request.CaptureEnabled {
 		return nil, nil
 	}
-	return newCapture(*request.FileInput, providerRate)
+	return newCapture(*request.FileInput, providerRate, f.audio)
 }
 
-func openPlayback(request devices.Request, providerRate int) (*filePlayback, error) {
+func (f *Factory) openPlayback(request devices.Request, providerRate int) (*filePlayback, error) {
 	if !request.PlaybackEnabled {
 		return nil, nil
 	}
-	return newPlayback(*request.FileOutput, providerRate)
+	return newPlayback(*request.FileOutput, providerRate, f.audio)
 }
 
 func newHandle(capture *fileCapture, playback *filePlayback) devices.Handle {

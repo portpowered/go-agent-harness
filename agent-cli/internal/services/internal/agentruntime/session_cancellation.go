@@ -19,10 +19,10 @@ func sessionSIGINTErrorOnly(err error) bool {
 		return true
 	}
 
-	// SessionAudioInputError includes a kind sentinel in its Unwrap result.
+	// RuntimeAudioInputError includes a kind sentinel in its Unwrap result.
 	// That sentinel describes the cancelled boundary, not an independent
 	// failure; inspect its underlying error instead.
-	if inputErr, ok := err.(*SessionAudioInputError); ok {
+	if inputErr, ok := err.(*RuntimeAudioInputError); ok {
 		if inputErr == nil || inputErr.Err == nil {
 			return false
 		}
@@ -48,7 +48,7 @@ func sessionSIGINTErrorOnly(err error) bool {
 	switch err {
 	case context.Canceled,
 		ErrSessionAudioResponseIncomplete,
-		ErrSessionAudioInputEndOfTurnLost,
+		ErrRuntimeAudioInputEndOfTurnLost,
 		ErrSessionScheduledAudioIncomplete,
 		ErrSessionUnresolvedToolResults,
 		ErrSessionToolContinuationIncomplete,

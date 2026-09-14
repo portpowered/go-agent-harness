@@ -21,6 +21,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/input"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 var (
@@ -160,14 +161,14 @@ func RunSessionWithImages(ctx context.Context, out io.Writer, opts SessionImageR
 // with the production file/stdin audio source. The image item is queued
 // without a response request; the finite audio source owns the single
 // end-of-turn commit and response boundary.
-func RunSessionWithImagesAndAudioInput(ctx context.Context, out io.Writer, opts SessionImageRunOptions, input SessionAudioInput) (runErr error) {
+func RunSessionWithImagesAndAudioInput(ctx context.Context, out io.Writer, opts SessionImageRunOptions, input RuntimeAudioInput) (runErr error) {
 	var coordinator SessionCapabilityCoordinator
 	opts.SessionRunOptions, coordinator = prepareSessionCapabilityCoordinator(opts.SessionRunOptions)
 	defer func() {
 		closeSessionCapabilityIfNeeded(coordinator, &runErr)
 	}()
 
-	if !sessionAudioInputSelected(input) {
+	if !runtimeAudioInputSelected(input) {
 		return RunSessionWithImages(ctx, out, opts)
 	}
 	paths := append([]string(nil), opts.ImagePaths...)
@@ -177,10 +178,7 @@ func RunSessionWithImagesAndAudioInput(ctx context.Context, out io.Writer, opts 
 	if err := sessioncontract.ValidateSessionMaxDuration(opts.MaxDuration); err != nil {
 		return err
 	}
-	if err := validateSessionRunOptions(opts.SessionRunOptions); err != nil {
-		return err
-	}
-	if err := validateSessionAudioInput(input); err != nil {
+	if err := validateRuntimeAudioInput(input); err != nil {
 		return err
 	}
 	if err := validateSessionRunOptions(opts.SessionRunOptions); err != nil {
@@ -210,7 +208,7 @@ func RunSessionWithImagesAndAudioInput(ctx context.Context, out io.Writer, opts 
 		return err
 	}
 	defer imageCleanup()
-	audioSource, err := openSessionAudioInput(input)
+	audioSource, err := openRuntimeAudioInput(input)
 	if err != nil {
 		return err
 	}
@@ -232,6 +230,7 @@ func RunSessionWithImagesAndAudioInput(ctx context.Context, out io.Writer, opts 
 		return err
 	}
 	plan.loop.CloseAfterOpen = false
+	audioSource.bindRuntimePlan(plan)
 	plan.loop.AudioIn = audioSource
 	plan.loop.MaxDuration = opts.MaxDuration
 	plan.loop.RequireAssistantResponse = true
@@ -301,7 +300,7 @@ func attachSessionImageRuntime(plan sessionRuntimePlan, parts []messages.ImagePa
 }
 func runSessionImagePlan(ctx context.Context, out io.Writer, plan sessionRuntimePlan, opts SessionImageRunOptions, wirePrompt string) (runErr error) {
 	if opts.AudioOutPath != "" {
-		audioOut, err := newSessionAudioOutputForPlan(&plan, opts.AudioOutPath, out, nil)
+		audioOut, err := newRuntimeAudioOutputForPlan(&plan, opts.AudioOutPath, out, nil)
 		if err != nil {
 			return fmt.Errorf("--audio-out %q: %w", opts.AudioOutPath, err)
 		}
@@ -310,7 +309,7 @@ func runSessionImagePlan(ctx context.Context, out io.Writer, plan sessionRuntime
 				runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", opts.AudioOutPath, closeErr))
 			}
 		}()
-		wrapped := newSessionAudioOutputInferencer(plan.inferencer, audioOut, wirePrompt, opts.TextSeed.Value)
+		wrapped := newRuntimeAudioOutputInferencer(plan.inferencer, audioOut, wirePrompt, opts.TextSeed.Value)
 		plan.inferencer = wrapped
 		if opts.AudioOutPath == "-" {
 			out = io.Discard
@@ -606,8 +605,8 @@ func (s *sessionImageSession) signalFirstTurn(sent bool) {
 	s.firstTurn <- fmt.Errorf("%w: provider session rejected image turn", ErrSessionImageSend)
 }
 
-func (s *sessionImageSession) rtcMedia() (RTCMediaEndpoints, bool) {
-	return rtcMediaFromSession(s.Session)
+func (s *sessionImageSession) rtcMedia() (audio.MediaEndpoints, bool) {
+	return sessionMediaFromSession(s.Session)
 }
 
 // SendSessionImageTurn attaches validated parts to one reusable user turn.
