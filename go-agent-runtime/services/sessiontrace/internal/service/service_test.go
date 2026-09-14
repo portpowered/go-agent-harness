@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -30,16 +32,31 @@ func TestPrepareRequiresClockAndNoOpsWhenDisabled(t *testing.T) {
 }
 
 func TestRemoteRenderMonitorStopIsBoundedBeforeFinalPoll(t *testing.T) {
+	requests := make(chan struct{}, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, request *http.Request) {
+		select {
+		case requests <- struct{}{}:
+		default:
+		}
+		<-request.Context().Done()
+	}))
+	defer server.Close()
+
 	monitor := &remoteRenderMonitor{
-		endpoint: "not-an-endpoint",
+		endpoint: strings.TrimPrefix(server.URL, "http://"),
 		observer: func(int, []int16) {},
 		cancel:   func() {},
 		done:     make(chan struct{}),
 	}
 	started := time.Now()
 	monitor.Stop()
-	if elapsed := time.Since(started); elapsed > 2*remoteRenderStopTimeout {
-		t.Fatalf("remote render stop took %s, want at most %s", elapsed, 2*remoteRenderStopTimeout)
+	if elapsed := time.Since(started); elapsed > remoteRenderStopTimeout+50*time.Millisecond {
+		t.Fatalf("remote render stop took %s, want at most %s", elapsed, remoteRenderStopTimeout+50*time.Millisecond)
+	}
+	select {
+	case <-requests:
+		t.Fatal("remote render stop polled after its deadline")
+	default:
 	}
 }
 

@@ -331,14 +331,15 @@ func (m *remoteRenderMonitor) Stop() {
 	if m.cancel != nil {
 		m.cancel()
 	}
-	timer := time.NewTimer(remoteRenderStopTimeout)
-	defer timer.Stop()
+	stopContext, stopCancel := context.WithTimeout(context.Background(), remoteRenderStopTimeout)
+	defer stopCancel()
 	select {
 	case <-m.done:
-	case <-timer.C:
+	case <-stopContext.Done():
+		return
 	}
 	// Capture the final callback before the owning device handle closes. The
-	// poll itself is bounded, so teardown remains bounded even if the remote
-	// endpoint is unavailable.
-	m.poll(context.Background())
+	// poll inherits the same stop deadline, so teardown remains bounded even if
+	// the remote endpoint is unavailable.
+	m.poll(stopContext)
 }
