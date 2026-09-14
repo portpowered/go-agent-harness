@@ -116,6 +116,7 @@ func fromServiceToolCapabilities(capabilities serviceTools.Capabilities) Session
 	}
 	return SessionToolCapabilities{
 		Executor: capabilities.Executor, Definitions: capabilities.Definitions,
+		InteractiveToolPolicy:       capabilities.InteractiveToolPolicy,
 		BrowserCapabilityState:      capabilities.BrowserCapabilityState,
 		DisplayCapability:           capabilities.DisplayCapability,
 		RefreshDefinitions:          capabilities.RefreshDefinitions,
@@ -139,6 +140,7 @@ func (factory SessionToolCapabilitiesFactory) Resolve(cfg *config.Config) (servi
 	}
 	return serviceTools.Capabilities{
 		Executor: capabilities.Executor, Definitions: capabilities.Definitions,
+		InteractiveToolPolicy:       capabilities.InteractiveToolPolicy,
 		BrowserCapabilityState:      capabilities.BrowserCapabilityState,
 		DisplayCapability:           capabilities.DisplayCapability,
 		RefreshDefinitions:          capabilities.RefreshDefinitions,

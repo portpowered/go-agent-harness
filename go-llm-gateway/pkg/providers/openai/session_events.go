@@ -291,7 +291,6 @@ func boundedRealtimeStatusDetail(value string) string {
 	}
 	return value
 }
-
 func realtimeOutboundEvents(msg messages.StreamMessage) ([]models.SessionEvent, bool) {
 	switch msg.Type {
 	case messages.StreamTypeAudioDelta:
@@ -314,17 +313,11 @@ func realtimeOutboundEvents(msg messages.StreamMessage) ([]models.SessionEvent, 
 			models.NewResponseCreateEvent(),
 		}, true
 	case messages.StreamTypeResponseCreate:
-		// Tool-result delivery and response creation are separate boundaries.
-		// The result item is queued first; this control event starts exactly one
-		// grounded continuation without committing a new user-audio turn.
-		// Tool results are delivered as conversation items without a response
-		// request. Audio-only turns have no user text event to trigger the
-		// continuation, so the model runner sends this explicit control event.
-		v, ok := msg.Value.(*messages.ResponseCreateValue)
-		if !ok || v == nil {
-			return nil, false
-		}
-		return []models.SessionEvent{models.NewResponseCreateEventWithInstructions(v.Instructions)}, true
+		// Tool-result delivery and response creation are separate boundaries: the
+		// result item is queued first; this control event starts one grounded
+		// continuation without committing a new user-audio turn. Audio-only turns
+		// have no user text event to trigger the continuation.
+		return realtimeResponseCreateEvents(msg.Value)
 	case messages.StreamTypeTextDelta:
 		v, ok := msg.Value.(*messages.TextDeltaValue)
 		if !ok || v == nil {
@@ -389,7 +382,16 @@ func realtimeOutboundEvents(msg messages.StreamMessage) ([]models.SessionEvent, 
 		return nil, false
 	}
 }
-
+func realtimeResponseCreateEvents(value any) ([]models.SessionEvent, bool) {
+	v, ok := value.(*messages.ResponseCreateValue)
+	if !ok || v == nil {
+		return nil, false
+	}
+	if v.IsToolAcknowledgement() {
+		return []models.SessionEvent{models.NewResponseCreateEventOutOfBandWithInstructions(v.Instructions)}, true
+	}
+	return []models.SessionEvent{models.NewResponseCreateEventWithInstructions(v.Instructions)}, true
+}
 func realtimeAudioBytes(data json.RawMessage) []byte {
 	encoded := firstStringField(data, "delta")
 	if encoded == "" {
@@ -401,7 +403,6 @@ func realtimeAudioBytes(data json.RawMessage) []byte {
 	}
 	return decoded
 }
-
 func realtimeAudioMediaType(data json.RawMessage) string {
 	format := firstStringField(data, "format", "format.type", "audio_format", "response.audio.output.format.type", "response.output_audio_format")
 	switch format {
@@ -415,7 +416,6 @@ func realtimeAudioMediaType(data json.RawMessage) string {
 		return format
 	}
 }
-
 func firstStringField(data json.RawMessage, paths ...string) string {
 	for _, path := range paths {
 		if value := stringField(data, strings.Split(path, ".")); value != "" {
@@ -424,7 +424,6 @@ func firstStringField(data json.RawMessage, paths ...string) string {
 	}
 	return ""
 }
-
 func stringField(data json.RawMessage, path []string) string {
 	if len(data) == 0 || len(path) == 0 {
 		return ""

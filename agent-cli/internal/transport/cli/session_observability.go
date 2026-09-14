@@ -235,6 +235,7 @@ func (c *SessionCommand) runtimeLiveCapabilities(cfg *config.Config) (*runtimeSe
 	binding := &runtimeSession.LiveCapabilities{
 		Executor:               capabilities.Executor,
 		Definitions:            append([]messages.ToolDefinition(nil), capabilities.Definitions...),
+		InteractiveToolPolicy:  capabilities.InteractiveToolPolicy,
 		BrowserCapabilityState: runtimeSession.BrowserCapabilityState(string(capabilities.BrowserCapabilityState)),
 		InheritDefaults:        false,
 		Initialize:             capabilities.Initialize,

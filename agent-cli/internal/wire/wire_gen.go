@@ -334,10 +334,13 @@ func provideFileDeviceService(source Clock) cli.FileDeviceService {
 }
 
 func provideToolCapabilitiesService(override toolServiceOverride, toolExecutor messages.ToolExecutor, browserFactory tools.BrowserFactory, displaySurface tools2.DisplaySurface, runtimeService tools3.Service) tools.Service {
+	var service tools.Service
 	if override.service != nil {
-		return override.service
+		service = override.service
+	} else {
+		service = wire2.NewToolCapabilitiesServiceForWire(toolExecutor, browserFactory, displaySurface, runtimeService)
 	}
-	return wire2.NewToolCapabilitiesServiceForWire(toolExecutor, browserFactory, displaySurface, runtimeService)
+	return newInteractiveToolPolicyService(service)
 }
 
 type defaultRuntimeToolService struct{ service tools3.Service }

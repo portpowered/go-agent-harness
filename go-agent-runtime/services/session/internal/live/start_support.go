@@ -167,7 +167,9 @@ func (h *handle) admitCapabilities(ctx context.Context) (messages.ToolExecutor, 
 	if binding == nil {
 		return executor, definitions, nil
 	}
-	normalizeCapabilityLifecycle(binding)
+	if err := h.validateInteractiveToolPolicyAdmission(binding); err != nil {
+		return nil, nil, closeFailedCapability(binding, err)
+	}
 	if binding.Initialize != nil {
 		if err := binding.Initialize(ctx); err != nil {
 			return nil, nil, closeFailedCapability(binding, fmt.Errorf("initialize live capabilities: %w", err))
@@ -202,18 +204,6 @@ func (h *handle) resolveCapabilityBinding(ctx context.Context) (*session.LiveCap
 		return nil, fmt.Errorf("resolve live capabilities: %w", err)
 	}
 	return &binding, nil
-}
-func normalizeCapabilityLifecycle(binding *session.LiveCapabilities) {
-	if binding.Handle == nil {
-		return
-	}
-	binding.Initialize = binding.Handle.Initialize
-	binding.RefreshDefinitions = binding.Handle.RefreshDefinitions
-	binding.Close = binding.Handle.Close
-	binding.BrowserWatch = nil
-	if watcher, ok := binding.Handle.(session.LiveCapabilityWatcher); ok {
-		binding.BrowserWatch = watcher.BrowserWatch
-	}
 }
 func closeFailedCapability(binding *session.LiveCapabilities, cause error) error {
 	if binding.Close == nil {

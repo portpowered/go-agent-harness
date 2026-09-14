@@ -13,6 +13,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/toolpolicy"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -33,6 +35,26 @@ type retryRequest struct {
 func (h *handle) firstTurnPolicyEnabled() bool {
 	return h != nil && (h.request.RequireFirstTurn || h.request.FirstTurnTimeout > 0)
 }
+
+func (h *handle) validateInteractiveToolPolicyAdmission(binding *session.LiveCapabilities) error {
+	toolpolicy.NormalizeCapabilityLifecycle(binding)
+	if binding.InteractiveToolPolicy == nil {
+		return nil
+	}
+	policy := binding.InteractiveToolPolicy.Clone()
+	if policy == nil {
+		return errors.New("interactive tool policy clone returned nil")
+	}
+	if err := policy.Validate(); err != nil {
+		return fmt.Errorf("validate interactive tool policy: %w", err)
+	}
+	binding.InteractiveToolPolicy = policy
+	if h.scheduler == nil {
+		return fmt.Errorf("%w: request requires a scheduler", session.ErrLiveSchedulerUnavailable)
+	}
+	return nil
+}
+
 func (h *handle) firstTurnTimeout() time.Duration {
 	if h == nil || h.request.FirstTurnTimeout <= 0 {
 		return defaultFirstTurnTimeout
@@ -301,36 +323,11 @@ func parseRateLimitRetryDelay(message string, defaultDelay, maxDelay time.Durati
 	return delay
 }
 
-type timedToolExecutor struct {
-	inner     messages.ToolExecutor
-	scheduler platformclock.Scheduler
-	timeout   time.Duration
-}
-
-func newTimedToolExecutor(inner messages.ToolExecutor, scheduler platformclock.Scheduler, timeout time.Duration) messages.ToolExecutor {
-	if inner == nil || timeout <= 0 {
-		return inner
+func (h *handle) interactiveToolPolicy() runtimeTools.InteractiveToolPolicy {
+	if h == nil || h.request.Capabilities == nil || h.request.Capabilities.InteractiveToolPolicy == nil {
+		return nil
 	}
-	return timedToolExecutor{inner: inner, scheduler: scheduler, timeout: timeout}
-}
-
-func (e timedToolExecutor) Execute(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
-	if err := ctx.Err(); err != nil {
-		return messages.ToolCallResponse{}, err
-	}
-	if e.scheduler == nil {
-		return messages.ToolCallResponse{}, session.ErrLiveSchedulerUnavailable
-	}
-	toolCtx, cancel := e.scheduler.WithTimeout(ctx, e.timeout)
-	defer cancel()
-	response, err := e.inner.Execute(toolCtx, call)
-	if errors.Is(toolCtx.Err(), context.DeadlineExceeded) && !errors.Is(ctx.Err(), context.Canceled) {
-		if err == nil {
-			err = context.DeadlineExceeded
-		}
-		return response, errors.Join(session.ErrLiveToolExecutionTimeout, err)
-	}
-	return response, err
+	return h.request.Capabilities.InteractiveToolPolicy.Clone()
 }
 
 func (h *handle) openingAdmissionRequired() bool {

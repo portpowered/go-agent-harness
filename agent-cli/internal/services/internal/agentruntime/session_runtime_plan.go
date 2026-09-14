@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -17,6 +16,8 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
+	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
@@ -172,7 +173,7 @@ type sessionRuntimePlan struct {
 	capabilityCoordinator  SessionCapabilityCoordinator
 	captureClaim           *sessionRecordingClaim
 	captureClaimWired      bool
-	interactivePolicy      *InteractiveToolPolicy
+	interactivePolicy      runtimeTools.InteractiveToolPolicy
 	filesystemPolicy       *tools.FilesystemPolicy
 }
 
@@ -421,9 +422,8 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	// so its capability snapshot cannot leak across concurrent sessions.
 	plan.loop.ToolExecutor = bindSessionImageToolExecutor(opts, plan)
 	plan.loop.ToolDefinitions = append([]messages.ToolDefinition(nil), opts.ToolDefinitions...)
-	policySnapshot := interactivePolicy.Clone()
-	plan.interactivePolicy = &policySnapshot
-	plan.loop.InteractiveToolPolicy = &policySnapshot
+	plan.interactivePolicy = interactivePolicy.Clone()
+	plan.loop.InteractiveToolPolicy = interactivePolicy.Clone()
 	// The per-invocation adapter deadline override is a hermetic test seam;
 	// zero selects the class-specific policy budget.
 	plan.loop.ToolDefinitionBase = append([]messages.ToolDefinition(nil), opts.ToolDefinitionBase...)
@@ -518,45 +518,27 @@ func wireSessionRecordingClaim(plan sessionRuntimePlan, claim *sessionRecordingC
 	return plan
 }
 
-func resolveSessionInteractiveToolPolicy(opts SessionRunOptions, definitions []messages.ToolDefinition) (InteractiveToolPolicy, error) {
+func resolveSessionInteractiveToolPolicy(opts SessionRunOptions, definitions []messages.ToolDefinition) (runtimeTools.InteractiveToolPolicy, error) {
 	if opts.InteractiveToolPolicy != nil {
 		policy := opts.InteractiveToolPolicy.Clone()
 		if err := policy.Validate(); err != nil {
-			return InteractiveToolPolicy{}, fmt.Errorf("resolve interactive tool policy: %w", err)
+			return nil, fmt.Errorf("resolve interactive tool policy: %w", err)
 		}
 		return policy, nil
 	}
 
-	loadedConfig := opts.LoadedConfig
-	if loadedConfig == nil && opts.ConfigDir != "" {
-		// The CLI composition root supplies LoadedConfig alongside its tool
-		// definitions. Direct service callers may only provide ConfigDir; honor
-		// an existing file there without creating a new config as a planning
-		// side effect. Provider resolution retains ownership of default-file
-		// creation when no file exists.
-		configPath := filepath.Join(opts.ConfigDir, config.ConfigFileName)
-		if _, err := os.Stat(configPath); err == nil {
-			storage, storageErr := config.NewDefaultConfigStorage(opts.ConfigDir)
-			if storageErr != nil {
-				return InteractiveToolPolicy{}, fmt.Errorf("initialize interactive tool configuration: %w", storageErr)
-			}
-			loadedConfig, storageErr = storage.Load()
-			if storageErr != nil {
-				return InteractiveToolPolicy{}, fmt.Errorf("load interactive tool configuration: %w", storageErr)
-			}
-		} else if !os.IsNotExist(err) {
-			return InteractiveToolPolicy{}, fmt.Errorf("inspect interactive tool configuration: %w", err)
-		}
+	// The CLI composition adapter normally supplies the policy alongside the
+	// resolved capability surface. Direct runtime callers without that host
+	// seam still receive the runtime-owned defaults and catalog semantics.
+	policy, err := runtimeToolsWire.NewInteractiveToolPolicy().Resolve(runtimeTools.InteractiveToolPolicyRequest{
+		Definitions:        append([]messages.ToolDefinition(nil), definitions...),
+		BaseDefinitions:    append([]messages.ToolDefinition(nil), opts.ToolDefinitionBase...),
+		DynamicLongRunning: opts.BrowserToolsEnabled,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("resolve interactive tool policy: %w", err)
 	}
-	settings := config.DefaultInteractiveToolConfig()
-	if loadedConfig != nil {
-		resolved, err := loadedConfig.ResolveInteractiveToolConfig()
-		if err != nil {
-			return InteractiveToolPolicy{}, fmt.Errorf("resolve interactive tool policy: %w", err)
-		}
-		settings = resolved
-	}
-	return NewInteractiveToolPolicyForSession(settings, definitions, opts.ToolDefinitionBase, opts.BrowserToolsEnabled)
+	return policy, nil
 }
 
 func planSessionRuntimeMode(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {

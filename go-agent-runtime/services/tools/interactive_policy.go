@@ -20,6 +20,12 @@ const (
 )
 
 const (
+	// InteractiveToolTimeoutClassification is the provider-visible marker for
+	// a class-specific interactive tool deadline. A timed-out call remains a
+	// correlated tool result so the enclosing session can request a grounded
+	// continuation instead of treating the local deadline as a session fault.
+	InteractiveToolTimeoutClassification = "interactive_tool_timeout"
+
 	// DefaultInteractiveFastReadTimeout is the default deadline for a
 	// read-shaped tool in a voice or realtime session.
 	DefaultInteractiveFastReadTimeout = 5 * time.Second

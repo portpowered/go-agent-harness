@@ -14,6 +14,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	audiosubsystem "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems/audio"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -174,9 +175,8 @@ type sessionLoopOptions struct {
 	// session loop. It is paired with ToolExecutor by the runtime planner.
 	ToolDefinitions []messages.ToolDefinition
 
-	// InteractiveToolPolicy is the immutable per-session class and timeout
-	// snapshot paired with ToolDefinitions and ToolExecutor.
-	InteractiveToolPolicy *InteractiveToolPolicy
+	// InteractiveToolPolicy is the immutable per-session class and timeout snapshot paired with ToolDefinitions and ToolExecutor.
+	InteractiveToolPolicy runtimeTools.InteractiveToolPolicy
 	// ToolDefinitionBase is the immutable static and stable broker surface
 	// retained by the dynamic publisher while page definitions change.
 	ToolDefinitionBase []messages.ToolDefinition
@@ -324,9 +324,9 @@ func duplexSessionLoopOptions(observedInferencer messages.SessionInferencer, opt
 		if opts.InteractiveToolPolicy != nil {
 			policy := opts.InteractiveToolPolicy.Clone()
 			loopOpts = append(loopOpts, agentloop.WithToolAcknowledgementPolicy(agentloop.ToolAcknowledgementPolicy{
-				Threshold: policy.AcknowledgementThreshold,
+				Threshold: policy.Settings().AcknowledgementThreshold,
 				IsLongRunning: func(name string) bool {
-					return policy.ClassForTool(name) == InteractiveToolClassBoundedLongRunning
+					return policy.ClassForTool(name) == runtimeTools.InteractiveToolClassBoundedLongRunning
 				},
 			}))
 		}

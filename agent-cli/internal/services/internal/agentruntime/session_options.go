@@ -20,6 +20,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
@@ -209,7 +210,6 @@ type SessionRunOptions struct {
 	// WebRTC without a factory returns an explicit setup error rather than
 	// silently falling back to WebSocket.
 	RTCRuntimeFactory SessionRTCRuntimeFactory
-
 	// Transport selects the live session runtime. Empty preserves the existing
 	// WebSocket default. The value is retained as supplied in the option
 	// contract only long enough for case/space-insensitive validation; plans
@@ -282,11 +282,8 @@ type SessionRunOptions struct {
 	// When present, provider resolution reuses it instead of loading config a
 	// second time during runtime planning.
 	LoadedConfig *config.Config
-	// InteractiveToolPolicy optionally supplies an already-resolved policy
-	// snapshot. When nil, runtime planning resolves one from LoadedConfig, an
-	// existing ConfigDir file, or the documented defaults before provider
-	// construction.
-	InteractiveToolPolicy *InteractiveToolPolicy
+	// InteractiveToolPolicy is the host-resolved runtime snapshot; planning clones it before handing it to the loop and executor. Nil selects public defaults for direct callers without a host adapter.
+	InteractiveToolPolicy runtimeTools.InteractiveToolPolicy
 
 	// CapabilityClose is the optional cleanup hook transferred from the CLI
 	// session capability factory. The service wraps it in one shared

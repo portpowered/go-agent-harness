@@ -212,32 +212,7 @@ func TestScheduledAudioErrorRequiresEveryTurnDispatched(t *testing.T) {
 		t.Fatalf("scheduled audio error = %v, want completed=2 dispatched=1 scheduled=2", err)
 	}
 }
-func TestTimedToolExecutorUsesSchedulerDeadline(t *testing.T) {
-	clock := platformclock.NewDeterministic(time.Unix(600, 0), time.Millisecond)
-	tool := blockingTool{started: make(chan struct{})}
-	executor := newTimedToolExecutor(tool, clock, 9*time.Millisecond)
-	result := make(chan error, 1)
-	go func() {
-		_, err := executor.Execute(context.Background(), messages.ToolCall{ID: "call-1", Name: "slow"})
-		result <- err
-	}()
-	select {
-	case <-tool.started:
-	case <-time.After(time.Second):
-		t.Fatal("tool did not start")
-	}
-	clock.AdvanceBy(9 * time.Millisecond)
-	select {
-	case err := <-result:
-		if !errors.Is(err, session.ErrLiveToolExecutionTimeout) {
-			t.Fatalf("tool error = %v, want ErrLiveToolExecutionTimeout", err)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("timed out waiting for tool deadline")
-	}
-}
 
-type blockingTool struct{ started chan struct{} }
 type observingScheduler struct {
 	platformclock.Scheduler
 	timerCreated chan struct{}
@@ -258,13 +233,6 @@ func (s *testSession) hasType(kind messages.StreamMessageType) bool {
 		}
 	}
 	return false
-}
-func (tool blockingTool) Execute(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
-	if tool.started != nil {
-		close(tool.started)
-	}
-	<-ctx.Done()
-	return messages.ToolCallResponse{ToolCallID: call.ID}, ctx.Err()
 }
 func TestCapabilityAdmissionPreservesCleanupFailures(t *testing.T) {
 	for _, phase := range []string{"initialize", "refresh", "closed"} {

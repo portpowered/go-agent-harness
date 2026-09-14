@@ -3,39 +3,60 @@ package agentruntime
 import (
 	"context"
 	"errors"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
+	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
+func interactiveToolPolicySettings(settings config.InteractiveToolConfig) runtimeTools.InteractiveToolPolicySettings {
+	return runtimeTools.InteractiveToolPolicySettings{
+		FastReadTimeout:          settings.FastReadTimeout,
+		LongRunningTimeout:       settings.LongRunningTimeout,
+		AcknowledgementThreshold: settings.AcknowledgementThreshold,
+	}
+}
+
+func newTestInteractiveToolPolicy(settings config.InteractiveToolConfig, definitions []messages.ToolDefinition) (runtimeTools.InteractiveToolPolicy, error) {
+	return runtimeToolsWire.NewInteractiveToolPolicy().Resolve(runtimeTools.InteractiveToolPolicyRequest{
+		Settings:    interactiveToolPolicySettings(settings),
+		Definitions: append([]messages.ToolDefinition(nil), definitions...),
+	})
+}
+
 func TestInteractiveToolPolicyDefaultsAndClassSelection(t *testing.T) {
-	policy, err := ResolveInteractiveToolPolicy(nil, []messages.ToolDefinition{
+	policy, err := newTestInteractiveToolPolicy(config.DefaultInteractiveToolConfig(), []messages.ToolDefinition{
 		{Name: "read_file"},
 		{Name: "exec"},
 		{Name: "unclassified"},
 	})
 	if err != nil {
-		t.Fatalf("ResolveInteractiveToolPolicy(): %v", err)
+		t.Fatalf("resolve policy: %v", err)
 	}
-	if policy.FastReadTimeout != config.DefaultInteractiveFastReadTimeout || policy.LongRunningTimeout != config.DefaultInteractiveLongRunningTimeout || policy.AcknowledgementThreshold != config.DefaultInteractiveAcknowledgementThreshold {
-		t.Fatalf("policy budgets = %+v, want documented defaults", policy)
+	settings := policy.Settings()
+	wantSettings := runtimeTools.InteractiveToolPolicySettings{
+		FastReadTimeout:          5 * time.Second,
+		LongRunningTimeout:       20 * time.Second,
+		AcknowledgementThreshold: 2 * time.Second,
 	}
-	if got := policy.ClassForTool("read_file"); got != InteractiveToolClassFastRead {
+	if settings != wantSettings {
+		t.Fatalf("policy settings = %+v, want %+v", settings, wantSettings)
+	}
+	if got := policy.ClassForTool("read_file"); got != runtimeTools.InteractiveToolClassFastRead {
 		t.Fatalf("read_file class = %q, want fast/read", got)
 	}
-	if got := policy.ClassForTool("exec"); got != InteractiveToolClassBoundedLongRunning {
+	if got := policy.ClassForTool("exec"); got != runtimeTools.InteractiveToolClassBoundedLongRunning {
 		t.Fatalf("exec class = %q, want bounded-long-running", got)
 	}
-	if got := policy.ClassForTool("unclassified"); got != InteractiveToolClassFastRead {
+	if got := policy.ClassForTool("unclassified"); got != runtimeTools.InteractiveToolClassFastRead {
 		t.Fatalf("unclassified class = %q, want fast/read", got)
 	}
-	if got := policy.ClassForTool("not-advertised"); got != InteractiveToolClassFastRead {
+	if got := policy.ClassForTool("not-advertised"); got != runtimeTools.InteractiveToolClassFastRead {
 		t.Fatalf("unknown class = %q, want fast/read fallback", got)
 	}
 	if policy.TimeoutForTool("read_file") != 5*time.Second || policy.TimeoutForTool("exec") != 20*time.Second || policy.TimeoutForTool("not-advertised") != 5*time.Second {
@@ -49,46 +70,44 @@ func TestInteractiveToolPolicyHonorsOverrides(t *testing.T) {
 		LongRunningTimeout:       15 * time.Second,
 		AcknowledgementThreshold: 1200 * time.Millisecond,
 	}
-	policy, err := NewInteractiveToolPolicy(settings, []messages.ToolDefinition{{Name: "sleep"}})
+	policy, err := newTestInteractiveToolPolicy(settings, []messages.ToolDefinition{{Name: "sleep"}})
 	if err != nil {
-		t.Fatalf("NewInteractiveToolPolicy(): %v", err)
+		t.Fatalf("resolve policy: %v", err)
 	}
-	if policy.FastReadTimeout != 7*time.Second || policy.LongRunningTimeout != 15*time.Second || policy.AcknowledgementThreshold != 1200*time.Millisecond {
-		t.Fatalf("policy = %+v, want explicit settings", policy)
+	if got := policy.Settings(); got != interactiveToolPolicySettings(settings) {
+		t.Fatalf("policy settings = %+v, want explicit settings", got)
 	}
 	if policy.TimeoutForTool("sleep") != 15*time.Second {
 		t.Fatalf("sleep timeout = %s, want long-running override", policy.TimeoutForTool("sleep"))
 	}
 }
 
-func TestInteractiveToolPolicyDirectValueCompatibility(t *testing.T) {
-	var zero InteractiveToolPolicy
-	if got := zero.ClassForTool("exec"); got != InteractiveToolClassFastRead {
-		t.Fatalf("zero class(exec) = %s, want fast/read", got)
+func TestInteractiveToolPolicyCloneAndFactoryInstanceIsolation(t *testing.T) {
+	definitions := []messages.ToolDefinition{{Name: "read_file"}, {Name: "exec"}}
+	factoryA := runtimeToolsWire.NewInteractiveToolPolicy()
+	factoryB := runtimeToolsWire.NewInteractiveToolPolicy()
+	policyA, err := factoryA.Resolve(runtimeTools.InteractiveToolPolicyRequest{Definitions: definitions})
+	if err != nil {
+		t.Fatalf("resolve policy A: %v", err)
 	}
-	if got := zero.TimeoutForTool("exec"); got != 0 {
-		t.Fatalf("zero timeout(exec) = %s, want 0", got)
+	policyB, err := factoryB.Resolve(runtimeTools.InteractiveToolPolicyRequest{Definitions: definitions})
+	if err != nil {
+		t.Fatalf("resolve policy B: %v", err)
 	}
-	if err := zero.Validate(); err == nil || !strings.Contains(err.Error(), "fast_read_timeout") {
-		t.Fatalf("zero Validate() = %v, want fast_read_timeout error", err)
+	clone := policyA.Clone()
+	if clone == nil || clone == policyA {
+		t.Fatal("Clone returned the original or a nil policy")
 	}
-
-	direct := InteractiveToolPolicy{
-		FastReadTimeout:          7 * time.Second,
-		LongRunningTimeout:       15 * time.Second,
-		AcknowledgementThreshold: 1200 * time.Millisecond,
+	if clone.Settings() != policyA.Settings() || policyB.Settings() != policyA.Settings() {
+		t.Fatalf("isolated policy settings differ: clone=%+v A=%+v B=%+v", clone.Settings(), policyA.Settings(), policyB.Settings())
 	}
-	if err := direct.Validate(); err != nil {
-		t.Fatalf("direct Validate() = %v", err)
-	}
-	clone := direct.Clone()
-	if clone.FastReadTimeout != direct.FastReadTimeout || clone.LongRunningTimeout != direct.LongRunningTimeout || clone.AcknowledgementThreshold != direct.AcknowledgementThreshold {
-		t.Fatalf("direct Clone() = %#v, want %#v", clone, direct)
+	if clone.ClassForTool("exec") != runtimeTools.InteractiveToolClassBoundedLongRunning || policyB.ClassForTool("read_file") != runtimeTools.InteractiveToolClassFastRead {
+		t.Fatal("clone or independent factory lost its classification snapshot")
 	}
 }
 
 func TestInteractiveToolExecutorUsesIndependentSessionBudgets(t *testing.T) {
-	policyA, err := NewInteractiveToolPolicy(config.InteractiveToolConfig{
+	policyA, err := newTestInteractiveToolPolicy(config.InteractiveToolConfig{
 		FastReadTimeout:          3 * time.Second,
 		LongRunningTimeout:       11 * time.Second,
 		AcknowledgementThreshold: time.Second,
@@ -96,7 +115,7 @@ func TestInteractiveToolExecutorUsesIndependentSessionBudgets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("policy A: %v", err)
 	}
-	policyB, err := NewInteractiveToolPolicy(config.InteractiveToolConfig{
+	policyB, err := newTestInteractiveToolPolicy(config.InteractiveToolConfig{
 		FastReadTimeout:          7 * time.Second,
 		LongRunningTimeout:       19 * time.Second,
 		AcknowledgementThreshold: 2 * time.Second,
@@ -112,8 +131,8 @@ func TestInteractiveToolExecutorUsesIndependentSessionBudgets(t *testing.T) {
 		}
 		return messages.ToolCallResponse{Content: time.Until(deadline).String()}, nil
 	})
-	executorA := newSessionToolExecutorWithInteractivePolicyAndObserverAndCancellationIntent(inner, &policyA, 0, nil, nil)
-	executorB := newSessionToolExecutorWithInteractivePolicyAndObserverAndCancellationIntent(inner, &policyB, 0, nil, nil)
+	executorA := newSessionToolExecutorWithInteractivePolicyAndObserverAndCancellationIntent(inner, policyA, 0, nil, nil)
+	executorB := newSessionToolExecutorWithInteractivePolicyAndObserverAndCancellationIntent(inner, policyB, 0, nil, nil)
 
 	responseA, err := executorA.Execute(context.Background(), messages.ToolCall{ID: "a", Name: "read_file"})
 	if err != nil {
@@ -143,16 +162,20 @@ func TestPlanSessionRuntimeThreadsResolvedInteractivePolicyBeforeProviderSetup(t
 	settings := config.DefaultInteractiveToolConfig()
 	settings.FastReadTimeout = 4 * time.Second
 	settings.LongRunningTimeout = 18 * time.Second
-	cfg := &config.Config{Tools: config.ToolsConfig{Interactive: settings}}
+	definitions := []messages.ToolDefinition{{Name: "exec"}, {Name: "read_file"}}
+	policy, err := newTestInteractiveToolPolicy(settings, definitions)
+	if err != nil {
+		t.Fatalf("resolve policy: %v", err)
+	}
 
 	plan, err := planSessionRuntime(SessionRunOptions{ModelCatalog: testModelCatalog(),
-		ReplayPath:        "unused.json",
-		LoadedConfig:      cfg,
-		SessionInferencer: stubPlanSessionInferencer{},
+		ReplayPath:            "unused.json",
+		InteractiveToolPolicy: policy,
+		SessionInferencer:     stubPlanSessionInferencer{},
 		ToolExecutor: sessionToolExecutorFunc(func(context.Context, messages.ToolCall) (messages.ToolCallResponse, error) {
 			return messages.ToolCallResponse{}, nil
 		}),
-		ToolDefinitions: []messages.ToolDefinition{{Name: "exec"}, {Name: "read_file"}},
+		ToolDefinitions: definitions,
 	})
 	if err != nil {
 		t.Fatalf("planSessionRuntime: %v", err)
@@ -160,43 +183,30 @@ func TestPlanSessionRuntimeThreadsResolvedInteractivePolicyBeforeProviderSetup(t
 	if plan.interactivePolicy == nil || plan.loop.InteractiveToolPolicy == nil {
 		t.Fatal("plan did not retain the interactive policy snapshot")
 	}
-	if plan.interactivePolicy.FastReadTimeout != 4*time.Second || plan.loop.InteractiveToolPolicy.LongRunningTimeout != 18*time.Second {
-		t.Fatalf("plan policy = %+v, want explicit settings", *plan.interactivePolicy)
+	if plan.interactivePolicy.Settings().FastReadTimeout != 4*time.Second || plan.loop.InteractiveToolPolicy.Settings().LongRunningTimeout != 18*time.Second {
+		t.Fatalf("plan policy settings = %+v/%+v, want explicit settings", plan.interactivePolicy.Settings(), plan.loop.InteractiveToolPolicy.Settings())
 	}
 }
 
-func TestPlanSessionRuntimeLoadsInteractivePolicyFromConfigDir(t *testing.T) {
-	dir := t.TempDir()
-	configPath := filepath.Join(dir, config.ConfigFileName)
-	if err := os.WriteFile(configPath, []byte(`tools:
-  interactive:
-    fast_read_timeout: 6s
-    long_running_timeout: 16s
-    acknowledgement_threshold: 1500ms
-`), 0o600); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
+type invalidInteractiveToolPolicy struct{}
 
-	plan, err := planSessionRuntime(SessionRunOptions{ModelCatalog: testModelCatalog(),
-		ConfigDir:         dir,
-		ReplayPath:        "unused.json",
-		SessionInferencer: stubPlanSessionInferencer{},
-		ToolExecutor: sessionToolExecutorFunc(func(context.Context, messages.ToolCall) (messages.ToolCallResponse, error) {
-			return messages.ToolCallResponse{}, nil
-		}),
-		ToolDefinitions: []messages.ToolDefinition{{Name: "read_file"}},
-	})
-	if err != nil {
-		t.Fatalf("planSessionRuntime: %v", err)
-	}
-	if plan.interactivePolicy == nil || plan.interactivePolicy.FastReadTimeout != 6*time.Second || plan.interactivePolicy.LongRunningTimeout != 16*time.Second || plan.interactivePolicy.AcknowledgementThreshold != 1500*time.Millisecond {
-		t.Fatalf("plan policy = %+v, want ConfigDir policy", plan.interactivePolicy)
-	}
+func (invalidInteractiveToolPolicy) Settings() runtimeTools.InteractiveToolPolicySettings {
+	return runtimeTools.InteractiveToolPolicySettings{}
 }
 
-func TestPlanSessionRuntimeRejectsInvalidInteractiveConfigBeforeProviderSetup(t *testing.T) {
-	settings := config.DefaultInteractiveToolConfig()
-	settings.FastReadTimeout = 10 * time.Second
+func (invalidInteractiveToolPolicy) ClassForTool(string) runtimeTools.InteractiveToolClass {
+	return runtimeTools.InteractiveToolClassFastRead
+}
+
+func (invalidInteractiveToolPolicy) TimeoutForTool(string) time.Duration { return 0 }
+
+func (p invalidInteractiveToolPolicy) Clone() runtimeTools.InteractiveToolPolicy { return p }
+
+func (invalidInteractiveToolPolicy) Validate() error {
+	return errors.New("tools.interactive.fast_read_timeout must be positive and less than 10s; got 0s")
+}
+
+func TestPlanSessionRuntimeRejectsInvalidInteractivePolicyBeforeProviderSetup(t *testing.T) {
 	providerCalls := 0
 	factory := defaultSessionRuntimeFactory
 	factory.newGrokSessionWithTools = func(config.GrokConfig, transport.Dialer, []messages.ToolDefinition) (messages.SessionInferencer, error) {
@@ -205,15 +215,15 @@ func TestPlanSessionRuntimeRejectsInvalidInteractiveConfigBeforeProviderSetup(t 
 	}
 
 	_, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
-		LoadedConfig:    &config.Config{Tools: config.ToolsConfig{Interactive: settings}},
-		Provider:        config.ProviderGrok,
-		RecordPath:      "capture.json",
-		ToolDefinitions: []messages.ToolDefinition{{Name: "read_file"}},
+		InteractiveToolPolicy: invalidInteractiveToolPolicy{},
+		Provider:              config.ProviderGrok,
+		RecordPath:            "capture.json",
+		ToolDefinitions:       []messages.ToolDefinition{{Name: "read_file"}},
 	}, factory)
 	if err == nil || !strings.Contains(err.Error(), "fast_read_timeout") {
 		t.Fatalf("plan error = %v, want fast-read validation", err)
 	}
 	if providerCalls != 0 {
-		t.Fatalf("provider setup calls = %d after invalid config, want zero", providerCalls)
+		t.Fatalf("provider setup calls = %d after invalid policy, want zero", providerCalls)
 	}
 }
