@@ -6,7 +6,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "factory/scripts"))
@@ -16,6 +16,51 @@ launcher = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(launcher)
 
 class FreshBoardTests(unittest.TestCase):
+    def test_configure_go_cache_environment_pins_shared_paths(self):
+        go_cache = self.root / "shared-cache" / "go-build"
+        module_cache = self.root / "shared-cache" / "gomod"
+        environment = launcher.configure_go_cache_environment(
+            self.root,
+            {
+                "PATH": "/usr/bin",
+                "FACTORY_GOCACHE": str(go_cache),
+                "FACTORY_GOMODCACHE": str(module_cache),
+            },
+        )
+
+        self.assertEqual(environment["GOCACHE"], str(go_cache.resolve()))
+        self.assertEqual(environment["FACTORY_GOCACHE"], str(go_cache.resolve()))
+        self.assertEqual(environment["GOMODCACHE"], str(module_cache.resolve()))
+        self.assertEqual(environment["FACTORY_GOMODCACHE"], str(module_cache.resolve()))
+        self.assertNotIn("GOTMPDIR", environment)
+
+    def test_configure_go_cache_environment_rejects_relative_override(self):
+        with self.assertRaisesRegex(launcher.ContractError, "GOCACHE must be an absolute path"):
+            launcher.configure_go_cache_environment(
+                self.root,
+                {
+                    "FACTORY_GOCACHE": "cache/go-build",
+                    "FACTORY_GOMODCACHE": str(self.root / "gomod"),
+                },
+            )
+
+    def test_storage_monitor_uses_pressure_hysteresis_and_common_dir_evidence(self):
+        stopped = MagicMock()
+        stopped.is_set.side_effect = [False, True]
+        with patch.object(launcher.subprocess, "run") as run:
+            launcher.storage_pressure_monitor(
+                self.root,
+                self.common,
+                self.common / "factory-bin/you",
+                stopped,
+            )
+
+        command = run.call_args.args[0]
+        self.assertIn("--pressure-trigger-free-gib", command)
+        self.assertIn("--pressure-target-free-gib", command)
+        self.assertIn(str(self.common / "factory-cleanup/report.json"), command)
+        stopped.wait.assert_called_once_with(launcher.STORAGE_CHECK_INTERVAL_SECONDS)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

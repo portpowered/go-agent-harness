@@ -3,24 +3,24 @@
 The factory restores the delivery shape from before the project-cycle expansion:
 
 ```text
-Astra medium meta-planner -> idea -> Astra medium planner -> isolated workspace
-  -> Luna max implementation -> Luna max independent CI/review/merge -> delivery
-  -> meta-planner -> fresh Luna max runtime probe -> meta-planner assessment
+Sol medium meta-planner -> idea -> Sol medium planner -> isolated workspace
+  -> Luna xhigh implementation -> hermetic functional CI
+  -> Luna xhigh independent review/merge -> delivery -> meta-planner reconciliation
 ```
 
-The meta-planner owns reconciliation and project completion. It wakes after
-vertical delivery, failure or a probe result, and routinely every four hours.
-There is no 15-minute reconciliation cron or separate project leader. Test success
-must be followed by exercising the built program. Failed probes become bounded
-repairs; final acceptance still requires fresh customer and engineering validation
-of all immutable criteria. See operating-policy.md and probe-contract.md.
+The meta-planner owns reconciliation, convergence and project completion. It wakes
+after delivery or failure and routinely every four hours. Every wake measures the
+production files and lines remaining in the legacy agentruntime package, maps active
+work to exact deletions and changes the task mix when that total is not falling.
+A vertical completes after caller cutover, legacy deletion, full functional CI and
+independent review/merge. Final acceptance requires qualitative inspection of the
+integrated architecture and the full functional/architecture suites. See
+operating-policy.md and meta-planner-handoff.md.
 
-One project remains admitted. The graph has the original nine workstations plus
-two probe preparation/execution stations. A serial manager, two worker slots,
-serial merge and serial validation keep ownership bounded. Model profiles remain
-Astra medium for planning and Luna max for execution, review and probes. All
-agent-worker timeouts are four hours; probe missions retain their own bounded
-execution budgets.
+One project remains admitted. Eight shared agent slots cover planning,
+implementation and review/merge; CI is a script gate and consumes no agent slot.
+Model profiles are Sol medium for planning and Luna xhigh for execution and review.
+All agent-worker timeouts are four hours.
 
 The user authorized a fresh board. meta-planner-handoff.md preserves the earlier
 PRs, branches, current dirty work, exact baseline and outstanding failures. Old
