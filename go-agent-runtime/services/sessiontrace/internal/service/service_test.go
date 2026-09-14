@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -26,6 +28,24 @@ func TestPrepareRequiresClockAndNoOpsWhenDisabled(t *testing.T) {
 	}
 	if _, err := service.Prepare(sessiontrace.Request{TraceAudio: true}); !errors.Is(err, sessiontrace.ErrClockRequired) {
 		t.Fatalf("missing clock error = %v", err)
+	}
+}
+
+func TestRemoteRenderMonitorStopIsBoundedBeforeFinalPoll(t *testing.T) {
+	requests := make(chan struct{}, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, request *http.Request) {
+		requests <- struct{}{}
+		<-request.Context().Done()
+	}))
+	defer server.Close()
+	monitor := &remoteRenderMonitor{endpoint: strings.TrimPrefix(server.URL, "http://"), observer: func(int, []int16) {}, cancel: func() {}, done: make(chan struct{})}
+	started := time.Now()
+	monitor.Stop()
+	if elapsed := time.Since(started); elapsed > remoteRenderStopTimeout+50*time.Millisecond {
+		t.Fatalf("remote render stop took %s, want at most %s", elapsed, remoteRenderStopTimeout+50*time.Millisecond)
+	}
+	if len(requests) != 0 {
+		t.Fatal("remote render stop polled after its deadline")
 	}
 }
 
@@ -101,7 +121,6 @@ func TestPrepareReportsStagingDirectoryFailure(t *testing.T) {
 		t.Fatal("staging failure returned nil error")
 	}
 }
-
 func TestPreparedTracePoliciesAndNilDeviceCallbacks(t *testing.T) {
 	prepared, err := New().Prepare(sessiontrace.Request{TraceAudio: true, RecordDirectory: filepath.Join(t.TempDir(), "requested"), Clock: clock.Real{}, CloseTimeout: time.Second})
 	if err != nil {
@@ -126,7 +145,6 @@ func TestPreparedTracePoliciesAndNilDeviceCallbacks(t *testing.T) {
 		t.Fatal(err)
 	}
 }
-
 func TestFinishCloseTimeoutRetainsStagedPath(t *testing.T) {
 	release := make(chan struct{})
 	completion := make(chan struct{})
@@ -172,7 +190,6 @@ func TestFinishCloseTimeoutRetainsStagedPath(t *testing.T) {
 		t.Fatalf("closeTrace calls = %d, want one", closeCalls)
 	}
 }
-
 func TestFinishRetryRetainsCloseCauseAndStagedPath(t *testing.T) {
 	closeCause := errors.New("trace close sentinel")
 	release := make(chan struct{})
@@ -227,7 +244,6 @@ func TestFinishRetryRetainsCloseCauseAndStagedPath(t *testing.T) {
 		t.Fatalf("closeTrace calls = %d, want one", closeCalls)
 	}
 }
-
 func TestFinishRetryHonorsCancellationWhileCloseInFlight(t *testing.T) {
 	release := make(chan struct{})
 	released := make(chan struct{})
@@ -287,7 +303,6 @@ func TestFinishRetryHonorsCancellationWhileCloseInFlight(t *testing.T) {
 		t.Fatalf("closeTrace calls = %d, want one", closeCalls)
 	}
 }
-
 func TestFinishUnpublishedEmptyBundleRetainsCloseCauseAndStagedPath(t *testing.T) {
 	successfulClosePath := t.TempDir()
 	successfulClose := &prepared{
@@ -312,7 +327,6 @@ func TestFinishUnpublishedEmptyBundleRetainsCloseCauseAndStagedPath(t *testing.T
 		t.Fatalf("empty unpublished finish lost staged path: %v", err)
 	}
 }
-
 func TestPreparedCapturesEdgesRedactsAndPublishes(t *testing.T) {
 	root := t.TempDir()
 	prepared, callbackOrder, observed := newCausalTrace(t, root)
