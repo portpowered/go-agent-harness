@@ -24,6 +24,22 @@ type ScheduledAudioInput struct {
 	EndOfTurn           bool
 }
 
+// ScheduledAudioInputs is a defensive-copyable sequence of public scheduling
+// values. The byte payload is copied before asynchronous dispatch.
+type ScheduledAudioInputs []ScheduledAudioInput
+
+func (inputs ScheduledAudioInputs) Clone() ScheduledAudioInputs {
+	if inputs == nil {
+		return nil
+	}
+	clone := make(ScheduledAudioInputs, len(inputs))
+	for index, input := range inputs {
+		clone[index] = input
+		clone[index].PCM = append([]byte(nil), input.PCM...)
+	}
+	return clone
+}
+
 // BrowserConversationScenarioError carries the exact scenario location that
 // prevented admission. Its message intentionally contains no credentials or
 // page payloads.
