@@ -309,6 +309,7 @@ func configureLegacyReplayInput(filePorts *FilePorts, request serviceSession.Req
 }
 
 func liveRunOptions(out io.Writer, request serviceSession.Request, liveRequest runtimeSession.LiveRequest, recorder runtimeSession.LiveRecorder, filePorts *FilePorts, deps Dependencies, traceRun *publicTraceRun) runtimeSession.LiveRunOptions {
+	terminalRenderer := newTerminalEventRenderer(request.ReplayPath != "")
 	deviceService := deps.DeviceService
 	deviceRequest := devicesRequest(request, liveRequest)
 	if filePorts != nil {
@@ -337,7 +338,7 @@ func liveRunOptions(out io.Writer, request serviceSession.Request, liveRequest r
 		CaptureCompleteControls: captureCompleteControls(request, deps.CaptureComplete),
 		Events: runtimeSession.LiveEventSinkFunc(func(eventContext context.Context, event runtimeSession.LiveEvent) error {
 			eventOut := outputWriter(request, out)
-			if err := renderTerminalEvent(eventContext, eventOut, request.ReplayPath != "", event); err != nil {
+			if err := renderTerminalEventWithRenderer(eventContext, eventOut, terminalRenderer, event); err != nil {
 				return err
 			}
 			if request.StreamObserver != nil && event.Message != nil {

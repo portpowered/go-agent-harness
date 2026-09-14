@@ -358,9 +358,6 @@ func (r *terminalReporter) publish(out io.Writer, runErr error) error {
 		r.mu.Unlock()
 		return nil
 	}
-	if sessionErrorHasIndependentFailure(runErr) {
-		r.outcome.fatalError = errors.Join(r.outcome.fatalError, runErr)
-	}
 	candidate, replayComplete := r.reconcileLocked(runErr)
 	fatalError := r.outcome.fatalError
 	r.mu.Unlock()
@@ -375,7 +372,7 @@ func (r *terminalReporter) publish(out io.Writer, runErr error) error {
 
 func (r *terminalReporter) reconcileLocked(runErr error) (*sessionTerminalCandidate, bool) {
 	o := &r.outcome
-	if o.fatalError != nil {
+	if o.fatalError != nil || sessionErrorHasIndependentFailure(runErr) {
 		return r.reconcileFailure(o)
 	}
 	if o.replayComplete {
