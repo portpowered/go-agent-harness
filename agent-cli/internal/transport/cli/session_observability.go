@@ -169,7 +169,7 @@ func (c *SessionCommand) runRuntimeLiveSessionWithAnnouncements(ctx context.Cont
 		// belong on stderr and stdout must remain byte-clean.
 		announcementOut = out
 	}
-	return adaptLiveRuntimeCompatibility(livehost.Run(ctx, out, request, livehost.Dependencies{
+	return livehost.AdaptLiveTerminalError(livehost.Run(ctx, out, request, livehost.Dependencies{
 		LiveService:        c.liveService,
 		ReplayInspection:   replayInspection,
 		BuildRequest:       c.runtimeLiveRequest,
@@ -184,19 +184,6 @@ func (c *SessionCommand) runRuntimeLiveSessionWithAnnouncements(ctx context.Cont
 		CredentialValues: runtimeLiveCredentialValues,
 		TraceService:     c.fileDeviceService.TraceService,
 	}))
-}
-
-func adaptLiveRuntimeCompatibility(err error) error {
-	if err == nil {
-		return nil
-	}
-	var unresolved *runtimeSession.LiveUnresolvedToolResultsError
-	if !errors.As(err, &unresolved) {
-		return err
-	}
-	return errors.Join(err, &serviceSession.SessionUnresolvedToolResultsError{
-		CallIDs: unresolved.UnresolvedCallIDs(),
-	})
 }
 
 func (c *SessionCommand) runtimeLiveRequest(ctx context.Context, request serviceSession.Request, replayInspection *runtimeReplay.CaptureInspection) (runtimeSession.LiveRequest, error) {
