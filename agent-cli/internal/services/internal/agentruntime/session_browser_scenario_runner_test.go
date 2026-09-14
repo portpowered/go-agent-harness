@@ -189,7 +189,17 @@ func TestRunBrowserConversationDefaultRunnerUsesSharedDuplexAudioPath(t *testing
 
 func TestRunBrowserConversationInterruptsInFlightWorkAndPreservesDetachedTab(t *testing.T) {
 	scenario := browserConversationInterruptScenario()
-	inferencer := &browserConversationInterruptInferencer{toolRef: browserConversationRunnerToolRef()}
+	// The fake provider waits for the runner's semantic cancellation observer
+	// before publishing its late response, making the pre-repair race a direct
+	// channel handoff rather than a scheduler or timer outcome.
+	cancellationObserved := make(chan struct{})
+	lateEventInduced := make(chan struct{})
+	var cancellationOnce sync.Once
+	inferencer := &browserConversationInterruptInferencer{
+		toolRef:              browserConversationRunnerToolRef(),
+		cancellationObserved: cancellationObserved,
+		lateEventInduced:     lateEventInduced,
+	}
 	result, err := RunBrowserConversation(context.Background(), nil, BrowserConversationRunOptions{
 		Scenario: scenario,
 		AudioByStep: map[string][]byte{
@@ -211,7 +221,18 @@ func TestRunBrowserConversationInterruptsInFlightWorkAndPreservesDetachedTab(t *
 			json.RawMessage(`{"value":true}`),
 			json.RawMessage(`{"value":true}`),
 		}},
-		SessionOptions: SessionRunOptions{ModelCatalog: testModelCatalog(), SessionInferencer: inferencer},
+		SessionOptions: SessionRunOptions{
+			ModelCatalog:      testModelCatalog(),
+			SessionInferencer: inferencer,
+			StreamObserver: func(message messages.StreamMessage) {
+				switch value := message.Value.(type) {
+				case *messages.TranscriptEndValue:
+					if value != nil && value.FullText == "cancel the session" {
+						cancellationOnce.Do(func() { close(cancellationObserved) })
+					}
+				}
+			},
+		},
 	})
 	if err == nil || !errors.Is(err, ErrBrowserConversationSession) {
 		t.Fatalf("RunBrowserConversation error = %v, want expected canceled session error", err)
@@ -244,6 +265,11 @@ func TestRunBrowserConversationInterruptsInFlightWorkAndPreservesDetachedTab(t *
 	inferencer.mu.Unlock()
 	if !bytes.Equal(audio, []byte{1, 2, 3, 4}) {
 		t.Fatalf("shared session audio = %v, want initial/in-flight/overlap/cancel audio", audio)
+	}
+	select {
+	case <-lateEventInduced:
+	default:
+		t.Fatal("late event was not induced after cancellation publication")
 	}
 }
 
@@ -345,9 +371,11 @@ func browserConversationInterruptScript() testkit.BrowserScript {
 }
 
 type browserConversationInterruptInferencer struct {
-	mu      sync.Mutex
-	toolRef webmcp.ToolRef
-	audio   []byte
+	mu                   sync.Mutex
+	toolRef              webmcp.ToolRef
+	audio                []byte
+	cancellationObserved <-chan struct{}
+	lateEventInduced     chan<- struct{}
 }
 
 func (i *browserConversationInterruptInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
@@ -411,8 +439,24 @@ func (s *browserConversationInterruptSession) Send(ctx context.Context, message 
 		case 3:
 			return s.write(ctx, messages.StreamMessage{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleUser, Value: messages.NewTranscriptEndValue("stop that request")})
 		case 4:
-			return s.write(ctx,
-				messages.StreamMessage{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleUser, Value: messages.NewTranscriptEndValue("cancel the session")},
+			if !s.write(ctx, messages.StreamMessage{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleUser, Value: messages.NewTranscriptEndValue("cancel the session")}) {
+				return false
+			}
+			if s.owner != nil && s.owner.cancellationObserved != nil {
+				go func() {
+					<-s.owner.cancellationObserved
+					if s.owner.lateEventInduced != nil {
+						close(s.owner.lateEventInduced)
+					}
+					_ = s.write(context.Background(),
+						messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
+						messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("late response")},
+						messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+					)
+				}()
+				return true
+			}
+			return s.write(context.Background(),
 				messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
 				messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("late response")},
 				messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},

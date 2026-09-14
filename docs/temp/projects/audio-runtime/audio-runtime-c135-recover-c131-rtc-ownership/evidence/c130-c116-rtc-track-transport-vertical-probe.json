@@ -1,0 +1,78 @@
+{
+  "project": "audio-runtime",
+  "contractRevision": "audio-runtime-v1",
+  "scope": "vertical",
+  "role": "engineering",
+  "validationWorkId": "batch-audio-runtime-c130-c116-rtc-track-transport-vertical-probe-20260913T111026Z-audio-runtime-c130-c116-rtc-track-transport-vertical-probe",
+  "build": {
+    "identity": "c116-merged-yui-071b0abf",
+    "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c130-c116-rtc-track-transport-vertical-probe/artifact-0",
+    "sha256": "6378acacc904f1f1f4a079ab6e9b18f7117edb53a1e57056d73f3d79845baab5"
+  },
+  "vertical": "audio-runtime-c116-centralize-rtc-track-transport",
+  "sourceRevision": "071b0abfd67501db61e3c1929971c6dd6e77eb62",
+  "fixtures": [
+    {
+      "identity": "source-071b0abfd67501db61e3c1929971c6dd6e77eb62",
+      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c130-c116-rtc-track-transport-vertical-probe/artifact-1.gz",
+      "sha256": "5c45978a386557fed60c9c4d8d000589de79730ed0028b82042657e91f5af48a"
+    },
+    {
+      "identity": "c07-audio-tool-traced.session.json",
+      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c130-c116-rtc-track-transport-vertical-probe/artifact-2.json",
+      "sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169"
+    },
+    {
+      "identity": "c07-interruption-no-close.session.json",
+      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c130-c116-rtc-track-transport-vertical-probe/artifact-3.json",
+      "sha256": "154477d4086c47f707441e19489dfa1a21d493475b4163e64a2833dca3f17206"
+    }
+  ],
+  "criteria": {
+    "AUDIO": {
+      "verdict": "FAIL",
+      "evidence": "Procedure: Ran the staged executable's public replay and the exact source's GOWORK=off race/causal transport tests; the runtime race suite and focused inbound/outbound, invalid RTP, PLC, ownership and lifecycle tests exited 0. Audited sourceRevision 071b0abfd67501db61e3c1929971c6dd6e77eb62 at its exact Git object. Observed: the new rtctransport service owns and passes RTP parsing, continuity, sample timing, resampling, framing, pacing, queue/lifecycle, caller-buffer ownership and typed-error tests. Residual: go-llm-gateway/pkg/transport/rtc/track_in.go still contains packet validation, resampling and mutable continuity state, while track_out.go still contains resampling, RTP packetization, pacing and mutable sequence/timestamp state. This violates single ownership and decision-free-adapter requirements. The exact files are 268+247=515 production lines, not the required 503. No physical/acoustic or C64 high-rate completion claim is made."
+    },
+    "DEVICE": {
+      "verdict": "PASS",
+      "evidence": "Procedure: Ran the archived bounded runner's device-probe-software and c21-consumption-replay cases, and inspected the staged tool and interruption records. Observed: the software device probe passed 6 tests and C21 callback consumption passed 3 tests; the staged record contains PCM output and a speaker-enqueued WAV, while directory replay explicitly reports Recorded render audio: false and render tap unavailable: false. Timeline entries identify speaker_enqueued software admission and clean recording closure, distinguishing queue/PCM receipt from software callback and physical consumption. Limitation: native Windows endpoints and physical/acoustic consumption are explicitly out of scope under the admitted amendment and are not claimed as PASS; this verdict is limited to the C116 software boundary."
+    },
+    "EMBED": {
+      "verdict": "PASS",
+      "evidence": "Procedure: In the archived standalone external consumer, ran env GOWORK=off go test -race ./... -count=1 -timeout=180s. Observed: exit 0, ok audio-runtime-c116-rtc-transport-consumer 1.180s; the separate go.mod/test imports runtime rtctransport/wire, go-audio and Pion without CLI packages, flags, terminal state or hidden CLI initialization. The tests exercised inbound one-frame ownership and outbound RTP/ownership/cancellation/overflow/close/error behavior. Limitation: this is fresh evidence for the C116 public module seam, not a claim about every broader project embedding."
+    },
+    "SERVICE": {
+      "verdict": "FAIL",
+      "evidence": "Procedure: Inspected the complete public rtctransport contract, private service implementation and generated Wire construction; ran the source module-boundary and focused inbound/outbound causal verifiers (each exited 0), plus the public standalone consumer. Observed: the service contract is thin, typed errors are explicit, implementation is under services/rtctransport/internal, Wire NewService constructs the private service, and the main CLI composition uses the service-owned track. Residual: the exact source still ships gateway track_in.go/track_out.go compatibility implementations with independent validation/resampling/packetization/pacing and mutable state, with no Deprecated: markers; the gateway reduction is 515 lines rather than 503. Therefore the required thin, decision-free, no-mutable-state adapter condition is not satisfied even though the new service tests pass. Smallest correction is to remove the duplicate gateway policy/state and leave only explicit Deprecated: thin aliases/adapters, then remeasure and rerun this public probe."
+    },
+    "TRACE": {
+      "verdict": "PASS",
+      "evidence": "Procedure: Launched the exact staged executable from the probe workdir with --config-dir, --workdir, --allow-path, session --replay artifact-2.json, --record-dir, --trace-audio, --audio-out and --wait-for-close. Observed: exit 0; PROBE_TOOL_MARKER_9182, ordered tool call/result, strict replay continuation and provider_close/session closed were printed. The 26-line audio timeline records 24 kHz 20 ms speaker_enqueued frames with ordered sample offsets; provider wire send/receive entries are marked clean and recording_closed is clean. record/audio/out-000.pcm is 4800 bytes, rendered.pcm is 3200 bytes, speaker-enqueued.wav is 4844 bytes, and manifest artifact hashes match. The interruption run also ended with a clean recording_closed timeline. Limitation: speaker_enqueued/file-sink evidence is software tracing, not physical speaker capture or acoustic proof; no C64/C127 residual is claimed."
+    },
+    "REPLAY": {
+      "verdict": "PASS",
+      "evidence": "Procedure: Replayed both supplied credential-free fixtures through the same staged executable and then ran directory replay verification. Tool fixture exited 0 with the literal marker and continuation; record replay verified 18 wire events and 1 tool call. Provider audio is 4800 bytes with sha256 0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502, rendered PCM is 3200 bytes with sha256 7d2d8221eb8ec0be3da4a3ed518e1e183aa56e4ac0140ca0cf761068555805, and the manifest/provider hash matches fixture sha256 38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169. Interruption fixture exited 0 with replay_complete; first output was truncated to 1440 bytes followed by a healthy 2400-byte continuation (tail sha256 16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf), and directory replay verified 15 wire events and 0 tool calls. No credentials or live Realtime were used. Limitation: external network, hardware and acoustics remain unproven."
+    },
+    "FAILURES": {
+      "verdict": "PASS",
+      "evidence": "Procedure: Ran the standalone consumer under -race, runtime and gateway RTC race suites, verbose causal transport tests, the archived bounded runner, and the staged interruption replay. Observed: exit-0 coverage includes wrong RTP version/payload/SSRC/timestamp, impossible sample progress, duplicate/late/gap PLC behavior, aliased resampler storage, partial frames, serialized concurrent writes, pacer/encoder/writer errors, cancellation, overflow, terminal failure with blocked readers, and idempotent close; the interruption fixture reproduced first-output truncation followed by healthy playback. Limitation: no claim is made that C116 fixes long-conversation/high-rate C64 behavior, physical barge-in/acoustics or every tool-collision scenario; the C64/current-main high-rate residual is explicitly preserved for C127."
+    },
+    "QUALITY": {
+      "verdict": "FAIL",
+      "evidence": "Procedure: Verified staged hashes before and after execution; ran compile/test and race checks for runtime, gateway RTC and the external consumer; ran module-boundary, inbound/outbound causal, software-device, external-media and C21 checks; inspected generated Wire and mutable-global patterns. Observed: all executed compile/race/test checks passed, generated Wire is consistent, and runtime service code has no mutable global state. Residual: the exact source's gateway adapters retain independent transport policy/state and lack explicit Deprecated: markers; exact gateway count is 515 instead of the required 503. This is an architecture-boundary and migration-quality failure despite passing behavioral tests. Final process recheck found no artifact-0 or probe-process survivors."
+    },
+    "PARITY": {
+      "verdict": "PASS",
+      "evidence": "Procedure: Ran staged artifact --help (exit 0), the required public tool replay, the supplied interruption regression, and archived external-media, software-device and C21 workflows; rechecked process-group cleanup with no matching survivors. Observed: supported in-scope CLI/public software workflows preserved tool continuation, interruption recovery, clean terminal output and clean shutdown. The staged descriptor remained unchanged at sha256 6378acacc904f1f1f4a079ab6e9b18f7117edb53a1e57056d73f3d79845baab5 throughout. Limitation: this vertical mission had realtimeSeconds/realtimeSessions 0 and did not use credentials or Realtime; physical-device/acoustic evidence is out of scope, and separate customer and project-control engineering evidence remain required for whole-project completion."
+    }
+  },
+  "limitations": [
+    "This is an engineering vertical result only; it does not complete the audio-runtime project or substitute for the separate customer and project-control checks.",
+    "Native Windows hardware/endpoints and physical acoustic proof are out of scope and were not claimed.",
+    "No credentials or live Realtime session were used; the mission budget for Realtime was zero.",
+    "The C64/current-main high-rate terminal-drain residual remains open for C127."
+  ],
+  "decision": "FAILED",
+  "feedback": "FAILED: the staged artifact and required public software workflows pass, but the C116 single-ownership/adapter gate does not. At sourceRevision 071b0abfd67501db61e3c1929971c6dd6e77eb62, go-llm-gateway/pkg/transport/rtc/track_in.go and track_out.go still contain duplicate RTP/audio policy and mutable continuity/packetization/pacing state, have no explicit Deprecated: markers, and measure 515 production lines rather than the required 503. Smallest correction: migrate/remove that duplicate policy and state, leaving explicit Deprecated: thin aliases/adapters only; remeasure the gateway at 503 and rerun the exact staged public tool/interruption workflows, standalone consumer, causal/race checks and hash/process checks."
+}
+

@@ -350,19 +350,13 @@ func testInboundPacketValidation(t *testing.T) {
 	decoder := &compatibilityInboundDecoder{samples: make([]int16, 960)}
 	source := &compatibilityInboundSource{reads: []compatibilityInboundRead{{packet: validPacket}, {packet: compatibilityInboundPacket(11, 1060, 21, 111)}}}
 	track := newCompatibilityInboundTrack(t, source, decoder, InboundTrackConfig{})
-	if _, err := track.ReadFrame(context.Background()); err != nil {
-		t.Fatalf("first packet = %v", err)
-	}
 	if _, err := track.ReadFrame(context.Background()); !errors.Is(err, ErrInvalidInboundRTPPacket) {
-		t.Fatalf("identity change = %v, want packet identity", err)
+		t.Fatalf("identity change in ingested stream = %v, want packet identity", err)
 	}
 	source = &compatibilityInboundSource{reads: []compatibilityInboundRead{{packet: validPacket}, {packet: compatibilityInboundPacket(12, 1060, 20, 111)}}}
 	track = newCompatibilityInboundTrack(t, source, decoder, InboundTrackConfig{})
-	if _, err := track.ReadFrame(context.Background()); err != nil {
-		t.Fatalf("first packet for progress = %v", err)
-	}
 	if _, err := track.ReadFrame(context.Background()); !errors.Is(err, ErrImpossibleRTPProgress) {
-		t.Fatalf("progress change = %v, want impossible progress", err)
+		t.Fatalf("progress change in ingested stream = %v, want impossible progress", err)
 	}
 }
 

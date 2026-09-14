@@ -1,10 +1,9 @@
-package service
+package rtctransport
 
 import (
 	"fmt"
 
 	"github.com/pion/rtp"
-	rtctransport "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rtctransport"
 )
 
 const (
@@ -55,7 +54,7 @@ func validateRTPVersion(packet *rtp.Packet) error {
 	if packet.Version == 2 {
 		return nil
 	}
-	return inboundTrackError(rtctransport.ErrInvalidInboundRTPPacket, "packet", fmt.Errorf("version %d: want RTP version 2", packet.Version))
+	return inboundTrackError(ErrInvalidInboundRTPPacket, "packet", fmt.Errorf("version %d: want RTP version 2", packet.Version))
 }
 
 func (s *inboundPlayout) initialize(packet *rtp.Packet) {
@@ -70,14 +69,14 @@ func (s *inboundPlayout) isObsolete(extended int64) bool {
 
 func (s *inboundPlayout) validatePacket(packet *rtp.Packet, extended int64) error {
 	if packet.SSRC != s.ssrc {
-		return inboundTrackError(rtctransport.ErrInvalidInboundRTPPacket, "packet", fmt.Errorf("SSRC %d changed within one audio track", packet.SSRC))
+		return inboundTrackError(ErrInvalidInboundRTPPacket, "packet", fmt.Errorf("SSRC %d changed within one audio track", packet.SSRC))
 	}
 	if packet.PayloadType != s.payloadType {
-		return inboundTrackError(rtctransport.ErrInvalidInboundRTPPacket, "packet", fmt.Errorf("payload type %d changed within one audio track", packet.PayloadType))
+		return inboundTrackError(ErrInvalidInboundRTPPacket, "packet", fmt.Errorf("payload type %d changed within one audio track", packet.PayloadType))
 	}
 	expected := s.expectedTimestamp(extended)
 	if packet.Timestamp != expected {
-		return inboundTrackError(rtctransport.ErrImpossibleRTPProgress, "RTP progress", fmt.Errorf("sequence %d timestamp %d: want %d", packet.SequenceNumber, packet.Timestamp, expected))
+		return inboundTrackError(ErrImpossibleRTPProgress, "RTP progress", fmt.Errorf("sequence %d timestamp %d: want %d", packet.SequenceNumber, packet.Timestamp, expected))
 	}
 	return nil
 }
@@ -110,7 +109,7 @@ func (s *inboundPlayout) validateInitialWindow(packet *rtp.Packet, extended int6
 }
 
 func impossibleProgress(packet *rtp.Packet, reason string) error {
-	return inboundTrackError(rtctransport.ErrImpossibleRTPProgress, "RTP progress", fmt.Errorf("sequence %d %s", packet.SequenceNumber, reason))
+	return inboundTrackError(ErrImpossibleRTPProgress, "RTP progress", fmt.Errorf("sequence %d %s", packet.SequenceNumber, reason))
 }
 
 func (s *inboundPlayout) tick() error {
@@ -163,26 +162,26 @@ func (s *inboundPlayout) emitNext() error {
 func (s *inboundPlayout) decode(payload []byte, plc bool) ([]int16, error) {
 	samples, err := decodeInboundFrame(s.track.decoder, payload, plc)
 	if err != nil {
-		return nil, inboundTrackError(rtctransport.ErrInboundTrackDecode, "decode", err)
+		return nil, inboundTrackError(ErrInboundTrackDecode, "decode", err)
 	}
 	if len(samples) != s.track.config.codecSamples {
-		return nil, inboundTrackError(rtctransport.ErrInboundTrackFrame, "decode", fmt.Errorf("got %d samples, want %d", len(samples), s.track.config.codecSamples))
+		return nil, inboundTrackError(ErrInboundTrackFrame, "decode", fmt.Errorf("got %d samples, want %d", len(samples), s.track.config.codecSamples))
 	}
 	owned := append([]int16(nil), samples...)
-	if s.track.config.rate == rtctransport.CodecSampleRate {
+	if s.track.config.rate == CodecSampleRate {
 		return owned, nil
 	}
-	resampled, err := s.track.config.resample(owned, rtctransport.CodecSampleRate, s.track.config.rate)
+	resampled, err := s.track.config.resample(owned, CodecSampleRate, s.track.config.rate)
 	if err != nil {
-		return nil, inboundTrackError(rtctransport.ErrInboundTrackResample, "resample", err)
+		return nil, inboundTrackError(ErrInboundTrackResample, "resample", err)
 	}
 	if len(resampled) != s.track.config.outputSamples {
-		return nil, inboundTrackError(rtctransport.ErrInboundTrackFrame, "resample", fmt.Errorf("got %d samples, want %d", len(resampled), s.track.config.outputSamples))
+		return nil, inboundTrackError(ErrInboundTrackFrame, "resample", fmt.Errorf("got %d samples, want %d", len(resampled), s.track.config.outputSamples))
 	}
 	return append([]int16(nil), resampled...), nil
 }
 
-func decodeInboundFrame(decoder rtctransport.OpusDecoder, payload []byte, plc bool) ([]int16, error) {
+func decodeInboundFrame(decoder OpusDecoder, payload []byte, plc bool) ([]int16, error) {
 	if plc {
 		return decoder.DecodePLC()
 	}
@@ -193,12 +192,12 @@ func (s *inboundPlayout) expectedTimestamp(sequence int64) uint32 {
 	return uint32(int64(s.baseTimestamp) + (sequence-s.baseSeq)*int64(s.track.config.codecSamples))
 }
 
-func inboundTrackError(kind error, operation string, err error) *rtctransport.InboundTrackError {
-	return &rtctransport.InboundTrackError{Operation: operation, Kind: kind, Err: err}
+func inboundTrackError(kind error, operation string, err error) *InboundTrackError {
+	return &InboundTrackError{Operation: operation, Kind: kind, Err: err}
 }
 
 func inboundConfigError(field string, observed any, reason string) error {
-	return inboundTrackError(rtctransport.ErrInvalidInboundTrackConfig, "configuration", fmt.Errorf("%s: got %v (%s)", field, observed, reason))
+	return inboundTrackError(ErrInvalidInboundTrackConfig, "configuration", fmt.Errorf("%s: got %v (%s)", field, observed, reason))
 }
 
 func unwrapSequence(sequence uint16, reference int64) int64 {
