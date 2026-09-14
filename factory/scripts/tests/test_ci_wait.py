@@ -306,10 +306,8 @@ class CIWaitTests(unittest.TestCase):
             (
                 "CI (static)",
                 "CI (unit)",
-                "CI (integration)",
                 "CI (coverage)",
                 "CI (race)",
-                "CI (hermetic)",
                 "CI (WebMCP Chrome)",
                 "CI (macOS audio release)",
             ),
