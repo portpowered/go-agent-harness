@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 )
 
 func (r *sessionDirectoryRecording) RecordTerminalSummary(summary transcript.RecordingTerminalSummary) error {
@@ -42,17 +43,18 @@ func (r *sessionDirectoryRecording) setTerminalSummaryLocked(summary transcript.
 	}
 	return fmt.Errorf("conflicting terminal summary: existing=%+v received=%+v", *r.terminal, summary)
 }
-
 func (r *sessionDirectoryRecording) Finalize() error {
 	r.finalizeOnce.Do(func() {
 		defer r.cleanupSpool()
-		if r.browser != nil {
-			r.browser.stop()
-		}
 		var browserArtifact *transcript.BrowserArtifact
-		var browserErr error
+		browserErr := r.browserErr
 		if r.browser != nil {
-			browserArtifact, browserErr = r.browser.artifact()
+			browserErr = errors.Join(browserErr, r.browser.Close())
+			snapshot, snapshotErr := r.browser.Snapshot()
+			browserErr = errors.Join(browserErr, snapshotErr)
+			if browserErr == nil {
+				browserArtifact = snapshot.Artifact
+			}
 		}
 		r.eventMu.Lock()
 		defer r.eventMu.Unlock()
@@ -61,13 +63,7 @@ func (r *sessionDirectoryRecording) Finalize() error {
 		if closeErr := r.closeSpoolLocked(); closeErr != nil {
 			r.latchRecordErrLocked(closeErr)
 		}
-		latchedRecordErr := r.recordErr
-		if browserErr != nil {
-			latchedRecordErr = errors.Join(
-				latchedRecordErr,
-				recordingDestinationError(transcript.ErrRecordingWrite, "finalize browser events", r.destination, browserErr),
-			)
-		}
+		latchedRecordErr := errors.Join(r.recordErr, browserErr)
 		if r.directoryClaim != nil {
 			if claimErr := r.directoryClaim.owns(); claimErr != nil {
 				r.finalizeErr = recordingDestinationError(transcript.ErrRecordingDestination, "verify destination claim", r.destination, claimErr)
