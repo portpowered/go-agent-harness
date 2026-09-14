@@ -67,6 +67,10 @@ jobs:
         if: always()
         run: make wire-check
 
+      - name: Verify CI test partition
+        if: always()
+        run: make check-ci-test-partition
+
       - name: Verify service architecture and size budgets
         if: always()
         run: make architecture-size-check
@@ -121,10 +125,6 @@ jobs:
         if: always()
         run: make build
 
-      - name: Verify independent runtime embedding
-        if: always()
-        run: make embed-check
-
       - name: Verify standalone checkout dependency graph
         if: always()
         working-directory: agent-cli
@@ -137,12 +137,11 @@ jobs:
           test "$(go list -m -f '{{.Replace.Dir}}' github.com/portpowered/go-agent-harness/go-llm-gateway)" = "$(cd ../go-llm-gateway && pwd)"
           go build -o "$RUNNER_TEMP/yui-standalone" ./cmd/yui
 
-  # The long pole: deterministic integration tests plus committed
-  # replay/fixture regression tests. Kept as its own job (not split further)
-  # so both suites stay on one runner together rather than adding more
-  # concurrent load-sensitive test processes across additional runners.
-  integration:
-    name: CI (integration)
+  # The Linux package corpus has one owner: coverage. agent-cli is isolated
+  # because its deterministic integration and replay tests are the long pole;
+  # the other modules and embedding consumer run concurrently on one runner.
+  coverage-agent-cli:
+    name: CI (coverage agent-cli)
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -166,26 +165,74 @@ jobs:
             tools/architecturegate/go.sum
             tests/embedding/go.sum
 
-      - name: Run deterministic integration tests
-        if: always()
-        run: make test-integration
+      - name: Run hermetic agent-cli tests with coverage
+        run: make coverage-ci-agent-cli
 
-      - name: Run production-binary audio-device replay integration
-        if: always()
-        run: make test-audio-device-server-integration
+      - name: Upload agent-cli coverage profile
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-agent-cli
+          path: coverage/agent-cli.out
+          if-no-files-found: error
+          retention-days: 1
 
-      - name: Run committed replay and fixture regression tests
-        if: always()
-        run: make test-regressions
+  coverage-libraries:
+    name: CI (coverage libraries)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
 
-  # Per-module coverage profiles plus the coverage gate. No analyzer
-  # binaries needed.
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.7"
+          cache: true
+          cache-dependency-path: |
+            go.work.sum
+            agent-cli/go.sum
+            go-agent-loop/go.sum
+            go-llm-gateway/go.sum
+            go-audio/go.sum
+            go-device-gateway/go.sum
+            go-agent-runtime/go.sum
+            tools/architecturegate/go.sum
+            tests/embedding/go.sum
+
+      - name: Run hermetic library and embedding tests with coverage
+        run: make coverage-ci-libraries
+
+      - name: Upload library coverage profiles
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-libraries
+          path: coverage/*.out
+          if-no-files-found: error
+          retention-days: 1
+
+  # Preserve the existing required-check name while aggregating the two
+  # disjoint profile shards. `always()` ensures a failed shard reports this
+  # check as failed rather than leaving it skipped.
   coverage:
     name: CI (coverage)
+    needs:
+      - coverage-agent-cli
+      - coverage-libraries
+    if: always()
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
 
     steps:
+      - name: Verify coverage shards completed
+        env:
+          AGENT_CLI_RESULT: ${{ needs.coverage-agent-cli.result }}
+          LIBRARIES_RESULT: ${{ needs.coverage-libraries.result }}
+        run: |
+          test "$AGENT_CLI_RESULT" = success
+          test "$LIBRARIES_RESULT" = success
+
       - name: Check out repository
         uses: actions/checkout@v4
 
@@ -205,8 +252,15 @@ jobs:
             tools/architecturegate/go.sum
             tests/embedding/go.sum
 
-      - name: Run coverage profiles and coverage gate
-        run: make coverage
+      - name: Download coverage profiles
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-*
+          path: coverage
+          merge-multiple: true
+
+      - name: Run coverage gate
+        run: make coverage-gate
 
   # Focused race-detector acceptance tests. Kept together on one runner
   # (rather than split further) to avoid adding more concurrent
@@ -248,38 +302,10 @@ jobs:
         if: always()
         run: make test-sessions-race
 
-  hermetic:
-    name: CI (hermetic)
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: "1.26.7"
-          cache: true
-          cache-dependency-path: |
-            go.work.sum
-            agent-cli/go.sum
-            go-agent-loop/go.sum
-            go-llm-gateway/go.sum
-            go-audio/go.sum
-            go-device-gateway/go.sum
-            go-agent-runtime/go.sum
-            tools/architecturegate/go.sum
-            tests/embedding/go.sum
-
-      - name: Run hermetic test pipeline
-        run: make test-hermetic
-
   webmcp-chrome:
     name: CI (WebMCP Chrome)
     # The locked WebMCP Chrome artifact is mac-arm64. Keep this behavioral
-    # check required alongside the hermetic jobs so skipped opt-in coverage
+    # check required alongside hermetic coverage so skipped opt-in coverage
     # cannot make a pull request appear complete.
     runs-on: macos-14
     timeout-minutes: 20
