@@ -5,17 +5,19 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 )
 
 const SchemaVersion = 1
 
 // ParticipantKind identifies who owns a room participant's conversation and
 // media lifecycle. Customer is accepted as a compatibility spelling for human at the document boundary.
-type ParticipantKind string
+type ParticipantKind = roomreplay.ParticipantKind
 
 const (
-	ParticipantKindAgent    ParticipantKind = "agent"
-	ParticipantKindHuman    ParticipantKind = "human"
+	ParticipantKindAgent    ParticipantKind = roomreplay.ParticipantKindAgent
+	ParticipantKindHuman    ParticipantKind = roomreplay.ParticipantKindHuman
 	ParticipantKindCustomer ParticipantKind = "customer"
 )
 
@@ -31,9 +33,6 @@ func (ParticipantKindNormalizer) Normalize(kind ParticipantKind) ParticipantKind
 	default:
 		return normalized
 	}
-}
-func normalizeParticipantKind(kind ParticipantKind) ParticipantKind {
-	return ParticipantKindNormalizer{}.Normalize(kind)
 }
 
 // Manifest is the normalized, credential-free room configuration. API keys never enter this value; APIKeyEnv is only an environment variable name.
@@ -257,7 +256,7 @@ func validateParticipant(index int, participant Participant, option ValidationOp
 			return err
 		}
 	}
-	kind := normalizeParticipantKind(participant.Kind)
+	kind := (ParticipantKindNormalizer{}).Normalize(participant.Kind)
 	if kind != ParticipantKindAgent && kind != ParticipantKindHuman {
 		return validation(field("kind"), string(participant.Kind), "must be agent or human", ErrUnknownParticipantKind)
 	}
@@ -373,7 +372,7 @@ func validEnvironmentNamePart(value byte) bool {
 func validateRoomHasOpener(participants []Participant) error {
 	hasHuman, hasOpener := false, false
 	for _, participant := range participants {
-		if normalizeParticipantKind(participant.Kind) == ParticipantKindHuman {
+		if (ParticipantKindNormalizer{}).Normalize(participant.Kind) == ParticipantKindHuman {
 			hasHuman = true
 		}
 		if strings.TrimSpace(participant.OpeningPrompt) != "" {

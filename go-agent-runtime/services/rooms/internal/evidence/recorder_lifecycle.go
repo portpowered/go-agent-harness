@@ -90,8 +90,9 @@ func (r *Recorder) closeTimeline() {
 }
 
 func (r *Recorder) resolveEndTime(endedAt time.Time) time.Time {
-	if endedAt.IsZero() {
-		return r.clock.Now()
+	now := r.clock.Now()
+	if endedAt.IsZero() || now.After(endedAt) {
+		return now
 	}
 	return endedAt
 }
