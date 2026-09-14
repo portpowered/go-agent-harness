@@ -7,8 +7,8 @@ Room JSON/YAML decoding, normalization, browser policy validation, credential-na
 ## Candidate
 
 - Same admitted task and PR: `audio-runtime-c54-room-document-admission`, #445.
-- Candidate merge: `49266d2bf44bea734f647d88941e1578919f000f`.
-- Required startup `8bdafc7f947a3a2c9856220abdc539437035bd21`, predecessor baseline `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`, and fetched/current `origin/main=904e1f4c3be6c1e629138632573bd2fb55d50938` are ancestors.
+- Candidate checkpoint: `cc740a131a0763a6325f20bb3d34195494fc6700`, integrating the accepted current mainline.
+- Required startup `8bdafc7f947a3a2c9856220abdc539437035bd21`, predecessor baseline `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`, and fetched/current `origin/main=d5d6f84363d8569d5dc1a59985f8d45cf50e1d06` are ancestors.
 - Generated `go-agent-runtime/services/rooms/wire/wire_gen.go` is unchanged.
 
 ## Validation
@@ -18,10 +18,10 @@ Room JSON/YAML decoding, normalization, browser policy validation, credential-na
 - Direct `go-agent-runtime/services/rooms/wire` coverage is 100%.
 - `make fmt`, `make wire-check`, `make coverage-registration`, focused room vet, and `git diff --check` pass.
 - Public runtime files remain within the immutable 400-line budget.
-- The clean pre-merge C54 evidence bundle passed all 10 bounded cases and final provenance verification at `00e5c46`.
+- The exact merged-head C54 runner passed all 10 bounded cases at `cc740a13`, including the external GOWORK=off consumer and its four mutation oracles, shipped YUI room admission, credential-free audio/tool replay, focused normal/race controls, and bounded timeout/output cleanup. Refreshed `verification-summary.json` and `provenance.json` bind the candidate to `cc740a13` and `origin/main=d5d6f843`.
 
-## Known external gate
+## Current handoff
 
-After the required current-main merge, the accumulated C54 runner reaches the unowned C47 package and fails `TestProductionWebMCPCLISelectsListedCompositeReference` in `agent-cli/internal/transport/cli`: the selected target does not provide WebMCP. `make architecture-size-check` independently reports the same current-main baseline drift, `agent-cli/internal/transport/cli` 148 lines versus baseline 147. These C47 paths and the baseline are preserved unchanged in this C54 candidate; the exact prior CI metadata is recorded under `docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/ci/` from run `34617011922`.
+The accepted mainline already contains the reviewed C47/C54/C55 composition and its transport, lifecycle, and architecture repairs. The merged candidate passes `make verify-architecture`, `make size-check`, `make coverage-registration`, C54 source formatting, focused room vet, and the accumulated session/replay regression matrix in normal, coverage, and race modes at `COUNT=3`. No script-CI result, independent review of this evidence-only successor, guarded merge of PR #445, vertical acceptance, or project-wide completion is claimed here.
 
-The next action is for the C47 owner to repair composite target selection and reconcile the baseline after an actual reduction, then rerun the script CI gate for this same C54 task. No CI success, independent review acceptance, merge, or project-wide completion is claimed here.
+The next action is to push this exact refreshed candidate to PR #445 and submit the same admitted task to the script CI gate without polling. Any exact current-head rejection remains with this task; later immutable executable probing and scoped acceptance remain primary-owned.

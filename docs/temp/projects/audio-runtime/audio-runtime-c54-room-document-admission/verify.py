@@ -108,6 +108,7 @@ def check_scope(provenance: dict[str, Any], final: bool) -> None:
     require(ancestor(BASELINE_REVISION, candidate), "candidate does not preserve required predecessor ancestry")
     origin = provenance.get("fresh_fetch_origin_main_revision")
     require(isinstance(origin, str) and ancestor(BASE_REVISION, origin), "freshly fetched origin/main is not a recorded baseline descendant")
+    require(ancestor(origin, head), "final HEAD does not contain the freshly fetched origin/main revision")
     require(provenance.get("source_tree_status") == "", "candidate source tree was not clean when evidence ran")
     require(provenance.get("ancestry") == {"base": True, "integration": True, "baseline": True}, "recorded ancestry is incomplete")
     scope = provenance.get("scope", {})
@@ -128,7 +129,7 @@ def check_scope(provenance: dict[str, Any], final: bool) -> None:
         "docs/architecture/architecture-size-baseline.json",
     }
     evidence_prefix = "docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/"
-    changed = [line for line in git("diff", f"{BASE_REVISION}...{head}", "--name-only").splitlines() if line]
+    changed = [line for line in git("diff", f"{origin}...{head}", "--name-only").splitlines() if line]
     require(changed, "candidate diff is empty")
     require(all(path in owned or path.startswith(evidence_prefix) for path in changed), f"candidate diff escaped admitted ownership: {changed}")
     require("go-agent-runtime/services/rooms/wire/wire_gen.go" not in changed, "generated room wire is in the candidate diff")
