@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	roomEvidenceCLI "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/roomevidence"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -24,6 +26,7 @@ type roomRunPlans struct {
 	launchPlan runtimeRooms.RoomLaunchPlan
 	replayPlan runtimeRooms.RoomReplayPlan
 	manifest   runtimeRooms.Manifest
+	secrets    []string
 }
 
 func (c *RoomRunCommand) resolveRoomRunPlans(configPath, manifestPath, replayPath string) (roomRunPlans, error) {
@@ -49,7 +52,36 @@ func (c *RoomRunCommand) resolveRoomRunPlans(configPath, manifestPath, replayPat
 		return roomRunPlans{}, err
 	}
 	plans.manifest = plans.launchPlan.Manifest
+	plans.secrets = roomCredentialSecrets(plans)
 	return plans, nil
+}
+
+func roomCredentialSecrets(plans roomRunPlans) []string {
+	seen := make(map[string]struct{})
+	secrets := make([]string, 0, len(plans.manifest.Participants)+1)
+	add := func(value string) {
+		if strings.TrimSpace(value) == "" {
+			return
+		}
+		if _, ok := seen[value]; ok {
+			return
+		}
+		seen[value] = struct{}{}
+		secrets = append(secrets, value)
+	}
+	for _, participant := range plans.manifest.Participants {
+		if value, ok := os.LookupEnv(participant.APIKeyEnv); ok {
+			add(value)
+		}
+	}
+	if plans.launchPlan.Mode == runtimeRooms.RoomLaunchModeBare {
+		if storage, err := config.NewDefaultConfigStorage(plans.launchPlan.ConfigDir); err == nil {
+			if loaded, err := storage.Load(); err == nil && loaded != nil && loaded.Model.OpenAI != nil {
+				add(loaded.Model.OpenAI.APIKey)
+			}
+		}
+	}
+	return secrets
 }
 
 func (c *RoomRunCommand) resolveRoomOutput(plans roomRunPlans, requested string, explicit bool) (string, error) {
@@ -73,11 +105,11 @@ func validateRoomOutput(service runtimeRooms.Service, plans roomRunPlans, output
 		return nil
 	}
 	if plans.replayMode {
-		if err := service.ValidateReplayOutput(plans.replayPlan, outputDir); err != nil {
+		if err := roomEvidenceCLI.ValidateReplayOutput(service, plans.replayPlan, outputDir); err != nil {
 			return fmt.Errorf("validate --out %q: %w", outputDir, err)
 		}
 	}
-	if err := service.ValidateEvidenceOutput(outputDir); err != nil {
+	if err := roomEvidenceCLI.ValidateOutput(service, outputDir); err != nil {
 		return fmt.Errorf("validate --out %q: %w", outputDir, err)
 	}
 	return nil

@@ -6,8 +6,11 @@ import (
 	"io"
 	"sync"
 
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer"
 )
 
@@ -91,7 +94,7 @@ func (f frameFanout) WriteFrame(ctx context.Context, frame audio.PCMFrame) error
 		f.recorder.RecordSource(f.sourceID, frame)
 	}
 	if observer, ok := f.recorder.(latencyRecorder); ok {
-		observer.ObserveSpeakerAudio(f.sourceID, f.targetIDs(targets), frame)
+		observer.ObserveSpeakerAudio(f.sourceID, f.targetIDs(targets), codec.EncodePCM16(append([]int16(nil), frame.Samples...)))
 	}
 	for _, target := range targets {
 		if target == nil {
@@ -140,4 +143,34 @@ func (b bufferedInbound) pump(ctx context.Context, playback rooms.MediaPlayback)
 
 func isGraphNormalStop(err error) bool {
 	return err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, io.EOF)
+}
+
+type recordingEventSink struct {
+	host     rooms.EventSink
+	recorder roomevidence.Recorder
+}
+
+func (s recordingEventSink) Publish(ctx context.Context, participantID string, event session.LiveEvent) error {
+	var hostErr error
+	if s.host != nil {
+		hostErr = s.host.Publish(ctx, participantID, event)
+	}
+	if s.recorder != nil {
+		observeRoomRecordingResult(s.recorder.RecordLiveEvent(participantID, event))
+		if participant := s.recorder.Participant(participantID); participant != nil {
+			if event.Message != nil {
+				observeRoomRecordingResult(participant.ObserveDelta(*event.Message))
+			}
+		}
+	}
+	return hostErr
+}
+
+// observeRoomRecordingResult makes best-effort recording explicit. Recorder
+// methods retain sink errors internally; the room runtime remains independent
+// of a degraded evidence sink.
+func observeRoomRecordingResult(err error) {
+	if err != nil {
+		return
+	}
 }

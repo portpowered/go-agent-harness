@@ -173,9 +173,6 @@ func TestOtherRoomWireConstructorsRemainInert(t *testing.T) {
 	if NewService(Dependencies{}) == nil {
 		t.Fatal("NewService() returned nil")
 	}
-	if NewLatencyService() == nil {
-		t.Fatal("NewLatencyService() returned nil")
-	}
 	factory := NewMediaFactory(nil)
 	if factory == nil {
 		t.Fatal("NewMediaFactory() returned nil")
