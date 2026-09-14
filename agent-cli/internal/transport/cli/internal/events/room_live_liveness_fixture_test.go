@@ -18,6 +18,7 @@ import (
 	runtimeRoomWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	runtimeSessionWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -116,7 +117,7 @@ func (f *roomLiveLivenessFixture) liveService(t *testing.T) session.LiveService 
 			f.factoryReady <- struct{}{}
 			return roomLiveInferencer{session: participant}, nil
 		},
-		Clock: f.clock.Now, Scheduler: f.clock,
+		Clock: f.clock.Now, Scheduler: f.clock, DurationService: durationwire.NewService(),
 	})
 }
 

@@ -1,4 +1,4 @@
-package agentruntime
+package service
 
 import (
 	"context"
@@ -11,32 +11,21 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
-// SessionDurationArtifactLifecycle receives the stream messages that crossed
-// the duration admission boundary and owns their finalization. Callers can
-// attach the existing audio/transcript resources through the context without
-// making the CLI responsible for session cleanup.
-type SessionDurationArtifactLifecycle interface {
-	Accept(messages.StreamMessage) error
-	Flush() error
-	Close() error
-}
-
+// Artifact lifecycle implementation for the sessionduration service.
 // sessionDurationTerminalRecorder receives normalized terminal metadata that
 // the duration controller emits. It is deliberately separate from the raw
 // artifact lifecycle: a recording directory needs the controller-owned
 // summary, but must not be given a fabricated provider frame.
-type sessionDurationTerminalRecorder interface {
-	RecordTerminalSummary(transcript.RecordingTerminalSummary) error
+type sessionDurationArtifactLifecycleWithTerminal struct {
+	artifacts sessionduration.ArtifactLifecycle
+	recorder  sessionduration.TerminalRecorder
 }
 
-type sessionDurationArtifactLifecycleWithTerminal struct {
-	artifacts SessionDurationArtifactLifecycle
-	recorder  sessionDurationTerminalRecorder
-}
+const sessionDurationArtifactFileMode = 0o644
 
 func (a *sessionDurationArtifactLifecycleWithTerminal) Accept(msg messages.StreamMessage) error {
 	if a == nil {
@@ -50,7 +39,7 @@ func (a *sessionDurationArtifactLifecycleWithTerminal) Accept(msg messages.Strea
 	if a.recorder == nil || msg.Type != messages.StreamTypeSessionClose {
 		return nil
 	}
-	summary, present, err := recordingTerminalSummaryFromMessage(msg)
+	summary, present, err := RecordingTerminalSummaryFromMessage(msg)
 	if err != nil {
 		return err
 	}
@@ -60,7 +49,7 @@ func (a *sessionDurationArtifactLifecycleWithTerminal) Accept(msg messages.Strea
 	return a.recorder.RecordTerminalSummary(*summary)
 }
 
-func recordingTerminalSummaryFromMessage(msg messages.StreamMessage) (*transcript.RecordingTerminalSummary, bool, error) {
+func RecordingTerminalSummaryFromMessage(msg messages.StreamMessage) (*transcript.RecordingTerminalSummary, bool, error) {
 	if msg.Type != messages.StreamTypeSessionClose {
 		return nil, false, nil
 	}
@@ -100,41 +89,35 @@ func (a *sessionDurationArtifactLifecycleWithTerminal) Close() error {
 
 type sessionDurationArtifactsContextKey struct{}
 
-// SessionDurationArtifactPaths identifies the production-owned files that a
-// positive duration run should finalize. The CLI supplies these paths while
-// the services layer retains ownership of opening, flushing, and closing the
-// resources.
-type SessionDurationArtifactPaths struct {
-	AudioPath      string
-	TranscriptPath string
-}
-
 type sessionDurationArtifactPathsContextKey struct{}
 
 // WithSessionDurationArtifacts attaches production-owned output resources to a
 // duration run. The duration controller flushes and closes them after the
 // accepted loop output has drained, including the synthesized terminal record.
-func WithSessionDurationArtifacts(ctx context.Context, artifacts SessionDurationArtifactLifecycle) context.Context {
+func WithSessionDurationArtifacts(ctx context.Context, artifacts sessionduration.ArtifactLifecycle) context.Context {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	return context.WithValue(ctx, sessionDurationArtifactsContextKey{}, artifacts)
 }
 
-func sessionDurationArtifactsFromContext(ctx context.Context) SessionDurationArtifactLifecycle {
+func ArtifactsFromContext(ctx context.Context) sessionduration.ArtifactLifecycle {
 	if ctx == nil {
 		return nil
 	}
-	artifacts, _ := ctx.Value(sessionDurationArtifactsContextKey{}).(SessionDurationArtifactLifecycle)
+	artifacts, ok := ctx.Value(sessionDurationArtifactsContextKey{}).(sessionduration.ArtifactLifecycle)
+	if !ok {
+		return nil
+	}
 	return artifacts
 }
 
-func withSessionDurationTerminalRecorder(ctx context.Context, recorder sessionDurationTerminalRecorder) context.Context {
+func WithTerminalRecorder(ctx context.Context, recorder sessionduration.TerminalRecorder) context.Context {
 	if recorder == nil {
 		return ctx
 	}
 	return WithSessionDurationArtifacts(ctx, &sessionDurationArtifactLifecycleWithTerminal{
-		artifacts: sessionDurationArtifactsFromContext(ctx),
+		artifacts: ArtifactsFromContext(ctx),
 		recorder:  recorder,
 	})
 }
@@ -143,26 +126,26 @@ func withSessionDurationTerminalRecorder(ctx context.Context, recorder sessionDu
 // the production-owned WAV and JSONL resources after validation and runtime
 // planning. Existing lifecycle values take precedence, which keeps injected
 // sinks useful for tests and other callers that already own their resources.
-func WithSessionDurationArtifactPaths(ctx context.Context, paths SessionDurationArtifactPaths) context.Context {
+func WithSessionDurationArtifactPaths(ctx context.Context, paths sessionduration.SessionDurationArtifactPaths) context.Context {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	return context.WithValue(ctx, sessionDurationArtifactPathsContextKey{}, paths)
 }
 
-func sessionDurationArtifactPathsFromContext(ctx context.Context) (SessionDurationArtifactPaths, bool) {
+func ArtifactPathsFromContext(ctx context.Context) (sessionduration.SessionDurationArtifactPaths, bool) {
 	if ctx == nil {
-		return SessionDurationArtifactPaths{}, false
+		return sessionduration.SessionDurationArtifactPaths{}, false
 	}
-	paths, ok := ctx.Value(sessionDurationArtifactPathsContextKey{}).(SessionDurationArtifactPaths)
+	paths, ok := ctx.Value(sessionDurationArtifactPathsContextKey{}).(sessionduration.SessionDurationArtifactPaths)
 	return paths, ok
 }
 
-func prepareSessionDurationArtifacts(ctx context.Context) (context.Context, error) {
-	if sessionDurationArtifactsFromContext(ctx) != nil {
+func PrepareArtifacts(ctx context.Context) (context.Context, error) {
+	if ArtifactsFromContext(ctx) != nil {
 		return ctx, nil
 	}
-	paths, ok := sessionDurationArtifactPathsFromContext(ctx)
+	paths, ok := ArtifactPathsFromContext(ctx)
 	if !ok || (paths.AudioPath == "" && paths.TranscriptPath == "") {
 		return ctx, nil
 	}
@@ -215,21 +198,19 @@ func NewSessionDurationArtifactSet(audioPath, transcriptPath string) (*SessionDu
 	}
 	transcriptSink, err := newSessionDurationTranscriptSink(transcriptPath)
 	if err != nil {
-		_ = audioSink.Close()
-		return nil, err
+		return nil, errors.Join(err, audioSink.Close())
 	}
 	return NewSessionDurationArtifactSetWithSinks(audioSink, transcriptSink), nil
 }
 
 func newSessionDurationTranscriptSink(path string) (*transcript.Writer, error) {
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, sessionDurationArtifactFileMode)
 	if err != nil {
 		return nil, fmt.Errorf("open duration transcript %q: %w", path, err)
 	}
 	writer, err := transcript.NewWriterOn(file)
 	if err != nil {
-		_ = file.Close()
-		return nil, fmt.Errorf("create duration transcript %q: %w", path, err)
+		return nil, errors.Join(fmt.Errorf("create duration transcript %q: %w", path, err), file.Close())
 	}
 	return writer, nil
 }
@@ -364,82 +345,12 @@ func sessionDurationPCM16Samples(content []byte) ([]int16, error) {
 	return samples, nil
 }
 
-type sessionDurationWAVSink struct {
-	mu       sync.Mutex
-	path     string
-	file     *os.File
-	writer   *wavio.StreamWriter
-	closed   bool
-	closeErr error
-}
-
-func newSessionDurationWAVSink(path string) (*sessionDurationWAVSink, error) {
-	if path == "" {
-		return nil, errors.New("duration audio path is empty")
-	}
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
-	if err != nil {
-		return nil, fmt.Errorf("open duration audio %q: %w", path, err)
-	}
-	writer, err := wavio.NewStreamWriter(file, wavio.Rate16kHz)
-	if err != nil {
-		return nil, errors.Join(err, file.Close())
-	}
-	return &sessionDurationWAVSink{path: path, file: file, writer: writer}, nil
-}
-
-func (s *sessionDurationWAVSink) WriteSamples(samples []int16) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed {
-		return errors.New("duration audio sink is closed")
-	}
-	if err := s.writer.WriteSamples(samples); err != nil {
-		return err
-	}
-	return s.writer.Checkpoint()
-}
-
-func (s *sessionDurationWAVSink) Flush() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed {
-		return s.closeErr
-	}
-	if s.file == nil {
-		return nil
-	}
-	return s.file.Sync()
-}
-
-func (s *sessionDurationWAVSink) Close() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed {
-		return s.closeErr
-	}
-	s.closed = true
-	var closeErrs []error
-	if s.file != nil {
-		if err := s.writer.Close(); err != nil {
-			closeErrs = append(closeErrs, fmt.Errorf("write duration audio %q: %w", s.path, err))
-		} else if err := s.file.Sync(); err != nil {
-			closeErrs = append(closeErrs, fmt.Errorf("flush duration audio %q: %w", s.path, err))
-		}
-		if err := s.file.Close(); err != nil {
-			closeErrs = append(closeErrs, fmt.Errorf("close duration audio %q: %w", s.path, err))
-		}
-	}
-	s.closeErr = errors.Join(closeErrs...)
-	return s.closeErr
-}
-
-func finalizeSessionDurationArtifacts(artifacts SessionDurationArtifactLifecycle) error {
+func FinalizeArtifacts(artifacts sessionduration.ArtifactLifecycle) error {
 	if artifacts == nil {
 		return nil
 	}
 	return errors.Join(
-		wrapSessionPhaseError("flush duration artifacts", invokeSessionFinalizer(artifacts.Flush)),
-		wrapSessionPhaseError("close duration artifacts", invokeSessionFinalizer(artifacts.Close)),
+		artifacts.Flush(),
+		artifacts.Close(),
 	)
 }

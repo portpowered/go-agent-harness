@@ -20,6 +20,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/input"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
@@ -238,7 +239,6 @@ func RunSessionWithImagesAndAudioInput(ctx context.Context, out io.Writer, opts 
 	plan.loop.RequireTerminalAssistantResponse = true
 	return runSessionImagePlan(ctx, out, plan, opts, wirePrompt)
 }
-
 func planSessionImageRuntime(opts SessionRunOptions, parts []messages.ImagePart, seed SessionTextSeed, systemPrompt string, deferResponse bool) (sessionRuntimePlan, string, error) {
 	var (
 		plan         sessionRuntimePlan
@@ -332,12 +332,12 @@ func runSessionImagePlan(ctx context.Context, out io.Writer, plan sessionRuntime
 			plan.inferencer = &sessionTextSeedInferencer{inner: plan.inferencer, wirePrompt: wirePrompt, value: opts.TextSeed.Value}
 			return errors.Join(plan.run(ctx, output), output.errorValue())
 		}
-		durationCtx, err := prepareSessionDurationArtifacts(ctx)
+		durationCtx, err := durationwire.NewService().PrepareArtifacts(ctx)
 		if err != nil {
 			return err
 		}
-		admission := newSessionDurationAdmission()
-		admittedInferencer := &sessionDurationAdmissionInferencer{inner: plan.inferencer, admission: admission, closeDone: make(chan struct{})}
+		admission := durationwire.NewService().NewEventAdmission()
+		admittedInferencer := durationwire.NewService().NewAdmissionInferencer(plan.inferencer, admission, make(chan struct{}))
 		plan.inferencer = &sessionTextSeedInferencer{inner: admittedInferencer, wirePrompt: wirePrompt, value: opts.TextSeed.Value}
 		err = runSessionDurationPlanWithAdmission(durationCtx, output, plan, opts.MaxDuration, realSessionDurationClock{}, admittedInferencer)
 		return errors.Join(err, output.errorValue())
@@ -351,7 +351,7 @@ func runSessionImagePlan(ctx context.Context, out io.Writer, plan sessionRuntime
 	return runSessionImageDuration(ctx, out, plan, opts.MaxDuration)
 }
 func runSessionImageDuration(ctx context.Context, out io.Writer, plan sessionRuntimePlan, maxDuration time.Duration) error {
-	durationCtx, err := prepareSessionDurationArtifacts(ctx)
+	durationCtx, err := durationwire.NewService().PrepareArtifacts(ctx)
 	if err != nil {
 		return err
 	}

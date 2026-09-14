@@ -9,6 +9,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/input"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/mediagate"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/observations"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"sync"
@@ -42,6 +43,7 @@ type Dependencies struct {
 	EventCapacity     int
 	Clock             session.LiveClock
 	Scheduler         platformclock.Scheduler
+	DurationService   sessionduration.ControllerService
 }
 type Service struct {
 	inferencerFactory session.LiveInferencerFactory
@@ -51,6 +53,7 @@ type Service struct {
 	eventCapacity     int
 	clock             session.LiveClock
 	scheduler         platformclock.Scheduler
+	durationService   sessionduration.ControllerService
 }
 
 func New(deps Dependencies) *Service {
@@ -66,6 +69,7 @@ func New(deps Dependencies) *Service {
 		eventCapacity:     capacity,
 		clock:             deps.Clock,
 		scheduler:         deps.Scheduler,
+		durationService:   deps.DurationService,
 	}
 }
 func (s *Service) OpenLive(ctx context.Context, request session.LiveRequest) (session.LiveHandle, error) {
@@ -79,7 +83,7 @@ func (s *Service) OpenLive(ctx context.Context, request session.LiveRequest) (se
 		return nil, err
 	}
 	request = input.CloneLiveRequest(request)
-	h := newHandle(request, s.inferencerFactory, s.capabilityFactory, s.toolExecutor, s.toolDefinitions, s.eventCapacity, s.clock, s.scheduler)
+	h := newHandle(request, s.inferencerFactory, s.capabilityFactory, s.toolExecutor, s.toolDefinitions, s.eventCapacity, s.clock, s.scheduler, s.durationService)
 	h.parentCtx = ctx
 	return h, nil
 }
@@ -99,6 +103,8 @@ type handle struct {
 	eventCapacity                                    int
 	clock                                            session.LiveClock
 	scheduler                                        platformclock.Scheduler
+	durationService                                  sessionduration.ControllerService
+	durationController                               sessionduration.Controller
 	media                                            *mediagate.Gate
 	events                                           chan session.LiveEvent
 	done                                             chan struct{}
@@ -171,18 +177,8 @@ type handle struct {
 	firstTurnTimerScheduled                          bool
 	firstTurnSeen                                    bool
 	retryRequests                                    chan retryRequest
-	retryMu                                          sync.Mutex
-	retriesUsed                                      int
 	livenessMu                                       sync.Mutex
-	livenessTimer                                    platformclock.Timer
-	livenessGeneration                               uint64
-	livenessArmed                                    bool
-	livenessStopped                                  bool
-	livenessWake                                     chan struct{}
 	livenessFailure                                  *session.LiveLivenessFailure
-	livenessErr                                      error
-	responseOutputSeen                               bool
-	responseToolObligation                           bool
 	toolMu                                           sync.Mutex
 	toolContinuations                                map[string]*liveToolContinuation
 	continuationErr                                  error
@@ -250,7 +246,7 @@ func (h *handle) evidenceContext() context.Context {
 func (h *handle) recorderError() error                    { return h.observationPort().Error() }
 func (h *handle) recordMessage(record session.LiveRecord) { h.observationPort().Message(record) }
 func (h *handle) recordEvent(event session.LiveEvent)     { h.observationPort().Event(event) }
-func newHandle(request session.LiveRequest, factory session.LiveInferencerFactory, capabilityFactory session.LiveCapabilityFactory, executor messages.ToolExecutor, definitions []messages.ToolDefinition, eventCapacity int, clock session.LiveClock, scheduler platformclock.Scheduler) *handle {
+func newHandle(request session.LiveRequest, factory session.LiveInferencerFactory, capabilityFactory session.LiveCapabilityFactory, executor messages.ToolExecutor, definitions []messages.ToolDefinition, eventCapacity int, clock session.LiveClock, scheduler platformclock.Scheduler, durationService sessionduration.ControllerService) *handle {
 	h := &handle{
 		request:                  request,
 		factory:                  terminalDrainFactory(factory),
@@ -260,6 +256,7 @@ func newHandle(request session.LiveRequest, factory session.LiveInferencerFactor
 		eventCapacity:            eventCapacity,
 		clock:                    clock,
 		scheduler:                scheduler,
+		durationService:          durationService,
 		events:                   make(chan session.LiveEvent, eventCapacity),
 		done:                     make(chan struct{}),
 		startDone:                make(chan struct{}),
@@ -276,7 +273,6 @@ func newHandle(request session.LiveRequest, factory session.LiveInferencerFactor
 		openingReady:             make(chan struct{}),
 		providerDoneSignal:       make(chan struct{}),
 		terminalObserved:         make(chan struct{}),
-		livenessWake:             make(chan struct{}, 1),
 		toolContinuations:        make(map[string]*liveToolContinuation),
 		pendingToolCallResponses: make(map[string]string),
 		activeResponseIDs:        make(map[string]struct{}),

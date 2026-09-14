@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
@@ -62,7 +63,6 @@ func RunSessionWithAudioOutAndTextSeed(ctx context.Context, out io.Writer, opts 
 	if err != nil {
 		return err
 	}
-
 	audioOut, err := newSessionAudioOutputForPlan(&plan, path, out, audio.NewLoudnessNormalizer(audio.LoudnessNormalizerConfig{GainDB: VoiceLoudnessGainDB(opts.Voice)}))
 	if err != nil {
 		return fmt.Errorf("--audio-out %q: %w", path, err)
@@ -158,7 +158,7 @@ func RunSessionWithAudioOutAndTextSeedAndMaxDuration(ctx context.Context, out io
 		if maxDuration == 0 {
 			runErr = plan.run(ctx, sessionOut)
 		} else {
-			durationCtx, durationErr := prepareSessionDurationArtifacts(ctx)
+			durationCtx, durationErr := durationwire.NewService().PrepareArtifacts(ctx)
 			if durationErr != nil {
 				return durationErr
 			}
@@ -178,7 +178,7 @@ func RunSessionWithAudioOutAndTextSeedAndMaxDuration(ctx context.Context, out io
 	if maxDuration == 0 {
 		return plan.run(ctx, sessionOut)
 	}
-	durationCtx, err := prepareSessionDurationArtifacts(ctx)
+	durationCtx, err := durationwire.NewService().PrepareArtifacts(ctx)
 	if err != nil {
 		return err
 	}
