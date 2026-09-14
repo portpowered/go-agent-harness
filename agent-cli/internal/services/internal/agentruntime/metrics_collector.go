@@ -2,16 +2,15 @@ package agentruntime
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
-	"strings"
 
 	serviceprobes "github.com/portpowered/go-agent-harness/agent-cli/internal/services/probes"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/metricsreplay"
+	metricsreplaywire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/metricsreplay/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
@@ -19,141 +18,120 @@ import (
 // It uses the same RunSession path as live sessions, with only a replay
 // capture and in-memory metrics sink supplied by the caller.
 func NewMetricsCollector(clockSource clock.Source, factory SessionRuntimeFactory) serviceprobes.MetricsCollector {
-	return metricsCollector{clock: clockSource, factory: factory}
+	return metricsCollectorAdapter{service: metricsreplaywire.NewService(metricsreplay.Dependencies{
+		Clock:   clockSource,
+		Runner:  sessionMetricsReplayRunner{factory: factory},
+		Loader:  sessionMetricsFixtureLoader{},
+		NewSink: newSessionMetricsSink,
+	})}
 }
 
-type metricsCollector struct {
-	clock   clock.Source
-	factory SessionRuntimeFactory
+type metricsCollectorAdapter struct {
+	service metricsreplay.Service
 }
 
-func (c metricsCollector) Collect(ctx context.Context, fixture, prompt string) ([]serviceprobes.MetricsSeries, error) {
-	if c.clock == nil {
-		return nil, fmt.Errorf("metrics collector requires an injected clock")
-	}
-	if !c.factory.configured() {
-		return nil, fmt.Errorf("metrics collector requires an injected session runtime factory")
-	}
-	sink, err := metrics.NewInMemorySink()
-	if err != nil {
-		return nil, fmt.Errorf("construct metrics sink: %w", err)
-	}
-	if err := RunSession(ctx, io.Discard, SessionRunOptions{
-		ReplayPath:      fixture,
-		Prompt:          prompt,
-		Clock:           c.clock,
-		runtimeFactory:  c.factory,
-		MetricsRecorder: sink,
-	}); err != nil {
-		return nil, fmt.Errorf("replay %s for metrics: %w", fixture, err)
-	}
-	snapshot := sink.Snapshot()
-	observed, err := observedFixtureDeltaSums(fixture)
+func (a metricsCollectorAdapter) Collect(ctx context.Context, fixture, prompt string) ([]serviceprobes.MetricsSeries, error) {
+	series, err := a.service.Collect(ctx, fixture, prompt)
 	if err != nil {
 		return nil, err
 	}
-	series := make([]serviceprobes.MetricsSeries, 0, len(snapshot.Series))
-	for _, entry := range snapshot.Series {
-		key := string(entry.Direction) + "/" + string(entry.Modality)
-		series = append(series, probe.MetricsSeries{
+	result := make([]serviceprobes.MetricsSeries, 0, len(series))
+	for _, entry := range series {
+		result = append(result, serviceprobes.MetricsSeries{
 			Direction:      string(entry.Direction),
 			Modality:       string(entry.Modality),
-			ObservedDeltas: observed[key],
-			ReportedTotal:  int64(entry.TotalBytes),
-		})
-		delete(observed, key)
-	}
-	for key, deltaSum := range observed {
-		parts := strings.SplitN(key, "/", 2)
-		if len(parts) != 2 {
-			continue
-		}
-		series = append(series, probe.MetricsSeries{
-			Direction:      parts[0],
-			Modality:       parts[1],
-			ObservedDeltas: deltaSum,
+			ObservedDeltas: entry.ObservedDeltas,
+			ReportedTotal:  entry.ReportedTotal,
 		})
 	}
-	return series, nil
+	return result, nil
 }
 
-// observedFixtureDeltaSums is deliberately independent from the runtime
-// observer. It is the wire-level oracle used to catch missing or duplicated
-// accounting in the production metrics path.
-func observedFixtureDeltaSums(fixture string) (map[string]int64, error) {
+type sessionMetricsReplayRunner struct {
+	factory SessionRuntimeFactory
+}
+
+func (r sessionMetricsReplayRunner) Run(ctx context.Context, request metricsreplay.RunRequest) error {
+	if !r.factory.configured() {
+		return fmt.Errorf("metrics collector requires an injected session runtime factory")
+	}
+	return RunSession(ctx, io.Discard, SessionRunOptions{
+		ReplayPath:      request.Fixture,
+		Prompt:          request.Prompt,
+		Clock:           request.Clock,
+		runtimeFactory:  r.factory,
+		MetricsRecorder: sessionMetricsRecorder{recorder: request.Recorder},
+	})
+}
+
+type sessionMetricsRecorder struct {
+	recorder metricsreplay.Recorder
+}
+
+func (r sessionMetricsRecorder) Record(direction metrics.Direction, modality metrics.Modality, bytes int64) error {
+	if r.recorder == nil {
+		return errors.New("metrics replay recorder is nil")
+	}
+	return r.recorder.Record(metricsreplay.Direction(direction), metricsreplay.Modality(modality), bytes)
+}
+
+type sessionMetricsFixtureLoader struct{}
+
+func (sessionMetricsFixtureLoader) Load(ctx context.Context, fixture string) (metricsreplay.Fixture, error) {
+	if err := ctx.Err(); err != nil {
+		return metricsreplay.Fixture{}, err
+	}
 	capture, err := gatewaytesting.LoadSessionCapture(fixture)
 	if err != nil {
-		return nil, fmt.Errorf("load replay fixture %q: %w", fixture, err)
+		return metricsreplay.Fixture{}, fmt.Errorf("load replay fixture %q: %w", fixture, err)
 	}
-	sums := map[string]int64{}
-	add := func(direction string, modality metrics.Modality, n int) {
-		if n > 0 {
-			sums[direction+"/"+string(modality)] += int64(n)
-		}
-	}
-	toolDeltaSeen := map[string]bool{}
+	records := make([]metricsreplay.Record, 0, len(capture.Records))
 	for _, record := range capture.Records {
-		var payload struct {
-			Type      string `json:"type"`
-			Delta     string `json:"delta"`
-			Audio     string `json:"audio"`
-			CallID    string `json:"call_id"`
-			Args      string `json:"arguments"`
-			Synthetic string `json:"synthetic_audio"`
-			Item      struct {
-				Type    string `json:"type"`
-				Content []struct {
-					Type string `json:"type"`
-					Text string `json:"text"`
-				} `json:"content"`
-			} `json:"item"`
+		payload := record.Payload
+		if len(payload) == 0 {
+			payload = record.Data
 		}
-		if json.Unmarshal(record.Payload, &payload) != nil {
-			continue
-		}
-		switch record.Direction {
-		case gatewaytesting.DirectionServerToClient:
-			switch payload.Type {
-			case "response.audio.delta", "response.output_audio.delta":
-				add("output", metrics.ModalityAudio, decodedBase64Len(payload.Delta))
-			case "response.text.delta", "response.output_text.delta", "response.audio_transcript.delta", "response.output_audio_transcript.delta":
-				add("output", metrics.ModalityText, len(payload.Delta))
-			case "response.function_call_arguments.delta":
-				add("output", metrics.ModalityTool, len(payload.Delta))
-				toolDeltaSeen[payload.CallID] = true
-			case "response.function_call_arguments.done":
-				if !toolDeltaSeen[payload.CallID] {
-					add("output", metrics.ModalityTool, len(payload.Args))
-					toolDeltaSeen[payload.CallID] = true
-				}
-			}
-		case gatewaytesting.DirectionClientToServer:
-			switch payload.Type {
-			case "conversation.item.create":
-				for _, part := range payload.Item.Content {
-					if part.Type == "input_text" {
-						add("input", metrics.ModalityText, len(part.Text))
-					}
-				}
-			case "input_audio_buffer.append":
-				audio := payload.Audio
-				if audio == "" {
-					audio = payload.Synthetic
-				}
-				add("input", metrics.ModalityAudio, decodedBase64Len(audio))
-			}
-		}
+		records = append(records, metricsreplay.Record{
+			Sequence:    record.Sequence,
+			Direction:   metricsreplay.WireDirection(record.Direction),
+			Type:        record.Type,
+			PayloadType: record.PayloadType,
+			Payload:     append([]byte(nil), payload...),
+		})
 	}
-	return sums, nil
+	return metricsreplay.Fixture{Records: records}, nil
 }
 
-func decodedBase64Len(encoded string) int {
-	if encoded == "" {
-		return 0
-	}
-	decoded, err := codec.DecodeBase64(encoded)
+func newSessionMetricsSink() (metricsreplay.Sink, error) {
+	sink, err := metrics.NewInMemorySink()
 	if err != nil {
-		return len(encoded)
+		return nil, err
 	}
-	return len(decoded)
+	return sessionMetricsSink{sink: sink}, nil
 }
+
+type sessionMetricsSink struct {
+	sink *metrics.InMemorySink
+}
+
+func (s sessionMetricsSink) Record(direction metricsreplay.Direction, modality metricsreplay.Modality, bytes int64) error {
+	return s.sink.Record(metrics.Direction(direction), metrics.Modality(modality), bytes)
+}
+
+func (s sessionMetricsSink) Snapshot() (metricsreplay.Snapshot, error) {
+	snapshot := s.sink.Snapshot()
+	series := make([]metricsreplay.SnapshotSeries, 0, len(snapshot.Series))
+	for _, entry := range snapshot.Series {
+		if entry.TotalBytes > uint64(^uint64(0)>>1) {
+			return metricsreplay.Snapshot{}, fmt.Errorf("metrics total for %s/%s exceeds int64", entry.Direction, entry.Modality)
+		}
+		series = append(series, metricsreplay.SnapshotSeries{
+			Direction:  metricsreplay.Direction(entry.Direction),
+			Modality:   metricsreplay.Modality(entry.Modality),
+			TotalBytes: int64(entry.TotalBytes),
+		})
+	}
+	return metricsreplay.Snapshot{Series: series}, nil
+}
+
+func (s sessionMetricsSink) Close() error { return nil }
