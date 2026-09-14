@@ -3,18 +3,21 @@ package agentruntime
 import (
 	"context"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
-// capturingSeedSession records every message forwarded past the seed
-// substitution boundary so tests can assert on what would reach the wire.
 type capturingSeedSession struct {
+	mu   sync.Mutex
 	sent []messages.StreamMessage
+	done chan struct{}
 }
 
 func (s *capturingSeedSession) Send(_ context.Context, msg messages.StreamMessage) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.sent = append(s.sent, msg)
 	return true
 }
@@ -23,24 +26,41 @@ func (s *capturingSeedSession) Receive() *messages.TypedBuffer[messages.StreamMe
 	return messages.NewTypedBuffer[messages.StreamMessage](1)
 }
 
-func (s *capturingSeedSession) Done() <-chan struct{} {
-	done := make(chan struct{})
-	return done
+func (s *capturingSeedSession) Done() <-chan struct{} { return s.done }
+
+func (s *capturingSeedSession) Close() error {
+	select {
+	case <-s.done:
+	default:
+		close(s.done)
+	}
+	return nil
 }
 
-func (s *capturingSeedSession) Close() error { return nil }
+type capturingSeedInferencer struct{ session messages.Session }
 
-func TestSessionTextSeedSessionSubstitutesEverySendPath(t *testing.T) {
+func (i *capturingSeedInferencer) ConnectSession(context.Context) (messages.Session, error) {
+	return i.session, nil
+}
+
+func TestSessionTextSeedAdapterDelegatesReplacementToRuntimeService(t *testing.T) {
 	const seedValue = "Say hello in one short sentence."
-	wirePrompt := nextSessionTextWirePrompt()
-	capturing := &capturingSeedSession{}
-	session := &sessionTextSeedSession{
-		inner:      capturing,
+	const wirePrompt = "\x00agent-cli-session-text-seed:test:1"
+	capturing := &capturingSeedSession{done: make(chan struct{})}
+	inferencer := &sessionTextSeedInferencer{
+		inner:      &capturingSeedInferencer{session: capturing},
 		wirePrompt: wirePrompt,
 		value:      seedValue,
-		receive:    messages.NewTypedBuffer[messages.StreamMessage](16),
 	}
-	go session.forwardIncoming()
+	session, err := inferencer.ConnectSession(context.Background())
+	if err != nil {
+		t.Fatalf("ConnectSession: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := session.Close(); err != nil {
+			t.Errorf("cleanup close: %v", err)
+		}
+	})
 
 	ctx := context.Background()
 	if !session.Send(ctx, messages.StreamMessage{
@@ -57,20 +77,23 @@ func TestSessionTextSeedSessionSubstitutesEverySendPath(t *testing.T) {
 		t.Fatal("second send rejected")
 	}
 
-	if len(capturing.sent) != 2 {
-		t.Fatalf("forwarded message count = %d, want 2", len(capturing.sent))
+	capturing.mu.Lock()
+	sent := append([]messages.StreamMessage(nil), capturing.sent...)
+	capturing.mu.Unlock()
+	if len(sent) != 2 {
+		t.Fatalf("forwarded message count = %d, want 2", len(sent))
 	}
-	first, ok := capturing.sent[0].Value.(*messages.TextDeltaValue)
+	first, ok := sent[0].Value.(*messages.TextDeltaValue)
 	if !ok || first.Content != seedValue {
-		t.Fatalf("connect-time prompt = %#v, want %q", capturing.sent[0].Value, seedValue)
+		t.Fatalf("connect-time prompt = %#v, want %q", sent[0].Value, seedValue)
 	}
-	second, ok := capturing.sent[1].Value.(*messages.TextDeltaValue)
+	second, ok := sent[1].Value.(*messages.TextDeltaValue)
 	if !ok || second.Content != followUp {
-		t.Fatalf("runtime Send text = %#v, want %q", capturing.sent[1].Value, followUp)
+		t.Fatalf("runtime Send text = %#v, want %q", sent[1].Value, followUp)
 	}
-	for i, msg := range capturing.sent {
+	for i, msg := range sent {
 		value, _ := msg.Value.(*messages.TextDeltaValue)
-		if value != nil && strings.Contains(value.Content, sessionTextWirePrefix) {
+		if value != nil && strings.Contains(value.Content, "agent-cli-session-text-seed:") && value.Content != seedValue {
 			t.Fatalf("forwarded message %d still carries the wire sentinel: %q", i, value.Content)
 		}
 	}
