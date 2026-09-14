@@ -1,0 +1,103 @@
+{
+  "checks": [
+    {
+      "argv": [
+        "go",
+        "run",
+        "."
+      ],
+      "cwd": "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/external-consumer",
+      "elapsedSeconds": 0.131,
+      "exitCode": 0,
+      "label": "external-consumer",
+      "stderr": "",
+      "stdout": "external-consumer-ok samples=5 default=24000 configured=48000\n",
+      "timedOut": false
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "./agent-cli/internal/services/internal/agentruntime",
+        "-run",
+        "Test(StreamSessionAudioInputResamples16kHzAtProviderBoundary|RoomProviderInputPCMResamples16kHzMixerTo24kHzContract|ConvertSessionAudioPCMIdentityAndFailures|ConvertScheduledAudioInputsUsesDeclaredSourceRate|ConfigureSessionAudioContract|LoadReplaySessionConfigurationExtractsDuplexAudioRates|ReplayPlannersRejectCapturedAsymmetricAudioRatesBeforeDialerConstruction|LiveRecordRuntimeScheduledAudio)",
+        "-count=1",
+        "-timeout=240s"
+      ],
+      "cwd": ".",
+      "elapsedSeconds": 2.817,
+      "exitCode": 0,
+      "label": "cli-audio-regressions",
+      "stderr": "",
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t1.061s\n",
+      "timedOut": false
+    }
+  ],
+  "elapsedSeconds": 3.65,
+  "mode": "final-scope-and-provenance",
+  "scope": {
+    "admission": {
+      "argv": [
+        "python3",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/factory/scripts/project-control.py",
+        "verify-work",
+        "--type",
+        "task",
+        "--name",
+        "audio-runtime-c114-retire-cli-audio-rate-contract",
+        "--root",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness"
+      ],
+      "cwd": ".",
+      "elapsedSeconds": 0.117,
+      "exitCode": 0,
+      "label": "admission",
+      "stderr": "",
+      "stdout": "{\"status\": \"admitted\", \"project\": \"audio-runtime\", \"name\": \"audio-runtime-c114-retire-cli-audio-rate-contract\"}\n",
+      "timedOut": false
+    },
+    "changedPaths": [
+      "agent-cli/internal/services/internal/agentruntime/session_audio_format.go",
+      "agent-cli/internal/services/internal/agentruntime/session_audio_rate.go",
+      "coverage-manifest/go-agent-runtime/services/audiorate/internal/service/package.json",
+      "coverage-manifest/go-agent-runtime/services/audiorate/package.json",
+      "coverage-manifest/go-agent-runtime/services/audiorate/wire/package.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/README.md",
+      "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/external-consumer/go.mod",
+      "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/external-consumer/go.sum",
+      "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/external-consumer/main.go",
+      "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/run.py",
+      "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/runs/run-cases.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/runs/verify-final-scope-and-provenance.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/runs/verify-positive-and-causal-negative-controls.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/runs/verify-retirement-callers-and-c101-readonly.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/verification-summary.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/verify.py",
+      "go-agent-runtime/services/audiorate/contract.go",
+      "go-agent-runtime/services/audiorate/contract_test.go",
+      "go-agent-runtime/services/audiorate/internal/service/service.go",
+      "go-agent-runtime/services/audiorate/internal/service/service_test.go",
+      "go-agent-runtime/services/audiorate/wire/providers.go",
+      "go-agent-runtime/services/audiorate/wire/wire_gen.go",
+      "go-agent-runtime/services/audiorate/wire/wire_test.go"
+    ],
+    "head": "008ad4a44c4d956b64c1ed4c76acb672e8d0328d",
+    "legacy": {
+      "agent-cli/internal/services/internal/agentruntime/session_audio_format.go": {
+        "baselineLines": 84,
+        "baselineSHA256": "086ecad62dcb61fd98ac8884da2fcaf79b5d5b8a967c6f03a5592f5373dac114",
+        "candidateLines": 79,
+        "candidateSHA256": "19a4f1aefabd1425088d5fc53439e63c787ed449c46e5faa2b2d27802a1f7cd5"
+      },
+      "agent-cli/internal/services/internal/agentruntime/session_audio_rate.go": {
+        "baselineLines": 68,
+        "baselineSHA256": "4b4d0e9ff4d9bc150ad68a4ea55b74f3d538f4069fe09a84d5a3eeecfb50d3f3",
+        "candidateLines": 46,
+        "candidateSHA256": "e1585638ad108eff4f17a2b3b5236e2aa2fb59c835aadb77fb976280b0713fb8"
+      }
+    },
+    "netProductionLineReduction": 27,
+    "originMain": "3963bc3566da24f8214634c17a9d0f79a6724171"
+  },
+  "status": "ACCEPTED"
+}
