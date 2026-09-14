@@ -10,11 +10,18 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
-	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 )
 
 func (h *handle) start(runCtx context.Context) error {
 	defer h.startFinish.Do(func() { close(h.startDone) })
+	durationController, err := h.beginDurationController(runCtx)
+	if err != nil {
+		return h.failStart(runCtx, err)
+	}
+	h.mu.Lock()
+	h.durationController = durationController
+	h.mu.Unlock()
 	toolExecutor, toolDefinitions, inferencer, err := h.prepareStart(runCtx)
 	if err != nil {
 		return h.failStart(runCtx, err)
@@ -27,14 +34,10 @@ func (h *handle) start(runCtx context.Context) error {
 	if err != nil {
 		return h.failStart(runCtx, err)
 	}
-	durationTimer, err := h.newDurationTimer()
-	if err != nil {
-		return h.failStart(runCtx, err)
-	}
 	h.prepareReplayCompletion()
 	h.publish(session.LiveEvent{Kind: string(session.LiveEventStarted), SessionID: h.request.SessionID, Critical: true}, false) //nolint:contextcheck // start publication uses the invocation evidence context.
 	watchEvents := capabilityEventStream(runCtx, capabilityWatch)
-	h.launchWorkers(runCtx, loop, durationTimer, watchEvents)
+	h.launchWorkers(runCtx, loop, watchEvents)
 	return nil
 }
 
@@ -248,15 +251,27 @@ func (h *handle) installLoop(loop *agentloop.AgentLoop) (func(context.Context) <
 	return h.capabilityWatch, nil
 }
 
-func (h *handle) newDurationTimer() (platformclock.Timer, error) {
-	if h.request.MaxDuration <= 0 {
-		return nil, nil
+func (h *handle) beginDurationController(ctx context.Context) (sessionduration.Controller, error) {
+	if h == nil || h.durationService == nil {
+		return nil, errors.New("session duration service is unavailable")
 	}
-	timer := h.scheduler.NewTimer(h.request.MaxDuration)
-	if timer == nil {
+	controller, err := h.durationService.Begin(sessionduration.Options{
+		Context:     ctx,
+		Clock:       h.scheduler,
+		MaxDuration: h.request.MaxDuration,
+		FirstCause: func(cause error) {
+			if errors.Is(cause, sessionduration.ErrMaxDurationExceeded) {
+				h.Cancel(session.ErrLiveDurationExceeded)
+			}
+		},
+	})
+	if errors.Is(err, sessionduration.ErrInvalidDuration) {
+		return nil, err
+	}
+	if errors.Is(err, sessionduration.ErrSchedulerUnavailable) {
 		return nil, fmt.Errorf("create live duration timer: %w", session.ErrLiveSchedulerUnavailable)
 	}
-	return timer, nil
+	return controller, err
 }
 
 func (h *handle) prepareReplayCompletion() {
@@ -287,7 +302,6 @@ func capabilityEventStream(ctx context.Context, watch func(context.Context) <-ch
 }
 
 type workerPlan struct {
-	durationTimer     platformclock.Timer
 	capabilityEvents  <-chan session.LiveCapabilityEvent
 	replay            bool
 	watchSession      bool
@@ -296,9 +310,8 @@ type workerPlan struct {
 	watchProviderLive bool
 }
 
-func (h *handle) makeWorkerPlan(durationTimer platformclock.Timer, capabilityEvents <-chan session.LiveCapabilityEvent) workerPlan {
+func (h *handle) makeWorkerPlan(capabilityEvents <-chan session.LiveCapabilityEvent) workerPlan {
 	return workerPlan{
-		durationTimer:     durationTimer,
 		capabilityEvents:  capabilityEvents,
 		replay:            h.request.ReplayPlan != nil && len(h.request.ReplayPlan.AudioTurns) > 0,
 		watchSession:      h.request.RequireSessionUpdated,
@@ -310,9 +323,6 @@ func (h *handle) makeWorkerPlan(durationTimer platformclock.Timer, capabilityEve
 
 func (p workerPlan) count() int {
 	count := 2
-	if p.durationTimer != nil {
-		count++
-	}
 	if p.watchSession {
 		count++
 	}
@@ -335,9 +345,6 @@ func (p workerPlan) count() int {
 }
 
 func (p workerPlan) launch(h *handle, ctx context.Context, loop *agentloop.AgentLoop) {
-	if p.durationTimer != nil {
-		go h.watchDuration(ctx, p.durationTimer)
-	}
 	if p.watchSession {
 		go h.watchSessionUpdated(ctx)
 	}
@@ -361,10 +368,9 @@ func (p workerPlan) launch(h *handle, ctx context.Context, loop *agentloop.Agent
 func (h *handle) launchWorkers(
 	ctx context.Context,
 	loop *agentloop.AgentLoop,
-	durationTimer platformclock.Timer,
 	capabilityEvents <-chan session.LiveCapabilityEvent,
 ) {
-	plan := h.makeWorkerPlan(durationTimer, capabilityEvents)
+	plan := h.makeWorkerPlan(capabilityEvents)
 	h.runWG.Add(plan.count())
 	go h.runLoop(ctx, loop)
 	go h.consumeDeltas(ctx, loop)

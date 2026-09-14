@@ -430,7 +430,7 @@ func TestOverlappingFiniteResponsesCountOnlyTheirOwnPendingTools(t *testing.T) {
 	require.Empty(t, h.pendingToolCallResponses)
 }
 func TestOpeningContentWaitsForProviderAdmission(t *testing.T) {
-	h := newHandle(session.LiveRequest{OpeningContentParts: []messages.ContentPart{messages.ImagePart{Bytes: []byte{1, 2, 3}}}}, nil, nil, nil, nil, defaultEventCapacity, nil, nil)
+	h := newHandle(session.LiveRequest{OpeningContentParts: []messages.ContentPart{messages.ImagePart{Bytes: []byte{1, 2, 3}}}}, nil, nil, nil, nil, defaultEventCapacity, nil, nil, nil)
 	result := make(chan error, 1)
 	go func() { result <- h.waitOpeningReady(context.Background()) }()
 	select {

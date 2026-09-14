@@ -5,6 +5,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -32,5 +33,6 @@ func NewLiveService(deps LiveDependencies) session.LiveService {
 		EventCapacity:     deps.EventCapacity,
 		Clock:             deps.Clock,
 		Scheduler:         deps.Scheduler,
+		DurationService:   durationwire.NewService(),
 	})
 }

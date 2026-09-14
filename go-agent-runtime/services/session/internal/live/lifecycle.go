@@ -7,6 +7,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"time"
 )
@@ -36,6 +37,13 @@ func (h *handle) finishOnceBody(err error) {
 		}
 	}
 	err = h.finishMedia(err, userCancelled)
+	h.mu.Lock()
+	durationController := h.durationController
+	h.mu.Unlock()
+	if durationController != nil {
+		_, durationErr := durationController.Finalize(context.WithoutCancel(h.evidenceContext()), sessionduration.FinalizeRequest{Primary: err})
+		err = durationErr
+	}
 	h.mu.Lock()
 	if !isContextTermination(h.pumpErr) {
 		err = errors.Join(err, h.pumpErr)

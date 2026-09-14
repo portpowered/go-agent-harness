@@ -32,6 +32,7 @@ func (stateProbe) Written() bool { return false }
 
 type serviceProbe struct{}
 
+func (serviceProbe) Begin(Options) (Controller, error) { return nil, nil }
 func (serviceProbe) NewState(TerminalSource) State { return stateProbe{} }
 func (serviceProbe) PublishMaxDuration(Publication, messages.TerminalOutputState) error {
 	return nil

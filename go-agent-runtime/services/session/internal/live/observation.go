@@ -65,6 +65,15 @@ func (h *handle) consumeCapabilityEvents(ctx context.Context, loop *agentloop.Ag
 	}
 }
 func (h *handle) consumeMessage(ctx context.Context, loop *agentloop.AgentLoop, msg messages.StreamMessage, allowOpening bool) bool {
+	h.mu.Lock()
+	durationController := h.durationController
+	h.mu.Unlock()
+	if durationController != nil {
+		admission := durationController.Observe(msg)
+		if !admission.Accepted && msg.Type != messages.StreamTypeSessionClose && msg.Type != messages.StreamTypeError {
+			return false
+		}
+	}
 	if eventcodec.OutputMessage(msg) {
 		h.mu.Lock()
 		h.outputObserved = true
