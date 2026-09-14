@@ -361,7 +361,7 @@ func messageEndCanAdmit(value *messages.MessageEndValue) bool {
 		return false
 	}
 	status := normalizeTerminalStatus(value.Status)
-	if status != "" && status != "completed" {
+	if status != "" && status != terminalStatusCompleted {
 		return false
 	}
 	if value.TerminalReason != "" && value.TerminalReason != messages.TerminalReasonProviderAuthoredCompletion && value.TerminalReason != messages.TerminalReasonLoopSynthesizedCompletion {

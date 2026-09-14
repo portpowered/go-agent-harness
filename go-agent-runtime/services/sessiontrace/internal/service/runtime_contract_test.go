@@ -2,16 +2,22 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
+	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 type runtimeContractObserver struct {
@@ -136,3 +142,94 @@ func TestLiveRecorderPublicContractPreservesInnerErrorsAndAddsTypedObservations(
 		t.Fatal("live recorder did not publish message, audio, event, and terminal observations")
 	}
 }
+
+type playbackContractSink struct {
+	records []sessiontrace.DiagnosticRecord
+}
+
+func (s *playbackContractSink) RecordSessionDiagnostic(record sessiontrace.DiagnosticRecord) {
+	s.records = append(s.records, record)
+}
+
+func TestPlaybackDiagnosticsPublicContractFansOutQueueAndReceiptObservations(t *testing.T) {
+	sink := &playbackContractSink{}
+	runtimeObserver := &runtimeContractObserver{}
+	diagnostics := NewPlaybackDiagnostics(sessiontrace.PlaybackDiagnosticsOptions{
+		Sink:    sink,
+		Runtime: NewRuntimeRecorder(runtimeObserver, clock.Real{}),
+	})
+	playbackCalls := 0
+	playbackObserver := diagnostics.PlaybackObserver(func(devicegw.DeviceID, audio.PlaybackQueueStats) { playbackCalls++ })
+	playbackObserver(devicegw.DeviceID("virtual:output"), audio.PlaybackQueueStats{
+		Format: audio.DeviceFormat{SampleRate: 16000, Channels: 1}, DroppedSamples: 2, OverflowEvents: 1,
+	})
+	if playbackCalls != 1 || len(sink.records) != 1 {
+		t.Fatalf("playback fanout = callbacks %d, diagnostics %d; want one each", playbackCalls, len(sink.records))
+	}
+	receiptObserver := diagnostics.PlaybackReceiptObserver(nil)
+	receiptObserver(audio.PlaybackReceipt{CommandID: 7, Epoch: 2, Applied: true})
+	captureObserver := diagnostics.CaptureObserver(nil)
+	captureObserver(devicegw.DeviceID("virtual:input"), audio.CaptureQueueStats{CapturedSamples: 4, DroppedSamples: 1, DropPolicy: "drop_oldest"})
+	diagnostics.RecordParticipantPlaybackOverflow("participant-1", nil)
+	if len(runtimeObserver.snapshot()) != 1 {
+		t.Fatalf("receipt observations = %d, want one", len(runtimeObserver.snapshot()))
+	}
+}
+
+func TestReplayMetricsCollectorPublicContractReportsWireDeltas(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "metrics.session.json")
+	capture := gatewaytesting.SessionCapture{
+		Version:  gatewaytesting.SessionCaptureVersion,
+		Provider: gatewaytesting.SessionProviderMetadata{Name: "fixture-provider", Model: "fixture-model"},
+		Records: []gatewaytesting.CapturedSessionEvent{
+			{Sequence: 1, Direction: gatewaytesting.DirectionServerToClient, TimestampMs: 1, Type: "response.output_text.delta", PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage, Payload: json.RawMessage(`{"type":"response.output_text.delta","delta":"hello"}`)},
+			{Sequence: 2, Direction: gatewaytesting.DirectionClientToServer, TimestampMs: 2, Type: "input_audio_buffer.append", PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage, Payload: json.RawMessage(`{"type":"input_audio_buffer.append","audio":"AQID"}`)},
+		},
+	}
+	data, err := json.Marshal(capture)
+	if err != nil {
+		t.Fatalf("marshal capture: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatalf("write capture: %v", err)
+	}
+	collector := NewReplayMetricsCollector(sessiontrace.MetricsCollectorOptions{
+		Clock: clock.Real{},
+		Runner: func(context.Context, string, string) (metrics.Snapshot, error) {
+			return metrics.Snapshot{Series: []metrics.SeriesSnapshot{{Direction: metrics.DirectionOutput, Modality: metrics.ModalityText, TotalBytes: 5}}}, nil
+		},
+	})
+	series, err := collector.Collect(context.Background(), path, "fixture prompt")
+	if err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	var outputText, inputAudio bool
+	for _, entry := range series {
+		switch {
+		case entry.Direction == string(metrics.DirectionOutput) && entry.Modality == string(metrics.ModalityText):
+			outputText = entry.ObservedDeltas == 5 && entry.ReportedTotal == 5
+		case entry.Direction == string(metrics.DirectionInput) && entry.Modality == string(metrics.ModalityAudio):
+			inputAudio = entry.ObservedDeltas == 3
+		}
+	}
+	if !outputText || !inputAudio {
+		t.Fatalf("metrics series = %+v, want text=5 and audio=3", series)
+	}
+}
+
+func TestLivenessClockAndTraceObserverPoliciesUseServiceContracts(t *testing.T) {
+	if liveness := LivenessClockFromSource(clock.Real{}); liveness == nil || liveness.NewTimer(time.Hour) == nil {
+		t.Fatal("real clock did not provide a liveness timer")
+	}
+	if LivenessClockFromSource(sourceOnlyClock{}) != nil {
+		t.Fatal("source-only clock unexpectedly provided a liveness timer")
+	}
+	observer := traceObserver{}
+	if !observer.ObserveProviderBoundaries() || observer.RetainCommitPayload() {
+		t.Fatal("trace observer policy contract changed")
+	}
+}
+
+type sourceOnlyClock struct{}
+
+func (sourceOnlyClock) Now() time.Time { return time.Unix(0, 0) }

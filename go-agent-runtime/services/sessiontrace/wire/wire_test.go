@@ -19,6 +19,12 @@ func TestNewServiceBuildsIndependentFactories(t *testing.T) {
 }
 
 func TestPublicWireFactoriesExposeIndependentContracts(t *testing.T) {
+	t.Run("constructors", testPublicWireConstructors)
+	t.Run("diagnostics", testPublicWireDiagnostics)
+	t.Run("liveness", testPublicWireLiveness)
+}
+
+func testPublicWireConstructors(t *testing.T) {
 	if NewLiveRecorder(sessiontrace.LiveRecorderOptions{}) == nil {
 		t.Fatal("NewLiveRecorder returned nil")
 	}
@@ -37,7 +43,9 @@ func TestPublicWireFactoriesExposeIndependentContracts(t *testing.T) {
 	if NewObserver(sessiontrace.NewObserverOptions{}) == nil {
 		t.Fatal("NewObserver returned nil")
 	}
+}
 
+func testPublicWireDiagnostics(t *testing.T) {
 	called := 0
 	sink := sessiontrace.DiagnosticFunc(func(sessiontrace.DiagnosticRecord) { called++ })
 	if CombineDiagnosticSinks(nil) != nil {
@@ -63,6 +71,9 @@ func TestPublicWireFactoriesExposeIndependentContracts(t *testing.T) {
 	if got := <-MergeErrorChannels(context.Background(), first, nil); !errors.Is(got, firstErr) {
 		t.Fatalf("merged error = %v, want first error", got)
 	}
+}
+
+func testPublicWireLiveness(t *testing.T) {
 	if NewCancellationIntent() == nil || LivenessClockFromSource(clock.Real{}) == nil {
 		t.Fatal("wire did not construct cancellation/liveness dependencies")
 	}

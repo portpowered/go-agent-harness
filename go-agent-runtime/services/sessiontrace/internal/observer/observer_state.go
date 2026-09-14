@@ -14,6 +14,8 @@ type SessionTokenUsageSemantics = sessiontrace.SessionTokenUsageSemantics
 
 const SessionTokenUsageIncremental = sessiontrace.SessionTokenUsageIncremental
 
+const terminalStatusCompleted = "completed"
+
 type failureFacts struct {
 	classification string
 	terminalReason string
@@ -28,7 +30,7 @@ type sessionTerminalObservation = sessiontrace.TerminalObservation
 
 func normalizeTerminalStatus(status string) string {
 	status = strings.ToLower(strings.TrimSpace(status))
-	if status == "completed" || status == "cancelled" || status == "failed" || status == "incomplete" {
+	if status == terminalStatusCompleted || status == "cancelled" || status == "failed" || status == "incomplete" {
 		return status
 	}
 	return status

@@ -228,3 +228,28 @@ func TestLifecycleCloseIsBoundedAndResetRetiresAllKnownIDs(t *testing.T) {
 		t.Fatalf("nil service close/snapshot = %v, %+v", err, nilService.Snapshot())
 	}
 }
+
+func TestScheduledLifecycleBindsTerminalOnlyRetryAndAllowsReplacementBoundary(t *testing.T) {
+	service := New(lifecycle.Options{})
+	applyEvent(t, service, lifecycle.Event{Kind: lifecycle.EventEnsureScheduled, Count: 2})
+	if bound := applyEvent(t, service, lifecycle.Event{Kind: lifecycle.EventBindScheduledBoundary, ResponseID: "scheduled-1"}); !bound.Accepted {
+		t.Fatalf("initial schedule bind = %+v, want acceptance", bound)
+	}
+	failure := terminal("failed", "terminal_failure", "rate_limit_exceeded", "Please try again in 2s")
+	applyEvent(t, service, lifecycle.Event{Kind: lifecycle.EventNoteScheduledTerminal, ResponseID: "scheduled-1", Terminal: failure})
+	if retry := applyEvent(t, service, lifecycle.Event{Kind: lifecycle.EventRememberRetry, ResponseID: "scheduled-1", Terminal: failure}); !retry.Retry.Accepted && !retry.Accepted {
+		t.Fatalf("retry candidate = %+v, want acceptance", retry)
+	}
+	if claimed, err := service.Apply(context.Background(), lifecycle.Event{Kind: lifecycle.EventClaimRetry, ResponseID: "scheduled-1", Terminal: failure}); err != nil || !claimed.Retry.Accepted {
+		t.Fatalf("retry claim = %+v, err=%v", claimed, err)
+	}
+	if rebound := applyEvent(t, service, lifecycle.Event{Kind: lifecycle.EventBindScheduledTerminalOnly, ResponseID: "scheduled-2"}); !rebound.Accepted {
+		t.Fatalf("terminal-only retry bind = %+v, want acceptance", rebound)
+	}
+	if replacement := applyEvent(t, service, lifecycle.Event{Kind: lifecycle.EventResponseOpen, ResponseID: "replacement"}); !replacement.Accepted || replacement.NewResponse {
+		t.Fatalf("replacement response = %+v, want adoption of the terminal-only active boundary", replacement)
+	}
+	if snapshot := service.Snapshot(); snapshot.ActiveResponseID != "replacement" || !snapshot.ActiveResponse {
+		t.Fatalf("replacement snapshot = %+v, want replacement active", snapshot)
+	}
+}

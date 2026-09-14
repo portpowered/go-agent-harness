@@ -8,9 +8,30 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 )
+
+type observerTestTerminalService struct{}
+
+func (observerTestTerminalService) Finalize(request sessionterminal.Request) sessionterminal.Result {
+	result := sessionterminal.Result{Accounting: &sessionterminal.FinalAccounting{}}
+	if request.RunError != nil && !request.UserCancelled && !request.RoomBoundCancellation {
+		result.Records = append(result.Records, sessionterminal.Record{Event: sessionterminal.EventFailure})
+	}
+	if request.UserCancelled || request.RoomBoundCancellation {
+		result.Records = append(result.Records, sessionterminal.Record{Event: sessionterminal.EventTerminal})
+	}
+	result.Records = append(result.Records, sessionterminal.Record{Event: sessionterminal.EventMetrics})
+	return result
+}
+
+func (observerTestTerminalService) CancellationOutputState(output sessionterminal.OutputSnapshot) messages.TerminalOutputState {
+	if output.AssistantOutputObserved || output.TurnsCompleted > 0 {
+		return messages.TerminalOutputPartial
+	}
+	return messages.TerminalOutputNone
+}
 
 type observerTestSink struct {
 	mu      sync.Mutex
@@ -40,7 +61,7 @@ func newObserverForTest(sink sessiontrace.DiagnosticSink, options ...func(*sessi
 		Sink:            sink,
 		Provider:        "provider-test",
 		Model:           "model-test",
-		TerminalService: wire.NewService(),
+		TerminalService: observerTestTerminalService{},
 	}
 	for _, option := range options {
 		option(&config)
@@ -90,7 +111,7 @@ func TestObserverPublicStreamContractAccountsAndFinishes(t *testing.T) {
 	observer.AccountRoomAudioInput(4)
 	observeAssistantTextTurn(observer, "response-1", "hello")
 	end := messages.NewMessageEndValue(messages.TokenUsage{PromptTokens: 2, CompletionTokens: 3, TotalTokens: 5})
-	end.Status = "completed"
+	end.Status = terminalStatusCompleted
 	end.TerminalReason = messages.TerminalReasonProviderAuthoredCompletion
 	end.TerminalProvenance = messages.TerminalProvenanceProvider
 	end.OutputState = messages.TerminalOutputComplete
