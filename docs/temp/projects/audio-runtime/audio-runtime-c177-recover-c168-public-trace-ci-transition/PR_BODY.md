@@ -6,6 +6,11 @@ Current `origin/main` was fetched and integrated in merge commit
 coverage failure from script run `34791475655` is therefore resolved by its
 peer-owned mainline repair. No C177-owned repair was justified.
 
+The later current-main tip `1b1c0296b9471b930c2b290f3bf6fa10559957de` was
+also fetched and integrated in baseline merge
+`f37dc5690fe56c59f73541e13175c3942b6a5599`; its delta is CI/Makefile/check
+partition infrastructure and does not alter the C177-owned source paths.
+
 Focused evidence passed: public trace normal/race, causal room-bound test,
 three shipped SIGINT integration cases, all normal/coverage/race lanes of
 `scripts/test-session-ci-regressions.sh`, Wire, architecture/size, and the

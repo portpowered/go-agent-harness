@@ -16,6 +16,11 @@ Current `origin/main` was fetched and integrated into the adopted worktree as
 merge commit `e3fc5db1cc0fa91e00aa9157d2d35e8c6265466c`, with parents
 `21734b0b2f4a619ff22d8527e18480e7ba865a4b` and
 `8490f8dcad63adde99036016e1e7ffd9ecf61e34`.
+After main advanced during the handoff, the newer `origin/main`
+`1b1c0296b9471b930c2b290f3bf6fa10559957de` was fetched and integrated as
+final baseline merge `f37dc5690fe56c59f73541e13175c3942b6a5599`. Its delta is
+CI/Makefile/check-partition infrastructure only; no C177-owned source path
+was changed by that baseline merge.
 
 The settled prior script run was `34791475655`: static, unit, integration,
 race, hermetic, WebMCP Chrome, macOS audio release, and Windows audio
