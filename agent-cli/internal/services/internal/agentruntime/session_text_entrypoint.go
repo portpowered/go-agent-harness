@@ -32,13 +32,13 @@ func RunSessionWithTextSeed(ctx context.Context, out io.Writer, opts SessionRunO
 	if err != nil {
 		return err
 	}
-	defer func() { _ = claim.release() }()
-	plan, err := planSessionRuntime(opts)
+	defer func() { releaseSessionClaim(claim, &runErr) }()
+	plan, err := planSessionRuntimeWithContext(ctx, opts)
 	if err != nil {
 		return err
 	}
 
-	turnRuntime, err := prepareSessionTurnSeed(&plan, seed)
+	turnRuntime, err := prepareSessionTurnSeed(ctx, &plan, seed)
 	if err != nil {
 		return err
 	}

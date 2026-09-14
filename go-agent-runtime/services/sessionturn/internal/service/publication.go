@@ -51,7 +51,7 @@ func startPublication(parent context.Context, request sessionturn.PublicationReq
 		return nil, errors.New("session turn publication requires watch, refresh, and publish callbacks")
 	}
 	if parent == nil {
-		parent = context.Background()
+		return nil, errors.New("session turn publication requires a non-nil context")
 	}
 	base := messages.CanonicalToolDefinitions(request.BaseDefinitions)
 	initial := messages.CanonicalToolDefinitions(request.InitialDefinitions)
@@ -59,7 +59,10 @@ func startPublication(parent context.Context, request sessionturn.PublicationReq
 		initial = append([]messages.ToolDefinition(nil), base...)
 	}
 	initial = mergeDefinitions(base, initial)
-	digest, _ := definitionDigest(initial)
+	digest, err := definitionDigest(initial)
+	if err != nil {
+		return nil, err
+	}
 	timerFactory := request.Browser.TimerFactory
 	if timerFactory == nil {
 		timerFactory = wallTimerFactory{}

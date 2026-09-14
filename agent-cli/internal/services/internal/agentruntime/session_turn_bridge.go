@@ -8,6 +8,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 )
 
+const sessionTurnBrowserEventBufferSize = 16
+
 // sessionTurnBrowserRequest is the only host-to-runtime conversion needed by
 // the session planner. Browser ownership and event production remain in the
 // CLI host; the session-turn service consumes only immutable event values.
@@ -25,7 +27,7 @@ func sessionTurnBrowserWatch(watch func(context.Context) <-chan webmcp.BrokerEve
 		if input == nil {
 			return nil
 		}
-		output := make(chan sessionturn.BrowserEvent, 16)
+		output := make(chan sessionturn.BrowserEvent, sessionTurnBrowserEventBufferSize)
 		go forwardSessionTurnEvents(ctx, input, output)
 		return output
 	}
@@ -63,6 +65,8 @@ func sessionTurnBrowserEvent(event webmcp.BrokerEvent) (sessionturn.BrowserEvent
 		kind = sessionturn.BrowserEventCatalogChanged
 	case webmcp.BrokerEventGenerationChanged:
 		kind = sessionturn.BrowserEventGenerationChanged
+	case webmcp.BrokerEventInvocationCreated, webmcp.BrokerEventInvocationTerminal, webmcp.BrokerEventSessionClosed:
+		return sessionturn.BrowserEvent{}, false
 	default:
 		return sessionturn.BrowserEvent{}, false
 	}

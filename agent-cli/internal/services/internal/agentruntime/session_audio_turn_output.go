@@ -14,7 +14,7 @@ import (
 )
 
 func runSessionAudioOutPlan(ctx context.Context, out io.Writer, plan sessionRuntimePlan, path string, seed SessionTextSeed, voice string, maxDuration time.Duration) (runErr error) {
-	turnRuntime, err := prepareSessionTurnSeed(&plan, seed)
+	turnRuntime, err := prepareSessionTurnSeed(ctx, &plan, seed)
 	if err != nil {
 		return err
 	}
@@ -140,7 +140,6 @@ func (i *sessionAudioOutputInferencer) err() error {
 
 type sessionAudioOutputSession struct {
 	messages.Session
-	ctx            context.Context
 	output         *sessionAudioOutput
 	record         func(error)
 	wirePrompt     string
@@ -160,7 +159,6 @@ type sessionAudioOutputSession struct {
 func newSessionAudioOutputSession(ctx context.Context, inner messages.Session, output *sessionAudioOutput, record func(error), wirePrompt string, seedValue string) *sessionAudioOutputSession {
 	s := &sessionAudioOutputSession{
 		Session:        inner,
-		ctx:            ctx,
 		output:         output,
 		record:         record,
 		wirePrompt:     wirePrompt,
@@ -171,7 +169,7 @@ func newSessionAudioOutputSession(ctx context.Context, inner messages.Session, o
 		closeRequested: make(chan struct{}),
 		innerCloseDone: make(chan struct{}),
 	}
-	go s.forward()
+	go s.forward(ctx)
 	return s
 }
 
@@ -242,26 +240,26 @@ func (s *sessionAudioOutputSession) TerminalError() error {
 	return terminalSessionError(s.Session)
 }
 
-func (s *sessionAudioOutputSession) forward() {
+func (s *sessionAudioOutputSession) forward(ctx context.Context) {
 	defer func() {
 		s.closeInner()
 		close(s.done)
 	}()
 	input := s.Session.Receive()
 	for {
-		if s.ctx.Err() != nil {
-			s.drainAfterCancellation(input)
+		if ctx.Err() != nil {
+			s.drainAfterCancellation(ctx, input)
 			return
 		}
-		if s.forwardNext(input) {
+		if s.forwardNext(ctx, input) {
 			continue
 		}
-		if s.ctx.Err() != nil {
-			s.drainAfterCancellation(input)
+		if ctx.Err() != nil {
+			s.drainAfterCancellation(ctx, input)
 		} else {
 			select {
 			case <-s.closeRequested:
-				s.drainAfterCancellation(input)
+				s.drainAfterCancellation(ctx, input)
 			default:
 			}
 		}
@@ -269,18 +267,18 @@ func (s *sessionAudioOutputSession) forward() {
 	}
 }
 
-func (s *sessionAudioOutputSession) forwardNext(input *messages.TypedBuffer[messages.StreamMessage]) bool {
+func (s *sessionAudioOutputSession) forwardNext(ctx context.Context, input *messages.TypedBuffer[messages.StreamMessage]) bool {
 	select {
 	case msg := <-input.Chan():
-		retainingCtx, cancel := context.WithTimeout(context.WithoutCancel(s.ctx), sessionStragglerDrainWallSafety)
+		retainingCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), sessionStragglerDrainWallSafety)
 		defer cancel()
-		return s.forwardMessageWithContext(retainingCtx, msg, s.ctx.Err() != nil)
+		return s.forwardMessageWithContext(retainingCtx, msg, ctx.Err() != nil)
 	case <-s.Session.Done():
-		if s.ctx.Err() == nil {
-			s.drain(input, s.ctx, false)
+		if ctx.Err() == nil {
+			s.drain(input, ctx, false)
 		}
 	case <-s.closeRequested:
-	case <-s.ctx.Done():
+	case <-ctx.Done():
 	}
 	return false
 }
@@ -297,9 +295,9 @@ func (s *sessionAudioOutputSession) drain(input *messages.TypedBuffer[messages.S
 	}
 }
 
-func (s *sessionAudioOutputSession) drainAfterCancellation(input *messages.TypedBuffer[messages.StreamMessage]) {
+func (s *sessionAudioOutputSession) drainAfterCancellation(ctx context.Context, input *messages.TypedBuffer[messages.StreamMessage]) {
 	close(s.drainStarted)
-	retainCtx, cancel := context.WithTimeout(context.WithoutCancel(s.ctx), sessionStragglerDrainWallSafety)
+	retainCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), sessionStragglerDrainWallSafety)
 	defer cancel()
 	terminal := time.NewTimer(sessionStragglerDrainWallSafety)
 	defer terminal.Stop()

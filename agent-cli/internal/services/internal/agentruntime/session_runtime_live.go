@@ -215,6 +215,22 @@ func planLiveSessionRuntime(opts SessionRunOptions, factory sessionRuntimeFactor
 }
 
 func planSessionWithResolvedInstructions(opts SessionRunOptions, instructions string) (sessionRuntimePlan, error) {
+	return planSessionWithResolvedInstructionsContext(context.Background(), opts, instructions)
+}
+
+func planSessionRuntime(opts SessionRunOptions) (sessionRuntimePlan, error) {
+	return planSessionRuntimeWithContext(context.Background(), opts)
+}
+
+func planSessionRuntimeWithContext(ctx context.Context, opts SessionRunOptions) (sessionRuntimePlan, error) {
+	factory := opts.runtimeFactory
+	if !factory.configured() {
+		factory = newDefaultSessionRuntimeFactory()
+	}
+	return planSessionRuntimeWithFactory(ctx, opts, factory)
+}
+
+func planSessionWithResolvedInstructionsContext(ctx context.Context, opts SessionRunOptions, instructions string) (sessionRuntimePlan, error) {
 	// This is the single service-owned boundary between prompt resolution and
 	// provider construction. The tool definitions in opts are the same snapshot
 	// that the runtime planner passes to the provider, so the grounding contract
@@ -229,7 +245,7 @@ func planSessionWithResolvedInstructions(opts SessionRunOptions, instructions st
 	if useInitialProviderInstructions {
 		planFactory = sessionRuntimeFactoryWithInstructions(planFactory, instructions)
 	}
-	plan, err := planSessionRuntimeWithFactory(opts, planFactory)
+	plan, err := planSessionRuntimeWithFactory(ctx, opts, planFactory)
 	if err != nil {
 		return sessionRuntimePlan{}, err
 	}
@@ -238,7 +254,7 @@ func planSessionWithResolvedInstructions(opts SessionRunOptions, instructions st
 	// instructions or tools are present; an empty instruction remains empty and
 	// does not synthesize a default prompt.
 	if opts.SessionInferencer != nil && plan.inferencer != nil && !useInitialProviderInstructions && (instructions != "" || len(opts.ToolDefinitions) > 0) {
-		turnRuntime, prepareErr := sessionturnwire.NewDefaultService().Prepare(context.Background(), sessionturn.Request{
+		turnRuntime, prepareErr := sessionturnwire.NewDefaultService().Prepare(ctx, sessionturn.Request{
 			SessionInferencer: plan.inferencer,
 			InstructionsText:  instructions,
 			ToolExecutor:      plan.loop.ToolExecutor,

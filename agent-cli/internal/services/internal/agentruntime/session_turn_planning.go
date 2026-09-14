@@ -15,11 +15,11 @@ import (
 // prepareSessionTurnSeed transfers seed substitution and serialized output
 // ownership to the session-turn service. The planner only replaces the
 // provider edge and prompt value; it does not retain seed state.
-func prepareSessionTurnSeed(plan *sessionRuntimePlan, seed sessionturn.Seed) (sessionturn.Runtime, error) {
+func prepareSessionTurnSeed(ctx context.Context, plan *sessionRuntimePlan, seed sessionturn.Seed) (sessionturn.Runtime, error) {
 	if plan == nil || plan.inferencer == nil {
 		return nil, nil
 	}
-	runtime, err := sessionturnwire.NewDefaultService().Prepare(context.Background(), sessionturn.Request{
+	runtime, err := sessionturnwire.NewDefaultService().Prepare(ctx, sessionturn.Request{
 		SessionInferencer: plan.inferencer,
 		Seed:              seed,
 		ToolExecutor:      plan.loop.ToolExecutor,
@@ -72,12 +72,12 @@ func sessionLoopToolExecutor(opts sessionLoopOptions) messages.ToolExecutor {
 	return opts.turnRuntime.ToolExecutor()
 }
 
-func prepareSessionRecordingTurnRuntime(plan *sessionRuntimePlan, seed SessionTextSeed) (sessionturn.Runtime, error) {
+func prepareSessionRecordingTurnRuntime(ctx context.Context, plan *sessionRuntimePlan, seed SessionTextSeed) (sessionturn.Runtime, error) {
 	turnRuntime := plan.turnRuntime
 	if !seed.Present || (turnRuntime != nil && turnRuntime.WirePrompt() != "") {
 		return turnRuntime, nil
 	}
-	return prepareSessionTurnSeed(plan, seed)
+	return prepareSessionTurnSeed(ctx, plan, seed)
 }
 
 func prepareSessionRecordingOutputs(plan *sessionRuntimePlan, out io.Writer, audioOutPath string, seed SessionTextSeed, turnRuntime sessionturn.Runtime) (*sessionAudioOutput, *sessionAudioOutputInferencer, sessionturn.Output, error) {
@@ -103,7 +103,7 @@ func prepareSessionRecordingOutputs(plan *sessionRuntimePlan, out io.Writer, aud
 	return audioOutput, audioWrapper, nil, nil
 }
 
-func prepareSessionTurnRuntime(opts SessionRunOptions, plan *sessionRuntimePlan, interactivePolicy runtimeTools.InteractiveToolPolicy) error {
+func prepareSessionTurnRuntime(ctx context.Context, opts SessionRunOptions, plan *sessionRuntimePlan, interactivePolicy runtimeTools.InteractiveToolPolicy) error {
 	toolLifecycle := composeSessionToolLifecycleObserver(plan.loop.toolLifecycleObserver, plan.loop.observer, plan.runtime)
 	runtimePolicy, err := runtimeToolsWire.NewInteractiveToolPolicy().Resolve(runtimeTools.InteractiveToolPolicyRequest{
 		Settings: runtimeTools.InteractiveToolPolicySettings{
@@ -118,7 +118,7 @@ func prepareSessionTurnRuntime(opts SessionRunOptions, plan *sessionRuntimePlan,
 	if err != nil {
 		return fmt.Errorf("prepare session-turn policy: %w", err)
 	}
-	turnRuntime, err := sessionturnwire.NewDefaultService().Prepare(context.Background(), sessionturn.Request{
+	turnRuntime, err := sessionturnwire.NewDefaultService().Prepare(ctx, sessionturn.Request{
 		SessionInferencer:     plan.inferencer,
 		ToolExecutor:          plan.loop.ToolExecutor,
 		ToolDefinitions:       nil,
@@ -149,8 +149,8 @@ func prepareSessionTurnRuntime(opts SessionRunOptions, plan *sessionRuntimePlan,
 	return nil
 }
 
-func prepareSessionRuntimeToolsAndAudio(opts SessionRunOptions, plan *sessionRuntimePlan, interactivePolicy runtimeTools.InteractiveToolPolicy) error {
-	if err := prepareSessionTurnRuntime(opts, plan, interactivePolicy); err != nil {
+func prepareSessionRuntimeToolsAndAudio(ctx context.Context, opts SessionRunOptions, plan *sessionRuntimePlan, interactivePolicy runtimeTools.InteractiveToolPolicy) error {
+	if err := prepareSessionTurnRuntime(ctx, opts, plan, interactivePolicy); err != nil {
 		return err
 	}
 	return configureSessionAudioContract(opts, plan)

@@ -75,7 +75,7 @@ func RunSessionWithMaxDurationClock(ctx context.Context, out io.Writer, opts Ses
 	}
 	defer func() { _ = claim.release() }()
 
-	plan, err := planSessionRuntime(opts)
+	plan, err := planSessionRuntimeWithContext(ctx, opts)
 	if err != nil {
 		return err
 	}
@@ -125,7 +125,7 @@ func RunSessionWithTextSeedAndMaxDuration(ctx context.Context, out io.Writer, op
 		return err
 	}
 	defer func() { _ = claim.release() }()
-	plan, err := planSessionRuntime(opts)
+	plan, err := planSessionRuntimeWithContext(ctx, opts)
 	if err != nil {
 		return err
 	}
@@ -134,7 +134,7 @@ func RunSessionWithTextSeedAndMaxDuration(ctx context.Context, out io.Writer, op
 		return err
 	}
 
-	turnRuntime, err := prepareSessionTurnSeed(&plan, seed)
+	turnRuntime, err := prepareSessionTurnSeed(ctx, &plan, seed)
 	if err != nil {
 		return err
 	}

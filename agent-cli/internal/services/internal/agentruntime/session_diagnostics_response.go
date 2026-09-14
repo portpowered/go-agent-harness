@@ -128,11 +128,23 @@ func (o *sessionProgressObserver) syncLifecycleProjection() {
 	o.retryCandidateID = snapshot.RetryCandidateID
 }
 func (o *sessionProgressObserver) lifecycleEvent(event sd.Event) sd.Observation {
-	observation, err := o.applyLifecycle(context.Background(), event)
+	return o.lifecycleEventWithContext(context.Background(), event)
+}
+
+func (o *sessionProgressObserver) lifecycleEventWithContext(ctx context.Context, event sd.Event) sd.Observation {
+	observation, err := o.applyLifecycle(ctx, event)
 	if err != nil {
 		return sd.Observation{}
 	}
 	return observation
+}
+
+func (o *sessionProgressObserver) noteToolResultAccepted(callID string) {
+	o.noteToolResultAcceptedWithContext(context.Background(), callID)
+}
+
+func (o *sessionProgressObserver) noteToolContinuationRequested() {
+	o.noteToolContinuationRequestedWithContext(context.Background())
 }
 
 func (o *sessionProgressObserver) observedResponseProjection() (active bool, id string) {

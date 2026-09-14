@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -48,7 +47,7 @@ func RunSessionWithImages(ctx context.Context, out io.Writer, opts SessionImageR
 	if err != nil {
 		return err
 	}
-	defer func() { _ = claim.release() }()
+	defer func() { releaseSessionClaim(claim, &runErr) }()
 	metadata, err := resolveSessionImageCapabilities(opts.SessionRunOptions)
 	if err != nil {
 		return err
@@ -66,12 +65,12 @@ func RunSessionWithImages(ctx context.Context, out io.Writer, opts SessionImageR
 		opts.SessionRunOptions.AudioOutputRequested = true
 	}
 	var imageCleanup func()
-	opts.SessionRunOptions, imageCleanup, err = prepareSessionImageToolAccess(opts.SessionRunOptions, paths, parts)
+	opts.SessionRunOptions, imageCleanup, err = prepareSessionImageToolAccess(ctx, opts.SessionRunOptions, paths, parts)
 	if err != nil {
 		return err
 	}
 	defer imageCleanup()
-	plan, wirePrompt, err := planSessionImageRuntime(opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, false)
+	plan, wirePrompt, err := planSessionImageRuntimeWithContext(ctx, opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, false)
 	if err != nil {
 		return err
 	}
@@ -107,7 +106,7 @@ func runSessionImagesAudioInput(ctx context.Context, out io.Writer, opts Session
 	if err != nil {
 		return err
 	}
-	defer func() { _ = claim.release() }()
+	defer func() { releaseSessionClaim(claim, &runErr) }()
 	metadata, err := resolveSessionImageCapabilities(opts.SessionRunOptions)
 	if err != nil {
 		return err
@@ -122,7 +121,7 @@ func runSessionImagesAudioInput(ctx context.Context, out io.Writer, opts Session
 		opts.SessionRunOptions.PromptProvided = true
 	}
 	var imageCleanup func()
-	opts.SessionRunOptions, imageCleanup, err = prepareSessionImageToolAccess(opts.SessionRunOptions, paths, parts)
+	opts.SessionRunOptions, imageCleanup, err = prepareSessionImageToolAccess(ctx, opts.SessionRunOptions, paths, parts)
 	if err != nil {
 		return err
 	}
@@ -141,7 +140,7 @@ func runSessionImagesAudioInput(ctx context.Context, out io.Writer, opts Session
 	if opts.AudioOutPath != "" {
 		opts.SessionRunOptions.AudioOutputRequested = true
 	}
-	plan, wirePrompt, err := planSessionImageRuntime(opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, true)
+	plan, wirePrompt, err := planSessionImageRuntimeWithContext(ctx, opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, true)
 	if err != nil {
 		return err
 	}
@@ -154,31 +153,35 @@ func runSessionImagesAudioInput(ctx context.Context, out io.Writer, opts Session
 }
 
 func planSessionImageRuntime(opts SessionRunOptions, parts []messages.ImagePart, seed sessionturn.Seed, systemPrompt string, deferResponse bool) (sessionRuntimePlan, string, error) {
+	return planSessionImageRuntimeWithContext(context.Background(), opts, parts, seed, systemPrompt, deferResponse)
+}
+
+func planSessionImageRuntimeWithContext(ctx context.Context, opts SessionRunOptions, parts []messages.ImagePart, seed sessionturn.Seed, systemPrompt string, deferResponse bool) (sessionRuntimePlan, string, error) {
 	var (
 		plan         sessionRuntimePlan
 		err          error
 		instructions string
 	)
 	if opts.ReplayPath != "" {
-		plan, err = planSessionRuntime(opts)
+		plan, err = planSessionRuntimeWithContext(ctx, opts)
 	} else {
-		instructions, err = sessionInstructionText(opts, systemPrompt)
+		instructions, err = sessionInstructionText(ctx, opts, systemPrompt)
 		if err == nil {
-			plan, err = planSessionWithResolvedInstructions(opts, instructions)
+			plan, err = planSessionWithResolvedInstructionsContext(ctx, opts, instructions)
 		}
 	}
 	if err != nil {
 		return sessionRuntimePlan{}, "", err
 	}
-	return attachSessionImageRuntime(plan, parts, seed, deferResponse, opts.Prompt)
+	return attachSessionImageRuntime(ctx, plan, parts, seed, deferResponse, opts.Prompt)
 }
 
-func planSessionImageRuntimeForDirectory(opts SessionRunOptions, parts []messages.ImagePart, seed sessionturn.Seed, systemPrompt string, deferResponse bool) (sessionRuntimePlan, string, func(), error) {
-	plan, cleanup, err := planSessionForDirectoryRecordingWithInstructions(opts, systemPrompt, true)
+func planSessionImageRuntimeForDirectory(ctx context.Context, opts SessionRunOptions, parts []messages.ImagePart, seed sessionturn.Seed, systemPrompt string, deferResponse bool) (sessionRuntimePlan, string, func(), error) {
+	plan, cleanup, err := planSessionForDirectoryRecordingWithInstructions(ctx, opts, systemPrompt, true)
 	if err != nil {
 		return sessionRuntimePlan{}, "", func() {}, err
 	}
-	plan, wirePrompt, err := attachSessionImageRuntime(plan, parts, seed, deferResponse, opts.Prompt)
+	plan, wirePrompt, err := attachSessionImageRuntime(ctx, plan, parts, seed, deferResponse, opts.Prompt)
 	if err != nil {
 		cleanup()
 		return sessionRuntimePlan{}, "", func() {}, err
@@ -186,13 +189,13 @@ func planSessionImageRuntimeForDirectory(opts SessionRunOptions, parts []message
 	return plan, wirePrompt, cleanup, nil
 }
 
-func attachSessionImageRuntime(plan sessionRuntimePlan, parts []messages.ImagePart, seed sessionturn.Seed, deferResponse bool, prompt string) (sessionRuntimePlan, string, error) {
+func attachSessionImageRuntime(ctx context.Context, plan sessionRuntimePlan, parts []messages.ImagePart, seed sessionturn.Seed, deferResponse bool, prompt string) (sessionRuntimePlan, string, error) {
 	if plan.inferencer == nil {
 		return sessionRuntimePlan{}, "", errors.New("session image runtime has no session inferencer")
 	}
 	firstTurn := make(chan error, 1)
 	plan.loop.awaitFirstTurn = firstTurn
-	turnRuntime, err := sessionturnwire.NewDefaultService().Prepare(context.Background(), sessionturn.Request{
+	turnRuntime, err := sessionturnwire.NewDefaultService().Prepare(ctx, sessionturn.Request{
 		SessionInferencer: plan.inferencer,
 		Seed:              seed,
 		Image: &sessionturn.ImageRequest{
@@ -340,7 +343,7 @@ func bindSessionImageToolExecutor(opts SessionRunOptions, plan sessionRuntimePla
 // of each initial image and advertises those exact paths to the provider. The
 // inline image turn still uses the validated parts supplied by the caller;
 // staging is only needed for a later model-issued read_image call.
-func prepareSessionImageToolAccess(opts SessionRunOptions, sourcePaths []string, parts []messages.ImagePart) (SessionRunOptions, func(), error) {
+func prepareSessionImageToolAccess(ctx context.Context, opts SessionRunOptions, sourcePaths []string, parts []messages.ImagePart) (SessionRunOptions, func(), error) {
 	if !sessionHasTool(opts.ToolDefinitions, runtimeTools.ReadImageToolID) {
 		return opts, noOpSessionImageCleanup, nil
 	}
@@ -352,7 +355,7 @@ func prepareSessionImageToolAccess(opts SessionRunOptions, sourcePaths []string,
 	if err != nil {
 		return opts, noOpSessionImageCleanup, fmt.Errorf("stage session images: %w", err)
 	}
-	staged, err := runtimeToolsWire.NewImageStaging().Stage(context.Background(), runtimeTools.ImageStagingRequest{
+	staged, err := runtimeToolsWire.NewImageStaging().Stage(ctx, runtimeTools.ImageStagingRequest{
 		StagingRoot:            configDir,
 		SourcePaths:            sourcePaths,
 		ImageParts:             parts,
@@ -378,16 +381,9 @@ func noOpSessionImageCleanup() {}
 
 func sessionImageStagingConfigDir(configDir string) (string, error) {
 	configDir = strings.TrimSpace(configDir)
-	if configDir == "" {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("resolve home directory: %w", err)
-		}
-		configDir = filepath.Join(homeDir, config.ConfigDirName)
-	}
-	abs, err := filepath.Abs(configDir)
+	storage, err := config.NewDefaultConfigStorage(configDir)
 	if err != nil {
 		return "", fmt.Errorf("resolve config directory %q: %w", configDir, err)
 	}
-	return filepath.Clean(abs), nil
+	return filepath.Clean(filepath.Dir(storage.Path())), nil
 }

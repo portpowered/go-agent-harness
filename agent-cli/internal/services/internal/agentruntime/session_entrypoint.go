@@ -18,8 +18,8 @@ func RunSession(ctx context.Context, out io.Writer, opts SessionRunOptions) (run
 	if err != nil {
 		return err
 	}
-	defer func() { _ = claim.release() }()
-	plan, err := planSessionRuntime(opts)
+	defer func() { releaseSessionClaim(claim, &runErr) }()
+	plan, err := planSessionRuntimeWithContext(ctx, opts)
 	if err != nil {
 		return err
 	}

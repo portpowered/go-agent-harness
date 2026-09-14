@@ -46,12 +46,12 @@ func RunSessionWithInstructions(ctx context.Context, out io.Writer, opts Session
 	}
 	defer func() { _ = claim.release() }()
 
-	instructions, err := sessionInstructionText(opts, systemPrompt)
+	instructions, err := sessionInstructionText(ctx, opts, systemPrompt)
 	if err != nil {
 		return err
 	}
 
-	plan, err := planSessionWithResolvedInstructions(opts, instructions)
+	plan, err := planSessionWithResolvedInstructionsContext(ctx, opts, instructions)
 	if err != nil {
 		return err
 	}
@@ -84,11 +84,11 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 		return err
 	}
 	defer func() { _ = claim.release() }()
-	instructions, err := sessionInstructionText(opts, systemPrompt)
+	instructions, err := sessionInstructionText(ctx, opts, systemPrompt)
 	if err != nil {
 		return err
 	}
-	plan, err := planSessionWithResolvedInstructions(opts, instructions)
+	plan, err := planSessionWithResolvedInstructionsContext(ctx, opts, instructions)
 	if err != nil {
 		return err
 	}
@@ -116,7 +116,7 @@ func runSessionInstructionsWithoutAudio(ctx context.Context, out io.Writer, plan
 }
 
 func runSessionInstructionsWithSeed(ctx context.Context, out io.Writer, plan sessionRuntimePlan, maxDuration time.Duration, seed SessionTextSeed) error {
-	turnRuntime, err := prepareSessionTurnSeed(&plan, seed)
+	turnRuntime, err := prepareSessionTurnSeed(ctx, &plan, seed)
 	if err != nil {
 		return err
 	}
@@ -152,7 +152,7 @@ func admitSessionDurationInferencer(plan *sessionRuntimePlan) *sessionDurationAd
 }
 
 func runSessionInstructionsWithAudio(ctx context.Context, out io.Writer, plan sessionRuntimePlan, audioPath string, maxDuration time.Duration, seed SessionTextSeed) (runErr error) {
-	turnRuntime, err := prepareSessionTurnSeed(&plan, seed)
+	turnRuntime, err := prepareSessionTurnSeed(ctx, &plan, seed)
 	if err != nil {
 		return err
 	}
@@ -205,12 +205,12 @@ func runSessionInstructionsDurationOrPlan(ctx context.Context, out io.Writer, pl
 // session instruction service. Filesystem policy normalization remains at the
 // CLI host edge; prompt selection, skills ordering, scope formatting and all
 // model-facing policy decisions live behind the runtime contract.
-func sessionInstructionText(opts SessionRunOptions, systemPrompt string) (string, error) {
+func sessionInstructionText(ctx context.Context, opts SessionRunOptions, systemPrompt string) (string, error) {
 	request, err := newSessionInstructionRequest(opts, systemPrompt)
 	if err != nil {
 		return "", err
 	}
-	result, err := runtimeSessionWire.NewInstructionService().Resolve(context.Background(), request)
+	result, err := runtimeSessionWire.NewInstructionService().Resolve(ctx, request)
 	if err != nil {
 		return "", err
 	}

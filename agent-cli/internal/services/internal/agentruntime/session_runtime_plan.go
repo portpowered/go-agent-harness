@@ -315,17 +315,7 @@ func (p sessionRuntimePlan) configureLoopObserver(loop *sessionLoopOptions) {
 	loop.observer = obs
 }
 
-func planSessionRuntime(opts SessionRunOptions) (sessionRuntimePlan, error) {
-	factory := opts.runtimeFactory
-	if !factory.configured() {
-		// Kept for package-local test callers while composition migrates. All
-		// production service entrypoints install runtimeFactory from Wire.
-		factory = newDefaultSessionRuntimeFactory()
-	}
-	return planSessionRuntimeWithFactory(opts, factory)
-}
-
-func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntimeFactory) (plan sessionRuntimePlan, planErr error) {
+func planSessionRuntimeWithFactory(ctx context.Context, opts SessionRunOptions, factory sessionRuntimeFactory) (plan sessionRuntimePlan, planErr error) {
 	recordingClaim, err := ensureSessionRecordingClaim(&opts)
 	if err != nil {
 		return sessionRuntimePlan{}, err
@@ -423,7 +413,7 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	// so its capability snapshot cannot leak across concurrent sessions.
 	plan.loop.ToolExecutor = bindSessionImageToolExecutor(opts, plan)
 	plan.loop.ToolDefinitions = append([]messages.ToolDefinition(nil), opts.ToolDefinitions...)
-	if err := prepareSessionRuntimeToolsAndAudio(opts, &plan, interactivePolicy); err != nil {
+	if err := prepareSessionRuntimeToolsAndAudio(ctx, opts, &plan, interactivePolicy); err != nil {
 		return sessionRuntimePlan{}, err
 	}
 	policySnapshot := interactivePolicy.Clone()

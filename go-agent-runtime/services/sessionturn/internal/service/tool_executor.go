@@ -36,12 +36,12 @@ func newToolExecutor(inner messages.ToolExecutor, policy tools.InteractiveToolPo
 }
 
 func (e *toolExecutor) Execute(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if e == nil || e.inner == nil {
 		err := errors.New("session turn tool executor is not configured")
 		return messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name, Content: fmt.Sprintf("tool %q failed: %v", call.Name, err)}, nil
+	}
+	if ctx == nil {
+		return e.failed(call, errors.New("session turn tool executor requires a non-nil context"))
 	}
 	if e.observeCall != nil {
 		e.observeCall(call)

@@ -20,7 +20,7 @@ func (s *observedSession) SendMessage(ctx context.Context, msg messages.Message)
 		return false
 	}
 	outcome := sessionCompleteMessageSendOutcome(ctx, sender.SendMessage(ctx, msg))
-	s.observeCompleteMessageToolResult(msg, outcome, true)
+	s.observeCompleteMessageToolResult(ctx, msg, outcome, true)
 	return outcome.OK()
 }
 
@@ -35,7 +35,7 @@ func (s *observedSession) SendMessageWithoutResponse(ctx context.Context, msg me
 		return false
 	}
 	outcome := sessionCompleteMessageSendOutcome(ctx, sender.SendMessageWithoutResponse(ctx, msg))
-	s.observeCompleteMessageToolResult(msg, outcome, false)
+	s.observeCompleteMessageToolResult(ctx, msg, outcome, false)
 	return outcome.OK()
 }
 
@@ -54,17 +54,17 @@ func sessionCompleteMessageSendOutcome(ctx context.Context, sent bool) messages.
 	return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}
 }
 
-func (s *observedSession) observeCompleteMessageToolResult(msg messages.Message, outcome messages.SessionSendOutcome, requestsContinuation bool) {
+func (s *observedSession) observeCompleteMessageToolResult(ctx context.Context, msg messages.Message, outcome messages.SessionSendOutcome, requestsContinuation bool) {
 	if s == nil || s.progress == nil {
 		return
 	}
 	if outcome.OK() {
 		if msg.ToolCallID != "" {
-			s.progress.noteToolResultAccepted(msg.ToolCallID)
+			s.progress.noteToolResultAcceptedWithContext(ctx, msg.ToolCallID)
 		}
 		if requestsContinuation {
 			if msg.ToolCallID != "" {
-				s.progress.noteToolContinuationRequestedFor(msg.ToolCallID)
+				s.progress.noteToolContinuationRequestedForWithContext(ctx, msg.ToolCallID)
 			}
 			s.progress.armProviderProgress()
 		}

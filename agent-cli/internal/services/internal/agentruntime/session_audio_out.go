@@ -58,7 +58,7 @@ func RunSessionWithAudioOutAndTextSeed(ctx context.Context, out io.Writer, opts 
 		return err
 	}
 	defer func() { _ = claim.release() }()
-	plan, err := planSessionRuntime(opts)
+	plan, err := planSessionRuntimeWithContext(ctx, opts)
 	if err != nil {
 		return err
 	}
@@ -91,7 +91,7 @@ func RunSessionWithAudioOutAndTextSeedAndMaxDuration(ctx context.Context, out io
 		return err
 	}
 	defer func() { _ = claim.release() }()
-	plan, err := planSessionRuntime(opts)
+	plan, err := planSessionRuntimeWithContext(ctx, opts)
 	if err != nil {
 		return err
 	}

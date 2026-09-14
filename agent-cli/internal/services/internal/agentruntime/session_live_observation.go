@@ -250,11 +250,11 @@ func (s *observedSession) SendWithOutcome(ctx context.Context, msg messages.Stre
 	}
 	if msg.Type == messages.StreamTypeToolCallEnd && s.progress != nil {
 		if value, ok := msg.Value.(*messages.ToolCallEndValue); ok && value != nil {
-			s.progress.noteToolResultAccepted(value.ToolCallID)
+			s.progress.noteToolResultAcceptedWithContext(ctx, value.ToolCallID)
 		}
 	}
 	if msg.Type == messages.StreamTypeResponseCreate && s.progress != nil {
-		s.progress.noteToolContinuationRequested()
+		s.progress.noteToolContinuationRequestedWithContext(ctx)
 	}
 	if s.progress != nil {
 		s.progress.observeProviderDispatch(msg)

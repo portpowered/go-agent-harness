@@ -10,14 +10,14 @@ import (
 	sessionturnwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn/wire"
 )
 
-func sessionTurnPublicationInputs(sessionInferencer messages.SessionInferencer, opts sessionLoopOptions) (sessionturn.Runtime, sessionturn.BrowserRequest, error) {
+func sessionTurnPublicationInputs(ctx context.Context, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions) (sessionturn.Runtime, sessionturn.BrowserRequest, error) {
 	if opts.turnRuntime != nil {
 		return opts.turnRuntime, opts.turnBrowser, nil
 	}
 	if opts.BrowserWatch == nil || opts.RefreshToolDefinitions == nil {
 		return nil, sessionturn.BrowserRequest{}, nil
 	}
-	runtime, err := sessionturnwire.NewDefaultService().Prepare(context.Background(), sessionturn.Request{
+	runtime, err := sessionturnwire.NewDefaultService().Prepare(ctx, sessionturn.Request{
 		SessionInferencer:     sessionInferencer,
 		ToolExecutor:          opts.ToolExecutor,
 		ToolDefinitions:       opts.ToolDefinitions,
@@ -31,11 +31,11 @@ func sessionTurnPublicationInputs(sessionInferencer messages.SessionInferencer, 
 }
 
 func startSessionTurnPublication(ctx context.Context, loop *agentloop.AgentLoop, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions) (sessionturn.Publication, <-chan error) {
-	runtime, browser, err := sessionTurnPublicationInputs(sessionInferencer, opts)
+	runtime, browser, err := sessionTurnPublicationInputs(ctx, sessionInferencer, opts)
 	if err != nil {
 		return nil, sessionTurnPublicationError(err)
 	}
-	if runtime == nil || browser.Watch == nil {
+	if runtime == nil || browser.Watch == nil || browser.Refresh == nil {
 		return nil, nil
 	}
 	publisher, err := runtime.StartPublication(ctx, sessionturn.PublicationRequest{

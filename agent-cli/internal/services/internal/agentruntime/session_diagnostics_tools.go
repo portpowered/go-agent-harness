@@ -1,6 +1,8 @@
 package agentruntime
 
 import (
+	"context"
+
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	sd "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
 	tools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
@@ -58,23 +60,21 @@ func (o *sessionProgressObserver) observeProviderToolCallWithID(callID, name str
 	o.observeProviderToolCallWithIDForResponse(callID, name, "")
 }
 
-// noteToolResultAccepted resolves exactly one provider call after the
-// provider-facing session send boundary reports success. Execution completion,
-// queueing, and rejected sends do not reach this method.
-func (o *sessionProgressObserver) noteToolResultAccepted(callID string) {
+// noteToolResultAccepted resolves one provider call after the send boundary succeeds.
+func (o *sessionProgressObserver) noteToolResultAcceptedWithContext(ctx context.Context, callID string) {
 	callID = strings.TrimSpace(callID)
 	if o == nil || callID == "" {
 		return
 	}
-	accepted := o.lifecycleEvent(sd.Event{Kind: sd.EventToolResultAccepted, CallID: callID}).Accepted
+	accepted := o.lifecycleEventWithContext(ctx, sd.Event{Kind: sd.EventToolResultAccepted, CallID: callID}).Accepted
 	if !accepted {
 		// The provider send can complete before the first inbound response delta.
 		// Establish one provisional, untagged lifecycle for that legitimate
 		// handoff, then let the later tool-call event enrich it with its ID.
 		active, _ := o.observedResponseProjection()
 		if !active {
-			o.lifecycleEvent(sd.Event{Kind: sd.EventResponseOpen})
-			accepted = o.lifecycleEvent(sd.Event{Kind: sd.EventToolResultAccepted, CallID: callID}).Accepted
+			o.lifecycleEventWithContext(ctx, sd.Event{Kind: sd.EventResponseOpen})
+			accepted = o.lifecycleEventWithContext(ctx, sd.Event{Kind: sd.EventToolResultAccepted, CallID: callID}).Accepted
 		}
 	}
 	o.toolStateMu.Lock()
@@ -101,31 +101,24 @@ func (o *sessionProgressObserver) noteToolResultAccepted(callID string) {
 	}
 }
 
-// noteToolContinuationRequested advances every accepted result in the
-// current provider batch at the explicit response.create send boundary. The
-// control event carries no call ID because one provider response may continue
-// several parallel function calls; accepted results are therefore the
-// correlation set. The operation is idempotent for duplicate control events.
-func (o *sessionProgressObserver) noteToolContinuationRequested() {
+// noteToolContinuationRequested advances accepted results at response.create.
+func (o *sessionProgressObserver) noteToolContinuationRequestedWithContext(ctx context.Context) {
 	if o == nil {
 		return
 	}
-	observation := o.lifecycleEvent(sd.Event{Kind: sd.EventContinuationRequested})
+	observation := o.lifecycleEventWithContext(ctx, sd.Event{Kind: sd.EventContinuationRequested})
 	if observation.Accepted {
 		o.signalToolLifecycle()
 	}
 }
 
-// noteToolContinuationRequestedFor is used by complete-message providers.
-// SendMessage may represent a whole rich batch, so the exact call is marked
-// first and any already accepted sibling is advanced by the batch-level
-// method as well.
-func (o *sessionProgressObserver) noteToolContinuationRequestedFor(callID string) {
+// noteToolContinuationRequestedFor marks a complete-message call and its batch.
+func (o *sessionProgressObserver) noteToolContinuationRequestedForWithContext(ctx context.Context, callID string) {
 	if o == nil || strings.TrimSpace(callID) == "" {
 		return
 	}
-	o.lifecycleEvent(sd.Event{Kind: sd.EventContinuationRequested, CallID: callID})
-	o.noteToolContinuationRequested()
+	o.lifecycleEventWithContext(ctx, sd.Event{Kind: sd.EventContinuationRequested, CallID: callID})
+	o.noteToolContinuationRequestedWithContext(ctx)
 }
 
 // toolLifecycleEvents wakes the session close controller whenever a result or

@@ -33,7 +33,7 @@ func TestLivePlannerFamiliesUseOneGroundingComposition(t *testing.T) {
 		{
 			name: "recording directory",
 			build: func(_ *testing.T, opts SessionRunOptions) (sessionRuntimePlan, func(), error) {
-				return planSessionForDirectoryRecordingWithInstructions(opts, "customer instructions", true)
+				return planSessionForDirectoryRecordingWithInstructions(context.Background(), opts, "customer instructions", true)
 			},
 		},
 		{

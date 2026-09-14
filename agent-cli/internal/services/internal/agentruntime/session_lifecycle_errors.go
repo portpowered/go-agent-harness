@@ -20,6 +20,7 @@ const ErrSessionUnresolvedToolResults = sessionpublic.ErrSessionUnresolvedToolRe
 const (
 	ErrSessionImageContinuationIncomplete = sessioncontract.ErrLiveImageContinuationIncomplete
 	ErrSessionToolContinuationIncomplete  = sessioncontract.ErrLiveToolContinuationIncomplete
+	sessionPageSightUnavailableCode       = "page_sight_unavailable"
 )
 
 // ErrSessionAudioResponseIncomplete is the CLI compatibility name for the
@@ -120,7 +121,7 @@ func recordSessionToolDiagnostic(sink SessionToolDiagnosticSink, executor messag
 	diagnostic := SessionToolDiagnostic{ToolCallID: call.ID, ToolName: call.Name, Error: err}
 	if router, ok := executor.(runtimeTools.PageSightToolRouter); ok && router.IsPageSightTool(call.Name) {
 		diagnostic.Source = sight.SourceBrowserPage
-		diagnostic.ErrorCode = "page_sight_unavailable"
+		diagnostic.ErrorCode = sessionPageSightUnavailableCode
 	} else if cliTools.IsPhysicalDisplayToolName(call.Name) {
 		diagnostic.Source = sight.SourceScreen
 		diagnostic.ErrorCode = cliTools.ScreenToolErrorCode(err)

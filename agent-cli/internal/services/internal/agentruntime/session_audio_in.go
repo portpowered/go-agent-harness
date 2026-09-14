@@ -239,7 +239,7 @@ func RunSessionWithAudioInput(ctx context.Context, out io.Writer, opts SessionRu
 		if err := validateSessionRunOptions(opts); err != nil {
 			return sessionRuntimePlan{}, err
 		}
-		return planSessionRuntime(opts)
+		return planSessionRuntimeWithContext(ctx, opts)
 	})
 }
 
@@ -299,18 +299,18 @@ func RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(c
 			if err := validateSessionRunOptions(opts); err != nil {
 				return sessionRuntimePlan{}, err
 			}
-			return planSessionRuntime(opts)
+			return planSessionRuntimeWithContext(ctx, opts)
 		})
 	}
 	return runSessionWithAudioInputPlan(ctx, out, input, audioOutPath, seed, func() (sessionRuntimePlan, error) {
 		if err := validateSessionRunOptions(opts); err != nil {
 			return sessionRuntimePlan{}, err
 		}
-		instructions, err := sessionInstructionText(opts, systemPrompt)
+		instructions, err := sessionInstructionText(ctx, opts, systemPrompt)
 		if err != nil {
 			return sessionRuntimePlan{}, err
 		}
-		return planSessionWithResolvedInstructions(opts, instructions)
+		return planSessionWithResolvedInstructionsContext(ctx, opts, instructions)
 	})
 }
 

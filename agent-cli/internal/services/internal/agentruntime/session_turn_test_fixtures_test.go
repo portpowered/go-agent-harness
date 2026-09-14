@@ -201,15 +201,3 @@ func toolCallEvents(callID, name, args string) []messages.StreamMessage {
 		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
 	}
 }
-
-func parallelToolCallEvents(calls ...messages.ToolCall) []messages.StreamMessage {
-	events := []messages.StreamMessage{{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()}}
-	for index, call := range calls {
-		events = append(events,
-			messages.StreamMessage{Type: messages.StreamTypeToolCallStart, ActorProvidedIndex: index, Value: messages.NewToolCallStartValue(call.ID, call.Name)},
-			messages.StreamMessage{Type: messages.StreamTypeToolCallDelta, ActorProvidedIndex: index, Value: messages.NewToolCallDeltaValue(call.Arguments)},
-			messages.StreamMessage{Type: messages.StreamTypeToolCallEnd, ActorProvidedIndex: index, Value: messages.NewToolCallEndValue(call.ID, call.Name, call.Arguments)},
-		)
-	}
-	return append(events, messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})})
-}

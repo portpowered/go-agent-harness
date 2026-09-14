@@ -275,7 +275,7 @@ func runSessionWithImagesAndRecordingDirectory(
 		opts.SessionRunOptions.PromptProvided = true
 	}
 	var imageCleanup func()
-	opts.SessionRunOptions, imageCleanup, err = prepareSessionImageToolAccess(opts.SessionRunOptions, paths, parts)
+	opts.SessionRunOptions, imageCleanup, err = prepareSessionImageToolAccess(ctx, opts.SessionRunOptions, paths, parts)
 	if err != nil {
 		return err
 	}
@@ -296,7 +296,7 @@ func runSessionWithImagesAndRecordingDirectory(
 		}()
 		opts.SessionRunOptions.ClientOwnsAudioTurnBoundaries = true
 	}
-	plan, wirePrompt, cleanup, err := planSessionImageRuntimeForDirectory(opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, audioSource != nil || len(opts.SessionRunOptions.AudioInputs) > 0)
+	plan, wirePrompt, cleanup, err := planSessionImageRuntimeForDirectory(ctx, opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, audioSource != nil || len(opts.SessionRunOptions.AudioInputs) > 0)
 	if err != nil {
 		return err
 	}
@@ -373,7 +373,7 @@ func runSessionWithRecordingDirectory(
 	if audioOutPath != "" {
 		opts.AudioOutputRequested = true
 	}
-	plan, cleanup, err := planSessionForDirectoryRecordingWithInstructions(opts, systemPrompt, withInstructions)
+	plan, cleanup, err := planSessionForDirectoryRecordingWithInstructions(ctx, opts, systemPrompt, withInstructions)
 	if err != nil {
 		return err
 	}
@@ -414,7 +414,7 @@ func runSessionWithRecordingDirectory(
 			recording: recording,
 		}
 	}
-	turnRuntime, err := prepareSessionRecordingTurnRuntime(&plan, seed)
+	turnRuntime, err := prepareSessionRecordingTurnRuntime(ctx, &plan, seed)
 	if err != nil {
 		return err
 	}
@@ -470,10 +470,7 @@ func runSessionWithRecordingDirectory(
 	return finalizeSessionDirectoryRecording(runErr, recording)
 }
 
-// finalizeSessionDirectoryRecording joins provider, cancellation, or runtime
-// failures with every recording validation and persistence failure. A caller
-// can therefore distinguish a failed session from a recording that was not
-// published, even when both failures happen during the same shutdown.
+// finalizeSessionDirectoryRecording preserves both run and recording failures.
 func finalizeSessionDirectoryRecording(runErr error, recording *sessionDirectoryRecording) error {
 	return errors.Join(runErr, recording.Finalize())
 }
@@ -488,24 +485,24 @@ func validateSessionRecordingOptions(opts SessionRunOptions) error {
 }
 
 func planSessionForDirectoryRecording(opts SessionRunOptions) (sessionRuntimePlan, func(), error) {
-	return planSessionForDirectoryRecordingWithInstructions(opts, "", false)
+	return planSessionForDirectoryRecordingWithInstructions(context.Background(), opts, "", false)
 }
 
-func planSessionForDirectoryRecordingWithInstructions(opts SessionRunOptions, systemPrompt string, withInstructions bool) (sessionRuntimePlan, func(), error) {
+func planSessionForDirectoryRecordingWithInstructions(ctx context.Context, opts SessionRunOptions, systemPrompt string, withInstructions bool) (sessionRuntimePlan, func(), error) {
 	planOpts := opts
 	cleanup := func() {}
 
 	var plan sessionRuntimePlan
 	var err error
 	if !withInstructions || (opts.ReplayPath != "" && opts.SessionInferencer == nil) {
-		plan, err = planSessionRuntime(planOpts)
+		plan, err = planSessionRuntimeWithContext(ctx, planOpts)
 	} else {
-		instructions, instructionErr := sessionInstructionText(opts, systemPrompt)
+		instructions, instructionErr := sessionInstructionText(ctx, opts, systemPrompt)
 		if instructionErr != nil {
 			cleanup()
 			return sessionRuntimePlan{}, func() {}, instructionErr
 		}
-		plan, err = planSessionWithResolvedInstructions(planOpts, instructions)
+		plan, err = planSessionWithResolvedInstructionsContext(ctx, planOpts, instructions)
 	}
 	if err != nil {
 		cleanup()
