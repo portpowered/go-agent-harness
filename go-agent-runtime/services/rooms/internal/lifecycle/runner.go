@@ -276,7 +276,7 @@ func (r Runner) newRecorder(request rooms.RoomRunOptions, manifest rooms.Manifes
 	if r.evidence == nil {
 		return nil, rooms.ErrRoomServiceUnavailable
 	}
-	return r.evidence.Open(roomevidence.Options{Destination: request.OutputDir, Manifest: manifest, AudioFormat: request.AudioFormat, StartedAt: r.currentTime(), Clock: r.clock})
+	return r.evidence.Open(roomevidence.Options{Destination: request.OutputDir, Manifest: manifest, AudioFormat: request.AudioFormat, Secrets: append([]string(nil), request.Secrets...), StartedAt: r.currentTime(), Clock: r.clock})
 }
 
 func installRecorder(request rooms.RoomRunOptions, recorder roomevidence.Recorder) rooms.RoomRunOptions {

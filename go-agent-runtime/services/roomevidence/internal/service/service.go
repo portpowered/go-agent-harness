@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/internal/admission"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/internal/pathguard"
 	"io"
 	"os"
 	"path/filepath"
@@ -39,6 +40,9 @@ func (s *Service) PrepareOutput(path string) (string, error) {
 	}
 	if err := os.MkdirAll(destination, evidenceDirectoryMode); err != nil {
 		return "", fmt.Errorf("create room evidence output directory %q: %w", destination, err)
+	}
+	if err := pathguard.ValidateNoSymlinkPath(destination); err != nil {
+		return "", fmt.Errorf("%w: output path is unsafe: %w", roomevidence.ErrInvalidOutput, err)
 	}
 	return destination, nil
 }
@@ -226,9 +230,15 @@ func Validate(service roomevidence.Service, plan RoomReplayPlan) error {
 }
 
 func validateOutputTarget(destination string) error {
+	if err := pathguard.ValidateNoSymlinkPath(destination); err != nil {
+		return fmt.Errorf("%w: output path is unsafe: %w", roomevidence.ErrInvalidOutput, err)
+	}
 	parent := filepath.Dir(destination)
 	if err := os.MkdirAll(parent, evidenceDirectoryMode); err != nil {
 		return fmt.Errorf("prepare room evidence output parent %q: %w", destination, err)
+	}
+	if err := pathguard.ValidateNoSymlinkPath(destination); err != nil {
+		return fmt.Errorf("%w: output path is unsafe: %w", roomevidence.ErrInvalidOutput, err)
 	}
 	info, err := os.Lstat(destination)
 	if err == nil {

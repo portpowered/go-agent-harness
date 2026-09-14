@@ -62,6 +62,59 @@ func ValidateNoSymlink(root, path string) error {
 	return nil
 }
 
+// ValidateNoSymlinkPath rejects symlink components in an output path. Unlike
+// ValidateNoSymlink, this helper has no existing bundle root to compare
+// against; it walks every existing component from the filesystem root and
+// leaves missing descendants for the caller to create.
+func ValidateNoSymlinkPath(path string) error {
+	if strings.TrimSpace(path) == "" {
+		return errValidation
+	}
+	absolute, err := filepath.Abs(filepath.Clean(path))
+	if err != nil {
+		return errValidation
+	}
+	volume := filepath.VolumeName(absolute)
+	root := volume + string(filepath.Separator)
+	relative := strings.TrimPrefix(absolute, root)
+	if relative == absolute {
+		return errValidation
+	}
+	current := root
+	for _, component := range strings.Split(relative, string(filepath.Separator)) {
+		if component == "" || component == "." {
+			continue
+		}
+		current = filepath.Join(current, component)
+		info, err := os.Lstat(current)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
+			return errValidation
+		}
+		if info.Mode()&os.ModeSymlink != 0 && !allowedSystemSymlink(root, current) {
+			return errSymlink
+		}
+	}
+	return nil
+}
+
+func allowedSystemSymlink(root, path string) bool {
+	if filepath.Dir(path) != filepath.Clean(root) {
+		return false
+	}
+	switch filepath.Base(path) {
+	case "tmp", "var":
+		// macOS exposes these standard writable locations as root-level
+		// aliases. The caller-controlled components below them are still
+		// checked individually.
+		return true
+	default:
+		return false
+	}
+}
+
 func rejectSymlinkComponents(root, relative string) error {
 	if err := rejectRoot(root); err != nil {
 		return err

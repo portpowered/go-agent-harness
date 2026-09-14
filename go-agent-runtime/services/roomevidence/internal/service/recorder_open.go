@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/internal/latency"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/internal/pathguard"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -101,8 +102,14 @@ func cloneManifest(value rooms.Manifest) rooms.Manifest {
 }
 
 func mkdirOutput(destination string) error {
+	if err := pathguard.ValidateNoSymlinkPath(destination); err != nil {
+		return fmt.Errorf("%w: output path is unsafe: %w", roomevidence.ErrInvalidOutput, err)
+	}
 	if err := os.MkdirAll(destination, evidenceDirectoryMode); err != nil {
 		return fmt.Errorf("create room evidence output directory %q: %w", destination, err)
+	}
+	if err := pathguard.ValidateNoSymlinkPath(destination); err != nil {
+		return fmt.Errorf("%w: output path is unsafe: %w", roomevidence.ErrInvalidOutput, err)
 	}
 	return nil
 }
@@ -234,8 +241,10 @@ func (r *recorder) RecordLiveEvent(participantID string, event session.LiveEvent
 	}
 	r.operationMu.Lock()
 	defer r.operationMu.Unlock()
+	if err := r.checkOpen(); err != nil {
+		return err
+	}
 	participantID = liveEventParticipantID(participantID, event)
-	r.markCaptureSeen(participantID)
 	fields := liveEventFields(event)
 	at := event.Timestamp.UTC()
 	if at.IsZero() {
@@ -243,6 +252,12 @@ func (r *recorder) RecordLiveEvent(participantID string, event session.LiveEvent
 	}
 	if err := r.writeTimelineAt(at, "live_"+normalizeLiveEventKind(event.Kind), participantID, fields); err != nil {
 		return err
+	}
+	r.markCaptureSeen(participantID)
+	if participant := r.participants[participantID]; participant != nil {
+		if err := participant.recordDiagnostic(roomevidence.DiagnosticRecord{Event: event.Kind, Fields: fields, At: at}); err != nil {
+			return err
+		}
 	}
 	r.observeLatencyEvent(participantID, event)
 	return nil

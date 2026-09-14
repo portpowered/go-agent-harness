@@ -17,6 +17,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
@@ -163,6 +164,16 @@ func TestServiceRecordsEffectsAndIntegrity(t *testing.T) {
 	if err := listener.RecordDiagnostic(roomevidence.DiagnosticRecord{Event: "tool_call_end", Fields: map[string]string{"message": "sk-service-secret"}}); err != nil {
 		t.Fatalf("record tool diagnostic: %v", err)
 	}
+	const timelineSecret = "sk-service-secret"
+	if err := recorder.RecordTimeline("timeline-"+timelineSecret, timelineSecret, map[string]string{"message": timelineSecret}); err != nil {
+		t.Fatalf("record arbitrary timeline: %v", err)
+	}
+	if err := recorder.RecordLiveEvent("speaker", session.LiveEvent{
+		Kind: string(session.LiveEventText), Text: timelineSecret, ResponseID: timelineSecret,
+		Error: errors.New(timelineSecret), Timestamp: source.Now(),
+	}); err != nil {
+		t.Fatalf("record live event: %v", err)
+	}
 	source.AdvanceBy(250 * time.Millisecond)
 	if path := recorder.CapturePath("speaker"); path == "" {
 		t.Fatal("agent capture path is empty")
@@ -177,6 +188,21 @@ func TestServiceRecordsEffectsAndIntegrity(t *testing.T) {
 	}
 
 	assertEffectsBundle(t, destination)
+	for _, path := range []string{
+		filepath.Join(destination, roomevidence.TimelinePath),
+		filepath.Join(destination, "agent-speaker.diagnostics.jsonl"),
+	} {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read redaction evidence %s: %v", path, err)
+		}
+		if bytesContain(data, timelineSecret) {
+			t.Fatalf("evidence %s leaked live timeline secret", path)
+		}
+		if !bytesContain(data, "[REDACTED]") {
+			t.Fatalf("evidence %s omitted redaction marker", path)
+		}
+	}
 }
 
 func TestServiceMixSumsOverlapAndPadsToFinalSpan(t *testing.T) {
@@ -260,6 +286,9 @@ func TestServiceRejectsPostFinalizeAndRetainsFirstTypedError(t *testing.T) {
 	if err := recorder.Participant("speaker").ObserveAudio([]byte{0, 0}); !errors.Is(err, roomevidence.ErrFinalized) {
 		t.Fatalf("post-finalize write = %v, want ErrFinalized", err)
 	}
+	if err := recorder.RecordLiveEvent("speaker", session.LiveEvent{Kind: string(session.LiveEventText), Text: "late"}); !errors.Is(err, roomevidence.ErrFinalized) {
+		t.Fatalf("post-finalize live event = %v, want ErrFinalized", err)
+	}
 	if err := recorder.Finalize(rooms.RoomResult{TerminationReason: rooms.RoomTerminationFailed}, second, source.Now()); !errors.Is(err, first) {
 		t.Fatalf("second finalize = %v, want cached first error", err)
 	}
@@ -279,6 +308,14 @@ func TestServiceOutputSafety(t *testing.T) {
 	}
 	if err := service.ValidateOutput(filepath.Join(occupied, "new-bundle")); err != nil {
 		t.Fatalf("new output validation: %v", err)
+	}
+	redirected := filepath.Join(t.TempDir(), "redirected")
+	outside := t.TempDir()
+	if err := os.Symlink(outside, redirected); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	if err := service.ValidateOutput(filepath.Join(redirected, "bundle")); !errors.Is(err, roomevidence.ErrInvalidOutput) || !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("symlinked output parent error = %v, want invalid symlink output", err)
 	}
 }
 

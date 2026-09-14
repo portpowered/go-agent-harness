@@ -139,6 +139,9 @@ type RoomRunOptions struct {
 	WorkDir     string
 	AllowPaths  []string
 	AudioFormat AudioFormat
+	// Secrets are invocation-scoped credential values supplied only for
+	// defensive evidence redaction. They are never persisted in the manifest.
+	Secrets []string
 
 	BrowserCapabilitiesFactory BrowserCapabilitiesFactory
 	// LiveCapabilitiesFactory creates participant-local tool bindings for the

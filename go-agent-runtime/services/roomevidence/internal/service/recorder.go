@@ -151,7 +151,13 @@ func (r *recorder) writeTimelineLocked(at time.Time, event, participant string, 
 		return errors.New("room timeline sink is not initialized")
 	}
 	offset := formatOffset(r.startedAt, at)
-	entry := timelineRecord{TOffsetMS: offset, TUnixMS: at.UnixMilli(), Event: event, Participant: participant, ParticipantID: participant, Fields: cloneFields(fields)}
+	entry := timelineRecord{
+		TOffsetMS: offset, TUnixMS: at.UnixMilli(),
+		Event:         redactText(event, r.secrets),
+		Participant:   redactText(participant, r.secrets),
+		ParticipantID: redactText(participant, r.secrets),
+		Fields:        redactFields(fields, r.secrets),
+	}
 	if err := r.timeline.write(entry); err != nil {
 		wrapped := fmt.Errorf("record %s: %w", event, err)
 		r.recordError("", roomevidence.TimelinePath, wrapped)

@@ -109,12 +109,12 @@ func (r *recorder) Finalize(result rooms.RoomResult, runErr error, endedAt time.
 		return nil
 	}
 	r.finalizeOnce.Do(func() {
+		r.operationMu.Lock()
+		defer r.operationMu.Unlock()
 		r.mu.Lock()
 		r.finalized = true
 		r.mu.Unlock()
 		defer close(r.finalizeDone)
-		r.operationMu.Lock()
-		defer r.operationMu.Unlock()
 		r.finalizeBundle(result, runErr, endedAt)
 	})
 	<-r.finalizeDone

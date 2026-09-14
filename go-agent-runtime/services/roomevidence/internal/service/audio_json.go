@@ -313,6 +313,14 @@ func cloneFields(values map[string]string) map[string]string {
 	return clone
 }
 
+func redactFields(values map[string]string, secrets []string) map[string]string {
+	fields := cloneFields(values)
+	for key, value := range fields {
+		fields[key] = redactText(value, secrets)
+	}
+	return fields
+}
+
 func cloneStatus(status *transcript.RecordingStatus) *transcript.RecordingStatus {
 	if status == nil {
 		return nil
