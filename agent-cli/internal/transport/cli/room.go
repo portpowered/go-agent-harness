@@ -18,7 +18,6 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/events"
-	roomEvidenceCLI "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/roomevidence"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/spf13/cobra"
 )
@@ -361,7 +360,7 @@ func resolveRoomCommandOutputDir(service runtimeRooms.Service, plan runtimeRooms
 			return destination, nil
 		}
 		if plan.Mode == runtimeRooms.RoomLaunchModeBare {
-			return roomEvidenceCLI.FreshRunDirectory(service, plan.ConfigDir)
+			return service.CreateFreshRunDirectory(plan.ConfigDir)
 		}
 	}
 	requested = strings.TrimSpace(requested)
