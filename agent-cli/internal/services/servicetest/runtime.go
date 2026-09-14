@@ -93,8 +93,8 @@ var NewOpenAIRealtimeSessionInferencerWithToolsAndOptions = impl.NewOpenAIRealti
 var NewGrokSessionInferencer = impl.NewGrokSessionInferencer
 var NewGrokSessionInferencerWithOptions = impl.NewGrokSessionInferencerWithOptions
 
-const ParticipantTerminationEnded = impl.ParticipantTerminationEnded
-const ParticipantTerminationError = impl.ParticipantTerminationError
+const ParticipantTerminationEnded = runtimeRooms.ParticipantTerminationEnded
+const ParticipantTerminationError = runtimeRooms.ParticipantTerminationError
 
 type RTCMediaEndpoints = impl.RTCMediaEndpoints
 type RTCMediaSession = impl.RTCMediaSession

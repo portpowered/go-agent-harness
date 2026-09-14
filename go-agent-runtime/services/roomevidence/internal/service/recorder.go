@@ -216,7 +216,7 @@ func (r *recorder) RecordSource(participantID string, frame audio.PCMFrame) {
 	if participant == nil {
 		return
 	}
-	_ = participant.ObserveSentAudio(codec.EncodePCM16(append([]int16(nil), frame.Samples...)))
+	_ = participant.ObserveSentAudio(codec.EncodePCM16(append([]int16(nil), frame.Samples...))) //nolint:errcheck // Audio evidence is best-effort and this interface cannot propagate recorder I/O failures.
 }
 
 func (r *recorder) RecordReceived(participantID string, frame audio.PCMFrame) {
@@ -227,7 +227,7 @@ func (r *recorder) RecordReceived(participantID string, frame audio.PCMFrame) {
 	if participant == nil {
 		return
 	}
-	_ = participant.ObserveReceivedAudio(codec.EncodePCM16(append([]int16(nil), frame.Samples...)))
+	_ = participant.ObserveReceivedAudio(codec.EncodePCM16(append([]int16(nil), frame.Samples...))) //nolint:errcheck // Audio evidence is best-effort and this interface cannot propagate recorder I/O failures.
 }
 
 func (r *recorder) ObserveSpeakerAudio(sourceID string, targetIDs []string, pcm []byte) {

@@ -202,7 +202,7 @@ func (r Runner) openOneParticipant(ctx context.Context, state *runState, partici
 		state.add(active)
 	}
 	if recorder != nil {
-		_ = recorder.RecordTimeline("participant_joined", participant.ID, map[string]string{"kind": string(roommanifest.NormalizeParticipantKind(participant.Kind))})
+		_ = recorder.RecordTimeline("participant_joined", participant.ID, map[string]string{"kind": string(roommanifest.NormalizeParticipantKind(participant.Kind))}) //nolint:errcheck // Joining evidence is best-effort and must not block participant admission.
 	}
 	if request.OnParticipantReady != nil {
 		request.OnParticipantReady(rooms.RoomParticipantReady{
@@ -302,7 +302,7 @@ func installRecorder(request rooms.RoomRunOptions, recorder roomevidence.Recorde
 	diagnosticCallback := request.OnDiagnostic
 	request.OnDiagnostic = func(participantID string, record rooms.RoomDiagnosticRecord) {
 		if participant := recorder.Participant(participantID); participant != nil {
-			_ = participant.RecordDiagnostic(roomevidence.DiagnosticRecord{Event: record.Event, Fields: record.Fields, At: record.At})
+			_ = participant.RecordDiagnostic(roomevidence.DiagnosticRecord{Event: record.Event, Fields: record.Fields, At: record.At}) //nolint:errcheck // Evidence is best-effort and must not replace the caller diagnostic callback.
 		}
 		if diagnosticCallback != nil {
 			diagnosticCallback(participantID, record)
@@ -310,14 +310,14 @@ func installRecorder(request rooms.RoomRunOptions, recorder roomevidence.Recorde
 	}
 	readyCallback := request.OnParticipantReady
 	request.OnParticipantReady = func(value rooms.RoomParticipantReady) {
-		_ = recorder.SetParticipantReady(value)
+		_ = recorder.SetParticipantReady(value) //nolint:errcheck // Evidence finalization is best-effort and must not block the public callback.
 		if readyCallback != nil {
 			readyCallback(value)
 		}
 	}
 	terminatedCallback := request.OnParticipantTerminated
 	request.OnParticipantTerminated = func(value rooms.RoomParticipantResult) {
-		_ = recorder.SetParticipantTerminated(value)
+		_ = recorder.SetParticipantTerminated(value) //nolint:errcheck // Evidence finalization is best-effort and must not block the public callback.
 		if terminatedCallback != nil {
 			terminatedCallback(value)
 		}

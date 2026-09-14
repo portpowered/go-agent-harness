@@ -25,12 +25,12 @@ func (s recordingEventSink) Publish(ctx context.Context, participantID string, e
 		hostErr = s.host.Publish(ctx, participantID, event)
 	}
 	if s.recorder != nil {
-		_ = s.recorder.RecordLiveEvent(participantID, event)
+		_ = s.recorder.RecordLiveEvent(participantID, event) //nolint:errcheck // Evidence must not change the live event delivery result.
 		if participant := s.recorder.Participant(participantID); participant != nil {
 			if event.Message != nil {
-				_ = participant.ObserveDelta(*event.Message)
+				_ = participant.ObserveDelta(*event.Message) //nolint:errcheck // Evidence is best-effort after the live event has been delivered.
 			}
-			_ = participant.RecordDiagnostic(roomevidence.DiagnosticRecord{Event: event.Kind, Fields: liveEventFields(event), At: event.Timestamp})
+			_ = participant.RecordDiagnostic(roomevidence.DiagnosticRecord{Event: event.Kind, Fields: liveEventFields(event), At: event.Timestamp}) //nolint:errcheck // Evidence is best-effort after the live event has been delivered.
 		}
 	}
 	return hostErr

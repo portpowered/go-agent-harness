@@ -37,7 +37,7 @@ func (c *RoomRunCommand) resolveRoomRunPlans(configPath, manifestPath, replayPat
 		if err != nil {
 			return roomRunPlans{}, err
 		}
-		plans.manifest = plans.replayPlan.Manifest()
+		plans.manifest = c.service.ReplayManifest(plans.replayPlan)
 		return plans, nil
 	}
 	var err error

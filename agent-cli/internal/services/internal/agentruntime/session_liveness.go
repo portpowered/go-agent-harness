@@ -111,14 +111,6 @@ func newSilentProviderEmptyResponseError(msg messages.StreamMessage, value *mess
 	return err
 }
 
-func sessionLivenessMetadata(err error) (classification string, terminalReason messages.TerminalReason, provenance messages.TerminalProvenance, outputState messages.TerminalOutputState) {
-	var livenessErr *SessionLivenessError
-	if !errors.As(err, &livenessErr) || livenessErr == nil {
-		return "", "", "", ""
-	}
-	return livenessErr.Classification, livenessErr.TerminalReason, livenessErr.TerminalProvenance, livenessErr.OutputState
-}
-
 // responseHasToolLifecycleObligation snapshots the current response's tool
 // state before MESSAGE.END processing clears toolCallInTurn. A pending result
 // or continuation owns the terminal boundary and must not be diagnosed as an

@@ -12,7 +12,6 @@ import (
 	"github.com/google/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
-	roomreplaywire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/errorpolicy"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle"
@@ -40,10 +39,7 @@ func NewService(dependencies Dependencies) rooms.Service {
 func newPlanner() planning.Planner { return planning.New() }
 
 func newReplay(dependencies Dependencies) roomreplay.Service {
-	if dependencies.Replay != nil {
-		return dependencies.Replay
-	}
-	return roomreplaywire.NewService()
+	return dependencies.Replay
 }
 
 func newEvidence(dependencies Dependencies) roomevidence.Service { return dependencies.Evidence }

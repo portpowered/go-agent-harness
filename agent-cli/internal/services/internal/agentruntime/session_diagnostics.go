@@ -123,32 +123,6 @@ type ScheduledAudioInput struct {
 	// The zero value preserves the diagnostics-only injection behavior.
 	EndOfTurn bool
 }
-type diagnosticSinkFanout []SessionDiagnosticSink
-
-func combineDiagnosticSinks(sinks ...SessionDiagnosticSink) SessionDiagnosticSink {
-	filtered := make(diagnosticSinkFanout, 0, len(sinks))
-	for _, sink := range sinks {
-		if sink != nil {
-			filtered = append(filtered, sink)
-		}
-	}
-	switch len(filtered) {
-	case 0:
-		return nil
-	case 1:
-		return filtered[0]
-	default:
-		return filtered
-	}
-}
-func (f diagnosticSinkFanout) RecordSessionDiagnostic(record SessionDiagnosticRecord) {
-	for _, sink := range f {
-		if sink != nil {
-			sink.RecordSessionDiagnostic(record)
-		}
-	}
-}
-
 type scheduledSessionInputSender interface {
 	SendAudioInput(context.Context, []byte) error
 	SendSessionEvent(context.Context, messages.StreamMessage) error
@@ -251,18 +225,12 @@ type sessionProgressObserver struct {
 	// terminal until the session runner decides whether to wait and retry. It
 	// is needed for legacy transports whose MESSAGE.END omits response_id and
 	// whose normal response cleanup clears the active/logical owner.
-	retryCandidateIndex int
-	retryCandidateSet   bool
-	retryCandidateID    string
-	counters            audioTurnCounters
-	totals              audioTurnCounters
-	pendingInputs       []ScheduledAudioInput
-	// Room mixer input is admitted by a background pump rather than the
-	// session delta consumer. Keep its per-turn and lifetime byte totals behind
-	// their own lock so concurrent provider observation remains race-free.
-	roomInputMu             sync.Mutex
-	roomInputTurnBytes      uint64
-	roomInputTotalBytes     uint64
+	retryCandidateIndex     int
+	retryCandidateSet       bool
+	retryCandidateID        string
+	counters                audioTurnCounters
+	totals                  audioTurnCounters
+	pendingInputs           []ScheduledAudioInput
 	toolStateMu             sync.Mutex
 	unresolvedToolCalls     map[string]struct{}
 	toolResultRejections    map[string]messages.SessionSendStatus

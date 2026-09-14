@@ -28,13 +28,7 @@ const (
 	SessionDiagnosticFieldPlaybackPeakQueuedSamples   = sessioncontract.SessionDiagnosticFieldPlaybackPeakQueuedSamples
 	SessionDiagnosticFieldPlaybackDroppedSamples      = sessioncontract.SessionDiagnosticFieldPlaybackDroppedSamples
 	SessionDiagnosticFieldPlaybackOverflowEvents      = sessioncontract.SessionDiagnosticFieldPlaybackOverflowEvents
-	// SessionDiagnosticFieldPlaybackParticipantID identifies which room
-	// participant's local speaker queue dropped samples. It is set only by
-	// emitRoomParticipantPlaybackOverflowDiagnostic; the single-session and
-	// self-play paths have no participant to name.
-	SessionDiagnosticFieldPlaybackParticipantID = sessioncontract.SessionDiagnosticFieldPlaybackParticipantID
-
-	SessionLogMessagePlaybackSnapshot = "audio playback queue finalized"
+	SessionLogMessagePlaybackSnapshot                 = "audio playback queue finalized"
 )
 
 var playbackMetricSamples = []struct {
@@ -64,13 +58,11 @@ var playbackMetricSamples = []struct {
 // reaching it, and the room/self-play half was still missed. Patching each
 // forgetful call site clearly does not close this class of bug, so instead
 // every place in this codebase that observes a playback queue overflow
-// (sessionPlaybackDiagnosticObserver below, and
-// emitRoomParticipantPlaybackOverflowDiagnostic for a room's human
-// participant device) resolves its sink through resolvePlaybackDiagnosticSink
-// rather than trusting the caller-supplied sink directly. A dropped sample
-// can now, at worst, degrade from "written to the caller's sink" to "logged
-// here" -- it can never again silently vanish because nobody remembered to
-// populate SessionRunOptions.Diagnostics.
+// (sessionPlaybackDiagnosticObserver below) resolves its sink through
+// resolvePlaybackDiagnosticSink rather than trusting the caller-supplied sink
+// directly. A dropped sample can now, at worst, degrade from "written to the
+// caller's sink" to "logged here" -- it can never again silently vanish
+// because nobody remembered to populate SessionRunOptions.Diagnostics.
 var fallbackPlaybackDiagnosticSink SessionDiagnosticSink = logPlaybackDiagnosticSink{}
 
 // logPlaybackDiagnosticSink is a named (comparable) type rather than a
@@ -247,29 +239,4 @@ func sessionCaptureObservabilityObserver(sampler observability.MetricSampler, lo
 			Level: level, Message: "audio capture queue finalized", Fields: fields,
 		})
 	}
-}
-
-// emitRoomParticipantPlaybackOverflowDiagnostic reports one room human
-// participant's local speaker queue overflow at participant teardown. Room
-// human participants never construct a SessionRunOptions or go through
-// planSessionRuntime: they own a raw *audio.DeviceSink directly (see
-// openRoomHumanDevices in session_room_orchestration.go), so
-// sessionPlaybackDiagnosticObserver above never applies to them at all. This
-// is the room's independent choke point for the identical class of bug --
-// see fallbackPlaybackDiagnosticSink -- and it names the dropping participant
-// so an operator can tell who lost audio.
-func emitRoomParticipantPlaybackOverflowDiagnostic(participantID string, output *devicegw.DeviceSink, sink SessionDiagnosticSink) {
-	if output == nil {
-		return
-	}
-	stats := output.PlaybackStats()
-	if stats.DroppedSamples == 0 {
-		return
-	}
-	fields := playbackOverflowDiagnosticFields(output.DeviceID(), stats)
-	fields[SessionDiagnosticFieldPlaybackParticipantID] = participantID
-	resolvePlaybackDiagnosticSink(sink).RecordSessionDiagnostic(SessionDiagnosticRecord{
-		Event:  SessionDiagnosticEventPlaybackOverflow,
-		Fields: fields,
-	})
 }

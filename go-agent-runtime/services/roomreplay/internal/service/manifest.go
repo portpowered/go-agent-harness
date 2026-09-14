@@ -101,8 +101,8 @@ func validateRoomReplayManifestHeader(document roomReplayManifestDocument) error
 	if len(document.Participants) < 2 {
 		return newRoomReplayBundleError(RoomReplayBundleIncomplete, "participants", "", "at least two participants", strconv.Itoa(len(document.Participants)), ErrRoomReplayBundleIncomplete)
 	}
-	if document.ClockBase.IsZero() || document.ClockBase.Year() <= 1970 {
-		return newRoomReplayBundleError(RoomReplayBundleMismatch, "clock_base", "", "a real UTC timestamp after 1970", document.ClockBase.UTC().Format(time.RFC3339Nano), ErrInvalidRoomReplayBundle)
+	if document.ClockBase.IsZero() {
+		return newRoomReplayBundleError(RoomReplayBundleMismatch, "clock_base", "", "a non-zero UTC timestamp", document.ClockBase.UTC().Format(time.RFC3339Nano), ErrInvalidRoomReplayBundle)
 	}
 	if document.EndedAt.Before(document.StartedAt) || document.ClockBase.Before(document.StartedAt) || document.ClockBase.After(document.EndedAt) {
 		return newRoomReplayBundleError(RoomReplayBundleMismatch, "timing", "", "ended_at >= started_at and clock_base inside interval", document.EndedAt.UTC().Format(time.RFC3339Nano), ErrInvalidRoomReplayBundle)

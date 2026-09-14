@@ -1,10 +1,7 @@
 package agentruntime
 
 import (
-	"context"
 	"errors"
-	"io"
-	"sync"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -210,59 +207,6 @@ func TestSessionProgressObserver_DoesNotClassifyCancellationOrToolContinuationAs
 				t.Fatalf("unexpected silent-provider classification: %v", err)
 			}
 		})
-	}
-}
-
-func TestRunRoom_EmptyResponseDoesNotAdvanceTurnsOrMaxTurns(t *testing.T) {
-	ids := []string{"customer", "assistant"}
-	emptyResponse := func(id string) []messages.StreamMessage {
-		return []messages.StreamMessage{
-			roomTestSessionOpen(id),
-			{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
-			roomTestMessageEnd(),
-		}
-	}
-	inferencers := map[string]*roomTestInferencer{
-		"customer":  {events: emptyResponse("customer"), disconnect: true},
-		"assistant": {events: emptyResponse("assistant"), disconnect: true},
-	}
-	opts, _ := newRoomTestRunOptions(ids, inferencers)
-	opts.Manifest.Room.MaxTurns = 1
-
-	var diagnosticMu sync.Mutex
-	diagnosticTurns := make(map[string]int, len(ids))
-	opts.OnDiagnostic = func(participantID string, record SessionDiagnosticRecord) {
-		if record.Event != SessionDiagnosticEventTurn {
-			return
-		}
-		diagnosticMu.Lock()
-		diagnosticTurns[participantID]++
-		diagnosticMu.Unlock()
-	}
-
-	result, err := RunRoomWithResult(context.Background(), io.Discard, opts)
-	if err != nil {
-		t.Fatalf("empty-response room: %v", err)
-	}
-	if result.Reason == RoomTerminationMaxTurnsReached {
-		t.Fatal("empty response satisfied the room MaxTurns target")
-	}
-	if result.Reason != RoomTerminationStopped {
-		t.Fatalf("empty-response room reason = %q, want clean stopped termination", result.Reason)
-	}
-	for _, id := range ids {
-		participant, ok := result.Participants[id]
-		if !ok {
-			t.Fatalf("room result is missing participant %q", id)
-		}
-		if participant.TurnsCompleted != 0 {
-			t.Fatalf("participant %q completed turns = %d, want 0", id, participant.TurnsCompleted)
-		}
-	}
-	diagnosticMu.Lock()
-	defer diagnosticMu.Unlock()
-	if len(diagnosticTurns) != 0 {
-		t.Fatalf("empty response emitted completed-turn diagnostics: %v", diagnosticTurns)
 	}
 }
 

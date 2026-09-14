@@ -1,14 +1,10 @@
 package agentruntime
 
-import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-
 import (
 	"context"
 	"errors"
 	"testing"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 )
@@ -141,63 +137,6 @@ func TestSessionPlaybackDiagnosticObserverResolvedNeverNil(t *testing.T) {
 	}
 }
 
-// TestEmitRoomParticipantPlaybackOverflowDiagnostic covers the room-specific
-// choke point directly: it must attach the dropping participant's ID and
-// must resolve a nil sink through the same fallback as the RTC path, and it
-// must stay silent when nothing actually overflowed.
-func TestEmitRoomParticipantPlaybackOverflowDiagnostic(t *testing.T) {
-	format := audio.DefaultDeviceFormat()
-	queueCapacity, err := audio.PlaybackQueueCapacity(format, audio.DefaultPlaybackLatencyTarget)
-	if err != nil {
-		t.Fatalf("playback queue capacity: %v", err)
-	}
-
-	registry, err := devicegw.NewVirtualRegistry(devicegw.VirtualBackendConfig{
-		Devices: []devicegw.VirtualDeviceConfig{
-			{ID: "speaker", Name: "speaker", Direction: devicegw.DirectionOutput, LoopbackID: "speaker-drain"},
-			{ID: "speaker-drain", Name: "speaker drain", Direction: devicegw.DirectionInput},
-		},
-	})
-	if err != nil {
-		t.Fatalf("new virtual registry: %v", err)
-	}
-	sink, err := devicegw.NewDeviceSink(registry, devicegw.DeviceID("virtual:speaker"))
-	if err != nil {
-		t.Fatalf("open device sink: %v", err)
-	}
-	t.Cleanup(func() { _ = sink.Close() })
-
-	recorder := &recordingDiagnosticSink{}
-	emitRoomParticipantPlaybackOverflowDiagnostic("customer", sink, recorder)
-	if len(recorder.records) != 0 {
-		t.Fatalf("emit fired with no overflow: %+v", recorder.records)
-	}
-
-	overflow := make([]int16, queueCapacity+audio.FrameSize)
-	if err := sink.WriteSamples(context.Background(), overflow); err != nil {
-		t.Fatalf("write overflowing samples: %v", err)
-	}
-
-	emitRoomParticipantPlaybackOverflowDiagnostic("customer", sink, recorder)
-	if len(recorder.records) != 1 {
-		t.Fatalf("caller-supplied sink recorded %d records after overflow, want 1", len(recorder.records))
-	}
-	record := recorder.records[0]
-	if record.Event != SessionDiagnosticEventPlaybackOverflow {
-		t.Fatalf("record event = %q, want %q", record.Event, SessionDiagnosticEventPlaybackOverflow)
-	}
-	if record.Fields[SessionDiagnosticFieldPlaybackParticipantID] != "customer" {
-		t.Fatalf("record fields = %+v, want participant_id=customer", record.Fields)
-	}
-	if record.Fields[SessionDiagnosticFieldPlaybackDroppedSamples] == "0" {
-		t.Fatal("record reports zero dropped samples after a deliberate overflow")
-	}
-
-	// A nil sink must still resolve to the shared fallback rather than being
-	// silently skipped, exactly like the RTC path above.
-	emitRoomParticipantPlaybackOverflowDiagnostic("customer", sink, nil)
-}
-
 // TestPlanSessionRuntimePlaybackObserverNonNilAcrossConstructionPaths is the
 // mandatory regression test asserting that every non-test construction path
 // for SessionRunOptions yields a non-nil playback observer once planned,
@@ -223,25 +162,6 @@ func TestPlanSessionRuntimePlaybackObserverNonNilAcrossConstructionPaths(t *test
 			name: "self-play (services.selfPlaySessionRunOptions)",
 			opts: selfPlaySessionRunOptions(SelfPlayRunOptions{}),
 		},
-		{
-			name: "room live participant (services.buildRoomParticipantPlans)",
-			opts: capturedRoomParticipantOptions(t),
-		},
-		{
-			// Mirrors the SessionRunOptions literal built for a room replay
-			// participant in buildRoomReplayParticipantPlans
-			// (session_room_planning.go); Diagnostics is not among the fields
-			// that function sets today.
-			name: "room replay participant (services.buildRoomReplayParticipantPlans shape)",
-			opts: SessionRunOptions{ModelCatalog: testModelCatalog(),
-				Provider:       "openai",
-				Model:          "gpt-realtime",
-				ModelProvided:  true,
-				Prompt:         "hello",
-				PromptProvided: true,
-				WaitForClose:   false,
-			},
-		},
 	}
 
 	for _, testCase := range cases {
@@ -262,44 +182,4 @@ func TestPlanSessionRuntimePlaybackObserverNonNilAcrossConstructionPaths(t *test
 			}
 		})
 	}
-}
-
-// capturedRoomParticipantOptions returns the exact SessionRunOptions
-// buildRoomParticipantPlans constructs today for a live (non-replay,
-// non-human) room participant, by running the real production function with
-// an injected SessionInferencer so no network or credential is needed. This
-// stays honest to source drift: if session_room_planning.go ever starts
-// setting Diagnostics, this helper's caller (Diagnostics != nil guard above)
-// fails loudly instead of silently testing a stale shape.
-func capturedRoomParticipantOptions(t *testing.T) SessionRunOptions {
-	t.Helper()
-	opts := RoomRunOptions{
-		Manifest: room.Manifest{
-			SchemaVersion: room.SchemaVersion,
-			Room:          room.Room{Interactive: true},
-			Participants: []room.Participant{
-				{
-					Kind:         room.ParticipantKindAgent,
-					ID:           "agent",
-					SystemPrompt: "provider agent",
-					Provider:     "test-provider",
-					Model:        "test-model",
-					APIKeyEnv:    "ROOM_AGENT_KEY",
-					Tools:        []string{},
-				},
-			},
-		},
-		CredentialLookup: func(string) (string, bool) { return "secret", true },
-		SessionInferencers: map[string]messages.SessionInferencer{
-			"agent": stubPlanSessionInferencer{},
-		},
-	}
-	plans, _, err := buildRoomParticipantPlans(opts, room.ValidationOptions{LookupCredential: opts.CredentialLookup})
-	if err != nil {
-		t.Fatalf("buildRoomParticipantPlans: %v", err)
-	}
-	if len(plans) != 1 || plans[0].startupErr != nil {
-		t.Fatalf("buildRoomParticipantPlans plans = %+v, want one clean agent plan", plans)
-	}
-	return plans[0].options
 }
