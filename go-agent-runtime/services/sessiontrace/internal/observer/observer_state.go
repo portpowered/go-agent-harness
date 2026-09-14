@@ -1,7 +1,6 @@
 package observer
 
 import (
-	"errors"
 	"strings"
 	"time"
 
@@ -43,15 +42,6 @@ func (c platformSessionLivenessClock) NewTimer(duration time.Duration) SessionLi
 	return c.source.NewTimer(duration)
 }
 
-func sessionLivenessClockFromSource(source platformclock.Source) SessionLivenessClock {
-	source = platformclock.Ensure(source)
-	timerSource, ok := source.(platformclock.TimerSource)
-	if !ok {
-		return nil
-	}
-	return platformSessionLivenessClock{source: timerSource}
-}
-
 type SessionLivenessError = sessiontrace.LivenessError
 
 func newSilentProviderEmptyResponseError(msg messages.StreamMessage, value *messages.MessageEndValue) *SessionLivenessError {
@@ -60,14 +50,6 @@ func newSilentProviderEmptyResponseError(msg messages.StreamMessage, value *mess
 		err.Usage = value.Usage
 	}
 	return err
-}
-
-func sessionLivenessMetadata(err error) (string, messages.TerminalReason, messages.TerminalProvenance, messages.TerminalOutputState) {
-	var livenessErr *SessionLivenessError
-	if !errors.As(err, &livenessErr) || livenessErr == nil {
-		return "", "", "", ""
-	}
-	return livenessErr.Classification, livenessErr.TerminalReason, livenessErr.TerminalProvenance, livenessErr.OutputState
 }
 
 func (o *observerState) responseHasToolLifecycleObligation() bool {

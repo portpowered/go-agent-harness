@@ -66,80 +66,6 @@ func newSessionRuntimeObservationRecorder(observer SessionRuntimeObserver, sourc
 	}
 }
 
-// These adapters only translate the two public observation types. The service
-// retains ownership of ordering, copying, redaction, and policy composition.
-type traceRuntimeObserverAdapter struct {
-	observer SessionRuntimeObserver
-	provider func() bool
-	retain   func() bool
-}
-
-func (a traceRuntimeObserverAdapter) ObserveSessionRuntime(o sessiontrace.SessionRuntimeObservation) {
-	if a.observer != nil {
-		a.observer.ObserveSessionRuntime(fromSessionTraceObservation(o))
-	}
-}
-func (a traceRuntimeObserverAdapter) ObserveProviderBoundaries() bool {
-	return a.provider != nil && a.provider()
-}
-func (a traceRuntimeObserverAdapter) RetainCommitPayload() bool { return a.retain == nil || a.retain() }
-
-func adaptSessionTraceObserver(observer SessionRuntimeObserver) sessiontrace.RuntimeObserver {
-	if observer == nil {
-		return nil
-	}
-	return traceRuntimeObserverAdapter{observer: observer,
-		provider: func() bool {
-			p, ok := observer.(interface{ ObserveProviderBoundaries() bool })
-			return ok && p.ObserveProviderBoundaries()
-		},
-		retain: func() bool {
-			p, ok := observer.(interface{ RetainCommitPayload() bool })
-			return !ok || p.RetainCommitPayload()
-		}}
-}
-
-type agentRuntimeObserverAdapter struct{ observer sessiontrace.RuntimeObserver }
-
-func (a agentRuntimeObserverAdapter) ObserveSessionRuntime(o SessionRuntimeObservation) {
-	if a.observer != nil {
-		a.observer.ObserveSessionRuntime(toSessionTraceObservation(o))
-	}
-}
-func (a agentRuntimeObserverAdapter) ObserveProviderBoundaries() bool {
-	p, ok := a.observer.(sessiontrace.ProviderBoundaryObserver)
-	return ok && p.ObserveProviderBoundaries()
-}
-func (a agentRuntimeObserverAdapter) RetainCommitPayload() bool {
-	p, ok := a.observer.(sessiontrace.CommitPayloadObserver)
-	return ok && p.RetainCommitPayload()
-}
-func adaptAgentRuntimeObserver(observer sessiontrace.RuntimeObserver) SessionRuntimeObserver {
-	if observer == nil {
-		return nil
-	}
-	return agentRuntimeObserverAdapter{observer: observer}
-}
-
-func toSessionTraceObservation(o SessionRuntimeObservation) sessiontrace.SessionRuntimeObservation {
-	return sessiontrace.SessionRuntimeObservation{Kind: sessiontrace.SessionRuntimeObservationKind(o.Kind), Tick: o.Tick, Timestamp: o.Timestamp, Payload: o.Payload, TurnsCompleted: o.TurnsCompleted, InputCommit: o.InputCommit, ResponseID: o.ResponseID, ResponsePurpose: o.ResponsePurpose, StreamID: o.StreamID, LoopPassID: o.LoopPassID, Epoch: o.Epoch, Clean: o.Clean, Error: o.Error, FinalAccounting: toSessionTraceAccounting(o.FinalAccounting)}
-}
-func fromSessionTraceObservation(o sessiontrace.SessionRuntimeObservation) SessionRuntimeObservation {
-	return SessionRuntimeObservation{Kind: SessionRuntimeObservationKind(o.Kind), Tick: o.Tick, Timestamp: o.Timestamp, Payload: o.Payload, TurnsCompleted: o.TurnsCompleted, InputCommit: o.InputCommit, ResponseID: o.ResponseID, ResponsePurpose: o.ResponsePurpose, StreamID: o.StreamID, LoopPassID: o.LoopPassID, Epoch: o.Epoch, Clean: o.Clean, Error: o.Error, FinalAccounting: fromSessionTraceAccounting(o.FinalAccounting)}
-}
-func toSessionTraceAccounting(a *SessionFinalAccounting) *sessiontrace.SessionFinalAccounting {
-	if a == nil {
-		return nil
-	}
-	return &sessiontrace.SessionFinalAccounting{PromptTokens: a.PromptTokens, CompletionTokens: a.CompletionTokens, TotalTokens: a.TotalTokens, ReasoningTokens: a.ReasoningTokens, UsageSemantics: sessiontrace.SessionTokenUsageSemantics(a.UsageSemantics), Metrics: a.Metrics}
-}
-func fromSessionTraceAccounting(a *sessiontrace.SessionFinalAccounting) *SessionFinalAccounting {
-	if a == nil {
-		return nil
-	}
-	return &SessionFinalAccounting{PromptTokens: a.PromptTokens, CompletionTokens: a.CompletionTokens, TotalTokens: a.TotalTokens, ReasoningTokens: a.ReasoningTokens, UsageSemantics: SessionTokenUsageSemantics(a.UsageSemantics), Metrics: a.Metrics}
-}
-
 // enableProviderBoundaryObservations opts a runtime recorder into inbound
 // provider commit/response boundaries. Ordinary session runtime observers keep
 // their historical client-owned observation surface; room latency evidence is
@@ -222,7 +148,7 @@ func (r *sessionRuntimeObservationRecorder) audioPlaybackReceipt(receipt audio.P
 	if receipt.Err != nil {
 		errText = receipt.Err.Error()
 	}
-	payload, _ := json.Marshal(struct {
+	payload, err := json.Marshal(struct {
 		CommandID  uint64 `json:"command_id"`
 		Epoch      uint64 `json:"epoch,omitempty"`
 		Applied    bool   `json:"applied"`
@@ -232,6 +158,9 @@ func (r *sessionRuntimeObservationRecorder) audioPlaybackReceipt(receipt audio.P
 		CommandID: receipt.CommandID, Epoch: receipt.Epoch, Applied: receipt.Applied,
 		AudioEndMS: receipt.Interruption.AudioEndMS, Error: errText,
 	})
+	if err != nil {
+		return
+	}
 	r.observe(SessionRuntimeObservationAudioPlaybackReceipt, payload, 0, false, receipt.Err)
 }
 

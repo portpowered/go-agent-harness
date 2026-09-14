@@ -53,28 +53,28 @@ func (o *observerState) prepareObservedResponse(msg messages.StreamMessage) (str
 	msgResponseID := strings.TrimSpace(msg.ResponseID)
 	responseLifecycleID := msgResponseID
 	acknowledgementResponse := msg.ResponsePurpose == messages.ResponsePurposeToolAcknowledgement
-	switch msg.Type {
-	case messages.StreamTypeMessageStart, messages.StreamTypeAudioStart:
+	if msg.Type == messages.StreamTypeMessageStart || msg.Type == messages.StreamTypeAudioStart {
 		newResponseBoundary, ok := o.prepareResponseStart(msgResponseID, msg.ResponsePurpose, msg.Role, acknowledgementResponse)
 		if !ok {
 			return "", false, false, false
 		}
 		return responseLifecycleID, newResponseBoundary, acknowledgementResponse, true
-	case messages.StreamTypeMessageEnd:
+	}
+	if msg.Type == messages.StreamTypeMessageEnd {
 		newResponseBoundary, responseLifecycleID, ok := o.prepareResponseEnd(msgResponseID, msg.ResponsePurpose, acknowledgementResponse)
 		if !ok {
 			return "", false, false, false
 		}
 		return responseLifecycleID, newResponseBoundary, acknowledgementResponse, true
-	case messages.StreamTypeSessionClose:
+	}
+	if msg.Type == messages.StreamTypeSessionClose {
 		// Keep the active response owner while draining already-queued provider
 		// output. A transport can deliver SESSION.CLOSE before the response's
 		// terminal event; clearing the owner here would make that terminal look
 		// like a new response and discard its output ledger.
-	default:
-		if responseScopedStreamType(msg.Type) && !o.responseEventBelongsToActive(msgResponseID) {
-			return "", false, false, false
-		}
+	}
+	if msg.Type != messages.StreamTypeSessionClose && responseScopedStreamType(msg.Type) && !o.responseEventBelongsToActive(msgResponseID) {
+		return "", false, false, false
 	}
 	if responseLifecycleID == "" {
 		_, responseLifecycleID = o.observedResponseProjection()

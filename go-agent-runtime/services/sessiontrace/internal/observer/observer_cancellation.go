@@ -2,6 +2,7 @@ package observer
 
 import (
 	"context"
+	"errors"
 	"sort"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -42,17 +43,12 @@ func sessionSIGINTErrorOnly(err error) bool {
 		return sessionSIGINTErrorOnly(unwrapper.Unwrap())
 	}
 
-	switch err {
-	case context.Canceled,
-		session.ErrLiveAudioResponseIncomplete,
-		session.ErrLiveScheduledAudioIncomplete,
-		session.ErrLiveUnresolvedToolResults,
-		session.ErrLiveToolContinuationIncomplete,
-		session.ErrLiveImageContinuationIncomplete:
-		return true
-	default:
-		return false
-	}
+	return errors.Is(err, context.Canceled) ||
+		errors.Is(err, session.ErrLiveAudioResponseIncomplete) ||
+		errors.Is(err, session.ErrLiveScheduledAudioIncomplete) ||
+		errors.Is(err, session.ErrLiveUnresolvedToolResults) ||
+		errors.Is(err, session.ErrLiveToolContinuationIncomplete) ||
+		errors.Is(err, session.ErrLiveImageContinuationIncomplete)
 }
 
 // sessionSIGINTCleanForObserver adds the observer's typed stream failure

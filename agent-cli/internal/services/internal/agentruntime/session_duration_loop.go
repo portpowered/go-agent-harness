@@ -476,7 +476,7 @@ func waitForDurationSessionLoopStragglers(out io.Writer, loop *agentloop.AgentLo
 	if timer == nil {
 		return errors.New("session duration clock returned a nil straggler timer")
 	}
-	defer timer.Stop()
+	defer func() { timer.Stop() }()
 	for {
 		select {
 		case msg, ok := <-loop.Deltas().Chan():

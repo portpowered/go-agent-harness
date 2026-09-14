@@ -64,7 +64,6 @@ func RunSessionWithAudioOutAndTextSeed(ctx context.Context, out io.Writer, opts 
 	if err != nil {
 		return err
 	}
-
 	audioOut, err := newSessionAudioOutputForPlan(&plan, path, out, audio.NewLoudnessNormalizer(audio.LoudnessNormalizerConfig{GainDB: VoiceLoudnessGainDB(opts.Voice)}))
 	if err != nil {
 		return fmt.Errorf("--audio-out %q: %w", path, err)
@@ -74,7 +73,6 @@ func RunSessionWithAudioOutAndTextSeed(ctx context.Context, out io.Writer, opts 
 			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", path, closeErr))
 		}
 	}()
-
 	if plan.inferencer != nil {
 		wirePrompt := ""
 		if seed.Present {
@@ -95,7 +93,6 @@ func RunSessionWithAudioOutAndTextSeed(ctx context.Context, out io.Writer, opts 
 		}
 		return runErr
 	}
-
 	sessionOut := out
 	if path == "-" {
 		sessionOut = io.Discard
@@ -448,7 +445,9 @@ func (o *sessionAudioOutput) writeDelta(ctx context.Context, content []byte, msg
 		return nil
 	}
 	if o.deviceBound {
-		o.runtime.AudioOutputMessage(content, msg)
+		if o.runtime != nil {
+			o.runtime.AudioOutputMessage(content, msg)
+		}
 		return nil
 	}
 	if err := codec.ValidatePCM16(content, codec.MaxPCM16Bytes); err != nil {
@@ -466,7 +465,9 @@ func (o *sessionAudioOutput) writeDelta(ctx context.Context, content []byte, msg
 	if err != nil {
 		return pcm16AudioDeltaError(len(content), err)
 	}
-	o.runtime.AudioOutputMessage(content, msg)
+	if o.runtime != nil {
+		o.runtime.AudioOutputMessage(content, msg)
+	}
 	writer, ok := o.sink.(interface {
 		WriteSamples(context.Context, []int16) error
 	})
@@ -517,7 +518,6 @@ func newSessionAudioOutputInferencer(inner messages.SessionInferencer, output *s
 		seedValue:  seedValue,
 	}
 }
-
 func (i *sessionAudioOutputInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
 	session, err := i.inner.ConnectSession(context.WithoutCancel(ctx))
 	if err != nil {

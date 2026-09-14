@@ -9,6 +9,15 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 )
 
+func recordMetric(recorder metrics.Recorder, direction metrics.Direction, modality metrics.Modality, n int64) {
+	if recorder == nil {
+		return
+	}
+	if err := recorder.Record(direction, modality, n); err != nil {
+		return
+	}
+}
+
 // account is the single observation seam: every counted byte crosses here
 // exactly once, forwarding to the metrics recorder and advancing both the
 // per-turn counters and the lifetime totals in one step. Recording failures
@@ -17,12 +26,8 @@ func (o *observerState) account(direction metrics.Direction, modality metrics.Mo
 	if o == nil || n <= 0 {
 		return
 	}
-	if o.productionSink != nil {
-		_ = o.productionSink.Record(direction, modality, int64(n))
-	}
-	if o.recorder != nil {
-		_ = o.recorder.Record(direction, modality, int64(n))
-	}
+	recordMetric(o.productionSink, direction, modality, int64(n))
+	recordMetric(o.recorder, direction, modality, int64(n))
 	o.counters.account(direction, modality, uint64(n))
 	o.totals.account(direction, modality, uint64(n))
 }
@@ -36,15 +41,11 @@ func (o *observerState) accountRoomAudioInput(n int) {
 	if o == nil || n <= 0 {
 		return
 	}
-	if o.productionSink != nil {
-		_ = o.productionSink.Record(metrics.DirectionInput, metrics.ModalityAudio, int64(n))
-	}
+	recordMetric(o.productionSink, metrics.DirectionInput, metrics.ModalityAudio, int64(n))
 	o.roomInputMu.Lock()
 	o.roomInputTurnBytes += uint64(n)
 	o.roomInputTotalBytes += uint64(n)
-	if o.recorder != nil {
-		_ = o.recorder.Record(metrics.DirectionInput, metrics.ModalityAudio, int64(n))
-	}
+	recordMetric(o.recorder, metrics.DirectionInput, metrics.ModalityAudio, int64(n))
 	o.roomInputMu.Unlock()
 }
 

@@ -64,6 +64,18 @@ func playbackMetricSamples() []playbackMetricDefinition {
 	}
 }
 
+func recordPlaybackSample(sampler observability.MetricSampler, sample observability.MetricSample) {
+	if err := observability.TrySample(context.Background(), sampler, sample); err != nil {
+		return
+	}
+}
+
+func recordPlaybackLog(logger observability.Logger, record observability.LogRecord) {
+	if err := observability.TryLog(context.Background(), logger, record); err != nil {
+		return
+	}
+}
+
 // fallbackPlaybackDiagnosticSink is the sink resolvePlaybackDiagnosticSink
 // installs whenever a caller did not wire one. This is the second time this
 // exact instrumentation has been found unwired end to end: #360 fixed the
@@ -201,7 +213,7 @@ func sessionPlaybackObservabilityObserver(sampler observability.MetricSampler, l
 			"channels":    strconv.Itoa(stats.Format.Channels),
 		}
 		for _, definition := range playbackMetricSamples() {
-			_ = observability.TrySample(context.Background(), sampler, observability.MetricSample{
+			recordPlaybackSample(sampler, observability.MetricSample{
 				Name: definition.name, Kind: definition.kind, Unit: definition.unit,
 				Value: definition.value(stats), Fields: fields,
 			})
@@ -215,7 +227,7 @@ func sessionPlaybackObservabilityObserver(sampler observability.MetricSampler, l
 		logFields["underflow_samples"] = strconv.FormatUint(stats.UnderflowSamples, 10)
 		logFields["zero_filled_samples"] = strconv.FormatUint(stats.ZeroFilledSamples, 10)
 		logFields["rendered_samples"] = strconv.FormatUint(stats.RenderedSamples, 10)
-		_ = observability.TryLog(context.Background(), logger, observability.LogRecord{
+		recordPlaybackLog(logger, observability.LogRecord{
 			Level: level, Message: SessionLogMessagePlaybackSnapshot, Fields: logFields,
 		})
 	}
@@ -239,7 +251,7 @@ func sessionCaptureObservabilityObserver(sampler observability.MetricSampler, lo
 			{Name: "audio.capture.sequence_gaps", Kind: "counter", Value: float64(stats.SequenceGaps), Unit: "gaps", Fields: fields},
 		}
 		for _, sample := range metrics {
-			_ = observability.TrySample(context.Background(), sampler, sample)
+			recordPlaybackSample(sampler, sample)
 		}
 		level := "info"
 		if stats.DroppedSamples > 0 || stats.SequenceGaps > 0 {
@@ -248,7 +260,7 @@ func sessionCaptureObservabilityObserver(sampler observability.MetricSampler, lo
 		fields["dropped_frames"] = strconv.FormatUint(stats.DroppedFrames, 10)
 		fields["dropped_samples"] = strconv.FormatUint(stats.DroppedSamples, 10)
 		fields["sequence_gaps"] = strconv.FormatUint(stats.SequenceGaps, 10)
-		_ = observability.TryLog(context.Background(), logger, observability.LogRecord{
+		recordPlaybackLog(logger, observability.LogRecord{
 			Level: level, Message: "audio capture queue finalized", Fields: fields,
 		})
 	}

@@ -58,7 +58,7 @@ func writeSessionReplayClose(out io.Writer, value *messages.SessionCloseValue, l
 }
 
 func sessionTerminalFields(classification string, reason messages.TerminalReason, provenance messages.TerminalProvenance, outputState messages.TerminalOutputState) string {
-	fields := make([]string, 0, 4)
+	fields := make([]string, 0)
 	if classification != "" {
 		fields = append(fields, "classification="+classification)
 	}

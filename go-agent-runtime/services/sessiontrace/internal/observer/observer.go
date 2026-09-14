@@ -97,10 +97,6 @@ const (
 	SessionDiagnosticFieldCancelledToolContinuationCount   = sessiontrace.SessionDiagnosticFieldCancelledToolContinuationCount
 	SessionDiagnosticFieldCancelledToolContinuationCallIDs = sessiontrace.SessionDiagnosticFieldCancelledToolContinuationCallIDs
 )
-const (
-	fieldUnresolvedToolResultCount = SessionDiagnosticFieldUnresolvedToolResultCount
-	fieldUnresolvedToolCallIDs     = SessionDiagnosticFieldUnresolvedToolCallIDs
-)
 
 // Failing-event identities used when no stream event authored the failure.
 const (
@@ -120,34 +116,6 @@ type ScheduledAudioDispatchPolicy = sessiontrace.ScheduledAudioDispatchPolicy
 const ScheduledAudioDispatchActiveResponse = sessiontrace.ScheduledAudioDispatchActiveResponse
 
 type SessionDiagnosticRecord = sessiontrace.DiagnosticRecord
-
-type sessionDiagnosticRecord = sessiontrace.DiagnosticRecord
-
-type diagnosticSinkFanout []sessiontrace.DiagnosticSink
-
-func combineDiagnosticSinks(sinks ...sessiontrace.DiagnosticSink) sessiontrace.DiagnosticSink {
-	filtered := make(diagnosticSinkFanout, 0, len(sinks))
-	for _, sink := range sinks {
-		if sink != nil {
-			filtered = append(filtered, sink)
-		}
-	}
-	switch len(filtered) {
-	case 0:
-		return nil
-	case 1:
-		return filtered[0]
-	default:
-		return filtered
-	}
-}
-func (f diagnosticSinkFanout) RecordSessionDiagnostic(record sessiontrace.DiagnosticRecord) {
-	for _, sink := range f {
-		if sink != nil {
-			sink.RecordSessionDiagnostic(record)
-		}
-	}
-}
 
 type scheduledSessionInputSender interface {
 	SendAudioInput(context.Context, []byte) error

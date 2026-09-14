@@ -96,7 +96,6 @@ func (r *terminalReporter) observeStreamMessage(msg messages.StreamMessage, lead
 	defer r.mu.Unlock()
 	r.observeStreamMessageLocked(msg, leadingNewline)
 }
-
 func (r *terminalReporter) observeStreamMessageLocked(msg messages.StreamMessage, leadingNewline bool) {
 	switch msg.Type {
 	case messages.StreamTypeMessageStart:
@@ -120,6 +119,36 @@ func (r *terminalReporter) observeStreamMessageLocked(msg messages.StreamMessage
 		if msg.Role != messages.RoleUser && streamMessageHasOutput(msg) {
 			r.outcome.outputState = messages.TerminalOutputPartial
 		}
+	case messages.StreamTypeTextStart,
+		messages.StreamTypeTextEnd,
+		messages.StreamTypeToolCallStart,
+		messages.StreamTypeAudioStart,
+		messages.StreamTypeAudioEnd,
+		messages.StreamTypeImageStart,
+		messages.StreamTypeImageEnd,
+		messages.StreamTypeVideoStart,
+		messages.StreamTypeVideoEnd,
+		messages.StreamTypeFileStart,
+		messages.StreamTypeFileEnd,
+		messages.StreamTypeEmbeddingStart,
+		messages.StreamTypeEmbeddingEnd,
+		messages.StreamTypeReasoningStart,
+		messages.StreamTypeReasoningEnd,
+		messages.StreamTypeVADSpeechStarted,
+		messages.StreamTypeVADSpeechStopped,
+		messages.StreamTypeTranscriptStart,
+		messages.StreamTypeTranscriptEnd,
+		messages.StreamTypeInputItemAdded,
+		messages.StreamTypePong,
+		messages.StreamTypeSessionOpen,
+		messages.StreamTypeSessionCreated,
+		messages.StreamTypeSessionUpdated,
+		messages.StreamTypeSessionUpdate,
+		messages.StreamTypeResponseCancel,
+		messages.StreamTypeResponseCreate,
+		messages.StreamTypeLoopEnd,
+		messages.StreamTypeUsageInfo,
+		messages.StreamTypeSystemFullMessage:
 	case messages.StreamTypeMessageEnd:
 		if r.outcome.outputState == messages.TerminalOutputPartial {
 			r.outcome.outputState = messages.TerminalOutputComplete
@@ -189,6 +218,12 @@ func (r *terminalReporter) observeSessionCloseLocked(msg messages.StreamMessage,
 		messages.TerminalReasonReplayDivergence,
 		messages.TerminalReasonReplayIncomplete:
 		rememberTerminalCandidate(&r.outcome.failure, candidate)
+	case messages.TerminalReasonProviderAuthoredCompletion,
+		messages.TerminalReasonLoopSynthesizedCompletion,
+		messages.TerminalReasonSessionClose,
+		messages.TerminalReasonPartialOutput,
+		messages.TerminalReasonProviderClose:
+		rememberObservedTerminalCandidate(&r.outcome.observedTerminal, candidate)
 	default:
 		rememberObservedTerminalCandidate(&r.outcome.observedTerminal, candidate)
 	}

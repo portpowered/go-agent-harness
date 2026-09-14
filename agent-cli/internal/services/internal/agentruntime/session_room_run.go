@@ -160,7 +160,7 @@ func runRoomParticipant(
 				value.TerminalReason == messages.TerminalReasonLoopSynthesizedCompletion
 		})
 		observer.SetStreamObserver(func(msg messages.StreamMessage) {
-			observeRoomParticipantStream(coordinator, runtime, opts, evidence, participantEvidence, msg)
+			observeRoomParticipantStream(coordinator, runtime, opts, evidence, participantEvidence, runtime.ctx, msg)
 		})
 		observer.SetAdmittedTurnObserver(func(messages.StreamMessage) {
 			turns := runtime.lifecycle.observeAdmittedTurn()
@@ -300,7 +300,7 @@ func runRoomParticipant(
 		return runtime.lifecycle.admitResponseTerminal()
 	})
 	observer.SetStreamObserver(func(msg messages.StreamMessage) {
-		observeRoomParticipantStream(coordinator, runtime, opts, evidence, participantEvidence, msg)
+		observeRoomParticipantStream(coordinator, runtime, opts, evidence, participantEvidence, runtime.ctx, msg)
 	})
 	observer.SetAdmittedTurnObserver(func(messages.StreamMessage) {
 		turns := runtime.lifecycle.observeAdmittedTurn()
@@ -434,7 +434,7 @@ func observeRoomParticipantStream(
 	runtime *roomParticipantRuntime,
 	opts RoomRunOptions,
 	evidence *roomEvidence,
-	participantEvidence *roomParticipantEvidence,
+	participantEvidence *roomParticipantEvidence, ctx context.Context,
 	msg messages.StreamMessage,
 ) {
 	plan := runtime.plan
@@ -514,8 +514,7 @@ func observeRoomParticipantStream(
 			return
 		}
 	}
-	// Room replay audio is released by the single room scheduler from the
-	// recorded logical timeline. Provider output remains observable above, but
+	// Room replay audio is released by the single room scheduler from the recorded logical timeline. Provider output remains observable above, but
 	// independently fanning it here would let goroutine timing choose the
 	// cross-participant order and overlap. Only the fan-out is skipped: the
 	// durable evidence writes below still run on the replay path, so a replayed
@@ -539,14 +538,11 @@ func observeRoomParticipantStream(
 			}
 		}
 	}
-	// Durable JSONL/WAV evidence is intentionally recorded after the bounded
-	// provider-to-peer handoff. A slow filesystem must not make the next room
-	// mixer frame wait before it can accept the first provider PCM delta.
+	// Durable JSONL/WAV evidence is intentionally recorded after the bounded provider-to-peer handoff; a slow filesystem must not make the next room mixer frame wait before it can accept the first provider PCM delta.
 	recordParticipantDelta()
 	if participantEvidence != nil {
-		// Durable WAV I/O only. A slow filesystem here must not delay the
-		// provider-to-peer handoff above.
-		_ = participantEvidence.observeAudio(pcm)
+		// Durable WAV I/O only. A slow filesystem here must not delay the provider-to-peer handoff above.
+		participantEvidence.owner.recordError(participantEvidence.id, "", participantEvidence.observeAudio(ctx, pcm))
 	}
 }
 func finalizeRoomParticipantResults(
@@ -1061,7 +1057,7 @@ func runRoomHumanCapture(
 		pcm := encodeRoomPCM16(roomSamples)
 		if participantEvidence != nil {
 			// Evidence is best-effort and independent of human capture/fan-out.
-			_ = participantEvidence.observeSentAudio(pcm)
+			participantEvidence.owner.recordError(participantEvidence.id, "", participantEvidence.observeSentAudio(roomCtx, pcm))
 		}
 		for _, target := range coordinator.activeExcept(participantID) {
 			if target == nil || target.mixer == nil {

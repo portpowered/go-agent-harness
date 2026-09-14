@@ -46,7 +46,12 @@ func factsFromSessionRunError(err error) *failureFacts {
 	if !errors.As(err, &streamErr) || streamErr == nil {
 		return nil
 	}
-	returnFacts, _ := normalizeErrorFacts(streamErr.Value)
+	returnFacts, err := normalizeErrorFacts(streamErr.Value)
+	if err != nil {
+		// The stream error remains the caller's causal error; this projection
+		// only needs the typed terminal facts for observer state.
+		return returnFacts
+	}
 	return returnFacts
 }
 
@@ -150,6 +155,13 @@ func normalizeCloseFacts(value *m.SessionCloseValue, open bool, turns int) *fail
 		return nil
 	}
 	switch value.TerminalReason {
+	case m.TerminalReasonProviderAuthoredCompletion,
+		m.TerminalReasonLoopSynthesizedCompletion,
+		m.TerminalReasonCancellation,
+		m.TerminalReasonReplayComplete,
+		m.TerminalReasonSessionClose,
+		m.TerminalReasonPartialOutput:
+		return nil
 	case m.TerminalReasonProviderClose, m.TerminalReasonTerminalFailure, m.TerminalReasonReplayDivergence, m.TerminalReasonReplayIncomplete:
 	default:
 		return nil

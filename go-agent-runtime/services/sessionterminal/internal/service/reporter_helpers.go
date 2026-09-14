@@ -142,7 +142,7 @@ func sessionErrorHasIndependentFailure(err error) bool {
 	var leaves []error
 	collectSessionErrorLeaves(err, &leaves)
 	for _, leaf := range leaves {
-		if leaf == nil || leaf == context.Canceled || leaf == context.DeadlineExceeded || errors.Is(leaf, sessionterminal.ErrDurationExpired) {
+		if leaf == nil || errors.Is(leaf, context.Canceled) || errors.Is(leaf, context.DeadlineExceeded) || errors.Is(leaf, sessionterminal.ErrDurationExpired) {
 			continue
 		}
 		return true
@@ -157,7 +157,7 @@ func sessionErrorIsCancellation(err error) bool {
 	var leaves []error
 	collectSessionErrorLeaves(err, &leaves)
 	for _, leaf := range leaves {
-		if leaf == context.Canceled || leaf == context.DeadlineExceeded {
+		if errors.Is(leaf, context.Canceled) || errors.Is(leaf, context.DeadlineExceeded) {
 			return true
 		}
 	}

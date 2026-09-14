@@ -20,7 +20,10 @@ func ReporterFromContext(ctx context.Context) sessionterminal.Reporter {
 	if ctx == nil {
 		return nil
 	}
-	reporter, _ := ctx.Value(reporterContextKey{}).(sessionterminal.Reporter)
+	reporter, ok := ctx.Value(reporterContextKey{}).(sessionterminal.Reporter)
+	if !ok {
+		return nil
+	}
 	return reporter
 }
 
@@ -31,7 +34,7 @@ func HasIndependentFailure(err error) bool {
 	var leaves []error
 	collectErrorLeaves(err, &leaves)
 	for _, leaf := range leaves {
-		if leaf == nil || leaf == context.Canceled || leaf == context.DeadlineExceeded || errors.Is(leaf, sessionterminal.ErrDurationExpired) {
+		if leaf == nil || errors.Is(leaf, context.Canceled) || errors.Is(leaf, context.DeadlineExceeded) || errors.Is(leaf, sessionterminal.ErrDurationExpired) {
 			continue
 		}
 		return true

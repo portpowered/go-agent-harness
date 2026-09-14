@@ -147,21 +147,6 @@ func (o *observerState) observedResponseProjection() (active bool, id string) {
 func (o *observerState) plainEvent(kind sd.EventKind, id string) sd.Observation {
 	return o.lifecycleEvent(sd.Event{Kind: kind, ResponseID: id})
 }
-func (o *observerState) indexEvent(kind sd.EventKind, index int, id string) sd.Observation {
-	return o.lifecycleEvent(sd.Event{Kind: kind, Index: index, ResponseID: id})
-}
-func (o *observerState) pendingScheduledRateLimitRetryIndex() (int, bool) {
-	if o == nil {
-		return 0, false
-	}
-	snapshot := o.ensureLifecycle().Snapshot()
-	for index, value := range snapshot.Scheduled {
-		if value.Bound && value.RetryPending {
-			return index, true
-		}
-	}
-	return 0, false
-}
 func (o *observerState) noteScheduledResponseTerminal(id string, terminal *messages.MessageEndValue) {
 	o.lifecycleEvent(sd.Event{Kind: sd.EventNoteScheduledTerminal, ResponseID: id, Terminal: lifecycleTerminal(terminal)})
 }
@@ -195,12 +180,6 @@ func (o *observerState) bindScheduledTerminalOnly(id string) {
 }
 func (o *observerState) rememberRateLimitRetryCandidate(responseID, lifecycleID string, terminal *messages.MessageEndValue) {
 	o.lifecycleEvent(sd.Event{Kind: sd.EventRememberRetry, ResponseID: responseID, LifecycleID: lifecycleID, Terminal: lifecycleTerminal(terminal)})
-}
-func (o *observerState) bindScheduledResponseID(index int, id string) bool {
-	return o.indexEvent(sd.EventBindScheduledID, index, id).Accepted
-}
-func (o *observerState) setActiveScheduledResponseWithID(index int, id string) bool {
-	return o.indexEvent(sd.EventSetScheduledOwner, index, id).Accepted
 }
 func (o *observerState) claimScheduledRateLimitRetry(responseID string, terminal *messages.MessageEndValue) (time.Duration, bool) {
 	if o == nil {
@@ -377,6 +356,21 @@ func responseScopedStreamType(t messages.StreamMessageType) bool {
 	switch t {
 	case messages.StreamTypeMessageStart, messages.StreamTypeMessageEnd, messages.StreamTypeTextStart, messages.StreamTypeTextDelta, messages.StreamTypeTextEnd, messages.StreamTypeToolCallStart, messages.StreamTypeToolCallDelta, messages.StreamTypeToolCallEnd, messages.StreamTypeAudioStart, messages.StreamTypeAudioDelta, messages.StreamTypeAudioEnd, messages.StreamTypeImageStart, messages.StreamTypeImageDelta, messages.StreamTypeImageEnd, messages.StreamTypeVideoStart, messages.StreamTypeVideoDelta, messages.StreamTypeVideoEnd, messages.StreamTypeFileStart, messages.StreamTypeFileDelta, messages.StreamTypeFileEnd, messages.StreamTypeEmbeddingStart, messages.StreamTypeEmbeddingDelta, messages.StreamTypeEmbeddingEnd, messages.StreamTypeReasoningStart, messages.StreamTypeReasoningDelta, messages.StreamTypeReasoningEnd, messages.StreamTypeTranscriptStart, messages.StreamTypeTranscriptDelta, messages.StreamTypeTranscriptEnd, messages.StreamTypeRefusal, messages.StreamTypeUsageInfo:
 		return true
+	case messages.StreamTypeVADSpeechStarted,
+		messages.StreamTypeVADSpeechStopped,
+		messages.StreamTypeInputItemAdded,
+		messages.StreamTypePong,
+		messages.StreamTypeSessionOpen,
+		messages.StreamTypeSessionClose,
+		messages.StreamTypeSessionCreated,
+		messages.StreamTypeSessionUpdated,
+		messages.StreamTypeSessionUpdate,
+		messages.StreamTypeResponseCancel,
+		messages.StreamTypeResponseCreate,
+		messages.StreamTypeLoopEnd,
+		messages.StreamTypeError,
+		messages.StreamTypeSystemFullMessage:
+		return false
 	default:
 		return false
 	}

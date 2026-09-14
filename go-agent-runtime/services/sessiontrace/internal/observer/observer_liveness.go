@@ -2,7 +2,6 @@ package observer
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -121,47 +120,6 @@ func sessionLivenessErrorChannel(ctx context.Context, observer *observerState) <
 		}
 	}()
 	return errorsCh
-}
-
-func forwardSessionErrors(ctx context.Context, merged chan<- error, source <-chan error, stop context.CancelFunc) {
-	for err := range source {
-		if err == nil {
-			continue
-		}
-		select {
-		case merged <- err:
-			stop()
-		case <-ctx.Done():
-		}
-		return
-	}
-}
-
-func mergeSessionErrorChannels(ctx context.Context, first, second <-chan error) <-chan error {
-	if first == nil {
-		return second
-	}
-	if second == nil {
-		return first
-	}
-	merged := make(chan error, 1)
-	mergeContext, stop := context.WithCancel(ctx)
-	var workers sync.WaitGroup
-	workers.Add(2)
-	go func() {
-		defer workers.Done()
-		forwardSessionErrors(mergeContext, merged, first, stop)
-	}()
-	go func() {
-		defer workers.Done()
-		forwardSessionErrors(mergeContext, merged, second, stop)
-	}()
-	go func() {
-		workers.Wait()
-		close(merged)
-		stop()
-	}()
-	return merged
 }
 
 func (o *observerState) ensureLivenessStateLocked() {
