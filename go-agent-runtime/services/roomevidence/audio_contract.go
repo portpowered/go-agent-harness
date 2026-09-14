@@ -1,7 +1,7 @@
-// Package roomaudio owns the bounded audio projection of an admitted room
+// Package roomevidence owns bounded room evidence and audio projection for an admitted room
 // replay plan. Filesystem decoding, metadata policy and analysis preparation
 // stay behind this contract; hosts supply only the already-admitted plan.
-package roomaudio
+package roomevidence
 
 import (
 	"encoding/json"
@@ -25,7 +25,6 @@ type (
 	RoomReplayArtifact      = runtimeRooms.RoomReplayArtifact
 	RoomReplayParticipant   = runtimeRooms.RoomReplayParticipant
 	RoomReplayTimelineEvent = runtimeRooms.RoomReplayTimelineEvent
-	ParticipantKind         = runtimeRooms.ParticipantKind
 )
 
 const (
@@ -278,12 +277,6 @@ func (b RoomReplayAudioBundle) AnalysisInput() roomanalysis.PCM16RoomInput {
 // AnalysisConfig returns a value copy of the fully expanded room profile.
 func (b RoomReplayAudioBundle) AnalysisConfig() roomanalysis.PCM16RoomAnalysisConfig {
 	return b.Tolerances.RoomConfig
-}
-
-// Service loads the audio projection for an already admitted room plan.
-// Implementations are stateless and return a fresh detached bundle per call.
-type Service interface {
-	Load(RoomReplayPlan) (RoomReplayAudioBundle, error)
 }
 
 func cloneTimedStream(stream roomanalysis.PCM16TimedStream) roomanalysis.PCM16TimedStream {

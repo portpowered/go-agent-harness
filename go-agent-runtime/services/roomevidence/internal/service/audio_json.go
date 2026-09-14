@@ -10,7 +10,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomaudio"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 )
 
@@ -31,7 +31,7 @@ func newRoomReplayBundleError(kind roomReplayBundleErrorKind, field, artifact, e
 	} else {
 		replayCause = gateway.NewReplayMismatchError(expected, actual, cause)
 	}
-	return &roomaudioBundleError{
+	return &roomevidenceBundleError{
 		Kind:     kind,
 		Field:    field,
 		Artifact: artifact,
@@ -43,9 +43,9 @@ func newRoomReplayBundleError(kind roomReplayBundleErrorKind, field, artifact, e
 
 // roomReplayBundleErrorKind keeps the service implementation independent of
 // the public type's string alias while retaining the exact public value.
-type roomReplayBundleErrorKind = roomaudio.RoomReplayBundleErrorKind
+type roomReplayBundleErrorKind = roomevidence.RoomReplayBundleErrorKind
 
-type roomaudioBundleError = roomaudio.RoomReplayBundleError
+type roomevidenceBundleError = roomevidence.RoomReplayBundleError
 
 func roomReplayObject(raw json.RawMessage) (roomReplayJSONObject, error) {
 	var object roomReplayJSONObject

@@ -86,6 +86,7 @@ type Service interface {
 	ValidateOutput(string) error
 	PrepareOutput(string) (string, error)
 	Open(Options) (Recorder, error)
+	Load(RoomReplayPlan) (RoomReplayAudioBundle, error)
 }
 
 // Recorder owns one room's evidence lifecycle.

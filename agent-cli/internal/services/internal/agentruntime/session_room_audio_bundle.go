@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomaudio"
-	roomaudiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomaudio/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
+	roomevidencewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	roomanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room"
 )
@@ -14,27 +14,27 @@ import (
 // aliases keep the CLI's historical test and command vocabulary source
 // compatible while preventing the decoder from depending on CLI state.
 
-// Deprecated: use the corresponding errors from services/roomaudio. These
+// Deprecated: use the corresponding errors from services/roomevidence. These
 // names remain only for source compatibility with the legacy CLI tests.
 const (
-	ErrRoomReplayDeltaReconstruction = roomaudio.ErrRoomReplayDeltaReconstruction
-	ErrRoomReplayAudioTimeline       = roomaudio.ErrRoomReplayAudioTimeline
-	ErrRoomReplayToleranceProfile    = roomaudio.ErrRoomReplayToleranceProfile
+	ErrRoomReplayDeltaReconstruction = roomevidence.ErrRoomReplayDeltaReconstruction
+	ErrRoomReplayAudioTimeline       = roomevidence.ErrRoomReplayAudioTimeline
+	ErrRoomReplayToleranceProfile    = roomevidence.ErrRoomReplayToleranceProfile
 )
 
-// Deprecated: use the corresponding contracts from services/roomaudio. These
+// Deprecated: use the corresponding contracts from services/roomevidence. These
 // aliases remain only for source compatibility with the legacy CLI tests.
 type (
-	RoomReplayToleranceProfile         = roomaudio.RoomReplayToleranceProfile
-	RoomReplayAudioDelta               = roomaudio.RoomReplayAudioDelta
-	RoomReplayDeltaReconstructionError = roomaudio.RoomReplayDeltaReconstructionError
-	RoomReplayAudioStream              = roomaudio.RoomReplayAudioStream
-	RoomReplayAudioParticipant         = roomaudio.RoomReplayAudioParticipant
-	RoomReplayAudioAnnotation          = roomaudio.RoomReplayAudioAnnotation
-	RoomReplayAudioBundle              = roomaudio.RoomReplayAudioBundle
+	RoomReplayToleranceProfile         = roomevidence.RoomReplayToleranceProfile
+	RoomReplayAudioDelta               = roomevidence.RoomReplayAudioDelta
+	RoomReplayDeltaReconstructionError = roomevidence.RoomReplayDeltaReconstructionError
+	RoomReplayAudioStream              = roomevidence.RoomReplayAudioStream
+	RoomReplayAudioParticipant         = roomevidence.RoomReplayAudioParticipant
+	RoomReplayAudioAnnotation          = roomevidence.RoomReplayAudioAnnotation
+	RoomReplayAudioBundle              = roomevidence.RoomReplayAudioBundle
 )
 
-// Deprecated: use the roomaudio service's admitted profile selection.
+// Deprecated: use the roomevidence service's admitted profile selection.
 func DefaultRoomReplayToleranceProfile() RoomReplayToleranceProfile {
 	return RoomReplayToleranceProfile{
 		Name:         "suite-default",
@@ -44,28 +44,28 @@ func DefaultRoomReplayToleranceProfile() RoomReplayToleranceProfile {
 }
 
 // LoadRoomReplayAudioBundle retains the CLI path-admission boundary and then
-// delegates all audio parsing to the public roomaudio service.
-// Deprecated: use services/roomaudio with an admitted RoomReplayPlan.
+// delegates all audio parsing to the public roomevidence service.
+// Deprecated: use services/roomevidence with an admitted RoomReplayPlan.
 func LoadRoomReplayAudioBundle(bundle string) (RoomReplayAudioBundle, error) {
 	plan, err := LoadRoomReplayPlan(bundle)
 	if err != nil {
 		return RoomReplayAudioBundle{}, err
 	}
-	loaded, err := roomaudiowire.NewService().Load(toRoomAudioPlan(plan))
+	loaded, err := roomevidencewire.NewService().Load(toRoomAudioPlan(plan))
 	if err != nil {
 		return RoomReplayAudioBundle{}, adaptRoomReplayAudioError(err)
 	}
 	return loaded, nil
 }
 
-// Deprecated: use services/roomaudio.Validate with an admitted plan.
+// Deprecated: use services/roomevidence.Validate with an admitted plan.
 func ValidateRoomReplayAudioBundle(bundle string) error {
 	_, err := LoadRoomReplayAudioBundle(bundle)
 	return err
 }
 
 func adaptRoomReplayAudioError(err error) error {
-	var detail *roomaudio.RoomReplayBundleError
+	var detail *roomevidence.RoomReplayBundleError
 	if !errors.As(err, &detail) {
 		return err
 	}
@@ -82,8 +82,8 @@ func adaptRoomReplayAudioError(err error) error {
 	return errors.Join(legacy, err)
 }
 
-func toRoomAudioPlan(plan RoomReplayPlan) roomaudio.RoomReplayPlan {
-	converted := roomaudio.RoomReplayPlan{
+func toRoomAudioPlan(plan RoomReplayPlan) roomevidence.RoomReplayPlan {
+	converted := roomevidence.RoomReplayPlan{
 		BundlePath:    plan.BundlePath,
 		ManifestPath:  plan.ManifestPath,
 		SchemaVersion: plan.SchemaVersion,
@@ -131,7 +131,7 @@ func toRoomAudioArtifact(artifact RoomReplayArtifact) runtimeRooms.RoomReplayArt
 
 // roomReplayParticipantArtifact remains a decision-free CLI lookup for the
 // scheduler's existing session composition. Audio decoding itself is owned by
-// roomaudio/internal/service.
+// roomevidence/internal/service.
 func roomReplayParticipantArtifact(participant RoomReplayParticipant, role string) (RoomReplayArtifact, bool) {
 	for _, artifact := range participant.Artifacts {
 		if artifact.Role == role || artifact.Name == role {

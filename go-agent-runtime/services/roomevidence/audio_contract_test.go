@@ -1,4 +1,4 @@
-package roomaudio
+package roomevidence
 
 import (
 	"errors"
