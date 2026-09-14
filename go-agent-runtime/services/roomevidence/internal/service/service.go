@@ -147,7 +147,7 @@ func validateRoomReplayPlan(plan RoomReplayPlan) error {
 }
 
 func loadRoomReplayManifest(plan RoomReplayPlan) (roomReplayJSONObject, RoomReplayToleranceProfile, map[string]roomReplayJSONObject, error) {
-	data, err := readRoomReplayPath(plan.ManifestPath, maxRoomReplayManifestBytes, "run-manifest.json")
+	data, err := readRoomReplayPath(plan.BundlePath, plan.ManifestPath, maxRoomReplayManifestBytes, "run-manifest.json")
 	if err != nil {
 		return nil, RoomReplayToleranceProfile{}, nil, err
 	}

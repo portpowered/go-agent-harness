@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/internal/pathguard"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 )
 
@@ -105,6 +106,9 @@ func safePath(root, raw string) (string, string, error) {
 	}
 	if absolute != base && !strings.HasPrefix(absolute, base+string(filepath.Separator)) {
 		return "", "", fmt.Errorf("artifact path escapes the bundle")
+	}
+	if err := pathguard.ValidateNoSymlink(base, absolute); err != nil {
+		return "", "", err
 	}
 	return filepath.ToSlash(clean), absolute, nil
 }

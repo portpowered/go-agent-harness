@@ -21,7 +21,7 @@ type roomReplayDeltaParseState struct {
 }
 
 func loadRoomReplayAudioDeltas(artifact RoomReplayArtifact, participantID, streamID string, plan RoomReplayPlan) ([]RoomReplayAudioDelta, error) {
-	data, err := readRoomReplayArtifact(artifact, maxRoomReplayArtifactBytes, "participants["+participantID+"].deltas")
+	data, err := readRoomReplayArtifact(plan.BundlePath, artifact, maxRoomReplayArtifactBytes, "participants["+participantID+"].deltas")
 	if err != nil {
 		return nil, err
 	}

@@ -48,8 +48,8 @@ func validateRoomReplayAudioStreamTimeline(stream RoomReplayAudioStream, plan Ro
 	return nil
 }
 
-func loadRoomReplayJSONL(artifact RoomReplayArtifact, field string) ([]json.RawMessage, error) {
-	data, err := readRoomReplayArtifact(artifact, maxRoomReplayArtifactBytes, field)
+func loadRoomReplayJSONL(root string, artifact RoomReplayArtifact, field string) ([]json.RawMessage, error) {
+	data, err := readRoomReplayArtifact(root, artifact, maxRoomReplayArtifactBytes, field)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +81,7 @@ func loadRoomReplayJSONL(artifact RoomReplayArtifact, field string) ([]json.RawM
 }
 
 func loadRoomReplayWAVStream(plan RoomReplayPlan, artifact RoomReplayArtifact, streamID, participantID, role string) (RoomReplayAudioStream, error) {
-	data, err := readRoomReplayArtifact(artifact, maxRoomReplayArtifactBytes, "artifact."+role)
+	data, err := readRoomReplayArtifact(plan.BundlePath, artifact, maxRoomReplayArtifactBytes, "artifact."+role)
 	if err != nil {
 		return RoomReplayAudioStream{}, err
 	}
@@ -112,7 +112,7 @@ func loadRoomReplayWAVStream(plan RoomReplayPlan, artifact RoomReplayArtifact, s
 }
 
 func loadRoomReplayPCMStream(plan RoomReplayPlan, artifact RoomReplayArtifact, streamID, participantID, role string) (RoomReplayAudioStream, error) {
-	data, err := readRoomReplayArtifact(artifact, maxRoomReplayArtifactBytes, "artifact."+role)
+	data, err := readRoomReplayArtifact(plan.BundlePath, artifact, maxRoomReplayArtifactBytes, "artifact."+role)
 	if err != nil {
 		return RoomReplayAudioStream{}, err
 	}

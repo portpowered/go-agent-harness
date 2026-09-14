@@ -9,6 +9,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/internal/pathguard"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
@@ -114,13 +115,16 @@ func findRoomReplayArtifact(artifacts []RoomReplayArtifact, owner string) (RoomR
 	return RoomReplayArtifact{}, false
 }
 
-func readRoomReplayPath(path string, maxBytes int64, field string) (data []byte, retErr error) {
-	if strings.TrimSpace(path) == "" {
+func readRoomReplayPath(root, path string, maxBytes int64, field string) (data []byte, retErr error) {
+	if strings.TrimSpace(root) == "" || strings.TrimSpace(path) == "" {
 		return nil, roomReplayAudioIncomplete(field, "", "readable bounded file", "missing path", ErrRoomReplayBundleIncomplete)
+	}
+	if err := pathguard.ValidateNoSymlink(root, path); err != nil {
+		return nil, roomReplayAudioMismatch(field, "", "bundle-local non-symlink file", "invalid path", err)
 	}
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, roomReplayAudioIncomplete(field, path, "readable bounded file", err.Error(), err)
+		return nil, roomReplayAudioIncomplete(field, "", "readable bounded file", "unavailable", err)
 	}
 	defer func() {
 		if err := file.Close(); err != nil && retErr == nil {
@@ -130,14 +134,14 @@ func readRoomReplayPath(path string, maxBytes int64, field string) (data []byte,
 	}()
 	info, err := file.Stat()
 	if err != nil {
-		return nil, roomReplayAudioIncomplete(field, path, "stat-able bounded file", err.Error(), err)
+		return nil, roomReplayAudioIncomplete(field, "", "stat-able bounded file", "unavailable", err)
 	}
 	if info.Size() < 0 || info.Size() > maxBytes {
 		return nil, roomReplayAudioMismatch(field, path, fmt.Sprintf("file no larger than %d bytes", maxBytes), fmt.Sprintf("%d bytes", info.Size()), nil)
 	}
 	data, err = io.ReadAll(io.LimitReader(file, maxBytes+1))
 	if err != nil {
-		return nil, roomReplayAudioIncomplete(field, path, "readable bounded file", err.Error(), err)
+		return nil, roomReplayAudioIncomplete(field, "", "readable bounded file", "unavailable", err)
 	}
 	if int64(len(data)) > maxBytes {
 		return nil, roomReplayAudioMismatch(field, path, fmt.Sprintf("file no larger than %d bytes", maxBytes), fmt.Sprintf("more than %d bytes", maxBytes), nil)
@@ -145,11 +149,11 @@ func readRoomReplayPath(path string, maxBytes int64, field string) (data []byte,
 	return data, nil
 }
 
-func readRoomReplayArtifact(artifact RoomReplayArtifact, maxBytes int64, field string) ([]byte, error) {
+func readRoomReplayArtifact(root string, artifact RoomReplayArtifact, maxBytes int64, field string) ([]byte, error) {
 	if artifact.Size < 0 || artifact.Size > maxBytes {
 		return nil, roomReplayAudioMismatch(field, artifact.Path, fmt.Sprintf("artifact no larger than %d bytes", maxBytes), fmt.Sprintf("%d bytes", artifact.Size), nil)
 	}
-	data, err := readRoomReplayPath(artifact.AbsolutePath, maxBytes, field)
+	data, err := readRoomReplayPath(root, artifact.AbsolutePath, maxBytes, field)
 	if err != nil {
 		return nil, err
 	}

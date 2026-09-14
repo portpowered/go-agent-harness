@@ -282,4 +282,114 @@ func TestServiceOutputSafety(t *testing.T) {
 	}
 }
 
+func TestServiceRejectsDirectAndParentSymlinkedReplayArtifacts(t *testing.T) {
+	t.Run("direct artifact", func(t *testing.T) {
+		destination, recorder := finalizedReplayBundle(t)
+		artifact := recorder.Participant("speaker").Artifacts().SentPCM
+		outside := filepath.Join(t.TempDir(), "sent.pcm")
+		service := NewService()
+		plan, err := service.LoadPlan(destination)
+		if err != nil {
+			t.Fatalf("admit intact replay bundle: %v", err)
+		}
+		replaceWithSymlink(t, filepath.Join(destination, filepath.FromSlash(artifact)), outside)
+
+		assertReplaySymlinkRejected(t, service, destination, outside)
+		if _, err := service.Load(plan); err == nil {
+			t.Fatal("symlinked replay artifact was loaded")
+		} else {
+			assertReplaySymlinkError(t, err, outside)
+		}
+	})
+
+	t.Run("parent directory", func(t *testing.T) {
+		destination, _ := finalizedReplayBundle(t)
+		participantDirectory := filepath.Join(destination, "participants", "speaker")
+		outside := filepath.Join(t.TempDir(), "speaker")
+		service := NewService()
+		plan, err := service.LoadPlan(destination)
+		if err != nil {
+			t.Fatalf("admit intact replay bundle: %v", err)
+		}
+		if err := os.Rename(participantDirectory, outside); err != nil {
+			t.Fatalf("move participant directory outside bundle: %v", err)
+		}
+		if err := os.Symlink(outside, participantDirectory); err != nil {
+			t.Skipf("symlink unavailable: %v", err)
+		}
+		assertReplaySymlinkRejected(t, service, destination, outside)
+		if _, err := service.Load(plan); err == nil {
+			t.Fatal("symlinked replay artifact was loaded")
+		} else {
+			assertReplaySymlinkError(t, err, outside)
+		}
+	})
+}
+
+func finalizedReplayBundle(t *testing.T) (string, roomevidence.Recorder) {
+	t.Helper()
+	recorder, destination, source := openRecorder(t)
+	pcm := []byte{0x34, 0x12, 0x78, 0x56}
+	for _, participantID := range []string{"speaker", "listener"} {
+		participant := recorder.Participant(participantID)
+		if err := participant.RecordDiagnostic(roomevidence.DiagnosticRecord{Event: "replay_fixture"}); err != nil {
+			t.Fatalf("record replay diagnostic for %s: %v", participantID, err)
+		}
+		if err := participant.ObserveDelta(messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue(pcm)}); err != nil {
+			t.Fatalf("record replay delta for %s: %v", participantID, err)
+		}
+		if err := participant.ObserveAudio(pcm); err != nil {
+			t.Fatalf("record replay WAV for %s: %v", participantID, err)
+		}
+		if err := participant.ObserveSentStream(pcm); err != nil {
+			t.Fatalf("record replay sent stream for %s: %v", participantID, err)
+		}
+		if err := participant.ObserveReceivedAudio(pcm); err != nil {
+			t.Fatalf("record replay received stream for %s: %v", participantID, err)
+		}
+	}
+	if capture := recorder.CapturePath("speaker"); capture != "" {
+		if err := os.WriteFile(capture, []byte(`{"captured":true}`), 0o600); err != nil {
+			t.Fatalf("write replay capture: %v", err)
+		}
+	}
+	source.AdvanceBy(time.Second)
+	if err := recorder.Finalize(testResult(), nil, source.Now()); err != nil {
+		t.Fatalf("finalize replay bundle: %v", err)
+	}
+	return destination, recorder
+}
+
+func replaceWithSymlink(t *testing.T, path, outside string) {
+	t.Helper()
+	if err := os.Rename(path, outside); err != nil {
+		t.Fatalf("move artifact outside bundle: %v", err)
+	}
+	if err := os.Symlink(outside, path); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+}
+
+func assertReplaySymlinkRejected(t *testing.T, service roomevidence.Service, destination, outside string) {
+	t.Helper()
+	_, err := service.LoadPlan(destination)
+	if err == nil {
+		t.Fatal("symlinked replay bundle was admitted")
+	}
+	assertReplaySymlinkError(t, err, outside)
+}
+
+func assertReplaySymlinkError(t *testing.T, err error, outside string) {
+	t.Helper()
+	if !errors.Is(err, roomevidence.ErrInvalidRoomReplayBundle) {
+		t.Fatalf("symlink error = %v, want invalid replay bundle", err)
+	}
+	if !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("symlink error = %v, want stable symlink diagnostic", err)
+	}
+	if strings.Contains(err.Error(), outside) {
+		t.Fatalf("symlink error leaked external path %q: %v", outside, err)
+	}
+}
+
 func bytesContain(data []byte, value string) bool { return strings.Contains(string(data), value) }

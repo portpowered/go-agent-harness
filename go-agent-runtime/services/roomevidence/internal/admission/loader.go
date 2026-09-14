@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/internal/pathguard"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 )
 
@@ -44,6 +45,12 @@ func (Loader) Load(bundle string) (rooms.RoomReplayPlan, error) {
 		return rooms.RoomReplayPlan{}, incomplete("bundle", fmt.Errorf("bundle directory is unavailable"))
 	}
 	manifestPath := filepath.Join(root, rooms.RoomReplayBundleManifestPath)
+	if err := pathguard.ValidateNoSymlink(root, root); err != nil {
+		return rooms.RoomReplayPlan{}, mismatch("bundle", err)
+	}
+	if err := pathguard.ValidateNoSymlink(root, manifestPath); err != nil {
+		return rooms.RoomReplayPlan{}, mismatch("manifest", err)
+	}
 	data, err := os.ReadFile(manifestPath)
 	if err != nil {
 		return rooms.RoomReplayPlan{}, incomplete("manifest", err)

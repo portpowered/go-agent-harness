@@ -19,7 +19,7 @@ func loadRoomReplayAudioParticipant(plan RoomReplayPlan, participant RoomReplayP
 	if err != nil {
 		return RoomReplayAudioParticipant{}, err
 	}
-	events, diagnostics, err := loadRoomReplayParticipantSidecars(artifacts, participant.ID)
+	events, diagnostics, err := loadRoomReplayParticipantSidecars(plan.BundlePath, artifacts, participant.ID)
 	if err != nil {
 		return RoomReplayAudioParticipant{}, err
 	}
@@ -75,12 +75,12 @@ func requiredRoomReplayParticipantArtifacts(participant RoomReplayParticipant) (
 	return result, nil
 }
 
-func loadRoomReplayParticipantSidecars(artifacts roomReplayParticipantArtifacts, participantID string) ([]json.RawMessage, []json.RawMessage, error) {
-	events, err := loadRoomReplayJSONL(artifacts.events, "participants["+participantID+"].events")
+func loadRoomReplayParticipantSidecars(root string, artifacts roomReplayParticipantArtifacts, participantID string) ([]json.RawMessage, []json.RawMessage, error) {
+	events, err := loadRoomReplayJSONL(root, artifacts.events, "participants["+participantID+"].events")
 	if err != nil {
 		return nil, nil, err
 	}
-	diagnostics, err := loadRoomReplayJSONL(artifacts.diagnostics, "participants["+participantID+"].diagnostics")
+	diagnostics, err := loadRoomReplayJSONL(root, artifacts.diagnostics, "participants["+participantID+"].diagnostics")
 	if err != nil {
 		return nil, nil, err
 	}

@@ -106,22 +106,22 @@ func TestRoomReplayBoundsAndPCMHelpers(t *testing.T) {
 	}
 	digest := sha256.Sum256(data)
 	artifact := RoomReplayArtifact{Path: "sample.pcm", AbsolutePath: path, Size: int64(len(data)), SHA256: hex.EncodeToString(digest[:])}
-	if got, err := readRoomReplayArtifact(artifact, 16, "sample"); err != nil || !bytes.Equal(got, data) {
+	if got, err := readRoomReplayArtifact(directory, artifact, 16, "sample"); err != nil || !bytes.Equal(got, data) {
 		t.Fatalf("bounded artifact = %v err=%v", got, err)
 	}
 	artifact.SHA256 = strings.Repeat("0", 64)
-	if _, err := readRoomReplayArtifact(artifact, 16, "sample"); err == nil || !errors.Is(err, ErrInvalidRoomReplayBundle) {
+	if _, err := readRoomReplayArtifact(directory, artifact, 16, "sample"); err == nil || !errors.Is(err, ErrInvalidRoomReplayBundle) {
 		t.Fatalf("digest mismatch = %v", err)
 	}
 	artifact.SHA256 = ""
 	artifact.Empty = true
-	if _, err := readRoomReplayArtifact(artifact, 16, "sample"); err == nil {
+	if _, err := readRoomReplayArtifact(directory, artifact, 16, "sample"); err == nil {
 		t.Fatal("non-empty artifact marked empty was accepted")
 	}
-	if _, err := readRoomReplayPath(path, 1, "small-bound"); err == nil {
+	if _, err := readRoomReplayPath(directory, path, 1, "small-bound"); err == nil {
 		t.Fatal("oversized bounded path was accepted")
 	}
-	if _, err := readRoomReplayPath(filepath.Join(directory, "missing"), 16, "missing"); err == nil {
+	if _, err := readRoomReplayPath(directory, filepath.Join(directory, "missing"), 16, "missing"); err == nil {
 		t.Fatal("missing bounded path was accepted")
 	}
 	if _, err := decodeRoomReplayWAV([]byte("RIFF"), "short.wav"); err == nil {
@@ -545,7 +545,7 @@ func assertRoomReplayPCMStreams(t *testing.T) {
 		t.Fatal(err)
 	}
 	artifact := RoomReplayArtifact{Path: "stream.wav", AbsolutePath: path}
-	plan := RoomReplayPlan{PCMFormat: RoomReplayPCMFormat{SampleRate: 24000, Channels: 1, SampleWidthBit: 16, ByteOrder: "little", Encoding: "signed_pcm16"}}
+	plan := RoomReplayPlan{BundlePath: directory, PCMFormat: RoomReplayPCMFormat{SampleRate: 24000, Channels: 1, SampleWidthBit: 16, ByteOrder: "little", Encoding: "signed_pcm16"}}
 	stream, err := loadRoomReplayPCMStream(plan, artifact, roomReplayTestSentRole, "alpha", roomReplayTestSentRole)
 	if err != nil || stream.SampleCount != 3 || stream.StreamID != roomReplayTestSentRole {
 		t.Fatalf("WAV-backed PCM stream = %+v err=%v", stream, err)
@@ -570,7 +570,7 @@ func assertRoomReplayRawPCMAndJSONL(t *testing.T, directory string, plan RoomRep
 	if err := os.WriteFile(jsonlPath, []byte("not-json\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := loadRoomReplayJSONL(RoomReplayArtifact{Path: "events.jsonl", AbsolutePath: jsonlPath}, "events"); err == nil {
+	if _, err := loadRoomReplayJSONL(directory, RoomReplayArtifact{Path: "events.jsonl", AbsolutePath: jsonlPath}, "events"); err == nil {
 		t.Fatal("malformed JSONL was accepted")
 	}
 	assertRoomReplayDirectDeltas(t, directory)
@@ -583,7 +583,7 @@ func assertRoomReplayDirectDeltas(t *testing.T, directory string) {
 	if err := os.WriteFile(deltaPath, deltaData, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	deltaPlan := RoomReplayPlan{ClockBase: time.Unix(0, 0), EndedAt: time.Unix(0, int64(time.Second))}
+	deltaPlan := RoomReplayPlan{BundlePath: directory, ClockBase: time.Unix(0, 0), EndedAt: time.Unix(0, int64(time.Second))}
 	deltas, err := loadRoomReplayAudioDeltas(RoomReplayArtifact{Path: "deltas.jsonl", AbsolutePath: deltaPath}, "alpha", "stream", deltaPlan)
 	if err != nil || len(deltas) != 1 || deltas[0].TurnID != "turn-1" {
 		t.Fatalf("direct deltas = %+v err=%v", deltas, err)
