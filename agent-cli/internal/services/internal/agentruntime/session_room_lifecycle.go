@@ -157,16 +157,16 @@ func roomParticipantOutstandingWork(runtime *roomParticipantRuntime) []string {
 	if closeErr != nil {
 		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "session.close.error"))
 	}
-	if created && !roomChannelClosed(transportDone) {
+	if created && !sessionChannelClosed(transportDone) {
 		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "session.transport"))
 	}
-	if runtime.participantDone != nil && !roomChannelClosed(runtime.participantDone) {
+	if runtime.participantDone != nil && !sessionChannelClosed(runtime.participantDone) {
 		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "participant.loop"))
 	}
-	if runtime.mixerDone != nil && !roomChannelClosed(runtime.mixerDone) {
+	if runtime.mixerDone != nil && !sessionChannelClosed(runtime.mixerDone) {
 		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "mixer"))
 	}
-	if runtime.observerDone != nil && !roomChannelClosed(runtime.observerDone) {
+	if runtime.observerDone != nil && !sessionChannelClosed(runtime.observerDone) {
 		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "observer"))
 	}
 	return outstanding

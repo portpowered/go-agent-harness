@@ -196,7 +196,7 @@ func TestRoomParticipantLifecycle_BoundFirstRejectsLateFailure(t *testing.T) {
 		t.Fatal("late provider failure replaced bound cancellation")
 	}
 	observation := lifecycle.terminalObservationSnapshot()
-	if observation.terminationTrigger != ParticipantTerminationTriggerMaxDurationReachedMidResponse || observation.terminationDisposition != ParticipantTerminationDispositionCancelledAfterGrace || observation.classification != RoomBoundCancelledClassification || observation.terminalReason != string(messages.TerminalReasonCancellation) || observation.terminalProvenance != string(messages.TerminalProvenanceRoom) {
+	if observation.terminationTrigger != ParticipantTerminationTriggerMaxDurationReachedMidResponse || observation.terminationDisposition != ParticipantTerminationDispositionCancelledAfterGrace || observation.classification != providers.ErrorClassRoomBoundCancelled || observation.terminalReason != string(messages.TerminalReasonCancellation) || observation.terminalProvenance != string(messages.TerminalProvenanceRoom) {
 		t.Fatalf("bound-first observation = %+v", observation)
 	}
 }
@@ -253,7 +253,7 @@ func TestRoomParticipantLifecycle_BoundCancellationRejectsLateCompletion(t *test
 		t.Fatal("late provider completion replaced bound cancellation")
 	}
 	observation := lifecycle.terminalObservationSnapshot()
-	if observation.terminationTrigger != ParticipantTerminationTriggerMaxTurnsReachedMidResponse || observation.terminationDisposition != ParticipantTerminationDispositionCancelledAfterGrace || observation.classification != RoomBoundCancelledClassification || observation.terminalReason != string(messages.TerminalReasonCancellation) || observation.terminalProvenance != string(messages.TerminalProvenanceRoom) {
+	if observation.terminationTrigger != ParticipantTerminationTriggerMaxTurnsReachedMidResponse || observation.terminationDisposition != ParticipantTerminationDispositionCancelledAfterGrace || observation.classification != providers.ErrorClassRoomBoundCancelled || observation.terminalReason != string(messages.TerminalReasonCancellation) || observation.terminalProvenance != string(messages.TerminalProvenanceRoom) {
 		t.Fatalf("bound cancellation after late completion = %+v", observation)
 	}
 }

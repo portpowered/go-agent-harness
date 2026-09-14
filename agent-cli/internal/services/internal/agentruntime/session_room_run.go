@@ -369,7 +369,7 @@ func runRoomParticipant(
 		coordinator.failParticipant(runtime.plan.manifest.ID, failure)
 	}
 	runErr = coordinator.participantRunError(runtime.plan.manifest.ID, runErr)
-	if runErr != nil && !roomCancellationOnly(runErr) {
+	if runErr != nil && !sessionCancellationOnly(runErr) {
 		coordinator.failParticipant(runtime.plan.manifest.ID, roomParticipantFailure(runtime.plan.manifest.ID, runErr, secretsForPlan(runtime.plan)))
 	}
 	runtime.lifecycle.markRunDone(runErr)
@@ -651,7 +651,7 @@ func finalizeRoomParticipantResults(
 			}
 		}
 		if observation.classification == "" && observation.terminationDisposition == ParticipantTerminationDispositionCancelledAfterGrace {
-			observation.classification = RoomBoundCancelledClassification
+			observation.classification = providers.ErrorClassRoomBoundCancelled
 		}
 		if observation.terminalProvenance == "" {
 			observation.terminalProvenance = defaultRoomTerminalProvenance(observation.terminationDisposition, observation.terminalReason)
@@ -756,7 +756,7 @@ func collectRoomParticipantResults(
 			delete(pending, id)
 			if !coordinator.isStopping() {
 				failure := result.connectErr
-				if failure == nil && result.err != nil && !roomCancellationOnly(result.err) {
+				if failure == nil && result.err != nil && !sessionCancellationOnly(result.err) {
 					failure = result.err
 				}
 				if failure != nil {

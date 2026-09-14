@@ -278,34 +278,38 @@ func (s *runState) waitBoundResponses(active []*activeParticipant) {
 	waitContext, cancelWait := context.WithCancel(context.Background())
 	defer cancelWait()
 	settled := make(chan struct{})
-	go func() {
-		for _, participant := range active {
-			if participant != nil && participant.boundWasActive() && participant.boundWasCancelled() {
-				participant.waitResponseSettled(waitContext)
-			}
-		}
-		close(settled)
-	}()
+	go waitBoundParticipants(waitContext, active, settled)
 	timeout := make(chan struct{})
-	go func() {
-		if s.wait != nil {
-			if err := s.wait(waitContext, boundResponseSettleTimeout); err != nil && !errors.Is(err, context.Canceled) {
-				s.setFailure(err)
-			}
-		} else {
-			timer := time.NewTimer(boundResponseSettleTimeout)
-			select {
-			case <-timer.C:
-			case <-waitContext.Done():
-				timer.Stop()
-			}
-		}
-		close(timeout)
-	}()
+	go s.waitBoundResponseTimeout(waitContext, timeout)
 	select {
 	case <-settled:
 	case <-timeout:
 	case <-s.boundDoneCh:
+	}
+}
+
+func waitBoundParticipants(ctx context.Context, active []*activeParticipant, settled chan<- struct{}) {
+	for _, participant := range active {
+		if participant != nil && participant.boundWasActive() && participant.boundWasCancelled() {
+			participant.waitResponseSettled(ctx)
+		}
+	}
+	close(settled)
+}
+
+func (s *runState) waitBoundResponseTimeout(ctx context.Context, timeout chan<- struct{}) {
+	defer close(timeout)
+	if s.wait != nil {
+		if err := s.wait(ctx, boundResponseSettleTimeout); err != nil && !errors.Is(err, context.Canceled) {
+			s.setFailure(err)
+		}
+		return
+	}
+	timer := time.NewTimer(boundResponseSettleTimeout)
+	select {
+	case <-timer.C:
+	case <-ctx.Done():
+		timer.Stop()
 	}
 }
 

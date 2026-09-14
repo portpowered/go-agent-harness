@@ -284,7 +284,7 @@ func TestRunRoom_BoundGraceExpiryCancelsActiveResponseCleanly(t *testing.T) {
 					if testCase.name == "turn" {
 						wantTrigger = ParticipantTerminationTriggerMaxTurnsReachedMidResponse
 					}
-					if participant.TerminationTrigger != wantTrigger || participant.TerminationDisposition != ParticipantTerminationDispositionCancelledAfterGrace || participant.Classification != RoomBoundCancelledClassification || participant.TerminalReason != string(messages.TerminalReasonCancellation) || participant.TerminalProvenance != string(messages.TerminalProvenanceRoom) {
+					if participant.TerminationTrigger != wantTrigger || participant.TerminationDisposition != ParticipantTerminationDispositionCancelledAfterGrace || participant.Classification != providers.ErrorClassRoomBoundCancelled || participant.TerminalReason != string(messages.TerminalReasonCancellation) || participant.TerminalProvenance != string(messages.TerminalProvenanceRoom) {
 						t.Fatalf("participant %q cancellation metadata = %+v", id, participant)
 					}
 					if participant.OutputState != string(messages.TerminalOutputNone) && participant.OutputState != string(messages.TerminalOutputPartial) {

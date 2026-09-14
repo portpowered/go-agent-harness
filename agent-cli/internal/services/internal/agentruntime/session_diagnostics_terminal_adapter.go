@@ -38,7 +38,7 @@ func (o *sessionProgressObserver) terminalRequest(runErr error) sessionterminal.
 		hints = append(hints, sessionterminal.FailureHintScheduledAudioIncomplete)
 	}
 	r := sessionterminal.Request{
-		RunError: runErr, UserCancelled: o.userCancelled, RoomBoundCancellation: o.roomBoundCancellation, RoomCancellationOnly: roomCancellationOnly(runErr), Provider: o.provider, Model: o.model, TurnsCompleted: o.turnsCompleted,
+		RunError: runErr, UserCancelled: o.userCancelled, RoomBoundCancellation: o.roomBoundCancellation, RoomCancellationOnly: sessionCancellationOnly(runErr), Provider: o.provider, Model: o.model, TurnsCompleted: o.turnsCompleted,
 		Output:    sessionterminal.OutputSnapshot{SawSessionOpen: o.sawSessionOpen, TurnsCompleted: o.turnsCompleted, TotalOutputAudioBytes: o.totals.outAudio, TotalOutputTextBytes: o.totals.outText, ResponseOutputAudioBytes: o.responseOutputAudioBytes, ResponseOutputTextBytes: o.responseOutputTextBytes, AssistantOutputObserved: o.assistantOutputObserved},
 		Bytes:     sessionterminal.ByteSnapshot{InputAudioBytes: o.totals.inputAudio + o.roomAudioInputTotalBytes(), InputTextBytes: o.totals.inputText, OutputAudioBytes: o.totals.outAudio, OutputTextBytes: o.totals.outText, OutputToolBytes: o.totals.outTool},
 		Failure:   terminalFailureFacts(o),
@@ -105,7 +105,7 @@ func (o *sessionProgressObserver) finish(err error) error {
 		o.clearFailure()
 		err = nil
 	}
-	if o.roomBoundCancellation && o.failure == nil && roomCancellationOnly(err) {
+	if o.roomBoundCancellation && o.failure == nil && sessionCancellationOnly(err) {
 		err = nil
 	}
 	if !o.userCancelled && !o.roomBoundCancellation {

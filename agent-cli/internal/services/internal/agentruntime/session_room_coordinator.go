@@ -10,6 +10,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
 type roomCoordinator struct {
@@ -182,55 +183,64 @@ func (c *roomCoordinator) forceBoundShutdown() {
 	if c == nil {
 		return
 	}
-	c.forceOnce.Do(func() {
-		c.mu.Lock()
-		if !c.bound {
-			c.mu.Unlock()
-			return
-		}
-		c.boundForced = true
-		var firstFailure error
-		runtimes := c.boundRuntimes
-		for _, runtime := range runtimes {
-			if runtime != nil {
-				if runtime.lifecycle != nil {
-					// The bound-start mark remains authoritative through the grace window.
-					runtime.lifecycle.markBoundCancellation()
-					observation := runtime.lifecycle.terminalObservationSnapshot()
-					if firstFailure == nil && observation.failure {
-						failureErr := observation.err
-						if failureErr == nil {
-							failureErr = errors.New("session stream error")
-						}
-						firstFailure = roomParticipantFailure(runtime.plan.manifest.ID, failureErr, secretsForPlan(runtime.plan))
-					}
-				}
-			}
-		}
-		if firstFailure != nil {
-			// A failure may have been accepted by the lifecycle immediately before
-			// the force phase acquired the coordinator lock. Preserve that failure
-			// rather than allowing the force phase to erase it as cancellation.
-			c.reason = RoomTerminationFailed
-			c.err = firstFailure
-			c.bound = false
-		}
+	c.forceOnce.Do(c.forceBoundShutdownOnce)
+}
+
+func (c *roomCoordinator) forceBoundShutdownOnce() {
+	c.mu.Lock()
+	if !c.bound {
 		c.mu.Unlock()
+		return
+	}
+	c.boundForced = true
+	runtimes := c.boundRuntimes
+	firstFailure := markBoundRuntimesForCancellation(runtimes)
+	if firstFailure != nil {
+		// A failure may have been accepted by the lifecycle immediately before
+		// the force phase acquired the coordinator lock. Preserve that failure
+		// rather than allowing the force phase to erase it as cancellation.
+		c.reason = RoomTerminationFailed
+		c.err = firstFailure
+		c.bound = false
+	}
+	c.mu.Unlock()
 
-		if firstFailure == nil {
-			for _, runtime := range runtimes {
-				if runtime != nil && runtime.lifecycle != nil {
-					runtime.lifecycle.cancelActiveResponse()
-				}
+	if firstFailure == nil {
+		cancelBoundRuntimes(runtimes)
+	}
+	c.boundCancellationOnce.Do(func() { close(c.boundCancellation) })
+	c.doneOnce.Do(func() { close(c.done) })
+	if c.cancel != nil {
+		c.cancel()
+	}
+}
+
+func markBoundRuntimesForCancellation(runtimes []*roomParticipantRuntime) error {
+	var firstFailure error
+	for _, runtime := range runtimes {
+		if runtime == nil || runtime.lifecycle == nil {
+			continue
+		}
+		// The bound-start mark remains authoritative through the grace window.
+		runtime.lifecycle.markBoundCancellation()
+		observation := runtime.lifecycle.terminalObservationSnapshot()
+		if firstFailure == nil && observation.failure {
+			failureErr := observation.err
+			if failureErr == nil {
+				failureErr = errors.New("session stream error")
 			}
+			firstFailure = roomParticipantFailure(runtime.plan.manifest.ID, failureErr, secretsForPlan(runtime.plan))
 		}
+	}
+	return firstFailure
+}
 
-		c.boundCancellationOnce.Do(func() { close(c.boundCancellation) })
-		c.doneOnce.Do(func() { close(c.done) })
-		if c.cancel != nil {
-			c.cancel()
+func cancelBoundRuntimes(runtimes []*roomParticipantRuntime) {
+	for _, runtime := range runtimes {
+		if runtime != nil && runtime.lifecycle != nil {
+			runtime.lifecycle.cancelActiveResponse()
 		}
-	})
+	}
 }
 
 func (c *roomCoordinator) stopImmediately(reason RoomTerminationReason, err error) {
@@ -479,11 +489,11 @@ func (c *roomCoordinator) participantRunError(participantID string, err error) e
 		if roomErr != nil && errors.Is(err, roomErr) {
 			return nil
 		}
-		if roomCancellationOnly(err) {
+		if sessionCancellationOnly(err) {
 			return nil
 		}
 	}
-	if roomErr == nil && roomCancellationOnly(err) {
+	if roomErr == nil && sessionCancellationOnly(err) {
 		return nil
 	}
 	return err
@@ -680,7 +690,7 @@ func (c *roomCoordinator) finishParticipant(runtime *roomParticipantRuntime, rea
 		}
 	}
 	if observation.classification == "" && observation.terminationDisposition == ParticipantTerminationDispositionCancelledAfterGrace {
-		observation.classification = RoomBoundCancelledClassification
+		observation.classification = providers.ErrorClassRoomBoundCancelled
 	}
 	if observation.terminalReason == "" {
 		if observation.terminationDisposition == ParticipantTerminationDispositionCancelledAfterGrace || observation.terminationDisposition == ParticipantTerminationDispositionStopped {
@@ -831,7 +841,7 @@ func (c *roomCoordinator) snapshot() (RoomTerminationReason, map[string]RoomPart
 }
 
 func classifyRoomParticipantTermination(roomStopping bool, runErr error, connected bool, transportEnded bool, sessionClosed bool, closeReason string, terminalReason messages.TerminalReason) ParticipantTerminationReason {
-	if runErr != nil && !roomCancellationOnly(runErr) {
+	if runErr != nil && !sessionCancellationOnly(runErr) {
 		return ParticipantTerminationError
 	}
 	if closeReason == "provider_closed" || terminalReason == messages.TerminalReasonProviderClose {
@@ -856,16 +866,4 @@ func classifyRoomSessionClose(closeReason string, terminalReason messages.Termin
 		return ParticipantTerminationError
 	}
 	return ParticipantTerminationEnded
-}
-
-func roomChannelClosed(ch <-chan struct{}) bool {
-	if ch == nil {
-		return false
-	}
-	select {
-	case <-ch:
-		return true
-	default:
-		return false
-	}
 }

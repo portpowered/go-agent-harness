@@ -540,23 +540,3 @@ func (o *sessionProgressObserver) observeProviderDispatch(msg messages.StreamMes
 		o.armProviderProgress()
 	}
 }
-
-func applyRoomParticipantTerminalMetadata(result *RoomParticipantResult, lifecycle *roomParticipantLifecycle, err error) {
-	if result == nil {
-		return
-	}
-	classification, terminalReason, provenance, outputState := "", messages.TerminalReason(""), messages.TerminalProvenance(""), messages.TerminalOutputState("")
-	if lifecycle != nil {
-		classification, terminalReason, provenance, outputState = lifecycle.terminalMetadata()
-	}
-	if classification == "" {
-		classification, terminalReason, provenance, outputState = sessionLivenessMetadata(err)
-	}
-	if classification == "" {
-		return
-	}
-	result.Classification = classification
-	result.TerminalReason = string(terminalReason)
-	result.TerminalProvenance = string(provenance)
-	result.OutputState = string(outputState)
-}
