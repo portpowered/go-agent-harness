@@ -116,6 +116,8 @@ func (o *sessionProgressObserver) finish(err error) error {
 	o.notifyFinalTerminalObservation(err)
 	o.emitTerminal(err)
 	o.emitMetricsMatrix()
+	o.recordLiveTerminalForRun(err)
+	err = errors.Join(err, o.liveRecordingFailure())
 	if o.runtime != nil {
 		o.runtime.terminalWithAccounting(o.turnsCompleted, err, o.finalAccounting())
 	}

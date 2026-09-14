@@ -247,7 +247,7 @@ func assembleLiveRequest(request serviceSession.Request, inputs requestInputs) r
 		// response cannot cancel the provider stream before later stdin audio
 		// reaches the same session.
 		FinishAfterResponse: !request.WaitForClose && (inputs.promptPresent || hasAudioInput(request) || len(inputs.openingParts) > 0 || inputs.replayFinish || request.AudioOutputPath != ""),
-		ExpectedResponses:   expectedResponses(request, inputs.promptPresent, inputs.openingParts, inputs.openingResponse),
+		ExpectedResponses:   replayExpectedResponses(request, inputs, inputs.promptPresent, inputs.openingParts, inputs.openingResponse),
 	}
 	appendToolNames(&result, inputs.capabilities)
 	return result
@@ -343,5 +343,12 @@ func buildReplayPlan(request serviceSession.Request, inspection *runtimeReplay.C
 }
 
 func replayPlanHasActions(plan runtimeSession.LiveReplayPlan) bool {
-	return plan.OpeningPromptPresent || len(plan.AudioTurns) > 0 || plan.StopAfterResponse || plan.ProviderCloseExpected
+	return plan.OpeningPromptPresent || len(plan.AudioTurns) > 0 || plan.StopAfterResponse || plan.ProviderCloseExpected || plan.ExpectedResponses > 0
+}
+
+func replayExpectedResponses(request serviceSession.Request, inputs requestInputs, promptPresent bool, openingParts []messages.ContentPart, openingResponse runtimeSession.LiveOpeningMessageResponse) int {
+	if inputs.replayPlan != nil && inputs.replayPlan.ExpectedResponses > 0 {
+		return inputs.replayPlan.ExpectedResponses
+	}
+	return expectedResponses(request, promptPresent, openingParts, openingResponse)
 }

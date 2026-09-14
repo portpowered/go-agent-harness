@@ -8,9 +8,13 @@ import (
 	sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	sessiondiagnostics "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
 	sessiondiagnosticswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"sync"
+	"time"
 )
 
 const (
@@ -217,6 +221,13 @@ type sessionProgressObserver struct {
 	// state or evidence.
 	turnAdmission      func(messages.StreamMessage) bool
 	runtime            *sessionRuntimeObservationRecorder
+	liveRecorder       session.LiveRecorder
+	recordingNow       func() time.Time
+	inputAudioRate     int
+	outputAudioRate    int
+	liveRecordingMu    sync.Mutex
+	liveRecordingErr   error
+	liveTerminalSeen   bool
 	cancellationIntent *SessionCancellationIntent
 	provider           string
 	model              string
@@ -376,6 +387,162 @@ func newSessionProgressObserver(sink SessionDiagnosticSink, recorder metrics.Rec
 		livenessClock:         realSessionDurationClock{},
 		livenessWakeCh:        make(chan struct{}, 1),
 	}
+}
+
+func (o *sessionProgressObserver) liveTimestamp() time.Time {
+	if o != nil && o.recordingNow != nil {
+		return o.recordingNow()
+	}
+	return time.Now().UTC()
+}
+
+func (o *sessionProgressObserver) recordLiveMessage(msg messages.StreamMessage, direction session.LiveRecordDirection) {
+	o.recordLiveMessageContext(context.Background(), msg, direction)
+}
+
+func (o *sessionProgressObserver) recordLiveMessageContext(ctx context.Context, msg messages.StreamMessage, direction session.LiveRecordDirection) {
+	if o == nil || o.liveRecorder == nil {
+		return
+	}
+	timestamp := o.liveTimestamp()
+	o.liveRecordingMu.Lock()
+	err := o.liveRecorder.RecordMessage(ctx, session.LiveRecord{Direction: direction, Timestamp: timestamp, Message: msg})
+	if err != nil && o.liveRecordingErr == nil {
+		o.liveRecordingErr = err
+	}
+	o.liveRecordingMu.Unlock()
+	if direction == session.LiveRecordAgent {
+		o.recordLiveMessageAudioContext(ctx, msg)
+	}
+	if msg.Type == messages.StreamTypeSessionClose {
+		if value, ok := msg.Value.(*messages.SessionCloseValue); ok && value != nil {
+			o.recordLiveTerminalContext(ctx, value, nil)
+		}
+	}
+	if msg.Type == messages.StreamTypeError {
+		if value, ok := msg.Value.(*messages.ErrorValue); ok && value != nil && value.IsTerminal() {
+			terminalReason := value.TerminalReason
+			if terminalReason == "" {
+				terminalReason = messages.TerminalReasonTerminalFailure
+			}
+			classification := value.Classification
+			if classification == "" {
+				classification = string(terminalReason)
+			}
+			provenance := value.TerminalProvenance
+			if provenance == "" {
+				provenance = messages.TerminalProvenanceProvider
+			}
+			outputState := value.OutputState
+			if outputState == "" {
+				outputState = messages.TerminalOutputNone
+			}
+			o.recordLiveTerminalContext(ctx, messages.NewSessionCloseValueWithTerminal("", value.Message, classification, terminalReason, provenance, messages.TerminalOutputState(outputState)), value.Err)
+		}
+	}
+}
+
+func (o *sessionProgressObserver) recordLiveAudio(record session.LiveAudioRecord) {
+	o.recordLiveAudioContext(context.Background(), record)
+}
+
+func (o *sessionProgressObserver) recordLiveAudioContext(ctx context.Context, record session.LiveAudioRecord) {
+	if o == nil || o.liveRecorder == nil {
+		return
+	}
+	if record.Timestamp.IsZero() {
+		record.Timestamp = o.liveTimestamp()
+	}
+	o.liveRecordingMu.Lock()
+	err := o.liveRecorder.RecordAudio(ctx, record)
+	if err != nil && o.liveRecordingErr == nil {
+		o.liveRecordingErr = err
+	}
+	o.liveRecordingMu.Unlock()
+}
+
+func (o *sessionProgressObserver) recordLiveMessageAudioContext(ctx context.Context, msg messages.StreamMessage) {
+	if o == nil || o.liveRecorder == nil || o.outputAudioRate <= 0 {
+		return
+	}
+	if msg.Type != messages.StreamTypeAudioDelta && msg.Type != messages.StreamTypeAudioEnd {
+		return
+	}
+	frame := audio.PCMFrame{Format: audio.PCM16DeviceFormat(o.outputAudioRate), PlaybackResponse: audio.PlaybackResponse{ResponseID: msg.ResponseID}}
+	if msg.Type == messages.StreamTypeAudioDelta {
+		value, ok := msg.Value.(*messages.AudioDeltaValue)
+		if !ok || value == nil || len(value.Content) == 0 {
+			return
+		}
+		samples, err := codec.DecodePCM16(value.Content)
+		if err != nil {
+			return
+		}
+		frame.Samples = samples
+	} else {
+		frame.EndOfResponse = true
+	}
+	o.recordLiveAudioContext(ctx, session.LiveAudioRecord{Direction: session.LiveRecordAgent, Admission: session.LiveAudioMessageObserved, Timestamp: o.liveTimestamp(), Frame: frame})
+}
+
+func (o *sessionProgressObserver) recordLiveTerminal(value *messages.SessionCloseValue, runErr error) {
+	o.recordLiveTerminalContext(context.Background(), value, runErr)
+}
+
+func (o *sessionProgressObserver) recordLiveTerminalContext(ctx context.Context, value *messages.SessionCloseValue, runErr error) {
+	if o == nil || o.liveRecorder == nil || value == nil {
+		return
+	}
+	o.liveRecordingMu.Lock()
+	if o.liveTerminalSeen {
+		o.liveRecordingMu.Unlock()
+		return
+	}
+	o.liveTerminalSeen = true
+	err := o.liveRecorder.RecordEvent(ctx, session.LiveEvent{
+		Timestamp: o.liveTimestamp(), Kind: string(session.LiveEventTerminal), SessionID: o.sessionID,
+		Terminal: value, Error: runErr, Critical: true,
+	})
+	if err != nil && o.liveRecordingErr == nil {
+		o.liveRecordingErr = err
+	}
+	o.liveRecordingMu.Unlock()
+}
+
+func (o *sessionProgressObserver) recordLiveTerminalForRun(runErr error) {
+	if o == nil || o.liveRecorder == nil {
+		return
+	}
+	o.liveRecordingMu.Lock()
+	seen := o.liveTerminalSeen
+	o.liveRecordingMu.Unlock()
+	if seen {
+		return
+	}
+	reason := messages.TerminalReasonLoopSynthesizedCompletion
+	provenance := messages.TerminalProvenanceLoop
+	classification := string(reason)
+	outputState := deriveOutputState(o.sawSessionOpen, o.turnsCompleted)
+	if runErr != nil && !roomCancellationOnly(runErr) {
+		reason = messages.TerminalReasonTerminalFailure
+		provenance = messages.TerminalProvenanceSession
+		classification = string(reason)
+	}
+	if o.userCancelled || roomCancellationOnly(runErr) {
+		reason = messages.TerminalReasonCancellation
+		provenance = messages.TerminalProvenanceCLI
+		classification = string(reason)
+	}
+	o.recordLiveTerminal(messages.NewSessionCloseValueWithTerminal("", "", classification, reason, provenance, messages.TerminalOutputState(outputState)), runErr)
+}
+
+func (o *sessionProgressObserver) liveRecordingFailure() error {
+	if o == nil {
+		return nil
+	}
+	o.liveRecordingMu.Lock()
+	defer o.liveRecordingMu.Unlock()
+	return o.liveRecordingErr
 }
 
 func (o *sessionProgressObserver) lockProviderBoundary() func() {

@@ -3,13 +3,15 @@ package agentruntime
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimereplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -18,6 +20,11 @@ import (
 // SessionReplayCompleteClassification is the terminal classification emitted
 // after a capture-derived replay consumes the complete ordered event stream.
 const SessionReplayCompleteClassification = "replay_complete"
+
+const (
+	pcmHighByteShift                = 8
+	sessionReplayDefaultMaxDuration = 3 * time.Second
+)
 
 func planOpenAIRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
 	sessionCfg, err := resolveOpenAIRealtimeSessionConfig(opts)
@@ -77,18 +84,16 @@ func planOpenAIRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 	}, nil
 }
 
-func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
-	configuration, err := loadReplaySessionConfiguration(opts.ReplayPath)
+func planOpenAIReplayRuntimeContext(ctx context.Context, opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
+	prepared, replayDialer, inspection, err := prepareReplayLiveContext(ctx, opts, factory)
 	if err != nil {
 		return sessionRuntimePlan{}, err
 	}
-	replayDialer, err := factory.replayDialer(opts.ReplayPath, opts.ReplayTiming)
-	if err != nil {
-		return sessionRuntimePlan{}, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
-	}
-	model := configuration.model
+	model := inspection.Model
 	if strings.TrimSpace(model) == "" {
-		model = replayDialer.Model()
+		if dialer, ok := replayDialer.(sessionReplayDialer); ok {
+			model = dialer.Model()
+		}
 	}
 	if strings.TrimSpace(model) == "" {
 		model = openAIRealtimeModel
@@ -98,12 +103,8 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 	barePromptReplay := false
 	var bareAudioTurns []ScheduledAudioInput
 	if !promptProvided {
-		capturedPrompt, promptErr := loadReplaySessionPrompt(opts.ReplayPath)
-		if promptErr != nil {
-			return sessionRuntimePlan{}, promptErr
-		}
-		if capturedPrompt != nil {
-			prompt = capturedPrompt.text
+		if inspection.LivePlan != nil && inspection.LivePlan.OpeningPromptPresent {
+			prompt = inspection.LivePlan.OpeningPrompt
 			promptProvided = true
 			barePromptReplay = true
 		} else if len(opts.AudioInputs) == 0 && !opts.ClientOwnsAudioTurnBoundaries && !opts.roomReplay {
@@ -114,11 +115,15 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 			// unchanged. Reconstruct scheduled turns directly from the recorded
 			// client frames so a bare replay never needs the caller to re-supply
 			// the original audio files.
-			audioTurns, audioErr := loadReplaySessionAudioTurns(opts.ReplayPath)
-			if audioErr != nil {
-				return sessionRuntimePlan{}, audioErr
+			if inspection.LivePlan != nil {
+				for _, turn := range inspection.LivePlan.AudioTurns {
+					bareAudioTurns = append(bareAudioTurns, ScheduledAudioInput{
+						AfterCompletedTurns: len(bareAudioTurns),
+						PCM:                 flattenReplayAudioTurn(turn),
+						EndOfTurn:           true,
+					})
+				}
 			}
-			bareAudioTurns = audioTurns
 		}
 	}
 	bareAudioTurnReplay := len(bareAudioTurns) > 0
@@ -126,42 +131,49 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 	// The initial provider configuration is captured wire data. The current
 	// tool definitions remain on plan.loop for local execution, but are not
 	// used to rebuild the provider handshake.
-	replayDialerWithConfiguration := newReplayInitialSessionUpdateDialer(
-		replayDialer,
-		configuration,
-		barePromptReplay || bareAudioTurnReplay,
-	)
 	sessionInferencer, err := factory.newOpenAISessionInferencerForTools(config.OpenAIConfig{
 		APIKey: "replay",
 		Model:  model,
-	}, opts.Voice, replayDialerWithConfiguration, nil, scheduledAudio, models.InputAudioTranscriptionConfig{})
+	}, opts.Voice, replayDialer, nil, scheduledAudio, models.InputAudioTranscriptionConfig{})
 	if err != nil {
 		return sessionRuntimePlan{}, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
 	}
-	sessionInferencer = newWebSocketReplaySessionInferencer(sessionInferencer)
+	if prepared != nil {
+		sessionInferencer = prepared.WrapInferencer(sessionInferencer)
+	}
+	var replayDone <-chan struct{}
+	var replayErr func() error
+	if prepared != nil {
+		replayDone, replayErr = prepared.Done(), prepared.Err
+	} else if dialer, ok := replayDialer.(sessionReplayDialer); ok {
+		replayDone, replayErr = dialer.Done(), dialer.Err
+	}
 	plan := sessionRuntimePlan{
 		mode:                  sessionRuntimeModeReplayOpenAI,
 		provider:              sessionProviderOpenAI,
 		model:                 model,
-		inputAudioSampleRate:  configuration.inputAudioSampleRate,
-		outputAudioSampleRate: configuration.outputAudioSampleRate,
+		inputAudioSampleRate:  replayInputAudioSampleRate(inspection),
+		outputAudioSampleRate: replayOutputAudioSampleRate(inspection),
 		inferencer:            sessionInferencer,
-		announceTools:         replayAnnouncementToolDefinitions(opts.ToolDefinitions, configuration.initialToolNames, configuration.initialToolsKnown),
+		replayPrepared:        prepared,
+		announceTools:         replayAnnouncementToolDefinitions(opts.ToolDefinitions, inspection.InitialTools, inspection.InitialToolsKnown),
 		loop: sessionLoopOptions{
 			Prompt:         prompt,
 			PromptProvided: promptProvided,
-			WaitForClose:   opts.WaitForClose || captureHasEvent(opts.ReplayPath, sessionClosedEventType),
-			MaxDuration:    replayLoopMaxDuration(opts.ReplayPath, opts.ReplayTiming),
+			WaitForClose:   opts.WaitForClose || replayProviderCloseExpected(inspection),
+			MaxDuration:    replayMaxDuration(inspection),
 			// Caller-supplied scheduled audio owns its close request. A bare
 			// replay must follow the capture's provider terminal instead of
 			// synthesizing a loop-authored client_close after the final turn.
 			CloseAfterScheduledAudio: len(opts.AudioInputs) > 0,
-			Done:                     replayDialer.Done(),
-			DoneErr:                  replayDialer.Err,
+			Done:                     replayDone,
+			DoneErr:                  replayErr,
 		},
 		finalize: func(_ context.Context, _ io.Writer) error {
-			if err := replayDialer.Err(); err != nil {
-				return fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
+			if replayErr != nil {
+				if err := replayErr(); err != nil {
+					return fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
+				}
 			}
 			return nil
 		},
@@ -178,6 +190,41 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 		}
 	}
 	return plan, nil
+}
+
+func flattenReplayAudioTurn(turn session.LiveReplayAudioTurn) []byte {
+	var pcm []byte
+	for _, chunk := range turn.Chunks {
+		for _, sample := range chunk {
+			pcm = append(pcm, byte(sample), byte(sample>>pcmHighByteShift))
+		}
+	}
+	return pcm
+}
+
+func replayInputAudioSampleRate(inspection runtimereplay.CaptureInspection) int {
+	if inspection.LivePlan == nil {
+		return 0
+	}
+	return inspection.LivePlan.InputAudioSampleRate
+}
+
+func replayOutputAudioSampleRate(inspection runtimereplay.CaptureInspection) int {
+	if inspection.LivePlan == nil {
+		return 0
+	}
+	return inspection.LivePlan.OutputAudioSampleRate
+}
+
+func replayProviderCloseExpected(inspection runtimereplay.CaptureInspection) bool {
+	return inspection.LivePlan != nil && inspection.LivePlan.ProviderCloseExpected
+}
+
+func replayMaxDuration(inspection runtimereplay.CaptureInspection) time.Duration {
+	if inspection.LivePlan == nil || inspection.LivePlan.MaxDuration <= 0 {
+		return sessionReplayDefaultMaxDuration
+	}
+	return inspection.LivePlan.MaxDuration
 }
 
 func replayAnnouncementToolDefinitions(definitions []messages.ToolDefinition, names []string, known bool) []messages.ToolDefinition {
@@ -204,26 +251,6 @@ func (p sessionRuntimePlan) toolDefinitionsForAnnouncement() []messages.ToolDefi
 		return p.announceTools
 	}
 	return p.loop.ToolDefinitions
-}
-
-func replaySessionToolNames(path string, sequence int, session map[string]json.RawMessage) ([]string, bool, error) {
-	raw, ok := session["tools"]
-	if !ok {
-		return []string{}, true, nil
-	}
-	var tools []struct {
-		Name string `json:"name"`
-	}
-	if err := json.Unmarshal(raw, &tools); err != nil {
-		return nil, true, fmt.Errorf("replay session capture %s: session.tools at sequence %d is invalid: %w", path, sequence, err)
-	}
-	names := make([]string, 0, len(tools))
-	for _, tool := range tools {
-		if name := strings.TrimSpace(tool.Name); name != "" {
-			names = append(names, name)
-		}
-	}
-	return names, true, nil
 }
 
 func buildOpenAIRealtimeSessionInferencer(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer) (messages.SessionInferencer, error) {

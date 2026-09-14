@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimesession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 )
 
 type observedSessionInferencer struct {
@@ -71,7 +72,12 @@ func (i *observedSessionInferencer) ConnectSession(ctx context.Context) (message
 	}
 	i.mu.Lock()
 	i.session = session
-	wrapped := &observedSession{Session: session, closeDone: i.closeDone, runtime: i.runtime, progress: i.progress}
+	wrapped := &observedSession{Session: session, closeDone: i.closeDone, runtime: i.runtime, progress: i.progress, liveRecorder: func() runtimesession.LiveRecorder {
+		if i.progress == nil {
+			return nil
+		}
+		return i.progress.liveRecorder
+	}()}
 	i.observed = wrapped
 	closeRequested := i.closeRequested
 	i.mu.Unlock()
@@ -197,12 +203,13 @@ func (i *observedSessionInferencer) closeDone() {
 
 type observedSession struct {
 	messages.Session
-	closeDone func()
-	runtime   *sessionRuntimeObservationRecorder
-	progress  *sessionProgressObserver
-	once      sync.Once
-	closeOnce sync.Once
-	closeErr  error
+	closeDone    func()
+	runtime      *sessionRuntimeObservationRecorder
+	progress     *sessionProgressObserver
+	liveRecorder runtimesession.LiveRecorder
+	once         sync.Once
+	closeOnce    sync.Once
+	closeErr     error
 }
 
 var _ messages.Session = (*observedSession)(nil)
@@ -225,6 +232,9 @@ func (s *observedSession) SendWithOutcome(ctx context.Context, msg messages.Stre
 			}
 		}
 		return outcome
+	}
+	if s.progress != nil {
+		s.progress.recordLiveMessageContext(ctx, msg, runtimesession.LiveRecordClient)
 	}
 	if msg.Type == messages.StreamTypeAudioDelta && s.runtime != nil {
 		if value, ok := msg.Value.(*messages.AudioDeltaValue); ok && value != nil {

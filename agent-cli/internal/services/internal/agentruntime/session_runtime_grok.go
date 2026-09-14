@@ -59,51 +59,57 @@ func planGrokRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFactory
 	}, nil
 }
 
-func planGrokReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
-	configuration, err := loadReplaySessionConfiguration(opts.ReplayPath)
+func planGrokReplayRuntimeContext(ctx context.Context, opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
+	prepared, replayDialer, inspection, err := prepareReplayLiveContext(ctx, opts, factory)
 	if err != nil {
 		return sessionRuntimePlan{}, err
 	}
-	replayDialer, err := factory.replayDialer(opts.ReplayPath, opts.ReplayTiming)
-	if err != nil {
-		return sessionRuntimePlan{}, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
-	}
-	model := configuration.model
+	model := inspection.Model
 	if strings.TrimSpace(model) == "" {
-		model = replayDialer.Model()
+		if dialer, ok := replayDialer.(sessionReplayDialer); ok {
+			model = dialer.Model()
+		}
 	}
 	if strings.TrimSpace(model) == "" {
 		model = "grok-replay"
 	}
-	// The initial provider configuration is captured wire data. The current
-	// tool definitions remain on plan.loop for local execution, but are not
-	// used to rebuild the provider handshake.
-	replayDialerWithConfiguration := newReplayInitialSessionUpdateDialer(replayDialer, configuration)
 	sessionInferencer, err := factory.newGrokSessionInferencerForTools(config.GrokConfig{
 		APIKey: "replay",
 		Model:  model,
-	}, replayDialerWithConfiguration, nil)
+	}, replayDialer, nil)
 	if err != nil {
 		return sessionRuntimePlan{}, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
 	}
-	sessionInferencer = newWebSocketReplaySessionInferencer(sessionInferencer)
+	if prepared != nil {
+		sessionInferencer = prepared.WrapInferencer(sessionInferencer)
+	}
+	var replayDone <-chan struct{}
+	var replayErr func() error
+	if prepared != nil {
+		replayDone, replayErr = prepared.Done(), prepared.Err
+	} else if dialer, ok := replayDialer.(sessionReplayDialer); ok {
+		replayDone, replayErr = dialer.Done(), dialer.Err
+	}
 	return sessionRuntimePlan{
 		mode:                  sessionRuntimeModeReplayGrok,
 		provider:              sessionProviderGrok,
 		model:                 model,
-		inputAudioSampleRate:  configuration.inputAudioSampleRate,
-		outputAudioSampleRate: configuration.outputAudioSampleRate,
+		inputAudioSampleRate:  replayInputAudioSampleRate(inspection),
+		outputAudioSampleRate: replayOutputAudioSampleRate(inspection),
 		inferencer:            sessionInferencer,
+		replayPrepared:        prepared,
 		loop: sessionLoopOptions{
 			Prompt:       opts.Prompt,
-			WaitForClose: opts.WaitForClose || grokReplayCaptureHasSessionClose(opts.ReplayPath),
-			MaxDuration:  replayLoopMaxDuration(opts.ReplayPath, opts.ReplayTiming),
-			Done:         replayDialer.Done(),
-			DoneErr:      replayDialer.Err,
+			WaitForClose: opts.WaitForClose || replayProviderCloseExpected(inspection),
+			MaxDuration:  replayMaxDuration(inspection),
+			Done:         replayDone,
+			DoneErr:      replayErr,
 		},
 		finalize: func(_ context.Context, _ io.Writer) error {
-			if err := replayDialer.Err(); err != nil {
-				return fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
+			if replayErr != nil {
+				if err := replayErr(); err != nil {
+					return fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
+				}
 			}
 			return nil
 		},

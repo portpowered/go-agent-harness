@@ -168,6 +168,22 @@ func (d *ReplayWebSocketDialer) Err() error {
 	return conn.Err()
 }
 
+// Close terminates the active replay connection, if one has been opened.
+// This is used by service-owned replay preparation to guarantee bounded
+// shutdown when a session fails before its provider cursor reaches Done.
+func (d *ReplayWebSocketDialer) Close() error {
+	if d == nil {
+		return nil
+	}
+	d.mu.Lock()
+	conn := d.conn
+	d.mu.Unlock()
+	if conn == nil {
+		return nil
+	}
+	return conn.Close()
+}
+
 type replayWebSocketConn struct {
 	events             []CapturedSessionEvent
 	index              int

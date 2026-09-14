@@ -122,11 +122,6 @@ func RunSessionWithImages(ctx context.Context, out io.Writer, opts SessionImageR
 	if err := validateSessionRunOptions(opts.SessionRunOptions); err != nil {
 		return err
 	}
-	claim, err := ensureSessionRecordingClaim(&opts.SessionRunOptions)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = claim.release() }()
 	metadata, err := resolveSessionImageCapabilities(opts.SessionRunOptions)
 	if err != nil {
 		return err
@@ -186,11 +181,6 @@ func RunSessionWithImagesAndAudioInput(ctx context.Context, out io.Writer, opts 
 	if err := validateSessionRunOptions(opts.SessionRunOptions); err != nil {
 		return err
 	}
-	claim, err := ensureSessionRecordingClaim(&opts.SessionRunOptions)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = claim.release() }()
 	metadata, err := resolveSessionImageCapabilities(opts.SessionRunOptions)
 	if err != nil {
 		return err
@@ -264,8 +254,8 @@ func planSessionImageRuntime(opts SessionRunOptions, parts []messages.ImagePart,
 // needs the live provider runtime without giving its capture finalizer an
 // empty path to flush. The directory planner owns that distinction and still
 // preserves explicit --record and --replay behavior.
-func planSessionImageRuntimeForDirectory(opts SessionRunOptions, parts []messages.ImagePart, seed SessionTextSeed, systemPrompt string, deferResponse bool) (sessionRuntimePlan, string, func(), error) {
-	plan, cleanup, err := planSessionForDirectoryRecordingWithInstructions(opts, systemPrompt, true)
+func planSessionImageRuntimeForDirectoryContext(ctx context.Context, opts SessionRunOptions, parts []messages.ImagePart, seed SessionTextSeed, systemPrompt string, deferResponse bool) (sessionRuntimePlan, string, func(), error) {
+	plan, cleanup, err := planSessionForDirectoryRecordingWithInstructionsContext(ctx, opts, systemPrompt, true)
 	if err != nil {
 		return sessionRuntimePlan{}, "", func() {}, err
 	}

@@ -35,6 +35,11 @@ const (
 	SessionPageSightUnavailableErrorCode = "page_sight_unavailable"
 )
 
+type sessionToolLifecycleObserver interface {
+	observeToolCall(messages.ToolCall)
+	observeToolResult(messages.ToolCall, messages.ToolCallResponse, bool)
+}
+
 // sessionToolLifecycleMux preserves the optional recording hook while adding
 // the participant-owned liveness boundary. A running local tool must suppress
 // the provider watchdog; the next accepted response.create re-arms it.

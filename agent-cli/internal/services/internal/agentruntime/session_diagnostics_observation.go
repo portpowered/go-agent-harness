@@ -3,6 +3,7 @@ package agentruntime
 import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"strings"
 )
 
@@ -12,6 +13,7 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 	}
 	unlockProviderBoundary := o.lockProviderBoundary()
 	defer unlockProviderBoundary()
+	o.recordLiveMessage(msg, session.LiveRecordAgent)
 	o.observeProviderBoundary(msg)
 	if o.streamObserver != nil {
 		o.streamObserver(msg)

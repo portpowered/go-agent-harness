@@ -30,7 +30,7 @@ func (r *directoryRecorder) providerArtifact() (transcript.RecordingArtifact, bo
 	path := r.ProviderCapturePath()
 	file, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
-		if r != nil && r.options.ProviderCapturePath == "" && len(r.inputPaths) == 0 && len(r.outputPaths) == 0 {
+		if r != nil && r.options.ProviderCapturePath == "" && (len(r.inputPaths) == 0 && len(r.outputPaths) == 0 || r.runtimeAudio) {
 			// A semantic-only injected session may have no raw wire writer. Once
 			// PCM is observed, missing provider evidence is incomplete.
 			return transcript.RecordingArtifact{}, false, nil

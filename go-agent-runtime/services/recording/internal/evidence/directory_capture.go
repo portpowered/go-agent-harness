@@ -127,7 +127,7 @@ func (r *directoryRecorder) processAudio(item directoryEvidenceItem) {
 		return
 	}
 	if err := r.writeTranscriptRecords(client, agent, sequence); err != nil {
-		r.workerErr = errors.Join(err, r.rollbackAudioAttempt(item.direction, audioAttempt.file, audioAttempt.offset, audioAttempt.start, audioAttempt.created))
+		r.workerErr = errors.Join(err, r.rollbackAudioAttempt(item.direction, audioAttempt.file, audioAttempt.offset, audioAttempt.start, audioAttempt.created, audioAttempt.path))
 		return
 	}
 	if item.direction == session.LiveRecordAgent && item.frame.PlaybackResponse.ResponseID != "" {
@@ -136,6 +136,11 @@ func (r *directoryRecorder) processAudio(item directoryEvidenceItem) {
 		r.conversation.observeAudio(item.direction == session.LiveRecordClient, len(data), offset, segment)
 	}
 	r.latchProjectionError()
+	if item.frame.EndOfResponse && item.admission != "" {
+		if err := r.rotateAudioFile(item.direction); err != nil && r.workerErr == nil {
+			r.workerErr = recordingWriteError("close audio segment", err)
+		}
+	}
 }
 
 type audioWriteAttempt struct {
@@ -143,6 +148,7 @@ type audioWriteAttempt struct {
 	offset  *uint64
 	start   uint64
 	created bool
+	path    string
 }
 
 func (r *directoryRecorder) writeAudioAttempt(direction session.LiveRecordDirection, data []byte) (audioWriteAttempt, error) {
@@ -153,20 +159,25 @@ func (r *directoryRecorder) writeAudioAttempt(direction session.LiveRecordDirect
 	if direction == session.LiveRecordClient {
 		pathCount = len(r.inputPaths)
 	}
-	file, _, offset, err := r.audioFile(direction)
+	file, path, offset, err := r.audioFile(direction)
 	if err != nil {
 		return audioWriteAttempt{}, err
 	}
-	attempt := audioWriteAttempt{file: file, offset: offset, start: *offset}
+	attempt := audioWriteAttempt{file: file, offset: offset, start: *offset, path: path}
 	if direction == session.LiveRecordClient {
 		attempt.created = len(r.inputPaths) > pathCount
 	} else {
 		attempt.created = len(r.outputPaths) > pathCount
 	}
 	if err := r.writeCompleteSpool(file, data); err != nil {
-		return attempt, errors.Join(recordingWriteError("write audio evidence", err), r.rollbackAudioAttempt(direction, file, offset, attempt.start, attempt.created))
+		return attempt, errors.Join(recordingWriteError("write audio evidence", err), r.rollbackAudioAttempt(direction, file, offset, attempt.start, attempt.created, attempt.path))
 	}
 	*offset += uint64(len(data))
+	if direction == session.LiveRecordClient {
+		r.inputBytes += uint64(len(data))
+	} else {
+		r.outputBytes += uint64(len(data))
+	}
 	return attempt, nil
 }
 
@@ -185,10 +196,20 @@ func boolToInt64(value bool) int64 {
 }
 
 func (r *directoryRecorder) audioLocation(direction session.LiveRecordDirection) (string, uint64) {
-	if direction == session.LiveRecordClient {
-		return "audio/in-000.pcm", r.inputBytes
+	index := len(r.outputPaths)
+	offset := r.outputBytes
+	if r.outputFile != nil {
+		index--
 	}
-	return "audio/out-000.pcm", r.outputBytes
+	if direction == session.LiveRecordClient {
+		index = len(r.inputPaths)
+		offset = r.inputBytes
+		if r.inputFile != nil {
+			index--
+		}
+		return "audio/in-" + threeDigit(index) + ".pcm", offset
+	}
+	return "audio/out-" + threeDigit(index) + ".pcm", offset
 }
 
 func (r *directoryRecorder) latchProjectionError() {
@@ -201,19 +222,19 @@ func (r *directoryRecorder) latchProjectionError() {
 }
 
 func (r *directoryRecorder) audioFile(direction session.LiveRecordDirection) (*os.File, string, *uint64, error) {
-	file, paths, offset, name := &r.outputFile, &r.outputPaths, &r.outputBytes, "out"
+	file, paths, offset, name := &r.outputFile, &r.outputPaths, &r.outputSegmentBytes, "out"
 	if direction == session.LiveRecordClient {
-		file, paths, offset, name = &r.inputFile, &r.inputPaths, &r.inputBytes, "in"
+		file, paths, offset, name = &r.inputFile, &r.inputPaths, &r.inputSegmentBytes, "in"
 	}
-	segment := "audio/" + name + "-000.pcm"
+	segment := "audio/" + name + "-" + threeDigit(len(*paths)) + ".pcm"
 	if *file == nil {
-		path := filepath.Join(r.spool, name+".pcm")
+		path := filepath.Join(r.spool, name+"-"+threeDigit(len(*paths))+".pcm")
 		opened, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, evidenceFileMode)
 		if err != nil {
 			return nil, "", nil, recordingWriteError("create audio spool", err)
 		}
 		*file = opened
-		*paths = []string{path}
+		*paths = append(*paths, path)
 	}
 	return *file, segment, offset, nil
 }
@@ -234,6 +255,21 @@ func (r *directoryRecorder) ensureTranscriptFiles() error {
 	r.client, r.agent = client, agent
 	r.clientPath, r.agentPath = clientPath, agentPath
 	return nil
+}
+
+func (r *directoryRecorder) rotateAudioFile(direction session.LiveRecordDirection) error {
+	file, offset := &r.outputFile, &r.outputSegmentBytes
+	if direction == session.LiveRecordClient {
+		file, offset = &r.inputFile, &r.inputSegmentBytes
+	}
+	if *file == nil {
+		return nil
+	}
+	err := (*file).Sync()
+	err = errors.Join(err, (*file).Close())
+	*file = nil
+	*offset = 0
+	return err
 }
 
 func (r *directoryRecorder) latch(err error) {
@@ -347,21 +383,27 @@ func rollbackSpoolFile(file *os.File, offset int64) error {
 	return nil
 }
 
-func (r *directoryRecorder) rollbackAudioAttempt(direction session.LiveRecordDirection, file *os.File, offset *uint64, start uint64, created bool) error {
+func (r *directoryRecorder) rollbackAudioAttempt(direction session.LiveRecordDirection, file *os.File, offset *uint64, start uint64, created bool, path string) error {
 	if file == nil || offset == nil {
 		return nil
 	}
 	result := rollbackSpoolFile(file, int64(start))
+	written := *offset - start
 	*offset = start
+	if direction == session.LiveRecordClient {
+		if r.inputBytes >= written {
+			r.inputBytes -= written
+		}
+	} else if r.outputBytes >= written {
+		r.outputBytes -= written
+	}
 	if !created || start != 0 {
 		return result
 	}
 	if err := file.Close(); err != nil {
 		result = errors.Join(result, err)
 	}
-	path := filepath.Join(r.spool, "out.pcm")
 	if direction == session.LiveRecordClient {
-		path = filepath.Join(r.spool, "in.pcm")
 		r.inputFile = nil
 		if len(r.inputPaths) > 0 {
 			r.inputPaths = r.inputPaths[:len(r.inputPaths)-1]

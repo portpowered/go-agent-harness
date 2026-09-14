@@ -66,14 +66,13 @@ type providerCapturePending struct {
 // mutations in order and the finalizer streams the spool into the protected
 // gateway envelope.
 type providerCaptureSpool struct {
-	destination         string
-	spoolPath           string
-	file                *os.File
-	destinationLock     *os.File
-	destinationLockPath string
-	queue               chan providerCaptureMutation
-	done                chan struct{}
-	limits              recording.ResourceLimits
+	destination string
+	spoolPath   string
+	file        *os.File
+	claim       *destinationClaim
+	queue       chan providerCaptureMutation
+	done        chan struct{}
+	limits      recording.ResourceLimits
 
 	mu                sync.Mutex
 	queuedBytes       int64
@@ -118,18 +117,18 @@ func NewProviderCaptureWithLimits(destination string, input recording.ResourceLi
 	if !info.IsDir() {
 		return nil, errors.New("provider capture destination directory is not a directory")
 	}
-	lockPath := destination + ".lock"
-	lock, err := os.OpenFile(lockPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, evidenceFileMode)
+	admitted, err := Claim(recording.ClaimOptions{Destination: destination, Kind: recording.ClaimKindCapture})
 	if err != nil {
-		if errors.Is(err, os.ErrExist) {
-			return nil, fmt.Errorf("%w: %s", recording.ErrLiveEvidenceClaimed, destination)
-		}
-		return nil, fmt.Errorf("claim provider capture destination: %w", err)
+		return nil, err
+	}
+	claim, ok := admitted.(*destinationClaim)
+	if !ok {
+		return nil, errors.Join(errors.New("provider capture claim has an unexpected implementation"), admitted.Release())
 	}
 	removeClaim := true
 	defer func() {
 		if removeClaim {
-			returnErr = errors.Join(returnErr, releaseEvidenceClaim(lock, lockPath))
+			returnErr = errors.Join(returnErr, claim.Release())
 		}
 	}()
 	base := filepath.Base(destination)
@@ -147,14 +146,13 @@ func NewProviderCaptureWithLimits(destination string, input recording.ResourceLi
 		return nil, fmt.Errorf("protect provider capture spool: %w", err)
 	}
 	spool := &providerCaptureSpool{
-		destination:         destination,
-		spoolPath:           file.Name(),
-		file:                file,
-		destinationLock:     lock,
-		destinationLockPath: lockPath,
-		queue:               make(chan providerCaptureMutation, providerCaptureQueueCapacity),
-		done:                make(chan struct{}),
-		limits:              budget.limits,
+		destination: destination,
+		spoolPath:   file.Name(),
+		file:        file,
+		claim:       claim,
+		queue:       make(chan providerCaptureMutation, providerCaptureQueueCapacity),
+		done:        make(chan struct{}),
+		limits:      budget.limits,
 	}
 	go spool.run()
 	remove = false
@@ -379,12 +377,12 @@ func (s *providerCaptureSpool) ResourceUsage() recording.ResourceUsage {
 }
 
 func (s *providerCaptureSpool) releaseDestinationClaim() error {
-	if s == nil || s.destinationLock == nil {
+	if s == nil || s.claim == nil {
 		return nil
 	}
-	lock := s.destinationLock
-	s.destinationLock = nil
-	return releaseEvidenceClaim(lock, s.destinationLockPath)
+	claim := s.claim
+	s.claim = nil
+	return claim.Release()
 }
 
 func (s *providerCaptureSpool) latch(err error) {

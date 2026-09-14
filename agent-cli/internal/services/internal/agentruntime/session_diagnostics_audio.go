@@ -7,6 +7,9 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
+	runtimesession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 // account is the single observation seam: every counted byte crosses here
@@ -132,6 +135,28 @@ func (o *sessionProgressObserver) sendScheduledAudioInput(ctx context.Context, l
 			return fmt.Errorf("send scheduled audio input %d end-of-turn: %w", inputIndex, err)
 		}
 		o.armProviderProgress()
+	}
+	if o.liveRecorder != nil {
+		samples, decodeErr := codec.DecodePCM16(input.PCM)
+		if decodeErr == nil {
+			frame := audio.PCMFrame{Samples: samples}
+			if o.inputAudioRate > 0 {
+				frame.Format = audio.PCM16DeviceFormat(o.inputAudioRate)
+			}
+			o.recordLiveAudioContext(ctx, runtimesession.LiveAudioRecord{
+				Direction: runtimesession.LiveRecordClient,
+				Admission: runtimesession.LiveAudioQueueAdmitted,
+				Frame:     frame,
+			})
+			if input.EndOfTurn {
+				frame = audio.PCMFrame{EndOfResponse: true, Format: frame.Format}
+				o.recordLiveAudioContext(ctx, runtimesession.LiveAudioRecord{
+					Direction: runtimesession.LiveRecordClient,
+					Admission: runtimesession.LiveAudioQueueAdmitted,
+					Frame:     frame,
+				})
+			}
+		}
 	}
 	o.lifecycleProjectionMu.Lock()
 	if !o.scheduledTurnBaseSet {
