@@ -142,6 +142,51 @@ func TestFileAdaptersDelegateRequests(t *testing.T) {
 
 }
 
+func TestFilePlaybackWaitForPumpDrainsAndPreservesPumpError(t *testing.T) {
+	started := make(chan struct{})
+	release := make(chan struct{})
+	wantErr := errors.New("playback failed")
+	output := &recordingOutput{pump: func(ctx context.Context, _ sharedaudio.InboundMedia) error {
+		close(started)
+		select {
+		case <-release:
+			return wantErr
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}}
+	playback, err := newPlayback(context.Background(), devices.FileOutput{Sink: &recordingSink{}}, 24000, &testAudioService{output: output})
+	if err != nil {
+		t.Fatalf("newPlayback: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := playback.Close(); err != nil {
+			t.Errorf("playback Close: %v", err)
+		}
+	})
+
+	pumpErr := make(chan error, 1)
+	go func() { pumpErr <- playback.Pump(context.Background(), &recordingInbound{}) }()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("playback pump did not start")
+	}
+	waitCtx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	if err := playback.WaitForPump(waitCtx); !errors.Is(err, context.DeadlineExceeded) {
+		cancel()
+		t.Fatalf("WaitForPump before completion = %v, want deadline", err)
+	}
+	cancel()
+	close(release)
+	if err := <-pumpErr; !errors.Is(err, wantErr) {
+		t.Fatalf("playback Pump = %v, want %v", err, wantErr)
+	}
+	if err := playback.WaitForPump(context.Background()); !errors.Is(err, wantErr) {
+		t.Fatalf("WaitForPump after completion = %v, want %v", err, wantErr)
+	}
+}
+
 func TestFileAdaptersRejectInvalidRequests(t *testing.T) {
 	service := &testAudioService{}
 	source := sharedaudio.NewSliceSource([]int16{7})
