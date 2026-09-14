@@ -1,0 +1,72 @@
+{
+  "work": "audio-runtime-c134-recover-c114-audio-rate-contract",
+  "project": "audio-runtime",
+  "branch": "codex/audio-runtime-c134-recover-c114-audio-rate-contract",
+  "testedRevision": "b566cc8c22fb02a05d9e143ca3b47ea13be9273e",
+  "originMain": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
+  "admission": {
+    "command": "python3 factory/scripts/project-control.py verify-work --type task --name audio-runtime-c134-recover-c114-audio-rate-contract --root $FACTORY_ROOT",
+    "result": {
+      "status": "admitted",
+      "project": "audio-runtime",
+      "name": "audio-runtime-c134-recover-c114-audio-rate-contract"
+    }
+  },
+  "ancestry": {
+    "preservedC114Head": "59edd9e15b8cf631e7230959f31c4a5faf64e56f",
+    "preservedC114HeadIsAncestor": true,
+    "acceptedMainIsAncestor": true,
+    "originMainIsAncestor": true,
+    "startupIsAncestor": true,
+    "baselineVerifierPassed": true
+  },
+  "ownedChecks": {
+    "audiorateTests": "PASS",
+    "cliFocusedContractTests": "PASS",
+    "externalConsumerGOWORKOff": "PASS",
+    "audiorateRace": "PASS",
+    "cliFocusedRace": "PASS",
+    "positiveAndCausalNegativeControls": "ACCEPTED",
+    "retirementCallersAndC101Readonly": "ACCEPTED",
+    "finalScopeAndProvenance": "ACCEPTED",
+    "softwareReplay": "ACCEPTED",
+    "transportRegressions": "PASS",
+    "fmt": "PASS",
+    "vet": "PASS",
+    "staticcheck": "PASS",
+    "lint": "PASS",
+    "wireCheck": "PASS",
+    "coverageRegistration": "PASS"
+  },
+  "architectureSizeCheck": {
+    "status": "BLOCKED_SHARED_PREREQUISITE",
+    "command": "make architecture-size-check",
+    "exitCode": 1,
+    "finding": "generated-file-spoof services/audiorate/wire/wire_gen.go: generated header is not registered with a reproducible generator",
+    "requiredSharedPath": "docs/architecture/architecture-policy.json",
+    "requiredSharedRegistration": "services/audiorate/wire/wire_gen.go",
+    "pathIsInAdmittedOwnedPaths": false,
+    "prdRequiresNoCentralWireRegistryEdit": true,
+    "repairAvailableWithinTask": false
+  },
+  "coverageChanged": {
+    "status": "BLOCKED_PEER_OWNERSHIP",
+    "command": "make coverage-changed COVERAGE_BASE=bd6a1289218d1bef1a3af36e64e9d4496062416f",
+    "exitCode": 1,
+    "firstCauses": [
+      "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner_test.go: scheduled PCM fixture has 3 bytes and is rejected by the shared odd-tail contract",
+      "agent-cli/internal/services/internal/agentruntime/session_instruction_composition_test.go:75: scheduled PCM fixture has 3 bytes and is rejected by the shared odd-tail contract",
+      "agent-cli/internal/services/internal/agentruntime/session_scheduled_audio_policy_test.go:38: scheduled PCM fixture has 1 byte and is rejected by the shared odd-tail contract",
+      "agent-cli/internal/services/internal/agentruntime/session_ambiguous_page_tools_test.go:398,441: dependent scenario ends before tab selection after the same scheduled-audio conversion failures"
+    ],
+    "fixturesAreInAdmittedOwnedPaths": false,
+    "repairAvailableWithinTask": false
+  },
+  "handoff": {
+    "ciSubmitted": false,
+    "pullRequestOpened": false,
+    "reason": "The candidate is not handoff-ready while the architecture gate requires an out-of-scope shared registration and accumulated coverage fails peer-owned fixtures.",
+    "nextAction": "Primary/meta must either land the shared audiorate generated-file registration on current main and coordinate even-byte repairs in the peer-owned fixtures, or explicitly amend this task's ownership/acceptance scope. Then integrate the resulting main, rerun architecture-size-check and coverage-changed plus the focused gates, and only if all pass commit/push and open the C134 PR for script CI.",
+    "escalationDecisionRequired": true
+  }
+}
