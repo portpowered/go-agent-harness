@@ -378,43 +378,4 @@ func (r *directoryRecorder) run() {
 	}
 }
 
-func (r *directoryRecorder) processItem(item directoryEvidenceItem) {
-	defer r.captureUsage(true)
-	switch item.kind {
-	case evidenceMessage:
-		r.processMessage(item)
-	case evidenceAudio:
-		r.processAudio(item)
-	case evidenceEvent:
-		r.processEvent(item)
-	}
-}
-
-func (r *directoryRecorder) processEvent(item directoryEvidenceItem) {
-	if r.workerErr == nil {
-		if err := r.writeTranscript(item, transcript.StreamRuntimeEvent, item.payload); err != nil && !isEvidenceBudgetError(err) {
-			r.workerErr = err
-		}
-	}
-	if item.terminal != nil {
-		if err := r.writeDurationSidecarTerminal(item.timestamp, item.terminal); err != nil && r.workerErr == nil && !isEvidenceBudgetError(err) {
-			r.workerErr = err
-		}
-	}
-}
-
-func (r *directoryRecorder) releaseQueueItem(item directoryEvidenceItem) {
-	r.mu.Lock()
-	r.queuedBytes -= item.bytes
-	if r.queuedItems > 0 {
-		r.queuedItems--
-	}
-	queuedBytes, queuedItems := r.queuedBytes, r.queuedItems
-	r.mu.Unlock()
-	r.usageMu.Lock()
-	r.usage.QueueBytes = queuedBytes
-	r.usage.QueueItems = queuedItems
-	r.usageMu.Unlock()
-}
-
 var _ session.LiveRecorder = (*directoryRecorder)(nil)

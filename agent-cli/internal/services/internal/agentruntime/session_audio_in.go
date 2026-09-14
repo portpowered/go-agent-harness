@@ -63,37 +63,49 @@ func StartSessionAudioInterruptionsOnBrowserTool(
 	ctx, cancel := context.WithCancel(parent)
 	out := make(chan ScheduledAudioInput, len(inputs))
 	cloned := cloneScheduledAudioInputs(inputs)
-	go func() {
-		defer close(out)
-		defer cancel()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case event, ok := <-events:
-				if !ok {
-					return
-				}
-				// Broker-owned calls first publish a queued admission event and
-				// publish this same lifecycle event type again when the browser
-				// invocation is actually dispatched. Require the identity-bearing
-				// start observation so a malformed or unrelated lifecycle event
-				// cannot release audio.
-				if event.Type != webmcp.BrokerEventInvocationCreated || event.State != webmcp.InvocationDispatched || event.InvocationID == "" || event.ToolName == "" || (toolName != "" && event.ToolName != toolName) {
-					continue
-				}
-				for _, input := range cloned {
-					select {
-					case out <- input:
-					case <-ctx.Done():
-						return
-					}
-				}
+	go runSessionAudioInterruptions(ctx, cancel, events, toolName, cloned, out)
+	return out, cancel
+}
+
+func runSessionAudioInterruptions(ctx context.Context, cancel context.CancelFunc, events <-chan webmcp.BrokerEvent, toolName string, inputs []ScheduledAudioInput, out chan<- ScheduledAudioInput) {
+	defer close(out)
+	defer cancel()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case event, ok := <-events:
+			if !ok {
 				return
 			}
+			if !sessionAudioInterruptionEventMatches(event, toolName) {
+				continue
+			}
+			if !sendScheduledAudioInputs(ctx, inputs, out) {
+				return
+			}
+			return
 		}
-	}()
-	return out, cancel
+	}
+}
+
+func sessionAudioInterruptionEventMatches(event webmcp.BrokerEvent, toolName string) bool {
+	// Broker-owned calls first publish a queued admission event and publish
+	// this same lifecycle event type again when the browser invocation is
+	// actually dispatched. Require the identity-bearing start observation so a
+	// malformed or unrelated lifecycle event cannot release audio.
+	return event.Type == webmcp.BrokerEventInvocationCreated && event.State == webmcp.InvocationDispatched && event.InvocationID != "" && event.ToolName != "" && (toolName == "" || event.ToolName == toolName)
+}
+
+func sendScheduledAudioInputs(ctx context.Context, inputs []ScheduledAudioInput, out chan<- ScheduledAudioInput) bool {
+	for _, input := range inputs {
+		select {
+		case out <- input:
+		case <-ctx.Done():
+			return false
+		}
+	}
+	return true
 }
 
 // SessionAudioInput carries the command-line presence bit separately from the
@@ -539,80 +551,6 @@ func readSessionAudioInputPCM(ctx context.Context, input SessionAudioInput) (pcm
 	return encoded.Bytes(), source.sourceRate, nil
 }
 
-func classifySessionAudioOpenError(path string, err error) error {
-	kind := SessionAudioInputUnreadable
-	switch {
-	case errors.Is(err, audio.ErrUnsupportedFormat):
-		kind = SessionAudioInputFormat
-	case errors.Is(err, os.ErrNotExist):
-		kind = SessionAudioInputMissing
-	case errors.Is(err, audio.ErrNilStream):
-		kind = SessionAudioInputUnreadable
-	}
-	return &SessionAudioInputError{Kind: kind, Path: path, Err: err}
-}
-
-type sessionAudioSource struct {
-	source       audio.AudioSource
-	path         string
-	sourceRate   int
-	providerRate int
-	reader       *sessionAudioReader
-	ownedInput   *os.File
-	// paced marks file-backed finite sources whose frames must be delivered
-	// at the encoded real-time rate. Synthetic test sources injected through
-	// the SessionAudioInput.Source seam are never paced so tests control
-	// their own timing.
-	paced       bool
-	send        func(context.Context, []byte) error
-	endOfTurn   func(context.Context) error
-	runtime     *sessionRuntimeObservationRecorder
-	clock       sharedclock.Source
-	recordAudio func(runtimesession.LiveAudioRecord)
-	recordRate  int
-	once        sync.Once
-	err         error
-}
-
-func (s *sessionAudioSource) bindProviderRate(rate int) {
-	if s != nil {
-		s.providerRate = rate
-	}
-}
-
-func (s *sessionAudioSource) bindContext(ctx context.Context) {
-	if s.reader != nil {
-		s.reader.bindContext(ctx)
-	}
-}
-
-func (s *sessionAudioSource) bindRuntime(runtime *sessionRuntimeObservationRecorder, source sharedclock.Source) {
-	if s != nil {
-		s.runtime = runtime
-		s.clock = source
-	}
-}
-
-func (s *sessionAudioSource) bindLiveAudio(record func(runtimesession.LiveAudioRecord), rate int) {
-	if s != nil {
-		s.recordAudio = record
-		s.recordRate = rate
-	}
-}
-
-func (s *sessionAudioSource) Close() error {
-	s.once.Do(func() {
-		s.err = s.source.Close()
-		if s.ownedInput != nil {
-			s.err = errors.Join(s.err, s.reader.Close())
-		}
-	})
-	if s.err == nil {
-		return nil
-	}
-	return &SessionAudioInputError{Kind: SessionAudioInputClose, Path: s.path, Err: s.err}
-}
-
 // sessionAudioReader carries cancellation into readers that can honor it
 // without closing the caller-owned stdin. The standard io.Reader contract has
 // no cancellation method, so a reader must implement ReadContext or support
@@ -890,34 +828,47 @@ func finishSessionAudioTurn(ctx context.Context, loop *agentloop.AgentLoop, sour
 
 func sendSessionAudioFrames(ctx context.Context, loop *agentloop.AgentLoop, source *sessionAudioSource, frames [][]byte) error {
 	for _, pcm := range frames {
-		send := source.send
-		if send == nil {
-			send = loop.SendAudioInput
+		if err := sendSessionAudioFrame(ctx, loop, source, pcm); err != nil {
+			return err
 		}
-		if err := send(ctx, pcm); err != nil {
-			return &SessionAudioInputError{Kind: SessionAudioInputSend, Path: source.path, Err: err}
-		}
-		if source.recordAudio != nil {
-			samples, err := codec.DecodePCM16(pcm)
-			if err == nil {
-				rate := source.recordRate
-				if rate <= 0 {
-					rate = source.providerRate
-				}
-				frame := audio.PCMFrame{Samples: samples}
-				if rate > 0 {
-					frame.Format = audio.PCM16DeviceFormat(rate)
-				}
-				source.recordAudio(runtimesession.LiveAudioRecord{
-					Direction: runtimesession.LiveRecordClient,
-					Admission: runtimesession.LiveAudioQueueAdmitted,
-					Frame:     frame,
-				})
-			}
-		}
-		source.runtime.audioInput(pcm)
 	}
 	return nil
+}
+
+func sendSessionAudioFrame(ctx context.Context, loop *agentloop.AgentLoop, source *sessionAudioSource, pcm []byte) error {
+	send := source.send
+	if send == nil {
+		send = loop.SendAudioInput
+	}
+	if err := send(ctx, pcm); err != nil {
+		return &SessionAudioInputError{Kind: SessionAudioInputSend, Path: source.path, Err: err}
+	}
+	recordSessionAudioFrame(source, pcm)
+	source.runtime.audioInput(pcm)
+	return nil
+}
+
+func recordSessionAudioFrame(source *sessionAudioSource, pcm []byte) {
+	if source.recordAudio == nil {
+		return
+	}
+	samples, err := codec.DecodePCM16(pcm)
+	if err != nil {
+		return
+	}
+	rate := source.recordRate
+	if rate <= 0 {
+		rate = source.providerRate
+	}
+	frame := audio.PCMFrame{Samples: samples}
+	if rate > 0 {
+		frame.Format = audio.PCM16DeviceFormat(rate)
+	}
+	source.recordAudio(runtimesession.LiveAudioRecord{
+		Direction: runtimesession.LiveRecordClient,
+		Admission: runtimesession.LiveAudioQueueAdmitted,
+		Frame:     frame,
+	})
 }
 
 // sendSessionAudioEndOfTurn signals end-of-turn after a finite audio source

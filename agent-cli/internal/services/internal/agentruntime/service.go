@@ -270,22 +270,8 @@ func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request)
 		copyCfg.FilesystemWorkDir, copyCfg.FilesystemAllowPaths = policy.PrimaryRoot(), policy.AdditionalRoots()
 		options.LoadedConfig = &copyCfg
 	}
-	if len(request.AudioInterrupts) > 0 {
-		if options.BrowserWatch == nil {
-			if options.CapabilityClose != nil {
-				_ = options.CapabilityClose()
-			}
-			return SessionRunOptions{}, errors.New("--audio-interrupt requires an enabled WebMCP session capability")
-		}
-		inputs, err := PrepareSessionAudioInputs(request.AudioInterrupts)
-		if err != nil {
-			if options.CapabilityClose != nil {
-				_ = options.CapabilityClose()
-			}
-			return SessionRunOptions{}, fmt.Errorf("prepare --audio-interrupt: %w", err)
-		}
-		interruptions, _ := StartSessionAudioInterruptionsOnBrowserTool(ctx, options.BrowserWatch(ctx), request.AudioInterruptTool, inputs)
-		options.AudioInterruptions = interruptions
+	if options, err = d.prepareAudioInterruptions(ctx, options, request); err != nil {
+		return SessionRunOptions{}, err
 	}
 	return options, nil
 }

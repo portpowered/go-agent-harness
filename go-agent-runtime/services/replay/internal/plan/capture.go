@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
@@ -178,42 +177,22 @@ func loadLivePlanFromCapture(ctx context.Context, path string, capture gatewayte
 	if err != nil {
 		return session.LiveReplayPlan{}, fmt.Errorf("live replay plan %s: %w", path, err)
 	}
-	providerCloseExpected := replayProviderCloseExpected(capture.Records)
-	waitForSessionUpdated := replayHasSessionUpdated(capture.Records)
-	inputRate, outputRate, err := replayAudioSampleRates(capture.Records)
+	lifecycle, err := replayLifecyclePlan(path, capture.Records)
 	if err != nil {
 		return session.LiveReplayPlan{}, fmt.Errorf("live replay plan %s: %w", path, err)
-	}
-	lifecycle := session.LiveReplayPlan{
-		WaitForSessionUpdated:           waitForSessionUpdated,
-		StopAfterResponse:               !providerCloseExpected,
-		ProviderCloseExpected:           providerCloseExpected,
-		InterruptionReplacementExpected: replayHasInterruptionReplacement(capture.Records),
-		InputAudioSampleRate:            inputRate,
-		OutputAudioSampleRate:           outputRate,
 	}
 	if len(actions) == 0 {
 		return lifecycle, nil
 	}
+	return replayActionsPlan(path, actions, capture.Records, lifecycle)
+}
+
+func replayActionsPlan(path string, actions []gatewaytesting.CapturedSessionEvent, records []gatewaytesting.CapturedSessionEvent, lifecycle session.LiveReplayPlan) (session.LiveReplayPlan, error) {
 	if plan, ok, err := replayTextPlan(path, actions); ok || err != nil {
 		if err != nil {
-			if errors.Is(err, errSelfDrivingPlanUnavailable) {
-				return session.LiveReplayPlan{}, err
-			}
 			return session.LiveReplayPlan{}, err
 		}
-		responseTarget, interruptionReplacementExpected, err := replayCaptureResponseTarget(path, capture.Records)
-		if err != nil {
-			return session.LiveReplayPlan{}, err
-		}
-		plan.WaitForSessionUpdated = waitForSessionUpdated
-		plan.StopAfterResponse = !providerCloseExpected
-		plan.ProviderCloseExpected = providerCloseExpected
-		plan.ExpectedResponses = responseTarget
-		plan.InterruptionReplacementExpected = interruptionReplacementExpected
-		plan.InputAudioSampleRate = inputRate
-		plan.OutputAudioSampleRate = outputRate
-		return plan, err
+		return attachReplayResponseTarget(path, records, lifecycle, plan)
 	}
 	if actions[0].Type != replayAppend {
 		return lifecycle, nil
@@ -225,18 +204,22 @@ func loadLivePlanFromCapture(ctx context.Context, path string, capture gatewayte
 		// rejecting the capture while deriving an optional self-driving plan.
 		return session.LiveReplayPlan{}, fmt.Errorf("%w: %w", errSelfDrivingPlanUnavailable, err)
 	}
-	responseTarget, interruptionReplacementExpected, err := replayCaptureResponseTarget(path, capture.Records)
+	return attachReplayResponseTarget(path, records, lifecycle, plan)
+}
+
+func attachReplayResponseTarget(path string, records []gatewaytesting.CapturedSessionEvent, lifecycle, plan session.LiveReplayPlan) (session.LiveReplayPlan, error) {
+	responseTarget, interruptionReplacementExpected, err := replayCaptureResponseTarget(path, records)
 	if err != nil {
 		return session.LiveReplayPlan{}, err
 	}
-	plan.WaitForSessionUpdated = waitForSessionUpdated
-	plan.StopAfterResponse = !providerCloseExpected
-	plan.ProviderCloseExpected = providerCloseExpected
+	plan.WaitForSessionUpdated = lifecycle.WaitForSessionUpdated
+	plan.StopAfterResponse = lifecycle.StopAfterResponse
+	plan.ProviderCloseExpected = lifecycle.ProviderCloseExpected
 	plan.ExpectedResponses = responseTarget
 	plan.InterruptionReplacementExpected = interruptionReplacementExpected
-	plan.InputAudioSampleRate = inputRate
-	plan.OutputAudioSampleRate = outputRate
-	return plan, err
+	plan.InputAudioSampleRate = lifecycle.InputAudioSampleRate
+	plan.OutputAudioSampleRate = lifecycle.OutputAudioSampleRate
+	return plan, nil
 }
 
 func loadReplayCapture(ctx context.Context, path string) (gatewaytesting.SessionCaptureReplayLoad, error) {
@@ -272,76 +255,6 @@ func captureKind(records []gatewaytesting.CapturedSessionEvent) replay.CaptureKi
 	return replay.CaptureKindTurn
 }
 
-func replayAudioSampleRates(records []gatewaytesting.CapturedSessionEvent) (int, int, error) {
-	for _, record := range records {
-		if record.Direction != gatewaytesting.DirectionClientToServer || record.Type != replaySessionUpdate {
-			continue
-		}
-		var envelope struct {
-			Session map[string]json.RawMessage `json:"session"`
-		}
-		if err := json.Unmarshal(replayRecordPayload(record), &envelope); err != nil {
-			return 0, 0, fmt.Errorf("decode session configuration at sequence %d: %w", record.Sequence, err)
-		}
-		return replaySessionAudioSampleRates(envelope.Session)
-	}
-	return 0, 0, nil
-}
-
-func replaySessionAudioSampleRates(session map[string]json.RawMessage) (int, int, error) {
-	var audio struct {
-		Input struct {
-			Format struct {
-				Rate int `json:"rate"`
-			} `json:"format"`
-		} `json:"input"`
-		Output struct {
-			Format struct {
-				Rate int `json:"rate"`
-			} `json:"format"`
-		} `json:"output"`
-	}
-	if raw, ok := session["audio"]; ok {
-		if err := json.Unmarshal(raw, &audio); err != nil {
-			return 0, 0, fmt.Errorf("decode audio configuration: %w", err)
-		}
-	}
-	inputRate := audio.Input.Format.Rate
-	outputRate := audio.Output.Format.Rate
-	var err error
-	if inputRate <= 0 {
-		inputRate, err = replayLegacyFormatRate(session["input_audio_format"])
-		if err != nil {
-			return 0, 0, fmt.Errorf("decode input audio format: %w", err)
-		}
-	}
-	if outputRate <= 0 {
-		outputRate, err = replayLegacyFormatRate(session["output_audio_format"])
-		if err != nil {
-			return 0, 0, fmt.Errorf("decode output audio format: %w", err)
-		}
-	}
-	return inputRate, outputRate, nil
-}
-
-func replayLegacyFormatRate(raw json.RawMessage) (int, error) {
-	if len(raw) == 0 || string(raw) == "null" {
-		return 0, nil
-	}
-	// Older captures name a codec without declaring a sample rate.
-	if raw[0] == '"' {
-		var codec string
-		return 0, json.Unmarshal(raw, &codec)
-	}
-	var format struct {
-		Rate int `json:"rate"`
-	}
-	if err := json.Unmarshal(raw, &format); err != nil {
-		return 0, err
-	}
-	return format.Rate, nil
-}
-
 func replayHasSessionUpdated(records []gatewaytesting.CapturedSessionEvent) bool {
 	// A replay only needs to wait for the handshake update when the capture
 	// shows that update before the first client action. An update observed
@@ -368,149 +281,6 @@ func replayProviderCloseExpected(records []gatewaytesting.CapturedSessionEvent) 
 		}
 	}
 	return false
-}
-
-// replayCaptureResponseTarget derives finite completion from correlated
-// provider response identities. A cancelled interruption does not satisfy the
-// target when the capture contains a distinct replacement response.
-func replayCaptureResponseTarget(path string, records []gatewaytesting.CapturedSessionEvent) (int, bool, error) {
-	createdResponses := make(map[string]struct{})
-	toolResponses := make(map[string]struct{})
-	terminalResponses := make(map[string]struct{})
-	currentResponseID := ""
-	cancelledResponseID := ""
-	replacementExpected := false
-	sawTerminal := false
-	target := 0
-
-	for _, record := range records {
-		if record.Direction != gatewaytesting.DirectionServerToClient {
-			continue
-		}
-		switch record.Type {
-		case "response.created":
-			response, err := replayResponseRecord(path, record, false)
-			if err != nil {
-				return 0, false, err
-			}
-			createdResponses[response.ID] = struct{}{}
-			currentResponseID = response.ID
-			if cancelledResponseID != "" && response.ID != cancelledResponseID {
-				replacementExpected = true
-				cancelledResponseID = ""
-			}
-		case "response.output_item.added", "response.output_item.done":
-			if err := replayObserveToolResponse(path, record, currentResponseID, toolResponses); err != nil {
-				return 0, false, err
-			}
-		case "response.done":
-			response, err := replayResponseRecord(path, record, true)
-			if err != nil {
-				return 0, false, err
-			}
-			if _, duplicate := terminalResponses[response.ID]; duplicate {
-				return 0, false, fmt.Errorf("live replay plan %s: duplicate response.done for response %q at sequence %d", path, response.ID, record.Sequence)
-			}
-			if _, created := createdResponses[response.ID]; !created {
-				return 0, false, fmt.Errorf("live replay plan %s: response.done at sequence %d has no preceding response.created for response %q", path, record.Sequence, response.ID)
-			}
-			terminalResponses[response.ID] = struct{}{}
-			sawTerminal = true
-			if replayResponseWasCancelled(response.Status, response.StatusDetails) {
-				if cancelledResponseID != "" {
-					return 0, false, fmt.Errorf("live replay plan %s: multiple cancelled response boundaries before a replacement at sequence %d", path, record.Sequence)
-				}
-				cancelledResponseID = response.ID
-				currentResponseID = ""
-				continue
-			}
-			if cancelledResponseID != "" && !replacementExpected {
-				return 0, false, fmt.Errorf("live replay plan %s: response %q completed after cancelled response %q without a distinct response.created boundary at sequence %d", path, response.ID, cancelledResponseID, record.Sequence)
-			}
-			if _, tool := toolResponses[response.ID]; !tool {
-				target++
-				if target > maxReplayResponseTarget {
-					return 0, false, fmt.Errorf("live replay plan %s: response terminal target exceeds bounded limit %d at sequence %d", path, maxReplayResponseTarget, record.Sequence)
-				}
-			}
-			currentResponseID = ""
-		}
-	}
-	if target == 0 && (sawTerminal || replacementExpected) {
-		target = 1
-	}
-	return target, replacementExpected, nil
-}
-
-type replayResponseBoundary struct {
-	ID            string
-	Status        string
-	StatusDetails string
-}
-
-func replayResponseRecord(path string, record gatewaytesting.CapturedSessionEvent, requireStatus bool) (replayResponseBoundary, error) {
-	var event struct {
-		Type     string `json:"type"`
-		Response *struct {
-			ID            string `json:"id"`
-			Status        string `json:"status"`
-			StatusDetails *struct {
-				Type string `json:"type"`
-			} `json:"status_details"`
-		} `json:"response"`
-	}
-	if err := json.Unmarshal(replayRecordPayload(record), &event); err != nil {
-		return replayResponseBoundary{}, fmt.Errorf("live replay plan %s: decode %s at sequence %d: %w", path, record.Type, record.Sequence, err)
-	}
-	if event.Type != record.Type {
-		return replayResponseBoundary{}, fmt.Errorf("live replay plan %s: %s at sequence %d has payload type %q", path, record.Type, record.Sequence, event.Type)
-	}
-	if event.Response == nil {
-		return replayResponseBoundary{}, fmt.Errorf("live replay plan %s: %s at sequence %d is missing its response object", path, record.Type, record.Sequence)
-	}
-	responseID := strings.TrimSpace(event.Response.ID)
-	if responseID == "" {
-		return replayResponseBoundary{}, fmt.Errorf("live replay plan %s: %s at sequence %d is missing a response id", path, record.Type, record.Sequence)
-	}
-	statusDetails := ""
-	if event.Response.StatusDetails != nil {
-		statusDetails = strings.TrimSpace(event.Response.StatusDetails.Type)
-	}
-	if requireStatus && strings.TrimSpace(event.Response.Status) == "" && statusDetails == "" {
-		return replayResponseBoundary{}, fmt.Errorf("live replay plan %s: response.done at sequence %d is missing status and status_details.type", path, record.Sequence)
-	}
-	return replayResponseBoundary{ID: responseID, Status: event.Response.Status, StatusDetails: statusDetails}, nil
-}
-
-func replayObserveToolResponse(path string, record gatewaytesting.CapturedSessionEvent, currentResponseID string, toolResponses map[string]struct{}) error {
-	var event struct {
-		Type       string `json:"type"`
-		ResponseID string `json:"response_id"`
-		Item       *struct {
-			Type string `json:"type"`
-		} `json:"item"`
-	}
-	if err := json.Unmarshal(replayRecordPayload(record), &event); err != nil {
-		return fmt.Errorf("live replay plan %s: decode %s at sequence %d: %w", path, record.Type, record.Sequence, err)
-	}
-	if event.Type != record.Type {
-		return fmt.Errorf("live replay plan %s: %s at sequence %d has payload type %q", path, record.Type, record.Sequence, event.Type)
-	}
-	if event.Item == nil {
-		return fmt.Errorf("live replay plan %s: %s at sequence %d is missing its item object", path, record.Type, record.Sequence)
-	}
-	if event.Item.Type != "function_call" {
-		return nil
-	}
-	responseID := strings.TrimSpace(event.ResponseID)
-	if responseID == "" {
-		responseID = currentResponseID
-	}
-	if responseID == "" {
-		return fmt.Errorf("live replay plan %s: function_call at sequence %d has no response id", path, record.Sequence)
-	}
-	toolResponses[responseID] = struct{}{}
-	return nil
 }
 
 func replayTextPlan(path string, actions []gatewaytesting.CapturedSessionEvent) (session.LiveReplayPlan, bool, error) {

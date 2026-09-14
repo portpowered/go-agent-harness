@@ -401,17 +401,6 @@ func invokeSessionTool(ctx context.Context, executor messages.ToolExecutor, call
 	return executor.Execute(ctx, call)
 }
 
-func sessionToolContextFailure(err error) error {
-	switch {
-	case errors.Is(err, context.DeadlineExceeded):
-		return ErrSessionToolTimeout
-	case errors.Is(err, context.Canceled):
-		return errors.New("tool execution canceled")
-	default:
-		return fmt.Errorf("tool execution stopped: %w", err)
-	}
-}
-
 func sessionToolFailure(call messages.ToolCall, err error) messages.ToolCallResponse {
 	if err == nil {
 		err = errors.New("tool execution failed")

@@ -522,20 +522,3 @@ func validateSessionCaptureReplayEnvelope(path string, capture SessionCapture) e
 	}
 	return validateSessionCaptureEnvelope(path, capture)
 }
-
-func eventPayload(evt CapturedSessionEvent) []byte {
-	if len(evt.Payload) > 0 {
-		return evt.Payload
-	}
-	return evt.Data
-}
-
-func websocketPayloadType(payload []byte) string {
-	var envelope struct {
-		Type string `json:"type"`
-	}
-	if err := json.Unmarshal(payload, &envelope); err != nil || envelope.Type == "" {
-		return "websocket.message"
-	}
-	return envelope.Type
-}

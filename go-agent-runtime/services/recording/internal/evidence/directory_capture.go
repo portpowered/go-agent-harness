@@ -188,13 +188,6 @@ func audioBoundary(item directoryEvidenceItem, segment string, offset uint64) ev
 	return evidenceAudioBoundary{Kind: "audio.frame", Segment: segment, ByteOffset: offset, SampleCount: sampleCount, Admission: item.admission, Frame: frame}
 }
 
-func boolToInt64(value bool) int64 {
-	if value {
-		return 1
-	}
-	return 0
-}
-
 func (r *directoryRecorder) audioLocation(direction session.LiveRecordDirection) (string, uint64) {
 	index := len(r.outputPaths)
 	offset := r.outputBytes
@@ -210,15 +203,6 @@ func (r *directoryRecorder) audioLocation(direction session.LiveRecordDirection)
 		return "audio/in-" + threeDigit(index) + ".pcm", offset
 	}
 	return "audio/out-" + threeDigit(index) + ".pcm", offset
-}
-
-func (r *directoryRecorder) latchProjectionError() {
-	if r == nil {
-		return
-	}
-	if err := r.conversation.projectionError(); err != nil {
-		r.latch(recordingWriteError("retain conversation summary", err))
-	}
 }
 
 func (r *directoryRecorder) audioFile(direction session.LiveRecordDirection) (*os.File, string, *uint64, error) {
@@ -237,39 +221,6 @@ func (r *directoryRecorder) audioFile(direction session.LiveRecordDirection) (*o
 		*paths = append(*paths, path)
 	}
 	return *file, segment, offset, nil
-}
-
-func (r *directoryRecorder) ensureTranscriptFiles() error {
-	if r.client != nil && r.agent != nil {
-		return nil
-	}
-	clientPath, agentPath := filepath.Join(r.spool, "client.transcript.jsonl"), filepath.Join(r.spool, "agent.transcript.jsonl")
-	client, err := os.OpenFile(clientPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, evidenceFileMode)
-	if err != nil {
-		return evidenceDestinationError(r.destination, "create client transcript spool", err)
-	}
-	agent, err := os.OpenFile(agentPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, evidenceFileMode)
-	if err != nil {
-		return errors.Join(evidenceDestinationError(r.destination, "create agent transcript spool", err), client.Close())
-	}
-	r.client, r.agent = client, agent
-	r.clientPath, r.agentPath = clientPath, agentPath
-	return nil
-}
-
-func (r *directoryRecorder) rotateAudioFile(direction session.LiveRecordDirection) error {
-	file, offset := &r.outputFile, &r.outputSegmentBytes
-	if direction == session.LiveRecordClient {
-		file, offset = &r.inputFile, &r.inputSegmentBytes
-	}
-	if *file == nil {
-		return nil
-	}
-	err := (*file).Sync()
-	err = errors.Join(err, (*file).Close())
-	*file = nil
-	*offset = 0
-	return err
 }
 
 func (r *directoryRecorder) latch(err error) {

@@ -89,95 +89,22 @@ func planOpenAIReplayRuntimeContext(ctx context.Context, opts SessionRunOptions,
 	if err != nil {
 		return sessionRuntimePlan{}, err
 	}
-	model := inspection.Model
-	if strings.TrimSpace(model) == "" {
-		if dialer, ok := replayDialer.(sessionReplayDialer); ok {
-			model = dialer.Model()
-		}
-	}
-	if strings.TrimSpace(model) == "" {
-		model = openAIRealtimeModel
-	}
-	prompt := opts.Prompt
-	promptProvided := opts.PromptProvided || prompt != ""
-	barePromptReplay := false
-	var bareAudioTurns []ScheduledAudioInput
-	if !promptProvided {
-		if inspection.LivePlan != nil && inspection.LivePlan.OpeningPromptPresent {
-			prompt = inspection.LivePlan.OpeningPrompt
-			promptProvided = true
-			barePromptReplay = true
-		} else if len(opts.AudioInputs) == 0 && !opts.ClientOwnsAudioTurnBoundaries && !opts.roomReplay {
-			// Without a recorded text prompt or caller-supplied audio turns, inspect
-			// the capture for a scheduled-audio-turn replay. A caller-owned streaming
-			// --audio-in source drives its own committed audio independently of
-			// ScheduledAudioInput and must keep reaching the strict replay dialer
-			// unchanged. Reconstruct scheduled turns directly from the recorded
-			// client frames so a bare replay never needs the caller to re-supply
-			// the original audio files.
-			if inspection.LivePlan != nil {
-				for _, turn := range inspection.LivePlan.AudioTurns {
-					bareAudioTurns = append(bareAudioTurns, ScheduledAudioInput{
-						AfterCompletedTurns: len(bareAudioTurns),
-						PCM:                 flattenReplayAudioTurn(turn),
-						EndOfTurn:           true,
-					})
-				}
-			}
-		}
-	}
+	model := openAIReplayModel(inspection, replayDialer)
+	prompt, promptProvided, barePromptReplay, bareAudioTurns := openAIReplayOpening(opts, inspection)
 	bareAudioTurnReplay := len(bareAudioTurns) > 0
 	scheduledAudio := len(opts.AudioInputs) > 0 || bareAudioTurnReplay
 	// The initial provider configuration is captured wire data. The current
 	// tool definitions remain on plan.loop for local execution, but are not
 	// used to rebuild the provider handshake.
-	sessionInferencer, err := factory.newOpenAISessionInferencerForTools(config.OpenAIConfig{
-		APIKey: "replay",
-		Model:  model,
-	}, opts.Voice, replayDialer, nil, scheduledAudio, models.InputAudioTranscriptionConfig{})
+	sessionInferencer, err := newOpenAIReplayInferencer(factory, model, opts.Voice, replayDialer, scheduledAudio)
 	if err != nil {
 		return sessionRuntimePlan{}, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
 	}
 	if prepared != nil {
 		sessionInferencer = prepared.WrapInferencer(sessionInferencer)
 	}
-	var replayDone <-chan struct{}
-	var replayErr func() error
-	if prepared != nil {
-		replayDone, replayErr = prepared.Done(), prepared.Err
-	} else if dialer, ok := replayDialer.(sessionReplayDialer); ok {
-		replayDone, replayErr = dialer.Done(), dialer.Err
-	}
-	plan := sessionRuntimePlan{
-		mode:                  sessionRuntimeModeReplayOpenAI,
-		provider:              sessionProviderOpenAI,
-		model:                 model,
-		inputAudioSampleRate:  replayInputAudioSampleRate(inspection),
-		outputAudioSampleRate: replayOutputAudioSampleRate(inspection),
-		inferencer:            sessionInferencer,
-		replayPrepared:        prepared,
-		announceTools:         replayAnnouncementToolDefinitions(opts.ToolDefinitions, inspection.InitialTools, inspection.InitialToolsKnown),
-		loop: sessionLoopOptions{
-			Prompt:         prompt,
-			PromptProvided: promptProvided,
-			WaitForClose:   opts.WaitForClose || replayProviderCloseExpected(inspection),
-			MaxDuration:    replayMaxDuration(inspection),
-			// Caller-supplied scheduled audio owns its close request. A bare
-			// replay must follow the capture's provider terminal instead of
-			// synthesizing a loop-authored client_close after the final turn.
-			CloseAfterScheduledAudio: len(opts.AudioInputs) > 0,
-			Done:                     replayDone,
-			DoneErr:                  replayErr,
-		},
-		finalize: func(_ context.Context, _ io.Writer) error {
-			if replayErr != nil {
-				if err := replayErr(); err != nil {
-					return fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
-				}
-			}
-			return nil
-		},
-	}
+	replayDone, replayErr := openAIReplayCompletion(prepared, replayDialer)
+	plan := newOpenAIReplayPlan(opts, inspection, prepared, sessionInferencer, model, prompt, promptProvided, replayDone, replayErr)
 	if bareAudioTurnReplay {
 		// The recorded client frames are entirely self-driving: no
 		// caller-supplied audio, --record-dir, or --max-duration bound is
@@ -190,6 +117,80 @@ func planOpenAIReplayRuntimeContext(ctx context.Context, opts SessionRunOptions,
 		}
 	}
 	return plan, nil
+}
+
+func openAIReplayModel(inspection runtimereplay.CaptureInspection, dialer transport.Dialer) string {
+	model := strings.TrimSpace(inspection.Model)
+	if model == "" {
+		if replayDialer, ok := dialer.(sessionReplayDialer); ok {
+			model = replayDialer.Model()
+		}
+	}
+	if model == "" {
+		return openAIRealtimeModel
+	}
+	return model
+}
+
+func openAIReplayOpening(opts SessionRunOptions, inspection runtimereplay.CaptureInspection) (string, bool, bool, []ScheduledAudioInput) {
+	prompt := opts.Prompt
+	promptProvided := opts.PromptProvided || prompt != ""
+	if promptProvided {
+		return prompt, true, false, nil
+	}
+	if inspection.LivePlan != nil && inspection.LivePlan.OpeningPromptPresent {
+		return inspection.LivePlan.OpeningPrompt, true, true, nil
+	}
+	if len(opts.AudioInputs) > 0 || opts.ClientOwnsAudioTurnBoundaries || opts.roomReplay || inspection.LivePlan == nil {
+		return prompt, false, false, nil
+	}
+	turns := make([]ScheduledAudioInput, 0, len(inspection.LivePlan.AudioTurns))
+	for _, turn := range inspection.LivePlan.AudioTurns {
+		turns = append(turns, ScheduledAudioInput{AfterCompletedTurns: len(turns), PCM: flattenReplayAudioTurn(turn), EndOfTurn: true})
+	}
+	return prompt, false, false, turns
+}
+
+func newOpenAIReplayInferencer(factory sessionRuntimeFactory, model, voice string, dialer transport.Dialer, scheduledAudio bool) (messages.SessionInferencer, error) {
+	return factory.newOpenAISessionInferencerForTools(config.OpenAIConfig{APIKey: "replay", Model: model}, voice, dialer, nil, scheduledAudio, models.InputAudioTranscriptionConfig{})
+}
+
+func openAIReplayCompletion(prepared runtimereplay.LivePrepared, dialer transport.Dialer) (<-chan struct{}, func() error) {
+	if prepared != nil {
+		return prepared.Done(), prepared.Err
+	}
+	if replayDialer, ok := dialer.(sessionReplayDialer); ok {
+		return replayDialer.Done(), replayDialer.Err
+	}
+	return nil, nil
+}
+
+func newOpenAIReplayPlan(opts SessionRunOptions, inspection runtimereplay.CaptureInspection, prepared runtimereplay.LivePrepared, inferencer messages.SessionInferencer, model, prompt string, promptProvided bool, replayDone <-chan struct{}, replayErr func() error) sessionRuntimePlan {
+	return sessionRuntimePlan{
+		mode:                  sessionRuntimeModeReplayOpenAI,
+		provider:              sessionProviderOpenAI,
+		model:                 model,
+		inputAudioSampleRate:  replayInputAudioSampleRate(inspection),
+		outputAudioSampleRate: replayOutputAudioSampleRate(inspection),
+		inferencer:            inferencer,
+		replayPrepared:        prepared,
+		announceTools:         replayAnnouncementToolDefinitions(opts.ToolDefinitions, inspection.InitialTools, inspection.InitialToolsKnown),
+		loop: sessionLoopOptions{
+			Prompt: prompt, PromptProvided: promptProvided,
+			WaitForClose:             opts.WaitForClose || replayProviderCloseExpected(inspection),
+			MaxDuration:              replayMaxDuration(inspection),
+			CloseAfterScheduledAudio: len(opts.AudioInputs) > 0,
+			Done:                     replayDone, DoneErr: replayErr,
+		},
+		finalize: func(_ context.Context, _ io.Writer) error {
+			if replayErr != nil {
+				if err := replayErr(); err != nil {
+					return fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
+				}
+			}
+			return nil
+		},
+	}
 }
 
 func flattenReplayAudioTurn(turn session.LiveReplayAudioTurn) []byte {
