@@ -93,3 +93,39 @@ The implementation checkpoint, PR, and script-CI handoff boundary are recorded i
 - `git fetch origin main` confirmed `origin/main=97d3dcfb1e97a2611aa26b203a7f893442db4768`. The isolated branch merged it as `1caea9e119f9396b8110a2847e463ee6270c2714`; merge-base is the planned `4a1c399ccbb3d780be95eb04316e84b8f11a6646`, and startup integration `8bdafc7f947a3a2c9856220abdc539437035bd21` remains an ancestor. The running host checkout and peer worktrees were not reset or modified.
 - On merged source `1caea9e1`, the causal subtest passed `200` normal, `100` race, `100` `GOMAXPROCS=1`, and `100` `GOMAXPROCS=8` trials; adversarial normal/race passed `900/420`, typed/loopback regressions passed `80`, the device package passed `2530` normal and `759` race tests, the full gateway module passed `285`, and gateway vet passed. `make architecture-size-check` passed at `202` packages, `1940` files and `28768` functions; `make fmt`, `make wire-check` and `git diff --check` passed.
 - This refresh is executor evidence only: no script-CI success, independent review, guarded merge, vertical acceptance, physical/acoustic proof or project completion is claimed. The evidence-only descendant changes no executable inputs. Next action is to push this same admitted branch, update its PR with the current-main and focused evidence, and return `ACCEPTED` to the script-owned CI gate without polling; retain C155 ownership for any exact rejection.
+
+## Review-96 causal oracle repair
+
+- The authoritative `work-review-96` finding, repeated on `work-review-104`, was
+  repaired on source commit `47189d1564003795762c5ab7946347af0ea729a3`. The
+  initial waiter-start handshake was insufficient because a post-read waiter
+  could return before the nonblocking assertion ran. The owned test now makes
+  each above-low read wait for the waiter to re-sample and reach its next
+  `Done()` boundary, fails immediately if the waiter returns or does not
+  re-block, and retains the nonblocking blocked assertion after the barrier.
+- The same behavior-level helpers restore ordered diagnostics and threshold
+  assertions without touching production or the architecture baseline:
+  `waiter-start queued=2880 low=1920 high=2880`,
+  `read-signal queued=2880->2400`, `waiter-reblock queued=2400`,
+  `read-signal-final queued=2400->1920`, and
+  `waiter-return queued=1920`. The final return is accepted only at or below
+  low with the incoming frame still fitting under high.
+- Post-repair evidence is green: the exact causal subtest passes 200 normal,
+  100 race, and 100 each at `GOMAXPROCS=1/8`; adversarial normal/race passes
+  are `900/420`; typed/loopback regressions pass `80`; device-package normal
+  and race pass `2530/759`; the full gateway module passes `285`; and gateway
+  vet passes. `make architecture-size-check` remains green at `202/1941/28788`.
+  Formatting, Wire, pinned golangci-lint `2.9.0` (0 issues), pinned
+  Staticcheck `2026.1`, and `git diff --check` pass.
+- Fresh `origin/main` remains
+  `2c79ec6a931c3e86944d6a625d0a5060b4f85aa0`; accepted main, startup
+  integration `8bdafc7f947a3a2c9856220abdc539437035bd21`, and the owned
+  source scope remain intact. No C155 review approval, guarded merge,
+  vertical acceptance, hardware/acoustic proof, or project completion is
+  claimed.
+
+Next bounded action: record this evidence checkpoint, push the same admitted
+branch, update PR `#516` with the exact repair head and prior finding mapping,
+then return `ACCEPTED` to the script-owned current-head CI gate without
+polling. Retain C155 ownership through `CONTINUE` for any exact CI rejection
+or actionable review finding.
