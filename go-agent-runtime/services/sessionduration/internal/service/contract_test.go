@@ -287,10 +287,11 @@ func TestArtifactsPreserveAcceptedAudioTranscriptAndLifecycleErrors(t *testing.T
 }
 
 func TestArtifactContextPreparationAndTerminalRecording(t *testing.T) {
-	if ArtifactsFromContext(nil) != nil {
+	var nilContext context.Context
+	if ArtifactsFromContext(nilContext) != nil {
 		t.Fatal("nil context unexpectedly returned artifacts")
 	}
-	if _, ok := ArtifactPathsFromContext(nil); ok {
+	if _, ok := ArtifactPathsFromContext(nilContext); ok {
 		t.Fatal("nil context unexpectedly returned artifact paths")
 	}
 	if _, err := PrepareArtifacts(WithSessionDurationArtifactPaths(context.Background(), sessionduration.SessionDurationArtifactPaths{AudioPath: "only-audio"})); err == nil {
@@ -302,7 +303,7 @@ func TestArtifactContextPreparationAndTerminalRecording(t *testing.T) {
 
 	directory := t.TempDir()
 	paths := sessionduration.SessionDurationArtifactPaths{AudioPath: filepath.Join(directory, "audio.wav"), TranscriptPath: filepath.Join(directory, "transcript.jsonl")}
-	ctx := WithSessionDurationArtifactPaths(nil, paths)
+	ctx := WithSessionDurationArtifactPaths(nilContext, paths)
 	prepared, err := PrepareArtifacts(ctx)
 	if err != nil {
 		t.Fatalf("PrepareArtifacts: %v", err)
