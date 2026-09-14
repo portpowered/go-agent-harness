@@ -1,7 +1,6 @@
 package agentruntime
 
 import devicecontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices"
-
 import sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 
 import (
@@ -20,6 +19,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeBrowser "github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	devicegateway "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
@@ -61,7 +61,7 @@ func StartSessionAudioInterruptionsOnBrowserTool(
 	}
 	ctx, cancel := context.WithCancel(parent)
 	out := make(chan ScheduledAudioInput, len(inputs))
-	cloned := cloneScheduledAudioInputs(inputs)
+	cloned := runtimeBrowser.ScheduledAudioInputs(inputs).Clone()
 	go func() {
 		defer close(out)
 		defer cancel()

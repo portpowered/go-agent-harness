@@ -19,6 +19,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
+	runtimeBrowser "github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
@@ -259,10 +260,9 @@ type SessionRunOptions struct {
 	RefreshToolDefinitions func(context.Context) ([]messages.ToolDefinition, error)
 	// BrowserWatch supplies an independent subscription to semantic broker
 	// selection/catalog/generation events for this session.
-	BrowserWatch func(context.Context) <-chan webmcp.BrokerEvent
-	// BrowserEventWatch supplies the adapter-owned semantic browser events used
-	// only by the optional recording observer. It never owns session delivery.
-	BrowserEventWatch func(context.Context) <-chan webmcp.BrowserEvent
+	BrowserWatch        func(context.Context) <-chan webmcp.BrokerEvent
+	BrowserEventWatch   func(context.Context) <-chan runtimeBrowser.BrowserEvent
+	BrowserConversation runtimeBrowser.Service
 	// BrowserCapabilityState is the session-owned browser state used to compose
 	// model-facing selection grounding. It must not be inferred from the
 	// presence or absence of dynamic page definitions.

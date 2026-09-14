@@ -10,19 +10,17 @@ import (
 	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
 	servicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
+	browserConversationAdapter "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/browserconversation"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeBrowser "github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation"
 	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 )
 
-// SessionBrowserBrokerFactory is retained as the transport injection seam;
-// capability composition itself lives in services/internal/tools.
 type SessionBrowserBrokerFactory func(config.BrowserConfig) (webmcp.Broker, error)
 
 type SessionDisplayCapability = cliTools.DisplayCapability
 
-// Retained for deterministic display-admission timeout tests; resolution is
-// owned by services/internal/tools.
 const sessionDisplayCapabilityProbeTimeout = 3 * time.Second
 
 func NewSessionToolCapabilitiesFactory(staticExecutor messages.ToolExecutor, brokerFactory SessionBrowserBrokerFactory) SessionToolCapabilitiesFactory {
@@ -93,15 +91,15 @@ func serviceBrowserCapability(broker webmcp.Broker) serviceTools.BrowserCapabili
 	}
 	result.BrowserWatch = broker.Watch
 	if watcher, ok := broker.(webmcp.BrowserEventWatcher); ok {
-		result.BrowserEventWatch = watcher.WatchBrowserEvents
+		result.BrowserEventWatch = func(ctx context.Context) <-chan runtimeBrowser.BrowserEvent {
+			return browserConversationAdapter.WatchEvents(ctx, watcher.WatchBrowserEvents(ctx))
+		}
 	}
 	result.Close = broker.Close
 	return result
 }
 
-// NewSessionBrowserCapability adapts the low-level browser runtime to the
-// injected services/tools capability seam. The composition root owns the
-// runtime; the private service owns capability assembly and lifecycle.
+// NewSessionBrowserCapability adapts the low-level browser runtime capability.
 func NewSessionBrowserCapability(broker webmcp.Broker) serviceTools.BrowserCapability {
 	return serviceBrowserCapability(broker)
 }
@@ -121,7 +119,13 @@ func fromServiceToolCapabilities(capabilities serviceTools.Capabilities) Session
 		RefreshDefinitions:          capabilities.RefreshDefinitions,
 		RefreshDefinitionsWithError: capabilities.RefreshDefinitionsWithError,
 		Initialize:                  capabilities.Initialize, Status: status,
-		BrowserWatch: capabilities.BrowserWatch, BrowserEventWatch: capabilities.BrowserEventWatch,
+		BrowserWatch: capabilities.BrowserWatch,
+		BrowserEventWatch: func(ctx context.Context) <-chan webmcp.BrowserEvent {
+			if capabilities.BrowserEventWatch == nil {
+				return nil
+			}
+			return browserConversationAdapter.WatchWebMCPEvents(ctx, capabilities.BrowserEventWatch(ctx))
+		},
 		Close: capabilities.Close,
 	}
 }
@@ -144,7 +148,13 @@ func (factory SessionToolCapabilitiesFactory) Resolve(cfg *config.Config) (servi
 		RefreshDefinitions:          capabilities.RefreshDefinitions,
 		RefreshDefinitionsWithError: capabilities.RefreshDefinitionsWithError,
 		Initialize:                  capabilities.Initialize,
-		BrowserWatch:                capabilities.BrowserWatch, BrowserEventWatch: capabilities.BrowserEventWatch,
+		BrowserWatch:                capabilities.BrowserWatch,
+		BrowserEventWatch: func(ctx context.Context) <-chan runtimeBrowser.BrowserEvent {
+			if capabilities.BrowserEventWatch == nil {
+				return nil
+			}
+			return browserConversationAdapter.WatchEvents(ctx, capabilities.BrowserEventWatch(ctx))
+		},
 		Close: capabilities.Close,
 		Status: func() serviceTools.CapabilityStatus {
 			if capabilities.Status == nil {
