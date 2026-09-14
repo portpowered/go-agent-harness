@@ -18,27 +18,95 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
-const maxImageBytes = 8 << 20
+const (
+	maxImageBytes      = sessionturn.MaxImageBytes
+	maxImageCount      = sessionturn.MaxImageCount
+	maxImageTotalBytes = sessionturn.MaxImageTotalBytes
+)
 
 func (s *Service) PrepareImageParts(paths []string, capabilities sessionturn.ImageCapabilities) ([]messages.ImagePart, error) {
+	return prepareImageParts(paths, capabilities)
+}
+
+func prepareImageParts(paths []string, capabilities sessionturn.ImageCapabilities) ([]messages.ImagePart, error) {
 	if !capabilities.SupportsImageInput {
 		return nil, &sessionturn.ImageCapabilityError{Model: capabilities.Model, Capability: "image input"}
+	}
+	if len(paths) > maxImageCount {
+		return nil, fmt.Errorf("%w: got %d images, maximum is %d", sessionturn.ErrImageCountLimit, len(paths), maxImageCount)
 	}
 	supported := append([]string(nil), capabilities.SupportedInputMIMETypes...)
 	if len(supported) == 0 {
 		supported = []string{"image/png", "image/jpeg"}
 	}
 	parts := make([]messages.ImagePart, 0, len(paths))
+	totalBytes := 0
 	for _, path := range paths {
 		part, err := readImagePart(path, supported)
 		if err != nil {
 			return nil, err
 		}
+		if totalBytes > maxImageTotalBytes-len(part.Bytes) {
+			return nil, fmt.Errorf("%w: maximum is %d bytes", sessionturn.ErrImageAggregateLimit, maxImageTotalBytes)
+		}
+		totalBytes += len(part.Bytes)
 		parts = append(parts, part)
 	}
 	return parts, nil
+}
+
+func (s *Service) PrepareImage(ctx context.Context, request sessionturn.ImagePreparationRequest) (sessionturn.ImagePreparationResult, error) {
+	if ctx == nil {
+		return sessionturn.ImagePreparationResult{}, errors.New("session image preparation context is required")
+	}
+	if err := ctx.Err(); err != nil {
+		return sessionturn.ImagePreparationResult{}, err
+	}
+	parts, err := prepareImageParts(request.SourcePaths, request.Capabilities)
+	if err != nil {
+		return sessionturn.ImagePreparationResult{}, err
+	}
+	result := sessionturn.ImagePreparationResult{
+		Parts:                  cloneImageParts(parts),
+		ToolExecutor:           s.BindImageToolExecutor(request.ToolExecutor, request.Capabilities),
+		ToolDefinitions:        messages.CanonicalToolDefinitions(request.ToolDefinitions),
+		RefreshToolDefinitions: request.RefreshToolDefinitions,
+		Cleanup:                func() error { return nil },
+	}
+	if !hasReadImageTool(result.ToolDefinitions) {
+		return result, nil
+	}
+	if len(request.SourcePaths) != len(parts) {
+		return sessionturn.ImagePreparationResult{}, fmt.Errorf("stage session images: source path count %d does not match image part count %d", len(request.SourcePaths), len(parts))
+	}
+	staged, err := s.StageImageTools(ctx, tools.ImageStagingRequest{
+		StagingRoot:            request.StagingRoot,
+		SourcePaths:            request.SourcePaths,
+		ImageParts:             parts,
+		ToolDefinitions:        result.ToolDefinitions,
+		RefreshToolDefinitions: request.RefreshToolDefinitions,
+	})
+	if err != nil {
+		return sessionturn.ImagePreparationResult{}, err
+	}
+	result.ToolDefinitions = messages.CanonicalToolDefinitions(staged.ToolDefinitions)
+	result.RefreshToolDefinitions = staged.RefreshToolDefinitions
+	if staged.Cleanup != nil {
+		result.Cleanup = staged.Cleanup
+	}
+	return result, nil
+}
+
+func hasReadImageTool(definitions []messages.ToolDefinition) bool {
+	for _, definition := range definitions {
+		if definition.Name == tools.ReadImageToolID {
+			return true
+		}
+	}
+	return false
 }
 
 func readImagePart(path string, supported []string) (part messages.ImagePart, retErr error) {

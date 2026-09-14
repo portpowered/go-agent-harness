@@ -5,15 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"path/filepath"
-	"strings"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
-	sessionturnwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn/wire"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
@@ -281,111 +277,42 @@ func runSessionImageDuration(ctx context.Context, out io.Writer, plan sessionRun
 	return runSessionDurationPlan(durationCtx, out, plan, maxDuration, realSessionDurationClock{})
 }
 
-func sessionHasTool(definitions []messages.ToolDefinition, name string) bool {
-	for _, definition := range definitions {
-		if definition.Name == name {
-			return true
-		}
-	}
-	return false
-}
-
-func bindSessionImageToolExecutor(opts SessionRunOptions, plan sessionRuntimePlan) messages.ToolExecutor {
-	if opts.ToolExecutor == nil || !sessionHasTool(opts.ToolDefinitions, runtimeTools.ReadImageToolID) {
-		return opts.ToolExecutor
-	}
-
-	capabilities := cloneSessionImageCapabilities(opts.sessionImageCapabilities)
-	var resolveErr error
-	if capabilities == nil {
-		capabilityOpts := opts
-		if plan.provider != "" {
-			capabilityOpts.Provider = plan.provider
-		}
-		if plan.model != "" {
-			capabilityOpts.Model = plan.model
-			capabilityOpts.ModelProvided = true
-		}
-		var resolved sessionturn.ImageCapabilities
-		resolved, resolveErr = resolveSessionImageCapabilities(capabilityOpts)
-		capabilities = cloneSessionImageCapabilities(&resolved)
-	}
-	metadata := sessionturn.ImageCapabilities{}
-	if capabilities != nil {
-		metadata = *capabilities
-		metadata.SupportedInputMIMETypes = append([]string(nil), capabilities.SupportedInputMIMETypes...)
-	}
-	if resolveErr != nil {
-		var capabilityErr *sessionturn.ImageCapabilityError
-		if !errors.As(resolveErr, &capabilityErr) {
-			return opts.ToolExecutor
-		}
-		metadata.Model = capabilityErr.Model
-		metadata.SupportsImageInput = false
-	}
-	return sessionturnwire.NewDefaultService().BindImageToolExecutor(opts.ToolExecutor, metadata)
-}
-
-// prepareSessionImageToolAccess gives read_image a stable, session-owned copy
-// of each initial image and advertises those exact paths to the provider. The
-// inline image turn still uses the validated parts supplied by the caller;
-// staging is only needed for a later model-issued read_image call.
 func prepareSessionImageRun(ctx context.Context, opts SessionRunOptions, sourcePaths []string, seed sessionturn.Seed) (SessionRunOptions, []messages.ImagePart, func() error, error) {
 	metadata, err := resolveSessionImageCapabilities(opts)
 	if err != nil {
 		return opts, nil, noOpSessionImageCleanup, err
 	}
 	opts.sessionImageCapabilities = cloneSessionImageCapabilities(&metadata)
-	parts, err := sessionturnwire.NewDefaultService().PrepareImageParts(sourcePaths, metadata)
-	if err != nil {
-		return opts, nil, noOpSessionImageCleanup, err
+	stagingRoot := ""
+	if sessionHasTool(opts.ToolDefinitions, runtimeTools.ReadImageToolID) {
+		stagingRoot, err = sessionImageStagingConfigDir(opts.ConfigDir)
+		if err != nil {
+			return opts, nil, noOpSessionImageCleanup, err
+		}
 	}
-	if seed.Present {
-		opts.Prompt = seed.Value
-		opts.PromptProvided = true
-	}
-	opts, cleanup, err := prepareSessionImageToolAccess(ctx, opts, sourcePaths, parts)
-	return opts, parts, cleanup, err
-}
-
-func prepareSessionImageToolAccess(ctx context.Context, opts SessionRunOptions, sourcePaths []string, parts []messages.ImagePart) (SessionRunOptions, func() error, error) {
-	if !sessionHasTool(opts.ToolDefinitions, runtimeTools.ReadImageToolID) {
-		return opts, noOpSessionImageCleanup, nil
-	}
-	if len(sourcePaths) != len(parts) {
-		return opts, noOpSessionImageCleanup, fmt.Errorf("stage session images: source path count %d does not match image part count %d", len(sourcePaths), len(parts))
-	}
-
-	configDir, err := sessionImageStagingConfigDir(opts.ConfigDir)
-	if err != nil {
-		return opts, noOpSessionImageCleanup, fmt.Errorf("stage session images: %w", err)
-	}
-	staged, err := newSessionTurnService().StageImageTools(ctx, runtimeTools.ImageStagingRequest{
-		StagingRoot:            configDir,
+	prepared, err := newSessionTurnService().PrepareImage(ctx, sessionturn.ImagePreparationRequest{
 		SourcePaths:            sourcePaths,
-		ImageParts:             parts,
+		Capabilities:           metadata,
+		StagingRoot:            stagingRoot,
+		ToolExecutor:           opts.ToolExecutor,
 		ToolDefinitions:        opts.ToolDefinitions,
 		RefreshToolDefinitions: opts.RefreshToolDefinitions,
 	})
 	if err != nil {
-		return opts, noOpSessionImageCleanup, err
+		return opts, nil, noOpSessionImageCleanup, err
 	}
-	opts.ToolDefinitions = staged.ToolDefinitions
-	opts.RefreshToolDefinitions = staged.RefreshToolDefinitions
-	cleanup := staged.Cleanup
+	opts.ToolExecutor = prepared.ToolExecutor
+	opts.ToolDefinitions = prepared.ToolDefinitions
+	opts.RefreshToolDefinitions = prepared.RefreshToolDefinitions
+	if seed.Present {
+		opts.Prompt = seed.Value
+		opts.PromptProvided = true
+	}
+	cleanup := prepared.Cleanup
 	if cleanup == nil {
-		cleanup = func() error { return nil }
+		cleanup = noOpSessionImageCleanup
 	}
-	return opts, cleanup, nil
+	return opts, prepared.Parts, cleanup, nil
 }
 
 func noOpSessionImageCleanup() error { return nil }
-
-func sessionImageStagingConfigDir(configDir string) (string, error) {
-	configDir = strings.TrimSpace(configDir)
-	storage, err := config.NewDefaultConfigStorage(configDir)
-	if err != nil {
-		return "", fmt.Errorf("resolve config directory %q: %w", configDir, err)
-	}
-	return filepath.Clean(filepath.Dir(storage.Path())), nil
-}

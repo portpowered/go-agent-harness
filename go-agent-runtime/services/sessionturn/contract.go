@@ -218,6 +218,35 @@ type ImageCapabilities struct {
 	SupportedInputMIMETypes []string
 }
 
+const (
+	MaxImageCount      = 16
+	MaxImageBytes      = 8 << 20
+	MaxImageTotalBytes = 32 << 20
+)
+
+// ImagePreparationRequest is the complete host-resolved input for one image
+// surface. The session-turn service validates the provider capability, reads
+// bounded image content, binds read_image to that same capability snapshot,
+// and stages a private copy when the tool is advertised.
+type ImagePreparationRequest struct {
+	SourcePaths            []string
+	Capabilities           ImageCapabilities
+	StagingRoot            string
+	ToolExecutor           messages.ToolExecutor
+	ToolDefinitions        []messages.ToolDefinition
+	RefreshToolDefinitions func(context.Context) ([]messages.ToolDefinition, error)
+}
+
+// ImagePreparationResult is independently owned by the service caller. The
+// cleanup function is idempotent when supplied by the staging implementation.
+type ImagePreparationResult struct {
+	Parts                  []messages.ImagePart
+	ToolExecutor           messages.ToolExecutor
+	ToolDefinitions        []messages.ToolDefinition
+	RefreshToolDefinitions func(context.Context) ([]messages.ToolDefinition, error)
+	Cleanup                func() error
+}
+
 type ImageRequest struct {
 	Parts               []messages.ImagePart
 	DeferResponse       bool
@@ -237,6 +266,8 @@ const (
 	ErrImageUnsupportedMIME sentinelError = "session image MIME type is unsupported"
 	ErrImageInvalidContent  sentinelError = "session image content is invalid"
 	ErrImageEmptyFile       sentinelError = "session image file is empty"
+	ErrImageCountLimit      sentinelError = "session image count exceeds the limit"
+	ErrImageAggregateLimit  sentinelError = "session image aggregate exceeds the limit"
 	ErrImageCapability      sentinelError = "session image capability is unsupported"
 	ErrImageSend            sentinelError = "session image turn could not be sent"
 )
@@ -317,6 +348,7 @@ type Runtime interface {
 type Service interface {
 	Prepare(context.Context, Request) (Runtime, error)
 	PrepareImageParts([]string, ImageCapabilities) ([]messages.ImagePart, error)
+	PrepareImage(context.Context, ImagePreparationRequest) (ImagePreparationResult, error)
 	StageImageTools(context.Context, tools.ImageStagingRequest) (tools.ImageStagingResult, error)
 	BindImageToolExecutor(messages.ToolExecutor, ImageCapabilities) messages.ToolExecutor
 	SendImageTurn(context.Context, messages.Session, string, []messages.ImagePart, bool) error

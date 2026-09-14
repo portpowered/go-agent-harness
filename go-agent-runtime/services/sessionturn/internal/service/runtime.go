@@ -171,6 +171,8 @@ type runtime struct {
 
 	mu          sync.Mutex
 	publication sessionturn.Publication
+	closeOnce   sync.Once
+	closeErr    error
 }
 
 func (r *runtime) Inferencer() messages.SessionInferencer { return r.inferencer }
@@ -211,18 +213,29 @@ func (r *runtime) StartPublication(ctx context.Context, request sessionturn.Publ
 }
 func (r *runtime) NewOutput(writer io.Writer) sessionturn.Output { return r.output.NewOutput(writer) }
 func (r *runtime) Close() error {
+	r.closeOnce.Do(func() {
+		r.mu.Lock()
+		publication := r.publication
+		r.mu.Unlock()
+		var closeErr error
+		if publication != nil {
+			publication.Stop()
+			closeErr = errors.Join(closeErr, publication.State().Err)
+		}
+		if r.continuation != nil {
+			closeErr = errors.Join(closeErr, r.continuation.Close())
+		}
+		closeErr = errors.Join(closeErr, r.turns.Close())
+		if r.imageCleanup != nil {
+			closeErr = errors.Join(closeErr, r.imageCleanup())
+		}
+		r.mu.Lock()
+		r.closeErr = closeErr
+		r.mu.Unlock()
+	})
 	r.mu.Lock()
-	publication := r.publication
-	r.mu.Unlock()
-	var closeErr error
-	if publication != nil {
-		publication.Stop()
-	}
-	closeErr = errors.Join(closeErr, r.turns.Close())
-	if r.imageCleanup != nil {
-		closeErr = errors.Join(closeErr, r.imageCleanup())
-	}
-	return closeErr
+	defer r.mu.Unlock()
+	return r.closeErr
 }
 
 func cloneDefinitions(definitions []messages.ToolDefinition) []messages.ToolDefinition {

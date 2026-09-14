@@ -4074,3 +4074,33 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   same PR `#435`, update its body with the repair/evidence map, then return
   `ACCEPTED` to the script-owned current-head CI gate without polling; retain
   this task through `CONTINUE` for any exact CI rejection or actionable repair.
+
+## C190 retirement repair checkpoint — 2026-09-14
+
+- Admission was verified for `audio-runtime` task
+  `audio-runtime-c190-retire-turn-input-tool-cluster`; `prd.json.branchName`
+  matches `codex/audio-runtime-c190-retire-turn-input-tool-cluster`, and
+  `origin/main` is an ancestor of the isolated worktree head.
+- Moved image validation, bounded image admission, read-image staging, and
+  executor binding behind the sessionturn service contract. The service now
+  enforces `16` images, `8 MiB` per file, and `32 MiB` aggregate limits; the
+  count-bound public regression passes. Runtime shutdown is idempotent and
+  joins bounded publication, continuation, provider, and image cleanup errors.
+- Deleted the replacement `session_image_capabilities.go` production file and
+  added the required `factory/docs/implementation-handoff.md` policy. The
+  exact nine planned legacy C190 files remain absent; the stateless
+  `livehost/turn_adapter.go` is `40` physical lines.
+- Focused sessionturn normal/race checks pass (`60` tests each), livehost checks
+  pass (`24`), and the combined sessionturn plus agentruntime package scope
+  passes (`1039`). This remains
+  an implementation checkpoint; next action is to finish the remaining
+  ownership cleanup, run prepush plus accumulated C190 checks, commit/push,
+  and hand the exact head to script CI without polling.
+- The subsequent `make prepush` passed fmt, architecture, Wire, vet, test
+  (`197` workspace packages), and coverage registration. Its coverage phase
+  was rejected only by the unrelated, environment-sensitive
+  `TestChromeForTestingAcquirerVerifiesAndCachesOneCompleteArtifact` with
+  `version_unverified`; rerunning that exact test passed. The earlier
+  integration failures likewise passed on exact rerun. No C190 causal test is
+  red; the prepush aggregate is not claimed green because its coverage command
+  exited nonzero.

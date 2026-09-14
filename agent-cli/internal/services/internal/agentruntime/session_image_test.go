@@ -110,6 +110,23 @@ func TestPrepareSessionImageParts_ReturnsDistinctTypedErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestPrepareSessionImageParts_EnforcesCountBound(t *testing.T) {
+	dir := t.TempDir()
+	valid := copySessionImageFixture(t, dir, "fixture.png")
+	paths := make([]string, sessionturn.MaxImageCount+1)
+	for i := range paths {
+		paths[i] = valid
+	}
+	_, err := sessionturnwire.NewDefaultService().PrepareImageParts(paths, sessionturn.ImageCapabilities{
+		Model:              "gpt-realtime",
+		SupportsImageInput: true,
+	})
+	if !errors.Is(err, sessionturn.ErrImageCountLimit) {
+		t.Fatalf("count-bound error = %v, want %v", err, sessionturn.ErrImageCountLimit)
+	}
+}
+
 func TestSendSessionImageTurn_UsesOneOrderedMessageAfterEarlierTurn(t *testing.T) {
 	dir := t.TempDir()
 	png := copySessionImageFixture(t, dir, "fixture.png")

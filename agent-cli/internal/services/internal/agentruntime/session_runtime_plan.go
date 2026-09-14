@@ -101,7 +101,7 @@ func newDefaultSessionRuntimeFactory() sessionRuntimeFactory {
 			return buildOpenAIRealtimeSessionInferencerWithInputAudioTranscription(sessionCfg, voice, dialer, inputAudioTranscription)
 		},
 		newBareLiveSessionInferencer: func(opts SessionRunOptions) (messages.SessionInferencer, string, error) {
-			return NewLiveSessionInferencer(opts, opts.sessionInstructions)
+			return NewLiveSessionInferencer(opts, "")
 		},
 		newGrokSessionWithTools: func(sessionCfg config.GrokConfig, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
 			return buildGrokSessionInferencerWithTools(sessionCfg, dialer, toolDefinitions)

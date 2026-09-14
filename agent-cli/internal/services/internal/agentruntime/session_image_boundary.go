@@ -1,13 +1,72 @@
 package agentruntime
 
 import (
+	"errors"
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
+	sessionturnwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn/wire"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
+
+// This file is the stateless CLI boundary for host model/config admission.
+// Image validation, staging, binding, and cleanup remain sessionturn-owned.
+
+func sessionHasTool(definitions []messages.ToolDefinition, name string) bool {
+	for _, definition := range definitions {
+		if definition.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func bindSessionImageToolExecutor(opts SessionRunOptions, plan sessionRuntimePlan) messages.ToolExecutor {
+	if opts.ToolExecutor == nil || !sessionHasTool(opts.ToolDefinitions, runtimeTools.ReadImageToolID) {
+		return opts.ToolExecutor
+	}
+	// Initial-image entrypoints already ask the session-turn service to prepare
+	// and bind this executor together with staging. Do not compose a second
+	// image-preparer wrapper at the common plan boundary.
+	if opts.sessionImageCapabilities != nil {
+		return opts.ToolExecutor
+	}
+
+	capabilities := cloneSessionImageCapabilities(opts.sessionImageCapabilities)
+	var resolveErr error
+	if capabilities == nil {
+		capabilityOpts := opts
+		if plan.provider != "" {
+			capabilityOpts.Provider = plan.provider
+		}
+		if plan.model != "" {
+			capabilityOpts.Model = plan.model
+			capabilityOpts.ModelProvided = true
+		}
+		var resolved sessionturn.ImageCapabilities
+		resolved, resolveErr = resolveSessionImageCapabilities(capabilityOpts)
+		capabilities = cloneSessionImageCapabilities(&resolved)
+	}
+	metadata := sessionturn.ImageCapabilities{}
+	if capabilities != nil {
+		metadata = *capabilities
+		metadata.SupportedInputMIMETypes = append([]string(nil), capabilities.SupportedInputMIMETypes...)
+	}
+	if resolveErr != nil {
+		var capabilityErr *sessionturn.ImageCapabilityError
+		if !errors.As(resolveErr, &capabilityErr) {
+			return opts.ToolExecutor
+		}
+		metadata.Model = capabilityErr.Model
+		metadata.SupportsImageInput = false
+	}
+	return sessionturnwire.NewDefaultService().BindImageToolExecutor(opts.ToolExecutor, metadata)
+}
 
 func resolveSessionImageCapabilities(opts SessionRunOptions) (sessionturn.ImageCapabilities, error) {
 	if !strings.EqualFold(strings.TrimSpace(effectiveSessionProvider(opts)), sessionProviderOpenAI) {
@@ -75,4 +134,13 @@ func cloneSessionImageCapabilities(capabilities *sessionturn.ImageCapabilities) 
 	clone := *capabilities
 	clone.SupportedInputMIMETypes = append([]string(nil), capabilities.SupportedInputMIMETypes...)
 	return &clone
+}
+
+func sessionImageStagingConfigDir(configDir string) (string, error) {
+	configDir = strings.TrimSpace(configDir)
+	storage, err := config.NewDefaultConfigStorage(configDir)
+	if err != nil {
+		return "", fmt.Errorf("resolve config directory %q: %w", configDir, err)
+	}
+	return filepath.Clean(filepath.Dir(storage.Path())), nil
 }
