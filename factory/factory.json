@@ -4,21 +4,11 @@
     {
       "id": "executor-slot",
       "name": "executor-slot",
-      "capacity": 2
+      "capacity": 8
     },
     {
       "id": "concurrent-planners",
       "name": "concurrent-planners",
-      "capacity": 1
-    },
-    {
-      "id": "merge-slot",
-      "name": "merge-slot",
-      "capacity": 1
-    },
-    {
-      "id": "validation-slot",
-      "name": "validation-slot",
       "capacity": 1
     }
   ],
@@ -53,6 +43,11 @@
           "id": "init",
           "name": "init",
           "type": "INITIAL"
+        },
+        {
+          "id": "ci-pending",
+          "name": "ci-pending",
+          "type": "PROCESSING"
         },
         {
           "id": "in-review",
@@ -164,32 +159,6 @@
           "type": "FAILED"
         }
       ]
-    },
-    {
-      "id": "validation",
-      "name": "validation",
-      "states": [
-        {
-          "id": "init",
-          "name": "init",
-          "type": "INITIAL"
-        },
-        {
-          "id": "ready",
-          "name": "ready",
-          "type": "PROCESSING"
-        },
-        {
-          "id": "complete",
-          "name": "complete",
-          "type": "TERMINAL"
-        },
-        {
-          "id": "failed",
-          "name": "failed",
-          "type": "FAILED"
-        }
-      ]
     }
   ],
   "workers": [
@@ -197,7 +166,7 @@
       "executorProvider": "SCRIPT_WRAP",
       "modelProvider": "codex",
       "model": "gpt-5.6-luna",
-      "reasoningEffort": "max",
+      "reasoningEffort": "xhigh",
       "name": "processor",
       "skipPermissions": true,
       "type": "AGENT_WORKER",
@@ -216,7 +185,7 @@
     {
       "executorProvider": "SCRIPT_WRAP",
       "modelProvider": "codex",
-      "model": "gpt-6-astra",
+      "model": "gpt-5.6-sol",
       "reasoningEffort": "medium",
       "id": "planner",
       "name": "planner",
@@ -227,7 +196,7 @@
     {
       "executorProvider": "SCRIPT_WRAP",
       "modelProvider": "codex",
-      "model": "gpt-6-astra",
+      "model": "gpt-5.6-sol",
       "reasoningEffort": "medium",
       "id": "ideafier",
       "name": "ideafier",
@@ -239,33 +208,22 @@
       "executorProvider": "SCRIPT_WRAP",
       "modelProvider": "codex",
       "model": "gpt-5.6-luna",
-      "reasoningEffort": "max",
+      "reasoningEffort": "xhigh",
       "name": "reviewer",
       "skipPermissions": true,
       "type": "AGENT_WORKER",
       "timeout": "4h"
     },
     {
-      "id": "validation-setup",
-      "name": "validation-setup",
+      "id": "ci-gate",
+      "name": "ci-gate",
       "type": "SCRIPT_WORKER",
       "command": "python3",
       "args": [
-        "factory/scripts/prepare-validation.py",
-        "{{ (index .Inputs 0).Name }}",
-        "{{ (index .Inputs 0).Payload }}"
-      ]
-    },
-    {
-      "id": "validator",
-      "name": "validator",
-      "type": "AGENT_WORKER",
-      "executorProvider": "SCRIPT_WRAP",
-      "modelProvider": "codex",
-      "model": "gpt-5.6-luna",
-      "reasoningEffort": "max",
-      "skipPermissions": true,
-      "timeout": "4h"
+        "factory/scripts/ci-gate.py",
+        "{{ (index .Inputs 0).Name }}"
+      ],
+      "timeout": "110m"
     }
   ],
   "workstations": [
@@ -464,12 +422,8 @@
       ],
       "outputs": [
         {
-          "state": "in-review",
-          "workType": "task"
-        },
-        {
-          "state": "init",
-          "workType": "review"
+          "workType": "task",
+          "state": "ci-pending"
         }
       ],
       "resources": [
@@ -538,11 +492,7 @@
       ],
       "resources": [
         {
-          "capacity": 1,
-          "name": "executor-slot"
-        },
-        {
-          "name": "merge-slot",
+          "name": "executor-slot",
           "capacity": 1
         }
       ],
@@ -553,71 +503,13 @@
       "onContinue": [
         {
           "workType": "task",
-          "state": "in-review"
+          "state": "ci-pending"
         },
         {
           "workType": "review",
-          "state": "init"
+          "state": "fin"
         }
       ]
-    },
-    {
-      "guards": [
-        {
-          "maxVisits": 12,
-          "type": "VISIT_COUNT",
-          "workstation": "process"
-        }
-      ],
-      "id": "executor-loop-breaker",
-      "inputs": [
-        {
-          "state": "init",
-          "workType": "task"
-        }
-      ],
-      "name": "executor-loop-breaker",
-      "outputs": [
-        {
-          "state": "failed",
-          "workType": "task"
-        },
-        {
-          "workType": "thoughts",
-          "state": "init"
-        }
-      ],
-      "type": "LOGICAL_MOVE",
-      "worker": ""
-    },
-    {
-      "guards": [
-        {
-          "maxVisits": 10,
-          "type": "VISIT_COUNT",
-          "workstation": "review"
-        }
-      ],
-      "id": "review-loop-breaker",
-      "inputs": [
-        {
-          "state": "in-review",
-          "workType": "task"
-        }
-      ],
-      "name": "review-loop-breaker",
-      "outputs": [
-        {
-          "state": "failed",
-          "workType": "task"
-        },
-        {
-          "workType": "thoughts",
-          "state": "init"
-        }
-      ],
-      "type": "LOGICAL_MOVE",
-      "worker": ""
     },
     {
       "behavior": "CRON",
@@ -637,99 +529,43 @@
       "worker": ""
     },
     {
-      "id": "prepare-validation",
-      "name": "prepare-validation",
+      "id": "ci-gate",
+      "name": "ci-gate",
       "type": "SCRIPT_RUN",
-      "worker": "validation-setup",
-      "inputs": [
-        {
-          "workType": "validation",
-          "state": "init"
-        }
-      ],
-      "outputs": [
-        {
-          "workType": "validation",
-          "state": "ready"
-        }
-      ],
-      "onFailure": [
-        {
-          "workType": "validation",
-          "state": "failed"
-        },
-        {
-          "workType": "thoughts",
-          "state": "init"
-        }
-      ],
-      "workPropagation": {
-        "mode": "PRESERVE_INPUT"
-      }
-    },
-    {
-      "id": "validate",
-      "name": "validate",
-      "type": "AGENT_RUN",
-      "worker": "validator",
+      "worker": "ci-gate",
       "outcomeFormat": "decision-envelope",
       "inputs": [
         {
-          "workType": "validation",
-          "state": "ready"
+          "workType": "task",
+          "state": "ci-pending"
         }
       ],
       "outputs": [
         {
-          "workType": "validation",
-          "state": "complete"
+          "workType": "task",
+          "state": "in-review"
         },
         {
-          "workType": "thoughts",
-          "state": "init"
-        }
-      ],
-      "onFailure": [
-        {
-          "workType": "validation",
-          "state": "failed"
-        },
-        {
-          "workType": "thoughts",
+          "workType": "review",
           "state": "init"
         }
       ],
       "onRejection": [
         {
-          "workType": "validation",
+          "workType": "task",
+          "state": "init"
+        }
+      ],
+      "onFailure": [
+        {
+          "workType": "task",
           "state": "failed"
         },
         {
           "workType": "thoughts",
           "state": "init"
         }
-      ],
-      "onContinue": [
-        {
-          "workType": "validation",
-          "state": "failed"
-        },
-        {
-          "workType": "thoughts",
-          "state": "init"
-        }
-      ],
-      "resources": [
-        {
-          "name": "executor-slot",
-          "capacity": 1
-        },
-        {
-          "name": "validation-slot",
-          "capacity": 1
-        }
-      ],
-      "workingDirectory": "docs/temp/probes/{{ (index .Inputs 0).Name }}"
+      ]
     }
   ]
 }
