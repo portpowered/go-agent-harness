@@ -15,6 +15,8 @@ import (
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
+const roomReplayScheduleAlphaID = "alpha"
+
 func TestBuildOrdersTiedSegmentsAndRetainsPartialTail(t *testing.T) {
 	root := t.TempDir()
 	alphaCapture := filepath.Join(root, "alpha.session.json")
@@ -32,22 +34,22 @@ func TestBuildOrdersTiedSegmentsAndRetainsPartialTail(t *testing.T) {
 		SourceFormat: sourceFormat(100, 1),
 		TargetFormat: targetTestFormat(100, 1),
 		Participants: []roomreplay.Participant{
-			{ID: "alpha", CapturePath: alphaCapture, SentPCMPath: alphaPath},
-			{ID: "beta", CapturePath: betaCapture, SentPCMPath: betaPath},
+			{ID: roomReplayScheduleAlphaID, CapturePath: alphaCapture, SentPCMPath: alphaPath},
+			{ID: roomReplayAdditionalParticipantID, CapturePath: betaCapture, SentPCMPath: betaPath},
 		},
 		Timeline: []roomreplay.TimelineEvent{
-			{Sequence: 20, Type: "speech_start", ParticipantID: "alpha"},
-			{Sequence: 21, OffsetMS: 20, Type: "speech_end", ParticipantID: "alpha"},
-			{Sequence: 10, Type: "speech_start", ParticipantID: "beta"},
-			{Sequence: 11, OffsetMS: 20, Type: "speech_end", ParticipantID: "beta"},
+			{Sequence: 20, Type: "speech_start", ParticipantID: roomReplayScheduleAlphaID},
+			{Sequence: 21, OffsetMS: 20, Type: "speech_end", ParticipantID: roomReplayScheduleAlphaID},
+			{Sequence: 10, Type: "speech_start", ParticipantID: roomReplayAdditionalParticipantID},
+			{Sequence: 11, OffsetMS: 20, Type: "speech_end", ParticipantID: roomReplayAdditionalParticipantID},
 		},
-		TargetIDs: []string{"alpha", "beta"},
+		TargetIDs: []string{roomReplayScheduleAlphaID, roomReplayAdditionalParticipantID},
 	})
 
 	if len(schedule.frames) != 2 {
 		t.Fatalf("scheduled frames = %d, want 2", len(schedule.frames))
 	}
-	if got := contributionSources(schedule.frames[0]); !reflect.DeepEqual(got, []string{"beta", "alpha"}) {
+	if got := contributionSources(schedule.frames[0]); !reflect.DeepEqual(got, []string{roomReplayAdditionalParticipantID, roomReplayScheduleAlphaID}) {
 		t.Fatalf("frame 0 sources = %v, want beta then alpha", got)
 	}
 	if got := contributionBytes(schedule.frames[1]); !reflect.DeepEqual(got, [][]byte{{7, 0, 0, 0}, {3, 0, 0, 0}}) {
@@ -160,9 +162,9 @@ func TestRunUsesAcknowledgementBarrierAndPreservesCancellation(t *testing.T) {
 	schedule := buildSchedule(t, roomreplay.BuildRequest{
 		SourceFormat: sourceFormat(100, 1), TargetFormat: targetTestFormat(100, 1),
 		Participants: []roomreplay.Participant{
-			{ID: "alpha", CapturePath: alphaCapture, SentPCMPath: alphaPath},
-			{ID: "beta", CapturePath: betaCapture, SentPCMPath: betaPath},
-		}, TargetIDs: []string{"alpha", "beta"},
+			{ID: roomReplayScheduleAlphaID, CapturePath: alphaCapture, SentPCMPath: alphaPath},
+			{ID: roomReplayAdditionalParticipantID, CapturePath: betaCapture, SentPCMPath: betaPath},
+		}, TargetIDs: []string{roomReplayScheduleAlphaID, roomReplayAdditionalParticipantID},
 	})
 
 	var mu sync.Mutex
@@ -190,7 +192,7 @@ func TestRunUsesAcknowledgementBarrierAndPreservesCancellation(t *testing.T) {
 				return nil
 			},
 			AwaitAcknowledgement: func(ctx context.Context) error {
-				if id != "alpha" {
+				if id != roomReplayScheduleAlphaID {
 					return nil
 				}
 				mu.Lock()
@@ -212,14 +214,14 @@ func TestRunUsesAcknowledgementBarrierAndPreservesCancellation(t *testing.T) {
 
 	runDone := make(chan error, 1)
 	go func() {
-		runDone <- schedule.Run(context.Background(), roomreplay.RunRequest{Targets: []roomreplay.Target{target("alpha"), target("beta")}})
+		runDone <- schedule.Run(context.Background(), roomreplay.RunRequest{Targets: []roomreplay.Target{target(roomReplayScheduleAlphaID), target(roomReplayAdditionalParticipantID)}})
 	}()
 	select {
 	case <-time.After(50 * time.Millisecond):
 		mu.Lock()
-		if advances["alpha"] != 1 {
+		if advances[roomReplayScheduleAlphaID] != 1 {
 			mu.Unlock()
-			t.Fatalf("alpha advances before acknowledgement = %d, want 1", advances["alpha"])
+			t.Fatalf("alpha advances before acknowledgement = %d, want 1", advances[roomReplayScheduleAlphaID])
 		}
 		mu.Unlock()
 	case err := <-runDone:
@@ -230,13 +232,13 @@ func TestRunUsesAcknowledgementBarrierAndPreservesCancellation(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 	mu.Lock()
-	gotAdvances := map[string]int{"alpha": advances["alpha"], "beta": advances["beta"]}
+	gotAdvances := map[string]int{roomReplayScheduleAlphaID: advances[roomReplayScheduleAlphaID], roomReplayAdditionalParticipantID: advances[roomReplayAdditionalParticipantID]}
 	gotContributions := append([][2]string(nil), contributions...)
 	mu.Unlock()
-	if !reflect.DeepEqual(gotAdvances, map[string]int{"alpha": 2, "beta": 2}) {
+	if !reflect.DeepEqual(gotAdvances, map[string]int{roomReplayScheduleAlphaID: 2, roomReplayAdditionalParticipantID: 2}) {
 		t.Fatalf("advances = %v, want two acknowledged frames", gotAdvances)
 	}
-	if !reflect.DeepEqual(gotContributions[:2], [][2]string{{"alpha", "beta"}, {"beta", "alpha"}}) {
+	if !reflect.DeepEqual(gotContributions[:2], [][2]string{{roomReplayScheduleAlphaID, roomReplayAdditionalParticipantID}, {roomReplayAdditionalParticipantID, roomReplayScheduleAlphaID}}) {
 		t.Fatalf("first contribution order = %v", gotContributions[:2])
 	}
 
@@ -244,7 +246,7 @@ func TestRunUsesAcknowledgementBarrierAndPreservesCancellation(t *testing.T) {
 	defer cancel()
 	var cancelOnce sync.Once
 	err := schedule.Run(cancelCtx, roomreplay.RunRequest{
-		Targets: []roomreplay.Target{target("alpha"), target("beta")},
+		Targets: []roomreplay.Target{target(roomReplayScheduleAlphaID), target(roomReplayAdditionalParticipantID)},
 		OnContribution: func(roomreplay.Contribution) {
 			cancelOnce.Do(cancel)
 		},
@@ -282,21 +284,21 @@ func TestRunRejectsMissingUncontrolledAndInactiveTargets(t *testing.T) {
 
 func TestRunRechecksTargetActivityBeforeEachContribution(t *testing.T) {
 	schedule := &schedule{
-		targetIDs: []string{"alpha", "beta", "gamma"},
+		targetIDs: []string{roomReplayScheduleAlphaID, roomReplayAdditionalParticipantID, "gamma"},
 		frames: []scheduledFrame{{contributions: []contribution{
-			{sourceID: "alpha", pcm: []byte{1, 0}},
+			{sourceID: roomReplayScheduleAlphaID, pcm: []byte{1, 0}},
 			{sourceID: "gamma", pcm: []byte{2, 0}},
 		}}},
 	}
 
-	active := map[string]bool{"alpha": true, "beta": true, "gamma": true}
+	active := map[string]bool{roomReplayScheduleAlphaID: true, roomReplayAdditionalParticipantID: true, "gamma": true}
 	var betaReleases int
 	target := func(id string) roomreplay.Target {
 		return roomreplay.Target{
 			ID:     id,
 			Active: func() bool { return active[id] },
 			Release: func(_ context.Context, _ string, _ []byte) error {
-				if id == "beta" {
+				if id == roomReplayAdditionalParticipantID {
 					betaReleases++
 					if betaReleases == 1 {
 						active[id] = false
@@ -310,7 +312,7 @@ func TestRunRechecksTargetActivityBeforeEachContribution(t *testing.T) {
 	}
 
 	err := schedule.Run(context.Background(), roomreplay.RunRequest{
-		Targets: []roomreplay.Target{target("alpha"), target("beta"), target("gamma")},
+		Targets: []roomreplay.Target{target(roomReplayScheduleAlphaID), target(roomReplayAdditionalParticipantID), target("gamma")},
 	})
 	if !errors.Is(err, roomreplay.ErrTargetInactive) {
 		t.Fatalf("mid-frame inactive target error = %v, want errors.Is(%v)", err, roomreplay.ErrTargetInactive)

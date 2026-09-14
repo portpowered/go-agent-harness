@@ -11,7 +11,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay/internal/service"
 )
 
-// NewService assembles one stateless room-replay-bundle admission service.
+// Injectors from providers.go:
+
 func NewService() roomreplay.Service {
 	serviceService := service.New()
 	return serviceService
