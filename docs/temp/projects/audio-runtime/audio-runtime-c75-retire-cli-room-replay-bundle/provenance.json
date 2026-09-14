@@ -1,0 +1,15 @@
+{
+  "accepted_main": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+  "branch": "codex/audio-runtime-c75-retire-cli-room-replay-bundle",
+  "candidate_revision": "9f4af321087e4c3dbd588486c69d83004320fa8a",
+  "fresh_fetch_origin_main_revision": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+  "owned_evidence_prefix": "docs/temp/projects/audio-runtime/audio-runtime-c75-retire-cli-room-replay-bundle",
+  "schema": "audio-runtime.c75.provenance.v1",
+  "shared_files_unchanged": [
+    "scripts/wire-packages.txt",
+    "docs/architecture/architecture-size-baseline.json"
+  ],
+  "source_revision": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+  "source_tree_status_before_evidence": " M docs/temp/projects/audio-runtime/audio-runtime-c75-retire-cli-room-replay-bundle/provenance.json\n M docs/temp/projects/audio-runtime/audio-runtime-c75-retire-cli-room-replay-bundle/verification-summary.json\n",
+  "task": "audio-runtime-c75-retire-cli-room-replay-bundle"
+}

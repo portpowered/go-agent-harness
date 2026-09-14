@@ -4074,3 +4074,176 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   same PR `#435`, update its body with the repair/evidence map, then return
   `ACCEPTED` to the script-owned current-head CI gate without polling; retain
   this task through `CONTINUE` for any exact CI rejection or actionable repair.
+
+## C75 checkpoint — room replay bundle retirement
+
+- Admission was verified for `audio-runtime-c75-retire-cli-room-replay-bundle`
+  on `codex/audio-runtime-c75-retire-cli-room-replay-bundle` from accepted
+  main `d5d6f84363d8569d5dc1a59985f8d45cf50e1d06`; required startup and
+  predecessor ancestry remain intact, and no running host checkout was merged
+  or reset.
+- The three admitted CLI production files moved their reusable contract and
+  admission implementation behind `go-agent-runtime/services/roomreplaybundle`
+  plus private service/Wire construction. CLI files are now deprecated aliases,
+  compatibility JSON helpers for the separately owned audio projection, or
+  package markers; scheduler/recording source was not changed. The original
+  `337 + 1,158 + 404 = 1,899` production-line baseline is reduced to
+  `88 + 219 + 6 = 313` lines in those named CLI files (`1,586` lines retired).
+- Runtime behavior now covers schema v1/current admission, deterministic
+  participant/artifact projections, inventory metadata, digest/size mismatch,
+  missing and duplicate artifacts, traversal/absolute/symlink rejection,
+  capture/provider mismatch, malformed JSON/timestamps, timeline references,
+  bounded manifest/artifact/capture/timeline reads, typed errors, and output
+  exclusion. The separate GOWORK=off consumer prints
+  `C75_ROOMREPLAYBUNDLE_CONSUMER PASS` and rejects same-length corruption via
+  the public error identity.
+- Evidence so far: runtime normal/race `21` tests in `3` packages; CLI full
+  compatibility/regression package `1057` tests; CLI focused race `8`; focused
+  `go vet`, staticcheck `2026.1`, coverage registration (`179` packages / `6`
+  modules), and `git diff --check` pass. Wire-check and architecture-size are
+  intentionally pending the exact shared `scripts/wire-packages.txt` and
+  `docs/architecture/architecture-size-baseline.json` leases held by C57/C61;
+  neither shared file was edited.
+- Exact next action: record the candidate/evidence artifacts, checkpoint the
+  disjoint implementation, then request only the demonstrated downward shared
+  Wire/baseline registrations after those owners release. Do not claim script
+  CI, independent review, guarded merge, or green CI before those gates run.
+
+- C75 architecture repair checkpoint: split the runtime manifest/integrity
+  admission implementation into bounded files and moved the output-exclusion
+  contract test into the Wire package so the public package no longer imports
+  its Wire implementation. Runtime normal/race remain `21` tests in `3`
+  packages; CLI focused normal/race remain `8` each and the full CLI package
+  passes `1057`; external GOWORK=off consumer, vet, staticcheck, coverage
+  registration (`179` packages / `6` modules), and diff-check pass. The
+  architecture check now reports only `35` shared baseline drift/stale entries
+  for the retired CLI files/roundtrip baseline plus the unregistered generated
+  Wire file; no new runtime file/function/import or mutable-global violations
+  remain. Wire-check reports only the unregistered
+  `go-agent-runtime/services/roomreplaybundle/wire/wire_gen.go`. These shared
+  paths remain leased by C57/C61 and were not edited. Next action: commit and
+  push this implementation repair, refresh the evidence bundle at that
+  revision, and update the same PR; request the exact shared registrations
+  only after those leases release.
+
+- C75 current-main integration and CI-rejection repair checkpoint: fetched
+  `origin/main` at `84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f` and merged it into
+  the isolated branch as `979c8904`, preserving the accepted-main/startup
+  ancestry and all predecessor worktrees. The earlier PR #465 static job
+  `34674059055` was read in full: it found the unregistered generated Wire
+  file, 35 shared architecture/baseline findings, and three unchecked type
+  assertions in the owned roundtrip test.
+- C75 repair commit `c3e8f8901d802dad74d52acb7006551f88171d66` fixes the owned
+  lint findings, checks service close/error/type paths, propagates malformed
+  timing errors, uses a named scanner buffer constant, and reduces the
+  roundtrip function below all three previous architecture thresholds. Pinned
+  golangci-lint `2.9.0` reports zero issues in all 15 modules; focused runtime
+  normal/race (`21` tests), CLI normal/race (`1057`/`8` tests), vet and
+  staticcheck pass.
+- Refreshed C75 evidence at `c3e8f890` passes runtime/CLI/race/vet/staticcheck,
+  coverage registration (`179` packages / `6` modules), external GOWORK=off
+  consumer and diff-check. `wire-check` still reports only the unregistered
+  `go-agent-runtime/services/roomreplaybundle/wire/wire_gen.go`; architecture
+  still reports only the exact 35 downward/stale retired-CLI entries and that
+  generated-file registration. Shared paths remain held by C57/C61; no CI,
+  review, merge, or vertical acceptance is claimed.
+
+# C75 current-head focused revalidation and lease checkpoint 2026-09-12T05:38Z
+
+- Reverified the sole admitted `audio-runtime` task with
+  `project-control.py verify-work --type task --name
+  audio-runtime-c75-retire-cli-room-replay-bundle`; the isolated branch still
+  matches `prd.json`, the worktree was clean before evidence refresh, and
+  `origin/main=84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f` remains an ancestor.
+  Required startup `8bdafc7f`, accepted planning main `d5d6f843`, and the
+  freshly fetched current main all remain in the candidate. No host checkout,
+  predecessor worktree, peer path, or shared file was reset or edited.
+- The provided C75 runner at the exact `bcca5943570d7242c0aee922f490b183c304cd7f`
+  head passes runtime normal/race, the full CLI room-replay package, focused
+  CLI race, vet, staticcheck, coverage registration (`179` packages across
+  six modules), the separate `GOWORK=off` consumer with
+  `C75_ROOMREPLAYBUNDLE_CONSUMER PASS`, and diff-check. The runner records
+  `passed=true`, the exact legacy census `337 + 1,158 + 404 = 1,899`, current
+  CLI files `88 + 219 + 6 = 313`, and `1,586` retired lines.
+- The accumulated `rtk proxy env COUNT=1 bash
+  scripts/test-session-ci-regressions.sh all` passes normal, coverage and race
+  modes. It includes the expected replay/PCM/transcript negative controls, 20
+  high-rate audio trials, device simulations, and OpenAI tool-lifecycle
+  controls; all exits were zero with expected negative diagnostics only.
+- The shared gates remain blocked under the preserved C57/C61 ownership:
+  `make wire-check` returns only the unregistered generated
+  `go-agent-runtime/services/roomreplaybundle/wire/wire_gen.go`, and
+  `make architecture-size-check` returns exactly the 35 C75 downward/stale
+  retired-CLI/roundtrip findings plus that generated-file registration. The
+  refreshed owned evidence remains `passed=true` while recording both lease
+  failures; neither `scripts/wire-packages.txt` nor
+  `docs/architecture/architecture-size-baseline.json` was changed.
+- This is an evidence-only descendant checkpoint; no current-head script CI,
+  independent review, guarded merge, immutable vertical probe, physical/
+  acoustic proof or project completion is claimed. Exact next action: retain
+  this same task, commit/push the owned evidence checkpoint, and wait for the
+  canonical C57/C61 shared-file release. Once released, apply only the
+  demonstrated roomreplaybundle Wire registration and C75 downward/deleted
+  baseline entries, rerun the two gates plus focused checks, update PR #465,
+  and return `ACCEPTED` to script-owned CI without polling. Do not resubmit the
+  unchanged head or self-review.
+
+# C75 owned coverage repair and current-head rejection checkpoint 2026-09-12T06:15Z
+
+- Inspected GitHub CI run `34676139982` for the prior PR #465 head. Static
+  failed only on the known C57/C61 shared Wire/baseline findings; coverage
+  failed at `75.40%` for the owned
+  `go-agent-runtime/services/roomreplaybundle/internal/service` package; and
+  integration failed the peer-owned `test46/slow_device` scenario because the
+  final PCM marker missed its deadline. The exact slow-device reproduction
+  passes `6/6`; no C64/audio-runtime source was changed.
+- Added bounded service/parser/timeline/output-boundary coverage tests. The
+  owned package now passes `47` tests at `80.9%` local statement coverage
+  against the `80.00%` floor. The initial test checkpoint is `17fa4d3`; the
+  follow-up split keeps the original test file at `482` lines and the new
+  additional test file at `312` lines, removing the owned architecture budget
+  findings; that checkpoint is `9f4af32`.
+- The provided C75 runner passes at exact head `9f4af321`: runtime normal/race
+  (`49` tests in three packages), full CLI (`1057`), focused CLI race, vet,
+  staticcheck, coverage registration (`179` packages across six modules), the
+  `GOWORK=off` consumer marker, and diff-check. `verify.py` passes. The shared
+  gates remain exact lease-only failures: one unregistered generated Wire path
+  and `35` C75 downward/stale architecture entries; neither shared file was
+  edited. A transient peer replay-runtime failure during the first runner pass
+  reproduced `3/3` green in isolation, and the second full runner pass was
+  green.
+- After the evidence checkpoint was pushed, `COUNT=1 bash
+  scripts/test-session-ci-regressions.sh all` exited zero in normal, coverage,
+  and race modes. The expected replay/PCM/transcript negative diagnostics and
+  all `20` high-rate audio trials remained asserted and green.
+- The refreshed owned evidence and PR body are committed and pushed at
+  `f340c292`; PR #465 remains open on the admitted branch and `verify.py`
+  passes with evidence candidate `9f4af321` as an ancestor. No CI-green,
+  review, merge, vertical, physical, acoustic, or project-acceptance claim is
+  made.
+- Exact next action: retain this same task through the C57/C61 shared-file
+  release. After release, apply only the demonstrated Wire registration and
+  baseline deletions, rerun the two shared gates plus focused checks, push the
+  same PR, and return `ACCEPTED` to script CI without polling.
+
+# C75 current-head CI rejection repair 2026-09-12T06:35Z
+
+- The newer completed PR #465 CI run `34677920595` tested head `ff87b074`.
+  Unit, race, coverage, hermetic, WebMCP Chrome, macOS audio release, and
+  Windows software passed. Static failed on the still-unreleased C57/C61
+  shared Wire/baseline findings and two owned `goconst` literals in
+  `service_behavior_additional_test.go`; integration failed only the
+  peer-owned `test46/slow_device` final PCM marker deadline with zero
+  queue/drop/overflow/discard events.
+- Commit `048f52cd8295ad2c1dca6255d1168737411ccb5c` replaces the two repeated
+  test literals with named constants. Roomreplaybundle normal/race passed
+  (`50` tests in `3` packages), pinned `make lint` passed all `15` modules,
+  and the accumulated `COUNT=1` normal/coverage/race regression matrix passed,
+  including expected negative controls and all `20` high-rate trials.
+- The repair is pushed to the existing PR #465 branch. No review, merge,
+  vertical, physical/acoustic, or project acceptance is claimed. C57 and C61
+  remain the canonical shared-file owners; do not resubmit until they release.
+  Exact next action: retain ownership, then apply only the demonstrated
+  roomreplaybundle Wire registration and downward/stale C75 baseline changes
+  after both leases release, rerun the shared gates plus focused checks, update
+  PR #465, and return `ACCEPTED` to script CI without polling.

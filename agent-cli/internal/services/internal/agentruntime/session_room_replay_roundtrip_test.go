@@ -2,9 +2,13 @@ package agentruntime
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -159,17 +163,14 @@ func TestRoomRunRecordThenReplay_ManifestAudioFormatRoundTrips(t *testing.T) {
 
 	manifestData := readRoomEvidenceFile(t, filepath.Join(outputDir, RoomEvidenceManifestPath))
 
-	// This is the real reader's schema-level manifest parser: the same one
-	// LoadRoomReplayPlan calls before it ever validates individual artifacts
-	// against the filesystem.
-	document, parseErr := parseRoomReplayManifest(manifestData)
-	if parseErr != nil {
-		t.Fatalf("replay reader rejected the recorder's own run-manifest.json: %v", parseErr)
+	// This is the real reader's schema-level manifest parser: the same service
+	// Load path calls before it ever validates individual artifacts against the
+	// filesystem. The compatibility test only needs the decoded PCM object.
+	pcmFormat := parseRoomReplayPCMForTest(t, manifestData)
+	if pcmFormat.SampleRate <= 0 || pcmFormat.Channels <= 0 {
+		t.Fatalf("parsed replay pcm format = %+v, want positive rate/channels", pcmFormat)
 	}
-	if document.PCMFormat.SampleRate <= 0 || document.PCMFormat.Channels <= 0 {
-		t.Fatalf("parsed replay pcm format = %+v, want positive rate/channels", document.PCMFormat)
-	}
-	if err := validateRoomReplayPCMFormat(document.PCMFormat); err != nil {
+	if err := validateRoomReplayPCMFormat(pcmFormat); err != nil {
 		t.Fatalf("recorder's audio_format failed replay validation: %v", err)
 	}
 
@@ -320,11 +321,8 @@ func TestRoomRunRecordThenReplay_FullEndToEndReplaySucceeds(t *testing.T) {
 	// first pins that admission genuinely succeeds, before the second run
 	// exercises the full replay execution path.
 	manifestData := readRoomEvidenceFile(t, filepath.Join(outputDir, RoomEvidenceManifestPath))
-	document, parseErr := parseRoomReplayManifest(manifestData)
-	if parseErr != nil {
-		t.Fatalf("replay reader rejected the recorder's own run-manifest.json: %v", parseErr)
-	}
-	if err := validateRoomReplayPCMFormat(document.PCMFormat); err != nil {
+	pcmFormat := parseRoomReplayPCMForTest(t, manifestData)
+	if err := validateRoomReplayPCMFormat(pcmFormat); err != nil {
 		t.Fatalf("recorder's audio_format failed replay validation: %v", err)
 	}
 
@@ -401,4 +399,152 @@ func TestRoomRunRecordThenReplay_FullEndToEndReplaySucceeds(t *testing.T) {
 			t.Fatalf("replay pass participant %q = %+v, want connected non-error result", id, participant)
 		}
 	}
+}
+
+// These fixtures are retained with the CLI compatibility tests because the
+// scheduler/runtime regression suite exercises the deprecated adapters. The
+// production writer is unchanged; bundle admission itself lives in the
+// roomreplaybundle runtime service.
+func writeRoomReplayBundle(t *testing.T) (string, map[string]any) {
+	t.Helper()
+	bundle := filepath.Join(t.TempDir(), "bundle")
+	for _, participantID := range []string{"alpha", "beta"} {
+		if err := os.MkdirAll(filepath.Join(bundle, "participants", participantID), 0o700); err != nil {
+			t.Fatalf("create participant directory: %v", err)
+		}
+	}
+	files := map[string][]byte{
+		"participants/alpha/agent.wav":         {1, 2, 3},
+		"participants/alpha/diagnostics.jsonl": {[]byte(`{"event":"turn"}`)[0]},
+		"participants/alpha/deltas.jsonl":      []byte("delta\n"),
+		"participants/alpha/sent.pcm":          {10, 11, 12, 13},
+		"participants/alpha/received.pcm":      {0, 0, 2, 0},
+		"participants/alpha/events.jsonl":      []byte("event\n"),
+		"participants/beta/agent.wav":          {4, 5, 6},
+		"participants/beta/diagnostics.jsonl":  []byte("diag\n"),
+		"participants/beta/deltas.jsonl":       []byte("delta\n"),
+		"participants/beta/sent.pcm":           {20, 21, 22, 23},
+		"participants/beta/received.pcm":       {0, 0, 3, 0},
+		"participants/beta/events.jsonl":       []byte("event\n"),
+		"room-mix.wav":                         {7, 8, 9, 10},
+	}
+	for name, data := range files {
+		filename := filepath.Join(bundle, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(filename), 0o700); err != nil {
+			t.Fatalf("create artifact directory: %v", err)
+		}
+		if err := os.WriteFile(filename, data, 0o600); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+	clockBase := time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)
+	timeline := []byte(fmt.Sprintf(`{"sequence":0,"monotonic_offset_ms":0,"unix_ms":%d,"type":"speech_start","participant_id":"alpha"}`+"\n"+`{"sequence":1,"monotonic_offset_ms":10,"unix_ms":%d,"type":"speech_start","participant_id":"beta"}`+"\n", clockBase.UnixMilli(), clockBase.UnixMilli()+10))
+	if err := os.WriteFile(filepath.Join(bundle, "room-timeline.jsonl"), timeline, 0o600); err != nil {
+		t.Fatalf("write timeline: %v", err)
+	}
+	for _, participantID := range []string{"alpha", "beta"} {
+		capture := gwtesting.SessionCapture{
+			Version:  gwtesting.SessionCaptureVersion,
+			Provider: gwtesting.SessionProviderMetadata{Name: "openai", Model: "gpt-realtime"},
+			Records: []gwtesting.CapturedSessionEvent{{
+				Sequence:    1,
+				Direction:   gwtesting.DirectionClientToServer,
+				Type:        "session.update",
+				PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
+				Payload:     json.RawMessage(`{"type":"session.update","session":{"model":"gpt-realtime"}}`),
+			}},
+		}
+		data, err := json.Marshal(capture)
+		if err != nil {
+			t.Fatalf("marshal capture: %v", err)
+		}
+		name := "participants/" + participantID + "/session.session.json"
+		if err := os.WriteFile(filepath.Join(bundle, filepath.FromSlash(name)), data, 0o600); err != nil {
+			t.Fatalf("write capture: %v", err)
+		}
+		files[name] = data
+	}
+
+	manifest := map[string]any{
+		"schema_version": RoomReplayBundleSchemaVersion,
+		"finalized":      true,
+		"clock_base":     clockBase.Format(time.RFC3339Nano),
+		"timing":         map[string]any{"started_at": clockBase.Format(time.RFC3339Nano), "ended_at": clockBase.Add(100 * time.Millisecond).Format(time.RFC3339Nano), "elapsed": "100ms"},
+		"pcm_format":     map[string]any{"sample_rate_hz": 24000, "channels": 1, "sample_width_bits": 16, "byte_order": "little", "encoding": "signed_pcm16"},
+		"participants":   map[string]any{},
+		"artifacts":      map[string]any{},
+	}
+	participants, ok := manifest["participants"].(map[string]any)
+	if !ok {
+		t.Fatal("test manifest participants field has unexpected type")
+	}
+	for _, participantID := range []string{"alpha", "beta"} {
+		artifactValues := map[string]any{}
+		for role, filename := range map[string]string{
+			roomReplayArtifactRoleWAV:         "participants/" + participantID + "/agent.wav",
+			roomReplayArtifactRoleDiagnostics: "participants/" + participantID + "/diagnostics.jsonl",
+			roomReplayArtifactRoleDeltas:      "participants/" + participantID + "/deltas.jsonl",
+			roomReplayArtifactRoleSentPCM:     "participants/" + participantID + "/sent.pcm",
+			roomReplayArtifactRoleReceivedPCM: "participants/" + participantID + "/received.pcm",
+			roomReplayArtifactRoleEvents:      "participants/" + participantID + "/events.jsonl",
+			roomReplayArtifactRoleCapture:     "participants/" + participantID + "/session.session.json",
+		} {
+			artifactValues[role] = artifactObject(filename, files[filename])
+		}
+		participants[participantID] = map[string]any{
+			"id": participantID, "kind": "agent", "provider": "openai", "model": "gpt-realtime", "artifacts": artifactValues,
+		}
+	}
+	artifacts, ok := manifest["artifacts"].(map[string]any)
+	if !ok {
+		t.Fatal("test manifest artifacts field has unexpected type")
+	}
+	artifacts["room_timeline"] = artifactObject("room-timeline.jsonl", timeline)
+	artifacts["room_mix"] = artifactObject("room-mix.wav", files["room-mix.wav"])
+	writeManifestValue(t, bundle, manifest)
+	return bundle, manifest
+}
+
+func artifactObject(path string, data []byte) map[string]any {
+	digest := sha256.Sum256(data)
+	return map[string]any{"path": path, "size": len(data), "sha256": hex.EncodeToString(digest[:])}
+}
+
+func parseRoomReplayPCMForTest(t *testing.T, manifestData []byte) RoomReplayPCMFormat {
+	t.Helper()
+	manifestObject, err := roomReplayObject(manifestData)
+	if err != nil {
+		t.Fatalf("replay reader rejected the recorder's own run-manifest.json: %v", err)
+	}
+	pcmFormat, err := parseRoomReplayPCMFormat(manifestObject)
+	if err != nil {
+		t.Fatalf("replay reader rejected the recorder's own pcm_format: %v", err)
+	}
+	return pcmFormat
+}
+
+func writeManifestValue(t *testing.T, bundle string, value map[string]any) {
+	t.Helper()
+	data, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal test manifest: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(bundle, RoomReplayBundleManifestPath), append(data, '\n'), 0o600); err != nil {
+		t.Fatalf("write test manifest: %v", err)
+	}
+}
+
+func updateArtifactDigest(t *testing.T, manifest map[string]any, role string, data []byte) {
+	t.Helper()
+	artifacts, ok := manifest["artifacts"].(map[string]any)
+	if !ok {
+		t.Fatal("test manifest artifacts field has unexpected type")
+	}
+	artifact, ok := artifacts[role].(map[string]any)
+	if !ok {
+		t.Fatalf("test manifest artifact %q has unexpected type", role)
+	}
+	artifact["size"] = len(data)
+	digest := sha256.Sum256(data)
+	artifact["sha256"] = hex.EncodeToString(digest[:])
 }
