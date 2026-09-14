@@ -11,6 +11,7 @@ import (
 	public "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/browser"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/composition"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/execution"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/filesystem"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/registry"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/skills"
@@ -19,13 +20,33 @@ import (
 // Service resolves the copied tool implementations against normalized public
 // request values. The implementation package is deliberately kept private so
 // callers cannot depend on registry or tool concrete types.
-type Service struct{}
+type Service struct {
+	executionFactory *execution.Factory
+}
 
 type invoker struct{ executor messages.ToolExecutor }
 
 var _ public.Service = (*Service)(nil)
+var _ public.ExecutionService = (*Service)(nil)
 
-func New() *Service { return &Service{} }
+func New() *Service { return NewWithExecution(execution.New()) }
+
+// NewWithExecution is the Wire constructor. The factory is kept private so
+// callers receive only the public controller contract.
+func NewWithExecution(factory *execution.Factory) *Service {
+	if factory == nil {
+		factory = execution.New()
+	}
+	return &Service{executionFactory: factory}
+}
+
+// NewToolExecutionController constructs one request-scoped bounded executor.
+func (s *Service) NewToolExecutionController(request public.ToolExecutionRequest) public.ToolExecutionController {
+	if s == nil || s.executionFactory == nil {
+		return execution.New().NewToolExecutionController(request)
+	}
+	return s.executionFactory.NewToolExecutionController(request)
+}
 
 // BrowserContract returns the pure browser protocol/result policy. The
 // connection and platform adapters remain outside this implementation.

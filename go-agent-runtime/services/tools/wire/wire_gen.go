@@ -8,6 +8,7 @@ package wire
 
 import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/execution"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/policy"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/service"
 )
@@ -17,7 +18,16 @@ import (
 // NewService creates the inert tools service. Tool resources are resolved per
 // request by the returned service rather than during graph construction.
 func NewService() tools.Service {
-	serviceService := service.New()
+	factory := execution.New()
+	serviceService := service.NewWithExecution(factory)
+	return serviceService
+}
+
+// NewExecutionService exposes the optional controller capability through the
+// same registered tools service graph.
+func NewExecutionService() tools.ExecutionService {
+	factory := execution.New()
+	serviceService := service.NewWithExecution(factory)
 	return serviceService
 }
 
