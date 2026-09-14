@@ -11,6 +11,7 @@ package wire
 import (
 	"github.com/google/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/errorpolicy"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/evidence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/planning"
@@ -26,7 +27,7 @@ type Dependencies struct {
 }
 
 func NewService(dependencies Dependencies) rooms.Service {
-	wire.Build(newPlanner, newEvidence, newRunner, newServiceDependencies, service.New)
+	wire.Build(newPlanner, newEvidence, newFailureService, newRunner, newServiceDependencies, service.New)
 	return nil
 }
 
@@ -34,9 +35,11 @@ func newPlanner() planning.Planner { return planning.New() }
 
 func newEvidence() evidence.Loader { return evidence.New() }
 
-func newRunner(dependencies Dependencies) lifecycle.Runner {
+func newFailureService() rooms.FailureService { return errorpolicy.New() }
+
+func newRunner(dependencies Dependencies, failure rooms.FailureService) lifecycle.Runner {
 	return lifecycle.New(lifecycle.Dependencies{
-		Live: dependencies.Live, Media: dependencies.Media, Clock: dependencies.Clock,
+		Live: dependencies.Live, Media: dependencies.Media, Clock: dependencies.Clock, Failure: failure,
 	})
 }
 

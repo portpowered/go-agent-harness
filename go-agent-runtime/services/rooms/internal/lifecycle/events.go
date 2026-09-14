@@ -20,6 +20,7 @@ type eventDrain struct {
 	stop  chan struct{}
 	done  chan struct{}
 	on    func(session.LiveEvent)
+	hook  func(session.LiveEvent)
 	mu    sync.Mutex
 	full  bool
 	close sync.Once
@@ -191,8 +192,23 @@ func (d *eventDrain) enqueue(event session.LiveEvent) bool {
 func (d *eventDrain) consume() {
 	defer close(d.done)
 	for event := range d.queue {
+		d.mu.Lock()
+		hook := d.hook
+		d.mu.Unlock()
+		if hook != nil {
+			hook(event)
+		}
 		d.on(event)
 	}
+}
+
+func (d *eventDrain) setHook(hook func(session.LiveEvent)) {
+	if d == nil {
+		return
+	}
+	d.mu.Lock()
+	d.hook = hook
+	d.mu.Unlock()
 }
 
 func (d *eventDrain) Stop() {
@@ -225,4 +241,33 @@ func isTerminalEvent(event session.LiveEvent) bool {
 	}
 	kind := normalizeEventKind(event.Kind)
 	return strings.Contains(kind, "terminal") || strings.Contains(kind, "close") || strings.Contains(kind, "error") || strings.Contains(kind, "failed") || strings.Contains(kind, "done")
+}
+
+const (
+	silentProviderEmptyResponse = "silent_provider_empty_response"
+	silentProviderTimeout       = "silent_provider_timeout"
+)
+
+func terminalLivenessFailure(event session.LiveEvent) error {
+	if event.Liveness != nil {
+		classification := strings.TrimSpace(event.Liveness.Classification)
+		if classification == "" {
+			return nil
+		}
+		if classification == silentProviderEmptyResponse || classification == silentProviderTimeout {
+			return fmt.Errorf("%s: provider response produced no observable output", classification)
+		}
+		return nil
+	}
+	if event.Terminal == nil {
+		return nil
+	}
+	classification := strings.TrimSpace(event.Terminal.Classification)
+	if classification == "" && event.Terminal.TerminalReason == messages.TerminalReasonPartialOutput && event.Terminal.OutputState == messages.TerminalOutputNone {
+		classification = silentProviderEmptyResponse
+	}
+	if classification != silentProviderEmptyResponse && classification != silentProviderTimeout {
+		return nil
+	}
+	return fmt.Errorf("%s: provider response produced no observable output", classification)
 }

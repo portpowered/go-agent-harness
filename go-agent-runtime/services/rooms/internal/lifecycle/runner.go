@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/errorpolicy"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/evidence"
 	roommanifest "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/manifest"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
@@ -23,20 +24,24 @@ var (
 	errTurnsBound    = errors.New("room turn bound reached")
 )
 
+const defaultBoundShutdownGrace = 250 * time.Millisecond
+
 // Dependencies are the two runtime roles required by a live room. A nil
 // MediaFactory is valid for headless provider sessions and keeps text-only
 // hosts free of device initialization.
 type Dependencies struct {
-	Live  session.LiveService
-	Media rooms.MediaFactory
-	Clock platformclock.Scheduler
+	Live    session.LiveService
+	Media   rooms.MediaFactory
+	Clock   platformclock.Scheduler
+	Failure rooms.FailureService
 }
 
 type Runner struct {
-	live  session.LiveService
-	media rooms.MediaFactory
-	clock platformclock.Scheduler
-	now   func() time.Time
+	live    session.LiveService
+	media   rooms.MediaFactory
+	clock   platformclock.Scheduler
+	now     func() time.Time
+	failure rooms.FailureService
 }
 
 func New(dependencies Dependencies) Runner {
@@ -44,7 +49,11 @@ func New(dependencies Dependencies) Runner {
 	if dependencies.Clock != nil {
 		now = dependencies.Clock.Now
 	}
-	return Runner{live: dependencies.Live, media: dependencies.Media, clock: dependencies.Clock, now: now}
+	failure := dependencies.Failure
+	if failure == nil {
+		failure = errorpolicy.New()
+	}
+	return Runner{live: dependencies.Live, media: dependencies.Media, clock: dependencies.Clock, now: now, failure: failure}
 }
 
 func (r Runner) currentTime() time.Time {
@@ -68,7 +77,7 @@ func (r Runner) Run(ctx context.Context, _ io.Writer, request rooms.RoomRunOptio
 
 	runCtx, cancel := context.WithCancelCause(ctx)
 	defer cancel(nil)
-	state := newRunState(manifest, cancel)
+	state := newRunState(manifest, cancel, request.BoundShutdownGrace, r.clock.Wait, r.failure)
 	stopTimer := r.startDurationBound(runCtx, manifest.Room.MaxDuration, state)
 	defer stopTimer()
 	r.openParticipants(ctx, runCtx, state, manifest, request, recorder)
@@ -108,12 +117,15 @@ func (r Runner) validateRun(manifest rooms.Manifest) error {
 	return nil
 }
 
-func newRunState(manifest rooms.Manifest, stop context.CancelCauseFunc) *runState {
+func newRunState(manifest rooms.Manifest, stop context.CancelCauseFunc, grace time.Duration, wait func(context.Context, time.Duration) error, failure rooms.FailureService) *runState {
+	if grace <= 0 {
+		grace = defaultBoundShutdownGrace
+	}
 	state := &runState{
 		results:   make(map[string]rooms.RoomParticipantResult, len(manifest.Participants)),
 		terminals: make(map[string]terminalMetadata, len(manifest.Participants)),
 		turns:     make(map[string]int, len(manifest.Participants)), agentIDs: make(map[string]struct{}),
-		turnsBound: manifest.Room.MaxTurns, stop: stop,
+		turnsBound: manifest.Room.MaxTurns, boundGrace: grace, boundDoneCh: make(chan struct{}), wait: wait, failure: failure, stop: stop,
 	}
 	for _, participant := range manifest.Participants {
 		if roommanifest.NormalizeParticipantKind(participant.Kind) != rooms.ParticipantKindAgent {
@@ -160,6 +172,7 @@ func (r Runner) openParticipants(ctx, runCtx context.Context, state *runState, m
 func (r Runner) openOneParticipant(ctx context.Context, state *runState, participant rooms.Participant, request rooms.RoomRunOptions, recorder *evidence.Recorder) {
 	active, err := r.openParticipant(ctx, state, participant, request, recorder)
 	if err != nil {
+		err = state.participantFailure(participant.ID, err)
 		// Admission failures leave no viable participant runtime to retire. They
 		// therefore remain room-scoped failures; media/provider faults after
 		// admission are recorded on the participant and let surviving peers run.
@@ -232,7 +245,7 @@ func (r Runner) finishRun(ctx context.Context, state *runState, graph *roomGraph
 		runErr = errors.Join(runErr, graphErr)
 		if result.TerminationReason != rooms.RoomTerminationFailed {
 			result.TerminationReason, result.Reason = rooms.RoomTerminationFailed, rooms.RoomTerminationFailed
-			result.Error = graphErr.Error()
+			result.Error = r.failure.Sanitize(graphErr, nil)
 		}
 	}
 	return r.finalizeRun(result, runErr, manifest, request, recorder)
@@ -333,13 +346,6 @@ func diagnostic(event string, err error, now func() time.Time) rooms.RoomDiagnos
 		return rooms.RoomDiagnosticRecord{Event: event, Fields: fields}
 	}
 	return rooms.RoomDiagnosticRecord{Event: event, Fields: fields, At: now()}
-}
-
-func errorString(err error) string {
-	if err == nil {
-		return ""
-	}
-	return err.Error()
 }
 
 func hasAgent(manifest rooms.Manifest) bool {

@@ -126,6 +126,7 @@ func (r Runner) admitLive(ctx context.Context, state *runState, participant room
 			state.failParticipant(participant.ID, err)
 		}
 	}, state.setFailure)
+	active.events.setHook(active.observeEvent)
 	if err := handle.Start(ctx); err != nil {
 		runErr := closeStartedParticipant(active, release, fmt.Errorf("start live participant: %w", err))
 		state.remove(active)
@@ -217,7 +218,7 @@ func (s *runState) result(ctx context.Context) (rooms.RoomResult, error) {
 	participants := cloneParticipantResults(s.results)
 	result := rooms.RoomResult{Participants: participants, TerminationReason: rooms.RoomTerminationStopped}
 	runErr := s.terminationCause(ctx)
-	applyRoomTermination(&result, s.boundReason, runErr)
+	applyRoomTermination(&result, s.boundReason, runErr, s.failure)
 	for id, value := range participants {
 		appendParticipantResult(&result, id, value)
 	}
@@ -232,7 +233,7 @@ func cloneParticipantResults(results map[string]rooms.RoomParticipantResult) map
 	return participants
 }
 
-func applyRoomTermination(result *rooms.RoomResult, boundReason rooms.RoomTerminationReason, runErr error) {
+func applyRoomTermination(result *rooms.RoomResult, boundReason rooms.RoomTerminationReason, runErr error, failure rooms.FailureService) {
 	if result == nil {
 		return
 	}
@@ -243,7 +244,11 @@ func applyRoomTermination(result *rooms.RoomResult, boundReason rooms.RoomTermin
 	}
 	if runErr != nil {
 		result.TerminationReason, result.Reason = rooms.RoomTerminationFailed, rooms.RoomTerminationFailed
-		result.Error = runErr.Error()
+		if failure != nil {
+			result.Error = failure.Sanitize(runErr, nil)
+		} else {
+			result.Error = runErr.Error()
+		}
 	}
 }
 

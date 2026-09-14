@@ -139,6 +139,10 @@ type RoomRunOptions struct {
 	WorkDir     string
 	AllowPaths  []string
 	AudioFormat AudioFormat
+	// BoundShutdownGrace keeps an active provider response admissible after a
+	// turn or duration bound. A zero value selects the bounded runtime default;
+	// the room sends one response cancellation only after this window expires.
+	BoundShutdownGrace time.Duration
 
 	BrowserCapabilitiesFactory BrowserCapabilitiesFactory
 	// LiveCapabilitiesFactory creates participant-local tool bindings for the
