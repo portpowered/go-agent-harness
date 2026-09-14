@@ -155,3 +155,26 @@ or actionable review finding.
   changed branch, update PR `#516` with the exact head and ancestry, and return
   `ACCEPTED` to the script-owned current-head gate without polling; retain C155
   ownership through `CONTINUE` for any exact rejection or repair.
+
+## Current-main merge and latest coverage rejection
+
+- Fresh `origin/main=1b1c0296b9471b930c2b290f3bf6fa10559957de` was merged into
+  the same C155 branch as `36dca7604e26cd69fd42c3a4be7b2d4a38fc865e`.
+  Accepted main and startup integration remain ancestors; the worktree is
+  clean and no host or peer worktree was reset.
+- The latest rejected CI coverage job is run `34793645068`, job
+  `103822470482`, at prior head `39af197f3f6bedc252a69a454c214a5618e8f475`.
+  Its full metadata/log are preserved at `/tmp/audio-runtime-c155-job-103822470482.json`
+  and `/tmp/audio-runtime-c155-job-103822470482.log`. The only assertion
+  failure is the unchanged, out-of-scope
+  `TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/slow_device`
+  remote final-marker wait; the child was still running with zero device
+  drops, overflows, discards or queued samples. The exact subtest passes once
+  normally and once under focused coverage locally. The prior room-duration
+  review finding passes `20` normal and `10` race repetitions.
+- Post-merge C155 causal, adversarial, typed/loopback, device-package and full
+  gateway/vet checks pass, with architecture-size `202/1941/28798`, Wire and
+  diff-check clean. The remote integration and room paths are not in the C155
+  lease and were not changed.
+- The changed current-main head must be pushed and submitted once to the
+  script-owned CI gate; no CI result, review, merge or acceptance is claimed.

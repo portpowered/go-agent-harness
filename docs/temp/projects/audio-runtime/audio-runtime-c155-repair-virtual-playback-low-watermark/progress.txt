@@ -116,3 +116,49 @@ Static rejection repair checkpoint:
   changed head and current-main ancestry, and return `ACCEPTED` to the
   script-owned current-head gate without polling; retain C155 ownership through
   `CONTINUE` for any exact rejection or actionable repair.
+
+# C155 current-main merge and latest coverage rejection characterization — 2026-09-14
+
+- A fresh `git fetch origin main` resolved current `origin/main` to
+  `1b1c0296b9471b930c2b290f3bf6fa10559957de`. The same isolated C155 branch
+  merged it with non-ff commit `36dca7604e26cd69fd42c3a4be7b2d4a38fc865e`;
+  accepted main `4a1c399ccbb3d780be95eb04316e84b8f11a6646`, startup integration
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, and current `origin/main` are
+  ancestors. No host or peer worktree was reset or modified.
+- The current branch is clean and its diff from `origin/main` remains limited
+  to `device_playback_adversarial_test.go` and the three C155 evidence files;
+  `device_virtual.go`, `device_virtual_test.go`, the provider, and the remote
+  integration files are unchanged.
+- The latest canonical CI rejection is run `34793645068`, coverage job
+  `103822470482`, against prior head
+  `39af197f3f6bedc252a69a454c214a5618e8f475`. The full job metadata is saved
+  at `/tmp/audio-runtime-c155-job-103822470482.json` and the complete job log
+  at `/tmp/audio-runtime-c155-job-103822470482.log`. Its only assertion
+  failure is the out-of-scope
+  `TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/slow_device`
+  at `session_tool_audio_remote_e2e_test.go:183`: the unchanged scenario
+  deadline expired with `rendered_pcm=319200`, `expected_pcm=174391`,
+  `final_marker=false`, zero queue/drop/overflow/discard counts, and the child
+  still running. Static, unit, race, hermetic, WebMCP Chrome, macOS audio
+  release and Windows portable jobs were green at that run snapshot; the
+  aggregate run was still settling when the coverage job failed.
+- The exact rejected remote subtest passes once in the normal topology and
+  once with focused `nomicrophone` coverage instrumentation (both exit 0;
+  scenario body about 18.2s). The prior review-117 room-duration finding also
+  passes `20` normal and `10` race repetitions on current source. These
+  controls establish non-reproduction, not a C155 repair; the failed remote
+  test and room paths are outside `prd.json.ownedPaths` and no C155 source
+  change can causally repair them.
+- Post-merge C155 evidence is green: causal subtest `200` normal and `100`
+  race trials; adversarial scenarios `04`-`20` `900` normal and full
+  adversarial race `420`; typed/loopback `80`; device package `2530` normal
+  and `759` race; full gateway `285`; gateway vet; architecture-size
+  `202/1941/28798`; Wire; and diff-check. No CI success, independent review,
+  guarded merge, vertical acceptance, hardware/acoustic proof or project
+  completion is claimed.
+- The merge is a required changed head for current-main handoff. Push
+  `36dca7604e26cd69fd42c3a4be7b2d4a38fc865e`, update PR `#516` with the exact
+  ancestry and failure mapping, and submit the changed head once to the
+  script-owned CI gate without polling. If the remote failure recurs, the
+  primary must route its exact owner/prerequisite; C155 must not edit or waive
+  the out-of-scope remote fixture.
