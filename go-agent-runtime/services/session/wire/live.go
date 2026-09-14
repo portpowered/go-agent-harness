@@ -6,7 +6,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
-	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -27,10 +26,6 @@ type LiveDependencies struct {
 // NewLiveService assembles the continuous session role. It does not connect a
 // provider until the returned handle's Start method is called.
 func NewLiveService(deps LiveDependencies) session.LiveService {
-	durationService := deps.DurationService
-	if durationService == nil {
-		durationService = durationwire.NewService()
-	}
 	return live.New(live.Dependencies{
 		InferencerFactory: deps.InferencerFactory,
 		CapabilityFactory: deps.CapabilityFactory,
@@ -39,6 +34,6 @@ func NewLiveService(deps LiveDependencies) session.LiveService {
 		EventCapacity:     deps.EventCapacity,
 		Clock:             deps.Clock,
 		Scheduler:         deps.Scheduler,
-		DurationService:   durationService,
+		DurationService:   deps.DurationService,
 	})
 }
