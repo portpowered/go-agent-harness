@@ -1,0 +1,383 @@
+package observer
+
+import (
+	"context"
+	"maps"
+	"strings"
+	"time"
+
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	sd "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/internal/lifecycle"
+	sdw "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/internal/lifecycle/service"
+)
+
+type scheduledAudioResponseDisposition = sd.Disposition
+
+const (
+	scheduledAudioResponsePending   = sd.DispositionPending
+	scheduledAudioResponseCompleted = sd.DispositionCompleted
+	scheduledAudioResponseCancelled = sd.DispositionCancelled
+)
+
+// Deprecated: retained as a compatibility projection; lifecycle decisions are
+// delegated to the provider-neutral service and copied here after each event.
+type scheduledAudioResponseLifecycle struct {
+	bound                 bool
+	disposition           scheduledAudioResponseDisposition
+	retryUsed             bool
+	retryPending          bool
+	terminalFailure       bool
+	terminalStatus        string
+	terminalErrorCode     string
+	terminalStatusDetails string
+}
+
+func (o *observerState) ensureLifecycle() sd.Service {
+	if o == nil {
+		return nil
+	}
+	if o.lifecycle == nil {
+		o.lifecycle = sdw.New(sd.Options{})
+	}
+	return o.lifecycle
+}
+func lifecycleTerminal(value *messages.MessageEndValue) *sd.Terminal {
+	if value == nil {
+		return nil
+	}
+	return &sd.Terminal{
+		Status:               sanitizeContinuationDetail(value.Status),
+		ErrorCode:            sanitizeContinuationDetail(value.ProviderErrorCode),
+		ErrorMessage:         sanitizeContinuationDetail(value.ProviderErrorMessage),
+		StatusDetails:        sanitizeContinuationDetail(value.StatusDetails),
+		Reason:               string(value.TerminalReason),
+		ProviderCancellation: value.TerminalReason == messages.TerminalReasonCancellation,
+	}
+}
+
+func (o *observerState) applyLifecycle(ctx context.Context, event sd.Event) (sd.Observation, error) {
+	if o == nil {
+		return sd.Observation{}, sd.ErrClosed
+	}
+	o.lifecycleProjectionMu.Lock()
+	defer o.lifecycleProjectionMu.Unlock()
+	lifecycle := o.ensureLifecycle()
+	if lifecycle == nil {
+		return sd.Observation{}, sd.ErrClosed
+	}
+	if err := o.ensureLifecycleSchedule(ctx, lifecycle); err != nil {
+		return sd.Observation{}, err
+	}
+	observation, err := lifecycle.Apply(ctx, event)
+	o.syncLifecycleProjection()
+	return observation, err
+}
+
+// ensureLifecycleSchedule is the private CLI adapter bridge for legacy test
+// setup. It only declares the number of scheduled slots; all response IDs,
+// ownership, continuation, retry, and disposition state remains private to
+// the runtime reducer and can only be changed through lifecycle events.
+func (o *observerState) ensureLifecycleSchedule(ctx context.Context, lifecycle sd.Service) error {
+	if o == nil || lifecycle == nil {
+		return sd.ErrClosed
+	}
+	if len(lifecycle.Snapshot().Scheduled) >= len(o.scheduledResponses) {
+		return nil
+	}
+	_, err := lifecycle.Apply(ctx, sd.Event{Kind: sd.EventEnsureScheduled, Count: len(o.scheduledResponses)})
+	return err
+}
+func (o *observerState) syncLifecycleProjection() {
+	if o == nil || o.lifecycle == nil {
+		return
+	}
+	snapshot := o.lifecycle.Snapshot()
+	o.activeResponse = snapshot.ActiveResponse
+	o.activeResponseID = snapshot.ActiveResponseID
+	o.completedResponseIDs = make(map[string]struct{}, len(snapshot.CompletedResponseIDs))
+	for _, id := range snapshot.CompletedResponseIDs {
+		o.completedResponseIDs[id] = struct{}{}
+	}
+	o.retiredResponseIDs = make(map[string]struct{}, len(snapshot.RetiredResponseIDs))
+	for _, id := range snapshot.RetiredResponseIDs {
+		o.retiredResponseIDs[id] = struct{}{}
+	}
+	o.scheduledResponses = make([]scheduledAudioResponseLifecycle, len(snapshot.Scheduled))
+	for index, value := range snapshot.Scheduled {
+		o.scheduledResponses[index] = scheduledAudioResponseLifecycle{
+			bound: value.Bound, disposition: value.Disposition, retryUsed: value.RetryUsed,
+			retryPending: value.RetryPending, terminalFailure: value.TerminalFailure,
+			terminalStatus: value.TerminalStatus, terminalErrorCode: value.TerminalErrorCode,
+			terminalStatusDetails: value.TerminalStatusDetails,
+		}
+	}
+	o.scheduledResponseByID = maps.Clone(snapshot.ScheduledResponseByID)
+	if o.scheduledResponseByID == nil {
+		o.scheduledResponseByID = make(map[string]int)
+	}
+	o.nextScheduledResponse = snapshot.NextScheduledResponse
+	o.activeScheduledResponseIndex = snapshot.ActiveScheduledIndex
+	o.activeScheduledResponseID = snapshot.ActiveScheduledID
+	o.activeScheduledResponseSet = snapshot.ActiveScheduledSet
+	o.logicalScheduledResponseIndex = snapshot.LogicalScheduledIndex
+	o.logicalScheduledResponseID = snapshot.LogicalScheduledID
+	o.logicalScheduledResponseSet = snapshot.LogicalScheduledSet
+	o.completedScheduled = snapshot.CompletedScheduled
+	o.retryCandidateIndex = snapshot.RetryCandidateIndex
+	o.retryCandidateSet = snapshot.RetryCandidateSet
+	o.retryCandidateID = snapshot.RetryCandidateID
+}
+func (o *observerState) lifecycleEvent(event sd.Event) sd.Observation {
+	observation, err := o.applyLifecycle(context.Background(), event)
+	if err != nil {
+		return sd.Observation{}
+	}
+	return observation
+}
+
+func (o *observerState) observedResponseProjection() (active bool, id string) {
+	if o == nil {
+		return false, ""
+	}
+	o.lifecycleProjectionMu.Lock()
+	defer o.lifecycleProjectionMu.Unlock()
+	return o.activeResponse, o.activeResponseID
+}
+
+func (o *observerState) plainEvent(kind sd.EventKind, id string) sd.Observation {
+	return o.lifecycleEvent(sd.Event{Kind: kind, ResponseID: id})
+}
+func (o *observerState) indexEvent(kind sd.EventKind, index int, id string) sd.Observation {
+	return o.lifecycleEvent(sd.Event{Kind: kind, Index: index, ResponseID: id})
+}
+func (o *observerState) pendingScheduledRateLimitRetryIndex() (int, bool) {
+	if o == nil {
+		return 0, false
+	}
+	snapshot := o.ensureLifecycle().Snapshot()
+	for index, value := range snapshot.Scheduled {
+		if value.Bound && value.RetryPending {
+			return index, true
+		}
+	}
+	return 0, false
+}
+func (o *observerState) noteScheduledResponseTerminal(id string, terminal *messages.MessageEndValue) {
+	o.lifecycleEvent(sd.Event{Kind: sd.EventNoteScheduledTerminal, ResponseID: id, Terminal: lifecycleTerminal(terminal)})
+}
+func (o *observerState) hasTerminalScheduledResponseFailure() bool {
+	_, ok := o.pendingScheduledFailure()
+	return ok
+}
+func (o *observerState) scheduledAudioFailureMetadata() (string, string, string) {
+	value, ok := o.pendingScheduledFailure()
+	if !ok {
+		return "", "", ""
+	}
+	return value.TerminalStatus, value.TerminalErrorCode, value.TerminalStatusDetails
+}
+func (o *observerState) pendingScheduledFailure() (sd.ScheduledState, bool) {
+	if o == nil {
+		return sd.ScheduledState{}, false
+	}
+	for _, value := range o.ensureLifecycle().Snapshot().Scheduled {
+		if value.Bound && value.Disposition == sd.DispositionPending && value.TerminalFailure && !value.RetryPending {
+			return value, true
+		}
+	}
+	return sd.ScheduledState{}, false
+}
+func (o *observerState) bindScheduledResponseBoundary(id string) {
+	o.plainEvent(sd.EventBindScheduledBoundary, id)
+}
+func (o *observerState) bindScheduledTerminalOnly(id string) {
+	o.plainEvent(sd.EventBindScheduledTerminalOnly, id)
+}
+func (o *observerState) rememberRateLimitRetryCandidate(responseID, lifecycleID string, terminal *messages.MessageEndValue) {
+	o.lifecycleEvent(sd.Event{Kind: sd.EventRememberRetry, ResponseID: responseID, LifecycleID: lifecycleID, Terminal: lifecycleTerminal(terminal)})
+}
+func (o *observerState) bindScheduledResponseID(index int, id string) bool {
+	return o.indexEvent(sd.EventBindScheduledID, index, id).Accepted
+}
+func (o *observerState) setActiveScheduledResponseWithID(index int, id string) bool {
+	return o.indexEvent(sd.EventSetScheduledOwner, index, id).Accepted
+}
+func (o *observerState) claimScheduledRateLimitRetry(responseID string, terminal *messages.MessageEndValue) (time.Duration, bool) {
+	if o == nil {
+		return 0, false
+	}
+	value := o.lifecycleEvent(sd.Event{Kind: sd.EventClaimRetry, ResponseID: responseID, Terminal: lifecycleTerminal(terminal)})
+	return value.Retry.Delay, value.Retry.Accepted
+}
+func (o *observerState) noteScheduledResponseDisposition(id string, disposition scheduledAudioResponseDisposition) {
+	if disposition != scheduledAudioResponsePending {
+		o.lifecycleEvent(sd.Event{Kind: sd.EventScheduledDisposition, ResponseID: id, Disposition: disposition})
+	}
+}
+func (o *observerState) resetObservedResponseState() {
+	if o == nil {
+		return
+	}
+	o.lifecycleProjectionMu.Lock()
+	activeResponse := o.activeResponse
+	o.lifecycleProjectionMu.Unlock()
+	if !activeResponse && !o.hasPendingLifecycleContinuation() {
+		o.lifecycleEvent(sd.Event{Kind: sd.EventReset})
+	}
+	o.toolStateMu.Lock()
+	o.resetResponseOutputLocked()
+	o.assistantResponseDone = false
+	o.assistantOutputObserved = false
+	o.toolCallInTurn = false
+	o.messageEndSeen = false
+	o.toolStateMu.Unlock()
+	o.toolDeltaSeen = false
+}
+
+// hasPendingLifecycleContinuation keeps a late SESSION.OPEN boundary from
+// erasing a tool lifecycle acknowledgement that was already accepted by the
+// provider-facing send path. The model runner may send the result and its
+// response.create before the corresponding provider tool-call delta reaches
+// the observer, so the lifecycle reducer can legitimately contain an
+// acknowledged continuation before the first inbound boundary is consumed.
+func (o *observerState) hasPendingLifecycleContinuation() bool {
+	if o == nil {
+		return false
+	}
+	snapshot := o.ensureLifecycle().Snapshot()
+	for _, state := range snapshot.ContinuationStates {
+		if state.ProviderCallObserved && !state.ResultAccepted {
+			return true
+		}
+		if state.ResultAccepted && !state.ContinuationComplete {
+			return true
+		}
+	}
+	return false
+}
+func (o *observerState) beginObservedResponseForPurpose(id string, purpose messages.ResponsePurpose) bool {
+	if o == nil {
+		return false
+	}
+	return o.lifecycleEvent(sd.Event{Kind: sd.EventResponseOpen, ResponseID: id, Purpose: sd.ResponsePurpose(purpose)}).NewResponse
+}
+func (o *observerState) adoptObservedResponseID(id string) bool {
+	if o == nil {
+		return true
+	}
+	o.lifecycleProjectionMu.Lock()
+	activeResponse, activeResponseID := o.activeResponse, o.activeResponseID
+	o.lifecycleProjectionMu.Unlock()
+	if !activeResponse || activeResponseID != "" {
+		return true
+	}
+	return o.lifecycleEvent(sd.Event{Kind: sd.EventResponseAdopt, ResponseID: id}).Accepted
+}
+func (o *observerState) ownsObservedResponseEnd(id string) bool {
+	return o.plainEvent(sd.EventResponseOwnsEnd, id).OwnsResponse
+}
+func (o *observerState) finishObservedResponse(id string) {
+	o.plainEvent(sd.EventResponseFinish, id)
+}
+func (o *observerState) responseEventBelongsToActive(id string) bool {
+	if o == nil {
+		return false
+	}
+	// Validate the response envelope before applying the untagged content
+	// boundary. A foreign response event must not clear the reducer's terminal
+	// marker and make a duplicate end for the active response admissible.
+	if !o.plainEvent(sd.EventResponseBelongs, id).Accepted {
+		return false
+	}
+	o.toolStateMu.Lock()
+	contentBoundary := o.messageEndSeen
+	o.toolStateMu.Unlock()
+	if contentBoundary {
+		contentID := strings.TrimSpace(id)
+		if contentID == "" {
+			_, contentID = o.observedResponseProjection()
+		}
+		o.lifecycleEvent(sd.Event{Kind: sd.EventResponseContentBoundary, ResponseID: contentID})
+	}
+	return true
+}
+func (o *observerState) observeProviderToolCallStartForResponse(callID, name, responseID string) {
+	if o == nil || strings.TrimSpace(callID) == "" {
+		return
+	}
+	o.toolStateMu.Lock()
+	enabled := o.toolResultsEnabled
+	o.toolStateMu.Unlock()
+	if !enabled {
+		return
+	}
+	toolCall := o.lifecycleEvent(sd.Event{Kind: sd.EventToolCall, CallID: callID, ToolName: name, ResponseID: responseID})
+	if !toolCall.Accepted {
+		// Terminal buffer recovery can replay a provider tool call after its
+		// response has already been finished. The reducer correctly rejects that
+		// stale envelope; do not turn a continuation whose result was already
+		// accepted into a new generic unresolved obligation.
+		if o.continuationResultAccepted(callID) {
+			return
+		}
+		// Keep a rejected provider call visible to termination diagnostics without
+		// projecting it into the reducer as an owned continuation.
+		o.toolStateMu.Lock()
+		o.ensureToolStateLocked()
+		o.unresolvedToolCalls[callID] = struct{}{}
+		o.toolStateMu.Unlock()
+		return
+	}
+	accepted := o.continuationResultAccepted(callID)
+	o.toolStateMu.Lock()
+	o.ensureToolStateLocked()
+	o.providerToolCallSeen = true
+	// The provider-facing tool-result send may complete while the shared
+	// lifecycle reducer is applying the tool-call event. The reducer snapshot
+	// above is authoritative, so an accepted result cannot be reintroduced as
+	// pending here.
+	if accepted {
+		delete(o.unresolvedToolCalls, callID)
+	} else {
+		o.unresolvedToolCalls[callID] = struct{}{}
+	}
+	o.toolStateMu.Unlock()
+}
+func (o *observerState) observeProviderToolCallWithIDForResponse(callID, name, responseID string) {
+	o.observeProviderToolCallStartForResponse(callID, name, responseID)
+}
+func (o *observerState) observeProviderMessageEndForResponse(role messages.Role, terminal *messages.MessageEndValue, responseID string, outputPresent bool) bool {
+	if o == nil {
+		return false
+	}
+	o.toolStateMu.Lock()
+	duplicate := o.messageEndSeen
+	o.messageEndSeen = true
+	o.toolCallInTurn = false
+	ch := o.toolLifecycleCh
+	o.toolStateMu.Unlock()
+	value := o.lifecycleEvent(sd.Event{Kind: sd.EventResponseEnd, ResponseID: responseID, Role: sd.Role(role), Terminal: lifecycleTerminal(terminal), Output: outputPresent})
+	o.toolStateMu.Lock()
+	if value.Candidate {
+		o.assistantResponseDone = true
+	}
+	o.toolStateMu.Unlock()
+	if value.ContinuationChanged && ch != nil {
+		select {
+		case ch <- struct{}{}:
+		default:
+		}
+	}
+	return value.Candidate && !duplicate
+}
+func isLocalResponseCancellation(value *messages.MessageEndValue) bool {
+	return value != nil && value.TerminalReason == messages.TerminalReasonPartialOutput && value.TerminalProvenance == messages.TerminalProvenanceLoop
+}
+func responseScopedStreamType(t messages.StreamMessageType) bool {
+	switch t {
+	case messages.StreamTypeMessageStart, messages.StreamTypeMessageEnd, messages.StreamTypeTextStart, messages.StreamTypeTextDelta, messages.StreamTypeTextEnd, messages.StreamTypeToolCallStart, messages.StreamTypeToolCallDelta, messages.StreamTypeToolCallEnd, messages.StreamTypeAudioStart, messages.StreamTypeAudioDelta, messages.StreamTypeAudioEnd, messages.StreamTypeImageStart, messages.StreamTypeImageDelta, messages.StreamTypeImageEnd, messages.StreamTypeVideoStart, messages.StreamTypeVideoDelta, messages.StreamTypeVideoEnd, messages.StreamTypeFileStart, messages.StreamTypeFileDelta, messages.StreamTypeFileEnd, messages.StreamTypeEmbeddingStart, messages.StreamTypeEmbeddingDelta, messages.StreamTypeEmbeddingEnd, messages.StreamTypeReasoningStart, messages.StreamTypeReasoningDelta, messages.StreamTypeReasoningEnd, messages.StreamTypeTranscriptStart, messages.StreamTypeTranscriptDelta, messages.StreamTypeTranscriptEnd, messages.StreamTypeRefusal, messages.StreamTypeUsageInfo:
+		return true
+	default:
+		return false
+	}
+}
