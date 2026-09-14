@@ -1,0 +1,60 @@
+{
+  "schema": "audio-runtime.c88.admission-inventory/v1",
+  "factory_session": "~default",
+  "factory_server_env": "FACTORY_SERVER_URL",
+  "project": "audio-runtime",
+  "task": "audio-runtime-c88-retire-cli-room-tool-capabilities",
+  "admission": {
+    "command": "python3 factory/scripts/project-control.py verify-work --type task --name audio-runtime-c88-retire-cli-room-tool-capabilities --root $FACTORY_ROOT",
+    "status": "admitted"
+  },
+  "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c88-retire-cli-room-tool-capabilities",
+  "branch": "codex/audio-runtime-c88-retire-cli-room-tool-capabilities",
+  "prd_branch_name": "codex/audio-runtime-c88-retire-cli-room-tool-capabilities",
+    "source_revision": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+    "required_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+    "origin_main_revision": "3d3e72786ac6fc1fd47c7e029589e5117674b035",
+    "baseline_integration_merge_revision": "39af6805139ae45ac2a731a275805fa549e88bf1",
+  "ancestry_verified": true,
+  "owned_paths": [
+    "agent-cli/internal/services/internal/agentruntime/session_room_tools.go",
+    "agent-cli/internal/services/internal/agentruntime/session_room_browser_capabilities.go",
+    "agent-cli/internal/services/internal/agentruntime/session_room_tools_test.go",
+    "go-agent-runtime/services/roomcapabilities/",
+    "coverage-manifest/go-agent-runtime/services/roomcapabilities/",
+    "docs/temp/projects/audio-runtime/audio-runtime-c88-retire-cli-room-tool-capabilities/"
+  ],
+  "excluded_paths_verified_unchanged": [
+    "agent-cli/internal/services/internal/agentruntime/session_room.go",
+    "agent-cli/internal/services/internal/agentruntime/session_room_planning.go",
+    "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go",
+    "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+    "agent-cli/internal/transport/cli/room_browser_capabilities.go",
+    "scripts/wire-packages.txt",
+    "docs/architecture/architecture-size-baseline.json"
+  ],
+  "retirement_baseline": {
+    "agent-cli/internal/services/internal/agentruntime/session_room_tools.go": 183,
+    "agent-cli/internal/services/internal/agentruntime/session_room_browser_capabilities.go": 151,
+    "total_physical_production_lines": 334
+  },
+  "retirement_candidate": {
+    "agent-cli/internal/services/internal/agentruntime/session_room_tools.go": 97,
+    "agent-cli/internal/services/internal/agentruntime/session_room_browser_capabilities.go": 56,
+    "total_physical_production_lines": 153,
+    "reduction": 181
+  },
+  "previous_task_specific_review_findings": "none found in the admitted task evidence at startup",
+  "shared_prerequisite": {
+    "owner": "audio-runtime-c79-retire-cli-response-lifecycle",
+    "work_id": "work-task-114",
+      "state_observed": "ci-pending/PROCESSING; PR open with no guarded merge observed",
+      "pr_head_observed": "5ea7aec83731a0c168a84637218fc53be63189b3",
+      "reviewed_guarded_merge_observed": false,
+    "paths": [
+      "scripts/wire-packages.txt",
+      "docs/architecture/architecture-size-baseline.json"
+    ],
+    "required_action": "wait for C79 reviewed guarded merge and lease release before making the demonstrated C88 registration/baseline changes"
+  }
+}
