@@ -194,7 +194,6 @@ func (c *roomCoordinator) forceBoundShutdown() {
 		for _, runtime := range runtimes {
 			if runtime != nil {
 				if runtime.lifecycle != nil {
-					runtime.lifecycle.markCoordinatorStopping(true, c.reason)
 					runtime.lifecycle.markBoundCancellation()
 					observation := runtime.lifecycle.terminalObservationSnapshot()
 					if firstFailure == nil && observation.failure {
