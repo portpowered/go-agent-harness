@@ -388,7 +388,8 @@ func RunBrowserConversation(ctx context.Context, out io.Writer, options BrowserC
 	runContext, cancel := context.WithTimeout(ctx, scenario.RunTimeout)
 	defer cancel()
 	tracker := newBrowserConversationEvidenceTracker(run, scenario)
-	tracker.configure(runContext, cancel, nil, options.CustomerNavigate)
+	cancellationPublication := newBrowserConversationCancellationPublication()
+	tracker.configure(runContext, cancellationPublication.requestCancellation, nil, options.CustomerNavigate)
 	interruptionController := newBrowserConversationInterruptionController(run, tracker, scenario, interruptionAudio)
 	if interruptionController != nil {
 		defer interruptionController.Close()
@@ -454,7 +455,7 @@ func RunBrowserConversation(ctx context.Context, out io.Writer, options BrowserC
 					return runFixture.Navigate(navigationContext, navigation)
 				}
 			}
-			tracker.configure(runContext, cancel, fixture, customerNavigate)
+			tracker.configure(runContext, cancellationPublication.requestCancellation, fixture, customerNavigate)
 		}
 		if fixture != nil && rootErr == nil {
 			observedBroker = newBrowserConversationBroker(fixture.Broker, run, tracker, scenario, options.Oracle, fixture, interruptionController)
@@ -480,8 +481,11 @@ func RunBrowserConversation(ctx context.Context, out io.Writer, options BrowserC
 					}
 					return interruptionController.AudioInterruptions()
 				}(),
-				SessionOptions:   options.SessionOptions,
-				StreamObserver:   tracker.observe,
+				SessionOptions: options.SessionOptions,
+				StreamObserver: func(message messages.StreamMessage) {
+					tracker.observe(message)
+					cancellationPublication.markLateEventPublished(tracker)
+				},
 				CustomerNavigate: customerNavigate,
 			}
 			lifecycle.SessionStarted = true
@@ -492,7 +496,9 @@ func RunBrowserConversation(ctx context.Context, out io.Writer, options BrowserC
 			if sessionRequest.AudioInterruptions != nil {
 				sessionRequest.SessionOptions.AudioInterruptions = sessionRequest.AudioInterruptions
 			}
-			sessionErr := sessionRunner(runContext, out, sessionRequest)
+			sessionErr := runBrowserConversationSessionWithCancellationPublication(
+				runContext, cancel, out, sessionRunner, sessionRequest, cancellationPublication,
+			)
 			lifecycle.SessionTerminated = true
 			if sessionErr != nil {
 				phase := BrowserConversationPhaseSession
@@ -634,6 +640,90 @@ func RunBrowserConversation(ctx context.Context, out io.Writer, options BrowserC
 	return result, rootErr
 }
 
+// runBrowserConversationSessionWithCancellationPublication keeps the session
+// context alive between the semantic cancellation request and the first
+// suppressed late stream event. That event is the publication barrier for the
+// browser-runner result: once it has been accounted, cancellation can stop the
+// shared session without losing the causal evidence that proved suppression.
+func runBrowserConversationSessionWithCancellationPublication(
+	ctx context.Context,
+	cancel context.CancelFunc,
+	out io.Writer,
+	runner BrowserConversationSessionRunner,
+	request BrowserConversationSessionRequest,
+	publication *browserConversationCancellationPublication,
+) error {
+	if runner == nil {
+		return errors.New("browser conversation session runner is nil")
+	}
+	if publication == nil {
+		return runner(ctx, out, request)
+	}
+	done := make(chan error, 1)
+	go func() {
+		done <- runner(ctx, out, request)
+	}()
+
+	cancellationRequest := publication.cancellationRequest()
+	lateEvent := publication.lateEvent()
+	contextDone := ctx.Done()
+	var sessionErr error
+	sessionFinished := false
+	cancellationRequested := false
+	contextCanceled := false
+	for {
+		select {
+		case err := <-done:
+			sessionErr = err
+			sessionFinished = true
+			done = nil
+			if cancellationRequested {
+				if contextDone == nil {
+					return sessionErr
+				}
+				// A session runner may finish after the tracker has published
+				// cancellation but before the provider's late event reaches its
+				// observer. Keep the result unpublished until that barrier arrives.
+				continue
+			}
+			select {
+			case <-cancellationRequest:
+				cancellationRequested = true
+				cancellationRequest = nil
+				if contextCanceled {
+					return sessionErr
+				}
+			default:
+				return sessionErr
+			}
+		case <-cancellationRequest:
+			// The tracker has recorded the semantic cancellation. Keep the
+			// session context live until the late-event publication arrives.
+			cancellationRequested = true
+			cancellationRequest = nil
+		case <-lateEvent:
+			lateEvent = nil
+			if cancel != nil {
+				cancel()
+			}
+			if sessionFinished {
+				return sessionErr
+			}
+		case <-contextDone:
+			contextDone = nil
+			contextCanceled = true
+			if cancel != nil {
+				cancel()
+			}
+			if sessionFinished {
+				return sessionErr
+			}
+			// Preserve the direct runner's join contract for caller cancellation:
+			// cancel the provider context, then wait for its goroutine to finish.
+		}
+	}
+}
+
 // RunBrowserConversationScenario is the scenario-first spelling.
 func RunBrowserConversationScenario(ctx context.Context, out io.Writer, scenario BrowserConversationScenario, options BrowserConversationRunOptions) (BrowserConversationResult, error) {
 	options.Scenario = scenario
@@ -672,9 +762,12 @@ func runBrowserConversationSession(ctx context.Context, out io.Writer, request B
 	sessionOptions.AudioInputs = cloneScheduledAudioInputs(request.AudioInputs)
 	sessionOptions.AudioInterruptions = request.AudioInterruptions
 	sessionOptions.WaitForClose = true
+	// The runner observer publishes cancellation accounting before caller-owned
+	// observers see the same stream frame. Hermetic providers can use that
+	// ordering to induce a post-cancel event without timing assumptions.
 	sessionOptions.StreamObserver = combineBrowserConversationStreamObservers(
-		sessionOptions.StreamObserver,
 		request.StreamObserver,
+		sessionOptions.StreamObserver,
 	)
 	if strings.TrimSpace(sessionOptions.Provider) == "" && sessionOptions.LoadedConfig == nil {
 		sessionOptions.Provider = config.ProviderGrok

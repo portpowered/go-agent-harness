@@ -391,6 +391,54 @@ type BrowserConversationRun struct {
 	hasCorrections  bool
 }
 
+// browserConversationCancellationPublication is the run-scoped handoff
+// between the tracker cancellation request and the immutable result snapshot.
+// The request channel is closed only after cancellation evidence is recorded;
+// the late-event channel is closed only after the tracker has suppressed and
+// counted a post-cancel stream event. The runner uses that happens-before edge
+// to keep provider output publication from racing the late-event snapshot.
+type browserConversationCancellationPublication struct {
+	cancellationRequested chan struct{}
+	lateEventPublished    chan struct{}
+	cancellationOnce      sync.Once
+	lateEventOnce         sync.Once
+}
+
+func newBrowserConversationCancellationPublication() *browserConversationCancellationPublication {
+	return &browserConversationCancellationPublication{
+		cancellationRequested: make(chan struct{}),
+		lateEventPublished:    make(chan struct{}),
+	}
+}
+
+func (p *browserConversationCancellationPublication) requestCancellation() {
+	if p == nil {
+		return
+	}
+	p.cancellationOnce.Do(func() { close(p.cancellationRequested) })
+}
+
+func (p *browserConversationCancellationPublication) markLateEventPublished(tracker *browserConversationEvidenceTracker) {
+	if p == nil || tracker == nil || tracker.lateEventCount() == 0 {
+		return
+	}
+	p.lateEventOnce.Do(func() { close(p.lateEventPublished) })
+}
+
+func (p *browserConversationCancellationPublication) cancellationRequest() <-chan struct{} {
+	if p == nil {
+		return nil
+	}
+	return p.cancellationRequested
+}
+
+func (p *browserConversationCancellationPublication) lateEvent() <-chan struct{} {
+	if p == nil {
+		return nil
+	}
+	return p.lateEventPublished
+}
+
 // NewBrowserConversationRun validates the full scenario before creating the
 // collector. No fixture, provider, process, or audio boundary is touched.
 func NewBrowserConversationRun(scenario BrowserConversationScenario) (*BrowserConversationRun, error) {

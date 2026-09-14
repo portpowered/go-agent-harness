@@ -1,0 +1,109 @@
+{
+  "schema": "audio-runtime-c167-recover-c163-rtc-hermetic-cancellation/v1",
+  "project": "audio-runtime",
+  "contractRevision": "audio-runtime-v1",
+  "planWork": "audio-runtime-c167-recover-c163-rtc-hermetic-cancellation",
+  "planBranch": "codex/audio-runtime-c167-recover-c163-rtc-hermetic-cancellation",
+  "planWorktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c167-recover-c163-rtc-hermetic-cancellation",
+  "admission": {
+    "status": "admitted",
+    "verifiedWith": "factory/scripts/project-control.py verify-work --type task --name audio-runtime-c167-recover-c163-rtc-hermetic-cancellation",
+    "factorySession": "~default",
+    "server": "http://127.0.0.1:7439"
+  },
+  "branchIdentity": {
+    "prdBranchName": "codex/audio-runtime-c167-recover-c163-rtc-hermetic-cancellation",
+    "prdBranchMatchesIsolatedWorktree": true,
+    "isolatedWorktreeHead": "2c79ec6a931c3e86944d6a625d0a5060b4f85aa0",
+    "operationalWorktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c152-recover-c135-c131-rtc-ownership",
+    "operationalBranch": "codex/audio-runtime-c152-recover-c135-c131-rtc-ownership"
+  },
+  "baseline": {
+    "preservedCandidateHead": "30c4d79573d9853f0cf8e1600bfa2612ff4b8fac",
+    "mergeCommit": "c7fb5e3b279707477e4605d989548e3721d6a3bb",
+    "mergeParents": [
+      "30c4d79573d9853f0cf8e1600bfa2612ff4b8fac",
+      "2c79ec6a931c3e86944d6a625d0a5060b4f85aa0"
+    ],
+    "freshOriginMain": "2c79ec6a931c3e86944d6a625d0a5060b4f85aa0",
+    "requiredAncestry": {
+      "startupIntegration": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+      "acceptedMain": "97d3dcfb1e97a2611aa26b203a7f893442db4768",
+      "preservedCandidate": "30c4d79573d9853f0cf8e1600bfa2612ff4b8fac",
+      "freshOriginMain": "2c79ec6a931c3e86944d6a625d0a5060b4f85aa0",
+      "allAncestors": true
+    },
+    "integrationMethod": "git merge --no-edit origin/main",
+    "hostCheckoutMutated": false
+  },
+  "historicalNegative": {
+    "run": 34787272577,
+    "head": "30c4d79573d9853f0cf8e1600bfa2612ff4b8fac",
+    "namedGreenLanes": 8,
+    "failedLane": "CI (hermetic)",
+    "failure": "TestRunBrowserConversationInterruptsInFlightWorkAndPreservesDetachedTab at session_browser_scenario_runner_test.go:228",
+    "canceledTerminalState": true,
+    "stepAndAudioFactsRetained": true,
+    "lateEventsSuppressed": 0,
+    "isCurrentHeadGreenEvidence": false
+  },
+  "causalOracle": {
+    "test": "TestRunBrowserConversationInterruptsInFlightWorkAndPreservesDetachedTab",
+    "barriers": [
+      "cancellationObserved is released only by the observer after the tracker has finalized semantic cancellation",
+      "lateEventInduced is released immediately before the deliberately induced background late response",
+      "lateEventPublished is released only after tracker suppression increments LateEventsSuppressed"
+    ],
+    "preRepair": {
+      "worktree": "/tmp/audio-runtime-c167-before",
+      "revision": "c7fb5e3b279707477e4605d989548e3721d6a3bb",
+      "result": "deterministic failure",
+      "lateEventsSuppressed": 0,
+      "lateEventInducedAfterCancellation": true,
+      "lateEventObservedBeforeSnapshot": false,
+      "orchestration": "no sleep, polling, retry or probabilistic repetition"
+    },
+    "repaired": {
+      "publicationRepair": "tracker cancellation publication -> induced late-event suppression/accounting -> context cancellation -> final snapshot",
+      "lateEventsSuppressed": ">0",
+      "publicLateResponse": false,
+      "canceledInvocationAndLifecycleEvidence": true,
+      "orderedAudio": [1, 2, 3, 4]
+    }
+  },
+  "focusedChecks": {
+    "normalCount1": "passed",
+    "nomicrophoneCount20Coverpkg": "passed",
+    "coverageProfile": "docs/temp/projects/audio-runtime/audio-runtime-c167-recover-c163-rtc-hermetic-cancellation/browser-cancellation.cover.out",
+    "coverageStatements": "16.3% package total for the focused coverpkg run",
+    "raceCount20TwoTests": "passed",
+    "diffCheck": "passed",
+    "gofmt": "passed"
+  },
+  "accumulatedChecks": {
+    "ownershipDagAndApi": "passed",
+    "behavioralAndCausalNegatives": "passed (84 normal, 415 race)",
+    "rtcNormal": "passed",
+    "rtcRace": "passed",
+    "deviceCallerWire": "passed",
+    "agentRuntimeDeviceToolReplay": "passed",
+    "goworkOffExternalConsumer": "passed"
+  },
+  "remainingGates": [
+    "changed-head SCRIPT CI",
+    "fresh independent review",
+    "guarded merge",
+    "meta-owned immutable engineering scope=vertical probe",
+    "AUDIO",
+    "DEVICE",
+    "EMBED",
+    "SERVICE",
+    "TRACE",
+    "REPLAY",
+    "FAILURES",
+    "QUALITY",
+    "PARITY"
+  ],
+  "hardwareAndAcoustics": "out_of_scope",
+  "realtime": "not used"
+}
