@@ -34,8 +34,8 @@ func TestSessionPlaybackObservabilitySamplesCompleteSnapshotAndContainsFailures(
 		UnderflowEvents: 1, UnderflowSamples: 480, ZeroFilledSamples: 480,
 		OverflowEvents: 2, DroppedSamples: 96, MinimumQueuedSamples: 0,
 	})
-	if len(samples) != len(playbackMetricSamples) {
-		t.Fatalf("metric samples = %d, want %d", len(samples), len(playbackMetricSamples))
+	if len(samples) != 12 {
+		t.Fatalf("metric samples = %d, want 12", len(samples))
 	}
 	byName := make(map[string]observability.MetricSample, len(samples))
 	for _, sample := range samples {
@@ -99,31 +99,12 @@ func (s *recordingDiagnosticSink) RecordSessionDiagnostic(record SessionDiagnost
 	s.records = append(s.records, record)
 }
 
-// TestResolvePlaybackDiagnosticSink covers the structural fix's core
-// contract: a caller-supplied sink is always used untouched, and a nil sink
-// -- the exact shape of the #350/#360 omission -- resolves to a real,
-// non-nil fallback instead of staying nil.
-func TestResolvePlaybackDiagnosticSink(t *testing.T) {
-	if resolved := resolvePlaybackDiagnosticSink(nil); resolved == nil {
-		t.Fatal("resolvePlaybackDiagnosticSink(nil) = nil, want the package fallback sink")
-	} else if resolved != fallbackPlaybackDiagnosticSink {
-		t.Fatal("resolvePlaybackDiagnosticSink(nil) did not return the shared fallback sink")
-	}
-
-	sink := &recordingDiagnosticSink{}
-	if resolved := resolvePlaybackDiagnosticSink(sink); resolved != SessionDiagnosticSink(sink) {
-		t.Fatal("resolvePlaybackDiagnosticSink did not pass a caller-supplied sink through unchanged")
-	}
-}
-
-// TestSessionPlaybackDiagnosticObserverResolvedNeverNil proves the specific
-// wiring bug is closed at the function level: an observer built from a
-// resolved nil sink is callable (never nil) and still reaches a real sink --
-// here, the fallback -- carrying the dropped-sample count.
+// TestSessionPlaybackDiagnosticObserverResolvedNeverNil proves the service
+// owns an explicit fallback when the host omitted its diagnostic sink.
 func TestSessionPlaybackDiagnosticObserverResolvedNeverNil(t *testing.T) {
-	observer := sessionPlaybackDiagnosticObserver(resolvePlaybackDiagnosticSink(nil))
+	observer := sessionPlaybackDiagnosticObserver(nil)
 	if observer == nil {
-		t.Fatal("sessionPlaybackDiagnosticObserver(resolvePlaybackDiagnosticSink(nil)) = nil, want a callable observer")
+		t.Fatal("sessionPlaybackDiagnosticObserver(nil) = nil, want a callable observer")
 	}
 	// The fallback logs rather than exposing a way to assert on it directly;
 	// this call only needs to prove it does not panic on the un-configured
@@ -131,7 +112,7 @@ func TestSessionPlaybackDiagnosticObserverResolvedNeverNil(t *testing.T) {
 	observer("virtual:output", audio.PlaybackQueueStats{DroppedSamples: 7, OverflowEvents: 1})
 
 	sink := &recordingDiagnosticSink{}
-	observer = sessionPlaybackDiagnosticObserver(resolvePlaybackDiagnosticSink(sink))
+	observer = sessionPlaybackDiagnosticObserver(sink)
 	observer("virtual:output", audio.PlaybackQueueStats{DroppedSamples: 7, OverflowEvents: 1})
 	if len(sink.records) != 1 {
 		t.Fatalf("caller-supplied sink recorded %d records, want 1", len(sink.records))
@@ -193,8 +174,8 @@ func TestEmitRoomParticipantPlaybackOverflowDiagnostic(t *testing.T) {
 		t.Fatal("record reports zero dropped samples after a deliberate overflow")
 	}
 
-	// A nil sink must still resolve to the shared fallback rather than being
-	// silently skipped, exactly like the RTC path above.
+	// A nil sink still uses the observer service's per-construction fallback
+	// rather than being silently skipped, exactly like the RTC path above.
 	emitRoomParticipantPlaybackOverflowDiagnostic("customer", sink, nil)
 }
 
@@ -202,7 +183,7 @@ func TestEmitRoomParticipantPlaybackOverflowDiagnostic(t *testing.T) {
 // mandatory regression test asserting that every non-test construction path
 // for SessionRunOptions yields a non-nil playback observer once planned,
 // closing the class of bug (not just the two call sites already found) --
-// see resolvePlaybackDiagnosticSink's doc comment. Each case below builds its
+// see the devices observer service's per-construction fallback. Each case below builds its
 // SessionRunOptions the same way the real, corresponding production call
 // site does (self-play's own builder function, and the room package's actual
 // per-participant plan for a live and a replay participant), deliberately

@@ -15,6 +15,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
@@ -132,6 +133,79 @@ type PlaybackControllerProvider interface {
 type PlaybackSamplesObserverProvider interface {
 	SetPlaybackSamplesObserver(func(context.Context, int, []int16) error)
 }
+
+// PlaybackObserver receives one synchronized playback queue snapshot outside
+// the device callback. Device IDs remain opaque host values at this boundary.
+type PlaybackObserver func(string, audio.PlaybackQueueStats)
+
+// CaptureObserver receives one synchronized capture queue snapshot outside
+// the device callback.
+type CaptureObserver func(string, audio.CaptureQueueStats)
+
+// PlaybackReceiptObserver receives the result of one admitted playback
+// control operation after the device worker applies or rejects it.
+type PlaybackReceiptObserver func(audio.PlaybackReceipt)
+
+// DiagnosticRecord is the device-owned structured projection for playback
+// loss. Fields are bounded, credential-free metadata.
+type DiagnosticRecord struct {
+	Event  string
+	Fields map[string]string
+}
+
+// DiagnosticSink is the host-owned destination for device diagnostics.
+type DiagnosticSink interface {
+	RecordDiagnostic(DiagnosticRecord)
+}
+
+// ObserverDependencies are invocation-owned ports. A nil diagnostic sink
+// receives the service's explicit per-construction fallback; nil metric and
+// log ports become no-op implementations.
+type ObserverDependencies struct {
+	DiagnosticSink DiagnosticSink
+	MetricSampler  observability.MetricSampler
+	Logger         observability.Logger
+}
+
+// PlaybackOverflowReport carries the participant attribution needed by room
+// teardown. An empty ParticipantID denotes a single-session observation.
+type PlaybackOverflowReport struct {
+	DeviceID      string
+	ParticipantID string
+	Stats         audio.PlaybackQueueStats
+}
+
+// ObserverService owns canonical playback/capture projections and safe
+// observer composition for one invocation. It has no device or process
+// lifecycle of its own.
+type ObserverService interface {
+	PlaybackObserver() PlaybackObserver
+	PlaybackOverflowObserver() PlaybackObserver
+	PlaybackObservabilityObserver() PlaybackObserver
+	CaptureObserver() CaptureObserver
+	CombinePlaybackObservers(...PlaybackObserver) PlaybackObserver
+	CombineCaptureObservers(...CaptureObserver) CaptureObserver
+	CombinePlaybackReceiptObservers(...PlaybackReceiptObserver) PlaybackReceiptObserver
+	ReportPlaybackOverflow(PlaybackOverflowReport)
+}
+
+// Device playback diagnostic names and fields are stable presentation
+// values shared by CLI, room, and embeddable hosts.
+const (
+	PlaybackOverflowDiagnosticEvent            = "session_playback_overflow"
+	PlaybackDiagnosticFieldDeviceID            = "device_id"
+	PlaybackDiagnosticFieldSampleRate          = "sample_rate"
+	PlaybackDiagnosticFieldChannels            = "channels"
+	PlaybackDiagnosticFieldLatencyTargetMillis = "latency_target_ms"
+	PlaybackDiagnosticFieldCapacitySamples     = "capacity_samples"
+	PlaybackDiagnosticFieldQueuedSamples       = "queued_samples"
+	PlaybackDiagnosticFieldPeakQueuedSamples   = "peak_queued_samples"
+	PlaybackDiagnosticFieldDroppedSamples      = "dropped_samples"
+	PlaybackDiagnosticFieldOverflowEvents      = "overflow_events"
+	PlaybackDiagnosticFieldParticipantID       = "participant_id"
+	PlaybackSnapshotLogMessage                 = "audio playback queue finalized"
+	CaptureSnapshotLogMessage                  = "audio capture queue finalized"
+)
 
 // MediaPorts are the optional local workers admitted for one device request.
 // The service handle owns both endpoints and must be closed exactly once by

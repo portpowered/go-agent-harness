@@ -753,7 +753,7 @@ func (c *roomCoordinator) finishParticipant(runtime *roomParticipantRuntime, rea
 		// no SessionRunOptions/RTCDeviceBinding behind it, so it never reaches
 		// sessionPlaybackDiagnosticObserver; this is the participant-scoped
 		// equivalent, checked once the device has stopped accepting writes.
-		emitRoomParticipantPlaybackOverflowDiagnostic(id, runtime.output, runtime.diagnosticSink)
+		reportRoomParticipantPlaybackOverflow(id, runtime.output, runtime.diagnosticSink)
 	}
 	if runtime.mixer != nil {
 		cleanupErr = errors.Join(cleanupErr, boundedRoomCleanupOperation(cleanup, roomLifecycleWorkLabel(id, "mixer"), runtime.mixer.Close))
