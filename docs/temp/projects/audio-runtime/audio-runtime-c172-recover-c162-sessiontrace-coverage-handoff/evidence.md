@@ -35,7 +35,7 @@ All commands were bounded and run without credentials or Realtime access on the 
 - Credential-free scheduled-audio/tool lifecycle replay passed in the accumulated matrix and in the explicit nomicrophone run (`4.479s`); the expected mismatch/PCM/transcript negative controls remained rejecting their mutations.
 - `COUNT=1 scripts/test-session-ci-regressions.sh all` passed normal, coverage and race modes, including high-rate tool/audio, simulated-device, provider-tool continuation, lifecycle and cleanup controls.
 - Targeted vet, `make wire-check`, `make fmt`, `make architecture-size-check` (`202` packages, `1,941` files, `28,805` functions), pinned `make staticcheck` `2026.1`, pinned `make lint LINT_BASE=origin/main` `v2.9.0` (`0 issues` in all `15` modules), and `git diff --check` passed.
-- Refreshed ignored coverage profiles are retained for this handoff: `canceled-close.cover.out` SHA-256 `a1c1bc1d05421bda4b083b1593b424f77a710271ca51ed0ce6cb3f814e167759`, `room-bound.cover.out` SHA-256 `828e35f43d0377e3378e935c4e91c36c286fcef281acf4b39e9caa6f5ca309f6`, and `sessiontrace.cover.out` SHA-256 `8c38a014bf9edd606f8046c46a21042490fb436396d2a87f7409bac823ca0131`.
+- Refreshed local coverage profiles were generated for this handoff: `canceled-close.cover.out` SHA-256 `a1c1bc1d05421bda4b083b1593b424f77a710271ca51ed0ce6cb3f814e167759`, `room-bound.cover.out` SHA-256 `828e35f43d0377e3378e935c4e91c36c286fcef281acf4b39e9caa6f5ca309f6`, and `sessiontrace.cover.out` SHA-256 `8c38a014bf9edd606f8046c46a21042490fb436396d2a87f7409bac823ca0131`. The 14 MiB, 221,086-line room-bound profile remains locally available but is omitted from the committed handoff as generated ignored output; the two smaller profiles are committed.
 
 ## Gate boundary and next action
 
