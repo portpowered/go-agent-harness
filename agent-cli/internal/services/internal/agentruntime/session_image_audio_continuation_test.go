@@ -30,17 +30,17 @@ func TestImageAudioSessionKeepsToolContinuationOpen(t *testing.T) {
 
 	cases := []struct {
 		name string
-		run  func(context.Context, io.Writer, SessionImageRunOptions, SessionAudioInput, string) error
+		run  func(context.Context, io.Writer, SessionImageRunOptions, RuntimeAudioInput, string) error
 	}{
 		{
 			name: "direct image audio",
-			run: func(ctx context.Context, out io.Writer, opts SessionImageRunOptions, input SessionAudioInput, _ string) error {
+			run: func(ctx context.Context, out io.Writer, opts SessionImageRunOptions, input RuntimeAudioInput, _ string) error {
 				return RunSessionWithImagesAndAudioInput(ctx, out, opts, input)
 			},
 		},
 		{
 			name: "recorded image audio",
-			run: func(ctx context.Context, out io.Writer, opts SessionImageRunOptions, input SessionAudioInput, destination string) error {
+			run: func(ctx context.Context, out io.Writer, opts SessionImageRunOptions, input RuntimeAudioInput, destination string) error {
 				return RunSessionWithImagesAndRecordingDirectoryAndAudioInput(ctx, out, opts, destination, input)
 			},
 		},
@@ -76,7 +76,7 @@ func TestImageAudioSessionKeepsToolContinuationOpen(t *testing.T) {
 					},
 					ImagePaths:   []string{imagePath},
 					SystemPrompt: "Use the image tool.",
-				}, SessionAudioInput{
+				}, RuntimeAudioInput{
 					Path:    "synthetic.pcm",
 					Present: true,
 					Source:  audio.NewSliceSource([]int16{1, 2, 3}),

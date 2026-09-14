@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
@@ -88,8 +89,8 @@ func TestResolveBareSessionOptionsUsesBareOpenAIDefaults(t *testing.T) {
 	if !resolved.BareLive {
 		t.Fatal("BareLive = false, want true")
 	}
-	if !resolved.RTCDeviceBinding.InputPresent || !resolved.RTCDeviceBinding.OutputPresent {
-		t.Fatalf("bare device presence = %#v, want both directions present", resolved.RTCDeviceBinding)
+	if !resolved.RTCBinding.InputPresent || !resolved.RTCBinding.OutputPresent {
+		t.Fatalf("bare device presence = %#v, want both directions present", resolved.RTCBinding)
 	}
 	if resolved.APIKey != "fallback-key" {
 		t.Fatalf("API key = %q, want conventional environment fallback", resolved.APIKey)
@@ -207,8 +208,8 @@ func TestResolveBareSessionOptionsHonorsPersistedSessionValues(t *testing.T) {
 	if resolved.APIKey != "persisted-key" {
 		t.Fatalf("API key = %q, want persisted key", resolved.APIKey)
 	}
-	if resolved.RTCDeviceBinding.InputDevice != "virtual:mic" || resolved.RTCDeviceBinding.OutputDevice != "virtual:speakers" {
-		t.Fatalf("device selectors = %#v, want persisted selectors", resolved.RTCDeviceBinding)
+	if resolved.RTCBinding.InputDevice != "virtual:mic" || resolved.RTCBinding.OutputDevice != "virtual:speakers" {
+		t.Fatalf("device selectors = %#v, want persisted selectors", resolved.RTCBinding)
 	}
 	if resolved.TurnDetection == nil || resolved.TurnDetection.Threshold != 0.72 || resolved.TurnDetection.PrefixPaddingMs != 120 || resolved.TurnDetection.SilenceDurationMs != 640 || resolved.TurnDetection.CreateResponse == nil || *resolved.TurnDetection.CreateResponse {
 		t.Fatalf("turn detection = %#v, want persisted policy", resolved.TurnDetection)
@@ -296,7 +297,7 @@ func TestResolveBareSessionOptionsCLIDeviceSelectorsOverridePersistedValues(t *t
 
 	resolved, err := ResolveBareSessionOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		LoadedConfig: loaded,
-		RTCDeviceBinding: RTCDeviceBindingRequest{
+		RTCBinding: runtimedevices.RTCBindingRequest{
 			InputDevice:   "cli:mic",
 			OutputDevice:  "",
 			InputPresent:  true,
@@ -306,8 +307,8 @@ func TestResolveBareSessionOptionsCLIDeviceSelectorsOverridePersistedValues(t *t
 	if err != nil {
 		t.Fatalf("ResolveBareSessionOptions(): %v", err)
 	}
-	if resolved.RTCDeviceBinding.InputDevice != "cli:mic" || resolved.RTCDeviceBinding.OutputDevice != "" {
-		t.Fatalf("device selectors = %#v, want CLI input and explicit default output", resolved.RTCDeviceBinding)
+	if resolved.RTCBinding.InputDevice != "cli:mic" || resolved.RTCBinding.OutputDevice != "" {
+		t.Fatalf("device selectors = %#v, want CLI input and explicit default output", resolved.RTCBinding)
 	}
 }
 

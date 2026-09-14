@@ -160,7 +160,7 @@ func TestRunSessionWithImagesAndAudioInputRequiresAssistantOutput(t *testing.T) 
 		},
 		ImagePaths:  []string{imagePath},
 		MaxDuration: 100 * time.Millisecond,
-	}, agentruntime.SessionAudioInput{Path: audioPath, Present: true})
+	}, agentruntime.RuntimeAudioInput{Path: audioPath, Present: true})
 	if err == nil || !errors.Is(err, agentruntime.ErrSessionAudioResponseIncomplete) {
 		t.Fatalf("image-plus-audio run without assistant output error = %v, want ErrSessionAudioResponseIncomplete", err)
 	}
@@ -194,7 +194,7 @@ func TestRunSessionWithImagesAndAudioInputUsesOneDeferredTurn(t *testing.T) {
 		ImagePaths:   []string{imagePath},
 		AudioOutPath: filepath.Join(dir, "response.wav"),
 		MaxDuration:  5 * time.Second,
-	}, agentruntime.SessionAudioInput{Path: audioPath, Present: true})
+	}, agentruntime.RuntimeAudioInput{Path: audioPath, Present: true})
 	if err != nil {
 		t.Fatalf("image-plus-audio session: %v", err)
 	}

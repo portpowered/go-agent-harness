@@ -9,14 +9,15 @@ import (
 )
 
 type sessionCommandPreflight struct {
-	cmd              *cobra.Command
-	browserTools     string
-	transport        string
-	signaling        string
-	mediaSource      string
-	audioInTurnBarge bool
-	audioInTurns     int
-	maxDuration      time.Duration
+	cmd               *cobra.Command
+	browserTools      string
+	transport         string
+	signaling         string
+	mediaSource       string
+	audioInTurnBarge  bool
+	audioInTurns      int
+	audioDeviceServer string
+	maxDuration       time.Duration
 }
 
 func validateSessionCommandPreflight(input sessionCommandPreflight) (string, error) {
@@ -40,6 +41,9 @@ func validateSessionCommandPreflight(input sessionCommandPreflight) (string, err
 		input.cmd.Flags().Changed("audio-in"), input.cmd.Flags().Changed("audio-out"),
 		input.cmd.Flags().Changed(serviceDevices.SessionAudioInDeviceFlag), input.cmd.Flags().Changed(serviceDevices.SessionAudioOutDeviceFlag),
 	); err != nil {
+		return "", err
+	}
+	if err := serviceDevices.ValidateRemoteEndpoint(input.audioDeviceServer); err != nil {
 		return "", err
 	}
 	if err := serviceSession.ValidateSessionMaxDuration(input.maxDuration); err != nil {

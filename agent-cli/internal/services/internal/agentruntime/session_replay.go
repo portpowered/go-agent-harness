@@ -6,14 +6,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 	"io"
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
-	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 const (
@@ -113,7 +113,7 @@ func loadReplaySessionConfiguration(path string) (replaySessionConfiguration, er
 		if inputRate > 0 && outputRate > 0 && inputRate != outputRate {
 			return replaySessionConfiguration{}, fmt.Errorf(
 				"replay session capture %s: %w: input=%d Hz output=%d Hz",
-				path, ErrSessionAudioSampleRateConflict, inputRate, outputRate,
+				path, audioio.ErrSampleRateConflict, inputRate, outputRate,
 			)
 		}
 		return replaySessionConfiguration{

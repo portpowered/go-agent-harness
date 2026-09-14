@@ -1,12 +1,9 @@
 package agentruntime
 
-import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-
 import (
 	"bytes"
 	"context"
 	"errors"
-	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
 	"io"
 	"strings"
 	"sync"
@@ -160,7 +157,7 @@ func TestRunAgentLoopSessionTerminalOutcomesAlwaysDrainAcceptedDelta(t *testing.
 		{
 			name: "audio input failure",
 			setup: func(f *liveTerminalDrainFixture) func() {
-				f.options.AudioIn = &sessionAudioSource{source: &liveTerminalDrainFailingAudioSource{err: audioErr}}
+				f.options.AudioIn = &runtimeAudioSource{source: &liveTerminalDrainFailingAudioSource{err: audioErr}}
 				return func() { f.acceptedOutput() }
 			},
 			wantErr: audioErr,
@@ -168,27 +165,11 @@ func TestRunAgentLoopSessionTerminalOutcomesAlwaysDrainAcceptedDelta(t *testing.
 		{
 			name: "RTC pump failure",
 			setup: func(f *liveTerminalDrainFixture) func() {
-				registry, err := devicegw.NewVirtualRegistry(devicegw.DefaultVirtualBackendConfig())
-				if err != nil {
-					t.Fatalf("new virtual registry: %v", err)
-				}
-				source, err := devicert.NewRTCDeviceSource(registry, "virtual:input")
-				if err != nil {
-					t.Fatalf("open RTC source: %v", err)
-				}
-				feed, err := devicegw.NewDeviceSink(registry, "virtual:output")
-				if err != nil {
-					_ = source.Close()
-					t.Fatalf("open RTC feed: %v", err)
-				}
-				f.cleanup = append(f.cleanup, func() { _ = feed.Close() })
-				f.options.rtcDeviceBinding = &RTCDeviceBinding{Source: source}
-				f.session.media.Outbound = &liveTerminalDrainFailingOutboundMedia{err: pumpErr}
+				deviceErrors := make(chan error, 1)
+				f.options.rtcDeviceBinding = &testRTCBinding{errors: deviceErrors}
 				return func() {
 					f.acceptedOutput()
-					if err := feed.WriteFrame(context.Background(), make([]int16, audio.FrameSize)); err != nil {
-						t.Errorf("write RTC trigger frame: %v", err)
-					}
+					deviceErrors <- pumpErr
 				}
 			},
 			wantErr: pumpErr,
@@ -432,15 +413,6 @@ type liveTerminalDrainFailingAudioSource struct {
 
 func (s *liveTerminalDrainFailingAudioSource) ReadFrame(context.Context, []int16) error { return s.err }
 func (*liveTerminalDrainFailingAudioSource) Close() error                               { return nil }
-
-type liveTerminalDrainFailingOutboundMedia struct {
-	err error
-}
-
-func (m *liveTerminalDrainFailingOutboundMedia) WriteFrame(context.Context, audio.PCMFrame) error {
-	return m.err
-}
-func (*liveTerminalDrainFailingOutboundMedia) Close() error { return nil }
 
 type liveTerminalDrainFailingWriter struct {
 	target    io.Writer

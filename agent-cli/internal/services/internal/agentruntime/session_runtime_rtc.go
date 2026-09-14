@@ -121,7 +121,7 @@ func planWebRTCSessionRuntime(opts SessionRunOptions, selection SessionRuntimeSe
 		if recordingDialer == nil {
 			return closeOnPlanError(wrapSessionRTCRuntimeError("create recording transport", ErrSessionRTCRuntimeUnavailable))
 		}
-		inputAudioTranscription := resolveInputAudioTranscriptionPolicy(opts, provider, opts.RTCDeviceBinding.InputPresent)
+		inputAudioTranscription := sessionInputTranscriptionPolicy(opts, provider, opts.RTCBinding.InputPresent)
 		inner, err = factory.newOpenAISessionInferencerForTools(sessionCfg, opts.Voice, recordingDialer, opts.ToolDefinitions, false, inputAudioTranscription)
 		if err != nil {
 			return closeOnPlanError(err)
@@ -191,7 +191,7 @@ type SessionRTCRuntimeError struct {
 
 func (e *SessionRTCRuntimeError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return runtimeNilText
 	}
 	if e.Phase == "" {
 		return fmt.Sprintf("WebRTC session runtime: %v", e.Err)
@@ -431,7 +431,7 @@ func (i *sessionRTCRuntimeInferencer) SetSessionAudioOutput(format models.AudioF
 	if i == nil || i.inner == nil {
 		return
 	}
-	if configurer, ok := i.inner.(sessionAudioOutputConfigurer); ok {
+	if configurer, ok := i.inner.(runtimeAudioOutputConfigurer); ok {
 		configurer.SetSessionAudioOutput(format, rate)
 	}
 }
@@ -440,7 +440,7 @@ func (i *sessionRTCRuntimeInferencer) SetSessionAudioInput(format models.AudioFo
 	if i == nil || i.inner == nil {
 		return
 	}
-	if configurer, ok := i.inner.(sessionAudioInputConfigurer); ok {
+	if configurer, ok := i.inner.(runtimeAudioInputConfigurer); ok {
 		configurer.SetSessionAudioInput(format, rate)
 	}
 }
@@ -572,16 +572,13 @@ func (s *sessionRTCRuntimeSession) OutputDrops() int64 {
 	return counters.OutputDrops()
 }
 
-// rtcMedia preserves the provider-owned media capability through the local
-// runtime decorator. The private seam lets service-owned wrappers discover
-// optional media without changing the public messages.Session contract.
-func (s *sessionRTCRuntimeSession) rtcMedia() (RTCMediaEndpoints, bool) {
+// rtcMedia preserves provider-owned media through the runtime decorator.
+func (s *sessionRTCRuntimeSession) rtcMedia() (sharedaudio.MediaEndpoints, bool) {
 	if s == nil || s.Session == nil {
-		return RTCMediaEndpoints{}, false
+		return sharedaudio.MediaEndpoints{}, false
 	}
-	return rtcMediaFromSession(s.Session)
+	return sessionMediaFromSession(s.Session)
 }
-
 func (s *sessionRTCRuntimeSession) Close() error {
 	if s == nil {
 		return nil

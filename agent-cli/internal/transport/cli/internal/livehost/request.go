@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -344,4 +345,34 @@ func buildReplayPlan(request serviceSession.Request, inspection *runtimeReplay.C
 
 func replayPlanHasActions(plan runtimeSession.LiveReplayPlan) bool {
 	return plan.OpeningPromptPresent || len(plan.AudioTurns) > 0 || plan.StopAfterResponse || plan.ProviderCloseExpected
+}
+
+func realtimeEndpoint(provider, baseURL string) string {
+	baseURL = strings.TrimSpace(baseURL)
+	if baseURL == "" {
+		return ""
+	}
+	parsed, err := url.Parse(baseURL)
+	if err != nil || parsed.Scheme == "" {
+		return baseURL
+	}
+	if parsed.Scheme == "http" {
+		parsed.Scheme = "ws"
+	}
+	if parsed.Scheme == "https" {
+		parsed.Scheme = "wss"
+	}
+	if provider == config.ProviderOpenAI && !strings.HasSuffix(strings.TrimRight(parsed.Path, "/"), "/realtime") {
+		parsed.Path = strings.TrimRight(parsed.Path, "/") + "/realtime"
+	}
+	return parsed.String()
+}
+
+func appendToolNames(result *runtimeSession.LiveRequest, capabilities *runtimeSession.LiveCapabilities) {
+	if result == nil || capabilities == nil {
+		return
+	}
+	for _, definition := range capabilities.Definitions {
+		result.ToolNames = append(result.ToolNames, definition.Name)
+	}
 }

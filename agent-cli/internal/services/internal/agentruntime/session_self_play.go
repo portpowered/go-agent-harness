@@ -491,7 +491,7 @@ func runSelfPlayConversation(ctx context.Context, opts SelfPlayRunOptions, custo
 	if opts.clock == nil {
 		opts.clock = platformclock.Real{}
 	}
-	timer, err := newSessionTimer(opts.clock, opts.MaxDuration)
+	timer, err := newAudioServiceTimer(opts.clock, opts.MaxDuration)
 	if err != nil {
 		return SelfPlayResult{StopReason: SelfPlayStopFailure}, fmt.Errorf("self-play clock: %w", err)
 	}

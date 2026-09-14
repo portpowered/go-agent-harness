@@ -274,9 +274,9 @@ func TestNewSessionWAVSourceRejectsMalformedHeaders(t *testing.T) {
 				_ = source.Close()
 				t.Fatal("expected format rejection")
 			}
-			var typed *SessionAudioInputError
-			if !errors.As(err, &typed) || typed.Kind != SessionAudioInputFormat {
-				t.Fatalf("error = %v, want kind %s", err, SessionAudioInputFormat)
+			var typed *RuntimeAudioInputError
+			if !errors.As(err, &typed) || typed.Kind != RuntimeAudioInputFormat {
+				t.Fatalf("error = %v, want kind %s", err, RuntimeAudioInputFormat)
 			}
 			if !errors.Is(err, audio.ErrUnsupportedFormat) {
 				t.Fatalf("error = %v, want errors.Is(audio.ErrUnsupportedFormat)", err)
@@ -291,7 +291,7 @@ func TestNewSessionWAVSourceRejectsMalformedHeaders(t *testing.T) {
 func TestOpenSessionWAVSourceClassifiesFileErrors(t *testing.T) {
 	if _, err := openSessionWAVSource(filepath.Join(t.TempDir(), "missing.wav")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("missing file error = %v, want errors.Is(os.ErrNotExist)", err)
-	} else if !errors.Is(err, ErrSessionAudioInputMissing) {
+	} else if !errors.Is(err, ErrRuntimeAudioInputMissing) {
 		t.Fatalf("missing file error = %v, want missing kind sentinel", err)
 	}
 
@@ -303,7 +303,7 @@ func TestOpenSessionWAVSourceClassifiesFileErrors(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected directory rejection")
 	}
-	if !errors.Is(err, ErrSessionAudioInputUnreadable) && !errors.Is(err, ErrSessionAudioInputFormat) {
+	if !errors.Is(err, ErrRuntimeAudioInputUnreadable) && !errors.Is(err, ErrRuntimeAudioInputFormat) {
 		t.Fatalf("directory error = %v, want unreadable or format kind", err)
 	}
 }
@@ -450,7 +450,7 @@ func TestNewSessionWAVSourceRetains24kHzHeaderRate(t *testing.T) {
 		t.Fatalf("open 24 kHz wav: %v", err)
 	}
 	defer func() { _ = source.Close() }()
-	if gotRate := sessionAudioSourceSampleRate(source, 0); gotRate != wavio.Rate24kHz {
+	if gotRate := runtimeAudioSourceSampleRate(source, 0); gotRate != wavio.Rate24kHz {
 		t.Fatalf("source sample rate = %d, want %d", gotRate, wavio.Rate24kHz)
 	}
 

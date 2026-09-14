@@ -313,7 +313,7 @@ func TestSessionRTCRuntimeInferencerStartsBeforeProviderAndUsesRTCDataPlane(t *t
 
 func TestSessionRTCRuntimeSessionForwardsProviderCapabilities(t *testing.T) {
 	wantSendErr := errors.New("provider send rejected")
-	media := RTCMediaEndpoints{
+	media := sharedaudio.MediaEndpoints{
 		Inbound:  &testRTCInboundMedia{},
 		Outbound: &testRTCOutboundMedia{},
 	}
@@ -326,7 +326,7 @@ func TestSessionRTCRuntimeSessionForwardsProviderCapabilities(t *testing.T) {
 	}
 	wrapper := &sessionRTCRuntimeSession{Session: provider}
 
-	gotMedia, ok := rtcMediaFromSession(wrapper)
+	gotMedia, ok := sessionMediaFromSession(wrapper)
 	if !ok {
 		t.Fatal("runtime session did not preserve provider RTC media capability")
 	}
@@ -693,7 +693,7 @@ func (*testRTCOutboundMedia) Close() error                                      
 
 type runtimeCapabilitySession struct {
 	*scriptedSession
-	media       RTCMediaEndpoints
+	media       sharedaudio.MediaEndpoints
 	sendOutcome messages.SessionSendOutcome
 	inputDrops  int64
 	outputDrops int64

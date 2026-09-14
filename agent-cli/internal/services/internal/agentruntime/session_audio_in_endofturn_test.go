@@ -46,12 +46,12 @@ func sessionAudioInTestWAVPCM(t *testing.T, wavPath string) []byte {
 // are emitted, after which the provider delivers a spoken response. The test
 // asserts the response audio received after commit is recorded non-empty.
 func TestSessionCommandAudioInputRecordsPostCommitResponse(t *testing.T) {
-	wavPath := committedSessionAudioInputWAVPath(t)
+	wavPath := committedRuntimeAudioInputWAVPath(t)
 	baseCapture, err := gwtesting.LoadSessionCapture(filepath.Join("..", "..", "..", "..", "test", "integration", "testdata", "openai_realtime_smoke.session.json"))
 	if err != nil {
 		t.Fatalf("load replay base fixture: %v", err)
 	}
-	records := []gwtesting.CapturedSessionEvent{committedSessionAudioInputUpdate(baseCapture.Records[0]), baseCapture.Records[1]}
+	records := []gwtesting.CapturedSessionEvent{committedRuntimeAudioInputUpdate(baseCapture.Records[0]), baseCapture.Records[1]}
 
 	appendChunk := func(audio []byte) {
 		t.Helper()

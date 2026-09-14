@@ -552,8 +552,8 @@ func TestLiveRecordRuntimeAudioInCompletesRoundTrip(t *testing.T) {
 			outputPath,
 			15*time.Second,
 			agentruntime.SessionTextSeed{},
-			agentruntime.SessionAudioInput{
-				Path:    committedSessionAudioInputWAVPath(t),
+			agentruntime.RuntimeAudioInput{
+				Path:    committedRuntimeAudioInputWAVPath(t),
 				Present: true,
 			},
 			"",
@@ -635,7 +635,7 @@ func TestLiveRecordRuntimeScheduledAudioCompletesWithoutCapturedSessionClose(t *
 	server := newScheduledAudioLifecycleServer()
 	destination := filepath.Join(t.TempDir(), "recording")
 	recordPath := filepath.Join(t.TempDir(), "capture.json")
-	audioPath := committedSessionAudioInputWAVPath(t)
+	audioPath := committedRuntimeAudioInputWAVPath(t)
 	toolDefinitions := []messages.ToolDefinition{
 		{Name: "read_file", Description: "Read a UTF-8 file."},
 		{Name: "exec", Description: "Execute a command."},
@@ -779,7 +779,7 @@ func TestLiveRecordRuntimeScheduledAudioContinuesAfterEmptyDirectoryResult(t *te
 	defer server.shutdown()
 	destination := filepath.Join(t.TempDir(), "recording")
 	recordPath := filepath.Join(t.TempDir(), "capture.json")
-	audioPath := committedSessionAudioInputWAVPath(t)
+	audioPath := committedRuntimeAudioInputWAVPath(t)
 	executor := &emptyDirectoryToolExecutor{}
 	diagnostics := &scheduledTurnDiagnosticSink{}
 	toolDefinitions := []messages.ToolDefinition{{
@@ -914,7 +914,7 @@ func TestLiveRecordRuntimeScheduledAudioBargeInUsesActiveResponseBoundary(t *tes
 	server := newBargeInScheduledAudioLifecycleServer()
 	destination := filepath.Join(t.TempDir(), "recording")
 	recordPath := filepath.Join(t.TempDir(), "capture.json")
-	audioPath := committedSessionAudioInputWAVPath(t)
+	audioPath := committedRuntimeAudioInputWAVPath(t)
 	var observed []messages.StreamMessage
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -1008,7 +1008,7 @@ func TestLiveRecordRuntimeScheduledAudioBargeInWaitsForPromptResponse(t *testing
 	defer server.closeOnce.Do(func() { close(server.closed) })
 	destination := filepath.Join(t.TempDir(), "recording")
 	recordPath := filepath.Join(t.TempDir(), "capture.json")
-	audioPath := committedSessionAudioInputWAVPath(t)
+	audioPath := committedRuntimeAudioInputWAVPath(t)
 	diagnostics := &scheduledTurnDiagnosticSink{}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -1089,7 +1089,7 @@ func TestLiveRecordRuntimeScheduledAudioWaitsForSessionUpdated(t *testing.T) {
 	server := newDelayedScheduledAudioLifecycleServer()
 	destination := filepath.Join(t.TempDir(), "recording")
 	recordPath := filepath.Join(t.TempDir(), "capture.json")
-	audioPath := committedSessionAudioInputWAVPath(t)
+	audioPath := committedRuntimeAudioInputWAVPath(t)
 
 	result := make(chan error, 1)
 	go func() {
@@ -1173,7 +1173,7 @@ func TestLiveRecordRuntimeScheduledAudioConfigTimeoutSendsNoTurn(t *testing.T) {
 	server := newDelayedScheduledAudioLifecycleServer()
 	destination := filepath.Join(t.TempDir(), "recording")
 	recordPath := filepath.Join(t.TempDir(), "capture.json")
-	audioPath := committedSessionAudioInputWAVPath(t)
+	audioPath := committedRuntimeAudioInputWAVPath(t)
 
 	result := make(chan error, 1)
 	go func() {
@@ -1272,8 +1272,8 @@ func TestLiveRecordRuntimeAudioInCancellationDuringAwaitSurfacesError(t *testing
 			filepath.Join(t.TempDir(), "response.wav"),
 			0,
 			agentruntime.SessionTextSeed{},
-			agentruntime.SessionAudioInput{
-				Path:    committedSessionAudioInputWAVPath(t),
+			agentruntime.RuntimeAudioInput{
+				Path:    committedRuntimeAudioInputWAVPath(t),
 				Present: true,
 			},
 			"",
@@ -1321,7 +1321,7 @@ func TestRunSessionWithAudioInputEndOfTurnLostSurfacesError(t *testing.T) {
 	baseInferencer := functional.NewMockSessionInferencer()
 	t.Cleanup(baseInferencer.Close)
 	endOfTurnInvoked := make(chan struct{})
-	input := agentruntime.SessionAudioInput{
+	input := agentruntime.RuntimeAudioInput{
 		Path:    "gated.raw",
 		Present: true,
 		Source:  source,
@@ -1353,8 +1353,8 @@ func TestRunSessionWithAudioInputEndOfTurnLostSurfacesError(t *testing.T) {
 	cancel()
 	select {
 	case err := <-result:
-		if !errors.Is(err, agentruntime.ErrSessionAudioInputEndOfTurnLost) {
-			t.Fatalf("error = %v; want ErrSessionAudioInputEndOfTurnLost", err)
+		if !errors.Is(err, agentruntime.ErrRuntimeAudioInputEndOfTurnLost) {
+			t.Fatalf("error = %v; want ErrRuntimeAudioInputEndOfTurnLost", err)
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("session did not report the lost end-of-turn signal")

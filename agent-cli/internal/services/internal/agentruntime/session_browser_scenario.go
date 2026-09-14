@@ -305,7 +305,7 @@ func (s BrowserConversationScenario) Validate() error {
 
 // ScheduleAudioInputs translates one finite PCM payload per customer step to
 // the existing session scheduler contract. It does not start a session or
-// copy the duplex loop; the normal SessionAudioInput/ScheduledAudioInput path
+// copy the duplex loop; the normal RuntimeAudioInput/ScheduledAudioInput path
 // remains responsible for delivery and turn-boundary signaling.
 func (s BrowserConversationScenario) ScheduleAudioInputs(audioByStep map[string][]byte) ([]ScheduledAudioInput, error) {
 	if err := s.Validate(); err != nil {
@@ -740,7 +740,7 @@ func cloneCancelPointer(value *BrowserConversationCancelRequest) *BrowserConvers
 // BrowserConversationScenarioForSession is the narrow extension seam consumed
 // by a shared session runner. It intentionally exposes scheduled utterances
 // as intent only; audio conversion and scheduling remain owned by the normal
-// SessionAudioInput/ScheduledAudioInput path.
+// RuntimeAudioInput/ScheduledAudioInput path.
 type BrowserConversationScenarioForSession interface {
 	BrowserConversationScenario() BrowserConversationScenario
 }

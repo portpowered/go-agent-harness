@@ -89,6 +89,13 @@ func (f *Factory) Open(ctx context.Context, request devices.Request) (devices.Ha
 	return handle, nil
 }
 
+func (f *Factory) BindRTC(ctx context.Context, request devices.RTCBindingRequest) (devices.RTCBinding, error) {
+	if f == nil || f.physical == nil {
+		return nil, devices.ErrUnavailable
+	}
+	return f.physical.BindRTC(ctx, request)
+}
+
 func (f *Factory) openPhysical(ctx context.Context, request devices.Request, plan openPlan) (devices.Handle, error) {
 	if !plan.hasPhysical() {
 		return nil, nil

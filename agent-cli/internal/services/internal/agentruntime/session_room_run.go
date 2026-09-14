@@ -479,7 +479,7 @@ func observeRoomParticipantStream(
 	pcm := append([]byte(nil), value.Content...)
 	if runtime.outboundLoudness != nil {
 		// Apply this participant's fixed, voice-specific gain (see
-		// VoiceLoudnessGainDB) before anything downstream observes it, so
+		// the audio service before anything downstream observes it, so
 		// --voice selection cannot leave one room participant audibly
 		// quieter than another. msg.Value is updated to the same bytes so
 		// the recorded delta (below, via recordParticipantDelta) stays
@@ -1016,7 +1016,7 @@ func roomProviderInputPCM(runtime *roomParticipantRuntime, pcm []byte) ([]byte, 
 		// media seam; their mixer bytes are already at that seam's rate.
 		return pcm, nil
 	}
-	converted, err := convertSessionAudioPCM(pcm, sourceRate, providerRate)
+	converted, err := convertSessionPCM16(pcm, sourceRate, providerRate)
 	if err != nil {
 		return nil, fmt.Errorf("convert room participant %q input from %d Hz to provider rate %d Hz: %w", runtime.plan.manifest.ID, sourceRate, providerRate, err)
 	}

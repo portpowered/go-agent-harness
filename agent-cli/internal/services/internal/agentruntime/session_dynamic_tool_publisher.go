@@ -90,6 +90,7 @@ type sessionDynamicToolPublisher struct {
 	cancel     context.CancelFunc
 }
 
+//lint:ignore U1000 package tests exercise the default timer seam.
 func newSessionDynamicToolPublisher(
 	staticStableDefinitions []messages.ToolDefinition,
 	initialDefinitions []messages.ToolDefinition,
@@ -98,7 +99,6 @@ func newSessionDynamicToolPublisher(
 ) *sessionDynamicToolPublisher {
 	return newSessionDynamicToolPublisherWithTimer(staticStableDefinitions, initialDefinitions, watch, refresh, nil)
 }
-
 func newSessionDynamicToolPublisherWithTimer(
 	staticStableDefinitions []messages.ToolDefinition,
 	initialDefinitions []messages.ToolDefinition,
@@ -217,6 +217,7 @@ func (p *sessionDynamicToolPublisher) stop() {
 	})
 }
 
+//lint:ignore U1000 package tests inspect the publication snapshot seam.
 func (p *sessionDynamicToolPublisher) stateSnapshot() SessionDynamicToolPublicationState {
 	if p == nil {
 		return SessionDynamicToolPublicationState{}
@@ -228,7 +229,6 @@ func (p *sessionDynamicToolPublisher) stateSnapshot() SessionDynamicToolPublicat
 	state.LastSuccessfulDefinitions = messages.CanonicalToolDefinitions(state.LastSuccessfulDefinitions)
 	return state
 }
-
 func (p *sessionDynamicToolPublisher) run(ctx context.Context, loop *agentloop.AgentLoop, events <-chan webmcp.BrokerEvent) {
 	defer close(p.done)
 	ready := p.ready

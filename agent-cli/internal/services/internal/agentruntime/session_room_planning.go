@@ -16,6 +16,7 @@ func roomParticipantIsHuman(plan *roomParticipantPlan) bool {
 	return plan != nil && room.NormalizeParticipantKind(plan.manifest.Kind) == room.ParticipantKindHuman
 }
 
+//lint:ignore U1000 package tests exercise the context-free planning seam.
 func buildRoomParticipantPlans(opts RoomRunOptions, validation room.ValidationOptions, evidences ...*roomEvidence) ([]*roomParticipantPlan, []string, error) {
 	return buildRoomParticipantPlansWithContext(context.Background(), opts, validation, evidences...)
 }
@@ -234,7 +235,7 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 		plan.tracker = newRoomConnectTrackingInferencer(plan.inferencer)
 		if usesProductionSessionFactory {
 			if _, injected := opts.SessionInferencers[participant.ID]; !injected {
-				rate, rateErr := resolveSessionAudioSampleRate(sessionOptions, sessionRuntimePlan{
+				rate, rateErr := resolveSessionSampleRate(sessionOptions, sessionRuntimePlan{
 					provider:   effectiveSessionProvider(sessionOptions),
 					inferencer: plan.inferencer,
 				})
@@ -318,7 +319,6 @@ func buildRoomReplayParticipantPlans(ctx context.Context, replay RoomReplayPlan,
 	}
 	return plans, nil, nil
 }
-
 func awaitRoomParticipantConnections(
 	ctx context.Context,
 	coordinator *roomCoordinator,

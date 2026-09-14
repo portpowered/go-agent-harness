@@ -56,13 +56,13 @@ func TestValidateOpenAIRealtimeVoiceReturnsStableTypedError(t *testing.T) {
 	}
 }
 
-// TestVoiceLoudnessGainDBAppliesOnlyMeasuredCorrections pins the fixed
+// TestSessionVoiceGainAppliesOnlyMeasuredCorrections pins the fixed
 // per-voice loudness gain table to the values measured from one live
 // gpt-realtime-2.1-mini session per voice (see the PR body for the full
 // before/after table, calibration utterance, and frame-selection method).
 // All 10 documented built-in voices are measured; only a voice absent from
 // the registry (or the empty/unset default) falls back to 0 dB.
-func TestVoiceLoudnessGainDBAppliesOnlyMeasuredCorrections(t *testing.T) {
+func TestSessionVoiceGainAppliesOnlyMeasuredCorrections(t *testing.T) {
 	want := map[string]float64{
 		"alloy":   0.0,
 		"ash":     6.2,
@@ -84,15 +84,15 @@ func TestVoiceLoudnessGainDBAppliesOnlyMeasuredCorrections(t *testing.T) {
 		if !ok {
 			t.Fatalf("registry voice %q has no expected gain in this test's table", voice)
 		}
-		if got := VoiceLoudnessGainDB(voice); got != wantGain {
-			t.Fatalf("VoiceLoudnessGainDB(%q) = %v, want %v", voice, got, wantGain)
+		if got := sessionVoiceGainDB(voice); got != wantGain {
+			t.Fatalf("sessionVoiceGainDB(%q) = %v, want %v", voice, got, wantGain)
 		}
 	}
-	if got := VoiceLoudnessGainDB(""); got != 0 {
-		t.Fatalf("VoiceLoudnessGainDB(\"\") = %v, want 0 (unset default)", got)
+	if got := sessionVoiceGainDB(""); got != 0 {
+		t.Fatalf("sessionVoiceGainDB(\"\") = %v, want 0 (unset default)", got)
 	}
-	if got := VoiceLoudnessGainDB("not-a-real-voice"); got != 0 {
-		t.Fatalf("VoiceLoudnessGainDB(unknown) = %v, want 0", got)
+	if got := sessionVoiceGainDB("not-a-real-voice"); got != 0 {
+		t.Fatalf("sessionVoiceGainDB(unknown) = %v, want 0", got)
 	}
 }
 

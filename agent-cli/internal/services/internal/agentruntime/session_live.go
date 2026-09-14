@@ -13,7 +13,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	audiosubsystem "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems/audio"
+	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -78,7 +78,7 @@ const sessionFirstTurnAckTimeout = 30 * time.Second
 const sessionScheduledAudioConfigTimeout = 30 * time.Second
 
 func awaitSessionFirstTurnWithClock(ctx context.Context, ack <-chan error, source platformclock.Source) error {
-	timer, err := newSessionTimer(source, sessionFirstTurnAckTimeout)
+	timer, err := newAudioServiceTimer(source, sessionFirstTurnAckTimeout)
 	if err != nil {
 		return err
 	}
@@ -133,7 +133,7 @@ type sessionLoopOptions struct {
 	// AudioIn optionally streams a bounded file or stdin audio source into
 	// the loop after SESSION.OPEN. When nil, every session path behaves
 	// exactly as it did before audio input existed.
-	AudioIn *sessionAudioSource
+	AudioIn *runtimeAudioSource
 
 	// awaitFirstTurn optionally blocks the SESSION.OPEN handler until the
 	// session's first user turn (the realtime image turn) has been accepted
@@ -227,7 +227,7 @@ type sessionLoopOptions struct {
 
 	// rtcDeviceBinding is opened by the enclosing runtime plan and is started
 	// against the real session-owned media endpoints after ConnectSession.
-	rtcDeviceBinding *RTCDeviceBinding
+	rtcDeviceBinding runtimedevices.RTCBinding
 
 	// CloseAfterScheduledAudio requests a live scheduled-audio session close
 	// only after every queued input has produced a terminal assistant turn.
@@ -276,31 +276,6 @@ func duplexSessionLoopOptions(observedInferencer messages.SessionInferencer, opt
 	loopOpts := []agentloop.Option{
 		agentloop.WithMode(engine.DuplexSession),
 		agentloop.WithSessionInferencer(observedInferencer),
-	}
-	if binding := opts.rtcDeviceBinding; binding != nil && (binding.Capture != nil || binding.Sink != nil) {
-		// The subsystem observes the source handoff created by the binding and
-		// the sink's synchronized playback queue. Commands are admitted to the
-		// sink's bounded PlaybackCommands port; the device worker applies them
-		// independently of reasoning ticks.
-		var capture audiosubsystem.BufferPort
-		if binding.Capture != nil {
-			capture = binding.Capture.Control()
-		}
-		loopOpts = append(loopOpts, agentloop.WithAudioSubsystem(audiosubsystem.New(audiosubsystem.Ports{
-			Capture: capture,
-			Playback: func() audiosubsystem.BufferPort {
-				if binding.Sink == nil {
-					return nil
-				}
-				return binding.Sink.PlaybackBuffer()
-			}(),
-			Commands: func() audiosubsystem.CommandPort {
-				if binding.Sink == nil {
-					return nil
-				}
-				return binding.Sink.PlaybackCommands()
-			}(),
-		})))
 	}
 	if opts.ToolExecutor != nil {
 		if len(opts.ToolDefinitions) > 0 {
@@ -622,7 +597,7 @@ func retryScheduledRateLimitedResponseWithClock(ctx context.Context, sessionDone
 	if !retry {
 		return nil
 	}
-	timer, err := newSessionTimer(source, delay)
+	timer, err := newAudioServiceTimer(source, delay)
 	if err != nil {
 		return err
 	}
@@ -773,7 +748,7 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 		}
 		audioErrCh := make(chan error, 1)
 		audioCh = audioErrCh
-		go func() { audioErrCh <- streamSessionAudioInput(audioCtx, loop, opts.AudioIn) }()
+		go func() { audioErrCh <- pumpAudioInput(audioCtx, loop, opts.AudioIn) }()
 	}
 	waitAudio := func() error {
 		if audioCh == nil {
@@ -824,8 +799,7 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 		}
 		cancel()
 		providerErr := closeBareSessionIfNeeded(opts.BareLive, observedInferencer)
-		bindingErr := closeRTCDeviceBinding(opts.rtcDeviceBinding)
-		return errors.Join(drainErr, providerErr, joinSessionTerminationErrors(waitRun(), waitAudio()), bindingErr)
+		return errors.Join(drainErr, providerErr, joinSessionTerminationErrors(waitRun(), waitAudio()))
 	}
 	termination := newSessionLiveTerminationBoundary(ctx, quiesceUpstream, stopOwnedResources, out, loop, opts, observedInferencer)
 	terminate := termination.terminate
@@ -846,7 +820,7 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 			timeout = sessionScheduledAudioConfigTimeout
 		}
 		var err error
-		sessionUpdatedTimer, err = newSessionTimer(opts.clockSource, timeout)
+		sessionUpdatedTimer, err = newAudioServiceTimer(opts.clockSource, timeout)
 		if err != nil {
 			// Keep setup inside the stream state machine so the shared
 			// termination boundary owns teardown and reports the error.

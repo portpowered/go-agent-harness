@@ -33,11 +33,7 @@ type SessionDurationClock interface {
 }
 
 func sessionDurationClockFromSource(source platformclock.Source) (SessionDurationClock, error) {
-	timerSource, err := sessionTimerSource(source)
-	if err != nil {
-		return nil, err
-	}
-	return timerSource, nil
+	return newSessionDurationClock(source)
 }
 
 // RunSessionWithMaxDuration runs a session with an optional graceful duration
@@ -180,6 +176,9 @@ func effectiveSessionDurationClock(plan sessionRuntimePlan, requested SessionDur
 		return sessionDurationClockFromSource(plan.clockSource)
 	}
 	if _, isDefault := requested.(realSessionDurationClock); isDefault {
+		if source, ok := plan.clockSource.(SessionDurationClock); ok {
+			return source, nil
+		}
 		return sessionDurationClockFromSource(plan.clockSource)
 	}
 	return requested, nil
@@ -216,26 +215,11 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 			return err
 		}
 	}
-	deviceBinding, err := PrepareRTCDeviceBindings(plan.rtcDeviceRequest)
-	if err != nil {
+	if err := plan.bindRTC(ctx, finalizer); err != nil {
 		return err
 	}
-	if deviceBinding != nil {
-		plan.loop.rtcDeviceBinding = deviceBinding
-		finalizer.setDeviceBinding(deviceBinding)
-	}
-	// Best-effort, same as the non-duration run path: this disclosure write
-	// must not pre-empt or masquerade as the session's own run/drain failure.
-	writeFilesystemScopeAnnouncement(out, plan.filesystemPolicy)
-	writeSessionToolAnnouncement(out, plan.toolDefinitionsForAnnouncement())
-	announcement := plan.announce
-	if plan.loop.BareLive {
-		announcement, plan.loop.ListeningBanner = plan.bareLiveOutput(deviceBinding)
-	}
-	if announcement != "" {
-		if _, err := fmt.Fprintln(out, announcement); err != nil {
-			return wrapSessionRuntimeError(plan, err)
-		}
+	if err := plan.writeAnnouncements(out, false); err != nil {
+		return wrapSessionRuntimeError(plan, err)
 	}
 
 	loopOut := out
