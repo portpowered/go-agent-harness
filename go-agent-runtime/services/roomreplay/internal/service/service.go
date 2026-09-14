@@ -18,6 +18,7 @@ type RoomReplayPCMFormat = roomreplay.RoomReplayPCMFormat
 type RoomReplayArtifact = roomreplay.RoomReplayArtifact
 type RoomReplayParticipant = roomreplay.RoomReplayParticipant
 type RoomReplayTimelineEvent = roomreplay.RoomReplayTimelineEvent
+type ParticipantKind = roomreplay.ParticipantKind
 
 const (
 	RoomReplayBundleSchemaVersion = roomreplay.RoomReplayBundleSchemaVersion

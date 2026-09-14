@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 )
 
 func TestRoomReplayBundleErrorClassificationAndProjection(t *testing.T) {
@@ -19,8 +18,8 @@ func TestRoomReplayBundleErrorClassificationAndProjection(t *testing.T) {
 	}
 
 	plan := roomreplay.RoomReplayPlan{Participants: []roomreplay.RoomReplayParticipant{
-		{ID: "agent", Kind: rooms.ParticipantKindAgent, Provider: "openai", Model: "model", Artifacts: []roomreplay.RoomReplayArtifact{{Path: "a"}}},
-		{ID: "human", Kind: rooms.ParticipantKindHuman, Provider: "ignored", Model: "ignored"},
+		{ID: "agent", Kind: roomreplay.ParticipantKindAgent, Provider: "openai", Model: "model", Artifacts: []roomreplay.RoomReplayArtifact{{Path: "a"}}},
+		{ID: "human", Kind: roomreplay.ParticipantKindHuman, Provider: "ignored", Model: "ignored"},
 	}}
 	participant, ok := plan.Participant("agent")
 	if !ok {
@@ -30,9 +29,5 @@ func TestRoomReplayBundleErrorClassificationAndProjection(t *testing.T) {
 	original, _ := plan.Participant("agent")
 	if original.Artifacts[0].Path != "a" {
 		t.Fatalf("Participant returned mutable plan state: %+v", original.Artifacts)
-	}
-	manifest := plan.Manifest()
-	if manifest.Participants[1].Provider != "" || manifest.Participants[1].Model != "" {
-		t.Fatalf("human projection retained provider metadata: %+v", manifest.Participants[1])
 	}
 }

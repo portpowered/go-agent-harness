@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"time"
 
-	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
@@ -22,7 +21,27 @@ const (
 
 	// RoomReplayBundleManifestPath is the stable manifest name used by room
 	// evidence bundles. Service.Load also accepts this file directly.
-	RoomReplayBundleManifestPath = runtimeRooms.RoomReplayBundleManifestPath
+	RoomReplayBundleManifestPath = "run-manifest.json"
+)
+
+// ParticipantKind identifies the owner of a replay participant without
+// importing the room lifecycle package. The room service converts this
+// source projection into its own manifest contract.
+type ParticipantKind string
+
+const (
+	ParticipantKindAgent ParticipantKind = "agent"
+	ParticipantKindHuman ParticipantKind = "human"
+)
+
+const (
+	ArtifactRoleWAV         = "wav"
+	ArtifactRoleDiagnostics = "diagnostics"
+	ArtifactRoleDeltas      = "deltas"
+	ArtifactRoleSentPCM     = "sent_pcm"
+	ArtifactRoleReceivedPCM = "received_pcm"
+	ArtifactRoleEvents      = "events"
+	ArtifactRoleCapture     = "capture"
 )
 
 type roomReplaySentinel string
@@ -115,27 +134,28 @@ func strconvQuote(value string) string {
 // recording. The replay runtime converts the sample rate and channel count to
 // the production mixer format after admission.
 type RoomReplayPCMFormat struct {
-	SampleRate      int
-	Channels        int
-	SampleWidthBits int
+	SampleRate      int `json:"sample_rate"`
+	Channels        int `json:"channels"`
+	SampleWidthBits int `json:"sample_width_bits"`
 	// SampleWidthBit is retained as an input-compatibility alias for callers
 	// that used the original singular field before the public shape settled.
-	SampleWidthBit int
-	ByteOrder      string
-	Encoding       string
+	SampleWidthBit int    `json:"sample_width_bit,omitempty"`
+	ByteOrder      string `json:"byte_order"`
+	Encoding       string `json:"encoding"`
 }
 
 // RoomReplayArtifact is one validated, bundle-relative file. AbsolutePath is
 // resolved once during admission and is never derived from an untrusted path
 // again by the replay runtime.
 type RoomReplayArtifact struct {
-	Name         string
-	Role         string
-	Owner        string
-	Path         string
-	AbsolutePath string
-	Size         int64
-	SHA256       string
+	Name         string `json:"name"`
+	Role         string `json:"role"`
+	Owner        string `json:"owner"`
+	Path         string `json:"path"`
+	AbsolutePath string `json:"-"`
+	Size         int64  `json:"size"`
+	SHA256       string `json:"sha256"`
+	Empty        bool   `json:"empty,omitempty"`
 }
 
 // RoomReplayParticipant is the immutable normalized participant projection
@@ -143,33 +163,33 @@ type RoomReplayArtifact struct {
 // human participant; provider participants always have a strict session
 // capture.
 type RoomReplayParticipant struct {
-	ID                string
-	Kind              runtimeRooms.ParticipantKind
-	Provider          string
-	Model             string
-	Voice             string
-	OpeningPrompt     string
-	SystemPrompt      string
-	CapturePath       string
-	Capture           RoomReplayArtifact
-	Artifacts         []RoomReplayArtifact
-	RecordedTurnCount int
+	ID                string               `json:"id"`
+	Kind              ParticipantKind      `json:"kind"`
+	Provider          string               `json:"provider"`
+	Model             string               `json:"model"`
+	Voice             string               `json:"voice"`
+	OpeningPrompt     string               `json:"opening_prompt"`
+	SystemPrompt      string               `json:"system_prompt"`
+	CapturePath       string               `json:"-"`
+	Capture           RoomReplayArtifact   `json:"capture"`
+	Artifacts         []RoomReplayArtifact `json:"artifacts"`
+	RecordedTurnCount int                  `json:"recorded_turn_count"`
 }
 
 // RoomReplayTimelineEvent is the validated, lossless projection of one
 // room-timeline.jsonl line. Raw retains fields added by the recording lane so
 // the scheduler can consume them without a second lossy decode.
 type RoomReplayTimelineEvent struct {
-	Sequence int64
-	OffsetMS int64
+	Sequence int64 `json:"sequence"`
+	OffsetMS int64 `json:"offset_ms"`
 	// OffsetNanos retains fractional t_offset_ms values emitted by the room
 	// recorder. OffsetMS remains the compatibility projection used by older
 	// callers and manifests.
-	OffsetNanos   int64
-	UnixMS        int64
-	Type          string
-	ParticipantID string
-	Raw           json.RawMessage
+	OffsetNanos   int64           `json:"offset_nanos,omitempty"`
+	UnixMS        int64           `json:"unix_ms"`
+	Type          string          `json:"type"`
+	ParticipantID string          `json:"participant_id"`
+	Raw           json.RawMessage `json:"-"`
 }
 
 // RoomReplayPlan is a source-independent replay plan. It owns copies of all
@@ -177,19 +197,20 @@ type RoomReplayTimelineEvent struct {
 // files after this function returns cannot mutate the plan. Callers should
 // treat the exported slices as read-only.
 type RoomReplayPlan struct {
-	BundlePath    string
-	ManifestPath  string
-	SchemaVersion int
-	Finalized     bool
-	ClockBase     time.Time
-	StartedAt     time.Time
-	EndedAt       time.Time
-	PCMFormat     RoomReplayPCMFormat
-	Participants  []RoomReplayParticipant
-	Timeline      []RoomReplayTimelineEvent
-	TimelinePath  string
-	RoomMixPath   string
-	Artifacts     []RoomReplayArtifact
+	BundlePath      string
+	ManifestPath    string
+	SchemaVersion   int
+	Finalized       bool
+	ClockBase       time.Time
+	StartedAt       time.Time
+	EndedAt         time.Time
+	PCMFormat       RoomReplayPCMFormat
+	Participants    []RoomReplayParticipant
+	Timeline        []RoomReplayTimelineEvent
+	TimelinePath    string
+	RoomMixPath     string
+	RoomLatencyPath string
+	Artifacts       []RoomReplayArtifact
 }
 
 // Participant returns a copy of a participant projection by stable ID.
@@ -202,39 +223,6 @@ func (p RoomReplayPlan) Participant(id string) (RoomReplayParticipant, bool) {
 		}
 	}
 	return RoomReplayParticipant{}, false
-}
-
-// Manifest projects the validated replay metadata into the room runtime's
-// credential-free participant shape. Provider handshake details remain owned
-// by each participant's capture and are loaded by the existing session replay
-// planner; this projection supplies only the stable room identity and bundle
-// prompts needed by room orchestration.
-func (p RoomReplayPlan) Manifest() runtimeRooms.Manifest {
-	manifest := runtimeRooms.Manifest{
-		SchemaVersion: runtimeRooms.SchemaVersion,
-		Room:          runtimeRooms.Room{Interactive: true},
-		Participants:  make([]runtimeRooms.Participant, 0, len(p.Participants)),
-	}
-	for _, participant := range p.Participants {
-		kind := runtimeRooms.ParticipantKindNormalizer{}.Normalize(participant.Kind)
-		provider := participant.Provider
-		model := participant.Model
-		if kind == runtimeRooms.ParticipantKindHuman {
-			provider = ""
-			model = ""
-		}
-		manifest.Participants = append(manifest.Participants, runtimeRooms.Participant{
-			Kind:          kind,
-			ID:            participant.ID,
-			SystemPrompt:  participant.SystemPrompt,
-			OpeningPrompt: participant.OpeningPrompt,
-			Provider:      provider,
-			Model:         model,
-			Voice:         participant.Voice,
-			Tools:         []string{},
-		})
-	}
-	return manifest
 }
 
 type scheduleError string

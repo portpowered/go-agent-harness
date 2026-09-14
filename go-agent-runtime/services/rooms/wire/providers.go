@@ -10,8 +10,8 @@ package wire
 
 import (
 	"github.com/google/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/evidence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/planning"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/service"
@@ -20,19 +20,18 @@ import (
 )
 
 type Dependencies struct {
-	Live  session.LiveService
-	Media rooms.MediaFactory
-	Clock platformclock.Scheduler
+	Live   session.LiveService
+	Media  rooms.MediaFactory
+	Replay roomreplay.Service
+	Clock  platformclock.Scheduler
 }
 
 func NewService(dependencies Dependencies) rooms.Service {
-	wire.Build(newPlanner, newEvidence, newRunner, newServiceDependencies, service.New)
+	wire.Build(newPlanner, newRunner, newServiceDependencies, service.New)
 	return nil
 }
 
 func newPlanner() planning.Planner { return planning.New() }
-
-func newEvidence() evidence.Loader { return evidence.New() }
 
 func newRunner(dependencies Dependencies) lifecycle.Runner {
 	return lifecycle.New(lifecycle.Dependencies{
@@ -40,6 +39,6 @@ func newRunner(dependencies Dependencies) lifecycle.Runner {
 	})
 }
 
-func newServiceDependencies(planner planning.Planner, evidenceLoader evidence.Loader, runner lifecycle.Runner) service.Dependencies {
-	return service.Dependencies{Planner: planner, Evidence: evidenceLoader, Runner: runner}
+func newServiceDependencies(planner planning.Planner, runner lifecycle.Runner, dependencies Dependencies) service.Dependencies {
+	return service.Dependencies{Planner: planner, Replay: dependencies.Replay, Runner: runner}
 }

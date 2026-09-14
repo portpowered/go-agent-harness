@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	room "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 )
 
 func parseRoomReplayManifest(data []byte) (roomReplayManifestDocument, error) {
@@ -283,8 +283,8 @@ func parseRoomReplayParticipant(object roomReplayJSONObject, field, mapID string
 	if err != nil {
 		return roomReplayParticipantRef{}, newRoomReplayBundleError(RoomReplayBundleMismatch, field+".kind", id, "string", "invalid", err)
 	}
-	kind := room.ParticipantKindNormalizer{}.Normalize(room.ParticipantKind(kindValue))
-	if kind != room.ParticipantKindAgent && kind != room.ParticipantKindHuman {
+	kind := normalizeRoomReplayParticipantKind(kindValue)
+	if kind != roomreplay.ParticipantKindAgent && kind != roomreplay.ParticipantKindHuman {
 		return roomReplayParticipantRef{}, newRoomReplayBundleError(RoomReplayBundleMismatch, field+".kind", id, "agent or human", kindValue, ErrInvalidRoomReplayBundle)
 	}
 	provider, err := roomReplayParticipantString(object, field, id, "provider")
@@ -316,6 +316,17 @@ func parseRoomReplayParticipant(object roomReplayJSONObject, field, mapID string
 		return roomReplayParticipantRef{}, err
 	}
 	return roomReplayParticipantRef{ID: id, Kind: kind, Provider: strings.TrimSpace(provider), Model: strings.TrimSpace(model), Voice: voice, OpeningPrompt: opening, SystemPrompt: system, RecordedTurnCount: turnCount, Artifacts: artifacts}, nil
+}
+
+func normalizeRoomReplayParticipantKind(value string) roomreplay.ParticipantKind {
+	switch normalized := strings.ToLower(strings.TrimSpace(value)); normalized {
+	case "", string(roomreplay.ParticipantKindAgent):
+		return roomreplay.ParticipantKindAgent
+	case string(roomreplay.ParticipantKindHuman), "customer":
+		return roomreplay.ParticipantKindHuman
+	default:
+		return roomreplay.ParticipantKind(normalized)
+	}
 }
 
 func parseRoomReplayParticipantID(object roomReplayJSONObject, field, mapID string) (string, error) {

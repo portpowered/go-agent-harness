@@ -258,7 +258,7 @@ func buildRoomReplayParticipantPlans(ctx context.Context, replay RoomReplayPlan,
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	manifest := replay.Manifest()
+	manifest := opts.Manifest
 	plans := make([]*roomParticipantPlan, 0, len(replay.Participants))
 	for index, recorded := range replay.Participants {
 		if err := ctx.Err(); err != nil {

@@ -7,8 +7,8 @@
 package wire
 
 import (
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/evidence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/planning"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/service"
@@ -20,9 +20,8 @@ import (
 
 func NewService(dependencies Dependencies) rooms.Service {
 	planner := newPlanner()
-	loader := newEvidence()
 	runner := newRunner(dependencies)
-	serviceDependencies := newServiceDependencies(planner, loader, runner)
+	serviceDependencies := newServiceDependencies(planner, runner, dependencies)
 	roomsService := service.New(serviceDependencies)
 	return roomsService
 }
@@ -30,14 +29,13 @@ func NewService(dependencies Dependencies) rooms.Service {
 // providers.go:
 
 type Dependencies struct {
-	Live  session.LiveService
-	Media rooms.MediaFactory
-	Clock clock.Scheduler
+	Live   session.LiveService
+	Media  rooms.MediaFactory
+	Replay roomreplay.Service
+	Clock  clock.Scheduler
 }
 
 func newPlanner() planning.Planner { return planning.New() }
-
-func newEvidence() evidence.Loader { return evidence.New() }
 
 func newRunner(dependencies Dependencies) lifecycle.Runner {
 	return lifecycle.New(lifecycle.Dependencies{
@@ -45,6 +43,6 @@ func newRunner(dependencies Dependencies) lifecycle.Runner {
 	})
 }
 
-func newServiceDependencies(planner planning.Planner, evidenceLoader evidence.Loader, runner lifecycle.Runner) service.Dependencies {
-	return service.Dependencies{Planner: planner, Evidence: evidenceLoader, Runner: runner}
+func newServiceDependencies(planner planning.Planner, runner lifecycle.Runner, dependencies Dependencies) service.Dependencies {
+	return service.Dependencies{Planner: planner, Replay: dependencies.Replay, Runner: runner}
 }
