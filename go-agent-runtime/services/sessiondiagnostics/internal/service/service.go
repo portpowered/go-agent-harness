@@ -69,7 +69,7 @@ func (r *reducer) Apply(ctx context.Context, event sessiondiagnostics.Event) (se
 		return sessiondiagnostics.Observation{}, sessiondiagnostics.ErrClosed
 	}
 	r.mu.Lock()
-	if r.closed && event.Kind != sessiondiagnostics.EventReset {
+	if r.closed && event.Kind != sessiondiagnostics.EventReset && event.Kind != sessiondiagnostics.EventToolResultRejected {
 		r.mu.Unlock()
 		return sessiondiagnostics.Observation{}, sessiondiagnostics.ErrClosed
 	}

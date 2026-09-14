@@ -17,6 +17,15 @@ type liveUserCancellationError string
 
 func (e liveUserCancellationError) Error() string { return string(e) }
 
+type liveContinuationSentinel string
+
+func (e liveContinuationSentinel) Error() string { return string(e) }
+
+const (
+	ErrLiveImageContinuationIncomplete liveContinuationSentinel = "session ended before the image tool continuation"
+	ErrLiveToolContinuationIncomplete  liveContinuationSentinel = "session ended before the tool continuation"
+)
+
 // ErrLiveUserCancellation identifies a host-owned operator cancellation.
 // Hosts may use it as the cause of a context.WithCancelCause context when a
 // user signal should produce a clean user-cancelled terminal rather than a
@@ -62,14 +71,6 @@ var (
 	// timing policy but the service was constructed without the matching
 	// application-owned scheduler.
 	ErrLiveSchedulerUnavailable = errors.New("live session scheduler is required for timing policy")
-	// ErrLiveImageContinuationIncomplete identifies a read_image result that
-	// reached the provider but did not receive a completed model continuation.
-	// The sentinel is part of the runtime contract so hosts can preserve the
-	// actionable failure without importing the CLI's private observer.
-	ErrLiveImageContinuationIncomplete = errors.New("session ended before the image tool continuation")
-	// ErrLiveToolContinuationIncomplete identifies an ordinary tool result that
-	// reached the provider but did not receive a completed model continuation.
-	ErrLiveToolContinuationIncomplete = errors.New("session ended before the tool continuation")
 	// ErrLiveScheduledAudioIncomplete identifies a finite scheduled-audio
 	// invocation that ended before every admitted source received a terminal
 	// response disposition. The runtime keeps this cause separate from a

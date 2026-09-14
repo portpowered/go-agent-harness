@@ -91,6 +91,9 @@ func (f *sessionRuntimeFinalizer) cleanup(ctx context.Context, out io.Writer) er
 	if f.plan.rtcRuntime != nil {
 		appendErr(wrapSessionPhaseError("close WebRTC runtime", invokeSessionFinalizer(f.plan.rtcRuntime.Close)))
 	}
+	if f.plan.turnRuntime != nil {
+		appendErr(wrapSessionPhaseError("close session-turn runtime", invokeSessionFinalizer(f.plan.turnRuntime.Close)))
+	}
 
 	// Provider capture must be durable before a recording-directory finalizer
 	// (owned by the outer recording wrapper) writes its manifest. Attempt the

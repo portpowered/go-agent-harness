@@ -12,6 +12,8 @@ import runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/se
 
 import runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 
+import runtimeSessionTurn "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
+
 const BrowserConversationAssistantTurn = impl.BrowserConversationAssistantTurn
 
 type BrowserConversationBrokerCall = impl.BrowserConversationBrokerCall
@@ -115,7 +117,7 @@ type ScheduledAudioInput = impl.ScheduledAudioInput
 type SelfPlayRunOptions = impl.SelfPlayRunOptions
 type SessionAudioInTurnBargeError = impl.SessionAudioInTurnBargeError
 type SessionAudioInput = impl.SessionAudioInput
-type SessionTextSeed = impl.SessionTextSeed
+type SessionTextSeed = runtimeSessionTurn.Seed
 
 const SessionDiagnosticEventFailure = impl.SessionDiagnosticEventFailure
 const SessionDiagnosticEventMetrics = impl.SessionDiagnosticEventMetrics

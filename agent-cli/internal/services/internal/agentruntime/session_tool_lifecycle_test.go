@@ -20,7 +20,7 @@ func TestSessionProgressObserver_RejectedResultRegistersBeforeCallObservation(t 
 
 	// The provider result can race ahead of the outer delta consumer. Rejection
 	// must create the obligation so terminal diagnostics cannot lose the ID.
-	observer.noteToolResultRejected(callID, outcome)
+	observer.noteToolResultRejected(context.Background(), callID, outcome)
 	observer.observeProviderToolCall(messages.NewToolCallEndValue(callID, "slow_tool", "{}"))
 
 	if got := observer.unresolvedToolCallIDs(); len(got) != 1 || got[0] != callID {
@@ -33,8 +33,8 @@ func TestSessionProgressObserver_RejectedResultRegistersBeforeCallObservation(t 
 
 	// A later duplicate rejection must not replace the first observable status,
 	// and acceptance of this ID must not affect any other obligation.
-	observer.noteToolResultRejected(callID, messages.SessionSendOutcome{Status: messages.SessionSendClosed})
-	observer.noteToolResultRejected("call-other", messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure})
+	observer.noteToolResultRejected(context.Background(), callID, messages.SessionSendOutcome{Status: messages.SessionSendClosed})
+	observer.noteToolResultRejected(context.Background(), "call-other", messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure})
 	observer.noteToolResultAccepted(callID)
 
 	got := observer.unresolvedToolCallIDs()

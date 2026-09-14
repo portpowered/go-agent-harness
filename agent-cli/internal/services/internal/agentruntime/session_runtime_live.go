@@ -1,6 +1,7 @@
 package agentruntime
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -212,34 +213,31 @@ func planLiveSessionRuntime(opts SessionRunOptions, factory sessionRuntimeFactor
 }
 
 func planSessionWithResolvedInstructions(opts SessionRunOptions, instructions string) (sessionRuntimePlan, error) {
-	// This is the single service-owned boundary between prompt resolution and
-	// provider construction. The tool definitions in opts are the same snapshot
-	// that the runtime planner passes to the provider, so the grounding contract
-	// cannot drift from the advertised tool surface.
+	return planSessionWithResolvedInstructionsContext(context.Background(), opts, instructions)
+}
+
+func planSessionRuntime(opts SessionRunOptions) (sessionRuntimePlan, error) {
+	return planSessionRuntimeWithContext(context.Background(), opts)
+}
+
+func planSessionRuntimeWithContext(ctx context.Context, opts SessionRunOptions) (sessionRuntimePlan, error) {
+	factory := opts.runtimeFactory
+	if !factory.configured() {
+		factory = newDefaultSessionRuntimeFactory()
+	}
+	return planSessionRuntimeWithFactory(ctx, opts, factory)
+}
+
+func planSessionWithResolvedInstructionsContext(ctx context.Context, opts SessionRunOptions, instructions string) (sessionRuntimePlan, error) {
 	opts.ToolDefinitions = messages.CanonicalToolDefinitions(opts.ToolDefinitions)
-	instructions = composeSessionInstructions(opts, instructions)
+	opts.sessionInstructions = instructions
 	planFactory := opts.runtimeFactory
 	if !planFactory.configured() {
 		planFactory = newDefaultSessionRuntimeFactory()
 	}
-	useInitialProviderInstructions := instructions != "" && opts.SessionInferencer == nil
-	if useInitialProviderInstructions {
-		planFactory = sessionRuntimeFactoryWithInstructions(planFactory, instructions)
-	}
-	plan, err := planSessionRuntimeWithFactory(opts, planFactory)
+	plan, err := planSessionRuntimeWithFactory(ctx, opts, planFactory)
 	if err != nil {
 		return sessionRuntimePlan{}, err
-	}
-	// Caller-owned/injected sessions do not have a provider factory that can
-	// receive the resolved tool surface. Configure them whenever either
-	// instructions or tools are present; an empty instruction remains empty and
-	// does not synthesize a default prompt.
-	if opts.SessionInferencer != nil && plan.inferencer != nil && !useInitialProviderInstructions && (instructions != "" || len(opts.ToolDefinitions) > 0) {
-		plan.inferencer = newSessionInstructionsInferencer(plan.inferencer, instructions, opts.ToolDefinitions)
-		// The wrapper above owns the complete injected-session configuration.
-		// Suppress ModelRunner's separate tool-only update, which otherwise races
-		// an identical second SESSION.UPDATE onto the provider wire.
-		plan.loop.AdvertiseToolDefinitions = false
 	}
 	return plan, nil
 }

@@ -128,11 +128,23 @@ func (o *sessionProgressObserver) syncLifecycleProjection() {
 	o.retryCandidateID = snapshot.RetryCandidateID
 }
 func (o *sessionProgressObserver) lifecycleEvent(event sd.Event) sd.Observation {
-	observation, err := o.applyLifecycle(context.Background(), event)
+	return o.lifecycleEventWithContext(context.Background(), event)
+}
+
+func (o *sessionProgressObserver) lifecycleEventWithContext(ctx context.Context, event sd.Event) sd.Observation {
+	observation, err := o.applyLifecycle(ctx, event)
 	if err != nil {
 		return sd.Observation{}
 	}
 	return observation
+}
+
+func (o *sessionProgressObserver) noteToolResultAccepted(callID string) {
+	o.noteToolResultAcceptedWithContext(context.Background(), callID)
+}
+
+func (o *sessionProgressObserver) noteToolContinuationRequested() {
+	o.noteToolContinuationRequestedWithContext(context.Background())
 }
 
 func (o *sessionProgressObserver) observedResponseProjection() (active bool, id string) {
@@ -320,27 +332,12 @@ func (o *sessionProgressObserver) observeProviderToolCallStartForResponse(callID
 		if o.continuationResultAccepted(callID) {
 			return
 		}
-		// Keep a rejected provider call visible to termination diagnostics without
-		// projecting it into the reducer as an owned continuation.
-		o.toolStateMu.Lock()
-		o.ensureToolStateLocked()
-		o.unresolvedToolCalls[callID] = struct{}{}
-		o.toolStateMu.Unlock()
+		// The reducer records an unowned provider call as a rejected continuation
+		// so terminal diagnostics still have one service-owned source of truth.
 		return
 	}
-	accepted := o.continuationResultAccepted(callID)
 	o.toolStateMu.Lock()
-	o.ensureToolStateLocked()
 	o.providerToolCallSeen = true
-	// The provider-facing tool-result send may complete while the shared
-	// lifecycle reducer is applying the tool-call event. The reducer snapshot
-	// above is authoritative, so an accepted result cannot be reintroduced as
-	// pending here.
-	if accepted {
-		delete(o.unresolvedToolCalls, callID)
-	} else {
-		o.unresolvedToolCalls[callID] = struct{}{}
-	}
 	o.toolStateMu.Unlock()
 }
 func (o *sessionProgressObserver) observeProviderToolCallWithIDForResponse(callID, name, responseID string) {

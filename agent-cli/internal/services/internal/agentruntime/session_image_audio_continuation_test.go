@@ -14,6 +14,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
@@ -294,5 +295,5 @@ func (e *imageAudioContinuationExecutor) releaseExecution() {
 
 var _ messages.SessionInferencer = (*imageAudioContinuationInferencer)(nil)
 var _ messages.ToolExecutor = (*imageAudioContinuationExecutor)(nil)
-var _ SessionImageMessageSender = (*imageAudioContinuationSession)(nil)
-var _ SessionImageMessageSenderWithoutResponse = (*imageAudioContinuationSession)(nil)
+var _ sessionturn.CompleteMessageSender = (*imageAudioContinuationSession)(nil)
+var _ sessionturn.CompleteMessageWithoutResponseSender = (*imageAudioContinuationSession)(nil)
