@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
@@ -278,6 +279,31 @@ func TestResolveBareSessionOptionsMissingOpenAIKeyIsActionableAndRedacted(t *tes
 	}
 	if strings.Contains(err.Error(), "sk-") || strings.Count(err.Error(), "API key") != 1 {
 		t.Fatalf("credential error is not a single redacted actionable message: %q", err)
+	}
+}
+
+func TestResolveBareSessionOptionsMapsServiceAdmissionErrors(t *testing.T) {
+	loaded := &config.Config{
+		ConfigPath: filepath.Join(t.TempDir(), config.ConfigFileName),
+		Model:      config.ModelConfig{Provider: config.ProviderOpenAI, OpenAI: &config.OpenAIConfig{Model: openAIRealtimeModel, APIKey: "key"}},
+	}
+	_, err := ResolveBareSessionOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), LoadedConfig: loaded, Model: "not-a-model", ModelProvided: true})
+	if err == nil || !errors.Is(err, ErrUnsupportedRealtimeModel) {
+		t.Fatalf("unsupported model error = %v, want legacy sentinel", err)
+	}
+	var unsupported *UnsupportedRealtimeModelError
+	if !errors.As(err, &unsupported) || unsupported.Model != "not-a-model" {
+		t.Fatalf("unsupported model error = %T %v, want legacy typed identity", err, err)
+	}
+
+	_, err = ResolveBareSessionOptions(SessionRunOptions{LoadedConfig: loaded, Transport: "tcp", TransportProvided: true, ModelCatalog: testModelCatalog()})
+	if err == nil || !errors.Is(err, ErrInvalidSessionTransport) || err.Error() != `invalid session transport: "tcp" (want "ws" or "webrtc")` {
+		t.Fatalf("invalid transport error = %v, want exact legacy identity and wording", err)
+	}
+
+	_, err = ResolveBareSessionOptions(SessionRunOptions{LoadedConfig: loaded, ModelCatalog: nil})
+	if err == nil || !errors.Is(err, runtimeproviders.ErrModelCatalogRequired) || !strings.Contains(err.Error(), "OpenAI realtime model admission") {
+		t.Fatalf("nil catalog error = %v, want legacy model-catalog identity", err)
 	}
 }
 
