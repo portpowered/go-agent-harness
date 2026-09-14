@@ -13,6 +13,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	runtimeRoomsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -304,13 +305,6 @@ func publishRoomParticipantsReady(coordinator *roomCoordinator, plans []*roomPar
 	}
 }
 
-func buildRoomReplaySchedule(ctx context.Context, replayMode bool, opts RoomRunOptions, plans []*roomParticipantPlan) (*roomReplaySchedule, error) {
-	if !replayMode {
-		return nil, nil
-	}
-	return newRoomReplaySchedule(ctx, *opts.ReplayPlan, plans, roomFormatForOptions(opts))
-}
-
 func roomReplayMixerConfig(opts RoomRunOptions, scheduled bool) room.PCM16MixerConfig {
 	config := roomMixerConfigForOptions(opts)
 	if scheduled {
@@ -331,7 +325,7 @@ func newRoomParticipantRuntime(
 	admissionCtx context.Context,
 	admissionCancel context.CancelFunc,
 	mixer *room.PCM16Mixer,
-	replaySchedule *roomReplaySchedule,
+	replaySchedule roomreplay.Schedule,
 	opts RoomRunOptions,
 	evidence *roomEvidence,
 	coordinator *roomCoordinator,
@@ -354,36 +348,11 @@ func newRoomParticipantRuntime(
 	}
 }
 
-func roomReplayFrameAckChannel(schedule *roomReplaySchedule, plan *roomParticipantPlan) chan struct{} {
+func roomReplayFrameAckChannel(schedule roomreplay.Schedule, plan *roomParticipantPlan) chan struct{} {
 	if schedule == nil || roomParticipantIsHuman(plan) {
 		return nil
 	}
 	return make(chan struct{}, 1)
-}
-
-func startRoomReplayScheduler(schedule *roomReplaySchedule, roomCtx context.Context, startGate <-chan struct{}, runtimes []*roomParticipantRuntime, coordinator *roomCoordinator, opts RoomRunOptions, wg *sync.WaitGroup) {
-	if schedule == nil || wg == nil {
-		return
-	}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		select {
-		case <-startGate:
-		case <-roomCtx.Done():
-			return
-		}
-		scheduleErr := schedule.run(roomCtx, runtimes, coordinator, opts)
-		if scheduleErr != nil {
-			if !coordinator.isStopping() {
-				coordinator.fail(fmt.Errorf("run room replay timeline: %w", scheduleErr))
-			}
-			return
-		}
-		if !coordinator.isStopping() {
-			coordinator.stop(RoomTerminationStopped, nil)
-		}
-	}()
 }
 
 func notifyRoomTerminated(observer RoomObserver, result RoomResult, roomErr error, secrets []string) (RoomResult, error) {
@@ -426,7 +395,9 @@ func prepareRoomReplayOptions(opts RoomRunOptions, validation room.ValidationOpt
 	// composing participants.
 	opts.ReplayPlan = &replayPlan
 	opts.ReplayPath = replayPlan.BundlePath
-	opts.Manifest = replayPlan.Manifest()
+	if opts.Manifest.SchemaVersion == 0 && len(opts.Manifest.Participants) == 0 {
+		return RoomRunOptions{}, validation, true, errors.New("replay room manifest is required")
+	}
 	opts.LaunchPlan = nil
 	opts.DeviceRegistry = nil
 	opts.CredentialLookup = nil

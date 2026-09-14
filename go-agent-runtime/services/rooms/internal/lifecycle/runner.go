@@ -87,7 +87,7 @@ func nonNilContext(ctx context.Context) context.Context {
 func requestManifest(request rooms.RoomRunOptions) rooms.Manifest {
 	manifest := request.Manifest
 	if isZeroManifest(manifest) && request.ReplayPlan != nil {
-		manifest = request.ReplayPlan.Manifest()
+		manifest = roommanifest.FromReplay(*request.ReplayPlan)
 	}
 	if isZeroManifest(manifest) && request.LaunchPlan != nil {
 		manifest = request.LaunchPlan.Manifest

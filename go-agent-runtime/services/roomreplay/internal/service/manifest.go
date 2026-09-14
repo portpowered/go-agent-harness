@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	room "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 )
 
 type roomReplayManifestDocument struct {
@@ -23,7 +23,7 @@ type roomReplayManifestDocument struct {
 
 type roomReplayParticipantRef struct {
 	ID                string
-	Kind              room.ParticipantKind
+	Kind              roomreplay.ParticipantKind
 	Provider          string
 	Model             string
 	Voice             string
@@ -125,10 +125,10 @@ func validateRoomReplayParticipants(participants []roomReplayParticipantRef) (ma
 }
 
 func validateRoomReplayParticipantProvider(participant roomReplayParticipantRef) error {
-	if participant.Provider == "" && participant.Kind != room.ParticipantKindHuman {
+	if participant.Provider == "" && participant.Kind != roomreplay.ParticipantKindHuman {
 		return newRoomReplayBundleError(RoomReplayBundleIncomplete, "participants["+participant.ID+"].provider", "", "recorded provider name", "missing", ErrRoomReplayBundleIncomplete)
 	}
-	if participant.Model == "" && participant.Kind != room.ParticipantKindHuman {
+	if participant.Model == "" && participant.Kind != roomreplay.ParticipantKindHuman {
 		return newRoomReplayBundleError(RoomReplayBundleIncomplete, "participants["+participant.ID+"].model", "", "recorded provider model", "missing", ErrRoomReplayBundleIncomplete)
 	}
 	return nil
@@ -153,7 +153,7 @@ func collectRoomReplayClaims(document roomReplayManifestDocument) ([]roomReplayA
 			return nil, nil, err
 		}
 	}
-	if len(document.RoomArtifacts) != 2 {
+	if len(document.RoomArtifacts) < 2 || len(document.RoomArtifacts) > 3 {
 		return nil, nil, newRoomReplayBundleError(RoomReplayBundleIncomplete, "artifacts", "", "room timeline and room mix", "missing one or more room artifacts", ErrRoomReplayBundleIncomplete)
 	}
 	for _, ref := range document.RoomArtifacts {
@@ -174,7 +174,7 @@ func appendParticipantReplayClaims(participant *roomReplayParticipantRef, append
 			return err
 		}
 	}
-	if participant.Kind != room.ParticipantKindHuman {
+	if participant.Kind != roomreplay.ParticipantKindHuman {
 		ref, ok := participant.Artifacts[roomReplayArtifactRoleCapture]
 		if !ok {
 			return newRoomReplayBundleError(RoomReplayBundleIncomplete, "participants["+participant.ID+"].artifacts.capture", "", "provider session capture", "missing", ErrRoomReplayBundleIncomplete)
@@ -200,7 +200,7 @@ func validateRoomReplayClaims(claims map[string][]string) error {
 }
 
 func projectRoomReplayPlan(root, manifestPath string, document roomReplayManifestDocument, validated []RoomReplayArtifact, byPath map[string]RoomReplayArtifact) (RoomReplayPlan, error) {
-	plan := RoomReplayPlan{BundlePath: root, ManifestPath: manifestPath, SchemaVersion: document.SchemaVersion, Finalized: document.Finalized, ClockBase: document.ClockBase, StartedAt: document.StartedAt, EndedAt: document.EndedAt, PCMFormat: document.PCMFormat, TimelinePath: artifactPathByRole(validated, "room:timeline"), RoomMixPath: artifactPathByRole(validated, "room:mix"), Artifacts: append([]RoomReplayArtifact(nil), validated...)}
+	plan := RoomReplayPlan{BundlePath: root, ManifestPath: manifestPath, SchemaVersion: document.SchemaVersion, Finalized: document.Finalized, ClockBase: document.ClockBase, StartedAt: document.StartedAt, EndedAt: document.EndedAt, PCMFormat: document.PCMFormat, TimelinePath: artifactPathByRole(validated, "room:timeline"), RoomMixPath: artifactPathByRole(validated, "room:mix"), RoomLatencyPath: artifactPathByRole(validated, "room:latency"), Artifacts: append([]RoomReplayArtifact(nil), validated...)}
 	sort.Slice(plan.Artifacts, func(i, j int) bool {
 		if plan.Artifacts[i].Path == plan.Artifacts[j].Path {
 			return plan.Artifacts[i].Name < plan.Artifacts[j].Name

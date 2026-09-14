@@ -175,6 +175,7 @@ func parseRoomReplayArtifacts(object roomReplayJSONObject, inventory []roomRepla
 	}{
 		{"timeline", []string{"room_timeline", "room-timeline", "timeline", "room_timeline_path", "timeline_path", "room_timeline_artifact"}},
 		{"mix", []string{"room_mix", "room-mix", "mix", "room_mix_path", "mix_path", "room_mix_artifact"}},
+		{"latency", []string{"room_latency", "room-latency", "latency", "room_latency_path", "latency_path", "room_latency_artifact"}},
 	} {
 		ref, found, err := parseRoomReplayRoomArtifact(object, inventory, spec.role, spec.keys)
 		if err != nil {
