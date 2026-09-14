@@ -2,6 +2,7 @@ package lifecycle
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -24,6 +25,7 @@ func (p *activeParticipant) observeEvent(event session.LiveEvent) {
 		}
 		return
 	}
+	//nolint:exhaustive // only response-boundary events affect bound shutdown.
 	switch message.Type {
 	case messages.StreamTypeMessageStart, messages.StreamTypeAudioStart:
 		if message.Role != messages.RoleTool {
@@ -33,6 +35,8 @@ func (p *activeParticipant) observeEvent(event session.LiveEvent) {
 		if message.Role != messages.RoleTool {
 			p.finishResponse()
 		}
+	default:
+		return
 	}
 }
 
@@ -187,6 +191,10 @@ func isBoundReason(reason rooms.RoomTerminationReason) bool {
 }
 
 func (s *runState) finishBound(active []*activeParticipant, reason rooms.RoomTerminationReason, cause error, grace time.Duration) {
+	if !hasBoundActiveResponse(active) {
+		s.releaseBound(reason, cause)
+		return
+	}
 	if !s.waitBoundGrace(grace) || !s.boundSettlingFor(reason) {
 		return
 	}
@@ -198,6 +206,15 @@ func (s *runState) finishBound(active []*activeParticipant, reason rooms.RoomTer
 	s.releaseBound(reason, cause)
 }
 
+func hasBoundActiveResponse(active []*activeParticipant) bool {
+	for _, participant := range active {
+		if participant != nil && participant.boundWasActive() {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *runState) waitBoundGrace(grace time.Duration) bool {
 	if grace <= 0 {
 		return !s.boundDone()
@@ -206,7 +223,9 @@ func (s *runState) waitBoundGrace(grace time.Duration) bool {
 	waitContext, cancelWait := context.WithCancel(context.Background())
 	go func() {
 		if s.wait != nil {
-			_ = s.wait(waitContext, grace)
+			if err := s.wait(waitContext, grace); err != nil && !errors.Is(err, context.Canceled) {
+				s.setFailure(err)
+			}
 		} else {
 			timer := time.NewTimer(grace)
 			select {
@@ -270,7 +289,9 @@ func (s *runState) waitBoundResponses(active []*activeParticipant) {
 	timeout := make(chan struct{})
 	go func() {
 		if s.wait != nil {
-			_ = s.wait(waitContext, boundResponseSettleTimeout)
+			if err := s.wait(waitContext, boundResponseSettleTimeout); err != nil && !errors.Is(err, context.Canceled) {
+				s.setFailure(err)
+			}
 		} else {
 			timer := time.NewTimer(boundResponseSettleTimeout)
 			select {

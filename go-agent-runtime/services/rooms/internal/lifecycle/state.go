@@ -327,7 +327,7 @@ func (s *runState) finishProjection(participant rooms.Participant, reason rooms.
 			if wasActive {
 				value.TerminationTrigger += "_mid_response"
 				if cancelled {
-					value.TerminationDisposition = "cancelled_after_grace"
+					value.TerminationDisposition = xCancelled
 					value.Classification = rooms.RoomBoundCancelledClassification
 					value.TerminalReason = string(messages.TerminalReasonCancellation)
 					value.TerminalProvenance = string(messages.TerminalProvenanceRoom)
