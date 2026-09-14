@@ -3,8 +3,11 @@ package plan
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
 
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 const replayResponseCreate = "response.create"
@@ -158,4 +161,106 @@ func replayClientItemContainsOnlyImages(content []replayClientContent) bool {
 		}
 	}
 	return true
+}
+
+// WrapInitialSessionUpdateDialer keeps the provider session implementation
+// intact while replacing only its first generated handshake with admitted
+// capture bytes. Later outbound frames remain owned by the strict replay
+// transport underneath.
+func (*Service) WrapInitialSessionUpdateDialer(inner transport.Dialer, configuration replay.ReplayConfiguration, paceOutbound ...bool) transport.Dialer {
+	var waitForNextOutbound func() error
+	if len(paceOutbound) > 0 && paceOutbound[0] {
+		if pacer, ok := inner.(gatewaytesting.ReplayOutboundPacer); ok {
+			waitForNextOutbound = pacer.WaitForNextOutbound
+		}
+	}
+	var payload []byte
+	if configuration != nil {
+		payload = configuration.Payload()
+	}
+	return &initialSessionUpdateDialer{inner: inner, payload: payload, waitForNextOutbound: waitForNextOutbound}
+}
+
+type initialSessionUpdateDialer struct {
+	inner               transport.Dialer
+	payload             []byte
+	waitForNextOutbound func() error
+}
+
+var _ transport.Dialer = (*initialSessionUpdateDialer)(nil)
+
+func (d *initialSessionUpdateDialer) Dial(endpoint string, headers map[string]string) (transport.Conn, error) {
+	if d == nil || d.inner == nil {
+		return nil, fmt.Errorf("replay initial session update dialer requires an inner dialer")
+	}
+	if len(d.payload) == 0 {
+		return nil, fmt.Errorf("replay initial session update dialer requires admitted configuration")
+	}
+	conn, err := d.inner.Dial(endpoint, headers)
+	if err != nil {
+		return nil, err
+	}
+	return &initialSessionUpdateConn{
+		inner:               conn,
+		payload:             append([]byte(nil), d.payload...),
+		waitForNextOutbound: d.waitForNextOutbound,
+	}, nil
+}
+
+type initialSessionUpdateConn struct {
+	inner               transport.Conn
+	payload             []byte
+	waitForNextOutbound func() error
+	writeMu             sync.Mutex
+	handshakeOn         bool
+}
+
+var _ transport.Conn = (*initialSessionUpdateConn)(nil)
+
+func (c *initialSessionUpdateConn) ReadMessage() (int, []byte, error) {
+	if c == nil || c.inner == nil {
+		return 0, nil, fmt.Errorf("replay initial session update connection requires an inner connection")
+	}
+	return c.inner.ReadMessage()
+}
+
+func (c *initialSessionUpdateConn) WriteMessage(messageType int, payload []byte) error {
+	if c == nil || c.inner == nil {
+		return fmt.Errorf("replay initial session update connection requires an inner connection")
+	}
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+	if c.waitForNextOutbound != nil {
+		if err := c.waitForNextOutbound(); err != nil {
+			return err
+		}
+	}
+	if !c.handshakeOn {
+		if err := validateInitialSessionUpdate(payload); err != nil {
+			return err
+		}
+		payload = append([]byte(nil), c.payload...)
+		c.handshakeOn = true
+	}
+	return c.inner.WriteMessage(messageType, payload)
+}
+
+func validateInitialSessionUpdate(payload []byte) error {
+	var envelope struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(payload, &envelope); err != nil {
+		return fmt.Errorf("replay provider initial event is not valid JSON: %w", err)
+	}
+	if envelope.Type != replaySessionUpdate {
+		return fmt.Errorf("replay provider expected initial %s, got %q", replaySessionUpdate, envelope.Type)
+	}
+	return nil
+}
+
+func (c *initialSessionUpdateConn) Close() error {
+	if c == nil || c.inner == nil {
+		return nil
+	}
+	return c.inner.Close()
 }

@@ -60,10 +60,20 @@ func (s *Service) InspectCapture(ctx context.Context, path string) (replay.Captu
 		Model:            loaded.Capture.Provider.Model,
 		IntegrityWarning: loaded.IntegrityWarning(sourcePath),
 	}
-	inspection.InitialTools, inspection.InitialToolsKnown = initialToolNames(loaded.Capture.Records)
 	if !inspection.IsRealtime() {
+		inspection.InitialTools, inspection.InitialToolsKnown = initialToolNames(loaded.Capture.Records)
 		return inspection, nil
 	}
+	configuration, err := parseReplayConfiguration(sourcePath, loaded.Capture.Records)
+	if err != nil {
+		return inspection, err
+	}
+	inspection.Configuration = configuration
+	if model := configuration.Model(); model != "" {
+		inspection.Model = model
+	}
+	inspection.InitialTools = configuration.InitialToolNames()
+	inspection.InitialToolsKnown = configuration.InitialToolsKnown()
 	plan, err := loadLivePlanFromCapture(ctx, capturePath, loaded.Capture)
 	if errors.Is(err, errSelfDrivingPlanUnavailable) {
 		// A caller-driven capture is still a valid realtime artifact. The host
@@ -74,12 +84,16 @@ func (s *Service) InspectCapture(ctx context.Context, path string) (replay.Captu
 		if metadataErr != nil {
 			return inspection, metadataErr
 		}
+		metadata.InputAudioSampleRate = configuration.InputAudioSampleRate()
+		metadata.OutputAudioSampleRate = configuration.OutputAudioSampleRate()
 		inspection.LivePlan = &metadata
 		return inspection, nil
 	}
 	if err != nil {
-		return replay.CaptureInspection{}, err
+		return inspection, err
 	}
+	plan.InputAudioSampleRate = configuration.InputAudioSampleRate()
+	plan.OutputAudioSampleRate = configuration.OutputAudioSampleRate()
 	inspection.LivePlan = &plan
 	return inspection, nil
 }
@@ -103,15 +117,19 @@ func replayLifecyclePlan(path string, records []gatewaytesting.CapturedSessionEv
 // LoadLivePlan extracts a narrow self-driving action sequence from an
 // explicit WebSocket capture. Captures with other action shapes return an
 // empty plan so the caller can continue with strict, caller-supplied replay.
-func (*Service) LoadLivePlan(ctx context.Context, path string) (session.LiveReplayPlan, error) {
+func (s *Service) LoadLivePlan(ctx context.Context, path string) (session.LiveReplayPlan, error) {
 	if err := replayContextError(ctx); err != nil {
 		return session.LiveReplayPlan{}, err
 	}
-	loaded, err := loadReplayCapture(ctx, path)
+	capturePath, err := s.ResolveCapturePath(ctx, path)
+	if err != nil {
+		return session.LiveReplayPlan{}, err
+	}
+	loaded, err := loadReplayCapture(ctx, capturePath)
 	if err != nil {
 		return session.LiveReplayPlan{}, fmt.Errorf("load live replay plan %s: %w", path, err)
 	}
-	return loadLivePlanFromCapture(ctx, path, loaded.Capture)
+	return loadLivePlanFromCapture(ctx, capturePath, loaded.Capture)
 }
 
 func loadLivePlanFromCapture(ctx context.Context, path string, capture gatewaytesting.SessionCapture) (session.LiveReplayPlan, error) {
@@ -328,6 +346,9 @@ func replayTextPrompt(path string, record gatewaytesting.CapturedSessionEvent) (
 	if envelope.Type != replayCreateItem {
 		return "", false, fmt.Errorf("live replay plan %s: conversation.item.create at sequence %d has payload type %q", path, record.Sequence, envelope.Type)
 	}
+	if replayJSONMissingOrNull(envelope.Item) {
+		return "", false, fmt.Errorf("live replay plan %s: conversation.item.create at sequence %d is missing its item", path, record.Sequence)
+	}
 	var item struct {
 		Type    string `json:"type"`
 		Role    string `json:"role"`
@@ -342,8 +363,16 @@ func replayTextPrompt(path string, record gatewaytesting.CapturedSessionEvent) (
 	if item.Type != "message" || item.Role != "user" {
 		return "", false, nil
 	}
-	if len(item.Content) != 1 || item.Content[0].Type != "input_text" || item.Content[0].Text == nil {
-		return "", false, fmt.Errorf("live replay plan %s: user item at sequence %d must contain exactly one input_text part", path, record.Sequence)
+	if len(item.Content) == 0 {
+		return "", false, fmt.Errorf("live replay plan %s: user item at sequence %d has no content", path, record.Sequence)
+	}
+	for _, part := range item.Content {
+		if part.Type != "input_text" {
+			return "", false, nil
+		}
+	}
+	if len(item.Content) != 1 || item.Content[0].Text == nil {
+		return "", false, fmt.Errorf("live replay plan %s: user item at sequence %d must contain exactly one input_text part with text", path, record.Sequence)
 	}
 	return *item.Content[0].Text, true, nil
 }

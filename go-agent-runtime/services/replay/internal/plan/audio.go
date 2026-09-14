@@ -82,6 +82,18 @@ func (c *audioCursor) consume(kind string) error {
 }
 
 func replayAudioChunk(path string, record gatewaytesting.CapturedSessionEvent) ([]int16, error) {
+	pcm, err := replayRawAudioChunk(path, record)
+	if err != nil {
+		return nil, err
+	}
+	samples, err := codec.DecodePCM16WithLimit(pcm, replayAudioChunkLimit)
+	if err != nil {
+		return nil, fmt.Errorf("live replay plan %s: decode audio append at sequence %d: %w", path, record.Sequence, err)
+	}
+	return samples, nil
+}
+
+func replayRawAudioChunk(path string, record gatewaytesting.CapturedSessionEvent) ([]byte, error) {
 	var envelope struct {
 		Type  string `json:"type"`
 		Audio string `json:"audio"`
@@ -92,11 +104,11 @@ func replayAudioChunk(path string, record gatewaytesting.CapturedSessionEvent) (
 	if envelope.Type != replayAppend || strings.TrimSpace(envelope.Audio) == "" {
 		return nil, fmt.Errorf("live replay plan %s: audio append at sequence %d is missing its audio payload", path, record.Sequence)
 	}
-	samples, err := codec.DecodePCM16Base64WithLimit(envelope.Audio, replayAudioChunkLimit)
+	pcm, err := codec.DecodeBase64WithLimit(envelope.Audio, replayAudioChunkLimit)
 	if err != nil {
 		return nil, fmt.Errorf("live replay plan %s: decode audio append at sequence %d: %w", path, record.Sequence, err)
 	}
-	return samples, nil
+	return pcm, nil
 }
 
 func replayPayloadType(record gatewaytesting.CapturedSessionEvent, want string) error {
