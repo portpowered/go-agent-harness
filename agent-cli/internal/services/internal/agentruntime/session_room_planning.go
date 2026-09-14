@@ -319,7 +319,6 @@ func buildRoomReplayParticipantPlans(ctx context.Context, replay RoomReplayPlan,
 	}
 	return plans, nil, nil
 }
-
 func awaitRoomParticipantConnections(
 	ctx context.Context,
 	coordinator *roomCoordinator,

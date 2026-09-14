@@ -134,21 +134,6 @@ func (i *input) finishEOF(ctx context.Context, outbound sharedaudio.OutboundMedi
 	return i.finishTurn(ctx, outbound, false)
 }
 
-// finishContinuousEOF closes the source-owned turn without asking the
-// resampler for a finite tail. Explicit ErrEndOfTurn remains the only
-// continuous boundary that flushes the resampler.
-func (i *input) finishContinuousEOF(ctx context.Context) error {
-	if !i.turnHasSamples && i.lastBoundary {
-		return nil
-	}
-	if err := i.notifyBoundary(ctx); err != nil {
-		return err
-	}
-	i.turnHasSamples = false
-	i.lastBoundary = true
-	return nil
-}
-
 func (i *input) processFrame(ctx context.Context, outbound sharedaudio.OutboundMedia, frame []int16, source sharedaudio.SampleSource) (int, int, bool, error) {
 	count, readErr := i.readFrame(ctx, frame, source)
 	if errors.Is(readErr, sharedaudio.ErrEndOfTurn) {
@@ -197,20 +182,6 @@ func (i *input) processEndOfTurn(ctx context.Context, outbound sharedaudio.Outbo
 	return 0, 0, false, nil
 }
 
-func validateReadError(err error) error {
-	if err != nil && !errors.Is(err, io.EOF) {
-		return fmt.Errorf("read audio input: %w", err)
-	}
-	return nil
-}
-
-func noProgressError(err error) error {
-	if errors.Is(err, io.EOF) {
-		return nil
-	}
-	return io.ErrNoProgress
-}
-
 func (i *input) recordTurnSamples(samples []int16) {
 	if !samplesAreSilent(samples) || (i.continuous && hasNonZeroSamples(samples)) {
 		i.turnHasSamples = true
@@ -251,12 +222,6 @@ func hasNonZeroSamples(samples []int16) bool {
 		}
 	}
 	return false
-}
-
-func clearProcessedFrames(frames []sharedaudio.PCMFrame) {
-	for index := range frames {
-		clear(frames[index].Samples)
-	}
 }
 
 func (i *input) readFrame(ctx context.Context, frame []int16, source sharedaudio.SampleSource) (int, error) {

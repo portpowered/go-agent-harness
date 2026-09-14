@@ -200,7 +200,6 @@ func (e *roomEvidence) recordProviderErrorTimeline(participant string, fields ma
 	e.mu.Unlock()
 	e.recordTimelineEvent("provider_error", participant, fields)
 }
-
 func (e *roomEvidence) participant(id string) *roomParticipantEvidence {
 	if e == nil {
 		return nil

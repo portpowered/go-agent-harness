@@ -77,7 +77,6 @@ func NewSessionRuntimeFactory() SessionRuntimeFactory { return newDefaultSession
 func (f sessionRuntimeFactory) configured() bool {
 	return f.newDefaultLiveDialer != nil || f.newReplayDialer != nil || f.newBareLiveSessionInferencer != nil || f.newRTCRuntime != nil
 }
-
 func newDefaultSessionRuntimeFactory() sessionRuntimeFactory {
 	return sessionRuntimeFactory{
 		newDefaultLiveDialer: func() transport.Dialer {

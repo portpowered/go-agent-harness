@@ -56,7 +56,6 @@ func (m sessionToolLifecycleMux) observeToolCall(call messages.ToolCall) {
 		m.recording.observeToolCall(call)
 	}
 }
-
 func (m sessionToolLifecycleMux) observeToolResult(call messages.ToolCall, response messages.ToolCallResponse, failed bool) {
 	if m.runtime != nil {
 		m.runtime.observeToolResult(call, response, failed)

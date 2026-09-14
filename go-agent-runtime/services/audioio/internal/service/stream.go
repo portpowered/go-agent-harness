@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
@@ -35,4 +37,36 @@ func writeFrame(ctx context.Context, outbound audio.OutboundMedia, frame audio.P
 		return nil
 	}
 	return outbound.WriteFrame(ctx, frame)
+}
+
+func (i *input) finishContinuousEOF(ctx context.Context) error {
+	if !i.turnHasSamples && i.lastBoundary {
+		return nil
+	}
+	if err := i.notifyBoundary(ctx); err != nil {
+		return err
+	}
+	i.turnHasSamples = false
+	i.lastBoundary = true
+	return nil
+}
+
+func validateReadError(err error) error {
+	if err != nil && !errors.Is(err, io.EOF) {
+		return fmt.Errorf("read audio input: %w", err)
+	}
+	return nil
+}
+
+func noProgressError(err error) error {
+	if errors.Is(err, io.EOF) {
+		return nil
+	}
+	return io.ErrNoProgress
+}
+
+func clearProcessedFrames(frames []audio.PCMFrame) {
+	for index := range frames {
+		clear(frames[index].Samples)
+	}
 }

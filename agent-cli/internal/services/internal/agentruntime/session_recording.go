@@ -846,7 +846,6 @@ func (s *sessionDirectoryRecordingSession) rtcMedia() (audio.MediaEndpoints, boo
 func (s *sessionDirectoryRecordingSession) TerminalError() error {
 	return terminalSessionError(s.inner)
 }
-
 func (s *sessionDirectoryRecordingSession) Close() error {
 	err := s.inner.Close()
 	select {
