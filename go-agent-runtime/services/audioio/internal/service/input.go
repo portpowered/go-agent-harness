@@ -164,7 +164,7 @@ func (i *input) processFrame(ctx context.Context, outbound sharedaudio.OutboundM
 	if err != nil {
 		return 0, 0, false, err
 	}
-	if samplesAreSilent(frame[:count]) {
+	if !hasNonZeroSamples(frame[:count]) {
 		clearProcessedFrames(frames)
 	}
 	i.hasSamples = true
