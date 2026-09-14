@@ -57,6 +57,7 @@ const (
 	EventScheduledDisposition      EventKind = "scheduled.disposition"
 	EventToolCall                  EventKind = "tool.call"
 	EventToolResultAccepted        EventKind = "tool.result_accepted"
+	EventToolResultRejected        EventKind = "tool.result_rejected"
 	EventContinuationRequested     EventKind = "tool.continuation_requested"
 	EventReset                     EventKind = "lifecycle.reset"
 )
@@ -74,18 +75,19 @@ type Terminal struct {
 
 // Event is an immutable host observation. Fields not used by Kind are ignored.
 type Event struct {
-	Kind        EventKind
-	ResponseID  string
-	LifecycleID string
-	Purpose     ResponsePurpose
-	Role        Role
-	CallID      string
-	ToolName    string
-	Terminal    *Terminal
-	Output      bool
-	Disposition Disposition
-	Index       int
-	Count       int
+	Kind         EventKind
+	ResponseID   string
+	LifecycleID  string
+	Purpose      ResponsePurpose
+	Role         Role
+	CallID       string
+	ToolName     string
+	ResultStatus string
+	Terminal     *Terminal
+	Output       bool
+	Disposition  Disposition
+	Index        int
+	Count        int
 }
 
 // RetryScheduler is injected by hosts that want the service to advance a
@@ -144,6 +146,8 @@ type ContinuationState struct {
 	ResponseID                 string
 	ProviderCallObserved       bool
 	ResultAccepted             bool
+	ResultRejected             bool
+	ResultRejectionStatus      string
 	ToolResponseComplete       bool
 	ContinuationRequested      bool
 	ContinuationResponseID     string

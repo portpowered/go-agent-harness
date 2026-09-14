@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"path/filepath"
 	"strings"
 	"time"
@@ -16,7 +15,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 	sessionturnwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn/wire"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
-	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 )
 
 type SessionImageRunOptions struct {
@@ -48,32 +46,27 @@ func RunSessionWithImages(ctx context.Context, out io.Writer, opts SessionImageR
 		return err
 	}
 	defer func() { releaseSessionClaim(claim, &runErr) }()
-	metadata, err := resolveSessionImageCapabilities(opts.SessionRunOptions)
-	if err != nil {
-		return err
-	}
-	opts.SessionRunOptions.sessionImageCapabilities = cloneSessionImageCapabilities(&metadata)
-	parts, err := sessionturnwire.NewDefaultService().PrepareImageParts(paths, metadata)
-	if err != nil {
-		return err
-	}
-	if opts.TextSeed.Present {
-		opts.SessionRunOptions.Prompt = opts.TextSeed.Value
-		opts.SessionRunOptions.PromptProvided = true
-	}
 	if opts.AudioOutPath != "" {
 		opts.SessionRunOptions.AudioOutputRequested = true
 	}
-	var imageCleanup func()
-	opts.SessionRunOptions, imageCleanup, err = prepareSessionImageToolAccess(ctx, opts.SessionRunOptions, paths, parts)
+	var parts []messages.ImagePart
+	var imageCleanup func() error
+	opts.SessionRunOptions, parts, imageCleanup, err = prepareSessionImageRun(ctx, opts.SessionRunOptions, paths, opts.TextSeed)
 	if err != nil {
 		return err
 	}
-	defer imageCleanup()
+	opts.SessionRunOptions.sessionImageCleanup = imageCleanup
+	imageCleanupOwned := true
+	defer func() {
+		if imageCleanupOwned {
+			runErr = errors.Join(runErr, imageCleanup())
+		}
+	}()
 	plan, wirePrompt, err := planSessionImageRuntimeWithContext(ctx, opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, false)
 	if err != nil {
 		return err
 	}
+	imageCleanupOwned = false
 	return runSessionImagePlan(ctx, out, plan, opts, wirePrompt)
 }
 
@@ -107,25 +100,19 @@ func runSessionImagesAudioInput(ctx context.Context, out io.Writer, opts Session
 		return err
 	}
 	defer func() { releaseSessionClaim(claim, &runErr) }()
-	metadata, err := resolveSessionImageCapabilities(opts.SessionRunOptions)
+	var parts []messages.ImagePart
+	var imageCleanup func() error
+	opts.SessionRunOptions, parts, imageCleanup, err = prepareSessionImageRun(ctx, opts.SessionRunOptions, paths, opts.TextSeed)
 	if err != nil {
 		return err
 	}
-	opts.SessionRunOptions.sessionImageCapabilities = cloneSessionImageCapabilities(&metadata)
-	parts, err := sessionturnwire.NewDefaultService().PrepareImageParts(paths, metadata)
-	if err != nil {
-		return err
-	}
-	if opts.TextSeed.Present {
-		opts.SessionRunOptions.Prompt = opts.TextSeed.Value
-		opts.SessionRunOptions.PromptProvided = true
-	}
-	var imageCleanup func()
-	opts.SessionRunOptions, imageCleanup, err = prepareSessionImageToolAccess(ctx, opts.SessionRunOptions, paths, parts)
-	if err != nil {
-		return err
-	}
-	defer imageCleanup()
+	opts.SessionRunOptions.sessionImageCleanup = imageCleanup
+	imageCleanupOwned := true
+	defer func() {
+		if imageCleanupOwned {
+			runErr = errors.Join(runErr, imageCleanup())
+		}
+	}()
 	audioSource, err := openSessionAudioInput(input)
 	if err != nil {
 		return err
@@ -144,6 +131,7 @@ func runSessionImagesAudioInput(ctx context.Context, out io.Writer, opts Session
 	if err != nil {
 		return err
 	}
+	imageCleanupOwned = false
 	plan.loop.CloseAfterOpen = false
 	plan.loop.AudioIn = audioSource
 	plan.loop.MaxDuration = opts.MaxDuration
@@ -173,7 +161,7 @@ func planSessionImageRuntimeWithContext(ctx context.Context, opts SessionRunOpti
 	if err != nil {
 		return sessionRuntimePlan{}, "", err
 	}
-	return attachSessionImageRuntime(ctx, plan, parts, seed, deferResponse, opts.Prompt)
+	return attachSessionImageRuntime(ctx, plan, parts, seed, deferResponse, opts.Prompt, opts.sessionImageCleanup)
 }
 
 func planSessionImageRuntimeForDirectory(ctx context.Context, opts SessionRunOptions, parts []messages.ImagePart, seed sessionturn.Seed, systemPrompt string, deferResponse bool) (sessionRuntimePlan, string, func(), error) {
@@ -181,7 +169,7 @@ func planSessionImageRuntimeForDirectory(ctx context.Context, opts SessionRunOpt
 	if err != nil {
 		return sessionRuntimePlan{}, "", func() {}, err
 	}
-	plan, wirePrompt, err := attachSessionImageRuntime(ctx, plan, parts, seed, deferResponse, opts.Prompt)
+	plan, wirePrompt, err := attachSessionImageRuntime(ctx, plan, parts, seed, deferResponse, opts.Prompt, opts.sessionImageCleanup)
 	if err != nil {
 		cleanup()
 		return sessionRuntimePlan{}, "", func() {}, err
@@ -189,13 +177,13 @@ func planSessionImageRuntimeForDirectory(ctx context.Context, opts SessionRunOpt
 	return plan, wirePrompt, cleanup, nil
 }
 
-func attachSessionImageRuntime(ctx context.Context, plan sessionRuntimePlan, parts []messages.ImagePart, seed sessionturn.Seed, deferResponse bool, prompt string) (sessionRuntimePlan, string, error) {
+func attachSessionImageRuntime(ctx context.Context, plan sessionRuntimePlan, parts []messages.ImagePart, seed sessionturn.Seed, deferResponse bool, prompt string, imageCleanup func() error) (sessionRuntimePlan, string, error) {
 	if plan.inferencer == nil {
 		return sessionRuntimePlan{}, "", errors.New("session image runtime has no session inferencer")
 	}
 	firstTurn := make(chan error, 1)
 	plan.loop.awaitFirstTurn = firstTurn
-	turnRuntime, err := sessionturnwire.NewDefaultService().Prepare(ctx, sessionturn.Request{
+	turnRuntime, err := newSessionTurnService().Prepare(ctx, sessionturn.Request{
 		SessionInferencer: plan.inferencer,
 		Seed:              seed,
 		Image: &sessionturn.ImageRequest{
@@ -207,6 +195,7 @@ func attachSessionImageRuntime(ctx context.Context, plan sessionRuntimePlan, par
 		},
 		ToolExecutor:    plan.loop.ToolExecutor,
 		ToolDefinitions: nil,
+		ImageCleanup:    imageCleanup,
 	})
 	if err != nil {
 		return sessionRuntimePlan{}, "", err
@@ -305,10 +294,6 @@ func bindSessionImageToolExecutor(opts SessionRunOptions, plan sessionRuntimePla
 	if opts.ToolExecutor == nil || !sessionHasTool(opts.ToolDefinitions, runtimeTools.ReadImageToolID) {
 		return opts.ToolExecutor
 	}
-	binder, ok := opts.ToolExecutor.(runtimeTools.SessionImagePreparerBinder)
-	if !ok {
-		return opts.ToolExecutor
-	}
 
 	capabilities := cloneSessionImageCapabilities(opts.sessionImageCapabilities)
 	var resolveErr error
@@ -330,20 +315,40 @@ func bindSessionImageToolExecutor(opts SessionRunOptions, plan sessionRuntimePla
 		metadata = *capabilities
 		metadata.SupportedInputMIMETypes = append([]string(nil), capabilities.SupportedInputMIMETypes...)
 	}
-	preparer := runtimeTools.ImagePartPreparer(func(paths []string) ([]messages.ImagePart, error) {
-		if resolveErr != nil {
-			return nil, resolveErr
+	if resolveErr != nil {
+		var capabilityErr *sessionturn.ImageCapabilityError
+		if !errors.As(resolveErr, &capabilityErr) {
+			return opts.ToolExecutor
 		}
-		return sessionturnwire.NewDefaultService().PrepareImageParts(paths, metadata)
-	})
-	return binder.WithSessionImagePreparer(preparer)
+		metadata.Model = capabilityErr.Model
+		metadata.SupportsImageInput = false
+	}
+	return sessionturnwire.NewDefaultService().BindImageToolExecutor(opts.ToolExecutor, metadata)
 }
 
 // prepareSessionImageToolAccess gives read_image a stable, session-owned copy
 // of each initial image and advertises those exact paths to the provider. The
 // inline image turn still uses the validated parts supplied by the caller;
 // staging is only needed for a later model-issued read_image call.
-func prepareSessionImageToolAccess(ctx context.Context, opts SessionRunOptions, sourcePaths []string, parts []messages.ImagePart) (SessionRunOptions, func(), error) {
+func prepareSessionImageRun(ctx context.Context, opts SessionRunOptions, sourcePaths []string, seed sessionturn.Seed) (SessionRunOptions, []messages.ImagePart, func() error, error) {
+	metadata, err := resolveSessionImageCapabilities(opts)
+	if err != nil {
+		return opts, nil, noOpSessionImageCleanup, err
+	}
+	opts.sessionImageCapabilities = cloneSessionImageCapabilities(&metadata)
+	parts, err := sessionturnwire.NewDefaultService().PrepareImageParts(sourcePaths, metadata)
+	if err != nil {
+		return opts, nil, noOpSessionImageCleanup, err
+	}
+	if seed.Present {
+		opts.Prompt = seed.Value
+		opts.PromptProvided = true
+	}
+	opts, cleanup, err := prepareSessionImageToolAccess(ctx, opts, sourcePaths, parts)
+	return opts, parts, cleanup, err
+}
+
+func prepareSessionImageToolAccess(ctx context.Context, opts SessionRunOptions, sourcePaths []string, parts []messages.ImagePart) (SessionRunOptions, func() error, error) {
 	if !sessionHasTool(opts.ToolDefinitions, runtimeTools.ReadImageToolID) {
 		return opts, noOpSessionImageCleanup, nil
 	}
@@ -355,7 +360,7 @@ func prepareSessionImageToolAccess(ctx context.Context, opts SessionRunOptions, 
 	if err != nil {
 		return opts, noOpSessionImageCleanup, fmt.Errorf("stage session images: %w", err)
 	}
-	staged, err := runtimeToolsWire.NewImageStaging().Stage(ctx, runtimeTools.ImageStagingRequest{
+	staged, err := newSessionTurnService().StageImageTools(ctx, runtimeTools.ImageStagingRequest{
 		StagingRoot:            configDir,
 		SourcePaths:            sourcePaths,
 		ImageParts:             parts,
@@ -367,17 +372,14 @@ func prepareSessionImageToolAccess(ctx context.Context, opts SessionRunOptions, 
 	}
 	opts.ToolDefinitions = staged.ToolDefinitions
 	opts.RefreshToolDefinitions = staged.RefreshToolDefinitions
-	cleanup := func() {
-		if staged.Cleanup != nil {
-			if err := staged.Cleanup(); err != nil {
-				log.Printf("stage session images: cleanup: %v", err)
-			}
-		}
+	cleanup := staged.Cleanup
+	if cleanup == nil {
+		cleanup = func() error { return nil }
 	}
 	return opts, cleanup, nil
 }
 
-func noOpSessionImageCleanup() {}
+func noOpSessionImageCleanup() error { return nil }
 
 func sessionImageStagingConfigDir(configDir string) (string, error) {
 	configDir = strings.TrimSpace(configDir)

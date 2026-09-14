@@ -6,39 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
-	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 )
-
-func resolveSessionInteractiveToolPolicy(opts SessionRunOptions, definitions []messages.ToolDefinition) (runtimeTools.InteractiveToolPolicy, error) {
-	if opts.InteractiveToolPolicy != nil {
-		policy := opts.InteractiveToolPolicy.Clone()
-		if err := policy.Validate(); err != nil {
-			return nil, fmt.Errorf("resolve interactive tool policy: %w", err)
-		}
-		return policy, nil
-	}
-	settings, err := sessionInteractiveToolSettings(opts)
-	if err != nil {
-		return nil, err
-	}
-	return runtimeToolsWire.NewInteractiveToolPolicy().Resolve(runtimeTools.InteractiveToolPolicyRequest{
-		Settings: runtimeTools.InteractiveToolPolicySettings{
-			FastReadTimeout:          settings.FastReadTimeout,
-			LongRunningTimeout:       settings.LongRunningTimeout,
-			AcknowledgementThreshold: settings.AcknowledgementThreshold,
-		},
-		Definitions:     definitions,
-		BaseDefinitions: opts.ToolDefinitionBase,
-		ExplicitLongRunningNames: []string{
-			"webmcp_select_tab", "webmcp_invoke", "webmcp_list_tools", "webmcp_list_tabs",
-			"webmcp_get_context", "webmcp_cancel", "webmcp_list_cast_devices", "webmcp_cast_tab",
-			"webmcp_stop_casting",
-		},
-		DynamicLongRunning: opts.BrowserToolsEnabled,
-	})
-}
 
 func sessionInteractiveToolSettings(opts SessionRunOptions) (config.InteractiveToolConfig, error) {
 	loadedConfig := opts.LoadedConfig

@@ -14,6 +14,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
@@ -83,6 +84,14 @@ type Output interface {
 // second time when constructing compatibility loops.
 type ServiceOwnedToolExecutor interface {
 	SessionTurnToolExecutor()
+}
+
+// SessionInferencerConfigurator is the optional provider-edge seam used by
+// the turn service to place its resolved instructions and tool snapshot in a
+// provider's initial connection request. Inferencers without this capability
+// retain the generic session.update compatibility path.
+type SessionInferencerConfigurator interface {
+	WithSessionInstructionsAndTools(string, []messages.ToolDefinition) messages.SessionInferencer
 }
 
 type CompleteMessageSender interface {
@@ -277,6 +286,7 @@ type Request struct {
 	ToolExecutor          messages.ToolExecutor
 	ToolDefinitions       []messages.ToolDefinition
 	ToolDefinitionBase    []messages.ToolDefinition
+	ToolPolicyRequest     *tools.InteractiveToolPolicyRequest
 	InteractiveToolPolicy tools.InteractiveToolPolicy
 	ToolExecutionTimeout  time.Duration
 	ToolCallObserver      func(messages.ToolCall)
@@ -284,8 +294,9 @@ type Request struct {
 	ToolDiagnostic        func(messages.ToolCall, error)
 	ToolFailurePresenter  func(messages.ToolCall, error) messages.ToolCallResponse
 
-	Browser BrowserRequest
-	Output  io.Writer
+	Browser      BrowserRequest
+	Output       io.Writer
+	ImageCleanup func() error
 }
 
 type Runtime interface {
@@ -294,6 +305,7 @@ type Runtime interface {
 	ToolExecutor() messages.ToolExecutor
 	ToolDefinitions() []messages.ToolDefinition
 	InteractiveToolPolicy() tools.InteractiveToolPolicy
+	Continuation() sessiondiagnostics.Service
 	RunTurn(context.Context, TurnRequest) (TurnResult, error)
 	History() []SessionTurn
 	PublicationState() PublicationState
@@ -305,6 +317,8 @@ type Runtime interface {
 type Service interface {
 	Prepare(context.Context, Request) (Runtime, error)
 	PrepareImageParts([]string, ImageCapabilities) ([]messages.ImagePart, error)
+	StageImageTools(context.Context, tools.ImageStagingRequest) (tools.ImageStagingResult, error)
+	BindImageToolExecutor(messages.ToolExecutor, ImageCapabilities) messages.ToolExecutor
 	SendImageTurn(context.Context, messages.Session, string, []messages.ImagePart, bool) error
 }
 

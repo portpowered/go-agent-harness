@@ -29,9 +29,24 @@ func (i *instructionsInferencer) Request() inference.SessionRequest {
 	if source, ok := i.inner.(interface {
 		Request() inference.SessionRequest
 	}); ok {
-		return source.Request()
+		request := source.Request()
+		request.Config.Instructions = i.instructions
+		request.Config.Tools = cloneDefinitions(i.tools)
+		return request
 	}
 	return inference.SessionRequest{}
+}
+
+func configureProviderRequest(inferencer messages.SessionInferencer, instructions string, definitions []messages.ToolDefinition) (messages.SessionInferencer, bool) {
+	configurer, ok := inferencer.(sessionturn.SessionInferencerConfigurator)
+	if !ok {
+		return inferencer, false
+	}
+	configured := configurer.WithSessionInstructionsAndTools(instructions, definitions)
+	if configured == nil {
+		return inferencer, false
+	}
+	return configured, true
 }
 
 func (i *instructionsInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {

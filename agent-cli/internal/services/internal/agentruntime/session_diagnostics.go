@@ -264,8 +264,6 @@ type sessionProgressObserver struct {
 	roomInputTurnBytes      uint64
 	roomInputTotalBytes     uint64
 	toolStateMu             sync.Mutex
-	unresolvedToolCalls     map[string]struct{}
-	toolResultRejections    map[string]messages.SessionSendStatus
 	toolLifecycleCh         chan struct{}
 	toolCallInTurn          bool
 	messageEndSeen          bool
@@ -367,8 +365,6 @@ func newSessionProgressObserver(sink SessionDiagnosticSink, recorder metrics.Rec
 		productionSink:        productionSink,
 		provider:              provider,
 		model:                 model,
-		unresolvedToolCalls:   make(map[string]struct{}),
-		toolResultRejections:  make(map[string]messages.SessionSendStatus),
 		toolLifecycleCh:       make(chan struct{}, 1),
 		completedResponseIDs:  make(map[string]struct{}),
 		retiredResponseIDs:    make(map[string]struct{}),

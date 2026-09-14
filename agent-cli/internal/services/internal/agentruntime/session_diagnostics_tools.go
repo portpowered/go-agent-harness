@@ -21,12 +21,6 @@ func (o *sessionProgressObserver) setToolResultsEnabled(enabled bool) {
 }
 
 func (o *sessionProgressObserver) ensureToolStateLocked() {
-	if o.unresolvedToolCalls == nil {
-		o.unresolvedToolCalls = make(map[string]struct{})
-	}
-	if o.toolResultRejections == nil {
-		o.toolResultRejections = make(map[string]messages.SessionSendStatus)
-	}
 	if o.toolLifecycleCh == nil {
 		o.toolLifecycleCh = make(chan struct{}, 1)
 	}
@@ -80,15 +74,10 @@ func (o *sessionProgressObserver) noteToolResultAcceptedWithContext(ctx context.
 	o.toolStateMu.Lock()
 	o.ensureToolStateLocked()
 	lifecycleCh := o.toolLifecycleCh
-	if accepted {
-		delete(o.unresolvedToolCalls, callID)
-		delete(o.toolResultRejections, callID)
-	} else {
-		// Preserve the close/termination obligation when the reducer rejects the
-		// result (for example, after Close or an ownership violation).
-		o.unresolvedToolCalls[callID] = struct{}{}
-	}
 	o.toolStateMu.Unlock()
+	if !accepted {
+		o.lifecycleEventWithContext(ctx, sd.Event{Kind: sd.EventToolResultRejected, CallID: callID, ResultStatus: string(messages.SessionSendClosed)})
+	}
 
 	// One wake-up is enough even when several results are accepted before the
 	// session loop selects this branch: the close predicate observes the whole
@@ -193,29 +182,21 @@ func firstNonBlankToolCallID(primary, fallback string) string {
 // rejection also registers the call as unresolved. It is intentionally
 // idempotent; only the first rejection is retained so repeated attempts cannot
 // rewrite the terminal status for a call.
-func (o *sessionProgressObserver) noteToolResultRejected(callID string, outcome messages.SessionSendOutcome) {
+func (o *sessionProgressObserver) noteToolResultRejected(ctx context.Context, callID string, outcome messages.SessionSendOutcome) {
 	if o == nil || strings.TrimSpace(callID) == "" || outcome.OK() {
 		return
 	}
-	o.toolStateMu.Lock()
-	defer o.toolStateMu.Unlock()
-	o.ensureToolStateLocked()
 	if o.continuationResultAccepted(callID) {
 		return
 	}
-	o.unresolvedToolCalls[callID] = struct{}{}
-	if _, recorded := o.toolResultRejections[callID]; !recorded {
-		o.toolResultRejections[callID] = outcome.Status
-	}
+	o.lifecycleEventWithContext(ctx, sd.Event{Kind: sd.EventToolResultRejected, CallID: callID, ResultStatus: string(outcome.Status)})
 }
 
 func (o *sessionProgressObserver) hasUnresolvedToolCalls() bool {
 	if o == nil {
 		return false
 	}
-	o.toolStateMu.Lock()
-	defer o.toolStateMu.Unlock()
-	return len(o.unresolvedToolCalls) > 0
+	return len(o.unresolvedToolCallIDs()) > 0
 }
 
 // lifecycleContinuationStates returns the reducer's immutable continuation
@@ -428,12 +409,12 @@ func (o *sessionProgressObserver) unresolvedToolCallIDs() []string {
 	if o == nil {
 		return nil
 	}
-	o.toolStateMu.Lock()
-	ids := make([]string, 0, len(o.unresolvedToolCalls))
-	for id := range o.unresolvedToolCalls {
-		ids = append(ids, id)
+	ids := make([]string, 0)
+	for _, state := range o.lifecycleContinuationStates() {
+		if (state.ProviderCallObserved && !state.ResultAccepted) || state.ResultRejected {
+			ids = append(ids, state.CallID)
+		}
 	}
-	o.toolStateMu.Unlock()
 	sort.Strings(ids)
 	return ids
 }
@@ -442,12 +423,10 @@ func (o *sessionProgressObserver) unresolvedToolResultSendStatuses() map[string]
 	if o == nil {
 		return nil
 	}
-	o.toolStateMu.Lock()
-	defer o.toolStateMu.Unlock()
-	statuses := make(map[string]messages.SessionSendStatus, len(o.toolResultRejections))
-	for id, status := range o.toolResultRejections {
-		if _, outstanding := o.unresolvedToolCalls[id]; outstanding {
-			statuses[id] = status
+	statuses := make(map[string]messages.SessionSendStatus)
+	for _, state := range o.lifecycleContinuationStates() {
+		if state.ResultRejected && state.ResultRejectionStatus != "" {
+			statuses[state.CallID] = messages.SessionSendStatus(state.ResultRejectionStatus)
 		}
 	}
 	return statuses

@@ -362,11 +362,11 @@ type SessionRunOptions struct {
 	// the existing single-turn stop behavior byte-for-byte.
 	WaitForClose bool
 
-	// sessionImageCapabilities is resolved once by the entry point that owns
-	// an initial --image turn and reused when the read_image tool is bound.
-	// Keeping it private prevents callers from bypassing the capability
-	// resolver while allowing all session wrappers to share one snapshot.
+	// sessionImageCapabilities is resolved by the initial-image entry point and
+	// reused by read_image. Keeping it private keeps capability policy per session.
 	sessionImageCapabilities *sessionturn.ImageCapabilities
+	sessionImageCleanup      func() error
+	sessionInstructions      string
 
 	// recordingClaim is acquired before provider construction and shared by
 	// nested session wrappers. It is intentionally private; command callers
@@ -812,13 +812,12 @@ func wrapSessionInferencerCaptureFlush(inferencer messages.SessionInferencer, re
 // device bridge can send and receive PCM without relying on a later control
 // message to change the wire contract.
 func NewLiveSessionInferencer(opts SessionRunOptions, instructions string) (messages.SessionInferencer, string, error) {
+	instructions = composeSessionInstructions(opts, instructions)
 	providerName := strings.ToLower(strings.TrimSpace(effectiveSessionProvider(opts)))
 	if providerName == "" {
 		return nil, "", fmt.Errorf("--devices real requires a realtime session provider; pass --provider openai or --provider grok")
 	}
 	opts.Provider = providerName
-	instructions = composeSessionInstructions(opts, instructions)
-
 	var (
 		model  string
 		config models.SessionConfig

@@ -13,7 +13,10 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 )
 
-const publicationSettleWindow = 10 * time.Millisecond
+const (
+	publicationSettleWindow = 10 * time.Millisecond
+	publicationStopTimeout  = 500 * time.Millisecond
+)
 
 type publication struct {
 	base, initial []messages.ToolDefinition
@@ -101,7 +104,18 @@ func (p *publication) Stop() {
 	if p == nil {
 		return
 	}
-	p.stopOnce.Do(func() { p.cancel(); <-p.done })
+	p.stopOnce.Do(func() {
+		p.cancel()
+		timer := time.NewTimer(publicationStopTimeout)
+		defer timer.Stop()
+		select {
+		case <-p.done:
+		case <-timer.C:
+			if err := p.fail("stop", p.latestSequence(), context.DeadlineExceeded); err != nil {
+				return
+			}
+		}
+	})
 }
 
 func (p *publication) run(ctx context.Context, events <-chan sessionturn.BrowserEvent) {

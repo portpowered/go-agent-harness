@@ -101,7 +101,7 @@ func newDefaultSessionRuntimeFactory() sessionRuntimeFactory {
 			return buildOpenAIRealtimeSessionInferencerWithInputAudioTranscription(sessionCfg, voice, dialer, inputAudioTranscription)
 		},
 		newBareLiveSessionInferencer: func(opts SessionRunOptions) (messages.SessionInferencer, string, error) {
-			return NewLiveSessionInferencer(opts, "")
+			return NewLiveSessionInferencer(opts, opts.sessionInstructions)
 		},
 		newGrokSessionWithTools: func(sessionCfg config.GrokConfig, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
 			return buildGrokSessionInferencerWithTools(sessionCfg, dialer, toolDefinitions)
@@ -302,6 +302,9 @@ func (p sessionRuntimePlan) configureLoopObserver(loop *sessionLoopOptions) {
 		return
 	}
 	obs := newSessionProgressObserver(p.diagnostics, p.metricsRecorder, p.provider, p.model)
+	if p.turnRuntime != nil && p.turnRuntime.Continuation() != nil {
+		obs.lifecycle = p.turnRuntime.Continuation()
+	}
 	obs.streamObserver = p.streamObserver
 	obs.runtime = p.runtime
 	obs.livenessClock = loop.livenessClock
@@ -342,10 +345,6 @@ func planSessionRuntimeWithFactory(ctx context.Context, opts SessionRunOptions, 
 			closeSessionCapabilityIfNeeded(capabilityCoordinator, &planErr)
 		}
 	}()
-	interactivePolicy, err := resolveSessionInteractiveToolPolicy(opts, opts.ToolDefinitions)
-	if err != nil {
-		return sessionRuntimePlan{}, err
-	}
 	if err := sessioncontract.ValidateSessionAudioInTurnBarge(opts.AudioInTurnBarge, len(opts.AudioInputs)); err != nil {
 		return sessionRuntimePlan{}, err
 	}
@@ -413,10 +412,10 @@ func planSessionRuntimeWithFactory(ctx context.Context, opts SessionRunOptions, 
 	// so its capability snapshot cannot leak across concurrent sessions.
 	plan.loop.ToolExecutor = bindSessionImageToolExecutor(opts, plan)
 	plan.loop.ToolDefinitions = append([]messages.ToolDefinition(nil), opts.ToolDefinitions...)
-	if err := prepareSessionRuntimeToolsAndAudio(ctx, opts, &plan, interactivePolicy); err != nil {
+	if err := prepareSessionRuntimeToolsAndAudio(ctx, opts, &plan); err != nil {
 		return sessionRuntimePlan{}, err
 	}
-	policySnapshot := interactivePolicy.Clone()
+	policySnapshot := plan.turnRuntime.InteractiveToolPolicy()
 	plan.interactivePolicy = policySnapshot
 	plan.loop.InteractiveToolPolicy = policySnapshot
 	// The per-invocation adapter deadline override is a hermetic test seam;

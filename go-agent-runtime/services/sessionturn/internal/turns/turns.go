@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
@@ -175,19 +176,15 @@ func (s *Service) NextTurnIndex() uint64 {
 	return s.nextIndex
 }
 
-// Close marks the service closed and closes its reused provider session once.
-// An active turn is left intact so its owner can observe and repair it.
+// Close marks the service closed, retires any active turn, and closes its
+// reused provider session once. The bounded provider close lets an in-flight
+// owner observe terminal shutdown without leaving the service reopenable.
 func (s *Service) Close() error {
 	s.transitionMu.Lock()
 	defer s.transitionMu.Unlock()
 
 	s.connectionMu.Lock()
 	s.mu.Lock()
-	if s.active != nil {
-		s.mu.Unlock()
-		s.connectionMu.Unlock()
-		return transitionError("close", sessionturn.ErrSessionEndedWithActiveTurn)
-	}
 	if s.closed {
 		err := s.closeErr
 		s.mu.Unlock()
@@ -195,6 +192,10 @@ func (s *Service) Close() error {
 		return err
 	}
 	s.closed = true
+	// Closing is terminal ownership of the active turn. The provider session
+	// is closed below, which wakes any reader and lets RunTurn observe the
+	// bounded shutdown error instead of leaving the service permanently open.
+	s.active = nil
 	connection := s.connection
 	s.mu.Unlock()
 	s.connectionMu.Unlock()
@@ -202,11 +203,27 @@ func (s *Service) Close() error {
 	if connection == nil {
 		return nil
 	}
-	err := connection.Close()
+	err := closeConnectionBounded(connection)
 	s.mu.Lock()
 	s.closeErr = err
 	s.mu.Unlock()
 	return err
+}
+
+const providerCloseTimeout = 500 * time.Millisecond
+
+func closeConnectionBounded(connection messages.Session) error {
+	if connection == nil {
+		return nil
+	}
+	result := make(chan error, 1)
+	go func() { result <- connection.Close() }()
+	select {
+	case err := <-result:
+		return err
+	case <-time.After(providerCloseTimeout):
+		return fmt.Errorf("close turn session: %w", context.DeadlineExceeded)
+	}
 }
 
 func (s *Service) sessionFor(ctx context.Context) (messages.Session, error) {

@@ -26,7 +26,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
-	sessionturnwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
@@ -261,25 +260,19 @@ func runSessionWithImagesAndRecordingDirectory(
 		return err
 	}
 	defer func() { _ = directoryClaim.release() }()
-	metadata, err := resolveSessionImageCapabilities(opts.SessionRunOptions)
+	var parts []messages.ImagePart
+	var imageCleanup func() error
+	opts.SessionRunOptions, parts, imageCleanup, err = prepareSessionImageRun(ctx, opts.SessionRunOptions, paths, opts.TextSeed)
 	if err != nil {
 		return err
 	}
-	opts.SessionRunOptions.sessionImageCapabilities = cloneSessionImageCapabilities(&metadata)
-	parts, err := sessionturnwire.NewDefaultService().PrepareImageParts(paths, metadata)
-	if err != nil {
-		return err
-	}
-	if opts.TextSeed.Present {
-		opts.SessionRunOptions.Prompt = opts.TextSeed.Value
-		opts.SessionRunOptions.PromptProvided = true
-	}
-	var imageCleanup func()
-	opts.SessionRunOptions, imageCleanup, err = prepareSessionImageToolAccess(ctx, opts.SessionRunOptions, paths, parts)
-	if err != nil {
-		return err
-	}
-	defer imageCleanup()
+	opts.SessionRunOptions.sessionImageCleanup = imageCleanup
+	imageCleanupOwned := true
+	defer func() {
+		if imageCleanupOwned {
+			runErr = errors.Join(runErr, imageCleanup())
+		}
+	}()
 	var audioSource *sessionAudioSource
 	if audioInput != nil {
 		if err := validateSessionAudioInput(*audioInput); err != nil {
@@ -300,6 +293,7 @@ func runSessionWithImagesAndRecordingDirectory(
 	if err != nil {
 		return err
 	}
+	imageCleanupOwned = false
 	defer cleanup()
 	if audioSource != nil {
 		audioSource.bindRuntime(plan.runtime, plan.clockSource)

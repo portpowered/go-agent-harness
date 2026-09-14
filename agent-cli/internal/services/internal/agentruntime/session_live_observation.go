@@ -231,7 +231,7 @@ func (s *observedSession) SendWithOutcome(ctx context.Context, msg messages.Stre
 	if !outcome.OK() {
 		if msg.Type == messages.StreamTypeToolCallEnd && s.progress != nil {
 			if value, ok := msg.Value.(*messages.ToolCallEndValue); ok && value != nil {
-				s.progress.noteToolResultRejected(value.ToolCallID, outcome)
+				s.progress.noteToolResultRejected(ctx, value.ToolCallID, outcome)
 			}
 		}
 		return outcome

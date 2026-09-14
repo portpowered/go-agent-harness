@@ -7,8 +7,6 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
-	sessionturnwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn/wire"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
@@ -231,45 +229,15 @@ func planSessionRuntimeWithContext(ctx context.Context, opts SessionRunOptions) 
 }
 
 func planSessionWithResolvedInstructionsContext(ctx context.Context, opts SessionRunOptions, instructions string) (sessionRuntimePlan, error) {
-	// This is the single service-owned boundary between prompt resolution and
-	// provider construction. The tool definitions in opts are the same snapshot
-	// that the runtime planner passes to the provider, so the grounding contract
-	// cannot drift from the advertised tool surface.
 	opts.ToolDefinitions = messages.CanonicalToolDefinitions(opts.ToolDefinitions)
-	instructions = composeSessionInstructions(opts, instructions)
+	opts.sessionInstructions = instructions
 	planFactory := opts.runtimeFactory
 	if !planFactory.configured() {
 		planFactory = newDefaultSessionRuntimeFactory()
 	}
-	useInitialProviderInstructions := instructions != "" && opts.SessionInferencer == nil
-	if useInitialProviderInstructions {
-		planFactory = sessionRuntimeFactoryWithInstructions(planFactory, instructions)
-	}
 	plan, err := planSessionRuntimeWithFactory(ctx, opts, planFactory)
 	if err != nil {
 		return sessionRuntimePlan{}, err
-	}
-	// Caller-owned/injected sessions do not have a provider factory that can
-	// receive the resolved tool surface. Configure them whenever either
-	// instructions or tools are present; an empty instruction remains empty and
-	// does not synthesize a default prompt.
-	if opts.SessionInferencer != nil && plan.inferencer != nil && !useInitialProviderInstructions && (instructions != "" || len(opts.ToolDefinitions) > 0) {
-		turnRuntime, prepareErr := sessionturnwire.NewDefaultService().Prepare(ctx, sessionturn.Request{
-			SessionInferencer: plan.inferencer,
-			InstructionsText:  instructions,
-			ToolExecutor:      plan.loop.ToolExecutor,
-			ToolDefinitions:   opts.ToolDefinitions,
-		})
-		if prepareErr != nil {
-			return sessionRuntimePlan{}, fmt.Errorf("prepare session-turn instructions: %w", prepareErr)
-		}
-		plan.turnRuntime = turnRuntime
-		plan.loop.turnRuntime = turnRuntime
-		plan.inferencer = turnRuntime.Inferencer()
-		// The wrapper above owns the complete injected-session configuration.
-		// Suppress ModelRunner's separate tool-only update, which otherwise races
-		// an identical second SESSION.UPDATE onto the provider wire.
-		plan.loop.AdvertiseToolDefinitions = false
 	}
 	return plan, nil
 }

@@ -7,6 +7,8 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn/internal/seed"
 	turns "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn/internal/turns"
@@ -14,7 +16,11 @@ import (
 )
 
 type Dependencies struct {
-	Allocator sessionturn.Allocator
+	Allocator          sessionturn.Allocator
+	PolicyFactory      tools.InteractiveToolPolicyFactory
+	ImageStaging       tools.ImageStaging
+	InstructionService session.InstructionService
+	LifecycleFactory   func() sessiondiagnostics.Service
 }
 
 type Service struct{ deps Dependencies }
@@ -36,25 +42,74 @@ func (s *Service) Prepare(ctx context.Context, request sessionturn.Request) (ses
 		allocator = s.deps.Allocator
 	}
 	seedService := seed.New(allocator)
-	inferencer, wirePrompt, err := prepareInferencer(ctx, request, seedService)
+	policy := request.InteractiveToolPolicy
+	if policy == nil && request.ToolPolicyRequest != nil {
+		if s == nil || s.deps.PolicyFactory == nil {
+			return nil, errors.New("session turn policy factory is not configured")
+		}
+		var err error
+		policy, err = s.deps.PolicyFactory.Resolve(*request.ToolPolicyRequest)
+		if err != nil {
+			return nil, err
+		}
+	}
+	var instructionService session.InstructionService
+	if s != nil {
+		instructionService = s.deps.InstructionService
+	}
+	inferencer, wirePrompt, err := prepareInferencer(ctx, request, seedService, instructionService)
 	if err != nil {
 		return nil, err
 	}
 
 	turnState := turns.New(turns.Dependencies{SessionInferencer: inferencer, EventSink: request.EventSink})
+	var continuation sessiondiagnostics.Service
+	if s != nil && s.deps.LifecycleFactory != nil {
+		continuation = s.deps.LifecycleFactory()
+	}
 	return &runtime{
 		inferencer:      inferencer,
 		turns:           turnState,
-		toolExecutor:    newToolExecutor(request.ToolExecutor, request.InteractiveToolPolicy, request.ToolExecutionTimeout, request.ToolCallObserver, request.ToolResultObserver, request.ToolDiagnostic, request.ToolFailurePresenter),
+		toolExecutor:    newToolExecutor(request.ToolExecutor, policy, request.ToolExecutionTimeout, request.ToolCallObserver, request.ToolResultObserver, request.ToolDiagnostic, request.ToolFailurePresenter),
 		toolDefinitions: cloneDefinitions(request.ToolDefinitions),
-		policy:          clonePolicy(request.InteractiveToolPolicy),
+		policy:          clonePolicy(policy),
 		output:          seedService,
 		wirePrompt:      wirePrompt,
+		continuation:    continuation,
+		imageCleanup:    request.ImageCleanup,
 	}, nil
 }
 
-func prepareInferencer(ctx context.Context, request sessionturn.Request, seedService *seed.Service) (messages.SessionInferencer, string, error) {
+func (s *Service) StageImageTools(ctx context.Context, request tools.ImageStagingRequest) (tools.ImageStagingResult, error) {
+	if s == nil || s.deps.ImageStaging == nil {
+		return tools.ImageStagingResult{}, errors.New("session turn image staging is not configured")
+	}
+	return s.deps.ImageStaging.Stage(ctx, request)
+}
+
+func (s *Service) BindImageToolExecutor(executor messages.ToolExecutor, capabilities sessionturn.ImageCapabilities) messages.ToolExecutor {
+	if executor == nil {
+		return nil
+	}
+	binder, ok := executor.(tools.SessionImagePreparerBinder)
+	if !ok {
+		return executor
+	}
+	return binder.WithSessionImagePreparer(func(paths []string) ([]messages.ImagePart, error) {
+		return s.PrepareImageParts(paths, capabilities)
+	})
+}
+
+func prepareInferencer(ctx context.Context, request sessionturn.Request, seedService *seed.Service, instructionService session.InstructionService) (messages.SessionInferencer, string, error) {
 	inferencer := request.SessionInferencer
+	instructions, err := resolveInstructions(ctx, request, instructionService)
+	if err != nil {
+		return nil, "", err
+	}
+	providerConfigured := false
+	if instructions != "" || len(request.ToolDefinitions) != 0 {
+		inferencer, providerConfigured = configureProviderRequest(inferencer, instructions, request.ToolDefinitions)
+	}
 	if request.Image != nil {
 		inferencer = newImageInferencer(inferencer, *request.Image)
 	}
@@ -62,11 +117,7 @@ func prepareInferencer(ctx context.Context, request sessionturn.Request, seedSer
 	if err != nil {
 		return nil, "", err
 	}
-	instructions, err := resolveInstructions(ctx, request)
-	if err != nil {
-		return nil, "", err
-	}
-	if instructions != "" || len(request.ToolDefinitions) != 0 {
+	if (instructions != "" || len(request.ToolDefinitions) != 0) && !providerConfigured {
 		inferencer = newInstructionsInferencer(inferencer, instructions, request.ToolDefinitions)
 	}
 	return inferencer, wirePrompt, nil
@@ -83,19 +134,26 @@ func applySeed(inferencer messages.SessionInferencer, requested sessionturn.Seed
 	return wirePrompt, seedService.WrapInferencer(inferencer, wirePrompt, requested), nil
 }
 
-func resolveInstructions(ctx context.Context, request sessionturn.Request) (string, error) {
-	if request.Instructions.Service == nil {
-		return request.InstructionsText, nil
+func resolveInstructions(ctx context.Context, request sessionturn.Request, instructionService session.InstructionService) (string, error) {
+	instructions := request.InstructionsText
+	service := request.Instructions.Service
+	if service != nil {
+		resolved, err := service.Resolve(ctx, request.Instructions.Request)
+		if err != nil {
+			return "", err
+		}
+		instructions = resolved.Instructions
 	}
-	resolved, err := request.Instructions.Service.Resolve(ctx, request.Instructions.Request)
-	if err != nil {
-		return "", err
-	}
-	instructions := resolved.Instructions
 	if request.Instructions.Composition != nil {
+		if service == nil {
+			service = instructionService
+		}
+		if service == nil {
+			return "", errors.New("session turn instruction service is not configured")
+		}
 		composition := *request.Instructions.Composition
 		composition.Instructions = instructions
-		instructions = request.Instructions.Service.Compose(composition)
+		instructions = service.Compose(composition)
 	}
 	return instructions, nil
 }
@@ -108,6 +166,8 @@ type runtime struct {
 	policy          tools.InteractiveToolPolicy
 	output          *seed.Service
 	wirePrompt      string
+	continuation    sessiondiagnostics.Service
+	imageCleanup    func() error
 
 	mu          sync.Mutex
 	publication sessionturn.Publication
@@ -120,6 +180,7 @@ func (r *runtime) ToolDefinitions() []messages.ToolDefinition {
 }
 func (r *runtime) InteractiveToolPolicy() tools.InteractiveToolPolicy { return clonePolicy(r.policy) }
 func (r *runtime) WirePrompt() string                                 { return r.wirePrompt }
+func (r *runtime) Continuation() sessiondiagnostics.Service           { return r.continuation }
 
 func (r *runtime) RunTurn(ctx context.Context, request sessionturn.TurnRequest) (sessionturn.TurnResult, error) {
 	turn, err := r.turns.RunTurn(ctx, request.Input, request.Direction, request.StartTick, request.EndTick)
@@ -153,10 +214,15 @@ func (r *runtime) Close() error {
 	r.mu.Lock()
 	publication := r.publication
 	r.mu.Unlock()
+	var closeErr error
 	if publication != nil {
 		publication.Stop()
 	}
-	return r.turns.Close()
+	closeErr = errors.Join(closeErr, r.turns.Close())
+	if r.imageCleanup != nil {
+		closeErr = errors.Join(closeErr, r.imageCleanup())
+	}
+	return closeErr
 }
 
 func cloneDefinitions(definitions []messages.ToolDefinition) []messages.ToolDefinition {

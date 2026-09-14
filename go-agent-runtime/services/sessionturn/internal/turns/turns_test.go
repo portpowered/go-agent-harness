@@ -240,17 +240,17 @@ func TestServiceInvalidTransitionsPreserveState(t *testing.T) {
 			}
 		})
 	}
-	if err := service.Close(); !errors.Is(err, sessionturn.ErrSessionEndedWithActiveTurn) {
+	if err := service.Close(); err != nil {
 		t.Fatalf("active Close error = %v", err)
 	}
-	if _, active := service.ActiveTurn(); !active {
-		t.Fatal("active turn was discarded by Close")
+	if _, active := service.ActiveTurn(); active {
+		t.Fatal("active turn was retained by Close")
 	}
-	if _, err := service.EndTurn(0, "", messages.NewTextMessage(messages.RoleAssistant, "ok"), 11); err != nil {
-		t.Fatalf("valid EndTurn = %v", err)
+	if _, err := service.StartTurn(textInput("later"), sessionturn.TurnDirectionUser, 11); !errors.Is(err, sessionturn.ErrSessionClosed) {
+		t.Fatalf("restart after close error = %v", err)
 	}
-	if _, err := service.StartTurn(textInput("later"), sessionturn.TurnDirectionUser, 11); !errors.Is(err, sessionturn.ErrInvalidTurnTick) {
-		t.Fatalf("non-increasing restart error = %v", err)
+	if _, err := service.EndTurn(1, sessionturn.TurnDirectionUser, messages.NewTextMessage(messages.RoleAssistant, "ok"), 11); !errors.Is(err, sessionturn.ErrSessionClosed) {
+		t.Fatalf("end after close error = %v", err)
 	}
 	if err := service.Close(); err != nil {
 		t.Fatalf("close after active turn = %v", err)

@@ -3,10 +3,12 @@ package service
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
+	"io"
 	"mime"
 	"net/http"
 	"os"
@@ -17,6 +19,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 )
+
+const maxImageBytes = 8 << 20
 
 func (s *Service) PrepareImageParts(paths []string, capabilities sessionturn.ImageCapabilities) ([]messages.ImagePart, error) {
 	if !capabilities.SupportsImageInput {
@@ -37,11 +41,11 @@ func (s *Service) PrepareImageParts(paths []string, capabilities sessionturn.Ima
 	return parts, nil
 }
 
-func readImagePart(path string, supported []string) (messages.ImagePart, error) {
+func readImagePart(path string, supported []string) (part messages.ImagePart, retErr error) {
 	if path == "" {
 		return messages.ImagePart{}, imageFileError(sessionturn.ErrImageMissingFile, path, "", nil, "session image file is missing")
 	}
-	data, err := os.ReadFile(path)
+	file, err := os.Open(path)
 	if err != nil {
 		kind := sessionturn.ErrImageUnreadableFile
 		if os.IsNotExist(err) {
@@ -49,6 +53,14 @@ func readImagePart(path string, supported []string) (messages.ImagePart, error) 
 			return messages.ImagePart{}, imageFileError(kind, path, "", err, fmt.Sprintf("session image %q is missing: %v", path, err))
 		}
 		return messages.ImagePart{}, imageFileError(kind, path, "", err, fmt.Sprintf("session image %q cannot be read: %v", path, err))
+	}
+	defer func() { retErr = errors.Join(retErr, file.Close()) }()
+	data, err := io.ReadAll(io.LimitReader(file, maxImageBytes+1))
+	if err != nil {
+		return messages.ImagePart{}, imageFileError(sessionturn.ErrImageUnreadableFile, path, "", err, fmt.Sprintf("session image %q cannot be read: %v", path, err))
+	}
+	if len(data) > maxImageBytes {
+		return messages.ImagePart{}, imageFileError(sessionturn.ErrImageInvalidContent, path, "", nil, fmt.Sprintf("session image %q exceeds the %d-byte limit", path, maxImageBytes))
 	}
 	if len(data) == 0 {
 		return messages.ImagePart{}, &sessionturn.ImageEmptyFileError{Path: path}

@@ -71,7 +71,7 @@ func (s *observedSession) observeCompleteMessageToolResult(ctx context.Context, 
 		return
 	}
 	if msg.ToolCallID != "" {
-		s.progress.noteToolResultRejected(msg.ToolCallID, outcome)
+		s.progress.noteToolResultRejected(ctx, msg.ToolCallID, outcome)
 	}
 }
 

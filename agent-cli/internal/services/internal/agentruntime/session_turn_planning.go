@@ -5,12 +5,28 @@ import (
 	"fmt"
 	"io"
 
+	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	runtimeSessionWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
+	sessiondiagnosticswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 	sessionturnwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn/wire"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 )
+
+func newSessionTurnService() sessionturn.Service {
+	return sessionturnwire.NewService(sessionturnwire.Dependencies{
+		PolicyFactory:      runtimeToolsWire.NewInteractiveToolPolicy(),
+		ImageStaging:       runtimeToolsWire.NewImageStaging(),
+		InstructionService: runtimeSessionWire.NewInstructionService(),
+		LifecycleFactory: func() sessiondiagnostics.Service {
+			return sessiondiagnosticswire.NewService(sessiondiagnostics.Options{})
+		},
+	})
+}
 
 // prepareSessionTurnSeed transfers seed substitution and serialized output
 // ownership to the session-turn service. The planner only replaces the
@@ -19,7 +35,7 @@ func prepareSessionTurnSeed(ctx context.Context, plan *sessionRuntimePlan, seed 
 	if plan == nil || plan.inferencer == nil {
 		return nil, nil
 	}
-	runtime, err := sessionturnwire.NewDefaultService().Prepare(ctx, sessionturn.Request{
+	runtime, err := newSessionTurnService().Prepare(ctx, sessionturn.Request{
 		SessionInferencer: plan.inferencer,
 		Seed:              seed,
 		ToolExecutor:      plan.loop.ToolExecutor,
@@ -46,7 +62,7 @@ func sessionLoopToolExecutor(opts sessionLoopOptions) messages.ToolExecutor {
 			return opts.ToolExecutor
 		}
 		toolLifecycle := composeSessionToolLifecycleObserver(opts.toolLifecycleObserver, opts.observer, opts.runtime)
-		runtime, err := sessionturnwire.NewDefaultService().Prepare(context.Background(), sessionturn.Request{
+		runtime, err := newSessionTurnService().Prepare(context.Background(), sessionturn.Request{
 			ToolExecutor:          opts.ToolExecutor,
 			InteractiveToolPolicy: opts.InteractiveToolPolicy,
 			ToolExecutionTimeout:  opts.ToolExecutionTimeout,
@@ -103,27 +119,19 @@ func prepareSessionRecordingOutputs(plan *sessionRuntimePlan, out io.Writer, aud
 	return audioOutput, audioWrapper, nil, nil
 }
 
-func prepareSessionTurnRuntime(ctx context.Context, opts SessionRunOptions, plan *sessionRuntimePlan, interactivePolicy runtimeTools.InteractiveToolPolicy) error {
+func prepareSessionTurnRuntime(ctx context.Context, opts SessionRunOptions, plan *sessionRuntimePlan) error {
 	toolLifecycle := composeSessionToolLifecycleObserver(plan.loop.toolLifecycleObserver, plan.loop.observer, plan.runtime)
-	runtimePolicy, err := runtimeToolsWire.NewInteractiveToolPolicy().Resolve(runtimeTools.InteractiveToolPolicyRequest{
-		Settings: runtimeTools.InteractiveToolPolicySettings{
-			FastReadTimeout:          interactivePolicy.Settings().FastReadTimeout,
-			LongRunningTimeout:       interactivePolicy.Settings().LongRunningTimeout,
-			AcknowledgementThreshold: interactivePolicy.Settings().AcknowledgementThreshold,
-		},
-		Definitions:        plan.loop.ToolDefinitions,
-		BaseDefinitions:    opts.ToolDefinitionBase,
-		DynamicLongRunning: opts.BrowserToolsInteractive,
-	})
-	if err != nil {
-		return fmt.Errorf("prepare session-turn policy: %w", err)
-	}
-	turnRuntime, err := sessionturnwire.NewDefaultService().Prepare(ctx, sessionturn.Request{
-		SessionInferencer:     plan.inferencer,
-		ToolExecutor:          plan.loop.ToolExecutor,
-		ToolDefinitions:       nil,
-		InteractiveToolPolicy: runtimePolicy,
-		ToolExecutionTimeout:  opts.ToolExecutionTimeout,
+	request := sessionturn.Request{
+		SessionInferencer: plan.inferencer,
+		ToolExecutor:      plan.loop.ToolExecutor,
+		InstructionsText:  opts.sessionInstructions,
+		Instructions: sessionturn.InstructionRequest{Composition: &runtimeSession.InstructionComposition{
+			ToolDefinitions:        append([]messages.ToolDefinition(nil), plan.loop.ToolDefinitions...),
+			BrowserCapabilityState: runtimeSession.BrowserCapabilityState(string(opts.BrowserCapabilityState)),
+			BrowserToolsEnabled:    opts.BrowserToolsEnabled,
+			PageSightToolID:        cliTools.PageSightToolID,
+		}},
+		ToolExecutionTimeout: opts.ToolExecutionTimeout,
 		ToolCallObserver: func(call messages.ToolCall) {
 			if toolLifecycle != nil {
 				toolLifecycle.observeToolCall(call)
@@ -137,7 +145,34 @@ func prepareSessionTurnRuntime(ctx context.Context, opts SessionRunOptions, plan
 		ToolDiagnostic: func(call messages.ToolCall, err error) {
 			recordSessionToolDiagnostic(opts.ToolDiagnostics, opts.ToolExecutor, call, err)
 		},
-	})
+	}
+	if opts.ReplayPath == "" || opts.SessionInferencer != nil {
+		request.ToolDefinitions = append([]messages.ToolDefinition(nil), plan.loop.ToolDefinitions...)
+	}
+	if opts.InteractiveToolPolicy != nil {
+		request.InteractiveToolPolicy = opts.InteractiveToolPolicy
+	} else {
+		settings, err := sessionInteractiveToolSettings(opts)
+		if err != nil {
+			return err
+		}
+		request.ToolPolicyRequest = &runtimeTools.InteractiveToolPolicyRequest{
+			Settings: runtimeTools.InteractiveToolPolicySettings{
+				FastReadTimeout:          settings.FastReadTimeout,
+				LongRunningTimeout:       settings.LongRunningTimeout,
+				AcknowledgementThreshold: settings.AcknowledgementThreshold,
+			},
+			Definitions:     plan.loop.ToolDefinitions,
+			BaseDefinitions: opts.ToolDefinitionBase,
+			ExplicitLongRunningNames: []string{
+				"webmcp_select_tab", "webmcp_invoke", "webmcp_list_tools", "webmcp_list_tabs",
+				"webmcp_get_context", "webmcp_cancel", "webmcp_list_cast_devices", "webmcp_cast_tab",
+				"webmcp_stop_casting",
+			},
+			DynamicLongRunning: opts.BrowserToolsInteractive,
+		}
+	}
+	turnRuntime, err := newSessionTurnService().Prepare(ctx, request)
 	if err != nil {
 		return fmt.Errorf("prepare session-turn runtime: %w", err)
 	}
@@ -146,11 +181,14 @@ func prepareSessionTurnRuntime(ctx context.Context, opts SessionRunOptions, plan
 	plan.loop.turnBrowser = sessionTurnBrowserRequest(opts.BrowserWatch, opts.RefreshToolDefinitions)
 	plan.loop.ToolExecutor = turnRuntime.ToolExecutor()
 	plan.inferencer = turnRuntime.Inferencer()
+	if opts.SessionInferencer != nil && (opts.sessionInstructions != "" || len(opts.ToolDefinitions) != 0) {
+		plan.loop.AdvertiseToolDefinitions = false
+	}
 	return nil
 }
 
-func prepareSessionRuntimeToolsAndAudio(ctx context.Context, opts SessionRunOptions, plan *sessionRuntimePlan, interactivePolicy runtimeTools.InteractiveToolPolicy) error {
-	if err := prepareSessionTurnRuntime(ctx, opts, plan, interactivePolicy); err != nil {
+func prepareSessionRuntimeToolsAndAudio(ctx context.Context, opts SessionRunOptions, plan *sessionRuntimePlan) error {
+	if err := prepareSessionTurnRuntime(ctx, opts, plan); err != nil {
 		return err
 	}
 	return configureSessionAudioContract(opts, plan)

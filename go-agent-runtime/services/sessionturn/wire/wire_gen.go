@@ -7,8 +7,11 @@
 package wire
 
 import (
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn/internal/service"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
 // Injectors from providers.go:
@@ -22,9 +25,13 @@ func NewService(deps Dependencies) sessionturn.Service {
 // providers.go:
 
 type Dependencies struct {
-	Allocator sessionturn.Allocator
+	Allocator          sessionturn.Allocator
+	PolicyFactory      tools.InteractiveToolPolicyFactory
+	ImageStaging       tools.ImageStaging
+	InstructionService session.InstructionService
+	LifecycleFactory   func() sessiondiagnostics.Service
 }
 
 func newServiceDependencies(deps Dependencies) service.Dependencies {
-	return service.Dependencies{Allocator: deps.Allocator}
+	return service.Dependencies{Allocator: deps.Allocator, PolicyFactory: deps.PolicyFactory, ImageStaging: deps.ImageStaging, InstructionService: deps.InstructionService, LifecycleFactory: deps.LifecycleFactory}
 }
