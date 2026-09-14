@@ -54,11 +54,20 @@ func TestResponseLifecyclePreservesIdentityAndRejectsLateEvents(t *testing.T) {
 	if !ended.Candidate || ended.ResponseID != "response-1" {
 		t.Fatalf("end = %+v, want admitted response-1", ended)
 	}
+	if lateContent := applyEvent(t, service, lifecycle.Event{Kind: lifecycle.EventResponseContent, ResponseID: "response-1"}); lateContent.Accepted {
+		t.Fatalf("late content = %+v, want rejection after MESSAGE.END", lateContent)
+	}
 	if duplicate := applyEvent(t, service, lifecycle.Event{Kind: lifecycle.EventResponseEnd, ResponseID: "response-1", Output: true}); duplicate.Accepted {
 		t.Fatalf("duplicate end = %+v, want ignored", duplicate)
 	}
 	if finished := applyEvent(t, service, lifecycle.Event{Kind: lifecycle.EventResponseFinish, ResponseID: "response-1"}); !finished.Accepted {
 		t.Fatalf("finish = %+v, want acceptance", finished)
+	}
+	if staleBoundary := applyEvent(t, service, lifecycle.Event{Kind: lifecycle.EventResponseContentBoundary, ResponseID: "response-1"}); staleBoundary.Accepted {
+		t.Fatalf("stale content boundary = %+v, want rejection after finish", staleBoundary)
+	}
+	if owns := applyEvent(t, service, lifecycle.Event{Kind: lifecycle.EventResponseOwnsEnd}); !owns.Accepted || !owns.OwnsResponse {
+		t.Fatalf("unidentified end ownership = %+v, want an idle boundary", owns)
 	}
 	if late := applyEvent(t, service, lifecycle.Event{Kind: lifecycle.EventResponseOpen, ResponseID: "response-1"}); late.NewResponse {
 		t.Fatalf("late response reopened lifecycle: %+v", late)
@@ -73,6 +82,9 @@ func TestResponseLifecyclePreservesIdentityAndRejectsLateEvents(t *testing.T) {
 func TestResponseLifecycleAdoptsUnidentifiedResponseAndControlsReplacement(t *testing.T) {
 	service := New(lifecycle.Options{})
 	applyEvent(t, service, lifecycle.Event{Kind: lifecycle.EventResponseOpen})
+	if content := applyEvent(t, service, lifecycle.Event{Kind: lifecycle.EventResponseContent}); !content.Accepted {
+		t.Fatalf("unidentified response content = %+v, want acceptance", content)
+	}
 	if adopted := applyEvent(t, service, lifecycle.Event{Kind: lifecycle.EventResponseAdopt, ResponseID: "late-id"}); !adopted.Accepted {
 		t.Fatalf("adopt = %+v, want acceptance", adopted)
 	}
