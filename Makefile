@@ -2,6 +2,7 @@ SHELL := /bin/bash
 
 GO ?= go
 MODULES := agent-cli go-agent-loop go-llm-gateway go-audio go-device-gateway go-agent-runtime
+COVERAGE_LIBRARY_MODULES := $(filter-out agent-cli,$(MODULES))
 LINT_MODULES := $(MODULES) tests/embedding tools/architecturegate tools/analyzergate tools/coveragegate tools/rtc-race-gate tools/session-race-gate tools/timingate scripts/webmcp-o0 test/localai
 LINT_BASE ?= origin/main
 BUILD_CGO_ENABLED ?= 0
@@ -13,6 +14,9 @@ AGENT_CLI_TEST_RUNNER := ./cmd/testtimeout
 COVERAGE_DIR ?= coverage
 COVERAGE_MANIFEST_DIR ?= coverage-manifest
 COVERAGE_BASE ?= origin/main
+COVERAGE_MODULES ?= $(MODULES)
+COVERAGE_INCLUDE_EMBEDDING ?= 1
+COVERAGE_RUN_GATE ?= 1
 CUSTOMER_SESSION_DIR ?= $(HOME)/.codex/sessions
 GOLANGCI_LINT ?= golangci-lint
 STATICCHECK ?= staticcheck
@@ -43,7 +47,7 @@ SKIP_RELEASE_CI ?= 0
 
 .DEFAULT_GOAL := help
 .PHONY: architecture-check size-check architecture-size-check test-architecture-gate verify-architecture embed-check
-.PHONY: help deps fmt fmt-fix wire-check typecheck vet lint staticcheck test test-tools test-audio-stability test-audio-stability-race test-audio-device-server-integration test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage coverage-registration coverage-changed prepush validate ci release-check release-tags release-push release-dry-run release clean test-budget test-hermetic
+.PHONY: help deps fmt fmt-fix wire-check typecheck vet lint staticcheck test test-tools test-audio-stability test-audio-stability-race test-audio-device-server-integration test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage coverage-ci-agent-cli coverage-ci-libraries coverage-gate coverage-registration coverage-changed check-ci-test-partition prepush validate ci release-check release-tags release-push release-dry-run release clean test-budget test-hermetic
 
 help: ## Show available targets.
 	@awk 'BEGIN {FS = ":.*## "; printf "Available targets:\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -168,6 +172,7 @@ test: ## Run deterministic Go tests across all workspace modules.
 test-tools: ## Run tests for standalone repository helper modules.
 	@set -euo pipefail; \
 	python3 -B -m unittest discover -s scripts -p test_check_wire.py; \
+	python3 -B -m unittest scripts.test_check_ci_test_partition; \
 	python3 -B -m unittest factory.scripts.tests.test_golangci_lint_working_tree; \
 	echo "==> test tools/analyzergate"; \
 	(cd tools/analyzergate && GOWORK=off $(GO) test ./... -timeout "$(GO_TEST_TIMEOUT)"); \
@@ -302,7 +307,7 @@ typecheck: build ## Backward-compatible alias for root compile validation.
 coverage: ## Write per-module coverage profiles under coverage/.
 	@set -euo pipefail; \
 	mkdir -p "$(COVERAGE_DIR)"; \
-	for module in $(MODULES); do \
+	for module in $(COVERAGE_MODULES); do \
 		effective_timeout="$(GO_TEST_TIMEOUT)"; \
 		timeout_scope="general package timeout"; \
 		if [ "$$module" = "agent-cli" ]; then \
@@ -311,15 +316,28 @@ coverage: ## Write per-module coverage profiles under coverage/.
 		fi; \
 		echo "==> coverage $$module ($$timeout_scope: $$effective_timeout)"; \
 		if [ "$$module" = "agent-cli" ]; then \
-			(cd "$$module" && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$$effective_timeout" --report-budget --label "agent-cli coverage" -- $(GO) test ./... -tags=nomicrophone -timeout "$$effective_timeout" -coverpkg=github.com/portpowered/go-agent-harness/agent-cli/...,github.com/portpowered/go-agent-harness/go-agent-runtime/... -coverprofile="../$(COVERAGE_DIR)/$$module.out"); \
+			(cd "$$module" && CGO_ENABLED=$(BUILD_CGO_ENABLED) YUI_AUDIO_STRESS=1 $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$$effective_timeout" --report-budget --label "agent-cli coverage" -- $(GO) test ./... -count=1 -tags=nomicrophone -timeout "$$effective_timeout" -coverpkg=github.com/portpowered/go-agent-harness/agent-cli/...,github.com/portpowered/go-agent-harness/go-agent-runtime/... -coverprofile="../$(COVERAGE_DIR)/$$module.out"); \
 		else \
-			(cd "$$module" && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) test ./... -tags=nomicrophone -timeout "$$effective_timeout" -coverpkg=./... -coverprofile="../$(COVERAGE_DIR)/$$module.out"); \
+			(cd "$$module" && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) test ./... -count=1 -tags=nomicrophone -timeout "$$effective_timeout" -coverpkg=./... -coverprofile="../$(COVERAGE_DIR)/$$module.out"); \
 		fi; \
 	done; \
-	echo "==> embedded runtime coverage"; \
-	(cd tests/embedding && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) test ./... -tags=nomicrophone -timeout "$(GO_TEST_TIMEOUT)" -coverpkg=github.com/portpowered/go-agent-harness/go-agent-runtime/... -coverprofile="../../$(COVERAGE_DIR)/embedding.out"); \
-	echo "==> coverage gate"; \
-	(cd tools/coveragegate && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run . --manifest "$(abspath $(COVERAGE_MANIFEST_DIR))" $(foreach module,$(MODULES),$(abspath $(COVERAGE_DIR))/$(module).out) $(abspath $(COVERAGE_DIR))/embedding.out)
+	if [ "$(COVERAGE_INCLUDE_EMBEDDING)" = "1" ]; then \
+		echo "==> embedded runtime coverage"; \
+		(cd tests/embedding && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) test -mod=readonly ./... -count=1 -tags=nomicrophone -timeout "$(GO_TEST_TIMEOUT)" -coverpkg=github.com/portpowered/go-agent-harness/go-agent-runtime/... -coverprofile="../../$(COVERAGE_DIR)/embedding.out"); \
+	fi; \
+	if [ "$(COVERAGE_RUN_GATE)" = "1" ]; then \
+		$(MAKE) coverage-gate; \
+	fi
+
+coverage-ci-agent-cli: ## Write the hermetic agent-cli profile owned by the CI coverage shard.
+	@$(MAKE) coverage COVERAGE_MODULES=agent-cli COVERAGE_INCLUDE_EMBEDDING=0 COVERAGE_RUN_GATE=0
+
+coverage-ci-libraries: ## Write hermetic library and embedding profiles owned by the CI coverage shard.
+	@$(MAKE) coverage COVERAGE_MODULES="$(COVERAGE_LIBRARY_MODULES)" COVERAGE_INCLUDE_EMBEDDING=1 COVERAGE_RUN_GATE=0
+
+coverage-gate: ## Enforce coverage policy against a complete set of generated profiles.
+	@echo "==> coverage gate"
+	@cd tools/coveragegate && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run . --manifest "$(abspath $(COVERAGE_MANIFEST_DIR))" $(foreach module,$(MODULES),$(abspath $(COVERAGE_DIR))/$(module).out) $(abspath $(COVERAGE_DIR))/embedding.out
 
 coverage-registration: ## Validate every workspace Go package is registered without running coverage.
 	@set -euo pipefail; \
@@ -336,12 +354,15 @@ coverage-changed: coverage ## Compatibility alias for the complete behavioral co
 wire-check: ## Regenerate the pinned Wire graph and reject generated-code drift.
 	@python3 -B scripts/check-wire.py --go "$(GO)" $(MODULES)
 
+check-ci-test-partition: ## Verify each Linux package corpus has exactly one CI owner.
+	@python3 -B scripts/check-ci-test-partition.py .github/workflows/ci.yml
+
 prepush: ## Run the fail-fast, timed local pre-push gate.
 	@PREPUSH_MAKE="$(PREPUSH_MAKE)" scripts/prepush.sh
 
 ci: ## Run the full deterministic validation pipeline used by contributors and CI.
 	@set -euo pipefail; \
-	steps="fmt verify-architecture vet lint staticcheck test-tools test-factory-scripts embed-check test-integration test-regressions build coverage"; \
+	steps="fmt verify-architecture vet lint staticcheck check-ci-test-partition test-tools test-factory-scripts build coverage"; \
 	for step in $$steps; do \
 		echo "==> ci $$step"; \
 		$(MAKE) "$$step" || { status=$$?; echo "==> ci failed at $$step"; exit $$status; }; \
