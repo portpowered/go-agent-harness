@@ -504,6 +504,7 @@ func validateSessionRecordingOptions(opts SessionRunOptions) error {
 	}
 	return validateSessionRunOptions(opts)
 }
+
 //lint:ignore U1000 package tests exercise the context-free recording seam.
 func planSessionForDirectoryRecording(opts SessionRunOptions) (sessionRuntimePlan, func(), error) {
 	return planSessionForDirectoryRecordingWithInstructions(opts, "", false)

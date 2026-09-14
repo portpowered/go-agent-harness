@@ -128,7 +128,25 @@ func (i *input) finishEOF(ctx context.Context, outbound sharedaudio.OutboundMedi
 	if sent == 0 && !i.hasSamples {
 		return audioio.ErrEmptyInput
 	}
+	if i.continuous {
+		return i.finishContinuousEOF(ctx)
+	}
 	return i.finishTurn(ctx, outbound, false)
+}
+
+// finishContinuousEOF closes the source-owned turn without asking the
+// resampler for a finite tail. Explicit ErrEndOfTurn remains the only
+// continuous boundary that flushes the resampler.
+func (i *input) finishContinuousEOF(ctx context.Context) error {
+	if !i.turnHasSamples && i.lastBoundary {
+		return nil
+	}
+	if err := i.notifyBoundary(ctx); err != nil {
+		return err
+	}
+	i.turnHasSamples = false
+	i.lastBoundary = true
+	return nil
 }
 
 func (i *input) processFrame(ctx context.Context, outbound sharedaudio.OutboundMedia, frame []int16, source sharedaudio.SampleSource) (int, int, bool, error) {
@@ -145,6 +163,9 @@ func (i *input) processFrame(ctx context.Context, outbound sharedaudio.OutboundM
 	frames, err := i.processSamples(frame, count)
 	if err != nil {
 		return 0, 0, false, err
+	}
+	if samplesAreSilent(frame[:count]) {
+		clearProcessedFrames(frames)
 	}
 	i.hasSamples = true
 	// The audio service forwards bounded packets for capture continuity, but
@@ -230,6 +251,12 @@ func hasNonZeroSamples(samples []int16) bool {
 		}
 	}
 	return false
+}
+
+func clearProcessedFrames(frames []sharedaudio.PCMFrame) {
+	for index := range frames {
+		clear(frames[index].Samples)
+	}
 }
 
 func (i *input) readFrame(ctx context.Context, frame []int16, source sharedaudio.SampleSource) (int, error) {

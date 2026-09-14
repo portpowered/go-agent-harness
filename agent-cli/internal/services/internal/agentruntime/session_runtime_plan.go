@@ -311,6 +311,7 @@ func planSessionRuntime(opts SessionRunOptions) (sessionRuntimePlan, error) {
 	}
 	return planSessionRuntimeWithFactory(opts, factory)
 }
+
 //lint:ignore U1000 package tests exercise the context-free planning seam.
 func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntimeFactory) (plan sessionRuntimePlan, planErr error) {
 	recordingClaim, err := ensureSessionRecordingClaim(&opts)

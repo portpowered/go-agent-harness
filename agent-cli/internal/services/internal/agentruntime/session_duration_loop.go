@@ -17,6 +17,7 @@ type realSessionDurationClock struct{}
 func (realSessionDurationClock) NewTimer(duration time.Duration) SessionDurationTimer {
 	return platformclock.Real{}.NewTimer(duration)
 }
+
 //lint:ignore U1000 package tests exercise the context-free admission seam.
 func runAgentLoopSessionWithDurationClock(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions, maxDuration time.Duration, durationClock SessionDurationClock) error {
 	return runAgentLoopSessionWithDurationAdmissionClock(ctx, out, sessionInferencer, opts, maxDuration, durationClock, nil)

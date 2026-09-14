@@ -125,6 +125,7 @@ type roomEvidenceArtifactPaths struct {
 	// path, matching how solo `agent session run --record` behaves.
 	Capture string `json:"capture,omitempty"`
 }
+
 //lint:ignore U1000 package tests exercise the context-free evidence seam.
 func newRoomEvidence(destination string, manifest room.Manifest, format room.PCM16Format, secrets []string, startedAt time.Time, sources ...platformclock.Source) (*roomEvidence, error) {
 	return newRoomEvidenceWithLatency(destination, manifest, format, secrets, startedAt, nil, sources...)
