@@ -4,10 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
-	"regexp"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -16,17 +12,13 @@ import (
 )
 
 const (
-	defaultLivenessTimeout = 10 * time.Second
-	defaultRetryDelay      = 2 * time.Second
-	defaultRetryMaxDelay   = 15 * time.Second
-	maxStatusDetailBytes   = 256
-	providerRetryCode      = "rate_limit_exceeded"
+	defaultLivenessTimeout  = 10 * time.Second
+	controllerErrorCapacity = 8
 )
-
-var retryDelayPattern = regexp.MustCompile(`(?i)\bplease\s+try\s+again\s+in\s+((?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+))s\b`)
 
 type controller struct {
 	mu      sync.Mutex
+	armMu   sync.Mutex
 	options sessionduration.Options
 	ctx     context.Context
 	cancel  context.CancelFunc
@@ -40,16 +32,17 @@ type controller struct {
 	livenessArmed      bool
 	livenessStopped    bool
 	livenessFailure    error
+	livenessReported   bool
 	responseOutput     bool
 	responseComplete   bool
 	toolObligation     bool
+	localToolActive    bool
 
-	terminalWritten  bool
-	expired          bool
-	expiryPublishing bool
-	outputState      messages.TerminalOutputState
-	retriesUsed      int
-	closed           bool
+	terminalWritten bool
+	expired         bool
+	outputState     messages.TerminalOutputState
+	retriesUsed     int
+	closed          bool
 
 	durationReported bool
 	finalizeOnce     sync.Once
@@ -65,22 +58,10 @@ type sessionTimer interface {
 var _ sessionduration.Controller = (*controller)(nil)
 
 func (s *Service) Begin(options sessionduration.Options) (sessionduration.Controller, error) {
-	if options.MaxDuration < 0 {
-		return nil, &sessionduration.InvalidDurationError{Duration: options.MaxDuration}
+	options, needsClock, err := normalizeOptions(options)
+	if err != nil {
+		return nil, err
 	}
-	if options.Liveness.Timeout < 0 || options.Retry.MaxRetries < 0 || options.Retry.DefaultDelay < 0 || options.Retry.MaxDelay < 0 {
-		return nil, fmt.Errorf("session duration policy values must be non-negative")
-	}
-	if options.Liveness.Timeout > 0 {
-		options.Liveness.Enabled = true
-	}
-	if options.Retry.MaxRetries != 0 || options.Retry.DefaultDelay != 0 || options.Retry.MaxDelay != 0 {
-		options.Retry.Enabled = true
-	}
-	if options.Context == nil {
-		options.Context = context.Background()
-	}
-	needsClock := options.MaxDuration > 0 || options.Liveness.Enabled || options.Retry.Enabled
 	if needsClock && options.Clock == nil {
 		return nil, sessionduration.ErrSchedulerUnavailable
 	}
@@ -89,20 +70,35 @@ func (s *Service) Begin(options sessionduration.Options) (sessionduration.Contro
 		options:      options,
 		ctx:          ctx,
 		cancel:       cancel,
-		errors:       make(chan error, 8),
+		errors:       make(chan error, controllerErrorCapacity),
 		livenessWake: make(chan struct{}, 1),
 		outputState:  messages.TerminalOutputNone,
 	}
-	if options.MaxDuration > 0 {
-		timer := options.Clock.NewTimer(options.MaxDuration)
-		if timer == nil {
-			cancel()
-			return nil, sessionduration.ErrSchedulerUnavailable
-		}
-		c.maxTimer = timer
-		go c.watchMaxDuration(timer)
+	if err := c.startMaxDuration(options.MaxDuration); err != nil {
+		cancel()
+		return nil, err
 	}
 	return c, nil
+}
+
+func (c *controller) startMaxDuration(maxDuration time.Duration) error {
+	if maxDuration <= 0 {
+		return nil
+	}
+	timer := c.options.Clock.NewTimer(maxDuration)
+	if timer == nil {
+		return fmt.Errorf("session duration clock returned a nil timer: %w", sessionduration.ErrSchedulerUnavailable)
+	}
+	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		timer.Stop()
+		return nil
+	}
+	c.maxTimer = timer
+	c.mu.Unlock()
+	go c.watchMaxDuration(timer)
+	return nil
 }
 
 func (c *controller) watchMaxDuration(timer sessionTimer) {
@@ -119,23 +115,13 @@ func (c *controller) Observe(msg messages.StreamMessage) sessionduration.Admissi
 	if c == nil {
 		return sessionduration.Admission{Message: msg}
 	}
-	var arm, reset, disarm bool
-	var failure error
 	c.mu.Lock()
 	if c.closed {
 		c.mu.Unlock()
 		return sessionduration.Admission{Message: msg, OutputState: messages.TerminalOutputNone}
 	}
 	if msg.Type == messages.StreamTypeSessionClose {
-		provider := c.options.Terminal.Matches == nil || c.options.Terminal.Matches(msg)
-		if c.terminalWritten || (c.expired && !provider) {
-			admission := sessionduration.Admission{Message: msg, OutputState: c.outputState, TerminalSeen: provider}
-			c.mu.Unlock()
-			return admission
-		}
-		c.terminalWritten = true
-		disarm = true
-		admission := sessionduration.Admission{Message: msg, Accepted: true, OutputState: c.outputState, TerminalSeen: true}
+		admission, disarm := c.observeCloseLocked(msg)
 		c.mu.Unlock()
 		if disarm {
 			c.stopLiveness()
@@ -149,23 +135,7 @@ func (c *controller) Observe(msg messages.StreamMessage) sessionduration.Admissi
 	}
 
 	c.observeOutputLocked(msg)
-	if c.options.Liveness.Enabled && msg.Role != messages.RoleTool && msg.ResponsePurpose != messages.ResponsePurposeToolAcknowledgement {
-		switch {
-		case msg.Type == messages.StreamTypeMessageStart:
-			arm = true
-		case msg.Type == messages.StreamTypeMessageEnd:
-			if c.isEmptyResponseLocked(msg) {
-				failure = c.makeLivenessErrorLocked(msg, false)
-			}
-			disarm = true
-		case msg.Type == messages.StreamTypeSessionOpen:
-			// The provider has not started a response yet.
-		case isProviderOutput(msg) || msg.Type == messages.StreamTypeToolCallStart || msg.Type == messages.StreamTypeToolCallDelta || msg.Type == messages.StreamTypeToolCallEnd:
-			reset = true
-		case msg.Type == messages.StreamTypeError:
-			disarm = true
-		}
-	}
+	arm, reset, disarm, failure := c.observeLivenessLocked(msg)
 	admission := sessionduration.Admission{Message: msg, Accepted: true, OutputState: c.outputState}
 	if failure != nil && c.livenessFailure == nil {
 		c.livenessFailure = failure
@@ -183,9 +153,80 @@ func (c *controller) Observe(msg messages.StreamMessage) sessionduration.Admissi
 		c.stopLiveness()
 	}
 	if failure != nil {
-		c.report(failure)
+		c.reportLiveness(failure)
 	}
 	return admission
+}
+
+func (c *controller) ObserveDrain(msg messages.StreamMessage) sessionduration.Admission {
+	if c == nil {
+		return sessionduration.Admission{Message: msg}
+	}
+	c.mu.Lock()
+	if !c.expired {
+		c.mu.Unlock()
+		return c.Observe(msg)
+	}
+	if msg.Type == messages.StreamTypeSessionClose {
+		admission, disarm := c.observeCloseLocked(msg)
+		c.mu.Unlock()
+		if disarm {
+			c.stopLiveness()
+		}
+		return admission
+	}
+	if c.closed {
+		c.mu.Unlock()
+		return sessionduration.Admission{Message: msg}
+	}
+	c.observeOutputLocked(msg)
+	admission := sessionduration.Admission{Message: msg, Accepted: true, OutputState: c.outputState}
+	c.mu.Unlock()
+	return admission
+}
+
+func (c *controller) SetToolObligation(obligation bool) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	c.toolObligation = obligation
+	c.mu.Unlock()
+}
+
+func (c *controller) observeCloseLocked(msg messages.StreamMessage) (sessionduration.Admission, bool) {
+	provider := c.options.Terminal.Matches == nil || c.options.Terminal.Matches(msg)
+	if c.terminalWritten || (c.expired && !provider) {
+		return sessionduration.Admission{Message: msg, OutputState: c.outputState, TerminalSeen: provider}, false
+	}
+	c.terminalWritten = true
+	return sessionduration.Admission{Message: msg, Accepted: true, OutputState: c.outputState, TerminalSeen: true}, true
+}
+
+func (c *controller) observeLivenessLocked(msg messages.StreamMessage) (arm, reset, disarm bool, failure error) {
+	if !c.options.Liveness.Enabled || msg.Role == messages.RoleTool || msg.ResponsePurpose == messages.ResponsePurposeToolAcknowledgement {
+		return false, false, false, nil
+	}
+	switch {
+	case msg.Type == messages.StreamTypeMessageStart:
+		arm = true
+	case msg.Type == messages.StreamTypeResponseCreate:
+		arm = true
+	case msg.Type == messages.StreamTypeMessageEnd:
+		if c.isEmptyResponseLocked(msg) {
+			failure = c.makeLivenessErrorLocked(msg, false)
+		}
+		disarm = true
+	case msg.Type == messages.StreamTypeSessionOpen:
+		// The provider has not started a response yet.
+	case isProviderOutput(msg) || msg.Type == messages.StreamTypeToolCallStart || msg.Type == messages.StreamTypeToolCallDelta || msg.Type == messages.StreamTypeToolCallEnd:
+		reset = true
+	case msg.Type == messages.StreamTypeError:
+		disarm = true
+	default:
+		// Provider metadata and unrelated stream messages do not affect liveness.
+	}
+	return arm, reset, disarm, failure
 }
 
 func (c *controller) observeOutputLocked(msg messages.StreamMessage) {
@@ -206,6 +247,8 @@ func (c *controller) observeOutputLocked(msg messages.StreamMessage) {
 		c.toolObligation = true
 	case messages.StreamTypeMessageEnd:
 		c.responseComplete = true
+	default:
+		// Non-response messages do not change terminal output state.
 	}
 	if !c.responseOutput {
 		c.outputState = messages.TerminalOutputNone
@@ -216,43 +259,6 @@ func (c *controller) observeOutputLocked(msg messages.StreamMessage) {
 	}
 }
 
-func (c *controller) isEmptyResponseLocked(msg messages.StreamMessage) bool {
-	value, ok := msg.Value.(*messages.MessageEndValue)
-	if !ok || value == nil || c.responseOutput || c.toolObligation || msg.ResponsePurpose == messages.ResponsePurposeToolAcknowledgement {
-		return false
-	}
-	if value.TerminalReason != messages.TerminalReasonPartialOutput || value.OutputState != messages.TerminalOutputNone || value.Usage.CompletionTokens != 0 {
-		return false
-	}
-	return value.TerminalReason != messages.TerminalReasonCancellation && !strings.EqualFold(strings.TrimSpace(value.Status), "cancelled")
-}
-
-func (c *controller) makeLivenessErrorLocked(msg messages.StreamMessage, timeout bool) error {
-	classification := "silent_provider_empty_response"
-	cause := sessionduration.ErrProviderEmptyResponse
-	if timeout {
-		classification = "silent_provider_timeout"
-		cause = sessionduration.ErrProviderLivenessTimeout
-	}
-	err := &sessionduration.LivenessError{Classification: classification, ResponseID: strings.TrimSpace(msg.ResponseID), Cause: cause}
-	if value, ok := msg.Value.(*messages.MessageEndValue); ok && value != nil {
-		err.Usage = value.Usage
-	}
-	return err
-}
-
-func isProviderOutput(msg messages.StreamMessage) bool {
-	if msg.Role == messages.RoleUser || msg.Role == messages.RoleTool {
-		return false
-	}
-	switch msg.Type {
-	case messages.StreamTypeTextDelta, messages.StreamTypeAudioDelta, messages.StreamTypeImageDelta, messages.StreamTypeVideoDelta, messages.StreamTypeFileDelta, messages.StreamTypeEmbeddingDelta, messages.StreamTypeReasoningDelta, messages.StreamTypeTranscriptDelta, messages.StreamTypeTextEnd, messages.StreamTypeAudioEnd, messages.StreamTypeImageEnd, messages.StreamTypeVideoEnd, messages.StreamTypeFileEnd, messages.StreamTypeEmbeddingEnd, messages.StreamTypeReasoningEnd, messages.StreamTypeTranscriptEnd:
-		return true
-	default:
-		return false
-	}
-}
-
 func (c *controller) Errors() <-chan error {
 	if c == nil {
 		return nil
@@ -260,111 +266,35 @@ func (c *controller) Errors() <-chan error {
 	return c.errors
 }
 
-func (c *controller) armLiveness(onlyIfArmed bool) {
-	if c == nil || !c.options.Liveness.Enabled || c.options.Clock == nil {
-		return
-	}
-	timeout := c.options.Liveness.Timeout
-	if timeout <= 0 {
-		timeout = defaultLivenessTimeout
+func (c *controller) LivenessFailure() error {
+	if c == nil {
+		return nil
 	}
 	c.mu.Lock()
-	if c.closed || c.livenessStopped || (onlyIfArmed && !c.livenessArmed) {
-		c.mu.Unlock()
-		return
+	defer c.mu.Unlock()
+	if !c.livenessReported {
+		return nil
 	}
-	c.mu.Unlock()
-	timer := c.options.Clock.NewTimer(timeout)
-	if timer == nil {
-		c.report(sessionduration.ErrSchedulerUnavailable)
-		return
-	}
-	c.mu.Lock()
-	if c.closed || c.livenessStopped || (onlyIfArmed && !c.livenessArmed) {
-		c.mu.Unlock()
-		timer.Stop()
-		return
-	}
-	old := c.livenessTimer
-	c.livenessTimer = timer
-	c.livenessArmed = true
-	c.livenessGeneration++
-	wake := c.livenessWake
-	c.mu.Unlock()
-	if old != nil {
-		old.Stop()
-	}
-	select {
-	case wake <- struct{}{}:
-	default:
-	}
-	go c.watchLiveness()
+	return c.livenessFailure
 }
 
-func (c *controller) watchLiveness() {
-	for {
-		c.mu.Lock()
-		if c.closed || c.livenessStopped || !c.livenessArmed || c.livenessTimer == nil {
-			c.mu.Unlock()
-			return
-		}
-		generation := c.livenessGeneration
-		timer := c.livenessTimer
-		wake := c.livenessWake
-		ctx := c.ctx
-		c.mu.Unlock()
-		select {
-		case <-timer.C():
-			c.expireLiveness(generation)
-			return
-		case <-wake:
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-
-func (c *controller) expireLiveness(generation uint64) {
-	c.mu.Lock()
-	if c.closed || c.livenessStopped || !c.livenessArmed || c.livenessGeneration != generation || c.livenessFailure != nil {
-		c.mu.Unlock()
-		return
-	}
-	err := c.makeLivenessErrorLocked(messages.StreamMessage{}, true)
-	c.livenessFailure = err
-	c.livenessArmed = false
-	timer := c.livenessTimer
-	c.livenessTimer = nil
-	c.livenessGeneration++
-	c.mu.Unlock()
-	if timer != nil {
-		timer.Stop()
-	}
-	c.report(err)
-}
-
-func (c *controller) stopLiveness() {
+func (c *controller) BeginLocalToolExecution() {
 	if c == nil {
 		return
 	}
 	c.mu.Lock()
-	if !c.livenessArmed && c.livenessTimer == nil {
-		c.mu.Unlock()
+	c.localToolActive = true
+	c.mu.Unlock()
+	c.stopLiveness()
+}
+
+func (c *controller) EndLocalToolExecution() {
+	if c == nil {
 		return
 	}
-	c.livenessArmed = false
-	c.livenessGeneration++
-	timer := c.livenessTimer
-	c.livenessTimer = nil
-	wake := c.livenessWake
+	c.mu.Lock()
+	c.localToolActive = false
 	c.mu.Unlock()
-	if timer != nil {
-		timer.Stop()
-	}
-	select {
-	case wake <- struct{}{}:
-	default:
-	}
 }
 
 func (c *controller) report(err error) {
@@ -380,34 +310,33 @@ func (c *controller) report(err error) {
 	}
 }
 
+func (c *controller) reportLiveness(err error) {
+	c.report(err)
+	c.mu.Lock()
+	c.livenessReported = true
+	c.mu.Unlock()
+}
+
 func (c *controller) Expire() error {
 	if c == nil {
 		return nil
 	}
 	c.mu.Lock()
-	if c.closed || c.terminalWritten || c.expiryPublishing {
+	if c.closed || c.expired {
 		c.mu.Unlock()
-		return nil
+		return sessionduration.ErrMaxDurationExceeded
 	}
 	c.expired = true
-	c.expiryPublishing = true
-	publication := c.options.Publication
-	output := c.outputState
 	c.mu.Unlock()
-	err := publishMaxDuration(publication, output)
 	c.mu.Lock()
-	c.expiryPublishing = false
-	if err == nil {
-		c.terminalWritten = true
-	}
 	if !c.durationReported {
 		c.durationReported = true
 		c.mu.Unlock()
 		c.report(sessionduration.ErrMaxDurationExceeded)
-	} else {
-		c.mu.Unlock()
+		return sessionduration.ErrMaxDurationExceeded
 	}
-	return errors.Join(sessionduration.ErrMaxDurationExceeded, err)
+	c.mu.Unlock()
+	return sessionduration.ErrMaxDurationExceeded
 }
 
 func (c *controller) Retry(request sessionduration.RetryRequest) sessionduration.RetryDecision {
@@ -416,8 +345,12 @@ func (c *controller) Retry(request sessionduration.RetryRequest) sessionduration
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.closed || !c.options.Retry.Enabled || strings.ToLower(strings.TrimSpace(request.Terminal.Status)) != "failed" || request.Terminal.TerminalReason == messages.TerminalReasonCancellation || providerErrorCode(request.Terminal) != providerRetryCode {
+	if c.closed || c.expired || !c.options.Retry.Enabled {
 		return sessionduration.RetryDecision{}
+	}
+	decision := EvaluateRetry(c.options.Retry, request.Terminal)
+	if !decision.Eligible {
+		return decision
 	}
 	maxRetries := c.options.Retry.MaxRetries
 	if maxRetries == 0 {
@@ -427,67 +360,7 @@ func (c *controller) Retry(request sessionduration.RetryRequest) sessionduration
 		return sessionduration.RetryDecision{Exhausted: true}
 	}
 	c.retriesUsed++
-	defaultDelay := c.options.Retry.DefaultDelay
-	if defaultDelay <= 0 {
-		defaultDelay = defaultRetryDelay
-	}
-	maxDelay := c.options.Retry.MaxDelay
-	if maxDelay <= 0 {
-		maxDelay = defaultRetryMaxDelay
-	}
-	return sessionduration.RetryDecision{Delay: parseRetryDelay(providerErrorMessage(request.Terminal), defaultDelay, maxDelay), Eligible: true}
-}
-
-func providerErrorCode(terminal *messages.MessageEndValue) string {
-	if value := strings.TrimSpace(terminal.ProviderErrorCode); value != "" {
-		return value
-	}
-	return statusDetail(terminal.StatusDetails, "code")
-}
-
-func providerErrorMessage(terminal *messages.MessageEndValue) string {
-	if value := strings.TrimSpace(terminal.ProviderErrorMessage); value != "" {
-		return value
-	}
-	return statusDetail(terminal.StatusDetails, "message")
-}
-
-func statusDetail(details, wanted string) string {
-	parts := strings.Split(details, ",")
-	for index, part := range parts {
-		key, value, ok := strings.Cut(part, "=")
-		if !ok || !strings.EqualFold(strings.TrimSpace(key), wanted) {
-			continue
-		}
-		value = strings.TrimSpace(value)
-		if wanted == "message" && index+1 < len(parts) {
-			value = strings.TrimSpace(strings.Join(append([]string{value}, parts[index+1:]...), ","))
-		}
-		if len(value) > maxStatusDetailBytes {
-			return value[:maxStatusDetailBytes]
-		}
-		return value
-	}
-	return ""
-}
-
-func parseRetryDelay(message string, defaultDelay, maxDelay time.Duration) time.Duration {
-	match := retryDelayPattern.FindStringSubmatch(message)
-	if len(match) != 2 {
-		return defaultDelay
-	}
-	seconds, err := strconv.ParseFloat(match[1], 64)
-	if err != nil || math.IsNaN(seconds) || math.IsInf(seconds, 0) || seconds <= 0 {
-		return defaultDelay
-	}
-	if seconds > maxDelay.Seconds() {
-		return maxDelay
-	}
-	delay := time.Duration(math.Round(seconds * float64(time.Second)))
-	if delay <= 0 {
-		return time.Nanosecond
-	}
-	return delay
+	return decision
 }
 
 func (c *controller) OutputState() messages.TerminalOutputState {
@@ -506,71 +379,4 @@ func (c *controller) TerminalWritten() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.terminalWritten
-}
-
-func (c *controller) Finalize(ctx context.Context, request sessionduration.FinalizeRequest) (result sessionduration.Result, err error) {
-	if c == nil {
-		return sessionduration.Result{}, request.Primary
-	}
-	c.finalizeOnce.Do(func() {
-		c.mu.Lock()
-		c.closed = true
-		c.livenessStopped = true
-		maxTimer := c.maxTimer
-		liveTimer := c.livenessTimer
-		c.maxTimer = nil
-		c.livenessTimer = nil
-		c.mu.Unlock()
-		if maxTimer != nil {
-			maxTimer.Stop()
-		}
-		if liveTimer != nil {
-			liveTimer.Stop()
-		}
-		c.cancel()
-
-		var failures []error
-		appendFailure := func(label string, cleanup func() error) {
-			if cleanup == nil {
-				return
-			}
-			if cleanupErr := invokeCleanup(cleanup); cleanupErr != nil {
-				failures = append(failures, fmt.Errorf("%s: %w", label, cleanupErr))
-			}
-		}
-		if ctx == nil {
-			ctx = c.ctx
-		}
-		if request.Drain != nil {
-			appendFailure("drain session", func() error { return request.Drain(ctx) })
-		}
-		appendFailure("close session", request.Close)
-		appendFailure("close device binding", request.Binding)
-		artifacts := request.Artifacts
-		if artifacts == nil {
-			artifacts = c.options.Artifacts
-		}
-		if artifacts != nil {
-			appendFailure("flush artifacts", artifacts.Flush)
-			appendFailure("close artifacts", artifacts.Close)
-		}
-		c.mu.Lock()
-		c.finalizeResult = sessionduration.Result{OutputState: c.outputState, TerminalWritten: c.terminalWritten, Expired: c.expired}
-		c.finalizeErr = errors.Join(appendError(request.Primary), errors.Join(failures...))
-		c.mu.Unlock()
-	})
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.finalizeResult, c.finalizeErr
-}
-
-func appendError(err error) error { return err }
-
-func invokeCleanup(cleanup func() error) (err error) {
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			err = fmt.Errorf("session finalization panicked: %v", recovered)
-		}
-	}()
-	return cleanup()
 }

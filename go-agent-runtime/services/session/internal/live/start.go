@@ -10,7 +10,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 )
 
 func (h *handle) start(runCtx context.Context) error {
@@ -140,11 +139,13 @@ func (e activeCaptureToolExecutor) Execute(ctx context.Context, call messages.To
 	}
 	return e.inner.Execute(ctx, call)
 }
+
 func configureActiveScheduledAudio(handle session.LiveHandle, active bool) {
 	if runtimeHandle, ok := handle.(interface{ configureActiveScheduledAudio(bool) }); ok {
 		runtimeHandle.configureActiveScheduledAudio(active)
 	}
 }
+
 func (h *handle) configureActiveScheduledAudio(active bool) {
 	if h == nil {
 		return
@@ -153,6 +154,7 @@ func (h *handle) configureActiveScheduledAudio(active bool) {
 	h.activeScheduledAudio = active
 	h.mu.Unlock()
 }
+
 func (h *handle) waitForActiveCaptureTurn(ctx context.Context) error {
 	if h == nil {
 		return nil
@@ -241,39 +243,6 @@ func (e allowlistedToolExecutor) Execute(ctx context.Context, call messages.Tool
 	return e.inner.Execute(ctx, call)
 }
 
-func (h *handle) installLoop(loop *agentloop.AgentLoop) (func(context.Context) <-chan session.LiveCapabilityEvent, error) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	if h.closed {
-		return nil, session.ErrLiveClosed
-	}
-	h.loop = loop
-	return h.capabilityWatch, nil
-}
-
-func (h *handle) beginDurationController(ctx context.Context) (sessionduration.Controller, error) {
-	if h == nil || h.durationService == nil {
-		return nil, errors.New("session duration service is unavailable")
-	}
-	controller, err := h.durationService.Begin(sessionduration.Options{
-		Context:     ctx,
-		Clock:       h.scheduler,
-		MaxDuration: h.request.MaxDuration,
-		FirstCause: func(cause error) {
-			if errors.Is(cause, sessionduration.ErrMaxDurationExceeded) {
-				h.Cancel(session.ErrLiveDurationExceeded)
-			}
-		},
-	})
-	if errors.Is(err, sessionduration.ErrInvalidDuration) {
-		return nil, err
-	}
-	if errors.Is(err, sessionduration.ErrSchedulerUnavailable) {
-		return nil, fmt.Errorf("create live duration timer: %w", session.ErrLiveSchedulerUnavailable)
-	}
-	return controller, err
-}
-
 func (h *handle) prepareReplayCompletion() {
 	// An explicit capture source owns the boundary and must send its bytes first.
 	if h.captureSourceIsActive() {
@@ -302,22 +271,20 @@ func capabilityEventStream(ctx context.Context, watch func(context.Context) <-ch
 }
 
 type workerPlan struct {
-	capabilityEvents  <-chan session.LiveCapabilityEvent
-	replay            bool
-	watchSession      bool
-	watchFirstTurn    bool
-	watchRateLimit    bool
-	watchProviderLive bool
+	capabilityEvents <-chan session.LiveCapabilityEvent
+	replay           bool
+	watchSession     bool
+	watchFirstTurn   bool
+	watchRateLimit   bool
 }
 
 func (h *handle) makeWorkerPlan(capabilityEvents <-chan session.LiveCapabilityEvent) workerPlan {
 	return workerPlan{
-		capabilityEvents:  capabilityEvents,
-		replay:            h.request.ReplayPlan != nil && len(h.request.ReplayPlan.AudioTurns) > 0,
-		watchSession:      h.request.RequireSessionUpdated,
-		watchFirstTurn:    h.firstTurnPolicyEnabled(),
-		watchRateLimit:    h.rateLimitRetryEnabled(),
-		watchProviderLive: h.providerLivenessEnabled(),
+		capabilityEvents: capabilityEvents,
+		replay:           h.request.ReplayPlan != nil && len(h.request.ReplayPlan.AudioTurns) > 0,
+		watchSession:     h.request.RequireSessionUpdated,
+		watchFirstTurn:   h.firstTurnPolicyEnabled(),
+		watchRateLimit:   h.rateLimitRetryEnabled(),
 	}
 }
 
@@ -333,9 +300,6 @@ func (p workerPlan) count() int {
 		count++
 	}
 	if p.capabilityEvents != nil {
-		count++
-	}
-	if p.watchProviderLive {
 		count++
 	}
 	if p.replay {
@@ -356,9 +320,6 @@ func (p workerPlan) launch(h *handle, ctx context.Context, loop *agentloop.Agent
 	}
 	if p.capabilityEvents != nil {
 		go h.consumeCapabilityEvents(ctx, loop, p.capabilityEvents)
-	}
-	if p.watchProviderLive {
-		go h.watchProviderLiveness(ctx)
 	}
 	if p.replay {
 		go h.runReplay(ctx)

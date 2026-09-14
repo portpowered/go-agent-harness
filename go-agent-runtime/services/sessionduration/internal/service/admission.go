@@ -1,33 +1,34 @@
-package agentruntime
+package service
 
 import (
 	"context"
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
-const sessionDurationAdmissionBufferCapacity = 1024
+const streamAdmissionBufferCapacity = 1024
 
-// sessionDurationAdmission is the single admission boundary for provider
+// EventAdmission is the single admission boundary for provider
 // events. Closing it prevents a provider event from entering the loop after
 // the logical deadline while preserving events accepted before the close.
-type sessionDurationAdmission struct {
+type EventAdmission struct {
 	mu     sync.Mutex
 	closed bool
 	done   chan struct{}
 	once   sync.Once
 }
 
-func newSessionDurationAdmission() *sessionDurationAdmission {
-	return &sessionDurationAdmission{done: make(chan struct{})}
+func NewEventAdmission() *EventAdmission {
+	return &EventAdmission{done: make(chan struct{})}
 }
 
-func (a *sessionDurationAdmission) close() {
+func (a *EventAdmission) close() {
 	a.closeWithDrain(nil, nil, nil)
 }
 
-func (a *sessionDurationAdmission) closeWithDrain(receive, source *messages.TypedBuffer[messages.StreamMessage], onAdmit func(messages.StreamMessage)) {
+func (a *EventAdmission) closeWithDrain(receive, source *messages.TypedBuffer[messages.StreamMessage], onAdmit func(messages.StreamMessage)) {
 	a.once.Do(func() {
 		a.mu.Lock()
 		if receive != nil && source != nil {
@@ -47,7 +48,7 @@ func (a *sessionDurationAdmission) closeWithDrain(receive, source *messages.Type
 	})
 }
 
-func (a *sessionDurationAdmission) admit(receive *messages.TypedBuffer[messages.StreamMessage], msg messages.StreamMessage) bool {
+func (a *EventAdmission) admit(receive *messages.TypedBuffer[messages.StreamMessage], msg messages.StreamMessage) bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.closed {
@@ -56,23 +57,33 @@ func (a *sessionDurationAdmission) admit(receive *messages.TypedBuffer[messages.
 	return receive.Write(context.Background(), msg)
 }
 
-// sessionDurationAdmissionInferencer inserts the admission boundary between
+// AdmissionInferencer inserts the admission boundary between
 // the provider session and the agent loop. The public Session interface exposes
 // a concrete receive buffer, so the wrapper forwards through its own buffer and
 // can stop admitting provider events without changing the shared interface.
-type sessionDurationAdmissionInferencer struct {
+type AdmissionInferencer struct {
 	inner      messages.SessionInferencer
-	admission  *sessionDurationAdmission
+	admission  *EventAdmission
 	mu         sync.Mutex
 	runtimeErr error
 	closeErr   error
 	connected  bool
-	session    *sessionDurationAdmissionSession
+	session    *AdmissionSession
 	closeDone  chan struct{}
 	closeOnce  sync.Once
 }
 
-func (i *sessionDurationAdmissionInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
+func NewAdmissionInferencer(inner messages.SessionInferencer, admission *EventAdmission, closeDone chan struct{}) *AdmissionInferencer {
+	if admission == nil {
+		admission = NewEventAdmission()
+	}
+	if closeDone == nil {
+		closeDone = make(chan struct{})
+	}
+	return &AdmissionInferencer{inner: inner, admission: admission, closeDone: closeDone}
+}
+
+func (i *AdmissionInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
 	session, err := i.inner.ConnectSession(ctx)
 	if err != nil {
 		i.mu.Lock()
@@ -82,13 +93,13 @@ func (i *sessionDurationAdmissionInferencer) ConnectSession(ctx context.Context)
 	}
 	i.mu.Lock()
 	i.connected = true
-	wrapped := newSessionDurationAdmissionSession(ctx, session, i.admission, i.recordCloseError)
+	wrapped := NewAdmissionSession(ctx, session, i.admission, i.recordCloseError)
 	i.session = wrapped
 	i.mu.Unlock()
 	return wrapped, nil
 }
 
-func (i *sessionDurationAdmissionInferencer) recordCloseError(err error) {
+func (i *AdmissionInferencer) recordCloseError(err error) {
 	i.mu.Lock()
 	i.closeErr = err
 	i.mu.Unlock()
@@ -97,19 +108,19 @@ func (i *sessionDurationAdmissionInferencer) recordCloseError(err error) {
 	}
 }
 
-func (i *sessionDurationAdmissionInferencer) closeError() error {
+func (i *AdmissionInferencer) CloseError() error {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	return i.closeErr
 }
 
-func (i *sessionDurationAdmissionInferencer) runtimeError() error {
+func (i *AdmissionInferencer) RuntimeError() error {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	return i.runtimeErr
 }
 
-func (i *sessionDurationAdmissionInferencer) waitForClose() {
+func (i *AdmissionInferencer) WaitForClose() {
 	i.mu.Lock()
 	connected := i.connected
 	closeDone := i.closeDone
@@ -119,7 +130,7 @@ func (i *sessionDurationAdmissionInferencer) waitForClose() {
 	}
 }
 
-func (i *sessionDurationAdmissionInferencer) providerTerminalMessage() (messages.StreamMessage, bool) {
+func (i *AdmissionInferencer) ProviderTerminalMessage() (messages.StreamMessage, bool) {
 	if i == nil {
 		return messages.StreamMessage{}, false
 	}
@@ -129,20 +140,20 @@ func (i *sessionDurationAdmissionInferencer) providerTerminalMessage() (messages
 	if session == nil {
 		return messages.StreamMessage{}, false
 	}
-	return session.providerTerminalMessage()
+	return session.ProviderTerminalMessage()
 }
 
-func (i *sessionDurationAdmissionInferencer) isProviderTerminalMessage(msg messages.StreamMessage) bool {
+func (i *AdmissionInferencer) IsProviderTerminalMessage(msg messages.StreamMessage) bool {
 	if i == nil {
 		return false
 	}
 	i.mu.Lock()
 	session := i.session
 	i.mu.Unlock()
-	return session != nil && session.isProviderTerminalMessage(msg)
+	return session != nil && session.IsProviderTerminalMessage(msg)
 }
 
-func (i *sessionDurationAdmissionInferencer) closeAdmission() {
+func (i *AdmissionInferencer) CloseAdmission() {
 	i.mu.Lock()
 	session := i.session
 	i.mu.Unlock()
@@ -153,9 +164,9 @@ func (i *sessionDurationAdmissionInferencer) closeAdmission() {
 	i.admission.close()
 }
 
-type sessionDurationAdmissionSession struct {
+type AdmissionSession struct {
 	inner     messages.Session
-	admission *sessionDurationAdmission
+	admission *EventAdmission
 	receive   *messages.TypedBuffer[messages.StreamMessage]
 	done      chan struct{}
 	doneOnce  sync.Once
@@ -170,11 +181,11 @@ type sessionDurationAdmissionSession struct {
 	providerTerminalSeen  bool
 }
 
-func newSessionDurationAdmissionSession(ctx context.Context, inner messages.Session, admission *sessionDurationAdmission, onClose func(error)) *sessionDurationAdmissionSession {
-	s := &sessionDurationAdmissionSession{
+func NewAdmissionSession(ctx context.Context, inner messages.Session, admission *EventAdmission, onClose func(error)) *AdmissionSession {
+	s := &AdmissionSession{
 		inner:     inner,
 		admission: admission,
-		receive:   messages.NewTypedBuffer[messages.StreamMessage](sessionDurationAdmissionBufferCapacity),
+		receive:   messages.NewTypedBuffer[messages.StreamMessage](streamAdmissionBufferCapacity),
 		done:      make(chan struct{}),
 		onClose:   onClose,
 	}
@@ -182,62 +193,73 @@ func newSessionDurationAdmissionSession(ctx context.Context, inner messages.Sess
 	return s
 }
 
-func (s *sessionDurationAdmissionSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
+func (s *AdmissionSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
 	return s.inner.Send(ctx, msg)
 }
 
 // RequestResponse forwards the optional explicit response capability while
 // retaining the admission wrapper's compatibility with replay sessions.
-func (s *sessionDurationAdmissionSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
+func (s *AdmissionSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
 	return messages.RequestSessionResponse(ctx, s.inner)
 }
 
-func (s *sessionDurationAdmissionSession) SupportsResponseRequests() bool {
+func (s *AdmissionSession) SupportsResponseRequests() bool {
 	return messages.SupportsSessionResponseRequests(s.inner)
 }
 
 // SendMessage forwards the optional complete-message capability of the
 // wrapped provider session. Duration admission must not hide the rich message
 // path used to deliver a tool result on the next model turn.
-func (s *sessionDurationAdmissionSession) SendMessage(ctx context.Context, msg messages.Message) bool {
-	sender, ok := s.inner.(SessionImageMessageSender)
+func (s *AdmissionSession) SendMessage(ctx context.Context, msg messages.Message) bool {
+	sender, ok := s.inner.(completeMessageSender)
 	return ok && sender.SendMessage(ctx, msg)
 }
 
 // SendMessageWithoutResponse forwards deferred complete messages for callers
 // that batch more than one tool result before requesting the next response.
-func (s *sessionDurationAdmissionSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
-	sender, ok := s.inner.(SessionImageMessageSenderWithoutResponse)
+func (s *AdmissionSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
+	sender, ok := s.inner.(completeMessageSenderWithoutResponse)
 	return ok && sender.SendMessageWithoutResponse(ctx, msg)
 }
 
-func (s *sessionDurationAdmissionSession) SupportsCompleteMessages() bool {
+func (s *AdmissionSession) SupportsCompleteMessages() bool {
 	complete, _ := completeMessageCapabilities(s.inner)
 	return complete
 }
 
-func (s *sessionDurationAdmissionSession) SupportsCompleteMessagesWithoutResponse() bool {
+func (s *AdmissionSession) SupportsCompleteMessagesWithoutResponse() bool {
 	_, withoutResponse := completeMessageCapabilities(s.inner)
 	return withoutResponse
 }
 
-func (s *sessionDurationAdmissionSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
+func (s *AdmissionSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
 	return s.receive
 }
 
-func (s *sessionDurationAdmissionSession) Done() <-chan struct{} {
+func (s *AdmissionSession) Done() <-chan struct{} {
 	return s.done
 }
 
-func (s *sessionDurationAdmissionSession) rtcMedia() (RTCMediaEndpoints, bool) {
-	return rtcMediaFromSession(s.inner)
+func (s *AdmissionSession) RTCMedia() (audio.MediaEndpoints, bool) {
+	if owner, ok := s.inner.(interface{ RTCMedia() audio.MediaEndpoints }); ok {
+		return owner.RTCMedia(), true
+	}
+	if owner, ok := s.inner.(interface {
+		RTCMedia() (audio.MediaEndpoints, bool)
+	}); ok {
+		return owner.RTCMedia()
+	}
+	return audio.MediaEndpoints{}, false
 }
 
-func (s *sessionDurationAdmissionSession) TerminalError() error {
-	return terminalSessionError(s.inner)
+func (s *AdmissionSession) TerminalError() error {
+	if source, ok := s.inner.(interface{ TerminalError() error }); ok {
+		return source.TerminalError()
+	}
+	return nil
 }
 
-func (s *sessionDurationAdmissionSession) providerTerminalMessage() (messages.StreamMessage, bool) {
+func (s *AdmissionSession) ProviderTerminalMessage() (messages.StreamMessage, bool) {
 	s.terminalMu.Lock()
 	defer s.terminalMu.Unlock()
 	if !s.providerTerminalSeen {
@@ -251,7 +273,7 @@ func (s *sessionDurationAdmissionSession) providerTerminalMessage() (messages.St
 	return msg, true
 }
 
-func (s *sessionDurationAdmissionSession) isProviderTerminalMessage(msg messages.StreamMessage) bool {
+func (s *AdmissionSession) IsProviderTerminalMessage(msg messages.StreamMessage) bool {
 	value, ok := msg.Value.(*messages.SessionCloseValue)
 	if !ok {
 		return false
@@ -261,7 +283,7 @@ func (s *sessionDurationAdmissionSession) isProviderTerminalMessage(msg messages
 	return s.providerTerminalSeen && value == s.providerTerminalValue
 }
 
-func (s *sessionDurationAdmissionSession) observeProviderMessage(msg messages.StreamMessage) {
+func (s *AdmissionSession) observeProviderMessage(msg messages.StreamMessage) {
 	if msg.Type != messages.StreamTypeSessionClose {
 		return
 	}
@@ -287,7 +309,7 @@ func (s *sessionDurationAdmissionSession) observeProviderMessage(msg messages.St
 	s.providerTerminalSeen = true
 }
 
-func (s *sessionDurationAdmissionSession) Close() error {
+func (s *AdmissionSession) Close() error {
 	s.closeOnce.Do(func() {
 		s.closeAdmission()
 		err := s.inner.Close()
@@ -309,11 +331,11 @@ func (s *sessionDurationAdmissionSession) Close() error {
 	return s.closeErr
 }
 
-func (s *sessionDurationAdmissionSession) closeAdmission() {
+func (s *AdmissionSession) closeAdmission() {
 	s.admission.closeWithDrain(s.receive, s.inner.Receive(), s.observeProviderMessage)
 }
 
-func (s *sessionDurationAdmissionSession) drainSourceAfterClose() {
+func (s *AdmissionSession) drainSourceAfterClose() {
 	source := s.inner.Receive()
 	for {
 		msg, ok := source.Read()
@@ -321,56 +343,13 @@ func (s *sessionDurationAdmissionSession) drainSourceAfterClose() {
 			return
 		}
 		s.observeProviderMessage(msg)
-		if isDurationForwardMessage(msg) {
+		if IsDurationForwardMessage(msg) {
 			s.receive.Write(context.Background(), msg)
 		}
 	}
 }
 
-func (s *sessionDurationAdmissionSession) forward(ctx context.Context) {
-	source := s.inner.Receive()
-	sourceCh := source.Chan()
-	admissionDone := s.admission.done
-	admissionOpen := true
-	for {
-		select {
-		case <-s.inner.Done():
-			s.drainSource(source, admissionOpen)
-			s.closeDone()
-			return
-		case <-ctx.Done():
-			s.closeDone()
-			return
-		case <-admissionDone:
-			// The deadline closes ordinary event admission, but the provider
-			// session must stay alive long enough to receive a terminal event
-			// during graceful shutdown. Keep reading the source and forward only
-			// terminal/error messages after this boundary.
-			admissionOpen = false
-			admissionDone = nil
-		case msg, ok := <-sourceCh:
-			if !ok {
-				s.closeDone()
-				return
-			}
-			s.observeProviderMessage(msg)
-			if admissionOpen {
-				if !s.admission.admit(s.receive, msg) {
-					admissionOpen = false
-					if isDurationForwardMessage(msg) {
-						s.receive.Write(context.Background(), msg)
-					}
-				}
-				continue
-			}
-			if isDurationForwardMessage(msg) {
-				s.receive.Write(context.Background(), msg)
-			}
-		}
-	}
-}
-
-func (s *sessionDurationAdmissionSession) drainSource(source *messages.TypedBuffer[messages.StreamMessage], admissionOpen bool) {
+func (s *AdmissionSession) drainSource(source *messages.TypedBuffer[messages.StreamMessage], admissionOpen bool) {
 	for {
 		msg, ok := source.Read()
 		if !ok {
@@ -383,23 +362,22 @@ func (s *sessionDurationAdmissionSession) drainSource(source *messages.TypedBuff
 			}
 			admissionOpen = false
 		}
-		if isDurationForwardMessage(msg) {
-			s.receive.Write(context.Background(), msg)
-		}
+		// The message was removed from the provider source before the admission
+		// close became visible to this forwarding worker. Retain it for the
+		// service controller to classify during the bounded drain; that boundary
+		// rejects late nonterminal output without losing an already-read delta.
+		s.receive.Write(context.Background(), msg)
 	}
 }
 
-func isDurationShutdownMessage(msg messages.StreamMessage) bool {
+func IsDurationShutdownMessage(msg messages.StreamMessage) bool {
 	return msg.Type == messages.StreamTypeSessionClose || isTerminalErrorMessage(msg)
 }
 
-func isDurationForwardMessage(msg messages.StreamMessage) bool {
-	return isDurationShutdownMessage(msg) || msg.Type == messages.StreamTypeError
+func IsDurationForwardMessage(msg messages.StreamMessage) bool {
+	return IsDurationShutdownMessage(msg) || msg.Type == messages.StreamTypeError
 }
 
-func (s *sessionDurationAdmissionSession) closeDone() {
+func (s *AdmissionSession) closeDone() {
 	s.doneOnce.Do(func() { close(s.done) })
 }
-
-var _ messages.SessionInferencer = (*sessionDurationAdmissionInferencer)(nil)
-var _ messages.Session = (*sessionDurationAdmissionSession)(nil)

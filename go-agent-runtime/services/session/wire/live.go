@@ -5,7 +5,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live"
-	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -20,6 +20,7 @@ type LiveDependencies struct {
 	EventCapacity     int
 	Clock             session.LiveClock
 	Scheduler         platformclock.Scheduler
+	DurationService   sessionduration.Service
 }
 
 // NewLiveService assembles the continuous session role. It does not connect a
@@ -33,6 +34,6 @@ func NewLiveService(deps LiveDependencies) session.LiveService {
 		EventCapacity:     deps.EventCapacity,
 		Clock:             deps.Clock,
 		Scheduler:         deps.Scheduler,
-		DurationService:   durationwire.NewService(),
+		DurationService:   deps.DurationService,
 	})
 }

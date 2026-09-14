@@ -6,29 +6,35 @@ package sessionduration
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
-var (
-	// ErrInvalidDuration identifies a negative duration before any runtime
-	// effect is admitted.
-	ErrInvalidDuration = errors.New("invalid session max duration")
-	// ErrMaxDurationExceeded identifies the controller's bounded expiry.
-	ErrMaxDurationExceeded = errors.New("session exceeded maximum duration")
-	// ErrProviderEmptyResponse identifies a terminal response with no output.
-	ErrProviderEmptyResponse = errors.New("silent provider returned an empty response")
-	// ErrProviderLivenessTimeout identifies a response that made no progress
-	// before the injected liveness deadline.
-	ErrProviderLivenessTimeout = errors.New("silent provider response timed out")
-	// ErrSchedulerUnavailable identifies a selected timing policy without an
-	// application-owned scheduler.
-	ErrSchedulerUnavailable = errors.New("session duration scheduler is required")
+type sessionDurationError string
+
+func (e sessionDurationError) Error() string { return string(e) }
+
+const (
+	ErrInvalidDuration         sessionDurationError = "invalid session max duration"
+	ErrMaxDurationExceeded     sessionDurationError = "session exceeded maximum duration"
+	ErrProviderEmptyResponse   sessionDurationError = "silent provider returned an empty response"
+	ErrProviderLivenessTimeout sessionDurationError = "silent provider response timed out"
+	ErrSchedulerUnavailable    sessionDurationError = "session duration scheduler is required"
 )
+
+// Timer is the timer contract shared by duration and liveness controllers.
+// It is an alias so host clocks can be passed without an adapter.
+type Timer = platformclock.Timer
+
+// TimerScheduler is the minimal clock contract required by the controller.
+// Context scheduling remains a host concern; the controller only owns timers.
+type TimerScheduler interface {
+	NewTimer(time.Duration) Timer
+}
 
 // InvalidDurationError preserves the stable validation identity and the
 // offending value without importing a CLI validation package.
@@ -42,15 +48,6 @@ func (e *InvalidDurationError) Error() string {
 }
 
 func (e *InvalidDurationError) Unwrap() error { return ErrInvalidDuration }
-
-// ValidateDuration is the public pre-effect validation seam used by hosts
-// that need to reject an invalid bound before constructing a session plan.
-func ValidateDuration(duration time.Duration) error {
-	if duration < 0 {
-		return &InvalidDurationError{Duration: duration}
-	}
-	return nil
-}
 
 // TerminalSource supplies the provider observation facts needed to distinguish
 // a provider-authored close from a loop shutdown request.
@@ -84,6 +81,32 @@ type ArtifactLifecycle interface {
 	Close() error
 }
 
+// EventAdmission is the opaque admission boundary assembled by the service.
+// Hosts pass it back to NewAdmissionInferencer without owning its state.
+type EventAdmission interface{}
+
+// AdmissionInferencer is the provider bridge that applies the event
+// admission boundary before the session loop sees provider messages.
+type AdmissionInferencer interface {
+	messages.SessionInferencer
+	CloseError() error
+	RuntimeError() error
+	WaitForClose()
+	ProviderTerminalMessage() (messages.StreamMessage, bool)
+	IsProviderTerminalMessage(messages.StreamMessage) bool
+	CloseAdmission()
+}
+
+// AdmissionSession is the wrapped provider session exposed for host seams
+// that need optional complete-message capabilities.
+type AdmissionSession interface {
+	messages.Session
+	SendMessage(context.Context, messages.Message) bool
+	SendMessageWithoutResponse(context.Context, messages.Message) bool
+	SupportsCompleteMessages() bool
+	SupportsCompleteMessagesWithoutResponse() bool
+}
+
 // LivenessOptions describes one response-progress watchdog.
 type LivenessOptions struct {
 	Enabled bool
@@ -93,10 +116,13 @@ type LivenessOptions struct {
 // LivenessError carries bounded, credential-free provider facts while
 // retaining a stable errors.Is identity for the failure class.
 type LivenessError struct {
-	Classification string
-	ResponseID     string
-	Usage          messages.TokenUsage
-	Cause          error
+	Classification     string
+	ResponseID         string
+	TerminalReason     messages.TerminalReason
+	TerminalProvenance messages.TerminalProvenance
+	OutputState        messages.TerminalOutputState
+	Usage              messages.TokenUsage
+	Cause              error
 }
 
 func (e *LivenessError) Error() string {
@@ -128,15 +154,18 @@ type RetryPolicy struct {
 // Options creates one isolated controller. Context cancellation stops timing
 // workers; no provider, filesystem, or device effect occurs here.
 type Options struct {
-	Context     context.Context
-	Clock       platformclock.Scheduler
-	MaxDuration time.Duration
-	Liveness    LivenessOptions
-	Retry       RetryPolicy
-	Terminal    TerminalSource
-	Publication Publication
-	Artifacts   ArtifactLifecycle
-	FirstCause  func(error)
+	Context context.Context
+	Clock   TimerScheduler
+	// LivenessClock may use a different time domain from the max-duration
+	// scheduler. When omitted, Clock remains the liveness scheduler.
+	LivenessClock TimerScheduler
+	MaxDuration   time.Duration
+	Liveness      LivenessOptions
+	Retry         RetryPolicy
+	Terminal      TerminalSource
+	Publication   Publication
+	Artifacts     ArtifactLifecycle
+	FirstCause    func(error)
 }
 
 // Admission is the controller's response-boundary decision. Rejected
@@ -169,6 +198,60 @@ type FinalizeRequest struct {
 	Artifacts ArtifactLifecycle
 }
 
+// Loop is the host-neutral portion of a running session loop needed by the
+// bounded execution service. The host constructs the loop through LoopFactory;
+// the service owns admission, deadline, terminal, drain, and finalization
+// ordering around it.
+type Loop interface {
+	Run(context.Context) error
+	Deltas() *messages.TypedBuffer[messages.StreamMessage]
+	Send(context.Context, []messages.Message) error
+}
+
+// MessageResult tells the duration service whether the host's ordinary
+// session completion rules selected a terminal boundary for the message.
+type MessageResult struct {
+	Stop    bool
+	Planned bool
+}
+
+// MessageHandler is the narrow host callback for session-specific prompt,
+// tool, and scheduled-input behavior. It cannot bypass controller admission:
+// the service invokes it only for an admitted message.
+type MessageHandler func(context.Context, Loop, Controller, messages.StreamMessage) (MessageResult, error)
+
+// LoopFactory constructs one loop around the service-owned admission bridge.
+// The controller is supplied so host tool adapters can report local execution
+// boundaries to the same service-owned liveness state.
+type LoopFactory func(context.Context, AdmissionInferencer, Controller) (Loop, error)
+
+// RunRequest describes one bounded session execution. Resource callbacks are
+// explicit ports so construction remains inert and the service retains the
+// shutdown order without importing a host or transport package.
+type RunRequest struct {
+	Context        context.Context
+	Inferencer     messages.SessionInferencer
+	Admission      AdmissionInferencer
+	Clock          TimerScheduler
+	LivenessClock  TimerScheduler
+	MaxDuration    time.Duration
+	Liveness       LivenessOptions
+	Retry          RetryPolicy
+	Terminal       TerminalSource
+	Publication    Publication
+	Artifacts      ArtifactLifecycle
+	LoopFactory    LoopFactory
+	Handle         MessageHandler
+	Drain          func(context.Context, Loop, Controller) error
+	Close          func() error
+	Binding        func() error
+	ExternalErrors <-chan error
+	Wake           <-chan struct{}
+	OnWake         func(context.Context, Loop, Controller) error
+	Done           <-chan struct{}
+	DoneError      func() error
+}
+
 // Result is the controller's terminal snapshot after cleanup.
 type Result struct {
 	OutputState     messages.TerminalOutputState
@@ -190,12 +273,27 @@ type State interface {
 // and finalization state.
 type Controller interface {
 	Observe(messages.StreamMessage) Admission
+	// ObserveDrain admits output already published by the loop while the
+	// bounded finalizer is draining. It is distinct from hot-path admission,
+	// which rejects newly arriving output after expiry.
+	ObserveDrain(messages.StreamMessage) Admission
+	SetToolObligation(bool)
+	BeginLocalToolExecution()
+	EndLocalToolExecution()
 	Errors() <-chan error
+	LivenessFailure() error
 	Expire() error
 	Retry(RetryRequest) RetryDecision
 	OutputState() messages.TerminalOutputState
 	TerminalWritten() bool
 	Finalize(context.Context, FinalizeRequest) (Result, error)
+}
+
+// ControllerService is the narrow dependency needed by a host session that
+// delegates bounded-session policy to this service. The broader Service
+// contract remains available to composition and artifact callers.
+type ControllerService interface {
+	Begin(Options) (Controller, error)
 }
 
 // LifecycleFailures contains independent shutdown causes. The service joins
@@ -210,8 +308,36 @@ type LifecycleFailures struct {
 // terminal synthesis, and normalized error composition.
 type Service interface {
 	Begin(Options) (Controller, error)
+	Run(RunRequest) error
 	NewState(TerminalSource) State
 	PublishMaxDuration(Publication, messages.TerminalOutputState) error
 	LifecycleError(LifecycleFailures) error
 	TransportError(error) error
+	ValidateDuration(time.Duration) error
+	NewEventAdmission() EventAdmission
+	NewAdmissionInferencer(messages.SessionInferencer, EventAdmission, chan struct{}) AdmissionInferencer
+	NewAdmissionSession(context.Context, messages.Session, EventAdmission, func(error)) AdmissionSession
+	WithArtifacts(context.Context, ArtifactLifecycle) context.Context
+	ArtifactsFromContext(context.Context) ArtifactLifecycle
+	WithTerminalRecorder(context.Context, TerminalRecorder) context.Context
+	WithArtifactPaths(context.Context, SessionDurationArtifactPaths) context.Context
+	PrepareArtifacts(context.Context) (context.Context, error)
+	FinalizeArtifacts(ArtifactLifecycle) error
+	EvaluateRetry(RetryPolicy, *messages.MessageEndValue) RetryDecision
+	IsDurationShutdownMessage(messages.StreamMessage) bool
+	IsDurationForwardMessage(messages.StreamMessage) bool
+	RecordingTerminalSummaryFromMessage(messages.StreamMessage) (*transcript.RecordingTerminalSummary, bool, error)
+}
+
+// TerminalRecorder receives the normalized terminal summary emitted by a
+// duration run. It is a host-owned persistence port.
+type TerminalRecorder interface {
+	RecordTerminalSummary(transcript.RecordingTerminalSummary) error
+}
+
+// SessionDurationArtifactPaths identifies the host paths for service-owned
+// duration artifacts.
+type SessionDurationArtifactPaths struct {
+	AudioPath      string
+	TranscriptPath string
 }

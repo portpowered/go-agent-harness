@@ -1,6 +1,7 @@
 package agentruntime
 
 import (
+	"context"
 	"errors"
 	"strconv"
 
@@ -8,6 +9,78 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
+
+// cancellationOnly reports whether every known cause is a consequence of
+// stopping the run for an operator signal. Timeouts remain independent
+// failures even when a signal is observed nearby.
+func cancellationOnly(err error, intent *SessionCancellationIntent) bool {
+	return intent != nil && intent.SIGINTReceived() && cancellationErrorOnly(err)
+}
+
+func cancellationErrorOnly(err error) bool {
+	if err == nil {
+		return true
+	}
+	if inputErr, ok := err.(*SessionAudioInputError); ok {
+		return inputErrorCancellationOnly(inputErr)
+	}
+	if unwrapper, ok := err.(interface{ Unwrap() []error }); ok {
+		return cancellationCausesOnly(unwrapper.Unwrap())
+	}
+	if unwrapper, ok := err.(interface{ Unwrap() error }); ok {
+		return cancellationErrorOnly(unwrapper.Unwrap())
+	}
+	return cancellationLeaf(err)
+}
+
+func inputErrorCancellationOnly(err *SessionAudioInputError) bool {
+	return err != nil && err.Err != nil && cancellationErrorOnly(err.Err)
+}
+
+func cancellationCausesOnly(causes []error) bool {
+	if len(causes) == 0 {
+		return false
+	}
+	for _, cause := range causes {
+		if !cancellationErrorOnly(cause) {
+			return false
+		}
+	}
+	return true
+}
+
+func cancellationLeaf(err error) bool {
+	switch err {
+	case context.Canceled,
+		ErrSessionAudioResponseIncomplete,
+		ErrSessionAudioInputEndOfTurnLost,
+		ErrSessionScheduledAudioIncomplete,
+		ErrSessionUnresolvedToolResults,
+		ErrSessionToolContinuationIncomplete,
+		ErrSessionImageContinuationIncomplete:
+		return true
+	default:
+		return false
+	}
+}
+
+// observerCancellationIsClean adds the observer's typed stream failure state
+// to the cancellation check. Provider failures remain independent evidence.
+func observerCancellationIsClean(err error, intent *SessionCancellationIntent, observer *sessionProgressObserver) bool {
+	if !cancellationOnly(err, intent) {
+		return false
+	}
+	return observerCancellationFailureOnly(observer)
+}
+
+func observerCancellationFailureOnly(observer *sessionProgressObserver) bool {
+	failure := observer.failureSnapshot()
+	if failure == nil {
+		return true
+	}
+	return failure.terminalReason == string(messages.TerminalReasonCancellation) &&
+		failure.provenance == string(messages.TerminalProvenanceLoop)
+}
 
 type failureFacts struct {
 	classification string
@@ -19,18 +92,95 @@ type failureFacts struct {
 	failingEvent   string
 }
 
+func (o *sessionProgressObserver) resetResponseOutputLocked() {
+	o.responseOutputTextBytes = 0
+	o.responseOutputAudioBytes = 0
+	o.responseActionableTool = false
+}
+
+func (o *sessionProgressObserver) beginResponseContentLocked() {
+	if o.messageEndSeen {
+		o.resetResponseOutputLocked()
+	}
+	o.messageEndSeen = false
+}
+
+func (o *sessionProgressObserver) responseHasAdmissibleOutput() bool {
+	if o == nil {
+		return false
+	}
+	o.toolStateMu.Lock()
+	defer o.toolStateMu.Unlock()
+	return o.responseOutputTextBytes > 0 || o.responseOutputAudioBytes > 0 || o.responseActionableTool
+}
+
+func (o *sessionProgressObserver) setAssistantResponseDone(done bool) {
+	if o == nil {
+		return
+	}
+	o.toolStateMu.Lock()
+	o.assistantResponseDone = done
+	o.toolStateMu.Unlock()
+}
+
+func assistantResponseDelta(msg messages.StreamMessage) bool {
+	return msg.Role == "" || msg.Role == messages.RoleAssistant
+}
+
+func (o *sessionProgressObserver) lastMessageEndAdmitted() bool {
+	if o == nil {
+		return false
+	}
+	o.toolStateMu.Lock()
+	defer o.toolStateMu.Unlock()
+	return o.messageEndAdmitted
+}
+
+func (o *sessionProgressObserver) hasTerminalToolContinuationFailure() bool {
+	if o == nil {
+		return false
+	}
+	for _, state := range o.lifecycleContinuationStates() {
+		if state.ResultAccepted && state.ContinuationRequested && state.ToolResponseComplete && state.ContinuationTerminalSeen && !state.ContinuationComplete && state.ContinuationFailure {
+			return true
+		}
+	}
+	return false
+}
+
+func (o *sessionProgressObserver) assistantResponseCompleted() bool {
+	if o == nil {
+		return false
+	}
+	o.toolStateMu.Lock()
+	defer o.toolStateMu.Unlock()
+	return o.assistantResponseDone
+}
+
+func (o *sessionProgressObserver) providerToolCallObserved() bool {
+	if o == nil {
+		return false
+	}
+	for _, state := range o.lifecycleContinuationStates() {
+		if state.ProviderCallObserved {
+			return true
+		}
+	}
+	return false
+}
+
 func (o *sessionProgressObserver) failureSnapshot() *failureFacts {
 	if o == nil {
 		return nil
 	}
-	o.livenessMu.Lock()
+	o.failureMu.Lock()
 	f := o.failure
 	if f == nil {
-		o.livenessMu.Unlock()
+		o.failureMu.Unlock()
 		return nil
 	}
 	copy := *f
-	o.livenessMu.Unlock()
+	o.failureMu.Unlock()
 	return &copy
 }
 
@@ -38,9 +188,9 @@ func (o *sessionProgressObserver) clearFailure() {
 	if o == nil {
 		return
 	}
-	o.livenessMu.Lock()
+	o.failureMu.Lock()
 	o.failure = nil
-	o.livenessMu.Unlock()
+	o.failureMu.Unlock()
 }
 
 // audioTurnCounters tracks per-turn byte attribution between MESSAGE.END

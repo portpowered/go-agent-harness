@@ -16,7 +16,6 @@ func (h *handle) finish(err error) {
 	h.finishOnce.Do(func() { h.finishOnceBody(err) })
 }
 func (h *handle) finishOnceBody(err error) {
-	h.stopProviderLiveness()
 	h.mu.Lock()
 	h.clearPendingToolCallsLocked()
 	if err == nil {
@@ -215,37 +214,6 @@ func (h *handle) finishMedia(err error, userCancelled bool) error {
 	}
 	return errors.Join(err, h.media.Close())
 }
-func (h *handle) ensureCaptureTurnAdmissible() error {
-	if h == nil {
-		return session.ErrLiveClosed
-	}
-	h.mu.Lock()
-	providerClosed := h.providerCloseObserved
-	scheduled := h.scheduledAudioCount
-	dispatched := h.dispatchedAudioCount
-	completed := h.observedResponseTerminals - h.scheduledResponseBase
-	terminal := cloneLiveTerminalValue(h.terminalValue)
-	h.mu.Unlock()
-	if !providerClosed {
-		return nil
-	}
-	if incomplete := newScheduledAudioIncompleteError(scheduled, dispatched, completed, terminal); incomplete != nil {
-		return incomplete
-	}
-	return session.ErrLiveClosed
-}
-func (h *handle) scheduledAudioError() error {
-	if h == nil {
-		return nil
-	}
-	h.mu.Lock()
-	scheduled := h.scheduledAudioCount
-	dispatched := h.dispatchedAudioCount
-	completed := h.observedResponseTerminals - h.scheduledResponseBase
-	terminal := cloneLiveTerminalValue(h.terminalValue)
-	h.mu.Unlock()
-	return newScheduledAudioIncompleteError(scheduled, dispatched, completed, terminal)
-}
 func shouldDrainPlayback(ctx context.Context, waitErr error) bool {
 	if errors.Is(waitErr, context.Canceled) || errors.Is(waitErr, context.DeadlineExceeded) || errors.Is(waitErr, session.ErrLiveDurationExceeded) {
 		return false
@@ -384,14 +352,17 @@ func finalizeRecorder(recorder session.LiveRecorder, ctx context.Context, runErr
 	}
 	return recorder.Finalize(context.WithoutCancel(ctx), runErr)
 }
+
 func (s *terminalDrainSession) SendMessage(ctx context.Context, msg messages.Message) bool {
 	sender, ok := s.inner.(completeMessageSender)
 	return ok && sender.SendMessage(ctx, msg)
 }
+
 func (s *terminalDrainSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
 	sender, ok := s.inner.(completeMessageWithoutResponseSender)
 	return ok && sender.SendMessageWithoutResponse(ctx, msg)
 }
+
 func (s *terminalDrainSession) RTCMedia() sharedaudio.MediaEndpoints {
 	provider, ok := s.inner.(sharedaudio.MediaSession)
 	if !ok {
@@ -399,6 +370,7 @@ func (s *terminalDrainSession) RTCMedia() sharedaudio.MediaEndpoints {
 	}
 	return provider.RTCMedia()
 }
+
 func (s *terminalDrainSession) RTCMediaWithOptions(options sharedaudio.MediaSessionOptions) sharedaudio.MediaEndpoints {
 	provider, ok := s.inner.(sharedaudio.ConfigurableMediaSession)
 	if !ok {

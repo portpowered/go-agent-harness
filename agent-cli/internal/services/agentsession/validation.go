@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 )
 
 // ErrInvalidSessionMaxDuration identifies a negative --max-duration value.
@@ -23,7 +24,7 @@ type InvalidSessionDurationError = SessionMaxDurationError
 // ValidateSessionMaxDuration validates the optional session duration before
 // any provider, session, or output resource is planned.
 func ValidateSessionMaxDuration(duration time.Duration) error {
-	return sessionduration.ValidateDuration(duration)
+	return durationwire.NewService().ValidateDuration(duration)
 }
 
 var ErrSessionAudioInTurnBargeRequiresSequence = errors.New("--audio-in-turn-barge requires at least two --audio-in-turn values")

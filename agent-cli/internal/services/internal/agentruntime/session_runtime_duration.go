@@ -10,6 +10,10 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	duration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionfinalization"
+	finalizationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionfinalization/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -17,10 +21,39 @@ import (
 // duration cutoff.
 const SessionMaxDurationReason messages.TerminalReason = "max_duration"
 
-var ErrInvalidSessionMaxDuration = sessioncontract.ErrInvalidSessionMaxDuration
-
-type SessionMaxDurationError = sessioncontract.SessionMaxDurationError
-type InvalidSessionDurationError = sessioncontract.InvalidSessionDurationError
+func (p sessionRuntimePlan) finalizationCallbacks() sessionfinalization.Callbacks {
+	callbacks := sessionfinalization.Callbacks{
+		CloseCapabilities: func() error {
+			if p.capabilityCoordinator == nil {
+				return nil
+			}
+			return p.capabilityCoordinator.Close()
+		},
+		CloseSession: p.closeSession,
+		CloseRuntime: func() error {
+			if p.rtcRuntime == nil {
+				return nil
+			}
+			return p.rtcRuntime.Close()
+		},
+		FlushCapture: p.flushCapture,
+		ReleaseCapture: func() error {
+			if p.captureClaim == nil {
+				return nil
+			}
+			return wrapSessionRuntimeError(p, p.captureClaim.release())
+		},
+	}
+	if p.finalize != nil {
+		callbacks.Finalize = func(ctx context.Context, out io.Writer) error {
+			if reporter := p.loop.terminalReporter; reporter != nil {
+				ctx = withSessionTerminalReporter(ctx, reporter)
+			}
+			return wrapSessionRuntimeError(p, p.finalize(ctx, out))
+		}
+	}
+	return callbacks
+}
 
 // SessionDurationTimer is the timer contract owned by the session duration
 // controller. The small interface gives deterministic tests a clock seam while
@@ -84,7 +117,7 @@ func RunSessionWithMaxDurationClock(ctx context.Context, out io.Writer, opts Ses
 	if maxDuration == 0 {
 		return plan.run(ctx, out)
 	}
-	durationCtx, err := prepareSessionDurationArtifacts(ctx)
+	durationCtx, err := durationwire.NewService().PrepareArtifacts(ctx)
 	if err != nil {
 		return err
 	}
@@ -129,7 +162,7 @@ func RunSessionWithTextSeedAndMaxDuration(ctx context.Context, out io.Writer, op
 	if err != nil {
 		return err
 	}
-	durationCtx, err := prepareSessionDurationArtifacts(ctx)
+	durationCtx, err := durationwire.NewService().PrepareArtifacts(ctx)
 	if err != nil {
 		return err
 	}
@@ -137,7 +170,7 @@ func RunSessionWithTextSeedAndMaxDuration(ctx context.Context, out io.Writer, op
 	wirePrompt := nextSessionTextWirePrompt()
 	plan.loop.Prompt = wirePrompt
 	output := &sessionTextOutput{writer: out}
-	admission := newSessionDurationAdmission()
+	admission := durationwire.NewService().NewEventAdmission()
 	var inner messages.SessionInferencer
 	if plan.inferencer != nil {
 		// The seed substitution wrapper must sit INSIDE the admission
@@ -150,11 +183,7 @@ func RunSessionWithTextSeedAndMaxDuration(ctx context.Context, out io.Writer, op
 			value:      seed.Value,
 		}
 	}
-	admittedInferencer := &sessionDurationAdmissionInferencer{
-		inner:     inner,
-		admission: admission,
-		closeDone: make(chan struct{}),
-	}
+	admittedInferencer := durationwire.NewService().NewAdmissionInferencer(inner, admission, make(chan struct{}))
 	if inner != nil {
 		plan.inferencer = admittedInferencer
 	}
@@ -185,25 +214,25 @@ func effectiveSessionDurationClock(plan sessionRuntimePlan, requested SessionDur
 	return requested, nil
 }
 
-func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, plan sessionRuntimePlan, maxDuration time.Duration, durationClock SessionDurationClock, admittedInferencer *sessionDurationAdmissionInferencer) (runErr error) {
+func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, plan sessionRuntimePlan, maxDuration time.Duration, durationClock SessionDurationClock, admittedInferencer duration.AdmissionInferencer) (runErr error) {
 	var err error
 	durationClock, err = effectiveSessionDurationClock(plan, durationClock)
 	if err != nil {
 		return err
 	}
-	artifacts := sessionDurationArtifactsFromContext(ctx)
+	artifacts := durationwire.NewService().ArtifactsFromContext(ctx)
 	reporter := plan.loop.terminalReporter
 	if reporter == nil {
 		reporter = newSessionTerminalReporter()
 		plan.loop.terminalReporter = reporter
 	}
-	finalizer := newSessionRuntimeFinalizer(plan)
+	finalizer := finalizationwire.NewService().New(plan.finalizationCallbacks())
 	defer func() {
 		// The common finalizer must complete browser/provider/capture teardown
 		// before the duration sidecar is flushed and closed as the final bundle
 		// stage. This keeps duration, image, and recording runs on one C0 order.
-		runErr = finalizer.finish(ctx, out, runErr)
-		artifactErr := finalizeSessionDurationArtifacts(artifacts)
+		runErr = finalizer.Finish(ctx, out, runErr)
+		artifactErr := durationwire.NewService().FinalizeArtifacts(artifacts)
 		runErr = errors.Join(runErr, artifactErr)
 		reporter.recordArtifactFinalization(artifacts != nil, artifactErr)
 		if !sessionErrorHasIndependentFailure(runErr) && plan.replayCompletion != nil {
@@ -211,6 +240,13 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 		}
 		runErr = errors.Join(runErr, reporter.publish(out, runErr))
 	}()
+	if err := prepareDurationSession(out, &plan, finalizer); err != nil {
+		return err
+	}
+	return runDurationSessionLoop(ctx, out, plan, maxDuration, durationClock, admittedInferencer)
+}
+
+func prepareDurationSession(out io.Writer, plan *sessionRuntimePlan, finalizer sessionfinalization.Finalizer) error {
 	if plan.replayIntegrityWarning != "" {
 		if _, err := fmt.Fprintln(out, plan.replayIntegrityWarning); err != nil {
 			return err
@@ -222,7 +258,7 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 	}
 	if deviceBinding != nil {
 		plan.loop.rtcDeviceBinding = deviceBinding
-		finalizer.setDeviceBinding(deviceBinding)
+		finalizer.SetDeviceBinding(deviceBinding.Close)
 	}
 	// Best-effort, same as the non-duration run path: this disclosure write
 	// must not pre-empt or masquerade as the session's own run/drain failure.
@@ -234,22 +270,27 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 	}
 	if announcement != "" {
 		if _, err := fmt.Fprintln(out, announcement); err != nil {
-			return wrapSessionRuntimeError(plan, err)
+			return wrapSessionRuntimeError(*plan, err)
 		}
 	}
+	return nil
+}
 
+func runDurationSessionLoop(ctx context.Context, out io.Writer, plan sessionRuntimePlan, maxDuration time.Duration, durationClock SessionDurationClock, admittedInferencer duration.AdmissionInferencer) error {
 	loopOut := out
 	if plan.loopOut != nil {
 		loopOut = plan.loopOut
 	}
 	plan.configureLoopObserver(&plan.loop)
 	if plan.inferencer != nil {
-		reporter.markRunStarted()
-		runErr = runAgentLoopSessionWithDurationAdmissionClock(ctx, loopOut, plan.inferencer, plan.loop, maxDuration, durationClock, admittedInferencer)
+		if plan.loop.terminalReporter != nil {
+			plan.loop.terminalReporter.markRunStarted()
+		}
+		runErr := runAgentLoopSessionWithDurationAdmissionClock(ctx, loopOut, plan.inferencer, plan.loop, maxDuration, durationClock, admittedInferencer)
+		if runErr != nil {
+			return wrapSessionRuntimeError(plan, wrapSessionPhaseError("run session loop", runErr))
+		}
+		return nil
 	}
-
-	if runErr != nil {
-		runErr = wrapSessionRuntimeError(plan, wrapSessionPhaseError("run session loop", runErr))
-	}
-	return runErr
+	return nil
 }

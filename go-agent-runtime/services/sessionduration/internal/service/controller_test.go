@@ -49,21 +49,28 @@ func TestControllerExpiresOnceAndRejectsLateOutput(t *testing.T) {
 	controller.Observe(messages.StreamMessage{Type: messages.StreamTypeTextDelta})
 	clock.AdvanceBy(5 * time.Millisecond)
 	deadline := time.After(time.Second)
-	for !controller.TerminalWritten() {
+	for {
 		select {
+		case err := <-controller.Errors():
+			if !errors.Is(err, sessionduration.ErrMaxDurationExceeded) {
+				t.Fatalf("expiry error = %v", err)
+			}
+			goto expired
 		case <-deadline:
 			t.Fatal("controller did not expire")
 		default:
 			time.Sleep(time.Millisecond)
 		}
 	}
+expired:
 	if got := controller.Observe(messages.StreamMessage{Type: messages.StreamTypeTextDelta}); got.Accepted {
 		t.Fatal("late output was admitted after expiry")
 	}
-	if err := controller.Expire(); err != nil {
-		if !errors.Is(err, sessionduration.ErrMaxDurationExceeded) {
-			t.Fatalf("second Expire: %v", err)
-		}
+	if err := controller.Expire(); !errors.Is(err, sessionduration.ErrMaxDurationExceeded) {
+		t.Fatalf("second Expire: %v", err)
+	}
+	if _, err := controller.Finalize(context.Background(), sessionduration.FinalizeRequest{}); err != nil {
+		t.Fatalf("Finalize: %v", err)
 	}
 	mu.Lock()
 	defer mu.Unlock()
@@ -74,7 +81,6 @@ func TestControllerExpiresOnceAndRejectsLateOutput(t *testing.T) {
 	if !ok || value.OutputState != messages.TerminalOutputPartial || value.TerminalReason != messages.TerminalReason("max_duration") {
 		t.Fatalf("publication = %#v, want partial max_duration terminal", writes[0].Value)
 	}
-	_, _ = controller.Finalize(context.Background(), sessionduration.FinalizeRequest{})
 }
 
 func TestControllerLivenessUsesGenerationAndPreservesTypedCause(t *testing.T) {
@@ -114,7 +120,9 @@ func TestControllerLivenessUsesGenerationAndPreservesTypedCause(t *testing.T) {
 	if !errors.As(got, &typed) || typed.Classification != "silent_provider_timeout" {
 		t.Fatalf("liveness error = %T/%v, want typed timeout", got, got)
 	}
-	_, _ = controller.Finalize(context.Background(), sessionduration.FinalizeRequest{})
+	if _, err := controller.Finalize(context.Background(), sessionduration.FinalizeRequest{}); err != nil {
+		t.Fatalf("Finalize: %v", err)
+	}
 }
 
 func TestControllerRetryIsBoundedAndNeverSleeps(t *testing.T) {
@@ -130,7 +138,9 @@ func TestControllerRetryIsBoundedAndNeverSleeps(t *testing.T) {
 	if exhausted := controller.Retry(sessionduration.RetryRequest{Terminal: terminal}); !exhausted.Exhausted || exhausted.Eligible {
 		t.Fatalf("second retry decision = %+v, want exhausted", exhausted)
 	}
-	_, _ = controller.Finalize(context.Background(), sessionduration.FinalizeRequest{})
+	if _, err := controller.Finalize(context.Background(), sessionduration.FinalizeRequest{}); err != nil {
+		t.Fatalf("Finalize: %v", err)
+	}
 }
 
 func TestControllerFinalizePreservesPrimaryAndCleanupErrors(t *testing.T) {

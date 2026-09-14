@@ -72,7 +72,7 @@ func TestLiveRateLimitRetryUsesInjectedScheduler(t *testing.T) {
 		InferencerFactory: func(context.Context, session.LiveRequest) (messages.SessionInferencer, error) {
 			return &testInferencer{session: provider}, nil
 		},
-		Clock: clock.Now, Scheduler: scheduler,
+		Clock: clock.Now, Scheduler: scheduler, DurationService: newTestDurationService(),
 	})
 	handle, err := service.OpenLive(context.Background(), session.LiveRequest{
 		SessionID: "retry-policy", RateLimitRetry: session.LiveRateLimitRetryPolicy{
@@ -588,7 +588,7 @@ func TestMissingMediaCauseSurvivesImmediateProviderTerminal(t *testing.T) {
 		if err != nil {
 			t.Fatalf("OpenLive: %v", err)
 		}
-		h := requireLiveHandle(t, opened)
+		h := opened.(*handle)
 		h.configureMediaRequirements(true, true)
 		if err := h.Start(context.Background()); err != nil {
 			t.Fatalf("Start: %v", err)

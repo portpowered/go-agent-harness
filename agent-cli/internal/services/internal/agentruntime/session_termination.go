@@ -3,8 +3,16 @@ package agentruntime
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	gwproviders "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
 // sessionStragglerDrainQuietPeriod is the bounded quiet period used before a
@@ -104,4 +112,266 @@ func (b *sessionTerminationBoundary) terminate(primary error) error {
 		b.result = errors.Join(primary, quiesceErr, waitErr, stopErr, flushErr, ctxErr)
 	})
 	return b.result
+}
+
+func writeSessionReplayMessageUnscoped(out io.Writer, msg messages.StreamMessage) error {
+	switch v := msg.Value.(type) {
+	case *messages.TextDeltaValue:
+		_, err := fmt.Fprint(out, v.Content)
+		return err
+	case *messages.TranscriptDeltaValue:
+		if v == nil || v.Text == "" || strings.TrimSpace(v.Text) == "" {
+			return nil
+		}
+		_, err := fmt.Fprintf(out, "%s: %s\n", sessionReplayTranscriptLabel(msg.Role), v.Text)
+		return err
+	case *messages.TranscriptEndValue:
+		if v == nil || v.FullText == "" || strings.TrimSpace(v.FullText) == "" {
+			return nil
+		}
+		_, err := fmt.Fprintf(out, "%s: %s\n", sessionReplayTranscriptLabel(msg.Role), v.FullText)
+		return err
+	case *messages.SessionCloseValue:
+		return writeSessionReplayClose(out, v, true)
+	case *messages.ErrorValue:
+		return writeSessionReplayError(out, v)
+	}
+	return nil
+}
+
+func writeSessionReplayError(out io.Writer, value *messages.ErrorValue) error {
+	if value == nil || value.IsNonTerminal() {
+		return nil
+	}
+	fields := sessionErrorFields(value)
+	wrapCause := func(message string) error {
+		if value.Err == nil {
+			return errors.New(message)
+		}
+		return fmt.Errorf("%s: %w", message, value.Err)
+	}
+	if value.Message != "" {
+		if fields != "" {
+			return wrapCause(fmt.Sprintf("session error: %s [%s]", value.Message, fields))
+		}
+		return wrapCause(fmt.Sprintf("session error: %s", value.Message))
+	}
+	if fields != "" {
+		return wrapCause(fmt.Sprintf("session error [%s]", fields))
+	}
+	return wrapCause("session error")
+}
+
+func writeSessionReplayClose(out io.Writer, value *messages.SessionCloseValue, leadingNewline bool) error {
+	if value == nil {
+		return nil
+	}
+	if value.Reason != "" {
+		prefix := ""
+		if leadingNewline {
+			prefix = "\n"
+		}
+		if _, err := fmt.Fprintf(out, "%s[session closed: %s]\n", prefix, value.Reason); err != nil {
+			return err
+		}
+	}
+	if fields := sessionTerminalFields(value.Classification, value.TerminalReason, value.TerminalProvenance, value.OutputState); fields != "" {
+		_, err := fmt.Fprintf(out, "[session terminal: %s]\n", fields)
+		return err
+	}
+	return nil
+}
+
+func isTerminalErrorMessage(msg messages.StreamMessage) bool {
+	if msg.Type != messages.StreamTypeError {
+		return false
+	}
+	value, ok := msg.Value.(*messages.ErrorValue)
+	return !ok || value.IsTerminal()
+}
+
+func sessionErrorFields(value *messages.ErrorValue) string {
+	if value == nil {
+		return ""
+	}
+	classification := value.Classification
+	if classification == "" && (value.ErrorType != "" || value.Code != "" || value.Message != "") {
+		classification = gwproviders.SessionErrorClassification(value.ErrorType, value.Code, value.Message)
+	}
+	fields := sessionTerminalFields(classification, value.TerminalReason, value.TerminalProvenance, value.OutputState)
+	providerFields := make([]string, 0, 2)
+	if value.ErrorType != "" {
+		providerFields = append(providerFields, "error_type="+value.ErrorType)
+	}
+	if value.Code != "" {
+		providerFields = append(providerFields, "code="+value.Code)
+	}
+	if fields != "" {
+		providerFields = append([]string{fields}, providerFields...)
+	}
+	return strings.Join(providerFields, " ")
+}
+
+func sessionTerminalFields(classification string, reason messages.TerminalReason, provenance messages.TerminalProvenance, outputState messages.TerminalOutputState) string {
+	var fields []string
+	if classification != "" {
+		fields = append(fields, "classification="+classification)
+	}
+	if reason != "" {
+		fields = append(fields, "terminal_reason="+string(reason))
+	}
+	if provenance != "" {
+		fields = append(fields, "terminal_provenance="+string(provenance))
+	}
+	if outputState != "" {
+		fields = append(fields, "output_state="+string(outputState))
+	}
+	return strings.Join(fields, " ")
+}
+
+func flushBufferedSessionLoopMessages(out io.Writer, loop *agentloop.AgentLoop, obs *sessionProgressObserver) error {
+	for {
+		msg, ok := loop.Deltas().Read()
+		if !ok {
+			return nil
+		}
+		if obs != nil {
+			obs.observe(msg)
+		}
+		if err := writeSessionReplayMessage(out, msg); err != nil {
+			return err
+		}
+	}
+}
+
+func sendSessionClose(ctx context.Context, loop *agentloop.AgentLoop) error {
+	msg := messages.Message{
+		Role: messages.RoleUser,
+		ContentParts: []messages.ContentPart{
+			messages.ControlPlanePart{ControlPlaneMessageType: messages.ControlPlaneMessageTypeSessionClose},
+		},
+	}
+	if err := loop.Send(ctx, []messages.Message{msg}); err != nil {
+		return fmt.Errorf("close session loop: %w", err)
+	}
+	return nil
+}
+
+func wrapSessionPhaseError(phase string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("%s: %w", phase, err)
+}
+
+func waitForLoopStragglers(out io.Writer, loop *agentloop.AgentLoop, policy sessionStragglerDrainPolicy, obs *sessionProgressObserver) error {
+	return waitForLoopStragglersWithContext(context.Background(), out, loop, policy, obs, nil)
+}
+
+func waitForLoopStragglersWithContext(ctx context.Context, out io.Writer, loop *agentloop.AgentLoop, policy sessionStragglerDrainPolicy, obs *sessionProgressObserver, source platformclock.Source) error {
+	quiet := policy.quietPeriod
+	if quiet <= 0 {
+		return errInvalidSessionStragglerDrainPolicy
+	}
+	idle, err := newSessionTimer(source, quiet)
+	if err != nil {
+		return err
+	}
+	var wallSafety platformclock.Timer
+	if source != nil {
+		wallSafety = platformclock.Real{}.NewTimer(sessionStragglerDrainWallSafety)
+	}
+	defer stopStragglerTimers(idle, wallSafety)
+	for {
+		msg, open, done := nextSessionStragglerEvent(ctx, wallTimerChannel(wallSafety), loop, idle)
+		if done || !open {
+			return nil
+		}
+		if err := writeStragglerMessage(out, msg, obs); err != nil {
+			return err
+		}
+		idle, err = resetSessionStragglerTimer(idle, source, quiet)
+		if err != nil {
+			return err
+		}
+	}
+}
+
+func nextSessionStragglerEvent(ctx context.Context, wallSafety <-chan time.Time, loop *agentloop.AgentLoop, idle platformclock.Timer) (messages.StreamMessage, bool, bool) {
+	select {
+	case <-ctx.Done():
+		return messages.StreamMessage{}, true, true
+	case <-wallSafety:
+		return messages.StreamMessage{}, true, true
+	case msg, ok := <-loop.Deltas().Chan():
+		return msg, ok, false
+	case <-idle.C():
+		return messages.StreamMessage{}, true, true
+	}
+}
+
+func writeStragglerMessage(out io.Writer, msg messages.StreamMessage, obs *sessionProgressObserver) error {
+	if obs != nil {
+		obs.observe(msg)
+	}
+	return writeSessionReplayMessage(out, msg)
+}
+
+func resetSessionStragglerTimer(timer platformclock.Timer, source platformclock.Source, quiet time.Duration) (platformclock.Timer, error) {
+	if !timer.Stop() {
+		select {
+		case <-timer.C():
+		default:
+		}
+	}
+	return newSessionTimer(source, quiet)
+}
+
+func stopStragglerTimers(idle, wallSafety platformclock.Timer) {
+	if idle != nil {
+		idle.Stop()
+	}
+	if wallSafety != nil {
+		wallSafety.Stop()
+	}
+}
+
+func shouldStopSessionLoop(msg messages.StreamMessage, opts sessionLoopOptions) bool {
+	if isAuthoritativeSessionStop(msg) || hasSessionTerminalFailure(msg, opts.observer) {
+		return true
+	}
+	if opts.CloseAfterOpen || opts.WaitForClose {
+		return false
+	}
+	return ordinarySessionStop(msg, opts)
+}
+
+func isAuthoritativeSessionStop(msg messages.StreamMessage) bool {
+	return msg.Type == messages.StreamTypeSessionClose || msg.Type == messages.StreamTypeLoopEnd || isTerminalErrorMessage(msg)
+}
+
+func hasSessionTerminalFailure(msg messages.StreamMessage, observer *sessionProgressObserver) bool {
+	return msg.Type == messages.StreamTypeMessageEnd && observer != nil &&
+		(observer.hasTerminalToolContinuationFailure() || observer.hasTerminalScheduledResponseFailure())
+}
+
+func ordinarySessionStop(msg messages.StreamMessage, opts sessionLoopOptions) bool {
+	switch msg.Type {
+	case messages.StreamTypeMessageEnd:
+		return messageEndStopsSession(opts)
+	case messages.StreamTypeTextEnd:
+		return opts.observer == nil || !opts.observer.hasToolLifecycleObligation()
+	default:
+		return false
+	}
+}
+
+func messageEndStopsSession(opts sessionLoopOptions) bool {
+	if opts.observer != nil && (!opts.observer.lastMessageEndAdmitted() || opts.observer.hasToolLifecycleObligation()) {
+		return false
+	}
+	if opts.CloseAfterScheduledAudio && opts.observer != nil && !opts.observer.scheduledAudioComplete() {
+		return false
+	}
+	return true
 }
