@@ -326,7 +326,7 @@ func waitForLoop(results <-chan error) error {
 
 func normalizeLoopError(ctx context.Context, err error) error {
 	if err == nil || errors.Is(err, context.Canceled) && ctx.Err() != nil {
-		return nil
+		return nil //nolint:nilerr // caller cancellation intentionally normalizes loop cancellation.
 	}
 	return err
 }

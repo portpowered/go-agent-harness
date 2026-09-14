@@ -200,6 +200,7 @@ func (h *handle) beginDurationController(ctx context.Context) (sessionduration.C
 		Context: ctx, Clock: h.scheduler, MaxDuration: h.request.MaxDuration,
 		Liveness: sessionduration.LivenessOptions{Enabled: h.request.ProviderLiveness.Enabled, Timeout: h.request.ProviderLiveness.Timeout},
 		Retry:    sessionduration.RetryPolicy{Enabled: h.request.RateLimitRetry.Enabled, MaxRetries: h.request.RateLimitRetry.MaxRetries, DefaultDelay: h.request.RateLimitRetry.DefaultDelay, MaxDelay: h.request.RateLimitRetry.MaxDelay},
+		//nolint:contextcheck // this synchronous cause callback records against the invocation context.
 		FirstCause: func(cause error) {
 			if errors.Is(cause, sessionduration.ErrMaxDurationExceeded) {
 				h.Cancel(session.ErrLiveDurationExceeded)

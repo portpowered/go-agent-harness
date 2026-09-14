@@ -74,12 +74,18 @@ func (s *Service) NewEventAdmission() sessionduration.EventAdmission {
 }
 
 func (s *Service) NewAdmissionInferencer(inner messages.SessionInferencer, admission sessionduration.EventAdmission, closeDone chan struct{}) sessionduration.AdmissionInferencer {
-	boundary, _ := admission.(*EventAdmission)
+	boundary, ok := admission.(*EventAdmission)
+	if !ok {
+		boundary = nil
+	}
 	return NewAdmissionInferencer(inner, boundary, closeDone)
 }
 
 func (s *Service) NewAdmissionSession(ctx context.Context, inner messages.Session, admission sessionduration.EventAdmission, onClose func(error)) sessionduration.AdmissionSession {
-	boundary, _ := admission.(*EventAdmission)
+	boundary, ok := admission.(*EventAdmission)
+	if !ok {
+		boundary = nil
+	}
 	return NewAdmissionSession(ctx, inner, boundary, onClose)
 }
 

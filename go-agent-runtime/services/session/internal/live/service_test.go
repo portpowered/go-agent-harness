@@ -60,9 +60,8 @@ func firstTestDurationCause(o sessionduration.Options, cause error) {
 		o.FirstCause(cause)
 	}
 }
-func (c *testDurationController) expire(cause error) error {
+func (c *testDurationController) expire(cause error) {
 	c.once.Do(func() { firstTestDurationCause(c.options, cause) })
-	return cause
 }
 func (c *testDurationController) Observe(msg messages.StreamMessage) sessionduration.Admission {
 	if c.options.Liveness.Enabled && isTestDurationResponseStart(msg) {
@@ -76,7 +75,9 @@ func (c *testDurationController) Observe(msg messages.StreamMessage) sessiondura
 	return sessionduration.Admission{Message: msg, Accepted: true, OutputState: messages.TerminalOutputPartial}
 }
 func (c *testDurationController) arm(delay time.Duration, cause error) {
-	scheduleTestDuration(c.options, delay, func() { c.expire(cause) })
+	scheduleTestDuration(c.options, delay, func() {
+		c.expire(cause)
+	})
 }
 func isTestDurationResponseStart(msg messages.StreamMessage) bool {
 	return msg.Type == messages.StreamTypeResponseCreate || msg.Type == messages.StreamTypeMessageStart

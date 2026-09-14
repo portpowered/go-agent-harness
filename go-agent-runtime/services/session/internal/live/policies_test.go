@@ -588,7 +588,7 @@ func TestMissingMediaCauseSurvivesImmediateProviderTerminal(t *testing.T) {
 		if err != nil {
 			t.Fatalf("OpenLive: %v", err)
 		}
-		h := opened.(*handle)
+		h := opened.(*handle) //nolint:errcheck // this package's OpenLive implementation returns *handle.
 		h.configureMediaRequirements(true, true)
 		if err := h.Start(context.Background()); err != nil {
 			t.Fatalf("Start: %v", err)

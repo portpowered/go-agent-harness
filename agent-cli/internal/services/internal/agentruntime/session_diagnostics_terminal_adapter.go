@@ -158,7 +158,9 @@ func (o *sessionProgressObserver) stopLiveness() {
 	if o == nil || o.durationController != nil || o.livenessController == nil {
 		return
 	}
-	_, _ = o.livenessController.Finalize(context.Background(), sessionduration.FinalizeRequest{})
+	if _, err := o.livenessController.Finalize(context.Background(), sessionduration.FinalizeRequest{}); err != nil {
+		o.recordLivenessFailure(err)
+	}
 }
 
 func (o *sessionProgressObserver) observeProviderEvent(msg messages.StreamMessage) {

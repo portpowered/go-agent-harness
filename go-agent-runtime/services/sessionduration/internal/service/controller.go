@@ -230,6 +230,7 @@ func (c *controller) observeLivenessLocked(msg messages.StreamMessage) (arm, res
 }
 
 func (c *controller) observeOutputLocked(msg messages.StreamMessage) {
+	//nolint:exhaustive // only response output boundaries affect this state.
 	switch msg.Type {
 	case messages.StreamTypeMessageStart:
 		c.responseOutput = false

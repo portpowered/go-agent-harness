@@ -13,7 +13,7 @@ func (s *AdmissionSession) forward(ctx context.Context) {
 	for {
 		select {
 		case <-s.inner.Done():
-			s.drainSource(source, admissionOpen)
+			s.drainSource(ctx, source, admissionOpen)
 			s.closeDone()
 			return
 		case <-ctx.Done():
@@ -26,20 +26,20 @@ func (s *AdmissionSession) forward(ctx context.Context) {
 				s.closeDone()
 				return
 			}
-			s.forwardMessage(msg, &admissionOpen)
+			s.forwardMessage(ctx, msg, &admissionOpen)
 		}
 	}
 }
 
-func (s *AdmissionSession) forwardMessage(msg messages.StreamMessage, admissionOpen *bool) {
+func (s *AdmissionSession) forwardMessage(ctx context.Context, msg messages.StreamMessage, admissionOpen *bool) {
 	s.observeProviderMessage(msg)
 	if *admissionOpen {
-		if s.admission.admit(s.receive, msg) {
+		if s.admission.admit(ctx, s.receive, msg) {
 			return
 		}
 		*admissionOpen = false
 	}
 	// Preserve a provider message already removed by this worker so the
 	// service controller can classify it during its bounded drain.
-	s.receive.Write(context.Background(), msg)
+	s.receive.Write(ctx, msg)
 }

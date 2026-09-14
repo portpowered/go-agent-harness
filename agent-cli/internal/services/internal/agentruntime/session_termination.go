@@ -287,7 +287,7 @@ func waitForLoopStragglersWithContext(ctx context.Context, out io.Writer, loop *
 		if done || !open {
 			return nil
 		}
-		if err := writeStragglerMessage(out, msg, obs); err != nil {
+		if err := writeStragglerMessage(out, msg, obs); err != nil { //nolint:contextcheck // the straggler observer is synchronous and context-free.
 			return err
 		}
 		idle, err = resetSessionStragglerTimer(idle, source, quiet)
@@ -356,6 +356,7 @@ func hasSessionTerminalFailure(msg messages.StreamMessage, observer *sessionProg
 }
 
 func ordinarySessionStop(msg messages.StreamMessage, opts sessionLoopOptions) bool {
+	//nolint:exhaustive // only terminal boundaries determine ordinary session stop.
 	switch msg.Type {
 	case messages.StreamTypeMessageEnd:
 		return messageEndStopsSession(opts)

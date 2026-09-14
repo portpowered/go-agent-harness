@@ -48,13 +48,13 @@ func (a *EventAdmission) closeWithDrain(receive, source *messages.TypedBuffer[me
 	})
 }
 
-func (a *EventAdmission) admit(receive *messages.TypedBuffer[messages.StreamMessage], msg messages.StreamMessage) bool {
+func (a *EventAdmission) admit(ctx context.Context, receive *messages.TypedBuffer[messages.StreamMessage], msg messages.StreamMessage) bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.closed {
 		return false
 	}
-	return receive.Write(context.Background(), msg)
+	return receive.Write(ctx, msg)
 }
 
 // AdmissionInferencer inserts the admission boundary between
@@ -349,7 +349,7 @@ func (s *AdmissionSession) drainSourceAfterClose() {
 	}
 }
 
-func (s *AdmissionSession) drainSource(source *messages.TypedBuffer[messages.StreamMessage], admissionOpen bool) {
+func (s *AdmissionSession) drainSource(ctx context.Context, source *messages.TypedBuffer[messages.StreamMessage], admissionOpen bool) {
 	for {
 		msg, ok := source.Read()
 		if !ok {
@@ -357,7 +357,7 @@ func (s *AdmissionSession) drainSource(source *messages.TypedBuffer[messages.Str
 		}
 		s.observeProviderMessage(msg)
 		if admissionOpen {
-			if s.admission.admit(s.receive, msg) {
+			if s.admission.admit(ctx, s.receive, msg) {
 				continue
 			}
 			admissionOpen = false
@@ -366,7 +366,7 @@ func (s *AdmissionSession) drainSource(source *messages.TypedBuffer[messages.Str
 		// close became visible to this forwarding worker. Retain it for the
 		// service controller to classify during the bounded drain; that boundary
 		// rejects late nonterminal output without losing an already-read delta.
-		s.receive.Write(context.Background(), msg)
+		s.receive.Write(ctx, msg)
 	}
 }
 

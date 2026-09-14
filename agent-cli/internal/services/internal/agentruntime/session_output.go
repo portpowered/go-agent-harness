@@ -42,6 +42,8 @@ type sessionReplayTranscriptState struct {
 	completed     bool
 }
 
+const unknownSessionToolName = "unknown"
+
 func newSessionReplayRenderer(out io.Writer, reporter ...*sessionTerminalReporter) *sessionReplayRenderer {
 	var terminalReporter *sessionTerminalReporter
 	if len(reporter) > 0 {
@@ -155,7 +157,7 @@ func (r *sessionReplayRenderer) writeToolCall(value *messages.ToolCallEndValue) 
 	}
 	name := strings.TrimSpace(value.Name)
 	if name == "" {
-		name = "unknown"
+		name = unknownSessionToolName
 	}
 	arguments := compactSessionToolText(value.Arguments)
 	if arguments == "" {

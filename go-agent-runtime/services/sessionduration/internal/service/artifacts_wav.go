@@ -22,7 +22,7 @@ func newSessionDurationWAVSink(path string) (*sessionDurationWAVSink, error) {
 	if path == "" {
 		return nil, errors.New("duration audio path is empty")
 	}
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, sessionDurationArtifactFileMode)
 	if err != nil {
 		return nil, fmt.Errorf("open duration audio %q: %w", path, err)
 	}

@@ -41,7 +41,8 @@ func (c *controller) Finalize(ctx context.Context, request sessionduration.Final
 
 func (c *controller) cleanup(ctx context.Context, request sessionduration.FinalizeRequest) []error {
 	if ctx == nil {
-		ctx = c.ctx
+		//nolint:contextcheck // finalization cleanup must outlive caller cancellation.
+		ctx = context.WithoutCancel(c.ctx)
 	}
 	var failures []error
 	appendFailure := func(label string, cleanup func() error) {

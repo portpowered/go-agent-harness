@@ -21,14 +21,15 @@ func cancellationErrorOnly(err error) bool {
 	if err == nil {
 		return true
 	}
-	if inputErr, ok := err.(*SessionAudioInputError); ok {
-		return inputErrorCancellationOnly(inputErr)
-	}
 	if unwrapper, ok := err.(interface{ Unwrap() []error }); ok {
 		return cancellationCausesOnly(unwrapper.Unwrap())
 	}
 	if unwrapper, ok := err.(interface{ Unwrap() error }); ok {
 		return cancellationErrorOnly(unwrapper.Unwrap())
+	}
+	var inputErr *SessionAudioInputError
+	if errors.As(err, &inputErr) {
+		return inputErrorCancellationOnly(inputErr)
 	}
 	return cancellationLeaf(err)
 }
@@ -50,18 +51,20 @@ func cancellationCausesOnly(causes []error) bool {
 }
 
 func cancellationLeaf(err error) bool {
-	switch err {
-	case context.Canceled,
+	for _, candidate := range []error{
+		context.Canceled,
 		ErrSessionAudioResponseIncomplete,
 		ErrSessionAudioInputEndOfTurnLost,
 		ErrSessionScheduledAudioIncomplete,
 		ErrSessionUnresolvedToolResults,
 		ErrSessionToolContinuationIncomplete,
-		ErrSessionImageContinuationIncomplete:
-		return true
-	default:
-		return false
+		ErrSessionImageContinuationIncomplete,
+	} {
+		if errors.Is(err, candidate) {
+			return true
+		}
 	}
+	return false
 }
 
 // observerCancellationIsClean adds the observer's typed stream failure state

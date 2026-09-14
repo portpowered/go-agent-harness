@@ -33,7 +33,7 @@ func cancellationErrorOnly(err error, allowed []error, normalize func(error) err
 		return true
 	}
 	if normalize != nil {
-		if normalized := normalize(err); normalized != nil && normalized != err {
+		if normalized := normalize(err); normalized != nil && !errors.Is(normalized, err) {
 			return cancellationErrorOnly(normalized, allowed, normalize)
 		}
 	}

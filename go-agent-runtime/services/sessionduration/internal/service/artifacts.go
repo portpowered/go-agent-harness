@@ -25,6 +25,8 @@ type sessionDurationArtifactLifecycleWithTerminal struct {
 	recorder  sessionduration.TerminalRecorder
 }
 
+const sessionDurationArtifactFileMode = 0o644
+
 func (a *sessionDurationArtifactLifecycleWithTerminal) Accept(msg messages.StreamMessage) error {
 	if a == nil {
 		return nil
@@ -103,7 +105,10 @@ func ArtifactsFromContext(ctx context.Context) sessionduration.ArtifactLifecycle
 	if ctx == nil {
 		return nil
 	}
-	artifacts, _ := ctx.Value(sessionDurationArtifactsContextKey{}).(sessionduration.ArtifactLifecycle)
+	artifacts, ok := ctx.Value(sessionDurationArtifactsContextKey{}).(sessionduration.ArtifactLifecycle)
+	if !ok {
+		return nil
+	}
 	return artifacts
 }
 
@@ -193,21 +198,19 @@ func NewSessionDurationArtifactSet(audioPath, transcriptPath string) (*SessionDu
 	}
 	transcriptSink, err := newSessionDurationTranscriptSink(transcriptPath)
 	if err != nil {
-		_ = audioSink.Close()
-		return nil, err
+		return nil, errors.Join(err, audioSink.Close())
 	}
 	return NewSessionDurationArtifactSetWithSinks(audioSink, transcriptSink), nil
 }
 
 func newSessionDurationTranscriptSink(path string) (*transcript.Writer, error) {
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, sessionDurationArtifactFileMode)
 	if err != nil {
 		return nil, fmt.Errorf("open duration transcript %q: %w", path, err)
 	}
 	writer, err := transcript.NewWriterOn(file)
 	if err != nil {
-		_ = file.Close()
-		return nil, fmt.Errorf("create duration transcript %q: %w", path, err)
+		return nil, errors.Join(fmt.Errorf("create duration transcript %q: %w", path, err), file.Close())
 	}
 	return writer, nil
 }

@@ -48,21 +48,14 @@ func TestControllerExpiresOnceAndRejectsLateOutput(t *testing.T) {
 	}
 	controller.Observe(messages.StreamMessage{Type: messages.StreamTypeTextDelta})
 	clock.AdvanceBy(5 * time.Millisecond)
-	deadline := time.After(time.Second)
-	for {
-		select {
-		case err := <-controller.Errors():
-			if !errors.Is(err, sessionduration.ErrMaxDurationExceeded) {
-				t.Fatalf("expiry error = %v", err)
-			}
-			goto expired
-		case <-deadline:
-			t.Fatal("controller did not expire")
-		default:
-			time.Sleep(time.Millisecond)
+	select {
+	case err := <-controller.Errors():
+		if !errors.Is(err, sessionduration.ErrMaxDurationExceeded) {
+			t.Fatalf("expiry error = %v", err)
 		}
+	case <-time.After(time.Second):
+		t.Fatal("controller did not expire")
 	}
-expired:
 	if got := controller.Observe(messages.StreamMessage{Type: messages.StreamTypeTextDelta}); got.Accepted {
 		t.Fatal("late output was admitted after expiry")
 	}

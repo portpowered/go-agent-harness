@@ -139,18 +139,20 @@ type durationServiceResources struct {
 }
 
 func runAgentLoopSessionWithDurationService(ctx context.Context, out io.Writer, inferencer messages.SessionInferencer, opts sessionLoopOptions, maxDuration time.Duration, clock SessionDurationClock, admitted duration.AdmissionInferencer) error {
+	const durationExternalErrorCapacity = 4
 	service := durationwire.NewService()
 	resources := &durationServiceResources{
 		opts:           opts,
 		out:            out,
 		clock:          clock,
-		externalErrors: make(chan error, 4),
+		externalErrors: make(chan error, durationExternalErrorCapacity),
 		runResult:      make(chan error, 1),
 		done:           make(chan struct{}),
 	}
 	artifacts := durationwire.NewService().ArtifactsFromContext(ctx)
 	resources.artifacts = artifacts
 	resources.publication = duration.Publication{
+		//nolint:contextcheck // the stream observer contract is synchronous and has no context parameter.
 		Write: func(msg messages.StreamMessage) error {
 			if opts.observer != nil {
 				opts.observer.observe(msg)

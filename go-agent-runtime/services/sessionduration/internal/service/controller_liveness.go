@@ -46,6 +46,7 @@ func isProviderOutput(msg messages.StreamMessage) bool {
 	if msg.Role == messages.RoleUser || msg.Role == messages.RoleTool {
 		return false
 	}
+	//nolint:exhaustive // only provider output boundaries affect liveness.
 	switch msg.Type {
 	case messages.StreamTypeTextDelta, messages.StreamTypeAudioDelta, messages.StreamTypeImageDelta, messages.StreamTypeVideoDelta, messages.StreamTypeFileDelta, messages.StreamTypeEmbeddingDelta, messages.StreamTypeReasoningDelta, messages.StreamTypeTranscriptDelta, messages.StreamTypeTextEnd, messages.StreamTypeAudioEnd, messages.StreamTypeImageEnd, messages.StreamTypeVideoEnd, messages.StreamTypeFileEnd, messages.StreamTypeEmbeddingEnd, messages.StreamTypeReasoningEnd, messages.StreamTypeTranscriptEnd:
 		return true
