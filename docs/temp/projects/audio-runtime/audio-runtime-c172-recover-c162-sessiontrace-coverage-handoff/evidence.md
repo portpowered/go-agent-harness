@@ -20,7 +20,7 @@ Project: `audio-runtime`; contract: `audio-runtime-v1`; session: `~default`
 ## Non-rewriting integration and scope
 
 - Accepted C154 main `8490f8dcad63adde99036016e1e7ffd9ecf61e34` was merged into the adopted C162 line as `1a547d5313eb2ffb084f2d8f46c815781f258368`.
-- Fresh main advanced during bounded verification to `1b1c0296b9471b930c2b290f3bf6fa10559957de` (CI partition/deduplication changes only) and was merged as `f1de875ee`. The final candidate must be checked against this fresh main before handoff.
+- Fresh main advanced during bounded verification to `1b1c0296b9471b930c2b290f3bf6fa10559957de` (CI partition/deduplication changes only) and was merged as `f1de875ee`.
 - Required ancestry is retained: startup integration `8bdafc7f947a3a2c9856220abdc539437035bd21`, planning main `2c79ec6a931c3e86944d6a625d0a5060b4f85aa0`, C162 `67865c27ac4c065f3e8833d48ad2b7cea4c329a2`, accepted C154 `8490f8dcad63adde99036016e1e7ffd9ecf61e34`, and fresh `origin/main` `1b1c0296b9471b930c2b290f3bf6fa10559957de` are ancestors.
 - Before this evidence update, `git diff --name-status origin/main...HEAD` contained only the two C162 sessiontrace service files and the inherited C162 evidence directory. C154 changes are inherited from main, not authored by C172.
 
@@ -35,7 +35,7 @@ All commands were bounded and run without credentials or Realtime access on the 
 - Credential-free scheduled-audio/tool lifecycle replay passed in the accumulated matrix and in the explicit nomicrophone run (`4.479s`); the expected mismatch/PCM/transcript negative controls remained rejecting their mutations.
 - `COUNT=1 scripts/test-session-ci-regressions.sh all` passed normal, coverage and race modes, including high-rate tool/audio, simulated-device, provider-tool continuation, lifecycle and cleanup controls.
 - Targeted vet, `make wire-check`, `make fmt`, `make architecture-size-check` (`202` packages, `1,941` files, `28,805` functions), pinned `make staticcheck` `2026.1`, pinned `make lint LINT_BASE=origin/main` `v2.9.0` (`0 issues` in all `15` modules), and `git diff --check` passed.
-- Refreshed local coverage profiles were generated for this handoff: `canceled-close.cover.out` SHA-256 `a1c1bc1d05421bda4b083b1593b424f77a710271ca51ed0ce6cb3f814e167759`, `room-bound.cover.out` SHA-256 `828e35f43d0377e3378e935c4e91c36c286fcef281acf4b39e9caa6f5ca309f6`, and `sessiontrace.cover.out` SHA-256 `8c38a014bf9edd606f8046c46a21042490fb436396d2a87f7409bac823ca0131`. The 14 MiB, 221,086-line room-bound profile remains locally available but is omitted from the committed handoff as generated ignored output; the two smaller profiles are committed.
+- Final clean-source recheck at source `1740b47303451ea0887a929d79edda785cad865b` passed the causal, full-sessiontrace and accumulated matrices above; subsequent changes are evidence-only. Refreshed local coverage profiles were generated for this handoff: `canceled-close.cover.out` SHA-256 `a1c1bc1d05421bda4b083b1593b424f77a710271ca51ed0ce6cb3f814e167759`, `room-bound.cover.out` SHA-256 `61533ca1ccf8b94c124e52b6fa8b7278195b0e40ad096bbdd45e57b07869c970`, and `sessiontrace.cover.out` SHA-256 `8c38a014bf9edd606f8046c46a21042490fb436396d2a87f7409bac823ca0131`. The 14 MiB, 221,086-line room-bound profile remains locally available but is omitted from the committed handoff as generated ignored output; the two smaller profiles are committed.
 
 ## Gate boundary and next action
 
