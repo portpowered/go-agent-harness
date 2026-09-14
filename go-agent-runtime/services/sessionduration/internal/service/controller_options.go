@@ -26,6 +26,9 @@ func normalizeOptions(options sessionduration.Options) (sessionduration.Options,
 	if options.LivenessClock == nil {
 		options.LivenessClock = options.Clock
 	}
-	needsClock := options.MaxDuration > 0 || options.Liveness.Enabled || options.Retry.Enabled
+	if options.Liveness.Enabled && options.LivenessClock == nil {
+		return options, false, sessionduration.ErrSchedulerUnavailable
+	}
+	needsClock := options.MaxDuration > 0
 	return options, needsClock, nil
 }

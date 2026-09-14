@@ -33,6 +33,7 @@ type controller struct {
 	livenessStopped    bool
 	livenessFailure    error
 	livenessReported   bool
+	firstCauseOnce     sync.Once
 	responseOutput     bool
 	responseComplete   bool
 	toolObligation     bool
@@ -45,6 +46,8 @@ type controller struct {
 	closed          bool
 
 	durationReported bool
+	startOnce        sync.Once
+	startErr         error
 	finalizeOnce     sync.Once
 	finalizeResult   sessionduration.Result
 	finalizeErr      error
@@ -74,11 +77,23 @@ func (s *Service) Begin(options sessionduration.Options) (sessionduration.Contro
 		livenessWake: make(chan struct{}, 1),
 		outputState:  messages.TerminalOutputNone,
 	}
-	if err := c.startMaxDuration(options.MaxDuration); err != nil {
-		cancel()
-		return nil, err
+	if !options.DeferStart {
+		if err := c.Start(); err != nil {
+			cancel()
+			return nil, err
+		}
 	}
 	return c, nil
+}
+
+func (c *controller) Start() error {
+	if c == nil {
+		return nil
+	}
+	c.startOnce.Do(func() {
+		c.startErr = c.startMaxDuration(c.options.MaxDuration)
+	})
+	return c.startErr
 }
 
 func (c *controller) startMaxDuration(maxDuration time.Duration) error {
@@ -307,7 +322,7 @@ func (c *controller) report(err error) {
 	default:
 	}
 	if c.options.FirstCause != nil {
-		c.options.FirstCause(err)
+		c.firstCauseOnce.Do(func() { c.options.FirstCause(err) })
 	}
 }
 

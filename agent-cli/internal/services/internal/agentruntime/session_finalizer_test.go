@@ -8,15 +8,14 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionfinalization"
-	finalizationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionfinalization/wire"
 )
 
-type testSessionRuntimeFinalizer struct{ inner sessionfinalization.Finalizer }
+type testSessionRuntimeFinalizer struct{ inner sessionduration.Finalizer }
 
 func newSessionRuntimeFinalizer(plan sessionRuntimePlan) *testSessionRuntimeFinalizer {
-	return &testSessionRuntimeFinalizer{inner: finalizationwire.NewService().New(plan.finalizationCallbacks())}
+	return &testSessionRuntimeFinalizer{inner: durationwire.NewService().NewFinalizer(plan.finalizationPorts())}
 }
 
 func (f *testSessionRuntimeFinalizer) finish(ctx context.Context, out io.Writer, primary error) error {
@@ -126,7 +125,7 @@ func TestSessionRuntimeFinalizerContinuesAfterCleanupPanic(t *testing.T) {
 	}
 
 	gotErr := newSessionRuntimeFinalizer(plan).finish(context.Background(), io.Discard, primaryErr)
-	if !errors.Is(gotErr, primaryErr) || !errors.Is(gotErr, sessionfinalization.ErrPanic) {
+	if !errors.Is(gotErr, primaryErr) || !errors.Is(gotErr, sessionduration.ErrFinalizationPanic) {
 		t.Fatalf("panic finalization error = %v, want primary and panic identities", gotErr)
 	}
 	if want := []string{"provider", "runtime", "capture", "finalize"}; !reflect.DeepEqual(order, want) {

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -83,7 +84,13 @@ func NewAdmissionInferencer(inner messages.SessionInferencer, admission *EventAd
 	return &AdmissionInferencer{inner: inner, admission: admission, closeDone: closeDone}
 }
 
-func (i *AdmissionInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
+func (i *AdmissionInferencer) ConnectSession(ctx context.Context) (messages.Session, error) { //nolint:contextcheck // nil contexts use the session API's documented background behavior.
+	if i == nil || i.inner == nil {
+		return nil, errors.New("session duration inferencer is unavailable")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	session, err := i.inner.ConnectSession(ctx)
 	if err != nil {
 		i.mu.Lock()
@@ -181,7 +188,10 @@ type AdmissionSession struct {
 	providerTerminalSeen  bool
 }
 
-func NewAdmissionSession(ctx context.Context, inner messages.Session, admission *EventAdmission, onClose func(error)) *AdmissionSession {
+func NewAdmissionSession(ctx context.Context, inner messages.Session, admission *EventAdmission, onClose func(error)) *AdmissionSession { //nolint:contextcheck // nil contexts use the session API's documented background behavior.
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	s := &AdmissionSession{
 		inner:     inner,
 		admission: admission,
@@ -189,28 +199,38 @@ func NewAdmissionSession(ctx context.Context, inner messages.Session, admission 
 		done:      make(chan struct{}),
 		onClose:   onClose,
 	}
-	go s.forward(ctx)
+	if inner != nil && inner.Receive() != nil && inner.Done() != nil {
+		go s.forward(ctx)
+	} else {
+		s.closeDone()
+	}
 	return s
 }
 
 func (s *AdmissionSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
-	return s.inner.Send(ctx, msg)
+	return s != nil && s.inner != nil && s.inner.Send(ctx, msg)
 }
 
 // RequestResponse forwards the optional explicit response capability while
 // retaining the admission wrapper's compatibility with replay sessions.
 func (s *AdmissionSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
+	if s == nil || s.inner == nil {
+		return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}
+	}
 	return messages.RequestSessionResponse(ctx, s.inner)
 }
 
 func (s *AdmissionSession) SupportsResponseRequests() bool {
-	return messages.SupportsSessionResponseRequests(s.inner)
+	return s != nil && s.inner != nil && messages.SupportsSessionResponseRequests(s.inner)
 }
 
 // SendMessage forwards the optional complete-message capability of the
 // wrapped provider session. Duration admission must not hide the rich message
 // path used to deliver a tool result on the next model turn.
 func (s *AdmissionSession) SendMessage(ctx context.Context, msg messages.Message) bool {
+	if s == nil || s.inner == nil {
+		return false
+	}
 	sender, ok := s.inner.(completeMessageSender)
 	return ok && sender.SendMessage(ctx, msg)
 }
@@ -218,6 +238,9 @@ func (s *AdmissionSession) SendMessage(ctx context.Context, msg messages.Message
 // SendMessageWithoutResponse forwards deferred complete messages for callers
 // that batch more than one tool result before requesting the next response.
 func (s *AdmissionSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
+	if s == nil || s.inner == nil {
+		return false
+	}
 	sender, ok := s.inner.(completeMessageSenderWithoutResponse)
 	return ok && sender.SendMessageWithoutResponse(ctx, msg)
 }
@@ -310,9 +333,15 @@ func (s *AdmissionSession) observeProviderMessage(msg messages.StreamMessage) {
 }
 
 func (s *AdmissionSession) Close() error {
+	if s == nil {
+		return nil
+	}
 	s.closeOnce.Do(func() {
 		s.closeAdmission()
-		err := s.inner.Close()
+		var err error
+		if s.inner != nil {
+			err = s.inner.Close()
+		}
 		// A provider may publish its terminal close while servicing Close. The
 		// forwarding goroutine can already have observed the runner context's
 		// cancellation by then, so make one final source drain after the inner
@@ -332,42 +361,14 @@ func (s *AdmissionSession) Close() error {
 }
 
 func (s *AdmissionSession) closeAdmission() {
-	s.admission.closeWithDrain(s.receive, s.inner.Receive(), s.observeProviderMessage)
-}
-
-func (s *AdmissionSession) drainSourceAfterClose() {
-	source := s.inner.Receive()
-	for {
-		msg, ok := source.Read()
-		if !ok {
-			return
-		}
-		s.observeProviderMessage(msg)
-		if IsDurationForwardMessage(msg) {
-			s.receive.Write(context.Background(), msg)
-		}
+	if s == nil || s.admission == nil {
+		return
 	}
-}
-
-func (s *AdmissionSession) drainSource(ctx context.Context, source *messages.TypedBuffer[messages.StreamMessage], admissionOpen bool) {
-	for {
-		msg, ok := source.Read()
-		if !ok {
-			return
-		}
-		s.observeProviderMessage(msg)
-		if admissionOpen {
-			if s.admission.admit(ctx, s.receive, msg) {
-				continue
-			}
-			admissionOpen = false
-		}
-		// The message was removed from the provider source before the admission
-		// close became visible to this forwarding worker. Retain it for the
-		// service controller to classify during the bounded drain; that boundary
-		// rejects late nonterminal output without losing an already-read delta.
-		s.receive.Write(ctx, msg)
+	var source *messages.TypedBuffer[messages.StreamMessage]
+	if s.inner != nil {
+		source = s.inner.Receive()
 	}
+	s.admission.closeWithDrain(s.receive, source, s.observeProviderMessage)
 }
 
 func IsDurationShutdownMessage(msg messages.StreamMessage) bool {

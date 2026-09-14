@@ -7,6 +7,7 @@ package sessionduration
 import (
 	"context"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -24,6 +25,7 @@ const (
 	ErrProviderEmptyResponse   sessionDurationError = "silent provider returned an empty response"
 	ErrProviderLivenessTimeout sessionDurationError = "silent provider response timed out"
 	ErrSchedulerUnavailable    sessionDurationError = "session duration scheduler is required"
+	ErrFinalizationPanic       sessionDurationError = "session finalization panicked"
 )
 
 // Timer is the timer contract shared by duration and liveness controllers.
@@ -136,10 +138,16 @@ func (e *LivenessError) Error() string {
 }
 
 func (e *LivenessError) Unwrap() error {
-	if e == nil || e.Cause == nil {
+	if e == nil {
 		return ErrProviderEmptyResponse
 	}
-	return e.Cause
+	if e.Cause != nil {
+		return e.Cause
+	}
+	if e.Classification == "silent_provider_timeout" {
+		return ErrProviderLivenessTimeout
+	}
+	return ErrProviderEmptyResponse
 }
 
 // RetryPolicy describes a bounded provider retry budget. Retry never sleeps;
@@ -156,6 +164,9 @@ type RetryPolicy struct {
 type Options struct {
 	Context context.Context
 	Clock   TimerScheduler
+	// DeferStart leaves max-duration timer creation to Controller.Start. It is
+	// used by Run to construct the host loop before scheduler effects occur.
+	DeferStart bool
 	// LivenessClock may use a different time domain from the max-duration
 	// scheduler. When omitted, Clock remains the liveness scheduler.
 	LivenessClock TimerScheduler
@@ -191,11 +202,42 @@ type RetryDecision struct {
 
 // FinalizeRequest supplies ordered cleanup ports owned by the host.
 type FinalizeRequest struct {
-	Primary   error
-	Drain     func(context.Context) error
-	Close     func() error
-	Binding   func() error
-	Artifacts ArtifactLifecycle
+	Primary     error
+	DrainLoop   Loop
+	DrainPolicy DrainPolicy
+	Drain       func(context.Context) error
+	Close       func() error
+	Binding     func() error
+	Artifacts   ArtifactLifecycle
+}
+
+// DrainPolicy bounds the quiet-period observation window used while a loop is
+// shutting down. Clock is injected for deterministic callers; the service
+// supplies bounded defaults for omitted durations.
+type DrainPolicy struct {
+	Clock       TimerScheduler
+	QuietPeriod time.Duration
+	WallSafety  time.Duration
+}
+
+// FinalizationPorts are already-admitted host cleanup operations. The service
+// owns their order, panic recovery, and once-only execution; hosts only expose
+// individual resource effects.
+type FinalizationPorts struct {
+	CloseCapabilities func() error
+	CloseSession      func() error
+	CloseBinding      func() error
+	CloseRuntime      func() error
+	FlushCapture      func() error
+	Finalize          func(context.Context, io.Writer) error
+	ReleaseCapture    func() error
+}
+
+// Finalizer is the standalone ordered cleanup boundary used by session modes
+// that do not need a running duration controller.
+type Finalizer interface {
+	SetDeviceBinding(func() error)
+	Finish(context.Context, io.Writer, error) error
 }
 
 // Loop is the host-neutral portion of a running session loop needed by the
@@ -243,6 +285,7 @@ type RunRequest struct {
 	LoopFactory    LoopFactory
 	Handle         MessageHandler
 	Drain          func(context.Context, Loop, Controller) error
+	DrainPolicy    DrainPolicy
 	Close          func() error
 	Binding        func() error
 	ExternalErrors <-chan error
@@ -272,6 +315,10 @@ type State interface {
 // Controller owns one session's mutable shutdown, admission, liveness, retry,
 // and finalization state.
 type Controller interface {
+	// Start arms the configured max-duration timer. Begin starts controllers by
+	// default; Run uses deferred start so loop construction remains observable
+	// before an injected scheduler can block or fail.
+	Start() error
 	Observe(messages.StreamMessage) Admission
 	// ObserveDrain admits output already published by the loop while the
 	// bounded finalizer is draining. It is distinct from hot-path admission,
@@ -309,6 +356,7 @@ type LifecycleFailures struct {
 type Service interface {
 	Begin(Options) (Controller, error)
 	Run(RunRequest) error
+	NewFinalizer(FinalizationPorts) Finalizer
 	NewState(TerminalSource) State
 	PublishMaxDuration(Publication, messages.TerminalOutputState) error
 	LifecycleError(LifecycleFailures) error

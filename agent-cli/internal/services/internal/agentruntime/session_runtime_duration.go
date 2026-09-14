@@ -12,8 +12,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	duration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionfinalization"
-	finalizationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionfinalization/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -21,8 +19,8 @@ import (
 // duration cutoff.
 const SessionMaxDurationReason messages.TerminalReason = "max_duration"
 
-func (p sessionRuntimePlan) finalizationCallbacks() sessionfinalization.Callbacks {
-	callbacks := sessionfinalization.Callbacks{
+func (p sessionRuntimePlan) finalizationPorts() duration.FinalizationPorts {
+	ports := duration.FinalizationPorts{
 		CloseCapabilities: func() error {
 			if p.capabilityCoordinator == nil {
 				return nil
@@ -45,14 +43,14 @@ func (p sessionRuntimePlan) finalizationCallbacks() sessionfinalization.Callback
 		},
 	}
 	if p.finalize != nil {
-		callbacks.Finalize = func(ctx context.Context, out io.Writer) error {
+		ports.Finalize = func(ctx context.Context, out io.Writer) error {
 			if reporter := p.loop.terminalReporter; reporter != nil {
 				ctx = withSessionTerminalReporter(ctx, reporter)
 			}
 			return wrapSessionRuntimeError(p, p.finalize(ctx, out))
 		}
 	}
-	return callbacks
+	return ports
 }
 
 // SessionDurationTimer is the timer contract owned by the session duration
@@ -226,7 +224,7 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 		reporter = newSessionTerminalReporter()
 		plan.loop.terminalReporter = reporter
 	}
-	finalizer := finalizationwire.NewService().New(plan.finalizationCallbacks())
+	finalizer := durationwire.NewService().NewFinalizer(plan.finalizationPorts())
 	defer func() {
 		// The common finalizer must complete browser/provider/capture teardown
 		// before the duration sidecar is flushed and closed as the final bundle
@@ -246,7 +244,7 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 	return runDurationSessionLoop(ctx, out, plan, maxDuration, durationClock, admittedInferencer)
 }
 
-func prepareDurationSession(out io.Writer, plan *sessionRuntimePlan, finalizer sessionfinalization.Finalizer) error {
+func prepareDurationSession(out io.Writer, plan *sessionRuntimePlan, finalizer duration.Finalizer) error {
 	if plan.replayIntegrityWarning != "" {
 		if _, err := fmt.Fprintln(out, plan.replayIntegrityWarning); err != nil {
 			return err

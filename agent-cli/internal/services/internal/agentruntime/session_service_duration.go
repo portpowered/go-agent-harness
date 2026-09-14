@@ -118,7 +118,6 @@ type durationServiceResources struct {
 	publication    duration.Publication
 	clock          SessionDurationClock
 	observed       *observedSessionInferencer
-	controller     duration.Controller
 	loop           *agentloop.AgentLoop
 	publisher      *sessionDynamicToolPublisher
 	rtcErrors      <-chan error
@@ -134,7 +133,6 @@ type durationServiceResources struct {
 	updatedTimer   SessionDurationTimer
 	updatedTimeout <-chan time.Time
 	drainPlayback  bool
-	drainTimer     SessionDurationTimer
 	closeOnce      sync.Once
 }
 
@@ -184,7 +182,7 @@ func runAgentLoopSessionWithDurationService(ctx context.Context, out io.Writer, 
 			return resources.handle(runCtx, loop, controller, msg)
 		},
 		Drain: func(drainCtx context.Context, loop duration.Loop, controller duration.Controller) error {
-			return resources.drain(drainCtx, loop, controller)
+			return resources.drainPlaybackOnly(drainCtx)
 		},
 		Close: func() error {
 			return resources.close()
@@ -258,7 +256,6 @@ func (r *durationServiceResources) buildLoop(ctx context.Context, inferencer mes
 	publisher, publisherErrors := startSessionDynamicToolPublisher(ctx, loop, r.opts)
 	r.ctx = ctx
 	r.observed = observed
-	r.controller = controller
 	r.loop = loop
 	r.publisher = publisher
 	r.rtcErrors = rtcErrors

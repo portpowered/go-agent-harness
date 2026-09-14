@@ -26,15 +26,13 @@ func (s *Service) Run(request sessionduration.RunRequest) error {
 		Context:       ctx,
 		Clock:         request.Clock,
 		LivenessClock: request.LivenessClock,
-		// Construct the host loop before asking an injected scheduler for the
-		// deadline timer. This keeps loop construction observable and makes a
-		// failed timer a normal finalized run rather than a half-built session.
-		MaxDuration: 0,
-		Liveness:    request.Liveness,
-		Retry:       request.Retry,
-		Terminal:    runTerminalSource(request.Terminal, admitted),
-		Publication: request.Publication,
-		Artifacts:   request.Artifacts,
+		MaxDuration:   request.MaxDuration,
+		DeferStart:    true,
+		Liveness:      request.Liveness,
+		Retry:         request.Retry,
+		Terminal:      runTerminalSource(request.Terminal, admitted),
+		Publication:   request.Publication,
+		Artifacts:     request.Artifacts,
 	})
 	if err != nil {
 		return err
@@ -44,7 +42,13 @@ func (s *Service) Run(request sessionduration.RunRequest) error {
 	if err != nil {
 		admitted.CloseAdmission()
 		cancel()
-		return err
+		_, finalizeErr := durationController.Finalize(ctx, sessionduration.FinalizeRequest{
+			Primary:   err,
+			Close:     request.Close,
+			Binding:   request.Binding,
+			Artifacts: request.Artifacts,
+		})
+		return finalizeErr
 	}
 	runner := &runLoop{
 		ctx:        ctx,
@@ -58,10 +62,8 @@ func (s *Service) Run(request sessionduration.RunRequest) error {
 		service:    s,
 	}
 	runner.start()
-	if starter, ok := durationController.(*controller); ok {
-		if err := starter.startMaxDuration(request.MaxDuration); err != nil {
-			return runner.finish(false, err)
-		}
+	if err := durationController.Start(); err != nil {
+		return runner.finish(false, err)
 	}
 	return runner.run()
 }
@@ -270,6 +272,10 @@ func (r *runLoop) finish(planned bool, primary error) error {
 		if planned {
 			primary = errors.Join(primary, sendLoopClose(r.runCtx, r.loop))
 		}
+		drainPolicy := r.request.DrainPolicy
+		if drainPolicy.Clock == nil {
+			drainPolicy.Clock = r.request.Clock
+		}
 		_, finalizeErr := r.controller.Finalize(r.ctx, sessionduration.FinalizeRequest{
 			Primary: primary,
 			Drain: func(ctx context.Context) error {
@@ -282,9 +288,11 @@ func (r *runLoop) finish(planned bool, primary error) error {
 				r.cancelRun()
 				return drainErr
 			},
-			Close:     r.request.Close,
-			Binding:   r.request.Binding,
-			Artifacts: r.request.Artifacts,
+			DrainLoop:   r.loop,
+			DrainPolicy: drainPolicy,
+			Close:       r.request.Close,
+			Binding:     r.request.Binding,
+			Artifacts:   r.request.Artifacts,
 		})
 		r.finishErr = errors.Join(finalizeErr, r.service.LifecycleError(sessionduration.LifecycleFailures{
 			Runtime: r.admitted.RuntimeError(),

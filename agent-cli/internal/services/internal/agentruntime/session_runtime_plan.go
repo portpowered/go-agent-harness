@@ -17,7 +17,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
-	finalizationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionfinalization/wire"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
@@ -207,7 +207,7 @@ func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr erro
 		reporter = newSessionTerminalReporter()
 		p.loop.terminalReporter = reporter
 	}
-	finalizer := finalizationwire.NewService().New(p.finalizationCallbacks())
+	finalizer := durationwire.NewService().NewFinalizer(p.finalizationPorts())
 	defer func() {
 		runErr = finalizer.Finish(ctx, out, runErr)
 		if !sessionErrorHasIndependentFailure(runErr) && p.replayCompletion != nil {

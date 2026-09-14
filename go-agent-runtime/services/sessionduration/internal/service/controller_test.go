@@ -118,6 +118,45 @@ func TestControllerLivenessUsesGenerationAndPreservesTypedCause(t *testing.T) {
 	}
 }
 
+func TestControllerArbitratesFirstCauseOnce(t *testing.T) {
+	clock := platformclock.NewDeterministic(time.Unix(30, 0), time.Millisecond)
+	var causes []error
+	causeCalled := make(chan struct{}, 2)
+	controller, err := New().Begin(sessionduration.Options{
+		Clock:       clock,
+		MaxDuration: time.Second,
+		Liveness:    sessionduration.LivenessOptions{Enabled: true, Timeout: 5 * time.Millisecond},
+		FirstCause: func(cause error) {
+			causes = append(causes, cause)
+			causeCalled <- struct{}{}
+		},
+	})
+	if err != nil {
+		t.Fatalf("Begin: %v", err)
+	}
+	controller.Observe(messages.StreamMessage{Type: messages.StreamTypeMessageStart})
+	clock.AdvanceBy(5 * time.Millisecond)
+	select {
+	case <-controller.Errors():
+	case <-time.After(time.Second):
+		t.Fatal("liveness failure was not reported")
+	}
+	select {
+	case <-causeCalled:
+	case <-time.After(time.Second):
+		t.Fatal("first-cause callback was not called")
+	}
+	if err := controller.Expire(); !errors.Is(err, sessionduration.ErrMaxDurationExceeded) {
+		t.Fatalf("Expire: %v", err)
+	}
+	if len(causes) != 1 || !errors.Is(causes[0], sessionduration.ErrProviderLivenessTimeout) {
+		t.Fatalf("first causes = %v, want one provider-timeout cause", causes)
+	}
+	if _, err := controller.Finalize(context.Background(), sessionduration.FinalizeRequest{}); err != nil {
+		t.Fatalf("Finalize: %v", err)
+	}
+}
+
 func TestControllerRetryIsBoundedAndNeverSleeps(t *testing.T) {
 	controller, err := New().Begin(sessionduration.Options{Clock: platformclock.NewDeterministic(time.Unix(4, 0), time.Millisecond), Retry: sessionduration.RetryPolicy{Enabled: true, MaxRetries: 1, DefaultDelay: time.Second, MaxDelay: 3 * time.Second}})
 	if err != nil {
@@ -146,7 +185,8 @@ func TestControllerFinalizePreservesPrimaryAndCleanupErrors(t *testing.T) {
 		t.Fatalf("Begin: %v", err)
 	}
 	order := make([]string, 0, 4)
-	result, finalErr := controller.Finalize(context.Background(), sessionduration.FinalizeRequest{
+	var finalizationContext context.Context
+	result, finalErr := controller.Finalize(finalizationContext, sessionduration.FinalizeRequest{
 		Primary: primary,
 		Drain:   func(context.Context) error { order = append(order, "drain"); return drainErr },
 		Close:   func() error { order = append(order, "close"); return closeErr },
@@ -167,6 +207,24 @@ func TestControllerFinalizePreservesPrimaryAndCleanupErrors(t *testing.T) {
 	}
 }
 
+func TestControllerBoundedDrainReportsSchedulerFailure(t *testing.T) {
+	deltas := messages.NewTypedBuffer[messages.StreamMessage](1)
+	if !deltas.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant}) {
+		t.Fatal("could not queue loop delta")
+	}
+	controller, err := New().Begin(sessionduration.Options{})
+	if err != nil {
+		t.Fatalf("Begin: %v", err)
+	}
+	_, err = controller.Finalize(context.Background(), sessionduration.FinalizeRequest{
+		DrainLoop:   &idleRunLoopProbe{deltas: deltas},
+		DrainPolicy: sessionduration.DrainPolicy{Clock: nilTimerScheduler{}},
+	})
+	if err == nil {
+		t.Fatal("Finalize unexpectedly hid a nil drain scheduler")
+	}
+}
+
 type artifactLifecycleFunc struct {
 	accept func(messages.StreamMessage) error
 	flush  func() error
@@ -176,3 +234,59 @@ type artifactLifecycleFunc struct {
 func (f artifactLifecycleFunc) Accept(msg messages.StreamMessage) error { return f.accept(msg) }
 func (f artifactLifecycleFunc) Flush() error                            { return f.flush() }
 func (f artifactLifecycleFunc) Close() error                            { return f.close() }
+
+func TestControllerFinalizationDrainsLoopUntilQuiet(t *testing.T) {
+	scheduler := &triggerScheduler{created: make(chan *triggerTimer, 1)}
+	deltas := messages.NewTypedBuffer[messages.StreamMessage](2)
+	first := messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("first")}
+	second := messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("second")}
+	if !deltas.Write(context.Background(), first) {
+		t.Fatal("could not queue first loop delta")
+	}
+	var published []messages.StreamMessage
+	controller, err := New().Begin(sessionduration.Options{Publication: sessionduration.Publication{Write: func(msg messages.StreamMessage) error {
+		published = append(published, msg)
+		return nil
+	}}})
+	if err != nil {
+		t.Fatalf("Begin: %v", err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, finalizeErr := controller.Finalize(context.Background(), sessionduration.FinalizeRequest{
+			DrainLoop: &idleRunLoopProbe{deltas: deltas},
+			DrainPolicy: sessionduration.DrainPolicy{
+				Clock:       scheduler,
+				QuietPeriod: time.Second,
+				WallSafety:  time.Second,
+			},
+		})
+		done <- finalizeErr
+	}()
+	select {
+	case <-scheduler.created:
+	case <-time.After(time.Second):
+		t.Fatal("bounded drain did not create its quiet timer")
+	}
+	if !deltas.Write(context.Background(), second) {
+		t.Fatal("could not queue late loop delta")
+	}
+	var quietTimer *triggerTimer
+	select {
+	case quietTimer = <-scheduler.created:
+	case <-time.After(time.Second):
+		t.Fatal("bounded drain did not reset its quiet timer")
+	}
+	quietTimer.events <- time.Now()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Finalize: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("bounded drain did not finish at quiet timer")
+	}
+	if len(published) != 2 || published[0].Value == nil || published[1].Value == nil {
+		t.Fatalf("published loop deltas = %+v, want both queued deltas", published)
+	}
+}

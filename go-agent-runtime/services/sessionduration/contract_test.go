@@ -35,9 +35,10 @@ func (stateProbe) Written() bool { return false }
 
 type serviceProbe struct{}
 
-func (serviceProbe) Run(RunRequest) error              { return nil }
-func (serviceProbe) Begin(Options) (Controller, error) { return nil, nil }
-func (serviceProbe) NewState(TerminalSource) State     { return stateProbe{} }
+func (serviceProbe) Run(RunRequest) error                     { return nil }
+func (serviceProbe) Begin(Options) (Controller, error)        { return nil, nil }
+func (serviceProbe) NewFinalizer(FinalizationPorts) Finalizer { return nil }
+func (serviceProbe) NewState(TerminalSource) State            { return stateProbe{} }
 func (serviceProbe) PublishMaxDuration(Publication, messages.TerminalOutputState) error {
 	return nil
 }

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
@@ -53,8 +55,11 @@ func (c *controller) cleanup(ctx context.Context, request sessionduration.Finali
 			failures = append(failures, fmt.Errorf("%s: %w", label, cleanupErr))
 		}
 	}
+	if request.DrainLoop != nil {
+		appendFailure("drain session", func() error { return c.drainLoop(ctx, request.DrainLoop, request.DrainPolicy) })
+	}
 	if request.Drain != nil {
-		appendFailure("drain session", func() error { return request.Drain(ctx) })
+		appendFailure("drain session resources", func() error { return request.Drain(ctx) })
 	}
 	appendFailure("close session", request.Close)
 	appendFailure("publish max duration", c.publishExpiredTerminal)
@@ -103,3 +108,86 @@ func invokeCleanup(cleanup func() error) (err error) {
 	}()
 	return cleanup()
 }
+
+func (s *Service) NewFinalizer(ports sessionduration.FinalizationPorts) sessionduration.Finalizer {
+	return &finalizer{ports: ports}
+}
+
+type finalizer struct {
+	ports   sessionduration.FinalizationPorts
+	binding func() error
+	once    sync.Once
+	mu      sync.Mutex
+	err     error
+}
+
+func (f *finalizer) SetDeviceBinding(binding func() error) {
+	if f == nil {
+		return
+	}
+	f.mu.Lock()
+	f.binding = binding
+	f.mu.Unlock()
+}
+
+func (f *finalizer) Finish(ctx context.Context, out io.Writer, primary error) error {
+	if f == nil {
+		return primary
+	}
+	f.once.Do(func() {
+		cleanupErr := f.cleanup(ctx, out)
+		f.mu.Lock()
+		f.err = cleanupErr
+		f.mu.Unlock()
+	})
+	f.mu.Lock()
+	cleanupErr := f.err
+	f.mu.Unlock()
+	return errors.Join(primary, cleanupErr)
+}
+
+func (f *finalizer) cleanup(ctx context.Context, out io.Writer) error {
+	if out == nil {
+		out = io.Discard
+	}
+	if ctx == nil {
+		ctx = context.Background() //nolint:contextcheck // standalone finalization has no caller context to inherit.
+	}
+	var failures []error
+	appendFailure := func(label string, cleanup func() error) {
+		if err := invokeFinalizer(cleanup); err != nil {
+			failures = append(failures, fmt.Errorf("%s: %w", label, err))
+		}
+	}
+
+	appendFailure("close session capabilities", f.ports.CloseCapabilities)
+	appendFailure("close WebRTC provider session", f.ports.CloseSession)
+	f.mu.Lock()
+	binding := f.binding
+	if binding == nil {
+		binding = f.ports.CloseBinding
+	}
+	f.mu.Unlock()
+	appendFailure("close RTC device binding", binding)
+	appendFailure("close WebRTC runtime", f.ports.CloseRuntime)
+	appendFailure("flush capture", f.ports.FlushCapture)
+	if f.ports.Finalize != nil {
+		appendFailure("finalize session", func() error { return f.ports.Finalize(ctx, out) })
+	}
+	appendFailure("release capture", f.ports.ReleaseCapture)
+	return errors.Join(failures...)
+}
+
+func invokeFinalizer(cleanup func() error) (err error) {
+	if cleanup == nil {
+		return nil
+	}
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("%w: %v", sessionduration.ErrFinalizationPanic, recovered)
+		}
+	}()
+	return cleanup()
+}
+
+var _ sessionduration.Finalizer = (*finalizer)(nil)

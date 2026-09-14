@@ -47,6 +47,13 @@ var errInvalidSessionStragglerDrainPolicy = errors.New("session straggler drain 
 
 var errMissingSessionStragglerDrain = errors.New("session termination boundary requires a straggler drain")
 
+func wallTimerChannel(timer platformclock.Timer) <-chan time.Time {
+	if timer == nil {
+		return nil
+	}
+	return timer.C()
+}
+
 // sessionTerminationBoundary is the one terminal shutdown boundary shared by
 // the live and duration session loops. Its callbacks are loop-owned adapters:
 // they retain the live renderer or duration artifact/terminal state while this

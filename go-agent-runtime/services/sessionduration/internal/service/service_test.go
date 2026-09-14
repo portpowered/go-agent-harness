@@ -1,8 +1,10 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io"
 	"sync"
 	"testing"
 	"time"
@@ -358,6 +360,35 @@ func TestServiceFacadeWrapsAdmissionAndArtifacts(t *testing.T) {
 	}
 }
 
+func TestAdmissionContractHandlesUnavailableSession(t *testing.T) {
+	inferencer := NewAdmissionInferencer(nil, nil, nil)
+	if _, err := inferencer.ConnectSession(context.Background()); err == nil {
+		t.Fatal("ConnectSession(nil) unexpectedly succeeded")
+	}
+	inferencer.CloseAdmission()
+	inferencer.WaitForClose()
+
+	session := NewAdmissionSession(context.Background(), nil, nil, nil)
+	if session.Send(context.Background(), messages.StreamMessage{}) {
+		t.Fatal("Send on unavailable session unexpectedly succeeded")
+	}
+	if outcome := session.RequestResponse(context.Background()); outcome.Status != messages.SessionSendTerminalFailure {
+		t.Fatalf("RequestResponse status = %q, want terminal failure", outcome.Status)
+	}
+	if session.SendMessage(context.Background(), messages.NewTextMessage(messages.RoleUser, "tool")) || session.SendMessageWithoutResponse(context.Background(), messages.NewTextMessage(messages.RoleUser, "tool")) {
+		t.Fatal("complete-message send on unavailable session unexpectedly succeeded")
+	}
+	if session.SupportsResponseRequests() || session.SupportsCompleteMessages() || session.SupportsCompleteMessagesWithoutResponse() {
+		t.Fatal("unavailable session reported unsupported capabilities")
+	}
+	if _, ok := session.RTCMedia(); ok || session.TerminalError() != nil {
+		t.Fatal("unavailable session reported transport capabilities")
+	}
+	if err := session.Close(); err != nil {
+		t.Fatalf("Close unavailable session: %v", err)
+	}
+}
+
 func TestServiceFacadeClassifiesRetryAndTerminalMessages(t *testing.T) {
 	service := New()
 	provider := providerTerminal("provider")
@@ -371,6 +402,12 @@ func TestServiceFacadeClassifiesRetryAndTerminalMessages(t *testing.T) {
 	}
 	if decision := service.EvaluateRetry(sessionduration.RetryPolicy{Enabled: true}, nil); decision != (sessionduration.RetryDecision{}) {
 		t.Fatalf("EvaluateRetry(nil) = %+v, want empty decision", decision)
+	}
+	if decision := service.EvaluateRetry(sessionduration.RetryPolicy{Enabled: true, DefaultDelay: time.Second}, &messages.MessageEndValue{Status: "failed", ProviderErrorCode: "rate_limit_exceeded", ProviderErrorMessage: "retry later"}); decision.Delay != time.Second {
+		t.Fatalf("EvaluateRetry(unparseable delay) = %+v, want default delay", decision)
+	}
+	if decision := service.EvaluateRetry(sessionduration.RetryPolicy{Enabled: true, DefaultDelay: time.Second}, &messages.MessageEndValue{Status: "failed", ProviderErrorCode: "rate_limit_exceeded", ProviderErrorMessage: "please try again in 0s"}); decision.Delay != time.Second {
+		t.Fatalf("EvaluateRetry(zero delay) = %+v, want default delay", decision)
 	}
 	if !service.IsDurationShutdownMessage(provider) || !service.IsDurationForwardMessage(messages.StreamMessage{Type: messages.StreamTypeError}) {
 		t.Fatal("duration message classification did not preserve terminal/error forwarding")
@@ -463,7 +500,7 @@ func (s *triggerScheduler) NewTimer(time.Duration) sessionduration.Timer {
 	return timer
 }
 func (t *triggerTimer) C() <-chan time.Time      { return t.events }
-func (t *triggerTimer) Stop() bool               { return true }
+func (t *triggerTimer) Stop() bool               { return false }
 func (t *triggerTimer) Reset(time.Duration) bool { return true }
 
 func TestRunExpiresAtMaxDurationAndClosesLoop(t *testing.T) {
@@ -495,5 +532,57 @@ func TestRunExpiresAtMaxDurationAndClosesLoop(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("Run did not finish after max duration")
+	}
+}
+
+func TestFinalizerOrdersOwnedCleanupAndIsIdempotent(t *testing.T) {
+	var order []string
+	step := func(name string) func() error {
+		return func() error {
+			order = append(order, name)
+			return nil
+		}
+	}
+	finalizer := New().NewFinalizer(sessionduration.FinalizationPorts{
+		CloseCapabilities: step("capabilities"),
+		CloseSession:      step("session"),
+		CloseRuntime:      step("runtime"),
+		FlushCapture:      step("flush"),
+		Finalize: func(_ context.Context, out io.Writer) error {
+			if out == nil {
+				t.Fatal("finalizer received a nil output writer")
+			}
+			order = append(order, "finalize")
+			return nil
+		},
+		ReleaseCapture: step("release"),
+	})
+	finalizer.SetDeviceBinding(step("binding"))
+	primary := errors.New("primary")
+	var finalizerContext context.Context
+	if err := finalizer.Finish(finalizerContext, &bytes.Buffer{}, primary); !errors.Is(err, primary) {
+		t.Fatalf("Finish() = %v, want primary identity", err)
+	}
+	if err := finalizer.Finish(context.Background(), nil, nil); err != nil {
+		t.Fatalf("duplicate Finish() = %v, want nil", err)
+	}
+	want := []string{"capabilities", "session", "binding", "runtime", "flush", "finalize", "release"}
+	if len(order) != len(want) {
+		t.Fatalf("cleanup calls = %v, want %v", order, want)
+	}
+	for index := range want {
+		if order[index] != want[index] {
+			t.Fatalf("cleanup order = %v, want %v", order, want)
+		}
+	}
+}
+
+func TestFinalizerConvertsCleanupPanicToTypedFailure(t *testing.T) {
+	finalizer := New().NewFinalizer(sessionduration.FinalizationPorts{
+		CloseSession: func() error { panic("provider close panic") },
+	})
+	err := finalizer.Finish(context.Background(), nil, nil)
+	if !errors.Is(err, sessionduration.ErrFinalizationPanic) {
+		t.Fatalf("Finish() = %v, want finalization panic identity", err)
 	}
 }

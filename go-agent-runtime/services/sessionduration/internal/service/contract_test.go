@@ -217,6 +217,29 @@ func TestBeginRejectsUnavailableSchedulersAndNegativePolicyValues(t *testing.T) 
 	}
 }
 
+func TestControllerReportsUnavailableLivenessScheduler(t *testing.T) {
+	controller, err := New().Begin(sessionduration.Options{
+		Clock:         testNoopScheduler{},
+		LivenessClock: nilTimerScheduler{},
+		Liveness:      sessionduration.LivenessOptions{Enabled: true, Timeout: time.Second},
+	})
+	if err != nil {
+		t.Fatalf("Begin: %v", err)
+	}
+	controller.Observe(messages.StreamMessage{Type: messages.StreamTypeMessageStart})
+	select {
+	case err := <-controller.Errors():
+		if !errors.Is(err, sessionduration.ErrSchedulerUnavailable) {
+			t.Fatalf("liveness scheduler error = %v, want unavailable identity", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("liveness scheduler failure was not reported")
+	}
+	if _, err := controller.Finalize(context.Background(), sessionduration.FinalizeRequest{}); err != nil {
+		t.Fatalf("Finalize: %v", err)
+	}
+}
+
 type artifactAudioSink struct {
 	samples  []int16
 	flushErr error
