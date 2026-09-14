@@ -74,8 +74,8 @@ var DeriveBrowserConversationRecovery = impl.DeriveBrowserConversationRecovery
 var ErrInvalidOpenAIRealtimeVoice = sessioncontract.ErrInvalidOpenAIRealtimeVoice
 var ErrRTCSessionMediaUnavailable = impl.ErrRTCSessionMediaUnavailable
 var ErrRoomLaunchPathConflict = runtimeRooms.ErrLaunchPathConflict
-var ErrRoomReplayBundleIncomplete = impl.ErrRoomReplayBundleIncomplete
-var ErrRoomReplaySourceConflict = impl.ErrRoomReplaySourceConflict
+var ErrRoomReplayBundleIncomplete = runtimeRooms.ErrReplayBundleIncomplete
+var ErrRoomReplaySourceConflict = runtimeRooms.ErrReplaySourceConflict
 var ErrSessionAudioInputConflict = serviceDevices.ErrSessionAudioInputConflict
 var ErrSessionAudioOutputConflict = serviceDevices.ErrSessionAudioOutputConflict
 var ErrSessionAudioInTurnBargeRequiresSequence = impl.ErrSessionAudioInTurnBargeRequiresSequence
@@ -93,8 +93,8 @@ var NewOpenAIRealtimeSessionInferencerWithToolsAndOptions = impl.NewOpenAIRealti
 var NewGrokSessionInferencer = impl.NewGrokSessionInferencer
 var NewGrokSessionInferencerWithOptions = impl.NewGrokSessionInferencerWithOptions
 
-const ParticipantTerminationEnded = impl.ParticipantTerminationEnded
-const ParticipantTerminationError = impl.ParticipantTerminationError
+const ParticipantTerminationEnded = runtimeRooms.ParticipantTerminationEnded
+const ParticipantTerminationError = runtimeRooms.ParticipantTerminationError
 
 type RTCMediaEndpoints = impl.RTCMediaEndpoints
 type RTCMediaSession = impl.RTCMediaSession

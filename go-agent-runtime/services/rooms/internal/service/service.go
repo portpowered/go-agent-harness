@@ -8,26 +8,30 @@ import (
 	"io"
 	"strings"
 
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/evidence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle"
+	roommanifest "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/manifest"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/planning"
 )
 
 type Dependencies struct {
 	Planner  planning.Planner
-	Evidence evidence.Loader
+	Replay   roomreplay.Service
+	Evidence roomevidence.Service
 	Runner   lifecycle.Runner
 }
 
 type Service struct {
 	planner  planning.Planner
-	evidence evidence.Loader
+	replay   roomreplay.Service
+	evidence roomevidence.Service
 	runner   lifecycle.Runner
 }
 
 func New(dependencies Dependencies) rooms.Service {
-	return &Service{planner: dependencies.Planner, evidence: dependencies.Evidence, runner: dependencies.Runner}
+	return &Service{planner: dependencies.Planner, replay: dependencies.Replay, evidence: dependencies.Evidence, runner: dependencies.Runner}
 }
 
 func (s *Service) Run(ctx context.Context, out io.Writer, request rooms.RoomRunOptions) (rooms.RoomResult, error) {
@@ -40,13 +44,16 @@ func (s *Service) Run(ctx context.Context, out io.Writer, request rooms.RoomRunO
 			return rooms.RoomResult{}, err
 		}
 		request.ReplayPlan = &plan
+		if request.Manifest.SchemaVersion == 0 && len(request.Manifest.Participants) == 0 {
+			request.Manifest = s.ReplayManifest(plan)
+		}
 	}
 	if strings.TrimSpace(request.OutputDir) != "" {
 		var err error
 		if request.ReplayPlan != nil {
-			err = evidence.ValidateOutput(*request.ReplayPlan, request.OutputDir)
+			err = s.evidence.ValidateReplayOutput(*request.ReplayPlan, request.OutputDir)
 		} else {
-			err = evidence.ValidateEvidenceOutput(request.OutputDir)
+			err = s.evidence.ValidateEvidenceOutput(request.OutputDir)
 		}
 		if err != nil {
 			return rooms.RoomResult{}, err
@@ -60,19 +67,29 @@ func (s *Service) ResolveLaunchPlan(options rooms.RoomLaunchOptions) (rooms.Room
 }
 
 func (s *Service) LoadReplayPlan(bundle string) (rooms.RoomReplayPlan, error) {
-	return s.evidence.Load(bundle)
+	if s == nil || s.replay == nil {
+		return rooms.RoomReplayPlan{}, rooms.ErrRoomServiceUnavailable
+	}
+	return s.replay.Load(bundle)
+}
+
+func (s *Service) ReplayManifest(plan rooms.RoomReplayPlan) rooms.Manifest {
+	return roommanifest.FromReplay(plan)
 }
 
 func (s *Service) ValidateReplayOutput(plan rooms.RoomReplayPlan, destination string) error {
-	return evidence.ValidateOutput(plan, destination)
+	if s == nil || s.replay == nil {
+		return rooms.ErrRoomServiceUnavailable
+	}
+	return s.replay.ValidateOutput(plan, destination)
 }
 
 func (s *Service) ValidateEvidenceOutput(destination string) error {
-	return evidence.ValidateEvidenceOutput(destination)
+	return s.evidence.ValidateEvidenceOutput(destination)
 }
 
 func (s *Service) CreateFreshRunDirectory(configDir string) (string, error) {
-	return evidence.CreateFreshRunDirectory(configDir)
+	return s.evidence.CreateFreshRunDirectory(configDir)
 }
 
 var _ rooms.Service = (*Service)(nil)

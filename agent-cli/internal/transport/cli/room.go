@@ -218,7 +218,6 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, r
 		return err
 	}
 	readyParticipants := 0
-
 	participantIDs := make([]string, 0, len(roomManifest.Participants))
 	for _, participant := range roomManifest.Participants {
 		participantIDs = append(participantIDs, participant.ID)

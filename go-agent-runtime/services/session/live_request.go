@@ -55,6 +55,12 @@ type LiveRequest struct {
 	// capability factory uses it to select an invocation-local surface without
 	// sharing mutable browser or tool state across participants.
 	ToolNames []string
+	// ToolWorkDir and ToolAllowPaths carry the host-admitted filesystem scope
+	// into an invocation-scoped capability factory. The session service treats
+	// them as opaque values; a host or room service resolves policy before
+	// constructing the capability.
+	ToolWorkDir    string
+	ToolAllowPaths []string
 	// Capabilities is an optional already-admitted participant binding. Room
 	// owners use it when a request-scoped browser/tool factory must run before
 	// OpenLive; the handle takes ownership of Close.

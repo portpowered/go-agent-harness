@@ -346,7 +346,7 @@ func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer m
 	reporter.markRunStarted()
 	renderer := newSessionReplayRenderer(out, reporter)
 	runErr = runAgentLoopSessionStream(ctx, renderer, sessionInferencer, opts)
-	if !roomChannelClosed(opts.BoundCancellation) {
+	if !sessionChannelClosed(opts.BoundCancellation) {
 		runErr = audioResponseCompletionError(runErr, opts)
 		runErr = scheduledAudioCompletionError(runErr, opts)
 	} else if opts.observer != nil {

@@ -1,6 +1,10 @@
 package rooms
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
+)
 
 var (
 	// ErrInvalidManifest identifies a room document that cannot be admitted.
@@ -46,9 +50,9 @@ var (
 
 	// ErrInvalidReplayBundle identifies a bundle that does not match the
 	// supported replay schema or integrity inventory.
-	ErrInvalidReplayBundle = errors.New("invalid room replay bundle")
+	ErrInvalidReplayBundle = roomreplay.ErrInvalidRoomReplayBundle
 	// ErrReplayBundleIncomplete identifies a recognizable but unfinished bundle.
-	ErrReplayBundleIncomplete = errors.New("room replay bundle incomplete")
+	ErrReplayBundleIncomplete = roomreplay.ErrRoomReplayBundleIncomplete
 	// ErrReplaySourceConflict identifies conflicting live and replay inputs.
 	ErrReplaySourceConflict = errors.New("room replay source conflict")
 	// ErrLaunchPathConflict identifies both config spellings with different paths.
@@ -103,4 +107,50 @@ func quote(value string) string {
 
 func validation(field, value, problem string, cause error) error {
 	return &ValidationError{Field: field, Value: value, Problem: problem, Cause: cause}
+}
+
+// ParticipantFailure is the typed identity carried by a participant-local
+// failure. The concrete wrapper remains private while errors.Is/errors.As
+// preserve the original provider, media, or capability cause.
+type ParticipantFailure interface {
+	error
+	ParticipantID() string
+}
+
+// ParticipantFailureRequest describes one participant-local failure at the
+// room boundary. Secrets are copied and used only for the textual projection.
+type ParticipantFailureRequest struct {
+	ParticipantID string
+	Cause         error
+	Secrets       []string
+}
+
+// ParticipantFailureReasonRequest contains terminal facts used when a room
+// must produce a credential-free participant diagnostic fallback.
+type ParticipantFailureReasonRequest struct {
+	Error                 error
+	TerminationReason     ParticipantTerminationReason
+	CloseReason           string
+	TransportDisconnected bool
+	Secrets               []string
+}
+
+// RoomFailureResult is the stable failed-room projection used by hosts that
+// need a result before participant details are available.
+type RoomFailureResult struct {
+	TerminationReason RoomTerminationReason
+	Reason            RoomTerminationReason
+	Error             string
+	Participants      map[string]struct{}
+}
+
+// FailureService owns participant wrapping, secret-aware cause projection,
+// terminal fallback, and stable failed-room results. Implementations are
+// constructed by the service-local Wire graph.
+type FailureService interface {
+	ParticipantFailure(ParticipantFailureRequest) error
+	ParticipantFailureID(error) (string, bool)
+	ParticipantFailureReason(ParticipantFailureReasonRequest) string
+	Sanitize(error, []string) string
+	FailureResult(error, []string) RoomFailureResult
 }

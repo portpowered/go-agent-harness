@@ -7,9 +7,27 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer"
+)
+
+type RoomReplayBundleErrorKind = roomreplay.RoomReplayBundleErrorKind
+type RoomReplayBundleError = roomreplay.RoomReplayBundleError
+type RoomReplayPCMFormat = roomreplay.RoomReplayPCMFormat
+type RoomReplayArtifact = roomreplay.RoomReplayArtifact
+type RoomReplayParticipant = roomreplay.RoomReplayParticipant
+type RoomReplayTimelineEvent = roomreplay.RoomReplayTimelineEvent
+type RoomReplayPlan = roomreplay.RoomReplayPlan
+
+const (
+	RoomReplayBundleSchemaVersion = roomreplay.RoomReplayBundleSchemaVersion
+	RoomReplayBundleManifestPath  = roomreplay.RoomReplayBundleManifestPath
+	RoomReplayBundleMismatch      = roomreplay.RoomReplayBundleMismatch
+	RoomReplayBundleIncomplete    = roomreplay.RoomReplayBundleIncomplete
+	RoomEvidenceTimelinePath      = "room-timeline.jsonl"
+	RoomEvidenceMixPath           = "room-mix.wav"
 )
 
 // Service is the public room lifecycle and admission contract. Implementations
@@ -19,6 +37,7 @@ type Service interface {
 	Run(context.Context, io.Writer, RoomRunOptions) (RoomResult, error)
 	ResolveLaunchPlan(RoomLaunchOptions) (RoomLaunchPlan, error)
 	LoadReplayPlan(string) (RoomReplayPlan, error)
+	ReplayManifest(RoomReplayPlan) Manifest
 	ValidateReplayOutput(RoomReplayPlan, string) error
 	ValidateEvidenceOutput(string) error
 	CreateFreshRunDirectory(string) (string, error)
@@ -139,6 +158,10 @@ type RoomRunOptions struct {
 	WorkDir     string
 	AllowPaths  []string
 	AudioFormat AudioFormat
+	// BoundShutdownGrace keeps an active provider response admissible after a
+	// turn or duration bound. A zero value selects the bounded runtime default;
+	// the room sends one response cancellation only after this window expires.
+	BoundShutdownGrace time.Duration
 
 	BrowserCapabilitiesFactory BrowserCapabilitiesFactory
 	// LiveCapabilitiesFactory creates participant-local tool bindings for the

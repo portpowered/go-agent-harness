@@ -111,14 +111,6 @@ func newSilentProviderEmptyResponseError(msg messages.StreamMessage, value *mess
 	return err
 }
 
-func sessionLivenessMetadata(err error) (classification string, terminalReason messages.TerminalReason, provenance messages.TerminalProvenance, outputState messages.TerminalOutputState) {
-	var livenessErr *SessionLivenessError
-	if !errors.As(err, &livenessErr) || livenessErr == nil {
-		return "", "", "", ""
-	}
-	return livenessErr.Classification, livenessErr.TerminalReason, livenessErr.TerminalProvenance, livenessErr.OutputState
-}
-
 // responseHasToolLifecycleObligation snapshots the current response's tool
 // state before MESSAGE.END processing clears toolCallInTurn. A pending result
 // or continuation owns the terminal boundary and must not be diagnosed as an
@@ -539,24 +531,4 @@ func (o *sessionProgressObserver) observeProviderDispatch(msg messages.StreamMes
 	case messages.StreamTypeMessageEnd, messages.StreamTypeResponseCreate:
 		o.armProviderProgress()
 	}
-}
-
-func applyRoomParticipantTerminalMetadata(result *RoomParticipantResult, lifecycle *roomParticipantLifecycle, err error) {
-	if result == nil {
-		return
-	}
-	classification, terminalReason, provenance, outputState := "", messages.TerminalReason(""), messages.TerminalProvenance(""), messages.TerminalOutputState("")
-	if lifecycle != nil {
-		classification, terminalReason, provenance, outputState = lifecycle.terminalMetadata()
-	}
-	if classification == "" {
-		classification, terminalReason, provenance, outputState = sessionLivenessMetadata(err)
-	}
-	if classification == "" {
-		return
-	}
-	result.Classification = classification
-	result.TerminalReason = string(terminalReason)
-	result.TerminalProvenance = string(provenance)
-	result.OutputState = string(outputState)
 }

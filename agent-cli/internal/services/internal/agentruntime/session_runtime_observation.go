@@ -142,16 +142,6 @@ func fromSessionTraceAccounting(a *sessiontrace.SessionFinalAccounting) *Session
 	return &SessionFinalAccounting{PromptTokens: a.PromptTokens, CompletionTokens: a.CompletionTokens, TotalTokens: a.TotalTokens, ReasoningTokens: a.ReasoningTokens, UsageSemantics: SessionTokenUsageSemantics(a.UsageSemantics), Metrics: a.Metrics}
 }
 
-// enableProviderBoundaryObservations opts a runtime recorder into inbound
-// provider commit/response boundaries. Ordinary session runtime observers keep
-// their historical client-owned observation surface; room latency evidence is
-// the caller that needs server-VAD boundaries as well.
-func (r *sessionRuntimeObservationRecorder) enableProviderBoundaryObservations() {
-	if r != nil {
-		r.providerBoundaryObserving = true
-	}
-}
-
 func (r *sessionRuntimeObservationRecorder) observe(kind SessionRuntimeObservationKind, payload []byte, turns int, clean bool, runErr error) {
 	r.observeWithMetadata(kind, payload, turns, 0, clean, runErr, "", "")
 }

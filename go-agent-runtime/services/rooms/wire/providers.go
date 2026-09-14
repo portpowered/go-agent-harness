@@ -10,36 +10,49 @@ package wire
 
 import (
 	"github.com/google/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/evidence"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/errorpolicy"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/planning"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/service"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
 type Dependencies struct {
-	Live  session.LiveService
-	Media rooms.MediaFactory
-	Clock platformclock.Scheduler
+	Live     session.LiveService
+	Media    rooms.MediaFactory
+	Replay   roomreplay.Service
+	Clock    platformclock.Scheduler
+	Evidence roomevidence.Service
+	Tools    runtimeTools.Service
 }
 
 func NewService(dependencies Dependencies) rooms.Service {
-	wire.Build(newPlanner, newEvidence, newRunner, newServiceDependencies, service.New)
+	wire.Build(newPlanner, newReplay, newEvidence, newFailureService, newRunner, newServiceDependencies, service.New)
 	return nil
 }
 
 func newPlanner() planning.Planner { return planning.New() }
 
-func newEvidence() evidence.Loader { return evidence.New() }
+func newReplay(dependencies Dependencies) roomreplay.Service {
+	return dependencies.Replay
+}
 
-func newRunner(dependencies Dependencies) lifecycle.Runner {
+func newEvidence(dependencies Dependencies) roomevidence.Service { return dependencies.Evidence }
+
+func newFailureService() rooms.FailureService { return errorpolicy.New() }
+
+func newRunner(dependencies Dependencies, failure rooms.FailureService) lifecycle.Runner {
 	return lifecycle.New(lifecycle.Dependencies{
 		Live: dependencies.Live, Media: dependencies.Media, Clock: dependencies.Clock,
+		Failure: failure, Evidence: dependencies.Evidence, Tools: dependencies.Tools,
 	})
 }
 
-func newServiceDependencies(planner planning.Planner, evidenceLoader evidence.Loader, runner lifecycle.Runner) service.Dependencies {
-	return service.Dependencies{Planner: planner, Evidence: evidenceLoader, Runner: runner}
+func newServiceDependencies(planner planning.Planner, replayService roomreplay.Service, evidenceService roomevidence.Service, runner lifecycle.Runner) service.Dependencies {
+	return service.Dependencies{Planner: planner, Replay: replayService, Evidence: evidenceService, Runner: runner}
 }

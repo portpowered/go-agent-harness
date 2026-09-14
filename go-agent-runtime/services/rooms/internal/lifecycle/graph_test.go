@@ -7,7 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
@@ -56,6 +58,50 @@ func TestRoomGraphRoutesEachSourceToPeersOnly(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("alice did not receive a peer cadence frame")
 	}
+}
+
+func TestRunnerCancelsOnlyActiveResponseAfterBoundGrace(t *testing.T) {
+	active := newFakeLiveHandle()
+	active.startEvents = []session.LiveEvent{{
+		Kind:    string(session.LiveEventText),
+		Message: &messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant},
+	}}
+	peer := newFakeLiveHandle()
+	service := &fakeLiveService{handles: map[string]*fakeLiveHandle{"alice": active, "bob": peer}}
+	manifest := testManifest()
+	manifest.Room.MaxTurns = 0
+	manifest.Room.MaxDuration = 20 * time.Millisecond
+	runner := New(Dependencies{Live: service, Clock: clock.Real{}})
+	result, err := runner.Run(context.Background(), nil, rooms.RoomRunOptions{
+		Manifest: manifest, BoundShutdownGrace: 5 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatalf("Run error = %v", err)
+	}
+	if result.TerminationReason != rooms.RoomTerminationMaxDurationReached {
+		t.Fatalf("room termination = %q, want max duration", result.TerminationReason)
+	}
+	if got := controlCount(active, session.LiveControlResponseCancel); got != 1 {
+		t.Fatalf("active response cancellations = %d, want one", got)
+	}
+	if got := controlCount(peer, session.LiveControlResponseCancel); got != 0 {
+		t.Fatalf("inactive peer response cancellations = %d, want zero", got)
+	}
+	if result.Participants["alice"].TerminationDisposition != "cancelled_after_grace" {
+		t.Fatalf("active participant = %+v, want cancelled_after_grace", result.Participants["alice"])
+	}
+}
+
+func controlCount(handle *fakeLiveHandle, kind session.LiveControlKind) int {
+	handle.mu.Lock()
+	defer handle.mu.Unlock()
+	count := 0
+	for _, control := range handle.controls {
+		if control.Kind == kind {
+			count++
+		}
+	}
+	return count
 }
 
 func TestRoomGraphRetiresFailedSourceAndKeepsSurvivorMesh(t *testing.T) {

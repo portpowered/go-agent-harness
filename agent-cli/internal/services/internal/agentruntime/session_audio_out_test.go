@@ -360,7 +360,7 @@ func TestRunSessionWithAudioOut_FinalizesOnCleanInterrupt(t *testing.T) {
 			SessionInferencer: inf, RuntimeObserver: inf,
 		}, "-")
 	}()
-	waitForClosedTargetSignal(t, context.Background(), firstWritten, "first audio delta output barrier")
+	waitForAudioSignal(t, context.Background(), firstWritten, "first audio delta output barrier")
 	cancel()
 	close(providerRelease)
 	close(writerRelease)
@@ -390,7 +390,7 @@ func runSessionAudioCancellationBarrier(t *testing.T, cancelBeforeConnect bool) 
 	inferencer := newSessionAudioOutputInferencer(provider, &sessionAudioOutput{sink: sink, runtime: &sessionRuntimeObservationRecorder{}}, "", "")
 	connected := make(chan *sessionAudioOutputSession, 1)
 	go func() { mustSessionAudioTestValue(inferencer.ConnectSession(ctx)); connected <- inferencer.connected }()
-	waitForClosedTargetSignal(t, context.Background(), provider.connectStarted, "connect start")
+	waitForAudioSignal(t, context.Background(), provider.connectStarted, "connect start")
 	if cancelBeforeConnect {
 		cancel()
 	}
@@ -398,12 +398,12 @@ func runSessionAudioCancellationBarrier(t *testing.T, cancelBeforeConnect bool) 
 	session := <-connected
 	cancel()
 	go func() { mustSessionAudioTestValue(struct{}{}, session.Close()) }()
-	waitForClosedTargetSignal(t, context.Background(), session.drainStarted, "cancellation drain start")
+	waitForAudioSignal(t, context.Background(), session.drainStarted, "cancellation drain start")
 	want := append(bytes.Repeat([]byte{0x01, 0x02}, 720), bytes.Repeat([]byte{0x03, 0x04}, 1200)...)
 	if !provider.recv.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue(want)}) {
 		t.Fatal("provider did not accept queued cancellation audio")
 	}
-	waitForClosedTargetSignal(t, context.Background(), writer.firstWritten, "queued cancellation audio output")
+	waitForAudioSignal(t, context.Background(), writer.firstWritten, "queued cancellation audio output")
 	select {
 	case <-provider.Done():
 		t.Fatal("provider closed before queued cancellation audio drained")

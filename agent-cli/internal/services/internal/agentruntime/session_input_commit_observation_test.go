@@ -11,7 +11,7 @@ import (
 func TestObservedSessionCommitExcludesLaterBufferAdmissions(t *testing.T) {
 	observer := &recordingSessionRuntimeObserver{}
 	recorder := newSessionRuntimeObservationRecorder(observer, nil)
-	session := &observedSession{Session: newRoomTestSession(), runtime: recorder}
+	session := &observedSession{Session: newScriptedSession(), runtime: recorder}
 	first, second := []byte{1, 2, 3, 4}, []byte{5, 6, 7, 8}
 	// Both frames can enter the core FIFO before its worker sends the first
 	// commit. Evidence must follow actual session sends, not these admissions.
@@ -50,7 +50,7 @@ func (s rejectObservedAudioSession) Send(_ context.Context, msg messages.StreamM
 func TestObservedSessionCommitExcludesRejectedAudio(t *testing.T) {
 	observer := &recordingSessionRuntimeObserver{}
 	recorder := newSessionRuntimeObservationRecorder(observer, nil)
-	session := &observedSession{Session: rejectObservedAudioSession{Session: newRoomTestSession()}, runtime: recorder}
+	session := &observedSession{Session: rejectObservedAudioSession{Session: newScriptedSession()}, runtime: recorder}
 	pcm := []byte{1, 2}
 	recorder.audioInput(pcm)
 	if session.Send(context.Background(), messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue(pcm)}) {

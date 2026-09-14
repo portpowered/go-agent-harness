@@ -3,7 +3,6 @@ package lifecycle
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -18,13 +17,20 @@ import (
 // invocation-scoped observers. The room runner owns this value until every
 // worker has been joined.
 type activeParticipant struct {
-	participant rooms.Participant
-	handle      session.LiveHandle
-	endpoints   audio.MediaEndpoints
-	media       rooms.MediaPorts
-	bridge      *mediaBridge
-	events      *eventDrain
-	finished    chan struct{}
+	participant    rooms.Participant
+	handle         session.LiveHandle
+	endpoints      audio.MediaEndpoints
+	media          rooms.MediaPorts
+	bridge         *mediaBridge
+	events         *eventDrain
+	finished       chan struct{}
+	responseMu     sync.Mutex
+	responseEnd    chan struct{}
+	responseActive bool
+	boundReason    rooms.RoomTerminationReason
+	boundActive    bool
+	boundCancelled bool
+	boundCompleted bool
 	// onMediaError retires only this participant when its provider/device edge
 	// fails. The room mesh remains available to surviving peers.
 	onMediaError func(error)
@@ -40,17 +46,23 @@ type activeParticipant struct {
 // admission, turn bounds, and terminal results together without exposing
 // mutable state through the public room contract.
 type runState struct {
-	mu          sync.Mutex
-	active      []*activeParticipant
-	results     map[string]rooms.RoomParticipantResult
-	terminals   map[string]terminalMetadata
-	turns       map[string]int
-	agentCount  int
-	agentIDs    map[string]struct{}
-	turnsBound  int
-	boundReason rooms.RoomTerminationReason
-	boundCause  error
-	stop        context.CancelCauseFunc
+	mu            sync.Mutex
+	active        []*activeParticipant
+	results       map[string]rooms.RoomParticipantResult
+	terminals     map[string]terminalMetadata
+	turns         map[string]int
+	agentCount    int
+	agentIDs      map[string]struct{}
+	turnsBound    int
+	boundReason   rooms.RoomTerminationReason
+	boundCause    error
+	boundGrace    time.Duration
+	boundSettle   bool
+	boundDoneCh   chan struct{}
+	boundDoneOnce sync.Once
+	wait          func(context.Context, time.Duration) error
+	failure       rooms.FailureService
+	stop          context.CancelCauseFunc
 }
 
 type terminalMetadata struct {
@@ -138,21 +150,6 @@ func (s *runState) snapshotActive() []*activeParticipant {
 	return append([]*activeParticipant(nil), s.active...)
 }
 
-func (s *runState) setFailure(err error) {
-	if s == nil || err == nil {
-		return
-	}
-	s.mu.Lock()
-	if s.boundReason == "" {
-		s.boundReason = rooms.RoomTerminationFailed
-		s.boundCause = err
-		if s.stop != nil {
-			s.stop(err)
-		}
-	}
-	s.mu.Unlock()
-}
-
 // failParticipant records a media-plane fault without cancelling the room.
 // The participant's own handle and local ports are asked to stop; waitAll
 // still performs the single joined cleanup path for its terminal result.
@@ -173,45 +170,26 @@ func (s *runState) failParticipant(id string, err error) {
 		s.setFailure(err)
 		return
 	}
+	wrapped := s.participantFailure(id, err)
+	s.mu.Lock()
+	boundGrace := s.boundSettle
+	s.mu.Unlock()
 	if closeErr := value.closeMedia(); closeErr != nil {
-		err = errors.Join(err, closeErr)
+		wrapped = errors.Join(wrapped, closeErr)
 	}
 	if value.handle != nil {
-		value.handle.Cancel(err)
+		value.handle.Cancel(wrapped)
+	}
+	if boundGrace && !isParticipantIsolatedFault(err) {
+		s.setFailure(wrapped)
 	}
 }
 
-func (s *runState) noteTurn(id string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.turns[id]++
-	if s.turnsBound <= 0 || s.boundReason != "" {
-		return
+func (s *runState) participantFailure(id string, err error) error {
+	if s != nil && s.failure != nil {
+		return s.failure.ParticipantFailure(rooms.ParticipantFailureRequest{ParticipantID: id, Cause: err})
 	}
-	for _, turns := range s.turns {
-		if turns < s.turnsBound {
-			return
-		}
-	}
-	if len(s.turns) < s.agentCount {
-		return
-	}
-	s.boundReason = rooms.RoomTerminationMaxTurnsReached
-	s.boundCause = errTurnsBound
-	if s.stop != nil {
-		s.stop(errTurnsBound)
-	}
-}
-
-func (s *runState) setBound(reason rooms.RoomTerminationReason, cause error) {
-	s.mu.Lock()
-	if s.boundReason == "" {
-		s.boundReason, s.boundCause = reason, cause
-		if s.stop != nil {
-			s.stop(cause)
-		}
-	}
-	s.mu.Unlock()
+	return err
 }
 
 func (s *runState) waitAll(ctx context.Context, request rooms.RoomRunOptions, now func() time.Time) {
@@ -226,7 +204,7 @@ func (s *runState) waitAll(ctx context.Context, request rooms.RoomRunOptions, no
 			err := waitParticipant(ctx, value)
 			retireFailedParticipant(value, err)
 			reason := participantTerminationReason(err)
-			s.finish(value.participant, reason, err)
+			s.finishActive(value, reason, err)
 			if request.OnDiagnostic != nil && err != nil {
 				request.OnDiagnostic(value.participant.ID, diagnostic("participant_finished_with_error", err, now))
 			}
@@ -315,12 +293,23 @@ func (p *activeParticipant) closeMedia() error {
 }
 
 func (s *runState) finish(participant rooms.Participant, reason rooms.ParticipantTerminationReason, err error) {
+	s.finishProjection(participant, reason, err, nil)
+}
+
+func (s *runState) finishActive(active *activeParticipant, reason rooms.ParticipantTerminationReason, err error) {
+	if active == nil {
+		return
+	}
+	s.finishProjection(active.participant, reason, err, active)
+}
+
+func (s *runState) finishProjection(participant rooms.Participant, reason rooms.ParticipantTerminationReason, err error, active *activeParticipant) {
 	if reason == "" {
 		reason = rooms.ParticipantTerminationEnded
 	}
 	value := rooms.RoomParticipantResult{
 		ID: participant.ID, ParticipantID: participant.ID, Reason: reason, TerminationReason: reason,
-		TerminationTrigger: string(reason), Connected: err == nil, Error: errorString(err),
+		TerminationTrigger: string(reason), Connected: reason != rooms.ParticipantTerminationError, Error: s.errorString(err),
 		TurnsCompleted: s.turnCount(participant.ID),
 	}
 	s.mu.Lock()
@@ -330,6 +319,25 @@ func (s *runState) finish(participant rooms.Participant, reason rooms.Participan
 		value.TerminalProvenance = metadata.provenance
 		value.OutputState = metadata.outputState
 	}
+	if active != nil && reason != rooms.ParticipantTerminationError {
+		boundReason, wasActive, cancelled, completed := active.boundState()
+		if boundReason != "" {
+			value.TerminationTrigger = string(boundReason)
+			value.TerminationDisposition = "completed"
+			if wasActive {
+				value.TerminationTrigger += "_mid_response"
+				if cancelled {
+					value.TerminationDisposition = xCancelled
+					value.Classification = rooms.RoomBoundCancelledClassification
+					value.TerminalReason = string(messages.TerminalReasonCancellation)
+					value.TerminalProvenance = string(messages.TerminalProvenanceRoom)
+					value.OutputState = string(messages.TerminalOutputNone)
+				} else if completed {
+					value.TerminationDisposition = "completed_during_grace"
+				}
+			}
+		}
+	}
 	if _, exists := s.results[participant.ID]; !exists {
 		s.results[participant.ID] = value
 	}
@@ -337,33 +345,14 @@ func (s *runState) finish(participant rooms.Participant, reason rooms.Participan
 	s.stopWhenAgentsDone()
 }
 
-const (
-	silentProviderEmptyResponse = "silent_provider_empty_response"
-	silentProviderTimeout       = "silent_provider_timeout"
-)
-
-func terminalLivenessFailure(event session.LiveEvent) error {
-	if event.Liveness != nil {
-		classification := strings.TrimSpace(event.Liveness.Classification)
-		if classification == "" {
-			return nil
-		}
-		if classification == silentProviderEmptyResponse || classification == silentProviderTimeout {
-			return fmt.Errorf("%s: provider response produced no observable output", classification)
-		}
-		return nil
+func (s *runState) errorString(err error) string {
+	if err == nil || !participantWaitFailed(err) {
+		return ""
 	}
-	if event.Terminal == nil {
-		return nil
+	if s != nil && s.failure != nil {
+		return s.failure.Sanitize(err, nil)
 	}
-	classification := strings.TrimSpace(event.Terminal.Classification)
-	if classification == "" && event.Terminal.TerminalReason == messages.TerminalReasonPartialOutput && event.Terminal.OutputState == messages.TerminalOutputNone {
-		classification = silentProviderEmptyResponse
-	}
-	if classification != silentProviderEmptyResponse && classification != silentProviderTimeout {
-		return nil
-	}
-	return fmt.Errorf("%s: provider response produced no observable output", classification)
+	return err.Error()
 }
 
 // stopWhenAgentsDone closes a room that has no provider work left. Human
