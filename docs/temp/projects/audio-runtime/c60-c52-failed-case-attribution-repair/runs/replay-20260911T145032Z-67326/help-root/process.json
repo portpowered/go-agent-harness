@@ -1,0 +1,38 @@
+{
+  "cleanup": {
+    "group_survivor": false,
+    "kill_error": null,
+    "kill_sent": false,
+    "parent_exit_code": 0,
+    "reason": "parent_exit",
+    "term_error": null,
+    "term_sent": false
+  },
+  "command": [
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c52-hermetic-room-liveness-characterization-corrected-vertical-probe/artifact-0",
+    "--help"
+  ],
+  "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair",
+  "duration_seconds": 0.026376625057309866,
+  "ended_at": "2026-09-11T14:50:32.355576+00:00",
+  "environment": {
+    "GOWORK": "",
+    "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145032Z-67326/home",
+    "LANG": "C",
+    "LC_ALL": "C",
+    "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg08mmOKN:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
+    "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145032Z-67326/tmp",
+    "TZ": "UTC"
+  },
+  "exit_code": 0,
+  "first_failure": null,
+  "label": "artifact-help",
+  "output_overflow": false,
+  "reader_survivor": false,
+  "started_at": "2026-09-11T14:50:32.329206+00:00",
+  "stderr_bytes": 0,
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_bytes": 1906,
+  "stdout_sha256": "b8ae29c32ef355998739a6145d661dbc047714f80784b4908db917d728eebff0",
+  "timed_out": false
+}

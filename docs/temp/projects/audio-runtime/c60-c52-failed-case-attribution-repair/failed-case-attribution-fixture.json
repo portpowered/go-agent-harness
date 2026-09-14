@@ -1,0 +1,92 @@
+{
+  "schema": "audio-runtime-c60-failed-case-attribution-fixture-v1",
+  "source_report": {
+    "path": "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization-corrected-vertical-probe.json",
+    "sha256": "8b4f23539aceb6f687e4adafef711b4fc65cc91862a0af5670add5f7b7379a25",
+    "decision": "FAILED",
+    "run_id": "20260911T124800Z-luna-independent",
+    "source_revision": "ab5fbade1bd69712deb8fcd84e605c0ce9916112",
+    "result": "21/22 with pr438/order-timeout-first direct failed test_outcome rejected by the old checkpoint attribution"
+  },
+  "trace_source": {
+    "path": "../audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T143300Z-review52-repair-v2/cells/pr438/order-timeout-first/trace.jsonl",
+    "sha256": "76d0eff35f188ec1cc6c4e8120533a61da7428b7f44248e70dd1601df52c2c8d"
+  },
+  "raw_source": {
+    "path": "../audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T143300Z-review52-repair-v2/cells/pr438/order-timeout-first/stdout.log",
+    "sha256": "2785c23c42d6974e7f4d94a7ef455cf26c09d3850f034419f99ea0a9d5c4ff40",
+    "purpose": "Preserves the exact selected parent/subtest/package action shape; the independent failed transcript is unavailable and is never represented as this passing historical file."
+  },
+  "case": {
+    "revision_label": "pr438",
+    "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+    "run_id": "20260911T124800Z-luna-independent",
+    "cell_id": "order-timeout-first",
+    "package_selector": "./services/rooms/internal/lifecycle",
+    "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+    "parent_test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer",
+    "subtest": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response",
+    "required_subtests": [
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout",
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response"
+    ],
+    "classification": "silent_provider_empty_response",
+    "process_exit_code": 1,
+    "first_assertion": "browser_parity_test.go:245",
+    "failure_text": "silent_provider_empty_response: provider response produced no observable output",
+    "peer_cancel_snapshot": {
+      "before": "external_room_cancel",
+      "count": "0"
+    },
+    "required_checkpoint_families": [
+      "typed-liveness",
+      "terminal",
+      "peer-preservation",
+      "cancellation",
+      "room-result",
+      "cleanup"
+    ],
+    "trace_checkpoint_kinds": [
+      "case_started",
+      "live_open",
+      "event_drain_created",
+      "handle_start",
+      "live_event_received",
+      "terminal_observed",
+      "terminal_metadata_latched",
+      "liveness_cancel_requested",
+      "handle_cancel",
+      "sink_publish_before",
+      "sink_publish",
+      "sink_publish_returned",
+      "diagnostic_published",
+      "peer_cancel_snapshot",
+      "room_context_cancel_requested",
+      "participant_wait_returned",
+      "participant_handle_closed",
+      "participant_result_recorded",
+      "room_result_snapshot",
+      "room_run_return"
+    ]
+  },
+  "derivation": {
+    "status": "identity-preserving_control_fixture",
+    "original_independent_raw_transcript_available": false,
+    "original_independent_trace_available": false,
+    "matrix_evidence_use": "never",
+    "field_sources": {
+      "run_id_and_result": "source_report.provenance.freshRun and source_report.feedback",
+      "revision_and_cell": "source_report.criteria.TRACE.evidence",
+      "parent_test_and_failure": "source_report.criteria.TRACE.evidence",
+      "subtest_and_classification": "source_report.criteria.FAILURES.evidence",
+      "checkpoint_families": "source_report.criteria.TRACE.evidence and source_report.criteria.FAILURES.evidence",
+      "checkpoint_shape": "trace_source.sha256 and raw_source.sha256 from the retained C52 canonical run"
+    },
+    "raw_failed_action": {
+      "Action": "fail",
+      "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+      "Test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response",
+      "status": "report-preserved_identity_fixture_not_original_transcript"
+    }
+  }
+}

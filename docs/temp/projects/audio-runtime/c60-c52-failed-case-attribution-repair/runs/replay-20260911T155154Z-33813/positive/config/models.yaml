@@ -1,0 +1,469 @@
+models:
+    - name: gpt-4o
+      aliases:
+        - gpt-4o-2024-11-20
+        - gpt-4o-2024-08-06
+      providers:
+        - openai
+        - openrouter
+      input_modalities:
+        - text
+        - image
+      output_modalities:
+        - text
+      max_token_count: 128000
+      supports_tool_use: true
+      supports_reasoning: false
+      tokenizer: o200k_base
+      supportedInputMimeTypes:
+        - image/png
+        - image/jpeg
+        - image/gif
+        - image/webp
+    - name: gpt-4o-mini
+      aliases:
+        - gpt-4o-mini-2024-07-18
+      providers:
+        - openai
+        - openrouter
+      input_modalities:
+        - text
+        - image
+      output_modalities:
+        - text
+      max_token_count: 128000
+      supports_tool_use: true
+      supports_reasoning: false
+      tokenizer: o200k_base
+      supportedInputMimeTypes:
+        - image/png
+        - image/jpeg
+        - image/gif
+        - image/webp
+    - name: o1
+      aliases:
+        - o1-2024-12-17
+      providers:
+        - openai
+        - openrouter
+      input_modalities:
+        - text
+        - image
+      output_modalities:
+        - text
+      max_token_count: 200000
+      supports_tool_use: true
+      supports_reasoning: true
+      tokenizer: o200k_base
+      supportedInputMimeTypes:
+        - image/png
+        - image/jpeg
+        - image/gif
+        - image/webp
+    - name: o3
+      providers:
+        - openai
+        - openrouter
+      input_modalities:
+        - text
+        - image
+      output_modalities:
+        - text
+      max_token_count: 200000
+      supports_tool_use: true
+      supports_reasoning: true
+      tokenizer: o200k_base
+      supportedInputMimeTypes:
+        - image/png
+        - image/jpeg
+        - image/gif
+        - image/webp
+    - name: o3-mini
+      aliases:
+        - o3-mini-2025-01-31
+      providers:
+        - openai
+        - openrouter
+      input_modalities:
+        - text
+      output_modalities:
+        - text
+      max_token_count: 200000
+      supports_tool_use: true
+      supports_reasoning: true
+      tokenizer: o200k_base
+    - name: o4-mini
+      providers:
+        - openai
+        - openrouter
+      input_modalities:
+        - text
+        - image
+      output_modalities:
+        - text
+      max_token_count: 200000
+      supports_tool_use: true
+      supports_reasoning: true
+      tokenizer: o200k_base
+      supportedInputMimeTypes:
+        - image/png
+        - image/jpeg
+        - image/gif
+        - image/webp
+    - name: claude-opus-4-6
+      aliases:
+        - claude-opus-4-6-20251101
+      providers:
+        - anthropic
+        - openrouter
+      input_modalities:
+        - text
+        - image
+      output_modalities:
+        - text
+      max_token_count: 200000
+      supports_tool_use: true
+      supports_reasoning: false
+      tokenizer: claude
+      supportedInputMimeTypes:
+        - image/png
+        - image/jpeg
+        - image/gif
+        - image/webp
+    - name: claude-sonnet-4-6
+      aliases:
+        - claude-sonnet-4-6-20251101
+      providers:
+        - anthropic
+        - openrouter
+      input_modalities:
+        - text
+        - image
+      output_modalities:
+        - text
+      max_token_count: 200000
+      supports_tool_use: true
+      supports_reasoning: true
+      tokenizer: claude
+      supportedInputMimeTypes:
+        - image/png
+        - image/jpeg
+        - image/gif
+        - image/webp
+    - name: claude-haiku-4-5
+      aliases:
+        - claude-haiku-4-5-20251001
+      providers:
+        - anthropic
+        - openrouter
+      input_modalities:
+        - text
+        - image
+      output_modalities:
+        - text
+      max_token_count: 200000
+      supports_tool_use: true
+      supports_reasoning: false
+      tokenizer: claude
+      supportedInputMimeTypes:
+        - image/png
+        - image/jpeg
+        - image/gif
+        - image/webp
+    - name: google/gemini-2.5-pro-preview
+      providers:
+        - openrouter
+        - google
+      input_modalities:
+        - text
+        - image
+        - audio
+        - video
+      output_modalities:
+        - text
+      max_token_count: 1000000
+      supports_tool_use: true
+      supports_reasoning: true
+      tokenizer: sentencepiece
+      supportedInputMimeTypes:
+        - image/png
+        - image/jpeg
+        - image/gif
+        - image/webp
+        - image/heic
+        - image/heif
+        - audio/mpeg
+        - audio/wav
+        - audio/ogg
+        - audio/flac
+        - audio/aac
+        - video/mp4
+        - video/mpeg
+        - video/webm
+        - video/quicktime
+    - name: google/gemini-2.5-flash-preview
+      providers:
+        - openrouter
+        - google
+      input_modalities:
+        - text
+        - image
+        - audio
+        - video
+      output_modalities:
+        - text
+      max_token_count: 1000000
+      supports_tool_use: true
+      supports_reasoning: true
+      tokenizer: sentencepiece
+      supportedInputMimeTypes:
+        - image/png
+        - image/jpeg
+        - image/gif
+        - image/webp
+        - image/heic
+        - image/heif
+        - audio/mpeg
+        - audio/wav
+        - audio/ogg
+        - audio/flac
+        - audio/aac
+        - video/mp4
+        - video/mpeg
+        - video/webm
+        - video/quicktime
+    - name: google/gemini-2.0-flash
+      aliases:
+        - google/gemini-2.0-flash-001
+      providers:
+        - openrouter
+        - google
+      input_modalities:
+        - text
+        - image
+        - audio
+        - video
+      output_modalities:
+        - text
+        - image
+      max_token_count: 1000000
+      supports_tool_use: true
+      supports_reasoning: false
+      tokenizer: sentencepiece
+      supportedInputMimeTypes:
+        - image/png
+        - image/jpeg
+        - image/gif
+        - image/webp
+        - image/heic
+        - image/heif
+        - audio/mpeg
+        - audio/wav
+        - audio/ogg
+        - audio/flac
+        - audio/aac
+        - video/mp4
+        - video/mpeg
+        - video/webm
+        - video/quicktime
+    - name: google/gemini-2.0-flash-thinking-exp
+      providers:
+        - openrouter
+        - google
+      input_modalities:
+        - text
+        - image
+        - audio
+        - video
+      output_modalities:
+        - text
+      max_token_count: 1000000
+      supports_tool_use: false
+      supports_reasoning: true
+      tokenizer: sentencepiece
+      supportedInputMimeTypes:
+        - image/png
+        - image/jpeg
+        - image/gif
+        - image/webp
+        - image/heic
+        - image/heif
+        - audio/mpeg
+        - audio/wav
+        - audio/ogg
+        - audio/flac
+        - audio/aac
+        - video/mp4
+        - video/mpeg
+        - video/webm
+        - video/quicktime
+    - name: google/gemini-flash-1.5
+      aliases:
+        - google/gemini-flash-1.5-8b
+      providers:
+        - openrouter
+        - google
+      input_modalities:
+        - text
+        - image
+        - audio
+        - video
+      output_modalities:
+        - text
+      max_token_count: 1000000
+      supports_tool_use: true
+      supports_reasoning: false
+      tokenizer: sentencepiece
+      supportedInputMimeTypes:
+        - image/png
+        - image/jpeg
+        - image/gif
+        - image/webp
+        - image/heic
+        - image/heif
+        - audio/mpeg
+        - audio/wav
+        - audio/ogg
+        - audio/flac
+        - audio/aac
+        - video/mp4
+        - video/mpeg
+        - video/webm
+        - video/quicktime
+    - name: meta-llama/llama-4-maverick
+      providers:
+        - openrouter
+      input_modalities:
+        - text
+        - image
+      output_modalities:
+        - text
+      max_token_count: 524288
+      supports_tool_use: true
+      supports_reasoning: false
+      tokenizer: llama
+      supportedInputMimeTypes:
+        - image/png
+        - image/jpeg
+        - image/gif
+        - image/webp
+    - name: meta-llama/llama-4-scout
+      providers:
+        - openrouter
+      input_modalities:
+        - text
+        - image
+      output_modalities:
+        - text
+      max_token_count: 524288
+      supports_tool_use: true
+      supports_reasoning: false
+      tokenizer: llama
+      supportedInputMimeTypes:
+        - image/png
+        - image/jpeg
+        - image/gif
+        - image/webp
+    - name: meta-llama/llama-3.3-70b-instruct
+      providers:
+        - openrouter
+      input_modalities:
+        - text
+      output_modalities:
+        - text
+      max_token_count: 128000
+      supports_tool_use: true
+      supports_reasoning: false
+      tokenizer: llama
+    - name: meta-llama/llama-3.1-8b-instruct
+      providers:
+        - openrouter
+      input_modalities:
+        - text
+      output_modalities:
+        - text
+      max_token_count: 128000
+      supports_tool_use: true
+      supports_reasoning: false
+      tokenizer: llama
+    - name: deepseek/deepseek-chat-v3-0324
+      aliases:
+        - deepseek/deepseek-chat
+      providers:
+        - openrouter
+      input_modalities:
+        - text
+      output_modalities:
+        - text
+      max_token_count: 65536
+      supports_tool_use: true
+      supports_reasoning: false
+      tokenizer: deepseek
+    - name: deepseek/deepseek-r1
+      providers:
+        - openrouter
+      input_modalities:
+        - text
+      output_modalities:
+        - text
+      max_token_count: 128000
+      supports_tool_use: true
+      supports_reasoning: true
+      tokenizer: deepseek
+    - name: mistralai/mistral-large
+      providers:
+        - openrouter
+      input_modalities:
+        - text
+      output_modalities:
+        - text
+      max_token_count: 128000
+      supports_tool_use: true
+      supports_reasoning: false
+      tokenizer: sentencepiece
+    - name: mistralai/mistral-small-3.1-24b-instruct
+      aliases:
+        - mistralai/mistral-small
+      providers:
+        - openrouter
+      input_modalities:
+        - text
+        - image
+      output_modalities:
+        - text
+      max_token_count: 128000
+      supports_tool_use: true
+      supports_reasoning: false
+      tokenizer: sentencepiece
+      supportedInputMimeTypes:
+        - image/png
+        - image/jpeg
+        - image/gif
+        - image/webp
+    - name: fal-ai/qwen-3-tts/text-to-speech/1.7b
+      providers:
+        - fal
+      input_modalities:
+        - embedding
+        - text
+      output_modalities:
+        - audio
+      max_token_count: 0
+      supports_tool_use: false
+      supports_reasoning: false
+    - name: z-ai/glm-4.7
+      providers:
+        - openrouter
+      input_modalities:
+        - text
+        - image
+      output_modalities:
+        - text
+      max_token_count: 128000
+      supports_tool_use: true
+      supports_reasoning: false
+      supportedInputMimeTypes:
+        - image/png
+        - image/jpeg
+        - image/gif
+        - image/webp
