@@ -848,28 +848,6 @@ func classifyRoomParticipantTermination(roomStopping bool, runErr error, connect
 	return ParticipantTerminationEnded
 }
 
-func roomCancellationOnly(err error) bool {
-	if err == nil {
-		return true
-	}
-	if joined, ok := err.(interface{ Unwrap() []error }); ok {
-		children := joined.Unwrap()
-		if len(children) == 0 {
-			return false
-		}
-		for _, child := range children {
-			if !roomCancellationOnly(child) {
-				return false
-			}
-		}
-		return true
-	}
-	if cause := errors.Unwrap(err); cause != nil {
-		return roomCancellationOnly(cause)
-	}
-	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
-}
-
 func classifyRoomSessionClose(closeReason string, terminalReason messages.TerminalReason) ParticipantTerminationReason {
 	if closeReason == "provider_closed" || terminalReason == messages.TerminalReasonProviderClose {
 		return ParticipantTerminationDisconnected

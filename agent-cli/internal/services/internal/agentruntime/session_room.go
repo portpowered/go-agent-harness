@@ -11,7 +11,6 @@ import (
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
@@ -77,11 +76,6 @@ const (
 	ParticipantTerminationDispositionFailed               = "failed"
 	ParticipantTerminationDispositionDisconnected         = "disconnected"
 )
-
-// RoomBoundCancelledClassification is the stable participant classification
-// for a response deliberately cancelled by the room after its bound grace
-// budget. It is intentionally distinct from generic caller cancellation.
-const RoomBoundCancelledClassification = providers.ErrorClassRoomBoundCancelled
 
 // RoomParticipantResult contains the observable outcome for one participant.
 // Error is already sanitized; the resolved API-key value is never retained in
