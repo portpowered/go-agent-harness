@@ -1,0 +1,76 @@
+{
+  "schema": "audio-runtime-c144-recovery-adoption.v1",
+  "project": "audio-runtime",
+  "contractRevision": "audio-runtime-v1",
+  "logicalWork": {
+    "name": "audio-runtime-c144-recover-c110-session-instruction-resolution",
+    "branch": "codex/audio-runtime-c144-recover-c110-session-instruction-resolution",
+    "admission": {
+      "status": "admitted",
+      "verification": "project-control.py verify-work --type task --name audio-runtime-c144-recover-c110-session-instruction-resolution"
+    }
+  },
+  "physicalDelivery": {
+    "predecessor": "audio-runtime-c110-retire-cli-session-instruction-resolution",
+    "branch": "codex/audio-runtime-c110-retire-cli-session-instruction-resolution",
+    "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution",
+    "pullRequest": 497,
+    "remoteHeadBeforeCheckpoint": "372a3e9bc6cbb80e111b6d4d8eed79d405731f42",
+    "localCheckpoint": "3d5b90bc7e6c090c3079bee9edc71ae82391260d",
+    "originMain": "4a1c399ccbb3d780be95eb04316e84b8f11a6646",
+    "startupAncestor": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+    "aheadOfRemote": 27,
+    "dirtyEvidenceFiles": [
+      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/artifacts/yui-build.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/baseline.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/provenance.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/reports/c110-public-contract.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/reports/c110-retirement-and-owned-paths.json"
+    ]
+  },
+  "evidence": {
+    "sourceRevision": "3d5b90bc7e6c090c3079bee9edc71ae82391260d",
+    "run": "run-20260913T200336Z-67684",
+    "yui": {
+      "bytes": 51183106,
+      "sha256": "89220655d1952f8dfe7a355e82d8944238f6f062699b7328f240868350ee7a0b"
+    },
+    "dirtyEvidenceSha256": {
+      "artifacts/yui-build.json": "0d8df5d89e023fb0e7c3274f55225d652120a8e7ff8b10f817a6672c5fdb3b53",
+      "baseline.json": "2cc144ab045748b3f6750ed63ee67abc7a702bf7c0ee757f78c42e36663977be",
+      "provenance.json": "fd94b51064ac91e8f705bf957e6a0ed7eefe31ffe0213376f3f15992b1872742",
+      "reports/c110-public-contract.json": "937853ba733fde9f8b8356c0c7a51701b86eaba7cc7834ec996398531a54a133",
+      "reports/c110-retirement-and-owned-paths.json": "937853ba733fde9f8b8356c0c7a51701b86eaba7cc7834ec996398531a54a133"
+    },
+    "ownedVerifierSha256": "f723c84bb58e0ff011168a7121c645be931cc68e74ece8e457d823484a8d57ae",
+    "c144EvidenceSha256": {
+      "PR_BODY.md": "573f5cde6e9cc30a04aa3602dc9f5d309437b6dd4991ac769d20fe1ec9efe335",
+      "README.md": "b01fab828287e8da3c78ef48d5b54e88950ab29202d853dd87f0a5c42639c3c3"
+    }
+  },
+  "focusedChecks": {
+    "sessioninstructionsNormal": "18 passed in 3 packages",
+    "sessioninstructionsRace": "54 passed in 3 packages",
+    "externalConsumer": "GOWORK=off passed",
+    "guardMutations": "accepted",
+    "retirement": "86-line adapter and 191 retired production lines",
+    "cliNormal": "207 passed",
+    "accumulatedRegressions": "normal, coverage and race matrices passed; 20 high-rate trials passed",
+    "quality": "coverage registration, Wire, architecture-size, vet, staticcheck, lint and diff-check passed"
+  },
+  "preservedResiduals": [
+    {
+      "test": "TestRunRoomWithResultReplaysAdmittedBundleWithoutLiveConfiguration",
+      "observation": "one failure in the 620-pass three-repeat CLI race selection; five standalone normal repeats passed",
+      "ownership": "outside C110 owned paths; no C110 room replay source changed",
+      "status": "preserved-peer-residual"
+    }
+  ],
+  "claims": {
+    "ciGreen": false,
+    "independentReview": false,
+    "merge": false,
+    "verticalAcceptance": false,
+    "projectAcceptance": false
+  }
+}

@@ -158,10 +158,10 @@ func TestRunSessionWithInstructions_SourceMatrix(t *testing.T) {
 				}
 			}
 			explicit := tt.setup(t, workspaceDir)
+
 			inferencer := newSessionInstructionsTestInferencer()
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
-
 			err := agentruntime.RunSessionWithInstructions(ctx, bytes.NewBuffer(nil), agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 				ReplayPath:        filepath.Join(workspaceDir, "session.json"),
 				ConfigDir:         workspaceDir,
@@ -179,6 +179,7 @@ func TestRunSessionWithInstructions_SourceMatrix(t *testing.T) {
 				if !strings.Contains(err.Error(), tt.wantErrorContains) {
 					t.Fatalf("prompt-resolution error = %v, want %q", err, tt.wantErrorContains)
 				}
+				assertFilesystemRootIdentity(t, err, tt.skipWorkspace)
 				if inferencer.wasConnected() {
 					t.Fatal("inaccessible workspace connected a session before returning its prompt error")
 				}
@@ -187,7 +188,6 @@ func TestRunSessionWithInstructions_SourceMatrix(t *testing.T) {
 			if err != nil {
 				t.Fatalf("RunSessionWithInstructions: %v", err)
 			}
-
 			wantInstructions := tt.want(t, workspaceDir, explicit)
 			assertSessionInstructionEvents(t, inferencer, wantInstructions, tt.wantConfigCount)
 		})
@@ -203,7 +203,6 @@ func TestRunSessionWithInstructions_MissingAgentsMDSendsNoToolGroundingOrFile(t 
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-
 	err := agentruntime.RunSessionWithInstructions(ctx, bytes.NewBuffer(nil), agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        filepath.Join(workspaceDir, "session.json"),
 		ConfigDir:         workspaceDir,
@@ -214,7 +213,6 @@ func TestRunSessionWithInstructions_MissingAgentsMDSendsNoToolGroundingOrFile(t 
 	if err != nil {
 		t.Fatalf("RunSessionWithInstructions: %v", err)
 	}
-
 	if _, err := os.Stat(filepath.Join(workspaceDir, workspace.AgentsMDFileName)); !os.IsNotExist(err) {
 		t.Fatalf("missing AGENTS.md gained a side effect: %v", err)
 	}
@@ -222,7 +220,6 @@ func TestRunSessionWithInstructions_MissingAgentsMDSendsNoToolGroundingOrFile(t 
 	// instruction field remains empty: no default or grounding prompt is made.
 	assertSessionInstructionEvents(t, inferencer, "", 1)
 }
-
 func TestRunSessionWithInstructions_ExplicitPromptDoesNotReconcileAgentsMD(t *testing.T) {
 	workspaceDir := t.TempDir()
 	staleAgents := "customer instructions\n\n## Available Tools\n\nNo tools are currently registered.\n## Notes\nkeep this section\n"
@@ -232,7 +229,6 @@ func TestRunSessionWithInstructions_ExplicitPromptDoesNotReconcileAgentsMD(t *te
 	inferencer := newSessionInstructionsTestInferencer()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-
 	err := agentruntime.RunSessionWithInstructions(ctx, bytes.NewBuffer(nil), agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        filepath.Join(workspaceDir, "session.json"),
 		ConfigDir:         workspaceDir,
@@ -251,7 +247,6 @@ func TestRunSessionWithInstructions_ExplicitPromptDoesNotReconcileAgentsMD(t *te
 	}
 	assertSessionInstructionEventsWithGrounding(t, inferencer, fileInstructionsMarker, 1)
 }
-
 func TestRunSessionWithInstructions_OpenAIInitialConfigCarriesGroundingWithTools(t *testing.T) {
 	workspaceDir := t.TempDir()
 	writeFile(t, filepath.Join(workspaceDir, workspace.AgentsMDFileName), agentsInstructionsMarker)
@@ -275,7 +270,6 @@ func TestRunSessionWithInstructions_OpenAIInitialConfigCarriesGroundingWithTools
 	if err != nil {
 		t.Fatalf("RunSessionWithInstructions: %v", err)
 	}
-
 	capture, err := gwtesting.LoadSessionCapture(recordPath)
 	if err != nil {
 		t.Fatalf("LoadSessionCapture: %v", err)
@@ -675,6 +669,12 @@ func assertSessionInstructionEvents(t *testing.T, inferencer *sessionInstruction
 	}
 }
 
+func assertFilesystemRootIdentity(t *testing.T, err error, enabled bool) {
+	t.Helper()
+	if enabled && !errors.Is(err, tools.ErrInvalidFilesystemRoot) {
+		t.Fatalf("filesystem root error = %v, want errors.Is(ErrInvalidFilesystemRoot)", err)
+	}
+}
 func assertSessionInstructionEventsWithGrounding(t *testing.T, inferencer *sessionInstructionsTestInferencer, wantBase string, wantConfigCount int) {
 	t.Helper()
 	events := inferencer.sentEvents()

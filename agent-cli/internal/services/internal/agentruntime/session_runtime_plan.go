@@ -597,7 +597,7 @@ func planSessionRuntimeMode(opts SessionRunOptions, factory sessionRuntimeFactor
 				WaitForClose:             opts.BareLive || interactive || opts.WaitForClose || len(opts.AudioInputs) > 0,
 				CloseAfterScheduledAudio: len(opts.AudioInputs) > 0,
 				MaxDuration:              injectedSessionMaxDuration(opts.BareLive || interactive),
-				AdvertiseToolDefinitions: true,
+				AdvertiseToolDefinitions: func() bool { _, wrapped := opts.SessionInferencer.(*sessionInstructionsInferencer); return !wrapped }(),
 				RequireSessionUpdated:    len(opts.AudioInputs) > 0 && strings.EqualFold(effectiveSessionProvider(opts), sessionProviderOpenAI),
 				BareLive:                 opts.BareLive,
 				BrowserToolsInteractive:  interactive,
@@ -636,7 +636,7 @@ func planReplaySessionRuntime(opts SessionRunOptions, factory sessionRuntimeFact
 				Prompt:                   opts.Prompt,
 				WaitForClose:             opts.WaitForClose,
 				MaxDuration:              3 * time.Second,
-				AdvertiseToolDefinitions: true,
+				AdvertiseToolDefinitions: func() bool { _, wrapped := opts.SessionInferencer.(*sessionInstructionsInferencer); return !wrapped }(),
 			},
 		}, nil
 	}

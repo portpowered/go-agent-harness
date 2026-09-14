@@ -16,7 +16,7 @@ import (
 	runtimeProviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
-	runtimeSessionWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
+	sessioninstructionswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessioninstructions/wire"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
 
@@ -117,7 +117,7 @@ func resolveRequestInputs(ctx context.Context, request serviceSession.Request, r
 func resolveAndComposeInstructions(ctx context.Context, request serviceSession.Request, capabilities *runtimeSession.LiveCapabilities, deps RequestDependencies) (string, error) {
 	instructionService := deps.InstructionService
 	if instructionService == nil {
-		instructionService = runtimeSessionWire.NewInstructionService()
+		instructionService = sessioninstructionswire.NewInstructionService()
 	}
 	workspaceDir := request.WorkDir
 	if workspaceDir == "" && request.LoadedConfig != nil {

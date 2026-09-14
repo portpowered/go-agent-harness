@@ -33,6 +33,10 @@ func RunSession(ctx context.Context, out io.Writer, opts SessionRunOptions) (run
 	return plan.run(ctx, out)
 }
 
+func resolveSessionInstructions(opts SessionRunOptions, systemPrompt string) (string, error) {
+	return resolveInstructions(context.Background(), opts, systemPrompt)
+}
+
 // sessionInstructionsInferencer decorates caller-owned session seams without
 // changing their provider construction. The provider-aware runtime factory
 // handles the live provider path; injected sessions receive a generic session
@@ -201,17 +205,13 @@ func (s *sessionInstructionsSession) Receive() *messages.TypedBuffer[messages.St
 	return s.receive
 }
 
-func (s *sessionInstructionsSession) Done() <-chan struct{} {
-	return s.done
-}
+func (s *sessionInstructionsSession) Done() <-chan struct{} { return s.done }
 
 func (s *sessionInstructionsSession) rtcMedia() (RTCMediaEndpoints, bool) {
 	return rtcMediaFromSession(s.inner)
 }
 
-func (s *sessionInstructionsSession) TerminalError() error {
-	return terminalSessionError(s.inner)
-}
+func (s *sessionInstructionsSession) TerminalError() error { return terminalSessionError(s.inner) }
 
 func (s *sessionInstructionsSession) Close() error {
 	s.cancel()
