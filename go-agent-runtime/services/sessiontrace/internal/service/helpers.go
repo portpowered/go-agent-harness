@@ -3,11 +3,13 @@ package service
 import (
 	"context"
 	"errors"
+	"io"
 	"sync"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -105,3 +107,82 @@ func OutputStateForProgress(open bool, turns int) string {
 	}
 	return string(messages.TerminalOutputPartial)
 }
+
+func wrapAudioSource(source audio.AudioSource, rate int, observer sessiontrace.CaptureSamplesObserver) audio.AudioSource {
+	if source == nil || observer == nil {
+		return source
+	}
+	if rate <= 0 {
+		rate = audio.SampleRate
+	}
+	if sampleSource, ok := source.(audio.SampleSource); ok {
+		return &traceSampleSource{source: sampleSource, rate: rate, observer: observer}
+	}
+	return &traceAudioSource{source: source, rate: rate, observer: observer}
+}
+
+type traceAudioSource struct {
+	source   audio.AudioSource
+	rate     int
+	observer sessiontrace.CaptureSamplesObserver
+}
+
+func (s *traceAudioSource) ReadFrame(ctx context.Context, buf []int16) error {
+	if s == nil || s.source == nil {
+		return io.EOF
+	}
+	if err := s.source.ReadFrame(ctx, buf); err != nil {
+		return err
+	}
+	if len(buf) > 0 && s.observer != nil {
+		s.observer(s.rate, append([]int16(nil), buf...))
+	}
+	return nil
+}
+
+func (s *traceAudioSource) Close() error {
+	if s == nil || s.source == nil {
+		return nil
+	}
+	return s.source.Close()
+}
+
+type traceSampleSource struct {
+	source   audio.SampleSource
+	rate     int
+	observer sessiontrace.CaptureSamplesObserver
+}
+
+func (s *traceSampleSource) ReadFrame(ctx context.Context, buf []int16) error {
+	if s == nil || s.source == nil {
+		return io.EOF
+	}
+	if err := s.source.ReadFrame(ctx, buf); err != nil {
+		return err
+	}
+	if len(buf) > 0 && s.observer != nil {
+		s.observer(s.rate, append([]int16(nil), buf...))
+	}
+	return nil
+}
+
+func (s *traceSampleSource) ReadSamples(ctx context.Context, buf []int16) (int, error) {
+	if s == nil || s.source == nil {
+		return 0, io.EOF
+	}
+	count, err := s.source.ReadSamples(ctx, buf)
+	if count > 0 && count <= len(buf) && s.observer != nil {
+		s.observer(s.rate, append([]int16(nil), buf[:count]...))
+	}
+	return count, err
+}
+
+func (s *traceSampleSource) Close() error {
+	if s == nil || s.source == nil {
+		return nil
+	}
+	return s.source.Close()
+}
+
+var _ audio.AudioSource = (*traceAudioSource)(nil)
+var _ audio.SampleSource = (*traceSampleSource)(nil)

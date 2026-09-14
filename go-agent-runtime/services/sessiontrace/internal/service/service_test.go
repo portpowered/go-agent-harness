@@ -27,6 +27,20 @@ func TestPrepareRequiresClockAndNoOpsWhenDisabled(t *testing.T) {
 	}
 }
 
+func TestRemoteRenderMonitorStopIsBoundedBeforeFinalPoll(t *testing.T) {
+	monitor := &remoteRenderMonitor{
+		endpoint: "not-an-endpoint",
+		observer: func(int, []int16) {},
+		cancel:   func() {},
+		done:     make(chan struct{}),
+	}
+	started := time.Now()
+	monitor.Stop()
+	if elapsed := time.Since(started); elapsed > 2*remoteRenderStopTimeout {
+		t.Fatalf("remote render stop took %s, want at most %s", elapsed, 2*remoteRenderStopTimeout)
+	}
+}
+
 func TestPrepareReportsStagingDirectoryFailure(t *testing.T) {
 	root := t.TempDir()
 	parent := filepath.Join(root, "not-a-directory")

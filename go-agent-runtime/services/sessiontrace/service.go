@@ -9,7 +9,9 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
+	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
@@ -322,6 +324,9 @@ type Prepared interface {
 	RuntimeObserver() RuntimeObserver
 	StagedPath() string
 	Finish(context.Context, string, bool) error
+	WrapLiveRecorder(session.LiveRecorder, session.LiveRequest) session.LiveRecorder
+	WrapDeviceService(runtimeDevices.Service) runtimeDevices.Service
+	WrapAudioSource(audio.AudioSource, int) audio.AudioSource
 }
 
 // Service creates one independent prepared trace per request.

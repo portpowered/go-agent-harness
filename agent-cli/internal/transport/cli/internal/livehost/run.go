@@ -67,7 +67,7 @@ func Run(ctx context.Context, out io.Writer, request serviceSession.Request, dep
 	if traceRun != nil {
 		defer func() {
 			bundle := strings.TrimSpace(request.RecordDirectory)
-			runErr = errors.Join(runErr, traceRun.finish(traceContext(ctx), bundle, runErr == nil, runErr))
+			runErr = errors.Join(runErr, finishTrace(traceRun, traceContext(ctx), bundle, runErr == nil))
 		}()
 	}
 	cleanupImages, err := stageLiveOpeningImages(request, &liveRequest)
@@ -89,7 +89,7 @@ func Run(ctx context.Context, out io.Writer, request serviceSession.Request, dep
 		return err
 	}
 	if traceRun != nil {
-		recorder = traceRun.wrapRecorder(recorder, liveRequest)
+		recorder = wrapTraceRecorder(traceRun, recorder, liveRequest)
 	}
 	finishRecorder := func(cause error) error {
 		if recorder == nil {
@@ -106,7 +106,7 @@ func Run(ctx context.Context, out io.Writer, request serviceSession.Request, dep
 	}
 	configureLegacyReplayInput(filePorts, request, liveRequest)
 	if traceRun != nil {
-		traceRun.wrapFilePorts(filePorts)
+		wrapTraceFilePorts(traceRun, filePorts)
 	}
 	options := liveRunOptions(out, request, liveRequest, recorder, filePorts, deps, traceRun)
 	return suppressExpectedDuration(runner.RunLive(ctx, options))
@@ -308,7 +308,7 @@ func configureLegacyReplayInput(filePorts *FilePorts, request serviceSession.Req
 	}
 }
 
-func liveRunOptions(out io.Writer, request serviceSession.Request, liveRequest runtimeSession.LiveRequest, recorder runtimeSession.LiveRecorder, filePorts *FilePorts, deps Dependencies, traceRun *publicTraceRun) runtimeSession.LiveRunOptions {
+func liveRunOptions(out io.Writer, request serviceSession.Request, liveRequest runtimeSession.LiveRequest, recorder runtimeSession.LiveRecorder, filePorts *FilePorts, deps Dependencies, traceRun runtimeSessionTrace.Prepared) runtimeSession.LiveRunOptions {
 	terminalRenderer := newTerminalEventRenderer(request.ReplayPath != "")
 	deviceService := deps.DeviceService
 	deviceRequest := devicesRequest(request, liveRequest)
