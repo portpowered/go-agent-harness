@@ -40,12 +40,6 @@ func RunSessionWithInstructions(ctx context.Context, out io.Writer, opts Session
 	if err := validateSessionRunOptions(opts); err != nil {
 		return err
 	}
-	claim, err := ensureSessionRecordingClaim(&opts)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = claim.release() }()
-
 	instructions, err := resolveSessionInstructions(opts, systemPrompt)
 	if err != nil {
 		return err
@@ -85,11 +79,6 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 	if err := validateSessionRunOptions(opts); err != nil {
 		return err
 	}
-	claim, err := ensureSessionRecordingClaim(&opts)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = claim.release() }()
 	instructions, err := resolveSessionInstructions(opts, systemPrompt)
 	if err != nil {
 		return err
@@ -210,11 +199,15 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 // CLI host edge; prompt selection, skills ordering, scope formatting and all
 // model-facing policy decisions live behind the runtime contract.
 func resolveSessionInstructions(opts SessionRunOptions, systemPrompt string) (string, error) {
+	return resolveSessionInstructionsContext(context.Background(), opts, systemPrompt)
+}
+
+func resolveSessionInstructionsContext(ctx context.Context, opts SessionRunOptions, systemPrompt string) (string, error) {
 	request, err := newSessionInstructionRequest(opts, systemPrompt)
 	if err != nil {
 		return "", err
 	}
-	result, err := runtimeSessionWire.NewInstructionService().Resolve(context.Background(), request)
+	result, err := runtimeSessionWire.NewInstructionService().Resolve(ctx, request)
 	if err != nil {
 		return "", err
 	}

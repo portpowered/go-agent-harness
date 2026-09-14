@@ -18,7 +18,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/service.go",
       "symbol": "*Dispatcher.requestOptions",
-      "value": 42,
+      "value": 32,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -38,7 +38,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/service.go",
       "symbol": "*Dispatcher.requestOptions",
-      "value": 30,
+      "value": 26,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -58,7 +58,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/service.go",
       "symbol": "*Dispatcher.requestOptions",
-      "value": 117,
+      "value": 105,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -68,7 +68,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/service.go",
       "symbol": "*Dispatcher.requestOptions",
-      "value": 70,
+      "value": 61,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     }

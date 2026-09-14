@@ -85,7 +85,7 @@ func newRoomReplaySchedule(ctx context.Context, replay RoomReplayPlan, plans []*
 		}
 		appendCount := 0
 		for _, record := range capture.Records {
-			if record.Direction == gwtesting.DirectionClientToServer && strings.EqualFold(strings.TrimSpace(record.Type), inputAudioBufferAppendEventType) {
+			if record.Direction == gwtesting.DirectionClientToServer && strings.EqualFold(strings.TrimSpace(record.Type), "input_audio_buffer.append") {
 				appendCount++
 			}
 		}

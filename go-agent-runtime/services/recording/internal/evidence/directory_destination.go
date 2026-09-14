@@ -4,56 +4,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
+	"sync"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 )
 
 const (
 	evidenceFileMode      = 0o600
 	evidenceDirectoryMode = 0o755
 )
-
-func claimEvidenceDestination(raw string, observed time.Time) (string, *os.File, error) {
-	if strings.TrimSpace(raw) == "" {
-		return "", nil, &transcript.RecordingError{Kind: transcript.ErrRecordingDestination, Operation: "validate destination", Cause: errors.New("destination is required")}
-	}
-	destination := filepath.Clean(raw)
-	parent := filepath.Dir(destination)
-	if err := os.MkdirAll(parent, evidenceDirectoryMode); err != nil {
-		return "", nil, evidenceDestinationError(destination, "prepare destination", err)
-	}
-	if err := inspectEvidenceDestination(destination); err != nil {
-		return "", nil, err
-	}
-	lockPath := destination + ".lock"
-	lock, err := os.OpenFile(lockPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, evidenceFileMode)
-	if err != nil {
-		if errors.Is(err, os.ErrExist) {
-			return "", nil, fmt.Errorf("%w: %s", recording.ErrLiveEvidenceClaimed, destination)
-		}
-		return "", nil, evidenceDestinationError(destination, "claim destination", err)
-	}
-	metadata, marshalErr := json.Marshal(struct {
-		SessionID   string `json:"session_id,omitempty"`
-		Participant string `json:"participant_id,omitempty"`
-		StartedAt   string `json:"started_at,omitempty"`
-	}{StartedAt: observed.UTC().Format(time.RFC3339Nano)})
-	if marshalErr == nil {
-		_, marshalErr = lock.Write(metadata)
-	}
-	if marshalErr == nil {
-		marshalErr = lock.Sync()
-	}
-	if marshalErr != nil {
-		return "", nil, errors.Join(evidenceDestinationError(destination, "write destination claim", marshalErr), releaseEvidenceClaim(lock, lockPath))
-	}
-	return destination, lock, nil
-}
 
 func inspectEvidenceDestination(destination string) error {
 	info, err := os.Lstat(destination)
@@ -78,22 +42,6 @@ func inspectEvidenceDestination(destination string) error {
 
 func evidenceDestinationError(path, operation string, cause error) error {
 	return &transcript.RecordingError{Kind: transcript.ErrRecordingDestination, Operation: operation, Path: path, Cause: cause}
-}
-
-func releaseEvidenceClaim(lock *os.File, path string) error {
-	if lock == nil {
-		return nil
-	}
-	ownershipErr := evidenceClaimOwns(lock, path)
-	closeErr := lock.Close()
-	if ownershipErr != nil {
-		return errors.Join(ownershipErr, closeErr)
-	}
-	removeErr := os.Remove(path)
-	if errors.Is(removeErr, os.ErrNotExist) {
-		removeErr = nil
-	}
-	return errors.Join(closeErr, removeErr)
 }
 
 const evidenceBudgetMessage = "recording evidence budget exceeded"
@@ -259,4 +207,166 @@ func checkResource(resource string, bytes, items, usedBytes, usedItems, maxBytes
 
 func isEvidenceBudgetError(err error) bool {
 	return errors.Is(err, evidenceBudgetMarker{})
+}
+
+const claimFileMode = 0o600
+
+type destinationClaim struct {
+	destination string
+	kind        recording.ClaimKind
+	lockPath    string
+	lock        *os.File
+
+	mu       sync.Mutex
+	released bool
+}
+
+const claimParentDirectoryMode = 0o755
+
+func Claim(options recording.ClaimOptions) (recording.DestinationClaim, error) {
+	if options.Kind != recording.ClaimKindCapture && options.Kind != recording.ClaimKindDirectory {
+		return nil, &recording.ClaimError{Destination: options.Destination, Err: fmt.Errorf("unsupported claim kind %q", options.Kind)}
+	}
+	destination := filepath.Clean(options.Destination)
+	if destination == "." || options.Destination == "" {
+		return nil, &recording.ClaimError{Destination: options.Destination, Err: errors.New("destination is required")}
+	}
+	if err := os.MkdirAll(filepath.Dir(destination), claimParentDirectoryMode); err != nil {
+		return nil, &recording.ClaimError{Destination: destination, Err: fmt.Errorf("prepare parent directory: %w", err)}
+	}
+	if err := validateClaimDestination(destination, options.Kind); err != nil {
+		return nil, &recording.ClaimError{Destination: destination, Err: err}
+	}
+	lockPath := destination + ".lock"
+	lock, err := os.OpenFile(lockPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, claimFileMode)
+	if err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return nil, &recording.ClaimError{Destination: destination, Err: recording.ErrLiveEvidenceClaimed, Holder: readClaimHolder(lockPath)}
+		}
+		return nil, &recording.ClaimError{Destination: destination, Err: err}
+	}
+	metadata, marshalErr := json.Marshal(recording.ClaimHolder{PID: os.Getpid(), StartedAt: time.Now().UTC()})
+	if marshalErr == nil {
+		_, marshalErr = lock.Write(metadata)
+	}
+	if marshalErr == nil {
+		marshalErr = lock.Sync()
+	}
+	if marshalErr != nil {
+		return nil, &recording.ClaimError{Destination: destination, Err: errors.Join(marshalErr, lock.Close(), os.Remove(lockPath))}
+	}
+	return &destinationClaim{destination: destination, kind: options.Kind, lockPath: lockPath, lock: lock}, nil
+}
+
+func validateClaimDestination(destination string, kind recording.ClaimKind) error {
+	if kind == recording.ClaimKindDirectory {
+		return inspectEvidenceDestination(destination)
+	}
+	if info, err := os.Lstat(destination); err == nil {
+		if info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+			return errors.New("capture destination must be a regular file")
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return nil
+}
+
+func readClaimHolder(path string) *recording.ClaimHolder {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var holder recording.ClaimHolder
+	if json.Unmarshal(data, &holder) != nil || holder.PID <= 0 || holder.StartedAt.IsZero() {
+		return nil
+	}
+	return &holder
+}
+
+func (c *destinationClaim) Destination() string {
+	if c == nil {
+		return ""
+	}
+	return c.destination
+}
+
+func (c *destinationClaim) ownsLocked() error {
+	if c == nil || c.lock == nil {
+		return recording.ErrClaimLost
+	}
+	lockInfo, err := c.lock.Stat()
+	if err != nil {
+		return fmt.Errorf("%w: inspect claim: %w", recording.ErrClaimLost, err)
+	}
+	pathInfo, err := os.Lstat(c.lockPath)
+	if err != nil || !os.SameFile(lockInfo, pathInfo) {
+		return recording.ErrClaimLost
+	}
+	return nil
+}
+
+func (c *destinationClaim) Publish(flush func(string) error) (publishErr error) {
+	if c == nil || flush == nil {
+		return recording.ErrClaimLost
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.released {
+		return recording.ErrClaimLost
+	}
+	if err := c.ownsLocked(); err != nil {
+		return &recording.ClaimError{Destination: c.destination, Err: err}
+	}
+	if c.kind == recording.ClaimKindDirectory {
+		return flush(c.destination)
+	}
+	temporary, err := os.CreateTemp(filepath.Dir(c.destination), "."+filepath.Base(c.destination)+".tmp-")
+	if err != nil {
+		return err
+	}
+	temporaryPath := temporary.Name()
+	defer func() {
+		if removeErr := os.Remove(temporaryPath); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+			publishErr = errors.Join(publishErr, removeErr)
+		}
+	}()
+	if err := temporary.Close(); err != nil {
+		return err
+	}
+	if err := flush(temporaryPath); err != nil {
+		return err
+	}
+	if err := c.ownsLocked(); err != nil {
+		return &recording.ClaimError{Destination: c.destination, Err: err}
+	}
+	if err := os.Link(temporaryPath, c.destination); err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return &recording.ClaimError{Destination: c.destination, Err: recording.ErrLiveEvidenceClaimed}
+		}
+		return err
+	}
+	return nil
+}
+
+func (c *destinationClaim) Release() error {
+	if c == nil {
+		return nil
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.released {
+		return nil
+	}
+	c.released = true
+	ownershipErr := c.ownsLocked()
+	closeErr := c.lock.Close()
+	if ownershipErr != nil {
+		return &recording.ClaimError{Destination: c.destination, Err: errors.Join(ownershipErr, closeErr)}
+	}
+	removeErr := os.Remove(c.lockPath)
+	if errors.Is(removeErr, os.ErrNotExist) {
+		removeErr = nil
+	}
+	return errors.Join(closeErr, removeErr)
 }

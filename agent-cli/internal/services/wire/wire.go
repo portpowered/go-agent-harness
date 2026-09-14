@@ -21,6 +21,8 @@ import (
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeDevicesWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
 	runtimeProviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	runtimeRecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
+	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
@@ -142,13 +144,13 @@ func NewSessionService(deps SessionDependencies) serviceSession.SessionService {
 
 // NewSessionRuntime builds the private runtime implementation behind its
 // public contract. Application Wire never imports services/internal.
-func NewSessionRuntime(clockSource clock.Source, resolver serviceTools.Service, planFactory agentruntime.SessionRuntimeFactory, runtimeFactory agentruntime.SessionRTCRuntimeFactory, inferencer messages.SessionInferencer, toolExecutor messages.ToolExecutor, deviceRegistry devicegw.DeviceRegistry, observer agentruntime.SessionRuntimeObserver, metricSampler observability.MetricSampler, logger observability.Logger, modelCatalog runtimeProviders.ModelCatalog) serviceRuntime.Runtime {
+func NewSessionRuntime(clockSource clock.Source, resolver serviceTools.Service, planFactory agentruntime.SessionRuntimeFactory, runtimeFactory agentruntime.SessionRTCRuntimeFactory, inferencer messages.SessionInferencer, toolExecutor messages.ToolExecutor, deviceRegistry devicegw.DeviceRegistry, observer agentruntime.SessionRuntimeObserver, metricSampler observability.MetricSampler, logger observability.Logger, modelCatalog runtimeProviders.ModelCatalog, recordingService runtimeRecording.Service, replayService runtimeReplay.Service) serviceRuntime.Runtime {
 	return agentruntime.New(agentruntime.Dependencies{
 		Clock: clockSource, PlanFactory: planFactory, ToolService: resolver, RuntimeFactory: runtimeFactory,
 		SessionInferencer: inferencer, ToolExecutor: toolExecutor,
 		DeviceRegistry: deviceRegistry, RuntimeObserver: observer,
 		Observability: observability.NewDependencies(metricSampler, logger),
-		ModelCatalog:  modelCatalog,
+		ModelCatalog:  modelCatalog, RecordingService: recordingService, ReplayService: replayService,
 	})
 }
 

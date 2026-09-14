@@ -142,9 +142,8 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 			return flushErr
 		},
 	}
-
 	finish := func(planned bool, preferredErr error) error {
-		terminationPlanned = planned
+		markLiveDurationFinish(&terminationPlanned, planned, opts.observer)
 		drainDevicePlayback = !planned && preferredErr == nil && ctx.Err() == nil
 		terminationErr := termination.terminate(preferredErr)
 		durationTerminalWritten = terminalState.written()

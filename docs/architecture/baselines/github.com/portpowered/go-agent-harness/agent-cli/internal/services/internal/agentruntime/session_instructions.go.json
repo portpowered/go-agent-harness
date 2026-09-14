@@ -8,7 +8,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_instructions.go",
       "symbol": "RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration",
-      "value": 52,
+      "value": 51,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -18,7 +18,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_instructions.go",
       "symbol": "RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration",
-      "value": 31,
+      "value": 30,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -28,7 +28,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_instructions.go",
       "symbol": "RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration",
-      "value": 142,
+      "value": 137,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -38,7 +38,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_instructions.go",
       "symbol": "RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration",
-      "value": 93,
+      "value": 88,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     }

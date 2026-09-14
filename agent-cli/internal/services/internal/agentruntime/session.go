@@ -5,9 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimerecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
+	recordingwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/wire"
+	runtimesession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
 // RunSession validates and runs the session inference command surface.
@@ -21,16 +27,67 @@ func RunSession(ctx context.Context, out io.Writer, opts SessionRunOptions) (run
 	if err := validateSessionRunOptions(opts); err != nil {
 		return err
 	}
-	claim, err := ensureSessionRecordingClaim(&opts)
+	plan, err := planSessionRuntimeContext(ctx, opts)
 	if err != nil {
-		return err
-	}
-	defer func() { _ = claim.release() }()
-	plan, err := planSessionRuntime(opts)
-	if err != nil {
+		if strings.TrimSpace(opts.ReplayPath) != "" {
+			return fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
+		}
 		return err
 	}
 	return plan.run(ctx, out)
+}
+
+func connectAudioOutputInferencer(i *sessionAudioOutputInferencer, ctx context.Context) (messages.Session, error) {
+	if i == nil || i.inner == nil {
+		return nil, errors.New("audio output session inferencer is unavailable")
+	}
+	return i.inner.ConnectSession(context.WithoutCancel(ctx))
+}
+
+func openSessionLiveRecorder(opts SessionRunOptions, plan sessionRuntimePlan, destination string, maxDuration time.Duration) (runtimesession.LiveRecorder, error) {
+	if strings.TrimSpace(destination) == "" {
+		return nil, nil
+	}
+	service := opts.recordingService
+	if service == nil {
+		service = recordingwire.NewService(platformclock.Ensure(plan.clockSource))
+	}
+	model := strings.TrimSpace(plan.model)
+	if model == "" {
+		model = strings.TrimSpace(opts.Model)
+	}
+	options := runtimerecording.LiveEvidenceOptions{
+		Destination:    destination,
+		Provider:       plan.provider,
+		Model:          model,
+		ClockBase:      plan.clockSource.Now(),
+		WallClockStart: time.Now().UTC(),
+		Credentials:    sessionEvidenceCredentials(opts, plan.provider),
+	}
+	if opts.LoadedConfig != nil {
+		browser := opts.LoadedConfig.Browser.Recording
+		options.Browser = runtimerecording.BrowserRecordingOptions{
+			Enabled: browser.Enabled, IncludeArguments: browser.IncludeArguments,
+			IncludeResults: browser.IncludeResults, RedactURLQuery: browser.RedactURLQuery,
+			RedactURLFragment: browser.RedactURLFragment,
+		}
+	}
+	if strings.TrimSpace(opts.RecordPath) != "" {
+		options.ProviderCapturePath = opts.RecordPath
+		// Positive max-duration runs own the sibling JSONL artifact through
+		// SessionDurationArtifactSet; the directory recorder must not create a
+		// second exclusive sidecar at the same path.
+		options.DisableProviderCaptureSidecar = maxDuration > 0
+	}
+	return service.OpenLiveEvidence(options)
+}
+
+func startBrowserRecording(ctx context.Context, opts SessionRunOptions, recorder runtimesession.LiveRecorder) func() {
+	if opts.browserRecordingStarter == nil {
+		return func() {}
+	}
+	enabled := opts.LoadedConfig != nil && opts.LoadedConfig.Browser.Recording.Enabled
+	return opts.browserRecordingStarter(ctx, enabled, opts.BrowserEventWatch, recorder)
 }
 
 // sessionInstructionsInferencer decorates caller-owned session seams without

@@ -28,6 +28,7 @@ type directoryRecorder struct {
 	options     recording.LiveEvidenceOptions
 	budget      evidenceResourceBudget
 	destination string
+	claim       *destinationClaim
 	lockPath    string
 	lock        *os.File
 	spool       string
@@ -55,8 +56,10 @@ type directoryRecorder struct {
 	agentPath      string
 	inputPaths     []string
 	outputPaths    []string
+	runtimeAudio   bool
 	terminal       *transcript.RecordingTerminalSummary
 	conversation   evidenceConversation
+	browser        *browserEvidence
 	usageMu        sync.Mutex
 	usage          recording.ResourceUsage
 
@@ -105,26 +108,32 @@ func newDirectoryRecorder(options recording.LiveEvidenceOptions, source clock.So
 	if options.WallClockStart.IsZero() {
 		options.WallClockStart = observed
 	}
-	destination, lock, err := claimEvidenceDestination(options.Destination, observed)
+	admitted, err := Claim(recording.ClaimOptions{Destination: options.Destination, Kind: recording.ClaimKindDirectory})
 	if err != nil {
 		return nil, err
 	}
+	claim, ok := admitted.(*destinationClaim)
+	if !ok {
+		return nil, errors.Join(errors.New("recording directory claim has an unexpected implementation"), admitted.Release())
+	}
 	spool, err := os.MkdirTemp("", ".go-agent-runtime-recording-")
 	if err != nil {
-		return nil, errors.Join(fmt.Errorf("create recording spool: %w", err), releaseEvidenceClaim(lock, destination+".lock"))
+		return nil, errors.Join(fmt.Errorf("create recording spool: %w", err), claim.Release())
 	}
 
 	recorder := &directoryRecorder{
 		options:      cloneEvidenceOptions(options),
 		budget:       budget,
 		writeSpool:   writeAll,
-		destination:  destination,
-		lockPath:     destination + ".lock",
-		lock:         lock,
+		destination:  claim.destination,
+		claim:        claim,
+		lockPath:     claim.lockPath,
+		lock:         claim.lock,
 		spool:        spool,
 		queue:        make(chan directoryEvidenceItem, directoryEvidenceQueueCapacity),
 		done:         make(chan struct{}),
 		conversation: newEvidenceConversation(),
+		browser:      newBrowserEvidence(options.Browser, options.Credentials, budget.limits),
 	}
 	go recorder.run()
 	return recorder, nil
@@ -169,6 +178,11 @@ func (r *directoryRecorder) RecordAudio(ctx context.Context, record session.Live
 	}
 	if err := record.Frame.Format.Validate(); err != nil {
 		r.latch(recordingWriteError("observe audio format", err))
+	}
+	if record.Admission != "" {
+		r.mu.Lock()
+		r.runtimeAudio = true
+		r.mu.Unlock()
 	}
 	if len(record.Frame.Samples) == 0 && !record.Frame.EndOfResponse {
 		return nil
@@ -218,6 +232,28 @@ func (r *directoryRecorder) RecordEvent(ctx context.Context, event session.LiveE
 		item.terminal = &terminal
 	}
 	return r.enqueue(item)
+}
+
+// RecordBrowserEvent forwards semantic browser observations to the recording
+// service's private redaction and bounded publication state.
+func (r *directoryRecorder) RecordBrowserEvent(ctx context.Context, event recording.BrowserEvent) error {
+	if r == nil {
+		return recording.ErrLiveEvidenceClosed
+	}
+	if err := contextError(ctx); err != nil {
+		return err
+	}
+	r.mu.Lock()
+	closed := r.closed
+	browser := r.browser
+	r.mu.Unlock()
+	if closed {
+		return recording.ErrLiveEvidenceClosed
+	}
+	if browser == nil {
+		return nil
+	}
+	return browser.record(event)
 }
 
 func encodeRuntimeEvent(event session.LiveEvent, errorText string) ([]byte, error) {
@@ -338,45 +374,6 @@ func (r *directoryRecorder) run() {
 		r.processItem(item)
 		r.releaseQueueItem(item)
 	}
-}
-
-func (r *directoryRecorder) processItem(item directoryEvidenceItem) {
-	defer r.captureUsage(true)
-	switch item.kind {
-	case evidenceMessage:
-		r.processMessage(item)
-	case evidenceAudio:
-		r.processAudio(item)
-	case evidenceEvent:
-		r.processEvent(item)
-	}
-}
-
-func (r *directoryRecorder) processEvent(item directoryEvidenceItem) {
-	if r.workerErr == nil {
-		if err := r.writeTranscript(item, transcript.StreamRuntimeEvent, item.payload); err != nil && !isEvidenceBudgetError(err) {
-			r.workerErr = err
-		}
-	}
-	if item.terminal != nil {
-		if err := r.writeDurationSidecarTerminal(item.timestamp, item.terminal); err != nil && r.workerErr == nil && !isEvidenceBudgetError(err) {
-			r.workerErr = err
-		}
-	}
-}
-
-func (r *directoryRecorder) releaseQueueItem(item directoryEvidenceItem) {
-	r.mu.Lock()
-	r.queuedBytes -= item.bytes
-	if r.queuedItems > 0 {
-		r.queuedItems--
-	}
-	queuedBytes, queuedItems := r.queuedBytes, r.queuedItems
-	r.mu.Unlock()
-	r.usageMu.Lock()
-	r.usage.QueueBytes = queuedBytes
-	r.usage.QueueItems = queuedItems
-	r.usageMu.Unlock()
 }
 
 var _ session.LiveRecorder = (*directoryRecorder)(nil)

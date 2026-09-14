@@ -54,6 +54,35 @@ type CaptureInspection struct {
 	InitialToolsKnown bool
 }
 
+// LiveRequest selects one credential-free realtime capture for preparation.
+// Timing is interpreted by the replay service rather than by a host adapter.
+type LiveRequest struct {
+	SourcePath string
+	Timing     session.LiveReplayTiming
+}
+
+// LivePrepared is the opaque, invocation-owned result of realtime replay
+// admission. Concrete cursors, wrappers, and mutable completion state remain
+// private to the replay service.
+type LivePrepared interface {
+	Inspection() CaptureInspection
+	WrapDialer(transport.Dialer) transport.Dialer
+	WrapInferencer(messages.SessionInferencer) messages.SessionInferencer
+	Done() <-chan struct{}
+	Err() error
+	Close() error
+}
+
+// CaptureReplay is the bounded message stream for a turn-oriented capture.
+// The replay service owns the cursor and its completion/error state; hosts only
+// render the admitted messages and observe completion.
+type CaptureReplay interface {
+	Receive() <-chan messages.StreamMessage
+	Done() <-chan struct{}
+	Err() error
+	Close() error
+}
+
 // IsRealtime reports whether the admitted capture can drive a continuous
 // provider session.
 func (i CaptureInspection) IsRealtime() bool { return i.Kind == CaptureKindRealtime }
@@ -72,6 +101,8 @@ type Service interface {
 	// provider artifact path before returning the raw capture path to the
 	// provider service.
 	ResolveCapturePath(context.Context, string) (string, error)
+	PrepareLive(context.Context, LiveRequest) (LivePrepared, error)
+	Replay(context.Context, string) (CaptureReplay, error)
 }
 
 // CaptureAdmission is the narrow admission dependency used by strict replay.

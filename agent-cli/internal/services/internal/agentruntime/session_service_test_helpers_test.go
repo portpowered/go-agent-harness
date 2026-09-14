@@ -38,6 +38,8 @@ func newInjectedSessionService(deps servicewire.SessionDependencies) serviceSess
 			deps.MetricSampler,
 			deps.Logger,
 			deps.ModelCatalog,
+			nil,
+			nil,
 		)
 	}
 	return servicewire.NewSessionService(deps)

@@ -5,10 +5,34 @@ import (
 	"errors"
 	"fmt"
 
+	public "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 )
+
+func (d *Dispatcher) prepareAudioInterruptions(ctx context.Context, options SessionRunOptions, request public.Request) (SessionRunOptions, error) {
+	if len(request.AudioInterrupts) == 0 {
+		return options, nil
+	}
+	if options.BrowserWatch == nil {
+		return SessionRunOptions{}, closeSessionAudioInterruptionCapability(options, errors.New("--audio-interrupt requires an enabled WebMCP session capability"))
+	}
+	inputs, err := prepareScheduledAudioInputsContext(ctx, request.AudioInterrupts)
+	if err != nil {
+		return SessionRunOptions{}, closeSessionAudioInterruptionCapability(options, fmt.Errorf("prepare --audio-interrupt: %w", err))
+	}
+	interruptions, _ := StartSessionAudioInterruptionsOnBrowserTool(ctx, options.BrowserWatch(ctx), request.AudioInterruptTool, inputs)
+	options.AudioInterruptions = interruptions
+	return options, nil
+}
+
+func closeSessionAudioInterruptionCapability(options SessionRunOptions, err error) error {
+	if options.CapabilityClose == nil {
+		return err
+	}
+	return errors.Join(err, options.CapabilityClose())
+}
 
 func sendEventDrivenAudioInput(ctx context.Context, loop *agentloop.AgentLoop, opts sessionLoopOptions, input ScheduledAudioInput) error {
 	if len(input.PCM) == 0 {

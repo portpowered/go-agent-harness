@@ -49,6 +49,17 @@ func (f *sessionRuntimeFinalizer) finish(ctx context.Context, out io.Writer, pri
 	}
 	f.once.Do(func() {
 		cleanupErr := f.cleanup(ctx, out)
+		if f.plan.liveRecorder != nil {
+			finalizeCtx := ctx
+			var cancel context.CancelFunc
+			if finalizeCtx == nil {
+				finalizeCtx, cancel = context.WithCancel(context.Background()) //nolint:contextcheck // A nil caller context has no inherited parent.
+				defer cancel()
+			}
+			cleanupErr = errors.Join(cleanupErr, invokeSessionFinalizer(func() error {
+				return f.plan.liveRecorder.Finalize(context.WithoutCancel(finalizeCtx), errors.Join(primary, cleanupErr))
+			}))
+		}
 		f.mu.Lock()
 		f.err = cleanupErr
 		f.mu.Unlock()
@@ -91,6 +102,9 @@ func (f *sessionRuntimeFinalizer) cleanup(ctx context.Context, out io.Writer) er
 	if f.plan.rtcRuntime != nil {
 		appendErr(wrapSessionPhaseError("close WebRTC runtime", invokeSessionFinalizer(f.plan.rtcRuntime.Close)))
 	}
+	if f.plan.replayPrepared != nil {
+		appendErr(wrapSessionPhaseError("close replay preparation", invokeSessionFinalizer(f.plan.replayPrepared.Close)))
+	}
 
 	// Provider capture must be durable before a recording-directory finalizer
 	// (owned by the outer recording wrapper) writes its manifest. Attempt the
@@ -109,7 +123,7 @@ func (f *sessionRuntimeFinalizer) cleanup(ctx context.Context, out io.Writer) er
 		})))
 	}
 	if f.plan.captureClaim != nil {
-		appendErr(wrapSessionRuntimeError(f.plan, invokeSessionFinalizer(f.plan.captureClaim.release)))
+		appendErr(wrapSessionRuntimeError(f.plan, invokeSessionFinalizer(f.plan.captureClaim.Release)))
 	}
 
 	return errors.Join(errs...)

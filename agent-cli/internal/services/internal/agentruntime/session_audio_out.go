@@ -53,11 +53,6 @@ func RunSessionWithAudioOutAndTextSeed(ctx context.Context, out io.Writer, opts 
 	if err := validateSessionRunOptions(opts); err != nil {
 		return err
 	}
-	claim, err := ensureSessionRecordingClaim(&opts)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = claim.release() }()
 	plan, err := planSessionRuntime(opts)
 	if err != nil {
 		return err
@@ -122,11 +117,6 @@ func RunSessionWithAudioOutAndTextSeedAndMaxDuration(ctx context.Context, out io
 	if err := validateSessionRunOptions(opts); err != nil {
 		return err
 	}
-	claim, err := ensureSessionRecordingClaim(&opts)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = claim.release() }()
 	plan, err := planSessionRuntime(opts)
 	if err != nil {
 		return err
@@ -517,7 +507,7 @@ func newSessionAudioOutputInferencer(inner messages.SessionInferencer, output *s
 }
 
 func (i *sessionAudioOutputInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
-	session, err := i.inner.ConnectSession(context.WithoutCancel(ctx))
+	session, err := connectAudioOutputInferencer(i, ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -533,7 +523,6 @@ func (i *sessionAudioOutputInferencer) wait() {
 	connected := i.connected
 	i.mu.Unlock()
 	if connected != nil {
-		// Close completes retained draining and captures provider shutdown errors.
 		i.recordErr(connected.Close())
 	}
 }

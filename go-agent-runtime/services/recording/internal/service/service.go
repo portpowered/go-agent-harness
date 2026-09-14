@@ -15,6 +15,10 @@ type Service struct{ clock clock.Source }
 
 func New(source clock.Source) *Service { return &Service{clock: source} }
 
+func (s *Service) Claim(options recording.ClaimOptions) (recording.DestinationClaim, error) {
+	return evidence.Claim(options)
+}
+
 func (*Service) TrackSession(inner messages.SessionInferencer, writer recording.Writer, path string) (recording.SessionCapture, error) {
 	if inner == nil || writer == nil || path == "" {
 		return nil, errors.New("recording requires a session, writer and destination")

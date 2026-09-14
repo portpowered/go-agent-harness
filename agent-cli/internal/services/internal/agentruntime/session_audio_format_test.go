@@ -50,7 +50,7 @@ func TestPlanOpenAIRecordPromptAudioOutputWithoutInputUsesRealtimeDuplexRate(t *
 	if err != nil {
 		t.Fatalf("plan operator-shaped record session: %v", err)
 	}
-	defer func() { _ = plan.captureClaim.release() }()
+	defer func() { _ = plan.captureClaim.Release() }() //nolint:errcheck // Test teardown is best effort after the assertion.
 
 	if plan.mode != sessionRuntimeModeRecordOpenAI || plan.capturePath != recordPath {
 		t.Fatalf("record plan = mode:%q capture:%q, want OpenAI record at %q", plan.mode, plan.capturePath, recordPath)

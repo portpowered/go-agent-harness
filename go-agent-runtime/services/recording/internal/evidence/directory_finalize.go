@@ -53,6 +53,14 @@ func (r *directoryRecorder) finalize(runErr error) error {
 	logData, logErr := r.conversation.json()
 	result = errors.Join(result, logErr)
 	config := r.bundleConfig(terminal, logData)
+	if r.browser != nil {
+		browserArtifact, browserErr := r.browser.artifact()
+		result = errors.Join(result, browserErr)
+		config.BrowserArtifact = browserArtifact
+		if browserArtifact != nil {
+			config.ManifestVersion = transcript.RecordingManifestV2Version
+		}
+	}
 	artifact, present, artifactErr := r.providerArtifact()
 	result = errors.Join(result, artifactErr)
 	config.Metadata.Configuration["provider_capture"] = "unavailable"
@@ -70,7 +78,9 @@ func (r *directoryRecorder) finalize(runErr error) error {
 	if publish {
 		result = errors.Join(result, transcript.WriteRecordingBundle(config))
 	}
-	result = errors.Join(result, releaseEvidenceClaim(r.lock, r.lockPath))
+	if r.claim != nil {
+		result = errors.Join(result, r.claim.Release())
+	}
 	if r.spool != "" {
 		result = errors.Join(result, os.RemoveAll(r.spool))
 	}
@@ -89,23 +99,16 @@ func (r *directoryRecorder) bundleConfig(terminal *transcript.RecordingTerminalS
 			Configuration:  map[string]string{"observation_boundary": "session-port", "provider": r.options.Provider, "session_id": r.options.SessionID, "participant_id": r.options.ParticipantID},
 		},
 		Terminal: terminal, Credentials: r.options.Credentials,
-		BeforeCommit: func() error { return evidenceClaimOwns(r.lock, r.lockPath) },
+		BeforeCommit: func() error {
+			if r.claim == nil {
+				return errors.Join(recording.ErrClaimLost, recording.ErrLiveEvidenceClaimed)
+			}
+			if err := r.claim.ownsLocked(); err != nil {
+				return errors.Join(err, recording.ErrLiveEvidenceClaimed)
+			}
+			return nil
+		},
 	}
-}
-
-func evidenceClaimOwns(lock *os.File, path string) error {
-	if lock == nil {
-		return recording.ErrLiveEvidenceClaimed
-	}
-	lockInfo, err := lock.Stat()
-	if err != nil {
-		return fmt.Errorf("%w: inspect lock: %w", recording.ErrLiveEvidenceClaimed, err)
-	}
-	pathInfo, err := os.Lstat(path)
-	if err != nil || !os.SameFile(lockInfo, pathInfo) {
-		return recording.ErrLiveEvidenceClaimed
-	}
-	return nil
 }
 
 func cloneTerminal(value *transcript.RecordingTerminalSummary) *transcript.RecordingTerminalSummary {

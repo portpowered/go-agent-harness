@@ -20,6 +20,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimesession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	devicegateway "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
@@ -62,37 +63,49 @@ func StartSessionAudioInterruptionsOnBrowserTool(
 	ctx, cancel := context.WithCancel(parent)
 	out := make(chan ScheduledAudioInput, len(inputs))
 	cloned := cloneScheduledAudioInputs(inputs)
-	go func() {
-		defer close(out)
-		defer cancel()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case event, ok := <-events:
-				if !ok {
-					return
-				}
-				// Broker-owned calls first publish a queued admission event and
-				// publish this same lifecycle event type again when the browser
-				// invocation is actually dispatched. Require the identity-bearing
-				// start observation so a malformed or unrelated lifecycle event
-				// cannot release audio.
-				if event.Type != webmcp.BrokerEventInvocationCreated || event.State != webmcp.InvocationDispatched || event.InvocationID == "" || event.ToolName == "" || (toolName != "" && event.ToolName != toolName) {
-					continue
-				}
-				for _, input := range cloned {
-					select {
-					case out <- input:
-					case <-ctx.Done():
-						return
-					}
-				}
+	go runSessionAudioInterruptions(ctx, cancel, events, toolName, cloned, out)
+	return out, cancel
+}
+
+func runSessionAudioInterruptions(ctx context.Context, cancel context.CancelFunc, events <-chan webmcp.BrokerEvent, toolName string, inputs []ScheduledAudioInput, out chan<- ScheduledAudioInput) {
+	defer close(out)
+	defer cancel()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case event, ok := <-events:
+			if !ok {
 				return
 			}
+			if !sessionAudioInterruptionEventMatches(event, toolName) {
+				continue
+			}
+			if !sendScheduledAudioInputs(ctx, inputs, out) {
+				return
+			}
+			return
 		}
-	}()
-	return out, cancel
+	}
+}
+
+func sessionAudioInterruptionEventMatches(event webmcp.BrokerEvent, toolName string) bool {
+	// Broker-owned calls first publish a queued admission event and publish
+	// this same lifecycle event type again when the browser invocation is
+	// actually dispatched. Require the identity-bearing start observation so a
+	// malformed or unrelated lifecycle event cannot release audio.
+	return event.Type == webmcp.BrokerEventInvocationCreated && event.State == webmcp.InvocationDispatched && event.InvocationID != "" && event.ToolName != "" && (toolName == "" || event.ToolName == toolName)
+}
+
+func sendScheduledAudioInputs(ctx context.Context, inputs []ScheduledAudioInput, out chan<- ScheduledAudioInput) bool {
+	for _, input := range inputs {
+		select {
+		case out <- input:
+		case <-ctx.Done():
+			return false
+		}
+	}
+	return true
 }
 
 // SessionAudioInput carries the command-line presence bit separately from the
@@ -229,11 +242,6 @@ func RunSessionWithAudioInput(ctx context.Context, out io.Writer, opts SessionRu
 	if err := validateSessionRunOptions(opts); err != nil {
 		return err
 	}
-	claim, err := ensureSessionRecordingClaim(&opts)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = claim.release() }()
 	opts.ClientOwnsAudioTurnBoundaries = true
 	return runSessionWithAudioInputPlan(ctx, out, input, "", SessionTextSeed{}, func() (sessionRuntimePlan, error) {
 		if err := validateSessionRunOptions(opts); err != nil {
@@ -285,11 +293,6 @@ func RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(c
 	if err := validateSessionRunOptions(opts); err != nil {
 		return err
 	}
-	claim, err := ensureSessionRecordingClaim(&opts)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = claim.release() }()
 	// This source owns the explicit end-of-turn marker below. Ask the provider
 	// runtime to disable server-side VAD before the session is connected so a
 	// finite stream cannot be auto-committed and then committed again at EOF.
@@ -488,13 +491,17 @@ func openSessionAudioInput(input SessionAudioInput) (*sessionAudioSource, error)
 // emits its MESSAGE.END boundary after the bytes so the next file is not
 // merged into the same provider response.
 func prepareScheduledAudioInputs(paths []string) ([]ScheduledAudioInput, error) {
+	return prepareScheduledAudioInputsContext(context.Background(), paths)
+}
+
+func prepareScheduledAudioInputsContext(ctx context.Context, paths []string) ([]ScheduledAudioInput, error) {
 	inputs := make([]ScheduledAudioInput, 0, len(paths))
 	for index, path := range paths {
 		input := SessionAudioInput{Path: path, Present: true}
 		if err := validateSessionAudioInput(input); err != nil {
 			return nil, err
 		}
-		pcm, sourceRate, err := readSessionAudioInputPCM(input)
+		pcm, sourceRate, err := readSessionAudioInputPCM(ctx, input)
 		if err != nil {
 			return nil, fmt.Errorf("load audio turn %d from %q: %w", index+1, path, err)
 		}
@@ -514,7 +521,7 @@ func prepareScheduledAudioInputs(paths []string) ([]ScheduledAudioInput, error) 
 // readSessionAudioInputPCM decodes one CLI audio input using the same source
 // implementation as --audio-in, but returns its normalized 16 kHz PCM bytes
 // for a scheduled persistent-session turn.
-func readSessionAudioInputPCM(input SessionAudioInput) (pcm []byte, sourceRate int, runErr error) {
+func readSessionAudioInputPCM(ctx context.Context, input SessionAudioInput) (pcm []byte, sourceRate int, runErr error) {
 	source, err := openSessionAudioInput(input)
 	if err != nil {
 		return nil, 0, err
@@ -529,7 +536,7 @@ func readSessionAudioInputPCM(input SessionAudioInput) (pcm []byte, sourceRate i
 	var encoded bytes.Buffer
 	for {
 		clear(frame)
-		if err := source.source.ReadFrame(context.Background(), frame); err != nil {
+		if err := source.source.ReadFrame(ctx, frame); err != nil {
 			if errors.Is(err, io.EOF) {
 				break
 			}
@@ -542,71 +549,6 @@ func readSessionAudioInputPCM(input SessionAudioInput) (pcm []byte, sourceRate i
 		_, _ = encoded.Write(frameBytes)
 	}
 	return encoded.Bytes(), source.sourceRate, nil
-}
-
-func classifySessionAudioOpenError(path string, err error) error {
-	kind := SessionAudioInputUnreadable
-	switch {
-	case errors.Is(err, audio.ErrUnsupportedFormat):
-		kind = SessionAudioInputFormat
-	case errors.Is(err, os.ErrNotExist):
-		kind = SessionAudioInputMissing
-	case errors.Is(err, audio.ErrNilStream):
-		kind = SessionAudioInputUnreadable
-	}
-	return &SessionAudioInputError{Kind: kind, Path: path, Err: err}
-}
-
-type sessionAudioSource struct {
-	source       audio.AudioSource
-	path         string
-	sourceRate   int
-	providerRate int
-	reader       *sessionAudioReader
-	ownedInput   *os.File
-	// paced marks file-backed finite sources whose frames must be delivered
-	// at the encoded real-time rate. Synthetic test sources injected through
-	// the SessionAudioInput.Source seam are never paced so tests control
-	// their own timing.
-	paced     bool
-	send      func(context.Context, []byte) error
-	endOfTurn func(context.Context) error
-	runtime   *sessionRuntimeObservationRecorder
-	clock     sharedclock.Source
-	once      sync.Once
-	err       error
-}
-
-func (s *sessionAudioSource) bindProviderRate(rate int) {
-	if s != nil {
-		s.providerRate = rate
-	}
-}
-
-func (s *sessionAudioSource) bindContext(ctx context.Context) {
-	if s.reader != nil {
-		s.reader.bindContext(ctx)
-	}
-}
-
-func (s *sessionAudioSource) bindRuntime(runtime *sessionRuntimeObservationRecorder, source sharedclock.Source) {
-	if s != nil {
-		s.runtime = runtime
-		s.clock = source
-	}
-}
-
-func (s *sessionAudioSource) Close() error {
-	s.once.Do(func() {
-		s.err = s.source.Close()
-		if s.ownedInput != nil {
-			s.err = errors.Join(s.err, s.reader.Close())
-		}
-	})
-	if s.err == nil {
-		return nil
-	}
-	return &SessionAudioInputError{Kind: SessionAudioInputClose, Path: s.path, Err: s.err}
 }
 
 // sessionAudioReader carries cancellation into readers that can honor it
@@ -886,16 +828,47 @@ func finishSessionAudioTurn(ctx context.Context, loop *agentloop.AgentLoop, sour
 
 func sendSessionAudioFrames(ctx context.Context, loop *agentloop.AgentLoop, source *sessionAudioSource, frames [][]byte) error {
 	for _, pcm := range frames {
-		send := source.send
-		if send == nil {
-			send = loop.SendAudioInput
+		if err := sendSessionAudioFrame(ctx, loop, source, pcm); err != nil {
+			return err
 		}
-		if err := send(ctx, pcm); err != nil {
-			return &SessionAudioInputError{Kind: SessionAudioInputSend, Path: source.path, Err: err}
-		}
-		source.runtime.audioInput(pcm)
 	}
 	return nil
+}
+
+func sendSessionAudioFrame(ctx context.Context, loop *agentloop.AgentLoop, source *sessionAudioSource, pcm []byte) error {
+	send := source.send
+	if send == nil {
+		send = loop.SendAudioInput
+	}
+	if err := send(ctx, pcm); err != nil {
+		return &SessionAudioInputError{Kind: SessionAudioInputSend, Path: source.path, Err: err}
+	}
+	recordSessionAudioFrame(source, pcm)
+	source.runtime.audioInput(pcm)
+	return nil
+}
+
+func recordSessionAudioFrame(source *sessionAudioSource, pcm []byte) {
+	if source.recordAudio == nil {
+		return
+	}
+	samples, err := codec.DecodePCM16(pcm)
+	if err != nil {
+		return
+	}
+	rate := source.recordRate
+	if rate <= 0 {
+		rate = source.providerRate
+	}
+	frame := audio.PCMFrame{Samples: samples}
+	if rate > 0 {
+		frame.Format = audio.PCM16DeviceFormat(rate)
+	}
+	source.recordAudio(runtimesession.LiveAudioRecord{
+		Direction: runtimesession.LiveRecordClient,
+		Admission: runtimesession.LiveAudioQueueAdmitted,
+		Frame:     frame,
+	})
 }
 
 // sendSessionAudioEndOfTurn signals end-of-turn after a finite audio source
@@ -918,6 +891,21 @@ func sendSessionAudioEndOfTurn(ctx context.Context, loop *agentloop.AgentLoop, s
 			}
 		}
 		return &SessionAudioInputError{Kind: SessionAudioInputSend, Path: source.path, Err: fmt.Errorf("end-of-turn signaling: %w", err)}
+	}
+	if source.recordAudio != nil {
+		rate := source.recordRate
+		if rate <= 0 {
+			rate = source.providerRate
+		}
+		frame := audio.PCMFrame{EndOfResponse: true}
+		if rate > 0 {
+			frame.Format = audio.PCM16DeviceFormat(rate)
+		}
+		source.recordAudio(runtimesession.LiveAudioRecord{
+			Direction: runtimesession.LiveRecordClient,
+			Admission: runtimesession.LiveAudioQueueAdmitted,
+			Frame:     frame,
+		})
 	}
 	return nil
 }

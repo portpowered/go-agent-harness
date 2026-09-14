@@ -8,9 +8,11 @@ import (
 	sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	sessiondiagnostics "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
 	sessiondiagnosticswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire"
 	"sync"
+	"time"
 )
 
 const (
@@ -215,13 +217,21 @@ type sessionProgressObserver struct {
 	// an otherwise valid completed response. Returning false keeps the raw
 	// stream event observable but prevents it from advancing completed-turn
 	// state or evidence.
-	turnAdmission      func(messages.StreamMessage) bool
-	runtime            *sessionRuntimeObservationRecorder
-	cancellationIntent *SessionCancellationIntent
-	provider           string
-	model              string
-	sawSessionOpen     bool
-	sessionID          string
+	turnAdmission       func(messages.StreamMessage) bool
+	runtime             *sessionRuntimeObservationRecorder
+	liveRecorder        session.LiveRecorder
+	recordingNow        func() time.Time
+	inputAudioRate      int
+	outputAudioRate     int
+	liveRecordingMu     sync.Mutex
+	liveRecordingErr    error
+	liveTerminalSeen    bool
+	liveDurationExpired bool
+	cancellationIntent  *SessionCancellationIntent
+	provider            string
+	model               string
+	sawSessionOpen      bool
+	sessionID           string
 	// sessionUpdated is scoped to the current SESSION.OPEN round trip. A
 	// subsequent SESSION.OPEN resets it so an acknowledgement from an older
 	// connection cannot release a new connection's scheduled input.
@@ -378,22 +388,11 @@ func newSessionProgressObserver(sink SessionDiagnosticSink, recorder metrics.Rec
 	}
 }
 
-func (o *sessionProgressObserver) lockProviderBoundary() func() {
-	if o == nil {
-		return func() {}
+func (o *sessionProgressObserver) liveTimestamp() time.Time {
+	if o != nil && o.recordingNow != nil {
+		return o.recordingNow()
 	}
-	o.providerBoundaryMu.Lock()
-	return o.providerBoundaryMu.Unlock
-}
-
-func (o *sessionProgressObserver) scheduleAudioInputs(inputs []ScheduledAudioInput) {
-	if o == nil {
-		return
-	}
-	o.lifecycleProjectionMu.Lock()
-	defer o.lifecycleProjectionMu.Unlock()
-	o.pendingInputs = append(o.pendingInputs, inputs...)
-	o.scheduledInputs += len(inputs)
+	return time.Now().UTC()
 }
 
 // observe consumes one delta crossing. It must run before any error-bearing

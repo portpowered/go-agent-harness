@@ -16,6 +16,8 @@ import (
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	runtimerecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
+	runtimereplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	sessiontrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
@@ -36,6 +38,8 @@ type Dependencies struct {
 	RuntimeObserver   SessionRuntimeObserver
 	Observability     observability.Dependencies
 	ModelCatalog      runtimeproviders.ModelCatalog
+	RecordingService  runtimerecording.Service
+	ReplayService     runtimereplay.Service
 }
 
 type Dispatcher struct{ deps Dependencies }
@@ -184,6 +188,8 @@ func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request)
 		ToolExecutionTimeout: request.ToolExecutionTimeout, Clock: d.deps.Clock,
 		RuntimeObserver: d.deps.RuntimeObserver, Diagnostics: request.Diagnostics, ToolDiagnostics: request.ToolDiagnostics,
 		Observability: d.deps.Observability, StreamObserver: request.StreamObserver,
+		browserRecordingStarter: request.BrowserRecordingStarter,
+		recordingService:        d.deps.RecordingService, replayService: d.deps.ReplayService,
 		RTCDeviceBinding: RTCDeviceBindingRequest{HoldToneConfig: request.HoldToneConfig, Observability: d.deps.Observability},
 		AudioInTurnBarge: request.AudioInTurnBarge, ClientOwnsAudioTurnBoundaries: request.ClientOwnsAudioTurnBoundaries,
 		SessionUpdatedTimeout: request.SessionUpdatedTimeout, WaitForClose: request.WaitForClose,
@@ -264,22 +270,8 @@ func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request)
 		copyCfg.FilesystemWorkDir, copyCfg.FilesystemAllowPaths = policy.PrimaryRoot(), policy.AdditionalRoots()
 		options.LoadedConfig = &copyCfg
 	}
-	if len(request.AudioInterrupts) > 0 {
-		if options.BrowserWatch == nil {
-			if options.CapabilityClose != nil {
-				_ = options.CapabilityClose()
-			}
-			return SessionRunOptions{}, errors.New("--audio-interrupt requires an enabled WebMCP session capability")
-		}
-		inputs, err := PrepareSessionAudioInputs(request.AudioInterrupts)
-		if err != nil {
-			if options.CapabilityClose != nil {
-				_ = options.CapabilityClose()
-			}
-			return SessionRunOptions{}, fmt.Errorf("prepare --audio-interrupt: %w", err)
-		}
-		interruptions, _ := StartSessionAudioInterruptionsOnBrowserTool(ctx, options.BrowserWatch(ctx), request.AudioInterruptTool, inputs)
-		options.AudioInterruptions = interruptions
+	if options, err = d.prepareAudioInterruptions(ctx, options, request); err != nil {
+		return SessionRunOptions{}, err
 	}
 	return options, nil
 }

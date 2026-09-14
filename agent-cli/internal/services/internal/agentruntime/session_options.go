@@ -20,6 +20,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	runtimerecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
+	runtimereplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
@@ -134,15 +136,18 @@ func (e *SessionRuntimeSelectionError) Unwrap() error {
 
 // SessionRunOptions contains the user-facing agent session command options.
 type SessionRunOptions struct {
+	recordingService runtimerecording.Service
+	replayService    runtimereplay.Service
 	// runtimeFactory is installed by the private service composition root.
 	// It is intentionally unexported so transport requests cannot construct
 	// provider gateways or dialers.
 	runtimeFactory sessionRuntimeFactory
 	// ModelCatalog is installed by service composition and owns the immutable
 	// provider capability metadata used during session planning.
-	ModelCatalog runtimeproviders.ModelCatalog
-	RecordPath   string
-	ReplayPath   string
+	ModelCatalog            runtimeproviders.ModelCatalog
+	browserRecordingStarter sessioncontract.BrowserRecordingStarter
+	RecordPath              string
+	ReplayPath              string
 	// ReplayTiming selects whether websocket replay runs as fast as causal
 	// ordering permits (immediate) or preserves capture timestamp_ms cadence
 	// (recorded). Empty retains the immediate compatibility default.
@@ -368,14 +373,6 @@ type SessionRunOptions struct {
 	// Keeping it private prevents callers from bypassing the capability
 	// resolver while allowing all session wrappers to share one snapshot.
 	sessionImageCapabilities *SessionImageCapabilities
-
-	// recordingClaim is acquired before provider construction and shared by
-	// nested session wrappers. It is intentionally private; command callers
-	// select the destination through RecordPath and do not manage sidecars.
-	recordingClaim *sessionRecordingClaim
-	// recordingDirectoryClaim is acquired before provider/media setup and shared
-	// by nested directory-recording wrappers through finalization.
-	recordingDirectoryClaim *sessionRecordingDirectoryClaim
 }
 
 // validateSessionCaptureOptions performs pure request validation before credential or device setup.
@@ -409,15 +406,6 @@ func validateSessionRunOptions(opts SessionRunOptions) error {
 	}
 	if err := validateSessionCaptureOptions(opts); err != nil {
 		return err
-	}
-	// Validate the complete capture before any caller-owned audio source,
-	// derived artifact sink, provider plan, or replay session can be created.
-	// Injected sessions are an explicit low-level test seam and do not use the
-	// path-based replay contract.
-	if opts.ReplayPath != "" && opts.SessionInferencer == nil {
-		if _, err := gwtesting.LoadSessionCaptureForReplay(opts.ReplayPath); err != nil {
-			return fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
-		}
 	}
 	return nil
 }
@@ -765,14 +753,14 @@ type SessionInferencerCaptureFlusher interface {
 	FlushCapture() error
 }
 
-// sessionInferencerWithCaptureFlush adapts a *gwtesting.RecordingWebSocketDialer
+// sessionInferencerWithCaptureFlush adapts a raw recording dialer
 // (which records raw websocket traffic, not messages.SessionInferencer calls)
 // into the SessionInferencerCaptureFlusher a caller can type-assert for
 // without depending on the concrete recorder type.
 type sessionInferencerWithCaptureFlush struct {
 	messages.SessionInferencer
 	path     string
-	recorder *gwtesting.RecordingWebSocketDialer
+	recorder sessionRecordingDialer
 }
 
 func (w *sessionInferencerWithCaptureFlush) FlushCapture() error {
@@ -784,7 +772,7 @@ func (w *sessionInferencerWithCaptureFlush) FlushCapture() error {
 // provider's real default when none was injected), optionally wrapped with a
 // raw-traffic recorder when SessionRunOptions.RecordSessionCapturePath is
 // set. The returned recorder is nil unless recording was requested.
-func resolveSessionWebSocketDialer(opts SessionRunOptions, providerName, model string, newDefaultDialer func() transport.Dialer) (transport.Dialer, *gwtesting.RecordingWebSocketDialer) {
+func resolveSessionWebSocketDialer(opts SessionRunOptions, providerName, model string, newDefaultDialer func() transport.Dialer) (transport.Dialer, sessionRecordingDialer) {
 	dialer := opts.WebSocketDialer
 	if dialer == nil {
 		dialer = newDefaultDialer()
@@ -800,7 +788,7 @@ func resolveSessionWebSocketDialer(opts SessionRunOptions, providerName, model s
 // is nil (recording was not requested), and otherwise wraps it so a caller
 // can type-assert for SessionInferencerCaptureFlusher and flush the capture
 // once the session this inferencer produced has closed.
-func wrapSessionInferencerCaptureFlush(inferencer messages.SessionInferencer, recorder *gwtesting.RecordingWebSocketDialer, path string) messages.SessionInferencer {
+func wrapSessionInferencerCaptureFlush(inferencer messages.SessionInferencer, recorder sessionRecordingDialer, path string) messages.SessionInferencer {
 	if recorder == nil {
 		return inferencer
 	}

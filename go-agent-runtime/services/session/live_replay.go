@@ -49,10 +49,18 @@ type LiveReplayPlan struct {
 	// after replay admission. Provider-close captures leave this false so the
 	// close event remains observable to hosts.
 	StopAfterResponse bool
+	// MaxDuration is the service-owned bounded completion grace for this
+	// prepared replay. Zero means the host uses its ordinary finite fallback.
+	MaxDuration time.Duration
 	// ProviderCloseExpected records whether the capture contains an explicit
 	// provider session-close boundary. It is advisory metadata for host
 	// rendering and lifecycle selection; replay validation remains strict.
 	ProviderCloseExpected bool
+	// ExpectedResponses is the bounded number of non-tool response terminals
+	// that can satisfy finite replay completion. An interruption replacement
+	// contributes the distinct replacement terminal while its cancelled
+	// terminal remains a boundary that must not complete replay.
+	ExpectedResponses int
 	// InterruptionReplacementExpected records whether a provider-cancelled
 	// response is followed by a distinct provider response in the capture. Such
 	// a cancellation is an interruption boundary whose replacement must be

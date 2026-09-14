@@ -3,6 +3,7 @@ package agentruntime
 import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"strings"
 )
 
@@ -12,6 +13,7 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 	}
 	unlockProviderBoundary := o.lockProviderBoundary()
 	defer unlockProviderBoundary()
+	o.recordLiveMessage(msg, session.LiveRecordAgent)
 	o.observeProviderBoundary(msg)
 	if o.streamObserver != nil {
 		o.streamObserver(msg)
@@ -212,47 +214,7 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		}
 		o.toolDeltaSeen = false
 	case *messages.MessageEndValue:
-		cancelled := isLocalResponseCancellation(v)
-		o.noteProviderUsage(v.Usage)
-		o.setAssistantResponseDone(false)
-		outputPresent := o.responseHasAdmissibleOutput()
-		toolObligation := o.responseHasToolLifecycleObligation()
-		candidate := false
-		if !acknowledgementResponse {
-			candidate = o.observeProviderMessageEndForResponse(msg.Role, v, responseLifecycleID, outputPresent)
-			o.noteScheduledResponseTerminal(responseLifecycleID, v)
-			o.rememberRateLimitRetryCandidate(msgResponseID, responseLifecycleID, v)
-		}
-		// A cancelled response can have output queued before the cancellation
-		// boundary. It is still an interrupted lifecycle disposition, never a
-		// normal assistant turn, and must not satisfy output admission.
-		admitted := !acknowledgementResponse && !cancelled && candidate && outputPresent && messageEndCanAdmit(v)
-		if admitted && o.turnAdmission != nil {
-			admitted = o.turnAdmission(msg)
-		}
-		o.setAssistantResponseDone(admitted)
-		o.toolStateMu.Lock()
-		o.messageEndAdmitted = admitted
-		o.toolStateMu.Unlock()
-		if admitted {
-			terminalAccepted := o.notifyTerminalObservation(sessionTerminalObservationFromMessageEnd(responseLifecycleID, v))
-			if !terminalAccepted {
-				o.finishObservedResponse(responseLifecycleID)
-				return
-			}
-			o.noteScheduledResponseDisposition(responseLifecycleID, scheduledAudioResponseCompleted)
-			o.completeTurn()
-			if o.admittedTurnObserver != nil {
-				o.admittedTurnObserver(msg)
-			}
-		} else if cancelled && !acknowledgementResponse {
-			o.noteScheduledResponseDisposition(responseLifecycleID, scheduledAudioResponseCancelled)
-		}
-		o.finishObservedResponse(responseLifecycleID)
-		if !acknowledgementResponse {
-			o.observeSilentProviderEmptyResponse(msg, v, outputPresent, toolObligation)
-		}
-		o.disarmProviderProgress()
+		o.observeMessageEnd(msg, msgResponseID, responseLifecycleID, acknowledgementResponse, v)
 	case *messages.ErrorValue:
 		o.captureFailureFromError(v)
 		if v != nil && v.IsTerminal() {
@@ -354,4 +316,48 @@ func (o *sessionProgressObserver) accountToolRoleMessage(msg messages.StreamMess
 			o.account(metrics.DirectionOutput, metrics.ModalityTool, len(v.Arguments))
 		}
 	}
+}
+
+func (o *sessionProgressObserver) observeMessageEnd(msg messages.StreamMessage, msgResponseID, responseLifecycleID string, acknowledgementResponse bool, value *messages.MessageEndValue) {
+	cancelled := isLocalResponseCancellation(value)
+	o.noteProviderUsage(value.Usage)
+	o.setAssistantResponseDone(false)
+	outputPresent := o.responseHasAdmissibleOutput()
+	toolObligation := o.responseHasToolLifecycleObligation()
+	candidate := false
+	if !acknowledgementResponse {
+		candidate = o.observeProviderMessageEndForResponse(msg.Role, value, responseLifecycleID, outputPresent)
+		o.noteScheduledResponseTerminal(responseLifecycleID, value)
+		o.rememberRateLimitRetryCandidate(msgResponseID, responseLifecycleID, value)
+	}
+	// A cancelled response can have output queued before the cancellation
+	// boundary. It is still an interrupted lifecycle disposition, never a
+	// normal assistant turn, and must not satisfy output admission.
+	admitted := !acknowledgementResponse && !cancelled && candidate && outputPresent && messageEndCanAdmit(value)
+	if admitted && o.turnAdmission != nil {
+		admitted = o.turnAdmission(msg)
+	}
+	o.setAssistantResponseDone(admitted)
+	o.toolStateMu.Lock()
+	o.messageEndAdmitted = admitted
+	o.toolStateMu.Unlock()
+	if admitted {
+		terminalAccepted := o.notifyTerminalObservation(sessionTerminalObservationFromMessageEnd(responseLifecycleID, value))
+		if !terminalAccepted {
+			o.finishObservedResponse(responseLifecycleID)
+			return
+		}
+		o.noteScheduledResponseDisposition(responseLifecycleID, scheduledAudioResponseCompleted)
+		o.completeTurn()
+		if o.admittedTurnObserver != nil {
+			o.admittedTurnObserver(msg)
+		}
+	} else if cancelled && !acknowledgementResponse {
+		o.noteScheduledResponseDisposition(responseLifecycleID, scheduledAudioResponseCancelled)
+	}
+	o.finishObservedResponse(responseLifecycleID)
+	if !acknowledgementResponse {
+		o.observeSilentProviderEmptyResponse(msg, value, outputPresent, toolObligation)
+	}
+	o.disarmProviderProgress()
 }

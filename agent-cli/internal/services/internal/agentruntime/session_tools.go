@@ -35,6 +35,11 @@ const (
 	SessionPageSightUnavailableErrorCode = "page_sight_unavailable"
 )
 
+type sessionToolLifecycleObserver interface {
+	observeToolCall(messages.ToolCall)
+	observeToolResult(messages.ToolCall, messages.ToolCallResponse, bool)
+}
+
 // sessionToolLifecycleMux preserves the optional recording hook while adding
 // the participant-owned liveness boundary. A running local tool must suppress
 // the provider watchdog; the next accepted response.create re-arms it.
@@ -394,17 +399,6 @@ func invokeSessionTool(ctx context.Context, executor messages.ToolExecutor, call
 		}
 	}()
 	return executor.Execute(ctx, call)
-}
-
-func sessionToolContextFailure(err error) error {
-	switch {
-	case errors.Is(err, context.DeadlineExceeded):
-		return ErrSessionToolTimeout
-	case errors.Is(err, context.Canceled):
-		return errors.New("tool execution canceled")
-	default:
-		return fmt.Errorf("tool execution stopped: %w", err)
-	}
 }
 
 func sessionToolFailure(call messages.ToolCall, err error) messages.ToolCallResponse {
