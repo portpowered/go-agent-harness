@@ -15,6 +15,7 @@ import (
 	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeBrowser "github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	sessiontrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -26,16 +27,17 @@ import (
 var _ contract.Runtime = (*Dispatcher)(nil)
 
 type Dependencies struct {
-	Clock             clock.Source
-	PlanFactory       sessionRuntimeFactory
-	ToolService       serviceTools.Service
-	RuntimeFactory    SessionRTCRuntimeFactory
-	SessionInferencer messages.SessionInferencer
-	ToolExecutor      messages.ToolExecutor
-	DeviceRegistry    devicegw.DeviceRegistry
-	RuntimeObserver   SessionRuntimeObserver
-	Observability     observability.Dependencies
-	ModelCatalog      runtimeproviders.ModelCatalog
+	Clock               clock.Source
+	PlanFactory         sessionRuntimeFactory
+	ToolService         serviceTools.Service
+	RuntimeFactory      SessionRTCRuntimeFactory
+	SessionInferencer   messages.SessionInferencer
+	ToolExecutor        messages.ToolExecutor
+	DeviceRegistry      devicegw.DeviceRegistry
+	RuntimeObserver     SessionRuntimeObserver
+	Observability       observability.Dependencies
+	ModelCatalog        runtimeproviders.ModelCatalog
+	BrowserConversation runtimeBrowser.Service
 }
 
 type Dispatcher struct{ deps Dependencies }
@@ -187,8 +189,7 @@ func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request)
 		RTCDeviceBinding: RTCDeviceBindingRequest{HoldToneConfig: request.HoldToneConfig, Observability: d.deps.Observability},
 		AudioInTurnBarge: request.AudioInTurnBarge, ClientOwnsAudioTurnBoundaries: request.ClientOwnsAudioTurnBoundaries,
 		SessionUpdatedTimeout: request.SessionUpdatedTimeout, WaitForClose: request.WaitForClose,
-		runtimeFactory: d.deps.PlanFactory,
-		ModelCatalog:   d.deps.ModelCatalog,
+		runtimeFactory: d.deps.PlanFactory, ModelCatalog: d.deps.ModelCatalog, BrowserConversation: d.deps.BrowserConversation,
 	}
 	if err := validateSessionCaptureOptions(options); err != nil {
 		return SessionRunOptions{}, err

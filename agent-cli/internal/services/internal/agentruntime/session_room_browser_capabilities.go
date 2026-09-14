@@ -8,6 +8,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeBrowser "github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 )
@@ -37,7 +38,7 @@ type RoomParticipantBrowserCapabilities struct {
 	ToolDefinitionBase     []messages.ToolDefinition
 	RefreshToolDefinitions func(context.Context) ([]messages.ToolDefinition, error)
 	BrowserWatch           func(context.Context) <-chan webmcp.BrokerEvent
-	BrowserEventWatch      func(context.Context) <-chan webmcp.BrowserEvent
+	BrowserEventWatch      func(context.Context) <-chan runtimeBrowser.BrowserEvent
 	Initialize             func(context.Context) error
 	Close                  func() error
 }
@@ -72,6 +73,12 @@ func validateRoomToolDefinitions(definitions []messages.ToolDefinition) error {
 		seen[definition.Name] = struct{}{}
 	}
 	return nil
+}
+
+func (r *sessionDirectoryRecording) startBrowser(ctx context.Context) {
+	if r != nil && r.browser != nil {
+		r.browser.Start(ctx)
+	}
 }
 
 // composeRoomParticipantBrowserCapabilities combines the browser-only
