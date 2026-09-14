@@ -1,0 +1,58 @@
+{
+  "task": "audio-runtime-c73-retire-cli-conversation-log",
+  "project": "audio-runtime",
+  "contractRevision": "audio-runtime-v1",
+  "session": "~default",
+  "testedSourceRevision": "c9215797656308bfb15e000744d655908de1f61e",
+  "branch": "codex/audio-runtime-c73-retire-cli-conversation-log",
+  "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c73-retire-cli-conversation-log",
+  "originMain": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+  "admission": "admitted",
+  "ancestry": {
+    "startupIntegrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+    "planningOriginMain": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+    "currentOriginMainAncestor": true,
+    "hostCheckoutReset": false
+  },
+  "focusedChecks": {
+    "serviceNormal": "12 passed in 3 packages",
+    "serviceRaceCount3": "36 passed in 3 packages",
+    "frozenJSONLAndTiming": "passed",
+    "mutationArrivalOrder": "failed its intended independent oracle as expected",
+    "mutationNoBound": "failed its intended independent oracle as expected",
+    "cliRetirement": "531 -> 112 lines, 419 retired, three required aliases, no forbidden policy tokens",
+    "recordedAudioToolRegression": "passed",
+    "nonRecordedAudioToolRegression": "passed",
+    "negativeControls": "passed"
+  },
+  "sharedGateFindings": {
+    "wire": {
+      "status": "blocked",
+      "owner": "C57",
+      "pullRequest": 449,
+      "path": "scripts/wire-packages.txt",
+      "finding": "go-agent-runtime/services/conversationlog/wire/wire_gen.go is unregistered"
+    },
+    "architecture": {
+      "status": "blocked",
+      "owner": "C61",
+      "pullRequest": 452,
+      "path": "docs/architecture/architecture-size-baseline.json",
+      "findings": [
+        "stale file-lines entry for internal/services/internal/agentruntime/session_conversation_log.go",
+        "stale cognitive-complexity entry for sessionConversationCollector.entries",
+        "stale cognitive-complexity entry for sessionConversationCollector.observe",
+        "stale cyclomatic-complexity entry for sessionConversationCollector.observe",
+        "stale function-lines entry for sessionConversationCollector.observe",
+        "stale function-statements entry for sessionConversationCollector.observe",
+        "generated-file-spoof for services/conversationlog/wire/wire_gen.go"
+      ]
+    }
+  },
+  "preserved": [
+    "No shared Wire registry or architecture baseline edit",
+    "No peer-owned source or predecessor checkpoint edit",
+    "No CI polling, independent review, guarded merge or vertical acceptance claim"
+  ],
+  "nextAction": "After C57 and C61 release their exact shared-file leases, fetch and integrate the latest origin/main, apply only the demonstrated conversationlog Wire registration and six downward/deletion baseline changes, rerun the shared and focused gates, then push the same PR and submit the changed head to SCRIPT CI without polling."
+}
