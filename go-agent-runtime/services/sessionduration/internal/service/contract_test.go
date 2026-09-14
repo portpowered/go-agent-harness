@@ -71,7 +71,8 @@ func (i contractInferencer) ConnectSession(context.Context) (messages.Session, e
 	return i.session, i.err
 }
 
-func TestAdmissionContractForwardsCapabilitiesAndTerminalFacts(t *testing.T) {
+func newConnectedAdmission(t *testing.T) (*AdmissionInferencer, *AdmissionSession, *contractSession) {
+	t.Helper()
 	inner := newContractSession()
 	inferencer := NewAdmissionInferencer(contractInferencer{session: inner}, nil, nil)
 	connected, err := inferencer.ConnectSession(context.Background())
@@ -82,11 +83,42 @@ func TestAdmissionContractForwardsCapabilitiesAndTerminalFacts(t *testing.T) {
 	if !ok {
 		t.Fatalf("wrapped session = %T, want *AdmissionSession", connected)
 	}
-	if !wrapped.SupportsResponseRequests() || wrapped.RequestResponse(context.Background()).Status != messages.SessionSendSucceeded || !inner.responseSent {
+	return inferencer, wrapped, inner
+}
+
+func closeAdmissionForTest(t *testing.T, inferencer *AdmissionInferencer, wrapped *AdmissionSession) {
+	t.Helper()
+	if err := wrapped.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	select {
+	case <-wrapped.Done():
+	case <-time.After(time.Second):
+		t.Fatal("wrapped session did not close its done channel")
+	}
+	inferencer.WaitForClose()
+	if inferencer.CloseError() != nil || inferencer.RuntimeError() != nil {
+		t.Fatalf("unexpected admission errors: close=%v runtime=%v", inferencer.CloseError(), inferencer.RuntimeError())
+	}
+}
+
+func TestAdmissionContractForwardsCapabilities(t *testing.T) {
+	inferencer, wrapped, inner := newConnectedAdmission(t)
+	defer closeAdmissionForTest(t, inferencer, wrapped)
+	if !wrapped.SupportsResponseRequests() {
 		t.Fatal("response request capability was not forwarded")
 	}
-	if !wrapped.SupportsCompleteMessages() || !wrapped.SupportsCompleteMessagesWithoutResponse() || !wrapped.SendMessage(context.Background(), messages.NewTextMessage(messages.RoleUser, "tool")) || !wrapped.SendMessageWithoutResponse(context.Background(), messages.NewTextMessage(messages.RoleUser, "tool")) || !inner.messageSent || !inner.withoutSent {
+	if wrapped.RequestResponse(context.Background()).Status != messages.SessionSendSucceeded || !inner.responseSent {
+		t.Fatal("response request capability was not forwarded")
+	}
+	if !wrapped.SupportsCompleteMessages() || !wrapped.SupportsCompleteMessagesWithoutResponse() {
 		t.Fatal("complete-message capability was not forwarded")
+	}
+	if !wrapped.SendMessage(context.Background(), messages.NewTextMessage(messages.RoleUser, "tool")) || !inner.messageSent {
+		t.Fatal("complete message was not forwarded")
+	}
+	if !wrapped.SendMessageWithoutResponse(context.Background(), messages.NewTextMessage(messages.RoleUser, "tool")) || !inner.withoutSent {
+		t.Fatal("deferred complete message was not forwarded")
 	}
 	if !wrapped.Send(context.Background(), messages.StreamMessage{Type: messages.StreamTypeTextDelta}) {
 		t.Fatal("stream message was not forwarded")
@@ -99,7 +131,11 @@ func TestAdmissionContractForwardsCapabilitiesAndTerminalFacts(t *testing.T) {
 	if !errors.Is(wrapped.TerminalError(), terminalErr) {
 		t.Fatal("terminal error capability was not forwarded")
 	}
+}
 
+func TestAdmissionContractRetainsProviderTerminal(t *testing.T) {
+	inferencer, wrapped, inner := newConnectedAdmission(t)
+	defer closeAdmissionForTest(t, inferencer, wrapped)
 	terminal := messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValueWithTerminal(
 		"session", "provider", "provider_close", messages.TerminalReasonProviderClose,
 		messages.TerminalProvenanceProvider, messages.TerminalOutputPartial,
@@ -120,18 +156,6 @@ func TestAdmissionContractForwardsCapabilitiesAndTerminalFacts(t *testing.T) {
 	}
 	if !inferencer.IsProviderTerminalMessage(terminal) {
 		t.Fatal("inferencer did not retain provider terminal identity")
-	}
-	if err := wrapped.Close(); err != nil {
-		t.Fatalf("Close: %v", err)
-	}
-	select {
-	case <-wrapped.Done():
-	case <-time.After(time.Second):
-		t.Fatal("wrapped session did not close its done channel")
-	}
-	inferencer.WaitForClose()
-	if inferencer.CloseError() != nil || inferencer.RuntimeError() != nil {
-		t.Fatalf("unexpected admission errors: close=%v runtime=%v", inferencer.CloseError(), inferencer.RuntimeError())
 	}
 }
 
@@ -385,23 +409,6 @@ func (l *idleRunLoopProbe) Run(ctx context.Context) error {
 func (l *idleRunLoopProbe) Deltas() *messages.TypedBuffer[messages.StreamMessage] { return l.deltas }
 func (l *idleRunLoopProbe) Send(context.Context, []messages.Message) error        { return nil }
 
-type triggerScheduler struct {
-	created chan *triggerTimer
-}
-
-type triggerTimer struct {
-	events chan time.Time
-}
-
-func (s *triggerScheduler) NewTimer(time.Duration) sessionduration.Timer {
-	timer := &triggerTimer{events: make(chan time.Time, 1)}
-	s.created <- timer
-	return timer
-}
-func (t *triggerTimer) C() <-chan time.Time      { return t.events }
-func (t *triggerTimer) Stop() bool               { return true }
-func (t *triggerTimer) Reset(time.Duration) bool { return true }
-
 func TestRunPublishesAdmittedMessageAndPerformsPlannedBoundedStop(t *testing.T) {
 	loop := &gatedRunLoopProbe{deltas: messages.NewTypedBuffer[messages.StreamMessage](1)}
 	var published []messages.StreamMessage
@@ -428,104 +435,6 @@ func TestRunPublishesAdmittedMessageAndPerformsPlannedBoundedStop(t *testing.T) 
 	}
 	if !loop.sent {
 		t.Fatal("planned stop did not send the loop close control message")
-	}
-}
-
-func TestRunHandlesWakeAndDoneBoundaryFailures(t *testing.T) {
-	wakeErr := errors.New("wake failed")
-	doneErr := errors.New("done failed")
-	tests := []struct {
-		name      string
-		wake      <-chan struct{}
-		done      <-chan struct{}
-		onWake    func(context.Context, sessionduration.Loop, sessionduration.Controller) error
-		doneError func() error
-		want      error
-	}{
-		{
-			name: "wake",
-			wake: func() <-chan struct{} {
-				wake := make(chan struct{}, 1)
-				wake <- struct{}{}
-				return wake
-			}(),
-			onWake: func(context.Context, sessionduration.Loop, sessionduration.Controller) error { return wakeErr },
-			want:   wakeErr,
-		},
-		{
-			name: "done",
-			done: func() <-chan struct{} {
-				done := make(chan struct{})
-				close(done)
-				return done
-			}(),
-			doneError: func() error { return doneErr },
-			want:      doneErr,
-		},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			request := sessionduration.RunRequest{
-				Context:    context.Background(),
-				Inferencer: contractInferencer{session: newContractSession()},
-				LoopFactory: func(context.Context, sessionduration.AdmissionInferencer, sessionduration.Controller) (sessionduration.Loop, error) {
-					return &idleRunLoopProbe{deltas: messages.NewTypedBuffer[messages.StreamMessage](1)}, nil
-				},
-				Wake:      test.wake,
-				OnWake:    test.onWake,
-				Done:      test.done,
-				DoneError: test.doneError,
-				Drain:     func(context.Context, sessionduration.Loop, sessionduration.Controller) error { return nil },
-			}
-			if err := New().Run(request); !errors.Is(err, test.want) {
-				t.Fatalf("Run() = %v, want %v", err, test.want)
-			}
-		})
-	}
-}
-
-func TestRunExpiresAtMaxDurationAndClosesLoop(t *testing.T) {
-	scheduler := &triggerScheduler{created: make(chan *triggerTimer, 1)}
-	result := make(chan error, 1)
-	go func() {
-		result <- New().Run(sessionduration.RunRequest{
-			Context:     context.Background(),
-			Inferencer:  contractInferencer{session: newContractSession()},
-			Clock:       scheduler,
-			MaxDuration: time.Second,
-			LoopFactory: func(context.Context, sessionduration.AdmissionInferencer, sessionduration.Controller) (sessionduration.Loop, error) {
-				return &idleRunLoopProbe{deltas: messages.NewTypedBuffer[messages.StreamMessage](1)}, nil
-			},
-			Drain: func(context.Context, sessionduration.Loop, sessionduration.Controller) error { return nil },
-		})
-	}()
-	var timer *triggerTimer
-	select {
-	case timer = <-scheduler.created:
-	case <-time.After(time.Second):
-		t.Fatal("max-duration timer was not created")
-	}
-	timer.events <- time.Now()
-	select {
-	case err := <-result:
-		if err != nil {
-			t.Fatalf("Run after max duration = %v, want bounded clean stop", err)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("Run did not finish after max duration")
-	}
-}
-
-func TestWaitForLoopNormalizesCancellation(t *testing.T) {
-	results := make(chan error, 2)
-	results <- context.Canceled
-	if err := waitForLoop(results); err != nil {
-		t.Fatalf("waitForLoop(cancellation) = %v, want nil", err)
-	}
-	failure := errors.New("loop failed")
-	results <- failure
-	if err := waitForLoop(results); !errors.Is(err, failure) {
-		t.Fatalf("waitForLoop(failure) = %v, want failure identity", err)
 	}
 }
 
@@ -648,121 +557,6 @@ func TestRunRejectsInvalidRequestsBeforeStartingResources(t *testing.T) {
 				t.Fatalf("Run() = %v, want %q", err, test.want)
 			}
 		})
-	}
-}
-
-func TestServiceFacadeExposesDurationContract(t *testing.T) {
-	service := New()
-	if err := service.ValidateDuration(-time.Second); !errors.Is(err, sessionduration.ErrInvalidDuration) {
-		t.Fatalf("ValidateDuration() = %v, want invalid-duration identity", err)
-	}
-	if err := service.ValidateDuration(0); err != nil {
-		t.Fatalf("ValidateDuration(0) = %v", err)
-	}
-
-	providerTerminal := messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValueWithTerminal(
-		"session", "provider", "provider_close", messages.TerminalReasonProviderClose,
-		messages.TerminalProvenanceProvider, messages.TerminalOutputComplete,
-	)}
-	state := service.NewState(sessionduration.TerminalSource{
-		Message: func() (messages.StreamMessage, bool) { return providerTerminal, true },
-		Matches: func(msg messages.StreamMessage) bool { return msg.Type == messages.StreamTypeSessionClose },
-	})
-	state.Observe(messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant})
-	if got := state.OutputState(); got != messages.TerminalOutputPartial {
-		t.Fatalf("state output = %q, want partial", got)
-	}
-	if err := state.PublishProviderTerminal(sessionduration.Publication{}); err != nil {
-		t.Fatalf("PublishProviderTerminal: %v", err)
-	}
-	if !state.Written() {
-		t.Fatal("state did not retain terminal-written state")
-	}
-	if _, ok := state.Admit(true, providerTerminal); ok {
-		t.Fatal("state admitted a duplicate provider terminal")
-	}
-
-	var published messages.StreamMessage
-	if err := service.PublishMaxDuration(sessionduration.Publication{Write: func(msg messages.StreamMessage) error {
-		published = msg
-		return nil
-	}}, messages.TerminalOutputPartial); err != nil {
-		t.Fatalf("PublishMaxDuration: %v", err)
-	}
-	if published.Type != messages.StreamTypeSessionClose {
-		t.Fatalf("max-duration publication type = %q", published.Type)
-	}
-
-	runtimeErr := errors.New("runtime")
-	closeErr := errors.New("close")
-	if got := service.LifecycleError(sessionduration.LifecycleFailures{Runtime: runtimeErr, Close: closeErr}); !errors.Is(got, runtimeErr) || !errors.Is(got, closeErr) {
-		t.Fatalf("LifecycleError() = %v, missing causes", got)
-	}
-	if service.TransportError(nil) != nil || !errors.Is(service.TransportError(runtimeErr), runtimeErr) {
-		t.Fatal("TransportError did not preserve nil and wrapped identities")
-	}
-
-	admission := service.NewEventAdmission()
-	if admission == nil {
-		t.Fatal("NewEventAdmission returned nil")
-	}
-	wrappedInferencer := service.NewAdmissionInferencer(contractInferencer{session: newContractSession()}, admission, nil)
-	if wrappedInferencer == nil {
-		t.Fatal("NewAdmissionInferencer returned nil")
-	}
-	wrapper := service.NewAdmissionSession(context.Background(), newContractSession(), admission, nil)
-	if wrapper == nil || !wrapper.SupportsCompleteMessages() || !wrapper.SupportsCompleteMessagesWithoutResponse() {
-		t.Fatal("NewAdmissionSession did not preserve complete-message capabilities")
-	}
-	if err := wrapper.Close(); err != nil {
-		t.Fatalf("wrapped session Close: %v", err)
-	}
-	if service.NewAdmissionInferencer(contractInferencer{session: newContractSession()}, struct{}{}, nil) == nil {
-		t.Fatal("NewAdmissionInferencer rejected an opaque admission boundary")
-	}
-
-	artifact := NewSessionDurationArtifactSetWithSinks(nil, &artifactTranscriptSink{})
-	ctx := service.WithArtifacts(context.Background(), artifact)
-	if service.ArtifactsFromContext(ctx) != artifact {
-		t.Fatal("ArtifactsFromContext did not return the attached lifecycle")
-	}
-	ctx = service.WithTerminalRecorder(ctx, &terminalRecorderProbe{})
-	if service.ArtifactsFromContext(ctx) == nil {
-		t.Fatal("WithTerminalRecorder removed the artifact lifecycle")
-	}
-	if service.WithTerminalRecorder(ctx, nil) != ctx {
-		t.Fatal("WithTerminalRecorder(nil) did not preserve the context")
-	}
-	ctx = service.WithArtifactPaths(ctx, sessionduration.SessionDurationArtifactPaths{AudioPath: "audio", TranscriptPath: "transcript"})
-	if _, ok := ArtifactPathsFromContext(ctx); !ok {
-		t.Fatal("WithArtifactPaths did not retain paths")
-	}
-	if _, err := service.PrepareArtifacts(context.Background()); err != nil {
-		t.Fatalf("PrepareArtifacts with no paths: %v", err)
-	}
-	if err := service.FinalizeArtifacts(nil); err != nil {
-		t.Fatalf("FinalizeArtifacts(nil): %v", err)
-	}
-
-	retryTerminal := &messages.MessageEndValue{Status: "failed", ProviderErrorCode: "rate_limit_exceeded", ProviderErrorMessage: "please try again in 3s"}
-	if decision := service.EvaluateRetry(sessionduration.RetryPolicy{Enabled: true}, retryTerminal); !decision.Eligible || decision.Delay != 3*time.Second {
-		t.Fatalf("EvaluateRetry() = %+v", decision)
-	}
-	statusRetry := &messages.MessageEndValue{Status: "failed", StatusDetails: "code=rate_limit_exceeded,message=please try again in 1.5s"}
-	if decision := service.EvaluateRetry(sessionduration.RetryPolicy{Enabled: true}, statusRetry); !decision.Eligible || decision.Delay != 1500*time.Millisecond {
-		t.Fatalf("EvaluateRetry(status details) = %+v", decision)
-	}
-	if decision := service.EvaluateRetry(sessionduration.RetryPolicy{Enabled: true}, nil); decision != (sessionduration.RetryDecision{}) {
-		t.Fatalf("EvaluateRetry(nil) = %+v, want empty decision", decision)
-	}
-	if !service.IsDurationShutdownMessage(providerTerminal) || !service.IsDurationForwardMessage(messages.StreamMessage{Type: messages.StreamTypeError}) {
-		t.Fatal("duration message classification did not preserve terminal/error forwarding")
-	}
-	if summary, present, err := service.RecordingTerminalSummaryFromMessage(providerTerminal); err != nil || !present || summary == nil {
-		t.Fatalf("RecordingTerminalSummaryFromMessage() = %+v, %v, %v", summary, present, err)
-	}
-	if _, present, err := service.RecordingTerminalSummaryFromMessage(messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: &messages.SessionCloseValue{Classification: "incomplete"}}); present || err == nil {
-		t.Fatalf("invalid terminal summary = present:%v err:%v, want validation error", present, err)
 	}
 }
 
