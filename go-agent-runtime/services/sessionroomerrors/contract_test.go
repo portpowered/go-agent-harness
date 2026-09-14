@@ -1,0 +1,32 @@
+package sessionroomerrors
+
+import (
+	"errors"
+	"testing"
+)
+
+func TestContractTypesRemainHostNeutral(t *testing.T) {
+	var _ ParticipantFailure = participantFailureProbe{}
+	var _ Service = serviceProbe{}
+	var failure ParticipantFailure
+	if errors.As(nil, &failure) || failure != nil {
+		t.Fatal("nil error unexpectedly exposed a participant failure")
+	}
+}
+
+type participantFailureProbe struct{}
+
+func (participantFailureProbe) Error() string         { return "failure" }
+func (participantFailureProbe) ParticipantID() string { return "participant" }
+
+type serviceProbe struct{}
+
+func (serviceProbe) ParticipantFailure(ParticipantFailureRequest) error { return nil }
+func (serviceProbe) ParticipantFailureID(error) (string, bool)          { return "", false }
+func (serviceProbe) ParticipantFailureReason(ParticipantFailureReasonRequest) string {
+	return ""
+}
+func (serviceProbe) Sanitize(error, []string) string { return "" }
+func (serviceProbe) FailureResult(error, []string) RoomFailureResult {
+	return RoomFailureResult{}
+}

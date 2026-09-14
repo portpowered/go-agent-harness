@@ -1,0 +1,39 @@
+{
+  "project": "audio-runtime",
+  "contractRevision": "audio-runtime-v1",
+  "work": "audio-runtime-c126-retire-cli-room-error-sanitization",
+  "pullRequest": 507,
+  "candidateRevision": "946c661aeb8473e40358c9ef59471ae77c09e537",
+  "currentOriginMain": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
+  "ciRun": {
+    "id": "34759976261",
+    "url": "https://github.com/portpowered/go-agent-harness/actions/runs/34759976261",
+    "conclusion": "failure",
+    "staticJob": "103730986715",
+    "integrationJob": "103730986672"
+  },
+  "staticRejection": {
+    "step": "make architecture-size-check",
+    "issue": "generated-file-spoof services/sessionroomerrors/wire/wire_gen.go: generated header is not registered with a reproducible generator",
+    "scope": "The required entry is scripts/wire-packages.txt; that shared registry was unchanged because active C110, C112, C116, and C119 writer leases were present."
+  },
+  "integrationRejection": {
+    "step": "make test-integration",
+    "test": "TestS2SLiveBargeInTurnStartCollisionMatrix",
+    "location": "agent-cli/test/integration/s2s_live_barge_in_turn_start_test.go:185",
+    "failure": "turn-start identity-aware ledger failed: barge-in oracle validation failed: violations=[user.turn: input \"input-3\" has no user-turn representation; response.created: missing response \"response-3\"; session.terminal: terminal observation arrived with unresolved ledger identities]",
+    "observedTail": "input.append input-3, input.commit input-3, session.terminal disposition=clean",
+    "scope": "The test and integration package are outside the C126 diff and C126 ownedPaths; no implementation change was authorized by this rejection."
+  },
+  "localReproduction": {
+    "command": "go test ./test/integration -run '^TestS2SLiveBargeInTurnStartCollisionMatrix$' -count=20 -timeout=180s -v",
+    "result": "20/20 passed",
+    "packageResult": "PASS",
+    "duration": "12.890s"
+  },
+  "expectedNegativeControls": "The remaining displayed integration log failures were expected invalid-fixture/replay/configuration negative controls, not additional failed checks.",
+  "ciGreen": false,
+  "acceptanceWaiver": false,
+  "realtime": false,
+  "nextAction": "After all active shared Wire registry writer leases release, re-audit authority, add only the C126 sessionroomerrors/wire entry, rerun Wire and architecture gates, bind final evidence to the exact pushed head, and hand the same PR to Script CI without polling."
+}

@@ -435,9 +435,8 @@ func (c *roomCoordinator) failedParticipantID() string {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	var safe *roomSafeError
-	if errors.As(c.err, &safe) {
-		return safe.participantID
+	if participantID, ok := roomParticipantFailureID(c.err); ok {
+		return participantID
 	}
 	return ""
 }
@@ -641,9 +640,8 @@ func (c *roomCoordinator) finishParticipant(runtime *roomParticipantRuntime, rea
 		// Preserve the redacted participant-local error latched above. The
 		// lifecycle observation may carry the provider's raw error, but the
 		// result contract must not leak it or lose its participant context.
-		var safeErr *roomSafeError
-		if observation.err != nil && !errors.As(err, &safeErr) {
-			err = observation.err
+		if observation.err != nil {
+			err = preserveRoomObservationError(err, observation.err)
 		}
 	} else if observation.terminationDisposition == ParticipantTerminationDispositionDisconnected {
 		reason = ParticipantTerminationDisconnected
