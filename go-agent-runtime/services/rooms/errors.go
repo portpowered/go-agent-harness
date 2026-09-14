@@ -2,6 +2,8 @@ package rooms
 
 import (
 	"errors"
+
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 )
 
 var (
@@ -48,9 +50,9 @@ var (
 
 	// ErrInvalidReplayBundle identifies a bundle that does not match the
 	// supported replay schema or integrity inventory.
-	ErrInvalidReplayBundle = errors.New("invalid room replay bundle")
+	ErrInvalidReplayBundle = roomreplay.ErrInvalidRoomReplayBundle
 	// ErrReplayBundleIncomplete identifies a recognizable but unfinished bundle.
-	ErrReplayBundleIncomplete = errors.New("room replay bundle incomplete")
+	ErrReplayBundleIncomplete = roomreplay.ErrRoomReplayBundleIncomplete
 	// ErrReplaySourceConflict identifies conflicting live and replay inputs.
 	ErrReplaySourceConflict = errors.New("room replay source conflict")
 	// ErrLaunchPathConflict identifies both config spellings with different paths.

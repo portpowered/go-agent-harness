@@ -1,6 +1,9 @@
 package agentruntime
 
 import (
+	"context"
+	"fmt"
+	"sync"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
@@ -151,6 +154,9 @@ type RoomRunOptions struct {
 	// both values so startup can pass a validated, immutable plan through the
 	// service boundary without reopening the source bundle.
 	ReplayPlan *RoomReplayPlan
+	// ReplayService is the admitted roomreplay owner used when a caller passes
+	// only ReplayPath. The room runtime never reopens replay files itself.
+	ReplayService roomreplay.Service
 	// Clock is the shared room timestamp source used by runtime landmarks and
 	// finalized evidence. Nil selects the host clock; deterministic callers
 	// should inject one source for all participants.
@@ -263,3 +269,63 @@ type RoomRunOptions struct {
 
 // RoomOptions is a concise alias for RoomRunOptions.
 type RoomOptions = RoomRunOptions
+
+func startRoomReplayScheduler(schedule roomreplay.Schedule, roomCtx context.Context, startGate <-chan struct{}, runtimes []*roomParticipantRuntime, coordinator *roomCoordinator, opts RoomRunOptions, wg *sync.WaitGroup) {
+	if schedule == nil || wg == nil {
+		return
+	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		select {
+		case <-startGate:
+		case <-roomCtx.Done():
+			return
+		}
+		targets, waitFor := roomReplayTargets(runtimes, coordinator)
+		scheduleErr := schedule.Run(roomCtx, roomreplay.RunRequest{Targets: targets, WaitFor: waitFor, IsStopping: coordinator.isStopping, OnContribution: func(contribution roomreplay.Contribution) {
+			if opts.onParticipantAudioFanned != nil {
+				opts.onParticipantAudioFanned(contribution.SourceID, contribution.TargetID, append([]byte(nil), contribution.PCM...))
+			}
+		}})
+		if scheduleErr != nil {
+			if !coordinator.isStopping() {
+				coordinator.fail(fmt.Errorf("run room replay timeline: %w", scheduleErr))
+			}
+			return
+		}
+		if !coordinator.isStopping() {
+			coordinator.stop(RoomTerminationStopped, nil)
+		}
+	}()
+}
+
+func roomReplayTargets(runtimes []*roomParticipantRuntime, coordinator *roomCoordinator) ([]roomreplay.Target, []roomreplay.Waiter) {
+	targets := make([]roomreplay.Target, 0, len(runtimes))
+	waitFor := make([]roomreplay.Waiter, 0, len(runtimes))
+	for _, runtime := range runtimes {
+		if runtime == nil || runtime.plan == nil || roomParticipantIsHuman(runtime.plan) {
+			continue
+		}
+		target := runtime
+		targets = append(targets, roomreplay.Target{
+			ID: target.plan.manifest.ID, Active: func() bool { return coordinator.isActive(target.plan.manifest.ID) },
+			Release: func(ctx context.Context, sourceID string, pcm []byte) error {
+				return routeRoomPeerPCM(ctx, sourceID, target, pcm)
+			},
+			Advance: func(ctx context.Context) error { return target.mixer.Advance(ctx) },
+			AwaitAcknowledgement: func(ctx context.Context) error {
+				select {
+				case <-target.replayFrameAcks:
+					return nil
+				case <-target.ctx.Done():
+					return roomreplay.ErrTargetStopped
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			},
+		})
+		waitFor = append(waitFor, roomreplay.Waiter{ID: target.plan.manifest.ID, Done: target.participantDone})
+	}
+	return targets, waitFor
+}

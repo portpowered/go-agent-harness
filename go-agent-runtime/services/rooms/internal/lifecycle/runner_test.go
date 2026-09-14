@@ -2,6 +2,7 @@ package lifecycle
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"sync"
@@ -13,6 +14,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 func TestRunnerStopsAllParticipantsAtSharedTurnBound(t *testing.T) {
@@ -355,6 +357,8 @@ func (s *fakeLiveService) OpenLive(_ context.Context, request session.LiveReques
 	if handle != nil {
 		handle.mu.Lock()
 		handle.capturePath = request.Replay.OutputCapturePath
+		handle.provider = request.Provider
+		handle.model = request.Model
 		handle.mu.Unlock()
 	}
 	return handle, nil
@@ -375,6 +379,8 @@ type fakeLiveHandle struct {
 	startEventReady   chan struct{}
 	startEventRelease chan struct{}
 	capturePath       string
+	provider          string
+	model             string
 }
 
 func newFakeLiveHandle() *fakeLiveHandle {
@@ -449,7 +455,26 @@ func (h *fakeLiveHandle) Close() error {
 	capturePath := h.capturePath
 	h.mu.Unlock()
 	if capturePath != "" {
-		if err := os.WriteFile(capturePath, []byte("[]\n"), 0o600); err != nil {
+		h.mu.Lock()
+		provider, model := h.provider, h.model
+		h.mu.Unlock()
+		capture := gatewaytesting.SessionCapture{
+			Version:  gatewaytesting.SessionCaptureVersion,
+			Provider: gatewaytesting.SessionProviderMetadata{Name: provider, Model: model},
+			Session: gatewaytesting.SessionMetadata{
+				ID: "replay", FixtureProvenance: gatewaytesting.SessionFixtureProvenanceSynthetic,
+			},
+			Records: []gatewaytesting.CapturedSessionEvent{{
+				Sequence: 1, Direction: gatewaytesting.DirectionServerToClient,
+				Type: "session.created", PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage,
+				Payload: json.RawMessage(`{"type":"session.created","session_id":"replay"}`),
+			}},
+		}
+		data, err := json.Marshal(capture)
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(capturePath, data, 0o600); err != nil {
 			return err
 		}
 	}

@@ -11,6 +11,8 @@ package wire
 import (
 	"github.com/google/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
+	roomreplaywire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/errorpolicy"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle"
@@ -24,17 +26,25 @@ import (
 type Dependencies struct {
 	Live     session.LiveService
 	Media    rooms.MediaFactory
+	Replay   roomreplay.Service
 	Clock    platformclock.Scheduler
 	Evidence roomevidence.Service
 	Tools    runtimeTools.Service
 }
 
 func NewService(dependencies Dependencies) rooms.Service {
-	wire.Build(newPlanner, newEvidence, newFailureService, newRunner, newServiceDependencies, service.New)
+	wire.Build(newPlanner, newReplay, newEvidence, newFailureService, newRunner, newServiceDependencies, service.New)
 	return nil
 }
 
 func newPlanner() planning.Planner { return planning.New() }
+
+func newReplay(dependencies Dependencies) roomreplay.Service {
+	if dependencies.Replay != nil {
+		return dependencies.Replay
+	}
+	return roomreplaywire.NewService()
+}
 
 func newEvidence(dependencies Dependencies) roomevidence.Service { return dependencies.Evidence }
 
@@ -47,6 +57,6 @@ func newRunner(dependencies Dependencies, failure rooms.FailureService) lifecycl
 	})
 }
 
-func newServiceDependencies(planner planning.Planner, evidenceService roomevidence.Service, runner lifecycle.Runner) service.Dependencies {
-	return service.Dependencies{Planner: planner, Evidence: evidenceService, Runner: runner}
+func newServiceDependencies(planner planning.Planner, replayService roomreplay.Service, evidenceService roomevidence.Service, runner lifecycle.Runner) service.Dependencies {
+	return service.Dependencies{Planner: planner, Replay: replayService, Evidence: evidenceService, Runner: runner}
 }
