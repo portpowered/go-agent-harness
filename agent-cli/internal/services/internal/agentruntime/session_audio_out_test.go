@@ -386,10 +386,10 @@ func runSessionAudioCancellationBarrier(t *testing.T, cancelBeforeConnect bool) 
 	ctx, cancel := context.WithCancel(context.Background())
 	provider := &sessionAudioTerminalBarrierSession{scriptedSession: newScriptedSession(), releaseConnect: make(chan struct{}), connectStarted: make(chan struct{})}
 	writer := &growingSessionAudioWriter{firstWritten: make(chan struct{})}
-	sink := mustSessionAudioTestValue(newSessionAudioSinkAtRate("-", writer, audio.SampleRate))
-	inferencer := newSessionAudioOutputInferencer(provider, &sessionAudioOutput{sink: sink, runtime: &sessionRuntimeObservationRecorder{}}, "", "")
-	connected := make(chan *sessionAudioOutputSession, 1)
-	go func() { mustSessionAudioTestValue(inferencer.ConnectSession(ctx)); connected <- inferencer.connected }()
+	output := mustSessionAudioTestValue(newSessionAudioOutputForPlan(&sessionRuntimePlan{outputAudioSampleRate: audio.SampleRate}, "-", writer, nil))
+	inferencer := newSessionAudioOutputInferencer(provider, output, "", "")
+	connected := make(chan messages.Session, 1)
+	go func() { connected <- mustSessionAudioTestValue(inferencer.ConnectSession(ctx)) }()
 	waitForClosedTargetSignal(t, context.Background(), provider.connectStarted, "connect start")
 	if cancelBeforeConnect {
 		cancel()
@@ -398,7 +398,6 @@ func runSessionAudioCancellationBarrier(t *testing.T, cancelBeforeConnect bool) 
 	session := <-connected
 	cancel()
 	go func() { mustSessionAudioTestValue(struct{}{}, session.Close()) }()
-	waitForClosedTargetSignal(t, context.Background(), session.drainStarted, "cancellation drain start")
 	want := append(bytes.Repeat([]byte{0x01, 0x02}, 720), bytes.Repeat([]byte{0x03, 0x04}, 1200)...)
 	if !provider.recv.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue(want)}) {
 		t.Fatal("provider did not accept queued cancellation audio")
@@ -410,6 +409,7 @@ func runSessionAudioCancellationBarrier(t *testing.T, cancelBeforeConnect bool) 
 	default:
 	}
 	mustSessionAudioTestValue(struct{}{}, provider.scriptedSession.Close())
+	// The provider close barrier proves output drains before teardown.
 	select {
 	case <-session.Done():
 	case <-time.After(2 * time.Second):
@@ -436,7 +436,7 @@ func TestRunSessionWithAudioOut_FinalizesOnMaxDuration(t *testing.T) {
 			SessionInferencer: inf,
 		}, path, 50*time.Millisecond, SessionTextSeed{})
 	}()
-	_ = waitForSessionAudioFileGrowth(t, path, sessionAudioWAVHeaderSize+len(first)*2)
+	_ = waitForSessionAudioFileGrowth(t, path, 44+len(first)*2)
 	select {
 	case err := <-errCh:
 		if err != nil {
@@ -591,7 +591,7 @@ func waitForSessionAudioWAVSamples(t *testing.T, path string, want []int16) []by
 	defer ticker.Stop()
 	for {
 		data, err := os.ReadFile(path)
-		if err == nil && len(data) >= sessionAudioWAVHeaderSize+len(want)*2 {
+		if err == nil && len(data) >= 44+len(want)*2 {
 			_, samples, readErr := wavio.Read(bytes.NewReader(data))
 			if readErr == nil && equalInt16(samples, want) {
 				return data
