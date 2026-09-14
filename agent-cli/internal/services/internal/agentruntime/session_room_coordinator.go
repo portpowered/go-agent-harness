@@ -194,6 +194,7 @@ func (c *roomCoordinator) forceBoundShutdown() {
 		for _, runtime := range runtimes {
 			if runtime != nil {
 				if runtime.lifecycle != nil {
+					// The bound-start mark remains authoritative through the grace window.
 					runtime.lifecycle.markBoundCancellation()
 					observation := runtime.lifecycle.terminalObservationSnapshot()
 					if firstFailure == nil && observation.failure {
