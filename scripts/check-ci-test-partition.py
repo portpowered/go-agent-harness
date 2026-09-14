@@ -7,6 +7,7 @@ import argparse
 from collections import defaultdict
 from pathlib import Path
 import re
+import shlex
 
 
 CANONICAL_CORPORA = {
@@ -40,7 +41,28 @@ TARGET_CORPORA = {
 }
 
 JOB_RE = re.compile(r"^  ([a-zA-Z0-9_-]+):\s*$")
-MAKE_RUN_RE = re.compile(r"^\s+(?:-\s*)?run:\s*make\s+([a-zA-Z0-9_-]+)(?:\s|$)")
+
+
+def make_target(command: str) -> str | None:
+    """Return the first target from a shell line containing a Make invocation."""
+    try:
+        tokens = shlex.split(command, comments=True)
+    except ValueError:
+        return None
+    for index, token in enumerate(tokens):
+        if token.rsplit("/", 1)[-1] != "make":
+            continue
+        index += 1
+        while index < len(tokens):
+            candidate = tokens[index]
+            if candidate in {"-C", "--directory", "-f", "--file", "-I", "--include-dir"}:
+                index += 2
+                continue
+            if candidate.startswith("-") or "=" in candidate:
+                index += 1
+                continue
+            return candidate.rstrip(";|&")
+    return None
 
 
 def workflow_make_targets(workflow: str) -> list[tuple[str, str]]:
@@ -57,8 +79,8 @@ def workflow_make_targets(workflow: str) -> list[tuple[str, str]]:
         if match := JOB_RE.match(line):
             current_job = match.group(1)
             continue
-        if match := MAKE_RUN_RE.match(line):
-            calls.append((current_job, match.group(1)))
+        if target := make_target(line):
+            calls.append((current_job, target))
     return calls
 
 

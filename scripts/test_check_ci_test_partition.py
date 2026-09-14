@@ -59,6 +59,23 @@ class CITestPartitionTest(unittest.TestCase):
         self.assertEqual(len(errors), len(check.CANONICAL_CORPORA) - 1)
         self.assertTrue(all("no CI owner" in error for error in errors))
 
+    def test_block_command_with_environment_and_make_flags_is_detected(self):
+        text = workflow(
+            ("coverage-agent-cli", "coverage-ci-agent-cli"),
+            ("coverage-libraries", "coverage-ci-libraries"),
+        )
+        text += (
+            "\n  hidden-hermetic:\n"
+            "    steps:\n"
+            "      - run: |\n"
+            "          CI=1 make --silent test-hermetic\n"
+        )
+        errors = check.ownership_errors(text)
+        self.assertTrue(any("agent-cli/...: multiple CI owners" in error for error in errors))
+
+    def test_make_directory_flag_does_not_hide_target(self):
+        self.assertEqual(check.make_target("run: make -C . test-integration"), "test-integration")
+
 
 if __name__ == "__main__":
     unittest.main()
