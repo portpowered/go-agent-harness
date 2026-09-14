@@ -5,8 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
+	"strings"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
@@ -278,11 +281,27 @@ func runSessionImageDuration(ctx context.Context, out io.Writer, plan sessionRun
 }
 
 func prepareSessionImageRun(ctx context.Context, opts SessionRunOptions, sourcePaths []string, seed sessionturn.Seed) (SessionRunOptions, []messages.ImagePart, func() error, error) {
-	metadata, err := resolveSessionImageCapabilities(opts)
+	provider := effectiveSessionProvider(opts)
+	model, err := resolveSessionImageModel(opts)
 	if err != nil {
 		return opts, nil, noOpSessionImageCleanup, err
 	}
-	opts.sessionImageCapabilities = cloneSessionImageCapabilities(&metadata)
+	configuredModel, err := loadSessionImageModelMetadata(opts.ConfigDir, model)
+	if err != nil {
+		return opts, nil, noOpSessionImageCleanup, err
+	}
+	turnService := newSessionTurnService()
+	metadata, err := turnService.ResolveImageCapabilities(sessionturn.ImageCapabilityRequest{
+		Provider:        provider,
+		Model:           model,
+		ModelProvided:   opts.ModelProvided,
+		ModelCatalog:    opts.ModelCatalog,
+		ConfiguredModel: configuredModel,
+	})
+	if err != nil {
+		return opts, nil, noOpSessionImageCleanup, err
+	}
+	opts.sessionImageCapabilities = &metadata
 	stagingRoot := ""
 	if sessionHasTool(opts.ToolDefinitions, runtimeTools.ReadImageToolID) {
 		stagingRoot, err = sessionImageStagingConfigDir(opts.ConfigDir)
@@ -290,7 +309,7 @@ func prepareSessionImageRun(ctx context.Context, opts SessionRunOptions, sourceP
 			return opts, nil, noOpSessionImageCleanup, err
 		}
 	}
-	prepared, err := newSessionTurnService().PrepareImage(ctx, sessionturn.ImagePreparationRequest{
+	prepared, err := turnService.PrepareImage(ctx, sessionturn.ImagePreparationRequest{
 		SourcePaths:            sourcePaths,
 		Capabilities:           metadata,
 		StagingRoot:            stagingRoot,
@@ -316,3 +335,55 @@ func prepareSessionImageRun(ctx context.Context, opts SessionRunOptions, sourceP
 }
 
 func noOpSessionImageCleanup() error { return nil }
+
+func sessionHasTool(definitions []messages.ToolDefinition, name string) bool {
+	for _, definition := range definitions {
+		if definition.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func resolveSessionImageModel(opts SessionRunOptions) (string, error) {
+	model := strings.TrimSpace(opts.Model)
+	if model == "" && opts.ReplayPath != "" {
+		return openAIRealtimeModel, nil
+	}
+	if model != "" {
+		return model, nil
+	}
+	resolved, err := resolveOpenAIRealtimeSessionConfig(opts)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(resolved.Model), nil
+}
+
+func loadSessionImageModelMetadata(configDir, model string) (*sessionturn.ImageModelMetadata, error) {
+	storage, err := config.NewModelsConfigStorage(configDir)
+	if err != nil {
+		return nil, fmt.Errorf("initialize model capability metadata: %w", err)
+	}
+	models, err := storage.Load()
+	if err != nil {
+		return nil, fmt.Errorf("load model capability metadata: %w", err)
+	}
+	info := models.Lookup(model)
+	if info == nil {
+		return nil, nil
+	}
+	return &sessionturn.ImageModelMetadata{
+		InputModalities:         append([]string(nil), info.InputModalities...),
+		SupportedInputMIMETypes: append([]string(nil), info.SupportedInputMimeTypes...),
+	}, nil
+}
+
+func sessionImageStagingConfigDir(configDir string) (string, error) {
+	configDir = strings.TrimSpace(configDir)
+	storage, err := config.NewDefaultConfigStorage(configDir)
+	if err != nil {
+		return "", fmt.Errorf("resolve config directory %q: %w", configDir, err)
+	}
+	return filepath.Clean(filepath.Dir(storage.Path())), nil
+}

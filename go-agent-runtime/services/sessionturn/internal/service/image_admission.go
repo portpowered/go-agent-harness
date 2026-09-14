@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
@@ -26,6 +27,50 @@ const (
 	maxImageCount      = sessionturn.MaxImageCount
 	maxImageTotalBytes = sessionturn.MaxImageTotalBytes
 )
+
+func (s *Service) ResolveImageCapabilities(request sessionturn.ImageCapabilityRequest) (sessionturn.ImageCapabilities, error) {
+	provider := strings.TrimSpace(request.Provider)
+	if !strings.EqualFold(provider, "openai") {
+		return sessionturn.ImageCapabilities{}, imageCapabilityError(request.Model)
+	}
+	model := strings.TrimSpace(request.Model)
+	if model == "" {
+		if request.ModelProvided {
+			return sessionturn.ImageCapabilities{}, imageCapabilityError(model)
+		}
+		model = providers.OpenAIRealtimeDefaultModel
+	}
+	if request.ModelCatalog == nil {
+		return sessionturn.ImageCapabilities{}, errors.New("session turn image model catalog is not configured")
+	}
+	realtimeModel, ok := request.ModelCatalog.LookupRealtimeModel(provider, model)
+	if !ok || !realtimeModel.SupportsImageInput {
+		return sessionturn.ImageCapabilities{}, imageCapabilityError(model)
+	}
+	if request.ConfiguredModel != nil && !configuredModelSupportsImageInput(request.ConfiguredModel) {
+		return sessionturn.ImageCapabilities{}, imageCapabilityError(model)
+	}
+	supported := []string(nil)
+	if request.ConfiguredModel != nil {
+		supported = append(supported, request.ConfiguredModel.SupportedInputMIMETypes...)
+	}
+	return sessionturn.ImageCapabilities{
+		Model:                   model,
+		SupportsImageInput:      true,
+		SupportedInputMIMETypes: supported,
+	}, nil
+}
+
+func imageCapabilityError(model string) error {
+	return &sessionturn.ImageCapabilityError{Model: strings.TrimSpace(model), Capability: "image input"}
+}
+
+func configuredModelSupportsImageInput(model *sessionturn.ImageModelMetadata) bool {
+	return model != nil && (slices.Contains(model.InputModalities, "image") ||
+		(len(model.InputModalities) == 0 && slices.ContainsFunc(model.SupportedInputMIMETypes, func(mime string) bool {
+			return strings.HasPrefix(mime, "image/")
+		})))
+}
 
 func (s *Service) PrepareImageParts(paths []string, capabilities sessionturn.ImageCapabilities) ([]messages.ImagePart, error) {
 	return prepareImageParts(paths, capabilities)
@@ -71,7 +116,7 @@ func (s *Service) PrepareImage(ctx context.Context, request sessionturn.ImagePre
 	}
 	result := sessionturn.ImagePreparationResult{
 		Parts:                  cloneImageParts(parts),
-		ToolExecutor:           s.BindImageToolExecutor(request.ToolExecutor, request.Capabilities),
+		ToolExecutor:           request.ToolExecutor,
 		ToolDefinitions:        messages.CanonicalToolDefinitions(request.ToolDefinitions),
 		RefreshToolDefinitions: request.RefreshToolDefinitions,
 		Cleanup:                func() error { return nil },

@@ -70,7 +70,7 @@ func (s *Service) Prepare(ctx context.Context, request sessionturn.Request) (ses
 	return &runtime{
 		inferencer:      inferencer,
 		turns:           turnState,
-		toolExecutor:    newToolExecutor(request.ToolExecutor, policy, request.ToolExecutionTimeout, request.ToolCallObserver, request.ToolResultObserver, request.ToolDiagnostic, request.ToolFailurePresenter),
+		toolExecutor:    s.prepareToolExecutor(request, policy),
 		toolDefinitions: cloneDefinitions(request.ToolDefinitions),
 		policy:          clonePolicy(policy),
 		output:          seedService,
@@ -78,6 +78,14 @@ func (s *Service) Prepare(ctx context.Context, request sessionturn.Request) (ses
 		continuation:    continuation,
 		imageCleanup:    request.ImageCleanup,
 	}, nil
+}
+
+func (s *Service) prepareToolExecutor(request sessionturn.Request, policy tools.InteractiveToolPolicy) messages.ToolExecutor {
+	toolExecutor := request.ToolExecutor
+	if request.ImageCapabilities != nil {
+		toolExecutor = s.BindImageToolExecutor(toolExecutor, *request.ImageCapabilities)
+	}
+	return newToolExecutor(toolExecutor, policy, request.ToolExecutionTimeout, request.ToolCallObserver, request.ToolResultObserver, request.ToolDiagnostic, request.ToolFailurePresenter)
 }
 
 func (s *Service) StageImageTools(ctx context.Context, request tools.ImageStagingRequest) (tools.ImageStagingResult, error) {

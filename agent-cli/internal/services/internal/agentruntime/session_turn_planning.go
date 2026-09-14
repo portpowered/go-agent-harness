@@ -2,6 +2,7 @@ package agentruntime
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
@@ -121,9 +122,14 @@ func prepareSessionRecordingOutputs(plan *sessionRuntimePlan, out io.Writer, aud
 
 func prepareSessionTurnRuntime(ctx context.Context, opts SessionRunOptions, plan *sessionRuntimePlan) error {
 	toolLifecycle := composeSessionToolLifecycleObserver(plan.loop.toolLifecycleObserver, plan.loop.observer, plan.runtime)
+	imageCapabilities, err := resolveSessionTurnImageCapabilities(opts, plan)
+	if err != nil {
+		return err
+	}
 	request := sessionturn.Request{
 		SessionInferencer: plan.inferencer,
 		ToolExecutor:      plan.loop.ToolExecutor,
+		ImageCapabilities: imageCapabilities,
 		InstructionsText:  opts.sessionInstructions,
 		Instructions: sessionturn.InstructionRequest{Composition: &runtimeSession.InstructionComposition{
 			ToolDefinitions:        append([]messages.ToolDefinition(nil), plan.loop.ToolDefinitions...),
@@ -185,6 +191,48 @@ func prepareSessionTurnRuntime(ctx context.Context, opts SessionRunOptions, plan
 		plan.loop.AdvertiseToolDefinitions = false
 	}
 	return nil
+}
+
+func resolveSessionTurnImageCapabilities(opts SessionRunOptions, plan *sessionRuntimePlan) (*sessionturn.ImageCapabilities, error) {
+	if !sessionHasTool(opts.ToolDefinitions, runtimeTools.ReadImageToolID) {
+		return nil, nil
+	}
+	if opts.sessionImageCapabilities != nil {
+		capabilities := *opts.sessionImageCapabilities
+		capabilities.SupportedInputMIMETypes = append([]string(nil), capabilities.SupportedInputMIMETypes...)
+		return &capabilities, nil
+	}
+	provider := plan.provider
+	if provider == "" {
+		provider = effectiveSessionProvider(opts)
+	}
+	model := plan.model
+	if model == "" {
+		var err error
+		model, err = resolveSessionImageModel(opts)
+		if err != nil {
+			return nil, err
+		}
+	}
+	configuredModel, err := loadSessionImageModelMetadata(opts.ConfigDir, model)
+	if err != nil {
+		return nil, err
+	}
+	resolved, err := newSessionTurnService().ResolveImageCapabilities(sessionturn.ImageCapabilityRequest{
+		Provider:        provider,
+		Model:           model,
+		ModelProvided:   opts.ModelProvided,
+		ModelCatalog:    opts.ModelCatalog,
+		ConfiguredModel: configuredModel,
+	})
+	if err == nil {
+		return &resolved, nil
+	}
+	var capabilityErr *sessionturn.ImageCapabilityError
+	if !errors.As(err, &capabilityErr) {
+		return nil, err
+	}
+	return &sessionturn.ImageCapabilities{Model: capabilityErr.Model}, nil
 }
 
 func prepareSessionRuntimeToolsAndAudio(ctx context.Context, opts SessionRunOptions, plan *sessionRuntimePlan) error {

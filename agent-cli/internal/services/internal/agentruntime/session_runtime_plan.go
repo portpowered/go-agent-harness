@@ -406,11 +406,7 @@ func planSessionRuntimeWithFactory(ctx context.Context, opts SessionRunOptions, 
 	// explicit bypass at the binding boundary so replayed provider output cannot
 	// be mistaken for speaker-to-microphone feedback.
 	plan.rtcDeviceRequest.BypassSelfHearing = plan.rtcDeviceRequest.BypassSelfHearing || opts.ReplayPath != ""
-	// The single composed executor crosses into every session mode (live,
-	// replay, record) here; the duplex loop construction seam decides whether
-	// tool execution is enabled. The read_image binding is cloned per session
-	// so its capability snapshot cannot leak across concurrent sessions.
-	plan.loop.ToolExecutor = bindSessionImageToolExecutor(opts, plan)
+	plan.loop.ToolExecutor = opts.ToolExecutor
 	plan.loop.ToolDefinitions = append([]messages.ToolDefinition(nil), opts.ToolDefinitions...)
 	if err := prepareSessionRuntimeToolsAndAudio(ctx, opts, &plan); err != nil {
 		return sessionRuntimePlan{}, err

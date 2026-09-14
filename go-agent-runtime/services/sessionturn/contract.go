@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
@@ -218,6 +219,19 @@ type ImageCapabilities struct {
 	SupportedInputMIMETypes []string
 }
 
+type ImageModelMetadata struct {
+	InputModalities         []string
+	SupportedInputMIMETypes []string
+}
+
+type ImageCapabilityRequest struct {
+	Provider        string
+	Model           string
+	ModelProvided   bool
+	ModelCatalog    providers.ModelCatalog
+	ConfiguredModel *ImageModelMetadata
+}
+
 const (
 	MaxImageCount      = 16
 	MaxImageBytes      = 8 << 20
@@ -316,6 +330,7 @@ type Request struct {
 
 	ToolExecutor          messages.ToolExecutor
 	ToolDefinitions       []messages.ToolDefinition
+	ImageCapabilities     *ImageCapabilities
 	ToolDefinitionBase    []messages.ToolDefinition
 	ToolPolicyRequest     *tools.InteractiveToolPolicyRequest
 	InteractiveToolPolicy tools.InteractiveToolPolicy
@@ -347,6 +362,7 @@ type Runtime interface {
 
 type Service interface {
 	Prepare(context.Context, Request) (Runtime, error)
+	ResolveImageCapabilities(ImageCapabilityRequest) (ImageCapabilities, error)
 	PrepareImageParts([]string, ImageCapabilities) ([]messages.ImagePart, error)
 	PrepareImage(context.Context, ImagePreparationRequest) (ImagePreparationResult, error)
 	StageImageTools(context.Context, tools.ImageStagingRequest) (tools.ImageStagingResult, error)
