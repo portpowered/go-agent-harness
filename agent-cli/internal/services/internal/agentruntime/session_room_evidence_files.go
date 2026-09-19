@@ -13,6 +13,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
+const roomEvidenceFileMode = 0o600
+
 // roomDiagnosticLine is the room evidence JSONL shape shared by per-session
 // diagnostics and stream records.
 type roomDiagnosticLine struct {
@@ -30,7 +32,7 @@ type roomEvidenceJSONLWriter struct {
 }
 
 func newRoomEvidenceJSONLWriter(path string) (*roomEvidenceJSONLWriter, error) {
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL|os.O_APPEND, 0o600)
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL|os.O_APPEND, roomEvidenceFileMode)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +110,7 @@ func newRoomWAVRecorder(path string, sampleRate int) (*roomWAVRecorder, error) {
 	if sampleRate <= 0 {
 		return nil, fmt.Errorf("WAV sample rate must be positive, got %d", sampleRate)
 	}
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, roomEvidenceFileMode)
 	if err != nil {
 		return nil, err
 	}
@@ -118,9 +120,7 @@ func newRoomWAVRecorder(path string, sampleRate int) (*roomWAVRecorder, error) {
 		_, err = writeRoomEvidenceAllCount(file, header[:])
 	}
 	if err != nil {
-		_ = file.Close()
-		_ = os.Remove(path)
-		return nil, fmt.Errorf("write WAV header: %w", err)
+		return nil, errors.Join(fmt.Errorf("write WAV header: %w", err), file.Close(), os.Remove(path))
 	}
 	return recorder, nil
 }
