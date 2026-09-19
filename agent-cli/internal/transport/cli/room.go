@@ -18,6 +18,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/events"
+	roomEvidenceCLI "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/roomevidence"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/spf13/cobra"
 )
@@ -218,7 +219,6 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, r
 		return err
 	}
 	readyParticipants := 0
-
 	participantIDs := make([]string, 0, len(roomManifest.Participants))
 	for _, participant := range roomManifest.Participants {
 		participantIDs = append(participantIDs, participant.ID)
@@ -267,7 +267,7 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, r
 	defer stopSignals()
 
 	options := runtimeRooms.RoomRunOptions{
-		Manifest:   roomManifest,
+		Manifest: roomManifest, Secrets: append([]string(nil), plans.secrets...),
 		ReplayPath: plans.replayPath,
 		OutputDir:  outputDir,
 		ConfigDir:  roomConfigDir(roomRunGlobalFlags(c)),
@@ -361,7 +361,7 @@ func resolveRoomCommandOutputDir(service runtimeRooms.Service, plan runtimeRooms
 			return destination, nil
 		}
 		if plan.Mode == runtimeRooms.RoomLaunchModeBare {
-			return service.CreateFreshRunDirectory(plan.ConfigDir)
+			return roomEvidenceCLI.FreshRunDirectory(service, plan.ConfigDir)
 		}
 	}
 	requested = strings.TrimSpace(requested)

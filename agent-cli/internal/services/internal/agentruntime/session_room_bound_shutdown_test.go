@@ -441,11 +441,11 @@ func TestRunRoom_BoundGraceProviderFailureRemainsAuthoritative(t *testing.T) {
 	if strings.Contains(failed.Error, secret) || strings.Contains(result.Error, secret) {
 		t.Fatalf("provider secret leaked in result: participant=%q room=%q", failed.Error, result.Error)
 	}
-	manifestData := readRoomEvidenceFile(t, filepath.Join(opts.OutputDir, RoomEvidenceManifestPath))
+	manifestData := readRoomBundleFile(t, filepath.Join(opts.OutputDir, roomBundleManifestPath))
 	if strings.Contains(string(manifestData), secret) {
 		t.Fatalf("provider secret leaked in run manifest: %s", manifestData)
 	}
-	var manifest roomEvidenceManifest
+	var manifest roomBundleManifest
 	if decodeErr := json.Unmarshal(manifestData, &manifest); decodeErr != nil {
 		t.Fatalf("decode run manifest: %v", decodeErr)
 	}
