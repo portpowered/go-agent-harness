@@ -122,6 +122,12 @@ func readRoomReplayPath(root, path string, maxBytes int64, field string) (data [
 	if err := pathguard.ValidateNoSymlink(root, path); err != nil {
 		return nil, roomReplayAudioMismatch(field, "", "bundle-local non-symlink file", "invalid path", err)
 	}
+	if err := pathguard.ValidateRegularFile(path); err != nil {
+		if os.IsNotExist(err) {
+			return nil, roomReplayAudioIncomplete(field, "", "readable bounded file", "unavailable", err)
+		}
+		return nil, roomReplayAudioMismatch(field, "", "bundle-local regular file", "special file", err)
+	}
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, roomReplayAudioIncomplete(field, "", "readable bounded file", "unavailable", err)

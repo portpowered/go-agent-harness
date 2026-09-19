@@ -51,6 +51,12 @@ func (Loader) Load(bundle string) (rooms.RoomReplayPlan, error) {
 	if err := pathguard.ValidateNoSymlink(root, manifestPath); err != nil {
 		return rooms.RoomReplayPlan{}, mismatch("manifest", err)
 	}
+	if err := pathguard.ValidateRegularFile(manifestPath); err != nil {
+		if os.IsNotExist(err) {
+			return rooms.RoomReplayPlan{}, incomplete("manifest", err)
+		}
+		return rooms.RoomReplayPlan{}, mismatch("manifest", err)
+	}
 	data, err := os.ReadFile(manifestPath)
 	if err != nil {
 		return rooms.RoomReplayPlan{}, incomplete("manifest", err)

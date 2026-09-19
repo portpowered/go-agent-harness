@@ -13,10 +13,29 @@ type validationError string
 func (e validationError) Error() string { return string(e) }
 
 const (
-	errSymlink    validationError = "bundle path contains a symlink"
-	errOutside    validationError = "bundle path is outside its root"
-	errValidation validationError = "bundle path cannot be revalidated"
+	errSymlink     validationError = "bundle path contains a symlink"
+	errOutside     validationError = "bundle path is outside its root"
+	errNotRegular  validationError = "bundle path is not a regular file"
+	errValidation  validationError = "bundle path cannot be revalidated"
 )
+
+// ValidateRegularFile rejects missing, symlinked, directory and special-file
+// paths before a caller opens them. This is deliberately separate from the
+// bundle containment check so every reader can fail closed before opening a
+// FIFO or other blocking filesystem object.
+func ValidateRegularFile(path string) error {
+	if strings.TrimSpace(path) == "" {
+		return errValidation
+	}
+	info, err := os.Lstat(filepath.Clean(path))
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return errNotRegular
+	}
+	return nil
+}
 
 // ValidateNoSymlink rejects a path containing a symlinked component and then
 // revalidates the resolved path remains under the resolved bundle root. Missing

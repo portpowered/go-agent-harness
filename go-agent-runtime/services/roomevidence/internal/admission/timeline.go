@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/internal/pathguard"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 )
 
@@ -21,6 +22,9 @@ const (
 )
 
 func loadTimeline(path string, participants []rooms.RoomReplayParticipant, clockBase, started, ended time.Time) (result []rooms.RoomReplayTimelineEvent, err error) {
+	if err := pathguard.ValidateRegularFile(path); err != nil {
+		return nil, incomplete("room_timeline", err)
+	}
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, incomplete("room_timeline", err)

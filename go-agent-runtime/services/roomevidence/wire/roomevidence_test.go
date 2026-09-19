@@ -363,6 +363,22 @@ func TestServiceRejectsDirectAndParentSymlinkedReplayArtifacts(t *testing.T) {
 	})
 }
 
+func TestServiceRejectsDirectoryReplayArtifact(t *testing.T) {
+	destination, recorder := finalizedReplayBundle(t)
+	artifact := recorder.Participant("speaker").Artifacts().SentPCM
+	path := filepath.Join(destination, filepath.FromSlash(artifact))
+	if err := os.Remove(path); err != nil {
+		t.Fatalf("remove replay artifact: %v", err)
+	}
+	if err := os.Mkdir(path, 0o700); err != nil {
+		t.Fatalf("replace replay artifact with directory: %v", err)
+	}
+	_, err := NewService().LoadPlan(destination)
+	if err == nil || !errors.Is(err, roomevidence.ErrInvalidRoomReplayBundle) {
+		t.Fatalf("directory replay artifact error = %v, want invalid bundle", err)
+	}
+}
+
 func finalizedReplayBundle(t *testing.T) (string, roomevidence.Recorder) {
 	t.Helper()
 	recorder, destination, source := openRecorder(t)

@@ -53,8 +53,14 @@ func validateArtifact(root string, seen map[string]string, ref artifactRef, meta
 			artifact.Empty = true
 		}
 	}
+	if err := pathguard.ValidateRegularFile(absolute); err != nil {
+		if os.IsNotExist(err) {
+			return rooms.RoomReplayArtifact{}, incomplete(ref.owner, fmt.Errorf("artifact %q is unavailable", relative))
+		}
+		return rooms.RoomReplayArtifact{}, mismatch(ref.owner, err)
+	}
 	info, err := os.Stat(absolute)
-	if err != nil || info.IsDir() {
+	if err != nil {
 		return rooms.RoomReplayArtifact{}, incomplete(ref.owner, fmt.Errorf("artifact %q is unavailable", relative))
 	}
 	if err := validateArtifactSize(artifact, info.Size(), ref.owner); err != nil {
