@@ -283,6 +283,7 @@ func (r *runLoop) finish(planned bool, primary error) error {
 				if drainErr == nil && r.request.Drain != nil {
 					drainErr = r.request.Drain(ctx, r.loop, r.controller)
 				} else if drainErr == nil {
+					r.cancelRun()
 					drainErr = waitForLoop(r.runErrs)
 				}
 				r.cancelRun()

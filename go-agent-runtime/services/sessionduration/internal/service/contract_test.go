@@ -433,6 +433,22 @@ func (l *idleRunLoopProbe) Run(ctx context.Context) error {
 func (l *idleRunLoopProbe) Deltas() *messages.TypedBuffer[messages.StreamMessage] { return l.deltas }
 func (l *idleRunLoopProbe) Send(context.Context, []messages.Message) error        { return nil }
 
+type contextWaitingRunLoopProbe struct {
+	deltas  *messages.TypedBuffer[messages.StreamMessage]
+	started chan struct{}
+	once    sync.Once
+}
+
+func (l *contextWaitingRunLoopProbe) Run(ctx context.Context) error {
+	l.once.Do(func() { close(l.started) })
+	<-ctx.Done()
+	return ctx.Err()
+}
+func (l *contextWaitingRunLoopProbe) Deltas() *messages.TypedBuffer[messages.StreamMessage] {
+	return l.deltas
+}
+func (l *contextWaitingRunLoopProbe) Send(context.Context, []messages.Message) error { return nil }
+
 func TestRunPublishesAdmittedMessageAndPerformsPlannedBoundedStop(t *testing.T) {
 	loop := &gatedRunLoopProbe{deltas: messages.NewTypedBuffer[messages.StreamMessage](1)}
 	var published []messages.StreamMessage
@@ -494,6 +510,46 @@ func TestRunOwnsLoopExecutionAndBoundedCleanup(t *testing.T) {
 	}
 }
 
+func TestRunCancelsLoopBeforeWaitingWhenDrainCallbackIsMissing(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	loop := &contextWaitingRunLoopProbe{
+		deltas:  messages.NewTypedBuffer[messages.StreamMessage](1),
+		started: make(chan struct{}),
+	}
+	done := make(chan struct{})
+	result := make(chan error, 1)
+	go func() {
+		result <- New().Run(sessionduration.RunRequest{
+			Context:    ctx,
+			Inferencer: contractInferencer{session: newContractSession()},
+			LoopFactory: func(context.Context, sessionduration.AdmissionInferencer, sessionduration.Controller) (sessionduration.Loop, error) {
+				return loop, nil
+			},
+			Done: done,
+		})
+	}()
+	select {
+	case <-loop.started:
+	case <-time.After(time.Second):
+		t.Fatal("session loop did not start")
+	}
+	close(done)
+	select {
+	case err := <-result:
+		if err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+	case <-time.After(time.Second):
+		cancel()
+		select {
+		case <-result:
+		case <-time.After(time.Second):
+		}
+		t.Fatal("Run waited for the loop before canceling it")
+	}
+}
+
 func TestControllerDrainsExpiredOutputAndReportsEmptyProviderResponse(t *testing.T) {
 	controller, err := New().Begin(sessionduration.Options{Clock: testNoopScheduler{}})
 	if err != nil {
@@ -502,8 +558,11 @@ func TestControllerDrainsExpiredOutputAndReportsEmptyProviderResponse(t *testing
 	if err := controller.Expire(); !errors.Is(err, sessionduration.ErrMaxDurationExceeded) {
 		t.Fatalf("Expire: %v", err)
 	}
-	if admission := controller.Observe(messages.StreamMessage{Type: messages.StreamTypeError}); !admission.Accepted {
-		t.Fatal("terminal error was rejected after expiry")
+	if admission := controller.Observe(messages.StreamMessage{Type: messages.StreamTypeError}); admission.Accepted {
+		t.Fatal("terminal error was admitted after expiry")
+	}
+	if admission := controller.ObserveDrain(messages.StreamMessage{Type: messages.StreamTypeError}); admission.Accepted {
+		t.Fatal("terminal error was admitted during post-expiry drain")
 	}
 	if admission := controller.ObserveDrain(messages.StreamMessage{Type: messages.StreamTypeTextDelta}); !admission.Accepted {
 		t.Fatal("expired output was not admitted during bounded drain")

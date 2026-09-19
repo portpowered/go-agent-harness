@@ -43,9 +43,13 @@ func (c *controller) Finalize(ctx context.Context, request sessionduration.Final
 
 func (c *controller) cleanup(ctx context.Context, request sessionduration.FinalizeRequest) []error {
 	if ctx == nil {
-		//nolint:contextcheck // finalization cleanup must outlive caller cancellation.
-		ctx = context.WithoutCancel(c.ctx)
+		ctx = c.ctx
+		if ctx == nil {
+			ctx = context.Background()
+		}
 	}
+	//nolint:contextcheck // finalization cleanup must outlive caller cancellation.
+	ctx = context.WithoutCancel(ctx)
 	var failures []error
 	appendFailure := func(label string, cleanup func() error) {
 		if cleanup == nil {
@@ -59,7 +63,12 @@ func (c *controller) cleanup(ctx context.Context, request sessionduration.Finali
 		appendFailure("drain session", func() error { return c.drainLoop(ctx, request.DrainLoop, request.DrainPolicy) })
 	}
 	if request.Drain != nil {
-		appendFailure("drain session resources", func() error { return request.Drain(ctx) })
+		appendFailure("drain session resources", func() error {
+			_, wallSafety := drainDurations(request.DrainPolicy)
+			drainCtx, cancel := context.WithTimeout(ctx, wallSafety)
+			defer cancel()
+			return request.Drain(drainCtx)
+		})
 	}
 	appendFailure("close session", request.Close)
 	appendFailure("publish max duration", c.publishExpiredTerminal)
@@ -103,7 +112,7 @@ func (c *controller) publishExpiredTerminal() error {
 func invokeCleanup(cleanup func() error) (err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
-			err = fmt.Errorf("session finalization panicked: %v", recovered)
+			err = fmt.Errorf("%w: %v", sessionduration.ErrFinalizationPanic, recovered)
 		}
 	}()
 	return cleanup()

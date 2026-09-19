@@ -225,6 +225,44 @@ func TestControllerBoundedDrainReportsSchedulerFailure(t *testing.T) {
 	}
 }
 
+func TestControllerFinalizationPreservesPanicIdentity(t *testing.T) {
+	controller, err := New().Begin(sessionduration.Options{})
+	if err != nil {
+		t.Fatalf("Begin: %v", err)
+	}
+	_, err = controller.Finalize(context.Background(), sessionduration.FinalizeRequest{
+		Close: func() error { panic("close panic") },
+	})
+	if !errors.Is(err, sessionduration.ErrFinalizationPanic) {
+		t.Fatalf("Finalize error = %v, want ErrFinalizationPanic identity", err)
+	}
+}
+
+func TestControllerFinalizationDrainOutlivesCallerCancellationWithBound(t *testing.T) {
+	callerCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	controller, err := New().Begin(sessionduration.Options{Context: callerCtx})
+	if err != nil {
+		t.Fatalf("Begin: %v", err)
+	}
+	cancel()
+
+	var gotDeadline bool
+	_, err = controller.Finalize(callerCtx, sessionduration.FinalizeRequest{
+		DrainPolicy: sessionduration.DrainPolicy{WallSafety: time.Second},
+		Drain: func(drainCtx context.Context) error {
+			_, gotDeadline = drainCtx.Deadline()
+			return drainCtx.Err()
+		},
+	})
+	if err != nil {
+		t.Fatalf("Finalize after caller cancellation: %v", err)
+	}
+	if !gotDeadline {
+		t.Fatal("finalization drain context has no bounded deadline")
+	}
+}
+
 type artifactLifecycleFunc struct {
 	accept func(messages.StreamMessage) error
 	flush  func() error
