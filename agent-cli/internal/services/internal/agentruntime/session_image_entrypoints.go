@@ -13,7 +13,6 @@ import (
 	sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
-	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
 type SessionImageRunOptions struct {
@@ -283,12 +282,9 @@ func prepareSessionImageRun(ctx context.Context, opts SessionRunOptions, sourceP
 		ModelCatalog:    opts.ModelCatalog,
 		ConfiguredModel: configuredModel,
 	}
-	stagingRoot := ""
-	if sessionHasTool(opts.ToolDefinitions, runtimeTools.ReadImageToolID) {
-		stagingRoot, err = sessionImageStagingConfigDir(opts.ConfigDir)
-		if err != nil {
-			return opts, nil, noOpSessionImageCleanup, err
-		}
+	stagingRoot, err := sessionImageStagingConfigDir(opts.ConfigDir)
+	if err != nil {
+		return opts, nil, noOpSessionImageCleanup, err
 	}
 	prepared, err := turnService.PrepareImage(ctx, sessionturn.ImagePreparationRequest{
 		SourcePaths:            sourcePaths,
@@ -318,15 +314,6 @@ func prepareSessionImageRun(ctx context.Context, opts SessionRunOptions, sourceP
 }
 
 func noOpSessionImageCleanup() error { return nil }
-
-func sessionHasTool(definitions []messages.ToolDefinition, name string) bool {
-	for _, definition := range definitions {
-		if definition.Name == name {
-			return true
-		}
-	}
-	return false
-}
 
 func resolveSessionImageModel(opts SessionRunOptions) (string, error) {
 	model := strings.TrimSpace(opts.Model)

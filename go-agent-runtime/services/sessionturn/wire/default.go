@@ -2,8 +2,22 @@
 
 package wire
 
-import "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
+import (
+	sessionwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
+	diagnosticswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
+	toolswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
+)
 
 func NewDefaultService() sessionturn.Service {
-	return NewService(Dependencies{})
+	return NewService(Dependencies{
+		PolicyFactory:      toolswire.NewInteractiveToolPolicy(),
+		ImageStaging:       toolswire.NewImageStaging(),
+		ToolService:        toolswire.NewService(),
+		InstructionService: sessionwire.NewInstructionService(),
+		LifecycleFactory: func() sessiondiagnostics.Service {
+			return diagnosticswire.NewService(sessiondiagnostics.Options{})
+		},
+	})
 }

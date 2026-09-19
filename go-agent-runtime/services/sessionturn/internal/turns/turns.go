@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
@@ -176,9 +175,8 @@ func (s *Service) NextTurnIndex() uint64 {
 	return s.nextIndex
 }
 
-// Close marks the service closed, retires any active turn, and closes its
-// reused provider session once. The bounded provider close lets an in-flight
-// owner observe terminal shutdown without leaving the service reopenable.
+// Close marks the service closed, retires any active turn, and joins the
+// provider session's close operation before returning.
 func (s *Service) Close() error {
 	s.transitionMu.Lock()
 	defer s.transitionMu.Unlock()
@@ -203,27 +201,18 @@ func (s *Service) Close() error {
 	if connection == nil {
 		return nil
 	}
-	err := closeConnectionBounded(connection)
+	err := closeConnectionAndJoin(connection)
 	s.mu.Lock()
 	s.closeErr = err
 	s.mu.Unlock()
 	return err
 }
 
-const providerCloseTimeout = 500 * time.Millisecond
-
-func closeConnectionBounded(connection messages.Session) error {
+func closeConnectionAndJoin(connection messages.Session) error {
 	if connection == nil {
 		return nil
 	}
-	result := make(chan error, 1)
-	go func() { result <- connection.Close() }()
-	select {
-	case err := <-result:
-		return err
-	case <-time.After(providerCloseTimeout):
-		return fmt.Errorf("close turn session: %w", context.DeadlineExceeded)
-	}
+	return connection.Close()
 }
 
 func (s *Service) sessionFor(ctx context.Context) (messages.Session, error) {
@@ -263,7 +252,7 @@ func (s *Service) sessionFor(ctx context.Context) (messages.Session, error) {
 		s.mu.Unlock()
 		s.connectionMu.Unlock()
 		closedErr := transitionError("run", sessionturn.ErrSessionClosed)
-		if closeErr := closeConnectionBounded(connection); closeErr != nil {
+		if closeErr := closeConnectionAndJoin(connection); closeErr != nil {
 			return nil, errors.Join(closedErr, closeErr)
 		}
 		return nil, closedErr
@@ -271,7 +260,7 @@ func (s *Service) sessionFor(ctx context.Context) (messages.Session, error) {
 	if existing := s.connection; existing != nil {
 		s.mu.Unlock()
 		s.connectionMu.Unlock()
-		if closeErr := closeConnectionBounded(connection); closeErr != nil {
+		if closeErr := closeConnectionAndJoin(connection); closeErr != nil {
 			return nil, closeErr
 		}
 		return existing, nil

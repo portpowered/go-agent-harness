@@ -9,24 +9,13 @@ import (
 	sessiontransport "github.com/portpowered/go-agent-harness/agent-cli/internal/transport"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
-	runtimeSessionWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
-	sessiondiagnosticswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 	sessionturnwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn/wire"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
-	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 )
 
 func newSessionTurnService() sessionturn.Service {
-	return sessionturnwire.NewService(sessionturnwire.Dependencies{
-		PolicyFactory:      runtimeToolsWire.NewInteractiveToolPolicy(),
-		ImageStaging:       runtimeToolsWire.NewImageStaging(),
-		InstructionService: runtimeSessionWire.NewInstructionService(),
-		LifecycleFactory: func() sessiondiagnostics.Service {
-			return sessiondiagnosticswire.NewService(sessiondiagnostics.Options{})
-		},
-	})
+	return sessionturnwire.NewDefaultService()
 }
 
 // prepareSessionTurnSeed transfers seed substitution and serialized output
@@ -158,8 +147,23 @@ func prepareSessionTurnRuntime(ctx context.Context, opts SessionRunOptions, plan
 	if opts.ReplayPath == "" || opts.SessionInferencer != nil {
 		request.ToolDefinitions = append([]messages.ToolDefinition(nil), plan.loop.ToolDefinitions...)
 	}
-	if err := prepareSessionTurnPolicy(opts, &request); err != nil {
-		return err
+	request.InteractiveToolPolicy = opts.InteractiveToolPolicy
+	if opts.InteractiveToolPolicy == nil {
+		settings := runtimeTools.InteractiveToolPolicySettings{}
+		if opts.LoadedConfig != nil {
+			configured, err := opts.LoadedConfig.ResolveInteractiveToolConfig()
+			if err != nil {
+				return fmt.Errorf("resolve interactive tool policy settings: %w", err)
+			}
+			settings = runtimeTools.InteractiveToolPolicySettings{
+				FastReadTimeout:          configured.FastReadTimeout,
+				LongRunningTimeout:       configured.LongRunningTimeout,
+				AcknowledgementThreshold: configured.AcknowledgementThreshold,
+			}
+		}
+		request.ToolPolicySettings = &settings
+		request.ToolDefinitionBase = append([]messages.ToolDefinition(nil), opts.ToolDefinitionBase...)
+		request.DynamicToolPolicy = opts.BrowserToolsInteractive
 	}
 	turnRuntime, err := newSessionTurnService().Prepare(ctx, request)
 	if err != nil {
@@ -177,55 +181,26 @@ func prepareSessionTurnRuntime(ctx context.Context, opts SessionRunOptions, plan
 }
 
 func prepareSessionTurnImages(opts SessionRunOptions, plan *sessionRuntimePlan, request *sessionturn.Request) error {
-	if opts.sessionImageCapabilities == nil && sessionHasTool(opts.ToolDefinitions, runtimeTools.ReadImageToolID) {
-		model := plan.model
-		if model == "" {
-			var err error
-			model, err = resolveSessionImageModel(opts)
-			if err != nil {
-				return err
-			}
-		}
-		configuredModel, err := loadSessionImageModelMetadata(opts.ConfigDir, model)
-		if err != nil {
-			return err
-		}
-		provider := plan.provider
-		if provider == "" {
-			provider = effectiveSessionProvider(opts)
-		}
-		request.ImageCapabilityRequest = &sessionturn.ImageCapabilityRequest{
-			Provider: provider, Model: model, ModelProvided: opts.ModelProvided,
-			ModelCatalog: opts.ModelCatalog, ConfiguredModel: configuredModel,
-		}
+	model := plan.model
+	if model == "" {
+		model = opts.Model
+	}
+	configuredModel, err := loadSessionImageModelMetadata(opts.ConfigDir, model)
+	if err != nil {
+		return err
+	}
+	provider := plan.provider
+	if provider == "" {
+		provider = effectiveSessionProvider(opts)
+	}
+	request.ImageCapabilityRequest = &sessionturn.ImageCapabilityRequest{
+		Provider: provider, Model: model, ModelProvided: opts.ModelProvided,
+		ModelCatalog: opts.ModelCatalog, ConfiguredModel: configuredModel,
 	}
 	if opts.sessionImageCapabilities != nil {
 		capabilities := *opts.sessionImageCapabilities
 		capabilities.SupportedInputMIMETypes = append([]string(nil), capabilities.SupportedInputMIMETypes...)
 		request.ImageCapabilities = &capabilities
-	}
-	return nil
-}
-
-func prepareSessionTurnPolicy(opts SessionRunOptions, request *sessionturn.Request) error {
-	if opts.InteractiveToolPolicy != nil {
-		request.InteractiveToolPolicy = opts.InteractiveToolPolicy
-	} else {
-		settings := runtimeTools.InteractiveToolPolicySettings{}
-		if opts.LoadedConfig != nil {
-			configured, err := opts.LoadedConfig.ResolveInteractiveToolConfig()
-			if err != nil {
-				return fmt.Errorf("resolve interactive tool policy: %w", err)
-			}
-			settings = runtimeTools.InteractiveToolPolicySettings{
-				FastReadTimeout:          configured.FastReadTimeout,
-				LongRunningTimeout:       configured.LongRunningTimeout,
-				AcknowledgementThreshold: configured.AcknowledgementThreshold,
-			}
-		}
-		request.ToolPolicySettings = &settings
-		request.ToolDefinitionBase = append([]messages.ToolDefinition(nil), opts.ToolDefinitionBase...)
-		request.DynamicToolPolicy = opts.BrowserToolsInteractive
 	}
 	return nil
 }

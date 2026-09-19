@@ -3,6 +3,8 @@ package agentruntime
 import (
 	"context"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/sight"
+	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	sd "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
 	tools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
@@ -10,6 +12,23 @@ import (
 	"strings"
 	"unicode"
 )
+
+const sessionPageSightUnavailableCode = "page_sight_unavailable"
+
+func recordSessionToolDiagnostic(sink SessionToolDiagnosticSink, executor messages.ToolExecutor, call messages.ToolCall, err error) {
+	if sink == nil || err == nil {
+		return
+	}
+	diagnostic := SessionToolDiagnostic{ToolCallID: call.ID, ToolName: call.Name, Error: err}
+	if router, ok := executor.(tools.PageSightToolRouter); ok && router.IsPageSightTool(call.Name) {
+		diagnostic.Source = sight.SourceBrowserPage
+		diagnostic.ErrorCode = sessionPageSightUnavailableCode
+	} else if cliTools.IsPhysicalDisplayToolName(call.Name) {
+		diagnostic.Source = sight.SourceScreen
+		diagnostic.ErrorCode = cliTools.ScreenToolErrorCode(err)
+	}
+	sink.RecordSessionToolDiagnostic(diagnostic)
+}
 
 func (o *sessionProgressObserver) setToolResultsEnabled(enabled bool) {
 	if o == nil {
@@ -60,6 +79,7 @@ func (o *sessionProgressObserver) noteToolResultAcceptedWithContext(ctx context.
 	if o == nil || callID == "" {
 		return
 	}
+	ctx = lifecycleObservationContext(ctx)
 	accepted := o.lifecycleEventWithContext(ctx, sd.Event{Kind: sd.EventToolResultAccepted, CallID: callID}).Accepted
 	if !accepted {
 		// The provider send can complete before the first inbound response delta.
@@ -95,6 +115,7 @@ func (o *sessionProgressObserver) noteToolContinuationRequestedWithContext(ctx c
 	if o == nil {
 		return
 	}
+	ctx = lifecycleObservationContext(ctx)
 	observation := o.lifecycleEventWithContext(ctx, sd.Event{Kind: sd.EventContinuationRequested})
 	if observation.Accepted {
 		o.signalToolLifecycle()
@@ -186,10 +207,18 @@ func (o *sessionProgressObserver) noteToolResultRejected(ctx context.Context, ca
 	if o == nil || strings.TrimSpace(callID) == "" || outcome.OK() {
 		return
 	}
+	ctx = lifecycleObservationContext(ctx)
 	if o.continuationResultAccepted(callID) {
 		return
 	}
 	o.lifecycleEventWithContext(ctx, sd.Event{Kind: sd.EventToolResultRejected, CallID: callID, ResultStatus: string(outcome.Status)})
+}
+
+func lifecycleObservationContext(ctx context.Context) context.Context {
+	if ctx == nil {
+		return context.Background()
+	}
+	return context.WithoutCancel(ctx)
 }
 
 func (o *sessionProgressObserver) hasUnresolvedToolCalls() bool {

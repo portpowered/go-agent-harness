@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
 )
 
 // sessionSIGINTCancellationOnly reports whether every known cause in err is
@@ -47,12 +49,12 @@ func sessionSIGINTErrorOnly(err error) bool {
 
 	switch err {
 	case context.Canceled,
-		ErrSessionAudioResponseIncomplete,
+		runtimeSession.ErrLiveAudioResponseIncomplete,
 		ErrSessionAudioInputEndOfTurnLost,
 		ErrSessionScheduledAudioIncomplete,
-		ErrSessionUnresolvedToolResults,
-		ErrSessionToolContinuationIncomplete,
-		ErrSessionImageContinuationIncomplete:
+		sessionterminal.ErrUnresolvedToolResults,
+		runtimeSession.ErrLiveToolContinuationIncomplete,
+		runtimeSession.ErrLiveImageContinuationIncomplete:
 		return true
 	default:
 		return false

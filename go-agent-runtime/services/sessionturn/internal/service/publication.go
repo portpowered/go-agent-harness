@@ -15,7 +15,6 @@ import (
 
 const (
 	publicationSettleWindow = 10 * time.Millisecond
-	publicationStopTimeout  = 500 * time.Millisecond
 )
 
 type publication struct {
@@ -106,15 +105,7 @@ func (p *publication) Stop() {
 	}
 	p.stopOnce.Do(func() {
 		p.cancel()
-		timer := time.NewTimer(publicationStopTimeout)
-		defer timer.Stop()
-		select {
-		case <-p.done:
-		case <-timer.C:
-			if err := p.fail("stop", p.latestSequence(), context.DeadlineExceeded); err != nil {
-				return
-			}
-		}
+		<-p.done
 	})
 }
 

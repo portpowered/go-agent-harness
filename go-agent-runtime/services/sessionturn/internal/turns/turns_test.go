@@ -48,6 +48,22 @@ type testSession struct {
 	sendFunc func(messages.StreamMessage) bool
 }
 
+type heldCloseSession struct {
+	*testSession
+	started chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func (s *heldCloseSession) Close() error {
+	s.once.Do(func() {
+		close(s.started)
+		<-s.release
+		_ = s.testSession.Close()
+	})
+	return s.closeErr
+}
+
 func newTestSession() *testSession {
 	return &testSession{receive: messages.NewTypedBuffer[messages.StreamMessage](32), done: make(chan struct{})}
 }
@@ -502,6 +518,41 @@ func TestServiceCloseDoesNotWaitForBlockedConnectionAdmission(t *testing.T) {
 	}
 	if provider.closeCall.Load() != 1 {
 		t.Fatalf("late connection close calls = %d, want 1", provider.closeCall.Load())
+	}
+}
+
+func TestServiceCloseJoinsProviderCloseBeforeReturning(t *testing.T) {
+	provider := &heldCloseSession{testSession: newTestSession(), started: make(chan struct{}), release: make(chan struct{})}
+	textResponse(provider.testSession, "answer")
+	inferencer := &testInferencer{session: provider}
+	service := New(Dependencies{SessionInferencer: inferencer})
+	if _, err := service.RunTurn(context.Background(), textInput("question"), sessionturn.TurnDirectionUser, 1, 2); err != nil {
+		t.Fatalf("RunTurn: %v", err)
+	}
+
+	closed := make(chan error, 1)
+	go func() { closed <- service.Close() }()
+	select {
+	case <-provider.started:
+	case <-time.After(time.Second):
+		t.Fatal("provider close did not start")
+	}
+	select {
+	case err := <-closed:
+		t.Fatalf("Close returned before provider close joined: %v", err)
+	default:
+	}
+	close(provider.release)
+	select {
+	case err := <-closed:
+		if err != nil {
+			t.Fatalf("Close: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Close did not return after provider close finished")
+	}
+	if calls := provider.closeCall.Load(); calls != 1 {
+		t.Fatalf("provider close calls = %d, want 1", calls)
 	}
 }
 

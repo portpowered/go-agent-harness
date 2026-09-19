@@ -5,11 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"time"
 
 	sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/skills"
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
@@ -215,43 +213,19 @@ func sessionInstructionText(ctx context.Context, opts SessionRunOptions, systemP
 func newSessionInstructionRequest(opts SessionRunOptions, systemPrompt string) (runtimeSession.InstructionRequest, error) {
 	workDir := opts.WorkDir
 	if workDir == "" && opts.FilesystemPolicy == nil {
-		// Preserve the direct service API's historical workspace behavior. CLI
-		// sessions always supply the launch-captured policy explicitly.
 		workDir = opts.ConfigDir
-	}
-	if workDir != "" && opts.FilesystemPolicy == nil {
-		// Validate the host-selected workspace before attempting prompt
-		// discovery. A missing workspace is a startup/configuration error, not
-		// an empty prompt, and must prevent provider/session admission.
-		policy, policyErr := cliTools.ResolveFilesystemPolicy(workDir, opts.AllowPaths...)
-		if policyErr != nil {
-			return runtimeSession.InstructionRequest{}, fmt.Errorf("resolve filesystem scope: %w", policyErr)
-		}
-		workDir = policy.PrimaryRoot()
 	}
 	request := runtimeSession.InstructionRequest{
 		Prompt:       systemPrompt,
 		WorkspaceDir: workDir,
-		Loader:       sessionInstructionLoader{workspaceDir: workDir, configDir: opts.ConfigDir},
+		ConfigDir:    opts.ConfigDir,
 	}
 	if opts.FilesystemPolicy != nil {
+		request.WorkspaceDir = opts.FilesystemPolicy.PrimaryRoot()
 		request.FilesystemScopeSet = true
 		request.FilesystemScopeDescription = opts.FilesystemPolicy.ScopeDescription()
 	}
 	return request, nil
-}
-
-type sessionInstructionLoader struct {
-	workspaceDir string
-	configDir    string
-}
-
-func (l sessionInstructionLoader) Stat(path string) error { _, err := os.Stat(path); return err }
-
-func (l sessionInstructionLoader) ReadFile(path string) ([]byte, error) { return os.ReadFile(path) }
-
-func (l sessionInstructionLoader) SkillsSummary() (string, error) {
-	return skills.NewLoader(l.workspaceDir, l.configDir).BuildSummary()
 }
 
 // composeSessionInstructions is a compatibility adapter around the runtime

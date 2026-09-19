@@ -22,7 +22,7 @@ func TestScheduledAudioCompletionErrorJoinsPrimaryAndReportsCounts(t *testing.T)
 		{AfterCompletedTurns: 2},
 	})
 	observer.dispatchedInputs = 2
-	observer.completedScheduled = 2
+	completeTestScheduledLifecycles(t, observer, 2)
 	observer.turnsCompleted = 2
 
 	primary := errors.New("provider closed cleanly")
@@ -59,7 +59,7 @@ func TestSessionProgressObserverScheduledIncompleteFailureIncludesCountsOnce(t *
 		{AfterCompletedTurns: 2},
 	})
 	observer.dispatchedInputs = 2
-	observer.completedScheduled = 2
+	completeTestScheduledLifecycles(t, observer, 2)
 
 	err := scheduledAudioCompletionError(nil, sessionLoopOptions{
 		CloseAfterScheduledAudio: true,
@@ -262,7 +262,7 @@ func TestSessionProgressObserverActiveResponseReleasesOnlyFollowingTurn(t *testi
 		Role:  messages.RoleAssistant,
 		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
 	})
-	if observer.activeResponse {
+	if lifecycleSnapshotForTest(observer).ActiveResponse {
 		t.Fatal("terminal MESSAGE.END left the response active")
 	}
 	if err := observer.dispatchScheduledInputs(context.Background(), probe); err != nil {
@@ -310,7 +310,7 @@ func TestSessionProgressObserverTerminalResponseWinsBeforeActiveDispatch(t *test
 		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
 	})
 
-	if observer.activeResponse {
+	if lifecycleSnapshotForTest(observer).ActiveResponse {
 		t.Fatal("terminal response remained active")
 	}
 	if err := observer.dispatchScheduledInputs(context.Background(), probe); err != nil {
@@ -434,8 +434,8 @@ func TestSessionProgressObserverResolvedBargeLifecycleReleasesThirdTurnAfterRepl
 	if observer.turnsCompleted != 0 {
 		t.Fatalf("cancelled response advanced ordinary turns = %d, want 0", observer.turnsCompleted)
 	}
-	if observer.completedScheduled != 1 {
-		t.Fatalf("resolved scheduled lifecycles = %d, want cancelled first lifecycle only", observer.completedScheduled)
+	if got := lifecycleSnapshotForTest(observer).CompletedScheduled; got != 1 {
+		t.Fatalf("resolved scheduled lifecycles = %d, want cancelled first lifecycle only", got)
 	}
 
 	observer.observe(messages.StreamMessage{
@@ -566,8 +566,8 @@ func TestSessionProgressObserverResponseIdentityRejectsOutOfOrderTerminal(t *tes
 		t.Fatalf("dispatch while first response is active: %v", err)
 	}
 	observer.observe(messages.StreamMessage{Type: messages.StreamTypeMessageStart, ResponseID: "resp-current", Value: messages.NewMessageStartValue()})
-	if observer.activeResponseID != "resp-current" {
-		t.Fatalf("active response ID = %q, want resp-current", observer.activeResponseID)
+	if got := lifecycleSnapshotForTest(observer).ActiveResponseID; got != "resp-current" {
+		t.Fatalf("active response ID = %q, want resp-current", got)
 	}
 	if err := observer.dispatchScheduledInputs(context.Background(), probe); err != nil {
 		t.Fatalf("dispatch while replacement response is active: %v", err)
@@ -577,13 +577,14 @@ func TestSessionProgressObserverResponseIdentityRejectsOutOfOrderTerminal(t *tes
 	}
 
 	observer.observe(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, ResponseID: "resp-old", Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})})
-	if !observer.activeResponse || observer.activeResponseID != "resp-current" || observer.turnsCompleted != 0 {
-		t.Fatalf("late old terminal changed lifecycle: active=%t id=%q turns=%d", observer.activeResponse, observer.activeResponseID, observer.turnsCompleted)
+	snapshot := lifecycleSnapshotForTest(observer)
+	if !snapshot.ActiveResponse || snapshot.ActiveResponseID != "resp-current" || observer.turnsCompleted != 0 {
+		t.Fatalf("late old terminal changed lifecycle: active=%t id=%q turns=%d", snapshot.ActiveResponse, snapshot.ActiveResponseID, observer.turnsCompleted)
 	}
 	observer.observe(messages.StreamMessage{Type: messages.StreamTypeTextDelta, ResponseID: "resp-current", Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("current response")})
 	observer.observe(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, ResponseID: "resp-current", Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})})
-	if observer.activeResponse || observer.turnsCompleted != 1 {
-		t.Fatalf("current terminal lifecycle = active:%t turns:%d, want inactive/1", observer.activeResponse, observer.turnsCompleted)
+	if lifecycleSnapshotForTest(observer).ActiveResponse || observer.turnsCompleted != 1 {
+		t.Fatalf("current terminal lifecycle = active:%t turns:%d, want inactive/1", lifecycleSnapshotForTest(observer).ActiveResponse, observer.turnsCompleted)
 	}
 }
 

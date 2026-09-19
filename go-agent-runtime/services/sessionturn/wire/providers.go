@@ -20,6 +20,7 @@ type Dependencies struct {
 	Allocator          sessionturn.Allocator
 	PolicyFactory      tools.InteractiveToolPolicyFactory
 	ImageStaging       tools.ImageStaging
+	ToolService        tools.Service
 	InstructionService session.InstructionService
 	LifecycleFactory   func() sessiondiagnostics.Service
 }
@@ -30,5 +31,5 @@ func NewService(deps Dependencies) sessionturn.Service {
 }
 
 func newServiceDependencies(deps Dependencies) service.Dependencies {
-	return service.Dependencies{Allocator: deps.Allocator, PolicyFactory: deps.PolicyFactory, ImageStaging: deps.ImageStaging, InstructionService: deps.InstructionService, LifecycleFactory: deps.LifecycleFactory}
+	return service.Dependencies{Allocator: deps.Allocator, PolicyFactory: deps.PolicyFactory, ImageStaging: deps.ImageStaging, ToolService: deps.ToolService, InstructionService: deps.InstructionService, LifecycleFactory: deps.LifecycleFactory}
 }

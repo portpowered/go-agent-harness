@@ -25,6 +25,13 @@ const (
 	sessionAudioWAVMaxDataSize   = uint64(^uint32(0)) - 36
 )
 
+func joinSessionAudioOutputError(runErr error, path string, outputErr error) error {
+	if outputErr == nil || errors.Is(runErr, outputErr) {
+		return runErr
+	}
+	return errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", path, outputErr))
+}
+
 // RunSessionWithAudioOut runs a session and writes assistant PCM to path; an empty path preserves normal output and "-" writes raw PCM16.
 func RunSessionWithAudioOut(ctx context.Context, out io.Writer, opts SessionRunOptions, path string) (runErr error) {
 	return RunSessionWithAudioOutAndTextSeed(ctx, out, opts, path, SessionTextSeed{})

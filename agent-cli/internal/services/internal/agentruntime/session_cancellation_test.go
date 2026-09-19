@@ -21,7 +21,6 @@ func TestSessionSIGINTCancellationResolvesPendingObligations(t *testing.T) {
 		{AfterCompletedTurns: 1},
 	})
 	observer.dispatchedInputs = 1
-	observer.completedScheduled = 0
 	observer.setToolResultsEnabled(true)
 	observer.observe(messages.StreamMessage{
 		Type:  messages.StreamTypeToolCallEnd,

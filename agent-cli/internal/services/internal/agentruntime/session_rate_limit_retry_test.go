@@ -216,8 +216,9 @@ func TestSessionProgressObserverRateLimitRetryKeepsScheduledLifecycle(t *testing
 	if !retry || delay != 10*time.Millisecond {
 		t.Fatalf("retry claim = (%s, %t), want (10ms, true)", delay, retry)
 	}
-	if observer.completedScheduled != 0 || observer.nextScheduledResponse != 1 {
-		t.Fatalf("failed response changed schedule counters: completed=%d next=%d", observer.completedScheduled, observer.nextScheduledResponse)
+	snapshot := lifecycleSnapshotForTest(observer)
+	if snapshot.CompletedScheduled != 0 || snapshot.NextScheduledResponse != 1 {
+		t.Fatalf("failed response changed schedule counters: completed=%d next=%d", snapshot.CompletedScheduled, snapshot.NextScheduledResponse)
 	}
 	if index, ok := observer.pendingScheduledRateLimitRetryIndex(); !ok || index != 0 {
 		t.Fatalf("pending retry lifecycle = (%d, %t), want (0, true)", index, ok)
@@ -241,11 +242,12 @@ func TestSessionProgressObserverRateLimitRetryKeepsScheduledLifecycle(t *testing
 		Role:       messages.RoleAssistant,
 		Value:      &messages.MessageEndValue{Type: "message_end", Status: "completed"},
 	})
-	if observer.completedScheduled != 1 || observer.turnsCompleted != 1 {
-		t.Fatalf("replacement completion = scheduled:%d turns:%d, want 1/1", observer.completedScheduled, observer.turnsCompleted)
+	snapshot = lifecycleSnapshotForTest(observer)
+	if snapshot.CompletedScheduled != 1 || observer.turnsCompleted != 1 {
+		t.Fatalf("replacement completion = scheduled:%d turns:%d, want 1/1", snapshot.CompletedScheduled, observer.turnsCompleted)
 	}
-	if observer.scheduledResponseByID["response-failed"] != 0 || observer.scheduledResponseByID["response-replacement"] != 0 {
-		t.Fatalf("response IDs did not remain on lifecycle zero: %#v", observer.scheduledResponseByID)
+	if snapshot.ScheduledResponseByID["response-failed"] != 0 || snapshot.ScheduledResponseByID["response-replacement"] != 0 {
+		t.Fatalf("response IDs did not remain on lifecycle zero: %#v", snapshot.ScheduledResponseByID)
 	}
 	if err := observer.dispatchScheduledInputs(context.Background(), probe); err != nil {
 		t.Fatalf("dispatch following scheduled input: %v", err)
@@ -435,8 +437,8 @@ func TestSessionProgressObserverRateLimitRetryKeepsToolContinuationOwner(t *test
 	if !complete || owner != "response-continuation-replacement" {
 		t.Fatalf("replacement continuation state = complete:%t owner:%q, want true/new response", complete, owner)
 	}
-	if observer.completedScheduled != 1 {
-		t.Fatalf("replacement continuation credited %d scheduled turns, want 1", observer.completedScheduled)
+	if got := lifecycleSnapshotForTest(observer).CompletedScheduled; got != 1 {
+		t.Fatalf("replacement continuation credited %d scheduled turns, want 1", got)
 	}
 }
 
@@ -460,7 +462,8 @@ func TestRunAgentLoopSessionRetriesScheduledToolContinuationOnce(t *testing.T) {
 	})
 	elapsed := time.Since(started)
 	if err != nil {
-		t.Fatalf("runAgentLoopSession: %v; timeline=%v; observer={scheduled:%#v next:%d active:%q logical:%q completed:%d turns:%d}", err, session.timelineSnapshot(), observer.scheduledResponses, observer.nextScheduledResponse, observer.activeScheduledResponseID, observer.logicalScheduledResponseID, observer.completedScheduled, observer.turnsCompleted)
+		snapshot := lifecycleSnapshotForTest(observer)
+		t.Fatalf("runAgentLoopSession: %v; timeline=%v; observer={scheduled:%#v next:%d active:%q logical:%q completed:%d turns:%d}", err, session.timelineSnapshot(), snapshot.Scheduled, snapshot.NextScheduledResponse, snapshot.ActiveScheduledID, snapshot.LogicalScheduledID, snapshot.CompletedScheduled, observer.turnsCompleted)
 	}
 	if elapsed < retryDelay {
 		t.Fatalf("retry elapsed time = %s, want at least %s; timeline=%v", elapsed, retryDelay, session.timelineSnapshot())
@@ -478,8 +481,8 @@ func TestRunAgentLoopSessionRetriesScheduledToolContinuationOnce(t *testing.T) {
 	if calls := executor.callsSnapshot(); len(calls) != 1 || calls[0].ID != "call-retry-once" {
 		t.Fatalf("tool executions = %#v, want exactly one call-retry-once", calls)
 	}
-	if observer.completedScheduled != 2 || observer.turnsCompleted != 2 {
-		t.Fatalf("scheduled credits = scheduled:%d turns:%d, want 2/2", observer.completedScheduled, observer.turnsCompleted)
+	if got := lifecycleSnapshotForTest(observer).CompletedScheduled; got != 2 || observer.turnsCompleted != 2 {
+		t.Fatalf("scheduled credits = scheduled:%d turns:%d, want 2/2", got, observer.turnsCompleted)
 	}
 	timeline := session.timelineSnapshot()
 	replacementDone := timelineIndex(timeline, "in:MESSAGE.END:response-replacement")
@@ -532,8 +535,8 @@ func TestRunAgentLoopSessionStopsAfterConsecutiveRateLimitFailure(t *testing.T) 
 	if calls := executor.callsSnapshot(); len(calls) != 1 {
 		t.Fatalf("tool executions = %#v, want exactly one execution", calls)
 	}
-	if observer.completedScheduled != 0 || observer.turnsCompleted != 0 {
-		t.Fatalf("failed scheduled credits = scheduled:%d turns:%d, want 0/0", observer.completedScheduled, observer.turnsCompleted)
+	if got := lifecycleSnapshotForTest(observer).CompletedScheduled; got != 0 || observer.turnsCompleted != 0 {
+		t.Fatalf("failed scheduled credits = scheduled:%d turns:%d, want 0/0", got, observer.turnsCompleted)
 	}
 	if !errors.Is(err, ErrSessionToolContinuationIncomplete) || !errors.Is(err, ErrSessionScheduledAudioIncomplete) {
 		t.Fatalf("consecutive failure error = %v, want tool and scheduled lifecycle sentinels", err)
@@ -594,8 +597,8 @@ func TestRunAgentLoopSessionDoesNotRetryNonRateLimitFailure(t *testing.T) {
 	if got := session.countSent(messages.StreamTypeAudioDelta); got != 1 || session.countSent(messages.StreamTypeToolCallEnd) != 1 {
 		t.Fatalf("non-rate-limit input/tool counts = audio:%d tool:%d, want 1/1", got, session.countSent(messages.StreamTypeToolCallEnd))
 	}
-	if observer.completedScheduled != 0 || observer.turnsCompleted != 0 {
-		t.Fatalf("non-rate-limit credits = scheduled:%d turns:%d, want 0/0", observer.completedScheduled, observer.turnsCompleted)
+	if got := lifecycleSnapshotForTest(observer).CompletedScheduled; got != 0 || observer.turnsCompleted != 0 {
+		t.Fatalf("non-rate-limit credits = scheduled:%d turns:%d, want 0/0", got, observer.turnsCompleted)
 	}
 	if !errors.Is(err, ErrSessionToolContinuationIncomplete) || !errors.Is(err, ErrSessionScheduledAudioIncomplete) {
 		t.Fatalf("non-rate-limit error = %v, want tool and scheduled lifecycle sentinels", err)

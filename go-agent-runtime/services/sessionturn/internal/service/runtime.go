@@ -19,6 +19,7 @@ type Dependencies struct {
 	Allocator          sessionturn.Allocator
 	PolicyFactory      tools.InteractiveToolPolicyFactory
 	ImageStaging       tools.ImageStaging
+	ToolService        tools.Service
 	InstructionService session.InstructionService
 	LifecycleFactory   func() sessiondiagnostics.Service
 }
@@ -36,6 +37,10 @@ func (s *Service) ResolveInstructions(ctx context.Context, request sessionturn.I
 	var instructionService session.InstructionService
 	if s != nil {
 		instructionService = s.deps.InstructionService
+	}
+	request, err := s.withInstructionLoader(ctx, request)
+	if err != nil {
+		return "", err
 	}
 	return resolveInstructionRequest(ctx, request, instructionService)
 }
@@ -64,6 +69,10 @@ func (s *Service) Prepare(ctx context.Context, request sessionturn.Request) (ses
 	if s != nil {
 		instructionService = s.deps.InstructionService
 	}
+	request.Instructions, err = s.withInstructionLoader(ctx, request.Instructions)
+	if err != nil {
+		return nil, err
+	}
 	inferencer, wirePrompt, err := prepareInferencer(ctx, request, seedService, instructionService)
 	if err != nil {
 		return nil, err
@@ -88,7 +97,8 @@ func (s *Service) Prepare(ctx context.Context, request sessionturn.Request) (ses
 }
 
 func (s *Service) prepareImageCapabilities(request *sessionturn.Request) error {
-	if request == nil || request.ImageCapabilities != nil || request.ImageCapabilityRequest == nil {
+	if request == nil || request.ImageCapabilities != nil || request.ImageCapabilityRequest == nil ||
+		(request.Image == nil && !hasReadImageTool(request.ToolDefinitions)) {
 		return nil
 	}
 	capabilities, err := s.ResolveImageCapabilities(*request.ImageCapabilityRequest)

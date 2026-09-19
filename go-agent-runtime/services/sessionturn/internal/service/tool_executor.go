@@ -73,7 +73,6 @@ func (e *toolExecutor) Execute(ctx context.Context, call messages.ToolCall) (mes
 	}()
 	execCtx, cancel := context.WithTimeout(callCtx, timeout)
 	defer cancel()
-	resultCh := make(chan toolResult, 1)
 	e.mu.Lock()
 	if e.closed {
 		e.mu.Unlock()
@@ -84,27 +83,23 @@ func (e *toolExecutor) Execute(ctx context.Context, call messages.ToolCall) (mes
 	}
 	e.activeCount++
 	e.mu.Unlock()
-	go func() {
-		defer e.finishCall()
-		response, err := invokeTool(execCtx, e.inner, call)
-		resultCh <- toolResult{response: response, err: err}
-	}()
-	select {
-	case result := <-resultCh:
-		if result.err == nil {
-			result.response.ToolCallID, result.response.Name = call.ID, call.Name
-			return e.finish(call, result.response, toolResponseFailed(result.response.Content), nil)
-		}
-		return e.failed(call, result.err)
-	case <-execCtx.Done():
-		if ctx.Err() != nil {
-			return e.finish(call, messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name}, false, ctx.Err())
-		}
+	defer e.finishCall()
+	if err := execCtx.Err(); err != nil {
+		return e.finish(call, messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name}, false, err)
+	}
+	response, err := invokeTool(execCtx, e.inner, call)
+	if ctx.Err() != nil {
+		return e.finish(call, messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name}, false, ctx.Err())
+	}
+	if errors.Is(execCtx.Err(), context.DeadlineExceeded) {
 		return e.failed(call, fmt.Errorf("%w after %s", errToolTimeout, timeout))
 	}
+	if err != nil {
+		return e.failed(call, err)
+	}
+	response.ToolCallID, response.Name = call.ID, call.Name
+	return e.finish(call, response, toolResponseFailed(response.Content), nil)
 }
-
-const toolShutdownTimeout = 500 * time.Millisecond
 
 func (e *toolExecutor) Close() error {
 	if e == nil {
@@ -118,11 +113,7 @@ func (e *toolExecutor) Close() error {
 		}
 		idle := e.activeIdle
 		e.mu.Unlock()
-		select {
-		case <-idle:
-		case <-time.After(toolShutdownTimeout):
-			e.closeErr = fmt.Errorf("close session turn tools: %w", context.DeadlineExceeded)
-		}
+		<-idle
 	})
 	return e.closeErr
 }
@@ -134,11 +125,6 @@ func (e *toolExecutor) finishCall() {
 	if e.activeCount == 0 {
 		close(e.activeIdle)
 	}
-}
-
-type toolResult struct {
-	response messages.ToolCallResponse
-	err      error
 }
 
 func (e *toolExecutor) failed(call messages.ToolCall, err error) (messages.ToolCallResponse, error) {

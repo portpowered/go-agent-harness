@@ -18,14 +18,13 @@ func TestSessionProgressObserver_SyntheticToolEnvelopeBeforeAndAfterContinuation
 		t.Run(testCase.name, func(t *testing.T) {
 			observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime-2.1-mini")
 			observer.setToolResultsEnabled(true)
-			observer.scheduledResponses = append(observer.scheduledResponses,
-				scheduledAudioResponseLifecycle{}, scheduledAudioResponseLifecycle{})
+			ensureTestLifecycleScheduled(t, observer, 2)
 
 			driveSyntheticToolEnvelopeTurn(observer, "response-a", "call-a", "response-b", testCase.syntheticAfterStart)
 			driveSyntheticToolEnvelopeTurn(observer, "response-c", "call-c", "response-d", false)
 
-			if observer.completedScheduled != 2 {
-				t.Fatalf("completed scheduled responses = %d, want 2", observer.completedScheduled)
+			if got := lifecycleSnapshotForTest(observer).CompletedScheduled; got != 2 {
+				t.Fatalf("completed scheduled responses = %d, want 2", got)
 			}
 		})
 	}
@@ -60,7 +59,7 @@ func driveSyntheticToolEnvelopeTurn(observer *sessionProgressObserver, responseI
 func TestSessionProgressObserver_ThreeChainedToolCallsCreditOneScheduledTurn(t *testing.T) {
 	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime-2.1-mini")
 	observer.setToolResultsEnabled(true)
-	observer.scheduledResponses = append(observer.scheduledResponses, scheduledAudioResponseLifecycle{})
+	ensureTestLifecycleScheduled(t, observer, 1)
 
 	emitToolEnvelope := func(callID string) {
 		observer.observe(messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleTool, Value: messages.NewMessageStartValue()})
@@ -97,8 +96,8 @@ func TestSessionProgressObserver_ThreeChainedToolCallsCreditOneScheduledTurn(t *
 			t.Errorf("continuation for %s was not completed", callID)
 		}
 	}
-	if observer.completedScheduled != 1 {
-		t.Errorf("completed scheduled responses = %d, want 1", observer.completedScheduled)
+	if got := lifecycleSnapshotForTest(observer).CompletedScheduled; got != 1 {
+		t.Errorf("completed scheduled responses = %d, want 1", got)
 	}
 }
 

@@ -15,6 +15,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	audiosubsystem "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems/audio"
+	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -425,7 +426,7 @@ func audioResponseCompletionError(err error, opts sessionLoopOptions) error {
 		}
 	}
 	if opts.RequireTerminalAssistantResponse && (opts.observer == nil || !opts.observer.assistantResponseCompleted()) {
-		incomplete := ErrSessionAudioResponseIncomplete
+		incomplete := runtimeSession.ErrLiveAudioResponseIncomplete
 		if err == nil {
 			return incomplete
 		}
@@ -434,7 +435,7 @@ func audioResponseCompletionError(err error, opts sessionLoopOptions) error {
 	if opts.observer == nil || !opts.observer.providerToolCallObserved() || opts.observer.assistantResponseCompleted() {
 		return err
 	}
-	incomplete := ErrSessionAudioResponseIncomplete
+	incomplete := runtimeSession.ErrLiveAudioResponseIncomplete
 	if err == nil {
 		return incomplete
 	}
@@ -486,7 +487,9 @@ func decorateSessionStreamTerminalError(err error) error {
 }
 
 func scheduledAudioCompletionError(err error, opts sessionLoopOptions) error {
-	err = withUnresolvedToolResults(err, opts.observer)
+	if opts.observer != nil {
+		err = opts.observer.enrichLifecycleError(err)
+	}
 	if !opts.CloseAfterScheduledAudio || opts.observer == nil || !opts.observer.scheduledAudioIncomplete() {
 		return err
 	}

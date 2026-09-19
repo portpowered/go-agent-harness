@@ -4136,3 +4136,38 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   script passes all normal, coverage, and race lanes across CLI, integration,
   device, and OpenAI provider packages. Expected replay/PCM/transcript negative
   controls report their rejection and pass.
+
+## C190 executor checkpoint — 2026-09-19
+
+- Re-read the operating policy and implementation handoff, reverified admission,
+  and confirmed branch `codex/audio-runtime-c190-retire-turn-input-tool-cluster`
+  still matches the PRD. Preserved the existing C190 dirty checkpoint and PR
+  head `87a8050857ab6f06db7cc526ba17965a405149eb`.
+- Moved session-turn default composition into `sessionturn/wire`, moved
+  instruction file/skills loading behind the session-turn service, made image
+  capability admission conditional on an image turn or `read_image`, and
+  removed the CLI-side instruction loader and conditional image staging gate.
+  Deleted `session_lifecycle_errors.go` and the now-unused 20-line
+  `agentsession/tool_lifecycle.go` compatibility alias.
+- Removed detached tool, provider-close, and publication shutdown workers; the
+  session-turn service now cancels and joins active work. Focused sessionturn
+  tests pass (`25` tests across five packages), instruction source-matrix plus
+  failed-image-continuation checks pass (`10`), and `git diff --check` passes.
+  The image-result continuation regression remains nondeterministic: its
+  ten-run check was `9` pass / `1` fail; the failing terminal snapshot still
+  reports `image-call` unresolved despite rendered tool-result and assistant
+  output. Do not treat this as accepted or handoff evidence.
+- The nine planned legacy filenames remain absent. Current CLI adapters count
+  `2` files / `195` lines (`turn_adapter.go` 24, `run_helpers.go` 171), but
+  `run_helpers.go` still owns a channel-forwarding goroutine and is not yet
+  stateless. Residual C190 production entrypoint/planning files remain in
+  `agentruntime`, so the full vertical retirement is incomplete. No prepush,
+  commit, push, PR update, CI handoff, or CI polling occurred.
+- Exact next action: repair the read-image result-acceptance/terminal-snapshot
+  race by tracing the stream-only rich-result fallback through the service
+  boundary; move the remaining turn/image/instruction/text planning decisions
+  and mutable state out of the named `agentruntime` entrypoint files, and move
+  the event-forwarding queue state behind the owning runtime service. Then
+  verify complete caller cutover and legacy-file absence before the PRD
+  normal/race/regression commands and `make prepush`; commit, push, and update
+  PR `#529` only when the complete candidate passes.

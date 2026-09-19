@@ -22,6 +22,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
@@ -161,7 +162,7 @@ func TestRunSessionWithImagesAndAudioInputRequiresAssistantOutput(t *testing.T) 
 		ImagePaths:  []string{imagePath},
 		MaxDuration: 100 * time.Millisecond,
 	}, agentruntime.SessionAudioInput{Path: audioPath, Present: true})
-	if err == nil || !errors.Is(err, agentruntime.ErrSessionAudioResponseIncomplete) {
+	if err == nil || !errors.Is(err, runtimeSession.ErrLiveAudioResponseIncomplete) {
 		t.Fatalf("image-plus-audio run without assistant output error = %v, want ErrSessionAudioResponseIncomplete", err)
 	}
 }
