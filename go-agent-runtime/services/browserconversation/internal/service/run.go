@@ -96,6 +96,9 @@ func (b *evidenceBroker) Invoke(ctx context.Context, request browserconversation
 	}
 	b.record(invokeCall(stepID, request, result, descriptor))
 	if isTerminal(result.State) || result.InvocationID == "" {
+		if step != nil && result.State == browserConversationInvocationCompleted && expectedState(step) != nil {
+			b.observeOracle(ctx, step, browserconversation.BrowserConversationOracleAfter)
+		}
 		return result, nil
 	}
 	if b.tracker != nil {

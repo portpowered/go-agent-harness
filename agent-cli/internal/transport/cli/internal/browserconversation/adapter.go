@@ -109,6 +109,9 @@ func WatchWebMCPEvents(ctx context.Context, source <-chan runtime.BrowserEvent) 
 }
 
 func (a *Adapter) WaitInvocation(ctx context.Context, invocationID string) (runtime.BrowserInvokeResult, error) {
+	if a == nil || a.inner == nil {
+		return runtime.BrowserInvokeResult{}, errors.New("browser conversation adapter has no broker")
+	}
 	waiter, ok := a.inner.(webmcp.InvocationWaiter)
 	if !ok {
 		return runtime.BrowserInvokeResult{}, errors.New("browser broker does not support invocation waiting")
