@@ -10,7 +10,6 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/livehost"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	gwproviders "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	"github.com/spf13/cobra"
@@ -129,8 +128,7 @@ func (c *SessionCommand) buildSessionRequest(cmd *cobra.Command, args []string, 
 		workDir = loadedConfig.FilesystemWorkDir
 	}
 	return serviceSession.Request{
-		BrowserRecordingStarter: livehost.StartBrowserRecording,
-		RecordPath:              c.askFlags.RecordCapturePath, ReplayPath: c.askFlags.ReplayCapturePath, ReplayTiming: c.askFlags.ReplayTiming,
+		RecordPath: c.askFlags.RecordCapturePath, ReplayPath: c.askFlags.ReplayCapturePath, ReplayTiming: c.askFlags.ReplayTiming,
 		Provider: c.askFlags.Provider, ProviderProvided: cmd.Flags().Changed("provider"), Model: c.askFlags.Model, ModelProvided: cmd.Flags().Changed("model"),
 		NoInputTranscription: state.NoInputTranscription, APIKey: c.askFlags.APIKey, BaseURL: c.askFlags.BaseURL, ConfigDir: c.globalFlags.ConfigDir(),
 		WorkDir: workDir, AllowPaths: globalAllowPaths(c.globalFlags), Prompt: strings.Join(args, " "),

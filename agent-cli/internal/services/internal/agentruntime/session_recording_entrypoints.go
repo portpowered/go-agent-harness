@@ -10,6 +10,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
+	runtimerecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	runtimesession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
@@ -172,9 +173,10 @@ func runSessionWithImagesAndRecordingDirectory(ctx context.Context, out io.Write
 		return err
 	}
 	plan.liveRecorder = recorder
-	stopBrowserRecording := startBrowserRecording(ctx, opts.SessionRunOptions, recorder)
+	browserRecording := newSessionBrowserRecording(opts.SessionRunOptions, plan)
+	browserRecording.start(ctx)
 	recorderFinalized := false
-	defer finalizeSessionDirectoryRecorder(ctx, &runErr, recorder, stopBrowserRecording, &recorderFinalized)
+	defer finalizeSessionDirectoryRecorder(ctx, &runErr, recorder, browserRecording, &recorderFinalized)
 	runErr = runSessionImagePlan(ctx, out, plan, opts, wirePrompt)
 	recorderFinalized = true
 	return runErr
@@ -237,9 +239,10 @@ func runSessionWithRecordingDirectory(ctx context.Context, out io.Writer, opts S
 		return err
 	}
 	plan.liveRecorder = recorder
-	stopBrowserRecording := startBrowserRecording(ctx, opts, recorder)
+	browserRecording := newSessionBrowserRecording(opts, plan)
+	browserRecording.start(ctx)
 	recorderFinalized := false
-	defer finalizeSessionDirectoryRecorder(ctx, &runErr, recorder, stopBrowserRecording, &recorderFinalized)
+	defer finalizeSessionDirectoryRecorder(ctx, &runErr, recorder, browserRecording, &recorderFinalized)
 	audioOutput, audioWrapper, textOutput, err := configureSessionOutputs(&plan, out, audioOutPath, seed)
 	if err != nil {
 		return err
@@ -275,8 +278,20 @@ func configureDirectoryAudioPlan(plan *sessionRuntimePlan, source *sessionAudioS
 	plan.loop.RequireAssistantResponse = true
 }
 
-func finalizeSessionDirectoryRecorder(ctx context.Context, runErr *error, recorder runtimesession.LiveRecorder, stop func(), finalized *bool) {
-	stop()
+func finalizeSessionDirectoryRecorder(ctx context.Context, runErr *error, recorder runtimesession.LiveRecorder, browser *sessionBrowserRecording, finalized *bool) {
+	if browser != nil {
+		browser.stop()
+		artifact, err := browser.artifact()
+		*runErr = errors.Join(*runErr, err)
+		if err == nil && artifact != nil {
+			browserRecorder, ok := recorder.(runtimerecording.BrowserArtifactRecorder)
+			if !ok {
+				*runErr = errors.Join(*runErr, errors.New("recording service cannot persist browser artifacts"))
+			} else {
+				*runErr = errors.Join(*runErr, browserRecorder.RecordBrowserArtifact(context.WithoutCancel(ctx), artifact))
+			}
+		}
+	}
 	if recorder != nil && !*finalized {
 		*runErr = errors.Join(*runErr, recorder.Finalize(context.WithoutCancel(ctx), *runErr))
 	}

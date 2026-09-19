@@ -1,12 +1,10 @@
 package evidence
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -247,127 +245,3 @@ func (r *sidecarRecorder) latchLocked(err error) {
 }
 
 var _ session.LiveRecorder = (*sidecarRecorder)(nil)
-
-func redactBrowserPayload(payload map[string]any, options recording.BrowserRecordingOptions, credentials []string, tool, eventType string) (json.RawMessage, browserRedaction, error) {
-	data, err := json.Marshal(payload)
-	if err != nil {
-		return nil, browserRedaction{}, err
-	}
-	redacted, changed, queryChanged, fragmentChanged, err := redactJSON(data, options, credentials)
-	if err != nil {
-		return nil, browserRedaction{}, err
-	}
-	// Argument/result omission is decided before this boundary; all remaining
-	// page JSON still receives credential and URL redaction.
-	_ = tool
-	_ = eventType
-	rules := []string{"raw_cdp_disabled"}
-	if queryChanged {
-		rules = append(rules, "url_query")
-	}
-	if fragmentChanged {
-		rules = append(rules, "url_fragment")
-	}
-	mode := "none"
-	if changed {
-		mode = "redacted"
-	}
-	return redacted, browserRedaction{Mode: mode, Rules: rules}, nil
-}
-
-func redactJSON(raw []byte, options recording.BrowserRecordingOptions, credentials []string) ([]byte, bool, bool, bool, error) {
-	trimmed := bytes.TrimSpace(raw)
-	if len(trimmed) == 0 || !json.Valid(trimmed) {
-		return nil, false, false, false, errors.New("browser payload must be valid JSON")
-	}
-	switch trimmed[0] {
-	case '{':
-		var fields map[string]json.RawMessage
-		if err := json.Unmarshal(trimmed, &fields); err != nil {
-			return nil, false, false, false, err
-		}
-		return redactJSONFields(fields, options, credentials)
-	case '[':
-		var values []json.RawMessage
-		if err := json.Unmarshal(trimmed, &values); err != nil {
-			return nil, false, false, false, err
-		}
-		return redactJSONArray(values, options, credentials)
-	case '"':
-		var value string
-		if err := json.Unmarshal(trimmed, &value); err != nil {
-			return nil, false, false, false, err
-		}
-		redacted, changed, queryChanged, fragmentChanged := redactString(value, options, credentials)
-		encoded, err := json.Marshal(redacted)
-		return encoded, changed, queryChanged, fragmentChanged, err
-	default:
-		return append([]byte(nil), trimmed...), false, false, false, nil
-	}
-}
-
-func redactJSONFields(fields map[string]json.RawMessage, options recording.BrowserRecordingOptions, credentials []string) ([]byte, bool, bool, bool, error) {
-	out := make(map[string]json.RawMessage, len(fields))
-	changed, queryChanged, fragmentChanged := false, false, false
-	for key, value := range fields {
-		child, childChanged, childQuery, childFragment, err := redactJSON(value, options, credentials)
-		if err != nil {
-			return nil, false, false, false, err
-		}
-		out[key] = child
-		changed = changed || childChanged
-		queryChanged = queryChanged || childQuery
-		fragmentChanged = fragmentChanged || childFragment
-	}
-	encoded, err := json.Marshal(out)
-	return encoded, changed, queryChanged, fragmentChanged, err
-}
-
-func redactJSONArray(values []json.RawMessage, options recording.BrowserRecordingOptions, credentials []string) ([]byte, bool, bool, bool, error) {
-	out := make([]json.RawMessage, len(values))
-	changed, queryChanged, fragmentChanged := false, false, false
-	for i, value := range values {
-		child, childChanged, childQuery, childFragment, err := redactJSON(value, options, credentials)
-		if err != nil {
-			return nil, false, false, false, err
-		}
-		out[i] = child
-		changed = changed || childChanged
-		queryChanged = queryChanged || childQuery
-		fragmentChanged = fragmentChanged || childFragment
-	}
-	encoded, err := json.Marshal(out)
-	return encoded, changed, queryChanged, fragmentChanged, err
-}
-
-func redactString(value string, options recording.BrowserRecordingOptions, credentials []string) (string, bool, bool, bool) {
-	redacted, queryChanged, fragmentChanged := value, false, false
-	if parsed, ok := parseBrowserURL(value); ok {
-		if options.RedactURLQuery && (parsed.RawQuery != "" || parsed.ForceQuery) {
-			parsed.RawQuery, parsed.ForceQuery, queryChanged = "", false, true
-		}
-		if options.RedactURLFragment && (parsed.Fragment != "" || parsed.RawFragment != "") {
-			parsed.Fragment, parsed.RawFragment, fragmentChanged = "", "", true
-		}
-		redacted = parsed.String()
-	}
-	for _, credential := range credentials {
-		if strings.TrimSpace(credential) != "" {
-			redacted = strings.ReplaceAll(redacted, credential, redactionMarker)
-		}
-	}
-	return redacted, redacted != value || queryChanged || fragmentChanged, queryChanged, fragmentChanged
-}
-
-func parseBrowserURL(value string) (*url.URL, bool) {
-	parsed, err := url.Parse(value)
-	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
-		return nil, false
-	}
-	switch strings.ToLower(parsed.Scheme) {
-	case "http", "https", "ws", "wss", "ftp":
-		return parsed, true
-	default:
-		return nil, false
-	}
-}

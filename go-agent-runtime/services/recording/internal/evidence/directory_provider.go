@@ -1,17 +1,13 @@
 package evidence
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
@@ -242,137 +238,4 @@ func (c evidenceConversation) withResponseAudio(turn evidenceTurn) evidenceTurn 
 		}
 	}
 	return turn
-}
-
-type browserEventInput struct {
-	Type               string
-	BrowserID          string
-	TargetID           string
-	Generation         uint64
-	RequiresGeneration bool
-	Payload            map[string]any
-	ToolName           string
-}
-
-func browserEventInputs(event recording.BrowserEvent, options recording.BrowserRecordingOptions) ([]browserEventInput, error) {
-	if strings.TrimSpace(event.BrowserID) == "" || strings.TrimSpace(event.TargetID) == "" {
-		return nil, nil
-	}
-	add := func(eventType string, generation uint64, requiresGeneration bool, payload map[string]any) browserEventInput {
-		return browserEventInput{Type: eventType, BrowserID: event.BrowserID, TargetID: event.TargetID, Generation: generation, RequiresGeneration: requiresGeneration, Payload: payload, ToolName: event.ToolName}
-	}
-	toolNames := append([]string(nil), event.ToolNames...)
-	switch event.Type {
-	case "target_attached":
-		return []browserEventInput{add("browser.chrome.target_attached", 0, false, map[string]any{"phase": "attached"})}, nil
-	case "tools_added":
-		count := len(toolNames)
-		if event.ToolCountKnown {
-			count = event.ToolCount
-		}
-		return []browserEventInput{add("browser.catalog.tool_added", event.Generation, true, map[string]any{"tools": toolNames, "tool_count": count})}, nil
-	case "tools_removed":
-		return []browserEventInput{add("browser.catalog.tool_removed", event.Generation, true, map[string]any{"tools": append([]string(nil), event.RemovedToolNames...)})}, nil
-	case "catalog_ready":
-		count := event.ToolCount
-		if !event.ToolCountKnown {
-			count = len(toolNames)
-		}
-		return []browserEventInput{add("browser.catalog.ready", event.Generation, true, map[string]any{"tool_count": count, "schema_digest": browserSchemaDigest(toolNames)})}, nil
-	case "tool_invoked":
-		return browserInvocationInputs(event, options, add)
-	case "tool_responded":
-		return browserResponseInputs(event, options, add)
-	case "page_navigated", "frame_navigated":
-		reason := strings.TrimSpace(event.Reason)
-		if reason == "" {
-			reason = "navigation"
-		}
-		return []browserEventInput{add("browser.page.generation_changed", 0, false, map[string]any{"previous_generation": event.PreviousGeneration, "current_generation": event.Generation, "reason": reason})}, nil
-	case "target_detached", "browser_disconnected":
-		return []browserEventInput{add("browser.target.detached", 0, false, map[string]any{"reason": event.Reason})}, nil
-	case "session_closed":
-		return []browserEventInput{add("browser.chrome.target_closed", 0, false, map[string]any{"reason": event.Reason})}, nil
-	default:
-		return nil, nil
-	}
-}
-
-func browserInvocationInputs(event recording.BrowserEvent, options recording.BrowserRecordingOptions, add func(string, uint64, bool, map[string]any) browserEventInput) ([]browserEventInput, error) {
-	if strings.TrimSpace(event.InvocationID) == "" {
-		return nil, nil
-	}
-	created := map[string]any{"invocation_id": event.InvocationID, "tool_name": event.ToolName}
-	if event.FrameID != "" {
-		created["frame_id"] = event.FrameID
-	}
-	dispatched := map[string]any{"invocation_id": event.InvocationID}
-	if options.IncludeArguments {
-		dispatched["input"] = browserRaw(event.Input)
-	}
-	return []browserEventInput{
-		add("browser.invocation.created", event.Generation, true, created),
-		add("browser.invocation.dispatched", event.Generation, true, dispatched),
-	}, nil
-}
-
-func browserResponseInputs(event recording.BrowserEvent, options recording.BrowserRecordingOptions, add func(string, uint64, bool, map[string]any) browserEventInput) ([]browserEventInput, error) {
-	if strings.TrimSpace(event.InvocationID) == "" {
-		return nil, nil
-	}
-	status := strings.ToLower(strings.TrimSpace(event.Status))
-	reason := strings.TrimSpace(event.Reason)
-	if reason == "" {
-		reason = status
-	}
-	switch status {
-	case "canceled", "cancelled", "timed_out", "timeout", "timedout":
-		return []browserEventInput{add("browser.invocation.canceled", event.Generation, true, map[string]any{"invocation_id": event.InvocationID, "source": "browser", "reason": reason})}, nil
-	case "error", "failed":
-		return []browserEventInput{add("browser.invocation.error", event.Generation, true, browserErrorFields(event, options, reason))}, nil
-	default:
-		statusValue := event.Status
-		if statusValue == "" {
-			statusValue = "completed"
-		}
-		fields := map[string]any{"invocation_id": event.InvocationID, "status": statusValue}
-		if options.IncludeResults {
-			fields["output"] = browserRaw(event.Output)
-		}
-		return []browserEventInput{add("browser.invocation.completed", event.Generation, true, fields)}, nil
-	}
-}
-
-func browserErrorFields(event recording.BrowserEvent, options recording.BrowserRecordingOptions, reason string) map[string]any {
-	fields := map[string]any{"invocation_id": event.InvocationID, "code": browserErrorCode(event)}
-	if options.IncludeResults && reason != "" {
-		fields["message"] = reason
-	}
-	if options.IncludeResults && len(event.Output) > 0 {
-		fields["error"] = browserRaw(event.Output)
-	}
-	return fields
-}
-
-func browserRaw(raw []byte) any {
-	if len(bytes.TrimSpace(raw)) == 0 {
-		return nil
-	}
-	return json.RawMessage(append([]byte(nil), raw...))
-}
-
-func browserSchemaDigest(toolNames []string) string {
-	hash := sha256.New()
-	for _, name := range toolNames {
-		hash.Write([]byte(name))
-		hash.Write([]byte{0})
-	}
-	return fmt.Sprintf("%x", hash.Sum(nil))
-}
-
-func browserErrorCode(event recording.BrowserEvent) string {
-	if code := strings.TrimSpace(event.ErrorCode); code != "" {
-		return code
-	}
-	return "invocation_error"
 }

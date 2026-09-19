@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
@@ -431,84 +430,5 @@ func TestMixedIdentifiedAndLegacyPCMUsesArtifactOffsets(t *testing.T) {
 	assertResponseAudioIndex(t, r)
 	if got := readEvidenceFile(t, r, "audio/out-000.pcm"); !bytes.Equal(got, []byte{1, 0, 2, 0}) {
 		t.Fatalf("recorded PCM = %v", got)
-	}
-}
-
-func TestBrowserEvidencePublishesRedactedSemanticLifecycle(t *testing.T) {
-	options := recording.BrowserRecordingOptions{
-		Enabled: true, IncludeArguments: true, IncludeResults: true,
-		RedactURLQuery: true, RedactURLFragment: true,
-	}
-	evidence := newBrowserEvidence(options, []string{"secret-token"}, recording.ResourceLimits{})
-	base := recording.BrowserEvent{BrowserID: "browser-1", TargetID: "target-1"}
-	events := []recording.BrowserEvent{
-		{Type: "target_attached"},
-		{Type: "tools_added", ToolNames: []string{"page_sight"}, Generation: 2},
-		{Type: "tools_removed", RemovedToolNames: []string{"page_sight"}, Generation: 2},
-		{Type: "catalog_ready", ToolNames: []string{"page_sight", "read_image"}, Generation: 2},
-		{Type: "tool_invoked", FrameID: "frame-1", ToolName: "browser.open", InvocationID: "call-1", Generation: 2,
-			Input: []byte(`{"url":"https://example.test/path?q=secret-token#fragment"}`)},
-		{Type: "tool_responded", Status: "completed", InvocationID: "call-1", Generation: 2,
-			Output: []byte(`{"url":"https://example.test/result?q=secret-token#fragment","items":["secret-token"]}`)},
-		{Type: "tool_responded", Status: "canceled", InvocationID: "call-2", Generation: 2, Reason: "user stopped"},
-		{Type: "tool_responded", Status: "error", InvocationID: "call-3", Generation: 2, ErrorCode: "tool_failed", Reason: "secret-token leaked", Output: []byte(`{"detail":"secret-token"}`)},
-		{Type: "page_navigated", PreviousGeneration: 2, Generation: 3, Reason: "navigation"},
-		{Type: "frame_navigated", PreviousGeneration: 3, Generation: 4},
-		{Type: "target_detached", Reason: "closed"},
-		{Type: "browser_disconnected", Reason: "lost"},
-		{Type: "session_closed", Reason: "finished"},
-	}
-	for _, event := range events {
-		event.BrowserID, event.TargetID = base.BrowserID, base.TargetID
-		event.At = time.Unix(0, 0)
-		if err := evidence.record(event); err != nil {
-			t.Fatalf("record %s: %v", event.Type, err)
-		}
-	}
-	if err := evidence.record(recording.BrowserEvent{Type: "unknown", BrowserID: base.BrowserID, TargetID: base.TargetID}); err != nil {
-		t.Fatalf("record unknown event: %v", err)
-	}
-	artifact, err := evidence.artifact()
-	if err != nil {
-		t.Fatalf("publish browser artifact: %v", err)
-	}
-	if artifact == nil || artifact.Path == "" || artifact.SHA256 == "" {
-		t.Fatalf("browser artifact = %+v, want path and digest", artifact)
-	}
-	if got := strings.Count(string(artifact.Data), "\n"); got != 14 {
-		t.Fatalf("browser event lines = %d, want 14", got)
-	}
-	data := string(artifact.Data)
-	if strings.Contains(data, "secret-token") || strings.Contains(data, "?q=") || strings.Contains(data, "#fragment") {
-		t.Fatalf("browser artifact retained sensitive URL or credential: %s", data)
-	}
-	if !bytes.Contains(artifact.Data, []byte(`"browser.invocation.created"`)) || !bytes.Contains(artifact.Data, []byte(`"browser.invocation.error"`)) {
-		t.Fatalf("browser artifact omitted invocation lifecycle: %s", data)
-	}
-	if !artifact.Redaction.URLQuery || !artifact.Redaction.URLFragment {
-		t.Fatalf("browser redaction policy = %+v", artifact.Redaction)
-	}
-}
-
-func TestBrowserEvidenceLatchesInvalidPayloadAndBudgetFailures(t *testing.T) {
-	options := recording.BrowserRecordingOptions{Enabled: true, IncludeArguments: true}
-	invalid := newBrowserEvidence(options, nil, recording.ResourceLimits{})
-	if err := invalid.record(recording.BrowserEvent{
-		Type: "tool_invoked", BrowserID: "browser", TargetID: "target", InvocationID: "call", Input: []byte("not-json"),
-	}); err != nil {
-		t.Fatalf("invalid payload admission: %v", err)
-	}
-	if _, err := invalid.artifact(); err == nil {
-		t.Fatal("invalid browser payload was reported as complete")
-	}
-	limited := newBrowserEvidence(options, nil, recording.ResourceLimits{SidecarItems: 1})
-	if err := limited.record(recording.BrowserEvent{Type: "target_attached", BrowserID: "browser", TargetID: "target"}); err != nil {
-		t.Fatalf("first bounded event: %v", err)
-	}
-	if err := limited.record(recording.BrowserEvent{Type: "session_closed", BrowserID: "browser", TargetID: "target"}); err != nil {
-		t.Fatalf("second bounded event: %v", err)
-	}
-	if _, err := limited.artifact(); err == nil {
-		t.Fatal("browser item budget failure was reported as complete")
 	}
 }

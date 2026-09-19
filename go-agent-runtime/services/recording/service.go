@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
@@ -240,8 +241,6 @@ type LiveEvidenceOptions struct {
 	// The raw ProviderCapturePath remains available for immutable bundle
 	// evidence, but no new terminal sidecar is written beside it.
 	DisableProviderCaptureSidecar bool
-	// Browser selects the optional semantic browser event artifact.
-	Browser BrowserRecordingOptions
 	// Limits bounds cumulative service-owned evidence. Zero fields retain the
 	// finite defaults declared above; larger values are capped at those
 	// defaults so callers cannot disable protection accidentally.
@@ -253,46 +252,11 @@ type LiveEvidenceOptions struct {
 // before the recorder's Finalize call. Absence is recorded, never fabricated.
 type ProviderCapture interface{ ProviderCapturePath() string }
 
-// BrowserRecordingOptions selects the bounded semantic browser evidence
-// observed by a live recorder. The recording service owns conversion,
-// redaction, ordering, and publication of the resulting artifact.
-type BrowserRecordingOptions struct {
-	Enabled           bool
-	IncludeArguments  bool
-	IncludeResults    bool
-	RedactURLQuery    bool
-	RedactURLFragment bool
-}
-
-// BrowserEvent is the provider-neutral adapter input for one semantic browser
-// observation. Raw JSON values remain opaque until the recording service's
-// redaction boundary.
-type BrowserEvent struct {
-	Type               string
-	At                 time.Time
-	BrowserID          string
-	TargetID           string
-	FrameID            string
-	Generation         uint64
-	PreviousGeneration uint64
-	ToolNames          []string
-	RemovedToolNames   []string
-	ToolCount          int
-	ToolCountKnown     bool
-	ToolName           string
-	InvocationID       string
-	Status             string
-	Input              []byte
-	Output             []byte
-	ErrorCode          string
-	Reason             string
-}
-
-// BrowserRecorder is the optional live-recording capability for semantic
-// browser observations. It is separate from LiveRecorder so existing session
-// embedders do not need to implement browser recording.
-type BrowserRecorder interface {
-	RecordBrowserEvent(context.Context, BrowserEvent) error
+// BrowserArtifactRecorder accepts a completed artifact from the separate
+// browser recorder. It persists the artifact with the recording bundle but
+// does not observe, convert, redact, or order browser events.
+type BrowserArtifactRecorder interface {
+	RecordBrowserArtifact(context.Context, *transcript.BrowserArtifact) error
 }
 
 // Service owns capture lifetime. Provider adapters supply a protocol writer;

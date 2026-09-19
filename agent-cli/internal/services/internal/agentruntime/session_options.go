@@ -144,10 +144,9 @@ type SessionRunOptions struct {
 	runtimeFactory sessionRuntimeFactory
 	// ModelCatalog is installed by service composition and owns the immutable
 	// provider capability metadata used during session planning.
-	ModelCatalog            runtimeproviders.ModelCatalog
-	browserRecordingStarter sessioncontract.BrowserRecordingStarter
-	RecordPath              string
-	ReplayPath              string
+	ModelCatalog runtimeproviders.ModelCatalog
+	RecordPath   string
+	ReplayPath   string
 	// ReplayTiming selects whether websocket replay runs as fast as causal
 	// ordering permits (immediate) or preserves capture timestamp_ms cadence
 	// (recorded). Empty retains the immediate compatibility default.

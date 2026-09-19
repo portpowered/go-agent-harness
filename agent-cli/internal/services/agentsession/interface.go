@@ -10,18 +10,11 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 type HoldToneConfig = audio.HoldToneConfig
-
-// BrowserRecordingStarter is the host transport seam for semantic browser
-// observations. The runtime supplies the public recorder; the host adapter
-// translates its broker events and owns only bounded watcher shutdown.
-type BrowserRecordingStarter func(context.Context, bool, func(context.Context) <-chan webmcp.BrowserEvent, runtimeSession.LiveRecorder) func()
 
 // SessionCancellationIntent is the run-scoped operator cancellation marker.
 type SessionCancellationIntent struct{ sigint atomic.Bool }
@@ -79,7 +72,6 @@ func (f SessionToolDiagnosticFunc) RecordSessionToolDiagnostic(diagnostic Sessio
 // services.SessionRunOptions aggregate. This keeps the transport contract
 // stable while the runtime implementation is moved behind this service.
 type Request struct {
-	BrowserRecordingStarter       BrowserRecordingStarter
 	RecordPath                    string
 	ReplayPath                    string
 	ReplayTiming                  string

@@ -36,32 +36,32 @@ type directoryRecorder struct {
 	queue chan directoryEvidenceItem
 	done  chan struct{}
 
-	mu             sync.Mutex
-	queuedBytes    int64
-	queuedItems    int64
-	closed         bool
-	recordErr      error
-	workerErr      error
-	sequence       uint64
-	client         *os.File
-	inputFile      *os.File
-	outputFile     *os.File
-	inputBytes     uint64
-	outputBytes    uint64
-	sidecar        *os.File
-	sidecarWritten bool
-	writeSpool     func(*os.File, []byte) error
-	agent          *os.File
-	clientPath     string
-	agentPath      string
-	inputPaths     []string
-	outputPaths    []string
-	runtimeAudio   bool
-	terminal       *transcript.RecordingTerminalSummary
-	conversation   evidenceConversation
-	browser        *browserEvidence
-	usageMu        sync.Mutex
-	usage          recording.ResourceUsage
+	mu              sync.Mutex
+	queuedBytes     int64
+	queuedItems     int64
+	closed          bool
+	recordErr       error
+	workerErr       error
+	sequence        uint64
+	client          *os.File
+	inputFile       *os.File
+	outputFile      *os.File
+	inputBytes      uint64
+	outputBytes     uint64
+	sidecar         *os.File
+	sidecarWritten  bool
+	writeSpool      func(*os.File, []byte) error
+	agent           *os.File
+	clientPath      string
+	agentPath       string
+	inputPaths      []string
+	outputPaths     []string
+	runtimeAudio    bool
+	terminal        *transcript.RecordingTerminalSummary
+	conversation    evidenceConversation
+	browserArtifact *transcript.BrowserArtifact
+	usageMu         sync.Mutex
+	usage           recording.ResourceUsage
 
 	finalizeOnce sync.Once
 	finalizeErr  error
@@ -133,7 +133,6 @@ func newDirectoryRecorder(options recording.LiveEvidenceOptions, source clock.So
 		queue:        make(chan directoryEvidenceItem, directoryEvidenceQueueCapacity),
 		done:         make(chan struct{}),
 		conversation: newEvidenceConversation(),
-		browser:      newBrowserEvidence(options.Browser, options.Credentials, budget.limits),
 	}
 	go recorder.run()
 	return recorder, nil
@@ -234,26 +233,30 @@ func (r *directoryRecorder) RecordEvent(ctx context.Context, event session.LiveE
 	return r.enqueue(item)
 }
 
-// RecordBrowserEvent forwards semantic browser observations to the recording
-// service's private redaction and bounded publication state.
-func (r *directoryRecorder) RecordBrowserEvent(ctx context.Context, event recording.BrowserEvent) error {
+func (r *directoryRecorder) RecordBrowserArtifact(ctx context.Context, artifact *transcript.BrowserArtifact) error {
 	if r == nil {
 		return recording.ErrLiveEvidenceClosed
 	}
-	if err := contextError(ctx); err != nil {
-		return err
+	if ctx != nil {
+		if err := contextError(ctx); err != nil {
+			return err
+		}
 	}
-	r.mu.Lock()
-	closed := r.closed
-	browser := r.browser
-	r.mu.Unlock()
-	if closed {
-		return recording.ErrLiveEvidenceClosed
-	}
-	if browser == nil {
+	if artifact == nil {
 		return nil
 	}
-	return browser.record(event)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed {
+		return recording.ErrLiveEvidenceClosed
+	}
+	if r.browserArtifact != nil {
+		return errors.New("recording already has a browser artifact")
+	}
+	copy := *artifact
+	copy.Data = append([]byte(nil), artifact.Data...)
+	r.browserArtifact = &copy
+	return nil
 }
 
 func encodeRuntimeEvent(event session.LiveEvent, errorText string) ([]byte, error) {

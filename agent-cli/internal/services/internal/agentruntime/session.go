@@ -64,14 +64,6 @@ func openSessionLiveRecorder(opts SessionRunOptions, plan sessionRuntimePlan, de
 		WallClockStart: time.Now().UTC(),
 		Credentials:    sessionEvidenceCredentials(opts, plan.provider),
 	}
-	if opts.LoadedConfig != nil {
-		browser := opts.LoadedConfig.Browser.Recording
-		options.Browser = runtimerecording.BrowserRecordingOptions{
-			Enabled: browser.Enabled, IncludeArguments: browser.IncludeArguments,
-			IncludeResults: browser.IncludeResults, RedactURLQuery: browser.RedactURLQuery,
-			RedactURLFragment: browser.RedactURLFragment,
-		}
-	}
 	if strings.TrimSpace(opts.RecordPath) != "" {
 		options.ProviderCapturePath = opts.RecordPath
 		// Positive max-duration runs own the sibling JSONL artifact through
@@ -82,12 +74,8 @@ func openSessionLiveRecorder(opts SessionRunOptions, plan sessionRuntimePlan, de
 	return service.OpenLiveEvidence(options)
 }
 
-func startBrowserRecording(ctx context.Context, opts SessionRunOptions, recorder runtimesession.LiveRecorder) func() {
-	if opts.browserRecordingStarter == nil {
-		return func() {}
-	}
-	enabled := opts.LoadedConfig != nil && opts.LoadedConfig.Browser.Recording.Enabled
-	return opts.browserRecordingStarter(ctx, enabled, opts.BrowserEventWatch, recorder)
+func sessionRecordingCredentials(opts SessionRunOptions, plan sessionRuntimePlan) []string {
+	return sessionEvidenceCredentials(opts, plan.provider)
 }
 
 // sessionInstructionsInferencer decorates caller-owned session seams without

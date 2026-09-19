@@ -53,13 +53,11 @@ func (r *directoryRecorder) finalize(runErr error) error {
 	logData, logErr := r.conversation.json()
 	result = errors.Join(result, logErr)
 	config := r.bundleConfig(terminal, logData)
-	if r.browser != nil {
-		browserArtifact, browserErr := r.browser.artifact()
-		result = errors.Join(result, browserErr)
-		config.BrowserArtifact = browserArtifact
-		if browserArtifact != nil {
-			config.ManifestVersion = transcript.RecordingManifestV2Version
-		}
+	if r.browserArtifact != nil {
+		browserArtifact := *r.browserArtifact
+		browserArtifact.Data = append([]byte(nil), r.browserArtifact.Data...)
+		config.BrowserArtifact = &browserArtifact
+		config.ManifestVersion = transcript.RecordingManifestV2Version
 	}
 	artifact, present, artifactErr := r.providerArtifact()
 	result = errors.Join(result, artifactErr)
