@@ -162,7 +162,7 @@ func TestRoomReplayServiceRejectsUnadmittedShape(t *testing.T) {
 	if err := os.WriteFile(manifestPath, manifest, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	plan := RoomReplayPlan{ManifestPath: manifestPath, ClockBase: time.Unix(0, 0), EndedAt: time.Unix(0, int64(time.Second)), PCMFormat: RoomReplayPCMFormat{SampleRate: 24000, Channels: 1, SampleWidthBits: 16, ByteOrder: "little"}}
+	plan := RoomReplayPlan{ManifestPath: manifestPath, ClockBase: time.Unix(0, 0), EndedAt: time.Unix(0, int64(time.Second)), PCMFormat: RoomReplayPCMFormat{SampleRate: 24000, Channels: 1, SampleWidthBits: 16, ByteOrder: "little", Encoding: "pcm_s16le"}}
 	if _, err := New().Load(plan); err == nil || !errors.Is(err, ErrRoomReplayBundleIncomplete) {
 		t.Fatalf("missing room mix = %v", err)
 	}
