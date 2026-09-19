@@ -31,43 +31,49 @@ func TestServiceRejectsFIFOReplayFiles(t *testing.T) {
 
 	for _, mode := range []string{"manifest", "artifact", "replay"} {
 		t.Run(mode, func(t *testing.T) {
-			destination, recorder := finalizedReplayBundle(t)
-			fifoPath := filepath.Join(destination, "replay-fifo")
-			if err := syscall.Mkfifo(fifoPath, 0o600); err != nil {
-				t.Skipf("FIFO unavailable: %v", err)
-			}
-			defer os.Remove(fifoPath)
-
-			path := fifoPath
-			switch mode {
-			case "manifest":
-				path = filepath.Join(destination, roomevidence.ManifestPath)
-			case "artifact":
-				path = filepath.Join(destination, filepath.FromSlash(recorder.Participant("speaker").Artifacts().SentPCM))
-				if err := os.Remove(path); err != nil {
-					t.Fatalf("remove replay artifact: %v", err)
-				}
-				if err := os.Rename(fifoPath, path); err != nil {
-					t.Fatalf("replace replay artifact with FIFO: %v", err)
-				}
-				fifoPath = path
-			case "replay":
-				// Keep the manifest valid so the child reaches the service's
-				// bounded replay reader, then point an admitted artifact at the
-				// FIFO inside the bundle.
-			}
-			if mode == "manifest" {
-				if err := os.Remove(path); err != nil {
-					t.Fatalf("remove manifest: %v", err)
-				}
-				if err := os.Rename(fifoPath, path); err != nil {
-					t.Fatalf("replace manifest with FIFO: %v", err)
-				}
-				fifoPath = path
-			}
-			assertFIFOChildFailsClosed(t, mode, destination, fifoPath)
+			assertFIFOReplayMode(t, mode)
 		})
 	}
+}
+
+func assertFIFOReplayMode(t *testing.T, mode string) {
+	t.Helper()
+	destination, recorder := finalizedReplayBundle(t)
+	fifoPath := filepath.Join(destination, "replay-fifo")
+	if err := syscall.Mkfifo(fifoPath, 0o600); err != nil {
+		t.Skipf("FIFO unavailable: %v", err)
+	}
+	defer os.Remove(fifoPath)
+	fifoPath = configureFIFOReplay(t, mode, destination, recorder, fifoPath)
+	assertFIFOChildFailsClosed(t, mode, destination, fifoPath)
+}
+
+func configureFIFOReplay(t *testing.T, mode, destination string, recorder roomevidence.Recorder, fifoPath string) string {
+	t.Helper()
+	switch mode {
+	case "manifest":
+		return replaceWithFIFO(t, fifoPath, filepath.Join(destination, roomevidence.ManifestPath))
+	case "artifact":
+		path := filepath.Join(destination, filepath.FromSlash(recorder.Participant("speaker").Artifacts().SentPCM))
+		return replaceWithFIFO(t, fifoPath, path)
+	case "replay":
+		// Keep the manifest valid so the child reaches the bounded replay reader.
+		return fifoPath
+	default:
+		t.Fatalf("unknown FIFO mode %q", mode)
+		return ""
+	}
+}
+
+func replaceWithFIFO(t *testing.T, fifoPath, path string) string {
+	t.Helper()
+	if err := os.Remove(path); err != nil {
+		t.Fatalf("remove replay file: %v", err)
+	}
+	if err := os.Rename(fifoPath, path); err != nil {
+		t.Fatalf("replace replay file with FIFO: %v", err)
+	}
+	return path
 }
 
 func assertFIFOChildFailsClosed(t *testing.T, mode, destination, fifoPath string) {

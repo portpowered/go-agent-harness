@@ -51,11 +51,8 @@ func (Loader) Load(bundle string) (rooms.RoomReplayPlan, error) {
 	if err := pathguard.ValidateNoSymlink(root, manifestPath); err != nil {
 		return rooms.RoomReplayPlan{}, mismatch("manifest", err)
 	}
-	if err := pathguard.ValidateRegularFile(manifestPath); err != nil {
-		if os.IsNotExist(err) {
-			return rooms.RoomReplayPlan{}, incomplete("manifest", err)
-		}
-		return rooms.RoomReplayPlan{}, mismatch("manifest", err)
+	if err := validateManifestRegularFile(manifestPath); err != nil {
+		return rooms.RoomReplayPlan{}, err
 	}
 	data, err := os.ReadFile(manifestPath)
 	if err != nil {
@@ -95,6 +92,16 @@ func (Loader) Load(bundle string) (rooms.RoomReplayPlan, error) {
 	}
 	plan.Timeline = timeline
 	return plan, nil
+}
+
+func validateManifestRegularFile(path string) error {
+	if err := pathguard.ValidateRegularFile(path); err != nil {
+		if os.IsNotExist(err) {
+			return incomplete("manifest", fmt.Errorf("manifest is unavailable"))
+		}
+		return mismatch("manifest", err)
+	}
+	return nil
 }
 
 func parseHeader(object object, root, manifestPath string) (rooms.RoomReplayPlan, error) {

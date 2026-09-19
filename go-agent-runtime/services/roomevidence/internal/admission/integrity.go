@@ -53,15 +53,9 @@ func validateArtifact(root string, seen map[string]string, ref artifactRef, meta
 			artifact.Empty = true
 		}
 	}
-	if err := pathguard.ValidateRegularFile(absolute); err != nil {
-		if os.IsNotExist(err) {
-			return rooms.RoomReplayArtifact{}, incomplete(ref.owner, fmt.Errorf("artifact %q is unavailable", relative))
-		}
-		return rooms.RoomReplayArtifact{}, mismatch(ref.owner, err)
-	}
-	info, err := os.Stat(absolute)
+	info, err := regularArtifactInfo(absolute, relative, ref.owner)
 	if err != nil {
-		return rooms.RoomReplayArtifact{}, incomplete(ref.owner, fmt.Errorf("artifact %q is unavailable", relative))
+		return rooms.RoomReplayArtifact{}, err
 	}
 	if err := validateArtifactSize(artifact, info.Size(), ref.owner); err != nil {
 		return rooms.RoomReplayArtifact{}, err
@@ -71,6 +65,20 @@ func validateArtifact(root string, seen map[string]string, ref artifactRef, meta
 	}
 	artifact.Owner, artifact.Role, artifact.AbsolutePath = ref.owner, ref.role, absolute
 	return artifact, nil
+}
+
+func regularArtifactInfo(absolute, relative, owner string) (os.FileInfo, error) {
+	if err := pathguard.ValidateRegularFile(absolute); err != nil {
+		if os.IsNotExist(err) {
+			return nil, incomplete(owner, fmt.Errorf("artifact %q is unavailable", relative))
+		}
+		return nil, mismatch(owner, err)
+	}
+	info, err := os.Stat(absolute)
+	if err != nil {
+		return nil, incomplete(owner, fmt.Errorf("artifact %q is unavailable", relative))
+	}
+	return info, nil
 }
 
 func validateArtifactSize(artifact rooms.RoomReplayArtifact, size int64, owner string) error {
