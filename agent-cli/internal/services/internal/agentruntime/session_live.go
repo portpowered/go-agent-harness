@@ -130,11 +130,6 @@ type sessionLoopOptions struct {
 	// distinct from ordinary context cancellation so incomplete-response guards
 	// can preserve clean room-owned cancellation semantics.
 	BoundCancellation <-chan struct{}
-	// AudioIn optionally streams a bounded file or stdin audio source into
-	// the loop after SESSION.OPEN. When nil, every session path behaves
-	// exactly as it did before audio input existed.
-	AudioIn *runtimeAudioSource
-
 	// awaitFirstTurn optionally blocks the SESSION.OPEN handler until the
 	// session's first user turn (the realtime image turn) has been accepted
 	// by the provider session's outbound queue. Without it, streamed user
@@ -501,7 +496,7 @@ type sessionLoopMessageState struct {
 	listeningReported     bool
 }
 
-func handleSessionLoopMessage(ctx context.Context, sessionDone <-chan struct{}, deadline <-chan time.Time, out io.Writer, loop *agentloop.AgentLoop, opts sessionLoopOptions, msg messages.StreamMessage, state sessionLoopMessageState, awaitingResponse bool, startAudio func(), terminate func(error) error) (sessionLoopMessageState, bool, error) {
+func handleSessionLoopMessage(ctx context.Context, sessionDone <-chan struct{}, deadline <-chan time.Time, out io.Writer, loop *agentloop.AgentLoop, opts sessionLoopOptions, msg messages.StreamMessage, state sessionLoopMessageState, terminate func(error) error) (sessionLoopMessageState, bool, error) {
 	promptProvided := opts.PromptProvided || opts.Prompt != ""
 	opts.observer.observe(msg)
 	if err := writeSessionReplayMessage(out, msg); err != nil {
@@ -542,7 +537,7 @@ func handleSessionLoopMessage(ctx context.Context, sessionDone <-chan struct{}, 
 				}
 			}
 		}
-		if opts.CloseAfterOpen && !promptProvided && opts.AudioIn == nil && !state.closeSent {
+		if opts.CloseAfterOpen && !promptProvided && !state.closeSent {
 			state.closeAfterOpenPending = true
 			var closeErr error
 			state, closeErr = closePendingSessionIfReady(ctx, loop, opts, state)
@@ -550,7 +545,6 @@ func handleSessionLoopMessage(ctx context.Context, sessionDone <-chan struct{}, 
 				return state, false, terminate(closeErr)
 			}
 		}
-		startAudio()
 	}
 	if shouldDispatchScheduledAudioForMessage(msg, opts.ScheduledAudioDispatch) {
 		if err := opts.observer.dispatchScheduledInputs(ctx, loop); err != nil {
@@ -572,11 +566,7 @@ func handleSessionLoopMessage(ctx context.Context, sessionDone <-chan struct{}, 
 			return state, false, terminate(closeErr)
 		}
 	}
-	if opts.AudioIn != nil {
-		if shouldStopAudioInputSessionLoop(msg, opts, state.closeSent, awaitingResponse) {
-			return state, true, nil
-		}
-	} else if shouldStopSessionLoop(msg, opts) {
+	if shouldStopSessionLoop(msg, opts) {
 		return state, true, nil
 	}
 	return state, false, nil
@@ -719,12 +709,10 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 	// stop before the shared terminal boundary begins waiting for provider
 	// stragglers. Keep its cancellation scope separate from runCtx so the
 	// provider output drain can still run after the producer is quiesced.
-	audioCtx, cancelAudio := context.WithCancel(runCtx)
-	defer cancelAudio()
 	publisher, publisherErrors := startSessionDynamicToolPublisher(runCtx, loop, opts)
 	publisherErrors = mergeSessionErrorChannels(runCtx, publisherErrors, sessionLivenessErrorChannel(runCtx, opts.observer))
 	defer publisher.stop()
-	if err := bindSessionLoopInputs(runCtx, audioCtx, loop, opts); err != nil {
+	if err := bindSessionLoopInputs(runCtx, loop, opts); err != nil {
 		return err
 	}
 
@@ -737,27 +725,6 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 	go func() {
 		runErrCh <- loop.Run(runCtx)
 	}()
-
-	// The optional audio input producer starts only after SESSION.OPEN so
-	// buffered frames cannot precede the provider handshake. Every terminal
-	// path below awaits it before returning.
-	var audioCh <-chan error
-	startAudio := func() {
-		if opts.AudioIn == nil || audioCh != nil {
-			return
-		}
-		audioErrCh := make(chan error, 1)
-		audioCh = audioErrCh
-		go func() { audioErrCh <- pumpAudioInput(audioCtx, loop, opts.AudioIn) }()
-	}
-	waitAudio := func() error {
-		if audioCh == nil {
-			return nil
-		}
-		audioErr := <-audioCh
-		audioCh = nil
-		return audioErr
-	}
 
 	runDone := false
 	runErrSelectCh := (<-chan error)(runErrCh)
@@ -777,29 +744,15 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 		return runErr
 	}
 	quiesceUpstream := opts.quiesceUpstream
-	// Caller-owned readers/hooks retain their delivery contract. Process-owned
-	// stdin must stop admitting frames before output drain, otherwise a probe
-	// waiting for stdout EOF can keep stdin open and prevent that drain forever.
-	if opts.AudioIn != nil && opts.AudioIn.send == nil && (opts.AudioIn.reader == nil || opts.AudioIn.reader.closeOnCancel) {
-		outerQuiesce := quiesceUpstream
-		quiesceUpstream = func() error {
-			cancelAudio()
-			if outerQuiesce != nil {
-				return outerQuiesce()
-			}
-			return nil
-		}
-	}
 	drainDevicePlayback := false
 	stopOwnedResources := func() error {
-		cancelAudio()
 		var drainErr error
 		if drainDevicePlayback {
 			drainErr = observedInferencer.DrainSessionPlayback(ctx)
 		}
 		cancel()
 		providerErr := closeBareSessionIfNeeded(opts.BareLive, observedInferencer)
-		return errors.Join(drainErr, providerErr, joinSessionTerminationErrors(waitRun(), waitAudio()))
+		return errors.Join(drainErr, providerErr, joinSessionTerminationErrors(waitRun(), nil))
 	}
 	termination := newSessionLiveTerminationBoundary(ctx, quiesceUpstream, stopOwnedResources, out, loop, opts, observedInferencer)
 	terminate := termination.terminate
@@ -847,7 +800,7 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 	// accepted by the loop. Local audio EOF alone never terminates the run;
 	// while awaiting a response only a terminal response frame, an explicit
 	// error, or max-duration expiry may end the session.
-	awaitingResponse := opts.AudioIn == nil
+	awaitingResponse := true
 	done := opts.Done
 	providerDone := observedInferencer.Done()
 	admissionClosed := opts.AdmissionClosed
@@ -855,7 +808,7 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 	audioInterruptions := opts.AudioInterruptions
 	toolLifecycleEvents := opts.observer.toolLifecycleEvents()
 	handleDelta := func(msg messages.StreamMessage) (bool, error) {
-		nextState, stopLoop, msgErr := handleSessionLoopMessage(runCtx, providerDone, timeout, out, loop, opts, msg, state, awaitingResponse, startAudio, terminate)
+		nextState, stopLoop, msgErr := handleSessionLoopMessage(runCtx, providerDone, timeout, out, loop, opts, msg, state, terminate)
 		state = nextState
 		if msgErr != nil {
 			return false, msgErr
@@ -912,12 +865,6 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 			if closeErr != nil {
 				return terminate(closeErr)
 			}
-		case audioErr := <-audioCh:
-			audioCh = nil
-			if audioErr != nil && !isSessionCancellation(audioErr) {
-				return terminate(audioErr)
-			}
-			awaitingResponse = audioErr == nil
 		case pumpErr := <-rtcPumpErrors:
 			return terminate(pumpErr)
 		case <-done:

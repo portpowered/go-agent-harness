@@ -360,12 +360,9 @@ func TestSessionCommand_ImagePreservesDurationAndAudioFlags(t *testing.T) {
 	cases := []struct {
 		name          string
 		flags         []string
-		wantAudio     bool
 		wantArtifacts bool
 	}{
 		{name: "duration", flags: []string{"--max-duration", "1s"}, wantArtifacts: true},
-		{name: "audio output", flags: []string{"--audio-out", filepath.Join(dir, "assistant.wav")}, wantAudio: true},
-		{name: "duration and audio output", flags: []string{"--max-duration", "1s", "--audio-out", filepath.Join(dir, "assistant-bounded.wav")}, wantAudio: true, wantArtifacts: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -398,19 +395,6 @@ func TestSessionCommand_ImagePreservesDurationAndAudioFlags(t *testing.T) {
 			}
 			if len(session.messages) != 1 || session.messages[0].TextContent() != "describe this" {
 				t.Fatalf("provider messages = %#v, want one image turn with the positional prompt", session.messages)
-			}
-			if tc.wantAudio {
-				audioPath := filepath.Join(dir, "assistant.wav")
-				if tc.name == "duration and audio output" {
-					audioPath = filepath.Join(dir, "assistant-bounded.wav")
-				}
-				info, err := os.Stat(audioPath)
-				if err != nil {
-					t.Fatalf("audio output stat: %v", err)
-				}
-				if info.Size() <= 44 {
-					t.Fatalf("audio output size = %d, want WAV header plus audio", info.Size())
-				}
 			}
 			if tc.wantArtifacts {
 				for _, path := range []string{

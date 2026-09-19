@@ -56,7 +56,7 @@ func sessionStreamDeadline(opts sessionLoopOptions) (<-chan time.Time, func(), e
 	return timer.C(), func() { timer.Stop() }, nil
 }
 
-func bindSessionLoopInputs(runCtx, audioCtx context.Context, loop *agentloop.AgentLoop, opts sessionLoopOptions) error {
+func bindSessionLoopInputs(runCtx context.Context, loop *agentloop.AgentLoop, opts sessionLoopOptions) error {
 	if opts.loopReady != nil {
 		select {
 		case opts.loopReady <- loop:
@@ -64,9 +64,5 @@ func bindSessionLoopInputs(runCtx, audioCtx context.Context, loop *agentloop.Age
 			return runCtx.Err()
 		}
 	}
-	if opts.AudioIn != nil {
-		opts.AudioIn.bindContext(audioCtx)
-	}
-
 	return nil
 }

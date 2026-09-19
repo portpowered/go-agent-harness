@@ -110,8 +110,14 @@ func providerConfig(cfg config.Config, provider string) (string, string, string,
 	return "", "", "", nil
 }
 
-func replayRates(plan *runtimeSession.LiveReplayPlan, request serviceSession.Request) (int, int) {
+func replayRates(plan *runtimeSession.LiveReplayPlan, request serviceSession.Request, inspection *runtimeReplay.CaptureInspection) (int, int) {
 	inputRate, outputRate := cliLiveDefaultRate, cliLiveDefaultRate
+	if plan == nil && inspection != nil && inspection.Kind == runtimeReplay.CaptureKindTurn {
+		// Semantic turn captures do not carry realtime negotiation metadata.
+		// Keep the established PCM session default instead of treating them as
+		// a 24 kHz provider transport.
+		return audio.SampleRate, audio.SampleRate
+	}
 	if plan == nil {
 		return inputRate, outputRate
 	}

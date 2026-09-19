@@ -13,6 +13,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
+	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 	runtimeRoomsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -348,7 +349,7 @@ func newRoomParticipantRuntime(
 		mixer:            mixer,
 		ingress:          newRoomParticipantIngress(plan, opts, evidence),
 		lifecycle:        &roomParticipantLifecycle{stateChanged: coordinator.progress, admissionClosed: coordinator.admissionDone()},
-		outboundLoudness: audio.NewLoudnessNormalizer(audio.LoudnessNormalizerConfig{GainDB: sessionVoiceGainDB(plan.manifest.Voice)}),
+		outboundLoudness: audio.NewLoudnessNormalizer(audio.LoudnessNormalizerConfig{GainDB: audioiowire.NewService().VoiceGainDB(plan.manifest.Voice)}),
 	}
 }
 

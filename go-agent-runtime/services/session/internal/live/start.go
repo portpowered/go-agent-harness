@@ -34,6 +34,9 @@ func (h *handle) start(runCtx context.Context) error {
 	h.prepareReplayCompletion()
 	h.publish(session.LiveEvent{Kind: string(session.LiveEventStarted), SessionID: h.request.SessionID, Critical: true}, false) //nolint:contextcheck // start publication uses the invocation evidence context.
 	watchEvents := capabilityEventStream(runCtx, capabilityWatch)
+	if h.captureInterruptionsEnabled() && watchEvents == nil {
+		return h.failStart(runCtx, errors.New("capture interruptions require browser invocation events"))
+	}
 	h.launchWorkers(runCtx, loop, durationTimer, watchEvents)
 	return nil
 }
@@ -73,6 +76,8 @@ func (h *handle) buildLoop(inferencer messages.SessionInferencer, toolExecutor m
 		media:             h.media,
 		continuous:        h.request.OutputAudioContinuous,
 		flushOutbound:     h.request.FinishAfterResponse,
+		replayKind:        h.request.Replay.Kind,
+		outputSampleRate:  h.request.OutputAudioSampleRate,
 		requirements:      h.mediaRequirements,
 		onDispatch:        h.observeProviderDispatch,
 		onToolResult:      h.beginToolResultAdmission,
@@ -284,6 +289,15 @@ func capabilityEventStream(ctx context.Context, watch func(context.Context) <-ch
 		return nil
 	}
 	return watch(ctx)
+}
+
+func (h *handle) captureInterruptionsEnabled() bool {
+	if h == nil {
+		return false
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.captureInterruptionEvent != nil
 }
 
 type workerPlan struct {

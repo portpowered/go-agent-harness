@@ -116,7 +116,6 @@ type ScheduledAudioInput = audioio.ScheduledAudioInput
 type SelfPlayRunOptions = impl.SelfPlayRunOptions
 type RuntimeAudioInTurnBargeError = sessioncontract.SessionAudioInTurnBargeError
 type SessionAudioInTurnBargeError = sessioncontract.SessionAudioInTurnBargeError
-type RuntimeAudioInput = impl.RuntimeAudioInput
 type SessionTextSeed = impl.SessionTextSeed
 
 const SessionDiagnosticEventFailure = impl.SessionDiagnosticEventFailure

@@ -10,44 +10,8 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
-	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
-
-func TestStreamRuntimeAudioInputResamples16kHzAtProviderBoundary(t *testing.T) {
-	samples := make([]int16, audio.FrameSize)
-	for index := range samples {
-		samples[index] = int16(index*11 - 2000)
-	}
-	var captured []byte
-	endOfTurn := false
-	source := &runtimeAudioSource{
-		source:       audio.NewSliceSource(samples),
-		path:         "injected-16k",
-		sourceRate:   wavio.Rate16kHz,
-		providerRate: wavio.Rate24kHz,
-		send: func(_ context.Context, pcm []byte) error {
-			captured = append(captured, pcm...)
-			return nil
-		},
-		endOfTurn: func(context.Context) error {
-			endOfTurn = true
-			return nil
-		},
-	}
-
-	if err := streamRuntimeAudioInput(context.Background(), nil, source); err != nil {
-		t.Fatalf("stream input: %v", err)
-	}
-	if !endOfTurn {
-		t.Fatal("end-of-turn was not sent after converted audio")
-	}
-	gotSamples := len(captured) / 2
-	wantSamples := len(samples) * wavio.Rate24kHz / wavio.Rate16kHz
-	if gotSamples != wantSamples {
-		t.Fatalf("provider samples = %d, want %d; duration changed", gotSamples, wantSamples)
-	}
-}
 
 func TestRoomProviderInputPCMResamples16kHzMixerTo24kHzContract(t *testing.T) {
 	mixer, err := room.NewPCM16Mixer(context.Background(), room.PCM16Format{

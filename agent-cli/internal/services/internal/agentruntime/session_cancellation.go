@@ -2,7 +2,6 @@ package agentruntime
 
 import (
 	"context"
-	"errors"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
@@ -18,17 +17,6 @@ func sessionSIGINTCancellationOnly(err error, intent *SessionCancellationIntent)
 func sessionSIGINTErrorOnly(err error) bool {
 	if err == nil {
 		return true
-	}
-
-	// RuntimeAudioInputError includes a kind sentinel in its Unwrap result.
-	// That sentinel describes the cancelled boundary, not an independent
-	// failure; inspect its underlying error instead.
-	var inputErr *RuntimeAudioInputError
-	if errors.As(err, &inputErr) {
-		if inputErr == nil || inputErr.Err == nil {
-			return false
-		}
-		return sessionSIGINTErrorOnly(inputErr.Err)
 	}
 
 	if unwrapper, ok := err.(interface{ Unwrap() []error }); ok {
@@ -50,7 +38,6 @@ func sessionSIGINTErrorOnly(err error) bool {
 	switch err {
 	case context.Canceled,
 		ErrSessionAudioResponseIncomplete,
-		ErrRuntimeAudioInputEndOfTurnLost,
 		ErrSessionScheduledAudioIncomplete,
 		ErrSessionUnresolvedToolResults,
 		ErrSessionToolContinuationIncomplete,

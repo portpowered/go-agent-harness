@@ -13,7 +13,7 @@ func joinSessionTerminationErrors(runErr, producerErr error) error {
 	if runErr != nil && !isSessionCancellation(runErr) {
 		errs = append(errs, fmt.Errorf("session error: %w", runErr))
 	}
-	if producerErr != nil && (!isSessionCancellation(producerErr) || errors.Is(producerErr, ErrRuntimeAudioInputEndOfTurnLost)) {
+	if producerErr != nil && !isSessionCancellation(producerErr) {
 		errs = append(errs, producerErr)
 	}
 	return errors.Join(errs...)

@@ -17,6 +17,12 @@ import (
 //lint:ignore U1000 package tests use this contract default.
 const sessionRealtimeAudioSampleRate = int(models.SampleRate24000)
 
+const runtimeNilText = "<nil>"
+
+func assistantAudioDelta(msg messages.StreamMessage) bool {
+	return msg.Role == "" || msg.Role == messages.RoleAssistant
+}
+
 type ScheduledAudioInput = audioio.ScheduledAudioInput
 
 type runtimeAudioOutputConfigurer interface {

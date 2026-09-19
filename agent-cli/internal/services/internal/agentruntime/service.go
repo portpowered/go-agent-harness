@@ -44,17 +44,22 @@ type Dispatcher struct{ deps Dependencies }
 
 func New(deps Dependencies) *Dispatcher { return &Dispatcher{deps: deps} }
 
-func audioInput(input public.AudioInput) RuntimeAudioInput {
-	return RuntimeAudioInput{Path: input.Path, Stdin: input.Stdin, SourceSampleRate: input.SourceSampleRate, CloseStdinOnCancel: input.CloseStdinOnCancel, MaxDuration: input.MaxDuration, Present: input.Present, DevicePresent: input.DevicePresent}
-}
-
 func textSeed(seed public.TextSeed) SessionTextSeed {
 	return SessionTextSeed{Value: seed.Value, Present: seed.Present}
 }
 
+// ErrLegacyAudioRuntimeRetired identifies requests that must enter through
+// the service-owned live host. The legacy dispatcher remains for text and
+// replay compatibility, but it must not retain a second file/device audio
+// implementation after C189.
+var ErrLegacyAudioRuntimeRetired = errors.New("legacy session audio runtime is retired; use the service-owned live session")
+
 func (d *Dispatcher) Run(ctx context.Context, out io.Writer, request public.Request) (runErr error) {
 	if d == nil || d.deps.Clock == nil {
 		return errors.New("session clock is required")
+	}
+	if request.AudioInput.Present || len(request.AudioTurns) > 0 || request.AudioOutputPath != "" || len(request.AudioInterrupts) > 0 {
+		return ErrLegacyAudioRuntimeRetired
 	}
 	if request.MaxDuration > 0 {
 		capturePath := request.RecordPath
@@ -83,87 +88,34 @@ func (d *Dispatcher) Run(ctx context.Context, out io.Writer, request public.Requ
 	if out == nil {
 		return fmt.Errorf("session output is required")
 	}
-	if len(request.AudioTurns) > 0 {
-		if len(request.ImagePaths) > 0 {
-			return RunSessionWithImagesAndRecordingDirectoryAndAudioFilesAndOutputAndTextSeedAndMaxDuration(
-				ctx, out, SessionImageRunOptions{
-					SessionRunOptions: options,
-					ImagePaths:        append([]string(nil), request.ImagePaths...),
-				}, request.RecordDirectory, request.AudioOutputPath, request.MaxDuration,
-				textSeed(request.TextSeed), request.AudioTurns, request.SystemPrompt,
-			)
-		}
-		return RunSessionWithRecordingDirectoryAndInstructionsAndAudioFilesAndOutputAndTextSeedAndMaxDuration(
-			ctx, out, options, request.RecordDirectory, request.AudioOutputPath,
-			request.MaxDuration, textSeed(request.TextSeed), request.AudioTurns, request.SystemPrompt,
-		)
-	}
 	if len(request.ImagePaths) > 0 {
 		if request.RecordDirectory != "" {
-			if request.AudioInput.Present {
-				return RunSessionWithImagesAndRecordingDirectoryAndAudioInput(
-					ctx, out, SessionImageRunOptions{
-						SessionRunOptions: options,
-						ImagePaths:        append([]string(nil), request.ImagePaths...),
-						AudioOutPath:      request.AudioOutputPath,
-						MaxDuration:       request.MaxDuration,
-						TextSeed:          textSeed(request.TextSeed),
-						SystemPrompt:      request.SystemPrompt,
-					}, request.RecordDirectory, audioInput(request.AudioInput),
-				)
-			}
 			return RunSessionWithImagesAndRecordingDirectory(
 				ctx, out, SessionImageRunOptions{
 					SessionRunOptions: options,
 					ImagePaths:        append([]string(nil), request.ImagePaths...),
-					AudioOutPath:      request.AudioOutputPath,
 					MaxDuration:       request.MaxDuration,
 					TextSeed:          textSeed(request.TextSeed),
 					SystemPrompt:      request.SystemPrompt,
 				}, request.RecordDirectory,
 			)
 		}
-		if request.AudioInput.Present {
-			return RunSessionWithImagesAndAudioInput(
-				ctx, out, SessionImageRunOptions{
-					SessionRunOptions: options,
-					ImagePaths:        append([]string(nil), request.ImagePaths...),
-					AudioOutPath:      request.AudioOutputPath,
-					MaxDuration:       request.MaxDuration,
-					TextSeed:          textSeed(request.TextSeed),
-					SystemPrompt:      request.SystemPrompt,
-				}, audioInput(request.AudioInput),
-			)
-		}
 		return RunSessionWithImages(ctx, out, SessionImageRunOptions{
 			SessionRunOptions: options,
 			ImagePaths:        append([]string(nil), request.ImagePaths...),
-			AudioOutPath:      request.AudioOutputPath,
 			MaxDuration:       request.MaxDuration,
 			TextSeed:          textSeed(request.TextSeed),
 			SystemPrompt:      request.SystemPrompt,
 		})
 	}
-	if request.AudioInput.Present {
-		if request.RecordDirectory != "" {
-			return RunSessionWithRecordingDirectoryAndInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(
-				ctx, out, options, request.RecordDirectory, request.AudioOutputPath,
-				request.MaxDuration, textSeed(request.TextSeed), audioInput(request.AudioInput), request.SystemPrompt,
-			)
-		}
-		return RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(
-			ctx, out, options, request.AudioOutputPath, request.MaxDuration,
-			textSeed(request.TextSeed), audioInput(request.AudioInput), request.SystemPrompt,
-		)
-	}
 	if request.RecordDirectory != "" {
 		return RunSessionWithRecordingDirectoryAndInstructionsAndAudioOutAndTextSeedAndMaxDuration(
-			ctx, out, options, request.RecordDirectory, request.AudioOutputPath,
+			ctx, out, options, request.RecordDirectory, "",
 			request.MaxDuration, textSeed(request.TextSeed), request.SystemPrompt,
 		)
 	}
 	return RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(
-		ctx, out, options, request.AudioOutputPath, request.MaxDuration,
+		ctx, out, options, "", request.MaxDuration,
 		textSeed(request.TextSeed), request.SystemPrompt,
 	)
 }
@@ -256,23 +208,6 @@ func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request)
 		copyCfg := *options.LoadedConfig
 		copyCfg.FilesystemWorkDir, copyCfg.FilesystemAllowPaths = policy.PrimaryRoot(), policy.AdditionalRoots()
 		options.LoadedConfig = &copyCfg
-	}
-	if len(request.AudioInterrupts) > 0 {
-		if options.BrowserWatch == nil {
-			if options.CapabilityClose != nil {
-				_ = options.CapabilityClose()
-			}
-			return SessionRunOptions{}, errors.New("--audio-interrupt requires an enabled WebMCP session capability")
-		}
-		inputs, err := prepareRuntimeAudioInputs(ctx, request.AudioInterrupts)
-		if err != nil {
-			if options.CapabilityClose != nil {
-				_ = options.CapabilityClose()
-			}
-			return SessionRunOptions{}, fmt.Errorf("prepare --audio-interrupt: %w", err)
-		}
-		interruptions, _ := StartSessionAudioInterruptionsOnBrowserTool(ctx, options.BrowserWatch(ctx), request.AudioInterruptTool, inputs)
-		options.AudioInterruptions = interruptions
 	}
 	return options, nil
 }

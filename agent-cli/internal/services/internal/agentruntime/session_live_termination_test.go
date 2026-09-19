@@ -127,7 +127,6 @@ func (f *liveTerminalDrainFixture) acceptedResponseThen(msg messages.StreamMessa
 
 func TestRunAgentLoopSessionTerminalOutcomesAlwaysDrainAcceptedDelta(t *testing.T) {
 	publicationErr := errors.New("page tool refresh failed")
-	audioErr := errors.New("audio source failed")
 	pumpErr := errors.New("RTC media pump failed")
 	doneErr := errors.New("transport done failed")
 	loopErr := errors.New("agent loop failed")
@@ -153,14 +152,6 @@ func TestRunAgentLoopSessionTerminalOutcomesAlwaysDrainAcceptedDelta(t *testing.
 				return func() { f.acceptedOutput() }
 			},
 			wantErr: publicationErr,
-		},
-		{
-			name: "audio input failure",
-			setup: func(f *liveTerminalDrainFixture) func() {
-				f.options.AudioIn = &runtimeAudioSource{source: &liveTerminalDrainFailingAudioSource{err: audioErr}}
-				return func() { f.acceptedOutput() }
-			},
-			wantErr: audioErr,
 		},
 		{
 			name: "RTC pump failure",
@@ -406,13 +397,6 @@ func (s *liveTerminalDrainSession) Close() error {
 }
 
 func (s *liveTerminalDrainSession) RTCMedia() audio.MediaEndpoints { return s.media }
-
-type liveTerminalDrainFailingAudioSource struct {
-	err error
-}
-
-func (s *liveTerminalDrainFailingAudioSource) ReadFrame(context.Context, []int16) error { return s.err }
-func (*liveTerminalDrainFailingAudioSource) Close() error                               { return nil }
 
 type liveTerminalDrainFailingWriter struct {
 	target    io.Writer

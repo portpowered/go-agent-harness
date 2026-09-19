@@ -78,11 +78,17 @@ func resolveRequestInputs(ctx context.Context, request serviceSession.Request, r
 		request.ReplayPath = inspection.CapturePath
 	}
 	effective := loaded.ApplyOverrides("", request.Model, request.Provider, request.BaseURL)
-	provider, model, apiKey, baseURL, err := ProviderValues(effective, request, inspection)
+	providerInspection := inspection
+	if inspection != nil && inspection.Kind == runtimeReplay.CaptureKindTurn {
+		// Turn captures replay a provider-neutral message stream. Their recorded
+		// provider name is metadata, not a live provider selection.
+		providerInspection = nil
+	}
+	provider, model, apiKey, baseURL, err := ProviderValues(effective, request, providerInspection)
 	if err != nil {
 		return requestInputs{}, err
 	}
-	if deps.ModelAdmission != nil {
+	if deps.ModelAdmission != nil && (inspection == nil || inspection.Kind != runtimeReplay.CaptureKindTurn) {
 		if err := deps.ModelAdmission.ValidateSessionModel(provider, model); err != nil {
 			return requestInputs{}, err
 		}
@@ -104,7 +110,7 @@ func resolveRequestInputs(ctx context.Context, request serviceSession.Request, r
 	if err != nil {
 		return requestInputs{}, err
 	}
-	inputRate, outputRate := replayRates(replayPlan, request)
+	inputRate, outputRate := replayRates(replayPlan, request, inspection)
 	return requestInputs{
 		effective: effective, inspection: inspection, provider: provider, model: model, baseURL: baseURL,
 		credentialRef: resolveCredentialReference(apiKey, deps.CredentialReference), instructions: instructions,
@@ -234,8 +240,9 @@ func assembleLiveRequest(request serviceSession.Request, inputs requestInputs) r
 		OutputAudioSampleRate:         inputs.outputRate,
 		OutputAudioContinuous:         request.AudioOutputPath == "-",
 		TurnDetection:                 turnDetectionPolicy(inputs.effective),
-		ClientOwnsAudioTurnBoundaries: request.ClientOwnsAudioTurnBoundaries || len(request.AudioTurns) > 0,
+		ClientOwnsAudioTurnBoundaries: request.ClientOwnsAudioTurnBoundaries || len(request.AudioTurns) > 0 || len(request.AudioInterrupts) > 0,
 		Replay: runtimeSession.LiveReplayPolicy{
+			Kind:             replayKind(inputs.inspection),
 			InputCapturePath: inputCapturePath, OutputCapturePath: request.RecordPath,
 			Timing: replayTiming(request.ReplayTiming),
 		},
@@ -259,8 +266,8 @@ func admitReplay(ctx context.Context, path string, inspection *runtimeReplay.Cap
 		return nil, nil
 	}
 	if inspection != nil {
-		if !inspection.IsRealtime() {
-			return nil, fmt.Errorf("replay capture %s is not a realtime session", path)
+		if !inspection.IsRealtime() && inspection.Kind != runtimeReplay.CaptureKindTurn {
+			return nil, fmt.Errorf("replay capture %s has unsupported session kind %q", path, inspection.Kind)
 		}
 		return inspection, nil
 	}
@@ -271,10 +278,24 @@ func admitReplay(ctx context.Context, path string, inspection *runtimeReplay.Cap
 	if err != nil {
 		return nil, err
 	}
-	if !loaded.IsRealtime() {
-		return nil, fmt.Errorf("replay capture %s is not a realtime session", path)
+	if !loaded.IsRealtime() && loaded.Kind != runtimeReplay.CaptureKindTurn {
+		return nil, fmt.Errorf("replay capture %s has unsupported session kind %q", path, loaded.Kind)
 	}
 	return &loaded, nil
+}
+
+func replayKind(inspection *runtimeReplay.CaptureInspection) runtimeSession.LiveReplayKind {
+	if inspection == nil {
+		return ""
+	}
+	switch inspection.Kind {
+	case runtimeReplay.CaptureKindRealtime:
+		return runtimeSession.LiveReplayKindRealtime
+	case runtimeReplay.CaptureKindTurn:
+		return runtimeSession.LiveReplayKindTurn
+	default:
+		return ""
+	}
 }
 
 func resolveCredentialReference(apiKey string, resolve func(string) string) string {
@@ -309,7 +330,7 @@ func openImages(paths []string, opener func([]string) ([]messages.ContentPart, e
 }
 
 func hasAudioInput(request serviceSession.Request) bool {
-	return request.AudioInput.Present || len(request.AudioTurns) > 0
+	return request.AudioInput.Present || len(request.AudioTurns) > 0 || len(request.AudioInterrupts) > 0
 }
 
 func buildReplayPlan(request serviceSession.Request, inspection *runtimeReplay.CaptureInspection, requestPrompt string, promptPresent bool) (*runtimeSession.LiveReplayPlan, string, bool, error) {
