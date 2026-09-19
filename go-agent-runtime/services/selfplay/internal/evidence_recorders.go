@@ -58,7 +58,7 @@ func (w *wavRecorder) close() error {
 		return w.err
 	}
 	w.closed = true
-	header, headerErr := wavio.PCM16Header(24000, uint64(w.dataBytes))
+	header, headerErr := wavio.PCM16Header(selfPlaySampleRate, uint64(w.dataBytes))
 	if headerErr != nil {
 		w.err = errors.Join(w.err, headerErr)
 	} else if _, err := w.file.Seek(0, io.SeekStart); err != nil {

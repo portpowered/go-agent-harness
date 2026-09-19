@@ -13,6 +13,11 @@ import (
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
+const (
+	sideLoopBufferCapacity = 128
+	bridgeReadBufferSize   = 64 * 1024
+)
+
 type sideResult struct {
 	index   int
 	err     error
@@ -44,7 +49,7 @@ func newSideLoop(inferencer messages.SessionInferencer) (*agentloop.AgentLoop, e
 		agentloop.WithMode(engine.DuplexSession),
 		agentloop.WithSessionInferencer(inferencer),
 		agentloop.WithToolExecutionDisabled(),
-		agentloop.WithBufferCapacity(128),
+		agentloop.WithBufferCapacity(sideLoopBufferCapacity),
 	)
 }
 
@@ -233,7 +238,7 @@ func awaitTargetLoop(ctx context.Context, target <-chan *agentloop.AgentLoop) (*
 }
 
 func forwardBridgePCM(ctx context.Context, loop *agentloop.AgentLoop, reader io.Reader) error {
-	buffer := make([]byte, 64*1024)
+	buffer := make([]byte, bridgeReadBufferSize)
 	for {
 		count, err := reader.Read(buffer)
 		if count > 0 {
@@ -242,26 +247,14 @@ func forwardBridgePCM(ctx context.Context, loop *agentloop.AgentLoop, reader io.
 			}
 		}
 		if err != nil {
-			return bridgeReadError(ctx, err)
+			return err
 		}
 	}
 }
 
 func sendBridgePCM(ctx context.Context, loop *agentloop.AgentLoop, chunk []byte) error {
 	pcm := append([]byte(nil), chunk...)
-	if err := loop.SendAudioInput(ctx, pcm); err != nil && ctx.Err() != nil {
-		return nil
-	} else if err != nil {
-		return err
-	}
-	return nil
-}
-
-func bridgeReadError(ctx context.Context, err error) error {
-	if ctx.Err() != nil || errors.Is(err, io.ErrClosedPipe) || errors.Is(err, io.EOF) {
-		return nil
-	}
-	return err
+	return loop.SendAudioInput(ctx, pcm)
 }
 
 func assistantAudio(message messages.StreamMessage) bool {

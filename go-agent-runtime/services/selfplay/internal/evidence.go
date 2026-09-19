@@ -19,6 +19,12 @@ import (
 
 const manifestSchemaVersion = 1
 
+const (
+	evidenceDirectoryMode = os.FileMode(0o700)
+	evidenceFileMode      = os.FileMode(0o600)
+	selfPlaySampleRate    = 24000
+)
+
 type evidenceFile interface {
 	io.Writer
 	io.Closer
@@ -97,7 +103,7 @@ type jsonlRecorder struct {
 
 func validateOutputTarget(files fileSystem, path string) error {
 	parent := filepath.Dir(path)
-	if err := files.MkdirAll(parent, 0o700); err != nil {
+	if err := files.MkdirAll(parent, evidenceDirectoryMode); err != nil {
 		return fmt.Errorf("prepare self-play output parent %q: %w", parent, err)
 	}
 	info, err := files.Lstat(path)
@@ -127,7 +133,7 @@ func newEvidence(files fileSystem, request selfplay.Request, startedAt time.Time
 		return nil, fmt.Errorf("inspect self-play output directory %q: %w", request.OutputDir, statErr)
 	}
 	entry.createdDir = errors.Is(statErr, os.ErrNotExist)
-	if err := files.MkdirAll(request.OutputDir, 0o700); err != nil {
+	if err := files.MkdirAll(request.OutputDir, evidenceDirectoryMode); err != nil {
 		return nil, fmt.Errorf("create self-play output directory %q: %w", request.OutputDir, err)
 	}
 	paths := [2][3]string{
@@ -137,7 +143,7 @@ func newEvidence(files fileSystem, request selfplay.Request, startedAt time.Time
 	roles := [2]selfplay.SideRole{selfplay.RoleCustomer, selfplay.RoleAssistant}
 	for side := range paths {
 		entry.sides[side] = &sideEvidence{role: roles[side], wavPath: paths[side][0], diagnosticsPath: paths[side][1], streamPath: paths[side][2], terminal: selfplay.SideNotStarted}
-		wavFile, err := files.OpenFile(filepath.Join(request.OutputDir, paths[side][0]), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		wavFile, err := files.OpenFile(filepath.Join(request.OutputDir, paths[side][0]), os.O_WRONLY|os.O_CREATE|os.O_EXCL, evidenceFileMode)
 		if err != nil {
 			return nil, errors.Join(fmt.Errorf("create %s WAV evidence: %w", roles[side], err), entry.cleanupSetup())
 		}
@@ -160,7 +166,7 @@ func newEvidence(files fileSystem, request selfplay.Request, startedAt time.Time
 }
 
 func (e *evidence) newJSONL(path string, limit int64) (*jsonlRecorder, error) {
-	file, err := e.files.OpenFile(filepath.Join(e.destination, path), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	file, err := e.files.OpenFile(filepath.Join(e.destination, path), os.O_WRONLY|os.O_CREATE|os.O_EXCL, evidenceFileMode)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +175,7 @@ func (e *evidence) newJSONL(path string, limit int64) (*jsonlRecorder, error) {
 }
 
 func newWAVRecorder(file evidenceFile, path string, limit int64) (*wavRecorder, error) {
-	header, err := wavio.PCM16Header(24000, 0)
+	header, err := wavio.PCM16Header(selfPlaySampleRate, 0)
 	if err != nil {
 		return nil, err
 	}
