@@ -43,7 +43,11 @@ func assertFIFOReplayMode(t *testing.T, mode string) {
 	if err := syscall.Mkfifo(fifoPath, 0o600); err != nil {
 		t.Skipf("FIFO unavailable: %v", err)
 	}
-	defer os.Remove(fifoPath)
+	t.Cleanup(func() {
+		if err := os.Remove(fifoPath); err != nil && !os.IsNotExist(err) {
+			t.Errorf("remove replay FIFO: %v", err)
+		}
+	})
 	fifoPath = configureFIFOReplay(t, mode, destination, recorder, fifoPath)
 	assertFIFOChildFailsClosed(t, mode, destination, fifoPath)
 }
