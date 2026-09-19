@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
@@ -250,6 +251,12 @@ func (r *runLoop) process(msg messages.StreamMessage) error {
 	if err := publish(r.request.Publication, admission.Message); err != nil {
 		return err
 	}
+	if err := r.retry(admission.Message); err != nil {
+		if errors.Is(err, sessionduration.ErrMaxDurationExceeded) {
+			return r.finish(true, nil)
+		}
+		return err
+	}
 	if r.request.Handle == nil {
 		return nil
 	}
@@ -264,6 +271,64 @@ func (r *runLoop) process(msg messages.StreamMessage) error {
 		return nil
 	}
 	return r.finish(result.Planned, nil)
+}
+
+func (r *runLoop) retry(msg messages.StreamMessage) error {
+	if msg.Type != messages.StreamTypeMessageEnd {
+		return nil
+	}
+	terminal, ok := msg.Value.(*messages.MessageEndValue)
+	if !ok || terminal == nil {
+		return nil
+	}
+	decision := r.controller.Retry(sessionduration.RetryRequest{Terminal: terminal})
+	if !decision.Eligible {
+		return nil
+	}
+	sender, ok := r.loop.(sessionduration.SessionEventSender)
+	if !ok {
+		return errors.New("session duration loop does not support provider session events")
+	}
+	if err := r.waitForRetry(decision.Delay); err != nil {
+		return err
+	}
+	control := messages.StreamMessage{Type: messages.StreamTypeResponseCreate, Value: messages.NewResponseCreateValue()}
+	if err := sender.SendSessionEvent(r.runCtx, control); err != nil {
+		return fmt.Errorf("send rate-limit retry response: %w", err)
+	}
+	if r.request.RetryDispatched != nil {
+		r.request.RetryDispatched(control)
+	}
+	return nil
+}
+
+func (r *runLoop) waitForRetry(delay time.Duration) error {
+	if delay <= 0 {
+		return nil
+	}
+	if r.request.Clock == nil {
+		return sessionduration.ErrSchedulerUnavailable
+	}
+	timer := r.request.Clock.NewTimer(delay)
+	if timer == nil {
+		return errors.New("session duration clock returned a nil retry timer")
+	}
+	defer timer.Stop()
+	select {
+	case <-timer.C():
+		return nil
+	case err := <-r.controller.Errors():
+		return err
+	case <-r.request.Done:
+		if err := runLoopDoneError(r.request); err != nil {
+			return err
+		}
+		return context.Canceled
+	case <-r.ctx.Done():
+		return r.ctx.Err()
+	case <-r.runCtx.Done():
+		return r.runCtx.Err()
+	}
 }
 
 func (r *runLoop) finish(planned bool, primary error) error {

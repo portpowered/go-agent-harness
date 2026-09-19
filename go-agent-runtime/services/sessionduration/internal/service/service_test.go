@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -471,6 +472,141 @@ func TestRunHandlesWakeAndDoneBoundaryFailures(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRunOwnsRateLimitRetryWaitAndDispatch(t *testing.T) {
+	scheduler := &triggerScheduler{created: make(chan *triggerTimer, 1)}
+	loop := &retryRunLoopProbe{
+		deltas: messages.NewTypedBuffer[messages.StreamMessage](1),
+		sent:   make(chan messages.StreamMessage, 1),
+	}
+	dispatched := make(chan messages.StreamMessage, 1)
+	done := make(chan struct{})
+	result := make(chan error, 1)
+	go func() {
+		result <- New().Run(sessionduration.RunRequest{
+			Context:    context.Background(),
+			Inferencer: contractInferencer{session: newContractSession()},
+			Clock:      scheduler,
+			Retry:      sessionduration.RetryPolicy{Enabled: true, MaxRetries: 1, DefaultDelay: time.Second},
+			LoopFactory: func(context.Context, sessionduration.AdmissionInferencer, sessionduration.Controller) (sessionduration.Loop, error) {
+				return loop, nil
+			},
+			RetryDispatched: func(msg messages.StreamMessage) { dispatched <- msg },
+			Done:            done,
+		})
+	}()
+
+	var timer *triggerTimer
+	select {
+	case timer = <-scheduler.created:
+	case <-time.After(time.Second):
+		t.Fatal("retry scheduler was not created")
+	}
+	select {
+	case msg := <-loop.sent:
+		t.Fatalf("retry was sent before its delay elapsed: %+v", msg)
+	default:
+	}
+	timer.events <- time.Now()
+
+	select {
+	case msg := <-loop.sent:
+		if msg.Type != messages.StreamTypeResponseCreate {
+			t.Fatalf("retry control type = %q, want response.create", msg.Type)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("retry control was not sent after the injected timer fired")
+	}
+	select {
+	case msg := <-dispatched:
+		if msg.Type != messages.StreamTypeResponseCreate {
+			t.Fatalf("observed retry type = %q, want response.create", msg.Type)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("successful retry dispatch was not reported")
+	}
+
+	close(done)
+	select {
+	case err := <-result:
+		if err != nil {
+			t.Fatalf("Run after retry completion = %v, want nil", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Run did not stop after its completion signal")
+	}
+}
+
+func TestRunRejectsRetryWhenLoopCannotSendSessionEvents(t *testing.T) {
+	loop := &retryRunLoopWithoutSessionEvents{deltas: messages.NewTypedBuffer[messages.StreamMessage](1)}
+	err := New().Run(sessionduration.RunRequest{
+		Context:    context.Background(),
+		Inferencer: contractInferencer{session: newContractSession()},
+		Retry:      sessionduration.RetryPolicy{Enabled: true, MaxRetries: 1},
+		LoopFactory: func(context.Context, sessionduration.AdmissionInferencer, sessionduration.Controller) (sessionduration.Loop, error) {
+			return loop, nil
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "does not support provider session events") {
+		t.Fatalf("Run() = %v, want the loop transport capability error", err)
+	}
+}
+
+type retryRunLoopProbe struct {
+	deltas *messages.TypedBuffer[messages.StreamMessage]
+	sent   chan messages.StreamMessage
+}
+
+func (l *retryRunLoopProbe) Run(ctx context.Context) error {
+	terminal := messages.StreamMessage{
+		Type: messages.StreamTypeMessageEnd,
+		Role: messages.RoleAssistant,
+		Value: &messages.MessageEndValue{
+			Status:               "failed",
+			ProviderErrorCode:    "rate_limit_exceeded",
+			ProviderErrorMessage: "retry after 1s",
+		},
+	}
+	if !l.deltas.Write(ctx, terminal) {
+		return ctx.Err()
+	}
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+func (l *retryRunLoopProbe) Deltas() *messages.TypedBuffer[messages.StreamMessage] { return l.deltas }
+func (l *retryRunLoopProbe) Send(context.Context, []messages.Message) error        { return nil }
+func (l *retryRunLoopProbe) SendSessionEvent(ctx context.Context, msg messages.StreamMessage) error {
+	select {
+	case l.sent <- msg:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+type retryRunLoopWithoutSessionEvents struct {
+	deltas *messages.TypedBuffer[messages.StreamMessage]
+}
+
+func (l *retryRunLoopWithoutSessionEvents) Run(ctx context.Context) error {
+	terminal := messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: &messages.MessageEndValue{
+		Status:            "failed",
+		ProviderErrorCode: "rate_limit_exceeded",
+	}}
+	if !l.deltas.Write(ctx, terminal) {
+		return ctx.Err()
+	}
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+func (l *retryRunLoopWithoutSessionEvents) Deltas() *messages.TypedBuffer[messages.StreamMessage] {
+	return l.deltas
+}
+func (l *retryRunLoopWithoutSessionEvents) Send(context.Context, []messages.Message) error {
+	return nil
 }
 
 func TestWaitForLoopNormalizesCancellation(t *testing.T) {

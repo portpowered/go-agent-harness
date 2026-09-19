@@ -250,6 +250,14 @@ type Loop interface {
 	Send(context.Context, []messages.Message) error
 }
 
+// SessionEventSender is the transport edge used by service-owned retry
+// scheduling. Implementations translate one provider session event into their
+// loop's native control path; the duration service owns eligibility, timing,
+// cancellation, and dispatch ordering.
+type SessionEventSender interface {
+	SendSessionEvent(context.Context, messages.StreamMessage) error
+}
+
 // MessageResult tells the duration service whether the host's ordinary
 // session completion rules selected a terminal boundary for the message.
 type MessageResult struct {
@@ -271,28 +279,31 @@ type LoopFactory func(context.Context, AdmissionInferencer, Controller) (Loop, e
 // explicit ports so construction remains inert and the service retains the
 // shutdown order without importing a host or transport package.
 type RunRequest struct {
-	Context        context.Context
-	Inferencer     messages.SessionInferencer
-	Admission      AdmissionInferencer
-	Clock          TimerScheduler
-	LivenessClock  TimerScheduler
-	MaxDuration    time.Duration
-	Liveness       LivenessOptions
-	Retry          RetryPolicy
-	Terminal       TerminalSource
-	Publication    Publication
-	Artifacts      ArtifactLifecycle
-	LoopFactory    LoopFactory
-	Handle         MessageHandler
-	Drain          func(context.Context, Loop, Controller) error
-	DrainPolicy    DrainPolicy
-	Close          func() error
-	Binding        func() error
-	ExternalErrors <-chan error
-	Wake           <-chan struct{}
-	OnWake         func(context.Context, Loop, Controller) error
-	Done           <-chan struct{}
-	DoneError      func() error
+	Context       context.Context
+	Inferencer    messages.SessionInferencer
+	Admission     AdmissionInferencer
+	Clock         TimerScheduler
+	LivenessClock TimerScheduler
+	MaxDuration   time.Duration
+	Liveness      LivenessOptions
+	Retry         RetryPolicy
+	// RetryDispatched observes a successfully sent retry control for tracing.
+	// It must not make policy decisions or perform another transport write.
+	RetryDispatched func(messages.StreamMessage)
+	Terminal        TerminalSource
+	Publication     Publication
+	Artifacts       ArtifactLifecycle
+	LoopFactory     LoopFactory
+	Handle          MessageHandler
+	Drain           func(context.Context, Loop, Controller) error
+	DrainPolicy     DrainPolicy
+	Close           func() error
+	Binding         func() error
+	ExternalErrors  <-chan error
+	Wake            <-chan struct{}
+	OnWake          func(context.Context, Loop, Controller) error
+	Done            <-chan struct{}
+	DoneError       func() error
 }
 
 // Result is the controller's terminal snapshot after cleanup.

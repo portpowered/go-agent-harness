@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -14,9 +13,6 @@ import (
 func (r *durationServiceResources) handle(ctx context.Context, loop duration.Loop, controller duration.Controller, msg messages.StreamMessage) (duration.MessageResult, error) {
 	concrete, err := durationAgentLoop(loop)
 	if err != nil {
-		return duration.MessageResult{}, err
-	}
-	if err := r.retry(ctx, concrete, controller, msg); err != nil {
 		return duration.MessageResult{}, err
 	}
 	return r.handleMessage(ctx, concrete, controller, msg)
@@ -105,65 +101,6 @@ func (r *durationServiceResources) shouldQueueClose(msg messages.StreamMessage) 
 	promptProvided := r.opts.PromptProvided || r.opts.Prompt != ""
 	return r.opts.CloseAfterOpen && promptProvided && msg.Type == messages.StreamTypeMessageEnd &&
 		(r.opts.observer == nil || r.opts.observer.lastMessageEndAdmitted()) && !r.closeSent
-}
-
-func (r *durationServiceResources) retry(ctx context.Context, loop *agentloop.AgentLoop, controller duration.Controller, msg messages.StreamMessage) error {
-	terminal, ok := durationRetryTerminal(msg)
-	if !ok {
-		return nil
-	}
-	decision := controller.Retry(duration.RetryRequest{Terminal: terminal})
-	if !decision.Eligible {
-		return nil
-	}
-	if err := r.waitForRetry(ctx, controller, decision.Delay); err != nil {
-		return err
-	}
-	if err := loop.SendSessionEvent(ctx, messages.StreamMessage{Type: messages.StreamTypeResponseCreate, Value: messages.NewResponseCreateValue()}); err != nil {
-		return fmt.Errorf("send rate-limit retry response: %w", err)
-	}
-	if r.opts.observer != nil {
-		r.opts.observer.observeProviderDispatch(messages.StreamMessage{Type: messages.StreamTypeResponseCreate})
-	}
-	return nil
-}
-
-func durationRetryTerminal(msg messages.StreamMessage) (*messages.MessageEndValue, bool) {
-	if msg.Type != messages.StreamTypeMessageEnd {
-		return nil, false
-	}
-	terminal, ok := msg.Value.(*messages.MessageEndValue)
-	return terminal, ok && terminal != nil
-}
-
-func (r *durationServiceResources) waitForRetry(ctx context.Context, controller duration.Controller, delay time.Duration) error {
-	timer := r.clock.NewTimer(delay)
-	if timer == nil {
-		return errors.New("session duration clock returned a nil retry timer")
-	}
-	defer timer.Stop()
-	select {
-	case <-timer.C():
-	case err := <-controller.Errors():
-		return normalizeDurationControllerError(err)
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-r.observed.Done():
-		return context.Canceled
-	}
-	select {
-	case err := <-controller.Errors():
-		return normalizeDurationControllerError(err)
-	default:
-		return nil
-	}
-}
-
-func normalizeDurationControllerError(err error) error {
-	if errors.Is(err, duration.ErrMaxDurationExceeded) {
-		return duration.ErrMaxDurationExceeded
-	}
-	return err
 }
 
 func (r *durationServiceResources) handleWake(ctx context.Context, loop duration.Loop) error {

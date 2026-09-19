@@ -109,6 +109,10 @@ func (l *durationServiceLoop) Send(ctx context.Context, msg []messages.Message) 
 	return l.inner.Send(ctx, msg)
 }
 
+func (l *durationServiceLoop) SendSessionEvent(ctx context.Context, msg messages.StreamMessage) error {
+	return l.inner.SendSessionEvent(ctx, msg)
+}
+
 type durationServiceResources struct {
 	mu             sync.Mutex
 	ctx            context.Context
@@ -173,6 +177,11 @@ func runAgentLoopSessionWithDurationService(ctx context.Context, out io.Writer, 
 		Retry: duration.RetryPolicy{
 			Enabled:    opts.observer != nil,
 			MaxRetries: 1,
+		},
+		RetryDispatched: func(msg messages.StreamMessage) {
+			if opts.observer != nil {
+				opts.observer.observeProviderDispatch(msg)
+			}
 		},
 		Publication: resources.publication,
 		LoopFactory: func(runCtx context.Context, admitted duration.AdmissionInferencer, controller duration.Controller) (duration.Loop, error) {
