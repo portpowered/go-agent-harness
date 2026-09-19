@@ -13,6 +13,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
+	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 	runtimeRoomsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -320,10 +321,8 @@ func roomReplayMixerConfig(opts RoomRunOptions, scheduled bool) room.PCM16MixerC
 	return config
 }
 
-// newRoomParticipantRuntime assembles one participant's runtime state,
-// including its fixed per-voice outbound loudness gain (see
-// VoiceLoudnessGainDB), which is why plan.manifest.Voice is required here
-// rather than left to a caller default.
+// newRoomParticipantRuntime assembles one participant's runtime state, including
+// its fixed per-voice outbound loudness gain from the audio service.
 func newRoomParticipantRuntime(
 	plan *roomParticipantPlan,
 	participantCtx context.Context,
@@ -350,7 +349,7 @@ func newRoomParticipantRuntime(
 		mixer:            mixer,
 		ingress:          newRoomParticipantIngress(plan, opts, evidence),
 		lifecycle:        &roomParticipantLifecycle{stateChanged: coordinator.progress, admissionClosed: coordinator.admissionDone()},
-		outboundLoudness: audio.NewLoudnessNormalizer(audio.LoudnessNormalizerConfig{GainDB: VoiceLoudnessGainDB(plan.manifest.Voice)}),
+		outboundLoudness: audio.NewLoudnessNormalizer(audio.LoudnessNormalizerConfig{GainDB: audioiowire.NewService().VoiceGainDB(plan.manifest.Voice)}),
 	}
 }
 

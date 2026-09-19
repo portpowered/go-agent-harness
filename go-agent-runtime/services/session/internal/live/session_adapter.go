@@ -16,6 +16,8 @@ type capturingInferencer struct {
 	media             *mediagate.Gate
 	continuous        bool
 	flushOutbound     bool
+	replayKind        session.LiveReplayKind
+	outputSampleRate  int
 	requirements      mediaRequirements
 	onDispatch        func(messages.StreamMessage)
 	onToolResult      func(string, string, bool) func()

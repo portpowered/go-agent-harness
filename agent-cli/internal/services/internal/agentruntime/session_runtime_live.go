@@ -1,11 +1,14 @@
 package agentruntime
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
@@ -13,6 +16,55 @@ import (
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
+
+func (p *sessionRuntimePlan) bindRTC(ctx context.Context, finalizer *sessionRuntimeFinalizer) error {
+	if p.deviceService == nil {
+		if sessionDevicesSelected(p.rtcDeviceRequest) {
+			return runtimedevices.ErrUnavailable
+		}
+		return nil
+	}
+	p.rtcDeviceRequest.Inferencer = p.inferencer
+	binding, err := p.deviceService.BindRTC(ctx, p.rtcDeviceRequest)
+	if err != nil {
+		return err
+	}
+	p.rtcBinding = binding
+	if binding == nil {
+		return nil
+	}
+	p.inferencer = binding.Inferencer()
+	p.loop.rtcDeviceBinding = binding
+	finalizer.setRTCBinding(binding)
+	if selected, ok := binding.(runtimedevices.RTCBindingDeviceSelection); ok {
+		inputDevice, outputDevice := selected.SelectedDeviceIDs()
+		if p.rtcDeviceRequest.InputDevice == "" {
+			p.rtcDeviceRequest.InputDevice = inputDevice
+		}
+		if p.rtcDeviceRequest.OutputDevice == "" {
+			p.rtcDeviceRequest.OutputDevice = outputDevice
+		}
+	}
+	return nil
+}
+
+func (p *sessionRuntimePlan) writeAnnouncements(out io.Writer, includeBrowser bool) error {
+	// These startup disclosures are best-effort and must not pre-empt the
+	// session's own run/drain failure when their writer is unavailable.
+	writeFilesystemScopeAnnouncement(out, p.filesystemPolicy)
+	writeSessionToolAnnouncement(out, p.toolDefinitionsForAnnouncement())
+	announcement := p.announce
+	if p.loop.BareLive {
+		announcement, p.loop.ListeningBanner = p.bareLiveOutput()
+	} else if includeBrowser && p.loop.BrowserToolsInteractive {
+		announcement, p.loop.ListeningBanner = p.browserLiveOutput()
+	}
+	if announcement == "" {
+		return nil
+	}
+	_, err := fmt.Fprintln(out, announcement)
+	return err
+}
 
 // planBareLiveSessionRuntime builds the alternate-free live voice path. The
 // resolver has already supplied the provider, model, credential, audio policy,
@@ -103,7 +155,7 @@ func planBrowserLiveSessionRuntime(opts SessionRunOptions, factory sessionRuntim
 	switch provider {
 	case sessionProviderOpenAI:
 		clientOwnedAudio := opts.ClientOwnsAudioTurnBoundaries || len(opts.AudioInputs) > 0
-		inputAudioTranscription := resolveInputAudioTranscriptionPolicy(opts, provider, interactive || clientOwnedAudio || opts.RTCDeviceBinding.inputSelected())
+		inputAudioTranscription := sessionInputTranscriptionPolicy(opts, provider, interactive || clientOwnedAudio || sessionInputDeviceSelected(opts.RTCBinding))
 		inferencer, err = factory.newOpenAISessionInferencerForTools(openAISessionCfg, opts.Voice, liveDialer, opts.ToolDefinitions, clientOwnedAudio, inputAudioTranscription)
 	case sessionProviderGrok:
 		inferencer, err = factory.newGrokSessionInferencerForTools(grokSessionCfg, liveDialer, opts.ToolDefinitions)
@@ -179,7 +231,7 @@ func planLiveSessionRuntime(opts SessionRunOptions, factory sessionRuntimeFactor
 	switch provider {
 	case sessionProviderOpenAI:
 		clientOwnedAudio := opts.ClientOwnsAudioTurnBoundaries || len(opts.AudioInputs) > 0
-		inputAudioTranscription := resolveInputAudioTranscriptionPolicy(opts, provider, clientOwnedAudio || opts.RTCDeviceBinding.inputSelected())
+		inputAudioTranscription := sessionInputTranscriptionPolicy(opts, provider, clientOwnedAudio || sessionInputDeviceSelected(opts.RTCBinding))
 		inferencer, err = factory.newOpenAISessionInferencerForTools(openAISessionCfg, opts.Voice, liveDialer, opts.ToolDefinitions, clientOwnedAudio, inputAudioTranscription)
 	case sessionProviderGrok:
 		inferencer, err = factory.newGrokSessionInferencerForTools(grokSessionCfg, liveDialer, opts.ToolDefinitions)
@@ -297,6 +349,7 @@ func buildGrokSessionInferencerWithInstructionsAndTools(sessionCfg config.GrokCo
 	return inference.NewSessionGatewayInferencer(sessionGateway, inferenceOpts...), nil
 }
 
+//lint:ignore U1000 package tests exercise the OpenAI factory seam.
 func buildOpenAIRealtimeSessionInferencerWithInstructionsAndTools(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, instructions string, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
 	return buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndInputAudioTranscription(sessionCfg, voice, dialer, instructions, toolDefinitions, models.InputAudioTranscriptionConfig{})
 }

@@ -72,15 +72,18 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 	if err := sessioncontract.ValidateSessionMaxDuration(maxDuration); err != nil {
 		return err
 	}
+	if audioPath != "" {
+		return ErrLegacyAudioRuntimeRetired
+	}
 	if opts.ReplayPath != "" && opts.SessionInferencer == nil {
-		return RunSessionWithAudioOutAndTextSeedAndMaxDuration(ctx, out, opts, audioPath, maxDuration, seed)
+		if maxDuration == 0 {
+			return RunSessionWithTextSeed(ctx, out, opts, seed)
+		}
+		return RunSessionWithTextSeedAndMaxDuration(ctx, out, opts, maxDuration, seed)
 	}
 	if seed.Present {
 		opts.Prompt = seed.Value
 		opts.PromptProvided = true
-	}
-	if audioPath != "" {
-		opts.AudioOutputRequested = true
 	}
 	if err := validateSessionRunOptions(opts); err != nil {
 		return err
@@ -99,7 +102,7 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 		return err
 	}
 
-	if audioPath == "" {
+	{
 		if seed.Present {
 			wirePrompt := nextSessionTextWirePrompt()
 			plan.loop.Prompt = wirePrompt
@@ -155,54 +158,6 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 		}
 		return runSessionDurationPlan(durationCtx, out, plan, maxDuration, realSessionDurationClock{})
 	}
-
-	if seed.Present {
-		plan.loop.Prompt = nextSessionTextWirePrompt()
-	}
-	audioOut, err := newSessionAudioOutputForPlan(&plan, audioPath, out, nil)
-	if err != nil {
-		return fmt.Errorf("--audio-out %q: %w", audioPath, err)
-	}
-	defer func() {
-		if closeErr := audioOut.close(); closeErr != nil {
-			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", audioPath, closeErr))
-		}
-	}()
-
-	sessionOut := out
-	if audioPath == "-" {
-		sessionOut = io.Discard
-	}
-	if plan.inferencer != nil {
-		wirePrompt := ""
-		if seed.Present {
-			wirePrompt = plan.loop.Prompt
-		}
-		wrapped := newSessionAudioOutputInferencer(plan.inferencer, audioOut, wirePrompt, seed.Value)
-		plan.inferencer = wrapped
-		if maxDuration == 0 {
-			runErr = plan.run(ctx, sessionOut)
-		} else {
-			durationCtx, durationErr := prepareSessionDurationArtifacts(ctx)
-			if durationErr != nil {
-				return durationErr
-			}
-			runErr = runSessionDurationPlan(durationCtx, sessionOut, plan, maxDuration, realSessionDurationClock{})
-		}
-		wrapped.wait()
-		if outputErr := wrapped.err(); outputErr != nil {
-			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", audioPath, outputErr))
-		}
-		return runErr
-	}
-	if maxDuration == 0 {
-		return plan.run(ctx, sessionOut)
-	}
-	durationCtx, err := prepareSessionDurationArtifacts(ctx)
-	if err != nil {
-		return err
-	}
-	return runSessionDurationPlan(durationCtx, sessionOut, plan, maxDuration, realSessionDurationClock{})
 }
 
 // resolveSessionInstructions is a compatibility adapter around the reusable
@@ -210,11 +165,15 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 // CLI host edge; prompt selection, skills ordering, scope formatting and all
 // model-facing policy decisions live behind the runtime contract.
 func resolveSessionInstructions(opts SessionRunOptions, systemPrompt string) (string, error) {
+	return resolveSessionInstructionsContext(context.Background(), opts, systemPrompt)
+}
+
+func resolveSessionInstructionsContext(ctx context.Context, opts SessionRunOptions, systemPrompt string) (string, error) {
 	request, err := newSessionInstructionRequest(opts, systemPrompt)
 	if err != nil {
 		return "", err
 	}
-	result, err := runtimeSessionWire.NewInstructionService().Resolve(context.Background(), request)
+	result, err := runtimeSessionWire.NewInstructionService().Resolve(ctx, request)
 	if err != nil {
 		return "", err
 	}

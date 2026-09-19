@@ -93,6 +93,9 @@ type handle struct {
 	capabilityClose                                  func() error
 	capabilityRefresh                                func(context.Context) ([]messages.ToolDefinition, error)
 	capabilityWatch                                  func(context.Context) <-chan session.LiveCapabilityEvent
+	captureInterruptionTool                          string
+	captureInterruptionEvent                         chan session.LiveCapabilityEvent
+	captureInterruptionOnce                          sync.Once
 	captureFlush                                     func() error
 	observer                                         *observations.Observer
 	capabilityMu                                     sync.Mutex
@@ -339,6 +342,12 @@ func terminalDrainFactory(factory session.LiveInferencerFactory) session.LiveInf
 		inner, err := factory(ctx, request)
 		if err != nil || inner == nil {
 			return inner, err
+		}
+		if request.Replay.Kind == session.LiveReplayKindTurn {
+			inner = turnReplayMediaInferencer{
+				inner: inner, sampleRate: request.OutputAudioSampleRate,
+				continuous: request.OutputAudioContinuous,
+			}
 		}
 		return terminalDrainInferencer{inner: inner, continuous: request.OutputAudioContinuous}, nil
 	}

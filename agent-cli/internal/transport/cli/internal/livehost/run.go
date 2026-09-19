@@ -327,7 +327,7 @@ func liveRunOptions(out io.Writer, request serviceSession.Request, liveRequest r
 		deviceRequest.FileOutput = filePorts.Output
 		deviceService, deviceRequest = selectFileDevices(deviceService, deps.FileDeviceService.Service, deviceRequest, filePorts)
 	}
-	if !deviceRequest.CaptureEnabled && !deviceRequest.PlaybackEnabled && (filePorts == nil || len(filePorts.InputTurns) == 0) {
+	if !deviceRequest.CaptureEnabled && !deviceRequest.PlaybackEnabled && (filePorts == nil || len(filePorts.InputTurns) == 0 && len(filePorts.InputInterruptions) == 0) {
 		deviceService = nil
 	}
 	renderer := cliOutput.NewLiveEventRenderer(request.ReplayPath != "")
@@ -338,6 +338,8 @@ func liveRunOptions(out io.Writer, request serviceSession.Request, liveRequest r
 		AudioTurnAdmission:      audioTurnAdmission(request),
 		Recorder:                recorder,
 		CaptureTurns:            captureTurns(filePorts),
+		CaptureInterruptions:    captureInterruptions(filePorts),
+		CaptureInterruptionTool: request.AudioInterruptTool,
 		CaptureCompleteControls: captureCompleteControls(request, deps.CaptureComplete),
 		Events: runtimeSession.LiveEventSinkFunc(func(eventContext context.Context, event runtimeSession.LiveEvent) error {
 			eventOut := outputWriter(request, out)

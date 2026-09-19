@@ -162,7 +162,7 @@ func playbackOverflowDiagnosticFields(id devicegw.DeviceID, stats audio.Playback
 	}
 }
 
-// sessionPlaybackDiagnosticObserver is installed as the RTCDeviceBinding's
+// sessionPlaybackDiagnosticObserver is installed as the RTCBinding's
 // devicert.RTCDevicePlaybackObserver by planSessionRuntime for every SessionRunOptions
 // caller (single session, browser, recording, and replay-with-devices). sink
 // is resolved by the caller (see planSessionRuntime) so it is never nil in
