@@ -129,9 +129,8 @@ func (o *sessionProgressObserver) responseHasToolLifecycleObligation() bool {
 	}
 	o.toolStateMu.Lock()
 	toolCallInTurn := o.toolCallInTurn
-	unresolved := len(o.unresolvedToolCalls)
 	o.toolStateMu.Unlock()
-	if toolCallInTurn || unresolved > 0 {
+	if toolCallInTurn || o.hasUnresolvedToolCalls() {
 		return true
 	}
 	return o.hasPendingToolContinuations()

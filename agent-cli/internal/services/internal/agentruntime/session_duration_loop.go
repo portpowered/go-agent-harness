@@ -7,6 +7,7 @@ import (
 	"io"
 	"time"
 
+	sessiontransport "github.com/portpowered/go-agent-harness/agent-cli/internal/transport"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -82,12 +83,11 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 	if err != nil {
 		return fmt.Errorf("create session agent loop: %w", err)
 	}
-
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	publisher, publisherErrors := startSessionDynamicToolPublisher(runCtx, loop, opts)
+	publisher, publisherErrors := sessiontransport.NewTurnAdapter(newSessionTurnService()).StartPublication(runCtx, loop, sessiontransport.TurnPublicationOptions{Runtime: opts.turnRuntime, Inferencer: sessionInferencer, ToolExecutor: opts.ToolExecutor, ToolDefinitions: opts.ToolDefinitions, InteractivePolicy: opts.InteractiveToolPolicy, ToolExecutionTimeout: opts.ToolExecutionTimeout, Browser: opts.turnBrowser, BrowserWatch: opts.BrowserWatch, RefreshToolDefinitions: opts.RefreshToolDefinitions, BaseDefinitions: opts.ToolDefinitionBase})
 	publisherErrors = mergeSessionErrorChannels(runCtx, publisherErrors, sessionLivenessErrorChannel(runCtx, opts.observer))
-	defer publisher.stop()
+	defer sessiontransport.StopPublication(publisher)
 	if opts.loopReady != nil {
 		select {
 		case opts.loopReady <- loop:
@@ -242,7 +242,7 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 			// SESSION.CREATED. Release dynamic publication only after that
 			// provider bootstrap boundary has been processed, so a page
 			// update cannot overtake the initial configuration.
-			publisher.markSessionReady()
+			sessiontransport.MarkPublicationReady(publisher)
 		}
 		if msg.Type == messages.StreamTypeSessionOpen {
 			if err := startSessionUpdatedTimer(); err != nil {

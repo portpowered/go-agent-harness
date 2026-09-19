@@ -193,10 +193,9 @@ func (c *audioTurnCounters) account(direction metrics.Direction, modality metric
 type sessionProgressObserver struct {
 	// lifecycle owns response identity, scheduled logical-turn ownership,
 	// continuation association, retry budget, and terminal dispositions. The
-	// fields below are compatibility projections consumed by the existing CLI
-	// scheduler and tests; they do not make lifecycle decisions.
-	lifecycle             sessiondiagnostics.Service
-	lifecycleProjectionMu sync.Mutex
+	// The host keeps only input-queue state here; lifecycle state is read
+	// through immutable service snapshots.
+	lifecycle sessiondiagnostics.Service
 	// providerBoundaryMu orders provider-send acceptance with inbound stream
 	// observation. A synchronous transport may publish response.create output
 	// before its Send call returns; holding this boundary prevents the observer
@@ -225,38 +224,18 @@ type sessionProgressObserver struct {
 	// sessionUpdated is scoped to the current SESSION.OPEN round trip. A
 	// subsequent SESSION.OPEN resets it so an acknowledgement from an older
 	// connection cannot release a new connection's scheduled input.
-	sessionUpdated                bool
-	requireSessionUpdated         bool
-	scheduledAudioDispatch        ScheduledAudioDispatchPolicy
-	activeResponse                bool
-	activeResponseID              string
-	completedResponseIDs          map[string]struct{}
-	retiredResponseIDs            map[string]struct{}
-	turnsCompleted                int
-	scheduledInputs               int
-	dispatchedInputs              int
-	completedScheduled            int
-	scheduledTurnBase             int
-	scheduledTurnBaseSet          bool
-	scheduledResponses            []scheduledAudioResponseLifecycle
-	scheduledResponseByID         map[string]int
-	nextScheduledResponse         int
-	activeScheduledResponseIndex  int
-	activeScheduledResponseID     string
-	activeScheduledResponseSet    bool
-	logicalScheduledResponseIndex int
-	logicalScheduledResponseID    string
-	logicalScheduledResponseSet   bool
-	// retryCandidate retains the scheduled owner of the most recent eligible
-	// terminal until the session runner decides whether to wait and retry. It
-	// is needed for legacy transports whose MESSAGE.END omits response_id and
-	// whose normal response cleanup clears the active/logical owner.
-	retryCandidateIndex int
-	retryCandidateSet   bool
-	retryCandidateID    string
-	counters            audioTurnCounters
-	totals              audioTurnCounters
-	pendingInputs       []ScheduledAudioInput
+	sessionUpdated         bool
+	requireSessionUpdated  bool
+	scheduledAudioDispatch ScheduledAudioDispatchPolicy
+	turnsCompleted         int
+	scheduledInputs        int
+	dispatchedInputs       int
+	scheduledTurnBase      int
+	scheduledTurnBaseSet   bool
+	scheduleMu             sync.Mutex
+	counters               audioTurnCounters
+	totals                 audioTurnCounters
+	pendingInputs          []ScheduledAudioInput
 	// Room mixer input is admitted by a background pump rather than the
 	// session delta consumer. Keep its per-turn and lifetime byte totals behind
 	// their own lock so concurrent provider observation remains race-free.
@@ -264,8 +243,6 @@ type sessionProgressObserver struct {
 	roomInputTurnBytes      uint64
 	roomInputTotalBytes     uint64
 	toolStateMu             sync.Mutex
-	unresolvedToolCalls     map[string]struct{}
-	toolResultRejections    map[string]messages.SessionSendStatus
 	toolLifecycleCh         chan struct{}
 	toolCallInTurn          bool
 	messageEndSeen          bool
@@ -361,20 +338,15 @@ func newSessionProgressObserver(sink SessionDiagnosticSink, recorder metrics.Rec
 		panic(err)
 	}
 	return &sessionProgressObserver{
-		lifecycle:             sessiondiagnosticswire.NewService(sessiondiagnostics.Options{}),
-		sink:                  sink,
-		recorder:              recorder,
-		productionSink:        productionSink,
-		provider:              provider,
-		model:                 model,
-		unresolvedToolCalls:   make(map[string]struct{}),
-		toolResultRejections:  make(map[string]messages.SessionSendStatus),
-		toolLifecycleCh:       make(chan struct{}, 1),
-		completedResponseIDs:  make(map[string]struct{}),
-		retiredResponseIDs:    make(map[string]struct{}),
-		scheduledResponseByID: make(map[string]int),
-		livenessClock:         realSessionDurationClock{},
-		livenessWakeCh:        make(chan struct{}, 1),
+		lifecycle:       sessiondiagnosticswire.NewService(sessiondiagnostics.Options{}),
+		sink:            sink,
+		recorder:        recorder,
+		productionSink:  productionSink,
+		provider:        provider,
+		model:           model,
+		toolLifecycleCh: make(chan struct{}, 1),
+		livenessClock:   realSessionDurationClock{},
+		livenessWakeCh:  make(chan struct{}, 1),
 	}
 }
 
@@ -390,8 +362,8 @@ func (o *sessionProgressObserver) scheduleAudioInputs(inputs []ScheduledAudioInp
 	if o == nil {
 		return
 	}
-	o.lifecycleProjectionMu.Lock()
-	defer o.lifecycleProjectionMu.Unlock()
+	o.scheduleMu.Lock()
+	defer o.scheduleMu.Unlock()
 	o.pendingInputs = append(o.pendingInputs, inputs...)
 	o.scheduledInputs += len(inputs)
 }

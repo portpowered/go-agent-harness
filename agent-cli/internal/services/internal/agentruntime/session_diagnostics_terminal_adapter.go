@@ -4,11 +4,23 @@ import (
 	"errors"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
 	terminalwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
 )
 
 func terminalService() sessionterminal.Service { return terminalwire.NewService() }
+
+func stringSendStatuses(statuses map[string]messages.SessionSendStatus) map[string]string {
+	if len(statuses) == 0 {
+		return nil
+	}
+	converted := make(map[string]string, len(statuses))
+	for callID, status := range statuses {
+		converted[callID] = string(status)
+	}
+	return converted
+}
 
 // terminalRequest only translates already-observed values; terminal policy is
 // owned by sessionterminal.
@@ -24,13 +36,13 @@ func (o *sessionProgressObserver) terminalRequest(runErr error) sessionterminal.
 	s, codes, details := o.pendingContinuationMetadata()
 	_, scheduledCode, scheduledDetails := o.scheduledAudioFailureMetadata()
 	var hints []string
-	if len(u) > 0 && errors.Is(runErr, ErrSessionUnresolvedToolResults) {
+	if len(u) > 0 && errors.Is(runErr, sessionterminal.ErrUnresolvedToolResults) {
 		hints = append(hints, sessionterminal.FailureHintUnresolvedToolResults)
 	}
-	if len(i) > 0 && errors.Is(runErr, ErrSessionImageContinuationIncomplete) {
+	if len(i) > 0 && errors.Is(runErr, session.ErrLiveImageContinuationIncomplete) {
 		hints = append(hints, sessionterminal.FailureHintImageContinuationIncomplete)
 	}
-	if len(t) > 0 && errors.Is(runErr, ErrSessionToolContinuationIncomplete) {
+	if len(t) > 0 && errors.Is(runErr, session.ErrLiveToolContinuationIncomplete) {
 		hints = append(hints, sessionterminal.FailureHintToolContinuationIncomplete)
 	}
 	incomplete := o.scheduledAudioIncomplete()
@@ -42,7 +54,7 @@ func (o *sessionProgressObserver) terminalRequest(runErr error) sessionterminal.
 		Output:    sessionterminal.OutputSnapshot{SawSessionOpen: o.sawSessionOpen, TurnsCompleted: o.turnsCompleted, TotalOutputAudioBytes: o.totals.outAudio, TotalOutputTextBytes: o.totals.outText, ResponseOutputAudioBytes: o.responseOutputAudioBytes, ResponseOutputTextBytes: o.responseOutputTextBytes, AssistantOutputObserved: o.assistantOutputObserved},
 		Bytes:     sessionterminal.ByteSnapshot{InputAudioBytes: o.totals.inputAudio + o.roomAudioInputTotalBytes(), InputTextBytes: o.totals.inputText, OutputAudioBytes: o.totals.outAudio, OutputTextBytes: o.totals.outText, OutputToolBytes: o.totals.outTool},
 		Failure:   terminalFailureFacts(o),
-		Lifecycle: sessionterminal.LifecycleSnapshot{UnresolvedToolResultCallIDs: u, PendingContinuationCallIDs: p, PendingToolContinuationIDs: t, PendingImageContinuationIDs: i, PendingContinuations: sessionterminal.ContinuationSnapshot{Statuses: s, Codes: codes, Details: details}, Scheduled: sessionterminal.ScheduledSnapshot{Completed: c, Dispatched: d, Inputs: n, Incomplete: incomplete, FailureCode: scheduledCode, FailureDetails: scheduledDetails}, FailureHints: hints},
+		Lifecycle: sessionterminal.LifecycleSnapshot{UnresolvedToolResultCallIDs: u, UnresolvedToolResultStatuses: stringSendStatuses(o.unresolvedToolResultSendStatuses()), PendingContinuationCallIDs: p, PendingToolContinuationIDs: t, PendingImageContinuationIDs: i, PendingContinuations: sessionterminal.ContinuationSnapshot{Statuses: s, Codes: codes, Details: details}, Scheduled: sessionterminal.ScheduledSnapshot{Completed: c, Dispatched: d, Inputs: n, Incomplete: incomplete, FailureCode: scheduledCode, FailureDetails: scheduledDetails}, FailureHints: hints},
 		Usage:     sessionterminal.TokenSnapshot{PromptTokens: o.usagePrompt, CompletionTokens: o.usageCompletion, TotalTokens: o.usageTotal, ReasoningTokens: o.usageReasoning, Seen: o.usageSeen},
 	}
 	if o.productionSink != nil {
@@ -91,12 +103,21 @@ func (o *sessionProgressObserver) userCancellationOutputState() messages.Termina
 	return terminalService().CancellationOutputState(o.terminalRequest(nil).Output)
 }
 
+func (o *sessionProgressObserver) enrichLifecycleError(err error) error {
+	if o == nil {
+		return err
+	}
+	return terminalService().Enrich(o.terminalRequest(err))
+}
+
 func (o *sessionProgressObserver) finish(err error) error {
 	if o == nil {
 		return err
 	}
 	o.finishMu.Lock()
 	defer o.finishMu.Unlock()
+	unlockProviderBoundary := o.lockProviderBoundary()
+	defer unlockProviderBoundary()
 	if livenessErr := o.livenessFailure(); livenessErr != nil && !errors.Is(err, livenessErr) {
 		err = errors.Join(livenessErr, err)
 	}
@@ -109,9 +130,7 @@ func (o *sessionProgressObserver) finish(err error) error {
 		err = nil
 	}
 	if !o.userCancelled && !o.roomBoundCancellation {
-		err = withUnresolvedToolResults(err, o)
-		err = withPendingToolContinuations(err, o)
-		err = withPendingImageContinuations(err, o)
+		err = o.enrichLifecycleError(err)
 	}
 	o.notifyFinalTerminalObservation(err)
 	o.emitTerminal(err)

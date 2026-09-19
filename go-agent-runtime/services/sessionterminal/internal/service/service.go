@@ -1,10 +1,12 @@
 package service
 
 import (
+	"errors"
 	"sort"
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
@@ -164,4 +166,43 @@ func bounded(value string, limit int) string {
 		return value
 	}
 	return value[:limit]
+}
+
+func (s *Service) Enrich(request sessionterminal.Request) error {
+	err := request.RunError
+	lifecycle := request.Lifecycle
+	if len(lifecycle.UnresolvedToolResultCallIDs) > 0 {
+		var existing *sessionterminal.UnresolvedToolResultsError
+		if !errors.As(err, &existing) {
+			unresolved := sessionterminal.NewUnresolvedToolResultsError(lifecycle.UnresolvedToolResultCallIDs, lifecycle.UnresolvedToolResultStatuses)
+			if err == nil {
+				err = unresolved
+			} else {
+				err = errors.Join(err, unresolved)
+			}
+		}
+	}
+	if len(lifecycle.PendingToolContinuationIDs) > 0 {
+		var existing *runtimeSession.LiveToolContinuationError
+		if !errors.As(err, &existing) {
+			continuation := &runtimeSession.LiveToolContinuationError{CallIDs: lifecycle.PendingToolContinuationIDs, ProviderStatuses: lifecycle.PendingContinuations.Statuses, ProviderCodes: lifecycle.PendingContinuations.Codes, ProviderDetails: lifecycle.PendingContinuations.Details}
+			if err == nil {
+				err = continuation
+			} else {
+				err = errors.Join(err, continuation)
+			}
+		}
+	}
+	if len(lifecycle.PendingImageContinuationIDs) > 0 {
+		var existing *runtimeSession.LiveImageContinuationError
+		if !errors.As(err, &existing) {
+			continuation := &runtimeSession.LiveImageContinuationError{CallIDs: lifecycle.PendingImageContinuationIDs, ProviderStatuses: lifecycle.PendingContinuations.Statuses, ProviderCodes: lifecycle.PendingContinuations.Codes, ProviderDetails: lifecycle.PendingContinuations.Details}
+			if err == nil {
+				err = continuation
+			} else {
+				err = errors.Join(err, continuation)
+			}
+		}
+	}
+	return err
 }

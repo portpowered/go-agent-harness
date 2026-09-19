@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
 	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
@@ -97,6 +98,11 @@ func (i *rtcDeviceBindingInferencer) ConnectSession(ctx context.Context) (messag
 }
 
 func rtcMediaFromSession(session messages.Session) (RTCMediaEndpoints, bool) {
+	if owner, ok := session.(interface {
+		RTCMedia() (RTCMediaEndpoints, bool)
+	}); ok {
+		return owner.RTCMedia()
+	}
 	if owner, ok := session.(RTCMediaSession); ok {
 		return owner.RTCMedia(), true
 	}
@@ -247,7 +253,7 @@ func (s *rtcDeviceBoundSession) SendMessage(ctx context.Context, msg messages.Me
 	if s.SessionAdmissionClosed() && !s.SessionAdmissionAllowsCompleteMessage(msg) {
 		return false
 	}
-	sender, ok := s.Session.(SessionImageMessageSender)
+	sender, ok := s.Session.(sessionturn.CompleteMessageSender)
 	return ok && sender.SendMessage(ctx, msg)
 }
 
@@ -255,7 +261,7 @@ func (s *rtcDeviceBoundSession) SendMessageWithoutResponse(ctx context.Context, 
 	if s.SessionAdmissionClosed() && !s.SessionAdmissionAllowsCompleteMessage(msg) {
 		return false
 	}
-	sender, ok := s.Session.(SessionImageMessageSenderWithoutResponse)
+	sender, ok := s.Session.(sessionturn.CompleteMessageWithoutResponseSender)
 	return ok && sender.SendMessageWithoutResponse(ctx, msg)
 }
 
@@ -385,16 +391,4 @@ func bindRTCDeviceSessionInferencer(inner messages.SessionInferencer, binding *R
 		return inner, nil
 	}
 	return newRTCDeviceBindingInferencer(inner, binding)
-}
-
-func ensureRTCDeviceBindingBuffers(binding *RTCDeviceBinding) error {
-	if binding == nil || binding.Source == nil || binding.Capture != nil {
-		return nil
-	}
-	capture, err := devicert.NewBufferedCapture(binding.Source)
-	if err != nil {
-		return fmt.Errorf("initialize RTC capture buffer: %w", err)
-	}
-	binding.Capture = capture
-	return nil
 }

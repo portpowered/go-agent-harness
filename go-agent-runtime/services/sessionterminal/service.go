@@ -142,7 +142,8 @@ type ScheduledSnapshot struct {
 // FailureHints are translated from caller-specific typed sentinels at the
 // host edge; they are not errors and cannot replace the original RunError.
 type LifecycleSnapshot struct {
-	UnresolvedToolResultCallIDs []string
+	UnresolvedToolResultCallIDs  []string
+	UnresolvedToolResultStatuses map[string]string
 	// PendingContinuationCallIDs is the complete accepted-continuation set,
 	// including image and non-image calls, used by cancellation accounting.
 	PendingContinuationCallIDs  []string
@@ -211,4 +212,5 @@ type Result struct {
 type Service interface {
 	Finalize(Request) Result
 	CancellationOutputState(OutputSnapshot) messages.TerminalOutputState
+	Enrich(Request) error
 }

@@ -318,54 +318,6 @@ func TestC156DiagnosticCallbacksPreservePublicRecords(t *testing.T) {
 	}
 }
 
-func TestC156UnresolvedToolResultsPreserveDeterministicOutcome(t *testing.T) {
-	statuses := map[string]messages.SessionSendStatus{
-		"call-z":        messages.SessionSendCancelled,
-		"call-a":        "",
-		"call-unlisted": messages.SessionSendClosed,
-	}
-	err := NewSessionUnresolvedToolResultsError(
-		[]string{" call-z ", "", "call-a", "call-z", "call-a"},
-		statuses,
-	)
-	if !errors.Is(err, ErrSessionUnresolvedToolResults) {
-		t.Fatalf("unresolved tool error = %v, want stable sentinel", err)
-	}
-	var unresolvedErr *SessionUnresolvedToolResultsError
-	if !errors.As(err, &unresolvedErr) {
-		t.Fatalf("unresolved tool error = %T, want *SessionUnresolvedToolResultsError", err)
-	}
-	wantIDs := []string{"call-a", "call-z"}
-	if got := unresolvedErr.UnresolvedCallIDs(); !reflect.DeepEqual(got, wantIDs) {
-		t.Fatalf("unresolved call IDs = %v, want %v", got, wantIDs)
-	}
-	copyOfIDs := unresolvedErr.UnresolvedCallIDs()
-	copyOfIDs[0] = c156MutationValue
-	if got := unresolvedErr.UnresolvedCallIDs(); !reflect.DeepEqual(got, wantIDs) {
-		t.Fatalf("unresolved call IDs changed after caller mutation: %v", got)
-	}
-	if len(unresolvedErr.SendStatuses) != 2 || unresolvedErr.SendStatuses["call-z"] != messages.SessionSendCancelled || unresolvedErr.SendStatuses["call-a"] != "" {
-		t.Fatalf("retained send statuses = %#v, want only ordered IDs", unresolvedErr.SendStatuses)
-	}
-	if got, want := unresolvedErr.Error(), "tool results were not delivered for 2 unresolved call(s): call-a, call-z (send outcomes: call-z=cancelled)"; got != want {
-		t.Fatalf("unresolved tool error text = %q, want %q", got, want)
-	}
-	if !errors.Is(unresolvedErr, ErrSessionUnresolvedToolResults) {
-		t.Fatalf("unresolved tool error = %v, want stable sentinel", unresolvedErr)
-	}
-
-	if got := NewSessionUnresolvedToolResultsError(nil, nil).Error(); got != ErrSessionUnresolvedToolResults.Error() {
-		t.Fatalf("empty unresolved tool error text = %q, want sentinel text", got)
-	}
-	var nilUnresolvedErr *SessionUnresolvedToolResultsError
-	if got := nilUnresolvedErr.Error(); got != ErrSessionUnresolvedToolResults.Error() {
-		t.Fatalf("nil unresolved tool error text = %q, want sentinel text", got)
-	}
-	if got := nilUnresolvedErr.UnresolvedCallIDs(); got != nil {
-		t.Fatalf("nil unresolved call IDs = %v, want nil", got)
-	}
-}
-
 func TestC156VoiceContractIsOrderedAndCopyIsolated(t *testing.T) {
 	wantVoices := []string{"alloy", "ash", "ballad", "cedar", "coral", "echo", "marin", "sage", "shimmer", "verse"}
 	voices := SupportedOpenAIRealtimeVoices()

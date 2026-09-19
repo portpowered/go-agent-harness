@@ -12,6 +12,10 @@ import runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/se
 
 import runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 
+import runtimeSessionTerminal "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
+
+import runtimeSessionTurn "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
+
 const BrowserConversationAssistantTurn = impl.BrowserConversationAssistantTurn
 
 type BrowserConversationBrokerCall = impl.BrowserConversationBrokerCall
@@ -79,10 +83,10 @@ var ErrRoomReplaySourceConflict = impl.ErrRoomReplaySourceConflict
 var ErrSessionAudioInputConflict = serviceDevices.ErrSessionAudioInputConflict
 var ErrSessionAudioOutputConflict = serviceDevices.ErrSessionAudioOutputConflict
 var ErrSessionAudioInTurnBargeRequiresSequence = impl.ErrSessionAudioInTurnBargeRequiresSequence
-var ErrSessionAudioResponseIncomplete = impl.ErrSessionAudioResponseIncomplete
-var ErrSessionImageContinuationIncomplete = impl.ErrSessionImageContinuationIncomplete
+var ErrSessionAudioResponseIncomplete = runtimeSession.ErrLiveAudioResponseIncomplete
+var ErrSessionImageContinuationIncomplete = runtimeSession.ErrLiveImageContinuationIncomplete
 var ErrSessionScheduledAudioIncomplete = runtimeSession.ErrLiveScheduledAudioIncomplete
-var ErrSessionUnresolvedToolResults = sessioncontract.ErrSessionUnresolvedToolResults
+var ErrSessionUnresolvedToolResults = runtimeSessionTerminal.ErrUnresolvedToolResults
 var EvaluateBrowserConversation = impl.EvaluateBrowserConversation
 
 type InvalidOpenAIRealtimeVoiceError = sessioncontract.InvalidOpenAIRealtimeVoiceError
@@ -115,7 +119,7 @@ type ScheduledAudioInput = impl.ScheduledAudioInput
 type SelfPlayRunOptions = impl.SelfPlayRunOptions
 type SessionAudioInTurnBargeError = impl.SessionAudioInTurnBargeError
 type SessionAudioInput = impl.SessionAudioInput
-type SessionTextSeed = impl.SessionTextSeed
+type SessionTextSeed = runtimeSessionTurn.Seed
 
 const SessionDiagnosticEventFailure = impl.SessionDiagnosticEventFailure
 const SessionDiagnosticEventMetrics = impl.SessionDiagnosticEventMetrics
@@ -128,7 +132,7 @@ const SessionDiagnosticFieldUnresolvedToolResultCount = impl.SessionDiagnosticFi
 
 type SessionDiagnosticRecord = impl.SessionDiagnosticRecord
 type SessionDurationTimer = impl.SessionDurationTimer
-type SessionImageContinuationError = impl.SessionImageContinuationError
+type SessionImageContinuationError = runtimeSession.LiveImageContinuationError
 
 const SessionMaxDurationReason = impl.SessionMaxDurationReason
 
@@ -140,11 +144,11 @@ type SessionScheduledAudioIncompleteError = runtimeSession.LiveScheduledAudioInc
 
 const SessionSilentProviderTimeoutClassification = impl.SessionSilentProviderTimeoutClassification
 
-type SessionToolContinuationError = impl.SessionToolContinuationError
+type SessionToolContinuationError = runtimeSession.LiveToolContinuationError
 type SessionToolDiagnostic = impl.SessionToolDiagnostic
 
 const SessionTransportWebRTC = impl.SessionTransportWebRTC
 
-type SessionUnresolvedToolResultsError = sessioncontract.SessionUnresolvedToolResultsError
+type SessionUnresolvedToolResultsError = runtimeSessionTerminal.UnresolvedToolResultsError
 
 var WriteBrowserConversationReport = impl.WriteBrowserConversationReport

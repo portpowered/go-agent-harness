@@ -5,6 +5,8 @@ import (
 	"errors"
 	"sync"
 	"testing"
+
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 // Tests may customize the factory while production receives a fresh factory
@@ -22,8 +24,8 @@ func TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic(t *tes
 	sink := &diagnosticRecordSink{}
 	observer := newSessionProgressObserver(sink, nil, "provider", "model")
 	observer.sawSessionOpen = true
-	observer.unresolvedToolCalls["call-z"] = struct{}{}
-	observer.unresolvedToolCalls["call-a"] = struct{}{}
+	observer.noteToolResultRejected(context.Background(), "call-z", messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure})
+	observer.noteToolResultRejected(context.Background(), "call-a", messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure})
 
 	if err := observer.finish(ErrSessionUnresolvedToolResults); !errors.Is(err, ErrSessionUnresolvedToolResults) {
 		t.Fatalf("finish error = %v", err)

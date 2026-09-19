@@ -7,6 +7,11 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	"io"
 	"os"
 	"os/exec"
@@ -17,11 +22,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
-	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
 func TestRunSessionWithMaxDuration_RejectsNegativeBeforePlanning(t *testing.T) {
@@ -1050,8 +1050,8 @@ func (p *durationArtifactLifecycleProbe) Close() error {
 var _ messages.SessionInferencer = (*durationTestInferencer)(nil)
 var _ messages.Session = (*durationTestSession)(nil)
 var _ messages.Session = (*durationCompleteMessageSession)(nil)
-var _ SessionImageMessageSender = (*durationCompleteMessageSession)(nil)
-var _ SessionImageMessageSenderWithoutResponse = (*durationCompleteMessageSession)(nil)
+var _ sessionturn.CompleteMessageSender = (*durationCompleteMessageSession)(nil)
+var _ sessionturn.CompleteMessageWithoutResponseSender = (*durationCompleteMessageSession)(nil)
 var _ SessionDurationClock = (*durationTestClock)(nil)
 var _ SessionDurationTimer = (*durationTestTimer)(nil)
 var _ SessionDurationArtifactLifecycle = (*durationArtifactLifecycleProbe)(nil)

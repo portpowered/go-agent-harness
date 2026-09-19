@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 // websocketReplaySessionInferencer keeps strict websocket replays on their
@@ -50,12 +52,12 @@ func (s *websocketReplaySession) SendWithOutcome(ctx context.Context, msg messag
 }
 
 func (s *websocketReplaySession) SendMessage(ctx context.Context, msg messages.Message) bool {
-	sender, ok := s.Session.(SessionImageMessageSender)
+	sender, ok := s.Session.(sessionturn.CompleteMessageSender)
 	return ok && sender.SendMessage(ctx, msg)
 }
 
 func (s *websocketReplaySession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
-	sender, ok := s.Session.(SessionImageMessageSenderWithoutResponse)
+	sender, ok := s.Session.(sessionturn.CompleteMessageWithoutResponseSender)
 	return ok && sender.SendMessageWithoutResponse(ctx, msg)
 }
 
@@ -67,6 +69,13 @@ func (s *websocketReplaySession) SupportsCompleteMessages() bool {
 func (s *websocketReplaySession) SupportsCompleteMessagesWithoutResponse() bool {
 	_, withoutResponse := completeMessageCapabilities(s.Session)
 	return withoutResponse
+}
+
+// RTCMedia forwards the optional provider media capability through the strict
+// replay wrapper so a device-bound replay can validate and pump the same media
+// boundary as the underlying realtime session.
+func (s *websocketReplaySession) RTCMedia() (audio.MediaEndpoints, bool) {
+	return rtcMediaFromSession(s.Session)
 }
 
 func (s *websocketReplaySession) InputDrops() int64 {

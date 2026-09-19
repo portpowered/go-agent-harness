@@ -1,9 +1,4 @@
-// This file contains session option types, validation, configuration resolution, and provider construction for the session command.
 package agentruntime
-
-import rtcontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime/transports"
-
-import sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 
 import (
 	"context"
@@ -15,11 +10,15 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	rtcontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime/transports"
+	sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
@@ -286,7 +285,7 @@ type SessionRunOptions struct {
 	// snapshot. When nil, runtime planning resolves one from LoadedConfig, an
 	// existing ConfigDir file, or the documented defaults before provider
 	// construction.
-	InteractiveToolPolicy *InteractiveToolPolicy
+	InteractiveToolPolicy runtimeTools.InteractiveToolPolicy
 
 	// CapabilityClose is the optional cleanup hook transferred from the CLI
 	// session capability factory. The service wraps it in one shared
@@ -362,12 +361,12 @@ type SessionRunOptions struct {
 	// stopping at the first completed turn. Defaults to false, which preserves
 	// the existing single-turn stop behavior byte-for-byte.
 	WaitForClose bool
-
-	// sessionImageCapabilities is resolved once by the entry point that owns
-	// an initial --image turn and reused when the read_image tool is bound.
-	// Keeping it private prevents callers from bypassing the capability
-	// resolver while allowing all session wrappers to share one snapshot.
-	sessionImageCapabilities *SessionImageCapabilities
+	// sessionImageCapabilities is resolved by the initial-image entry point and
+	// reused by read_image. Keeping it private keeps capability policy per session.
+	sessionImageCapabilities *sessionturn.ImageCapabilities
+	sessionImageCleanup      func() error
+	sessionImageRequest      *sessionturn.Request
+	sessionInstructions      string
 
 	// recordingClaim is acquired before provider construction and shared by
 	// nested session wrappers. It is intentionally private; command callers
@@ -813,13 +812,12 @@ func wrapSessionInferencerCaptureFlush(inferencer messages.SessionInferencer, re
 // device bridge can send and receive PCM without relying on a later control
 // message to change the wire contract.
 func NewLiveSessionInferencer(opts SessionRunOptions, instructions string) (messages.SessionInferencer, string, error) {
+	instructions = composeSessionInstructions(opts, instructions)
 	providerName := strings.ToLower(strings.TrimSpace(effectiveSessionProvider(opts)))
 	if providerName == "" {
 		return nil, "", fmt.Errorf("--devices real requires a realtime session provider; pass --provider openai or --provider grok")
 	}
 	opts.Provider = providerName
-	instructions = composeSessionInstructions(opts, instructions)
-
 	var (
 		model  string
 		config models.SessionConfig

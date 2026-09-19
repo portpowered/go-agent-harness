@@ -122,6 +122,20 @@ func (si *SessionGatewayInferencer) Request() SessionRequest {
 	return cloneSessionRequest(si.request)
 }
 
+// WithSessionInstructionsAndTools returns an isolated inferencer whose
+// provider connection request carries the runtime-owned prompt and tool
+// snapshot. The gateway and all unrelated session configuration are copied so
+// one session can be enriched without mutating a shared factory result.
+func (si *SessionGatewayInferencer) WithSessionInstructionsAndTools(instructions string, tools []messages.ToolDefinition) messages.SessionInferencer {
+	if si == nil {
+		return nil
+	}
+	clone := &SessionGatewayInferencer{sessionGW: si.sessionGW, request: cloneSessionRequest(si.request)}
+	clone.request.Config.Instructions = instructions
+	clone.request.Config.Tools = messages.CanonicalToolDefinitions(tools)
+	return clone
+}
+
 // SetSessionAudioOutput configures the provider-owned output contract before
 // the next connection. Service planners use this narrow mutation seam after
 // they know whether a caller requested local audio output, which keeps text
