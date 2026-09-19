@@ -147,6 +147,9 @@ func validateRoomReplayPlan(plan RoomReplayPlan) error {
 		actual := fmt.Sprintf("rate=%d channels=%d bits=%d byte_order=%q", plan.PCMFormat.SampleRate, plan.PCMFormat.Channels, width, plan.PCMFormat.ByteOrder)
 		return roomReplayAudioMismatch("pcm_format", plan.ManifestPath, "positive mono little-endian PCM16 format", actual, nil)
 	}
+	if !admission.ValidPCM16Encoding(plan.PCMFormat.Encoding) {
+		return roomReplayAudioMismatch("pcm_format.encoding", plan.ManifestPath, "signed_pcm16", plan.PCMFormat.Encoding, nil)
+	}
 	return nil
 }
 

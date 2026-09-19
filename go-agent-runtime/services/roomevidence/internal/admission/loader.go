@@ -186,7 +186,20 @@ func parsePCMFormat(object object) (rooms.RoomReplayPCMFormat, error) {
 	if !ok || !channelsOK || !widthOK || rate <= 0 || channels <= 0 || width != 16 {
 		return rooms.RoomReplayPCMFormat{}, mismatch("pcm_format", fmt.Errorf("must describe positive mono or interleaved PCM16"))
 	}
-	return rooms.RoomReplayPCMFormat{SampleRate: rate, Channels: channels, SampleWidthBits: width, ByteOrder: stringValue(value, "byte_order"), Encoding: stringValue(value, "encoding")}, nil
+	encoding := stringValue(value, "encoding")
+	if !ValidPCM16Encoding(encoding) {
+		return rooms.RoomReplayPCMFormat{}, mismatch("pcm_format.encoding", fmt.Errorf("must be signed_pcm16"))
+	}
+	return rooms.RoomReplayPCMFormat{SampleRate: rate, Channels: channels, SampleWidthBits: width, ByteOrder: stringValue(value, "byte_order"), Encoding: encoding}, nil
+}
+
+func ValidPCM16Encoding(encoding string) bool {
+	switch strings.ToLower(strings.TrimSpace(encoding)) {
+	case "signed_pcm16", "pcm_s16le", "pcm16", "signed 16-bit pcm":
+		return true
+	default:
+		return false
+	}
 }
 
 func parseParticipants(object object) ([]rooms.RoomReplayParticipant, []artifactRef, error) {

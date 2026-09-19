@@ -379,6 +379,66 @@ func TestServiceRejectsDirectoryReplayArtifact(t *testing.T) {
 	}
 }
 
+func TestServiceRejectsUnsupportedPCMEncoding(t *testing.T) {
+	t.Run("manifest", func(t *testing.T) {
+		destination, _ := finalizedReplayBundle(t)
+		replaceReplayManifestEncoding(t, destination, "float32")
+		_, err := NewService().LoadPlan(destination)
+		if err == nil || !errors.Is(err, roomevidence.ErrInvalidRoomReplayBundle) {
+			t.Fatalf("unsupported manifest encoding error = %v, want invalid replay bundle", err)
+		}
+	})
+	t.Run("caller plan", func(t *testing.T) {
+		destination, _ := finalizedReplayBundle(t)
+		service := NewService()
+		plan, err := service.LoadPlan(destination)
+		if err != nil {
+			t.Fatalf("admit intact replay bundle: %v", err)
+		}
+		plan.PCMFormat.Encoding = "float32"
+		if _, err := service.Load(plan); err == nil || !errors.Is(err, roomevidence.ErrInvalidRoomReplayBundle) {
+			t.Fatalf("unsupported caller plan encoding error = %v, want invalid replay bundle", err)
+		}
+	})
+}
+
+func replaceReplayManifestEncoding(t *testing.T, destination, encoding string) {
+	t.Helper()
+	path := filepath.Join(destination, roomevidence.ManifestPath)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read replay manifest: %v", err)
+	}
+	var manifest map[string]json.RawMessage
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		t.Fatalf("decode replay manifest: %v", err)
+	}
+	var format map[string]json.RawMessage
+	formatData, ok := manifest["pcm_format"]
+	if !ok {
+		formatData = manifest["audio_format"]
+	}
+	if err := json.Unmarshal(formatData, &format); err != nil {
+		t.Fatalf("decode replay PCM format: %v", err)
+	}
+	encoded, err := json.Marshal(encoding)
+	if err != nil {
+		t.Fatalf("encode replay PCM format: %v", err)
+	}
+	format["encoding"] = encoded
+	manifest["pcm_format"], err = json.Marshal(format)
+	if err != nil {
+		t.Fatalf("encode replay PCM format: %v", err)
+	}
+	data, err = json.Marshal(manifest)
+	if err != nil {
+		t.Fatalf("encode replay manifest: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatalf("write replay manifest: %v", err)
+	}
+}
+
 func finalizedReplayBundle(t *testing.T) (string, roomevidence.Recorder) {
 	t.Helper()
 	recorder, destination, source := openRecorder(t)
