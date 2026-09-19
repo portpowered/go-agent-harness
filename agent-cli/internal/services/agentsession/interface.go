@@ -25,7 +25,7 @@ type SessionToolDiagnostic = sessiontrace.ToolDiagnostic
 type SessionToolDiagnosticSink = sessiontrace.ToolDiagnosticSink
 type SessionToolDiagnosticFunc = sessiontrace.ToolDiagnosticFunc
 
-func NewSessionCancellationIntent() *SessionCancellationIntent {
+func NewSessionCancellationIntent() SessionCancellationIntent {
 	return sessiontracewire.NewCancellationIntent()
 }
 
@@ -62,7 +62,7 @@ type Request struct {
 	BrowserToolsEnabled           bool
 	BrowserToolsInteractive       bool
 	LoadedConfig                  *config.Config
-	CancellationIntent            *sessiontrace.CancellationIntent
+	CancellationIntent            sessiontrace.CancellationIntent
 	ToolExecutionTimeout          time.Duration
 	Diagnostics                   SessionDiagnosticSink
 	ToolDiagnostics               SessionToolDiagnosticSink

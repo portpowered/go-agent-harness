@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -14,6 +15,22 @@ import (
 )
 
 type diagnosticFanout []sessiontrace.DiagnosticSink
+
+type cancellationIntent struct{ sigint atomic.Bool }
+
+func NewCancellationIntent() sessiontrace.CancellationIntent {
+	return &cancellationIntent{}
+}
+
+func (i *cancellationIntent) MarkSIGINT() {
+	if i != nil {
+		i.sigint.Store(true)
+	}
+}
+
+func (i *cancellationIntent) SIGINTReceived() bool {
+	return i != nil && i.sigint.Load()
+}
 
 func CombineDiagnosticSinks(sinks ...sessiontrace.DiagnosticSink) sessiontrace.DiagnosticSink {
 	filtered := make(diagnosticFanout, 0, len(sinks))
@@ -72,10 +89,6 @@ func MergeErrorChannels(ctx context.Context, first, second <-chan error) <-chan 
 		stop()
 	}()
 	return merged
-}
-
-func NewCancellationIntent() *sessiontrace.CancellationIntent {
-	return &sessiontrace.CancellationIntent{}
 }
 
 type sourceLivenessClock struct{ source clock.TimerSource }

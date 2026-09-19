@@ -15,7 +15,7 @@ import (
 // a consequence of stopping the run for SIGINT. It intentionally does not
 // treat context.DeadlineExceeded as suppressible: a timeout can be an
 // independent failure even when a signal is observed nearby.
-func sessionSIGINTCancellationOnly(err error, intent *sessiontrace.CancellationIntent) bool {
+func sessionSIGINTCancellationOnly(err error, intent sessiontrace.CancellationIntent) bool {
 	return intent != nil && intent.SIGINTReceived() && sessionSIGINTErrorOnly(err)
 }
 
@@ -54,7 +54,7 @@ func sessionSIGINTErrorOnly(err error) bool {
 // sessionSIGINTCleanForObserver adds the observer's typed stream failure
 // state to the error-tree check. A provider ERROR or failure-shaped close is
 // independent evidence and must survive an otherwise nearby SIGINT.
-func sessionSIGINTCleanForObserver(err error, intent *sessiontrace.CancellationIntent, observer *observerState) bool {
+func sessionSIGINTCleanForObserver(err error, intent sessiontrace.CancellationIntent, observer *observerState) bool {
 	if !sessionSIGINTCancellationOnly(err, intent) {
 		return false
 	}

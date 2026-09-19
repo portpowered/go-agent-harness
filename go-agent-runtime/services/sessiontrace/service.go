@@ -3,7 +3,6 @@ package sessiontrace
 
 import (
 	"context"
-	"sync/atomic"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -97,16 +96,12 @@ const (
 
 type StreamObserver func(messages.StreamMessage)
 
-// CancellationIntent is the run-scoped cancellation marker shared by the
-// trace observer and terminal boundary. It has no orchestration policy.
-type CancellationIntent struct{ sigint atomic.Bool }
-
-func (i *CancellationIntent) MarkSIGINT() {
-	if i != nil {
-		i.sigint.Store(true)
-	}
+// CancellationIntent is an opaque run-scoped SIGINT marker shared by the
+// trace observer and host boundary. Wire supplies its stateful implementation.
+type CancellationIntent interface {
+	MarkSIGINT()
+	SIGINTReceived() bool
 }
-func (i *CancellationIntent) SIGINTReceived() bool { return i != nil && i.sigint.Load() }
 
 type ScheduledAudioInput struct {
 	AfterCompletedTurns int

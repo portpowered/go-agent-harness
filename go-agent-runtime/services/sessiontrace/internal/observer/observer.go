@@ -186,7 +186,7 @@ type observerState struct {
 	// state or evidence.
 	turnAdmission      func(messages.StreamMessage) bool
 	runtime            sessiontrace.RuntimeRecorder
-	cancellationIntent *sessiontrace.CancellationIntent
+	cancellationIntent sessiontrace.CancellationIntent
 	provider           string
 	model              string
 	sawSessionOpen     bool

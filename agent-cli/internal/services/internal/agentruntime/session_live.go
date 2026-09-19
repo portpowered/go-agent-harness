@@ -211,7 +211,7 @@ type sessionLoopOptions struct {
 
 	// cancellationIntent is the CLI-owned run marker used to distinguish an
 	// operator SIGINT from ordinary caller cancellation.
-	cancellationIntent *SessionCancellationIntent
+	cancellationIntent SessionCancellationIntent
 
 	// terminalSummaryRecorder receives a synthetic user-cancellation terminal
 	// summary on the non-duration path. Duration artifacts already receive the

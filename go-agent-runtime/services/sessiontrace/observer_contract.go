@@ -82,7 +82,7 @@ type Observer interface {
 	SetStreamObserver(StreamObserver)
 	SetAdmittedTurnObserver(StreamObserver)
 	SetTurnAdmission(func(messages.StreamMessage) bool)
-	SetCancellationIntent(*CancellationIntent)
+	SetCancellationIntent(CancellationIntent)
 	SetRequireSessionUpdated(bool)
 	SetScheduledAudioDispatch(ScheduledAudioDispatchPolicy)
 	SetLivenessClock(LivenessClock)
@@ -158,7 +158,7 @@ type NewObserverOptions struct {
 	TurnAdmission          func(messages.StreamMessage) bool
 	RuntimeRecorder        RuntimeRecorder
 	TerminalService        sessionterminal.Service
-	CancellationIntent     *CancellationIntent
+	CancellationIntent     CancellationIntent
 	LivenessClock          LivenessClock
 	RequireSessionUpdated  bool
 	ScheduledAudioDispatch ScheduledAudioDispatchPolicy

@@ -5,9 +5,11 @@ import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/d
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -241,3 +243,207 @@ var _ messages.SessionInferencer = (*combinedAudioOutputInferencer)(nil)
 var _ messages.Session = (*combinedAudioOutputSession)(nil)
 var _ RTCMediaSession = (*combinedAudioOutputSession)(nil)
 var _ audio.InboundMedia = (*singleFrameInboundMedia)(nil)
+
+func TestRunSessionWithAudioOut_PreflightsOutputPathBeforeSessionConnect(t *testing.T) {
+	directoryTarget := filepath.Join(t.TempDir(), "response.wav")
+	if err := os.Mkdir(directoryTarget, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	for name, path := range map[string]string{
+		"missing parent":   filepath.Join(t.TempDir(), "missing", "response.wav"),
+		"directory target": directoryTarget,
+	} {
+		t.Run(name, func(t *testing.T) {
+			inferencer := &scriptedSessionInferencer{}
+			err := RunSessionWithAudioOut(context.Background(), io.Discard, SessionRunOptions{
+				ModelCatalog:      testModelCatalog(),
+				ReplayPath:        "synthetic.json",
+				SessionInferencer: inferencer,
+			}, path)
+			if err == nil || !strings.Contains(err.Error(), "--audio-out") {
+				t.Fatalf("preflight error = %v, want --audio-out context", err)
+			}
+			if name == "directory target" {
+				var streamErr *audio.StreamError
+				if !errors.As(err, &streamErr) || streamErr.Path != path || streamErr.Operation != "open" {
+					t.Fatalf("directory target error = %v, want typed open StreamError for %q", err, path)
+				}
+			}
+			if inferencer.connected {
+				t.Fatal("invalid audio output path connected to the session")
+			}
+		})
+	}
+}
+
+func TestRunSessionWithAudioOut_DoesNotTruncateWhenSessionOptionsAreInvalid(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "preserved.wav")
+	want := []byte("preserve existing output")
+	if err := os.WriteFile(path, want, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	inferencer := &scriptedSessionInferencer{}
+	err := RunSessionWithAudioOut(context.Background(), io.Discard, SessionRunOptions{
+		ModelCatalog:      testModelCatalog(),
+		RecordPath:        "record.json",
+		ReplayPath:        "replay.json",
+		SessionInferencer: inferencer,
+	}, path)
+	if err == nil || !strings.Contains(err.Error(), "--record") || !strings.Contains(err.Error(), "--replay") {
+		t.Fatalf("invalid session options error = %v, want both capture flags", err)
+	}
+	got, readErr := os.ReadFile(path)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("invalid session options changed output target to %q", got)
+	}
+	if inferencer.connected {
+		t.Fatal("invalid session options connected to the session")
+	}
+}
+
+func TestRunSessionWithAudioOut_FinalizesOnCleanInterrupt(t *testing.T) {
+	first, second := sessionAudioFrame(800), sessionAudioFrame(-900)
+	providerRelease := make(chan struct{})
+	firstWritten := make(chan struct{})
+	writer := &sessionAudioOutRepairWriter{firstWritten: firstWritten}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	inferencer := &sessionAudioOutRepairInferencer{
+		first:   pcm16Bytes(first),
+		second:  pcm16Bytes(second),
+		release: providerRelease,
+		cancel:  cancel,
+	}
+	defer inferencer.releaseProvider()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- RunSessionWithAudioOut(ctx, writer, SessionRunOptions{
+			ModelCatalog:      testModelCatalog(),
+			ReplayPath:        "synthetic.json",
+			SessionInferencer: inferencer,
+			RuntimeObserver:   inferencer,
+		}, "-")
+	}()
+	select {
+	case <-firstWritten:
+	case <-time.After(2 * time.Second):
+		t.Fatal("first accepted audio delta did not reach the output writer")
+	}
+	cancel()
+	inferencer.releaseProvider()
+
+	select {
+	case err := <-errCh:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("clean interrupt error = %v, want context.Canceled", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("clean interrupt did not finalize the session")
+	}
+	want := append(pcm16Bytes(first), pcm16Bytes(second)...)
+	if got := writer.snapshot(); !bytes.Equal(got, want) {
+		t.Fatalf("interrupted PCM = %d bytes, want both accepted deltas (%d bytes)", len(got), len(want))
+	}
+}
+
+func TestRunSessionWithAudioOut_PreservesSinkWriteAndProviderCloseErrors(t *testing.T) {
+	wantErr := errors.New("stdout write failed")
+	closeErr := errors.New("provider close failed after sink write")
+	inferencer := &durationTestInferencer{
+		events: []messages.StreamMessage{{
+			Type:  messages.StreamTypeAudioDelta,
+			Role:  messages.RoleAssistant,
+			Value: messages.NewAudioDeltaValue(pcm16Bytes(sessionAudioFrame(700))),
+		}},
+		sessionCloseErr: closeErr,
+	}
+	err := RunSessionWithAudioOut(context.Background(), sessionAudioOutRepairErrorWriter{err: wantErr}, SessionRunOptions{
+		ModelCatalog:      testModelCatalog(),
+		ReplayPath:        "synthetic.json",
+		SessionInferencer: inferencer,
+	}, "-")
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("write error = %v, want underlying sink error", err)
+	}
+	if !errors.Is(err, closeErr) {
+		t.Fatalf("write error = %v, want provider close error", err)
+	}
+}
+
+type sessionAudioOutRepairWriter struct {
+	mu           sync.Mutex
+	data         bytes.Buffer
+	firstWritten chan struct{}
+	firstOnce    sync.Once
+}
+
+func (w *sessionAudioOutRepairWriter) Write(data []byte) (int, error) {
+	w.mu.Lock()
+	n, err := w.data.Write(data)
+	firstWritten := w.firstWritten
+	w.mu.Unlock()
+	if n > 0 && firstWritten != nil {
+		w.firstOnce.Do(func() { close(firstWritten) })
+	}
+	return n, err
+}
+
+func (w *sessionAudioOutRepairWriter) snapshot() []byte {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return append([]byte(nil), w.data.Bytes()...)
+}
+
+type sessionAudioOutRepairErrorWriter struct{ err error }
+
+func (w sessionAudioOutRepairErrorWriter) Write([]byte) (int, error) { return 0, w.err }
+
+type sessionAudioOutRepairInferencer struct {
+	first       []byte
+	second      []byte
+	release     chan struct{}
+	releaseOnce sync.Once
+	cancel      context.CancelFunc
+}
+
+func (i *sessionAudioOutRepairInferencer) ObserveSessionRuntime(SessionRuntimeObservation) {
+	if i.cancel != nil {
+		i.cancel()
+	}
+}
+
+func (i *sessionAudioOutRepairInferencer) releaseProvider() {
+	i.releaseOnce.Do(func() { close(i.release) })
+}
+
+func (i *sessionAudioOutRepairInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
+	session := newScriptedSession()
+	go func() {
+		session.recv.Write(ctx, messages.StreamMessage{
+			Type:  messages.StreamTypeSessionOpen,
+			Value: messages.NewSessionOpenValue("audio-contract-session", "session"),
+		})
+		session.recv.Write(ctx, messages.StreamMessage{
+			Type:  messages.StreamTypeAudioDelta,
+			Role:  messages.RoleAssistant,
+			Value: messages.NewAudioDeltaValue(i.first),
+		})
+		<-i.release
+		session.recv.Write(ctx, messages.StreamMessage{
+			Type:  messages.StreamTypeAudioDelta,
+			Role:  messages.RoleAssistant,
+			Value: messages.NewAudioDeltaValue(i.second),
+		})
+		session.recv.Write(ctx, messages.StreamMessage{
+			Type:  messages.StreamTypeMessageEnd,
+			Role:  messages.RoleAssistant,
+			Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+		})
+	}()
+	return session, nil
+}

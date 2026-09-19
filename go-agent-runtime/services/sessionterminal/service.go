@@ -6,7 +6,6 @@ package sessionterminal
 import (
 	"context"
 	"io"
-	"sync/atomic"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -258,17 +257,6 @@ type Reporter interface {
 	RecordArtifactFinalization(bool, error)
 	Publish(io.Writer, error) error
 }
-
-// CancellationIntent is a monotonic, run-scoped operator marker used by the
-// terminal service and session observer. It contains no policy or lifecycle.
-type CancellationIntent struct{ sigint atomic.Bool }
-
-func (i *CancellationIntent) MarkSIGINT() {
-	if i != nil {
-		i.sigint.Store(true)
-	}
-}
-func (i *CancellationIntent) SIGINTReceived() bool { return i != nil && i.sigint.Load() }
 
 // Service owns terminal precedence, error classification, cancellation output
 // state, metadata formatting, and final accounting. Implementations are

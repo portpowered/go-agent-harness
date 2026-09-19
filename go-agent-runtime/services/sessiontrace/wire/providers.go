@@ -27,7 +27,7 @@ func MergeErrorChannels(ctx context.Context, first, second <-chan error) <-chan 
 	return service.MergeErrorChannels(ctx, first, second)
 }
 
-func NewCancellationIntent() *sessiontrace.CancellationIntent {
+func NewCancellationIntent() sessiontrace.CancellationIntent {
 	return service.NewCancellationIntent()
 }
 

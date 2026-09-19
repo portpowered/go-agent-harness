@@ -221,7 +221,7 @@ func TestObserverPublicFailureAndCancellationBoundaries(t *testing.T) {
 		t.Fatalf("failure diagnostics = %d, want one", got)
 	}
 
-	intent := &sessiontrace.CancellationIntent{}
+	intent := &testCancellationIntent{}
 	cancelSink := &observerTestSink{}
 	cancelled := newObserverForTest(cancelSink, func(options *sessiontrace.NewObserverOptions) {
 		options.CancellationIntent = intent
@@ -241,6 +241,18 @@ func TestObserverPublicFailureAndCancellationBoundaries(t *testing.T) {
 type scheduledSender struct {
 	sendAudio func(context.Context, []byte) error
 	sendEvent func(context.Context, messages.StreamMessage) error
+}
+
+type testCancellationIntent struct{ marked bool }
+
+func (i *testCancellationIntent) MarkSIGINT() {
+	if i != nil {
+		i.marked = true
+	}
+}
+
+func (i *testCancellationIntent) SIGINTReceived() bool {
+	return i != nil && i.marked
 }
 
 func (s scheduledSender) SendAudioInput(ctx context.Context, pcm []byte) error {

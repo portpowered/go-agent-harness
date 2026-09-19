@@ -108,7 +108,7 @@ func (o *observerState) SetTurnAdmission(admission func(messages.StreamMessage) 
 		o.turnAdmission = admission
 	}
 }
-func (o *observerState) SetCancellationIntent(intent *sessiontrace.CancellationIntent) {
+func (o *observerState) SetCancellationIntent(intent sessiontrace.CancellationIntent) {
 	if o != nil {
 		o.cancellationIntent = intent
 	}

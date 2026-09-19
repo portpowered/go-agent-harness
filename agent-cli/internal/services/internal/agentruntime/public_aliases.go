@@ -40,7 +40,7 @@ type SessionRuntimeFinalAccounting = sessiontrace.SessionRuntimeFinalAccounting
 type SessionRuntimeObservation = sessiontrace.SessionRuntimeObservation
 type SessionRuntimeObserver = sessiontrace.RuntimeObserver
 
-func NewSessionCancellationIntent() *SessionCancellationIntent {
+func NewSessionCancellationIntent() SessionCancellationIntent {
 	return sessiontracewire.NewCancellationIntent()
 }
 

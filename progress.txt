@@ -4128,3 +4128,41 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   unchanged full `make prepush` candidate, then push/update PR #531 only after
   the exact gate passes. No CI, review, merge, vertical acceptance or project
   acceptance is claimed.
+
+
+# C186 review rejection repairs — 2026-09-19
+
+- Re-read the concluded canonical rejection for PR #531 at `5ee8918`. Review 64's
+  bounded remote-render shutdown fix is accepted. The remaining findings were the
+  concrete atomic cancellation marker exposed by `sessiontrace`, the unused
+  duplicate in `sessionterminal`, and deleted public audio-output failure and
+  cancellation coverage.
+- Changed `sessiontrace.CancellationIntent` to an opaque service-owned contract;
+  its sole `atomic.Bool` implementation now lives under
+  `services/sessiontrace/internal/service`. Removed the unused terminal marker
+  and updated the CLI/service callers. Added focused regressions in the existing
+  audio-output test file for preflight, preserving existing output on invalid
+  options, preserving sink/provider-close errors, and draining accepted output
+  across cancellation.
+- Focused results on the consolidated source pass: sessiontrace/sessionterminal
+  normal and race suites (56 tests across 9 packages each); marker, CLI signal,
+  and audio-output failure/cancellation tests normal and race (8 across 3
+  packages each); C186 livehost/agentruntime and shipped SIGINT checks; and the
+  bounded remote-render stop regression five repetitions.
+- `COUNT=1 scripts/test-session-ci-regressions.sh all` passes normal, coverage,
+  and race modes, including retained negative controls. `make wire-check`, pinned
+  staticcheck 2026.1, `make architecture-size-check` (202 packages, 1,923 files,
+  28,572 functions), and `git diff --check` pass.
+- An initial `make prepush` stopped at architecture because the marker implementation
+  and focused tests temporarily added one Go file to each capped package. Both are
+  now folded into existing files; no architecture limits or baselines changed,
+  and the standalone architecture gate passes. The full `make prepush` remains
+  to be rerun on the committed candidate.
+- Admission and `prd.branchName` match the isolated task worktree. Fetched
+  `origin/main=b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`; startup, planning main,
+  C177, C119, and current main all remain ancestors. All 13 owned legacy
+  production files are absent; the two permitted adapters total 146 lines
+  (76 + 70).
+- Exact next action: commit this repair checkpoint, run `make prepush` on that
+  exact head, then push and update PR #531 with the passing local evidence and
+  return `ACCEPTED` to the script-owned full functional CI gate without polling.

@@ -91,7 +91,7 @@ type sessionToolExecutor struct {
 	timeout            time.Duration
 	interactivePolicy  *InteractiveToolPolicy
 	observer           sessionToolLifecycleObserver
-	cancellationIntent *SessionCancellationIntent
+	cancellationIntent SessionCancellationIntent
 	diagnostics        SessionToolDiagnosticSink
 }
 
@@ -128,7 +128,7 @@ func newSessionToolExecutorWithTimeoutAndObserverAndCancellationIntent(
 	inner messages.ToolExecutor,
 	timeout time.Duration,
 	observer sessionToolLifecycleObserver,
-	cancellationIntent *SessionCancellationIntent,
+	cancellationIntent SessionCancellationIntent,
 ) *sessionToolExecutor {
 	if timeout <= 0 {
 		timeout = defaultSessionToolExecutionTimeout
@@ -146,7 +146,7 @@ func newSessionToolExecutorWithInteractivePolicyAndObserverAndCancellationIntent
 	policy *InteractiveToolPolicy,
 	timeoutOverride time.Duration,
 	observer sessionToolLifecycleObserver,
-	cancellationIntent *SessionCancellationIntent,
+	cancellationIntent SessionCancellationIntent,
 ) *sessionToolExecutor {
 	return newSessionToolExecutorWithInteractivePolicyAndObserverAndCancellationIntentAndDiagnostics(inner, policy, timeoutOverride, observer, cancellationIntent, nil)
 }
@@ -156,7 +156,7 @@ func newSessionToolExecutorWithInteractivePolicyAndObserverAndCancellationIntent
 	policy *InteractiveToolPolicy,
 	timeoutOverride time.Duration,
 	observer sessionToolLifecycleObserver,
-	cancellationIntent *SessionCancellationIntent,
+	cancellationIntent SessionCancellationIntent,
 	diagnostics SessionToolDiagnosticSink,
 ) *sessionToolExecutor {
 	if policy == nil {

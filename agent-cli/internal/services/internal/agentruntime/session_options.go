@@ -299,7 +299,7 @@ type SessionRunOptions struct {
 	// CancellationIntent carries the CLI-owned, run-scoped SIGINT marker into
 	// terminal accounting. A nil value preserves ordinary caller-cancellation
 	// behavior for service callers that do not own OS signal handling.
-	CancellationIntent *SessionCancellationIntent
+	CancellationIntent SessionCancellationIntent
 
 	// ToolExecutionTimeout overrides the per-invocation session tool adapter
 	// deadline for hermetic tests. Zero selects the class-specific interactive
