@@ -13,10 +13,10 @@ type validationError string
 func (e validationError) Error() string { return string(e) }
 
 const (
-	errSymlink     validationError = "bundle path contains a symlink"
-	errOutside     validationError = "bundle path is outside its root"
-	errNotRegular  validationError = "bundle path is not a regular file"
-	errValidation  validationError = "bundle path cannot be revalidated"
+	errSymlink    validationError = "bundle path contains a symlink"
+	errOutside    validationError = "bundle path is outside its root"
+	errNotRegular validationError = "bundle path is not a regular file"
+	errValidation validationError = "bundle path cannot be revalidated"
 )
 
 // ValidateRegularFile rejects missing, symlinked, directory and special-file
