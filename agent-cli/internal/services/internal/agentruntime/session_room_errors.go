@@ -103,7 +103,7 @@ func sanitizeRoomError(err error, secrets []string) string {
 			value = strings.ReplaceAll(value, secret, "[REDACTED]")
 		}
 	}
-	return redactSelfPlayError(value, "")
+	return redactRoomError(value, "")
 }
 
 func secretsForPlan(plan *roomParticipantPlan) []string {
