@@ -25,13 +25,13 @@ func TestServiceRunExecutesAndReportsAdmittedScenario(t *testing.T) {
 	result, err := service.Run(context.Background(), browserconversation.RunRequest{
 		Scenario: scenario, AudioByStep: map[string][]byte{"step-1": pcm},
 		Broker: broker, Fixture: fixture, Oracle: fixture,
-		SessionRunner: func(_ context.Context, _ io.Writer, request browserconversation.SessionRequest) error {
+		SessionRunner: func(ctx context.Context, _ io.Writer, request browserconversation.SessionRequest) error {
 			called = true
 			if len(request.AudioInputs) != 1 || !bytes.Equal(request.AudioInputs[0].PCM, pcm) {
 				return errors.New("session runner received different scheduled PCM")
 			}
 			request.StreamObserver(messages.StreamMessage{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleUser, Value: messages.NewTranscriptEndValue(scenario.Steps[0].Utterance)})
-			invocation, invokeErr := request.Broker.Invoke(context.Background(), browserconversation.BrowserInvokeRequest{ToolRef: "tool-1", Input: json.RawMessage(`{"value":"after"}`)})
+			invocation, invokeErr := request.Broker.Invoke(ctx, browserconversation.BrowserInvokeRequest{ToolRef: "tool-1", Input: json.RawMessage(`{"value":"after"}`)})
 			if invokeErr != nil {
 				return invokeErr
 			}
