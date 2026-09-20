@@ -338,6 +338,7 @@ func (o *sessionProgressObserver) setProviderProgress(onlyIfArmed bool) {
 	}
 	clock := o.livenessClock
 	if clock == nil {
+		o.livenessMu.Unlock()
 		return
 	}
 	o.ensureLivenessStateLocked()

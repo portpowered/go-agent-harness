@@ -225,6 +225,7 @@ func TestRunAgentLoopSession_ScreenTimeoutDeniedRecheckDeliversOneContinuation(t
 	}()
 
 	err = runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
+		audioService:          newTestAudioIOService(),
 		MaxDuration:           2 * time.Second,
 		WaitForClose:          true,
 		ToolExecutor:          executor,
@@ -758,6 +759,7 @@ func TestRunAgentLoopSession_InteractivePolicyTimeoutDeliversOneCorrelatedContin
 
 	startedAt := time.Now()
 	err = runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
+		audioService:          newTestAudioIOService(),
 		MaxDuration:           2 * time.Second,
 		WaitForClose:          true,
 		ToolExecutor:          executor,
@@ -865,6 +867,7 @@ func TestRunAgentLoopSession_InteractiveTimeoutPreservesParallelSiblingResults(t
 	})
 
 	err = runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
+		audioService:          newTestAudioIOService(),
 		MaxDuration:           2 * time.Second,
 		WaitForClose:          true,
 		ToolExecutor:          executor,
@@ -990,6 +993,7 @@ func TestRunAgentLoopSession_ExecutesScriptedCallsInOrderAndKeepsSessionUsable(t
 	executor := &recordingSessionExecutor{}
 
 	err := runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
+		audioService: newTestAudioIOService(),
 		MaxDuration:  2 * time.Second,
 		WaitForClose: true,
 		ToolExecutor: executor,
@@ -1103,6 +1107,7 @@ func TestRunAgentLoopSession_FailureTableKeepsSessionAlive(t *testing.T) {
 			})
 
 			err := runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
+				audioService:         newTestAudioIOService(),
 				MaxDuration:          2 * time.Second,
 				WaitForClose:         true,
 				ToolExecutor:         executor,
@@ -1152,6 +1157,7 @@ func TestRunAgentLoopSession_TimeoutWorkerExitsBoundedly(t *testing.T) {
 	})
 
 	err := runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
+		audioService:         newTestAudioIOService(),
 		MaxDuration:          2 * time.Second,
 		WaitForClose:         true,
 		ToolExecutor:         executor,
@@ -1240,7 +1246,7 @@ func TestPlanSessionRuntimeThreadsToolExecutorAndDeadlineOverride(t *testing.T) 
 		return messages.ToolCallResponse{}, nil
 	})
 
-	plan, err := planSessionRuntime(SessionRunOptions{ModelCatalog: testModelCatalog(),
+	plan, err := planSessionRuntime(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		ReplayPath:           "unused.json",
 		SessionInferencer:    stubPlanSessionInferencer{},
 		ToolExecutor:         executor,
@@ -1256,7 +1262,7 @@ func TestPlanSessionRuntimeThreadsToolExecutorAndDeadlineOverride(t *testing.T) 
 		t.Fatalf("plan.loop.ToolExecutionTimeout = %s, want 7ms", plan.loop.ToolExecutionTimeout)
 	}
 
-	defaultPlan, err := planSessionRuntime(SessionRunOptions{ModelCatalog: testModelCatalog(),
+	defaultPlan, err := planSessionRuntime(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		ReplayPath:        "unused.json",
 		SessionInferencer: stubPlanSessionInferencer{},
 		ToolExecutor:      executor,

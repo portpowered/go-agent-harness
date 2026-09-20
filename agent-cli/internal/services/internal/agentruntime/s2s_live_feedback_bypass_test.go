@@ -12,6 +12,7 @@ import (
 
 	services "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
@@ -63,6 +64,7 @@ func TestRunSessionHeadphoneShapedPlaybackPreservesIndependentSpeech(t *testing.
 	runErr := make(chan error, 1)
 	go func() {
 		runErr <- services.RunSession(ctx, io.Discard, services.SessionRunOptions{
+			AudioService:      audioiowire.NewService(),
 			Provider:          "openai",
 			Model:             services.DefaultOpenAIRealtimeModel,
 			APIKey:            "test-key",
@@ -177,6 +179,7 @@ func TestRunSessionReplayBypassesPairedDeviceFeedbackController(t *testing.T) {
 	runErr := make(chan error, 1)
 	go func() {
 		runErr <- services.RunSession(ctx, io.Discard, services.SessionRunOptions{
+			AudioService:      audioiowire.NewService(),
 			ReplayPath:        "synthetic.json",
 			SessionInferencer: inferencer,
 			DeviceService:     newTestDeviceService(registry),

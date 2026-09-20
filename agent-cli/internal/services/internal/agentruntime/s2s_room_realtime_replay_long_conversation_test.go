@@ -86,8 +86,9 @@ func TestRunRoomWithResult_LongConversationEndsBothParticipantsCleanly(t *testin
 
 	outputDir := filepath.Join(t.TempDir(), "long-room")
 	opts := RoomRunOptions{
-		Manifest:  manifest,
-		ConfigDir: configDir, ModelCatalog: testModelCatalog(),
+		AudioService: newTestAudioIOService(),
+		Manifest:     manifest,
+		ConfigDir:    configDir, ModelCatalog: testModelCatalog(),
 		BaseURL:            "wss://room-replay.invalid/v1/realtime",
 		MixerConfig:        mixerConfig,
 		OutputDir:          outputDir,

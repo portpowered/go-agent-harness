@@ -4195,3 +4195,34 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   then run `make prepush` plus all C229 audio/device/RTC functional, integration,
   race, hermetic, and Wire commands on the exact candidate before opening or
   updating a PR. No PR or hosted CI handoff is claimed.
+
+# C229 session-loop dependency repair checkpoint 2026-09-20
+
+- Repaired all existing `agentruntime` tests whose session loops now require an
+  injected audio I/O service. External-package fixtures construct the public
+  audioio Wire service directly; internal fixtures use the existing test
+  constructor. `rtk go test ./agent-cli/internal/services/internal/agentruntime
+  -count=1 -timeout=240s` passes: 927 tests in 1 package.
+- The package run exposed two production dependency defects and two lifecycle
+  defects: self-play had not passed its owned audio service into each session
+  loop; negative max duration reached service resolution before validation;
+  duration finalization was not installed before clock-service preflight; and
+  nil liveness clock returned while holding the liveness mutex. These paths now
+  propagate/validate dependencies and release/close cleanly. Duration and
+  straggler helpers also return an explicit missing-audio-service error instead
+  of panicking.
+- The failed first package run had 921 passing / 6 failing tests; those fixture
+  gaps and the production issues were repaired, and the subsequent full package
+  run passed. `git diff --check` passed before checkpointing.
+- Current candidate remains on
+  `codex/audio-runtime-c229-recover-audio-device-rtc-retirement`, based on
+  `26abced5c700d7084ffeb4706adea16e2ea17632`. The exact ten legacy paths are
+  absent from that committed tree; the allowed adapters total 2 files / 32
+  physical lines (`audio_adapter.go` 19, `rtc_adapter.go` 13). Full current
+  filesystem absence and production caller audits remain part of the final
+  preflight.
+- Next: commit the reviewed repair diff and this checkpoint, then run every
+  C229 local command from PRD C229-05 (including `make prepush`, Wire/embed,
+  audio stability normal/race, RTC race, audio-device server integration,
+  integration/regressions, and audioio/device functional/race suites) on that
+  exact commit. Do not open/update a PR or push until all local gates pass.

@@ -472,6 +472,9 @@ func waitForSessionLoopStragglersWithContext(ctx context.Context, out io.Writer,
 	if quiet <= 0 {
 		return errInvalidSessionStragglerDrainPolicy
 	}
+	if audioService == nil {
+		return errors.New("audio service is required for session straggler drain timing")
+	}
 	idle, err := audioService.NewTimer(source, quiet)
 	if err != nil {
 		return err

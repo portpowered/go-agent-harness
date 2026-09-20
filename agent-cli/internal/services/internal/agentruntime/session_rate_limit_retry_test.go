@@ -320,6 +320,7 @@ func TestRunAgentLoopSessionMaxDurationStopsRateLimitRetry(t *testing.T) {
 	observer.scheduleAudioInputs([]ScheduledAudioInput{{AfterCompletedTurns: 0, PCM: []byte{1, 2}, EndOfTurn: true}})
 
 	err := runAgentLoopSessionStream(context.Background(), io.Discard, &rateLimitRetrySessionInferencer{session: session}, sessionLoopOptions{
+		audioService:             newTestAudioIOService(),
 		MaxDuration:              100 * time.Millisecond,
 		CloseAfterScheduledAudio: true,
 		ToolExecutor:             &rateLimitRetryToolExecutor{},
@@ -364,6 +365,7 @@ func TestRunAgentLoopSessionWithDurationMaxDurationStopsRateLimitRetry(t *testin
 			io.Discard,
 			&rateLimitRetrySessionInferencer{session: session},
 			sessionLoopOptions{
+				audioService:    newTestAudioIOService(),
 				ToolExecutor:    &rateLimitRetryToolExecutor{},
 				ToolDefinitions: []messages.ToolDefinition{{Name: "lookup", Description: "Look up one value."}},
 				observer:        observer,
@@ -454,6 +456,7 @@ func TestRunAgentLoopSessionRetriesScheduledToolContinuationOnce(t *testing.T) {
 	executor := &rateLimitRetryToolExecutor{}
 	started := time.Now()
 	err := runAgentLoopSession(context.Background(), io.Discard, inferencer, sessionLoopOptions{
+		audioService:             newTestAudioIOService(),
 		CloseAfterScheduledAudio: true,
 		ToolExecutor:             executor,
 		ToolDefinitions:          []messages.ToolDefinition{{Name: "lookup", Description: "Look up one value."}},
@@ -506,6 +509,7 @@ func TestRunAgentLoopSessionStopsAfterConsecutiveRateLimitFailure(t *testing.T) 
 	defer cancel()
 	started := time.Now()
 	err := runAgentLoopSession(ctx, io.Discard, &rateLimitRetrySessionInferencer{session: session}, sessionLoopOptions{
+		audioService:             newTestAudioIOService(),
 		CloseAfterScheduledAudio: true,
 		ToolExecutor:             executor,
 		ToolDefinitions:          []messages.ToolDefinition{{Name: "lookup", Description: "Look up one value."}},
@@ -574,6 +578,7 @@ func TestRunAgentLoopSessionDoesNotRetryNonRateLimitFailure(t *testing.T) {
 	defer cancel()
 	started := time.Now()
 	err := runAgentLoopSession(ctx, io.Discard, &rateLimitRetrySessionInferencer{session: session}, sessionLoopOptions{
+		audioService:             newTestAudioIOService(),
 		CloseAfterScheduledAudio: true,
 		ToolExecutor:             executor,
 		ToolDefinitions:          []messages.ToolDefinition{{Name: "lookup", Description: "Look up one value."}},

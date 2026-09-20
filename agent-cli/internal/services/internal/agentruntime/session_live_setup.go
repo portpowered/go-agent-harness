@@ -49,6 +49,9 @@ func sessionStreamDeadline(opts sessionLoopOptions) (<-chan time.Time, func(), e
 	if opts.MaxDuration <= 0 {
 		return nil, func() {}, nil
 	}
+	if opts.audioService == nil {
+		return nil, nil, errors.New("audio service is required for session duration timing")
+	}
 	timer, err := opts.audioService.NewTimer(opts.clockSource, opts.MaxDuration)
 	if err != nil {
 		return nil, nil, err

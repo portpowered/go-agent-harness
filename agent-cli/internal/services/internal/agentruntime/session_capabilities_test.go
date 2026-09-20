@@ -48,6 +48,7 @@ func TestSessionDurationPlanClosesTransferredCapabilityOnPreflightExit(t *testin
 			closeCalls++
 			return nil
 		}),
+		loop: sessionLoopOptions{audioService: newTestAudioIOService()},
 		rtcDeviceRequest: runtimedevices.RTCBindingRequest{
 			InputPresent: true,
 		},

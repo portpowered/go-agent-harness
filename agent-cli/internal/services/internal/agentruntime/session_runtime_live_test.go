@@ -39,7 +39,7 @@ func TestPlanSessionRuntime_BrowserToolsUsesUnrecordedLiveRuntime(t *testing.T) 
 		},
 	}
 	definitions := []messages.ToolDefinition{{Name: "browser_test"}}
-	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		Provider:                config.ProviderGrok,
 		BrowserToolsEnabled:     true,
 		BrowserToolsInteractive: true,
@@ -85,7 +85,7 @@ func TestPlanSessionRuntime_BrowserToolsDefaultProviderFallsBackToOpenAI(t *test
 		},
 	}
 
-	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		BrowserToolsEnabled: true,
 		LoadedConfig:        loaded,
 		APIKey:              "openai-default-key",
@@ -159,7 +159,7 @@ func runNoCaptureProviderCase(t *testing.T, testCase noCaptureProviderCase) {
 	} else {
 		loaded.Model.Grok = &config.GrokConfig{Model: testCase.model, APIKey: testCase.apiKey}
 	}
-	opts := SessionRunOptions{ModelCatalog: testModelCatalog(), Provider: testCase.provider, LoadedConfig: loaded,
+	opts := SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(), Provider: testCase.provider, LoadedConfig: loaded,
 		ToolDefinitions: []messages.ToolDefinition{{Name: "live_test"}}, ConfigDir: filepath.Dir(destination)}
 	if err := validateSessionRunOptions(opts); err != nil {
 		t.Fatalf("validate no-capture options: %v", err)
@@ -222,7 +222,7 @@ func assertNoCaptureOutput(t *testing.T, output, provider, destination string) {
 }
 
 func TestPlanSessionRuntime_BrowserToolsRejectsUnsupportedProvider(t *testing.T) {
-	_, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
+	_, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		Provider:            "unsupported-provider",
 		BrowserToolsEnabled: true,
 	}, sessionRuntimeFactory{
@@ -242,11 +242,11 @@ func TestPlanSessionRuntime_UnsupportedProviderDiagnosticsAreShared(t *testing.T
 	}{
 		{
 			name: "browser tools",
-			opts: SessionRunOptions{ModelCatalog: testModelCatalog(), Provider: provider, BrowserToolsEnabled: true},
+			opts: SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(), Provider: provider, BrowserToolsEnabled: true},
 		},
 		{
 			name: "recording",
-			opts: SessionRunOptions{ModelCatalog: testModelCatalog(), Provider: provider, RecordPath: filepath.Join(t.TempDir(), "capture.json")},
+			opts: SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(), Provider: provider, RecordPath: filepath.Join(t.TempDir(), "capture.json")},
 		},
 	}
 
@@ -294,7 +294,7 @@ func TestPlanSessionRuntime_RecordDefaultProviderFallsBackToOpenAI(t *testing.T)
 		},
 	}
 
-	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		RecordPath:   recordPath,
 		LoadedConfig: loaded,
 		APIKey:       "openai-default-key",
@@ -334,7 +334,7 @@ func TestPlanOpenAIRecordRuntimeDeviceInputDefaultsServerVAD(t *testing.T) {
 			return inferencer, nil
 		},
 	}
-	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		Provider: config.ProviderOpenAI, Model: openAIRealtimeModel, APIKey: "test-key",
 		RecordPath: filepath.Join(t.TempDir(), "device-vad.session.json"),
 		RTCBinding: runtimedevices.RTCBindingRequest{InputPresent: true, OutputPresent: true},
@@ -403,7 +403,7 @@ func TestPlanSessionRuntime_BrowserToolsWithRecordingPreservesCaptureLifecycle(t
 				}
 			}
 
-			plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
+			plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 				RecordPath:          recordPath,
 				Provider:            testCase.provider,
 				BrowserToolsEnabled: true,

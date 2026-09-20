@@ -44,6 +44,9 @@ func sessionDurationClockFromSource(service audioio.Service, source platformcloc
 // bound. A zero duration disables the controller; a positive duration requests
 // a session close and drains the accepted output before finalization.
 func RunSessionWithMaxDuration(ctx context.Context, out io.Writer, opts SessionRunOptions, maxDuration time.Duration) error {
+	if err := sessioncontract.ValidateSessionMaxDuration(maxDuration); err != nil {
+		return err
+	}
 	if maxDuration == 0 {
 		return RunSessionWithMaxDurationClock(ctx, out, opts, maxDuration, nil)
 	}
@@ -181,11 +184,6 @@ func effectiveSessionDurationClock(plan sessionRuntimePlan, requested SessionDur
 }
 
 func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, plan sessionRuntimePlan, maxDuration time.Duration, durationClock SessionDurationClock, admittedInferencer *sessionDurationAdmissionInferencer) (runErr error) {
-	var err error
-	durationClock, err = effectiveSessionDurationClock(plan, durationClock)
-	if err != nil {
-		return err
-	}
 	artifacts := sessionDurationArtifactsFromContext(ctx)
 	reporter := plan.loop.terminalReporter
 	if reporter == nil {
@@ -206,6 +204,11 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 		}
 		runErr = errors.Join(runErr, reporter.publish(out, runErr))
 	}()
+	var err error
+	durationClock, err = effectiveSessionDurationClock(plan, durationClock)
+	if err != nil {
+		return err
+	}
 	if plan.replayIntegrityWarning != "" {
 		if _, err := fmt.Fprintln(out, plan.replayIntegrityWarning); err != nil {
 			return err

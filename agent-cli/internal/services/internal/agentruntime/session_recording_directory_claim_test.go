@@ -32,7 +32,7 @@ func TestRunSessionWithRecordingDirectoryConcurrentClaimHasOneProviderConnection
 		go func() {
 			defer wait.Done()
 			<-start
-			results <- RunSessionWithRecordingDirectory(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
+			results <- RunSessionWithRecordingDirectory(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 				Provider:          config.ProviderOpenAI,
 				Model:             "gpt-realtime",
 				APIKey:            "test-key",
@@ -95,7 +95,7 @@ func TestSessionRecordingDirectoryClaimRejectsSymlinkAndNonDirectoryBeforeConnec
 			t.Skipf("symlink unavailable: %v", err)
 		}
 		inferencer := &countingSessionRecordingInferencer{}
-		err := RunSessionWithRecordingDirectory(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
+		err := RunSessionWithRecordingDirectory(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 			Provider:          config.ProviderOpenAI,
 			Model:             "gpt-realtime",
 			APIKey:            "test-key",
@@ -120,7 +120,7 @@ func TestSessionRecordingDirectoryClaimRejectsSymlinkAndNonDirectoryBeforeConnec
 			t.Fatal(err)
 		}
 		inferencer := &countingSessionRecordingInferencer{}
-		err := RunSessionWithRecordingDirectory(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
+		err := RunSessionWithRecordingDirectory(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 			Provider:          config.ProviderOpenAI,
 			Model:             "gpt-realtime",
 			APIKey:            "test-key",

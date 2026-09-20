@@ -7,6 +7,7 @@ import (
 	"fmt"
 	agentruntime "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
@@ -79,7 +80,7 @@ func TestRunSessionRTCBindingPropagatesPumpError(t *testing.T) {
 	})
 	runErrCh := make(chan error, 1)
 	go func() {
-		runErrCh <- agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
+		runErrCh <- agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
 			ReplayPath:        "synthetic.json",
 			SessionInferencer: sessionInferencer,
 			DeviceService:     newTestDeviceService(registry),
@@ -316,7 +317,7 @@ func TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio(t *tes
 	runErr := make(chan error, 1)
 	go func() {
 		runErr <- agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{
-			ModelCatalog: testModelCatalog(), Provider: "grok", Model: "test-model", APIKey: "test-key", WaitForClose: true, BareLive: true,
+			ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(), Provider: "grok", Model: "test-model", APIKey: "test-key", WaitForClose: true, BareLive: true,
 			SessionInferencer: &terminalDrainExternalInferencer{session: s.provider}, DeviceService: newTestDeviceService(s.registry), RTCBinding: s.request,
 			ToolExecutor: s.toolExecutor, ToolDefinitions: []messages.ToolDefinition{{Name: terminalDrainFirstToolName}, {Name: terminalDrainSecondToolName}},
 			StreamObserver: func(msg messages.StreamMessage) {

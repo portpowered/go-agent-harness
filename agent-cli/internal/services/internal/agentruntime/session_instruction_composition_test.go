@@ -60,7 +60,7 @@ func TestLivePlannerFamiliesUseOneGroundingComposition(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			configDir := t.TempDir()
 			writeSessionConfigFile(t, configDir, "model:\n  provider: openai\n")
-			opts := SessionRunOptions{ModelCatalog: testModelCatalog(),
+			opts := SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 				RecordPath:      filepath.Join(t.TempDir(), "session.json"),
 				Provider:        config.ProviderOpenAI,
 				Model:           openAIRealtimeDefaultModel,
@@ -117,7 +117,7 @@ func TestIndependentSessionCompositionsProduceIdenticalInstructionsAndProviderUp
 			configDir := t.TempDir()
 			writeSessionConfigFile(t, configDir, "model:\n  provider: openai\n")
 			conn := &replayHandshakeRecordingConn{}
-			opts := SessionRunOptions{ModelCatalog: testModelCatalog(),
+			opts := SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 				RecordPath:      filepath.Join(t.TempDir(), "session.json"),
 				Provider:        config.ProviderOpenAI,
 				Model:           openAIRealtimeDefaultModel,
@@ -264,7 +264,7 @@ func TestComposeSessionInstructionsDistinguishesConnectedUnselectedBrowser(t *te
 func TestProviderInitialInstructionsCarryConnectedUnselectedBrowserContract(t *testing.T) {
 	configDir := t.TempDir()
 	writeSessionConfigFile(t, configDir, "model:\n  provider: openai\n")
-	opts := SessionRunOptions{ModelCatalog: testModelCatalog(),
+	opts := SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		RecordPath:   filepath.Join(t.TempDir(), "session.json"),
 		Provider:     config.ProviderOpenAI,
 		Model:        openAIRealtimeDefaultModel,

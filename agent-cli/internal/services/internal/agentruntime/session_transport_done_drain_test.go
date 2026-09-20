@@ -147,9 +147,10 @@ func TestSessionTransportDoneDrainsAcceptedOutputWhenTransportErrored(t *testing
 
 	out := &bytes.Buffer{}
 	runErr := runAgentLoopSessionStream(ctx, out, &transportDoneDrainInferencer{session: session}, sessionLoopOptions{
-		Done:     transportDone,
-		DoneErr:  doneErr,
-		observer: observer,
+		audioService: newTestAudioIOService(),
+		Done:         transportDone,
+		DoneErr:      doneErr,
+		observer:     observer,
 	})
 
 	if !errors.Is(runErr, transportErr) {
