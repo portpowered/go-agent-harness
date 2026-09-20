@@ -1,11 +1,14 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 )
 
@@ -57,6 +60,73 @@ func (s *Service) TransportError(err error) error {
 		return nil
 	}
 	return fmt.Errorf("session transport: %w", err)
+}
+
+func (s *Service) ValidateDuration(duration time.Duration) error {
+	if duration < 0 {
+		return &sessionduration.InvalidDurationError{Duration: duration}
+	}
+	return nil
+}
+
+func (s *Service) NewEventAdmission() sessionduration.EventAdmission {
+	return NewEventAdmission()
+}
+
+func (s *Service) NewAdmissionInferencer(inner messages.SessionInferencer, admission sessionduration.EventAdmission, closeDone chan struct{}) sessionduration.AdmissionInferencer {
+	boundary, ok := admission.(*EventAdmission)
+	if !ok {
+		boundary = nil
+	}
+	return NewAdmissionInferencer(inner, boundary, closeDone)
+}
+
+func (s *Service) NewAdmissionSession(ctx context.Context, inner messages.Session, admission sessionduration.EventAdmission, onClose func(error)) sessionduration.AdmissionSession {
+	boundary, ok := admission.(*EventAdmission)
+	if !ok {
+		boundary = nil
+	}
+	return NewAdmissionSession(ctx, inner, boundary, onClose)
+}
+
+func (s *Service) WithArtifacts(ctx context.Context, artifacts sessionduration.ArtifactLifecycle) context.Context {
+	return WithSessionDurationArtifacts(ctx, artifacts)
+}
+
+func (s *Service) ArtifactsFromContext(ctx context.Context) sessionduration.ArtifactLifecycle {
+	return ArtifactsFromContext(ctx)
+}
+
+func (s *Service) WithTerminalRecorder(ctx context.Context, recorder sessionduration.TerminalRecorder) context.Context {
+	return WithTerminalRecorder(ctx, recorder)
+}
+
+func (s *Service) WithArtifactPaths(ctx context.Context, paths sessionduration.SessionDurationArtifactPaths) context.Context {
+	return WithSessionDurationArtifactPaths(ctx, paths)
+}
+
+func (s *Service) PrepareArtifacts(ctx context.Context) (context.Context, error) {
+	return PrepareArtifacts(ctx)
+}
+
+func (s *Service) FinalizeArtifacts(artifacts sessionduration.ArtifactLifecycle) error {
+	return FinalizeArtifacts(artifacts)
+}
+
+func (s *Service) EvaluateRetry(policy sessionduration.RetryPolicy, terminal *messages.MessageEndValue) sessionduration.RetryDecision {
+	return EvaluateRetry(policy, terminal)
+}
+
+func (s *Service) IsDurationShutdownMessage(msg messages.StreamMessage) bool {
+	return IsDurationShutdownMessage(msg)
+}
+
+func (s *Service) IsDurationForwardMessage(msg messages.StreamMessage) bool {
+	return IsDurationForwardMessage(msg)
+}
+
+func (s *Service) RecordingTerminalSummaryFromMessage(msg messages.StreamMessage) (*transcript.RecordingTerminalSummary, bool, error) {
+	return RecordingTerminalSummaryFromMessage(msg)
 }
 
 func phaseError(phase string, err error) error { return fmt.Errorf("%s: %w", phase, err) }

@@ -1,6 +1,8 @@
 package agentruntime
 
-import public "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
+import (
+	public "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
+)
 
 type SessionCancellationIntent = public.SessionCancellationIntent
 type SessionDiagnosticRecord = public.SessionDiagnosticRecord

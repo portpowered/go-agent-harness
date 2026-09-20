@@ -25,6 +25,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/sight"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
@@ -443,7 +444,6 @@ func runSessionWithRecordingDirectory(
 			}
 		}
 	}
-
 	sessionOut := out
 	if textOutput != nil {
 		sessionOut = textOutput
@@ -459,7 +459,7 @@ func runSessionWithRecordingDirectory(
 	} else if maxDuration == 0 {
 		runErr = plan.run(ctx, sessionOut)
 	} else {
-		durationCtx, durationErr := prepareSessionDurationArtifacts(ctx)
+		durationCtx, durationErr := durationwire.NewService().PrepareArtifacts(ctx)
 		if durationErr != nil {
 			runErr = durationErr
 			if audioOutput != nil {
@@ -469,7 +469,7 @@ func runSessionWithRecordingDirectory(
 			}
 			return finalizeSessionDirectoryRecording(runErr, recording)
 		}
-		durationCtx = withSessionDurationTerminalRecorder(durationCtx, recording)
+		durationCtx = durationwire.NewService().WithTerminalRecorder(durationCtx, recording)
 		runErr = runSessionDurationPlan(durationCtx, sessionOut, plan, maxDuration, realSessionDurationClock{})
 	}
 

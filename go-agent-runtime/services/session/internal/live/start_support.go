@@ -126,18 +126,6 @@ func (h *handle) includeTerminalRecordingError(event *session.LiveEvent) {
 	h.terminalErr = event.Error
 	h.mu.Unlock()
 }
-func (h *handle) watchDuration(ctx context.Context, timer platformclock.Timer) {
-	defer h.runWG.Done()
-	if timer == nil {
-		return
-	}
-	defer timer.Stop()
-	select {
-	case <-timer.C():
-		h.Cancel(session.ErrLiveDurationExceeded)
-	case <-ctx.Done():
-	}
-}
 func (h *handle) watchSessionUpdated(ctx context.Context) {
 	defer h.runWG.Done()
 	var timer platformclock.Timer

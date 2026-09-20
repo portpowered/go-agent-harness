@@ -14,6 +14,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	audiosubsystem "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems/audio"
+	duration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -149,7 +151,7 @@ type sessionLoopOptions struct {
 
 	// livenessClock is the participant-owned watchdog timer seam. Runtime plans
 	// derive it from the public session clock when a caller does not inject one.
-	livenessClock SessionLivenessClock
+	livenessClock duration.TimerScheduler
 	// clockSource is the shared session timing domain. It is populated by the
 	// runtime plan and is used for max-duration, acknowledgement, retry, and
 	// configuration timers in the live stream path.
@@ -212,7 +214,7 @@ type sessionLoopOptions struct {
 	// terminalSummaryRecorder receives a synthetic user-cancellation terminal
 	// summary on the non-duration path. Duration artifacts already receive the
 	// same summary through writeDurationSessionReplayMessage.
-	terminalSummaryRecorder sessionDurationTerminalRecorder
+	terminalSummaryRecorder duration.TerminalRecorder
 
 	// terminalReporter is the services-owned consume-once boundary for the
 	// customer-facing terminal announcement. Stream consumers only contribute
@@ -355,7 +357,7 @@ func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer m
 		// cannot turn the deliberate teardown into a session failure.
 		opts.observer.markRoomBoundCancellation()
 	}
-	cleanSIGINT := sessionSIGINTCleanForObserver(runErr, opts.cancellationIntent, opts.observer)
+	cleanSIGINT := observerCancellationIsClean(runErr, opts.cancellationIntent, opts.observer)
 	runErr = opts.observer.finish(runErr)
 	if cleanSIGINT {
 		runErr = errors.Join(runErr, publishSessionUserCancellation(renderer, opts, writeSessionReplayMessage))
@@ -368,12 +370,11 @@ func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer m
 	}
 	return runErr
 }
-
 func publishSessionUserCancellation(out io.Writer, opts sessionLoopOptions, write func(io.Writer, messages.StreamMessage) error) error {
 	terminal := sessionUserCancelledTerminalMessage(opts.observer)
 	var errs []error
 	if opts.terminalSummaryRecorder != nil {
-		summary, present, err := recordingTerminalSummaryFromMessage(terminal)
+		summary, present, err := durationwire.NewService().RecordingTerminalSummaryFromMessage(terminal)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("record user cancellation terminal summary: %w", err))
 		} else if present {
@@ -397,7 +398,6 @@ func publishSessionUserCancellation(out io.Writer, opts sessionLoopOptions, writ
 	}
 	return errors.Join(errs...)
 }
-
 func sessionUserCancelledTerminalMessage(observer *sessionProgressObserver) messages.StreamMessage {
 	outputState := messages.TerminalOutputNone
 	if observer != nil {
@@ -706,7 +706,7 @@ func newSessionLiveTerminationBoundary(
 			// teardown can begin after the last virtual tick, and cleanup must not
 			// wait forever for a timer that no owner can advance anymore.
 			source := opts.clockSource
-			return waitForSessionLoopStragglersWithContext(ctx, out, loop, policy, opts.observer, source)
+			return waitForLoopStragglersWithContext(ctx, out, loop, policy, opts.observer, source)
 		},
 		stopOwnedResources: stopOwnedResources,
 		flushBuffered: func() error {
@@ -747,7 +747,7 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 	audioCtx, cancelAudio := context.WithCancel(runCtx)
 	defer cancelAudio()
 	publisher, publisherErrors := startSessionDynamicToolPublisher(runCtx, loop, opts)
-	publisherErrors = mergeSessionErrorChannels(runCtx, publisherErrors, sessionLivenessErrorChannel(runCtx, opts.observer))
+	publisherErrors = mergeSessionErrorChannels(runCtx, publisherErrors, observerFailureErrors(opts.observer))
 	defer publisher.stop()
 	if err := bindSessionLoopInputs(runCtx, audioCtx, loop, opts); err != nil {
 		return err

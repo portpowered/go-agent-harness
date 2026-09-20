@@ -13,6 +13,7 @@ import (
 	roomswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	sessionwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -21,8 +22,9 @@ func TestExternalRoomRejectsMissingProviderTrace(t *testing.T) {
 	defer cancel()
 	scheduler := clock.NewDeterministic(time.Unix(123, 0), time.Millisecond)
 	live := sessionwire.NewLiveService(sessionwire.LiveDependencies{
-		Clock:     scheduler.Now,
-		Scheduler: scheduler,
+		Clock:           scheduler.Now,
+		Scheduler:       scheduler,
+		DurationService: durationwire.NewService(),
 		InferencerFactory: func(context.Context, session.LiveRequest) (messages.SessionInferencer, error) {
 			return newEmbeddedLiveProvider(), nil
 		},
