@@ -60,12 +60,12 @@ func RunSessionWithImages(ctx context.Context, out io.Writer, opts SessionImageR
 			runErr = errors.Join(runErr, imageCleanup())
 		}
 	}()
-	plan, wirePrompt, err := planSessionImageRuntimeWithContext(ctx, opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, false)
+	plan, _, err := planSessionImageRuntimeWithContext(ctx, opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, false)
 	if err != nil {
 		return err
 	}
 	imageCleanupOwned = false
-	return runSessionImagePlan(ctx, out, plan, opts, wirePrompt)
+	return runSessionImagePlan(ctx, out, plan, opts)
 }
 
 func RunSessionWithImagesAndAudioInput(ctx context.Context, out io.Writer, opts SessionImageRunOptions, input SessionAudioInput) (runErr error) {
@@ -125,7 +125,7 @@ func runSessionImagesAudioInput(ctx context.Context, out io.Writer, opts Session
 	if opts.AudioOutPath != "" {
 		opts.SessionRunOptions.AudioOutputRequested = true
 	}
-	plan, wirePrompt, err := planSessionImageRuntimeWithContext(ctx, opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, true)
+	plan, _, err := planSessionImageRuntimeWithContext(ctx, opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, true)
 	if err != nil {
 		return err
 	}
@@ -135,7 +135,7 @@ func runSessionImagesAudioInput(ctx context.Context, out io.Writer, opts Session
 	plan.loop.MaxDuration = opts.MaxDuration
 	plan.loop.RequireAssistantResponse = true
 	plan.loop.RequireTerminalAssistantResponse = true
-	return runSessionImagePlan(ctx, out, plan, opts, wirePrompt)
+	return runSessionImagePlan(ctx, out, plan, opts)
 }
 
 func planSessionImageRuntime(opts SessionRunOptions, parts []messages.ImagePart, seed sessionturn.Seed, systemPrompt string, deferResponse bool) (sessionRuntimePlan, string, error) {
@@ -195,9 +195,9 @@ func attachSessionImageRuntime(ctx context.Context, plan sessionRuntimePlan, par
 	return plan, "", nil
 }
 
-func runSessionImagePlan(ctx context.Context, out io.Writer, plan sessionRuntimePlan, opts SessionImageRunOptions, wirePrompt string) (runErr error) {
+func runSessionImagePlan(ctx context.Context, out io.Writer, plan sessionRuntimePlan, opts SessionImageRunOptions) (runErr error) {
 	if opts.AudioOutPath != "" {
-		return runSessionImageWithAudioOutput(ctx, out, plan, opts, wirePrompt)
+		return runSessionImageWithAudioOutput(ctx, out, plan, opts)
 	}
 	if opts.TextSeed.Present {
 		return runSessionImageWithTextSeed(ctx, out, plan, opts)
@@ -205,7 +205,7 @@ func runSessionImagePlan(ctx context.Context, out io.Writer, plan sessionRuntime
 	return runSessionImageWithoutSeed(ctx, out, plan, opts.MaxDuration)
 }
 
-func runSessionImageWithAudioOutput(ctx context.Context, out io.Writer, plan sessionRuntimePlan, opts SessionImageRunOptions, wirePrompt string) (runErr error) {
+func runSessionImageWithAudioOutput(ctx context.Context, out io.Writer, plan sessionRuntimePlan, opts SessionImageRunOptions) (runErr error) {
 	audioOut, err := newSessionAudioOutputForPlan(&plan, opts.AudioOutPath, out, nil)
 	if err != nil {
 		return fmt.Errorf("--audio-out %q: %w", opts.AudioOutPath, err)
@@ -215,8 +215,10 @@ func runSessionImageWithAudioOutput(ctx context.Context, out io.Writer, plan ses
 			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", opts.AudioOutPath, closeErr))
 		}
 	}()
-	wrapped := newSessionAudioOutputInferencer(plan.inferencer, audioOut, wirePrompt, opts.TextSeed.Value)
-	plan.inferencer = wrapped
+	wrapped, err := attachSessionAudioOutput(plan.turnRuntime, &plan, audioOut)
+	if err != nil {
+		return errors.Join(err, audioOut.close())
+	}
 	if opts.AudioOutPath == "-" {
 		out = io.Discard
 	}
@@ -225,8 +227,7 @@ func runSessionImageWithAudioOutput(ctx context.Context, out io.Writer, plan ses
 	} else {
 		runErr = runSessionImageDuration(ctx, out, plan, opts.MaxDuration)
 	}
-	wrapped.wait()
-	if outputErr := wrapped.err(); outputErr != nil {
+	if outputErr := wrapped.Wait(); outputErr != nil {
 		runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", opts.AudioOutPath, outputErr))
 	}
 	return runErr

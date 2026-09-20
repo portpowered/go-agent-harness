@@ -13,6 +13,7 @@ import (
 
 	sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
@@ -30,6 +31,69 @@ func joinSessionAudioOutputError(runErr error, path string, outputErr error) err
 		return runErr
 	}
 	return errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", path, outputErr))
+}
+
+func attachSessionAudioOutput(turnRuntime sessionturn.Runtime, plan *sessionRuntimePlan, output *sessionAudioOutput) (sessionturn.AudioOutputRuntime, error) {
+	if turnRuntime == nil || plan == nil || plan.inferencer == nil || output == nil {
+		return nil, sessionturn.ErrMissingTurnInferencer
+	}
+	wrapped, err := turnRuntime.AttachAudioOutput(plan.inferencer, output.writeDelta)
+	if err != nil {
+		return nil, err
+	}
+	plan.inferencer = wrapped.Inferencer()
+	return wrapped, nil
+}
+
+func runSessionAudioOutPlan(ctx context.Context, out io.Writer, plan sessionRuntimePlan, path string, seed SessionTextSeed, voice string, maxDuration time.Duration) (runErr error) {
+	turnRuntime, err := prepareSessionTurnSeed(ctx, &plan, seed)
+	if err != nil {
+		return err
+	}
+	audioOut, err := newSessionAudioOutputForPlan(&plan, path, out, audio.NewLoudnessNormalizer(audio.LoudnessNormalizerConfig{GainDB: VoiceLoudnessGainDB(voice)}))
+	if err != nil {
+		return fmt.Errorf("--audio-out %q: %w", path, err)
+	}
+	defer func() {
+		if closeErr := audioOut.close(); closeErr != nil {
+			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", path, closeErr))
+		}
+	}()
+	sessionOut := audioSessionWriter(out, path)
+	if plan.inferencer == nil {
+		return runSessionAudioPlan(ctx, sessionOut, plan, maxDuration)
+	}
+	wrapped, err := attachSessionAudioOutput(turnRuntime, &plan, audioOut)
+	if err != nil {
+		return errors.Join(err, audioOut.close())
+	}
+	runErr = runSessionAudioPlan(ctx, sessionOut, plan, maxDuration)
+	if outputErr := wrapped.Wait(); outputErr != nil {
+		runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", path, outputErr))
+	}
+	return runErr
+}
+
+func audioSessionWriter(out io.Writer, path string) io.Writer {
+	if path == "-" {
+		return io.Discard
+	}
+	return out
+}
+
+func assistantAudioDelta(msg messages.StreamMessage) bool {
+	return msg.Role == "" || msg.Role == messages.RoleAssistant
+}
+
+func runSessionAudioPlan(ctx context.Context, out io.Writer, plan sessionRuntimePlan, maxDuration time.Duration) error {
+	if maxDuration == 0 {
+		return plan.run(ctx, out)
+	}
+	durationCtx, err := prepareSessionDurationArtifacts(ctx)
+	if err != nil {
+		return err
+	}
+	return runSessionDurationPlan(durationCtx, out, plan, maxDuration, realSessionDurationClock{})
 }
 
 // RunSessionWithAudioOut runs a session and writes assistant PCM to path; an empty path preserves normal output and "-" writes raw PCM16.

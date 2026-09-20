@@ -169,19 +169,16 @@ func runSessionInstructionsWithAudio(ctx context.Context, out io.Writer, plan se
 	if plan.inferencer == nil {
 		return runSessionInstructionsDurationOrPlan(ctx, sessionOut, plan, maxDuration)
 	}
-	return runSessionInstructionsWithAudioInferencer(ctx, sessionOut, plan, audioOut, audioPath, maxDuration, seed, turnRuntime)
+	return runSessionInstructionsWithAudioInferencer(ctx, sessionOut, plan, audioOut, audioPath, maxDuration, turnRuntime)
 }
 
-func runSessionInstructionsWithAudioInferencer(ctx context.Context, out io.Writer, plan sessionRuntimePlan, audioOut *sessionAudioOutput, audioPath string, maxDuration time.Duration, seed SessionTextSeed, turnRuntime sessionturn.Runtime) (runErr error) {
-	wirePrompt := ""
-	if turnRuntime != nil {
-		wirePrompt = turnRuntime.WirePrompt()
+func runSessionInstructionsWithAudioInferencer(ctx context.Context, out io.Writer, plan sessionRuntimePlan, audioOut *sessionAudioOutput, audioPath string, maxDuration time.Duration, turnRuntime sessionturn.Runtime) (runErr error) {
+	wrapped, err := attachSessionAudioOutput(turnRuntime, &plan, audioOut)
+	if err != nil {
+		return err
 	}
-	wrapped := newSessionAudioOutputInferencer(plan.inferencer, audioOut, wirePrompt, seed.Value)
-	plan.inferencer = wrapped
 	runErr = runSessionInstructionsDurationOrPlan(ctx, out, plan, maxDuration)
-	wrapped.wait()
-	if outputErr := wrapped.err(); outputErr != nil {
+	if outputErr := wrapped.Wait(); outputErr != nil {
 		runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", audioPath, outputErr))
 	}
 	return runErr

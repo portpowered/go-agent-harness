@@ -7,6 +7,7 @@ import (
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	sd "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 	tools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	"sort"
 	"strings"
@@ -157,6 +158,22 @@ func (o *sessionProgressObserver) signalToolLifecycle() {
 	select {
 	case ch <- struct{}{}:
 	default:
+	}
+}
+
+// observeSessionTurnLifecycle receives state changes after sessionturn has
+// applied them to its private continuation service. The CLI only wakes its
+// close controller; it does not keep a second tool-result ledger.
+func (o *sessionProgressObserver) observeSessionTurnLifecycle(event sessionturn.ToolLifecycleEvent) {
+	if o == nil {
+		return
+	}
+	switch event.Type {
+	case sessionturn.ToolResultAccepted, sessionturn.ToolResultRejected:
+		o.signalToolLifecycle()
+	case sessionturn.ToolContinuationRequested:
+		o.armProviderProgress()
+		o.signalToolLifecycle()
 	}
 }
 

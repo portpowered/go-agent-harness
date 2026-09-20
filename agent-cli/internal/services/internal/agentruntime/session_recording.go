@@ -448,8 +448,7 @@ func runSessionWithRecordingDirectory(
 	}
 
 	if audioWrapper != nil {
-		audioWrapper.wait()
-		if outputErr := audioWrapper.err(); outputErr != nil {
+		if outputErr := audioWrapper.Wait(); outputErr != nil {
 			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", audioOutPath, outputErr))
 		}
 	}

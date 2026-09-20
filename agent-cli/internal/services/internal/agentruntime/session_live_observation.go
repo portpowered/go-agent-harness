@@ -11,14 +11,15 @@ import (
 )
 
 type observedSessionInferencer struct {
-	inner       messages.SessionInferencer
-	done        chan struct{}
-	once        sync.Once
-	connectDone chan struct{}
-	closeOnce   sync.Once
-	closeErr    error
-	runtime     *sessionRuntimeObservationRecorder
-	progress    *sessionProgressObserver
+	inner            messages.SessionInferencer
+	done             chan struct{}
+	once             sync.Once
+	connectDone      chan struct{}
+	closeOnce        sync.Once
+	closeErr         error
+	runtime          *sessionRuntimeObservationRecorder
+	progress         *sessionProgressObserver
+	serviceLifecycle bool
 
 	mu              sync.Mutex
 	connectErr      error
@@ -81,7 +82,7 @@ func (i *observedSessionInferencer) ConnectSession(ctx context.Context) (message
 	}
 	i.mu.Lock()
 	i.session = session
-	wrapped := &observedSession{Session: session, closeDone: i.closeDone, runtime: i.runtime, progress: i.progress}
+	wrapped := &observedSession{Session: session, closeDone: i.closeDone, runtime: i.runtime, progress: i.progress, serviceLifecycle: i.serviceLifecycle}
 	i.observed = wrapped
 	closeRequested := i.closeRequested
 	i.mu.Unlock()
@@ -207,12 +208,13 @@ func (i *observedSessionInferencer) closeDone() {
 
 type observedSession struct {
 	messages.Session
-	closeDone func()
-	runtime   *sessionRuntimeObservationRecorder
-	progress  *sessionProgressObserver
-	once      sync.Once
-	closeOnce sync.Once
-	closeErr  error
+	closeDone        func()
+	runtime          *sessionRuntimeObservationRecorder
+	progress         *sessionProgressObserver
+	once             sync.Once
+	closeOnce        sync.Once
+	closeErr         error
+	serviceLifecycle bool
 }
 
 var _ messages.Session = (*observedSession)(nil)
@@ -229,7 +231,7 @@ func (s *observedSession) SendWithOutcome(ctx context.Context, msg messages.Stre
 	defer unlockProviderBoundary()
 	outcome := messages.SendSessionWithOutcome(ctx, s.Session, msg)
 	if !outcome.OK() {
-		if msg.Type == messages.StreamTypeToolCallEnd && s.progress != nil {
+		if msg.Type == messages.StreamTypeToolCallEnd && s.progress != nil && !s.sessionTurnOwnsToolLifecycle() {
 			if value, ok := msg.Value.(*messages.ToolCallEndValue); ok && value != nil {
 				s.progress.noteToolResultRejected(ctx, value.ToolCallID, outcome)
 			}
@@ -248,18 +250,123 @@ func (s *observedSession) SendWithOutcome(ctx context.Context, msg messages.Stre
 	if msg.Type == messages.StreamTypeResponseCreate && s.runtime != nil {
 		s.runtime.responseCreate(msg)
 	}
-	if msg.Type == messages.StreamTypeToolCallEnd && s.progress != nil {
+	if msg.Type == messages.StreamTypeToolCallEnd && s.progress != nil && !s.sessionTurnOwnsToolLifecycle() {
 		if value, ok := msg.Value.(*messages.ToolCallEndValue); ok && value != nil {
 			s.progress.noteToolResultAcceptedWithContext(ctx, value.ToolCallID)
 		}
 	}
-	if msg.Type == messages.StreamTypeResponseCreate && s.progress != nil {
+	if msg.Type == messages.StreamTypeResponseCreate && s.progress != nil && !s.sessionTurnOwnsToolLifecycle() {
 		s.progress.noteToolContinuationRequestedWithContext(ctx)
 	}
 	if s.progress != nil {
 		s.progress.observeProviderDispatch(msg)
 	}
 	return outcome
+}
+
+type sessionToolLifecycleOwner interface{ OwnsToolLifecycle() bool }
+
+func sessionOwnsToolLifecycle(session messages.Session) bool {
+	owner, ok := session.(sessionToolLifecycleOwner)
+	return ok && owner.OwnsToolLifecycle()
+}
+
+func (s *observedSession) sessionTurnOwnsToolLifecycle() bool {
+	return s != nil && (s.serviceLifecycle || sessionOwnsToolLifecycle(s.Session))
+}
+
+// SendMessage forwards the optional complete-message provider capability. The
+// sessionturn service records the result boundary when it owns the session;
+// injected legacy sessions retain the runtime's compatibility observation.
+func (s *observedSession) SendMessage(ctx context.Context, msg messages.Message) bool {
+	unlockProviderBoundary := s.progress.lockProviderBoundary()
+	defer unlockProviderBoundary()
+	if s.SessionAdmissionClosed() && !s.SessionAdmissionAllowsCompleteMessage(msg) {
+		return false
+	}
+	sender, ok := s.Session.(sessionturn.CompleteMessageSender)
+	if !ok {
+		return false
+	}
+	outcome := sessionCompleteMessageSendOutcome(ctx, sender.SendMessage(ctx, msg))
+	s.observeCompleteMessageToolResult(ctx, msg, outcome, true)
+	return outcome.OK()
+}
+
+func (s *observedSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
+	unlockProviderBoundary := s.progress.lockProviderBoundary()
+	defer unlockProviderBoundary()
+	if s.SessionAdmissionClosed() && !s.SessionAdmissionAllowsCompleteMessage(msg) {
+		return false
+	}
+	sender, ok := s.Session.(sessionturn.CompleteMessageWithoutResponseSender)
+	if !ok {
+		return false
+	}
+	outcome := sessionCompleteMessageSendOutcome(ctx, sender.SendMessageWithoutResponse(ctx, msg))
+	s.observeCompleteMessageToolResult(ctx, msg, outcome, false)
+	return outcome.OK()
+}
+
+func (s *observedSession) observeCompleteMessageToolResult(ctx context.Context, msg messages.Message, outcome messages.SessionSendOutcome, requestsContinuation bool) {
+	if s == nil || s.progress == nil || s.sessionTurnOwnsToolLifecycle() {
+		return
+	}
+	if outcome.OK() {
+		if msg.ToolCallID != "" {
+			s.progress.noteToolResultAcceptedWithContext(ctx, msg.ToolCallID)
+		}
+		if requestsContinuation {
+			if msg.ToolCallID != "" {
+				s.progress.noteToolContinuationRequestedForWithContext(ctx, msg.ToolCallID)
+			}
+			s.progress.armProviderProgress()
+		}
+		return
+	}
+	if msg.ToolCallID != "" {
+		s.progress.noteToolResultRejected(ctx, msg.ToolCallID, outcome)
+	}
+}
+
+func sessionCompleteMessageSendOutcome(ctx context.Context, sent bool) messages.SessionSendOutcome {
+	if sent {
+		return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
+	}
+	if ctx != nil {
+		switch ctx.Err() {
+		case context.DeadlineExceeded:
+			return messages.SessionSendOutcome{Status: messages.SessionSendTimedOut, Err: ctx.Err()}
+		case context.Canceled:
+			return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: ctx.Err()}
+		}
+	}
+	return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}
+}
+
+func (s *observedSession) SupportsCompleteMessages() bool {
+	complete, _ := completeMessageCapabilities(s.Session)
+	return complete
+}
+
+func (s *observedSession) SupportsCompleteMessagesWithoutResponse() bool {
+	_, withoutResponse := completeMessageCapabilities(s.Session)
+	return withoutResponse
+}
+
+func (s *observedSession) Close() error {
+	if s == nil {
+		return nil
+	}
+	s.closeOnce.Do(func() {
+		s.closeErr = s.Session.Close()
+		s.markDone()
+	})
+	return s.closeErr
+}
+
+func (s *observedSession) markDone() {
+	s.once.Do(s.closeDone)
 }
 
 // SessionAdmissionClosed preserves the room's optional admission boundary

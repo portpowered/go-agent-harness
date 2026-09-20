@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
+	sessionturnwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -386,10 +388,16 @@ func runSessionAudioCancellationBarrier(t *testing.T, cancelBeforeConnect bool) 
 	ctx, cancel := context.WithCancel(context.Background())
 	provider := &sessionAudioTerminalBarrierSession{scriptedSession: newScriptedSession(), releaseConnect: make(chan struct{}), connectStarted: make(chan struct{})}
 	writer := &growingSessionAudioWriter{firstWritten: make(chan struct{})}
-	sink := mustSessionAudioTestValue(newSessionAudioSinkAtRate("-", writer, audio.SampleRate))
-	inferencer := newSessionAudioOutputInferencer(provider, &sessionAudioOutput{sink: sink, runtime: &sessionRuntimeObservationRecorder{}}, "", "")
-	connected := make(chan *sessionAudioOutputSession, 1)
-	go func() { mustSessionAudioTestValue(inferencer.ConnectSession(ctx)); connected <- inferencer.connected }()
+	turnRuntime := mustSessionAudioTestValue(sessionturnwire.NewDefaultService().Prepare(context.Background(), sessionturn.Request{SessionInferencer: provider}))
+	audioRuntime := mustSessionAudioTestValue(turnRuntime.AttachAudioOutput(turnRuntime.Inferencer(), func(_ context.Context, content []byte, _ messages.StreamMessage) error {
+		_, err := writer.Write(content)
+		return err
+	}))
+	connected := make(chan messages.Session, 1)
+	go func() {
+		session, err := audioRuntime.Inferencer().ConnectSession(ctx)
+		connected <- mustSessionAudioTestValue(session, err)
+	}()
 	waitForClosedTargetSignal(t, context.Background(), provider.connectStarted, "connect start")
 	if cancelBeforeConnect {
 		cancel()
@@ -397,8 +405,8 @@ func runSessionAudioCancellationBarrier(t *testing.T, cancelBeforeConnect bool) 
 	close(provider.releaseConnect)
 	session := <-connected
 	cancel()
-	go func() { mustSessionAudioTestValue(struct{}{}, session.Close()) }()
-	waitForClosedTargetSignal(t, context.Background(), session.drainStarted, "cancellation drain start")
+	waitDone := make(chan error, 1)
+	go func() { waitDone <- audioRuntime.Wait() }()
 	want := append(bytes.Repeat([]byte{0x01, 0x02}, 720), bytes.Repeat([]byte{0x03, 0x04}, 1200)...)
 	if !provider.recv.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue(want)}) {
 		t.Fatal("provider did not accept queued cancellation audio")
@@ -414,6 +422,9 @@ func runSessionAudioCancellationBarrier(t *testing.T, cancelBeforeConnect bool) 
 	case <-session.Done():
 	case <-time.After(2 * time.Second):
 		t.Fatal("cancellation barrier close did not finish")
+	}
+	if err := <-waitDone; err != nil {
+		t.Fatalf("audio output shutdown: %v", err)
 	}
 	if got := writer.snapshot(); !bytes.Equal(got, want) {
 		t.Fatalf("retained PCM = %d bytes, want 1440-byte prefix plus 2400-byte healthy tail", len(got))

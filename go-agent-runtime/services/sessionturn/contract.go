@@ -80,6 +80,15 @@ type Output interface {
 	Err() error
 }
 
+type AudioDeltaObserver func(context.Context, []byte, messages.StreamMessage) error
+
+// AudioOutputRuntime retains the bounded provider-session forwarding state
+// required while an embedding host consumes assistant audio deltas.
+type AudioOutputRuntime interface {
+	Inferencer() messages.SessionInferencer
+	Wait() error
+}
+
 // ServiceOwnedToolExecutor marks the executor returned by a prepared
 // session-turn runtime so hosts do not wrap its policy and lifecycle state a
 // second time when constructing compatibility loops.
@@ -266,6 +275,25 @@ type ImageRequest struct {
 	DeferredInstruction string
 }
 
+type ToolLifecycleEventType string
+
+const (
+	ToolResultAccepted        ToolLifecycleEventType = "tool-result-accepted"
+	ToolResultRejected        ToolLifecycleEventType = "tool-result-rejected"
+	ToolContinuationRequested ToolLifecycleEventType = "tool-continuation-requested"
+)
+
+// ToolLifecycleEvent reports a completed provider-facing tool boundary. The
+// runtime owns lifecycle reduction; hosts may observe the accepted boundary
+// to wake their presentation or shutdown loop.
+type ToolLifecycleEvent struct {
+	Type   ToolLifecycleEventType
+	CallID string
+	Status messages.SessionSendStatus
+}
+
+type ToolLifecycleObserver func(ToolLifecycleEvent)
+
 const (
 	ImageOnlyPrompt          = "\x00agent-session-image-turn\x00"
 	DeferredImageInstruction = "Use the attached image to answer the user's next spoken question."
@@ -318,6 +346,7 @@ func (*ImageEmptyFileError) Unwrap() error   { return ErrImageEmptyFile }
 type Request struct {
 	SessionInferencer messages.SessionInferencer
 	EventSink         TurnEventSink
+	ToolLifecycle     ToolLifecycleObserver
 
 	Seed                   Seed
 	SeedAllocator          Allocator
@@ -355,6 +384,7 @@ type Runtime interface {
 	PublicationState() PublicationState
 	StartPublication(context.Context, PublicationRequest) (Publication, error)
 	NewOutput(io.Writer) Output
+	AttachAudioOutput(messages.SessionInferencer, AudioDeltaObserver) (AudioOutputRuntime, error)
 	Close() error
 }
 type Service interface {
@@ -395,4 +425,5 @@ const (
 	ErrSessionResponse            ErrorCode = "session returned an error"
 	ErrTurnInputRejected          ErrorCode = "session rejected turn input"
 	ErrTurnInputCommitRejected    ErrorCode = "session rejected turn input commit"
+	ErrMissingAudioOutputObserver ErrorCode = "session turn audio output observer is not configured"
 )

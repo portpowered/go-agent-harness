@@ -20,6 +20,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	devicegateway "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
@@ -346,7 +347,7 @@ func runSessionWithAudioInputPlan(ctx context.Context, out io.Writer, input Sess
 
 	sessionOut := out
 	var audioOutput *sessionAudioOutput
-	var audioWrapped *sessionAudioOutputInferencer
+	var audioWrapped sessionturn.AudioOutputRuntime
 	if audioOutPath != "" {
 		var sinkErr error
 		audioOutput, sinkErr = newSessionAudioOutputForPlan(&plan, audioOutPath, out, nil)
@@ -358,12 +359,17 @@ func runSessionWithAudioInputPlan(ctx context.Context, out io.Writer, input Sess
 				runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", audioOutPath, closeErr))
 			}
 		}()
-		wrapped := newSessionAudioOutputInferencer(plan.inferencer, audioOutput, "", seed.Value)
-		plan.inferencer = wrapped
+		turnRuntime, runtimeErr := prepareSessionRecordingTurnRuntime(ctx, &plan, seed)
+		if runtimeErr != nil {
+			return runtimeErr
+		}
+		wrapped, wrapErr := attachSessionAudioOutput(turnRuntime, &plan, audioOutput)
+		if wrapErr != nil {
+			return wrapErr
+		}
 		audioWrapped = wrapped
 		plan.loop.AudioOutputError = func() error {
-			audioWrapped.wait()
-			return joinSessionAudioOutputError(nil, audioOutPath, audioWrapped.err())
+			return joinSessionAudioOutputError(nil, audioOutPath, audioWrapped.Wait())
 		}
 		if audioOutPath == "-" {
 			sessionOut = io.Discard
@@ -377,8 +383,7 @@ func runSessionWithAudioInputPlan(ctx context.Context, out io.Writer, input Sess
 	plan.loop.AudioIn = source
 	runErr = plan.run(ctx, sessionOut)
 	if audioWrapped != nil {
-		audioWrapped.wait()
-		runErr = joinSessionAudioOutputError(runErr, audioOutPath, audioWrapped.err())
+		runErr = joinSessionAudioOutputError(runErr, audioOutPath, audioWrapped.Wait())
 	}
 	return runErr
 }

@@ -60,7 +60,11 @@ func (s *Service) Prepare(ctx context.Context, request sessionturn.Request) (ses
 	if allocator == nil && s != nil {
 		allocator = s.deps.Allocator
 	}
-	seedService := seed.New(allocator)
+	var continuation sessiondiagnostics.Service
+	if s != nil && s.deps.LifecycleFactory != nil {
+		continuation = s.deps.LifecycleFactory()
+	}
+	seedService := seed.New(allocator, seed.Options{Lifecycle: continuation, Observer: request.ToolLifecycle})
 	policy, err := s.resolvePolicy(request)
 	if err != nil {
 		return nil, err
@@ -79,10 +83,6 @@ func (s *Service) Prepare(ctx context.Context, request sessionturn.Request) (ses
 	}
 
 	turnState := turns.New(turns.Dependencies{SessionInferencer: inferencer, EventSink: request.EventSink})
-	var continuation sessiondiagnostics.Service
-	if s != nil && s.deps.LifecycleFactory != nil {
-		continuation = s.deps.LifecycleFactory()
-	}
 	return &runtime{
 		inferencer:      inferencer,
 		turns:           turnState,
@@ -312,6 +312,17 @@ func (r *runtime) StartPublication(ctx context.Context, request sessionturn.Publ
 	return publication, nil
 }
 func (r *runtime) NewOutput(writer io.Writer) sessionturn.Output { return r.output.NewOutput(writer) }
+
+func (r *runtime) AttachAudioOutput(inferencer messages.SessionInferencer, observer sessionturn.AudioDeltaObserver) (sessionturn.AudioOutputRuntime, error) {
+	if r == nil || inferencer == nil {
+		return nil, sessionturn.ErrMissingTurnInferencer
+	}
+	if observer == nil {
+		return nil, sessionturn.ErrMissingAudioOutputObserver
+	}
+	return newAudioOutputRuntime(inferencer, observer), nil
+}
+
 func (r *runtime) Close() error {
 	r.closeOnce.Do(func() {
 		r.mu.Lock()

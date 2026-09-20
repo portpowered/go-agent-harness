@@ -9,6 +9,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 )
 
 // prepareSessionStreamOutput gives an unowned stream its terminal renderer.
@@ -34,6 +35,8 @@ func newObservedSessionLoop(inferencer messages.SessionInferencer, opts sessionL
 	}
 	observed := newObservedSessionInferencer(inferencer, opts.runtime)
 	observed.progress = opts.observer
+	_, serviceOwnedToolExecutor := opts.ToolExecutor.(sessionturn.ServiceOwnedToolExecutor)
+	observed.serviceLifecycle = opts.turnRuntime != nil || serviceOwnedToolExecutor
 	if opts.observer != nil {
 		opts.observer.setLivenessClock(opts.livenessClock)
 		opts.observer.setToolResultsEnabled(opts.ToolExecutor != nil)

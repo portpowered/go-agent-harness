@@ -69,6 +69,11 @@ func sessionLoopToolExecutor(opts sessionLoopOptions) messages.ToolExecutor {
 			ToolDiagnostic: func(call messages.ToolCall, err error) {
 				recordSessionToolDiagnostic(opts.toolDiagnostics, opts.ToolExecutor, call, err)
 			},
+			ToolLifecycle: func(event sessionturn.ToolLifecycleEvent) {
+				if opts.observer != nil {
+					opts.observer.observeSessionTurnLifecycle(event)
+				}
+			},
 		})
 		if err != nil {
 			return opts.ToolExecutor
@@ -86,7 +91,7 @@ func prepareSessionRecordingTurnRuntime(ctx context.Context, plan *sessionRuntim
 	return prepareSessionTurnSeed(ctx, plan, seed)
 }
 
-func prepareSessionRecordingOutputs(plan *sessionRuntimePlan, out io.Writer, audioOutPath string, seed SessionTextSeed, turnRuntime sessionturn.Runtime) (*sessionAudioOutput, *sessionAudioOutputInferencer, sessionturn.Output, error) {
+func prepareSessionRecordingOutputs(plan *sessionRuntimePlan, out io.Writer, audioOutPath string, seed SessionTextSeed, turnRuntime sessionturn.Runtime) (*sessionAudioOutput, sessionturn.AudioOutputRuntime, sessionturn.Output, error) {
 	if audioOutPath == "" {
 		if seed.Present && turnRuntime != nil {
 			return nil, nil, turnRuntime.NewOutput(out), nil
@@ -100,12 +105,10 @@ func prepareSessionRecordingOutputs(plan *sessionRuntimePlan, out io.Writer, aud
 	if plan.inferencer == nil {
 		return audioOutput, nil, nil, nil
 	}
-	wirePrompt := ""
-	if turnRuntime != nil {
-		wirePrompt = turnRuntime.WirePrompt()
+	audioWrapper, err := attachSessionAudioOutput(turnRuntime, plan, audioOutput)
+	if err != nil {
+		return nil, nil, nil, err
 	}
-	audioWrapper := newSessionAudioOutputInferencer(plan.inferencer, audioOutput, wirePrompt, seed.Value)
-	plan.inferencer = audioWrapper
 	return audioOutput, audioWrapper, nil, nil
 }
 
@@ -134,6 +137,11 @@ func prepareSessionTurnRuntime(ctx context.Context, opts SessionRunOptions, plan
 		},
 		ToolDiagnostic: func(call messages.ToolCall, err error) {
 			recordSessionToolDiagnostic(opts.ToolDiagnostics, opts.ToolExecutor, call, err)
+		},
+		ToolLifecycle: func(event sessionturn.ToolLifecycleEvent) {
+			if plan.loop.observer != nil {
+				plan.loop.observer.observeSessionTurnLifecycle(event)
+			}
 		},
 		ImageCleanup: opts.sessionImageCleanup,
 	}
