@@ -10,6 +10,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	audiosubsystem "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems/audio"
 	duration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -258,9 +259,19 @@ func (r *durationServiceResources) buildLoop(ctx context.Context, inferencer mes
 	if r.opts.observer != nil {
 		r.opts.observer.setToolResultsEnabled(r.opts.ToolExecutor != nil)
 	}
-	loop, err := agentloop.New(duplexSessionLoopOptions(observed, r.opts)...)
+	loopContract, err := durationwire.NewDuplexLoopFactory().Build(ctx, observed, duration.DuplexLoopOptions{
+		AudioPorts:                 durationAudioPorts(r.opts.rtcDeviceBinding),
+		ToolExecutor:               durationToolExecutor(r.opts),
+		ToolDefinitions:            append([]messages.ToolDefinition(nil), r.opts.ToolDefinitions...),
+		AdvertiseToolDefinitions:   r.opts.AdvertiseToolDefinitions,
+		ToolAcknowledgementPolicy: durationToolAcknowledgementPolicy(r.opts),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("create session agent loop: %w", err)
+	}
+	loop, ok := loopContract.(*agentloop.AgentLoop)
+	if !ok {
+		return nil, errors.New("session execution returned an unsupported duration loop")
 	}
 	publisher, publisherErrors := startSessionDynamicToolPublisher(ctx, loop, r.opts)
 	r.ctx = ctx
@@ -288,4 +299,50 @@ func (r *durationServiceResources) buildLoop(ctx context.Context, inferencer mes
 		}
 	}
 	return &durationServiceLoop{inner: loop, resources: r}, nil
+}
+
+func durationAudioPorts(binding *RTCDeviceBinding) *audiosubsystem.Ports {
+	if binding == nil || (binding.Capture == nil && binding.Sink == nil) {
+		return nil
+	}
+	ports := &audiosubsystem.Ports{}
+	if binding.Capture != nil {
+		ports.Capture = binding.Capture.Control()
+	}
+	if binding.Sink != nil {
+		ports.Playback = binding.Sink.PlaybackBuffer()
+		ports.Commands = binding.Sink.PlaybackCommands()
+	}
+	return ports
+}
+
+func durationToolExecutor(opts sessionLoopOptions) messages.ToolExecutor {
+	if opts.ToolExecutor == nil {
+		return nil
+	}
+	return newSessionToolExecutorWithInteractivePolicyAndObserverAndCancellationIntentAndDiagnostics(
+		opts.ToolExecutor,
+		opts.InteractiveToolPolicy,
+		opts.ToolExecutionTimeout,
+		composeSessionToolLifecycleObserver(opts.toolLifecycleObserver, opts.observer, opts.runtime),
+		opts.cancellationIntent,
+		opts.toolDiagnostics,
+	)
+}
+
+func durationToolAcknowledgementPolicy(opts sessionLoopOptions) *duration.DuplexToolAcknowledgementPolicy {
+	if opts.InteractiveToolPolicy == nil {
+		return nil
+	}
+	policy := opts.InteractiveToolPolicy.Clone()
+	longRunning := make([]string, 0, len(opts.ToolDefinitions))
+	for _, definition := range opts.ToolDefinitions {
+		if policy.ClassForTool(definition.Name) == InteractiveToolClassBoundedLongRunning {
+			longRunning = append(longRunning, definition.Name)
+		}
+	}
+	return &duration.DuplexToolAcknowledgementPolicy{
+		Threshold:            policy.AcknowledgementThreshold,
+		LongRunningToolNames: longRunning,
+	}
 }
