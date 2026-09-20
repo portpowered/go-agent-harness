@@ -50,7 +50,12 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		result := roomFailureResult(err, nil)
 		return result, err
 	}
-	opts, roomClock := normalizeRoomClockOptions(opts)
+	var roomClock platformclock.Source
+	opts, roomClock, err = normalizeRoomClockOptions(opts)
+	if err != nil {
+		result := roomFailureResult(err, nil)
+		return result, err
+	}
 
 	var evidence *roomEvidence
 	var evidenceSecrets []string
@@ -308,7 +313,7 @@ func buildRoomReplaySchedule(ctx context.Context, replayMode bool, opts RoomRunO
 	if !replayMode {
 		return nil, nil
 	}
-	return newRoomReplaySchedule(ctx, *opts.ReplayPlan, plans, roomFormatForOptions(opts))
+	return newRoomReplaySchedule(ctx, *opts.ReplayPlan, plans, roomFormatForOptions(opts), opts.AudioService)
 }
 
 func roomReplayMixerConfig(opts RoomRunOptions, scheduled bool) room.PCM16MixerConfig {
@@ -320,10 +325,8 @@ func roomReplayMixerConfig(opts RoomRunOptions, scheduled bool) room.PCM16MixerC
 	return config
 }
 
-// newRoomParticipantRuntime assembles one participant's runtime state,
-// including its fixed per-voice outbound loudness gain (see
-// VoiceLoudnessGainDB), which is why plan.manifest.Voice is required here
-// rather than left to a caller default.
+// newRoomParticipantRuntime assembles one participant's runtime state, including
+// its fixed per-voice outbound loudness gain from the audio service.
 func newRoomParticipantRuntime(
 	plan *roomParticipantPlan,
 	participantCtx context.Context,
@@ -350,7 +353,7 @@ func newRoomParticipantRuntime(
 		mixer:            mixer,
 		ingress:          newRoomParticipantIngress(plan, opts, evidence),
 		lifecycle:        &roomParticipantLifecycle{stateChanged: coordinator.progress, admissionClosed: coordinator.admissionDone()},
-		outboundLoudness: audio.NewLoudnessNormalizer(audio.LoudnessNormalizerConfig{GainDB: VoiceLoudnessGainDB(plan.manifest.Voice)}),
+		outboundLoudness: audio.NewLoudnessNormalizer(audio.LoudnessNormalizerConfig{GainDB: opts.AudioService.VoiceGainDB(plan.manifest.Voice)}),
 	}
 }
 
@@ -452,13 +455,20 @@ func validateRoomRunAdmission(opts RoomRunOptions, validation room.ValidationOpt
 	return nil
 }
 
-func normalizeRoomClockOptions(opts RoomRunOptions) (RoomRunOptions, platformclock.Source) {
+func normalizeRoomClockOptions(opts RoomRunOptions) (RoomRunOptions, platformclock.Source, error) {
 	roomClock := platformclock.Ensure(opts.Clock)
 	opts.Clock = roomClock
 	if opts.LivenessClock == nil {
-		opts.LivenessClock = sessionLivenessClockFromSource(roomClock)
+		if opts.AudioService == nil {
+			return opts, roomClock, errors.New("audio service is required for room liveness timing")
+		}
+		livenessClock, err := opts.AudioService.NewClock(roomClock)
+		if err != nil {
+			return opts, roomClock, err
+		}
+		opts.LivenessClock = livenessClock
 	}
-	return opts, roomClock
+	return opts, roomClock, nil
 }
 
 func roomParticipantReady(plan *roomParticipantPlan) RoomParticipantReady {

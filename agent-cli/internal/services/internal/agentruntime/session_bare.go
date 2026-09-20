@@ -117,17 +117,17 @@ func ResolveBareSessionOptions(opts SessionRunOptions) (SessionRunOptions, error
 	resolved.InputAudioTranscription = &transcription
 
 	if loadedCfg.Session != nil {
-		if !resolved.RTCDeviceBinding.InputPresent && resolved.RTCDeviceBinding.InputDevice == "" {
-			resolved.RTCDeviceBinding.InputDevice = loadedCfg.Session.InputDevice
+		if !resolved.RTCBinding.InputPresent && resolved.RTCBinding.InputDevice == "" {
+			resolved.RTCBinding.InputDevice = loadedCfg.Session.InputDevice
 		}
-		if !resolved.RTCDeviceBinding.OutputPresent && resolved.RTCDeviceBinding.OutputDevice == "" {
-			resolved.RTCDeviceBinding.OutputDevice = loadedCfg.Session.OutputDevice
+		if !resolved.RTCBinding.OutputPresent && resolved.RTCBinding.OutputDevice == "" {
+			resolved.RTCBinding.OutputDevice = loadedCfg.Session.OutputDevice
 		}
 	}
 	// Bare mode intentionally selects both directions. Empty and "default"
 	// selectors are left intact for the shared registry resolver.
-	resolved.RTCDeviceBinding.InputPresent = true
-	resolved.RTCDeviceBinding.OutputPresent = true
+	resolved.RTCBinding.InputPresent = true
+	resolved.RTCBinding.OutputPresent = true
 
 	return resolved, nil
 }

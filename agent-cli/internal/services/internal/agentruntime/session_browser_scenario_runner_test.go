@@ -171,7 +171,7 @@ func TestRunBrowserConversationDefaultRunnerUsesSharedDuplexAudioPath(t *testing
 		PostSessionProbe: func(context.Context, *BrowserConversationFixtureRun, string) (BrowserConversationTabStateProbeResult, error) {
 			return BrowserConversationTabStateProbeResult{PageID: "checkout", Alive: true, Responsive: true, AllowsMutation: true}, nil
 		},
-		SessionOptions: SessionRunOptions{ModelCatalog: testModelCatalog(), SessionInferencer: sessionInferencer},
+		SessionOptions: SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(), SessionInferencer: sessionInferencer},
 	})
 	if err != nil {
 		t.Fatalf("RunBrowserConversation: %v", err)

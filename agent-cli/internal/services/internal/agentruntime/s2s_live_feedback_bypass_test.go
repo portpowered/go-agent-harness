@@ -12,6 +12,7 @@ import (
 
 	services "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
@@ -67,10 +68,10 @@ func TestRunSessionHeadphoneShapedPlaybackPreservesIndependentSpeech(t *testing.
 			APIKey:            "test-key",
 			ConfigDir:         t.TempDir(),
 			ModelCatalog:      providerswire.NewModelCatalog(),
+			DeviceService:     newTestDeviceService(registry),
 			BareLive:          true,
 			SessionInferencer: inferencer,
-			RTCDeviceBinding: services.RTCDeviceBindingRequest{
-				Registry:              registry,
+			RTCBinding: runtimedevices.RTCBindingRequest{
 				InputPresent:          true,
 				OutputPresent:         true,
 				FeedbackWarningWriter: feedbackBypassWarningWriter(warning),
@@ -178,8 +179,8 @@ func TestRunSessionReplayBypassesPairedDeviceFeedbackController(t *testing.T) {
 		runErr <- services.RunSession(ctx, io.Discard, services.SessionRunOptions{
 			ReplayPath:        "synthetic.json",
 			SessionInferencer: inferencer,
-			RTCDeviceBinding: services.RTCDeviceBindingRequest{
-				Registry:              registry,
+			DeviceService:     newTestDeviceService(registry),
+			RTCBinding: runtimedevices.RTCBindingRequest{
 				InputPresent:          true,
 				OutputPresent:         true,
 				FeedbackWarningWriter: feedbackBypassWarningWriter(warning),
@@ -334,7 +335,7 @@ func (s *feedbackBypassSession) Receive() *messages.TypedBuffer[messages.StreamM
 
 func (s *feedbackBypassSession) Done() <-chan struct{} { return s.done }
 
-func (s *feedbackBypassSession) RTCMedia() services.RTCMediaEndpoints {
+func (s *feedbackBypassSession) RTCMedia() audio.MediaEndpoints {
 	return s.media.Endpoints()
 }
 
@@ -357,7 +358,7 @@ func (s *feedbackBypassSession) sentSnapshot() []messages.StreamMessage {
 var (
 	_ messages.SessionInferencer = (*feedbackBypassSessionInferencer)(nil)
 	_ messages.Session           = (*feedbackBypassSession)(nil)
-	_ services.RTCMediaSession   = (*feedbackBypassSession)(nil)
+	_ audio.MediaSession         = (*feedbackBypassSession)(nil)
 )
 
 func assertFeedbackBypassNotInterrupted(t *testing.T, warning <-chan string, session *feedbackBypassSession) {

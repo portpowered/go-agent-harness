@@ -28,10 +28,6 @@ func prepareSessionStreamOutput(out io.Writer, opts *sessionLoopOptions) (io.Wri
 }
 
 func newObservedSessionLoop(inferencer messages.SessionInferencer, opts sessionLoopOptions) (*agentloop.AgentLoop, *observedSessionInferencer, <-chan error, error) {
-	inferencer, pumpErrors := bindRTCDeviceSessionInferencer(inferencer, opts.rtcDeviceBinding)
-	if err := ensureRTCDeviceBindingBuffers(opts.rtcDeviceBinding); err != nil {
-		return nil, nil, nil, err
-	}
 	observed := newObservedSessionInferencer(inferencer, opts.runtime)
 	observed.progress = opts.observer
 	if opts.observer != nil {
@@ -42,21 +38,25 @@ func newObservedSessionLoop(inferencer messages.SessionInferencer, opts sessionL
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("create session agent loop: %w", err)
 	}
-	return loop, observed, pumpErrors, nil
+	var deviceErrors <-chan error
+	if opts.rtcDeviceBinding != nil {
+		deviceErrors = opts.rtcDeviceBinding.Errors()
+	}
+	return loop, observed, deviceErrors, nil
 }
 
 func sessionStreamDeadline(opts sessionLoopOptions) (<-chan time.Time, func(), error) {
 	if opts.MaxDuration <= 0 {
 		return nil, func() {}, nil
 	}
-	timer, err := newSessionTimer(opts.clockSource, opts.MaxDuration)
+	timer, err := opts.audioService.NewTimer(opts.clockSource, opts.MaxDuration)
 	if err != nil {
 		return nil, nil, err
 	}
 	return timer.C(), func() { timer.Stop() }, nil
 }
 
-func bindSessionLoopInputs(runCtx, audioCtx context.Context, loop *agentloop.AgentLoop, opts sessionLoopOptions) error {
+func bindSessionLoopInputs(runCtx context.Context, loop *agentloop.AgentLoop, opts sessionLoopOptions) error {
 	if opts.loopReady != nil {
 		select {
 		case opts.loopReady <- loop:
@@ -64,9 +64,5 @@ func bindSessionLoopInputs(runCtx, audioCtx context.Context, loop *agentloop.Age
 			return runCtx.Err()
 		}
 	}
-	if opts.AudioIn != nil {
-		opts.AudioIn.bindContext(audioCtx)
-	}
-
 	return nil
 }

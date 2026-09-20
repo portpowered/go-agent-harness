@@ -18,7 +18,7 @@ func prepareTrace(request *public.Request, options *SessionRunOptions, source cl
 	if !request.TraceAudio && request.RecordDirectory == "" {
 		return nil, nil
 	}
-	binding := options.RTCDeviceBinding
+	binding := options.RTCBinding
 	prepared, err := tracewire.NewService().Prepare(sessiontrace.Request{
 		TraceAudio: request.TraceAudio, RecordDirectory: request.RecordDirectory, Clock: source,
 		Credentials: traceCredentials(request), RuntimeObserver: adaptSessionTraceObserver(options.RuntimeObserver),

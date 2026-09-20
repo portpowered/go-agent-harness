@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -32,12 +33,11 @@ type SessionDurationClock interface {
 	NewTimer(time.Duration) SessionDurationTimer
 }
 
-func sessionDurationClockFromSource(source platformclock.Source) (SessionDurationClock, error) {
-	timerSource, err := sessionTimerSource(source)
-	if err != nil {
-		return nil, err
+func sessionDurationClockFromSource(service audioio.Service, source platformclock.Source) (SessionDurationClock, error) {
+	if service == nil {
+		return nil, errors.New("audio service is required for session duration timing")
 	}
-	return timerSource, nil
+	return service.NewClock(source)
 }
 
 // RunSessionWithMaxDuration runs a session with an optional graceful duration
@@ -47,7 +47,7 @@ func RunSessionWithMaxDuration(ctx context.Context, out io.Writer, opts SessionR
 	if maxDuration == 0 {
 		return RunSessionWithMaxDurationClock(ctx, out, opts, maxDuration, nil)
 	}
-	durationClock, err := sessionDurationClockFromSource(opts.Clock)
+	durationClock, err := sessionDurationClockFromSource(opts.AudioService, opts.Clock)
 	if err != nil {
 		return err
 	}
@@ -89,7 +89,10 @@ func RunSessionWithMaxDurationClock(ctx context.Context, out io.Writer, opts Ses
 		return err
 	}
 	if durationClock == nil {
-		durationClock = realSessionDurationClock{}
+		durationClock, err = sessionDurationClockFromSource(opts.AudioService, opts.Clock)
+		if err != nil {
+			return err
+		}
 	}
 	return runSessionDurationPlan(durationCtx, out, plan, maxDuration, durationClock)
 }
@@ -158,7 +161,7 @@ func RunSessionWithTextSeedAndMaxDuration(ctx context.Context, out io.Writer, op
 	if inner != nil {
 		plan.inferencer = admittedInferencer
 	}
-	durationClock, err := sessionDurationClockFromSource(opts.Clock)
+	durationClock, err := sessionDurationClockFromSource(opts.AudioService, opts.Clock)
 	if err != nil {
 		return err
 	}
@@ -171,16 +174,8 @@ func runSessionDurationPlan(ctx context.Context, out io.Writer, plan sessionRunt
 }
 
 func effectiveSessionDurationClock(plan sessionRuntimePlan, requested SessionDurationClock) (SessionDurationClock, error) {
-	// The legacy production callers pass realSessionDurationClock{} because
-	// that was the only implementation before SessionRunOptions.Clock became
-	// the shared timing dependency. Redirect that default through the plan's
-	// source so deterministic sessions do not accidentally schedule on host
-	// time. A non-default test clock remains authoritative.
 	if requested == nil {
-		return sessionDurationClockFromSource(plan.clockSource)
-	}
-	if _, isDefault := requested.(realSessionDurationClock); isDefault {
-		return sessionDurationClockFromSource(plan.clockSource)
+		return sessionDurationClockFromSource(plan.loop.audioService, plan.clockSource)
 	}
 	return requested, nil
 }
@@ -216,26 +211,11 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 			return err
 		}
 	}
-	deviceBinding, err := PrepareRTCDeviceBindings(plan.rtcDeviceRequest)
-	if err != nil {
+	if err := plan.bindRTC(ctx, finalizer); err != nil {
 		return err
 	}
-	if deviceBinding != nil {
-		plan.loop.rtcDeviceBinding = deviceBinding
-		finalizer.setDeviceBinding(deviceBinding)
-	}
-	// Best-effort, same as the non-duration run path: this disclosure write
-	// must not pre-empt or masquerade as the session's own run/drain failure.
-	writeFilesystemScopeAnnouncement(out, plan.filesystemPolicy)
-	writeSessionToolAnnouncement(out, plan.toolDefinitionsForAnnouncement())
-	announcement := plan.announce
-	if plan.loop.BareLive {
-		announcement, plan.loop.ListeningBanner = plan.bareLiveOutput(deviceBinding)
-	}
-	if announcement != "" {
-		if _, err := fmt.Fprintln(out, announcement); err != nil {
-			return wrapSessionRuntimeError(plan, err)
-		}
+	if err := plan.writeAnnouncements(out, false); err != nil {
+		return wrapSessionRuntimeError(plan, err)
 	}
 
 	loopOut := out

@@ -11,6 +11,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 )
 
 func TestRateLimitRetryDecision(t *testing.T) {
@@ -298,7 +299,7 @@ func TestRateLimitRetryWaitStopsOnContextCancellation(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if err := retryScheduledRateLimitedResponseWithClock(ctx, nil, nil, loop, observer, terminal, nil); !errors.Is(err, context.Canceled) {
+	if err := retryScheduledRateLimitedResponseWithClock(audioiowire.NewService(), ctx, nil, nil, loop, observer, terminal, nil); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled retry error = %v, want context cancellation", err)
 	}
 	if got := session.countSent(messages.StreamTypeResponseCreate); got != 0 {

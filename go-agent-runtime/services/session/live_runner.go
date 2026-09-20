@@ -35,7 +35,16 @@ type LiveRunOptions struct {
 	// Sources admitted by a device service are owned and closed by that service;
 	// sources that were never admitted remain the caller's responsibility.
 	CaptureTurns []devices.FileInput
-	Events       LiveEventSink
+	// CaptureInterruptions are finite clips admitted after the first dispatched
+	// browser invocation that matches CaptureInterruptionTool. They are sent
+	// through the same ordered provider audio boundary and committed as separate
+	// turns while the browser invocation remains in flight.
+	CaptureInterruptions []devices.FileInput
+	// CaptureInterruptionTool optionally narrows the browser invocation that
+	// releases CaptureInterruptions. An empty value accepts the first dispatched
+	// invocation with a non-empty ID and tool name.
+	CaptureInterruptionTool string
+	Events                  LiveEventSink
 	// CaptureCompleteControls are sent through the same ordered ingress after
 	// a capture pump reaches EOF. A finite source commonly supplies one
 	// LiveControlAudioCommit value here; the runtime waits for provider

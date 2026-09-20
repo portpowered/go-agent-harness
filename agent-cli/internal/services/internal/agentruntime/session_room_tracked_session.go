@@ -5,6 +5,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	runtimeRoomsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"sync"
 )
 
@@ -85,11 +86,16 @@ func (s *roomTrackedSession) TerminalError() error {
 	}
 	return delegate.TerminalError()
 }
-func (s *roomTrackedSession) rtcMedia() (RTCMediaEndpoints, bool) {
+func (s *roomTrackedSession) rtcMedia() (audio.MediaEndpoints, bool) {
 	if delegate := s.delegateSession(); delegate != nil {
 		if media, ok := delegate.RTCMedia(); ok {
 			return media, true
 		}
 	}
-	return rtcMediaFromSession(s.Session)
+	return sessionMediaFromSession(s.Session)
+}
+
+func (s *roomTrackedSession) RTCMedia() audio.MediaEndpoints {
+	media, _ := s.rtcMedia()
+	return media
 }

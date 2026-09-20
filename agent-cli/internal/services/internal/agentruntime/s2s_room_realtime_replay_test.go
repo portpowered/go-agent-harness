@@ -371,7 +371,7 @@ func roomRealtimeReplaySessionUpdate(t *testing.T, model, instructions string) [
 
 func pID(participant *roomRealtimeReplayParticipant) string {
 	if participant == nil {
-		return "<nil>"
+		return runtimeNilText
 	}
 	return participant.id
 }

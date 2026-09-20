@@ -14,6 +14,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
@@ -479,7 +480,7 @@ func observeRoomParticipantStream(
 	pcm := append([]byte(nil), value.Content...)
 	if runtime.outboundLoudness != nil {
 		// Apply this participant's fixed, voice-specific gain (see
-		// VoiceLoudnessGainDB) before anything downstream observes it, so
+		// the audio service before anything downstream observes it, so
 		// --voice selection cannot leave one room participant audibly
 		// quieter than another. msg.Value is updated to the same bytes so
 		// the recorded delta (below, via recordParticipantDelta) stays
@@ -1016,9 +1017,15 @@ func roomProviderInputPCM(runtime *roomParticipantRuntime, pcm []byte) ([]byte, 
 		// media seam; their mixer bytes are already at that seam's rate.
 		return pcm, nil
 	}
-	converted, err := convertSessionAudioPCM(pcm, sourceRate, providerRate)
+	service := runtime.plan.options.AudioService
+	if service == nil {
+		return nil, errors.New("audio service is required for room participant conversion")
+	}
+	converted, err := service.ConvertPCM16(context.Background(), audioio.PCM16Request{
+		PCM: pcm, SourceRate: sourceRate, TargetRate: providerRate,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("convert room participant %q input from %d Hz to provider rate %d Hz: %w", runtime.plan.manifest.ID, sourceRate, providerRate, err)
+		return nil, fmt.Errorf("convert room participant %q input from %d Hz to provider rate %d Hz: convert session input from %d Hz to provider rate %d Hz: %w", runtime.plan.manifest.ID, sourceRate, providerRate, sourceRate, providerRate, err)
 	}
 	return converted, nil
 }

@@ -9,12 +9,17 @@ package devices
 import (
 	"context"
 	"errors"
+	"io"
+	"strings"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
+	selfhearing "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/selfhearing"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
+	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
@@ -29,6 +34,19 @@ var (
 	// class of playback error.
 	ErrPlaybackInput = errors.New("provider playback input failed")
 )
+
+// RemoteEndpoint is the opaque endpoint selector accepted by the device
+// service. Validate performs its side-effect-free admission check before a
+// host opens replay captures or media ports.
+type RemoteEndpoint string
+
+func (endpoint RemoteEndpoint) Validate() error {
+	if strings.TrimSpace(string(endpoint)) == "" {
+		return nil
+	}
+	_, err := devicegw.NewRemoteDeviceRegistry(string(endpoint))
+	return err
+}
 
 // Request is the normalized device admission input for one invocation. IDs
 // remain opaque strings at this boundary; the host or device implementation
@@ -151,6 +169,67 @@ type Handle interface {
 // inert; registry access and worker startup happen only in Open.
 type Service interface {
 	Open(context.Context, Request) (Handle, error)
+	BindRTC(context.Context, RTCBindingRequest) (RTCBinding, error)
+}
+
+// RTCBindingRequest is the normalized, host-neutral RTC device request. The
+// service owns the registry and all device lifecycle decisions; callers pass
+// only selectors, negotiated rates and observation hooks.
+type RTCBindingRequest struct {
+	Inferencer                 messages.SessionInferencer
+	RemoteEndpoint             string
+	InputDevice                string
+	OutputDevice               string
+	InputPresent               bool
+	OutputPresent              bool
+	SelfHearingConfig          selfhearing.PCM16SelfHearingConfig
+	FeedbackWarningWriter      io.Writer
+	BypassSelfHearing          bool
+	InputSampleRate            int
+	OutputSampleRate           int
+	OutputVoice                string
+	HoldToneConfig             *audio.HoldToneConfig
+	PlaybackObserver           devicert.RTCDevicePlaybackObserver
+	PlaybackReceiptObserver    devicert.RTCDevicePlaybackReceiptObserver
+	PlaybackSamplesObserver    devicert.RTCDevicePlaybackSamplesObserver
+	PreGateSamplesObserver     devicert.RTCDeviceCaptureSamplesObserver
+	UploadedSamplesObserver    devicert.RTCDeviceCaptureSamplesObserver
+	RenderedSamplesObserver    devicert.RTCDeviceRenderedSamplesObserver
+	RenderedSamplesUnavailable func()
+	CaptureObserver            devicert.RTCDeviceCaptureObserver
+}
+
+// HasInput reports whether this request selects an input direction. An empty
+// device ID still selects the registry default when InputPresent is set.
+func (request RTCBindingRequest) HasInput() bool {
+	return request.InputPresent || request.InputDevice != ""
+}
+
+// HasOutput reports whether this request selects an output direction. An
+// empty device ID still selects the registry default when OutputPresent is set.
+func (request RTCBindingRequest) HasOutput() bool {
+	return request.OutputPresent || request.OutputDevice != ""
+}
+
+// HasDevices reports whether either media direction is selected.
+func (request RTCBindingRequest) HasDevices() bool {
+	return request.HasInput() || request.HasOutput()
+}
+
+// RTCBinding owns selected local devices and the provider-facing session
+// decorator. Its public surface intentionally exposes no concrete device or
+// mutable runtime state.
+type RTCBinding interface {
+	Inferencer() messages.SessionInferencer
+	Errors() <-chan error
+	Close() error
+}
+
+// RTCBindingDeviceSelection reports the concrete IDs acquired for enabled
+// directions. It is optional so the lifecycle contract remains usable by
+// bindings that do not expose registry metadata.
+type RTCBindingDeviceSelection interface {
+	SelectedDeviceIDs() (input, output string)
 }
 
 // ProbeRequest is the transport-neutral configuration for a live device
