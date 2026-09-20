@@ -219,6 +219,9 @@ type DrainPolicy struct {
 	Clock       TimerScheduler
 	QuietPeriod time.Duration
 	WallSafety  time.Duration
+	// LoopJoinTimeout bounds joining the loop after close and cancellation.
+	// Zero selects the service default.
+	LoopJoinTimeout time.Duration
 }
 
 // FinalizationPorts are already-admitted host cleanup operations. The service

@@ -20,8 +20,7 @@ import (
 // sessionduration service. It contains no duration policy; the service owns
 // the controller, deadline, terminal admission, and finalization state.
 type durationServiceLoop struct {
-	inner     *agentloop.AgentLoop
-	resources *durationServiceResources
+	inner *agentloop.AgentLoop
 }
 
 type realSessionDurationClock struct{}
@@ -91,15 +90,7 @@ func writeDurationSessionReplayMessage(out io.Writer, msg messages.StreamMessage
 }
 
 func (l *durationServiceLoop) Run(ctx context.Context) error {
-	l.resources.mu.Lock()
-	l.resources.runStarted = true
-	l.resources.mu.Unlock()
-	err := l.inner.Run(ctx)
-	select {
-	case l.resources.runResult <- err:
-	default:
-	}
-	return err
+	return l.inner.Run(ctx)
 }
 
 func (l *durationServiceLoop) Deltas() *messages.TypedBuffer[messages.StreamMessage] {
@@ -115,7 +106,6 @@ func (l *durationServiceLoop) SendSessionEvent(ctx context.Context, msg messages
 }
 
 type durationServiceResources struct {
-	mu             sync.Mutex
 	ctx            context.Context
 	opts           sessionLoopOptions
 	out            io.Writer
@@ -123,15 +113,10 @@ type durationServiceResources struct {
 	publication    duration.Publication
 	clock          SessionDurationClock
 	observed       *observedSessionInferencer
-	loop           *agentloop.AgentLoop
 	publisher      *sessionDynamicToolPublisher
 	rtcErrors      <-chan error
 	externalErrors chan error
-	runResult      chan error
 	done           chan struct{}
-	runStarted     bool
-	runDone        bool
-	runErr         error
 	promptSent     bool
 	closeSent      bool
 	closeAfterOpen bool
@@ -149,7 +134,6 @@ func runAgentLoopSessionWithDurationService(ctx context.Context, out io.Writer, 
 		out:            out,
 		clock:          clock,
 		externalErrors: make(chan error, durationExternalErrorCapacity),
-		runResult:      make(chan error, 1),
 		done:           make(chan struct{}),
 	}
 	artifacts := durationwire.NewService().ArtifactsFromContext(ctx)
@@ -260,10 +244,10 @@ func (r *durationServiceResources) buildLoop(ctx context.Context, inferencer mes
 		r.opts.observer.setToolResultsEnabled(r.opts.ToolExecutor != nil)
 	}
 	loopContract, err := durationwire.NewDuplexLoopFactory().Build(ctx, observed, duration.DuplexLoopOptions{
-		AudioPorts:                 durationAudioPorts(r.opts.rtcDeviceBinding),
-		ToolExecutor:               durationToolExecutor(r.opts),
-		ToolDefinitions:            append([]messages.ToolDefinition(nil), r.opts.ToolDefinitions...),
-		AdvertiseToolDefinitions:   r.opts.AdvertiseToolDefinitions,
+		AudioPorts:                durationAudioPorts(r.opts.rtcDeviceBinding),
+		ToolExecutor:              durationToolExecutor(r.opts),
+		ToolDefinitions:           append([]messages.ToolDefinition(nil), r.opts.ToolDefinitions...),
+		AdvertiseToolDefinitions:  r.opts.AdvertiseToolDefinitions,
 		ToolAcknowledgementPolicy: durationToolAcknowledgementPolicy(r.opts),
 	})
 	if err != nil {
@@ -276,7 +260,6 @@ func (r *durationServiceResources) buildLoop(ctx context.Context, inferencer mes
 	publisher, publisherErrors := startSessionDynamicToolPublisher(ctx, loop, r.opts)
 	r.ctx = ctx
 	r.observed = observed
-	r.loop = loop
 	r.publisher = publisher
 	r.rtcErrors = rtcErrors
 	go func() {
@@ -298,7 +281,7 @@ func (r *durationServiceResources) buildLoop(ctx context.Context, inferencer mes
 			return nil, ctx.Err()
 		}
 	}
-	return &durationServiceLoop{inner: loop, resources: r}, nil
+	return &durationServiceLoop{inner: loop}, nil
 }
 
 func durationAudioPorts(binding *RTCDeviceBinding) *audiosubsystem.Ports {

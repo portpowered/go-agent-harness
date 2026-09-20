@@ -11,6 +11,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 )
 
+const defaultLoopJoinTimeout = 5 * time.Second
+
 // Run is the single bounded-session loop boundary. Host-specific prompt,
 // scheduled-input, and rendering behavior is supplied as a handler; deadline,
 // admission, terminal publication, and cleanup remain service-owned.
@@ -130,9 +132,12 @@ type runLoop struct {
 	loop       sessionduration.Loop
 	request    sessionduration.RunRequest
 	runErrs    chan error
+	loopErr    error
+	loopDone   bool
 	pending    []messages.StreamMessage
 	finishOnce sync.Once
 	startOnce  sync.Once
+	finished   bool
 	finishErr  error
 	service    *Service
 }
@@ -196,6 +201,8 @@ func (r *runLoop) handleEvent(event runLoopEvent) (error, bool) {
 	case runLoopControllerError:
 		return r.finishControllerError(event.err), true
 	case runLoopError:
+		r.loopErr = event.err
+		r.loopDone = true
 		return r.finish(false, runLoopFailure(r.ctx, event.err)), true
 	case runLoopExternalError:
 		return r.finish(false, event.err), true
@@ -209,6 +216,9 @@ func (r *runLoop) handleEvent(event runLoopEvent) (error, bool) {
 		}
 		if err := r.process(event.msg); err != nil {
 			return r.finish(false, err), true
+		}
+		if r.finished {
+			return r.finishErr, true
 		}
 		return nil, false
 	case runLoopContext:
@@ -256,6 +266,9 @@ func (r *runLoop) process(msg messages.StreamMessage) error {
 			return r.finish(true, nil)
 		}
 		return err
+	}
+	if r.finished {
+		return nil
 	}
 	if r.request.Handle == nil {
 		return nil
@@ -347,25 +360,68 @@ func (r *runLoop) finish(planned bool, primary error) error {
 				drainErr := r.drainPending()
 				if drainErr == nil && r.request.Drain != nil {
 					drainErr = r.request.Drain(ctx, r.loop, r.controller)
-				} else if drainErr == nil {
-					r.cancelRun()
-					drainErr = waitForLoop(r.runErrs)
 				}
 				r.cancelRun()
 				return drainErr
 			},
 			DrainLoop:   r.loop,
 			DrainPolicy: drainPolicy,
-			Close:       r.request.Close,
-			Binding:     r.request.Binding,
-			Artifacts:   r.request.Artifacts,
+			Close: func() error {
+				var closeErr error
+				if r.request.Close != nil {
+					closeErr = r.request.Close()
+				}
+				joinCtx, cancel := context.WithTimeout(context.Background(), loopJoinTimeout(drainPolicy))
+				defer cancel()
+				loopErr := r.waitForLoop(joinCtx)
+				if errors.Is(primary, loopErr) {
+					loopErr = nil
+				}
+				return errors.Join(closeErr, loopErr)
+			},
+			Binding:   r.request.Binding,
+			Artifacts: r.request.Artifacts,
 		})
 		r.finishErr = errors.Join(finalizeErr, r.service.LifecycleError(sessionduration.LifecycleFailures{
 			Runtime: r.admitted.RuntimeError(),
 			Close:   r.admitted.CloseError(),
 		}))
+		r.finished = true
 	})
 	return r.finishErr
+}
+
+func loopJoinTimeout(policy sessionduration.DrainPolicy) time.Duration {
+	if policy.LoopJoinTimeout <= 0 {
+		return defaultLoopJoinTimeout
+	}
+	return policy.LoopJoinTimeout
+}
+
+func (r *runLoop) waitForLoop(ctx context.Context) error {
+	if !r.loopDone {
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		select {
+		case r.loopErr = <-r.runErrs:
+			r.loopDone = true
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	if errors.Is(r.loopErr, context.Canceled) {
+		return nil
+	}
+	return r.loopErr
+}
+
+func waitForLoop(results <-chan error) error {
+	err := <-results
+	if errors.Is(err, context.Canceled) {
+		return nil
+	}
+	return err
 }
 
 func (r *runLoop) cancelRun() {
@@ -388,14 +444,6 @@ func sendLoopClose(ctx context.Context, loop sessionduration.Loop) error {
 		return fmt.Errorf("close session loop: %w", err)
 	}
 	return nil
-}
-
-func waitForLoop(results <-chan error) error {
-	err := <-results
-	if errors.Is(err, context.Canceled) {
-		return nil
-	}
-	return err
 }
 
 func normalizeLoopError(ctx context.Context, err error) error {

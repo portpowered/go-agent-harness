@@ -4214,3 +4214,30 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   `session/internal/live` behind service-owned contracts; preserve peer-leased
   callers until released or reviewed integration, then cut over every caller,
   delete all five replacements, and run the complete exact-head local preflight.
+
+# C227 service-owned loop join checkpoint 2026-09-20
+
+- Moved duration loop-result ownership from the CLI `durationServiceResources`
+  channel and wrapper mutex into `sessionduration/internal/service.runLoop`.
+  The service now joins after drain and close, retains provider/close error
+  identity, exits immediately after handler-selected completion, and applies a
+  separately bounded loop-join timeout. The CLI no longer stores or joins a
+  second copy of the loop result.
+- Early regression runs exposed lost provider/close errors, loop completion
+  hangs, and a too-short reuse of drain wall-safety for loop joining. Repaired
+  these in the service runner and kept the timeout distinct from the drain
+  interval. Final checks passed: normal and race
+  `rtk go test -count=1 -timeout 480s ./go-agent-runtime/services/sessionduration/... ./go-agent-runtime/services/session/...`
+  and its `-race` equivalent (261 tests / 15 packages each); filtered normal
+  and race `rtk go test -count=1 -timeout 180s ./agent-cli/internal/services/internal/agentruntime -run 'Duration|Scheduled|Cancel|Drain|Retry|Provider|Liveness|Finaliz|Shutdown|Terminal|RTC|Interrupt|Replacement'`
+  and its `-race` equivalent (363 tests each); and `rtk git diff --check`.
+- This remains a partial checkpoint. The nine-file / 2,569-line legacy cluster
+  is absent, but `durationServiceResources` still holds session-specific state
+  and decisions, all caller cutovers are incomplete, the five uncredited C216
+  replacement files remain, and `shutdown_adapter.go` remains one file / 59
+  lines. No PR, push, SCRIPT CI, review, merge, or acceptance is claimed.
+- Exact next action: replace the remaining CLI resource object with
+  service-owned session lifecycle contracts and implementations; cut over every
+  caller while respecting exact peer file leases; remove all five uncredited
+  replacements; verify there are no duplicate decisions; then run the complete
+  exact-head preflight before submitting a candidate.

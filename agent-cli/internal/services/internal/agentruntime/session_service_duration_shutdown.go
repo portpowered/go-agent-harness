@@ -84,18 +84,10 @@ func (r *durationServiceResources) close() error {
 
 func (r *durationServiceResources) closeResources() error {
 	r.stopSessionUpdatedTimer()
-	r.mu.Lock()
-	runStarted := r.runStarted
-	r.mu.Unlock()
 	if r.publisher != nil {
 		r.publisher.stop()
 	}
 	result := r.closeSessionResources()
-	if runStarted && !r.runDone {
-		r.runErr = <-r.runResult
-		r.runDone = true
-	}
-	result = errors.Join(result, joinSessionTerminationErrors(r.runErr, nil))
 	if r.observed != nil {
 		result = errors.Join(result, durationTransportError(r.observed.sessionFailure()))
 	}
