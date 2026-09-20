@@ -11,7 +11,6 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	gwproviders "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
@@ -46,13 +45,6 @@ var defaultSessionStragglerDrainPolicy = sessionStragglerDrainPolicy{
 var errInvalidSessionStragglerDrainPolicy = errors.New("session straggler drain policy requires a positive quiet period")
 
 var errMissingSessionStragglerDrain = errors.New("session termination boundary requires a straggler drain")
-
-func wallTimerChannel(timer platformclock.Timer) <-chan time.Time {
-	if timer == nil {
-		return nil
-	}
-	return timer.C()
-}
 
 // sessionTerminationBoundary is the one terminal shutdown boundary shared by
 // the live and duration session loops. Its callbacks are loop-owned adapters:
@@ -269,78 +261,6 @@ func wrapSessionPhaseError(phase string, err error) error {
 		return nil
 	}
 	return fmt.Errorf("%s: %w", phase, err)
-}
-
-func waitForLoopStragglers(out io.Writer, loop *agentloop.AgentLoop, policy sessionStragglerDrainPolicy, obs *sessionProgressObserver) error {
-	return waitForLoopStragglersWithContext(context.Background(), out, loop, policy, obs, nil)
-}
-
-func waitForLoopStragglersWithContext(ctx context.Context, out io.Writer, loop *agentloop.AgentLoop, policy sessionStragglerDrainPolicy, obs *sessionProgressObserver, source platformclock.Source) error {
-	quiet := policy.quietPeriod
-	if quiet <= 0 {
-		return errInvalidSessionStragglerDrainPolicy
-	}
-	idle, err := newSessionTimer(source, quiet)
-	if err != nil {
-		return err
-	}
-	var wallSafety platformclock.Timer
-	if source != nil {
-		wallSafety = platformclock.Real{}.NewTimer(sessionStragglerDrainWallSafety)
-	}
-	defer stopStragglerTimers(idle, wallSafety)
-	for {
-		msg, open, done := nextSessionStragglerEvent(ctx, wallTimerChannel(wallSafety), loop, idle)
-		if done || !open {
-			return nil
-		}
-		if err := writeStragglerMessage(out, msg, obs); err != nil { //nolint:contextcheck // the straggler observer is synchronous and context-free.
-			return err
-		}
-		idle, err = resetSessionStragglerTimer(idle, source, quiet)
-		if err != nil {
-			return err
-		}
-	}
-}
-
-func nextSessionStragglerEvent(ctx context.Context, wallSafety <-chan time.Time, loop *agentloop.AgentLoop, idle platformclock.Timer) (messages.StreamMessage, bool, bool) {
-	select {
-	case <-ctx.Done():
-		return messages.StreamMessage{}, true, true
-	case <-wallSafety:
-		return messages.StreamMessage{}, true, true
-	case msg, ok := <-loop.Deltas().Chan():
-		return msg, ok, false
-	case <-idle.C():
-		return messages.StreamMessage{}, true, true
-	}
-}
-
-func writeStragglerMessage(out io.Writer, msg messages.StreamMessage, obs *sessionProgressObserver) error {
-	if obs != nil {
-		obs.observe(msg)
-	}
-	return writeSessionReplayMessage(out, msg)
-}
-
-func resetSessionStragglerTimer(timer platformclock.Timer, source platformclock.Source, quiet time.Duration) (platformclock.Timer, error) {
-	if !timer.Stop() {
-		select {
-		case <-timer.C():
-		default:
-		}
-	}
-	return newSessionTimer(source, quiet)
-}
-
-func stopStragglerTimers(idle, wallSafety platformclock.Timer) {
-	if idle != nil {
-		idle.Stop()
-	}
-	if wallSafety != nil {
-		wallSafety.Stop()
-	}
 }
 
 func shouldStopSessionLoop(msg messages.StreamMessage, opts sessionLoopOptions) bool {

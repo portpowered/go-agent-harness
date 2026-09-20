@@ -68,6 +68,11 @@ type LiveCapabilityWatcher interface {
 	BrowserWatch(context.Context) <-chan LiveCapabilityEvent
 }
 
+const (
+	LiveCapabilityEventInvocationCreated = "invocation_created"
+	LiveCapabilityStateDispatched        = "dispatched"
+)
+
 // LiveCapabilityEvent is the provider-neutral browser/tool lifecycle event
 // forwarded by a participant-local capability binding. Hosts may omit the
 // watch port when they only need tool invocation.

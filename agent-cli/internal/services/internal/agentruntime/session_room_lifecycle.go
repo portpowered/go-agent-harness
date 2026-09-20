@@ -1,6 +1,5 @@
 package agentruntime
 
-import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 import (
 	"context"
 	"errors"
@@ -8,6 +7,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	runtimeRoomsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
@@ -52,8 +52,11 @@ type roomParticipantRuntime struct {
 	replayFrameAcks  chan struct{}
 	mixer            *room.PCM16Mixer
 	ingress          *roomAudioIngressLedger
-	input            *devicegw.DeviceSource
-	output           *devicegw.DeviceSink
+	deviceHandle     runtimeDevices.Handle
+	input            runtimeDevices.Capture
+	output           runtimeDevices.Playback
+	inputDeviceID    string
+	outputDeviceID   string
 	lifecycle        *roomParticipantLifecycle
 	diagnosticSink   SessionDiagnosticSink
 	outboundLoudness *audio.LoudnessNormalizer

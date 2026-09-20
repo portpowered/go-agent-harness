@@ -8,9 +8,9 @@ import (
 	"time"
 
 	public "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
+	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
-	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
 )
 
 func TestC112TraceAdapterRequiresInjectedClock(t *testing.T) {
@@ -26,8 +26,8 @@ func TestC112TraceAdapterKeepsDeviceErrorsAndObserverPolicy(t *testing.T) {
 	options := SessionRunOptions{
 		ModelCatalog:    testModelCatalog(),
 		RuntimeObserver: observer,
-		RTCDeviceBinding: RTCDeviceBindingRequest{
-			PlaybackSamplesObserver: devicert.RTCDevicePlaybackSamplesObserver(func(context.Context, int, []int16) error { return priorErr }),
+		RTCBinding: runtimedevices.RTCBindingRequest{
+			PlaybackSamplesObserver: func(context.Context, int, []int16) error { return priorErr },
 		},
 	}
 	request := public.Request{TraceAudio: true, RecordDirectory: filepath.Join(t.TempDir(), "requested")}
@@ -41,7 +41,7 @@ func TestC112TraceAdapterKeepsDeviceErrorsAndObserverPolicy(t *testing.T) {
 	if retain, ok := options.RuntimeObserver.(interface{ RetainCommitPayload() bool }); !ok || !retain.RetainCommitPayload() {
 		t.Fatal("trace adapter changed commit payload policy")
 	}
-	if err := options.RTCDeviceBinding.PlaybackSamplesObserver(context.Background(), 16000, []int16{1, 2}); !errors.Is(err, priorErr) {
+	if err := options.RTCBinding.PlaybackSamplesObserver(context.Background(), 16000, []int16{1, 2}); !errors.Is(err, priorErr) {
 		t.Fatalf("playback callback error = %v", err)
 	}
 	event := SessionRuntimeObservation{Kind: SessionRuntimeObservationResponseCreate, Tick: 11, ResponseID: "response-11"}

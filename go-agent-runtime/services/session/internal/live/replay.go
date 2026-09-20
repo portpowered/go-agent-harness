@@ -50,6 +50,36 @@ func (i *liveInvocation) runCaptureTurns(ctx context.Context) error {
 	return nil
 }
 
+func (i *liveInvocation) runCaptureInterruptions(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case _, ok := <-i.captureInterruptionEvents:
+		if !ok {
+			return nil
+		}
+	}
+	controls := i.options.CaptureCompleteControls
+	if len(controls) == 0 {
+		controls = []session.LiveControl{{Kind: session.LiveControlAudioCommit}}
+	}
+	for index, input := range i.options.CaptureInterruptions {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		turn := len(i.options.CaptureTurns) + index
+		if err := i.captureFiniteTurn(ctx, turn, input); err != nil {
+			return err
+		}
+		for _, control := range controls {
+			if err := i.handle.Send(ctx, control); err != nil {
+				return fmt.Errorf("capture interruption control %q for turn %d: %w", control.Kind, turn+1, err)
+			}
+		}
+	}
+	return nil
+}
+
 func validateCaptureInvocation(i *liveInvocation) error {
 	if i == nil || i.options.Devices == nil || i.endpoints.Outbound == nil {
 		return errors.New("finite capture service is unavailable")

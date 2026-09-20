@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 // websocketReplaySessionInferencer keeps strict websocket replays on their
@@ -85,8 +86,13 @@ func (s *websocketReplaySession) OutputDrops() int64 {
 	return counters.OutputDrops()
 }
 
-func (s *websocketReplaySession) rtcMedia() (RTCMediaEndpoints, bool) {
-	return rtcMediaFromSession(s.Session)
+func (s *websocketReplaySession) rtcMedia() (audio.MediaEndpoints, bool) {
+	return sessionMediaFromSession(s.Session)
+}
+
+func (s *websocketReplaySession) RTCMedia() audio.MediaEndpoints {
+	media, _ := s.rtcMedia()
+	return media
 }
 
 func (s *websocketReplaySession) TerminalError() error {

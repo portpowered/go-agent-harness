@@ -83,10 +83,21 @@ type LiveRateLimitRetryPolicy struct {
 // path validation and opens them before admission when a stronger boundary is
 // required. Empty paths select live provider operation with no capture.
 type LiveReplayPolicy struct {
+	Kind              LiveReplayKind
 	InputCapturePath  string
 	OutputCapturePath string
 	Timing            LiveReplayTiming
 }
+
+// LiveReplayKind describes the session protocol represented by an admitted
+// capture. Realtime captures replay provider transport events; turn captures
+// replay the typed session message stream.
+type LiveReplayKind string
+
+const (
+	LiveReplayKindRealtime LiveReplayKind = "realtime"
+	LiveReplayKindTurn     LiveReplayKind = "turn"
+)
 
 // LiveReplayTiming controls how a host-owned replay source advances.
 type LiveReplayTiming string

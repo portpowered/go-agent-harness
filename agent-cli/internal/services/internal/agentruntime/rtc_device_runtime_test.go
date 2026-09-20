@@ -7,6 +7,7 @@ import (
 	"fmt"
 	agentruntime "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
@@ -21,17 +22,9 @@ import (
 	"time"
 )
 
-func TestRunSessionRTCDeviceBindingStartsRuntimePumps(t *testing.T) {
+func TestRunSessionRTCBindingStartsRuntimePumps(t *testing.T) {
 	registry := newRTCDeviceRoundtripRegistry(t)
-	feed, err := devicegw.NewDeviceSink(registry, rtcRoundtripMicFeedID)
-	if err != nil {
-		t.Fatalf("open virtual microphone feeder: %v", err)
-	}
-	observe, err := devicegw.NewDeviceSource(registry, rtcRoundtripSpeakerID)
-	if err != nil {
-		_ = feed.Close()
-		t.Fatalf("open virtual speaker observer: %v", err)
-	}
+	feed, observe := openRTCDeviceRoundtripObservation(t, registry)
 	peer := newLoopbackRTCTrackPeer(rtcRoundtripFrameCount)
 	sessionInferencer := newRuntimeRTCSessionInferencer(peer)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -44,61 +37,17 @@ func TestRunSessionRTCDeviceBindingStartsRuntimePumps(t *testing.T) {
 		_ = feed.Close()
 		_ = observe.Close()
 	})
-	runErrCh := make(chan error, 1)
-	go func() {
-		runErrCh <- agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
-			ReplayPath:        "synthetic.json",
-			SessionInferencer: sessionInferencer,
-			RTCDeviceBinding: agentruntime.RTCDeviceBindingRequest{
-				Registry:      registry,
-				InputDevice:   rtcRoundtripInputID,
-				OutputDevice:  rtcRoundtripOutputID,
-				InputPresent:  true,
-				OutputPresent: true,
-			},
-		})
-	}()
-	var session *runtimeRTCSession
-	select {
-	case session = <-sessionInferencer.connected:
-	case <-ctx.Done():
-		t.Fatalf("provider session did not connect: %v", ctx.Err())
-	}
-	wantFrames := make([][]int16, rtcRoundtripFrameCount)
-	for frameIndex := range wantFrames {
-		wantFrames[frameIndex] = rtcRoundtripPCMFrame(frameIndex)
-		if err := feed.WriteFrame(ctx, wantFrames[frameIndex]); err != nil {
-			t.Fatalf("feed virtual microphone frame %d: %v", frameIndex, err)
-		}
-	}
+	runErrCh := startRTCDeviceSession(ctx, sessionInferencer, registry)
+	session := waitForRTCDeviceSession(t, ctx, sessionInferencer)
+	wantFrames := writeRTCDeviceRoundtripFrames(t, ctx, feed)
 	readCtx, readCancel := context.WithTimeout(ctx, rtcRoundtripTimeout)
 	defer readCancel()
-	for frameIndex, want := range wantFrames {
-		got := make([]int16, audio.FrameSize)
-		if err := observe.ReadFrame(readCtx, got); err != nil {
-			t.Fatalf("observe virtual speaker frame %d: %v", frameIndex, err)
-		}
-		if pcmAbsoluteEnergy(got) == 0 {
-			t.Fatalf("observed virtual speaker frame %d has no emitted audio energy", frameIndex)
-		}
-		for sampleIndex := range want {
-			if got[sampleIndex] != want[sampleIndex] {
-				t.Fatalf("speaker frame %d sample %d = %d, want %d", frameIndex, sampleIndex, got[sampleIndex], want[sampleIndex])
-			}
-		}
-	}
+	assertRTCDeviceRuntimeFrames(t, readCtx, observe, wantFrames)
 	if got := peer.Stats(); got.Writes != rtcRoundtripFrameCount || got.Reads != rtcRoundtripFrameCount {
 		t.Fatalf("runtime RTC peer stats = %+v, want %d writes and reads", got, rtcRoundtripFrameCount)
 	}
 	session.finish()
-	select {
-	case err := <-runErrCh:
-		if err != nil {
-			t.Fatalf("RunSession with runtime RTC pumps: %v", err)
-		}
-	case <-ctx.Done():
-		t.Fatalf("RunSession did not finish after provider close: %v", ctx.Err())
-	}
+	awaitRTCDeviceSession(t, ctx, runErrCh)
 	if err := feed.Close(); err != nil {
 		t.Fatalf("close virtual microphone feeder: %v", err)
 	}
@@ -109,14 +58,15 @@ func TestRunSessionRTCDeviceBindingStartsRuntimePumps(t *testing.T) {
 		t.Fatalf("runtime registry observations = %+v, want four opens and releases", got)
 	}
 }
-func TestRunSessionRTCDeviceBindingPropagatesPumpError(t *testing.T) {
+
+func TestRunSessionRTCBindingPropagatesPumpError(t *testing.T) {
 	registry := newRTCDeviceRoundtripRegistry(t)
 	feed, err := devicegw.NewDeviceSink(registry, rtcRoundtripMicFeedID)
 	if err != nil {
 		t.Fatalf("open virtual microphone feeder: %v", err)
 	}
 	wantErr := errors.New("outbound RTC track failed")
-	sessionInferencer := newRuntimeRTCSessionInferencerWithMedia(agentruntime.RTCMediaEndpoints{
+	sessionInferencer := newRuntimeRTCSessionInferencerWithMedia(audio.MediaEndpoints{
 		Outbound: failingRTCOutboundMedia{err: wantErr},
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -132,8 +82,8 @@ func TestRunSessionRTCDeviceBindingPropagatesPumpError(t *testing.T) {
 		runErrCh <- agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 			ReplayPath:        "synthetic.json",
 			SessionInferencer: sessionInferencer,
-			RTCDeviceBinding: agentruntime.RTCDeviceBindingRequest{
-				Registry:     registry,
+			DeviceService:     newTestDeviceService(registry),
+			RTCBinding: runtimedevices.RTCBindingRequest{
 				InputDevice:  rtcRoundtripInputID,
 				InputPresent: true,
 			},
@@ -168,19 +118,19 @@ func TestRunSessionRTCDeviceBindingPropagatesPumpError(t *testing.T) {
 }
 
 type runtimeRTCSessionInferencer struct {
-	media     agentruntime.RTCMediaEndpoints
+	media     audio.MediaEndpoints
 	connected chan *runtimeRTCSession
 	mu        sync.Mutex
 	session   *runtimeRTCSession
 }
 
 func newRuntimeRTCSessionInferencer(peer *loopbackRTCTrackPeer) *runtimeRTCSessionInferencer {
-	return newRuntimeRTCSessionInferencerWithMedia(agentruntime.RTCMediaEndpoints{
+	return newRuntimeRTCSessionInferencerWithMedia(audio.MediaEndpoints{
 		Inbound:  peer,
 		Outbound: peer,
 	})
 }
-func newRuntimeRTCSessionInferencerWithMedia(media agentruntime.RTCMediaEndpoints) *runtimeRTCSessionInferencer {
+func newRuntimeRTCSessionInferencerWithMedia(media audio.MediaEndpoints) *runtimeRTCSessionInferencer {
 	return &runtimeRTCSessionInferencer{
 		media:     media,
 		connected: make(chan *runtimeRTCSession, 1),
@@ -217,7 +167,7 @@ func (i *runtimeRTCSessionInferencer) sessionValue() *runtimeRTCSession {
 type runtimeRTCSession struct {
 	recv       *messages.TypedBuffer[messages.StreamMessage]
 	done       chan struct{}
-	media      agentruntime.RTCMediaEndpoints
+	media      audio.MediaEndpoints
 	mu         sync.Mutex
 	sent       []messages.StreamMessage
 	doneOnce   sync.Once
@@ -245,8 +195,8 @@ func (s *runtimeRTCSession) Close() error {
 	s.doneOnce.Do(func() { close(s.done) })
 	return nil
 }
-func (s *runtimeRTCSession) finish()                                  { _ = s.Close() } //nolint:errcheck // The test session close is infallible.
-func (s *runtimeRTCSession) RTCMedia() agentruntime.RTCMediaEndpoints { return s.media }
+func (s *runtimeRTCSession) finish()                        { _ = s.Close() } //nolint:errcheck // The test session close is infallible.
+func (s *runtimeRTCSession) RTCMedia() audio.MediaEndpoints { return s.media }
 func (s *runtimeRTCSession) sentMessages() []messages.StreamMessage {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -254,9 +204,9 @@ func (s *runtimeRTCSession) sentMessages() []messages.StreamMessage {
 }
 
 var (
-	_ messages.SessionInferencer   = (*runtimeRTCSessionInferencer)(nil)
-	_ messages.Session             = (*runtimeRTCSession)(nil)
-	_ agentruntime.RTCMediaSession = (*runtimeRTCSession)(nil)
+	_ messages.SessionInferencer = (*runtimeRTCSessionInferencer)(nil)
+	_ messages.Session           = (*runtimeRTCSession)(nil)
+	_ audio.MediaSession         = (*runtimeRTCSession)(nil)
 )
 
 const (
@@ -294,7 +244,7 @@ func terminalDrainEventForMessage(msg messages.StreamMessage) (string, bool) {
 
 type terminalDrainExternalScenario struct {
 	registry        *devicegw.SimulatedDuplexRegistry
-	request         agentruntime.RTCDeviceBindingRequest
+	request         runtimedevices.RTCBindingRequest
 	providerMedia   *audio.SessionMedia
 	barrierInbound  *terminalDrainExternalInbound
 	provider        *terminalDrainExternalSession
@@ -318,8 +268,8 @@ func newTerminalDrainExternalScenario(t *testing.T) *terminalDrainExternalScenar
 	s.registry = registry
 	holdTone := audio.DefaultHoldToneConfig()
 	holdTone.GapThreshold = time.Hour
-	s.request = agentruntime.RTCDeviceBindingRequest{
-		Registry: registry, OutputPresent: true, OutputDevice: "", OutputSampleRate: terminalDrainProviderRate,
+	s.request = runtimedevices.RTCBindingRequest{
+		OutputPresent: true, OutputDevice: "", OutputSampleRate: terminalDrainProviderRate,
 		HoldToneConfig: &holdTone, PlaybackSamplesObserver: func(_ context.Context, _ int, samples []int16) error {
 			s.record(samples)
 			return registry.Advance(1) //nolint:contextcheck // Simulated callback advancement is synchronous and has no context-aware API.
@@ -367,7 +317,7 @@ func TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio(t *tes
 	go func() {
 		runErr <- agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{
 			ModelCatalog: testModelCatalog(), Provider: "grok", Model: "test-model", APIKey: "test-key", WaitForClose: true, BareLive: true,
-			SessionInferencer: &terminalDrainExternalInferencer{session: s.provider}, RTCDeviceBinding: s.request,
+			SessionInferencer: &terminalDrainExternalInferencer{session: s.provider}, DeviceService: newTestDeviceService(s.registry), RTCBinding: s.request,
 			ToolExecutor: s.toolExecutor, ToolDefinitions: []messages.ToolDefinition{{Name: terminalDrainFirstToolName}, {Name: terminalDrainSecondToolName}},
 			StreamObserver: func(msg messages.StreamMessage) {
 				s.observeStream(msg)

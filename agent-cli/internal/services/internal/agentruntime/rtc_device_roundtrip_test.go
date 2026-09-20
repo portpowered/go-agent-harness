@@ -4,15 +4,16 @@ import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/d
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
+	agentruntime "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime"
+	"io"
 	"reflect"
 	"sync"
 	"testing"
 	"time"
 
-	agentruntime "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
 )
@@ -26,95 +27,49 @@ const (
 	rtcRoundtripTimeout                      = 2 * time.Second
 )
 
-// TestRTCDeviceBindingVirtualRegistryTrackRoundTrip proves the complete PCM
+// TestRTCBindingVirtualRegistryTrackRoundTrip proves the complete PCM
 // path at the provider-neutral RTC media boundary. The loopback peer models
 // the outgoing and incoming WebRTC tracks with the same frame ownership and
 // cancellation contract as rtc.OutboundMedia/rtc.InboundMedia; the virtual
 // registry keeps capture and playback topologies separate so both directions
 // can be observed without a hardware device.
-func TestRTCDeviceBindingVirtualRegistryTrackRoundTrip(t *testing.T) {
+func TestRTCBindingVirtualRegistryTrackRoundTrip(t *testing.T) {
 	registry := newRTCDeviceRoundtripRegistry(t)
-	binding, err := agentruntime.PrepareRTCDeviceBindings(agentruntime.RTCDeviceBindingRequest{
-		Registry:      registry,
-		InputPresent:  true,
-		OutputPresent: true,
-	})
-	if err != nil {
-		t.Fatalf("prepare default RTC device bindings: %v", err)
-	}
-	if binding == nil || binding.Source == nil || binding.Sink == nil {
-		t.Fatalf("binding = %#v, want source and sink", binding)
-	}
-
-	feed, err := devicegw.NewDeviceSink(registry, rtcRoundtripMicFeedID)
-	if err != nil {
-		binding.Close()
-		t.Fatalf("open virtual microphone feeder: %v", err)
-	}
-	observe, err := devicegw.NewDeviceSource(registry, rtcRoundtripSpeakerID)
-	if err != nil {
-		feed.Close()
-		binding.Close()
-		t.Fatalf("open virtual speaker observer: %v", err)
-	}
+	peer := newLoopbackRTCTrackPeer(rtcRoundtripFrameCount)
+	provider := newRuntimeRTCSessionInferencer(peer)
+	binding := openRTCDeviceRoundtripBinding(t, registry, provider)
+	feed, observe := openRTCDeviceRoundtripObservation(t, registry)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(func() {
 		cancel()
-		_ = binding.Close()
-		_ = feed.Close()
-		_ = observe.Close()
+		if closeErr := binding.Close(); closeErr != nil {
+			t.Errorf("close binding: %v", closeErr)
+		}
+		if closeErr := feed.Close(); closeErr != nil {
+			t.Errorf("close feed: %v", closeErr)
+		}
+		if closeErr := observe.Close(); closeErr != nil {
+			t.Errorf("close observe: %v", closeErr)
+		}
 	})
 
-	if got := binding.Source.DeviceID(); got != rtcRoundtripInputID {
-		t.Fatalf("resolved input device = %q, want %q", got, rtcRoundtripInputID)
-	}
-	if got := binding.Sink.DeviceID(); got != rtcRoundtripOutputID {
-		t.Fatalf("resolved output device = %q, want %q", got, rtcRoundtripOutputID)
-	}
 	assertRTCDeviceRoundtripIDs(t, registry)
-
-	peer := newLoopbackRTCTrackPeer(rtcRoundtripFrameCount)
-	t.Cleanup(func() { _ = peer.Close() })
-	sourceDone := make(chan error, 1)
-	sinkDone := make(chan error, 1)
-	go func() { sourceDone <- binding.Source.Pump(ctx, peer) }()
-	go func() { sinkDone <- binding.Sink.Pump(ctx, peer) }()
-
-	wantFrames := make([][]int16, rtcRoundtripFrameCount)
-	for frameIndex := range wantFrames {
-		wantFrames[frameIndex] = rtcRoundtripPCMFrame(frameIndex)
-		if err := feed.WriteFrame(ctx, wantFrames[frameIndex]); err != nil {
-			cancel()
-			t.Fatalf("feed virtual microphone frame %d: %v", frameIndex, err)
+	t.Cleanup(func() {
+		if closeErr := peer.Close(); closeErr != nil {
+			t.Errorf("close peer: %v", closeErr)
 		}
+	})
+	providerSession, err := binding.Inferencer().ConnectSession(ctx)
+	if err != nil {
+		t.Fatalf("connect provider media session: %v", err)
 	}
+
+	wantFrames := writeRTCDeviceRoundtripFrames(t, ctx, feed)
 
 	readCtx, readCancel := context.WithTimeout(context.Background(), rtcRoundtripTimeout)
 	defer readCancel()
-	gotFrames := make([][]int16, rtcRoundtripFrameCount)
-	for frameIndex := range gotFrames {
-		frame := make([]int16, audio.FrameSize)
-		if err := observe.ReadFrame(readCtx, frame); err != nil {
-			cancel()
-			t.Fatalf("observe virtual speaker frame %d: %v", frameIndex, err)
-		}
-		gotFrames[frameIndex] = frame
-		if energy := pcmAbsoluteEnergy(frame); energy == 0 {
-			t.Fatalf("observed virtual speaker frame %d has no emitted audio energy", frameIndex)
-		}
-	}
-
-	// Both pumps are intentionally long-lived. Cancellation after the expected
-	// frames proves they stop at the endpoint lifecycle boundary rather than
-	// silently returning after one media frame.
-	cancel()
-	assertRTCDeviceRoundtripShutdown(t, "source", sourceDone, func(err error) bool {
-		return errors.Is(err, context.Canceled) || errors.Is(err, devicert.ErrRTCDeviceSourceClosed)
-	})
-	assertRTCDeviceRoundtripShutdown(t, "sink", sinkDone, func(err error) bool {
-		return errors.Is(err, context.Canceled) || errors.Is(err, devicert.ErrRTCDeviceSinkClosed)
-	})
+	gotFrames := readRTCDeviceRoundtripFrames(t, readCtx, observe)
 
 	if !reflect.DeepEqual(gotFrames, wantFrames) {
 		t.Fatalf("roundtrip speaker frames differ from microphone frames")
@@ -123,7 +78,75 @@ func TestRTCDeviceBindingVirtualRegistryTrackRoundTrip(t *testing.T) {
 		t.Fatalf("loopback peer stats = %+v, want %d writes and reads", got, rtcRoundtripFrameCount)
 	}
 
-	if err := binding.Close(); err != nil {
+	closeRTCDeviceRoundtripResources(t, providerSession, binding, feed, observe)
+	if got := registry.Observations(); got.OpenCount != 4 || got.ReleaseCount != 4 {
+		t.Fatalf("registry observations = %+v, want four opens and four releases", got)
+	}
+	cancel()
+	if err := peer.Close(); err != nil {
+		t.Fatalf("close loopback peer: %v", err)
+	}
+}
+
+func openRTCDeviceRoundtripBinding(t *testing.T, registry *devicegw.VirtualRegistry, provider messages.SessionInferencer) runtimedevices.RTCBinding {
+	t.Helper()
+	binding, err := newTestDeviceService(registry).BindRTC(context.Background(), runtimedevices.RTCBindingRequest{
+		Inferencer: provider, InputPresent: true, OutputPresent: true,
+	})
+	if err != nil {
+		t.Fatalf("prepare default RTC device bindings: %v", err)
+	}
+	if binding == nil || binding.Inferencer() == nil {
+		t.Fatalf("binding = %#v, want public binding", binding)
+	}
+	return binding
+}
+
+func openRTCDeviceRoundtripObservation(t *testing.T, registry *devicegw.VirtualRegistry) (*devicegw.DeviceSink, *devicegw.DeviceSource) {
+	t.Helper()
+	feed, err := devicegw.NewDeviceSink(registry, rtcRoundtripMicFeedID)
+	if err != nil {
+		t.Fatalf("open virtual microphone feeder: %v", err)
+	}
+	observe, err := devicegw.NewDeviceSource(registry, rtcRoundtripSpeakerID)
+	if err != nil {
+		_ = feed.Close()
+		t.Fatalf("open virtual speaker observer: %v", err)
+	}
+	return feed, observe
+}
+
+func writeRTCDeviceRoundtripFrames(t *testing.T, ctx context.Context, feed *devicegw.DeviceSink) [][]int16 {
+	t.Helper()
+	wantFrames := make([][]int16, rtcRoundtripFrameCount)
+	for frameIndex := range wantFrames {
+		wantFrames[frameIndex] = rtcRoundtripPCMFrame(frameIndex)
+		if err := feed.WriteFrame(ctx, wantFrames[frameIndex]); err != nil {
+			t.Fatalf("feed virtual microphone frame %d: %v", frameIndex, err)
+		}
+	}
+	return wantFrames
+}
+
+func readRTCDeviceRoundtripFrames(t *testing.T, ctx context.Context, observe *devicegw.DeviceSource) [][]int16 {
+	t.Helper()
+	gotFrames := make([][]int16, rtcRoundtripFrameCount)
+	for frameIndex := range gotFrames {
+		frame := make([]int16, audio.FrameSize)
+		if err := observe.ReadFrame(ctx, frame); err != nil {
+			t.Fatalf("observe virtual speaker frame %d: %v", frameIndex, err)
+		}
+		gotFrames[frameIndex] = frame
+		if pcmAbsoluteEnergy(frame) == 0 {
+			t.Fatalf("observed virtual speaker frame %d has no emitted audio energy", frameIndex)
+		}
+	}
+	return gotFrames
+}
+
+func closeRTCDeviceRoundtripResources(t *testing.T, providerSession messages.Session, binding runtimedevices.RTCBinding, feed *devicegw.DeviceSink, observe *devicegw.DeviceSource) {
+	t.Helper()
+	if err := providerSession.Close(); err != nil {
 		t.Fatalf("close RTC device binding: %v", err)
 	}
 	if err := binding.Close(); err != nil {
@@ -135,11 +158,61 @@ func TestRTCDeviceBindingVirtualRegistryTrackRoundTrip(t *testing.T) {
 	if err := observe.Close(); err != nil {
 		t.Fatalf("close virtual speaker observer: %v", err)
 	}
-	if got := registry.Observations(); got.OpenCount != 4 || got.ReleaseCount != 4 {
-		t.Fatalf("registry observations = %+v, want four opens and four releases", got)
+}
+
+func startRTCDeviceSession(ctx context.Context, inferencer messages.SessionInferencer, registry *devicegw.VirtualRegistry) <-chan error {
+	runErrCh := make(chan error, 1)
+	go func() {
+		runErrCh <- agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
+			ReplayPath: "synthetic.json", SessionInferencer: inferencer,
+			DeviceService: newTestDeviceService(registry),
+			RTCBinding: runtimedevices.RTCBindingRequest{
+				InputDevice: rtcRoundtripInputID, OutputDevice: rtcRoundtripOutputID,
+				InputPresent: true, OutputPresent: true,
+			},
+		})
+	}()
+	return runErrCh
+}
+
+func waitForRTCDeviceSession(t *testing.T, ctx context.Context, inferencer *runtimeRTCSessionInferencer) *runtimeRTCSession {
+	t.Helper()
+	select {
+	case session := <-inferencer.connected:
+		return session
+	case <-ctx.Done():
+		t.Fatalf("provider session did not connect: %v", ctx.Err())
+		return nil
 	}
-	if err := peer.Close(); err != nil {
-		t.Fatalf("close loopback peer: %v", err)
+}
+
+func assertRTCDeviceRuntimeFrames(t *testing.T, ctx context.Context, observe *devicegw.DeviceSource, wantFrames [][]int16) {
+	t.Helper()
+	for frameIndex, want := range wantFrames {
+		got := make([]int16, audio.FrameSize)
+		if err := observe.ReadFrame(ctx, got); err != nil {
+			t.Fatalf("observe virtual speaker frame %d: %v", frameIndex, err)
+		}
+		if pcmAbsoluteEnergy(got) == 0 {
+			t.Fatalf("observed virtual speaker frame %d has no emitted audio energy", frameIndex)
+		}
+		for sampleIndex := range want {
+			if got[sampleIndex] != want[sampleIndex] {
+				t.Fatalf("speaker frame %d sample %d = %d, want %d", frameIndex, sampleIndex, got[sampleIndex], want[sampleIndex])
+			}
+		}
+	}
+}
+
+func awaitRTCDeviceSession(t *testing.T, ctx context.Context, runErrCh <-chan error) {
+	t.Helper()
+	select {
+	case err := <-runErrCh:
+		if err != nil {
+			t.Fatalf("RunSession with runtime RTC pumps: %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatalf("RunSession did not finish after provider close: %v", ctx.Err())
 	}
 }
 
@@ -201,18 +274,6 @@ func pcmAbsoluteEnergy(samples []int16) int64 {
 		}
 	}
 	return energy
-}
-
-func assertRTCDeviceRoundtripShutdown(t *testing.T, name string, done <-chan error, acceptable func(error) bool) {
-	t.Helper()
-	select {
-	case err := <-done:
-		if !acceptable(err) {
-			t.Fatalf("%s pump error = %v, want cancellation/close identity", name, err)
-		}
-	case <-time.After(rtcRoundtripTimeout):
-		t.Fatalf("%s pump did not stop after cancellation", name)
-	}
 }
 
 type loopbackRTCTrackPeer struct {

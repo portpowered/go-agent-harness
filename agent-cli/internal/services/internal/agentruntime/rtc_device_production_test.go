@@ -15,6 +15,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	agentruntime "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -102,23 +103,16 @@ func newRecordedRTCDeviceRoundtripRegistry(t *testing.T) *devicegw.VirtualRegist
 
 func exerciseRTCDeviceAudioPass(t *testing.T, registry *devicegw.VirtualRegistry, inferencer messages.SessionInferencer, afterOutput func()) {
 	t.Helper()
-	feed, err := devicegw.NewDeviceSink(registry, rtcRoundtripMicFeedID)
-	if err != nil {
-		t.Fatalf("open device microphone feeder: %v", err)
-	}
-	observe, err := devicegw.NewDeviceSource(registry, rtcRoundtripSpeakerID)
-	if err != nil {
-		_ = feed.Close()
-		t.Fatalf("open device speaker observer: %v", err)
-	}
+	feed, observe := openRTCDeviceRoundtripObservation(t, registry)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	runErr := make(chan error, 1)
 	go func() {
 		runErr <- agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 			ReplayPath: "device-record-replay.json", SessionInferencer: inferencer,
-			RTCDeviceBinding: agentruntime.RTCDeviceBindingRequest{
-				Registry: registry, InputDevice: rtcRoundtripInputID, OutputDevice: rtcRoundtripOutputID,
+			DeviceService: newTestDeviceService(registry),
+			RTCBinding: runtimedevices.RTCBindingRequest{
+				InputDevice: rtcRoundtripInputID, OutputDevice: rtcRoundtripOutputID,
 				InputPresent: true, OutputPresent: true,
 			},
 		})
@@ -149,6 +143,8 @@ func exerciseRTCDeviceAudioPass(t *testing.T, registry *devicegw.VirtualRegistry
 				t.Fatalf("replayed speaker sample %d = %d, want %d", index, got[index], want[index])
 			}
 		}
+	case err := <-runErr:
+		t.Fatalf("device audio session terminated before speaker output: %v", err)
 	}
 	if afterOutput != nil {
 		afterOutput()
@@ -178,12 +174,12 @@ func exerciseRTCDeviceAudioPass(t *testing.T, registry *devicegw.VirtualRegistry
 	}
 }
 
-// TestRunSessionRTCDeviceBindingUsesProductionProviderMediaOwner exercises
+// TestRunSessionRTCBindingUsesProductionProviderMediaOwner exercises
 // the CLI service runtime with the real Grok provider session implementation.
 // The transport is only a deterministic WebSocket seam: input device PCM is
 // serialized by grokSession, echoed as a provider audio delta, then framed by
 // the same provider-owned media endpoints for the output device.
-func TestRunSessionRTCDeviceBindingUsesProductionProviderMediaOwner(t *testing.T) {
+func TestRunSessionRTCBindingUsesProductionProviderMediaOwner(t *testing.T) {
 	registry := newRTCDeviceRoundtripRegistry(t)
 	feed, err := devicegw.NewDeviceSink(registry, rtcRoundtripMicFeedID)
 	if err != nil {
@@ -223,8 +219,8 @@ func TestRunSessionRTCDeviceBindingUsesProductionProviderMediaOwner(t *testing.T
 		runErrCh <- agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 			ReplayPath:        "synthetic.json",
 			SessionInferencer: inferencer,
-			RTCDeviceBinding: agentruntime.RTCDeviceBindingRequest{
-				Registry:      registry,
+			DeviceService:     newTestDeviceService(registry),
+			RTCBinding: runtimedevices.RTCBindingRequest{
 				InputDevice:   rtcRoundtripInputID,
 				OutputDevice:  rtcRoundtripOutputID,
 				InputPresent:  true,
@@ -255,6 +251,8 @@ func TestRunSessionRTCDeviceBindingUsesProductionProviderMediaOwner(t *testing.T
 	case err := <-readErrCh:
 		t.Fatalf("read virtual speaker frame: %v", err)
 	case got = <-gotCh:
+	case err := <-runErrCh:
+		t.Fatalf("RunSession terminated before speaker output: %v", err)
 	}
 	if len(got) != len(want) {
 		t.Fatalf("speaker frame length = %d, want %d", len(got), len(want))

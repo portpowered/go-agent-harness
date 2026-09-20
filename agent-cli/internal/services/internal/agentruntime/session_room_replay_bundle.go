@@ -62,7 +62,7 @@ type RoomReplayBundleError struct {
 
 func (e *RoomReplayBundleError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return runtimeNilText
 	}
 	label := string(e.Kind)
 	if label == "" {

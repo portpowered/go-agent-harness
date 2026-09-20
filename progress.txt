@@ -4241,3 +4241,118 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   caller while respecting exact peer file leases; remove all five uncredited
   replacements; verify there are no duplicate decisions; then run the complete
   exact-head preflight before submitting a candidate.
+# C229 predecessor preservation snapshot — 2026-09-20
+
+- Canonical admission check returned `admitted` for the sole project
+  `audio-runtime`. `prd.json.branchName` equals isolated branch
+  `codex/audio-runtime-c229-recover-audio-device-rtc-retirement`, initially at
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`.
+- Before integration or cleanup, C218 was read-only at
+  `dc92c6c8f1033b5c416345fd4f54ad2369bd6268` on branch
+  `codex/audio-runtime-c218-recover-audio-device-rtc-retirement`. Raw Git
+  porcelain recorded 55 tracked dirty paths, zero staged paths, and zero
+  untracked paths. This differs from C229's stated 54-path count; all 55 are
+  preserved as found. The porcelain SHA-256 is
+  `247806d3613a0be3c8550f07b667c97f252603f405601168fb5fe7867b0d339d`; the
+  unstaged binary diff SHA-256 is
+  `efcf7a559ca32980d301159411d832a21f40b79466c58f42a7aa87de89182b36`.
+- Exact pre-checkpoint status inventory:
+  ```text
+   M agent-cli/internal/services/internal/agentruntime/metrics_collector.go
+   M agent-cli/internal/services/internal/agentruntime/s2s_room_cancel_not_active_race_replay_test.go
+   M agent-cli/internal/services/internal/agentruntime/s2s_room_realtime_replay_cadence_test.go
+   M agent-cli/internal/services/internal/agentruntime/selfplay_service.go
+   M agent-cli/internal/services/internal/agentruntime/service.go
+   D agent-cli/internal/services/internal/agentruntime/session_audio_clock.go
+   D agent-cli/internal/services/internal/agentruntime/session_audio_contract.go
+   D agent-cli/internal/services/internal/agentruntime/session_audio_devices.go
+   M agent-cli/internal/services/internal/agentruntime/session_audio_format_test.go
+   D agent-cli/internal/services/internal/agentruntime/session_audio_policy.go
+   M agent-cli/internal/services/internal/agentruntime/session_audio_rate_test.go
+   M agent-cli/internal/services/internal/agentruntime/session_bare_test.go
+   M agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner_test.go
+   M agent-cli/internal/services/internal/agentruntime/session_conversation_log_test.go
+   M agent-cli/internal/services/internal/agentruntime/session_diagnostics.go
+   M agent-cli/internal/services/internal/agentruntime/session_drain.go
+   M agent-cli/internal/services/internal/agentruntime/session_duration.go
+   M agent-cli/internal/services/internal/agentruntime/session_duration_loop.go
+   M agent-cli/internal/services/internal/agentruntime/session_image.go
+   M agent-cli/internal/services/internal/agentruntime/session_instructions.go
+   D agent-cli/internal/services/internal/agentruntime/session_lifecycle.go
+   M agent-cli/internal/services/internal/agentruntime/session_live.go
+   M agent-cli/internal/services/internal/agentruntime/session_live_observation.go
+   D agent-cli/internal/services/internal/agentruntime/session_live_observation_state.go
+   M agent-cli/internal/services/internal/agentruntime/session_live_setup.go
+   M agent-cli/internal/services/internal/agentruntime/session_liveness.go
+   M agent-cli/internal/services/internal/agentruntime/session_liveness_test.go
+   M agent-cli/internal/services/internal/agentruntime/session_options.go
+   M agent-cli/internal/services/internal/agentruntime/session_rate_limit_retry_test.go
+   M agent-cli/internal/services/internal/agentruntime/session_recording.go
+   M agent-cli/internal/services/internal/agentruntime/session_room.go
+   M agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go
+   M agent-cli/internal/services/internal/agentruntime/session_room_planning.go
+   M agent-cli/internal/services/internal/agentruntime/session_room_replay_scheduler.go
+   M agent-cli/internal/services/internal/agentruntime/session_room_run.go
+   M agent-cli/internal/services/internal/agentruntime/session_runtime_live.go
+   M agent-cli/internal/services/internal/agentruntime/session_runtime_openai.go
+   M agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go
+   M agent-cli/internal/services/internal/agentruntime/session_runtime_rtc.go
+   M agent-cli/internal/services/internal/agentruntime/session_self_play.go
+   M agent-cli/internal/services/internal/agentruntime/session_service_test_helpers_test.go
+   M agent-cli/internal/services/internal/agentruntime/session_termination_test.go
+   M agent-cli/internal/services/internal/agentruntime/session_timing_test.go
+   M agent-cli/internal/services/internal/agentruntime/session_transport_done_drain_test.go
+   M agent-cli/internal/services/wire/metrics.go
+   M agent-cli/internal/services/wire/wire.go
+   M agent-cli/internal/transport/cli/root_routes_test.go
+   M agent-cli/internal/transport/cli/session_service_composition_test.go
+   M agent-cli/internal/wire/wire_gen.go
+   M agent-cli/test/integration/session_service_composition_test.go
+   M go-agent-runtime/services/audioio/contract.go
+   M go-agent-runtime/services/audioio/internal/service/service.go
+   M go-agent-runtime/services/devices/contract.go
+   M go-agent-runtime/services/session/internal/live/session_adapter.go
+   M go-agent-runtime/services/session/internal/live/turn_replay.go
+  ```
+- Prior C189 PR `#530` remains open at `438a2e5ea533e7930fcaa5c48a35f61490bce55a`.
+  GitHub reports no submitted reviews, issue comments, or inline review comments.
+  Its handoff states `make prepush` was partial with contention-sensitive
+  probe/replay/browser failures; isolated reruns passed. This is not a green
+  exact-candidate preflight and is not reused as such.
+- The exact C218 snapshot above is now committed as
+  `6e923c6ca07bb59590fbe9abeae420a3bd80665f`, whose parent is the observed
+  `dc92c6c8f1033b5c416345fd4f54ad2369bd6268`; it records all 55 paths and
+  leaves the C218 worktree clean. No cleanup, integration, reset, or rewrite
+  preceded the checkpoint.
+
+# C229 room device service cutover checkpoint 2026-09-20
+
+- Human room participants now open the public `devices.Service` handle and
+  run its `Capture`/`Playback` pumps. The room runtime no longer opens or
+  retains gateway `DeviceSource`/`DeviceSink` values. Selected IDs and playback
+  queue snapshots are optional public handle capabilities implemented by the
+  private media/composite services.
+- The public device contract no longer imports gateway device/runtime types.
+  RTC observers use service-owned callback types, remote endpoint validation
+  has a public service sentinel, and the internal RTC binding adapts callbacks
+  at the gateway edge. The unused raw registry parameter was removed from the
+  session runtime dependency graph and its generated Wire call.
+- Room output drains through the service playback pump. The regression now
+  verifies bounded service backpressure does not report a false queue
+  overflow; the focused diagnostic unit test still covers positive reported
+  overflow snapshots. A focused room run found the session loop omitted its
+  injected audio service/clock; those dependencies are now passed into the
+  loop options, eliminating the nil timer panic.
+- Focused passes on this slice: `rtk go test ./go-agent-runtime/services/devices/...
+  -count=1 -timeout=180s` (48 tests / 7 packages); `rtk go test
+  ./agent-cli/internal/services/internal/agentruntime -run
+  '^(TestRunRoom_HumanParticipantRoutesDevicesAndReportsReadiness|TestRunRoom_HumanParticipantPlaybackUsesServiceBackpressure|TestEmitRoomParticipantPlaybackOverflowDiagnostic|TestResolveBareSessionOptions|TestNewLiveSessionInferencerCarriesBareAudioPolicies)$'
+  `-count=1 -timeout=120s` (4 tests); and focused CLI remote endpoint preflight
+  (1 test). `git diff --check` is clean.
+- `rtk make wire-check` regenerated the root CLI graph and detected the
+  expected signature change in `agent-cli/internal/wire/wire_gen.go`; rerun the
+  same check after this generated diff is committed to confirm drift is clean.
+- Next: finish the production caller and exact legacy-file audit, rerun Wire,
+  then run `make prepush` plus all C229 audio/device/RTC functional, integration,
+  race, hermetic, and Wire commands on the exact candidate before opening or
+  updating a PR. No PR or hosted CI handoff is claimed.
