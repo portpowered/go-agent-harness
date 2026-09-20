@@ -4181,7 +4181,8 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   service/clock; those dependencies are now passed into the loop options,
   eliminating the nil timer panic.
 - Focused passes on this slice: `rtk go test ./go-agent-runtime/services/devices/...
-  -count=1 -timeout=180s` (48 tests / 7 packages); `rtk go test
+  -count=1 -timeout=180s` (49 tests / 7 packages, including composite handle
+  metadata propagation); `rtk go test
   ./agent-cli/internal/services/internal/agentruntime -run
   '^(TestRunRoom_HumanParticipantRoutesDevicesAndReportsReadiness|TestRunRoom_HumanParticipantPlaybackUsesServiceBackpressure|TestEmitRoomParticipantPlaybackOverflowDiagnostic|TestResolveBareSessionOptions|TestNewLiveSessionInferencerCarriesBareAudioPolicies)$'
   `-count=1 -timeout=120s` (4 tests); and focused CLI remote endpoint preflight
