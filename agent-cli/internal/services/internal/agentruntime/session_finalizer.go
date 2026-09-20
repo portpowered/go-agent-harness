@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"sync"
+
+	runtimerecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 )
 
 // ErrSessionFinalizationPanic identifies a panic from a non-capability
@@ -49,7 +51,7 @@ func (f *sessionRuntimeFinalizer) finish(ctx context.Context, out io.Writer, pri
 	}
 	f.once.Do(func() {
 		cleanupErr := f.cleanup(ctx, out)
-		if f.plan.liveRecorder != nil {
+		if f.plan.liveRecorder != nil && !f.plan.recordingManagedByService {
 			finalizeCtx := ctx
 			var cancel context.CancelFunc
 			if finalizeCtx == nil {
@@ -88,6 +90,23 @@ func (f *sessionRuntimeFinalizer) cleanup(ctx context.Context, out io.Writer) er
 	// browser event can still be recorded against the session.
 	if f.plan.capabilityCoordinator != nil {
 		appendErr(wrapSessionPhaseError("close session capabilities", f.plan.capabilityCoordinator.Close()))
+	}
+	if f.plan.browserRecording != nil {
+		f.plan.browserRecording.stop()
+		artifact, err := f.plan.browserRecording.artifact()
+		appendErr(err)
+		if err == nil && artifact != nil {
+			browserRecorder, ok := f.plan.liveRecorder.(runtimerecording.BrowserArtifactRecorder)
+			if !ok {
+				appendErr(errors.New("recording service cannot persist browser artifacts"))
+			} else {
+				artifactCtx := context.Background()
+				if ctx != nil {
+					artifactCtx = context.WithoutCancel(ctx)
+				}
+				appendErr(browserRecorder.RecordBrowserArtifact(artifactCtx, artifact))
+			}
+		}
 	}
 
 	// RTC provider sessions close their provider session before releasing the

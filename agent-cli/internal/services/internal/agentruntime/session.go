@@ -48,10 +48,21 @@ func openSessionLiveRecorder(opts SessionRunOptions, plan sessionRuntimePlan, de
 	if strings.TrimSpace(destination) == "" {
 		return nil, nil
 	}
-	service := opts.recordingService
-	if service == nil {
-		service = recordingwire.NewService(platformclock.Ensure(plan.clockSource))
+	service := sessionRecordingService(opts, plan)
+	return service.OpenLiveEvidence(sessionLiveEvidenceOptions(opts, plan, destination, maxDuration))
+}
+
+func sessionRecordingService(opts SessionRunOptions, plan sessionRuntimePlan) runtimerecording.Service {
+	if opts.recordingService != nil {
+		return opts.recordingService
 	}
+	if plan.recordingService != nil {
+		return plan.recordingService
+	}
+	return recordingwire.NewService(platformclock.Ensure(plan.clockSource))
+}
+
+func sessionLiveEvidenceOptions(opts SessionRunOptions, plan sessionRuntimePlan, destination string, maxDuration time.Duration) runtimerecording.LiveEvidenceOptions {
 	model := strings.TrimSpace(plan.model)
 	if model == "" {
 		model = strings.TrimSpace(opts.Model)
@@ -71,7 +82,7 @@ func openSessionLiveRecorder(opts SessionRunOptions, plan sessionRuntimePlan, de
 		// second exclusive sidecar at the same path.
 		options.DisableProviderCaptureSidecar = maxDuration > 0
 	}
-	return service.OpenLiveEvidence(options)
+	return options
 }
 
 func sessionRecordingCredentials(opts SessionRunOptions, plan sessionRuntimePlan) []string {

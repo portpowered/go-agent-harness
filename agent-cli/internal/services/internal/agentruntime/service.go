@@ -85,46 +85,7 @@ func (d *Dispatcher) Run(ctx context.Context, out io.Writer, request public.Requ
 	if out == nil {
 		return fmt.Errorf("session output is required")
 	}
-	if len(request.AudioTurns) > 0 {
-		if len(request.ImagePaths) > 0 {
-			return RunSessionWithImagesAndRecordingDirectoryAndAudioFilesAndOutputAndTextSeedAndMaxDuration(
-				ctx, out, SessionImageRunOptions{
-					SessionRunOptions: options,
-					ImagePaths:        append([]string(nil), request.ImagePaths...),
-				}, request.RecordDirectory, request.AudioOutputPath, request.MaxDuration,
-				textSeed(request.TextSeed), request.AudioTurns, request.SystemPrompt,
-			)
-		}
-		return RunSessionWithRecordingDirectoryAndInstructionsAndAudioFilesAndOutputAndTextSeedAndMaxDuration(
-			ctx, out, options, request.RecordDirectory, request.AudioOutputPath,
-			request.MaxDuration, textSeed(request.TextSeed), request.AudioTurns, request.SystemPrompt,
-		)
-	}
 	if len(request.ImagePaths) > 0 {
-		if request.RecordDirectory != "" {
-			if request.AudioInput.Present {
-				return RunSessionWithImagesAndRecordingDirectoryAndAudioInput(
-					ctx, out, SessionImageRunOptions{
-						SessionRunOptions: options,
-						ImagePaths:        append([]string(nil), request.ImagePaths...),
-						AudioOutPath:      request.AudioOutputPath,
-						MaxDuration:       request.MaxDuration,
-						TextSeed:          textSeed(request.TextSeed),
-						SystemPrompt:      request.SystemPrompt,
-					}, request.RecordDirectory, audioInput(request.AudioInput),
-				)
-			}
-			return RunSessionWithImagesAndRecordingDirectory(
-				ctx, out, SessionImageRunOptions{
-					SessionRunOptions: options,
-					ImagePaths:        append([]string(nil), request.ImagePaths...),
-					AudioOutPath:      request.AudioOutputPath,
-					MaxDuration:       request.MaxDuration,
-					TextSeed:          textSeed(request.TextSeed),
-					SystemPrompt:      request.SystemPrompt,
-				}, request.RecordDirectory,
-			)
-		}
 		if request.AudioInput.Present {
 			return RunSessionWithImagesAndAudioInput(
 				ctx, out, SessionImageRunOptions{
@@ -147,21 +108,9 @@ func (d *Dispatcher) Run(ctx context.Context, out io.Writer, request public.Requ
 		})
 	}
 	if request.AudioInput.Present {
-		if request.RecordDirectory != "" {
-			return RunSessionWithRecordingDirectoryAndInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(
-				ctx, out, options, request.RecordDirectory, request.AudioOutputPath,
-				request.MaxDuration, textSeed(request.TextSeed), audioInput(request.AudioInput), request.SystemPrompt,
-			)
-		}
 		return RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(
 			ctx, out, options, request.AudioOutputPath, request.MaxDuration,
 			textSeed(request.TextSeed), audioInput(request.AudioInput), request.SystemPrompt,
-		)
-	}
-	if request.RecordDirectory != "" {
-		return RunSessionWithRecordingDirectoryAndInstructionsAndAudioOutAndTextSeedAndMaxDuration(
-			ctx, out, options, request.RecordDirectory, request.AudioOutputPath,
-			request.MaxDuration, textSeed(request.TextSeed), request.SystemPrompt,
 		)
 	}
 	return RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(
@@ -172,7 +121,8 @@ func (d *Dispatcher) Run(ctx context.Context, out io.Writer, request public.Requ
 
 func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request) (SessionRunOptions, error) {
 	options := SessionRunOptions{
-		RecordPath: request.RecordPath, ReplayPath: request.ReplayPath, ReplayTiming: request.ReplayTiming,
+		RecordPath: request.RecordPath, RecordDirectory: request.RecordDirectory, RecordMaxDuration: request.MaxDuration,
+		ReplayPath: request.ReplayPath, ReplayTiming: request.ReplayTiming,
 		Provider: request.Provider, ProviderProvided: request.ProviderProvided, Model: request.Model, ModelProvided: request.ModelProvided,
 		NoInputTranscription: request.NoInputTranscription,
 		APIKey:               request.APIKey, BaseURL: request.BaseURL, ConfigDir: request.ConfigDir, WorkDir: request.WorkDir,
@@ -194,6 +144,21 @@ func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request)
 		SessionUpdatedTimeout: request.SessionUpdatedTimeout, WaitForClose: request.WaitForClose,
 		runtimeFactory: d.deps.PlanFactory,
 		ModelCatalog:   d.deps.ModelCatalog,
+	}
+	if len(request.AudioTurns) > 0 {
+		if err := public.ValidateSessionAudioInTurnBarge(options.AudioInTurnBarge, len(request.AudioTurns)); err != nil {
+			return SessionRunOptions{}, err
+		}
+		scheduled, err := prepareScheduledAudioInputsContext(ctx, request.AudioTurns)
+		if err != nil {
+			return SessionRunOptions{}, err
+		}
+		if strings.TrimSpace(request.Prompt) != "" || request.TextSeed.Present {
+			for index := range scheduled {
+				scheduled[index].AfterCompletedTurns++
+			}
+		}
+		options.AudioInputs, options.WaitForClose = scheduled, true
 	}
 	if err := validateSessionCaptureOptions(options); err != nil {
 		return SessionRunOptions{}, err

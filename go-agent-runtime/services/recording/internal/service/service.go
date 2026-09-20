@@ -1,7 +1,9 @@
 package service
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -28,6 +30,32 @@ func (*Service) TrackSession(inner messages.SessionInferencer, writer recording.
 
 func (s *Service) OpenLiveEvidence(options recording.LiveEvidenceOptions) (session.LiveRecorder, error) {
 	return evidence.New(options, s.clock)
+}
+
+func (s *Service) RunLiveEvidence(ctx context.Context, options recording.LiveEvidenceOptions, run func(context.Context, session.LiveRecorder) error) (runErr error) {
+	if run == nil {
+		return errors.New("recording runtime callback is required")
+	}
+	recorder, err := s.OpenLiveEvidence(options)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		panicValue := recover()
+		terminalErr := runErr
+		if panicValue != nil {
+			terminalErr = errors.Join(terminalErr, fmt.Errorf("recording runtime callback panicked: %v", panicValue))
+		}
+		finalizeCtx := context.Background()
+		if ctx != nil {
+			finalizeCtx = context.WithoutCancel(ctx)
+		}
+		runErr = errors.Join(runErr, recorder.Finalize(finalizeCtx, terminalErr))
+		if panicValue != nil {
+			panic(panicValue)
+		}
+	}()
+	return run(ctx, recorder)
 }
 
 func (*Service) OpenProviderCapture(options recording.ProviderCaptureOptions) (recording.ProviderCaptureSink, error) {

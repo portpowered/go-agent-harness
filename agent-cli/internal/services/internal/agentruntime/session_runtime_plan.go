@@ -128,43 +128,47 @@ func (f sessionRuntimeFactory) newOpenAISessionInferencerForTools(sessionCfg con
 }
 
 type sessionRuntimePlan struct {
-	mode                   sessionRuntimeMode
-	provider               string
-	model                  string
-	inputAudioSampleRate   int
-	outputAudioSampleRate  int
-	capturePath            string
-	loopOut                io.Writer
-	inferencer             messages.SessionInferencer
-	loop                   sessionLoopOptions
-	announceTools          []messages.ToolDefinition
-	announce               string
-	replayIntegrityWarning string
-	flushCapture           func() error
-	flushCaptureTo         func(string) error
-	finalize               func(context.Context, io.Writer) error
-	replayCompletion       func(*sessionTerminalReporter)
-	diagnostics            SessionDiagnosticSink
-	metricsRecorder        metrics.Recorder
-	streamObserver         SessionStreamObserver
-	audioInputs            []ScheduledAudioInput
-	scheduledAudioDispatch ScheduledAudioDispatchPolicy
-	clockSource            platformclock.Source
-	runtime                *sessionRuntimeObservationRecorder
-	rtcRuntime             SessionRTCRuntime
-	closeSession           func() error
-	replayPrepared         runtimereplay.LivePrepared
-	liveRecorder           session.LiveRecorder
-	selection              SessionRuntimeSelection
-	transport              string
-	signalingEndpoint      string
-	mediaSource            string
-	rtcDeviceRequest       RTCDeviceBindingRequest
-	capabilityCoordinator  SessionCapabilityCoordinator
-	captureClaim           runtimerecording.DestinationClaim
-	captureClaimWired      bool
-	interactivePolicy      *InteractiveToolPolicy
-	filesystemPolicy       *tools.FilesystemPolicy
+	mode                      sessionRuntimeMode
+	provider                  string
+	model                     string
+	inputAudioSampleRate      int
+	outputAudioSampleRate     int
+	capturePath               string
+	loopOut                   io.Writer
+	inferencer                messages.SessionInferencer
+	loop                      sessionLoopOptions
+	announceTools             []messages.ToolDefinition
+	announce                  string
+	replayIntegrityWarning    string
+	flushCapture              func() error
+	flushCaptureTo            func(string) error
+	finalize                  func(context.Context, io.Writer) error
+	replayCompletion          func(*sessionTerminalReporter)
+	diagnostics               SessionDiagnosticSink
+	metricsRecorder           metrics.Recorder
+	streamObserver            SessionStreamObserver
+	audioInputs               []ScheduledAudioInput
+	scheduledAudioDispatch    ScheduledAudioDispatchPolicy
+	clockSource               platformclock.Source
+	runtime                   *sessionRuntimeObservationRecorder
+	rtcRuntime                SessionRTCRuntime
+	closeSession              func() error
+	replayPrepared            runtimereplay.LivePrepared
+	liveRecorder              session.LiveRecorder
+	recordingService          runtimerecording.Service
+	liveEvidenceOptions       *runtimerecording.LiveEvidenceOptions
+	browserRecording          *sessionBrowserRecording
+	recordingManagedByService bool
+	selection                 SessionRuntimeSelection
+	transport                 string
+	signalingEndpoint         string
+	mediaSource               string
+	rtcDeviceRequest          RTCDeviceBindingRequest
+	capabilityCoordinator     SessionCapabilityCoordinator
+	captureClaim              runtimerecording.DestinationClaim
+	captureClaimWired         bool
+	interactivePolicy         *InteractiveToolPolicy
+	filesystemPolicy          *tools.FilesystemPolicy
 }
 
 func (p sessionRuntimePlan) bareLiveOutput(binding *RTCDeviceBinding) (string, string) {
@@ -194,6 +198,33 @@ func (p sessionRuntimePlan) liveOutput(binding *RTCDeviceBinding, prefix string)
 }
 
 func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr error) {
+	if p.liveEvidenceOptions != nil {
+		return p.runWithLiveEvidence(ctx, out, func(runCtx context.Context, planned sessionRuntimePlan) error {
+			return planned.runCore(runCtx, out)
+		})
+	}
+	return p.runCore(ctx, out)
+}
+
+func (p sessionRuntimePlan) runWithLiveEvidence(ctx context.Context, out io.Writer, run func(context.Context, sessionRuntimePlan) error) error {
+	if p.liveEvidenceOptions == nil {
+		return run(ctx, p)
+	}
+	if p.recordingService == nil {
+		return errors.New("recording service is required for directory evidence")
+	}
+	options := *p.liveEvidenceOptions
+	return p.recordingService.RunLiveEvidence(ctx, options, func(runCtx context.Context, recorder session.LiveRecorder) error {
+		planned := p
+		planned.liveEvidenceOptions = nil
+		planned.recordingService = nil
+		planned.liveRecorder = recorder
+		planned.recordingManagedByService = true
+		return run(runCtx, planned)
+	})
+}
+
+func (p sessionRuntimePlan) runCore(ctx context.Context, out io.Writer) (runErr error) {
 	reporter := p.loop.terminalReporter
 	if reporter == nil {
 		reporter = newSessionTerminalReporter()
@@ -220,6 +251,9 @@ func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr erro
 	if deviceBinding != nil {
 		p.loop.rtcDeviceBinding = deviceBinding
 		finalizer.setDeviceBinding(deviceBinding)
+	}
+	if p.browserRecording != nil {
+		p.browserRecording.start(ctx)
 	}
 	// The filesystem-scope disclosure is best-effort: it is new, unconditional
 	// startup output on every session, and a write failure here must not

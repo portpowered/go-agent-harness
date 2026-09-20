@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 
 	sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
@@ -53,7 +54,7 @@ func planSessionRuntimeWithFactoryContext(ctx context.Context, opts SessionRunOp
 
 func prepareSessionPlanningState(opts SessionRunOptions) (sessionPlanningState, error) {
 	opts.ToolDefinitions = messages.CanonicalToolDefinitions(opts.ToolDefinitions)
-	if opts.RecordPath != "" && opts.recordingService == nil {
+	if (opts.RecordPath != "" || opts.RecordDirectory != "") && opts.recordingService == nil {
 		opts.recordingService = recordingwire.NewService(platformclock.Ensure(opts.Clock))
 	}
 	filesystemPolicy := opts.FilesystemPolicy
@@ -95,7 +96,17 @@ func completeSessionRuntimePlan(ctx context.Context, opts SessionRunOptions, pla
 		return sessionRuntimePlan{}, wrapSessionRTCRuntimeError("create runtime", ErrSessionRTCRuntimeUnavailable)
 	}
 	plan.capabilityCoordinator = coordinator
-	return claimSessionRuntimeCapture(opts, plan)
+	plan, err = claimSessionRuntimeCapture(opts, plan)
+	if err != nil {
+		return sessionRuntimePlan{}, err
+	}
+	if strings.TrimSpace(opts.RecordDirectory) != "" {
+		plan.recordingService = sessionRecordingService(opts, plan)
+		evidenceOptions := sessionLiveEvidenceOptions(opts, plan, opts.RecordDirectory, opts.RecordMaxDuration)
+		plan.liveEvidenceOptions = &evidenceOptions
+		plan.browserRecording = newSessionBrowserRecording(opts, plan)
+	}
+	return plan, nil
 }
 
 func applySessionRuntimeLifecycle(opts SessionRunOptions, plan sessionRuntimePlan, scheduledAudioDispatch ScheduledAudioDispatchPolicy) sessionRuntimePlan {

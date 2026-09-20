@@ -180,6 +180,11 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 	if err != nil {
 		return err
 	}
+	if plan.liveEvidenceOptions != nil {
+		return plan.runWithLiveEvidence(ctx, out, func(runCtx context.Context, planned sessionRuntimePlan) error {
+			return runSessionDurationPlanWithAdmission(runCtx, out, planned, maxDuration, durationClock, admittedInferencer)
+		})
+	}
 	artifacts := sessionDurationArtifactsFromContext(ctx)
 	reporter := plan.loop.terminalReporter
 	if reporter == nil {
@@ -212,6 +217,9 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 	if deviceBinding != nil {
 		plan.loop.rtcDeviceBinding = deviceBinding
 		finalizer.setDeviceBinding(deviceBinding)
+	}
+	if plan.browserRecording != nil {
+		plan.browserRecording.start(ctx)
 	}
 	// Best-effort, same as the non-duration run path: this disclosure write
 	// must not pre-empt or masquerade as the session's own run/drain failure.

@@ -225,6 +225,7 @@ type LiveEvidenceOptions struct {
 	ParticipantID  string
 	Provider       string
 	Model          string
+	OutputAudioRate int
 	ClockBase      time.Time
 	WallClockStart time.Time
 	Credentials    []string
@@ -247,6 +248,35 @@ type LiveEvidenceOptions struct {
 	Limits ResourceLimits
 }
 
+// LiveAudioObservation is an admitted runtime audio frame. The recording
+// service assigns its canonical timestamp and orders it with stream messages.
+type LiveAudioObservation struct {
+	Direction session.LiveRecordDirection
+	Admission session.LiveAudioAdmission
+	Frame     audio.PCMFrame
+}
+
+// LiveCompletion contains facts observed by the session runner. The recording
+// service owns terminal classification, synthesis, deduplication, and durable
+// publication.
+type LiveCompletion struct {
+	RunError            error
+	UserCancelled       bool
+	RoomCancellationOnly bool
+	DurationExpired     bool
+	SawSessionOpen      bool
+	TurnsCompleted      int
+}
+
+// LiveEvidence accepts ordered runtime observations for one admitted
+// directory recording. It exposes no claim, writer, or mutable recorder state.
+type LiveEvidence interface {
+	ObserveMessage(context.Context, session.LiveRecordDirection, messages.StreamMessage) error
+	ObserveAudio(context.Context, LiveAudioObservation) error
+	SetCompletion(context.Context, LiveCompletion) error
+	BrowserArtifactRecorder
+}
+
 // ProviderCapture is the optional composition port used to direct the provider
 // capture writer into the same evidence archive. The file must be finalized
 // before the recorder's Finalize call. Absence is recorded, never fabricated.
@@ -265,6 +295,10 @@ type Service interface {
 	Claim(ClaimOptions) (DestinationClaim, error)
 	TrackSession(messages.SessionInferencer, Writer, string) (SessionCapture, error)
 	OpenLiveEvidence(LiveEvidenceOptions) (session.LiveRecorder, error)
+	// RunLiveEvidence owns one recorder from admission through bounded
+	// finalization. The callback supplies runtime observations but never owns
+	// destination claims, recorder state, or terminal publication.
+	RunLiveEvidence(context.Context, LiveEvidenceOptions, func(context.Context, LiveEvidence) error) error
 	// OpenLiveSemanticEvidence creates the semantic lifecycle sidecar associated
 	// with an explicitly requested provider capture. The recording service owns
 	// the sibling artifact path and writes only normalized runtime observations;
