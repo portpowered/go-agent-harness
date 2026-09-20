@@ -9,6 +9,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 )
@@ -168,7 +169,8 @@ func TestEmitRoomParticipantPlaybackOverflowDiagnostic(t *testing.T) {
 	t.Cleanup(func() { _ = sink.Close() })
 
 	recorder := &recordingDiagnosticSink{}
-	emitRoomParticipantPlaybackOverflowDiagnostic("customer", sink, recorder)
+	handle := roomPlaybackDiagnosticTestHandle{sink: sink}
+	emitRoomParticipantPlaybackOverflowDiagnostic("customer", handle, recorder)
 	if len(recorder.records) != 0 {
 		t.Fatalf("emit fired with no overflow: %+v", recorder.records)
 	}
@@ -178,7 +180,7 @@ func TestEmitRoomParticipantPlaybackOverflowDiagnostic(t *testing.T) {
 		t.Fatalf("write overflowing samples: %v", err)
 	}
 
-	emitRoomParticipantPlaybackOverflowDiagnostic("customer", sink, recorder)
+	emitRoomParticipantPlaybackOverflowDiagnostic("customer", handle, recorder)
 	if len(recorder.records) != 1 {
 		t.Fatalf("caller-supplied sink recorded %d records after overflow, want 1", len(recorder.records))
 	}
@@ -195,7 +197,17 @@ func TestEmitRoomParticipantPlaybackOverflowDiagnostic(t *testing.T) {
 
 	// A nil sink must still resolve to the shared fallback rather than being
 	// silently skipped, exactly like the RTC path above.
-	emitRoomParticipantPlaybackOverflowDiagnostic("customer", sink, nil)
+	emitRoomParticipantPlaybackOverflowDiagnostic("customer", handle, nil)
+}
+
+type roomPlaybackDiagnosticTestHandle struct{ sink *devicegw.DeviceSink }
+
+func (h roomPlaybackDiagnosticTestHandle) Media() runtimeDevices.MediaPorts {
+	return runtimeDevices.MediaPorts{}
+}
+func (h roomPlaybackDiagnosticTestHandle) Close() error { return nil }
+func (h roomPlaybackDiagnosticTestHandle) PlaybackStats() (string, audio.PlaybackQueueStats) {
+	return string(h.sink.DeviceID()), h.sink.PlaybackStats()
 }
 
 // TestPlanSessionRuntimePlaybackObserverNonNilAcrossConstructionPaths is the

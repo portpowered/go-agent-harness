@@ -11,6 +11,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/rtc"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
@@ -49,6 +50,9 @@ func (f *Factory) Open(ctx context.Context, request devices.Request) (devices.Ha
 	}
 	registry := f.registry
 	if endpoint := strings.TrimSpace(request.RemoteEndpoint); endpoint != "" {
+		if err := devices.RemoteEndpoint(endpoint).Validate(); err != nil {
+			return nil, err
+		}
 		var err error
 		registry, err = devicegw.NewRemoteDeviceRegistry(endpoint)
 		if err != nil {
@@ -146,7 +150,7 @@ func newHandle(input *devicert.RTCDeviceSource, output *devicert.RTCDeviceSink) 
 	if output != nil {
 		ports.Playback = output
 	}
-	return &handle{ports: ports, close: func() error { return errors.Join(closeInput(input), closeOutput(output)) }}
+	return &handle{ports: ports, source: input, sink: output, close: func() error { return errors.Join(closeInput(input), closeOutput(output)) }}
 }
 
 func closeOutput(output *devicert.RTCDeviceSink) error {
@@ -186,8 +190,10 @@ func contextError(ctx context.Context) error {
 }
 
 type handle struct {
-	ports devices.MediaPorts
-	close func() error
+	ports  devices.MediaPorts
+	source *devicert.RTCDeviceSource
+	sink   *devicert.RTCDeviceSink
+	close  func() error
 
 	once     sync.Once
 	closeMu  sync.Mutex
@@ -199,6 +205,26 @@ func (h *handle) Media() devices.MediaPorts {
 		return devices.MediaPorts{}
 	}
 	return h.ports
+}
+
+func (h *handle) SelectedDeviceIDs() (input, output string) {
+	if h == nil {
+		return "", ""
+	}
+	if h.source != nil {
+		input = string(h.source.DeviceID())
+	}
+	if h.sink != nil {
+		output = string(h.sink.DeviceID())
+	}
+	return input, output
+}
+
+func (h *handle) PlaybackStats() (deviceID string, stats audio.PlaybackQueueStats) {
+	if h == nil || h.sink == nil {
+		return "", audio.PlaybackQueueStats{}
+	}
+	return string(h.sink.DeviceID()), h.sink.PlaybackStats()
 }
 
 func (h *handle) Close() error {

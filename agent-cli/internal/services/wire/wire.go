@@ -145,11 +145,11 @@ func NewSessionService(deps SessionDependencies) serviceSession.SessionService {
 
 // NewSessionRuntime builds the private runtime implementation behind its
 // public contract. Application Wire never imports services/internal.
-func NewSessionRuntime(audioService audioio.Service, clockSource clock.Source, resolver serviceTools.Service, planFactory agentruntime.SessionRuntimeFactory, runtimeFactory agentruntime.SessionRTCRuntimeFactory, inferencer messages.SessionInferencer, toolExecutor messages.ToolExecutor, deviceRegistry devicegw.DeviceRegistry, deviceService runtimeDevices.Service, observer agentruntime.SessionRuntimeObserver, metricSampler observability.MetricSampler, logger observability.Logger, modelCatalog runtimeProviders.ModelCatalog) serviceRuntime.Runtime {
+func NewSessionRuntime(audioService audioio.Service, clockSource clock.Source, resolver serviceTools.Service, planFactory agentruntime.SessionRuntimeFactory, runtimeFactory agentruntime.SessionRTCRuntimeFactory, inferencer messages.SessionInferencer, toolExecutor messages.ToolExecutor, deviceService runtimeDevices.Service, observer agentruntime.SessionRuntimeObserver, metricSampler observability.MetricSampler, logger observability.Logger, modelCatalog runtimeProviders.ModelCatalog) serviceRuntime.Runtime {
 	return agentruntime.New(agentruntime.Dependencies{
 		AudioService: audioService, Clock: clockSource, PlanFactory: planFactory, ToolService: resolver, RuntimeFactory: runtimeFactory,
 		SessionInferencer: inferencer, ToolExecutor: toolExecutor,
-		DeviceRegistry: deviceRegistry, DeviceService: deviceService, RuntimeObserver: observer,
+		DeviceService: deviceService, RuntimeObserver: observer,
 		Observability: observability.NewDependencies(metricSampler, logger),
 		ModelCatalog:  modelCatalog,
 	})

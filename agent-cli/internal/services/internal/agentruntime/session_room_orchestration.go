@@ -1,7 +1,5 @@
 package agentruntime
 
-import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-
 import (
 	"context"
 	"errors"
@@ -13,6 +11,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
+	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeRoomsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -195,7 +194,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		}
 		notifyRoomParticipantMixerReady(opts, plan.manifest.ID, mixer)
 		if roomParticipantIsHuman(plan) && !replayMode {
-			if deviceErr := openRoomHumanDevices(runtime, opts.DeviceRegistry); deviceErr != nil {
+			if deviceErr := openRoomHumanDevices(runtime, opts.DeviceService); deviceErr != nil {
 				plan.startupErr = roomParticipantFailure(plan.manifest.ID, deviceErr, secretsForPlan(plan))
 				coordinator.failParticipant(plan.manifest.ID, plan.startupErr)
 				continue
@@ -431,7 +430,7 @@ func prepareRoomReplayOptions(opts RoomRunOptions, validation room.ValidationOpt
 	opts.ReplayPath = replayPlan.BundlePath
 	opts.Manifest = replayPlan.Manifest()
 	opts.LaunchPlan = nil
-	opts.DeviceRegistry = nil
+	opts.DeviceService = nil
 	opts.CredentialLookup = nil
 	return opts, room.ValidationOptions{}, true, nil
 }
@@ -486,32 +485,43 @@ func roomParticipantReady(plan *roomParticipantPlan) RoomParticipantReady {
 		Model:         participant.Model,
 	}
 	if runtime := plan.participant; roomParticipantIsHuman(plan) && runtime != nil {
-		if runtime.input != nil {
-			ready.InputDevice = string(runtime.input.DeviceID())
+		if runtime.inputDeviceID != "" {
+			ready.InputDevice = runtime.inputDeviceID
 		}
-		if runtime.output != nil {
-			ready.OutputDevice = string(runtime.output.DeviceID())
+		if runtime.outputDeviceID != "" {
+			ready.OutputDevice = runtime.outputDeviceID
 		}
 	}
 	return ready
 }
 
-func openRoomHumanDevices(runtime *roomParticipantRuntime, registry devicegw.DeviceRegistry) error {
+func openRoomHumanDevices(runtime *roomParticipantRuntime, service runtimeDevices.Service) error {
 	if runtime == nil || runtime.plan == nil {
 		return errors.New("human participant runtime is nil")
 	}
+	if service == nil {
+		return runtimeDevices.ErrUnavailable
+	}
 	participant := runtime.plan.manifest
-	input, err := devicegw.NewDeviceSource(registry, devicegw.DeviceID(participant.InputDevice))
+	handle, err := service.Open(runtime.ctx, runtimeDevices.Request{
+		InputDevice: participant.InputDevice, OutputDevice: participant.OutputDevice,
+		CaptureEnabled: true, PlaybackEnabled: true, SampleRate: runtime.mixer.Format().SampleRate, Channels: 1,
+	})
 	if err != nil {
-		return fmt.Errorf("open human participant input device %q: %w", participant.InputDevice, err)
+		return fmt.Errorf("open human participant devices: %w", err)
 	}
-	runtime.input = input
-	output, err := devicegw.NewDeviceSink(registry, devicegw.DeviceID(participant.OutputDevice))
-	if err != nil {
-		closeErr := input.Close()
-		return errors.Join(fmt.Errorf("open human participant output device %q: %w", participant.OutputDevice, err), closeErr)
+	if handle == nil {
+		return fmt.Errorf("%w: device service returned a nil handle", runtimeDevices.ErrUnavailable)
 	}
-	runtime.output = output
+	ports := handle.Media()
+	if ports.Capture == nil || ports.Playback == nil {
+		return errors.Join(fmt.Errorf("%w: device service omitted room capture or playback", runtimeDevices.ErrUnavailable), handle.Close())
+	}
+	runtime.deviceHandle = handle
+	runtime.input, runtime.output = ports.Capture, ports.Playback
+	if selection, ok := handle.(runtimeDevices.DeviceSelectionProvider); ok {
+		runtime.inputDeviceID, runtime.outputDeviceID = selection.SelectedDeviceIDs()
+	}
 	runtime.lifecycle.markDeviceReady()
 	return nil
 }

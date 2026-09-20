@@ -87,7 +87,7 @@ func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transp
 	toolsService := provideToolCapabilitiesService(toolService, toolExecutor, browserFactory, v4, service)
 	sessionRTCRuntimeFactory := provideSessionRTCRuntimeFactory(rtcComponents, metricSampler, logger)
 	devicesService := wire4.NewService(deviceRegistry, audioioService)
-	runtime := wire2.NewSessionRuntime(audioioService, clockSource, toolsService, v3, sessionRTCRuntimeFactory, sessionInferencer, toolExecutor, deviceRegistry, devicesService, runtimeObserver, metricSampler, logger, modelCatalog)
+	runtime := wire2.NewSessionRuntime(audioioService, clockSource, toolsService, v3, sessionRTCRuntimeFactory, sessionInferencer, toolExecutor, devicesService, runtimeObserver, metricSampler, logger, modelCatalog)
 	sessionDependencies := provideSessionDependencies(clockSource, toolsService, sessionRTCRuntimeFactory, sessionInferencer, toolExecutor, deviceRegistry, runtimeObserver, metricSampler, logger, runtime)
 	agentsessionSessionService := wire2.NewSessionService(sessionDependencies)
 	v5 := provideFleetEntryExecutors()

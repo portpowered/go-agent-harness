@@ -9,7 +9,10 @@ package devices
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
+	"net"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,8 +21,6 @@ import (
 	selfhearing "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/selfhearing"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
-	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
@@ -33,6 +34,9 @@ var (
 	// drain already-admitted lifecycle messages before it tears down for this
 	// class of playback error.
 	ErrPlaybackInput = errors.New("provider playback input failed")
+	// ErrInvalidRemoteEndpoint identifies a malformed or non-loopback device
+	// server selector without exposing gateway implementation errors.
+	ErrInvalidRemoteEndpoint = errors.New("invalid remote audio-device server endpoint")
 )
 
 // RemoteEndpoint is the opaque endpoint selector accepted by the device
@@ -41,11 +45,28 @@ var (
 type RemoteEndpoint string
 
 func (endpoint RemoteEndpoint) Validate() error {
-	if strings.TrimSpace(string(endpoint)) == "" {
+	value := strings.TrimSpace(string(endpoint))
+	if value == "" {
 		return nil
 	}
-	_, err := devicegw.NewRemoteDeviceRegistry(string(endpoint))
-	return err
+	if strings.Contains(value, "://") {
+		return fmt.Errorf("%w: want loopback host:port", ErrInvalidRemoteEndpoint)
+	}
+	host, port, err := net.SplitHostPort(value)
+	if err != nil || port == "" {
+		return fmt.Errorf("%w: want loopback host:port, got %q", ErrInvalidRemoteEndpoint, value)
+	}
+	portNumber, err := strconv.Atoi(port)
+	if err != nil || portNumber <= 0 || portNumber > 65535 {
+		return fmt.Errorf("%w: port %q is invalid", ErrInvalidRemoteEndpoint, port)
+	}
+	if host != "localhost" {
+		ip := net.ParseIP(host)
+		if ip == nil || !ip.IsLoopback() {
+			return fmt.Errorf("%w: host %q is not loopback", ErrInvalidRemoteEndpoint, host)
+		}
+	}
+	return nil
 }
 
 // Request is the normalized device admission input for one invocation. IDs
@@ -165,6 +186,19 @@ type Handle interface {
 	Close() error
 }
 
+// DeviceSelectionProvider optionally reports the concrete devices admitted
+// for a media handle. The result contains only opaque IDs; registry and
+// opened-device objects remain private to the service implementation.
+type DeviceSelectionProvider interface {
+	SelectedDeviceIDs() (input, output string)
+}
+
+// PlaybackStatsProvider optionally exposes the service-owned local playback
+// queue observation used by host diagnostics after a handle is closed.
+type PlaybackStatsProvider interface {
+	PlaybackStats() (deviceID string, stats audio.PlaybackQueueStats)
+}
+
 // Service admits device workers for one normalized request. Construction is
 // inert; registry access and worker startup happen only in Open.
 type Service interface {
@@ -189,15 +223,34 @@ type RTCBindingRequest struct {
 	OutputSampleRate           int
 	OutputVoice                string
 	HoldToneConfig             *audio.HoldToneConfig
-	PlaybackObserver           devicert.RTCDevicePlaybackObserver
-	PlaybackReceiptObserver    devicert.RTCDevicePlaybackReceiptObserver
-	PlaybackSamplesObserver    devicert.RTCDevicePlaybackSamplesObserver
-	PreGateSamplesObserver     devicert.RTCDeviceCaptureSamplesObserver
-	UploadedSamplesObserver    devicert.RTCDeviceCaptureSamplesObserver
-	RenderedSamplesObserver    devicert.RTCDeviceRenderedSamplesObserver
+	PlaybackObserver           PlaybackObserver
+	PlaybackReceiptObserver    PlaybackReceiptObserver
+	PlaybackSamplesObserver    PlaybackSamplesObserver
+	PreGateSamplesObserver     CaptureSamplesObserver
+	UploadedSamplesObserver    CaptureSamplesObserver
+	RenderedSamplesObserver    RenderedSamplesObserver
 	RenderedSamplesUnavailable func()
-	CaptureObserver            devicert.RTCDeviceCaptureObserver
+	CaptureObserver            CaptureObserver
 }
+
+// PlaybackObserver receives the final playback queue snapshot at device
+// teardown. Device identifiers remain opaque strings at this boundary.
+type PlaybackObserver func(deviceID string, stats audio.PlaybackQueueStats)
+
+// PlaybackReceiptObserver receives each applied or rejected playback control.
+type PlaybackReceiptObserver func(audio.PlaybackReceipt)
+
+// PlaybackSamplesObserver observes accepted PCM at the service playback edge.
+type PlaybackSamplesObserver func(context.Context, int, []int16) error
+
+// CaptureSamplesObserver observes owned PCM at a service capture edge.
+type CaptureSamplesObserver func(sampleRate int, samples []int16)
+
+// CaptureObserver receives the final capture queue snapshot at teardown.
+type CaptureObserver func(deviceID string, stats audio.CaptureQueueStats)
+
+// RenderedSamplesObserver observes PCM rendered by a local playback device.
+type RenderedSamplesObserver func(sampleRate int, samples []int16)
 
 // HasInput reports whether this request selects an input direction. An empty
 // device ID still selects the registry default when InputPresent is set.

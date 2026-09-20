@@ -50,6 +50,9 @@ func admitBindRequest(ctx context.Context, f *Factory, request devices.RTCBindin
 func (f *Factory) resolveRegistry(request devices.RTCBindingRequest) (devicegw.DeviceRegistry, error) {
 	registry := f.registry
 	if endpoint := strings.TrimSpace(request.RemoteEndpoint); endpoint != "" {
+		if err := devices.RemoteEndpoint(endpoint).Validate(); err != nil {
+			return nil, err
+		}
 		var err error
 		registry, err = devicegw.NewRemoteDeviceRegistry(endpoint)
 		if err != nil {
@@ -97,9 +100,9 @@ func openDuplex(b *binding, registry devicegw.DeviceRegistry, request devices.RT
 		return err
 	}
 	b.source = devicert.NewRTCDeviceSourceFromOpened(source, inputRate, inputRate)
-	b.sink = devicert.NewRTCDeviceSinkFromOpened(sink, outputRate, outputRate, request.OutputVoice, request.PlaybackObserver)
-	b.sink.SetPlaybackReceiptObserver(request.PlaybackReceiptObserver)
-	b.sink.SetPlaybackSamplesObserver(request.PlaybackSamplesObserver)
+	b.sink = devicert.NewRTCDeviceSinkFromOpened(sink, outputRate, outputRate, request.OutputVoice, playbackObserver(request.PlaybackObserver))
+	b.sink.SetPlaybackReceiptObserver(devicert.RTCDevicePlaybackReceiptObserver(request.PlaybackReceiptObserver))
+	b.sink.SetPlaybackSamplesObserver(devicert.RTCDevicePlaybackSamplesObserver(request.PlaybackSamplesObserver))
 	return nil
 }
 
@@ -113,13 +116,13 @@ func openInput(b *binding, registry devicegw.DeviceRegistry, request devices.RTC
 }
 
 func openOutput(b *binding, registry devicegw.DeviceRegistry, request devices.RTCBindingRequest) error {
-	sink, err := devicert.NewRTCDeviceSinkAtRateWithOptions(registry, normalizeSelector(request.OutputDevice), request.OutputSampleRate, request.OutputVoice, request.PlaybackObserver)
+	sink, err := devicert.NewRTCDeviceSinkAtRateWithOptions(registry, normalizeSelector(request.OutputDevice), request.OutputSampleRate, request.OutputVoice, playbackObserver(request.PlaybackObserver))
 	if err != nil {
 		return &bindingError{flag: "--" + outputFlag, direction: devicegw.DirectionOutput, id: request.OutputDevice, err: err}
 	}
 	b.sink = sink
-	b.sink.SetPlaybackReceiptObserver(request.PlaybackReceiptObserver)
-	b.sink.SetPlaybackSamplesObserver(request.PlaybackSamplesObserver)
+	b.sink.SetPlaybackReceiptObserver(devicert.RTCDevicePlaybackReceiptObserver(request.PlaybackReceiptObserver))
+	b.sink.SetPlaybackSamplesObserver(devicert.RTCDevicePlaybackSamplesObserver(request.PlaybackSamplesObserver))
 	return nil
 }
 
@@ -155,14 +158,14 @@ func configureCapture(b *binding, request devices.RTCBindingRequest) error {
 	if b.source == nil {
 		return nil
 	}
-	b.source.SetCaptureObserver(request.CaptureObserver)
+	b.source.SetCaptureObserver(captureObserver(request.CaptureObserver))
 	capture, err := devicert.NewBufferedCapture(b.source)
 	if err != nil {
 		return err
 	}
 	b.capture = capture
-	b.source.SetPreGateSamplesObserver(request.PreGateSamplesObserver)
-	b.source.SetUploadedSamplesObserver(request.UploadedSamplesObserver)
+	b.source.SetPreGateSamplesObserver(devicert.RTCDeviceCaptureSamplesObserver(request.PreGateSamplesObserver))
+	b.source.SetUploadedSamplesObserver(devicert.RTCDeviceCaptureSamplesObserver(request.UploadedSamplesObserver))
 	return nil
 }
 
@@ -173,7 +176,21 @@ func configurePlayback(b *binding, request devices.RTCBindingRequest) {
 	if request.HoldToneConfig != nil {
 		b.sink.SetHoldToneConfig(*request.HoldToneConfig)
 	}
-	if request.RenderedSamplesObserver != nil && !b.sink.SetRenderedSamplesObserver(request.RenderedSamplesObserver) && request.RenderedSamplesUnavailable != nil {
+	if request.RenderedSamplesObserver != nil && !b.sink.SetRenderedSamplesObserver(devicert.RTCDeviceRenderedSamplesObserver(request.RenderedSamplesObserver)) && request.RenderedSamplesUnavailable != nil {
 		request.RenderedSamplesUnavailable()
 	}
+}
+
+func playbackObserver(observer devices.PlaybackObserver) devicert.RTCDevicePlaybackObserver {
+	if observer == nil {
+		return nil
+	}
+	return func(id devicegw.DeviceID, stats audio.PlaybackQueueStats) { observer(string(id), stats) }
+}
+
+func captureObserver(observer devices.CaptureObserver) devicert.RTCDeviceCaptureObserver {
+	if observer == nil {
+		return nil
+	}
+	return func(id devicegw.DeviceID, stats audio.CaptureQueueStats) { observer(string(id), stats) }
 }

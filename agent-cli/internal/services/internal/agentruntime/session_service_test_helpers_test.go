@@ -38,7 +38,6 @@ func newInjectedSessionService(deps servicewire.SessionDependencies) serviceSess
 			deps.RuntimeFactory,
 			deps.SessionInferencer,
 			deps.ToolExecutor,
-			deps.DeviceRegistry,
 			newTestDeviceService(deps.DeviceRegistry),
 			deps.RuntimeObserver,
 			deps.MetricSampler,

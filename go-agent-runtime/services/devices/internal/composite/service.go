@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 // Factory composes a registry-backed service with the finite file role. Each
@@ -242,6 +243,28 @@ func (h *handle) Media() devices.MediaPorts {
 		return devices.MediaPorts{}
 	}
 	return h.ports
+}
+
+func (h *handle) SelectedDeviceIDs() (input, output string) {
+	if h == nil {
+		return "", ""
+	}
+	provider, ok := h.physical.(devices.DeviceSelectionProvider)
+	if !ok {
+		return "", ""
+	}
+	return provider.SelectedDeviceIDs()
+}
+
+func (h *handle) PlaybackStats() (deviceID string, stats audio.PlaybackQueueStats) {
+	if h == nil {
+		return "", audio.PlaybackQueueStats{}
+	}
+	provider, ok := h.physical.(devices.PlaybackStatsProvider)
+	if !ok {
+		return "", audio.PlaybackQueueStats{}
+	}
+	return provider.PlaybackStats()
 }
 
 func (h *handle) Close() error {

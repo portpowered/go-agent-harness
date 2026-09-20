@@ -21,8 +21,6 @@ import (
 	sessiontrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
-	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
 )
 
 var _ contract.Runtime = (*Dispatcher)(nil)
@@ -35,7 +33,6 @@ type Dependencies struct {
 	RuntimeFactory    SessionRTCRuntimeFactory
 	SessionInferencer messages.SessionInferencer
 	ToolExecutor      messages.ToolExecutor
-	DeviceRegistry    devicegw.DeviceRegistry
 	DeviceService     runtimedevices.Service
 	RuntimeObserver   SessionRuntimeObserver
 	Observability     observability.Dependencies
@@ -296,9 +293,9 @@ func traceCredentials(r *public.Request) []string {
 }
 
 func setTraceBinding(o *SessionRunOptions, b sessiontrace.DeviceBinding) {
-	o.RTCBinding.PreGateSamplesObserver = devicert.RTCDeviceCaptureSamplesObserver(b.PreGateSamplesObserver)
-	o.RTCBinding.UploadedSamplesObserver = devicert.RTCDeviceCaptureSamplesObserver(b.UploadedSamplesObserver)
-	o.RTCBinding.PlaybackSamplesObserver = devicert.RTCDevicePlaybackSamplesObserver(b.PlaybackSamplesObserver)
-	o.RTCBinding.RenderedSamplesObserver = devicert.RTCDeviceRenderedSamplesObserver(b.RenderedSamplesObserver)
+	o.RTCBinding.PreGateSamplesObserver = runtimedevices.CaptureSamplesObserver(b.PreGateSamplesObserver)
+	o.RTCBinding.UploadedSamplesObserver = runtimedevices.CaptureSamplesObserver(b.UploadedSamplesObserver)
+	o.RTCBinding.PlaybackSamplesObserver = runtimedevices.PlaybackSamplesObserver(b.PlaybackSamplesObserver)
+	o.RTCBinding.RenderedSamplesObserver = runtimedevices.RenderedSamplesObserver(b.RenderedSamplesObserver)
 	o.RTCBinding.RenderedSamplesUnavailable = b.RenderedSamplesUnavailable
 }

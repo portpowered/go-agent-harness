@@ -744,16 +744,9 @@ func (c *roomCoordinator) finishParticipant(runtime *roomParticipantRuntime, rea
 		runtime.cancel()
 	}
 	var cleanupErr error
-	if runtime.input != nil {
-		cleanupErr = errors.Join(cleanupErr, boundedRoomCleanupOperation(cleanup, roomLifecycleWorkLabel(id, "input.device"), runtime.input.Close))
-	}
-	if runtime.output != nil {
-		cleanupErr = errors.Join(cleanupErr, boundedRoomCleanupOperation(cleanup, roomLifecycleWorkLabel(id, "output.device"), runtime.output.Close))
-		// A human participant's speaker queue is a raw *audio.DeviceSink with
-		// no SessionRunOptions/RTCBinding behind it, so it never reaches
-		// sessionPlaybackDiagnosticObserver; this is the participant-scoped
-		// equivalent, checked once the device has stopped accepting writes.
-		emitRoomParticipantPlaybackOverflowDiagnostic(id, runtime.output, runtime.diagnosticSink)
+	if runtime.deviceHandle != nil {
+		cleanupErr = errors.Join(cleanupErr, boundedRoomCleanupOperation(cleanup, roomLifecycleWorkLabel(id, "devices"), runtime.deviceHandle.Close))
+		emitRoomParticipantPlaybackOverflowDiagnostic(id, runtime.deviceHandle, runtime.diagnosticSink)
 	}
 	if runtime.mixer != nil {
 		cleanupErr = errors.Join(cleanupErr, boundedRoomCleanupOperation(cleanup, roomLifecycleWorkLabel(id, "mixer"), runtime.mixer.Close))
