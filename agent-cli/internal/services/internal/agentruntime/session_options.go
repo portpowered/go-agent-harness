@@ -125,7 +125,7 @@ func resolveSessionTranscription(opts SessionRunOptions, provider string, accept
 		Provider:          provider,
 		Replay:            opts.ReplayPath != "",
 		AcceptsAudioInput: acceptsAudioInput,
-		Enabled:           !opts.NoInputTranscription,
+		Disabled:          opts.NoInputTranscription,
 		Override:          override,
 	})
 	return models.InputAudioTranscriptionConfig{Enabled: resolved.Enabled, Model: resolved.Model}, nil

@@ -173,11 +173,11 @@ func (s *Service) ResolveTranscription(request audioio.TranscriptionRequest) aud
 	if !request.AcceptsAudioInput || request.Replay || !strings.EqualFold(strings.TrimSpace(request.Provider), audioio.ProviderOpenAI) {
 		return audioio.TranscriptionConfig{}
 	}
-	if !request.Enabled {
-		return audioio.TranscriptionConfig{}
+	model := strings.TrimSpace(request.Model)
+	if request.Disabled {
+		return audioio.TranscriptionConfig{Model: model}
 	}
-	model := request.Model
-	if model == "" && strings.EqualFold(strings.TrimSpace(request.Provider), audioio.ProviderOpenAI) {
+	if model == "" {
 		model = audioio.DefaultTranscriptionModel
 	}
 	return audioio.TranscriptionConfig{Enabled: true, Model: model}

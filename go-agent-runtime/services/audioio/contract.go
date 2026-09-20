@@ -102,7 +102,7 @@ type TranscriptionRequest struct {
 	Provider          string
 	Replay            bool
 	AcceptsAudioInput bool
-	Enabled           bool
+	Disabled          bool
 	Model             string
 	Override          *TranscriptionConfig
 }

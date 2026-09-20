@@ -113,10 +113,10 @@ func TestServiceResolvesRatesAndAudioPolicies(t *testing.T) {
 	if _, err := service.ResolveRates(nilContext, audioio.RateRequest{}); err == nil {
 		t.Fatal("nil context unexpectedly accepted")
 	}
-	if got := service.ResolveTranscription(audioio.TranscriptionRequest{Provider: audioio.ProviderOpenAI, AcceptsAudioInput: true, Enabled: true}); !got.Enabled || got.Model != audioio.DefaultTranscriptionModel {
+	if got := service.ResolveTranscription(audioio.TranscriptionRequest{Provider: audioio.ProviderOpenAI, AcceptsAudioInput: true}); !got.Enabled || got.Model != audioio.DefaultTranscriptionModel {
 		t.Fatalf("transcription = %+v, want enabled default", got)
 	}
-	if got := service.ResolveTranscription(audioio.TranscriptionRequest{Provider: audioio.ProviderOpenAI, AcceptsAudioInput: true, Enabled: true, Replay: true}); got.Enabled {
+	if got := service.ResolveTranscription(audioio.TranscriptionRequest{Provider: audioio.ProviderOpenAI, AcceptsAudioInput: true, Replay: true}); got.Enabled {
 		t.Fatal("replay transcription unexpectedly enabled")
 	}
 	if service.VoiceGainDB("verse") <= 0 {

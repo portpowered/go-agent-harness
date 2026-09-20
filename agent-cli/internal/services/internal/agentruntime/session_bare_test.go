@@ -73,7 +73,7 @@ func TestResolveBareSessionOptionsUsesBareOpenAIDefaults(t *testing.T) {
 		},
 	}
 
-	resolved, err := ResolveBareSessionOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), LoadedConfig: loaded})
+	resolved, err := ResolveBareSessionOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(), LoadedConfig: loaded})
 	if err != nil {
 		t.Fatalf("ResolveBareSessionOptions(): %v", err)
 	}
@@ -103,6 +103,31 @@ func TestResolveBareSessionOptionsUsesBareOpenAIDefaults(t *testing.T) {
 	}
 }
 
+func TestResolveBareSessionOptionsNoInputTranscriptionDisablesPersistedPolicy(t *testing.T) {
+	enabled := true
+	loaded := &config.Config{
+		ConfigPath: filepath.Join(t.TempDir(), config.ConfigFileName),
+		Model: config.ModelConfig{Provider: config.ProviderOpenAI, OpenAI: &config.OpenAIConfig{
+			Model: "gpt-realtime", APIKey: "persisted-key",
+		}},
+		Session: &config.SessionConfig{InputTranscription: &config.SessionInputTranscriptionConfig{
+			Enabled: &enabled,
+			Model:   "custom-transcriber",
+		}},
+	}
+
+	resolved, err := ResolveBareSessionOptions(SessionRunOptions{
+		ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+		LoadedConfig: loaded, NoInputTranscription: true,
+	})
+	if err != nil {
+		t.Fatalf("ResolveBareSessionOptions(): %v", err)
+	}
+	if got := resolved.InputAudioTranscription; got == nil || got.Enabled || got.Model != "" {
+		t.Fatalf("input transcription = %#v, want disabled with no model", got)
+	}
+}
+
 func TestResolveBareSessionOptionsKeepsGrokServerVADDefault(t *testing.T) {
 	loaded := &config.Config{
 		ConfigPath: filepath.Join(t.TempDir(), config.ConfigFileName),
@@ -110,7 +135,7 @@ func TestResolveBareSessionOptionsKeepsGrokServerVADDefault(t *testing.T) {
 			Model: "grok-voice", APIKey: "grok-key",
 		}},
 	}
-	resolved, err := ResolveBareSessionOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), LoadedConfig: loaded})
+	resolved, err := ResolveBareSessionOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(), LoadedConfig: loaded})
 	if err != nil {
 		t.Fatalf("ResolveBareSessionOptions(): %v", err)
 	}
@@ -131,7 +156,7 @@ func TestResolveBareSessionOptionsHonorsSemanticVADPolicy(t *testing.T) {
 		}},
 	}
 
-	resolved, err := ResolveBareSessionOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), LoadedConfig: loaded})
+	resolved, err := ResolveBareSessionOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(), LoadedConfig: loaded})
 	if err != nil {
 		t.Fatalf("ResolveBareSessionOptions(): %v", err)
 	}
@@ -142,7 +167,7 @@ func TestResolveBareSessionOptionsHonorsSemanticVADPolicy(t *testing.T) {
 
 func TestResolveBareSessionOptionsRejectsIncompatibleVADFields(t *testing.T) {
 	base := func(vad *config.SessionVADConfig) SessionRunOptions {
-		return SessionRunOptions{ModelCatalog: testModelCatalog(), LoadedConfig: &config.Config{
+		return SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(), LoadedConfig: &config.Config{
 			ConfigPath: filepath.Join(t.TempDir(), config.ConfigFileName),
 			Model:      config.ModelConfig{Provider: config.ProviderOpenAI, OpenAI: &config.OpenAIConfig{Model: "gpt-realtime", APIKey: "key"}},
 			Session:    &config.SessionConfig{VAD: vad},
@@ -198,7 +223,7 @@ func TestResolveBareSessionOptionsHonorsPersistedSessionValues(t *testing.T) {
 		},
 	}
 
-	resolved, err := ResolveBareSessionOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), LoadedConfig: loaded})
+	resolved, err := ResolveBareSessionOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(), LoadedConfig: loaded})
 	if err != nil {
 		t.Fatalf("ResolveBareSessionOptions(): %v", err)
 	}
@@ -232,7 +257,7 @@ func TestResolveBareSessionOptionsExplicitAndAgentEnvironmentPrecedence(t *testi
 	}
 	t.Setenv("OPENAI_API_KEY", "fallback-key")
 
-	resolved, err := ResolveBareSessionOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
+	resolved, err := ResolveBareSessionOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		LoadedConfig: loaded,
 		APIKey:       "cli-key",
 		Model:        "gpt-realtime-2.1-mini",
@@ -244,7 +269,7 @@ func TestResolveBareSessionOptionsExplicitAndAgentEnvironmentPrecedence(t *testi
 		t.Fatalf("explicit precedence = key %q, model %q", resolved.APIKey, resolved.Model)
 	}
 
-	resolved, err = ResolveBareSessionOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), LoadedConfig: loaded})
+	resolved, err = ResolveBareSessionOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(), LoadedConfig: loaded})
 	if err != nil {
 		t.Fatalf("agent environment ResolveBareSessionOptions(): %v", err)
 	}
@@ -256,7 +281,7 @@ func TestResolveBareSessionOptionsExplicitAndAgentEnvironmentPrecedence(t *testi
 func TestResolveBareSessionOptionsMissingOpenAIKeyIsActionableAndRedacted(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "")
 	configPath := filepath.Join(t.TempDir(), config.ConfigFileName)
-	resolvedErr, err := ResolveBareSessionOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
+	resolvedErr, err := ResolveBareSessionOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		LoadedConfig: &config.Config{
 			ConfigPath: configPath,
 			Model: config.ModelConfig{
@@ -295,7 +320,7 @@ func TestResolveBareSessionOptionsCLIDeviceSelectorsOverridePersistedValues(t *t
 		},
 	}
 
-	resolved, err := ResolveBareSessionOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
+	resolved, err := ResolveBareSessionOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		LoadedConfig: loaded,
 		RTCBinding: runtimedevices.RTCBindingRequest{
 			InputDevice:   "cli:mic",
