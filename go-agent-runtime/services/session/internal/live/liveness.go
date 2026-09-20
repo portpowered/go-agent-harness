@@ -95,35 +95,14 @@ func (h *handle) latchProviderLiveness(failure session.LiveLivenessFailure) {
 		Cause:          cause,
 	}
 	err := &providerLivenessError{failure: failure, cause: causeError}
-	h.livenessMu.Lock()
-	if h.livenessFailure != nil {
-		h.livenessMu.Unlock()
-		return
-	}
-	copy := failure
-	h.livenessFailure = &copy
-	h.livenessMu.Unlock()
 	h.publish(session.LiveEvent{
 		Kind:      string(session.LiveEventLiveness),
 		SessionID: h.request.SessionID,
 		Error:     err,
-		Liveness:  &copy,
+		Liveness:  &failure,
 		Critical:  true,
 	}, false)
 	h.Cancel(err)
-}
-
-func (h *handle) livenessFailureSnapshot() *session.LiveLivenessFailure {
-	if h == nil {
-		return nil
-	}
-	h.livenessMu.Lock()
-	defer h.livenessMu.Unlock()
-	if h.livenessFailure == nil {
-		return nil
-	}
-	copy := *h.livenessFailure
-	return &copy
 }
 
 func livenessFailureFromError(err error) *session.LiveLivenessFailure {

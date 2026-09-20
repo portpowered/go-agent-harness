@@ -61,10 +61,7 @@ func (h *handle) finishOnceBody(err error) {
 	h.mu.Lock()
 	h.terminalErr = err
 	h.mu.Unlock()
-	liveness := h.livenessFailureSnapshot()
-	if liveness == nil {
-		liveness = livenessFailureFromError(err)
-	}
+	liveness := livenessFailureFromError(err)
 	if userCancelled && err == nil {
 		terminalValue = userCancellationTerminalValue(h.request.SessionID, outputObserved)
 	}

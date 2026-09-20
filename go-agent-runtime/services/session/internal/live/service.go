@@ -177,8 +177,6 @@ type handle struct {
 	firstTurnTimerScheduled                          bool
 	firstTurnSeen                                    bool
 	retryRequests                                    chan retryRequest
-	livenessMu                                       sync.Mutex
-	livenessFailure                                  *session.LiveLivenessFailure
 	toolMu                                           sync.Mutex
 	toolContinuations                                map[string]*liveToolContinuation
 	continuationErr                                  error
