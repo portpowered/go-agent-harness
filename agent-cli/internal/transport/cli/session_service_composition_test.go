@@ -1,21 +1,52 @@
 package cli
 
 import (
+	"context"
 	"errors"
+	"strings"
+	"testing"
+
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 	runtimedeviceswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
 	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
-	"strings"
-	"testing"
+	runtimeRecordingWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/wire"
+	runtimeReplayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
+	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	runtimeSessionWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
 
 // Tests compose the same runtime and use-case services as the application graph.
 func newTestSessionService(deps sessionservicewire.SessionDependencies) agentsession.SessionService {
-	deps.Runtime = sessionservicewire.NewSessionRuntime(audioiowire.NewService(), deps.Clock, deps.ToolService, sessionservicewire.NewSessionRuntimeFactory(), deps.RuntimeFactory, deps.SessionInferencer, deps.ToolExecutor, runtimedeviceswire.NewService(deps.DeviceRegistry, audioiowire.NewService()), deps.RuntimeObserver, deps.MetricSampler, deps.Logger, providerswire.NewModelCatalog())
+	audioService := audioiowire.NewService()
+	deps.Runtime = sessionservicewire.NewSessionRuntime(audioService, deps.Clock, deps.ToolService, sessionservicewire.NewSessionRuntimeFactory(), deps.RuntimeFactory, deps.SessionInferencer, deps.ToolExecutor, runtimedeviceswire.NewService(deps.DeviceRegistry, audioService), deps.RuntimeObserver, deps.MetricSampler, deps.Logger, providerswire.NewModelCatalog())
 	return sessionservicewire.NewSessionService(deps)
+}
+
+func newTestLiveSessionCommand(askFlags *flags.AskFlags, globalFlags *flags.GlobalFlags, inferencer messages.SessionInferencer, registry devicegw.DeviceRegistry) *SessionCommand {
+	audioService := audioiowire.NewService()
+	clockSource := clock.Real{}
+	liveService := runtimeSessionWire.NewLiveService(runtimeSessionWire.LiveDependencies{
+		InferencerFactory: func(context.Context, runtimeSession.LiveRequest) (messages.SessionInferencer, error) {
+			return inferencer, nil
+		},
+		Clock:     clockSource.Now,
+		Scheduler: clockSource,
+	})
+	deviceService := runtimedeviceswire.NewService(registry, audioService)
+	fileDeviceService := runtimedeviceswire.NewFileService(audioService)
+	return NewSessionCommandWithLive(
+		askFlags, globalFlags,
+		newTestSessionService(sessionservicewire.SessionDependencies{Clock: clockSource, SessionInferencer: inferencer, DeviceRegistry: registry}), nil,
+		liveService, runtimeReplayWire.NewService(), deviceService,
+		FileDeviceService{Service: fileDeviceService, Scheduler: clockSource},
+		nil, nil, nil, runtimeRecordingWire.NewService(clockSource), nil,
+	)
 }
 
 type chatFlagMatrixCase struct {

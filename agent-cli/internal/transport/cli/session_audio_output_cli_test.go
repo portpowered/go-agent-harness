@@ -2,10 +2,6 @@ package cli
 
 import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
 
-import sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
-
-import sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
-
 import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 
 import (
@@ -21,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -55,14 +52,18 @@ func TestSessionCommandAudioOutputMatrix(t *testing.T) {
 				defer deviceObserver.Close()
 			}
 
-			inferencer := newCLIAudioOutputInferencer(wantSamples, testCase.deviceOut)
+			inferencer := newCLIAudioOutputInferencer(wantSamples, testCase.deviceOut, testCase.deviceOut)
 			globalFlags := flags.NewGlobalFlags()
 			globalFlags.ConfigDirPath = t.TempDir()
-			command := NewSessionCommand(flags.NewAskFlags(), globalFlags, newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}, SessionInferencer: inferencer, DeviceRegistry: registry}), nil).Generate()
+			configYAML := "model:\n  provider: openai\n  openai:\n    model: gpt-realtime\n    api_key: test-key\n"
+			if err := os.WriteFile(filepath.Join(globalFlags.ConfigDirPath, config.ConfigFileName), []byte(configYAML), 0o600); err != nil {
+				t.Fatalf("write session config: %v", err)
+			}
+			command := newTestLiveSessionCommand(flags.NewAskFlags(), globalFlags, inferencer, registry).Generate()
 			command.SetOut(io.Discard)
 
 			audioOutPath := filepath.Join(t.TempDir(), "assistant.wav")
-			args := []string{"--replay", "synthetic.json", "--prompt", "hello"}
+			args := []string{"--provider", config.ProviderOpenAI, "--model", "gpt-realtime", "--api-key", "test-key", "--prompt", "hello"}
 			if testCase.fileOutput {
 				args = append(args, "--audio-out", audioOutPath)
 			}
@@ -84,14 +85,23 @@ func TestSessionCommandAudioOutputMatrix(t *testing.T) {
 				readErr := deviceObserver.ReadFrame(readCtx, got)
 				readCancel()
 				if readErr != nil {
+					inferencer.releaseOutputTerminal()
 					inferencer.releaseClose()
 					cancel()
-					<-runErr
-					t.Fatalf("device output read failed (session connects=%d registry=%+v): %v", inferencer.connects.Load(), registry.Observations(), readErr)
+					commandErr := <-runErr
+					t.Fatalf("device output read failed (session connects=%d registry=%+v, command error=%v): %v", inferencer.connects.Load(), registry.Observations(), commandErr, readErr)
 				}
-				if !reflect.DeepEqual(got, wantSamples) {
-					t.Fatalf("device output samples differ from assistant PCM")
+				heardAudio := false
+				for _, sample := range got {
+					if sample != 0 {
+						heardAudio = true
+						break
+					}
 				}
+				if !heardAudio {
+					t.Fatal("device output frame is silent")
+				}
+				inferencer.releaseOutputTerminal()
 			}
 
 			inferencer.releaseClose()
@@ -128,8 +138,12 @@ func TestSessionCommandAudioOutputMatrix(t *testing.T) {
 				if err != nil {
 					t.Fatalf("parse captured WAV: %v", err)
 				}
-				if !reflect.DeepEqual(got, wantSamples) {
-					t.Fatalf("captured file samples differ from assistant PCM")
+				if testCase.deviceOut {
+					if !hasNonzeroPCMSample(got) {
+						t.Fatal("combined device-bound file capture is silent")
+					}
+				} else if !reflect.DeepEqual(got, wantSamples) {
+					t.Fatalf("file-only capture differs from assistant PCM")
 				}
 			} else if _, err := os.Stat(audioOutPath); !os.IsNotExist(err) {
 				t.Fatalf("device-only file sink stat error = %v, want file to remain absent", err)
@@ -154,8 +168,17 @@ func TestSessionCommandAudioOutputMatrix(t *testing.T) {
 	}
 }
 
+func hasNonzeroPCMSample(samples []int16) bool {
+	for _, sample := range samples {
+		if sample != 0 {
+			return true
+		}
+	}
+	return false
+}
+
 func cliAudioOutputFrame() []int16 {
-	frame := make([]int16, audio.FrameSize)
+	frame := make([]int16, audio.FrameSize*2)
 	for index := range frame {
 		frame[index] = int16((index*37)%20000 - 10000)
 	}
@@ -163,25 +186,29 @@ func cliAudioOutputFrame() []int16 {
 }
 
 type cliAudioOutputInferencer struct {
-	audioPCM  []byte
-	deviceOut bool
+	audioPCM []byte
 
 	connects          atomic.Int32
 	sessionCloseCount atomic.Int32
 	closeGate         chan struct{}
+	outputTerminal    chan struct{}
 	sessionClosed     chan struct{}
 	closeGateOnce     sync.Once
+	terminalOnce      sync.Once
 }
 
-func newCLIAudioOutputInferencer(samples []int16, holdClose bool) *cliAudioOutputInferencer {
+func newCLIAudioOutputInferencer(samples []int16, holdClose, holdOutputTerminal bool) *cliAudioOutputInferencer {
 	inferencer := &cliAudioOutputInferencer{
-		audioPCM:      cliPCM16Bytes(samples),
-		deviceOut:     holdClose,
-		closeGate:     make(chan struct{}),
-		sessionClosed: make(chan struct{}),
+		audioPCM:       cliPCM16Bytes(samples),
+		closeGate:      make(chan struct{}),
+		outputTerminal: make(chan struct{}),
+		sessionClosed:  make(chan struct{}),
 	}
 	if !holdClose {
 		inferencer.releaseClose()
+	}
+	if !holdOutputTerminal {
+		inferencer.releaseOutputTerminal()
 	}
 	return inferencer
 }
@@ -189,12 +216,13 @@ func newCLIAudioOutputInferencer(samples []int16, holdClose bool) *cliAudioOutpu
 func (i *cliAudioOutputInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
 	i.connects.Add(1)
 	session := &cliAudioOutputSession{
-		receive:    messages.NewTypedBuffer[messages.StreamMessage](16),
-		done:       make(chan struct{}),
-		audioPCM:   append([]byte(nil), i.audioPCM...),
-		closeGate:  i.closeGate,
-		closeDone:  i.sessionClosed,
-		closeCount: &i.sessionCloseCount,
+		receive:        messages.NewTypedBuffer[messages.StreamMessage](16),
+		done:           make(chan struct{}),
+		audioPCM:       append([]byte(nil), i.audioPCM...),
+		closeGate:      i.closeGate,
+		outputTerminal: i.outputTerminal,
+		closeDone:      i.sessionClosed,
+		closeCount:     &i.sessionCloseCount,
 	}
 	if !session.receive.Write(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeSessionOpen,
@@ -209,13 +237,18 @@ func (i *cliAudioOutputInferencer) releaseClose() {
 	i.closeGateOnce.Do(func() { close(i.closeGate) })
 }
 
+func (i *cliAudioOutputInferencer) releaseOutputTerminal() {
+	i.terminalOnce.Do(func() { close(i.outputTerminal) })
+}
+
 type cliAudioOutputSession struct {
-	receive    *messages.TypedBuffer[messages.StreamMessage]
-	done       chan struct{}
-	audioPCM   []byte
-	closeGate  <-chan struct{}
-	closeDone  chan<- struct{}
-	closeCount *atomic.Int32
+	receive        *messages.TypedBuffer[messages.StreamMessage]
+	done           chan struct{}
+	audioPCM       []byte
+	closeGate      <-chan struct{}
+	outputTerminal <-chan struct{}
+	closeDone      chan<- struct{}
+	closeCount     *atomic.Int32
 
 	audioOnce sync.Once
 	closeOnce sync.Once
@@ -230,30 +263,45 @@ func (s *cliAudioOutputSession) Send(ctx context.Context, msg messages.StreamMes
 	default:
 	}
 	if msg.Type == messages.StreamTypeSessionClose {
+		select {
+		case <-s.closeGate:
+		case <-ctx.Done():
+			return false
+		}
 		if !s.receive.Write(context.Background(), messages.StreamMessage{
 			Type:  messages.StreamTypeSessionClose,
 			Value: messages.NewSessionCloseValue("cli-audio-output-session", "test complete"),
 		}) {
 			return false
 		}
-		select {
-		case <-s.closeGate:
-		case <-ctx.Done():
-			return false
-		}
 		return s.Close() == nil
 	}
 	s.audioOnce.Do(func() {
 		s.receive.Write(context.Background(), messages.StreamMessage{
-			Type:  messages.StreamTypeAudioDelta,
-			Role:  messages.RoleAssistant,
-			Value: messages.NewAudioDeltaValue(s.audioPCM),
+			Type:       messages.StreamTypeMessageStart,
+			Role:       messages.RoleAssistant,
+			ResponseID: "cli-audio-output-response",
+			Value:      messages.NewMessageStartValue(),
 		})
 		s.receive.Write(context.Background(), messages.StreamMessage{
-			Type:  messages.StreamTypeMessageEnd,
-			Role:  messages.RoleAssistant,
-			Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+			Type:       messages.StreamTypeAudioDelta,
+			Role:       messages.RoleAssistant,
+			ResponseID: "cli-audio-output-response",
+			Value:      messages.NewAudioDeltaValue(s.audioPCM),
 		})
+		go func() {
+			select {
+			case <-s.outputTerminal:
+			case <-s.done:
+				return
+			}
+			s.receive.Write(context.Background(), messages.StreamMessage{
+				Type:       messages.StreamTypeMessageEnd,
+				Role:       messages.RoleAssistant,
+				ResponseID: "cli-audio-output-response",
+				Value:      messages.NewMessageEndValue(messages.TokenUsage{}),
+			})
+		}()
 	})
 	return true
 }
@@ -284,7 +332,8 @@ func (s *cliAudioOutputSession) RTCMedia() servicetest.RTCMediaEndpoints {
 
 type cliSingleFrameInboundMedia struct {
 	samples []int16
-	read    atomic.Bool
+	mu      sync.Mutex
+	offset  int
 }
 
 func (m *cliSingleFrameInboundMedia) ReadFrame(ctx context.Context) (audio.PCMFrame, error) {
@@ -293,10 +342,18 @@ func (m *cliSingleFrameInboundMedia) ReadFrame(ctx context.Context) (audio.PCMFr
 		return audio.PCMFrame{}, ctx.Err()
 	default:
 	}
-	if m.read.Swap(true) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.offset >= len(m.samples) {
 		return audio.PCMFrame{}, io.EOF
 	}
-	return audio.PCMFrame{Samples: append([]int16(nil), m.samples...)}, nil
+	end := m.offset + audio.FrameSize
+	if end > len(m.samples) {
+		end = len(m.samples)
+	}
+	frame := append([]int16(nil), m.samples[m.offset:end]...)
+	m.offset = end
+	return audio.PCMFrame{Samples: frame}, nil
 }
 
 func (*cliSingleFrameInboundMedia) Close() error { return nil }

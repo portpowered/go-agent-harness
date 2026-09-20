@@ -51,7 +51,11 @@ func textSeed(seed public.TextSeed) SessionTextSeed {
 // the service-owned live host. The legacy dispatcher remains for text and
 // replay compatibility, but it must not retain a second file/device audio
 // implementation after C189.
-var ErrLegacyAudioRuntimeRetired = errors.New("legacy session audio runtime is retired; use the service-owned live session")
+type legacyAudioRuntimeRetiredError string
+
+func (e legacyAudioRuntimeRetiredError) Error() string { return string(e) }
+
+const ErrLegacyAudioRuntimeRetired legacyAudioRuntimeRetiredError = "legacy session audio runtime is retired; use the service-owned live session"
 
 func (d *Dispatcher) Run(ctx context.Context, out io.Writer, request public.Request) (runErr error) {
 	if d == nil || d.deps.Clock == nil {

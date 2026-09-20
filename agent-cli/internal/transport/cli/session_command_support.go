@@ -10,6 +10,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
+	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	gwproviders "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	"github.com/spf13/cobra"
@@ -84,10 +85,15 @@ type sessionCommandRunState struct {
 
 func (c *SessionCommand) runSessionCommand(cmd *cobra.Command, args []string, state sessionCommandRunState) (runErr error) {
 	defer func() { runErr = decorateSessionCommandError(runErr) }()
+	var endpointValidator runtimeDevices.RemoteEndpointValidator
+	if validator, ok := c.deviceService.(runtimeDevices.RemoteEndpointValidator); ok {
+		endpointValidator = validator
+	}
 	selectedTransport, err := validateSessionCommandPreflight(sessionCommandPreflight{
 		cmd: cmd, browserTools: state.BrowserTools, transport: state.Transport,
 		signaling: state.Signaling, mediaSource: state.MediaSource,
 		audioInTurnBarge: state.AudioTurnBarge, audioInTurns: len(state.AudioTurns), audioDeviceServer: state.AudioDeviceServer, maxDuration: state.MaxDuration,
+		deviceService: endpointValidator,
 	})
 	if err != nil {
 		return err

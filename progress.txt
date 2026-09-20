@@ -4226,3 +4226,34 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   audio stability normal/race, RTC race, audio-device server integration,
   integration/regressions, and audioio/device functional/race suites) on that
   exact commit. Do not open/update a PR or push until all local gates pass.
+
+# C229 live-path repair and preflight checkpoint 2026-09-20
+
+- Migrated existing CLI live-session fixtures to compose the public live,
+  device, file, replay, recording, and audioio services. Fixed the audio
+  output fixture to hold its terminal event until device playback is observed;
+  the device output path resamples provider frames before playback, and the
+  combined file output contract taps device-bound PCM. The existing audio-input
+  success case now uses audible source samples and waits for the finite capture
+  boundary before its provider response.
+- Moved remote endpoint validation out of the broad `devices.Service` interface
+  into its optional `RemoteEndpointValidator` contract. Concrete device
+  factories retain validation; unrelated service fakes do not need the method.
+  Device RTC pumps are canceled before provider session close after playback
+  drain so clean peer shutdown cannot race as an inbound media failure.
+- `rtk go test ./agent-cli/internal/transport/cli
+  ./go-agent-runtime/services/devices/... -count=1 -timeout=240s` passes:
+  750 tests in 9 packages. `rtk proxy git diff --check` passes.
+- `rtk make prepush` now reaches architecture analysis. Its latest run reports
+  198 issues: 114 baseline drifts, 52 stale baseline entries, 12 cognitive,
+  5 cyclomatic, 10 file-line, 2 function-line, 2 function-statement, and 1
+  package-file issue. These remain actionable; no baseline was widened.
+- Fetched `origin/main` as `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`;
+  this branch's merge base is the same commit. The fetched main has later
+  retirement commits, while `docs/architecture/size-baselines.json` has no
+  change between this branch base and fetched main. No merge, reset, push, or PR
+  action has occurred.
+- The current tree is a partial checkpoint atop `ce3c2a9507219b371990ab3f4ad1d95648fb1aab`.
+  Next: commit these repairs and this progress entry, integrate fetched main
+  while preserving ancestry in this isolated worktree, then repair the complete
+  architecture findings and rerun every C229 gate on the exact final commit.

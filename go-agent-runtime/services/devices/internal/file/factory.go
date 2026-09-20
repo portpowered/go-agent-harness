@@ -11,6 +11,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/endpoint"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
@@ -21,6 +22,10 @@ const defaultProviderSampleRate = 24000
 type Factory struct{ audio audioio.Service }
 
 func NewFactory(service audioio.Service) *Factory { return &Factory{audio: service} }
+
+func (f *Factory) ValidateRemoteEndpoint(value string) error {
+	return endpoint.ValidateRemoteEndpoint(value)
+}
 
 func (f *Factory) Open(ctx context.Context, request devices.Request) (devices.Handle, error) {
 	if f == nil || f.audio == nil {
