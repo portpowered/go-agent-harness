@@ -39,12 +39,6 @@ type Service struct{}
 
 func New() *Service { return &Service{} }
 
-// LoadRoomReplayPlan is retained only for the moved in-package behavior tests;
-// hosts use the public Service contract through roomreplay/wire.
-func LoadRoomReplayPlan(bundle string) (RoomReplayPlan, error) {
-	return New().Load(bundle)
-}
-
 func (s *Service) Load(bundle string) (RoomReplayPlan, error) {
 	root, manifestPath, manifestRelative, err := resolveRoomReplayBundle(bundle)
 	if err != nil {
