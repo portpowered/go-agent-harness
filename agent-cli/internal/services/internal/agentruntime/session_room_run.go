@@ -1108,13 +1108,19 @@ func (m *roomHumanCaptureMedia) WriteFrame(ctx context.Context, frame audio.PCMF
 		}
 		targetPCM := pcm
 		if target.mixer.Format().SampleRate != sourceRate {
-			targetSamples, err := audio.ResamplePCM16(frame.Samples, sourceRate, target.mixer.Format().SampleRate)
+			if m.opts.AudioService == nil {
+				return errors.New("audio service is required to convert human room input")
+			}
+			convertedPCM, err := m.opts.AudioService.ConvertPCM16(ctx, audioio.PCM16Request{
+				PCM: pcm, SourceRate: sourceRate, TargetRate: target.mixer.Format().SampleRate,
+				SourceChannels: 1, TargetChannels: 1,
+			})
 			if err != nil {
 				failure := roomParticipantFailure(participantID, fmt.Errorf("convert human input audio for %s: %w", target.plan.manifest.ID, err), m.secrets)
 				m.coordinator.failParticipant(participantID, failure)
 				return failure
 			}
-			targetPCM = encodeRoomPCM16(targetSamples)
+			targetPCM = convertedPCM
 		}
 		if err := routeRoomPeerPCM(ctx, participantID, target, targetPCM); err != nil {
 			if m.coordinator.isActive(target.plan.manifest.ID) {
