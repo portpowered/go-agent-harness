@@ -3,7 +3,6 @@ package agentruntime
 import (
 	"errors"
 	"fmt"
-	"strings"
 
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
@@ -48,21 +47,4 @@ func validateBareSessionModel(opts SessionRunOptions, provider, model string) er
 		return nil
 	}
 	return unsupportedOpenAIRealtimeModelErrorFor(opts, model)
-}
-
-func validateSelfPlayModel(opts SelfPlayRunOptions) error {
-	err := providerswire.NewModelAdmission(opts.modelCatalog).ValidateRealtimeModel(SelfPlayDefaultProvider, opts.Model, runtimeproviders.ModelAdmissionOptions{
-		PreserveModelInError: true,
-	})
-	if err == nil {
-		return nil
-	}
-	if errors.Is(err, runtimeproviders.ErrModelCatalogRequired) {
-		return fmt.Errorf("%w: self-play model admission", err)
-	}
-	var unsupported *runtimeproviders.UnsupportedRealtimeModelError
-	if errors.As(err, &unsupported) {
-		return fmt.Errorf("self-play model %q is not an OpenAI Realtime model; supported models: %s", unsupported.Model, strings.Join(unsupported.SupportedModels, ", "))
-	}
-	return err
 }

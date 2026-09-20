@@ -204,8 +204,8 @@ func TestEmitRoomParticipantPlaybackOverflowDiagnostic(t *testing.T) {
 // closing the class of bug (not just the two call sites already found) --
 // see resolvePlaybackDiagnosticSink's doc comment. Each case below builds its
 // SessionRunOptions the same way the real, corresponding production call
-// site does (self-play's own builder function, and the room package's actual
-// per-participant plan for a live and a replay participant), deliberately
+// site does (a minimal caller and the room package's actual per-participant
+// plan for a live and a replay participant), deliberately
 // leaving Diagnostics unset exactly as that call site does today, then
 // re-plans a hermetic copy (ReplayPath + an injected SessionInferencer, the
 // same seam session_interactive_policy_test.go already uses) and asserts the
@@ -218,10 +218,6 @@ func TestPlanSessionRuntimePlaybackObserverNonNilAcrossConstructionPaths(t *test
 		{
 			name: "generic minimal caller (a hypothetical future construction site)",
 			opts: SessionRunOptions{ModelCatalog: testModelCatalog()},
-		},
-		{
-			name: "self-play (services.selfPlaySessionRunOptions)",
-			opts: selfPlaySessionRunOptions(SelfPlayRunOptions{}),
 		},
 		{
 			name: "room live participant (services.buildRoomParticipantPlans)",

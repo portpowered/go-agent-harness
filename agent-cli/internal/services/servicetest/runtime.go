@@ -112,7 +112,6 @@ var RunSessionWithMaxDuration = impl.RunSessionWithMaxDuration
 var RunSessionWithMaxDurationClock = impl.RunSessionWithMaxDurationClock
 
 type ScheduledAudioInput = impl.ScheduledAudioInput
-type SelfPlayRunOptions = impl.SelfPlayRunOptions
 type SessionAudioInTurnBargeError = impl.SessionAudioInTurnBargeError
 type SessionAudioInput = impl.SessionAudioInput
 type SessionTextSeed = impl.SessionTextSeed
