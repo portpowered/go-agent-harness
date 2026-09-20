@@ -96,16 +96,6 @@ func (i *rtcDeviceBindingInferencer) ConnectSession(ctx context.Context) (messag
 	return bound, nil
 }
 
-func rtcMediaFromSession(session messages.Session) (RTCMediaEndpoints, bool) {
-	if owner, ok := session.(RTCMediaSession); ok {
-		return owner.RTCMedia(), true
-	}
-	if forwarder, ok := session.(rtcMediaSessionForwarder); ok {
-		return forwarder.rtcMedia()
-	}
-	return RTCMediaEndpoints{}, false
-}
-
 func closeRTCDeviceBinding(binding *RTCDeviceBinding) error {
 	if binding == nil {
 		return nil

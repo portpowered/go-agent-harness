@@ -16,10 +16,39 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	duration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 const durationTerminalDrainAcceptedOutput = "accepted duration terminal delta"
+
+const (
+	rateLimitRetryCode         = "rate_limit_exceeded"
+	defaultRateLimitRetryDelay = 2 * time.Second
+	maxRateLimitRetryDelay     = 15 * time.Second
+)
+
+func rateLimitRetryDecision(terminal *messages.MessageEndValue) (time.Duration, bool) {
+	decision := durationwire.NewService().EvaluateRetry(duration.RetryPolicy{Enabled: true}, terminal)
+	return decision.Delay, decision.Eligible
+}
+
+func providerTerminalErrorCode(terminal *messages.MessageEndValue) string {
+	if terminal == nil {
+		return ""
+	}
+	if code := strings.TrimSpace(terminal.ProviderErrorCode); code != "" {
+		return code
+	}
+	for _, part := range strings.Split(terminal.StatusDetails, ",") {
+		key, value, ok := strings.Cut(part, "=")
+		if ok && strings.EqualFold(strings.TrimSpace(key), "code") {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
 
 type durationTerminalDrainFixture struct {
 	ctx    context.Context

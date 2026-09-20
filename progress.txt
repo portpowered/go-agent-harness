@@ -4074,3 +4074,170 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   same PR `#435`, update its body with the repair/evidence map, then return
   `ACCEPTED` to the script-owned current-head CI gate without polling; retain
   this task through `CONTINUE` for any exact CI rejection or actionable repair.
+
+# C216 recovery and ownership checkpoint 2026-09-19
+
+- Admission check passed for `audio-runtime-c216-recover-shutdown-duration-retirement`;
+  `prd.branchName` matches the isolated branch. The requested
+  `factory/docs/implementation-handoff.md` is absent at the factory root; the
+  executor policy copy under the preserved C186 worktree was read with the
+  operating and meta-planner handoffs.
+- The local `progress.txt` history ends at C40 and is stale for C216. The live
+  `~default` board has C216 as `work-task-10` in `init`; it has no C216 review
+  item. PR #527 is open at `4d819b05518b65351af398020bd42431abd341c3` and has
+  no GitHub review records or comments. C216-02's plan identifies the known
+  repairs: nil-Drain cancellation order, `ErrFinalizationPanic` identity,
+  post-expiry ERROR admission, and bounded finalization after caller cancel.
+- Fetched `origin main` at `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`, then
+  fast-forwarded only this isolated worktree to preserved C211 checkpoint
+  `bdc06bc52dff`. Required startup and current-main ancestry are present. The
+  C187 and C211 predecessor worktrees remain clean and untouched.
+- Restored `agent-cli/internal/services/internal/agentruntime/session_voices.go`
+  from `origin/main`; blob `087f3b20b215128098a4b2e98c079d8c1d0cc118` matches.
+  Commit `4431f6e01fa0785bcde6d77b2bd368cfd3e880a9` contains only that restore.
+- The five C211 replacements remain in agentruntime pending caller cutover:
+  `session_output.go`, `session_runtime_duration.go`, `session_service_duration.go`,
+  `session_service_duration_execution.go`, and
+  `session_service_duration_shutdown.go`. No production callers have been
+  cut over and no owned legacy deletion is claimed yet.
+- C215 has a running owner on `work-task-8`; its exact ownership includes
+  `session_termination.go`, `session_terminal_outcome.go`, and the diagnostics
+  files. C216 will keep edits off these files and limit shared-file edits to
+  its duration seam.
+- There is an exact API sequencing dependency: `session_output.go` calls
+  `writeSessionReplayMessageUnscoped` and `writeSessionReplayClose` from
+  C215-owned `session_termination.go`; C215-owned `session_terminal_outcome.go`
+  also uses `writeSessionReplayClose` and `SessionMaxDurationReason` from
+  `session_runtime_duration.go`. Move the output and reason contracts through
+  the service-owned API after C215's current terminal cutover is reviewable;
+  do not retain adapters in agentruntime to work around that lease.
+- Next action: implement duration execution ownership under
+  `go-agent-runtime/services/session/internal/execution` and its public session
+  contract using only C216-owned paths; then integrate the reviewed C215
+  terminal cutover, adapt every caller, delete all five replacements, and run
+  the full caller search before gates.
+
+# C216 retry ownership checkpoint — 2026-09-19
+
+- Admission remains `audio-runtime/audio-runtime-v1`; `prd.branchName` matches
+  the isolated branch. Fresh `origin/main` is still
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44` and remains an ancestor alongside
+  startup `8bdafc7f947a3a2c9856220abdc539437035bd21` and predecessor
+  `bdc06bc52dff`. No predecessor worktree or running host checkout was changed.
+- Moved rate-limit terminal classification, injected-clock waiting, bounded
+  cancellation/error handling, `response.create` dispatch, and retry dispatch
+  observation from `session_service_duration_execution.go` into
+  `sessionduration/internal/service`. The CLI loop adapter now exposes only the
+  session-event transport method; its observation hook records a successful
+  dispatch and makes no policy decision.
+- Restoring `session_voices.go` byte-for-byte from origin/main exposed a
+  duplicate `VoiceLoudnessGainDB` alias left in `public_aliases.go`. Removed
+  that redundant alias only; `session_voices.go` remains unchanged from
+  origin/main so the CLI package compiles.
+- Focused duration tests pass normally and under race: 32 tests across three
+  packages in each mode. Focused CLI retry regressions pass normally and under
+  race: 26 tests in each mode. `git diff --check` passes. The plan's filtered
+  execution-package patterns match no tests; the full execution suite remains
+  to be run with the completed execution migration.
+- This is partial progress: the five C211 replacement files remain, other
+  `durationServiceResources` mutable state and callbacks remain in agentruntime,
+  callers are not fully cut over, and no PR, push, CI, independent review, or
+  deletion completion is claimed. Exact next action: move duration loop
+  construction/mechanics into the session-owned execution contract and
+  implementation on C216-owned paths; then sequence C215's terminal API
+  integration, complete all caller cutovers, delete all five replacements,
+  and run full local preflight on the exact candidate.
+
+# C227 recovery and service-boundary checkpoint 2026-09-20
+
+- Verified the sole `audio-runtime` admission and matching C227 branch. The
+  factory-root `factory/docs/implementation-handoff.md` is absent; read the
+  retained same-project copy from the C219 worktree. C227 has no review Work;
+  PR #527 has no reviews or comments. C226's task failed with an unknown runner
+  outcome and its worktree is clean. C224, C225, and C228 remain nonterminal
+  `init` tasks with exact leases on shared caller files; their worktrees are
+  clean and untouched.
+- Fetched `origin main` at `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44` and
+  merged C216 `130d8936872a7b30902edb0cd9778d78aea7d367` into this isolated
+  C227 branch. Required C211 `bdc06bc52dff`, startup
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, and fetched main ancestry pass.
+  The C216 source worktree still has exactly its six tracked modifications and
+  untracked duplex factory. Its tracked diff snapshot is SHA-256
+  `e73a3c50f34a310a5c2e9cc0f69fa63beb95cd80be1334f57b01cac8ac5c8020`
+  (18,941 bytes); the duplex file is SHA-256
+  `c963545e0c4ef297eb287d3c82e4ad1bfdbb11f769617b6c5c1e4cb3060847dc`.
+- Preserved the six modified files and moved the duplex factory into
+  `go-agent-runtime/services/session/internal/live/duplex_loop.go`, updated
+  session Wire and regenerated it. Checkpoint commit: `aebd907`.
+- Integrated-main baseline is 106 production files / 39,329 physical lines;
+  the nine owned files total 2,569 lines. All nine are absent from this
+  candidate. The five uncredited C216 replacements
+  (`session_output.go`, `session_runtime_duration.go`,
+  `session_service_duration.go`, `session_service_duration_execution.go`,
+  `session_service_duration_shutdown.go`) remain. The sole shutdown adapter is
+  one production file / 59 lines.
+- Exact checks passed: `rtk go test -count=1
+  ./go-agent-runtime/services/session/... ./agent-cli/internal/services/internal/agentruntime/...
+  -run 'RTC.*Cancel|Cancel.*RTC|Interrupt|Replacement'` (23 tests, 13
+  packages); focused sessionduration/session tests normal and race (88 tests,
+  15 packages each); full sessionduration/session suites with
+  `-timeout 480s` (261 tests, 15 packages); `rtk make wire-check`; and
+  `rtk git diff --check`. No PR, push, CI result, independent review, or merge
+  is claimed.
+- Next action: move the remaining duration runner's mutable resources and
+  session-specific policy out of agentruntime into the service-owned
+  `sessionduration/internal` and `session/internal/live` contracts and
+  implementations. Keep exact peer-leased caller files untouched until release
+  or reviewed integration, then cut over every caller, remove all five
+  replacement files, verify no duplicate decisions remain, and run the complete
+  exact-head local preflight before submitting a candidate.
+
+# C227 service-owned liveness checkpoint 2026-09-20
+
+- Commit `a10078b` removes the duplicate `handle.livenessFailure` snapshot and
+  mutex from `go-agent-runtime/services/session/internal/live`; terminal
+  liveness projection now comes from the preserved `sessionduration.LivenessError`
+  chain. The sessionduration controller remains the first-cause and watchdog
+  owner. Liveness events and compatibility error identities remain intact.
+- `rtk go test -count=1 -timeout 120s
+  ./go-agent-runtime/services/session/internal/live -run 'Liveness|Timeout'`
+  and its `-race` equivalent passed (3 tests each). The full normal and race
+  suites passed for `./go-agent-runtime/services/session/...` and
+  `./go-agent-runtime/services/sessionduration/...` (261 tests, 15 packages
+  each). `rtk git diff --check` passed. No test was added.
+- The C227 legacy nine-file / 2,569-line cluster remains absent. The five
+  uncredited C216 replacement files remain, callers are not fully cut over,
+  and `shutdown_adapter.go` remains 1 production file / 59 lines. No PR, push,
+  SCRIPT CI, review, or merge is claimed.
+- Exact next action: move the remaining `durationServiceResources` mutable
+  state and session-specific policy into `sessionduration/internal` and
+  `session/internal/live` behind service-owned contracts; preserve peer-leased
+  callers until released or reviewed integration, then cut over every caller,
+  delete all five replacements, and run the complete exact-head local preflight.
+
+# C227 service-owned loop join checkpoint 2026-09-20
+
+- Moved duration loop-result ownership from the CLI `durationServiceResources`
+  channel and wrapper mutex into `sessionduration/internal/service.runLoop`.
+  The service now joins after drain and close, retains provider/close error
+  identity, exits immediately after handler-selected completion, and applies a
+  separately bounded loop-join timeout. The CLI no longer stores or joins a
+  second copy of the loop result.
+- Early regression runs exposed lost provider/close errors, loop completion
+  hangs, and a too-short reuse of drain wall-safety for loop joining. Repaired
+  these in the service runner and kept the timeout distinct from the drain
+  interval. Final checks passed: normal and race
+  `rtk go test -count=1 -timeout 480s ./go-agent-runtime/services/sessionduration/... ./go-agent-runtime/services/session/...`
+  and its `-race` equivalent (261 tests / 15 packages each); filtered normal
+  and race `rtk go test -count=1 -timeout 180s ./agent-cli/internal/services/internal/agentruntime -run 'Duration|Scheduled|Cancel|Drain|Retry|Provider|Liveness|Finaliz|Shutdown|Terminal|RTC|Interrupt|Replacement'`
+  and its `-race` equivalent (363 tests each); and `rtk git diff --check`.
+- This remains a partial checkpoint. The nine-file / 2,569-line legacy cluster
+  is absent, but `durationServiceResources` still holds session-specific state
+  and decisions, all caller cutovers are incomplete, the five uncredited C216
+  replacement files remain, and `shutdown_adapter.go` remains one file / 59
+  lines. No PR, push, SCRIPT CI, review, merge, or acceptance is claimed.
+- Exact next action: replace the remaining CLI resource object with
+  service-owned session lifecycle contracts and implementations; cut over every
+  caller while respecting exact peer file leases; remove all five uncredited
+  replacements; verify there are no duplicate decisions; then run the complete
+  exact-head preflight before submitting a candidate.

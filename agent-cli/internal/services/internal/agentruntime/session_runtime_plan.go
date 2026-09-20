@@ -17,6 +17,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
@@ -113,7 +114,6 @@ func newDefaultSessionRuntimeFactory() sessionRuntimeFactory {
 		},
 	}
 }
-
 func (f sessionRuntimeFactory) replayDialer(path, timing string) (sessionReplayDialer, error) {
 	if normalizedSessionReplayTiming(timing) == sessionReplayTimingRecorded && f.newRecordedTimingReplayDialer != nil {
 		return f.newRecordedTimingReplayDialer(path)
@@ -127,7 +127,6 @@ func (f sessionRuntimeFactory) newGrokSessionInferencerForTools(sessionCfg confi
 	}
 	return f.newGrokSessionInferencer(sessionCfg, dialer)
 }
-
 func (f sessionRuntimeFactory) newOpenAISessionInferencerForTools(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition, scheduledAudio bool, inputAudioTranscription models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
 	if scheduledAudio && f.newOpenAIScheduledSessionWithTools != nil {
 		return f.newOpenAIScheduledSessionWithTools(sessionCfg, voice, dialer, toolDefinitions, inputAudioTranscription)
@@ -208,9 +207,9 @@ func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr erro
 		reporter = newSessionTerminalReporter()
 		p.loop.terminalReporter = reporter
 	}
-	finalizer := newSessionRuntimeFinalizer(p)
+	finalizer := durationwire.NewService().NewFinalizer(p.finalizationPorts())
 	defer func() {
-		runErr = finalizer.finish(ctx, out, runErr)
+		runErr = finalizer.Finish(ctx, out, runErr)
 		if !sessionErrorHasIndependentFailure(runErr) && p.replayCompletion != nil {
 			p.replayCompletion(reporter)
 		}
@@ -228,7 +227,7 @@ func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr erro
 	}
 	if deviceBinding != nil {
 		p.loop.rtcDeviceBinding = deviceBinding
-		finalizer.setDeviceBinding(deviceBinding)
+		finalizer.SetDeviceBinding(deviceBinding.Close)
 	}
 	// The filesystem-scope disclosure is best-effort: it is new, unconditional
 	// startup output on every session, and a write failure here must not
@@ -261,6 +260,7 @@ func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr erro
 	}
 	return nil
 }
+
 func writeFilesystemScopeAnnouncement(out io.Writer, policy *tools.FilesystemPolicy) {
 	if policy == nil {
 		return
@@ -302,10 +302,10 @@ func (p sessionRuntimePlan) configureLoopObserver(loop *sessionLoopOptions) {
 	obs := newSessionProgressObserver(p.diagnostics, p.metricsRecorder, p.provider, p.model)
 	obs.streamObserver = p.streamObserver
 	obs.runtime = p.runtime
-	obs.livenessClock = loop.livenessClock
-	if obs.livenessClock == nil {
-		obs.livenessClock = sessionLivenessClockFromSource(p.clockSource)
+	if loop.livenessClock == nil {
+		loop.livenessClock = sessionLivenessClockFromSource(p.clockSource)
 	}
+	obs.setLivenessClock(loop.livenessClock)
 	obs.cancellationIntent = loop.cancellationIntent
 	obs.requireSessionUpdated = loop.RequireSessionUpdated
 	obs.scheduledAudioDispatch = loop.ScheduledAudioDispatch

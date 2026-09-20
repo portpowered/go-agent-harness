@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 )
 
 func TestSessionProgressObserver_AdmitsOnlyResponsesWithOutput(t *testing.T) {
@@ -142,7 +143,7 @@ func TestSessionProgressObserver_ClassifiesExplicitEmptyPartialResponse(t *testi
 	if livenessErr == nil || !errors.Is(livenessErr, ErrSilentProviderEmptyResponse) {
 		t.Fatalf("liveness error = %v, want ErrSilentProviderEmptyResponse", livenessErr)
 	}
-	var typedErr *SessionLivenessError
+	var typedErr *sessionduration.LivenessError
 	if !errors.As(livenessErr, &typedErr) || typedErr.ResponseID != "response-empty" {
 		t.Fatalf("liveness error = %#v, want typed response-empty error", livenessErr)
 	}

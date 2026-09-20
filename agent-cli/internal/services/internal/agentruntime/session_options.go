@@ -20,6 +20,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
@@ -309,11 +310,10 @@ type SessionRunOptions struct {
 	// generated CLI supplies the composed clock so replay and recording
 	// observers can correlate events across command instances.
 	Clock platformclock.Source
-	// LivenessClock supplies participant-owned watchdog timers. Nil derives a
-	// timer clock from Clock when possible, otherwise the session uses the host
+	// LivenessClock supplies participant-owned watchdog timers. Nil derives a timer clock from Clock when possible, otherwise the session uses the host
 	// clock. Deterministic callers can inject this seam without changing the
 	// runtime timestamp source.
-	LivenessClock SessionLivenessClock
+	LivenessClock sessionduration.TimerScheduler
 	// RuntimeObserver receives clock-stamped audio, turn, and terminal events
 	// from the session command. The terminal event carries the production-owned
 	// session-cumulative token totals and complete metrics snapshot. Nil keeps
