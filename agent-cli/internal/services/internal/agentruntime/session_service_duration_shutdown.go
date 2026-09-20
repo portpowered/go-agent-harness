@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	duration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 )
 
@@ -37,40 +38,8 @@ func mergeSessionErrorChannels(ctx context.Context, first, second <-chan error) 
 	return merged
 }
 
-func (r *durationServiceResources) startSessionUpdatedTimer() error {
-	if !r.opts.RequireSessionUpdated || r.opts.observer == nil || !r.opts.observer.scheduledAudioAwaitingConfiguration() || r.updatedTimer != nil {
-		return nil
-	}
-	timeout := r.opts.SessionUpdatedTimeout
-	if timeout <= 0 {
-		timeout = sessionScheduledAudioConfigTimeout
-	}
-	r.updatedTimer = r.clock.NewTimer(timeout)
-	if r.updatedTimer == nil {
-		return errors.New("session duration clock returned a nil session-updated timer")
-	}
-	r.updatedTimeout = r.updatedTimer.C()
-	go func(timer SessionDurationTimer) {
-		select {
-		case <-timer.C():
-			forwardDurationServiceError(r.ctx, r.externalErrors, sessionScheduledAudioConfigTimeoutError(r.opts))
-		case <-r.ctx.Done():
-		}
-	}(r.updatedTimer)
-	return nil
-}
-
-func (r *durationServiceResources) stopSessionUpdatedTimer() {
-	if r.updatedTimer == nil {
-		return
-	}
-	r.updatedTimer.Stop()
-	r.updatedTimer = nil
-	r.updatedTimeout = nil
-}
-
-func (r *durationServiceResources) drainPlaybackOnly(ctx context.Context) error {
-	if !r.drainPlayback || r.observed == nil {
+func (r *durationServiceResources) drainPlaybackOnly(ctx context.Context, state duration.RunState) error {
+	if !state.DrainPlayback() || r.observed == nil {
 		return nil
 	}
 	return r.observed.DrainSessionPlayback(ctx)
@@ -83,7 +52,6 @@ func (r *durationServiceResources) close() error {
 }
 
 func (r *durationServiceResources) closeResources() error {
-	r.stopSessionUpdatedTimer()
 	if r.publisher != nil {
 		r.publisher.stop()
 	}

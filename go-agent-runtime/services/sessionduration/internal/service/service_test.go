@@ -428,7 +428,7 @@ func TestRunHandlesWakeAndDoneBoundaryFailures(t *testing.T) {
 		name      string
 		wake      <-chan struct{}
 		done      <-chan struct{}
-		onWake    func(context.Context, sessionduration.Loop, sessionduration.Controller) error
+		onWake    func(context.Context, sessionduration.Loop, sessionduration.Controller, sessionduration.RunState) (sessionduration.RunState, error)
 		doneError func() error
 		want      error
 	}{
@@ -439,8 +439,10 @@ func TestRunHandlesWakeAndDoneBoundaryFailures(t *testing.T) {
 				wake <- struct{}{}
 				return wake
 			}(),
-			onWake: func(context.Context, sessionduration.Loop, sessionduration.Controller) error { return wakeErr },
-			want:   wakeErr,
+			onWake: func(_ context.Context, _ sessionduration.Loop, _ sessionduration.Controller, state sessionduration.RunState) (sessionduration.RunState, error) {
+				return state, wakeErr
+			},
+			want: wakeErr,
 		},
 		{
 			name: "done",
@@ -465,7 +467,9 @@ func TestRunHandlesWakeAndDoneBoundaryFailures(t *testing.T) {
 				OnWake:    test.onWake,
 				Done:      test.done,
 				DoneError: test.doneError,
-				Drain:     func(context.Context, sessionduration.Loop, sessionduration.Controller) error { return nil },
+				Drain: func(context.Context, sessionduration.Loop, sessionduration.Controller, sessionduration.RunState) error {
+					return nil
+				},
 			}
 			if err := New().Run(request); !errors.Is(err, test.want) {
 				t.Fatalf("Run() = %v, want %v", err, test.want)
@@ -651,7 +655,9 @@ func TestRunExpiresAtMaxDurationAndClosesLoop(t *testing.T) {
 			LoopFactory: func(context.Context, sessionduration.AdmissionInferencer, sessionduration.Controller) (sessionduration.Loop, error) {
 				return &idleRunLoopProbe{deltas: messages.NewTypedBuffer[messages.StreamMessage](1)}, nil
 			},
-			Drain: func(context.Context, sessionduration.Loop, sessionduration.Controller) error { return nil },
+			Drain: func(context.Context, sessionduration.Loop, sessionduration.Controller, sessionduration.RunState) error {
+				return nil
+			},
 		})
 	}()
 	var timer *triggerTimer

@@ -94,12 +94,6 @@ type durationServiceResources struct {
 	rtcErrors      <-chan error
 	externalErrors chan error
 	done           chan struct{}
-	promptSent     bool
-	closeSent      bool
-	closeAfterOpen bool
-	updatedTimer   SessionDurationTimer
-	updatedTimeout <-chan time.Time
-	drainPlayback  bool
 	closeOnce      sync.Once
 }
 
@@ -140,6 +134,16 @@ func runAgentLoopSessionWithDurationService(ctx context.Context, out io.Writer, 
 			Enabled:    opts.observer != nil,
 			MaxRetries: 1,
 		},
+		SessionUpdated: duration.SessionUpdatedWait{
+			Timeout: opts.SessionUpdatedTimeout,
+			Pending: func() bool {
+				return opts.RequireSessionUpdated && opts.observer != nil && opts.observer.scheduledAudioAwaitingConfiguration()
+			},
+			Ready: func() bool {
+				return opts.observer != nil && opts.observer.scheduledAudioReady()
+			},
+			TimeoutError: sessionScheduledAudioConfigTimeoutError(opts),
+		},
 		RetryDispatched: func(msg messages.StreamMessage) {
 			if opts.observer != nil {
 				opts.observer.observeProviderDispatch(msg)
@@ -149,11 +153,11 @@ func runAgentLoopSessionWithDurationService(ctx context.Context, out io.Writer, 
 		LoopFactory: func(runCtx context.Context, admitted duration.AdmissionInferencer, controller duration.Controller) (duration.Loop, error) {
 			return resources.buildLoop(runCtx, inferencer, admitted, controller)
 		},
-		Handle: func(runCtx context.Context, loop duration.Loop, controller duration.Controller, msg messages.StreamMessage) (duration.MessageResult, error) {
-			return resources.handle(runCtx, loop, controller, msg)
+		Handle: func(runCtx context.Context, loop duration.Loop, controller duration.Controller, msg messages.StreamMessage, state duration.RunState) (duration.MessageResult, error) {
+			return resources.handle(runCtx, loop, controller, msg, state)
 		},
-		Drain: func(drainCtx context.Context, loop duration.Loop, controller duration.Controller) error {
-			return resources.drainPlaybackOnly(drainCtx)
+		Drain: func(drainCtx context.Context, loop duration.Loop, controller duration.Controller, state duration.RunState) error {
+			return resources.drainPlaybackOnly(drainCtx, state)
 		},
 		Close: func() error {
 			return resources.close()
@@ -163,8 +167,8 @@ func runAgentLoopSessionWithDurationService(ctx context.Context, out io.Writer, 
 		},
 		ExternalErrors: resources.externalErrors,
 		Wake:           toolLifecycleEvents(opts.observer),
-		OnWake: func(runCtx context.Context, loop duration.Loop, _ duration.Controller) error {
-			return resources.handleWake(runCtx, loop)
+		OnWake: func(runCtx context.Context, loop duration.Loop, _ duration.Controller, state duration.RunState) (duration.RunState, error) {
+			return resources.handleWake(runCtx, loop, state)
 		},
 		Done: mergeDurationDone(opts.Done, resources.done),
 		DoneError: func() error {

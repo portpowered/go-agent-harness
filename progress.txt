@@ -4241,3 +4241,30 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   caller while respecting exact peer file leases; remove all five uncredited
   replacements; verify there are no duplicate decisions; then run the complete
   exact-head preflight before submitting a candidate.
+
+# C227 service-owned session state checkpoint 2026-09-20
+
+- Moved prompt-sent, close-sent, pending-close and playback-drain state into the
+  `sessionduration.RunState` snapshot held by `sessionduration/internal/service`
+  runner. Moved the scheduled `SESSION.UPDATED` timeout timer and timeout
+  delivery from `durationServiceResources` into the service runner; the caller
+  now supplies only pending/ready observations and the existing typed timeout
+  error. `RunState` is an immutable public value.
+- Exact checks passed after these changes: normal and race
+  `rtk go test -count=1 -timeout 180s ./go-agent-runtime/services/sessionduration/... ./go-agent-runtime/services/session/...`
+  and its `-race -timeout 240s` equivalent (261 tests, 15 packages each);
+  filtered normal and race
+  `rtk go test -count=1 -timeout 180s ./agent-cli/internal/services/internal/agentruntime -run 'Duration|Scheduled|Cancel|Drain|Retry|Provider|Liveness|Finaliz|Shutdown|Terminal|RTC|Interrupt|Replacement'`
+  and its `-race -timeout 240s` equivalent (363 tests each); `rtk make
+  wire-check`; and `rtk git diff --check`.
+- The nine exact legacy production files remain absent. The five uncredited
+  replacement files remain; `durationServiceResources` still owns loop,
+  observer/publisher, error-channel and close effects. Current adapter count is
+  one production file / 59 lines. No PR, push, SCRIPT CI, review, or merge is
+  claimed. C224/C225/C228 retain queued leases over overlapping caller files;
+  none were changed by this checkpoint.
+- Next: move remaining run resources and session-specific decisions into the
+  private service implementations behind public contracts; then cut over every
+  caller when its exact peer lease is released or reviewed-integrated, delete
+  all five replacements, and run the complete exact-head local preflight before
+  the first PR or push.

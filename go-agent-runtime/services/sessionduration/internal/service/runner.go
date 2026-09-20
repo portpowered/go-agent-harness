@@ -11,7 +11,10 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 )
 
-const defaultLoopJoinTimeout = 5 * time.Second
+const (
+	defaultLoopJoinTimeout       = 5 * time.Second
+	defaultSessionUpdatedTimeout = 30 * time.Second
+)
 
 // Run is the single bounded-session loop boundary. Host-specific prompt,
 // scheduled-input, and rendering behavior is supplied as a handler; deadline,
@@ -124,22 +127,25 @@ func newRunContext(ctx context.Context) (context.Context, context.CancelFunc) {
 }
 
 type runLoop struct {
-	ctx        context.Context
-	runCtx     context.Context
-	cancel     context.CancelFunc
-	controller sessionduration.Controller
-	admitted   sessionduration.AdmissionInferencer
-	loop       sessionduration.Loop
-	request    sessionduration.RunRequest
-	runErrs    chan error
-	loopErr    error
-	loopDone   bool
-	pending    []messages.StreamMessage
-	finishOnce sync.Once
-	startOnce  sync.Once
-	finished   bool
-	finishErr  error
-	service    *Service
+	ctx            context.Context
+	runCtx         context.Context
+	cancel         context.CancelFunc
+	controller     sessionduration.Controller
+	admitted       sessionduration.AdmissionInferencer
+	loop           sessionduration.Loop
+	request        sessionduration.RunRequest
+	runErrs        chan error
+	loopErr        error
+	loopDone       bool
+	pending        []messages.StreamMessage
+	state          sessionduration.RunState
+	updatedTimer   sessionduration.Timer
+	updatedTimeout <-chan time.Time
+	finishOnce     sync.Once
+	startOnce      sync.Once
+	finished       bool
+	finishErr      error
+	service        *Service
 }
 
 type runLoopEvent struct {
@@ -157,6 +163,7 @@ const (
 	runLoopExternalError
 	runLoopWake
 	runLoopDone
+	runLoopSessionUpdatedTimeout
 	runLoopMessage
 	runLoopContext
 )
@@ -189,6 +196,8 @@ func (r *runLoop) nextEvent() runLoopEvent {
 		return runLoopEvent{kind: runLoopWake}
 	case <-r.request.Done:
 		return runLoopEvent{kind: runLoopDone}
+	case <-r.updatedTimeout:
+		return runLoopEvent{kind: runLoopSessionUpdatedTimeout, err: r.sessionUpdatedTimeoutError()}
 	case msg, ok := <-r.loop.Deltas().Chan():
 		return runLoopEvent{kind: runLoopMessage, msg: msg, valid: ok}
 	case <-r.ctx.Done():
@@ -210,6 +219,8 @@ func (r *runLoop) handleEvent(event runLoopEvent) (error, bool) {
 		return r.handleWake()
 	case runLoopDone:
 		return r.finish(false, runLoopDoneError(r.request)), true
+	case runLoopSessionUpdatedTimeout:
+		return r.finish(false, event.err), true
 	case runLoopMessage:
 		if !event.valid {
 			return r.finish(false, nil), true
@@ -232,7 +243,9 @@ func (r *runLoop) handleWake() (error, bool) {
 	if r.request.OnWake == nil {
 		return nil, false
 	}
-	if err := r.request.OnWake(r.runCtx, r.loop, r.controller); err != nil {
+	state, err := r.request.OnWake(r.runCtx, r.loop, r.controller, r.state)
+	r.state = state
+	if err != nil {
 		return r.finish(false, err), true
 	}
 	return nil, false
@@ -270,15 +283,28 @@ func (r *runLoop) process(msg messages.StreamMessage) error {
 	if r.finished {
 		return nil
 	}
+	if err := r.startSessionUpdatedTimer(admission.Message); err != nil {
+		return err
+	}
+	var result sessionduration.MessageResult
+	if r.request.Handle != nil {
+		var err error
+		result, err = r.request.Handle(r.runCtx, r.loop, r.controller, admission.Message, r.state)
+		if result.State != nil {
+			r.state = *result.State
+		}
+		if err != nil {
+			if errors.Is(err, sessionduration.ErrMaxDurationExceeded) {
+				return r.finish(true, nil)
+			}
+			return err
+		}
+	}
+	if r.request.SessionUpdated.Ready != nil && r.request.SessionUpdated.Ready() {
+		r.stopSessionUpdatedTimer()
+	}
 	if r.request.Handle == nil {
 		return nil
-	}
-	result, err := r.request.Handle(r.runCtx, r.loop, r.controller, admission.Message)
-	if err != nil {
-		if errors.Is(err, sessionduration.ErrMaxDurationExceeded) {
-			return r.finish(true, nil)
-		}
-		return err
 	}
 	if !result.Stop {
 		return nil
@@ -346,6 +372,7 @@ func (r *runLoop) waitForRetry(delay time.Duration) error {
 
 func (r *runLoop) finish(planned bool, primary error) error {
 	r.finishOnce.Do(func() {
+		r.stopSessionUpdatedTimer()
 		r.admitted.CloseAdmission()
 		if planned {
 			primary = errors.Join(primary, sendLoopClose(r.runCtx, r.loop))
@@ -359,7 +386,7 @@ func (r *runLoop) finish(planned bool, primary error) error {
 			Drain: func(ctx context.Context) error {
 				drainErr := r.drainPending()
 				if drainErr == nil && r.request.Drain != nil {
-					drainErr = r.request.Drain(ctx, r.loop, r.controller)
+					drainErr = r.request.Drain(ctx, r.loop, r.controller, r.state)
 				}
 				r.cancelRun()
 				return drainErr
@@ -389,6 +416,43 @@ func (r *runLoop) finish(planned bool, primary error) error {
 		r.finished = true
 	})
 	return r.finishErr
+}
+
+func (r *runLoop) startSessionUpdatedTimer(msg messages.StreamMessage) error {
+	wait := r.request.SessionUpdated
+	if msg.Type != messages.StreamTypeSessionOpen || wait.Pending == nil || !wait.Pending() || r.updatedTimer != nil {
+		return nil
+	}
+	if r.request.Clock == nil {
+		return sessionduration.ErrSchedulerUnavailable
+	}
+	timeout := wait.Timeout
+	if timeout <= 0 {
+		timeout = defaultSessionUpdatedTimeout
+	}
+	timer := r.request.Clock.NewTimer(timeout)
+	if timer == nil {
+		return errors.New("session duration clock returned a nil session-updated timer")
+	}
+	r.updatedTimer = timer
+	r.updatedTimeout = timer.C()
+	return nil
+}
+
+func (r *runLoop) stopSessionUpdatedTimer() {
+	if r.updatedTimer == nil {
+		return
+	}
+	r.updatedTimer.Stop()
+	r.updatedTimer = nil
+	r.updatedTimeout = nil
+}
+
+func (r *runLoop) sessionUpdatedTimeoutError() error {
+	if err := r.request.SessionUpdated.TimeoutError; err != nil {
+		return err
+	}
+	return errors.New("session updated acknowledgement timed out")
 }
 
 func loopJoinTimeout(policy sessionduration.DrainPolicy) time.Duration {

@@ -462,10 +462,12 @@ func TestRunPublishesAdmittedMessageAndPerformsPlannedBoundedStop(t *testing.T) 
 			published = append(published, msg)
 			return nil
 		}},
-		Handle: func(context.Context, sessionduration.Loop, sessionduration.Controller, messages.StreamMessage) (sessionduration.MessageResult, error) {
+		Handle: func(context.Context, sessionduration.Loop, sessionduration.Controller, messages.StreamMessage, sessionduration.RunState) (sessionduration.MessageResult, error) {
 			return sessionduration.MessageResult{Stop: true, Planned: true}, nil
 		},
-		Drain: func(context.Context, sessionduration.Loop, sessionduration.Controller) error { return nil },
+		Drain: func(context.Context, sessionduration.Loop, sessionduration.Controller, sessionduration.RunState) error {
+			return nil
+		},
 	})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
@@ -488,7 +490,7 @@ func TestRunOwnsLoopExecutionAndBoundedCleanup(t *testing.T) {
 		LoopFactory: func(context.Context, sessionduration.AdmissionInferencer, sessionduration.Controller) (sessionduration.Loop, error) {
 			return loop, nil
 		},
-		Drain: func(context.Context, sessionduration.Loop, sessionduration.Controller) error {
+		Drain: func(context.Context, sessionduration.Loop, sessionduration.Controller, sessionduration.RunState) error {
 			drained = true
 			return nil
 		},

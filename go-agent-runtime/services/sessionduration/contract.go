@@ -287,17 +287,81 @@ type SessionEventSender interface {
 	SendSessionEvent(context.Context, messages.StreamMessage) error
 }
 
+// RunState contains the mutable session-loop decisions held by the duration
+// runner while one invocation is active. Handlers receive a copy and return
+// any updated value through MessageResult; they must not retain the value.
+type RunState struct {
+	promptSent            bool
+	closeSent             bool
+	closeAfterOpenPending bool
+	drainPlayback         bool
+}
+
+// PromptSent reports whether the opening prompt was sent.
+func (s RunState) PromptSent() bool { return s.promptSent }
+
+// CloseSent reports whether a session close control was sent.
+func (s RunState) CloseSent() bool { return s.closeSent }
+
+// CloseAfterOpenPending reports whether a session close is waiting for readiness.
+func (s RunState) CloseAfterOpenPending() bool { return s.closeAfterOpenPending }
+
+// DrainPlayback reports whether finalization should drain session playback.
+func (s RunState) DrainPlayback() bool { return s.drainPlayback }
+
+// WithPromptSent returns a state recording the opening prompt send.
+func (s RunState) WithPromptSent() RunState {
+	s.promptSent = true
+	return s
+}
+
+// WithCloseSent returns a state with the close-control result.
+func (s RunState) WithCloseSent(value bool) RunState {
+	s.closeSent = value
+	return s
+}
+
+// WithCloseAfterOpenPending returns a state with the pending-close decision.
+func (s RunState) WithCloseAfterOpenPending(value bool) RunState {
+	s.closeAfterOpenPending = value
+	return s
+}
+
+// WithDrainPlayback returns a state requesting bounded playback drain.
+func (s RunState) WithDrainPlayback() RunState {
+	s.drainPlayback = true
+	return s
+}
+
 // MessageResult tells the duration service whether the host's ordinary
 // session completion rules selected a terminal boundary for the message.
 type MessageResult struct {
 	Stop    bool
 	Planned bool
+	State   *RunState
 }
 
 // MessageHandler is the narrow host callback for session-specific prompt,
 // tool, and scheduled-input behavior. It cannot bypass controller admission:
 // the service invokes it only for an admitted message.
-type MessageHandler func(context.Context, Loop, Controller, messages.StreamMessage) (MessageResult, error)
+type MessageHandler func(context.Context, Loop, Controller, messages.StreamMessage, RunState) (MessageResult, error)
+
+// DrainHandler receives the runner-owned terminal state after the final
+// message and before loop cancellation.
+type DrainHandler func(context.Context, Loop, Controller, RunState) error
+
+// WakeHandler handles service wakeups using a runner-owned state snapshot.
+type WakeHandler func(context.Context, Loop, Controller, RunState) (RunState, error)
+
+// SessionUpdatedWait asks the runner to bound the acknowledgement after an
+// admitted session-open event. Pending and Ready expose host-observed facts;
+// timer ownership and timeout delivery remain with the service.
+type SessionUpdatedWait struct {
+	Timeout      time.Duration
+	Pending      func() bool
+	Ready        func() bool
+	TimeoutError error
+}
 
 // LoopFactory constructs one loop around the service-owned admission bridge.
 // The controller is supplied so host tool adapters can report local execution
@@ -324,15 +388,16 @@ type RunRequest struct {
 	Artifacts       ArtifactLifecycle
 	LoopFactory     LoopFactory
 	Handle          MessageHandler
-	Drain           func(context.Context, Loop, Controller) error
+	Drain           DrainHandler
 	DrainPolicy     DrainPolicy
 	Close           func() error
 	Binding         func() error
 	ExternalErrors  <-chan error
 	Wake            <-chan struct{}
-	OnWake          func(context.Context, Loop, Controller) error
+	OnWake          WakeHandler
 	Done            <-chan struct{}
 	DoneError       func() error
+	SessionUpdated  SessionUpdatedWait
 }
 
 // Result is the controller's terminal snapshot after cleanup.

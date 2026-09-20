@@ -10,12 +10,12 @@ import (
 	duration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 )
 
-func (r *durationServiceResources) handle(ctx context.Context, loop duration.Loop, controller duration.Controller, msg messages.StreamMessage) (duration.MessageResult, error) {
+func (r *durationServiceResources) handle(ctx context.Context, loop duration.Loop, controller duration.Controller, msg messages.StreamMessage, state duration.RunState) (duration.MessageResult, error) {
 	concrete, err := durationAgentLoop(loop)
 	if err != nil {
-		return duration.MessageResult{}, err
+		return duration.MessageResult{State: &state}, err
 	}
-	return r.handleMessage(ctx, concrete, controller, msg)
+	return r.handleMessage(ctx, concrete, msg, state)
 }
 
 func durationAgentLoop(loop duration.Loop) (*agentloop.AgentLoop, error) {
@@ -26,22 +26,19 @@ func durationAgentLoop(loop duration.Loop) (*agentloop.AgentLoop, error) {
 	return concrete, nil
 }
 
-func (r *durationServiceResources) handleMessage(ctx context.Context, loop *agentloop.AgentLoop, _ duration.Controller, msg messages.StreamMessage) (duration.MessageResult, error) {
-	if err := r.prepareMessage(ctx, loop, msg); err != nil {
-		return duration.MessageResult{}, err
+func (r *durationServiceResources) handleMessage(ctx context.Context, loop *agentloop.AgentLoop, msg messages.StreamMessage, state duration.RunState) (duration.MessageResult, error) {
+	if err := r.prepareMessage(ctx, loop, msg, &state); err != nil {
+		return duration.MessageResult{State: &state}, err
 	}
-	return r.finishMessage(ctx, loop, msg)
+	return r.finishMessage(ctx, loop, msg, state)
 }
 
-func (r *durationServiceResources) prepareMessage(ctx context.Context, loop *agentloop.AgentLoop, msg messages.StreamMessage) error {
+func (r *durationServiceResources) prepareMessage(ctx context.Context, loop *agentloop.AgentLoop, msg messages.StreamMessage, state *duration.RunState) error {
 	if msg.Type == messages.StreamTypeSessionCreated && r.publisher != nil {
 		r.publisher.markSessionReady()
 	}
 	if msg.Type == messages.StreamTypeSessionOpen {
-		if err := r.startSessionUpdatedTimer(); err != nil {
-			return err
-		}
-		if err := r.open(ctx, loop); err != nil {
+		if err := r.open(ctx, loop, state); err != nil {
 			return err
 		}
 	}
@@ -53,32 +50,29 @@ func (r *durationServiceResources) prepareMessage(ctx context.Context, loop *age
 	return nil
 }
 
-func (r *durationServiceResources) finishMessage(ctx context.Context, loop *agentloop.AgentLoop, msg messages.StreamMessage) (duration.MessageResult, error) {
-	if r.opts.observer != nil && r.opts.observer.scheduledAudioReady() {
-		r.stopSessionUpdatedTimer()
+func (r *durationServiceResources) finishMessage(ctx context.Context, loop *agentloop.AgentLoop, msg messages.StreamMessage, state duration.RunState) (duration.MessageResult, error) {
+	if r.shouldQueueClose(msg, state) {
+		state = state.WithCloseAfterOpenPending(true)
 	}
-	if r.shouldQueueClose(msg) {
-		r.closeAfterOpen = true
-	}
-	state, err := closePendingSessionIfReady(ctx, loop, r.opts, sessionLoopMessageState{
-		closeSent:             r.closeSent,
-		closeAfterOpenPending: r.closeAfterOpen,
+	messageState, err := closePendingSessionIfReady(ctx, loop, r.opts, sessionLoopMessageState{
+		closeSent:             state.CloseSent(),
+		closeAfterOpenPending: state.CloseAfterOpenPending(),
 	})
 	if err != nil {
-		return duration.MessageResult{}, err
+		return duration.MessageResult{State: &state}, err
 	}
-	r.closeSent = state.closeSent
+	state = state.WithCloseSent(messageState.closeSent).WithCloseAfterOpenPending(messageState.closeAfterOpenPending)
 	if shouldStopSessionLoop(msg, r.opts) {
-		r.drainPlayback = true
-		return duration.MessageResult{Stop: true}, nil
+		state = state.WithDrainPlayback()
+		return duration.MessageResult{Stop: true, State: &state}, nil
 	}
-	return duration.MessageResult{}, nil
+	return duration.MessageResult{State: &state}, nil
 }
 
-func (r *durationServiceResources) open(ctx context.Context, loop *agentloop.AgentLoop) error {
+func (r *durationServiceResources) open(ctx context.Context, loop *agentloop.AgentLoop, state *duration.RunState) error {
 	promptProvided := r.opts.PromptProvided || r.opts.Prompt != ""
-	if promptProvided && !r.promptSent {
-		r.promptSent = true
+	if promptProvided && !state.PromptSent() {
+		*state = state.WithPromptSent()
 		if err := loop.Send(ctx, []messages.Message{messages.NewTextMessage(messages.RoleUser, r.opts.Prompt)}); err != nil {
 			return fmt.Errorf("send session message: %w", err)
 		}
@@ -91,35 +85,35 @@ func (r *durationServiceResources) open(ctx context.Context, loop *agentloop.Age
 			}
 		}
 	}
-	if r.opts.CloseAfterOpen && !promptProvided && r.opts.AudioIn == nil && !r.closeSent {
-		r.closeAfterOpen = true
+	if r.opts.CloseAfterOpen && !promptProvided && r.opts.AudioIn == nil && !state.CloseSent() {
+		*state = state.WithCloseAfterOpenPending(true)
 	}
 	return nil
 }
 
-func (r *durationServiceResources) shouldQueueClose(msg messages.StreamMessage) bool {
+func (r *durationServiceResources) shouldQueueClose(msg messages.StreamMessage, state duration.RunState) bool {
 	promptProvided := r.opts.PromptProvided || r.opts.Prompt != ""
 	return r.opts.CloseAfterOpen && promptProvided && msg.Type == messages.StreamTypeMessageEnd &&
-		(r.opts.observer == nil || r.opts.observer.lastMessageEndAdmitted()) && !r.closeSent
+		(r.opts.observer == nil || r.opts.observer.lastMessageEndAdmitted()) && !state.CloseSent()
 }
 
-func (r *durationServiceResources) handleWake(ctx context.Context, loop duration.Loop) error {
+func (r *durationServiceResources) handleWake(ctx context.Context, loop duration.Loop, state duration.RunState) (duration.RunState, error) {
 	concrete, err := durationAgentLoop(loop)
 	if err != nil {
-		return err
+		return state, err
 	}
 	if r.opts.observer != nil {
 		if err := r.opts.observer.dispatchScheduledInputs(ctx, concrete); err != nil {
-			return err
+			return state, err
 		}
 	}
-	state, err := closePendingSessionIfReady(ctx, concrete, r.opts, sessionLoopMessageState{
-		closeSent:             r.closeSent,
-		closeAfterOpenPending: r.closeAfterOpen,
+	messageState, err := closePendingSessionIfReady(ctx, concrete, r.opts, sessionLoopMessageState{
+		closeSent:             state.CloseSent(),
+		closeAfterOpenPending: state.CloseAfterOpenPending(),
 	})
 	if err != nil {
-		return err
+		return state, err
 	}
-	r.closeSent = state.closeSent
-	return nil
+	state = state.WithCloseSent(messageState.closeSent).WithCloseAfterOpenPending(messageState.closeAfterOpenPending)
+	return state, nil
 }
