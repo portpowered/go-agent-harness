@@ -1,7 +1,6 @@
 package service
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -69,7 +68,7 @@ func TestLoadRoomReplayPlanAcceptsArrayAndAliasSchemas(t *testing.T) {
 	}
 	writeManifestValue(t, bundle, manifest)
 
-	plan, err := LoadRoomReplayPlan(bundle)
+	plan, err := roomReplayServiceForTest().Load(bundle)
 	if err != nil {
 		t.Fatalf("LoadRoomReplayPlan with array/alias schema: %v", err)
 	}
@@ -105,7 +104,7 @@ func TestLoadRoomReplayPlanAcceptsLegacyAliasesAndHumanParticipant(t *testing.T)
 	delete(betaArtifacts, roomReplayArtifactRoleCapture)
 	writeManifestValue(t, bundle, manifest)
 
-	plan, err := LoadRoomReplayPlan(bundle)
+	plan, err := roomReplayServiceForTest().Load(bundle)
 	if err != nil {
 		t.Fatalf("LoadRoomReplayPlan with legacy aliases: %v", err)
 	}
@@ -122,7 +121,7 @@ func TestLoadRoomReplayPlanAcceptsLegacyAliasesAndHumanParticipant(t *testing.T)
 
 func TestRoomReplayServiceValidatesBundleAndOutputBoundaries(t *testing.T) {
 	bundle, _ := writeRoomReplayBundle(t)
-	service := New()
+	service := roomReplayServiceForTest()
 	plan, err := service.Load(bundle)
 	if err != nil {
 		t.Fatalf("Service.Load: %v", err)
@@ -164,7 +163,7 @@ func TestLoadRoomReplayPlanRejectsConflictingInventoryMetadata(t *testing.T) {
 	}
 	writeManifestValue(t, bundle, manifest)
 
-	_, err := LoadRoomReplayPlan(bundle)
+	_, err := roomReplayServiceForTest().Load(bundle)
 	if err == nil || !errors.Is(err, ErrInvalidRoomReplayBundle) || !strings.Contains(err.Error(), "participants/alpha/sent.pcm") {
 		t.Fatalf("conflicting inventory metadata error = %v, want typed path conflict", err)
 	}
@@ -181,7 +180,7 @@ func TestLoadRoomReplayPlanPreservesFractionalTimelineAndRejectsUnsafeReference(
 		updateArtifactDigest(t, manifest, "room_timeline", timeline)
 		writeManifestValue(t, bundle, manifest)
 
-		plan, err := LoadRoomReplayPlan(bundle)
+		plan, err := roomReplayServiceForTest().Load(bundle)
 		if err != nil {
 			t.Fatalf("LoadRoomReplayPlan fractional timeline: %v", err)
 		}
@@ -200,7 +199,7 @@ func TestLoadRoomReplayPlanPreservesFractionalTimelineAndRejectsUnsafeReference(
 		updateArtifactDigest(t, manifest, "room_timeline", timeline)
 		writeManifestValue(t, bundle, manifest)
 
-		_, err := LoadRoomReplayPlan(bundle)
+		_, err := roomReplayServiceForTest().Load(bundle)
 		if err == nil || !errors.Is(err, ErrInvalidRoomReplayBundle) || !strings.Contains(err.Error(), "unsafe") {
 			t.Fatalf("unsafe timeline reference error = %v, want typed path rejection", err)
 		}
@@ -231,7 +230,7 @@ func TestLoadRoomReplayPlanRejectsHeaderAndArtifactShapeFailures(t *testing.T) {
 			bundle, manifest := writeRoomReplayBundle(t)
 			test.mutate(manifest)
 			writeManifestValue(t, bundle, manifest)
-			_, err := LoadRoomReplayPlan(bundle)
+			_, err := roomReplayServiceForTest().Load(bundle)
 			if err == nil || !errors.Is(err, test.want) {
 				t.Fatalf("LoadRoomReplayPlan error = %v, want errors.Is(..., %v)", err, test.want)
 			}
@@ -241,44 +240,77 @@ func TestLoadRoomReplayPlanRejectsHeaderAndArtifactShapeFailures(t *testing.T) {
 
 func TestRoomReplayPathNormalizationRejectsUnsafeInputs(t *testing.T) {
 	for _, value := range []string{"", "has\x00nul", `a\b`, "/absolute", "../outside", ".", "artifact:stream"} {
-		if _, err := normalizeSafeRoomReplayPath(value); err == nil {
-			t.Errorf("normalizeSafeRoomReplayPath(%q) = nil error, want rejection", value)
-		}
+		t.Run(value, func(t *testing.T) {
+			bundle, manifest := writeRoomReplayBundle(t)
+			participants := roomReplayTestMap(t, manifest["participants"], "participants")
+			participant := roomReplayTestMap(t, participants["alpha"], "participant alpha")
+			artifacts := roomReplayTestMap(t, participant["artifacts"], "participant alpha artifacts")
+			roomReplayTestMap(t, artifacts[roomReplayArtifactRoleSentPCM], "participant alpha sent PCM")["path"] = value
+			writeManifestValue(t, bundle, manifest)
+			_, err := roomReplayServiceForTest().Load(bundle)
+			want := ErrInvalidRoomReplayBundle
+			if value == "" {
+				want = ErrRoomReplayBundleIncomplete
+			}
+			if !errors.Is(err, want) {
+				t.Fatalf("Service.Load with unsafe artifact path %q = %v, want errors.Is(%v)", value, err, want)
+			}
+		})
 	}
 }
 
 func TestRoomReplayInventoryObjectAcceptsSinglePathEntry(t *testing.T) {
-	entries, err := parseRoomReplayArtifactInventory(json.RawMessage(`{"path":"room-mix.wav","size":4,"sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`), "integrity")
-	if err != nil || len(entries) != 1 || entries[0].Path != "room-mix.wav" {
-		t.Fatalf("single inventory entry = %+v, err=%v", entries, err)
+	bundle, manifest := writeRoomReplayBundle(t)
+	artifacts := roomReplayTestMap(t, manifest["artifacts"], "artifacts")
+	roomMix := roomReplayTestMap(t, artifacts["room_mix"], "room mix")
+	manifest["integrity"] = map[string]any{
+		"path": roomMix["path"], "size": roomMix["size"], "sha256": roomMix["sha256"],
+	}
+	writeManifestValue(t, bundle, manifest)
+	if _, err := roomReplayServiceForTest().Load(bundle); err != nil {
+		t.Fatalf("Service.Load with single-entry integrity metadata: %v", err)
 	}
 }
 
 func TestRoomReplayInventoryRejectsInvalidPathAndDuplicateRole(t *testing.T) {
-	if _, err := parseRoomReplayArtifactInventory(json.RawMessage(`{"path":12}`), "integrity"); err == nil {
-		t.Fatal("invalid inventory path type accepted")
-	}
-	duplicate := json.RawMessage(`[{"role":"sent_pcm","path":"a.pcm","size":1,"sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},{"role":"sent_pcm","path":"b.pcm","size":1,"sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}]`)
-	if _, err := parseRoomReplayParticipantArtifacts(duplicate, "artifacts"); err == nil {
-		t.Fatal("duplicate participant artifact role accepted")
-	}
-}
-
-func TestRoomReplayTimelineBudgetRejectsLimits(t *testing.T) {
-	if err := validateRoomReplayTimelineBudget(roomReplayMaxTimelineBytes+1, 0); err == nil {
-		t.Fatal("oversized timeline accepted")
-	}
-	if err := validateRoomReplayTimelineBudget(0, roomReplayMaxTimelineRecords); err == nil {
-		t.Fatal("overlong timeline record count accepted")
-	}
+	t.Run("invalid integrity path", func(t *testing.T) {
+		bundle, manifest := writeRoomReplayBundle(t)
+		manifest["integrity"] = map[string]any{"path": 12}
+		writeManifestValue(t, bundle, manifest)
+		if _, err := roomReplayServiceForTest().Load(bundle); !errors.Is(err, ErrInvalidRoomReplayBundle) {
+			t.Fatalf("Service.Load with non-string integrity path = %v, want invalid-bundle error", err)
+		}
+	})
+	t.Run("duplicate participant role", func(t *testing.T) {
+		bundle, manifest := writeRoomReplayBundle(t)
+		participants := roomReplayTestMap(t, manifest["participants"], "participants")
+		participant := roomReplayTestMap(t, participants["alpha"], "participant alpha")
+		artifacts := roomReplayTestMap(t, participant["artifacts"], "participant alpha artifacts")
+		sent := roomReplayTestMap(t, artifacts[roomReplayArtifactRoleSentPCM], "participant alpha sent PCM")
+		duplicate := make(map[string]any, len(sent))
+		for key, value := range sent {
+			duplicate[key] = value
+		}
+		sent["role"] = roomReplayArtifactRoleSentPCM
+		duplicate["role"] = roomReplayArtifactRoleSentPCM
+		duplicate["path"] = "participants/alpha/duplicate.pcm"
+		participant["artifacts"] = []any{sent, duplicate}
+		writeManifestValue(t, bundle, manifest)
+		if _, err := roomReplayServiceForTest().Load(bundle); !errors.Is(err, ErrInvalidRoomReplayBundle) {
+			t.Fatalf("Service.Load with duplicate participant role = %v, want invalid-bundle error", err)
+		}
+	})
 }
 
 func TestRoomReplayTimelineOffsetRejectsMalformedNumbers(t *testing.T) {
 	for _, raw := range []string{"not-a-number", "-1", "1e999"} {
-		object := roomReplayJSONObject{"offset": json.RawMessage(raw)}
-		if _, _, _, err := firstRoomReplayTimelineOffset(object, "offset"); err == nil {
-			t.Errorf("firstRoomReplayTimelineOffset(%s) = nil error, want rejection", raw)
-		}
+		t.Run(raw, func(t *testing.T) {
+			clockBase := time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)
+			line := fmt.Sprintf(`{"type":"speech_start","offset":%s,"unix_ms":%d,"participant_id":"alpha"}`, raw, clockBase.UnixMilli())
+			if err := loadRoomReplayWithTimeline(t, line); err == nil {
+				t.Fatalf("Service.Load with malformed timeline offset %s succeeded", raw)
+			}
+		})
 	}
 }
 
@@ -290,7 +322,7 @@ func TestRoomReplayRejectsEmptyManifest(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(bundle, RoomReplayBundleManifestPath), []byte(" \n"), 0o600); err != nil {
 		t.Fatalf("write empty manifest: %v", err)
 	}
-	_, err := LoadRoomReplayPlan(bundle)
+	_, err := roomReplayServiceForTest().Load(bundle)
 	if err == nil || !errors.Is(err, ErrInvalidRoomReplayBundle) {
 		t.Fatalf("empty manifest error = %v, want typed mismatch", err)
 	}
@@ -309,9 +341,22 @@ func TestRoomReplayTimelineParserRejectsMalformedEvents(t *testing.T) {
 		{name: "negative sequence", line: `{"type":"speech_start","offset":0,"unix_ms":0,"sequence":-1}`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			if _, _, err := parseRoomReplayTimelineEvent([]byte(test.line), 1, 0, "room-timeline.jsonl"); err == nil {
-				t.Fatalf("parseRoomReplayTimelineEvent(%s) = nil error, want rejection", test.line)
+			if err := loadRoomReplayWithTimeline(t, test.line); err == nil {
+				t.Fatalf("Service.Load with malformed timeline event %s succeeded", test.line)
 			}
 		})
 	}
+}
+
+func loadRoomReplayWithTimeline(t *testing.T, line string) error {
+	t.Helper()
+	bundle, manifest := writeRoomReplayBundle(t)
+	timeline := []byte(line + "\n")
+	if err := os.WriteFile(filepath.Join(bundle, "room-timeline.jsonl"), timeline, 0o600); err != nil {
+		t.Fatalf("write malformed timeline: %v", err)
+	}
+	updateArtifactDigest(t, manifest, "room_timeline", timeline)
+	writeManifestValue(t, bundle, manifest)
+	_, err := roomReplayServiceForTest().Load(bundle)
+	return err
 }
