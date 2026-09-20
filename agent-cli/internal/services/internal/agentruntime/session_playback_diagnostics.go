@@ -182,8 +182,8 @@ func sessionPlaybackDiagnosticObserver(sink SessionDiagnosticSink) runtimeDevice
 }
 
 // sessionPlaybackObservabilityObserver exports the complete synchronized
-// queue snapshot at device teardown. RTCDeviceSink invokes this observer only
-// after the native handle is closed, never from its real-time callback.
+// queue snapshot after the device service closes its handle, outside native
+// callbacks.
 func sessionPlaybackObservabilityObserver(sampler observability.MetricSampler, logger observability.Logger) runtimeDevices.PlaybackObserver {
 	sampler = observability.EnsureMetricSampler(sampler)
 	logger = observability.EnsureLogger(logger)

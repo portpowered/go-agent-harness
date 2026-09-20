@@ -99,6 +99,38 @@ func TestFactoryUsesFiniteRoleForFileOnlyPlayback(t *testing.T) {
 	}
 }
 
+func TestFactoryPreservesPublicDeviceMetadataCapabilities(t *testing.T) {
+	wantStats := audio.PlaybackQueueStats{DroppedSamples: 23, OverflowEvents: 2}
+	physicalHandle := &metadataTestHandle{
+		testHandle:    &testHandle{ports: devices.MediaPorts{Playback: newTestPlayback(nil)}},
+		inputDevice:   "virtual:microphone",
+		outputDevice:  "virtual:speaker",
+		playbackStats: wantStats,
+	}
+	factory := NewFactory(&testService{handle: physicalHandle}, nil)
+	handle, err := factory.Open(context.Background(), devices.Request{PlaybackEnabled: true})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	selection, ok := handle.(devices.DeviceSelectionProvider)
+	if !ok {
+		t.Fatal("composite handle does not expose selected device IDs")
+	}
+	if input, output := selection.SelectedDeviceIDs(); input != physicalHandle.inputDevice || output != physicalHandle.outputDevice {
+		t.Fatalf("selected device IDs = %q, %q; want %q, %q", input, output, physicalHandle.inputDevice, physicalHandle.outputDevice)
+	}
+	playbackStats, ok := handle.(devices.PlaybackStatsProvider)
+	if !ok {
+		t.Fatal("composite handle does not expose playback stats")
+	}
+	if id, stats := playbackStats.PlaybackStats(); id != physicalHandle.outputDevice || stats != wantStats {
+		t.Fatalf("playback observation = %q, %+v; want %q, %+v", id, stats, physicalHandle.outputDevice, wantStats)
+	}
+	if err := handle.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+}
+
 func TestFactoryRecordsPostConversionPhysicalPlaybackThroughBoundedTap(t *testing.T) {
 	sink := &testSampleSink{}
 	physicalPlayback := &tapPlayback{}
@@ -318,6 +350,21 @@ type testHandle struct {
 	closeErr error
 	mu       sync.Mutex
 	closes   int
+}
+
+type metadataTestHandle struct {
+	*testHandle
+	inputDevice   string
+	outputDevice  string
+	playbackStats audio.PlaybackQueueStats
+}
+
+func (h *metadataTestHandle) SelectedDeviceIDs() (input, output string) {
+	return h.inputDevice, h.outputDevice
+}
+
+func (h *metadataTestHandle) PlaybackStats() (deviceID string, stats audio.PlaybackQueueStats) {
+	return h.outputDevice, h.playbackStats
 }
 
 func (h *testHandle) Media() devices.MediaPorts { return h.ports }
