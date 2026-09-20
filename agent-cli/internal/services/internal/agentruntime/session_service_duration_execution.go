@@ -19,11 +19,11 @@ func (r *durationServiceResources) handle(ctx context.Context, loop duration.Loo
 }
 
 func durationAgentLoop(loop duration.Loop) (*agentloop.AgentLoop, error) {
-	concrete, ok := loop.(*durationServiceLoop)
-	if !ok || concrete.inner == nil {
+	concrete, ok := loop.(*agentloop.AgentLoop)
+	if !ok || concrete == nil {
 		return nil, errors.New("session duration loop adapter is invalid")
 	}
-	return concrete.inner, nil
+	return concrete, nil
 }
 
 func (r *durationServiceResources) handleMessage(ctx context.Context, loop *agentloop.AgentLoop, _ duration.Controller, msg messages.StreamMessage) (duration.MessageResult, error) {

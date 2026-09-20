@@ -16,13 +16,6 @@ import (
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
-// durationServiceLoop is the deliberately small host adapter exposed to the
-// sessionduration service. It contains no duration policy; the service owns
-// the controller, deadline, terminal admission, and finalization state.
-type durationServiceLoop struct {
-	inner *agentloop.AgentLoop
-}
-
 type realSessionDurationClock struct{}
 
 func (realSessionDurationClock) NewTimer(duration time.Duration) SessionDurationTimer {
@@ -87,22 +80,6 @@ func writeDurationSessionReplayMessage(out io.Writer, msg messages.StreamMessage
 		}
 	}
 	return writeSessionReplayMessage(out, msg)
-}
-
-func (l *durationServiceLoop) Run(ctx context.Context) error {
-	return l.inner.Run(ctx)
-}
-
-func (l *durationServiceLoop) Deltas() *messages.TypedBuffer[messages.StreamMessage] {
-	return l.inner.Deltas()
-}
-
-func (l *durationServiceLoop) Send(ctx context.Context, msg []messages.Message) error {
-	return l.inner.Send(ctx, msg)
-}
-
-func (l *durationServiceLoop) SendSessionEvent(ctx context.Context, msg messages.StreamMessage) error {
-	return l.inner.SendSessionEvent(ctx, msg)
 }
 
 type durationServiceResources struct {
@@ -281,7 +258,7 @@ func (r *durationServiceResources) buildLoop(ctx context.Context, inferencer mes
 			return nil, ctx.Err()
 		}
 	}
-	return &durationServiceLoop{inner: loop}, nil
+	return loop, nil
 }
 
 func durationAudioPorts(binding *RTCDeviceBinding) *audiosubsystem.Ports {
