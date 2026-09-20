@@ -31,6 +31,7 @@ func newInjectedSessionService(deps servicewire.SessionDependencies) serviceSess
 	if deps.Runtime == nil {
 		factory := servicewire.NewSessionRuntimeFactory()
 		deps.Runtime = servicewire.NewSessionRuntime(
+			audioiowire.NewService(),
 			deps.Clock,
 			deps.ToolService,
 			factory,

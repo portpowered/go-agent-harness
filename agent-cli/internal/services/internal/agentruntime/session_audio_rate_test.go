@@ -29,6 +29,7 @@ func TestRoomProviderInputPCMResamples16kHzMixerTo24kHzContract(t *testing.T) {
 		mixer: mixer,
 		plan: &roomParticipantPlan{
 			manifest:             room.Participant{ID: "agent-a"},
+			options:              SessionRunOptions{AudioService: newTestAudioIOService()},
 			inputAudioSampleRate: wavio.Rate24kHz,
 		},
 	}
@@ -42,18 +43,19 @@ func TestRoomProviderInputPCMResamples16kHzMixerTo24kHzContract(t *testing.T) {
 }
 
 func TestConvertSessionAudioPCMIdentityAndFailures(t *testing.T) {
+	service := newTestAudioIOService()
 	pcm := []byte{1, 2, 3, 4}
-	got, err := convertSessionPCM16(pcm, wavio.Rate24kHz, wavio.Rate24kHz)
+	got, err := service.ConvertPCM16(context.Background(), audioio.PCM16Request{PCM: pcm, SourceRate: wavio.Rate24kHz, TargetRate: wavio.Rate24kHz})
 	if err != nil {
 		t.Fatalf("identity conversion: %v", err)
 	}
 	if !bytes.Equal(got, pcm) || &got[0] != &pcm[0] {
 		t.Fatal("matched-rate conversion did not preserve byte identity")
 	}
-	if _, err := convertSessionPCM16([]byte{1}, wavio.Rate16kHz, wavio.Rate24kHz); !errors.Is(err, audioio.ErrPCM16Truncated) {
+	if _, err := service.ConvertPCM16(context.Background(), audioio.PCM16Request{PCM: []byte{1}, SourceRate: wavio.Rate16kHz, TargetRate: wavio.Rate24kHz}); !errors.Is(err, audioio.ErrPCM16Truncated) {
 		t.Fatalf("truncated PCM error = %v, want audioio.ErrPCM16Truncated", err)
 	}
-	if _, err := convertSessionPCM16(pcm, 22050, wavio.Rate24kHz); !errors.Is(err, wavio.ErrUnsupportedResampleRate) {
+	if _, err := service.ConvertPCM16(context.Background(), audioio.PCM16Request{PCM: pcm, SourceRate: 22050, TargetRate: wavio.Rate24kHz}); !errors.Is(err, wavio.ErrUnsupportedResampleRate) {
 		t.Fatalf("unsupported rate error = %v, want ErrUnsupportedResampleRate", err)
 	}
 }
@@ -64,7 +66,7 @@ func TestConvertScheduledAudioInputsUsesDeclaredSourceRate(t *testing.T) {
 	for index := range samples {
 		binary.LittleEndian.PutUint16(pcm[index*2:], uint16(index))
 	}
-	converted, err := convertScheduledInputs([]ScheduledAudioInput{{
+	converted, err := newTestAudioIOService().ConvertScheduledInputs(context.Background(), []ScheduledAudioInput{{
 		PCM:              pcm,
 		SourceSampleRate: wavio.Rate16kHz,
 		EndOfTurn:        true,

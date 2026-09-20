@@ -231,7 +231,7 @@ func runSessionImagePlan(ctx context.Context, out io.Writer, plan sessionRuntime
 		admission := newSessionDurationAdmission()
 		admittedInferencer := &sessionDurationAdmissionInferencer{inner: plan.inferencer, admission: admission, closeDone: make(chan struct{})}
 		plan.inferencer = &sessionTextSeedInferencer{inner: admittedInferencer, wirePrompt: wirePrompt, value: opts.TextSeed.Value}
-		err = runSessionDurationPlanWithAdmission(durationCtx, output, plan, opts.MaxDuration, realSessionDurationClock{}, admittedInferencer)
+		err = runSessionDurationPlanWithAdmission(durationCtx, output, plan, opts.MaxDuration, nil, admittedInferencer)
 		return errors.Join(err, output.errorValue())
 	}
 	if opts.MaxDuration == 0 {
@@ -244,7 +244,7 @@ func runSessionImageDuration(ctx context.Context, out io.Writer, plan sessionRun
 	if err != nil {
 		return err
 	}
-	return runSessionDurationPlan(durationCtx, out, plan, maxDuration, realSessionDurationClock{})
+	return runSessionDurationPlan(durationCtx, out, plan, maxDuration, nil)
 }
 func PrepareSessionImageParts(paths []string, metadata SessionImageCapabilities) ([]messages.ImagePart, error) {
 	if !metadata.SupportsImageInput {

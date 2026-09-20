@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -232,8 +233,12 @@ func TestSessionProgressObserver_DoesNotArmWhileSessionIsQuiet(t *testing.T) {
 
 func TestSessionProgressObserver_WatchdogUsesInjectedDeterministicClock(t *testing.T) {
 	clock := platformclock.NewDeterministic(time.Unix(42, 0).UTC(), time.Second)
+	livenessClock, err := audioiowire.NewService().NewClock(clock)
+	if err != nil {
+		t.Fatal(err)
+	}
 	observer := newSessionProgressObserver(nil, nil, "test-provider", "test-model")
-	observer.setLivenessClock(sessionLivenessClockFromSource(clock))
+	observer.setLivenessClock(livenessClock)
 	defer observer.stopLiveness()
 
 	observer.observeProviderDispatch(messages.StreamMessage{Type: messages.StreamTypeResponseCreate})

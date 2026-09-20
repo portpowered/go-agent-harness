@@ -31,6 +31,8 @@ var ErrSessionRTCRuntimeUnavailable = rtcontract.ErrSessionRTCRuntimeUnavailable
 var ErrSessionRTCRuntimeClosed = rtcontract.ErrSessionRTCRuntimeClosed
 var ErrSessionRTCDataPlaneUnavailable = rtcontract.ErrSessionRTCDataPlaneUnavailable
 
+const runtimeNilText = "<nil>"
+
 // NewSessionRTCRuntimeFactory returns a factory that composes the existing
 // signaling, peer/data, and media-source components. It performs no setup at
 // factory construction time; every resource is acquired by Start and released
@@ -121,7 +123,10 @@ func planWebRTCSessionRuntime(opts SessionRunOptions, selection SessionRuntimeSe
 		if recordingDialer == nil {
 			return closeOnPlanError(wrapSessionRTCRuntimeError("create recording transport", ErrSessionRTCRuntimeUnavailable))
 		}
-		inputAudioTranscription := sessionInputTranscriptionPolicy(opts, provider, opts.RTCBinding.InputPresent)
+		inputAudioTranscription, resolveErr := resolveSessionTranscription(opts, provider, opts.RTCBinding.HasInput())
+		if resolveErr != nil {
+			return sessionRuntimePlan{}, resolveErr
+		}
 		inner, err = factory.newOpenAISessionInferencerForTools(sessionCfg, opts.Voice, recordingDialer, opts.ToolDefinitions, false, inputAudioTranscription)
 		if err != nil {
 			return closeOnPlanError(err)

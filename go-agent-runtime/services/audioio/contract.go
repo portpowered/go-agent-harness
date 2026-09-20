@@ -104,6 +104,7 @@ type TranscriptionRequest struct {
 	AcceptsAudioInput bool
 	Enabled           bool
 	Model             string
+	Override          *TranscriptionConfig
 }
 
 type TranscriptionConfig struct {
@@ -114,8 +115,10 @@ type TranscriptionConfig struct {
 type Service interface {
 	ResolveRates(context.Context, RateRequest) (RateResolution, error)
 	ConvertPCM16(context.Context, PCM16Request) ([]byte, error)
+	ConvertScheduledInputs(context.Context, []ScheduledAudioInput, int) ([]ScheduledAudioInput, error)
 	OpenInput(context.Context, InputRequest) (Input, error)
 	OpenOutput(context.Context, OutputRequest) (Output, error)
+	NewClock(clock.Source) (clock.TimerSource, error)
 	NewTimer(clock.Source, time.Duration) (clock.Timer, error)
 	ResolveTranscription(TranscriptionRequest) TranscriptionConfig
 	VoiceGainDB(string) float64

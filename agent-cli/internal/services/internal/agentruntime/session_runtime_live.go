@@ -19,7 +19,7 @@ import (
 
 func (p *sessionRuntimePlan) bindRTC(ctx context.Context, finalizer *sessionRuntimeFinalizer) error {
 	if p.deviceService == nil {
-		if sessionDevicesSelected(p.rtcDeviceRequest) {
+		if p.rtcDeviceRequest.HasDevices() {
 			return runtimedevices.ErrUnavailable
 		}
 		return nil
@@ -155,7 +155,10 @@ func planBrowserLiveSessionRuntime(opts SessionRunOptions, factory sessionRuntim
 	switch provider {
 	case sessionProviderOpenAI:
 		clientOwnedAudio := opts.ClientOwnsAudioTurnBoundaries || len(opts.AudioInputs) > 0
-		inputAudioTranscription := sessionInputTranscriptionPolicy(opts, provider, interactive || clientOwnedAudio || sessionInputDeviceSelected(opts.RTCBinding))
+		inputAudioTranscription, resolveErr := resolveSessionTranscription(opts, provider, interactive || clientOwnedAudio || opts.RTCBinding.HasInput())
+		if resolveErr != nil {
+			return sessionRuntimePlan{}, resolveErr
+		}
 		inferencer, err = factory.newOpenAISessionInferencerForTools(openAISessionCfg, opts.Voice, liveDialer, opts.ToolDefinitions, clientOwnedAudio, inputAudioTranscription)
 	case sessionProviderGrok:
 		inferencer, err = factory.newGrokSessionInferencerForTools(grokSessionCfg, liveDialer, opts.ToolDefinitions)
@@ -231,7 +234,10 @@ func planLiveSessionRuntime(opts SessionRunOptions, factory sessionRuntimeFactor
 	switch provider {
 	case sessionProviderOpenAI:
 		clientOwnedAudio := opts.ClientOwnsAudioTurnBoundaries || len(opts.AudioInputs) > 0
-		inputAudioTranscription := sessionInputTranscriptionPolicy(opts, provider, clientOwnedAudio || sessionInputDeviceSelected(opts.RTCBinding))
+		inputAudioTranscription, resolveErr := resolveSessionTranscription(opts, provider, clientOwnedAudio || opts.RTCBinding.HasInput())
+		if resolveErr != nil {
+			return sessionRuntimePlan{}, resolveErr
+		}
 		inferencer, err = factory.newOpenAISessionInferencerForTools(openAISessionCfg, opts.Voice, liveDialer, opts.ToolDefinitions, clientOwnedAudio, inputAudioTranscription)
 	case sessionProviderGrok:
 		inferencer, err = factory.newGrokSessionInferencerForTools(grokSessionCfg, liveDialer, opts.ToolDefinitions)

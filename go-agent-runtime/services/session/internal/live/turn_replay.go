@@ -26,15 +26,15 @@ func (i turnReplayMediaInferencer) ConnectSession(ctx context.Context) (messages
 }
 
 type turnReplayMediaSession struct {
-	inner      messages.Session
-	media      *sharedaudio.SessionMedia
-	received   *messages.TypedBuffer[messages.StreamMessage]
-	done       chan struct{}
-	stop       chan struct{}
-	forwarded  chan struct{}
-	closeOnce  sync.Once
-	closeErr   error
-	errMu      sync.Mutex
+	inner       messages.Session
+	media       *sharedaudio.SessionMedia
+	received    *messages.TypedBuffer[messages.StreamMessage]
+	done        chan struct{}
+	stop        chan struct{}
+	forwarded   chan struct{}
+	closeOnce   sync.Once
+	closeErr    error
+	errMu       sync.Mutex
 	terminalErr error
 }
 
@@ -53,12 +53,8 @@ func newTurnReplayMediaSession(inner messages.Session, sampleRate int, continuou
 		stop:      make(chan struct{}),
 		forwarded: make(chan struct{}),
 	}
-	go s.forward(context.WithoutCancelContext(ctxForReplay(inner)))
+	go s.forward(context.Background())
 	return s
-}
-
-func ctxForReplay(messages.Session) context.Context {
-	return context.Background()
 }
 
 func (s *turnReplayMediaSession) Send(ctx context.Context, msg messages.StreamMessage) bool {

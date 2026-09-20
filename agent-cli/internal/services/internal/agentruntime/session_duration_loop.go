@@ -9,14 +9,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
-
-type realSessionDurationClock struct{}
-
-func (realSessionDurationClock) NewTimer(duration time.Duration) SessionDurationTimer {
-	return platformclock.Real{}.NewTimer(duration)
-}
 
 //lint:ignore U1000 package tests exercise the context-free admission seam.
 func runAgentLoopSessionWithDurationClock(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions, maxDuration time.Duration, durationClock SessionDurationClock) error {
@@ -127,7 +120,10 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 			}
 			cancel()
 			providerErr := closeBareSessionIfNeeded(opts.BareLive, observedInferencer)
-			runTerminationErr := joinSessionTerminationErrors(waitRun(), nil)
+			var runTerminationErr error
+			if runErr := waitRun(); runErr != nil && !sessionErrorIsCancellation(runErr) {
+				runTerminationErr = fmt.Errorf("session error: %w", runErr)
+			}
 			admittedInferencer.waitForClose()
 			return errors.Join(drainErr, providerErr, runTerminationErr)
 		},
@@ -374,7 +370,7 @@ func processDurationLoopMessage(ctx context.Context, sessionDone <-chan struct{}
 	if err := writeDurationSessionReplayMessage(out, msg, artifacts); err != nil {
 		return result, err
 	}
-	if err := retryScheduledRateLimitedResponseWithClock(ctx, sessionDone, deadline, loop, opts.observer, msg, opts.clockSource); err != nil {
+	if err := retryScheduledRateLimitedResponseWithClock(opts.audioService, ctx, sessionDone, deadline, loop, opts.observer, msg, opts.clockSource); err != nil {
 		return result, err
 	}
 	promptProvided := opts.PromptProvided || opts.Prompt != ""
@@ -387,7 +383,7 @@ func processDurationLoopMessage(ctx context.Context, sessionDone <-chan struct{}
 			}
 			opts.observer.noteUserTextInput(opts.Prompt)
 			if opts.awaitFirstTurn != nil {
-				if err := awaitSessionFirstTurnWithClock(ctx, opts.awaitFirstTurn, opts.clockSource); err != nil {
+				if err := awaitSessionFirstTurnWithClock(opts.audioService, ctx, opts.awaitFirstTurn, opts.clockSource); err != nil {
 					return result, fmt.Errorf("send session first turn: %w", err)
 				}
 			}

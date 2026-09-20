@@ -10,6 +10,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 )
 
 func roomParticipantIsHuman(plan *roomParticipantPlan) bool {
@@ -102,6 +103,7 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 			continue
 		}
 		sessionOptions := SessionRunOptions{
+			AudioService:  opts.AudioService,
 			Provider:      participant.Provider,
 			Model:         participant.Model,
 			ModelProvided: true,
@@ -235,15 +237,26 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 		plan.tracker = newRoomConnectTrackingInferencer(plan.inferencer)
 		if usesProductionSessionFactory {
 			if _, injected := opts.SessionInferencers[participant.ID]; !injected {
-				rate, rateErr := resolveSessionSampleRate(sessionOptions, sessionRuntimePlan{
-					provider:   effectiveSessionProvider(sessionOptions),
-					inferencer: plan.inferencer,
+				inputRate, outputRate := 0, 0
+				if requested, ok := plan.inferencer.(sessionAudioRequestProvider); ok {
+					request := requested.Request().Config
+					inputRate, outputRate = int(request.InputAudioSampleRate), int(request.OutputAudioSampleRate)
+				}
+				if sessionOptions.AudioService == nil {
+					markStartupFailure(errors.New("audio service is required for session rate resolution"))
+					continue
+				}
+				rates, rateErr := sessionOptions.AudioService.ResolveRates(ctx, audioio.RateRequest{
+					Provider:           effectiveSessionProvider(sessionOptions),
+					Replay:             sessionOptions.ReplayPath != "",
+					CapturedInputRate:  inputRate,
+					CapturedOutputRate: outputRate,
 				})
 				if rateErr != nil {
 					markStartupFailure(rateErr)
 					continue
 				}
-				plan.inputAudioSampleRate = rate
+				plan.inputAudioSampleRate = rates.InputRate
 			}
 		}
 	}
@@ -281,6 +294,7 @@ func buildRoomReplayParticipantPlans(ctx context.Context, replay RoomReplayPlan,
 			return plans, nil, roomParticipantFailure(recorded.ID, errors.New("replay provider capture path is empty"), nil)
 		}
 		sessionOptions := SessionRunOptions{
+			AudioService:   opts.AudioService,
 			Provider:       recorded.Provider,
 			Model:          recorded.Model,
 			ModelProvided:  true,

@@ -9,6 +9,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
+	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
@@ -25,7 +26,7 @@ func TestPlanOpenAIRecordPromptAudioOutputWithoutInputUsesRealtimeDuplexRate(t *
 			Model:  DefaultOpenAIRealtimeModel,
 		},
 	}}
-	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		Prompt:               "What is the current state of the cube? Then turn the top face once.",
 		PromptProvided:       true,
 		RecordPath:           recordPath,
@@ -57,25 +58,12 @@ func TestPlanOpenAIRecordPromptAudioOutputWithoutInputUsesRealtimeDuplexRate(t *
 	if plan.mode != sessionRuntimeModeRecordOpenAI || plan.capturePath != recordPath {
 		t.Fatalf("record plan = mode:%q capture:%q, want OpenAI record at %q", plan.mode, plan.capturePath, recordPath)
 	}
-	assertSessionAudioContract(t, plan, inferencer, sessionRealtimeAudioSampleRate)
+	assertSessionAudioContract(t, plan, inferencer, audioio.RealtimeSampleRate)
 }
 
-func TestConfigureSessionAudioContractPromptRecordWithoutInputUsesRealtimeRate(t *testing.T) {
-	inferencer := &sessionAudioContractInferencer{}
-	opts := SessionRunOptions{ModelCatalog: testModelCatalog(),
-		Prompt:               "inspect the cube",
-		RecordPath:           "cube-session.json",
-		AudioOutputRequested: true,
-	}
-	plan := sessionRuntimePlan{provider: sessionProviderOpenAI, inferencer: inferencer}
+func newTestAudioIOService() audioio.Service { return audioiowire.NewService() }
 
-	if err := configureSessionAudioContract(opts, &plan); err != nil {
-		t.Fatalf("configure session audio: %v", err)
-	}
-	assertSessionAudioContract(t, plan, inferencer, sessionRealtimeAudioSampleRate)
-}
-
-func TestConfigureSessionAudioContractResolution(t *testing.T) {
+func TestAudioioRateResolution(t *testing.T) {
 	tests := []struct {
 		name       string
 		opts       SessionRunOptions
@@ -86,13 +74,13 @@ func TestConfigureSessionAudioContractResolution(t *testing.T) {
 		wantRate   int
 		wantErr    bool
 	}{
-		{name: "openai no flags", provider: sessionProviderOpenAI, wantRate: sessionRealtimeAudioSampleRate},
-		{name: "grok no flags", provider: sessionProviderGrok, wantRate: sessionRealtimeAudioSampleRate},
-		{name: "output file", provider: sessionProviderOpenAI, opts: SessionRunOptions{ModelCatalog: testModelCatalog(), AudioOutputRequested: true}, wantRate: sessionRealtimeAudioSampleRate},
-		{name: "input device", provider: sessionProviderOpenAI, opts: SessionRunOptions{ModelCatalog: testModelCatalog(), RTCBinding: runtimedevices.RTCBindingRequest{InputPresent: true}}, wantRate: sessionRealtimeAudioSampleRate},
-		{name: "both devices", provider: sessionProviderGrok, opts: SessionRunOptions{ModelCatalog: testModelCatalog(), RTCBinding: runtimedevices.RTCBindingRequest{InputPresent: true, OutputPresent: true}}, wantRate: sessionRealtimeAudioSampleRate},
-		{name: "caller openai inferencer defaults to realtime rate", provider: sessionProviderOpenAI, opts: SessionRunOptions{ModelCatalog: testModelCatalog(), SessionInferencer: &sessionAudioContractInferencer{}}, wantRate: sessionRealtimeAudioSampleRate},
-		{name: "caller grok inferencer defaults to realtime rate", provider: sessionProviderGrok, opts: SessionRunOptions{ModelCatalog: testModelCatalog(), SessionInferencer: &sessionAudioContractInferencer{}}, wantRate: sessionRealtimeAudioSampleRate},
+		{name: "openai no flags", provider: sessionProviderOpenAI, wantRate: audioio.RealtimeSampleRate},
+		{name: "grok no flags", provider: sessionProviderGrok, wantRate: audioio.RealtimeSampleRate},
+		{name: "output file", provider: sessionProviderOpenAI, opts: SessionRunOptions{ModelCatalog: testModelCatalog(), AudioOutputRequested: true}, wantRate: audioio.RealtimeSampleRate},
+		{name: "input device", provider: sessionProviderOpenAI, opts: SessionRunOptions{ModelCatalog: testModelCatalog(), RTCBinding: runtimedevices.RTCBindingRequest{InputPresent: true}}, wantRate: audioio.RealtimeSampleRate},
+		{name: "both devices", provider: sessionProviderGrok, opts: SessionRunOptions{ModelCatalog: testModelCatalog(), RTCBinding: runtimedevices.RTCBindingRequest{InputPresent: true, OutputPresent: true}}, wantRate: audioio.RealtimeSampleRate},
+		{name: "caller openai inferencer defaults to realtime rate", provider: sessionProviderOpenAI, opts: SessionRunOptions{ModelCatalog: testModelCatalog(), SessionInferencer: &sessionAudioContractInferencer{}}, wantRate: audioio.RealtimeSampleRate},
+		{name: "caller grok inferencer defaults to realtime rate", provider: sessionProviderGrok, opts: SessionRunOptions{ModelCatalog: testModelCatalog(), SessionInferencer: &sessionAudioContractInferencer{}}, wantRate: audioio.RealtimeSampleRate},
 		{name: "caller seam explicitly declares native rate", provider: sessionProviderOpenAI, opts: SessionRunOptions{ModelCatalog: testModelCatalog(), SessionInferencer: &sessionAudioContractInferencer{request: inference.SessionRequest{Config: models.SessionConfig{InputAudioSampleRate: models.SampleRate16000}}}}, wantRate: 16000},
 		{name: "explicit request input", request: models.SessionConfig{InputAudioSampleRate: models.SampleRate16000}, wantRate: 16000},
 		{name: "explicit request output", request: models.SessionConfig{OutputAudioSampleRate: models.SampleRate24000}, wantRate: 24000},
@@ -109,24 +97,29 @@ func TestConfigureSessionAudioContractResolution(t *testing.T) {
 			if opts.SessionInferencer != nil {
 				inferencer = opts.SessionInferencer.(*sessionAudioContractInferencer)
 			}
-			plan := sessionRuntimePlan{
-				provider:              tt.provider,
-				inferencer:            inferencer,
-				inputAudioSampleRate:  tt.inputRate,
-				outputAudioSampleRate: tt.outputRate,
+			inputRate, outputRate := tt.inputRate, tt.outputRate
+			request := inferencer.Request().Config
+			if inputRate <= 0 {
+				inputRate = int(request.InputAudioSampleRate)
 			}
-
-			err := configureSessionAudioContract(opts, &plan)
+			if outputRate <= 0 {
+				outputRate = int(request.OutputAudioSampleRate)
+			}
+			rates, err := audioiowire.NewService().ResolveRates(context.Background(), audioio.RateRequest{
+				Provider: tt.provider, CapturedInputRate: inputRate, CapturedOutputRate: outputRate,
+			})
 			if tt.wantErr {
 				if !errors.Is(err, audioio.ErrSampleRateConflict) {
-					t.Fatalf("configure error = %v, want audioio.ErrSampleRateConflict", err)
+					t.Fatalf("resolve error = %v, want audioio.ErrSampleRateConflict", err)
 				}
 				return
 			}
 			if err != nil {
-				t.Fatalf("configure session audio: %v", err)
+				t.Fatalf("resolve audio rate: %v", err)
 			}
-			assertSessionAudioContract(t, plan, inferencer, tt.wantRate)
+			if rates.InputRate != tt.wantRate || rates.OutputRate != tt.wantRate {
+				t.Fatalf("resolved audio rates = %d/%d, want %d/%d", rates.InputRate, rates.OutputRate, tt.wantRate, tt.wantRate)
+			}
 		})
 	}
 }

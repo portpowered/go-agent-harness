@@ -17,9 +17,11 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	gwproviders "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
@@ -50,6 +52,18 @@ type sessionReplayDialer interface {
 	Done() <-chan struct{}
 	Err() error
 	Model() string
+}
+
+type runtimeAudioOutputConfigurer interface {
+	SetSessionAudioOutput(models.AudioFormat, models.SampleRate)
+}
+
+type runtimeAudioInputConfigurer interface {
+	SetSessionAudioInput(models.AudioFormat, models.SampleRate)
+}
+
+type sessionAudioRequestProvider interface {
+	Request() inference.SessionRequest
 }
 
 type sessionRuntimeFactory struct {
@@ -194,13 +208,13 @@ func (p sessionRuntimePlan) liveOutput(prefix string) (string, string) {
 		transport = SessionTransportWebSocket
 	}
 	inputDevice, outputDevice := "unavailable", "unavailable"
-	if sessionInputDeviceSelected(p.rtcDeviceRequest) {
+	if p.rtcDeviceRequest.HasInput() {
 		inputDevice = p.rtcDeviceRequest.InputDevice
 		if inputDevice == "" {
 			inputDevice = defaultSessionAudioDevice
 		}
 	}
-	if sessionOutputDeviceSelected(p.rtcDeviceRequest) {
+	if p.rtcDeviceRequest.HasOutput() {
 		outputDevice = p.rtcDeviceRequest.OutputDevice
 		if outputDevice == "" {
 			outputDevice = defaultSessionAudioDevice
@@ -293,7 +307,7 @@ func (p sessionRuntimePlan) configureLoopObserver(loop *sessionLoopOptions) {
 	obs.runtime = p.runtime
 	obs.livenessClock = loop.livenessClock
 	if obs.livenessClock == nil {
-		obs.livenessClock = sessionLivenessClockFromSource(p.clockSource)
+		obs.livenessClock = loop.livenessClock
 	}
 	obs.cancellationIntent = loop.cancellationIntent
 	obs.requireSessionUpdated = loop.RequireSessionUpdated
@@ -383,10 +397,17 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	plan.clockSource = platformclock.Ensure(opts.Clock)
 	plan.runtime = newSessionRuntimeObservationRecorder(opts.RuntimeObserver, plan.clockSource)
 	plan.loop.runtime = plan.runtime
+	plan.loop.audioService = opts.AudioService
 	plan.loop.clockSource = plan.clockSource
 	plan.loop.livenessClock = opts.LivenessClock
 	if plan.loop.livenessClock == nil {
-		plan.loop.livenessClock = sessionLivenessClockFromSource(plan.clockSource)
+		if opts.AudioService == nil {
+			return sessionRuntimePlan{}, errors.New("audio service is required for session liveness timing")
+		}
+		plan.loop.livenessClock, err = opts.AudioService.NewClock(plan.clockSource)
+		if err != nil {
+			return sessionRuntimePlan{}, err
+		}
 	}
 	plan.loop.BareLive = plan.loop.BareLive || opts.BareLive
 	plan.loop.cancellationIntent = opts.CancellationIntent
@@ -424,18 +445,43 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	// zero keeps every production plan on defaultSessionToolExecutionTimeout.
 	plan.loop.ToolExecutionTimeout = opts.ToolExecutionTimeout
 	plan.loop.ScheduledAudioDispatch = scheduledAudioDispatch
-	if err := configureSessionAudioContract(opts, &plan); err != nil {
+	if opts.AudioService == nil {
+		return sessionRuntimePlan{}, errors.New("audio service is required for session rate resolution")
+	}
+	inputRate, outputRate := plan.inputAudioSampleRate, plan.outputAudioSampleRate
+	if requested, ok := plan.inferencer.(sessionAudioRequestProvider); ok {
+		request := requested.Request().Config
+		if inputRate <= 0 {
+			inputRate = int(request.InputAudioSampleRate)
+		}
+		if outputRate <= 0 {
+			outputRate = int(request.OutputAudioSampleRate)
+		}
+	}
+	rates, err := opts.AudioService.ResolveRates(context.Background(), audioio.RateRequest{
+		Provider: plan.provider, Replay: opts.ReplayPath != "",
+		CapturedInputRate: inputRate, CapturedOutputRate: outputRate,
+	})
+	if err != nil {
 		return sessionRuntimePlan{}, err
 	}
-	plan.audioInputs, err = convertScheduledInputs(plan.audioInputs, plan.inputAudioSampleRate)
+	plan.outputAudioSampleRate = rates.OutputRate
+	plan.inputAudioSampleRate = rates.InputRate
+	if configurer, ok := plan.inferencer.(runtimeAudioOutputConfigurer); ok {
+		configurer.SetSessionAudioOutput(models.AudioFormatPCM16, models.SampleRate(rates.OutputRate))
+	}
+	if configurer, ok := plan.inferencer.(runtimeAudioInputConfigurer); ok {
+		configurer.SetSessionAudioInput(models.AudioFormatPCM16, models.SampleRate(rates.InputRate))
+	}
+	plan.audioInputs, err = opts.AudioService.ConvertScheduledInputs(context.Background(), plan.audioInputs, plan.inputAudioSampleRate)
 	if err != nil {
 		return sessionRuntimePlan{}, err
 	}
 	plan.loop.InputAudioSampleRate = plan.inputAudioSampleRate
-	if sessionOutputDeviceSelected(plan.rtcDeviceRequest) && plan.outputAudioSampleRate > 0 {
+	if plan.rtcDeviceRequest.HasOutput() && plan.outputAudioSampleRate > 0 {
 		plan.rtcDeviceRequest.OutputSampleRate = plan.outputAudioSampleRate
 	}
-	if sessionInputDeviceSelected(plan.rtcDeviceRequest) && plan.inputAudioSampleRate > 0 {
+	if plan.rtcDeviceRequest.HasInput() && plan.inputAudioSampleRate > 0 {
 		plan.rtcDeviceRequest.InputSampleRate = plan.inputAudioSampleRate
 	}
 	// The playback-overflow observer's sink is resolved (never trusted as-is)

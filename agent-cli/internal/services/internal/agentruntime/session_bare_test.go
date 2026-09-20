@@ -314,7 +314,7 @@ func TestResolveBareSessionOptionsCLIDeviceSelectorsOverridePersistedValues(t *t
 
 func TestNewLiveSessionInferencerCarriesBareAudioPolicies(t *testing.T) {
 	createResponse := true
-	inferencer, model, err := NewLiveSessionInferencer(SessionRunOptions{ModelCatalog: testModelCatalog(),
+	inferencer, model, err := NewLiveSessionInferencer(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		Provider:  sessionProviderOpenAI,
 		Model:     openAIRealtimeModel,
 		APIKey:    "bare-test-key",

@@ -146,7 +146,7 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 			if admitted, ok := plan.inferencer.(*sessionDurationAdmissionInferencer); ok {
 				admittedInferencer = admitted
 			}
-			runErr = runSessionDurationPlanWithAdmission(durationCtx, output, plan, maxDuration, realSessionDurationClock{}, admittedInferencer)
+			runErr = runSessionDurationPlanWithAdmission(durationCtx, output, plan, maxDuration, nil, admittedInferencer)
 			return errors.Join(runErr, output.errorValue())
 		}
 		if maxDuration == 0 {
@@ -156,7 +156,7 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 		if err != nil {
 			return err
 		}
-		return runSessionDurationPlan(durationCtx, out, plan, maxDuration, realSessionDurationClock{})
+		return runSessionDurationPlan(durationCtx, out, plan, maxDuration, nil)
 	}
 }
 

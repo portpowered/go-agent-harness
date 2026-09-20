@@ -15,6 +15,7 @@ import (
 	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	sessiontrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
@@ -27,6 +28,7 @@ import (
 var _ contract.Runtime = (*Dispatcher)(nil)
 
 type Dependencies struct {
+	AudioService      audioio.Service
 	Clock             clock.Source
 	PlanFactory       sessionRuntimeFactory
 	ToolService       serviceTools.Service
@@ -136,6 +138,7 @@ func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request)
 		BrowserToolsEnabled: request.BrowserToolsEnabled, BrowserToolsInteractive: request.BrowserToolsInteractive, LoadedConfig: request.LoadedConfig,
 		CancellationIntent:   request.CancellationIntent,
 		ToolExecutionTimeout: request.ToolExecutionTimeout, Clock: d.deps.Clock,
+		AudioService:    d.deps.AudioService,
 		RuntimeObserver: d.deps.RuntimeObserver, Diagnostics: request.Diagnostics, ToolDiagnostics: request.ToolDiagnostics,
 		DeviceService: d.deps.DeviceService,
 		Observability: d.deps.Observability, StreamObserver: request.StreamObserver,

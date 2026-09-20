@@ -386,6 +386,10 @@ func (s *observedSession) SupportsCompleteMessagesWithoutResponse() bool {
 	return withoutResponse
 }
 
+func (s *observedSession) markDone() {
+	s.once.Do(s.closeDone)
+}
+
 func (s *observedSession) Close() error {
 	if s == nil {
 		return nil

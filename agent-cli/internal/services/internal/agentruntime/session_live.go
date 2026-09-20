@@ -13,6 +13,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
@@ -22,6 +24,37 @@ var errSessionMaxDurationExpired = errors.New("session max duration expired")
 // ErrSessionScheduledAudioIncomplete identifies a live scheduled-audio run
 // that ended before every queued input received an assistant response.
 var ErrSessionScheduledAudioIncomplete = errors.New("scheduled audio session ended before all turns completed")
+
+func assistantAudioDelta(msg messages.StreamMessage) bool {
+	return msg.Role == "" || msg.Role == messages.RoleAssistant
+}
+
+func sendEventDrivenAudioInput(ctx context.Context, loop *agentloop.AgentLoop, opts sessionLoopOptions, input audioio.ScheduledAudioInput) error {
+	if len(input.PCM) == 0 {
+		return errors.New("event-driven audio input is empty")
+	}
+	if opts.audioService == nil {
+		return errors.New("audio service is required for event-driven audio conversion")
+	}
+	pcm, err := opts.audioService.ConvertPCM16(ctx, audioio.PCM16Request{
+		PCM: input.PCM, SourceRate: input.SourceSampleRate, TargetRate: opts.InputAudioSampleRate,
+	})
+	if err != nil {
+		return fmt.Errorf("convert event-driven audio input: convert session input from %d Hz to provider rate %d Hz: %w", input.SourceSampleRate, opts.InputAudioSampleRate, err)
+	}
+	if err := loop.SendAudioInput(ctx, pcm); err != nil {
+		return fmt.Errorf("send event-driven audio input: %w", err)
+	}
+	if opts.observer != nil {
+		opts.observer.account(metrics.DirectionInput, metrics.ModalityAudio, len(pcm))
+	}
+	if input.EndOfTurn {
+		if err := loop.SendSessionEvent(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd}); err != nil {
+			return fmt.Errorf("send event-driven audio input end-of-turn: %w", err)
+		}
+	}
+	return nil
+}
 
 // SessionScheduledAudioIncompleteError carries the deterministic schedule
 // counts observed at a terminal boundary. When a provider terminal caused the
@@ -77,8 +110,8 @@ const sessionFirstTurnAckTimeout = 30 * time.Second
 // per-loop override exists only for deterministic service tests.
 const sessionScheduledAudioConfigTimeout = 30 * time.Second
 
-func awaitSessionFirstTurnWithClock(ctx context.Context, ack <-chan error, source platformclock.Source) error {
-	timer, err := newAudioServiceTimer(source, sessionFirstTurnAckTimeout)
+func awaitSessionFirstTurnWithClock(audioService audioio.Service, ctx context.Context, ack <-chan error, source platformclock.Source) error {
+	timer, err := audioService.NewTimer(source, sessionFirstTurnAckTimeout)
 	if err != nil {
 		return err
 	}
@@ -94,6 +127,7 @@ func awaitSessionFirstTurnWithClock(ctx context.Context, ack <-chan error, sourc
 }
 
 type sessionLoopOptions struct {
+	audioService   audioio.Service
 	Prompt         string
 	PromptProvided bool
 	CloseAfterOpen bool
@@ -513,7 +547,7 @@ func handleSessionLoopMessage(ctx context.Context, sessionDone <-chan struct{}, 
 		}
 		state.listeningReported = true
 	}
-	if err := retryScheduledRateLimitedResponseWithClock(ctx, sessionDone, deadline, loop, opts.observer, msg, opts.clockSource); err != nil {
+	if err := retryScheduledRateLimitedResponseWithClock(opts.audioService, ctx, sessionDone, deadline, loop, opts.observer, msg, opts.clockSource); err != nil {
 		if errors.Is(err, errSessionMaxDurationExpired) {
 			// The caller owns the clean terminal transition for a stop result.
 			// Returning the internal deadline sentinel here would both expose an
@@ -532,7 +566,7 @@ func handleSessionLoopMessage(ctx context.Context, sessionDone <-chan struct{}, 
 			}
 			opts.observer.noteUserTextInput(opts.Prompt)
 			if opts.awaitFirstTurn != nil {
-				if err := awaitSessionFirstTurnWithClock(ctx, opts.awaitFirstTurn, opts.clockSource); err != nil {
+				if err := awaitSessionFirstTurnWithClock(opts.audioService, ctx, opts.awaitFirstTurn, opts.clockSource); err != nil {
 					return state, false, terminate(fmt.Errorf("send session first turn: %w", err))
 				}
 			}
@@ -572,7 +606,7 @@ func handleSessionLoopMessage(ctx context.Context, sessionDone <-chan struct{}, 
 	return state, false, nil
 }
 
-func retryScheduledRateLimitedResponseWithClock(ctx context.Context, sessionDone <-chan struct{}, deadline <-chan time.Time, loop *agentloop.AgentLoop, observer *sessionProgressObserver, msg messages.StreamMessage, source platformclock.Source) error {
+func retryScheduledRateLimitedResponseWithClock(audioService audioio.Service, ctx context.Context, sessionDone <-chan struct{}, deadline <-chan time.Time, loop *agentloop.AgentLoop, observer *sessionProgressObserver, msg messages.StreamMessage, source platformclock.Source) error {
 	if observer == nil || loop == nil || msg.Type != messages.StreamTypeMessageEnd {
 		return nil
 	}
@@ -587,7 +621,7 @@ func retryScheduledRateLimitedResponseWithClock(ctx context.Context, sessionDone
 	if !retry {
 		return nil
 	}
-	timer, err := newAudioServiceTimer(source, delay)
+	timer, err := audioService.NewTimer(source, delay)
 	if err != nil {
 		return err
 	}
@@ -671,7 +705,7 @@ func newSessionLiveTerminationBoundary(
 			// teardown can begin after the last virtual tick, and cleanup must not
 			// wait forever for a timer that no owner can advance anymore.
 			source := opts.clockSource
-			return waitForSessionLoopStragglersWithContext(ctx, out, loop, policy, opts.observer, source)
+			return waitForSessionLoopStragglersWithContext(ctx, out, loop, policy, opts.observer, source, opts.audioService)
 		},
 		stopOwnedResources: stopOwnedResources,
 		flushBuffered: func() error {
@@ -752,7 +786,11 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 		}
 		cancel()
 		providerErr := closeBareSessionIfNeeded(opts.BareLive, observedInferencer)
-		return errors.Join(drainErr, providerErr, joinSessionTerminationErrors(waitRun(), nil))
+		var runTerminationErr error
+		if runErr := waitRun(); runErr != nil && !sessionErrorIsCancellation(runErr) {
+			runTerminationErr = fmt.Errorf("session error: %w", runErr)
+		}
+		return errors.Join(drainErr, providerErr, runTerminationErr)
 	}
 	termination := newSessionLiveTerminationBoundary(ctx, quiesceUpstream, stopOwnedResources, out, loop, opts, observedInferencer)
 	terminate := termination.terminate
@@ -773,7 +811,7 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 			timeout = sessionScheduledAudioConfigTimeout
 		}
 		var err error
-		sessionUpdatedTimer, err = newAudioServiceTimer(opts.clockSource, timeout)
+		sessionUpdatedTimer, err = opts.audioService.NewTimer(opts.clockSource, timeout)
 		if err != nil {
 			// Keep setup inside the stream state machine so the shared
 			// termination boundary owns teardown and reports the error.

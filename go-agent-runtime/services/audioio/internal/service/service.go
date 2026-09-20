@@ -66,6 +66,25 @@ func (s *Service) ConvertPCM16(ctx context.Context, request audioio.PCM16Request
 	return convertPCM16Payload(ctx, request, sourceRate, targetRate)
 }
 
+func (s *Service) ConvertScheduledInputs(ctx context.Context, inputs []audioio.ScheduledAudioInput, providerRate int) ([]audioio.ScheduledAudioInput, error) {
+	if inputs == nil {
+		return nil, nil
+	}
+	converted := make([]audioio.ScheduledAudioInput, len(inputs))
+	for index, input := range inputs {
+		pcm, err := s.ConvertPCM16(ctx, audioio.PCM16Request{
+			PCM: input.PCM, SourceRate: input.SourceSampleRate, TargetRate: providerRate,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("convert scheduled audio input %d: convert session input from %d Hz to provider rate %d Hz: %w", index+1, input.SourceSampleRate, providerRate, err)
+		}
+		converted[index] = input
+		converted[index].PCM = pcm
+		converted[index].SourceSampleRate = providerRate
+	}
+	return converted, nil
+}
+
 func resolveConversionRates(request audioio.PCM16Request) (int, int, error) {
 	sourceRate, targetRate := request.SourceRate, request.TargetRate
 	if targetRate == 0 {
@@ -125,10 +144,7 @@ func (s *Service) OpenOutput(ctx context.Context, request audioio.OutputRequest)
 }
 
 func (s *Service) NewTimer(source platformclock.Source, duration time.Duration) (platformclock.Timer, error) {
-	if source == nil {
-		source = platformclock.Real{}
-	}
-	timerSource, err := platformclock.RequireTimerSource(source)
+	timerSource, err := s.NewClock(source)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +155,21 @@ func (s *Service) NewTimer(source platformclock.Source, duration time.Duration) 
 	return timer, nil
 }
 
+func (s *Service) NewClock(source platformclock.Source) (platformclock.TimerSource, error) {
+	if source == nil {
+		source = platformclock.Real{}
+	}
+	timerSource, err := platformclock.RequireTimerSource(source)
+	if err != nil {
+		return nil, err
+	}
+	return timerSource, nil
+}
+
 func (s *Service) ResolveTranscription(request audioio.TranscriptionRequest) audioio.TranscriptionConfig {
+	if request.Override != nil {
+		return *request.Override
+	}
 	if !request.AcceptsAudioInput || request.Replay || !strings.EqualFold(strings.TrimSpace(request.Provider), audioio.ProviderOpenAI) {
 		return audioio.TranscriptionConfig{}
 	}

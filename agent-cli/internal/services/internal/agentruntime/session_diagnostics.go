@@ -357,7 +357,6 @@ func newSessionProgressObserver(sink SessionDiagnosticSink, recorder metrics.Rec
 		completedResponseIDs:  make(map[string]struct{}),
 		retiredResponseIDs:    make(map[string]struct{}),
 		scheduledResponseByID: make(map[string]int),
-		livenessClock:         realSessionDurationClock{},
 		livenessWakeCh:        make(chan struct{}, 1),
 	}
 }

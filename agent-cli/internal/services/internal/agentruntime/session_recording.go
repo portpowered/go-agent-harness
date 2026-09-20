@@ -246,7 +246,7 @@ func runSessionWithRecordingDirectory(
 			return finalizeSessionDirectoryRecording(runErr, recording)
 		}
 		durationCtx = withSessionDurationTerminalRecorder(durationCtx, recording)
-		runErr = runSessionDurationPlan(durationCtx, sessionOut, plan, maxDuration, realSessionDurationClock{})
+		runErr = runSessionDurationPlan(durationCtx, sessionOut, plan, maxDuration, nil)
 	}
 
 	return finalizeSessionDirectoryRecording(runErr, recording)

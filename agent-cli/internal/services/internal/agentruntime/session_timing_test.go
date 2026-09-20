@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -16,7 +17,7 @@ func (timestampOnlyClock) Now() time.Time { return time.Unix(0, 0).UTC() }
 func TestSessionTimerUsesElapsedVirtualTimeWithoutLoopTick(t *testing.T) {
 	base := time.Date(2026, 9, 5, 0, 0, 0, 0, time.UTC)
 	virtual := platformclock.NewDeterministic(base, time.Second)
-	timer, err := newAudioServiceTimer(virtual, 1500*time.Microsecond)
+	timer, err := audioiowire.NewService().NewTimer(virtual, 1500*time.Microsecond)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,8 +43,8 @@ func TestSessionTimerUsesElapsedVirtualTimeWithoutLoopTick(t *testing.T) {
 }
 
 func TestSessionTimerRejectsTimestampOnlySource(t *testing.T) {
-	if _, err := newAudioServiceTimer(timestampOnlyClock{}, time.Second); !errors.Is(err, platformclock.ErrTimerSourceUnavailable) {
-		t.Fatalf("newAudioServiceTimer error=%v, want ErrTimerSourceUnavailable", err)
+	if _, err := audioiowire.NewService().NewTimer(timestampOnlyClock{}, time.Second); !errors.Is(err, platformclock.ErrTimerSourceUnavailable) {
+		t.Fatalf("audio service timer error=%v, want ErrTimerSourceUnavailable", err)
 	}
 }
 
@@ -53,7 +54,7 @@ func TestAwaitSessionFirstTurnUsesVirtualTimerAndParentCancellation(t *testing.T
 	defer cancel()
 	ack := make(chan error)
 	result := make(chan error, 1)
-	go func() { result <- awaitSessionFirstTurnWithClock(ctx, ack, virtual) }()
+	go func() { result <- awaitSessionFirstTurnWithClock(audioiowire.NewService(), ctx, ack, virtual) }()
 	virtual.AdvanceBy(sessionFirstTurnAckTimeout - time.Nanosecond)
 	select {
 	case err := <-result:
@@ -73,7 +74,7 @@ func TestAwaitSessionFirstTurnUsesVirtualTimerAndParentCancellation(t *testing.T
 
 func TestEffectiveSessionDurationClockUsesPlanSource(t *testing.T) {
 	virtual := platformclock.NewDeterministic(time.Unix(0, 0).UTC(), time.Second)
-	clock, err := effectiveSessionDurationClock(sessionRuntimePlan{clockSource: virtual}, realSessionDurationClock{})
+	clock, err := effectiveSessionDurationClock(sessionRuntimePlan{clockSource: virtual, loop: sessionLoopOptions{audioService: audioiowire.NewService()}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

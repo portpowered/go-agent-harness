@@ -199,6 +199,23 @@ type RTCBindingRequest struct {
 	CaptureObserver            devicert.RTCDeviceCaptureObserver
 }
 
+// HasInput reports whether this request selects an input direction. An empty
+// device ID still selects the registry default when InputPresent is set.
+func (request RTCBindingRequest) HasInput() bool {
+	return request.InputPresent || request.InputDevice != ""
+}
+
+// HasOutput reports whether this request selects an output direction. An
+// empty device ID still selects the registry default when OutputPresent is set.
+func (request RTCBindingRequest) HasOutput() bool {
+	return request.OutputPresent || request.OutputDevice != ""
+}
+
+// HasDevices reports whether either media direction is selected.
+func (request RTCBindingRequest) HasDevices() bool {
+	return request.HasInput() || request.HasOutput()
+}
+
 // RTCBinding owns selected local devices and the provider-facing session
 // decorator. Its public surface intentionally exposes no concrete device or
 // mutable runtime state.

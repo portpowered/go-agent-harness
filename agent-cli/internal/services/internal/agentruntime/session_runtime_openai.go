@@ -35,7 +35,10 @@ func planOpenAIRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 	liveDialer = observeSessionWire(liveDialer, opts)
 	recordingDialer := factory.newRecordingDialer(liveDialer, sessionProviderOpenAI, sessionCfg.Model)
 	clientOwnedAudio := opts.ClientOwnsAudioTurnBoundaries || len(opts.AudioInputs) > 0
-	inputAudioTranscription := sessionInputTranscriptionPolicy(opts, sessionProviderOpenAI, clientOwnedAudio || sessionInputDeviceSelected(opts.RTCBinding))
+	inputAudioTranscription, err := resolveSessionTranscription(opts, sessionProviderOpenAI, clientOwnedAudio || opts.RTCBinding.HasInput())
+	if err != nil {
+		return sessionRuntimePlan{}, err
+	}
 	sessionInferencer, err := factory.newOpenAISessionInferencerForTools(sessionCfg, opts.Voice, recordingDialer, opts.ToolDefinitions, clientOwnedAudio, inputAudioTranscription)
 	if err != nil {
 		return sessionRuntimePlan{}, err
@@ -44,7 +47,7 @@ func planOpenAIRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 		SetSessionTurnDetection(*models.TurnDetectionConfig)
 	}); ok {
 		turnDetection := cloneSessionTurnDetection(opts.TurnDetection)
-		if turnDetection == nil && sessionInputDeviceSelected(opts.RTCBinding) && !clientOwnedAudio {
+		if turnDetection == nil && opts.RTCBinding.HasInput() && !clientOwnedAudio {
 			turnDetection = &models.TurnDetectionConfig{Type: "semantic_vad"}
 		}
 		configurer.SetSessionTurnDetection(turnDetection)
