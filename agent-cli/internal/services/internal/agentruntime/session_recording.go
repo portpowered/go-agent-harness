@@ -289,7 +289,7 @@ func runSessionWithImagesAndRecordingDirectory(
 		}()
 		opts.SessionRunOptions.ClientOwnsAudioTurnBoundaries = true
 	}
-	plan, wirePrompt, cleanup, err := planSessionImageRuntimeForDirectory(ctx, opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, audioSource != nil || len(opts.SessionRunOptions.AudioInputs) > 0)
+	plan, _, cleanup, err := planSessionImageRuntimeForDirectory(ctx, opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, audioSource != nil || len(opts.SessionRunOptions.AudioInputs) > 0)
 	if err != nil {
 		return err
 	}
@@ -316,7 +316,7 @@ func runSessionWithImagesAndRecordingDirectory(
 			recording: recording,
 		}
 	}
-	runErr = runSessionImagePlan(ctx, out, plan, opts, wirePrompt)
+	runErr = runSessionImagePlan(ctx, out, plan, opts)
 	return finalizeSessionDirectoryRecording(runErr, recording)
 }
 func runSessionWithRecordingDirectory(

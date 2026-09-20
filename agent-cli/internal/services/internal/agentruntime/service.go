@@ -42,6 +42,25 @@ type Dispatcher struct{ deps Dependencies }
 
 func New(deps Dependencies) *Dispatcher { return &Dispatcher{deps: deps} }
 
+func RunSession(ctx context.Context, out io.Writer, opts SessionRunOptions) (runErr error) {
+	var coordinator SessionCapabilityCoordinator
+	opts, coordinator = prepareSessionCapabilityCoordinator(opts)
+	defer func() { closeSessionCapabilityIfNeeded(coordinator, &runErr) }()
+	if err := validateSessionRunOptions(opts); err != nil {
+		return err
+	}
+	claim, err := ensureSessionRecordingClaim(&opts)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = claim.release() }()
+	plan, err := planSessionRuntime(opts)
+	if err != nil {
+		return err
+	}
+	return plan.run(ctx, out)
+}
+
 func audioInput(input public.AudioInput) SessionAudioInput {
 	return SessionAudioInput{Path: input.Path, Stdin: input.Stdin, SourceSampleRate: input.SourceSampleRate, CloseStdinOnCancel: input.CloseStdinOnCancel, MaxDuration: input.MaxDuration, Present: input.Present, DevicePresent: input.DevicePresent}
 }

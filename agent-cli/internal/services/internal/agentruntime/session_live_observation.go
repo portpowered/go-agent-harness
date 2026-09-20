@@ -11,15 +11,14 @@ import (
 )
 
 type observedSessionInferencer struct {
-	inner            messages.SessionInferencer
-	done             chan struct{}
-	once             sync.Once
-	connectDone      chan struct{}
-	closeOnce        sync.Once
-	closeErr         error
-	runtime          *sessionRuntimeObservationRecorder
-	progress         *sessionProgressObserver
-	serviceLifecycle bool
+	inner       messages.SessionInferencer
+	done        chan struct{}
+	once        sync.Once
+	connectDone chan struct{}
+	closeOnce   sync.Once
+	closeErr    error
+	runtime     *sessionRuntimeObservationRecorder
+	progress    *sessionProgressObserver
 
 	mu              sync.Mutex
 	connectErr      error
@@ -82,7 +81,7 @@ func (i *observedSessionInferencer) ConnectSession(ctx context.Context) (message
 	}
 	i.mu.Lock()
 	i.session = session
-	wrapped := &observedSession{Session: session, closeDone: i.closeDone, runtime: i.runtime, progress: i.progress, serviceLifecycle: i.serviceLifecycle}
+	wrapped := &observedSession{Session: session, closeDone: i.closeDone, runtime: i.runtime, progress: i.progress}
 	i.observed = wrapped
 	closeRequested := i.closeRequested
 	i.mu.Unlock()
@@ -208,13 +207,12 @@ func (i *observedSessionInferencer) closeDone() {
 
 type observedSession struct {
 	messages.Session
-	closeDone        func()
-	runtime          *sessionRuntimeObservationRecorder
-	progress         *sessionProgressObserver
-	once             sync.Once
-	closeOnce        sync.Once
-	closeErr         error
-	serviceLifecycle bool
+	closeDone func()
+	runtime   *sessionRuntimeObservationRecorder
+	progress  *sessionProgressObserver
+	once      sync.Once
+	closeOnce sync.Once
+	closeErr  error
 }
 
 var _ messages.Session = (*observedSession)(nil)
@@ -272,7 +270,7 @@ func sessionOwnsToolLifecycle(session messages.Session) bool {
 }
 
 func (s *observedSession) sessionTurnOwnsToolLifecycle() bool {
-	return s != nil && (s.serviceLifecycle || sessionOwnsToolLifecycle(s.Session))
+	return s != nil && sessionOwnsToolLifecycle(s.Session)
 }
 
 // SendMessage forwards the optional complete-message provider capability. The

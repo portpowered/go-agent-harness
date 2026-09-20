@@ -182,6 +182,28 @@ type sessionAudioOutput struct {
 	closeErr     error
 }
 
+func (o *sessionAudioOutput) close() error {
+	if o == nil {
+		return nil
+	}
+	o.closeOnce.Do(func() {
+		o.mu.Lock()
+		o.closed = true
+		sink := o.sink
+		o.mu.Unlock()
+		var err error
+		if sink != nil {
+			err = sink.Close()
+		}
+		o.mu.Lock()
+		o.closeErr = err
+		o.mu.Unlock()
+	})
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.closeErr
+}
+
 func newSessionAudioOutputForPlan(plan *sessionRuntimePlan, path string, out io.Writer, loudness *audio.LoudnessNormalizer) (*sessionAudioOutput, error) {
 	if plan != nil && plan.rtcDeviceRequest.outputSelected() {
 		output := &sessionAudioOutput{

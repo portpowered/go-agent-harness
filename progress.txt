@@ -4171,3 +4171,32 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   verify complete caller cutover and legacy-file absence before the PRD
   normal/race/regression commands and `make prepush`; commit, push, and update
   PR `#529` only when the complete candidate passes.
+
+## C248 recovery checkpoint — 2026-09-20
+
+- Verified task admission and the matching PRD branch. Preserved all 19 dirty
+  C219 paths in checkpoint `963ec75cd79c26ee56e485e094bb6dae159b0fd5`; C190,
+  C219, startup integration `8bdafc7f947a3a2c9856220abdc539437035bd21`,
+  planning base `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`, and fetched
+  `origin/main` are ancestors. C230 was clean at the planning base. C190 PR
+  #529 had no formal review entries; its recorded image continuation and
+  stateful-adapter findings remain actionable.
+- Removed the recovered `session.go` duplicate and repaired the recording
+  image-plan call, caller-owned audio output close, and an unused test import.
+  Focused image-result, failed-image, image/audio continuation, and audio
+  interrupt-ordering tests initially exposed that a service-owned executor was
+  incorrectly treated as owning a provider session that it did not wrap. The
+  observed-session boundary now checks actual session ownership; the exact
+  targeted set passes (`10` tests across agentruntime and CLI transport).
+- Sessionturn package tests still pass (`25` across five packages). Retirement
+  remains incomplete: `session_image_entrypoints.go`,
+  `session_instruction_entrypoints.go`, `session_text_entrypoint.go`, and
+  `session_turn_planning.go` remain production files, and the 15 named callers
+  and adapter purity/budget are not yet verified after cutover. No PR, push,
+  full preflight, CI handoff, or CI polling occurred.
+- Exact next action: finish service-owned request and runtime cutover for the
+  remaining image, instruction, text, tool, and publication callers; delete all
+  eight named replacement files plus every remaining target file; verify the
+  adapter cap and all callers; then run the full C248 functional, race,
+  integration, hermetic, Wire, embedding, ancestry, cleanliness, and `make
+  prepush` gates on one committed SHA before any PR update.
