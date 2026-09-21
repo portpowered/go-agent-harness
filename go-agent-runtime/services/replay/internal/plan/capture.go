@@ -12,8 +12,8 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
+	replaycapture "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/internal/capture"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/internal/engine"
-	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 const (
@@ -226,18 +226,8 @@ func (s *Service) InspectCapture(ctx context.Context, path string) (replay.Captu
 	return inspection, nil
 }
 
-func loadReplayCapture(ctx context.Context, path string) (gatewaytesting.SessionCaptureReplayLoad, error) {
-	if err := replayContextError(ctx); err != nil {
-		return gatewaytesting.SessionCaptureReplayLoad{}, err
-	}
-	loaded, err := gatewaytesting.LoadSessionCaptureForReplay(path)
-	if err != nil {
-		return gatewaytesting.SessionCaptureReplayLoad{}, err
-	}
-	if err := replayContextError(ctx); err != nil {
-		return gatewaytesting.SessionCaptureReplayLoad{}, err
-	}
-	return loaded, nil
+func loadReplayCapture(ctx context.Context, path string) (replaycapture.ReplayLoad, error) {
+	return replaycapture.LoadReplayCapture(ctx, path)
 }
 
 func replayContextError(ctx context.Context) error {

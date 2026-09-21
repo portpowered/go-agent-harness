@@ -9,7 +9,7 @@ import (
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
-func observeProbeCapture(report gatewaytesting.SessionReplayProbeReport, capture gatewaytesting.SessionCapture) replay.CaptureProbeObservation {
+func observeProbeCapture(report replayProbeReport, capture gatewaytesting.SessionCapture) replay.CaptureProbeObservation {
 	observation := replay.CaptureProbeObservation{
 		Provider:           capture.Provider.Name,
 		Model:              capture.Provider.Model,
@@ -35,7 +35,7 @@ func observeProbeCapture(report gatewaytesting.SessionReplayProbeReport, capture
 	return observation
 }
 
-func setProbeTerminalReason(report gatewaytesting.SessionReplayProbeReport, capture gatewaytesting.SessionCapture, observation *replay.CaptureProbeObservation) {
+func setProbeTerminalReason(report replayProbeReport, capture gatewaytesting.SessionCapture, observation *replay.CaptureProbeObservation) {
 	if report.EndsWithDisconnect {
 		observation.TerminalReason = "disconnect"
 	}
