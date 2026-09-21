@@ -4655,3 +4655,10 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
 - Exact-candidate `rtk make prepush` on `1a09595996eed0b35d8d3ee1d2c8d1451176c8f0` passed formatting, architecture, Wire generation and vet, then pinned golangci-lint rejected the ignored return from the metrics sink in `observations/accounting.go`.
 - The service now retains the first accounting error and joins it into bounded live-session shutdown before terminal publication. `rtk make lint` passes all 15 modules with zero issues; the focused service suite passes (89 tests) and the two final-accounting integration cases pass.
 - This repair is uncommitted. Next: checkpoint it in a commit, then run `make prepush` and every C229-05 command on that exact clean SHA. Repair every locally reproducible failure and rerun the full command set on each changed candidate. No push or PR exists.
+
+
+# C229 coverage-registration repair checkpoint - 2026-09-21
+
+- On clean candidate `d95df8790ba8911e0001c073202d9007406a2ba3`, `make prepush` passed formatting, architecture (208 packages / 1,935 files / 28,479 functions), Wire regeneration/checks, vet, lint, staticcheck, test partition, tools, factory scripts, build, and all six module test suites. It stopped at `coverage-registration` because the new service packages `devices/internal/endpoint` and `session/internal/live/sessionwrap` were missing from the coverage manifest.
+- Existing focused package tests measure endpoint validation at 68.8% through `devices/internal/media` tests and session wrappers at 34.4% through live service tests. Registered each package at its measured existing coverage floor; no tests or runtime code were added for registration.
+- Next: verify registration, commit this repair/checkpoint, then rerun `make prepush` and all C229-05 functional, integration, race, hermetic, and Wire commands on that exact clean commit. Repair locally and repeat the full gate for every changed candidate. No push or PR exists.
