@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
-	serviceSelfPlay "github.com/portpowered/go-agent-harness/agent-cli/internal/services/selfplay"
+	runtimeSelfPlay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/selfplay"
 )
 
 func TestSessionSelfPlayCommandParsesBoundedRunOptions(t *testing.T) {
@@ -18,8 +18,8 @@ func TestSessionSelfPlayCommandParsesBoundedRunOptions(t *testing.T) {
 	globalFlags.ConfigDirPath = t.TempDir()
 	subject := NewSessionSelfPlayCommand(globalFlags, nil)
 
-	var got serviceSelfPlay.RunOptions
-	subject.SetRunner(func(_ context.Context, _ io.Writer, opts serviceSelfPlay.RunOptions) error {
+	var got runtimeSelfPlay.Request
+	subject.SetRunner(func(_ context.Context, _ io.Writer, opts runtimeSelfPlay.Request) error {
 		got = opts
 		return nil
 	})
@@ -47,9 +47,6 @@ func TestSessionSelfPlayCommandParsesBoundedRunOptions(t *testing.T) {
 	if got.MaxDuration != 17*time.Second || got.MaxTurns != 4 {
 		t.Fatalf("parsed bounds = (%s, %d), want (17s, 4)", got.MaxDuration, got.MaxTurns)
 	}
-	if got.ConfigDir != globalFlags.ConfigDir() {
-		t.Fatalf("config dir = %q, want %q", got.ConfigDir, globalFlags.ConfigDir())
-	}
 }
 
 func TestSessionSelfPlayCommandHelpDocumentsFixedPhaseOneContract(t *testing.T) {
@@ -61,9 +58,8 @@ func TestSessionSelfPlayCommandHelpDocumentsFixedPhaseOneContract(t *testing.T) 
 	}
 	help := helpOutput.String()
 	for _, want := range []string{
-		"Customer persona:",
-		"Assistant persona:",
-		"Opening seed (sent once as customer text):",
+		"fixed personas",
+		"opening seed",
 		"raw PCM16 audio",
 		"tools and transcript/text bridging are disabled",
 		"--api-key",

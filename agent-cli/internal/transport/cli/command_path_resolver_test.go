@@ -16,8 +16,8 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe"
-	serviceSelfPlay "github.com/portpowered/go-agent-harness/agent-cli/internal/services/selfplay"
 	sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
+	runtimeSelfPlay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/selfplay"
 	sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
@@ -231,8 +231,8 @@ func TestRouterPreRunNormalizesSelfPlayOutputDirectory(t *testing.T) {
 	namedHome := t.TempDir()
 	globalFlags := flags.NewGlobalFlags()
 	owner := NewSessionSelfPlayCommand(globalFlags, nil)
-	var got serviceSelfPlay.RunOptions
-	owner.SetRunner(func(_ context.Context, _ io.Writer, options serviceSelfPlay.RunOptions) error {
+	var got runtimeSelfPlay.Request
+	owner.SetRunner(func(_ context.Context, _ io.Writer, options runtimeSelfPlay.Request) error {
 		got = options
 		return nil
 	})

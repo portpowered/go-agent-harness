@@ -4299,6 +4299,34 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   cluster, prove the sole one-file/300-line adapter cap, and run the exact-head
   full local preflight before opening/updating the PR.
 
+# C281 disjoint service-Wire and adapter cutover checkpoint — 2026-09-21
+
+- Reverified the admitted task and branch before this checkpoint. Canonical
+  C279 (`work-task-136`) and C280 (`work-task-139`) still have no reviewed or
+  exact-path releases; their actionable implementation failures keep the
+  shared turn/input and room-evidence seams frozen. No peer or predecessor
+  worktree was changed.
+- Moved application self-play composition to
+  `go-agent-runtime/services/selfplay/wire.NewService`, updated the generated
+  root Wire call to inject the provider `SessionService`, and changed the
+  session/observability command graph to consume the runtime-owned contract.
+  The CLI self-play file is now a 124-line stateless transport/config
+  translation and result-presentation adapter; it no longer imports the CLI
+  projection or carries provider/persona/turn defaults. Removed the stale
+  `servicetest` self-play options projection. The legacy implementation,
+  projection, and all three deletion-target files remain present because the
+  peer release gate is not satisfied; no retirement credit is claimed.
+- Focused validation passes after the cutover: runtime self-play normal and
+  race suites (26 tests / 3 packages), repeated cancellation/duration/
+  shutdown/stop/failure run (`COUNT=10`), focused CLI adapter/router tests,
+  `make wire-check`, `make architecture-size-check`, and `git diff --check`.
+- Exact next action: retain ownership at `CONTINUE`; refresh C279/C280 release
+  state without editing their paths. When exact reviewed releases are
+  available, fetch current main, reconcile C249/C220 and peer behavior
+  additively, finish every remaining caller cutover, delete the obsolete
+  projection and complete 1,410-line cluster, then run the full exact-head
+  preflight before push/CI handoff.
+
 ### C281 service recovery checkpoint — 2026-09-21
 
 - Reverified admission for `audio-runtime/audio-runtime-v1` with
