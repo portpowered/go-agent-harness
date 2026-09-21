@@ -4475,3 +4475,52 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   preflight on one exact candidate. Before handoff, complete production caller
   and Wire audits, confirm the owned cluster and adapter cap again, and only
   then push/open or update the PR for SCRIPT CI.
+
+# C229 planning, room replay, lifecycle and self-play checkpoint — 2026-09-20
+
+- Admission remains the single `audio-runtime` project; `prd.json.branchName`
+  matches `codex/audio-runtime-c229-recover-audio-device-rtc-retirement`.
+  Starting checkpoint was `cd821a52e00e648a3588b5c50b7368fa36138e92`; refreshed
+  `origin/main` remains `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`. No PR or push
+  exists. C218 remains preserved and untouched.
+- Completed behavior-preserving reductions in the room lifecycle, replay
+  scheduler and self-play path. Room helper moves keep the package file budget
+  within the existing baseline; extracted work errors and self-play side
+  execution remain in their existing package files. Runtime RTC factory setup
+  is shared by the planner. Replay scheduling now relies on the existing
+  preflight target validation and uses equivalent bounded max calculations.
+- Updated only exact measured reductions in architecture baselines; no ceiling
+  was widened. Recorded scheduler values: file 415 to 404 lines, replay run
+  cognitive complexity 82 to 77, cyclomatic 42 to 40, function lines 92 to 89,
+  statements 61 to 59; schedule builder cognitive 87 to 84, cyclomatic 45 to
+  43, lines 166 to 162, statements 112 to 110. The prior self-play helper
+  extraction reduced the file 641 to 619 lines and `runSelfPlayConversation`
+  from 116 to 91 lines, with exact complexity/statement ratchets.
+- Focused commands passed: `rtk go test
+  ./agent-cli/internal/services/internal/agentruntime -run
+  'Test.*Replay|TestRoomRunRecordThenReplay' -count=1 -timeout=240s` (109
+  tests); earlier in this slice, session planning/runtime passed 53 tests, RTC
+  dispatch/runtime passed 7, room browser/build/run passed 75, timer/duration
+  passed 44, room human/lifecycle passed 19/38, and self-play passed 22.
+  `rtk git diff --check` passed.
+- `rtk make architecture-size-check` remains red with 11 issues across 208
+  packages (`1789963654_make_architecture-size-check.log`). The remaining
+  measured increases are limited to behavioral tests: overlap replay test
+  file/function/helper (939/294/226 versus 924/293/225); instructions test
+  file 919 versus 918; room replay roundtrip function 168 versus 167; RTC test
+  file 1,132 versus 1,103; session test file 1,805 versus 1,803; session tools
+  test file 1,284 versus 1,273; WebMCP realtime test function 188 versus 187;
+  and two CLI test files 1,089 versus 1,088 and 692 versus 691. An attempted
+  same-file overlap test setup consolidation increased the file size and was
+  reverted; no test was moved, removed, or weakened.
+- The ten exact C229 legacy production paths remain absent. The only adapters
+  are `audio_adapter.go` (19 physical lines) and `rtc_adapter.go` (13), 2 files
+  / 32 lines combined. All callers and Wire still require final audit. The
+  mandatory `make prepush` and C229-05 full preflight have not run on a clean
+  exact candidate because the architecture gate remains red; no PR/push or
+  hosted-CI handoff has occurred.
+- Next: inspect the current behavioral-test diffs and reduce only genuine
+  duplication while retaining public assertions and keeping tests in place;
+  rerun architecture-size-check until clean. Then audit all named production
+  callers and generated Wire, confirm the exact cluster/adapters, and run the
+  full C229-05 command set on one clean committed SHA before PR/push.

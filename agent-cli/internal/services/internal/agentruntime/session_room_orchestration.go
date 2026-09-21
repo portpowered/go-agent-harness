@@ -11,7 +11,6 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
-	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeRoomsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -488,35 +487,4 @@ func roomParticipantReady(plan *roomParticipantPlan) RoomParticipantReady {
 		}
 	}
 	return ready
-}
-
-func openRoomHumanDevices(runtime *roomParticipantRuntime, service runtimeDevices.Service) error {
-	if runtime == nil || runtime.plan == nil {
-		return errors.New("human participant runtime is nil")
-	}
-	if service == nil {
-		return runtimeDevices.ErrUnavailable
-	}
-	participant := runtime.plan.manifest
-	handle, err := service.Open(runtime.ctx, runtimeDevices.Request{
-		InputDevice: participant.InputDevice, OutputDevice: participant.OutputDevice,
-		CaptureEnabled: true, PlaybackEnabled: true, SampleRate: runtime.mixer.Format().SampleRate, Channels: 1,
-	})
-	if err != nil {
-		return fmt.Errorf("open human participant devices: %w", err)
-	}
-	if handle == nil {
-		return fmt.Errorf("%w: device service returned a nil handle", runtimeDevices.ErrUnavailable)
-	}
-	ports := handle.Media()
-	if ports.Capture == nil || ports.Playback == nil {
-		return errors.Join(fmt.Errorf("%w: device service omitted room capture or playback", runtimeDevices.ErrUnavailable), handle.Close())
-	}
-	runtime.deviceHandle = handle
-	runtime.input, runtime.output = ports.Capture, ports.Playback
-	if selection, ok := handle.(runtimeDevices.DeviceSelectionProvider); ok {
-		runtime.inputDeviceID, runtime.outputDeviceID = selection.SelectedDeviceIDs()
-	}
-	runtime.lifecycle.markDeviceReady()
-	return nil
 }

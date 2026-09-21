@@ -3,7 +3,9 @@ package agentruntime
 import (
 	"context"
 	"errors"
-	"fmt"
+	"sync"
+	"time"
+
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -11,10 +13,6 @@ import (
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	runtimeRoomsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-	"sort"
-	"strings"
-	"sync"
-	"time"
 )
 
 const (
@@ -98,41 +96,6 @@ func (w *roomCleanupWaiter) stop() {
 	w.timer = nil
 }
 
-type roomLifecycleWorkError struct {
-	outstanding []string
-}
-
-func (e *roomLifecycleWorkError) Error() string {
-	if e == nil || len(e.outstanding) == 0 {
-		return "room lifecycle work did not complete"
-	}
-	return "room lifecycle work did not complete: " + strings.Join(e.outstanding, "; ")
-}
-func newRoomLifecycleWorkError(outstanding ...string) error {
-	seen := make(map[string]struct{}, len(outstanding))
-	ordered := make([]string, 0, len(outstanding))
-	for _, item := range outstanding {
-		if item == "" {
-			continue
-		}
-		if _, exists := seen[item]; exists {
-			continue
-		}
-		seen[item] = struct{}{}
-		ordered = append(ordered, item)
-	}
-	if len(ordered) == 0 {
-		return nil
-	}
-	sort.Strings(ordered)
-	return &roomLifecycleWorkError{outstanding: ordered}
-}
-func roomLifecycleWorkLabel(participantID, phase string) string {
-	if participantID == "" {
-		return phase
-	}
-	return fmt.Sprintf("participant %q phase %s", participantID, phase)
-}
 func roomParticipantOutstandingWork(runtime *roomParticipantRuntime) []string {
 	if runtime == nil || runtime.plan == nil {
 		return []string{"participant runtime"}

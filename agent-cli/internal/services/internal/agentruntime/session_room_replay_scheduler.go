@@ -93,9 +93,7 @@ func newRoomReplaySchedule(ctx context.Context, replay RoomReplayPlan, plans []*
 		if appendCount > 0 {
 			hasRecordedInboundAudio = true
 		}
-		if appendCount > expectedFrames {
-			expectedFrames = appendCount
-		}
+		expectedFrames = max(expectedFrames, appendCount)
 	}
 	if len(targetIDs) == 0 || !hasRecordedInboundAudio {
 		return nil, nil
@@ -193,9 +191,7 @@ func newRoomReplaySchedule(ctx context.Context, replay RoomReplayPlan, plans []*
 	}
 
 	totalFrames := expectedFrames
-	if maxFrame+1 > totalFrames {
-		totalFrames = maxFrame + 1
-	}
+	totalFrames = max(totalFrames, maxFrame+1)
 	if totalFrames == 0 {
 		return nil, fmt.Errorf("room replay contains inbound audio captures but no replayable sent PCM")
 	}
@@ -253,9 +249,6 @@ func (s *roomReplaySchedule) run(ctx context.Context, runtimes []*roomParticipan
 					continue
 				}
 				target := byID[targetID]
-				if target == nil || target.mixer == nil {
-					return fmt.Errorf("room replay frame %d target %q is missing", frameIndex, targetID)
-				}
 				if coordinator != nil && !coordinator.isActive(targetID) {
 					if coordinator.isStopping() {
 						return nil
@@ -360,11 +353,7 @@ func roomReplaySegmentFrameCount(startNanos, endNanos int64, frameDuration time.
 	if endNanos <= startNanos || frameDuration <= 0 {
 		return 1
 	}
-	frames := int(math.Ceil(float64(endNanos-startNanos) / float64(frameDuration)))
-	if frames < 1 {
-		return 1
-	}
-	return frames
+	return max(1, int(math.Ceil(float64(endNanos-startNanos)/float64(frameDuration))))
 }
 
 func roomReplayPCMFrame(pcm []byte, frameIndex, frameBytes int) []byte {

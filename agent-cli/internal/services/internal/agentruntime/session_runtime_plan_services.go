@@ -35,6 +35,24 @@ func configureSessionRuntimePlan(plan sessionRuntimePlan, opts SessionRunOptions
 	return wireSessionRecordingClaim(plan, recordingClaim), nil
 }
 
+func newSessionRTCRuntimeForPlan(opts SessionRunOptions, selection SessionRuntimeSelection, factory sessionRuntimeFactory) (SessionRTCRuntime, error) {
+	runtimeFactory := opts.RTCRuntimeFactory
+	if runtimeFactory == nil {
+		runtimeFactory = factory.newRTCRuntime
+	}
+	if runtimeFactory == nil {
+		return nil, wrapSessionRTCRuntimeError("create runtime", ErrSessionRTCRuntimeUnavailable)
+	}
+	runtime, err := runtimeFactory(selection)
+	if err != nil {
+		return nil, wrapSessionRTCRuntimeError("create runtime", err)
+	}
+	if runtime == nil {
+		return nil, wrapSessionRTCRuntimeError("create runtime", ErrSessionRTCRuntimeUnavailable)
+	}
+	return runtime, nil
+}
+
 func configureSessionRuntimeLoop(plan *sessionRuntimePlan, opts SessionRunOptions, interactivePolicy InteractiveToolPolicy, scheduledAudioDispatch ScheduledAudioDispatchPolicy) error {
 	plan.diagnostics = opts.Diagnostics
 	plan.metricsRecorder = opts.MetricsRecorder

@@ -7,6 +7,8 @@ import (
 	"io"
 
 	public "github.com/portpowered/go-agent-harness/agent-cli/internal/services/selfplay"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -53,4 +55,44 @@ func (s *SelfPlayService) Run(ctx context.Context, out io.Writer, options public
 		modelCatalog:   s.modelCatalog,
 	})
 	return err
+}
+
+func runSelfPlaySide(ctx context.Context, name string, side int, inferencer messages.SessionInferencer, prompt string, output *selfPlayPCMBridge, ready chan<- *agentloop.AgentLoop, opts SelfPlayRunOptions, livenessClock SessionLivenessClock, evidence *selfPlayEvidence, stop *selfPlayStopState, results chan<- selfPlaySideResult) {
+	sideEvidence := evidence.side(side)
+	sideEvidence.diagnosticErr = func(err error) {
+		wrapped := fmt.Errorf("%s diagnostic evidence: %w", name, err)
+		evidence.fail(wrapped)
+		stop.fail(wrapped)
+	}
+	observer := newSessionProgressObserver(sideEvidence, nil, opts.Provider, opts.Model)
+	observer.runtime = sideEvidence.runtimeRecord
+	observer.turnAdmission = func(messages.StreamMessage) bool {
+		return stop.recordTurn(side, opts.MaxTurns)
+	}
+	observer.streamObserver = selfPlayStreamObserver(ctx, name, sideEvidence, evidence, stop, output)
+	err := runAgentLoopSession(ctx, io.Discard, inferencer, sessionLoopOptions{
+		audioService:  opts.audioService,
+		Prompt:        prompt,
+		WaitForClose:  true,
+		Done:          stop.done,
+		DoneErr:       stop.doneErr,
+		observer:      observer,
+		runtime:       sideEvidence.runtimeRecord,
+		loopReady:     ready,
+		clockSource:   opts.clock,
+		livenessClock: livenessClock,
+	})
+	results <- selfPlaySideResult{name: name, err: err}
+}
+
+func recordSelfPlaySideResult(result selfPlaySideResult, stop *selfPlayStopState) {
+	if result.err != nil {
+		if !stop.stopped() {
+			stop.fail(fmt.Errorf("%s session: %w", result.name, result.err))
+		}
+		return
+	}
+	if !stop.stopped() {
+		stop.fail(fmt.Errorf("%s session ended before a self-play bound", result.name))
+	}
 }

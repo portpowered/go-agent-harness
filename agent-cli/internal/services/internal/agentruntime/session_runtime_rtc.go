@@ -76,19 +76,9 @@ func validateSessionRTCComponents(c SessionRTCComponents) error {
 // asks the inferencer to connect, which keeps planning free of network and
 // media-source side effects.
 func planWebRTCSessionRuntime(opts SessionRunOptions, selection SessionRuntimeSelection, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
-	runtimeFactory := opts.RTCRuntimeFactory
-	if runtimeFactory == nil {
-		runtimeFactory = factory.newRTCRuntime
-	}
-	if runtimeFactory == nil {
-		return sessionRuntimePlan{}, wrapSessionRTCRuntimeError("create runtime", ErrSessionRTCRuntimeUnavailable)
-	}
-	runtime, err := runtimeFactory(selection)
+	runtime, err := newSessionRTCRuntimeForPlan(opts, selection, factory)
 	if err != nil {
-		return sessionRuntimePlan{}, wrapSessionRTCRuntimeError("create runtime", err)
-	}
-	if runtime == nil {
-		return sessionRuntimePlan{}, wrapSessionRTCRuntimeError("create runtime", ErrSessionRTCRuntimeUnavailable)
+		return sessionRuntimePlan{}, err
 	}
 	rtcInferencer := &sessionRTCRuntimeInferencer{runtime: runtime}
 
