@@ -315,12 +315,17 @@ func longConversationDiagnosticObserver(
 	}
 }
 
-func longConversationTurnIsInTimeline(path, participantID, turnIndex string) (bool, error) {
+func longConversationTurnIsInTimeline(path, participantID, turnIndex string) (present bool, err error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return false, err
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil && err == nil {
+			present = false
+			err = closeErr
+		}
+	}()
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {

@@ -414,7 +414,7 @@ func combineRoomDoneErrors(primary, secondary func() error) func() error {
 
 func roomParticipantDiagnosticSinks(plan *roomParticipantPlan, opts RoomRunOptions,
 	participantEvidence *roomParticipantEvidence, evidence ...*roomEvidence) []SessionDiagnosticSink {
-	diagnosticSinks := make([]SessionDiagnosticSink, 0, 3)
+	diagnosticSinks := make([]SessionDiagnosticSink, 0, 2+len(evidence))
 	if len(evidence) > 0 && evidence[0] != nil {
 		diagnosticSinks = append(diagnosticSinks, roomParticipantDiagnosticSink{participantID: plan.manifest.ID, evidence: evidence[0]})
 	}
