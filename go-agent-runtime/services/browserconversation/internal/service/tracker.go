@@ -10,6 +10,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation/internal/service/policy"
 )
 
 type evidenceTracker struct {
@@ -180,7 +181,7 @@ func (t *evidenceTracker) navigateCustomerTurn(step browserconversation.BrowserC
 		return errors.New("customer navigation callback is unavailable")
 	}
 	navigationErr := navigate(ctx, fixture, *step.Navigation)
-	if err := t.run.ObserveBrokerCall(browserconversation.BrowserConversationBrokerCall{StepID: step.ID, Operation: browserconversation.BrowserConversationCustomerNavigate, InputJSON: fmt.Sprintf(`{"to_page_id":%q,"url":%q}`, step.Navigation.ToPageID, step.Navigation.URL), ErrorCode: safeErrorCode(navigationErr)}); err != nil {
+	if err := t.run.ObserveBrokerCall(browserconversation.BrowserConversationBrokerCall{StepID: step.ID, Operation: browserconversation.BrowserConversationCustomerNavigate, InputJSON: fmt.Sprintf(`{"to_page_id":%q,"url":%q}`, step.Navigation.ToPageID, step.Navigation.URL), ErrorCode: policy.SafeErrorCode(navigationErr)}); err != nil {
 		return err
 	}
 	return navigationErr
@@ -200,7 +201,7 @@ func (t *evidenceTracker) cancellationForStep(step browserconversation.BrowserCo
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	action := browserConversationCancelAction{cancel: t.cancelInvocation, ctx: t.ctx, id: t.inFlightInvocation, reason: safeBrowserConversationText(step.Cancel.Reason), step: step.ID}
+	action := browserConversationCancelAction{cancel: t.cancelInvocation, ctx: t.ctx, id: t.inFlightInvocation, reason: policy.SafeText(step.Cancel.Reason), step: step.ID}
 	if action.cancel == nil {
 		t.setErrorLocked(errors.New("explicit cancellation callback is unavailable"))
 	} else if action.id == "" {
@@ -222,7 +223,7 @@ func (t *evidenceTracker) executeCancellation(action browserConversationCancelAc
 		t.setError(err)
 		return
 	}
-	if err := t.run.ObserveInvocationPublication("cancel", action.id, browserConversationInvocationCanceled, true); err != nil {
+	if err := t.run.ObserveInvocationPublication("cancel", action.id, policy.InvocationCanceled, true); err != nil {
 		t.setError(err)
 		return
 	}

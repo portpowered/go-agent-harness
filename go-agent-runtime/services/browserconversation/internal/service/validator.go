@@ -5,13 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation/internal/service/policy"
 )
 
 const maxBrowserConversationValidatorOutput = 1 << 20
@@ -37,7 +37,7 @@ func (validator *commandValidator) ValidateBrowserConversation(result browsercon
 	if err := validateBrowserConversationValidatorBoundary(validator.Command, validator.Dir, validator.Env, validator.Timeout); err != nil {
 		return browserconversation.BrowserConversationValidatorVerdict{}, err
 	}
-	input, err := newValidatorInput(result)
+	input, err := policy.NewValidatorInput(result)
 	if err != nil {
 		return browserconversation.BrowserConversationValidatorVerdict{}, err
 	}
@@ -56,7 +56,7 @@ func (validator *commandValidator) ValidateBrowserConversation(result browsercon
 	if err != nil {
 		return browserconversation.BrowserConversationValidatorVerdict{}, errors.Join(browserconversation.ErrBrowserConversationValidatorVerdict, err)
 	}
-	if err := validateBrowserConversationValidatorVerdict(verdict); err != nil {
+	if err := policy.ValidateValidatorVerdict(verdict); err != nil {
 		return browserconversation.BrowserConversationValidatorVerdict{}, errors.Join(browserconversation.ErrBrowserConversationValidatorVerdict, err)
 	}
 	return verdict, nil
@@ -84,7 +84,7 @@ func browserConversationUnsafeEnvironment(name, value string) bool {
 			return true
 		}
 	}
-	return browserConversationContainsCredentialMarker(value)
+	return policy.ContainsCredentialMarker(value)
 }
 
 func validateBrowserConversationValidatorCommand(command []string, timeout time.Duration) error {
@@ -95,7 +95,7 @@ func validateBrowserConversationValidatorCommand(command []string, timeout time.
 		return errors.Join(browserconversation.ErrBrowserConversationValidatorCommand, errors.New("validator command timeout must be positive"))
 	}
 	for _, part := range command {
-		if browserConversationContainsCredentialMarker(part) {
+		if policy.ContainsCredentialMarker(part) {
 			return errors.Join(browserconversation.ErrBrowserConversationValidatorCommand, errors.New("validator command must not contain credential-shaped arguments"))
 		}
 	}
@@ -106,11 +106,11 @@ func validateBrowserConversationValidatorBoundary(command []string, dir string, 
 	if err := validateBrowserConversationValidatorCommand(command, timeout); err != nil {
 		return err
 	}
-	if browserConversationContainsCredentialMarker(dir) {
+	if policy.ContainsCredentialMarker(dir) {
 		return errors.Join(browserconversation.ErrBrowserConversationValidatorCommand, errors.New("validator working directory must not contain credential-shaped text"))
 	}
 	for _, value := range env {
-		if browserConversationContainsCredentialMarker(value) {
+		if policy.ContainsCredentialMarker(value) {
 			return errors.Join(browserconversation.ErrBrowserConversationValidatorCommand, errors.New("validator environment must not contain credential-shaped text"))
 		}
 	}
@@ -129,53 +129,6 @@ func decodeBrowserConversationValidatorVerdict(payload []byte) (browserconversat
 		return browserconversation.BrowserConversationValidatorVerdict{}, errors.New("validator verdict must contain one JSON object")
 	}
 	return verdict, nil
-}
-
-func validateBrowserConversationValidatorVerdict(verdict browserconversation.BrowserConversationValidatorVerdict) error {
-	if verdict.Version != "" && verdict.Version != browserconversation.BrowserConversationValidatorVersion {
-		return fmt.Errorf("validator verdict version must be %q", browserconversation.BrowserConversationValidatorVersion)
-	}
-	if verdict.Status == "" {
-		return errors.New("validator verdict status is required")
-	}
-	if !validBrowserConversationValidatorStatus(verdict.Status) {
-		return errors.New("validator verdict status is unsupported")
-	}
-	if verdict.Status == browserconversation.BrowserConversationValidatorPass && !verdict.Passed {
-		return errors.New("validator pass status contradicted passed=false")
-	}
-	if verdict.Status == browserconversation.BrowserConversationValidatorFail && verdict.Passed {
-		return errors.New("validator fail status contradicted passed=true")
-	}
-	if verdict.Status == browserconversation.BrowserConversationValidatorNotRun {
-		return nil
-	}
-	return validateBrowserConversationChecks(verdict.Checks)
-}
-
-func validBrowserConversationValidatorStatus(status browserconversation.BrowserConversationValidatorStatus) bool {
-	return status == browserconversation.BrowserConversationValidatorPass || status == browserconversation.BrowserConversationValidatorFail || status == browserconversation.BrowserConversationValidatorNotRun
-}
-
-func validateBrowserConversationChecks(checks []browserconversation.BrowserConversationValidatorCheck) error {
-	wanted := make(map[string]struct{}, len(validatorRubricValues()))
-	for _, name := range validatorRubricValues() {
-		wanted[name] = struct{}{}
-	}
-	seen := make(map[string]struct{}, len(checks))
-	for _, check := range checks {
-		if _, ok := wanted[check.Name]; !ok {
-			return fmt.Errorf("validator verdict contains unsupported check %q", check.Name)
-		}
-		if _, duplicate := seen[check.Name]; duplicate {
-			return fmt.Errorf("validator verdict repeats check %q", check.Name)
-		}
-		seen[check.Name] = struct{}{}
-	}
-	if len(seen) != len(wanted) {
-		return errors.New("validator verdict did not cover the fixed rubric")
-	}
-	return nil
 }
 
 type browserConversationBoundedBuffer struct {
@@ -202,13 +155,3 @@ func (buffer *browserConversationBoundedBuffer) Write(value []byte) (int, error)
 func (buffer *browserConversationBoundedBuffer) Bytes() []byte  { return buffer.data }
 func (buffer *browserConversationBoundedBuffer) Len() int       { return len(buffer.data) }
 func (buffer *browserConversationBoundedBuffer) String() string { return string(buffer.data) }
-
-func browserConversationContainsCredentialMarker(value string) bool {
-	lower := strings.ToLower(value)
-	for _, marker := range []string{"authorization:", "bearer ", "api_key", "api-key", "access_token", "refresh_token", "client_secret", "password", "-----begin ", "sk-"} {
-		if strings.Contains(lower, marker) {
-			return true
-		}
-	}
-	return false
-}

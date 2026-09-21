@@ -1,4 +1,4 @@
-package service
+package policy
 
 import (
 	"fmt"
@@ -40,8 +40,8 @@ func safeBrowserConversationText(value string) string {
 	if value == "" {
 		return ""
 	}
-	if browserConversationContainsCredentialMarker(value) {
-		return recordingRedactedText
+	if ContainsCredentialMarker(value) {
+		return RedactedText
 	}
 	var builder strings.Builder
 	for _, char := range value {
@@ -194,7 +194,7 @@ func sanitizeBrowserConversationOpaque(value any) any {
 		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
 		reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128,
 		reflect.Chan, reflect.Func, reflect.Interface, reflect.Pointer, reflect.String, reflect.Struct, reflect.UnsafePointer:
-		if browserConversationContainsCredentialMarker(browserConversationOpaqueString(value)) {
+		if ContainsCredentialMarker(browserConversationOpaqueString(value)) {
 			return browserConversationRedactedText
 		}
 		return cloneBrowserConversationOpaque(value)

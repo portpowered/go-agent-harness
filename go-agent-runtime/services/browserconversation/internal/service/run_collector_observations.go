@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation/internal/service/policy"
 )
 
 // RecordRecovery records the derived stale-reference recovery evidence once.
@@ -25,24 +27,24 @@ func (r *browserConversationRun) RecordRecovery(evidence []BrowserConversationRe
 		return err
 	}
 	r.hasRecovery = true
-	r.result.Recovery = cloneBrowserConversationRecoveries(evidence)
+	r.result.Recovery = policy.CloneRecoveries(evidence)
 	return nil
 }
 
 func validateBrowserConversationRecoveriesForObservation(recoveries []BrowserConversationRecoveryEvidence) error {
 	for index, recovery := range recoveries {
 		path := fmt.Sprintf("recovery[%d]", index)
-		if err := validateBrowserConversationRecoveryIdentity(path, recovery); err != nil {
-			return browserConversationObservationError(path, "requires step_id, from_page_id, and to_page_id")
+		if err := policy.ValidateRecoveryIdentity(path, recovery); err != nil {
+			return policy.ObservationError(path, "requires step_id, from_page_id, and to_page_id")
 		}
-		if recovery.StaleRejected && recovery.StaleErrorCode != browserConversationStaleToolRef {
-			return browserConversationObservationError(path+".stale_error_code", "must be %q when stale_rejected is true", browserConversationStaleToolRef)
+		if recovery.StaleRejected && recovery.StaleErrorCode != policy.StaleToolRef {
+			return policy.ObservationError(path+".stale_error_code", "must be %q when stale_rejected is true", policy.StaleToolRef)
 		}
-		if recovery.ToolsRelisted && browserConversationOpaqueLen(recovery.RelistedToolRefs) == 0 {
-			return browserConversationObservationError(path+".relisted_tool_refs", "must include the fresh catalog references when tools_relisted is true")
+		if recovery.ToolsRelisted && policy.OpaqueLen(recovery.RelistedToolRefs) == 0 {
+			return policy.ObservationError(path+".relisted_tool_refs", "must include the fresh catalog references when tools_relisted is true")
 		}
-		if recovery.FreshInvocationCompleted && browserConversationOpaqueString(recovery.FreshToolRef) == "" {
-			return browserConversationObservationError(path+".fresh_tool_ref", "is required when fresh invocation completed")
+		if recovery.FreshInvocationCompleted && policy.OpaqueString(recovery.FreshToolRef) == "" {
+			return policy.ObservationError(path+".fresh_tool_ref", "is required when fresh invocation completed")
 		}
 	}
 	return nil
@@ -66,19 +68,19 @@ func (r *browserConversationRun) RecordCorrections(evidence []BrowserConversatio
 		return err
 	}
 	r.hasCorrections = true
-	r.result.Corrections = cloneBrowserConversationCorrections(evidence)
+	r.result.Corrections = policy.CloneCorrections(evidence)
 	return nil
 }
 
 func validateBrowserConversationCorrectionsForObservation(corrections []BrowserConversationCorrectionEvidence) error {
 	for _, correction := range corrections {
 		if strings.TrimSpace(correction.StepID) == "" || strings.TrimSpace(correction.TargetStepID) == "" {
-			return browserConversationObservationError("correction", "requires step_id and target_step_id")
+			return policy.ObservationError("correction", "requires step_id and target_step_id")
 		}
 		if strings.TrimSpace(correction.TargetUtterance) == "" || strings.TrimSpace(correction.CorrectionUtterance) == "" {
-			return browserConversationObservationError("correction", "requires target and correction utterances")
+			return policy.ObservationError("correction", "requires target and correction utterances")
 		}
-		if err := validateBrowserConversationCorrectionStates("correction", correction); err != nil {
+		if err := policy.ValidateCorrectionStates("correction", correction); err != nil {
 			return err
 		}
 	}
@@ -96,25 +98,25 @@ func (r *browserConversationRun) ObserveOracleSnapshot(snapshot BrowserConversat
 		return err
 	}
 	if snapshot.PageID == "" {
-		return browserConversationObservationError("oracle.page_id", "is required")
+		return policy.ObservationError("oracle.page_id", "is required")
 	}
-	if !browserConversationOraclePhaseValid(snapshot.Phase) {
-		return browserConversationObservationError("oracle.phase", "is unsupported")
+	if !policy.OraclePhaseValid(snapshot.Phase) {
+		return policy.ObservationError("oracle.phase", "is unsupported")
 	}
 	if snapshot.Phase != BrowserConversationOraclePostSession {
 		if snapshot.StepID == "" {
-			return browserConversationObservationError("oracle.step_id", "is required for a step snapshot")
+			return policy.ObservationError("oracle.step_id", "is required for a step snapshot")
 		}
 		if _, ok := r.steps[snapshot.StepID]; !ok {
-			return browserConversationObservationError("oracle.step_id", "references unknown step %q", snapshot.StepID)
+			return policy.ObservationError("oracle.step_id", "references unknown step %q", snapshot.StepID)
 		}
 	}
-	if err := validateJSONObject("oracle.state", snapshot.State); err != nil {
+	if err := policy.ValidateJSONObject("oracle.state", snapshot.State); err != nil {
 		return err
 	}
 	snapshot.Sequence = r.takeSequenceLocked()
 	snapshot.State = append(json.RawMessage(nil), snapshot.State...)
-	r.result.Oracles = append(r.result.Oracles, cloneBrowserConversationOracleSnapshot(snapshot))
+	r.result.Oracles = append(r.result.Oracles, policy.CloneOracleSnapshot(snapshot))
 	return nil
 }
 
@@ -166,31 +168,31 @@ func (r *browserConversationRun) ObserveInvocationPublication(source string, inv
 }
 
 func (r *browserConversationRun) appendInvocationObservationLocked(source string, evidence BrowserConversationCancellationEvidence) {
-	if browserConversationOpaqueString(evidence.InvocationID) == "" {
+	if policy.OpaqueString(evidence.InvocationID) == "" {
 		return
 	}
 	r.result.InvocationObservations = append(r.result.InvocationObservations, BrowserConversationInvocationObservation{
-		Sequence: r.takeSequenceLocked(), Source: source, InvocationID: cloneBrowserConversationOpaque(evidence.InvocationID),
-		State: cloneBrowserConversationOpaque(evidence.FinalState), Terminal: browserConversationInvocationStateTerminal(evidence.FinalState),
+		Sequence: r.takeSequenceLocked(), Source: source, InvocationID: policy.CloneOpaque(evidence.InvocationID),
+		State: policy.CloneOpaque(evidence.FinalState), Terminal: policy.InvocationStateTerminal(evidence.FinalState),
 	})
 }
 
 func validateBrowserConversationCancellationObservation(current, evidence BrowserConversationCancellationEvidence) error {
-	state := browserConversationOpaqueString(evidence.FinalState)
-	if state == browserConversationInvocationCompleted && (evidence.Interrupted || evidence.Requested || current.Interrupted || current.Requested) {
-		return browserConversationObservationError("cancellation.final_state", "a canceled or interrupted invocation cannot be completed")
+	state := policy.OpaqueString(evidence.FinalState)
+	if state == policy.InvocationCompleted && (evidence.Interrupted || evidence.Requested || current.Interrupted || current.Requested) {
+		return policy.ObservationError("cancellation.final_state", "a canceled or interrupted invocation cannot be completed")
 	}
-	if state != "" && !browserConversationInvocationStateTerminal(evidence.FinalState) {
-		return browserConversationObservationError("cancellation.final_state", "must be a terminal invocation state")
+	if state != "" && !policy.InvocationStateTerminal(evidence.FinalState) {
+		return policy.ObservationError("cancellation.final_state", "must be a terminal invocation state")
 	}
 	if evidence.LateEventsSuppressed < 0 {
-		return browserConversationObservationError("cancellation.late_events_suppressed", "must not be negative")
+		return policy.ObservationError("cancellation.late_events_suppressed", "must not be negative")
 	}
-	if browserConversationOpaqueString(current.InvocationID) != "" && browserConversationOpaqueString(evidence.InvocationID) != "" && !opaqueEqual(current.InvocationID, evidence.InvocationID) {
-		return browserConversationObservationError("cancellation.invocation_id", "cannot change after the invocation is identified")
+	if policy.OpaqueString(current.InvocationID) != "" && policy.OpaqueString(evidence.InvocationID) != "" && !policy.OpaqueEqual(current.InvocationID, evidence.InvocationID) {
+		return policy.ObservationError("cancellation.invocation_id", "cannot change after the invocation is identified")
 	}
-	if browserConversationOpaqueString(current.FinalState) != "" && state != "" && !opaqueEqual(current.FinalState, evidence.FinalState) {
-		return browserConversationObservationError("cancellation.final_state", "cannot change after a terminal disposition is recorded")
+	if policy.OpaqueString(current.FinalState) != "" && state != "" && !policy.OpaqueEqual(current.FinalState, evidence.FinalState) {
+		return policy.ObservationError("cancellation.final_state", "cannot change after a terminal disposition is recorded")
 	}
 	return nil
 }
@@ -234,7 +236,7 @@ func (r *browserConversationRun) RecordLifecycle(evidence BrowserConversationLif
 		return ErrBrowserConversationDuplicateObservation
 	}
 	if evidence.DetachCount < 0 {
-		return browserConversationObservationError("lifecycle.detach_count", "must not be negative")
+		return policy.ObservationError("lifecycle.detach_count", "must not be negative")
 	}
 	r.hasLifecycle = true
 	r.result.Lifecycle = evidence
@@ -255,7 +257,7 @@ func (r *browserConversationRun) RecordMechanicalEvaluation(evaluation BrowserCo
 		return ErrBrowserConversationDuplicateObservation
 	}
 	r.hasMechanical = true
-	r.result.Mechanical = cloneBrowserConversationMechanicalEvaluation(evaluation)
+	r.result.Mechanical = policy.CloneMechanicalEvaluation(evaluation)
 	return nil
 }
 
@@ -276,15 +278,15 @@ func (r *browserConversationRun) RecordValidator(verdict BrowserConversationVali
 		verdict.Version = BrowserConversationValidatorVersion
 	}
 	if verdict.Version != BrowserConversationValidatorVersion {
-		return browserConversationObservationError("validator.version", "must be %q", BrowserConversationValidatorVersion)
+		return policy.ObservationError("validator.version", "must be %q", BrowserConversationValidatorVersion)
 	}
 	if verdict.Status == "" {
-		return browserConversationObservationError("validator.status", "is required")
+		return policy.ObservationError("validator.status", "is required")
 	}
-	if !browserConversationValidatorStatusValid(verdict.Status) {
-		return browserConversationObservationError("validator.status", "is unsupported")
+	if !policy.ValidatorStatusValid(verdict.Status) {
+		return policy.ObservationError("validator.status", "is unsupported")
 	}
 	r.hasValidator = true
-	r.result.Validator = cloneBrowserConversationValidatorVerdict(verdict)
+	r.result.Validator = policy.CloneValidatorVerdict(verdict)
 	return nil
 }

@@ -1,4 +1,4 @@
-package service
+package policy
 
 // DeriveBrowserConversationRecovery exposes the same evidence derivation used
 // by the shared runner to production report builders. It only derives facts

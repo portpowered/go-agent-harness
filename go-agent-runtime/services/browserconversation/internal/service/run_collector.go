@@ -5,6 +5,8 @@ import (
 	"errors"
 	"strings"
 	"sync"
+
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation/internal/service/policy"
 )
 
 // browserConversationRun is a serialized observation collector. All mutation
@@ -109,14 +111,14 @@ func (r *browserConversationRun) ObserveTurn(turn BrowserConversationTurn) error
 		return err
 	}
 	if turn.Direction != BrowserConversationCustomerTurn && turn.Direction != BrowserConversationAssistantTurn {
-		return browserConversationObservationError("turn.direction", "must identify customer or assistant")
+		return policy.ObservationError("turn.direction", "must identify customer or assistant")
 	}
 	turn.Sequence = r.takeSequenceLocked()
 	turn.StepID = step.ID
 	if turn.Direction == BrowserConversationCustomerTurn && turn.ExpectedText == "" {
 		turn.ExpectedText = step.Utterance
 	}
-	r.result.Turns = append(r.result.Turns, cloneBrowserConversationTurn(turn))
+	r.result.Turns = append(r.result.Turns, policy.CloneTurn(turn))
 	return nil
 }
 
@@ -132,20 +134,20 @@ func (r *browserConversationRun) ObserveBrokerCall(call BrowserConversationBroke
 		return err
 	}
 	if call.Operation == "" {
-		return browserConversationObservationError("broker_call.operation", "is required")
+		return policy.ObservationError("broker_call.operation", "is required")
 	}
-	if !browserConversationBrokerOperationValid(call.Operation) {
-		return browserConversationObservationError("broker_call.operation", "is unsupported")
+	if !policy.BrokerOperationValid(call.Operation) {
+		return policy.ObservationError("broker_call.operation", "is unsupported")
 	}
 	if call.StepID != "" {
 		if _, ok := r.steps[call.StepID]; !ok {
-			return browserConversationObservationError("broker_call.step_id", "references unknown step %q", call.StepID)
+			return policy.ObservationError("broker_call.step_id", "references unknown step %q", call.StepID)
 		}
 	}
 	call.Sequence = r.takeSequenceLocked()
 	call.InputJSON = string([]byte(call.InputJSON))
 	call.Output = append(json.RawMessage(nil), call.Output...)
-	r.result.BrokerCalls = append(r.result.BrokerCalls, cloneBrowserConversationBrokerCall(call))
+	r.result.BrokerCalls = append(r.result.BrokerCalls, policy.CloneBrokerCall(call))
 	return nil
 }
 
@@ -156,7 +158,7 @@ func (r *browserConversationRun) Snapshot() BrowserConversationResult {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return cloneBrowserConversationResult(r.result)
+	return policy.CloneResult(r.result)
 }
 
 // Finalize publishes exactly one immutable result. Repeated calls return the
@@ -170,9 +172,9 @@ func (r *browserConversationRun) Finalize() (BrowserConversationResult, error) {
 	if !r.finalized {
 		r.finalized = true
 		r.result.Finalized = true
-		r.result = cloneBrowserConversationResult(r.result)
+		r.result = policy.CloneResult(r.result)
 	}
-	return cloneBrowserConversationResult(r.result), nil
+	return policy.CloneResult(r.result), nil
 }
 
 func (r *browserConversationRun) stepForObservationLocked(stepID, observed string) (BrowserConversationStep, error) {
@@ -180,14 +182,14 @@ func (r *browserConversationRun) stepForObservationLocked(stepID, observed strin
 		return BrowserConversationStep{}, err
 	}
 	if strings.TrimSpace(stepID) == "" {
-		return BrowserConversationStep{}, browserConversationObservationError("step_id", "is required")
+		return BrowserConversationStep{}, policy.ObservationError("step_id", "is required")
 	}
 	step, ok := r.steps[stepID]
 	if !ok {
-		return BrowserConversationStep{}, browserConversationObservationError("step_id", "references unknown step %q", stepID)
+		return BrowserConversationStep{}, policy.ObservationError("step_id", "references unknown step %q", stepID)
 	}
 	if strings.TrimSpace(observed) == "" {
-		return BrowserConversationStep{}, browserConversationObservationError("observed_text", "must not be empty")
+		return BrowserConversationStep{}, policy.ObservationError("observed_text", "must not be empty")
 	}
 	return step, nil
 }

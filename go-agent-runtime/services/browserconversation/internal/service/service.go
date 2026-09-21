@@ -8,6 +8,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation/internal/service/policy"
 )
 
 type BrowserConversationScenario = browserconversation.BrowserConversationScenario
@@ -100,7 +101,7 @@ func (*Service) Run(ctx context.Context, request browserconversation.RunRequest)
 }
 
 func (*Service) ValidateScenario(scenario browserconversation.BrowserConversationScenario) (browserconversation.BrowserConversationScenario, error) {
-	return admitScenario(scenario)
+	return policy.AdmitScenario(scenario)
 }
 
 func (*Service) NewRecorder(request browserconversation.RecordingRequest) (browserconversation.Recorder, error) {
@@ -108,15 +109,15 @@ func (*Service) NewRecorder(request browserconversation.RecordingRequest) (brows
 }
 
 func (*Service) AdmitScenario(scenario browserconversation.BrowserConversationScenario) (browserconversation.BrowserConversationScenario, error) {
-	return admitScenario(scenario)
+	return policy.AdmitScenario(scenario)
 }
 
 func (*Service) ScheduleAudioInputs(scenario browserconversation.BrowserConversationScenario, audio map[string][]byte) ([]browserconversation.ScheduledAudioInput, error) {
-	return scheduleAudioInputs(scenario, audio)
+	return policy.ScheduleAudioInputs(scenario, audio)
 }
 
 func (*Service) NewScenarioValue(scenario browserconversation.BrowserConversationScenario) (browserconversation.BrowserConversationScenarioForSession, error) {
-	validated, err := admitScenario(scenario)
+	validated, err := policy.AdmitScenario(scenario)
 	if err != nil {
 		return browserconversation.BrowserConversationScenarioValue{}, err
 	}
@@ -124,7 +125,7 @@ func (*Service) NewScenarioValue(scenario browserconversation.BrowserConversatio
 }
 
 func (*Service) NewRun(scenario browserconversation.BrowserConversationScenario) (browserconversation.Run, error) {
-	validated, err := admitScenario(scenario)
+	validated, err := policy.AdmitScenario(scenario)
 	if err != nil {
 		return nil, err
 	}
@@ -132,51 +133,51 @@ func (*Service) NewRun(scenario browserconversation.BrowserConversationScenario)
 }
 
 func (*Service) ComputeInputJSONValidity(calls []browserconversation.BrowserConversationBrokerCall) browserconversation.BrowserConversationInputJSONValidity {
-	return computeBrowserConversationInputJSONValidity(calls)
+	return policy.ComputeInputJSONValidity(calls)
 }
 
 func (*Service) SanitizeResult(result browserconversation.BrowserConversationResult) browserconversation.BrowserConversationResult {
-	return sanitizeBrowserConversationResult(result)
+	return policy.SanitizeResult(result)
 }
 
 func (*Service) NewReport(result browserconversation.BrowserConversationResult, metadata browserconversation.BrowserConversationReportMetadata) (browserconversation.BrowserConversationReport, error) {
-	return newReport(result, metadata)
+	return policy.NewReport(result, metadata)
 }
 
 func (*Service) Report(result browserconversation.BrowserConversationResult, metadata browserconversation.BrowserConversationReportMetadata) (browserconversation.BrowserConversationReport, error) {
-	return newReport(result, metadata)
+	return policy.NewReport(result, metadata)
 }
 
 func (*Service) NewValidatorInput(result browserconversation.BrowserConversationResult) (browserconversation.BrowserConversationValidatorInput, error) {
-	return newValidatorInput(result)
+	return policy.NewValidatorInput(result)
 }
 
 func (*Service) RenderReport(result browserconversation.BrowserConversationResult, metadata browserconversation.BrowserConversationReportMetadata) (string, error) {
-	return renderReport(result, metadata)
+	return policy.RenderReport(result, metadata)
 }
 
 func (*Service) WriteReport(out io.Writer, result browserconversation.BrowserConversationResult, metadata browserconversation.BrowserConversationReportMetadata) error {
-	return writeReport(out, result, metadata)
+	return policy.WriteReport(out, result, metadata)
 }
 
 func (*Service) DeriveCorrections(scenario browserconversation.BrowserConversationScenario, result browserconversation.BrowserConversationResult) []browserconversation.BrowserConversationCorrectionEvidence {
-	return deriveBrowserConversationCorrections(scenario, result)
+	return policy.DeriveBrowserConversationCorrections(scenario, result)
 }
 
 func (*Service) DeriveRecovery(scenario browserconversation.BrowserConversationScenario, result browserconversation.BrowserConversationResult) []browserconversation.BrowserConversationRecoveryEvidence {
-	return deriveBrowserConversationRecovery(scenario, result)
+	return policy.DeriveBrowserConversationRecovery(scenario, result)
 }
 
 func (*Service) Evaluate(scenario browserconversation.BrowserConversationScenario, result browserconversation.BrowserConversationResult, rootErr error) (browserconversation.BrowserConversationMechanicalEvaluation, error) {
-	return EvaluateBrowserConversation(scenario, result, rootErr)
+	return policy.EvaluateBrowserConversation(scenario, result, rootErr)
 }
 
 func (*Service) ValidateJSONObject(path string, raw json.RawMessage) error {
-	return validateJSONObject(path, raw)
+	return policy.ValidateJSONObject(path, raw)
 }
 
 func (*Service) ValidateResult(result browserconversation.BrowserConversationResult) error {
-	return validateResult(result)
+	return policy.ValidateResult(result)
 }
 
 func (*Service) NewCommandValidator(config browserconversation.BrowserConversationValidatorCommand) (browserconversation.BrowserConversationValidator, error) {
@@ -230,7 +231,7 @@ func (t *evidenceTracker) noteLateEventLocked(message messages.StreamMessage) {
 	switch message.Type {
 	case messages.StreamTypeTranscriptEnd, messages.StreamTypeMessageStart, messages.StreamTypeTextDelta, messages.StreamTypeMessageEnd, messages.StreamTypeAudioDelta, messages.StreamTypeToolCallEnd, messages.StreamTypeToolCallStart:
 		t.suppressedLateEvents++
-		if err := t.run.ObserveInvocationPublication("late_event", t.inFlightInvocation, browserConversationInvocationCanceled, false); err != nil {
+		if err := t.run.ObserveInvocationPublication("late_event", t.inFlightInvocation, policy.InvocationCanceled, false); err != nil {
 			t.setErrorLocked(err)
 		}
 	case messages.StreamTypeTextStart, messages.StreamTypeTextEnd, messages.StreamTypeToolCallDelta,

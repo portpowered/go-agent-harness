@@ -1,112 +1,14 @@
 package service
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
-	"reflect"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation/internal/service/policy"
 )
-
-func browserConversationStepByID(scenario BrowserConversationScenario, stepID string) *BrowserConversationStep {
-	for index := range scenario.Steps {
-		if scenario.Steps[index].ID == stepID {
-			return &scenario.Steps[index]
-		}
-	}
-	return nil
-}
-
-func browserConversationExpectedState(step *BrowserConversationStep) *BrowserStateTransition {
-	if step == nil {
-		return nil
-	}
-	if step.ExpectedState != nil {
-		return step.ExpectedState
-	}
-	if step.Correction != nil {
-		return &step.Correction.ExpectedState
-	}
-	return nil
-}
-
-func browserConversationTurnsForStep(turns []BrowserConversationTurn, stepID string) (*BrowserConversationTurn, *BrowserConversationTurn) {
-	var customer, assistant *BrowserConversationTurn
-	for index := range turns {
-		if turns[index].StepID != stepID {
-			continue
-		}
-		switch turns[index].Direction {
-		case BrowserConversationCustomerTurn:
-			if customer == nil {
-				customer = &turns[index]
-			}
-		case BrowserConversationAssistantTurn:
-			if assistant == nil {
-				assistant = &turns[index]
-			}
-		}
-	}
-	return customer, assistant
-}
-
-func browserConversationOracleForStep(oracles []BrowserConversationOracleSnapshot, stepID string, phase BrowserConversationOraclePhase) *BrowserConversationOracleSnapshot {
-	var match *BrowserConversationOracleSnapshot
-	for index := range oracles {
-		if oracles[index].StepID == stepID && oracles[index].Phase == phase {
-			match = &oracles[index]
-		}
-	}
-	return match
-}
-
-func browserConversationTerminalInvokeForStep(calls []BrowserConversationBrokerCall, stepID string) *BrowserConversationBrokerCall {
-	for _, call := range calls {
-		if call.StepID == stepID &&
-			call.Operation == BrowserConversationInvoke &&
-			call.Terminal &&
-			browserConversationOpaqueString(call.State) == browserConversationInvocationCompleted &&
-			call.ErrorCode == "" {
-			candidate := call
-			return &candidate
-		}
-	}
-	return nil
-}
-
-func browserConversationJSONEqual(left, right json.RawMessage) bool {
-	leftValue, leftOK := decodeBrowserConversationJSON(left)
-	rightValue, rightOK := decodeBrowserConversationJSON(right)
-	return leftOK && rightOK && reflect.DeepEqual(leftValue, rightValue)
-}
-
-func decodeBrowserConversationJSON(raw json.RawMessage) (any, bool) {
-	if len(bytes.TrimSpace(raw)) == 0 {
-		return nil, false
-	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.UseNumber()
-	var value any
-	if err := decoder.Decode(&value); err != nil {
-		return nil, false
-	}
-	var extra any
-	if err := decoder.Decode(&extra); err != io.EOF {
-		return nil, false
-	}
-	return value, true
-}
-
-func safeErrorCode(err error) string {
-	if err == nil {
-		return ""
-	}
-	return safeBrowserConversationText(err.Error())
-}
 
 func (t *evidenceTracker) readyInvocationStepLocked() string {
 	if t.currentStep != "" && t.awaitingAssistant {
@@ -129,11 +31,11 @@ type browserConversationExecution struct {
 }
 
 func newBrowserConversationExecution(ctx context.Context, request browserconversation.RunRequest) (*browserConversationExecution, error) {
-	scenario, err := admitScenario(request.Scenario)
+	scenario, err := policy.AdmitScenario(request.Scenario)
 	if err != nil {
 		return nil, err
 	}
-	audio, err := scheduleAudioInputs(scenario, request.AudioByStep)
+	audio, err := policy.ScheduleAudioInputs(scenario, request.AudioByStep)
 	if err != nil {
 		return nil, err
 	}
@@ -288,12 +190,12 @@ func (e *browserConversationExecution) finish(request browserconversation.RunReq
 
 func (e *browserConversationExecution) recordDerivedEvidence() {
 	snapshot := e.run.Snapshot()
-	e.add(e.run.RecordCorrections(deriveBrowserConversationCorrections(e.scenario, snapshot)))
-	e.add(e.run.RecordRecovery(deriveBrowserConversationRecovery(e.scenario, snapshot)))
+	e.add(e.run.RecordCorrections(policy.DeriveBrowserConversationCorrections(e.scenario, snapshot)))
+	e.add(e.run.RecordRecovery(policy.DeriveBrowserConversationRecovery(e.scenario, snapshot)))
 }
 
 func (e *browserConversationExecution) recordEvaluation() {
-	evaluation, err := EvaluateBrowserConversation(e.scenario, e.run.Snapshot(), e.rootErr)
+	evaluation, err := policy.EvaluateBrowserConversation(e.scenario, e.run.Snapshot(), e.rootErr)
 	if err != nil {
 		e.add(err)
 		return

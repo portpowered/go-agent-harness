@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation/internal/service/policy"
 )
 
 // runBrowserConversation coordinates the service-owned vertical. The detailed
@@ -109,14 +110,14 @@ func (b *evidenceBroker) Invoke(ctx context.Context, request browserconversation
 	if err != nil {
 		return result, err
 	}
-	if step != nil && result.State == browserConversationInvocationCompleted && isTerminal(result.State) && expectedState(step) != nil {
+	if step != nil && result.State == policy.InvocationCompleted && isTerminal(result.State) && expectedState(step) != nil {
 		b.observeOracle(ctx, step, browserconversation.BrowserConversationOracleAfter)
 	}
 	return result, nil
 }
 
 func (b *evidenceBroker) observeImmediateInvocationOracle(ctx context.Context, step *browserconversation.BrowserConversationStep, result browserconversation.BrowserInvokeResult) {
-	if step != nil && result.State == browserConversationInvocationCompleted && expectedState(step) != nil {
+	if step != nil && result.State == policy.InvocationCompleted && expectedState(step) != nil {
 		b.observeOracle(ctx, step, browserconversation.BrowserConversationOracleAfter)
 	}
 }
@@ -338,7 +339,7 @@ func safeText(value string) string {
 		} else {
 			builder.WriteRune(char)
 		}
-		if builder.Len() >= browserConversationMaxSafeTextBytes {
+		if builder.Len() >= policy.MaxSafeTextBytes {
 			break
 		}
 	}

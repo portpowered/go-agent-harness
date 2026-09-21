@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation/internal/service/policy"
 )
 
 const (
@@ -17,7 +18,6 @@ const (
 	defaultRecorderBytes  = 16 << 20
 	recorderCloseTimeout  = time.Second
 	maxRecordingTextBytes = 4096
-	recordingRedactedText = "[redacted]"
 )
 
 type recorder struct {
@@ -222,7 +222,7 @@ func safeRecordingJSON(raw json.RawMessage, credentials []string) any {
 		return nil
 	}
 	text := sanitizeRecordingText(string(raw), credentials)
-	if text == recordingRedactedText {
+	if text == policy.RedactedText {
 		return text
 	}
 	var value any
@@ -237,11 +237,11 @@ func sanitizeRecordingText(value string, credentials []string) string {
 	for _, credential := range credentials {
 		credential = strings.TrimSpace(credential)
 		if credential != "" {
-			value = strings.ReplaceAll(value, credential, recordingRedactedText)
+			value = strings.ReplaceAll(value, credential, policy.RedactedText)
 		}
 	}
-	if browserConversationContainsCredentialMarker(value) {
-		return recordingRedactedText
+	if policy.ContainsCredentialMarker(value) {
+		return policy.RedactedText
 	}
 	var builder strings.Builder
 	for _, char := range value {

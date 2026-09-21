@@ -1,4 +1,4 @@
-package service
+package policy
 
 import (
 	"encoding/json"
@@ -158,7 +158,7 @@ func sanitizeBrowserConversationReportTexts(values []string) []string {
 }
 
 func sanitizeBrowserConversationInputJSON(value string) string {
-	if browserConversationContainsCredentialMarker(value) {
+	if ContainsCredentialMarker(value) {
 		return browserConversationRedactedText
 	}
 	return value
@@ -168,7 +168,7 @@ func sanitizeBrowserConversationRawJSON(value json.RawMessage) json.RawMessage {
 	if len(value) == 0 {
 		return nil
 	}
-	if browserConversationContainsCredentialMarker(string(value)) {
+	if ContainsCredentialMarker(string(value)) {
 		return json.RawMessage(`"` + browserConversationRedactedText + `"`)
 	}
 	if json.Valid(value) {
@@ -182,7 +182,7 @@ func sanitizeBrowserConversationRawJSON(value json.RawMessage) json.RawMessage {
 }
 
 func sanitizeBrowserConversationReportText(value string) string {
-	if browserConversationContainsCredentialMarker(value) {
+	if ContainsCredentialMarker(value) {
 		return browserConversationRedactedText
 	}
 	var builder strings.Builder

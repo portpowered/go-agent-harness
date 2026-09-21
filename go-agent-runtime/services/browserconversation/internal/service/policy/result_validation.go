@@ -1,7 +1,8 @@
-package service
+package policy
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -187,6 +188,49 @@ func validateBrowserConversationCancellation(cancellation BrowserConversationCan
 
 func browserConversationValidatorStatusValid(status BrowserConversationValidatorStatus) bool {
 	return status == BrowserConversationValidatorPass || status == BrowserConversationValidatorFail || status == BrowserConversationValidatorNotRun
+}
+
+func validateBrowserConversationValidatorVerdict(verdict BrowserConversationValidatorVerdict) error {
+	if verdict.Version != "" && verdict.Version != BrowserConversationValidatorVersion {
+		return fmt.Errorf("validator verdict version must be %q", BrowserConversationValidatorVersion)
+	}
+	if verdict.Status == "" {
+		return errors.New("validator verdict status is required")
+	}
+	if !browserConversationValidatorStatusValid(verdict.Status) {
+		return errors.New("validator verdict status is unsupported")
+	}
+	if verdict.Status == BrowserConversationValidatorPass && !verdict.Passed {
+		return errors.New("validator pass status contradicted passed=false")
+	}
+	if verdict.Status == BrowserConversationValidatorFail && verdict.Passed {
+		return errors.New("validator fail status contradicted passed=true")
+	}
+	if verdict.Status == BrowserConversationValidatorNotRun {
+		return nil
+	}
+	return validateBrowserConversationChecks(verdict.Checks)
+}
+
+func validateBrowserConversationChecks(checks []BrowserConversationValidatorCheck) error {
+	wanted := make(map[string]struct{}, len(validatorRubricValues()))
+	for _, name := range validatorRubricValues() {
+		wanted[name] = struct{}{}
+	}
+	seen := make(map[string]struct{}, len(checks))
+	for _, check := range checks {
+		if _, ok := wanted[check.Name]; !ok {
+			return fmt.Errorf("validator verdict contains unsupported check %q", check.Name)
+		}
+		if _, duplicate := seen[check.Name]; duplicate {
+			return fmt.Errorf("validator verdict repeats check %q", check.Name)
+		}
+		seen[check.Name] = struct{}{}
+	}
+	if len(seen) != len(wanted) {
+		return errors.New("validator verdict did not cover the fixed rubric")
+	}
+	return nil
 }
 
 func browserConversationBrokerOperationValid(operation BrowserConversationBrokerOperation) bool {
