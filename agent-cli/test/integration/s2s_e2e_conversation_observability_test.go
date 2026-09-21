@@ -503,7 +503,7 @@ func TestSessionCommandConversationObservabilityNegativeControlFailsTruncatedArt
 	negativeRoot := filepath.Join(t.TempDir(), "negative")
 	copyArtifactTree(t, root, negativeRoot)
 	truncateSessionLog(t, filepath.Join(negativeRoot, "session-log.jsonl"), observabilityTurnCount-1)
-	redactedReplyPath := filepath.Join(negativeRoot, "audio", "out-001.pcm")
+	redactedReplyPath := filepath.Join(negativeRoot, "audio", "out-000.pcm")
 	replyAudio, err := os.ReadFile(redactedReplyPath)
 	if err != nil {
 		t.Fatalf("read negative control reply audio: %v", err)

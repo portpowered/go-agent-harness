@@ -54,7 +54,7 @@ func (h *handle) finishOnceBody(err error) {
 	h.terminalErr = err
 	h.mu.Unlock()
 	if h.runtimeTrace != nil {
-		h.runtimeTrace.terminal(0, err)
+		h.runtimeTrace.Terminal(0, err)
 	}
 	liveness := h.livenessFailureSnapshot()
 	if liveness == nil {

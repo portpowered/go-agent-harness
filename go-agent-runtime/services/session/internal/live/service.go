@@ -88,7 +88,7 @@ func (s *Service) OpenLive(ctx context.Context, request session.LiveRequest) (se
 	}
 	request = input.CloneLiveRequest(request)
 	h := newHandle(request, s.inferencerFactory, s.capabilityFactory, s.toolExecutor, s.toolDefinitions, s.eventCapacity, s.clock, s.scheduler)
-	h.runtimeTrace = newRuntimeObservations(s.runtimeObserver, s.clock, s.tick)
+	h.runtimeTrace = observations.NewRuntimeTrace(s.runtimeObserver, s.clock, s.tick)
 	h.parentCtx = ctx
 	return h, nil
 }
@@ -107,7 +107,7 @@ type handle struct {
 	captureInterruptionOnce                          sync.Once
 	captureFlush                                     func() error
 	observer                                         *observations.Observer
-	runtimeTrace                                     *runtimeTrace
+	runtimeTrace                                     *observations.RuntimeTrace
 	capabilityMu                                     sync.Mutex
 	eventCapacity                                    int
 	clock                                            session.LiveClock
@@ -199,6 +199,13 @@ type handle struct {
 	toolMu                                           sync.Mutex
 	toolContinuations                                map[string]*liveToolContinuation
 	continuationErr                                  error
+}
+
+func (h *handle) observeRuntimeMessage(msg messages.StreamMessage) {
+	if h.runtimeTrace == nil {
+		return
+	}
+	h.runtimeTrace.Message(msg, h.finiteResponseWasInterrupted(msg))
 }
 
 func (h *handle) mediaFailure(err error) {

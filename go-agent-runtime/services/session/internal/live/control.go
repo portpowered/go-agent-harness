@@ -88,10 +88,12 @@ func (h *handle) sendLiveControl(ctx context.Context, loop *agentloop.AgentLoop,
 		if h.runtimeTrace != nil {
 			switch control.Kind {
 			case session.LiveControlAudioCommit:
-				h.runtimeTrace.inputCommit(false)
-				h.runtimeTrace.responseCreate(messages.StreamMessage{Type: messages.StreamTypeResponseCreate})
+				h.runtimeTrace.InputCommit(false)
+				h.runtimeTrace.ResponseCreate(messages.StreamMessage{Type: messages.StreamTypeResponseCreate})
 			case session.LiveControlResponseCreate:
-				h.runtimeTrace.responseCreate(event)
+				h.runtimeTrace.ResponseCreate(event)
+			case session.LiveControlText, session.LiveControlResponseCancel, session.LiveControlClose:
+				// Text and lifecycle controls have no dedicated runtime observation.
 			}
 		}
 		return nil

@@ -272,7 +272,7 @@ func (h *handle) recordCapturedAudio(frame sharedaudio.PCMFrame) {
 		return
 	}
 	if h.runtimeTrace != nil {
-		h.runtimeTrace.capturedAudio(frame)
+		h.runtimeTrace.CapturedAudio(frame)
 	}
 	if observer := h.observationPort(); observer != nil {
 		observer.QueueFrame(frame)

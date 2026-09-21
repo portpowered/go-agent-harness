@@ -35,16 +35,17 @@ func (i inferencerAdapter) ConnectSession(ctx context.Context) (messages.Session
 }
 
 type mediaSession struct {
-	inner       messages.Session
-	media       *sharedaudio.SessionMedia
-	received    *messages.TypedBuffer[messages.StreamMessage]
-	done        chan struct{}
-	stop        chan struct{}
-	forwarded   chan struct{}
-	closeOnce   sync.Once
-	closeErr    error
-	errMu       sync.Mutex
-	terminalErr error
+	inner        messages.Session
+	media        *sharedaudio.SessionMedia
+	received     *messages.TypedBuffer[messages.StreamMessage]
+	done         chan struct{}
+	stop         chan struct{}
+	forwarded    chan struct{}
+	mediaFlushed bool
+	closeOnce    sync.Once
+	closeErr     error
+	errMu        sync.Mutex
+	terminalErr  error
 }
 
 func newMediaSession(ctx context.Context, inner messages.Session, sampleRate int, continuous bool) *mediaSession {
@@ -98,10 +99,14 @@ func (s *mediaSession) TerminalError() error {
 		return err
 	}
 	if terminal, ok := s.inner.(interface{ TerminalError() error }); ok {
-		return terminal.TerminalError()
+		if err := terminal.TerminalError(); err != nil {
+			return fmt.Errorf("turn replay provider session: %w", err)
+		}
 	}
 	if terminal, ok := s.inner.(interface{ Err() error }); ok {
-		return terminal.Err()
+		if err := terminal.Err(); err != nil {
+			return fmt.Errorf("turn replay provider session: %w", err)
+		}
 	}
 	return nil
 }
@@ -129,15 +134,15 @@ func (s *mediaSession) Close() error {
 func (s *mediaSession) forward(ctx context.Context) {
 	defer close(s.forwarded)
 	defer close(s.done)
+	// Keep media open until the live service drains frames behind the terminal message.
 	defer func() {
-		if err := s.media.FlushInbound(); err != nil {
-			s.fail(err)
+		if !s.mediaFlushed {
+			if err := s.media.FlushInbound(); err != nil {
+				s.fail(fmt.Errorf("flush turn replay media after stream end: %w", err))
+			}
 		}
 		if err := s.TerminalError(); err != nil {
 			s.media.FailInbound(err)
-		}
-		if err := s.media.Close(); err != nil {
-			s.fail(fmt.Errorf("close turn replay media: %w", err))
 		}
 	}()
 
@@ -200,12 +205,14 @@ func (s *mediaSession) processMediaMessage(msg messages.StreamMessage) error {
 		if err := s.media.PushInbound(samples); err != nil {
 			return fmt.Errorf("queue turn replay PCM16: %w", err)
 		}
+		s.mediaFlushed = false
 		return nil
 	}
-	if msg.Type == messages.StreamTypeAudioEnd {
+	if msg.Type == messages.StreamTypeAudioEnd || msg.Type == messages.StreamTypeSessionClose {
 		if err := s.media.FlushInbound(); err != nil {
 			return fmt.Errorf("flush turn replay PCM16: %w", err)
 		}
+		s.mediaFlushed = true
 	}
 	return nil
 }

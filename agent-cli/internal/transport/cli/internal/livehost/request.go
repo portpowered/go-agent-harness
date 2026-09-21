@@ -63,6 +63,7 @@ type requestInputs struct {
 	inputRate       int
 	outputRate      int
 	replayFinish    bool
+	turnCapture     bool
 }
 
 func resolveRequestInputs(ctx context.Context, request serviceSession.Request, replayInspection *runtimeReplay.CaptureInspection, deps RequestDependencies) (requestInputs, error) {
@@ -90,7 +91,8 @@ func resolveRequestInputs(ctx context.Context, request serviceSession.Request, r
 	inputs.openingResponse = openingResponse
 	inputs.replayPlan = replayPlan
 	inputs.inputRate, inputs.outputRate = replayRates(replayPlan, request, inputs.inspection)
-	inputs.replayFinish = inputs.inspection != nil && (replayPlan == nil || replayPlan.StopAfterResponse)
+	inputs.turnCapture = inputs.inspection != nil && inputs.inspection.Kind == runtimeReplay.CaptureKindTurn
+	inputs.replayFinish = inputs.inspection != nil && !inputs.turnCapture && (replayPlan == nil || replayPlan.StopAfterResponse)
 	return inputs, nil
 }
 
@@ -227,7 +229,9 @@ func assembleLiveRequest(request serviceSession.Request, inputs requestInputs) r
 		// override the ordinary finite audio/output policy so a completed
 		// response cannot cancel the provider stream before later stdin audio
 		// reaches the same session.
-		FinishAfterResponse: !request.WaitForClose && (inputs.promptPresent || hasAudioInput(request) || len(inputs.openingParts) > 0 || inputs.replayFinish || request.AudioOutputPath != ""),
+		// Provider-neutral turn captures own completion through their recorded
+		// SESSION.CLOSE, which may follow multiple output responses.
+		FinishAfterResponse: !request.WaitForClose && !inputs.turnCapture && (inputs.promptPresent || hasAudioInput(request) || len(inputs.openingParts) > 0 || inputs.replayFinish || request.AudioOutputPath != ""),
 		ExpectedResponses:   expectedResponses(request, inputs.promptPresent, inputs.openingParts, inputs.openingResponse),
 	}
 	appendToolNames(&result, inputs.capabilities)
@@ -308,6 +312,10 @@ func hasAudioInput(request serviceSession.Request) bool {
 
 func buildReplayPlan(request serviceSession.Request, inspection *runtimeReplay.CaptureInspection, requestPrompt string, promptPresent bool) (*runtimeSession.LiveReplayPlan, string, bool, error) {
 	if inspection == nil {
+		return nil, requestPrompt, promptPresent, nil
+	}
+	if inspection.Kind == runtimeReplay.CaptureKindTurn {
+		// Turn captures replay the recorded output stream without a caller plan.
 		return nil, requestPrompt, promptPresent, nil
 	}
 	if inspection.LivePlan == nil {

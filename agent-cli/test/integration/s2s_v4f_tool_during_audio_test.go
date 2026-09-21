@@ -235,16 +235,12 @@ func buildToolDuringAudioFixture(t *testing.T, wavPath string, pre, post [][]int
 	serverEvent("response.output_audio_transcript.done", `{"type":"response.output_audio_transcript.done","transcript":"Checking the weather now."}`)
 	serverEvent("response.output_audio.done", `{"type":"response.output_audio.done"}`)
 	serverEvent("response.done", `{"type":"response.done","response":{"id":"`+toolDuringAudioResponseID+`","status":"completed"}}`)
-	toolOutput, err := json.Marshal(map[string]any{
+	clientEvent("conversation.item.create", observabilityJSONPayload(t, map[string]any{
 		"type": "conversation.item.create",
 		"item": map[string]string{
 			"type": "function_call_output", "call_id": "call_weather_1", "output": toolSingleCallResultContent,
 		},
-	})
-	if err != nil {
-		t.Fatalf("marshal weather tool result: %v", err)
-	}
-	clientEvent("conversation.item.create", toolOutput)
+	}))
 	clientEvent("response.create", json.RawMessage(`{"type":"response.create"}`))
 	serverEvent("response.created", `{"type":"response.created","response":{"id":"resp_tool_during_audio_followup"}}`)
 	serverEvent("response.output_text.delta", `{"type":"response.output_text.delta","delta":"Forecast delivered."}`)

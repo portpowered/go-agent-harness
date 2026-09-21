@@ -11,10 +11,245 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	sessiontrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
+
+// RuntimeTrace emits bounded lifecycle observations at the live service boundary.
+type RuntimeTrace struct {
+	observer      sessiontrace.RuntimeObserver
+	clock         session.LiveClock
+	tick          func() uint64
+	sequence      atomic.Uint64
+	inputMu       sync.Mutex
+	input         []byte
+	inputOverflow bool
+	commits       int
+	turns         atomic.Int64
+	accountingMu  sync.Mutex
+	accounting    *metrics.InMemorySink
+	usage         messages.TokenUsage
+	outputInTurn  bool
+	toolDeltas    map[string]struct{}
+}
+
+// NewRuntimeTrace constructs an inert observer for one live invocation.
+func NewRuntimeTrace(observer sessiontrace.RuntimeObserver, clock session.LiveClock, tick func() uint64) *RuntimeTrace {
+	if observer == nil {
+		return nil
+	}
+	accounting, err := metrics.NewInMemorySink()
+	if err != nil {
+		panic(err)
+	}
+	return &RuntimeTrace{observer: observer, clock: clock, tick: tick, accounting: accounting, toolDeltas: make(map[string]struct{})}
+}
+
+func (r *RuntimeTrace) observe(kind sessiontrace.SessionRuntimeObservationKind, payload []byte, turns, commit int, response messages.StreamMessage, clean bool, runErr error) {
+	r.observeFinal(kind, payload, turns, commit, response, clean, runErr, nil)
+}
+
+func (r *RuntimeTrace) observeFinal(kind sessiontrace.SessionRuntimeObservationKind, payload []byte, turns, commit int, response messages.StreamMessage, clean bool, runErr error, finalAccounting *sessiontrace.SessionFinalAccounting) {
+	if r == nil || r.observer == nil {
+		return
+	}
+	tick := r.sequence.Add(1)
+	if r.tick != nil {
+		tick = r.tick()
+	}
+	r.observer.ObserveSessionRuntime(sessiontrace.SessionRuntimeObservation{
+		Kind: kind, Tick: tick, Timestamp: r.now(), Payload: append([]byte(nil), payload...),
+		TurnsCompleted: turns, InputCommit: commit, ResponseID: response.ResponseID,
+		ResponsePurpose: response.ResponsePurpose, StreamID: response.ActorStreamID,
+		LoopPassID: response.LoopPassID, Clean: clean, Error: runtimeTraceError(runErr), FinalAccounting: finalAccounting,
+	})
+}
+
+// Message accounts each normalized stream observation before publishing its
+// related trace events. Usage is accumulated only for completed responses
+// that emitted output, matching the live stream boundary rather than a
+// rendered transcript.
+func (r *RuntimeTrace) Message(msg messages.StreamMessage, interrupted bool) {
+	if r == nil {
+		return
+	}
+	r.accountMessage(msg)
+	r.AudioOutput(msg)
+	r.TurnCompleted(msg, interrupted)
+	if msg.Type == messages.StreamTypeInputItemAdded {
+		r.InputCommit(true)
+	}
+}
+
+func (r *RuntimeTrace) accountMessage(msg messages.StreamMessage) {
+	if r == nil || r.accounting == nil {
+		return
+	}
+	r.accountingMu.Lock()
+	defer r.accountingMu.Unlock()
+	if msg.Type == messages.StreamTypeMessageStart {
+		r.outputInTurn = false
+	}
+	switch value := msg.Value.(type) {
+	case *messages.AudioDeltaValue:
+		direction := streamDirection(msg.Role)
+		r.recordMetric(direction, metrics.ModalityAudio, len(value.Content))
+		r.outputInTurn = r.outputInTurn || direction == metrics.DirectionOutput && len(value.Content) > 0
+	case *messages.TextDeltaValue:
+		direction := streamDirection(msg.Role)
+		r.recordMetric(direction, metrics.ModalityText, len(value.Content))
+		r.outputInTurn = r.outputInTurn || direction == metrics.DirectionOutput && len(value.Content) > 0
+	case *messages.TranscriptDeltaValue:
+		direction := streamDirection(msg.Role)
+		r.recordMetric(direction, metrics.ModalityText, len(value.Text))
+		r.outputInTurn = r.outputInTurn || direction == metrics.DirectionOutput && len(value.Text) > 0
+	case *messages.ImageDeltaValue:
+		direction := streamDirection(msg.Role)
+		r.recordMetric(direction, metrics.ModalityImage, len(value.Content))
+		r.outputInTurn = r.outputInTurn || direction == metrics.DirectionOutput && len(value.Content) > 0
+	case *messages.ToolCallDeltaValue:
+		r.recordMetric(metrics.DirectionOutput, metrics.ModalityTool, len(value.PartialJSON))
+		if len(value.PartialJSON) > 0 {
+			r.outputInTurn = true
+			r.toolDeltas[msg.ToolCallId] = struct{}{}
+		}
+	case *messages.ToolCallEndValue:
+		id := msg.ToolCallId
+		if value.ToolCallID != "" {
+			id = value.ToolCallID
+		}
+		if _, streamed := r.toolDeltas[id]; !streamed {
+			r.recordMetric(metrics.DirectionOutput, metrics.ModalityTool, len(value.Arguments))
+		}
+		delete(r.toolDeltas, id)
+	case *messages.MessageEndValue:
+		usage := value.Usage
+		if r.outputInTurn && usage.PromptTokens >= 0 && usage.CompletionTokens >= 0 && usage.TotalTokens >= 0 && usage.ReasoningTokens >= 0 {
+			r.usage.PromptTokens += usage.PromptTokens
+			r.usage.CompletionTokens += usage.CompletionTokens
+			r.usage.TotalTokens += usage.TotalTokens
+			r.usage.ReasoningTokens += usage.ReasoningTokens
+		}
+		r.outputInTurn = false
+	}
+}
+
+func streamDirection(role messages.Role) metrics.Direction {
+	if role == messages.RoleUser {
+		return metrics.DirectionInput
+	}
+	return metrics.DirectionOutput
+}
+
+func (r *RuntimeTrace) recordMetric(direction metrics.Direction, modality metrics.Modality, byteCount int) {
+	if byteCount > 0 {
+		_ = r.accounting.Record(direction, modality, int64(byteCount))
+	}
+}
+
+func (r *RuntimeTrace) finalAccounting() *sessiontrace.SessionFinalAccounting {
+	if r == nil || r.accounting == nil {
+		return nil
+	}
+	r.accountingMu.Lock()
+	usage := r.usage
+	r.accountingMu.Unlock()
+	return &sessiontrace.SessionFinalAccounting{
+		PromptTokens: uint64(usage.PromptTokens), CompletionTokens: uint64(usage.CompletionTokens),
+		TotalTokens: uint64(usage.TotalTokens), ReasoningTokens: uint64(usage.ReasoningTokens),
+		UsageSemantics: sessiontrace.SessionTokenUsageIncremental, Metrics: r.accounting.Snapshot(),
+	}
+}
+
+func (r *RuntimeTrace) now() time.Time {
+	if r.clock != nil {
+		return r.clock()
+	}
+	return time.Time{}
+}
+
+// AudioOutput copies each normalized response-audio delta into the observer.
+func (r *RuntimeTrace) AudioOutput(msg messages.StreamMessage) {
+	value, ok := msg.Value.(*messages.AudioDeltaValue)
+	if ok && value != nil {
+		r.observe(sessiontrace.SessionRuntimeObservationAudioOutput, value.Content, 0, 0, msg, false, nil)
+	}
+}
+
+// CapturedAudio records the accepted input frame and retains a bounded commit payload.
+func (r *RuntimeTrace) CapturedAudio(frame audio.PCMFrame) {
+	if r == nil {
+		return
+	}
+	payload := codec.EncodePCM16(frame.Samples)
+	r.accountingMu.Lock()
+	r.recordMetric(metrics.DirectionInput, metrics.ModalityAudio, len(payload))
+	r.accountingMu.Unlock()
+	r.inputMu.Lock()
+	if !r.inputOverflow && len(payload) <= codec.MaxPayloadBytes-len(r.input) {
+		r.input = append(r.input, payload...)
+	} else {
+		r.inputOverflow = true
+	}
+	r.inputMu.Unlock()
+	r.observe(sessiontrace.SessionRuntimeObservationAudioInput, payload, 0, 0, messages.StreamMessage{ActorStreamID: frame.StreamID}, false, nil)
+}
+
+// InputCommit emits one provider or caller-owned audio commit boundary.
+func (r *RuntimeTrace) InputCommit(providerCreated bool) {
+	if r == nil {
+		return
+	}
+	r.inputMu.Lock()
+	payload := append([]byte(nil), r.input...)
+	r.input = nil
+	if r.inputOverflow {
+		payload = nil
+		r.inputOverflow = false
+	}
+	commit := 0
+	if !providerCreated {
+		r.commits++
+		commit = r.commits
+	}
+	r.inputMu.Unlock()
+	r.observe(sessiontrace.SessionRuntimeObservationInputCommit, payload, 0, commit, messages.StreamMessage{}, true, nil)
+}
+
+// ResponseCreate records a response-request control accepted by the provider.
+func (r *RuntimeTrace) ResponseCreate(msg messages.StreamMessage) {
+	r.observe(sessiontrace.SessionRuntimeObservationResponseCreate, nil, 0, 0, msg, true, nil)
+}
+
+// TurnCompleted records assistant completion while excluding tool responses.
+func (r *RuntimeTrace) TurnCompleted(msg messages.StreamMessage, interrupted bool) {
+	if r == nil || msg.Type != messages.StreamTypeMessageEnd || msg.Role == messages.RoleTool || interrupted {
+		return
+	}
+	turns := int(r.turns.Add(1))
+	r.observe(sessiontrace.SessionRuntimeObservationTurnCompleted, nil, turns, 0, msg, true, nil)
+}
+
+// Terminal emits the bounded service result after its media workers join.
+func (r *RuntimeTrace) Terminal(turns int, err error) {
+	if r == nil {
+		return
+	}
+	if turns == 0 {
+		turns = int(r.turns.Load())
+	}
+	r.observeFinal(sessiontrace.SessionRuntimeObservationTerminal, nil, turns, 0, messages.StreamMessage{}, err == nil, err, r.finalAccounting())
+}
+
+func runtimeTraceError(err error) string {
+	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return ""
+	}
+	return err.Error()
+}
 
 // Observer is invocation-owned. Recorder admission must remain nonblocking;
 // failures are retained for the lifecycle join without interrupting audio.
