@@ -268,6 +268,58 @@ func TestSelfPlayServiceCallerCancellationStopsBothSides(t *testing.T) {
 	}
 }
 
+func TestSelfPlayServiceReportsBoundedShutdownTimeout(t *testing.T) {
+	releaseConnect := make(chan struct{})
+	var releaseOnce sync.Once
+	unblockConnect := func() { releaseOnce.Do(func() { close(releaseConnect) }) }
+	defer unblockConnect()
+	provider := &testSessionService{
+		silent:          true,
+		connected:       make(chan struct{}, 2),
+		connectEntered:  make(chan struct{}, 2),
+		connectRelease:  releaseConnect,
+		connectReturned: make(chan struct{}, 2),
+	}
+	service := NewService(Dependencies{SessionService: provider, ModelCatalog: testModelCatalog{}, Clock: fastShutdownClock{}})
+	ctx, cancel := context.WithCancel(context.Background())
+	type outcome struct {
+		result selfplay.Result
+		err    error
+	}
+	done := make(chan outcome, 1)
+	go func() {
+		result, err := service.Run(ctx, selfplay.Request{OutputDir: filepath.Join(t.TempDir(), "run"), MaxDuration: 30 * time.Second, MaxTurns: 2})
+		done <- outcome{result: result, err: err}
+	}()
+	for range 2 {
+		select {
+		case <-provider.connectEntered:
+		case <-time.After(time.Second):
+			t.Fatal("both provider connects did not enter")
+		}
+	}
+	cancel()
+	select {
+	case finished := <-done:
+		unblockConnect()
+		if !errors.Is(finished.err, selfplay.ErrShutdownTimeout) {
+			t.Fatalf("Run error = %v, want bounded shutdown timeout", finished.err)
+		}
+		if finished.result.StopReason != selfplay.StopFailure {
+			t.Fatalf("shutdown-timeout result = %#v", finished.result)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Run did not return within the bounded shutdown interval")
+	}
+	for range 2 {
+		select {
+		case <-provider.connectReturned:
+		case <-time.After(time.Second):
+			t.Error("provider connect did not finish after the test gate was released")
+		}
+	}
+}
+
 func TestSelfPlayServiceRejectsInvalidProviderAndBoundsBeforeSessionBuild(t *testing.T) {
 	provider := newTestSessionService(t, "")
 	service := NewService(Dependencies{SessionService: provider, ModelCatalog: testModelCatalog{}, Clock: clock.Real{}})
@@ -311,6 +363,17 @@ func TestSelfPlayServiceRejectsInvalidProviderAndBoundsBeforeSessionBuild(t *tes
 
 type testModelCatalog struct{ allow bool }
 
+type fastShutdownClock struct{}
+
+func (fastShutdownClock) Now() time.Time { return time.Now() }
+
+func (fastShutdownClock) NewTimer(duration time.Duration) clock.Timer {
+	if duration == 5*time.Second {
+		duration = 25 * time.Millisecond
+	}
+	return clock.Real{}.NewTimer(duration)
+}
+
 func (c testModelCatalog) RealtimeModels(string) []providers.RealtimeModel { return nil }
 func (c testModelCatalog) SupportedRealtimeModelIDs(string) []string       { return nil }
 func (c testModelCatalog) LookupRealtimeModel(provider, model string) (providers.RealtimeModel, bool) {
@@ -321,12 +384,15 @@ func (c testModelCatalog) LookupRealtimeModel(provider, model string) (providers
 }
 
 type testSessionService struct {
-	mu        sync.Mutex
-	configs   []providers.SessionConfig
-	sessions  []*testSession
-	failure   string
-	silent    bool
-	connected chan struct{}
+	mu              sync.Mutex
+	configs         []providers.SessionConfig
+	sessions        []*testSession
+	failure         string
+	silent          bool
+	connected       chan struct{}
+	connectEntered  chan struct{}
+	connectRelease  <-chan struct{}
+	connectReturned chan struct{}
 }
 
 type firstFailureSessionService struct{ built int }
@@ -379,7 +445,10 @@ func (s *testSessionService) BuildSession(_ context.Context, config providers.Se
 	s.configs = append(s.configs, config)
 	s.sessions = append(s.sessions, session)
 	s.mu.Unlock()
-	return testInferencer{session: session, connected: s.connected, failure: s.failure}, nil
+	return testInferencer{
+		session: session, connected: s.connected, failure: s.failure,
+		connectEntered: s.connectEntered, connectRelease: s.connectRelease, connectReturned: s.connectReturned,
+	}, nil
 }
 
 func (s *testSessionService) snapshot() ([]providers.SessionConfig, []*testSession) {
@@ -389,12 +458,25 @@ func (s *testSessionService) snapshot() ([]providers.SessionConfig, []*testSessi
 }
 
 type testInferencer struct {
-	session   *testSession
-	connected chan struct{}
-	failure   string
+	session         *testSession
+	connected       chan struct{}
+	failure         string
+	connectEntered  chan struct{}
+	connectRelease  <-chan struct{}
+	connectReturned chan struct{}
 }
 
 func (i testInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
+	if i.connectEntered != nil {
+		i.connectEntered <- struct{}{}
+	}
+	if i.connectRelease != nil {
+		defer func() { i.connectReturned <- struct{}{} }()
+		<-i.connectRelease
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+	}
 	if i.failure != "" && !i.session.receive.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeError, Value: messages.NewErrorValue(i.failure)}) {
 		return nil, ctx.Err()
 	}

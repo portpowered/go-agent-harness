@@ -39,7 +39,16 @@ func (s *Service) runConversation(runCtx, callerCtx context.Context, cancel cont
 	terminal := stop.snapshot()
 	shutdownErr := joinWorkers(source, workers.wait, &pumpWait, workers.results, &completion)
 	recordSideTerminals(request.APIKey, roles, terminal, shutdownErr, completion, evidence)
-	return makeConversationResult(terminal, roles, evidence), errors.Join(terminal.err, shutdownErr)
+	return makeConversationResult(terminal, roles, evidence), errors.Join(terminal.err, shutdownErr, sideShutdownError(completion))
+}
+
+func sideShutdownError(completion sideCompletion) error {
+	for _, err := range completion.errors {
+		if errors.Is(err, selfplay.ErrShutdownTimeout) {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Service) startSideWorkers(runCtx, callerCtx context.Context, source platformclock.TimerSource, inferencers [2]messages.SessionInferencer, bridges [2]*pcmBridge, roles [2]selfplay.SideRole, stop *stopState, evidence *evidence) sideWorkers {
