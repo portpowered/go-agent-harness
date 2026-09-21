@@ -88,15 +88,7 @@ func (f *Factory) BindRTC(ctx context.Context, request devices.RTCBindingRequest
 	if !inputSelected && !outputSelected {
 		return nil, nil
 	}
-	registry := f.registry
-	if endpoint := strings.TrimSpace(request.RemoteEndpoint); endpoint != "" {
-		var err error
-		registry, err = devicegw.NewRemoteDeviceRegistry(endpoint)
-		if err != nil {
-			return nil, fmt.Errorf("connect remote audio device server: %w", err)
-		}
-	}
-	return rtc.NewFactory(registry).BindRTC(ctx, request)
+	return rtc.NewFactory(f.registry).BindRTC(ctx, request)
 }
 
 func (f *Factory) validateRequest(ctx context.Context, request devices.Request) error {

@@ -392,6 +392,17 @@ func TestFactoryRejectsInvalidRemoteEndpoint(t *testing.T) {
 	}
 }
 
+func TestFactoryBindRTCRejectsInvalidRemoteEndpoint(t *testing.T) {
+	factory := NewFactory(devicegw.NewPlatformDeviceRegistry(), mixer.DefaultFormat())
+	_, err := factory.BindRTC(context.Background(), devices.RTCBindingRequest{
+		InputPresent:   true,
+		RemoteEndpoint: "192.0.2.10:19090",
+	})
+	if !errors.Is(err, devices.ErrInvalidRemoteEndpoint) {
+		t.Fatalf("BindRTC remote error = %v, want ErrInvalidRemoteEndpoint", err)
+	}
+}
+
 type registryStub struct {
 	inner  devicegw.DeviceRegistry
 	failID devicegw.DeviceID
