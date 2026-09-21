@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/internal/catalog"
+	runtimeRecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
+	recordingwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/wire"
+	replaywire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	llmproviders "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	"io"
@@ -286,7 +288,7 @@ func TestBuildProviderHTTPRuntime_ReplayModePropagatesFixtureErrors(t *testing.T
 // production graph is now owned by the provider service.
 type providerHTTPTestRuntime struct {
 	Client   *http.Client
-	Recorder *gwtesting.RecordRoundTripper
+	Recorder runtimeRecording.HTTPRecorder
 }
 
 func buildProviderHTTPRuntime(cfg *providers.Config, transports ...http.RoundTripper) (providerHTTPTestRuntime, error) {
@@ -294,19 +296,19 @@ func buildProviderHTTPRuntime(cfg *providers.Config, transports ...http.RoundTri
 	if len(transports) != 0 {
 		client.Transport = transports[0]
 	}
-	invocation, recorder, err := New(client, nil, clock.Real{}, nil, catalog.New(), nil).httpRuntime(*cfg)
+	invocation, recorder, err := NewWithReplay(
+		client,
+		nil,
+		clock.Real{},
+		recordingwire.NewService(clock.Real{}),
+		catalog.New(),
+		nil,
+		replaywire.NewService(),
+	).httpRuntime(*cfg)
 	if err != nil {
 		return providerHTTPTestRuntime{}, err
 	}
-	var concrete *gwtesting.RecordRoundTripper
-	if recorder != nil {
-		var ok bool
-		concrete, ok = recorder.(*gwtesting.RecordRoundTripper)
-		if !ok {
-			return providerHTTPTestRuntime{}, fmt.Errorf("unexpected recorder type %T", recorder)
-		}
-	}
-	return providerHTTPTestRuntime{Client: invocation.httpClient, Recorder: concrete}, nil
+	return providerHTTPTestRuntime{Client: invocation.httpClient, Recorder: recorder}, nil
 }
 func closeHTTPResponseForTest(t *testing.T, response *http.Response) {
 	t.Helper()
@@ -316,7 +318,15 @@ func closeHTTPResponseForTest(t *testing.T, response *http.Response) {
 }
 
 func TestHTTPRecordingPreservesProviderCapabilities(t *testing.T) {
-	service := New(nil, nil, clock.Real{}, nil, catalog.New(), nil)
+	service := NewWithReplay(
+		nil,
+		nil,
+		clock.Real{},
+		recordingwire.NewService(clock.Real{}),
+		catalog.New(),
+		nil,
+		replaywire.NewService(),
+	)
 	cfg := providers.Config{Provider: "openai", Model: "model", APIKey: "configured-test-key"}
 	plain, err := service.Build(t.Context(), cfg)
 	if err != nil {

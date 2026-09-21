@@ -6,18 +6,18 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
+	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	llmproviders "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
-	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 type capturedProvider struct {
 	llmproviders.Provider
-	recorder recording.Writer
+	recorder recording.HTTPRecorder
 }
 
 func (p *capturedProvider) FlushToFile(path string) error { return p.recorder.FlushToFile(path) }
 
-func (s *Service) httpRuntime(cfg providers.Config) (*Service, recording.Writer, error) {
+func (s *Service) httpRuntime(cfg providers.Config) (*Service, recording.HTTPRecorder, error) {
 	client := &http.Client{}
 	if s.httpClient != nil {
 		*client = *s.httpClient
@@ -25,9 +25,13 @@ func (s *Service) httpRuntime(cfg providers.Config) (*Service, recording.Writer,
 	if client.Transport == nil {
 		client.Transport = http.DefaultTransport
 	}
-	var recorder recording.Writer
+	var recorder recording.HTTPRecorder
 	if cfg.ReplayPath != "" {
-		replay, err := gatewaytesting.NewReplayRoundTripper(cfg.ReplayPath)
+		replayService, ok := s.replay.(runtimeReplay.HTTPReplayService)
+		if !ok {
+			return nil, nil, fmt.Errorf("replay service does not provide HTTP replay")
+		}
+		replay, err := replayService.OpenHTTPReplay(cfg.ReplayPath)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to load replay captures: %w", err)
 		}
@@ -37,7 +41,14 @@ func (s *Service) httpRuntime(cfg providers.Config) (*Service, recording.Writer,
 		if transport == nil {
 			transport = http.DefaultTransport
 		}
-		capture := gatewaytesting.NewRecordRoundTripper(transport)
+		recordingService, ok := s.recording.(recording.HTTPRecordingService)
+		if !ok {
+			return nil, nil, fmt.Errorf("recording service does not provide HTTP recording")
+		}
+		capture, err := recordingService.OpenHTTPRecorder(transport)
+		if err != nil {
+			return nil, nil, fmt.Errorf("open HTTP recording: %w", err)
+		}
 		recorder = capture
 		client.Transport = capture
 	}

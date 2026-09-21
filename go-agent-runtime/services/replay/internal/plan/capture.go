@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
@@ -38,6 +39,10 @@ type captureReplay struct {
 
 // New constructs an inert replay planner.
 func New() *Service { return &Service{} }
+
+func (*Service) OpenHTTPReplay(path string) (http.RoundTripper, error) {
+	return replaycapture.NewHTTPReplay(path)
+}
 
 func (s *Service) Replay(ctx context.Context, path string) (replay.CaptureReplay, error) {
 	if err := replayContextError(ctx); err != nil {
