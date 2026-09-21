@@ -47,8 +47,8 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_recording_test.go",
-      "value": 778,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "value": 689,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; C229 removed four pinned-staticcheck U1000 helpers, reducing this file exactly from 778 to 689 lines; retain only through the owning package migration.",
       "phase": "P0"
     },
     {
