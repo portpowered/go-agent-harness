@@ -188,6 +188,25 @@ func TestSelfPlayServiceRedactsProviderFailureFromReturnedEvidence(t *testing.T)
 	}
 }
 
+func TestSelfPlayServicePreservesFirstMeaningfulFailure(t *testing.T) {
+	service := NewService(Dependencies{
+		SessionService: &firstFailureSessionService{},
+		ModelCatalog:   testModelCatalog{},
+		Clock:          clock.Real{},
+	})
+	result, err := service.Run(context.Background(), selfplay.Request{
+		OutputDir:   filepath.Join(t.TempDir(), "run"),
+		MaxDuration: 10 * time.Second,
+		MaxTurns:    1,
+	})
+	if err == nil || !strings.Contains(err.Error(), "primary customer failure") || strings.Contains(err.Error(), "secondary assistant failure") {
+		t.Fatalf("Run error = %v, want only the first customer failure", err)
+	}
+	if result.StopReason != selfplay.StopFailure || !strings.Contains(result.Customer.TerminalError, "primary customer failure") {
+		t.Fatalf("first failure result = %#v", result)
+	}
+}
+
 func TestSelfPlayServiceMaxDurationStopsOpenSessionsCleanly(t *testing.T) {
 	provider := newTestSessionService(t, "")
 	provider.silent = true
@@ -308,6 +327,31 @@ type testSessionService struct {
 	failure   string
 	silent    bool
 	connected chan struct{}
+}
+
+type firstFailureSessionService struct{ built int }
+
+func (s *firstFailureSessionService) BuildSession(_ context.Context, _ providers.SessionConfig) (messages.SessionInferencer, error) {
+	side := s.built
+	s.built++
+	return firstFailureInferencer{side: side, session: &testSession{receive: messages.NewTypedBuffer[messages.StreamMessage](128)}}, nil
+}
+
+type firstFailureInferencer struct {
+	side    int
+	session *testSession
+}
+
+func (i firstFailureInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
+	if i.side == 0 {
+		failure := messages.StreamMessage{Type: messages.StreamTypeError, Value: messages.NewErrorValue("primary customer failure")}
+		if !i.session.receive.Write(ctx, failure) {
+			return nil, ctx.Err()
+		}
+		return i.session, nil
+	}
+	<-ctx.Done()
+	return nil, errors.New("secondary assistant failure")
 }
 
 func newTestSessionService(t *testing.T, failure string) *testSessionService {
