@@ -5228,3 +5228,33 @@ handoff sequence. No gate completion is claimed.
   every planned C251 local functional, integration, race, hermetic, embed,
   Wire, absence, adapter, ancestry, and diff gate on the resulting SHA before
   any push or PR creation.
+
+## C251 exact-candidate architecture preflight checkpoint — 2026-09-21
+
+- Candidate `53fa72b0a2f4758b595bb56d128e234ac9bd9a43` is clean and retains the
+  required ancestry. All fourteen planned agentruntime production files are
+  absent; `livehost/shutdown_adapter.go` is the sole adapter at 59 lines. The
+  planned duplicate-policy symbol scan returns no matches.
+- `rtk make prepush` reaches `verify-architecture`: formatting passes, then the
+  architecture gate reports 241 findings across 213 packages. Categories are
+  baseline-drift 91, baseline-stale 36, cognitive-complexity 36, file-lines
+  20, mutable-global 19, cyclomatic-complexity 17, function-lines 6,
+  forbidden-import 4, peer-private-import 4, function-statements 3,
+  package-files 3, root-constructor 1, and root-exported-function 1. The
+  findings include actionable C251-owned service code, including
+  `session/internal/live/duration_runner.go` complexity/length violations and
+  `sessionduration` contract, admission, completion, drain, and runner size or
+  complexity violations; the report also contains findings in other peer
+  service and CLI areas. No baseline waiver or hosted handoff is claimed.
+- The older `80d573c` checkpoint does not provide a comparable size report:
+  its `make architecture-size-check` stops at Go type loading because the
+  agentruntime symbols needed by the partial retirement are unresolved. The
+  current gate output must therefore be repaired and rerun on the buildable
+  exact candidate, beginning with the owned duration-runner/service findings.
+- No push, PR, or CI handoff exists. Exact next action: refactor the C251-owned
+  duration runner and service code to resolve their reported architecture
+  findings without baseline increases or test relocation, rerun the targeted
+  service functional/race/Wire checks, then rerun `make prepush` and the full
+  planned C251 local gate on the new clean commit. Keep all remaining
+  cross-service findings explicit for ownership review; do not submit a red
+  candidate.
