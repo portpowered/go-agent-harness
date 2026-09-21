@@ -9,6 +9,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -347,6 +348,19 @@ func TestServiceOutputSafety(t *testing.T) {
 	}
 	if err := service.ValidateOutput(filepath.Join(occupied, "new-bundle")); err != nil {
 		t.Fatalf("new output validation: %v", err)
+	}
+	unwritable := filepath.Join(t.TempDir(), "unwritable")
+	if err := os.Mkdir(unwritable, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if runtime.GOOS != "windows" {
+		if err := os.Chmod(unwritable, 0o500); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = os.Chmod(unwritable, 0o700) })
+		if err := service.ValidateOutput(unwritable); !errors.Is(err, roomevidence.ErrInvalidOutput) {
+			t.Fatalf("unwritable output error = %v, want invalid output", err)
+		}
 	}
 	redirected := filepath.Join(t.TempDir(), "redirected")
 	outside := t.TempDir()

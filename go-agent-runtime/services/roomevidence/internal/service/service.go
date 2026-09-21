@@ -244,6 +244,7 @@ func validateOutputTarget(destination string) error {
 		return fmt.Errorf("%w: output path is unsafe: %w", roomevidence.ErrInvalidOutput, err)
 	}
 	info, err := os.Lstat(destination)
+	probeDirectory := parent
 	if err == nil {
 		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
 			return fmt.Errorf("%w: target %q must be a non-symlink directory", roomevidence.ErrInvalidOutput, destination)
@@ -255,21 +256,22 @@ func validateOutputTarget(destination string) error {
 		if len(entries) != 0 {
 			return fmt.Errorf("%w: %q is not safe: it must be empty", roomevidence.ErrOutputNotEmpty, destination)
 		}
+		probeDirectory = destination
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("inspect room evidence output target %q: %w", destination, err)
 	}
-	probe, err := os.CreateTemp(parent, ".room-evidence-probe-")
+	probe, err := os.CreateTemp(probeDirectory, ".room-evidence-probe-")
 	if err != nil {
-		return fmt.Errorf("probe room evidence output target %q: %w", destination, err)
+		return fmt.Errorf("%w: probe room evidence output target %q: %w", roomevidence.ErrInvalidOutput, destination, err)
 	}
 	probePath := probe.Name()
 	closeErr := probe.Close()
 	removeErr := os.Remove(probePath)
 	if closeErr != nil {
-		return fmt.Errorf("close room evidence output probe %q: %w", destination, closeErr)
+		return fmt.Errorf("%w: close room evidence output probe %q: %w", roomevidence.ErrInvalidOutput, destination, closeErr)
 	}
 	if removeErr != nil {
-		return fmt.Errorf("remove room evidence output probe %q: %w", destination, removeErr)
+		return fmt.Errorf("%w: remove room evidence output probe %q: %w", roomevidence.ErrInvalidOutput, destination, removeErr)
 	}
 	return nil
 }
