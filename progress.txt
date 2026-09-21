@@ -5861,3 +5861,63 @@ candidate before pushing it and handing it to SCRIPT CI.
   reduce the sole adapter to stateless translation within 300 lines. Run
   `make prepush` and every planned C271-05/C271-06 gate on the same clean exact
   SHA before any push or SCRIPT handoff.
+
+### C271 focused service and live-release checkpoint — 2026-09-21
+
+- Re-read `factory/docs/operating-policy.md`,
+  `factory/docs/implementation-handoff.md`,
+  `factory/docs/meta-planner-handoff.md`, the admitted manifest, the task-root
+  `prd.json`, and this progress history. Ran `project-control.py verify-work
+  --type task --name audio-runtime-c271-recover-selfplay-retirement` from
+  `FACTORY_ROOT`; it returned `admitted` for `audio-runtime/audio-runtime-v1`.
+  The task-root PRD branch is exactly
+  `codex/audio-runtime-c271-recover-selfplay-retirement`.
+- Read canonical `~default` Work. C271 `work-task-106` remains `init` /
+  `PROCESSING`, with no C271 review. C248 `work-task-45` and C269
+  `work-task-101` are both still `init` / `PROCESSING`; no C248 or C269 review
+  Work is recorded. Their worktrees remain protected and unreleased: C248 is
+  at `38b72e0a0b42f88c3d6672793cb0a5b6004251b2` with six modified integration
+  tests; C269 is at `889b1a49adaa8840f75a283f75cee1faff8baba1` with only a
+  progress-log modification. C271 did not mutate either worktree or any shared
+  caller seam.
+- Read the latest concluded feedback, C259 `work-review-78` (PR #535 at
+  `a187b9f13c699c049f25add3bd71001fe2c0d529`). It requests bounded manifest
+  and timeline admission, public recorder-failure degradation coverage,
+  integrated room replay round-trip coverage, and exact-head preflight. These
+  room-evidence findings identify no C271 self-play-specific repair.
+- Fetched `origin main`; current `origin/main` is
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`. C271 HEAD before this progress
+  update was clean at `bfcf9310ff939916a6a624d759d64a4146aa0c69`; current main
+  and startup integration `8bdafc7f947a3a2c9856220abdc539437035bd21` are
+  ancestors, while required C249 `86a1eed17b099d510b39ce3d3b4ee7d8f7998881`
+  is not. The C249 worktree remains clean at that exact SHA; no reset, merge,
+  or rewrite was performed.
+- Re-ran the disjoint focused service checks on the unchanged C271 source:
+  `rtk go test -count=1 -timeout=180s
+  ./go-agent-runtime/services/selfplay/...` passed 26 tests / 3 packages;
+  `rtk go test -race -count=1 -timeout=180s
+  ./go-agent-runtime/services/selfplay/...` passed 26 / 3; and
+  `rtk go test -count=10 -timeout=180s
+  ./go-agent-runtime/services/selfplay/... -run
+  '(Cancel|Duration|Shutdown|Stop|Failure)'` passed 180 / 3. The production
+  service boundary scan found no CLI import, legacy-runtime import, or
+  `func init` match.
+- The owned legacy cluster is unchanged: `selfplay_service.go` (53 lines),
+  `session_self_play.go` (641), and `session_self_play_evidence.go` (716),
+  totaling 3 production files / 1,410 lines. The obsolete projection is 68
+  lines. The 85-line `session_self_play.go` transport adapter still imports
+  that projection for defaults/personas/opening-seed policy, so it is not a
+  stateless adapter. The production census still finds legacy service,
+  session, model, and evidence behavior plus the projection, Wire provider,
+  root generated Wire, transport session, observability, and self-play command
+  callers. No caller cutover or owned-file deletion has occurred.
+- No production source changed. No `make prepush`, PR, push, or SCRIPT CI
+  handoff is claimed because both exact shared release dependencies remain
+  unavailable and the caller cutover/deletion is incomplete. Exact next action:
+  retain C271 at `CONTINUE`; refresh C248/C269 canonical release state while
+  keeping their seams untouched. After both reviewed/guarded releases, fetch
+  current main again, reconcile C249/C220 and peer behavior additively, finish
+  every caller cutover, remove the projection/helper and all three owned legacy
+  files, verify the sole stateless adapter is at most 300 lines, then run
+  `make prepush` and every C271-05/C271-06 local gate on the same clean exact
+  SHA before push and SCRIPT handoff.
