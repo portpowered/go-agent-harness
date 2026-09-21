@@ -2,12 +2,15 @@ package recording
 
 import (
 	"encoding/json"
-	"net/http"
 )
 
 // HTTPBody preserves the portable capture format's plain-string body encoding
 // while retaining the byte-oriented contract used by HTTP callers.
 type HTTPBody []byte
+
+// HTTPHeaders is the portable header projection used by the capture format.
+// It keeps the service contract independent from net/http.
+type HTTPHeaders map[string][]string
 
 func (b HTTPBody) MarshalJSON() ([]byte, error) {
 	return json.Marshal(string(b))
@@ -36,21 +39,20 @@ type HTTPCapturePair struct {
 type HTTPCapturedRequest struct {
 	Method  string      `json:"method"`
 	URL     string      `json:"url"`
-	Headers http.Header `json:"headers"`
+	Headers HTTPHeaders `json:"headers"`
 	Body    HTTPBody    `json:"body,omitempty"`
 }
 
 type HTTPCapturedResponse struct {
 	StatusCode int         `json:"status_code"`
 	Status     string      `json:"status"`
-	Headers    http.Header `json:"headers"`
+	Headers    HTTPHeaders `json:"headers"`
 	Body       HTTPBody    `json:"body,omitempty"`
 }
 
 // HTTPRecorder is the recording-owned HTTP transport. It observes response
 // consumption and publishes only after every request and response is complete.
 type HTTPRecorder interface {
-	http.RoundTripper
 	Writer
 	Captures() []HTTPCapturePair
 }
@@ -59,5 +61,8 @@ type HTTPRecorder interface {
 // record ordinary HTTP request/response traffic. Keeping it separate avoids
 // enlarging the required embeddable recording contract for custom services.
 type HTTPRecordingService interface {
-	OpenHTTPRecorder(http.RoundTripper) (HTTPRecorder, error)
+	// OpenHTTPRecorder accepts the host transport as an opaque value so this
+	// contract remains free of effectful net/http imports. The provider adapter
+	// validates the concrete transport before installing it on an HTTP client.
+	OpenHTTPRecorder(any) (HTTPRecorder, error)
 }

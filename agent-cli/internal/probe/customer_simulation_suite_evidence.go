@@ -88,7 +88,7 @@ type customerSimulationSessionLogEntry struct {
 	} `json:"response"`
 }
 
-func readCustomerSimulationRecording(recordRoot string, scenario CustomerScenario) (customerSimulationRecordingFacts, error) {
+func readCustomerSimulationRecording(recordRoot string, scenario CustomerScenario, replayService runtimeReplay.StreamMessageCodec) (customerSimulationRecordingFacts, error) {
 	var facts customerSimulationRecordingFacts
 	var sessionLogResponses []customerSimulationResponse
 	var failures []error
@@ -109,7 +109,7 @@ func readCustomerSimulationRecording(recordRoot string, scenario CustomerScenari
 		failures = append(failures, fmt.Errorf("read session-log: %v", err))
 	}
 
-	streamFacts, err := readCustomerSimulationStream(recordRoot, scenario, len(sessionLogResponses))
+	streamFacts, err := readCustomerSimulationStream(recordRoot, scenario, len(sessionLogResponses), replayService)
 	if err != nil {
 		failures = append(failures, err)
 	}
@@ -133,7 +133,10 @@ func readCustomerSimulationRecording(recordRoot string, scenario CustomerScenari
 	return facts, errors.Join(failures...)
 }
 
-func readCustomerSimulationStream(recordRoot string, scenario CustomerScenario, knownResponses int) (customerSimulationRecordingFacts, error) {
+func readCustomerSimulationStream(recordRoot string, scenario CustomerScenario, knownResponses int, replayService runtimeReplay.StreamMessageCodec) (customerSimulationRecordingFacts, error) {
+	if replayService == nil {
+		return customerSimulationRecordingFacts{}, errors.New("customer simulation replay service is required")
+	}
 	var facts customerSimulationRecordingFacts
 	path := filepath.Join(recordRoot, "agent.transcript.jsonl")
 	file, err := os.Open(path)
@@ -165,7 +168,7 @@ func readCustomerSimulationStream(recordRoot string, scenario CustomerScenario, 
 		if parseErr == nil && !base.IsZero() && wallAt.After(base) {
 			at = wallAt.Sub(base)
 		}
-		parsed, keep, err := parseCustomerSimulationRecord(record, at, wallAt, completedToolIDs)
+		parsed, keep, err := parseCustomerSimulationRecord(record, at, wallAt, completedToolIDs, replayService)
 		if err != nil {
 			return facts, err
 		}
@@ -605,14 +608,14 @@ func toolObservationIDsNotComplete(tools []ToolObservation) []string {
 	return result
 }
 
-func parseCustomerSimulationRecord(record transcript.Record, at time.Duration, wallAt time.Time, completedToolIDs map[string]time.Duration) (customerSimulationRecordedMessage, bool, error) {
+func parseCustomerSimulationRecord(record transcript.Record, at time.Duration, wallAt time.Time, completedToolIDs map[string]time.Duration, replayService runtimeReplay.StreamMessageCodec) (customerSimulationRecordedMessage, bool, error) {
 	parsed := customerSimulationRecordedMessage{at: at, wallAt: wallAt, dir: record.Direction}
 	if record.Stream == transcript.StreamRuntimeAudio {
 		media, err := decodeCustomerSimulationMedia(record)
 		parsed.media = media
 		return parsed, media != nil, err
 	}
-	message, err := runtimeReplay.DecodeStreamMessage(record.Payload)
+	message, err := replayService.DecodeStreamMessage(record.Payload)
 	if err == nil {
 		parsed.message = message
 		return parsed, true, nil

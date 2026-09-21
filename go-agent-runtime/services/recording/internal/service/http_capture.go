@@ -104,9 +104,9 @@ func (t *httpRecorder) Captures() []recording.HTTPCapturePair {
 func (t *httpRecorder) copyCapturesLocked() []recording.HTTPCapturePair {
 	out := make([]recording.HTTPCapturePair, len(t.captures))
 	for index, pair := range t.captures {
-		pair.Request.Headers = pair.Request.Headers.Clone()
+		pair.Request.Headers = cloneHTTPHeaders(pair.Request.Headers)
 		pair.Request.Body = append(recording.HTTPBody(nil), pair.Request.Body...)
-		pair.Response.Headers = pair.Response.Headers.Clone()
+		pair.Response.Headers = cloneHTTPHeaders(pair.Response.Headers)
 		pair.Response.Body = append(recording.HTTPBody(nil), pair.Response.Body...)
 		out[index] = pair
 	}
@@ -132,13 +132,24 @@ func captureHTTPRequest(req *http.Request) (recording.HTTPCapturedRequest, error
 	}, nil
 }
 
-func captureHTTPHeaders(headers http.Header) http.Header {
-	result := headers.Clone()
+func captureHTTPHeaders(headers http.Header) recording.HTTPHeaders {
+	result := make(recording.HTTPHeaders, len(headers))
+	for name, values := range headers {
+		result[name] = append([]string(nil), values...)
+	}
 	for name := range result {
 		switch strings.ToLower(name) {
 		case "authorization", "proxy-authorization", "x-api-key", "api-key", "cookie", "set-cookie":
 			delete(result, name)
 		}
+	}
+	return result
+}
+
+func cloneHTTPHeaders(headers recording.HTTPHeaders) recording.HTTPHeaders {
+	result := make(recording.HTTPHeaders, len(headers))
+	for name, values := range headers {
+		result[name] = append([]string(nil), values...)
 	}
 	return result
 }
@@ -179,7 +190,11 @@ func (t *httpRecorder) finishBodyLocked(index int, err error) {
 	}
 }
 
-func (*Service) OpenHTTPRecorder(transport http.RoundTripper) (recording.HTTPRecorder, error) {
+func (*Service) OpenHTTPRecorder(value any) (recording.HTTPRecorder, error) {
+	transport, ok := value.(http.RoundTripper)
+	if !ok {
+		return nil, errors.New("HTTP recording requires an http.RoundTripper")
+	}
 	return newHTTPRecorder(transport), nil
 }
 

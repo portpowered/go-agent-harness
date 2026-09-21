@@ -19,6 +19,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
+	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
@@ -70,9 +71,10 @@ type CustomerSimulationCommand struct {
 	ShutdownGrace       time.Duration
 	ReportPath          string
 
-	globalFlags *flags.GlobalFlags
-	run         CustomerSimulationSuiteRunner
-	validator   probe.CustomerSimulationValidatorAgent
+	globalFlags   *flags.GlobalFlags
+	run           CustomerSimulationSuiteRunner
+	validator     probe.CustomerSimulationValidatorAgent
+	ReplayService runtimeReplay.StreamMessageCodec
 }
 
 // NewCustomerSimulationCommand constructs the opt-in customer simulation
@@ -234,6 +236,7 @@ func (c *CustomerSimulationCommand) runCommand(cmd *cobra.Command, positional []
 	result, runErr := runner(cmd.Context(), probe.CustomerSimulationSuiteOptions{
 		BinaryPath: binaryPath, RunRoot: c.RunRoot, Provider: c.Provider, Model: c.Model, BaseURL: c.BaseURL, APIKey: apiKey, SystemPrompt: c.SystemPrompt,
 		Runs: runs, Validator: validator, ValidatorTimeout: c.ValidatorTimeout, MaxDuration: c.MaxDuration, FrameDuration: c.FrameDuration, SilenceDuration: c.SilenceDuration, ShutdownGrace: c.ShutdownGrace,
+		ReplayService: c.ReplayService,
 	})
 	if writeErr := writeCustomerSimulationReport(cmd, c.ReportPath, result, apiKey, validatorAPIKey); writeErr != nil {
 		return writeErr

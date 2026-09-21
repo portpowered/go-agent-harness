@@ -73,7 +73,7 @@ func replayResponse(req *http.Request, captured recording.HTTPCapturedResponse) 
 	response := &http.Response{
 		Status:        captured.Status,
 		StatusCode:    captured.StatusCode,
-		Header:        captured.Headers.Clone(),
+		Header:        http.Header(captured.Headers).Clone(),
 		Body:          io.NopCloser(bytes.NewReader(captured.Body)),
 		Request:       req,
 		Proto:         "HTTP/1.1",

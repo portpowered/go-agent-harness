@@ -7,9 +7,9 @@ package plan
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
@@ -40,8 +40,16 @@ type captureReplay struct {
 // New constructs an inert replay planner.
 func New() *Service { return &Service{} }
 
-func (*Service) OpenHTTPReplay(path string) (http.RoundTripper, error) {
+func (*Service) OpenHTTPReplay(path string) (any, error) {
 	return replaycapture.NewHTTPReplay(path)
+}
+
+func (*Service) EncodeStreamMessage(message messages.StreamMessage) ([]byte, error) {
+	return replaycapture.MarshalStreamMessage(message)
+}
+
+func (*Service) DecodeStreamMessage(data []byte) (messages.StreamMessage, error) {
+	return replaycapture.UnmarshalStreamMessage(json.RawMessage(data))
 }
 
 func (s *Service) Replay(ctx context.Context, path string) (replay.CaptureReplay, error) {

@@ -15,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 )
 
 const (
@@ -68,6 +70,7 @@ type CustomerSimulationSuiteOptions struct {
 	FrameDuration     time.Duration
 	SilenceDuration   time.Duration
 	ShutdownGrace     time.Duration
+	ReplayService     runtimeReplay.StreamMessageCodec
 	CaptureOutputSink io.Writer
 	CaptureErrorSink  io.Writer
 }
@@ -476,7 +479,7 @@ func runCustomerSimulation(ctx context.Context, suiteRoot string, index int, spe
 		checkpointMu.Unlock()
 	}
 
-	recordingFacts, recordingErr := readCustomerSimulationRecording(recordRoot, spec.Scenario)
+	recordingFacts, recordingErr := readCustomerSimulationRecording(recordRoot, spec.Scenario, options.ReplayService)
 	transcripts := buildCustomerSimulationTranscripts(spec.Scenario, script, duplexResult, recordingFacts)
 	audioEvents := customerSimulationAudioEvents(spec.Scenario, duplexResult, options.FrameDuration, recordingFacts)
 	toolObservations := recordingFacts.tools

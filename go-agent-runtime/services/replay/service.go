@@ -249,6 +249,13 @@ type CaptureReplay interface {
 	Close() error
 }
 
+// StreamMessageCodec is the replay-owned codec for one canonical transcript
+// message. It exposes no capture files, cursors, or mutable replay state.
+type StreamMessageCodec interface {
+	EncodeStreamMessage(messages.StreamMessage) ([]byte, error)
+	DecodeStreamMessage([]byte) (messages.StreamMessage, error)
+}
+
 // IsRealtime reports whether the admitted capture can drive a continuous
 // provider session.
 func (i CaptureInspection) IsRealtime() bool { return i.Kind == CaptureKindRealtime }
@@ -256,6 +263,7 @@ func (i CaptureInspection) IsRealtime() bool { return i.Kind == CaptureKindRealt
 // Service constructs bounded replay actions from explicit capture artifacts.
 // Execution and device attachment remain owned by the session service.
 type Service interface {
+	StreamMessageCodec
 	// InspectCapture validates and classifies a raw capture or finalized
 	// recording directory, returning provider metadata and any self-driving
 	// live plan. The returned paths are safe for the provider replay adapter.
