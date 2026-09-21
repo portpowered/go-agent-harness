@@ -1102,39 +1102,54 @@ func (m *roomHumanCaptureMedia) WriteFrame(ctx context.Context, frame audio.PCMF
 		_ = m.evidence.observeSentAudio(pcm)
 	}
 	sourceRate := m.runtime.mixer.Format().SampleRate
+	return m.fanOutPCM(ctx, participantID, pcm, sourceRate)
+}
+
+func (m *roomHumanCaptureMedia) fanOutPCM(ctx context.Context, participantID string, pcm []byte, sourceRate int) error {
 	for _, target := range m.coordinator.activeExcept(participantID) {
-		if target == nil || target.mixer == nil {
-			continue
-		}
-		targetPCM := pcm
-		if target.mixer.Format().SampleRate != sourceRate {
-			if m.opts.AudioService == nil {
-				return errors.New("audio service is required to convert human room input")
-			}
-			convertedPCM, err := m.opts.AudioService.ConvertPCM16(ctx, audioio.PCM16Request{
-				PCM: pcm, SourceRate: sourceRate, TargetRate: target.mixer.Format().SampleRate,
-				SourceChannels: 1, TargetChannels: 1,
-			})
-			if err != nil {
-				failure := roomParticipantFailure(participantID, fmt.Errorf("convert human input audio for %s: %w", target.plan.manifest.ID, err), m.secrets)
-				m.coordinator.failParticipant(participantID, failure)
-				return failure
-			}
-			targetPCM = convertedPCM
-		}
-		if err := routeRoomPeerPCM(ctx, participantID, target, targetPCM); err != nil {
-			if m.coordinator.isActive(target.plan.manifest.ID) {
-				failure := roomParticipantFailure(target.plan.manifest.ID, fmt.Errorf("receive fan out human PCM from %s: %w", participantID, err), m.secrets)
-				m.coordinator.failParticipant(target.plan.manifest.ID, failure)
-				return failure
-			}
-			continue
-		}
-		if m.opts.onParticipantAudioFanned != nil {
-			m.opts.onParticipantAudioFanned(participantID, target.plan.manifest.ID, append([]byte(nil), targetPCM...))
+		if err := m.fanOutTargetPCM(ctx, participantID, sourceRate, pcm, target); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+func (m *roomHumanCaptureMedia) fanOutTargetPCM(ctx context.Context, participantID string, sourceRate int, pcm []byte, target *roomParticipantRuntime) error {
+	if target == nil || target.mixer == nil {
+		return nil
+	}
+	if target.mixer.Format().SampleRate != sourceRate && m.opts.AudioService == nil {
+		return errors.New("audio service is required to convert human room input")
+	}
+	targetPCM, err := m.convertPCMForTarget(ctx, sourceRate, pcm, target)
+	if err != nil {
+		failure := roomParticipantFailure(participantID, fmt.Errorf("convert human input audio for %s: %w", target.plan.manifest.ID, err), m.secrets)
+		m.coordinator.failParticipant(participantID, failure)
+		return failure
+	}
+	if err := routeRoomPeerPCM(ctx, participantID, target, targetPCM); err != nil {
+		if m.coordinator.isActive(target.plan.manifest.ID) {
+			failure := roomParticipantFailure(target.plan.manifest.ID, fmt.Errorf("receive fan out human PCM from %s: %w", participantID, err), m.secrets)
+			m.coordinator.failParticipant(target.plan.manifest.ID, failure)
+			return failure
+		}
+		return nil
+	}
+	if m.opts.onParticipantAudioFanned != nil {
+		m.opts.onParticipantAudioFanned(participantID, target.plan.manifest.ID, append([]byte(nil), targetPCM...))
+	}
+	return nil
+}
+
+func (m *roomHumanCaptureMedia) convertPCMForTarget(ctx context.Context, sourceRate int, pcm []byte, target *roomParticipantRuntime) ([]byte, error) {
+	targetRate := target.mixer.Format().SampleRate
+	if targetRate == sourceRate {
+		return pcm, nil
+	}
+	return m.opts.AudioService.ConvertPCM16(ctx, audioio.PCM16Request{
+		PCM: pcm, SourceRate: sourceRate, TargetRate: targetRate,
+		SourceChannels: 1, TargetChannels: 1,
+	})
 }
 
 type roomHumanPlaybackMedia struct {

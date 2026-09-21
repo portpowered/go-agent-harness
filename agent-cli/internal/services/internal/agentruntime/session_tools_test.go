@@ -642,61 +642,66 @@ func (i *scriptedToolCallInferencer) ConnectSession(ctx context.Context) (messag
 	i.sessionMu.Lock()
 	i.session = session
 	i.sessionMu.Unlock()
-	go func() {
-		// The session deliberately stays open; the runner's MaxDuration ends
-		// the run so all provider turns are drained deterministically.
-		defer i.finishOnce.Do(func() { close(i.runFinished) })
-		if !session.recv.Write(ctx, messages.StreamMessage{
-			Type:  messages.StreamTypeSessionOpen,
-			Value: messages.NewSessionOpenValue("roundtrip-session", "session"),
-		}) {
-			return
-		}
-		for _, turn := range i.turns {
-			if turn.after != "" && !i.out.waitForOutput(turn.after, 5*time.Second) {
-				return
-			}
-			for _, evt := range turn.events {
-				if !session.recv.Write(ctx, evt) {
-					return
-				}
-			}
-			if !session.waitForSent(ctx, messages.StreamTypeResponseCreate) {
-				return
-			}
-		}
-		if i.followUpGate != "" && !i.out.waitForOutput(i.followUpGate, 5*time.Second) {
-			return
-		}
-		if len(i.followUpEvents) > 0 {
-			for _, event := range i.followUpEvents {
-				if !session.recv.Write(ctx, event) {
-					return
-				}
-			}
-		} else {
-			session.recv.Write(ctx, messages.StreamMessage{
-				Type:  messages.StreamTypeMessageStart,
-				Role:  messages.RoleAssistant,
-				Value: messages.NewMessageStartValue(),
-			})
-			session.recv.Write(ctx, messages.StreamMessage{
-				Type:  messages.StreamTypeTextDelta,
-				Role:  messages.RoleAssistant,
-				Value: messages.NewTextDeltaValue(i.followUpText),
-			})
-			session.recv.Write(ctx, messages.StreamMessage{
-				Type:  messages.StreamTypeMessageEnd,
-				Role:  messages.RoleAssistant,
-				Value: messages.NewMessageEndValue(messages.TokenUsage{}),
-			})
-		}
-		session.recv.Write(ctx, messages.StreamMessage{
-			Type:  messages.StreamTypeSessionClose,
-			Value: messages.NewSessionCloseValue("roundtrip-session", "test complete"),
-		})
-	}()
+	go i.runSession(ctx, session)
 	return session, nil
+}
+
+func (i *scriptedToolCallInferencer) runSession(ctx context.Context, session *roundTripSession) {
+	// The session deliberately stays open; the runner's MaxDuration ends the
+	// run so all provider turns are drained deterministically.
+	defer i.finishOnce.Do(func() { close(i.runFinished) })
+	if !session.recv.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeSessionOpen,
+		Value: messages.NewSessionOpenValue("roundtrip-session", "session"),
+	}) {
+		return
+	}
+	if !i.sendTurns(ctx, session) || !i.waitForFollowUpGate() || !i.sendFollowUp(ctx, session) {
+		return
+	}
+	session.recv.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeSessionClose,
+		Value: messages.NewSessionCloseValue("roundtrip-session", "test complete"),
+	})
+}
+
+func (i *scriptedToolCallInferencer) sendTurns(ctx context.Context, session *roundTripSession) bool {
+	for _, turn := range i.turns {
+		if turn.after != "" && !i.out.waitForOutput(turn.after, 5*time.Second) {
+			return false
+		}
+		if !writeScriptedToolEvents(ctx, session, turn.events) || !session.waitForSent(ctx, messages.StreamTypeResponseCreate) {
+			return false
+		}
+	}
+	return true
+}
+
+func (i *scriptedToolCallInferencer) waitForFollowUpGate() bool {
+	return i.followUpGate == "" || i.out.waitForOutput(i.followUpGate, 5*time.Second)
+}
+
+func (i *scriptedToolCallInferencer) sendFollowUp(ctx context.Context, session *roundTripSession) bool {
+	if len(i.followUpEvents) > 0 {
+		return writeScriptedToolEvents(ctx, session, i.followUpEvents)
+	}
+	for _, event := range []messages.StreamMessage{
+		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue(i.followUpText)},
+		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+	} {
+		session.recv.Write(ctx, event)
+	}
+	return true
+}
+
+func writeScriptedToolEvents(ctx context.Context, session *roundTripSession, events []messages.StreamMessage) bool {
+	for _, event := range events {
+		if !session.recv.Write(ctx, event) {
+			return false
+		}
+	}
+	return true
 }
 
 func (i *scriptedToolCallInferencer) sessionSnapshot() *roundTripSession {

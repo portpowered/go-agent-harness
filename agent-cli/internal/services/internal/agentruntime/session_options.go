@@ -852,66 +852,11 @@ func NewLiveSessionInferencer(opts SessionRunOptions, instructions string) (mess
 	}
 	opts.Provider = providerName
 	instructions = composeSessionInstructions(opts, instructions)
-
-	var (
-		model  string
-		config models.SessionConfig
-	)
 	switch providerName {
 	case sessionProviderOpenAI:
-		sessionCfg, err := resolveOpenAIRealtimeSessionConfig(opts)
-		if err != nil {
-			return nil, "", err
-		}
-		model = sessionCfg.Model
-		config = deviceProbeSessionConfig(model, instructions, models.AudioFormatPCM16, models.AudioFormatPCM16)
-		inputAudioTranscription, err := resolveSessionTranscription(opts, providerName, true)
-		if err != nil {
-			return nil, "", err
-		}
-		config.InputAudioTranscription = &inputAudioTranscription
-		config.TurnDetection = cloneSessionTurnDetection(opts.TurnDetection)
-		config.Voice = opts.Voice
-		config.ReasoningEffort = sessionCfg.ReasoningEffort
-		config.Tools = append([]messages.ToolDefinition(nil), opts.ToolDefinitions...)
-		dialer, recorder := resolveSessionWebSocketDialer(opts, providerName, model, func() transport.Dialer { return oaiprovider.NewDefaultWebSocketDialer() })
-		providerOpts := []oaiprovider.Option{
-			oaiprovider.WithAPIKey(sessionCfg.APIKey),
-			oaiprovider.WithModel(sessionCfg.Model),
-			oaiprovider.WithRealtimeBaseURL(openAIRealtimeURL(sessionCfg)),
-			oaiprovider.WithWebSocketDialer(dialer),
-		}
-		providerGateway, err := gateway.NewSessionGateway(gateway.WithSessionProvider(oaiprovider.New(providerOpts...)))
-		if err != nil {
-			return nil, "", fmt.Errorf("create OpenAI realtime session gateway: %w", err)
-		}
-		inferencer := inference.NewSessionGatewayInferencer(providerGateway, inference.WithSessionRequest(inference.SessionRequest{Config: config}))
-		return wrapSessionInferencerCaptureFlush(inferencer, recorder, opts.RecordSessionCapturePath), model, nil
+		return newOpenAIDeviceProbeSessionInferencer(opts, instructions)
 	case sessionProviderGrok:
-		sessionCfg, err := resolveGrokSessionConfig(opts)
-		if err != nil {
-			return nil, "", err
-		}
-		model = sessionCfg.Model
-		config = deviceProbeSessionConfig(model, instructions, models.AudioFormatPCM16, models.AudioFormatPCM16)
-		config.TurnDetection = cloneSessionTurnDetection(opts.TurnDetection)
-		inputAudioTranscription, err := resolveSessionTranscription(opts, providerName, true)
-		if err != nil {
-			return nil, "", err
-		}
-		config.InputAudioTranscription = &inputAudioTranscription
-		config.Tools = append([]messages.ToolDefinition(nil), opts.ToolDefinitions...)
-		dialer, recorder := resolveSessionWebSocketDialer(opts, providerName, model, func() transport.Dialer { return grok.NewDefaultWebSocketDialer() })
-		providerOpts := []grok.Option{grok.WithAPIKey(sessionCfg.APIKey), grok.WithWebSocketDialer(dialer)}
-		if strings.TrimSpace(sessionCfg.BaseURL) != "" {
-			providerOpts = append(providerOpts, grok.WithBaseURL(sessionCfg.BaseURL))
-		}
-		providerGateway, err := gateway.NewSessionGateway(gateway.WithSessionProvider(grok.New(providerOpts...)))
-		if err != nil {
-			return nil, "", fmt.Errorf("create Grok realtime session gateway: %w", err)
-		}
-		inferencer := inference.NewSessionGatewayInferencer(providerGateway, inference.WithSessionRequest(inference.SessionRequest{Config: config}))
-		return wrapSessionInferencerCaptureFlush(inferencer, recorder, opts.RecordSessionCapturePath), model, nil
+		return newGrokDeviceProbeSessionInferencer(opts, instructions)
 	default:
 		return nil, "", fmt.Errorf("--devices real supports realtime providers %q and %q; got %q", sessionProviderOpenAI, sessionProviderGrok, providerName)
 	}
