@@ -41,6 +41,30 @@ func TestSelfPlayServiceBridgesOnlyPCMAndWritesBoundedEvidence(t *testing.T) {
 	}
 }
 
+func TestSelfPlayServiceHonorsConfiguredTurnTarget(t *testing.T) {
+	provider := newTestSessionService(t, "")
+	service := NewService(Dependencies{
+		SessionService: provider,
+		ModelCatalog:   testModelCatalog{},
+		Clock:          clock.Real{},
+	})
+	outputDir := filepath.Join(t.TempDir(), "run")
+	result, err := service.Run(context.Background(), selfplay.Request{
+		OutputDir:   outputDir,
+		MaxDuration: 10 * time.Second,
+		MaxTurns:    2,
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if result.StopReason != selfplay.StopTurnTarget || result.Customer.CompletedTurns != 2 || result.Assistant.CompletedTurns != 2 {
+		t.Fatalf("two-turn result = %#v", result)
+	}
+	_, sessions := provider.snapshot()
+	assertSessionTraffic(t, sessions)
+	assertCompletedTurnsPerSide(t, outputDir, 2)
+}
+
 func assertTurnTargetResult(t *testing.T, result selfplay.Result, err error) {
 	t.Helper()
 	if err != nil {
@@ -89,13 +113,18 @@ func assertSessionTraffic(t *testing.T, sessions []*testSession) {
 
 func assertOneTurnPerSide(t *testing.T, outputDir string) {
 	t.Helper()
+	assertCompletedTurnsPerSide(t, outputDir, 1)
+}
+
+func assertCompletedTurnsPerSide(t *testing.T, outputDir string, want int) {
+	t.Helper()
 	for _, path := range []string{"agent-a-diagnostics.jsonl", "agent-b-diagnostics.jsonl"} {
 		data, err := os.ReadFile(filepath.Join(outputDir, path))
 		if err != nil {
 			t.Fatalf("read %s: %v", path, err)
 		}
-		if got := strings.Count(string(data), `"event":"turn_completed"`); got != 1 {
-			t.Fatalf("%s has %d admitted turn records, want exactly one", path, got)
+		if got := strings.Count(string(data), `"event":"turn_completed"`); got != want {
+			t.Fatalf("%s has %d admitted turn records, want exactly %d", path, got, want)
 		}
 	}
 }

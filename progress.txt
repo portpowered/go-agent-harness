@@ -4214,3 +4214,41 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   three-file legacy cluster, verify the final adapter, and run the complete
   exact-head preflight before any push or PR handoff. Keep this task at
   `CONTINUE` until that complete retirement is ready for SCRIPT CI.
+
+# C271 exact-turn public behavior checkpoint — 2026-09-21
+
+- Reverified admission for the sole `audio-runtime` project and exact branch
+  `codex/audio-runtime-c271-recover-selfplay-retirement`. Fetched
+  `origin/main=b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`; startup integration
+  `8bdafc7f947a3a2c9856220abdc539437035bd21` and current main are ancestors of
+  candidate `a67711a21b86b21f75ae109890883ee4499f35ab`.
+- C249 remains clean at `86a1eed17b099d510b39ce3d3b4ee7d8f7998881`, with C220
+  ancestry reachable. C248 remains unreleased at `cb9e720f`; its shared
+  worktree has active tracked and untracked changes. C269 remains unreleased at
+  `3be45b10`; its shared worktree also has active changes. Neither worktree was
+  modified. Canonical C271 `work-task-106` has no review row; the concluded
+  C259 `work-review-78` findings concern room evidence and are not self-play
+  repairs.
+- Added public Wire integration coverage proving a requested two-turn target
+  completes exactly two turns per side and records two turn-completion events
+  per side. The prior integration coverage only proved a one-turn target.
+- On this source, `rtk go test -timeout=3m -count=1
+  ./go-agent-runtime/services/selfplay/...` passed 24 tests in 3 packages;
+  `rtk go test -race -timeout=5m -count=1
+  ./go-agent-runtime/services/selfplay/...` passed the same; the bounded
+  stop/failure repeat passed 160 tests; the new two-turn behavior passed 10
+  consecutive runs. `rtk make wire-check` and `rtk git diff --check` passed;
+  Wire regeneration left no tracked generated changes.
+- Current integrated inventory is 106 legacy production Go files / 39,329
+  lines. All owned files still remain (`selfplay_service.go` 53,
+  `session_self_play.go` 641, `session_self_play_evidence.go` 716; 1,410 total).
+  The CLI remainder is one 85-line production file, whose stateless adapter
+  boundary is still unverified. No caller cutover, legacy deletion, `make
+  prepush`, push, PR, or SCRIPT handoff has occurred. C249/C220 and the two
+  unreleased shared seams still need reconciliation before completion.
+- Exact next action: continue disjoint public self-play behavior and CLI
+  boundary audit while C248 and C269 retain their shared seams. After reviewed
+  releases are integrated, reconcile the C249 source and all peer behavior,
+  cut over every caller, delete both uncredited files and the exact 1,410-line
+  cluster, prove the sole adapter boundary, and run the full exact-head local
+  preflight before any PR submission. Keep C271 at `CONTINUE` meanwhile.
