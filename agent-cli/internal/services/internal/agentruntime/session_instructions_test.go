@@ -48,10 +48,8 @@ func TestRunSessionWithInstructions_SourceMatrix(t *testing.T) {
 		skipWorkspace     bool
 	}{
 		{
-			name: "absent AGENTS.md sends no instructions and creates no file",
-			setup: func(*testing.T, string) string {
-				return ""
-			},
+			name:  "absent AGENTS.md sends no instructions and creates no file",
+			setup: func(*testing.T, string) string { return "" },
 			want: func(t *testing.T, workspaceDir, _ string) string {
 				t.Helper()
 				if _, err := os.Stat(filepath.Join(workspaceDir, workspace.AgentsMDFileName)); !os.IsNotExist(err) {

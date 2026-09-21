@@ -240,10 +240,8 @@ func TestPlanSessionRuntime_WebRTCDispatchesThroughRuntimeFactory(t *testing.T) 
 	runtime := &testSessionRTCRuntime{}
 	var got SessionRuntimeSelection
 	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
-		SessionInferencer: &selectionTestInferencer{},
-		Transport:         "WebRTC",
-		Signaling:         signaling,
-		MediaSource:       media,
+		SessionInferencer: &selectionTestInferencer{}, Transport: SessionTransportWebRTC,
+		Signaling: signaling, MediaSource: media,
 	}, sessionRuntimeFactory{
 		newRTCRuntime: func(selection SessionRuntimeSelection) (SessionRTCRuntime, error) {
 			got = selection
@@ -253,55 +251,28 @@ func TestPlanSessionRuntime_WebRTCDispatchesThroughRuntimeFactory(t *testing.T) 
 	if err != nil {
 		t.Fatalf("planSessionRuntimeWithFactory: %v", err)
 	}
-	if got != (SessionRuntimeSelection{
-		Transport:         SessionTransportWebRTC,
-		SignalingEndpoint: signaling,
-		MediaSource:       media,
-	}) {
-		t.Fatalf("runtime selection = %#v, want exact values", got)
+	if got != (SessionRuntimeSelection{Transport: SessionTransportWebRTC, SignalingEndpoint: signaling, MediaSource: media}) ||
+		plan.rtcRuntime != runtime || plan.transport != SessionTransportWebRTC || plan.signalingEndpoint != signaling || plan.mediaSource != media {
+		t.Fatalf("runtime selection = %#v; plan = (%q, %q, %q), want exact WebRTC values and owned runtime", got, plan.transport, plan.signalingEndpoint, plan.mediaSource)
 	}
-	if plan.rtcRuntime != runtime {
-		t.Fatal("WebRTC plan did not retain the owned runtime")
-	}
-	if plan.transport != SessionTransportWebRTC || plan.signalingEndpoint != signaling || plan.mediaSource != media {
-		t.Fatalf("plan selection fields = (%q, %q, %q), want exact WebRTC values", plan.transport, plan.signalingEndpoint, plan.mediaSource)
-	}
-	if _, ok := plan.inferencer.(*sessionRTCRuntimeInferencer); !ok {
-		t.Fatalf("plan inferencer = %T, want RTC lifecycle wrapper", plan.inferencer)
-	}
-	if runtime.closeCount != 0 {
-		t.Fatal("planning closed the RTC runtime before execution")
+	if _, ok := plan.inferencer.(*sessionRTCRuntimeInferencer); !ok || runtime.closeCount != 0 {
+		t.Fatalf("plan inferencer = %T, RTC close count = %d; want lifecycle wrapper and deferred close", plan.inferencer, runtime.closeCount)
 	}
 	if err := runtime.Close(); err != nil {
 		t.Fatalf("cleanup test runtime: %v", err)
 	}
 
 	failedRuntime := &testSessionRTCRuntime{}
-	loaded := &config.Config{Model: config.ModelConfig{
-		Provider: config.ProviderOpenAI,
-		OpenAI:   &config.OpenAIConfig{Model: openAIRealtimeDefaultModel, APIKey: "openai-runtime-test-key"},
-	}}
+	loaded := &config.Config{Model: config.ModelConfig{Provider: config.ProviderOpenAI, OpenAI: &config.OpenAIConfig{Model: openAIRealtimeDefaultModel, APIKey: "openai-runtime-test-key"}}}
+	factory := defaultSessionRuntimeFactory
+	factory.newRTCRuntime = func(SessionRuntimeSelection) (SessionRTCRuntime, error) { return failedRuntime, nil }
 	_, err = planSessionRuntimeWithFactory(SessionRunOptions{
-		ModelCatalog: testModelCatalog(),
-		LoadedConfig: loaded,
-		Provider:     config.ProviderOpenAI,
-		Transport:    SessionTransportWebRTC,
-		Signaling:    "loopback://plan/transcription-failure",
-		MediaSource:  "fixture://plan/transcription-failure",
-		RTCBinding:   runtimedevices.RTCBindingRequest{InputPresent: true},
-	}, sessionRuntimeFactory{
-		newRTCRuntime: func(SessionRuntimeSelection) (SessionRTCRuntime, error) {
-			return failedRuntime, nil
-		},
-		newRecordingDialer: func(transport.Dialer, string, string) sessionRecordingDialer {
-			return &browserRecordingDialer{}
-		},
-	})
-	if err == nil || !strings.Contains(err.Error(), "audio service is required for transcription resolution") {
-		t.Fatalf("WebRTC transcription preflight error = %v, want missing audio service", err)
-	}
-	if failedRuntime.closeCount != 1 {
-		t.Fatalf("WebRTC runtime close count after transcription preflight failure = %d, want 1", failedRuntime.closeCount)
+		ModelCatalog: testModelCatalog(), LoadedConfig: loaded, Provider: config.ProviderOpenAI,
+		Transport: SessionTransportWebRTC, Signaling: "loopback://plan/transcription-failure", MediaSource: "fixture://plan/transcription-failure",
+		RTCBinding: runtimedevices.RTCBindingRequest{InputPresent: true},
+	}, factory)
+	if err == nil || !strings.Contains(err.Error(), "audio service is required for transcription resolution") || failedRuntime.closeCount != 1 {
+		t.Fatalf("WebRTC transcription preflight error = %v, RTC close count = %d; want missing audio service and one close", err, failedRuntime.closeCount)
 	}
 }
 

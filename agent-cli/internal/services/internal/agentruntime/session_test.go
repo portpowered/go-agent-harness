@@ -1469,9 +1469,8 @@ func TestRunAgentLoopSession_ReturnsOnCleanDoneSignal(t *testing.T) {
 
 	start := time.Now()
 	err := runAgentLoopSession(context.Background(), &out, sessionInf, sessionLoopOptions{
-		audioService: newTestAudioIOService(),
-		MaxDuration:  time.Second,
-		Done:         done,
+		audioService: newTestAudioIOService(), MaxDuration: time.Second,
+		Done: done,
 		DoneErr: func() error {
 			return nil
 		},
@@ -1499,8 +1498,7 @@ func TestRunAgentLoopSession_TimeoutCancelsLoopWithoutCallerCancellationError(t 
 
 	start := time.Now()
 	err := runAgentLoopSession(context.Background(), &out, sessionInf, sessionLoopOptions{
-		audioService: newTestAudioIOService(),
-		MaxDuration:  75 * time.Millisecond,
+		audioService: newTestAudioIOService(), MaxDuration: 75 * time.Millisecond,
 	})
 	if err != nil {
 		t.Fatalf("runAgentLoopSession timeout should not report caller cancellation: %v", err)

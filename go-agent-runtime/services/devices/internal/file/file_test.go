@@ -111,11 +111,11 @@ func TestFileAdaptersDelegateRequests(t *testing.T) {
 	service := &testAudioService{input: input, output: output}
 	source := sharedaudio.NewSliceSource([]int16{7})
 	scheduler := &recordingScheduler{}
-	capture, err := newCapture(context.Background(), devices.FileInput{Source: source, SampleRate: 8000, Pace: true, Continuous: true, Scheduler: scheduler}, 24000, service)
+	capture, err := newCapture(context.Background(), devices.FileInput{Source: source, SampleRate: 8000, Pace: true, Continuous: true, PadFinalFrame: true, Scheduler: scheduler}, 24000, service)
 	if err != nil {
 		t.Fatalf("newCapture: %v", err)
 	}
-	if !service.inputRequest.Continuous || !service.inputRequest.Pace || service.inputRequest.SourceRate != 8000 || service.inputRequest.ProviderRate != 24000 || service.inputRequest.Scheduler != scheduler {
+	if !service.inputRequest.Continuous || !service.inputRequest.Pace || !service.inputRequest.PadFinalFrame || service.inputRequest.SourceRate != 8000 || service.inputRequest.ProviderRate != 24000 || service.inputRequest.Scheduler != scheduler {
 		t.Fatalf("input request = %+v, want request fields forwarded", service.inputRequest)
 	}
 	if err := capture.Pump(context.Background(), &recordingOutbound{}); !errors.Is(err, input.pumpErr) {

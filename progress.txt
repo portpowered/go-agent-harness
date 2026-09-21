@@ -4531,3 +4531,30 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   worktree was clean at invocation. This is not a completed C229-05 preflight;
   `make prepush`, remaining vertical commands, caller/Wire audit, PR and push
   remain pending.
+
+# C229 architecture recovery and service-owned replay compatibility — 2026-09-20
+
+- Admission, project, and branch remain valid. Current branch is
+  `codex/audio-runtime-c229-recover-audio-device-rtc-retirement`; the working
+  tree started at `f8bcb296959ea85d57c596ba4ee24a8716c1ee05`, descended from
+  C218 `dc92c6c8f103`, startup `8bdafc7f947a3a2c9856220abdc539437035bd21`,
+  and planning `origin/main` `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`.
+- Replaced the extra livehost fixed-frame replay wrapper with a session-owned
+  replay policy and forwarded the fixed-frame option through the public
+  devices file-input contract into audioio. The host no longer wraps or
+  mutates the source. The two permitted adapters remain stateless at 19 and 13
+  physical lines (2 files / 32 total).
+- Verified all ten exact planned legacy production files are absent. No C229
+  PR or push exists. A production caller and Wire review remains part of the
+  final handoff audit.
+- Passing checks on this working revision: `rtk make architecture-size-check`
+  (208 packages, 1,934 files, 28,448 functions); `rtk go test
+  ./go-agent-runtime/services/devices/... ./go-agent-runtime/services/session/internal/live/...
+  ./go-agent-runtime/services/audioio/... -count=1 -timeout=300s` (149 tests,
+  17 packages); and `rtk git diff --check`. The prior CLI runtime package run
+  passed 927 tests before the replay compatibility cutover.
+- The full exact candidate gate has not run. Next: commit this checkpoint and
+  implementation as a clean candidate, run `make prepush` plus every C229-05
+  functional, integration, race, hermetic, and Wire command on that exact
+  commit, repair any local failure and rerun the complete gate, then push/open
+  the PR with the verified SHA and command results for SCRIPT CI.

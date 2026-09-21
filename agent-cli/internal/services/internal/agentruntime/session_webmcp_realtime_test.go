@@ -46,8 +46,7 @@ func TestOpenAIRealtimeWebMCPResultsCorrelateAndContinueOnce(t *testing.T) {
 	runErr := make(chan error, 1)
 	go func() {
 		runErr <- runAgentLoopSession(ctx, io.Discard, inferencer, sessionLoopOptions{
-			audioService:    newTestAudioIOService(),
-			WaitForClose:    true,
+			audioService: newTestAudioIOService(), WaitForClose: true,
 			ToolExecutor:    toolSet.Executor(),
 			ToolDefinitions: toolSet.Definitions(),
 		})

@@ -28,8 +28,7 @@ import (
 // OpenAI Realtime adapter writes to the websocket. Everything below the CLI
 // composition root is production code; only the browser transport and the
 // provider websocket are hermetic fakes. Asserting on the encoded wire frame
-// (rather than on internal registration bookkeeping) is what makes this test
-// track what the model can actually call.
+// (rather than internal registration bookkeeping) tracks what the model can call.
 func TestSessionAdvertisesConnectedPageToolsOnTheProviderWire(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()

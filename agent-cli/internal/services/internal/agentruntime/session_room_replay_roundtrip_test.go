@@ -363,10 +363,9 @@ func TestRoomRunRecordThenReplay_FullEndToEndReplaySucceeds(t *testing.T) {
 	replayCtx, replayCancel := context.WithTimeout(context.Background(), roomRealtimeReplayTestTimeout)
 	defer replayCancel()
 	replayResult, err := RunRoomWithResult(replayCtx, io.Discard, RoomRunOptions{
-		AudioService: newTestAudioIOService(),
-		Manifest:     room.Manifest{SchemaVersion: 999},
-		ReplayPlan:   &plan,
-		ReplayPath:   outputDir, ModelCatalog: testModelCatalog(),
+		AudioService: newTestAudioIOService(), Manifest: room.Manifest{SchemaVersion: 999},
+		ReplayPlan: &plan,
+		ReplayPath: outputDir, ModelCatalog: testModelCatalog(),
 		CredentialLookup: func(string) (string, bool) {
 			t.Fatal("room replay looked up a live credential")
 			return "", false

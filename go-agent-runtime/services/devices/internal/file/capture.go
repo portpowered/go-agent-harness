@@ -29,7 +29,7 @@ func newCapture(ctx context.Context, request devices.FileInput, providerRate int
 	}
 	input, err := service.OpenInput(ctx, audioio.InputRequest{
 		Source: request.Source, SourceRate: request.SampleRate, ProviderRate: providerRate,
-		Pace: request.Pace, Continuous: request.Continuous, OnTurnBoundary: request.OnTurnBoundary,
+		Pace: request.Pace, Continuous: request.Continuous, PadFinalFrame: request.PadFinalFrame, OnTurnBoundary: request.OnTurnBoundary,
 		Scheduler: request.Scheduler,
 	})
 	if err != nil {

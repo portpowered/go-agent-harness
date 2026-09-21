@@ -225,8 +225,7 @@ func TestRunAgentLoopSession_ScreenTimeoutDeniedRecheckDeliversOneContinuation(t
 	}()
 
 	err = runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
-		audioService:          newTestAudioIOService(),
-		MaxDuration:           2 * time.Second,
+		audioService: newTestAudioIOService(), MaxDuration: 2 * time.Second,
 		WaitForClose:          true,
 		ToolExecutor:          executor,
 		ToolDefinitions:       definitions,
@@ -667,10 +666,8 @@ func (i *scriptedToolCallInferencer) runSession(ctx context.Context, session *ro
 
 func (i *scriptedToolCallInferencer) sendTurns(ctx context.Context, session *roundTripSession) bool {
 	for _, turn := range i.turns {
-		if turn.after != "" && !i.out.waitForOutput(turn.after, 5*time.Second) {
-			return false
-		}
-		if !writeScriptedToolEvents(ctx, session, turn.events) || !session.waitForSent(ctx, messages.StreamTypeResponseCreate) {
+		if (turn.after != "" && !i.out.waitForOutput(turn.after, 5*time.Second)) ||
+			!writeScriptedToolEvents(ctx, session, turn.events) || !session.waitForSent(ctx, messages.StreamTypeResponseCreate) {
 			return false
 		}
 	}
@@ -685,14 +682,11 @@ func (i *scriptedToolCallInferencer) sendFollowUp(ctx context.Context, session *
 	if len(i.followUpEvents) > 0 {
 		return writeScriptedToolEvents(ctx, session, i.followUpEvents)
 	}
-	for _, event := range []messages.StreamMessage{
+	return writeScriptedToolEvents(ctx, session, []messages.StreamMessage{
 		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
 		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue(i.followUpText)},
 		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
-	} {
-		session.recv.Write(ctx, event)
-	}
-	return true
+	})
 }
 
 func writeScriptedToolEvents(ctx context.Context, session *roundTripSession, events []messages.StreamMessage) bool {
@@ -764,8 +758,7 @@ func TestRunAgentLoopSession_InteractivePolicyTimeoutDeliversOneCorrelatedContin
 
 	startedAt := time.Now()
 	err = runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
-		audioService:          newTestAudioIOService(),
-		MaxDuration:           2 * time.Second,
+		audioService: newTestAudioIOService(), MaxDuration: 2 * time.Second,
 		WaitForClose:          true,
 		ToolExecutor:          executor,
 		ToolDefinitions:       definitions,
@@ -872,8 +865,7 @@ func TestRunAgentLoopSession_InteractiveTimeoutPreservesParallelSiblingResults(t
 	})
 
 	err = runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
-		audioService:          newTestAudioIOService(),
-		MaxDuration:           2 * time.Second,
+		audioService: newTestAudioIOService(), MaxDuration: 2 * time.Second,
 		WaitForClose:          true,
 		ToolExecutor:          executor,
 		ToolDefinitions:       definitions,
@@ -998,8 +990,7 @@ func TestRunAgentLoopSession_ExecutesScriptedCallsInOrderAndKeepsSessionUsable(t
 	executor := &recordingSessionExecutor{}
 
 	err := runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
-		audioService: newTestAudioIOService(),
-		MaxDuration:  2 * time.Second,
+		audioService: newTestAudioIOService(), MaxDuration: 2 * time.Second,
 		WaitForClose: true,
 		ToolExecutor: executor,
 	})
@@ -1112,8 +1103,7 @@ func TestRunAgentLoopSession_FailureTableKeepsSessionAlive(t *testing.T) {
 			})
 
 			err := runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
-				audioService:         newTestAudioIOService(),
-				MaxDuration:          2 * time.Second,
+				audioService: newTestAudioIOService(), MaxDuration: 2 * time.Second,
 				WaitForClose:         true,
 				ToolExecutor:         executor,
 				ToolExecutionTimeout: tc.timeout,
@@ -1162,8 +1152,7 @@ func TestRunAgentLoopSession_TimeoutWorkerExitsBoundedly(t *testing.T) {
 	})
 
 	err := runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
-		audioService:         newTestAudioIOService(),
-		MaxDuration:          2 * time.Second,
+		audioService: newTestAudioIOService(), MaxDuration: 2 * time.Second,
 		WaitForClose:         true,
 		ToolExecutor:         executor,
 		ToolExecutionTimeout: 10 * time.Millisecond,

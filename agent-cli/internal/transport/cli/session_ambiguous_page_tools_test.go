@@ -398,8 +398,7 @@ func TestSessionAmbiguousCubeConversationRequiresChoiceBeforePageWork(t *testing
 			if err != nil && !errors.Is(err, context.Canceled) {
 				t.Errorf("session loop shutdown: %v", err)
 			}
-		case <-runComplete:
-			// The final assertion consumed the result.
+		case <-runComplete: // Final assertion consumed the result.
 		case <-time.After(time.Second):
 			t.Error("session loop did not stop after cancellation")
 		}

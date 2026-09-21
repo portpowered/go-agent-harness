@@ -48,6 +48,7 @@ type liveInvocation struct {
 }
 
 func newLiveInvocation(s *Service, ctx context.Context, options session.LiveRunOptions) (*liveInvocation, error) {
+	selectLegacyReplayFramePolicy(&options)
 	liveHandle, err := openLiveHandle(s, ctx, options)
 	if err != nil {
 		return nil, err

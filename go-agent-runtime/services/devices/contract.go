@@ -85,6 +85,9 @@ type FileInput struct {
 	Source     audio.AudioSource
 	SampleRate int
 	Pace       bool
+	// PadFinalFrame preserves fixed-frame replay behavior when a legacy capture
+	// omitted its negotiated input rate.
+	PadFinalFrame bool
 	// Continuous keeps processed PCM flowing as soon as a provider frame is
 	// available. Finite inputs retain one frame of lookahead so an explicit
 	// source boundary can mark the final frame EndOfResponse; a continuously
