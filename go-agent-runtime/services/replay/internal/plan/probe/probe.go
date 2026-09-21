@@ -25,28 +25,10 @@ func AnalyzeProbe(ctx context.Context, resolvePath func(context.Context, string)
 	if strings.TrimSpace(request.SourcePath) == "" {
 		return replay.CaptureProbeObservation{}, fmt.Errorf("replay probe capture path is required")
 	}
-
-	path, err := resolvePath(ctx, request.SourcePath)
+	capture, err := loadProbeCapture(ctx, resolvePath, request)
 	if err != nil {
 		return replay.CaptureProbeObservation{}, err
 	}
-	loaded, err := replaycapture.LoadReplayCapture(ctx, path)
-	if err != nil {
-		return replay.CaptureProbeObservation{}, fmt.Errorf("load replay session fixture: %w", err)
-	}
-	if !loaded.IntegrityVerified {
-		return replay.CaptureProbeObservation{}, gatewaytesting.ErrSessionCaptureIntegrityUnavailable
-	}
-	if request.ValidateSource {
-		if validationErrs := validateCaptureSource(path, loaded.Capture); len(validationErrs) > 0 {
-			messages := make([]string, 0, len(validationErrs))
-			for _, validationErr := range validationErrs {
-				messages = append(messages, validationErr.Error())
-			}
-			return replay.CaptureProbeObservation{}, fmt.Errorf("session fixture validation failed before any probe observation: %s", strings.Join(messages, "; "))
-		}
-	}
-	capture := loaded.Capture
 	if request.AudioSamples != nil {
 		capture, err = injectProbeAudio(capture, request)
 		if err != nil {
@@ -61,6 +43,38 @@ func AnalyzeProbe(ctx context.Context, resolvePath func(context.Context, string)
 		return replay.CaptureProbeObservation{}, err
 	}
 	return observeProbeCapture(report, capture), nil
+}
+
+func loadProbeCapture(ctx context.Context, resolvePath func(context.Context, string) (string, error), request replay.CaptureProbeRequest) (gatewaytesting.SessionCapture, error) {
+	path, err := resolvePath(ctx, request.SourcePath)
+	if err != nil {
+		return gatewaytesting.SessionCapture{}, err
+	}
+	loaded, err := replaycapture.LoadReplayCapture(ctx, path)
+	if err != nil {
+		return gatewaytesting.SessionCapture{}, fmt.Errorf("load replay session fixture: %w", err)
+	}
+	if !loaded.IntegrityVerified {
+		return gatewaytesting.SessionCapture{}, gatewaytesting.ErrSessionCaptureIntegrityUnavailable
+	}
+	if request.ValidateSource {
+		if err := validateProbeCapture(path, loaded.Capture, "any probe observation"); err != nil {
+			return gatewaytesting.SessionCapture{}, err
+		}
+	}
+	return loaded.Capture, nil
+}
+
+func validateProbeCapture(path string, capture gatewaytesting.SessionCapture, phase string) error {
+	validationErrs := validateCaptureSource(path, capture)
+	if len(validationErrs) == 0 {
+		return nil
+	}
+	messages := make([]string, 0, len(validationErrs))
+	for _, validationErr := range validationErrs {
+		messages = append(messages, validationErr.Error())
+	}
+	return fmt.Errorf("session fixture validation failed before %s: %s", phase, strings.Join(messages, "; "))
 }
 
 func AnalyzeProbeDocument(ctx context.Context, name string, document []byte) (replay.CaptureProbeObservation, error) {
@@ -145,19 +159,14 @@ func replayProbe(ctx context.Context, capture gatewaytesting.SessionCapture) (re
 		if err := contextError(ctx); err != nil {
 			return fail("replay probe canceled at sequence %d: %w", record.Sequence, err)
 		}
+		if err := replayProbeRecord(conn, record); err != nil {
+			return fail("%w", err)
+		}
 		switch record.Direction {
 		case gatewaytesting.DirectionClientToServer:
-			if err := conn.WriteMessage(1, probeRecordPayload(record)); err != nil {
-				return fail("replay probe outbound tick at sequence %d diverged: %w", record.Sequence, err)
-			}
 			report.OutboundTicks++
 		case gatewaytesting.DirectionServerToClient:
-			if _, _, err := conn.ReadMessage(); err != nil {
-				return fail("replay probe inbound frame at sequence %d failed: %w", record.Sequence, err)
-			}
 			report.InboundFrames++
-		default:
-			return fail("replay probe event at sequence %d has invalid direction %q", record.Sequence, record.Direction)
 		}
 		report.Observations = append(report.Observations, replayProbeEvent{
 			Sequence: record.Sequence, Direction: record.Direction, Type: record.Type,
@@ -180,6 +189,27 @@ func replayProbe(ctx context.Context, capture gatewaytesting.SessionCapture) (re
 	return report, nil
 }
 
+type probeConnection interface {
+	WriteMessage(int, []byte) error
+	ReadMessage() (int, []byte, error)
+}
+
+func replayProbeRecord(conn probeConnection, record gatewaytesting.CapturedSessionEvent) error {
+	switch record.Direction {
+	case gatewaytesting.DirectionClientToServer:
+		if err := conn.WriteMessage(1, probeRecordPayload(record)); err != nil {
+			return fmt.Errorf("replay probe outbound tick at sequence %d diverged: %w", record.Sequence, err)
+		}
+	case gatewaytesting.DirectionServerToClient:
+		if _, _, err := conn.ReadMessage(); err != nil {
+			return fmt.Errorf("replay probe inbound frame at sequence %d failed: %w", record.Sequence, err)
+		}
+	default:
+		return fmt.Errorf("replay probe event at sequence %d has invalid direction %q", record.Sequence, record.Direction)
+	}
+	return nil
+}
+
 func WriteCaptureDocument(ctx context.Context, resolvePath func(context.Context, string) (string, error), request replay.CaptureDocumentRequest, output io.Writer) error {
 	if err := contextError(ctx); err != nil {
 		return err
@@ -187,42 +217,49 @@ func WriteCaptureDocument(ctx context.Context, resolvePath func(context.Context,
 	if output == nil {
 		return fmt.Errorf("capture document output is required")
 	}
-	var capture gatewaytesting.SessionCapture
-	switch {
-	case strings.TrimSpace(request.SourcePath) != "" && strings.TrimSpace(request.SyntheticSessionID) == "":
-		path, err := resolvePath(ctx, request.SourcePath)
-		if err != nil {
-			return err
-		}
-		loaded, loadErr := replaycapture.LoadReplayCapture(ctx, path)
-		if loadErr != nil {
-			return fmt.Errorf("load capture for export: %w", loadErr)
-		}
-		if !loaded.IntegrityVerified {
-			return gatewaytesting.ErrSessionCaptureIntegrityUnavailable
-		}
-		if validationErrs := validateCaptureSource(path, loaded.Capture); len(validationErrs) > 0 {
-			messages := make([]string, 0, len(validationErrs))
-			for _, validationErr := range validationErrs {
-				messages = append(messages, validationErr.Error())
-			}
-			return fmt.Errorf("session fixture validation failed before capture export: %s", strings.Join(messages, "; "))
-		}
-		capture = loaded.Capture
-	case strings.TrimSpace(request.SourcePath) == "" && strings.TrimSpace(request.SyntheticSessionID) != "":
-		capture = gatewaytesting.SessionCapture{
-			Version:  gatewaytesting.SessionCaptureVersion,
-			Provider: gatewaytesting.SessionProviderMetadata{Name: "probe", Model: "fixture"},
-			Session: gatewaytesting.SessionMetadata{
-				ID:                request.SyntheticSessionID,
-				FixtureProvenance: gatewaytesting.SessionFixtureProvenanceSynthetic,
-			},
-			Records: []gatewaytesting.CapturedSessionEvent{},
-		}
-	default:
-		return fmt.Errorf("select exactly one source capture or synthetic session ID")
+	capture, err := captureDocument(ctx, resolvePath, request)
+	if err != nil {
+		return err
 	}
 	return json.NewEncoder(output).Encode(capture)
+}
+
+func captureDocument(ctx context.Context, resolvePath func(context.Context, string) (string, error), request replay.CaptureDocumentRequest) (gatewaytesting.SessionCapture, error) {
+	hasSource := strings.TrimSpace(request.SourcePath) != ""
+	hasSynthetic := strings.TrimSpace(request.SyntheticSessionID) != ""
+	if hasSource == hasSynthetic {
+		return gatewaytesting.SessionCapture{}, fmt.Errorf("select exactly one source capture or synthetic session ID")
+	}
+	if hasSynthetic {
+		return syntheticCapture(request.SyntheticSessionID), nil
+	}
+	path, err := resolvePath(ctx, request.SourcePath)
+	if err != nil {
+		return gatewaytesting.SessionCapture{}, err
+	}
+	loaded, err := replaycapture.LoadReplayCapture(ctx, path)
+	if err != nil {
+		return gatewaytesting.SessionCapture{}, fmt.Errorf("load capture for export: %w", err)
+	}
+	if !loaded.IntegrityVerified {
+		return gatewaytesting.SessionCapture{}, gatewaytesting.ErrSessionCaptureIntegrityUnavailable
+	}
+	if err := validateProbeCapture(path, loaded.Capture, "capture export"); err != nil {
+		return gatewaytesting.SessionCapture{}, err
+	}
+	return loaded.Capture, nil
+}
+
+func syntheticCapture(sessionID string) gatewaytesting.SessionCapture {
+	return gatewaytesting.SessionCapture{
+		Version:  gatewaytesting.SessionCaptureVersion,
+		Provider: gatewaytesting.SessionProviderMetadata{Name: "probe", Model: "fixture"},
+		Session: gatewaytesting.SessionMetadata{
+			ID:                sessionID,
+			FixtureProvenance: gatewaytesting.SessionFixtureProvenanceSynthetic,
+		},
+		Records: []gatewaytesting.CapturedSessionEvent{},
+	}
 }
 
 func contextError(ctx context.Context) error {

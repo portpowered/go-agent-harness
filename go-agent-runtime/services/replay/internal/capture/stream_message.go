@@ -75,6 +75,30 @@ func UnmarshalStreamMessage(data json.RawMessage) (messages.StreamMessage, error
 }
 
 func unmarshalStreamMessageValue(messageType messages.StreamMessageType, data json.RawMessage) (messages.StreamMessageValue, error) {
+	value, ok := newStreamMessageValue(messageType)
+	if !ok {
+		return nil, fmt.Errorf("unknown stream message type: %s", messageType)
+	}
+	if err := json.Unmarshal(data, value); err != nil {
+		return nil, fmt.Errorf("unmarshal value for type %s: %w", messageType, err)
+	}
+	return value, nil
+}
+
+func newStreamMessageValue(messageType messages.StreamMessageType) (messages.StreamMessageValue, bool) {
+	if value, ok := newStreamMessageValueOne(messageType); ok {
+		return value, true
+	}
+	if value, ok := newStreamMessageValueTwo(messageType); ok {
+		return value, true
+	}
+	if value, ok := newStreamMessageValueThree(messageType); ok {
+		return value, true
+	}
+	return newStreamMessageValueFour(messageType)
+}
+
+func newStreamMessageValueOne(messageType messages.StreamMessageType) (messages.StreamMessageValue, bool) {
 	var value messages.StreamMessageValue
 	switch messageType {
 	case messages.StreamTypeMessageStart:
@@ -101,6 +125,15 @@ func unmarshalStreamMessageValue(messageType messages.StreamMessageType, data js
 		value = new(messages.ReasoningEndValue)
 	case messages.StreamTypePong:
 		value = new(messages.PongValue)
+	default:
+		return nil, false
+	}
+	return value, true
+}
+
+func newStreamMessageValueTwo(messageType messages.StreamMessageType) (messages.StreamMessageValue, bool) {
+	var value messages.StreamMessageValue
+	switch messageType {
 	case messages.StreamTypeSessionOpen:
 		value = new(messages.SessionOpenValue)
 	case messages.StreamTypeSessionClose:
@@ -121,6 +154,15 @@ func unmarshalStreamMessageValue(messageType messages.StreamMessageType, data js
 		value = new(messages.ErrorValue)
 	case messages.StreamTypeRefusal:
 		value = new(messages.RefusalValue)
+	default:
+		return nil, false
+	}
+	return value, true
+}
+
+func newStreamMessageValueThree(messageType messages.StreamMessageType) (messages.StreamMessageValue, bool) {
+	var value messages.StreamMessageValue
+	switch messageType {
 	case messages.StreamTypeImageStart:
 		value = new(messages.ImageStartValue)
 	case messages.StreamTypeImageDelta:
@@ -145,6 +187,15 @@ func unmarshalStreamMessageValue(messageType messages.StreamMessageType, data js
 		value = new(messages.EmbeddingDeltaValue)
 	case messages.StreamTypeEmbeddingEnd:
 		value = new(messages.EmbeddingEndValue)
+	default:
+		return nil, false
+	}
+	return value, true
+}
+
+func newStreamMessageValueFour(messageType messages.StreamMessageType) (messages.StreamMessageValue, bool) {
+	var value messages.StreamMessageValue
+	switch messageType {
 	case messages.StreamTypeLoopEnd:
 		value = new(messages.LoopEndValue)
 	case messages.StreamTypeAudioStart:
@@ -166,10 +217,7 @@ func unmarshalStreamMessageValue(messageType messages.StreamMessageType, data js
 	case messages.StreamTypeInputItemAdded:
 		value = new(messages.InputItemAddedValue)
 	default:
-		return nil, fmt.Errorf("unknown stream message type: %s", messageType)
+		return nil, false
 	}
-	if err := json.Unmarshal(data, value); err != nil {
-		return nil, fmt.Errorf("unmarshal value for type %s: %w", messageType, err)
-	}
-	return value, nil
+	return value, true
 }

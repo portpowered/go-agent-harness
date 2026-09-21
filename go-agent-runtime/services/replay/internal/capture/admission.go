@@ -60,17 +60,24 @@ func replayContextError(ctx context.Context) error {
 func DecodeReplayCapture(path string, data []byte) (ReplayLoad, error) {
 	trimmed := bytes.TrimSpace(data)
 	if len(trimmed) > 0 && trimmed[0] == '[' && json.Valid(trimmed) {
-		var records []gatewaytesting.CapturedSessionEvent
-		if err := json.Unmarshal(trimmed, &records); err != nil {
-			return ReplayLoad{}, captureValidationError(path, gatewaytesting.SessionCaptureErrorClassStructure, "$", 0, "JSON event array", "invalid JSON", errors.Join(gatewaytesting.ErrSessionCaptureStructure, err))
-		}
-		capture := gatewaytesting.SessionCapture{Version: gatewaytesting.SessionCaptureLegacyVersion, Records: records}
-		if err := validateReplayCaptureRecords(path, capture); err != nil {
-			return ReplayLoad{}, err
-		}
-		return ReplayLoad{Capture: capture}, nil
+		return decodeLegacyReplayCapture(path, trimmed)
 	}
+	return decodeReplayCaptureEnvelope(path, data)
+}
 
+func decodeLegacyReplayCapture(path string, data []byte) (ReplayLoad, error) {
+	var records []gatewaytesting.CapturedSessionEvent
+	if err := json.Unmarshal(data, &records); err != nil {
+		return ReplayLoad{}, captureValidationError(path, gatewaytesting.SessionCaptureErrorClassStructure, "$", 0, "JSON event array", "invalid JSON", errors.Join(gatewaytesting.ErrSessionCaptureStructure, err))
+	}
+	capture := gatewaytesting.SessionCapture{Version: gatewaytesting.SessionCaptureLegacyVersion, Records: records}
+	if err := validateReplayCaptureRecords(path, capture); err != nil {
+		return ReplayLoad{}, err
+	}
+	return ReplayLoad{Capture: capture}, nil
+}
+
+func decodeReplayCaptureEnvelope(path string, data []byte) (ReplayLoad, error) {
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
 		return ReplayLoad{}, captureValidationError(path, gatewaytesting.SessionCaptureErrorClassStructure, "$", 0, "JSON object", "invalid JSON", errors.Join(gatewaytesting.ErrSessionCaptureStructure, err))
@@ -90,49 +97,62 @@ func DecodeReplayCapture(path string, data []byte) (ReplayLoad, error) {
 	if err := json.Unmarshal(data, &capture); err != nil {
 		return ReplayLoad{}, captureValidationError(path, gatewaytesting.SessionCaptureErrorClassStructure, "$", 0, "valid capture envelope", "unparseable", errors.Join(gatewaytesting.ErrSessionCaptureStructure, err))
 	}
-	switch version {
-	case gatewaytesting.SessionCaptureLegacyVersion:
+	if version == gatewaytesting.SessionCaptureLegacyVersion {
 		if err := validateReplayCaptureRecords(path, capture); err != nil {
 			return ReplayLoad{}, err
 		}
 		return ReplayLoad{Capture: capture}, nil
-	case gatewaytesting.SessionCaptureVersion:
-		if err := validateProtectedCaptureFields(path, fields, capture); err != nil {
-			return ReplayLoad{}, err
-		}
-		if err := validateReplayCaptureRecords(path, capture); err != nil {
-			return ReplayLoad{}, err
-		}
-		actual, err := gatewaytesting.ComputeSessionCaptureDigest(capture)
-		if err != nil {
-			return ReplayLoad{}, &gatewaytesting.SessionCaptureValidationError{
-				Path:           path,
-				Classification: gatewaytesting.SessionCaptureErrorClassStructure,
-				FieldPath:      "$",
-				Algorithm:      gatewaytesting.SessionCaptureIntegrityAlgorithm,
-				Expected:       "serializable protected envelope",
-				Actual:         "serialization failed",
-				Err:            errors.Join(gatewaytesting.ErrSessionCaptureStructure, err),
-			}
-		}
-		if actual != capture.Integrity.Digest {
-			return ReplayLoad{}, &gatewaytesting.SessionCaptureValidationError{
-				Path:           path,
-				Classification: gatewaytesting.SessionCaptureErrorClassIntegrityChecksum,
-				FieldPath:      "/integrity/digest",
-				Algorithm:      capture.Integrity.Algorithm,
-				Expected:       "stored " + capture.Integrity.Digest,
-				Actual:         "computed " + actual,
-				Err:            gatewaytesting.ErrSessionCaptureIntegrity,
-			}
-		}
-		return ReplayLoad{Capture: capture, IntegrityVerified: true}, nil
-	default:
+	}
+	if version != gatewaytesting.SessionCaptureVersion {
 		return ReplayLoad{}, captureValidationError(path, gatewaytesting.SessionCaptureErrorClassUnsupportedVersion, "/version", 0, "supported protected version", fmt.Sprintf("%d", version), gatewaytesting.ErrSessionCaptureUnsupportedVersion)
+	}
+	if err := validateProtectedCaptureFields(path, fields, capture); err != nil {
+		return ReplayLoad{}, err
+	}
+	if err := validateReplayCaptureRecords(path, capture); err != nil {
+		return ReplayLoad{}, err
+	}
+	if err := validateReplayCaptureDigest(path, capture); err != nil {
+		return ReplayLoad{}, err
+	}
+	return ReplayLoad{Capture: capture, IntegrityVerified: true}, nil
+}
+
+func validateReplayCaptureDigest(path string, capture gatewaytesting.SessionCapture) error {
+	actual, err := gatewaytesting.ComputeSessionCaptureDigest(capture)
+	if err != nil {
+		return &gatewaytesting.SessionCaptureValidationError{
+			Path:           path,
+			Classification: gatewaytesting.SessionCaptureErrorClassStructure,
+			FieldPath:      "$",
+			Algorithm:      gatewaytesting.SessionCaptureIntegrityAlgorithm,
+			Expected:       "serializable protected envelope",
+			Actual:         "serialization failed",
+			Err:            errors.Join(gatewaytesting.ErrSessionCaptureStructure, err),
+		}
+	}
+	if actual == capture.Integrity.Digest {
+		return nil
+	}
+	return &gatewaytesting.SessionCaptureValidationError{
+		Path:           path,
+		Classification: gatewaytesting.SessionCaptureErrorClassIntegrityChecksum,
+		FieldPath:      "/integrity/digest",
+		Algorithm:      capture.Integrity.Algorithm,
+		Expected:       "stored " + capture.Integrity.Digest,
+		Actual:         "computed " + actual,
+		Err:            gatewaytesting.ErrSessionCaptureIntegrity,
 	}
 }
 
 func validateProtectedCaptureFields(path string, fields map[string]json.RawMessage, capture gatewaytesting.SessionCapture) error {
+	if err := validateCaptureEnvelopeFields(path, fields); err != nil {
+		return err
+	}
+	return validateCaptureIntegrityFields(path, fields, capture)
+}
+
+func validateCaptureEnvelopeFields(path string, fields map[string]json.RawMessage) error {
 	for _, field := range []string{"provider", "session", "records"} {
 		raw, ok := fields[field]
 		if !ok {
@@ -146,6 +166,10 @@ func validateProtectedCaptureFields(path string, fields map[string]json.RawMessa
 			return captureValidationError(path, gatewaytesting.SessionCaptureErrorClassStructure, "/"+field, 0, want, captureJSONType(raw), gatewaytesting.ErrSessionCaptureStructure)
 		}
 	}
+	return nil
+}
+
+func validateCaptureIntegrityFields(path string, fields map[string]json.RawMessage, capture gatewaytesting.SessionCapture) error {
 	raw, ok := fields["integrity"]
 	if !ok || captureJSONType(raw) == "null" {
 		return captureValidationError(path, gatewaytesting.SessionCaptureErrorClassIntegrityMetadata, "/integrity", 0, "object with algorithm, coverage, and digest", "missing", gatewaytesting.ErrSessionCaptureIntegrity)
@@ -181,30 +205,37 @@ func validateProtectedCaptureFields(path string, fields map[string]json.RawMessa
 func validateReplayCaptureRecords(path string, capture gatewaytesting.SessionCapture) error {
 	previousSequence := 0
 	for index, record := range capture.Records {
-		field := fmt.Sprintf("/records/%d", index)
-		if record.Sequence <= 0 || record.Sequence <= previousSequence {
-			return captureValidationError(path, gatewaytesting.SessionCaptureErrorClassStructure, field+"/sequence", record.Sequence, "positive, increasing sequence", fmt.Sprintf("%d", record.Sequence), gatewaytesting.ErrSessionCaptureStructure)
-		}
-		if record.Direction != gatewaytesting.DirectionClientToServer && record.Direction != gatewaytesting.DirectionServerToClient {
-			return captureValidationError(path, gatewaytesting.SessionCaptureErrorClassStructure, field+"/direction", record.Sequence, "client_to_server or server_to_client", string(record.Direction), gatewaytesting.ErrSessionCaptureStructure)
-		}
-		if record.TimestampMs < 0 {
-			return captureValidationError(path, gatewaytesting.SessionCaptureErrorClassStructure, field+"/timestamp_ms", record.Sequence, "non-negative integer", fmt.Sprintf("%d", record.TimestampMs), gatewaytesting.ErrSessionCaptureStructure)
-		}
-		if strings.TrimSpace(record.Type) == "" {
-			return captureValidationError(path, gatewaytesting.SessionCaptureErrorClassStructure, field+"/type", record.Sequence, "non-empty string", "missing", gatewaytesting.ErrSessionCaptureStructure)
-		}
-		if record.PayloadType != gatewaytesting.SessionPayloadTypeStreamMessage && record.PayloadType != gatewaytesting.SessionPayloadTypeWebSocketMessage {
-			return captureValidationError(path, gatewaytesting.SessionCaptureErrorClassStructure, field+"/payload_type", record.Sequence, gatewaytesting.SessionPayloadTypeStreamMessage+" or "+gatewaytesting.SessionPayloadTypeWebSocketMessage, record.PayloadType, gatewaytesting.ErrSessionCaptureStructure)
-		}
-		payload := record.Payload
-		if len(payload) == 0 {
-			payload = record.Data
-		}
-		if len(bytes.TrimSpace(payload)) == 0 || !json.Valid(payload) || captureJSONType(payload) == "null" {
-			return captureValidationError(path, gatewaytesting.SessionCaptureErrorClassStructure, field+"/payload", record.Sequence, "non-null JSON value", "missing or invalid", gatewaytesting.ErrSessionCaptureStructure)
+		if err := validateReplayCaptureRecord(path, index, previousSequence, record); err != nil {
+			return err
 		}
 		previousSequence = record.Sequence
+	}
+	return nil
+}
+
+func validateReplayCaptureRecord(path string, index, previousSequence int, record gatewaytesting.CapturedSessionEvent) error {
+	field := fmt.Sprintf("/records/%d", index)
+	if record.Sequence <= 0 || record.Sequence <= previousSequence {
+		return captureValidationError(path, gatewaytesting.SessionCaptureErrorClassStructure, field+"/sequence", record.Sequence, "positive, increasing sequence", fmt.Sprintf("%d", record.Sequence), gatewaytesting.ErrSessionCaptureStructure)
+	}
+	if record.Direction != gatewaytesting.DirectionClientToServer && record.Direction != gatewaytesting.DirectionServerToClient {
+		return captureValidationError(path, gatewaytesting.SessionCaptureErrorClassStructure, field+"/direction", record.Sequence, "client_to_server or server_to_client", string(record.Direction), gatewaytesting.ErrSessionCaptureStructure)
+	}
+	if record.TimestampMs < 0 {
+		return captureValidationError(path, gatewaytesting.SessionCaptureErrorClassStructure, field+"/timestamp_ms", record.Sequence, "non-negative integer", fmt.Sprintf("%d", record.TimestampMs), gatewaytesting.ErrSessionCaptureStructure)
+	}
+	if strings.TrimSpace(record.Type) == "" {
+		return captureValidationError(path, gatewaytesting.SessionCaptureErrorClassStructure, field+"/type", record.Sequence, "non-empty string", "missing", gatewaytesting.ErrSessionCaptureStructure)
+	}
+	if record.PayloadType != gatewaytesting.SessionPayloadTypeStreamMessage && record.PayloadType != gatewaytesting.SessionPayloadTypeWebSocketMessage {
+		return captureValidationError(path, gatewaytesting.SessionCaptureErrorClassStructure, field+"/payload_type", record.Sequence, gatewaytesting.SessionPayloadTypeStreamMessage+" or "+gatewaytesting.SessionPayloadTypeWebSocketMessage, record.PayloadType, gatewaytesting.ErrSessionCaptureStructure)
+	}
+	payload := record.Payload
+	if len(payload) == 0 {
+		payload = record.Data
+	}
+	if len(bytes.TrimSpace(payload)) == 0 || !json.Valid(payload) || captureJSONType(payload) == "null" {
+		return captureValidationError(path, gatewaytesting.SessionCaptureErrorClassStructure, field+"/payload", record.Sequence, "non-null JSON value", "missing or invalid", gatewaytesting.ErrSessionCaptureStructure)
 	}
 	return nil
 }
