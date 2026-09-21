@@ -5287,3 +5287,47 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   every discovered caller, delete the obsolete projection, temporary helper,
   and exact three-file legacy cluster, then run the complete planned C271
   preflight on one exact clean candidate before pushing it for SCRIPT CI.
+
+### C271 executor refresh and dependency checkpoint — 2026-09-21
+
+- Re-read the required operating policy and implementation handoff, the
+  admitted project manifest, `prd.json`, and the latest C271 progress. Ran
+  `project-control.py verify-work --type task --name
+  audio-runtime-c271-recover-selfplay-retirement`; it returned `admitted` for
+  `audio-runtime/audio-runtime-v1`. `prd.json.branchName` matches this isolated
+  worktree. The clean candidate is `e57c9712308e9ee792493b3dc635fb4d705a5b58`;
+  after `git fetch origin main`, `origin/main` is
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`. Both main and startup integration
+  `8bdafc7f947a3a2c9856220abdc539437035bd21` are ancestors. The preserved C249
+  source remains clean at `86a1eed17b099d510b39ce3d3b4ee7d8f7998881` with C220
+  ancestry; it has not been folded into this candidate.
+- The shared seams remain unreleased. C248 is still at
+  `0f00c79549b33e5e26c5c7bbe20313a07267e3dc` with active `session_audio_in.go`
+  and architecture-baseline edits. C269 is still at
+  `d792accaf8244898f559962ae371e06263095a9b` with active room/evidence, rooms
+  Wire, architecture-policy, and embedding changes. No C248 caller release or
+  C269 guarded merge is available in the preserved worktrees; neither was
+  modified. The latest previous review feedback recorded for this lane is C259
+  `work-review-78`: bound room-evidence manifest/timeline admission, restore
+  public recorder-failure degradation coverage, add a public room
+  run/load/analyze replay round trip, and report exact-head preflight. These
+  findings concern the room-evidence lane and identify no self-play-specific
+  repair; C271 has no review attempt.
+- The owned legacy production cluster remains exactly
+  `selfplay_service.go` (53 lines), `session_self_play.go` (641), and
+  `session_self_play_evidence.go` (716), 3 files / 1,410 lines. The uncredited
+  CLI projection remains 68 lines, and the planned CLI adapter is 85 lines but
+  still owns defaults, personas, and opening-seed policy. The production scan
+  still finds service/root Wire, transport observability and command wiring,
+  plus legacy live/model/playback and room-evidence references. No production
+  file was changed and no tests, `make prepush`, PR, push, or SCRIPT handoff was
+  claimed.
+- Exact next action: refresh the canonical C248 caller-release and C269
+  guarded-merge state before touching their shared seams. If either remains
+  unreleased, keep those paths frozen and retain C271 at `CONTINUE`; once both
+  releases are available, fetch current main, reconcile C249/C220 and peer
+  behavior through public contracts, cut over every discovered production
+  caller, delete the projection, temporary helper, and exact three-file
+  cluster, make the sole adapter stateless and within 300 lines, then run
+  `make prepush` and every planned C271 local gate on one exact clean candidate
+  before push and SCRIPT handoff.
