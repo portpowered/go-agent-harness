@@ -36,7 +36,9 @@ func (p *sessionRuntimePlan) bindRTC(ctx context.Context, finalizer duration.Fin
 	}
 	p.inferencer = binding.Inferencer()
 	p.loop.rtcDeviceBinding = binding
-	finalizer.SetDeviceBinding(binding.Close)
+	if finalizer != nil {
+		finalizer.SetDeviceBinding(binding.Close)
+	}
 	if selected, ok := binding.(runtimedevices.RTCBindingDeviceSelection); ok {
 		inputDevice, outputDevice := selected.SelectedDeviceIDs()
 		if p.rtcDeviceRequest.InputDevice == "" {

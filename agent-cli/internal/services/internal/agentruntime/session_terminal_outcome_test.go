@@ -8,27 +8,30 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	duration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+	terminalwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
 )
 
 func TestSessionTerminalReporterReconcilesCompetingCandidatesOnce(t *testing.T) {
 	var out bytes.Buffer
 	reporter := newSessionTerminalReporter()
 	reporter.markRunStarted()
-	renderer := newSessionReplayRenderer(&out, reporter)
+	terminalService := terminalwire.NewService()
+	renderer := terminalService.NewTranscriptRenderer(&out, reporter.observeStreamMessage)
 
-	if err := writeSessionReplayMessage(renderer, messages.StreamMessage{
+	if err := terminalService.WriteTranscriptMessage(renderer, messages.StreamMessage{
 		Type:  messages.StreamTypeTextDelta,
 		Value: messages.NewTextDeltaValue("accepted output"),
 	}); err != nil {
 		t.Fatalf("write accepted output: %v", err)
 	}
-	if err := writeSessionReplayMessage(renderer, messages.StreamMessage{
+	if err := terminalService.WriteTranscriptMessage(renderer, messages.StreamMessage{
 		Type: messages.StreamTypeSessionClose,
 		Value: messages.NewSessionCloseValueWithTerminal(
 			"",
-			string(SessionMaxDurationReason),
-			string(SessionMaxDurationReason),
-			SessionMaxDurationReason,
+			string(duration.MaxDurationReason),
+			string(duration.MaxDurationReason),
+			duration.MaxDurationReason,
 			messages.TerminalProvenanceLoop,
 			messages.TerminalOutputPartial,
 		),

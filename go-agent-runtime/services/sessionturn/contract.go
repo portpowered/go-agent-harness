@@ -389,6 +389,7 @@ type Runtime interface {
 }
 type Service interface {
 	Prepare(context.Context, Request) (Runtime, error)
+	StartPublication(context.Context, PublicationRequest) (Publication, error)
 	ResolveInstructions(context.Context, InstructionRequest) (string, error)
 	ResolveImageCapabilities(ImageCapabilityRequest) (ImageCapabilities, error)
 	PrepareImageParts([]string, ImageCapabilities) ([]messages.ImagePart, error)

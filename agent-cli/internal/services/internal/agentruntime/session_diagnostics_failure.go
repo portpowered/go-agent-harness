@@ -7,6 +7,8 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
@@ -53,12 +55,13 @@ func cancellationCausesOnly(causes []error) bool {
 func cancellationLeaf(err error) bool {
 	for _, candidate := range []error{
 		context.Canceled,
-		ErrSessionAudioResponseIncomplete,
+		runtimeSession.ErrLiveAudioResponseIncomplete,
 		ErrSessionAudioInputEndOfTurnLost,
-		ErrSessionScheduledAudioIncomplete,
-		ErrSessionUnresolvedToolResults,
-		ErrSessionToolContinuationIncomplete,
-		ErrSessionImageContinuationIncomplete,
+		runtimeSession.ErrLiveScheduledAudioIncomplete,
+		runtimeSession.ErrLiveScheduledAudioIncomplete,
+		sessionterminal.ErrUnresolvedToolResults,
+		runtimeSession.ErrLiveToolContinuationIncomplete,
+		runtimeSession.ErrLiveImageContinuationIncomplete,
 	} {
 		if errors.Is(err, candidate) {
 			return true

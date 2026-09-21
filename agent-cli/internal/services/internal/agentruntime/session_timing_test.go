@@ -54,7 +54,7 @@ func TestAwaitSessionFirstTurnUsesVirtualTimerAndParentCancellation(t *testing.T
 	defer cancel()
 	ack := make(chan error)
 	result := make(chan error, 1)
-	go func() { result <- awaitSessionFirstTurnWithClock(audioiowire.NewService(), ctx, ack, virtual) }()
+	go func() { result <- awaitSessionFirstTurnWithClock(ctx, ack, audioiowire.NewService(), virtual) }()
 	virtual.AdvanceBy(sessionFirstTurnAckTimeout - time.Nanosecond)
 	select {
 	case err := <-result:
@@ -74,18 +74,12 @@ func TestAwaitSessionFirstTurnUsesVirtualTimerAndParentCancellation(t *testing.T
 
 func TestEffectiveSessionDurationClockUsesPlanSource(t *testing.T) {
 	virtual := platformclock.NewDeterministic(time.Unix(0, 0).UTC(), time.Second)
-	clock, err := effectiveSessionDurationClock(sessionRuntimePlan{clockSource: virtual, loop: sessionLoopOptions{audioService: audioiowire.NewService()}}, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	clock := effectiveSessionDurationClock(sessionRuntimePlan{clockSource: virtual, loop: sessionLoopOptions{audioService: audioiowire.NewService()}}, nil)
 	if clock != virtual {
 		t.Fatalf("duration clock=%T, want shared virtual clock", clock)
 	}
 	custom := &durationTestClock{}
-	clock, err = effectiveSessionDurationClock(sessionRuntimePlan{clockSource: virtual}, custom)
-	if err != nil {
-		t.Fatal(err)
-	}
+	clock = effectiveSessionDurationClock(sessionRuntimePlan{clockSource: virtual}, custom)
 	if clock != custom {
 		t.Fatal("explicit test duration clock was replaced")
 	}

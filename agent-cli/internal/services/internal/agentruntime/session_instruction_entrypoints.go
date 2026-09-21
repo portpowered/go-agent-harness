@@ -11,9 +11,49 @@ import (
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	duration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 	sessionturnwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn/wire"
 )
+
+// RunSessionWithMaxDuration runs a session with a service-owned optional
+// duration bound. A zero duration keeps the existing unbounded plan path.
+func RunSessionWithMaxDuration(ctx context.Context, out io.Writer, opts SessionRunOptions, maxDuration time.Duration) error {
+	return RunSessionWithMaxDurationClock(ctx, out, opts, maxDuration, nil)
+}
+
+// RunSessionWithMaxDurationClock exposes the deterministic scheduler seam used
+// by public duration behavior tests and injected runtime callers.
+func RunSessionWithMaxDurationClock(ctx context.Context, out io.Writer, opts SessionRunOptions, maxDuration time.Duration, clock duration.TimerScheduler) (runErr error) {
+	service := durationwire.NewService()
+	if err := service.ValidateDuration(maxDuration); err != nil {
+		return err
+	}
+	var coordinator SessionCapabilityCoordinator
+	opts, coordinator = prepareSessionCapabilityCoordinator(opts)
+	defer func() { closeSessionCapabilityIfNeeded(coordinator, &runErr) }()
+	if err := validateSessionRunOptions(opts); err != nil {
+		return err
+	}
+	claim, err := ensureSessionRecordingClaim(&opts)
+	if err != nil {
+		return err
+	}
+	defer func() { releaseSessionClaim(claim, &runErr) }()
+	plan, err := planSessionRuntimeWithContext(ctx, opts)
+	if err != nil {
+		return err
+	}
+	if maxDuration == 0 {
+		return plan.run(ctx, out)
+	}
+	durationCtx, err := service.PrepareArtifacts(ctx)
+	if err != nil {
+		return err
+	}
+	return runSessionDurationPlan(durationCtx, out, plan, maxDuration, clock)
+}
 
 // RunSessionWithInstructions resolves the ask-path system-prompt contract and
 // applies the result to the realtime session before the first user turn.
@@ -125,7 +165,7 @@ func runSessionInstructionsWithSeed(ctx context.Context, out io.Writer, plan ses
 	if maxDuration == 0 {
 		return errors.Join(plan.run(ctx, output), output.Err())
 	}
-	durationCtx, err := prepareSessionDurationArtifacts(ctx)
+	durationCtx, err := durationwire.NewService().PrepareArtifacts(ctx)
 	if err != nil {
 		return err
 	}
@@ -136,15 +176,12 @@ func runSessionInstructionsWithSeed(ctx context.Context, out io.Writer, plan ses
 	return errors.Join(runErr, output.Err())
 }
 
-func admitSessionDurationInferencer(plan *sessionRuntimePlan) *sessionDurationAdmissionInferencer {
+func admitSessionDurationInferencer(plan *sessionRuntimePlan) duration.AdmissionInferencer {
 	if plan.inferencer == nil {
 		return nil
 	}
-	admitted := &sessionDurationAdmissionInferencer{
-		inner:     plan.inferencer,
-		admission: newSessionDurationAdmission(),
-		closeDone: make(chan struct{}),
-	}
+	service := durationwire.NewService()
+	admitted := service.NewAdmissionInferencer(plan.inferencer, service.NewEventAdmission(), make(chan struct{}))
 	plan.inferencer = admitted
 	return admitted
 }
@@ -189,7 +226,7 @@ func runSessionInstructionsDurationOrPlan(ctx context.Context, out io.Writer, pl
 	if maxDuration == 0 {
 		return plan.run(ctx, out)
 	}
-	durationCtx, err := prepareSessionDurationArtifacts(ctx)
+	durationCtx, err := durationwire.NewService().PrepareArtifacts(ctx)
 	if err != nil {
 		return err
 	}

@@ -8,11 +8,13 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	audiosubsystem "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems/audio"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -21,12 +23,16 @@ type sessionDurationError string
 func (e sessionDurationError) Error() string { return string(e) }
 
 const (
-	ErrInvalidDuration         sessionDurationError = "invalid session max duration"
-	ErrMaxDurationExceeded     sessionDurationError = "session exceeded maximum duration"
-	ErrProviderEmptyResponse   sessionDurationError = "silent provider returned an empty response"
-	ErrProviderLivenessTimeout sessionDurationError = "silent provider response timed out"
-	ErrSchedulerUnavailable    sessionDurationError = "session duration scheduler is required"
-	ErrFinalizationPanic       sessionDurationError = "session finalization panicked"
+	ErrInvalidDuration                  sessionDurationError = "invalid session max duration"
+	ErrMaxDurationExceeded              sessionDurationError = "session exceeded maximum duration"
+	ErrProviderEmptyResponse            sessionDurationError = "silent provider returned an empty response"
+	ErrProviderLivenessTimeout          sessionDurationError = "silent provider response timed out"
+	ErrAssistantResponseIncomplete      sessionDurationError = "audio session ended before the final assistant response"
+	ErrScheduledAudioIncomplete         sessionDurationError = "scheduled audio session ended before all turns completed"
+	ErrSchedulerUnavailable             sessionDurationError = "session duration scheduler is required"
+	ErrFinalizationPanic                sessionDurationError = "session finalization panicked"
+	LivenessClassificationEmptyResponse                      = "silent_provider_empty_response"
+	LivenessClassificationTimeout                            = "silent_provider_timeout"
 	// MaxDurationReason is the stable terminal reason published when the
 	// duration controller ends a run at its configured bound.
 	MaxDurationReason messages.TerminalReason = "max_duration"
@@ -107,10 +113,22 @@ type AdmissionInferencer interface {
 // that need optional complete-message capabilities.
 type AdmissionSession interface {
 	messages.Session
+	// SessionAdmissionClosed and SessionAdmissionAllows preserve an optional
+	// outer transport admission boundary through duration event wrapping.
+	SessionAdmissionClosed() bool
+	SessionAdmissionAllows(messages.StreamMessage) bool
+	SessionAdmissionAllowsCompleteMessage(messages.Message) bool
 	SendMessage(context.Context, messages.Message) bool
 	SendMessageWithoutResponse(context.Context, messages.Message) bool
 	SupportsCompleteMessages() bool
 	SupportsCompleteMessagesWithoutResponse() bool
+}
+
+// PlaybackDrainer is an optional session capability used during bounded
+// finalization. Admission wrappers preserve it so accepted device playback
+// can drain before the binding closes.
+type PlaybackDrainer interface {
+	DrainPlayback(context.Context) error
 }
 
 // LivenessOptions describes one response-progress watchdog.
@@ -124,6 +142,7 @@ type LivenessOptions struct {
 type LivenessError struct {
 	Classification     string
 	ResponseID         string
+	FailingEvent       messages.StreamMessageType
 	TerminalReason     messages.TerminalReason
 	TerminalProvenance messages.TerminalProvenance
 	OutputState        messages.TerminalOutputState
@@ -148,7 +167,7 @@ func (e *LivenessError) Unwrap() error {
 	if e.Cause != nil {
 		return e.Cause
 	}
-	if e.Classification == "silent_provider_timeout" {
+	if e.Classification == LivenessClassificationTimeout {
 		return ErrProviderLivenessTimeout
 	}
 	return ErrProviderEmptyResponse
@@ -207,6 +226,7 @@ type RetryDecision struct {
 // FinalizeRequest supplies ordered cleanup ports owned by the host.
 type FinalizeRequest struct {
 	Primary     error
+	Quiesce     func() error
 	DrainLoop   Loop
 	DrainPolicy DrainPolicy
 	Drain       func(context.Context) error
@@ -222,6 +242,10 @@ type DrainPolicy struct {
 	Clock       TimerScheduler
 	QuietPeriod time.Duration
 	WallSafety  time.Duration
+	// Pending reports service work that still needs loop output to settle, such
+	// as an accepted provider tool result awaiting its continuation response.
+	// WallSafety remains the final bound even while this callback returns true.
+	Pending func() bool
 	// LoopJoinTimeout bounds joining the loop after close and cancellation.
 	// Zero selects the service default.
 	LoopJoinTimeout time.Duration
@@ -290,6 +314,14 @@ type SessionEventSender interface {
 	SendSessionEvent(context.Context, messages.StreamMessage) error
 }
 
+// ScheduledInputSender is the transport effect needed to deliver one
+// admitted scheduled audio input. The duration service owns dispatch timing;
+// hosts implement only the ordered send operations.
+type ScheduledInputSender interface {
+	SendAudioInput(context.Context, []byte) error
+	SessionEventSender
+}
+
 // RunState contains the mutable session-loop decisions held by the duration
 // runner while one invocation is active. Handlers receive a copy and return
 // any updated value through MessageResult; they must not retain the value.
@@ -298,6 +330,7 @@ type RunState struct {
 	closeSent             bool
 	closeAfterOpenPending bool
 	drainPlayback         bool
+	awaitingResponse      bool
 }
 
 // PromptSent reports whether the opening prompt was sent.
@@ -311,6 +344,10 @@ func (s RunState) CloseAfterOpenPending() bool { return s.closeAfterOpenPending 
 
 // DrainPlayback reports whether finalization should drain session playback.
 func (s RunState) DrainPlayback() bool { return s.drainPlayback }
+
+// AwaitingResponse reports whether the last accepted end-of-turn dispatch is
+// still waiting for provider output.
+func (s RunState) AwaitingResponse() bool { return s.awaitingResponse }
 
 // WithPromptSent returns a state recording the opening prompt send.
 func (s RunState) WithPromptSent() RunState {
@@ -336,12 +373,95 @@ func (s RunState) WithDrainPlayback() RunState {
 	return s
 }
 
+// WithAwaitingResponse returns a state recording provider response wait.
+func (s RunState) WithAwaitingResponse(value bool) RunState {
+	s.awaitingResponse = value
+	return s
+}
+
 // MessageResult tells the duration service whether the host's ordinary
 // session completion rules selected a terminal boundary for the message.
 type MessageResult struct {
 	Stop    bool
 	Planned bool
 	State   *RunState
+}
+
+// ScheduledAudioDispatch selects when an already-admitted scheduled input may
+// be dispatched. The duration service owns the boundary decision; a host only
+// supplies the effect that sends the selected input.
+type ScheduledAudioDispatch string
+
+const (
+	ScheduledAudioCompletionGated ScheduledAudioDispatch = "completion-gated"
+	ScheduledAudioActiveResponse  ScheduledAudioDispatch = "active-response"
+)
+
+// RunPolicy contains the immutable, normalized session completion settings
+// used by the duration runner. It contains values, not decisions or mutable
+// invocation state.
+type RunPolicy struct {
+	Prompt                           string
+	PromptProvided                   bool
+	CloseAfterOpen                   bool
+	WaitForClose                     bool
+	HasAudioInput                    bool
+	RequireAssistantResponse         bool
+	RequireTerminalAssistantResponse bool
+	CloseAfterScheduledAudio         bool
+	ScheduledAudioDispatch           ScheduledAudioDispatch
+}
+
+// RunFacts are host observations used by service-owned run policy. These
+// callbacks must report facts only; they must not decide whether the run
+// continues or dispatch another input.
+type RunFacts struct {
+	LastMessageEndAdmitted              func() bool
+	HasToolLifecycleObligation          func() bool
+	HasTerminalToolContinuationFailure  func() bool
+	HasTerminalScheduledResponseFailure func() bool
+	AssistantResponseCompleted          func() bool
+	ProviderToolCallObserved            func() bool
+	ScheduledAudioComplete              func() bool
+	ScheduledAudioAwaitingConfiguration func() bool
+	ScheduledAudioReady                 func() bool
+}
+
+// RunObserver exposes session-owned observations to the bounded execution
+// service. Implementations report facts only; duration policy and the mutable
+// controller state remain service-owned.
+type RunObserver interface {
+	Active() bool
+	RunFacts() RunFacts
+	ToolLifecycleEvents() <-chan struct{}
+	SessionUpdatedPending() bool
+	SessionUpdatedReady() bool
+	EnrichLifecycleError(error) error
+	RetryDispatched(messages.StreamMessage)
+	ObserveStreamMessage(messages.StreamMessage)
+	NoteUserTextInput(string)
+	SetToolResultsEnabled(bool)
+	SetDurationController(Controller)
+	DispatchScheduledInputs(context.Context, ScheduledInputSender) error
+}
+
+// WakeResult carries facts observed while the host handles invocation-only
+// wake sources such as an audio reader or an event-driven input queue.
+type WakeResult struct {
+	AudioInputCompleted bool
+	AudioInputError     error
+}
+
+// RunEffects expose resource operations around service-owned message and
+// shutdown policy. They are called only after the service selects the
+// corresponding boundary.
+type RunEffects struct {
+	SessionCreated          func(context.Context, Loop) error
+	SessionOpened           func(context.Context, Loop) error
+	AwaitFirstTurn          func(context.Context) error
+	NoteUserTextInput       func(string)
+	DispatchScheduledInputs func(context.Context, Loop) error
+	OnWake                  func(context.Context, Loop) (WakeResult, error)
 }
 
 // MessageHandler is the narrow host callback for session-specific prompt,
@@ -371,36 +491,80 @@ type SessionUpdatedWait struct {
 // boundaries to the same service-owned liveness state.
 type LoopFactory func(context.Context, AdmissionInferencer, Controller) (Loop, error)
 
+// AudioInputPort supplies one session's local audio reader. The implementation
+// owns only the source-specific binding and read operation; the duration
+// service owns the worker, cancellation, wake signal, result collection, and
+// shutdown join.
+type AudioInputPort struct {
+	BindContext func(context.Context)
+	Run         func(context.Context, Loop) error
+}
+
+// AudioInterruptionPort admits one finite audio turn after an external wake.
+// The source pump, pending-item bound, wake signal, and worker join belong to
+// the duration service; Dispatch is the host's ordered audio-send effect.
+type AudioInterruptionPort struct {
+	Source   <-chan audioio.ScheduledAudioInput
+	Dispatch func(context.Context, Loop, audioio.ScheduledAudioInput) error
+}
+
 // RunRequest describes one bounded session execution. Resource callbacks are
 // explicit ports so construction remains inert and the service retains the
 // shutdown order without importing a host or transport package.
 type RunRequest struct {
-	Context       context.Context
-	Inferencer    messages.SessionInferencer
-	Admission     AdmissionInferencer
-	Clock         TimerScheduler
-	LivenessClock TimerScheduler
-	MaxDuration   time.Duration
-	Liveness      LivenessOptions
-	Retry         RetryPolicy
+	Context            context.Context
+	Inferencer         messages.SessionInferencer
+	Admission          AdmissionInferencer
+	Clock              TimerScheduler
+	LivenessClock      TimerScheduler
+	MaxDuration        time.Duration
+	AudioInput         AudioInputPort
+	AudioInterruptions AudioInterruptionPort
+	// AwaitingResponseOnCancel seeds response wait for sessions whose opening
+	// dispatch is initiated outside the duration loop handler.
+	AwaitingResponseOnCancel bool
+	// MaxDurationExpired returns any lifecycle failure that must survive the
+	// service's bounded terminal cause.
+	MaxDurationExpired func() error
+	Liveness           LivenessOptions
+	Retry              RetryPolicy
 	// RetryDispatched observes a successfully sent retry control for tracing.
 	// It must not make policy decisions or perform another transport write.
 	RetryDispatched func(messages.StreamMessage)
-	Terminal        TerminalSource
-	Publication     Publication
-	Artifacts       ArtifactLifecycle
-	LoopFactory     LoopFactory
-	Handle          MessageHandler
-	Drain           DrainHandler
-	DrainPolicy     DrainPolicy
-	Close           func() error
-	Binding         func() error
-	ExternalErrors  <-chan error
-	Wake            <-chan struct{}
-	OnWake          WakeHandler
-	Done            <-chan struct{}
-	DoneError       func() error
-	SessionUpdated  SessionUpdatedWait
+	// Quiesce stops host-owned producers before draining accepted loop and
+	// playback work. The service invokes it once at the start of shutdown.
+	Quiesce        func() error
+	Terminal       TerminalSource
+	Publication    Publication
+	Artifacts      ArtifactLifecycle
+	LoopFactory    LoopFactory
+	Handle         MessageHandler
+	Drain          DrainHandler
+	DrainPolicy    DrainPolicy
+	Close          func() error
+	Binding        func() error
+	ExternalErrors <-chan error
+	// ExternalErrorSources is evaluated after LoopFactory returns, when host
+	// resource error channels become available. The duration service owns the
+	// bounded fan-in and stops its forwarding workers with Context.
+	ExternalErrorSources func() []<-chan error
+	Wake                 <-chan struct{}
+	// WakeSources are independent host observations that wake one invocation.
+	// The duration service coalesces them into its bounded runner signal.
+	WakeSources []<-chan struct{}
+	OnWake      WakeHandler
+	Done        <-chan struct{}
+	// DoneSources close the run when any host-owned completion signal closes.
+	DoneSources    []<-chan struct{}
+	DoneError      func() error
+	SessionUpdated SessionUpdatedWait
+	Policy         RunPolicy
+	Facts          RunFacts
+	Effects        RunEffects
+	// Observer supplies diagnostic facts used by the duration policy. The
+	// service derives Facts, observer wakeups, readiness observations, liveness
+	// and retry enablement from its presence.
+	Observer RunObserver
 }
 
 // Result is the controller's terminal snapshot after cleanup.
@@ -408,6 +572,99 @@ type Result struct {
 	OutputState     messages.TerminalOutputState
 	TerminalWritten bool
 	Expired         bool
+}
+
+// CompletionRequest contains host observations for the final response and
+// scheduled-input boundaries. The duration service decides which failures
+// apply and preserves their causes while composing the final result.
+type CompletionRequest struct {
+	RunError                      error
+	AudioOutputError              func() error
+	AssistantResponseIncomplete   error
+	ScheduledAudioIncompleteCause error
+	HasAudioInput                 bool
+	RequireAssistantResponse      bool
+	RequireTerminalAssistantReply bool
+	ProviderToolCallObserved      bool
+	AssistantResponseCompleted    bool
+	RoomBoundCancellation         bool
+	DurationExpired               bool
+	CloseAfterScheduledAudio      bool
+	ScheduledAudioIncomplete      bool
+	ScheduledAudioCompleted       int
+	ScheduledAudioDispatched      int
+	ScheduledAudioCount           int
+	ProviderScheduledStatus       string
+	ProviderScheduledErrorCode    string
+	ProviderScheduledErrorDetails string
+	// Observer supplies completion facts from the active session. Completion
+	// policy reads these facts inside the service instead of being assembled by
+	// a transport caller.
+	Observer CompletionObserver
+	// BoundCancellation is checked by the service at completion time so the
+	// cancellation classification remains part of session-duration policy.
+	BoundCancellation <-chan struct{}
+}
+
+// CompletionFacts are observations needed to classify a bounded session's
+// final response and scheduled-audio status.
+type CompletionFacts struct {
+	ProviderToolCallObserved     bool
+	AssistantResponseCompleted   bool
+	ScheduledAudioIncomplete     bool
+	ScheduledAudioCompleted      int
+	ScheduledAudioDispatched     int
+	ScheduledAudioCount          int
+	ProviderScheduledStatus      string
+	ProviderScheduledErrorCode   string
+	ProviderScheduledErrorDetail string
+}
+
+// CompletionObserver supplies final response and scheduled-audio facts to
+// the duration service without transferring ownership of observation state.
+type CompletionObserver interface {
+	Active() bool
+	CompletionFacts() CompletionFacts
+}
+
+// ScheduledAudioIncompleteError carries the deterministic schedule counters
+// and bounded provider metadata observed at a terminal boundary.
+type ScheduledAudioIncompleteError struct {
+	Completed         int
+	Dispatched        int
+	Scheduled         int
+	ProviderStatus    string
+	ProviderErrorCode string
+	ProviderDetails   string
+	Cause             error
+}
+
+func (e *ScheduledAudioIncompleteError) Error() string {
+	if e == nil {
+		return ErrScheduledAudioIncomplete.Error()
+	}
+	message := fmt.Sprintf("%s: completed=%d dispatched=%d scheduled=%d", ErrScheduledAudioIncomplete, e.Completed, e.Dispatched, e.Scheduled)
+	annotations := make([]string, 0, 3)
+	if status := strings.TrimSpace(e.ProviderStatus); status != "" {
+		annotations = append(annotations, "status="+status)
+	}
+	if code := strings.TrimSpace(e.ProviderErrorCode); code != "" {
+		annotations = append(annotations, "code="+code)
+	}
+	if detail := strings.TrimSpace(e.ProviderDetails); detail != "" {
+		annotations = append(annotations, "detail="+detail)
+	}
+	if len(annotations) > 0 {
+		message += " (" + strings.Join(annotations, "; ") + ")"
+	}
+	return message
+}
+
+func (e *ScheduledAudioIncompleteError) Unwrap() error {
+	if e != nil && e.Cause != nil {
+		return e.Cause
+	}
+	return ErrScheduledAudioIncomplete
 }
 
 // State owns one bounded-session observation and terminal-admission lifecycle.
@@ -467,6 +724,10 @@ type LifecycleFailures struct {
 type Service interface {
 	Begin(Options) (Controller, error)
 	Run(RunRequest) error
+	// RunWithResult returns the immutable terminal snapshot produced by the
+	// service-owned controller along with the run error.
+	RunWithResult(RunRequest) (Result, error)
+	Complete(CompletionRequest) error
 	NewFinalizer(FinalizationPorts) Finalizer
 	NewState(TerminalSource) State
 	PublishMaxDuration(Publication, messages.TerminalOutputState) error

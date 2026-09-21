@@ -830,13 +830,14 @@ func boundedRoomCleanupOperation(cleanup *roomCleanupWaiter, label string, opera
 	done := make(chan error, 1)
 	go func() { done <- operation() }()
 
-	var timeout <-chan time.Time
+	var timeout <-chan struct{}
 	var timer *time.Timer
 	if cleanup != nil && cleanup.timer != nil {
 		timeout = cleanup.done()
 	} else {
-		timer = time.NewTimer(roomCleanupTimeout)
-		timeout = timer.C
+		expired := make(chan struct{})
+		timer = time.AfterFunc(roomCleanupTimeout, func() { close(expired) })
+		timeout = expired
 		defer timer.Stop()
 	}
 	select {

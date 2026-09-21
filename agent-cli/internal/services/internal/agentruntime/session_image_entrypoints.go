@@ -12,6 +12,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 	sessionturnwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn/wire"
 )
@@ -242,7 +243,7 @@ func runSessionImageWithTextSeed(ctx context.Context, out io.Writer, plan sessio
 	if opts.MaxDuration == 0 || plan.loop.AudioIn != nil {
 		return errors.Join(plan.run(ctx, output), output.Err())
 	}
-	durationCtx, err := prepareSessionDurationArtifacts(ctx)
+	durationCtx, err := durationwire.NewService().PrepareArtifacts(ctx)
 	if err != nil {
 		return err
 	}
@@ -259,7 +260,7 @@ func runSessionImageWithoutSeed(ctx context.Context, out io.Writer, plan session
 }
 
 func runSessionImageDuration(ctx context.Context, out io.Writer, plan sessionRuntimePlan, maxDuration time.Duration) error {
-	durationCtx, err := prepareSessionDurationArtifacts(ctx)
+	durationCtx, err := durationwire.NewService().PrepareArtifacts(ctx)
 	if err != nil {
 		return err
 	}

@@ -9,6 +9,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	terminalwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
 )
 
 // prepareSessionStreamOutput gives an unowned stream its terminal renderer.
@@ -20,9 +21,10 @@ func prepareSessionStreamOutput(out io.Writer, opts *sessionLoopOptions) (io.Wri
 	reporter := newSessionTerminalReporter()
 	opts.terminalReporter = reporter
 	reporter.markRunStarted()
-	renderer := newSessionReplayRenderer(out, reporter)
+	terminalService := terminalwire.NewService()
+	renderer := terminalService.NewTranscriptRenderer(out, reporter.observeStreamMessage)
 	return renderer, func(runErr error) error {
-		runErr = errors.Join(runErr, renderer.finishTranscript())
+		runErr = errors.Join(runErr, renderer.Finish())
 		return errors.Join(runErr, reporter.publish(out, runErr))
 	}
 }
@@ -31,7 +33,6 @@ func newObservedSessionLoop(inferencer messages.SessionInferencer, opts sessionL
 	observed := newObservedSessionInferencer(inferencer, opts.runtime)
 	observed.progress = opts.observer
 	if opts.observer != nil {
-		opts.observer.setLivenessClock(opts.livenessClock)
 		opts.observer.setToolResultsEnabled(opts.ToolExecutor != nil)
 	}
 	loop, err := agentloop.New(duplexSessionLoopOptions(observed, opts)...)

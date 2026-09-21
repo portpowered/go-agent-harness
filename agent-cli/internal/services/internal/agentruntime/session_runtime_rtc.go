@@ -436,7 +436,7 @@ func (i *sessionRTCRuntimeInferencer) SetSessionAudioOutput(format models.AudioF
 	if i == nil || i.inner == nil {
 		return
 	}
-	if configurer, ok := i.inner.(runtimeAudioOutputConfigurer); ok {
+	if configurer, ok := i.inner.(sessionAudioOutputConfigurer); ok {
 		configurer.SetSessionAudioOutput(format, rate)
 	}
 }
@@ -445,7 +445,7 @@ func (i *sessionRTCRuntimeInferencer) SetSessionAudioInput(format models.AudioFo
 	if i == nil || i.inner == nil {
 		return
 	}
-	if configurer, ok := i.inner.(runtimeAudioInputConfigurer); ok {
+	if configurer, ok := i.inner.(sessionAudioInputConfigurer); ok {
 		configurer.SetSessionAudioInput(format, rate)
 	}
 }
@@ -533,13 +533,13 @@ func (s *sessionRTCRuntimeSession) SendMessageWithoutResponse(ctx context.Contex
 }
 
 func (s *sessionRTCRuntimeSession) SupportsCompleteMessages() bool {
-	complete, _ := completeMessageCapabilities(s.Session)
-	return complete
+	_, ok := s.Session.(sessionturn.CompleteMessageSender)
+	return ok
 }
 
 func (s *sessionRTCRuntimeSession) SupportsCompleteMessagesWithoutResponse() bool {
-	_, withoutResponse := completeMessageCapabilities(s.Session)
-	return withoutResponse
+	_, ok := s.Session.(sessionturn.CompleteMessageWithoutResponseSender)
+	return ok
 }
 
 // SendWithOutcome preserves the provider's typed send lifecycle through the

@@ -290,9 +290,8 @@ func (s *boundSession) DrainPlayback(ctx context.Context) error {
 	if s == nil || s.binding == nil || s.binding.sink == nil {
 		return nil
 	}
-	mediaOwner, ok := s.Session.(audio.MediaSession)
+	media, ok := rtcMedia(s.Session)
 	if ok {
-		media := mediaOwner.RTCMedia()
 		if err := closeInboundMedia(media.Inbound); err != nil {
 			return err
 		}

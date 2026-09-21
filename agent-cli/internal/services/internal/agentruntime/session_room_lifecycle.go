@@ -10,6 +10,7 @@ import (
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	runtimeRoomsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
+	duration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"sort"
 	"strings"
@@ -70,31 +71,28 @@ func (r *roomParticipantRuntime) markObserverDone() {
 }
 
 type roomCleanupWaiter struct {
-	timer *time.Timer
+	timer   *time.Timer
+	expired chan struct{}
 }
 
 func (w *roomCleanupWaiter) start() {
 	if w == nil || w.timer != nil {
 		return
 	}
-	w.timer = time.NewTimer(roomCleanupTimeout)
+	w.expired = make(chan struct{})
+	w.timer = time.AfterFunc(roomCleanupTimeout, func() { close(w.expired) })
 }
-func (w *roomCleanupWaiter) done() <-chan time.Time {
-	if w == nil || w.timer == nil {
+func (w *roomCleanupWaiter) done() <-chan struct{} {
+	if w == nil || w.expired == nil {
 		return nil
 	}
-	return w.timer.C
+	return w.expired
 }
 func (w *roomCleanupWaiter) stop() {
 	if w == nil || w.timer == nil {
 		return
 	}
-	if !w.timer.Stop() {
-		select {
-		case <-w.timer.C:
-		default:
-		}
-	}
+	w.timer.Stop()
 	w.timer = nil
 }
 
@@ -320,6 +318,34 @@ func (l *roomParticipantLifecycle) terminalMetadata() (string, messages.Terminal
 		return "", "", "", ""
 	}
 	return backend.TerminalMetadata()
+}
+
+func sessionLivenessMetadata(err error) (string, messages.TerminalReason, messages.TerminalProvenance, messages.TerminalOutputState) {
+	var failure *duration.LivenessError
+	if !errors.As(err, &failure) || failure == nil {
+		return "", "", "", ""
+	}
+	return failure.Classification, failure.TerminalReason, failure.TerminalProvenance, failure.OutputState
+}
+
+func applyRoomParticipantTerminalMetadata(result *RoomParticipantResult, lifecycle *roomParticipantLifecycle, err error) {
+	if result == nil {
+		return
+	}
+	classification, terminalReason, provenance, outputState := "", messages.TerminalReason(""), messages.TerminalProvenance(""), messages.TerminalOutputState("")
+	if lifecycle != nil {
+		classification, terminalReason, provenance, outputState = lifecycle.terminalMetadata()
+	}
+	if classification == "" {
+		classification, terminalReason, provenance, outputState = sessionLivenessMetadata(err)
+	}
+	if classification == "" {
+		return
+	}
+	result.Classification = classification
+	result.TerminalReason = string(terminalReason)
+	result.TerminalProvenance = string(provenance)
+	result.OutputState = string(outputState)
 }
 func (l *roomParticipantLifecycle) terminalObservationSnapshot() roomParticipantTerminalObservation {
 	backend := l.backendLifecycle()

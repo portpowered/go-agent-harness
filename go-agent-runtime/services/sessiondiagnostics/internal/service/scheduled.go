@@ -268,12 +268,9 @@ func (r *reducer) noteScheduledTerminalLocked(rawID string, terminal *sessiondia
 }
 
 func (r *reducer) rememberRetryLocked(responseID, lifecycleID string, terminal *sessiondiagnostics.Terminal) sessiondiagnostics.Observation {
+	_ = terminal
 	r.retryCandidateSet = false
 	r.retryCandidateID = ""
-	delay, eligible := retryDecision(terminal)
-	if !eligible {
-		return sessiondiagnostics.Observation{}
-	}
 	index, ok := r.scheduledIndexForLocked(lifecycleID)
 	if !ok {
 		return sessiondiagnostics.Observation{}
@@ -281,7 +278,33 @@ func (r *reducer) rememberRetryLocked(responseID, lifecycleID string, terminal *
 	r.retryCandidateIndex = index
 	r.retryCandidateSet = true
 	r.retryCandidateID = strings.TrimSpace(responseID)
-	return sessiondiagnostics.Observation{Accepted: true, ScheduledIndex: index, HasScheduledIndex: true, Retry: sessiondiagnostics.RetryRequest{Delay: delay}}
+	return sessiondiagnostics.Observation{Accepted: true, ScheduledIndex: index, HasScheduledIndex: true}
+}
+
+func (r *reducer) retryDispatchedLocked() sessiondiagnostics.Observation {
+	if !r.retryCandidateSet {
+		return sessiondiagnostics.Observation{}
+	}
+	index := r.retryCandidateIndex
+	r.retryCandidateSet = false
+	r.retryCandidateID = ""
+	if index < 0 || index >= len(r.scheduled) || !r.scheduled[index].Bound || r.scheduled[index].Disposition != sessiondiagnostics.DispositionPending {
+		return sessiondiagnostics.Observation{}
+	}
+	lifecycle := &r.scheduled[index]
+	lifecycle.RetryUsed = true
+	lifecycle.RetryPending = true
+	lifecycle.TerminalFailure = false
+	lifecycle.TerminalStatus = ""
+	lifecycle.TerminalErrorCode = ""
+	lifecycle.TerminalStatusDetails = ""
+	for callID, state := range r.continuations {
+		if state.ContinuationScheduledSet && state.ContinuationScheduledIndex == index {
+			clearContinuationTerminal(&state)
+			r.continuations[callID] = state
+		}
+	}
+	return sessiondiagnostics.Observation{Accepted: true, ScheduledIndex: index, HasScheduledIndex: true}
 }
 
 func (r *reducer) claimRetryLocked(rawID string, terminal *sessiondiagnostics.Terminal) (sessiondiagnostics.Observation, time.Duration, bool, error) {

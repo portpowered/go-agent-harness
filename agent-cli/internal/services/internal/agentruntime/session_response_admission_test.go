@@ -9,6 +9,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 )
 
 func TestSessionProgressObserver_AdmitsOnlyResponsesWithOutput(t *testing.T) {
@@ -119,12 +120,26 @@ func TestSessionProgressObserver_AdmitsOnlyResponsesWithOutput(t *testing.T) {
 func TestSessionProgressObserver_ClassifiesExplicitEmptyPartialResponse(t *testing.T) {
 	sink := &diagnosticRecordSink{}
 	observer := newSessionProgressObserver(sink, nil, "test-provider", "test-model")
-	observer.observe(messages.StreamMessage{
+	controller, err := durationwire.NewService().Begin(sessionduration.Options{
+		Context:  context.Background(),
+		Clock:    realSessionDurationClock{},
+		Liveness: sessionduration.LivenessOptions{Enabled: true},
+	})
+	if err != nil {
+		t.Fatalf("begin session duration controller: %v", err)
+	}
+	defer func() { _, _ = controller.Finalize(context.Background(), sessionduration.FinalizeRequest{}) }()
+	observer.setDurationController(controller)
+	observe := func(event messages.StreamMessage) {
+		controller.Observe(event)
+		observer.observe(event)
+	}
+	observe(messages.StreamMessage{
 		Type:  messages.StreamTypeSessionOpen,
 		Value: messages.NewSessionOpenValue("session-empty", "test"),
 	})
-	observer.observe(responseMessageStart())
-	observer.observe(messages.StreamMessage{
+	observe(responseMessageStart())
+	observe(messages.StreamMessage{
 		Type:       messages.StreamTypeMessageEnd,
 		Role:       messages.RoleAssistant,
 		ResponseID: "response-empty",
@@ -140,7 +155,7 @@ func TestSessionProgressObserver_ClassifiesExplicitEmptyPartialResponse(t *testi
 		t.Fatalf("empty partial response completed turns = %d, want 0", observer.turnsCompleted)
 	}
 	livenessErr := observer.livenessFailure()
-	if livenessErr == nil || !errors.Is(livenessErr, ErrSilentProviderEmptyResponse) {
+	if livenessErr == nil || !errors.Is(livenessErr, sessionduration.ErrProviderEmptyResponse) {
 		t.Fatalf("liveness error = %v, want ErrSilentProviderEmptyResponse", livenessErr)
 	}
 	var typedErr *sessionduration.LivenessError
@@ -148,7 +163,7 @@ func TestSessionProgressObserver_ClassifiesExplicitEmptyPartialResponse(t *testi
 		t.Fatalf("liveness error = %#v, want typed response-empty error", livenessErr)
 	}
 
-	if err := observer.finish(livenessErr); err == nil || !errors.Is(err, ErrSilentProviderEmptyResponse) {
+	if err := observer.finish(livenessErr); err == nil || !errors.Is(err, sessionduration.ErrProviderEmptyResponse) {
 		t.Fatalf("finish error = %v, want ErrSilentProviderEmptyResponse", err)
 	}
 	records := sink.events(SessionDiagnosticEventFailure)
@@ -156,7 +171,7 @@ func TestSessionProgressObserver_ClassifiesExplicitEmptyPartialResponse(t *testi
 		t.Fatalf("session failure records = %d, want exactly one", len(records))
 	}
 	want := map[string]string{
-		fieldClassification:     SessionSilentProviderEmptyResponseClassification,
+		fieldClassification:     sessionduration.LivenessClassificationEmptyResponse,
 		fieldTerminalReason:     string(messages.TerminalReasonTerminalFailure),
 		fieldTerminalProvenance: string(messages.TerminalProvenanceSession),
 		fieldOutputState:        string(messages.TerminalOutputNone),

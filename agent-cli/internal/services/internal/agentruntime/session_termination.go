@@ -5,13 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	gwproviders "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
+	terminalwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
 )
 
 // sessionStragglerDrainQuietPeriod is the bounded quiet period used before a
@@ -113,119 +112,12 @@ func (b *sessionTerminationBoundary) terminate(primary error) error {
 	return b.result
 }
 
-func writeSessionReplayMessageUnscoped(out io.Writer, msg messages.StreamMessage) error {
-	switch v := msg.Value.(type) {
-	case *messages.TextDeltaValue:
-		_, err := fmt.Fprint(out, v.Content)
-		return err
-	case *messages.TranscriptDeltaValue:
-		if v == nil || v.Text == "" || strings.TrimSpace(v.Text) == "" {
-			return nil
-		}
-		_, err := fmt.Fprintf(out, "%s: %s\n", sessionReplayTranscriptLabel(msg.Role), v.Text)
-		return err
-	case *messages.TranscriptEndValue:
-		if v == nil || v.FullText == "" || strings.TrimSpace(v.FullText) == "" {
-			return nil
-		}
-		_, err := fmt.Fprintf(out, "%s: %s\n", sessionReplayTranscriptLabel(msg.Role), v.FullText)
-		return err
-	case *messages.SessionCloseValue:
-		return writeSessionReplayClose(out, v, true)
-	case *messages.ErrorValue:
-		return writeSessionReplayError(out, v)
-	}
-	return nil
-}
-
-func writeSessionReplayError(out io.Writer, value *messages.ErrorValue) error {
-	if value == nil || value.IsNonTerminal() {
-		return nil
-	}
-	fields := sessionErrorFields(value)
-	wrapCause := func(message string) error {
-		if value.Err == nil {
-			return errors.New(message)
-		}
-		return fmt.Errorf("%s: %w", message, value.Err)
-	}
-	if value.Message != "" {
-		if fields != "" {
-			return wrapCause(fmt.Sprintf("session error: %s [%s]", value.Message, fields))
-		}
-		return wrapCause(fmt.Sprintf("session error: %s", value.Message))
-	}
-	if fields != "" {
-		return wrapCause(fmt.Sprintf("session error [%s]", fields))
-	}
-	return wrapCause("session error")
-}
-
-func writeSessionReplayClose(out io.Writer, value *messages.SessionCloseValue, leadingNewline bool) error {
-	if value == nil {
-		return nil
-	}
-	if value.Reason != "" {
-		prefix := ""
-		if leadingNewline {
-			prefix = "\n"
-		}
-		if _, err := fmt.Fprintf(out, "%s[session closed: %s]\n", prefix, value.Reason); err != nil {
-			return err
-		}
-	}
-	if fields := sessionTerminalFields(value.Classification, value.TerminalReason, value.TerminalProvenance, value.OutputState); fields != "" {
-		_, err := fmt.Fprintf(out, "[session terminal: %s]\n", fields)
-		return err
-	}
-	return nil
-}
-
 func isTerminalErrorMessage(msg messages.StreamMessage) bool {
 	if msg.Type != messages.StreamTypeError {
 		return false
 	}
 	value, ok := msg.Value.(*messages.ErrorValue)
 	return !ok || value.IsTerminal()
-}
-
-func sessionErrorFields(value *messages.ErrorValue) string {
-	if value == nil {
-		return ""
-	}
-	classification := value.Classification
-	if classification == "" && (value.ErrorType != "" || value.Code != "" || value.Message != "") {
-		classification = gwproviders.SessionErrorClassification(value.ErrorType, value.Code, value.Message)
-	}
-	fields := sessionTerminalFields(classification, value.TerminalReason, value.TerminalProvenance, value.OutputState)
-	providerFields := make([]string, 0, 2)
-	if value.ErrorType != "" {
-		providerFields = append(providerFields, "error_type="+value.ErrorType)
-	}
-	if value.Code != "" {
-		providerFields = append(providerFields, "code="+value.Code)
-	}
-	if fields != "" {
-		providerFields = append([]string{fields}, providerFields...)
-	}
-	return strings.Join(providerFields, " ")
-}
-
-func sessionTerminalFields(classification string, reason messages.TerminalReason, provenance messages.TerminalProvenance, outputState messages.TerminalOutputState) string {
-	var fields []string
-	if classification != "" {
-		fields = append(fields, "classification="+classification)
-	}
-	if reason != "" {
-		fields = append(fields, "terminal_reason="+string(reason))
-	}
-	if provenance != "" {
-		fields = append(fields, "terminal_provenance="+string(provenance))
-	}
-	if outputState != "" {
-		fields = append(fields, "output_state="+string(outputState))
-	}
-	return strings.Join(fields, " ")
 }
 
 func flushBufferedSessionLoopMessages(out io.Writer, loop *agentloop.AgentLoop, obs *sessionProgressObserver) error {
@@ -237,7 +129,7 @@ func flushBufferedSessionLoopMessages(out io.Writer, loop *agentloop.AgentLoop, 
 		if obs != nil {
 			obs.observe(msg)
 		}
-		if err := writeSessionReplayMessage(out, msg); err != nil {
+		if err := terminalwire.NewService().WriteTranscriptMessage(out, msg); err != nil {
 			return err
 		}
 	}

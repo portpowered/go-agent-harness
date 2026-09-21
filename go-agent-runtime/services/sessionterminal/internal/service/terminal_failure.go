@@ -11,6 +11,9 @@ import (
 )
 
 func terminalFailure(request sessionterminal.Request) *sessionterminal.FailureFacts {
+	if request.DurationExpired {
+		return nil
+	}
 	if request.Failure == nil && !hasLifecycleObligation(request) && contextOnlyError(request.RunError) {
 		return nil
 	}

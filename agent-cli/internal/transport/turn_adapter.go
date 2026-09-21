@@ -8,6 +8,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
+	sessionturnwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn/wire"
 )
 
 // SessionTurnBrowserRequest translates broker events at the host boundary.
@@ -43,17 +44,21 @@ func SessionTurnBrowserRequest(watch func(context.Context) <-chan webmcp.BrokerE
 // StartSessionTurnPublication forwards provider updates through the already
 // prepared service runtime. It does not prepare or retain runtime state.
 func StartSessionTurnPublication(ctx context.Context, runtime sessionturn.Runtime, loop *agentloop.AgentLoop, browser sessionturn.BrowserRequest, base, initial []messages.ToolDefinition) (sessionturn.Publication, error) {
-	if runtime == nil || loop == nil || browser.Watch == nil || browser.Refresh == nil {
+	if loop == nil || browser.Watch == nil || browser.Refresh == nil {
 		return nil, nil
 	}
-	return runtime.StartPublication(ctx, sessionturn.PublicationRequest{
+	request := sessionturn.PublicationRequest{
 		BaseDefinitions:    base,
 		InitialDefinitions: initial,
 		Browser:            browser,
 		Publish: func(ctx context.Context, definitions []messages.ToolDefinition) error {
 			return loop.SendSessionEvent(ctx, messages.StreamMessage{Type: messages.StreamTypeSessionUpdate, Value: messages.NewSessionUpdateValue(&messages.SessionUpdateConfig{Tools: definitions})})
 		},
-	})
+	}
+	if runtime != nil {
+		return runtime.StartPublication(ctx, request)
+	}
+	return sessionturnwire.NewDefaultService().StartPublication(ctx, request)
 }
 
 func StopPublication(publication sessionturn.Publication) {

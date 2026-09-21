@@ -14,6 +14,9 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
+	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	runtimedeviceswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
@@ -40,7 +43,7 @@ func TestRunSessionWithAudioOutAndRTCDeviceOutputRoutesOneSession(t *testing.T) 
 		closed: make(chan struct{}),
 	}
 	inferencer := &combinedAudioOutputInferencer{
-		media:             RTCMediaEndpoints{Inbound: media},
+		media:             audio.MediaEndpoints{Inbound: media},
 		audioPCM:          pcm16Bytes(fileSamples),
 		allowSessionClose: make(chan struct{}),
 	}
@@ -50,13 +53,13 @@ func TestRunSessionWithAudioOutAndRTCDeviceOutputRoutesOneSession(t *testing.T) 
 	defer cancel()
 	runErr := make(chan error, 1)
 	go func() {
-		runErr <- RunSessionWithAudioOut(ctx, io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
+		runErr <- RunSessionWithAudioOut(ctx, io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 			ReplayPath:        "synthetic.json",
 			Prompt:            "hello",
 			PromptProvided:    true,
 			SessionInferencer: inferencer,
-			RTCDeviceBinding: RTCDeviceBindingRequest{
-				Registry:      registry,
+			DeviceService:     runtimedeviceswire.NewService(registry, audioiowire.NewService()),
+			RTCBinding: runtimedevices.RTCBindingRequest{
 				OutputDevice:  "virtual:output",
 				OutputPresent: true,
 			},
@@ -115,7 +118,7 @@ func TestRunSessionWithAudioOutAndRTCDeviceOutputRoutesOneSession(t *testing.T) 
 }
 
 type combinedAudioOutputInferencer struct {
-	media             RTCMediaEndpoints
+	media             audio.MediaEndpoints
 	audioPCM          []byte
 	allowSessionClose chan struct{}
 	connects          atomic.Int32
@@ -142,7 +145,7 @@ func (i *combinedAudioOutputInferencer) ConnectSession(ctx context.Context) (mes
 type combinedAudioOutputSession struct {
 	receive           *messages.TypedBuffer[messages.StreamMessage]
 	done              chan struct{}
-	media             RTCMediaEndpoints
+	media             audio.MediaEndpoints
 	audioPCM          []byte
 	allowSessionClose chan struct{}
 
@@ -207,7 +210,7 @@ func (s *combinedAudioOutputSession) Close() error {
 	return nil
 }
 
-func (s *combinedAudioOutputSession) RTCMedia() RTCMediaEndpoints { return s.media }
+func (s *combinedAudioOutputSession) RTCMedia() audio.MediaEndpoints { return s.media }
 
 type singleFrameInboundMedia struct {
 	frame      audio.PCMFrame
@@ -239,5 +242,5 @@ func (m *singleFrameInboundMedia) Close() error {
 
 var _ messages.SessionInferencer = (*combinedAudioOutputInferencer)(nil)
 var _ messages.Session = (*combinedAudioOutputSession)(nil)
-var _ RTCMediaSession = (*combinedAudioOutputSession)(nil)
+var _ audio.MediaSession = (*combinedAudioOutputSession)(nil)
 var _ audio.InboundMedia = (*singleFrameInboundMedia)(nil)

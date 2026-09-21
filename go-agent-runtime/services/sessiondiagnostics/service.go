@@ -54,6 +54,7 @@ const (
 	EventNoteScheduledTerminal     EventKind = "scheduled.note_terminal"
 	EventRememberRetry             EventKind = "scheduled.remember_retry"
 	EventClaimRetry                EventKind = "scheduled.claim_retry"
+	EventRetryDispatched           EventKind = "scheduled.retry_dispatched"
 	EventScheduledDisposition      EventKind = "scheduled.disposition"
 	EventToolCall                  EventKind = "tool.call"
 	EventToolResultAccepted        EventKind = "tool.result_accepted"

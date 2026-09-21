@@ -7,6 +7,9 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	sessionduration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 )
 
 type scheduledInputDispatchProbe struct {
@@ -26,15 +29,29 @@ func TestScheduledAudioCompletionErrorJoinsPrimaryAndReportsCounts(t *testing.T)
 	observer.turnsCompleted = 2
 
 	primary := errors.New("provider closed cleanly")
-	opts := sessionLoopOptions{CloseAfterScheduledAudio: true, observer: observer}
-	err := scheduledAudioCompletionError(primary, opts)
+	completed, dispatched, scheduled := observer.scheduledAudioCounts()
+	providerStatus, providerCode, providerDetails := observer.scheduledAudioFailureMetadata()
+	completion := sessionduration.CompletionRequest{
+		RunError:                      primary,
+		CloseAfterScheduledAudio:      true,
+		ScheduledAudioIncomplete:      observer.scheduledAudioIncomplete(),
+		ScheduledAudioCompleted:       completed,
+		ScheduledAudioDispatched:      dispatched,
+		ScheduledAudioCount:           scheduled,
+		ProviderScheduledStatus:       providerStatus,
+		ProviderScheduledErrorCode:    providerCode,
+		ProviderScheduledErrorDetails: providerDetails,
+		ScheduledAudioIncompleteCause: runtimeSession.ErrLiveScheduledAudioIncomplete,
+	}
+	service := durationwire.NewService()
+	err := service.Complete(completion)
 	if !errors.Is(err, primary) {
 		t.Fatalf("scheduled completion error lost primary cause: %v", err)
 	}
-	if !errors.Is(err, ErrSessionScheduledAudioIncomplete) {
+	if !errors.Is(err, runtimeSession.ErrLiveScheduledAudioIncomplete) {
 		t.Fatalf("scheduled completion error = %v, want incomplete sentinel", err)
 	}
-	var incomplete *SessionScheduledAudioIncompleteError
+	var incomplete *sessionduration.ScheduledAudioIncompleteError
 	if !errors.As(err, &incomplete) {
 		t.Fatalf("scheduled completion error = %v, want typed incomplete error", err)
 	}
@@ -42,7 +59,8 @@ func TestScheduledAudioCompletionErrorJoinsPrimaryAndReportsCounts(t *testing.T)
 		t.Fatalf("scheduled completion counts = %+v, want completed=2 dispatched=2 scheduled=3", incomplete)
 	}
 
-	second := scheduledAudioCompletionError(err, opts)
+	completion.RunError = err
+	second := service.Complete(completion)
 	if second != err {
 		t.Fatalf("scheduled completion error was wrapped more than once: first=%v second=%v", err, second)
 	}
@@ -61,9 +79,14 @@ func TestSessionProgressObserverScheduledIncompleteFailureIncludesCountsOnce(t *
 	observer.dispatchedInputs = 2
 	completeTestScheduledLifecycles(t, observer, 2)
 
-	err := scheduledAudioCompletionError(nil, sessionLoopOptions{
-		CloseAfterScheduledAudio: true,
-		observer:                 observer,
+	completed, dispatched, scheduled := observer.scheduledAudioCounts()
+	err := durationwire.NewService().Complete(sessionduration.CompletionRequest{
+		CloseAfterScheduledAudio:      true,
+		ScheduledAudioIncomplete:      observer.scheduledAudioIncomplete(),
+		ScheduledAudioCompleted:       completed,
+		ScheduledAudioDispatched:      dispatched,
+		ScheduledAudioCount:           scheduled,
+		ScheduledAudioIncompleteCause: runtimeSession.ErrLiveScheduledAudioIncomplete,
 	})
 	err = observer.finish(err)
 	_ = observer.finish(err)
@@ -672,15 +695,20 @@ func TestScheduledAudioCompletionErrorCarriesCountsAndDiagnosticFields(t *testin
 		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
 	})
 
-	err := scheduledAudioCompletionError(nil, sessionLoopOptions{
-		CloseAfterScheduledAudio: true,
-		observer:                 observer,
+	completed, dispatched, scheduled := observer.scheduledAudioCounts()
+	err := durationwire.NewService().Complete(sessionduration.CompletionRequest{
+		CloseAfterScheduledAudio:      true,
+		ScheduledAudioIncomplete:      observer.scheduledAudioIncomplete(),
+		ScheduledAudioCompleted:       completed,
+		ScheduledAudioDispatched:      dispatched,
+		ScheduledAudioCount:           scheduled,
+		ScheduledAudioIncompleteCause: runtimeSession.ErrLiveScheduledAudioIncomplete,
 	})
-	var incomplete *SessionScheduledAudioIncompleteError
+	var incomplete *sessionduration.ScheduledAudioIncompleteError
 	if !errors.As(err, &incomplete) {
 		t.Fatalf("scheduled completion error = %v, want typed incomplete counts", err)
 	}
-	if !errors.Is(err, ErrSessionScheduledAudioIncomplete) {
+	if !errors.Is(err, runtimeSession.ErrLiveScheduledAudioIncomplete) {
 		t.Fatalf("scheduled completion error = %v, want incomplete sentinel", err)
 	}
 	if incomplete.Completed != 1 || incomplete.Dispatched != 1 || incomplete.Scheduled != 2 {

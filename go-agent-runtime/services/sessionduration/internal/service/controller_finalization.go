@@ -59,6 +59,7 @@ func (c *controller) cleanup(ctx context.Context, request sessionduration.Finali
 			failures = append(failures, fmt.Errorf("%s: %w", label, cleanupErr))
 		}
 	}
+	appendFailure("quiesce session input", request.Quiesce)
 	if request.DrainLoop != nil {
 		appendFailure("drain session", func() error { return c.drainLoop(ctx, request.DrainLoop, request.DrainPolicy) })
 	}

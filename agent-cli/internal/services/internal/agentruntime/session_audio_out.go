@@ -13,6 +13,7 @@ import (
 
 	sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
@@ -50,7 +51,7 @@ func runSessionAudioOutPlan(ctx context.Context, out io.Writer, plan sessionRunt
 	if err != nil {
 		return err
 	}
-	audioOut, err := newSessionAudioOutputForPlan(&plan, path, out, audio.NewLoudnessNormalizer(audio.LoudnessNormalizerConfig{GainDB: VoiceLoudnessGainDB(voice)}))
+	audioOut, err := newSessionAudioOutputForPlan(&plan, path, out, audio.NewLoudnessNormalizer(audio.LoudnessNormalizerConfig{GainDB: plan.voiceGainDB}))
 	if err != nil {
 		return fmt.Errorf("--audio-out %q: %w", path, err)
 	}
@@ -89,7 +90,7 @@ func runSessionAudioPlan(ctx context.Context, out io.Writer, plan sessionRuntime
 	if maxDuration == 0 {
 		return plan.run(ctx, out)
 	}
-	durationCtx, err := prepareSessionDurationArtifacts(ctx)
+	durationCtx, err := durationwire.NewService().PrepareArtifacts(ctx)
 	if err != nil {
 		return err
 	}
@@ -205,7 +206,7 @@ func (o *sessionAudioOutput) close() error {
 }
 
 func newSessionAudioOutputForPlan(plan *sessionRuntimePlan, path string, out io.Writer, loudness *audio.LoudnessNormalizer) (*sessionAudioOutput, error) {
-	if plan != nil && plan.rtcDeviceRequest.outputSelected() {
+	if plan != nil && plan.rtcDeviceRequest.HasOutput() {
 		output := &sessionAudioOutput{
 			runtime:      plan.runtime,
 			deviceBound:  true,

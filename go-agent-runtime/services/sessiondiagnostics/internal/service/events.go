@@ -26,6 +26,7 @@ func (r *reducer) applyLocked(event sessiondiagnostics.Event) (sessiondiagnostic
 		sessiondiagnostics.EventNoteScheduledTerminal,
 		sessiondiagnostics.EventRememberRetry,
 		sessiondiagnostics.EventClaimRetry,
+		sessiondiagnostics.EventRetryDispatched,
 		sessiondiagnostics.EventScheduledDisposition:
 		return r.applyScheduledLocked(event)
 	case sessiondiagnostics.EventToolCall,
@@ -100,6 +101,8 @@ func (r *reducer) applyScheduledLocked(event sessiondiagnostics.Event) (sessiond
 		return r.rememberRetryLocked(event.ResponseID, lifecycleID, event.Terminal), 0, false, nil
 	case sessiondiagnostics.EventClaimRetry:
 		return r.claimRetryLocked(event.ResponseID, event.Terminal)
+	case sessiondiagnostics.EventRetryDispatched:
+		return r.retryDispatchedLocked(), 0, false, nil
 	case sessiondiagnostics.EventScheduledDisposition:
 		observation, err := r.noteDispositionLocked(event.ResponseID, event.Disposition)
 		return observation, 0, false, err

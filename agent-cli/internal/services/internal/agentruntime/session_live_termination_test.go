@@ -68,7 +68,7 @@ func (f *liveTerminalDrainFixture) run(t *testing.T, setup func(*liveTerminalDra
 	trigger := setup(f)
 	result := make(chan error, 1)
 	go func() {
-		result <- runAgentLoopSessionStream(f.ctx, f.writer, &liveTerminalDrainInferencer{session: f.session}, f.options)
+		result <- runAgentLoopSessionWithDurationClock(f.ctx, f.writer, &liveTerminalDrainInferencer{session: f.session}, f.options, f.options.MaxDuration, realSessionDurationClock{})
 	}()
 
 	select {

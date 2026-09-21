@@ -65,6 +65,7 @@ func TestRoomProviderInputPCMResamples16kHzMixerTo24kHzContract(t *testing.T) {
 		plan: &roomParticipantPlan{
 			manifest:             room.Participant{ID: "agent-a"},
 			inputAudioSampleRate: wavio.Rate24kHz,
+			options:              SessionRunOptions{AudioService: newTestAudioIOService()},
 		},
 	}
 	converted, err := roomProviderInputPCM(runtime, pcm)

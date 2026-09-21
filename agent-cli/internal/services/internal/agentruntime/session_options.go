@@ -16,7 +16,11 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
+	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
+	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -87,6 +91,28 @@ type SessionAudioInTurnBargeError = sessioncontract.SessionAudioInTurnBargeError
 // planning always normalizes it to completion-gated behavior.
 type ScheduledAudioDispatchPolicy string
 
+type ScheduledAudioInput = audioio.ScheduledAudioInput
+
+func sessionAudioService(service audioio.Service) audioio.Service {
+	if service != nil {
+		return service
+	}
+	return audioiowire.NewService()
+}
+
+func resolveSessionTranscription(opts SessionRunOptions, provider string, acceptsAudioInput bool) (models.InputAudioTranscriptionConfig, error) {
+	service := sessionAudioService(opts.AudioService)
+	var override *audioio.TranscriptionConfig
+	if opts.InputAudioTranscription != nil {
+		override = &audioio.TranscriptionConfig{Enabled: opts.InputAudioTranscription.Enabled, Model: opts.InputAudioTranscription.Model}
+	}
+	resolved := service.ResolveTranscription(audioio.TranscriptionRequest{
+		Provider: provider, Replay: opts.ReplayPath != "", AcceptsAudioInput: acceptsAudioInput,
+		Disabled: opts.NoInputTranscription, Override: override,
+	})
+	return models.InputAudioTranscriptionConfig{Enabled: resolved.Enabled, Model: resolved.Model}, nil
+}
+
 const (
 	// ScheduledAudioDispatchCompletionGated preserves ordinary serialized
 	// --audio-in-turn behavior.
@@ -133,6 +159,8 @@ func (e *SessionRuntimeSelectionError) Unwrap() error {
 
 // SessionRunOptions contains the user-facing agent session command options.
 type SessionRunOptions struct {
+	AudioService  audioio.Service
+	DeviceService runtimedevices.Service
 	// runtimeFactory is installed by the private service composition root.
 	// It is intentionally unexported so transport requests cannot construct
 	// provider gateways or dialers.
@@ -232,10 +260,9 @@ type SessionRunOptions struct {
 	// MediaSource is the selected opaque external media-source identity. It is
 	// consumed by the WebRTC runtime only; it must remain empty for WebSocket.
 	MediaSource string
-	// RTCDeviceBinding carries optional registry-backed local audio selectors.
-	// The runtime opens these devices only after planning succeeds and before
-	// provider/peer setup begins.
-	RTCDeviceBinding RTCDeviceBindingRequest
+	// RTCBinding is the public device-service request. The runtime opens these
+	// devices only after planning succeeds and before provider setup.
+	RTCBinding runtimedevices.RTCBindingRequest
 
 	// ToolExecutor optionally injects the composed session tool executor.
 	// When nil, duplex loop construction stays byte-for-byte identical to the
@@ -312,7 +339,7 @@ type SessionRunOptions struct {
 	// timer clock from Clock when possible, otherwise the session uses the host
 	// clock. Deterministic callers can inject this seam without changing the
 	// runtime timestamp source.
-	LivenessClock SessionLivenessClock
+	LivenessClock sessionduration.TimerScheduler
 	// RuntimeObserver receives clock-stamped audio, turn, and terminal events
 	// from the session command. The terminal event carries the production-owned
 	// session-cumulative token totals and complete metrics snapshot. Nil keeps
@@ -830,9 +857,9 @@ func NewLiveSessionInferencer(opts SessionRunOptions, instructions string) (mess
 		}
 		model = sessionCfg.Model
 		config = deviceProbeSessionConfig(model, instructions, models.AudioFormatPCM16, models.AudioFormatPCM16)
-		inputAudioTranscription := resolveInputAudioTranscriptionPolicy(opts, providerName, true)
-		if opts.InputAudioTranscription != nil {
-			inputAudioTranscription = *opts.InputAudioTranscription
+		inputAudioTranscription, err := resolveSessionTranscription(opts, providerName, true)
+		if err != nil {
+			return nil, "", err
 		}
 		config.InputAudioTranscription = &inputAudioTranscription
 		config.TurnDetection = cloneSessionTurnDetection(opts.TurnDetection)
@@ -860,9 +887,9 @@ func NewLiveSessionInferencer(opts SessionRunOptions, instructions string) (mess
 		model = sessionCfg.Model
 		config = deviceProbeSessionConfig(model, instructions, models.AudioFormatPCM16, models.AudioFormatPCM16)
 		config.TurnDetection = cloneSessionTurnDetection(opts.TurnDetection)
-		inputAudioTranscription := resolveInputAudioTranscriptionPolicy(opts, providerName, true)
-		if opts.InputAudioTranscription != nil {
-			inputAudioTranscription = *opts.InputAudioTranscription
+		inputAudioTranscription, err := resolveSessionTranscription(opts, providerName, true)
+		if err != nil {
+			return nil, "", err
 		}
 		config.InputAudioTranscription = &inputAudioTranscription
 		config.Tools = append([]messages.ToolDefinition(nil), opts.ToolDefinitions...)

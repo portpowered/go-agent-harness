@@ -23,6 +23,19 @@ type LiveDependencies struct {
 	DurationService   sessionduration.Service
 }
 
+// DurationDependencies contains the service-owned dependencies for one
+// bounded agent-loop invocation.
+type DurationDependencies struct {
+	DurationService sessionduration.Service
+	LoopFactory     sessionduration.DuplexLoopFactory
+}
+
+// NewDurationRunner assembles the bounded invocation owner behind the public
+// session contract.
+func NewDurationRunner(deps DurationDependencies) session.DurationRunner {
+	return live.NewDurationRunner(deps.DurationService, deps.LoopFactory)
+}
+
 // NewLiveService assembles the continuous session role. It does not connect a
 // provider until the returned handle's Start method is called.
 func NewLiveService(deps LiveDependencies) session.LiveService {

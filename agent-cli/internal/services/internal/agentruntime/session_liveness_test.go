@@ -5,13 +5,11 @@ import (
 	"errors"
 	"io"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
-	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	duration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 )
 
 type livenessTestClock struct {
@@ -20,7 +18,7 @@ type livenessTestClock struct {
 	created chan struct{}
 }
 
-func (c *livenessTestClock) NewTimer(time.Duration) SessionLivenessTimer {
+func (c *livenessTestClock) NewTimer(time.Duration) duration.Timer {
 	timer := &livenessTestTimer{ch: make(chan time.Time, 1), active: true}
 	c.mu.Lock()
 	c.timers = append(c.timers, timer)
@@ -89,169 +87,6 @@ func (t *livenessTestTimer) fire() bool {
 	return true
 }
 
-func waitForLivenessFailure(t *testing.T, observer *sessionProgressObserver) error {
-	t.Helper()
-	select {
-	case <-observer.livenessEvents():
-		return observer.livenessFailure()
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for provider liveness failure")
-		return nil
-	}
-}
-
-func TestSessionProgressObserver_WatchdogTimesOutExactlyOnce(t *testing.T) {
-	clock := &livenessTestClock{}
-	sink := &diagnosticRecordSink{}
-	observer := newSessionProgressObserver(sink, nil, "test-provider", "test-model")
-	observer.setLivenessClock(clock)
-	defer observer.stopLiveness()
-	var callbacks atomic.Int32
-	observer.livenessObserver = func(error) { callbacks.Add(1) }
-
-	observer.observeProviderDispatch(messages.StreamMessage{Type: messages.StreamTypeResponseCreate})
-	if !clock.fireLatest() {
-		t.Fatal("watchdog timer was not armed")
-	}
-	livenessErr := waitForLivenessFailure(t, observer)
-	if !errors.Is(livenessErr, ErrSilentProviderTimeout) {
-		t.Fatalf("liveness error = %v, want ErrSilentProviderTimeout", livenessErr)
-	}
-	var typedErr *SessionLivenessError
-	if !errors.As(livenessErr, &typedErr) || typedErr.Classification != SessionSilentProviderTimeoutClassification {
-		t.Fatalf("liveness error = %#v, want typed timeout", livenessErr)
-	}
-	if callbacks.Load() != 1 {
-		t.Fatalf("liveness callback count = %d, want 1", callbacks.Load())
-	}
-
-	// A late provider event or a second dispatch cannot replace the first
-	// timeout cause or invoke the room lifecycle callback again.
-	observer.observeProviderEvent(messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("late")})
-	observer.observeProviderDispatch(messages.StreamMessage{Type: messages.StreamTypeResponseCreate})
-	if callbacks.Load() != 1 {
-		t.Fatalf("late liveness callback count = %d, want 1", callbacks.Load())
-	}
-	if err := observer.finish(livenessErr); !errors.Is(err, ErrSilentProviderTimeout) {
-		t.Fatalf("finish error = %v, want timeout", err)
-	}
-	records := sink.events(SessionDiagnosticEventFailure)
-	if len(records) != 1 || records[0].Fields[fieldClassification] != SessionSilentProviderTimeoutClassification {
-		t.Fatalf("timeout diagnostic records = %#v, want one typed failure", records)
-	}
-}
-
-func TestSessionProgressObserver_WatchdogResetsOnProviderEvent(t *testing.T) {
-	clock := &livenessTestClock{}
-	observer := newSessionProgressObserver(nil, nil, "test-provider", "test-model")
-	observer.setLivenessClock(clock)
-	defer observer.stopLiveness()
-
-	observer.observeProviderDispatch(messages.StreamMessage{Type: messages.StreamTypeResponseCreate})
-	first := clock.latestActiveTimer()
-	if first == nil {
-		t.Fatal("watchdog timer was not armed")
-	}
-	observer.observeProviderEvent(messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("progress")})
-	second := clock.latestActiveTimer()
-	if second == nil || second == first {
-		t.Fatal("provider progress did not replace the watchdog timer")
-	}
-	if first.fire() {
-		t.Fatal("replaced watchdog timer remained active")
-	}
-	select {
-	case <-observer.livenessEvents():
-		t.Fatal("replaced watchdog timer woke the liveness controller")
-	default:
-	}
-	if err := observer.livenessFailure(); err != nil {
-		t.Fatalf("replaced watchdog timer produced failure: %v", err)
-	}
-
-	if !second.fire() {
-		t.Fatal("current watchdog timer did not fire")
-	}
-	if err := waitForLivenessFailure(t, observer); !errors.Is(err, ErrSilentProviderTimeout) {
-		t.Fatalf("liveness error = %v, want timeout", err)
-	}
-}
-
-func TestSessionProgressObserver_WatchdogDisarmsForTerminalAndLocalTool(t *testing.T) {
-	t.Run("normal terminal", func(t *testing.T) {
-		clock := &livenessTestClock{}
-		observer := newSessionProgressObserver(nil, nil, "test-provider", "test-model")
-		observer.setLivenessClock(clock)
-		defer observer.stopLiveness()
-
-		observer.observeProviderDispatch(messages.StreamMessage{Type: messages.StreamTypeResponseCreate})
-		observer.observe(messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()})
-		observer.observe(messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("done")})
-		observer.observe(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})})
-		if clock.fireLatest() {
-			t.Fatal("terminal response left the watchdog armed")
-		}
-		if err := observer.livenessFailure(); err != nil {
-			t.Fatalf("terminal response produced liveness failure: %v", err)
-		}
-	})
-
-	t.Run("local tool", func(t *testing.T) {
-		clock := &livenessTestClock{}
-		observer := newSessionProgressObserver(nil, nil, "test-provider", "test-model")
-		observer.setLivenessClock(clock)
-		defer observer.stopLiveness()
-
-		observer.observeProviderDispatch(messages.StreamMessage{Type: messages.StreamTypeResponseCreate})
-		observer.beginLocalToolExecution()
-		if clock.fireLatest() {
-			t.Fatal("local tool execution left the watchdog armed")
-		}
-		observer.endLocalToolExecution()
-		observer.observeProviderDispatch(messages.StreamMessage{Type: messages.StreamTypeResponseCreate})
-		if !clock.fireLatest() {
-			t.Fatal("ordinary continuation did not re-arm the watchdog")
-		}
-		if err := waitForLivenessFailure(t, observer); !errors.Is(err, ErrSilentProviderTimeout) {
-			t.Fatalf("liveness error = %v, want timeout after continuation", err)
-		}
-	})
-}
-
-func TestSessionProgressObserver_DoesNotArmWhileSessionIsQuiet(t *testing.T) {
-	clock := &livenessTestClock{}
-	observer := newSessionProgressObserver(nil, nil, "test-provider", "test-model")
-	observer.setLivenessClock(clock)
-	defer observer.stopLiveness()
-
-	observer.observe(messages.StreamMessage{Type: messages.StreamTypeSessionOpen, Value: messages.NewSessionOpenValue("session", "test")})
-	observer.observe(messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("unsolicited")})
-	if timer := clock.latestActiveTimer(); timer != nil {
-		t.Fatal("quiet session unexpectedly armed provider watchdog")
-	}
-}
-
-func TestSessionProgressObserver_WatchdogUsesInjectedDeterministicClock(t *testing.T) {
-	clock := platformclock.NewDeterministic(time.Unix(42, 0).UTC(), time.Second)
-	livenessClock, err := audioiowire.NewService().NewClock(clock)
-	if err != nil {
-		t.Fatal(err)
-	}
-	observer := newSessionProgressObserver(nil, nil, "test-provider", "test-model")
-	observer.setLivenessClock(livenessClock)
-	defer observer.stopLiveness()
-
-	observer.observeProviderDispatch(messages.StreamMessage{Type: messages.StreamTypeResponseCreate})
-	clock.AdvanceTo(9)
-	if err := observer.livenessFailure(); err != nil {
-		t.Fatalf("watchdog fired before injected deadline: %v", err)
-	}
-	clock.AdvanceTo(10)
-	if err := waitForLivenessFailure(t, observer); !errors.Is(err, ErrSilentProviderTimeout) {
-		t.Fatalf("liveness error = %v, want timeout at injected deadline", err)
-	}
-}
-
 func TestRunAgentLoopSessionWithDuration_WatchdogWakesLoop(t *testing.T) {
 	livenessClock := &livenessTestClock{created: make(chan struct{}, 1)}
 	observer := newSessionProgressObserver(nil, nil, "test-provider", "test-model")
@@ -295,7 +130,7 @@ func TestRunAgentLoopSessionWithDuration_WatchdogWakesLoop(t *testing.T) {
 	}
 	select {
 	case err := <-runErrCh:
-		if !errors.Is(err, ErrSilentProviderTimeout) {
+		if !errors.Is(err, duration.ErrProviderLivenessTimeout) {
 			t.Fatalf("session error = %v, want timeout", err)
 		}
 	case <-time.After(2 * time.Second):
@@ -303,5 +138,5 @@ func TestRunAgentLoopSessionWithDuration_WatchdogWakesLoop(t *testing.T) {
 	}
 }
 
-var _ SessionLivenessClock = (*livenessTestClock)(nil)
-var _ SessionLivenessTimer = (*livenessTestTimer)(nil)
+var _ duration.TimerScheduler = (*livenessTestClock)(nil)
+var _ duration.Timer = (*livenessTestTimer)(nil)

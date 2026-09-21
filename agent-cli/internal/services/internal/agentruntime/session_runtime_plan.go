@@ -16,6 +16,9 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
+	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	duration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
@@ -145,6 +148,7 @@ type sessionRuntimePlan struct {
 	model                  string
 	inputAudioSampleRate   int
 	outputAudioSampleRate  int
+	voiceGainDB            float64
 	capturePath            string
 	loopOut                io.Writer
 	inferencer             messages.SessionInferencer
@@ -169,7 +173,9 @@ type sessionRuntimePlan struct {
 	transport              string
 	signalingEndpoint      string
 	mediaSource            string
-	rtcDeviceRequest       RTCDeviceBindingRequest
+	rtcDeviceRequest       runtimedevices.RTCBindingRequest
+	deviceService          runtimedevices.Service
+	rtcBinding             runtimedevices.RTCBinding
 	capabilityCoordinator  SessionCapabilityCoordinator
 	captureClaim           *sessionRecordingClaim
 	captureClaimWired      bool
@@ -178,26 +184,30 @@ type sessionRuntimePlan struct {
 	filesystemPolicy       *tools.FilesystemPolicy
 }
 
-func (p sessionRuntimePlan) bareLiveOutput(binding *RTCDeviceBinding) (string, string) {
-	return p.liveOutput(binding, "Starting bare live session: ")
+func (p sessionRuntimePlan) bareLiveOutput() (string, string) {
+	return p.liveOutput("Starting bare live session: ")
 }
 
-func (p sessionRuntimePlan) browserLiveOutput(binding *RTCDeviceBinding) (string, string) {
-	return p.liveOutput(binding, "Starting WebMCP browser live session: ")
+func (p sessionRuntimePlan) browserLiveOutput() (string, string) {
+	return p.liveOutput("Starting WebMCP browser live session: ")
 }
 
-func (p sessionRuntimePlan) liveOutput(binding *RTCDeviceBinding, prefix string) (string, string) {
+func (p sessionRuntimePlan) liveOutput(prefix string) (string, string) {
 	transport := p.transport
 	if transport == "" {
 		transport = SessionTransportWebSocket
 	}
 	inputDevice, outputDevice := "unavailable", "unavailable"
-	if binding != nil {
-		if binding.Source != nil {
-			inputDevice = string(binding.Source.DeviceID())
+	if p.rtcDeviceRequest.HasInput() {
+		inputDevice = p.rtcDeviceRequest.InputDevice
+		if inputDevice == "" {
+			inputDevice = "default"
 		}
-		if binding.Sink != nil {
-			outputDevice = string(binding.Sink.DeviceID())
+	}
+	if p.rtcDeviceRequest.HasOutput() {
+		outputDevice = p.rtcDeviceRequest.OutputDevice
+		if outputDevice == "" {
+			outputDevice = "default"
 		}
 	}
 	identity := fmt.Sprintf("provider=%s model=%s transport=%s input-device=%s output-device=%s", p.provider, p.model, transport, inputDevice, outputDevice)
@@ -210,9 +220,9 @@ func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr erro
 		reporter = newSessionTerminalReporter()
 		p.loop.terminalReporter = reporter
 	}
-	finalizer := newSessionRuntimeFinalizer(p)
+	finalizer := durationwire.NewService().NewFinalizer(p.finalizationPorts())
 	defer func() {
-		runErr = finalizer.finish(ctx, out, runErr)
+		runErr = finalizer.Finish(ctx, out, runErr)
 		if !sessionErrorHasIndependentFailure(runErr) && p.replayCompletion != nil {
 			p.replayCompletion(reporter)
 		}
@@ -224,30 +234,11 @@ func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr erro
 		}
 	}
 
-	deviceBinding, err := PrepareRTCDeviceBindings(p.rtcDeviceRequest)
-	if err != nil {
+	if err := p.bindRTC(ctx, finalizer); err != nil {
 		return err
 	}
-	if deviceBinding != nil {
-		p.loop.rtcDeviceBinding = deviceBinding
-		finalizer.setDeviceBinding(deviceBinding)
-	}
-	// The filesystem-scope disclosure is best-effort: it is new, unconditional
-	// startup output on every session, and a write failure here must not
-	// masquerade as (or pre-empt) the session's own run/drain failure below,
-	// which is what a broken writer is actually expected to surface as.
-	writeFilesystemScopeAnnouncement(out, p.filesystemPolicy)
-	writeSessionToolAnnouncement(out, p.toolDefinitionsForAnnouncement())
-	announcement := p.announce
-	if p.loop.BareLive {
-		announcement, p.loop.ListeningBanner = p.bareLiveOutput(deviceBinding)
-	} else if p.loop.BrowserToolsInteractive {
-		announcement, p.loop.ListeningBanner = p.browserLiveOutput(deviceBinding)
-	}
-	if announcement != "" {
-		if _, err := fmt.Fprintln(out, announcement); err != nil {
-			return err
-		}
+	if err := p.writeAnnouncements(out, true); err != nil {
+		return err
 	}
 	loopOut := out
 	if p.loopOut != nil {
@@ -263,6 +254,107 @@ func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr erro
 	}
 	return nil
 }
+
+func (p sessionRuntimePlan) finalizationPorts() duration.FinalizationPorts {
+	ports := duration.FinalizationPorts{
+		CloseCapabilities: func() error {
+			if p.capabilityCoordinator == nil {
+				return nil
+			}
+			return p.capabilityCoordinator.Close()
+		},
+		CloseSession: p.closeSession,
+		CloseRuntime: func() error {
+			if p.rtcRuntime == nil {
+				return nil
+			}
+			return p.rtcRuntime.Close()
+		},
+		FlushCapture: p.flushCapture,
+		ReleaseCapture: func() error {
+			if p.captureClaim == nil {
+				return nil
+			}
+			return wrapSessionRuntimeError(p, p.captureClaim.release())
+		},
+	}
+	if p.finalize != nil {
+		ports.Finalize = func(ctx context.Context, out io.Writer) error {
+			if reporter := p.loop.terminalReporter; reporter != nil {
+				ctx = withSessionTerminalReporter(ctx, reporter)
+			}
+			return wrapSessionRuntimeError(p, p.finalize(ctx, out))
+		}
+	}
+	return ports
+}
+
+func runSessionDurationPlan(ctx context.Context, out io.Writer, plan sessionRuntimePlan, maxDuration time.Duration, clock duration.TimerScheduler) error {
+	return runSessionDurationPlanWithAdmission(ctx, out, plan, maxDuration, clock, nil)
+}
+
+func effectiveSessionDurationClock(plan sessionRuntimePlan, requested duration.TimerScheduler) duration.TimerScheduler {
+	if requested != nil {
+		if _, isDefault := requested.(realSessionDurationClock); !isDefault {
+			return requested
+		}
+	}
+	if source, ok := plan.clockSource.(duration.TimerScheduler); ok {
+		return source
+	}
+	return plan.loop.livenessClock
+}
+
+func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, plan sessionRuntimePlan, maxDuration time.Duration, clock duration.TimerScheduler, admitted duration.AdmissionInferencer) (runErr error) {
+	service := durationwire.NewService()
+	if err := service.ValidateDuration(maxDuration); err != nil {
+		return err
+	}
+	clock = effectiveSessionDurationClock(plan, clock)
+	artifacts := service.ArtifactsFromContext(ctx)
+	reporter := plan.loop.terminalReporter
+	if reporter == nil {
+		reporter = newSessionTerminalReporter()
+		plan.loop.terminalReporter = reporter
+	}
+	finalizer := service.NewFinalizer(plan.finalizationPorts())
+	defer func() {
+		runErr = finalizer.Finish(ctx, out, runErr)
+		artifactErr := service.FinalizeArtifacts(artifacts)
+		runErr = errors.Join(runErr, artifactErr)
+		reporter.recordArtifactFinalization(artifacts != nil, artifactErr)
+		if !sessionErrorHasIndependentFailure(runErr) && plan.replayCompletion != nil {
+			plan.replayCompletion(reporter)
+		}
+		runErr = errors.Join(runErr, reporter.publish(out, runErr))
+	}()
+
+	if plan.replayIntegrityWarning != "" {
+		if _, err := fmt.Fprintln(out, plan.replayIntegrityWarning); err != nil {
+			return err
+		}
+	}
+	if err := plan.bindRTC(ctx, nil); err != nil {
+		return err
+	}
+	if err := plan.writeAnnouncements(out, true); err != nil {
+		return wrapSessionRuntimeError(plan, err)
+	}
+	loopOut := out
+	if plan.loopOut != nil {
+		loopOut = plan.loopOut
+	}
+	plan.configureLoopObserver(&plan.loop)
+	if plan.inferencer == nil {
+		return nil
+	}
+	reporter.markRunStarted()
+	if err := runAgentLoopSessionWithDurationAdmissionClock(ctx, loopOut, plan.inferencer, plan.loop, maxDuration, clock, admitted); err != nil {
+		return wrapSessionRuntimeError(plan, wrapSessionPhaseError("run session loop", err))
+	}
+	return nil
+}
+
 func writeFilesystemScopeAnnouncement(out io.Writer, policy *tools.FilesystemPolicy) {
 	if policy == nil {
 		return
@@ -307,10 +399,6 @@ func (p sessionRuntimePlan) configureLoopObserver(loop *sessionLoopOptions) {
 	}
 	obs.streamObserver = p.streamObserver
 	obs.runtime = p.runtime
-	obs.livenessClock = loop.livenessClock
-	if obs.livenessClock == nil {
-		obs.livenessClock = sessionLivenessClockFromSource(p.clockSource)
-	}
 	obs.cancellationIntent = loop.cancellationIntent
 	obs.requireSessionUpdated = loop.RequireSessionUpdated
 	obs.scheduledAudioDispatch = loop.ScheduledAudioDispatch
@@ -319,6 +407,7 @@ func (p sessionRuntimePlan) configureLoopObserver(loop *sessionLoopOptions) {
 }
 
 func planSessionRuntimeWithFactory(ctx context.Context, opts SessionRunOptions, factory sessionRuntimeFactory) (plan sessionRuntimePlan, planErr error) {
+	opts.AudioService = sessionAudioService(opts.AudioService)
 	recordingClaim, err := ensureSessionRecordingClaim(&opts)
 	if err != nil {
 		return sessionRuntimePlan{}, err
@@ -385,16 +474,27 @@ func planSessionRuntimeWithFactory(ctx context.Context, opts SessionRunOptions, 
 	plan.runtime = newSessionRuntimeObservationRecorder(opts.RuntimeObserver, plan.clockSource)
 	plan.loop.runtime = plan.runtime
 	plan.loop.clockSource = plan.clockSource
+	plan.loop.audioService = opts.AudioService
 	plan.loop.livenessClock = opts.LivenessClock
 	if plan.loop.livenessClock == nil {
-		plan.loop.livenessClock = sessionLivenessClockFromSource(plan.clockSource)
+		if opts.AudioService != nil {
+			plan.loop.livenessClock, err = opts.AudioService.NewClock(plan.clockSource)
+			if err != nil {
+				return sessionRuntimePlan{}, err
+			}
+		} else if timerSource, ok := plan.clockSource.(platformclock.TimerSource); ok {
+			plan.loop.livenessClock = timerSource
+		} else {
+			plan.loop.livenessClock = platformclock.Real{}
+		}
 	}
 	plan.loop.BareLive = plan.loop.BareLive || opts.BareLive
 	plan.loop.cancellationIntent = opts.CancellationIntent
 	plan.loop.toolDiagnostics = opts.ToolDiagnostics
 	plan.loop.SessionUpdatedTimeout = opts.SessionUpdatedTimeout
 	plan.loop.AudioInterruptions = opts.AudioInterruptions
-	plan.rtcDeviceRequest = opts.RTCDeviceBinding
+	plan.rtcDeviceRequest = opts.RTCBinding
+	plan.deviceService = opts.DeviceService
 	// Local device playback of this session's own synthesized voice must
 	// carry the same fixed per-voice loudness correction as every other
 	// output path (see VoiceLoudnessGainDB), so --voice selection does not
@@ -423,24 +523,28 @@ func planSessionRuntimeWithFactory(ctx context.Context, opts SessionRunOptions, 
 	// zero keeps every production plan on defaultSessionToolExecutionTimeout.
 	plan.loop.ToolExecutionTimeout = opts.ToolExecutionTimeout
 	plan.loop.ScheduledAudioDispatch = scheduledAudioDispatch
-	plan.audioInputs, err = convertScheduledAudioInputs(plan.audioInputs, plan.inputAudioSampleRate)
+	if opts.AudioService == nil {
+		return sessionRuntimePlan{}, errors.New("audio service is required for session rate resolution")
+	}
+	plan.voiceGainDB = opts.AudioService.VoiceGainDB(opts.Voice)
+	if err := configureSessionAudioContract(opts, &plan); err != nil {
+		return sessionRuntimePlan{}, err
+	}
+	plan.audioInputs, err = opts.AudioService.ConvertScheduledInputs(ctx, plan.audioInputs, plan.inputAudioSampleRate)
 	if err != nil {
 		return sessionRuntimePlan{}, err
 	}
 	plan.loop.InputAudioSampleRate = plan.inputAudioSampleRate
-	if plan.rtcDeviceRequest.outputSelected() && plan.outputAudioSampleRate > 0 {
+	if plan.rtcDeviceRequest.HasOutput() && plan.outputAudioSampleRate > 0 {
 		plan.rtcDeviceRequest.OutputSampleRate = plan.outputAudioSampleRate
 	}
-	if plan.rtcDeviceRequest.inputSelected() && plan.inputAudioSampleRate > 0 {
+	if plan.rtcDeviceRequest.HasInput() && plan.inputAudioSampleRate > 0 {
 		plan.rtcDeviceRequest.InputSampleRate = plan.inputAudioSampleRate
 	}
 	// The playback-overflow observer's sink is resolved (never trusted as-is)
 	// so an omitted SessionRunOptions.Diagnostics can no longer make a real
 	// device overflow invisible; see resolvePlaybackDiagnosticSink.
 	observabilityDependencies := opts.Observability
-	if observabilityDependencies.MetricSampler == nil && observabilityDependencies.Logger == nil {
-		observabilityDependencies = plan.rtcDeviceRequest.Observability
-	}
 	plan.rtcDeviceRequest.PlaybackObserver = combineRTCDevicePlaybackObservers(
 		plan.rtcDeviceRequest.PlaybackObserver,
 		sessionPlaybackDiagnosticObserver(resolvePlaybackDiagnosticSink(plan.diagnostics)),

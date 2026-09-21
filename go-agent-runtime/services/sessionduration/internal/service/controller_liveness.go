@@ -22,15 +22,16 @@ func (c *controller) isEmptyResponseLocked(msg messages.StreamMessage) bool {
 }
 
 func (c *controller) makeLivenessErrorLocked(msg messages.StreamMessage, timeout bool) error {
-	classification := "silent_provider_empty_response"
+	classification := sessionduration.LivenessClassificationEmptyResponse
 	cause := sessionduration.ErrProviderEmptyResponse
 	if timeout {
-		classification = "silent_provider_timeout"
+		classification = sessionduration.LivenessClassificationTimeout
 		cause = sessionduration.ErrProviderLivenessTimeout
 	}
 	err := &sessionduration.LivenessError{
 		Classification:     classification,
 		ResponseID:         strings.TrimSpace(msg.ResponseID),
+		FailingEvent:       msg.Type,
 		TerminalReason:     messages.TerminalReasonTerminalFailure,
 		TerminalProvenance: messages.TerminalProvenanceSession,
 		OutputState:        messages.TerminalOutputNone,

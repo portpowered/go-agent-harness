@@ -781,6 +781,14 @@ func TestRunSessionWithAudioInputAwaitsSendBeforeNextRead(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("session inferencer did not connect")
 	}
+	select {
+	case <-source.closed:
+		// Closing the provider is the teardown trigger for this fixture. Wait
+		// until the finite source reaches EOF first so the assertion below
+	// measures send/read ordering rather than provider-close cancellation.
+	case <-time.After(2 * time.Second):
+		t.Fatal("audio source did not finish before provider teardown")
+	}
 	baseInferencer.Close()
 	select {
 	case err := <-result:

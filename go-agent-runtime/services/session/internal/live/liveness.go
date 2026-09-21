@@ -82,7 +82,7 @@ func (h *handle) latchProviderLiveness(failure session.LiveLivenessFailure) {
 	}
 	classification := strings.TrimSpace(failure.Classification)
 	if classification == "" {
-		classification = silentProviderEmptyResponse
+		classification = sessionduration.LivenessClassificationEmptyResponse
 	}
 	cause := sessionduration.ErrProviderEmptyResponse
 	if classification == silentProviderTimeout {

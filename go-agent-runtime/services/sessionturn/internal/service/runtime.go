@@ -84,6 +84,7 @@ func (s *Service) Prepare(ctx context.Context, request sessionturn.Request) (ses
 
 	turnState := turns.New(turns.Dependencies{SessionInferencer: inferencer, EventSink: request.EventSink})
 	return &runtime{
+		service:         s,
 		inferencer:      inferencer,
 		turns:           turnState,
 		toolExecutor:    s.prepareToolExecutor(request, policy),
@@ -259,6 +260,7 @@ func resolveInstructionRequest(ctx context.Context, request sessionturn.Instruct
 }
 
 type runtime struct {
+	service         *Service
 	inferencer      messages.SessionInferencer
 	turns           *turns.Service
 	toolExecutor    messages.ToolExecutor
@@ -302,7 +304,13 @@ func (r *runtime) PublicationState() sessionturn.PublicationState {
 	return r.publication.State()
 }
 func (r *runtime) StartPublication(ctx context.Context, request sessionturn.PublicationRequest) (sessionturn.Publication, error) {
-	publication, err := startPublication(ctx, request)
+	var publication sessionturn.Publication
+	var err error
+	if r.service == nil {
+		publication, err = startPublication(ctx, request)
+	} else {
+		publication, err = r.service.StartPublication(ctx, request)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -310,6 +318,10 @@ func (r *runtime) StartPublication(ctx context.Context, request sessionturn.Publ
 	r.publication = publication
 	r.mu.Unlock()
 	return publication, nil
+}
+
+func (*Service) StartPublication(ctx context.Context, request sessionturn.PublicationRequest) (sessionturn.Publication, error) {
+	return startPublication(ctx, request)
 }
 func (r *runtime) NewOutput(writer io.Writer) sessionturn.Output { return r.output.NewOutput(writer) }
 

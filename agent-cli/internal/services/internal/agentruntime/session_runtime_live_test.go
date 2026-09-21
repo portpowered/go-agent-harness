@@ -11,6 +11,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -329,8 +330,8 @@ func TestPlanOpenAIRecordRuntimeDeviceInputDefaultsServerVAD(t *testing.T) {
 	}
 	plan, err := planSessionRuntimeWithFactory(context.Background(), SessionRunOptions{ModelCatalog: testModelCatalog(),
 		Provider: config.ProviderOpenAI, Model: openAIRealtimeModel, APIKey: "test-key",
-		RecordPath:       filepath.Join(t.TempDir(), "device-vad.session.json"),
-		RTCDeviceBinding: RTCDeviceBindingRequest{InputPresent: true, OutputPresent: true},
+		RecordPath: filepath.Join(t.TempDir(), "device-vad.session.json"),
+		RTCBinding: runtimedevices.RTCBindingRequest{InputPresent: true, OutputPresent: true},
 	}, factory)
 	if err != nil {
 		t.Fatalf("plan recorded device session: %v", err)

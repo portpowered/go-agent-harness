@@ -47,36 +47,42 @@ func sessionLoopToolExecutor(opts sessionLoopOptions) messages.ToolExecutor {
 		if _, ok := opts.ToolExecutor.(sessionturn.ServiceOwnedToolExecutor); ok {
 			return opts.ToolExecutor
 		}
-		toolLifecycle := composeSessionToolLifecycleObserver(opts.toolLifecycleObserver, opts.observer, opts.runtime)
-		runtime, err := sessionturnwire.NewDefaultService().Prepare(context.Background(), sessionturn.Request{
-			ToolExecutor:          opts.ToolExecutor,
-			InteractiveToolPolicy: opts.InteractiveToolPolicy,
-			ToolExecutionTimeout:  opts.ToolExecutionTimeout,
-			ToolCallObserver: func(call messages.ToolCall) {
-				if toolLifecycle != nil {
-					toolLifecycle.observeToolCall(call)
-				}
-			},
-			ToolResultObserver: func(call messages.ToolCall, response messages.ToolCallResponse, failed bool) {
-				if toolLifecycle != nil {
-					toolLifecycle.observeToolResult(call, response, failed)
-				}
-			},
-			ToolDiagnostic: func(call messages.ToolCall, err error) {
-				recordSessionToolDiagnostic(opts.toolDiagnostics, opts.ToolExecutor, call, err)
-			},
-			ToolLifecycle: func(event sessionturn.ToolLifecycleEvent) {
-				if opts.observer != nil {
-					opts.observer.observeSessionTurnLifecycle(event)
-				}
-			},
-		})
+		runtime, err := prepareSessionTurnExecutorRuntime(context.Background(), nil, opts)
 		if err != nil {
 			return opts.ToolExecutor
 		}
 		return runtime.ToolExecutor()
 	}
 	return opts.turnRuntime.ToolExecutor()
+}
+
+func prepareSessionTurnExecutorRuntime(ctx context.Context, inferencer messages.SessionInferencer, opts sessionLoopOptions) (sessionturn.Runtime, error) {
+	toolLifecycle := composeSessionToolLifecycleObserver(opts.toolLifecycleObserver, opts.observer, opts.runtime)
+	return sessionturnwire.NewDefaultService().Prepare(ctx, sessionturn.Request{
+		SessionInferencer:     inferencer,
+		ToolExecutor:          opts.ToolExecutor,
+		ToolDefinitions:       append([]messages.ToolDefinition(nil), opts.ToolDefinitions...),
+		InteractiveToolPolicy: opts.InteractiveToolPolicy,
+		ToolExecutionTimeout:  opts.ToolExecutionTimeout,
+		ToolCallObserver: func(call messages.ToolCall) {
+			if toolLifecycle != nil {
+				toolLifecycle.observeToolCall(call)
+			}
+		},
+		ToolResultObserver: func(call messages.ToolCall, response messages.ToolCallResponse, failed bool) {
+			if toolLifecycle != nil {
+				toolLifecycle.observeToolResult(call, response, failed)
+			}
+		},
+		ToolDiagnostic: func(call messages.ToolCall, err error) {
+			recordSessionToolDiagnostic(opts.toolDiagnostics, opts.ToolExecutor, call, err)
+		},
+		ToolLifecycle: func(event sessionturn.ToolLifecycleEvent) {
+			if opts.observer != nil {
+				opts.observer.observeSessionTurnLifecycle(event)
+			}
+		},
+	})
 }
 
 func prepareSessionRecordingTurnRuntime(ctx context.Context, plan *sessionRuntimePlan, seed SessionTextSeed) (sessionturn.Runtime, error) {
@@ -230,7 +236,9 @@ func (m sessionToolLifecycleMux) observeToolCall(call messages.ToolCall) {
 		m.runtime.observeToolCall(call)
 	}
 	if m.progress != nil {
-		m.progress.beginLocalToolExecution()
+		if m.progress.durationController != nil {
+			m.progress.durationController.BeginLocalToolExecution()
+		}
 	}
 	if m.recording != nil {
 		m.recording.observeToolCall(call)
@@ -245,7 +253,9 @@ func (m sessionToolLifecycleMux) observeToolResult(call messages.ToolCall, respo
 		m.recording.observeToolResult(call, response, failed)
 	}
 	if m.progress != nil {
-		m.progress.endLocalToolExecution()
+		if m.progress.durationController != nil {
+			m.progress.durationController.EndLocalToolExecution()
+		}
 	}
 }
 

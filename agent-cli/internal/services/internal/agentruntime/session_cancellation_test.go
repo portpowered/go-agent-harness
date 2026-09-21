@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	terminalwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
 )
 
 func TestSessionSIGINTCancellationResolvesPendingObligations(t *testing.T) {
@@ -39,7 +41,7 @@ func TestSessionSIGINTCancellationResolvesPendingObligations(t *testing.T) {
 	observer.cancellationIntent = intent
 	err := errors.Join(
 		context.Canceled,
-		&SessionScheduledAudioIncompleteError{Completed: 0, Dispatched: 1, Scheduled: 2},
+		&runtimeSession.LiveScheduledAudioIncompleteError{Completed: 0, Dispatched: 1, Scheduled: 2},
 		&SessionUnresolvedToolResultsError{CallIDs: []string{"call-unresolved"}},
 		&SessionToolContinuationError{CallIDs: []string{"call-pending"}},
 	)
@@ -76,7 +78,7 @@ func TestSessionSIGINTCancellationResolvesPendingObligations(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	if err := publishSessionUserCancellation(&out, sessionLoopOptions{observer: observer}, writeSessionReplayMessage); err != nil {
+	if err := publishSessionUserCancellation(&out, sessionLoopOptions{observer: observer}, terminalwire.NewService().WriteTranscriptMessage); err != nil {
 		t.Fatalf("publish cancellation terminal: %v", err)
 	}
 	output := out.String()
@@ -109,7 +111,7 @@ func TestSessionSIGINTCancellationIgnoresLoopCancellationDiagnostic(t *testing.T
 	message := messages.StreamMessage{Type: messages.StreamTypeError, Value: value}
 	observer.observe(message)
 
-	writeErr := writeSessionReplayMessage(io.Discard, message)
+	writeErr := terminalwire.NewService().WriteTranscriptMessage(io.Discard, message)
 	if !errors.Is(writeErr, context.Canceled) {
 		t.Fatalf("rendered cancellation error = %v, want context.Canceled cause", writeErr)
 	}

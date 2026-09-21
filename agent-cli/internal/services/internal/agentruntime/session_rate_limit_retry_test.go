@@ -9,9 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
+	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	sessionduration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 )
 
 func TestRateLimitRetryDecision(t *testing.T) {
@@ -282,33 +283,6 @@ func TestSessionProgressObserverRateLimitRetrySupportsUntaggedTerminal(t *testin
 	}
 }
 
-func TestRateLimitRetryWaitStopsOnContextCancellation(t *testing.T) {
-	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime-2.1-mini")
-	probe := &scheduledInputDispatchProbe{}
-	observer.scheduleAudioInputs([]ScheduledAudioInput{{AfterCompletedTurns: 0, PCM: []byte{1}, EndOfTurn: true}})
-	if err := observer.dispatchScheduledInputs(context.Background(), probe); err != nil {
-		t.Fatalf("dispatch scheduled input: %v", err)
-	}
-	observer.observe(messages.StreamMessage{Type: messages.StreamTypeMessageStart, ResponseID: "response-cancelled-wait", Value: messages.NewMessageStartValue()})
-	failed := &messages.MessageEndValue{Type: "message_end", Status: "failed", ProviderErrorCode: rateLimitRetryCode, ProviderErrorMessage: "Please try again in 0.03s"}
-	terminal := messages.StreamMessage{Type: messages.StreamTypeMessageEnd, ResponseID: "response-cancelled-wait", Value: failed}
-	observer.observe(terminal)
-
-	session := newRateLimitRetrySession()
-	loop, err := agentloop.New(duplexSessionLoopOptions(&rateLimitRetrySessionInferencer{session: session}, sessionLoopOptions{})...)
-	if err != nil {
-		t.Fatalf("create agent loop: %v", err)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	if err := retryScheduledRateLimitedResponseWithClock(audioiowire.NewService(), ctx, nil, nil, loop, observer, terminal, nil); !errors.Is(err, context.Canceled) {
-		t.Fatalf("cancelled retry error = %v, want context cancellation", err)
-	}
-	if got := session.countSent(messages.StreamTypeResponseCreate); got != 0 {
-		t.Fatalf("cancelled retry sent %d response.create messages, want zero", got)
-	}
-}
-
 func TestRunAgentLoopSessionMaxDurationStopsRateLimitRetry(t *testing.T) {
 	const retryDelay = 500 * time.Millisecond
 
@@ -321,16 +295,16 @@ func TestRunAgentLoopSessionMaxDurationStopsRateLimitRetry(t *testing.T) {
 	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime-2.1-mini")
 	observer.scheduleAudioInputs([]ScheduledAudioInput{{AfterCompletedTurns: 0, PCM: []byte{1, 2}, EndOfTurn: true}})
 
-	err := runAgentLoopSessionStream(context.Background(), io.Discard, &rateLimitRetrySessionInferencer{session: session}, sessionLoopOptions{
+	err := runAgentLoopSessionWithDurationClock(context.Background(), io.Discard, &rateLimitRetrySessionInferencer{session: session}, sessionLoopOptions{
 		audioService:             newTestAudioIOService(),
 		MaxDuration:              100 * time.Millisecond,
 		CloseAfterScheduledAudio: true,
 		ToolExecutor:             &rateLimitRetryToolExecutor{},
 		ToolDefinitions:          []messages.ToolDefinition{{Name: "lookup", Description: "Look up one value."}},
 		observer:                 observer,
-	})
+	}, 100*time.Millisecond, realSessionDurationClock{})
 	if err != nil {
-		t.Fatalf("runAgentLoopSessionStream: %v; timeline=%v", err, session.timelineSnapshot())
+		t.Fatalf("service-owned session run: %v; timeline=%v", err, session.timelineSnapshot())
 	}
 	if got := session.countSent(messages.StreamTypeResponseCreate); got != 1 {
 		t.Fatalf("response.create count = %d, want initial continuation only (retry delay %s); timeline=%v", got, retryDelay, session.timelineSnapshot())
@@ -543,7 +517,7 @@ func TestRunAgentLoopSessionStopsAfterConsecutiveRateLimitFailure(t *testing.T) 
 	if got := lifecycleSnapshotForTest(observer).CompletedScheduled; got != 0 || observer.turnsCompleted != 0 {
 		t.Fatalf("failed scheduled credits = scheduled:%d turns:%d, want 0/0", got, observer.turnsCompleted)
 	}
-	if !errors.Is(err, ErrSessionToolContinuationIncomplete) || !errors.Is(err, ErrSessionScheduledAudioIncomplete) {
+	if !errors.Is(err, ErrSessionToolContinuationIncomplete) || !errors.Is(err, runtimeSession.ErrLiveScheduledAudioIncomplete) {
 		t.Fatalf("consecutive failure error = %v, want tool and scheduled lifecycle sentinels", err)
 	}
 	var continuationErr *SessionToolContinuationError
@@ -606,7 +580,7 @@ func TestRunAgentLoopSessionDoesNotRetryNonRateLimitFailure(t *testing.T) {
 	if got := lifecycleSnapshotForTest(observer).CompletedScheduled; got != 0 || observer.turnsCompleted != 0 {
 		t.Fatalf("non-rate-limit credits = scheduled:%d turns:%d, want 0/0", got, observer.turnsCompleted)
 	}
-	if !errors.Is(err, ErrSessionToolContinuationIncomplete) || !errors.Is(err, ErrSessionScheduledAudioIncomplete) {
+	if !errors.Is(err, ErrSessionToolContinuationIncomplete) || !errors.Is(err, runtimeSession.ErrLiveScheduledAudioIncomplete) {
 		t.Fatalf("non-rate-limit error = %v, want tool and scheduled lifecycle sentinels", err)
 	}
 	var continuationErr *SessionToolContinuationError
@@ -642,8 +616,20 @@ func TestScheduledFailureRetainsProviderMetadataWithoutRetry(t *testing.T) {
 	if delay, retry := observer.claimScheduledRateLimitRetry(responseID, terminal); retry || delay != 0 {
 		t.Fatalf("direct scheduled failure unexpectedly claimed retry = (%s, %t)", delay, retry)
 	}
-	err := scheduledAudioCompletionError(nil, sessionLoopOptions{CloseAfterScheduledAudio: true, observer: observer})
-	var incomplete *SessionScheduledAudioIncompleteError
+	completed, dispatched, scheduled := observer.scheduledAudioCounts()
+	providerStatus, providerErrCode, providerDetails := observer.scheduledAudioFailureMetadata()
+	err := durationwire.NewService().Complete(sessionduration.CompletionRequest{
+		CloseAfterScheduledAudio:      true,
+		ScheduledAudioIncomplete:      observer.scheduledAudioIncomplete(),
+		ScheduledAudioCompleted:       completed,
+		ScheduledAudioDispatched:      dispatched,
+		ScheduledAudioCount:           scheduled,
+		ProviderScheduledStatus:       providerStatus,
+		ProviderScheduledErrorCode:    providerErrCode,
+		ProviderScheduledErrorDetails: providerDetails,
+		ScheduledAudioIncompleteCause: runtimeSession.ErrLiveScheduledAudioIncomplete,
+	})
+	var incomplete *sessionduration.ScheduledAudioIncompleteError
 	if !errors.As(err, &incomplete) {
 		t.Fatalf("scheduled failure error = %v, want typed incomplete error", err)
 	}

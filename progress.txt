@@ -5021,3 +5021,173 @@ handoff sequence. No gate completion is claimed.
   contract; cut over every production caller and delete all three remaining
   files. Then verify all 14 exact absences and adapter purity before the full
   exact-candidate local preflight.
+# C251 candidate regression checkpoint — 2026-09-21
+
+- `project-control.py verify-work --type task --name
+  audio-runtime-c251-recover-shutdown-duration-retirement` admits the task to
+  `audio-runtime/audio-runtime-v1`; `prd.json.branchName` matches the isolated
+  branch. The canonical `~default` board task is still `init`. The C251 PR
+  query is empty, so there are no concluded review findings or PR repairs.
+- Fetched `origin/main` at
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`; it remains an ancestor of
+  `HEAD=4e9a8b43f80d85f1b35cd5bc79785d9423732e61`. No host checkout was merged
+  or reset.
+- Current candidate regression command passes 1,209 tests in 16 packages:
+  `rtk go test -count=1 -timeout 240s ./go-agent-runtime/services/session/... ./go-agent-runtime/services/sessionduration/... ./agent-cli/internal/services/internal/agentruntime`.
+  `rtk make wire-check` passes for all registered graphs, and
+  `rtk git diff --check` passes.
+- Retirement is incomplete. Eleven of the fourteen planned files are absent;
+  `session_service_duration.go` (404 lines),
+  `session_service_duration_execution.go` (16 lines), and
+  `session_service_duration_shutdown.go` (53 lines) remain. The named adapter
+  remains one production file / 59 lines. The current duration resource
+  composition and per-run handles are still in the legacy region; these are
+  not credited as retirement.
+- No `make prepush`, complete C251 local gate, commit, push, PR, or CI handoff
+  is claimed. Exact next action: move the remaining loop/resource composition
+  and invocation state behind the session-owned contract and internals, cut over
+  every production caller, delete all three remaining legacy files, then verify
+  all fourteen absences and adapter purity before running the complete exact-head
+  preflight.
+
+## C251 duration invocation ownership checkpoint — 2026-09-21
+
+- Added the public `session.DurationRunner` contract and private
+  `session/internal/live` implementation. The session service now owns duration
+  loop construction, publication readiness/stop lifetime, provider playback
+  drain/close, RTC binding shutdown, resource error fan-in, and provider done
+  signaling. The CLI supplies public loop/session ports and observer facts.
+- Removed `session_service_duration_execution.go` and
+  `session_service_duration_shutdown.go`; `durationServiceResources` and its
+  shutdown methods no longer own the invocation state. The remaining CLI file
+  still contains a stateless concrete loop conversion and request composition.
+  The only remaining planned legacy file is
+  `session_service_duration.go` at 357 lines. `shutdown_adapter.go` remains one
+  file / 59 lines.
+- The initial compile-only check exposed a `session` to `sessionturn` import
+  cycle. The contract now takes publication construction as an explicit host
+  effect, leaving lifecycle ownership in `session/internal/live`; the compile
+  check then passed across 17 affected packages.
+- The accumulated normal regression command
+  `rtk go test -count=1 -timeout 240s ./go-agent-runtime/services/session/... ./go-agent-runtime/services/sessionduration/... ./agent-cli/internal/services/internal/agentruntime`
+  passes 1,209 tests in 16 packages. `rtk git diff --check` passes.
+- This is a partial ownership checkpoint only. The C251 candidate still has
+  pre-existing uncommitted peer and integration changes preserved in this
+  worktree. No complete race/local preflight, commit, push, PR, or CI handoff is
+  claimed.
+- Final compile-only check passes across the affected session, duration,
+  agentruntime, and livehost packages after restoring the active peer audio
+  files to their pre-existing state. The exact 14-file census is 13 absent / 1
+  present; `session_service_duration.go` is 357 lines and the named adapter is
+  1 file / 59 lines.
+- Exact next action: move the remaining CLI duration request composition and
+  observed-session wrapper behind the session-owned public invocation contract,
+  cut over every production caller, and delete
+  `session_service_duration.go`. Then verify the fourteen exact absences and
+  adapter purity before running the full exact-head C251 preflight.
+
+## C251 executor recovery checkpoint — 2026-09-21
+
+- Reverified task admission with `project-control.py verify-work --type task`
+  for `audio-runtime-c251-recover-shutdown-duration-retirement`; the sole
+  admitted project remains `audio-runtime/audio-runtime-v1`, and
+  `prd.json.branchName` matches the isolated branch. `origin/main` is
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44` and remains an ancestor of HEAD,
+  as do the required startup and recovery-checkpoint revisions. The branch PR
+  query is empty; no concluded C251 review finding exists.
+- Preserved the existing dirty checkpoint and predecessor changes. The
+  accumulated normal regression command
+  `rtk go test -count=1 -timeout 240s ./go-agent-runtime/services/session/... ./go-agent-runtime/services/sessionduration/... ./go-agent-runtime/services/sessionterminal/... ./agent-cli/internal/services/internal/agentruntime`
+  passes 1,221 tests in 19 packages.
+- Retirement remains incomplete: thirteen of fourteen planned production
+  files are absent; `session_service_duration.go` remains at 357 lines. The
+  named `livehost/shutdown_adapter.go` is one production file / 59 lines. That
+  CLI file still assembles the run request, duration/session Wire, observer
+  callbacks, publication and completion flow; this is not credited as a
+  stateless adapter or completed caller cutover.
+- No `make prepush`, complete C251 gate, commit, push, PR, or CI handoff is
+  claimed. Exact next action: move the remaining duration request/completion
+  composition behind the service-owned public invocation contract and
+  `session/internal/live`; cut over both remaining production entrypoints,
+  delete `session_service_duration.go`, then verify all fourteen absences and
+  the adapter's stateless one-file/300-line limit before the exact-candidate
+  local preflight.
+
+## C251 observer policy handoff checkpoint — 2026-09-21
+
+- Reverified `project-control.py verify-work --type task`; C251 remains admitted
+  to `audio-runtime/audio-runtime-v1`, `prd.json.branchName` matches the
+  isolated branch, and `gh pr list --head
+  codex/audio-runtime-c251-recover-shutdown-duration-retirement --state all`
+  returns no PR or prior review feedback. Fetched `origin main` at
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`; it remains an ancestor of
+  `HEAD=4e9a8b43f80d85f1b35cd5bc79785d9423732e61`, as do the startup revision
+  and required `ee9b68260ad69e8b72c2bcbed655435af877d5c3` checkpoint.
+- Moved observer-derived duration facts, tool-lifecycle wakeups, session-update
+  readiness, liveness/retry enablement, scheduled-input dispatch hooks, and
+  completion facts behind public sessionduration observer contracts and the
+  internal service/runner. `session/internal/live` now connects the observer
+  to the service-owned controller and tool-result boundary. A typed-nil observer
+  regression was found and fixed; publication artifact duplication exposed by
+  the first focused run was also corrected.
+- Verification passes on the current dirty worktree:
+  `rtk go test -count=1 -timeout 120s ./go-agent-runtime/services/sessionduration/... ./agent-cli/internal/services/internal/agentruntime -run 'TestRunAgentLoopSessionWithDurationTerminalOutcomesAlwaysDrainAcceptedDelta|TestRunAgentLoopSessionTerminalOutcomesAlwaysDrainAcceptedDelta|TestRunSessionWithMaxDuration_FinalizesRealArtifactsAndRejectsLateFrame|TestRunSessionWithMaxDuration_FinalizesZeroSampleArtifactsBeforeFirstAudio'`
+  (36 passed in 4 packages);
+  `rtk go test -count=1 -timeout 240s ./go-agent-runtime/services/session/... ./go-agent-runtime/services/sessionduration/... ./go-agent-runtime/services/sessionterminal/... ./agent-cli/internal/services/internal/agentruntime`
+  (1,221 passed in 19 packages); the same command with `-race` (1,221 passed
+  in 19 packages); and `rtk git diff --check`.
+- Retirement remains incomplete: thirteen of fourteen target files are absent;
+  `session_service_duration.go` remains at 295 physical lines and still owns
+  invocation/request and terminal-completion composition. The named adapter is
+  one production file / 59 lines. No commit, push, PR, prepush, full C251 gate,
+  or CI handoff is claimed. Exact next action: move the remaining request and
+  completion composition behind a service-owned invocation contract, integrate
+  the live and runtime-plan callers directly through it, delete
+  `session_service_duration.go`, then prove the fourteen absences and adapter
+  cap before the exact-candidate local preflight.
+
+## C251 executor revalidation checkpoint — 2026-09-21
+
+- Re-ran `project-control.py verify-work --type task` for
+  `audio-runtime-c251-recover-shutdown-duration-retirement`; admission remains
+  `audio-runtime/audio-runtime-v1`, and `prd.json.branchName` matches the
+  isolated worktree. The canonical PR query is empty, with no concluded review
+  findings to repair.
+- Fetched `origin main`; `origin/main` remains
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`. It is an ancestor of
+  `HEAD=4e9a8b43f80d85f1b35cd5bc79785d9423732e61`, as are the startup and
+  recovery checkpoints. No host checkout was reset or merged.
+- Recounted the exact planned production target: thirteen of fourteen files are
+  absent; `session_service_duration.go` remains at 295 physical lines. The
+  named stateless adapter remains one production file / 59 lines. Existing
+  dirty peer and predecessor changes remain preserved.
+- No implementation, prepush, candidate commit, push, PR, or CI handoff is
+  claimed in this revalidation. Exact next action: move request/completion
+  composition behind the session-owned invocation contract and
+  `session/internal/live`, cut over the live and runtime-plan callers, delete
+  `session_service_duration.go`, and only then run the complete exact-head
+  local preflight.
+
+## C251 service-owned invocation cutover checkpoint — 2026-09-21
+
+- Reverified C251 admission and branch identity; a fresh `git fetch origin main`
+  leaves `origin/main=b9b2f90bf7e00430cd0ab6067179a5fb8005ec44` as an ancestor
+  of the isolated candidate. The C251 pull-request query remains empty and no
+  concluded review finding is available.
+- Added the session contract's normalized `DurationRunRequest`; moved bounded
+  request assembly, tool-acknowledgement projection, completion classification,
+  observer finalization, and cancellation publication ordering behind
+  `session/internal/live`. The live/runtime-plan callers now enter through the
+  public runner contract. Deleted the final planned production file,
+  `agent-cli/internal/services/internal/agentruntime/session_service_duration.go`.
+- Verified all fourteen planned legacy production files absent and the named
+  adapter at one file / 59 lines. The focused 15 previously scheduler-failing
+  caller regressions pass. The accumulated normal suite passes 1,221 tests in
+  19 packages on rerun; one diagnostic-signature distinctness failure from the
+  prior full run passed when reproduced alone and did not recur.
+- No exact-candidate prepush, commit, push, PR, or CI handoff is claimed.
+  Exact next action: inspect the public caller cutover and duplicate-policy
+  search, create a clean candidate commit preserving predecessor/peer changes,
+  then run `make prepush` and every C251 local functional, integration, race,
+  hermetic, embed, Wire, absence, adapter, ancestry, and diff gate on that SHA
+  before pushing or opening the PR.

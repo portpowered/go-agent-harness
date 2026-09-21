@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
@@ -72,6 +73,7 @@ type AdmissionInferencer struct {
 	session    *AdmissionSession
 	closeDone  chan struct{}
 	closeOnce  sync.Once
+	deferClose bool
 }
 
 func NewAdmissionInferencer(inner messages.SessionInferencer, admission *EventAdmission, closeDone chan struct{}) *AdmissionInferencer {
@@ -101,6 +103,9 @@ func (i *AdmissionInferencer) ConnectSession(ctx context.Context) (messages.Sess
 	i.mu.Lock()
 	i.connected = true
 	wrapped := NewAdmissionSession(ctx, session, i.admission, i.recordCloseError)
+	if i.deferClose {
+		wrapped.deferCloseUntilFinalization()
+	}
 	i.session = wrapped
 	i.mu.Unlock()
 	return wrapped, nil
@@ -171,21 +176,97 @@ func (i *AdmissionInferencer) CloseAdmission() {
 	i.admission.close()
 }
 
+func (i *AdmissionInferencer) deferSessionCloseUntilFinalization() {
+	if i == nil {
+		return
+	}
+	i.mu.Lock()
+	i.deferClose = true
+	session := i.session
+	i.mu.Unlock()
+	if session != nil {
+		session.deferCloseUntilFinalization()
+	}
+}
+
+func (i *AdmissionInferencer) finalizeSessionClose() error {
+	if i == nil {
+		return nil
+	}
+	i.mu.Lock()
+	session := i.session
+	i.mu.Unlock()
+	if session == nil {
+		return nil
+	}
+	drainCtx, cancel := context.WithTimeout(context.Background(), defaultDrainWallSafety)
+	defer cancel()
+	drainErr := session.DrainPlayback(drainCtx)
+	session.releaseDeferredClose()
+	return errors.Join(drainErr, session.Close())
+}
+
 type AdmissionSession struct {
-	inner     messages.Session
-	admission *EventAdmission
-	receive   *messages.TypedBuffer[messages.StreamMessage]
-	done      chan struct{}
-	doneOnce  sync.Once
-	closeOnce sync.Once
-	closeMu   sync.Mutex
-	closeErr  error
-	onClose   func(error)
+	inner      messages.Session
+	admission  *EventAdmission
+	receive    *messages.TypedBuffer[messages.StreamMessage]
+	done       chan struct{}
+	doneOnce   sync.Once
+	closeOnce  sync.Once
+	drainOnce  sync.Once
+	closeMu    sync.Mutex
+	closeErr   error
+	drainErr   error
+	onClose    func(error)
+	deferClose bool
 
 	terminalMu            sync.Mutex
 	providerTerminal      messages.StreamMessage
 	providerTerminalValue *messages.SessionCloseValue
 	providerTerminalSeen  bool
+}
+
+type sessionAdmissionController interface {
+	SessionAdmissionClosed() bool
+}
+
+type sessionAdmissionPolicy interface {
+	SessionAdmissionAllows(messages.StreamMessage) bool
+}
+
+type completeMessageAdmissionPolicy interface {
+	SessionAdmissionAllowsCompleteMessage(messages.Message) bool
+}
+
+func (s *AdmissionSession) SessionAdmissionClosed() bool {
+	if s == nil || s.inner == nil {
+		return false
+	}
+	controller, ok := s.inner.(sessionAdmissionController)
+	return ok && controller.SessionAdmissionClosed()
+}
+
+func (s *AdmissionSession) SessionAdmissionAllows(msg messages.StreamMessage) bool {
+	if s == nil || s.inner == nil {
+		return false
+	}
+	if policy, ok := s.inner.(sessionAdmissionPolicy); ok {
+		return policy.SessionAdmissionAllows(msg)
+	}
+	if s.SessionAdmissionClosed() {
+		return msg.Type == messages.StreamTypeResponseCancel || msg.Type == messages.StreamTypeSessionClose
+	}
+	return true
+}
+
+func (s *AdmissionSession) SessionAdmissionAllowsCompleteMessage(msg messages.Message) bool {
+	if s == nil || s.inner == nil {
+		return false
+	}
+	if policy, ok := s.inner.(completeMessageAdmissionPolicy); ok {
+		return policy.SessionAdmissionAllowsCompleteMessage(msg)
+	}
+	return !s.SessionAdmissionClosed()
 }
 
 func NewAdmissionSession(ctx context.Context, inner messages.Session, admission *EventAdmission, onClose func(error)) *AdmissionSession { //nolint:contextcheck // nil contexts use the session API's documented background behavior.
@@ -275,6 +356,22 @@ func (s *AdmissionSession) RTCMedia() (audio.MediaEndpoints, bool) {
 	return audio.MediaEndpoints{}, false
 }
 
+func (s *AdmissionSession) DrainPlayback(ctx context.Context) error {
+	if s == nil {
+		return nil
+	}
+	s.drainOnce.Do(func() {
+		if s.inner == nil {
+			return
+		}
+		drainer, ok := s.inner.(sessionduration.PlaybackDrainer)
+		if ok {
+			s.drainErr = drainer.DrainPlayback(ctx)
+		}
+	})
+	return s.drainErr
+}
+
 func (s *AdmissionSession) TerminalError() error {
 	if source, ok := s.inner.(interface{ TerminalError() error }); ok {
 		return source.TerminalError()
@@ -336,6 +433,13 @@ func (s *AdmissionSession) Close() error {
 	if s == nil {
 		return nil
 	}
+	s.closeMu.Lock()
+	deferred := s.deferClose
+	s.closeMu.Unlock()
+	if deferred {
+		s.closeAdmission()
+		return nil
+	}
 	s.closeOnce.Do(func() {
 		s.closeAdmission()
 		var err error
@@ -358,6 +462,24 @@ func (s *AdmissionSession) Close() error {
 	s.closeMu.Lock()
 	defer s.closeMu.Unlock()
 	return s.closeErr
+}
+
+func (s *AdmissionSession) deferCloseUntilFinalization() {
+	if s == nil {
+		return
+	}
+	s.closeMu.Lock()
+	s.deferClose = true
+	s.closeMu.Unlock()
+}
+
+func (s *AdmissionSession) releaseDeferredClose() {
+	if s == nil {
+		return
+	}
+	s.closeMu.Lock()
+	s.deferClose = false
+	s.closeMu.Unlock()
 }
 
 func (s *AdmissionSession) closeAdmission() {

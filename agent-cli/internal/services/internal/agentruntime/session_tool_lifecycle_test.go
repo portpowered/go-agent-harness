@@ -7,6 +7,9 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	sessionduration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 )
 
 func TestSessionProgressObserver_RejectedResultRegistersBeforeCallObservation(t *testing.T) {
@@ -116,9 +119,11 @@ func TestSessionProgressObserver_IncompleteResponseReportsAcceptedContinuationID
 	})
 	observer.noteToolResultAccepted(callID)
 
-	err := audioResponseCompletionError(nil, sessionLoopOptions{
-		RequireAssistantResponse: true,
-		observer:                 observer,
+	err := durationwire.NewService().Complete(sessionduration.CompletionRequest{
+		RequireAssistantResponse:    true,
+		ProviderToolCallObserved:    observer.providerToolCallObserved(),
+		AssistantResponseCompleted:  observer.assistantResponseCompleted(),
+		AssistantResponseIncomplete: runtimeSession.ErrLiveAudioResponseIncomplete,
 	})
 	if !errors.Is(err, ErrSessionAudioResponseIncomplete) {
 		t.Fatalf("incomplete response error = %v, want ErrSessionAudioResponseIncomplete", err)
@@ -530,8 +535,10 @@ func TestAudioResponseCompletionPreservesIncompleteWithOutputDiagnostic(t *testi
 	pcmErr := errors.New("PCM16 audio delta has odd byte length 1")
 	outputErr := errors.New("audio write response.wav: empty WAV samples")
 	called := false
-	err := audioResponseCompletionError(pcmErr, sessionLoopOptions{
-		RequireTerminalAssistantResponse: true,
+	err := durationwire.NewService().Complete(sessionduration.CompletionRequest{
+		RunError:                      pcmErr,
+		RequireTerminalAssistantReply: true,
+		AssistantResponseIncomplete:   runtimeSession.ErrLiveAudioResponseIncomplete,
 		AudioOutputError: func() error {
 			called = true
 			return outputErr

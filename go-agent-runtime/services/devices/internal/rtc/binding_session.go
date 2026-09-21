@@ -56,6 +56,11 @@ func (i *inferencer) ConnectSession(ctx context.Context) (messages.Session, erro
 }
 
 func rtcMedia(session messages.Session) (audio.MediaEndpoints, bool) {
+	if owner, ok := session.(interface {
+		RTCMedia() (audio.MediaEndpoints, bool)
+	}); ok {
+		return owner.RTCMedia()
+	}
 	owner, ok := session.(audio.MediaSession)
 	if !ok {
 		return audio.MediaEndpoints{}, false

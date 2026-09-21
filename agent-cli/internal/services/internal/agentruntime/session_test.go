@@ -21,6 +21,7 @@ import (
 	services "github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	sessionwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
+	terminalwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -822,7 +823,7 @@ func (w failingWriter) Write([]byte) (int, error) {
 func TestWriteSessionReplayMessage_PrintsSessionTerminalFields(t *testing.T) {
 	var out bytes.Buffer
 
-	err := writeSessionReplayMessage(&out, messages.StreamMessage{
+	err := terminalwire.NewService().WriteTranscriptMessage(&out, messages.StreamMessage{
 		Type: messages.StreamTypeSessionClose,
 		Value: messages.NewSessionCloseValueWithTerminal(
 			"session-1",
@@ -856,7 +857,7 @@ func TestWriteSessionReplayMessage_PrintsSessionTerminalFields(t *testing.T) {
 func TestWriteSessionReplayMessage_PrintsTranscriptDelta(t *testing.T) {
 	var out bytes.Buffer
 
-	err := writeSessionReplayMessage(&out, messages.StreamMessage{
+	err := terminalwire.NewService().WriteTranscriptMessage(&out, messages.StreamMessage{
 		Type:  messages.StreamTypeTranscriptDelta,
 		Value: messages.NewTranscriptDeltaValue("spoken image description"),
 	})
@@ -870,7 +871,7 @@ func TestWriteSessionReplayMessage_PrintsTranscriptDelta(t *testing.T) {
 
 func TestSessionReplayRendererKeepsInterleavedTranscriptRolesSeparate(t *testing.T) {
 	var out bytes.Buffer
-	renderer := newSessionReplayRenderer(&out)
+	renderer := terminalwire.NewService().NewTranscriptRenderer(&out, nil)
 	events := []messages.StreamMessage{
 		{Type: messages.StreamTypeTranscriptStart, Role: messages.RoleUser, Value: messages.NewTranscriptStartValue()},
 		{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleUser, Value: messages.NewTranscriptDeltaValue("heard ")},
@@ -880,7 +881,7 @@ func TestSessionReplayRendererKeepsInterleavedTranscriptRolesSeparate(t *testing
 		{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleUser, Value: messages.NewTranscriptEndValue("again")},
 	}
 	for _, event := range events {
-		if err := writeSessionReplayMessage(renderer, event); err != nil {
+		if err := terminalwire.NewService().WriteTranscriptMessage(renderer, event); err != nil {
 			t.Fatalf("write transcript event: %v", err)
 		}
 	}
@@ -892,7 +893,7 @@ func TestSessionReplayRendererKeepsInterleavedTranscriptRolesSeparate(t *testing
 
 func TestSessionReplayRendererKeepsActorChunksOnOneLineAcrossToolContinuation(t *testing.T) {
 	var out bytes.Buffer
-	renderer := newSessionReplayRenderer(&out)
+	renderer := terminalwire.NewService().NewTranscriptRenderer(&out, nil)
 	events := []messages.StreamMessage{
 		{Type: messages.StreamTypeTranscriptStart, Role: messages.RoleAssistant, Value: messages.NewTranscriptStartValue()},
 		{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleAssistant, Value: messages.NewTranscriptDeltaValue("I will check ")},
@@ -910,7 +911,7 @@ func TestSessionReplayRendererKeepsActorChunksOnOneLineAcrossToolContinuation(t 
 		{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleAssistant, Value: messages.NewTranscriptEndValue("It is sunny and warm.")},
 	}
 	for _, event := range events {
-		if err := writeSessionReplayMessage(renderer, event); err != nil {
+		if err := terminalwire.NewService().WriteTranscriptMessage(renderer, event); err != nil {
 			t.Fatalf("write event %s: %v", event.Type, err)
 		}
 	}
@@ -926,14 +927,14 @@ func TestSessionReplayRendererKeepsActorChunksOnOneLineAcrossToolContinuation(t 
 
 func TestSessionReplayRendererKeepsTextDeltasOnOneActorLine(t *testing.T) {
 	var out bytes.Buffer
-	renderer := newSessionReplayRenderer(&out)
+	renderer := terminalwire.NewService().NewTranscriptRenderer(&out, nil)
 	for _, event := range []messages.StreamMessage{
 		{Type: messages.StreamTypeTextStart, Role: messages.RoleAssistant, Value: messages.NewTextStartValue()},
 		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("first ")},
 		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("second")},
 		{Type: messages.StreamTypeTextEnd, Role: messages.RoleAssistant, Value: messages.NewTextEndValue()},
 	} {
-		if err := writeSessionReplayMessage(renderer, event); err != nil {
+		if err := terminalwire.NewService().WriteTranscriptMessage(renderer, event); err != nil {
 			t.Fatalf("write event %s: %v", event.Type, err)
 		}
 	}
@@ -944,7 +945,7 @@ func TestSessionReplayRendererKeepsTextDeltasOnOneActorLine(t *testing.T) {
 
 func TestSessionReplayRendererKeepsTranscriptContiguousAcrossAudioPackets(t *testing.T) {
 	var out bytes.Buffer
-	renderer := newSessionReplayRenderer(&out)
+	renderer := terminalwire.NewService().NewTranscriptRenderer(&out, nil)
 	events := []messages.StreamMessage{
 		{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleAssistant, ResponseID: "response-1", Value: messages.NewTranscriptDeltaValue("Incorrect. ")},
 		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, ResponseID: "response-1", Value: messages.NewAudioDeltaValue([]byte{0x01, 0x02})},
@@ -955,7 +956,7 @@ func TestSessionReplayRendererKeepsTranscriptContiguousAcrossAudioPackets(t *tes
 		{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleAssistant, ResponseID: "response-1", Value: messages.NewTranscriptEndValue("Incorrect. Me llamo means my name is.")},
 	}
 	for _, event := range events {
-		if err := writeSessionReplayMessage(renderer, event); err != nil {
+		if err := terminalwire.NewService().WriteTranscriptMessage(renderer, event); err != nil {
 			t.Fatalf("write event %s: %v", event.Type, err)
 		}
 	}
@@ -967,7 +968,7 @@ func TestSessionReplayRendererKeepsTranscriptContiguousAcrossAudioPackets(t *tes
 
 func TestSessionReplayRendererBreaksOnlyWhenVisibleActorChanges(t *testing.T) {
 	var out bytes.Buffer
-	renderer := newSessionReplayRenderer(&out)
+	renderer := terminalwire.NewService().NewTranscriptRenderer(&out, nil)
 	events := []messages.StreamMessage{
 		{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleAssistant, Value: messages.NewTranscriptDeltaValue("assistant ")},
 		{Type: messages.StreamTypeAudioStart, Role: messages.RoleAssistant, Value: messages.NewAudioStartValue()},
@@ -985,7 +986,7 @@ func TestSessionReplayRendererBreaksOnlyWhenVisibleActorChanges(t *testing.T) {
 		{Type: messages.StreamTypeTextEnd, Role: messages.RoleTool, Value: messages.NewTextEndValue()},
 	}
 	for _, event := range events {
-		if err := writeSessionReplayMessage(renderer, event); err != nil {
+		if err := terminalwire.NewService().WriteTranscriptMessage(renderer, event); err != nil {
 			t.Fatalf("write event %s: %v", event.Type, err)
 		}
 	}
@@ -1029,9 +1030,9 @@ func TestSessionReplayRendererIgnoresLateCompletionForInactiveRole(t *testing.T)
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			var out bytes.Buffer
-			renderer := newSessionReplayRenderer(&out)
+			renderer := terminalwire.NewService().NewTranscriptRenderer(&out, nil)
 			for _, event := range testCase.events {
-				if err := writeSessionReplayMessage(renderer, event); err != nil {
+				if err := terminalwire.NewService().WriteTranscriptMessage(renderer, event); err != nil {
 					t.Fatalf("write transcript event: %v", err)
 				}
 			}
@@ -1076,9 +1077,9 @@ func TestSessionReplayRendererRendersInactiveCompletionOnly(t *testing.T) {
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			var out bytes.Buffer
-			renderer := newSessionReplayRenderer(&out)
+			renderer := terminalwire.NewService().NewTranscriptRenderer(&out, nil)
 			for _, event := range testCase.events {
-				if err := writeSessionReplayMessage(renderer, event); err != nil {
+				if err := terminalwire.NewService().WriteTranscriptMessage(renderer, event); err != nil {
 					t.Fatalf("write transcript event: %v", err)
 				}
 			}
@@ -1091,7 +1092,7 @@ func TestSessionReplayRendererRendersInactiveCompletionOnly(t *testing.T) {
 }
 
 func TestWriteSessionReplayMessage_ReturnsSessionErrorTerminalFields(t *testing.T) {
-	err := writeSessionReplayMessage(io.Discard, messages.StreamMessage{
+	err := terminalwire.NewService().WriteTranscriptMessage(io.Discard, messages.StreamMessage{
 		Type: messages.StreamTypeError,
 		Value: messages.NewErrorValueWithTerminal(
 			"provider rejected request",
@@ -1146,7 +1147,7 @@ func TestWriteSessionToolAnnouncementEnumeratesCanonicalSurface(t *testing.T) {
 }
 
 func TestWriteSessionReplayMessage_IgnoresNonTerminalDiagnostic(t *testing.T) {
-	err := writeSessionReplayMessage(io.Discard, messages.StreamMessage{
+	err := terminalwire.NewService().WriteTranscriptMessage(io.Discard, messages.StreamMessage{
 		Type:  messages.StreamTypeError,
 		Value: messages.NewNonTerminalErrorValue("response is not active", "response_cancel_not_active"),
 	})

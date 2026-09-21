@@ -10,7 +10,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -21,37 +20,6 @@ import (
 )
 
 const transportDoneDrainTranscript = "grounded reply that must survive a failed transport"
-
-func TestDrainPublishedSessionDeltasConsumesEveryAlreadyPublishedMessage(t *testing.T) {
-	buffer := messages.NewTypedBuffer[messages.StreamMessage](4)
-	ctx := context.Background()
-	for _, msg := range []messages.StreamMessage{
-		{Type: messages.StreamTypeTranscriptDelta, Value: messages.NewTranscriptDeltaValue("first")},
-		{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValue("session", "provider_closed")},
-	} {
-		if !buffer.Write(ctx, msg) {
-			t.Fatalf("seed published delta %s", msg.Type)
-		}
-	}
-
-	var got []messages.StreamMessageType
-	stop, err := drainPublishedSessionDeltas(buffer.Read, func(msg messages.StreamMessage) (bool, error) {
-		got = append(got, msg.Type)
-		return msg.Type == messages.StreamTypeSessionClose, nil
-	})
-	if err != nil {
-		t.Fatalf("drainPublishedSessionDeltas: %v", err)
-	}
-	if !stop {
-		t.Fatal("drainPublishedSessionDeltas stop = false, want terminal delta to stop")
-	}
-	if want := []messages.StreamMessageType{messages.StreamTypeTranscriptDelta, messages.StreamTypeSessionClose}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("drained delta types = %v, want %v", got, want)
-	}
-	if _, ok := buffer.Read(); ok {
-		t.Fatal("published delta buffer still contains a message after drain")
-	}
-}
 
 // transportDoneDrainSession is a minimal provider session. It owns nothing
 // beyond the receive buffer the test publishes into, so the assertion below
@@ -146,12 +114,12 @@ func TestSessionTransportDoneDrainsAcceptedOutputWhenTransportErrored(t *testing
 	}()
 
 	out := &bytes.Buffer{}
-	runErr := runAgentLoopSessionStream(ctx, out, &transportDoneDrainInferencer{session: session}, sessionLoopOptions{
+	runErr := runAgentLoopSessionWithDurationClock(ctx, out, &transportDoneDrainInferencer{session: session}, sessionLoopOptions{
 		audioService: newTestAudioIOService(),
 		Done:         transportDone,
 		DoneErr:      doneErr,
 		observer:     observer,
-	})
+	}, 0, platformclock.Real{})
 
 	if !errors.Is(runErr, transportErr) {
 		t.Fatalf("transport-done run error = %v, want the reported transport failure %v", runErr, transportErr)

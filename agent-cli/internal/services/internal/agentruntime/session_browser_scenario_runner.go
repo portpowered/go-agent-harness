@@ -661,6 +661,7 @@ func runBrowserConversationSession(ctx context.Context, out io.Writer, request B
 	sessionOptions.RecordPath = ""
 	sessionOptions.ReplayPath = ""
 	sessionOptions.BrowserToolsEnabled = true
+	sessionOptions.BrowserToolsInteractive = true
 	// BrowserCapabilityState composes the model-facing grounding alongside
 	// BrowserToolsEnabled (see composeSessionInstructions). Leaving it at its
 	// zero value here used to silently drop the connected/unselected

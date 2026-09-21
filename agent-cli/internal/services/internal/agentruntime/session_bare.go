@@ -254,9 +254,7 @@ func resolveBareSessionTurnDetection(provider string, cfg *config.SessionConfig)
 }
 
 func resolveBareSessionTranscription(audioService audioio.Service, provider string, cfg *config.SessionConfig, disabled bool) (models.InputAudioTranscriptionConfig, error) {
-	if audioService == nil {
-		return models.InputAudioTranscriptionConfig{}, errors.New("audio service is required for transcription resolution")
-	}
+	audioService = sessionAudioService(audioService)
 	request := audioio.TranscriptionRequest{
 		Provider:          provider,
 		AcceptsAudioInput: true,

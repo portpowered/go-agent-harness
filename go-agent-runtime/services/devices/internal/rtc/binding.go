@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	audiosubsystem "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems/audio"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
@@ -62,6 +63,20 @@ func (b *binding) Errors() <-chan error {
 		return nil
 	}
 	return b.inferencer.errors
+}
+func (b *binding) AudioPorts() *audiosubsystem.Ports {
+	if b == nil || b.capture == nil && b.sink == nil {
+		return nil
+	}
+	ports := &audiosubsystem.Ports{}
+	if b.capture != nil {
+		ports.Capture = b.capture.Control()
+	}
+	if b.sink != nil {
+		ports.Playback = b.sink.PlaybackBuffer()
+		ports.Commands = b.sink.PlaybackCommands()
+	}
+	return ports
 }
 func (b *binding) SelectedDeviceIDs() (input, output string) {
 	if b == nil {

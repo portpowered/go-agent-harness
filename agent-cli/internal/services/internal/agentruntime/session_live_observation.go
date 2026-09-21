@@ -7,6 +7,8 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	sessionduration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 )
 
 type observedSessionInferencer struct {
@@ -132,6 +134,14 @@ func (i *observedSessionInferencer) CloseSession() error {
 	return i.closeErr
 }
 
+func (i *observedSessionInferencer) Close() error { return i.CloseSession() }
+
+func (i *observedSessionInferencer) DrainPlayback(ctx context.Context) error {
+	return i.DrainSessionPlayback(ctx)
+}
+
+func (i *observedSessionInferencer) Error() error { return i.sessionFailure() }
+
 func (i *observedSessionInferencer) DrainSessionPlayback(ctx context.Context) error {
 	if i == nil {
 		return nil
@@ -142,9 +152,7 @@ func (i *observedSessionInferencer) DrainSessionPlayback(ctx context.Context) er
 	if observed == nil {
 		return nil
 	}
-	drainer, ok := observed.Session.(interface {
-		DrainPlayback(context.Context) error
-	})
+	drainer, ok := observed.Session.(sessionduration.PlaybackDrainer)
 	if !ok {
 		return nil
 	}
@@ -223,7 +231,7 @@ func (s *observedSession) SendWithOutcome(ctx context.Context, msg messages.Stre
 	if !outcome.OK() {
 		if msg.Type == messages.StreamTypeToolCallEnd && s.progress != nil {
 			if value, ok := msg.Value.(*messages.ToolCallEndValue); ok && value != nil {
-				s.progress.noteToolResultRejected(value.ToolCallID, outcome)
+				s.progress.noteToolResultRejected(ctx, value.ToolCallID, outcome)
 			}
 		}
 		return outcome
@@ -249,7 +257,10 @@ func (s *observedSession) SendWithOutcome(ctx context.Context, msg messages.Stre
 		s.progress.noteToolContinuationRequested()
 	}
 	if s.progress != nil {
-		s.progress.observeProviderDispatch(msg)
+		switch msg.Type {
+		case messages.StreamTypeTextDelta, messages.StreamTypeMessageEnd, messages.StreamTypeResponseCreate:
+			s.progress.armProviderProgress()
+		}
 	}
 	return outcome
 }
@@ -296,7 +307,7 @@ func (s *observedSession) RequestResponse(ctx context.Context) messages.SessionS
 		s.runtime.responseCreate(messages.StreamMessage{Type: messages.StreamTypeResponseCreate})
 	}
 	if outcome.OK() && s.progress != nil {
-		s.progress.observeProviderDispatch(messages.StreamMessage{Type: messages.StreamTypeResponseCreate})
+		s.progress.armProviderProgress()
 	}
 	return outcome
 }
@@ -314,12 +325,12 @@ func (s *observedSession) SendMessage(ctx context.Context, msg messages.Message)
 	if s.SessionAdmissionClosed() && !s.SessionAdmissionAllowsCompleteMessage(msg) {
 		return false
 	}
-	sender, ok := s.Session.(SessionImageMessageSender)
+	sender, ok := s.Session.(sessionturn.CompleteMessageSender)
 	if !ok {
 		return false
 	}
 	outcome := sessionCompleteMessageSendOutcome(ctx, sender.SendMessage(ctx, msg))
-	s.observeCompleteMessageToolResult(msg, outcome, true)
+	s.observeCompleteMessageToolResult(ctx, msg, outcome, true)
 	return outcome.OK()
 }
 
@@ -331,12 +342,12 @@ func (s *observedSession) SendMessageWithoutResponse(ctx context.Context, msg me
 	if s.SessionAdmissionClosed() && !s.SessionAdmissionAllowsCompleteMessage(msg) {
 		return false
 	}
-	sender, ok := s.Session.(SessionImageMessageSenderWithoutResponse)
+	sender, ok := s.Session.(sessionturn.CompleteMessageWithoutResponseSender)
 	if !ok {
 		return false
 	}
 	outcome := sessionCompleteMessageSendOutcome(ctx, sender.SendMessageWithoutResponse(ctx, msg))
-	s.observeCompleteMessageToolResult(msg, outcome, false)
+	s.observeCompleteMessageToolResult(ctx, msg, outcome, false)
 	return outcome.OK()
 }
 
@@ -355,7 +366,7 @@ func sessionCompleteMessageSendOutcome(ctx context.Context, sent bool) messages.
 	return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}
 }
 
-func (s *observedSession) observeCompleteMessageToolResult(msg messages.Message, outcome messages.SessionSendOutcome, requestsContinuation bool) {
+func (s *observedSession) observeCompleteMessageToolResult(ctx context.Context, msg messages.Message, outcome messages.SessionSendOutcome, requestsContinuation bool) {
 	if s == nil || s.progress == nil {
 		return
 	}
@@ -365,25 +376,31 @@ func (s *observedSession) observeCompleteMessageToolResult(msg messages.Message,
 		}
 		if requestsContinuation {
 			if msg.ToolCallID != "" {
-				s.progress.noteToolContinuationRequestedFor(msg.ToolCallID)
+				s.progress.noteToolContinuationRequestedForWithContext(ctx, msg.ToolCallID)
 			}
 			s.progress.armProviderProgress()
 		}
 		return
 	}
 	if msg.ToolCallID != "" {
-		s.progress.noteToolResultRejected(msg.ToolCallID, outcome)
+		s.progress.noteToolResultRejected(ctx, msg.ToolCallID, outcome)
 	}
 }
 
 func (s *observedSession) SupportsCompleteMessages() bool {
-	complete, _ := completeMessageCapabilities(s.Session)
-	return complete
+	if capabilities, ok := s.Session.(interface{ SupportsCompleteMessages() bool }); ok {
+		return capabilities.SupportsCompleteMessages()
+	}
+	_, ok := s.Session.(sessionturn.CompleteMessageSender)
+	return ok
 }
 
 func (s *observedSession) SupportsCompleteMessagesWithoutResponse() bool {
-	_, withoutResponse := completeMessageCapabilities(s.Session)
-	return withoutResponse
+	if capabilities, ok := s.Session.(interface{ SupportsCompleteMessagesWithoutResponse() bool }); ok {
+		return capabilities.SupportsCompleteMessagesWithoutResponse()
+	}
+	_, ok := s.Session.(sessionturn.CompleteMessageWithoutResponseSender)
+	return ok
 }
 
 func (s *observedSession) markDone() {
@@ -399,4 +416,15 @@ func (s *observedSession) Close() error {
 		s.markDone()
 	})
 	return s.closeErr
+}
+
+func (s *observedSession) DrainPlayback(ctx context.Context) error {
+	if s == nil || s.Session == nil {
+		return nil
+	}
+	drainer, ok := s.Session.(sessionduration.PlaybackDrainer)
+	if !ok {
+		return nil
+	}
+	return drainer.DrainPlayback(ctx)
 }

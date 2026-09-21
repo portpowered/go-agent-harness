@@ -10,6 +10,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	sessiondiagnostics "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
 	sessiondiagnosticswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	"sync"
 )
 
@@ -190,6 +191,7 @@ type sessionProgressObserver struct {
 	sink               SessionDiagnosticSink
 	recorder           metrics.Recorder
 	productionSink     *metrics.InMemorySink
+	durationController sessionduration.Controller
 	streamObserver     SessionStreamObserver
 	// admittedTurnObserver runs after this observer has admitted one provider
 	// response as a completed turn. Room accounting uses this boundary instead
@@ -209,38 +211,19 @@ type sessionProgressObserver struct {
 	// sessionUpdated is scoped to the current SESSION.OPEN round trip. A
 	// subsequent SESSION.OPEN resets it so an acknowledgement from an older
 	// connection cannot release a new connection's scheduled input.
-	sessionUpdated                bool
-	requireSessionUpdated         bool
-	scheduledAudioDispatch        ScheduledAudioDispatchPolicy
-	activeResponse                bool
-	activeResponseID              string
-	completedResponseIDs          map[string]struct{}
-	retiredResponseIDs            map[string]struct{}
-	turnsCompleted                int
-	scheduledInputs               int
-	dispatchedInputs              int
-	completedScheduled            int
-	scheduledTurnBase             int
-	scheduledTurnBaseSet          bool
-	scheduledResponses            []scheduledAudioResponseLifecycle
-	scheduledResponseByID         map[string]int
-	nextScheduledResponse         int
-	activeScheduledResponseIndex  int
-	activeScheduledResponseID     string
-	activeScheduledResponseSet    bool
-	logicalScheduledResponseIndex int
-	logicalScheduledResponseID    string
-	logicalScheduledResponseSet   bool
-	// retryCandidate retains the scheduled owner of the most recent eligible
-	// terminal until the session runner decides whether to wait and retry. It
-	// is needed for legacy transports whose MESSAGE.END omits response_id and
-	// whose normal response cleanup clears the active/logical owner.
-	retryCandidateIndex int
-	retryCandidateSet   bool
-	retryCandidateID    string
-	counters            audioTurnCounters
-	totals              audioTurnCounters
-	pendingInputs       []ScheduledAudioInput
+	sessionUpdated         bool
+	requireSessionUpdated  bool
+	scheduledAudioDispatch ScheduledAudioDispatchPolicy
+	turnsCompleted         int
+	scheduledInputs        int
+	dispatchedInputs       int
+	completedScheduled     int
+	scheduledTurnBase      int
+	scheduledTurnBaseSet   bool
+	scheduleMu             sync.Mutex
+	counters               audioTurnCounters
+	totals                 audioTurnCounters
+	pendingInputs          []ScheduledAudioInput
 	// Room mixer input is admitted by a background pump rather than the
 	// session delta consumer. Keep its per-turn and lifetime byte totals behind
 	// their own lock so concurrent provider observation remains race-free.
@@ -271,26 +254,14 @@ type sessionProgressObserver struct {
 	// toolDeltaSeen tracks whether the in-flight provider tool call streamed
 	// TOOLCALL.DELTA bytes, so a terminal TOOLCALL.END carrying full arguments
 	// is counted only when no deltas preceded it.
-	toolDeltaSeen          bool
-	usagePrompt            uint64
-	usageCompletion        uint64
-	usageTotal             uint64
-	usageReasoning         uint64
-	usageSeen              bool
-	livenessMu             sync.Mutex
-	livenessErr            error
-	livenessObserver       func(error)
-	livenessClock          SessionLivenessClock
-	livenessTimer          SessionLivenessTimer
-	livenessWakeCh         chan struct{}
-	livenessControlCh      chan struct{}
-	livenessWatcherStop    chan struct{}
-	livenessWatcherStarted bool
-	livenessGeneration     uint64
-	livenessArmed          bool
-	livenessStopped        bool
-	localToolDepth         int
-	failure                *failureFacts
+	toolDeltaSeen    bool
+	usagePrompt      uint64
+	usageCompletion  uint64
+	usageTotal       uint64
+	usageReasoning   uint64
+	usageSeen        bool
+	livenessObserver func(error)
+	failure          *failureFacts
 	// userCancelled is set once by finish after the explicit SIGINT marker has
 	// proved that all observed causes were cancellation-only.
 	userCancelled bool
@@ -308,6 +279,7 @@ type sessionProgressObserver struct {
 	// separate from the diagnostic sink so a failure still produces exactly
 	// one canonical session_failure record.
 	failureObserver       func(sessionTerminalObservation)
+	failureMu             sync.Mutex
 	emitOnce, metricsOnce sync.Once
 	finishMu              sync.Mutex
 }
@@ -317,6 +289,113 @@ func (o *sessionProgressObserver) markRoomBoundCancellation() {
 		o.roomBoundCancellation = true
 	}
 }
+
+func (o *sessionProgressObserver) livenessFailure() error {
+	if o == nil || o.durationController == nil {
+		return nil
+	}
+	return o.durationController.LivenessFailure()
+}
+
+func (o *sessionProgressObserver) setDurationController(controller sessionduration.Controller) {
+	if o != nil {
+		o.durationController = controller
+	}
+}
+
+// RunFacts exposes observations to the sessionduration service without
+// transferring ownership of diagnostic state or run policy.
+func (o *sessionProgressObserver) RunFacts() sessionduration.RunFacts {
+	if o == nil {
+		return sessionduration.RunFacts{}
+	}
+	return sessionduration.RunFacts{
+		LastMessageEndAdmitted:              o.lastMessageEndAdmitted,
+		HasToolLifecycleObligation:          o.hasToolLifecycleObligation,
+		HasTerminalToolContinuationFailure:  o.hasTerminalToolContinuationFailure,
+		HasTerminalScheduledResponseFailure: o.hasTerminalScheduledResponseFailure,
+		AssistantResponseCompleted:          o.assistantResponseCompleted,
+		ProviderToolCallObserved:            o.providerToolCallObserved,
+		ScheduledAudioComplete:              o.scheduledAudioComplete,
+		ScheduledAudioAwaitingConfiguration: o.scheduledAudioAwaitingConfiguration,
+		ScheduledAudioReady:                 o.scheduledAudioReady,
+	}
+}
+
+func (o *sessionProgressObserver) Active() bool { return o != nil }
+
+func (o *sessionProgressObserver) ToolLifecycleEvents() <-chan struct{} {
+	return o.toolLifecycleEvents()
+}
+
+func (o *sessionProgressObserver) SessionUpdatedPending() bool {
+	return o != nil && o.scheduledAudioAwaitingConfiguration()
+}
+
+func (o *sessionProgressObserver) SessionUpdatedReady() bool {
+	return o == nil || o.scheduledAudioReady()
+}
+
+func (o *sessionProgressObserver) EnrichLifecycleError(err error) error {
+	return o.enrichLifecycleError(err)
+}
+
+func (o *sessionProgressObserver) RetryDispatched(messages.StreamMessage) {
+	if o != nil {
+		o.noteScheduledRateLimitRetryDispatched()
+	}
+}
+
+func (o *sessionProgressObserver) ObserveStreamMessage(message messages.StreamMessage) {
+	if o != nil {
+		o.observe(message)
+	}
+}
+
+func (o *sessionProgressObserver) NoteUserTextInput(prompt string) {
+	if o != nil {
+		o.noteUserTextInput(prompt)
+	}
+}
+
+func (o *sessionProgressObserver) SetToolResultsEnabled(enabled bool) {
+	o.setToolResultsEnabled(enabled)
+}
+
+func (o *sessionProgressObserver) DispatchScheduledInputs(ctx context.Context, sender sessionduration.ScheduledInputSender) error {
+	return o.dispatchScheduledInputs(ctx, sender)
+}
+
+func (o *sessionProgressObserver) SetDurationController(controller sessionduration.Controller) {
+	o.setDurationController(controller)
+}
+
+func (o *sessionProgressObserver) CompletionFacts() sessionduration.CompletionFacts {
+	if o == nil {
+		return sessionduration.CompletionFacts{}
+	}
+	completed, dispatched, scheduled := o.scheduledAudioCounts()
+	status, code, details := o.scheduledAudioFailureMetadata()
+	return sessionduration.CompletionFacts{
+		ProviderToolCallObserved:     o.providerToolCallObserved(),
+		AssistantResponseCompleted:   o.assistantResponseCompleted(),
+		ScheduledAudioIncomplete:     o.scheduledAudioIncomplete(),
+		ScheduledAudioCompleted:      completed,
+		ScheduledAudioDispatched:     dispatched,
+		ScheduledAudioCount:          scheduled,
+		ProviderScheduledStatus:      status,
+		ProviderScheduledErrorCode:   code,
+		ProviderScheduledErrorDetail: details,
+	}
+}
+
+func (o *sessionProgressObserver) armProviderProgress() {
+	if o == nil || o.durationController == nil {
+		return
+	}
+	o.durationController.ExpectProviderProgress()
+}
+
 func (o *sessionProgressObserver) notifyTerminalObservation(observation sessionTerminalObservation) bool {
 	if o == nil {
 		return false
@@ -345,19 +424,15 @@ func newSessionProgressObserver(sink SessionDiagnosticSink, recorder metrics.Rec
 		panic(err)
 	}
 	return &sessionProgressObserver{
-		lifecycle:             sessiondiagnosticswire.NewService(sessiondiagnostics.Options{}),
-		sink:                  sink,
-		recorder:              recorder,
-		productionSink:        productionSink,
-		provider:              provider,
-		model:                 model,
-		unresolvedToolCalls:   make(map[string]struct{}),
-		toolResultRejections:  make(map[string]messages.SessionSendStatus),
-		toolLifecycleCh:       make(chan struct{}, 1),
-		completedResponseIDs:  make(map[string]struct{}),
-		retiredResponseIDs:    make(map[string]struct{}),
-		scheduledResponseByID: make(map[string]int),
-		livenessWakeCh:        make(chan struct{}, 1),
+		lifecycle:            sessiondiagnosticswire.NewService(sessiondiagnostics.Options{}),
+		sink:                 sink,
+		recorder:             recorder,
+		productionSink:       productionSink,
+		provider:             provider,
+		model:                model,
+		unresolvedToolCalls:  make(map[string]struct{}),
+		toolResultRejections: make(map[string]messages.SessionSendStatus),
+		toolLifecycleCh:      make(chan struct{}, 1),
 	}
 }
 
@@ -373,8 +448,8 @@ func (o *sessionProgressObserver) scheduleAudioInputs(inputs []ScheduledAudioInp
 	if o == nil {
 		return
 	}
-	o.lifecycleProjectionMu.Lock()
-	defer o.lifecycleProjectionMu.Unlock()
+	o.scheduleMu.Lock()
+	defer o.scheduleMu.Unlock()
 	o.pendingInputs = append(o.pendingInputs, inputs...)
 	o.scheduledInputs += len(inputs)
 }

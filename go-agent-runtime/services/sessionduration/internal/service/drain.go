@@ -32,7 +32,7 @@ func (c *controller) drainLoop(ctx context.Context, loop sessionduration.Loop, p
 	if err != nil {
 		return err
 	}
-	return c.drainUntilQuiet(ctx, loop.Deltas(), policy.Clock, timer, quietPeriod, wallSafety)
+	return c.drainUntilQuiet(ctx, loop, policy.Clock, timer, quietPeriod, wallSafety, policy.Pending)
 }
 
 func drainDurations(policy sessionduration.DrainPolicy) (quietPeriod, wallSafety time.Duration) {
@@ -55,8 +55,8 @@ func newDrainTimer(clock sessionduration.TimerScheduler, duration time.Duration)
 	return timer, nil
 }
 
-func (c *controller) drainUntilQuiet(ctx context.Context, deltas *messages.TypedBuffer[messages.StreamMessage], clock sessionduration.TimerScheduler, timer sessionduration.Timer, quietPeriod, wallSafety time.Duration) error {
-	defer timer.Stop()
+func (c *controller) drainUntilQuiet(ctx context.Context, loop sessionduration.Loop, clock sessionduration.TimerScheduler, timer sessionduration.Timer, quietPeriod, wallSafety time.Duration, pending func() bool) error {
+	defer func() { timer.Stop() }()
 	wallTimer := time.NewTimer(wallSafety)
 	defer wallTimer.Stop()
 	for {
@@ -64,10 +64,29 @@ func (c *controller) drainUntilQuiet(ctx context.Context, deltas *messages.Typed
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-timer.C():
+			if drainPending(pending) {
+				var err error
+				timer, err = resetDrainTimer(clock, timer, quietPeriod)
+				if err != nil {
+					return err
+				}
+				continue
+			}
+			if err := c.drainAvailable(loop); err != nil {
+				return err
+			}
+			if drainPending(pending) {
+				var err error
+				timer, err = resetDrainTimer(clock, timer, quietPeriod)
+				if err != nil {
+					return err
+				}
+				continue
+			}
 			return nil
 		case <-wallTimer.C:
 			return nil
-		case msg, ok := <-deltas.Chan():
+		case msg, ok := <-loop.Deltas().Chan():
 			if !ok {
 				return nil
 			}
@@ -82,6 +101,8 @@ func (c *controller) drainUntilQuiet(ctx context.Context, deltas *messages.Typed
 		}
 	}
 }
+
+func drainPending(pending func() bool) bool { return pending != nil && pending() }
 
 func (c *controller) drainAvailable(loop sessionduration.Loop) error {
 	for {

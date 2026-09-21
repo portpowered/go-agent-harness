@@ -8,6 +8,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -23,7 +24,7 @@ func TestPlanOpenAIRecordPromptAudioOutputWithoutInputUsesRealtimeDuplexRate(t *
 			Model:  DefaultOpenAIRealtimeModel,
 		},
 	}}
-	plan, err := planSessionRuntimeWithFactory(context.Background(), SessionRunOptions{ModelCatalog: testModelCatalog(),
+	plan, err := planSessionRuntimeWithFactory(context.Background(), SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		Prompt:               "What is the current state of the cube? Then turn the top face once.",
 		PromptProvided:       true,
 		RecordPath:           recordPath,
@@ -87,8 +88,8 @@ func TestConfigureSessionAudioContractResolution(t *testing.T) {
 		{name: "openai no flags", provider: sessionProviderOpenAI, wantRate: sessionRealtimeAudioSampleRate},
 		{name: "grok no flags", provider: sessionProviderGrok, wantRate: sessionRealtimeAudioSampleRate},
 		{name: "output file", provider: sessionProviderOpenAI, opts: SessionRunOptions{ModelCatalog: testModelCatalog(), AudioOutputRequested: true}, wantRate: sessionRealtimeAudioSampleRate},
-		{name: "input device", provider: sessionProviderOpenAI, opts: SessionRunOptions{ModelCatalog: testModelCatalog(), RTCDeviceBinding: RTCDeviceBindingRequest{InputPresent: true}}, wantRate: sessionRealtimeAudioSampleRate},
-		{name: "both devices", provider: sessionProviderGrok, opts: SessionRunOptions{ModelCatalog: testModelCatalog(), RTCDeviceBinding: RTCDeviceBindingRequest{InputPresent: true, OutputPresent: true}}, wantRate: sessionRealtimeAudioSampleRate},
+		{name: "input device", provider: sessionProviderOpenAI, opts: SessionRunOptions{ModelCatalog: testModelCatalog(), RTCBinding: runtimedevices.RTCBindingRequest{InputPresent: true}}, wantRate: sessionRealtimeAudioSampleRate},
+		{name: "both devices", provider: sessionProviderGrok, opts: SessionRunOptions{ModelCatalog: testModelCatalog(), RTCBinding: runtimedevices.RTCBindingRequest{InputPresent: true, OutputPresent: true}}, wantRate: sessionRealtimeAudioSampleRate},
 		{name: "caller openai inferencer defaults to realtime rate", provider: sessionProviderOpenAI, opts: SessionRunOptions{ModelCatalog: testModelCatalog(), SessionInferencer: &sessionAudioContractInferencer{}}, wantRate: sessionRealtimeAudioSampleRate},
 		{name: "caller grok inferencer defaults to realtime rate", provider: sessionProviderGrok, opts: SessionRunOptions{ModelCatalog: testModelCatalog(), SessionInferencer: &sessionAudioContractInferencer{}}, wantRate: sessionRealtimeAudioSampleRate},
 		{name: "caller seam explicitly declares native rate", provider: sessionProviderOpenAI, opts: SessionRunOptions{ModelCatalog: testModelCatalog(), SessionInferencer: &sessionAudioContractInferencer{request: inference.SessionRequest{Config: models.SessionConfig{InputAudioSampleRate: models.SampleRate16000}}}}, wantRate: 16000},

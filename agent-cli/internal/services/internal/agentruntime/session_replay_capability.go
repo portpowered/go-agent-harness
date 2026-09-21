@@ -62,13 +62,13 @@ func (s *websocketReplaySession) SendMessageWithoutResponse(ctx context.Context,
 }
 
 func (s *websocketReplaySession) SupportsCompleteMessages() bool {
-	complete, _ := completeMessageCapabilities(s.Session)
-	return complete
+	_, ok := s.Session.(sessionturn.CompleteMessageSender)
+	return ok
 }
 
 func (s *websocketReplaySession) SupportsCompleteMessagesWithoutResponse() bool {
-	_, withoutResponse := completeMessageCapabilities(s.Session)
-	return withoutResponse
+	_, ok := s.Session.(sessionturn.CompleteMessageWithoutResponseSender)
+	return ok
 }
 
 // RTCMedia forwards the optional provider media capability through the strict
@@ -94,7 +94,7 @@ func (s *websocketReplaySession) OutputDrops() int64 {
 	return counters.OutputDrops()
 }
 
-func (s *websocketReplaySession) rtcMedia() (RTCMediaEndpoints, bool) {
+func (s *websocketReplaySession) rtcMedia() (audio.MediaEndpoints, bool) {
 	return rtcMediaFromSession(s.Session)
 }
 

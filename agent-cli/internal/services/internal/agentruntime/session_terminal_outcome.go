@@ -8,6 +8,8 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	duration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+	terminalwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
 )
 
 // sessionTerminalCompletionState records whether the session has a verified
@@ -193,7 +195,7 @@ func (r *sessionTerminalReporter) observeSessionCloseLocked(msg messages.StreamM
 		r.outcome.completion = sessionTerminalCompletionComplete
 	case messages.TerminalReasonCancellation:
 		rememberTerminalCandidate(&r.outcome.cancellation, candidate)
-	case SessionMaxDurationReason:
+	case duration.MaxDurationReason:
 		rememberTerminalCandidate(&r.outcome.durationTerminal, candidate)
 		r.outcome.durationExpired = true
 	case messages.TerminalReasonTerminalFailure,
@@ -405,17 +407,17 @@ func (r *sessionTerminalReporter) reconcileLocked(runErr error) (*sessionTermina
 			candidate = &sessionTerminalCandidate{
 				value: messages.NewSessionCloseValueWithTerminal(
 					"",
-					string(SessionMaxDurationReason),
-					string(SessionMaxDurationReason),
-					SessionMaxDurationReason,
+					string(duration.MaxDurationReason),
+					string(duration.MaxDurationReason),
+					duration.MaxDurationReason,
 					messages.TerminalProvenanceLoop,
 					o.outputStateOrNone(),
 				),
 				leadingNewline: true,
 			}
 		}
-		candidate.value = normalizeSessionTerminalValue(candidate.value, SessionMaxDurationReason, o.outputStateOrNone())
-		o.cause = SessionMaxDurationReason
+		candidate.value = normalizeSessionTerminalValue(candidate.value, duration.MaxDurationReason, o.outputStateOrNone())
+		o.cause = duration.MaxDurationReason
 		o.completion = sessionTerminalCompletionIncomplete
 		return candidate, false
 	}
@@ -510,10 +512,10 @@ func writePublishedSessionTerminal(out io.Writer, candidate *sessionTerminalCand
 		if _, err := io.WriteString(out, "\n"); err != nil {
 			return err
 		}
-		if err := writeSessionReplayClose(out, value, false); err != nil {
+		if err := terminalwire.NewService().WriteSessionClose(out, value, false); err != nil {
 			return err
 		}
-	} else if err := writeSessionReplayClose(out, value, candidate.leadingNewline); err != nil {
+	} else if err := terminalwire.NewService().WriteSessionClose(out, value, candidate.leadingNewline); err != nil {
 		return err
 	}
 	if replayComplete {

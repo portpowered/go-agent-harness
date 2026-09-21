@@ -54,7 +54,7 @@ type durationTerminalDrainFixture struct {
 	inferencer *durationTerminalDrainInferencer
 	loopReady  chan *agentloop.AgentLoop
 	loop       *agentloop.AgentLoop
-	clock      SessionDurationClock
+	clock      duration.TimerScheduler
 	done       chan struct{}
 
 	options      sessionLoopOptions
@@ -95,7 +95,7 @@ func (f *durationTerminalDrainFixture) run(t *testing.T, setup func(*durationTer
 	trigger := setup(f)
 	result := make(chan error, 1)
 	go func() {
-		result <- runAgentLoopSessionWithDurationAdmissionClockStream(
+		_, err := runAgentLoopSessionWithDurationAdmissionClockStream(
 			f.ctx,
 			f.writer,
 			f.inferencer,
@@ -104,6 +104,7 @@ func (f *durationTerminalDrainFixture) run(t *testing.T, setup func(*durationTer
 			f.clock,
 			nil,
 		)
+		result <- err
 	}()
 
 	select {
@@ -191,7 +192,7 @@ func TestRunAgentLoopSessionWithDurationTerminalOutcomesAlwaysDrainAcceptedDelta
 					clock.releaseTimer()
 				}
 			},
-			wantOutput: string(SessionMaxDurationReason),
+			wantOutput: string(duration.MaxDurationReason),
 		},
 		{
 			name: "duration clock construction failure",
@@ -249,7 +250,7 @@ func TestRunAgentLoopSessionWithDurationTerminalOutcomesAlwaysDrainAcceptedDelta
 					f.clock.(*durationTestClock).fire()
 				}
 			},
-			wantOutput: string(SessionMaxDurationReason),
+			wantOutput: string(duration.MaxDurationReason),
 		},
 		{
 			name: "session updated timeout",
@@ -455,7 +456,7 @@ func newGatedDurationTerminalDrainClock(returnNil bool) *gatedDurationTerminalDr
 	}
 }
 
-func (c *gatedDurationTerminalDrainClock) NewTimer(duration time.Duration) SessionDurationTimer {
+func (c *gatedDurationTerminalDrainClock) NewTimer(duration time.Duration) duration.Timer {
 	c.createdOnce.Do(func() { close(c.created) })
 	<-c.release
 	if c.returnNil {
@@ -556,4 +557,4 @@ func (w *durationTerminalDrainFailingWriter) Write(data []byte) (int, error) {
 
 var _ messages.SessionInferencer = (*durationTerminalDrainInferencer)(nil)
 var _ messages.Session = (*durationTerminalDrainSession)(nil)
-var _ SessionDurationClock = (*gatedDurationTerminalDrainClock)(nil)
+var _ duration.TimerScheduler = (*gatedDurationTerminalDrainClock)(nil)

@@ -170,6 +170,9 @@ func bounded(value string, limit int) string {
 
 func (s *Service) Enrich(request sessionterminal.Request) error {
 	err := request.RunError
+	if request.DurationExpired {
+		return err
+	}
 	lifecycle := request.Lifecycle
 	if len(lifecycle.UnresolvedToolResultCallIDs) > 0 {
 		var existing *sessionterminal.UnresolvedToolResultsError

@@ -5,6 +5,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
 	terminalwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
 )
@@ -25,6 +26,10 @@ func stringSendStatuses(statuses map[string]messages.SessionSendStatus) map[stri
 // terminalRequest only translates already-observed values; terminal policy is
 // owned by sessionterminal.
 func (o *sessionProgressObserver) terminalRequest(runErr error) sessionterminal.Request {
+	return o.terminalRequestWithDuration(runErr, false)
+}
+
+func (o *sessionProgressObserver) terminalRequestWithDuration(runErr error, durationExpired bool) sessionterminal.Request {
 	if o == nil {
 		return sessionterminal.Request{RunError: runErr}
 	}
@@ -46,11 +51,11 @@ func (o *sessionProgressObserver) terminalRequest(runErr error) sessionterminal.
 		hints = append(hints, sessionterminal.FailureHintToolContinuationIncomplete)
 	}
 	incomplete := o.scheduledAudioIncomplete()
-	if incomplete && errors.Is(runErr, ErrSessionScheduledAudioIncomplete) {
+	if incomplete && errors.Is(runErr, session.ErrLiveScheduledAudioIncomplete) {
 		hints = append(hints, sessionterminal.FailureHintScheduledAudioIncomplete)
 	}
 	r := sessionterminal.Request{
-		RunError: runErr, UserCancelled: o.userCancelled, RoomBoundCancellation: o.roomBoundCancellation, RoomCancellationOnly: roomCancellationOnly(runErr), Provider: o.provider, Model: o.model, TurnsCompleted: o.turnsCompleted,
+		RunError: runErr, DurationExpired: durationExpired, UserCancelled: o.userCancelled, RoomBoundCancellation: o.roomBoundCancellation, RoomCancellationOnly: roomCancellationOnly(runErr), Provider: o.provider, Model: o.model, TurnsCompleted: o.turnsCompleted,
 		Output:    sessionterminal.OutputSnapshot{SawSessionOpen: o.sawSessionOpen, TurnsCompleted: o.turnsCompleted, TotalOutputAudioBytes: o.totals.outAudio, TotalOutputTextBytes: o.totals.outText, ResponseOutputAudioBytes: o.responseOutputAudioBytes, ResponseOutputTextBytes: o.responseOutputTextBytes, AssistantOutputObserved: o.assistantOutputObserved},
 		Bytes:     sessionterminal.ByteSnapshot{InputAudioBytes: o.totals.inputAudio + o.roomAudioInputTotalBytes(), InputTextBytes: o.totals.inputText, OutputAudioBytes: o.totals.outAudio, OutputTextBytes: o.totals.outText, OutputToolBytes: o.totals.outTool},
 		Failure:   terminalFailureFacts(o),
@@ -88,11 +93,15 @@ func (o *sessionProgressObserver) record(result sessionterminal.Result, events .
 }
 
 func (o *sessionProgressObserver) emitTerminal(runErr error) {
+	o.emitTerminalWithDuration(runErr, false)
+}
+
+func (o *sessionProgressObserver) emitTerminalWithDuration(runErr error, durationExpired bool) {
 	if o == nil || o.sink == nil {
 		return
 	}
 	o.emitOnce.Do(func() {
-		o.record(terminalService().Finalize(o.terminalRequest(runErr)), sessionterminal.EventFailure, sessionterminal.EventTerminal)
+		o.record(terminalService().Finalize(o.terminalRequestWithDuration(runErr, durationExpired)), sessionterminal.EventFailure, sessionterminal.EventTerminal)
 	})
 }
 
@@ -104,13 +113,21 @@ func (o *sessionProgressObserver) userCancellationOutputState() messages.Termina
 }
 
 func (o *sessionProgressObserver) enrichLifecycleError(err error) error {
+	return o.enrichLifecycleErrorWithDuration(err, false)
+}
+
+func (o *sessionProgressObserver) enrichLifecycleErrorWithDuration(err error, durationExpired bool) error {
 	if o == nil {
 		return err
 	}
-	return terminalService().Enrich(o.terminalRequest(err))
+	return terminalService().Enrich(o.terminalRequestWithDuration(err, durationExpired))
 }
 
 func (o *sessionProgressObserver) finish(err error) error {
+	return o.finishWithDuration(err, false)
+}
+
+func (o *sessionProgressObserver) finishWithDuration(err error, durationExpired bool) error {
 	if o == nil {
 		return err
 	}
@@ -121,7 +138,17 @@ func (o *sessionProgressObserver) finish(err error) error {
 	if livenessErr := o.livenessFailure(); livenessErr != nil && !errors.Is(err, livenessErr) {
 		err = errors.Join(livenessErr, err)
 	}
-	if sessionSIGINTCleanForObserver(err, o.cancellationIntent, o) {
+	if livenessErr := o.livenessFailure(); livenessErr != nil {
+		if o.livenessObserver != nil {
+			o.livenessObserver(livenessErr)
+		}
+		if o.failureSnapshot() == nil {
+			if facts := failureFactsFromLiveness(livenessErr); facts != nil {
+				o.acceptFailureObservation(facts, livenessErr)
+			}
+		}
+	}
+	if observerCancellationIsClean(err, o.cancellationIntent, o) {
 		o.userCancelled = true
 		o.clearFailure()
 		err = nil
@@ -130,15 +157,42 @@ func (o *sessionProgressObserver) finish(err error) error {
 		err = nil
 	}
 	if !o.userCancelled && !o.roomBoundCancellation {
-		err = o.enrichLifecycleError(err)
+		err = o.enrichLifecycleErrorWithDuration(err, durationExpired)
 	}
 	o.notifyFinalTerminalObservation(err)
-	o.emitTerminal(err)
+	o.emitTerminalWithDuration(err, durationExpired)
 	o.emitMetricsMatrix()
 	if o.runtime != nil {
 		o.runtime.terminalWithAccounting(o.turnsCompleted, err, o.finalAccounting())
 	}
 	return err
+}
+
+func (o *sessionProgressObserver) finishDuration(err error, durationExpired bool) (error, bool) {
+	if o == nil {
+		return err, false
+	}
+	cleanCancellation := observerCancellationIsClean(err, o.cancellationIntent, o)
+	err = o.finishWithDuration(err, durationExpired)
+	return err, cleanCancellation
+}
+
+func failureFactsFromLiveness(err error) *failureFacts {
+	var typed *sessionduration.LivenessError
+	if !errors.As(err, &typed) || typed == nil {
+		return nil
+	}
+	failingEvent := string(typed.FailingEvent)
+	if failingEvent == "" {
+		failingEvent = failingEventRun
+	}
+	return &failureFacts{
+		classification: typed.Classification,
+		terminalReason: string(typed.TerminalReason),
+		provenance:     string(typed.TerminalProvenance),
+		outputState:    string(typed.OutputState),
+		failingEvent:   failingEvent,
+	}
 }
 
 func (o *sessionProgressObserver) finalAccounting() *SessionFinalAccounting {

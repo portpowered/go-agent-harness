@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -326,5 +327,52 @@ func TestControllerFinalizationDrainsLoopUntilQuiet(t *testing.T) {
 	}
 	if len(published) != 2 || published[0].Value == nil || published[1].Value == nil {
 		t.Fatalf("published loop deltas = %+v, want both queued deltas", published)
+	}
+}
+
+func TestControllerDrainWaitsForPendingShutdownWorkAfterQuietPeriod(t *testing.T) {
+	scheduler := &triggerScheduler{created: make(chan *triggerTimer, 1)}
+	var pending atomic.Bool
+	pending.Store(true)
+	controller, err := New().Begin(sessionduration.Options{})
+	if err != nil {
+		t.Fatalf("Begin: %v", err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, finalizeErr := controller.Finalize(context.Background(), sessionduration.FinalizeRequest{
+			DrainLoop: &idleRunLoopProbe{deltas: messages.NewTypedBuffer[messages.StreamMessage](1)},
+			DrainPolicy: sessionduration.DrainPolicy{
+				Clock:       scheduler,
+				QuietPeriod: time.Second,
+				WallSafety:  time.Second,
+				Pending:     pending.Load,
+			},
+		})
+		done <- finalizeErr
+	}()
+	select {
+	case timer := <-scheduler.created:
+		timer.events <- time.Now()
+	case <-time.After(time.Second):
+		t.Fatal("bounded drain did not create its quiet timer")
+	}
+	var retryTimer *triggerTimer
+	select {
+	case retryTimer = <-scheduler.created:
+	case err := <-done:
+		t.Fatalf("Finalize returned while shutdown work was pending: %v", err)
+	case <-time.After(time.Second):
+		t.Fatal("bounded drain did not continue waiting for pending work")
+	}
+	pending.Store(false)
+	retryTimer.events <- time.Now()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Finalize after pending work completed: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("bounded drain did not finish after pending work completed")
 	}
 }

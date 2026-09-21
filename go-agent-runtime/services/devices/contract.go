@@ -14,6 +14,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
+	audiosubsystem "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems/audio"
 	selfhearing "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/selfhearing"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -258,6 +259,13 @@ type RTCBinding interface {
 	Inferencer() messages.SessionInferencer
 	Errors() <-chan error
 	Close() error
+}
+
+// RTCBindingAudioPorts exposes the bounded loop ports owned by a binding.
+// Implementations retain device and buffer lifecycle ownership; callers only
+// pass these ports to the session loop's audio subsystem.
+type RTCBindingAudioPorts interface {
+	AudioPorts() *audiosubsystem.Ports
 }
 
 // RTCBindingDeviceSelection reports the concrete IDs acquired for enabled

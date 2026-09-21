@@ -4,9 +4,25 @@
 package sessionterminal
 
 import (
+	"io"
+
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 )
+
+// TranscriptObserver receives message evidence after the renderer selects its
+// output boundary. The service owns formatting state; hosts own any recording
+// side effect performed by the callback.
+type TranscriptObserver func(messages.StreamMessage, bool)
+
+// TranscriptRenderer owns one invocation's buffered transcript formatting.
+// It is safe to retain only for that invocation and must be finished before
+// the destination writer is reused.
+type TranscriptRenderer interface {
+	io.Writer
+	WriteMessage(messages.StreamMessage) error
+	Finish() error
+}
 
 const (
 	// MaxDiagnosticItems bounds each collection crossing the terminal service
@@ -168,6 +184,7 @@ type TokenSnapshot struct {
 // continue to reach provider, replay, cancellation, and loop causes.
 type Request struct {
 	RunError              error
+	DurationExpired       bool
 	UserCancelled         bool
 	RoomBoundCancellation bool
 	RoomCancellationOnly  bool
@@ -213,4 +230,8 @@ type Service interface {
 	Finalize(Request) Result
 	CancellationOutputState(OutputSnapshot) messages.TerminalOutputState
 	Enrich(Request) error
+	NewTranscriptRenderer(io.Writer, TranscriptObserver) TranscriptRenderer
+	WriteTranscriptMessage(io.Writer, messages.StreamMessage) error
+	WriteSessionClose(io.Writer, *messages.SessionCloseValue, bool) error
+	ErrorFields(*messages.ErrorValue) string
 }

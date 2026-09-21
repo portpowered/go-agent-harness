@@ -16,6 +16,14 @@ import runtimeSessionTerminal "github.com/portpowered/go-agent-harness/go-agent-
 
 import runtimeSessionTurn "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 
+import runtimeAudio "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
+
+import runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+
+import sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+
+import runtimeSessionDuration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+
 const BrowserConversationAssistantTurn = impl.BrowserConversationAssistantTurn
 
 type BrowserConversationBrokerCall = impl.BrowserConversationBrokerCall
@@ -76,7 +84,7 @@ const DefaultOpenAIRealtimeModel = impl.DefaultOpenAIRealtimeModel
 var DeriveBrowserConversationCorrections = impl.DeriveBrowserConversationCorrections
 var DeriveBrowserConversationRecovery = impl.DeriveBrowserConversationRecovery
 var ErrInvalidOpenAIRealtimeVoice = sessioncontract.ErrInvalidOpenAIRealtimeVoice
-var ErrRTCSessionMediaUnavailable = impl.ErrRTCSessionMediaUnavailable
+var ErrRTCSessionMediaUnavailable = runtimeSession.ErrLiveMediaUnavailable
 var ErrRoomLaunchPathConflict = runtimeRooms.ErrLaunchPathConflict
 var ErrRoomReplayBundleIncomplete = impl.ErrRoomReplayBundleIncomplete
 var ErrRoomReplaySourceConflict = impl.ErrRoomReplaySourceConflict
@@ -100,12 +108,10 @@ var NewGrokSessionInferencerWithOptions = impl.NewGrokSessionInferencerWithOptio
 const ParticipantTerminationEnded = impl.ParticipantTerminationEnded
 const ParticipantTerminationError = impl.ParticipantTerminationError
 
-type RTCMediaEndpoints = impl.RTCMediaEndpoints
-type RTCMediaSession = impl.RTCMediaSession
-type RTCDeviceBindingRequest = impl.RTCDeviceBindingRequest
-type RTCDeviceBindingError = impl.RTCDeviceBindingError
+type RTCMediaEndpoints = sharedaudio.MediaEndpoints
+type RTCMediaSession = sharedaudio.MediaSession
+type RTCDeviceBindingRequest = runtimeDevices.RTCBindingRequest
 
-var PrepareRTCDeviceBindings = impl.PrepareRTCDeviceBindings
 var ValidateSessionAudioDeviceConflicts = serviceDevices.ValidateSessionAudioDeviceConflicts
 
 var RenderBrowserConversationReport = impl.RenderBrowserConversationReport
@@ -115,7 +121,7 @@ var RunSessionWithInstructions = impl.RunSessionWithInstructions
 var RunSessionWithMaxDuration = impl.RunSessionWithMaxDuration
 var RunSessionWithMaxDurationClock = impl.RunSessionWithMaxDurationClock
 
-type ScheduledAudioInput = impl.ScheduledAudioInput
+type ScheduledAudioInput = runtimeAudio.ScheduledAudioInput
 type SelfPlayRunOptions = impl.SelfPlayRunOptions
 type SessionAudioInTurnBargeError = impl.SessionAudioInTurnBargeError
 type SessionAudioInput = impl.SessionAudioInput
@@ -131,10 +137,10 @@ const SessionDiagnosticFieldUnresolvedToolCallIDs = impl.SessionDiagnosticFieldU
 const SessionDiagnosticFieldUnresolvedToolResultCount = impl.SessionDiagnosticFieldUnresolvedToolResultCount
 
 type SessionDiagnosticRecord = impl.SessionDiagnosticRecord
-type SessionDurationTimer = impl.SessionDurationTimer
+type SessionDurationTimer = runtimeSessionDuration.Timer
 type SessionImageContinuationError = runtimeSession.LiveImageContinuationError
 
-const SessionMaxDurationReason = impl.SessionMaxDurationReason
+const SessionMaxDurationReason = runtimeSessionDuration.MaxDurationReason
 
 type SessionRTCComponents = impl.SessionRTCComponents
 type SessionRTCDataPlane = impl.SessionRTCDataPlane
@@ -142,7 +148,7 @@ type SessionRunOptions = impl.SessionRunOptions
 type SessionRuntimeSelection = impl.SessionRuntimeSelection
 type SessionScheduledAudioIncompleteError = runtimeSession.LiveScheduledAudioIncompleteError
 
-const SessionSilentProviderTimeoutClassification = impl.SessionSilentProviderTimeoutClassification
+const SessionSilentProviderTimeoutClassification = runtimeSessionDuration.LivenessClassificationTimeout
 
 type SessionToolContinuationError = runtimeSession.LiveToolContinuationError
 type SessionToolDiagnostic = impl.SessionToolDiagnostic
