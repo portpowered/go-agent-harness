@@ -4074,3 +4074,52 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   same PR `#435`, update its body with the repair/evidence map, then return
   `ACCEPTED` to the script-owned current-head CI gate without polling; retain
   this task through `CONTINUE` for any exact CI rejection or actionable repair.
+
+# C271 self-play service recovery checkpoint — 2026-09-21
+
+- Re-read the Factory operating policy and implementation handoff. From
+  `$FACTORY_ROOT`, `project-control.py verify-work --type task --name
+  audio-runtime-c271-recover-selfplay-retirement` returned `admitted` for the
+  sole `audio-runtime` project (`audio-runtime-v1`). The admitted task packet's
+  `branchName` matches the isolated branch
+  `codex/audio-runtime-c271-recover-selfplay-retirement`.
+- Fetched current `origin/main=b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`;
+  candidate `HEAD=5492d9b44a17dfbb80f2dd12ed9cbfece6859452` is clean and retains
+  main and startup integration `8bdafc7f947a3a2c9856220abdc539437035bd21`
+  ancestry. Preserved C249 remains clean at
+  `86a1eed17b099d510b39ce3d3b4ee7d8f7998881`, with C220 history reachable;
+  no predecessor or peer worktree was changed.
+- Restored only the C249 service-owned self-play contract, internal
+  implementation, service-local Wire graph, package registrations, and Wire
+  generated-file policy in checkpoint `c4d74a3`. Removed the obsolete
+  `servicetest.SelfPlayRunOptions` projection in `5492d9b`. The candidate does
+  not import CLI or `agentruntime` from `go-agent-runtime/services/selfplay`.
+- Focused commands pass on the current service slice:
+  `rtk go test -timeout=3m -count=1 ./go-agent-runtime/services/selfplay/...`
+  (23 tests / 3 packages), `rtk go test -race -timeout=5m -count=1
+  ./go-agent-runtime/services/selfplay/...` (23 / 3), `rtk go test
+  -timeout=5m -count=10 ./go-agent-runtime/services/selfplay/... -run
+  '(Cancel|Duration|Shutdown|Stop|Failure)'` (160 / 3), `rtk make wire-check`,
+  the service-boundary scan, and `rtk git diff --check`.
+- Current integrated legacy inventory remains 106 production Go files / 39,329
+  physical lines. The exact planned `selfplay_service.go` (53),
+  `session_self_play.go` (641), and `session_self_play_evidence.go` (716)
+  remain present on current main; no deletion credit is claimed. Caller cutover
+  and adapter verification are not complete.
+- C248's clean branch checkpoint is `cb9e720f0871f4275930b63d03cc06effceeba33`;
+  its canonical task remains `init`, with 111 architecture findings and no
+  complete prepush or PR handoff recorded. C269's clean branch is
+  `3be45b10da238cc653a00282ecc3efeb05adf237`; its canonical task remains
+  `init`, and no reviewed merge release is recorded. These exact shared caller
+  seams remain untouched. The concluded C259 `work-review-78` findings were
+  read from the canonical board; they concern roomevidence manifest/timeline
+  bounds, failure degradation and public round-trip coverage, not the selfplay
+  service slice. C267 had no earlier review or PR, and C249's canonical failure
+  was generic with no concluded review.
+- No C271 `make prepush`, push, PR, hosted-CI handoff, or review has occurred.
+  Exact next action: continue the disjoint public self-play service audit and
+  tests; wait for reviewed C248 and C269 releases; then fetch current main and
+  reconcile their changes plus clean C249 ancestry before completing every
+  caller cutover, deleting the full three-file cluster and temporary helper,
+  checking the sole adapter budget, and running the complete exact-head local
+  preflight. Keep this task at `CONTINUE` until those steps are complete.
