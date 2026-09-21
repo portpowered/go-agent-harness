@@ -5479,3 +5479,45 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   WebMCP regressions, repeat the production caller/direct-reader census, then
   run every planned local gate plus `make prepush` on one exact clean candidate
   before any push. Decision remains CONTINUE.
+
+# C270 continuation checkpoint — candidate and peer-release refresh — 2026-09-21
+
+- `project-control.py verify-work --type task --name
+  audio-runtime-c270-recover-recording-replay-finalization` returned admitted;
+  `prd.json.branchName` matches this isolated worktree. After `rtk git fetch
+  origin main`, `origin/main` is `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`.
+  Startup, planning main, C217, C234 source/checkpoint, and fetched-main
+  ancestry checks all pass. The preserved C234 predecessor worktree is clean
+  at `7e6022bac496975f6b91b05e2a19b36348083eb7`.
+- The candidate code state is `de2c751646f00432793d3a1f00a8469e6c4cd073`.
+  The corrected public selector
+  `rtk env CGO_ENABLED=0 go test -count=1 -tags=nomicrophone
+  ./agent-cli/internal/transport/cli -run
+  'TestSession(Recorded|Unrecorded)WebMCPCastDeviceWAVStaysInteractive'`
+  executes both tests; both fail before provider connection with
+  `legacy session audio runtime is retired; use the service-owned live
+  session`. All seven integrated-main targets and six checkpoint-only
+  replacement paths remain absent. `recording_adapter.go` and
+  `replay_adapter.go` remain stateless at 20 and 25 lines (45 combined), the
+  browser recording boundary matches `origin/main`, and `git diff --check`
+  passes.
+- The canonical C270 review query returned no review Work; no concluded C270 or
+  C234 review finding is available. The canonical peer tasks remain incomplete:
+  C229 `work-task-16`, C268 `work-task-96`, C269 `work-task-101`, and C273
+  `work-task-111`. The Worker Sessions list returned `FACTORY_UNREACHABLE`, so
+  no current session-liveness claim is made. The preserved C234 worktree and
+  C268 worktree are clean; the C229 worktree has uncommitted changes to its
+  architecture baseline and session observer, and C269 has uncommitted room,
+  CLI/Wire, embedding, and progress changes. C273 is clean at fetched main.
+  None of those paths or worktrees was modified. The sibling worktree paths
+  were checked explicitly; earlier relative-path status output did not verify
+  those sibling worktrees.
+- No C270 caller cutover, complete preflight, `make prepush`, push, PR update,
+  or SCRIPT handoff ran. The WebMCP route is still within C229's unreleased
+  caller seam; the metrics/trace readers remain with C268, and room replay
+  readers remain within the unreleased C269/C273 boundary. Exact next action:
+  preserve these ownership boundaries; after exact reviewed releases, integrate
+  only their caller seams, repair and rerun both WebMCP tests, repeat the full
+  caller/direct-reader census, then run all C270-02 through C270-06 commands
+  including `make prepush` on one exact clean candidate before pushing. Decision
+  remains CONTINUE.
