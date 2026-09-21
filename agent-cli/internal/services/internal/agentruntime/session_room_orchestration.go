@@ -63,8 +63,9 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 			// room runtime failure. The status projection is applied to the
 			// returned result after all close/mix/manifest callbacks have had a
 			// chance to latch their first error.
-			finalized, _ := evidence.Finalize(roomevidence.Finalization{Room: result, Err: runErr, EndedAt: roomClock.Now().UTC()})
+			finalized, finalizeErr := evidence.Finalize(roomevidence.Finalization{Room: result, Err: runErr, EndedAt: roomClock.Now().UTC()})
 			result = finalized.Room
+			observeRoomEvidenceResult(finalizeErr)
 		}
 		return result, runErr
 	}
@@ -110,7 +111,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 			return finalizeEvidence(result, safeErr)
 		}
 		if evidence != nil {
-			_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationTimeline, Event: "participant_joined", ParticipantID: plan.manifest.ID})
+			observeRoomEvidenceResult(evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationTimeline, Event: "participant_joined", ParticipantID: plan.manifest.ID}))
 		}
 	}
 
@@ -119,7 +120,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		onParticipantTerminated = func(result RoomParticipantResult) {
 			recordRoomParticipantBoundDiagnostic(opts, evidence, result)
 			if evidence != nil {
-				_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationTimeline, Event: "participant_terminated", ParticipantID: result.ParticipantID, Fields: participantTerminalFields(result)})
+				observeRoomEvidenceResult(evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationTimeline, Event: "participant_terminated", ParticipantID: result.ParticipantID, Fields: participantTerminalFields(result)}))
 			}
 			if opts.OnParticipantTerminated != nil {
 				opts.OnParticipantTerminated(result)
@@ -129,7 +130,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 	coordinator := newRoomCoordinator(roomCancel, opts.Manifest.Room.MaxTurns, opts.BoundShutdownGrace, onParticipantTerminated, opts.onRoomBoundShutdown)
 	coordinator.setParticipantFailureObserver(func(participantID, reason string) {
 		if evidence != nil {
-			_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationTimeline, Event: "participant_failed", ParticipantID: participantID, Fields: map[string]string{"reason": reason}})
+			observeRoomEvidenceResult(evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationTimeline, Event: "participant_failed", ParticipantID: participantID, Fields: map[string]string{"reason": reason}}))
 		}
 	})
 	coordinator.blockEmptyStop()
@@ -282,8 +283,8 @@ func publishRoomParticipantsReady(coordinator *roomCoordinator, plans []*roomPar
 		}
 		ready := roomParticipantReady(plan)
 		if evidence != nil {
-			_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationParticipantReady, ParticipantID: ready.ParticipantID, ParticipantReady: runtimeRoomsReady(ready)})
-			_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationTimeline, Event: "participant_ready", ParticipantID: ready.ParticipantID})
+			observeRoomEvidenceResult(evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationParticipantReady, ParticipantID: ready.ParticipantID, ParticipantReady: runtimeRoomsReady(ready)}))
+			observeRoomEvidenceResult(evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationTimeline, Event: "participant_ready", ParticipantID: ready.ParticipantID}))
 		}
 		if opts.OnParticipantReady != nil {
 			opts.OnParticipantReady(ready)

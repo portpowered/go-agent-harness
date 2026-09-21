@@ -352,6 +352,7 @@ type graphRecorderProbe struct {
 func (p *graphRecorderProbe) Observe(observation roomevidence.Observation) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	//nolint:exhaustive // the probe counts only source and received audio.
 	switch observation.Kind {
 	case roomevidence.ObservationSourceAudio:
 		p.sources++

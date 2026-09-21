@@ -259,6 +259,7 @@ func (r *recorder) Observe(observation roomevidence.Observation) error {
 }
 
 func (r *recorder) observeRoomAudio(observation roomevidence.Observation) error {
+	//nolint:exhaustive // this handler receives only room-level audio observation kinds.
 	switch observation.Kind {
 	case roomevidence.ObservationSourceAudio:
 		r.RecordSource(observation.ParticipantID, observation.AudioFrame)
@@ -283,6 +284,7 @@ func (r *recorder) observeParticipant(observation roomevidence.Observation) erro
 	if err != nil {
 		return err
 	}
+	//nolint:exhaustive // this handler receives only participant-scoped observation kinds.
 	switch observation.Kind {
 	case roomevidence.ObservationDiagnostic:
 		diagnostic := observation.Diagnostic

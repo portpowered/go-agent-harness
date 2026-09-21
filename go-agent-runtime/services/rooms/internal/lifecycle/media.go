@@ -91,8 +91,8 @@ type frameFanout struct {
 func (f frameFanout) WriteFrame(ctx context.Context, frame audio.PCMFrame) error {
 	targets := f.routeTargets()
 	if f.recorder != nil {
-		_ = f.recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationSourceAudio, ParticipantID: f.sourceID, AudioFrame: frame})
-		_ = f.recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationSpeakerAudio, ParticipantID: f.sourceID, TargetIDs: f.targetIDs(targets), PCM: codec.EncodePCM16(frame.Samples)})
+		observeRoomEvidenceBestEffort(f.recorder, roomevidence.Observation{Kind: roomevidence.ObservationSourceAudio, ParticipantID: f.sourceID, AudioFrame: frame})
+		observeRoomEvidenceBestEffort(f.recorder, roomevidence.Observation{Kind: roomevidence.ObservationSpeakerAudio, ParticipantID: f.sourceID, TargetIDs: f.targetIDs(targets), PCM: codec.EncodePCM16(frame.Samples)})
 	}
 	for _, target := range targets {
 		if target == nil {

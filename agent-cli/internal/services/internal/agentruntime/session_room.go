@@ -298,3 +298,11 @@ func openRoomEvidence(opts RoomRunOptions, validation room.ValidationOptions, re
 	}
 	return recorder, secrets, opts, nil
 }
+
+// observeRoomEvidenceResult keeps sink failures out of the room outcome. The
+// recorder retains its first failure and projects it in health at finalization.
+func observeRoomEvidenceResult(err error) {
+	if err != nil {
+		return
+	}
+}

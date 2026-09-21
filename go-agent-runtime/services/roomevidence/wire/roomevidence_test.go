@@ -308,8 +308,12 @@ func TestServiceRejectsPostFinalizeAndRetainsFirstTypedError(t *testing.T) {
 	recorder, _, source := openRecorder(t)
 	first := errors.New("first sink failure")
 	second := errors.New("second sink failure")
-	_ = recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationError, ParticipantID: "speaker", Artifact: "agent-speaker.deltas.jsonl", Err: first})
-	_ = recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationError, ParticipantID: "speaker", Artifact: "agent-speaker.wav", Err: second})
+	if err := recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationError, ParticipantID: "speaker", Artifact: "agent-speaker.deltas.jsonl", Err: first}); !errors.Is(err, first) {
+		t.Fatalf("first sink failure = %v, want %v", err, first)
+	}
+	if err := recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationError, ParticipantID: "speaker", Artifact: "agent-speaker.wav", Err: second}); !errors.Is(err, first) {
+		t.Fatalf("second sink failure = %v, want retained first failure %v", err, first)
+	}
 	_, finalErr := finalizeForTest(recorder, testResult(), nil, source.Now())
 	if !errors.Is(finalErr, first) {
 		t.Fatalf("final error %v does not preserve first cause", finalErr)

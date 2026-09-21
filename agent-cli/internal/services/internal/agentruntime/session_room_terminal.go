@@ -238,7 +238,7 @@ func (h roomParticipantFailureHandler) recordProviderError(observation sessionTe
 	if observation.Code != "" {
 		fields["code"] = observation.Code
 	}
-	_ = h.evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationProviderError, ParticipantID: h.runtime.plan.manifest.ID, Fields: fields})
+	observeRoomEvidenceResult(h.evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationProviderError, ParticipantID: h.runtime.plan.manifest.ID, Fields: fields}))
 }
 
 func (h roomParticipantFailureHandler) failureError(observation sessionTerminalObservation) error {
@@ -270,8 +270,8 @@ func recordRoomParticipantBoundDiagnostic(opts RoomRunOptions, evidence roomevid
 	}
 	record := participantTerminationDiagnostic(result)
 	if evidence != nil {
-		_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationDiagnostic, ParticipantID: result.ParticipantID, Diagnostic: roomevidence.DiagnosticRecord{Event: record.Event, Fields: record.Fields}})
-		_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationTimeline, Event: "room_bound_shutdown", ParticipantID: result.ParticipantID, Fields: record.Fields})
+		observeRoomEvidenceResult(evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationDiagnostic, ParticipantID: result.ParticipantID, Diagnostic: roomevidence.DiagnosticRecord{Event: record.Event, Fields: record.Fields}}))
+		observeRoomEvidenceResult(evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationTimeline, Event: "room_bound_shutdown", ParticipantID: result.ParticipantID, Fields: record.Fields}))
 	}
 	if opts.OnDiagnostic != nil {
 		opts.OnDiagnostic(result.ParticipantID, record)

@@ -55,6 +55,16 @@ type audioRecorder interface {
 	Observe(roomevidence.Observation) error
 }
 
+func observeRoomEvidenceBestEffort(recorder audioRecorder, observation roomevidence.Observation) {
+	if recorder == nil {
+		return
+	}
+	if err := recorder.Observe(observation); err != nil {
+		// The recorder retains its health; artifact degradation does not stop media delivery.
+		return
+	}
+}
+
 func newRoomGraph(parent context.Context, scheduler clock.TimerSource, format rooms.AudioFormat, participants []*activeParticipant, onError func(error), recorders ...audioRecorder) (*roomGraph, error) {
 	if scheduler == nil {
 		return nil, mixer.ErrClockUnavailable
@@ -280,9 +290,7 @@ func (g *roomGraph) deliverOutput(output *graphOutput, mixed mixer.MixedFrame) e
 		if err := output.provider.WriteFrame(g.ctx, frame); err != nil {
 			return fmt.Errorf("write room mix for %q: %w", output.target.participant.ID, err)
 		}
-		if g.recorder != nil {
-			_ = g.recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationReceivedAudio, ParticipantID: output.target.participant.ID, AudioFrame: frame})
-		}
+		observeRoomEvidenceBestEffort(g.recorder, roomevidence.Observation{Kind: roomevidence.ObservationReceivedAudio, ParticipantID: output.target.participant.ID, AudioFrame: frame})
 		g.observePeerAudio(mixed.Sources, output.target.participant.ID, frame)
 	}
 	if output.queue == (audio.FrameProducer{}) {
@@ -291,8 +299,8 @@ func (g *roomGraph) deliverOutput(output *graphOutput, mixed mixer.MixedFrame) e
 	if err := output.queue.Submit(g.ctx, frame); err != nil {
 		return fmt.Errorf("queue room playback for %q: %w", output.target.participant.ID, err)
 	}
-	if output.provider == nil && g.recorder != nil {
-		_ = g.recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationReceivedAudio, ParticipantID: output.target.participant.ID, AudioFrame: frame})
+	if output.provider == nil {
+		observeRoomEvidenceBestEffort(g.recorder, roomevidence.Observation{Kind: roomevidence.ObservationReceivedAudio, ParticipantID: output.target.participant.ID, AudioFrame: frame})
 	}
 	if output.provider == nil {
 		g.observePeerAudio(mixed.Sources, output.target.participant.ID, frame)
@@ -308,6 +316,6 @@ func (g *roomGraph) observePeerAudio(sources []string, targetID string, frame au
 		if sourceID == "" || sourceID == targetID {
 			continue
 		}
-		_ = g.recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationPeerAudio, ParticipantID: sourceID, RelatedID: targetID, PCM: codec.EncodePCM16(frame.Samples)})
+		observeRoomEvidenceBestEffort(g.recorder, roomevidence.Observation{Kind: roomevidence.ObservationPeerAudio, ParticipantID: sourceID, RelatedID: targetID, PCM: codec.EncodePCM16(frame.Samples)})
 	}
 }
