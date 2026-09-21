@@ -1,13 +1,7 @@
 package browserconversation
 
 import (
-	"bytes"
 	"encoding/json"
-	"errors"
-	"fmt"
-	"io"
-	"strings"
-	"time"
 )
 
 func cloneBrowserConversationScenario(scenario BrowserConversationScenario) BrowserConversationScenario {
@@ -89,59 +83,6 @@ func (s BrowserConversationScenario) MarshalJSON() ([]byte, error) {
 		Version: s.Version, ID: s.ID, Name: s.Name, Fixture: s.Fixture, Steps: steps,
 		RunTimeout: s.RunTimeout.String(), PostSession: s.PostSession,
 	})
-}
-
-// UnmarshalJSON accepts only versioned scenario fields and readable durations.
-func (s *BrowserConversationScenario) UnmarshalJSON(data []byte) error {
-	if s == nil {
-		return errors.New("cannot unmarshal browser conversation scenario into nil receiver")
-	}
-	var wire browserConversationScenarioJSON
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&wire); err != nil {
-		return browserScenarioError("scenario", "invalid JSON: %v", err)
-	}
-	var extra any
-	if err := decoder.Decode(&extra); err != io.EOF {
-		return browserScenarioError("scenario", "must contain exactly one JSON object")
-	}
-	runTimeout, err := parseScenarioDuration("run_timeout", wire.RunTimeout)
-	if err != nil {
-		return err
-	}
-	steps := make([]BrowserConversationStep, len(wire.Steps))
-	for index, step := range wire.Steps {
-		deadline, parseErr := parseScenarioDuration(fmt.Sprintf("steps[%d].deadline", index), step.Deadline)
-		if parseErr != nil {
-			return parseErr
-		}
-		steps[index] = BrowserConversationStep{
-			ID: step.ID, Utterance: step.Utterance, PageID: step.PageID,
-			ExpectedState: cloneStateTransitionPointer(step.ExpectedState),
-			Navigation:    cloneNavigationPointer(step.Navigation),
-			Correction:    cloneCorrectionPointer(step.Correction),
-			Interrupt:     cloneInterruptPointer(step.Interrupt),
-			Cancel:        cloneCancelPointer(step.Cancel), Deadline: deadline,
-		}
-	}
-	parsed := BrowserConversationScenario{
-		Version: wire.Version, ID: wire.ID, Name: wire.Name, Fixture: wire.Fixture,
-		Steps: steps, RunTimeout: runTimeout, PostSession: wire.PostSession,
-	}
-	*s = cloneBrowserConversationScenario(parsed)
-	return nil
-}
-
-func parseScenarioDuration(path, raw string) (time.Duration, error) {
-	if strings.TrimSpace(raw) == "" {
-		return 0, nil
-	}
-	duration, err := time.ParseDuration(raw)
-	if err != nil {
-		return 0, browserScenarioError(path, "must be a duration string: %v", err)
-	}
-	return duration, nil
 }
 
 func cloneStateTransitionPointer(value *BrowserStateTransition) *BrowserStateTransition {

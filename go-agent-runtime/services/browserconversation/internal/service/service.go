@@ -96,6 +96,10 @@ type Service struct{}
 
 func New() *Service { return &Service{} }
 
+func (*Service) ParseScenarioJSON(data []byte) (browserconversation.BrowserConversationScenario, error) {
+	return policy.ParseScenarioJSON(data)
+}
+
 func (*Service) Run(ctx context.Context, request browserconversation.RunRequest) (browserconversation.BrowserConversationResult, error) {
 	return runBrowserConversation(ctx, request)
 }

@@ -16,6 +16,10 @@ func ValidateScenario(scenario BrowserConversationScenario) error {
 	return validateScenario(scenario)
 }
 
+func ParseScenarioJSON(data []byte) (BrowserConversationScenario, error) {
+	return parseScenarioJSON(data)
+}
+
 func AdmitScenario(scenario BrowserConversationScenario) (BrowserConversationScenario, error) {
 	return admitScenario(scenario)
 }

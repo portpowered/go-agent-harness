@@ -69,6 +69,32 @@ func TestServiceRunExecutesAndReportsAdmittedScenario(t *testing.T) {
 	}
 }
 
+func TestServiceParsesScenarioJSONAndKeepsParserFailuresPrivate(t *testing.T) {
+	service := NewService()
+	want := testBrowserConversationScenario()
+	data, err := json.Marshal(want)
+	if err != nil {
+		t.Fatalf("marshal scenario: %v", err)
+	}
+	got, err := service.ParseScenarioJSON(data)
+	if err != nil {
+		t.Fatalf("ParseScenarioJSON: %v", err)
+	}
+	if got.RunTimeout != want.RunTimeout || len(got.Steps) != len(want.Steps) || got.Steps[0].Deadline != want.Steps[0].Deadline {
+		t.Fatalf("parsed durations = run %s, step %s; want %s, %s", got.RunTimeout, got.Steps[0].Deadline, want.RunTimeout, want.Steps[0].Deadline)
+	}
+
+	withUnknownField := append(append([]byte(nil), data[:len(data)-1]...), []byte(`,"unexpected":"field"}`)...)
+	if _, err := service.ParseScenarioJSON(withUnknownField); !errors.Is(err, browserconversation.ErrInvalidBrowserConversationScenario) {
+		t.Fatalf("unknown-field parse error = %v, want invalid-scenario error", err)
+	}
+
+	withSensitiveDuration := strings.Replace(string(data), `"run_timeout":"2s"`, `"run_timeout":"credential-canary"`, 1)
+	if _, err := service.ParseScenarioJSON([]byte(withSensitiveDuration)); !errors.Is(err, browserconversation.ErrInvalidBrowserConversationScenario) || strings.Contains(err.Error(), "credential-canary") {
+		t.Fatalf("invalid-duration parse error = %v, want sanitized invalid-scenario error", err)
+	}
+}
+
 func TestServiceRejectsCredentialBearingScenarioBeforeFixtureCreation(t *testing.T) {
 	scenario := testBrowserConversationScenario()
 	scenario.Fixture.Pages[0].URL = "https://customer:credential-canary@fixture.test/"

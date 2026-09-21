@@ -52,6 +52,7 @@ type BrowserConversationValidatorCommand struct {
 // contract; constructors and effectful implementation live in services/.../wire
 // and services/.../internal/service.
 type Service interface {
+	ParseScenarioJSON([]byte) (BrowserConversationScenario, error)
 	Run(context.Context, RunRequest) (BrowserConversationResult, error)
 	ValidateScenario(BrowserConversationScenario) (BrowserConversationScenario, error)
 	AdmitScenario(BrowserConversationScenario) (BrowserConversationScenario, error)
