@@ -4,6 +4,7 @@ package wire
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"os"
 	"os/exec"
@@ -16,24 +17,44 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 )
 
-const (
-	roomEvidenceFIFOChildEnv = "ROOM_EVIDENCE_FIFO_CHILD"
-	roomEvidenceFIFOModeEnv  = "ROOM_EVIDENCE_FIFO_MODE"
-	roomEvidenceFIFOPathEnv  = "ROOM_EVIDENCE_FIFO_PATH"
-	roomEvidenceFIFORootEnv  = "ROOM_EVIDENCE_FIFO_ROOT"
-)
-
 func TestServiceRejectsFIFOReplayFiles(t *testing.T) {
-	if os.Getenv(roomEvidenceFIFOChildEnv) == "1" {
-		runFIFOReplayChild(t)
+	if payload, ok := fifoReplayChildPayload(os.Args); ok {
+		t.Run(payload, func(t *testing.T) {
+			decoded, err := base64.RawURLEncoding.DecodeString(payload)
+			if err != nil {
+				t.Fatalf("decode FIFO child arguments: %v", err)
+			}
+			arguments := strings.Split(string(decoded), "\x00")
+			if len(arguments) != 3 {
+				t.Fatalf("FIFO child arguments = %d values, want mode, root and path", len(arguments))
+			}
+			runFIFOReplayChild(t, arguments[0], arguments[1], arguments[2])
+		})
 		return
 	}
-
 	for _, mode := range []string{"manifest", "artifact", "replay"} {
 		t.Run(mode, func(t *testing.T) {
 			assertFIFOReplayMode(t, mode)
 		})
 	}
+}
+
+func fifoReplayChildPayload(arguments []string) (string, bool) {
+	for index, argument := range arguments {
+		var pattern string
+		switch {
+		case argument == "-test.run" && index+1 < len(arguments):
+			pattern = arguments[index+1]
+		case strings.HasPrefix(argument, "-test.run="):
+			pattern = strings.TrimPrefix(argument, "-test.run=")
+		}
+		const prefix = "^TestServiceRejectsFIFOReplayFiles/"
+		if strings.HasPrefix(pattern, prefix) && strings.HasSuffix(pattern, "$") {
+			payload := strings.TrimSuffix(strings.TrimPrefix(pattern, prefix), "$")
+			return payload, payload != ""
+		}
+	}
+	return "", false
 }
 
 func assertFIFOReplayMode(t *testing.T, mode string) {
@@ -84,13 +105,9 @@ func assertFIFOChildFailsClosed(t *testing.T, mode, destination, fifoPath string
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	command := exec.CommandContext(ctx, os.Args[0], "-test.run", "^TestServiceRejectsFIFOReplayFiles$")
-	command.Env = append(os.Environ(),
-		roomEvidenceFIFOChildEnv+"=1",
-		roomEvidenceFIFOModeEnv+"="+mode,
-		roomEvidenceFIFOPathEnv+"="+fifoPath,
-		roomEvidenceFIFORootEnv+"="+destination,
-	)
+	payload := base64.RawURLEncoding.EncodeToString([]byte(strings.Join([]string{mode, destination, fifoPath}, "\x00")))
+	selector := "^TestServiceRejectsFIFOReplayFiles/" + payload + "$"
+	command := exec.CommandContext(ctx, os.Args[0], "-test.run", selector)
 	output, err := command.CombinedOutput()
 	if ctx.Err() == context.DeadlineExceeded {
 		t.Fatalf("FIFO %s handling exceeded bounded deadline", mode)
@@ -100,10 +117,7 @@ func assertFIFOChildFailsClosed(t *testing.T, mode, destination, fifoPath string
 	}
 }
 
-func runFIFOReplayChild(t *testing.T) {
-	mode := os.Getenv(roomEvidenceFIFOModeEnv)
-	destination := os.Getenv(roomEvidenceFIFORootEnv)
-	fifoPath := os.Getenv(roomEvidenceFIFOPathEnv)
+func runFIFOReplayChild(t *testing.T, mode, destination, fifoPath string) {
 	service := NewService()
 	var err error
 	switch mode {
