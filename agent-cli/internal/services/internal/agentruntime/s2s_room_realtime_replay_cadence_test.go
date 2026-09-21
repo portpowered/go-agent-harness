@@ -260,3 +260,23 @@ func (c *roomRealtimeReplayCadence) Advance() {
 	case <-c.stopped:
 	}
 }
+
+func gatedRoomAudioOutput(ctx context.Context, release <-chan struct{}, outputs chan<- roomSpeechOverlapFanout) func(string, []byte) error {
+	return func(participantID string, pcm []byte) error {
+		select {
+		case <-release:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		outputs <- roomSpeechOverlapFanout{targetID: participantID, pcm: append([]byte(nil), pcm...)}
+		return nil
+	}
+}
+
+func awaitRoomBidirectionalInputs(t *testing.T, inputs <-chan roomSpeechOverlapFanout, participant func(string) *roomRealtimeReplayParticipant, wants map[string][]byte) {
+	t.Helper()
+	awaitRoomBidirectionalFrames(t, inputs, wants)
+	for id, pcm := range wants {
+		assertRoomSpeechOverlapAppend(t, participant(id), pcm)
+	}
+}

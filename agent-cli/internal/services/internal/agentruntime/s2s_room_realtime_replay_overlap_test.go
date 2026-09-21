@@ -490,6 +490,7 @@ func TestRunRoomWithResult_BidirectionalOverlapRecordsPeerOnlyEvidence(t *testin
 	outputDir := filepath.Join(t.TempDir(), "room-run")
 	roomCtx, cancel := context.WithTimeout(context.Background(), roomRealtimeReplayTestTimeout)
 	t.Cleanup(cancel)
+	responseAudioRelease := make(chan struct{})
 
 	opts := RoomRunOptions{
 		AudioService: newTestAudioIOService(), Manifest: manifest,
@@ -519,10 +520,7 @@ func TestRunRoomWithResult_BidirectionalOverlapRecordsPeerOnlyEvidence(t *testin
 				messageEnds <- participantID
 			}
 		},
-		OnAudioOutput: func(participantID string, pcm []byte) error {
-			audioOutputs <- roomSpeechOverlapFanout{targetID: participantID, pcm: append([]byte(nil), pcm...)}
-			return nil
-		},
+		OnAudioOutput: gatedRoomAudioOutput(roomCtx, responseAudioRelease, audioOutputs),
 		OnAudioInput: func(participantID string, pcm []byte) error {
 			audioInputs <- roomSpeechOverlapFanout{targetID: participantID, pcm: append([]byte(nil), pcm...)}
 			return nil
@@ -567,9 +565,8 @@ func TestRunRoomWithResult_BidirectionalOverlapRecordsPeerOnlyEvidence(t *testin
 	// response's peer frame to arrive. This is the controlled overlap point.
 	aliceCadence.Advance()
 	bobCadence.Advance()
-	awaitRoomBidirectionalFrames(t, audioInputs, map[string][]byte{aliceID: silence, bobID: silence})
-	assertRoomSpeechOverlapAppend(t, harness.participant(aliceID), silence)
-	assertRoomSpeechOverlapAppend(t, harness.participant(bobID), silence)
+	awaitRoomBidirectionalInputs(t, audioInputs, harness.participant, map[string][]byte{aliceID: silence, bobID: silence})
+	close(responseAudioRelease)
 	awaitRoomBidirectionalFrames(t, audioOutputs, map[string][]byte{aliceID: alicePCM, bobID: bobPCM})
 	awaitRoomBidirectionalFanouts(t, fanouts, map[string][]byte{
 		aliceID + "\x00" + bobID: alicePCM,
@@ -581,9 +578,7 @@ func TestRunRoomWithResult_BidirectionalOverlapRecordsPeerOnlyEvidence(t *testin
 	// peer frames are appended.
 	aliceCadence.Advance()
 	bobCadence.Advance()
-	awaitRoomBidirectionalFrames(t, audioInputs, map[string][]byte{aliceID: bobPCM, bobID: alicePCM})
-	assertRoomSpeechOverlapAppend(t, harness.participant(aliceID), bobPCM)
-	assertRoomSpeechOverlapAppend(t, harness.participant(bobID), alicePCM)
+	awaitRoomBidirectionalInputs(t, audioInputs, harness.participant, map[string][]byte{aliceID: bobPCM, bobID: alicePCM})
 	awaitRoomBidirectionalIDs(t, vadStarted, aliceID, bobID)
 	awaitRoomBidirectionalIDs(t, messageEnds, aliceID, bobID)
 
