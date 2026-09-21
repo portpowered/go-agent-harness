@@ -317,148 +317,213 @@ func writeDurationSessionReplayMessage(out io.Writer, msg messages.StreamMessage
 
 func executeDurationRequest(ctx context.Context, out io.Writer, inferencer messages.SessionInferencer, opts sessionLoopOptions, maxDuration time.Duration, clock sessionduration.TimerScheduler, admitted sessionduration.AdmissionInferencer) (sessionduration.Result, error) {
 	durationService := durationwire.NewService()
-	artifacts := durationService.ArtifactsFromContext(ctx)
-	browser := opts.turnBrowser
-	if browser.Watch == nil && opts.BrowserWatch != nil {
-		browser = sessiontransport.SessionTurnBrowserRequest(opts.BrowserWatch, opts.RefreshToolDefinitions)
-	}
-	request := runtimeSession.DurationRunRequest{
-		Context:                    ctx,
-		Inferencer:                 inferencer,
-		Admission:                  admitted,
-		Clock:                      clock,
-		LivenessClock:              opts.livenessClock,
-		MaxDuration:                maxDuration,
-		Prompt:                     opts.Prompt,
-		PromptProvided:             opts.PromptProvided,
-		CloseAfterOpen:             opts.CloseAfterOpen,
-		WaitForClose:               opts.WaitForClose,
-		RequireAssistantResponse:   opts.RequireAssistantResponse,
-		RequireTerminalReply:       opts.RequireTerminalAssistantResponse,
-		CloseAfterScheduledAudio:   opts.CloseAfterScheduledAudio,
-		ScheduledAudioDispatch:     sessionduration.ScheduledAudioDispatch(opts.ScheduledAudioDispatch),
-		Observer:                   opts.observer,
-		CompletionObserver:         opts.observer,
-		SessionUpdatedTimeout:      opts.SessionUpdatedTimeout,
-		SessionUpdatedTimeoutError: sessionScheduledAudioConfigTimeoutError(opts),
-		Effects: sessionduration.RunEffects{
-			SessionCreated: func(_ context.Context, _ sessionduration.Loop) error {
-				if opts.ListeningBanner != "" && out != nil {
-					_, err := fmt.Fprintln(out, opts.ListeningBanner)
-					return err
-				}
-				return nil
-			},
-			AwaitFirstTurn: func(waitCtx context.Context) error {
-				if opts.awaitFirstTurn == nil {
-					return nil
-				}
-				return awaitSessionFirstTurnWithClock(waitCtx, opts.awaitFirstTurn, opts.audioService, opts.clockSource)
-			},
-		},
-		Publication: sessionduration.Publication{
-			Write: func(msg messages.StreamMessage) error {
-				return writeDurationSessionReplayMessage(out, msg, artifacts)
-			},
-		},
-		Done: opts.Done,
-		DoneError: func() error {
-			if opts.DoneErr == nil {
-				return nil
-			}
-			return opts.DoneErr()
-		},
-		Completion: runtimeSession.DurationCompletionOptions{
-			AudioOutputError:              opts.AudioOutputError,
-			AssistantResponseIncomplete:   runtimeSession.ErrLiveAudioResponseIncomplete,
-			ScheduledAudioIncompleteCause: runtimeSession.ErrLiveScheduledAudioIncomplete,
-			BoundCancellation:             opts.BoundCancellation,
-		},
-		ToolExecutor:             sessionLoopToolExecutor(opts),
-		ToolDefinitions:          append([]messages.ToolDefinition(nil), opts.ToolDefinitions...),
-		AdvertiseToolDefinitions: opts.AdvertiseToolDefinitions,
-		InteractiveToolPolicy:    opts.InteractiveToolPolicy,
-		Binding:                  opts.rtcDeviceBinding,
-		CloseProviderOnShutdown:  opts.BareLive,
-		QuiesceUpstream:          opts.quiesceUpstream,
-		StartPublication: func(publishCtx context.Context, loop sessionduration.Loop) (runtimeSession.DurationPublication, error) {
-			if browser.Watch == nil || browser.Refresh == nil {
-				return nil, nil
-			}
-			sender, ok := loop.(sessionduration.SessionEventSender)
-			if !ok {
-				return nil, errors.New("session loop does not support tool publication")
-			}
-			publicationRequest := sessionturn.PublicationRequest{
-				BaseDefinitions:    append([]messages.ToolDefinition(nil), opts.ToolDefinitionBase...),
-				InitialDefinitions: append([]messages.ToolDefinition(nil), opts.ToolDefinitions...),
-				Browser:            browser,
-				Publish: func(ctx context.Context, definitions []messages.ToolDefinition) error {
-					return sender.SendSessionEvent(ctx, messages.StreamMessage{
-						Type:  messages.StreamTypeSessionUpdate,
-						Value: messages.NewSessionUpdateValue(&messages.SessionUpdateConfig{Tools: append([]messages.ToolDefinition(nil), definitions...)}),
-					})
-				},
-			}
-			if opts.turnRuntime != nil {
-				return opts.turnRuntime.StartPublication(publishCtx, publicationRequest)
-			}
-			return sessionturnwire.NewDefaultService().StartPublication(publishCtx, publicationRequest)
-		},
-		WrapInferencer: func(admitted messages.SessionInferencer) (messages.SessionInferencer, runtimeSession.DurationSessionLifecycle, error) {
-			observed := newObservedSessionInferencer(admitted, opts.runtime)
-			observed.progress = opts.observer
-			return observed, observed, nil
-		},
-		LoopReady: func(loop sessionduration.Loop) error {
-			if opts.loopReady == nil {
-				return nil
-			}
-			concrete, ok := loop.(*agentloop.AgentLoop)
-			if !ok || concrete == nil {
-				return errors.New("session loop adapter is invalid")
-			}
-			select {
-			case opts.loopReady <- concrete:
-				return nil
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-		},
-		FinishObserver: opts.observer.finishDuration,
-		PublishUserCancellation: func() error {
-			return publishSessionUserCancellation(out, opts, func(out io.Writer, msg messages.StreamMessage) error {
-				return writeDurationSessionReplayMessage(out, msg, artifacts)
-			})
-		},
-	}
-	if opts.AudioIn != nil {
-		request.AudioInput = sessionduration.AudioInputPort{
-			BindContext: opts.AudioIn.bindContext,
-			Run: func(audioCtx context.Context, loop sessionduration.Loop) error {
-				audioLoop, ok := loop.(sessionAudioLoop)
-				if !ok || audioLoop == nil {
-					return errors.New("session loop does not support audio input")
-				}
-				return streamSessionAudioInput(audioCtx, audioLoop, opts.AudioIn)
-			},
-		}
-	}
-	request.AudioInterruptions = sessionduration.AudioInterruptionPort{
-		Source: opts.AudioInterruptions,
-		Dispatch: func(dispatchCtx context.Context, loop sessionduration.Loop, input ScheduledAudioInput) error {
-			audioLoop, ok := loop.(sessionAudioLoop)
-			if !ok || audioLoop == nil {
-				return errors.New("session loop does not support audio interruption")
-			}
-			return sendEventDrivenAudioInput(dispatchCtx, audioLoop, opts, input)
-		},
-	}
+	builder := newDurationRequestBuilder(ctx, out, inferencer, opts, maxDuration, clock, admitted, durationService)
+	request := builder.Build()
 	runner := sessionwire.NewDurationRunner(sessionwire.DurationDependencies{
 		DurationService: durationService,
 		LoopFactory:     sessionwire.NewDuplexLoopFactory(),
 	})
 	return runner.RunDuration(request)
+}
+
+type durationRequestBuilder struct {
+	ctx         context.Context
+	out         io.Writer
+	inferencer  messages.SessionInferencer
+	opts        sessionLoopOptions
+	maxDuration time.Duration
+	clock       sessionduration.TimerScheduler
+	admitted    sessionduration.AdmissionInferencer
+	service     sessionduration.Service
+	artifacts   sessionduration.ArtifactLifecycle
+	browser     sessionturn.BrowserRequest
+}
+
+func newDurationRequestBuilder(ctx context.Context, out io.Writer, inferencer messages.SessionInferencer, opts sessionLoopOptions, maxDuration time.Duration, clock sessionduration.TimerScheduler, admitted sessionduration.AdmissionInferencer, service sessionduration.Service) *durationRequestBuilder {
+	browser := opts.turnBrowser
+	if browser.Watch == nil && opts.BrowserWatch != nil {
+		browser = sessiontransport.SessionTurnBrowserRequest(opts.BrowserWatch, opts.RefreshToolDefinitions)
+	}
+	return &durationRequestBuilder{
+		ctx: ctx, out: out, inferencer: inferencer, opts: opts, maxDuration: maxDuration,
+		clock: clock, admitted: admitted, service: service,
+		artifacts: service.ArtifactsFromContext(ctx), browser: browser,
+	}
+}
+
+func (b *durationRequestBuilder) Build() runtimeSession.DurationRunRequest {
+	request := runtimeSession.DurationRunRequest{
+		Context:                    b.ctx,
+		Inferencer:                 b.inferencer,
+		Admission:                  b.admitted,
+		Clock:                      b.clock,
+		LivenessClock:              b.opts.livenessClock,
+		MaxDuration:                b.maxDuration,
+		Prompt:                     b.opts.Prompt,
+		PromptProvided:             b.opts.PromptProvided,
+		CloseAfterOpen:             b.opts.CloseAfterOpen,
+		WaitForClose:               b.opts.WaitForClose,
+		RequireAssistantResponse:   b.opts.RequireAssistantResponse,
+		RequireTerminalReply:       b.opts.RequireTerminalAssistantResponse,
+		CloseAfterScheduledAudio:   b.opts.CloseAfterScheduledAudio,
+		ScheduledAudioDispatch:     sessionduration.ScheduledAudioDispatch(b.opts.ScheduledAudioDispatch),
+		Observer:                   b.opts.observer,
+		CompletionObserver:         b.opts.observer,
+		SessionUpdatedTimeout:      b.opts.SessionUpdatedTimeout,
+		SessionUpdatedTimeoutError: sessionScheduledAudioConfigTimeoutError(b.opts),
+		Effects:                    b.effects(),
+		Publication:                b.publication(),
+		Done:                       b.opts.Done,
+		DoneError:                  b.doneError(),
+		Completion:                 b.completion(),
+		ToolExecutor:               sessionLoopToolExecutor(b.opts),
+		ToolDefinitions:            append([]messages.ToolDefinition(nil), b.opts.ToolDefinitions...),
+		AdvertiseToolDefinitions:   b.opts.AdvertiseToolDefinitions,
+		InteractiveToolPolicy:      b.opts.InteractiveToolPolicy,
+		Binding:                    b.opts.rtcDeviceBinding,
+		CloseProviderOnShutdown:    b.opts.BareLive,
+		QuiesceUpstream:            b.opts.quiesceUpstream,
+		StartPublication:           b.startPublication(),
+		WrapInferencer:             b.wrapInferencer(),
+		LoopReady:                  b.loopReady(),
+		FinishObserver:             b.opts.observer.finishDuration,
+		PublishUserCancellation:    b.publishUserCancellation(),
+		AudioInput:                 b.audioInput(),
+		AudioInterruptions:         b.audioInterruptions(),
+	}
+	return request
+}
+
+func (b *durationRequestBuilder) effects() sessionduration.RunEffects {
+	return sessionduration.RunEffects{
+		SessionCreated: func(_ context.Context, _ sessionduration.Loop) error {
+			if b.opts.ListeningBanner != "" && b.out != nil {
+				_, err := fmt.Fprintln(b.out, b.opts.ListeningBanner)
+				return err
+			}
+			return nil
+		},
+		AwaitFirstTurn: func(waitCtx context.Context) error {
+			if b.opts.awaitFirstTurn == nil {
+				return nil
+			}
+			return awaitSessionFirstTurnWithClock(waitCtx, b.opts.awaitFirstTurn, b.opts.audioService, b.opts.clockSource)
+		},
+	}
+}
+
+func (b *durationRequestBuilder) publication() sessionduration.Publication {
+	return sessionduration.Publication{Write: func(msg messages.StreamMessage) error {
+		return writeDurationSessionReplayMessage(b.out, msg, b.artifacts)
+	}}
+}
+
+func (b *durationRequestBuilder) doneError() func() error {
+	return func() error {
+		if b.opts.DoneErr == nil {
+			return nil
+		}
+		return b.opts.DoneErr()
+	}
+}
+
+func (b *durationRequestBuilder) completion() runtimeSession.DurationCompletionOptions {
+	return runtimeSession.DurationCompletionOptions{
+		AudioOutputError:              b.opts.AudioOutputError,
+		AssistantResponseIncomplete:   runtimeSession.ErrLiveAudioResponseIncomplete,
+		ScheduledAudioIncompleteCause: runtimeSession.ErrLiveScheduledAudioIncomplete,
+		BoundCancellation:             b.opts.BoundCancellation,
+	}
+}
+
+func (b *durationRequestBuilder) startPublication() func(context.Context, sessionduration.Loop) (runtimeSession.DurationPublication, error) {
+	return func(publishCtx context.Context, loop sessionduration.Loop) (runtimeSession.DurationPublication, error) {
+		if b.browser.Watch == nil || b.browser.Refresh == nil {
+			return nil, nil
+		}
+		sender, ok := loop.(sessionduration.SessionEventSender)
+		if !ok {
+			return nil, errors.New("session loop does not support tool publication")
+		}
+		publicationRequest := sessionturn.PublicationRequest{
+			BaseDefinitions:    append([]messages.ToolDefinition(nil), b.opts.ToolDefinitionBase...),
+			InitialDefinitions: append([]messages.ToolDefinition(nil), b.opts.ToolDefinitions...),
+			Browser:            b.browser,
+			Publish: func(ctx context.Context, definitions []messages.ToolDefinition) error {
+				return sender.SendSessionEvent(ctx, messages.StreamMessage{
+					Type:  messages.StreamTypeSessionUpdate,
+					Value: messages.NewSessionUpdateValue(&messages.SessionUpdateConfig{Tools: append([]messages.ToolDefinition(nil), definitions...)}),
+				})
+			},
+		}
+		if b.opts.turnRuntime != nil {
+			return b.opts.turnRuntime.StartPublication(publishCtx, publicationRequest)
+		}
+		return sessionturnwire.NewDefaultService().StartPublication(publishCtx, publicationRequest)
+	}
+}
+
+func (b *durationRequestBuilder) wrapInferencer() func(messages.SessionInferencer) (messages.SessionInferencer, runtimeSession.DurationSessionLifecycle, error) {
+	return func(admitted messages.SessionInferencer) (messages.SessionInferencer, runtimeSession.DurationSessionLifecycle, error) {
+		observed := newObservedSessionInferencer(admitted, b.opts.runtime)
+		observed.progress = b.opts.observer
+		return observed, observed, nil
+	}
+}
+
+func (b *durationRequestBuilder) loopReady() func(sessionduration.Loop) error {
+	return func(loop sessionduration.Loop) error {
+		if b.opts.loopReady == nil {
+			return nil
+		}
+		concrete, ok := loop.(*agentloop.AgentLoop)
+		if !ok || concrete == nil {
+			return errors.New("session loop adapter is invalid")
+		}
+		select {
+		case b.opts.loopReady <- concrete:
+			return nil
+		case <-b.ctx.Done():
+			return b.ctx.Err()
+		}
+	}
+}
+
+func (b *durationRequestBuilder) publishUserCancellation() func() error {
+	return func() error {
+		return publishSessionUserCancellation(b.out, b.opts, func(out io.Writer, msg messages.StreamMessage) error {
+			return writeDurationSessionReplayMessage(out, msg, b.artifacts)
+		})
+	}
+}
+
+func (b *durationRequestBuilder) audioInput() sessionduration.AudioInputPort {
+	if b.opts.AudioIn == nil {
+		return sessionduration.AudioInputPort{}
+	}
+	return sessionduration.AudioInputPort{
+		BindContext: b.opts.AudioIn.bindContext,
+		Run: func(audioCtx context.Context, loop sessionduration.Loop) error {
+			audioLoop, ok := loop.(sessionAudioLoop)
+			if !ok || audioLoop == nil {
+				return errors.New("session loop does not support audio input")
+			}
+			return streamSessionAudioInput(audioCtx, audioLoop, b.opts.AudioIn)
+		},
+	}
+}
+
+func (b *durationRequestBuilder) audioInterruptions() sessionduration.AudioInterruptionPort {
+	return sessionduration.AudioInterruptionPort{
+		Source: b.opts.AudioInterruptions,
+		Dispatch: func(dispatchCtx context.Context, loop sessionduration.Loop, input ScheduledAudioInput) error {
+			audioLoop, ok := loop.(sessionAudioLoop)
+			if !ok || audioLoop == nil {
+				return errors.New("session loop does not support audio interruption")
+			}
+			return sendEventDrivenAudioInput(dispatchCtx, audioLoop, b.opts, input)
+		},
+	}
 }
 
 func publishSessionUserCancellation(out io.Writer, opts sessionLoopOptions, write func(io.Writer, messages.StreamMessage) error) error {
