@@ -47,8 +47,8 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/test/integration",
       "file": "test/integration/session_metrics_reconcile_test.go",
-      "value": 737,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "value": 728,
+      "rationale": "Line baseline lowered after C229 removed obsolete duration-artifact checks from the final-accounting proof; retain remaining pre-existing P0 debt only through the owning package migration.",
       "phase": "P0"
     },
     {

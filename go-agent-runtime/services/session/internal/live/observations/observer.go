@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	sessiontrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
@@ -29,11 +28,7 @@ type RuntimeTrace struct {
 	inputOverflow bool
 	commits       int
 	turns         atomic.Int64
-	accountingMu  sync.Mutex
-	accounting    *metrics.InMemorySink
-	usage         messages.TokenUsage
-	outputInTurn  bool
-	toolDeltas    map[string]struct{}
+	accounting    *streamAccounting
 }
 
 // NewRuntimeTrace constructs an inert observer for one live invocation.
@@ -41,11 +36,7 @@ func NewRuntimeTrace(observer sessiontrace.RuntimeObserver, clock session.LiveCl
 	if observer == nil {
 		return nil
 	}
-	accounting, err := metrics.NewInMemorySink()
-	if err != nil {
-		panic(err)
-	}
-	return &RuntimeTrace{observer: observer, clock: clock, tick: tick, accounting: accounting, toolDeltas: make(map[string]struct{})}
+	return &RuntimeTrace{observer: observer, clock: clock, tick: tick, accounting: newStreamAccounting()}
 }
 
 func (r *RuntimeTrace) observe(kind sessiontrace.SessionRuntimeObservationKind, payload []byte, turns, commit int, response messages.StreamMessage, clean bool, runErr error) {
@@ -76,91 +67,11 @@ func (r *RuntimeTrace) Message(msg messages.StreamMessage, interrupted bool) {
 	if r == nil {
 		return
 	}
-	r.accountMessage(msg)
+	r.accounting.observeMessage(msg)
 	r.AudioOutput(msg)
 	r.TurnCompleted(msg, interrupted)
 	if msg.Type == messages.StreamTypeInputItemAdded {
 		r.InputCommit(true)
-	}
-}
-
-func (r *RuntimeTrace) accountMessage(msg messages.StreamMessage) {
-	if r == nil || r.accounting == nil {
-		return
-	}
-	r.accountingMu.Lock()
-	defer r.accountingMu.Unlock()
-	if msg.Type == messages.StreamTypeMessageStart {
-		r.outputInTurn = false
-	}
-	switch value := msg.Value.(type) {
-	case *messages.AudioDeltaValue:
-		direction := streamDirection(msg.Role)
-		r.recordMetric(direction, metrics.ModalityAudio, len(value.Content))
-		r.outputInTurn = r.outputInTurn || direction == metrics.DirectionOutput && len(value.Content) > 0
-	case *messages.TextDeltaValue:
-		direction := streamDirection(msg.Role)
-		r.recordMetric(direction, metrics.ModalityText, len(value.Content))
-		r.outputInTurn = r.outputInTurn || direction == metrics.DirectionOutput && len(value.Content) > 0
-	case *messages.TranscriptDeltaValue:
-		direction := streamDirection(msg.Role)
-		r.recordMetric(direction, metrics.ModalityText, len(value.Text))
-		r.outputInTurn = r.outputInTurn || direction == metrics.DirectionOutput && len(value.Text) > 0
-	case *messages.ImageDeltaValue:
-		direction := streamDirection(msg.Role)
-		r.recordMetric(direction, metrics.ModalityImage, len(value.Content))
-		r.outputInTurn = r.outputInTurn || direction == metrics.DirectionOutput && len(value.Content) > 0
-	case *messages.ToolCallDeltaValue:
-		r.recordMetric(metrics.DirectionOutput, metrics.ModalityTool, len(value.PartialJSON))
-		if len(value.PartialJSON) > 0 {
-			r.outputInTurn = true
-			r.toolDeltas[msg.ToolCallId] = struct{}{}
-		}
-	case *messages.ToolCallEndValue:
-		id := msg.ToolCallId
-		if value.ToolCallID != "" {
-			id = value.ToolCallID
-		}
-		if _, streamed := r.toolDeltas[id]; !streamed {
-			r.recordMetric(metrics.DirectionOutput, metrics.ModalityTool, len(value.Arguments))
-		}
-		delete(r.toolDeltas, id)
-	case *messages.MessageEndValue:
-		usage := value.Usage
-		if r.outputInTurn && usage.PromptTokens >= 0 && usage.CompletionTokens >= 0 && usage.TotalTokens >= 0 && usage.ReasoningTokens >= 0 {
-			r.usage.PromptTokens += usage.PromptTokens
-			r.usage.CompletionTokens += usage.CompletionTokens
-			r.usage.TotalTokens += usage.TotalTokens
-			r.usage.ReasoningTokens += usage.ReasoningTokens
-		}
-		r.outputInTurn = false
-	}
-}
-
-func streamDirection(role messages.Role) metrics.Direction {
-	if role == messages.RoleUser {
-		return metrics.DirectionInput
-	}
-	return metrics.DirectionOutput
-}
-
-func (r *RuntimeTrace) recordMetric(direction metrics.Direction, modality metrics.Modality, byteCount int) {
-	if byteCount > 0 {
-		_ = r.accounting.Record(direction, modality, int64(byteCount))
-	}
-}
-
-func (r *RuntimeTrace) finalAccounting() *sessiontrace.SessionFinalAccounting {
-	if r == nil || r.accounting == nil {
-		return nil
-	}
-	r.accountingMu.Lock()
-	usage := r.usage
-	r.accountingMu.Unlock()
-	return &sessiontrace.SessionFinalAccounting{
-		PromptTokens: uint64(usage.PromptTokens), CompletionTokens: uint64(usage.CompletionTokens),
-		TotalTokens: uint64(usage.TotalTokens), ReasoningTokens: uint64(usage.ReasoningTokens),
-		UsageSemantics: sessiontrace.SessionTokenUsageIncremental, Metrics: r.accounting.Snapshot(),
 	}
 }
 
@@ -185,9 +96,7 @@ func (r *RuntimeTrace) CapturedAudio(frame audio.PCMFrame) {
 		return
 	}
 	payload := codec.EncodePCM16(frame.Samples)
-	r.accountingMu.Lock()
-	r.recordMetric(metrics.DirectionInput, metrics.ModalityAudio, len(payload))
-	r.accountingMu.Unlock()
+	r.accounting.inputAudio(len(payload))
 	r.inputMu.Lock()
 	if !r.inputOverflow && len(payload) <= codec.MaxPayloadBytes-len(r.input) {
 		r.input = append(r.input, payload...)
@@ -241,7 +150,7 @@ func (r *RuntimeTrace) Terminal(turns int, err error) {
 	if turns == 0 {
 		turns = int(r.turns.Load())
 	}
-	r.observeFinal(sessiontrace.SessionRuntimeObservationTerminal, nil, turns, 0, messages.StreamMessage{}, err == nil, err, r.finalAccounting())
+	r.observeFinal(sessiontrace.SessionRuntimeObservationTerminal, nil, turns, 0, messages.StreamMessage{}, err == nil, err, r.accounting.snapshot())
 }
 
 func runtimeTraceError(err error) string {
