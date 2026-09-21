@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
@@ -139,15 +141,20 @@ func (s *turnReplayMediaSession) forward(ctx context.Context) {
 				return
 			}
 		case <-s.inner.Done():
-			for {
-				msg, ok := source.Read()
-				if !ok || !s.forwardMessage(ctx, msg) {
-					return
-				}
-			}
+			s.drain(ctx, source)
+			return
 		case <-s.stop:
 			return
 		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (s *turnReplayMediaSession) drain(ctx context.Context, source *messages.TypedBuffer[messages.StreamMessage]) {
+	for {
+		msg, ok := source.Read()
+		if !ok || !s.forwardMessage(ctx, msg) {
 			return
 		}
 	}
@@ -198,4 +205,65 @@ func (s *turnReplayMediaSession) fail(err error) {
 	}
 	s.errMu.Unlock()
 	s.media.FailInbound(err)
+}
+
+func (h *handle) liveControlLoop() (*agentloop.AgentLoop, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if !h.started || h.loop == nil {
+		return nil, session.ErrLiveNotStarted
+	}
+	if h.closed {
+		return nil, session.ErrLiveClosed
+	}
+	return h.loop, nil
+}
+
+func (h *handle) sendLiveControl(ctx context.Context, loop *agentloop.AgentLoop, control session.LiveControl) error {
+	ackID, ack, err := h.media.RegisterAck()
+	if err != nil {
+		return err
+	}
+	event, err := liveControlEvent(control)
+	if err != nil {
+		h.media.AbortAck(ackID)
+		return err
+	}
+	if control.Kind == session.LiveControlAudioCommit && h.request.Replay.Kind == session.LiveReplayKindTurn {
+		// Session-message captures preserve the historical type-only end
+		// marker; realtime provider controls carry their negotiated value.
+		event.Value = nil
+	}
+	event.ActorProvidedID = ackID
+	if err := loop.SendSessionEvent(ctx, event); err != nil {
+		h.media.AbortAck(ackID)
+		return err
+	}
+	select {
+	case accepted := <-ack:
+		if !accepted {
+			return fmt.Errorf("live provider rejected control %q", control.Kind)
+		}
+		return nil
+	case <-ctx.Done():
+		h.media.CancelAck(ackID)
+		return ctx.Err()
+	}
+}
+
+func liveControlEvent(control session.LiveControl) (messages.StreamMessage, error) {
+	switch control.Kind {
+	case session.LiveControlText:
+		return messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue(control.Text)}, nil
+	case session.LiveControlAudioCommit:
+		return messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{})}, nil
+	case session.LiveControlResponseCancel:
+		return messages.StreamMessage{Type: messages.StreamTypeResponseCancel, Value: messages.NewResponseCancelValue()}, nil
+	case session.LiveControlResponseCreate:
+		return messages.StreamMessage{Type: messages.StreamTypeResponseCreate, Value: messages.NewResponseCreateValue()}, nil
+	case session.LiveControlClose:
+		return messages.StreamMessage{}, errors.New("close control is handled by the live lifecycle")
+	default:
+		return messages.StreamMessage{}, fmt.Errorf("unsupported live control %q", control.Kind)
+	}
 }

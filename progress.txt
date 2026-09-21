@@ -4249,11 +4249,33 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   5 cyclomatic, 10 file-line, 2 function-line, 2 function-statement, and 1
   package-file issue. These remain actionable; no baseline was widened.
 - Fetched `origin/main` as `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`;
-  this branch's merge base is the same commit. The fetched main has later
-  retirement commits, while `docs/architecture/size-baselines.json` has no
-  change between this branch base and fetched main. No merge, reset, push, or PR
-  action has occurred.
+  this branch's merge base is the same commit, so the required main ancestry is
+  already present. The earlier statement that fetched main had later retirement
+  commits was incorrect. No merge, reset, push, or PR action has occurred.
 - The current tree is a partial checkpoint atop `ce3c2a9507219b371990ab3f4ad1d95648fb1aab`.
-  Next: commit these repairs and this progress entry, integrate fetched main
-  while preserving ancestry in this isolated worktree, then repair the complete
-  architecture findings and rerun every C229 gate on the exact final commit.
+  Next: repair the complete architecture findings while preserving the existing
+  ancestry, then rerun every C229 gate on the exact final commit.
+
+# C229 architecture repair checkpoint 2026-09-20
+
+- Canonical admission is still `work-task-16` in `~default`; `verify-work`
+  returns admitted, and the task packet branch matches this isolated worktree.
+  The canonical review list is empty; prior PR #530 is open with no submitted
+  reviews or comments and is historical negative evidence, not a pass.
+- Required startup `8bdafc7f947a3a2c9856220abdc539437035bd21`, C218 checkpoint
+  `dc92c6c8f103`, planning main `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`,
+  and fetched `FETCH_HEAD` are ancestors. `origin/main` equals the existing
+  merge base; no integration commit is required and no history was rewritten.
+- Reduced live-service control and replay-forward complexity by extracting
+  bounded helpers. `rtk go test
+  ./go-agent-runtime/services/session/internal/live -count=1 -timeout=180s`
+  passes all 72 tests; `rtk proxy git diff --check` passes.
+- The latest `rtk make prepush` formats successfully but fails its architecture
+  gate with 194 issues (114 baseline drifts, 52 stale entries, 10 cognitive,
+  4 cyclomatic, 9 file-line, 2 function-line, 2 function-statement, and 1
+  package-file). This is four fewer than the prior 198-issue report. Exact log:
+  `1789948948_make_prepush.log`. No baseline was widened; no PR or push exists.
+- Next: continue reducing the remaining source-shape failures and reconcile only
+  exact measured baseline reductions/stale entries. Do not run the PR preflight
+  as complete or submit until all 194 findings and the full C229 command list
+  pass on one clean candidate SHA.
