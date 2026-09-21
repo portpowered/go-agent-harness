@@ -252,6 +252,9 @@ const (
 	ErrTargetInactive scheduleError = "room replay target is inactive"
 	// ErrTargetStopped identifies a target acknowledgement that terminated early.
 	ErrTargetStopped scheduleError = "room replay target stopped"
+	// ErrScheduleTooLong identifies a replay whose logical frame count exceeds
+	// the bounded schedule capacity.
+	ErrScheduleTooLong scheduleError = "room replay schedule exceeds the supported frame limit"
 )
 
 // PCM16Format is the target cadence used by a deterministic replay schedule.

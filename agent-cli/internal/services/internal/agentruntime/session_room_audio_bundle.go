@@ -269,11 +269,8 @@ func ValidateRoomReplayAudioBundle(replayService roomreplay.Service, bundle stri
 
 func resolveRoomReplayPlan(opts RoomRunOptions) (RoomReplayPlan, bool, error) {
 	if opts.ReplayPlan != nil {
-		plan := *opts.ReplayPlan
-		if !plan.Finalized || len(plan.Participants) < 2 {
-			return RoomReplayPlan{}, true, &roomreplay.RoomReplayBundleError{Kind: roomreplay.RoomReplayBundleIncomplete, Field: "replay_plan", Expected: "admitted finalized plan with at least two participants", Actual: "incomplete", Err: roomreplay.ErrRoomReplayBundleIncomplete}
-		}
-		return plan, true, nil
+		plan, err := loadRoomReplayPlan(opts.ReplayService, opts.ReplayPlan.BundlePath)
+		return plan, true, err
 	}
 	path := strings.TrimSpace(opts.ReplayPath)
 	if path == "" {

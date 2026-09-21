@@ -21,9 +21,15 @@ func (s *schedule) Run(ctx context.Context, request roomreplay.RunRequest) error
 		return err
 	}
 	for frameIndex, frame := range s.frames {
+		if stopping(request) {
+			return nil
+		}
 		if err := runFrame(ctx, request, s.targetIDs, targets, frameIndex, frame); err != nil {
 			return err
 		}
+	}
+	if stopping(request) {
+		return nil
 	}
 	return waitForParticipants(ctx, request)
 }

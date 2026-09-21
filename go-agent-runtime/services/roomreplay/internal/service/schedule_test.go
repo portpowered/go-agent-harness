@@ -179,6 +179,27 @@ func TestBuildRejectsMalformedAdmissionInputs(t *testing.T) {
 	}
 }
 
+func TestBuildRejectsScheduleBeyondFrameLimit(t *testing.T) {
+	root := t.TempDir()
+	capturePath := filepath.Join(root, "target.session.json")
+	writeCapture(t, capturePath, 1)
+	pcmPath := filepath.Join(root, "target.pcm")
+	writeBytes(t, pcmPath, []byte{1, 0})
+
+	_, err := roomReplayServiceForTest().Build(context.Background(), roomreplay.BuildRequest{
+		SourceFormat: sourceFormat(24000, 1),
+		TargetFormat: roomreplay.PCM16Format{SampleRate: 24000, Channels: 1, FrameDuration: 20 * time.Millisecond},
+		Participants: []roomreplay.Participant{{ID: "target", CapturePath: capturePath, SentPCMPath: pcmPath}},
+		Timeline: []roomreplay.TimelineEvent{{
+			Sequence: 1, OffsetNanos: int64(365 * 24 * time.Hour), Type: "speech_start", ParticipantID: "target",
+		}},
+		TargetIDs: []string{"target"},
+	})
+	if !errors.Is(err, roomreplay.ErrScheduleTooLong) {
+		t.Fatalf("Build() error = %v, want errors.Is(%v)", err, roomreplay.ErrScheduleTooLong)
+	}
+}
+
 func TestRunUsesAcknowledgementBarrierAndPreservesCancellation(t *testing.T) {
 	root := t.TempDir()
 	alphaCapture := filepath.Join(root, "alpha.session.json")
@@ -365,6 +386,44 @@ func TestRunRechecksTargetActivityBeforeEachContribution(t *testing.T) {
 	}
 	if betaReleases != 1 {
 		t.Fatalf("inactive target releases = %d, want one", betaReleases)
+	}
+}
+
+func TestRunStopsBeforeScanningRemainingSchedule(t *testing.T) {
+	schedule := &schedule{
+		frames:    make([]scheduledFrame, roomReplayMaxScheduleFrames),
+		targetIDs: []string{"target"},
+	}
+	stopping, stoppingChecks, advances := false, 0, 0
+	target := roomreplay.Target{
+		ID:      "target",
+		Active:  func() bool { return true },
+		Release: func(context.Context, string, []byte) error { return nil },
+		Advance: func(context.Context) error {
+			advances++
+			stopping = true
+			return nil
+		},
+		AwaitAcknowledgement: func(context.Context) error { return nil },
+	}
+	barrier := make(chan struct{})
+	close(barrier)
+	err := schedule.Run(context.Background(), roomreplay.RunRequest{
+		Targets: []roomreplay.Target{target},
+		WaitFor: []roomreplay.Waiter{{ID: "target", Done: barrier}},
+		IsStopping: func() bool {
+			stoppingChecks++
+			return stopping
+		},
+	})
+	if err != nil {
+		t.Fatalf("Schedule.Run() error = %v, want clean stop", err)
+	}
+	if advances != 1 {
+		t.Fatalf("logical frame advances = %d, want stop after first frame", advances)
+	}
+	if stoppingChecks > 10 {
+		t.Fatalf("stop checks = %d, want prompt exit before scanning remaining frames", stoppingChecks)
 	}
 }
 

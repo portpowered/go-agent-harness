@@ -5,12 +5,14 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/planning"
+	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
 type replayServiceStub struct {
@@ -100,5 +102,57 @@ func TestServiceReportsUnavailableForMissingReplayOwner(t *testing.T) {
 	}
 	if err := svc.ValidateReplayOutput(rooms.RoomReplayPlan{}, "output"); !errors.Is(err, rooms.ErrRoomServiceUnavailable) {
 		t.Fatalf("missing replay owner output error = %v, want unavailable", err)
+	}
+}
+
+func TestPublicRunRejectsNonEmptyReplayOutputBeforeParticipantEffects(t *testing.T) {
+	replay := replayServiceStub{plan: roomreplay.RoomReplayPlan{BundlePath: filepath.Join(t.TempDir(), "bundle")}}
+	service := New(Dependencies{
+		Planner: planning.New(), Replay: replay,
+		Runner: lifecycle.New(lifecycle.Dependencies{Clock: platformclock.Real{}}),
+	})
+	var public rooms.Service = service
+
+	output := filepath.Join(t.TempDir(), "output")
+	if err := os.Mkdir(output, 0o700); err != nil {
+		t.Fatalf("create output directory: %v", err)
+	}
+	marker := filepath.Join(output, "keep.txt")
+	if err := os.WriteFile(marker, []byte("preserve"), 0o600); err != nil {
+		t.Fatalf("write output marker: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ready := 0
+	recordingDisabled := false
+	manifest := rooms.Manifest{
+		SchemaVersion: rooms.SchemaVersion,
+		Room:          rooms.Room{MaxTurns: 1, Recording: &rooms.RoomRecordingConfig{Enabled: &recordingDisabled}},
+		Participants: []rooms.Participant{
+			{ID: "human-a", Kind: rooms.ParticipantKindHuman, SystemPrompt: "human", InputDevice: "mic", OutputDevice: "speaker", Tools: []string{}},
+			{ID: "human-b", Kind: rooms.ParticipantKindHuman, SystemPrompt: "human", InputDevice: "mic", OutputDevice: "speaker", Tools: []string{}},
+		},
+	}
+	_, err := public.Run(ctx, nil, rooms.RoomRunOptions{
+		Manifest: manifest,
+		ReplayPlan: &roomreplay.RoomReplayPlan{
+			BundlePath: replay.plan.BundlePath,
+			Finalized:  true,
+		},
+		OutputDir: output,
+		OnParticipantReady: func(rooms.RoomParticipantReady) {
+			ready++
+			cancel()
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "must be empty") {
+		t.Fatalf("Run() error = %v, want non-empty replay output rejection", err)
+	}
+	if ready != 0 {
+		t.Fatalf("participant ready callbacks = %d, want no runner side effect", ready)
+	}
+	entries, err := os.ReadDir(output)
+	if err != nil || len(entries) != 1 || entries[0].Name() != filepath.Base(marker) {
+		t.Fatalf("output entries = %v, err = %v; want only preserved marker", entries, err)
 	}
 }

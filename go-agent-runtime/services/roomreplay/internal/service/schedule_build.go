@@ -18,6 +18,9 @@ const (
 	defaultSampleRate    = 24000
 	defaultChannels      = 1
 	defaultFrameDuration = 20 * time.Millisecond
+	// At the default cadence this permits more than 33 minutes of replay while
+	// bounding retained schedule state for sparse or adversarial timelines.
+	roomReplayMaxScheduleFrames = 100_000
 )
 
 type schedule struct {
@@ -222,6 +225,9 @@ func scheduleParticipant(ctx context.Context, participant roomreplay.Participant
 
 func scheduleParticipantFrames(pcm []byte, participantID string, segments []speechSegment, targetFormat roomreplay.PCM16Format, frameBytes, order int) ([]frameContribution, int, error) {
 	frameCount := (len(pcm)-1)/frameBytes + 1
+	if frameCount > roomReplayMaxScheduleFrames {
+		return nil, order, scheduleTooLong(frameCount)
+	}
 	state := participantFrameState{order: order, lastScheduledFrame: -1}
 	for segmentIndex, segment := range segments {
 		if state.cursor >= frameCount {
@@ -281,6 +287,12 @@ func (state *participantFrameState) appendRemainder(pcm []byte, participantID st
 }
 
 func assembleSchedule(contributionsByFrame map[int][]contribution, targetIDs []string, expectedFrames, maxFrame int) (roomreplay.Schedule, error) {
+	if expectedFrames > roomReplayMaxScheduleFrames {
+		return nil, scheduleTooLong(expectedFrames)
+	}
+	if maxFrame >= roomReplayMaxScheduleFrames {
+		return nil, scheduleTooLong(maxFrame + 1)
+	}
 	totalFrames := expectedFrames
 	if maxFrame+1 > totalFrames {
 		totalFrames = maxFrame + 1
@@ -302,6 +314,10 @@ func assembleSchedule(contributionsByFrame map[int][]contribution, targetIDs []s
 		frames[frameIndex].contributions = contributions
 	}
 	return &schedule{frames: frames, targetIDs: targetIDs}, nil
+}
+
+func scheduleTooLong(frameCount int) error {
+	return fmt.Errorf("%w: %d frames exceeds maximum %d", roomreplay.ErrScheduleTooLong, frameCount, roomReplayMaxScheduleFrames)
 }
 
 func speechSegments(timeline []roomreplay.TimelineEvent, participantID string) []speechSegment {

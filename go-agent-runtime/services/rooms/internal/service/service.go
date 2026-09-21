@@ -47,13 +47,12 @@ func (s *Service) Run(ctx context.Context, out io.Writer, request rooms.RoomRunO
 		}
 	}
 	if strings.TrimSpace(request.OutputDir) != "" {
-		var err error
 		if request.ReplayPlan != nil {
-			err = s.ValidateReplayOutput(*request.ReplayPlan, request.OutputDir)
-		} else {
-			err = evidence.ValidateEvidenceOutput(request.OutputDir)
+			if err := s.ValidateReplayOutput(*request.ReplayPlan, request.OutputDir); err != nil {
+				return rooms.RoomResult{}, err
+			}
 		}
-		if err != nil {
+		if err := evidence.ValidateEvidenceOutput(request.OutputDir); err != nil {
 			return rooms.RoomResult{}, err
 		}
 	}
