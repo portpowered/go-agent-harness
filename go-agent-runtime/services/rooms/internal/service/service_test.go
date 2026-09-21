@@ -172,11 +172,20 @@ func TestPublicRunRejectsUnwritableReplayOutputBeforeParticipantEffects(t *testi
 	if err := os.Chmod(output, 0o500); err != nil {
 		t.Fatalf("make output directory unwritable: %v", err)
 	}
-	defer func() { _ = os.Chmod(output, 0o700) }()
+	t.Cleanup(func() {
+		if err := os.Chmod(output, 0o700); err != nil {
+			t.Errorf("restore output directory permissions: %v", err)
+		}
+	})
 	probe, err := os.CreateTemp(output, ".permission-check-")
 	if err == nil {
-		_ = probe.Close()
-		_ = os.Remove(probe.Name())
+		probePath := probe.Name()
+		if closeErr := probe.Close(); closeErr != nil {
+			t.Fatalf("close permission probe: %v", closeErr)
+		}
+		if removeErr := os.Remove(probePath); removeErr != nil {
+			t.Fatalf("remove permission probe: %v", removeErr)
+		}
 		t.Skip("test filesystem does not enforce directory write permissions")
 	}
 
