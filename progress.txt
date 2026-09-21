@@ -4299,6 +4299,34 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   cluster, prove the sole one-file/300-line adapter cap, and run the exact-head
   full local preflight before opening/updating the PR.
 
+### C281 service recovery checkpoint — 2026-09-21
+
+- Reverified admission for `audio-runtime/audio-runtime-v1` with
+  `factory/scripts/project-control.py verify-work`; `prd.json.branchName`
+  matches `codex/audio-runtime-c281-recover-c271-selfplay-retirement`. The
+  current branch remains based on fetched `origin/main=b9b2f90bf`; startup
+  integration is an ancestor. The C271 handoff `afdac0c6b`, focused source
+  `f012af8c`, C249 `86a1eed17`, and C220 history remain reachable; predecessor
+  and peer worktrees were not changed.
+- Transplanted only the C271 service-owned source and public behavior repairs:
+  `c4d74a37e`, bounded shutdown `6079c6cbd`, exact turn target `be3a084db`,
+  and first-failure `57faba95d`. The service contract/internal/Wire paths pass
+  normal `26` tests, race `26` tests, repeated cancellation/duration/
+  shutdown/stop/failure `180` tests, the no-CLI/no-legacy/no-init boundary
+  scan, `make wire-check`, and `git diff --check`. The CGO-disabled focused
+  CLI/service suite also passes.
+- The integrated legacy census remains `106` production files / `39,329`
+  physical lines; the owned cluster remains present at `53 + 641 + 716 =
+  1,410` lines, and the 68-line projection plus policy-bearing 85-line CLI
+  command remain. No deletion or caller cutover is claimed.
+- Canonical C279/C280 exact seams are still unreleased (`work-task-136` and
+  `work-task-139` remain `init`/`PROCESSING`); their owned caller paths stay
+  untouched. Exact next action: refresh those reviewed/guarded release states,
+  then fetch current main, reconcile C249/C220 and peer behavior additively,
+  cut over every caller, delete the complete cluster/projection/helper, reduce
+  the sole adapter to stateless translation within 300 lines, and run the full
+  exact-head preflight before any push or SCRIPT handoff. Decision: `CONTINUE`.
+
 # C271 disjoint service and release audit — 2026-09-21
 
 - Reverified task admission for the sole `audio-runtime` / `audio-runtime-v1`
