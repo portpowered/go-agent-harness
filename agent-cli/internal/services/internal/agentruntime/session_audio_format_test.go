@@ -63,17 +63,19 @@ func TestPlanOpenAIRecordPromptAudioOutputWithoutInputUsesRealtimeDuplexRate(t *
 
 func newTestAudioIOService() audioio.Service { return audioiowire.NewService() }
 
+type audioioRateResolutionCase struct {
+	name       string
+	opts       SessionRunOptions
+	provider   string
+	request    models.SessionConfig
+	inputRate  int
+	outputRate int
+	wantRate   int
+	wantErr    bool
+}
+
 func TestAudioioRateResolution(t *testing.T) {
-	tests := []struct {
-		name       string
-		opts       SessionRunOptions
-		provider   string
-		request    models.SessionConfig
-		inputRate  int
-		outputRate int
-		wantRate   int
-		wantErr    bool
-	}{
+	tests := []audioioRateResolutionCase{
 		{name: "openai no flags", provider: sessionProviderOpenAI, wantRate: audioio.RealtimeSampleRate},
 		{name: "grok no flags", provider: sessionProviderGrok, wantRate: audioio.RealtimeSampleRate},
 		{name: "output file", provider: sessionProviderOpenAI, opts: SessionRunOptions{ModelCatalog: testModelCatalog(), AudioOutputRequested: true}, wantRate: audioio.RealtimeSampleRate},
@@ -92,35 +94,39 @@ func TestAudioioRateResolution(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			inferencer := &sessionAudioContractInferencer{request: inference.SessionRequest{Config: tt.request}}
-			opts := tt.opts
-			if opts.SessionInferencer != nil {
-				inferencer = opts.SessionInferencer.(*sessionAudioContractInferencer)
-			}
-			inputRate, outputRate := tt.inputRate, tt.outputRate
-			request := inferencer.Request().Config
-			if inputRate <= 0 {
-				inputRate = int(request.InputAudioSampleRate)
-			}
-			if outputRate <= 0 {
-				outputRate = int(request.OutputAudioSampleRate)
-			}
-			rates, err := audioiowire.NewService().ResolveRates(context.Background(), audioio.RateRequest{
-				Provider: tt.provider, CapturedInputRate: inputRate, CapturedOutputRate: outputRate,
-			})
-			if tt.wantErr {
-				if !errors.Is(err, audioio.ErrSampleRateConflict) {
-					t.Fatalf("resolve error = %v, want audioio.ErrSampleRateConflict", err)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("resolve audio rate: %v", err)
-			}
-			if rates.InputRate != tt.wantRate || rates.OutputRate != tt.wantRate {
-				t.Fatalf("resolved audio rates = %d/%d, want %d/%d", rates.InputRate, rates.OutputRate, tt.wantRate, tt.wantRate)
-			}
+			assertAudioioRateResolution(t, tt)
 		})
+	}
+}
+
+func assertAudioioRateResolution(t *testing.T, testCase audioioRateResolutionCase) {
+	t.Helper()
+	inferencer := &sessionAudioContractInferencer{request: inference.SessionRequest{Config: testCase.request}}
+	if testCase.opts.SessionInferencer != nil {
+		inferencer = testCase.opts.SessionInferencer.(*sessionAudioContractInferencer)
+	}
+	inputRate, outputRate := testCase.inputRate, testCase.outputRate
+	request := inferencer.Request().Config
+	if inputRate <= 0 {
+		inputRate = int(request.InputAudioSampleRate)
+	}
+	if outputRate <= 0 {
+		outputRate = int(request.OutputAudioSampleRate)
+	}
+	rates, err := audioiowire.NewService().ResolveRates(context.Background(), audioio.RateRequest{
+		Provider: testCase.provider, CapturedInputRate: inputRate, CapturedOutputRate: outputRate,
+	})
+	if testCase.wantErr {
+		if !errors.Is(err, audioio.ErrSampleRateConflict) {
+			t.Fatalf("resolve error = %v, want audioio.ErrSampleRateConflict", err)
+		}
+		return
+	}
+	if err != nil {
+		t.Fatalf("resolve audio rate: %v", err)
+	}
+	if rates.InputRate != testCase.wantRate || rates.OutputRate != testCase.wantRate {
+		t.Fatalf("resolved audio rates = %d/%d, want %d/%d", rates.InputRate, rates.OutputRate, testCase.wantRate, testCase.wantRate)
 	}
 }
 
