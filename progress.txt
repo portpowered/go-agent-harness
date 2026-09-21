@@ -4386,3 +4386,55 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   remove the projection/helper and full cluster, verify the sole stateless
   adapter cap, and run the complete planned local preflight on the exact clean
   candidate before PR submission. Retain C271 at `CONTINUE` meanwhile.
+
+# C271 recovered ownership and shared-seam checkpoint — 2026-09-21
+
+- Reverified task admission with
+  `rtk proxy python3 factory/scripts/project-control.py verify-work --type task
+  --name audio-runtime-c271-recover-selfplay-retirement`: admitted under the
+  sole audio-runtime/audio-runtime-v1 project. `prd.json.branchName` matches
+  `codex/audio-runtime-c271-recover-selfplay-retirement`. Candidate HEAD is
+  `f9b8f5b0840348698753e8a411793f4f34bf4b27`, clean; `origin/main` is freshly
+  fetched at `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`. Both it and startup
+  integration `8bdafc7f947a3a2c9856220abdc539437035bd21` are ancestors. The
+  current HEAD checkpoint changes only this progress file, so the previously
+  recorded source checks at `2f6c0f9` still describe the production tree.
+- Canonical `work-task-106` remains `init`; the C271 work list has no review
+  row. C248 `work-task-45` remains `init` at `0cefde30e86e809018d70b9f74067d35b241f506`
+  and its worktree has active sessionturn service edits, including a deleted
+  tool lifecycle file. Its canonical checkpoint reports 108 architecture
+  findings, so no reviewed caller release is available. C269 `work-task-101`
+  remains `init` at `3be45b10da238cc653a00282ecc3efeb05adf237`; its worktree
+  has active agentruntime room-evidence/diagnostics and service changes and
+  deletions. Neither peer worktree was modified. C249 remains clean at
+  `86a1eed17b099d510b39ce3d3b4ee7d8f7998881`, with C220 `1bf045dd8`, startup,
+  and current-main ancestry intact.
+- Read the full concluded C259 `work-review-78` feedback. Its four findings
+  address bounded room-evidence manifest/timeline admission, degraded recording
+  behavior, integrated room replay, and missing exact-head preflight; none
+  identifies a self-play service repair. The disjoint C271 service audit and
+  public behavior checks recorded above remain clean. No new self-play defect
+  surfaced in the current caller census.
+- Recounted the current legacy runtime at 106 production Go files / 39,329
+  physical lines. The complete C271-owned cluster remains present:
+  selfplay_service.go 53 lines, session_self_play.go 641, and
+  session_self_play_evidence.go 716, totaling the exact 1,410-line target.
+  The sole candidate adapter remains one 85-line file, but still uses the
+  legacy projection and retains defaults/persona/seed policy. Additional
+  production callers and composition remain outstanding. In particular, the
+  unreleased C269 room-evidence work owns paths that overlap the helper
+  dependencies used by the legacy evidence cluster, while C248 still owns
+  shared session/Wire integration paths.
+- No safely actionable C271 production mutation remains before these exact
+  shared seams are released; making one now risks overwriting active peer work
+  or preserving duplicate authority. No source, peer worktree, or remote PR was
+  changed. The prior focused service normal/race/repeated-shutdown checks pass
+  on the unchanged production tree; no full prepush, final local preflight,
+  push, PR, or SCRIPT handoff has occurred.
+- Exact next action: retain C271 ownership at `CONTINUE`. After C248's reviewed
+  caller/session release and C269's guarded room-evidence merge are available,
+  fetch current main, reconcile both released behaviors additively with the
+  preserved C249/C220 ancestry, cut over every named and discovered caller,
+  delete the projection/helper and exact three-file/1,410-line legacy cluster,
+  verify the sole stateless adapter is at most 300 lines, then run the entire
+  planned exact-head preflight before any PR submission.
