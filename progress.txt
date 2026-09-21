@@ -4657,8 +4657,15 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
 - This repair is uncommitted. Next: checkpoint it in a commit, then run `make prepush` and every C229-05 command on that exact clean SHA. Repair every locally reproducible failure and rerun the full command set on each changed candidate. No push or PR exists.
 
 
-# C229 coverage-registration repair checkpoint - 2026-09-21
+# C229 coverage-registration repair checkpoint — 2026-09-21
 
 - On clean candidate `d95df8790ba8911e0001c073202d9007406a2ba3`, `make prepush` passed formatting, architecture (208 packages / 1,935 files / 28,479 functions), Wire regeneration/checks, vet, lint, staticcheck, test partition, tools, factory scripts, build, and all six module test suites. It stopped at `coverage-registration` because the new service packages `devices/internal/endpoint` and `session/internal/live/sessionwrap` were missing from the coverage manifest.
 - Existing focused package tests measure endpoint validation at 68.8% through `devices/internal/media` tests and session wrappers at 34.4% through live service tests. Registered each package at its measured existing coverage floor; no tests or runtime code were added for registration.
 - Next: verify registration, commit this repair/checkpoint, then rerun `make prepush` and all C229-05 functional, integration, race, hermetic, and Wire commands on that exact clean commit. Repair locally and repeat the full gate for every changed candidate. No push or PR exists.
+
+
+# C229 coverage-floor behavior-test repair checkpoint — 2026-09-21
+
+- `make prepush` on `aaa8993b66563833dd1177a223e7dcb4fd0a5022` passed the earlier stages and full module tests, then reported three measured coverage-floor regressions: CLI device validation 69.00% / 75.00%, device media 82.40% / 85.00%, and session observations 78.00% / 85.00%.
+- Added public behavior tests for structured CLI conflict identity, device selection plus queued-versus-rendered playback state with bounded pump cancellation, and ordered live trace events, copied payloads, bounded commit retention, terminal error classification, and final token/modality accounting. Focused package tests pass (22 tests across three packages); session observations measure 92.0% in the focused run. `make architecture-size-check` passes (208 packages, 1,936 files, 28,492 functions); `git diff --check` passes.
+- No coverage floor was lowered and no production behavior changed for this repair. The complete aggregate coverage result is still pending; no push or PR exists. Next: commit these behavior tests and checkpoint, then run `make prepush` and every C229-05 functional, integration, race, hermetic, and Wire command on that exact clean candidate. Repair any aggregate floor or other locally reproducible failure and rerun the full command set on each changed SHA before push/PR.

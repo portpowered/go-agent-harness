@@ -5,11 +5,76 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
+
+func TestFactoryReportsSelectedDevicesAndQueuedPlayback(t *testing.T) {
+	registry, err := devicegw.NewVirtualRegistry(devicegw.DefaultVirtualBackendConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	handle, err := NewFactory(registry, mixer.DefaultFormat()).Open(context.Background(), devices.Request{
+		InputDevice:     "virtual:input",
+		OutputDevice:    "virtual:output",
+		CaptureEnabled:  true,
+		PlaybackEnabled: true,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if err := handle.Close(); err != nil {
+			t.Errorf("Close() error = %v", err)
+		}
+	})
+
+	selection, ok := handle.(devices.DeviceSelectionProvider)
+	if !ok {
+		t.Fatal("device handle does not expose its selected device IDs")
+	}
+	inputID, outputID := selection.SelectedDeviceIDs()
+	if inputID != "virtual:input" || outputID != "virtual:output" {
+		t.Fatalf("selected devices = (%q, %q), want (virtual:input, virtual:output)", inputID, outputID)
+	}
+
+	statsProvider, ok := handle.(devices.PlaybackStatsProvider)
+	if !ok {
+		t.Fatal("device handle does not expose its playback queue snapshot")
+	}
+	deviceID, stats := statsProvider.PlaybackStats()
+	if deviceID != outputID || stats.QueuedSamples != 0 {
+		t.Fatalf("initial playback snapshot = (%q, %+v), want selected output and empty queue", deviceID, stats)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	inbound := &oneFrameThenBlockedInbound{
+		frame:     audio.PCMFrame{Samples: []int16{1, -1}, EndOfResponse: true},
+		readAgain: make(chan struct{}),
+	}
+	pumpResult := make(chan error, 1)
+	go func() { pumpResult <- handle.Media().Playback.Pump(ctx, inbound) }()
+	select {
+	case <-inbound.readAgain:
+	case <-time.After(time.Second):
+		t.Fatal("playback pump did not admit the frame before the deadline")
+	}
+	deviceID, stats = statsProvider.PlaybackStats()
+	if deviceID != outputID || stats.QueuedSamples != 2 {
+		t.Fatalf("queued playback snapshot = (%q, %+v), want two admitted samples", deviceID, stats)
+	}
+	if stats.RenderedSamples != 0 || stats.CallbackCount != 0 {
+		t.Fatalf("queue admission reported device consumption: %+v", stats)
+	}
+	cancel()
+	if err := <-pumpResult; !errors.Is(err, context.Canceled) {
+		t.Fatalf("Playback.Pump() after cancellation = %v, want context.Canceled", err)
+	}
+}
 
 func TestFactoryClosesCaptureWhenPlaybackAdmissionFails(t *testing.T) {
 	inner, err := devicegw.NewVirtualRegistry(devicegw.DefaultVirtualBackendConfig())
@@ -185,3 +250,24 @@ func (r *registryStub) Open(id devicegw.DeviceID) (devicegw.OpenedDevice, error)
 }
 
 var _ devicegw.DeviceRegistry = (*registryStub)(nil)
+
+type oneFrameThenBlockedInbound struct {
+	frame     audio.PCMFrame
+	sent      bool
+	readAgain chan struct{}
+}
+
+func (i *oneFrameThenBlockedInbound) ReadFrame(ctx context.Context) (audio.PCMFrame, error) {
+	if !i.sent {
+		i.sent = true
+		return i.frame, nil
+	}
+	select {
+	case i.readAgain <- struct{}{}:
+	default:
+	}
+	<-ctx.Done()
+	return audio.PCMFrame{}, ctx.Err()
+}
+
+func (*oneFrameThenBlockedInbound) Close() error { return nil }
