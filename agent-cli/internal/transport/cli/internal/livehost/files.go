@@ -243,28 +243,34 @@ func (p *FilePorts) Close() error {
 	if p == nil {
 		return nil
 	}
-	p.once.Do(func() {
-		var errs []error
-		if p.Output != nil && p.Output.Sink != nil {
-			errs = append(errs, p.Output.Sink.Close())
-		}
-		if p.Input != nil && p.Input.Source != nil {
-			errs = append(errs, p.Input.Source.Close())
-		}
-		for index := range p.InputTurns {
-			if p.InputTurns[index].Source != nil {
-				errs = append(errs, p.InputTurns[index].Source.Close())
-			}
-		}
-		for index := range p.InputInterruptions {
-			if p.InputInterruptions[index].Source != nil {
-				errs = append(errs, p.InputInterruptions[index].Source.Close())
-			}
-		}
-		p.closeErr = errors.Join(errs...)
-	})
+	p.once.Do(func() { p.closeErr = closeFilePortSources(p) })
 	return p.closeErr
 }
+
+func closeFilePortSources(ports *FilePorts) error {
+	var errs []error
+	if ports.Output != nil {
+		errs = appendFilePortClose(errs, ports.Output.Sink)
+	}
+	if ports.Input != nil {
+		errs = appendFilePortClose(errs, ports.Input.Source)
+	}
+	for index := range ports.InputTurns {
+		errs = appendFilePortClose(errs, ports.InputTurns[index].Source)
+	}
+	for index := range ports.InputInterruptions {
+		errs = appendFilePortClose(errs, ports.InputInterruptions[index].Source)
+	}
+	return errors.Join(errs...)
+}
+
+func appendFilePortClose(errs []error, closer interface{ Close() error }) []error {
+	if closer == nil {
+		return errs
+	}
+	return append(errs, closer.Close())
+}
+
 func selectFileDevices(physical, finite runtimeDevices.Service, deviceRequest runtimeDevices.Request, filePorts *FilePorts) (runtimeDevices.Service, runtimeDevices.Request) {
 	if filePorts == nil {
 		return physical, deviceRequest

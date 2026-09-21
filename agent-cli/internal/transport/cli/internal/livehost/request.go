@@ -66,38 +66,11 @@ type requestInputs struct {
 }
 
 func resolveRequestInputs(ctx context.Context, request serviceSession.Request, replayInspection *runtimeReplay.CaptureInspection, deps RequestDependencies) (requestInputs, error) {
-	loaded, err := requireLiveConfig(request)
+	inputs, err := resolveProviderInputs(ctx, request, replayInspection, deps)
 	if err != nil {
 		return requestInputs{}, err
 	}
-	inspection, err := admitReplay(ctx, request.ReplayPath, replayInspection, deps.ReplayService)
-	if err != nil {
-		return requestInputs{}, err
-	}
-	if inspection != nil {
-		request.ReplayPath = inspection.CapturePath
-	}
-	effective := loaded.ApplyOverrides("", request.Model, request.Provider, request.BaseURL)
-	providerInspection := inspection
-	if inspection != nil && inspection.Kind == runtimeReplay.CaptureKindTurn {
-		// Turn captures replay a provider-neutral message stream. Their recorded
-		// provider name is metadata, not a live provider selection.
-		providerInspection = nil
-	}
-	provider, model, apiKey, baseURL, err := ProviderValues(effective, request, providerInspection)
-	if err != nil {
-		return requestInputs{}, err
-	}
-	if deps.ModelAdmission != nil && (inspection == nil || inspection.Kind != runtimeReplay.CaptureKindTurn) {
-		if err := deps.ModelAdmission.ValidateSessionModel(provider, model); err != nil {
-			return requestInputs{}, err
-		}
-	}
-	capabilities, err := buildCapabilities(loaded, request, deps)
-	if err != nil {
-		return requestInputs{}, err
-	}
-	instructions, err := resolveAndComposeInstructions(ctx, request, capabilities, deps)
+	instructions, err := resolveAndComposeInstructions(ctx, request, inputs.capabilities, deps)
 	if err != nil {
 		return requestInputs{}, err
 	}
@@ -106,19 +79,19 @@ func resolveRequestInputs(ctx context.Context, request serviceSession.Request, r
 	if err != nil {
 		return requestInputs{}, err
 	}
-	replayPlan, requestPrompt, promptPresent, err := buildReplayPlan(request, inspection, requestPrompt, promptPresent)
+	replayPlan, requestPrompt, promptPresent, err := buildReplayPlan(request, inputs.inspection, requestPrompt, promptPresent)
 	if err != nil {
 		return requestInputs{}, err
 	}
-	inputRate, outputRate := replayRates(replayPlan, request, inspection)
-	return requestInputs{
-		effective: effective, inspection: inspection, provider: provider, model: model, baseURL: baseURL,
-		credentialRef: resolveCredentialReference(apiKey, deps.CredentialReference), instructions: instructions,
-		capabilities: capabilities, requestPrompt: requestPrompt, promptPresent: promptPresent,
-		openingParts: openingParts, openingResponse: openingResponse, replayPlan: replayPlan,
-		inputRate: inputRate, outputRate: outputRate,
-		replayFinish: inspection != nil && (replayPlan == nil || replayPlan.StopAfterResponse),
-	}, nil
+	inputs.instructions = instructions
+	inputs.requestPrompt = requestPrompt
+	inputs.promptPresent = promptPresent
+	inputs.openingParts = openingParts
+	inputs.openingResponse = openingResponse
+	inputs.replayPlan = replayPlan
+	inputs.inputRate, inputs.outputRate = replayRates(replayPlan, request, inputs.inspection)
+	inputs.replayFinish = inputs.inspection != nil && (replayPlan == nil || replayPlan.StopAfterResponse)
+	return inputs, nil
 }
 
 func resolveAndComposeInstructions(ctx context.Context, request serviceSession.Request, capabilities *runtimeSession.LiveCapabilities, deps RequestDependencies) (string, error) {

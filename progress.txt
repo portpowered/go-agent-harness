@@ -4279,3 +4279,23 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   exact measured baseline reductions/stale entries. Do not run the PR preflight
   as complete or submit until all 194 findings and the full C229 command list
   pass on one clean candidate SHA.
+
+# C229 livehost size-gate repair checkpoint 2026-09-20
+
+- Refactored `FilePorts.Close` to close its host-owned input/output sources via
+  one nil-safe helper, and split provider selection/model admission from the
+  rest of request assembly. The latter stays within existing `livehost` files;
+  no new adapter or test file was added.
+- `rtk go test ./agent-cli/internal/transport/cli/internal/livehost -count=1
+  -timeout=180s` passes all 24 tests. `rtk proxy git diff --check` passes.
+  `rtk make architecture-check` passed at 207 packages, 1,931 files and 28,405
+  functions.
+- The latest `rtk make architecture-size-check` run reports 191 issues:
+  114 baseline drifts, 52 stale entries, 8 cognitive, 3 cyclomatic, 9 file-line,
+  2 function-line, 2 function-statement and 1 package-file. Exact log:
+  `1789949360_make_architecture-size-check.log`. The last full `rtk make
+  prepush` at `7845eb42a` failed the size lane at 194 issues; the subsequent
+  focused size-gate run reflects the three committed-and-uncommitted repairs.
+- Next: continue addressing the remaining size findings, update baselines only
+  for proven reductions and remove stale entries, then run the entire C229 local
+  preflight on the exact clean candidate before any PR or push.
