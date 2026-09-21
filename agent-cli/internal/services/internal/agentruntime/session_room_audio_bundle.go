@@ -1,12 +1,40 @@
 package agentruntime
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
+	"strings"
 	"time"
 
-	"encoding/json"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	roomanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
+)
+
+type RoomReplayPlan = roomreplay.RoomReplayPlan
+type RoomReplayArtifact = roomreplay.RoomReplayArtifact
+type RoomReplayParticipant = roomreplay.RoomReplayParticipant
+type RoomReplayPCMFormat = roomreplay.RoomReplayPCMFormat
+type RoomReplayTimelineEvent = roomreplay.RoomReplayTimelineEvent
+type roomReplayJSONObject map[string]json.RawMessage
+
+const (
+	RoomReplayBundleSchemaVersion     = roomreplay.RoomReplayBundleSchemaVersion
+	RoomReplayBundleManifestPath      = roomreplay.RoomReplayBundleManifestPath
+	RoomReplayBundleMismatch          = roomreplay.RoomReplayBundleMismatch
+	RoomReplayBundleIncomplete        = roomreplay.RoomReplayBundleIncomplete
+	ErrInvalidRoomReplayBundle        = roomreplay.ErrInvalidRoomReplayBundle
+	ErrRoomReplayBundleIncomplete     = roomreplay.ErrRoomReplayBundleIncomplete
+	roomReplayArtifactRoleWAV         = roomreplay.ArtifactRoleWAV
+	roomReplayArtifactRoleDiagnostics = roomreplay.ArtifactRoleDiagnostics
+	roomReplayArtifactRoleDeltas      = roomreplay.ArtifactRoleDeltas
+	roomReplayArtifactRoleSentPCM     = roomreplay.ArtifactRoleSentPCM
+	roomReplayArtifactRoleReceivedPCM = roomreplay.ArtifactRoleReceivedPCM
+	roomReplayArtifactRoleEvents      = roomreplay.ArtifactRoleEvents
+	roomReplayArtifactRoleCapture     = roomreplay.ArtifactRoleCapture
 )
 
 var (
@@ -154,8 +182,8 @@ func (b RoomReplayAudioBundle) AnalysisConfig() roomanalysis.PCM16RoomAnalysisCo
 // bundle. The existing LoadRoomReplayPlan is deliberately the first step so
 // no audio property is evaluated against an untrusted or hash-inconsistent
 // bundle.
-func LoadRoomReplayAudioBundle(bundle string) (RoomReplayAudioBundle, error) {
-	plan, err := LoadRoomReplayPlan(bundle)
+func LoadRoomReplayAudioBundle(replayService roomreplay.Service, bundle string) (RoomReplayAudioBundle, error) {
+	plan, err := loadRoomReplayPlan(replayService, bundle)
 	if err != nil {
 		return RoomReplayAudioBundle{}, err
 	}
@@ -226,9 +254,147 @@ func LoadRoomReplayAudioBundle(bundle string) (RoomReplayAudioBundle, error) {
 	return result, nil
 }
 
-// ValidateRoomReplayAudioBundle is the admission-only form of
-// LoadRoomReplayAudioBundle.
-func ValidateRoomReplayAudioBundle(bundle string) error {
-	_, err := LoadRoomReplayAudioBundle(bundle)
+func loadRoomReplayPlan(replayService roomreplay.Service, bundle string) (RoomReplayPlan, error) {
+	if replayService == nil {
+		return RoomReplayPlan{}, errors.New("room replay service is required")
+	}
+	return replayService.Load(bundle)
+}
+
+// ValidateRoomReplayAudioBundle is the admission-only form of LoadRoomReplayAudioBundle.
+func ValidateRoomReplayAudioBundle(replayService roomreplay.Service, bundle string) error {
+	_, err := LoadRoomReplayAudioBundle(replayService, bundle)
 	return err
+}
+
+func resolveRoomReplayPlan(opts RoomRunOptions) (RoomReplayPlan, bool, error) {
+	if opts.ReplayPlan != nil {
+		plan := *opts.ReplayPlan
+		if !plan.Finalized || len(plan.Participants) < 2 {
+			return RoomReplayPlan{}, true, &roomreplay.RoomReplayBundleError{Kind: roomreplay.RoomReplayBundleIncomplete, Field: "replay_plan", Expected: "admitted finalized plan with at least two participants", Actual: "incomplete", Err: roomreplay.ErrRoomReplayBundleIncomplete}
+		}
+		return plan, true, nil
+	}
+	path := strings.TrimSpace(opts.ReplayPath)
+	if path == "" {
+		return RoomReplayPlan{}, false, nil
+	}
+	if opts.ReplayService == nil {
+		return RoomReplayPlan{}, true, errors.New("room replay service is required for replay path admission")
+	}
+	plan, err := opts.ReplayService.Load(path)
+	return plan, true, err
+}
+
+func buildRoomReplaySchedule(ctx context.Context, replayMode bool, opts RoomRunOptions, plans []*roomParticipantPlan) (roomreplay.Schedule, error) {
+	if !replayMode || opts.ReplayPlan == nil {
+		return nil, nil
+	}
+	if opts.ReplayService == nil {
+		return nil, errors.New("room replay service is required")
+	}
+	format := roomFormatForOptions(opts)
+	request := roomreplay.BuildRequest{
+		SourceFormat: roomreplay.SourcePCM16Format{
+			SampleRate: opts.ReplayPlan.PCMFormat.SampleRate, Channels: opts.ReplayPlan.PCMFormat.Channels,
+			SampleWidthBits: opts.ReplayPlan.PCMFormat.SampleWidthBits, SampleWidthBit: opts.ReplayPlan.PCMFormat.SampleWidthBit,
+			ByteOrder: opts.ReplayPlan.PCMFormat.ByteOrder, Encoding: opts.ReplayPlan.PCMFormat.Encoding,
+		},
+		TargetFormat: roomreplay.PCM16Format{SampleRate: format.SampleRate, Channels: format.Channels, FrameDuration: format.FrameDuration},
+	}
+	for _, plan := range plans {
+		if plan == nil || roomParticipantIsHuman(plan) {
+			continue
+		}
+		recorded, ok := opts.ReplayPlan.Participant(plan.manifest.ID)
+		if !ok {
+			return nil, fmt.Errorf("replay participant %q is missing", plan.manifest.ID)
+		}
+		sent, ok := replayArtifactByRole(recorded, roomreplay.ArtifactRoleSentPCM)
+		if !ok {
+			return nil, fmt.Errorf("replay participant %q sent PCM is missing", plan.manifest.ID)
+		}
+		request.Participants = append(request.Participants, roomreplay.Participant{ID: recorded.ID, CapturePath: recorded.CapturePath, SentPCMPath: sent.AbsolutePath})
+		request.TargetIDs = append(request.TargetIDs, plan.manifest.ID)
+	}
+	for _, event := range opts.ReplayPlan.Timeline {
+		request.Timeline = append(request.Timeline, roomreplay.TimelineEvent{Sequence: event.Sequence, OffsetMS: event.OffsetMS, OffsetNanos: event.OffsetNanos, Type: event.Type, ParticipantID: event.ParticipantID})
+	}
+	return opts.ReplayService.Build(ctx, request)
+}
+
+func replayArtifactByRole(participant roomreplay.RoomReplayParticipant, role string) (roomreplay.RoomReplayArtifact, bool) {
+	for _, artifact := range participant.Artifacts {
+		if artifact.Role == role {
+			return artifact, true
+		}
+	}
+	return roomreplay.RoomReplayArtifact{}, false
+}
+
+func roomReplayObject(data []byte) (roomReplayJSONObject, error) {
+	var object roomReplayJSONObject
+	if err := json.Unmarshal(data, &object); err != nil {
+		return nil, err
+	}
+	if object == nil {
+		return nil, errors.New("JSON object is null")
+	}
+	return object, nil
+}
+
+func firstRoomReplayStringField(object, fallback roomReplayJSONObject, names ...string) (string, bool, error) {
+	for _, source := range []roomReplayJSONObject{object, fallback} {
+		if source == nil {
+			continue
+		}
+		for _, name := range names {
+			raw, ok := source[name]
+			if !ok {
+				continue
+			}
+			var value string
+			if err := json.Unmarshal(raw, &value); err != nil {
+				return "", true, err
+			}
+			return strings.TrimSpace(value), true, nil
+		}
+	}
+	return "", false, nil
+}
+
+func decodeRoomReplayString(raw json.RawMessage) (string, bool) {
+	var value string
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return "", false
+	}
+	return strings.TrimSpace(value), true
+}
+
+func errOrDefault(err, fallback error) error {
+	if err != nil {
+		return err
+	}
+	return fallback
+}
+
+func findRoomReplayArtifact(artifacts []RoomReplayArtifact, role string) (RoomReplayArtifact, bool) {
+	for _, artifact := range artifacts {
+		if artifact.Role == role || artifact.Owner == role || artifact.Owner == "room:"+role {
+			return artifact, true
+		}
+	}
+	return RoomReplayArtifact{}, false
+}
+
+func newRoomReplayBundleError(kind roomreplay.RoomReplayBundleErrorKind, field, artifact, expected, actual string, cause error) error {
+	if kind == "" {
+		kind = roomreplay.RoomReplayBundleMismatch
+	}
+	if kind == roomreplay.RoomReplayBundleIncomplete {
+		cause = gateway.NewReplayIncompleteError(expected, actual, cause)
+	} else {
+		cause = gateway.NewReplayMismatchError(expected, actual, cause)
+	}
+	return &roomreplay.RoomReplayBundleError{Kind: kind, Field: field, Artifact: artifact, Expected: expected, Actual: actual, Err: cause}
 }
