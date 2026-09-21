@@ -6076,3 +6076,34 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
 - `rtk make verify-architecture` remains red with 261 findings at `/Users/abdifamily/Library/Application Support/rtk/tee/1790030671_make_verify-architecture.log`. The new replay-root/free-function, root net/http, provider Wire-import, and provider HTTP complexity findings are cleared. Remaining output is baseline drift (including the two modified customer-simulation files), known pre-existing service-public/Wire and complexity findings, and unrelated predecessor debt; no arbitrary line-floor or baseline edit was made.
 - Rechecked retirement state on the committed candidate: all seven integrated-main deletion targets and six checkpoint-only replacements are absent (13/13), `session_browser_recording.go` is unchanged from `origin/main`, and named adapter inventory remains 0 files / 0 physical lines. The vertical is not complete: C229/C268/C269/C274 caller releases or planner handoff, public live-route repairs, remaining direct-reader cutovers, the exact C276-02 through C276-06 gate, `make prepush`, push, PR, and SCRIPT handoff remain open.
 - Exact next action: retain C276 ownership, consume only exact reviewed C229/C268/C269/C274 releases or planner-recorded handoffs, integrate the remaining production callers/direct readers and public routes, add only the bounded stateless transport adapter if an actual caller requires it, then run every planned C276-02 through C276-06 command plus `make prepush` on one clean exact candidate before any push. Decision remains CONTINUE.
+
+# C276 current-turn checkpoint - replay architecture repair - 2026-09-21
+
+- Reverified the admitted `audio-runtime` task and exact branch before editing;
+  the worktree was clean at `823814061`, and no predecessor or peer worktree
+  was modified. Canonical review history still has no concluded C276 finding;
+  C229/C268/C269/C274 caller releases remain unavailable, with C274 successor
+  work still in SCRIPT/CI flow and no reviewed seam released to C276.
+- Committed `e42f91f1778cca14f24929cbfb114e06e6e16660` to finish the owned
+  replay architecture repair. Capture admission/integrity validation is split
+  into bounded helpers, stream-message value decoding is partitioned below the
+  complexity/size limits, and replay probe loading/execution/export follows
+  bounded helpers without changing the public errors or capture wire format.
+  The existing public integrity regression remains in place and is explicitly
+  registered as a replay Wire-composition test; no test was moved or weakened.
+- Exact checks passed on the changed source: `rtk go test -count=1
+  ./go-agent-runtime/services/replay/...` (115 tests / 9 packages), `rtk go
+  test -race -count=1 ./go-agent-runtime/services/recording/...
+  ./go-agent-runtime/services/replay/...` (207 tests / 13 packages), `rtk make
+  wire-check` (all generated Wire packages completed with no tracked changes),
+  and `rtk git diff --check`. The full architecture gate remains red only on
+  246 inherited baseline/peer findings; the refreshed report has no
+  `services/recording` or `services/replay` findings.
+- Retirement remains 13/13 absent, browser boundary unchanged, and adapters
+  remain 0 files / 0 physical lines. No C276 caller cutover, final WebMCP
+  evidence, `make prepush`, push, PR update, or SCRIPT handoff is claimed.
+  Exact next action: retain ownership and consume only reviewed C229/C268/C269/
+  C274 releases or planner-recorded handoff, then integrate their released
+  caller seams, finish direct-reader/caller cutover and actual adapter need,
+  and run the complete exact-head C276-02 through C276-06 command set plus
+  `make prepush` before any push. Decision remains CONTINUE.
