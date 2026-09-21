@@ -5490,3 +5490,56 @@ candidate before pushing it and handing it to SCRIPT CI.
   `make prepush` plus every planned C271 functional, integration, race,
   hermetic, Wire, embedding, caller/deletion, ancestry, and cleanliness gate on
   one exact clean candidate before push and SCRIPT CI handoff.
+
+
+### C271 focused audit and current release checkpoint — 2026-09-21
+
+- Re-read the operating policy and implementation handoff. From `FACTORY_ROOT`,
+  `project-control.py verify-work --type task --name
+  audio-runtime-c271-recover-selfplay-retirement` returned `admitted` for
+  `audio-runtime/audio-runtime-v1`; `prd.json.branchName` matches this isolated
+  worktree. Fetched `origin/main=b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`.
+  Candidate `cc6a3e8dbfe3a5d7fe1a8534a167eb61591ac8e2` is clean, with startup
+  integration `8bdafc7f947a3a2c9856220abdc539437035bd21` and current main as
+  ancestors. Preserved C249 is clean at `86a1eed17b099d510b39ce3d3b4ee7d8f7998881`
+  and contains C220 `1bf045dd8`; C249 is not yet an ancestor of C271 and must be
+  reconciled without rewriting either worktree.
+- Canonical `~default` still reports C248 `work-task-45` and C269 `work-task-101`
+  as `init` / `PROCESSING`, with RUNNING scoped worker sessions. C248 remains
+  dirty at `cfadae4fa9156cfc235811fe1e0c01509ea48996` in session-diagnostics and
+  session-turn paths. C269 remains dirty at
+  `d792accaf8244898f559962ae371e06263095a9b` in room evidence, rooms Wire, and
+  embedding paths. Both owners' exact seams remain frozen. The latest concluded
+  review is C259 `work-review-78`; its four actionable findings concern bounded
+  room-evidence admission, recorder-failure degradation, integrated room replay,
+  and exact-head preflight. It identifies no self-play-specific defect.
+- On exact candidate `cc6a3e8dbfe3a5d7fe1a8534a167eb61591ac8e2`,
+  `rtk go test -count=1 -timeout=180s ./go-agent-runtime/services/selfplay/...`
+  passed 26 tests / 3 packages; the matching `-race` command passed 26 / 3;
+  `rtk go test -count=10 -timeout=180s ./go-agent-runtime/services/selfplay/... -run
+  '(Cancel|Duration|Shutdown|Stop|Failure)'` passed 180 / 3. The service boundary
+  scan for CLI imports, legacy runtime imports, and `func init` returned no
+  matches; `git diff --check` passed. Production census still finds CLI/Wire,
+  transport, legacy model/live/playback, and room evidence consumers; room
+  evidence overlaps C269 ownership.
+- The exact C271 legacy cluster remains present: `selfplay_service.go` (53),
+  `session_self_play.go` (641), and `session_self_play_evidence.go` (716),
+  3 files / 1,410 lines. The obsolete `agent-cli/internal/services/selfplay`
+  projection is 68 lines and the current transport file is 85 lines with policy,
+  so it is not a compliant adapter. The preserved C249 checkpoint has all three
+  owned files absent and a one-file / 84-line stateless adapter; its self-play
+  service delta is limited to `conversation.go` and
+  `conversation_coordination.go` (4 insertions / 19 deletions) plus 179 Wire
+  test lines. C271 must reconcile that behavior and remove the obsolete
+  projection after C248/C269 releases. `session_room_evidence_files.go` is already
+  absent and receives no deletion credit.
+- No C271 production code changed. No `make prepush`, PR, push, or SCRIPT handoff
+  is claimed because C271 still lacks the C249 ancestry, complete caller cutover,
+  exact three-file deletion, projection deletion, and compliant adapter. Exact
+  next action: keep the C248/C269 shared paths untouched; refresh their canonical
+  reviewed/released state. When both releases are available, fetch current main,
+  preserve C249/C220 ancestry, reconcile the self-play behavior through the public
+  service contract, cut over every named and search-discovered caller, delete the
+  projection and exact three-file cluster, verify one stateless adapter within
+  300 lines, then run `make prepush` and every C271-06 local gate on one exact
+  clean candidate before push and SCRIPT handoff.
