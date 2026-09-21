@@ -4411,3 +4411,33 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   replay, drain, self-play, and current RTC test-file drift; rerun the size
   gate, then run the complete exact-candidate C229 local preflight before PR or
   push.
+
+# C229 RTC capture finalization checkpoint — 2026-09-20
+
+- Admission remains `audio-runtime-c229-recover-audio-device-rtc-retirement`;
+  `prd.json.branchName` matches this isolated branch. `git fetch origin main`
+  refreshed `origin/main` and `FETCH_HEAD` to
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`. The candidate at
+  `50c9a9ce0d22bb030c51de91c0cd15be82927eac` remains a descendant of the C218
+  checkpoint, startup integration revision, planning main and fetched main;
+  the worktree is clean. All ten exact legacy production paths remain absent,
+  with only `audio_adapter.go` (19 lines) and `rtc_adapter.go` (13 lines), 32
+  lines total.
+- The prior C229 review list was empty. Historical C189 PR `#530` is open and
+  has no submitted reviews or comments. No C229 PR or push exists.
+- Consolidated duplicate RTC recording finalization in
+  `session_runtime_rtc.go`; provider announcements, flush behavior and final
+  output remain the same. Command: `rtk go test ./agent-cli/internal/services/internal/agentruntime -run 'TestPlanSessionRuntime_WebRTCDispatchesThroughRuntimeFactory|TestSessionRTCRuntime_' -count=1 -timeout=240s`; 7 tests in 1 package passed. `rtk git diff --check` passed. The verified `planWebRTCSessionRuntime` statement count fell from 67 to 63, and only that exact lower baseline value was recorded.
+- `rtk make architecture-size-check` still fails with 40 measured baseline
+  drifts across 208 packages. Remaining highest-count source measurements are
+  `session_runtime_plan.go` (+46 lines), `session_room_run.go` (+43),
+  `session_runtime_rtc_test.go` (+29), `session_room_planning.go` (+14), and
+  `session_self_play.go` (+11); the complete current list is in the command
+  output. No ceiling was raised. This keeps `make prepush` and the C229-05
+  preflight incomplete.
+- Next: repair the remaining source and function drifts with behavior-preserving
+  simplifications, ratchet only actual reductions and remove only exact stale
+  baseline entries; rerun `rtk make architecture-size-check` until clean, then
+  run `make prepush` and every C229-05 functional, integration, race, hermetic
+  and Wire command on one exact clean candidate before opening/updating a PR or
+  pushing.
