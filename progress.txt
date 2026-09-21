@@ -5141,3 +5141,52 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   over every production caller, delete the obsolete projection and exact
   1,410-line cluster, verify the stateless adapter cap, then run `make prepush`
   and every planned exact-head C271 gate before pushing for SCRIPT CI.
+||||||| parent of 57faba95d (audio-runtime: verify selfplay failure precedence)
+
+# C271 first-failure public behavior checkpoint — 2026-09-21
+
+- Reverified `project-control.py verify-work --type task --name
+  audio-runtime-c271-recover-selfplay-retirement`: admitted for the sole
+  `audio-runtime` project. `prd.json.branchName` matches
+  `codex/audio-runtime-c271-recover-selfplay-retirement`. Fetched
+  `origin/main=b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`; it and startup
+  integration `8bdafc7f947a3a2c9856220abdc539437035bd21` remain ancestors of
+  this candidate.
+- The previous checkpoint records no concluded C271 review. The concluded
+  `work-review-78` for C259 covers room-evidence bounds, failure degradation,
+  public room replay and exact-head preflight; those findings do not identify
+  self-play service repairs. No PR is listed for either C248 or C269, and both
+  peer worktrees remain dirty on their owned branches. C248 still edits
+  `agent-cli/internal/services/internal/agentruntime/session_live.go`; C269
+  retains its room-evidence caller/service changes. Neither peer worktree or
+  shared seam was modified.
+- Added the public Wire-level
+  `TestSelfPlayServicePreservesFirstMeaningfulFailure`: the customer stream
+  fails first and the assistant reports a later failure after cancellation; the
+  public error and customer terminal result retain the first cause. The
+  production service package scan finds no CLI, legacy `agentruntime`, or
+  package-init dependency.
+- Checks pass on the current source tree:
+  `rtk go test -timeout=3m -count=1 ./go-agent-runtime/services/selfplay/...`
+  (25 tests / 3 packages), `rtk go test -race -timeout=5m -count=1
+  ./go-agent-runtime/services/selfplay/...` (25 / 3), `rtk go test
+  -timeout=5m -count=10 ./go-agent-runtime/services/selfplay/... -run
+  '(Cancel|Duration|Shutdown|Stop|Failure)'` (170 / 3), and
+  `rtk git diff --check`.
+- The legacy inventory remains 106 production files / 39,329 physical lines.
+  The complete owned cluster is still present: `selfplay_service.go` (53),
+  `session_self_play.go` (641) and `session_self_play_evidence.go` (716),
+  totaling 1,410 lines. The transport command is one 85-line production file,
+  but still imports the CLI projection and duplicates defaults/persona/seed
+  policy; it is not yet the final stateless adapter. Caller census still finds
+  `servicetest/runtime.go`, root service Wire, transport session and
+  observability, generated root Wire, legacy live/model/playback-diagnostic
+  callers, and room error/evidence callers.
+- No caller cutover or deletion, `make prepush`, full planned preflight, push
+  or PR handoff has occurred. Exact next action: keep the active C248/C269
+  shared seams untouched; continue only disjoint public service/caller audit
+  until those exact peer changes are reviewed and released. Then fetch current
+  main, reconcile C249/C220 ancestry and both releases additively, cut over the
+  full caller census, remove the projection/helper and complete 1,410-line
+  cluster, prove the sole one-file/300-line adapter cap, and run the exact-head
+  full local preflight before opening/updating the PR.
