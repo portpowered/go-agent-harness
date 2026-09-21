@@ -25,8 +25,8 @@ import (
 	runtimeRecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
 	runtimeSessionWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
