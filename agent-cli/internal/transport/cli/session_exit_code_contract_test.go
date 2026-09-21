@@ -93,12 +93,16 @@ func TestSessionPromptOnlyExitsNonZeroAndNamesTheProblem(t *testing.T) {
 func TestSessionAudioInMissingFileExitsNonZeroAndSaysFileDoesNotExist(t *testing.T) {
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = t.TempDir()
-	command := NewSessionCommand(flags.NewAskFlags(), globalFlags, newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}}), nil).Generate()
+	configYAML := "model:\n  provider: openai\n  openai:\n    model: gpt-realtime\n    api_key: test-key\n"
+	if err := os.WriteFile(filepath.Join(globalFlags.ConfigDirPath, config.ConfigFileName), []byte(configYAML), 0o600); err != nil {
+		t.Fatalf("write session config: %v", err)
+	}
+	command := newTestLiveSessionCommand(flags.NewAskFlags(), globalFlags, nil, nil).Generate()
 	var stdout, stderr bytes.Buffer
 	command.SetOut(&stdout)
 	command.SetErr(&stderr)
 	missingPath := t.TempDir() + "/does-not-exist.wav"
-	command.SetArgs([]string{"--audio-in", missingPath})
+	command.SetArgs([]string{"--audio-in", missingPath, "--provider", config.ProviderOpenAI, "--model", "gpt-realtime", "--api-key", "test-key"})
 
 	err := command.ExecuteContext(context.Background())
 	if err == nil {
@@ -195,19 +199,27 @@ func TestSessionPromptWithRecordStillSucceeds(t *testing.T) {
 // continues to run a real session end to end and exit 0.
 func TestSessionAudioInWithExistingFileStillSucceeds(t *testing.T) {
 	artifactRoot := t.TempDir()
+	configDir := filepath.Join(artifactRoot, "config")
+	if err := os.MkdirAll(configDir, 0o700); err != nil {
+		t.Fatalf("create config directory: %v", err)
+	}
+	configYAML := "model:\n  provider: openai\n  openai:\n    model: " + servicetest.DefaultOpenAIRealtimeModel + "\n    api_key: test-key\n"
+	if err := os.WriteFile(filepath.Join(configDir, config.ConfigFileName), []byte(configYAML), 0o600); err != nil {
+		t.Fatalf("write session config: %v", err)
+	}
 	recordPath := filepath.Join(artifactRoot, "audio-in-success.json")
 	audioInPath := filepath.Join(artifactRoot, "in.pcm")
-	if err := os.WriteFile(audioInPath, []byte{0, 0, 1, 0, 2, 0, 3, 0}, 0o600); err != nil {
+	if err := os.WriteFile(audioInPath, []byte{0x10, 0x27, 0xf0, 0xd8}, 0o600); err != nil {
 		t.Fatalf("write audio-in fixture: %v", err)
 	}
-	inferencer := newCLIDurationInferencer(cliDurationPartialEvents())
-	root := newTestRootCommandWithProbeFleetCommand(NewProbeFleetCommand(nil, nil), inferencer)
+	inferencer := newCLIAudioInputSuccessInferencer(cliDurationCompleteEvents())
+	globalFlags := flags.NewGlobalFlags()
+	globalFlags.ConfigDirPath = configDir
+	command := newTestLiveSessionCommand(flags.NewAskFlags(), globalFlags, inferencer, nil).Generate()
 	var stdout, stderr bytes.Buffer
-	root.SetOut(&stdout)
-	root.SetErr(&stderr)
-	root.SetArgs([]string{
-		"--config-dir", filepath.Join(artifactRoot, "config"),
-		"session",
+	command.SetOut(&stdout)
+	command.SetErr(&stderr)
+	command.SetArgs([]string{
 		"--audio-in", audioInPath,
 		"--provider", config.ProviderOpenAI,
 		"--model", servicetest.DefaultOpenAIRealtimeModel,
@@ -216,7 +228,7 @@ func TestSessionAudioInWithExistingFileStillSucceeds(t *testing.T) {
 		"--max-duration", "40ms",
 	})
 
-	if err := root.Execute(); err != nil {
-		t.Fatalf("session --audio-in --record: %v\nstdout=%q\nstderr=%q", err, stdout.String(), stderr.String())
+	if err := command.Execute(); err != nil {
+		t.Fatalf("session --audio-in --record: %v (audio commit sends=%d)\nstdout=%q\nstderr=%q", err, inferencer.audioCommits.Load(), stdout.String(), stderr.String())
 	}
 }

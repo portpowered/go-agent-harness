@@ -10,17 +10,11 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
 func (h *handle) start(runCtx context.Context) error {
 	defer h.startFinish.Do(func() { close(h.startDone) })
-	durationController, err := h.beginDurationController(runCtx)
-	if err != nil {
-		return h.failStart(runCtx, err)
-	}
-	h.mu.Lock()
-	h.durationController = durationController
-	h.mu.Unlock()
 	toolExecutor, toolDefinitions, inferencer, err := h.prepareStart(runCtx)
 	if err != nil {
 		return h.failStart(runCtx, err)
@@ -33,10 +27,17 @@ func (h *handle) start(runCtx context.Context) error {
 	if err != nil {
 		return h.failStart(runCtx, err)
 	}
+	durationTimer, err := h.newDurationTimer()
+	if err != nil {
+		return h.failStart(runCtx, err)
+	}
 	h.prepareReplayCompletion()
 	h.publish(session.LiveEvent{Kind: string(session.LiveEventStarted), SessionID: h.request.SessionID, Critical: true}, false) //nolint:contextcheck // start publication uses the invocation evidence context.
 	watchEvents := capabilityEventStream(runCtx, capabilityWatch)
-	h.launchWorkers(runCtx, loop, watchEvents)
+	if h.captureInterruptionsEnabled() && watchEvents == nil {
+		return h.failStart(runCtx, errors.New("capture interruptions require browser invocation events"))
+	}
+	h.launchWorkers(runCtx, loop, durationTimer, watchEvents)
 	return nil
 }
 
@@ -75,6 +76,8 @@ func (h *handle) buildLoop(inferencer messages.SessionInferencer, toolExecutor m
 		media:             h.media,
 		continuous:        h.request.OutputAudioContinuous,
 		flushOutbound:     h.request.FinishAfterResponse,
+		replayKind:        h.request.Replay.Kind,
+		outputSampleRate:  h.request.OutputAudioSampleRate,
 		requirements:      h.mediaRequirements,
 		onDispatch:        h.observeProviderDispatch,
 		onToolResult:      h.beginToolResultAdmission,
@@ -139,13 +142,11 @@ func (e activeCaptureToolExecutor) Execute(ctx context.Context, call messages.To
 	}
 	return e.inner.Execute(ctx, call)
 }
-
 func configureActiveScheduledAudio(handle session.LiveHandle, active bool) {
 	if runtimeHandle, ok := handle.(interface{ configureActiveScheduledAudio(bool) }); ok {
 		runtimeHandle.configureActiveScheduledAudio(active)
 	}
 }
-
 func (h *handle) configureActiveScheduledAudio(active bool) {
 	if h == nil {
 		return
@@ -154,7 +155,6 @@ func (h *handle) configureActiveScheduledAudio(active bool) {
 	h.activeScheduledAudio = active
 	h.mu.Unlock()
 }
-
 func (h *handle) waitForActiveCaptureTurn(ctx context.Context) error {
 	if h == nil {
 		return nil
@@ -243,6 +243,27 @@ func (e allowlistedToolExecutor) Execute(ctx context.Context, call messages.Tool
 	return e.inner.Execute(ctx, call)
 }
 
+func (h *handle) installLoop(loop *agentloop.AgentLoop) (func(context.Context) <-chan session.LiveCapabilityEvent, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.closed {
+		return nil, session.ErrLiveClosed
+	}
+	h.loop = loop
+	return h.capabilityWatch, nil
+}
+
+func (h *handle) newDurationTimer() (platformclock.Timer, error) {
+	if h.request.MaxDuration <= 0 {
+		return nil, nil
+	}
+	timer := h.scheduler.NewTimer(h.request.MaxDuration)
+	if timer == nil {
+		return nil, fmt.Errorf("create live duration timer: %w", session.ErrLiveSchedulerUnavailable)
+	}
+	return timer, nil
+}
+
 func (h *handle) prepareReplayCompletion() {
 	// An explicit capture source owns the boundary and must send its bytes first.
 	if h.captureSourceIsActive() {
@@ -270,26 +291,42 @@ func capabilityEventStream(ctx context.Context, watch func(context.Context) <-ch
 	return watch(ctx)
 }
 
-type workerPlan struct {
-	capabilityEvents <-chan session.LiveCapabilityEvent
-	replay           bool
-	watchSession     bool
-	watchFirstTurn   bool
-	watchRateLimit   bool
+func (h *handle) captureInterruptionsEnabled() bool {
+	if h == nil {
+		return false
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.captureInterruptionEvent != nil
 }
 
-func (h *handle) makeWorkerPlan(capabilityEvents <-chan session.LiveCapabilityEvent) workerPlan {
+type workerPlan struct {
+	durationTimer     platformclock.Timer
+	capabilityEvents  <-chan session.LiveCapabilityEvent
+	replay            bool
+	watchSession      bool
+	watchFirstTurn    bool
+	watchRateLimit    bool
+	watchProviderLive bool
+}
+
+func (h *handle) makeWorkerPlan(durationTimer platformclock.Timer, capabilityEvents <-chan session.LiveCapabilityEvent) workerPlan {
 	return workerPlan{
-		capabilityEvents: capabilityEvents,
-		replay:           h.request.ReplayPlan != nil && len(h.request.ReplayPlan.AudioTurns) > 0,
-		watchSession:     h.request.RequireSessionUpdated,
-		watchFirstTurn:   h.firstTurnPolicyEnabled(),
-		watchRateLimit:   h.rateLimitRetryEnabled(),
+		durationTimer:     durationTimer,
+		capabilityEvents:  capabilityEvents,
+		replay:            h.request.ReplayPlan != nil && len(h.request.ReplayPlan.AudioTurns) > 0,
+		watchSession:      h.request.RequireSessionUpdated,
+		watchFirstTurn:    h.firstTurnPolicyEnabled(),
+		watchRateLimit:    h.rateLimitRetryEnabled(),
+		watchProviderLive: h.providerLivenessEnabled(),
 	}
 }
 
 func (p workerPlan) count() int {
 	count := 2
+	if p.durationTimer != nil {
+		count++
+	}
 	if p.watchSession {
 		count++
 	}
@@ -302,6 +339,9 @@ func (p workerPlan) count() int {
 	if p.capabilityEvents != nil {
 		count++
 	}
+	if p.watchProviderLive {
+		count++
+	}
 	if p.replay {
 		count++
 	}
@@ -309,6 +349,9 @@ func (p workerPlan) count() int {
 }
 
 func (p workerPlan) launch(h *handle, ctx context.Context, loop *agentloop.AgentLoop) {
+	if p.durationTimer != nil {
+		go h.watchDuration(ctx, p.durationTimer)
+	}
 	if p.watchSession {
 		go h.watchSessionUpdated(ctx)
 	}
@@ -321,6 +364,9 @@ func (p workerPlan) launch(h *handle, ctx context.Context, loop *agentloop.Agent
 	if p.capabilityEvents != nil {
 		go h.consumeCapabilityEvents(ctx, loop, p.capabilityEvents)
 	}
+	if p.watchProviderLive {
+		go h.watchProviderLiveness(ctx)
+	}
 	if p.replay {
 		go h.runReplay(ctx)
 	}
@@ -329,9 +375,10 @@ func (p workerPlan) launch(h *handle, ctx context.Context, loop *agentloop.Agent
 func (h *handle) launchWorkers(
 	ctx context.Context,
 	loop *agentloop.AgentLoop,
+	durationTimer platformclock.Timer,
 	capabilityEvents <-chan session.LiveCapabilityEvent,
 ) {
-	plan := h.makeWorkerPlan(capabilityEvents)
+	plan := h.makeWorkerPlan(durationTimer, capabilityEvents)
 	h.runWG.Add(plan.count())
 	go h.runLoop(ctx, loop)
 	go h.consumeDeltas(ctx, loop)

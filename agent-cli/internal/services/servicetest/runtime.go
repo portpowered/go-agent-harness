@@ -12,6 +12,10 @@ import runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/se
 
 import runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 
+import audioio "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
+
+import sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+
 const BrowserConversationAssistantTurn = impl.BrowserConversationAssistantTurn
 
 type BrowserConversationBrokerCall = impl.BrowserConversationBrokerCall
@@ -72,11 +76,12 @@ const DefaultOpenAIRealtimeModel = impl.DefaultOpenAIRealtimeModel
 var DeriveBrowserConversationCorrections = impl.DeriveBrowserConversationCorrections
 var DeriveBrowserConversationRecovery = impl.DeriveBrowserConversationRecovery
 var ErrInvalidOpenAIRealtimeVoice = sessioncontract.ErrInvalidOpenAIRealtimeVoice
-var ErrRTCSessionMediaUnavailable = impl.ErrRTCSessionMediaUnavailable
 var ErrRoomLaunchPathConflict = runtimeRooms.ErrLaunchPathConflict
 var ErrRoomReplayBundleIncomplete = impl.ErrRoomReplayBundleIncomplete
 var ErrRoomReplaySourceConflict = impl.ErrRoomReplaySourceConflict
-var ErrSessionAudioInputConflict = serviceDevices.ErrSessionAudioInputConflict
+
+const ErrRuntimeAudioInputConflict = serviceDevices.ErrSessionAudioInputConflict
+
 var ErrSessionAudioOutputConflict = serviceDevices.ErrSessionAudioOutputConflict
 var ErrSessionAudioInTurnBargeRequiresSequence = impl.ErrSessionAudioInTurnBargeRequiresSequence
 var ErrSessionAudioResponseIncomplete = impl.ErrSessionAudioResponseIncomplete
@@ -96,12 +101,6 @@ var NewGrokSessionInferencerWithOptions = impl.NewGrokSessionInferencerWithOptio
 const ParticipantTerminationEnded = impl.ParticipantTerminationEnded
 const ParticipantTerminationError = impl.ParticipantTerminationError
 
-type RTCMediaEndpoints = impl.RTCMediaEndpoints
-type RTCMediaSession = impl.RTCMediaSession
-type RTCDeviceBindingRequest = impl.RTCDeviceBindingRequest
-type RTCDeviceBindingError = impl.RTCDeviceBindingError
-
-var PrepareRTCDeviceBindings = impl.PrepareRTCDeviceBindings
 var ValidateSessionAudioDeviceConflicts = serviceDevices.ValidateSessionAudioDeviceConflicts
 
 var RenderBrowserConversationReport = impl.RenderBrowserConversationReport
@@ -111,10 +110,12 @@ var RunSessionWithInstructions = impl.RunSessionWithInstructions
 var RunSessionWithMaxDuration = impl.RunSessionWithMaxDuration
 var RunSessionWithMaxDurationClock = impl.RunSessionWithMaxDurationClock
 
-type ScheduledAudioInput = impl.ScheduledAudioInput
+type RTCMediaEndpoints = sharedaudio.MediaEndpoints
+type RTCMediaSession = sharedaudio.MediaSession
+type ScheduledAudioInput = audioio.ScheduledAudioInput
 type SelfPlayRunOptions = impl.SelfPlayRunOptions
-type SessionAudioInTurnBargeError = impl.SessionAudioInTurnBargeError
-type SessionAudioInput = impl.SessionAudioInput
+type RuntimeAudioInTurnBargeError = sessioncontract.SessionAudioInTurnBargeError
+type SessionAudioInTurnBargeError = sessioncontract.SessionAudioInTurnBargeError
 type SessionTextSeed = impl.SessionTextSeed
 
 const SessionDiagnosticEventFailure = impl.SessionDiagnosticEventFailure

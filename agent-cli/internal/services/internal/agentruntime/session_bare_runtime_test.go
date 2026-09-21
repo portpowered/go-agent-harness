@@ -364,10 +364,6 @@ func TestBareSessionMissingOutputDefaultReleasesInputBeforeProviderSetup(t *test
 	if err == nil || !errors.Is(err, devicegw.ErrNoDefaultDevice) {
 		t.Fatalf("bare missing-output-default error = %v, want no-default error", err)
 	}
-	var bindingErr *agentruntime.RTCDeviceBindingError
-	if !errors.As(err, &bindingErr) || bindingErr.Flag != "--audio-out-device" {
-		t.Fatalf("bare missing-output-default error = %v, want typed output binding error", err)
-	}
 	if inferencer.sessionValue() != nil {
 		t.Fatal("bare missing-output-default path connected a provider session")
 	}

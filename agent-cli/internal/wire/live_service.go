@@ -122,6 +122,7 @@ func liveSessionConfig(request session.LiveRequest, apiKey string, toolDefs []me
 		ReplayPath:                    request.Replay.InputCapturePath,
 		ReplayTiming:                  liveReplayTiming(request.Replay.Timing),
 		RecordPath:                    request.Replay.OutputCapturePath,
+		SessionMessageReplay:          request.Replay.Kind == session.LiveReplayKindTurn,
 	}
 	if request.InputTranscription {
 		config.InputTranscription = &runtimeModels.InputAudioTranscriptionConfig{Enabled: true, Model: request.InputTranscriptionModel}

@@ -35,7 +35,10 @@ func planOpenAIRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 	liveDialer = observeSessionWire(liveDialer, opts)
 	recordingDialer := factory.newRecordingDialer(liveDialer, sessionProviderOpenAI, sessionCfg.Model)
 	clientOwnedAudio := opts.ClientOwnsAudioTurnBoundaries || len(opts.AudioInputs) > 0
-	inputAudioTranscription := resolveInputAudioTranscriptionPolicy(opts, sessionProviderOpenAI, clientOwnedAudio || opts.RTCDeviceBinding.inputSelected())
+	inputAudioTranscription, err := resolveSessionTranscription(opts, sessionProviderOpenAI, clientOwnedAudio || opts.RTCBinding.HasInput())
+	if err != nil {
+		return sessionRuntimePlan{}, err
+	}
 	sessionInferencer, err := factory.newOpenAISessionInferencerForTools(sessionCfg, opts.Voice, recordingDialer, opts.ToolDefinitions, clientOwnedAudio, inputAudioTranscription)
 	if err != nil {
 		return sessionRuntimePlan{}, err
@@ -44,7 +47,7 @@ func planOpenAIRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 		SetSessionTurnDetection(*models.TurnDetectionConfig)
 	}); ok {
 		turnDetection := cloneSessionTurnDetection(opts.TurnDetection)
-		if turnDetection == nil && opts.RTCDeviceBinding.inputSelected() && !clientOwnedAudio {
+		if turnDetection == nil && opts.RTCBinding.HasInput() && !clientOwnedAudio {
 			turnDetection = &models.TurnDetectionConfig{Type: "semantic_vad"}
 		}
 		configurer.SetSessionTurnDetection(turnDetection)
@@ -226,10 +229,12 @@ func replaySessionToolNames(path string, sequence int, session map[string]json.R
 	return names, true, nil
 }
 
+//lint:ignore U1000 package tests exercise the OpenAI factory seam.
 func buildOpenAIRealtimeSessionInferencer(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer) (messages.SessionInferencer, error) {
 	return buildOpenAIRealtimeSessionInferencerWithInputAudioTranscription(sessionCfg, voice, dialer, models.InputAudioTranscriptionConfig{})
 }
 
+//lint:ignore U1000 package tests exercise the OpenAI factory seam.
 func buildOpenAIRealtimeSessionInferencerWithTools(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
 	return buildOpenAIRealtimeSessionInferencerWithToolsAndInputAudioTranscription(sessionCfg, voice, dialer, toolDefinitions, models.InputAudioTranscriptionConfig{})
 }

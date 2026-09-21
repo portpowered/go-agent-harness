@@ -6,6 +6,14 @@ import sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 
 import sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
 
+import runtimeAudioIOWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
+
+import runtimeDevicesWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
+
+import runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+
+import runtimeSessionWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
+
 import (
 	"bytes"
 	"context"
@@ -37,8 +45,8 @@ const (
 )
 
 var (
-	sessionAudioInterruptScheduledPCM = []byte{0x11, 0x00, 0x12, 0x00}
-	sessionAudioInterruptOverlapPCM   = []byte{0x91, 0x00, 0x92, 0x00}
+	sessionAudioInterruptScheduledPCM = []byte{0x11, 0x20, 0x12, 0x20}
+	sessionAudioInterruptOverlapPCM   = []byte{0x91, 0x20, 0x92, 0x20}
 )
 
 type sessionAudioInterruptScenario string
@@ -88,10 +96,10 @@ func runSessionCommandAudioInterruptScenario(t *testing.T, scenario sessionAudio
 	tempDir := t.TempDir()
 	scheduledPath := filepath.Join(tempDir, "scheduled.raw")
 	interruptPath := filepath.Join(tempDir, "interrupt.raw")
-	if err := os.WriteFile(scheduledPath, sessionAudioInterruptScheduledPCM, 0o600); err != nil {
+	if err := os.WriteFile(scheduledPath, bytes.Repeat(sessionAudioInterruptScheduledPCM, 160), 0o600); err != nil {
 		t.Fatalf("write scheduled audio fixture: %v", err)
 	}
-	if err := os.WriteFile(interruptPath, sessionAudioInterruptOverlapPCM, 0o600); err != nil {
+	if err := os.WriteFile(interruptPath, bytes.Repeat(sessionAudioInterruptOverlapPCM, 160), 0o600); err != nil {
 		t.Fatalf("write interruption audio fixture: %v", err)
 	}
 
@@ -113,11 +121,25 @@ func runSessionCommandAudioInterruptScenario(t *testing.T, scenario sessionAudio
 			Close: broker.Close,
 		}, nil
 	}
-	commandOwner := NewSessionCommand(flags.NewAskFlags(), globalFlags, newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}, SessionInferencer: inferencer, ToolService: SessionToolCapabilitiesFactory(capabilityFactory)}), nil)
+	liveService := runtimeSessionWire.NewLiveService(runtimeSessionWire.LiveDependencies{
+		InferencerFactory: func(context.Context, runtimeSession.LiveRequest) (messages.SessionInferencer, error) {
+			return inferencer, nil
+		},
+		Scheduler: sessionclock.Real{},
+	})
+	fileDevices := runtimeDevicesWire.NewFileService(runtimeAudioIOWire.NewService())
+	commandOwner := NewSessionCommandWithLive(
+		flags.NewAskFlags(), globalFlags,
+		newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}, SessionInferencer: inferencer, ToolService: SessionToolCapabilitiesFactory(capabilityFactory)}), nil,
+		liveService, nil, nil,
+		FileDeviceService{Service: fileDevices, Scheduler: sessionclock.Real{}},
+		SessionToolCapabilitiesFactory(capabilityFactory), nil, nil,
+		nil, nil,
+	)
 	command := commandOwner.Generate()
 	var output bytes.Buffer
 	command.SetOut(&output)
-	command.SetArgs(sessionAudioInterruptArgs(scenario, scheduledPath, interruptPath, filepath.Join(tempDir, "recording")))
+	command.SetArgs(sessionAudioInterruptArgs(scenario, scheduledPath, interruptPath))
 
 	// This only needs to bound a genuine hang; the assertions below no longer
 	// depend on how much of the budget was actually used, so the deadline can
@@ -141,14 +163,13 @@ func runSessionCommandAudioInterruptScenario(t *testing.T, scenario sessionAudio
 	assertSessionAudioInterruptScenario(t, scenario, wire.writesSnapshot(), ledger.eventsSnapshot())
 }
 
-func sessionAudioInterruptArgs(scenario sessionAudioInterruptScenario, scheduledPath, interruptPath, recordDir string) []string {
+func sessionAudioInterruptArgs(scenario sessionAudioInterruptScenario, scheduledPath, interruptPath string) []string {
 	args := []string{
 		"--browser-tools", "webmcp",
 		"--provider", "openai",
 		"--model", "gpt-realtime-2.1-mini",
 		"--api-key", "test-key",
-		"--record-dir", recordDir,
-		"--audio-in-turn", scheduledPath,
+		"--audio-in", scheduledPath,
 		"--audio-interrupt", interruptPath,
 	}
 	if scenario != sessionAudioInterruptUnfiltered {

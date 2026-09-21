@@ -10,6 +10,9 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/endpoint"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/rtc"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
@@ -39,6 +42,10 @@ func NewFactory(registry devicegw.DeviceRegistry, format mixer.Format) *Factory 
 	return &Factory{registry: registry, format: format}
 }
 
+func (f *Factory) ValidateRemoteEndpoint(value string) error {
+	return endpoint.ValidateRemoteEndpoint(value)
+}
+
 // Open admits the input and output workers as one lifecycle unit. If output
 // admission fails after capture succeeds, capture is closed before the error
 // is returned so partial startup cannot leak a device handle.
@@ -48,6 +55,9 @@ func (f *Factory) Open(ctx context.Context, request devices.Request) (devices.Ha
 	}
 	registry := f.registry
 	if endpoint := strings.TrimSpace(request.RemoteEndpoint); endpoint != "" {
+		if err := f.ValidateRemoteEndpoint(endpoint); err != nil {
+			return nil, err
+		}
 		var err error
 		registry, err = devicegw.NewRemoteDeviceRegistry(endpoint)
 		if err != nil {
@@ -69,6 +79,26 @@ func (f *Factory) Open(ctx context.Context, request devices.Request) (devices.Ha
 	return newHandle(input, output), nil
 }
 
+func (f *Factory) BindRTC(ctx context.Context, request devices.RTCBindingRequest) (devices.RTCBinding, error) {
+	if f == nil {
+		return nil, devices.ErrUnavailable
+	}
+	inputSelected := request.InputPresent || strings.TrimSpace(request.InputDevice) != ""
+	outputSelected := request.OutputPresent || strings.TrimSpace(request.OutputDevice) != ""
+	if !inputSelected && !outputSelected {
+		return nil, nil
+	}
+	registry := f.registry
+	if endpoint := strings.TrimSpace(request.RemoteEndpoint); endpoint != "" {
+		var err error
+		registry, err = devicegw.NewRemoteDeviceRegistry(endpoint)
+		if err != nil {
+			return nil, fmt.Errorf("connect remote audio device server: %w", err)
+		}
+	}
+	return rtc.NewFactory(registry).BindRTC(ctx, request)
+}
+
 func (f *Factory) validateRequest(ctx context.Context, request devices.Request) error {
 	if f == nil || (f.registry == nil && strings.TrimSpace(request.RemoteEndpoint) == "") {
 		return errors.Join(devices.ErrUnavailable, devicegw.ErrNilDeviceRegistry)
@@ -86,7 +116,7 @@ func (f *Factory) openInput(registry devicegw.DeviceRegistry, request devices.Re
 	if !request.CaptureEnabled {
 		return nil, nil
 	}
-	input, err := devicert.NewRTCDeviceSourceAtRate(registry, devicegw.DeviceID(strings.TrimSpace(request.InputDevice)), rate)
+	input, err := devicert.NewRTCDeviceSourceAtRate(registry, normalizeSelector(request.InputDevice), rate)
 	if err != nil {
 		return nil, fmt.Errorf("open input device %q: %w", request.InputDevice, err)
 	}
@@ -98,7 +128,7 @@ func (f *Factory) openOutput(registry devicegw.DeviceRegistry, request devices.R
 		return nil, nil
 	}
 	output, err := devicert.NewRTCDeviceSinkAtRateWithOptions(
-		registry, devicegw.DeviceID(strings.TrimSpace(request.OutputDevice)), rate,
+		registry, normalizeSelector(request.OutputDevice), rate,
 		request.PlaybackProfile, nil,
 	)
 	if err != nil {
@@ -108,6 +138,14 @@ func (f *Factory) openOutput(registry devicegw.DeviceRegistry, request devices.R
 		output.SetHoldToneConfig(*request.HoldToneConfig)
 	}
 	return output, nil
+}
+
+func normalizeSelector(id string) devicegw.DeviceID {
+	trimmed := strings.TrimSpace(id)
+	if strings.EqualFold(trimmed, "default") {
+		return ""
+	}
+	return devicegw.DeviceID(trimmed)
 }
 
 func closeInput(input *devicert.RTCDeviceSource) error {
@@ -125,7 +163,7 @@ func newHandle(input *devicert.RTCDeviceSource, output *devicert.RTCDeviceSink) 
 	if output != nil {
 		ports.Playback = output
 	}
-	return &handle{ports: ports, close: func() error { return errors.Join(closeInput(input), closeOutput(output)) }}
+	return &handle{ports: ports, source: input, sink: output, close: func() error { return errors.Join(closeInput(input), closeOutput(output)) }}
 }
 
 func closeOutput(output *devicert.RTCDeviceSink) error {
@@ -165,8 +203,10 @@ func contextError(ctx context.Context) error {
 }
 
 type handle struct {
-	ports devices.MediaPorts
-	close func() error
+	ports  devices.MediaPorts
+	source *devicert.RTCDeviceSource
+	sink   *devicert.RTCDeviceSink
+	close  func() error
 
 	once     sync.Once
 	closeMu  sync.Mutex
@@ -178,6 +218,26 @@ func (h *handle) Media() devices.MediaPorts {
 		return devices.MediaPorts{}
 	}
 	return h.ports
+}
+
+func (h *handle) SelectedDeviceIDs() (input, output string) {
+	if h == nil {
+		return "", ""
+	}
+	if h.source != nil {
+		input = string(h.source.DeviceID())
+	}
+	if h.sink != nil {
+		output = string(h.sink.DeviceID())
+	}
+	return input, output
+}
+
+func (h *handle) PlaybackStats() (deviceID string, stats audio.PlaybackQueueStats) {
+	if h == nil || h.sink == nil {
+		return "", audio.PlaybackQueueStats{}
+	}
+	return string(h.sink.DeviceID()), h.sink.PlaybackStats()
 }
 
 func (h *handle) Close() error {

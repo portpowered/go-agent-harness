@@ -147,9 +147,13 @@ func (o *sessionProgressObserver) observedResponseProjection() (active bool, id 
 func (o *sessionProgressObserver) plainEvent(kind sd.EventKind, id string) sd.Observation {
 	return o.lifecycleEvent(sd.Event{Kind: kind, ResponseID: id})
 }
+
+//lint:ignore U1000 package tests exercise the response projection seam.
 func (o *sessionProgressObserver) indexEvent(kind sd.EventKind, index int, id string) sd.Observation {
 	return o.lifecycleEvent(sd.Event{Kind: kind, Index: index, ResponseID: id})
 }
+
+//lint:ignore U1000 package tests exercise the response projection seam.
 func (o *sessionProgressObserver) pendingScheduledRateLimitRetryIndex() (int, bool) {
 	if o == nil {
 		return 0, false
@@ -196,9 +200,13 @@ func (o *sessionProgressObserver) bindScheduledTerminalOnly(id string) {
 func (o *sessionProgressObserver) rememberRateLimitRetryCandidate(responseID, lifecycleID string, terminal *messages.MessageEndValue) {
 	o.lifecycleEvent(sd.Event{Kind: sd.EventRememberRetry, ResponseID: responseID, LifecycleID: lifecycleID, Terminal: lifecycleTerminal(terminal)})
 }
+
+//lint:ignore U1000 package tests exercise the response projection seam.
 func (o *sessionProgressObserver) bindScheduledResponseID(index int, id string) bool {
 	return o.indexEvent(sd.EventBindScheduledID, index, id).Accepted
 }
+
+//lint:ignore U1000 package tests exercise the response projection seam.
 func (o *sessionProgressObserver) setActiveScheduledResponseWithID(index int, id string) bool {
 	return o.indexEvent(sd.EventSetScheduledOwner, index, id).Accepted
 }

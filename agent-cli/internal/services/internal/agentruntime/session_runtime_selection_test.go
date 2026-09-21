@@ -25,7 +25,7 @@ func TestPlanSessionRuntime_RetainsExactWebRTCSelection(t *testing.T) {
 	const signaling = " loopback://sentinel/signaling?token=exact "
 	const media = "rtsp://fixture:secret@sentinel.example/camera/main"
 
-	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		ReplayPath:        "synthetic.session.json",
 		SessionInferencer: &selectionTestInferencer{},
 		Transport:         " WebRTC ",
@@ -140,7 +140,7 @@ func TestPlanSessionRuntime_InvalidSelectionFailsBeforeFactorySideEffects(t *tes
 
 func TestRunSession_InvalidRTCSelectionDoesNotMutateCapturePath(t *testing.T) {
 	recordPath := filepath.Join(t.TempDir(), "rejected.session.json")
-	err := RunSession(context.Background(), os.Stdout, SessionRunOptions{ModelCatalog: testModelCatalog(),
+	err := RunSession(context.Background(), os.Stdout, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		RecordPath: recordPath,
 		Transport:  SessionTransportWebRTC,
 		Signaling:  "loopback",

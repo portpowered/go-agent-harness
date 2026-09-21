@@ -214,7 +214,7 @@ func runV8Duplex(t *testing.T, aToB, bToA []byte, mutateFirst bool) v8DuplexRun 
 	for name, result := range harnesses {
 		terminalObservation, err := v8RuntimeObservation(result.Runtime, runtimecontract.SessionRuntimeObservationTerminal)
 		if err != nil {
-			t.Fatalf("harness %s terminal runtime observation: %v", name, err)
+			t.Fatalf("harness %s terminal runtime observation: %v; command error=%v runtime=%+v stream=%+v", name, err, result.Err, result.Runtime, result.Stream)
 		}
 		terminal := v8TerminalFact{
 			Clean:          terminalObservation.Clean,
@@ -347,7 +347,7 @@ func runV8MultiTurnDuplex(t *testing.T, aToB, bToA [][]byte) v8DuplexRun {
 	for name, result := range harnesses {
 		terminalObservation, err := v8RuntimeObservation(result.Runtime, runtimecontract.SessionRuntimeObservationTerminal)
 		if err != nil {
-			t.Fatalf("harness %s terminal runtime observation: %v", name, err)
+			t.Fatalf("harness %s terminal runtime observation: %v; command error=%v runtime=%+v stream=%+v", name, err, result.Err, result.Runtime, result.Stream)
 		}
 		terminal := v8TerminalFact{
 			Clean:          terminalObservation.Clean,

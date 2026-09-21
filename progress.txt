@@ -4268,3 +4268,247 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   caller when its exact peer lease is released or reviewed-integrated, delete
   all five replacements, and run the complete exact-head local preflight before
   the first PR or push.
+||||||| b9b2f90bf
+
+# C229 predecessor preservation snapshot — 2026-09-20
+
+- Canonical admission check returned `admitted` for the sole project
+  `audio-runtime`. `prd.json.branchName` equals isolated branch
+  `codex/audio-runtime-c229-recover-audio-device-rtc-retirement`, initially at
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`.
+- Before integration or cleanup, C218 was read-only at
+  `dc92c6c8f1033b5c416345fd4f54ad2369bd6268` on branch
+  `codex/audio-runtime-c218-recover-audio-device-rtc-retirement`. Raw Git
+  porcelain recorded 55 tracked dirty paths, zero staged paths, and zero
+  untracked paths. This differs from C229's stated 54-path count; all 55 are
+  preserved as found. The porcelain SHA-256 is
+  `247806d3613a0be3c8550f07b667c97f252603f405601168fb5fe7867b0d339d`; the
+  unstaged binary diff SHA-256 is
+  `efcf7a559ca32980d301159411d832a21f40b79466c58f42a7aa87de89182b36`.
+- Exact pre-checkpoint status inventory:
+  ```text
+   M agent-cli/internal/services/internal/agentruntime/metrics_collector.go
+   M agent-cli/internal/services/internal/agentruntime/s2s_room_cancel_not_active_race_replay_test.go
+   M agent-cli/internal/services/internal/agentruntime/s2s_room_realtime_replay_cadence_test.go
+   M agent-cli/internal/services/internal/agentruntime/selfplay_service.go
+   M agent-cli/internal/services/internal/agentruntime/service.go
+   D agent-cli/internal/services/internal/agentruntime/session_audio_clock.go
+   D agent-cli/internal/services/internal/agentruntime/session_audio_contract.go
+   D agent-cli/internal/services/internal/agentruntime/session_audio_devices.go
+   M agent-cli/internal/services/internal/agentruntime/session_audio_format_test.go
+   D agent-cli/internal/services/internal/agentruntime/session_audio_policy.go
+   M agent-cli/internal/services/internal/agentruntime/session_audio_rate_test.go
+   M agent-cli/internal/services/internal/agentruntime/session_bare_test.go
+   M agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner_test.go
+   M agent-cli/internal/services/internal/agentruntime/session_conversation_log_test.go
+   M agent-cli/internal/services/internal/agentruntime/session_diagnostics.go
+   M agent-cli/internal/services/internal/agentruntime/session_drain.go
+   M agent-cli/internal/services/internal/agentruntime/session_duration.go
+   M agent-cli/internal/services/internal/agentruntime/session_duration_loop.go
+   M agent-cli/internal/services/internal/agentruntime/session_image.go
+   M agent-cli/internal/services/internal/agentruntime/session_instructions.go
+   D agent-cli/internal/services/internal/agentruntime/session_lifecycle.go
+   M agent-cli/internal/services/internal/agentruntime/session_live.go
+   M agent-cli/internal/services/internal/agentruntime/session_live_observation.go
+   D agent-cli/internal/services/internal/agentruntime/session_live_observation_state.go
+   M agent-cli/internal/services/internal/agentruntime/session_live_setup.go
+   M agent-cli/internal/services/internal/agentruntime/session_liveness.go
+   M agent-cli/internal/services/internal/agentruntime/session_liveness_test.go
+   M agent-cli/internal/services/internal/agentruntime/session_options.go
+   M agent-cli/internal/services/internal/agentruntime/session_rate_limit_retry_test.go
+   M agent-cli/internal/services/internal/agentruntime/session_recording.go
+   M agent-cli/internal/services/internal/agentruntime/session_room.go
+   M agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go
+   M agent-cli/internal/services/internal/agentruntime/session_room_planning.go
+   M agent-cli/internal/services/internal/agentruntime/session_room_replay_scheduler.go
+   M agent-cli/internal/services/internal/agentruntime/session_room_run.go
+   M agent-cli/internal/services/internal/agentruntime/session_runtime_live.go
+   M agent-cli/internal/services/internal/agentruntime/session_runtime_openai.go
+   M agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go
+   M agent-cli/internal/services/internal/agentruntime/session_runtime_rtc.go
+   M agent-cli/internal/services/internal/agentruntime/session_self_play.go
+   M agent-cli/internal/services/internal/agentruntime/session_service_test_helpers_test.go
+   M agent-cli/internal/services/internal/agentruntime/session_termination_test.go
+   M agent-cli/internal/services/internal/agentruntime/session_timing_test.go
+   M agent-cli/internal/services/internal/agentruntime/session_transport_done_drain_test.go
+   M agent-cli/internal/services/wire/metrics.go
+   M agent-cli/internal/services/wire/wire.go
+   M agent-cli/internal/transport/cli/root_routes_test.go
+   M agent-cli/internal/transport/cli/session_service_composition_test.go
+   M agent-cli/internal/wire/wire_gen.go
+   M agent-cli/test/integration/session_service_composition_test.go
+   M go-agent-runtime/services/audioio/contract.go
+   M go-agent-runtime/services/audioio/internal/service/service.go
+   M go-agent-runtime/services/devices/contract.go
+   M go-agent-runtime/services/session/internal/live/session_adapter.go
+   M go-agent-runtime/services/session/internal/live/turn_replay.go
+  ```
+- Prior C189 PR `#530` remains open at `438a2e5ea533e7930fcaa5c48a35f61490bce55a`.
+  GitHub reports no submitted reviews, issue comments, or inline review comments.
+  Its handoff states `make prepush` was partial with contention-sensitive
+  probe/replay/browser failures; isolated reruns passed. This is not a green
+  exact-candidate preflight and is not reused as such.
+- The exact C218 snapshot above is now committed as
+  `6e923c6ca07bb59590fbe9abeae420a3bd80665f`, whose parent is the observed
+  `dc92c6c8f1033b5c416345fd4f54ad2369bd6268`; it records all 55 paths and
+  leaves the C218 worktree clean. No cleanup, integration, reset, or rewrite
+  preceded the checkpoint.
+
+# C229 room device service cutover checkpoint 2026-09-20
+
+- Human room participants now open the public `devices.Service` handle and
+  run its `Capture`/`Playback` pumps. The room runtime no longer opens or
+  retains gateway `DeviceSource`/`DeviceSink` values. Selected IDs and playback
+  queue snapshots are optional public handle capabilities implemented by the
+  private media/composite services.
+- The public device contract no longer imports gateway device/runtime types.
+  RTC observers use service-owned callback types, remote endpoint validation
+  has a public service sentinel, and the internal RTC binding adapts callbacks
+  at the gateway edge. The unused raw registry parameter was removed from the
+  session runtime dependency graph and its generated Wire call.
+- Room output drains through the service playback pump. The regression now
+  verifies bounded service backpressure does not report a false queue
+  overflow; the focused diagnostic unit test still covers positive reported
+  overflow snapshots. Cross-participant sample-rate conversion now uses
+  `audioio.Service.ConvertPCM16`; no production `ResamplePCM16` or direct
+  device source/sink operation remains in the CLI agentruntime package. A
+  focused room run found the session loop omitted its injected audio
+  service/clock; those dependencies are now passed into the loop options,
+  eliminating the nil timer panic.
+- Focused passes on this slice: `rtk go test ./go-agent-runtime/services/devices/...
+  -count=1 -timeout=180s` (49 tests / 7 packages, including composite handle
+  metadata propagation); `rtk go test
+  ./agent-cli/internal/services/internal/agentruntime -run
+  '^(TestRunRoom_HumanParticipantRoutesDevicesAndReportsReadiness|TestRunRoom_HumanParticipantPlaybackUsesServiceBackpressure|TestEmitRoomParticipantPlaybackOverflowDiagnostic|TestResolveBareSessionOptions|TestNewLiveSessionInferencerCarriesBareAudioPolicies)$'
+  `-count=1 -timeout=120s` (4 tests); and focused CLI remote endpoint preflight
+  (1 test). `git diff --check` is clean.
+- After generated Wire commit `47071e085939ec313751c31927c07a4265f0f321`,
+  `rtk make wire-check` passed, and `rtk make embed-check` passed. The
+  cross-participant conversion follow-up passes the room routing and bounded
+  playback tests (2 tests / 1 package).
+- Next: finish the production caller and exact legacy-file audit, rerun Wire,
+  then run `make prepush` plus all C229 audio/device/RTC functional, integration,
+  race, hermetic, and Wire commands on the exact candidate before opening or
+  updating a PR. No PR or hosted CI handoff is claimed.
+
+# C229 session-loop dependency repair checkpoint 2026-09-20
+
+- Repaired all existing `agentruntime` tests whose session loops now require an
+  injected audio I/O service. External-package fixtures construct the public
+  audioio Wire service directly; internal fixtures use the existing test
+  constructor. `rtk go test ./agent-cli/internal/services/internal/agentruntime
+  -count=1 -timeout=240s` passes: 927 tests in 1 package.
+- The package run exposed two production dependency defects and two lifecycle
+  defects: self-play had not passed its owned audio service into each session
+  loop; negative max duration reached service resolution before validation;
+  duration finalization was not installed before clock-service preflight; and
+  nil liveness clock returned while holding the liveness mutex. These paths now
+  propagate/validate dependencies and release/close cleanly. Duration and
+  straggler helpers also return an explicit missing-audio-service error instead
+  of panicking.
+- The failed first package run had 921 passing / 6 failing tests; those fixture
+  gaps and the production issues were repaired, and the subsequent full package
+  run passed. `git diff --check` passed before checkpointing.
+- Current candidate remains on
+  `codex/audio-runtime-c229-recover-audio-device-rtc-retirement`, based on
+  `26abced5c700d7084ffeb4706adea16e2ea17632`. The exact ten legacy paths are
+  absent from that committed tree; the allowed adapters total 2 files / 32
+  physical lines (`audio_adapter.go` 19, `rtc_adapter.go` 13). Full current
+  filesystem absence and production caller audits remain part of the final
+  preflight.
+- Next: commit the reviewed repair diff and this checkpoint, then run every
+  C229 local command from PRD C229-05 (including `make prepush`, Wire/embed,
+  audio stability normal/race, RTC race, audio-device server integration,
+  integration/regressions, and audioio/device functional/race suites) on that
+  exact commit. Do not open/update a PR or push until all local gates pass.
+
+# C229 live-path repair and preflight checkpoint 2026-09-20
+
+- Migrated existing CLI live-session fixtures to compose the public live,
+  device, file, replay, recording, and audioio services. Fixed the audio
+  output fixture to hold its terminal event until device playback is observed;
+  the device output path resamples provider frames before playback, and the
+  combined file output contract taps device-bound PCM. The existing audio-input
+  success case now uses audible source samples and waits for the finite capture
+  boundary before its provider response.
+- Moved remote endpoint validation out of the broad `devices.Service` interface
+  into its optional `RemoteEndpointValidator` contract. Concrete device
+  factories retain validation; unrelated service fakes do not need the method.
+  Device RTC pumps are canceled before provider session close after playback
+  drain so clean peer shutdown cannot race as an inbound media failure.
+- `rtk go test ./agent-cli/internal/transport/cli
+  ./go-agent-runtime/services/devices/... -count=1 -timeout=240s` passes:
+  750 tests in 9 packages. `rtk proxy git diff --check` passes.
+- `rtk make prepush` now reaches architecture analysis. Its latest run reports
+  198 issues: 114 baseline drifts, 52 stale baseline entries, 12 cognitive,
+  5 cyclomatic, 10 file-line, 2 function-line, 2 function-statement, and 1
+  package-file issue. These remain actionable; no baseline was widened.
+- Fetched `origin/main` as `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`;
+  this branch's merge base is the same commit, so the required main ancestry is
+  already present. The earlier statement that fetched main had later retirement
+  commits was incorrect. No merge, reset, push, or PR action has occurred.
+- The current tree is a partial checkpoint atop `ce3c2a9507219b371990ab3f4ad1d95648fb1aab`.
+  Next: repair the complete architecture findings while preserving the existing
+  ancestry, then rerun every C229 gate on the exact final commit.
+
+# C229 architecture repair checkpoint 2026-09-20
+
+- Canonical admission is still `work-task-16` in `~default`; `verify-work`
+  returns admitted, and the task packet branch matches this isolated worktree.
+  The canonical review list is empty; prior PR #530 is open with no submitted
+  reviews or comments and is historical negative evidence, not a pass.
+- Required startup `8bdafc7f947a3a2c9856220abdc539437035bd21`, C218 checkpoint
+  `dc92c6c8f103`, planning main `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`,
+  and fetched `FETCH_HEAD` are ancestors. `origin/main` equals the existing
+  merge base; no integration commit is required and no history was rewritten.
+- Reduced live-service control and replay-forward complexity by extracting
+  bounded helpers. `rtk go test
+  ./go-agent-runtime/services/session/internal/live -count=1 -timeout=180s`
+  passes all 72 tests; `rtk proxy git diff --check` passes.
+- The latest `rtk make prepush` formats successfully but fails its architecture
+  gate with 194 issues (114 baseline drifts, 52 stale entries, 10 cognitive,
+  4 cyclomatic, 9 file-line, 2 function-line, 2 function-statement, and 1
+  package-file). This is four fewer than the prior 198-issue report. Exact log:
+  `1789948948_make_prepush.log`. No baseline was widened; no PR or push exists.
+- Next: continue reducing the remaining source-shape failures and reconcile only
+  exact measured baseline reductions/stale entries. Do not run the PR preflight
+  as complete or submit until all 194 findings and the full C229 command list
+  pass on one clean candidate SHA.
+
+# C229 livehost size-gate repair checkpoint 2026-09-20
+
+- Refactored `FilePorts.Close` to close its host-owned input/output sources via
+  one nil-safe helper, and split provider selection/model admission from the
+  rest of request assembly. The latter stays within existing `livehost` files;
+  no new adapter or test file was added.
+- `rtk go test ./agent-cli/internal/transport/cli/internal/livehost -count=1
+  -timeout=180s` passes all 24 tests. `rtk proxy git diff --check` passes.
+  `rtk make architecture-check` passed at 207 packages, 1,931 files and 28,405
+  functions.
+- The latest `rtk make architecture-size-check` run reports 191 issues:
+  114 baseline drifts, 52 stale entries, 8 cognitive, 3 cyclomatic, 9 file-line,
+  2 function-line, 2 function-statement and 1 package-file. Exact log:
+  `1789949360_make_architecture-size-check.log`. The last full `rtk make
+  prepush` at `7845eb42a` failed the size lane at 194 issues; the subsequent
+  focused size-gate run reflects the three committed-and-uncommitted repairs.
+- Next: continue addressing the remaining size findings, update baselines only
+  for proven reductions and remove stale entries, then run the entire C229 local
+  preflight on the exact clean candidate before any PR or push.
+
+# C229 architecture size checkpoint 2026-09-20
+
+- Refactored the existing CLI audio-output matrix test into same-file helpers
+  while preserving its three output cases and assertions, and extracted the
+  existing audioio rate-resolution assertions into a same-file helper. No test
+  moved or new test was added. Focused CLI matrix (4 cases) and audioio rate
+  resolution (15 cases) both pass.
+- `rtk make architecture-size-check` now reports 186 issues across 207
+  packages, down from 191. Exact log:
+  `1789949940_make_architecture-size-check.log`. Remaining shape findings
+  include six cognitive, two cyclomatic, nine file-line, one function-line,
+  one function-statement and one package-file issue; there are also 110
+  baseline drifts and 56 stale entries. No baseline was widened. Full
+  `make prepush` has not passed, and no PR or push exists.
+- Next: continue with source-owned caller and service complexity repairs, then
+  remove stale baseline entries and lower only exact proven reductions. Run all
+  C229 preflight commands on one clean candidate before any PR or push.

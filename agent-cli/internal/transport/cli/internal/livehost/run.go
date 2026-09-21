@@ -32,6 +32,44 @@ type RequestBuilder func(context.Context, serviceSession.Request, *runtimeReplay
 // AnnouncementWriter owns operator-facing startup text at the CLI boundary.
 type AnnouncementWriter func(io.Writer, serviceSession.Request, runtimeSession.LiveRequest, *runtimeReplay.CaptureInspection) error
 
+func resolveProviderInputs(ctx context.Context, request serviceSession.Request, replayInspection *runtimeReplay.CaptureInspection, deps RequestDependencies) (requestInputs, error) {
+	loaded, err := requireLiveConfig(request)
+	if err != nil {
+		return requestInputs{}, err
+	}
+	inspection, err := admitReplay(ctx, request.ReplayPath, replayInspection, deps.ReplayService)
+	if err != nil {
+		return requestInputs{}, err
+	}
+	if inspection != nil {
+		request.ReplayPath = inspection.CapturePath
+	}
+	effective := loaded.ApplyOverrides("", request.Model, request.Provider, request.BaseURL)
+	providerInspection := inspection
+	if inspection != nil && inspection.Kind == runtimeReplay.CaptureKindTurn {
+		// Turn captures replay a provider-neutral message stream. Their recorded
+		// provider name is metadata, not a live provider selection.
+		providerInspection = nil
+	}
+	provider, model, apiKey, baseURL, err := ProviderValues(effective, request, providerInspection)
+	if err != nil {
+		return requestInputs{}, err
+	}
+	if deps.ModelAdmission != nil && (inspection == nil || inspection.Kind != runtimeReplay.CaptureKindTurn) {
+		if err := deps.ModelAdmission.ValidateSessionModel(provider, model); err != nil {
+			return requestInputs{}, err
+		}
+	}
+	capabilities, err := buildCapabilities(loaded, request, deps)
+	if err != nil {
+		return requestInputs{}, err
+	}
+	return requestInputs{
+		effective: effective, inspection: inspection, provider: provider, model: model, capabilities: capabilities,
+		baseURL: baseURL, credentialRef: resolveCredentialReference(apiKey, deps.CredentialReference),
+	}, nil
+}
+
 // Dependencies are the explicit host edges needed to run one live session.
 // No process-wide discovery or default runtime graph is performed here.
 type Dependencies struct {
@@ -274,7 +312,7 @@ func liveRunOptions(out io.Writer, request serviceSession.Request, liveRequest r
 		deviceRequest.FileOutput = filePorts.Output
 		deviceService, deviceRequest = selectFileDevices(deviceService, deps.FileDeviceService.Service, deviceRequest, filePorts)
 	}
-	if !deviceRequest.CaptureEnabled && !deviceRequest.PlaybackEnabled && (filePorts == nil || len(filePorts.InputTurns) == 0) {
+	if !deviceRequest.CaptureEnabled && !deviceRequest.PlaybackEnabled && (filePorts == nil || len(filePorts.InputTurns) == 0 && len(filePorts.InputInterruptions) == 0) {
 		deviceService = nil
 	}
 	renderer := cliOutput.NewLiveEventRenderer(request.ReplayPath != "")
@@ -285,6 +323,8 @@ func liveRunOptions(out io.Writer, request serviceSession.Request, liveRequest r
 		AudioTurnAdmission:      audioTurnAdmission(request),
 		Recorder:                recorder,
 		CaptureTurns:            captureTurns(filePorts),
+		CaptureInterruptions:    captureInterruptions(filePorts),
+		CaptureInterruptionTool: request.AudioInterruptTool,
 		CaptureCompleteControls: captureCompleteControls(request, deps.CaptureComplete),
 		Events: runtimeSession.LiveEventSinkFunc(func(eventContext context.Context, event runtimeSession.LiveEvent) error {
 			eventOut := outputWriter(request, out)

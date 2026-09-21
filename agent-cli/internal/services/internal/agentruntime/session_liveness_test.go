@@ -10,18 +10,17 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
 type livenessTestClock struct {
 	mu      sync.Mutex
 	timers  []*livenessTestTimer
-	pending bool
 	created chan struct{}
 }
 
-func (c *livenessTestClock) NewTimer(time.Duration) sessionduration.Timer {
+func (c *livenessTestClock) NewTimer(time.Duration) SessionLivenessTimer {
 	timer := &livenessTestTimer{ch: make(chan time.Time, 1), active: true}
 	c.mu.Lock()
 	c.timers = append(c.timers, timer)
@@ -32,15 +31,6 @@ func (c *livenessTestClock) NewTimer(time.Duration) sessionduration.Timer {
 		case created <- struct{}{}:
 		default:
 		}
-	}
-	c.mu.Lock()
-	pending := c.pending
-	if pending {
-		c.pending = false
-	}
-	c.mu.Unlock()
-	if pending {
-		timer.fire()
 	}
 	return timer
 }
@@ -62,13 +52,7 @@ func (c *livenessTestClock) latestActiveTimer() *livenessTestTimer {
 
 func (c *livenessTestClock) fireLatest() bool {
 	timer := c.latestActiveTimer()
-	if timer == nil {
-		return false
-	}
-	c.mu.Lock()
-	c.pending = true
-	c.mu.Unlock()
-	return timer.fire()
+	return timer != nil && timer.fire()
 }
 
 type livenessTestTimer struct {
@@ -107,20 +91,12 @@ func (t *livenessTestTimer) fire() bool {
 
 func waitForLivenessFailure(t *testing.T, observer *sessionProgressObserver) error {
 	t.Helper()
-	deadline := time.NewTimer(2 * time.Second)
-	defer deadline.Stop()
-	ticker := time.NewTicker(time.Millisecond)
-	defer ticker.Stop()
-	for {
-		if err := observer.livenessFailure(); err != nil {
-			return err
-		}
-		select {
-		case <-ticker.C:
-		case <-deadline.C:
-			t.Fatal("timed out waiting for provider liveness failure")
-			return nil
-		}
+	select {
+	case <-observer.livenessEvents():
+		return observer.livenessFailure()
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for provider liveness failure")
+		return nil
 	}
 }
 
@@ -141,7 +117,7 @@ func TestSessionProgressObserver_WatchdogTimesOutExactlyOnce(t *testing.T) {
 	if !errors.Is(livenessErr, ErrSilentProviderTimeout) {
 		t.Fatalf("liveness error = %v, want ErrSilentProviderTimeout", livenessErr)
 	}
-	var typedErr *sessionduration.LivenessError
+	var typedErr *SessionLivenessError
 	if !errors.As(livenessErr, &typedErr) || typedErr.Classification != SessionSilentProviderTimeoutClassification {
 		t.Fatalf("liveness error = %#v, want typed timeout", livenessErr)
 	}
@@ -183,6 +159,11 @@ func TestSessionProgressObserver_WatchdogResetsOnProviderEvent(t *testing.T) {
 	}
 	if first.fire() {
 		t.Fatal("replaced watchdog timer remained active")
+	}
+	select {
+	case <-observer.livenessEvents():
+		t.Fatal("replaced watchdog timer woke the liveness controller")
+	default:
 	}
 	if err := observer.livenessFailure(); err != nil {
 		t.Fatalf("replaced watchdog timer produced failure: %v", err)
@@ -252,8 +233,12 @@ func TestSessionProgressObserver_DoesNotArmWhileSessionIsQuiet(t *testing.T) {
 
 func TestSessionProgressObserver_WatchdogUsesInjectedDeterministicClock(t *testing.T) {
 	clock := platformclock.NewDeterministic(time.Unix(42, 0).UTC(), time.Second)
+	livenessClock, err := audioiowire.NewService().NewClock(clock)
+	if err != nil {
+		t.Fatal(err)
+	}
 	observer := newSessionProgressObserver(nil, nil, "test-provider", "test-model")
-	observer.setLivenessClock(sessionLivenessClockFromSource(clock))
+	observer.setLivenessClock(livenessClock)
 	defer observer.stopLiveness()
 
 	observer.observeProviderDispatch(messages.StreamMessage{Type: messages.StreamTypeResponseCreate})
@@ -318,5 +303,5 @@ func TestRunAgentLoopSessionWithDuration_WatchdogWakesLoop(t *testing.T) {
 	}
 }
 
-var _ sessionduration.TimerScheduler = (*livenessTestClock)(nil)
-var _ sessionduration.Timer = (*livenessTestTimer)(nil)
+var _ SessionLivenessClock = (*livenessTestClock)(nil)
+var _ SessionLivenessTimer = (*livenessTestTimer)(nil)

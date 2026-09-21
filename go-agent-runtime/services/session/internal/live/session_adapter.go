@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/mediagate"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
@@ -16,6 +17,8 @@ type capturingInferencer struct {
 	media             *mediagate.Gate
 	continuous        bool
 	flushOutbound     bool
+	replayKind        session.LiveReplayKind
+	outputSampleRate  int
 	requirements      mediaRequirements
 	onDispatch        func(messages.StreamMessage)
 	onToolResult      func(string, string, bool) func()

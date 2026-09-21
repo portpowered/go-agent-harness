@@ -13,6 +13,7 @@ import (
 	agentruntime "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
+	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -33,7 +34,7 @@ func TestRunSession_OpenAIAdvertisesRegistryExecDefinition(t *testing.T) {
 	defer cancel()
 
 	var err error
-	err = agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
+	err = agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
 		RecordPath:      recordPath,
 		Provider:        "openai",
 		Model:           "gpt-realtime",
@@ -178,7 +179,7 @@ func TestRunSession_OpenAIAdvertisesComposedWebMCPDefinitions(t *testing.T) {
 	conn := newRecordingRealtimeTestConn()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	if err := agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
+	if err := agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
 		Provider:            config.ProviderOpenAI,
 		Model:               "gpt-realtime",
 		APIKey:              "test-api-key",

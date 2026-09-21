@@ -5,16 +5,15 @@ package agentruntime
 
 import (
 	"context"
-
 	sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	sessiondiagnostics "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
 	sessiondiagnosticswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire"
-	sessionduration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	"sync"
 )
 
+//lint:ignore U1000 retained names are part of package-test diagnostic compatibility.
 const (
 	// SessionDiagnosticEventFailure is emitted exactly once per terminal
 	// session failure with the canonical failure field map.
@@ -108,23 +107,6 @@ const (
 	failingEventRun     = "SESSION.RUN"
 )
 
-// ScheduledAudioInput schedules one raw PCM user-audio injection through the
-// loop's existing audio-input seam (AgentLoop.SendAudioInput). The default
-// completion-gated policy fires after AfterCompletedTurns assistant turns have
-// completed; the active-response policy may fire at the immediately preceding
-// response's non-terminal boundary. Its bytes are attributed to the then
-// in-flight turn (turn index AfterCompletedTurns+1).
-type ScheduledAudioInput struct {
-	AfterCompletedTurns int
-	PCM                 []byte
-	// SourceSampleRate is the native rate of PCM. Zero explicitly means the
-	// caller/replay bytes already use the resolved provider rate.
-	SourceSampleRate int
-	// EndOfTurn sends MESSAGE.END after this input so realtime providers
-	// commit the audio and create one response before the next scheduled turn.
-	// The zero value preserves the diagnostics-only injection behavior.
-	EndOfTurn bool
-}
 type diagnosticSinkFanout []SessionDiagnosticSink
 
 func combineDiagnosticSinks(sinks ...SessionDiagnosticSink) SessionDiagnosticSink {
@@ -289,22 +271,26 @@ type sessionProgressObserver struct {
 	// toolDeltaSeen tracks whether the in-flight provider tool call streamed
 	// TOOLCALL.DELTA bytes, so a terminal TOOLCALL.END carrying full arguments
 	// is counted only when no deltas preceded it.
-	toolDeltaSeen      bool
-	usagePrompt        uint64
-	usageCompletion    uint64
-	usageTotal         uint64
-	usageReasoning     uint64
-	usageSeen          bool
-	livenessObserver   func(error)
-	livenessErrors     chan error
-	livenessController sessionduration.Controller
-	// durationController is the service-owned watchdog for bounded runs. It is
-	// kept separate from the legacy diagnostics projection so one provider
-	// event cannot arm two independent liveness controllers.
-	durationController             sessionduration.Controller
-	livenessOwnedByDurationService bool
-	failureMu                      sync.Mutex
-	failure                        *failureFacts
+	toolDeltaSeen          bool
+	usagePrompt            uint64
+	usageCompletion        uint64
+	usageTotal             uint64
+	usageReasoning         uint64
+	usageSeen              bool
+	livenessMu             sync.Mutex
+	livenessErr            error
+	livenessObserver       func(error)
+	livenessClock          SessionLivenessClock
+	livenessTimer          SessionLivenessTimer
+	livenessWakeCh         chan struct{}
+	livenessControlCh      chan struct{}
+	livenessWatcherStop    chan struct{}
+	livenessWatcherStarted bool
+	livenessGeneration     uint64
+	livenessArmed          bool
+	livenessStopped        bool
+	localToolDepth         int
+	failure                *failureFacts
 	// userCancelled is set once by finish after the explicit SIGINT marker has
 	// proved that all observed causes were cancellation-only.
 	userCancelled bool
@@ -368,10 +354,10 @@ func newSessionProgressObserver(sink SessionDiagnosticSink, recorder metrics.Rec
 		unresolvedToolCalls:   make(map[string]struct{}),
 		toolResultRejections:  make(map[string]messages.SessionSendStatus),
 		toolLifecycleCh:       make(chan struct{}, 1),
-		livenessErrors:        make(chan error, 1),
 		completedResponseIDs:  make(map[string]struct{}),
 		retiredResponseIDs:    make(map[string]struct{}),
 		scheduledResponseByID: make(map[string]int),
+		livenessWakeCh:        make(chan struct{}, 1),
 	}
 }
 

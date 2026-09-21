@@ -175,8 +175,9 @@ func newRoomSpeechOverlapScenario(t *testing.T, peerOutput []byte) *roomSpeechOv
 	t.Cleanup(cancel)
 
 	opts := RoomRunOptions{
-		Manifest:  manifest,
-		ConfigDir: configDir, ModelCatalog: testModelCatalog(),
+		AudioService: newTestAudioIOService(),
+		Manifest:     manifest,
+		ConfigDir:    configDir, ModelCatalog: testModelCatalog(),
 		BaseURL:     "wss://room-replay.invalid/v1/realtime",
 		MixerConfig: mixerConfig,
 		CredentialLookup: func(name string) (string, bool) {
@@ -522,8 +523,9 @@ func TestRunRoomWithResult_BidirectionalOverlapRecordsPeerOnlyEvidence(t *testin
 	t.Cleanup(cancel)
 
 	opts := RoomRunOptions{
-		Manifest:  manifest,
-		ConfigDir: configDir, ModelCatalog: testModelCatalog(),
+		AudioService: newTestAudioIOService(),
+		Manifest:     manifest,
+		ConfigDir:    configDir, ModelCatalog: testModelCatalog(),
 		OutputDir:   outputDir,
 		BaseURL:     "wss://room-replay.invalid/v1/realtime",
 		MixerConfig: mixerConfig,

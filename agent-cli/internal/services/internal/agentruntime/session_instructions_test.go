@@ -25,6 +25,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/workspace"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
@@ -162,7 +163,7 @@ func TestRunSessionWithInstructions_SourceMatrix(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 
-			err := agentruntime.RunSessionWithInstructions(ctx, bytes.NewBuffer(nil), agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
+			err := agentruntime.RunSessionWithInstructions(ctx, bytes.NewBuffer(nil), agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
 				ReplayPath:        filepath.Join(workspaceDir, "session.json"),
 				ConfigDir:         workspaceDir,
 				Prompt:            userTurnMarker,
@@ -204,7 +205,7 @@ func TestRunSessionWithInstructions_MissingAgentsMDSendsNoToolGroundingOrFile(t 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	err := agentruntime.RunSessionWithInstructions(ctx, bytes.NewBuffer(nil), agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
+	err := agentruntime.RunSessionWithInstructions(ctx, bytes.NewBuffer(nil), agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
 		ReplayPath:        filepath.Join(workspaceDir, "session.json"),
 		ConfigDir:         workspaceDir,
 		Prompt:            userTurnMarker,
@@ -233,7 +234,7 @@ func TestRunSessionWithInstructions_ExplicitPromptDoesNotReconcileAgentsMD(t *te
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	err := agentruntime.RunSessionWithInstructions(ctx, bytes.NewBuffer(nil), agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
+	err := agentruntime.RunSessionWithInstructions(ctx, bytes.NewBuffer(nil), agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
 		ReplayPath:        filepath.Join(workspaceDir, "session.json"),
 		ConfigDir:         workspaceDir,
 		Prompt:            userTurnMarker,
@@ -261,7 +262,7 @@ func TestRunSessionWithInstructions_OpenAIInitialConfigCarriesGroundingWithTools
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	err := agentruntime.RunSessionWithInstructions(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
+	err := agentruntime.RunSessionWithInstructions(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
 		RecordPath:      recordPath,
 		Provider:        config.ProviderOpenAI,
 		Model:           "gpt-realtime",
@@ -460,7 +461,7 @@ func TestRunSessionWithInstructionsAndOptions_PreservesExplicitSeed(t *testing.T
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	err := agentruntime.RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
+	err := agentruntime.RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
 		ReplayPath:        filepath.Join(workspaceDir, "session.json"),
 		ConfigDir:         workspaceDir,
 		SessionInferencer: inferencer,
@@ -481,7 +482,7 @@ func TestRunSessionWithInstructions_OpenAIInitialConfigPrecedesUserTurn(t *testi
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	err := agentruntime.RunSessionWithInstructions(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
+	err := agentruntime.RunSessionWithInstructions(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
 		RecordPath:      recordPath,
 		Provider:        config.ProviderOpenAI,
 		Model:           "gpt-realtime",
@@ -584,7 +585,7 @@ model:
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	err := agentruntime.RunSessionWithInstructions(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
+	err := agentruntime.RunSessionWithInstructions(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
 		RecordPath:      filepath.Join(t.TempDir(), "grok-session.json"),
 		Provider:        config.ProviderGrok,
 		Model:           "grok-3-mini",
@@ -610,7 +611,7 @@ func TestRunSessionWithInstructions_ConfigurationSendFailureStopsBeforeUserTurn(
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	err := agentruntime.RunSessionWithInstructions(ctx, &out, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
+	err := agentruntime.RunSessionWithInstructions(ctx, &out, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
 		ReplayPath:        filepath.Join(workspaceDir, "session.json"),
 		ConfigDir:         workspaceDir,
 		Prompt:            userTurnMarker,

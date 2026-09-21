@@ -201,6 +201,7 @@ func TestRunSessionDurationPlanUsesCommonFinalizerOnLoopFailure(t *testing.T) {
 	flushCalls := 0
 	finalizeCalls := 0
 	plan := sessionRuntimePlan{
+		loop:        sessionLoopOptions{audioService: newTestAudioIOService()},
 		mode:        sessionRuntimeModeRecordOpenAI,
 		capturePath: "capture.json",
 		inferencer:  &durationTestInferencer{connectErr: primaryErr},

@@ -21,6 +21,9 @@ import (
 )
 
 func runSelfPlayWithTestDependencies(ctx context.Context, out io.Writer, opts SelfPlayRunOptions) (SelfPlayResult, error) {
+	if opts.audioService == nil {
+		opts.audioService = newTestAudioIOService()
+	}
 	if opts.modelCatalog == nil {
 		opts.modelCatalog = testModelCatalog()
 	}

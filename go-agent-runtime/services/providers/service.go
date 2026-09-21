@@ -87,8 +87,9 @@ type SessionConfig struct {
 	// ReplayPath selects an explicit raw session capture. The provider service
 	// creates a replay transport and never connects to a live provider when it
 	// is set.
-	ReplayPath   string
-	ReplayTiming string
+	ReplayPath           string
+	ReplayTiming         string
+	SessionMessageReplay bool
 	// RecordPath selects an explicit raw capture artifact. The returned
 	// inferencer flushes the capture when its session terminates.
 	RecordPath string
