@@ -230,7 +230,7 @@ func TestRouterPreRunNormalizesSelfPlayOutputDirectory(t *testing.T) {
 	currentHome := t.TempDir()
 	namedHome := t.TempDir()
 	var got runtimeselfplay.Request
-	owner := NewSessionSelfPlayCommand(nil, runtimeselfplay.RunFunc(func(_ context.Context, request runtimeselfplay.Request) (runtimeselfplay.Result, error) {
+	owner := NewSessionSelfPlayCommand(nil, selfPlayServiceFunc(func(_ context.Context, request runtimeselfplay.Request) (runtimeselfplay.Result, error) {
 		got = request
 		return runtimeselfplay.Result{}, nil
 	}))

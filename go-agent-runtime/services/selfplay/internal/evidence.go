@@ -137,8 +137,8 @@ func newEvidence(files fileSystem, request selfplay.Request, startedAt time.Time
 		return nil, fmt.Errorf("create self-play output directory %q: %w", request.OutputDir, err)
 	}
 	paths := [2][3]string{
-		{selfplay.SelfPlayAgentAWAVPath, selfplay.SelfPlayAgentADiagnosticsPath, selfplay.SelfPlayAgentAStreamDeltasPath},
-		{selfplay.SelfPlayAgentBWAVPath, selfplay.SelfPlayAgentBDiagnosticsPath, selfplay.SelfPlayAgentBStreamDeltasPath},
+		{agentAWAVPath, agentADiagnosticsPath, agentAStreamDeltasPath},
+		{agentBWAVPath, agentBDiagnosticsPath, agentBStreamDeltasPath},
 	}
 	roles := [2]selfplay.SideRole{selfplay.RoleCustomer, selfplay.RoleAssistant}
 	for side := range paths {
@@ -311,15 +311,15 @@ func (e *evidence) finalize(result *selfplay.Result, runErr error, secret string
 		runErr = errors.Join(runErr, closeErr)
 	}
 	manifest := makeManifest(e, *result, runErr, secret)
-	manifestPath := filepath.Join(e.destination, selfplay.SelfPlayManifestPath)
-	manifestErr := atomicManifest(e.files, manifestPath, manifest)
+	manifestFilePath := filepath.Join(e.destination, manifestPath)
+	manifestErr := atomicManifest(e.files, manifestFilePath, manifest)
 	if manifestErr != nil {
 		return errors.Join(closeErr, fmt.Errorf("write self-play manifest: %w", manifestErr))
 	}
-	info, statErr := e.files.Stat(manifestPath)
+	info, statErr := e.files.Stat(manifestFilePath)
 	if statErr != nil {
 		return errors.Join(closeErr, fmt.Errorf("inspect self-play manifest: %w", statErr))
 	}
-	result.Manifest = selfplay.ArtifactOutcome{Path: selfplay.SelfPlayManifestPath, Bytes: info.Size(), Complete: true}
+	result.Manifest = selfplay.ArtifactOutcome{Path: manifestPath, Bytes: info.Size(), Complete: true}
 	return closeErr
 }

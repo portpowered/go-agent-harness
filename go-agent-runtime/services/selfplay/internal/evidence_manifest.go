@@ -61,20 +61,20 @@ type sideArtifactNames struct {
 func makeManifest(e *evidence, result selfplay.Result, runErr error, secret string) manifestValue {
 	value := manifestValue{
 		SchemaVersion: manifestSchemaVersion,
-		Personas:      personaValues{Customer: selfplay.SelfPlayCustomerPersona, Assistant: selfplay.SelfPlayAssistantPersona},
-		OpeningSeed:   selfplay.SelfPlayOpeningSeed,
+		Personas:      personaValues{Customer: customerPersona, Assistant: assistantPersona},
+		OpeningSeed:   openingSeed,
 		Provider:      e.request.Provider,
 		Model:         e.request.Model,
 		Timing:        timingValues{StartedAt: result.StartedAt.UTC().Format(time.RFC3339Nano), EndedAt: result.EndedAt.UTC().Format(time.RFC3339Nano), Elapsed: result.Elapsed.String()},
 		Bounds:        boundValues{MaxDuration: e.request.MaxDuration.String(), MaxTurns: e.request.MaxTurns, WAVBytes: maxPCMBytes, DiagnosticsBytes: maxDiagnosticBytes, StreamBytes: maxStreamBytes},
 		StopReason:    result.StopReason,
 		Artifacts: map[string]string{
-			"agent_a_wav":           selfplay.SelfPlayAgentAWAVPath,
-			"agent_a_diagnostics":   selfplay.SelfPlayAgentADiagnosticsPath,
-			"agent_a_stream_deltas": selfplay.SelfPlayAgentAStreamDeltasPath,
-			"agent_b_wav":           selfplay.SelfPlayAgentBWAVPath,
-			"agent_b_diagnostics":   selfplay.SelfPlayAgentBDiagnosticsPath,
-			"agent_b_stream_deltas": selfplay.SelfPlayAgentBStreamDeltasPath,
+			"agent_a_wav":           agentAWAVPath,
+			"agent_a_diagnostics":   agentADiagnosticsPath,
+			"agent_a_stream_deltas": agentAStreamDeltasPath,
+			"agent_b_wav":           agentBWAVPath,
+			"agent_b_diagnostics":   agentBDiagnosticsPath,
+			"agent_b_stream_deltas": agentBStreamDeltasPath,
 		},
 	}
 	if runErr != nil {

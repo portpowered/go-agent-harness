@@ -36,7 +36,7 @@ func TestSelfPlayServiceBridgesOnlyPCMAndWritesBoundedEvidence(t *testing.T) {
 	assertSessionSetup(t, configs, sessions)
 	assertSessionTraffic(t, sessions)
 	assertOneTurnPerSide(t, outputDir)
-	if _, err := os.Stat(filepath.Join(outputDir, selfplay.SelfPlayManifestPath)); err != nil {
+	if _, err := os.Stat(filepath.Join(outputDir, "run-manifest.json")); err != nil {
 		t.Fatalf("manifest missing: %v", err)
 	}
 }
@@ -65,7 +65,7 @@ func assertSessionSetup(t *testing.T, configs []providers.SessionConfig, session
 	if len(configs) != 2 || len(sessions) != 2 {
 		t.Fatalf("built %d sessions with %d configs, want two", len(sessions), len(configs))
 	}
-	if configs[0].Provider != selfplay.SelfPlayDefaultProvider || configs[0].Model != selfplay.SelfPlayDefaultModel || configs[0].Instructions != selfplay.SelfPlayCustomerPersona || configs[1].Instructions != selfplay.SelfPlayAssistantPersona {
+	if configs[0].Provider != "openai" || configs[0].Model != "gpt-realtime" || configs[0].Instructions != "You are the customer. Speak naturally, briefly, and only as part of a spoken conversation. Ask one practical follow-up at a time. Do not call tools." || configs[1].Instructions != "You are the helpful assistant. Speak naturally, briefly, and only as part of a spoken conversation. Answer the customer's latest request and ask one concise follow-up when useful. Do not call tools." {
 		t.Fatalf("default provider/model/personas = %#v", configs)
 	}
 	for _, config := range configs {
@@ -79,7 +79,7 @@ func assertSessionTraffic(t *testing.T, sessions []*testSession) {
 	t.Helper()
 	customerSent := sessions[0].sentMessages()
 	assistantSent := sessions[1].sentMessages()
-	if countOutboundText(customerSent, selfplay.SelfPlayOpeningSeed) != 1 || countOutboundText(assistantSent, "") != 0 {
+	if countOutboundText(customerSent, "Hi, I need help planning a simple weekend trip.") != 1 || countOutboundText(assistantSent, "") != 0 {
 		t.Fatalf("opening text isolation failed: customer=%#v assistant=%#v", customerSent, assistantSent)
 	}
 	if !containsOutboundAudio(customerSent, testAssistantPCM()) || !containsOutboundAudio(assistantSent, testCustomerPCM()) || containsOutboundAudio(customerSent, testCustomerPCM()) || containsOutboundAudio(assistantSent, testAssistantPCM()) {
@@ -89,7 +89,7 @@ func assertSessionTraffic(t *testing.T, sessions []*testSession) {
 
 func assertOneTurnPerSide(t *testing.T, outputDir string) {
 	t.Helper()
-	for _, path := range []string{selfplay.SelfPlayAgentADiagnosticsPath, selfplay.SelfPlayAgentBDiagnosticsPath} {
+	for _, path := range []string{"agent-a-diagnostics.jsonl", "agent-b-diagnostics.jsonl"} {
 		data, err := os.ReadFile(filepath.Join(outputDir, path))
 		if err != nil {
 			t.Fatalf("read %s: %v", path, err)
@@ -139,7 +139,7 @@ func TestSelfPlayServiceRedactsProviderFailureFromReturnedEvidence(t *testing.T)
 	if err == nil || !strings.Contains(err.Error(), "[REDACTED]") || strings.Contains(err.Error(), secret) {
 		t.Fatalf("provider failure = %v, want a redacted error", err)
 	}
-	manifest, readErr := os.ReadFile(filepath.Join(outputDir, selfplay.SelfPlayManifestPath))
+	manifest, readErr := os.ReadFile(filepath.Join(outputDir, "run-manifest.json"))
 	if readErr != nil {
 		t.Fatalf("read failure manifest: %v", readErr)
 	}
@@ -266,7 +266,7 @@ type testModelCatalog struct{ allow bool }
 func (c testModelCatalog) RealtimeModels(string) []providers.RealtimeModel { return nil }
 func (c testModelCatalog) SupportedRealtimeModelIDs(string) []string       { return nil }
 func (c testModelCatalog) LookupRealtimeModel(provider, model string) (providers.RealtimeModel, bool) {
-	if !c.allow && (provider != selfplay.SelfPlayDefaultProvider || model != selfplay.SelfPlayDefaultModel) {
+	if !c.allow && (provider != "openai" || model != "gpt-realtime") {
 		return providers.RealtimeModel{}, false
 	}
 	return providers.RealtimeModel{ID: model, SupportsAudio: true}, true
@@ -288,7 +288,7 @@ func newTestSessionService(t *testing.T, failure string) *testSessionService {
 }
 
 func (s *testSessionService) BuildSession(_ context.Context, config providers.SessionConfig) (messages.SessionInferencer, error) {
-	customer := config.Instructions == selfplay.SelfPlayCustomerPersona
+	customer := config.Instructions == "You are the customer. Speak naturally, briefly, and only as part of a spoken conversation. Ask one practical follow-up at a time. Do not call tools."
 	session := &testSession{receive: messages.NewTypedBuffer[messages.StreamMessage](128)}
 	session.onSend = func(ctx context.Context, message messages.StreamMessage) {
 		if s.silent {

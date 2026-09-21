@@ -5,27 +5,7 @@ package selfplay
 
 import (
 	"context"
-	"fmt"
 	"time"
-)
-
-const (
-	SelfPlayDefaultProvider    = "openai"
-	SelfPlayDefaultModel       = "gpt-realtime"
-	SelfPlayDefaultMaxDuration = 2 * time.Minute
-	SelfPlayDefaultTurnTarget  = 3
-
-	SelfPlayCustomerPersona  = "You are the customer. Speak naturally, briefly, and only as part of a spoken conversation. Ask one practical follow-up at a time. Do not call tools."
-	SelfPlayAssistantPersona = "You are the helpful assistant. Speak naturally, briefly, and only as part of a spoken conversation. Answer the customer's latest request and ask one concise follow-up when useful. Do not call tools."
-	SelfPlayOpeningSeed      = "Hi, I need help planning a simple weekend trip."
-
-	SelfPlayAgentAWAVPath          = "agent-a.wav"
-	SelfPlayAgentBWAVPath          = "agent-b.wav"
-	SelfPlayAgentADiagnosticsPath  = "agent-a-diagnostics.jsonl"
-	SelfPlayAgentBDiagnosticsPath  = "agent-b-diagnostics.jsonl"
-	SelfPlayAgentAStreamDeltasPath = "agent-a-stream-deltas.jsonl"
-	SelfPlayAgentBStreamDeltasPath = "agent-b-stream-deltas.jsonl"
-	SelfPlayManifestPath           = "run-manifest.json"
 )
 
 // StopReason is the single terminal reason committed for one run.
@@ -66,27 +46,10 @@ const (
 	ErrUnsupportedModel       SentinelError = "unsupported self-play model"
 	ErrModelCatalogRequired   SentinelError = "self-play model catalog is required"
 	ErrSessionServiceRequired SentinelError = "self-play session service is required"
-	ErrRunnerRequired         SentinelError = "self-play runner is required"
 	ErrOutputTargetUnsafe     SentinelError = "self-play output target is unsafe"
 	ErrArtifactLimit          SentinelError = "self-play evidence limit exceeded"
 	ErrShutdownTimeout        SentinelError = "self-play shutdown deadline exceeded"
 )
-
-// UnsupportedModelError retains the stable unsupported-model category while
-// keeping the exact provider and model values available to callers.
-type UnsupportedModelError struct {
-	Provider string
-	Model    string
-}
-
-func (e *UnsupportedModelError) Error() string {
-	if e == nil {
-		return ErrUnsupportedModel.Error()
-	}
-	return fmt.Sprintf("%s: %s model %q is not realtime-capable", ErrUnsupportedModel, e.Provider, e.Model)
-}
-
-func (e *UnsupportedModelError) Unwrap() error { return ErrUnsupportedModel }
 
 // Request contains only values resolved by the host. Config-file paths,
 // provider objects, writers, and mutable runtime state are intentionally absent.
@@ -132,14 +95,4 @@ type Result struct {
 // Service runs one bounded self-play conversation.
 type Service interface {
 	Run(context.Context, Request) (Result, error)
-}
-
-// RunFunc adapts a function to Service for host composition and tests.
-type RunFunc func(context.Context, Request) (Result, error)
-
-func (f RunFunc) Run(ctx context.Context, request Request) (Result, error) {
-	if f == nil {
-		return Result{}, ErrRunnerRequired
-	}
-	return f(ctx, request)
 }

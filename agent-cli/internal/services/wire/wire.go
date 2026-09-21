@@ -21,7 +21,6 @@ import (
 	runtimeDevicesWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
 	runtimeProviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
-	runtimeSelfPlay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/selfplay"
 	runtimeSelfPlayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/selfplay/wire"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
@@ -107,16 +106,6 @@ func (s legacyToolCapabilitiesService) Resolve(cfg *config.Config) (serviceTools
 	return capabilities, nil
 }
 
-// NewSelfPlayService composes the runtime-owned implementation from the
-// provider session role, immutable catalog, and application clock.
-func NewSelfPlayService(sessionService runtimeProviders.SessionService, clockSource clock.Source, modelCatalog runtimeProviders.ModelCatalog) runtimeSelfPlay.Service {
-	return runtimeSelfPlayWire.NewService(runtimeSelfPlayWire.Dependencies{
-		SessionService: sessionService,
-		ModelCatalog:   modelCatalog,
-		Clock:          clockSource,
-	})
-}
-
 // DeviceSet is the device service's complete provider set. Application Wire
 // composition includes this set alongside the existing registry provider.
 var DeviceSet = wire.NewSet(NewDeviceService, NewDeviceProbeSessionFactory, NewDeviceProbeService, runtimeDevicesWire.NewService) //nolint:gochecknoglobals // immutable Wire provider metadata
@@ -163,5 +152,8 @@ func NewSessionRuntimeFactory() agentruntime.SessionRuntimeFactory {
 
 var SessionSet = wire.NewSet(NewSessionRuntimeFactory, NewSessionRuntime, NewSessionService)
 
-// SelfPlaySet is the self-play service's complete provider set.
-var SelfPlaySet = wire.NewSet(NewSelfPlayService)
+// SelfPlaySet wires the service-owned constructor from its own dependency type.
+var SelfPlaySet = wire.NewSet(
+	runtimeSelfPlayWire.NewService,
+	wire.Struct(new(runtimeSelfPlayWire.Dependencies), "SessionService", "ModelCatalog", "Clock"),
+)

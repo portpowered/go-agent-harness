@@ -12,11 +12,17 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/selfplay"
 )
 
+type selfPlayServiceFunc func(context.Context, selfplay.Request) (selfplay.Result, error)
+
+func (f selfPlayServiceFunc) Run(ctx context.Context, request selfplay.Request) (selfplay.Result, error) {
+	return f(ctx, request)
+}
+
 func TestSessionSelfPlayCommandParsesBoundedRunOptions(t *testing.T) {
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = t.TempDir()
 	var got selfplay.Request
-	runner := selfplay.RunFunc(func(_ context.Context, request selfplay.Request) (selfplay.Result, error) {
+	runner := selfPlayServiceFunc(func(_ context.Context, request selfplay.Request) (selfplay.Result, error) {
 		got = request
 		return selfplay.Result{StopReason: selfplay.StopTurnTarget, Customer: selfplay.SideResult{CompletedTurns: request.MaxTurns}, Assistant: selfplay.SideResult{CompletedTurns: request.MaxTurns}}, nil
 	})
@@ -59,9 +65,8 @@ func TestSessionSelfPlayCommandHelpDocumentsFixedPhaseOneContract(t *testing.T) 
 	}
 	help := helpOutput.String()
 	for _, want := range []string{
-		"Customer persona:",
-		"Assistant persona:",
-		"Opening seed (sent once as customer text):",
+		"fixed participant instructions",
+		"customer opening message",
 		"raw PCM16 audio",
 		"tools and transcript/text bridging are disabled",
 		"--api-key",

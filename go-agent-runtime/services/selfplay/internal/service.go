@@ -16,6 +16,23 @@ import (
 )
 
 const (
+	defaultProvider    = "openai"
+	defaultModel       = "gpt-realtime"
+	defaultMaxDuration = 2 * time.Minute
+	defaultTurnTarget  = 3
+
+	customerPersona  = "You are the customer. Speak naturally, briefly, and only as part of a spoken conversation. Ask one practical follow-up at a time. Do not call tools."
+	assistantPersona = "You are the helpful assistant. Speak naturally, briefly, and only as part of a spoken conversation. Answer the customer's latest request and ask one concise follow-up when useful. Do not call tools."
+	openingSeed      = "Hi, I need help planning a simple weekend trip."
+
+	agentAWAVPath          = "agent-a.wav"
+	agentBWAVPath          = "agent-b.wav"
+	agentADiagnosticsPath  = "agent-a-diagnostics.jsonl"
+	agentBDiagnosticsPath  = "agent-b-diagnostics.jsonl"
+	agentAStreamDeltasPath = "agent-a-stream-deltas.jsonl"
+	agentBStreamDeltasPath = "agent-b-stream-deltas.jsonl"
+	manifestPath           = "run-manifest.json"
+
 	maxPCMBytes        = 32 << 20
 	maxDiagnosticBytes = 4 << 20
 	maxStreamBytes     = 32 << 20
@@ -90,7 +107,7 @@ func validateRunModel(catalog providers.ModelCatalog, request selfplay.Request) 
 	if ok && model.SupportsAudio {
 		return nil
 	}
-	return &selfplay.UnsupportedModelError{Provider: request.Provider, Model: request.Model}
+	return fmt.Errorf("%w: %s model %q is not realtime-capable", selfplay.ErrUnsupportedModel, request.Provider, request.Model)
 }
 
 func (s *Service) executeRun(ctx context.Context, plan runPlan) (selfplay.Result, error) {
@@ -108,11 +125,11 @@ func (s *Service) executeRun(ctx context.Context, plan runPlan) (selfplay.Result
 }
 
 func (s *Service) executeSessions(runCtx, callerCtx context.Context, cancel context.CancelFunc, plan runPlan, evidence *evidence) (selfplay.Result, error) {
-	customer, err := s.buildSession(runCtx, plan.request, selfplay.SelfPlayCustomerPersona)
+	customer, err := s.buildSession(runCtx, plan.request, customerPersona)
 	if err != nil {
 		return failedSessionResult(runCtx, callerCtx, err)
 	}
-	assistant, err := s.buildSession(runCtx, plan.request, selfplay.SelfPlayAssistantPersona)
+	assistant, err := s.buildSession(runCtx, plan.request, assistantPersona)
 	if err != nil {
 		return failedSessionResult(runCtx, callerCtx, err)
 	}
@@ -168,14 +185,14 @@ func providersRequiredError() error {
 func normalizeRequest(request selfplay.Request) (selfplay.Request, error) {
 	request.Provider = strings.ToLower(strings.TrimSpace(request.Provider))
 	if request.Provider == "" {
-		request.Provider = selfplay.SelfPlayDefaultProvider
+		request.Provider = defaultProvider
 	}
-	if request.Provider != selfplay.SelfPlayDefaultProvider {
-		return selfplay.Request{}, fmt.Errorf("%w: Phase 1 supports %q only; got %q", selfplay.ErrUnsupportedProvider, selfplay.SelfPlayDefaultProvider, request.Provider)
+	if request.Provider != defaultProvider {
+		return selfplay.Request{}, fmt.Errorf("%w: Phase 1 supports %q only; got %q", selfplay.ErrUnsupportedProvider, defaultProvider, request.Provider)
 	}
 	request.Model = strings.TrimSpace(request.Model)
 	if request.Model == "" {
-		request.Model = selfplay.SelfPlayDefaultModel
+		request.Model = defaultModel
 	}
 	request.APIKey = strings.TrimSpace(request.APIKey)
 	request.BaseURL = strings.TrimSpace(request.BaseURL)
@@ -185,13 +202,13 @@ func normalizeRequest(request selfplay.Request) (selfplay.Request, error) {
 	}
 	request.OutputDir = filepath.Clean(request.OutputDir)
 	if request.MaxDuration == 0 {
-		request.MaxDuration = selfplay.SelfPlayDefaultMaxDuration
+		request.MaxDuration = defaultMaxDuration
 	}
 	if request.MaxDuration < 0 {
 		return selfplay.Request{}, fmt.Errorf("%w: maximum duration must be positive", selfplay.ErrInvalidRequest)
 	}
 	if request.MaxTurns == 0 {
-		request.MaxTurns = selfplay.SelfPlayDefaultTurnTarget
+		request.MaxTurns = defaultTurnTarget
 	}
 	if request.MaxTurns < 0 {
 		return selfplay.Request{}, fmt.Errorf("%w: maximum turns must be positive", selfplay.ErrInvalidRequest)
@@ -224,7 +241,7 @@ func (s *Service) buildSession(ctx context.Context, request selfplay.Request, pe
 }
 
 func personaName(persona string) string {
-	if persona == selfplay.SelfPlayCustomerPersona {
+	if persona == customerPersona {
 		return "customer"
 	}
 	return "assistant"

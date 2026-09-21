@@ -127,7 +127,7 @@ func sendCustomerOpening(ctx context.Context, loop *agentloop.AgentLoop, index i
 		return nil
 	}
 	*sent = true
-	return loop.Send(ctx, []messages.Message{messages.NewTextMessage(messages.RoleUser, selfplay.SelfPlayOpeningSeed)})
+	return loop.Send(ctx, []messages.Message{messages.NewTextMessage(messages.RoleUser, openingSeed)})
 }
 
 func (s *Service) handleSideAudio(ctx context.Context, index int, role selfplay.SideRole, message messages.StreamMessage, output *pcmBridge, stop *stopState, evidence *evidence) error {

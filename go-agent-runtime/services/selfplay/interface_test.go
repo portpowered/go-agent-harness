@@ -1,51 +1,26 @@
 package selfplay
 
-import (
-	"context"
-	"errors"
-	"strings"
-	"testing"
-)
+import "testing"
 
-func TestRunFuncWithoutRunnerReturnsStableError(t *testing.T) {
-	var run RunFunc
-	_, err := run.Run(context.Background(), Request{})
-	if !errors.Is(err, ErrRunnerRequired) {
-		t.Fatalf("Run error = %v, want ErrRunnerRequired", err)
-	}
-}
-
-func TestRunFuncReturnsServiceResultAndCause(t *testing.T) {
-	wantErr := errors.New("service failure")
-	want := Result{StopReason: StopFailure, Customer: SideResult{Role: RoleCustomer}}
-	run := RunFunc(func(context.Context, Request) (Result, error) {
-		return want, wantErr
-	})
-
-	got, err := run.Run(context.Background(), Request{MaxTurns: 2})
-	if !errors.Is(err, wantErr) {
-		t.Fatalf("Run error = %v, want wrapped service cause", err)
-	}
-	if got != want {
-		t.Fatalf("Run result = %#v, want %#v", got, want)
-	}
-}
-
-func TestUnsupportedModelErrorPreservesCategoryAndContext(t *testing.T) {
-	err := &UnsupportedModelError{Provider: "openai", Model: "text-only"}
-	if !errors.Is(err, ErrUnsupportedModel) {
-		t.Fatalf("error %v does not preserve ErrUnsupportedModel", err)
-	}
-	for _, value := range []string{"openai", "text-only", "realtime-capable"} {
-		if !strings.Contains(err.Error(), value) {
-			t.Fatalf("error %q does not include %q", err, value)
-		}
-	}
-}
-
-func TestUnsupportedModelErrorNilReceiverHasStableText(t *testing.T) {
-	var err *UnsupportedModelError
-	if got := err.Error(); got != ErrUnsupportedModel.Error() {
-		t.Fatalf("nil receiver error = %q, want %q", got, ErrUnsupportedModel)
+func TestSentinelErrorsExposeStableFailureCategories(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		err  SentinelError
+		want string
+	}{
+		{name: "invalid request", err: ErrInvalidRequest, want: "invalid self-play request"},
+		{name: "unsupported provider", err: ErrUnsupportedProvider, want: "unsupported self-play provider"},
+		{name: "unsupported model", err: ErrUnsupportedModel, want: "unsupported self-play model"},
+		{name: "missing model catalog", err: ErrModelCatalogRequired, want: "self-play model catalog is required"},
+		{name: "missing session service", err: ErrSessionServiceRequired, want: "self-play session service is required"},
+		{name: "unsafe output target", err: ErrOutputTargetUnsafe, want: "self-play output target is unsafe"},
+		{name: "artifact limit", err: ErrArtifactLimit, want: "self-play evidence limit exceeded"},
+		{name: "shutdown deadline", err: ErrShutdownTimeout, want: "self-play shutdown deadline exceeded"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := test.err.Error(); got != test.want {
+				t.Fatalf("error category = %q, want %q", got, test.want)
+			}
+		})
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
@@ -23,19 +24,14 @@ func NewSessionSelfPlayCommand(globalFlags *flags.GlobalFlags, service selfplay.
 
 func (c *SessionSelfPlayCommand) Generate() *cobra.Command {
 	var apiKey, provider, model, baseURL, outputDir string
-	var maxDuration = selfplay.SelfPlayDefaultMaxDuration
-	var maxTurns = selfplay.SelfPlayDefaultTurnTarget
-	provider = selfplay.SelfPlayDefaultProvider
-	model = selfplay.SelfPlayDefaultModel
+	var maxDuration time.Duration
+	var maxTurns int
 
 	cmd := &cobra.Command{
 		Use:   "self-play",
 		Short: "Run two fixed-persona live agents through a PCM16 audio bridge",
-		Long: "Run the Phase 1 live self-play harness with two continuously open OpenAI Realtime sessions.\n\n" +
-			"Customer persona: " + selfplay.SelfPlayCustomerPersona + "\n" +
-			"Assistant persona: " + selfplay.SelfPlayAssistantPersona + "\n" +
-			"Opening seed (sent once as customer text): " + selfplay.SelfPlayOpeningSeed + "\n\n" +
-			"Only emitted raw PCM16 audio crosses between agents; tools and transcript/text bridging are disabled.",
+		Long: "Run the bounded self-play harness with two OpenAI Realtime sessions.\n\n" +
+			"The runtime supplies the fixed participant instructions and customer opening message. Only raw PCM16 audio crosses between sides; tools and transcript/text bridging are disabled.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if c == nil || c.run == nil {
@@ -58,16 +54,17 @@ func (c *SessionSelfPlayCommand) Generate() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&apiKey, "api-key", "", "OpenAI API key; may also come from the configured AGENT_MODEL__OPENAI__API_KEY")
 	cmd.Flags().StringVar(&outputDir, "output-dir", "", "Empty directory for this self-play run (required)")
-	cmd.Flags().StringVar(&provider, "provider", provider, "Phase 1 realtime provider (openai only)")
-	cmd.Flags().StringVar(&model, "model", model, "OpenAI Realtime model (default: gpt-realtime)")
+	cmd.Flags().StringVar(&provider, "provider", provider, "Realtime provider; empty uses the service default")
+	cmd.Flags().StringVar(&model, "model", model, "Realtime model; empty uses the service default")
 	cmd.Flags().StringVar(&baseURL, "base-url", "", "Optional OpenAI Realtime WebSocket endpoint override")
-	cmd.Flags().DurationVar(&maxDuration, "max-duration", maxDuration, "Positive maximum run duration (default: 2m)")
-	cmd.Flags().IntVar(&maxTurns, "max-turns", maxTurns, "Positive completed-turn target per side (default: 3)")
+	cmd.Flags().DurationVar(&maxDuration, "max-duration", maxDuration, "Positive maximum run duration; zero uses the service default")
+	cmd.Flags().IntVar(&maxTurns, "max-turns", maxTurns, "Positive completed-turn target per side; zero uses the service default")
 	return cmd
 }
 
 func resolveSelfPlayHostConfig(globalFlags *flags.GlobalFlags, apiKey, provider, model, baseURL string) (string, string, error) {
-	if globalFlags == nil || strings.ToLower(strings.TrimSpace(provider)) != selfplay.SelfPlayDefaultProvider {
+	provider = strings.TrimSpace(provider)
+	if globalFlags == nil || (provider != "" && !strings.EqualFold(provider, config.ProviderOpenAI)) {
 		return apiKey, baseURL, nil
 	}
 	storage, err := config.NewDefaultConfigStorage(globalFlags.ConfigDir())
@@ -78,7 +75,7 @@ func resolveSelfPlayHostConfig(globalFlags *flags.GlobalFlags, apiKey, provider,
 	if err != nil {
 		return "", "", fmt.Errorf("load self-play host config: %w", err)
 	}
-	effective := loaded.ApplyOverrides(apiKey, model, provider, baseURL)
+	effective := loaded.ApplyOverrides(apiKey, model, config.ProviderOpenAI, baseURL)
 	active, err := effective.ActiveOpenAIConfig()
 	if err != nil {
 		return "", "", fmt.Errorf("resolve self-play host config: %w", err)

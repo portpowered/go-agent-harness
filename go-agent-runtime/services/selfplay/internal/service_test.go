@@ -17,7 +17,7 @@ import (
 )
 
 func TestSelfPlayEvidenceWriteFailureIsReturnedAndRecorded(t *testing.T) {
-	files := &injectedFileSystem{writeFailure: selfplay.SelfPlayAgentADiagnosticsPath}
+	files := &injectedFileSystem{writeFailure: agentADiagnosticsPath}
 	service := newInjectedService(files)
 	outputDir := filepath.Join(t.TempDir(), "run")
 	result, err := service.Run(context.Background(), selfplay.Request{OutputDir: outputDir, MaxDuration: time.Second, MaxTurns: 1})
@@ -27,7 +27,7 @@ func TestSelfPlayEvidenceWriteFailureIsReturnedAndRecorded(t *testing.T) {
 	if result.StopReason != selfplay.StopFailure || !result.Manifest.Complete || result.Customer.Diagnostics.Complete {
 		t.Fatalf("write-failure result = %#v", result)
 	}
-	manifest, readErr := os.ReadFile(filepath.Join(outputDir, selfplay.SelfPlayManifestPath))
+	manifest, readErr := os.ReadFile(filepath.Join(outputDir, manifestPath))
 	if readErr != nil {
 		t.Fatalf("read manifest: %v", readErr)
 	}
@@ -37,7 +37,7 @@ func TestSelfPlayEvidenceWriteFailureIsReturnedAndRecorded(t *testing.T) {
 }
 
 func TestSelfPlayEvidenceSetupFailureCleansCreatedArtifacts(t *testing.T) {
-	files := &injectedFileSystem{openFailure: selfplay.SelfPlayAgentBStreamDeltasPath}
+	files := &injectedFileSystem{openFailure: agentBStreamDeltasPath}
 	service := newInjectedService(files)
 	outputDir := filepath.Join(t.TempDir(), "run")
 	_, err := service.Run(context.Background(), selfplay.Request{OutputDir: outputDir, MaxDuration: time.Second, MaxTurns: 1})
@@ -50,7 +50,7 @@ func TestSelfPlayEvidenceSetupFailureCleansCreatedArtifacts(t *testing.T) {
 }
 
 func TestSelfPlayEvidenceCloseFailureReturnsCauseAndMarksArtifactIncomplete(t *testing.T) {
-	files := &injectedFileSystem{closeFailure: selfplay.SelfPlayAgentADiagnosticsPath}
+	files := &injectedFileSystem{closeFailure: agentADiagnosticsPath}
 	service := newInjectedService(files)
 	outputDir := filepath.Join(t.TempDir(), "run")
 	result, err := service.Run(context.Background(), selfplay.Request{OutputDir: outputDir, MaxDuration: 30 * time.Millisecond, MaxTurns: 1})
@@ -60,7 +60,7 @@ func TestSelfPlayEvidenceCloseFailureReturnsCauseAndMarksArtifactIncomplete(t *t
 	if result.StopReason != selfplay.StopMaxDuration || result.Customer.Diagnostics.Complete || !result.Manifest.Complete {
 		t.Fatalf("close-failure result = %#v", result)
 	}
-	manifest, readErr := os.ReadFile(filepath.Join(outputDir, selfplay.SelfPlayManifestPath))
+	manifest, readErr := os.ReadFile(filepath.Join(outputDir, manifestPath))
 	if readErr != nil {
 		t.Fatalf("read manifest: %v", readErr)
 	}
@@ -80,7 +80,7 @@ func TestSelfPlayManifestFinalizationFailureReturnsCauseWithoutClaimingComplete(
 	if result.StopReason != selfplay.StopMaxDuration || result.Manifest.Complete || result.Manifest.Path != "" {
 		t.Fatalf("manifest-failure result = %#v", result)
 	}
-	if _, statErr := os.Stat(filepath.Join(outputDir, selfplay.SelfPlayManifestPath)); !errors.Is(statErr, os.ErrNotExist) {
+	if _, statErr := os.Stat(filepath.Join(outputDir, manifestPath)); !errors.Is(statErr, os.ErrNotExist) {
 		t.Fatalf("manifest exists after failed finalization: %v", statErr)
 	}
 }
