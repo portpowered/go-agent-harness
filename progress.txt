@@ -4778,3 +4778,54 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   and full three-file legacy cluster, verify the sole stateless adapter cap,
   then run `make prepush` plus every planned exact-head local gate before push
   or PR handoff.
+
+### C271 live-board and bounded-contract checkpoint — 2026-09-21
+
+- Re-read the required operating policy and implementation handoff. The exact
+  `project-control.py verify-work --type task --name
+  audio-runtime-c271-recover-selfplay-retirement` check returned `admitted` for
+  `audio-runtime/audio-runtime-v1`; `prd.json.branchName` matches the isolated
+  branch. Candidate source before this progress-only checkpoint was clean at
+  `9a01fa05afc61dedb9cdd97c95bf47b49fceefc9`. Fresh `origin/main` is
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`, and both it and startup
+  integration `8bdafc7f947a3a2c9856220abdc539437035bd21` are ancestors.
+- Canonical `~default` board still has C248 `work-task-45` and C269
+  `work-task-101` in `init`, with active RUNNING worker sessions; neither
+  reviewed/guarded release is available. C248 currently has uncommitted changes
+  in `session_runtime_plan.go` and new `session_runtime_factory.go` /
+  `session_runtime_turn.go` files. Its latest checkpoint reports 108
+  architecture findings. C269 currently has uncommitted room-evidence,
+  rooms-service/Wire, and integration-test changes; its latest `make prepush`
+  report has 105 architecture findings. Their worktrees and files were only
+  read, not modified. Do not reconcile C249 or edit the shared caller/evidence
+  seams until those dependencies are released.
+- C249 remains clean at `86a1eed17b099d510b39ce3d3b4ee7d8f7998881`, with C220
+  `1bf045dd8` reachable. C249 is not yet an ancestor of C271, as required by
+  the explicit C248/C269 reconciliation gate. No predecessor checkpoint or
+  unrelated worktree was changed.
+- Read the full concluded C259 `work-review-78` feedback. Its four findings
+  require bounded total manifest/timeline admission, a public room-evidence
+  degradation regression, a public room-run/load/analyze replay round trip,
+  and exact-head local preflight evidence. They identify no self-play-specific
+  repair. A fresh audit of the self-play request bounds, validation order,
+  bounded evidence configuration and public failure/shutdown behavior found no
+  additional actionable defect. Production files are unchanged since tested
+  source commit `6079c6cbdbaff3281b8545839a10a12819157a69`; previously recorded
+  normal, race, repeated shutdown/failure, Wire, boundary and diff checks passed
+  on that source. Tests were not rerun in this progress-only checkpoint.
+- The planned legacy retirement remains intact: `selfplay_service.go` 53 lines,
+  `session_self_play.go` 641, and `session_self_play_evidence.go` 716 (3 files /
+  1,410 lines). The uncredited CLI projection remains 68 lines. The only
+  candidate transport file remains 85 lines but imports the projection and
+  retains defaults/persona/opening-seed policy, so it is not yet a stateless
+  adapter. The temporary `session_room_evidence_files.go` helper is absent.
+  No caller cutover, exact legacy deletion, full `make prepush`, PR, push, or
+  SCRIPT handoff is claimed.
+- Exact next action: retain C271 at `CONTINUE`; refresh the canonical C248/C269
+  release state while leaving their active edits untouched. When both reviewed
+  releases are available, fetch current main, reconcile C249/C220 and the
+  released peer behavior additively, cut over every production caller, delete
+  the obsolete projection and exact three-file / 1,410-line cluster, verify
+  the sole stateless adapter cap, then run `make prepush` and every planned
+  functional, integration, race, hermetic, embed and Wire gate on the exact
+  clean candidate before push or PR handoff.
