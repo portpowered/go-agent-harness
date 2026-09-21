@@ -5602,3 +5602,42 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   two public WebMCP regressions, then run every remaining C270-05/06 command
   and `make prepush` on one exact clean candidate before push. Decision remains
   CONTINUE.
+
+# C270 current-turn checkpoint — refreshed admission, ancestry, and WebMCP route — 2026-09-21
+
+- Re-ran `project-control.py verify-work --type task` from `FACTORY_ROOT`; the
+  canonical result is `admitted`, and `prd.json.branchName` exactly matches
+  `codex/audio-runtime-c270-recover-recording-replay-finalization`. Fetched
+  `origin/main` remains `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`. Startup,
+  planning-main, C217, C234 source/checkpoint, and current-main ancestry checks
+  all pass. The preserved C234 worktree is clean at
+  `7e6022bac496975f6b91b05e2a19b36348083eb7`.
+- Canonical `~default` review queries returned no C270 or C234 review Work and
+  no concluded findings to apply. C229 `work-task-16` is RUNNING in Worker
+  Session `7af6bde2-107b-4078-a963-58c7fe485033`; C268 `work-task-96` is
+  RUNNING in `7734dd06-516c-4a3b-8806-2ee35744144e`; C269 `work-task-101` is
+  RUNNING in `ebe42959-3746-4f3c-9962-747ae818f159`. C264 `work-task-86` and
+  its C273 recovery `work-task-111` have no running sessions and remain failed;
+  there is no reviewed room-replay caller release. No peer worktree was changed.
+- Candidate before this progress checkpoint is clean at
+  `ba82f87d93b5eb0fe93a094f726494b5904486b4`; its only difference from the
+  previously regression-tested code candidate `257cc9ef45a90b56af1e25a149e1d60f51bb7c45`
+  is `progress.txt`. Recording/replay functional and race suites previously
+  passed 198 tests across eight packages each on that unchanged code. All seven
+  integrated-main deletion targets and six checkpoint-only replacement paths
+  remain absent. The two stateless adapters are 20 and 25 lines (45 total),
+  and `session_browser_recording.go` matches `origin/main`.
+- Re-ran the corrected public route selection on this checkout:
+  `rtk proxy env CGO_ENABLED=0 go test -count=1 -tags=nomicrophone ./agent-cli/internal/transport/cli -run 'TestSession(Recorded|Unrecorded)WebMCPCastDeviceWAVStaysInteractive'`.
+  Both tests execute and fail before provider connection with
+  `legacy session audio runtime is retired; use the service-owned live session`,
+  then time out at the five-second connection wait. The route is within C229's
+  unreleased WebMCP caller seam; C268's capture readers and the C264/C269 room
+  replay readers also remain owned by unreleased peer work. No production edit,
+  full preflight, `make prepush`, push, PR update, or SCRIPT handoff ran.
+- Exact next action: after reviewed peer release commits become available,
+  integrate only their C229 live/WebMCP, C268 metrics/trace, and C264/C269 room
+  replay caller changes additively; repair both WebMCP regressions and rerun
+  them; repeat the full caller/direct-reader census; then run every C270-02
+  through C270-06 verification command, including `make prepush`, on one exact
+  clean candidate before push. Decision remains CONTINUE.
