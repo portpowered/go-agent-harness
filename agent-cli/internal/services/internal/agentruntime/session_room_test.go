@@ -44,7 +44,7 @@ func TestObserveRoomParticipantStream_FansOutBeforeDurableAudioEvidence(t *testi
 		t.Fatalf("add source mixer input: %v", err)
 	}
 
-	owner := &roomEvidence{}
+	owner := &roomEvidence{replayService: newTestReplayService()}
 	deltasPath := filepath.Join(t.TempDir(), "source.deltas.jsonl")
 	deltasFile, err := os.OpenFile(deltasPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
@@ -1238,7 +1238,8 @@ func newRoomTestRunOptions(ids []string, inferencers map[string]*roomTestInferen
 		credentials["ROOM_"+strings.ToUpper(id)+"_KEY"] = "secret-" + id
 	}
 	opts := RoomRunOptions{
-		AudioService: newTestAudioIOService(),
+		AudioService:  newTestAudioIOService(),
+		replayService: newTestReplayService(),
 		Manifest: room.Manifest{
 			SchemaVersion: room.SchemaVersion,
 			Room:          room.Room{MaxDuration: 5 * time.Second},

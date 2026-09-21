@@ -49,6 +49,7 @@ func newPublicTextSessionService(globalFlags *flags.GlobalFlags, toolExecutor me
 		Inferencer:      inferencer,
 		RelaxValidation: true,
 		Resolver:        resolver,
+		ReplayService:   replaywire.NewService(),
 	})
 }
 

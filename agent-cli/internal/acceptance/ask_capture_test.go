@@ -19,6 +19,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	providerwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
 	recordingwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/wire"
+	replaywire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
 	sessionwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
@@ -86,7 +87,7 @@ func TestAskRecordsAndReplaysThroughProviderService(t *testing.T) {
 		t.Run(fmt.Sprintf("stream=%t", streaming), func(t *testing.T) {
 			capturePath := filepath.Join(t.TempDir(), "capture.json")
 			transport := &captureTransport{}
-			provider := providerwire.NewService(providerwire.Dependencies{Recording: recordingwire.NewService(clock.Real{}), HTTPClient: &http.Client{Transport: transport}})
+			provider := providerwire.NewService(providerwire.Dependencies{Recording: recordingwire.NewService(clock.Real{}), Replay: replaywire.NewService(), HTTPClient: &http.Client{Transport: transport}})
 			service := sessionwire.NewService(sessionwire.Dependencies{ProviderService: provider, RelaxValidation: true})
 			run := func(mode string) string {
 				t.Helper()
@@ -125,6 +126,7 @@ func TestAskStreamingCaptureJoinsResponseBodyBeforeFlush(t *testing.T) {
 	transport := &barrierCaptureTransport{body: body}
 	provider := providerwire.NewService(providerwire.Dependencies{
 		Recording:  recordingwire.NewService(clock.Real{}),
+		Replay:     replaywire.NewService(),
 		HTTPClient: &http.Client{Transport: transport},
 	})
 	service := sessionwire.NewService(sessionwire.Dependencies{ProviderService: provider, RelaxValidation: true})
