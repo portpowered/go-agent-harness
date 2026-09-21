@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer"
 )
 
@@ -50,17 +52,7 @@ type graphOutput struct {
 }
 
 type audioRecorder interface {
-	RecordSource(string, audio.PCMFrame)
-	RecordReceived(string, audio.PCMFrame)
-}
-
-// latencyRecorder is an optional evidence capability. Keeping it separate
-// from audioRecorder preserves the small recorder probe used by media tests
-// while allowing production evidence to retain source attribution from the
-// canonical mixer output.
-type latencyRecorder interface {
-	ObserveSpeakerAudio(string, []string, audio.PCMFrame)
-	ObservePeerAudio(string, string, audio.PCMFrame)
+	Observe(roomevidence.Observation) error
 }
 
 func newRoomGraph(parent context.Context, scheduler clock.TimerSource, format rooms.AudioFormat, participants []*activeParticipant, onError func(error), recorders ...audioRecorder) (*roomGraph, error) {
@@ -289,7 +281,7 @@ func (g *roomGraph) deliverOutput(output *graphOutput, mixed mixer.MixedFrame) e
 			return fmt.Errorf("write room mix for %q: %w", output.target.participant.ID, err)
 		}
 		if g.recorder != nil {
-			g.recorder.RecordReceived(output.target.participant.ID, frame)
+			_ = g.recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationReceivedAudio, ParticipantID: output.target.participant.ID, AudioFrame: frame})
 		}
 		g.observePeerAudio(mixed.Sources, output.target.participant.ID, frame)
 	}
@@ -300,7 +292,7 @@ func (g *roomGraph) deliverOutput(output *graphOutput, mixed mixer.MixedFrame) e
 		return fmt.Errorf("queue room playback for %q: %w", output.target.participant.ID, err)
 	}
 	if output.provider == nil && g.recorder != nil {
-		g.recorder.RecordReceived(output.target.participant.ID, frame)
+		_ = g.recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationReceivedAudio, ParticipantID: output.target.participant.ID, AudioFrame: frame})
 	}
 	if output.provider == nil {
 		g.observePeerAudio(mixed.Sources, output.target.participant.ID, frame)
@@ -309,14 +301,13 @@ func (g *roomGraph) deliverOutput(output *graphOutput, mixed mixer.MixedFrame) e
 }
 
 func (g *roomGraph) observePeerAudio(sources []string, targetID string, frame audio.PCMFrame) {
-	observer, ok := g.recorder.(latencyRecorder)
-	if !ok || len(sources) == 0 {
+	if g.recorder == nil || len(sources) == 0 {
 		return
 	}
 	for _, sourceID := range sources {
 		if sourceID == "" || sourceID == targetID {
 			continue
 		}
-		observer.ObservePeerAudio(sourceID, targetID, frame)
+		_ = g.recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationPeerAudio, ParticipantID: sourceID, RelatedID: targetID, PCM: codec.EncodePCM16(frame.Samples)})
 	}
 }

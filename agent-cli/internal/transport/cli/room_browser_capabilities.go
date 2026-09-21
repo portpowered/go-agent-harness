@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 )
 
@@ -24,6 +26,7 @@ type roomRunPlans struct {
 	launchPlan runtimeRooms.RoomLaunchPlan
 	replayPlan runtimeRooms.RoomReplayPlan
 	manifest   runtimeRooms.Manifest
+	secrets    []string
 }
 
 func (c *RoomRunCommand) resolveRoomRunPlans(configPath, manifestPath, replayPath string) (roomRunPlans, error) {
@@ -34,7 +37,10 @@ func (c *RoomRunCommand) resolveRoomRunPlans(configPath, manifestPath, replayPat
 			return roomRunPlans{}, fmt.Errorf("%w: --replay cannot be combined with --config or --manifest", runtimeRooms.ErrReplaySourceConflict)
 		}
 		var err error
-		plans.replayPlan, err = c.service.LoadReplayPlan(replayPath)
+		if c.evidence == nil {
+			return roomRunPlans{}, errors.New("room evidence service is required")
+		}
+		plans.replayPlan, err = c.evidence.LoadPlan(replayPath)
 		if err != nil {
 			return roomRunPlans{}, err
 		}
@@ -49,7 +55,36 @@ func (c *RoomRunCommand) resolveRoomRunPlans(configPath, manifestPath, replayPat
 		return roomRunPlans{}, err
 	}
 	plans.manifest = plans.launchPlan.Manifest
+	plans.secrets = roomCredentialSecrets(plans)
 	return plans, nil
+}
+
+func roomCredentialSecrets(plans roomRunPlans) []string {
+	seen := make(map[string]struct{})
+	secrets := make([]string, 0, len(plans.manifest.Participants)+1)
+	add := func(value string) {
+		if strings.TrimSpace(value) == "" {
+			return
+		}
+		if _, ok := seen[value]; ok {
+			return
+		}
+		seen[value] = struct{}{}
+		secrets = append(secrets, value)
+	}
+	for _, participant := range plans.manifest.Participants {
+		if value, ok := os.LookupEnv(participant.APIKeyEnv); ok {
+			add(value)
+		}
+	}
+	if plans.launchPlan.Mode == runtimeRooms.RoomLaunchModeBare {
+		if storage, err := config.NewDefaultConfigStorage(plans.launchPlan.ConfigDir); err == nil {
+			if loaded, err := storage.Load(); err == nil && loaded != nil && loaded.Model.OpenAI != nil {
+				add(loaded.Model.OpenAI.APIKey)
+			}
+		}
+	}
+	return secrets
 }
 
 func (c *RoomRunCommand) resolveRoomOutput(plans roomRunPlans, requested string, explicit bool) (string, error) {
@@ -57,20 +92,23 @@ func (c *RoomRunCommand) resolveRoomOutput(plans roomRunPlans, requested string,
 		requested = resolveRoomReplayCommandOutputDir(requested)
 	} else {
 		var err error
-		requested, err = resolveRoomCommandOutputDir(c.service, plans.launchPlan, requested, explicit)
+		requested, err = resolveRoomCommandOutputDir(c.evidence, plans.launchPlan, requested, explicit)
 		if err != nil {
 			return "", err
 		}
 	}
-	if err := validateRoomOutput(c.service, plans, requested); err != nil {
+	if err := validateRoomOutput(c.evidence, plans, requested); err != nil {
 		return "", err
 	}
 	return requested, nil
 }
 
-func validateRoomOutput(service runtimeRooms.Service, plans roomRunPlans, outputDir string) error {
+func validateRoomOutput(service roomevidence.Service, plans roomRunPlans, outputDir string) error {
 	if outputDir == "" {
 		return nil
+	}
+	if service == nil {
+		return errors.New("room evidence service is required")
 	}
 	if plans.replayMode {
 		if err := service.ValidateReplayOutput(plans.replayPlan, outputDir); err != nil {

@@ -11,6 +11,7 @@ import (
 	"github.com/google/wire"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services/rooms/internal/launch"
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	roomevidencewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	runtimeWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
@@ -38,7 +39,7 @@ func NewService(deps Dependencies) runtimeRooms.Service {
 		media = runtimeWire.NewMediaFactory(deps.Devices)
 	}
 	runtimeService := runtimeWire.NewService(runtimeWire.Dependencies{
-		Live: deps.Live, Media: media, Clock: deps.Clock,
+		Live: deps.Live, Media: media, Clock: deps.Clock, Evidence: roomevidencewire.NewService(),
 	})
 	return &service{runtime: runtimeService, launch: launch.NewPlanner(deps.Registry)}
 }
@@ -60,34 +61,6 @@ func (s *service) ResolveLaunchPlan(options runtimeRooms.RoomLaunchOptions) (run
 		return runtimeRooms.RoomLaunchPlan{}, runtimeRooms.ErrRoomServiceUnavailable
 	}
 	return s.launch.Resolve(options)
-}
-
-func (s *service) LoadReplayPlan(path string) (runtimeRooms.RoomReplayPlan, error) {
-	if s == nil || s.runtime == nil {
-		return runtimeRooms.RoomReplayPlan{}, runtimeRooms.ErrRoomServiceUnavailable
-	}
-	return s.runtime.LoadReplayPlan(path)
-}
-
-func (s *service) ValidateReplayOutput(plan runtimeRooms.RoomReplayPlan, destination string) error {
-	if s == nil || s.runtime == nil {
-		return runtimeRooms.ErrRoomServiceUnavailable
-	}
-	return s.runtime.ValidateReplayOutput(plan, destination)
-}
-
-func (s *service) ValidateEvidenceOutput(destination string) error {
-	if s == nil || s.runtime == nil {
-		return runtimeRooms.ErrRoomServiceUnavailable
-	}
-	return s.runtime.ValidateEvidenceOutput(destination)
-}
-
-func (s *service) CreateFreshRunDirectory(configDir string) (string, error) {
-	if s == nil || s.runtime == nil {
-		return "", runtimeRooms.ErrRoomServiceUnavailable
-	}
-	return s.runtime.CreateFreshRunDirectory(configDir)
 }
 
 var _ runtimeRooms.Service = (*service)(nil)

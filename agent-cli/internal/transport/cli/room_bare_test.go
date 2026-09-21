@@ -56,6 +56,9 @@ func TestRoomRunCommandBareInvocationPassesResolvedPlanToRunner(t *testing.T) {
 	if agent.Provider != "openai" || agent.Model != servicetest.DefaultOpenAIRealtimeModel || agent.CredentialProvenance != rooms.RoomCredentialFromEnvironment {
 		t.Fatalf("agent plan = %+v", agent)
 	}
+	if len(got.Secrets) != 1 || got.Secrets[0] != "fake-openai-key" {
+		t.Fatalf("runtime redaction secrets = %q, want resolved credential", got.Secrets)
+	}
 	if registry.defaultCalls != 2 || registry.openCalls != 0 {
 		t.Fatalf("registry observations = defaults:%d opens:%d", registry.defaultCalls, registry.openCalls)
 	}

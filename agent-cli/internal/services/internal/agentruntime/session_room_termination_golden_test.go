@@ -8,6 +8,9 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
+	roomevidencewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
 )
 
 type longConversationTerminationManifest struct {
@@ -59,17 +62,11 @@ const (
 
 func TestLongConversationTerminationGoldenReplaysCleanly(t *testing.T) {
 	fixture := longConversationTerminationFixturePath()
-	bundle, err := LoadRoomReplayAudioBundle(fixture)
-	if err != nil {
-		t.Fatalf("load post-fix long-conversation termination bundle: %v", err)
-	}
+	bundle := loadRoomBundleAudio(t, fixture)
 	// Loading the same committed capture a second time is the replay control:
 	// admission rechecks every artifact digest and provider capture before any
 	// runtime is built, so terminal evidence cannot depend on a mutable read.
-	replayed, err := LoadRoomReplayAudioBundle(fixture)
-	if err != nil {
-		t.Fatalf("replay post-fix long-conversation termination bundle: %v", err)
-	}
+	replayed := loadRoomBundleAudio(t, fixture)
 	if !reflect.DeepEqual(bundle.Plan.Timeline, replayed.Plan.Timeline) {
 		t.Fatal("room timeline changed between fixture admission and replay")
 	}
@@ -78,8 +75,8 @@ func TestLongConversationTerminationGoldenReplaysCleanly(t *testing.T) {
 	if !manifest.Finalized || manifest.TerminationReason != RoomTerminationMaxTurnsReached || manifest.Reason != RoomTerminationMaxTurnsReached || manifest.Error != "" {
 		t.Fatalf("termination golden manifest = %+v, want finalized clean max-turn outcome", manifest)
 	}
-	if manifest.Bounds.MaxTurns != longConversationTerminationTurnsPerParticipant || manifest.RoomTimeline != RoomEvidenceTimelinePath {
-		t.Fatalf("termination golden bounds/timeline = %+v/%q, want max_turns=%d and %q", manifest.Bounds, manifest.RoomTimeline, longConversationTerminationTurnsPerParticipant, RoomEvidenceTimelinePath)
+	if manifest.Bounds.MaxTurns != longConversationTerminationTurnsPerParticipant || manifest.RoomTimeline != roomevidence.TimelinePath {
+		t.Fatalf("termination golden bounds/timeline = %+v/%q, want max_turns=%d and %q", manifest.Bounds, manifest.RoomTimeline, longConversationTerminationTurnsPerParticipant, roomevidence.TimelinePath)
 	}
 
 	wantOrder := []string{longConversationTerminationParticipantA, longConversationTerminationParticipantB, longConversationTerminationParticipantA, longConversationTerminationParticipantB, longConversationTerminationParticipantA, longConversationTerminationParticipantB, longConversationTerminationParticipantA, longConversationTerminationParticipantB}
@@ -217,7 +214,7 @@ func assertLongConversationTerminalRecordFields(t *testing.T, record longConvers
 
 func loadLongConversationTerminationManifest(t *testing.T, fixture string) longConversationTerminationManifest {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(fixture, RoomEvidenceManifestPath))
+	data, err := os.ReadFile(filepath.Join(fixture, roomBundleManifestPath))
 	if err != nil {
 		t.Fatalf("read termination golden manifest: %v", err)
 	}
@@ -226,6 +223,20 @@ func loadLongConversationTerminationManifest(t *testing.T, fixture string) longC
 		t.Fatalf("decode termination golden manifest: %v", err)
 	}
 	return manifest
+}
+
+func loadRoomBundleAudio(t *testing.T, fixture string) roomevidence.Bundle {
+	t.Helper()
+	service := roomevidencewire.NewService()
+	plan, err := service.LoadPlan(fixture)
+	if err != nil {
+		t.Fatalf("load room bundle plan: %v", err)
+	}
+	bundle, err := service.Load(plan)
+	if err != nil {
+		t.Fatalf("load room bundle audio: %v", err)
+	}
+	return bundle
 }
 
 func readLongConversationEvidenceRecords(t *testing.T, path string) []longConversationEvidenceRecord {

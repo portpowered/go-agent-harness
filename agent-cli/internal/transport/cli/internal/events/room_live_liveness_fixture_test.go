@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	roomevidencewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	runtimeRoomWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
@@ -56,8 +57,9 @@ func newRoomLiveLivenessFixture(t *testing.T, timeoutCase bool) *roomLiveLivenes
 	}
 	fixture.manifest = roomLiveLivenessManifest()
 	fixture.roomService = runtimeRoomWire.NewService(runtimeRoomWire.Dependencies{
-		Live:  fixture.liveService(t),
-		Clock: fixture.clock,
+		Live:     fixture.liveService(t),
+		Clock:    fixture.clock,
+		Evidence: roomevidencewire.NewService(),
 	})
 	fixture.destination = filepath.Join(t.TempDir(), "evidence")
 	fixture.broker = fixture.newBroker(t)

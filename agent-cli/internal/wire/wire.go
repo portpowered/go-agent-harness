@@ -30,6 +30,7 @@ import (
 	recordingwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/wire"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	runtimeReplayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
+	roomevidencewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	sessionwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
@@ -301,6 +302,7 @@ var CliSet = wire.NewSet(
 	cli.NewProbeCommand,
 	servicewire.DeviceSet,
 	servicewire.RoomSet,
+	roomevidencewire.NewService,
 	servicewire.SessionSet,
 	servicewire.NewReplayService,
 	servicewire.NewMetricsCollector,

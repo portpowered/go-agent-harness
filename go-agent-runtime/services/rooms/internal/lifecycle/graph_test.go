@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -348,14 +349,14 @@ type graphRecorderProbe struct {
 	received int
 }
 
-func (p *graphRecorderProbe) RecordSource(string, audio.PCMFrame) {
+func (p *graphRecorderProbe) Observe(observation roomevidence.Observation) error {
 	p.mu.Lock()
-	p.sources++
-	p.mu.Unlock()
-}
-
-func (p *graphRecorderProbe) RecordReceived(string, audio.PCMFrame) {
-	p.mu.Lock()
-	p.received++
-	p.mu.Unlock()
+	defer p.mu.Unlock()
+	switch observation.Kind {
+	case roomevidence.ObservationSourceAudio:
+		p.sources++
+	case roomevidence.ObservationReceivedAudio:
+		p.received++
+	}
+	return nil
 }

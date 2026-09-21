@@ -18,10 +18,6 @@ import (
 type Service interface {
 	Run(context.Context, io.Writer, RoomRunOptions) (RoomResult, error)
 	ResolveLaunchPlan(RoomLaunchOptions) (RoomLaunchPlan, error)
-	LoadReplayPlan(string) (RoomReplayPlan, error)
-	ValidateReplayOutput(RoomReplayPlan, string) error
-	ValidateEvidenceOutput(string) error
-	CreateFreshRunDirectory(string) (string, error)
 }
 
 // RoomDiagnosticRecord is the transport-neutral diagnostic event forwarded to
@@ -139,6 +135,9 @@ type RoomRunOptions struct {
 	WorkDir     string
 	AllowPaths  []string
 	AudioFormat AudioFormat
+	// Secrets are invocation-scoped credential values supplied only for
+	// defensive evidence redaction. They are never persisted in the manifest.
+	Secrets []string
 
 	BrowserCapabilitiesFactory BrowserCapabilitiesFactory
 	// LiveCapabilitiesFactory creates participant-local tool bindings for the

@@ -18,6 +18,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/events"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/spf13/cobra"
 )
@@ -44,13 +45,14 @@ type RoomSignalContextFunc func(context.Context) (context.Context, func())
 type RoomRunCommand struct {
 	globalFlags   *flags.GlobalFlags
 	service       runtimeRooms.Service
+	evidence      roomevidence.Service
 	signalContext RoomSignalContextFunc
 	run           RoomRunFunc
 }
 
 // NewRoomRunCommand injects room orchestration without device construction.
-func NewRoomRunCommand(globalFlags *flags.GlobalFlags, service runtimeRooms.Service) *RoomRunCommand {
-	command := &RoomRunCommand{globalFlags: globalFlags, service: service, signalContext: defaultRoomSignalContext}
+func NewRoomRunCommand(globalFlags *flags.GlobalFlags, service runtimeRooms.Service, evidence roomevidence.Service) *RoomRunCommand {
+	command := &RoomRunCommand{globalFlags: globalFlags, service: service, evidence: evidence, signalContext: defaultRoomSignalContext}
 	if service != nil {
 		command.run = service.Run
 	}
@@ -218,7 +220,6 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, r
 		return err
 	}
 	readyParticipants := 0
-
 	participantIDs := make([]string, 0, len(roomManifest.Participants))
 	for _, participant := range roomManifest.Participants {
 		participantIDs = append(participantIDs, participant.ID)
@@ -267,7 +268,7 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, r
 	defer stopSignals()
 
 	options := runtimeRooms.RoomRunOptions{
-		Manifest:   roomManifest,
+		Manifest: roomManifest, Secrets: append([]string(nil), plans.secrets...),
 		ReplayPath: plans.replayPath,
 		OutputDir:  outputDir,
 		ConfigDir:  roomConfigDir(roomRunGlobalFlags(c)),
@@ -352,7 +353,7 @@ func resolveRoomReplayCommandOutputDir(requested string) string {
 	return requested
 }
 
-func resolveRoomCommandOutputDir(service runtimeRooms.Service, plan runtimeRooms.RoomLaunchPlan, requested string, explicit bool) (string, error) {
+func resolveRoomCommandOutputDir(service roomevidence.Service, plan runtimeRooms.RoomLaunchPlan, requested string, explicit bool) (string, error) {
 	if !plan.Manifest.Room.RecordingEnabled() {
 		return "", nil
 	}
@@ -361,6 +362,9 @@ func resolveRoomCommandOutputDir(service runtimeRooms.Service, plan runtimeRooms
 			return destination, nil
 		}
 		if plan.Mode == runtimeRooms.RoomLaunchModeBare {
+			if service == nil {
+				return "", errors.New("room evidence service is required")
+			}
 			return service.CreateFreshRunDirectory(plan.ConfigDir)
 		}
 	}

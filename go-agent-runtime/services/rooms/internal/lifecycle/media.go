@@ -6,8 +6,11 @@ import (
 	"io"
 	"sync"
 
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer"
 )
 
@@ -88,10 +91,8 @@ type frameFanout struct {
 func (f frameFanout) WriteFrame(ctx context.Context, frame audio.PCMFrame) error {
 	targets := f.routeTargets()
 	if f.recorder != nil {
-		f.recorder.RecordSource(f.sourceID, frame)
-	}
-	if observer, ok := f.recorder.(latencyRecorder); ok {
-		observer.ObserveSpeakerAudio(f.sourceID, f.targetIDs(targets), frame)
+		_ = f.recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationSourceAudio, ParticipantID: f.sourceID, AudioFrame: frame})
+		_ = f.recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationSpeakerAudio, ParticipantID: f.sourceID, TargetIDs: f.targetIDs(targets), PCM: codec.EncodePCM16(frame.Samples)})
 	}
 	for _, target := range targets {
 		if target == nil {
@@ -140,4 +141,32 @@ func (b bufferedInbound) pump(ctx context.Context, playback rooms.MediaPlayback)
 
 func isGraphNormalStop(err error) bool {
 	return err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, io.EOF)
+}
+
+type recordingEventSink struct {
+	host     rooms.EventSink
+	recorder roomevidence.Recorder
+}
+
+func (s recordingEventSink) Publish(ctx context.Context, participantID string, event session.LiveEvent) error {
+	var hostErr error
+	if s.host != nil {
+		hostErr = s.host.Publish(ctx, participantID, event)
+	}
+	if s.recorder != nil {
+		observeRoomRecordingResult(s.recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationLiveEvent, ParticipantID: participantID, LiveEvent: event}))
+		if event.Message != nil {
+			observeRoomRecordingResult(s.recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationDelta, ParticipantID: participantID, StreamMessage: *event.Message}))
+		}
+	}
+	return hostErr
+}
+
+// observeRoomRecordingResult makes best-effort recording explicit. Recorder
+// methods retain sink errors internally; the room runtime remains independent
+// of a degraded evidence sink.
+func observeRoomRecordingResult(err error) {
+	if err != nil {
+		return
+	}
 }
