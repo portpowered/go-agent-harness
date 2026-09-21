@@ -4198,11 +4198,14 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   projection, including duplicated defaults, persona/seed constants, and
   command options, so its final stateless boundary is not yet established.
   The `go-agent-runtime/services/selfplay` package scan found no CLI,
-  `agentruntime`, or package-init dependency. On the current candidate,
+  `agentruntime`, or package-init dependency. On source checkpoint
+  `e8beab180de8475a1b3dd1c75139e00ead7ca465`, before the progress-only
+  checkpoint commit,
   `rtk go test -timeout=3m -count=1 ./go-agent-runtime/services/selfplay/...`
   and `rtk go test -race -timeout=5m -count=1
   ./go-agent-runtime/services/selfplay/...` each passed 23 tests across 3
-  packages. The bounded repeated stop/failure command remains valid from the
+  packages. Commit `9a062e9` changes only this progress record. The bounded
+  repeated stop/failure command remains valid from the
   production-identical `2f428de` checkpoint: 160 tests across 3 packages.
 - Exact next action: continue the disjoint self-play public contract/failure
   audit without changing C248/C269-owned callers. Once both exact releases are
