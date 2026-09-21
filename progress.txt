@@ -4201,3 +4201,41 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   additively, cut over every named/discovered caller, delete the complete
   legacy cluster, and run the full C280-03/C280-05 gate on one clean SHA.
   Return `CONTINUE` while that actionable integration remains.
+
+# C280 resumed ownership and current release audit 2026-09-21
+
+- Re-read `factory/docs/operating-policy.md` and
+  `factory/docs/implementation-handoff.md`; verified admission from
+  `FACTORY_ROOT` for the sole `audio-runtime` / `audio-runtime-v1` project.
+  `prd.json.branchName` matches this isolated branch. Fresh `origin/main` is
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`; startup integration
+  `8bdafc7f947a3a2c9856220abdc539437035bd21` and origin/main are ancestors.
+  The worktree was clean before and after read-only checks; Wire regeneration
+  produced no diff.
+- Canonical board refresh: C272 (`work-task-109`) and C276
+  (`work-task-121`) remain processing/init with no reviewed seam release;
+  C278 (`work-task-134`) remains review-rejected with its destination-probe
+  repair required. C271's exact caller path also has no release. No peer
+  revision was consumed or peer worktree modified. Review-78 remains the
+  applicable concluded feedback; its three code findings are repaired in the
+  recovered service history, while exact-head preflight remains outstanding.
+- Current owned-service verification passes: focused normal room-evidence and
+  rooms selection `56` tests / `16` packages; complete normal suites `101` /
+  `16`; complete race suites `101` / `16`; repeated race admission,
+  observation/finalize and typed-post-finalize checks `120` / `1`; private
+  boundary scan; `make wire-check`; `make architecture-size-check`
+  (`208` packages, `1,980` files, `29,332` functions); and `git diff --check`.
+- The full retirement is still open: all eight named agentruntime files
+  (`3,619` lines) and all 19 duplicate `rooms/internal/evidence` production
+  files (`3,509` lines) remain; discovered production callers are not cut over.
+  Adapter remains `0` files / `0` lines. The integrated-main census remains
+  `106` agentruntime production Go files / `39,329` lines. No `make prepush`,
+  complete C280-03/04/05 gate, push, PR, SCRIPT CI or review is claimed because
+  the caller seams are unreleased.
+- Exact next action: refresh canonical peer state; once C271/C272/C276/C278
+  provide reviewed or exact-path releases, integrate only those revisions,
+  cut over every named and search-discovered production caller, delete all
+  eight owned agentruntime files and all 19 duplicate rooms evidence files in
+  this task, then run the full C280-03/04 gate and `make prepush` plus every
+  C280-05 command on one clean exact candidate. Continue ownership through any
+  locally reproducible repairs; return `CONTINUE` meanwhile.
