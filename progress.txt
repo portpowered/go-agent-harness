@@ -4149,9 +4149,11 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   `services/selfplay/internal` implementation and service-local Wire graph.
   The planned `selfplay_service.go` (53 lines), `session_self_play.go`
   (641 lines), and `session_self_play_evidence.go` (716 lines) are still
-  present; the obsolete projection and temporary room-evidence helper also
-  remain. No deletion credit is claimed. The existing sole CLI command source
-  is 85 lines, but it has not yet been verified as a stateless adapter.
+  present; the obsolete CLI projection remains. The temporary C249
+  room-evidence helper is absent from this candidate and will be rechecked
+  after ancestry reconciliation. No deletion credit is claimed. The existing
+  sole CLI command source is 85 lines, but it has not yet been verified as a
+  stateless adapter.
 - `rtk go test -timeout=5m -count=10
   ./go-agent-runtime/services/selfplay/... -run
   '(Cancel|Duration|Shutdown|Stop|Failure)'` passed 160 tests in 3 packages.
