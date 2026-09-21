@@ -227,12 +227,12 @@ func setBrowserConversationSanitizedValue(target reflect.Value, value any) {
 
 func browserConversationSanitizedValue(targetType reflect.Type, value any) reflect.Value {
 	if value == nil {
-		switch targetType.Kind() {
-		case reflect.Interface, reflect.Pointer, reflect.Map, reflect.Slice, reflect.Func, reflect.Chan:
+		kind := targetType.Kind()
+		if kind == reflect.Interface || kind == reflect.Pointer || kind == reflect.Map ||
+			kind == reflect.Slice || kind == reflect.Func || kind == reflect.Chan {
 			return reflect.Zero(targetType)
-		default:
-			return reflect.Value{}
 		}
+		return reflect.Value{}
 	}
 	converted := reflect.ValueOf(value)
 	if converted.Type().AssignableTo(targetType) {
