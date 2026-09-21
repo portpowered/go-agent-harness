@@ -5052,3 +5052,45 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   1,410-line cluster, verify the sole adapter is stateless and within 300
   lines, then run `make prepush` and every planned C271 local gate on the same
   clean SHA before pushing or updating the PR for SCRIPT CI.
+
+### C271 refreshed admission and seam checkpoint — 2026-09-21
+
+- Read the required operating policy and implementation handoff, then ran
+  `project-control.py verify-work --type task --name
+  audio-runtime-c271-recover-selfplay-retirement`; admission is still
+  `admitted` for `audio-runtime/audio-runtime-v1`. `prd.json.branchName` is
+  `codex/audio-runtime-c271-recover-selfplay-retirement`, matching this
+  isolated branch. The candidate is clean at
+  `1b61b4fc11fd58d76454098b24f4447c49734044`. Fetched `origin/main`; it remains
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`. Both current main and startup
+  integration `8bdafc7f947a3a2c9856220abdc539437035bd21` are ancestors.
+- The preserved C249 source remains clean at
+  `86a1eed17b099d510b39ce3d3b4ee7d8f7998881`, with startup ancestry intact.
+  Canonical `work-task-106` is `init`/`PROCESSING`; C271 has no review attempt.
+  C248 `work-task-45` remains `init`/`PROCESSING` at clean
+  `0f00c79549b33e5e26c5c7bbe20313a07267e3dc`; its latest checkpoint still has
+  62 architecture findings and no reviewed release. C269 `work-task-101`
+  remains `init`/`PROCESSING` at `d792accaf8244898f559962ae371e06263095a9b`
+  with uncommitted room/evidence, Wire, architecture-policy and embedding
+  repairs. Neither required seam has been released; no peer worktree was
+  changed.
+- Read concluded C259 `work-review-78`. Its four findings concern bounded
+  room-evidence manifest/timeline admission, public recorder-failure
+  degradation coverage, a public room-run/load/analyze replay round trip, and
+  exact-head preflight; none calls out a self-play-specific repair.
+- Refreshed the production caller census across CLI/runtime: it still includes
+  CLI and runtime Wire, session/observability and the self-play command path,
+  legacy model admission, live/playback diagnostics, and room error/evidence
+  capture/integrity paths. No caller or service production code changed and
+  no tests were rerun in this checkpoint. The exact owned legacy cluster still
+  exists at 3 files / 1,410 lines; the obsolete projection is 68 lines, and
+  the only candidate adapter is 85 lines but still carries defaults, persona
+  prompts and the opening seed. No caller cutover, deletion, `make prepush`,
+  PR, push or SCRIPT handoff is claimed.
+- Exact next action: keep C248 and C269 paths frozen until their reviewed /
+  guarded releases are canonical. Then fetch current main, reconcile C249/C220
+  and both peer behaviors additively, cut over every discovered caller, remove
+  the projection and temporary helper, delete all three owned legacy files,
+  verify the remaining adapter is stateless and within 300 lines, and run
+  `make prepush` plus every C271 local gate on one exact clean candidate before
+  pushing it for SCRIPT CI.
