@@ -14,7 +14,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
-	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 )
 
 // customerSimulationRecordingFacts are derived only from the copied product
@@ -612,7 +612,7 @@ func parseCustomerSimulationRecord(record transcript.Record, at time.Duration, w
 		parsed.media = media
 		return parsed, media != nil, err
 	}
-	message, err := gatewaytesting.UnmarshalStreamMessage(record.Payload)
+	message, err := runtimeReplay.DecodeStreamMessage(record.Payload)
 	if err == nil {
 		parsed.message = message
 		return parsed, true, nil
