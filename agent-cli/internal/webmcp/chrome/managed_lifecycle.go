@@ -16,6 +16,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -126,7 +127,15 @@ type ManagedBrowserManagerOptions struct {
 // directory and installs lifecycle-aware close behavior on every returned
 // browser.
 type ManagedBrowserManager struct {
-	options ManagedBrowserManagerOptions
+	options  ManagedBrowserManagerOptions
+	watchMu  sync.Mutex
+	watching map[managedBrowserWatchKey]struct{}
+}
+
+type managedBrowserWatchKey struct {
+	profileDir string
+	pid        int
+	identity   string
 }
 
 // NewManagedBrowserManager constructs a side-effect-free lifecycle manager.
@@ -443,6 +452,26 @@ func (m *ManagedBrowserManager) watchManagedBrowser(browser *ManagedBrowser, sta
 	if browser == nil || browser.Done() == nil {
 		return
 	}
+	key := managedBrowserWatchKey{
+		profileDir: filepath.Clean(expected.ProfileDir),
+		pid:        expected.PID,
+		identity:   expected.ProcessIdentity,
+	}
+	m.watchMu.Lock()
+	if m.watching == nil {
+		m.watching = make(map[managedBrowserWatchKey]struct{})
+	}
+	if _, alreadyWatching := m.watching[key]; alreadyWatching {
+		m.watchMu.Unlock()
+		return
+	}
+	m.watching[key] = struct{}{}
+	m.watchMu.Unlock()
+	defer func() {
+		m.watchMu.Lock()
+		delete(m.watching, key)
+		m.watchMu.Unlock()
+	}()
 	<-browser.Done()
 	lease, err := acquireManagedBrowserLease(context.Background(), filepath.Join(expected.ProfileDir, managedBrowserLockName), m.options.LockTimeout, m.options.LockPoll, m.options.LockStaleAfter)
 	if err != nil {
