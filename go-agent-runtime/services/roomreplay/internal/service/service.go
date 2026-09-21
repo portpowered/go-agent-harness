@@ -64,9 +64,17 @@ func (s *Service) ValidateOutput(plan RoomReplayPlan, destination string) error 
 	if err != nil {
 		return fmt.Errorf("resolve room replay bundle path: %w", err)
 	}
+	root, err = resolveRoomReplayOutputPath(root)
+	if err != nil {
+		return fmt.Errorf("resolve room replay bundle path %q: %w", plan.BundlePath, err)
+	}
 	output, err := filepath.Abs(filepath.Clean(raw))
 	if err != nil {
 		return fmt.Errorf("resolve room replay output path: %w", err)
+	}
+	output, err = resolveRoomReplayOutputPath(output)
+	if err != nil {
+		return fmt.Errorf("resolve room replay output path %q: %w", destination, err)
 	}
 	relative, err := filepath.Rel(root, output)
 	if err != nil {
@@ -76,6 +84,49 @@ func (s *Service) ValidateOutput(plan RoomReplayPlan, destination string) error 
 		return fmt.Errorf("room replay output directory %q must be outside source bundle %q", destination, plan.BundlePath)
 	}
 	return nil
+}
+
+func resolveRoomReplayOutputPath(output string) (string, error) {
+	existing, missing, err := nearestExistingRoomReplayPath(output)
+	if err != nil {
+		return "", err
+	}
+	resolved, err := filepath.EvalSymlinks(existing)
+	if err != nil {
+		return "", err
+	}
+	if len(missing) > 0 {
+		info, err := os.Stat(resolved)
+		if err != nil {
+			return "", err
+		}
+		if !info.IsDir() {
+			return "", fmt.Errorf("existing path component %q is not a directory", existing)
+		}
+	}
+	for index := len(missing) - 1; index >= 0; index-- {
+		resolved = filepath.Join(resolved, missing[index])
+	}
+	return filepath.Clean(resolved), nil
+}
+
+func nearestExistingRoomReplayPath(output string) (string, []string, error) {
+	missing := make([]string, 0, 1)
+	for {
+		_, err := os.Lstat(output)
+		if err == nil {
+			return output, missing, nil
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return "", nil, err
+		}
+		parent := filepath.Dir(output)
+		if parent == output {
+			return "", nil, err
+		}
+		missing = append(missing, filepath.Base(output))
+		output = parent
+	}
 }
 
 func newRoomReplayBundleError(kind RoomReplayBundleErrorKind, field, artifact, expected, actual string, cause error) error {

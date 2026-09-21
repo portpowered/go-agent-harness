@@ -153,6 +153,32 @@ func TestRoomReplayServiceValidatesBundleAndOutputBoundaries(t *testing.T) {
 	}
 }
 
+func TestRoomReplayServiceValidatesOutputBoundaryThroughSymlinks(t *testing.T) {
+	bundle := filepath.Join(t.TempDir(), "bundle")
+	if err := os.Mkdir(bundle, 0o755); err != nil {
+		t.Fatalf("create bundle: %v", err)
+	}
+	plan := RoomReplayPlan{BundlePath: bundle}
+	service := roomReplayServiceForTest()
+
+	external := t.TempDir()
+	linkToBundle := filepath.Join(external, "bundle-link")
+	if err := os.Symlink(bundle, linkToBundle); err != nil {
+		t.Skipf("create symlink: %v", err)
+	}
+	if err := service.ValidateOutput(plan, filepath.Join(linkToBundle, "output")); err == nil {
+		t.Fatal("output through an external symlink into the source bundle was accepted")
+	}
+
+	linkFromBundle := filepath.Join(bundle, "external-link")
+	if err := os.Symlink(external, linkFromBundle); err != nil {
+		t.Skipf("create symlink: %v", err)
+	}
+	if err := service.ValidateOutput(plan, filepath.Join(linkFromBundle, "output")); err != nil {
+		t.Fatalf("output through a source symlink to an external directory was rejected: %v", err)
+	}
+}
+
 func TestLoadRoomReplayPlanRejectsConflictingInventoryMetadata(t *testing.T) {
 	bundle, manifest := writeRoomReplayBundle(t)
 	manifest["integrity"] = map[string]any{
