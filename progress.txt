@@ -4876,3 +4876,61 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   cut over every caller, delete the projection and exact three-file cluster,
   verify the adapter budget, and run `make prepush` plus all planned local gates
   on the exact clean candidate before pushing or updating the PR.
+
+### C271 live dependency and caller audit — 2026-09-21
+
+- Re-ran `rtk python3 "$FACTORY_ROOT/factory/scripts/project-control.py"
+  verify-work --type task --name
+  audio-runtime-c271-recover-selfplay-retirement --root "$FACTORY_ROOT"`;
+  admission remains `admitted` for `audio-runtime`. `prd.json.branchName`
+  exactly matches `codex/audio-runtime-c271-recover-selfplay-retirement`.
+  The pre-checkpoint candidate was clean at
+  `a3c309360321e59f93319b2b2fc5b5a9ced2c1f8`. Fetched `origin/main` at
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`; it and startup integration
+  `8bdafc7f947a3a2c9856220abdc539437035bd21` remain ancestors. No merge,
+  reset, rewrite or other worktree mutation occurred.
+- Preserved C249 remains clean at
+  `86a1eed17b099d510b39ce3d3b4ee7d8f7998881`; C220 `1bf045dd8` is reachable.
+  Canonical `work-task-45` (C248) and `work-task-101` (C269) remain
+  `init`/`PROCESSING`, each with a current `RUNNING` Worker Session. C248's
+  worktree currently has active session-turn edits in
+  `session_runtime_plan.go`, `session_runtime_factory.go`,
+  `session_runtime_turn.go`, and sessionturn tool-lifecycle files. C269's
+  worktree currently has active room/evidence service, admission, Wire,
+  architecture-policy and embedding changes. Their reviewed/guarded releases
+  remain unavailable; no peer-owned path was touched.
+- Read the full concluded `work-review-78` feedback for C259. Its four
+  findings remain limited to unbounded manifest/timeline admission, lost
+  recorder-failure degradation coverage, missing public replay round-trip
+  coverage, and missing exact-head preflight. It contains no self-play-specific
+  repair.
+- Refreshed the production reference census. The self-play service tree is
+  `interface.go`, seven files in `internal/`, and three files in `wire/`; its
+  boundary scan has no `agent-cli`, legacy `agentruntime`, or `init` matches.
+  Production caller paths include root and service Wire, CLI command path,
+  session, observability and self-play command files, runtime live/models/
+  playback-diagnostics/room-error files, and room evidence capture,
+  integrity and orchestration files. Room evidence writer references still
+  reach `session_self_play_evidence.go`; C269 release must be reconciled before
+  that owned legacy file can be deleted. Full production Go source is
+  unchanged since tested checkpoint `6079c6cbdbaff3281b8545839a10a12819157a69`
+  (`git diff` from there changes only this progress log), so the previously
+  recorded focused functional, race, repeated shutdown/failure, Wire, boundary
+  and diff checks still describe the unchanged implementation. No test was
+  rerun and no production code changed in this checkpoint.
+- The owned production cluster remains present:
+  `selfplay_service.go` 53 lines, `session_self_play.go` 641, and
+  `session_self_play_evidence.go` 716 (3 / 1,410). The obsolete CLI projection
+  remains 68 lines. The only candidate adapter remains one 85-line file, but
+  it still imports that projection and displays/consumes defaults, personas
+  and the opening seed, so it is not yet a compliant adapter. No caller
+  cutover, legacy deletion, `make prepush`, PR, push or SCRIPT handoff is
+  claimed.
+- Exact next action: keep C248/C269 paths frozen and refresh the canonical
+  releases. Once both reviewed/guarded releases are available, fetch current
+  main, reconcile C249/C220 and both peer behaviors additively, cut over every
+  discovered production caller, move all self-play decisions behind the
+  service-owned contract, delete the projection and exact three-file / 1,410-
+  line cluster, verify the sole stateless adapter is within 300 lines, then
+  run `make prepush` and every planned C271 local gate on the exact clean
+  candidate before pushing or submitting to SCRIPT CI.
