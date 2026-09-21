@@ -14,6 +14,7 @@ import (
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
+	"github.com/stretchr/testify/require"
 )
 
 func TestLiveFirstTurnTimeoutUsesInjectedScheduler(t *testing.T) {
@@ -543,12 +544,12 @@ func TestMediaPumpProviderCloseIsAnExpectedStop(t *testing.T) {
 	d := sessionwrap.WrapSession(context.Background(), provider, false, 1)
 	value := messages.NewSessionCloseValueWithTerminal("provider", "fixture_complete", "fixture", messages.TerminalReasonProviderAuthoredCompletion, messages.TerminalProvenanceProvider, messages.TerminalOutputComplete)
 	provider.receive.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeSessionClose, ResponseID: "response", Value: value})
-	_ = provider.Close()
+	require.NoError(t, provider.Close())
 	<-d.Done()
 	if msg, ok := d.Receive().Read(); !ok || msg.ResponseID != "" || msg.Value != value {
 		t.Fatalf("forwarded close = %+v, want uncorrelated close with original metadata", msg)
 	}
-	_ = d.Close()
+	require.NoError(t, d.Close())
 }
 func TestMediaPumpDeviceTeardownErrorsAreExpectedStops(t *testing.T) {
 	tests := []struct {

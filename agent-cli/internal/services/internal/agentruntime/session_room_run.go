@@ -180,7 +180,7 @@ func runRoomParticipant(
 			}
 		}()
 		if roomParticipantIsHuman(runtime.plan) {
-			pumpRoomHumanOutput(roomCtx, coordinator, runtime, startGate, participantEvidence, secrets)
+			pumpRoomHumanOutput(runtime.ctx, roomCtx, coordinator, runtime, startGate, participantEvidence, secrets)
 			return
 		}
 		pumpRoomMixer(roomCtx, coordinator, runtime, startGate, opts.onParticipantAudioInput, inputObserver, participantEvidence, secrets)
@@ -217,7 +217,7 @@ func runRoomParticipant(
 			results <- roomParticipantRunResult{plan: runtime.plan, runtime: runtime, connected: connected, connectErr: connectErr}
 			return
 		}
-		runErr := runRoomHumanCapture(roomCtx, coordinator, runtime, startGate, participantEvidence, opts, secrets)
+		runErr := runRoomHumanCapture(runtime.ctx, roomCtx, coordinator, runtime, startGate, participantEvidence, opts, secrets)
 		runErr = coordinator.participantRunError(runtime.plan.manifest.ID, runErr)
 		runtime.lifecycle.markRunDone(runErr)
 		connected, _, _, _, _, _, connectErr := runtime.lifecycle.snapshot()
@@ -544,7 +544,7 @@ func observeRoomParticipantStream(
 	if participantEvidence != nil {
 		// Durable WAV I/O only. A slow filesystem here must not delay the
 		// provider-to-peer handoff above.
-		_ = participantEvidence.observeAudio(pcm)
+		_ = participantEvidence.observeAudio(context.WithoutCancel(runtime.ctx), pcm) //nolint:errcheck // evidence status retains write failures without interrupting session delivery
 	}
 }
 

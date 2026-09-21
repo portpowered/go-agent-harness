@@ -26,13 +26,10 @@ import (
 )
 
 const (
-	sessionAudioInterruptReadTool  = "read_cube_state"
-	sessionAudioInterruptQueueTool = "queue_cube_moves"
-)
-
-var (
-	sessionAudioInterruptScheduledPCM = []byte{0x11, 0x20, 0x12, 0x20}
-	sessionAudioInterruptOverlapPCM   = []byte{0x91, 0x20, 0x92, 0x20}
+	sessionAudioInterruptReadTool     = "read_cube_state"
+	sessionAudioInterruptQueueTool    = "queue_cube_moves"
+	sessionAudioInterruptScheduledPCM = "\x11\x20\x12\x20"
+	sessionAudioInterruptOverlapPCM   = "\x91\x20\x92\x20"
 )
 
 type sessionAudioInterruptScenario string
@@ -82,10 +79,10 @@ func runSessionCommandAudioInterruptScenario(t *testing.T, scenario sessionAudio
 	tempDir := t.TempDir()
 	scheduledPath := filepath.Join(tempDir, "scheduled.raw")
 	interruptPath := filepath.Join(tempDir, "interrupt.raw")
-	if err := os.WriteFile(scheduledPath, bytes.Repeat(sessionAudioInterruptScheduledPCM, 160), 0o600); err != nil {
+	if err := os.WriteFile(scheduledPath, bytes.Repeat([]byte(sessionAudioInterruptScheduledPCM), 160), 0o600); err != nil {
 		t.Fatalf("write scheduled audio fixture: %v", err)
 	}
-	if err := os.WriteFile(interruptPath, bytes.Repeat(sessionAudioInterruptOverlapPCM, 160), 0o600); err != nil {
+	if err := os.WriteFile(interruptPath, bytes.Repeat([]byte(sessionAudioInterruptOverlapPCM), 160), 0o600); err != nil {
 		t.Fatalf("write interruption audio fixture: %v", err)
 	}
 
@@ -413,7 +410,7 @@ func assertSessionAudioInterruptScenario(t *testing.T, scenario sessionAudioInte
 	if len(commits[0].appends) == 0 {
 		t.Fatalf("first audio commit had no nonempty append group; writes=%s", sessionAudioInterruptWriteSummary(writes))
 	}
-	if !sessionAudioInterruptGroupHasPrefix(commits[0].appends, sessionAudioInterruptScheduledPCM) {
+	if !sessionAudioInterruptGroupHasPrefix(commits[0].appends, []byte(sessionAudioInterruptScheduledPCM)) {
 		t.Fatalf("first audio commit did not contain scheduled audio; commits=%#v", commits)
 	}
 
@@ -425,7 +422,7 @@ func assertSessionAudioInterruptScenario(t *testing.T, scenario sessionAudioInte
 			t.Fatalf("unfiltered provider commits = %d, want exactly scheduled + interruption; commits=%#v", len(commits), commits)
 		}
 		assertSessionAudioInterruptCommitInSpan(t, commits[1], targetSpan)
-		if !sessionAudioInterruptGroupHasPrefix(commits[1].appends, sessionAudioInterruptOverlapPCM) {
+		if !sessionAudioInterruptGroupHasPrefix(commits[1].appends, []byte(sessionAudioInterruptOverlapPCM)) {
 			t.Fatalf("unfiltered interruption commit did not contain overlap audio; commits=%#v", commits)
 		}
 		// Require ordered transitions without a minimum wall-time duration.
@@ -444,7 +441,7 @@ func assertSessionAudioInterruptScenario(t *testing.T, scenario sessionAudioInte
 				readSpan.terminal.event.Sequence, targetSpan.start.event.Sequence, readSpan.start.at, readSpan.terminal.at, targetSpan.start.at)
 		}
 		assertSessionAudioInterruptCommitInSpan(t, commits[1], targetSpan)
-		if !sessionAudioInterruptGroupHasPrefix(commits[1].appends, sessionAudioInterruptOverlapPCM) {
+		if !sessionAudioInterruptGroupHasPrefix(commits[1].appends, []byte(sessionAudioInterruptOverlapPCM)) {
 			t.Fatalf("named interruption commit did not contain overlap audio; commits=%#v", commits)
 		}
 	case sessionAudioInterruptNegative:
@@ -456,7 +453,7 @@ func assertSessionAudioInterruptScenario(t *testing.T, scenario sessionAudioInte
 			t.Fatalf("negative named scenario unexpectedly invoked %q; events=%#v", sessionAudioInterruptQueueTool, events)
 		}
 		for _, commit := range commits {
-			if sessionAudioInterruptGroupHasPrefix(commit.appends, sessionAudioInterruptOverlapPCM) {
+			if sessionAudioInterruptGroupHasPrefix(commit.appends, []byte(sessionAudioInterruptOverlapPCM)) {
 				t.Fatalf("negative named scenario emitted interruption audio; commits=%#v", commits)
 			}
 		}
@@ -701,10 +698,10 @@ func (w *sessionAudioInterruptWire) recordAudioCommit() {
 	w.mu.Lock()
 	group := append([][]byte(nil), w.audioGroup...)
 	w.audioGroup = nil
-	if sessionAudioInterruptWireGroupHasPrefix(group, sessionAudioInterruptOverlapPCM) {
+	if sessionAudioInterruptWireGroupHasPrefix(group, []byte(sessionAudioInterruptOverlapPCM)) {
 		w.interrupts++
 	}
-	isInterrupt := sessionAudioInterruptWireGroupHasPrefix(group, sessionAudioInterruptOverlapPCM)
+	isInterrupt := sessionAudioInterruptWireGroupHasPrefix(group, []byte(sessionAudioInterruptOverlapPCM))
 	w.mu.Unlock()
 	if isInterrupt {
 		select {

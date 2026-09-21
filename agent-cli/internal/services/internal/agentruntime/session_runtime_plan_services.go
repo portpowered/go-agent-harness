@@ -7,6 +7,8 @@ import (
 	"io"
 	"time"
 
+	sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
@@ -16,14 +18,92 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
 
-func configureSessionRuntimePlan(plan sessionRuntimePlan, opts SessionRunOptions, selection SessionRuntimeSelection, interactivePolicy InteractiveToolPolicy, scheduledAudioDispatch ScheduledAudioDispatchPolicy, capabilityCoordinator SessionCapabilityCoordinator, recordingClaim *sessionRecordingClaim) (sessionRuntimePlan, error) {
+func planSessionRuntimeWithContext(ctx context.Context, opts SessionRunOptions) (sessionRuntimePlan, error) {
+	factory := opts.runtimeFactory
+	if !factory.configured() {
+		factory = newDefaultSessionRuntimeFactory()
+	}
+	return planSessionRuntimeWithFactoryAndContext(ctx, opts, factory)
+}
+
+func planSessionRuntimeWithFactoryAndContext(ctx context.Context, opts SessionRunOptions, factory sessionRuntimeFactory) (plan sessionRuntimePlan, planErr error) {
+	if ctx == nil {
+		return sessionRuntimePlan{}, errors.New("session planning context is required")
+	}
+	if err := ctx.Err(); err != nil {
+		return sessionRuntimePlan{}, err
+	}
+	recordingClaim, err := ensureSessionRecordingClaim(&opts)
+	if err != nil {
+		return sessionRuntimePlan{}, err
+	}
+	opts.ToolDefinitions = messages.CanonicalToolDefinitions(opts.ToolDefinitions)
+	opts, err = resolveSessionRuntimeFilesystem(opts)
+	if err != nil {
+		return sessionRuntimePlan{}, err
+	}
+	var capabilityCoordinator SessionCapabilityCoordinator
+	opts, capabilityCoordinator = prepareSessionCapabilityCoordinator(opts)
+	defer func() {
+		if planErr != nil && recordingClaim != nil {
+			planErr = errors.Join(planErr, recordingClaim.release())
+		}
+		if planErr != nil {
+			closeSessionCapabilityIfNeeded(capabilityCoordinator, &planErr)
+		}
+	}()
+	interactivePolicy, err := resolveSessionInteractiveToolPolicy(opts, opts.ToolDefinitions)
+	if err != nil {
+		return sessionRuntimePlan{}, err
+	}
+	if err := sessioncontract.ValidateSessionAudioInTurnBarge(opts.AudioInTurnBarge, len(opts.AudioInputs)); err != nil {
+		return sessionRuntimePlan{}, err
+	}
+	if opts.ReplayPath == "" {
+		// Replay keeps its capture-owned provider identity.
+		opts.Provider = effectiveSessionProvider(opts)
+	}
+	selection, err := resolveSessionRuntimeSelection(opts)
+	if err != nil {
+		return sessionRuntimePlan{}, err
+	}
+	plan, err = planSessionRuntimeForSelection(opts, selection, factory)
+	if err != nil {
+		return sessionRuntimePlan{}, err
+	}
+	return configureSessionRuntimePlan(ctx, plan, opts, selection, interactivePolicy, scheduledAudioDispatchPolicyForOptions(opts), capabilityCoordinator, recordingClaim)
+}
+
+func resolveSessionRuntimeFilesystem(opts SessionRunOptions) (SessionRunOptions, error) {
+	filesystemPolicy := opts.FilesystemPolicy
+	if filesystemPolicy == nil {
+		var err error
+		filesystemPolicy, err = tools.ResolveFilesystemPolicy(opts.WorkDir, opts.AllowPaths...)
+		if err != nil {
+			return SessionRunOptions{}, fmt.Errorf("resolve filesystem scope: %w", err)
+		}
+	}
+	opts.FilesystemPolicy = filesystemPolicy
+	opts.WorkDir = filesystemPolicy.PrimaryRoot()
+	opts.AllowPaths = filesystemPolicy.AdditionalRoots()
+	return opts, nil
+}
+
+func planSessionRuntimeForSelection(opts SessionRunOptions, selection SessionRuntimeSelection, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
+	if selection.Transport == SessionTransportWebRTC && opts.ReplayPath == "" {
+		return planWebRTCSessionRuntime(opts, selection, factory)
+	}
+	return planSessionRuntimeMode(opts, factory)
+}
+
+func configureSessionRuntimePlan(ctx context.Context, plan sessionRuntimePlan, opts SessionRunOptions, selection SessionRuntimeSelection, interactivePolicy InteractiveToolPolicy, scheduledAudioDispatch ScheduledAudioDispatchPolicy, capabilityCoordinator SessionCapabilityCoordinator, recordingClaim *sessionRecordingClaim) (sessionRuntimePlan, error) {
 	if err := configureSessionRuntimeLoop(&plan, opts, interactivePolicy, scheduledAudioDispatch); err != nil {
 		return sessionRuntimePlan{}, err
 	}
-	if err := configureSessionRuntimeAudio(&plan, opts); err != nil {
+	if err := configureSessionRuntimeAudio(ctx, &plan, opts); err != nil {
 		return sessionRuntimePlan{}, err
 	}
-	configureSessionRuntimeDeviceObservers(&plan, opts.Observability)
+	configureSessionRuntimeDeviceObservers(ctx, &plan, opts.Observability)
 	plan.selection = selection
 	plan.transport = selection.Transport
 	plan.signalingEndpoint = selection.SignalingEndpoint
@@ -109,7 +189,7 @@ func configureSessionRuntimeLoop(plan *sessionRuntimePlan, opts SessionRunOption
 	return nil
 }
 
-func configureSessionRuntimeAudio(plan *sessionRuntimePlan, opts SessionRunOptions) error {
+func configureSessionRuntimeAudio(ctx context.Context, plan *sessionRuntimePlan, opts SessionRunOptions) error {
 	if opts.AudioService == nil {
 		return errors.New("audio service is required for session rate resolution")
 	}
@@ -123,7 +203,7 @@ func configureSessionRuntimeAudio(plan *sessionRuntimePlan, opts SessionRunOptio
 			outputRate = int(request.OutputAudioSampleRate)
 		}
 	}
-	rates, err := opts.AudioService.ResolveRates(context.Background(), audioio.RateRequest{
+	rates, err := opts.AudioService.ResolveRates(ctx, audioio.RateRequest{
 		Provider: plan.provider, Replay: opts.ReplayPath != "",
 		CapturedInputRate: inputRate, CapturedOutputRate: outputRate,
 	})
@@ -138,7 +218,7 @@ func configureSessionRuntimeAudio(plan *sessionRuntimePlan, opts SessionRunOptio
 	if configurer, ok := plan.inferencer.(runtimeAudioInputConfigurer); ok {
 		configurer.SetSessionAudioInput(models.AudioFormatPCM16, models.SampleRate(rates.InputRate))
 	}
-	plan.audioInputs, err = opts.AudioService.ConvertScheduledInputs(context.Background(), plan.audioInputs, rates.InputRate)
+	plan.audioInputs, err = opts.AudioService.ConvertScheduledInputs(ctx, plan.audioInputs, rates.InputRate)
 	if err != nil {
 		return err
 	}
@@ -152,13 +232,13 @@ func configureSessionRuntimeAudio(plan *sessionRuntimePlan, opts SessionRunOptio
 	return nil
 }
 
-func configureSessionRuntimeDeviceObservers(plan *sessionRuntimePlan, dependencies observability.Dependencies) {
+func configureSessionRuntimeDeviceObservers(ctx context.Context, plan *sessionRuntimePlan, dependencies observability.Dependencies) {
 	// Resolve the diagnostic sink so device overflow remains visible even when
 	// the caller omitted SessionRunOptions.Diagnostics.
 	plan.rtcDeviceRequest.PlaybackObserver = combineRTCDevicePlaybackObservers(
 		plan.rtcDeviceRequest.PlaybackObserver,
 		sessionPlaybackDiagnosticObserver(resolvePlaybackDiagnosticSink(plan.diagnostics)),
-		sessionPlaybackObservabilityObserver(dependencies.MetricSampler, dependencies.Logger),
+		sessionPlaybackObservabilityObserver(context.WithoutCancel(ctx), dependencies.MetricSampler, dependencies.Logger),
 	)
 	plan.rtcDeviceRequest.PlaybackReceiptObserver = combineRTCDevicePlaybackReceiptObservers(
 		plan.rtcDeviceRequest.PlaybackReceiptObserver,
@@ -170,7 +250,7 @@ func configureSessionRuntimeDeviceObservers(plan *sessionRuntimePlan, dependenci
 	)
 	plan.rtcDeviceRequest.CaptureObserver = combineRTCDeviceCaptureObservers(
 		plan.rtcDeviceRequest.CaptureObserver,
-		sessionCaptureObservabilityObserver(dependencies.MetricSampler, dependencies.Logger),
+		sessionCaptureObservabilityObserver(context.WithoutCancel(ctx), dependencies.MetricSampler, dependencies.Logger),
 	)
 }
 

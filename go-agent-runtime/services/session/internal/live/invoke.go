@@ -13,6 +13,8 @@ import (
 	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
 )
 
+const liveMediaPumpCapacity = 3
+
 // RunLive owns the complete invocation boundary for hosts that have local
 // media. Device admission, provider startup, bounded event delivery, pump
 // cancellation, and terminal joining stay together so a CLI transport cannot
@@ -277,7 +279,7 @@ func (i *liveInvocation) startPump(name string, run func(context.Context) error)
 		return
 	}
 	if i.pumps == nil {
-		i.pumps = make(chan error, 3)
+		i.pumps = make(chan error, liveMediaPumpCapacity)
 	}
 	i.count++
 	go i.runPump(name, run)

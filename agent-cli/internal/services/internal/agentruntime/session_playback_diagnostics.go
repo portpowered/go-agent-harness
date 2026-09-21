@@ -184,7 +184,7 @@ func sessionPlaybackDiagnosticObserver(sink SessionDiagnosticSink) runtimeDevice
 // sessionPlaybackObservabilityObserver exports the complete synchronized
 // queue snapshot after the device service closes its handle, outside native
 // callbacks.
-func sessionPlaybackObservabilityObserver(sampler observability.MetricSampler, logger observability.Logger) runtimeDevices.PlaybackObserver {
+func sessionPlaybackObservabilityObserver(ctx context.Context, sampler observability.MetricSampler, logger observability.Logger) runtimeDevices.PlaybackObserver {
 	sampler = observability.EnsureMetricSampler(sampler)
 	logger = observability.EnsureLogger(logger)
 	return func(id string, stats audio.PlaybackQueueStats) {
@@ -194,7 +194,7 @@ func sessionPlaybackObservabilityObserver(sampler observability.MetricSampler, l
 			"channels":    strconv.Itoa(stats.Format.Channels),
 		}
 		for _, definition := range playbackMetricSamples {
-			_ = observability.TrySample(context.Background(), sampler, observability.MetricSample{
+			_ = observability.TrySample(ctx, sampler, observability.MetricSample{ //nolint:errcheck // telemetry cannot fail device teardown
 				Name: definition.name, Kind: definition.kind, Unit: definition.unit,
 				Value: definition.value(stats), Fields: fields,
 			})
@@ -208,13 +208,13 @@ func sessionPlaybackObservabilityObserver(sampler observability.MetricSampler, l
 		logFields["underflow_samples"] = strconv.FormatUint(stats.UnderflowSamples, 10)
 		logFields["zero_filled_samples"] = strconv.FormatUint(stats.ZeroFilledSamples, 10)
 		logFields["rendered_samples"] = strconv.FormatUint(stats.RenderedSamples, 10)
-		_ = observability.TryLog(context.Background(), logger, observability.LogRecord{
+		_ = observability.TryLog(ctx, logger, observability.LogRecord{ //nolint:errcheck // telemetry cannot fail device teardown
 			Level: level, Message: SessionLogMessagePlaybackSnapshot, Fields: logFields,
 		})
 	}
 }
 
-func sessionCaptureObservabilityObserver(sampler observability.MetricSampler, logger observability.Logger) runtimeDevices.CaptureObserver {
+func sessionCaptureObservabilityObserver(ctx context.Context, sampler observability.MetricSampler, logger observability.Logger) runtimeDevices.CaptureObserver {
 	sampler = observability.EnsureMetricSampler(sampler)
 	logger = observability.EnsureLogger(logger)
 	return func(id string, stats audio.CaptureQueueStats) {
@@ -232,7 +232,7 @@ func sessionCaptureObservabilityObserver(sampler observability.MetricSampler, lo
 			{Name: "audio.capture.sequence_gaps", Kind: "counter", Value: float64(stats.SequenceGaps), Unit: "gaps", Fields: fields},
 		}
 		for _, sample := range metrics {
-			_ = observability.TrySample(context.Background(), sampler, sample)
+			_ = observability.TrySample(ctx, sampler, sample) //nolint:errcheck // telemetry cannot fail device teardown
 		}
 		level := "info"
 		if stats.DroppedSamples > 0 || stats.SequenceGaps > 0 {
@@ -241,7 +241,7 @@ func sessionCaptureObservabilityObserver(sampler observability.MetricSampler, lo
 		fields["dropped_frames"] = strconv.FormatUint(stats.DroppedFrames, 10)
 		fields["dropped_samples"] = strconv.FormatUint(stats.DroppedSamples, 10)
 		fields["sequence_gaps"] = strconv.FormatUint(stats.SequenceGaps, 10)
-		_ = observability.TryLog(context.Background(), logger, observability.LogRecord{
+		_ = observability.TryLog(ctx, logger, observability.LogRecord{ //nolint:errcheck // telemetry cannot fail device teardown
 			Level: level, Message: "audio capture queue finalized", Fields: fields,
 		})
 	}

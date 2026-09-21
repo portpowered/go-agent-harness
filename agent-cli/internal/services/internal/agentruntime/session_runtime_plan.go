@@ -1,8 +1,6 @@
 // This file owns the shared session-runtime modes, factories, plan state, generic planning and dispatch, execution, and cross-provider error handling.
 package agentruntime
 
-import sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
-
 import (
 	"context"
 	"errors"
@@ -314,72 +312,12 @@ func (p sessionRuntimePlan) configureLoopObserver(loop *sessionLoopOptions) {
 	loop.observer = obs
 }
 func planSessionRuntime(opts SessionRunOptions) (sessionRuntimePlan, error) {
-	factory := opts.runtimeFactory
-	if !factory.configured() {
-		// Kept for package-local test callers while composition migrates. All
-		// production service entrypoints install runtimeFactory from Wire.
-		factory = newDefaultSessionRuntimeFactory()
-	}
-	return planSessionRuntimeWithFactory(opts, factory)
+	return planSessionRuntimeWithContext(context.Background(), opts)
 }
 
 //lint:ignore U1000 package tests exercise the context-free planning seam.
-func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntimeFactory) (plan sessionRuntimePlan, planErr error) {
-	recordingClaim, err := ensureSessionRecordingClaim(&opts)
-	if err != nil {
-		return sessionRuntimePlan{}, err
-	}
-	opts.ToolDefinitions = messages.CanonicalToolDefinitions(opts.ToolDefinitions)
-	filesystemPolicy := opts.FilesystemPolicy
-	if filesystemPolicy == nil {
-		var err error
-		filesystemPolicy, err = tools.ResolveFilesystemPolicy(opts.WorkDir, opts.AllowPaths...)
-		if err != nil {
-			return sessionRuntimePlan{}, fmt.Errorf("resolve filesystem scope: %w", err)
-		}
-	}
-	opts.FilesystemPolicy = filesystemPolicy
-	opts.WorkDir = filesystemPolicy.PrimaryRoot()
-	opts.AllowPaths = filesystemPolicy.AdditionalRoots()
-	var capabilityCoordinator SessionCapabilityCoordinator
-	opts, capabilityCoordinator = prepareSessionCapabilityCoordinator(opts)
-	defer func() {
-		if planErr != nil && recordingClaim != nil {
-			_ = recordingClaim.release()
-		}
-		if planErr != nil {
-			closeSessionCapabilityIfNeeded(capabilityCoordinator, &planErr)
-		}
-	}()
-	interactivePolicy, err := resolveSessionInteractiveToolPolicy(opts, opts.ToolDefinitions)
-	if err != nil {
-		return sessionRuntimePlan{}, err
-	}
-	if err := sessioncontract.ValidateSessionAudioInTurnBarge(opts.AudioInTurnBarge, len(opts.AudioInputs)); err != nil {
-		return sessionRuntimePlan{}, err
-	}
-	scheduledAudioDispatch := scheduledAudioDispatchPolicyForOptions(opts)
-
-	// Resolve the provider once at the session boundary so every live mode
-	// (bare, browser-enabled, recorded, injected, and RTC) consumes the same
-	// realtime-capable policy. Replay keeps its capture-owned provider identity.
-	if opts.ReplayPath == "" {
-		opts.Provider = effectiveSessionProvider(opts)
-	}
-
-	selection, err := resolveSessionRuntimeSelection(opts)
-	if err != nil {
-		return sessionRuntimePlan{}, err
-	}
-	if selection.Transport == SessionTransportWebRTC && opts.ReplayPath == "" {
-		plan, err = planWebRTCSessionRuntime(opts, selection, factory)
-	} else {
-		plan, err = planSessionRuntimeMode(opts, factory)
-	}
-	if err != nil {
-		return sessionRuntimePlan{}, err
-	}
-	return configureSessionRuntimePlan(plan, opts, selection, interactivePolicy, scheduledAudioDispatch, capabilityCoordinator, recordingClaim)
+func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
+	return planSessionRuntimeWithFactoryAndContext(context.Background(), opts, factory)
 }
 
 // wireSessionRecordingClaim redirects one recording plan's capture flush

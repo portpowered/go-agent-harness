@@ -4558,3 +4558,29 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   functional, integration, race, hermetic, and Wire command on that exact
   commit, repair any local failure and rerun the complete gate, then push/open
   the PR with the verified SHA and command results for SCRIPT CI.
+
+
+# C229 pinned prepush repair checkpoint — 2026-09-20
+
+- The first clean candidate was `2223907bf35d08fd7367412620843b4494bf661b`.
+  `rtk make prepush` passed formatting, architecture-size-check, Wire generation,
+  and vet, then failed the pinned golangci-lint 2.9.0 gate with 16 findings.
+  The installed default 2.3.0 was replaced in the repository-local tool cache
+  by the pinned version; no tracked generated drift was left by that run.
+- Repaired all locally reported lint findings: propagated request contexts
+  through image, recording, room replay and observability paths; retained
+  best-effort telemetry/error semantics explicitly; checked test close and
+  assertion errors; removed unused test state/helper code; and reduced planner,
+  recording and replay wrapper complexity while preserving cleanup behavior.
+  Architecture baselines were ratcheted only to measured reductions.
+- Current repaired worktree checks pass: `rtk make lint` with the pinned 2.9.0
+  binary (all 15 modules, zero issues); `rtk make architecture-size-check`
+  (208 packages, 1,934 files, 28,453 functions); `rtk go test
+  ./go-agent-runtime/services/session/internal/live/...
+  ./agent-cli/internal/services/internal/agentruntime -count=1 -timeout=300s`
+  (1,016 tests across 7 packages); and `rtk git diff --check`.
+- The failed prepush candidate is not the handoff candidate. No PR/push exists.
+  Next: commit these repairs and this checkpoint, then run `rtk make prepush`
+  and every C229-05 functional, integration, race, hermetic, and Wire command on
+  the resulting exact clean SHA. Repair locally and rerun the entire command set
+  on any changed commit before pushing or opening the PR.

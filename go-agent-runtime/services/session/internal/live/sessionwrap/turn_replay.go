@@ -11,6 +11,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
+const turnReplayMessageCapacity = 128
+
 type inferencerAdapter struct {
 	inner      messages.SessionInferencer
 	sampleRate int
@@ -22,11 +24,14 @@ func WrapTurnReplay(inner messages.SessionInferencer, sampleRate int, continuous
 }
 
 func (i inferencerAdapter) ConnectSession(ctx context.Context) (messages.Session, error) {
+	if ctx == nil {
+		return nil, errors.New("turn replay context is required")
+	}
 	inner, err := i.inner.ConnectSession(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return newMediaSession(inner, i.sampleRate, i.continuous), nil
+	return newMediaSession(ctx, inner, i.sampleRate, i.continuous), nil
 }
 
 type mediaSession struct {
@@ -42,7 +47,7 @@ type mediaSession struct {
 	terminalErr error
 }
 
-func newMediaSession(inner messages.Session, sampleRate int, continuous bool) *mediaSession {
+func newMediaSession(ctx context.Context, inner messages.Session, sampleRate int, continuous bool) *mediaSession {
 	if sampleRate <= 0 {
 		sampleRate = sharedaudio.DefaultSessionMediaSampleRate
 	}
@@ -52,12 +57,12 @@ func newMediaSession(inner messages.Session, sampleRate int, continuous bool) *m
 	s := &mediaSession{
 		inner:     inner,
 		media:     media,
-		received:  messages.NewTypedBuffer[messages.StreamMessage](128),
+		received:  messages.NewTypedBuffer[messages.StreamMessage](turnReplayMessageCapacity),
 		done:      make(chan struct{}),
 		stop:      make(chan struct{}),
 		forwarded: make(chan struct{}),
 	}
-	go s.forward(context.Background())
+	go s.forward(ctx)
 	return s
 }
 
@@ -107,13 +112,16 @@ func (s *mediaSession) Close() error {
 	}
 	s.closeOnce.Do(func() {
 		close(s.stop)
+		var mediaErr error
 		if s.media != nil {
-			_ = s.media.Close()
+			mediaErr = s.media.Close()
 		}
+		var innerErr error
 		if s.inner != nil {
-			s.closeErr = s.inner.Close()
+			innerErr = s.inner.Close()
 		}
 		<-s.forwarded
+		s.closeErr = errors.Join(mediaErr, innerErr)
 	})
 	return s.closeErr
 }
@@ -128,7 +136,9 @@ func (s *mediaSession) forward(ctx context.Context) {
 		if err := s.TerminalError(); err != nil {
 			s.media.FailInbound(err)
 		}
-		_ = s.media.Close()
+		if err := s.media.Close(); err != nil {
+			s.fail(fmt.Errorf("close turn replay media: %w", err))
+		}
 	}()
 
 	source := s.inner.Receive()
@@ -163,27 +173,9 @@ func (s *mediaSession) drain(ctx context.Context, source *messages.TypedBuffer[m
 }
 
 func (s *mediaSession) forwardMessage(ctx context.Context, msg messages.StreamMessage) bool {
-	switch msg.Type {
-	case messages.StreamTypeAudioDelta:
-		value, ok := msg.Value.(*messages.AudioDeltaValue)
-		if !ok || value == nil {
-			s.fail(errors.New("turn replay audio delta has no PCM payload"))
-			break
-		}
-		samples, err := codec.DecodePCM16(value.Content)
-		if err != nil {
-			s.fail(fmt.Errorf("decode turn replay PCM16: %w", err))
-			break
-		}
-		if err := s.media.PushInbound(samples); err != nil {
-			s.fail(fmt.Errorf("queue turn replay PCM16: %w", err))
-		}
-	case messages.StreamTypeAudioEnd:
-		if err := s.media.FlushInbound(); err != nil {
-			s.fail(fmt.Errorf("flush turn replay PCM16: %w", err))
-		}
+	if err := s.processMediaMessage(msg); err != nil {
+		s.fail(err)
 	}
-
 	outcome := s.received.WriteWaitContextOrDone(ctx, s.stop, msg)
 	if !outcome.OK() {
 		if outcome.Err != nil {
@@ -192,9 +184,34 @@ func (s *mediaSession) forwardMessage(ctx context.Context, msg messages.StreamMe
 		return false
 	}
 	if msg.Type == messages.StreamTypeSessionClose {
-		_ = s.media.Close()
+		if err := s.media.Close(); err != nil {
+			s.fail(fmt.Errorf("close turn replay media: %w", err))
+		}
 	}
 	return true
+}
+
+func (s *mediaSession) processMediaMessage(msg messages.StreamMessage) error {
+	if msg.Type == messages.StreamTypeAudioDelta {
+		value, ok := msg.Value.(*messages.AudioDeltaValue)
+		if !ok || value == nil {
+			return errors.New("turn replay audio delta has no PCM payload")
+		}
+		samples, err := codec.DecodePCM16(value.Content)
+		if err != nil {
+			return fmt.Errorf("decode turn replay PCM16: %w", err)
+		}
+		if err := s.media.PushInbound(samples); err != nil {
+			return fmt.Errorf("queue turn replay PCM16: %w", err)
+		}
+		return nil
+	}
+	if msg.Type == messages.StreamTypeAudioEnd {
+		if err := s.media.FlushInbound(); err != nil {
+			return fmt.Errorf("flush turn replay PCM16: %w", err)
+		}
+	}
+	return nil
 }
 
 func (s *mediaSession) fail(err error) {

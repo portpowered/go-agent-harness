@@ -103,7 +103,11 @@ func assertAudioioRateResolution(t *testing.T, testCase audioioRateResolutionCas
 	t.Helper()
 	inferencer := &sessionAudioContractInferencer{request: inference.SessionRequest{Config: testCase.request}}
 	if testCase.opts.SessionInferencer != nil {
-		inferencer = testCase.opts.SessionInferencer.(*sessionAudioContractInferencer)
+		var ok bool
+		inferencer, ok = testCase.opts.SessionInferencer.(*sessionAudioContractInferencer)
+		if !ok {
+			t.Fatalf("session inferencer = %T, want *sessionAudioContractInferencer", testCase.opts.SessionInferencer)
+		}
 	}
 	inputRate, outputRate := testCase.inputRate, testCase.outputRate
 	request := inferencer.Request().Config

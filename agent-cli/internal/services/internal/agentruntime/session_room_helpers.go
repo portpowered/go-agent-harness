@@ -82,7 +82,7 @@ func configureRoomParticipantBrowserOptions(ctx context.Context, opts RoomRunOpt
 		}
 		return roomParticipantBrowserStartupFailure(sessionOptions, plan, participant, secret, err)
 	}
-	composed, err := composeRoomParticipantBrowserCapabilities(participant, staticCapabilities, browserCapabilities)
+	composed, err := composeRoomParticipantBrowserCapabilities(ctx, participant, staticCapabilities, browserCapabilities)
 	if err != nil {
 		return sessionOptions, false, fmt.Errorf("room participant %q browser composition contract: %w", participant.ID, err)
 	}
@@ -164,22 +164,22 @@ func closeRoomParticipantDevices(runtime *roomParticipantRuntime, cleanup *roomC
 	return boundedRoomCleanupOperation(cleanup, roomLifecycleWorkLabel(id, "devices"), runtime.deviceHandle.Close)
 }
 
-func runRoomHumanCapture(roomCtx context.Context, coordinator *roomCoordinator, runtime *roomParticipantRuntime, startGate <-chan struct{}, participantEvidence *roomParticipantEvidence, opts RoomRunOptions, secrets []string) error {
+func runRoomHumanCapture(ctx, roomCtx context.Context, coordinator *roomCoordinator, runtime *roomParticipantRuntime, startGate <-chan struct{}, participantEvidence *roomParticipantEvidence, opts RoomRunOptions, secrets []string) error {
 	if runtime == nil || runtime.plan == nil || runtime.input == nil || runtime.mixer == nil {
 		return errors.New("human participant input device is not ready")
 	}
 	select {
 	case <-startGate:
-	case <-runtime.ctx.Done():
+	case <-ctx.Done():
 		return nil
 	case <-roomCtx.Done():
 		return nil
 	}
 	participantID := runtime.plan.manifest.ID
 	media := &roomHumanCaptureMedia{coordinator: coordinator, runtime: runtime, opts: opts, evidence: participantEvidence, secrets: secrets}
-	if err := runtime.input.Pump(runtime.ctx, media); err != nil {
-		if runtime.ctx.Err() != nil || coordinator.isStopping() || errors.Is(err, context.Canceled) {
-			return nil
+	if err := runtime.input.Pump(ctx, media); err != nil {
+		if ctx.Err() != nil || coordinator.isStopping() || errors.Is(err, context.Canceled) {
+			return nil //nolint:nilerr // participant and room shutdown are expected cancellation paths
 		}
 		failure := roomParticipantFailure(participantID, fmt.Errorf("capture human input device: %w", err), secrets)
 		coordinator.failParticipant(participantID, failure)
@@ -188,21 +188,23 @@ func runRoomHumanCapture(roomCtx context.Context, coordinator *roomCoordinator, 
 	return nil
 }
 
-func pumpRoomHumanOutput(ctx context.Context, coordinator *roomCoordinator, runtime *roomParticipantRuntime, startGate <-chan struct{}, participantEvidence *roomParticipantEvidence, secrets []string) {
+func pumpRoomHumanOutput(ctx, roomCtx context.Context, coordinator *roomCoordinator, runtime *roomParticipantRuntime, startGate <-chan struct{}, participantEvidence *roomParticipantEvidence, secrets []string) {
 	if runtime == nil || runtime.mixer == nil || runtime.output == nil {
 		return
 	}
 	select {
 	case <-startGate:
-	case <-runtime.ctx.Done():
-		return
 	case <-ctx.Done():
+		return
+	case <-roomCtx.Done():
 		return
 	}
 	media := newRoomHumanPlaybackMedia(runtime, participantEvidence)
-	err := runtime.output.Pump(runtime.ctx, media)
-	media.finish()
-	if err != nil && runtime.ctx.Err() == nil && ctx.Err() == nil && !coordinator.isStopping() &&
+	err := runtime.output.Pump(ctx, media)
+	if finishErr := media.finish(); finishErr != nil {
+		err = errors.Join(err, finishErr)
+	}
+	if err != nil && ctx.Err() == nil && roomCtx.Err() == nil && !coordinator.isStopping() &&
 		!errors.Is(err, context.Canceled) && !errors.Is(err, room.ErrMixerClosed) {
 		coordinator.failParticipant(runtime.plan.manifest.ID, roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("write human output device: %w", err), secrets))
 	}
@@ -228,7 +230,9 @@ func (m *roomHumanCaptureMedia) WriteFrame(ctx context.Context, frame audio.PCMF
 	}
 	pcm := encodeRoomPCM16(frame.Samples)
 	if m.evidence != nil {
-		_ = m.evidence.observeSentAudio(pcm)
+		if err := m.evidence.observeSentAudio(ctx, pcm); err != nil {
+			return fmt.Errorf("record human capture evidence: %w", err)
+		}
 	}
 	sourceRate := m.runtime.mixer.Format().SampleRate
 	return m.fanOutPCM(ctx, participantID, pcm, sourceRate)
@@ -304,7 +308,9 @@ func (m *roomHumanPlaybackMedia) ReadFrame(ctx context.Context) (audio.PCMFrame,
 	if m == nil || m.runtime == nil || m.runtime.mixer == nil {
 		return audio.PCMFrame{}, errors.New("human participant output mixer is unavailable")
 	}
-	m.resolvePending(true)
+	if err := m.resolvePending(true); err != nil {
+		return audio.PCMFrame{}, err
+	}
 	mixed, err := m.runtime.mixer.ReadFrameWithSources(ctx)
 	if err != nil {
 		return audio.PCMFrame{}, err
@@ -322,16 +328,16 @@ func (m *roomHumanPlaybackMedia) ReadFrame(ctx context.Context) (audio.PCMFrame,
 
 func (m *roomHumanPlaybackMedia) Close() error {
 	if m != nil {
-		m.resolvePending(false)
+		return m.resolvePending(false)
 	}
 	return nil
 }
 
-func (m *roomHumanPlaybackMedia) finish() { _ = m.Close() }
+func (m *roomHumanPlaybackMedia) finish() error { return m.Close() }
 
-func (m *roomHumanPlaybackMedia) resolvePending(accepted bool) {
+func (m *roomHumanPlaybackMedia) resolvePending(accepted bool) error {
 	if m == nil || !m.pending {
-		return
+		return nil
 	}
 	if m.runtime.ingress != nil {
 		reason := ""
@@ -340,12 +346,14 @@ func (m *roomHumanPlaybackMedia) resolvePending(accepted bool) {
 		}
 		m.runtime.ingress.resolveFrame(m.sources, len(m.pcm), reason)
 	}
+	var err error
 	if accepted && m.evidence != nil {
-		_ = m.evidence.observeReceivedAudio(m.pcm)
+		err = m.evidence.observeReceivedAudio(m.pcm)
 	}
 	m.pending = false
 	m.sources = nil
 	m.pcm = nil
+	return err
 }
 
 // roomHumanOutputClock keeps hold-tone deadlines in the room's injected time

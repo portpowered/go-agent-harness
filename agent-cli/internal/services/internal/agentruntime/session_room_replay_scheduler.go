@@ -50,7 +50,7 @@ type roomReplaySpeechSegment struct {
 // room clock below.
 func newRoomReplaySchedule(ctx context.Context, replay RoomReplayPlan, plans []*roomParticipantPlan, format room.PCM16Format, audioService audioio.Service) (*roomReplaySchedule, error) {
 	if ctx == nil {
-		ctx = context.Background()
+		return nil, errors.New("room replay schedule context is required")
 	}
 	if format == (room.PCM16Format{}) {
 		format = room.DefaultPCM16Format()
@@ -114,7 +114,7 @@ func newRoomReplaySchedule(ctx context.Context, replay RoomReplayPlan, plans []*
 		if readErr != nil {
 			return nil, fmt.Errorf("read room replay participant %q sent PCM: %w", participant.ID, readErr)
 		}
-		pcm, readErr = normalizeRoomReplayPCM(audioService, pcm, replay.PCMFormat, format)
+		pcm, readErr = normalizeRoomReplayPCM(ctx, audioService, pcm, replay.PCMFormat, format)
 		if readErr != nil {
 			return nil, fmt.Errorf("normalize room replay participant %q sent PCM: %w", participant.ID, readErr)
 		}
@@ -366,7 +366,7 @@ func roomReplayPCMFrame(pcm []byte, frameIndex, frameBytes int) []byte {
 	return frame
 }
 
-func normalizeRoomReplayPCM(audioService audioio.Service, pcm []byte, source RoomReplayPCMFormat, target room.PCM16Format) ([]byte, error) {
+func normalizeRoomReplayPCM(ctx context.Context, audioService audioio.Service, pcm []byte, source RoomReplayPCMFormat, target room.PCM16Format) ([]byte, error) {
 	sourceChannels := source.Channels
 	if sourceChannels <= 0 {
 		sourceChannels = 1
@@ -393,7 +393,7 @@ func normalizeRoomReplayPCM(audioService audioio.Service, pcm []byte, source Roo
 	if audioService == nil {
 		return nil, errors.New("audio service is required for room replay conversion")
 	}
-	converted, err := audioService.ConvertPCM16(context.Background(), audioio.PCM16Request{
+	converted, err := audioService.ConvertPCM16(ctx, audioio.PCM16Request{
 		PCM: pcm, SourceRate: source.SampleRate, TargetRate: target.SampleRate,
 		SourceChannels: sourceChannels, TargetChannels: target.Channels,
 	})

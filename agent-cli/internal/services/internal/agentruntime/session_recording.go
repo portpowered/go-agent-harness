@@ -136,7 +136,7 @@ func runSessionWithImagesAndRecordingDirectory(
 		return err
 	}
 	defer imageCleanup()
-	plan, wirePrompt, cleanup, err := planSessionImageRuntimeForDirectory(opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, len(opts.SessionRunOptions.AudioInputs) > 0)
+	plan, wirePrompt, cleanup, err := planSessionImageRuntimeForDirectory(ctx, opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, len(opts.SessionRunOptions.AudioInputs) > 0)
 	if err != nil {
 		return err
 	}
@@ -202,7 +202,7 @@ func runSessionWithRecordingDirectory(
 	}
 	defer func() { _ = directoryClaim.release() }()
 
-	plan, cleanup, err := planSessionForDirectoryRecordingWithInstructions(opts, systemPrompt, withInstructions)
+	plan, cleanup, err := planSessionForDirectoryRecordingWithInstructionsAndContext(ctx, opts, systemPrompt, withInstructions)
 	if err != nil {
 		return err
 	}
@@ -269,29 +269,9 @@ func validateSessionRecordingOptions(opts SessionRunOptions) error {
 	return validateSessionRunOptions(opts)
 }
 
-//lint:ignore U1000 package tests exercise the context-free recording seam.
-func planSessionForDirectoryRecording(opts SessionRunOptions) (sessionRuntimePlan, func(), error) {
-	return planSessionForDirectoryRecordingWithInstructions(opts, "", false)
-}
-
-func planSessionForDirectoryRecordingWithInstructions(opts SessionRunOptions, systemPrompt string, withInstructions bool) (sessionRuntimePlan, func(), error) {
-	planOpts := opts
-	cleanup := func() {}
-
-	var plan sessionRuntimePlan
-	var err error
-	if !withInstructions || (opts.ReplayPath != "" && opts.SessionInferencer == nil) {
-		plan, err = planSessionRuntime(planOpts)
-	} else {
-		instructions, instructionErr := resolveSessionInstructions(opts, systemPrompt)
-		if instructionErr != nil {
-			cleanup()
-			return sessionRuntimePlan{}, func() {}, instructionErr
-		}
-		plan, err = planSessionWithResolvedInstructions(planOpts, instructions)
-	}
+func planSessionForDirectoryRecordingWithInstructionsAndContext(ctx context.Context, opts SessionRunOptions, systemPrompt string, withInstructions bool) (sessionRuntimePlan, func(), error) {
+	plan, err := buildSessionDirectoryRecordingPlan(ctx, opts, systemPrompt, withInstructions)
 	if err != nil {
-		cleanup()
 		return sessionRuntimePlan{}, func() {}, err
 	}
 	if opts.RecordPath != "" && opts.SessionInferencer != nil {
@@ -318,7 +298,18 @@ func planSessionForDirectoryRecordingWithInstructions(opts SessionRunOptions, sy
 		}
 		plan = wireSessionRecordingClaim(plan, plan.captureClaim)
 	}
-	return plan, cleanup, nil
+	return plan, func() {}, nil
+}
+
+func buildSessionDirectoryRecordingPlan(ctx context.Context, opts SessionRunOptions, systemPrompt string, withInstructions bool) (sessionRuntimePlan, error) {
+	if !withInstructions || (opts.ReplayPath != "" && opts.SessionInferencer == nil) {
+		return planSessionRuntimeWithContext(ctx, opts)
+	}
+	instructions, err := resolveSessionInstructionsContext(ctx, opts, systemPrompt)
+	if err != nil {
+		return sessionRuntimePlan{}, err
+	}
+	return planSessionWithResolvedInstructionsContext(ctx, opts, instructions)
 }
 
 func prepareSessionRecordingDestination(path string) (string, error) {

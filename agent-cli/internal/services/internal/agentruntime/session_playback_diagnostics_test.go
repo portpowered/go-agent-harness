@@ -18,6 +18,7 @@ func TestSessionPlaybackObservabilitySamplesCompleteSnapshotAndContainsFailures(
 	var samples []observability.MetricSample
 	var records []observability.LogRecord
 	observer := sessionPlaybackObservabilityObserver(
+		context.Background(),
 		observability.MetricSamplerFunc(func(_ context.Context, sample observability.MetricSample) error {
 			samples = append(samples, sample)
 			if sample.Name == "audio.playback.zero_fill" {
@@ -54,6 +55,7 @@ func TestSessionPlaybackObservabilitySamplesCompleteSnapshotAndContainsFailures(
 
 	// A panicking observer is also contained and cannot change device teardown.
 	panicking := sessionPlaybackObservabilityObserver(
+		context.Background(),
 		observability.MetricSamplerFunc(func(context.Context, observability.MetricSample) error { panic("metric") }),
 		observability.LoggerFunc(func(context.Context, observability.LogRecord) error { panic("logger") }),
 	)
@@ -64,6 +66,7 @@ func TestSessionCaptureObservabilitySamplesDropOldestLoss(t *testing.T) {
 	var samples []observability.MetricSample
 	var records []observability.LogRecord
 	observer := sessionCaptureObservabilityObserver(
+		context.Background(),
 		observability.MetricSamplerFunc(func(_ context.Context, sample observability.MetricSample) error {
 			samples = append(samples, sample)
 			return nil

@@ -150,25 +150,25 @@ func RunSessionWithImages(ctx context.Context, out io.Writer, opts SessionImageR
 		return err
 	}
 	defer imageCleanup()
-	plan, wirePrompt, err := planSessionImageRuntime(opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, false)
+	plan, wirePrompt, err := planSessionImageRuntime(ctx, opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, false)
 	if err != nil {
 		return err
 	}
 	return runSessionImagePlan(ctx, out, plan, opts, wirePrompt)
 }
 
-func planSessionImageRuntime(opts SessionRunOptions, parts []messages.ImagePart, seed SessionTextSeed, systemPrompt string, deferResponse bool) (sessionRuntimePlan, string, error) {
+func planSessionImageRuntime(ctx context.Context, opts SessionRunOptions, parts []messages.ImagePart, seed SessionTextSeed, systemPrompt string, deferResponse bool) (sessionRuntimePlan, string, error) {
 	var (
 		plan         sessionRuntimePlan
 		err          error
 		instructions string
 	)
 	if opts.ReplayPath != "" {
-		plan, err = planSessionRuntime(opts)
+		plan, err = planSessionRuntimeWithContext(ctx, opts)
 	} else {
 		instructions, err = resolveSessionInstructions(opts, systemPrompt)
 		if err == nil {
-			plan, err = planSessionWithResolvedInstructions(opts, instructions)
+			plan, err = planSessionWithResolvedInstructionsContext(ctx, opts, instructions)
 		}
 	}
 	if err != nil {
@@ -182,8 +182,8 @@ func planSessionImageRuntime(opts SessionRunOptions, parts []messages.ImagePart,
 // needs the live provider runtime without giving its capture finalizer an
 // empty path to flush. The directory planner owns that distinction and still
 // preserves explicit --record and --replay behavior.
-func planSessionImageRuntimeForDirectory(opts SessionRunOptions, parts []messages.ImagePart, seed SessionTextSeed, systemPrompt string, deferResponse bool) (sessionRuntimePlan, string, func(), error) {
-	plan, cleanup, err := planSessionForDirectoryRecordingWithInstructions(opts, systemPrompt, true)
+func planSessionImageRuntimeForDirectory(ctx context.Context, opts SessionRunOptions, parts []messages.ImagePart, seed SessionTextSeed, systemPrompt string, deferResponse bool) (sessionRuntimePlan, string, func(), error) {
+	plan, cleanup, err := planSessionForDirectoryRecordingWithInstructionsAndContext(ctx, opts, systemPrompt, true)
 	if err != nil {
 		return sessionRuntimePlan{}, "", func() {}, err
 	}
