@@ -244,7 +244,11 @@ func TestRuntimeTraceBoundsCommitPayloadAndClassifiesTerminalErrors(t *testing.T
 			commits = append(commits, value.Payload)
 		case sessiontrace.SessionRuntimeObservationTerminal:
 			terminals = append(terminals, value)
-		default:
+		case sessiontrace.SessionRuntimeObservationAudioOutput,
+			sessiontrace.SessionRuntimeObservationAudioPlaybackReceipt,
+			sessiontrace.SessionRuntimeObservationAudioRenderTapUnavailable,
+			sessiontrace.SessionRuntimeObservationResponseCreate,
+			sessiontrace.SessionRuntimeObservationTurnCompleted:
 			// This test captures only commit retention and terminal classification.
 		}
 	}), nil, nil)
