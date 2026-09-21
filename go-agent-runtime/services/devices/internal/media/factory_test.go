@@ -98,8 +98,11 @@ func TestFactoryPlaybackAppliesOneDeviceOwnedHoldToneToSilentRoomFrames(t *testi
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
-	t.Cleanup(func() { _ = deviceHandle.Close() })
-	deviceHandle.(*handle).sink.SetHoldToneTick(5 * time.Millisecond)
+	t.Cleanup(func() {
+		if err := deviceHandle.Close(); err != nil {
+			t.Errorf("Close() error = %v", err)
+		}
+	})
 	ctx, cancel := context.WithCancel(context.Background())
 	inbound := &oneFrameThenBlockedInbound{frame: audio.PCMFrame{Samples: make([]int16, audio.FrameSize)}, readAgain: make(chan struct{})}
 	pumpResult := make(chan error, 1)
