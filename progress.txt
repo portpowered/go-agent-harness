@@ -4155,3 +4155,25 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   additively, cut over every named/discovered caller, delete the complete owned
   cluster, and run C280-03/C280-05 including `make prepush` on one clean SHA.
   Return `CONTINUE` while that actionable release/integration remains.
+
+# C280 output-admission repair checkpoint 2026-09-21T23:30Z
+
+- Repaired C280-owned `roomevidence` output validation in commit
+  `26372c1e487fe8dfbffad837dc8a8537efad7319`: existing empty destinations are
+  now probed inside the destination rather than only in the parent, and probe,
+  close and cleanup failures preserve the public `ErrInvalidOutput` identity.
+  Added the public Wire-level unwritable-destination regression; no peer-owned
+  caller or legacy cluster path changed.
+- The focused regression passes. Full roomevidence/rooms normal tests pass
+  `101` tests in `16` packages; the selected race suite passes `56` tests in
+  `16` packages; `make wire-check`, `make architecture-size-check` (`208`
+  packages, `1,980` files, `29,332` functions), and `git diff --check` pass.
+- Retirement remains incomplete: C271/C272/C276/C278 have not released the
+  required shared caller seams, so the eight agentruntime room-evidence files,
+  19 rooms evidence production files and caller graph remain present; adapter
+  count remains `0 files / 0 lines`. No prepush, push, PR, SCRIPT CI, review or
+  merge is claimed.
+- Exact next action: refresh peer release state, integrate only reviewed or
+  explicitly released revisions, finish every caller cutover and delete the
+  complete owned cluster, then run the full C280-03/C280-05 gate on one clean
+  SHA. Return `CONTINUE` while that actionable integration remains.
