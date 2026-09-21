@@ -81,6 +81,64 @@ func TestFactoryReportsSelectedDevicesAndQueuedPlayback(t *testing.T) {
 	}
 }
 
+func TestFactoryPlaybackAppliesOneDeviceOwnedHoldToneToSilentRoomFrames(t *testing.T) {
+	backend := devicegw.DefaultVirtualBackendConfig()
+	backend.RecordPCM = true
+	registry, err := devicegw.NewVirtualRegistry(backend)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := audio.DefaultHoldToneConfig()
+	config.GapThreshold = 25 * time.Millisecond
+	config.PulseInterval = time.Hour
+	config.PulseDuration = 25 * time.Millisecond
+	deviceHandle, err := NewFactory(registry, mixer.DefaultFormat()).Open(context.Background(), devices.Request{
+		OutputDevice: testOutputDevice, PlaybackEnabled: true, HoldToneConfig: &config,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	t.Cleanup(func() { _ = deviceHandle.Close() })
+	deviceHandle.(*handle).sink.SetHoldToneTick(5 * time.Millisecond)
+	ctx, cancel := context.WithCancel(context.Background())
+	inbound := &oneFrameThenBlockedInbound{frame: audio.PCMFrame{Samples: make([]int16, audio.FrameSize)}, readAgain: make(chan struct{})}
+	pumpResult := make(chan error, 1)
+	go func() { pumpResult <- deviceHandle.Media().Playback.Pump(ctx, inbound) }()
+	select {
+	case <-inbound.readAgain:
+	case <-time.After(time.Second):
+		cancel()
+		t.Fatal("playback pump did not reach its bounded silent gap")
+	}
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		nonSilent := 0
+		for _, observation := range registry.PCMObservations() {
+			if devicegw.DirectionOutput == observation.Direction && hasNonZeroSamples(observation.Samples) {
+				nonSilent++
+			}
+		}
+		if nonSilent == 1 {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	nonSilent := 0
+	for _, observation := range registry.PCMObservations() {
+		if devicegw.DirectionOutput == observation.Direction && hasNonZeroSamples(observation.Samples) {
+			nonSilent++
+		}
+	}
+	if nonSilent != 1 {
+		cancel()
+		t.Fatalf("non-silent playback writes = %d, want one device-owned hold tone", nonSilent)
+	}
+	cancel()
+	if err := <-pumpResult; !errors.Is(err, context.Canceled) {
+		t.Fatalf("Playback.Pump() after cancellation = %v, want context.Canceled", err)
+	}
+}
+
 func TestFactoryClosesCaptureWhenPlaybackAdmissionFails(t *testing.T) {
 	inner, err := devicegw.NewVirtualRegistry(devicegw.DefaultVirtualBackendConfig())
 	if err != nil {
@@ -377,3 +435,12 @@ func (i *oneFrameThenBlockedInbound) ReadFrame(ctx context.Context) (audio.PCMFr
 }
 
 func (*oneFrameThenBlockedInbound) Close() error { return nil }
+
+func hasNonZeroSamples(samples []int16) bool {
+	for _, sample := range samples {
+		if sample != 0 {
+			return true
+		}
+	}
+	return false
+}

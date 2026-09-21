@@ -12,7 +12,6 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	runtimeRoomsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
-	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -318,8 +317,8 @@ func roomReplayMixerConfig(opts RoomRunOptions, scheduled bool) room.PCM16MixerC
 	return config
 }
 
-// newRoomParticipantRuntime assembles one participant's runtime state, including
-// its fixed per-voice outbound loudness gain from the audio service.
+// newRoomParticipantRuntime assembles one participant's routing and lifecycle
+// state. Audio policy remains owned by the audio and device services.
 func newRoomParticipantRuntime(
 	plan *roomParticipantPlan,
 	participantCtx context.Context,
@@ -333,20 +332,19 @@ func newRoomParticipantRuntime(
 	coordinator *roomCoordinator,
 ) *roomParticipantRuntime {
 	return &roomParticipantRuntime{
-		plan:             plan,
-		ctx:              participantCtx,
-		cancel:           participantCancel,
-		admissionCtx:     admissionCtx,
-		admissionCancel:  admissionCancel,
-		loopReady:        make(chan *agentloop.AgentLoop, 1),
-		participantDone:  make(chan struct{}),
-		mixerDone:        make(chan struct{}),
-		observerDone:     make(chan struct{}),
-		replayFrameAcks:  roomReplayFrameAckChannel(replaySchedule, plan),
-		mixer:            mixer,
-		ingress:          newRoomParticipantIngress(plan, opts, evidence),
-		lifecycle:        &roomParticipantLifecycle{stateChanged: coordinator.progress, admissionClosed: coordinator.admissionDone()},
-		outboundLoudness: audio.NewLoudnessNormalizer(audio.LoudnessNormalizerConfig{GainDB: opts.AudioService.VoiceGainDB(plan.manifest.Voice)}),
+		plan:            plan,
+		ctx:             participantCtx,
+		cancel:          participantCancel,
+		admissionCtx:    admissionCtx,
+		admissionCancel: admissionCancel,
+		loopReady:       make(chan *agentloop.AgentLoop, 1),
+		participantDone: make(chan struct{}),
+		mixerDone:       make(chan struct{}),
+		observerDone:    make(chan struct{}),
+		replayFrameAcks: roomReplayFrameAckChannel(replaySchedule, plan),
+		mixer:           mixer,
+		ingress:         newRoomParticipantIngress(plan, opts, evidence),
+		lifecycle:       &roomParticipantLifecycle{stateChanged: coordinator.progress, admissionClosed: coordinator.admissionDone()},
 	}
 }
 

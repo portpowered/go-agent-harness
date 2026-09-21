@@ -12,7 +12,6 @@ import (
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	runtimeRoomsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
-	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 const (
@@ -37,27 +36,26 @@ type roomParticipantPlan struct {
 	capabilityCoordinator SessionCapabilityCoordinator
 }
 type roomParticipantRuntime struct {
-	plan             *roomParticipantPlan
-	ctx              context.Context
-	cancel           context.CancelFunc
-	admissionCtx     context.Context
-	admissionCancel  context.CancelFunc
-	loopReady        chan *agentloop.AgentLoop
-	participantDone  chan struct{}
-	mixerDone        chan struct{}
-	observerDone     chan struct{}
-	observerOnce     sync.Once
-	replayFrameAcks  chan struct{}
-	mixer            *room.PCM16Mixer
-	ingress          *roomAudioIngressLedger
-	deviceHandle     runtimeDevices.Handle
-	input            runtimeDevices.Capture
-	output           runtimeDevices.Playback
-	inputDeviceID    string
-	outputDeviceID   string
-	lifecycle        *roomParticipantLifecycle
-	diagnosticSink   SessionDiagnosticSink
-	outboundLoudness *audio.LoudnessNormalizer
+	plan            *roomParticipantPlan
+	ctx             context.Context
+	cancel          context.CancelFunc
+	admissionCtx    context.Context
+	admissionCancel context.CancelFunc
+	loopReady       chan *agentloop.AgentLoop
+	participantDone chan struct{}
+	mixerDone       chan struct{}
+	observerDone    chan struct{}
+	observerOnce    sync.Once
+	replayFrameAcks chan struct{}
+	mixer           *room.PCM16Mixer
+	ingress         *roomAudioIngressLedger
+	deviceHandle    runtimeDevices.Handle
+	input           runtimeDevices.Capture
+	output          runtimeDevices.Playback
+	inputDeviceID   string
+	outputDeviceID  string
+	lifecycle       *roomParticipantLifecycle
+	diagnosticSink  SessionDiagnosticSink
 }
 
 func (r *roomParticipantRuntime) markObserverDone() {

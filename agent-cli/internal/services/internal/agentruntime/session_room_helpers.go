@@ -11,7 +11,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
@@ -33,6 +32,19 @@ func timerChannel(timer *time.Timer) <-chan time.Time {
 		return nil
 	}
 	return timer.C
+}
+
+func applyRoomParticipantVoiceTransform(coordinator *roomCoordinator, runtime *roomParticipantRuntime, opts RoomRunOptions, plan *roomParticipantPlan, pcm []byte) ([]byte, bool) {
+	if opts.AudioService == nil {
+		coordinator.failParticipant(plan.manifest.ID, roomParticipantFailure(plan.manifest.ID, errors.New("audio service is required for room voice transformation"), secretsForPlan(plan)))
+		return nil, false
+	}
+	transformed, err := opts.AudioService.ApplyVoicePCM16(runtime.ctx, audioio.VoicePCMRequest{Voice: plan.manifest.Voice, PCM: pcm})
+	if err != nil {
+		coordinator.failParticipant(plan.manifest.ID, roomParticipantFailure(plan.manifest.ID, fmt.Errorf("transform participant voice audio: %w", err), secretsForPlan(plan)))
+		return nil, false
+	}
+	return transformed, true
 }
 
 func sortedRoomIDs(ids []string) []string {
@@ -288,8 +300,6 @@ func (m *roomHumanCaptureMedia) convertPCMForTarget(ctx context.Context, sourceR
 type roomHumanPlaybackMedia struct {
 	runtime  *roomParticipantRuntime
 	evidence *roomParticipantEvidence
-	clock    platformclock.Source
-	holdTone *audio.HoldToneFiller
 
 	pending bool
 	sources []string
@@ -297,11 +307,7 @@ type roomHumanPlaybackMedia struct {
 }
 
 func newRoomHumanPlaybackMedia(runtime *roomParticipantRuntime, evidence *roomParticipantEvidence) *roomHumanPlaybackMedia {
-	roomClock := roomHumanOutputClock(runtime)
-	return &roomHumanPlaybackMedia{
-		runtime: runtime, evidence: evidence, clock: roomClock,
-		holdTone: audio.NewHoldToneFiller(audio.DefaultHoldToneConfig(), runtime.mixer.Format().SampleRate, roomClock.Now()),
-	}
+	return &roomHumanPlaybackMedia{runtime: runtime, evidence: evidence}
 }
 
 func (m *roomHumanPlaybackMedia) ReadFrame(ctx context.Context) (audio.PCMFrame, error) {
@@ -315,7 +321,7 @@ func (m *roomHumanPlaybackMedia) ReadFrame(ctx context.Context) (audio.PCMFrame,
 	if err != nil {
 		return audio.PCMFrame{}, err
 	}
-	pcm := audio.ApplyHoldTonePCM16(m.holdTone, m.clock.Now(), mixed.PCM)
+	pcm := mixed.PCM
 	samples, err := codec.DecodePCM16WithLimit(pcm, len(pcm))
 	if err != nil {
 		return audio.PCMFrame{}, err
@@ -354,15 +360,6 @@ func (m *roomHumanPlaybackMedia) resolvePending(accepted bool) error {
 	m.sources = nil
 	m.pcm = nil
 	return err
-}
-
-// roomHumanOutputClock keeps hold-tone deadlines in the room's injected time
-// domain; deterministic replay advances that scheduler explicitly.
-func roomHumanOutputClock(runtime *roomParticipantRuntime) platformclock.Source {
-	if runtime != nil && runtime.plan != nil {
-		return platformclock.Ensure(runtime.plan.options.Clock)
-	}
-	return platformclock.Real{}
 }
 
 func encodeRoomPCM16(samples []int16) []byte {

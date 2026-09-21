@@ -52,6 +52,14 @@ type PCM16Request struct {
 	TargetChannels int
 }
 
+// VoicePCMRequest is one provider-owned PCM16 payload that needs the
+// service's measured voice playback correction before it is routed to any
+// downstream participant or device.
+type VoicePCMRequest struct {
+	Voice string
+	PCM   []byte
+}
+
 // ScheduledAudioInput is one finite PCM turn admitted by a persistent audio
 // session. The session layer supplies scheduling policy; audioio owns the
 // sample payload and its native-rate declaration.
@@ -118,6 +126,7 @@ type Service interface {
 	ConvertScheduledInputs(context.Context, []ScheduledAudioInput, int) ([]ScheduledAudioInput, error)
 	OpenInput(context.Context, InputRequest) (Input, error)
 	OpenOutput(context.Context, OutputRequest) (Output, error)
+	ApplyVoicePCM16(context.Context, VoicePCMRequest) ([]byte, error)
 	NewClock(clock.Source) (clock.TimerSource, error)
 	NewTimer(clock.Source, time.Duration) (clock.Timer, error)
 	ResolveTranscription(TranscriptionRequest) TranscriptionConfig

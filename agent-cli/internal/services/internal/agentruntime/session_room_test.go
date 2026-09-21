@@ -87,7 +87,7 @@ func TestObserveRoomParticipantStream_FansOutBeforeDurableAudioEvidence(t *testi
 
 	pcm := []byte{0x34, 0x12, 0x78, 0x56}
 	order := make([]string, 0, 2)
-	opts := RoomRunOptions{
+	opts := RoomRunOptions{AudioService: newTestAudioIOService(),
 		OnAudioOutput: func(participantID string, got []byte) error {
 			if participantID != "source" || !bytes.Equal(got, pcm) {
 				t.Errorf("audio output = %q/%v, want source/%v", participantID, got, pcm)
