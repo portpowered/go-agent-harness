@@ -5341,3 +5341,33 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   route, rerun its two public regressions, then complete every C270 functional,
   race, hermetic, integration, embed, architecture, Wire, and `make prepush`
   command on one exact clean candidate before push. Decision remains CONTINUE.
+
+# C270 continuation checkpoint — canonical release refresh and WebMCP repro — 2026-09-21
+
+- Reverified admission as `admitted`; `prd.json.branchName` matches this
+  isolated branch. Fetched `origin/main` is still
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`. The clean C234 predecessor
+  remains at `7e6022bac496975f6b91b05e2a19b36348083eb7`; C270's code candidate
+  before this progress-only checkpoint is `48bb4b367f983d03500e7704dbf5adfbbcbf7dea`.
+- Refreshed canonical `~default` state: no C270 or C234 review Work or
+  concluded review findings exist. C229 `work-task-16` still has active Worker
+  Session `991295d8-86fa-422e-9e47-568b80f76564`; C268 `work-task-96` has
+  active Worker Session `d7d2bd56-cc87-414f-99a1-c5deed4b9960`. C264
+  `work-task-86` is FAILED and its recovery idea remains INITIAL, so no
+  reviewed caller release is available for that seam.
+- Reproduced the current public caller failure with
+  `rtk env CGO_ENABLED=0 go test -count=1 -tags=nomicrophone ./agent-cli/internal/transport/cli -run 'TestSession(Recorded|Unrecorded)WebMCPCastDeviceWAVStaysInteractive'`.
+  Both tests fail before provider connection with `legacy session audio
+  runtime is retired; use the service-owned live session`. The live routing
+  paths overlap C229's admitted caller ownership; capture-reader cutovers
+  overlap C268/C264. No peer worktree or caller file was changed.
+- Reconfirmed all 13 planned legacy/replacement files are absent, the two
+  stateless adapters total 45 physical lines, the browser recording boundary
+  matches `origin/main`, and both C234 and C270 worktrees are clean. No full
+  preflight, `make prepush`, push, PR update or SCRIPT handoff ran.
+- Exact next action: refresh and honor C229/C268/C264 release boundaries;
+  integrate only their exact reviewed caller commits, including the
+  service-owned WebMCP live route, then rerun both public regressions and all
+  remaining C270 functional, race, hermetic, integration, embed, architecture,
+  Wire and `make prepush` gates on one exact clean candidate before submission.
+  Decision remains CONTINUE.
