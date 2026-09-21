@@ -5806,3 +5806,58 @@ candidate before pushing it and handing it to SCRIPT CI.
   repeated-shutdown, nomicrophone, hermetic, embed, Wire, caller/deletion,
   adapter-budget, ancestry and cleanliness command on one exact clean SHA
   before push and SCRIPT handoff.
+
+### C271 fresh admission, peer-session, and focused service checkpoint — 2026-09-21
+
+- Read the Factory operating policy and implementation handoff before acting,
+  then read the admitted manifest, `prd.json`, progress history, and the full
+  latest concluded feedback `work-review-78` for C259 (PR #535,
+  `a187b9f13c699c049f25add3bd71001fe2c0d529`). Re-ran
+  `rtk python3 factory/scripts/project-control.py verify-work --type task
+  --name audio-runtime-c271-recover-selfplay-retirement` from `FACTORY_ROOT`;
+  it returned admitted for `audio-runtime/audio-runtime-v1`. The PRD branch
+  exactly matches `codex/audio-runtime-c271-recover-selfplay-retirement`.
+  Canonical C271 `work-task-106` remains `init` / `PROCESSING` with no review.
+  C259's four findings are room-evidence admission bounds, recorder-failure
+  degradation through its service, integrated room replay, and exact-head
+  preflight; none identifies a self-play-specific defect.
+- `rtk git fetch origin main` completed; `origin/main` is still
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`. C271 is clean at
+  `38b7ea3caae73ade038042cad63092d8b84df638`, with current main and startup
+  integration `8bdafc7f947a3a2c9856220abdc539437035bd21` as ancestors. C249
+  `86a1eed17b099d510b39ce3d3b4ee7d8f7998881` and C220
+  `1bf045dd8` remain absent from C271 ancestry. The preserved C249 worktree is
+  clean at its named checkpoint with C220 reachable; it was not changed.
+- Canonical `~default` still has C248 `work-task-45` and C269 `work-task-101`
+  in `init` / `PROCESSING`. C248 Worker Session
+  `efb716f4-148d-4e14-adda-5238201dee2a` is RUNNING. C269 Worker Session
+  `ede0de8e-c68c-461f-a4dc-4fe1b4048148` is RUNNING; its peer worktree has
+  only an uncommitted `progress.txt` update at source checkpoint
+  `889b1a49adaa8840f75a283f75cee1faff8baba1`. Neither reviewed caller release
+  nor guarded C269 merge exists, so the exact shared paths remain frozen.
+- On exact C271 `38b7ea3c`, these planned focused checks passed: `rtk go test
+  -count=1 -timeout=180s ./go-agent-runtime/services/selfplay/...` (26 tests /
+  3 packages), `rtk go test -race -count=1 -timeout=180s
+  ./go-agent-runtime/services/selfplay/...` (26 / 3), and `rtk go test
+  -count=10 -timeout=180s ./go-agent-runtime/services/selfplay/... -run
+  '(Cancel|Duration|Shutdown|Stop|Failure)'` (180 / 3). The service tree is
+  unchanged from the previous focused-test source at `b54fd484`; the production
+  boundary scan has no CLI, legacy-runtime, or `func init` matches. Before this
+  progress update the worktree was clean; `git diff --check` passes.
+- Reconfirmed the complete legacy cluster is still present:
+  `selfplay_service.go` (53), `session_self_play.go` (641), and
+  `session_self_play_evidence.go` (716), totaling 3 files / 1,410 lines. The
+  obsolete projection remains 68 lines and the planned transport file remains
+  85 lines while still sourcing defaults/personas/opening-seed policy from the
+  projection; neither is yet an eligible stateless adapter. The temporary
+  `session_room_evidence_files.go` helper remains absent. No caller cutover,
+  production deletion, `make prepush`, PR, push, or SCRIPT handoff is claimed.
+- Exact next action: retain C271 at `CONTINUE` and keep the C248 observability /
+  service-test caller seam and C269 room-evidence caller seam untouched. Refresh
+  canonical state after their active Worker Sessions finish and only integrate
+  their exact seams after reviewed/guarded release. Then fetch current main,
+  reconcile C249/C220 and peer behavior additively, complete all caller cutovers,
+  remove the projection and helper, delete the exact three legacy files, and
+  reduce the sole adapter to stateless translation within 300 lines. Run
+  `make prepush` and every planned C271-05/C271-06 gate on the same clean exact
+  SHA before any push or SCRIPT handoff.
