@@ -18,8 +18,8 @@ func TestFactoryReportsSelectedDevicesAndQueuedPlayback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handle, err := NewFactory(registry, mixer.DefaultFormat()).Open(context.Background(), devices.Request{
-		InputDevice:     "virtual:input",
+	handle, err := NewFactory(registry, mixer.Format{}).Open(context.Background(), devices.Request{
+		InputDevice:     " DEFAULT ",
 		OutputDevice:    "virtual:output",
 		CaptureEnabled:  true,
 		PlaybackEnabled: true,
@@ -173,25 +173,126 @@ func TestFactoryAdmitsEachDirectionIndependently(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			inner, err := devicegw.NewVirtualRegistry(devicegw.DefaultVirtualBackendConfig())
+			assertFactoryDirection(t, test.enable, test.wantInput, test.wantOutput, test.wantOpen)
+		})
+	}
+}
+
+func assertFactoryDirection(t *testing.T, request devices.Request, wantInput, wantOutput bool, wantOpen int) {
+	t.Helper()
+	inner, err := devicegw.NewVirtualRegistry(devicegw.DefaultVirtualBackendConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.InputDevice = "virtual:input"
+	request.OutputDevice = "virtual:output"
+	handle, err := NewFactory(inner, mixer.DefaultFormat()).Open(context.Background(), request)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	assertMediaDirections(t, handle, wantInput, wantOutput)
+	_, outputID := assertHandleSelection(t, handle, wantInput, wantOutput)
+	assertHandlePlaybackStats(t, handle, outputID, wantOutput)
+	if err := handle.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	if got := inner.Observations().OpenCount; got != wantOpen {
+		t.Fatalf("opened handles = %d, want %d", got, wantOpen)
+	}
+}
+
+func assertMediaDirections(t *testing.T, handle devices.Handle, wantInput, wantOutput bool) {
+	t.Helper()
+	ports := handle.Media()
+	if (ports.Capture != nil) != wantInput || (ports.Playback != nil) != wantOutput {
+		t.Fatalf("ports = capture %v playback %v", ports.Capture != nil, ports.Playback != nil)
+	}
+}
+
+func assertHandleSelection(t *testing.T, handle devices.Handle, wantInput, wantOutput bool) (string, string) {
+	t.Helper()
+	selection, ok := handle.(devices.DeviceSelectionProvider)
+	if !ok {
+		t.Fatal("device handle does not expose selected device IDs")
+	}
+	inputID, outputID := selection.SelectedDeviceIDs()
+	if wantInput != (inputID == "virtual:input") || wantOutput != (outputID == "virtual:output") {
+		t.Fatalf("selected devices = (%q, %q), want input=%v output=%v", inputID, outputID, wantInput, wantOutput)
+	}
+	return inputID, outputID
+}
+
+func assertHandlePlaybackStats(t *testing.T, handle devices.Handle, outputID string, wantOutput bool) {
+	t.Helper()
+	statsProvider, ok := handle.(devices.PlaybackStatsProvider)
+	if !ok {
+		t.Fatal("device handle does not expose playback stats")
+	}
+	statsDeviceID, stats := statsProvider.PlaybackStats()
+	if wantOutput {
+		if statsDeviceID != outputID || stats.QueuedSamples != 0 {
+			t.Fatalf("playback snapshot = (%q, %+v), want selected empty output queue", statsDeviceID, stats)
+		}
+		return
+	}
+	if statsDeviceID != "" || stats != (audio.PlaybackQueueStats{}) {
+		t.Fatalf("capture-only playback snapshot = (%q, %+v), want empty", statsDeviceID, stats)
+	}
+}
+
+func TestFactoryUnavailableAndUnselectedRTCBindingResults(t *testing.T) {
+	var missing *Factory
+	if _, err := missing.Open(context.Background(), devices.Request{CaptureEnabled: true}); !errors.Is(err, devices.ErrUnavailable) {
+		t.Fatalf("nil factory Open() error = %v, want devices.ErrUnavailable", err)
+	}
+	if _, err := missing.BindRTC(context.Background(), devices.RTCBindingRequest{InputPresent: true}); !errors.Is(err, devices.ErrUnavailable) {
+		t.Fatalf("nil factory BindRTC() error = %v, want devices.ErrUnavailable", err)
+	}
+
+	registry, err := devicegw.NewVirtualRegistry(devicegw.DefaultVirtualBackendConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	binding, err := NewFactory(registry, mixer.DefaultFormat()).BindRTC(context.Background(), devices.RTCBindingRequest{})
+	if err != nil || binding != nil {
+		t.Fatalf("BindRTC() without selected directions = (%v, %v), want (nil, nil)", binding, err)
+	}
+	if got := registry.Observations().OpenCount; got != 0 {
+		t.Fatalf("unselected RTC binding opened %d devices, want none", got)
+	}
+}
+
+func TestFactoryBindsSelectedRTCDirections(t *testing.T) {
+	registry, err := devicegw.NewVirtualRegistry(devicegw.DefaultVirtualBackendConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	factory := NewFactory(registry, mixer.DefaultFormat())
+	tests := []struct {
+		name       string
+		request    devices.RTCBindingRequest
+		wantInput  string
+		wantOutput string
+	}{
+		{name: "input", request: devices.RTCBindingRequest{InputPresent: true, BypassSelfHearing: true}, wantInput: "virtual:input"},
+		{name: "output", request: devices.RTCBindingRequest{OutputPresent: true, BypassSelfHearing: true}, wantOutput: "virtual:output"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			binding, err := factory.BindRTC(context.Background(), test.request)
 			if err != nil {
-				t.Fatal(err)
+				t.Fatalf("BindRTC() error = %v", err)
 			}
-			test.enable.InputDevice = "virtual:input"
-			test.enable.OutputDevice = "virtual:output"
-			handle, err := NewFactory(inner, mixer.DefaultFormat()).Open(context.Background(), test.enable)
-			if err != nil {
-				t.Fatalf("Open() error = %v", err)
+			selection, ok := binding.(interface{ SelectedDeviceIDs() (string, string) })
+			if !ok {
+				t.Fatal("RTC binding does not expose selected device IDs")
 			}
-			ports := handle.Media()
-			if (ports.Capture != nil) != test.wantInput || (ports.Playback != nil) != test.wantOutput {
-				t.Fatalf("ports = capture %v playback %v", ports.Capture != nil, ports.Playback != nil)
+			inputID, outputID := selection.SelectedDeviceIDs()
+			if inputID != test.wantInput || outputID != test.wantOutput {
+				t.Fatalf("selected devices = (%q, %q), want (%q, %q)", inputID, outputID, test.wantInput, test.wantOutput)
 			}
-			if err := handle.Close(); err != nil {
+			if err := binding.Close(); err != nil {
 				t.Fatalf("Close() error = %v", err)
-			}
-			if got := inner.Observations().OpenCount; got != test.wantOpen {
-				t.Fatalf("opened handles = %d, want %d", got, test.wantOpen)
 			}
 		})
 	}
