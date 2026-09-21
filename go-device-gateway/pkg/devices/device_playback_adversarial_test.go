@@ -338,7 +338,9 @@ func startCapacityWait(t *testing.T, output *VirtualStream, ctx context.Context,
 	done := make(chan error, 1)
 	blocked := make(chan struct{}, 1)
 	observed := &observedCapacityContext{Context: ctx, blocked: blocked}
-	go func() { done <- output.WaitForPlaybackCapacity(observed, samples) }()
+	go func(waitContext context.Context) {
+		done <- output.WaitForPlaybackCapacity(waitContext, samples)
+	}(observed)
 	wait := capacityWait{done: done, blocked: blocked}
 	assertObservedCapacityWaitBlocked(t, wait)
 	return wait
