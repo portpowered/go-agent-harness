@@ -46,17 +46,22 @@ func (s *Service) Run(ctx context.Context, out io.Writer, request rooms.RoomRunO
 			request.Manifest = s.ReplayManifest(plan)
 		}
 	}
-	if strings.TrimSpace(request.OutputDir) != "" {
-		if request.ReplayPlan != nil {
-			if err := s.ValidateReplayOutput(*request.ReplayPlan, request.OutputDir); err != nil {
-				return rooms.RoomResult{}, err
-			}
-		}
-		if err := evidence.ValidateEvidenceOutput(request.OutputDir); err != nil {
-			return rooms.RoomResult{}, err
-		}
+	if err := s.validateRunOutput(request); err != nil {
+		return rooms.RoomResult{}, err
 	}
 	return s.runner.Run(ctx, out, request)
+}
+
+func (s *Service) validateRunOutput(request rooms.RoomRunOptions) error {
+	if strings.TrimSpace(request.OutputDir) == "" {
+		return nil
+	}
+	if request.ReplayPlan != nil {
+		if err := s.ValidateReplayOutput(*request.ReplayPlan, request.OutputDir); err != nil {
+			return err
+		}
+	}
+	return evidence.ValidateEvidenceOutput(request.OutputDir)
 }
 
 func (s *Service) ResolveLaunchPlan(options rooms.RoomLaunchOptions) (rooms.RoomLaunchPlan, error) {

@@ -4,9 +4,60 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 )
+
+// At the default cadence this permits more than 33 minutes of replay while
+// bounding retained schedule state for sparse or adversarial timelines.
+const roomReplayMaxScheduleFrames = 100_000
+
+func scheduleTooLong(frameCount int) error {
+	return fmt.Errorf("%w: %d frames exceeds maximum %d", roomreplay.ErrScheduleTooLong, frameCount, roomReplayMaxScheduleFrames)
+}
+
+type speechSegment struct {
+	startNanos int64
+	endNanos   int64
+	hasEnd     bool
+	sequence   int64
+}
+
+func speechSegments(timeline []roomreplay.TimelineEvent, participantID string) []speechSegment {
+	segments := make([]speechSegment, 0)
+	open := make([]int, 0, 1)
+	for _, event := range timeline {
+		if event.ParticipantID != participantID {
+			continue
+		}
+		eventType := normalizeEventType(event.Type)
+		offsetNanos := event.OffsetNanos
+		if offsetNanos == 0 && event.OffsetMS != 0 {
+			offsetNanos = event.OffsetMS * int64(time.Millisecond)
+		}
+		switch eventType {
+		case "speech_start", "audio_start", "response_audio_start", "output_audio_start", "speaking_start":
+			segments = append(segments, speechSegment{startNanos: offsetNanos, sequence: event.Sequence})
+			open = append(open, len(segments)-1)
+		case "speech_end", "audio_end", "response_audio_end", "output_audio_end", "speaking_end":
+			if len(open) == 0 {
+				continue
+			}
+			index := open[len(open)-1]
+			open = open[:len(open)-1]
+			segments[index].endNanos = offsetNanos
+			segments[index].hasEnd = true
+		}
+	}
+	return segments
+}
+
+func normalizeEventType(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	value = strings.ReplaceAll(value, ".", "_")
+	return strings.ReplaceAll(value, "-", "_")
+}
 
 func (s *schedule) Run(ctx context.Context, request roomreplay.RunRequest) error {
 	if s == nil {

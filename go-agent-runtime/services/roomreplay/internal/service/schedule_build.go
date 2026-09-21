@@ -18,9 +18,6 @@ const (
 	defaultSampleRate    = 24000
 	defaultChannels      = 1
 	defaultFrameDuration = 20 * time.Millisecond
-	// At the default cadence this permits more than 33 minutes of replay while
-	// bounding retained schedule state for sparse or adversarial timelines.
-	roomReplayMaxScheduleFrames = 100_000
 )
 
 type schedule struct {
@@ -49,13 +46,6 @@ type participantFrameState struct {
 	cursor             int
 	order              int
 	lastScheduledFrame int
-}
-
-type speechSegment struct {
-	startNanos int64
-	endNanos   int64
-	hasEnd     bool
-	sequence   int64
 }
 
 // Build admits capture barriers and file-backed sent PCM before producing an
@@ -287,15 +277,12 @@ func (state *participantFrameState) appendRemainder(pcm []byte, participantID st
 }
 
 func assembleSchedule(contributionsByFrame map[int][]contribution, targetIDs []string, expectedFrames, maxFrame int) (roomreplay.Schedule, error) {
-	if expectedFrames > roomReplayMaxScheduleFrames {
-		return nil, scheduleTooLong(expectedFrames)
-	}
 	if maxFrame >= roomReplayMaxScheduleFrames {
-		return nil, scheduleTooLong(maxFrame + 1)
+		return nil, scheduleTooLong(maxFrame)
 	}
-	totalFrames := expectedFrames
-	if maxFrame+1 > totalFrames {
-		totalFrames = maxFrame + 1
+	totalFrames := max(expectedFrames, maxFrame+1)
+	if totalFrames > roomReplayMaxScheduleFrames {
+		return nil, scheduleTooLong(totalFrames)
 	}
 	if totalFrames == 0 {
 		return nil, fmt.Errorf("%w: inbound captures have no replayable sent PCM", roomreplay.ErrSentPCMUnavailable)
@@ -314,45 +301,6 @@ func assembleSchedule(contributionsByFrame map[int][]contribution, targetIDs []s
 		frames[frameIndex].contributions = contributions
 	}
 	return &schedule{frames: frames, targetIDs: targetIDs}, nil
-}
-
-func scheduleTooLong(frameCount int) error {
-	return fmt.Errorf("%w: %d frames exceeds maximum %d", roomreplay.ErrScheduleTooLong, frameCount, roomReplayMaxScheduleFrames)
-}
-
-func speechSegments(timeline []roomreplay.TimelineEvent, participantID string) []speechSegment {
-	segments := make([]speechSegment, 0)
-	open := make([]int, 0, 1)
-	for _, event := range timeline {
-		if event.ParticipantID != participantID {
-			continue
-		}
-		eventType := normalizeEventType(event.Type)
-		offsetNanos := event.OffsetNanos
-		if offsetNanos == 0 && event.OffsetMS != 0 {
-			offsetNanos = event.OffsetMS * int64(time.Millisecond)
-		}
-		switch eventType {
-		case "speech_start", "audio_start", "response_audio_start", "output_audio_start", "speaking_start":
-			segments = append(segments, speechSegment{startNanos: offsetNanos, sequence: event.Sequence})
-			open = append(open, len(segments)-1)
-		case "speech_end", "audio_end", "response_audio_end", "output_audio_end", "speaking_end":
-			if len(open) == 0 {
-				continue
-			}
-			index := open[len(open)-1]
-			open = open[:len(open)-1]
-			segments[index].endNanos = offsetNanos
-			segments[index].hasEnd = true
-		}
-	}
-	return segments
-}
-
-func normalizeEventType(value string) string {
-	value = strings.ToLower(strings.TrimSpace(value))
-	value = strings.ReplaceAll(value, ".", "_")
-	return strings.ReplaceAll(value, "-", "_")
 }
 
 func frameIndex(offsetNanos int64, frameDuration time.Duration) int {
