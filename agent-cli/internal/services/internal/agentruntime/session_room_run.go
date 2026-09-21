@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strconv"
 	"sync"
 	"time"
 
@@ -110,6 +109,22 @@ func (s roomParticipantDiagnosticSink) RecordSessionDiagnostic(record SessionDia
 	s.observer(s.participantID, record)
 }
 
+type roomTurnTimelineDiagnosticSink struct {
+	participantID string
+	evidence      *roomEvidence
+}
+
+func (s roomTurnTimelineDiagnosticSink) RecordSessionDiagnostic(record SessionDiagnosticRecord) {
+	if s.evidence == nil || record.Event != SessionDiagnosticEventTurn {
+		return
+	}
+	turnIndex := record.Fields[fieldTurnIndex]
+	if turnIndex == "" {
+		return
+	}
+	s.evidence.recordTimelineEvent("turn_completed", s.participantID, map[string]string{fieldTurnIndex: turnIndex})
+}
+
 func runRoomParticipant(
 	roomCtx context.Context,
 	coordinator *roomCoordinator,
@@ -136,7 +151,7 @@ func runRoomParticipant(
 	// participant's teardown (see finishParticipant) can name this
 	// participant on a playback overflow the same way a provider
 	// participant's session diagnostics already do below.
-	runtime.diagnosticSink = combineDiagnosticSinks(roomParticipantDiagnosticSinks(runtime.plan, opts, participantEvidence)...)
+	runtime.diagnosticSink = combineDiagnosticSinks(roomParticipantDiagnosticSinksWithTimeline(runtime.plan, opts, evidence, participantEvidence)...)
 	var observer *sessionProgressObserver
 	if !roomParticipantIsHuman(runtime.plan) {
 		observer = newSessionProgressObserver(runtime.diagnosticSink, nil, runtime.plan.manifest.Provider, runtime.plan.manifest.Model)
@@ -162,7 +177,6 @@ func runRoomParticipant(
 		observer.admittedTurnObserver = func(messages.StreamMessage) {
 			turns := runtime.lifecycle.observeAdmittedTurn()
 			coordinator.noteTurn(runtime.plan.manifest.ID, turns)
-			evidence.recordTimelineEvent("turn_completed", runtime.plan.manifest.ID, map[string]string{"turn_index": strconv.Itoa(turns)})
 		}
 	}
 	inputObserver := opts.OnAudioInput
@@ -229,7 +243,7 @@ func runRoomParticipant(
 		results <- roomParticipantRunResult{plan: runtime.plan, runtime: runtime, err: runErr, connected: connected, connectErr: connectErr}
 		return
 	}
-	diagnosticSinks := roomParticipantDiagnosticSinks(runtime.plan, opts, participantEvidence)
+	diagnosticSinks := roomParticipantDiagnosticSinksWithTimeline(runtime.plan, opts, evidence, participantEvidence)
 	observer = newSessionProgressObserver(combineDiagnosticSinks(diagnosticSinks...), nil, runtime.plan.manifest.Provider, runtime.plan.manifest.Model)
 	observer.livenessObserver = func(err error) {
 		runtime.lifecycle.markLivenessFailure(err)
@@ -302,7 +316,6 @@ func runRoomParticipant(
 	observer.admittedTurnObserver = func(messages.StreamMessage) {
 		turns := runtime.lifecycle.observeAdmittedTurn()
 		coordinator.noteTurn(runtime.plan.manifest.ID, turns)
-		evidence.recordTimelineEvent("turn_completed", runtime.plan.manifest.ID, map[string]string{"turn_index": strconv.Itoa(turns)})
 	}
 	var latencyRuntime *sessionRuntimeObservationRecorder
 	if evidence != nil && evidence.latency != nil {
@@ -427,6 +440,23 @@ func roomParticipantDiagnosticSinks(
 			observer:      opts.OnDiagnostic,
 		})
 	}
+	return diagnosticSinks
+}
+
+func roomParticipantDiagnosticSinksWithTimeline(
+	plan *roomParticipantPlan,
+	opts RoomRunOptions,
+	evidence *roomEvidence,
+	participantEvidence *roomParticipantEvidence,
+) []SessionDiagnosticSink {
+	diagnosticSinks := make([]SessionDiagnosticSink, 0, 3)
+	if evidence != nil {
+		diagnosticSinks = append(diagnosticSinks, roomTurnTimelineDiagnosticSink{
+			participantID: plan.manifest.ID,
+			evidence:      evidence,
+		})
+	}
+	diagnosticSinks = append(diagnosticSinks, roomParticipantDiagnosticSinks(plan, opts, participantEvidence)...)
 	return diagnosticSinks
 }
 

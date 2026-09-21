@@ -1,11 +1,13 @@
 package agentruntime
 
 import (
+	"bufio"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -114,6 +116,12 @@ func TestRunRoomWithResult_LongConversationEndsBothParticipantsCleanly(t *testin
 				record        SessionDiagnosticRecord
 			}{participantID: participantID, record: record}
 			if record.Event == SessionDiagnosticEventTurn {
+				present, err := longConversationTurnIsInTimeline(filepath.Join(outputDir, RoomEvidenceTimelinePath), participantID, record.Fields[fieldTurnIndex])
+				if err != nil {
+					t.Errorf("read long-conversation timeline before turn diagnostic %q/%s: %v", participantID, record.Fields[fieldTurnIndex], err)
+				} else if !present {
+					t.Errorf("long-conversation turn diagnostic %q/%s was observable before its timeline entry", participantID, record.Fields[fieldTurnIndex])
+				}
 				turnDiagnostics <- participantID
 			}
 		},
@@ -295,6 +303,29 @@ diagnosticsDrained:
 	if !sameRoomReplayStrings(timelineTurns, turnOrder) {
 		t.Fatalf("long-conversation timeline turn order = %v, want %v", timelineTurns, turnOrder)
 	}
+}
+
+func longConversationTurnIsInTimeline(path, participantID, turnIndex string) (bool, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return false, err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		var entry roomTimelineEntry
+		if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
+			return false, err
+		}
+		if entry.Event == "turn_completed" && entry.Participant == participantID && entry.Fields[fieldTurnIndex] == turnIndex {
+			return true, nil
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return false, err
+	}
+	return false, nil
 }
 
 func roomRealtimeLongConversationCapture(t *testing.T, participantID, model string, input []byte, responses []string) gwtesting.SessionCapture {
