@@ -4109,3 +4109,25 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   checks, then run `make prepush` plus the complete exact-head C280-05 gate on
   one clean candidate before push and SCRIPT handoff. Return `CONTINUE` while
   that actionable integration remains.
+
+# C280 architecture registration repair checkpoint 2026-09-21
+
+- Re-ran the owned C280 gates after the service-owner checkpoint. Normal focused
+  tests pass `56` tests in `16` packages; the focused race selection passes `51`
+  tests in `16` packages; the roomevidence boundary scan and `git diff --check`
+  pass; `make wire-check` passes; and `make architecture-size-check` now passes
+  with `208` packages, `1,980` files and `29,331` functions.
+- The architecture gate initially found one C280-owned defect:
+  `go-agent-runtime/services/roomevidence/wire/wire_gen.go` had a valid Wire
+  header but no exact registration in `docs/architecture/architecture-policy.json`.
+  Added only that registration; no production runtime behavior or peer-owned
+  caller path changed.
+- Canonical C271/C272/C276/C278 seams remain unreleased (`work-task-106`
+  failed/init, `work-task-109` processing/init, `work-task-121` processing/init,
+  and `work-task-134` CI-pending). The eight agentruntime room-evidence files,
+  19 duplicate rooms evidence production files and caller graph therefore remain
+  intentionally present; adapter count remains `0 files / 0 lines`.
+- No prepush, full C280 vertical gate, push, PR, SCRIPT CI, review or merge is
+  claimed. Next: wait for exact reviewed/released peer seams, integrate those
+  revisions additively, finish every caller cutover and complete legacy deletion,
+  then run the full C280-03/C280-05 commands on one clean SHA. Return `CONTINUE`.
