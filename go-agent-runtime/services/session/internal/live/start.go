@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/sessionwrap"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -71,21 +71,15 @@ func (h *handle) prepareStart(runCtx context.Context) (messages.ToolExecutor, []
 }
 
 func (h *handle) buildLoop(inferencer messages.SessionInferencer, toolExecutor messages.ToolExecutor, toolDefinitions []messages.ToolDefinition) (*agentloop.AgentLoop, error) {
-	capturing := &capturingInferencer{
-		inner:             inferencer,
-		media:             h.media,
-		continuous:        h.request.OutputAudioContinuous,
-		flushOutbound:     h.request.FinishAfterResponse,
-		replayKind:        h.request.Replay.Kind,
-		outputSampleRate:  h.request.OutputAudioSampleRate,
-		requirements:      h.mediaRequirements,
-		onDispatch:        h.observeProviderDispatch,
-		onToolResult:      h.beginToolResultAdmission,
-		onContinuation:    h.beginContinuationAdmission,
-		onOpeningAdmitted: func() { h.markOpeningAdmitted(nil) },
-		onProviderDone:    h.providerDone,
-		onMediaAttached:   h.setProviderMediaAttached,
-	}
+	capturing := sessionwrap.NewCapturingInferencer(sessionwrap.CapturingInferencerOptions{
+		Inner: inferencer, Media: h.media, Continuous: h.request.OutputAudioContinuous,
+		FlushOutbound:  h.request.FinishAfterResponse,
+		RequireInbound: h.mediaRequirements.inbound, RequireOutbound: h.mediaRequirements.outbound,
+		OnDispatch: h.observeProviderDispatch, OnToolResult: h.beginToolResultAdmission,
+		OnContinuation:    h.beginContinuationAdmission,
+		OnOpeningAdmitted: func() { h.markOpeningAdmitted(nil) },
+		OnProviderDone:    h.providerDone, OnMediaAttached: h.setProviderMediaAttached,
+	})
 	h.providerTerminalError = capturing.TerminalError
 	options := []agentloop.Option{
 		agentloop.WithMode(engine.DuplexSession),
@@ -284,22 +278,6 @@ func (h *handle) prepareReplayCompletion() {
 	}
 }
 
-func capabilityEventStream(ctx context.Context, watch func(context.Context) <-chan session.LiveCapabilityEvent) <-chan session.LiveCapabilityEvent {
-	if watch == nil {
-		return nil
-	}
-	return watch(ctx)
-}
-
-func (h *handle) captureInterruptionsEnabled() bool {
-	if h == nil {
-		return false
-	}
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	return h.captureInterruptionEvent != nil
-}
-
 type workerPlan struct {
 	durationTimer     platformclock.Timer
 	capabilityEvents  <-chan session.LiveCapabilityEvent
@@ -384,31 +362,4 @@ func (h *handle) launchWorkers(
 	go h.consumeDeltas(ctx, loop)
 	plan.launch(h, ctx, loop)
 	go h.finishWhenStopped() //nolint:contextcheck // lifecycle join owns the invocation evidence context.
-}
-
-func capabilityEvent(sessionID, participantID string, value session.LiveCapabilityEvent) session.LiveEvent {
-	copy := value
-	return session.LiveEvent{
-		Kind:          "browser." + strings.TrimSpace(value.Type),
-		SessionID:     sessionID,
-		ParticipantID: participantID,
-		Timestamp:     value.Timestamp,
-		BrowserID:     value.BrowserID,
-		TargetID:      value.TargetID,
-		Generation:    value.Generation,
-		InvocationID:  value.InvocationID,
-		State:         value.State,
-		Reason:        value.Reason,
-		Capability:    &copy,
-		Critical:      capabilityEventCritical(value),
-	}
-}
-
-func capabilityEventCritical(value session.LiveCapabilityEvent) bool {
-	typeName := strings.ToLower(strings.TrimSpace(value.Type))
-	state := strings.ToLower(strings.TrimSpace(value.State))
-	return strings.Contains(typeName, "closed") || strings.Contains(typeName, "disconnect") ||
-		strings.Contains(typeName, "error") || strings.Contains(typeName, "failed") ||
-		strings.Contains(state, "error") || strings.Contains(state, "failed") ||
-		strings.Contains(state, "canceled") || strings.Contains(state, "timed_out")
 }

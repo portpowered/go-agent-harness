@@ -4340,3 +4340,24 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
 - Next: remove stale records exactly, ratchet measured reductions, repair
   upward baseline drift and remaining file/package sizes, then rerun the full
   preflight on the exact candidate.
+
+# C229 live-session wrapper checkpoint 2026-09-20
+
+- Grouped capture-inferencer, ordered-session, terminal-drain and turn-replay
+  wrappers under `services/session/internal/live/sessionwrap`. Split replay
+  orchestration and moved response-boundary cleanup and capability-event
+  conversion into their existing service responsibilities. No tests moved or
+  added; live service files now meet the 400-line production and 600-line test
+  limits.
+- `rtk go test ./go-agent-runtime/services/session/internal/live/... -count=1
+  -timeout=180s` passes 89 tests across six packages. `rtk git diff --check`
+  passes. The ten planned `agentruntime` production files are absent; the two
+  named stateless `livehost` adapters total 32 physical lines.
+- `rtk make architecture-size-check` still fails with 171 issues across 208
+  packages: 107 baseline drifts and 64 stale entries. Inspection found 69
+  upward measurements and 38 reductions that require exact lower ceilings.
+  Exact log: `1789954935_make_architecture-size-check.log`. No baseline was
+  changed or widened. No PR or push exists.
+- Next: repair every upward measurement in source, lower only proven reductions
+  and delete exact stale entries; rerun the architecture gate, then execute the
+  complete C229 local preflight on one exact candidate before any PR or push.

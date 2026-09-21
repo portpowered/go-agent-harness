@@ -1,96 +1,35 @@
-package live
+package sessionwrap
 
 import (
 	"context"
 	"errors"
-	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/mediagate"
-	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
-// capturingInferencer attaches optional provider media after session setup.
-type capturingInferencer struct {
-	inner             messages.SessionInferencer
-	media             *mediagate.Gate
-	continuous        bool
-	flushOutbound     bool
-	replayKind        session.LiveReplayKind
-	outputSampleRate  int
-	requirements      mediaRequirements
-	onDispatch        func(messages.StreamMessage)
-	onToolResult      func(string, string, bool) func()
-	onContinuation    func() func()
-	onOpeningAdmitted func()
-	onProviderDone    func(error)
-	onMediaAttached   func(bool)
-	captureMu         sync.Mutex
-	captureFlush      func() error
-	connectedSession  messages.Session
+type OrderedSessionOptions struct {
+	Media             *mediagate.Gate
+	FlushOutbound     bool
+	OnDispatch        func(messages.StreamMessage)
+	OnToolResult      func(string, string, bool) func()
+	OnContinuation    func() func()
+	OnOpeningAdmitted func()
 }
 
-func (i *capturingInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
-	s, err := i.inner.ConnectSession(ctx)
-	if err != nil {
-		i.media.Fail(err)
-		return nil, err
-	}
-	if flusher, ok := i.inner.(interface{ FlushCapture() error }); ok {
-		i.captureMu.Lock()
-		i.captureFlush = flusher.FlushCapture
-		i.captureMu.Unlock()
-	}
-	i.captureMu.Lock()
-	i.connectedSession = s
-	i.captureMu.Unlock()
-	mediaAttached := false
-	if providerMedia, ok := s.(sharedaudio.MediaSession); ok {
-		endpoints := captureMediaEndpoints(s, providerMedia, i.continuous)
-		mediaAttached = i.requirements.satisfiedBy(endpoints)
-		i.media.Attach(ctx, endpoints)
-	}
-	if i.onMediaAttached != nil {
-		i.onMediaAttached(mediaAttached)
-	}
-	if !mediaAttached {
-		i.media.Fail(mediagate.ErrMediaUnavailable)
-	}
-	// Notify the live owner after the provider cleanup boundary, even if the
-	// runner context is already canceled.
-	if done := s.Done(); done != nil && i.onProviderDone != nil {
-		go func() {
-			<-done
-			i.onProviderDone(i.TerminalError())
-		}()
-	}
+type OrderedSession interface {
+	messages.Session
+	SendWithOutcome(context.Context, messages.StreamMessage) messages.SessionSendOutcome
+}
+
+func WrapOrderedSession(inner messages.Session, options OrderedSessionOptions) OrderedSession {
 	return &orderedSession{
-		inner:             s,
-		media:             i.media,
-		flushOutbound:     i.flushOutbound,
-		onDispatch:        i.onDispatch,
-		onToolResult:      i.onToolResult,
-		onContinuation:    i.onContinuation,
-		onOpeningAdmitted: i.onOpeningAdmitted,
-	}, nil
+		inner: inner, media: options.Media, flushOutbound: options.FlushOutbound,
+		onDispatch: options.OnDispatch, onToolResult: options.OnToolResult,
+		onContinuation: options.OnContinuation, onOpeningAdmitted: options.OnOpeningAdmitted,
+	}
 }
 
-// FlushCapture forwards provider capture finalization after session join.
-func (i *capturingInferencer) FlushCapture() error {
-	if i == nil {
-		return nil
-	}
-	i.captureMu.Lock()
-	flush := i.captureFlush
-	i.captureMu.Unlock()
-	if flush == nil {
-		return nil
-	}
-	return flush()
-}
-
-// orderedSession serializes provider ingress with the public media bridge.
 type orderedSession struct {
 	inner             messages.Session
 	media             *mediagate.Gate
@@ -170,6 +109,19 @@ func sessionSendOutcomeForContext(err error) messages.SessionSendOutcome {
 	return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: err}
 }
 
+func sessionSendOutcomeForError(ctx context.Context, err error) messages.SessionSendOutcome {
+	if err == nil {
+		return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
+	}
+	if errors.Is(err, context.DeadlineExceeded) || (ctx != nil && errors.Is(ctx.Err(), context.DeadlineExceeded)) {
+		return messages.SessionSendOutcome{Status: messages.SessionSendTimedOut, Err: err}
+	}
+	if errors.Is(err, context.Canceled) || (ctx != nil && errors.Is(ctx.Err(), context.Canceled)) {
+		return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: err}
+	}
+	return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure, Err: err}
+}
+
 func (s *orderedSession) runAdmission(ctx context.Context, operation func() messages.SessionSendOutcome) messages.SessionSendOutcome {
 	if operation == nil {
 		return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}
@@ -187,10 +139,7 @@ func (s *orderedSession) runAdmission(ctx context.Context, operation func() mess
 }
 
 func (s *orderedSession) runAdmissionBool(ctx context.Context, operation func() bool) bool {
-	if operation == nil {
-		return false
-	}
-	if ctx == nil {
+	if operation == nil || ctx == nil {
 		return false
 	}
 	outcome := s.runAdmission(ctx, func() messages.SessionSendOutcome {
@@ -388,16 +337,4 @@ func (s *orderedSession) InitialSessionConfigSent() bool {
 	}
 	marker, ok := s.inner.(interface{ InitialSessionConfigSent() bool })
 	return ok && marker.InitialSessionConfigSent()
-}
-
-// TerminalError reads the joined provider state directly. Final classification
-// must not depend on when the asynchronous Done notification gets scheduled.
-func (i *capturingInferencer) TerminalError() error {
-	i.captureMu.Lock()
-	connected := i.connectedSession
-	i.captureMu.Unlock()
-	if provider, ok := connected.(interface{ TerminalError() error }); ok {
-		return provider.TerminalError()
-	}
-	return nil
 }

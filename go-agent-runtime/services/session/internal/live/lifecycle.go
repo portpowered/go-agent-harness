@@ -7,7 +7,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
-	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"time"
 )
 
@@ -376,25 +375,16 @@ func finalizeRecorder(recorder session.LiveRecorder, ctx context.Context, runErr
 	}
 	return recorder.Finalize(context.WithoutCancel(ctx), runErr)
 }
-func (s *terminalDrainSession) SendMessage(ctx context.Context, msg messages.Message) bool {
-	sender, ok := s.inner.(completeMessageSender)
-	return ok && sender.SendMessage(ctx, msg)
-}
-func (s *terminalDrainSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
-	sender, ok := s.inner.(completeMessageWithoutResponseSender)
-	return ok && sender.SendMessageWithoutResponse(ctx, msg)
-}
-func (s *terminalDrainSession) RTCMedia() sharedaudio.MediaEndpoints {
-	provider, ok := s.inner.(sharedaudio.MediaSession)
-	if !ok {
-		return sharedaudio.MediaEndpoints{}
+
+func (i *liveInvocation) closeAfterStartError(startErr error) error {
+	if i == nil {
+		return startErr
 	}
-	return provider.RTCMedia()
-}
-func (s *terminalDrainSession) RTCMediaWithOptions(options sharedaudio.MediaSessionOptions) sharedaudio.MediaEndpoints {
-	provider, ok := s.inner.(sharedaudio.ConfigurableMediaSession)
-	if !ok {
-		return s.RTCMedia()
+	var deviceErr error
+	if i.device != nil {
+		deviceErr = i.device.Close()
 	}
-	return provider.RTCMediaWithOptions(options)
+	handleErr := i.handle.Close()
+	result := errors.Join(startErr, deviceErr, handleErr)
+	return errors.Join(result, finalizeRecorder(i.options.Recorder, i.ctx, result))
 }

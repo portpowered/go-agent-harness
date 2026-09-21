@@ -1,4 +1,4 @@
-package live
+package sessionwrap
 
 import (
 	"context"
@@ -6,28 +6,30 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
-type turnReplayMediaInferencer struct {
+type inferencerAdapter struct {
 	inner      messages.SessionInferencer
 	sampleRate int
 	continuous bool
 }
 
-func (i turnReplayMediaInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
+func WrapTurnReplay(inner messages.SessionInferencer, sampleRate int, continuous bool) messages.SessionInferencer {
+	return inferencerAdapter{inner: inner, sampleRate: sampleRate, continuous: continuous}
+}
+
+func (i inferencerAdapter) ConnectSession(ctx context.Context) (messages.Session, error) {
 	inner, err := i.inner.ConnectSession(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return newTurnReplayMediaSession(inner, i.sampleRate, i.continuous), nil
+	return newMediaSession(inner, i.sampleRate, i.continuous), nil
 }
 
-type turnReplayMediaSession struct {
+type mediaSession struct {
 	inner       messages.Session
 	media       *sharedaudio.SessionMedia
 	received    *messages.TypedBuffer[messages.StreamMessage]
@@ -40,14 +42,14 @@ type turnReplayMediaSession struct {
 	terminalErr error
 }
 
-func newTurnReplayMediaSession(inner messages.Session, sampleRate int, continuous bool) *turnReplayMediaSession {
+func newMediaSession(inner messages.Session, sampleRate int, continuous bool) *mediaSession {
 	if sampleRate <= 0 {
 		sampleRate = sharedaudio.DefaultSessionMediaSampleRate
 	}
 	media := sharedaudio.NewSessionMediaAtRateWithOptions(nil, sampleRate, sharedaudio.MediaSessionOptions{
 		InboundContinuous: continuous,
 	})
-	s := &turnReplayMediaSession{
+	s := &mediaSession{
 		inner:     inner,
 		media:     media,
 		received:  messages.NewTypedBuffer[messages.StreamMessage](128),
@@ -59,28 +61,28 @@ func newTurnReplayMediaSession(inner messages.Session, sampleRate int, continuou
 	return s
 }
 
-func (s *turnReplayMediaSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
+func (s *mediaSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
 	return messages.SendSessionWithOutcome(ctx, s.inner, msg).OK()
 }
 
-func (s *turnReplayMediaSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
+func (s *mediaSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
 	return messages.SendSessionWithOutcome(ctx, s.inner, msg)
 }
 
-func (s *turnReplayMediaSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
+func (s *mediaSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
 	return s.received
 }
 
-func (s *turnReplayMediaSession) Done() <-chan struct{} { return s.done }
+func (s *mediaSession) Done() <-chan struct{} { return s.done }
 
-func (s *turnReplayMediaSession) RTCMedia() sharedaudio.MediaEndpoints {
+func (s *mediaSession) RTCMedia() sharedaudio.MediaEndpoints {
 	if s == nil || s.media == nil {
 		return sharedaudio.MediaEndpoints{}
 	}
 	return sharedaudio.MediaEndpoints{Inbound: s.media.Endpoints().Inbound}
 }
 
-func (s *turnReplayMediaSession) TerminalError() error {
+func (s *mediaSession) TerminalError() error {
 	if s == nil {
 		return nil
 	}
@@ -99,7 +101,7 @@ func (s *turnReplayMediaSession) TerminalError() error {
 	return nil
 }
 
-func (s *turnReplayMediaSession) Close() error {
+func (s *mediaSession) Close() error {
 	if s == nil {
 		return nil
 	}
@@ -116,7 +118,7 @@ func (s *turnReplayMediaSession) Close() error {
 	return s.closeErr
 }
 
-func (s *turnReplayMediaSession) forward(ctx context.Context) {
+func (s *mediaSession) forward(ctx context.Context) {
 	defer close(s.forwarded)
 	defer close(s.done)
 	defer func() {
@@ -151,7 +153,7 @@ func (s *turnReplayMediaSession) forward(ctx context.Context) {
 	}
 }
 
-func (s *turnReplayMediaSession) drain(ctx context.Context, source *messages.TypedBuffer[messages.StreamMessage]) {
+func (s *mediaSession) drain(ctx context.Context, source *messages.TypedBuffer[messages.StreamMessage]) {
 	for {
 		msg, ok := source.Read()
 		if !ok || !s.forwardMessage(ctx, msg) {
@@ -160,7 +162,7 @@ func (s *turnReplayMediaSession) drain(ctx context.Context, source *messages.Typ
 	}
 }
 
-func (s *turnReplayMediaSession) forwardMessage(ctx context.Context, msg messages.StreamMessage) bool {
+func (s *mediaSession) forwardMessage(ctx context.Context, msg messages.StreamMessage) bool {
 	switch msg.Type {
 	case messages.StreamTypeAudioDelta:
 		value, ok := msg.Value.(*messages.AudioDeltaValue)
@@ -195,7 +197,7 @@ func (s *turnReplayMediaSession) forwardMessage(ctx context.Context, msg message
 	return true
 }
 
-func (s *turnReplayMediaSession) fail(err error) {
+func (s *mediaSession) fail(err error) {
 	if s == nil || err == nil {
 		return
 	}
@@ -207,63 +209,12 @@ func (s *turnReplayMediaSession) fail(err error) {
 	s.media.FailInbound(err)
 }
 
-func (h *handle) liveControlLoop() (*agentloop.AgentLoop, error) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	if !h.started || h.loop == nil {
-		return nil, session.ErrLiveNotStarted
+func CaptureMediaEndpoints(session messages.Session, providerMedia sharedaudio.MediaSession, continuous bool) sharedaudio.MediaEndpoints {
+	if !continuous {
+		return providerMedia.RTCMedia()
 	}
-	if h.closed {
-		return nil, session.ErrLiveClosed
+	if configurable, ok := session.(sharedaudio.ConfigurableMediaSession); ok {
+		return configurable.RTCMediaWithOptions(sharedaudio.MediaSessionOptions{InboundContinuous: true})
 	}
-	return h.loop, nil
-}
-
-func (h *handle) sendLiveControl(ctx context.Context, loop *agentloop.AgentLoop, control session.LiveControl) error {
-	ackID, ack, err := h.media.RegisterAck()
-	if err != nil {
-		return err
-	}
-	event, err := liveControlEvent(control)
-	if err != nil {
-		h.media.AbortAck(ackID)
-		return err
-	}
-	if control.Kind == session.LiveControlAudioCommit && h.request.Replay.Kind == session.LiveReplayKindTurn {
-		// Session-message captures preserve the historical type-only end
-		// marker; realtime provider controls carry their negotiated value.
-		event.Value = nil
-	}
-	event.ActorProvidedID = ackID
-	if err := loop.SendSessionEvent(ctx, event); err != nil {
-		h.media.AbortAck(ackID)
-		return err
-	}
-	select {
-	case accepted := <-ack:
-		if !accepted {
-			return fmt.Errorf("live provider rejected control %q", control.Kind)
-		}
-		return nil
-	case <-ctx.Done():
-		h.media.CancelAck(ackID)
-		return ctx.Err()
-	}
-}
-
-func liveControlEvent(control session.LiveControl) (messages.StreamMessage, error) {
-	switch control.Kind {
-	case session.LiveControlText:
-		return messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue(control.Text)}, nil
-	case session.LiveControlAudioCommit:
-		return messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{})}, nil
-	case session.LiveControlResponseCancel:
-		return messages.StreamMessage{Type: messages.StreamTypeResponseCancel, Value: messages.NewResponseCancelValue()}, nil
-	case session.LiveControlResponseCreate:
-		return messages.StreamMessage{Type: messages.StreamTypeResponseCreate, Value: messages.NewResponseCreateValue()}, nil
-	case session.LiveControlClose:
-		return messages.StreamMessage{}, errors.New("close control is handled by the live lifecycle")
-	default:
-		return messages.StreamMessage{}, fmt.Errorf("unsupported live control %q", control.Kind)
-	}
+	return providerMedia.RTCMedia()
 }

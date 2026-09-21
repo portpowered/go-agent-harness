@@ -999,6 +999,21 @@ func closePendingSessionIfReady(ctx context.Context, loop *agentloop.AgentLoop, 
 	return state, nil
 }
 
+func (s *observedSession) markDone() {
+	s.once.Do(s.closeDone)
+}
+
+func (s *observedSession) Close() error {
+	if s == nil {
+		return nil
+	}
+	s.closeOnce.Do(func() {
+		s.closeErr = s.Session.Close()
+		s.markDone()
+	})
+	return s.closeErr
+}
+
 // drainPublishedSessionDeltas consumes the finite set of messages already
 // published to the session loop's public delta buffer. AgentLoop.Run's clean
 // completion is a publication barrier, so callers must inspect this buffer

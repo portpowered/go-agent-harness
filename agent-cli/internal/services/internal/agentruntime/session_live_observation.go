@@ -385,18 +385,3 @@ func (s *observedSession) SupportsCompleteMessagesWithoutResponse() bool {
 	_, withoutResponse := completeMessageCapabilities(s.Session)
 	return withoutResponse
 }
-
-func (s *observedSession) markDone() {
-	s.once.Do(s.closeDone)
-}
-
-func (s *observedSession) Close() error {
-	if s == nil {
-		return nil
-	}
-	s.closeOnce.Do(func() {
-		s.closeErr = s.Session.Close()
-		s.markDone()
-	})
-	return s.closeErr
-}

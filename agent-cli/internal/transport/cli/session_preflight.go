@@ -63,3 +63,10 @@ func validateSessionCommandPreflight(input sessionCommandPreflight) (string, err
 	}
 	return selectedTransport, nil
 }
+
+func replayRequestsAudio(request serviceSession.Request) bool {
+	return request.AudioInput.Present || request.AudioInput.DevicePresent ||
+		len(request.AudioTurns) > 0 || len(request.AudioInterrupts) > 0 ||
+		request.AudioOutputPath != "" || request.AudioOutputRequested ||
+		request.AudioInputDevicePresent || request.AudioOutputDevicePresent
+}
