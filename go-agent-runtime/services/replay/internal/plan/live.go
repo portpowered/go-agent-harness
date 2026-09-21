@@ -9,15 +9,16 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/internal/engine"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 type livePrepared struct {
 	inspection replay.CaptureInspection
-	dialer     *testing.ReplayWebSocketDialer
+	dialer     *engine.WebSocketDialer
 	config     []byte
 	active     transport.Dialer
 	mu         sync.Mutex
@@ -48,18 +49,14 @@ func (s *Service) PrepareLive(ctx context.Context, request replay.LiveRequest) (
 	if err != nil {
 		return nil, err
 	}
-	options := []testing.ReplayWebSocketDialerOption(nil)
-	if request.Timing == "realtime" {
-		options = append(options, testing.WithRecordedSessionTiming())
-	}
-	dialer, err := testing.NewReplayWebSocketDialerFromCapture(loaded.Capture, options...)
+	dialer, err := engine.NewWebSocketDialer(loaded.Capture, request.Timing == session.LiveReplayTimingRealtime)
 	if err != nil {
 		return nil, fmt.Errorf("prepare live replay %s: %w", request.SourcePath, err)
 	}
 	return &livePrepared{inspection: inspection, dialer: dialer, config: config, active: dialer}, nil
 }
 
-func replayMaxDuration(records []testing.CapturedSessionEvent, timing session.LiveReplayTiming) time.Duration {
+func replayMaxDuration(records []gatewaytesting.CapturedSessionEvent, timing session.LiveReplayTiming) time.Duration {
 	const completionGrace = 3 * time.Second
 	if timing != session.LiveReplayTimingRealtime || len(records) < 2 {
 		return completionGrace
@@ -71,9 +68,9 @@ func replayMaxDuration(records []testing.CapturedSessionEvent, timing session.Li
 	return time.Duration(last-first)*time.Millisecond + completionGrace
 }
 
-func initialSessionUpdatePayload(path string, records []testing.CapturedSessionEvent) ([]byte, error) {
+func initialSessionUpdatePayload(path string, records []gatewaytesting.CapturedSessionEvent) ([]byte, error) {
 	for _, record := range records {
-		if record.Direction != testing.DirectionClientToServer || record.Type != replaySessionUpdate {
+		if record.Direction != gatewaytesting.DirectionClientToServer || record.Type != replaySessionUpdate {
 			continue
 		}
 		payload := replayRecordPayload(record)
@@ -115,8 +112,8 @@ func (p *livePrepared) WrapDialer(inner transport.Dialer) transport.Dialer {
 	p.mu.Lock()
 	p.active = inner
 	p.mu.Unlock()
-	var pacer testing.ReplayOutboundPacer
-	if candidate, ok := inner.(testing.ReplayOutboundPacer); ok {
+	var pacer engine.OutboundPacer
+	if candidate, ok := inner.(engine.OutboundPacer); ok {
 		pacer = candidate
 	}
 	return &initialSessionUpdateDialer{inner: inner, payload: append([]byte(nil), p.config...), waitForNextOutbound: pacer}
@@ -172,7 +169,7 @@ func (p *livePrepared) Close() error {
 type initialSessionUpdateDialer struct {
 	inner               transport.Dialer
 	payload             []byte
-	waitForNextOutbound testing.ReplayOutboundPacer
+	waitForNextOutbound engine.OutboundPacer
 }
 
 func (d *initialSessionUpdateDialer) Dial(endpoint string, headers map[string]string) (transport.Conn, error) {
@@ -191,7 +188,7 @@ type initialSessionUpdateConn struct {
 	payload             []byte
 	mu                  sync.Mutex
 	handshake           bool
-	waitForNextOutbound testing.ReplayOutboundPacer
+	waitForNextOutbound engine.OutboundPacer
 }
 
 func (c *initialSessionUpdateConn) ReadMessage() (int, []byte, error) {

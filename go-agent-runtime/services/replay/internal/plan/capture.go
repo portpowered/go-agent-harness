@@ -15,6 +15,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/internal/engine"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -38,7 +39,7 @@ var errSelfDrivingPlanUnavailable = errors.New("self-driving replay plan unavail
 type Service struct{}
 
 type captureReplay struct {
-	inner *gatewaytesting.SessionReplayer
+	inner *engine.MessageSession
 }
 
 // New constructs an inert replay planner.
@@ -52,14 +53,11 @@ func (s *Service) Replay(ctx context.Context, path string) (replay.CaptureReplay
 	if err != nil {
 		return nil, err
 	}
-	replayer, err := gatewaytesting.NewSessionReplayer(capturePath,
-		gatewaytesting.WithReplayOutboundValidation(false),
-		gatewaytesting.WithReplayContext(ctx),
-	)
+	loaded, err := loadReplayCapture(ctx, capturePath)
 	if err != nil {
 		return nil, fmt.Errorf("replay session capture %s: %w", path, err)
 	}
-	return &captureReplay{inner: replayer}, nil
+	return &captureReplay{inner: engine.NewMessageSession(loaded.Capture.Records, ctx, false)}, nil
 }
 
 func (s *Service) NewSessionInferencer(ctx context.Context, path string) (messages.SessionInferencer, error) {
@@ -94,7 +92,11 @@ func (i sessionCaptureInferencer) ConnectSession(ctx context.Context) (messages.
 	if err := replayContextError(ctx); err != nil {
 		return nil, err
 	}
-	return gatewaytesting.NewSessionReplayer(i.path, gatewaytesting.WithReplayContext(ctx))
+	loaded, err := loadReplayCapture(ctx, i.path)
+	if err != nil {
+		return nil, err
+	}
+	return engine.NewMessageSession(loaded.Capture.Records, ctx, true), nil
 }
 
 func (r *captureReplay) Receive() <-chan messages.StreamMessage {
@@ -205,7 +207,7 @@ func (s *Service) InspectCapture(ctx context.Context, path string) (replay.Captu
 	if !inspection.IsRealtime() {
 		return inspection, nil
 	}
-	if _, err := gatewaytesting.NewReplayWebSocketDialerFromCapture(loaded.Capture); err != nil {
+	if err := engine.ValidateWebSocketCapture(loaded.Capture); err != nil {
 		return replay.CaptureInspection{}, fmt.Errorf("validate realtime replay capture %s: %w", sourcePath, err)
 	}
 	inspection.Facts.RealtimeWebSocketReplayable = true

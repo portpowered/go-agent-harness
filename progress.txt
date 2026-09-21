@@ -5859,3 +5859,50 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   caller/direct reader, resolve the adapter requirement from actual caller
   needs, then run all C276-02 through C276-06 commands plus `make prepush` on
   one exact clean candidate before any push. Decision remains CONTINUE.
+
+# C276 current-turn checkpoint — replay service state ownership and gate evidence — 2026-09-21
+
+- Worktree started clean at `73bb8d5d46cff091bfc49002b45c39dd0d40fa1a` on
+  `codex/audio-runtime-c276-recover-c270-recording-replay-finalization`, matching
+  `prd.json.branchName`. No peer worktree or predecessor checkpoint was changed.
+- Moved the captured-message replay cursor, validated outbound admission,
+  cancellation/completion state, WebSocket event cursor, payload checks, pacing,
+  and close result into `go-agent-runtime/services/replay/internal/engine`.
+  Production `Replay`, `NewSessionInferencer`, `PrepareLive`, and strict replay
+  now construct service-owned engines instead of the stateful
+  `gatewaytesting.SessionReplayer` or replay WebSocket dialer. The focused public
+  service tests cover ordered traffic, outbound divergence, terminal disconnect,
+  and completion closure.
+- Exact vertical commands passed after these changes:
+  `rtk go test -count=1 ./go-agent-runtime/services/recording/... ./go-agent-runtime/services/replay/...`
+  (202 tests / 9 packages),
+  `rtk go test -race -count=1 ./go-agent-runtime/services/recording/... ./go-agent-runtime/services/replay/...`
+  (202 tests / 9 packages), `rtk make wire-check`, and `rtk git diff --check`.
+  Wire regenerated no tracked changes.
+- `rtk make verify-architecture` failed with 260 findings across 207 packages;
+  complete log:
+  `/Users/abdifamily/Library/Application Support/rtk/tee/1790019887_make_verify-architecture.log`.
+  There are 21 findings in `services/replay/internal/plan` covering
+  capture/probe/timing complexity, two overlong files, three overlong functions,
+  and the 17-file package limit. The new replay engine and tests have no current
+  architecture finding. The other findings span the accumulated agentruntime,
+  session, sessionduration, providers, and active peer-owned CLI changes; do not
+  modify those leased seams without their exact reviewed release or handoff.
+- The two recorded-WebMCP selections remain unresolved from the previous bounded
+  run: both stop before opening the fake provider at
+  `legacy session audio runtime is retired; use the service-owned live session`.
+  Routing them through the live constructor previously exposed C229's default
+  virtual-output/RTC failure. C229, C268, C269, and C274 have no exact reviewed
+  release available; C274's prior review rejection and active repair remain as
+  recorded above.
+- The seven integrated-main deletion targets and six checkpoint-only replacement
+  paths remain absent in this branch. No direct-reader/caller cutover is complete;
+  uncalled `recording_adapter.go` and `replay_adapter.go` remain deleted at 0
+  adapter files / 0 lines. `make prepush`, other accumulated C276-05/06 gates,
+  push, PR update, and SCRIPT handoff were not run because callers remain
+  unresolved and public WebMCP is red. Exact next action: retain C276 ownership,
+  remove the 21 replay-plan architecture findings without adding test-only
+  evidence, then integrate the exact reviewed C229/C268/C269/C274 releases,
+  repair the public live route and remaining direct readers, and only then run
+  the full exact-head C276-02 through C276-06 command set plus `make prepush`.
+  Decision remains CONTINUE.
