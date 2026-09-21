@@ -244,6 +244,8 @@ func TestRuntimeTraceBoundsCommitPayloadAndClassifiesTerminalErrors(t *testing.T
 			commits = append(commits, value.Payload)
 		case sessiontrace.SessionRuntimeObservationTerminal:
 			terminals = append(terminals, value)
+		default:
+			// This test captures only commit retention and terminal classification.
 		}
 	}), nil, nil)
 	trace.CapturedAudio(audio.PCMFrame{Samples: make([]int16, codec.MaxPayloadBytes/2+1)})
