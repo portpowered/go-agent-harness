@@ -380,7 +380,7 @@ func participantArtifactList(paths roomevidence.ArtifactPaths) []string {
 	return []string{paths.WAV, paths.Diagnostics, paths.Deltas, paths.SentPCM, paths.ReceivedPCM, paths.Events, paths.Capture}
 }
 
-func (r *recorder) ApplyRecordingHealth(result *rooms.RoomResult) {
+func (r *recorder) applyRecordingHealth(result *rooms.RoomResult) {
 	if r == nil || result == nil {
 		return
 	}

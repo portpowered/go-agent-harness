@@ -110,7 +110,7 @@ func (r *recorder) Finalize(finalization roomevidence.Finalization) (roomevidenc
 	}
 	err := r.finalize(finalization.Room, finalization.Err, finalization.EndedAt)
 	roomResult := finalization.Room
-	r.ApplyRecordingHealth(&roomResult)
+	r.applyRecordingHealth(&roomResult)
 	return roomevidence.Result{Room: roomResult, Health: r.Health(), Err: err}, err
 }
 

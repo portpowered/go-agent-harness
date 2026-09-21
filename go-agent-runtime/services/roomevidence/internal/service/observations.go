@@ -99,7 +99,7 @@ func (r *recorder) Observe(observation roomevidence.Observation) error {
 		if err != nil {
 			return err
 		}
-		return participant.RecordAudioDropped(observation.Artifact, observation.DroppedSamples)
+		return participant.RecordAudioDropped(observation.Artifact, observation.DroppedBytes)
 	case roomevidence.ObservationParticipantError:
 		participant, err := r.participantRecorder(observation.ParticipantID)
 		if err != nil {
@@ -126,8 +126,8 @@ func (r *recorder) recordObservedTimeline(at time.Time, event, participant strin
 	return r.writeTimelineAt(at.UTC(), event, participant, fields)
 }
 
-func (r *recorder) participantRecorder(id string) (roomevidence.ParticipantRecorder, error) {
-	participant := r.Participant(id)
+func (r *recorder) participantRecorder(id string) (*participantRecorder, error) {
+	participant := r.participant(id)
 	if participant != nil {
 		return participant, nil
 	}

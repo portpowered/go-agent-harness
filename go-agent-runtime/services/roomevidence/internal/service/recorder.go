@@ -78,22 +78,19 @@ func (r *recorder) AudioFormat() rooms.AudioFormat {
 	return r.format
 }
 
-func (r *recorder) Participant(id string) roomevidence.ParticipantRecorder {
+func (r *recorder) participant(id string) *participantRecorder {
 	if r == nil {
 		return nil
 	}
 	return r.participants[id]
 }
 
-func (r *recorder) CapturePath(id string) string {
-	if r == nil {
-		return ""
+func (r *recorder) Artifacts(id string) roomevidence.ArtifactPaths {
+	participant := r.participant(id)
+	if participant == nil {
+		return roomevidence.ArtifactPaths{}
 	}
-	participant := r.participants[id]
-	if participant == nil || participant.artifacts.Capture == "" {
-		return ""
-	}
-	return filepath.Join(r.destination, filepath.FromSlash(participant.artifacts.Capture))
+	return participant.Artifacts()
 }
 
 func (r *recorder) checkOpen() error {
@@ -234,16 +231,12 @@ func (r *recorder) RecordSource(participantID string, frame audio.PCMFrame) {
 	}
 	r.operationMu.Lock()
 	defer r.operationMu.Unlock()
-	participant := r.Participant(participantID)
+	participant := r.participant(participantID)
 	if participant == nil {
 		return
 	}
-	participantRecorder, ok := participant.(*participantRecorder)
-	if !ok {
-		return
-	}
-	if err := participantRecorder.observeSentAudio(codec.EncodePCM16(append([]int16(nil), frame.Samples...))); err != nil {
-		r.recordError(participantID, participantRecorder.artifacts.SentPCM, err)
+	if err := participant.observeSentAudio(codec.EncodePCM16(append([]int16(nil), frame.Samples...))); err != nil {
+		r.recordError(participantID, participant.artifacts.SentPCM, err)
 	}
 }
 
@@ -253,16 +246,12 @@ func (r *recorder) RecordReceived(participantID string, frame audio.PCMFrame) {
 	}
 	r.operationMu.Lock()
 	defer r.operationMu.Unlock()
-	participant := r.Participant(participantID)
+	participant := r.participant(participantID)
 	if participant == nil {
 		return
 	}
-	participantRecorder, ok := participant.(*participantRecorder)
-	if !ok {
-		return
-	}
-	if err := participantRecorder.observeReceivedAudio(codec.EncodePCM16(append([]int16(nil), frame.Samples...))); err != nil {
-		r.recordError(participantID, participantRecorder.artifacts.ReceivedPCM, err)
+	if err := participant.observeReceivedAudio(codec.EncodePCM16(append([]int16(nil), frame.Samples...))); err != nil {
+		r.recordError(participantID, participant.artifacts.ReceivedPCM, err)
 	}
 }
 
@@ -371,4 +360,3 @@ func mkdirOutputDirectory(path string) error { return os.MkdirAll(path, evidence
 
 // compile-time interface checks keep the public seam honest.
 var _ roomevidence.Recorder = (*recorder)(nil)
-var _ roomevidence.ParticipantRecorder = (*participantRecorder)(nil)

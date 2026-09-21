@@ -101,27 +101,10 @@ type Recorder interface {
 	Destination() string
 	StartedAt() time.Time
 	AudioFormat() rooms.AudioFormat
-	Participant(string) ParticipantRecorder
-	CapturePath(string) string
+	Artifacts(string) ArtifactPaths
 	Observe(Observation) error
-
-	RecordTimeline(string, string, map[string]string) error
-	RecordFinalTimeline(string, string, map[string]string) (time.Time, error)
-	RecordLiveEvent(string, session.LiveEvent) error
-	RecordProviderErrorTimeline(string, map[string]string) error
-	SetParticipantReady(rooms.RoomParticipantReady) error
-	SetParticipantTerminated(rooms.RoomParticipantResult) error
-	RecordSource(string, audio.PCMFrame)
-	RecordReceived(string, audio.PCMFrame)
-
-	ObserveSpeakerAudio(string, []string, []byte)
-	ObserveSpeechStopped(string)
-	ObserveProviderAudio(string, string)
-	ObservePeerAudio(string, string, []byte)
-	MarkError(string, string, error)
 	Error() error
 	Health() Health
-	ApplyRecordingHealth(*rooms.RoomResult)
 	Finalize(Finalization) (Result, error)
 	Close() error
 }
@@ -166,7 +149,7 @@ type Observation struct {
 	At                time.Time
 	PCM               []byte
 	TargetIDs         []string
-	DroppedSamples    int
+	DroppedBytes      int
 	StreamMessage     messages.StreamMessage
 	LiveEvent         session.LiveEvent
 	AudioFrame        audio.PCMFrame
@@ -191,22 +174,6 @@ type Result struct {
 	Err       error
 	StartedAt time.Time
 	EndedAt   time.Time
-}
-
-// ParticipantRecorder is the observation port for one participant. All
-// methods copy caller-owned buffers before retaining or writing them.
-type ParticipantRecorder interface {
-	ID() string
-	Artifacts() ArtifactPaths
-	RecordDiagnostic(DiagnosticRecord) error
-	ObserveDelta(messages.StreamMessage) error
-	ObserveAudio([]byte) error
-	ObserveSentAudio([]byte) error
-	ObserveSentStream([]byte) error
-	CloseSentSpeechSegment() error
-	ObserveReceivedAudio([]byte) error
-	RecordAudioDropped(string, int) error
-	MarkError(string, error) error
 }
 
 // DiagnosticRecord is the bounded, transport-neutral diagnostic projection.

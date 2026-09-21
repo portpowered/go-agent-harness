@@ -132,52 +132,50 @@ func assertParticipantIntegrity(t *testing.T, destination, participantID string,
 	}
 }
 
-func observeConcurrent(t *testing.T, participant roomevidence.ParticipantRecorder, pcm []byte) {
-	if err := participant.ObserveAudio(pcm); err != nil && !errors.Is(err, roomevidence.ErrFinalized) {
+func observeConcurrent(t *testing.T, recorder roomevidence.Recorder, participantID string, pcm []byte) {
+	if err := recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationParticipantAudio, ParticipantID: participantID, PCM: pcm}); err != nil && !errors.Is(err, roomevidence.ErrFinalized) {
 		t.Errorf("concurrent participant audio: %v", err)
 	}
-	if err := participant.ObserveSentStream(pcm); err != nil && !errors.Is(err, roomevidence.ErrFinalized) {
+	if err := recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationSentStream, ParticipantID: participantID, PCM: pcm}); err != nil && !errors.Is(err, roomevidence.ErrFinalized) {
 		t.Errorf("concurrent sent stream: %v", err)
 	}
-	if err := participant.ObserveDelta(messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("bounded")}); err != nil && !errors.Is(err, roomevidence.ErrFinalized) {
+	if err := recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationDelta, ParticipantID: participantID, StreamMessage: messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("bounded")}}); err != nil && !errors.Is(err, roomevidence.ErrFinalized) {
 		t.Errorf("concurrent delta: %v", err)
 	}
 }
 
 func TestServiceRecordsEffectsAndIntegrity(t *testing.T) {
 	recorder, destination, source := openRecorder(t)
-	speaker := recorder.Participant("speaker")
-	listener := recorder.Participant("listener")
 	pcm := []byte{0x34, 0x12, 0x78, 0x56}
-	if err := speaker.ObserveDelta(messages.StreamMessage{Type: messages.StreamTypeToolCallStart}); err != nil {
+	if err := recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationDelta, ParticipantID: "speaker", StreamMessage: messages.StreamMessage{Type: messages.StreamTypeToolCallStart}}); err != nil {
 		t.Fatalf("observe tool delta: %v", err)
 	}
-	if err := speaker.ObserveSentAudio(pcm); err != nil {
+	if err := recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationSentAudio, ParticipantID: "speaker", PCM: pcm}); err != nil {
 		t.Fatalf("observe speaker audio: %v", err)
 	}
-	if err := listener.ObserveReceivedAudio(pcm); err != nil {
+	if err := recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationReceivedParticipantAudio, ParticipantID: "listener", PCM: pcm}); err != nil {
 		t.Fatalf("observe listener audio: %v", err)
 	}
-	if err := listener.RecordAudioDropped("test drop", len(pcm)); err != nil {
+	if err := recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationAudioDropped, ParticipantID: "listener", Artifact: "test drop", DroppedBytes: len(pcm)}); err != nil {
 		t.Fatalf("record dropped audio: %v", err)
 	}
-	if err := listener.RecordDiagnostic(roomevidence.DiagnosticRecord{Event: "tool_call_end", Fields: map[string]string{"message": "sk-service-secret"}}); err != nil {
+	if err := recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationDiagnostic, ParticipantID: "listener", Diagnostic: roomevidence.DiagnosticRecord{Event: "tool_call_end", Fields: map[string]string{"message": "sk-service-secret"}}}); err != nil {
 		t.Fatalf("record tool diagnostic: %v", err)
 	}
 	const timelineSecret = "sk-service-secret"
-	if err := recorder.RecordTimeline("timeline-"+timelineSecret, timelineSecret, map[string]string{"message": timelineSecret}); err != nil {
+	if err := recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationTimeline, At: source.Now(), Event: "timeline-" + timelineSecret, ParticipantID: timelineSecret, Fields: map[string]string{"message": timelineSecret}}); err != nil {
 		t.Fatalf("record arbitrary timeline: %v", err)
 	}
-	if err := recorder.RecordLiveEvent("speaker", session.LiveEvent{
+	if err := recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationLiveEvent, ParticipantID: "speaker", LiveEvent: session.LiveEvent{
 		Kind: string(session.LiveEventText), Text: timelineSecret, ResponseID: timelineSecret,
 		Error: errors.New(timelineSecret), Timestamp: source.Now(),
-	}); err != nil {
+	}}); err != nil {
 		t.Fatalf("record live event: %v", err)
 	}
 	source.AdvanceBy(250 * time.Millisecond)
-	if path := recorder.CapturePath("speaker"); path == "" {
+	if artifact := recorder.Artifacts("speaker").Capture; artifact == "" {
 		t.Fatal("agent capture path is empty")
-	} else if err := os.WriteFile(path, []byte(`{"captured":true}`), 0o600); err != nil {
+	} else if err := os.WriteFile(filepath.Join(destination, filepath.FromSlash(artifact)), []byte(`{"captured":true}`), 0o600); err != nil {
 		t.Fatalf("write provider capture: %v", err)
 	}
 	if _, err := finalizeForTest(recorder, testResult(), nil, source.Now()); err != nil {
@@ -211,10 +209,10 @@ func TestServiceMixSumsOverlapAndPadsToFinalSpan(t *testing.T) {
 	for index := 0; index < 5; index++ {
 		binary.LittleEndian.PutUint16(chunk[index*2:], uint16(int16(10000)))
 	}
-	if err := recorder.Participant("speaker").ObserveSentStream(chunk); err != nil {
+	if err := recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationSentStream, ParticipantID: "speaker", PCM: chunk}); err != nil {
 		t.Fatalf("first sent stream: %v", err)
 	}
-	if err := recorder.Participant("speaker").ObserveSentStream(chunk); err != nil {
+	if err := recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationSentStream, ParticipantID: "speaker", PCM: chunk}); err != nil {
 		t.Fatalf("overlapping sent stream: %v", err)
 	}
 	source.AdvanceBy(2 * time.Second)
@@ -244,7 +242,6 @@ func TestServiceMixSumsOverlapAndPadsToFinalSpan(t *testing.T) {
 
 func TestServiceConcurrentObservationAndFinalize(t *testing.T) {
 	recorder, _, source := openRecorder(t)
-	participant := recorder.Participant("speaker")
 	pcm := []byte{0x01, 0x00, 0x02, 0x00}
 	var group sync.WaitGroup
 	for worker := 0; worker < 6; worker++ {
@@ -252,7 +249,7 @@ func TestServiceConcurrentObservationAndFinalize(t *testing.T) {
 		go func() {
 			defer group.Done()
 			for index := 0; index < 20; index++ {
-				observeConcurrent(t, participant, pcm)
+				observeConcurrent(t, recorder, "speaker", pcm)
 			}
 		}()
 	}
@@ -273,8 +270,8 @@ func TestServiceRejectsPostFinalizeAndRetainsFirstTypedError(t *testing.T) {
 	recorder, _, source := openRecorder(t)
 	first := errors.New("first sink failure")
 	second := errors.New("second sink failure")
-	recorder.MarkError("speaker", "agent-speaker.deltas.jsonl", first)
-	recorder.MarkError("speaker", "agent-speaker.wav", second)
+	_ = recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationError, ParticipantID: "speaker", Artifact: "agent-speaker.deltas.jsonl", Err: first})
+	_ = recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationError, ParticipantID: "speaker", Artifact: "agent-speaker.wav", Err: second})
 	_, finalErr := finalizeForTest(recorder, testResult(), nil, source.Now())
 	if !errors.Is(finalErr, first) {
 		t.Fatalf("final error %v does not preserve first cause", finalErr)
@@ -283,10 +280,10 @@ func TestServiceRejectsPostFinalizeAndRetainsFirstTypedError(t *testing.T) {
 	if health.Status == nil || health.Status.State != "partial" || !strings.Contains(health.Status.Reason, "first sink failure") || strings.Contains(health.Status.Reason, "second sink failure") {
 		t.Fatalf("health = %+v", health)
 	}
-	if err := recorder.Participant("speaker").ObserveAudio([]byte{0, 0}); !errors.Is(err, roomevidence.ErrFinalized) {
+	if err := recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationParticipantAudio, ParticipantID: "speaker", PCM: []byte{0, 0}}); !errors.Is(err, roomevidence.ErrFinalized) {
 		t.Fatalf("post-finalize write = %v, want ErrFinalized", err)
 	}
-	if err := recorder.RecordLiveEvent("speaker", session.LiveEvent{Kind: string(session.LiveEventText), Text: "late"}); !errors.Is(err, roomevidence.ErrFinalized) {
+	if err := recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationLiveEvent, ParticipantID: "speaker", LiveEvent: session.LiveEvent{Kind: string(session.LiveEventText), Text: "late"}}); !errors.Is(err, roomevidence.ErrFinalized) {
 		t.Fatalf("post-finalize live event = %v, want ErrFinalized", err)
 	}
 	if _, err := finalizeForTest(recorder, rooms.RoomResult{TerminationReason: rooms.RoomTerminationFailed}, second, source.Now()); !errors.Is(err, first) {
@@ -322,7 +319,7 @@ func TestServiceOutputSafety(t *testing.T) {
 func TestServiceRejectsDirectAndParentSymlinkedReplayArtifacts(t *testing.T) {
 	t.Run("direct artifact", func(t *testing.T) {
 		destination, recorder := finalizedReplayBundle(t)
-		artifact := recorder.Participant("speaker").Artifacts().SentPCM
+		artifact := recorder.Artifacts("speaker").SentPCM
 		outside := filepath.Join(t.TempDir(), "sent.pcm")
 		service := NewService()
 		plan, err := service.LoadPlan(destination)
@@ -365,7 +362,7 @@ func TestServiceRejectsDirectAndParentSymlinkedReplayArtifacts(t *testing.T) {
 
 func TestServiceRejectsDirectoryReplayArtifact(t *testing.T) {
 	destination, recorder := finalizedReplayBundle(t)
-	artifact := recorder.Participant("speaker").Artifacts().SentPCM
+	artifact := recorder.Artifacts("speaker").SentPCM
 	path := filepath.Join(destination, filepath.FromSlash(artifact))
 	if err := os.Remove(path); err != nil {
 		t.Fatalf("remove replay artifact: %v", err)
@@ -444,25 +441,24 @@ func finalizedReplayBundle(t *testing.T) (string, roomevidence.Recorder) {
 	recorder, destination, source := openRecorder(t)
 	pcm := []byte{0x34, 0x12, 0x78, 0x56}
 	for _, participantID := range []string{"speaker", "listener"} {
-		participant := recorder.Participant(participantID)
-		if err := participant.RecordDiagnostic(roomevidence.DiagnosticRecord{Event: "replay_fixture"}); err != nil {
+		if err := recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationDiagnostic, ParticipantID: participantID, Diagnostic: roomevidence.DiagnosticRecord{Event: "replay_fixture"}}); err != nil {
 			t.Fatalf("record replay diagnostic for %s: %v", participantID, err)
 		}
-		if err := participant.ObserveDelta(messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue(pcm)}); err != nil {
+		if err := recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationDelta, ParticipantID: participantID, StreamMessage: messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue(pcm)}}); err != nil {
 			t.Fatalf("record replay delta for %s: %v", participantID, err)
 		}
-		if err := participant.ObserveAudio(pcm); err != nil {
+		if err := recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationParticipantAudio, ParticipantID: participantID, PCM: pcm}); err != nil {
 			t.Fatalf("record replay WAV for %s: %v", participantID, err)
 		}
-		if err := participant.ObserveSentStream(pcm); err != nil {
+		if err := recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationSentStream, ParticipantID: participantID, PCM: pcm}); err != nil {
 			t.Fatalf("record replay sent stream for %s: %v", participantID, err)
 		}
-		if err := participant.ObserveReceivedAudio(pcm); err != nil {
+		if err := recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationReceivedParticipantAudio, ParticipantID: participantID, PCM: pcm}); err != nil {
 			t.Fatalf("record replay received stream for %s: %v", participantID, err)
 		}
 	}
-	if capture := recorder.CapturePath("speaker"); capture != "" {
-		if err := os.WriteFile(capture, []byte(`{"captured":true}`), 0o600); err != nil {
+	if capture := recorder.Artifacts("speaker").Capture; capture != "" {
+		if err := os.WriteFile(filepath.Join(destination, filepath.FromSlash(capture)), []byte(`{"captured":true}`), 0o600); err != nil {
 			t.Fatalf("write replay capture: %v", err)
 		}
 	}

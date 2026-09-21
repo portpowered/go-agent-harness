@@ -58,7 +58,7 @@ func configureFIFOReplay(t *testing.T, mode, destination string, recorder roomev
 	case "manifest":
 		return replaceWithFIFO(t, fifoPath, filepath.Join(destination, roomevidence.ManifestPath))
 	case "artifact":
-		path := filepath.Join(destination, filepath.FromSlash(recorder.Participant("speaker").Artifacts().SentPCM))
+		path := filepath.Join(destination, filepath.FromSlash(recorder.Artifacts("speaker").SentPCM))
 		return replaceWithFIFO(t, fifoPath, path)
 	case "replay":
 		// Keep the manifest valid so the child reaches the bounded replay reader.
