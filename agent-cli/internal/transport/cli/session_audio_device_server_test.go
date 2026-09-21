@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
-	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
+	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 )
 
 func TestSessionCommandRejectsNonLoopbackAudioDeviceServerBeforeSessionSetup(t *testing.T) {
@@ -19,8 +19,8 @@ func TestSessionCommandRejectsNonLoopbackAudioDeviceServerBeforeSessionSetup(t *
 		"--audio-device-server", "192.0.2.10:19090",
 	})
 	err := command.Execute()
-	if !errors.Is(err, devicegw.ErrRemoteDeviceServerEndpoint) {
-		t.Fatalf("session remote device error = %v, want ErrRemoteDeviceServerEndpoint", err)
+	if !errors.Is(err, runtimeDevices.ErrInvalidRemoteEndpoint) {
+		t.Fatalf("session remote device error = %v, want ErrInvalidRemoteEndpoint", err)
 	}
 }
 

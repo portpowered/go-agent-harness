@@ -7,10 +7,14 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
+	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeProviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	runtimerecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
+	runtimereplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
-	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
@@ -179,7 +183,11 @@ type RoomObserver func(RoomResult)
 // SessionFactory or SessionInferencers map is intended for deterministic tests;
 // the default factory builds the repository's existing live session runtime.
 type RoomRunOptions struct {
-	Manifest room.Manifest
+	AudioService           audioio.Service
+	recordingService       runtimerecording.Service
+	providerCaptureService runtimerecording.ProviderCaptureService
+	replayService          runtimereplay.Service
+	Manifest               room.Manifest
 	// ReplayPath selects a finalized room evidence directory (or its
 	// run-manifest.json) as the sole source of participant runtime settings.
 	// Replay admission never resolves credentials, live config, host devices,
@@ -197,7 +205,7 @@ type RoomRunOptions struct {
 	// Nil derives timers from Clock when possible, otherwise each participant
 	// uses the host timer. A shared deterministic clock keeps room tests and
 	// participant watchdogs on one controllable timeline.
-	LivenessClock SessionLivenessClock
+	LivenessClock sessionduration.TimerScheduler
 	// BoundShutdownGrace is the fixed room-bound drain window. A zero value
 	// selects the documented production default; tests may override it with a
 	// small positive duration to make the bounded drain deterministic.
@@ -212,11 +220,9 @@ type RoomRunOptions struct {
 	// the service's observational-only mode for callers that do not need
 	// artifacts; the room CLI supplies a concrete, empty directory.
 	OutputDir string
-	// DeviceRegistry is the runtime registry used by human participants. Bare
-	// launch resolution selects the defaults without opening them; the room
-	// opens the selected input and output at startup and owns them until the
-	// participant is torn down. Provider-only manifests do not require it.
-	DeviceRegistry devicegw.DeviceRegistry
+	// DeviceService admits and owns human participant capture and playback
+	// workers for the duration of the room.
+	DeviceService runtimeDevices.Service
 
 	SessionFactory     RoomSessionInferencerFactory
 	SessionInferencers map[string]messages.SessionInferencer

@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 // SessionTextSeed carries the value and Cobra presence of --prompt separately.
@@ -37,11 +38,6 @@ func RunSessionWithTextSeed(ctx context.Context, out io.Writer, opts SessionRunO
 	if err := validateSessionRunOptions(opts); err != nil {
 		return err
 	}
-	claim, err := ensureSessionRecordingClaim(&opts)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = claim.release() }()
 	plan, err := planSessionRuntime(opts)
 	if err != nil {
 		return err
@@ -153,8 +149,13 @@ func (s *sessionTextSeedSession) Done() <-chan struct{} {
 	return s.inner.Done()
 }
 
-func (s *sessionTextSeedSession) rtcMedia() (RTCMediaEndpoints, bool) {
-	return rtcMediaFromSession(s.inner)
+func (s *sessionTextSeedSession) rtcMedia() (audio.MediaEndpoints, bool) {
+	return sessionMediaFromSession(s.inner)
+}
+
+func (s *sessionTextSeedSession) RTCMedia() audio.MediaEndpoints {
+	media, _ := s.rtcMedia()
+	return media
 }
 
 func (s *sessionTextSeedSession) TerminalError() error {

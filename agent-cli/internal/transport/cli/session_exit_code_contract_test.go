@@ -169,7 +169,7 @@ func TestSessionPromptWithRecordStillSucceeds(t *testing.T) {
 	artifactRoot := t.TempDir()
 	recordPath := filepath.Join(artifactRoot, "prompt-success.json")
 	inferencer := newCLIDurationInferencer(cliDurationPartialEvents())
-	root := newTestRootCommandWithProbeFleetCommand(NewProbeFleetCommand(nil, nil), inferencer)
+	root := newTestRootCommandWithProbeFleetCommand(NewProbeFleetCommand(nil, nil, newReplayRuntimeServiceForTest()), inferencer)
 	var stdout, stderr bytes.Buffer
 	root.SetOut(&stdout)
 	root.SetErr(&stderr)
@@ -201,7 +201,7 @@ func TestSessionAudioInWithExistingFileStillSucceeds(t *testing.T) {
 		t.Fatalf("write audio-in fixture: %v", err)
 	}
 	inferencer := newCLIDurationInferencer(cliDurationPartialEvents())
-	root := newTestRootCommandWithProbeFleetCommand(NewProbeFleetCommand(nil, nil), inferencer)
+	root := newTestRootCommandWithProbeFleetCommand(NewProbeFleetCommand(nil, nil, newReplayRuntimeServiceForTest()), inferencer)
 	var stdout, stderr bytes.Buffer
 	root.SetOut(&stdout)
 	root.SetErr(&stderr)

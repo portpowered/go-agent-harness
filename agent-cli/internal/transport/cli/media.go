@@ -6,7 +6,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
 	"github.com/spf13/cobra"
 )
@@ -27,6 +27,7 @@ type MediaCommand struct {
 	Look          MediaLookFunc
 	Timeout       time.Duration
 	ReplayFixture string
+	ReplayService runtimeReplay.Service
 }
 
 // NewMediaCommand constructs the media command group. An omitted probe uses
@@ -41,7 +42,7 @@ func NewMediaCommand(probe ...MediaProbeFunc) *MediaCommand {
 
 // Generate returns the media command group and its probe subcommand.
 func (c *MediaCommand) Generate() *cobra.Command {
-	probe := &MediaProbeCommand{Probe: c.Probe, Timeout: c.Timeout, ReplayFixture: c.ReplayFixture}
+	probe := &MediaProbeCommand{Probe: c.Probe, Timeout: c.Timeout, ReplayFixture: c.ReplayFixture, ReplayService: c.ReplayService}
 	look := &MediaLookCommand{Look: c.Look, Timeout: c.Timeout}
 	cmd := &cobra.Command{
 		Use:     "media",
@@ -62,10 +63,9 @@ type MediaProbeCommand struct {
 	// ReplayFixture, when non-empty, selects record/replay mode explicitly.
 	// The live probe path remains the default when it is unset.
 	ReplayFixture string
-	// SessionReplayProbe overrides the replay probe implementation; the
-	// default sources its transport from the pkg/testing session replay
-	// dialer contract.
-	SessionReplayProbe testing.SessionReplayProbeFunc
+	// ReplayService owns capture validation, replay, and the payload-free
+	// observation projection rendered by this command.
+	ReplayService runtimeReplay.Service
 }
 
 // MediaProbeOption customizes a MediaProbeCommand at construction time.
@@ -77,10 +77,9 @@ func WithReplayFixture(fixturePath string) MediaProbeOption {
 	return func(c *MediaProbeCommand) { c.ReplayFixture = fixturePath }
 }
 
-// WithSessionReplayProbe supplies the probe's transport from an alternative
-// pkg/testing session replay dialer implementation.
-func WithSessionReplayProbe(probe testing.SessionReplayProbeFunc) MediaProbeOption {
-	return func(c *MediaProbeCommand) { c.SessionReplayProbe = probe }
+// WithReplayService supplies the owner of capture admission and replay.
+func WithReplayService(service runtimeReplay.Service) MediaProbeOption {
+	return func(c *MediaProbeCommand) { c.ReplayService = service }
 }
 
 // NewMediaProbeCommand constructs the probe command with an injected source
@@ -94,7 +93,7 @@ func NewMediaProbeCommand(probe ...MediaProbeFunc) *MediaProbeCommand {
 }
 
 // NewMediaProbeCommandWithOptions constructs the probe command from options,
-// allowing explicit selection of the pkg/testing replay transport.
+// allowing explicit selection of the service-owned replay contract.
 func NewMediaProbeCommandWithOptions(options ...MediaProbeOption) *MediaProbeCommand {
 	command := &MediaProbeCommand{Timeout: rtc.DefaultMediaSourceTimeout}
 	for _, option := range options {
@@ -161,19 +160,19 @@ func (c *MediaProbeCommand) Run(ctx context.Context, out io.Writer, rawURL strin
 	return err
 }
 
-// runReplayProbe executes a probe pass over the pkg/testing record/replay
-// transport and renders a deterministic report. The fixture is loaded and
-// validated through session_fixture_validator before any observation.
+// runReplayProbe asks the replay service for a payload-free observation and
+// renders the public report without interpreting capture data in the CLI.
 func (c *MediaProbeCommand) runReplayProbe(ctx context.Context, out io.Writer) error {
-	probe := c.SessionReplayProbe
-	if probe == nil {
-		probe = testing.RunSessionReplayProbe
+	if c.ReplayService == nil {
+		return fmt.Errorf("media probe replay: replay service is not configured")
 	}
-	report, err := probe(ctx, c.ReplayFixture)
+	report, err := c.ReplayService.AnalyzeProbe(ctx, runtimeReplay.CaptureProbeRequest{
+		SourcePath: c.ReplayFixture, ValidateSource: true,
+	})
 	if err != nil {
 		return fmt.Errorf("media probe replay: %w", err)
 	}
-	fmt.Fprintf(out, "Mode: replay\nSource: %s\nProvider: %s\nModel: %s\nProvenance: %s\nInbound frames: %d\nOutbound ticks: %d\n", report.Fixture, report.Provider, report.Model, report.Provenance, report.InboundFrames, report.OutboundTicks)
+	fmt.Fprintf(out, "Mode: replay\nSource: %s\nProvider: %s\nModel: %s\nProvenance: %s\nInbound frames: %d\nOutbound ticks: %d\n", c.ReplayFixture, report.Provider, report.Model, report.FixtureProvenance, report.InboundFrames, report.OutboundTicks)
 	for _, observation := range report.Observations {
 		fmt.Fprintf(out, "Observation: %d %s %s\n", observation.Sequence, observation.Direction, observation.Type)
 	}

@@ -19,7 +19,12 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
+	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	runtimerecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
+	runtimereplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
@@ -27,7 +32,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
-	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
@@ -88,6 +92,8 @@ type SessionAudioInTurnBargeError = sessioncontract.SessionAudioInTurnBargeError
 // planning always normalizes it to completion-gated behavior.
 type ScheduledAudioDispatchPolicy string
 
+type ScheduledAudioInput = audioio.ScheduledAudioInput
+
 const (
 	// ScheduledAudioDispatchCompletionGated preserves ordinary serialized
 	// --audio-in-turn behavior.
@@ -102,6 +108,29 @@ func scheduledAudioDispatchPolicyForOptions(opts SessionRunOptions) ScheduledAud
 		return ScheduledAudioDispatchActiveResponse
 	}
 	return ScheduledAudioDispatchCompletionGated
+}
+
+// resolveSessionTranscription delegates transcription policy to audioio and
+// translates the service result into the gateway's provider request shape.
+func resolveSessionTranscription(opts SessionRunOptions, provider string, acceptsAudioInput bool) (models.InputAudioTranscriptionConfig, error) {
+	if opts.AudioService == nil {
+		return models.InputAudioTranscriptionConfig{}, errors.New("audio service is required for transcription resolution")
+	}
+	var override *audioio.TranscriptionConfig
+	if opts.InputAudioTranscription != nil {
+		override = &audioio.TranscriptionConfig{
+			Enabled: opts.InputAudioTranscription.Enabled,
+			Model:   opts.InputAudioTranscription.Model,
+		}
+	}
+	resolved := opts.AudioService.ResolveTranscription(audioio.TranscriptionRequest{
+		Provider:          provider,
+		Replay:            opts.ReplayPath != "",
+		AcceptsAudioInput: acceptsAudioInput,
+		Disabled:          opts.NoInputTranscription,
+		Override:          override,
+	})
+	return models.InputAudioTranscriptionConfig{Enabled: resolved.Enabled, Model: resolved.Model}, nil
 }
 
 // SessionRuntimeSelectionError reports all fields that made a selection
@@ -134,15 +163,27 @@ func (e *SessionRuntimeSelectionError) Unwrap() error {
 
 // SessionRunOptions contains the user-facing agent session command options.
 type SessionRunOptions struct {
+	recordingService       runtimerecording.Service
+	providerCaptureService runtimerecording.ProviderCaptureService
+	replayService          runtimereplay.Service
+	// AudioService is the application-composed audio contract. Audio policy,
+	// PCM conversion, and timers are delegated to this service.
+	AudioService audioio.Service
+	// DeviceService is the injected service-owned RTC/device boundary. The
+	// registry field below remains only for compatibility with older test and
+	// probe paths that do not install the service graph.
+	DeviceService runtimedevices.Service
 	// runtimeFactory is installed by the private service composition root.
 	// It is intentionally unexported so transport requests cannot construct
 	// provider gateways or dialers.
 	runtimeFactory sessionRuntimeFactory
 	// ModelCatalog is installed by service composition and owns the immutable
 	// provider capability metadata used during session planning.
-	ModelCatalog runtimeproviders.ModelCatalog
-	RecordPath   string
-	ReplayPath   string
+	ModelCatalog      runtimeproviders.ModelCatalog
+	RecordPath        string
+	RecordDirectory   string
+	RecordMaxDuration time.Duration
+	ReplayPath        string
 	// ReplayTiming selects whether websocket replay runs as fast as causal
 	// ordering permits (immediate) or preserves capture timestamp_ms cadence
 	// (recorded). Empty retains the immediate compatibility default.
@@ -233,10 +274,9 @@ type SessionRunOptions struct {
 	// MediaSource is the selected opaque external media-source identity. It is
 	// consumed by the WebRTC runtime only; it must remain empty for WebSocket.
 	MediaSource string
-	// RTCDeviceBinding carries optional registry-backed local audio selectors.
-	// The runtime opens these devices only after planning succeeds and before
-	// provider/peer setup begins.
-	RTCDeviceBinding RTCDeviceBindingRequest
+	// RTCBinding carries the public device-service request. The runtime
+	// opens these devices only after planning succeeds and before provider setup.
+	RTCBinding runtimedevices.RTCBindingRequest
 
 	// ToolExecutor optionally injects the composed session tool executor.
 	// When nil, duplex loop construction stays byte-for-byte identical to the
@@ -309,11 +349,10 @@ type SessionRunOptions struct {
 	// generated CLI supplies the composed clock so replay and recording
 	// observers can correlate events across command instances.
 	Clock platformclock.Source
-	// LivenessClock supplies participant-owned watchdog timers. Nil derives a
-	// timer clock from Clock when possible, otherwise the session uses the host
+	// LivenessClock supplies participant-owned watchdog timers. Nil derives a timer clock from Clock when possible, otherwise the session uses the host
 	// clock. Deterministic callers can inject this seam without changing the
 	// runtime timestamp source.
-	LivenessClock SessionLivenessClock
+	LivenessClock sessionduration.TimerScheduler
 	// RuntimeObserver receives clock-stamped audio, turn, and terminal events
 	// from the session command. The terminal event carries the production-owned
 	// session-cumulative token totals and complete metrics snapshot. Nil keeps
@@ -368,14 +407,6 @@ type SessionRunOptions struct {
 	// Keeping it private prevents callers from bypassing the capability
 	// resolver while allowing all session wrappers to share one snapshot.
 	sessionImageCapabilities *SessionImageCapabilities
-
-	// recordingClaim is acquired before provider construction and shared by
-	// nested session wrappers. It is intentionally private; command callers
-	// select the destination through RecordPath and do not manage sidecars.
-	recordingClaim *sessionRecordingClaim
-	// recordingDirectoryClaim is acquired before provider/media setup and shared
-	// by nested directory-recording wrappers through finalization.
-	recordingDirectoryClaim *sessionRecordingDirectoryClaim
 }
 
 // validateSessionCaptureOptions performs pure request validation before credential or device setup.
@@ -410,12 +441,12 @@ func validateSessionRunOptions(opts SessionRunOptions) error {
 	if err := validateSessionCaptureOptions(opts); err != nil {
 		return err
 	}
-	// Validate the complete capture before any caller-owned audio source,
-	// derived artifact sink, provider plan, or replay session can be created.
-	// Injected sessions are an explicit low-level test seam and do not use the
-	// path-based replay contract.
+	// Replay admission and path validation belong to the replay service.
 	if opts.ReplayPath != "" && opts.SessionInferencer == nil {
-		if _, err := gwtesting.LoadSessionCaptureForReplay(opts.ReplayPath); err != nil {
+		if opts.replayService == nil {
+			return errors.New("replay service is not configured")
+		}
+		if _, err := opts.replayService.InspectCapture(context.Background(), opts.ReplayPath); err != nil {
 			return fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
 		}
 	}
@@ -754,57 +785,10 @@ func newOpenAIRealtimeSessionInferencerWithVoiceAndToolsAndInputAudioTranscripti
 	return inference.NewSessionGatewayInferencer(sessionGateway, inferenceOpts...), nil
 }
 
-// SessionInferencerCaptureFlusher is implemented by the inferencer
-// NewLiveSessionInferencer returns when SessionRunOptions.RecordSessionCapturePath
-// is set: its live websocket traffic is being recorded, and FlushCapture
-// persists everything captured so far to that path. A caller should call
-// FlushCapture once the session this inferencer produced has fully closed,
-// so the persisted capture reflects the complete exchange rather than a
-// still-in-progress one.
+// SessionInferencerCaptureFlusher is implemented by recording service handles
+// returned by NewLiveSessionInferencer when capture is requested.
 type SessionInferencerCaptureFlusher interface {
 	FlushCapture() error
-}
-
-// sessionInferencerWithCaptureFlush adapts a *gwtesting.RecordingWebSocketDialer
-// (which records raw websocket traffic, not messages.SessionInferencer calls)
-// into the SessionInferencerCaptureFlusher a caller can type-assert for
-// without depending on the concrete recorder type.
-type sessionInferencerWithCaptureFlush struct {
-	messages.SessionInferencer
-	path     string
-	recorder *gwtesting.RecordingWebSocketDialer
-}
-
-func (w *sessionInferencerWithCaptureFlush) FlushCapture() error {
-	return w.recorder.FlushToFile(w.path)
-}
-
-// resolveSessionWebSocketDialer picks the dialer NewLiveSessionInferencer's
-// provider construction should use: the caller-injected dialer (or the
-// provider's real default when none was injected), optionally wrapped with a
-// raw-traffic recorder when SessionRunOptions.RecordSessionCapturePath is
-// set. The returned recorder is nil unless recording was requested.
-func resolveSessionWebSocketDialer(opts SessionRunOptions, providerName, model string, newDefaultDialer func() transport.Dialer) (transport.Dialer, *gwtesting.RecordingWebSocketDialer) {
-	dialer := opts.WebSocketDialer
-	if dialer == nil {
-		dialer = newDefaultDialer()
-	}
-	if strings.TrimSpace(opts.RecordSessionCapturePath) == "" {
-		return dialer, nil
-	}
-	recorder := gwtesting.NewRecordingWebSocketDialer(dialer, providerName, model)
-	return recorder, recorder
-}
-
-// wrapSessionInferencerCaptureFlush leaves inferencer unchanged when recorder
-// is nil (recording was not requested), and otherwise wraps it so a caller
-// can type-assert for SessionInferencerCaptureFlusher and flush the capture
-// once the session this inferencer produced has closed.
-func wrapSessionInferencerCaptureFlush(inferencer messages.SessionInferencer, recorder *gwtesting.RecordingWebSocketDialer, path string) messages.SessionInferencer {
-	if recorder == nil {
-		return inferencer
-	}
-	return &sessionInferencerWithCaptureFlush{SessionInferencer: inferencer, path: path, recorder: recorder}
 }
 
 // NewLiveSessionInferencer builds the audio-capable realtime session used by
@@ -832,28 +816,50 @@ func NewLiveSessionInferencer(opts SessionRunOptions, instructions string) (mess
 		}
 		model = sessionCfg.Model
 		config = deviceProbeSessionConfig(model, instructions, models.AudioFormatPCM16, models.AudioFormatPCM16)
-		inputAudioTranscription := resolveInputAudioTranscriptionPolicy(opts, providerName, true)
-		if opts.InputAudioTranscription != nil {
-			inputAudioTranscription = *opts.InputAudioTranscription
+		inputAudioTranscription, err := resolveSessionTranscription(opts, providerName, true)
+		if err != nil {
+			return nil, "", err
 		}
 		config.InputAudioTranscription = &inputAudioTranscription
 		config.TurnDetection = cloneSessionTurnDetection(opts.TurnDetection)
 		config.Voice = opts.Voice
 		config.ReasoningEffort = sessionCfg.ReasoningEffort
 		config.Tools = append([]messages.ToolDefinition(nil), opts.ToolDefinitions...)
-		dialer, recorder := resolveSessionWebSocketDialer(opts, providerName, model, func() transport.Dialer { return oaiprovider.NewDefaultWebSocketDialer() })
-		providerOpts := []oaiprovider.Option{
-			oaiprovider.WithAPIKey(sessionCfg.APIKey),
-			oaiprovider.WithModel(sessionCfg.Model),
-			oaiprovider.WithRealtimeBaseURL(openAIRealtimeURL(sessionCfg)),
-			oaiprovider.WithWebSocketDialer(dialer),
+		build := func(dialer transport.Dialer) (messages.SessionInferencer, error) {
+			providerOpts := []oaiprovider.Option{
+				oaiprovider.WithAPIKey(sessionCfg.APIKey),
+				oaiprovider.WithModel(sessionCfg.Model),
+				oaiprovider.WithRealtimeBaseURL(openAIRealtimeURL(sessionCfg)),
+				oaiprovider.WithWebSocketDialer(dialer),
+			}
+			providerGateway, err := gateway.NewSessionGateway(gateway.WithSessionProvider(oaiprovider.New(providerOpts...)))
+			if err != nil {
+				return nil, fmt.Errorf("create OpenAI realtime session gateway: %w", err)
+			}
+			return inference.NewSessionGatewayInferencer(providerGateway, inference.WithSessionRequest(inference.SessionRequest{Config: config})), nil
 		}
-		providerGateway, err := gateway.NewSessionGateway(gateway.WithSessionProvider(oaiprovider.New(providerOpts...)))
+		dialer := opts.WebSocketDialer
+		if dialer == nil {
+			dialer = oaiprovider.NewDefaultWebSocketDialer()
+		}
+		if strings.TrimSpace(opts.RecordSessionCapturePath) != "" {
+			if opts.recordingService == nil || opts.providerCaptureService == nil {
+				return nil, "", errors.New("recording services are not configured")
+			}
+			capture, err := opts.recordingService.RecordProviderSession(opts.providerCaptureService, runtimerecording.ProviderSessionOptions{
+				Destination: opts.RecordSessionCapturePath, Provider: providerName, Model: model,
+				Dialer: observeSessionWire(dialer, opts), Clock: opts.Clock, Build: build,
+			})
+			if err != nil {
+				return nil, "", err
+			}
+			return capture, model, nil
+		}
+		inferencer, err := build(dialer)
 		if err != nil {
-			return nil, "", fmt.Errorf("create OpenAI realtime session gateway: %w", err)
+			return nil, "", err
 		}
-		inferencer := inference.NewSessionGatewayInferencer(providerGateway, inference.WithSessionRequest(inference.SessionRequest{Config: config}))
-		return wrapSessionInferencerCaptureFlush(inferencer, recorder, opts.RecordSessionCapturePath), model, nil
+		return inferencer, model, nil
 	case sessionProviderGrok:
 		sessionCfg, err := resolveGrokSessionConfig(opts)
 		if err != nil {
@@ -862,23 +868,45 @@ func NewLiveSessionInferencer(opts SessionRunOptions, instructions string) (mess
 		model = sessionCfg.Model
 		config = deviceProbeSessionConfig(model, instructions, models.AudioFormatPCM16, models.AudioFormatPCM16)
 		config.TurnDetection = cloneSessionTurnDetection(opts.TurnDetection)
-		inputAudioTranscription := resolveInputAudioTranscriptionPolicy(opts, providerName, true)
-		if opts.InputAudioTranscription != nil {
-			inputAudioTranscription = *opts.InputAudioTranscription
+		inputAudioTranscription, err := resolveSessionTranscription(opts, providerName, true)
+		if err != nil {
+			return nil, "", err
 		}
 		config.InputAudioTranscription = &inputAudioTranscription
 		config.Tools = append([]messages.ToolDefinition(nil), opts.ToolDefinitions...)
-		dialer, recorder := resolveSessionWebSocketDialer(opts, providerName, model, func() transport.Dialer { return grok.NewDefaultWebSocketDialer() })
-		providerOpts := []grok.Option{grok.WithAPIKey(sessionCfg.APIKey), grok.WithWebSocketDialer(dialer)}
-		if strings.TrimSpace(sessionCfg.BaseURL) != "" {
-			providerOpts = append(providerOpts, grok.WithBaseURL(sessionCfg.BaseURL))
+		build := func(dialer transport.Dialer) (messages.SessionInferencer, error) {
+			providerOpts := []grok.Option{grok.WithAPIKey(sessionCfg.APIKey), grok.WithWebSocketDialer(dialer)}
+			if strings.TrimSpace(sessionCfg.BaseURL) != "" {
+				providerOpts = append(providerOpts, grok.WithBaseURL(sessionCfg.BaseURL))
+			}
+			providerGateway, err := gateway.NewSessionGateway(gateway.WithSessionProvider(grok.New(providerOpts...)))
+			if err != nil {
+				return nil, fmt.Errorf("create Grok realtime session gateway: %w", err)
+			}
+			return inference.NewSessionGatewayInferencer(providerGateway, inference.WithSessionRequest(inference.SessionRequest{Config: config})), nil
 		}
-		providerGateway, err := gateway.NewSessionGateway(gateway.WithSessionProvider(grok.New(providerOpts...)))
+		dialer := opts.WebSocketDialer
+		if dialer == nil {
+			dialer = grok.NewDefaultWebSocketDialer()
+		}
+		if strings.TrimSpace(opts.RecordSessionCapturePath) != "" {
+			if opts.recordingService == nil || opts.providerCaptureService == nil {
+				return nil, "", errors.New("recording services are not configured")
+			}
+			capture, err := opts.recordingService.RecordProviderSession(opts.providerCaptureService, runtimerecording.ProviderSessionOptions{
+				Destination: opts.RecordSessionCapturePath, Provider: providerName, Model: model,
+				Dialer: observeSessionWire(dialer, opts), Clock: opts.Clock, Build: build,
+			})
+			if err != nil {
+				return nil, "", err
+			}
+			return capture, model, nil
+		}
+		inferencer, err := build(dialer)
 		if err != nil {
-			return nil, "", fmt.Errorf("create Grok realtime session gateway: %w", err)
+			return nil, "", err
 		}
-		inferencer := inference.NewSessionGatewayInferencer(providerGateway, inference.WithSessionRequest(inference.SessionRequest{Config: config}))
-		return wrapSessionInferencerCaptureFlush(inferencer, recorder, opts.RecordSessionCapturePath), model, nil
+		return inferencer, model, nil
 	default:
 		return nil, "", fmt.Errorf("--devices real supports realtime providers %q and %q; got %q", sessionProviderOpenAI, sessionProviderGrok, providerName)
 	}

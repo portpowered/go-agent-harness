@@ -10,18 +10,23 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 const (
-	replayAudioChunkLimit = 96 * 1024
-	replayAppend          = "input_audio_buffer.append"
-	replaySessionUpdate   = "session.update"
-	replayCreateItem      = "conversation.item.create"
-	replayTruncateItem    = "conversation.item.truncate"
+	replayAudioChunkLimit   = 96 * 1024
+	replayAppend            = "input_audio_buffer.append"
+	replaySessionUpdate     = "session.update"
+	replayCreateItem        = "conversation.item.create"
+	replayTruncateItem      = "conversation.item.truncate"
+	maxReplayResponseTarget = 128
 )
 
 // errSelfDrivingPlanUnavailable distinguishes a valid realtime capture whose
@@ -32,8 +37,143 @@ var errSelfDrivingPlanUnavailable = errors.New("self-driving replay plan unavail
 
 type Service struct{}
 
+type captureReplay struct {
+	inner *gatewaytesting.SessionReplayer
+}
+
 // New constructs an inert replay planner.
 func New() *Service { return &Service{} }
+
+func (s *Service) Replay(ctx context.Context, path string) (replay.CaptureReplay, error) {
+	if err := replayContextError(ctx); err != nil {
+		return nil, err
+	}
+	capturePath, err := s.ResolveCapturePath(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	replayer, err := gatewaytesting.NewSessionReplayer(capturePath,
+		gatewaytesting.WithReplayOutboundValidation(false),
+		gatewaytesting.WithReplayContext(ctx),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("replay session capture %s: %w", path, err)
+	}
+	return &captureReplay{inner: replayer}, nil
+}
+
+func (s *Service) NewSessionInferencer(ctx context.Context, path string) (messages.SessionInferencer, error) {
+	if err := replayContextError(ctx); err != nil {
+		return nil, err
+	}
+	capturePath, err := s.ResolveCapturePath(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	return sessionCaptureInferencer{path: capturePath}, nil
+}
+
+func (s *Service) AnalyzeTiming(ctx context.Context, path string) (replay.CaptureTimingReport, error) {
+	if err := replayContextError(ctx); err != nil {
+		return replay.CaptureTimingReport{}, err
+	}
+	capturePath, err := s.ResolveCapturePath(ctx, path)
+	if err != nil {
+		return replay.CaptureTimingReport{}, err
+	}
+	loaded, err := loadReplayCapture(ctx, capturePath)
+	if err != nil {
+		return replay.CaptureTimingReport{}, fmt.Errorf("load capture timing source %s: %w", path, err)
+	}
+	return analyzeCaptureTiming(loaded.Capture)
+}
+
+type sessionCaptureInferencer struct{ path string }
+
+func (i sessionCaptureInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
+	if err := replayContextError(ctx); err != nil {
+		return nil, err
+	}
+	return gatewaytesting.NewSessionReplayer(i.path, gatewaytesting.WithReplayContext(ctx))
+}
+
+func (r *captureReplay) Receive() <-chan messages.StreamMessage {
+	if r == nil || r.inner == nil {
+		return nil
+	}
+	return r.inner.Receive().Chan()
+}
+
+func (r *captureReplay) Drain(ctx context.Context, consume func(messages.StreamMessage) error) error {
+	if err := replayContextError(ctx); err != nil {
+		return err
+	}
+	if r == nil || r.inner == nil {
+		return errors.New("replay capture is unavailable")
+	}
+	if consume == nil {
+		return errors.New("replay message consumer is required")
+	}
+	input := r.Receive()
+	done := r.Done()
+	if input == nil || done == nil {
+		return errors.New("replay capture stream is unavailable")
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-done:
+			return r.drainReady(ctx, input, consume)
+		case message, ok := <-input:
+			if !ok {
+				return r.Err()
+			}
+			if err := consume(message); err != nil {
+				return err
+			}
+		}
+	}
+}
+
+func (r *captureReplay) drainReady(ctx context.Context, input <-chan messages.StreamMessage, consume func(messages.StreamMessage) error) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case message, ok := <-input:
+			if !ok {
+				return r.Err()
+			}
+			if err := consume(message); err != nil {
+				return err
+			}
+		default:
+			return r.Err()
+		}
+	}
+}
+
+func (r *captureReplay) Done() <-chan struct{} {
+	if r == nil || r.inner == nil {
+		return nil
+	}
+	return r.inner.Done()
+}
+
+func (r *captureReplay) Err() error {
+	if r == nil || r.inner == nil {
+		return nil
+	}
+	return r.inner.Err()
+}
+
+func (r *captureReplay) Close() error {
+	if r == nil || r.inner == nil {
+		return nil
+	}
+	return r.inner.Close()
+}
 
 // InspectCapture performs the complete replay admission once and returns the
 // host-facing metadata needed to select a session route. This keeps capture
@@ -59,22 +199,28 @@ func (s *Service) InspectCapture(ctx context.Context, path string) (replay.Captu
 		Provider:         loaded.Capture.Provider.Name,
 		Model:            loaded.Capture.Provider.Model,
 		IntegrityWarning: loaded.IntegrityWarning(sourcePath),
+		Facts:            captureFacts(loaded.Capture),
 	}
 	inspection.InitialTools, inspection.InitialToolsKnown = initialToolNames(loaded.Capture.Records)
 	if !inspection.IsRealtime() {
 		return inspection, nil
 	}
+	if _, err := gatewaytesting.NewReplayWebSocketDialerFromCapture(loaded.Capture); err != nil {
+		return replay.CaptureInspection{}, fmt.Errorf("validate realtime replay capture %s: %w", sourcePath, err)
+	}
+	inspection.Facts.RealtimeWebSocketReplayable = true
 	plan, err := loadLivePlanFromCapture(ctx, capturePath, loaded.Capture)
-	if errors.Is(err, errSelfDrivingPlanUnavailable) {
-		// A caller-driven capture is still a valid realtime artifact. The host
-		// may provide its own prompt/audio actions; only the optional
-		// self-driving actions are unavailable. Retain lifecycle metadata so a
-		// recorded provider close remains authoritative after those actions run.
-		metadata, metadataErr := replayLifecyclePlan(capturePath, loaded.Capture.Records)
-		if metadataErr != nil {
-			return inspection, metadataErr
+	if err != nil {
+		if !errors.Is(err, errSelfDrivingPlanUnavailable) {
+			return inspection, err
 		}
-		inspection.LivePlan = &metadata
+		// Preserve valid opening actions while leaving response-target correlation
+		// unavailable; the strict loader still rejects incomplete self-driving plans.
+		fallback, fallbackErr := replayCallerActionPlan(capturePath, loaded.Capture.Records)
+		if fallbackErr != nil {
+			return inspection, fallbackErr
+		}
+		inspection.LivePlan = &fallback
 		return inspection, nil
 	}
 	if err != nil {
@@ -82,6 +228,129 @@ func (s *Service) InspectCapture(ctx context.Context, path string) (replay.Captu
 	}
 	inspection.LivePlan = &plan
 	return inspection, nil
+}
+
+func captureFacts(capture gatewaytesting.SessionCapture) replay.CaptureFacts {
+	facts := replay.CaptureFacts{Version: capture.Version, EventCount: len(capture.Records)}
+	totals := make(map[metrics.SeriesKey]int64)
+	toolDeltaSeen := make(map[string]bool)
+	for _, record := range capture.Records {
+		if record.Direction == gatewaytesting.DirectionClientToServer && strings.EqualFold(strings.TrimSpace(record.Type), replayAppend) {
+			facts.ClientAudioAppendCount++
+		}
+		payloadBytes := record.Payload
+		if len(payloadBytes) == 0 {
+			payloadBytes = record.Data
+		}
+		var payload struct {
+			Type      string `json:"type"`
+			Delta     string `json:"delta"`
+			Audio     string `json:"audio"`
+			CallID    string `json:"call_id"`
+			Arguments string `json:"arguments"`
+			Synthetic string `json:"synthetic_audio"`
+			Item      struct {
+				Type    string `json:"type"`
+				Content []struct {
+					Type string `json:"type"`
+					Text string `json:"text"`
+				} `json:"content"`
+			} `json:"item"`
+		}
+		if json.Unmarshal(payloadBytes, &payload) != nil {
+			continue
+		}
+		switch record.Direction {
+		case gatewaytesting.DirectionServerToClient:
+			switch payload.Type {
+			case "response.audio.delta", "response.output_audio.delta":
+				addCaptureMetric(totals, metrics.DirectionOutput, metrics.ModalityAudio, decodedCaptureBase64Len(payload.Delta))
+			case "response.text.delta", "response.output_text.delta", "response.audio_transcript.delta", "response.output_audio_transcript.delta":
+				addCaptureMetric(totals, metrics.DirectionOutput, metrics.ModalityText, len(payload.Delta))
+			case "response.function_call_arguments.delta":
+				addCaptureMetric(totals, metrics.DirectionOutput, metrics.ModalityTool, len(payload.Delta))
+				toolDeltaSeen[payload.CallID] = true
+			case "response.function_call_arguments.done":
+				if !toolDeltaSeen[payload.CallID] {
+					addCaptureMetric(totals, metrics.DirectionOutput, metrics.ModalityTool, len(payload.Arguments))
+					toolDeltaSeen[payload.CallID] = true
+				}
+			}
+		case gatewaytesting.DirectionClientToServer:
+			switch payload.Type {
+			case "conversation.item.create":
+				for _, part := range payload.Item.Content {
+					if part.Type == "input_text" {
+						addCaptureMetric(totals, metrics.DirectionInput, metrics.ModalityText, len(part.Text))
+					}
+				}
+			case replayAppend:
+				audio := payload.Audio
+				if audio == "" {
+					audio = payload.Synthetic
+				}
+				addCaptureMetric(totals, metrics.DirectionInput, metrics.ModalityAudio, decodedCaptureBase64Len(audio))
+			}
+		}
+	}
+	for _, direction := range metrics.SupportedDirections() {
+		for _, modality := range metrics.SupportedModalities() {
+			key := metrics.SeriesKey{Direction: direction, Modality: modality}
+			if bytes := totals[key]; bytes > 0 {
+				facts.MetricDeltas = append(facts.MetricDeltas, replay.CaptureMetricDelta{Direction: direction, Modality: modality, Bytes: bytes})
+			}
+		}
+	}
+	return facts
+}
+
+func addCaptureMetric(totals map[metrics.SeriesKey]int64, direction metrics.Direction, modality metrics.Modality, bytes int) {
+	if bytes > 0 {
+		totals[metrics.SeriesKey{Direction: direction, Modality: modality}] += int64(bytes)
+	}
+}
+
+func decodedCaptureBase64Len(encoded string) int {
+	if encoded == "" {
+		return 0
+	}
+	decoded, err := codec.DecodeBase64(encoded)
+	if err != nil {
+		return len(encoded)
+	}
+	return len(decoded)
+}
+
+func replayCallerActionPlan(path string, records []gatewaytesting.CapturedSessionEvent) (session.LiveReplayPlan, error) {
+	lifecycle, err := replayLifecyclePlan(path, records)
+	if err != nil {
+		return session.LiveReplayPlan{}, fmt.Errorf("live replay plan %s: %w", path, err)
+	}
+	actions, err := replayDriverActions(records)
+	if err != nil {
+		if errors.Is(err, errSelfDrivingPlanUnavailable) {
+			return lifecycle, nil
+		}
+		return session.LiveReplayPlan{}, fmt.Errorf("live replay plan %s: %w", path, err)
+	}
+	if len(actions) == 0 {
+		return lifecycle, nil
+	}
+	if actions[0].Type == replayCreateItem {
+		plan, ok, planErr := replayTextPlan(path, actions)
+		if planErr == nil && ok {
+			applyReplayLifecycle(&plan, lifecycle)
+			return plan, nil
+		}
+	}
+	if actions[0].Type == replayAppend {
+		plan, planErr := replayAudioPlan(path, actions)
+		if planErr == nil {
+			applyReplayLifecycle(&plan, lifecycle)
+			return plan, nil
+		}
+	}
+	return lifecycle, nil
 }
 
 func replayLifecyclePlan(path string, records []gatewaytesting.CapturedSessionEvent) (session.LiveReplayPlan, error) {
@@ -122,43 +391,63 @@ func loadLivePlanFromCapture(ctx context.Context, path string, capture gatewayte
 	if err != nil {
 		return session.LiveReplayPlan{}, fmt.Errorf("live replay plan %s: %w", path, err)
 	}
-	providerCloseExpected := replayProviderCloseExpected(capture.Records)
-	waitForSessionUpdated := replayHasSessionUpdated(capture.Records)
-	interruptionReplacementExpected := replayHasInterruptionReplacement(capture.Records)
-	inputRate, outputRate, err := replayAudioSampleRates(capture.Records)
+	lifecycle, err := replayLifecyclePlan(path, capture.Records)
 	if err != nil {
 		return session.LiveReplayPlan{}, fmt.Errorf("live replay plan %s: %w", path, err)
 	}
 	if len(actions) == 0 {
-		return session.LiveReplayPlan{
-			WaitForSessionUpdated:           waitForSessionUpdated,
-			StopAfterResponse:               !providerCloseExpected,
-			ProviderCloseExpected:           providerCloseExpected,
-			InterruptionReplacementExpected: interruptionReplacementExpected,
-			InputAudioSampleRate:            inputRate,
-			OutputAudioSampleRate:           outputRate,
-		}, nil
+		return lifecycle, nil
 	}
+	return replayActionsPlan(path, actions, capture.Records, lifecycle)
+}
+
+func replayActionsPlan(path string, actions []gatewaytesting.CapturedSessionEvent, records []gatewaytesting.CapturedSessionEvent, lifecycle session.LiveReplayPlan) (session.LiveReplayPlan, error) {
 	if plan, ok, err := replayTextPlan(path, actions); ok || err != nil {
-		plan.WaitForSessionUpdated = waitForSessionUpdated
-		plan.StopAfterResponse = !providerCloseExpected
-		plan.ProviderCloseExpected = providerCloseExpected
-		plan.InterruptionReplacementExpected = interruptionReplacementExpected
-		plan.InputAudioSampleRate = inputRate
-		plan.OutputAudioSampleRate = outputRate
-		return plan, err
+		if err != nil {
+			return session.LiveReplayPlan{}, err
+		}
+		return attachReplayResponseTarget(path, records, lifecycle, plan)
 	}
 	if actions[0].Type != replayAppend {
-		return session.LiveReplayPlan{}, nil
+		return lifecycle, nil
 	}
 	plan, err := replayAudioPlan(path, actions)
-	plan.WaitForSessionUpdated = waitForSessionUpdated
-	plan.StopAfterResponse = !providerCloseExpected
-	plan.ProviderCloseExpected = providerCloseExpected
+	if err != nil {
+		// An incomplete audio action sequence is caller-driven: let the strict
+		// transport validate the caller's actual outbound sequence instead of
+		// rejecting the capture while deriving an optional self-driving plan.
+		return session.LiveReplayPlan{}, fmt.Errorf("%w: %w", errSelfDrivingPlanUnavailable, err)
+	}
+	return attachReplayResponseTarget(path, records, lifecycle, plan)
+}
+
+func attachReplayResponseTarget(path string, records []gatewaytesting.CapturedSessionEvent, lifecycle, plan session.LiveReplayPlan) (session.LiveReplayPlan, error) {
+	responseTarget, interruptionReplacementExpected, err := replayCaptureResponseTarget(path, records)
+	if err != nil {
+		if !errors.Is(err, replayResponseIdentityUnavailableError{}) {
+			return session.LiveReplayPlan{}, err
+		}
+		// A capture can remain a valid caller-driven realtime artifact even when
+		// its provider response boundaries cannot supply a self-driving target.
+		// Keep the strict error for LoadLivePlan, while InspectCapture preserves
+		// lifecycle metadata for callers that provide the turn actions.
+		return session.LiveReplayPlan{}, fmt.Errorf("%w: %w", errSelfDrivingPlanUnavailable, err)
+	}
+	applyReplayLifecycle(&plan, lifecycle)
+	plan.ExpectedResponses = responseTarget
 	plan.InterruptionReplacementExpected = interruptionReplacementExpected
-	plan.InputAudioSampleRate = inputRate
-	plan.OutputAudioSampleRate = outputRate
-	return plan, err
+	return plan, nil
+}
+
+func applyReplayLifecycle(plan *session.LiveReplayPlan, lifecycle session.LiveReplayPlan) {
+	if plan == nil {
+		return
+	}
+	plan.WaitForSessionUpdated = lifecycle.WaitForSessionUpdated
+	plan.StopAfterResponse = lifecycle.StopAfterResponse
+	plan.ProviderCloseExpected = lifecycle.ProviderCloseExpected
+	plan.InputAudioSampleRate = lifecycle.InputAudioSampleRate
+	plan.OutputAudioSampleRate = lifecycle.OutputAudioSampleRate
 }
 
 func loadReplayCapture(ctx context.Context, path string) (gatewaytesting.SessionCaptureReplayLoad, error) {
@@ -192,76 +481,6 @@ func captureKind(records []gatewaytesting.CapturedSessionEvent) replay.CaptureKi
 		}
 	}
 	return replay.CaptureKindTurn
-}
-
-func replayAudioSampleRates(records []gatewaytesting.CapturedSessionEvent) (int, int, error) {
-	for _, record := range records {
-		if record.Direction != gatewaytesting.DirectionClientToServer || record.Type != replaySessionUpdate {
-			continue
-		}
-		var envelope struct {
-			Session map[string]json.RawMessage `json:"session"`
-		}
-		if err := json.Unmarshal(replayRecordPayload(record), &envelope); err != nil {
-			return 0, 0, fmt.Errorf("decode session configuration at sequence %d: %w", record.Sequence, err)
-		}
-		return replaySessionAudioSampleRates(envelope.Session)
-	}
-	return 0, 0, nil
-}
-
-func replaySessionAudioSampleRates(session map[string]json.RawMessage) (int, int, error) {
-	var audio struct {
-		Input struct {
-			Format struct {
-				Rate int `json:"rate"`
-			} `json:"format"`
-		} `json:"input"`
-		Output struct {
-			Format struct {
-				Rate int `json:"rate"`
-			} `json:"format"`
-		} `json:"output"`
-	}
-	if raw, ok := session["audio"]; ok {
-		if err := json.Unmarshal(raw, &audio); err != nil {
-			return 0, 0, fmt.Errorf("decode audio configuration: %w", err)
-		}
-	}
-	inputRate := audio.Input.Format.Rate
-	outputRate := audio.Output.Format.Rate
-	var err error
-	if inputRate <= 0 {
-		inputRate, err = replayLegacyFormatRate(session["input_audio_format"])
-		if err != nil {
-			return 0, 0, fmt.Errorf("decode input audio format: %w", err)
-		}
-	}
-	if outputRate <= 0 {
-		outputRate, err = replayLegacyFormatRate(session["output_audio_format"])
-		if err != nil {
-			return 0, 0, fmt.Errorf("decode output audio format: %w", err)
-		}
-	}
-	return inputRate, outputRate, nil
-}
-
-func replayLegacyFormatRate(raw json.RawMessage) (int, error) {
-	if len(raw) == 0 || string(raw) == "null" {
-		return 0, nil
-	}
-	// Older captures name a codec without declaring a sample rate.
-	if raw[0] == '"' {
-		var codec string
-		return 0, json.Unmarshal(raw, &codec)
-	}
-	var format struct {
-		Rate int `json:"rate"`
-	}
-	if err := json.Unmarshal(raw, &format); err != nil {
-		return 0, err
-	}
-	return format.Rate, nil
 }
 
 func replayHasSessionUpdated(records []gatewaytesting.CapturedSessionEvent) bool {
@@ -342,8 +561,18 @@ func replayTextPrompt(path string, record gatewaytesting.CapturedSessionEvent) (
 	if item.Type != "message" || item.Role != "user" {
 		return "", false, nil
 	}
-	if len(item.Content) != 1 || item.Content[0].Type != "input_text" || item.Content[0].Text == nil {
+	var prompt *string
+	for _, part := range item.Content {
+		if part.Type != "input_text" || part.Text == nil {
+			continue
+		}
+		if prompt != nil {
+			return "", false, fmt.Errorf("live replay plan %s: user item at sequence %d contains multiple input_text parts", path, record.Sequence)
+		}
+		prompt = part.Text
+	}
+	if prompt == nil {
 		return "", false, fmt.Errorf("live replay plan %s: user item at sequence %d must contain exactly one input_text part", path, record.Sequence)
 	}
-	return *item.Content[0].Text, true, nil
+	return *prompt, true, nil
 }

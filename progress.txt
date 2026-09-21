@@ -4074,3 +4074,1174 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   same PR `#435`, update its body with the repair/evidence map, then return
   `ACCEPTED` to the script-owned current-head CI gate without polling; retain
   this task through `CONTINUE` for any exact CI rejection or actionable repair.
+
+# C216 recovery and ownership checkpoint 2026-09-19
+
+- Admission check passed for `audio-runtime-c216-recover-shutdown-duration-retirement`;
+  `prd.branchName` matches the isolated branch. The requested
+  `factory/docs/implementation-handoff.md` is absent at the factory root; the
+  executor policy copy under the preserved C186 worktree was read with the
+  operating and meta-planner handoffs.
+- The local `progress.txt` history ends at C40 and is stale for C216. The live
+  `~default` board has C216 as `work-task-10` in `init`; it has no C216 review
+  item. PR #527 is open at `4d819b05518b65351af398020bd42431abd341c3` and has
+  no GitHub review records or comments. C216-02's plan identifies the known
+  repairs: nil-Drain cancellation order, `ErrFinalizationPanic` identity,
+  post-expiry ERROR admission, and bounded finalization after caller cancel.
+- Fetched `origin main` at `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`, then
+  fast-forwarded only this isolated worktree to preserved C211 checkpoint
+  `bdc06bc52dff`. Required startup and current-main ancestry are present. The
+  C187 and C211 predecessor worktrees remain clean and untouched.
+- Restored `agent-cli/internal/services/internal/agentruntime/session_voices.go`
+  from `origin/main`; blob `087f3b20b215128098a4b2e98c079d8c1d0cc118` matches.
+  Commit `4431f6e01fa0785bcde6d77b2bd368cfd3e880a9` contains only that restore.
+- The five C211 replacements remain in agentruntime pending caller cutover:
+  `session_output.go`, `session_runtime_duration.go`, `session_service_duration.go`,
+  `session_service_duration_execution.go`, and
+  `session_service_duration_shutdown.go`. No production callers have been
+  cut over and no owned legacy deletion is claimed yet.
+- C215 has a running owner on `work-task-8`; its exact ownership includes
+  `session_termination.go`, `session_terminal_outcome.go`, and the diagnostics
+  files. C216 will keep edits off these files and limit shared-file edits to
+  its duration seam.
+- There is an exact API sequencing dependency: `session_output.go` calls
+  `writeSessionReplayMessageUnscoped` and `writeSessionReplayClose` from
+  C215-owned `session_termination.go`; C215-owned `session_terminal_outcome.go`
+  also uses `writeSessionReplayClose` and `SessionMaxDurationReason` from
+  `session_runtime_duration.go`. Move the output and reason contracts through
+  the service-owned API after C215's current terminal cutover is reviewable;
+  do not retain adapters in agentruntime to work around that lease.
+- Next action: implement duration execution ownership under
+  `go-agent-runtime/services/session/internal/execution` and its public session
+  contract using only C216-owned paths; then integrate the reviewed C215
+  terminal cutover, adapt every caller, delete all five replacements, and run
+  the full caller search before gates.
+
+# C216 retry ownership checkpoint — 2026-09-19
+
+- Admission remains `audio-runtime/audio-runtime-v1`; `prd.branchName` matches
+  the isolated branch. Fresh `origin/main` is still
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44` and remains an ancestor alongside
+  startup `8bdafc7f947a3a2c9856220abdc539437035bd21` and predecessor
+  `bdc06bc52dff`. No predecessor worktree or running host checkout was changed.
+- Moved rate-limit terminal classification, injected-clock waiting, bounded
+  cancellation/error handling, `response.create` dispatch, and retry dispatch
+  observation from `session_service_duration_execution.go` into
+  `sessionduration/internal/service`. The CLI loop adapter now exposes only the
+  session-event transport method; its observation hook records a successful
+  dispatch and makes no policy decision.
+- Restoring `session_voices.go` byte-for-byte from origin/main exposed a
+  duplicate `VoiceLoudnessGainDB` alias left in `public_aliases.go`. Removed
+  that redundant alias only; `session_voices.go` remains unchanged from
+  origin/main so the CLI package compiles.
+- Focused duration tests pass normally and under race: 32 tests across three
+  packages in each mode. Focused CLI retry regressions pass normally and under
+  race: 26 tests in each mode. `git diff --check` passes. The plan's filtered
+  execution-package patterns match no tests; the full execution suite remains
+  to be run with the completed execution migration.
+- This is partial progress: the five C211 replacement files remain, other
+  `durationServiceResources` mutable state and callbacks remain in agentruntime,
+  callers are not fully cut over, and no PR, push, CI, independent review, or
+  deletion completion is claimed. Exact next action: move duration loop
+  construction/mechanics into the session-owned execution contract and
+  implementation on C216-owned paths; then sequence C215's terminal API
+  integration, complete all caller cutovers, delete all five replacements,
+  and run full local preflight on the exact candidate.
+
+# C227 recovery and service-boundary checkpoint 2026-09-20
+
+- Verified the sole `audio-runtime` admission and matching C227 branch. The
+  factory-root `factory/docs/implementation-handoff.md` is absent; read the
+  retained same-project copy from the C219 worktree. C227 has no review Work;
+  PR #527 has no reviews or comments. C226's task failed with an unknown runner
+  outcome and its worktree is clean. C224, C225, and C228 remain nonterminal
+  `init` tasks with exact leases on shared caller files; their worktrees are
+  clean and untouched.
+- Fetched `origin main` at `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44` and
+  merged C216 `130d8936872a7b30902edb0cd9778d78aea7d367` into this isolated
+  C227 branch. Required C211 `bdc06bc52dff`, startup
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, and fetched main ancestry pass.
+  The C216 source worktree still has exactly its six tracked modifications and
+  untracked duplex factory. Its tracked diff snapshot is SHA-256
+  `e73a3c50f34a310a5c2e9cc0f69fa63beb95cd80be1334f57b01cac8ac5c8020`
+  (18,941 bytes); the duplex file is SHA-256
+  `c963545e0c4ef297eb287d3c82e4ad1bfdbb11f769617b6c5c1e4cb3060847dc`.
+- Preserved the six modified files and moved the duplex factory into
+  `go-agent-runtime/services/session/internal/live/duplex_loop.go`, updated
+  session Wire and regenerated it. Checkpoint commit: `aebd907`.
+- Integrated-main baseline is 106 production files / 39,329 physical lines;
+  the nine owned files total 2,569 lines. All nine are absent from this
+  candidate. The five uncredited C216 replacements
+  (`session_output.go`, `session_runtime_duration.go`,
+  `session_service_duration.go`, `session_service_duration_execution.go`,
+  `session_service_duration_shutdown.go`) remain. The sole shutdown adapter is
+  one production file / 59 lines.
+- Exact checks passed: `rtk go test -count=1
+  ./go-agent-runtime/services/session/... ./agent-cli/internal/services/internal/agentruntime/...
+  -run 'RTC.*Cancel|Cancel.*RTC|Interrupt|Replacement'` (23 tests, 13
+  packages); focused sessionduration/session tests normal and race (88 tests,
+  15 packages each); full sessionduration/session suites with
+  `-timeout 480s` (261 tests, 15 packages); `rtk make wire-check`; and
+  `rtk git diff --check`. No PR, push, CI result, independent review, or merge
+  is claimed.
+- Next action: move the remaining duration runner's mutable resources and
+  session-specific policy out of agentruntime into the service-owned
+  `sessionduration/internal` and `session/internal/live` contracts and
+  implementations. Keep exact peer-leased caller files untouched until release
+  or reviewed integration, then cut over every caller, remove all five
+  replacement files, verify no duplicate decisions remain, and run the complete
+  exact-head local preflight before submitting a candidate.
+
+# C227 service-owned liveness checkpoint 2026-09-20
+
+- Commit `a10078b` removes the duplicate `handle.livenessFailure` snapshot and
+  mutex from `go-agent-runtime/services/session/internal/live`; terminal
+  liveness projection now comes from the preserved `sessionduration.LivenessError`
+  chain. The sessionduration controller remains the first-cause and watchdog
+  owner. Liveness events and compatibility error identities remain intact.
+- `rtk go test -count=1 -timeout 120s
+  ./go-agent-runtime/services/session/internal/live -run 'Liveness|Timeout'`
+  and its `-race` equivalent passed (3 tests each). The full normal and race
+  suites passed for `./go-agent-runtime/services/session/...` and
+  `./go-agent-runtime/services/sessionduration/...` (261 tests, 15 packages
+  each). `rtk git diff --check` passed. No test was added.
+- The C227 legacy nine-file / 2,569-line cluster remains absent. The five
+  uncredited C216 replacement files remain, callers are not fully cut over,
+  and `shutdown_adapter.go` remains 1 production file / 59 lines. No PR, push,
+  SCRIPT CI, review, or merge is claimed.
+- Exact next action: move the remaining `durationServiceResources` mutable
+  state and session-specific policy into `sessionduration/internal` and
+  `session/internal/live` behind service-owned contracts; preserve peer-leased
+  callers until released or reviewed integration, then cut over every caller,
+  delete all five replacements, and run the complete exact-head local preflight.
+
+# C227 service-owned loop join checkpoint 2026-09-20
+
+- Moved duration loop-result ownership from the CLI `durationServiceResources`
+  channel and wrapper mutex into `sessionduration/internal/service.runLoop`.
+  The service now joins after drain and close, retains provider/close error
+  identity, exits immediately after handler-selected completion, and applies a
+  separately bounded loop-join timeout. The CLI no longer stores or joins a
+  second copy of the loop result.
+- Early regression runs exposed lost provider/close errors, loop completion
+  hangs, and a too-short reuse of drain wall-safety for loop joining. Repaired
+  these in the service runner and kept the timeout distinct from the drain
+  interval. Final checks passed: normal and race
+  `rtk go test -count=1 -timeout 480s ./go-agent-runtime/services/sessionduration/... ./go-agent-runtime/services/session/...`
+  and its `-race` equivalent (261 tests / 15 packages each); filtered normal
+  and race `rtk go test -count=1 -timeout 180s ./agent-cli/internal/services/internal/agentruntime -run 'Duration|Scheduled|Cancel|Drain|Retry|Provider|Liveness|Finaliz|Shutdown|Terminal|RTC|Interrupt|Replacement'`
+  and its `-race` equivalent (363 tests each); and `rtk git diff --check`.
+- This remains a partial checkpoint. The nine-file / 2,569-line legacy cluster
+  is absent, but `durationServiceResources` still holds session-specific state
+  and decisions, all caller cutovers are incomplete, the five uncredited C216
+  replacement files remain, and `shutdown_adapter.go` remains one file / 59
+  lines. No PR, push, SCRIPT CI, review, merge, or acceptance is claimed.
+- Exact next action: replace the remaining CLI resource object with
+  service-owned session lifecycle contracts and implementations; cut over every
+  caller while respecting exact peer file leases; remove all five uncredited
+  replacements; verify there are no duplicate decisions; then run the complete
+  exact-head preflight before submitting a candidate.
+# C229 predecessor preservation snapshot — 2026-09-20
+
+- Canonical admission check returned `admitted` for the sole project
+  `audio-runtime`. `prd.json.branchName` equals isolated branch
+  `codex/audio-runtime-c229-recover-audio-device-rtc-retirement`, initially at
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`.
+- Before integration or cleanup, C218 was read-only at
+  `dc92c6c8f1033b5c416345fd4f54ad2369bd6268` on branch
+  `codex/audio-runtime-c218-recover-audio-device-rtc-retirement`. Raw Git
+  porcelain recorded 55 tracked dirty paths, zero staged paths, and zero
+  untracked paths. This differs from C229's stated 54-path count; all 55 are
+  preserved as found. The porcelain SHA-256 is
+  `247806d3613a0be3c8550f07b667c97f252603f405601168fb5fe7867b0d339d`; the
+  unstaged binary diff SHA-256 is
+  `efcf7a559ca32980d301159411d832a21f40b79466c58f42a7aa87de89182b36`.
+- Exact pre-checkpoint status inventory:
+  ```text
+   M agent-cli/internal/services/internal/agentruntime/metrics_collector.go
+   M agent-cli/internal/services/internal/agentruntime/s2s_room_cancel_not_active_race_replay_test.go
+   M agent-cli/internal/services/internal/agentruntime/s2s_room_realtime_replay_cadence_test.go
+   M agent-cli/internal/services/internal/agentruntime/selfplay_service.go
+   M agent-cli/internal/services/internal/agentruntime/service.go
+   D agent-cli/internal/services/internal/agentruntime/session_audio_clock.go
+   D agent-cli/internal/services/internal/agentruntime/session_audio_contract.go
+   D agent-cli/internal/services/internal/agentruntime/session_audio_devices.go
+   M agent-cli/internal/services/internal/agentruntime/session_audio_format_test.go
+   D agent-cli/internal/services/internal/agentruntime/session_audio_policy.go
+   M agent-cli/internal/services/internal/agentruntime/session_audio_rate_test.go
+   M agent-cli/internal/services/internal/agentruntime/session_bare_test.go
+   M agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner_test.go
+   M agent-cli/internal/services/internal/agentruntime/session_conversation_log_test.go
+   M agent-cli/internal/services/internal/agentruntime/session_diagnostics.go
+   M agent-cli/internal/services/internal/agentruntime/session_drain.go
+   M agent-cli/internal/services/internal/agentruntime/session_duration.go
+   M agent-cli/internal/services/internal/agentruntime/session_duration_loop.go
+   M agent-cli/internal/services/internal/agentruntime/session_image.go
+   M agent-cli/internal/services/internal/agentruntime/session_instructions.go
+   D agent-cli/internal/services/internal/agentruntime/session_lifecycle.go
+   M agent-cli/internal/services/internal/agentruntime/session_live.go
+   M agent-cli/internal/services/internal/agentruntime/session_live_observation.go
+   D agent-cli/internal/services/internal/agentruntime/session_live_observation_state.go
+   M agent-cli/internal/services/internal/agentruntime/session_live_setup.go
+   M agent-cli/internal/services/internal/agentruntime/session_liveness.go
+   M agent-cli/internal/services/internal/agentruntime/session_liveness_test.go
+   M agent-cli/internal/services/internal/agentruntime/session_options.go
+   M agent-cli/internal/services/internal/agentruntime/session_rate_limit_retry_test.go
+   M agent-cli/internal/services/internal/agentruntime/session_recording.go
+   M agent-cli/internal/services/internal/agentruntime/session_room.go
+   M agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go
+   M agent-cli/internal/services/internal/agentruntime/session_room_planning.go
+   M agent-cli/internal/services/internal/agentruntime/session_room_replay_scheduler.go
+   M agent-cli/internal/services/internal/agentruntime/session_room_run.go
+   M agent-cli/internal/services/internal/agentruntime/session_runtime_live.go
+   M agent-cli/internal/services/internal/agentruntime/session_runtime_openai.go
+   M agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go
+   M agent-cli/internal/services/internal/agentruntime/session_runtime_rtc.go
+   M agent-cli/internal/services/internal/agentruntime/session_self_play.go
+   M agent-cli/internal/services/internal/agentruntime/session_service_test_helpers_test.go
+   M agent-cli/internal/services/internal/agentruntime/session_termination_test.go
+   M agent-cli/internal/services/internal/agentruntime/session_timing_test.go
+   M agent-cli/internal/services/internal/agentruntime/session_transport_done_drain_test.go
+   M agent-cli/internal/services/wire/metrics.go
+   M agent-cli/internal/services/wire/wire.go
+   M agent-cli/internal/transport/cli/root_routes_test.go
+   M agent-cli/internal/transport/cli/session_service_composition_test.go
+   M agent-cli/internal/wire/wire_gen.go
+   M agent-cli/test/integration/session_service_composition_test.go
+   M go-agent-runtime/services/audioio/contract.go
+   M go-agent-runtime/services/audioio/internal/service/service.go
+   M go-agent-runtime/services/devices/contract.go
+   M go-agent-runtime/services/session/internal/live/session_adapter.go
+   M go-agent-runtime/services/session/internal/live/turn_replay.go
+  ```
+- Prior C189 PR `#530` remains open at `438a2e5ea533e7930fcaa5c48a35f61490bce55a`.
+  GitHub reports no submitted reviews, issue comments, or inline review comments.
+  Its handoff states `make prepush` was partial with contention-sensitive
+  probe/replay/browser failures; isolated reruns passed. This is not a green
+  exact-candidate preflight and is not reused as such.
+- The exact C218 snapshot above is now committed as
+  `6e923c6ca07bb59590fbe9abeae420a3bd80665f`, whose parent is the observed
+  `dc92c6c8f1033b5c416345fd4f54ad2369bd6268`; it records all 55 paths and
+  leaves the C218 worktree clean. No cleanup, integration, reset, or rewrite
+  preceded the checkpoint.
+
+# C229 room device service cutover checkpoint 2026-09-20
+
+- Human room participants now open the public `devices.Service` handle and
+  run its `Capture`/`Playback` pumps. The room runtime no longer opens or
+  retains gateway `DeviceSource`/`DeviceSink` values. Selected IDs and playback
+  queue snapshots are optional public handle capabilities implemented by the
+  private media/composite services.
+- The public device contract no longer imports gateway device/runtime types.
+  RTC observers use service-owned callback types, remote endpoint validation
+  has a public service sentinel, and the internal RTC binding adapts callbacks
+  at the gateway edge. The unused raw registry parameter was removed from the
+  session runtime dependency graph and its generated Wire call.
+- Room output drains through the service playback pump. The regression now
+  verifies bounded service backpressure does not report a false queue
+  overflow; the focused diagnostic unit test still covers positive reported
+  overflow snapshots. Cross-participant sample-rate conversion now uses
+  `audioio.Service.ConvertPCM16`; no production `ResamplePCM16` or direct
+  device source/sink operation remains in the CLI agentruntime package. A
+  focused room run found the session loop omitted its injected audio
+  service/clock; those dependencies are now passed into the loop options,
+  eliminating the nil timer panic.
+- Focused passes on this slice: `rtk go test ./go-agent-runtime/services/devices/...
+  -count=1 -timeout=180s` (49 tests / 7 packages, including composite handle
+  metadata propagation); `rtk go test
+  ./agent-cli/internal/services/internal/agentruntime -run
+  '^(TestRunRoom_HumanParticipantRoutesDevicesAndReportsReadiness|TestRunRoom_HumanParticipantPlaybackUsesServiceBackpressure|TestEmitRoomParticipantPlaybackOverflowDiagnostic|TestResolveBareSessionOptions|TestNewLiveSessionInferencerCarriesBareAudioPolicies)$'
+  `-count=1 -timeout=120s` (4 tests); and focused CLI remote endpoint preflight
+  (1 test). `git diff --check` is clean.
+- After generated Wire commit `47071e085939ec313751c31927c07a4265f0f321`,
+  `rtk make wire-check` passed, and `rtk make embed-check` passed. The
+  cross-participant conversion follow-up passes the room routing and bounded
+  playback tests (2 tests / 1 package).
+- Next: finish the production caller and exact legacy-file audit, rerun Wire,
+  then run `make prepush` plus all C229 audio/device/RTC functional, integration,
+  race, hermetic, and Wire commands on the exact candidate before opening or
+  updating a PR. No PR or hosted CI handoff is claimed.
+
+# C234 recovery and concurrent-head integration checkpoint — 2026-09-20
+
+- Admission verification returned `admitted` for the sole `audio-runtime`
+  project; `prd.branchName` matches the isolated C234 worktree. The C234 task
+  requires the preserved C217 recovery and latest retained C227/C229 heads.
+  Required `implementation-handoff.md` is absent from the current factory tree;
+  the preserved same-project copy at historical SHA
+  `52750ceb7ee9fa62bc05fe6d699f54e5ed07657c` was read.
+- C217 was verified at corrected HEAD
+  `ca87a126b2cf8e7fc2aa510fcf2938e7c085836a`, six commits ahead of planning
+  main, with exactly nine dirty production paths. All nine were committed
+  together as `03662c1b30bf2c0bead10fc14235c7e2df5224ce`; its name-status is
+  recorded in the task handoff. The C217 source worktree remains clean at that
+  commit, and its original six commits remain ancestral.
+- C234 merged the retained C227/C229 integration checkpoint as `7a6d169ce`
+  and the latest C229 commits `7ccaf69b8` and `26abced5c` as `7e12df1c2`.
+  Startup, planning-main, and fetched `origin/main` were ancestors before those
+  merges; C234 remains isolated from the running host checkout.
+- C217 integration is now in progress. The conflict set includes runtime
+  service/wiring seams and stale audio/duration paths; no owned recording or
+  replay deletion is claimed while callers are unresolved. A compile-only
+  `rtk go test -run '^$' ./agent-cli/internal/services/internal/agentruntime
+  ./go-agent-runtime/services/session/internal/live` on the earlier C227/C229
+  merge exposed transitional duplicate/missing symbols and did not execute
+  tests. This is actionable integration work, not an escalation.
+- No push, PR update, script CI handoff, hosted CI polling, independent review,
+  or completion is claimed. Exact next action: resolve the active C217 merge by
+  routing recording/replay callers through their public service contracts while
+  preserving C227 duration and C229 audio/device behavior; then delete all 13
+  named production targets, regenerate Wire, verify the C224 browser boundary
+  and adapter budget, and run the full exact-candidate preflight.
+
+# C234 resumed worktree checkpoint — 2026-09-20
+
+- Reverified admission as `audio-runtime` and matched `prd.branchName` to the
+  isolated C234 branch. The requested current-path
+  `factory/docs/implementation-handoff.md` is absent; read the preserved file
+  at historical source revision `52750ceb7ee9fa62bc05fe6d699f54e5ed07657c`.
+  PR #526 is open at the C188 checkpoint with no submitted reviews; its only
+  comment is the implementation handoff. No C210/C217/C234 concluded review
+  finding is present in the canonical `~default` Work list.
+- Fetched `origin main`; it remains `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`.
+  Manifest baseline `3194edd9`, startup `8bdafc7f`, planning main and fetched
+  main are all ancestors of the C234 HEAD.
+- Continued the existing merge of C217 recovery checkpoint
+  `03662c1b30bf2c0bead10fc14235c7e2df5224ce`. Resolved 13 stale/delete
+  conflicts by retaining the C229/C227 removals and intended recording/replay
+  legacy deletions. Twenty-seven conflicted paths remain in runtime,
+  composition, Wire and architecture metadata. No tests were run while those
+  conflicts remain; no commit, push or PR handoff is claimed.
+- Exact next action: resolve the remaining composition/runtime conflicts by
+  routing recording and replay through their public service contracts while
+  retaining C227 sessionduration, C229 audio/device and C224 browser behavior;
+  then remove the six checkpoint-only replacement files, cut over every
+  caller, regenerate Wire and run the complete local preflight.
+
+# C234 service-boundary recovery checkpoint — 2026-09-20
+
+- Resolved all remaining git index conflicts in the isolated worktree. The
+  recording and replay public-contract changes, C227 duration implementation,
+  C229 audio/device removals, and C224 browser source remain in the tree. No
+  merge commit, push, PR update, or CI handoff was made.
+- Regenerated `agent-cli/internal/wire/wire_gen.go` with
+  `GOWORK=off go run -mod=mod github.com/google/wire/cmd/wire .`; the graph now
+  injects recording and replay services. `make -C agent-cli wire` could not
+  launch because the standalone `wire` binary is absent from PATH; use the
+  repository-pinned `make wire-check` in final preflight.
+- Added the missing `audio.PCMFrame` public recording-contract import and a
+  `RunLiveEvidence` implementation adapter in recording service internals.
+  Recording and replay packages compiled under `go test -run '^$'`, but the
+  CLI runtime package does not compile yet. Latest exact probe:
+  `rtk go test -run '^$' ./agent-cli/internal/services/internal/agentruntime`.
+  Remaining errors identify the C217 entrypoint/source files depending on
+  retired audio/session recorder types, a duplicate test helper, and obsolete
+  media wrappers.
+- Also removed the old direct replay parser from session-option validation and
+  the duplicate runtime replay planner; validation and planning now require the
+  injected replay service. Removed the implicit recording/replay Wire fallback
+  from runtime planning and changed raw capture claim storage to the public
+  `DestinationClaim` contract.
+- Next action: finish service integration by making directory recording execute
+  through `recording.Service.RunLiveEvidence`, remove or trim the checkpoint-only
+  audio/recording entrypoint files and obsolete moved tests while preserving the
+  C229 retired-audio behavior and C224 browser behavior, then cut remaining raw
+  capture/replay paths over through recording/replay services. Re-run the
+  focused compile probe before any functional gate; all exact legacy deletions,
+  adapter budget checks, and full local preflight remain outstanding.
+
+# C234 recording/replay service cutover checkpoint — 2026-09-20
+
+- Added `recording.Service.RecordProviderSession`, with bounded provider capture
+  sink admission, gateway transport recording, provider inferencer construction,
+  service-owned session finalization, and alternate-path flushing behind the
+  public recording contract. Its build-failure cleanup is covered by a public
+  service-path test that confirms the original failure and destination reuse.
+- OpenAI, Grok, and WebRTC record planning now delegates provider capture and
+  session finalization to recording service. `NewLiveSessionInferencer` no
+  longer creates a CLI-owned gateway recorder. Generated Wire and CLI service
+  composition now pass the provider-capture service.
+- Generic turn replay planning now uses `replay.Service.Replay` for rendering
+  and no longer constructs `NewReplaySessionInferencer`. Realtime replay
+  receives its transport from `LivePrepared.WrapDialer` rather than a gateway
+  testing dialer factory. Removed the old private timed gateway-inferencer test;
+  public replay service behavior still requires focused cancellation coverage.
+- Passing compile-only matrix:
+  `rtk go test -run '^$' ./agent-cli/internal/services/internal/agentruntime
+  ./agent-cli/internal/services/agentsession ./agent-cli/internal/services/wire
+  ./agent-cli/internal/transport/cli/internal/livehost
+  ./agent-cli/internal/transport/cli ./agent-cli/test/integration
+  ./go-agent-runtime/services/recording/... ./go-agent-runtime/services/replay/...`
+- Passing focused behavior checks:
+  `rtk go test ./go-agent-runtime/services/recording/...
+  ./agent-cli/internal/services/internal/agentruntime -run
+  '^(TestRecordProviderSessionReleasesAdmissionWhenProviderBuildFails|TestNewLiveSessionInferencer.*|TestLivePlannerFamiliesUseOneGroundingComposition|TestPlanWebRTCRecordSuppliesRuntimeDataPlaneToProvider|TestRunSession_WebRTCCompletesHermeticTurnThroughExportedService)$' -count=1`
+  (recording subpackages compiled; matching runtime and recording service tests
+  passed).
+- Worktree remains an incomplete candidate: no exact planned legacy cluster
+  deletion, complete caller audit, adapter-budget/deletion/browser check, full
+  preflight, commit, push, PR handoff, hosted CI, or acceptance is claimed.
+- Exact next action: remove remaining legacy test seams and direct room/replay
+  callers, integrate bounded `RunLiveEvidence` into duration paths, delete all
+  six checkpoint-only replacement production files and the seven integrated
+  main retirement targets, regenerate Wire, then resume the exact-candidate
+  verification plan. Decision remains CONTINUE.
+
+# C234 duration and caller-audit checkpoint — 2026-09-20
+
+- Reverified the admitted `audio-runtime` task with
+  `python3 $FACTORY_ROOT/factory/scripts/project-control.py verify-work
+  --type task --name audio-runtime-c234-recover-recording-replay-retirement
+  --root $FACTORY_ROOT`; status is `admitted`. `prd.branchName` matches the
+  isolated worktree. The current-tree implementation handoff remains absent;
+  the preserved copy at `52750ceb7ee9fa62bc05fe6d699f54e5ed07657c` was read in
+  the prior checkpoint. No concluded review findings are present in the
+  canonical `~default` Work list.
+- Fixed the duration test setup to inject the required audio clock service and
+  made the three lifecycle waits report an early runtime error. Exact focused
+  check passed:
+  `rtk go test ./agent-cli/internal/services/internal/agentruntime -run
+  '^(TestRunSessionWithMaxDuration_FinalizesRealArtifactsAndRejectsLateFrame|TestRunSessionWithMaxDuration_FinalizesZeroSampleArtifactsBeforeFirstAudio|TestRunSessionWithMaxDuration_ReleasesTimerSessionAndProductionArtifacts|TestSessionDirectoryRecordingPersistsBrowserArtifact|TestSessionBrowserRecordingCapturesRedactedInvocationEvidence)$' -count=1`.
+- Current filesystem inventory: ten of the 13 planned production paths are
+  absent. `session_live_messages.go`, `session_live_recording.go`, and
+  `session_runtime_modes.go` remain. The C224
+  `session_browser_recording.go` source has no diff from `origin/main`.
+- Remaining direct gateway replay/capture readers found in production are
+  `session_room_replay_scheduler.go`,
+  `session_room_replay_integrity.go`, `metrics_collector.go`, and
+  `livehost/trace.go`. The two named compatibility adapters total 45 physical
+  lines, but are not proof of a completed cutover. The dead
+  `sessionRecordingDialer` runtime-factory seam also remains in production and
+  several internal tests still configure it.
+- No full functional/integration/race/hermetic/Wire preflight, commit, push,
+  PR update, or CI handoff has occurred.
+- Exact next action: extend the replay service contract with the admitted
+  capture facts required by room replay, metrics reconciliation, and trace
+  projection; route those production readers through that contract and verify
+  their public behavior. Then remove the stale recording factory seam and the
+  three remaining target files before running the complete exact-candidate
+  preflight. Decision remains CONTINUE.
+
+# C234 legacy-region retirement checkpoint — 2026-09-20
+
+- Kept candidate changes in the isolated C234 worktree at base
+  `7e12df1c284a2381cc3535b6053b0b402e497fa5`; fetched `origin/main` remains an
+  ancestor. No commit, push, PR update, or hosted CI handoff is claimed.
+- Deleted the final three planned production files from `agentruntime`:
+  `session_live_messages.go`, `session_live_recording.go`, and
+  `session_runtime_modes.go`. All 13 PRD-listed legacy/replacement paths are
+  absent from the working filesystem. Complete-message observation and the
+  provider-boundary lock remain in the existing session observation owner;
+  scheduled-input state remains in session diagnostics. Recording observation
+  errors and terminal deduplication now stay in `recording/internal`, and turn
+  replay drains through `CaptureReplay.Drain` in `replay/internal`.
+- Added focused public-path checks for replay message ordering and for the
+  recording service returning an ignored observation failure. Exact passing
+  commands:
+  `rtk go test ./go-agent-runtime/services/replay/internal/plan -run
+  '^TestCaptureReplayDrainPreservesPublicMessageOrder$' -count=1 -timeout=120s`;
+  `rtk go test ./go-agent-runtime/services/recording/internal/service -run
+  '^TestRunLiveEvidenceReturnsLatchedObservationFailure$' -count=1 -timeout=120s`;
+  `rtk go test ./agent-cli/internal/services/internal/agentruntime -run
+  '^(TestPlanSessionRuntime_OpenAIRecordOwnsConfigAndDialerSelection|TestPlanSessionRuntime_ScheduledAudioUsesPersistentLiveLifecycle|TestPlanSessionRuntime_GrokRecordPreservesCallerOwnedDialer|TestPlanSessionRuntime_RecordDefaultProviderFallsBackToOpenAI|TestPlanOpenAIRecordRuntimeDeviceInputDefaultsServerVAD|TestPlanSessionRuntime_BrowserToolsWithRecordingPreservesCaptureLifecycle|TestOpenAIRecordPromptAudioOutputWithoutInputUsesRealtimeDuplexRate)$'
+  -count=1 -timeout=180s`.
+- Compile-only package matrix passed:
+  `rtk go test -run '^$' ./go-agent-runtime/services/replay/...
+  ./go-agent-runtime/services/recording/internal/service
+  ./agent-cli/internal/services/internal/agentruntime`.
+- Adapter inventory remains exactly the two named livehost adapters at 45
+  physical lines combined. Direct capture loading remains in the separately
+  owned `session_room_replay_integrity.go`, `metrics_collector.go`, and
+  `livehost/trace.go`; C253/C255 own those paths. Their required cutovers,
+  remaining repository caller audit, and all full preflight commands are still
+  outstanding. Exact next action: reconcile the C253/C255 path ownership and
+  integrate their capture-fact consumers, then run the complete local gate on
+  the exact candidate commit. Decision remains CONTINUE.
+
+# C234 replay fact contract checkpoint — 2026-09-20
+
+- Extended `replay.CaptureInspection.Facts` with stable direction/modality
+  byte aggregates derived inside replay internals. This gives the separately
+  owned metrics caller capture-derived counts without exporting event payloads.
+  `RealtimeWebSocketReplayable` also carries the admission result needed by
+  room integrity. Inspection copies the bounded metric facts from prepared
+  replay handles.
+- Exact passing checks:
+  `rtk go test ./go-agent-runtime/services/replay/internal/plan -run
+  '^(TestInspectCaptureRetainsLifecycleMetadataForCallerDrivenActions|TestCaptureReplayDrainPreservesPublicMessageOrder)$'
+  -count=1 -timeout=120s`; and
+  `rtk go test -run '^$' ./go-agent-runtime/services/replay/...
+  ./go-agent-runtime/services/recording/internal/service
+  ./agent-cli/internal/services/internal/agentruntime`.
+- No path owned by C253/C255 has been modified. The trace caller still requires
+  an explicit service-owned projection contract because it currently parses
+  provider payloads for redaction and tool linkage; capture facts intentionally
+  do not export those payloads. Exact next action: reconcile trace ownership
+  with C255 and cut its projection over through an agreed recording/replay
+  contract before beginning the full candidate preflight. Decision remains
+  CONTINUE.
+
+# C234 runtime test and caller audit checkpoint — 2026-09-20
+
+- Re-ran the full runtime package after the latest fixture and service
+  injection edits: `rtk go test -count=1
+  ./agent-cli/internal/services/internal/agentruntime` passed (857 tests).
+- Repeated admission verification:
+  `rtk python3 "$FACTORY_ROOT/factory/scripts/project-control.py" verify-work
+  --type task --name audio-runtime-c234-recover-recording-replay-retirement`
+  returned `admitted` for the sole `audio-runtime` project. The checked-out
+  branch is exactly `codex/audio-runtime-c234-recover-recording-replay-retirement`.
+- Filesystem inventory confirms all 13 named legacy paths are absent. The
+  preserved C224 `session_browser_recording.go` has no diff against
+  `origin/main`. The only named adapters remain
+  `recording_adapter.go` and `replay_adapter.go`, totaling 45 physical lines.
+- Repository-wide production reader search still finds the separately owned
+  C253 `session_room_replay_integrity.go` and C255
+  `metrics_collector.go` / `livehost/trace.go`. No files owned by either
+  checkpoint were changed. The same search found additional production probe
+  and timing consumers in `probe.go`, `probe_fleet.go`, `probe_replay.go`,
+  `probe_scenario_v2_exec.go`, `media.go`, and
+  `cmd/session-timing-report/main.go`; these callers remain to be classified
+  and moved behind the replay contract. Replay/provider implementation files
+  under `services/replay/internal` and `services/providers/internal` also
+  consume capture data and need contract-boundary review.
+- No candidate commit exists yet; `make prepush`, the complete vertical gate,
+  push, and PR handoff remain outstanding because the production caller audit
+  and C253/C255 ownership reconciliation are incomplete. Exact next action:
+  reconcile ownership of the three C253/C255 paths and the trace projection
+  contract, then integrate every remaining production probe/timing caller
+  through the public recording/replay contracts before assembling a candidate
+  and running the full local preflight. Decision remains CONTINUE.
+
+# C234 resumed executor audit checkpoint — 2026-09-20
+
+- Re-read the governing operating policy, implementation handoff, manifest,
+  source plan and acceptance. Admission remains `audio-runtime/audio-runtime-v1`;
+  `project-control.py verify-work --type task --name
+  audio-runtime-c234-recover-recording-replay-retirement` returned `admitted`,
+  and `prd.branchName` matches the isolated branch.
+- Canonical `~default` Work `work-task-25` remains PROCESSING with the previous
+  caller-audit feedback. No C234 review Work exists; the filtered review list
+  for recording is empty. PR #526 is the older C188 branch at
+  `01b3107eb83f758bb9d190008ff74effddb4d986` with no reviews and is not a C234
+  candidate. No C234 PR exists.
+- Preserved the existing dirty C234 candidate and predecessor changes without
+  reset, cleanup, commit or push. HEAD is
+  `7e12df1c284a2381cc3535b6053b0b402e497fa5`; observed `origin/main` is
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44` and remains an ancestor.
+  `git diff --check` passes.
+- Rechecked the exact 13 PRD-listed legacy/replacement production paths: all
+  are absent in the working tree. The only named CLI adapters are
+  `recording_adapter.go` (20 lines) and `replay_adapter.go` (25 lines), 45
+  total. C224's `session_browser_recording.go` remains unchanged from
+  `origin/main`.
+- Production capture parsing/caller audit is still incomplete. Peer-owned
+  paths remain `session_room_replay_integrity.go` and the room replay caller
+  seam owned by C253, plus `metrics_collector.go` and
+  `livehost/trace.go` owned by the currently RUNNING C255 session. Do not
+  overwrite those leases. Disjoint direct production consumers also remain in
+  provider replay construction (`services/providers/internal/service/{session.go,replay.go,http_capture.go}`),
+  session execution (`services/session/internal/execution/executor_build.go`),
+  CLI timing report, and CLI probe replay/fleet/scenario code. The existing
+  `replay.Service` contract has no caller-facing capture operations for all
+  these consumers yet. These are actionable integration gaps, not review
+  findings or escalation grounds. Gateway fixture-validator/testing utilities
+  still require classification in the full caller audit.
+- No local preflight, commit, push, PR update, hosted CI, or acceptance is
+  claimed. Exact next action: finish the disjoint production caller cutover
+  through behavior-owning `replay.Service` internals, integrate C253/C255's
+  caller changes only after their owners release those paths, then repeat the
+  repository-wide production-reader audit. Once every caller is integrated,
+  run `make prepush` and every C234 functional, integration, race, hermetic,
+  embedding, Wire, deletion, browser-preservation, adapter-budget, ancestry,
+  and diff command on one clean candidate SHA before pushing/updating the PR.
+  Decision remains CONTINUE.
+
+## C234 continuation checkpoint — replay service caller cutover
+
+- Continued on the admitted `audio-runtime` task and isolated branch without
+  resetting or cleaning the mixed predecessor/C234 worktree. Admission,
+  required ancestry, the C224 browser boundary, and the exact 13 planned
+  legacy/replacement file absence were rechecked. Both named livehost adapters
+  remain stateless at 20 and 25 physical lines (45 total).
+- Cut provider and session replay construction over to the public
+  `replay.Service`: provider replay admission now uses `PrepareLive`, turn
+  replay uses `NewSessionInferencer`, and session execution obtains its
+  sidecar inferencer through the same service. Provider/session Wire graphs
+  inject the service contract.
+- Moved capture timing analysis from `agent-cli/internal/sessiontiming` into
+  replay internals behind `Service.AnalyzeTiming`. The timing-report command
+  and existing timing checks now pass a capture path to that service. The
+  existing focused behavior tests exercise the service API for reconstructed
+  tool/audio timing and malformed audio rejection.
+- Passing commands:
+  `go test -count=1 -timeout=180s ./go-agent-runtime/services/replay/... ./go-agent-runtime/services/providers/internal/service ./go-agent-runtime/services/providers/wire ./go-agent-runtime/services/session/internal/execution ./go-agent-runtime/services/session/wire`;
+  `go test -count=1 -timeout=180s ./agent-cli/cmd/session-timing-report ./agent-cli/internal/sessiontiming`;
+  `go test -run '^$' -count=1 -timeout=240s ./agent-cli/cmd/session-timing-report ./agent-cli/internal/sessiontiming ./agent-cli/test/integration`;
+  `go test -run '^$' -tags=e2e -count=1 -timeout=240s ./agent-cli/test/e2e`;
+  and `git diff --check`.
+- Remaining direct capture readers include CLI probe replay/fleet/scenario
+  evidence (`probe_replay.go`, `probe_fleet.go`, and
+  `probe_scenario_v2_exec.go`), C253-owned room replay integrity, and C255-owned
+  metrics/trace paths. Provider `http_capture.go` is the separate generic HTTP
+  fixture transport; gateway fixture-validator reads are validation tooling.
+  These callers and boundaries still need the final ownership/cutover audit;
+  C253/C255 leased files have not been changed.
+- No full candidate preflight, commit, push, PR update, or hosted CI is claimed.
+  Exact next action: finish the remaining replay caller audit and cutover,
+  integrate the C253/C255 seams after release, then run every named C234 local
+  gate plus `make prepush` on the exact clean candidate before any push.
+  Decision remains CONTINUE.
+
+# C234 replay-admission caller checkpoint — 2026-09-20
+
+- Reverified `project-control.py verify-work --type task --name
+  audio-runtime-c234-recover-recording-replay-retirement --root "$FACTORY_ROOT"`
+  as `admitted`; `prd.branchName` still matches the isolated C234 branch.
+  `origin/main` remains `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`. The C217
+  checkpoint `03662c1b30bf2c0bead10fc14235c7e2df5224ce`, startup revision
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, planning main and fetched main
+  are ancestors. Existing staged/unstaged changes were preserved.
+- No C234 concluded review finding is present in the retained task history;
+  the default review input directory contains only `.gitkeep`.
+- Routed probe and fleet fixture admission through the injected public
+  `replay.Service.InspectCapture`. Regenerated CLI Wire with
+  `rtk proxy sh -c 'cd agent-cli/internal/wire && GOWORK=off go run -mod=mod
+  github.com/google/wire/cmd/wire'`; generated constructors now receive the
+  replay service. This is partial: `probe_replay.go`,
+  `probe_replay_observation.go`, scenario-v2 capture parsing and live fleet
+  capture analysis still use gateway capture readers.
+- `rtk git diff --check` passes. All 13 planned legacy/replacement production
+  paths are absent; the two named adapters remain 20 and 25 lines (45 total);
+  C224 `session_browser_recording.go` remains unchanged from `origin/main`.
+- `rtk go test -run '^$' -count=1 -timeout=240s
+  ./agent-cli/internal/wire ./agent-cli/test/integration` exits 0 as a
+  compile-only check (no test names selected).
+- Targeted probe command
+  `rtk go test -count=1 -timeout=180s ./agent-cli/internal/transport/cli -run 'TestProbe'`
+  produced 60 passes and two failures in the v7a metrics cases. Direct CLI
+  reproduction reports `collect metrics evidence: replay service is not
+  configured`. The required metrics collector and caller wiring are leased to
+  C255 (`metrics_collector.go` and `services/wire/metrics.go`); do not change
+  those files before the owner releases them. No full preflight, candidate
+  commit, push, PR update or CI handoff is claimed.
+- Correction to the prior C234 audit note: the current C234 diff already
+  changes `session_room_replay_scheduler.go` to obtain append counts from
+  `replay.Service.InspectCapture`. C253 separately owns this file as both a
+  caller seam and a deletion target. Preserve the existing staged and
+  unstaged edits, but make no further change there until ownership is
+  reconciled.
+- Exact next action: continue on unleased replay consumers by moving probe
+  observation and corpus-injection behavior behind the replay contract; then
+  integrate C255 metrics wiring and reconcile the C253 scheduler/deletion
+  overlap after those owners release their paths. Finish the repository-wide
+  caller audit before running the complete C234 preflight and `make prepush`
+  on one exact candidate SHA. Decision remains CONTINUE.
+
+# C234 continuation checkpoint — probe analysis cutover and ancestry audit — 2026-09-20
+
+- Reverified admission with `project-control.py verify-work --type task
+  --name audio-runtime-c234-recover-recording-replay-retirement`; the admitted
+  project is `audio-runtime`, and `prd.branchName` matches this isolated
+  branch. Fetched `origin/main`; its current head and the required startup and
+  planning commits are ancestors of C234.
+- Corrected the previous ancestry note: required C217 source `ca87a126` and
+  recovery checkpoint `03662c1b` are not yet ancestors of C234. The separate
+  C217 worktree is clean at `03662c1b`, seven commits ahead of origin/main;
+  that checkpoint directly follows `ca87a126` and records the nine planned
+  dirty production paths. C234 must add that reachable history before its
+  candidate is complete. No C217 worktree files were changed.
+- Added replay-service-owned probe admission, observation projection,
+  synthetic capture construction, and capture-document writing. Cut CLI probe
+  replay, fleet analysis, and scenario-v2 capture operations over to the
+  injected public replay contract. `go test -count=1 -timeout=240s
+  ./go-agent-runtime/services/replay/...` passed (107 tests); the focused
+  replay/probe/scenario-v2 CLI tests passed (6 tests), and the corresponding
+  replay service race and focused CLI race commands passed (107 and 6 tests).
+- The broader `go test -count=1 -timeout=240s
+  ./agent-cli/internal/transport/cli -run 'TestProbe'` passed 60 tests and
+  failed two v7a metrics tests because the replay service is not configured
+  for their metrics collector. C255 owns that collector and its wiring; keep
+  those leased paths unchanged until release. C253's room replay scheduler
+  remains an overlapping seam and was not edited further.
+- Exact C234-04 inventory check: all 13 planned production files under
+  `agent-cli/internal/services/internal/agentruntime` are absent. The two
+  named livehost adapters total 45 physical lines; the C224 browser recording
+  file has no diff from origin/main. Working copies of two composition tests
+  were staged to clear stale conflict-marker content in the index, and both
+  unstaged and cached `git diff --check` now pass.
+- No full vertical preflight or `make prepush` has run; no candidate SHA,
+  push, PR update, or CI handoff is claimed. The local tree still contains
+  the partial C234 implementation and predecessor edits, which are being
+  preserved. Exact next action: checkpoint this complete local snapshot,
+  merge the clean C217 recovery branch into this isolated branch to restore
+  required ancestry, then resolve and verify shared seams before continuing
+  caller integration. Decision remains CONTINUE.
+
+# C234 continuation checkpoint — C217 ancestry adopted — 2026-09-20
+
+- Correction to the previous next-step note: local checkpoint commit
+  `74642d85788a9f41283dfc7b6a99e40d2437002e` is a two-parent additive merge
+  of C234's `7e12df1c` line and C217's `03662c1b` recovery checkpoint. It
+  therefore adopts C217 source `ca87a126` and checkpoint history without
+  rewriting either branch. No host checkout or C217 worktree was changed.
+- Rechecked ancestry for C217 source, C217 checkpoint, startup revision,
+  planning main, and fetched `origin/main`; all return ancestor status 0 for
+  C234 HEAD. The clean C234 HEAD is `74642d85788a9f41283dfc7b6a99e40d2437002e`.
+- Audited remaining production references. Direct capture reads still present
+  in CLI are confined to C255-owned `metrics_collector.go` and
+  `livehost/trace.go`, plus the overlapping room replay integrity seam owned
+  by C253/C258/C259. The customer simulation consumer decodes an individual
+  normalized transcript stream message; it does not load or replay a session
+  capture. Replay service internals retain the shared gateway capture codec
+  behind the public replay contract.
+- The 13 exact planned legacy production paths remain absent; the two named
+  livehost adapters total 45 physical lines and contain no session state.
+  C224 browser recording remains unchanged from fetched origin/main.
+- No vertical preflight, `make prepush`, push, PR update or CI handoff has run.
+  Exact next action: after C255 releases its trace/metrics paths, finish their
+  service cutover and repair the v7a metrics failure; reconcile the C253/C258
+  room replay overlap after those owners release it. Then audit all production
+  callers again and run every named functional, integration, race, hermetic,
+  Wire and `make prepush` gate on the exact final candidate. Decision remains
+  CONTINUE.
+
+# C234 continuation checkpoint — remaining CLI replay caller — 2026-09-20
+
+- Admission remains `audio-runtime/audio-runtime-v1`; the checked-out branch
+  matches `prd.json.branchName`. Fetched `origin/main` is still
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`, an ancestor. No concluded C234
+  review findings exist in canonical `~default` Work.
+- Committed unleased caller work at `125922d4aa3a10596b6b5822604f984bcdefd40c`.
+  `agent-cli/internal/transport/cli/media.go` now calls
+  `replay.Service.AnalyzeProbe`; replay internals return the existing ordered,
+  payload-free event report through `CaptureProbeObservation`. The root router
+  injects the already composed replay service. This removes the last unleased
+  CLI call to `go-llm-gateway/pkg/testing.RunSessionReplayProbe` without adding
+  a fixture. The existing path-normalization test now observes the public
+  service request.
+- Repaired the existing corrupt-capture CLI test setup to use
+  `NewSessionCommandWithLive` and the public replay service. Its targeted test
+  passes with the expected checksum failure before provider connection or
+  derived artifact creation.
+- Passing after the media/replay change: `rtk go test -count=1 -timeout=180s
+  ./agent-cli/internal/transport/cli -run '^(TestMediaProbe.*|TestRouterPreRunNormalizesMediaReplayFixtureAndLeavesURLOperandAlone|TestSessionCLIRejectsCorruptCaptureBeforeProviderOrDerivedArtifacts)$'`
+  (17 tests); the matching `-race` command (17); `rtk go test -count=1
+  -timeout=240s ./go-agent-runtime/services/replay/...` (107 tests / 4
+  packages); the matching `-race` command (107); the C234 replay
+  `nomicrophone` selector; `make wire-check`; `make embed-check`; and
+  `git diff --check`. Recording service normal/race checks passed earlier in
+  this turn (91 tests / 4 packages each), before this replay-only API addition.
+- The C234 recording `nomicrophone` selector still fails reproducibly only at
+  `TestSessionRecordedWebMCPCastDeviceWAVStaysInteractive` in
+  `agent-cli/internal/transport/cli/session_record_only_live_test.go`; it
+  constructs the retired legacy dispatcher and never reaches the provider.
+  C229 owns the live-session caller cutover and has a RUNNING Worker Session
+  `991295d8-86fa-422e-9e47-568b80f76564`; no C229 files were changed.
+- The remaining direct runtime capture readers are C255's
+  `metrics_collector.go` and `livehost/trace.go` (Worker Session
+  `538cc9ed-93dd-42cb-bf4e-71c9bee87553` is RUNNING), plus
+  `session_room_replay_integrity.go`. The C263 recovery Work `work-task-81` is
+  FAILED, so reconcile that room-replay lease/continuation before editing its
+  caller or deletion paths. Replay package internals and
+  `go-llm-gateway/internal/sessionfixturevalidator` remain service/tooling
+  boundaries; `media.go` no longer reads captures.
+- The 13 exact C234 legacy/replacement paths remain absent, adapters remain
+  `recording_adapter.go` (20 lines) and `replay_adapter.go` (25 lines), and
+  C224 `session_browser_recording.go` remains unchanged from `origin/main`.
+  No full exact-candidate preflight, `make prepush`, push, PR update, or SCRIPT
+  handoff has run. Exact next action: preserve `125922d`, let C229/C255 finish
+  their leased caller seams, reconcile the failed C263 room-replay ownership,
+  then rerun the production capture-reader audit and complete every caller
+  cutover before the exact-head full local gate. Decision remains CONTINUE.
+
+# C234 continuation checkpoint — exact-head ownership audit — 2026-09-20
+
+- Reverified admission with `project-control.py verify-work --type task
+  --name audio-runtime-c234-recover-recording-replay-retirement --root
+  "$FACTORY_ROOT"`; status is `admitted`. `prd.json.branchName` matches the
+  isolated branch. HEAD is `68814cab28e77871fef60c3573c908d0a501f7ed`; the
+  worktree was clean before this progress entry. Fetched
+  `refs/heads/main:refs/remotes/origin/main`; `origin/main` remains
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`.
+- C217 source `ca87a126b2cf8e7fc2aa510fcf2938e7c085836a`, its recovery
+  checkpoint `03662c1b30bf2c0bead10fc14235c7e2df5224ce`, startup
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, planning main
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`, and fetched `origin/main` are
+  all ancestors of HEAD. No running host checkout was merged or reset.
+- The canonical `~default` review list for this exact C234 Work returns no
+  review items; there are no concluded C234 review findings to repair. The
+  13 planned legacy/replacement production paths remain absent. The only
+  named adapters are `recording_adapter.go` (20 lines) and `replay_adapter.go`
+  (25 lines), 45 combined. `session_browser_recording.go` remains unchanged
+  from `origin/main`.
+- The repeated production capture-reader search finds only leased seams:
+  `metrics_collector.go` and `livehost/trace.go` remain with C255's RUNNING
+  Worker Session `538cc9ed-93dd-42cb-bf4e-71c9bee87553`; room replay integrity
+  remains assigned to admitted C264 Work `work-task-86` after C263's PR-identity
+  failure. C229's live-session caller remains with RUNNING Worker Session
+  `991295d8-86fa-422e-9e47-568b80f76564`. The earlier C234 hermetic selector
+  failure has not been rechecked because its caller is still leased to C229.
+- No full C234 preflight, `make prepush`, candidate push, PR update or SCRIPT
+  handoff ran. Exact next action: preserve those leases, integrate the C229,
+  C255 and C264 caller checkpoints as their owners release them, repair any
+  resulting C234-local failures, repeat the repository-wide production reader
+  audit, then run every C234 exact-candidate functional, integration, race,
+  hermetic, Wire, embedding and `make prepush` gate before pushing.
+  Decision remains CONTINUE.
+
+# C234 continuation checkpoint — refreshed caller ownership audit — 2026-09-20
+
+- Reverified task admission with `project-control.py verify-work --type task
+  --name audio-runtime-c234-recover-recording-replay-retirement`; status is
+  `admitted` for `audio-runtime`. `prd.json.branchName` matches the isolated
+  branch. The canonical `~default` review query for C234 returns no review
+  Work, so there are no concluded C234 review findings to repair.
+- Fetched `origin/main` into `refs/remotes/origin/main`; it remains
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`. Required C217 source
+  `ca87a126b2cf8e7fc2aa510fcf2938e7c085836a`, recovery checkpoint
+  `03662c1b30bf2c0bead10fc14235c7e2df5224ce`, startup
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, planning main, and fetched main
+  are all ancestors of `a38ac31a91088040bb9c5f737248dc695f5ffbeb`. The
+  isolated worktree was clean at audit start; no host checkout or peer worktree
+  was changed.
+- Canonical Worker Sessions still show active C229 (`991295d8-86fa-422e-9e47-568b80f76564`),
+  C255 (`cb62a101-2ced-441e-89fc-825f8bce0cfc`), and C264
+  (`f7ea6549-881e-4b84-9aae-84f5ef088c36`) owners. Their remaining C234 caller
+  seams are respectively the stale live-session caller, `metrics_collector.go`
+  and `livehost/trace.go`, and the room replay integrity/scheduler paths.
+  None was edited.
+- Rechecked the 13 exact C234 legacy/replacement production paths: all are
+  absent. `session_browser_recording.go` has no diff from fetched `origin/main`.
+  The only named adapters remain stateless `recording_adapter.go` (20 lines)
+  and `replay_adapter.go` (25 lines), 45 total. The repository-wide capture
+  reader scan found no additional unleased agentruntime caller; remaining raw
+  room replay reads are assigned to C264 and gateway fixture-validation code
+  remains tooling.
+- No full C234 candidate preflight, `make prepush`, candidate push, PR update,
+  or SCRIPT handoff ran. Exact next action: preserve the live C229/C255/C264
+  leases, integrate their same-task caller checkpoints after owner release,
+  repair the resulting C234-local failures, repeat the production-reader audit,
+  then run the full exact-head C234 verification list and `make prepush` before
+  any push. Decision remains CONTINUE.
+
+# C234 continuation checkpoint — concurrent owner refresh — 2026-09-20
+
+- Re-read the operating policy, implementation handoff, admitted project
+  manifest, C234 `prd.json`, and progress history. `project-control.py
+  verify-work --type task --name
+  audio-runtime-c234-recover-recording-replay-retirement` returns `admitted`;
+  `prd.json.branchName` matches this isolated branch. The canonical `~default`
+  work list has no C234 review Work or concluded C234 review finding.
+- Fetched `origin/main`; it remains
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`. At clean HEAD
+  `673fb88a8971b258b9cbd098e4bdb473d4dcc3d8`, each required ancestry check
+  passes for C217 source `ca87a126b2cf8e7fc2aa510fcf2938e7c085836a`, C217
+  checkpoint `03662c1b30bf2c0bead10fc14235c7e2df5224ce`, startup
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, planning main, and fetched main.
+  No host checkout or peer worktree was changed.
+- Canonical Worker Sessions show C229 (`work-task-16`,
+  `991295d8-86fa-422e-9e47-568b80f76564`), C255 (`work-task-59`,
+  `0b9aa37e-5a2e-46fd-9b77-6939dee427a8`), and C264 (`work-task-86`,
+  `f7ea6549-881e-4b84-9aae-84f5ef088c36`) RUNNING. C229's worktree at
+  `2223907bf` has uncommitted runtime/caller changes including
+  `session_recording.go`; C255's worktree is clean at `315707613`; C264's is
+  clean at `202d80625`. Preserve these ownership boundaries until release.
+- Repeated the production capture-reader scan. Remaining direct CLI/runtime
+  capture readers are the C255 metrics/trace seams and C264 room replay
+  integrity seam; replay-service internals and gateway fixture validation are
+  service/tooling boundaries. No additional unleased production caller was
+  found. All 13 exact C234 legacy/replacement paths are absent, the C224
+  `session_browser_recording.go` has no diff from `origin/main`, and the only
+  named adapters remain stateless at 20 + 25 = 45 physical lines. `git diff
+  --check` passes.
+- No production change, complete local preflight, `make prepush`, push, PR
+  update, or SCRIPT handoff is claimed. Exact next action: integrate the C229,
+  C255, and C264 caller checkpoints only after each owner releases them,
+  preserving C234's deletions and repairing the known C229-owned hermetic
+  caller failure. Repeat the production caller audit, then run every C234
+  functional, integration, race, hermetic, Wire, embedding, regression,
+  deletion, adapter, ancestry, diff, and `make prepush` command on one exact
+  clean candidate before pushing. Decision remains CONTINUE.
+
+# C234 continuation checkpoint — refreshed leases and ancestry — 2026-09-21
+
+- Reverified admission with `project-control.py verify-work --type task
+  --name audio-runtime-c234-recover-recording-replay-retirement`; status is
+  `admitted`. `prd.json.branchName` matches the isolated branch. The canonical
+  `~default` review query for C234 returns no review Work or concluded findings.
+- Fetched `origin main`; it remains
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`. C217 source
+  `ca87a126b2cf8e7fc2aa510fcf2938e7c085836a`, recovery checkpoint
+  `03662c1b30bf2c0bead10fc14235c7e2df5224ce`, startup
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, planning main, and fetched main
+  are ancestors of clean C234 HEAD `e689446ac01864fc29e14354b85b6e80db3949c9`.
+- Current Worker Sessions still run C229 (`work-task-16`,
+  `991295d8-86fa-422e-9e47-568b80f76564`), C255 (`work-task-59`,
+  `0b9aa37e-5a2e-46fd-9b77-6939dee427a8`), and C264 (`work-task-86`,
+  `f7ea6549-881e-4b84-9aae-84f5ef088c36`). Their clean peer heads are
+  `ffe016d89`, `4b09c4230`, and `202d80625`; all three workers remain active,
+  so C234 has not integrated or edited their leased paths. C229's branch also
+  changes `session_options.go` and `session_runtime_plan.go`, which remain
+  shared caller seams to audit after its release.
+- The production capture-reader audit finds C255's `metrics_collector.go`
+  and C264's `session_room_replay_integrity.go` as the remaining direct
+  `agentruntime` capture consumers; replay runtime callers otherwise use the
+  public replay contract. No additional unleased capture consumer was found.
+  All 13 planned C234 legacy/replacement paths are absent. C224's
+  `session_browser_recording.go` has no diff from `origin/main`. The named
+  stateless adapters remain 20 + 25 = 45 physical lines, and `git diff
+  --check` passes.
+- The prior C234 recording `nomicrophone` failure in
+  `TestSessionRecordedWebMCPCastDeviceWAVStaysInteractive` has not been
+  rechecked against released C229 changes. No full preflight, `make prepush`,
+  push, PR update, or SCRIPT handoff is claimed. Exact next action: integrate
+  the C229, C255, and C264 checkpoints only after their Worker Sessions
+  release, preserve all 13 deletions and C224, then rerun the production
+  caller audit and repair any reproducible C234 failures. When every caller is
+  integrated, run the complete C234 exact-head gate and `make prepush` before
+  opening/updating the PR. Decision remains CONTINUE.
+
+# C234 continuation checkpoint — focused service gates and caller repair — 2026-09-20
+
+- Reverified sole-project admission with `project-control.py verify-work
+  --type task --name audio-runtime-c234-recover-recording-replay-retirement`;
+  it returns `admitted`. The task `prd.json.branchName` matches
+  `codex/audio-runtime-c234-recover-recording-replay-retirement`. Fetched
+  `origin/main` remains `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`; C217 source
+  `ca87a126b2cf8e7fc2aa510fcf2938e7c085836a`, checkpoint
+  `03662c1b30bf2c0bead10fc14235c7e2df5224ce`, startup, planning main and
+  fetched main are ancestors of clean HEAD `e7c6e5b3dc9400ed8ddf9eebcb969e2c37e6b042`.
+  No C234 concluded review finding is present in retained progress or the
+  canonical review list.
+- Focused recording/replay service gates pass at this candidate:
+  `rtk go test -count=1 ./go-agent-runtime/services/recording/... ./go-agent-runtime/services/replay/...`
+  and the matching `-race` command each pass 198 tests across 8 packages.
+- The C234 no-microphone selector reproduces one failure:
+  `TestSessionRecordedWebMCPCastDeviceWAVStaysInteractive` in
+  `agent-cli/internal/transport/cli/session_record_only_live_test.go` times out
+  before the injected provider connects. A normal focused rerun fails the same
+  way and reports `legacy session audio runtime is retired; use the
+  service-owned live session`. The fixture uses the legacy `NewSessionCommand`
+  constructor for the WebMCP Cast/record/audio-output invocation. C229 still
+  owns this live-session caller seam; preserve its worktree and repair the test
+  route through the service-owned live runtime after that owner releases it.
+- Rechecked all 13 exact C234 legacy/replacement production paths: absent.
+  `recording_adapter.go` and `replay_adapter.go` remain stateless at 20 and 25
+  lines (45 total); C224 `session_browser_recording.go` has no diff from
+  `origin/main`. Production capture readers remaining on this branch are
+  C255-owned `metrics_collector.go` and `livehost/trace.go`, and the C264-owned
+  `session_room_replay_integrity.go`. The latest peer worktree heads observed
+  were clean C229 `b412be6a5`, C255 `12b1b6633`, and C264 `202d80625`; none was
+  modified or imported while its owner lease remains.
+- No complete candidate preflight, `make prepush`, push, PR update or SCRIPT
+  handoff ran. Exact next action: re-query and preserve C229/C255/C264 ownership,
+  integrate their caller checkpoints after release, repair the reproducible
+  record-only WebMCP test on the owning service path, finish the production
+  capture-reader cutovers, and then run every C234 exact-candidate gate plus
+  `make prepush` on one clean SHA before any push. Decision remains CONTINUE.
+
+# C234 continuation checkpoint — live ownership refresh — 2026-09-20
+
+- Reverified sole-project admission with `project-control.py verify-work
+  --type task --name audio-runtime-c234-recover-recording-replay-retirement`
+  from `FACTORY_ROOT`; status is `admitted`. `prd.json.branchName` exactly
+  matches `codex/audio-runtime-c234-recover-recording-replay-retirement`.
+  Canonical `~default` Work has no C234 review Work or concluded review
+  findings. The isolated branch is clean at `fd6aa85ac3859f7dbc316cf4ae221af0a40eb860`.
+- Refreshed scoped Worker Sessions. C229 still has RUNNING owner
+  `991295d8-86fa-422e-9e47-568b80f76564`; C264 still has RUNNING owner
+  `ad906b1d-b9f9-49aa-96a7-756662ed7889`. Preserve their exact caller paths.
+  C255's latest task attempt ended FAILED (`0e1e484f-6b47-4d17-b7d4-3f72d402a8ba`);
+  its C268 recovery is only an `init` idea, so there is no released replacement
+  checkpoint to integrate. Do not mutate the C255/C268 peer worktrees.
+- Rechecked the 13 exact C234 legacy/replacement paths: all remain absent.
+  The only named adapters are `recording_adapter.go` (20 lines) and
+  `replay_adapter.go` (25 lines), 45 combined. C224's browser boundary remains
+  outside this change. Production raw-capture consumers still include
+  C255-owned `metrics_collector.go` and `livehost/trace.go`, plus C264-owned
+  `session_room_replay_integrity.go`; replay service internals consume capture
+  data only inside the service boundary.
+- The focused recording/replay normal and race checks passed on source commit
+  `e7c6e5b3dc9400ed8ddf9eebcb969e2c37e6b042`; `fd6aa85` adds progress only.
+  The no-microphone WebMCP record-only test remains unverified against the
+  unreleased C229 caller change. No full exact-candidate preflight,
+  `make prepush`, push, PR update or SCRIPT handoff ran.
+- Exact next action: preserve C229/C264 leases and resolve the C255 recovery
+  owner; integrate each caller checkpoint only after release, repair the
+  WebMCP route through the service-owned live contract, repeat the production
+  capture-reader audit, then run every C234 functional, integration, race,
+  hermetic, Wire, embedding and `make prepush` command on one clean exact
+  candidate before any push. Decision remains CONTINUE.
+
+# C234 continuation checkpoint — refreshed recovery ownership — 2026-09-20
+
+- Reverified admission from `FACTORY_ROOT`: `project-control.py verify-work
+  --type task --name audio-runtime-c234-recover-recording-replay-retirement`
+  returns `admitted`; `prd.json.branchName` matches the isolated branch.
+  Fetched `origin/main` remains
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`, an ancestor of clean HEAD
+  `4d51aa7b13181f6222cc07924b8f2071f4751d9c`. Required C217 source,
+  recovery checkpoint, startup and planning-main ancestry checks pass.
+- The canonical `~default` query for C234 review Work returns no items; no
+  concluded C234 review findings are available. C234-04 names thirteen
+  recording/replay legacy targets; all thirteen are absent. The only named
+  CLI adapters remain stateless `recording_adapter.go` (20 lines) and
+  `replay_adapter.go` (25 lines), 45 lines combined. C224's
+  `session_browser_recording.go` matches `origin/main`; `git diff --check`
+  passes.
+- Refreshed ownership: C229 Worker Session
+  `991295d8-86fa-422e-9e47-568b80f76564` is still RUNNING. C264 Work
+  `work-task-86` is `ci-pending` with Worker Session
+  `ad906b1d-b9f9-49aa-96a7-756662ed7889` RUNNING. C255 Work `work-task-59`
+  is FAILED; its admitted C268 replacement `work-task-96` remains `init`
+  (INITIAL), with no running Worker Session. No peer worktree was changed.
+- The known remaining direct capture seams are C268-owned
+  `metrics_collector.go` and `livehost/trace.go`, and C264-owned
+  `session_room_replay_integrity.go`. The C229 live-session/WebMCP path still
+  needs rechecking after its owner releases. No complete C234 exact-candidate
+  preflight, `make prepush`, push, PR update or SCRIPT handoff ran.
+- Exact next action: preserve the C229, C264 and admitted C268 ownership;
+  integrate each caller change after its owner releases it, repair the
+  service-owned WebMCP route if still failing, repeat the production caller
+  audit, then run every C234 functional, integration, race, hermetic, Wire,
+  embedding and `make prepush` command on one clean exact candidate before
+  pushing and updating the PR. Decision remains CONTINUE.
+
+# C234 continuation checkpoint — current main and canonical ownership — 2026-09-20
+
+- Reverified from `FACTORY_ROOT` that the sole admitted project is `audio-runtime`
+  and this task remains admitted. `prd.json.branchName` matches the isolated
+  branch `codex/audio-runtime-c234-recover-recording-replay-retirement`.
+  Fetched `origin/main`; it remains
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`. Required ancestry checks pass for
+  C217 source `ca87a126b2cf8e7fc2aa510fcf2938e7c085836a`, recovery checkpoint
+  `03662c1b30bf2c0bead10fc14235c7e2df5224ce`, startup revision
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, planning main, and fetched main.
+  The recovery checkpoint records the seven legacy paths and two recording
+  service paths in one commit.
+- Canonical review queries in `~default` for C217, C228, C234, and C236 return
+  no review Work, so no concluded review findings are available to repair.
+  All thirteen exact C234 legacy/replacement paths are absent. The only named
+  adapters are `recording_adapter.go` (20 physical lines) and
+  `replay_adapter.go` (25), 45 combined. `session_browser_recording.go` has no
+  diff from fetched `origin/main`.
+- Current ownership is still live: C229 `work-task-16` has Worker Session
+  `991295d8-86fa-422e-9e47-568b80f76564` RUNNING; C264 `work-task-86` is
+  `ci-pending` with Worker Session `ad906b1d-b9f9-49aa-96a7-756662ed7889`
+  RUNNING. C268 recovery `work-task-96` is admitted in INITIAL with no running
+  Worker Session. Preserve their caller paths until those owners release them.
+  The known unfinished callers are C229's live-session/WebMCP seam, C264's
+  room replay integrity/scheduler seam, and C268's metrics/trace capture seams.
+- HEAD before this progress update was clean at
+  `3ced8d28e14f8d7d035372418ebd01b3ce2c6df1`. The exact candidate remains
+  incomplete: no complete local preflight, `make prepush`, candidate push, PR
+  update, or SCRIPT handoff ran. Next: preserve the three ownership boundaries,
+  integrate each caller checkpoint only after release, repair any reproducible
+  C234-local failure, repeat the production caller audit, then run every C234
+  functional, integration, race, hermetic, Wire, embedding, regression,
+  deletion, adapter, ancestry, diff, and `make prepush` gate on one exact clean
+  candidate before any push. Decision remains CONTINUE.
+
+# C234 continuation checkpoint — refreshed exact-head and ownership audit — 2026-09-20
+
+- Re-read the factory operating policy and implementation handoff before acting.
+  `project-control.py verify-work --type task --name
+  audio-runtime-c234-recover-recording-replay-retirement` returned `admitted`;
+  the PRD branch matches this isolated worktree. Fetched `origin/main` remains
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`. At candidate HEAD
+  `1a8f14ec38cf39b20037ac1dab9852a84bc90671`, the C217 source, recovery
+  checkpoint, startup revision, planning main and fetched main are ancestors;
+  the tree was clean before this note.
+- The canonical `~default` review query for C234 returns no review Work or
+  concluded findings. The 13 planned recording/replay legacy target paths are
+  absent. The only named adapters remain `recording_adapter.go` (20 physical
+  lines) and `replay_adapter.go` (25), 45 total. The C224
+  `session_browser_recording.go` matches `origin/main`; `git diff --check`
+  passes.
+- The read-only caller audit confirms remaining leased capture readers:
+  `metrics_collector.go:87` and `livehost/trace.go:192` are assigned to C268's
+  admitted recovery from failed C255 Work `work-task-59`; C268 Work
+  `work-task-96` is still INITIAL without a running implementation session.
+  `session_room_replay_integrity.go:235` remains with C264 Work `work-task-86`
+  and active Worker Session `ad906b1d-b9f9-49aa-96a7-756662ed7889`. C229 Work
+  `work-task-16` has active Worker Session
+  `991295d8-86fa-422e-9e47-568b80f76564`; its live-session/WebMCP caller seam
+  remains leased. No peer worktree or leased file was changed.
+- No production change, exact-candidate preflight, `make prepush`, push, PR
+  update or SCRIPT handoff ran. Exact next action: preserve the C229/C264/C268
+  ownership boundaries; integrate each caller checkpoint only after its owner
+  releases it, repair the service-owned WebMCP route if it still fails, repeat
+  the production caller audit, then run the full C234-02 through C234-05
+  functional, race, integration, hermetic, Wire, embedding, regression,
+  deletion, adapter, ancestry, diff and `make prepush` gates on one clean exact
+  candidate before pushing. Decision remains CONTINUE.
+
+# C234 continuation checkpoint — fetched-main and live-owner refresh — 2026-09-20
+
+- Re-ran `project-control.py verify-work --type task --name
+  audio-runtime-c234-recover-recording-replay-retirement` from `FACTORY_ROOT`;
+  admission is `admitted`, and `prd.json.branchName` matches this worktree.
+  `you work list --name c234 --all` shows no review Work or concluded C234
+  findings. Fetched `origin/main` remains
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`; C217 source, recovery checkpoint,
+  startup, planning-main and fetched-main ancestry all pass at clean HEAD
+  `20e2e1d0592816e5e0d0950b7e85d4f09fb152f1`.
+- All thirteen named C234 legacy/replacement production paths remain absent.
+  The named stateless adapters remain 20 and 25 lines (45 total), and
+  `session_browser_recording.go` is unchanged from `origin/main`.
+- Canonical Worker Sessions still show C229 `work-task-16` RUNNING as
+  `991295d8-86fa-422e-9e47-568b80f76564` and C264 `work-task-86` RUNNING as
+  `ad906b1d-b9f9-49aa-96a7-756662ed7889`. C268 `work-task-96` remains
+  `INITIAL` with no implementation Worker Session and owns the remaining
+  `metrics_collector.go` / `livehost/trace.go` capture seams. No peer worktree
+  or leased file was changed.
+- No production change or test ran; the full exact-candidate preflight,
+  `make prepush`, push, PR update and SCRIPT handoff remain outstanding. Exact
+  next action: preserve these three caller ownership boundaries, integrate
+  their checkpoints only after release, repair the WebMCP route if it still
+  fails, repeat the production caller audit, then run every C234-02 through
+  C234-05 gate plus `make prepush` on one clean exact candidate before push.
+  Decision remains CONTINUE.
+
+# C234 continuation checkpoint — current ownership and caller audit — 2026-09-21
+
+- Re-read the operating policy, implementation handoff, admitted manifest and
+  this task plan. `project-control.py verify-work --type task --name
+  audio-runtime-c234-recover-recording-replay-retirement` returned `admitted`;
+  `prd.json.branchName` matches this isolated branch. Canonical `~default`
+  C234 Work lists the task and plan but no C234 review Work or concluded review
+  findings. The fleet Worker Sessions endpoint returned
+  `FACTORY_UNREACHABLE`; no hosted CI was polled.
+- Fetched `origin main`; `origin/main` remains
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`. At clean HEAD
+  `dfbf00f35b4543d64a58f30a171656a658aec4d2`, ancestry checks pass for C217
+  source `ca87a126b2cf8e7fc2aa510fcf2938e7c085836a`, recovery checkpoint
+  `03662c1b30bf2c0bead10fc14235c7e2df5224ce`, startup
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, planning main and fetched main.
+- All thirteen exact C234 recording/replay deletion targets are absent. The
+  stateless adapters remain `recording_adapter.go` (20 lines) and
+  `replay_adapter.go` (25 lines), 45 combined. The separate C224
+  `session_browser_recording.go` matches fetched `origin/main`; `git diff
+  --check` passes.
+- The production capture-reader audit found three CLI callers still loading
+  gateway capture files directly: `metrics_collector.go:87`,
+  `livehost/trace.go:192`, and `session_room_replay_integrity.go:235`. C268
+  Work `work-task-96` is INITIAL and owns deletion of `metrics_collector.go`
+  plus a `session_runtime_plan.go` caller cutover after C229/C234/C251 release.
+  C264 Work `work-task-86` is `ci-pending`; its open PR #536 head
+  `202d80625dc80131995ad734402c97f8a8f39b30` deletes the room replay integrity
+  and scheduler files. C229 Work `work-task-16` is INITIAL; its peer worktree
+  has uncommitted replay/runtime and integration-test changes, and its branch
+  modifies shared `metrics_collector.go`, `session_options.go`,
+  `session_recording.go`, and `session_runtime_plan.go`. None of these peer
+  worktrees or files was changed or imported.
+- No production edits, tests, complete exact-candidate preflight,
+  `make prepush`, candidate push, C234 PR update or SCRIPT handoff ran. The
+  WebMCP record-only failure remains to be checked after C229's caller changes
+  are integrated. Exact next action: preserve C229/C264/C268 ownership; after
+  their applicable checkpoint/release, integrate the service-owned caller
+  changes without restoring C234 deletions, repeat the direct-capture caller
+  audit, repair any reproduced candidate failure, then run all C234-02 through
+  C234-05 commands and `make prepush` on one clean exact candidate before push.
+  Decision remains CONTINUE.

@@ -87,7 +87,7 @@ func (c *SessionCommand) runSessionCommand(cmd *cobra.Command, args []string, st
 	selectedTransport, err := validateSessionCommandPreflight(sessionCommandPreflight{
 		cmd: cmd, browserTools: state.BrowserTools, transport: state.Transport,
 		signaling: state.Signaling, mediaSource: state.MediaSource,
-		audioInTurnBarge: state.AudioTurnBarge, audioInTurns: len(state.AudioTurns), maxDuration: state.MaxDuration,
+		audioInTurnBarge: state.AudioTurnBarge, audioInTurns: len(state.AudioTurns), audioDeviceServer: state.AudioDeviceServer, maxDuration: state.MaxDuration,
 	})
 	if err != nil {
 		return err

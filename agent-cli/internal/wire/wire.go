@@ -23,6 +23,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	looplogging "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	runtimeDevicesWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
@@ -141,6 +142,7 @@ func provideTextSessionService(
 	inferencer messages.Inferencer,
 	validation modelValidation,
 	providerService runtimeproviders.Service,
+	replayService runtimeReplay.Service,
 	loopLogger looplogging.Logger,
 ) session.Service {
 	return sessionwire.NewService(sessionwire.Dependencies{
@@ -151,6 +153,7 @@ func provideTextSessionService(
 		RelaxValidation: validation.relax,
 		Resolver:        hostServices.NewSessionResolverWithStoreFactory(globalFlags, fileStoreFactory),
 		ProviderService: providerService,
+		ReplayService:   replayService,
 		Logger:          loopLogger,
 	})
 }
@@ -210,7 +213,7 @@ func provideProviderCaptureService(source Clock) runtimeRecording.ProviderCaptur
 	return recordingwire.NewProviderCaptureService(source)
 }
 
-func provideProviderService(clockSource Clock, recordingService runtimeRecording.Service, providerCaptureService runtimeRecording.ProviderCaptureService) (runtimeproviders.FullService, error) {
+func provideProviderService(clockSource Clock, recordingService runtimeRecording.Service, providerCaptureService runtimeRecording.ProviderCaptureService, replayService runtimeReplay.Service) (runtimeproviders.FullService, error) {
 	timerSource, err := clock.RequireTimerSource(clockSource)
 	if err != nil {
 		return nil, fmt.Errorf("provider clock: %w", err)
@@ -219,6 +222,7 @@ func provideProviderService(clockSource Clock, recordingService runtimeRecording
 		HTTPClient:      http.DefaultClient,
 		Recording:       recordingService,
 		ProviderCapture: providerCaptureService,
+		Replay:          replayService,
 		Clock:           timerSource,
 	}), nil
 }
@@ -253,12 +257,12 @@ func provideRoomClock(source Clock) clock.Scheduler {
 // provideFileDeviceService keeps finite file conversion and pump ownership in
 // the reusable runtime device service. The CLI opens paths into canonical
 // audio ports, then injects those ports at invocation time.
-func provideFileDeviceService(source Clock) cli.FileDeviceService {
+func provideFileDeviceService(source Clock, audioService audioio.Service) cli.FileDeviceService {
 	var scheduler clock.Scheduler
 	if value, ok := source.(clock.Scheduler); ok {
 		scheduler = value
 	}
-	return cli.FileDeviceService{Service: runtimeDevicesWire.NewFileService(), Scheduler: scheduler}
+	return cli.FileDeviceService{Service: runtimeDevicesWire.NewFileService(audioService), Scheduler: scheduler}
 }
 
 func provideToolCapabilitiesService(override toolServiceOverride, toolExecutor messages.ToolExecutor, browserFactory serviceTools.BrowserFactory, displaySurface cliTools.DisplaySurface, runtimeService runtimeTools.Service) serviceTools.Service {

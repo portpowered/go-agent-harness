@@ -7,6 +7,7 @@ import (
 	looplogging "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/persistence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
@@ -125,6 +126,7 @@ type Executor struct {
 	resolvedCatalog         ModelCatalog
 	resolvedModelPolicy     ModelPolicy
 	resolvedProviderService providers.Service
+	replayService           runtimeReplay.Service
 	resolvedStorage         Storage
 	resolvedWorkspace       string
 	resolvedAllowPaths      []string
@@ -150,6 +152,14 @@ func NewExecutorWithToolService(toolService tools.Service, executor messages.Too
 // is handled by the loop's no-op default.
 func NewExecutorWithToolServiceAndLogger(toolService tools.Service, executor messages.ToolExecutor, toolDefs []messages.ToolDefinition, inferencerOverride messages.Inferencer, logger looplogging.Logger, relaxModelValidation ...bool) *Executor {
 	return newExecutor(toolService, executor, toolDefs, inferencerOverride, logger, relaxModelValidation...)
+}
+
+// NewExecutorWithReplayServiceAndToolServiceAndLogger constructs a session
+// executor whose optional sidecar replay uses the replay service contract.
+func NewExecutorWithReplayServiceAndToolServiceAndLogger(toolService tools.Service, replayService runtimeReplay.Service, executor messages.ToolExecutor, toolDefs []messages.ToolDefinition, inferencerOverride messages.Inferencer, logger looplogging.Logger, relaxModelValidation ...bool) *Executor {
+	result := NewExecutorWithToolServiceAndLogger(toolService, executor, toolDefs, inferencerOverride, logger, relaxModelValidation...)
+	result.replayService = replayService
+	return result
 }
 
 func newExecutor(toolService tools.Service, executor messages.ToolExecutor, toolDefs []messages.ToolDefinition, inferencerOverride messages.Inferencer, logger looplogging.Logger, relaxModelValidation ...bool) *Executor {

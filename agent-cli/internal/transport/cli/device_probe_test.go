@@ -117,7 +117,7 @@ func TestDeviceProbeReadyPathUsesDeadguard(t *testing.T) {
 	root := &cobra.Command{Use: "agent", SilenceUsage: true, SilenceErrors: true}
 	probeCommand := NewProbeCommand().Generate()
 	registry := &deviceProbeRegistry{devices: []devicegw.Device{input, output}}
-	run := NewProbeRunCommandWithDeviceService(deviceProbeService{registry: registry}, nil, nil)
+	run := NewProbeRunCommandWithDeviceService(deviceProbeService{registry: registry}, nil, nil, newReplayRuntimeServiceForTest())
 	run.deviceProbeDeadline = 25 * time.Millisecond
 	run.deviceProbeExec = func(ctx context.Context, _ probe.Scenario, _ serviceDevices.DeviceProbeAvailability) (probe.ObservationSnapshot, error) {
 		<-ctx.Done()
@@ -318,7 +318,7 @@ func mustReadDeviceProbeScenario(t *testing.T) []byte {
 func newDeviceProbeTestRoot(registry devicegw.DeviceRegistry, exec ...DeviceProbeExecFunc) *cobra.Command {
 	root := &cobra.Command{Use: "agent", SilenceUsage: true, SilenceErrors: true}
 	probe := NewProbeCommand().Generate()
-	run := NewProbeRunCommandWithDeviceService(deviceProbeService{registry: registry}, nil, nil)
+	run := NewProbeRunCommandWithDeviceService(deviceProbeService{registry: registry}, nil, nil, newReplayRuntimeServiceForTest())
 	if len(exec) > 0 {
 		run.deviceProbeExec = exec[0]
 	}

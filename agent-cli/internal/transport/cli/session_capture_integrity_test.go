@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"os"
 	"path/filepath"
@@ -16,6 +17,8 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	replaywire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
+	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
@@ -64,7 +67,11 @@ func TestSessionCLIRejectsCorruptCaptureBeforeProviderOrDerivedArtifacts(t *test
 		}
 	}()
 
-	command := NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}}), nil).Generate()
+	command := NewSessionCommandWithLive(
+		flags.NewAskFlags(), flags.NewGlobalFlags(),
+		newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}}), nil,
+		captureIntegrityLiveService{}, replaywire.NewService(), nil, FileDeviceService{}, nil, nil, nil, nil, nil,
+	).Generate()
 	var stdout, stderr bytes.Buffer
 	command.SetOut(&stdout)
 	command.SetErr(&stderr)
@@ -99,4 +106,10 @@ func TestSessionCLIRejectsCorruptCaptureBeforeProviderOrDerivedArtifacts(t *test
 	if _, statErr := os.Stat(recordDir); !os.IsNotExist(statErr) {
 		t.Fatalf("recording directory exists after integrity preflight failure: stat error = %v", statErr)
 	}
+}
+
+type captureIntegrityLiveService struct{}
+
+func (captureIntegrityLiveService) OpenLive(context.Context, runtimeSession.LiveRequest) (runtimeSession.LiveHandle, error) {
+	return nil, errors.New("unexpected live service open before replay admission")
 }

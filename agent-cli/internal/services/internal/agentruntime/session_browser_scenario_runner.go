@@ -373,7 +373,7 @@ func RunBrowserConversation(ctx context.Context, out io.Writer, options BrowserC
 	if err != nil {
 		return BrowserConversationResult{}, err
 	}
-	sessionAudioInputs, interruptionAudio := partitionBrowserConversationAudio(scenario, audioInputs)
+	runtimeAudioInputs, interruptionAudio := partitionBrowserConversationAudio(scenario, audioInputs)
 	run, err := NewBrowserConversationRun(scenario)
 	if err != nil {
 		return BrowserConversationResult{}, err
@@ -473,7 +473,7 @@ func RunBrowserConversation(ctx context.Context, out io.Writer, options BrowserC
 				Broker:          observedBroker,
 				ToolExecutor:    toolSet.Executor(),
 				ToolDefinitions: toolSet.Definitions(),
-				AudioInputs:     cloneScheduledAudioInputs(sessionAudioInputs),
+				AudioInputs:     cloneScheduledAudioInputs(runtimeAudioInputs),
 				AudioInterruptions: func() <-chan ScheduledAudioInput {
 					if interruptionController == nil {
 						return nil

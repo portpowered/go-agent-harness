@@ -17,6 +17,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
+	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 	gwproviders "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
@@ -81,6 +82,8 @@ func runSessionWithDiagnostics(t *testing.T, mutate func(*SessionRunOptions)) se
 		t.Fatalf("metrics.NewInMemorySink: %v", err)
 	}
 	opts := SessionRunOptions{ModelCatalog: testModelCatalog(),
+		AudioService:    audioiowire.NewService(),
+		replayService:   newTestReplayService(),
 		Diagnostics:     sink,
 		MetricsRecorder: metricSink,
 	}
@@ -391,6 +394,8 @@ func TestSessionDiagnostics_DrainPhaseFailureEmitsOneCanonicalRecord(t *testing.
 	}
 	sink := &diagnosticRecordSink{}
 	opts := SessionRunOptions{ModelCatalog: testModelCatalog(),
+		AudioService:      audioiowire.NewService(),
+		replayService:     newTestReplayService(),
 		ReplayPath:        "scripted-drain-failure.session.json",
 		SessionInferencer: sessionInf,
 		WaitForClose:      true,

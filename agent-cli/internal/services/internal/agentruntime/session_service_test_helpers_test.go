@@ -9,8 +9,14 @@ import (
 	servicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
+	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	runtimedeviceswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
 	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
+	recordingwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/wire"
+	replaywire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
 
 // newInjectedSessionService keeps moved CLI tests on the same explicit graph
@@ -27,20 +33,28 @@ func newInjectedSessionService(deps servicewire.SessionDependencies) serviceSess
 	if deps.Runtime == nil {
 		factory := servicewire.NewSessionRuntimeFactory()
 		deps.Runtime = servicewire.NewSessionRuntime(
+			audioiowire.NewService(),
 			deps.Clock,
 			deps.ToolService,
 			factory,
 			deps.RuntimeFactory,
 			deps.SessionInferencer,
 			deps.ToolExecutor,
-			deps.DeviceRegistry,
+			newTestDeviceService(deps.DeviceRegistry),
 			deps.RuntimeObserver,
 			deps.MetricSampler,
 			deps.Logger,
 			deps.ModelCatalog,
+			recordingwire.NewService(deps.Clock),
+			recordingwire.NewProviderCaptureService(deps.Clock),
+			replaywire.NewService(),
 		)
 	}
 	return servicewire.NewSessionService(deps)
+}
+
+func newTestDeviceService(registry devicegw.DeviceRegistry) runtimedevices.Service {
+	return runtimedeviceswire.NewService(registry, audioiowire.NewService())
 }
 
 func browserTestToolService(closeCount *int) serviceTools.Service {

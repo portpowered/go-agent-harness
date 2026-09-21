@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
 const transportDoneDrainTranscript = "grounded reply that must survive a failed transport"
@@ -146,9 +147,10 @@ func TestSessionTransportDoneDrainsAcceptedOutputWhenTransportErrored(t *testing
 
 	out := &bytes.Buffer{}
 	runErr := runAgentLoopSessionStream(ctx, out, &transportDoneDrainInferencer{session: session}, sessionLoopOptions{
-		Done:     transportDone,
-		DoneErr:  doneErr,
-		observer: observer,
+		audioService: newTestAudioIOService(),
+		Done:         transportDone,
+		DoneErr:      doneErr,
+		observer:     observer,
 	})
 
 	if !errors.Is(runErr, transportErr) {
@@ -204,10 +206,11 @@ func TestSessionDurationTransportDoneDrainsAcceptedOutputWhenTransportErrored(t 
 
 	out := &bytes.Buffer{}
 	runErr := runAgentLoopSessionWithDurationClock(ctx, out, &transportDoneDrainInferencer{session: session}, sessionLoopOptions{
-		Done:     transportDone,
-		DoneErr:  doneErr,
-		observer: observer,
-	}, 30*time.Second, realSessionDurationClock{})
+		audioService: newTestAudioIOService(),
+		Done:         transportDone,
+		DoneErr:      doneErr,
+		observer:     observer,
+	}, 30*time.Second, platformclock.Real{})
 
 	if !errors.Is(runErr, transportErr) {
 		t.Fatalf("duration transport-done run error = %v, want the reported transport failure %v", runErr, transportErr)

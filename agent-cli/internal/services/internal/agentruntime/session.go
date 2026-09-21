@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 // RunSession validates and runs the session inference command surface.
@@ -21,12 +22,7 @@ func RunSession(ctx context.Context, out io.Writer, opts SessionRunOptions) (run
 	if err := validateSessionRunOptions(opts); err != nil {
 		return err
 	}
-	claim, err := ensureSessionRecordingClaim(&opts)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = claim.release() }()
-	plan, err := planSessionRuntime(opts)
+	plan, err := planSessionRuntimeContext(ctx, opts)
 	if err != nil {
 		return err
 	}
@@ -205,8 +201,13 @@ func (s *sessionInstructionsSession) Done() <-chan struct{} {
 	return s.done
 }
 
-func (s *sessionInstructionsSession) rtcMedia() (RTCMediaEndpoints, bool) {
-	return rtcMediaFromSession(s.inner)
+func (s *sessionInstructionsSession) rtcMedia() (audio.MediaEndpoints, bool) {
+	return sessionMediaFromSession(s.inner)
+}
+
+func (s *sessionInstructionsSession) RTCMedia() audio.MediaEndpoints {
+	media, _ := s.rtcMedia()
+	return media
 }
 
 func (s *sessionInstructionsSession) TerminalError() error {

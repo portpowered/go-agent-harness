@@ -62,6 +62,11 @@ func (h *handle) Send(ctx context.Context, control session.LiveControl) error {
 		h.media.AbortAck(ackID)
 		return err
 	}
+	if control.Kind == session.LiveControlAudioCommit && h.request.Replay.Kind == session.LiveReplayKindTurn {
+		// Session-message captures preserve the historical type-only end
+		// marker; realtime provider controls carry their negotiated value.
+		event.Value = nil
+	}
 	event.ActorProvidedID = ackID
 	if err := loop.SendSessionEvent(ctx, event); err != nil {
 		h.media.AbortAck(ackID)

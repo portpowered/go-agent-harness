@@ -10,6 +10,7 @@ import (
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	sessionwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	runtimeModels "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -34,6 +35,7 @@ func provideLiveService(
 		ToolDefinitions:   append([]messages.ToolDefinition(nil), toolDefs...),
 		Clock:             liveClock(clockSource),
 		Scheduler:         liveScheduler(clockSource),
+		DurationService:   durationwire.NewService(),
 	})
 }
 
@@ -120,6 +122,7 @@ func liveSessionConfig(request session.LiveRequest, apiKey string, toolDefs []me
 		ReplayPath:                    request.Replay.InputCapturePath,
 		ReplayTiming:                  liveReplayTiming(request.Replay.Timing),
 		RecordPath:                    request.Replay.OutputCapturePath,
+		SessionMessageReplay:          request.Replay.Kind == session.LiveReplayKindTurn,
 	}
 	if request.InputTranscription {
 		config.InputTranscription = &runtimeModels.InputAudioTranscriptionConfig{Enabled: true, Model: request.InputTranscriptionModel}

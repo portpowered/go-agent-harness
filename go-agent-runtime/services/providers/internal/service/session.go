@@ -9,6 +9,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
+	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
+	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
@@ -39,6 +41,15 @@ func (s *Service) BuildSession(ctx context.Context, cfg runtimeproviders.Session
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	if cfg.SessionMessageReplay {
+		if strings.TrimSpace(cfg.ReplayPath) == "" {
+			return nil, errors.New("session message replay requires a capture path")
+		}
+		if s.replay == nil {
+			return nil, errors.New("replay service is required for session message replay")
+		}
+		return s.replay.NewSessionInferencer(ctx, cfg.ReplayPath)
+	}
 	providerName := strings.ToLower(strings.TrimSpace(cfg.Provider))
 	if providerName == "" {
 		providerName = providerOpenAI
@@ -54,25 +65,58 @@ func (s *Service) BuildSession(ctx context.Context, cfg runtimeproviders.Session
 	if err := validateSessionCredential(cfg, providerName); err != nil {
 		return nil, err
 	}
+	var prepared runtimeReplay.LivePrepared
+	var err error
+	if strings.TrimSpace(cfg.ReplayPath) != "" {
+		if s.replay == nil {
+			return nil, errors.New("replay service is required for realtime session replay")
+		}
+		prepared, err = s.replay.PrepareLive(ctx, runtimeReplay.LiveRequest{
+			SourcePath: cfg.ReplayPath,
+			Timing:     providerReplayTiming(cfg.ReplayTiming),
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
 
-	dialer, recorder, err := s.sessionDialer(cfg, providerName, model, s.clock)
+	dialer, recorder, err := s.sessionDialer(cfg, providerName, model, s.clock, prepared)
 	if err != nil {
-		return nil, err
+		return nil, closeProviderReplay(prepared, err)
 	}
 
 	provider, err := buildSessionProvider(cfg, providerName, model, dialer)
 	if err != nil {
-		return nil, err
+		return nil, closeProviderReplay(prepared, err)
 	}
 	sessionGateway, err := gateway.NewSessionGateway(gateway.WithSessionProvider(provider))
 	if err != nil {
-		return nil, fmt.Errorf("create realtime session gateway: %w", err)
+		return nil, closeProviderReplay(prepared, fmt.Errorf("create realtime session gateway: %w", err))
 	}
-	inferencer := inference.NewSessionGatewayInferencer(sessionGateway, inference.WithSessionRequest(inference.SessionRequest{Config: sessionConfig(cfg, model)}))
+	var inferencer messages.SessionInferencer = inference.NewSessionGatewayInferencer(sessionGateway, inference.WithSessionRequest(inference.SessionRequest{Config: sessionConfig(cfg, model)}))
+	if prepared != nil {
+		inferencer = prepared.WrapInferencer(inferencer)
+	}
 	if recorder != nil {
 		return s.recording.TrackSession(inferencer, recorder, cfg.RecordPath)
 	}
 	return inferencer, nil
+}
+
+func providerReplayTiming(value string) runtimeSession.LiveReplayTiming {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "realtime", "recorded":
+		return runtimeSession.LiveReplayTimingRealtime
+	default:
+		return runtimeSession.LiveReplayTimingFast
+	}
+}
+
+func closeProviderReplay(prepared runtimeReplay.LivePrepared, err error) error {
+	if prepared == nil {
+		return err
+	}
+	return errors.Join(err, prepared.Close())
 }
 
 func buildSessionProvider(cfg runtimeproviders.SessionConfig, providerName, model string, dialer transport.Dialer) (llmproviders.SessionProvider, error) {
@@ -176,22 +220,20 @@ func cloneInputTranscription(policy *models.InputAudioTranscriptionConfig) *mode
 	return &copy
 }
 
-func (s *Service) sessionDialer(cfg runtimeproviders.SessionConfig, provider, model string, source clock.TimerSource) (transport.Dialer, recording.Writer, error) {
+func (s *Service) sessionDialer(cfg runtimeproviders.SessionConfig, provider, model string, source clock.TimerSource, preparedValue ...runtimeReplay.LivePrepared) (transport.Dialer, recording.Writer, error) {
+	var prepared runtimeReplay.LivePrepared
+	if len(preparedValue) > 0 {
+		prepared = preparedValue[0]
+	}
 	dialer := cfg.WebSocketDialer
 	if strings.TrimSpace(cfg.ReplayPath) != "" {
-		configuration, err := loadReplaySessionConfiguration(cfg.ReplayPath)
-		if err != nil {
-			return nil, nil, err
+		if prepared == nil {
+			return nil, nil, errors.New("prepared replay session is unavailable")
 		}
-		replayOptions := []gatewaytesting.ReplayWebSocketDialerOption{gatewaytesting.WithReplayClock(source)}
-		if strings.EqualFold(strings.TrimSpace(cfg.ReplayTiming), "realtime") || strings.EqualFold(strings.TrimSpace(cfg.ReplayTiming), "recorded") {
-			replayOptions = append(replayOptions, gatewaytesting.WithRecordedSessionTiming())
+		dialer = prepared.WrapDialer(nil)
+		if dialer == nil {
+			return nil, nil, errors.New("replay service returned an unavailable session dialer")
 		}
-		replay, err := gatewaytesting.NewReplayWebSocketDialer(cfg.ReplayPath, replayOptions...)
-		if err != nil {
-			return nil, nil, fmt.Errorf("load realtime session replay %s: %w", cfg.ReplayPath, err)
-		}
-		dialer = &replayInitialSessionUpdateDialer{inner: replay, payload: configuration.payload}
 	}
 	if dialer == nil {
 		switch provider {

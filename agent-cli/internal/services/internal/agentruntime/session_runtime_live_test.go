@@ -3,7 +3,6 @@ package agentruntime
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +10,8 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	runtimerecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -38,7 +39,7 @@ func TestPlanSessionRuntime_BrowserToolsUsesUnrecordedLiveRuntime(t *testing.T) 
 		},
 	}
 	definitions := []messages.ToolDefinition{{Name: "browser_test"}}
-	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{AudioService: newTestAudioIOService(), ModelCatalog: testModelCatalog(),
 		Provider:                config.ProviderGrok,
 		BrowserToolsEnabled:     true,
 		BrowserToolsInteractive: true,
@@ -84,7 +85,7 @@ func TestPlanSessionRuntime_BrowserToolsDefaultProviderFallsBackToOpenAI(t *test
 		},
 	}
 
-	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{AudioService: newTestAudioIOService(), ModelCatalog: testModelCatalog(),
 		BrowserToolsEnabled: true,
 		LoadedConfig:        loaded,
 		APIKey:              "openai-default-key",
@@ -102,14 +103,16 @@ func TestPlanSessionRuntime_BrowserToolsDefaultProviderFallsBackToOpenAI(t *test
 	}
 }
 
+type noCaptureProviderCase struct {
+	name      string
+	provider  string
+	model     string
+	apiKey    string
+	configure func(*sessionRuntimeFactory, *transport.Dialer)
+}
+
 func TestPlanSessionRuntime_NoCaptureUsesLiveProviderWithoutCaptureLifecycle(t *testing.T) {
-	for _, testCase := range []struct {
-		name      string
-		provider  string
-		model     string
-		apiKey    string
-		configure func(*sessionRuntimeFactory, *transport.Dialer)
-	}{
+	for _, testCase := range []noCaptureProviderCase{
 		{
 			name:     "openai",
 			provider: config.ProviderOpenAI,
@@ -139,78 +142,75 @@ func TestPlanSessionRuntime_NoCaptureUsesLiveProviderWithoutCaptureLifecycle(t *
 			},
 		},
 	} {
-		t.Run(testCase.name, func(t *testing.T) {
-			destination := filepath.Join(t.TempDir(), "must-not-be-created.session.json")
-			liveDialer := &stubRuntimeDialer{id: testCase.name + "-live"}
-			var gotDialer transport.Dialer
-			defaultDialerCalls := 0
-			recordingDialerCalls := 0
-			factory := sessionRuntimeFactory{
-				newDefaultLiveDialer: func() transport.Dialer {
-					defaultDialerCalls++
-					return liveDialer
-				},
-				newRecordingDialer: func(transport.Dialer, string, string) sessionRecordingDialer {
-					recordingDialerCalls++
-					return &stubRecordingDialer{}
-				},
-			}
-			testCase.configure(&factory, &gotDialer)
-			loaded := &config.Config{Model: config.ModelConfig{Provider: testCase.provider}}
-			if testCase.provider == config.ProviderOpenAI {
-				loaded.Model.OpenAI = &config.OpenAIConfig{Model: testCase.model, APIKey: testCase.apiKey}
-			} else {
-				loaded.Model.Grok = &config.GrokConfig{Model: testCase.model, APIKey: testCase.apiKey}
-			}
+		t.Run(testCase.name, func(t *testing.T) { runNoCaptureProviderCase(t, testCase) })
+	}
+}
 
-			opts := SessionRunOptions{ModelCatalog: testModelCatalog(),
-				Provider:        testCase.provider,
-				LoadedConfig:    loaded,
-				ToolDefinitions: []messages.ToolDefinition{{Name: "live_test"}},
-				ConfigDir:       filepath.Dir(destination),
-			}
-			if err := validateSessionRunOptions(opts); err != nil {
-				t.Fatalf("validate no-capture options: %v", err)
-			}
-			plan, err := planSessionRuntimeWithFactory(opts, factory)
-			if err != nil {
-				t.Fatalf("plan no-capture %s runtime: %v", testCase.provider, err)
-			}
-			if plan.mode != sessionRuntimeModeInjectedLive || plan.provider != testCase.provider || plan.model != testCase.model {
-				t.Fatalf("no-capture plan identity = mode:%q provider:%q model:%q", plan.mode, plan.provider, plan.model)
-			}
-			if plan.capturePath != "" || plan.captureClaim != nil || plan.flushCapture != nil || plan.flushCaptureTo != nil || plan.finalize != nil || plan.announce != "" {
-				t.Fatalf("no-capture plan owns capture lifecycle: %+v", plan)
-			}
-			if plan.loop.Prompt != opts.Prompt || !plan.loop.CloseAfterOpen || plan.loop.AdvertiseToolDefinitions {
-				t.Fatalf("no-capture plan changed live loop semantics: %+v", plan.loop)
-			}
-			if defaultDialerCalls != 1 || gotDialer != liveDialer {
-				t.Fatalf("live provider dialer = calls:%d dialer:%v, want one factory-owned live dialer", defaultDialerCalls, gotDialer)
-			}
-			if recordingDialerCalls != 0 {
-				t.Fatalf("no-capture planning constructed %d recording dialers", recordingDialerCalls)
-			}
+func runNoCaptureProviderCase(t *testing.T, testCase noCaptureProviderCase) {
+	t.Helper()
+	destination := filepath.Join(t.TempDir(), "must-not-be-created.session.json")
+	liveDialer := &stubRuntimeDialer{id: testCase.name + "-live"}
+	var gotDialer transport.Dialer
+	defaultDialerCalls := 0
+	factory := noCaptureRuntimeFactory(testCase, liveDialer, &gotDialer, &defaultDialerCalls)
+	loaded := &config.Config{Model: config.ModelConfig{Provider: testCase.provider}}
+	if testCase.provider == config.ProviderOpenAI {
+		loaded.Model.OpenAI = &config.OpenAIConfig{Model: testCase.model, APIKey: testCase.apiKey}
+	} else {
+		loaded.Model.Grok = &config.GrokConfig{Model: testCase.model, APIKey: testCase.apiKey}
+	}
+	opts := SessionRunOptions{AudioService: newTestAudioIOService(), ModelCatalog: testModelCatalog(), Provider: testCase.provider, LoadedConfig: loaded,
+		ToolDefinitions: []messages.ToolDefinition{{Name: "live_test"}}, ConfigDir: filepath.Dir(destination)}
+	if err := validateSessionRunOptions(opts); err != nil {
+		t.Fatalf("validate no-capture options: %v", err)
+	}
+	plan, err := planSessionRuntimeWithFactory(opts, factory)
+	if err != nil {
+		t.Fatalf("plan no-capture %s runtime: %v", testCase.provider, err)
+	}
+	assertNoCapturePlan(t, plan, opts, testCase.provider, testCase.model, liveDialer, gotDialer, defaultDialerCalls)
+	var out bytes.Buffer
+	if err := plan.run(context.Background(), &out); err != nil {
+		t.Fatalf("run no-capture %s plan: %v", testCase.provider, err)
+	}
+	assertNoCaptureOutput(t, out.String(), testCase.provider, destination)
+}
 
-			var out bytes.Buffer
-			if err := plan.run(context.Background(), &out); err != nil {
-				t.Fatalf("run no-capture %s plan: %v", testCase.provider, err)
-			}
-			for _, unwanted := range []string{
-				"Starting " + testCase.provider + " session recording",
-				"Wrote session capture",
-				"agent session requires --record <file>.json or --replay <file>.json",
-			} {
-				if strings.Contains(out.String(), unwanted) {
-					t.Fatalf("no-capture output contains %q:\n%s", unwanted, out.String())
-				}
-			}
-			for _, path := range []string{destination, destination + ".lock"} {
-				if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
-					t.Fatalf("no-capture run touched %q: stat error = %v", path, statErr)
-				}
-			}
-		})
+func noCaptureRuntimeFactory(testCase noCaptureProviderCase, liveDialer *stubRuntimeDialer, gotDialer *transport.Dialer, defaultCalls *int) sessionRuntimeFactory {
+	factory := sessionRuntimeFactory{
+		newDefaultLiveDialer: func() transport.Dialer { (*defaultCalls)++; return liveDialer },
+	}
+	testCase.configure(&factory, gotDialer)
+	return factory
+}
+
+func assertNoCapturePlan(t *testing.T, plan sessionRuntimePlan, opts SessionRunOptions, provider, model string, liveDialer *stubRuntimeDialer, gotDialer transport.Dialer, defaultCalls int) {
+	t.Helper()
+	if plan.mode != sessionRuntimeModeInjectedLive || plan.provider != provider || plan.model != model {
+		t.Fatalf("no-capture plan identity = mode:%q provider:%q model:%q", plan.mode, plan.provider, plan.model)
+	}
+	if plan.capturePath != "" || plan.flushCapture != nil || plan.flushCaptureTo != nil || plan.finalize != nil || plan.announce != "" {
+		t.Fatalf("no-capture plan owns capture lifecycle: %+v", plan)
+	}
+	if plan.loop.Prompt != opts.Prompt || !plan.loop.CloseAfterOpen || plan.loop.AdvertiseToolDefinitions {
+		t.Fatalf("no-capture plan changed live loop semantics: %+v", plan.loop)
+	}
+	if defaultCalls != 1 || gotDialer != liveDialer {
+		t.Fatalf("live provider dialer = calls:%d dialer:%v, want one factory-owned live dialer", defaultCalls, gotDialer)
+	}
+}
+
+func assertNoCaptureOutput(t *testing.T, output, provider, destination string) {
+	t.Helper()
+	for _, unwanted := range []string{"Starting " + provider + " session recording", "Wrote session capture", "agent session requires --record <file>.json or --replay <file>.json"} {
+		if strings.Contains(output, unwanted) {
+			t.Fatalf("no-capture output contains %q:\n%s", unwanted, output)
+		}
+	}
+	for _, path := range []string{destination, destination + ".lock"} {
+		if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
+			t.Fatalf("no-capture run touched %q: stat error = %v", path, statErr)
+		}
 	}
 }
 
@@ -235,11 +235,11 @@ func TestPlanSessionRuntime_UnsupportedProviderDiagnosticsAreShared(t *testing.T
 	}{
 		{
 			name: "browser tools",
-			opts: SessionRunOptions{ModelCatalog: testModelCatalog(), Provider: provider, BrowserToolsEnabled: true},
+			opts: SessionRunOptions{AudioService: newTestAudioIOService(), ModelCatalog: testModelCatalog(), Provider: provider, BrowserToolsEnabled: true},
 		},
 		{
 			name: "recording",
-			opts: SessionRunOptions{ModelCatalog: testModelCatalog(), Provider: provider, RecordPath: filepath.Join(t.TempDir(), "capture.json")},
+			opts: withTestRecordingServices(SessionRunOptions{ModelCatalog: testModelCatalog(), Provider: provider, RecordPath: filepath.Join(t.TempDir(), "capture.json")}),
 		},
 	}
 
@@ -260,18 +260,10 @@ func TestPlanSessionRuntime_UnsupportedProviderDiagnosticsAreShared(t *testing.T
 func TestPlanSessionRuntime_RecordDefaultProviderFallsBackToOpenAI(t *testing.T) {
 	recordPath := filepath.Join(t.TempDir(), "default-openai.session.json")
 	liveDialer := &stubRuntimeDialer{id: "record-openai-default-live"}
-	recordingDialer := &browserRecordingDialer{provider: config.ProviderOpenAI, model: openAIRealtimeModel}
 	var gotConfig config.OpenAIConfig
 	var gotDialer transport.Dialer
 	factory := sessionRuntimeFactory{
 		newDefaultLiveDialer: func() transport.Dialer { return liveDialer },
-		newRecordingDialer: func(inner transport.Dialer, provider, model string) sessionRecordingDialer {
-			if provider != config.ProviderOpenAI || model != openAIRealtimeModel {
-				t.Fatalf("record default metadata = (%q, %q), want (%q, %q)", provider, model, config.ProviderOpenAI, openAIRealtimeModel)
-			}
-			recordingDialer.inner = inner
-			return recordingDialer
-		},
 		newOpenAISessionWithTools: func(cfg config.OpenAIConfig, _ string, dialer transport.Dialer, _ []messages.ToolDefinition, _ models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
 			gotConfig = cfg
 			gotDialer = dialer
@@ -287,13 +279,13 @@ func TestPlanSessionRuntime_RecordDefaultProviderFallsBackToOpenAI(t *testing.T)
 		},
 	}
 
-	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
+	plan, err := planSessionRuntimeWithFactory(withTestRecordingServices(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		RecordPath:   recordPath,
 		LoadedConfig: loaded,
 		APIKey:       "openai-default-key",
 		Prompt:       "answer after the audio turn",
 		AudioInputs:  []ScheduledAudioInput{{AfterCompletedTurns: 0, PCM: []byte{1, 2}, EndOfTurn: true}},
-	}, factory)
+	}), factory)
 	if err != nil {
 		t.Fatalf("plan record default runtime: %v", err)
 	}
@@ -306,32 +298,36 @@ func TestPlanSessionRuntime_RecordDefaultProviderFallsBackToOpenAI(t *testing.T)
 	if gotConfig.Model != openAIRealtimeModel || gotConfig.APIKey != "openai-default-key" {
 		t.Fatalf("record default provider config = %#v, want realtime OpenAI config", gotConfig)
 	}
-	if gotDialer != recordingDialer || recordingDialer.inner != liveDialer {
-		t.Fatalf("record default dialer chain = provider:%T inner:%T, want recording over live", gotDialer, recordingDialer.inner)
+	if _, ok := gotDialer.(runtimerecording.Writer); !ok {
+		t.Fatalf("record default inferencer received %T, want the public recording writer", gotDialer)
+	}
+	if err := plan.flushCapture(); err != nil {
+		t.Fatalf("flush default provider capture: %v", err)
+	}
+	capture, err := gwtesting.LoadSessionCapture(recordPath)
+	if err != nil {
+		t.Fatalf("load default provider capture: %v", err)
+	}
+	if capture.Provider.Name != config.ProviderOpenAI || capture.Provider.Model != openAIRealtimeModel {
+		t.Fatalf("record default capture provider = %#v", capture.Provider)
 	}
 }
 
 func TestPlanOpenAIRecordRuntimeDeviceInputDefaultsServerVAD(t *testing.T) {
-	liveDialer := &stubRuntimeDialer{id: "record-device-vad-live"}
-	recordingDialer := &browserRecordingDialer{}
 	inferencer := &turnDetectionRecordingInferencer{scriptedSessionInferencer: &scriptedSessionInferencer{}}
 	var transcription models.InputAudioTranscriptionConfig
 	factory := sessionRuntimeFactory{
-		newDefaultLiveDialer: func() transport.Dialer { return liveDialer },
-		newRecordingDialer: func(inner transport.Dialer, provider, model string) sessionRecordingDialer {
-			recordingDialer.inner, recordingDialer.provider, recordingDialer.model = inner, provider, model
-			return recordingDialer
-		},
+		newDefaultLiveDialer: defaultSessionRuntimeFactory.newDefaultLiveDialer,
 		newOpenAISessionWithTools: func(_ config.OpenAIConfig, _ string, _ transport.Dialer, _ []messages.ToolDefinition, policy models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
 			transcription = policy
 			return inferencer, nil
 		},
 	}
-	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
+	plan, err := planSessionRuntimeWithFactory(withTestRecordingServices(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		Provider: config.ProviderOpenAI, Model: openAIRealtimeModel, APIKey: "test-key",
-		RecordPath:       filepath.Join(t.TempDir(), "device-vad.session.json"),
-		RTCDeviceBinding: RTCDeviceBindingRequest{InputPresent: true, OutputPresent: true},
-	}, factory)
+		RecordPath: filepath.Join(t.TempDir(), "device-vad.session.json"),
+		RTCBinding: runtimedevices.RTCBindingRequest{InputPresent: true, OutputPresent: true},
+	}), factory)
 	if err != nil {
 		t.Fatalf("plan recorded device session: %v", err)
 	}
@@ -343,6 +339,12 @@ func TestPlanOpenAIRecordRuntimeDeviceInputDefaultsServerVAD(t *testing.T) {
 	}
 	if !transcription.Enabled || transcription.Model != models.DefaultInputAudioTranscriptionModel {
 		t.Fatalf("recorded device transcription = %#v, want enabled default", transcription)
+	}
+	if plan.flushCapture == nil {
+		t.Fatal("recorded device plan has no capture finalizer")
+	}
+	if err := plan.flushCapture(); err != nil {
+		t.Fatalf("flush recorded device capture: %v", err)
 	}
 }
 
@@ -368,18 +370,8 @@ func TestPlanSessionRuntime_BrowserToolsWithRecordingPreservesCaptureLifecycle(t
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			recordPath := filepath.Join(t.TempDir(), "browser-session.json")
-			liveDialer := &stubRuntimeDialer{id: testCase.name + "-live"}
-			recordingDialer := &browserRecordingDialer{provider: testCase.provider, model: testCase.model}
 			var gotDialer transport.Dialer
-			factory := sessionRuntimeFactory{
-				newDefaultLiveDialer: func() transport.Dialer { return liveDialer },
-				newRecordingDialer: func(inner transport.Dialer, provider, model string) sessionRecordingDialer {
-					recordingDialer.inner = inner
-					recordingDialer.provider = provider
-					recordingDialer.model = model
-					return recordingDialer
-				},
-			}
+			factory := newDefaultSessionRuntimeFactory()
 			loaded := &config.Config{Model: config.ModelConfig{Provider: testCase.provider}}
 			switch testCase.provider {
 			case config.ProviderGrok:
@@ -396,13 +388,13 @@ func TestPlanSessionRuntime_BrowserToolsWithRecordingPreservesCaptureLifecycle(t
 				}
 			}
 
-			plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
+			plan, err := planSessionRuntimeWithFactory(withTestRecordingServices(SessionRunOptions{ModelCatalog: testModelCatalog(),
 				RecordPath:          recordPath,
 				Provider:            testCase.provider,
 				BrowserToolsEnabled: true,
 				LoadedConfig:        loaded,
 				ToolDefinitions:     []messages.ToolDefinition{{Name: "browser_test"}},
-			}, factory)
+			}), factory)
 			if err != nil {
 				t.Fatalf("plan browser recording runtime: %v", err)
 			}
@@ -412,19 +404,13 @@ func TestPlanSessionRuntime_BrowserToolsWithRecordingPreservesCaptureLifecycle(t
 			if plan.capturePath != recordPath || plan.flushCapture == nil || plan.finalize == nil {
 				t.Fatalf("browser recording plan capture lifecycle = path:%q flush:%t finalize:%t", plan.capturePath, plan.flushCapture != nil, plan.finalize != nil)
 			}
-			if gotDialer != recordingDialer {
-				t.Fatalf("%s provider received %T, want recording dialer", testCase.provider, gotDialer)
-			}
-			if recordingDialer.inner != liveDialer {
-				t.Fatalf("%s recording dialer wrapped %T, want caller live dialer", testCase.provider, recordingDialer.inner)
+			if _, ok := gotDialer.(runtimerecording.Writer); !ok {
+				t.Fatalf("%s provider received %T, want the public recording writer", testCase.provider, gotDialer)
 			}
 
 			var out bytes.Buffer
 			if err := plan.run(context.Background(), &out); err != nil {
 				t.Fatalf("run browser recording plan: %v", err)
-			}
-			if recordingDialer.flushCalls != 1 || filepath.Dir(recordingDialer.path) != filepath.Dir(recordPath) || !strings.HasPrefix(filepath.Base(recordingDialer.path), "."+filepath.Base(recordPath)+".tmp-") {
-				t.Fatalf("%s recording flush = calls:%d path:%q, want one private same-directory temporary artifact for %q", testCase.provider, recordingDialer.flushCalls, recordingDialer.path, recordPath)
 			}
 			capture, err := gwtesting.LoadSessionCapture(recordPath)
 			if err != nil {
@@ -438,30 +424,4 @@ func TestPlanSessionRuntime_BrowserToolsWithRecordingPreservesCaptureLifecycle(t
 			}
 		})
 	}
-}
-
-type browserRecordingDialer struct {
-	inner      transport.Dialer
-	provider   string
-	model      string
-	path       string
-	flushCalls int
-}
-
-func (d *browserRecordingDialer) Dial(endpoint string, headers map[string]string) (transport.Conn, error) {
-	return d.inner.Dial(endpoint, headers)
-}
-
-func (d *browserRecordingDialer) FlushToFile(path string) error {
-	d.flushCalls++
-	d.path = path
-	data, err := json.Marshal(gwtesting.SessionCapture{
-		Version:  gwtesting.SessionCaptureVersion,
-		Provider: gwtesting.SessionProviderMetadata{Name: d.provider, Model: d.model},
-		Records:  []gwtesting.CapturedSessionEvent{},
-	})
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, data, 0o600)
 }

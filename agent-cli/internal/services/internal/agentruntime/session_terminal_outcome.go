@@ -259,12 +259,6 @@ func (r *sessionTerminalReporter) markDurationExpiryWithOutput(outputState messa
 	r.mu.Unlock()
 }
 
-func markSessionDurationExpiry(reporter *sessionTerminalReporter, planned bool, outputState messages.TerminalOutputState) {
-	if planned {
-		reporter.markDurationExpiryWithOutput(outputState)
-	}
-}
-
 func (r *sessionTerminalReporter) markReplayComplete() {
 	if r == nil {
 		return

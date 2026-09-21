@@ -31,7 +31,7 @@ func TestSessionCommandMaxDurationMatrixPreservesPartialArtifacts(t *testing.T) 
 			recordPath := filepath.Join(artifactRoot, "cutoff.json")
 			recordingDir := filepath.Join(artifactRoot, "recording")
 			inferencer := newCLIDurationInferencer(cliDurationPartialEvents())
-			root := newTestRootCommandWithProbeFleetCommand(NewProbeFleetCommand(nil, nil), inferencer)
+			root := newTestRootCommandWithProbeFleetCommand(NewProbeFleetCommand(nil, nil, newReplayRuntimeServiceForTest()), inferencer)
 			var stdout, stderr bytes.Buffer
 			root.SetOut(&stdout)
 			root.SetErr(&stderr)
@@ -71,7 +71,7 @@ func TestSessionCommandMaxDurationRejectsInvalidPartialArtifact(t *testing.T) {
 	artifactRoot := t.TempDir()
 	recordPath := filepath.Join(artifactRoot, "invalid.json")
 	recordingDir := filepath.Join(artifactRoot, "recording")
-	root := newTestRootCommandWithProbeFleetCommand(NewProbeFleetCommand(nil, nil), newCLIDurationInferencer(cliDurationInvalidAudioEvents()))
+	root := newTestRootCommandWithProbeFleetCommand(NewProbeFleetCommand(nil, nil, newReplayRuntimeServiceForTest()), newCLIDurationInferencer(cliDurationInvalidAudioEvents()))
 	var stdout, stderr bytes.Buffer
 	root.SetOut(&stdout)
 	root.SetErr(&stderr)

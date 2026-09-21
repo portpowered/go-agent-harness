@@ -1,15 +1,8 @@
 package agentruntime
 
 import (
-	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"image"
-	"image/png"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -17,7 +10,6 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/sight"
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 )
@@ -196,6 +188,7 @@ func TestRunAgentLoopSession_PageSightUsesOneSourceForSuccessiveQuestions(t *tes
 		scriptedTurn{events: toolCallEvents("literal-page-call", cliTools.PageSightToolID, `{}`), after: `"source":"browser_page"`},
 	)
 	if err := runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
+		audioService:    newTestAudioIOService(),
 		MaxDuration:     2 * time.Second,
 		WaitForClose:    true,
 		ToolExecutor:    capability.Executor,
@@ -211,75 +204,6 @@ func TestRunAgentLoopSession_PageSightUsesOneSourceForSuccessiveQuestions(t *tes
 	}
 	if !strings.Contains(out.String(), `"source":"browser_page"`) || !strings.Contains(out.String(), "page sight continuation") {
 		t.Fatalf("session output = %q, want page source and assistant continuation", out.String())
-	}
-}
-
-func TestSessionDirectoryRecordingPersistsScreenCaptureEvidence(t *testing.T) {
-	var pixels bytes.Buffer
-	if err := png.Encode(&pixels, image.NewRGBA(image.Rect(0, 0, 2, 1))); err != nil {
-		t.Fatalf("encode screen fixture: %v", err)
-	}
-	result, err := sight.NewSuccess(sight.SourceScreen, "image/png", pixels.Bytes(), 2, 1)
-	if err != nil {
-		t.Fatalf("create screen result: %v", err)
-	}
-	encoded, err := sight.Encode(result)
-	if err != nil {
-		t.Fatalf("encode screen result: %v", err)
-	}
-	imageBytes := append([]byte(nil), pixels.Bytes()...)
-	call := messages.ToolCall{ID: "screen-call-1", Name: "show", Arguments: `{"action":"screenshot"}`}
-	recording := newSessionDirectoryRecording(filepath.Join(t.TempDir(), "screen-recording"), sessionRuntimePlan{provider: sessionProviderOpenAI}, SessionRunOptions{ModelCatalog: testModelCatalog(), Model: "gpt-realtime"})
-	writeSyntheticRecordingTranscript(t, recording, "client", "agent")
-	recording.observeToolCall(call)
-	recording.observeToolResult(call, messages.ToolCallResponse{
-		ToolCallID: call.ID,
-		Name:       call.Name,
-		Content:    string(encoded),
-		ContentParts: []messages.ContentPart{
-			messages.TextPart{Text: string(encoded)},
-			messages.ImagePart{Bytes: imageBytes, MediaType: "image/png"},
-		},
-	}, false)
-	if err := recording.Finalize(); err != nil {
-		t.Fatalf("finalize screen recording: %v", err)
-	}
-
-	var manifest transcript.RecordingManifest
-	manifestBytes, err := os.ReadFile(filepath.Join(recording.destination, "manifest.json"))
-	if err != nil {
-		t.Fatalf("read manifest: %v", err)
-	}
-	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
-		t.Fatalf("decode manifest: %v", err)
-	}
-	digest := sha256.Sum256(imageBytes)
-	var screenshotPath string
-	for _, artifact := range manifest.Artifacts {
-		if strings.HasPrefix(artifact.Path, "screenshots/") {
-			screenshotPath = artifact.Path
-			if artifact.SHA256 != result.SHA256 || artifact.SHA256 != stringDigest(digest) {
-				t.Fatalf("screenshot manifest artifact = %+v, want capture digest", artifact)
-			}
-		}
-	}
-	if screenshotPath == "" {
-		t.Fatalf("manifest artifacts = %#v, want screenshot artifact", manifest.Artifacts)
-	}
-	stored, err := os.ReadFile(filepath.Join(recording.destination, filepath.FromSlash(screenshotPath)))
-	if err != nil {
-		t.Fatalf("read screenshot artifact: %v", err)
-	}
-	if !bytes.Equal(stored, imageBytes) {
-		t.Fatalf("stored screenshot bytes differ from the projected image")
-	}
-
-	logBytes, err := os.ReadFile(filepath.Join(recording.destination, "session-log.jsonl"))
-	if err != nil {
-		t.Fatalf("read session log: %v", err)
-	}
-	if !bytes.Contains(logBytes, []byte(`"image"`)) || !bytes.Contains(logBytes, []byte(screenshotPath)) || !bytes.Contains(logBytes, []byte(`"source":"screen"`)) {
-		t.Fatalf("session log = %s, want correlated screenshot evidence", logBytes)
 	}
 }
 
@@ -349,10 +273,6 @@ func (s *sessionSightDisplaySurface) Bounds(context.Context, int) (image.Rectang
 func (s *sessionSightDisplaySurface) Capture(context.Context, image.Rectangle) (*image.RGBA, error) {
 	s.captures++
 	return s.frame, nil
-}
-
-func stringDigest(digest [sha256.Size]byte) string {
-	return hex.EncodeToString(digest[:])
 }
 
 func screenOnlyToolSelections() []runtimeTools.ToolSelection {

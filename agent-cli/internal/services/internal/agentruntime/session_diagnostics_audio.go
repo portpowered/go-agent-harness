@@ -7,6 +7,10 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
+	runtimerecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
+	runtimesession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 // account is the single observation seam: every counted byte crosses here
@@ -133,6 +137,28 @@ func (o *sessionProgressObserver) sendScheduledAudioInput(ctx context.Context, l
 		}
 		o.armProviderProgress()
 	}
+	if o.liveRecorder != nil {
+		samples, decodeErr := codec.DecodePCM16(input.PCM)
+		if decodeErr == nil {
+			frame := audio.PCMFrame{Samples: samples}
+			if o.inputAudioRate > 0 {
+				frame.Format = audio.PCM16DeviceFormat(o.inputAudioRate)
+			}
+			_ = o.liveRecorder.ObserveAudio(ctx, runtimerecording.LiveAudioObservation{
+				Direction: runtimesession.LiveRecordClient,
+				Admission: runtimesession.LiveAudioQueueAdmitted,
+				Frame:     frame,
+			})
+			if input.EndOfTurn {
+				frame = audio.PCMFrame{EndOfResponse: true, Format: frame.Format}
+				_ = o.liveRecorder.ObserveAudio(ctx, runtimerecording.LiveAudioObservation{
+					Direction: runtimesession.LiveRecordClient,
+					Admission: runtimesession.LiveAudioQueueAdmitted,
+					Frame:     frame,
+				})
+			}
+		}
+	}
 	o.lifecycleProjectionMu.Lock()
 	if !o.scheduledTurnBaseSet {
 		o.scheduledTurnBase = o.turnsCompleted
@@ -144,6 +170,16 @@ func (o *sessionProgressObserver) sendScheduledAudioInput(ctx context.Context, l
 	o.lifecycleProjectionMu.Unlock()
 	o.account(metrics.DirectionInput, metrics.ModalityAudio, len(input.PCM))
 	return nil
+}
+
+func (o *sessionProgressObserver) scheduleAudioInputs(inputs []ScheduledAudioInput) {
+	if o == nil {
+		return
+	}
+	o.lifecycleProjectionMu.Lock()
+	defer o.lifecycleProjectionMu.Unlock()
+	o.pendingInputs = append(o.pendingInputs, inputs...)
+	o.scheduledInputs += len(inputs)
 }
 
 func (o *sessionProgressObserver) scheduledAudioInputDueLocked(input ScheduledAudioInput) bool {

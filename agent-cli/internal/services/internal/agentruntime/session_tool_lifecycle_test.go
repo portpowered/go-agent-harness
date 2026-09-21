@@ -429,9 +429,6 @@ func TestSessionProgressObserverContinuationRequiresSuccessfulObservableOutput(t
 			if got := shouldStopSessionLoop(terminalMessage, sessionLoopOptions{observer: observer, WaitForClose: true}); got != tc.wantError {
 				t.Fatalf("wait-for-close stop = %v, want %v", got, tc.wantError)
 			}
-			if got := shouldStopAudioInputSessionLoop(terminalMessage, sessionLoopOptions{observer: observer, WaitForClose: true}, false, true); got != tc.wantError {
-				t.Fatalf("audio wait-for-close stop = %v, want %v", got, tc.wantError)
-			}
 			err := observer.finish(nil)
 			if tc.wantError {
 				if err == nil {

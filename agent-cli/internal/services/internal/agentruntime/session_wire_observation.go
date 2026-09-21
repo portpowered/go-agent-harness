@@ -2,6 +2,9 @@ package agentruntime
 
 import (
 	"encoding/json"
+
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
@@ -31,4 +34,16 @@ func observeSessionWire(inner transport.Dialer, opts SessionRunOptions) transpor
 		}
 		runtime.observe("provider_wire_"+SessionRuntimeObservationKind(event.Direction), payload, 0, event.Err == nil, event.Err)
 	}}
+}
+
+func rtcMediaFromSession(session messages.Session) (audio.MediaEndpoints, bool) {
+	if owner, ok := session.(audio.MediaSession); ok {
+		return owner.RTCMedia(), true
+	}
+	if owner, ok := session.(interface {
+		RTCMedia() (audio.MediaEndpoints, bool)
+	}); ok {
+		return owner.RTCMedia()
+	}
+	return audio.MediaEndpoints{}, false
 }

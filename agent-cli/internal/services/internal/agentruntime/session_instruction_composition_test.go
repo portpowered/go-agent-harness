@@ -10,6 +10,8 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	recordingwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/wire"
+	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 )
 
@@ -32,8 +34,10 @@ func TestLivePlannerFamiliesUseOneGroundingComposition(t *testing.T) {
 		},
 		{
 			name: "recording directory",
-			build: func(_ *testing.T, opts SessionRunOptions) (sessionRuntimePlan, func(), error) {
-				return planSessionForDirectoryRecordingWithInstructions(opts, "customer instructions", true)
+			build: func(t *testing.T, opts SessionRunOptions) (sessionRuntimePlan, func(), error) {
+				opts.RecordDirectory = filepath.Join(t.TempDir(), "session-evidence")
+				plan, err := planSessionWithResolvedInstructions(opts, "customer instructions")
+				return plan, func() {}, err
 			},
 		},
 		{
@@ -60,14 +64,16 @@ func TestLivePlannerFamiliesUseOneGroundingComposition(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			configDir := t.TempDir()
 			writeSessionConfigFile(t, configDir, "model:\n  provider: openai\n")
-			opts := SessionRunOptions{ModelCatalog: testModelCatalog(),
-				RecordPath:      filepath.Join(t.TempDir(), "session.json"),
-				Provider:        config.ProviderOpenAI,
-				Model:           openAIRealtimeDefaultModel,
-				APIKey:          "test-key",
-				ConfigDir:       configDir,
-				ToolExecutor:    &messages.DefaultToolExecutor{},
-				ToolDefinitions: append([]messages.ToolDefinition(nil), toolDefinitions...),
+			opts := SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+				RecordPath:             filepath.Join(t.TempDir(), "session.json"),
+				Provider:               config.ProviderOpenAI,
+				Model:                  openAIRealtimeDefaultModel,
+				APIKey:                 "test-key",
+				ConfigDir:              configDir,
+				recordingService:       recordingwire.NewService(platformclock.Real{}),
+				providerCaptureService: recordingwire.NewProviderCaptureService(platformclock.Real{}),
+				ToolExecutor:           &messages.DefaultToolExecutor{},
+				ToolDefinitions:        append([]messages.ToolDefinition(nil), toolDefinitions...),
 			}
 
 			plan, cleanup, err := test.build(t, opts)
@@ -117,15 +123,17 @@ func TestIndependentSessionCompositionsProduceIdenticalInstructionsAndProviderUp
 			configDir := t.TempDir()
 			writeSessionConfigFile(t, configDir, "model:\n  provider: openai\n")
 			conn := &replayHandshakeRecordingConn{}
-			opts := SessionRunOptions{ModelCatalog: testModelCatalog(),
-				RecordPath:      filepath.Join(t.TempDir(), "session.json"),
-				Provider:        config.ProviderOpenAI,
-				Model:           openAIRealtimeDefaultModel,
-				APIKey:          "test-key",
-				ConfigDir:       configDir,
-				ToolExecutor:    &messages.DefaultToolExecutor{},
-				ToolDefinitions: definitions,
-				WebSocketDialer: &replayHandshakeRecordingDialer{conn: conn},
+			opts := SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+				RecordPath:             filepath.Join(t.TempDir(), "session.json"),
+				Provider:               config.ProviderOpenAI,
+				Model:                  openAIRealtimeDefaultModel,
+				APIKey:                 "test-key",
+				ConfigDir:              configDir,
+				recordingService:       recordingwire.NewService(platformclock.Real{}),
+				providerCaptureService: recordingwire.NewProviderCaptureService(platformclock.Real{}),
+				ToolExecutor:           &messages.DefaultToolExecutor{},
+				ToolDefinitions:        definitions,
+				WebSocketDialer:        &replayHandshakeRecordingDialer{conn: conn},
 			}
 
 			plan, err := planSessionWithResolvedInstructions(opts, "customer instructions")
@@ -265,12 +273,15 @@ func TestProviderInitialInstructionsCarryConnectedUnselectedBrowserContract(t *t
 	configDir := t.TempDir()
 	writeSessionConfigFile(t, configDir, "model:\n  provider: openai\n")
 	opts := SessionRunOptions{ModelCatalog: testModelCatalog(),
-		RecordPath:   filepath.Join(t.TempDir(), "session.json"),
-		Provider:     config.ProviderOpenAI,
-		Model:        openAIRealtimeDefaultModel,
-		APIKey:       "test-key",
-		ConfigDir:    configDir,
-		ToolExecutor: &messages.DefaultToolExecutor{},
+		AudioService:           newTestAudioIOService(),
+		RecordPath:             filepath.Join(t.TempDir(), "session.json"),
+		Provider:               config.ProviderOpenAI,
+		Model:                  openAIRealtimeDefaultModel,
+		APIKey:                 "test-key",
+		ConfigDir:              configDir,
+		recordingService:       recordingwire.NewService(platformclock.Real{}),
+		providerCaptureService: recordingwire.NewProviderCaptureService(platformclock.Real{}),
+		ToolExecutor:           &messages.DefaultToolExecutor{},
 		ToolDefinitions: []messages.ToolDefinition{
 			{Name: webmcp.ListTabsToolName},
 			{Name: webmcp.SelectTabToolName},

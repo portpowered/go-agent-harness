@@ -216,7 +216,6 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		o.noteProviderUsage(v.Usage)
 		o.setAssistantResponseDone(false)
 		outputPresent := o.responseHasAdmissibleOutput()
-		toolObligation := o.responseHasToolLifecycleObligation()
 		candidate := false
 		if !acknowledgementResponse {
 			candidate = o.observeProviderMessageEndForResponse(msg.Role, v, responseLifecycleID, outputPresent)
@@ -249,19 +248,29 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 			o.noteScheduledResponseDisposition(responseLifecycleID, scheduledAudioResponseCancelled)
 		}
 		o.finishObservedResponse(responseLifecycleID)
-		if !acknowledgementResponse {
-			o.observeSilentProviderEmptyResponse(msg, v, outputPresent, toolObligation)
-		}
-		o.disarmProviderProgress()
 	case *messages.ErrorValue:
 		o.captureFailureFromError(v)
-		if v != nil && v.IsTerminal() {
-			o.disarmProviderProgress()
-		}
 	case *messages.SessionCloseValue:
 		o.captureFailureFromClose(v)
-		o.disarmProviderProgress()
 	}
+}
+
+// responseHasToolLifecycleObligation snapshots the current response's tool
+// state before MESSAGE.END processing clears toolCallInTurn. A pending result
+// or continuation owns the terminal boundary and must not be diagnosed as an
+// empty provider response.
+func (o *sessionProgressObserver) responseHasToolLifecycleObligation() bool {
+	if o == nil {
+		return false
+	}
+	o.toolStateMu.Lock()
+	toolCallInTurn := o.toolCallInTurn
+	unresolved := len(o.unresolvedToolCalls)
+	o.toolStateMu.Unlock()
+	if toolCallInTurn || unresolved > 0 {
+		return true
+	}
+	return o.hasPendingToolContinuations()
 }
 
 func (o *sessionProgressObserver) observeProviderBoundary(msg messages.StreamMessage) {
@@ -321,7 +330,7 @@ func messageEndCanAdmit(value *messages.MessageEndValue) bool {
 	if value == nil {
 		return false
 	}
-	status := normalizeTerminalStatus(value.Status)
+	status := strings.ToLower(strings.TrimSpace(value.Status))
 	if status != "" && status != "completed" {
 		return false
 	}

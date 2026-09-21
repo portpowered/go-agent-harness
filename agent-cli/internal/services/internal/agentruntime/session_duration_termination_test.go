@@ -1,12 +1,9 @@
 package agentruntime
 
-import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-
 import (
 	"bytes"
 	"context"
 	"errors"
-	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
 	"io"
 	"strings"
 	"sync"
@@ -16,10 +13,39 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	duration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 const durationTerminalDrainAcceptedOutput = "accepted duration terminal delta"
+
+const (
+	rateLimitRetryCode         = "rate_limit_exceeded"
+	defaultRateLimitRetryDelay = 2 * time.Second
+	maxRateLimitRetryDelay     = 15 * time.Second
+)
+
+func rateLimitRetryDecision(terminal *messages.MessageEndValue) (time.Duration, bool) {
+	decision := durationwire.NewService().EvaluateRetry(duration.RetryPolicy{Enabled: true}, terminal)
+	return decision.Delay, decision.Eligible
+}
+
+func providerTerminalErrorCode(terminal *messages.MessageEndValue) string {
+	if terminal == nil {
+		return ""
+	}
+	if code := strings.TrimSpace(terminal.ProviderErrorCode); code != "" {
+		return code
+	}
+	for _, part := range strings.Split(terminal.StatusDetails, ",") {
+		key, value, ok := strings.Cut(part, "=")
+		if ok && strings.EqualFold(strings.TrimSpace(key), "code") {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
 
 type durationTerminalDrainFixture struct {
 	ctx    context.Context
@@ -284,27 +310,11 @@ func TestRunAgentLoopSessionWithDurationTerminalOutcomesAlwaysDrainAcceptedDelta
 		{
 			name: "RTC pump failure",
 			setup: func(f *durationTerminalDrainFixture) func() {
-				registry, err := devicegw.NewVirtualRegistry(devicegw.DefaultVirtualBackendConfig())
-				if err != nil {
-					t.Fatalf("new virtual registry: %v", err)
-				}
-				source, err := devicert.NewRTCDeviceSource(registry, "virtual:input")
-				if err != nil {
-					t.Fatalf("open RTC source: %v", err)
-				}
-				feed, err := devicegw.NewDeviceSink(registry, "virtual:output")
-				if err != nil {
-					_ = source.Close()
-					t.Fatalf("open RTC feed: %v", err)
-				}
-				f.cleanup = append(f.cleanup, func() { _ = feed.Close() })
-				f.options.rtcDeviceBinding = &RTCDeviceBinding{Source: source}
-				f.inferencer.session.media.Outbound = &durationTerminalDrainFailingOutbound{err: pumpErr}
+				deviceErrors := make(chan error, 1)
+				f.options.rtcDeviceBinding = &testRTCBinding{errors: deviceErrors}
 				return func() {
 					f.acceptedOutput()
-					if err := feed.WriteFrame(context.Background(), make([]int16, audio.FrameSize)); err != nil {
-						t.Errorf("write RTC trigger frame: %v", err)
-					}
+					deviceErrors <- pumpErr
 				}
 			},
 			wantErr: pumpErr,
@@ -524,14 +534,6 @@ func (s *durationTerminalDrainSession) end() {
 }
 
 func (s *durationTerminalDrainSession) RTCMedia() audio.MediaEndpoints { return s.media }
-
-type durationTerminalDrainFailingOutbound struct{ err error }
-
-func (m *durationTerminalDrainFailingOutbound) WriteFrame(context.Context, audio.PCMFrame) error {
-	return m.err
-}
-
-func (*durationTerminalDrainFailingOutbound) Close() error { return nil }
 
 type durationTerminalDrainFailingWriter struct {
 	target    io.Writer

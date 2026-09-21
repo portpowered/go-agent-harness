@@ -11,6 +11,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
+	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
 	llmproviders "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
@@ -29,19 +30,26 @@ type Service struct {
 	clock           clock.TimerSource
 	recording       recording.Service
 	providerCapture recording.ProviderCaptureService
+	replay          runtimeReplay.Service
 	catalog         providers.ModelCatalog
 }
 
 // New constructs an inert provider service. It does not dial or validate
 // credentials; Build performs those operations when a request is admitted.
 func New(httpClient *http.Client, logger logging.Logger, source clock.TimerSource, captures recording.Service, modelCatalog providers.ModelCatalog, providerCapture recording.ProviderCaptureService) *Service {
+	return NewWithReplay(httpClient, logger, source, captures, modelCatalog, providerCapture, nil)
+}
+
+// NewWithReplay constructs the provider service with the replay contract used
+// for captured session admission and transport preparation.
+func NewWithReplay(httpClient *http.Client, logger logging.Logger, source clock.TimerSource, captures recording.Service, modelCatalog providers.ModelCatalog, providerCapture recording.ProviderCaptureService, replayService runtimeReplay.Service) *Service {
 	if logger == nil {
 		logger = logging.DummyLogger()
 	}
 	if source == nil {
 		source = clock.Real{}
 	}
-	return &Service{httpClient: httpClient, logger: logger, clock: source, recording: captures, providerCapture: providerCapture, catalog: modelCatalog}
+	return &Service{httpClient: httpClient, logger: logger, clock: source, recording: captures, providerCapture: providerCapture, replay: replayService, catalog: modelCatalog}
 }
 
 func (s *Service) Build(ctx context.Context, cfg providers.Config) (llmproviders.Provider, error) {

@@ -1,12 +1,211 @@
 package agentruntime
 
 import (
+	"context"
 	"errors"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimerecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
+	sessionduration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+	sessiondurationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
 	terminalwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
+	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
+
+const (
+	SessionSilentProviderEmptyResponseClassification = "silent_provider_empty_response"
+	SessionSilentProviderTimeoutClassification       = "silent_provider_timeout"
+	sessionProviderLivenessTimeout                   = 10 * time.Second
+)
+
+const (
+	ErrSilentProviderEmptyResponse = sessionduration.ErrProviderEmptyResponse
+	ErrSilentProviderTimeout       = sessionduration.ErrProviderLivenessTimeout
+)
+
+func sessionLivenessClockFromSource(source platformclock.Source) sessionduration.TimerScheduler {
+	source = platformclock.Ensure(source)
+	timerSource, ok := source.(platformclock.TimerSource)
+	if !ok {
+		return nil
+	}
+	return timerSource
+}
+
+func sessionLivenessMetadata(err error) (classification string, terminalReason messages.TerminalReason, provenance messages.TerminalProvenance, outputState messages.TerminalOutputState) {
+	var livenessErr *sessionduration.LivenessError
+	if !errors.As(err, &livenessErr) || livenessErr == nil {
+		return "", "", "", ""
+	}
+	return livenessErr.Classification, livenessErr.TerminalReason, livenessErr.TerminalProvenance, livenessErr.OutputState
+}
+
+func (o *sessionProgressObserver) ensureLivenessController(clock sessionduration.TimerScheduler) {
+	if o == nil || o.livenessOwnedByDurationService || o.livenessController != nil || clock == nil {
+		return
+	}
+	controller, err := sessiondurationwire.NewService().Begin(sessionduration.Options{
+		Context: context.Background(),
+		Clock:   clock,
+		Liveness: sessionduration.LivenessOptions{
+			Enabled: true,
+			Timeout: sessionProviderLivenessTimeout,
+		},
+		FirstCause: o.recordLivenessFailure,
+	})
+	if err == nil {
+		o.livenessController = controller
+	}
+}
+
+func (o *sessionProgressObserver) recordLivenessFailure(err error) {
+	if o == nil || err == nil {
+		return
+	}
+	classification, reason, provenance, output := sessionLivenessMetadata(err)
+	facts := &failureFacts{
+		classification: classification,
+		terminalReason: string(reason),
+		provenance:     string(provenance),
+		outputState:    string(output),
+		failingEvent:   failingEventRun,
+	}
+	if classification == SessionSilentProviderEmptyResponseClassification {
+		facts.failingEvent = string(messages.StreamTypeMessageEnd)
+	}
+	o.failureMu.Lock()
+	if o.failure == nil {
+		o.failure = facts
+	}
+	callback := o.livenessObserver
+	o.failureMu.Unlock()
+	if callback != nil {
+		callback(err)
+	}
+	select {
+	case o.livenessErrors <- err:
+	default:
+	}
+}
+
+func (o *sessionProgressObserver) livenessFailure() error {
+	if o == nil {
+		return nil
+	}
+	if o.durationController != nil {
+		return o.durationController.LivenessFailure()
+	}
+	if o.livenessController == nil {
+		return nil
+	}
+	return o.livenessController.LivenessFailure()
+}
+
+func (o *sessionProgressObserver) setDurationController(controller sessionduration.Controller) {
+	if o == nil {
+		return
+	}
+	o.durationController = controller
+	o.livenessOwnedByDurationService = controller != nil
+}
+
+func (o *sessionProgressObserver) setLivenessClock(clock sessionduration.TimerScheduler) {
+	if o == nil {
+		return
+	}
+	if clock == nil {
+		clock = platformclock.Real{}
+	}
+	o.ensureLivenessController(clock)
+}
+
+func (o *sessionProgressObserver) armProviderProgress() {
+	if o == nil {
+		return
+	}
+	o.ensureLivenessController(platformclock.Real{})
+	if o.livenessController != nil {
+		o.livenessController.Observe(messages.StreamMessage{Type: messages.StreamTypeResponseCreate})
+	}
+}
+
+func (o *sessionProgressObserver) beginLocalToolExecution() {
+	if o == nil {
+		return
+	}
+	if o.durationController != nil {
+		o.durationController.BeginLocalToolExecution()
+		return
+	}
+	o.ensureLivenessController(platformclock.Real{})
+	if o.livenessController != nil {
+		o.livenessController.BeginLocalToolExecution()
+	}
+}
+
+func (o *sessionProgressObserver) endLocalToolExecution() {
+	if o != nil && o.durationController != nil {
+		o.durationController.EndLocalToolExecution()
+		return
+	}
+	if o != nil && o.livenessController != nil {
+		o.livenessController.EndLocalToolExecution()
+	}
+}
+
+func (o *sessionProgressObserver) stopLiveness() {
+	if o == nil || o.durationController != nil || o.livenessController == nil {
+		return
+	}
+	if _, err := o.livenessController.Finalize(context.Background(), sessionduration.FinalizeRequest{}); err != nil {
+		o.recordLivenessFailure(err)
+	}
+}
+
+func (o *sessionProgressObserver) observeProviderEvent(msg messages.StreamMessage) {
+	if o == nil || msg.Role == messages.RoleTool {
+		return
+	}
+	o.ensureLivenessController(platformclock.Real{})
+	if o.livenessController != nil {
+		if msg.Type == messages.StreamTypeMessageEnd {
+			o.livenessController.SetToolObligation(o.responseHasToolLifecycleObligation())
+		}
+		o.livenessController.Observe(msg)
+	}
+}
+
+func (o *sessionProgressObserver) observeProviderDispatch(msg messages.StreamMessage) {
+	if o == nil || msg.ResponsePurpose == messages.ResponsePurposeToolAcknowledgement {
+		return
+	}
+	o.ensureLivenessController(platformclock.Real{})
+	if o.livenessController != nil {
+		o.livenessController.Observe(msg)
+	}
+}
+
+func applyRoomParticipantTerminalMetadata(result *RoomParticipantResult, lifecycle *roomParticipantLifecycle, err error) {
+	if result == nil {
+		return
+	}
+	classification, terminalReason, provenance, outputState := "", messages.TerminalReason(""), messages.TerminalProvenance(""), messages.TerminalOutputState("")
+	if lifecycle != nil {
+		classification, terminalReason, provenance, outputState = lifecycle.terminalMetadata()
+	}
+	if classification == "" {
+		classification, terminalReason, provenance, outputState = sessionLivenessMetadata(err)
+	}
+	if classification == "" {
+		return
+	}
+	result.Classification = classification
+	result.TerminalReason = string(terminalReason)
+	result.TerminalProvenance = string(provenance)
+	result.OutputState = string(outputState)
+}
 
 func terminalService() sessionterminal.Service { return terminalwire.NewService() }
 
@@ -100,7 +299,7 @@ func (o *sessionProgressObserver) finish(err error) error {
 	if livenessErr := o.livenessFailure(); livenessErr != nil && !errors.Is(err, livenessErr) {
 		err = errors.Join(livenessErr, err)
 	}
-	if sessionSIGINTCleanForObserver(err, o.cancellationIntent, o) {
+	if observerCancellationIsClean(err, o.cancellationIntent, o) {
 		o.userCancelled = true
 		o.clearFailure()
 		err = nil
@@ -116,6 +315,13 @@ func (o *sessionProgressObserver) finish(err error) error {
 	o.notifyFinalTerminalObservation(err)
 	o.emitTerminal(err)
 	o.emitMetricsMatrix()
+	if o.liveRecorder != nil {
+		_ = o.liveRecorder.SetCompletion(context.Background(), runtimerecording.LiveCompletion{
+			RunError: err, UserCancelled: o.userCancelled,
+			RoomCancellationOnly: roomCancellationOnly(err),
+			SawSessionOpen:       o.sawSessionOpen, TurnsCompleted: o.turnsCompleted,
+		})
+	}
 	if o.runtime != nil {
 		o.runtime.terminalWithAccounting(o.turnsCompleted, err, o.finalAccounting())
 	}

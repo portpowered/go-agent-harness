@@ -9,10 +9,16 @@ package devices
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
+	"net"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
+	selfhearing "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/selfhearing"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -28,7 +34,40 @@ var (
 	// drain already-admitted lifecycle messages before it tears down for this
 	// class of playback error.
 	ErrPlaybackInput = errors.New("provider playback input failed")
+	// ErrInvalidRemoteEndpoint identifies a malformed or non-loopback device
+	// server selector without exposing gateway implementation errors.
+	ErrInvalidRemoteEndpoint = errors.New("invalid remote audio-device server endpoint")
 )
+
+// RemoteEndpoint is the opaque endpoint selector accepted by the device
+// service. Validate performs its side-effect-free admission check before a
+// host opens replay captures or media ports.
+type RemoteEndpoint string
+
+func (endpoint RemoteEndpoint) Validate() error {
+	value := strings.TrimSpace(string(endpoint))
+	if value == "" {
+		return nil
+	}
+	if strings.Contains(value, "://") {
+		return fmt.Errorf("%w: want loopback host:port", ErrInvalidRemoteEndpoint)
+	}
+	host, port, err := net.SplitHostPort(value)
+	if err != nil || port == "" {
+		return fmt.Errorf("%w: want loopback host:port, got %q", ErrInvalidRemoteEndpoint, value)
+	}
+	portNumber, err := strconv.Atoi(port)
+	if err != nil || portNumber <= 0 || portNumber > 65535 {
+		return fmt.Errorf("%w: port %q is invalid", ErrInvalidRemoteEndpoint, port)
+	}
+	if host != "localhost" {
+		ip := net.ParseIP(host)
+		if ip == nil || !ip.IsLoopback() {
+			return fmt.Errorf("%w: host %q is not loopback", ErrInvalidRemoteEndpoint, host)
+		}
+	}
+	return nil
+}
 
 // Request is the normalized device admission input for one invocation. IDs
 // remain opaque strings at this boundary; the host or device implementation
@@ -147,10 +186,103 @@ type Handle interface {
 	Close() error
 }
 
+// DeviceSelectionProvider optionally reports the concrete devices admitted
+// for a media handle. The result contains only opaque IDs; registry and
+// opened-device objects remain private to the service implementation.
+type DeviceSelectionProvider interface {
+	SelectedDeviceIDs() (input, output string)
+}
+
+// PlaybackStatsProvider optionally exposes the service-owned local playback
+// queue observation used by host diagnostics after a handle is closed.
+type PlaybackStatsProvider interface {
+	PlaybackStats() (deviceID string, stats audio.PlaybackQueueStats)
+}
+
 // Service admits device workers for one normalized request. Construction is
 // inert; registry access and worker startup happen only in Open.
 type Service interface {
 	Open(context.Context, Request) (Handle, error)
+	BindRTC(context.Context, RTCBindingRequest) (RTCBinding, error)
+}
+
+// RTCBindingRequest is the normalized, host-neutral RTC device request. The
+// service owns the registry and all device lifecycle decisions; callers pass
+// only selectors, negotiated rates and observation hooks.
+type RTCBindingRequest struct {
+	Inferencer                 messages.SessionInferencer
+	RemoteEndpoint             string
+	InputDevice                string
+	OutputDevice               string
+	InputPresent               bool
+	OutputPresent              bool
+	SelfHearingConfig          selfhearing.PCM16SelfHearingConfig
+	FeedbackWarningWriter      io.Writer
+	BypassSelfHearing          bool
+	InputSampleRate            int
+	OutputSampleRate           int
+	OutputVoice                string
+	HoldToneConfig             *audio.HoldToneConfig
+	PlaybackObserver           PlaybackObserver
+	PlaybackReceiptObserver    PlaybackReceiptObserver
+	PlaybackSamplesObserver    PlaybackSamplesObserver
+	PreGateSamplesObserver     CaptureSamplesObserver
+	UploadedSamplesObserver    CaptureSamplesObserver
+	RenderedSamplesObserver    RenderedSamplesObserver
+	RenderedSamplesUnavailable func()
+	CaptureObserver            CaptureObserver
+}
+
+// PlaybackObserver receives the final playback queue snapshot at device
+// teardown. Device identifiers remain opaque strings at this boundary.
+type PlaybackObserver func(deviceID string, stats audio.PlaybackQueueStats)
+
+// PlaybackReceiptObserver receives each applied or rejected playback control.
+type PlaybackReceiptObserver func(audio.PlaybackReceipt)
+
+// PlaybackSamplesObserver observes accepted PCM at the service playback edge.
+type PlaybackSamplesObserver func(context.Context, int, []int16) error
+
+// CaptureSamplesObserver observes owned PCM at a service capture edge.
+type CaptureSamplesObserver func(sampleRate int, samples []int16)
+
+// CaptureObserver receives the final capture queue snapshot at teardown.
+type CaptureObserver func(deviceID string, stats audio.CaptureQueueStats)
+
+// RenderedSamplesObserver observes PCM rendered by a local playback device.
+type RenderedSamplesObserver func(sampleRate int, samples []int16)
+
+// HasInput reports whether this request selects an input direction. An empty
+// device ID still selects the registry default when InputPresent is set.
+func (request RTCBindingRequest) HasInput() bool {
+	return request.InputPresent || request.InputDevice != ""
+}
+
+// HasOutput reports whether this request selects an output direction. An
+// empty device ID still selects the registry default when OutputPresent is set.
+func (request RTCBindingRequest) HasOutput() bool {
+	return request.OutputPresent || request.OutputDevice != ""
+}
+
+// HasDevices reports whether either media direction is selected.
+func (request RTCBindingRequest) HasDevices() bool {
+	return request.HasInput() || request.HasOutput()
+}
+
+// RTCBinding owns selected local devices and the provider-facing session
+// decorator. Its public surface intentionally exposes no concrete device or
+// mutable runtime state.
+type RTCBinding interface {
+	Inferencer() messages.SessionInferencer
+	Errors() <-chan error
+	Close() error
+}
+
+// RTCBindingDeviceSelection reports the concrete IDs acquired for enabled
+// directions. It is optional so the lifecycle contract remains usable by
+// bindings that do not expose registry metadata.
+type RTCBindingDeviceSelection interface {
+	SelectedDeviceIDs() (input, output string)
 }
 
 // ProbeRequest is the transport-neutral configuration for a live device

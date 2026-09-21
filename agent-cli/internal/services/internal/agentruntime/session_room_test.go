@@ -339,7 +339,7 @@ func TestRunRoom_DeliversPeerPCMToEachProviderSession(t *testing.T) {
 		if !ok {
 			t.Fatalf("%s missing provider factory options", id)
 		}
-		if binding := factoryOptions.RTCDeviceBinding; binding.Registry != nil || binding.InputDevice != "" || binding.OutputDevice != "" || binding.InputPresent || binding.OutputPresent || binding.BypassSelfHearing {
+		if binding := factoryOptions.RTCBinding; binding.InputDevice != "" || binding.OutputDevice != "" || binding.InputPresent || binding.OutputPresent || binding.BypassSelfHearing {
 			t.Fatalf("%s room provider received local-device feedback binding = %+v, want room-owned peer ingress without local policy", id, binding)
 		}
 
@@ -1238,6 +1238,7 @@ func newRoomTestRunOptions(ids []string, inferencers map[string]*roomTestInferen
 		credentials["ROOM_"+strings.ToUpper(id)+"_KEY"] = "secret-" + id
 	}
 	opts := RoomRunOptions{
+		AudioService: newTestAudioIOService(),
 		Manifest: room.Manifest{
 			SchemaVersion: room.SchemaVersion,
 			Room:          room.Room{MaxDuration: 5 * time.Second},

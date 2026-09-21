@@ -20,7 +20,9 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/input"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 var (
@@ -119,14 +121,12 @@ func RunSessionWithImages(ctx context.Context, out io.Writer, opts SessionImageR
 	if err := sessioncontract.ValidateSessionMaxDuration(opts.MaxDuration); err != nil {
 		return err
 	}
+	if opts.AudioOutPath != "" {
+		return ErrLegacyAudioRuntimeRetired
+	}
 	if err := validateSessionRunOptions(opts.SessionRunOptions); err != nil {
 		return err
 	}
-	claim, err := ensureSessionRecordingClaim(&opts.SessionRunOptions)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = claim.release() }()
 	metadata, err := resolveSessionImageCapabilities(opts.SessionRunOptions)
 	if err != nil {
 		return err
@@ -139,9 +139,6 @@ func RunSessionWithImages(ctx context.Context, out io.Writer, opts SessionImageR
 	if opts.TextSeed.Present {
 		opts.SessionRunOptions.Prompt = opts.TextSeed.Value
 		opts.SessionRunOptions.PromptProvided = true
-	}
-	if opts.AudioOutPath != "" {
-		opts.SessionRunOptions.AudioOutputRequested = true
 	}
 	var imageCleanup func()
 	opts.SessionRunOptions, imageCleanup, err = prepareSessionImageToolAccess(opts.SessionRunOptions, paths, parts)
@@ -153,89 +150,6 @@ func RunSessionWithImages(ctx context.Context, out io.Writer, opts SessionImageR
 	if err != nil {
 		return err
 	}
-	return runSessionImagePlan(ctx, out, plan, opts, wirePrompt)
-}
-
-// RunSessionWithImagesAndAudioInput composes the ordinary image session path
-// with the production file/stdin audio source. The image item is queued
-// without a response request; the finite audio source owns the single
-// end-of-turn commit and response boundary.
-func RunSessionWithImagesAndAudioInput(ctx context.Context, out io.Writer, opts SessionImageRunOptions, input SessionAudioInput) (runErr error) {
-	var coordinator SessionCapabilityCoordinator
-	opts.SessionRunOptions, coordinator = prepareSessionCapabilityCoordinator(opts.SessionRunOptions)
-	defer func() {
-		closeSessionCapabilityIfNeeded(coordinator, &runErr)
-	}()
-
-	if !sessionAudioInputSelected(input) {
-		return RunSessionWithImages(ctx, out, opts)
-	}
-	paths := append([]string(nil), opts.ImagePaths...)
-	if len(paths) == 0 {
-		return RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(ctx, out, opts.SessionRunOptions, opts.AudioOutPath, opts.MaxDuration, opts.TextSeed, input, opts.SystemPrompt)
-	}
-	if err := sessioncontract.ValidateSessionMaxDuration(opts.MaxDuration); err != nil {
-		return err
-	}
-	if err := validateSessionRunOptions(opts.SessionRunOptions); err != nil {
-		return err
-	}
-	if err := validateSessionAudioInput(input); err != nil {
-		return err
-	}
-	if err := validateSessionRunOptions(opts.SessionRunOptions); err != nil {
-		return err
-	}
-	claim, err := ensureSessionRecordingClaim(&opts.SessionRunOptions)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = claim.release() }()
-	metadata, err := resolveSessionImageCapabilities(opts.SessionRunOptions)
-	if err != nil {
-		return err
-	}
-	opts.SessionRunOptions.sessionImageCapabilities = cloneSessionImageCapabilities(&metadata)
-	parts, err := PrepareSessionImageParts(paths, metadata)
-	if err != nil {
-		return err
-	}
-	if opts.TextSeed.Present {
-		opts.SessionRunOptions.Prompt = opts.TextSeed.Value
-		opts.SessionRunOptions.PromptProvided = true
-	}
-	var imageCleanup func()
-	opts.SessionRunOptions, imageCleanup, err = prepareSessionImageToolAccess(opts.SessionRunOptions, paths, parts)
-	if err != nil {
-		return err
-	}
-	defer imageCleanup()
-	audioSource, err := openSessionAudioInput(input)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if closeErr := audioSource.Close(); closeErr != nil {
-			runErr = errors.Join(runErr, closeErr)
-		}
-	}()
-
-	// The finite source sends MESSAGE.END after its final frame. Disable
-	// provider-side turn detection before planning the live runtime so that
-	// this path owns the single commit and response boundary.
-	opts.SessionRunOptions.ClientOwnsAudioTurnBoundaries = true
-	if opts.AudioOutPath != "" {
-		opts.SessionRunOptions.AudioOutputRequested = true
-	}
-	plan, wirePrompt, err := planSessionImageRuntime(opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, true)
-	if err != nil {
-		return err
-	}
-	plan.loop.CloseAfterOpen = false
-	plan.loop.AudioIn = audioSource
-	plan.loop.MaxDuration = opts.MaxDuration
-	plan.loop.RequireAssistantResponse = true
-	plan.loop.RequireTerminalAssistantResponse = true
 	return runSessionImagePlan(ctx, out, plan, opts, wirePrompt)
 }
 
@@ -257,24 +171,6 @@ func planSessionImageRuntime(opts SessionRunOptions, parts []messages.ImagePart,
 		return sessionRuntimePlan{}, "", err
 	}
 	return attachSessionImageRuntime(plan, parts, seed, deferResponse, opts.Prompt)
-}
-
-// planSessionImageRuntimeForDirectory keeps directory recording independent
-// from the optional provider capture file. In particular, --record-dir alone
-// needs the live provider runtime without giving its capture finalizer an
-// empty path to flush. The directory planner owns that distinction and still
-// preserves explicit --record and --replay behavior.
-func planSessionImageRuntimeForDirectory(opts SessionRunOptions, parts []messages.ImagePart, seed SessionTextSeed, systemPrompt string, deferResponse bool) (sessionRuntimePlan, string, func(), error) {
-	plan, cleanup, err := planSessionForDirectoryRecordingWithInstructions(opts, systemPrompt, true)
-	if err != nil {
-		return sessionRuntimePlan{}, "", func() {}, err
-	}
-	plan, wirePrompt, err := attachSessionImageRuntime(plan, parts, seed, deferResponse, opts.Prompt)
-	if err != nil {
-		cleanup()
-		return sessionRuntimePlan{}, "", func() {}, err
-	}
-	return plan, wirePrompt, cleanup, nil
 }
 
 func attachSessionImageRuntime(plan sessionRuntimePlan, parts []messages.ImagePart, seed SessionTextSeed, deferResponse bool, prompt string) (sessionRuntimePlan, string, error) {
@@ -300,62 +196,39 @@ func attachSessionImageRuntime(plan sessionRuntimePlan, parts []messages.ImagePa
 	return plan, "", nil
 }
 func runSessionImagePlan(ctx context.Context, out io.Writer, plan sessionRuntimePlan, opts SessionImageRunOptions, wirePrompt string) (runErr error) {
-	if opts.AudioOutPath != "" {
-		audioOut, err := newSessionAudioOutputForPlan(&plan, opts.AudioOutPath, out, nil)
-		if err != nil {
-			return fmt.Errorf("--audio-out %q: %w", opts.AudioOutPath, err)
-		}
-		defer func() {
-			if closeErr := audioOut.close(); closeErr != nil {
-				runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", opts.AudioOutPath, closeErr))
-			}
-		}()
-		wrapped := newSessionAudioOutputInferencer(plan.inferencer, audioOut, wirePrompt, opts.TextSeed.Value)
-		plan.inferencer = wrapped
-		if opts.AudioOutPath == "-" {
-			out = io.Discard
-		}
-		if opts.MaxDuration == 0 || plan.loop.AudioIn != nil {
-			runErr = plan.run(ctx, out)
-		} else {
-			runErr = runSessionImageDuration(ctx, out, plan, opts.MaxDuration)
-		}
-		wrapped.wait()
-		if outputErr := wrapped.err(); outputErr != nil {
-			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", opts.AudioOutPath, outputErr))
-		}
-		return runErr
-	}
 	if opts.TextSeed.Present {
 		output := &sessionTextOutput{writer: out}
-		if opts.MaxDuration == 0 || plan.loop.AudioIn != nil {
+		if opts.MaxDuration == 0 {
 			plan.inferencer = &sessionTextSeedInferencer{inner: plan.inferencer, wirePrompt: wirePrompt, value: opts.TextSeed.Value}
 			return errors.Join(plan.run(ctx, output), output.errorValue())
 		}
-		durationCtx, err := prepareSessionDurationArtifacts(ctx)
+		durationService := durationwire.NewService()
+		durationCtx, err := durationService.PrepareArtifacts(ctx)
 		if err != nil {
 			return err
 		}
-		admission := newSessionDurationAdmission()
-		admittedInferencer := &sessionDurationAdmissionInferencer{inner: plan.inferencer, admission: admission, closeDone: make(chan struct{})}
-		plan.inferencer = &sessionTextSeedInferencer{inner: admittedInferencer, wirePrompt: wirePrompt, value: opts.TextSeed.Value}
-		err = runSessionDurationPlanWithAdmission(durationCtx, output, plan, opts.MaxDuration, realSessionDurationClock{}, admittedInferencer)
-		return errors.Join(err, output.errorValue())
+		return plan.withLiveEvidence(durationCtx, func(runCtx context.Context, prepared sessionRuntimePlan) error {
+			inner := &sessionTextSeedInferencer{inner: prepared.inferencer, wirePrompt: wirePrompt, value: opts.TextSeed.Value}
+			admission := durationService.NewEventAdmission()
+			admittedInferencer := durationService.NewAdmissionInferencer(inner, admission, make(chan struct{}))
+			prepared.inferencer = admittedInferencer
+			err := runSessionDurationPlanWithAdmission(runCtx, output, prepared, opts.MaxDuration, nil, admittedInferencer)
+			return errors.Join(err, output.errorValue())
+		})
 	}
 	if opts.MaxDuration == 0 {
-		return plan.run(ctx, out)
-	}
-	if plan.loop.AudioIn != nil {
 		return plan.run(ctx, out)
 	}
 	return runSessionImageDuration(ctx, out, plan, opts.MaxDuration)
 }
 func runSessionImageDuration(ctx context.Context, out io.Writer, plan sessionRuntimePlan, maxDuration time.Duration) error {
-	durationCtx, err := prepareSessionDurationArtifacts(ctx)
+	durationCtx, err := durationwire.NewService().PrepareArtifacts(ctx)
 	if err != nil {
 		return err
 	}
-	return runSessionDurationPlan(durationCtx, out, plan, maxDuration, realSessionDurationClock{})
+	return plan.withLiveEvidence(durationCtx, func(runCtx context.Context, prepared sessionRuntimePlan) error {
+		return runSessionDurationPlan(runCtx, out, prepared, maxDuration, nil)
+	})
 }
 func PrepareSessionImageParts(paths []string, metadata SessionImageCapabilities) ([]messages.ImagePart, error) {
 	if !metadata.SupportsImageInput {
@@ -606,8 +479,8 @@ func (s *sessionImageSession) signalFirstTurn(sent bool) {
 	s.firstTurn <- fmt.Errorf("%w: provider session rejected image turn", ErrSessionImageSend)
 }
 
-func (s *sessionImageSession) rtcMedia() (RTCMediaEndpoints, bool) {
-	return rtcMediaFromSession(s.Session)
+func (s *sessionImageSession) rtcMedia() (audio.MediaEndpoints, bool) {
+	return sessionMediaFromSession(s.Session)
 }
 
 // SendSessionImageTurn attaches validated parts to one reusable user turn.

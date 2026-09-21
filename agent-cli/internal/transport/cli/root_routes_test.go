@@ -12,6 +12,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe/fleet"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	"github.com/spf13/cobra"
 )
@@ -23,7 +24,7 @@ type cliExecution struct {
 }
 
 func newTestRootCommand(fleetExecutor ...fleet.EntryExecutor) *cobra.Command {
-	return newTestRootCommandWithProbeFleetCommand(NewProbeFleetCommand(nil, nil, fleetExecutor...))
+	return newTestRootCommandWithProbeFleetCommand(NewProbeFleetCommand(nil, nil, newReplayRuntimeServiceForTest(), fleetExecutor...))
 }
 
 func newTestRootCommandWithProbeFleetCommand(probeFleetCommand *ProbeFleetCommand, sessionInferencer ...messages.SessionInferencer) *cobra.Command {
@@ -46,7 +47,7 @@ func newTestRootCommandWithProbeFleetCommand(probeFleetCommand *ProbeFleetComman
 		NewInteractionCommand(),
 		NewInteractionReplayCommand(),
 		NewProbeCommand(),
-		NewProbeRunCommandWithDeviceService(newDevicesTestService(), nil, sessionservicewire.NewMetricsCollector(sessionclock.Real{}, sessionservicewire.NewSessionRuntimeFactory())),
+		NewProbeRunCommandWithDeviceService(newDevicesTestService(), nil, sessionservicewire.NewMetricsCollector(audioiowire.NewService(), sessionclock.Real{}, sessionservicewire.NewSessionRuntimeFactory()), newReplayRuntimeServiceForTest()),
 		NewProbeGateCommand(),
 		NewProbeReportCommand(),
 		probeFleetCommand,

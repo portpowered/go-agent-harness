@@ -46,6 +46,7 @@ func TestOpenAIRealtimeWebMCPResultsCorrelateAndContinueOnce(t *testing.T) {
 	runErr := make(chan error, 1)
 	go func() {
 		runErr <- runAgentLoopSession(ctx, io.Discard, inferencer, sessionLoopOptions{
+			audioService:    newTestAudioIOService(),
 			WaitForClose:    true,
 			ToolExecutor:    toolSet.Executor(),
 			ToolDefinitions: toolSet.Definitions(),
@@ -240,6 +241,7 @@ func TestWebMCPAmbiguitySessionForwardsOneResultAndAsksOneQuestion(t *testing.T)
 	})
 
 	err := runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
+		audioService:    newTestAudioIOService(),
 		MaxDuration:     2 * time.Second,
 		WaitForClose:    true,
 		ToolExecutor:    executor,
@@ -337,6 +339,7 @@ func TestWebMCPAmbiguitySessionRejectsSilentContinuation(t *testing.T) {
 	)
 	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
 	err := runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
+		audioService: newTestAudioIOService(),
 		MaxDuration:  2 * time.Second,
 		WaitForClose: true,
 		ToolExecutor: sessionToolExecutorFunc(func(_ context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
@@ -419,6 +422,7 @@ func TestWebMCPAmbiguitySessionUsesExactChoiceBeforePageWork(t *testing.T) {
 	})
 
 	err := runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
+		audioService:    newTestAudioIOService(),
 		MaxDuration:     2 * time.Second,
 		WaitForClose:    true,
 		ToolExecutor:    executor,

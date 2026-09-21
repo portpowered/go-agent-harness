@@ -86,8 +86,11 @@ func TestRunRoomWithResult_LongConversationEndsBothParticipantsCleanly(t *testin
 
 	outputDir := filepath.Join(t.TempDir(), "long-room")
 	opts := RoomRunOptions{
-		Manifest:  manifest,
-		ConfigDir: configDir, ModelCatalog: testModelCatalog(),
+		AudioService:           newTestAudioIOService(),
+		recordingService:       newTestRecordingService(),
+		providerCaptureService: newTestProviderCaptureService(),
+		Manifest:               manifest,
+		ConfigDir:              configDir, ModelCatalog: testModelCatalog(),
 		BaseURL:            "wss://room-replay.invalid/v1/realtime",
 		MixerConfig:        mixerConfig,
 		OutputDir:          outputDir,
@@ -139,6 +142,8 @@ func TestRunRoomWithResult_LongConversationEndsBothParticipantsCleanly(t *testin
 	for range manifest.Participants {
 		select {
 		case <-opened:
+		case outcome := <-runDone:
+			t.Fatalf("long-conversation room exited before opening sessions: result=%+v err=%v", outcome.result, outcome.err)
 		case <-roomCtx.Done():
 			t.Fatalf("long-conversation room sessions did not open: %v", roomCtx.Err())
 		}

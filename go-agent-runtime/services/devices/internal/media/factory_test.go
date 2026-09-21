@@ -155,8 +155,8 @@ func TestFactoryRejectsDirectionlessAndNegativeRequests(t *testing.T) {
 func TestFactoryRejectsInvalidRemoteEndpoint(t *testing.T) {
 	factory := NewFactory(devicegw.NewPlatformDeviceRegistry(), mixer.DefaultFormat())
 	_, err := factory.Open(context.Background(), devices.Request{PlaybackEnabled: true, RemoteEndpoint: "192.0.2.10:19090"})
-	if !errors.Is(err, devicegw.ErrRemoteDeviceServerEndpoint) {
-		t.Fatalf("Open remote error = %v, want ErrRemoteDeviceServerEndpoint", err)
+	if !errors.Is(err, devices.ErrInvalidRemoteEndpoint) {
+		t.Fatalf("Open remote error = %v, want ErrInvalidRemoteEndpoint", err)
 	}
 }
 

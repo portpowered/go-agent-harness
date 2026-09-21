@@ -126,18 +126,6 @@ func (h *handle) includeTerminalRecordingError(event *session.LiveEvent) {
 	h.terminalErr = event.Error
 	h.mu.Unlock()
 }
-func (h *handle) watchDuration(ctx context.Context, timer platformclock.Timer) {
-	defer h.runWG.Done()
-	if timer == nil {
-		return
-	}
-	defer timer.Stop()
-	select {
-	case <-timer.C():
-		h.Cancel(session.ErrLiveDurationExceeded)
-	case <-ctx.Done():
-	}
-}
 func (h *handle) watchSessionUpdated(ctx context.Context) {
 	defer h.runWG.Done()
 	var timer platformclock.Timer
@@ -301,6 +289,38 @@ func (h *handle) handleCapabilityEvent(
 }
 func (h *handle) publishCapabilityEvent(event session.LiveCapabilityEvent) {
 	h.publish(capabilityEvent(h.request.SessionID, h.request.ParticipantID, event), false)
+	h.publishCaptureInterruptionEvent(event)
+}
+
+func (h *handle) configureCaptureInterruption(toolName string) <-chan session.LiveCapabilityEvent {
+	if h == nil {
+		return nil
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.captureInterruptionTool = strings.TrimSpace(toolName)
+	h.captureInterruptionEvent = make(chan session.LiveCapabilityEvent, 1)
+	return h.captureInterruptionEvent
+}
+
+func (h *handle) publishCaptureInterruptionEvent(event session.LiveCapabilityEvent) {
+	if h == nil {
+		return
+	}
+	h.mu.Lock()
+	channel, toolName := h.captureInterruptionEvent, h.captureInterruptionTool
+	h.mu.Unlock()
+	if channel == nil || !isCaptureInterruptionEvent(event, toolName) {
+		return
+	}
+	h.captureInterruptionOnce.Do(func() { channel <- event })
+}
+
+func isCaptureInterruptionEvent(event session.LiveCapabilityEvent, toolName string) bool {
+	return event.Type == session.LiveCapabilityEventInvocationCreated &&
+		event.State == session.LiveCapabilityStateDispatched &&
+		event.InvocationID != "" && event.ToolName != "" &&
+		(toolName == "" || event.ToolName == toolName)
 }
 func (h *handle) nextCapabilityRefresh(ctx context.Context, events <-chan session.LiveCapabilityEvent) (session.LiveCapabilityEvent, bool, error) {
 	var latest session.LiveCapabilityEvent

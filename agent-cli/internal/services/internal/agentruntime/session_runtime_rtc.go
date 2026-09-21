@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimerecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -30,6 +31,8 @@ type SessionRTCComponents = rtcontract.SessionRTCComponents
 var ErrSessionRTCRuntimeUnavailable = rtcontract.ErrSessionRTCRuntimeUnavailable
 var ErrSessionRTCRuntimeClosed = rtcontract.ErrSessionRTCRuntimeClosed
 var ErrSessionRTCDataPlaneUnavailable = rtcontract.ErrSessionRTCDataPlaneUnavailable
+
+const runtimeNilText = "<nil>"
 
 // NewSessionRTCRuntimeFactory returns a factory that composes the existing
 // signaling, peer/data, and media-source components. It performs no setup at
@@ -117,17 +120,23 @@ func planWebRTCSessionRuntime(opts SessionRunOptions, selection SessionRuntimeSe
 		model = sessionCfg.Model
 		mode = sessionRuntimeModeRecordOpenAI
 		dialer := &sessionRTCLazyDialer{runtime: runtime}
-		recordingDialer := factory.newRecordingDialer(dialer, provider, model)
-		if recordingDialer == nil {
-			return closeOnPlanError(wrapSessionRTCRuntimeError("create recording transport", ErrSessionRTCRuntimeUnavailable))
+		inputAudioTranscription, resolveErr := resolveSessionTranscription(opts, provider, opts.RTCBinding.HasInput())
+		if resolveErr != nil {
+			return closeOnPlanError(resolveErr)
 		}
-		inputAudioTranscription := resolveInputAudioTranscriptionPolicy(opts, provider, opts.RTCDeviceBinding.InputPresent)
-		inner, err = factory.newOpenAISessionInferencerForTools(sessionCfg, opts.Voice, recordingDialer, opts.ToolDefinitions, false, inputAudioTranscription)
-		if err != nil {
-			return closeOnPlanError(err)
+		build := func(recordingDialer transport.Dialer) (messages.SessionInferencer, error) {
+			return factory.newOpenAISessionInferencerForTools(sessionCfg, opts.Voice, recordingDialer, opts.ToolDefinitions, false, inputAudioTranscription)
 		}
-		flushCapture = func() error { return recordingDialer.FlushToFile(opts.RecordPath) }
-		flushCaptureTo = func(path string) error { return recordingDialer.FlushToFile(path) }
+		capture, captureErr := opts.recordingService.RecordProviderSession(opts.providerCaptureService, runtimerecording.ProviderSessionOptions{
+			Destination: opts.RecordPath, Provider: provider, Model: model,
+			Dialer: observeSessionWire(dialer, opts), Clock: opts.Clock, Build: build,
+		})
+		if captureErr != nil {
+			return closeOnPlanError(wrapSessionRTCRuntimeError("create recording transport", captureErr))
+		}
+		inner = capture
+		flushCapture = capture.FlushCapture
+		flushCaptureTo = capture.FlushToFile
 		announce = fmt.Sprintf("Starting OpenAI realtime session recording to %s", opts.RecordPath)
 		finalize = func(_ context.Context, out io.Writer) error {
 			_, writeErr := fmt.Fprintf(out, "Wrote session capture to %s\n", opts.RecordPath)
@@ -142,16 +151,19 @@ func planWebRTCSessionRuntime(opts SessionRunOptions, selection SessionRuntimeSe
 		model = sessionCfg.Model
 		mode = sessionRuntimeModeRecordGrok
 		dialer := &sessionRTCLazyDialer{runtime: runtime}
-		recordingDialer := factory.newRecordingDialer(dialer, provider, model)
-		if recordingDialer == nil {
-			return closeOnPlanError(wrapSessionRTCRuntimeError("create recording transport", ErrSessionRTCRuntimeUnavailable))
+		build := func(recordingDialer transport.Dialer) (messages.SessionInferencer, error) {
+			return factory.newGrokSessionInferencerForTools(sessionCfg, recordingDialer, opts.ToolDefinitions)
 		}
-		inner, err = factory.newGrokSessionInferencerForTools(sessionCfg, recordingDialer, opts.ToolDefinitions)
-		if err != nil {
-			return closeOnPlanError(err)
+		capture, captureErr := opts.recordingService.RecordProviderSession(opts.providerCaptureService, runtimerecording.ProviderSessionOptions{
+			Destination: opts.RecordPath, Provider: provider, Model: model,
+			Dialer: observeSessionWire(dialer, opts), Clock: opts.Clock, Build: build,
+		})
+		if captureErr != nil {
+			return closeOnPlanError(wrapSessionRTCRuntimeError("create recording transport", captureErr))
 		}
-		flushCapture = func() error { return recordingDialer.FlushToFile(opts.RecordPath) }
-		flushCaptureTo = func(path string) error { return recordingDialer.FlushToFile(path) }
+		inner = capture
+		flushCapture = capture.FlushCapture
+		flushCaptureTo = capture.FlushToFile
 		announce = fmt.Sprintf("Starting Grok session recording to %s", opts.RecordPath)
 		finalize = func(_ context.Context, out io.Writer) error {
 			_, writeErr := fmt.Fprintf(out, "Wrote session capture to %s\n", opts.RecordPath)
@@ -191,7 +203,7 @@ type SessionRTCRuntimeError struct {
 
 func (e *SessionRTCRuntimeError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return runtimeNilText
 	}
 	if e.Phase == "" {
 		return fmt.Sprintf("WebRTC session runtime: %v", e.Err)
@@ -431,7 +443,7 @@ func (i *sessionRTCRuntimeInferencer) SetSessionAudioOutput(format models.AudioF
 	if i == nil || i.inner == nil {
 		return
 	}
-	if configurer, ok := i.inner.(sessionAudioOutputConfigurer); ok {
+	if configurer, ok := i.inner.(runtimeAudioOutputConfigurer); ok {
 		configurer.SetSessionAudioOutput(format, rate)
 	}
 }
@@ -440,7 +452,7 @@ func (i *sessionRTCRuntimeInferencer) SetSessionAudioInput(format models.AudioFo
 	if i == nil || i.inner == nil {
 		return
 	}
-	if configurer, ok := i.inner.(sessionAudioInputConfigurer); ok {
+	if configurer, ok := i.inner.(runtimeAudioInputConfigurer); ok {
 		configurer.SetSessionAudioInput(format, rate)
 	}
 }
@@ -572,16 +584,13 @@ func (s *sessionRTCRuntimeSession) OutputDrops() int64 {
 	return counters.OutputDrops()
 }
 
-// rtcMedia preserves the provider-owned media capability through the local
-// runtime decorator. The private seam lets service-owned wrappers discover
-// optional media without changing the public messages.Session contract.
-func (s *sessionRTCRuntimeSession) rtcMedia() (RTCMediaEndpoints, bool) {
+// rtcMedia preserves provider-owned media through the runtime decorator.
+func (s *sessionRTCRuntimeSession) rtcMedia() (sharedaudio.MediaEndpoints, bool) {
 	if s == nil || s.Session == nil {
-		return RTCMediaEndpoints{}, false
+		return sharedaudio.MediaEndpoints{}, false
 	}
-	return rtcMediaFromSession(s.Session)
+	return sessionMediaFromSession(s.Session)
 }
-
 func (s *sessionRTCRuntimeSession) Close() error {
 	if s == nil {
 		return nil

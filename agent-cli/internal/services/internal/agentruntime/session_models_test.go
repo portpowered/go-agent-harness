@@ -236,8 +236,8 @@ func TestNewOpenAIRealtimeSessionInferencer_SupportedModelsReachDialer(t *testin
 
 func TestNewLiveSessionInferencer_GPTRealtime21CarriesReasoningEffort(t *testing.T) {
 	inferencer, model, err := NewLiveSessionInferencer(SessionRunOptions{
-		ModelCatalog: testModelCatalog(),
-		Provider:     config.ProviderOpenAI, Model: openAIRealtime21Model, ModelProvided: true,
+		AudioService: newTestAudioIOService(), ModelCatalog: testModelCatalog(),
+		Provider: config.ProviderOpenAI, Model: openAIRealtime21Model, ModelProvided: true,
 		APIKey: "sk-test", BaseURL: "ws://openai.test/realtime", ConfigDir: t.TempDir(),
 		ReasoningEffort: "high",
 	}, "test")
@@ -278,13 +278,13 @@ func TestNewLiveSessionInferencerBuildsAudioSessionRequest(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			inferencer, model, err := NewLiveSessionInferencer(SessionRunOptions{
-				ModelCatalog: testModelCatalog(),
-				Provider:     tt.provider,
-				Model:        tt.model,
-				APIKey:       tt.apiKey,
-				BaseURL:      tt.baseURL,
-				ConfigDir:    t.TempDir(),
-				Voice:        tt.voice,
+				AudioService: newTestAudioIOService(), ModelCatalog: testModelCatalog(),
+				Provider:  tt.provider,
+				Model:     tt.model,
+				APIKey:    tt.apiKey,
+				BaseURL:   tt.baseURL,
+				ConfigDir: t.TempDir(),
+				Voice:     tt.voice,
 			}, "respond with the device probe phrase")
 			if err != nil {
 				t.Fatalf("NewLiveSessionInferencer: %v", err)
@@ -481,12 +481,15 @@ model:
 	dialer := &recordingGrokRealtimeDialer{dialErr: errors.New("dial should not be reached")}
 
 	err := RunSession(context.Background(), &strings.Builder{}, SessionRunOptions{
-		ModelCatalog:    testModelCatalog(),
-		RecordPath:      filepath.Join(t.TempDir(), "openai-session.json"),
-		Provider:        config.ProviderOpenAI,
-		ModelProvided:   true,
-		ConfigDir:       configDir,
-		WebSocketDialer: dialer,
+		AudioService:           newTestAudioIOService(),
+		recordingService:       newTestRecordingService(),
+		providerCaptureService: newTestProviderCaptureService(),
+		ModelCatalog:           testModelCatalog(),
+		RecordPath:             filepath.Join(t.TempDir(), "openai-session.json"),
+		Provider:               config.ProviderOpenAI,
+		ModelProvided:          true,
+		ConfigDir:              configDir,
+		WebSocketDialer:        dialer,
 	})
 	if err == nil {
 		t.Fatal("expected explicit empty model rejection")
@@ -533,12 +536,15 @@ func runOpenAIRealtimeWithDialer(t *testing.T, configDir, model string, dialer t
 	t.Helper()
 	var out strings.Builder
 	err := RunSession(context.Background(), &out, SessionRunOptions{
-		ModelCatalog:    testModelCatalog(),
-		RecordPath:      filepath.Join(t.TempDir(), "openai-session.json"),
-		Provider:        config.ProviderOpenAI,
-		Model:           model,
-		ConfigDir:       configDir,
-		WebSocketDialer: dialer,
+		AudioService:           newTestAudioIOService(),
+		recordingService:       newTestRecordingService(),
+		providerCaptureService: newTestProviderCaptureService(),
+		ModelCatalog:           testModelCatalog(),
+		RecordPath:             filepath.Join(t.TempDir(), "openai-session.json"),
+		Provider:               config.ProviderOpenAI,
+		Model:                  model,
+		ConfigDir:              configDir,
+		WebSocketDialer:        dialer,
 	})
 	return out.String(), err
 }

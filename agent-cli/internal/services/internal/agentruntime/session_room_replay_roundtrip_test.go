@@ -144,6 +144,7 @@ func TestRoomRunRecordThenReplay_ManifestAudioFormatRoundTrips(t *testing.T) {
 
 	outputDir := filepath.Join(t.TempDir(), "room-run")
 	opts, _ := newRoomTestRunOptions(ids, inferencers)
+	opts.AudioService = newTestAudioIOService()
 	opts.OutputDir = outputDir
 	opts.Manifest.Room.MaxTurns = 1
 	// room-mix.wav is decoded with wavio.Read elsewhere in this package,
@@ -280,8 +281,11 @@ func TestRoomRunRecordThenReplay_FullEndToEndReplaySucceeds(t *testing.T) {
 	recordCtx, recordCancel := context.WithTimeout(context.Background(), roomRealtimeReplayTestTimeout)
 	defer recordCancel()
 	recordResult, err := RunRoomWithResult(recordCtx, io.Discard, RoomRunOptions{
-		Manifest:  manifest,
-		ConfigDir: configDir, ModelCatalog: testModelCatalog(),
+		AudioService:           newTestAudioIOService(),
+		recordingService:       newTestRecordingService(),
+		providerCaptureService: newTestProviderCaptureService(),
+		Manifest:               manifest,
+		ConfigDir:              configDir, ModelCatalog: testModelCatalog(),
 		BaseURL:   "wss://room-record.invalid/v1/realtime",
 		OutputDir: outputDir,
 		CredentialLookup: func(name string) (string, bool) {
@@ -363,6 +367,7 @@ func TestRoomRunRecordThenReplay_FullEndToEndReplaySucceeds(t *testing.T) {
 	replayCtx, replayCancel := context.WithTimeout(context.Background(), roomRealtimeReplayTestTimeout)
 	defer replayCancel()
 	replayResult, err := RunRoomWithResult(replayCtx, io.Discard, RoomRunOptions{
+		AudioService: newTestAudioIOService(), replayService: newTestReplayService(),
 		Manifest:   room.Manifest{SchemaVersion: 999},
 		ReplayPlan: &plan,
 		ReplayPath: outputDir, ModelCatalog: testModelCatalog(),

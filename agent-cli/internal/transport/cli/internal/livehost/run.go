@@ -102,59 +102,6 @@ func Run(ctx context.Context, out io.Writer, request serviceSession.Request, dep
 	return suppressExpectedDuration(runner.RunLive(ctx, options))
 }
 
-// suppressExpectedDuration keeps the CLI's historical exit contract for an
-// explicit max-duration stop while preserving every independent lifecycle
-// failure joined by the runtime. The terminal event and recording still carry
-// the duration classification; only the process exit value is translated.
-func suppressExpectedDuration(err error) error {
-	if err == nil {
-		return nil
-	}
-	// Leave unrelated typed causes untouched. In particular, a scheduled
-	// audio error carries its own concrete counters through Unwrap; traversing
-	// that wrapper merely because it has an Unwrap method would replace the
-	// type with the sentinel and break errors.As for the caller.
-	if !errors.Is(err, runtimeSession.ErrLiveDurationExceeded) {
-		return err
-	}
-	if joined, ok := err.(interface{ Unwrap() []error }); ok {
-		return retainNonDurationCauses(joined.Unwrap())
-	}
-	if wrapped, ok := err.(interface{ Unwrap() error }); ok {
-		cause := wrapped.Unwrap()
-		if cause != nil {
-			retained := suppressExpectedDuration(cause)
-			if retained == nil {
-				return nil
-			}
-			// Preserve the outer operation context while exposing the retained
-			// cause to errors.Is/errors.As. This matters when a fmt.Errorf
-			// wrapper surrounds an errors.Join(duration, independentFailure).
-			return retainedLiveError{message: err.Error(), cause: retained}
-		}
-	}
-	return nil
-}
-
-func retainNonDurationCauses(causes []error) error {
-	kept := make([]error, 0, len(causes))
-	for _, cause := range causes {
-		if retained := suppressExpectedDuration(cause); retained != nil {
-			kept = append(kept, retained)
-		}
-	}
-	return errors.Join(kept...)
-}
-
-type retainedLiveError struct {
-	message string
-	cause   error
-}
-
-func (e retainedLiveError) Error() string { return e.message }
-
-func (e retainedLiveError) Unwrap() error { return e.cause }
-
 func liveRunner(service runtimeSession.LiveService) (runtimeSession.LiveRunner, error) {
 	if service == nil {
 		return nil, errors.New("live session runner is not configured")
@@ -197,13 +144,22 @@ func openRecorder(request serviceSession.Request, liveRequest *runtimeSession.Li
 		Model:                         liveRequest.Model,
 		Credentials:                   credentials,
 		ProviderCapturePath:           liveProviderCapturePath(request.RecordPath, replayInputPath),
-		DisableProviderCaptureSidecar: replayInputPath != "" && request.RecordPath == "",
+		ProviderCaptureRequired:       liveProviderCaptureRequired(request, replayInputPath),
+		DisableProviderCaptureSidecar: liveProviderCaptureSidecarDisabled(request, replayInputPath),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("open live recording: %w", err)
 	}
 	configureLiveCapturePath(request, replayInputPath, recorder, liveRequest)
 	return traceLiveRecorderIfRequested(request, replayInputPath, recorder, liveRequest, deps)
+}
+
+func liveProviderCaptureRequired(request serviceSession.Request, replayInputPath string) bool {
+	return request.RecordDirectory != "" && replayInputPath == ""
+}
+
+func liveProviderCaptureSidecarDisabled(request serviceSession.Request, replayInputPath string) bool {
+	return replayInputPath != "" && request.RecordPath == ""
 }
 
 func traceLiveRecorderIfRequested(request serviceSession.Request, replayInputPath string, recorder runtimeSession.LiveRecorder, liveRequest *runtimeSession.LiveRequest, deps Dependencies) (runtimeSession.LiveRecorder, error) {
@@ -327,7 +283,7 @@ func liveRunOptions(out io.Writer, request serviceSession.Request, liveRequest r
 		deviceRequest.FileOutput = filePorts.Output
 		deviceService, deviceRequest = selectFileDevices(deviceService, deps.FileDeviceService.Service, deviceRequest, filePorts)
 	}
-	if !deviceRequest.CaptureEnabled && !deviceRequest.PlaybackEnabled && (filePorts == nil || len(filePorts.InputTurns) == 0) {
+	if !deviceRequest.CaptureEnabled && !deviceRequest.PlaybackEnabled && (filePorts == nil || len(filePorts.InputTurns) == 0 && len(filePorts.InputInterruptions) == 0) {
 		deviceService = nil
 	}
 	renderer := cliOutput.NewLiveEventRenderer(request.ReplayPath != "")
@@ -338,6 +294,8 @@ func liveRunOptions(out io.Writer, request serviceSession.Request, liveRequest r
 		AudioTurnAdmission:      audioTurnAdmission(request),
 		Recorder:                recorder,
 		CaptureTurns:            captureTurns(filePorts),
+		CaptureInterruptions:    captureInterruptions(filePorts),
+		CaptureInterruptionTool: request.AudioInterruptTool,
 		CaptureCompleteControls: captureCompleteControls(request, deps.CaptureComplete),
 		Events: runtimeSession.LiveEventSinkFunc(func(eventContext context.Context, event runtimeSession.LiveEvent) error {
 			eventOut := outputWriter(request, out)

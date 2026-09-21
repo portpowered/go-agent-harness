@@ -14,6 +14,8 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
+	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
+	replaywire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
@@ -22,6 +24,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
+type mediaReplayServiceStub struct {
+	runtimeReplay.Service
+	analyzeProbe func(context.Context, runtimeReplay.CaptureProbeRequest) (runtimeReplay.CaptureProbeObservation, error)
+}
+
+func (s mediaReplayServiceStub) AnalyzeProbe(ctx context.Context, request runtimeReplay.CaptureProbeRequest) (runtimeReplay.CaptureProbeObservation, error) {
+	return s.analyzeProbe(ctx, request)
+}
+
 func replaySessionFixturePath(t *testing.T) string {
 	t.Helper()
 	return gatewaytesting.SharedSessionFixturePath("session_healthy_multiturn_audio.session.json")
@@ -29,7 +40,7 @@ func replaySessionFixturePath(t *testing.T) string {
 
 func TestMediaProbeCommandReplayOptionCompletesObservationCycle(t *testing.T) {
 	fixture := replaySessionFixturePath(t)
-	command := NewMediaProbeCommandWithOptions(WithReplayFixture(fixture))
+	command := NewMediaProbeCommandWithOptions(WithReplayFixture(fixture), WithReplayService(replaywire.NewService()))
 	var out bytes.Buffer
 	if err := command.Run(context.Background(), &out, "go2rtc://unused-when-replaying"); err != nil {
 		t.Fatal(err)
@@ -58,7 +69,7 @@ func TestMediaProbeCommandReplayReportIsDeterministicAcrossRuns(t *testing.T) {
 	fixture := replaySessionFixturePath(t)
 	var first, second bytes.Buffer
 	for _, out := range []*bytes.Buffer{&first, &second} {
-		command := NewMediaProbeCommandWithOptions(WithReplayFixture(fixture))
+		command := NewMediaProbeCommandWithOptions(WithReplayFixture(fixture), WithReplayService(replaywire.NewService()))
 		command.Timeout = time.Second
 		if err := command.Run(context.Background(), out, "go2rtc://unused-when-replaying"); err != nil {
 			t.Fatal(err)
@@ -75,7 +86,7 @@ func TestMediaProbeCommandReplayRejectsInvalidFixtureWithClearError(t *testing.T
 	if err := os.WriteFile(path, []byte(invalid), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	command := NewMediaProbeCommandWithOptions(WithReplayFixture(path))
+	command := NewMediaProbeCommandWithOptions(WithReplayFixture(path), WithReplayService(replaywire.NewService()))
 	err := command.Run(context.Background(), &bytes.Buffer{}, "go2rtc://unused-when-replaying")
 	if err == nil || !strings.Contains(err.Error(), "session fixture validation failed before any probe observation") {
 		t.Fatalf("error = %v, want clear fixture validation failure", err)
@@ -104,7 +115,7 @@ func TestMediaProbeCLIReplayFlagProducesDeterministicReport(t *testing.T) {
 	fixture := replaySessionFixturePath(t)
 	var first, second bytes.Buffer
 	for _, out := range []*bytes.Buffer{&first, &second} {
-		command := NewMediaProbeCommand().Generate()
+		command := NewMediaProbeCommandWithOptions(WithReplayService(replaywire.NewService())).Generate()
 		command.SetOut(out)
 		command.SetArgs([]string{"--replay-fixture", fixture, "go2rtc://unused-when-replaying"})
 		if err := command.ExecuteContext(context.Background()); err != nil {
