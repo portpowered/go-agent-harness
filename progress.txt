@@ -4166,3 +4166,48 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   and the full three-file cluster, verify the one-file/300-line stateless
   adapter limit, and run the complete planned preflight on the exact clean
   candidate before any PR submission. Keep C271 at `CONTINUE` until then.
+
+# C271 disjoint service and caller audit — 2026-09-21
+
+- Reverified the exact admitted task as canonical `work-task-106` (`init`),
+  with no C271 review row. C248 `work-task-45` and C269 `work-task-101` are
+  still `init`; neither release is available. The concluded `work-review-78`
+  for C259 was read in full: its four findings cover bounded room-evidence
+  manifest/timeline admission, room sink degradation coverage, integrated room
+  record/replay coverage, and missing exact-head preflight. Those findings are
+  owned by room evidence and do not identify a self-play repair.
+- Fetched `origin/main=b9b2f90bf7e00430cd0ab6067179a5fb8005ec44` again. Clean
+  candidate `HEAD=e8beab180de8475a1b3dd1c75139e00ead7ca465` retains current-main
+  and startup `8bdafc7f947a3a2c9856220abdc539437035bd21` ancestry. The preserved
+  C249 worktree remains clean at `86a1eed17b099d510b39ce3d3b4ee7d8f7998881`,
+  with C220 `1bf045dd8` and startup ancestry reachable. C249 and C220 are not
+  yet ancestors of this C271 candidate; its required reconciliation is deferred
+  until C248 releases the shared caller and C269 releases its reviewed seam,
+  as required by C271-02. Neither source worktree was changed.
+- The live agentruntime inventory is still 106 production Go files / 39,329
+  physical lines. All three planned files remain: `selfplay_service.go` (53),
+  `session_self_play.go` (641), and `session_self_play_evidence.go` (716),
+  totaling the full 1,410-line retirement target; no deletion credit is claimed.
+  The obsolete `agent-cli/internal/services/selfplay/interface.go` projection
+  remains referenced by the transport command and service Wire composition.
+  Repository search also found self-play composition in `session.go`,
+  `session_observability.go`, and generated root Wire, with legacy cross-calls
+  in live/model/playback diagnostics and room error/evidence files.
+- The current transport adapter is one production file at 85 physical lines
+  (`session_self_play_test.go` is a test). It still consumes the CLI-owned
+  projection, including duplicated defaults, persona/seed constants, and
+  command options, so its final stateless boundary is not yet established.
+  The `go-agent-runtime/services/selfplay` package scan found no CLI,
+  `agentruntime`, or package-init dependency. On the current candidate,
+  `rtk go test -timeout=3m -count=1 ./go-agent-runtime/services/selfplay/...`
+  and `rtk go test -race -timeout=5m -count=1
+  ./go-agent-runtime/services/selfplay/...` each passed 23 tests across 3
+  packages. The bounded repeated stop/failure command remains valid from the
+  production-identical `2f428de` checkpoint: 160 tests across 3 packages.
+- Exact next action: continue the disjoint self-play public contract/failure
+  audit without changing C248/C269-owned callers. Once both exact releases are
+  available, fetch current main, reconcile C249 and its C220 ancestry with both
+  released changes, cut over every caller, remove the projection and exact
+  three-file legacy cluster, verify the final adapter, and run the complete
+  exact-head preflight before any push or PR handoff. Keep this task at
+  `CONTINUE` until that complete retirement is ready for SCRIPT CI.
