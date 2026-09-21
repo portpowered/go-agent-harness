@@ -26,6 +26,7 @@ func provideLiveService(
 	sessionInferencer messages.SessionInferencer,
 	transportDialer transport.Dialer,
 	clockSource Clock,
+	runtimeObserver SessionRuntimeObserver,
 	credentialVault *liveCredentialVault,
 ) session.LiveService {
 	return sessionwire.NewLiveService(sessionwire.LiveDependencies{
@@ -34,6 +35,8 @@ func provideLiveService(
 		ToolDefinitions:   append([]messages.ToolDefinition(nil), toolDefs...),
 		Clock:             liveClock(clockSource),
 		Scheduler:         liveScheduler(clockSource),
+		RuntimeObserver:   runtimeObserver,
+		Tick:              liveTick(clockSource),
 	})
 }
 
@@ -50,6 +53,13 @@ func liveScheduler(source Clock) clock.Scheduler {
 	}
 	if scheduler, ok := source.(clock.Scheduler); ok {
 		return scheduler
+	}
+	return nil
+}
+
+func liveTick(source Clock) func() uint64 {
+	if tickSource, ok := source.(interface{ Tick() uint64 }); ok {
+		return tickSource.Tick
 	}
 	return nil
 }

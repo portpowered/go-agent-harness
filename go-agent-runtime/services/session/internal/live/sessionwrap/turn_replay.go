@@ -183,11 +183,6 @@ func (s *mediaSession) forwardMessage(ctx context.Context, msg messages.StreamMe
 		}
 		return false
 	}
-	if msg.Type == messages.StreamTypeSessionClose {
-		if err := s.media.Close(); err != nil {
-			s.fail(fmt.Errorf("close turn replay media: %w", err))
-		}
-	}
 	return true
 }
 
@@ -201,6 +196,7 @@ func (s *mediaSession) processMediaMessage(msg messages.StreamMessage) error {
 		if err != nil {
 			return fmt.Errorf("decode turn replay PCM16: %w", err)
 		}
+		s.media.StartInboundResponse(sharedaudio.PlaybackResponse{ResponseID: msg.ResponseID})
 		if err := s.media.PushInbound(samples); err != nil {
 			return fmt.Errorf("queue turn replay PCM16: %w", err)
 		}

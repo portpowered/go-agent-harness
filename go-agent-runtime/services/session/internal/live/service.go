@@ -10,6 +10,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/mediagate"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/observations"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/sessionwrap"
+	sessiontrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"sync"
@@ -43,6 +44,8 @@ type Dependencies struct {
 	EventCapacity     int
 	Clock             session.LiveClock
 	Scheduler         platformclock.Scheduler
+	RuntimeObserver   sessiontrace.RuntimeObserver
+	Tick              func() uint64
 }
 type Service struct {
 	inferencerFactory session.LiveInferencerFactory
@@ -52,6 +55,8 @@ type Service struct {
 	eventCapacity     int
 	clock             session.LiveClock
 	scheduler         platformclock.Scheduler
+	runtimeObserver   sessiontrace.RuntimeObserver
+	tick              func() uint64
 }
 
 func New(deps Dependencies) *Service {
@@ -67,6 +72,8 @@ func New(deps Dependencies) *Service {
 		eventCapacity:     capacity,
 		clock:             deps.Clock,
 		scheduler:         deps.Scheduler,
+		runtimeObserver:   deps.RuntimeObserver,
+		tick:              deps.Tick,
 	}
 }
 func (s *Service) OpenLive(ctx context.Context, request session.LiveRequest) (session.LiveHandle, error) {
@@ -81,6 +88,7 @@ func (s *Service) OpenLive(ctx context.Context, request session.LiveRequest) (se
 	}
 	request = input.CloneLiveRequest(request)
 	h := newHandle(request, s.inferencerFactory, s.capabilityFactory, s.toolExecutor, s.toolDefinitions, s.eventCapacity, s.clock, s.scheduler)
+	h.runtimeTrace = newRuntimeObservations(s.runtimeObserver, s.clock, s.tick)
 	h.parentCtx = ctx
 	return h, nil
 }
@@ -99,6 +107,7 @@ type handle struct {
 	captureInterruptionOnce                          sync.Once
 	captureFlush                                     func() error
 	observer                                         *observations.Observer
+	runtimeTrace                                     *runtimeTrace
 	capabilityMu                                     sync.Mutex
 	eventCapacity                                    int
 	clock                                            session.LiveClock

@@ -34,10 +34,13 @@ import (
 	wire10 "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	tools3 "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	wire8 "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
+	"github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 	"net/http"
 )
@@ -47,7 +50,7 @@ import (
 // assembleAgentCLI is the generated implementation shared by production and
 // mock composition. Its parameters are explicit so the generated graph cannot
 // hide a dependency behind a bag or locator.
-func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transport.Dialer, deviceRegistry DeviceRegistry, audioSource AudioSource, audioSink AudioSink, clockSource Clock, runtimeObserver SessionRuntimeObserver, metricSampler MetricSampler, logger Logger, toolDefs []messages.ToolDefinition, toolService toolServiceOverride, inferencer messages.Inferencer, sessionInferencer messages.SessionInferencer, rtcComponents transports.SessionRTCComponents, relaxModelValidation bool, observer assemblyObserver) (*cli.AgentCLI, error) {
+func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transport.Dialer, deviceRegistry devices.DeviceRegistry, audioSource audio.AudioSource, audioSink AudioSink, clockSource clock.Source, runtimeObserver sessiontrace.SessionRuntimeObserver, metricSampler observability.MetricSampler, logger observability.Logger, toolDefs []messages.ToolDefinition, toolService toolServiceOverride, inferencer messages.Inferencer, sessionInferencer messages.SessionInferencer, rtcComponents transports.SessionRTCComponents, relaxModelValidation bool, observer assemblyObserver) (*cli.AgentCLI, error) {
 	globalFlags := flags.NewGlobalFlags()
 	rootCommand := cli.NewRootCommand(globalFlags)
 	fileStoreFactory := wire.NewFileStoreFactory()
@@ -75,27 +78,27 @@ func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transp
 	deviceService := wire2.NewDeviceService(deviceRegistry)
 	audioioService := wire3.NewService()
 	modelCatalog := provideProviderModelCatalog(fullService)
-	v := wire2.NewDeviceProbeSessionFactory(audioioService, modelCatalog)
-	v2 := wire2.NewDeviceProbeService(deviceRegistry, v)
-	v3 := wire2.NewSessionRuntimeFactory()
-	metricsCollector := wire2.NewMetricsCollector(audioioService, clockSource, v3)
-	probeRunCommand := cli.NewProbeRunCommandWithDeviceService(deviceService, v2, metricsCollector)
+	probeSessionFactory := wire2.NewDeviceProbeSessionFactory(audioioService, modelCatalog)
+	probeService := wire2.NewDeviceProbeService(deviceRegistry, probeSessionFactory)
+	sessionRuntimeFactory := wire2.NewSessionRuntimeFactory()
+	metricsCollector := wire2.NewMetricsCollector(audioioService, clockSource, sessionRuntimeFactory)
+	probeRunCommand := cli.NewProbeRunCommandWithDeviceService(deviceService, probeService, metricsCollector)
 	probeGateCommand := cli.NewProbeGateCommand()
 	probeReportCommand := cli.NewProbeReportCommand()
 	browserFactory := provideSessionBrowserCapabilityFactory()
-	v4 := provideSessionDisplaySurface()
-	toolsService := provideToolCapabilitiesService(toolService, toolExecutor, browserFactory, v4, service)
+	displaySurface := provideSessionDisplaySurface()
+	toolsService := provideToolCapabilitiesService(toolService, toolExecutor, browserFactory, displaySurface, service)
 	sessionRTCRuntimeFactory := provideSessionRTCRuntimeFactory(rtcComponents, metricSampler, logger)
 	devicesService := wire4.NewService(deviceRegistry, audioioService)
-	runtime := wire2.NewSessionRuntime(audioioService, clockSource, toolsService, v3, sessionRTCRuntimeFactory, sessionInferencer, toolExecutor, devicesService, runtimeObserver, metricSampler, logger, modelCatalog)
+	runtime := wire2.NewSessionRuntime(audioioService, clockSource, toolsService, sessionRuntimeFactory, sessionRTCRuntimeFactory, sessionInferencer, toolExecutor, devicesService, runtimeObserver, metricSampler, logger, modelCatalog)
 	sessionDependencies := provideSessionDependencies(clockSource, toolsService, sessionRTCRuntimeFactory, sessionInferencer, toolExecutor, deviceRegistry, runtimeObserver, metricSampler, logger, runtime)
 	agentsessionSessionService := wire2.NewSessionService(sessionDependencies)
-	v5 := provideFleetEntryExecutors()
-	probeFleetCommand := cli.NewProbeFleetCommand(agentsessionSessionService, metricsCollector, v5...)
-	selfplayService := wire2.NewSelfPlayService(audioioService, v3, clockSource, modelCatalog)
+	v := provideFleetEntryExecutors()
+	probeFleetCommand := cli.NewProbeFleetCommand(agentsessionSessionService, metricsCollector, v...)
+	selfplayService := wire2.NewSelfPlayService(audioioService, sessionRuntimeFactory, clockSource, modelCatalog)
 	providersSessionService := provideProviderSessionServiceRole(fullService)
 	wireLiveCredentialVault := provideLiveCredentialVault()
-	liveService := provideLiveService(providersSessionService, toolExecutor, toolDefs, sessionInferencer, transportDialer, clockSource, wireLiveCredentialVault)
+	liveService := provideLiveService(providersSessionService, toolExecutor, toolDefs, sessionInferencer, transportDialer, clockSource, runtimeObserver, wireLiveCredentialVault)
 	replayService := provideLiveReplayService()
 	fileDeviceService := provideFileDeviceService(clockSource, audioioService)
 	sessionToolCapabilitiesFactory := cli.NewSessionToolCapabilitiesFactoryFromService(toolsService)
@@ -112,8 +115,8 @@ func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transp
 	roomRunCommand := cli.NewRoomRunCommand(globalFlags, roomsService)
 	configCommand := cli.NewConfigCommand()
 	configAddLocalCommand := cli.NewConfigAddLocalCommand(globalFlags)
-	v6 := provideAcceptanceCommands()
-	router := cli.NewRouter(globalFlags, rootCommand, askCommand, chatCommand, toolCommand, interactionCommand, interactionReplayCommand, probeCommand, probeRunCommand, probeGateCommand, probeReportCommand, probeFleetCommand, sessionCommand, sessionShowCommand, sessionListCommand, sessionDeleteCommand, sessionReplayCommand, roomRunCommand, configCommand, configAddLocalCommand, deviceRegistry, deviceService, v6...)
+	v2 := provideAcceptanceCommands()
+	router := cli.NewRouter(globalFlags, rootCommand, askCommand, chatCommand, toolCommand, interactionCommand, interactionReplayCommand, probeCommand, probeRunCommand, probeGateCommand, probeReportCommand, probeFleetCommand, sessionCommand, sessionShowCommand, sessionListCommand, sessionDeleteCommand, sessionReplayCommand, roomRunCommand, configCommand, configAddLocalCommand, deviceRegistry, deviceService, v2...)
 	agentCLI := cli.NewAgentCLI(router)
 	return agentCLI, nil
 }

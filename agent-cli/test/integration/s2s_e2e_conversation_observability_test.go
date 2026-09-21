@@ -1,9 +1,5 @@
 package integration
 
-import sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
-
-import sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
-
 import (
 	"bytes"
 	"crypto/sha256"
@@ -21,8 +17,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
@@ -66,16 +60,18 @@ var observabilityReplies = []string{
 type observabilityLogEntry struct {
 	TurnIndex int `json:"turn_index"`
 	Input     struct {
-		Text          string   `json:"text"`
-		AudioBytes    uint64   `json:"audio_bytes"`
-		Committed     bool     `json:"committed"`
-		AudioSegments []string `json:"audio_segments"`
+		Text             string   `json:"text"`
+		AudioOffsetBytes uint64   `json:"audio_offset_bytes"`
+		AudioBytes       uint64   `json:"audio_bytes"`
+		Committed        bool     `json:"committed"`
+		AudioSegments    []string `json:"audio_segments"`
 	} `json:"input"`
 	Response struct {
-		Text          string   `json:"text"`
-		Complete      bool     `json:"complete"`
-		AudioBytes    uint64   `json:"audio_bytes"`
-		AudioSegments []string `json:"audio_segments"`
+		Text             string   `json:"text"`
+		Complete         bool     `json:"complete"`
+		AudioOffsetBytes uint64   `json:"audio_offset_bytes"`
+		AudioBytes       uint64   `json:"audio_bytes"`
+		AudioSegments    []string `json:"audio_segments"`
 	} `json:"response"`
 }
 
@@ -161,8 +157,9 @@ func observabilityOutputAudioRecord(t *testing.T, turn int) gwtesting.CapturedSe
 		Type:        "response.output_audio.delta",
 		PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
 		Payload: observabilityJSONPayload(t, map[string]any{
-			"type":  "response.output_audio.delta",
-			"delta": base64.StdEncoding.EncodeToString(observabilityReferenceUtterance(t, turn)),
+			"type":        "response.output_audio.delta",
+			"response_id": fmt.Sprintf("resp_turn%d", turn),
+			"delta":       base64.StdEncoding.EncodeToString(observabilityReferenceUtterance(t, turn)),
 		}),
 	}
 }
@@ -228,10 +225,10 @@ func runObservabilityConversation(t *testing.T, fixturePath, recordDir string) [
 		args = append(args, "--audio-in-turn", wavPath)
 	}
 
-	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}}), nil).Generate()
+	cmd := newTestSessionRootCommand(t)
 	cmd.SetOut(io.Discard)
 	cmd.SetErr(os.Stderr)
-	cmd.SetArgs(args)
+	cmd.SetArgs(append([]string{"session"}, args...))
 	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatalf("multi-turn session command over replay: %v", err)
 	}
@@ -333,7 +330,7 @@ func assertConversationArtifactEvidence(root string, wantInputs, wantReplies []s
 		if len(entry.Input.AudioSegments) == 0 {
 			violations = append(violations, fmt.Errorf("turn %d: session log lists no recorded input audio segments", turn))
 		} else if index < len(referenceUtterances) {
-			inputAudio, readErr := readListedRecordingSegments(root, entry.Input.AudioSegments, entry.Input.AudioBytes)
+			inputAudio, readErr := readListedRecordingRange(root, entry.Input.AudioSegments, entry.Input.AudioOffsetBytes, entry.Input.AudioBytes)
 			if readErr != nil {
 				violations = append(violations, fmt.Errorf("turn %d: input audio: %w", turn, readErr))
 			} else if !bytes.Equal(inputAudio, referenceUtterances[index]) {
@@ -350,7 +347,7 @@ func assertConversationArtifactEvidence(root string, wantInputs, wantReplies []s
 			violations = append(violations, fmt.Errorf("turn %d: session log lists no recorded output audio segments", turn))
 			continue
 		}
-		outputAudio, readErr := readListedRecordingSegments(root, entry.Response.AudioSegments, entry.Response.AudioBytes)
+		outputAudio, readErr := readListedRecordingRange(root, entry.Response.AudioSegments, entry.Response.AudioOffsetBytes, entry.Response.AudioBytes)
 		if readErr != nil {
 			violations = append(violations, fmt.Errorf("turn %d: output audio: %w", turn, readErr))
 			continue
@@ -368,9 +365,9 @@ func assertConversationArtifactEvidence(root string, wantInputs, wantReplies []s
 	return errors.Join(violations...)
 }
 
-// readListedRecordingSegments concatenates exactly the segment paths named by
-// one session-log entry and checks their total against that entry's byte count.
-func readListedRecordingSegments(dir string, segments []string, wantBytes uint64) ([]byte, error) {
+// readListedRecordingRange joins the listed recording segments and selects the
+// byte range identified by the public offset and length in one session-log row.
+func readListedRecordingRange(dir string, segments []string, offsetBytes, wantBytes uint64) ([]byte, error) {
 	var combined []byte
 	for _, relative := range segments {
 		clean := filepath.Clean(filepath.FromSlash(relative))
@@ -383,10 +380,11 @@ func readListedRecordingSegments(dir string, segments []string, wantBytes uint64
 		}
 		combined = append(combined, data...)
 	}
-	if uint64(len(combined)) != wantBytes {
-		return combined, fmt.Errorf("segments hold %d bytes, session log accounts %d", len(combined), wantBytes)
+	if offsetBytes > uint64(len(combined)) || wantBytes > uint64(len(combined))-offsetBytes {
+		return nil, fmt.Errorf("segments hold %d bytes, session log selects offset %d plus %d bytes", len(combined), offsetBytes, wantBytes)
 	}
-	return combined, nil
+	end := offsetBytes + wantBytes
+	return combined[int(offsetBytes):int(end)], nil
 }
 
 // verifyManifestHashes re-hashes every regular artifact listed by the

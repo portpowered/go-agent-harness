@@ -83,6 +83,13 @@ func (h *handle) consumeMessage(ctx context.Context, loop *agentloop.AgentLoop, 
 	}
 	continuationErr, toolContinuationComplete := h.observeToolLifecycle(msg)
 	h.publishMessage(msg) //nolint:contextcheck // recording owns the invocation evidence context.
+	if h.runtimeTrace != nil {
+		h.runtimeTrace.audioOutput(msg)
+		h.runtimeTrace.turnCompleted(msg, h.finiteResponseWasInterrupted(msg))
+		if msg.Type == messages.StreamTypeInputItemAdded {
+			h.runtimeTrace.inputCommit(true)
+		}
+	}
 	if continuationErr != nil {
 		h.Cancel(continuationErr)
 	}

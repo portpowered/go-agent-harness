@@ -123,7 +123,7 @@ func replayRates(plan *runtimeSession.LiveReplayPlan, request serviceSession.Req
 	}
 	if plan.InputAudioSampleRate > 0 {
 		inputRate = plan.InputAudioSampleRate
-	} else if request.AudioInput.Present {
+	} else if hasAudioInput(request) {
 		inputRate = audio.SampleRate
 	}
 	if plan.OutputAudioSampleRate > 0 {

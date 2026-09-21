@@ -85,6 +85,15 @@ func (h *handle) sendLiveControl(ctx context.Context, loop *agentloop.AgentLoop,
 		if !accepted {
 			return fmt.Errorf("live provider rejected control %q", control.Kind)
 		}
+		if h.runtimeTrace != nil {
+			switch control.Kind {
+			case session.LiveControlAudioCommit:
+				h.runtimeTrace.inputCommit(false)
+				h.runtimeTrace.responseCreate(messages.StreamMessage{Type: messages.StreamTypeResponseCreate})
+			case session.LiveControlResponseCreate:
+				h.runtimeTrace.responseCreate(event)
+			}
+		}
 		return nil
 	case <-ctx.Done():
 		h.media.CancelAck(ackID)

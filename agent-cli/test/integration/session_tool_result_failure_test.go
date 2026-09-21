@@ -171,6 +171,7 @@ type sessionRunInputs struct {
 func runUnresolvedFailureSessionWithContext(ctx context.Context, inputs *sessionRunInputs) error {
 	var out bytes.Buffer
 	return servicetest.RunSession(ctx, &out, servicetest.SessionRunOptions{
+		AudioService:      newTestAudioService(),
 		RecordPath:        "unresolved-tool-result.session.json",
 		Provider:          "grok",
 		Model:             "grok-realtime",
