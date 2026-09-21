@@ -5813,3 +5813,49 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   through the released live-service seam, cut over the enumerated direct
   readers, finish all callers and rerun the full exact-head C276-02–06 gate
   including `make prepush` before any push. Decision remains CONTINUE.
+
+# C276 current-turn checkpoint — canonical review and exact caller inventory — 2026-09-21
+
+- Reverified admission for the sole `audio-runtime` project and the exact
+  `prd.json.branchName`. Fetched `origin/main=b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`;
+  all seven startup, planning-main, C270, C234, C217, and current-main
+  ancestry checks pass. Candidate `85b3aa812c8b632eb43e3a2f3153ab5b3c49dfe1`
+  was clean before this progress update.
+- Canonical `~default` review queries return no C276, C270, or C234 review
+  Work. C274 review `work-review-122` is failed on PR #538 because the Windows
+  software check `TestVirtualPlaybackCapacityAdversarial/08_waiter_remains_blocked_above_low_watermark`
+  returned before its asserted waiter state; the feedback identifies a waiter
+  registration race to diagnose without weakening the assertion. C274 has a
+  running repair session `60bc1dc4-70d6-44c9-a58b-3d7b34bcf56b`. C229
+  `work-task-16` and C269 `work-task-101` also have running owners
+  (`7af6bde2-107b-4078-a963-58c7fe485033` and
+  `0ebc3a78-6325-4359-a132-44d0acccd3ff`); C268 `work-task-96` has no running
+  session and no reviewed release. No exact reviewed C229/C268/C269/C274
+  release or planner-recorded handoff is available. No peer worktree was
+  modified.
+- Rechecked the complete 13-path inventory: all seven integrated-main deletion
+  targets and six checkpoint-only replacements are absent. The browser
+  recording boundary is byte-identical to `origin/main`. The two formerly
+  named livehost wrappers have zero external references and only delegated to
+  gateway testing dialer constructors; they remain removed at 0 adapter files /
+  0 lines. The PRD's named-adapter existence check remains open: determine
+  whether a released caller needs stateless translation, and do not restore
+  unused wrappers solely to satisfy a file-count check.
+- Production capture-reader census leaves three CLI paths: C268's
+  `agent-cli/internal/services/internal/agentruntime/metrics_collector.go:87`
+  and `agent-cli/internal/transport/cli/internal/livehost/trace.go:192`, plus
+  C274's
+  `agent-cli/internal/services/internal/agentruntime/session_room_replay_integrity.go:235`
+  and `:251`. Other production loader calls are inside the replay service's
+  own `internal/plan` or gateway testing package. The bounded WebMCP diagnosis
+  remains unchanged: both public tests call `NewSessionCommand`, which reaches
+  the retired-runtime error at `agentruntime/service.go:68` before provider
+  connection; switching the route to the live constructor exposes the
+  C229-owned default virtual-output/RTC compatibility failure.
+- No production edit, full C276 preflight, `make prepush`, push, or PR handoff
+  ran. Exact next action: retain C276 ownership; consume only exact reviewed
+  C229/C268/C269/C274 releases or an explicit planner handoff, integrate those
+  seams additively, repair both public WebMCP cases, cut over every remaining
+  caller/direct reader, resolve the adapter requirement from actual caller
+  needs, then run all C276-02 through C276-06 commands plus `make prepush` on
+  one exact clean candidate before any push. Decision remains CONTINUE.
