@@ -4986,3 +4986,69 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   adapter cap, then run `make prepush` plus every planned functional,
   integration, race, hermetic, embed, Wire, deletion, and adapter command on
   the exact clean candidate before pushing it to SCRIPT CI.
+
+### C271 live audit and self-play check refresh — 2026-09-21
+
+- Re-read the required operating policy and implementation handoff and
+  reverified `project-control.py verify-work --type task --name
+  audio-runtime-c271-recover-selfplay-retirement`; admission remains
+  `admitted` for `audio-runtime/audio-runtime-v1`. `prd.json.branchName`
+  matches `codex/audio-runtime-c271-recover-selfplay-retirement`. The clean
+  candidate before this progress checkpoint is
+  `936f83a733beac8bc1e3e568ce56def07ef6a131`. Fetched
+  `origin/main=b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`; current main and
+  startup integration `8bdafc7f947a3a2c9856220abdc539437035bd21` are
+  ancestors. Preserved C249 remains clean at
+  `86a1eed17b099d510b39ce3d3b4ee7d8f7998881`, with C220 `1bf045dd8` reachable;
+  C249 is intentionally not yet an ancestor of C271 while the C248/C269 seams
+  remain unreleased. No peer worktree was modified.
+- Canonical `~default` still has C248 `work-task-45` and C269 `work-task-101`
+  in `init`/`PROCESSING` with active RUNNING Worker Sessions. C248's current
+  worktree is dirty at `9ccaa3639f0695d600c2c9ac3466391002e6514f` in
+  sessionturn tool-lifecycle files; its latest recorded feedback reports 108
+  architecture findings. C269 remains dirty at
+  `d792accaf8244898f559962ae371e06263095a9b` across room-evidence,
+  rooms/Wire, policy, and hermetic embedding paths; its latest recorded
+  prepush feedback reports 105 architecture findings. Neither reviewed or
+  guarded release is available. The C248-owned `servicetest/runtime.go` and
+  `session_observability.go` callers and the C269-owned room-evidence seam
+  remain frozen.
+- Re-read canonical C259 `work-review-78`. Its four findings remain: bound
+  manifest bytes and total timeline admission; restore public room-evidence
+  recorder-failure degradation coverage; add a public room-run/load/analyze
+  replay round trip; and record exact-head preflight. None identifies a
+  self-play-specific service repair. C271 has no review attempt.
+- Audited the self-play contract and internal boundary. The runtime contract
+  exposes value-only `Request`/`Result` and `Service.Run`; service defaults,
+  conversation policy, evidence coordination, and mutable state are in
+  `go-agent-runtime/services/selfplay/internal`. A production scan found no
+  CLI, legacy `agentruntime`, or `init` references under the runtime service.
+  The outstanding caller census still includes root/service Wire, CLI session,
+  observability and self-play command paths, legacy live/model/playback and
+  room error/evidence callers. The CLI projection and compatibility callers
+  are not yet cut over.
+- Re-ran focused checks on the unchanged production candidate:
+  `rtk go test -count=1 -timeout=180s ./go-agent-runtime/services/selfplay/...`
+  passed 26 tests / 3 packages;
+  `rtk go test -race -count=1 -timeout=300s
+  ./go-agent-runtime/services/selfplay/...` passed 26 / 3;
+  `rtk go test -count=10 -timeout=300s ./go-agent-runtime/services/selfplay/...
+  -run '(Cancel|Duration|Shutdown|Stop|Failure)'` passed 180 / 3;
+  `CGO_ENABLED=0` nomicrophone CLI/service selection passed; `rtk make
+  wire-check` passed; the service boundary scan and `rtk git diff --check`
+  passed. Wire regeneration left no tracked changes.
+- Retirement is incomplete: `selfplay_service.go` (53 lines),
+  `session_self_play.go` (641), and `session_self_play_evidence.go` (716)
+  remain together (3 / 1,410). The obsolete CLI projection remains 68 lines.
+  The sole candidate transport file remains 85 lines, but it still imports
+  that projection and carries defaults/persona/opening-seed policy, so it is
+  not a compliant stateless adapter. No caller cutover, legacy deletion,
+  `make prepush`, PR, push, or SCRIPT handoff is claimed.
+- Exact next action: retain C271 at `CONTINUE`; keep the active C248/C269
+  seams untouched while they repair and release their candidates. Once both
+  reviewed/guarded releases are available, fetch current main, reconcile the
+  clean C249/C220 checkpoint and both peer changes additively, cut over every
+  production caller, delete the obsolete projection and exact three-file /
+  1,410-line cluster, verify the sole adapter is stateless and within 300
+  lines, then run `make prepush` and every planned C271 local gate on the same
+  clean SHA before pushing or updating the PR for SCRIPT CI.
