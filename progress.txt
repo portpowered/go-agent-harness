@@ -5001,3 +5001,42 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   caller audit and repair any reproducible C234 failures. When every caller is
   integrated, run the complete C234 exact-head gate and `make prepush` before
   opening/updating the PR. Decision remains CONTINUE.
+
+# C234 continuation checkpoint — focused service gates and caller repair — 2026-09-20
+
+- Reverified sole-project admission with `project-control.py verify-work
+  --type task --name audio-runtime-c234-recover-recording-replay-retirement`;
+  it returns `admitted`. The task `prd.json.branchName` matches
+  `codex/audio-runtime-c234-recover-recording-replay-retirement`. Fetched
+  `origin/main` remains `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`; C217 source
+  `ca87a126b2cf8e7fc2aa510fcf2938e7c085836a`, checkpoint
+  `03662c1b30bf2c0bead10fc14235c7e2df5224ce`, startup, planning main and
+  fetched main are ancestors of clean HEAD `e7c6e5b3dc9400ed8ddf9eebcb969e2c37e6b042`.
+  No C234 concluded review finding is present in retained progress or the
+  canonical review list.
+- Focused recording/replay service gates pass at this candidate:
+  `rtk go test -count=1 ./go-agent-runtime/services/recording/... ./go-agent-runtime/services/replay/...`
+  and the matching `-race` command each pass 198 tests across 8 packages.
+- The C234 no-microphone selector reproduces one failure:
+  `TestSessionRecordedWebMCPCastDeviceWAVStaysInteractive` in
+  `agent-cli/internal/transport/cli/session_record_only_live_test.go` times out
+  before the injected provider connects. A normal focused rerun fails the same
+  way and reports `legacy session audio runtime is retired; use the
+  service-owned live session`. The fixture uses the legacy `NewSessionCommand`
+  constructor for the WebMCP Cast/record/audio-output invocation. C229 still
+  owns this live-session caller seam; preserve its worktree and repair the test
+  route through the service-owned live runtime after that owner releases it.
+- Rechecked all 13 exact C234 legacy/replacement production paths: absent.
+  `recording_adapter.go` and `replay_adapter.go` remain stateless at 20 and 25
+  lines (45 total); C224 `session_browser_recording.go` has no diff from
+  `origin/main`. Production capture readers remaining on this branch are
+  C255-owned `metrics_collector.go` and `livehost/trace.go`, and the C264-owned
+  `session_room_replay_integrity.go`. The latest peer worktree heads observed
+  were clean C229 `b412be6a5`, C255 `12b1b6633`, and C264 `202d80625`; none was
+  modified or imported while its owner lease remains.
+- No complete candidate preflight, `make prepush`, push, PR update or SCRIPT
+  handoff ran. Exact next action: re-query and preserve C229/C255/C264 ownership,
+  integrate their caller checkpoints after release, repair the reproducible
+  record-only WebMCP test on the owning service path, finish the production
+  capture-reader cutovers, and then run every C234 exact-candidate gate plus
+  `make prepush` on one clean SHA before any push. Decision remains CONTINUE.
