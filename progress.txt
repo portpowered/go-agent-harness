@@ -5694,3 +5694,60 @@ candidate before pushing it and handing it to SCRIPT CI.
   planned C271 functional, integration, regression, race, repeated-shutdown,
   nomicrophone, hermetic, embed, Wire, deletion/caller, ancestry, and cleanliness
   gate on the same exact clean SHA before any push or SCRIPT CI handoff.
+
+### C271 executor canonical release refresh — 2026-09-21
+
+- Re-read the required operating policy and implementation handoff, the admitted
+  audio-runtime manifest, this task's PRD and progress, and the latest concluded
+  review. `project-control.py verify-work --type task --name
+  audio-runtime-c271-recover-selfplay-retirement` returned `admitted` for
+  `audio-runtime/audio-runtime-v1`. `prd.json.branchName` matches the isolated
+  branch `codex/audio-runtime-c271-recover-selfplay-retirement`.
+- Fetched `origin main`; it remains `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`.
+  C271 was clean at `4d6af531628e0dbe1f2b99c074a9d6d93762f719` before this
+  checkpoint, with current `origin/main` and startup integration
+  `8bdafc7f947a3a2c9856220abdc539437035bd21` as ancestors. Preserved C249 is
+  clean at `86a1eed17b099d510b39ce3d3b4ee7d8f7998881` and retains C220
+  `1bf045dd8` ancestry; C249 is still not an ancestor of C271. No host checkout
+  or peer source files were changed.
+- Canonical `~default` reports C271 `work-task-106` as `init` / `PROCESSING`
+  with no C271 review. Latest concluded feedback is C259 `work-review-78` (PR
+  #535, `a187b9f13`): bound room-evidence manifest/timeline admission, preserve
+  recorder-failure degradation, restore the integrated room replay round trip,
+  and record exact-head preflight. These findings are for room evidence and do
+  not identify a self-play-specific C271 repair.
+- C248 `work-task-45` remains `init` / `INITIAL` at clean checkpoint
+  `38b72e0a0b42f88c3d6672793cb0a5b6004251b2`; no RUNNING worker session was
+  listed. Its latest feedback still has architecture-size findings and four
+  live-capability watcher failures in C229-owned `embed-check` paths, so its
+  shared caller seam is unreleased. C269 `work-task-101` remains `init` /
+  `PROCESSING` at `889b1a49adaa8840f75a283f75cee1faff8baba1`, with RUNNING
+  Worker Session `48201661-cb34-4f63-99e3-98a0f237bdc7`; its latest feedback
+  still reports 15 architecture-size findings in C268/C272-owned paths and no
+  guarded merge. Its worktree has only a progress-log change. Both exact shared
+  seams remain frozen.
+- Reconfirmed the owned cluster is still `selfplay_service.go` (53 lines),
+  `session_self_play.go` (641), and `session_self_play_evidence.go` (716):
+  3 production files / 1,410 lines. The uncredited CLI projection remains 68
+  lines; the planned transport file is 85 lines and still retains policy.
+  `session_room_evidence_files.go` is absent. The production caller census
+  continues to include CLI command/service/Wire, the obsolete projection,
+  transport session/observability, and legacy live/model/playback/room-evidence
+  references. No production caller is cut over and no owned legacy file is
+  deleted.
+- Focused public self-play checks recorded on `b54fd4845a9acd5cf6b26c1c802e7dbe326076e2`
+  passed: functional `go test -count=1` (26 tests / 3 packages), race
+  `go test -race -count=1` (26 / 3), and repeated cancellation/duration/shutdown/
+  stop/failure `go test -count=10` (180 / 3). The self-play production and test
+  paths are unchanged from that checked source through this checkpoint. This is
+  focused evidence only; no `make prepush`, full local preflight, PR, push, or
+  SCRIPT handoff is claimed.
+- Exact next action: keep C271 at `CONTINUE`; refresh canonical C248 and C269
+  release state while their shared paths remain untouched. When both reviewed
+  releases are available, integrate preserved C249/C220 history and peer
+  behavior additively, cut over every discovered caller, remove the projection
+  and temporary helper, delete all three owned legacy production files, and
+  leave only a stateless adapter within 300 lines. Then run `make prepush` and
+  every C271 functional, integration, race, hermetic, embed, Wire, ancestry,
+  deletion/caller, and adapter-budget gate on one exact clean candidate before
+  pushing or handing it to SCRIPT CI.
