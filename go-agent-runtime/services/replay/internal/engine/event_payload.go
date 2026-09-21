@@ -10,6 +10,7 @@ import (
 	"reflect"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/internal/capture"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -64,7 +65,7 @@ func decodeStreamEvent(event gatewaytesting.CapturedSessionEvent) (messages.Stre
 	if event.PayloadType != "" && event.PayloadType != gatewaytesting.SessionPayloadTypeStreamMessage {
 		return messages.StreamMessage{}, fmt.Errorf("unsupported payload type: %s", event.PayloadType)
 	}
-	return gatewaytesting.UnmarshalStreamMessage(payload)
+	return capture.UnmarshalStreamMessage(payload)
 }
 
 func compareStreamEvent(expected gatewaytesting.CapturedSessionEvent, actual messages.StreamMessage) error {
@@ -75,7 +76,7 @@ func compareStreamEvent(expected gatewaytesting.CapturedSessionEvent, actual mes
 	if expected.PayloadType != "" && expected.PayloadType != gatewaytesting.SessionPayloadTypeStreamMessage {
 		return fmt.Errorf("expected outbound event %s has unsupported payload type %s", expected.Type, expected.PayloadType)
 	}
-	actualPayload, err := gatewaytesting.MarshalStreamMessage(actual)
+	actualPayload, err := capture.MarshalStreamMessage(actual)
 	if err != nil {
 		return fmt.Errorf("marshal outbound event %s: %w", actual.Type, err)
 	}

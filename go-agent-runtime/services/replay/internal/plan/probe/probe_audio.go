@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
+	replaycapture "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/internal/capture"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -40,7 +41,7 @@ func injectProbeAudio(capture gatewaytesting.SessionCapture, request replay.Capt
 	if err := validateProbeAudio(injected, frames); err != nil {
 		return gatewaytesting.SessionCapture{}, err
 	}
-	sealed, err := gatewaytesting.SealSessionCapture(injected)
+	sealed, err := replaycapture.SealReplayCapture(injected)
 	if err != nil {
 		return gatewaytesting.SessionCapture{}, fmt.Errorf("seal injected replay capture: %w", err)
 	}
