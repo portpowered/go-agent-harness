@@ -5176,3 +5176,30 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   functional, race, integration, hermetic, Wire, embedding, regression,
   deletion, adapter, ancestry, diff and `make prepush` gates on one clean exact
   candidate before pushing. Decision remains CONTINUE.
+
+# C234 continuation checkpoint — fetched-main and live-owner refresh — 2026-09-20
+
+- Re-ran `project-control.py verify-work --type task --name
+  audio-runtime-c234-recover-recording-replay-retirement` from `FACTORY_ROOT`;
+  admission is `admitted`, and `prd.json.branchName` matches this worktree.
+  `you work list --name c234 --all` shows no review Work or concluded C234
+  findings. Fetched `origin/main` remains
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`; C217 source, recovery checkpoint,
+  startup, planning-main and fetched-main ancestry all pass at clean HEAD
+  `20e2e1d0592816e5e0d0950b7e85d4f09fb152f1`.
+- All thirteen named C234 legacy/replacement production paths remain absent.
+  The named stateless adapters remain 20 and 25 lines (45 total), and
+  `session_browser_recording.go` is unchanged from `origin/main`.
+- Canonical Worker Sessions still show C229 `work-task-16` RUNNING as
+  `991295d8-86fa-422e-9e47-568b80f76564` and C264 `work-task-86` RUNNING as
+  `ad906b1d-b9f9-49aa-96a7-756662ed7889`. C268 `work-task-96` remains
+  `INITIAL` with no implementation Worker Session and owns the remaining
+  `metrics_collector.go` / `livehost/trace.go` capture seams. No peer worktree
+  or leased file was changed.
+- No production change or test ran; the full exact-candidate preflight,
+  `make prepush`, push, PR update and SCRIPT handoff remain outstanding. Exact
+  next action: preserve these three caller ownership boundaries, integrate
+  their checkpoints only after release, repair the WebMCP route if it still
+  fails, repeat the production caller audit, then run every C234-02 through
+  C234-05 gate plus `make prepush` on one clean exact candidate before push.
+  Decision remains CONTINUE.
