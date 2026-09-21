@@ -28,8 +28,8 @@
       "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
       "file": "pkg/devices/device_playback_adversarial_test.go",
       "symbol": "TestVirtualPlaybackCapacityAdversarial",
-      "value": 260,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "value": 259,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; the C274 waiter handshake reduced this function from 260 to 259 physical lines; retain remaining debt only through the owning package migration.",
       "phase": "P0"
     },
     {
@@ -38,8 +38,8 @@
       "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
       "file": "pkg/devices/device_playback_adversarial_test.go",
       "symbol": "TestVirtualPlaybackCapacityAdversarial",
-      "value": 206,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "value": 205,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; the C274 waiter handshake reduced this function from 206 to 205 statements; retain remaining debt only through the owning package migration.",
       "phase": "P0"
     }
   ]
