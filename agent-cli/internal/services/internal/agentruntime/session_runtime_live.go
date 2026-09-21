@@ -9,6 +9,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	duration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
@@ -17,7 +18,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
-func (p *sessionRuntimePlan) bindRTC(ctx context.Context, finalizer *sessionRuntimeFinalizer) error {
+func (p *sessionRuntimePlan) bindRTC(ctx context.Context, finalizer duration.Finalizer) error {
 	if p.deviceService == nil {
 		if p.rtcDeviceRequest.HasDevices() {
 			return runtimedevices.ErrUnavailable
@@ -35,7 +36,7 @@ func (p *sessionRuntimePlan) bindRTC(ctx context.Context, finalizer *sessionRunt
 	}
 	p.inferencer = binding.Inferencer()
 	p.loop.rtcDeviceBinding = binding
-	finalizer.setRTCBinding(binding)
+	finalizer.SetDeviceBinding(binding.Close)
 	if selected, ok := binding.(runtimedevices.RTCBindingDeviceSelection); ok {
 		inputDevice, outputDevice := selected.SelectedDeviceIDs()
 		if p.rtcDeviceRequest.InputDevice == "" {
