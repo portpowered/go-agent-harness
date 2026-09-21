@@ -25,6 +25,7 @@ import (
 	runtimeRecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
 	runtimeSessionWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -198,9 +199,7 @@ func adaptLiveRuntimeCompatibility(err error) error {
 	if !errors.As(err, &unresolved) {
 		return err
 	}
-	return errors.Join(err, &serviceSession.SessionUnresolvedToolResultsError{
-		CallIDs: unresolved.UnresolvedCallIDs(),
-	})
+	return errors.Join(err, sessionterminal.NewUnresolvedToolResultsError(unresolved.UnresolvedCallIDs(), nil))
 }
 
 func (c *SessionCommand) runtimeLiveRequest(ctx context.Context, request serviceSession.Request, replayInspection *runtimeReplay.CaptureInspection) (runtimeSession.LiveRequest, error) {

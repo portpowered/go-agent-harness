@@ -6,9 +6,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
-// InstructionLoader is the host-owned I/O boundary used while resolving a
-// session's instruction value. The runtime chooses which operation is needed;
-// the host supplies the filesystem and skill-summary implementations.
+// InstructionLoader is an optional host-owned I/O seam for embedded callers.
+// Normal session-turn composition creates its loader inside the service.
 //
 // A loader must not mutate the workspace. Stat is used only to preserve the
 // explicit prompt path-versus-literal compatibility rule: any stat error
@@ -19,18 +18,19 @@ type InstructionLoader interface {
 	SkillsSummary() (string, error)
 }
 
-// InstructionRequest contains the normalized host values needed for prompt
-// selection. WorkspaceDir and FilesystemScopeDescription are values already
-// resolved by the host; the runtime never discovers a workspace, config
-// directory, environment, or skills root on its own.
+// InstructionRequest contains the prompt inputs used by the session runtime.
+// WorkspaceDir and ConfigDir are explicit host values; the runtime does not
+// discover them from process state.
 type InstructionRequest struct {
 	// Prompt accepts the existing session contract: "none" disables
 	// instructions, a value that stats as a file is read, and all other
 	// non-empty values remain literal text.
 	Prompt string
 	// WorkspaceDir is the normalized root used for AGENTS.md lookup and is
-	// also the context in which the host-owned loader builds its skill summary.
+	// also the context in which the service builds its skill summary.
 	WorkspaceDir string
+	// ConfigDir is the explicit configuration root used for user skills.
+	ConfigDir string
 	// FilesystemScopeDescription is appended only when the host marks the
 	// normalized filesystem policy as present and the selected instructions are
 	// non-empty. The separate presence bit preserves an empty description.

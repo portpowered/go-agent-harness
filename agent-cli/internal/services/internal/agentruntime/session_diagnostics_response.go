@@ -2,7 +2,6 @@ package agentruntime
 
 import (
 	"context"
-	"maps"
 	"strings"
 	"time"
 
@@ -18,19 +17,6 @@ const (
 	scheduledAudioResponseCompleted = sd.DispositionCompleted
 	scheduledAudioResponseCancelled = sd.DispositionCancelled
 )
-
-// Deprecated: retained as a compatibility projection; lifecycle decisions are
-// delegated to the provider-neutral service and copied here after each event.
-type scheduledAudioResponseLifecycle struct {
-	bound                 bool
-	disposition           scheduledAudioResponseDisposition
-	retryUsed             bool
-	retryPending          bool
-	terminalFailure       bool
-	terminalStatus        string
-	terminalErrorCode     string
-	terminalStatusDetails string
-}
 
 func (o *sessionProgressObserver) ensureLifecycle() sd.Service {
 	if o == nil {
@@ -59,8 +45,6 @@ func (o *sessionProgressObserver) applyLifecycle(ctx context.Context, event sd.E
 	if o == nil {
 		return sd.Observation{}, sd.ErrClosed
 	}
-	o.lifecycleProjectionMu.Lock()
-	defer o.lifecycleProjectionMu.Unlock()
 	lifecycle := o.ensureLifecycle()
 	if lifecycle == nil {
 		return sd.Observation{}, sd.ErrClosed
@@ -69,79 +53,51 @@ func (o *sessionProgressObserver) applyLifecycle(ctx context.Context, event sd.E
 		return sd.Observation{}, err
 	}
 	observation, err := lifecycle.Apply(ctx, event)
-	o.syncLifecycleProjection()
 	return observation, err
 }
 
-// ensureLifecycleSchedule is the private CLI adapter bridge for legacy test
-// setup. It only declares the number of scheduled slots; all response IDs,
-// ownership, continuation, retry, and disposition state remains private to
-// the runtime reducer and can only be changed through lifecycle events.
+// ensureLifecycleSchedule declares the number of dispatched scheduled slots;
+// all response IDs, ownership, continuation, retry, and disposition state
+// remains private to the runtime reducer.
 func (o *sessionProgressObserver) ensureLifecycleSchedule(ctx context.Context, lifecycle sd.Service) error {
 	if o == nil || lifecycle == nil {
 		return sd.ErrClosed
 	}
-	if len(lifecycle.Snapshot().Scheduled) >= len(o.scheduledResponses) {
+	o.scheduleMu.Lock()
+	dispatched := o.dispatchedInputs
+	o.scheduleMu.Unlock()
+	if len(lifecycle.Snapshot().Scheduled) >= dispatched {
 		return nil
 	}
-	_, err := lifecycle.Apply(ctx, sd.Event{Kind: sd.EventEnsureScheduled, Count: len(o.scheduledResponses)})
+	_, err := lifecycle.Apply(ctx, sd.Event{Kind: sd.EventEnsureScheduled, Count: dispatched})
 	return err
 }
-func (o *sessionProgressObserver) syncLifecycleProjection() {
-	if o == nil || o.lifecycle == nil {
-		return
-	}
-	snapshot := o.lifecycle.Snapshot()
-	o.activeResponse = snapshot.ActiveResponse
-	o.activeResponseID = snapshot.ActiveResponseID
-	o.completedResponseIDs = make(map[string]struct{}, len(snapshot.CompletedResponseIDs))
-	for _, id := range snapshot.CompletedResponseIDs {
-		o.completedResponseIDs[id] = struct{}{}
-	}
-	o.retiredResponseIDs = make(map[string]struct{}, len(snapshot.RetiredResponseIDs))
-	for _, id := range snapshot.RetiredResponseIDs {
-		o.retiredResponseIDs[id] = struct{}{}
-	}
-	o.scheduledResponses = make([]scheduledAudioResponseLifecycle, len(snapshot.Scheduled))
-	for index, value := range snapshot.Scheduled {
-		o.scheduledResponses[index] = scheduledAudioResponseLifecycle{
-			bound: value.Bound, disposition: value.Disposition, retryUsed: value.RetryUsed,
-			retryPending: value.RetryPending, terminalFailure: value.TerminalFailure,
-			terminalStatus: value.TerminalStatus, terminalErrorCode: value.TerminalErrorCode,
-			terminalStatusDetails: value.TerminalStatusDetails,
-		}
-	}
-	o.scheduledResponseByID = maps.Clone(snapshot.ScheduledResponseByID)
-	if o.scheduledResponseByID == nil {
-		o.scheduledResponseByID = make(map[string]int)
-	}
-	o.nextScheduledResponse = snapshot.NextScheduledResponse
-	o.activeScheduledResponseIndex = snapshot.ActiveScheduledIndex
-	o.activeScheduledResponseID = snapshot.ActiveScheduledID
-	o.activeScheduledResponseSet = snapshot.ActiveScheduledSet
-	o.logicalScheduledResponseIndex = snapshot.LogicalScheduledIndex
-	o.logicalScheduledResponseID = snapshot.LogicalScheduledID
-	o.logicalScheduledResponseSet = snapshot.LogicalScheduledSet
-	o.completedScheduled = snapshot.CompletedScheduled
-	o.retryCandidateIndex = snapshot.RetryCandidateIndex
-	o.retryCandidateSet = snapshot.RetryCandidateSet
-	o.retryCandidateID = snapshot.RetryCandidateID
-}
 func (o *sessionProgressObserver) lifecycleEvent(event sd.Event) sd.Observation {
-	observation, err := o.applyLifecycle(context.Background(), event)
+	return o.lifecycleEventWithContext(context.Background(), event)
+}
+
+func (o *sessionProgressObserver) lifecycleEventWithContext(ctx context.Context, event sd.Event) sd.Observation {
+	observation, err := o.applyLifecycle(ctx, event)
 	if err != nil {
 		return sd.Observation{}
 	}
 	return observation
 }
 
+func (o *sessionProgressObserver) noteToolResultAccepted(callID string) {
+	o.noteToolResultAcceptedWithContext(context.Background(), callID)
+}
+
+func (o *sessionProgressObserver) noteToolContinuationRequested() {
+	o.noteToolContinuationRequestedWithContext(context.Background())
+}
+
 func (o *sessionProgressObserver) observedResponseProjection() (active bool, id string) {
 	if o == nil {
 		return false, ""
 	}
-	o.lifecycleProjectionMu.Lock()
-	defer o.lifecycleProjectionMu.Unlock()
-	return o.activeResponse, o.activeResponseID
+	snapshot := o.ensureLifecycle().Snapshot()
+	return snapshot.ActiveResponse, snapshot.ActiveResponseID
 }
 
 func (o *sessionProgressObserver) plainEvent(kind sd.EventKind, id string) sd.Observation {
@@ -226,9 +182,7 @@ func (o *sessionProgressObserver) resetObservedResponseState() {
 	if o == nil {
 		return
 	}
-	o.lifecycleProjectionMu.Lock()
-	activeResponse := o.activeResponse
-	o.lifecycleProjectionMu.Unlock()
+	activeResponse := o.ensureLifecycle().Snapshot().ActiveResponse
 	if !activeResponse && !o.hasPendingLifecycleContinuation() {
 		o.lifecycleEvent(sd.Event{Kind: sd.EventReset})
 	}
@@ -273,9 +227,8 @@ func (o *sessionProgressObserver) adoptObservedResponseID(id string) bool {
 	if o == nil {
 		return true
 	}
-	o.lifecycleProjectionMu.Lock()
-	activeResponse, activeResponseID := o.activeResponse, o.activeResponseID
-	o.lifecycleProjectionMu.Unlock()
+	snapshot := o.ensureLifecycle().Snapshot()
+	activeResponse, activeResponseID := snapshot.ActiveResponse, snapshot.ActiveResponseID
 	if !activeResponse || activeResponseID != "" {
 		return true
 	}
@@ -328,27 +281,12 @@ func (o *sessionProgressObserver) observeProviderToolCallStartForResponse(callID
 		if o.continuationResultAccepted(callID) {
 			return
 		}
-		// Keep a rejected provider call visible to termination diagnostics without
-		// projecting it into the reducer as an owned continuation.
-		o.toolStateMu.Lock()
-		o.ensureToolStateLocked()
-		o.unresolvedToolCalls[callID] = struct{}{}
-		o.toolStateMu.Unlock()
+		// The reducer records an unowned provider call as a rejected continuation
+		// so terminal diagnostics still have one service-owned source of truth.
 		return
 	}
-	accepted := o.continuationResultAccepted(callID)
 	o.toolStateMu.Lock()
-	o.ensureToolStateLocked()
 	o.providerToolCallSeen = true
-	// The provider-facing tool-result send may complete while the shared
-	// lifecycle reducer is applying the tool-call event. The reducer snapshot
-	// above is authoritative, so an accepted result cannot be reintroduced as
-	// pending here.
-	if accepted {
-		delete(o.unresolvedToolCalls, callID)
-	} else {
-		o.unresolvedToolCalls[callID] = struct{}{}
-	}
 	o.toolStateMu.Unlock()
 }
 func (o *sessionProgressObserver) observeProviderToolCallWithIDForResponse(callID, name, responseID string) {

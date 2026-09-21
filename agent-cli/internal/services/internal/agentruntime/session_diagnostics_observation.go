@@ -1,9 +1,11 @@
 package agentruntime
 
 import (
+	"strings"
+
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
-	"strings"
+	sd "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
 )
 
 func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
@@ -295,12 +297,7 @@ func (o *sessionProgressObserver) observeSessionLifecycleBoundary(msg messages.S
 	case messages.StreamTypeSessionOpen:
 		o.sawSessionOpen = true
 		o.sessionID = ""
-		o.lifecycleProjectionMu.Lock()
-		o.activeResponse = false
-		o.activeResponseID = ""
-		o.completedResponseIDs = make(map[string]struct{})
-		o.retiredResponseIDs = make(map[string]struct{})
-		o.lifecycleProjectionMu.Unlock()
+		o.lifecycleEvent(sd.Event{Kind: sd.EventReset})
 		o.resetObservedResponseState()
 		if v, ok := msg.Value.(*messages.SessionOpenValue); ok && v != nil {
 			o.sessionID = v.SessionID

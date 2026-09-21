@@ -42,11 +42,12 @@ func TestSessionProgressObserver_ToolAcknowledgementDoesNotAdmitOrConsumeSchedul
 		observer.observe(event)
 	}
 
-	if observer.turnsCompleted != 0 || observer.completedScheduled != 0 {
-		t.Fatalf("acknowledgement advanced lifecycle: turns=%d completed=%d", observer.turnsCompleted, observer.completedScheduled)
+	if got := lifecycleSnapshotForTest(observer).CompletedScheduled; observer.turnsCompleted != 0 || got != 0 {
+		t.Fatalf("acknowledgement advanced lifecycle: turns=%d completed=%d", observer.turnsCompleted, got)
 	}
-	if observer.nextScheduledResponse != 0 || observer.activeScheduledResponseSet {
-		t.Fatalf("acknowledgement consumed scheduled response: next=%d active=%t", observer.nextScheduledResponse, observer.activeScheduledResponseSet)
+	snapshot := lifecycleSnapshotForTest(observer)
+	if snapshot.NextScheduledResponse != 0 || snapshot.ActiveScheduledSet {
+		t.Fatalf("acknowledgement consumed scheduled response: next=%d active=%t", snapshot.NextScheduledResponse, snapshot.ActiveScheduledSet)
 	}
 	if observer.assistantResponseCompleted() {
 		t.Fatal("acknowledgement was admitted as the final assistant response")
@@ -75,7 +76,7 @@ func TestSessionProgressObserver_ToolAcknowledgementDoesNotAdmitOrConsumeSchedul
 		observer.observe(event)
 	}
 
-	if observer.turnsCompleted != 1 || observer.completedScheduled != 1 {
-		t.Fatalf("final response lifecycle = turns:%d completed:%d, want one each", observer.turnsCompleted, observer.completedScheduled)
+	if got := lifecycleSnapshotForTest(observer).CompletedScheduled; observer.turnsCompleted != 1 || got != 1 {
+		t.Fatalf("final response lifecycle = turns:%d completed:%d, want one each", observer.turnsCompleted, got)
 	}
 }

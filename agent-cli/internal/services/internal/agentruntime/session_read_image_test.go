@@ -91,7 +91,7 @@ func TestRunAgentLoopSession_ReadImageResultReachesNextModelTurn(t *testing.T) {
 		observer:             observer,
 	})
 	if err != nil {
-		t.Fatalf("runAgentLoopSession: %v\noutput:\n%s", err, out.String())
+		t.Fatalf("runAgentLoopSession: %v\nlifecycle: %#v\noutput:\n%s", err, observer.terminalRequest(err).Lifecycle, out.String())
 	}
 	if !strings.Contains(out.String(), "next model turn after image tool result") {
 		t.Fatalf("session did not reach the next model turn:\n%s", out.String())

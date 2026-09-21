@@ -2,13 +2,35 @@
 package agentruntime
 
 import (
+	"context"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/sight"
+	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	sd "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 	tools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	"sort"
 	"strings"
 	"unicode"
 )
+
+const sessionPageSightUnavailableCode = "page_sight_unavailable"
+
+func recordSessionToolDiagnostic(sink SessionToolDiagnosticSink, executor messages.ToolExecutor, call messages.ToolCall, err error) {
+	if sink == nil || err == nil {
+		return
+	}
+	diagnostic := SessionToolDiagnostic{ToolCallID: call.ID, ToolName: call.Name, Error: err}
+	if router, ok := executor.(tools.PageSightToolRouter); ok && router.IsPageSightTool(call.Name) {
+		diagnostic.Source = sight.SourceBrowserPage
+		diagnostic.ErrorCode = sessionPageSightUnavailableCode
+	} else if cliTools.IsPhysicalDisplayToolName(call.Name) {
+		diagnostic.Source = sight.SourceScreen
+		diagnostic.ErrorCode = cliTools.ScreenToolErrorCode(err)
+	}
+	sink.RecordSessionToolDiagnostic(diagnostic)
+}
 
 func (o *sessionProgressObserver) setToolResultsEnabled(enabled bool) {
 	if o == nil {
@@ -19,12 +41,6 @@ func (o *sessionProgressObserver) setToolResultsEnabled(enabled bool) {
 	o.toolStateMu.Unlock()
 }
 func (o *sessionProgressObserver) ensureToolStateLocked() {
-	if o.unresolvedToolCalls == nil {
-		o.unresolvedToolCalls = make(map[string]struct{})
-	}
-	if o.toolResultRejections == nil {
-		o.toolResultRejections = make(map[string]messages.SessionSendStatus)
-	}
 	if o.toolLifecycleCh == nil {
 		o.toolLifecycleCh = make(chan struct{}, 1)
 	}
@@ -58,37 +74,31 @@ func (o *sessionProgressObserver) observeProviderToolCallWithID(callID, name str
 	o.observeProviderToolCallWithIDForResponse(callID, name, "")
 }
 
-// noteToolResultAccepted resolves exactly one provider call after the
-// provider-facing session send boundary reports success. Execution completion,
-// queueing, and rejected sends do not reach this method.
-func (o *sessionProgressObserver) noteToolResultAccepted(callID string) {
+// noteToolResultAccepted resolves one provider call after the send boundary succeeds.
+func (o *sessionProgressObserver) noteToolResultAcceptedWithContext(ctx context.Context, callID string) {
 	callID = strings.TrimSpace(callID)
 	if o == nil || callID == "" {
 		return
 	}
-	accepted := o.lifecycleEvent(sd.Event{Kind: sd.EventToolResultAccepted, CallID: callID}).Accepted
+	ctx = lifecycleObservationContext(ctx)
+	accepted := o.lifecycleEventWithContext(ctx, sd.Event{Kind: sd.EventToolResultAccepted, CallID: callID}).Accepted
 	if !accepted {
 		// The provider send can complete before the first inbound response delta.
 		// Establish one provisional, untagged lifecycle for that legitimate
 		// handoff, then let the later tool-call event enrich it with its ID.
 		active, _ := o.observedResponseProjection()
 		if !active {
-			o.lifecycleEvent(sd.Event{Kind: sd.EventResponseOpen})
-			accepted = o.lifecycleEvent(sd.Event{Kind: sd.EventToolResultAccepted, CallID: callID}).Accepted
+			o.lifecycleEventWithContext(ctx, sd.Event{Kind: sd.EventResponseOpen})
+			accepted = o.lifecycleEventWithContext(ctx, sd.Event{Kind: sd.EventToolResultAccepted, CallID: callID}).Accepted
 		}
 	}
 	o.toolStateMu.Lock()
 	o.ensureToolStateLocked()
 	lifecycleCh := o.toolLifecycleCh
-	if accepted {
-		delete(o.unresolvedToolCalls, callID)
-		delete(o.toolResultRejections, callID)
-	} else {
-		// Preserve the close/termination obligation when the reducer rejects the
-		// result (for example, after Close or an ownership violation).
-		o.unresolvedToolCalls[callID] = struct{}{}
-	}
 	o.toolStateMu.Unlock()
+	if !accepted {
+		o.lifecycleEventWithContext(ctx, sd.Event{Kind: sd.EventToolResultRejected, CallID: callID, ResultStatus: string(messages.SessionSendClosed)})
+	}
 
 	// One wake-up is enough even when several results are accepted before the
 	// session loop selects this branch: the close predicate observes the whole
@@ -101,31 +111,25 @@ func (o *sessionProgressObserver) noteToolResultAccepted(callID string) {
 	}
 }
 
-// noteToolContinuationRequested advances every accepted result in the
-// current provider batch at the explicit response.create send boundary. The
-// control event carries no call ID because one provider response may continue
-// several parallel function calls; accepted results are therefore the
-// correlation set. The operation is idempotent for duplicate control events.
-func (o *sessionProgressObserver) noteToolContinuationRequested() {
+// noteToolContinuationRequested advances accepted results at response.create.
+func (o *sessionProgressObserver) noteToolContinuationRequestedWithContext(ctx context.Context) {
 	if o == nil {
 		return
 	}
-	observation := o.lifecycleEvent(sd.Event{Kind: sd.EventContinuationRequested})
+	ctx = lifecycleObservationContext(ctx)
+	observation := o.lifecycleEventWithContext(ctx, sd.Event{Kind: sd.EventContinuationRequested})
 	if observation.Accepted {
 		o.signalToolLifecycle()
 	}
 }
 
-// noteToolContinuationRequestedFor is used by complete-message providers.
-// SendMessage may represent a whole rich batch, so the exact call is marked
-// first and any already accepted sibling is advanced by the batch-level
-// method as well.
-func (o *sessionProgressObserver) noteToolContinuationRequestedFor(callID string) {
+// noteToolContinuationRequestedFor marks a complete-message call and its batch.
+func (o *sessionProgressObserver) noteToolContinuationRequestedForWithContext(ctx context.Context, callID string) {
 	if o == nil || strings.TrimSpace(callID) == "" {
 		return
 	}
-	o.lifecycleEvent(sd.Event{Kind: sd.EventContinuationRequested, CallID: callID})
-	o.noteToolContinuationRequested()
+	o.lifecycleEventWithContext(ctx, sd.Event{Kind: sd.EventContinuationRequested, CallID: callID})
+	o.noteToolContinuationRequestedWithContext(ctx)
 }
 
 // toolLifecycleEvents wakes the session close controller whenever a result or
@@ -154,6 +158,22 @@ func (o *sessionProgressObserver) signalToolLifecycle() {
 	select {
 	case ch <- struct{}{}:
 	default:
+	}
+}
+
+// observeSessionTurnLifecycle receives state changes after sessionturn has
+// applied them to its private continuation service. The CLI only wakes its
+// close controller; it does not keep a second tool-result ledger.
+func (o *sessionProgressObserver) observeSessionTurnLifecycle(event sessionturn.ToolLifecycleEvent) {
+	if o == nil {
+		return
+	}
+	switch event.Type {
+	case sessionturn.ToolResultAccepted, sessionturn.ToolResultRejected:
+		o.signalToolLifecycle()
+	case sessionturn.ToolContinuationRequested:
+		o.armProviderProgress()
+		o.signalToolLifecycle()
 	}
 }
 
@@ -200,29 +220,29 @@ func firstNonBlankToolCallID(primary, fallback string) string {
 // rejection also registers the call as unresolved. It is intentionally
 // idempotent; only the first rejection is retained so repeated attempts cannot
 // rewrite the terminal status for a call.
-func (o *sessionProgressObserver) noteToolResultRejected(callID string, outcome messages.SessionSendOutcome) {
+func (o *sessionProgressObserver) noteToolResultRejected(ctx context.Context, callID string, outcome messages.SessionSendOutcome) {
 	if o == nil || strings.TrimSpace(callID) == "" || outcome.OK() {
 		return
 	}
-	o.toolStateMu.Lock()
-	defer o.toolStateMu.Unlock()
-	o.ensureToolStateLocked()
+	ctx = lifecycleObservationContext(ctx)
 	if o.continuationResultAccepted(callID) {
 		return
 	}
-	o.unresolvedToolCalls[callID] = struct{}{}
-	if _, recorded := o.toolResultRejections[callID]; !recorded {
-		o.toolResultRejections[callID] = outcome.Status
+	o.lifecycleEventWithContext(ctx, sd.Event{Kind: sd.EventToolResultRejected, CallID: callID, ResultStatus: string(outcome.Status)})
+}
+
+func lifecycleObservationContext(ctx context.Context) context.Context {
+	if ctx == nil {
+		return context.Background()
 	}
+	return context.WithoutCancel(ctx)
 }
 
 func (o *sessionProgressObserver) hasUnresolvedToolCalls() bool {
 	if o == nil {
 		return false
 	}
-	o.toolStateMu.Lock()
-	defer o.toolStateMu.Unlock()
-	return len(o.unresolvedToolCalls) > 0
+	return len(o.unresolvedToolCallIDs()) > 0
 }
 
 // lifecycleContinuationStates returns the reducer's immutable continuation
@@ -435,12 +455,12 @@ func (o *sessionProgressObserver) unresolvedToolCallIDs() []string {
 	if o == nil {
 		return nil
 	}
-	o.toolStateMu.Lock()
-	ids := make([]string, 0, len(o.unresolvedToolCalls))
-	for id := range o.unresolvedToolCalls {
-		ids = append(ids, id)
+	ids := make([]string, 0)
+	for _, state := range o.lifecycleContinuationStates() {
+		if (state.ProviderCallObserved && !state.ResultAccepted) || state.ResultRejected {
+			ids = append(ids, state.CallID)
+		}
 	}
-	o.toolStateMu.Unlock()
 	sort.Strings(ids)
 	return ids
 }
@@ -449,12 +469,10 @@ func (o *sessionProgressObserver) unresolvedToolResultSendStatuses() map[string]
 	if o == nil {
 		return nil
 	}
-	o.toolStateMu.Lock()
-	defer o.toolStateMu.Unlock()
-	statuses := make(map[string]messages.SessionSendStatus, len(o.toolResultRejections))
-	for id, status := range o.toolResultRejections {
-		if _, outstanding := o.unresolvedToolCalls[id]; outstanding {
-			statuses[id] = status
+	statuses := make(map[string]messages.SessionSendStatus)
+	for _, state := range o.lifecycleContinuationStates() {
+		if state.ResultRejected && state.ResultRejectionStatus != "" {
+			statuses[state.CallID] = messages.SessionSendStatus(state.ResultRejectionStatus)
 		}
 	}
 	return statuses

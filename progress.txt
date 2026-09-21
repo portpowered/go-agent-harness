@@ -4512,3 +4512,161 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
 - Next: continue with source-owned caller and service complexity repairs, then
   remove stale baseline entries and lower only exact proven reductions. Run all
   C229 preflight commands on one clean candidate before any PR or push.
+||||||| b9b2f90bf
+
+## C190 retirement repair checkpoint — 2026-09-14
+
+- Admission was verified for `audio-runtime` task
+  `audio-runtime-c190-retire-turn-input-tool-cluster`; `prd.json.branchName`
+  matches `codex/audio-runtime-c190-retire-turn-input-tool-cluster`, and
+  `origin/main` is an ancestor of the isolated worktree head.
+- Moved image validation, bounded image admission, read-image staging, and
+  executor binding behind the sessionturn service contract. The service now
+  enforces `16` images, `8 MiB` per file, and `32 MiB` aggregate limits; the
+  count-bound public regression passes. Runtime shutdown is idempotent and
+  joins bounded publication, continuation, provider, and image cleanup errors.
+- Deleted the replacement `session_image_capabilities.go` production file and
+  added the required `factory/docs/implementation-handoff.md` policy. The
+  exact nine planned legacy C190 files remain absent; the stateless
+  `livehost/turn_adapter.go` is `40` physical lines.
+- Focused sessionturn normal/race checks pass (`60` tests each), livehost checks
+  pass (`24`), and the combined sessionturn plus agentruntime package scope
+  passes (`1039`). This remains
+  an implementation checkpoint; next action is to finish the remaining
+  ownership cleanup, run prepush plus accumulated C190 checks, commit/push,
+  and hand the exact head to script CI without polling.
+- The subsequent `make prepush` passed fmt, architecture, Wire, vet, test
+  (`197` workspace packages), and coverage registration. Its coverage phase
+  was rejected only by the unrelated, environment-sensitive
+  `TestChromeForTestingAcquirerVerifiesAndCachesOneCompleteArtifact` with
+  `version_unverified`; rerunning that exact test passed. The earlier
+  integration failures likewise passed on exact rerun. No C190 causal test is
+  red; the prepush aggregate is not claimed green because its coverage command
+  exited nonzero.
+- The exact PRD accumulated regression command
+  `COUNT=1 bash scripts/test-session-ci-regressions.sh all` passed normal,
+  coverage, and race lanes across CLI, integration, device, and OpenAI
+  provider packages.
+
+## C190 final ownership repair checkpoint — 2026-09-14
+
+- Removed the renamed `session_image_boundary.go` so no image capability policy
+  remains in the retired `agentruntime` region. Sessionturn now resolves image
+  capability admission from the provider catalog and host-loaded metadata, and
+  binds the session-scoped read-image executor during service `Prepare`.
+- The focused capability/read-image/turn/publication/continuation/shutdown
+  regression set passes (`319` tests); the full combined sessionturn plus
+  agentruntime scope passes (`1039` tests). The exact nine legacy production
+  filenames remain absent, the boundary file is absent, and the only retained
+  transport adapter remains `livehost/turn_adapter.go` at `40` lines.
+- Exact next action: run the final normal/race sessionturn checks and accumulated
+  regression script against this repair, commit and push the same PR head,
+  update PR #529, then return `ACCEPTED` to script CI without polling.
+
+## C190 final gates — 2026-09-14
+
+- Architecture-size-check passes after the real production-file reduction at
+  `207` packages, `1960` files, and `28815` functions; only the corresponding
+  agentruntime package/file/function baselines were lowered.
+- Final owned scope passes `1039` tests. The exact PRD sessionturn checks pass:
+  normal `60` tests across five packages and race `18` invocations across five
+  packages. The livehost package passes `24` tests.
+- The accumulated `COUNT=1 bash scripts/test-session-ci-regressions.sh all`
+  script passes all normal, coverage, and race lanes across CLI, integration,
+  device, and OpenAI provider packages. Expected replay/PCM/transcript negative
+  controls report their rejection and pass.
+
+## C190 executor checkpoint — 2026-09-19
+
+- Re-read the operating policy and implementation handoff, reverified admission,
+  and confirmed branch `codex/audio-runtime-c190-retire-turn-input-tool-cluster`
+  still matches the PRD. Preserved the existing C190 dirty checkpoint and PR
+  head `87a8050857ab6f06db7cc526ba17965a405149eb`.
+- Moved session-turn default composition into `sessionturn/wire`, moved
+  instruction file/skills loading behind the session-turn service, made image
+  capability admission conditional on an image turn or `read_image`, and
+  removed the CLI-side instruction loader and conditional image staging gate.
+  Deleted `session_lifecycle_errors.go` and the now-unused 20-line
+  `agentsession/tool_lifecycle.go` compatibility alias.
+- Removed detached tool, provider-close, and publication shutdown workers; the
+  session-turn service now cancels and joins active work. Focused sessionturn
+  tests pass (`25` tests across five packages), instruction source-matrix plus
+  failed-image-continuation checks pass (`10`), and `git diff --check` passes.
+  The image-result continuation regression remains nondeterministic: its
+  ten-run check was `9` pass / `1` fail; the failing terminal snapshot still
+  reports `image-call` unresolved despite rendered tool-result and assistant
+  output. Do not treat this as accepted or handoff evidence.
+- The nine planned legacy filenames remain absent. Current CLI adapters count
+  `2` files / `195` lines (`turn_adapter.go` 24, `run_helpers.go` 171), but
+  `run_helpers.go` still owns a channel-forwarding goroutine and is not yet
+  stateless. Residual C190 production entrypoint/planning files remain in
+  `agentruntime`, so the full vertical retirement is incomplete. No prepush,
+  commit, push, PR update, CI handoff, or CI polling occurred.
+- Exact next action: repair the read-image result-acceptance/terminal-snapshot
+  race by tracing the stream-only rich-result fallback through the service
+  boundary; move the remaining turn/image/instruction/text planning decisions
+  and mutable state out of the named `agentruntime` entrypoint files, and move
+  the event-forwarding queue state behind the owning runtime service. Then
+  verify complete caller cutover and legacy-file absence before the PRD
+  normal/race/regression commands and `make prepush`; commit, push, and update
+  PR `#529` only when the complete candidate passes.
+
+## C248 recovery checkpoint — 2026-09-20
+
+- Verified task admission and the matching PRD branch. Preserved all 19 dirty
+  C219 paths in checkpoint `963ec75cd79c26ee56e485e094bb6dae159b0fd5`; C190,
+  C219, startup integration `8bdafc7f947a3a2c9856220abdc539437035bd21`,
+  planning base `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`, and fetched
+  `origin/main` are ancestors. C230 was clean at the planning base. C190 PR
+  #529 had no formal review entries; its recorded image continuation and
+  stateful-adapter findings remain actionable.
+- Removed the recovered `session.go` duplicate and repaired the recording
+  image-plan call, caller-owned audio output close, and an unused test import.
+  Focused image-result, failed-image, image/audio continuation, and audio
+  interrupt-ordering tests initially exposed that a service-owned executor was
+  incorrectly treated as owning a provider session that it did not wrap. The
+  observed-session boundary now checks actual session ownership; the exact
+  targeted set passes (`10` tests across agentruntime and CLI transport).
+- Sessionturn package tests still pass (`25` across five packages). Retirement
+  remains incomplete: `session_image_entrypoints.go`,
+  `session_instruction_entrypoints.go`, `session_text_entrypoint.go`, and
+  `session_turn_planning.go` remain production files, and the 15 named callers
+  and adapter purity/budget are not yet verified after cutover. No PR, push,
+  full preflight, CI handoff, or CI polling occurred.
+- Exact next action: finish service-owned request and runtime cutover for the
+  remaining image, instruction, text, tool, and publication callers; delete all
+  eight named replacement files plus every remaining target file; verify the
+  adapter cap and all callers; then run the full C248 functional, race,
+  integration, hermetic, Wire, embedding, ancestry, cleanliness, and `make
+  prepush` gates on one committed SHA before any PR update.
+
+### C248 publication ownership repair — 2026-09-20
+
+- Changed `sessionturn.BrowserRequest.Watch` to a callback stream. The service
+  now owns the bounded event queue, watcher goroutine, cancellation, and join;
+  the CLI bridge only translates broker events synchronously. Removed the
+  service-holding `TurnAdapter` and its fallback `Prepare`; publication now
+  uses the already prepared runtime. Deleted the now-unused livehost turn
+  adapter alias. The sole named transport adapter is 86 physical lines.
+- Replaced the `newSessionTurnService` wrapper with direct Wire construction at
+  callers. Exact checks pass: `go test -count=1
+  ./go-agent-runtime/services/sessionturn/...` (25 tests), `go test -race
+  -count=1 ./go-agent-runtime/services/sessionturn/...` (25), focused
+  agentruntime behavior selection (224), and `go test -count=1
+  ./agent-cli/internal/transport/...` (736). The checks ran before this
+  checkpoint; `git diff --check` is still required before commit.
+- The full vertical remains incomplete: four named replacement production
+  files remain (`session_image_entrypoints.go`,
+  `session_instruction_entrypoints.go`, `session_text_entrypoint.go`,
+  `session_turn_planning.go`); remaining caller cutover and adapter purity
+  review are pending. No complete preflight, PR update, push, or CI handoff.
+- Exact next action: move the remaining image/instruction/text/session
+  composition decisions behind the sessionturn contract, cut over the named
+  callers, remove the four replacement files, and verify every planned
+  original/replacement is absent before running the full pre-PR gate.
+- The repair above is checkpointed at `898c719` (`move publication stream
+  ownership into sessionturn`). `git diff --check` passed before commit; the
+  branch was clean at the checkpoint. The named adapter count is one file / 86
+  lines because the unused `livehost/turn_adapter.go` was deleted. Normal and
+  race sessionturn tests, focused agentruntime tests, and all agent-cli
+  transport tests passed on the checkpoint contents.

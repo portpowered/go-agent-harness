@@ -33,7 +33,7 @@ func TestLivePlannerFamiliesUseOneGroundingComposition(t *testing.T) {
 		{
 			name: "recording directory",
 			build: func(_ *testing.T, opts SessionRunOptions) (sessionRuntimePlan, func(), error) {
-				return planSessionForDirectoryRecordingWithInstructions(opts, "customer instructions", true)
+				return planSessionForDirectoryRecordingWithInstructions(context.Background(), opts, "customer instructions", true)
 			},
 		},
 		{
@@ -583,9 +583,6 @@ func TestComposeSessionInstructionsRequiresHonestFilesystemRefusalHandling(t *te
 
 func sessionRequestFromPlanner(t *testing.T, inferencer messages.SessionInferencer) inference.SessionRequest {
 	t.Helper()
-	if image, ok := inferencer.(*sessionImageInferencer); ok {
-		inferencer = image.inner
-	}
 	requester, ok := inferencer.(interface {
 		Request() inference.SessionRequest
 	})

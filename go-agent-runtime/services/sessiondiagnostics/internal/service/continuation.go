@@ -18,6 +18,10 @@ func (r *reducer) toolCallLocked(event sessiondiagnostics.Event) sessiondiagnost
 	// existing call. Empty IDs remain compatible with legacy providers and can
 	// be enriched by a later identified boundary.
 	if !r.responseBelongsLocked(responseID) {
+		if r.activeResponse || r.continuations[callID].ResultAccepted {
+			return sessiondiagnostics.Observation{ResponseID: responseID}
+		}
+		r.recordRejectedToolCallLocked(callID, event.ToolName, responseID)
 		return sessiondiagnostics.Observation{ResponseID: responseID}
 	}
 	state := r.continuations[callID]
@@ -38,6 +42,20 @@ func (r *reducer) toolCallLocked(event sessiondiagnostics.Event) sessiondiagnost
 	return sessiondiagnostics.Observation{Accepted: true, ResponseID: responseID}
 }
 
+func (r *reducer) recordRejectedToolCallLocked(callID, toolName, responseID string) {
+	state := r.continuations[callID]
+	state.CallID = callID
+	if toolName = strings.TrimSpace(toolName); toolName != "" {
+		state.ToolName = toolName
+	}
+	if responseID != "" && state.ResponseID == "" {
+		state.ResponseID = responseID
+	}
+	state.ProviderCallObserved = true
+	state.ResultRejected = true
+	r.continuations[callID] = state
+}
+
 func (r *reducer) toolResultAcceptedLocked(callID string) sessiondiagnostics.Observation {
 	callID = strings.TrimSpace(callID)
 	if callID == "" {
@@ -55,8 +73,28 @@ func (r *reducer) toolResultAcceptedLocked(callID string) sessiondiagnostics.Obs
 		state.ResponseID = strings.TrimSpace(r.activeResponseID)
 	}
 	state.ResultAccepted = true
+	state.ResultRejected = false
+	state.ResultRejectionStatus = ""
 	if continuationCanComplete(state) {
 		state.ContinuationComplete = true
+	}
+	r.continuations[callID] = state
+	return sessiondiagnostics.Observation{Accepted: true}
+}
+
+func (r *reducer) toolResultRejectedLocked(callID, status string) sessiondiagnostics.Observation {
+	callID = strings.TrimSpace(callID)
+	if callID == "" {
+		return sessiondiagnostics.Observation{}
+	}
+	state := r.continuations[callID]
+	if state.ResultAccepted {
+		return sessiondiagnostics.Observation{}
+	}
+	state.CallID = callID
+	state.ResultRejected = true
+	if state.ResultRejectionStatus == "" {
+		state.ResultRejectionStatus = strings.TrimSpace(status)
 	}
 	r.continuations[callID] = state
 	return sessiondiagnostics.Observation{Accepted: true}
@@ -219,7 +257,7 @@ func (r *reducer) pendingContinuationCountLocked() int {
 func (r *reducer) unresolvedCallCountLocked() int {
 	count := 0
 	for _, state := range r.continuations {
-		if state.ProviderCallObserved && !state.ResultAccepted {
+		if (state.ProviderCallObserved && !state.ResultAccepted) || state.ResultRejected {
 			count++
 		}
 	}

@@ -55,14 +55,15 @@ func TestSessionProgressObserver_ToolRoleDeliveryCannotClaimScheduledContinuatio
 		observer.observe(msg)
 	}
 
-	if observer.activeResponse {
+	if lifecycleSnapshotForTest(observer).ActiveResponse {
 		t.Fatal("ToolRunner delivery opened an active provider response")
 	}
-	if observer.nextScheduledResponse != 1 || len(observer.scheduledResponses) != 1 {
-		t.Fatalf("ToolRunner delivery changed scheduled slots: next=%d lifecycles=%d", observer.nextScheduledResponse, len(observer.scheduledResponses))
+	snapshot := lifecycleSnapshotForTest(observer)
+	if snapshot.NextScheduledResponse != 1 || len(snapshot.Scheduled) != 1 {
+		t.Fatalf("ToolRunner delivery changed scheduled slots: next=%d lifecycles=%d", snapshot.NextScheduledResponse, len(snapshot.Scheduled))
 	}
-	if !observer.logicalScheduledResponseSet || observer.logicalScheduledResponseIndex != 0 || observer.logicalScheduledResponseID != providerResponseID {
-		t.Fatalf("ToolRunner delivery changed logical owner: set=%t index=%d id=%q", observer.logicalScheduledResponseSet, observer.logicalScheduledResponseIndex, observer.logicalScheduledResponseID)
+	if !snapshot.LogicalScheduledSet || snapshot.LogicalScheduledIndex != 0 || snapshot.LogicalScheduledID != providerResponseID {
+		t.Fatalf("ToolRunner delivery changed logical owner: set=%t index=%d id=%q", snapshot.LogicalScheduledSet, snapshot.LogicalScheduledIndex, snapshot.LogicalScheduledID)
 	}
 
 	observer.observe(messages.StreamMessage{
@@ -78,8 +79,9 @@ func TestSessionProgressObserver_ToolRoleDeliveryCannotClaimScheduledContinuatio
 	} {
 		observer.observe(msg)
 	}
-	if !observer.activeResponse || observer.activeResponseID != continuationResponse || !observer.activeScheduledResponseSet || observer.activeScheduledResponseID != continuationResponse {
-		t.Fatalf("ToolRunner delivery after continuation start changed owner: response=%t/%q scheduled=%t/%q", observer.activeResponse, observer.activeResponseID, observer.activeScheduledResponseSet, observer.activeScheduledResponseID)
+	snapshot = lifecycleSnapshotForTest(observer)
+	if !snapshot.ActiveResponse || snapshot.ActiveResponseID != continuationResponse || !snapshot.ActiveScheduledSet || snapshot.ActiveScheduledID != continuationResponse {
+		t.Fatalf("ToolRunner delivery after continuation start changed owner: response=%t/%q scheduled=%t/%q", snapshot.ActiveResponse, snapshot.ActiveResponseID, snapshot.ActiveScheduledSet, snapshot.ActiveScheduledID)
 	}
 	observer.observe(messages.StreamMessage{
 		Type:       messages.StreamTypeTextDelta,
@@ -106,7 +108,7 @@ func TestSessionProgressObserver_ChainedToolContinuationCreditsPredecessor(t *te
 	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
 	observer.setToolResultsEnabled(true)
 	observer.scheduleAudioInputs([]ScheduledAudioInput{{AfterCompletedTurns: 0}})
-	observer.scheduledResponses = append(observer.scheduledResponses, scheduledAudioResponseLifecycle{})
+	ensureTestLifecycleScheduled(t, observer, 1)
 
 	const (
 		firstResponseID      = "chain-initial"
@@ -156,60 +158,63 @@ func TestSessionProgressObserver_ChainedToolContinuationCreditsPredecessor(t *te
 func TestSessionProgressObserver_UnknownScheduledResponseIDCannotFallbackToCurrentOwner(t *testing.T) {
 	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
 	observer.scheduleAudioInputs([]ScheduledAudioInput{{AfterCompletedTurns: 0}, {AfterCompletedTurns: 1}})
-	observer.scheduledResponses = []scheduledAudioResponseLifecycle{{bound: true}, {}}
-	observer.nextScheduledResponse = 1
+	ensureTestLifecycleScheduled(t, observer, 2)
 	if !observer.bindScheduledResponseID(0, "response-current") || !observer.setActiveScheduledResponseWithID(0, "response-current") {
 		t.Fatal("failed to establish current scheduled owner")
 	}
 
 	observer.noteScheduledResponseDisposition("response-foreign", scheduledAudioResponseCompleted)
-	if observer.completedScheduled != 0 {
-		t.Fatalf("foreign response completed %d scheduled lifecycles, want 0", observer.completedScheduled)
+	snapshot := lifecycleSnapshotForTest(observer)
+	if snapshot.CompletedScheduled != 0 {
+		t.Fatalf("foreign response completed %d scheduled lifecycles, want 0", snapshot.CompletedScheduled)
 	}
-	if !observer.activeScheduledResponseSet || observer.activeScheduledResponseID != "response-current" {
-		t.Fatalf("foreign response changed active owner: set=%t id=%q", observer.activeScheduledResponseSet, observer.activeScheduledResponseID)
+	if !snapshot.ActiveScheduledSet || snapshot.ActiveScheduledID != "response-current" {
+		t.Fatalf("foreign response changed active owner: set=%t id=%q", snapshot.ActiveScheduledSet, snapshot.ActiveScheduledID)
 	}
-	if observer.scheduledResponses[1].bound {
+	if snapshot.Scheduled[1].Bound {
 		t.Fatal("foreign response consumed a later scheduled lifecycle")
 	}
 }
 
 func TestSessionProgressObserver_LateDispositionCannotClearNewerScheduledOwner(t *testing.T) {
 	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
-	observer.scheduledResponses = []scheduledAudioResponseLifecycle{{}, {}}
+	ensureTestLifecycleScheduled(t, observer, 2)
 	if !observer.bindScheduledResponseID(0, "response-old") || !observer.setActiveScheduledResponseWithID(0, "response-old") {
 		t.Fatal("failed to establish initial scheduled owner")
 	}
 	observer.noteScheduledResponseDisposition("response-old", scheduledAudioResponseCancelled)
-	if observer.completedScheduled != 1 {
-		t.Fatalf("cancelled lifecycle count = %d, want 1", observer.completedScheduled)
+	if got := lifecycleSnapshotForTest(observer).CompletedScheduled; got != 1 {
+		t.Fatalf("cancelled lifecycle count = %d, want 1", got)
 	}
 
 	if !observer.bindScheduledResponseID(1, "response-new") || !observer.setActiveScheduledResponseWithID(1, "response-new") {
 		t.Fatal("failed to establish replacement scheduled owner")
 	}
 	observer.noteScheduledResponseDisposition("response-old", scheduledAudioResponseCompleted)
-	if !observer.activeScheduledResponseSet || observer.activeScheduledResponseID != "response-new" {
-		t.Fatalf("late old disposition cleared replacement owner: set=%t id=%q", observer.activeScheduledResponseSet, observer.activeScheduledResponseID)
+	snapshot := lifecycleSnapshotForTest(observer)
+	if !snapshot.ActiveScheduledSet || snapshot.ActiveScheduledID != "response-new" {
+		t.Fatalf("late old disposition cleared replacement owner: set=%t id=%q", snapshot.ActiveScheduledSet, snapshot.ActiveScheduledID)
 	}
-	if observer.completedScheduled != 1 {
-		t.Fatalf("late old disposition changed completed count to %d, want 1", observer.completedScheduled)
+	if snapshot.CompletedScheduled != 1 {
+		t.Fatalf("late old disposition changed completed count to %d, want 1", snapshot.CompletedScheduled)
 	}
 
 	observer.noteScheduledResponseDisposition("response-new", scheduledAudioResponseCompleted)
-	if observer.activeScheduledResponseSet || observer.logicalScheduledResponseSet {
+	snapshot = lifecycleSnapshotForTest(observer)
+	if snapshot.ActiveScheduledSet || snapshot.LogicalScheduledSet {
 		t.Fatal("current disposition did not clear its own owner")
 	}
-	if observer.completedScheduled != 2 {
-		t.Fatalf("duplicate resolved disposition changed completed count to %d, want 2", observer.completedScheduled)
+	if snapshot.CompletedScheduled != 2 {
+		t.Fatalf("duplicate resolved disposition changed completed count to %d, want 2", snapshot.CompletedScheduled)
 	}
 }
 
 func TestSessionProgressObserver_SessionOpenResetsReducerBeforeUntaggedResponse(t *testing.T) {
 	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
 	observer.observe(messages.StreamMessage{Type: messages.StreamTypeMessageStart, ResponseID: "response-old", Value: messages.NewMessageStartValue()})
-	if !observer.activeResponse || observer.activeResponseID != "response-old" {
-		t.Fatalf("initial response owner = active=%t id=%q, want response-old", observer.activeResponse, observer.activeResponseID)
+	snapshot := lifecycleSnapshotForTest(observer)
+	if !snapshot.ActiveResponse || snapshot.ActiveResponseID != "response-old" {
+		t.Fatalf("initial response owner = active=%t id=%q, want response-old", snapshot.ActiveResponse, snapshot.ActiveResponseID)
 	}
 
 	observer.observe(messages.StreamMessage{Type: messages.StreamTypeSessionOpen, Value: messages.NewSessionOpenValue("session-new", "openai")})
@@ -218,8 +223,9 @@ func TestSessionProgressObserver_SessionOpenResetsReducerBeforeUntaggedResponse(
 	}
 
 	observer.observe(messages.StreamMessage{Type: messages.StreamTypeMessageStart, Value: messages.NewMessageStartValue()})
-	if !observer.activeResponse || observer.activeResponseID != "" {
-		t.Fatalf("untagged response owner = active=%t id=%q, want a fresh untagged response", observer.activeResponse, observer.activeResponseID)
+	snapshot = lifecycleSnapshotForTest(observer)
+	if !snapshot.ActiveResponse || snapshot.ActiveResponseID != "" {
+		t.Fatalf("untagged response owner = active=%t id=%q, want a fresh untagged response", snapshot.ActiveResponse, snapshot.ActiveResponseID)
 	}
 	observer.observe(messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("fresh response")})
 	observer.observe(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{})})

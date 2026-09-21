@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -72,9 +73,8 @@ func validateSessionRTCComponents(c SessionRTCComponents) error {
 
 // planWebRTCSessionRuntime keeps provider-specific configuration and capture
 // construction behind the existing provider seams while replacing only the
-// live transport owner. Runtime startup remains lazy until the session loop
-// asks the inferencer to connect, which keeps planning free of network and
-// media-source side effects.
+// live transport owner. Runtime startup remains lazy until the session loop asks
+// the inferencer to connect, keeping planning free of network and media effects.
 func planWebRTCSessionRuntime(opts SessionRunOptions, selection SessionRuntimeSelection, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
 	runtimeFactory := opts.RTCRuntimeFactory
 	if runtimeFactory == nil {
@@ -523,12 +523,12 @@ func (s *sessionRTCRuntimeSession) SupportsResponseRequests() bool {
 }
 
 func (s *sessionRTCRuntimeSession) SendMessage(ctx context.Context, msg messages.Message) bool {
-	sender, ok := s.Session.(SessionImageMessageSender)
+	sender, ok := s.Session.(sessionturn.CompleteMessageSender)
 	return ok && sender.SendMessage(ctx, msg)
 }
 
 func (s *sessionRTCRuntimeSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
-	sender, ok := s.Session.(SessionImageMessageSenderWithoutResponse)
+	sender, ok := s.Session.(sessionturn.CompleteMessageWithoutResponseSender)
 	return ok && sender.SendMessageWithoutResponse(ctx, msg)
 }
 

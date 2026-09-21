@@ -7,6 +7,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
+	sd "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
 )
 
 // account is the single observation seam: every counted byte crosses here
@@ -113,14 +114,15 @@ func (o *sessionProgressObserver) dispatchScheduledInputs(ctx context.Context, l
 }
 
 func (o *sessionProgressObserver) nextScheduledAudioInput() (ScheduledAudioInput, int, bool) {
-	o.lifecycleProjectionMu.Lock()
-	defer o.lifecycleProjectionMu.Unlock()
+	snapshot := o.ensureLifecycle().Snapshot()
+	o.scheduleMu.Lock()
+	defer o.scheduleMu.Unlock()
 	if len(o.pendingInputs) == 0 {
 		return ScheduledAudioInput{}, 0, false
 	}
 	input := o.pendingInputs[0]
 	inputIndex := o.scheduledInputs - len(o.pendingInputs) + 1
-	return input, inputIndex, o.scheduledAudioInputDueLocked(input)
+	return input, inputIndex, o.scheduledAudioInputDueLocked(input, snapshot)
 }
 
 func (o *sessionProgressObserver) sendScheduledAudioInput(ctx context.Context, loop scheduledSessionInputSender, input ScheduledAudioInput, inputIndex int) error {
@@ -133,23 +135,22 @@ func (o *sessionProgressObserver) sendScheduledAudioInput(ctx context.Context, l
 		}
 		o.armProviderProgress()
 	}
-	o.lifecycleProjectionMu.Lock()
+	o.scheduleMu.Lock()
 	if !o.scheduledTurnBaseSet {
 		o.scheduledTurnBase = o.turnsCompleted
 		o.scheduledTurnBaseSet = true
 	}
 	o.dispatchedInputs++
-	o.scheduledResponses = append(o.scheduledResponses, scheduledAudioResponseLifecycle{})
 	o.pendingInputs = o.pendingInputs[1:]
-	o.lifecycleProjectionMu.Unlock()
+	o.scheduleMu.Unlock()
 	o.account(metrics.DirectionInput, metrics.ModalityAudio, len(input.PCM))
 	return nil
 }
 
-func (o *sessionProgressObserver) scheduledAudioInputDueLocked(input ScheduledAudioInput) bool {
+func (o *sessionProgressObserver) scheduledAudioInputDueLocked(input ScheduledAudioInput, snapshot sd.Snapshot) bool {
 	completionThreshold := o.turnsCompleted
 	if o.scheduledTurnBaseSet {
-		scheduledThreshold := o.scheduledTurnBase + o.completedScheduled
+		scheduledThreshold := o.scheduledTurnBase + snapshot.CompletedScheduled
 		if scheduledThreshold > completionThreshold {
 			completionThreshold = scheduledThreshold
 		}
@@ -164,7 +165,7 @@ func (o *sessionProgressObserver) scheduledAudioInputDueLocked(input ScheduledAu
 		return false
 	}
 	return o.scheduledAudioDispatch == ScheduledAudioDispatchActiveResponse &&
-		o.activeResponse && input.AfterCompletedTurns <= o.turnsCompleted+1
+		snapshot.ActiveResponse && input.AfterCompletedTurns <= o.turnsCompleted+1
 }
 
 // scheduledAudioReady reports whether the scheduler may release its next
@@ -178,9 +179,9 @@ func (o *sessionProgressObserver) scheduledAudioAwaitingConfiguration() bool {
 	if o == nil {
 		return false
 	}
-	o.lifecycleProjectionMu.Lock()
+	o.scheduleMu.Lock()
 	pending := len(o.pendingInputs) > 0
-	o.lifecycleProjectionMu.Unlock()
+	o.scheduleMu.Unlock()
 	return o.requireSessionUpdated && pending && !o.scheduledAudioReady()
 }
 
@@ -195,9 +196,10 @@ func (o *sessionProgressObserver) scheduledAudioComplete() bool {
 	if o == nil {
 		return false
 	}
-	o.lifecycleProjectionMu.Lock()
-	complete := o.scheduledInputs > 0 && len(o.pendingInputs) == 0 && o.completedScheduled >= o.scheduledInputs
-	o.lifecycleProjectionMu.Unlock()
+	snapshot := o.ensureLifecycle().Snapshot()
+	o.scheduleMu.Lock()
+	complete := o.scheduledInputs > 0 && len(o.pendingInputs) == 0 && snapshot.CompletedScheduled >= o.scheduledInputs
+	o.scheduleMu.Unlock()
 	return complete && !o.hasToolLifecycleObligation()
 }
 
@@ -214,9 +216,10 @@ func (o *sessionProgressObserver) scheduledAudioCounts() (completed, dispatched,
 	if o == nil {
 		return 0, 0, 0
 	}
-	o.lifecycleProjectionMu.Lock()
-	defer o.lifecycleProjectionMu.Unlock()
-	return o.completedScheduled, o.dispatchedInputs, o.scheduledInputs
+	snapshot := o.ensureLifecycle().Snapshot()
+	o.scheduleMu.Lock()
+	defer o.scheduleMu.Unlock()
+	return snapshot.CompletedScheduled, o.dispatchedInputs, o.scheduledInputs
 }
 
 // noteProviderUsage accumulates the provider-reported token usage delivered on
