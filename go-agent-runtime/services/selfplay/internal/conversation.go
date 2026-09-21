@@ -38,8 +38,11 @@ func (s *Service) runSide(ctx, callerCtx context.Context, index int, role selfpl
 	defer cancelLoop()
 	runResult := startSideLoop(loop, loopCtx, cancelLoop)
 	started, runErr, failureErr := s.readSideDeltas(loopCtx, loop, index, role, output, stop, evidence, runResult)
-	if runErr == nil {
-		runErr = waitSideLoop(source, runResult)
+	loopErr := waitSideLoop(source, runResult)
+	if errors.Is(loopErr, selfplay.ErrShutdownTimeout) {
+		runErr = errors.Join(runErr, loopErr)
+	} else if runErr == nil || contextStopError(runErr) {
+		runErr = loopErr
 	}
 	return finishSide(stop, ctx, callerCtx, index, role, started, runErr, failureErr)
 }
@@ -178,6 +181,9 @@ func waitSideLoop(source platformclock.TimerSource, runResult <-chan error) erro
 
 func finishSide(stop *stopState, runCtx, callerCtx context.Context, index int, role selfplay.SideRole, started bool, runErr, failureErr error) sideResult {
 	if failureErr != nil {
+		if errors.Is(runErr, selfplay.ErrShutdownTimeout) {
+			return sideResult{index: index, err: errors.Join(failureErr, selfplay.ErrShutdownTimeout), started: started}
+		}
 		return sideResult{index: index, err: failureErr, started: started}
 	}
 	if !stop.stopped() {
@@ -186,7 +192,7 @@ func finishSide(stop *stopState, runCtx, callerCtx context.Context, index int, r
 	if failureErr != nil {
 		return sideResult{index: index, err: failureErr, started: started}
 	}
-	if stop.stopped() && contextStopError(runErr) {
+	if stop.stopped() && contextStopError(runErr) && !errors.Is(runErr, selfplay.ErrShutdownTimeout) {
 		return sideResult{index: index, started: started}
 	}
 	return sideResult{index: index, err: runErr, started: started}
