@@ -4584,3 +4584,21 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   and every C229-05 functional, integration, race, hermetic, and Wire command on
   the resulting exact clean SHA. Repair locally and rerun the entire command set
   on any changed commit before pushing or opening the PR.
+
+
+# C229 staticcheck repair checkpoint — 2026-09-20
+
+- The clean candidate `ffe016d897ab2a15708d4acdba47e6425de94571` passed
+  formatting, architecture-size-check (208 packages, 1,934 files, 28,453
+  functions), Wire generation and vet in `rtk make prepush`, then staticcheck
+  reported five U1000 declarations with no call sites: one unused legacy
+  audio-output error helper and four unreferenced recording test helpers.
+  Pinned golangci-lint had already passed all 15 modules with zero findings.
+- Removed only those dead declarations. Causal checks now pass: `rtk go test
+  ./agent-cli/internal/services/internal/agentruntime -count=1
+  -timeout=300s` (927 tests, 1 package) and `rtk make staticcheck` (all 15
+  modules, pinned staticcheck 2026.1). `rtk git diff --check` passes.
+- The prepush candidate above is not the handoff SHA. Next: commit this cleanup
+  and checkpoint, then run `rtk make prepush` and all C229-05 commands on the
+  resulting exact clean commit. Any new local failure must be repaired and the
+  complete command set rerun on the changed SHA before push/PR.

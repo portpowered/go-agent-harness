@@ -2,7 +2,6 @@ package agentruntime
 
 import (
 	"errors"
-	"fmt"
 
 	sessionpublic "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -21,13 +20,6 @@ var (
 // ErrSessionAudioResponseIncomplete is the CLI compatibility name for the
 // reusable runtime's finite audio-response contract.
 const ErrSessionAudioResponseIncomplete = sessioncontract.ErrLiveAudioResponseIncomplete
-
-func joinSessionAudioOutputError(runErr error, path string, outputErr error) error {
-	if outputErr == nil || errors.Is(runErr, outputErr) {
-		return runErr
-	}
-	return errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", path, outputErr))
-}
 
 // SessionUnresolvedToolResultsError remains source-compatible for the legacy
 // runtime while sharing the host-facing contract with the reusable runtime.
