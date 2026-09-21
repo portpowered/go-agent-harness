@@ -113,8 +113,8 @@ func (s legacyToolCapabilitiesService) Resolve(cfg *config.Config) (serviceTools
 
 // NewSelfPlayService keeps the self-play runtime implementation private while
 // exposing only its value-oriented application contract to the CLI graph.
-func NewSelfPlayService(audioService audioio.Service, factory agentruntime.SessionRuntimeFactory, clockSource clock.Source, modelCatalog runtimeProviders.ModelCatalog) serviceSelfPlay.Service {
-	return agentruntime.NewSelfPlayService(audioService, factory, clockSource, modelCatalog)
+func NewSelfPlayService(audioService audioio.Service, factory agentruntime.SessionRuntimeFactory, clockSource clock.Source, modelCatalog runtimeProviders.ModelCatalog, replayService runtimeReplay.Service) serviceSelfPlay.Service {
+	return agentruntime.NewSelfPlayService(audioService, factory, clockSource, modelCatalog, replayService)
 }
 
 // DeviceSet is the device service's complete provider set. Application Wire

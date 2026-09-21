@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	replaywire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -23,7 +24,7 @@ func TestLiveTraceRecorderRoundTripsProviderAndPCM(t *testing.T) {
 	provider := filepath.Join(root, "provider.json")
 	writeTraceProviderCapture(t, provider)
 	inner := &traceTestRecorder{destination: bundle}
-	traced, err := newLiveTraceRecorder(inner, bundle, provider, 16_000, clock.Real{})
+	traced, err := newLiveTraceRecorder(inner, bundle, provider, 16_000, clock.Real{}, replaywire.NewService())
 	if err != nil {
 		t.Fatalf("newLiveTraceRecorder: %v", err)
 	}
@@ -94,7 +95,7 @@ func TestLiveTraceRecorderRetainsTraceWhenProviderEvidenceIsMissing(t *testing.T
 	bundle := filepath.Join(root, "bundle")
 	stagedProvider := filepath.Join(root, "missing-provider.json")
 	inner := &traceTestRecorder{destination: bundle}
-	traced, err := newLiveTraceRecorder(inner, bundle, stagedProvider, 16_000, clock.Real{})
+	traced, err := newLiveTraceRecorder(inner, bundle, stagedProvider, 16_000, clock.Real{}, replaywire.NewService())
 	if err != nil {
 		t.Fatalf("newLiveTraceRecorder: %v", err)
 	}
@@ -118,7 +119,7 @@ func TestLiveTraceRecorderRetainsTraceWhenProviderEvidenceIsCorrupt(t *testing.T
 		t.Fatalf("write corrupt provider capture: %v", err)
 	}
 	inner := &traceTestRecorder{destination: bundle}
-	traced, err := newLiveTraceRecorder(inner, bundle, provider, 16_000, clock.Real{})
+	traced, err := newLiveTraceRecorder(inner, bundle, provider, 16_000, clock.Real{}, replaywire.NewService())
 	if err != nil {
 		t.Fatalf("newLiveTraceRecorder: %v", err)
 	}

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
+	runtimereplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 )
 
 type roomReplayManifestDocument struct {
@@ -48,7 +49,7 @@ type roomReplayArtifactRef struct {
 
 type roomReplayJSONObject map[string]json.RawMessage
 
-func validateRoomReplayManifest(root, manifestPath string, data []byte) (RoomReplayPlan, error) {
+func validateRoomReplayManifest(root, manifestPath string, data []byte, replayService runtimereplay.Service) (RoomReplayPlan, error) {
 	document, err := parseRoomReplayManifest(data)
 	if err != nil {
 		return RoomReplayPlan{}, err
@@ -303,8 +304,10 @@ func validateRoomReplayManifest(root, manifestPath string, data []byte) (RoomRep
 		plan.Participants = append(plan.Participants, projection)
 	}
 
-	if err := validateRoomReplayCaptures(&plan); err != nil {
-		return RoomReplayPlan{}, err
+	if replayService != nil {
+		if err := validateRoomReplayCaptures(&plan, replayService); err != nil {
+			return RoomReplayPlan{}, err
+		}
 	}
 	timelineArtifact, ok := findRoomReplayArtifact(validated, "room:timeline")
 	if !ok {

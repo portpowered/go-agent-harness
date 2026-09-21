@@ -2,6 +2,7 @@ package agentruntime
 
 import (
 	"bufio"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -15,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+	runtimereplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 )
 
 func resolveRoomReplayBundle(bundle string) (string, string, string, error) {
@@ -223,7 +224,10 @@ func roomReplayFileDigest(filename string) (string, error) {
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
-func validateRoomReplayCaptures(plan *RoomReplayPlan) error {
+func validateRoomReplayCaptures(plan *RoomReplayPlan, replayService runtimereplay.Service) error {
+	if replayService == nil {
+		return errors.New("room replay capture validation requires a replay service")
+	}
 	for index := range plan.Participants {
 		participant := &plan.Participants[index]
 		if participant.Kind == "human" {
@@ -232,24 +236,21 @@ func validateRoomReplayCaptures(plan *RoomReplayPlan) error {
 		if participant.Capture.AbsolutePath == "" {
 			return newRoomReplayBundleError(RoomReplayBundleIncomplete, "participants["+participant.ID+"].capture", "", "provider capture", "missing", ErrRoomReplayBundleIncomplete)
 		}
-		capture, err := testing.LoadSessionCapture(participant.Capture.AbsolutePath)
+		inspection, err := replayService.InspectCapture(context.Background(), participant.Capture.AbsolutePath)
 		if err != nil {
 			return newRoomReplayBundleError(RoomReplayBundleMismatch, "participants["+participant.ID+"].capture", participant.Capture.Path, "valid session capture", err.Error(), err)
 		}
-		if capture.Version != 0 && capture.Version != testing.SessionCaptureVersion {
-			return newRoomReplayBundleError(RoomReplayBundleMismatch, "participants["+participant.ID+"].capture.version", participant.Capture.Path, fmt.Sprintf("%d", testing.SessionCaptureVersion), fmt.Sprintf("%d", capture.Version), ErrInvalidRoomReplayBundle)
+		if !inspection.IsRealtime() || !inspection.Facts.RealtimeWebSocketReplayable {
+			return newRoomReplayBundleError(RoomReplayBundleMismatch, "participants["+participant.ID+"].capture", participant.Capture.Path, "realtime websocket capture", string(inspection.Kind), ErrInvalidRoomReplayBundle)
 		}
-		if len(capture.Records) == 0 {
+		if inspection.Facts.EventCount == 0 {
 			return newRoomReplayBundleError(RoomReplayBundleIncomplete, "participants["+participant.ID+"].capture.records", participant.Capture.Path, "at least one provider event", "empty", ErrRoomReplayBundleIncomplete)
 		}
-		if capture.Provider.Name != "" && participant.Provider != "" && !strings.EqualFold(capture.Provider.Name, participant.Provider) {
-			return newRoomReplayBundleError(RoomReplayBundleMismatch, "participants["+participant.ID+"].provider", participant.Capture.Path, participant.Provider, capture.Provider.Name, ErrInvalidRoomReplayBundle)
+		if inspection.Provider != "" && participant.Provider != "" && !strings.EqualFold(inspection.Provider, participant.Provider) {
+			return newRoomReplayBundleError(RoomReplayBundleMismatch, "participants["+participant.ID+"].provider", participant.Capture.Path, participant.Provider, inspection.Provider, ErrInvalidRoomReplayBundle)
 		}
-		if capture.Provider.Model != "" && participant.Model != "" && capture.Provider.Model != participant.Model {
-			return newRoomReplayBundleError(RoomReplayBundleMismatch, "participants["+participant.ID+"].model", participant.Capture.Path, participant.Model, capture.Provider.Model, ErrInvalidRoomReplayBundle)
-		}
-		if _, err := testing.NewReplayWebSocketDialerFromCapture(capture); err != nil {
-			return newRoomReplayBundleError(RoomReplayBundleMismatch, "participants["+participant.ID+"].capture", participant.Capture.Path, "provider websocket payloads", err.Error(), err)
+		if inspection.Model != "" && participant.Model != "" && inspection.Model != participant.Model {
+			return newRoomReplayBundleError(RoomReplayBundleMismatch, "participants["+participant.ID+"].model", participant.Capture.Path, participant.Model, inspection.Model, ErrInvalidRoomReplayBundle)
 		}
 	}
 	return nil

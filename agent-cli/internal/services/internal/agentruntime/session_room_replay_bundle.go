@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
+	runtimereplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
@@ -264,6 +265,16 @@ func cloneRoomReplayArtifact(artifact RoomReplayArtifact) RoomReplayArtifact {
 // creating any provider, device, browser, or output runtime. bundle may be a
 // directory or the path to its run-manifest.json file.
 func LoadRoomReplayPlan(bundle string) (RoomReplayPlan, error) {
+	return loadRoomReplayPlan(bundle, nil)
+}
+
+// LoadRoomReplayPlanWithReplayService performs complete room admission,
+// including replay-owned provider capture validation, before runtime setup.
+func LoadRoomReplayPlanWithReplayService(bundle string, replayService runtimereplay.Service) (RoomReplayPlan, error) {
+	return loadRoomReplayPlan(bundle, replayService)
+}
+
+func loadRoomReplayPlan(bundle string, replayService runtimereplay.Service) (RoomReplayPlan, error) {
 	root, manifestPath, manifestRelative, err := resolveRoomReplayBundle(bundle)
 	if err != nil {
 		return RoomReplayPlan{}, err
@@ -276,7 +287,7 @@ func LoadRoomReplayPlan(bundle string) (RoomReplayPlan, error) {
 		}
 		return RoomReplayPlan{}, newRoomReplayBundleError(kind, "run-manifest.json", manifestRelative, "readable JSON manifest", err.Error(), err)
 	}
-	return validateRoomReplayManifest(root, manifestPath, data)
+	return validateRoomReplayManifest(root, manifestPath, data, replayService)
 }
 
 // ValidateRoomReplayBundle is a convenience for command admission and tests
@@ -332,6 +343,6 @@ func resolveRoomReplayPlan(opts RoomRunOptions) (RoomReplayPlan, bool, error) {
 	if path == "" {
 		return RoomReplayPlan{}, false, nil
 	}
-	plan, err := LoadRoomReplayPlan(path)
+	plan, err := LoadRoomReplayPlanWithReplayService(path, opts.replayService)
 	return plan, true, err
 }

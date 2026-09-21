@@ -17,11 +17,11 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	runtimereplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
-	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 const (
@@ -56,6 +56,7 @@ type roomEvidence struct {
 	participants   map[string]*roomParticipantEvidence
 	providerErrors map[string]struct{}
 	latency        runtimeRooms.LatencyRecorder
+	replayService  runtimereplay.Service
 	// source is the injectable platform clock the latency recorder samples;
 	// distinct from roomClock below, which anchors offsets to room start.
 	source platformclock.Source
@@ -128,17 +129,21 @@ type roomEvidenceArtifactPaths struct {
 
 //lint:ignore U1000 package tests exercise the context-free evidence seam.
 func newRoomEvidence(destination string, manifest room.Manifest, format room.PCM16Format, secrets []string, startedAt time.Time, sources ...platformclock.Source) (*roomEvidence, error) {
-	return newRoomEvidenceWithLatency(destination, manifest, format, secrets, startedAt, nil, sources...)
+	return newRoomEvidenceWithLatencyAndReplay(destination, manifest, format, secrets, startedAt, nil, nil, sources...)
 }
 
 func newRoomEvidenceWithLatency(destination string, manifest room.Manifest, format room.PCM16Format, secrets []string, startedAt time.Time, latencyService runtimeRooms.LatencyService, sources ...platformclock.Source) (*roomEvidence, error) {
+	return newRoomEvidenceWithLatencyAndReplay(destination, manifest, format, secrets, startedAt, latencyService, nil, sources...)
+}
+
+func newRoomEvidenceWithLatencyAndReplay(destination string, manifest room.Manifest, format room.PCM16Format, secrets []string, startedAt time.Time, latencyService runtimeRooms.LatencyService, replayService runtimereplay.Service, sources ...platformclock.Source) (*roomEvidence, error) {
 	if strings.TrimSpace(destination) == "" {
 		return nil, errors.New("room evidence output directory is empty")
 	}
 	clock := platformclock.Ensure(roomEvidenceSource(sources))
 	startedAt = roomEvidenceStart(startedAt, clock)
 	format = normalizedRoomEvidenceFormat(format)
-	evidence := newRoomEvidenceState(destination, manifest, format, secrets, startedAt, clock, latencyService)
+	evidence := newRoomEvidenceState(destination, manifest, format, secrets, startedAt, clock, latencyService, replayService)
 	if err := evidence.openTimeline(); err != nil {
 		return nil, err
 	}
@@ -454,7 +459,10 @@ func (p *roomParticipantEvidence) observeDelta(msg messages.StreamMessage) error
 	if p.owner == nil || p.deltas == nil {
 		return p.recordError(p.artifacts.Deltas, errors.New("room participant delta sink is not initialized"))
 	}
-	data, err := gwtesting.MarshalStreamMessage(msg)
+	if p.owner.replayService == nil {
+		return p.recordError(p.artifacts.Deltas, errors.New("room evidence replay service is not initialized"))
+	}
+	data, err := p.owner.replayService.EncodeStreamMessage(msg)
 	if err != nil {
 		return p.recordError(p.artifacts.Deltas, fmt.Errorf("marshal stream delta: %w", err))
 	}

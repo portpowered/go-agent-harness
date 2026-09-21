@@ -69,7 +69,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		if !replayMode {
 			evidenceSecrets = roomCredentialSecrets(opts.Manifest, validation)
 		}
-		evidence, err = newRoomEvidenceWithLatency(outputDir, opts.Manifest, roomFormatForOptions(opts), evidenceSecrets, startedAt, runtimeRoomsWire.NewLatencyService(), roomClock)
+		evidence, err = newRoomEvidenceWithLatencyAndReplay(outputDir, opts.Manifest, roomFormatForOptions(opts), evidenceSecrets, startedAt, runtimeRoomsWire.NewLatencyService(), opts.replayService, roomClock)
 		if err != nil {
 			result := roomFailureResult(err, evidenceSecrets)
 			return result, err

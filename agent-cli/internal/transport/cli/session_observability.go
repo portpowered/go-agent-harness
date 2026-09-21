@@ -186,6 +186,7 @@ func (c *SessionCommand) runRuntimeLiveSessionWithAnnouncements(ctx context.Cont
 		DeviceService:      c.deviceService,
 		FileDeviceService:  livehost.FileDeviceService{Service: c.fileDeviceService.Service, Scheduler: c.fileDeviceService.Scheduler},
 		RecordingService:   c.recordingService,
+		ReplayService:      c.liveReplayService,
 		CredentialValues:   runtimeLiveCredentialValues,
 	}))
 }

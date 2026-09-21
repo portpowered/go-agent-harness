@@ -47,7 +47,7 @@ func newTestRootCommandWithProbeFleetCommand(probeFleetCommand *ProbeFleetComman
 		NewInteractionCommand(),
 		NewInteractionReplayCommand(),
 		NewProbeCommand(),
-		NewProbeRunCommandWithDeviceService(newDevicesTestService(), nil, sessionservicewire.NewMetricsCollector(audioiowire.NewService(), sessionclock.Real{}, sessionservicewire.NewSessionRuntimeFactory()), newReplayRuntimeServiceForTest()),
+		NewProbeRunCommandWithDeviceService(newDevicesTestService(), nil, sessionservicewire.NewMetricsCollector(audioiowire.NewService(), sessionclock.Real{}, sessionservicewire.NewSessionRuntimeFactory(), newReplayRuntimeServiceForTest()), newReplayRuntimeServiceForTest()),
 		NewProbeGateCommand(),
 		NewProbeReportCommand(),
 		probeFleetCommand,

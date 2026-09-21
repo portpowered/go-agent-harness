@@ -216,6 +216,16 @@ type CaptureMetricDelta struct {
 	Bytes     int64
 }
 
+// CaptureTraceEvent is the bounded, ordered provider-wire projection used by
+// host trace attachment. Replay validates the source before returning these
+// copied bytes; hosts do not open or decode capture files themselves.
+type CaptureTraceEvent struct {
+	Sequence  int
+	Direction string
+	Type      string
+	Payload   []byte
+}
+
 // LiveRequest selects one credential-free realtime capture for preparation.
 // Timing is interpreted by the replay service rather than by a host adapter.
 type LiveRequest struct {
@@ -268,6 +278,7 @@ type Service interface {
 	// recording directory, returning provider metadata and any self-driving
 	// live plan. The returned paths are safe for the provider replay adapter.
 	InspectCapture(context.Context, string) (CaptureInspection, error)
+	TraceCapture(context.Context, string) ([]CaptureTraceEvent, error)
 	LoadLivePlan(context.Context, string) (session.LiveReplayPlan, error)
 	// ResolveCapturePath admits either a raw provider capture or a finalized
 	// recording directory. Directory admission verifies the manifest, complete

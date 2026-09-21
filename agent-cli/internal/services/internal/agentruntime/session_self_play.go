@@ -16,6 +16,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	runtimereplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
@@ -89,6 +90,7 @@ type SelfPlayRunOptions struct {
 	audioService   audioio.Service
 	runtimeFactory sessionRuntimeFactory
 	modelCatalog   runtimeproviders.ModelCatalog
+	replayService  runtimereplay.Service
 }
 
 // SelfPlayOptions is a concise alias for callers that do not need the Run
@@ -267,6 +269,7 @@ func selfPlaySessionRunOptions(opts SelfPlayRunOptions) SessionRunOptions {
 		Clock:           opts.clock,
 		runtimeFactory:  opts.runtimeFactory,
 		ModelCatalog:    opts.modelCatalog,
+		replayService:   opts.replayService,
 		// Phase 1 is intentionally no-tools. These fields stay nil even when
 		// callers provide a composed CLI executor elsewhere in the process.
 		ToolExecutor:    nil,

@@ -11,10 +11,10 @@ import (
 	"sync"
 
 	runtimeRecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
+	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/recording"
-	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 const (
@@ -29,23 +29,27 @@ const (
 // audio trace and projects the already-published raw provider capture into its
 // runtime timeline before it is attached.
 type liveTraceRecorder struct {
-	inner        runtimeSession.LiveRecorder
-	trace        *recording.Trace
-	tracePath    string
-	destination  string
-	providerPath string
-	providerRate int
+	inner         runtimeSession.LiveRecorder
+	trace         *recording.Trace
+	tracePath     string
+	destination   string
+	providerPath  string
+	providerRate  int
+	replayService runtimeReplay.Service
 
 	finalizeOnce sync.Once
 	finalizeErr  error
 }
 
-func newLiveTraceRecorder(inner runtimeSession.LiveRecorder, destination, providerPath string, providerRate int, source clock.Source) (*liveTraceRecorder, error) {
+func newLiveTraceRecorder(inner runtimeSession.LiveRecorder, destination, providerPath string, providerRate int, source clock.Source, replayService runtimeReplay.Service) (*liveTraceRecorder, error) {
 	if strings.TrimSpace(destination) == "" {
 		return nil, errors.New("live trace recorder destination is empty")
 	}
 	if source == nil {
 		return nil, errors.New("live trace clock is required")
+	}
+	if replayService == nil {
+		return nil, errors.New("live trace replay service is required")
 	}
 	parent := filepath.Dir(filepath.Clean(destination))
 	if err := os.MkdirAll(parent, liveTraceDirectoryMode); err != nil {
@@ -60,12 +64,13 @@ func newLiveTraceRecorder(inner runtimeSession.LiveRecorder, destination, provid
 		return nil, errors.Join(fmt.Errorf("open live audio trace: %w", err), os.RemoveAll(tracePath))
 	}
 	return &liveTraceRecorder{
-		inner:        inner,
-		trace:        trace,
-		tracePath:    tracePath,
-		destination:  destination,
-		providerPath: strings.TrimSpace(providerPath),
-		providerRate: providerRate,
+		inner:         inner,
+		trace:         trace,
+		tracePath:     tracePath,
+		destination:   destination,
+		providerPath:  strings.TrimSpace(providerPath),
+		providerRate:  providerRate,
+		replayService: replayService,
 	}, nil
 }
 
@@ -147,7 +152,7 @@ func (r *liveTraceRecorder) Finalize(ctx context.Context, runErr error) error {
 		}
 		projectionErr := error(nil)
 		if innerErr == nil && runErr == nil && r.providerCapturePath() != "" {
-			projectionErr = projectProviderCapture(r.trace, r.providerCapturePath())
+			projectionErr = projectProviderCapture(ctx, r.replayService, r.trace, r.providerCapturePath())
 		}
 		closeErr := r.trace.Close()
 		result := errors.Join(runErr, innerErr, projectionErr, closeErr)
@@ -181,20 +186,23 @@ func attachLiveTrace(staged, bundle string) error {
 	return nil
 }
 
-func projectProviderCapture(trace *recording.Trace, path string) error {
+func projectProviderCapture(ctx context.Context, replayService runtimeReplay.Service, trace *recording.Trace, path string) error {
 	if trace == nil {
 		return errors.New("live audio trace is unavailable")
+	}
+	if replayService == nil {
+		return errors.New("live trace replay service is unavailable")
 	}
 	path = strings.TrimSpace(path)
 	if path == "" {
 		return errors.New("provider capture path is unavailable for live audio trace")
 	}
-	loaded, err := gatewaytesting.LoadSessionCaptureForReplay(path)
+	events, err := replayService.TraceCapture(ctx, path)
 	if err != nil {
 		return fmt.Errorf("load provider capture for audio trace: %w", err)
 	}
 	calls := make(map[string]string)
-	for _, event := range loaded.Capture.Records {
+	for _, event := range events {
 		if err := projectProviderEvent(trace, event, calls); err != nil {
 			return err
 		}
@@ -202,20 +210,20 @@ func projectProviderCapture(trace *recording.Trace, path string) error {
 	return nil
 }
 
-func projectProviderEvent(trace *recording.Trace, event gatewaytesting.CapturedSessionEvent, calls map[string]string) error {
+func projectProviderEvent(trace *recording.Trace, event runtimeReplay.CaptureTraceEvent, calls map[string]string) error {
 	wire, err := traceWireEnvelope(event)
 	if err != nil {
 		return fmt.Errorf("project provider wire sequence %d: %w", event.Sequence, err)
 	}
 	kind := "provider_wire_receive"
-	if event.Direction == gatewaytesting.DirectionClientToServer {
+	if event.Direction == "client_to_server" {
 		kind = "provider_wire_send"
 	}
 	trace.ObserveRuntime(recording.RuntimeEvent{Kind: kind, Tick: uint64(event.Sequence), Clean: true, Payload: wire})
 	return projectProviderToolEvent(trace, event, calls)
 }
 
-func projectProviderToolEvent(trace *recording.Trace, event gatewaytesting.CapturedSessionEvent, calls map[string]string) error {
+func projectProviderToolEvent(trace *recording.Trace, event runtimeReplay.CaptureTraceEvent, calls map[string]string) error {
 	switch event.Type {
 	case "response.function_call_arguments.done":
 		callPayload, callID, callName, err := traceToolCall(event.Payload)
@@ -237,11 +245,8 @@ func projectProviderToolEvent(trace *recording.Trace, event gatewaytesting.Captu
 	return nil
 }
 
-func traceWireEnvelope(event gatewaytesting.CapturedSessionEvent) ([]byte, error) {
+func traceWireEnvelope(event runtimeReplay.CaptureTraceEvent) ([]byte, error) {
 	payload := event.Payload
-	if len(payload) == 0 {
-		payload = event.Data
-	}
 	if len(payload) == 0 {
 		return nil, errors.New("provider payload is empty")
 	}

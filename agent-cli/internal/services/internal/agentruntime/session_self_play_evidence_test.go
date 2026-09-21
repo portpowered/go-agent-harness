@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	replaywire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
@@ -26,6 +27,9 @@ func runSelfPlayWithTestDependencies(ctx context.Context, out io.Writer, opts Se
 	}
 	if opts.audioService == nil {
 		opts.audioService = newTestAudioIOService()
+	}
+	if opts.replayService == nil {
+		opts.replayService = replaywire.NewService()
 	}
 	return RunSelfPlayWithResult(ctx, out, opts)
 }

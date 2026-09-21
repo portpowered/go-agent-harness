@@ -239,6 +239,38 @@ func (s *Service) InspectCapture(ctx context.Context, path string) (replay.Captu
 	return inspection, nil
 }
 
+// TraceCapture admits a provider capture and returns only the copied event
+// projection needed by the host audio trace. Capture format and integrity
+// validation remain inside replay; the returned payloads cannot mutate the
+// admitted source.
+func (s *Service) TraceCapture(ctx context.Context, path string) ([]replay.CaptureTraceEvent, error) {
+	if err := replayContextError(ctx); err != nil {
+		return nil, err
+	}
+	capturePath, err := s.ResolveCapturePath(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	loaded, err := loadReplayCapture(ctx, capturePath)
+	if err != nil {
+		return nil, fmt.Errorf("trace replay capture %s: %w", path, err)
+	}
+	events := make([]replay.CaptureTraceEvent, 0, len(loaded.Capture.Records))
+	for _, record := range loaded.Capture.Records {
+		payload := record.Payload
+		if len(payload) == 0 {
+			payload = record.Data
+		}
+		events = append(events, replay.CaptureTraceEvent{
+			Sequence:  record.Sequence,
+			Direction: string(record.Direction),
+			Type:      record.Type,
+			Payload:   append([]byte(nil), payload...),
+		})
+	}
+	return events, nil
+}
+
 func loadReplayCapture(ctx context.Context, path string) (replaycapture.ReplayLoad, error) {
 	return replaycapture.LoadReplayCapture(ctx, path)
 }

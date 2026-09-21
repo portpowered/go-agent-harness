@@ -46,6 +46,7 @@ type Dependencies struct {
 	DeviceService      runtimeDevices.Service
 	FileDeviceService  FileDeviceService
 	RecordingService   runtimeRecording.Service
+	ReplayService      runtimeReplay.Service
 	CredentialValues   func(serviceSession.Request) ([]string, error)
 	CaptureComplete    func(serviceSession.Request) []runtimeSession.LiveControl
 }
@@ -119,7 +120,7 @@ func openRecorder(request serviceSession.Request, liveRequest *runtimeSession.Li
 		if err != nil || !request.TraceAudio {
 			return recorder, err
 		}
-		traced, traceErr := newLiveTraceRecorder(recorder, ".", request.RecordPath, liveTraceProviderRate(liveRequest), liveTraceSource(deps.FileDeviceService.Scheduler))
+		traced, traceErr := newLiveTraceRecorder(recorder, ".", request.RecordPath, liveTraceProviderRate(liveRequest), liveTraceSource(deps.FileDeviceService.Scheduler), deps.ReplayService)
 		if traceErr != nil {
 			if recorder != nil {
 				traceErr = errors.Join(traceErr, recorder.Finalize(context.Background(), traceErr))
@@ -170,7 +171,7 @@ func traceLiveRecorderIfRequested(request serviceSession.Request, replayInputPat
 	if providerPath == "" {
 		providerPath = filepath.Join(request.RecordDirectory, "provider.json")
 	}
-	traced, err := newLiveTraceRecorder(recorder, request.RecordDirectory, providerPath, liveTraceProviderRate(liveRequest), liveTraceSource(deps.FileDeviceService.Scheduler))
+	traced, err := newLiveTraceRecorder(recorder, request.RecordDirectory, providerPath, liveTraceProviderRate(liveRequest), liveTraceSource(deps.FileDeviceService.Scheduler), deps.ReplayService)
 	if err != nil {
 		return nil, errors.Join(err, recorder.Finalize(context.Background(), err))
 	}
