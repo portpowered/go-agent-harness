@@ -4854,3 +4854,38 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   their leased caller seams, reconcile the failed C263 room-replay ownership,
   then rerun the production capture-reader audit and complete every caller
   cutover before the exact-head full local gate. Decision remains CONTINUE.
+
+# C234 continuation checkpoint — exact-head ownership audit — 2026-09-20
+
+- Reverified admission with `project-control.py verify-work --type task
+  --name audio-runtime-c234-recover-recording-replay-retirement --root
+  "$FACTORY_ROOT"`; status is `admitted`. `prd.json.branchName` matches the
+  isolated branch. HEAD is `68814cab28e77871fef60c3573c908d0a501f7ed`; the
+  worktree was clean before this progress entry. Fetched
+  `refs/heads/main:refs/remotes/origin/main`; `origin/main` remains
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`.
+- C217 source `ca87a126b2cf8e7fc2aa510fcf2938e7c085836a`, its recovery
+  checkpoint `03662c1b30bf2c0bead10fc14235c7e2df5224ce`, startup
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, planning main
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`, and fetched `origin/main` are
+  all ancestors of HEAD. No running host checkout was merged or reset.
+- The canonical `~default` review list for this exact C234 Work returns no
+  review items; there are no concluded C234 review findings to repair. The
+  13 planned legacy/replacement production paths remain absent. The only
+  named adapters are `recording_adapter.go` (20 lines) and `replay_adapter.go`
+  (25 lines), 45 combined. `session_browser_recording.go` remains unchanged
+  from `origin/main`.
+- The repeated production capture-reader search finds only leased seams:
+  `metrics_collector.go` and `livehost/trace.go` remain with C255's RUNNING
+  Worker Session `538cc9ed-93dd-42cb-bf4e-71c9bee87553`; room replay integrity
+  remains assigned to admitted C264 Work `work-task-86` after C263's PR-identity
+  failure. C229's live-session caller remains with RUNNING Worker Session
+  `991295d8-86fa-422e-9e47-568b80f76564`. The earlier C234 hermetic selector
+  failure has not been rechecked because its caller is still leased to C229.
+- No full C234 preflight, `make prepush`, candidate push, PR update or SCRIPT
+  handoff ran. Exact next action: preserve those leases, integrate the C229,
+  C255 and C264 caller checkpoints as their owners release them, repair any
+  resulting C234-local failures, repeat the repository-wide production reader
+  audit, then run every C234 exact-candidate functional, integration, race,
+  hermetic, Wire, embedding and `make prepush` gate before pushing.
+  Decision remains CONTINUE.
