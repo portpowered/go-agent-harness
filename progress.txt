@@ -4739,3 +4739,42 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   the obsolete projection/helper and exact three-file / 1,410-line cluster,
   verify the one-file / 300-line stateless adapter cap, then run `make prepush`
   and the complete planned C271 exact-head local preflight before push or PR.
+
+### C271 dependency refresh — 2026-09-21
+
+- Reverified exact task admission and branch identity. Admission is `admitted`
+  for `audio-runtime/audio-runtime-v1`; `prd.json.branchName` matches
+  `codex/audio-runtime-c271-recover-selfplay-retirement`. Current HEAD before
+  this checkpoint is `3fe9f11f598d4c95026cb6e0ce4af17dec07a323`, clean, and
+  `origin/main=b9b2f90bf7e00430cd0ab6067179a5fb8005ec44` is an ancestor. The
+  preserved C249 source remains clean at
+  `86a1eed17b099d510b39ce3d3b4ee7d8f7998881`, with C220 reachable; C249 itself
+  remains unreconciled pending the shared releases.
+- Canonical `work-task-45` (C248) and `work-task-101` (C269) remain `init`, with
+  no reviewed/guarded releases. C248's latest checkpoint is
+  `0cefde30e86e809018d70b9f74067d35b241f506`; its continuation feedback reports
+  108 architecture findings, so the caller/session release is unavailable.
+  C269's latest clean checkpoint is
+  `d792accaf8244898f559962ae371e06263095a9b`; its attempted `make prepush` at
+  `70342d5c9ae5cfac7e6b0272463cec6752b522f8` reports 105 architecture findings.
+  No peer worktree or shared path was changed. C271 has no review attempt.
+- The latest concluded review remains C259 `work-review-78`; its four findings
+  concern room-evidence input bounds, recorder-failure degradation coverage,
+  public room replay round-trip coverage, and exact-head preflight. None is a
+  self-play service repair. The unchanged C271 self-play service tree remains
+  isolated under `go-agent-runtime/services/selfplay/internal`; the public
+  contract and Wire boundary have no CLI, legacy-runtime or init dependency.
+- Current retirement inventory is still present: the three owned production
+  files are 53 + 641 + 716 = 1,410 lines; the obsolete CLI projection is 68
+  lines. `agent-cli/internal/transport/cli/session_self_play.go` is one 85-line
+  file, but it still imports the projection and carries defaults, personas and
+  opening-seed policy, so it is not yet the allowed stateless adapter. No
+  caller cutover, exact deletion, full preflight, push, PR update or SCRIPT
+  handoff is claimed.
+- Exact next action: retain C271 at `CONTINUE` and keep C248/C269-owned paths
+  untouched. After C248's reviewed caller release and C269's guarded room-
+  evidence merge, fetch current main, reconcile C249/C220 and both released
+  behaviors additively, cut over every production caller, delete the projection
+  and full three-file legacy cluster, verify the sole stateless adapter cap,
+  then run `make prepush` plus every planned exact-head local gate before push
+  or PR handoff.
