@@ -5921,3 +5921,59 @@ candidate before pushing it and handing it to SCRIPT CI.
   files, verify the sole stateless adapter is at most 300 lines, then run
   `make prepush` and every C271-05/C271-06 local gate on the same clean exact
   SHA before push and SCRIPT handoff.
+
+
+### C271 peer release and additive-reconciliation audit — 2026-09-21
+
+- Re-read the Factory operating and implementation-handoff policies, admitted
+  manifest, task-root prd.json, progress history, and latest concluded review
+  feedback. `project-control.py verify-work --type task --name
+  audio-runtime-c271-recover-selfplay-retirement` returned admitted for
+  audio-runtime/audio-runtime-v1; prd.branchName matches
+  codex/audio-runtime-c271-recover-selfplay-retirement.
+- Fetched origin main; it remains
+  b9b2f90bf7e00430cd0ab6067179a5fb8005ec44. C271 is clean at
+  f012af8c43e65bb04bf1e13c768abb5b06da1e8d. origin/main and startup
+  integration 8bdafc7f947a3a2c9856220abdc539437035bd21 are ancestors.
+  C249 checkpoint 86a1eed17b099d510b39ce3d3b4ee7d8f7998881 and C220
+  checkpoint 1bf045dd8 are not C271 ancestors. Preserved C249 remains clean
+  at 86a1eed17, and C220 is its ancestor. The running host checkout and peer
+  worktrees were not changed.
+- Canonical ~default Work still has C248 work-task-45 and C269 work-task-101
+  in init / PROCESSING, each with a RUNNING Worker Session. C248 worktree is
+  clean at 32ea66ca7de4407d55d4f2c0192812ac961f2225. C269 remains at
+  889b1a49adaa8840f75a283f75cee1faff8baba1 with only its progress.txt
+  modification. No concluded C248 or C269 review/release is recorded. Their
+  session_self_play caller and room-evidence seams remain leased; C271 did
+  not modify them.
+- Read latest concluded feedback C259 work-review-78 for PR #535. Its bounded
+  room-evidence admission, recorder-failure degradation, integrated replay,
+  and exact-head preflight findings are room-evidence lane work and identify
+  no C271 self-play-specific repair. C271 has no review attempt.
+- The caller census still finds the self-play service, service Wire, generated
+  root Wire, transport command, runtime compatibility service, and legacy
+  session/model/observability/room-evidence callers. Exact owned legacy files
+  remain selfplay_service.go (53 lines), session_self_play.go (641), and
+  session_self_play_evidence.go (716), totaling 3 files / 1,410 lines. The
+  uncredited agent-cli/internal/services/selfplay/interface.go projection
+  remains 68 lines; session_room_evidence_files.go is absent. The transport
+  adapter remains one file / 85 lines and imports the projection for defaults,
+  personas, and opening-seed presentation, so it is not yet stateless.
+- Read-only comparison against preserved C249 identifies the additive
+  reconciliation still needed after seam release: remove the 68-line CLI
+  projection, move service provision to the runtime service-local Wire
+  contract, retain the stateless public request/result adapter, and preserve
+  C249 timeout-propagation fixes in conversation.go and
+  conversation_coordination.go. No production source changed in this
+  checkpoint. Focused C271 normal, race, and count-10 shutdown/cancellation/
+  failure checks remain recorded passing on f012af8; no make prepush, PR, push,
+  or SCRIPT handoff is claimed because the exact shared releases, caller
+  cutover, and deletion are incomplete.
+- Exact next action: retain C271 and keep peer-owned seams untouched; refresh
+  canonical C248/C269 status. After C248 releases its caller seam and C269
+  guarded-merges/releases the repaired room-evidence seam, fetch current main,
+  merge/reconcile C249/C220 and peer behavior additively, finish every caller
+  cutover, delete the projection/helper and all three owned legacy files,
+  verify the sole stateless adapter remains at most 300 lines, then run make
+  prepush plus every C271-05/C271-06 command on one clean exact candidate SHA
+  before push and SCRIPT handoff. Do not poll hosted CI.
