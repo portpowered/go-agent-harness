@@ -12,6 +12,7 @@ import (
 	agentruntime "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime"
 	servicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
+	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -167,7 +168,7 @@ func TestSessionCommandWiresBothRTCDeviceSelectorsBeforeProviderConnect(t *testi
 func TestRunSessionRTCDevicePreflightHappensBeforeProviderConnect(t *testing.T) {
 	registry := virtualRTCRegistry(t)
 	inferencer := &countingSessionInferencer{}
-	err := agentruntime.RunSession(context.Background(), io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), ReplayPath: "synthetic.json", SessionInferencer: inferencer, DeviceService: newTestDeviceService(registry), RTCBinding: runtimedevices.RTCBindingRequest{InputDevice: "virtual:missing", InputPresent: true}})
+	err := agentruntime.RunSession(context.Background(), io.Discard, agentruntime.SessionRunOptions{AudioService: audioiowire.NewService(), ModelCatalog: testModelCatalog(), ReplayPath: "synthetic.json", SessionInferencer: inferencer, DeviceService: newTestDeviceService(registry), RTCBinding: runtimedevices.RTCBindingRequest{InputDevice: "virtual:missing", InputPresent: true}})
 	if err == nil || !errors.Is(err, devicegw.ErrDeviceNotFound) {
 		t.Fatalf("session error = %v, want typed preflight not-found", err)
 	}

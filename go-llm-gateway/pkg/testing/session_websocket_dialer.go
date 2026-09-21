@@ -168,6 +168,22 @@ func (d *ReplayWebSocketDialer) Err() error {
 	return conn.Err()
 }
 
+// Close terminates the active replay connection, if one has been opened.
+// This is used by service-owned replay preparation to guarantee bounded
+// shutdown when a session fails before its provider cursor reaches Done.
+func (d *ReplayWebSocketDialer) Close() error {
+	if d == nil {
+		return nil
+	}
+	d.mu.Lock()
+	conn := d.conn
+	d.mu.Unlock()
+	if conn == nil {
+		return nil
+	}
+	return conn.Close()
+}
+
 type replayWebSocketConn struct {
 	events             []CapturedSessionEvent
 	index              int
@@ -505,21 +521,4 @@ func validateSessionCaptureReplayEnvelope(path string, capture SessionCapture) e
 		return validateLegacySessionCaptureStructure(path, capture)
 	}
 	return validateSessionCaptureEnvelope(path, capture)
-}
-
-func eventPayload(evt CapturedSessionEvent) []byte {
-	if len(evt.Payload) > 0 {
-		return evt.Payload
-	}
-	return evt.Data
-}
-
-func websocketPayloadType(payload []byte) string {
-	var envelope struct {
-		Type string `json:"type"`
-	}
-	if err := json.Unmarshal(payload, &envelope); err != nil || envelope.Type == "" {
-		return "websocket.message"
-	}
-	return envelope.Type
 }

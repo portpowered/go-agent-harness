@@ -127,7 +127,7 @@ func (r *directoryRecorder) processAudio(item directoryEvidenceItem) {
 		return
 	}
 	if err := r.writeTranscriptRecords(client, agent, sequence); err != nil {
-		r.workerErr = errors.Join(err, r.rollbackAudioAttempt(item.direction, audioAttempt.file, audioAttempt.offset, audioAttempt.start, audioAttempt.created))
+		r.workerErr = errors.Join(err, r.rollbackAudioAttempt(item.direction, audioAttempt.file, audioAttempt.offset, audioAttempt.start, audioAttempt.created, audioAttempt.path))
 		return
 	}
 	if item.direction == session.LiveRecordAgent && item.frame.PlaybackResponse.ResponseID != "" {
@@ -143,6 +143,7 @@ type audioWriteAttempt struct {
 	offset  *uint64
 	start   uint64
 	created bool
+	path    string
 }
 
 func (r *directoryRecorder) writeAudioAttempt(direction session.LiveRecordDirection, data []byte) (audioWriteAttempt, error) {
@@ -153,18 +154,18 @@ func (r *directoryRecorder) writeAudioAttempt(direction session.LiveRecordDirect
 	if direction == session.LiveRecordClient {
 		pathCount = len(r.inputPaths)
 	}
-	file, _, offset, err := r.audioFile(direction)
+	file, path, offset, err := r.audioFile(direction)
 	if err != nil {
 		return audioWriteAttempt{}, err
 	}
-	attempt := audioWriteAttempt{file: file, offset: offset, start: *offset}
+	attempt := audioWriteAttempt{file: file, offset: offset, start: *offset, path: path}
 	if direction == session.LiveRecordClient {
 		attempt.created = len(r.inputPaths) > pathCount
 	} else {
 		attempt.created = len(r.outputPaths) > pathCount
 	}
 	if err := r.writeCompleteSpool(file, data); err != nil {
-		return attempt, errors.Join(recordingWriteError("write audio evidence", err), r.rollbackAudioAttempt(direction, file, offset, attempt.start, attempt.created))
+		return attempt, errors.Join(recordingWriteError("write audio evidence", err), r.rollbackAudioAttempt(direction, file, offset, attempt.start, attempt.created, attempt.path))
 	}
 	*offset += uint64(len(data))
 	return attempt, nil
@@ -177,27 +178,11 @@ func audioBoundary(item directoryEvidenceItem, segment string, offset uint64) ev
 	return evidenceAudioBoundary{Kind: "audio.frame", Segment: segment, ByteOffset: offset, SampleCount: sampleCount, Admission: item.admission, Frame: frame}
 }
 
-func boolToInt64(value bool) int64 {
-	if value {
-		return 1
-	}
-	return 0
-}
-
 func (r *directoryRecorder) audioLocation(direction session.LiveRecordDirection) (string, uint64) {
 	if direction == session.LiveRecordClient {
 		return "audio/in-000.pcm", r.inputBytes
 	}
 	return "audio/out-000.pcm", r.outputBytes
-}
-
-func (r *directoryRecorder) latchProjectionError() {
-	if r == nil {
-		return
-	}
-	if err := r.conversation.projectionError(); err != nil {
-		r.latch(recordingWriteError("retain conversation summary", err))
-	}
 }
 
 func (r *directoryRecorder) audioFile(direction session.LiveRecordDirection) (*os.File, string, *uint64, error) {
@@ -213,27 +198,9 @@ func (r *directoryRecorder) audioFile(direction session.LiveRecordDirection) (*o
 			return nil, "", nil, recordingWriteError("create audio spool", err)
 		}
 		*file = opened
-		*paths = []string{path}
+		*paths = append(*paths, path)
 	}
 	return *file, segment, offset, nil
-}
-
-func (r *directoryRecorder) ensureTranscriptFiles() error {
-	if r.client != nil && r.agent != nil {
-		return nil
-	}
-	clientPath, agentPath := filepath.Join(r.spool, "client.transcript.jsonl"), filepath.Join(r.spool, "agent.transcript.jsonl")
-	client, err := os.OpenFile(clientPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, evidenceFileMode)
-	if err != nil {
-		return evidenceDestinationError(r.destination, "create client transcript spool", err)
-	}
-	agent, err := os.OpenFile(agentPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, evidenceFileMode)
-	if err != nil {
-		return errors.Join(evidenceDestinationError(r.destination, "create agent transcript spool", err), client.Close())
-	}
-	r.client, r.agent = client, agent
-	r.clientPath, r.agentPath = clientPath, agentPath
-	return nil
 }
 
 func (r *directoryRecorder) latch(err error) {
@@ -347,21 +314,27 @@ func rollbackSpoolFile(file *os.File, offset int64) error {
 	return nil
 }
 
-func (r *directoryRecorder) rollbackAudioAttempt(direction session.LiveRecordDirection, file *os.File, offset *uint64, start uint64, created bool) error {
+func (r *directoryRecorder) rollbackAudioAttempt(direction session.LiveRecordDirection, file *os.File, offset *uint64, start uint64, created bool, path string) error {
 	if file == nil || offset == nil {
 		return nil
 	}
 	result := rollbackSpoolFile(file, int64(start))
+	written := *offset - start
 	*offset = start
+	if direction == session.LiveRecordClient {
+		if r.inputBytes >= written {
+			r.inputBytes -= written
+		}
+	} else if r.outputBytes >= written {
+		r.outputBytes -= written
+	}
 	if !created || start != 0 {
 		return result
 	}
 	if err := file.Close(); err != nil {
 		result = errors.Join(result, err)
 	}
-	path := filepath.Join(r.spool, "out.pcm")
 	if direction == session.LiveRecordClient {
-		path = filepath.Join(r.spool, "in.pcm")
 		r.inputFile = nil
 		if len(r.inputPaths) > 0 {
 			r.inputPaths = r.inputPaths[:len(r.inputPaths)-1]

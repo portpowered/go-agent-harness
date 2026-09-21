@@ -44,6 +44,7 @@ func TestSessionRuntimePlanClosesTransferredCapabilityOnNormalExit(t *testing.T)
 func TestSessionDurationPlanClosesTransferredCapabilityOnPreflightExit(t *testing.T) {
 	closeCalls := 0
 	plan := sessionRuntimePlan{
+		loop: sessionLoopOptions{audioService: newTestAudioIOService()},
 		capabilityCoordinator: NewSessionCapabilityCoordinator(func() error {
 			closeCalls++
 			return nil

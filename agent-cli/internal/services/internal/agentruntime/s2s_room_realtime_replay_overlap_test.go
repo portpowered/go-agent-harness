@@ -175,8 +175,11 @@ func newRoomSpeechOverlapScenario(t *testing.T, peerOutput []byte) *roomSpeechOv
 	t.Cleanup(cancel)
 
 	opts := RoomRunOptions{
-		Manifest:  manifest,
-		ConfigDir: configDir, ModelCatalog: testModelCatalog(),
+		AudioService:           newTestAudioIOService(),
+		recordingService:       newTestRecordingService(),
+		providerCaptureService: newTestProviderCaptureService(),
+		Manifest:               manifest,
+		ConfigDir:              configDir, ModelCatalog: testModelCatalog(),
 		BaseURL:     "wss://room-replay.invalid/v1/realtime",
 		MixerConfig: mixerConfig,
 		CredentialLookup: func(name string) (string, bool) {
@@ -522,8 +525,11 @@ func TestRunRoomWithResult_BidirectionalOverlapRecordsPeerOnlyEvidence(t *testin
 	t.Cleanup(cancel)
 
 	opts := RoomRunOptions{
-		Manifest:  manifest,
-		ConfigDir: configDir, ModelCatalog: testModelCatalog(),
+		AudioService:           newTestAudioIOService(),
+		recordingService:       newTestRecordingService(),
+		providerCaptureService: newTestProviderCaptureService(),
+		Manifest:               manifest,
+		ConfigDir:              configDir, ModelCatalog: testModelCatalog(),
 		OutputDir:   outputDir,
 		BaseURL:     "wss://room-replay.invalid/v1/realtime",
 		MixerConfig: mixerConfig,
@@ -588,6 +594,8 @@ func TestRunRoomWithResult_BidirectionalOverlapRecordsPeerOnlyEvidence(t *testin
 	for range manifest.Participants {
 		select {
 		case <-opened:
+		case outcome := <-runDone:
+			t.Fatalf("bidirectional room exited before opening sessions: result=%+v err=%v", outcome.result, outcome.err)
 		case <-roomCtx.Done():
 			t.Fatalf("bidirectional room sessions did not open: %v", roomCtx.Err())
 		}

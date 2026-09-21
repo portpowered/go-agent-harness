@@ -103,6 +103,7 @@ func TestRunRoomReplaySchedulesOverlapThroughProductionMixer(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	result, err := RunRoomWithResult(ctx, io.Discard, RoomRunOptions{
+		AudioService: newTestAudioIOService(), replayService: newTestReplayService(),
 		ReplayPath: bundle,
 		PCMFormat:  room.PCM16Format{SampleRate: 100, Channels: 1, FrameDuration: 20 * time.Millisecond},
 		OnAudioInput: func(id string, pcm []byte) error {

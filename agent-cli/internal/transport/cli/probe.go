@@ -15,7 +15,7 @@ import (
 	serviceDevices "github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices"
 	serviceprobes "github.com/portpowered/go-agent-harness/agent-cli/internal/services/probes"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
-	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/spf13/cobra"
 )
 
@@ -77,6 +77,7 @@ type ProbeRunCommand struct {
 	browserFlags        *flags.BrowserFlags
 	browserFactory      WebMCPDoctorFactory
 	metricsCollector    serviceprobes.MetricsCollector
+	replayService       runtimeReplay.Service
 }
 
 // DeviceProbeExecFunc runs one validated scenario against the selected device
@@ -87,11 +88,11 @@ type DeviceProbeExecFunc func(context.Context, probe.Scenario, serviceDevices.De
 // NewProbeRunCommandWithDeviceService constructs the probe transport with the
 // injected device service while retaining the gateway registry only for the
 // runtime's private device lease boundary.
-func NewProbeRunCommandWithDeviceService(service serviceDevices.DeviceService, probeService serviceDevices.DeviceProbeService, metricsCollector serviceprobes.MetricsCollector) *ProbeRunCommand {
-	return newProbeRunCommand(service, probeService, metricsCollector)
+func NewProbeRunCommandWithDeviceService(service serviceDevices.DeviceService, probeService serviceDevices.DeviceProbeService, metricsCollector serviceprobes.MetricsCollector, replayService runtimeReplay.Service) *ProbeRunCommand {
+	return newProbeRunCommand(service, probeService, metricsCollector, replayService)
 }
 
-func newProbeRunCommand(service serviceDevices.DeviceService, probeService serviceDevices.DeviceProbeService, metricsCollector serviceprobes.MetricsCollector) *ProbeRunCommand {
+func newProbeRunCommand(service serviceDevices.DeviceService, probeService serviceDevices.DeviceProbeService, metricsCollector serviceprobes.MetricsCollector, replayService runtimeReplay.Service) *ProbeRunCommand {
 	command := &ProbeRunCommand{
 		deviceService:       service,
 		deviceProbeService:  probeService,
@@ -101,6 +102,7 @@ func newProbeRunCommand(service serviceDevices.DeviceService, probeService servi
 		BrowserExecutorMode: ProbeScenarioV2BrowserExecutorHermetic,
 		browserFlags:        flags.NewBrowserFlags(),
 		browserFactory:      NewProductionWebMCPDoctorFactory(),
+		replayService:       replayService,
 	}
 	command.metricsCollector = metricsCollector
 	command.deviceProbeExec = func(ctx context.Context, scenario probe.Scenario, _ serviceDevices.DeviceProbeAvailability) (probe.ObservationSnapshot, error) {
@@ -222,7 +224,7 @@ func (c *ProbeRunCommand) run(cmd *cobra.Command, positional []string) error {
 		return err
 	}
 
-	scenarios, exec, err := buildProbePlan(positional, c.Scenarios, fixtures, c.metricsCollector)
+	scenarios, exec, err := buildProbePlan(cmd.Context(), positional, c.Scenarios, fixtures, c.replayService, c.metricsCollector)
 	if err != nil {
 		return err
 	}
@@ -385,7 +387,7 @@ func fixtureStem(path string) string {
 // match against a registered scenario's ID or name, (3) a suite prefix match
 // that expands to every registered scenario whose ID extends the selection
 // with "-" (e.g. s2s-v6a-error-auth selects both of its cases).
-func buildProbePlan(positional []string, flags []string, fixtures map[string]string, collectors ...serviceprobes.MetricsCollector) ([]probe.Scenario, probe.ExecFunc, error) {
+func buildProbePlan(ctx context.Context, positional []string, flags []string, fixtures map[string]string, replayService runtimeReplay.Service, collectors ...serviceprobes.MetricsCollector) ([]probe.Scenario, probe.ExecFunc, error) {
 	selections := append(append([]string{}, positional...), flags...)
 	if len(selections) == 0 {
 		return nil, nil, fmt.Errorf("no probe scenarios selected; pass scenario paths as arguments or repeat --scenario")
@@ -406,18 +408,15 @@ func buildProbePlan(positional []string, flags []string, fixtures map[string]str
 			scenarios = append(scenarios, scenario)
 		}
 	}
-	for _, fixture := range fixtures {
-		validationErrs := gatewaytesting.ValidateSessionCaptureFile(fixture)
-		if len(validationErrs) == 0 {
-			continue
-		}
-		messages := make([]string, 0, len(validationErrs))
-		for _, validationErr := range validationErrs {
-			messages = append(messages, validationErr.Error())
-		}
-		return nil, nil, fmt.Errorf("invalid replay fixture %q: %s", fixture, strings.Join(messages, "; "))
+	if replayService == nil {
+		return nil, nil, fmt.Errorf("replay service is not configured")
 	}
-	return scenarios, replayExecFunc(fixtures, collectors...), nil
+	for _, fixture := range fixtures {
+		if _, err := replayService.InspectCapture(ctx, fixture); err != nil {
+			return nil, nil, fmt.Errorf("invalid replay fixture %q: %w", fixture, err)
+		}
+	}
+	return scenarios, replayExecFunc(replayService, fixtures, collectors...), nil
 }
 
 // resolveProbeSelection resolves one selection into zero or more scenarios,

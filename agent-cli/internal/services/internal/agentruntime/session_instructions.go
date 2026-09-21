@@ -15,6 +15,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	runtimeSessionWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
+	duration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 )
 
 // RunSessionWithInstructions resolves the ask-path system-prompt contract and
@@ -40,12 +42,6 @@ func RunSessionWithInstructions(ctx context.Context, out io.Writer, opts Session
 	if err := validateSessionRunOptions(opts); err != nil {
 		return err
 	}
-	claim, err := ensureSessionRecordingClaim(&opts)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = claim.release() }()
-
 	instructions, err := resolveSessionInstructions(opts, systemPrompt)
 	if err != nil {
 		return err
@@ -88,11 +84,6 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 	if err := validateSessionRunOptions(opts); err != nil {
 		return err
 	}
-	claim, err := ensureSessionRecordingClaim(&opts)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = claim.release() }()
 	instructions, err := resolveSessionInstructions(opts, systemPrompt)
 	if err != nil {
 		return err
@@ -117,46 +108,47 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 				}
 				return errors.Join(plan.run(ctx, output), output.errorValue())
 			}
-			durationCtx, err := prepareSessionDurationArtifacts(ctx)
+			durationService := durationwire.NewService()
+			durationCtx, err := durationService.PrepareArtifacts(ctx)
 			if err != nil {
 				return err
 			}
-			admission := newSessionDurationAdmission()
-			// The seed substitution wrapper must sit INSIDE the admission
-			// boundary: the duration runner connects through
-			// admittedInferencer, so any wrapper composed outside it never
-			// observes the session and the sentinel prompt would leak onto
-			// the live wire.
-			var admittedInner messages.SessionInferencer
-			if plan.inferencer != nil {
-				admittedInner = &sessionTextSeedInferencer{
-					inner:      plan.inferencer,
-					wirePrompt: wirePrompt,
-					value:      seed.Value,
+			return plan.withLiveEvidence(durationCtx, func(runCtx context.Context, prepared sessionRuntimePlan) error {
+				admission := durationService.NewEventAdmission()
+				// The seed substitution wrapper must sit INSIDE the admission
+				// boundary: the duration runner connects through
+				// admittedInferencer, so any wrapper composed outside it never
+				// observes the session and the sentinel prompt would leak onto
+				// the live wire.
+				var admittedInner messages.SessionInferencer
+				if prepared.inferencer != nil {
+					admittedInner = &sessionTextSeedInferencer{
+						inner:      prepared.inferencer,
+						wirePrompt: wirePrompt,
+						value:      seed.Value,
+					}
 				}
-			}
-			if admittedInner != nil {
-				plan.inferencer = &sessionDurationAdmissionInferencer{
-					inner:     admittedInner,
-					admission: admission,
-					closeDone: make(chan struct{}),
+				if admittedInner != nil {
+					prepared.inferencer = durationService.NewAdmissionInferencer(admittedInner, admission, make(chan struct{}))
 				}
-			}
-			var admittedInferencer *sessionDurationAdmissionInferencer
-			if admitted, ok := plan.inferencer.(*sessionDurationAdmissionInferencer); ok {
-				admittedInferencer = admitted
-			}
-			runErr = runSessionDurationPlanWithAdmission(durationCtx, output, plan, maxDuration, nil, admittedInferencer)
-			return errors.Join(runErr, output.errorValue())
+				var admittedInferencer duration.AdmissionInferencer
+				if admitted, ok := prepared.inferencer.(duration.AdmissionInferencer); ok {
+					admittedInferencer = admitted
+				}
+				runErr = runSessionDurationPlanWithAdmission(runCtx, output, prepared, maxDuration, nil, admittedInferencer)
+				return errors.Join(runErr, output.errorValue())
+			})
 		}
 		if maxDuration == 0 {
 			return plan.run(ctx, out)
 		}
-		durationCtx, err := prepareSessionDurationArtifacts(ctx)
+		durationCtx, err := durationwire.NewService().PrepareArtifacts(ctx)
 		if err != nil {
 			return err
 		}
-		return runSessionDurationPlan(durationCtx, out, plan, maxDuration, nil)
+		return plan.withLiveEvidence(durationCtx, func(runCtx context.Context, prepared sessionRuntimePlan) error {
+			return runSessionDurationPlan(runCtx, out, prepared, maxDuration, nil)
+		})
 	}
 }
 

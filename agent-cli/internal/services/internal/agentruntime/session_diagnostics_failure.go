@@ -27,15 +27,7 @@ func cancellationErrorOnly(err error) bool {
 	if unwrapper, ok := err.(interface{ Unwrap() error }); ok {
 		return cancellationErrorOnly(unwrapper.Unwrap())
 	}
-	var inputErr *SessionAudioInputError
-	if errors.As(err, &inputErr) {
-		return inputErrorCancellationOnly(inputErr)
-	}
 	return cancellationLeaf(err)
-}
-
-func inputErrorCancellationOnly(err *SessionAudioInputError) bool {
-	return err != nil && err.Err != nil && cancellationErrorOnly(err.Err)
 }
 
 func cancellationCausesOnly(causes []error) bool {
@@ -54,7 +46,6 @@ func cancellationLeaf(err error) bool {
 	for _, candidate := range []error{
 		context.Canceled,
 		ErrSessionAudioResponseIncomplete,
-		ErrSessionAudioInputEndOfTurnLost,
 		ErrSessionScheduledAudioIncomplete,
 		ErrSessionUnresolvedToolResults,
 		ErrSessionToolContinuationIncomplete,

@@ -558,6 +558,7 @@ func runSelfPlayConversation(ctx context.Context, opts SelfPlayRunOptions, custo
 		observer.streamObserver = selfPlayStreamObserver(ctx, name, sideEvidence, evidence, stop, output)
 
 		err := runAgentLoopSession(ctx, io.Discard, inferencer, sessionLoopOptions{
+			audioService:  opts.audioService,
 			Prompt:        prompt,
 			WaitForClose:  true,
 			Done:          stop.done,

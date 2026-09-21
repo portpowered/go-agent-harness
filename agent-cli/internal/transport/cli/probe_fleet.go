@@ -15,7 +15,7 @@ import (
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	serviceProbes "github.com/portpowered/go-agent-harness/agent-cli/internal/services/probes"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
-	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/spf13/cobra"
 )
 
@@ -30,6 +30,7 @@ type FleetLiveSessionRunner func(context.Context, io.Writer, serviceSession.Requ
 // probe path and live entries through the existing live session runtime.
 type ProbeFleetCommand struct {
 	metricsCollector  serviceProbes.MetricsCollector
+	replayService     runtimeReplay.Service
 	sessionService    serviceSession.SessionService
 	ManifestPath      string
 	Replay            string
@@ -45,8 +46,8 @@ type ProbeFleetCommand struct {
 // NewProbeFleetCommand returns the probe fleet command constructor. An
 // optional executor replaces the default replay-backed executor, which lets
 // callers test transport behavior without network or device dependencies.
-func NewProbeFleetCommand(sessionService serviceSession.SessionService, metricsCollector serviceProbes.MetricsCollector, executor ...fleet.EntryExecutor) *ProbeFleetCommand {
-	command := &ProbeFleetCommand{sessionService: sessionService, metricsCollector: metricsCollector}
+func NewProbeFleetCommand(sessionService serviceSession.SessionService, metricsCollector serviceProbes.MetricsCollector, replayService runtimeReplay.Service, executor ...fleet.EntryExecutor) *ProbeFleetCommand {
+	command := &ProbeFleetCommand{sessionService: sessionService, metricsCollector: metricsCollector, replayService: replayService}
 	if len(executor) > 0 {
 		command.Executor = executor[0]
 	}
@@ -125,7 +126,7 @@ func (c *ProbeFleetCommand) newDefaultExecutor(cmd *cobra.Command, manifest flee
 	var liveExecutor fleet.EntryExecutor
 	var err error
 	if manifestHasTransport(manifest, fleet.TransportReplay) {
-		replayExecutor, err = c.newReplayExecutor(manifest)
+		replayExecutor, err = c.newReplayExecutor(cmd.Context(), manifest)
 		if err != nil {
 			return nil, err
 		}
@@ -154,20 +155,23 @@ func manifestHasTransport(manifest fleet.Manifest, want fleet.Transport) bool {
 	return false
 }
 
-func (c *ProbeFleetCommand) newReplayExecutor(manifest fleet.Manifest) (fleet.EntryExecutor, error) {
+func (c *ProbeFleetCommand) newReplayExecutor(ctx context.Context, manifest fleet.Manifest) (fleet.EntryExecutor, error) {
 	if strings.TrimSpace(c.Replay) == "" {
 		return nil, fmt.Errorf("--replay <fixture-path-or-dir> is required for replay fleet entries")
+	}
+	if c.replayService == nil {
+		return nil, fmt.Errorf("fleet replay service is required")
 	}
 	fixtures, err := loadReplayFixtures(c.Replay)
 	if err != nil {
 		return nil, err
 	}
 	for name, fixture := range fixtures {
-		if _, err := gatewaytesting.LoadSessionCapture(fixture); err != nil {
+		if _, err := c.replayService.InspectCapture(ctx, fixture); err != nil {
 			return nil, fmt.Errorf("invalid replay fixture %q (%s): %w", fixture, name, err)
 		}
 	}
-	replayExec := replayExecFunc(fixtures, c.metricsCollector)
+	replayExec := replayExecFunc(c.replayService, fixtures, c.metricsCollector)
 	return func(ctx context.Context, entry fleet.Entry) (fleet.EntryOutcome, error) {
 		return runReplayFleetEntry(ctx, entry, replayExec)
 	}, nil
@@ -187,7 +191,7 @@ func (c *ProbeFleetCommand) newLiveExecutor(cmd *cobra.Command) fleet.EntryExecu
 		ConfigDir:     commandFlagValue(cmd, "config-dir"),
 	}
 	return func(ctx context.Context, entry fleet.Entry) (fleet.EntryOutcome, error) {
-		return runLiveFleetEntry(ctx, entry, options, runner)
+		return runLiveFleetEntry(ctx, entry, options, runner, c.replayService, c.metricsCollector)
 	}
 }
 
@@ -211,7 +215,7 @@ func (c *ProbeFleetCommand) runLiveSession(ctx context.Context, out io.Writer, r
 	return c.sessionService.Run(ctx, out, request)
 }
 
-func runLiveFleetEntry(ctx context.Context, entry fleet.Entry, options serviceSession.Request, runSession FleetLiveSessionRunner) (fleet.EntryOutcome, error) {
+func runLiveFleetEntry(ctx context.Context, entry fleet.Entry, options serviceSession.Request, runSession FleetLiveSessionRunner, replayService runtimeReplay.Service, metricsCollector serviceProbes.MetricsCollector) (fleet.EntryOutcome, error) {
 	scenario, err := loadFleetScenario(entry)
 	if err != nil {
 		return fleet.EntryOutcome{}, err
@@ -220,7 +224,7 @@ func runLiveFleetEntry(ctx context.Context, entry fleet.Entry, options serviceSe
 	var output bytes.Buffer
 	runner := &probe.Runner{
 		Exec: deadguardExec(func(ctx context.Context, scenario probe.Scenario) (probe.ObservationSnapshot, error) {
-			return executeLiveScenario(ctx, scenario, options, runSession)
+			return executeLiveScenario(ctx, scenario, options, runSession, replayService, metricsCollector)
 		}, probeScenarioDeadline),
 		Out:           &output,
 		CorpusLookups: []probe.CorpusLookup{replayCorpusLookup{}},
@@ -242,7 +246,7 @@ func runLiveFleetEntry(ctx context.Context, entry fleet.Entry, options serviceSe
 	return fleet.EntryOutcome{Err: probeResultError(result)}, nil
 }
 
-func executeLiveScenario(ctx context.Context, scenario probe.Scenario, baseOptions serviceSession.Request, runSession FleetLiveSessionRunner) (probe.ObservationSnapshot, error) {
+func executeLiveScenario(ctx context.Context, scenario probe.Scenario, baseOptions serviceSession.Request, runSession FleetLiveSessionRunner, replayService runtimeReplay.Service, metricsCollector serviceProbes.MetricsCollector) (probe.ObservationSnapshot, error) {
 	prompt, audioPath, err := liveScenarioInputs(scenario)
 	if err != nil {
 		return probe.ObservationSnapshot{}, err
@@ -261,11 +265,9 @@ func executeLiveScenario(ctx context.Context, scenario probe.Scenario, baseOptio
 	if err := runSession(ctx, io.Discard, options, audioInput); err != nil {
 		return probe.ObservationSnapshot{}, fmt.Errorf("run live fleet scenario %q: %w", scenarioName(scenario), err)
 	}
-	capture, err := gatewaytesting.LoadSessionCapture(capturePath)
-	if err != nil {
-		return probe.ObservationSnapshot{}, fmt.Errorf("load live fleet capture %q: %w", capturePath, err)
-	}
-	return observationFromSessionCapture(ctx, scenario, capture, capturePath, false)
+	return observationFromSessionCapture(ctx, scenario, replayService, runtimeReplay.CaptureProbeRequest{
+		SourcePath: capturePath,
+	}, metricsCollector)
 }
 
 func liveScenarioInputs(scenario probe.Scenario) (prompt, audioPath string, err error) {

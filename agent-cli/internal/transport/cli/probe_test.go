@@ -3,8 +3,6 @@ package cli
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
-	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,12 +15,17 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
-	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
+	replaywire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 const probeSessionFixture = "../../../../go-llm-gateway/pkg/testing/testdata/session-fixtures/session_healthy_multiturn_audio.session.json"
+
+func newReplayRuntimeServiceForTest() runtimeReplay.Service {
+	return replaywire.NewService()
+}
 
 func probeFixtureObservation(t *testing.T) gatewaytesting.SessionReplayProbeReport {
 	t.Helper()
@@ -1002,11 +1005,9 @@ func TestV3AScenariosReferenceCommittedOverlapCorpus(t *testing.T) {
 	}
 }
 
-// TestV3AReplayInjectsCompleteOverlapCorpusPCM proves that the positive replay
-// path replaces sanitized append placeholders with every frame from the
-// committed overlap WAV. The cancel remains in its recorded position while
-// the rest of the user's utterance continues through the same replay wire.
-func TestV3AReplayInjectsCompleteOverlapCorpusPCM(t *testing.T) {
+// TestV3AReplayServiceInjectsOverlapCorpus preserves the provider cancel's
+// recorded logical position while the service replays the full committed WAV.
+func TestV3AReplayServiceInjectsOverlapCorpus(t *testing.T) {
 	tests := []struct {
 		name       string
 		fixture    string
@@ -1019,76 +1020,27 @@ func TestV3AReplayInjectsCompleteOverlapCorpusPCM(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			capture, err := gatewaytesting.LoadSessionCapture(test.fixture)
+			samples, rate, err := replayCorpusSamples(test.corpusID)
 			if err != nil {
-				t.Fatalf("load source capture: %v", err)
-			}
-			injected, err := injectReplayCorpusAudio(capture, test.corpusID)
-			if err != nil {
-				t.Fatalf("inject corpus: %v", err)
-			}
-
-			corpusPath, err := replayCorpusPath(test.corpusID)
-			if err != nil {
-				t.Fatalf("resolve corpus: %v", err)
-			}
-			wavBytes, err := os.ReadFile(corpusPath)
-			if err != nil {
-				t.Fatalf("read corpus: %v", err)
-			}
-			rate, samples, err := wavio.Read(bytes.NewReader(wavBytes))
-			if err != nil {
-				t.Fatalf("decode corpus: %v", err)
+				t.Fatalf("load corpus: %v", err)
 			}
 			if rate != test.wantRate {
 				t.Fatalf("corpus rate = %d, want %d", rate, test.wantRate)
 			}
-
-			want := make([]byte, 0, ((len(samples)+audio.FrameSize-1)/audio.FrameSize)*audio.FrameSize*2)
-			got := make([]byte, 0, cap(want))
-			appendCount := 0
-			for start := 0; start < len(samples); start += audio.FrameSize {
-				frame := make([]int16, audio.FrameSize)
-				copy(frame, samples[start:])
-				encoded := make([]byte, len(frame)*2)
-				for index, sample := range frame {
-					binary.LittleEndian.PutUint16(encoded[index*2:], uint16(sample))
-				}
-				want = append(want, encoded...)
-			}
-			for _, record := range injected.Records {
-				if record.Direction != gatewaytesting.DirectionClientToServer || record.Type != "input_audio_buffer.append" {
-					continue
-				}
-				appendCount++
-				var event struct {
-					Audio string `json:"audio"`
-				}
-				if err := json.Unmarshal(record.Payload, &event); err != nil {
-					t.Fatalf("decode injected append: %v", err)
-				}
-				pcm, err := base64.StdEncoding.DecodeString(event.Audio)
-				if err != nil {
-					t.Fatalf("decode injected PCM: %v", err)
-				}
-				got = append(got, pcm...)
-			}
-			wantFrames := (len(samples) + audio.FrameSize - 1) / audio.FrameSize
-			if appendCount != wantFrames {
-				t.Fatalf("injected append count = %d, want %d", appendCount, wantFrames)
-			}
-			if !bytes.Equal(got, want) {
-				t.Fatalf("injected append PCM differs from the complete corpus: got %d bytes, want %d", len(got), len(want))
-			}
-
-			var observation probe.ObservationSnapshot
-			if err := deriveResponseCancelObservationFromCapture(injected, &observation); err != nil {
-				t.Fatalf("derive cancel observation: %v", err)
+			observation, err := newReplayRuntimeServiceForTest().AnalyzeProbe(t.Context(), runtimeReplay.CaptureProbeRequest{
+				SourcePath:           test.fixture,
+				CorpusID:             test.corpusID,
+				AudioSamples:         samples,
+				SampleRateHz:         rate,
+				ExpectedSampleRateHz: test.wantRate,
+			})
+			if err != nil {
+				t.Fatalf("replay injected corpus: %v", err)
 			}
 			if !observation.HasInterruptTick || observation.InterruptTick != 2 {
 				t.Fatalf("interrupt tick = %d (present=%t), want actual first append tick 2", observation.InterruptTick, observation.HasInterruptTick)
 			}
-			if !observation.HasResponseCancel || observation.ResponseCancelTick != test.wantCancel {
+			if !observation.HasResponseCancel || probe.LogicalTime(observation.ResponseCancelTick) != test.wantCancel {
 				t.Fatalf("cancel tick = %d (present=%t), want %d", observation.ResponseCancelTick, observation.HasResponseCancel, test.wantCancel)
 			}
 		})

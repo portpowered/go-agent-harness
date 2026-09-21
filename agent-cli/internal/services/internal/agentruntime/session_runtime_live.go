@@ -271,6 +271,10 @@ func planLiveSessionRuntime(opts SessionRunOptions, factory sessionRuntimeFactor
 }
 
 func planSessionWithResolvedInstructions(opts SessionRunOptions, instructions string) (sessionRuntimePlan, error) {
+	return planSessionWithResolvedInstructionsContext(context.Background(), opts, instructions)
+}
+
+func planSessionWithResolvedInstructionsContext(ctx context.Context, opts SessionRunOptions, instructions string) (sessionRuntimePlan, error) {
 	// This is the single service-owned boundary between prompt resolution and
 	// provider construction. The tool definitions in opts are the same snapshot
 	// that the runtime planner passes to the provider, so the grounding contract
@@ -285,7 +289,7 @@ func planSessionWithResolvedInstructions(opts SessionRunOptions, instructions st
 	if useInitialProviderInstructions {
 		planFactory = sessionRuntimeFactoryWithInstructions(planFactory, instructions)
 	}
-	plan, err := planSessionRuntimeWithFactory(opts, planFactory)
+	plan, err := planSessionRuntimeWithFactoryContext(ctx, opts, planFactory)
 	if err != nil {
 		return sessionRuntimePlan{}, err
 	}

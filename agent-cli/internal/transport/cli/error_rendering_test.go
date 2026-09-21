@@ -121,7 +121,7 @@ func (i *failingCLIInferencer) ConnectSession(context.Context) (messages.Session
 }
 
 func executeCLIWithSessionInferencer(inferencer messages.SessionInferencer, args ...string) cliExecution {
-	root := newTestRootCommandWithProbeFleetCommand(NewProbeFleetCommand(nil, nil), inferencer)
+	root := newTestRootCommandWithProbeFleetCommand(NewProbeFleetCommand(nil, nil, newReplayRuntimeServiceForTest()), inferencer)
 	var stdout, stderr bytes.Buffer
 	root.SetOut(&stdout)
 	root.SetErr(&stderr)

@@ -58,6 +58,7 @@ func TestRunSessionWithMaxDuration_ZeroDoesNotCreateTimer(t *testing.T) {
 	clock := &durationTestClock{}
 	var out bytes.Buffer
 	err := RunSessionWithMaxDurationClock(context.Background(), &out, SessionRunOptions{ModelCatalog: testModelCatalog(),
+		AudioService:      newTestAudioIOService(),
 		ReplayPath:        "synthetic.session.json",
 		SessionInferencer: &durationTestInferencer{events: durationNaturalEvents()},
 	}, 0, clock)
@@ -192,7 +193,7 @@ func runNegativeDurationCase(t *testing.T, testCase durationS2Case, clock *durat
 }
 func runUnboundedDurationCase(t *testing.T, testCase durationS2Case, clock *durationTestClock) {
 	var out bytes.Buffer
-	err := RunSessionWithMaxDurationClock(context.Background(), &out, SessionRunOptions{ModelCatalog: testModelCatalog(), ReplayPath: "synthetic.session.json", SessionInferencer: &durationTestInferencer{events: durationNaturalEvents()}}, testCase.maxDuration, clock)
+	err := RunSessionWithMaxDurationClock(context.Background(), &out, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(), ReplayPath: "synthetic.session.json", SessionInferencer: &durationTestInferencer{events: durationNaturalEvents()}}, testCase.maxDuration, clock)
 	if err != nil {
 		t.Fatalf("unbounded case: %v", err)
 	}
@@ -578,6 +579,24 @@ func (w *durationTestWriter) waitFor(t *testing.T, want string) {
 	}
 }
 
+func waitForDurationTextOrError(t *testing.T, writer *durationTestWriter, runErr <-chan error, want string) {
+	t.Helper()
+	timer := time.NewTimer(2 * time.Second)
+	defer timer.Stop()
+	for {
+		select {
+		case got := <-writer.writes:
+			if strings.Contains(got, want) {
+				return
+			}
+		case err := <-runErr:
+			t.Fatalf("duration session ended before %q: %v; output=%q", want, err, writer.String())
+		case <-timer.C:
+			t.Fatalf("timed out waiting for %q; output=%q", want, writer.String())
+		}
+	}
+}
+
 func TestRunAgentLoopSessionWithDuration_ProviderDoneDrainsAcceptedOutput(t *testing.T) {
 	clock := &durationTestClock{}
 	var out bytes.Buffer
@@ -620,7 +639,7 @@ func TestRunSessionWithMaxDuration_FinalizesRealArtifactsAndRejectsLateFrame(t *
 		TranscriptPath: transcriptPath,
 	})
 	go func() {
-		runErrCh <- RunSessionWithMaxDurationClock(ctx, writer, SessionRunOptions{ModelCatalog: testModelCatalog(),
+		runErrCh <- RunSessionWithMaxDurationClock(ctx, writer, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 			ReplayPath:        filepath.Join(artifactDir, "fixture.session.json"),
 			SessionInferencer: inferencer,
 		}, time.Nanosecond, clock)
@@ -628,7 +647,7 @@ func TestRunSessionWithMaxDuration_FinalizesRealArtifactsAndRejectsLateFrame(t *
 
 	// The ready marker is emitted only after the production artifact lifecycle
 	// has accepted every preceding audio/transcript message.
-	writer.waitFor(t, "artifact-ready")
+	waitForDurationTextOrError(t, writer, runErrCh, "artifact-ready")
 	clock.fire()
 	if inferencer.session == nil {
 		t.Fatal("duration session was not connected")
@@ -742,13 +761,15 @@ func TestRunSessionWithMaxDuration_FinalizesZeroSampleArtifactsBeforeFirstAudio(
 		TranscriptPath: transcriptPath,
 	})
 	go func() {
-		runErrCh <- RunSessionWithMaxDurationClock(ctx, &out, SessionRunOptions{ModelCatalog: testModelCatalog(),
+		runErrCh <- RunSessionWithMaxDurationClock(ctx, &out, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 			ReplayPath:        filepath.Join(artifactDir, "fixture.session.json"),
 			SessionInferencer: inferencer,
 		}, time.Nanosecond, clock)
 	}()
 	select {
 	case <-inferencer.connectedCh:
+	case err := <-runErrCh:
+		t.Fatalf("zero-sample duration session ended before connect: %v", err)
 	case <-time.After(2 * time.Second):
 		t.Fatal("zero-sample session did not connect")
 	}
@@ -839,7 +860,7 @@ func TestRunSessionWithMaxDuration_PreservesArtifactFlushAndCloseIdentity(t *tes
 			err := RunSessionWithMaxDurationClock(
 				durationwire.NewService().WithArtifacts(context.Background(), lifecycle),
 				io.Discard,
-				SessionRunOptions{ModelCatalog: testModelCatalog(),
+				SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 					ReplayPath:        "artifact-failure.session.json",
 					SessionInferencer: &durationTestInferencer{events: durationNaturalEvents(), closeAfterEvents: true},
 				},
@@ -946,12 +967,12 @@ func TestRunSessionWithMaxDuration_ReleasesTimerSessionAndProductionArtifacts(t 
 		TranscriptPath: transcriptPath,
 	})
 	go func() {
-		runErrCh <- RunSessionWithMaxDurationClock(ctx, writer, SessionRunOptions{ModelCatalog: testModelCatalog(),
+		runErrCh <- RunSessionWithMaxDurationClock(ctx, writer, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 			ReplayPath:        filepath.Join(artifactDir, "fixture.session.json"),
 			SessionInferencer: inferencer,
 		}, time.Nanosecond, clock)
 	}()
-	writer.waitFor(t, "artifact-ready")
+	waitForDurationTextOrError(t, writer, runErrCh, "artifact-ready")
 	clock.fire()
 	if err := <-runErrCh; err != nil {
 		t.Fatalf("resource cutoff: %v", err)

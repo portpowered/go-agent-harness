@@ -36,12 +36,6 @@ func (p sessionRuntimePlan) finalizationPorts() duration.FinalizationPorts {
 			return p.rtcRuntime.Close()
 		},
 		FlushCapture: p.flushCapture,
-		ReleaseCapture: func() error {
-			if p.captureClaim == nil {
-				return nil
-			}
-			return wrapSessionRuntimeError(p, p.captureClaim.release())
-		},
 	}
 	if p.finalize != nil {
 		ports.Finalize = func(ctx context.Context, out io.Writer) error {
@@ -64,6 +58,8 @@ type SessionDurationClock interface {
 	NewTimer(time.Duration) SessionDurationTimer
 }
 
+type SessionLivenessClock = SessionDurationClock
+
 func sessionDurationClockFromSource(service audioio.Service, source platformclock.Source) (SessionDurationClock, error) {
 	if service == nil {
 		return nil, errors.New("audio service is required for session duration clock")
@@ -79,6 +75,9 @@ func sessionDurationClockFromSource(service audioio.Service, source platformcloc
 // bound. A zero duration disables the controller; a positive duration requests
 // a session close and drains the accepted output before finalization.
 func RunSessionWithMaxDuration(ctx context.Context, out io.Writer, opts SessionRunOptions, maxDuration time.Duration) error {
+	if err := sessioncontract.ValidateSessionMaxDuration(maxDuration); err != nil {
+		return err
+	}
 	if maxDuration == 0 {
 		return RunSessionWithMaxDurationClock(ctx, out, opts, maxDuration, nil)
 	}
@@ -104,13 +103,7 @@ func RunSessionWithMaxDurationClock(ctx context.Context, out io.Writer, opts Ses
 	if err := validateSessionRunOptions(opts); err != nil {
 		return err
 	}
-	claim, err := ensureSessionRecordingClaim(&opts)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = claim.release() }()
-
-	plan, err := planSessionRuntime(opts)
+	plan, err := planSessionRuntimeContext(ctx, opts)
 	if err != nil {
 		return err
 	}
@@ -126,7 +119,9 @@ func RunSessionWithMaxDurationClock(ctx context.Context, out io.Writer, opts Ses
 	if durationClock == nil {
 		durationClock = realSessionDurationClock{}
 	}
-	return runSessionDurationPlan(durationCtx, out, plan, maxDuration, durationClock)
+	return plan.withLiveEvidence(durationCtx, func(runCtx context.Context, prepared sessionRuntimePlan) error {
+		return runSessionDurationPlan(runCtx, out, prepared, maxDuration, durationClock)
+	})
 }
 
 // RunSessionWithTextSeedAndMaxDuration preserves the explicit --prompt seed
@@ -155,12 +150,7 @@ func RunSessionWithTextSeedAndMaxDuration(ctx context.Context, out io.Writer, op
 	if err := validateSessionRunOptions(opts); err != nil {
 		return err
 	}
-	claim, err := ensureSessionRecordingClaim(&opts)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = claim.release() }()
-	plan, err := planSessionRuntime(opts)
+	plan, err := planSessionRuntimeContext(ctx, opts)
 	if err != nil {
 		return err
 	}
@@ -169,32 +159,34 @@ func RunSessionWithTextSeedAndMaxDuration(ctx context.Context, out io.Writer, op
 		return err
 	}
 
-	wirePrompt := nextSessionTextWirePrompt()
-	plan.loop.Prompt = wirePrompt
-	output := &sessionTextOutput{writer: out}
-	admission := durationwire.NewService().NewEventAdmission()
-	var inner messages.SessionInferencer
-	if plan.inferencer != nil {
-		// The seed substitution wrapper must sit INSIDE the admission
-		// boundary: the duration runner connects through admittedInferencer,
-		// so any wrapper composed outside it never observes the session and
-		// the sentinel prompt would leak onto the live wire.
-		inner = &sessionTextSeedInferencer{
-			inner:      plan.inferencer,
-			wirePrompt: wirePrompt,
-			value:      seed.Value,
+	return plan.withLiveEvidence(durationCtx, func(runCtx context.Context, prepared sessionRuntimePlan) error {
+		wirePrompt := nextSessionTextWirePrompt()
+		prepared.loop.Prompt = wirePrompt
+		output := &sessionTextOutput{writer: out}
+		admission := durationwire.NewService().NewEventAdmission()
+		var inner messages.SessionInferencer
+		if prepared.inferencer != nil {
+			// The seed substitution wrapper must sit INSIDE the admission
+			// boundary: the duration runner connects through admittedInferencer,
+			// so any wrapper composed outside it never observes the session and
+			// the sentinel prompt would leak onto the live wire.
+			inner = &sessionTextSeedInferencer{
+				inner:      prepared.inferencer,
+				wirePrompt: wirePrompt,
+				value:      seed.Value,
+			}
 		}
-	}
-	admittedInferencer := durationwire.NewService().NewAdmissionInferencer(inner, admission, make(chan struct{}))
-	if inner != nil {
-		plan.inferencer = admittedInferencer
-	}
-	durationClock, err := sessionDurationClockFromSource(opts.AudioService, opts.Clock)
-	if err != nil {
-		return err
-	}
-	err = runSessionDurationPlanWithAdmission(durationCtx, output, plan, maxDuration, durationClock, admittedInferencer)
-	return errors.Join(err, output.errorValue())
+		admittedInferencer := durationwire.NewService().NewAdmissionInferencer(inner, admission, make(chan struct{}))
+		if inner != nil {
+			prepared.inferencer = admittedInferencer
+		}
+		durationClock, err := sessionDurationClockFromSource(opts.AudioService, opts.Clock)
+		if err != nil {
+			return err
+		}
+		err = runSessionDurationPlanWithAdmission(runCtx, output, prepared, maxDuration, durationClock, admittedInferencer)
+		return errors.Join(err, output.errorValue())
+	})
 }
 
 func runSessionDurationPlan(ctx context.Context, out io.Writer, plan sessionRuntimePlan, maxDuration time.Duration, durationClock SessionDurationClock) error {
@@ -229,6 +221,12 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 		plan.loop.terminalReporter = reporter
 	}
 	finalizer := durationwire.NewService().NewFinalizer(plan.finalizationPorts())
+	if plan.browserRecording != nil {
+		plan.browserRecording.start(ctx)
+		defer func() {
+			runErr = errors.Join(runErr, plan.finishBrowserRecording(ctx))
+		}()
+	}
 	defer func() {
 		// The common finalizer must complete browser/provider/capture teardown
 		// before the duration sidecar is flushed and closed as the final bundle

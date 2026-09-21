@@ -1,6 +1,7 @@
 package agentruntime
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -8,6 +9,17 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	sessioncontract "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 )
+
+func sessionToolContextFailure(err error) error {
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		return ErrSessionToolTimeout
+	case errors.Is(err, context.Canceled):
+		return errors.New("tool execution canceled")
+	default:
+		return fmt.Errorf("tool execution stopped: %w", err)
+	}
+}
 
 var (
 	// ErrSessionUnresolvedToolResults is the stable sentinel for a session that

@@ -87,6 +87,7 @@ func (o *sessionProgressObserver) ensureLifecycleSchedule(ctx context.Context, l
 	_, err := lifecycle.Apply(ctx, sd.Event{Kind: sd.EventEnsureScheduled, Count: len(o.scheduledResponses)})
 	return err
 }
+
 func (o *sessionProgressObserver) syncLifecycleProjection() {
 	if o == nil || o.lifecycle == nil {
 		return
@@ -128,7 +129,11 @@ func (o *sessionProgressObserver) syncLifecycleProjection() {
 	o.retryCandidateID = snapshot.RetryCandidateID
 }
 func (o *sessionProgressObserver) lifecycleEvent(event sd.Event) sd.Observation {
-	observation, err := o.applyLifecycle(context.Background(), event)
+	return o.lifecycleEventContext(context.Background(), event)
+}
+
+func (o *sessionProgressObserver) lifecycleEventContext(ctx context.Context, event sd.Event) sd.Observation {
+	observation, err := o.applyLifecycle(ctx, event)
 	if err != nil {
 		return sd.Observation{}
 	}

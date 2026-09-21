@@ -380,7 +380,7 @@ func TestRouterPreRunNormalizesProbeRunPathsAndWritesUnderExpandedHomes(t *testi
 	firstScenario := writeProbeScenario(t, currentHome, "home-scenario-one", len(observation.Observations))
 	secondScenario := writeProbeScenario(t, namedHome, "home-scenario-two", len(observation.Observations))
 
-	owner := NewProbeRunCommandWithDeviceService(newDevicesTestService(), nil, nil)
+	owner := NewProbeRunCommandWithDeviceService(newDevicesTestService(), nil, nil, newReplayRuntimeServiceForTest())
 	command := owner.Generate()
 	root := newProbePathPreflightRoot(command, testPathResolver(currentHome, namedHome))
 	firstScenarioArg := "~/" + filepath.Base(firstScenario)
@@ -630,7 +630,7 @@ func TestRouterPreRunRejectsCustomerSimulationPathBeforeRunner(t *testing.T) {
 }
 
 func TestRouterPreRunNormalizesProbeFleetPaths(t *testing.T) {
-	owner := NewProbeFleetCommand(nil, nil)
+	owner := NewProbeFleetCommand(nil, nil, newReplayRuntimeServiceForTest())
 	command := owner.Generate()
 	command.RunE = func(*cobra.Command, []string) error { return nil }
 	currentHome := t.TempDir()

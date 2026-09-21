@@ -14,13 +14,13 @@ import (
 )
 
 func TestProbeScenarioV2BrowserExecutorDefaultsToHermetic(t *testing.T) {
-	command := NewProbeRunCommandWithDeviceService(newDevicesTestService(), nil, nil)
+	command := NewProbeRunCommandWithDeviceService(newDevicesTestService(), nil, nil, newReplayRuntimeServiceForTest())
 	if command.BrowserExecutorMode != ProbeScenarioV2BrowserExecutorHermetic {
 		t.Fatalf("default browser executor = %q, want hermetic", command.BrowserExecutorMode)
 	}
 
 	factoryCalled := false
-	executor, err := newProbeScenarioV2Executor(probe.ScenarioV2{}, WithProbeScenarioV2BrowserExecutorFactory(func(config.BrowserConfig) (WebMCPDoctorRuntime, error) {
+	executor, err := newProbeScenarioV2Executor(probe.ScenarioV2{}, newReplayRuntimeServiceForTest(), WithProbeScenarioV2BrowserExecutorFactory(func(config.BrowserConfig) (WebMCPDoctorRuntime, error) {
 		factoryCalled = true
 		return WebMCPDoctorRuntime{}, nil
 	}))
@@ -36,7 +36,7 @@ func TestProbeScenarioV2BrowserExecutorDefaultsToHermetic(t *testing.T) {
 }
 
 func TestProbeRunCommandBrowserExecutorFlagIsExplicitAndTyped(t *testing.T) {
-	command := NewProbeRunCommandWithDeviceService(newDevicesTestService(), nil, nil)
+	command := NewProbeRunCommandWithDeviceService(newDevicesTestService(), nil, nil, newReplayRuntimeServiceForTest())
 	generated := command.Generate()
 	if err := generated.Flags().Set("browser-executor", "real"); err != nil {
 		t.Fatalf("set real browser executor: %v", err)
@@ -73,7 +73,7 @@ func TestProbeScenarioV2RealExecutorUsesSharedBrowserContract(t *testing.T) {
 			{Type: probe.ScenarioV2ExpectationBrowserConnectionClosed},
 		},
 	}
-	result := executeProbeScenarioV2(context.Background(), probeScenarioV2Selection{Scenario: scenario}, t.TempDir()+"/evidence",
+	result := executeProbeScenarioV2(context.Background(), probeScenarioV2Selection{Scenario: scenario}, t.TempDir()+"/evidence", newReplayRuntimeServiceForTest(),
 		WithProbeScenarioV2BrowserExecutorMode(ProbeScenarioV2BrowserExecutorReal),
 		WithProbeScenarioV2BrowserExecutorFactory(factory),
 	)
@@ -105,7 +105,7 @@ func TestProbeScenarioV2RealUnavailableIsClassifiedAndDoesNotLeakCause(t *testin
 		ID:            "real-browser-unavailable",
 		Steps:         []probe.ScenarioV2Step{{Type: probe.ScenarioV2StepBrowserConnect}},
 	}
-	result := executeProbeScenarioV2(context.Background(), probeScenarioV2Selection{Scenario: scenario}, "",
+	result := executeProbeScenarioV2(context.Background(), probeScenarioV2Selection{Scenario: scenario}, "", newReplayRuntimeServiceForTest(),
 		WithProbeScenarioV2BrowserExecutorMode(ProbeScenarioV2BrowserExecutorReal),
 		WithProbeScenarioV2BrowserExecutorFactory(factory),
 	)
@@ -125,7 +125,7 @@ func TestProbeScenarioV2RealUnavailableIsClassifiedAndDoesNotLeakCause(t *testin
 		t.Fatalf("factory runtime close calls = %d, want 1", closeCalls)
 	}
 
-	_, err := newProbeScenarioV2Executor(scenario,
+	_, err := newProbeScenarioV2Executor(scenario, newReplayRuntimeServiceForTest(),
 		WithProbeScenarioV2BrowserExecutorMode(ProbeScenarioV2BrowserExecutorReal),
 		WithProbeScenarioV2BrowserExecutorFactory(factory),
 	)

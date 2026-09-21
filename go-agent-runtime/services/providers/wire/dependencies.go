@@ -4,6 +4,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	"net/http"
 
+	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
 )
@@ -13,6 +14,7 @@ import (
 type Dependencies struct {
 	Recording       recording.Service
 	ProviderCapture recording.ProviderCaptureService
+	Replay          runtimeReplay.Service
 	HTTPClient      *http.Client
 	Logger          logging.Logger
 	Clock           clock.TimerSource

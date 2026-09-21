@@ -51,7 +51,8 @@ func newLiveTerminalDrainFixture(t *testing.T) *liveTerminalDrainFixture {
 	}
 	f.writer = &f.output
 	f.options = sessionLoopOptions{
-		loopReady: f.loopReady,
+		audioService: newTestAudioIOService(),
+		loopReady:    f.loopReady,
 	}
 	f.session.opened = func() {
 		// ConnectSession has accepted SESSION.OPEN. The service may not have

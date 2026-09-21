@@ -211,7 +211,7 @@ func TestRunBrowserConversationInterruptsInFlightWorkAndPreservesDetachedTab(t *
 			json.RawMessage(`{"value":true}`),
 			json.RawMessage(`{"value":true}`),
 		}},
-		SessionOptions: SessionRunOptions{ModelCatalog: testModelCatalog(), SessionInferencer: inferencer},
+		SessionOptions: SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(), SessionInferencer: inferencer},
 	})
 	if err == nil || !errors.Is(err, ErrBrowserConversationSession) {
 		t.Fatalf("RunBrowserConversation error = %v, want expected canceled session error", err)

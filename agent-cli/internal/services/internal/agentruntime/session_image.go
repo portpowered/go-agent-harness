@@ -20,6 +20,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/input"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
@@ -126,11 +127,6 @@ func RunSessionWithImages(ctx context.Context, out io.Writer, opts SessionImageR
 	if err := validateSessionRunOptions(opts.SessionRunOptions); err != nil {
 		return err
 	}
-	claim, err := ensureSessionRecordingClaim(&opts.SessionRunOptions)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = claim.release() }()
 	metadata, err := resolveSessionImageCapabilities(opts.SessionRunOptions)
 	if err != nil {
 		return err
@@ -177,24 +173,6 @@ func planSessionImageRuntime(opts SessionRunOptions, parts []messages.ImagePart,
 	return attachSessionImageRuntime(plan, parts, seed, deferResponse, opts.Prompt)
 }
 
-// planSessionImageRuntimeForDirectory keeps directory recording independent
-// from the optional provider capture file. In particular, --record-dir alone
-// needs the live provider runtime without giving its capture finalizer an
-// empty path to flush. The directory planner owns that distinction and still
-// preserves explicit --record and --replay behavior.
-func planSessionImageRuntimeForDirectory(opts SessionRunOptions, parts []messages.ImagePart, seed SessionTextSeed, systemPrompt string, deferResponse bool) (sessionRuntimePlan, string, func(), error) {
-	plan, cleanup, err := planSessionForDirectoryRecordingWithInstructions(opts, systemPrompt, true)
-	if err != nil {
-		return sessionRuntimePlan{}, "", func() {}, err
-	}
-	plan, wirePrompt, err := attachSessionImageRuntime(plan, parts, seed, deferResponse, opts.Prompt)
-	if err != nil {
-		cleanup()
-		return sessionRuntimePlan{}, "", func() {}, err
-	}
-	return plan, wirePrompt, cleanup, nil
-}
-
 func attachSessionImageRuntime(plan sessionRuntimePlan, parts []messages.ImagePart, seed SessionTextSeed, deferResponse bool, prompt string) (sessionRuntimePlan, string, error) {
 	if plan.inferencer == nil {
 		return sessionRuntimePlan{}, "", errors.New("session image runtime has no session inferencer")
@@ -224,15 +202,19 @@ func runSessionImagePlan(ctx context.Context, out io.Writer, plan sessionRuntime
 			plan.inferencer = &sessionTextSeedInferencer{inner: plan.inferencer, wirePrompt: wirePrompt, value: opts.TextSeed.Value}
 			return errors.Join(plan.run(ctx, output), output.errorValue())
 		}
-		durationCtx, err := prepareSessionDurationArtifacts(ctx)
+		durationService := durationwire.NewService()
+		durationCtx, err := durationService.PrepareArtifacts(ctx)
 		if err != nil {
 			return err
 		}
-		admission := newSessionDurationAdmission()
-		admittedInferencer := &sessionDurationAdmissionInferencer{inner: plan.inferencer, admission: admission, closeDone: make(chan struct{})}
-		plan.inferencer = &sessionTextSeedInferencer{inner: admittedInferencer, wirePrompt: wirePrompt, value: opts.TextSeed.Value}
-		err = runSessionDurationPlanWithAdmission(durationCtx, output, plan, opts.MaxDuration, nil, admittedInferencer)
-		return errors.Join(err, output.errorValue())
+		return plan.withLiveEvidence(durationCtx, func(runCtx context.Context, prepared sessionRuntimePlan) error {
+			inner := &sessionTextSeedInferencer{inner: prepared.inferencer, wirePrompt: wirePrompt, value: opts.TextSeed.Value}
+			admission := durationService.NewEventAdmission()
+			admittedInferencer := durationService.NewAdmissionInferencer(inner, admission, make(chan struct{}))
+			prepared.inferencer = admittedInferencer
+			err := runSessionDurationPlanWithAdmission(runCtx, output, prepared, opts.MaxDuration, nil, admittedInferencer)
+			return errors.Join(err, output.errorValue())
+		})
 	}
 	if opts.MaxDuration == 0 {
 		return plan.run(ctx, out)
@@ -240,11 +222,13 @@ func runSessionImagePlan(ctx context.Context, out io.Writer, plan sessionRuntime
 	return runSessionImageDuration(ctx, out, plan, opts.MaxDuration)
 }
 func runSessionImageDuration(ctx context.Context, out io.Writer, plan sessionRuntimePlan, maxDuration time.Duration) error {
-	durationCtx, err := prepareSessionDurationArtifacts(ctx)
+	durationCtx, err := durationwire.NewService().PrepareArtifacts(ctx)
 	if err != nil {
 		return err
 	}
-	return runSessionDurationPlan(durationCtx, out, plan, maxDuration, nil)
+	return plan.withLiveEvidence(durationCtx, func(runCtx context.Context, prepared sessionRuntimePlan) error {
+		return runSessionDurationPlan(runCtx, out, prepared, maxDuration, nil)
+	})
 }
 func PrepareSessionImageParts(paths []string, metadata SessionImageCapabilities) ([]messages.ImagePart, error) {
 	if !metadata.SupportsImageInput {

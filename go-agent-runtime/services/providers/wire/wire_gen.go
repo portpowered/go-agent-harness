@@ -23,7 +23,8 @@ func NewService(deps Dependencies) providers.FullService {
 	recordingService := deps.Recording
 	modelCatalog := NewModelCatalog()
 	providerCaptureService := deps.ProviderCapture
-	serviceService := service.New(client, logger, timerSource, recordingService, modelCatalog, providerCaptureService)
+	replayService := deps.Replay
+	serviceService := service.NewWithReplay(client, logger, timerSource, recordingService, modelCatalog, providerCaptureService, replayService)
 	return serviceService
 }
 

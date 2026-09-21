@@ -10,6 +10,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeProviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	runtimerecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
+	runtimereplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -181,8 +183,11 @@ type RoomObserver func(RoomResult)
 // SessionFactory or SessionInferencers map is intended for deterministic tests;
 // the default factory builds the repository's existing live session runtime.
 type RoomRunOptions struct {
-	AudioService audioio.Service
-	Manifest     room.Manifest
+	AudioService           audioio.Service
+	recordingService       runtimerecording.Service
+	providerCaptureService runtimerecording.ProviderCaptureService
+	replayService          runtimereplay.Service
+	Manifest               room.Manifest
 	// ReplayPath selects a finalized room evidence directory (or its
 	// run-manifest.json) as the sole source of participant runtime settings.
 	// Replay admission never resolves credentials, live config, host devices,

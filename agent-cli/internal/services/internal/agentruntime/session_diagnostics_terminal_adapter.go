@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimerecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	sessionduration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	sessiondurationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
@@ -314,6 +315,13 @@ func (o *sessionProgressObserver) finish(err error) error {
 	o.notifyFinalTerminalObservation(err)
 	o.emitTerminal(err)
 	o.emitMetricsMatrix()
+	if o.liveRecorder != nil {
+		_ = o.liveRecorder.SetCompletion(context.Background(), runtimerecording.LiveCompletion{
+			RunError: err, UserCancelled: o.userCancelled,
+			RoomCancellationOnly: roomCancellationOnly(err),
+			SawSessionOpen:       o.sawSessionOpen, TurnsCompleted: o.turnsCompleted,
+		})
+	}
 	if o.runtime != nil {
 		o.runtime.terminalWithAccounting(o.turnsCompleted, err, o.finalAccounting())
 	}

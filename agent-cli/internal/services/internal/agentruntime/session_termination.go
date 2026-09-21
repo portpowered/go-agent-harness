@@ -11,6 +11,9 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
+	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
+	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	gwproviders "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
@@ -45,6 +48,10 @@ var defaultSessionStragglerDrainPolicy = sessionStragglerDrainPolicy{
 var errInvalidSessionStragglerDrainPolicy = errors.New("session straggler drain policy requires a positive quiet period")
 
 var errMissingSessionStragglerDrain = errors.New("session termination boundary requires a straggler drain")
+
+func waitForSessionLoopStragglers(out io.Writer, loop *agentloop.AgentLoop, policy sessionStragglerDrainPolicy, obs *sessionProgressObserver) error {
+	return waitForSessionLoopStragglersWithContext(context.Background(), out, loop, policy, obs, platformclock.Real{}, audioiowire.NewService())
+}
 
 // sessionTerminationBoundary is the one terminal shutdown boundary shared by
 // the live and duration session loops. Its callbacks are loop-owned adapters:
@@ -209,6 +216,82 @@ func sessionErrorFields(value *messages.ErrorValue) string {
 		providerFields = append([]string{fields}, providerFields...)
 	}
 	return strings.Join(providerFields, " ")
+}
+
+// waitForSessionLoopStragglersWithContext drains provider output until the
+// required quiet period elapses. The audio service creates the canonical
+// timers so injected clocks retain the same behavior as the live loop.
+func waitForSessionLoopStragglersWithContext(ctx context.Context, out io.Writer, loop *agentloop.AgentLoop, policy sessionStragglerDrainPolicy, obs *sessionProgressObserver, source platformclock.Source, services ...audioio.Service) error {
+	if policy.quietPeriod <= 0 {
+		return errInvalidSessionStragglerDrainPolicy
+	}
+	var audioService audioio.Service
+	if len(services) > 0 {
+		audioService = services[0]
+	}
+	if audioService == nil {
+		return errors.New("session straggler drain requires an audio service")
+	}
+	idle, err := audioService.NewTimer(source, policy.quietPeriod)
+	if err != nil {
+		return err
+	}
+	var wallSafety platformclock.Timer
+	var wallSafetyC <-chan time.Time
+	if source != nil {
+		wallSafety, err = audioService.NewTimer(platformclock.Real{}, sessionStragglerDrainWallSafety)
+		if err != nil {
+			idle.Stop()
+			return err
+		}
+		wallSafetyC = wallSafety.C()
+	}
+	defer func() {
+		idle.Stop()
+		if wallSafety != nil {
+			wallSafety.Stop()
+		}
+	}()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-wallSafetyC:
+			return nil
+		case msg, ok := <-loop.Deltas().Chan():
+			if !ok {
+				return nil
+			}
+			if obs != nil {
+				obs.observe(msg)
+			}
+			if err := writeSessionReplayMessage(out, msg); err != nil {
+				return err
+			}
+			if !idle.Stop() {
+				select {
+				case <-idle.C():
+				default:
+				}
+			}
+			idle, err = audioService.NewTimer(source, policy.quietPeriod)
+			if err != nil {
+				return err
+			}
+		case <-idle.C():
+			return nil
+		}
+	}
+}
+
+// sessionLivenessErrorChannel bridges the observer's stable wake channel to
+// the session loop's error channel and exits promptly when its run is cancelled.
+func sessionLivenessErrorChannel(ctx context.Context, observer *sessionProgressObserver) <-chan error {
+	if observer == nil {
+		return nil
+	}
+	_ = ctx // the merged error-channel owner already cancels its read on teardown.
+	return observer.livenessErrors
 }
 
 func sessionTerminalFields(classification string, reason messages.TerminalReason, provenance messages.TerminalProvenance, outputState messages.TerminalOutputState) string {

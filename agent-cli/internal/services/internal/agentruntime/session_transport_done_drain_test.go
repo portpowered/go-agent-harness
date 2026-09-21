@@ -147,9 +147,10 @@ func TestSessionTransportDoneDrainsAcceptedOutputWhenTransportErrored(t *testing
 
 	out := &bytes.Buffer{}
 	runErr := runAgentLoopSessionStream(ctx, out, &transportDoneDrainInferencer{session: session}, sessionLoopOptions{
-		Done:     transportDone,
-		DoneErr:  doneErr,
-		observer: observer,
+		audioService: newTestAudioIOService(),
+		Done:         transportDone,
+		DoneErr:      doneErr,
+		observer:     observer,
 	})
 
 	if !errors.Is(runErr, transportErr) {
@@ -205,9 +206,10 @@ func TestSessionDurationTransportDoneDrainsAcceptedOutputWhenTransportErrored(t 
 
 	out := &bytes.Buffer{}
 	runErr := runAgentLoopSessionWithDurationClock(ctx, out, &transportDoneDrainInferencer{session: session}, sessionLoopOptions{
-		Done:     transportDone,
-		DoneErr:  doneErr,
-		observer: observer,
+		audioService: newTestAudioIOService(),
+		Done:         transportDone,
+		DoneErr:      doneErr,
+		observer:     observer,
 	}, 30*time.Second, platformclock.Real{})
 
 	if !errors.Is(runErr, transportErr) {

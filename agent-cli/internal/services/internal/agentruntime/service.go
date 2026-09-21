@@ -18,6 +18,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	runtimerecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
+	runtimereplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	duration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	sessiontrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
@@ -28,17 +30,20 @@ import (
 var _ contract.Runtime = (*Dispatcher)(nil)
 
 type Dependencies struct {
-	AudioService      audioio.Service
-	Clock             clock.Source
-	PlanFactory       sessionRuntimeFactory
-	ToolService       serviceTools.Service
-	RuntimeFactory    SessionRTCRuntimeFactory
-	SessionInferencer messages.SessionInferencer
-	ToolExecutor      messages.ToolExecutor
-	DeviceService     runtimedevices.Service
-	RuntimeObserver   SessionRuntimeObserver
-	Observability     observability.Dependencies
-	ModelCatalog      runtimeproviders.ModelCatalog
+	AudioService           audioio.Service
+	Clock                  clock.Source
+	PlanFactory            sessionRuntimeFactory
+	ToolService            serviceTools.Service
+	RuntimeFactory         SessionRTCRuntimeFactory
+	SessionInferencer      messages.SessionInferencer
+	ToolExecutor           messages.ToolExecutor
+	DeviceService          runtimedevices.Service
+	RuntimeObserver        SessionRuntimeObserver
+	Observability          observability.Dependencies
+	ModelCatalog           runtimeproviders.ModelCatalog
+	RecordingService       runtimerecording.Service
+	ProviderCaptureService runtimerecording.ProviderCaptureService
+	ReplayService          runtimereplay.Service
 }
 
 type Dispatcher struct{ deps Dependencies }
@@ -90,17 +95,6 @@ func (d *Dispatcher) Run(ctx context.Context, out io.Writer, request public.Requ
 		return fmt.Errorf("session output is required")
 	}
 	if len(request.ImagePaths) > 0 {
-		if request.RecordDirectory != "" {
-			return RunSessionWithImagesAndRecordingDirectory(
-				ctx, out, SessionImageRunOptions{
-					SessionRunOptions: options,
-					ImagePaths:        append([]string(nil), request.ImagePaths...),
-					MaxDuration:       request.MaxDuration,
-					TextSeed:          textSeed(request.TextSeed),
-					SystemPrompt:      request.SystemPrompt,
-				}, request.RecordDirectory,
-			)
-		}
 		return RunSessionWithImages(ctx, out, SessionImageRunOptions{
 			SessionRunOptions: options,
 			ImagePaths:        append([]string(nil), request.ImagePaths...),
@@ -108,12 +102,6 @@ func (d *Dispatcher) Run(ctx context.Context, out io.Writer, request public.Requ
 			TextSeed:          textSeed(request.TextSeed),
 			SystemPrompt:      request.SystemPrompt,
 		})
-	}
-	if request.RecordDirectory != "" {
-		return RunSessionWithRecordingDirectoryAndInstructionsAndAudioOutAndTextSeedAndMaxDuration(
-			ctx, out, options, request.RecordDirectory, "",
-			request.MaxDuration, textSeed(request.TextSeed), request.SystemPrompt,
-		)
 	}
 	return RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(
 		ctx, out, options, "", request.MaxDuration,
@@ -123,7 +111,8 @@ func (d *Dispatcher) Run(ctx context.Context, out io.Writer, request public.Requ
 
 func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request) (SessionRunOptions, error) {
 	options := SessionRunOptions{
-		RecordPath: request.RecordPath, ReplayPath: request.ReplayPath, ReplayTiming: request.ReplayTiming,
+		RecordPath: request.RecordPath, RecordDirectory: request.RecordDirectory,
+		RecordMaxDuration: request.MaxDuration, ReplayPath: request.ReplayPath, ReplayTiming: request.ReplayTiming,
 		Provider: request.Provider, ProviderProvided: request.ProviderProvided, Model: request.Model, ModelProvided: request.ModelProvided,
 		NoInputTranscription: request.NoInputTranscription,
 		APIKey:               request.APIKey, BaseURL: request.BaseURL, ConfigDir: request.ConfigDir, WorkDir: request.WorkDir,
@@ -141,6 +130,7 @@ func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request)
 		RuntimeObserver: d.deps.RuntimeObserver, Diagnostics: request.Diagnostics, ToolDiagnostics: request.ToolDiagnostics,
 		DeviceService: d.deps.DeviceService,
 		Observability: d.deps.Observability, StreamObserver: request.StreamObserver,
+		recordingService: d.deps.RecordingService, providerCaptureService: d.deps.ProviderCaptureService, replayService: d.deps.ReplayService,
 		RTCBinding:       runtimedevices.RTCBindingRequest{HoldToneConfig: request.HoldToneConfig, RemoteEndpoint: request.AudioDeviceServer},
 		AudioInTurnBarge: request.AudioInTurnBarge, ClientOwnsAudioTurnBoundaries: request.ClientOwnsAudioTurnBoundaries,
 		SessionUpdatedTimeout: request.SessionUpdatedTimeout, WaitForClose: request.WaitForClose,

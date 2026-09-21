@@ -3,12 +3,14 @@ package agentruntime
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimereplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 )
 
 // sessionReplayMessageWriter is implemented by the stateful terminal renderer
@@ -54,6 +56,18 @@ func newSessionReplayRenderer(out io.Writer, reporter ...*sessionTerminalReporte
 		terminalReporter: terminalReporter,
 		transcriptStates: make(map[messages.Role]sessionReplayTranscriptState),
 	}
+}
+
+func runReplayCapture(ctx context.Context, out io.Writer, service runtimereplay.Service, path string) error {
+	replay, err := service.Replay(ctx, path)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = replay.Close() }() //nolint:errcheck // bounded best-effort close
+	renderer := newSessionReplayRenderer(out, sessionTerminalReporterFromContext(ctx))
+	return replay.Drain(ctx, func(msg messages.StreamMessage) error {
+		return writeSessionReplayMessage(renderer, msg)
+	})
 }
 
 func (r *sessionReplayRenderer) Write(data []byte) (int, error) {

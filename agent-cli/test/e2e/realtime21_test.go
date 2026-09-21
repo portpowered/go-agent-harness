@@ -16,9 +16,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/sessiontiming"
+	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
+	runtimeReplayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
 	audiorecording "github.com/portpowered/go-agent-harness/go-audio/pkg/recording"
-	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 // TestGPTRealtime21BinaryAudioAndToolRoundTrip is the billed, real-provider
@@ -159,11 +159,7 @@ func TestGPTRealtime21BinaryAudioAndToolRoundTrip(t *testing.T) {
 	if !reasoningLow || toolCall != 1 || toolResult != 1 || audioDone < 1 {
 		t.Fatalf("wire contract: reasoning_low=%v tool_calls=%d tool_results=%d audio_done=%d", reasoningLow, toolCall, toolResult, audioDone)
 	}
-	protectedCapture, err := gwtesting.LoadSessionCapture(capturePath)
-	if err != nil {
-		t.Fatalf("load protected live capture: %v", err)
-	}
-	timing, err := sessiontiming.AnalyzeCapture(protectedCapture)
+	timing, err := runtimeReplayWire.NewService().AnalyzeTiming(t.Context(), capturePath)
 	if err != nil {
 		t.Fatalf("analyze live timing: %v", err)
 	}
@@ -194,7 +190,7 @@ func TestGPTRealtime21BinaryAudioAndToolRoundTrip(t *testing.T) {
 	}
 }
 
-func assertLiveTimingBudget(t *testing.T, report sessiontiming.Report) {
+func assertLiveTimingBudget(t *testing.T, report runtimeReplay.CaptureTimingReport) {
 	t.Helper()
 	if report.Summary.ToolCallCount != 1 || report.Summary.UnfinishedToolCallCount != 0 {
 		t.Fatalf("tool timing topology = %+v", report.Summary)

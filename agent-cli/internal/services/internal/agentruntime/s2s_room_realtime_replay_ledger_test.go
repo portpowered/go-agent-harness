@@ -144,8 +144,9 @@ func TestRunRoomWithResult_PreservesExactThreeParticipantTurnLedgers(t *testing.
 	defer cancel()
 
 	opts := RoomRunOptions{
-		Manifest:  manifest,
-		ConfigDir: configDir, ModelCatalog: testModelCatalog(),
+		AudioService: newTestAudioIOService(),
+		Manifest:     manifest,
+		ConfigDir:    configDir, ModelCatalog: testModelCatalog(),
 		BaseURL:     "wss://room-replay.invalid/v1/realtime",
 		MixerConfig: mixerConfig,
 		CredentialLookup: func(name string) (string, bool) {

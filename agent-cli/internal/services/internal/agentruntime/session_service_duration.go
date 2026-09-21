@@ -10,7 +10,6 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	audiosubsystem "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems/audio"
 	duration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -182,7 +181,10 @@ func runAgentLoopSessionWithDurationService(ctx context.Context, out io.Writer, 
 			return resources.close()
 		},
 		Binding: func() error {
-			return closeRTCDeviceBinding(opts.rtcDeviceBinding)
+			if opts.rtcDeviceBinding == nil {
+				return nil
+			}
+			return opts.rtcDeviceBinding.Close()
 		},
 		ExternalErrors: resources.externalErrors,
 		Wake:           toolLifecycleEvents(opts.observer),
@@ -233,18 +235,17 @@ func mergeDurationDone(first, second <-chan struct{}) <-chan struct{} {
 }
 
 func (r *durationServiceResources) buildLoop(ctx context.Context, inferencer messages.SessionInferencer, admitted duration.AdmissionInferencer, controller duration.Controller) (duration.Loop, error) {
-	boundInferencer, rtcErrors := bindRTCDeviceSessionInferencer(admitted, r.opts.rtcDeviceBinding)
-	if err := ensureRTCDeviceBindingBuffers(r.opts.rtcDeviceBinding); err != nil {
-		return nil, err
+	var rtcErrors <-chan error
+	if r.opts.rtcDeviceBinding != nil {
+		rtcErrors = r.opts.rtcDeviceBinding.Errors()
 	}
-	observed := newObservedSessionInferencer(boundInferencer, r.opts.runtime)
+	observed := newObservedSessionInferencer(admitted, r.opts.runtime)
 	observed.progress = r.opts.observer
 	r.opts.observer.setDurationController(controller)
 	if r.opts.observer != nil {
 		r.opts.observer.setToolResultsEnabled(r.opts.ToolExecutor != nil)
 	}
 	loopContract, err := durationwire.NewDuplexLoopFactory().Build(ctx, observed, duration.DuplexLoopOptions{
-		AudioPorts:                durationAudioPorts(r.opts.rtcDeviceBinding),
 		ToolExecutor:              durationToolExecutor(r.opts),
 		ToolDefinitions:           append([]messages.ToolDefinition(nil), r.opts.ToolDefinitions...),
 		AdvertiseToolDefinitions:  r.opts.AdvertiseToolDefinitions,
@@ -282,21 +283,6 @@ func (r *durationServiceResources) buildLoop(ctx context.Context, inferencer mes
 		}
 	}
 	return &durationServiceLoop{inner: loop}, nil
-}
-
-func durationAudioPorts(binding *RTCDeviceBinding) *audiosubsystem.Ports {
-	if binding == nil || (binding.Capture == nil && binding.Sink == nil) {
-		return nil
-	}
-	ports := &audiosubsystem.Ports{}
-	if binding.Capture != nil {
-		ports.Capture = binding.Capture.Control()
-	}
-	if binding.Sink != nil {
-		ports.Playback = binding.Sink.PlaybackBuffer()
-		ports.Commands = binding.Sink.PlaybackCommands()
-	}
-	return ports
 }
 
 func durationToolExecutor(opts sessionLoopOptions) messages.ToolExecutor {

@@ -12,6 +12,7 @@ import (
 	looplogging "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	agent "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/execution"
 	instructionservice "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/instructions"
@@ -34,6 +35,7 @@ type Dependencies struct {
 	Store           session.SessionStore
 	TraceStore      session.TraceStore
 	ProviderService providers.Service
+	ReplayService   runtimeReplay.Service
 	ToolService     tools.Service
 	Logger          looplogging.Logger
 }
@@ -71,8 +73,9 @@ func NewDuplexLoopFactory() sessionduration.DuplexLoopFactory {
 func newFileStoreFactory() *persistence.Factory { return persistence.NewFactory() }
 
 func newExecutor(deps Dependencies) *agent.Executor {
-	return agent.NewExecutorWithToolServiceAndLogger(
+	return agent.NewExecutorWithReplayServiceAndToolServiceAndLogger(
 		deps.ToolService,
+		deps.ReplayService,
 		deps.ToolExecutor,
 		append([]messages.ToolDefinition(nil), deps.ToolDefinitions...),
 		deps.Inferencer,

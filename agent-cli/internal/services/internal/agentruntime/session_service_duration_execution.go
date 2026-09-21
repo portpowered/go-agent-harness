@@ -86,12 +86,12 @@ func (r *durationServiceResources) open(ctx context.Context, loop *agentloop.Age
 			r.opts.observer.noteUserTextInput(r.opts.Prompt)
 		}
 		if r.opts.awaitFirstTurn != nil {
-			if err := awaitSessionFirstTurnWithClock(ctx, r.opts.awaitFirstTurn, r.opts.clockSource); err != nil {
+			if err := awaitSessionFirstTurnWithClock(r.opts.audioService, ctx, r.opts.awaitFirstTurn, r.opts.clockSource); err != nil {
 				return fmt.Errorf("send session first turn: %w", err)
 			}
 		}
 	}
-	if r.opts.CloseAfterOpen && !promptProvided && r.opts.AudioIn == nil && !r.closeSent {
+	if r.opts.CloseAfterOpen && !promptProvided && r.opts.AudioInterruptions == nil && !r.closeSent {
 		r.closeAfterOpen = true
 	}
 	return nil

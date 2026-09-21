@@ -2,19 +2,21 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
-	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
-	"os"
-	"path/filepath"
-	"strings"
+	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 )
 
 const (
@@ -101,7 +103,11 @@ func (e *probeScenarioV2Executor) finalizeEvidence(destination string) (probeSce
 		return probeScenarioV2EvidenceSummary{}, probe.ObjectiveEvidence{}, errors.New("browser fixture completed without browser event evidence")
 	}
 
-	verification := verifyProbeScenarioV2EvidenceData(e.scenario, events, bytes.TrimSpace(pageState), e.providerCapture, browserArtifact != nil)
+	var providerReport runtimeReplay.CaptureProbeObservation
+	if e.providerReport != nil {
+		providerReport = *e.providerReport
+	}
+	verification := verifyProbeScenarioV2EvidenceData(e.scenario, events, bytes.TrimSpace(pageState), providerReport, browserArtifact != nil)
 	objectiveArtifact := probeScenarioV2ObjectiveEvidenceArtifact{
 		Version:               probeScenarioV2ObjectiveVersion,
 		ScenarioID:            e.scenario.ID,
@@ -119,7 +125,10 @@ func (e *probeScenarioV2Executor) finalizeEvidence(destination string) (probeSce
 		return probeScenarioV2EvidenceSummary{}, probe.ObjectiveEvidence{}, fmt.Errorf("encode objective evidence: %w", err)
 	}
 
-	model := e.providerCapture.Provider.Model
+	model := ""
+	if e.providerReport != nil {
+		model = e.providerReport.Model
+	}
 	if model == "" {
 		model = "fixture"
 	}
@@ -147,7 +156,7 @@ func (e *probeScenarioV2Executor) finalizeEvidence(destination string) (probeSce
 		return probeScenarioV2EvidenceSummary{}, probe.ObjectiveEvidence{}, fmt.Errorf("finalize v2 evidence: %w", err)
 	}
 
-	post, err := verifyProbeScenarioV2Bundle(destination, e.scenario)
+	post, err := verifyProbeScenarioV2Bundle(e.replayService, destination, e.scenario)
 	if err != nil {
 		// The destination is a fresh run-scoped path. Remove it if the
 		// post-commit verifier rejects the complete layout so callers cannot
@@ -197,26 +206,18 @@ func probeScenarioV2WorkspaceBytes(scenario probe.ScenarioV2) ([]byte, error) {
 }
 
 func probeScenarioV2ProviderCaptureBytes(executor *probeScenarioV2Executor) ([]byte, error) {
-	capture := executor.providerCapture
+	if executor == nil || executor.replayService == nil {
+		return nil, fmt.Errorf("replay service is required to write provider capture evidence")
+	}
+	var output bytes.Buffer
+	request := runtimeReplay.CaptureDocumentRequest{SourcePath: executor.providerPath}
 	if executor.providerPath == "" {
-		capture = gatewaytesting.SessionCapture{
-			Version:  gatewaytesting.SessionCaptureVersion,
-			Provider: gatewaytesting.SessionProviderMetadata{Name: "probe", Model: "fixture"},
-			Session: gatewaytesting.SessionMetadata{
-				ID:                executor.scenario.ID,
-				FixtureProvenance: gatewaytesting.SessionFixtureProvenanceSynthetic,
-			},
-			Records: []gatewaytesting.CapturedSessionEvent{},
-		}
+		request.SyntheticSessionID = executor.scenario.ID
 	}
-	if capture.Records == nil {
-		capture.Records = []gatewaytesting.CapturedSessionEvent{}
-	}
-	encoded, err := json.Marshal(capture)
-	if err != nil {
+	if err := executor.replayService.WriteCaptureDocument(context.Background(), request, &output); err != nil {
 		return nil, err
 	}
-	return append(encoded, '\n'), nil
+	return output.Bytes(), nil
 }
 
 func probeScenarioV2JSONLine(value any) ([]byte, error) {
@@ -256,7 +257,7 @@ func optionalEvidencePath(destination, relative string) string {
 	return filepath.Join(destination, relative)
 }
 
-func verifyProbeScenarioV2Bundle(destination string, expected probe.ScenarioV2) (probeScenarioV2ObjectiveVerification, error) {
+func verifyProbeScenarioV2Bundle(replayService runtimeReplay.Service, destination string, expected probe.ScenarioV2) (probeScenarioV2ObjectiveVerification, error) {
 	manifestBytes, err := os.ReadFile(filepath.Join(destination, "manifest.json"))
 	if err != nil {
 		return probeScenarioV2ObjectiveVerification{}, fmt.Errorf("read manifest: %w", err)
@@ -302,12 +303,12 @@ func verifyProbeScenarioV2Bundle(destination string, expected probe.ScenarioV2) 
 	if err != nil {
 		return probeScenarioV2ObjectiveVerification{}, err
 	}
-	var capture gatewaytesting.SessionCapture
-	if err := json.Unmarshal(providerData, &capture); err != nil {
-		return probeScenarioV2ObjectiveVerification{}, fmt.Errorf("decode provider capture: %w", err)
+	if replayService == nil {
+		return probeScenarioV2ObjectiveVerification{}, errors.New("replay service is required to verify provider capture evidence")
 	}
-	if validationErrs := gatewaytesting.ValidateSessionCapture(probeScenarioV2ProviderArtifactPath, capture); len(validationErrs) > 0 {
-		return probeScenarioV2ObjectiveVerification{}, fmt.Errorf("validate provider capture: %s", joinSessionFixtureErrors(validationErrs))
+	capture, err := replayService.InspectProbeDocument(context.Background(), probeScenarioV2ProviderArtifactPath, providerData)
+	if err != nil {
+		return probeScenarioV2ObjectiveVerification{}, err
 	}
 
 	pageStateData, err := readProbeScenarioV2Artifact(destination, probeScenarioV2PageStateArtifactPath)
@@ -463,7 +464,7 @@ func verifyProbeScenarioV2EvidenceData(
 	scenario probe.ScenarioV2,
 	events []testkit.Event,
 	pageState json.RawMessage,
-	capture gatewaytesting.SessionCapture,
+	capture runtimeReplay.CaptureProbeObservation,
 	hasBrowserArtifact bool,
 ) probeScenarioV2ObjectiveVerification {
 	verification := probeScenarioV2ObjectiveVerification{

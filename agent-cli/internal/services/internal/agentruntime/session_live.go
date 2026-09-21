@@ -16,6 +16,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -241,7 +243,7 @@ type sessionLoopOptions struct {
 	// terminalSummaryRecorder receives a synthetic user-cancellation terminal
 	// summary on the non-duration path. Duration artifacts already receive the
 	// same summary through writeDurationSessionReplayMessage.
-	terminalSummaryRecorder sessionDurationTerminalRecorder
+	terminalSummaryRecorder sessionduration.TerminalRecorder
 
 	// terminalReporter is the services-owned consume-once boundary for the
 	// customer-facing terminal announcement. Stream consumers only contribute
@@ -359,7 +361,7 @@ func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer m
 		// cannot turn the deliberate teardown into a session failure.
 		opts.observer.markRoomBoundCancellation()
 	}
-	cleanSIGINT := sessionSIGINTCleanForObserver(runErr, opts.cancellationIntent, opts.observer)
+	cleanSIGINT := observerCancellationIsClean(runErr, opts.cancellationIntent, opts.observer)
 	runErr = opts.observer.finish(runErr)
 	if cleanSIGINT {
 		runErr = errors.Join(runErr, publishSessionUserCancellation(renderer, opts, writeSessionReplayMessage))
@@ -377,7 +379,7 @@ func publishSessionUserCancellation(out io.Writer, opts sessionLoopOptions, writ
 	terminal := sessionUserCancelledTerminalMessage(opts.observer)
 	var errs []error
 	if opts.terminalSummaryRecorder != nil {
-		summary, present, err := recordingTerminalSummaryFromMessage(terminal)
+		summary, present, err := durationwire.NewService().RecordingTerminalSummaryFromMessage(terminal)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("record user cancellation terminal summary: %w", err))
 		} else if present {

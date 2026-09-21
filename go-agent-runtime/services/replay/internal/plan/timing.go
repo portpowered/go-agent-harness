@@ -1,4 +1,4 @@
-package sessiontiming
+package plan
 
 import (
 	"encoding/json"
@@ -6,86 +6,20 @@ import (
 	"math"
 	"slices"
 
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
-const (
-	ReportSchemaVersion       = 1
-	defaultOutputSampleRateHz = 24000
-)
+const defaultOutputSampleRateHz = 24000
 
-type Report struct {
-	SchemaVersion int              `json:"schema_version"`
-	Provider      string           `json:"provider"`
-	Model         string           `json:"model"`
-	DurationMS    int64            `json:"duration_ms"`
-	SampleRateHz  int              `json:"sample_rate_hz"`
-	Responses     []ResponseTiming `json:"responses"`
-	Tools         []ToolTiming     `json:"tools"`
-	Summary       Summary          `json:"summary"`
-}
+type Report = replay.CaptureTimingReport
+type ResponseTiming = replay.CaptureResponseTiming
+type ToolTiming = replay.CaptureToolTiming
+type Summary = replay.CaptureTimingSummary
+type DurationSummary = replay.CaptureDurationSummary
 
-type ResponseTiming struct {
-	ResponseID             string  `json:"response_id"`
-	TurnIndex              int     `json:"turn_index,omitempty"`
-	CreatedMS              int64   `json:"created_ms"`
-	FirstOutputMS          *int64  `json:"first_output_ms,omitempty"`
-	FirstAudioMS           *int64  `json:"first_audio_ms,omitempty"`
-	AudioDoneMS            *int64  `json:"audio_done_ms,omitempty"`
-	DoneMS                 *int64  `json:"done_ms,omitempty"`
-	AudioDurationMS        float64 `json:"audio_duration_ms"`
-	AudioDeliverySpanMS    int64   `json:"audio_delivery_span_ms,omitempty"`
-	AudioBurstRatio        float64 `json:"audio_burst_ratio,omitempty"`
-	EstimatedPlaybackStart *int64  `json:"estimated_playback_start_ms,omitempty"`
-	EstimatedPlaybackEnd   *int64  `json:"estimated_playback_end_ms,omitempty"`
-	EstimatedAudibleGapMS  int64   `json:"estimated_audible_gap_ms,omitempty"`
-	EstimatedQueueDelayMS  int64   `json:"estimated_queue_delay_ms,omitempty"`
-}
-
-type ToolTiming struct {
-	CallID                    string `json:"call_id"`
-	Name                      string `json:"name"`
-	ResponseID                string `json:"response_id"`
-	CallReadyMS               int64  `json:"call_ready_ms"`
-	ResultSentMS              *int64 `json:"result_sent_ms,omitempty"`
-	ExecutionMS               *int64 `json:"execution_ms,omitempty"`
-	ContinuationRequestedMS   *int64 `json:"continuation_requested_ms,omitempty"`
-	ContinuationResponseID    string `json:"continuation_response_id,omitempty"`
-	ContinuationCreatedMS     *int64 `json:"continuation_created_ms,omitempty"`
-	ContinuationFirstOutputMS *int64 `json:"continuation_first_output_ms,omitempty"`
-	ContinuationFirstAudioMS  *int64 `json:"continuation_first_audio_ms,omitempty"`
-	ResultToRequestMS         *int64 `json:"result_to_request_ms,omitempty"`
-	RequestToCreatedMS        *int64 `json:"request_to_created_ms,omitempty"`
-	CreatedToFirstOutputMS    *int64 `json:"created_to_first_output_ms,omitempty"`
-	ResultToFirstOutputMS     *int64 `json:"result_to_first_output_ms,omitempty"`
-	ResultToFirstAudioMS      *int64 `json:"result_to_first_audio_ms,omitempty"`
-}
-
-type Summary struct {
-	ResponseCount              int             `json:"response_count"`
-	AudioResponseCount         int             `json:"audio_response_count"`
-	ToolCallCount              int             `json:"tool_call_count"`
-	UnfinishedToolCallCount    int             `json:"unfinished_tool_call_count"`
-	InputToFirstOutputMS       DurationSummary `json:"input_to_first_output_ms"`
-	ResponseToFirstOutputMS    DurationSummary `json:"response_created_to_first_output_ms"`
-	ToolExecutionMS            DurationSummary `json:"tool_execution_ms"`
-	ToolResultToRequestMS      DurationSummary `json:"tool_result_to_request_ms"`
-	ToolRequestToCreatedMS     DurationSummary `json:"tool_request_to_response_created_ms"`
-	ToolCreatedToFirstOutputMS DurationSummary `json:"tool_response_created_to_first_output_ms"`
-	ToolResultToFirstOutputMS  DurationSummary `json:"tool_result_to_first_output_ms"`
-	ToolResultToFirstAudioMS   DurationSummary `json:"tool_result_to_first_audio_ms"`
-	EstimatedAudibleGapMS      DurationSummary `json:"estimated_audible_gap_ms"`
-	MaxAudioBurstRatio         float64         `json:"max_audio_burst_ratio"`
-	MaxEstimatedQueueDelayMS   int64           `json:"max_estimated_queue_delay_ms"`
-}
-
-type DurationSummary struct {
-	Count int   `json:"count"`
-	P50MS int64 `json:"p50_ms"`
-	P95MS int64 `json:"p95_ms"`
-	MaxMS int64 `json:"max_ms"`
-}
+const ReportSchemaVersion = replay.CaptureTimingReportSchemaVersion
 
 type wireEvent struct {
 	ResponseID string          `json:"response_id"`
@@ -111,7 +45,7 @@ type responseState struct {
 	firstAudioSet  bool
 }
 
-func AnalyzeCapture(capture gwtesting.SessionCapture) (Report, error) {
+func analyzeCaptureTiming(capture gwtesting.SessionCapture) (Report, error) {
 	report := Report{
 		SchemaVersion: ReportSchemaVersion,
 		Provider:      capture.Provider.Name,

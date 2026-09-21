@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimerecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -119,20 +120,23 @@ func planWebRTCSessionRuntime(opts SessionRunOptions, selection SessionRuntimeSe
 		model = sessionCfg.Model
 		mode = sessionRuntimeModeRecordOpenAI
 		dialer := &sessionRTCLazyDialer{runtime: runtime}
-		recordingDialer := factory.newRecordingDialer(dialer, provider, model)
-		if recordingDialer == nil {
-			return closeOnPlanError(wrapSessionRTCRuntimeError("create recording transport", ErrSessionRTCRuntimeUnavailable))
-		}
 		inputAudioTranscription, resolveErr := resolveSessionTranscription(opts, provider, opts.RTCBinding.HasInput())
 		if resolveErr != nil {
-			return sessionRuntimePlan{}, resolveErr
+			return closeOnPlanError(resolveErr)
 		}
-		inner, err = factory.newOpenAISessionInferencerForTools(sessionCfg, opts.Voice, recordingDialer, opts.ToolDefinitions, false, inputAudioTranscription)
-		if err != nil {
-			return closeOnPlanError(err)
+		build := func(recordingDialer transport.Dialer) (messages.SessionInferencer, error) {
+			return factory.newOpenAISessionInferencerForTools(sessionCfg, opts.Voice, recordingDialer, opts.ToolDefinitions, false, inputAudioTranscription)
 		}
-		flushCapture = func() error { return recordingDialer.FlushToFile(opts.RecordPath) }
-		flushCaptureTo = func(path string) error { return recordingDialer.FlushToFile(path) }
+		capture, captureErr := opts.recordingService.RecordProviderSession(opts.providerCaptureService, runtimerecording.ProviderSessionOptions{
+			Destination: opts.RecordPath, Provider: provider, Model: model,
+			Dialer: observeSessionWire(dialer, opts), Clock: opts.Clock, Build: build,
+		})
+		if captureErr != nil {
+			return closeOnPlanError(wrapSessionRTCRuntimeError("create recording transport", captureErr))
+		}
+		inner = capture
+		flushCapture = capture.FlushCapture
+		flushCaptureTo = capture.FlushToFile
 		announce = fmt.Sprintf("Starting OpenAI realtime session recording to %s", opts.RecordPath)
 		finalize = func(_ context.Context, out io.Writer) error {
 			_, writeErr := fmt.Fprintf(out, "Wrote session capture to %s\n", opts.RecordPath)
@@ -147,16 +151,19 @@ func planWebRTCSessionRuntime(opts SessionRunOptions, selection SessionRuntimeSe
 		model = sessionCfg.Model
 		mode = sessionRuntimeModeRecordGrok
 		dialer := &sessionRTCLazyDialer{runtime: runtime}
-		recordingDialer := factory.newRecordingDialer(dialer, provider, model)
-		if recordingDialer == nil {
-			return closeOnPlanError(wrapSessionRTCRuntimeError("create recording transport", ErrSessionRTCRuntimeUnavailable))
+		build := func(recordingDialer transport.Dialer) (messages.SessionInferencer, error) {
+			return factory.newGrokSessionInferencerForTools(sessionCfg, recordingDialer, opts.ToolDefinitions)
 		}
-		inner, err = factory.newGrokSessionInferencerForTools(sessionCfg, recordingDialer, opts.ToolDefinitions)
-		if err != nil {
-			return closeOnPlanError(err)
+		capture, captureErr := opts.recordingService.RecordProviderSession(opts.providerCaptureService, runtimerecording.ProviderSessionOptions{
+			Destination: opts.RecordPath, Provider: provider, Model: model,
+			Dialer: observeSessionWire(dialer, opts), Clock: opts.Clock, Build: build,
+		})
+		if captureErr != nil {
+			return closeOnPlanError(wrapSessionRTCRuntimeError("create recording transport", captureErr))
 		}
-		flushCapture = func() error { return recordingDialer.FlushToFile(opts.RecordPath) }
-		flushCaptureTo = func(path string) error { return recordingDialer.FlushToFile(path) }
+		inner = capture
+		flushCapture = capture.FlushCapture
+		flushCaptureTo = capture.FlushToFile
 		announce = fmt.Sprintf("Starting Grok session recording to %s", opts.RecordPath)
 		finalize = func(_ context.Context, out io.Writer) error {
 			_, writeErr := fmt.Fprintf(out, "Wrote session capture to %s\n", opts.RecordPath)

@@ -53,7 +53,7 @@ func TestDeriveBargeInObservationCountsV3CComposition(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve registered scenario: %v", err)
 	}
-	exec := replayExecFunc(map[string]string{"s2s-v3c-barge-in-repeated": fixture})
+	exec := replayExecFunc(newReplayRuntimeServiceForTest(), map[string]string{"s2s-v3c-barge-in-repeated": fixture})
 	observation, err := exec(t.Context(), scenario[0])
 	if err != nil {
 		t.Fatalf("replay execution failed: %v", err)

@@ -21,10 +21,9 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/sessiontiming"
+	runtimeReplayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
-	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 const (
@@ -417,11 +416,7 @@ func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, delt
 
 func assertRemoteToolTimingEvidence(t *testing.T, capturePath string, wantCalls int) {
 	t.Helper()
-	capture, err := gwtesting.LoadSessionCapture(capturePath)
-	if err != nil {
-		t.Fatalf("load process-edge timing capture: %v", err)
-	}
-	report, err := sessiontiming.AnalyzeCapture(capture)
+	report, err := runtimeReplayWire.NewService().AnalyzeTiming(t.Context(), capturePath)
 	if err != nil {
 		t.Fatalf("analyze process-edge timing capture: %v", err)
 	}

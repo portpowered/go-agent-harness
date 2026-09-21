@@ -26,7 +26,7 @@ func TestPlanOpenAIRecordPromptAudioOutputWithoutInputUsesRealtimeDuplexRate(t *
 			Model:  DefaultOpenAIRealtimeModel,
 		},
 	}}
-	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+	plan, err := planSessionRuntimeWithFactory(withTestRecordingServices(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		Prompt:               "What is the current state of the cube? Then turn the top face once.",
 		PromptProvided:       true,
 		RecordPath:           recordPath,
@@ -37,9 +37,8 @@ func TestPlanOpenAIRecordPromptAudioOutputWithoutInputUsesRealtimeDuplexRate(t *
 		ModelProvided:        true,
 		APIKey:               "test-key",
 		LoadedConfig:         loaded,
-	}, sessionRuntimeFactory{
+	}), sessionRuntimeFactory{
 		newDefaultLiveDialer: defaultSessionRuntimeFactory.newDefaultLiveDialer,
-		newRecordingDialer:   defaultSessionRuntimeFactory.newRecordingDialer,
 		newOpenAISessionWithTools: func(
 			config.OpenAIConfig,
 			string,
@@ -53,8 +52,6 @@ func TestPlanOpenAIRecordPromptAudioOutputWithoutInputUsesRealtimeDuplexRate(t *
 	if err != nil {
 		t.Fatalf("plan operator-shaped record session: %v", err)
 	}
-	defer func() { _ = plan.captureClaim.release() }()
-
 	if plan.mode != sessionRuntimeModeRecordOpenAI || plan.capturePath != recordPath {
 		t.Fatalf("record plan = mode:%q capture:%q, want OpenAI record at %q", plan.mode, plan.capturePath, recordPath)
 	}

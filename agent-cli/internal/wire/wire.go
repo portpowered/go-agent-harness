@@ -142,6 +142,7 @@ func provideTextSessionService(
 	inferencer messages.Inferencer,
 	validation modelValidation,
 	providerService runtimeproviders.Service,
+	replayService runtimeReplay.Service,
 	loopLogger looplogging.Logger,
 ) session.Service {
 	return sessionwire.NewService(sessionwire.Dependencies{
@@ -152,6 +153,7 @@ func provideTextSessionService(
 		RelaxValidation: validation.relax,
 		Resolver:        hostServices.NewSessionResolverWithStoreFactory(globalFlags, fileStoreFactory),
 		ProviderService: providerService,
+		ReplayService:   replayService,
 		Logger:          loopLogger,
 	})
 }
@@ -211,7 +213,7 @@ func provideProviderCaptureService(source Clock) runtimeRecording.ProviderCaptur
 	return recordingwire.NewProviderCaptureService(source)
 }
 
-func provideProviderService(clockSource Clock, recordingService runtimeRecording.Service, providerCaptureService runtimeRecording.ProviderCaptureService) (runtimeproviders.FullService, error) {
+func provideProviderService(clockSource Clock, recordingService runtimeRecording.Service, providerCaptureService runtimeRecording.ProviderCaptureService, replayService runtimeReplay.Service) (runtimeproviders.FullService, error) {
 	timerSource, err := clock.RequireTimerSource(clockSource)
 	if err != nil {
 		return nil, fmt.Errorf("provider clock: %w", err)
@@ -220,6 +222,7 @@ func provideProviderService(clockSource Clock, recordingService runtimeRecording
 		HTTPClient:      http.DefaultClient,
 		Recording:       recordingService,
 		ProviderCapture: providerCaptureService,
+		Replay:          replayService,
 		Clock:           timerSource,
 	}), nil
 }

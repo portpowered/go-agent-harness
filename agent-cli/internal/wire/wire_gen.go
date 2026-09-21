@@ -56,13 +56,14 @@ func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transp
 	wireModelValidation := provideModelValidation(relaxModelValidation, observer, toolExecutor, transportDialer, deviceRegistry, audioSource, audioSink, clockSource, runtimeObserver, metricSampler, logger, inferencer, sessionInferencer, toolService)
 	recordingService := provideRecordingService(clockSource)
 	providerCaptureService := provideProviderCaptureService(clockSource)
-	fullService, err := provideProviderService(clockSource, recordingService, providerCaptureService)
+	replayService := provideLiveReplayService()
+	fullService, err := provideProviderService(clockSource, recordingService, providerCaptureService, replayService)
 	if err != nil {
 		return nil, err
 	}
 	providersService := provideProviderServiceRole(fullService)
 	loggingLogger := provideSessionLogger(logger)
-	sessionService := provideTextSessionService(globalFlags, fileStoreFactory, toolExecutor, toolDefs, service, inferencer, wireModelValidation, providersService, loggingLogger)
+	sessionService := provideTextSessionService(globalFlags, fileStoreFactory, toolExecutor, toolDefs, service, inferencer, wireModelValidation, providersService, replayService, loggingLogger)
 	askFlags := flags.NewAskFlags()
 	loopFlags := flags.NewLoopFlags()
 	askCommand := cli.NewAskCommand(sessionService, askFlags, loopFlags, globalFlags)
@@ -79,7 +80,7 @@ func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transp
 	v2 := wire2.NewDeviceProbeService(deviceRegistry, v)
 	v3 := wire2.NewSessionRuntimeFactory()
 	metricsCollector := wire2.NewMetricsCollector(audioioService, clockSource, v3)
-	probeRunCommand := cli.NewProbeRunCommandWithDeviceService(deviceService, v2, metricsCollector)
+	probeRunCommand := cli.NewProbeRunCommandWithDeviceService(deviceService, v2, metricsCollector, replayService)
 	probeGateCommand := cli.NewProbeGateCommand()
 	probeReportCommand := cli.NewProbeReportCommand()
 	browserFactory := provideSessionBrowserCapabilityFactory()
@@ -87,16 +88,15 @@ func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transp
 	toolsService := provideToolCapabilitiesService(toolService, toolExecutor, browserFactory, v4, service)
 	sessionRTCRuntimeFactory := provideSessionRTCRuntimeFactory(rtcComponents, metricSampler, logger)
 	devicesService := wire4.NewService(deviceRegistry, audioioService)
-	runtime := wire2.NewSessionRuntime(audioioService, clockSource, toolsService, v3, sessionRTCRuntimeFactory, sessionInferencer, toolExecutor, devicesService, runtimeObserver, metricSampler, logger, modelCatalog)
+	runtime := wire2.NewSessionRuntime(audioioService, clockSource, toolsService, v3, sessionRTCRuntimeFactory, sessionInferencer, toolExecutor, devicesService, runtimeObserver, metricSampler, logger, modelCatalog, recordingService, providerCaptureService, replayService)
 	sessionDependencies := provideSessionDependencies(clockSource, toolsService, sessionRTCRuntimeFactory, sessionInferencer, toolExecutor, deviceRegistry, runtimeObserver, metricSampler, logger, runtime)
 	agentsessionSessionService := wire2.NewSessionService(sessionDependencies)
 	v5 := provideFleetEntryExecutors()
-	probeFleetCommand := cli.NewProbeFleetCommand(agentsessionSessionService, metricsCollector, v5...)
+	probeFleetCommand := cli.NewProbeFleetCommand(agentsessionSessionService, metricsCollector, replayService, v5...)
 	selfplayService := wire2.NewSelfPlayService(audioioService, v3, clockSource, modelCatalog)
 	providersSessionService := provideProviderSessionServiceRole(fullService)
 	wireLiveCredentialVault := provideLiveCredentialVault()
 	liveService := provideLiveService(providersSessionService, toolExecutor, toolDefs, sessionInferencer, transportDialer, clockSource, wireLiveCredentialVault)
-	replayService := provideLiveReplayService()
 	fileDeviceService := provideFileDeviceService(clockSource, audioioService)
 	sessionToolCapabilitiesFactory := cli.NewSessionToolCapabilitiesFactoryFromService(toolsService)
 	liveCredentialReference := provideLiveCredentialReference(wireLiveCredentialVault)
@@ -216,6 +216,7 @@ func provideTextSessionService(
 	inferencer messages.Inferencer,
 	validation modelValidation,
 	providerService providers.Service,
+	replayService replay.Service,
 	loopLogger logging.Logger,
 ) session.Service {
 	return wire.NewService(wire.Dependencies{
@@ -226,6 +227,7 @@ func provideTextSessionService(
 		RelaxValidation: validation.relax,
 		Resolver:        services.NewSessionResolverWithStoreFactory(globalFlags, fileStoreFactory),
 		ProviderService: providerService,
+		ReplayService:   replayService,
 		Logger:          loopLogger,
 	})
 }
@@ -285,7 +287,7 @@ func provideProviderCaptureService(source Clock) recording.ProviderCaptureServic
 	return wire6.NewProviderCaptureService(source)
 }
 
-func provideProviderService(clockSource Clock, recordingService recording.Service, providerCaptureService recording.ProviderCaptureService) (providers.FullService, error) {
+func provideProviderService(clockSource Clock, recordingService recording.Service, providerCaptureService recording.ProviderCaptureService, replayService replay.Service) (providers.FullService, error) {
 	timerSource, err := clock.RequireTimerSource(clockSource)
 	if err != nil {
 		return nil, fmt.Errorf("provider clock: %w", err)
@@ -294,6 +296,7 @@ func provideProviderService(clockSource Clock, recordingService recording.Servic
 		HTTPClient:      http.DefaultClient,
 		Recording:       recordingService,
 		ProviderCapture: providerCaptureService,
+		Replay:          replayService,
 		Clock:           timerSource,
 	}), nil
 }

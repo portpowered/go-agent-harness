@@ -15,7 +15,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
-	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/spf13/cobra"
 )
 
@@ -84,8 +84,9 @@ type probeScenarioV2StatefulBroker interface {
 }
 
 type probeScenarioV2Executor struct {
-	scenario probe.ScenarioV2
-	mode     ProbeScenarioV2BrowserExecutorMode
+	scenario      probe.ScenarioV2
+	mode          ProbeScenarioV2BrowserExecutorMode
+	replayService runtimeReplay.Service
 
 	clock   *testkit.FakeClock
 	ids     *testkit.DeterministicIDSource
@@ -111,7 +112,7 @@ type probeScenarioV2Executor struct {
 
 	invocations         []probeScenarioV2Invocation
 	provider            *probe.ObservationSnapshot
-	providerCapture     gatewaytesting.SessionCapture
+	providerReport      *runtimeReplay.CaptureProbeObservation
 	providerPath        string
 	providerSteps       []probe.Step
 	closed              bool
@@ -189,7 +190,7 @@ func (c *ProbeRunCommand) runScenarioV2(cmd *cobra.Command, selections []string)
 	}
 	for index, entry := range entries {
 		recordingDirectory := probeScenarioV2RecordingDirectory(recordingRoot, index, entry)
-		result := executeProbeScenarioV2(cmd.Context(), entry, recordingDirectory,
+		result := executeProbeScenarioV2(cmd.Context(), entry, recordingDirectory, c.replayService,
 			WithProbeScenarioV2BrowserExecutorMode(browserOptions.Mode),
 			WithProbeScenarioV2BrowserExecutorFactory(browserOptions.Factory),
 			WithProbeScenarioV2BrowserExecutorConfig(browserOptions.Browser),
@@ -269,7 +270,7 @@ func (c *ProbeRunCommand) openProbeOutputs(cmd interface {
 	return resultsOut, summaryOut, closeOutputs, nil
 }
 
-func executeProbeScenarioV2(parent context.Context, entry probeScenarioV2Selection, recordingDirectory string, options ...ProbeScenarioV2BrowserExecutorOption) (result probeScenarioV2Result) {
+func executeProbeScenarioV2(parent context.Context, entry probeScenarioV2Selection, recordingDirectory string, replayService runtimeReplay.Service, options ...ProbeScenarioV2BrowserExecutorOption) (result probeScenarioV2Result) {
 	resolvedOptions, optionsErr := resolveProbeScenarioV2BrowserExecutorOptions(options...)
 	result = probeScenarioV2Result{
 		ID:              entry.Scenario.ID,
@@ -304,7 +305,7 @@ func executeProbeScenarioV2(parent context.Context, entry probeScenarioV2Selecti
 	}
 	ctx, cancel := context.WithTimeout(ctx, probeScenarioDeadline)
 	defer cancel()
-	executor, err := newProbeScenarioV2Executor(entry.Scenario, options...)
+	executor, err := newProbeScenarioV2Executor(entry.Scenario, replayService, options...)
 	if err == nil {
 		err = executor.execute(ctx)
 	}
@@ -349,14 +350,22 @@ func executeProbeScenarioV2(parent context.Context, entry probeScenarioV2Selecti
 	return result
 }
 
-func newProbeScenarioV2Executor(scenario probe.ScenarioV2, options ...ProbeScenarioV2BrowserExecutorOption) (*probeScenarioV2Executor, error) {
+func newProbeScenarioV2Executor(scenario probe.ScenarioV2, replayService runtimeReplay.Service, options ...ProbeScenarioV2BrowserExecutorOption) (*probeScenarioV2Executor, error) {
 	resolved, err := resolveProbeScenarioV2BrowserExecutorOptions(options...)
 	if err != nil {
-		return &probeScenarioV2Executor{scenario: scenario, mode: ProbeScenarioV2BrowserExecutorHermetic}, err
+		return &probeScenarioV2Executor{scenario: scenario, mode: ProbeScenarioV2BrowserExecutorHermetic, replayService: replayService}, err
 	}
-	executor := &probeScenarioV2Executor{scenario: scenario, mode: resolved.Mode}
+	executor := &probeScenarioV2Executor{scenario: scenario, mode: resolved.Mode, replayService: replayService}
 	executor.clock = testkit.NewFakeClock(0)
 	executor.ids = testkit.NewDeterministicIDSource("probe")
+	if scenario.ProviderFixture != "" {
+		if replayService == nil {
+			return executor, errors.New("replay service is required for provider fixtures")
+		}
+		if _, inspectErr := replayService.InspectCapture(context.Background(), scenario.ProviderFixturePath); inspectErr != nil {
+			return executor, fmt.Errorf("invalid provider fixture %q: %w", scenario.ProviderFixture, inspectErr)
+		}
+	}
 	if resolved.Mode == ProbeScenarioV2BrowserExecutorReal {
 		if resolved.ConfigError != nil {
 			return executor, newProbeScenarioV2BrowserExecutorError(resolved.Mode, "configuration", webmcp.ErrorBrowserProtocol, resolved.ConfigError)
@@ -416,15 +425,6 @@ func newProbeScenarioV2Executor(scenario probe.ScenarioV2, options ...ProbeScena
 		})
 	}
 	if scenario.ProviderFixture != "" {
-		validationErrs := gatewaytesting.ValidateSessionCaptureFile(scenario.ProviderFixturePath)
-		if len(validationErrs) > 0 {
-			return executor, fmt.Errorf("invalid provider fixture %q: %s", scenario.ProviderFixture, joinSessionFixtureErrors(validationErrs))
-		}
-		capture, err := gatewaytesting.LoadSessionCapture(scenario.ProviderFixturePath)
-		if err != nil {
-			return executor, fmt.Errorf("load provider fixture %q: %w", scenario.ProviderFixture, err)
-		}
-		executor.providerCapture = capture
 		executor.providerPath = scenario.ProviderFixturePath
 	}
 	executor.recorder, err = testkit.NewRecorder(&executor.eventOutput,
@@ -458,7 +458,15 @@ func (e *probeScenarioV2Executor) execute(ctx context.Context) error {
 	}
 	if e.providerPath != "" {
 		providerScenario := scenarioV2ProviderScenario(e.scenario, e.providerSteps)
-		observation, err := observationFromSessionCapture(ctx, providerScenario, e.providerCapture, e.providerPath, false)
+		request := runtimeReplay.CaptureProbeRequest{
+			SourcePath: e.providerPath,
+		}
+		report, err := e.replayService.AnalyzeProbe(ctx, request)
+		if err != nil {
+			return fmt.Errorf("replay provider fixture %q: %w", e.scenario.ProviderFixture, err)
+		}
+		e.providerReport = &report
+		observation, err := observationFromCaptureProbe(ctx, providerScenario, request, report)
 		if err != nil {
 			return fmt.Errorf("replay provider fixture %q: %w", e.scenario.ProviderFixture, err)
 		}
@@ -1015,7 +1023,7 @@ func (e *probeScenarioV2Executor) evaluateExpectation(expectation probe.Scenario
 		check := probeScenarioV2BrowserObjectiveCheck(*evidence, nil, expectation)
 		return check.Passed, check.Expected, check.Actual, nil
 	case probe.ScenarioV2ExpectationAssistantAudioStarted, probe.ScenarioV2ExpectationAssistantAudioStopped:
-		check := probeScenarioV2ProviderObjectiveCheck(e.providerCapture, expectation)
+		check := probeScenarioV2ProviderObjectiveCheck(*e.providerReport, expectation)
 		return check.Passed, check.Expected, check.Actual, nil
 	default:
 		return false, string(expectation.Type), "unsupported", fmt.Errorf("unsupported probe.scenario.v2 expectation %q", expectation.Type)
@@ -1024,14 +1032,6 @@ func (e *probeScenarioV2Executor) evaluateExpectation(expectation probe.Scenario
 
 func scenarioV2ProviderScenario(scenario probe.ScenarioV2, steps []probe.Step) probe.Scenario {
 	return probe.Scenario{ID: scenario.ID, Name: scenario.Name, Description: scenario.Description, Steps: steps}
-}
-
-func joinSessionFixtureErrors(errs []gatewaytesting.SessionFixtureValidationError) string {
-	parts := make([]string, 0, len(errs))
-	for _, err := range errs {
-		parts = append(parts, err.Error())
-	}
-	return strings.Join(parts, "; ")
 }
 
 func semanticJSONEqual(left, right json.RawMessage) bool {

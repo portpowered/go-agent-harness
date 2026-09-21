@@ -103,13 +103,16 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 			continue
 		}
 		sessionOptions := SessionRunOptions{
-			AudioService:  opts.AudioService,
-			Provider:      participant.Provider,
-			Model:         participant.Model,
-			ModelProvided: true,
-			APIKey:        value,
-			BaseURL:       opts.BaseURL,
-			ConfigDir:     opts.ConfigDir, ModelCatalog: opts.ModelCatalog,
+			AudioService:           opts.AudioService,
+			recordingService:       opts.recordingService,
+			providerCaptureService: opts.providerCaptureService,
+			replayService:          opts.replayService,
+			Provider:               participant.Provider,
+			Model:                  participant.Model,
+			ModelProvided:          true,
+			APIKey:                 value,
+			BaseURL:                opts.BaseURL,
+			ConfigDir:              opts.ConfigDir, ModelCatalog: opts.ModelCatalog,
 			Clock:            opts.Clock,
 			LivenessClock:    opts.LivenessClock,
 			WorkDir:          opts.WorkDir,
@@ -294,15 +297,18 @@ func buildRoomReplayParticipantPlans(ctx context.Context, replay RoomReplayPlan,
 			return plans, nil, roomParticipantFailure(recorded.ID, errors.New("replay provider capture path is empty"), nil)
 		}
 		sessionOptions := SessionRunOptions{
-			AudioService:   opts.AudioService,
-			Provider:       recorded.Provider,
-			Model:          recorded.Model,
-			ModelProvided:  true,
-			ReplayPath:     recorded.CapturePath,
-			roomReplay:     true,
-			Prompt:         recorded.OpeningPrompt,
-			PromptProvided: recorded.OpeningPrompt != "",
-			Voice:          recorded.Voice,
+			AudioService:           opts.AudioService,
+			recordingService:       opts.recordingService,
+			providerCaptureService: opts.providerCaptureService,
+			replayService:          opts.replayService,
+			Provider:               recorded.Provider,
+			Model:                  recorded.Model,
+			ModelProvided:          true,
+			ReplayPath:             recorded.CapturePath,
+			roomReplay:             true,
+			Prompt:                 recorded.OpeningPrompt,
+			PromptProvided:         recorded.OpeningPrompt != "",
+			Voice:                  recorded.Voice,
 			// Replay planning reads provider configuration from the captured
 			// session.update. Keep ConfigDir and APIKey empty so no live config
 			// or credential path can be consulted accidentally.

@@ -255,7 +255,7 @@ func assembleLiveRequest(request serviceSession.Request, inputs requestInputs) r
 		// response cannot cancel the provider stream before later stdin audio
 		// reaches the same session.
 		FinishAfterResponse: !request.WaitForClose && (inputs.promptPresent || hasAudioInput(request) || len(inputs.openingParts) > 0 || inputs.replayFinish || request.AudioOutputPath != ""),
-		ExpectedResponses:   expectedResponses(request, inputs.promptPresent, inputs.openingParts, inputs.openingResponse),
+		ExpectedResponses:   replayExpectedResponses(request, inputs, inputs.promptPresent, inputs.openingParts, inputs.openingResponse),
 	}
 	appendToolNames(&result, inputs.capabilities)
 	return result
@@ -276,7 +276,7 @@ func admitReplay(ctx context.Context, path string, inspection *runtimeReplay.Cap
 	}
 	loaded, err := service.InspectCapture(ctx, path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("replay session capture %s: %w", path, err)
 	}
 	if !loaded.IsRealtime() && loaded.Kind != runtimeReplay.CaptureKindTurn {
 		return nil, fmt.Errorf("replay capture %s has unsupported session kind %q", path, loaded.Kind)
@@ -365,7 +365,14 @@ func buildReplayPlan(request serviceSession.Request, inspection *runtimeReplay.C
 }
 
 func replayPlanHasActions(plan runtimeSession.LiveReplayPlan) bool {
-	return plan.OpeningPromptPresent || len(plan.AudioTurns) > 0 || plan.StopAfterResponse || plan.ProviderCloseExpected
+	return plan.OpeningPromptPresent || len(plan.AudioTurns) > 0 || plan.StopAfterResponse || plan.ProviderCloseExpected || plan.ExpectedResponses > 0
+}
+
+func replayExpectedResponses(request serviceSession.Request, inputs requestInputs, promptPresent bool, openingParts []messages.ContentPart, openingResponse runtimeSession.LiveOpeningMessageResponse) int {
+	if inputs.replayPlan != nil && inputs.replayPlan.ExpectedResponses > 0 {
+		return inputs.replayPlan.ExpectedResponses
+	}
+	return expectedResponses(request, promptPresent, openingParts, openingResponse)
 }
 
 func realtimeEndpoint(provider, baseURL string) string {

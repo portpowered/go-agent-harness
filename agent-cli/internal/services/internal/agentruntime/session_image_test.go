@@ -16,6 +16,7 @@ import (
 	sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/stretchr/testify/require"
@@ -189,8 +190,8 @@ func TestRunSessionWithImages_ProviderObservesOrderedFixtures(t *testing.T) {
 	}
 	inf := &countingSessionImageInferencer{session: session}
 	err := agentruntime.RunSessionWithImages(context.Background(), io.Discard, agentruntime.SessionImageRunOptions{
-		SessionRunOptions: agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
-			RecordPath: filepath.Join(dir, "capture.json"), Provider: "openai", Model: "gpt-realtime",
+		SessionRunOptions: agentruntime.SessionRunOptions{AudioService: audioiowire.NewService(), ModelCatalog: testModelCatalog(),
+			Provider: "openai", Model: "gpt-realtime",
 			APIKey: "sk-test-key", ConfigDir: filepath.Join(dir, "config"), Prompt: "describe these", SessionInferencer: inf,
 		},
 		ImagePaths: []string{png, jpeg},
@@ -212,7 +213,7 @@ func TestRunSessionWithImages_ValidatesBeforeConnect(t *testing.T) {
 	inf := &countingSessionImageInferencer{}
 	missing := filepath.Join(t.TempDir(), "does-not-exist.png")
 	err := agentruntime.RunSessionWithImages(context.Background(), io.Discard, agentruntime.SessionImageRunOptions{
-		SessionRunOptions: agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
+		SessionRunOptions: agentruntime.SessionRunOptions{AudioService: audioiowire.NewService(), ModelCatalog: testModelCatalog(),
 			RecordPath:        filepath.Join(t.TempDir(), "capture.json"),
 			Provider:          "openai",
 			Model:             "gpt-realtime",
@@ -246,7 +247,7 @@ models:
 	imagePath := copySessionImageFixture(t, dir, "fixture.png")
 	inf := &countingSessionImageInferencer{}
 	err := agentruntime.RunSessionWithImages(context.Background(), io.Discard, agentruntime.SessionImageRunOptions{
-		SessionRunOptions: agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
+		SessionRunOptions: agentruntime.SessionRunOptions{AudioService: audioiowire.NewService(), ModelCatalog: testModelCatalog(),
 			RecordPath:        filepath.Join(dir, "capture.json"),
 			Provider:          "openai",
 			Model:             "gpt-realtime",

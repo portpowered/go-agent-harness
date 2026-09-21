@@ -10,7 +10,10 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
+	runtimesession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 type captureInferencer struct {
@@ -171,5 +174,51 @@ func TestRecordingAdmissionRequiresDependenciesAndLiveContext(t *testing.T) {
 	}
 	if _, err := os.Stat(owner.path); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("canceled admission wrote evidence: %v", err)
+	}
+}
+
+type providerCaptureDialer struct{}
+
+func (providerCaptureDialer) Dial(string, map[string]string) (transport.Conn, error) {
+	return nil, errors.New("unexpected provider dial")
+}
+
+func TestRecordProviderSessionReleasesAdmissionWhenProviderBuildFails(t *testing.T) {
+	service := New(clock.Real{})
+	destination := filepath.Join(t.TempDir(), "provider.capture.json")
+	buildErr := errors.New("provider construction failed")
+	_, err := service.RecordProviderSession(service, recording.ProviderSessionOptions{
+		Destination: destination,
+		Provider:    "fixture",
+		Model:       "fixture-model",
+		Dialer:      providerCaptureDialer{},
+		Build: func(transport.Dialer) (messages.SessionInferencer, error) {
+			return nil, buildErr
+		},
+	})
+	if !errors.Is(err, buildErr) {
+		t.Fatalf("provider build error = %v, want original cause", err)
+	}
+	sink, err := service.OpenProviderCapture(recording.ProviderCaptureOptions{Destination: destination})
+	if err != nil {
+		t.Fatalf("failed provider build retained destination admission: %v", err)
+	}
+	if err := sink.Abort(); err != nil {
+		t.Fatalf("release retry admission: %v", err)
+	}
+}
+
+func TestRunLiveEvidenceReturnsLatchedObservationFailure(t *testing.T) {
+	service := New(clock.Real{})
+	err := service.RunLiveEvidence(t.Context(), recording.LiveEvidenceOptions{
+		Destination: filepath.Join(t.TempDir(), "recording"), OutputAudioRate: 24000,
+	}, func(ctx context.Context, evidence recording.LiveEvidence) error {
+		_ = evidence.ObserveMessage(ctx, runtimesession.LiveRecordAgent, messages.StreamMessage{
+			Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue([]byte{1}),
+		})
+		return nil
+	})
+	if err == nil {
+		t.Fatal("ignored live observation failure was not returned by recording service")
 	}
 }
