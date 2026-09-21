@@ -4300,3 +4300,45 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   full caller census, remove the projection/helper and complete 1,410-line
   cluster, prove the sole one-file/300-line adapter cap, and run the exact-head
   full local preflight before opening/updating the PR.
+
+# C271 disjoint service and release audit — 2026-09-21
+
+- Reverified task admission for the sole `audio-runtime` / `audio-runtime-v1`
+  project and confirmed `prd.json.branchName` matches
+  `codex/audio-runtime-c271-recover-selfplay-retirement`. Fetched `origin/main`;
+  candidate `57faba95d1d96e20ea8ad1a902354b25362503d3` is clean, nine commits
+  ahead, and retains `origin/main=b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`
+  and startup `8bdafc7f947a3a2c9856220abdc539437035bd21` ancestry.
+- Preserved C249 remains clean at `86a1eed17b099d510b39ce3d3b4ee7d8f7998881`;
+  its C220 `1bf045dd8` ancestry is intact. C249/C220 are still not integrated
+  into C271; ancestry reconciliation remains after the peer release gates.
+- Canonical board: C248 `work-task-45` is still `init`; its clean
+  `cb9e720f` candidate has 111 architecture findings and no PR/reviewed release.
+  C269 `work-task-101` is still `init`; its branch has active room-evidence
+  changes and no PR/reviewed release. Neither release is available, so shared
+  caller seams remain frozen. The complete concluded C259 `work-review-78` was
+  read; its four findings concern room evidence and do not identify self-play
+  service repairs. C271 has no review row.
+- The migrated production service scan found no `agent-cli`, legacy
+  `agentruntime`, or package `init` references. The service-side public
+  behavior checkpoints already cover configured two-turn completion and
+  first-meaningful-failure precedence; existing checkpoint evidence records
+  normal/race 25-test runs and the bounded repeated failure/shutdown run
+  (170 tests across 3 packages). No new source test was needed in this audit.
+- The full owned legacy cluster remains present: `selfplay_service.go` (53
+  lines), `session_self_play.go` (641), and `session_self_play_evidence.go`
+  (716), totaling 1,410 lines. The single transport command remains 85 lines
+  but still consumes `agent-cli/internal/services/selfplay/interface.go`,
+  including defaults and persona/seed policy; application Wire still builds
+  the legacy `agentruntime` façade. These are actionable caller cutovers, but
+  `session.go`/service Wire overlap C248 ownership and cannot be changed before
+  its reviewed release. The complete production caller census and CLI
+  composition changes remain outstanding.
+- No legacy deletion, caller cutover, `make prepush`, full C271 preflight, push,
+  PR, or SCRIPT handoff has occurred. Exact next action: retain C271 ownership
+  at `CONTINUE`; keep C248/C269-owned paths untouched and continue only
+  disjoint service/caller audit. After both reviewed releases, fetch current
+  main, reconcile C249/C220 and both peer changes additively, finish every
+  caller cutover, delete the projection/helper and exact 1,410-line cluster,
+  verify the sole adapter budget, then run the complete exact-head local gate
+  before opening/updating the PR.
