@@ -4342,3 +4342,47 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   caller cutover, delete the projection/helper and exact 1,410-line cluster,
   verify the sole adapter budget, then run the complete exact-head local gate
   before opening/updating the PR.
+
+# C271 focused service audit checkpoint — 2026-09-21
+
+- Reverified the task with `project-control.py verify-work --type task --name
+  audio-runtime-c271-recover-selfplay-retirement`; it remains admitted for the
+  sole `audio-runtime` project. The isolated branch
+  `codex/audio-runtime-c271-recover-selfplay-retirement` matches
+  `prd.json.branchName`. `HEAD=2f6c0f9ec7088ba8ce6265c66a5ed484e1a0446f` is
+  clean. `git fetch origin main` left `origin/main` at
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`; current main and startup
+  `8bdafc7f947a3a2c9856220abdc539437035bd21` remain ancestors. The preserved
+  C249 worktree is clean at `86a1eed17b099d510b39ce3d3b4ee7d8f7998881`, and
+  C220 `1bf045dd8` remains its ancestor; neither predecessor was modified.
+- Canonical board state still withholds both shared releases. C248
+  `work-task-45` is `init`; its clean checkpoint reports 108 architecture
+  findings and no reviewed release. C269 `work-task-101` is `init` and its
+  worktree has active room-evidence edits, so no self-play/room-evidence seam
+  was changed. C271 has no concluded review. The full concluded C259
+  `work-review-78` was read: its four findings are bounded room-evidence
+  admission, sink-failure degradation coverage, integrated room replay, and
+  exact-head preflight; none identifies a self-play service repair.
+- Re-ran the disjoint public service checks on this candidate:
+  `rtk go test -timeout=3m -count=1 ./go-agent-runtime/services/selfplay/...`
+  passed 25 tests across 3 packages;
+  `rtk go test -race -timeout=5m -count=1
+  ./go-agent-runtime/services/selfplay/...` passed 25 tests across 3 packages;
+  `rtk go test -timeout=5m -count=10 ./go-agent-runtime/services/selfplay/...
+  -run '(Cancel|Duration|Shutdown|Stop|Failure)'` passed 170 tests across 3
+  packages. The service boundary scan found no CLI or legacy `agentruntime`
+  imports and no package `init`.
+- The three owned production files remain present at exactly 53, 641, and 716
+  lines (1,410 total): `selfplay_service.go`, `session_self_play.go`, and
+  `session_self_play_evidence.go`. The only current CLI self-play command file
+  is 85 lines, but it still imports the old projection and carries defaults,
+  persona, and seed policy; application Wire still constructs the legacy
+  facade. Caller cutover and adapter purity are therefore incomplete.
+- No source or peer worktree was changed. No full prepush, exact-head
+  preflight, push, PR, or SCRIPT handoff has occurred. Exact next action: keep
+  C248/C269 seams untouched and continue only useful disjoint self-play public
+  service/caller audit; once both reviewed releases are available, fetch main,
+  reconcile C249/C220 and peer behavior additively, cut over every caller,
+  remove the projection/helper and full cluster, verify the sole stateless
+  adapter cap, and run the complete planned local preflight on the exact clean
+  candidate before PR submission. Retain C271 at `CONTINUE` meanwhile.
