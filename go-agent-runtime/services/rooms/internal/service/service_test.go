@@ -156,3 +156,48 @@ func TestPublicRunRejectsNonEmptyReplayOutputBeforeParticipantEffects(t *testing
 		t.Fatalf("output entries = %v, err = %v; want only preserved marker", entries, err)
 	}
 }
+
+func TestPublicRunRejectsUnwritableReplayOutputBeforeParticipantEffects(t *testing.T) {
+	replay := replayServiceStub{plan: roomreplay.RoomReplayPlan{BundlePath: filepath.Join(t.TempDir(), "bundle")}}
+	service := New(Dependencies{
+		Planner: planning.New(), Replay: replay,
+		Runner: lifecycle.New(lifecycle.Dependencies{Clock: platformclock.Real{}}),
+	})
+	var public rooms.Service = service
+
+	output := filepath.Join(t.TempDir(), "output")
+	if err := os.Mkdir(output, 0o700); err != nil {
+		t.Fatalf("create output directory: %v", err)
+	}
+	if err := os.Chmod(output, 0o500); err != nil {
+		t.Fatalf("make output directory unwritable: %v", err)
+	}
+	defer func() { _ = os.Chmod(output, 0o700) }()
+	probe, err := os.CreateTemp(output, ".permission-check-")
+	if err == nil {
+		_ = probe.Close()
+		_ = os.Remove(probe.Name())
+		t.Skip("test filesystem does not enforce directory write permissions")
+	}
+
+	ready := 0
+	recordingDisabled := false
+	manifest := rooms.Manifest{
+		SchemaVersion: rooms.SchemaVersion,
+		Room:          rooms.Room{MaxTurns: 1, Recording: &rooms.RoomRecordingConfig{Enabled: &recordingDisabled}},
+		Participants: []rooms.Participant{
+			{ID: "human-a", Kind: rooms.ParticipantKindHuman, SystemPrompt: "human", InputDevice: "mic", OutputDevice: "speaker", Tools: []string{}},
+			{ID: "human-b", Kind: rooms.ParticipantKindHuman, SystemPrompt: "human", InputDevice: "mic", OutputDevice: "speaker", Tools: []string{}},
+		},
+	}
+	_, err = public.Run(context.Background(), nil, rooms.RoomRunOptions{
+		Manifest: manifest, ReplayPlan: &replay.plan, OutputDir: output,
+		OnParticipantReady: func(rooms.RoomParticipantReady) { ready++ },
+	})
+	if err == nil || !strings.Contains(err.Error(), "probe room evidence output target") {
+		t.Fatalf("Run() error = %v, want unwritable output rejection during admission", err)
+	}
+	if ready != 0 {
+		t.Fatalf("participant ready callbacks = %d, want no runner side effect", ready)
+	}
+}
