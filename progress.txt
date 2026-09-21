@@ -5283,3 +5283,28 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   regression, repeat the capture-reader census, and complete all C270-02
   through C270-06 gates on one clean candidate before pushing. Decision remains
   CONTINUE.
+
+# C270 partial integrated regressions and Wire — 2026-09-21
+
+- The accumulated no-microphone functional command passed agentsession, livehost,
+  and every selected session-runtime package. The CLI package has two remaining
+  failures: `TestSessionRecordedWebMCPCastDeviceWAVStaysInteractive` and
+  `TestSessionUnrecordedWebMCPCastDeviceWAVStaysInteractive`; both return
+  `legacy session audio runtime is retired; use the service-owned live session`
+  before provider connection. Other emitted error text is expected negative
+  control output from passing tests.
+- `rtk make wire-check` passed across all 13 generated Wire packages. It
+  regenerated no tracked changes; `rtk git diff --check` passed and the
+  candidate remained clean at `a78d800d36d9d2f89bd537473b5a094be5acb8a4`.
+- The canonical board still assigns the WebMCP/audio caller to C229
+  (`work-task-16`, Worker Session `991295d8-86fa-422e-9e47-568b80f76564`,
+  RUNNING), room replay capture integrity to C264 (`work-task-86`, Worker
+  Session `ad906b1d-b9f9-49aa-96a7-756662ed7889`, RUNNING), and metrics/trace
+  capture readers to C268 (`work-task-96`, Worker Session
+  `f0bf564c-7adf-48cb-8aa8-961f824f18a0`, RUNNING). No peer branch was changed.
+- Exact next action: keep these ownership boundaries; refresh their canonical
+  release states, integrate their committed caller seams only after release,
+  rerun the two WebMCP regressions plus the full functional/race set, and finish
+  the remaining hermetic, integration, embed, architecture, Wire, and
+  `make prepush` gates on the final clean SHA before any PR push. Decision
+  remains CONTINUE.
