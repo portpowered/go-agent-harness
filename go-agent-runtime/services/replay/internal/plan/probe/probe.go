@@ -38,7 +38,7 @@ func AnalyzeProbe(ctx context.Context, resolvePath func(context.Context, string)
 		return replay.CaptureProbeObservation{}, gatewaytesting.ErrSessionCaptureIntegrityUnavailable
 	}
 	if request.ValidateSource {
-		if validationErrs := gatewaytesting.ValidateSessionCapture(path, loaded.Capture); len(validationErrs) > 0 {
+		if validationErrs := validateCaptureSource(path, loaded.Capture); len(validationErrs) > 0 {
 			messages := make([]string, 0, len(validationErrs))
 			for _, validationErr := range validationErrs {
 				messages = append(messages, validationErr.Error())
@@ -98,7 +98,7 @@ func decodeProbeDocument(ctx context.Context, name string, document []byte) (gat
 		return gatewaytesting.SessionCapture{}, gatewaytesting.ErrSessionCaptureIntegrityUnavailable
 	}
 	capture := loaded.Capture
-	if validationErrs := gatewaytesting.ValidateSessionCapture(name, capture); len(validationErrs) > 0 {
+	if validationErrs := validateCaptureSource(name, capture); len(validationErrs) > 0 {
 		messages := make([]string, 0, len(validationErrs))
 		for _, validationErr := range validationErrs {
 			messages = append(messages, validationErr.Error())
@@ -201,7 +201,7 @@ func WriteCaptureDocument(ctx context.Context, resolvePath func(context.Context,
 		if !loaded.IntegrityVerified {
 			return gatewaytesting.ErrSessionCaptureIntegrityUnavailable
 		}
-		if validationErrs := gatewaytesting.ValidateSessionCapture(path, loaded.Capture); len(validationErrs) > 0 {
+		if validationErrs := validateCaptureSource(path, loaded.Capture); len(validationErrs) > 0 {
 			messages := make([]string, 0, len(validationErrs))
 			for _, validationErr := range validationErrs {
 				messages = append(messages, validationErr.Error())

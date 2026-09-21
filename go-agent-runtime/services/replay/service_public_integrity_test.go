@@ -5,9 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	replaywire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
@@ -64,5 +67,45 @@ func TestProbeDocumentRejectsCaptureWithCorruptIntegrity(t *testing.T) {
 				t.Fatalf("error = %v, want session capture integrity failure", err)
 			}
 		})
+	}
+}
+
+func TestAnalyzeProbeRejectsCredentialBearingSourceBeforeReplay(t *testing.T) {
+	const credential = "sk-probe-source-must-not-leak"
+	capture, err := gatewaytesting.SealSessionCapture(gatewaytesting.SessionCapture{
+		Version:  gatewaytesting.SessionCaptureVersion,
+		Provider: gatewaytesting.SessionProviderMetadata{Name: "openai", Model: "gpt-realtime"},
+		Session: gatewaytesting.SessionMetadata{
+			ID:                "credential-source-regression",
+			FixtureProvenance: gatewaytesting.SessionFixtureProvenanceSynthetic,
+		},
+		Records: []gatewaytesting.CapturedSessionEvent{{
+			Sequence: 1, Direction: gatewaytesting.DirectionServerToClient,
+			Type: "session.created", PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage,
+			Payload: json.RawMessage(`{"type":"session.created","session":{"api_key":"` + credential + `"}}`),
+		}},
+	})
+	if err != nil {
+		t.Fatalf("seal capture: %v", err)
+	}
+	document, err := json.Marshal(capture)
+	if err != nil {
+		t.Fatalf("marshal capture: %v", err)
+	}
+	path := filepath.Join(t.TempDir(), "credential-source.session.json")
+	if err := os.WriteFile(path, document, 0o600); err != nil {
+		t.Fatalf("write capture: %v", err)
+	}
+
+	service := replaywire.NewService()
+	_, err = service.AnalyzeProbe(context.Background(), replay.CaptureProbeRequest{SourcePath: path, ValidateSource: true})
+	if err == nil {
+		t.Fatal("credential-bearing source capture was accepted")
+	}
+	if !strings.Contains(err.Error(), "records[0].payload.session.api_key") {
+		t.Fatalf("error = %v, want the credential field location", err)
+	}
+	if strings.Contains(err.Error(), credential) {
+		t.Fatalf("error exposed credential value: %v", err)
 	}
 }
