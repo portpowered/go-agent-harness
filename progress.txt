@@ -5521,3 +5521,41 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   caller/direct-reader census, then run all C270-02 through C270-06 commands
   including `make prepush` on one exact clean candidate before pushing. Decision
   remains CONTINUE.
+
+# C270 current-turn checkpoint — canonical lease and baseline refresh — 2026-09-21
+
+- `project-control.py verify-work --type task --name
+  audio-runtime-c270-recover-recording-replay-finalization` returns `admitted`;
+  `prd.json.branchName` matches this isolated worktree. Fetched `origin/main` is
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`. Startup integration, planning
+  main, C217, C234 source, C234 checkpoint, and fetched-main ancestry checks all
+  pass. HEAD is `c609dc185a99cd7c94cd79ca5736d5dd83cc8e63`; the diff from the
+  previous candidate `257cc9ef45a90b56af1e25a149e1d60f51bb7c45` is only
+  `progress.txt`. The preserved C234 predecessor remains clean at
+  `7e6022bac496975f6b91b05e2a19b36348083eb7`.
+- Canonical `~default` Work queries find no C270 review Work or concluded C270
+  or C234 review findings. C229 `work-task-16` session
+  `991295d8-86fa-422e-9e47-568b80f76564`, C268 `work-task-96` session
+  `1a0334a2-8dc5-47c7-969a-9edec0454f75`, and C269 `work-task-101` session
+  `ebe42959-3746-4f3c-9962-747ae818f159` are still RUNNING. C229 has uncommitted
+  session lifecycle/observation changes; C268 is clean; C269 has uncommitted
+  room, CLI/Wire, and embedding changes. C264 `work-task-86` is FAILED and its
+  C273 recovery `work-task-111` is also FAILED; no reviewed room-replay release
+  is available. No peer worktree was modified.
+- All seven integrated-main deletion targets and six checkpoint-only
+  replacements remain absent. `recording_adapter.go` is 20 lines and
+  `replay_adapter.go` is 25 lines (45 total); the browser recording boundary
+  matches `origin/main`; this worktree is clean. Recording/replay functional
+  and race suites previously passed 198 tests across eight packages each on
+  `257cc9ef45a90b56af1e25a149e1d60f51bb7c45`. The corrected public WebMCP
+  selector executed both recorded and unrecorded tests on that code candidate;
+  both failed before provider connection with `legacy session audio runtime is
+  retired; use the service-owned live session`. Code is unchanged since that
+  run. No full C270 preflight, `make prepush`, push, PR update, or SCRIPT
+  handoff ran.
+- Exact next action: refresh canonical C229/C268/C264/C273 Work and integrate
+  their caller seams only when exact reviewed release commits are available.
+  Repair and rerun both public WebMCP regressions, repeat the production
+  caller/direct-reader census, then run all C270-02 through C270-06 verification
+  plus `make prepush` on the exact clean candidate before pushing and
+  opening/updating the PR. Decision remains CONTINUE.
