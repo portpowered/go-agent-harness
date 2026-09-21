@@ -91,13 +91,13 @@ func roomAnalysisInput(bundle roomevidence.Bundle) roomanalysis.PCM16RoomInput {
 		Loudness: append([]roomanalysis.PCM16LoudnessInterval(nil), bundle.Loudness...),
 	}
 	for _, participant := range bundle.Participants {
-		input.Streams = append(input.Streams,
-			cloneTimedStream(participant.WAV.PCM16TimedStream),
-			cloneTimedStream(participant.Sent.PCM16TimedStream),
-			cloneTimedStream(participant.Received.PCM16TimedStream),
-		)
+		for _, stream := range []roomevidence.AudioStream{participant.WAV, participant.Sent, participant.Received} {
+			if len(stream.Samples) > 0 {
+				input.Streams = append(input.Streams, cloneTimedStream(stream.PCM16TimedStream))
+			}
+		}
 	}
-	if bundle.RoomMix.StreamID != "" {
+	if bundle.RoomMix.StreamID != "" && len(bundle.RoomMix.Samples) > 0 {
 		input.Streams = append(input.Streams, cloneTimedStream(bundle.RoomMix.PCM16TimedStream))
 	}
 	return input
@@ -243,8 +243,14 @@ func (r *recorder) SetParticipantTerminated(value rooms.RoomParticipantResult) e
 	r.operationMu.Lock()
 	defer r.operationMu.Unlock()
 	fields := map[string]string{
-		"reason": string(value.TerminationReason),
-		"turns":  fmt.Sprintf("%d", value.TurnsCompleted),
+		"termination_trigger":     value.TerminationTrigger,
+		"termination_disposition": value.TerminationDisposition,
+		"classification":          value.Classification,
+		"terminal_reason":         value.TerminalReason,
+		"terminal_provenance":     value.TerminalProvenance,
+		"output_state":            value.OutputState,
+		"reason":                  string(value.TerminationReason),
+		"turns":                   fmt.Sprintf("%d", value.TurnsCompleted),
 	}
 	_, err := r.recordOpenTimeline("participant_terminated", value.ParticipantID, fields)
 	return err

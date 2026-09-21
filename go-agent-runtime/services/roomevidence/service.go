@@ -103,6 +103,7 @@ type Recorder interface {
 	AudioFormat() rooms.AudioFormat
 	Artifacts(string) ArtifactPaths
 	Observe(Observation) error
+	RecordSessionDiagnostic(DiagnosticRecord)
 	Error() error
 	Health() Health
 	Finalize(Finalization) (Result, error)
@@ -178,9 +179,10 @@ type Result struct {
 
 // DiagnosticRecord is the bounded, transport-neutral diagnostic projection.
 type DiagnosticRecord struct {
-	Event  string
-	Fields map[string]string
-	At     time.Time
+	ParticipantID string
+	Event         string
+	Fields        map[string]string
+	At            time.Time
 }
 
 // ArtifactPaths is the stable relative-path inventory for one participant.

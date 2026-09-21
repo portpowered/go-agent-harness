@@ -58,15 +58,19 @@ func (p *participantRecorder) recordDiagnostic(record roomevidence.DiagnosticRec
 }
 
 func (p *participantRecorder) ObserveDelta(message messages.StreamMessage) error {
+	return p.observeDeltaAt(message, time.Time{})
+}
+
+func (p *participantRecorder) observeDeltaAt(message messages.StreamMessage, at time.Time) error {
 	if p == nil || p.owner == nil {
 		return roomevidence.ErrRecorderClosed
 	}
 	p.owner.operationMu.Lock()
 	defer p.owner.operationMu.Unlock()
-	return p.observeDelta(message)
+	return p.recordDelta(message, at)
 }
 
-func (p *participantRecorder) observeDelta(message messages.StreamMessage) error {
+func (p *participantRecorder) recordDelta(message messages.StreamMessage, at time.Time) error {
 	if err := p.openCheck(); err != nil {
 		return err
 	}
@@ -75,7 +79,11 @@ func (p *participantRecorder) observeDelta(message messages.StreamMessage) error
 		return p.MarkError(p.artifacts.Deltas, err)
 	}
 	data = redactJSON(data, p.owner.secrets)
-	data, err = stampJSON(data, p.owner.clock)
+	if at.IsZero() {
+		data, err = stampJSON(data, p.owner.clock)
+	} else {
+		data, err = stampJSONAt(data, p.owner.clock, at)
+	}
 	if err != nil {
 		return p.MarkError(p.artifacts.Deltas, err)
 	}
@@ -226,7 +234,27 @@ func (r *recorder) Observe(observation roomevidence.Observation) error {
 	case roomevidence.ObservationTimeline, roomevidence.ObservationFinalTimeline:
 		return r.recordObservedTimeline(observation.At, observation.Event, observation.ParticipantID, observation.Fields)
 	case roomevidence.ObservationLiveEvent:
-		return r.RecordLiveEvent(observation.ParticipantID, observation.LiveEvent)
+		if err := r.RecordLiveEvent(observation.ParticipantID, observation.LiveEvent); err != nil {
+			return err
+		}
+		message := observation.LiveEvent.Message
+		if message == nil {
+			return nil
+		}
+		participantID := liveEventParticipantID(observation.ParticipantID, observation.LiveEvent)
+		if message.Type == messages.StreamTypeAudioDelta {
+			if audio, ok := message.Value.(*messages.AudioDeltaValue); ok {
+				if err := r.observeParticipant(roomevidence.Observation{Kind: roomevidence.ObservationParticipantAudio, ParticipantID: participantID, PCM: audio.Content}); err != nil {
+					return err
+				}
+			}
+		}
+		return r.observeParticipant(roomevidence.Observation{
+			Kind:          roomevidence.ObservationDelta,
+			ParticipantID: participantID,
+			StreamMessage: *message,
+			At:            observation.LiveEvent.Timestamp,
+		})
 	case roomevidence.ObservationProviderError:
 		return r.RecordProviderErrorTimeline(observation.ParticipantID, observation.Fields)
 	case roomevidence.ObservationParticipantReady:
@@ -256,6 +284,14 @@ func (r *recorder) Observe(observation roomevidence.Observation) error {
 	default:
 		return fmt.Errorf("unknown room evidence observation kind %q", observation.Kind)
 	}
+}
+
+func (r *recorder) RecordSessionDiagnostic(record roomevidence.DiagnosticRecord) {
+	_ = r.Observe(roomevidence.Observation{
+		Kind:          roomevidence.ObservationDiagnostic,
+		ParticipantID: record.ParticipantID,
+		Diagnostic:    record,
+	})
 }
 
 func (r *recorder) observeRoomAudio(observation roomevidence.Observation) error {
@@ -299,7 +335,7 @@ func (r *recorder) observeParticipant(observation roomevidence.Observation) erro
 		}
 		return participant.RecordDiagnostic(diagnostic)
 	case roomevidence.ObservationDelta:
-		return participant.ObserveDelta(observation.StreamMessage)
+		return participant.observeDeltaAt(observation.StreamMessage, observation.At)
 	case roomevidence.ObservationParticipantAudio:
 		return participant.ObserveAudio(observation.PCM)
 	case roomevidence.ObservationSentAudio:

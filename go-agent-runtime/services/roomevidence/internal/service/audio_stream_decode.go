@@ -16,16 +16,52 @@ import (
 )
 
 func validateRoomReplayAudioStreamTimeline(stream AudioStream, plan RoomReplayPlan, field string) error {
-	roomDuration := plan.EndedAt.Sub(plan.ClockBase)
+	if err := validateRoomReplayStreamIdentity(stream, field); err != nil {
+		return err
+	}
+	if len(stream.Samples) == 0 && stream.Artifact.Empty {
+		return validateEmptyRoomReplayStreamInterval(stream, plan, field)
+	}
+	if err := validateRoomReplayStreamInterval(stream, plan, field); err != nil {
+		return err
+	}
+	if err := validateRoomReplaySampleInterval(stream, plan, field); err != nil {
+		return err
+	}
+	if err := validateRoomReplayChunkBoundaries(stream, field); err != nil {
+		return err
+	}
+	return validateRoomReplaySpeechAnnotations(stream, field)
+}
+
+func validateRoomReplayStreamIdentity(stream AudioStream, field string) error {
 	if stream.StreamID == "" || stream.ParticipantID == "" {
 		return roomReplayAudioMismatch(field+".identity", stream.Artifact.Path, "non-empty stream and participant identity", stream.StreamID+"/"+stream.ParticipantID, nil)
 	}
+	return nil
+}
+
+func validateEmptyRoomReplayStreamInterval(stream AudioStream, plan RoomReplayPlan, field string) error {
+	roomDuration := plan.EndedAt.Sub(plan.ClockBase)
+	if stream.TimelineStart < 0 || stream.TimelineEnd < stream.TimelineStart || stream.TimelineEnd > roomDuration {
+		return roomReplayAudioTimeline(field+".timeline", stream.Artifact.Path, "empty stream interval within room", fmt.Sprintf("%s..%s", stream.TimelineStart, stream.TimelineEnd))
+	}
+	return nil
+}
+
+func validateRoomReplayStreamInterval(stream AudioStream, plan RoomReplayPlan, field string) error {
+	roomDuration := plan.EndedAt.Sub(plan.ClockBase)
 	if stream.TimelineStart < 0 || stream.TimelineEnd <= stream.TimelineStart {
 		return roomReplayAudioTimeline(field+".timeline", stream.Artifact.Path, "positive interval within room", fmt.Sprintf("%s..%s", stream.TimelineStart, stream.TimelineEnd))
 	}
 	if stream.TimelineEnd > roomDuration {
 		return roomReplayAudioTimeline(field+".timeline", stream.Artifact.Path, "timeline end within declared room duration", stream.TimelineEnd.String())
 	}
+	return nil
+}
+
+func validateRoomReplaySampleInterval(stream AudioStream, plan RoomReplayPlan, field string) error {
+	roomDuration := plan.EndedAt.Sub(plan.ClockBase)
 	sampleDuration := roomReplaySampleDuration(len(stream.Samples), stream.SampleRate)
 	if stream.TimelineStart+sampleDuration > roomDuration {
 		return roomReplayAudioTimeline(field+".samples", stream.Artifact.Path, "sample payload within declared room duration", (stream.TimelineStart + sampleDuration).String())
@@ -33,6 +69,10 @@ func validateRoomReplayAudioStreamTimeline(stream AudioStream, plan RoomReplayPl
 	if stream.TimelineStart+sampleDuration > stream.TimelineEnd {
 		return roomReplayAudioTimeline(field+".samples", stream.Artifact.Path, "sample payload within stream timeline", (stream.TimelineStart + sampleDuration).String())
 	}
+	return nil
+}
+
+func validateRoomReplayChunkBoundaries(stream AudioStream, field string) error {
 	previous := 0
 	for index, boundary := range stream.ChunkBoundaries {
 		if boundary.SampleIndex <= previous || boundary.SampleIndex > len(stream.Samples) {
@@ -40,6 +80,10 @@ func validateRoomReplayAudioStreamTimeline(stream AudioStream, plan RoomReplayPl
 		}
 		previous = boundary.SampleIndex
 	}
+	return nil
+}
+
+func validateRoomReplaySpeechAnnotations(stream AudioStream, field string) error {
 	for index, annotation := range stream.ExpectedSpeech {
 		if annotation.Start < stream.TimelineStart || annotation.End > stream.TimelineEnd || annotation.End <= annotation.Start {
 			return roomReplayAudioTimeline(fmt.Sprintf("%s.expected_speech[%d]", field, index), stream.Artifact.Path, "annotation within stream timeline", fmt.Sprintf("%s..%s", annotation.Start, annotation.End))
@@ -117,7 +161,14 @@ func loadRoomReplayPCMStream(plan RoomReplayPlan, artifact RoomReplayArtifact, s
 		return AudioStream{}, err
 	}
 	if len(data) == 0 {
-		return AudioStream{}, roomReplayAudioIncomplete("artifact."+role, artifact.Path, "non-empty PCM payload", "empty", ErrRoomReplayBundleIncomplete)
+		if !artifact.Empty {
+			return AudioStream{}, roomReplayAudioIncomplete("artifact."+role, artifact.Path, "non-empty or explicitly empty PCM payload", "empty", ErrRoomReplayBundleIncomplete)
+		}
+		stream := AudioStream{
+			PCM16TimedStream: roomanalysis.PCM16TimedStream{PCM16Input: roomanalysis.PCM16Input{StreamID: streamID, ParticipantID: participantID, SampleRate: plan.PCMFormat.SampleRate}},
+			Role:             role, PCM: []byte{}, Artifact: artifact,
+		}
+		return stream, nil
 	}
 	pcm := data
 	rate := plan.PCMFormat.SampleRate

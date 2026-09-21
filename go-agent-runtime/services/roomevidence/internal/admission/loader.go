@@ -5,10 +5,7 @@ package admission
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
-	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -16,7 +13,6 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/internal/pathguard"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 )
 
@@ -41,34 +37,13 @@ type Loader struct{}
 func New() Loader { return Loader{} }
 
 func (Loader) Load(bundle string) (rooms.RoomReplayPlan, error) {
-	root, err := filepath.Abs(strings.TrimSpace(bundle))
+	root, err := resolveBundleRoot(bundle)
 	if err != nil {
-		return rooms.RoomReplayPlan{}, incomplete("bundle", err)
-	}
-	info, err := os.Stat(root)
-	if err != nil || !info.IsDir() {
-		return rooms.RoomReplayPlan{}, incomplete("bundle", fmt.Errorf("bundle directory is unavailable"))
-	}
-	manifestPath := filepath.Join(root, rooms.RoomReplayBundleManifestPath)
-	if err := pathguard.ValidateNoSymlink(root, root); err != nil {
-		return rooms.RoomReplayPlan{}, mismatch("bundle", err)
-	}
-	if err := pathguard.ValidateNoSymlink(root, manifestPath); err != nil {
-		return rooms.RoomReplayPlan{}, mismatch("manifest", err)
-	}
-	if err := validateManifestRegularFile(manifestPath); err != nil {
 		return rooms.RoomReplayPlan{}, err
 	}
-	data, err := readManifest(manifestPath)
+	object, manifestPath, err := loadManifestObject(root)
 	if err != nil {
-		if errors.Is(err, errManifestTooLarge) {
-			return rooms.RoomReplayPlan{}, mismatch("manifest", err)
-		}
-		return rooms.RoomReplayPlan{}, incomplete("manifest", err)
-	}
-	object, err := decodeObject(data)
-	if err != nil {
-		return rooms.RoomReplayPlan{}, mismatch("manifest", err)
+		return rooms.RoomReplayPlan{}, err
 	}
 	plan, err := parseHeader(object, root, manifestPath)
 	if err != nil {
@@ -100,37 +75,6 @@ func (Loader) Load(bundle string) (rooms.RoomReplayPlan, error) {
 	}
 	plan.Timeline = timeline
 	return plan, nil
-}
-
-var errManifestTooLarge = fmt.Errorf("room replay manifest exceeds the %d-byte limit", MaxManifestBytes)
-
-func readManifest(path string) ([]byte, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	data, readErr := io.ReadAll(io.LimitReader(file, MaxManifestBytes+1))
-	closeErr := file.Close()
-	if readErr != nil {
-		return nil, readErr
-	}
-	if closeErr != nil {
-		return nil, closeErr
-	}
-	if int64(len(data)) > MaxManifestBytes {
-		return nil, errManifestTooLarge
-	}
-	return data, nil
-}
-
-func validateManifestRegularFile(path string) error {
-	if err := pathguard.ValidateRegularFile(path); err != nil {
-		if os.IsNotExist(err) {
-			return incomplete("manifest", fmt.Errorf("manifest is unavailable"))
-		}
-		return mismatch("manifest", err)
-	}
-	return nil
 }
 
 func parseHeader(object object, root, manifestPath string) (rooms.RoomReplayPlan, error) {
