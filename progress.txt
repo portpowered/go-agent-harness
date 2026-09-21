@@ -5094,3 +5094,43 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   verify the remaining adapter is stateless and within 300 lines, and run
   `make prepush` plus every C271 local gate on one exact clean candidate before
   pushing it for SCRIPT CI.
+
+### C271 current admission and release checkpoint — 2026-09-21
+
+- Re-ran `project-control.py verify-work --type task --name
+  audio-runtime-c271-recover-selfplay-retirement`; admission remains `admitted`
+  for the sole `audio-runtime/audio-runtime-v1` project. The isolated branch
+  matches `prd.json.branchName`. The starting candidate is clean at
+  `6184f7a31f6a318a23e6649febfcd8663bd64b45`; fetched `origin/main` remains
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`, and main plus startup revision
+  `8bdafc7f947a3a2c9856220abdc539437035bd21` are ancestors. Preserved C249 is
+  clean at `86a1eed17b099d510b39ce3d3b4ee7d8f7998881`; it is not yet an
+  ancestor of this candidate. No peer worktree or host checkout was changed.
+- The canonical board still has C271 `work-task-106` in `init`/`PROCESSING`
+  and no C271 review row. C248 `work-task-45` is `init`/`PROCESSING` at clean
+  `0f00c79549b33e5e26c5c7bbe20313a07267e3dc`; its recorded 62 architecture
+  findings and unreleased caller seam remain actionable in that task. C269
+  `work-task-101` is `init`/`PROCESSING` at
+  `d792accaf8244898f559962ae371e06263095a9b`, with dirty room/evidence, Wire,
+  architecture and embedding repairs and a RUNNING Worker Session. Neither
+  reviewed/guarded release required for C271 is available.
+- Read the full canonical C259 `work-review-78` rejection. It requires bounded
+  room-evidence manifest/timeline admission, public recorder-failure
+  degradation coverage, a public room-run/load/analyze round trip, and exact
+  head preflight. These findings belong to the unreleased room-evidence
+  candidate and identify no self-play-specific repair. No C271-specific review
+  finding exists.
+- The exact C271 legacy cluster remains `selfplay_service.go` (53 lines),
+  `session_self_play.go` (641), and `session_self_play_evidence.go` (716):
+  3 files / 1,410 lines. The obsolete CLI projection is 68 lines. The
+  85-line candidate CLI file still carries defaults/persona/opening-seed
+  policy and is not a stateless adapter. Production callers are not cut over;
+  no deletion, `make prepush`, PR, push or SCRIPT handoff is claimed. No
+  production code changed and no tests were rerun in this checkpoint.
+- Exact next action: keep the C248/C269 shared seams untouched until C248's
+  caller release and C269's room-evidence release are reviewed/guarded. On
+  release, fetch current main, reconcile C249/C220 and both peer behaviors
+  through public contracts, cut over every caller, remove the projection and
+  temporary helper, delete the exact three-file cluster, then run `make
+  prepush` and all planned C271 local checks on the same clean candidate before
+  push and SCRIPT handoff.
