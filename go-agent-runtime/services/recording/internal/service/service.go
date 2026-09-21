@@ -14,7 +14,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
-	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 // Service is an inert capture factory; invocation resources live in handles.
@@ -44,7 +43,7 @@ func (s *Service) RecordProviderSession(captureService recording.ProviderCapture
 	if sink == nil {
 		return nil, errors.New("provider capture service returned no sink")
 	}
-	writer, err := gatewaytesting.NewRecordingWebSocketDialerWithSink(options.Dialer, options.Provider, options.Model, sink, options.Clock)
+	writer, err := newProviderRecordingDialer(options.Dialer, options.Provider, options.Model, sink, options.Clock)
 	if err != nil {
 		return nil, errors.Join(err, sink.Abort())
 	}

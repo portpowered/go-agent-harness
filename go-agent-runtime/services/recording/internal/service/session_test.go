@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
@@ -181,6 +182,116 @@ type providerCaptureDialer struct{}
 
 func (providerCaptureDialer) Dial(string, map[string]string) (transport.Conn, error) {
 	return nil, errors.New("unexpected provider dial")
+}
+
+type providerRecorderDialer struct{ conn transport.Conn }
+
+func (d providerRecorderDialer) Dial(string, map[string]string) (transport.Conn, error) {
+	return d.conn, nil
+}
+
+type providerRecorderConn struct {
+	inbound []byte
+	read    bool
+	writes  [][]byte
+	closed  bool
+}
+
+func (c *providerRecorderConn) ReadMessage() (int, []byte, error) {
+	if c.read {
+		return 0, nil, io.EOF
+	}
+	c.read = true
+	return 1, append([]byte(nil), c.inbound...), nil
+}
+
+func (c *providerRecorderConn) WriteMessage(_ int, payload []byte) error {
+	c.writes = append(c.writes, append([]byte(nil), payload...))
+	return nil
+}
+
+func (c *providerRecorderConn) Close() error {
+	c.closed = true
+	return nil
+}
+
+type providerRecorderSession struct {
+	done chan struct{}
+	conn transport.Conn
+	once sync.Once
+}
+
+func (*providerRecorderSession) Send(context.Context, messages.StreamMessage) bool      { return false }
+func (*providerRecorderSession) Receive() *messages.TypedBuffer[messages.StreamMessage] { return nil }
+func (s *providerRecorderSession) Done() <-chan struct{}                                { return s.done }
+func (s *providerRecorderSession) Close() error {
+	var closeErr error
+	s.once.Do(func() {
+		closeErr = s.conn.Close()
+		close(s.done)
+	})
+	return closeErr
+}
+
+type providerRecorderInferencer struct{ dialer transport.Dialer }
+
+func (i providerRecorderInferencer) ConnectSession(context.Context) (messages.Session, error) {
+	conn, err := i.dialer.Dial("wss://provider.invalid/session", nil)
+	if err != nil {
+		return nil, err
+	}
+	if err := conn.WriteMessage(1, []byte(`{"type":"session.update"}`)); err != nil {
+		return nil, err
+	}
+	if _, _, err := conn.ReadMessage(); err != nil {
+		return nil, err
+	}
+	return &providerRecorderSession{done: make(chan struct{}), conn: conn}, nil
+}
+
+func TestRecordProviderSessionPublishesOrderedProtectedWireCapture(t *testing.T) {
+	service := New(clock.Real{})
+	conn := &providerRecorderConn{inbound: []byte(`{"type":"session.created"}`)}
+	destination := filepath.Join(t.TempDir(), "provider.capture.json")
+	owner, err := service.RecordProviderSession(service, recording.ProviderSessionOptions{
+		Destination: destination,
+		Provider:    "fixture",
+		Model:       "fixture-model",
+		Dialer:      providerRecorderDialer{conn: conn},
+		Build: func(dialer transport.Dialer) (messages.SessionInferencer, error) {
+			return providerRecorderInferencer{dialer: dialer}, nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := owner.ConnectSession(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := session.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := owner.FlushCapture(); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := gatewaytesting.LoadSessionCaptureForReplay(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	records := loaded.Capture.Records
+	if len(records) != 2 {
+		t.Fatalf("capture record count = %d, want 2", len(records))
+	}
+	if records[0].Direction != gatewaytesting.DirectionClientToServer || records[0].Type != "session.update" || string(records[0].Payload) != `{"type":"session.update"}` {
+		t.Fatalf("first capture record = %#v, want outbound session.update", records[0])
+	}
+	if records[1].Direction != gatewaytesting.DirectionServerToClient || records[1].Type != "session.created" || string(records[1].Payload) != `{"type":"session.created"}` {
+		t.Fatalf("second capture record = %#v, want inbound session.created", records[1])
+	}
+	if !conn.closed {
+		t.Fatal("provider websocket connection was not closed with its session")
+	}
 }
 
 func TestRecordProviderSessionReleasesAdmissionWhenProviderBuildFails(t *testing.T) {
