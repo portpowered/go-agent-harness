@@ -4438,3 +4438,45 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   delete the projection/helper and exact three-file/1,410-line legacy cluster,
   verify the sole stateless adapter is at most 300 lines, then run the entire
   planned exact-head preflight before any PR submission.
+
+# C271 admission and release recheck — 2026-09-21
+
+- Re-ran `rtk python3 factory/scripts/project-control.py verify-work --type
+  task --name audio-runtime-c271-recover-selfplay-retirement --root
+  "$FACTORY_ROOT"`; result is admitted for `audio-runtime`. `prd.json` names
+  `codex/audio-runtime-c271-recover-selfplay-retirement`, matching this clean
+  worktree. HEAD is `c08dca3bc20584c521ff3b4889e35564afbfadf2`; current local
+  `origin/main=b9b2f90bf7e00430cd0ab6067179a5fb8005ec44` and startup
+  `8bdafc7f947a3a2c9856220abdc539437035bd21` are ancestors. The preserved C249
+  source remains clean at `86a1eed17b099d510b39ce3d3b4ee7d8f7998881`, with
+  C220 `1bf045dd8` ancestry intact. No peer worktree was changed.
+- Canonical `work-task-106` is still `init` and has no C271 review row. C248
+  `work-task-45` is still `init` at `0cefde30e86e809018d70b9f74067d35b241f506`
+  with uncommitted sessionturn internal repairs; its latest checkpoint reports
+  108 architecture findings, so its caller release is unavailable. C269
+  `work-task-101` is still `init` at `3be45b10da238cc653a00282ecc3efeb05adf237`
+  with uncommitted room-evidence, diagnostics and caller edits; its reviewed
+  merge release is unavailable. The complete concluded C259 `work-review-78`
+  was read: its findings cover bounded room-evidence manifest/timeline
+  admission, recorder-failure degradation, public room replay round-trip, and
+  exact-head preflight. They do not identify a self-play repair; C269's latest
+  checkpoint carries the first three repairs into its candidate.
+- Recounted the live legacy runtime at 106 production Go files / 39,329
+  physical lines. The entire owned cluster remains: `selfplay_service.go` 53,
+  `session_self_play.go` 641, and `session_self_play_evidence.go` 716 (3 / 1,410).
+  The obsolete CLI projection remains. The sole command file is 85 lines but
+  still consumes that projection and owns defaults/persona/seed policy; it is
+  not yet the required stateless adapter. The runtime self-play service tree
+  remains free of CLI/legacy imports and package init. Prior normal, race, and
+  repeated failure/shutdown checks still describe the unchanged production
+  source; no production caller cutover or deletion is claimed.
+- No disjoint production mutation is safe while the CLI/session/Wire cutovers
+  remain within C248 ownership and the overlapping room evidence/cross-caller
+  edits remain within unreleased C269 ownership. No `make prepush`, complete
+  C271 preflight, push, PR update, or SCRIPT handoff has occurred. Exact next
+  action: keep C271 at `CONTINUE`; once C248 has a reviewed caller release and
+  C269 has a guarded room-evidence merge, fetch current main, reconcile C249 and
+  both released changes additively, complete every caller cutover and exact
+  legacy deletion, verify the single stateless adapter cap, then run
+  `make prepush` and every planned C271 local gate on the exact clean candidate
+  before pushing it for SCRIPT CI.
