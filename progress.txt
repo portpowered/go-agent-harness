@@ -5040,3 +5040,36 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   record-only WebMCP test on the owning service path, finish the production
   capture-reader cutovers, and then run every C234 exact-candidate gate plus
   `make prepush` on one clean SHA before any push. Decision remains CONTINUE.
+
+# C234 continuation checkpoint — live ownership refresh — 2026-09-20
+
+- Reverified sole-project admission with `project-control.py verify-work
+  --type task --name audio-runtime-c234-recover-recording-replay-retirement`
+  from `FACTORY_ROOT`; status is `admitted`. `prd.json.branchName` exactly
+  matches `codex/audio-runtime-c234-recover-recording-replay-retirement`.
+  Canonical `~default` Work has no C234 review Work or concluded review
+  findings. The isolated branch is clean at `fd6aa85ac3859f7dbc316cf4ae221af0a40eb860`.
+- Refreshed scoped Worker Sessions. C229 still has RUNNING owner
+  `991295d8-86fa-422e-9e47-568b80f76564`; C264 still has RUNNING owner
+  `ad906b1d-b9f9-49aa-96a7-756662ed7889`. Preserve their exact caller paths.
+  C255's latest task attempt ended FAILED (`0e1e484f-6b47-4d17-b7d4-3f72d402a8ba`);
+  its C268 recovery is only an `init` idea, so there is no released replacement
+  checkpoint to integrate. Do not mutate the C255/C268 peer worktrees.
+- Rechecked the 13 exact C234 legacy/replacement paths: all remain absent.
+  The only named adapters are `recording_adapter.go` (20 lines) and
+  `replay_adapter.go` (25 lines), 45 combined. C224's browser boundary remains
+  outside this change. Production raw-capture consumers still include
+  C255-owned `metrics_collector.go` and `livehost/trace.go`, plus C264-owned
+  `session_room_replay_integrity.go`; replay service internals consume capture
+  data only inside the service boundary.
+- The focused recording/replay normal and race checks passed on source commit
+  `e7c6e5b3dc9400ed8ddf9eebcb969e2c37e6b042`; `fd6aa85` adds progress only.
+  The no-microphone WebMCP record-only test remains unverified against the
+  unreleased C229 caller change. No full exact-candidate preflight,
+  `make prepush`, push, PR update or SCRIPT handoff ran.
+- Exact next action: preserve C229/C264 leases and resolve the C255 recovery
+  owner; integrate each caller checkpoint only after release, repair the
+  WebMCP route through the service-owned live contract, repeat the production
+  capture-reader audit, then run every C234 functional, integration, race,
+  hermetic, Wire, embedding and `make prepush` command on one clean exact
+  candidate before any push. Decision remains CONTINUE.
