@@ -302,6 +302,12 @@ func observeProbeCapture(report gatewaytesting.SessionReplayProbeReport, capture
 		EndsWithDisconnect: capture.EndsWithDisconnect,
 		TerminalReason:     capture.Session.FixtureProvenance,
 		Transcript:         probeTranscript(capture),
+		Observations:       make([]replay.CaptureProbeEvent, 0, len(report.Observations)),
+	}
+	for _, event := range report.Observations {
+		observation.Observations = append(observation.Observations, replay.CaptureProbeEvent{
+			Sequence: event.Sequence, Direction: string(event.Direction), Type: event.Type,
+		})
 	}
 	if report.EndsWithDisconnect {
 		observation.TerminalReason = "disconnect"

@@ -22,9 +22,9 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	sessionwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
-	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/spf13/cobra"
 )
 
@@ -311,9 +311,11 @@ func TestRouterPreRunNormalizesMediaReplayFixtureAndLeavesURLOperandAlone(t *tes
 	currentHome := t.TempDir()
 	fixturePath := filepath.Join(currentHome, "session.json")
 	var gotFixture string
-	probe := NewMediaProbeCommandWithOptions(WithSessionReplayProbe(func(_ context.Context, fixture string) (gatewaytesting.SessionReplayProbeReport, error) {
-		gotFixture = fixture
-		return gatewaytesting.SessionReplayProbeReport{}, nil
+	probe := NewMediaProbeCommandWithOptions(WithReplayService(mediaReplayServiceStub{
+		analyzeProbe: func(_ context.Context, request runtimeReplay.CaptureProbeRequest) (runtimeReplay.CaptureProbeObservation, error) {
+			gotFixture = request.SourcePath
+			return runtimeReplay.CaptureProbeObservation{}, nil
+		},
 	}))
 	mediaGroup := &cobra.Command{Use: "media"}
 	mediaGroup.AddCommand(probe.Generate())

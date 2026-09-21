@@ -169,6 +169,7 @@ type CaptureProbeObservation struct {
 	Provider                 string
 	Model                    string
 	FixtureProvenance        string
+	Observations             []CaptureProbeEvent
 	InboundFrames            int
 	OutboundTicks            int
 	EndsWithDisconnect       bool
@@ -197,6 +198,14 @@ type CaptureProbeObservation struct {
 	AssistantAudioStartEvent int
 	AssistantAudioStopped    bool
 	AssistantAudioStopEvent  int
+}
+
+// CaptureProbeEvent is a payload-free protocol observation returned in
+// capture order. Replay internals keep the captured event bodies private.
+type CaptureProbeEvent struct {
+	Sequence  int
+	Direction string
+	Type      string
 }
 
 // CaptureMetricDelta is a service-derived aggregate for one direction and
