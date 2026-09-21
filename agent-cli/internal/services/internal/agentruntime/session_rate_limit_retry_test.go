@@ -11,7 +11,6 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 )
 
 func TestRateLimitRetryDecision(t *testing.T) {
@@ -299,7 +298,7 @@ func TestRateLimitRetryWaitStopsOnContextCancellation(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if err := retryScheduledRateLimitedResponseWithClock(audioiowire.NewService(), ctx, nil, nil, loop, observer, terminal, nil); !errors.Is(err, context.Canceled) {
+	if err := retryScheduledRateLimitedResponseWithClock(newTestAudioIOService(), ctx, nil, nil, loop, observer, terminal, nil); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled retry error = %v, want context cancellation", err)
 	}
 	if got := session.countSent(messages.StreamTypeResponseCreate); got != 0 {
@@ -320,8 +319,7 @@ func TestRunAgentLoopSessionMaxDurationStopsRateLimitRetry(t *testing.T) {
 	observer.scheduleAudioInputs([]ScheduledAudioInput{{AfterCompletedTurns: 0, PCM: []byte{1, 2}, EndOfTurn: true}})
 
 	err := runAgentLoopSessionStream(context.Background(), io.Discard, &rateLimitRetrySessionInferencer{session: session}, sessionLoopOptions{
-		audioService:             newTestAudioIOService(),
-		MaxDuration:              100 * time.Millisecond,
+		MaxDuration: 100 * time.Millisecond, audioService: newTestAudioIOService(),
 		CloseAfterScheduledAudio: true,
 		ToolExecutor:             &rateLimitRetryToolExecutor{},
 		ToolDefinitions:          []messages.ToolDefinition{{Name: "lookup", Description: "Look up one value."}},
@@ -365,8 +363,7 @@ func TestRunAgentLoopSessionWithDurationMaxDurationStopsRateLimitRetry(t *testin
 			io.Discard,
 			&rateLimitRetrySessionInferencer{session: session},
 			sessionLoopOptions{
-				audioService:    newTestAudioIOService(),
-				ToolExecutor:    &rateLimitRetryToolExecutor{},
+				ToolExecutor: &rateLimitRetryToolExecutor{}, audioService: newTestAudioIOService(),
 				ToolDefinitions: []messages.ToolDefinition{{Name: "lookup", Description: "Look up one value."}},
 				observer:        observer,
 			},
@@ -456,11 +453,10 @@ func TestRunAgentLoopSessionRetriesScheduledToolContinuationOnce(t *testing.T) {
 	executor := &rateLimitRetryToolExecutor{}
 	started := time.Now()
 	err := runAgentLoopSession(context.Background(), io.Discard, inferencer, sessionLoopOptions{
-		audioService:             newTestAudioIOService(),
-		CloseAfterScheduledAudio: true,
-		ToolExecutor:             executor,
-		ToolDefinitions:          []messages.ToolDefinition{{Name: "lookup", Description: "Look up one value."}},
-		observer:                 observer,
+		CloseAfterScheduledAudio: true, audioService: newTestAudioIOService(),
+		ToolExecutor:    executor,
+		ToolDefinitions: []messages.ToolDefinition{{Name: "lookup", Description: "Look up one value."}},
+		observer:        observer,
 	})
 	elapsed := time.Since(started)
 	if err != nil {
@@ -509,11 +505,10 @@ func TestRunAgentLoopSessionStopsAfterConsecutiveRateLimitFailure(t *testing.T) 
 	defer cancel()
 	started := time.Now()
 	err := runAgentLoopSession(ctx, io.Discard, &rateLimitRetrySessionInferencer{session: session}, sessionLoopOptions{
-		audioService:             newTestAudioIOService(),
-		CloseAfterScheduledAudio: true,
-		ToolExecutor:             executor,
-		ToolDefinitions:          []messages.ToolDefinition{{Name: "lookup", Description: "Look up one value."}},
-		observer:                 observer,
+		CloseAfterScheduledAudio: true, audioService: newTestAudioIOService(),
+		ToolExecutor:    executor,
+		ToolDefinitions: []messages.ToolDefinition{{Name: "lookup", Description: "Look up one value."}},
+		observer:        observer,
 	})
 	elapsed := time.Since(started)
 	if errors.Is(err, context.DeadlineExceeded) {
@@ -578,11 +573,10 @@ func TestRunAgentLoopSessionDoesNotRetryNonRateLimitFailure(t *testing.T) {
 	defer cancel()
 	started := time.Now()
 	err := runAgentLoopSession(ctx, io.Discard, &rateLimitRetrySessionInferencer{session: session}, sessionLoopOptions{
-		audioService:             newTestAudioIOService(),
-		CloseAfterScheduledAudio: true,
-		ToolExecutor:             executor,
-		ToolDefinitions:          []messages.ToolDefinition{{Name: "lookup", Description: "Look up one value."}},
-		observer:                 observer,
+		CloseAfterScheduledAudio: true, audioService: newTestAudioIOService(),
+		ToolExecutor:    executor,
+		ToolDefinitions: []messages.ToolDefinition{{Name: "lookup", Description: "Look up one value."}},
+		observer:        observer,
 	})
 	elapsed := time.Since(started)
 	if errors.Is(err, context.DeadlineExceeded) {

@@ -65,8 +65,6 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 	if opts.observer != nil {
 		opts.observer.setLivenessClock(opts.livenessClock)
 		opts.observer.setToolResultsEnabled(opts.ToolExecutor != nil)
-	}
-	if opts.observer != nil {
 		defer opts.observer.stopLiveness()
 	}
 	loop, err := agentloop.New(duplexSessionLoopOptions(observedInferencer, opts)...)

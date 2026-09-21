@@ -129,8 +129,7 @@ func TestSessionAdvertisesConnectedPageToolsOnTheProviderWire(t *testing.T) {
 	runErr := make(chan error, 1)
 	go func() {
 		runErr <- servicetest.RunSessionWithInstructions(sessionCtx, io.Discard, servicetest.SessionRunOptions{
-			AudioService:           audioiowire.NewService(),
-			Provider:               config.ProviderOpenAI,
+			Provider: config.ProviderOpenAI, AudioService: audioiowire.NewService(),
 			Model:                  "gpt-realtime",
 			ModelCatalog:           providerswire.NewModelCatalog(),
 			APIKey:                 "unused",
@@ -443,8 +442,7 @@ func TestSessionRepublishesLateConnectedPageToolsOnTheProviderWire(t *testing.T)
 	runErr := make(chan error, 1)
 	go func() {
 		runErr <- servicetest.RunSessionWithInstructions(sessionCtx, io.Discard, servicetest.SessionRunOptions{
-			AudioService:           audioiowire.NewService(),
-			Provider:               config.ProviderOpenAI,
+			Provider: config.ProviderOpenAI, AudioService: audioiowire.NewService(),
 			Model:                  "gpt-realtime",
 			ModelCatalog:           providerswire.NewModelCatalog(),
 			APIKey:                 "unused",
@@ -634,8 +632,7 @@ func TestSessionAdvertisesPageToolsOnTheWireAfterMidSessionSelection(t *testing.
 	runErr := make(chan error, 1)
 	go func() {
 		runErr <- servicetest.RunSessionWithInstructions(sessionCtx, io.Discard, servicetest.SessionRunOptions{
-			AudioService:           audioiowire.NewService(),
-			Provider:               config.ProviderOpenAI,
+			Provider: config.ProviderOpenAI, AudioService: audioiowire.NewService(),
 			Model:                  "gpt-realtime",
 			ModelCatalog:           providerswire.NewModelCatalog(),
 			APIKey:                 "unused",

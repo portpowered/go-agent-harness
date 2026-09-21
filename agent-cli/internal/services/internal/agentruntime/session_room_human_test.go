@@ -14,8 +14,6 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
-	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimedeviceswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
@@ -24,14 +22,27 @@ import (
 )
 
 func TestRunRoom_HumanParticipantRoutesDevicesAndReportsReadiness(t *testing.T) {
-	scenario := startRoomHumanDeviceRouteScenario(t)
-	registry := scenario.registry
-	inferencer := scenario.inferencer
-	ready := scenario.ready
-	inputToAgent := scenario.inputToAgent
-	fanned := scenario.fanned
-	resultCh := scenario.resultCh
-	cancel := scenario.cancel
+	registry := newRoomHumanTestRegistry(t)
+	inferencer := &roomTestInferencer{events: []messages.StreamMessage{roomTestSessionOpen("agent")}}
+	opts := newRoomHumanRunOptions(registry, inferencer)
+	ready := make(chan RoomParticipantReady, 2)
+	inputToAgent := make(chan roomAudioFrame, 512)
+	fanned := make(chan [2]string, 8)
+	opts.OnParticipantReady = func(event RoomParticipantReady) { ready <- event }
+	opts.OnAudioInput = func(id string, pcm []byte) error {
+		inputToAgent <- roomAudioFrame{id: id, pcm: append([]byte(nil), pcm...)}
+		return nil
+	}
+	opts.onParticipantAudioFanned = func(sourceID, targetID string, _ []byte) {
+		fanned <- [2]string{sourceID, targetID}
+	}
+	resultCh := make(chan roomTestRunOutcome, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		result, err := RunRoomWithResult(ctx, io.Discard, opts)
+		resultCh <- roomTestRunOutcome{result: result, err: err}
+	}()
 
 	readyEvents := make(map[string]RoomParticipantReady, 2)
 	for len(readyEvents) < 2 {
@@ -39,12 +50,7 @@ func TestRunRoom_HumanParticipantRoutesDevicesAndReportsReadiness(t *testing.T) 
 		case event := <-ready:
 			readyEvents[event.ParticipantID] = event
 		case <-time.After(2 * time.Second):
-			select {
-			case outcome := <-resultCh:
-				t.Fatalf("readiness events = %v, want customer and agent; room ended result=%+v err=%v", readyEvents, outcome.result, outcome.err)
-			default:
-				t.Fatalf("readiness events = %v, want customer and agent", readyEvents)
-			}
+			t.Fatalf("readiness events = %v, want customer and agent", readyEvents)
 		}
 	}
 	if event := readyEvents["customer"]; event.Kind != room.ParticipantKindHuman || event.InputDevice != string(registry.inputDevice.ID) || event.OutputDevice != string(registry.outputDevice.ID) || event.Provider != "" || event.Model != "" {
@@ -131,44 +137,6 @@ func TestRunRoom_HumanParticipantRoutesDevicesAndReportsReadiness(t *testing.T) 
 	if registry.inputHandle.closeCallsSnapshot() != 1 || registry.outputHandle.closeCallsSnapshot() != 1 {
 		t.Fatalf("device close calls = input:%d output:%d, want exactly once", registry.inputHandle.closeCallsSnapshot(), registry.outputHandle.closeCallsSnapshot())
 	}
-}
-
-type roomHumanDeviceRouteScenario struct {
-	registry     *roomHumanTestRegistry
-	inferencer   *roomTestInferencer
-	ready        chan RoomParticipantReady
-	inputToAgent chan roomAudioFrame
-	fanned       chan [2]string
-	resultCh     chan roomTestRunOutcome
-	cancel       context.CancelFunc
-}
-
-func startRoomHumanDeviceRouteScenario(t *testing.T) roomHumanDeviceRouteScenario {
-	t.Helper()
-	registry := newRoomHumanTestRegistry(t)
-	inferencer := &roomTestInferencer{events: []messages.StreamMessage{roomTestSessionOpen("agent")}}
-	opts := newRoomHumanRunOptions(registry, inferencer)
-	scenario := roomHumanDeviceRouteScenario{
-		registry: registry, inferencer: inferencer,
-		ready: make(chan RoomParticipantReady, 2), inputToAgent: make(chan roomAudioFrame, 512),
-		fanned: make(chan [2]string, 8), resultCh: make(chan roomTestRunOutcome, 1),
-	}
-	opts.OnParticipantReady = func(event RoomParticipantReady) { scenario.ready <- event }
-	opts.OnAudioInput = func(id string, pcm []byte) error {
-		scenario.inputToAgent <- roomAudioFrame{id: id, pcm: append([]byte(nil), pcm...)}
-		return nil
-	}
-	opts.onParticipantAudioFanned = func(sourceID, targetID string, _ []byte) {
-		scenario.fanned <- [2]string{sourceID, targetID}
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	scenario.cancel = cancel
-	t.Cleanup(cancel)
-	go func() {
-		result, err := RunRoomWithResult(ctx, io.Discard, opts)
-		scenario.resultCh <- roomTestRunOutcome{result: result, err: err}
-	}()
-	return scenario
 }
 
 func TestRunRoom_HumanCancellationFinalizesAllDefaultEvidence(t *testing.T) {
@@ -529,8 +497,7 @@ func TestRunRoom_HumanProviderFailureFailsOnlyParticipant(t *testing.T) {
 
 func newRoomHumanRunOptions(registry *roomHumanTestRegistry, inferencer *roomTestInferencer) RoomRunOptions {
 	return RoomRunOptions{
-		AudioService: audioiowire.NewService(),
-		Manifest: room.Manifest{
+		AudioService: newTestAudioIOService(), Manifest: room.Manifest{
 			SchemaVersion: room.SchemaVersion,
 			Room:          room.Room{Interactive: true},
 			Participants: []room.Participant{
@@ -559,15 +526,11 @@ func newRoomHumanRunOptions(registry *roomHumanTestRegistry, inferencer *roomTes
 			}
 			return "", false
 		},
-		DeviceService: newRoomHumanDeviceService(registry),
+		DeviceService: runtimedeviceswire.NewService(registry, newTestAudioIOService()),
 		SessionInferencers: map[string]messages.SessionInferencer{
 			"agent": inferencer,
 		},
 	}
-}
-
-func newRoomHumanDeviceService(registry devicegw.DeviceRegistry) runtimedevices.Service {
-	return runtimedeviceswire.NewService(registry, audioiowire.NewService())
 }
 
 func waitRoomHumanTestSession(t *testing.T, inferencer *roomTestInferencer) *roomTestSession {

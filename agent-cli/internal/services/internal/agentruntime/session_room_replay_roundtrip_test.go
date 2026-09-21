@@ -280,9 +280,8 @@ func TestRoomRunRecordThenReplay_FullEndToEndReplaySucceeds(t *testing.T) {
 	recordCtx, recordCancel := context.WithTimeout(context.Background(), roomRealtimeReplayTestTimeout)
 	defer recordCancel()
 	recordResult, err := RunRoomWithResult(recordCtx, io.Discard, RoomRunOptions{
-		AudioService: newTestAudioIOService(),
-		Manifest:     manifest,
-		ConfigDir:    configDir, ModelCatalog: testModelCatalog(),
+		Manifest: manifest, AudioService: newTestAudioIOService(),
+		ConfigDir: configDir, ModelCatalog: testModelCatalog(),
 		BaseURL:   "wss://room-record.invalid/v1/realtime",
 		OutputDir: outputDir,
 		CredentialLookup: func(name string) (string, bool) {

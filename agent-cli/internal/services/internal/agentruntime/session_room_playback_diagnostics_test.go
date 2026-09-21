@@ -9,6 +9,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
+	runtimedeviceswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
 
@@ -68,7 +69,7 @@ func TestRunRoom_HumanParticipantPlaybackUsesServiceBackpressure(t *testing.T) {
 			}
 			return "", false
 		},
-		DeviceService: newRoomHumanDeviceService(registry),
+		DeviceService: runtimedeviceswire.NewService(registry, audioiowire.NewService()),
 		SessionInferencers: map[string]messages.SessionInferencer{
 			"agent": inferencer,
 		},

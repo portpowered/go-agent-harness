@@ -28,9 +28,13 @@ func newTestSessionService(deps sessionservicewire.SessionDependencies) agentses
 	return sessionservicewire.NewSessionService(deps)
 }
 
-func newTestLiveSessionCommand(askFlags *flags.AskFlags, globalFlags *flags.GlobalFlags, inferencer messages.SessionInferencer, registry devicegw.DeviceRegistry) *SessionCommand {
+func newTestLiveSessionCommand(askFlags *flags.AskFlags, globalFlags *flags.GlobalFlags, inferencer messages.SessionInferencer, registry devicegw.DeviceRegistry, capabilities ...SessionToolCapabilitiesFactory) *SessionCommand {
 	audioService := audioiowire.NewService()
 	clockSource := clock.Real{}
+	var liveCapabilities SessionToolCapabilitiesFactory
+	if len(capabilities) > 0 {
+		liveCapabilities = capabilities[0]
+	}
 	liveService := runtimeSessionWire.NewLiveService(runtimeSessionWire.LiveDependencies{
 		InferencerFactory: func(context.Context, runtimeSession.LiveRequest) (messages.SessionInferencer, error) {
 			return inferencer, nil
@@ -42,10 +46,10 @@ func newTestLiveSessionCommand(askFlags *flags.AskFlags, globalFlags *flags.Glob
 	fileDeviceService := runtimedeviceswire.NewFileService(audioService)
 	return NewSessionCommandWithLive(
 		askFlags, globalFlags,
-		newTestSessionService(sessionservicewire.SessionDependencies{Clock: clockSource, SessionInferencer: inferencer, DeviceRegistry: registry}), nil,
+		newTestSessionService(sessionservicewire.SessionDependencies{Clock: clockSource, SessionInferencer: inferencer, ToolService: liveCapabilities, DeviceRegistry: registry}), nil,
 		liveService, runtimeReplayWire.NewService(), deviceService,
 		FileDeviceService{Service: fileDeviceService, Scheduler: clockSource},
-		nil, nil, nil, runtimeRecordingWire.NewService(clockSource), nil,
+		liveCapabilities, nil, nil, runtimeRecordingWire.NewService(clockSource), nil,
 	)
 }
 

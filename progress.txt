@@ -4361,3 +4361,31 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
 - Next: repair every upward measurement in source, lower only proven reductions
   and delete exact stale entries; rerun the architecture gate, then execute the
   complete C229 local preflight on one exact candidate before any PR or push.
+
+# C229 architecture repair continuation — 2026-09-20
+
+- Continued from `f2ce08aad6067fbd1f407b4e513ba62dc870e74d` without changing
+  ancestry or touching the C218 predecessor. Simplified room admission and
+  liveness-clock initialization in the existing room runner, consolidated
+  duplicate test fixture composition, and removed a duplicated observer nil
+  check from the duration loop. These changes retain the existing production
+  service boundaries; no test was added or moved.
+- Focused behavior checks pass: the agentruntime and CLI package run passed
+  1,628 tests before the final duration-loop cleanup; subsequent room tests
+  passed 65 tests, audio-interrupt ordering passed 4 cases, and duration/session
+  tests passed 22 cases. `git diff --check` is clean.
+- `rtk make architecture-size-check` has 41 remaining baseline-drift findings
+  across 208 packages, down from 69 at the start of this repair slice. The
+  exact measured duration-loop file reduction was ratcheted from 526 to 524;
+  no ceiling was widened. Current gate log:
+  `1789958888_make_architecture-size-check.log`. Largest unresolved production
+  areas are runtime planning, room planning/run/orchestration, replay cadence,
+  RTC planning, self-play, and straggler draining.
+- The exact ten PRD legacy files remain absent; the two stateless livehost
+  adapters remain 19 and 13 lines (32 combined). Admission and branch identity
+  remain as recorded above. Full C229 preflight, PR, push, and hosted CI handoff
+  have not occurred because the architecture gate is still failing.
+- Next: repair all 41 measured source increases without adding proof material,
+  lower only exact measured reductions, rerun the architecture gate, then run
+  `make prepush` and every C229-05 command on one exact clean candidate before
+  any PR or push.

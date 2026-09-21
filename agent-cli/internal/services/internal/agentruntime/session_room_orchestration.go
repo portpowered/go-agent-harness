@@ -45,12 +45,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		result := roomFailureResult(err, nil)
 		return result, err
 	}
-	if err = validateRoomRunAdmission(opts, validation, replayMode); err != nil {
-		result := roomFailureResult(err, nil)
-		return result, err
-	}
-	var roomClock platformclock.Source
-	opts, roomClock, err = normalizeRoomClockOptions(opts)
+	opts, roomClock, err := validateRoomRunAdmission(opts, validation, replayMode)
 	if err != nil {
 		result := roomFailureResult(err, nil)
 		return result, err
@@ -435,7 +430,7 @@ func prepareRoomReplayOptions(opts RoomRunOptions, validation room.ValidationOpt
 	return opts, room.ValidationOptions{}, true, nil
 }
 
-func validateRoomRunAdmission(opts RoomRunOptions, validation room.ValidationOptions, replayMode bool) error {
+func validateRoomRunAdmission(opts RoomRunOptions, validation room.ValidationOptions, replayMode bool) (RoomRunOptions, platformclock.Source, error) {
 	if !replayMode {
 		// A caller that already supplies its own session or transport seam
 		// (SessionFactory, SessionInferencers, or WebSocketDialerFactory) owns
@@ -448,10 +443,10 @@ func validateRoomRunAdmission(opts RoomRunOptions, validation room.ValidationOpt
 			validation.AllowMissingOpener = true
 		}
 		if err := opts.Manifest.Validate(validation); err != nil {
-			return err
+			return opts, nil, err
 		}
 	}
-	return nil
+	return normalizeRoomClockOptions(opts)
 }
 
 func normalizeRoomClockOptions(opts RoomRunOptions) (RoomRunOptions, platformclock.Source, error) {

@@ -1,19 +1,5 @@
 package cli
 
-import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
-
-import sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
-
-import sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
-
-import runtimeAudioIOWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
-
-import runtimeDevicesWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
-
-import runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
-
-import runtimeSessionWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
-
 import (
 	"bytes"
 	"context"
@@ -30,7 +16,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
-
+	servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
 	webmcpTools "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/tools"
@@ -121,22 +107,10 @@ func runSessionCommandAudioInterruptScenario(t *testing.T, scenario sessionAudio
 			Close: broker.Close,
 		}, nil
 	}
-	liveService := runtimeSessionWire.NewLiveService(runtimeSessionWire.LiveDependencies{
-		InferencerFactory: func(context.Context, runtimeSession.LiveRequest) (messages.SessionInferencer, error) {
-			return inferencer, nil
-		},
-		Scheduler: sessionclock.Real{},
-	})
-	fileDevices := runtimeDevicesWire.NewFileService(runtimeAudioIOWire.NewService())
-	commandOwner := NewSessionCommandWithLive(
-		flags.NewAskFlags(), globalFlags,
-		newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}, SessionInferencer: inferencer, ToolService: SessionToolCapabilitiesFactory(capabilityFactory)}), nil,
-		liveService, nil, nil,
-		FileDeviceService{Service: fileDevices, Scheduler: sessionclock.Real{}},
-		SessionToolCapabilitiesFactory(capabilityFactory), nil, nil,
-		nil, nil,
-	)
-	command := commandOwner.Generate()
+	command := newTestLiveSessionCommand(
+		flags.NewAskFlags(), globalFlags, inferencer, nil,
+		SessionToolCapabilitiesFactory(capabilityFactory),
+	).Generate()
 	var output bytes.Buffer
 	command.SetOut(&output)
 	command.SetArgs(sessionAudioInterruptArgs(scenario, scheduledPath, interruptPath))

@@ -60,8 +60,7 @@ func TestBuildRoomParticipantPlans_LoadedManifestWiresExactParticipantToolContra
 	requests := make(map[string]inference.SessionRequest, len(manifest.Participants))
 	configDir := t.TempDir()
 	opts := RoomRunOptions{
-		AudioService: newTestAudioIOService(),
-		Manifest:     manifest, ModelCatalog: testModelCatalog(),
+		Manifest: manifest, AudioService: newTestAudioIOService(), ModelCatalog: testModelCatalog(),
 		CredentialLookup: lookupCredential,
 		ConfigDir:        configDir,
 		BaseURL:          "ws://room.test/realtime",
