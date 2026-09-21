@@ -5107,3 +5107,38 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   audit, then run every C234 functional, integration, race, hermetic, Wire,
   embedding and `make prepush` command on one clean exact candidate before
   pushing and updating the PR. Decision remains CONTINUE.
+
+# C234 continuation checkpoint — current main and canonical ownership — 2026-09-20
+
+- Reverified from `FACTORY_ROOT` that the sole admitted project is `audio-runtime`
+  and this task remains admitted. `prd.json.branchName` matches the isolated
+  branch `codex/audio-runtime-c234-recover-recording-replay-retirement`.
+  Fetched `origin/main`; it remains
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`. Required ancestry checks pass for
+  C217 source `ca87a126b2cf8e7fc2aa510fcf2938e7c085836a`, recovery checkpoint
+  `03662c1b30bf2c0bead10fc14235c7e2df5224ce`, startup revision
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, planning main, and fetched main.
+  The recovery checkpoint records the seven legacy paths and two recording
+  service paths in one commit.
+- Canonical review queries in `~default` for C217, C228, C234, and C236 return
+  no review Work, so no concluded review findings are available to repair.
+  All thirteen exact C234 legacy/replacement paths are absent. The only named
+  adapters are `recording_adapter.go` (20 physical lines) and
+  `replay_adapter.go` (25), 45 combined. `session_browser_recording.go` has no
+  diff from fetched `origin/main`.
+- Current ownership is still live: C229 `work-task-16` has Worker Session
+  `991295d8-86fa-422e-9e47-568b80f76564` RUNNING; C264 `work-task-86` is
+  `ci-pending` with Worker Session `ad906b1d-b9f9-49aa-96a7-756662ed7889`
+  RUNNING. C268 recovery `work-task-96` is admitted in INITIAL with no running
+  Worker Session. Preserve their caller paths until those owners release them.
+  The known unfinished callers are C229's live-session/WebMCP seam, C264's
+  room replay integrity/scheduler seam, and C268's metrics/trace capture seams.
+- HEAD before this progress update was clean at
+  `3ced8d28e14f8d7d035372418ebd01b3ce2c6df1`. The exact candidate remains
+  incomplete: no complete local preflight, `make prepush`, candidate push, PR
+  update, or SCRIPT handoff ran. Next: preserve the three ownership boundaries,
+  integrate each caller checkpoint only after release, repair any reproducible
+  C234-local failure, repeat the production caller audit, then run every C234
+  functional, integration, race, hermetic, Wire, embedding, regression,
+  deletion, adapter, ancestry, diff, and `make prepush` gate on one exact clean
+  candidate before any push. Decision remains CONTINUE.
