@@ -5441,3 +5441,41 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   WebMCP tests, repeat the production caller/direct-reader census, then run the
   complete local C270 gate including `make prepush` on one clean candidate
   before any push. Decision remains CONTINUE.
+
+# C270 current-turn checkpoint — corrected WebMCP regression selector — 2026-09-21
+
+- Reverified admission as `admitted`; `prd.json.branchName` matches the isolated
+  branch. Fetched `origin/main` is `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`;
+  all six required startup/planning/C217/C234/current-main ancestry checks pass.
+  The candidate before this progress-only checkpoint is clean at
+  `ff1a2f08baa83a58d45bc1cc9d0e40bf026b1413`; no production code changed.
+- Corrected a selector typo in earlier retained WebMCP repro entries: those
+  commands used `WebMPCast` (omitting the `C` in `WebMCP`) and Go reported
+  `[no tests to run]`. The actual public tests are declared in
+  `agent-cli/internal/transport/cli/session_record_only_live_test.go`.
+  Re-ran both with
+  `rtk env CGO_ENABLED=0 go test -count=1 -tags=nomicrophone ./agent-cli/internal/transport/cli -run 'TestSession(Recorded|Unrecorded)WebMCPCastDeviceWAVStaysInteractive'`.
+  Both now execute and fail: each returns `legacy session audio runtime is
+  retired; use the service-owned live session` before provider connection and
+  times out at the five-second connection wait.
+- The route enters `agent-cli/internal/services/internal/agentruntime/session_instructions.go:72`
+  with a non-empty audio output path, where the retired-runtime guard fires.
+  Its caller cutover is in the active C229 audio/WebMCP ownership seam; C229's
+  PRD specifically leases livehost request/run and session command support.
+  Do not modify or integrate that caller until reviewed release.
+- Refreshed canonical Worker Sessions: C229 `work-task-16` is RUNNING
+  (`991295d8-86fa-422e-9e47-568b80f76564`); C268 `work-task-96` is RUNNING
+  (`32a4bee5-6dbf-47b3-b499-aacd0907db43`); C269 `work-task-101` is RUNNING
+  (`ebe42959-3746-4f3c-9962-747ae818f159`); C273 recovery `work-task-111` is
+  RUNNING (`d5bda407-169f-4f5a-b3df-68ec5d9b4ec5`) for the failed C264 seam.
+  No C270 review Work or concluded C270/C234 review findings exist. No peer
+  worktree was changed. All 13 planned legacy/replacement files remain absent;
+  the two stateless adapters remain 45 physical lines total; the browser
+  recording boundary remains unchanged from `origin/main`; `git diff --check`
+  passes.
+- No full C270 preflight, `make prepush`, push, PR update, or SCRIPT handoff ran.
+  Exact next action: refresh peer leases and reviewed-release state, integrate
+  only released C229/C268/C264/C269 seams, rerun the correctly selected public
+  WebMCP regressions, repeat the production caller/direct-reader census, then
+  run every planned local gate plus `make prepush` on one exact clean candidate
+  before any push. Decision remains CONTINUE.
