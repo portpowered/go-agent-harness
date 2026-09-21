@@ -192,34 +192,6 @@ func (f BrowserConversationValidatorFunc) ValidateBrowserConversation(result Bro
 	return f(result)
 }
 
-// Admit validates and defensively copies a scenario before any host resource is touched.
-func (s BrowserConversationScenario) Admit() (BrowserConversationScenario, error) {
-	scenario := s
-	if err := scenario.Validate(); err != nil {
-		return BrowserConversationScenario{}, err
-	}
-	return cloneBrowserConversationScenario(scenario), nil
-}
-
-// ScheduleAudioInputs translates finite PCM payloads to the shared scheduler contract.
-func (s BrowserConversationScenario) ScheduleAudioInputs(audioByStep map[string][]byte) ([]ScheduledAudioInput, error) {
-	if err := s.Validate(); err != nil {
-		return nil, err
-	}
-	if audioByStep == nil {
-		return nil, browserScenarioError("audio", "one PCM payload is required for every step")
-	}
-	inputs := make([]ScheduledAudioInput, len(s.Steps))
-	for index, step := range s.Steps {
-		pcm, ok := audioByStep[step.ID]
-		if !ok || len(pcm) == 0 {
-			return nil, browserScenarioError(fmt.Sprintf("steps[%d].audio", index), "one non-empty PCM payload is required")
-		}
-		inputs[index] = ScheduledAudioInput{AfterCompletedTurns: index, PCM: append([]byte(nil), pcm...), EndOfTurn: true}
-	}
-	return inputs, nil
-}
-
 // BrowserConversationScenarioForSession is the narrow extension seam consumed by a shared session runner.
 type BrowserConversationScenarioForSession interface {
 	BrowserConversationScenario() BrowserConversationScenario
@@ -230,16 +202,7 @@ type BrowserConversationScenarioValue struct {
 	Scenario BrowserConversationScenario
 }
 
-// ScenarioValue validates and wraps a scenario for the shared session seam.
-func (s BrowserConversationScenario) ScenarioValue() (BrowserConversationScenarioValue, error) {
-	validated, err := s.Admit()
-	if err != nil {
-		return BrowserConversationScenarioValue{}, err
-	}
-	return BrowserConversationScenarioValue{Scenario: validated}, nil
-}
-
 // BrowserConversationScenario returns a defensive scenario copy.
 func (v BrowserConversationScenarioValue) BrowserConversationScenario() BrowserConversationScenario {
-	return cloneBrowserConversationScenario(v.Scenario)
+	return v.Scenario.Clone()
 }

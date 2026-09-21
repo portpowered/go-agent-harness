@@ -28,7 +28,7 @@ func runBrowserConversation(ctx context.Context, request browserconversation.Run
 
 type evidenceBroker struct {
 	inner       browserconversation.Broker
-	run         *browserconversation.BrowserConversationRun
+	run         browserconversation.Run
 	tracker     *evidenceTracker
 	scenario    browserconversation.BrowserConversationScenario
 	oracle      browserconversation.OracleReader
@@ -38,7 +38,7 @@ type evidenceBroker struct {
 	catalog     map[string]browserconversation.BrowserToolDescriptor
 }
 
-func newEvidenceBroker(inner browserconversation.Broker, run *browserconversation.BrowserConversationRun, tracker *evidenceTracker, scenario browserconversation.BrowserConversationScenario, oracle browserconversation.OracleReader, fixture browserconversation.Fixture, interrupter *interruptionController) *evidenceBroker {
+func newEvidenceBroker(inner browserconversation.Broker, run browserconversation.Run, tracker *evidenceTracker, scenario browserconversation.BrowserConversationScenario, oracle browserconversation.OracleReader, fixture browserconversation.Fixture, interrupter *interruptionController) *evidenceBroker {
 	return &evidenceBroker{inner: inner, run: run, tracker: tracker, scenario: scenario, oracle: oracle, fixture: fixture, interrupter: interrupter, catalog: make(map[string]browserconversation.BrowserToolDescriptor)}
 }
 

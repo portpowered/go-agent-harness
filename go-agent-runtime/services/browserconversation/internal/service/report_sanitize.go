@@ -1,4 +1,4 @@
-package browserconversation
+package service
 
 import (
 	"encoding/json"
@@ -7,8 +7,8 @@ import (
 
 // Sanitized returns a defensive report-safe copy. Invalid input JSON remains
 // attributable while credential-shaped fields are redacted.
-func (result BrowserConversationResult) Sanitized() BrowserConversationResult {
-	validity := BrowserConversationTrace(result.BrokerCalls).InputJSONValidity()
+func sanitizeBrowserConversationResult(result BrowserConversationResult) BrowserConversationResult {
+	validity := computeBrowserConversationInputJSONValidity(result.BrokerCalls)
 	clone := cloneBrowserConversationResult(result)
 	clone.ScenarioID = sanitizeBrowserConversationReportText(clone.ScenarioID)
 	clone.ScenarioName = sanitizeBrowserConversationReportText(clone.ScenarioName)
@@ -199,14 +199,4 @@ func sanitizeBrowserConversationReportText(value string) string {
 		}
 	}
 	return builder.String()
-}
-
-func browserConversationContainsCredentialMarker(value string) bool {
-	lower := strings.ToLower(value)
-	for _, marker := range []string{"authorization:", "bearer ", "api_key", "api-key", "access_token", "refresh_token", "client_secret", "password", "-----begin ", "sk-"} {
-		if strings.Contains(lower, marker) {
-			return true
-		}
-	}
-	return false
 }

@@ -37,7 +37,7 @@ func (validator *commandValidator) ValidateBrowserConversation(result browsercon
 	if err := validateBrowserConversationValidatorBoundary(validator.Command, validator.Dir, validator.Env, validator.Timeout); err != nil {
 		return browserconversation.BrowserConversationValidatorVerdict{}, err
 	}
-	input, err := result.ValidatorInput()
+	input, err := newValidatorInput(result)
 	if err != nil {
 		return browserconversation.BrowserConversationValidatorVerdict{}, err
 	}
@@ -158,8 +158,8 @@ func validBrowserConversationValidatorStatus(status browserconversation.BrowserC
 }
 
 func validateBrowserConversationChecks(checks []browserconversation.BrowserConversationValidatorCheck) error {
-	wanted := make(map[string]struct{}, len((browserconversation.BrowserConversationValidatorRubric{}).Values()))
-	for _, name := range (browserconversation.BrowserConversationValidatorRubric{}).Values() {
+	wanted := make(map[string]struct{}, len(validatorRubricValues()))
+	for _, name := range validatorRubricValues() {
 		wanted[name] = struct{}{}
 	}
 	seen := make(map[string]struct{}, len(checks))

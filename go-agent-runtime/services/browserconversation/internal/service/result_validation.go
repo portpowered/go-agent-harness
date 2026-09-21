@@ -1,4 +1,4 @@
-package browserconversation
+package service
 
 import (
 	"encoding/json"
@@ -9,7 +9,7 @@ import (
 // Validate checks the joined evidence shape without rejecting invalid
 // InputJSON. Invalid invocation input is an observation that must remain
 // serializable for the validity measurement.
-func (r BrowserConversationResult) Validate() error {
+func validateResult(r BrowserConversationResult) error {
 	if err := validateBrowserConversationResultIdentity(r); err != nil {
 		return err
 	}

@@ -145,7 +145,8 @@ func TestPinnedChromeWebMCPConversationalCustomerLive(t *testing.T) {
 	}
 
 	scenario := newConversationalCustomerScenario(homeURL, settingsURL)
-	if err := scenario.Validate(); err != nil {
+	browserService := browserconversationWire.NewService()
+	if _, err := browserService.ValidateScenario(scenario); err != nil {
 		t.Fatalf("canonical scenario validation: %v", err)
 	}
 	initialOracle, err := readConversationalCustomerOracle(ctx, fixture.StateURL())
@@ -349,7 +350,6 @@ func TestPinnedChromeWebMCPConversationalCustomerLive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build joined live evidence: %v", err)
 	}
-	browserService := browserconversationWire.NewService()
 	mechanical, err := browserService.Evaluate(scenario, result, nil)
 	if err != nil {
 		t.Fatalf("evaluate joined live evidence: %v", err)
@@ -1295,7 +1295,7 @@ func buildConversationalCustomerResult(
 	result.Corrections = browserconversationWire.NewService().DeriveCorrections(scenario, result)
 	result.Recovery = browserconversationWire.NewService().DeriveRecovery(scenario, result)
 	result.InputJSONValidity = browserconversationWire.NewService().ComputeInputJSONValidity(result.BrokerCalls)
-	return result, result.Validate()
+	return result, browserconversationWire.NewService().ValidateResult(result)
 }
 
 func expectedStepTextForStep(scenario browserconversation.BrowserConversationScenario, stepID string) string {

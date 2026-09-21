@@ -14,7 +14,7 @@ import (
 
 type evidenceTracker struct {
 	mu                    sync.Mutex
-	run                   *browserconversation.BrowserConversationRun
+	run                   browserconversation.Run
 	scenario              browserconversation.BrowserConversationScenario
 	customerAt            int
 	currentStep           string
@@ -35,7 +35,7 @@ type evidenceTracker struct {
 	stepChanged           chan struct{}
 }
 
-func newEvidenceTracker(run *browserconversation.BrowserConversationRun, scenario browserconversation.BrowserConversationScenario) *evidenceTracker {
+func newEvidenceTracker(run browserconversation.Run, scenario browserconversation.BrowserConversationScenario) *evidenceTracker {
 	return &evidenceTracker{run: run, scenario: scenario, stepChanged: make(chan struct{})}
 }
 

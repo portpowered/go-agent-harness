@@ -12,7 +12,7 @@ import (
 // only for one run and owns no browser or provider resource.
 type interruptionController struct {
 	mu        sync.Mutex
-	run       *browserconversation.BrowserConversationRun
+	run       browserconversation.Run
 	tracker   *evidenceTracker
 	scenario  browserconversation.BrowserConversationScenario
 	audio     map[string]browserconversation.ScheduledAudioInput
@@ -21,7 +21,7 @@ type interruptionController struct {
 	closed    bool
 }
 
-func newInterruptionController(run *browserconversation.BrowserConversationRun, tracker *evidenceTracker, scenario browserconversation.BrowserConversationScenario, audio map[string]browserconversation.ScheduledAudioInput) *interruptionController {
+func newInterruptionController(run browserconversation.Run, tracker *evidenceTracker, scenario browserconversation.BrowserConversationScenario, audio map[string]browserconversation.ScheduledAudioInput) *interruptionController {
 	count := 0
 	for _, step := range scenario.Steps {
 		if step.Interrupt != nil || step.Cancel != nil {

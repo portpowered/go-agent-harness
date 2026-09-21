@@ -44,6 +44,11 @@ func cloneBrowserConversationScenario(scenario BrowserConversationScenario) Brow
 	return clone
 }
 
+// Clone returns a defensive copy of the public scenario value.
+func (s BrowserConversationScenario) Clone() BrowserConversationScenario {
+	return cloneBrowserConversationScenario(s)
+}
+
 type browserConversationScenarioJSON struct {
 	Version     string                              `json:"version"`
 	ID          string                              `json:"id"`
@@ -69,9 +74,6 @@ type browserConversationStepJSON struct {
 // MarshalJSON emits bounded durations as readable strings and exposes only
 // the scenario contract's fields.
 func (s BrowserConversationScenario) MarshalJSON() ([]byte, error) {
-	if err := s.Validate(); err != nil {
-		return nil, err
-	}
 	steps := make([]browserConversationStepJSON, len(s.Steps))
 	for index, step := range s.Steps {
 		steps[index] = browserConversationStepJSON{
@@ -126,9 +128,6 @@ func (s *BrowserConversationScenario) UnmarshalJSON(data []byte) error {
 	parsed := BrowserConversationScenario{
 		Version: wire.Version, ID: wire.ID, Name: wire.Name, Fixture: wire.Fixture,
 		Steps: steps, RunTimeout: runTimeout, PostSession: wire.PostSession,
-	}
-	if err := parsed.Validate(); err != nil {
-		return err
 	}
 	*s = cloneBrowserConversationScenario(parsed)
 	return nil

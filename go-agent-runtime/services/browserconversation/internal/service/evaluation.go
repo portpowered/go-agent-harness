@@ -12,11 +12,11 @@ import (
 // have joined their session-log, browser-event, oracle, and lifecycle
 // observations into the same result contract as the hermetic runner.
 func EvaluateBrowserConversation(scenario BrowserConversationScenario, result BrowserConversationResult, rootErr error) (BrowserConversationMechanicalEvaluation, error) {
-	normalizedScenario, err := scenario.Admit()
+	normalizedScenario, err := admitScenario(scenario)
 	if err != nil {
 		return BrowserConversationMechanicalEvaluation{}, err
 	}
-	if err := result.Validate(); err != nil {
+	if err := validateResult(result); err != nil {
 		return BrowserConversationMechanicalEvaluation{}, err
 	}
 	return evaluateBrowserConversation(normalizedScenario, result, rootErr), nil

@@ -57,7 +57,8 @@ type Service interface {
 	AdmitScenario(BrowserConversationScenario) (BrowserConversationScenario, error)
 	ScheduleAudioInputs(BrowserConversationScenario, map[string][]byte) ([]ScheduledAudioInput, error)
 	NewScenarioValue(BrowserConversationScenario) (BrowserConversationScenarioForSession, error)
-	NewRun(BrowserConversationScenario) (*BrowserConversationRun, error)
+	NewRun(BrowserConversationScenario) (Run, error)
+	ValidateResult(BrowserConversationResult) error
 	ComputeInputJSONValidity([]BrowserConversationBrokerCall) BrowserConversationInputJSONValidity
 	SanitizeResult(BrowserConversationResult) BrowserConversationResult
 	NewReport(BrowserConversationResult, BrowserConversationReportMetadata) (BrowserConversationReport, error)

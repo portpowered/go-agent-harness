@@ -18,6 +18,7 @@ type BrowserConversationScenarioError = browserconversation.BrowserConversationS
 type BrowserConversationFixture = browserconversation.BrowserConversationFixture
 type BrowserConversationPage = browserconversation.BrowserConversationPage
 type BrowserConversationStep = browserconversation.BrowserConversationStep
+type ScheduledAudioInput = browserconversation.ScheduledAudioInput
 type BrowserStateTransition = browserconversation.BrowserStateTransition
 type BrowserCustomerNavigation = browserconversation.BrowserCustomerNavigation
 type BrowserConversationCorrection = browserconversation.BrowserConversationCorrection
@@ -30,6 +31,7 @@ type BrowserConversationScenarioForSession = browserconversation.BrowserConversa
 type BrowserConversationValidator = browserconversation.BrowserConversationValidator
 type BrowserConversationValidatorFunc = browserconversation.BrowserConversationValidatorFunc
 type BrowserConversationTurn = browserconversation.BrowserConversationTurn
+type BrowserConversationInvocationObservation = browserconversation.BrowserConversationInvocationObservation
 type BrowserConversationBrokerCall = browserconversation.BrowserConversationBrokerCall
 type BrowserConversationInputJSONAttempt = browserconversation.BrowserConversationInputJSONAttempt
 type BrowserConversationInputJSONValidity = browserconversation.BrowserConversationInputJSONValidity
@@ -50,7 +52,6 @@ type BrowserConversationValidatorStatus = browserconversation.BrowserConversatio
 type BrowserConversationReportMetadata = browserconversation.BrowserConversationReportMetadata
 type BrowserConversationReport = browserconversation.BrowserConversationReport
 type BrowserConversationValidatorInput = browserconversation.BrowserConversationValidatorInput
-type BrowserConversationRun = browserconversation.BrowserConversationRun
 
 const (
 	BrowserConversationScenarioVersion         = browserconversation.BrowserConversationScenarioVersion
@@ -70,6 +71,7 @@ const (
 	BrowserConversationOraclePostSession       = browserconversation.BrowserConversationOraclePostSession
 	BrowserConversationLifecycleCanceled       = browserconversation.BrowserConversationLifecycleCanceled
 	BrowserConversationLifecycleCompleted      = browserconversation.BrowserConversationLifecycleCompleted
+	BrowserConversationLifecycleNotStarted     = browserconversation.BrowserConversationLifecycleNotStarted
 	BrowserConversationValidatorVersion        = browserconversation.BrowserConversationValidatorVersion
 	BrowserConversationValidatorPass           = browserconversation.BrowserConversationValidatorPass
 	BrowserConversationValidatorFail           = browserconversation.BrowserConversationValidatorFail
@@ -98,7 +100,7 @@ func (*Service) Run(ctx context.Context, request browserconversation.RunRequest)
 }
 
 func (*Service) ValidateScenario(scenario browserconversation.BrowserConversationScenario) (browserconversation.BrowserConversationScenario, error) {
-	return scenario.Admit()
+	return admitScenario(scenario)
 }
 
 func (*Service) NewRecorder(request browserconversation.RecordingRequest) (browserconversation.Recorder, error) {
@@ -106,47 +108,55 @@ func (*Service) NewRecorder(request browserconversation.RecordingRequest) (brows
 }
 
 func (*Service) AdmitScenario(scenario browserconversation.BrowserConversationScenario) (browserconversation.BrowserConversationScenario, error) {
-	return scenario.Admit()
+	return admitScenario(scenario)
 }
 
 func (*Service) ScheduleAudioInputs(scenario browserconversation.BrowserConversationScenario, audio map[string][]byte) ([]browserconversation.ScheduledAudioInput, error) {
-	return scenario.ScheduleAudioInputs(audio)
+	return scheduleAudioInputs(scenario, audio)
 }
 
 func (*Service) NewScenarioValue(scenario browserconversation.BrowserConversationScenario) (browserconversation.BrowserConversationScenarioForSession, error) {
-	return scenario.ScenarioValue()
+	validated, err := admitScenario(scenario)
+	if err != nil {
+		return browserconversation.BrowserConversationScenarioValue{}, err
+	}
+	return browserconversation.BrowserConversationScenarioValue{Scenario: validated}, nil
 }
 
-func (*Service) NewRun(scenario browserconversation.BrowserConversationScenario) (*browserconversation.BrowserConversationRun, error) {
-	return scenario.NewRun()
+func (*Service) NewRun(scenario browserconversation.BrowserConversationScenario) (browserconversation.Run, error) {
+	validated, err := admitScenario(scenario)
+	if err != nil {
+		return nil, err
+	}
+	return newBrowserConversationRun(validated), nil
 }
 
 func (*Service) ComputeInputJSONValidity(calls []browserconversation.BrowserConversationBrokerCall) browserconversation.BrowserConversationInputJSONValidity {
-	return browserconversation.BrowserConversationTrace(calls).InputJSONValidity()
+	return computeBrowserConversationInputJSONValidity(calls)
 }
 
 func (*Service) SanitizeResult(result browserconversation.BrowserConversationResult) browserconversation.BrowserConversationResult {
-	return result.Sanitized()
+	return sanitizeBrowserConversationResult(result)
 }
 
 func (*Service) NewReport(result browserconversation.BrowserConversationResult, metadata browserconversation.BrowserConversationReportMetadata) (browserconversation.BrowserConversationReport, error) {
-	return result.Report(metadata)
+	return newReport(result, metadata)
 }
 
 func (*Service) Report(result browserconversation.BrowserConversationResult, metadata browserconversation.BrowserConversationReportMetadata) (browserconversation.BrowserConversationReport, error) {
-	return result.Report(metadata)
+	return newReport(result, metadata)
 }
 
 func (*Service) NewValidatorInput(result browserconversation.BrowserConversationResult) (browserconversation.BrowserConversationValidatorInput, error) {
-	return result.ValidatorInput()
+	return newValidatorInput(result)
 }
 
 func (*Service) RenderReport(result browserconversation.BrowserConversationResult, metadata browserconversation.BrowserConversationReportMetadata) (string, error) {
-	return result.RenderReport(metadata)
+	return renderReport(result, metadata)
 }
 
 func (*Service) WriteReport(out io.Writer, result browserconversation.BrowserConversationResult, metadata browserconversation.BrowserConversationReportMetadata) error {
-	return result.WriteReport(out, metadata)
+	return writeReport(out, result, metadata)
 }
 
 func (*Service) DeriveCorrections(scenario browserconversation.BrowserConversationScenario, result browserconversation.BrowserConversationResult) []browserconversation.BrowserConversationCorrectionEvidence {
@@ -162,7 +172,11 @@ func (*Service) Evaluate(scenario browserconversation.BrowserConversationScenari
 }
 
 func (*Service) ValidateJSONObject(path string, raw json.RawMessage) error {
-	return (browserconversation.BrowserConversationScenario{}).ValidateJSONObject(path, raw)
+	return validateJSONObject(path, raw)
+}
+
+func (*Service) ValidateResult(result browserconversation.BrowserConversationResult) error {
+	return validateResult(result)
 }
 
 func (*Service) NewCommandValidator(config browserconversation.BrowserConversationValidatorCommand) (browserconversation.BrowserConversationValidator, error) {

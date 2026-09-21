@@ -1,11 +1,5 @@
 package browserconversation
 
-import (
-	"encoding/json"
-	"io"
-	"strings"
-)
-
 // BrowserConversationReportVersion identifies the stable, sanitized report
 // envelope suitable for review or validator input.
 const BrowserConversationReportVersion = "webmcp.conversational-report.v1"
@@ -44,62 +38,4 @@ type BrowserConversationValidatorInput struct {
 	Version  string                    `json:"version"`
 	Rubric   []string                  `json:"rubric"`
 	Evidence BrowserConversationResult `json:"evidence"`
-}
-
-// BrowserConversationValidatorRubric is a value object that returns a fresh
-// copy of the required validator checks.
-type BrowserConversationValidatorRubric struct{}
-
-func (BrowserConversationValidatorRubric) Values() []string {
-	return []string{
-		"claim_grounding", "terminal_statuses", "page_state_changes",
-		"stale_reference_recovery", "input_json_validity", "correction_grounding",
-		"interruption_and_cancel", "detach_survival",
-	}
-}
-
-// BrowserConversationTrace provides pure validity measurement over an ordered
-// broker trace without exposing a package-level function.
-type BrowserConversationTrace []BrowserConversationBrokerCall
-
-func (calls BrowserConversationTrace) InputJSONValidity() BrowserConversationInputJSONValidity {
-	return computeBrowserConversationInputJSONValidity(calls)
-}
-
-func computeBrowserConversationInputJSONValidity(calls []BrowserConversationBrokerCall) BrowserConversationInputJSONValidity {
-	measurement := BrowserConversationInputJSONValidity{}
-	for _, call := range calls {
-		if call.Operation != BrowserConversationInvoke {
-			continue
-		}
-		valid := browserConversationJSONStringObject(call.InputJSON)
-		measurement.Attempts = append(measurement.Attempts, BrowserConversationInputJSONAttempt{
-			Sequence: call.Sequence, StepID: call.StepID, InvocationID: cloneBrowserConversationOpaque(call.InvocationID),
-			ToolRef: cloneBrowserConversationOpaque(call.ToolRef), ToolName: call.ToolName,
-			State: cloneBrowserConversationOpaque(call.State), Terminal: call.Terminal,
-			InputJSON: call.InputJSON, ValidObject: valid,
-		})
-		measurement.TotalAttempts++
-		if valid {
-			measurement.ValidObjectStrings++
-		}
-	}
-	if measurement.TotalAttempts > 0 {
-		measurement.Percentage = float64(measurement.ValidObjectStrings) * 100 / float64(measurement.TotalAttempts)
-	}
-	return measurement
-}
-
-func browserConversationJSONStringObject(value string) bool {
-	decoder := json.NewDecoder(strings.NewReader(value))
-	decoder.UseNumber()
-	var decoded any
-	if err := decoder.Decode(&decoded); err != nil {
-		return false
-	}
-	if _, ok := decoded.(map[string]any); !ok {
-		return false
-	}
-	var extra any
-	return decoder.Decode(&extra) == io.EOF
 }

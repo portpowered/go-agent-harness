@@ -1,4 +1,4 @@
-package browserconversation
+package service
 
 import "encoding/json"
 

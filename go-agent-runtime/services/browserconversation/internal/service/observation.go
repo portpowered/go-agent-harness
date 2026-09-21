@@ -118,7 +118,7 @@ func (t *evidenceTracker) readyInvocationStepLocked() string {
 type browserConversationExecution struct {
 	scenario    browserconversation.BrowserConversationScenario
 	normalAudio []browserconversation.ScheduledAudioInput
-	run         *browserconversation.BrowserConversationRun
+	run         browserconversation.Run
 	runContext  context.Context
 	cancel      context.CancelFunc
 	tracker     *evidenceTracker
@@ -129,19 +129,16 @@ type browserConversationExecution struct {
 }
 
 func newBrowserConversationExecution(ctx context.Context, request browserconversation.RunRequest) (*browserConversationExecution, error) {
-	scenario, err := request.Scenario.Admit()
+	scenario, err := admitScenario(request.Scenario)
 	if err != nil {
 		return nil, err
 	}
-	audio, err := scenario.ScheduleAudioInputs(request.AudioByStep)
+	audio, err := scheduleAudioInputs(scenario, request.AudioByStep)
 	if err != nil {
 		return nil, err
 	}
 	normalAudio, heldAudio := partitionAudio(scenario, audio)
-	run, err := scenario.NewRun()
-	if err != nil {
-		return nil, err
-	}
+	run := newBrowserConversationRun(scenario)
 	runContext, cancel := context.WithTimeout(ctx, scenario.RunTimeout)
 	tracker := newEvidenceTracker(run, scenario)
 	return &browserConversationExecution{

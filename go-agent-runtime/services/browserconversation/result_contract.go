@@ -275,4 +275,4 @@ type BrowserConversationResult struct {
 // BrowserScenarioResult and BrowserScenarioRun are descriptive aliases for
 // callers using the shorter scenario vocabulary.
 type BrowserScenarioResult = BrowserConversationResult
-type BrowserScenarioRun = BrowserConversationRun
+type BrowserScenarioRun = Run

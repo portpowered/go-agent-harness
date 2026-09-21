@@ -1,4 +1,4 @@
-package browserconversation
+package service
 
 import (
 	"bytes"
@@ -8,13 +8,17 @@ import (
 	"strings"
 )
 
+func browserScenarioError(path, format string, args ...any) error {
+	return &BrowserConversationScenarioError{Path: path, Reason: fmt.Sprintf(format, args...)}
+}
+
 // Validate checks every admission-time contract without invoking a hook or
 // opening a resource. Errors name the exact invalid field or step.
-func (s BrowserConversationScenario) Validate() error {
+func validateScenario(s BrowserConversationScenario) error {
 	if err := validateScenarioHeader(s); err != nil {
 		return err
 	}
-	if err := s.Fixture.validate(); err != nil {
+	if err := validateScenarioFixture(s.Fixture); err != nil {
 		return err
 	}
 	if err := validateScenarioSteps(s); err != nil {
@@ -110,7 +114,7 @@ func validateScenarioStep(scenario BrowserConversationScenario, index int, path 
 	return transitions, nil
 }
 
-func (f BrowserConversationFixture) validate() error {
+func validateScenarioFixture(f BrowserConversationFixture) error {
 	if err := validateScenarioIdentifier("fixture.id", f.ID); err != nil {
 		return err
 	}
@@ -380,9 +384,4 @@ func validateJSONObject(path string, raw json.RawMessage) error {
 		return browserScenarioError(path, "must be a JSON object")
 	}
 	return nil
-}
-
-// ValidateJSONObject applies the strict object check used by scenario and observation admission.
-func (BrowserConversationScenario) ValidateJSONObject(path string, raw json.RawMessage) error {
-	return validateJSONObject(path, raw)
 }

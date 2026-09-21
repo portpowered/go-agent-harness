@@ -1,4 +1,4 @@
-package browserconversation
+package service
 
 import (
 	"encoding/json"
@@ -9,7 +9,7 @@ import (
 
 // RecordRecovery records the derived stale-reference recovery evidence once.
 // The underlying ordered broker calls remain the source of truth.
-func (r *BrowserConversationRun) RecordRecovery(evidence []BrowserConversationRecoveryEvidence) error {
+func (r *browserConversationRun) RecordRecovery(evidence []BrowserConversationRecoveryEvidence) error {
 	if r == nil {
 		return errors.New("browser conversation run is nil")
 	}
@@ -50,7 +50,7 @@ func validateBrowserConversationRecoveriesForObservation(recoveries []BrowserCon
 
 // RecordCorrections records derived correction evidence once. The underlying
 // turns, broker calls, and oracle snapshots remain the source of truth.
-func (r *BrowserConversationRun) RecordCorrections(evidence []BrowserConversationCorrectionEvidence) error {
+func (r *browserConversationRun) RecordCorrections(evidence []BrowserConversationCorrectionEvidence) error {
 	if r == nil {
 		return errors.New("browser conversation run is nil")
 	}
@@ -86,7 +86,7 @@ func validateBrowserConversationCorrectionsForObservation(corrections []BrowserC
 }
 
 // ObserveOracleSnapshot appends an independent page-state reading.
-func (r *BrowserConversationRun) ObserveOracleSnapshot(snapshot BrowserConversationOracleSnapshot) error {
+func (r *browserConversationRun) ObserveOracleSnapshot(snapshot BrowserConversationOracleSnapshot) error {
 	if r == nil {
 		return errors.New("browser conversation run is nil")
 	}
@@ -122,7 +122,7 @@ func (r *BrowserConversationRun) ObserveOracleSnapshot(snapshot BrowserConversat
 // event facts into one run-scoped record. Each fact is monotonic: later
 // observations may fill fields but can never turn a canceled invocation into
 // a completed one or replace its identity.
-func (r *BrowserConversationRun) RecordCancellation(evidence BrowserConversationCancellationEvidence) error {
+func (r *browserConversationRun) RecordCancellation(evidence BrowserConversationCancellationEvidence) error {
 	if r == nil {
 		return errors.New("browser conversation run is nil")
 	}
@@ -149,7 +149,7 @@ func (r *BrowserConversationRun) RecordCancellation(evidence BrowserConversation
 // invocation observation. It is intentionally separate from broker calls so
 // a late terminal event remains accounted for even when it is suppressed from
 // public turns.
-func (r *BrowserConversationRun) ObserveInvocationPublication(source string, invocationID, state any, terminal bool) error {
+func (r *browserConversationRun) ObserveInvocationPublication(source string, invocationID, state any, terminal bool) error {
 	if r == nil {
 		return errors.New("browser conversation run is nil")
 	}
@@ -165,7 +165,7 @@ func (r *BrowserConversationRun) ObserveInvocationPublication(source string, inv
 	return nil
 }
 
-func (r *BrowserConversationRun) appendInvocationObservationLocked(source string, evidence BrowserConversationCancellationEvidence) {
+func (r *browserConversationRun) appendInvocationObservationLocked(source string, evidence BrowserConversationCancellationEvidence) {
 	if browserConversationOpaqueString(evidence.InvocationID) == "" {
 		return
 	}
@@ -221,7 +221,7 @@ func firstBrowserConversationText(current, fallback string) string {
 }
 
 // RecordLifecycle records process/session ownership facts once.
-func (r *BrowserConversationRun) RecordLifecycle(evidence BrowserConversationLifecycleEvidence) error {
+func (r *browserConversationRun) RecordLifecycle(evidence BrowserConversationLifecycleEvidence) error {
 	if r == nil {
 		return errors.New("browser conversation run is nil")
 	}
@@ -242,7 +242,7 @@ func (r *BrowserConversationRun) RecordLifecycle(evidence BrowserConversationLif
 }
 
 // RecordMechanicalEvaluation records the authoritative fact checks once.
-func (r *BrowserConversationRun) RecordMechanicalEvaluation(evaluation BrowserConversationMechanicalEvaluation) error {
+func (r *browserConversationRun) RecordMechanicalEvaluation(evaluation BrowserConversationMechanicalEvaluation) error {
 	if r == nil {
 		return errors.New("browser conversation run is nil")
 	}
@@ -260,7 +260,7 @@ func (r *BrowserConversationRun) RecordMechanicalEvaluation(evaluation BrowserCo
 }
 
 // RecordValidator records structured validator output once.
-func (r *BrowserConversationRun) RecordValidator(verdict BrowserConversationValidatorVerdict) error {
+func (r *browserConversationRun) RecordValidator(verdict BrowserConversationValidatorVerdict) error {
 	if r == nil {
 		return errors.New("browser conversation run is nil")
 	}
