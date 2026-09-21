@@ -4805,3 +4805,52 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   callers again and run every named functional, integration, race, hermetic,
   Wire and `make prepush` gate on the exact final candidate. Decision remains
   CONTINUE.
+
+# C234 continuation checkpoint — remaining CLI replay caller — 2026-09-20
+
+- Admission remains `audio-runtime/audio-runtime-v1`; the checked-out branch
+  matches `prd.json.branchName`. Fetched `origin/main` is still
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`, an ancestor. No concluded C234
+  review findings exist in canonical `~default` Work.
+- Committed unleased caller work at `125922d4aa3a10596b6b5822604f984bcdefd40c`.
+  `agent-cli/internal/transport/cli/media.go` now calls
+  `replay.Service.AnalyzeProbe`; replay internals return the existing ordered,
+  payload-free event report through `CaptureProbeObservation`. The root router
+  injects the already composed replay service. This removes the last unleased
+  CLI call to `go-llm-gateway/pkg/testing.RunSessionReplayProbe` without adding
+  a fixture. The existing path-normalization test now observes the public
+  service request.
+- Repaired the existing corrupt-capture CLI test setup to use
+  `NewSessionCommandWithLive` and the public replay service. Its targeted test
+  passes with the expected checksum failure before provider connection or
+  derived artifact creation.
+- Passing after the media/replay change: `rtk go test -count=1 -timeout=180s
+  ./agent-cli/internal/transport/cli -run '^(TestMediaProbe.*|TestRouterPreRunNormalizesMediaReplayFixtureAndLeavesURLOperandAlone|TestSessionCLIRejectsCorruptCaptureBeforeProviderOrDerivedArtifacts)$'`
+  (17 tests); the matching `-race` command (17); `rtk go test -count=1
+  -timeout=240s ./go-agent-runtime/services/replay/...` (107 tests / 4
+  packages); the matching `-race` command (107); the C234 replay
+  `nomicrophone` selector; `make wire-check`; `make embed-check`; and
+  `git diff --check`. Recording service normal/race checks passed earlier in
+  this turn (91 tests / 4 packages each), before this replay-only API addition.
+- The C234 recording `nomicrophone` selector still fails reproducibly only at
+  `TestSessionRecordedWebMCPCastDeviceWAVStaysInteractive` in
+  `agent-cli/internal/transport/cli/session_record_only_live_test.go`; it
+  constructs the retired legacy dispatcher and never reaches the provider.
+  C229 owns the live-session caller cutover and has a RUNNING Worker Session
+  `991295d8-86fa-422e-9e47-568b80f76564`; no C229 files were changed.
+- The remaining direct runtime capture readers are C255's
+  `metrics_collector.go` and `livehost/trace.go` (Worker Session
+  `538cc9ed-93dd-42cb-bf4e-71c9bee87553` is RUNNING), plus
+  `session_room_replay_integrity.go`. The C263 recovery Work `work-task-81` is
+  FAILED, so reconcile that room-replay lease/continuation before editing its
+  caller or deletion paths. Replay package internals and
+  `go-llm-gateway/internal/sessionfixturevalidator` remain service/tooling
+  boundaries; `media.go` no longer reads captures.
+- The 13 exact C234 legacy/replacement paths remain absent, adapters remain
+  `recording_adapter.go` (20 lines) and `replay_adapter.go` (25 lines), and
+  C224 `session_browser_recording.go` remains unchanged from `origin/main`.
+  No full exact-candidate preflight, `make prepush`, push, PR update, or SCRIPT
+  handoff has run. Exact next action: preserve `125922d`, let C229/C255 finish
+  their leased caller seams, reconcile the failed C263 room-replay ownership,
+  then rerun the production capture-reader audit and complete every caller
+  cutover before the exact-head full local gate. Decision remains CONTINUE.
