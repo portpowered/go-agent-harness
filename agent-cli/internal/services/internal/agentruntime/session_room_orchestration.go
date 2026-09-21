@@ -63,9 +63,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 			// room runtime failure. The status projection is applied to the
 			// returned result after all close/mix/manifest callbacks have had a
 			// chance to latch their first error.
-			finalized, finalizeErr := evidence.Finalize(roomevidence.Finalization{Room: result, Err: runErr, EndedAt: roomClock.Now().UTC()})
-			result = finalized.Room
-			observeRoomEvidenceResult(finalizeErr)
+			result = finalizeRoomEvidence(evidence, result, runErr, roomClock.Now().UTC())
 		}
 		return result, runErr
 	}

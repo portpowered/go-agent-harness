@@ -306,3 +306,9 @@ func observeRoomEvidenceResult(err error) {
 		return
 	}
 }
+
+func finalizeRoomEvidence(evidence roomevidence.Recorder, result RoomResult, runErr error, endedAt time.Time) RoomResult {
+	finalized, finalizeErr := evidence.Finalize(roomevidence.Finalization{Room: result, Err: runErr, EndedAt: endedAt})
+	observeRoomEvidenceResult(finalizeErr)
+	return finalized.Room
+}
