@@ -4635,3 +4635,50 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   over every production caller, delete the obsolete projection and exact
   1,410-line cluster, verify the stateless adapter cap, then run `make prepush`
   and every planned exact-head C271 gate before pushing for SCRIPT CI.
+
+### C271 current release, ancestry, and cross-caller recheck — 2026-09-21
+
+- `project-control.py verify-work --type task --name
+  audio-runtime-c271-recover-selfplay-retirement --root "$FACTORY_ROOT"`
+  returned `admitted` for `audio-runtime`. The isolated branch matches
+  `prd.json.branchName`; the worktree was clean at source HEAD
+  `6079c6cbd...`. Fetched `origin/main=b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`;
+  both current main and startup integration
+  `8bdafc7f947a3a2c9856220abdc539437035bd21` are ancestors.
+- C249 remains clean at `86a1eed17b099d510b39ce3d3b4ee7d8f7998881`, and C220
+  `1bf045dd8` is reachable from that source. A fresh check shows the exact C249
+  commit is not yet an ancestor of C271. Do not merge it early: its diff touches
+  the C248 session/app callers and C269 room-evidence helpers. Reconcile it
+  additively only after those planned shared-seam releases; earlier progress
+  statements that C249 ancestry was already present were incorrect.
+- The exact releases remain unavailable. C248 has no PR and has uncommitted
+  edits in `session_diagnostics_lifecycle_test_helpers_test.go`,
+  `servicetest/runtime.go`, `transport/cli/session_observability.go`,
+  `transport/turn_adapter.go`, and sessionterminal service files. C269 is clean
+  at local `d792accaf8244898f559962ae371e06263095a9b`, has no PR, and is not
+  merged to current main. C271 has no PR. No peer worktree was changed.
+- Read the full canonical `work-review-78` C259 feedback. It identifies bounded
+  manifest/timeline admission, a missing recorder-failure degradation test, a
+  missing public room-run/load/analyze round-trip test, and missing exact-head
+  preflight evidence. It contains no self-play-specific repair.
+- Refreshed production caller census: legacy contract/composition remain in
+  `services/wire/wire.go` and generated root Wire; CLI callers remain in
+  `transport/cli/session.go`, `session_observability.go`, and
+  `session_self_play.go`. `session_models.go` also validates legacy self-play
+  options. Newly confirmed room evidence capture/integrity files call writer
+  helpers still defined by `session_self_play_evidence.go`, so their release
+  must be reconciled before deleting that file. These paths overlap C248/C269.
+- The owned legacy files remain `selfplay_service.go` 53 lines,
+  `session_self_play.go` 641, and `session_self_play_evidence.go` 716 (3 / 1,410).
+  The 68-line obsolete projection remains. The one CLI command file is 85 lines
+  but still imports that projection and consumes defaults, personas, and the
+  opening seed; it is not yet a compliant stateless adapter. No caller cutover
+  or deletion occurred, and no tests or prepush were rerun because production
+  source was unchanged in this checkpoint.
+- Exact next action: return `CONTINUE`, preserve the clean C249 source, and keep
+  C248/C269 shared paths untouched until their reviewed/guarded releases exist.
+  Then fetch current main, merge/reconcile C249 plus both released behaviors,
+  resolve the room-evidence writer dependencies through the owning service,
+  cut over every production caller, delete the projection and exact three-file
+  legacy cluster, verify the single stateless adapter cap, and run the complete
+  exact-head local preflight before any push or PR handoff.
