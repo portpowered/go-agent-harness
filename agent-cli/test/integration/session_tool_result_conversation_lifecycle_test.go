@@ -507,7 +507,7 @@ func TestSessionToolResultConversationCorruptAudioDeltaIsRejected(t *testing.T) 
 		replaceConversationAudioDelta(t, capture, func([]byte) []byte { return []byte{0} })
 	})
 	executor := &conversationResultExecutor{result: toolResultPositive}
-	stdout, _, runErr := runToolResultConversation(t, wavPath, wirePath, executor)
+	stdout, outputPath, runErr := runToolResultConversation(t, wavPath, wirePath, executor)
 	if runErr == nil {
 		t.Fatalf("corrupt-audio control completed cleanly; odd PCM16 delta was accepted\nstdout=%s", stdout)
 	}
@@ -522,7 +522,9 @@ func TestSessionToolResultConversationCorruptAudioDeltaIsRejected(t *testing.T) 
 	if len(outputs) != 1 || outputs[0].CallID != toolConversationCallID || outputs[0].Output != toolResultPositive {
 		t.Fatalf("corrupt-audio result exchange = %v, want one accepted exact result", outputs)
 	}
-	if err := transcriptReflectionError(stdout); err != nil {
-		t.Fatalf("corrupt-audio control lost the otherwise valid grounded transcript: %v", err)
+	artifactErr := validateConversationAudioArtifact(outputPath, len(reply))
+	var validationErr *conversationAudioValidationError
+	if artifactErr == nil || !errors.As(artifactErr, &validationErr) || validationErr.kind != conversationAudioMissing {
+		t.Fatalf("corrupt-audio control published response audio: %v\nstdout=%s", artifactErr, stdout)
 	}
 }
