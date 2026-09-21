@@ -5,12 +5,11 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 )
 
-func sendEventDrivenAudioInput(ctx context.Context, loop *agentloop.AgentLoop, opts sessionLoopOptions, input ScheduledAudioInput) error {
+func sendEventDrivenAudioInput(ctx context.Context, loop sessionAudioLoop, opts sessionLoopOptions, input ScheduledAudioInput) error {
 	if len(input.PCM) == 0 {
 		return errors.New("event-driven audio input is empty")
 	}

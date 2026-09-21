@@ -5191,3 +5191,22 @@ handoff sequence. No gate completion is claimed.
   then run `make prepush` and every C251 local functional, integration, race,
   hermetic, embed, Wire, absence, adapter, ancestry, and diff gate on that SHA
   before pushing or opening the PR.
+
+## C251 local gate repair checkpoint — 2026-09-21
+
+- First candidate `5f9f3c3eca485ad1a2ff61aad84bf8fca89652aa` stopped at the
+  prepush `fmt` phase because `agent-cli/internal/transport/cli/session_observability.go`
+  had one import-order drift. `make fmt-fix` changed only that line; the repair
+  was committed as `e0101d28f1574a928dab6b5fb1c376e39fac5797`.
+- The C251 production source scan also required that no legacy
+  `runAgentLoopSessionWithDuration` or `durationAgentLoop` symbol remain. Those
+  production entry points/conversions have been removed; the exact planned
+  duplicate/state scan returns no matches. The focused service and caller
+  command passes 421 tests in 16 packages.
+- This source-scan repair is not yet committed. No prepush or complete C251
+  local gate has passed on its eventual candidate SHA, and nothing has been
+  pushed or submitted to SCRIPT.
+- Exact next action: commit the production caller cutover and narrow audio
+  port update, then run `make prepush` followed by all C251 functional,
+  integration, race, hermetic, embed, Wire, absence, adapter, ancestry, and diff
+  checks on that exact SHA. Push/open the PR only if all local gates pass.

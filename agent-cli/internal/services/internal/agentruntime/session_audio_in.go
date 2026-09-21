@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
@@ -755,7 +754,12 @@ func readAudioReaderWithCancellation(ctx context.Context, reader io.Reader, clos
 	}
 }
 
-func streamSessionAudioInput(ctx context.Context, loop *agentloop.AgentLoop, source *sessionAudioSource) (runErr error) {
+type sessionAudioLoop interface {
+	SendAudioInput(context.Context, []byte) error
+	SendSessionEvent(context.Context, messages.StreamMessage) error
+}
+
+func streamSessionAudioInput(ctx context.Context, loop sessionAudioLoop, source *sessionAudioSource) (runErr error) {
 	defer func() {
 		if closeErr := source.Close(); closeErr != nil {
 			runErr = errors.Join(runErr, closeErr)
@@ -871,7 +875,7 @@ const sessionAudioTerminationSettle = time.Duration(audio.FrameSize) * time.Seco
 // source already paced at or below the harness rate (make-up delay is zero
 // or negative there), so this leaves existing tightly-scheduled duplex
 // timing at the harness rate untouched.
-func finishSessionAudioTurn(ctx context.Context, loop *agentloop.AgentLoop, source *sessionAudioSource, framer *audio.PCM16Framer, frameDuration time.Duration) error {
+func finishSessionAudioTurn(ctx context.Context, loop sessionAudioLoop, source *sessionAudioSource, framer *audio.PCM16Framer, frameDuration time.Duration) error {
 	flush, err := framer.Flush()
 	if err != nil {
 		return &SessionAudioInputError{Kind: SessionAudioInputFormat, Path: source.path, Err: err}
@@ -889,7 +893,7 @@ func finishSessionAudioTurn(ctx context.Context, loop *agentloop.AgentLoop, sour
 	return sendSessionAudioEndOfTurn(ctx, loop, source)
 }
 
-func sendSessionAudioFrames(ctx context.Context, loop *agentloop.AgentLoop, source *sessionAudioSource, frames [][]byte) error {
+func sendSessionAudioFrames(ctx context.Context, loop sessionAudioLoop, source *sessionAudioSource, frames [][]byte) error {
 	for _, pcm := range frames {
 		send := source.send
 		if send == nil {
@@ -907,7 +911,7 @@ func sendSessionAudioFrames(ctx context.Context, loop *agentloop.AgentLoop, sour
 // is exhausted: MESSAGE.END flows to the realtime provider as
 // input_audio_buffer.commit followed by response.create, so the server stops
 // waiting for more audio and produces a response.
-func sendSessionAudioEndOfTurn(ctx context.Context, loop *agentloop.AgentLoop, source *sessionAudioSource) error {
+func sendSessionAudioEndOfTurn(ctx context.Context, loop sessionAudioLoop, source *sessionAudioSource) error {
 	send := source.endOfTurn
 	if send == nil {
 		send = func(ctx context.Context) error {

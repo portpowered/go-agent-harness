@@ -278,7 +278,7 @@ func duplexSessionLoopOptions(observedInferencer messages.SessionInferencer, opt
 }
 
 func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions) (runErr error) {
-	return runAgentLoopSessionWithDurationClock(ctx, out, sessionInferencer, opts, opts.MaxDuration, opts.livenessClock)
+	return runSessionDurationInvocation(ctx, out, sessionInferencer, opts, opts.MaxDuration, opts.livenessClock, nil)
 }
 
 type realSessionDurationClock struct{}
@@ -287,11 +287,7 @@ func (realSessionDurationClock) NewTimer(interval time.Duration) sessionduration
 	return platformclock.Real{}.NewTimer(interval)
 }
 
-func runAgentLoopSessionWithDurationClock(ctx context.Context, out io.Writer, inferencer messages.SessionInferencer, opts sessionLoopOptions, maxDuration time.Duration, clock sessionduration.TimerScheduler) error {
-	return runAgentLoopSessionWithDurationAdmissionClock(ctx, out, inferencer, opts, maxDuration, clock, nil)
-}
-
-func runAgentLoopSessionWithDurationAdmissionClock(ctx context.Context, out io.Writer, inferencer messages.SessionInferencer, opts sessionLoopOptions, maxDuration time.Duration, clock sessionduration.TimerScheduler, admitted sessionduration.AdmissionInferencer) (runErr error) {
+func runSessionDurationInvocation(ctx context.Context, out io.Writer, inferencer messages.SessionInferencer, opts sessionLoopOptions, maxDuration time.Duration, clock sessionduration.TimerScheduler, admitted sessionduration.AdmissionInferencer) (runErr error) {
 	reporter := opts.terminalReporter
 	ownsReporter := reporter == nil
 	if reporter == nil {
@@ -300,7 +296,7 @@ func runAgentLoopSessionWithDurationAdmissionClock(ctx context.Context, out io.W
 	}
 	reporter.markRunStarted()
 	renderer := terminalwire.NewService().NewTranscriptRenderer(out, reporter.observeStreamMessage)
-	_, runErr = runAgentLoopSessionWithDurationService(ctx, renderer, inferencer, opts, maxDuration, clock, admitted)
+	_, runErr = executeDurationRequest(ctx, renderer, inferencer, opts, maxDuration, clock, admitted)
 	if ownsReporter {
 		if err := renderer.Finish(); err != nil {
 			runErr = errors.Join(runErr, err)
@@ -308,10 +304,6 @@ func runAgentLoopSessionWithDurationAdmissionClock(ctx context.Context, out io.W
 		runErr = errors.Join(runErr, reporter.publish(out, runErr))
 	}
 	return runErr
-}
-
-func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, out io.Writer, inferencer messages.SessionInferencer, opts sessionLoopOptions, maxDuration time.Duration, clock sessionduration.TimerScheduler, admitted sessionduration.AdmissionInferencer) (sessionduration.Result, error) {
-	return runAgentLoopSessionWithDurationService(ctx, out, inferencer, opts, maxDuration, clock, admitted)
 }
 
 func writeDurationSessionReplayMessage(out io.Writer, msg messages.StreamMessage, artifacts sessionduration.ArtifactLifecycle) error {
@@ -323,7 +315,7 @@ func writeDurationSessionReplayMessage(out io.Writer, msg messages.StreamMessage
 	return terminalwire.NewService().WriteTranscriptMessage(out, msg)
 }
 
-func runAgentLoopSessionWithDurationService(ctx context.Context, out io.Writer, inferencer messages.SessionInferencer, opts sessionLoopOptions, maxDuration time.Duration, clock sessionduration.TimerScheduler, admitted sessionduration.AdmissionInferencer) (sessionduration.Result, error) {
+func executeDurationRequest(ctx context.Context, out io.Writer, inferencer messages.SessionInferencer, opts sessionLoopOptions, maxDuration time.Duration, clock sessionduration.TimerScheduler, admitted sessionduration.AdmissionInferencer) (sessionduration.Result, error) {
 	durationService := durationwire.NewService()
 	artifacts := durationService.ArtifactsFromContext(ctx)
 	browser := opts.turnBrowser
@@ -422,9 +414,9 @@ func runAgentLoopSessionWithDurationService(ctx context.Context, out io.Writer, 
 			if opts.loopReady == nil {
 				return nil
 			}
-			concrete, err := durationAgentLoop(loop)
-			if err != nil {
-				return err
+			concrete, ok := loop.(*agentloop.AgentLoop)
+			if !ok || concrete == nil {
+				return errors.New("session loop adapter is invalid")
 			}
 			select {
 			case opts.loopReady <- concrete:
@@ -444,22 +436,22 @@ func runAgentLoopSessionWithDurationService(ctx context.Context, out io.Writer, 
 		request.AudioInput = sessionduration.AudioInputPort{
 			BindContext: opts.AudioIn.bindContext,
 			Run: func(audioCtx context.Context, loop sessionduration.Loop) error {
-				concrete, err := durationAgentLoop(loop)
-				if err != nil {
-					return err
+				audioLoop, ok := loop.(sessionAudioLoop)
+				if !ok || audioLoop == nil {
+					return errors.New("session loop does not support audio input")
 				}
-				return streamSessionAudioInput(audioCtx, concrete, opts.AudioIn)
+				return streamSessionAudioInput(audioCtx, audioLoop, opts.AudioIn)
 			},
 		}
 	}
 	request.AudioInterruptions = sessionduration.AudioInterruptionPort{
 		Source: opts.AudioInterruptions,
 		Dispatch: func(dispatchCtx context.Context, loop sessionduration.Loop, input ScheduledAudioInput) error {
-			concrete, err := durationAgentLoop(loop)
-			if err != nil {
-				return err
+			audioLoop, ok := loop.(sessionAudioLoop)
+			if !ok || audioLoop == nil {
+				return errors.New("session loop does not support audio interruption")
 			}
-			return sendEventDrivenAudioInput(dispatchCtx, concrete, opts, input)
+			return sendEventDrivenAudioInput(dispatchCtx, audioLoop, opts, input)
 		},
 	}
 	runner := sessionwire.NewDurationRunner(sessionwire.DurationDependencies{
@@ -467,14 +459,6 @@ func runAgentLoopSessionWithDurationService(ctx context.Context, out io.Writer, 
 		LoopFactory:     durationwire.NewDuplexLoopFactory(),
 	})
 	return runner.RunDuration(request)
-}
-
-func durationAgentLoop(loop sessionduration.Loop) (*agentloop.AgentLoop, error) {
-	concrete, ok := loop.(*agentloop.AgentLoop)
-	if !ok || concrete == nil {
-		return nil, errors.New("session loop adapter is invalid")
-	}
-	return concrete, nil
 }
 
 func publishSessionUserCancellation(out io.Writer, opts sessionLoopOptions, write func(io.Writer, messages.StreamMessage) error) error {

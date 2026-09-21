@@ -349,7 +349,7 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 		return nil
 	}
 	reporter.markRunStarted()
-	if err := runAgentLoopSessionWithDurationAdmissionClock(ctx, loopOut, plan.inferencer, plan.loop, maxDuration, clock, admitted); err != nil {
+	if err := runSessionDurationInvocation(ctx, loopOut, plan.inferencer, plan.loop, maxDuration, clock, admitted); err != nil {
 		return wrapSessionRuntimeError(plan, wrapSessionPhaseError("run session loop", err))
 	}
 	return nil
