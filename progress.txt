@@ -6107,3 +6107,37 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   caller seams, finish direct-reader/caller cutover and actual adapter need,
   and run the complete exact-head C276-02 through C276-06 command set plus
   `make prepush` before any push. Decision remains CONTINUE.
+
+# C276 current-turn checkpoint - bounded caller verification and ownership blocker - 2026-09-21
+
+- Reverified admission with `project-control.py verify-work --type task --name
+  audio-runtime-c276-recover-c270-recording-replay-finalization`; the admitted
+  project remains `audio-runtime`, `prd.json.branchName` matches the isolated
+  branch, and the worktree is clean at `675f368234229fda333941c0507c79cc136d96a2`.
+  Fetched `origin/main=b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`; startup,
+  current-main, C270, C234, and both C217 ancestry pins remain ancestors. The
+  read-only C270 recovery worktree remains clean at
+  `c590fe43a0b8ecbde9ab6de3ee00f898f2a12a02`.
+- Bounded public verification passed: `CGO_ENABLED=0 go test -count=1
+  -tags=nomicrophone ./agent-cli/internal/transport/cli -run
+  'TestSession(Recorded|Unrecorded)WebMCPCastDeviceWAVStaysInteractive'`
+  passed, and the recording/replay/session focused command passed 167 tests
+  across 25 packages.
+- The accumulated `go test -count=1 ./agent-cli/internal/transport/cli -run
+  '^TestProbe'` remains 60 passed / 2 failed. The causal failure is the known
+  C268 seam: `agent-cli/internal/services/internal/agentruntime/metrics_collector.go`
+  invokes `RunSession` without the replay service, yielding `replay service is
+  not configured`; the dependent overcount test then sees no expectation list
+  and panics. C268 owns that legacy target and has no reviewed release or
+  planner handoff, so no peer-owned production file was edited.
+- All seven C276 integrated-main deletion targets and six checkpoint-only
+  replacements remain absent; `session_browser_recording.go` remains unchanged
+  from `origin/main`. The adapter inventory remains 0 files / 0 physical lines;
+  no adapter is restored without an actual released caller and a stateless
+  service-contract translation.
+- No full C276-05/06 preflight, `make prepush`, push, PR update, SCRIPT gate,
+  review, or merge is claimed. Exact next action: consume exact reviewed/released
+  C229/C268/C269/C274 seams or an explicit planner handoff, repair the metrics
+  replay-service injection and remaining direct readers additively, then run
+  every C276-02 through C276-06 command plus `make prepush` on one clean exact
+  candidate before any push. Decision remains CONTINUE.
