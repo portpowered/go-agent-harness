@@ -5706,3 +5706,56 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   and rerun the WebMCP regression, complete the caller/direct-reader census,
   and run every C270-02 through C270-06 command plus `make prepush` on one
   exact candidate before push. Decision remains CONTINUE.
+
+# C276 C270 recovery and service-boundary checkpoint — 2026-09-21
+
+- Reverified the admitted `audio-runtime` task with
+  `project-control.py verify-work --type task`; admission is confirmed and
+  `prd.json.branchName` exactly matches this isolated C276 branch. Read the
+  required Factory policy/handoff, immutable manifest/source plan, C276 PRD,
+  progress history, and canonical C270/C234 review status. No C270/C234 review
+  Work or PR review findings exist.
+- Fetched `origin/main=b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`. The clean C270
+  predecessor remains at `c590fe43a0b8ecbde9ab6de3ee00f898f2a12a02`; this
+  isolated C276 branch was fast-forwarded from main to that exact checkpoint.
+  Startup, planning-main, C270, C234, and C217 ancestry pins all pass. The
+  predecessor worktree was not modified.
+- Independently measured `origin/main` at 106 production files / 39,329
+  physical lines. The complete seven-file, 3,335-line C276 target is absent:
+  `session_capture_claim.go` (317), `session_conversation_log.go` (531),
+  `session_recording.go` (1,217), `session_recording_directory_claim.go`
+  (261), `session_recording_finalize.go` (245), `session_replay.go` (670),
+  and `session_replay_capability.go` (94). All six checkpoint-only
+  replacements remain absent. `recording_adapter.go` and `replay_adapter.go`
+  are the only named recording/replay adapters at 20 + 25 = 45 physical
+  lines; `session_browser_recording.go` is byte-identical to `origin/main`.
+- Service tests pass on the recovered code: recording normal/race each pass
+  91 tests in 4 packages; replay normal/race each pass 107 tests in 4
+  packages. `make wire-check` passes and leaves generated Wire files unchanged;
+  `git diff --check` passes.
+- The corrected public WebMCP selector reproduces both failures on clean
+  `c590fe43`: `TestSessionRecordedWebMCPCastDeviceWAVStaysInteractive` and
+  `TestSessionUnrecordedWebMCPCastDeviceWAVStaysInteractive` return
+  `legacy session audio runtime is retired; use the service-owned live
+  session` before the fake provider opens. The trace reaches
+  `agent-cli/internal/services/internal/agentruntime/service.go:68`: these
+  tests build the legacy `NewSessionCommand` without a `LiveService`, while
+  production Wire uses `NewSessionCommandWithLive`. A temporary fixture-only
+  switch to the live service exposed the next C229-owned compatibility gap
+  (`default` virtual output is rejected and the fake RTC media closes); that
+  partial fixture edit was reverted. No production or predecessor file was
+  changed.
+- Canonical release status remains unresolved: C229 has active Worker Session
+  `7af6bde2-107b-4078-a963-58c7fe485033` on candidate
+  `06121a78176475ffd3fc53e29c22813f7ee8c0de`; C269 has active session
+  `e118882e-1a38-42ce-b0fc-a817bf094eb8` and dirty peer-owned paths; C274 has
+  active session `ee7d7a59-d5f3-4f42-bc4d-a1de79954d37`. C268 remains at clean
+  `9f4fc64721809e3be9aacca52a3b0f03d32f8f3b` without a PR/review release.
+  No exact reviewed C229/C268/C269/C274 release is available; no peer
+  worktree was modified and no PR or hosted-CI handoff was attempted.
+- Exact next action: retain C276 ownership; after the named peer owners publish
+  reviewed releases or the planner records an explicit handoff, integrate
+  those caller seams additively on this branch, repair the default-device/live
+  route and both WebMCP cases, complete the caller/direct-reader census, then
+  run every C276-02 through C276-06 command including `make prepush` on the
+  same clean candidate before push. Decision remains CONTINUE.
