@@ -4934,3 +4934,55 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   line cluster, verify the sole stateless adapter is within 300 lines, then
   run `make prepush` and every planned C271 local gate on the exact clean
   candidate before pushing or submitting to SCRIPT CI.
+
+### C271 current-board and focused-gate checkpoint — 2026-09-21
+
+- Re-ran `project-control.py verify-work --type task --name
+  audio-runtime-c271-recover-selfplay-retirement --root "$FACTORY_ROOT"`;
+  admission is `admitted` for `audio-runtime/audio-runtime-v1`. Canonical
+  `work-task-106` is still `init`/`PROCESSING`; a filtered canonical work-list
+  query returns no C271 review row. The isolated branch exactly matches
+  `prd.json.branchName`. The progress-only starting HEAD was
+  `51b614411b4c8691d88962ed9c9ff312f9da5bfa`.
+- Fetched `origin/main=b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`; it and startup
+  integration `8bdafc7f947a3a2c9856220abdc539437035bd21` are ancestors of the
+  candidate. Preserved C249 remains clean at
+  `86a1eed17b099d510b39ce3d3b4ee7d8f7998881`, with C220
+  `1bf045dd8` reachable. No reset, rewrite, merge, or peer-worktree mutation
+  occurred.
+- Canonical C248 `work-task-45` and C269 `work-task-101` each have an active
+  RUNNING Worker Session and uncommitted shared-path edits. C248's worktree is
+  at `fd999b18c3b6f277c1da4bc0511944a56037cae7`; its latest feedback still
+  reports 108 architecture findings. C269 is at
+  `d792accaf8244898f559962ae371e06263095a9b`; its active room/evidence changes
+  include the shared room-evidence callers and its latest feedback reports 105
+  architecture findings. Neither reviewed/guarded release is available. Read
+  the full concluded C259 `work-review-78`: its four findings are bounded
+  manifest/timeline admission, public recorder-failure degradation coverage,
+  public room-run/load/analyze replay coverage, and exact-head preflight. None
+  identifies a self-play-specific repair.
+- Re-ran the disjoint self-play checks on unchanged production source:
+  `rtk go test -count=1 -timeout=180s ./go-agent-runtime/services/selfplay/...`
+  passed 26 tests / 3 packages;
+  `rtk go test -race -count=1 -timeout=300s
+  ./go-agent-runtime/services/selfplay/...` passed 26 / 3; and
+  `rtk go test -count=10 -timeout=300s ./go-agent-runtime/services/selfplay/...
+  -run '(Cancel|Duration|Shutdown|Stop|Failure)'` passed 180 / 3.
+  `CGO_ENABLED=0` nomicrophone selection for services/CLI passed, and
+  `rtk make wire-check` exited zero with no tracked generated changes. The
+  service boundary scan found no CLI/legacy-runtime/init references;
+  `rtk git diff --check` passed and the candidate remained clean after the
+  checks.
+- The retirement inventory is unchanged: the exact three legacy production
+  files remain 53 + 641 + 716 = 1,410 lines; the obsolete projection remains
+  68 lines, and the sole 85-line CLI candidate still imports it and carries
+  policy, so it is not a stateless adapter. No caller cutover, deletion,
+  `make prepush`, PR, push, or SCRIPT handoff is claimed.
+- Exact next action: retain C271 at `CONTINUE`; leave the active C248/C269
+  shared paths frozen and refresh their canonical release state. After both
+  reviewed releases are available, fetch current main, reconcile C249/C220 and
+  both peer behaviors additively, cut over every production caller, delete the
+  projection and exact three-file / 1,410-line cluster, verify the stateless
+  adapter cap, then run `make prepush` plus every planned functional,
+  integration, race, hermetic, embed, Wire, deletion, and adapter command on
+  the exact clean candidate before pushing it to SCRIPT CI.
