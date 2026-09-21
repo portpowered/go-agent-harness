@@ -17,6 +17,7 @@ import (
 	runtimeReplayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	runtimeSessionWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
@@ -35,8 +36,9 @@ func newTestLiveSessionCommand(askFlags *flags.AskFlags, globalFlags *flags.Glob
 		InferencerFactory: func(context.Context, runtimeSession.LiveRequest) (messages.SessionInferencer, error) {
 			return inferencer, nil
 		},
-		Clock:     clockSource.Now,
-		Scheduler: clockSource,
+		Clock:           clockSource.Now,
+		Scheduler:       clockSource,
+		DurationService: durationwire.NewService(),
 	})
 	deviceService := runtimedeviceswire.NewService(registry, audioService)
 	fileDeviceService := runtimedeviceswire.NewFileService(audioService)
