@@ -4177,3 +4177,27 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   explicitly released revisions, finish every caller cutover and delete the
   complete owned cluster, then run the full C280-03/C280-05 gate on one clean
   SHA. Return `CONTINUE` while that actionable integration remains.
+
+# C280 release-blocked service audit checkpoint 2026-09-21T23:47Z
+
+- Admission and branch identity were reverified for the sole `audio-runtime`
+  project. Canonical peer state remains unreleased: C271 is failed, C272 and
+  C276 are processing/init, and C278 is failed in review. Their exact peer
+  worktree heads were inspected read-only; none was integrated or treated as a
+  release. The C280 worktree remains clean at `b66f405bb`.
+- C280-owned normal focused tests pass `56` in `16` packages; focused race
+  tests pass `29` in `16` packages; the repeated wire bound/concurrent-close
+  selection passes `100` iterations; the roomevidence boundary scan,
+  `make wire-check`, `make architecture-size-check` (`208` packages, `1,980`
+  files, `29,332` functions), and `git diff --check` pass. Wire regeneration
+  produced no source changes.
+- Retirement is still incomplete and intentionally unclaimed: the eight owned
+  agentruntime files and all 19 duplicate rooms evidence production files are
+  present, production callers still compose `rooms/internal/evidence`, and the
+  adapter budget remains `0 files / 0 lines`. No prepush, push, PR, SCRIPT CI,
+  review or merge is claimed.
+- Exact next action: refresh the same peer release state; after reviewed or
+  exact-path release of C271/C272/C276/C278, integrate those revisions
+  additively, cut over every named/discovered caller, delete the complete
+  legacy cluster, and run the full C280-03/C280-05 gate on one clean SHA.
+  Return `CONTINUE` while that actionable integration remains.
