@@ -13,6 +13,11 @@ import (
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
 
+const (
+	testInputDevice  = "virtual:input"
+	testOutputDevice = "virtual:output"
+)
+
 func TestFactoryReportsSelectedDevicesAndQueuedPlayback(t *testing.T) {
 	registry, err := devicegw.NewVirtualRegistry(devicegw.DefaultVirtualBackendConfig())
 	if err != nil {
@@ -20,7 +25,7 @@ func TestFactoryReportsSelectedDevicesAndQueuedPlayback(t *testing.T) {
 	}
 	handle, err := NewFactory(registry, mixer.Format{}).Open(context.Background(), devices.Request{
 		InputDevice:     " DEFAULT ",
-		OutputDevice:    "virtual:output",
+		OutputDevice:    testOutputDevice,
 		CaptureEnabled:  true,
 		PlaybackEnabled: true,
 	})
@@ -38,8 +43,8 @@ func TestFactoryReportsSelectedDevicesAndQueuedPlayback(t *testing.T) {
 		t.Fatal("device handle does not expose its selected device IDs")
 	}
 	inputID, outputID := selection.SelectedDeviceIDs()
-	if inputID != "virtual:input" || outputID != "virtual:output" {
-		t.Fatalf("selected devices = (%q, %q), want (virtual:input, virtual:output)", inputID, outputID)
+	if inputID != testInputDevice || outputID != testOutputDevice {
+		t.Fatalf("selected devices = (%q, %q), want (%q, %q)", inputID, outputID, testInputDevice, testOutputDevice)
 	}
 
 	statsProvider, ok := handle.(devices.PlaybackStatsProvider)
@@ -81,11 +86,11 @@ func TestFactoryClosesCaptureWhenPlaybackAdmissionFails(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	registry := &registryStub{inner: inner, failID: "virtual:output"}
+	registry := &registryStub{inner: inner, failID: testOutputDevice}
 	factory := NewFactory(registry, mixer.DefaultFormat())
 	_, err = factory.Open(context.Background(), devices.Request{
-		InputDevice:     "virtual:input",
-		OutputDevice:    "virtual:output",
+		InputDevice:     testInputDevice,
+		OutputDevice:    testOutputDevice,
 		CaptureEnabled:  true,
 		PlaybackEnabled: true,
 	})
@@ -138,8 +143,8 @@ func TestFactoryHandleOwnsBothWorkersAndClosesOnce(t *testing.T) {
 	}
 	factory := NewFactory(inner, mixer.DefaultFormat())
 	handle, err := factory.Open(context.Background(), devices.Request{
-		InputDevice:     "virtual:input",
-		OutputDevice:    "virtual:output",
+		InputDevice:     testInputDevice,
+		OutputDevice:    testOutputDevice,
 		CaptureEnabled:  true,
 		PlaybackEnabled: true,
 	})
@@ -184,8 +189,8 @@ func assertFactoryDirection(t *testing.T, request devices.Request, wantInput, wa
 	if err != nil {
 		t.Fatal(err)
 	}
-	request.InputDevice = "virtual:input"
-	request.OutputDevice = "virtual:output"
+	request.InputDevice = testInputDevice
+	request.OutputDevice = testOutputDevice
 	handle, err := NewFactory(inner, mixer.DefaultFormat()).Open(context.Background(), request)
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
@@ -216,7 +221,7 @@ func assertHandleSelection(t *testing.T, handle devices.Handle, wantInput, wantO
 		t.Fatal("device handle does not expose selected device IDs")
 	}
 	inputID, outputID := selection.SelectedDeviceIDs()
-	if wantInput != (inputID == "virtual:input") || wantOutput != (outputID == "virtual:output") {
+	if wantInput != (inputID == testInputDevice) || wantOutput != (outputID == testOutputDevice) {
 		t.Fatalf("selected devices = (%q, %q), want input=%v output=%v", inputID, outputID, wantInput, wantOutput)
 	}
 	return inputID, outputID
@@ -274,8 +279,8 @@ func TestFactoryBindsSelectedRTCDirections(t *testing.T) {
 		wantInput  string
 		wantOutput string
 	}{
-		{name: "input", request: devices.RTCBindingRequest{InputPresent: true, BypassSelfHearing: true}, wantInput: "virtual:input"},
-		{name: "output", request: devices.RTCBindingRequest{OutputPresent: true, BypassSelfHearing: true}, wantOutput: "virtual:output"},
+		{name: "input", request: devices.RTCBindingRequest{InputPresent: true, BypassSelfHearing: true}, wantInput: testInputDevice},
+		{name: "output", request: devices.RTCBindingRequest{OutputPresent: true, BypassSelfHearing: true}, wantOutput: testOutputDevice},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
