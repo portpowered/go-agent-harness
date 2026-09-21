@@ -5237,3 +5237,53 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   verify the sole adapter is stateless and within 300 lines, then run
   `make prepush` plus every planned C271 local gate on the same clean candidate
   before push and SCRIPT CI handoff.
+
+### C271 admission, canonical review, and shared-seam checkpoint — 2026-09-21
+
+- Re-read `factory/docs/operating-policy.md` and
+  `factory/docs/implementation-handoff.md`. The required
+  `project-control.py verify-work --type task --name
+  audio-runtime-c271-recover-selfplay-retirement` returned `admitted` for the
+  sole `audio-runtime/audio-runtime-v1` project. `prd.json.branchName` exactly
+  matches `codex/audio-runtime-c271-recover-selfplay-retirement`. The starting
+  checkout was clean at `f1ab181cbf181ca5edc080ec99ba3aa38d52fbd9`; its existing
+  28-commit checkpoint history is preserved. No reset, merge, rewrite, or peer
+  worktree mutation was made.
+- Canonical `~default` confirms C271 is `work-task-106` in `init` / `PROCESSING`
+  and has no review attempt. The latest concluded review is C259
+  `work-review-78`; its findings require bounded manifest/timeline admission,
+  restored public recorder-failure degradation coverage, a public room
+  run/load/analyze replay round trip, and exact-head preflight. These are C259
+  room-evidence repairs and identify no C271 self-play defect.
+- C248 `work-task-45` and C269 `work-task-101` remain `init` / `PROCESSING` with
+  active RUNNING Worker Sessions. C248's latest recorded checkpoint is
+  `0f00c79549b33e5e26c5c7bbe20313a07267e3dc`; its exact caller/session seam has
+  not been reviewed/released, and its current executor session is still
+  running repairs after an architecture gate reported 62 findings. C269's
+  latest recorded candidate is dirty at
+  `d792accaf8244898f559962ae371e06263095a9b`; its room-evidence/Wire overlap
+  has not been reviewed/guarded, and its executor session is still running
+  repairs after an architecture gate reported 28 findings. Neither required
+  release is available. Those peer-owned paths remain frozen.
+- Fresh production inventory confirms the full owned legacy cluster remains:
+  `selfplay_service.go` 53 lines, `session_self_play.go` 641, and
+  `session_self_play_evidence.go` 716 (3 files / 1,410 lines). The obsolete
+  `agent-cli/internal/services/selfplay/interface.go` projection is 68 lines.
+  The only planned transport file is 85 lines, but still imports that
+  projection and contains provider/model defaults, both personas, and opening
+  seed policy. Production caller scan still finds CLI and service Wire, root
+  generated Wire, session/observability transport, and legacy model/live,
+  playback-diagnostics, room-error, and room-evidence consumers. No caller
+  cutover or target deletion is complete.
+- No production code changed and no tests were run in this checkpoint. No
+  `make prepush`, PR, push, or SCRIPT handoff is claimed. The candidate is not
+  ready for delivery while the exact C248 caller release and C269 guarded
+  room-evidence release are unavailable.
+- Exact next action: retain ownership at `CONTINUE`, refresh the canonical
+  C248/C269 release state while their active sessions repair their candidates,
+  and leave shared paths untouched. Once both reviewed/guarded releases are
+  available, fetch current `origin/main`, preserve C249/C220 and required
+  ancestry, reconcile both peer behaviors through public contracts, cut over
+  every discovered caller, delete the obsolete projection, temporary helper,
+  and exact three-file legacy cluster, then run the complete planned C271
+  preflight on one exact clean candidate before pushing it for SCRIPT CI.
