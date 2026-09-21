@@ -4777,3 +4777,31 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   merge the clean C217 recovery branch into this isolated branch to restore
   required ancestry, then resolve and verify shared seams before continuing
   caller integration. Decision remains CONTINUE.
+
+# C234 continuation checkpoint — C217 ancestry adopted — 2026-09-20
+
+- Correction to the previous next-step note: local checkpoint commit
+  `74642d85788a9f41283dfc7b6a99e40d2437002e` is a two-parent additive merge
+  of C234's `7e12df1c` line and C217's `03662c1b` recovery checkpoint. It
+  therefore adopts C217 source `ca87a126` and checkpoint history without
+  rewriting either branch. No host checkout or C217 worktree was changed.
+- Rechecked ancestry for C217 source, C217 checkpoint, startup revision,
+  planning main, and fetched `origin/main`; all return ancestor status 0 for
+  C234 HEAD. The clean C234 HEAD is `74642d85788a9f41283dfc7b6a99e40d2437002e`.
+- Audited remaining production references. Direct capture reads still present
+  in CLI are confined to C255-owned `metrics_collector.go` and
+  `livehost/trace.go`, plus the overlapping room replay integrity seam owned
+  by C253/C258/C259. The customer simulation consumer decodes an individual
+  normalized transcript stream message; it does not load or replay a session
+  capture. Replay service internals retain the shared gateway capture codec
+  behind the public replay contract.
+- The 13 exact planned legacy production paths remain absent; the two named
+  livehost adapters total 45 physical lines and contain no session state.
+  C224 browser recording remains unchanged from fetched origin/main.
+- No vertical preflight, `make prepush`, push, PR update or CI handoff has run.
+  Exact next action: after C255 releases its trace/metrics paths, finish their
+  service cutover and repair the v7a metrics failure; reconcile the C253/C258
+  room replay overlap after those owners release it. Then audit all production
+  callers again and run every named functional, integration, race, hermetic,
+  Wire and `make prepush` gate on the exact final candidate. Decision remains
+  CONTINUE.
