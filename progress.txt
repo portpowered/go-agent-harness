@@ -5641,3 +5641,68 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   them; repeat the full caller/direct-reader census; then run every C270-02
   through C270-06 verification command, including `make prepush`, on one exact
   clean candidate before push. Decision remains CONTINUE.
+
+# C270 current-turn checkpoint — refreshed review, ownership, and ancestry — 2026-09-21
+
+- Re-ran `project-control.py verify-work --type task --name
+  audio-runtime-c270-recover-recording-replay-finalization` from `FACTORY_ROOT`;
+  the admitted project is `audio-runtime`. `prd.json.branchName` matches this
+  isolated branch. Fetched `origin/main` is
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`; all six required ancestry pins
+  pass. Candidate `3ffcdbfee6cc9ea53f64d301d2c01aea00db2de8` is clean before
+  this progress update. The preserved C234 predecessor is clean at the exact
+  checkpoint `7e6022bac496975f6b91b05e2a19b36348083eb7`.
+- Canonical `~default` Work queries return no C270 or C234 review Work, so no
+  concluded review findings are available to repair. C229 `work-task-16`,
+  C268 `work-task-96`, and C269 `work-task-101` remain nonterminal; C264
+  `work-task-86` and C273 `work-task-111` are failed without a reviewed
+  room-replay release. The Worker Sessions endpoint returned
+  `FACTORY_UNREACHABLE`; no session-liveness claim is made. Read-only peer PRD
+  inspection confirms C229 owns the live replay/WebMCP caller paths, C268 owns
+  overlapping metrics/trace callers, and C264/C273/C269 own the unreleased
+  room-replay/evidence cutovers. No peer worktree or path was modified.
+- All seven planned integrated-main deletion targets and six checkpoint-only
+  replacements remain absent. The two stateless adapters remain 20 and 25
+  lines (45 total); the browser recording boundary matches `origin/main`, and
+  `git diff --check` passes. The candidate's only file delta since the last
+  regression-tested code SHA `257cc9ef45a90b56af1e25a149e1d60f51bb7c45` is
+  `progress.txt`. On that unchanged code, both selected public WebMCP cases
+  still fail before provider connection with the retired-runtime error. No
+  production edit, full preflight, `make prepush`, push, PR update, or SCRIPT
+  handoff ran.
+- Exact next action: retain C270 ownership and wait for exact reviewed peer
+  releases; integrate only the released C229 live/WebMCP, C268 metrics/trace,
+  and C264/C269 room-replay caller changes. Then repair and rerun both public
+  WebMCP cases, repeat the complete production caller/direct-reader census, and
+  run every C270-02 through C270-06 command plus `make prepush` on one exact
+  clean candidate before pushing. Decision remains CONTINUE.
+
+# C270 current-turn checkpoint — admission, ancestry, and caller releases — 2026-09-21
+
+- Re-ran task admission from `FACTORY_ROOT`; Factory returned `admitted` for
+  the sole `audio-runtime` project. `prd.json.branchName` matches this
+  worktree. Fetched `origin/main` is still
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`; all six required ancestry pins
+  pass. C234 remains clean at
+  `7e6022bac496975f6b91b05e2a19b36348083eb7`. Candidate HEAD is
+  `3ffcdbfee6cc9ea53f64d301d2c01aea00db2de8`; since the last regression-tested
+  code SHA `257cc9ef45a90b56af1e25a149e1d60f51bb7c45`, only `progress.txt`
+  changed.
+- Canonical `~default` review queries return no C270, C234, C264, or C274
+  review Work and no concluded findings are available. C229 `work-task-16` and
+  C269 `work-task-101` have running sessions; C268 `work-task-96` is in
+  `INITIAL` with no running session. C264 `work-task-86` and C273
+  `work-task-111` are failed. C274 `work-task-116` is processing with a
+  running recovery session, but no room-replay review/release is available.
+  No peer worktree or caller path was modified.
+- Confirmed all seven planned legacy production files and six checkpoint-only
+  replacement paths are absent. The two named livehost adapters remain 20 and
+  25 lines (45 total); `session_browser_recording.go` is unchanged from
+  `origin/main`. The corrected WebMCP public selection previously failed both
+  cases before provider connection on the unchanged code SHA above. No code
+  repair, full preflight, `make prepush`, push, PR update, or SCRIPT handoff ran.
+- Exact next action: retain C270 ownership and consume only exact reviewed
+  caller releases from C229, C268, C269, and C274 when available. Then repair
+  and rerun the WebMCP regression, complete the caller/direct-reader census,
+  and run every C270-02 through C270-06 command plus `make prepush` on one
+  exact candidate before push. Decision remains CONTINUE.
