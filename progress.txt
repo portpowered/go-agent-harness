@@ -5906,3 +5906,44 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   repair the public live route and remaining direct readers, and only then run
   the full exact-head C276-02 through C276-06 command set plus `make prepush`.
   Decision remains CONTINUE.
+
+# C276 partial checkpoint — replay planner architecture repair — 2026-09-21
+
+- Reverified `project-control.py verify-work --type task` for the admitted
+  `audio-runtime` project; `prd.json.branchName` matches this isolated branch.
+  Fetched `origin/main=b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`. Baseline,
+  startup, planning-main, C270, C234, both C217 checkpoints, and current main
+  are ancestors of candidate `29270fff79f14f6eb11bb6454bf9dcd2c12bd433`.
+- Reorganized replay planner implementation into service-owned `internal`
+  packages for probe, response planning, and timing; extracted capture action
+  and metadata processing. No tests moved or added. The maintained Go file count
+  in `internal/plan` is 14. The exact-head architecture report has zero findings
+  under `services/replay/internal/plan`; the full repository gate still fails
+  with 239 findings across 210 packages, principally legacy baseline drift and
+  peer-owned session/provider paths. Full log:
+  `/Users/abdifamily/Library/Application Support/rtk/tee/1790021577_make_verify-architecture.log`.
+- Exact focused checks pass on the committed source: `rtk go test -count=1
+  ./go-agent-runtime/services/replay/...` (111 tests / 8 packages),
+  `rtk go test -race -count=1 ./go-agent-runtime/services/replay/...` (111 / 8),
+  `rtk make wire-check` (generated files unchanged), and `rtk git diff --check`.
+- The seven C276 deletion targets and six checkpoint-only replacement paths
+  remain absent; `session_browser_recording.go` is byte-identical to
+  `origin/main`. No named adapter is currently required by a caller: 0 files /
+  0 lines. The required caller cutover is still incomplete, so this does not
+  satisfy final adapter/caller acceptance. No C276/C270/C234 concluded review
+  finding is recorded in the retained canonical board history. Latest recorded
+  peer state remains C229 and C269 with active owners, C268 without a reviewed
+  release, and C274 with a failed Windows software review being repaired.
+- The last bounded public WebMCP reproduction remains the known route failure:
+  `NewSessionCommand` reaches `agentruntime/service.go:68` without a live
+  service; routing through the live constructor exposed the C229 default
+  virtual-output/RTC gap. The remaining production capture readers are
+  `agent-cli/internal/services/internal/agentruntime/metrics_collector.go:87`
+  and `session_room_replay_integrity.go:235,251` (C268/C274 seams), plus
+  `agent-cli/internal/transport/cli/internal/livehost/trace.go:192` (C268 seam).
+- No caller was cut over, no exact pre-PR gate or `make prepush` was run, and no
+  push/PR/SCRIPT handoff was attempted. Exact next action: integrate only exact
+  reviewed C229/C268/C269/C274 releases or a planner-recorded handoff, repair
+  both public live-route regressions and cut over every caller/direct reader;
+  then run all C276-02 through C276-06 commands plus `make prepush` on one clean
+  candidate before any push. Decision remains CONTINUE.
