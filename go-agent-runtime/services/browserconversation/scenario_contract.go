@@ -3,7 +3,6 @@ package browserconversation
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"time"
 )
 
@@ -64,10 +63,6 @@ func (e *BrowserConversationScenarioError) Error() string {
 
 func (e *BrowserConversationScenarioError) Unwrap() error {
 	return ErrInvalidBrowserConversationScenario
-}
-
-func browserScenarioError(path, format string, args ...any) error {
-	return &BrowserConversationScenarioError{Path: path, Reason: fmt.Sprintf(format, args...)}
 }
 
 // BrowserConversationScenario describes one bounded customer conversation.
