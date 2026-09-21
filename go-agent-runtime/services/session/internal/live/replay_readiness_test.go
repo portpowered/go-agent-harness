@@ -7,6 +7,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/mediagate"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/sessionadapter"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/stretchr/testify/require"
@@ -35,8 +36,7 @@ func TestLoopAudioOutboundUsesOrderedPCMInputPolicy(t *testing.T) {
 	require.Equal(t, want, got)
 	require.Equal(t, messages.SessionAudioInputPolicyDefault, sender.policy)
 	require.Equal(t, want, admitted.Samples)
-	require.Equal(t, frame.StreamID, admitted.StreamID)
-	require.Equal(t, frame.Sequence, admitted.Sequence)
+	require.Equal(t, frame, admitted)
 }
 
 type replayReadinessSession struct {
@@ -464,7 +464,7 @@ func TestOrderedSessionAutomaticSendAheadOfPendingControlDoesNotDeadlock(t *test
 		releaseAutomatic: releaseAutomatic,
 		controlSent:      controlSent,
 	}
-	ordered := &orderedSession{inner: provider, media: gate}
+	ordered := sessionadapter.NewOrderedSession(provider, gate)
 	automaticDone := make(chan messages.SessionSendOutcome, 1)
 	go func() {
 		automaticDone <- ordered.SendWithOutcome(context.Background(), messages.StreamMessage{
@@ -594,7 +594,7 @@ func TestRejectedToolResultAdmissionRestoresPriorState(t *testing.T) {
 func TestMediaRequirementsRespectCapturePlaybackDirections(t *testing.T) {
 	media := sharedaudio.NewSessionMediaAtRate(nil, 24000)
 	t.Cleanup(func() { require.NoError(t, media.Close()) })
-	if !(mediaRequirements{outbound: true}).satisfiedBy(sharedaudio.MediaEndpoints{Outbound: media.Endpoints().Outbound}) || !(mediaRequirements{inbound: true}).satisfiedBy(sharedaudio.MediaEndpoints{Inbound: media.Endpoints().Inbound}) || (mediaRequirements{inbound: true, outbound: true}).satisfiedBy(sharedaudio.MediaEndpoints{Inbound: media.Endpoints().Inbound}) || (mediaRequirements{inbound: true, outbound: true}).satisfiedBy(sharedaudio.MediaEndpoints{Outbound: media.Endpoints().Outbound}) {
+	if !(mediaRequirements{outbound: true}).SatisfiedBy(sharedaudio.MediaEndpoints{Outbound: media.Endpoints().Outbound}) || !(mediaRequirements{inbound: true}).SatisfiedBy(sharedaudio.MediaEndpoints{Inbound: media.Endpoints().Inbound}) || (mediaRequirements{inbound: true, outbound: true}).SatisfiedBy(sharedaudio.MediaEndpoints{Inbound: media.Endpoints().Inbound}) || (mediaRequirements{inbound: true, outbound: true}).SatisfiedBy(sharedaudio.MediaEndpoints{Outbound: media.Endpoints().Outbound}) {
 		t.Fatal("direction-aware media admission mismatch")
 	}
 }

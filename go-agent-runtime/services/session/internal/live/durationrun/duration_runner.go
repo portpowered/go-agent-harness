@@ -1,4 +1,4 @@
-package live
+package durationrun
 
 import (
 	"context"
@@ -23,12 +23,27 @@ func NewDurationRunner(durationService sessionduration.Service, loopFactory sess
 }
 
 func (r *durationRunner) RunDuration(request session.DurationRunRequest) (sessionduration.Result, error) {
+	if err := r.validate(); err != nil {
+		return sessionduration.Result{}, err
+	}
+	run := r.newRunRequest(request)
+	resources := r.newResources(request, run)
+	r.configureRun(&run, resources)
+	result, err := r.durationService.RunWithResult(run)
+	return r.complete(request, result, err)
+}
+
+func (r *durationRunner) validate() error {
 	if r == nil || r.durationService == nil {
-		return sessionduration.Result{}, errors.New("session duration service is required")
+		return errors.New("session duration service is required")
 	}
 	if r.loopFactory == nil {
-		return sessionduration.Result{}, errors.New("session loop factory is required")
+		return errors.New("session loop factory is required")
 	}
+	return nil
+}
+
+func (r *durationRunner) newRunRequest(request session.DurationRunRequest) sessionduration.RunRequest {
 	clock := request.Clock
 	if clock == nil {
 		clock = platformclock.Real{}
@@ -45,7 +60,6 @@ func (r *durationRunner) RunDuration(request session.DurationRunRequest) (sessio
 	if completionObserver == nil {
 		completionObserver, _ = request.Observer.(sessionduration.CompletionObserver)
 	}
-	loopOptions := durationLoopOptions(request)
 	run := sessionduration.RunRequest{
 		Context:                  request.Context,
 		Inferencer:               request.Inferencer,
@@ -77,7 +91,21 @@ func (r *durationRunner) RunDuration(request session.DurationRunRequest) (sessio
 			ScheduledAudioDispatch:           dispatch,
 		},
 	}
-	resources := &durationResources{request: request, run: run, loopOptions: loopOptions, service: r.durationService, loopFactory: r.loopFactory, done: make(chan struct{})}
+	return run
+}
+
+func (r *durationRunner) newResources(request session.DurationRunRequest, run sessionduration.RunRequest) *durationResources {
+	return &durationResources{
+		request:     request,
+		run:         run,
+		loopOptions: durationLoopOptions(request),
+		service:     r.durationService,
+		loopFactory: r.loopFactory,
+		done:        make(chan struct{}),
+	}
+}
+
+func (r *durationRunner) configureRun(run *sessionduration.RunRequest, resources *durationResources) {
 	run.LoopFactory = resources.buildLoop
 	run.Quiesce = resources.quiesce
 	run.Drain = resources.drain
@@ -102,8 +130,14 @@ func (r *durationRunner) RunDuration(request session.DurationRunRequest) (sessio
 		}
 		return nil
 	}
-	result, runErr := r.durationService.RunWithResult(run)
+}
+
+func (r *durationRunner) complete(request session.DurationRunRequest, result sessionduration.Result, runErr error) (sessionduration.Result, error) {
 	durationExpired := result.Expired && request.CloseAfterScheduledAudio && request.Observer != nil
+	completionObserver := request.CompletionObserver
+	if completionObserver == nil {
+		completionObserver, _ = request.Observer.(sessionduration.CompletionObserver)
+	}
 	runErr = r.durationService.Complete(sessionduration.CompletionRequest{
 		RunError:                      runErr,
 		AudioOutputError:              request.Completion.AudioOutputError,
@@ -165,6 +199,21 @@ type durationResources struct {
 }
 
 func (r *durationResources) buildLoop(ctx context.Context, admitted sessionduration.AdmissionInferencer, controller sessionduration.Controller) (sessionduration.Loop, error) {
+	inferencer, err := r.prepareInferencer(admitted, controller)
+	if err != nil {
+		return nil, err
+	}
+	loop, err := r.loopFactory.Build(ctx, inferencer, r.buildOptions())
+	if err != nil {
+		return nil, fmt.Errorf("create session agent loop: %w", err)
+	}
+	if err := r.startLoopResources(ctx, loop); err != nil {
+		return nil, err
+	}
+	return loop, nil
+}
+
+func (r *durationResources) prepareInferencer(admitted sessionduration.AdmissionInferencer, controller sessionduration.Controller) (messages.SessionInferencer, error) {
 	if observer := r.run.Observer; observer != nil {
 		observer.SetToolResultsEnabled(r.loopOptions.ToolExecutor != nil)
 		observer.SetDurationController(controller)
@@ -181,18 +230,22 @@ func (r *durationResources) buildLoop(ctx context.Context, admitted sessiondurat
 	if r.request.ControllerReady != nil {
 		r.request.ControllerReady(controller)
 	}
+	return inferencer, nil
+}
+
+func (r *durationResources) buildOptions() sessionduration.DuplexLoopOptions {
 	options := r.loopOptions
 	options.ToolDefinitions = append([]messages.ToolDefinition(nil), options.ToolDefinitions...)
 	if binding, ok := r.request.Binding.(devices.RTCBindingAudioPorts); ok {
 		options.AudioPorts = binding.AudioPorts()
 	}
-	loop, err := r.loopFactory.Build(ctx, inferencer, options)
-	if err != nil {
-		return nil, fmt.Errorf("create session agent loop: %w", err)
-	}
+	return options
+}
+
+func (r *durationResources) startLoopResources(ctx context.Context, loop sessionduration.Loop) error {
 	r.bindingError = bindingErrors(r.request.Binding)
 	if err := r.startPublication(ctx, loop); err != nil {
-		return nil, err
+		return err
 	}
 	if r.lifecycle != nil && r.lifecycle.Done() != nil {
 		go func() {
@@ -208,10 +261,10 @@ func (r *durationResources) buildLoop(ctx context.Context, admitted sessiondurat
 			if r.publisher != nil {
 				r.publisher.Stop()
 			}
-			return nil, err
+			return err
 		}
 	}
-	return loop, nil
+	return nil
 }
 
 func (r *durationResources) startPublication(ctx context.Context, loop sessionduration.Loop) error {

@@ -243,18 +243,6 @@ func drainLiveEvents(events <-chan session.LiveEvent, sink session.LiveEventSink
 		}
 	}
 }
-func sessionSendOutcomeForError(ctx context.Context, err error) messages.SessionSendOutcome {
-	if err == nil {
-		return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
-	}
-	if errors.Is(err, context.DeadlineExceeded) || (ctx != nil && errors.Is(ctx.Err(), context.DeadlineExceeded)) {
-		return messages.SessionSendOutcome{Status: messages.SessionSendTimedOut, Err: err}
-	}
-	if errors.Is(err, context.Canceled) || (ctx != nil && errors.Is(ctx.Err(), context.Canceled)) {
-		return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: err}
-	}
-	return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure, Err: err}
-}
 func (h *handle) finiteResponseWasInterrupted(msg messages.StreamMessage) bool {
 	value, ok := msg.Value.(*messages.MessageEndValue)
 	if !ok || value == nil {

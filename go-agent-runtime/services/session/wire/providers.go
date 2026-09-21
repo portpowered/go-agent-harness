@@ -15,7 +15,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	agent "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/execution"
 	instructionservice "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/instructions"
-	live "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live"
+	durationrun "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/durationrun"
 	persistence "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/persistence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/service"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
@@ -64,7 +64,7 @@ func NewFileStoreFactory() session.FileStoreFactory {
 // NewDuplexLoopFactory assembles the session execution loop constructor behind
 // the duration service's narrow factory contract.
 func NewDuplexLoopFactory() sessionduration.DuplexLoopFactory {
-	wire.Build(live.NewDuplexLoopFactory, wire.Bind(new(sessionduration.DuplexLoopFactory), new(*live.DuplexLoopFactory)))
+	wire.Build(durationrun.NewDuplexLoopFactory, wire.Bind(new(sessionduration.DuplexLoopFactory), new(*durationrun.DuplexLoopFactory)))
 	return nil
 }
 

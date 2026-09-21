@@ -87,13 +87,6 @@ func validateCaptureInvocation(i *liveInvocation) error {
 	return nil
 }
 
-func captureResponseTarget(request session.LiveRequest) int {
-	if openingMessageRequestsResponse(request) {
-		return 1
-	}
-	return 0
-}
-
 func (i *liveInvocation) runCaptureTurn(ctx context.Context, index int, input devices.FileInput, admission session.AudioTurnAdmission) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -203,22 +196,6 @@ func (i *liveInvocation) waitForNextCaptureTurn(ctx context.Context, index int, 
 	return nil
 }
 
-func shouldWaitForCaptureResponse(index int, admission session.AudioTurnAdmission) bool {
-	return admission == session.AudioTurnAdmissionCompletionGated || index > 0
-}
-
-func normalizeAudioTurnAdmission(value session.AudioTurnAdmission) (session.AudioTurnAdmission, error) {
-	if value == "" {
-		return session.AudioTurnAdmissionCompletionGated, nil
-	}
-	switch value {
-	case session.AudioTurnAdmissionCompletionGated, session.AudioTurnAdmissionBarge:
-		return value, nil
-	default:
-		return "", fmt.Errorf("unsupported audio turn admission %q", value)
-	}
-}
-
 const finiteTurnFrameBudget = 48_000
 
 type sessionAudioInputSender interface {
@@ -317,13 +294,6 @@ func (i *liveInvocation) handleResponseIsActive() bool {
 	return false
 }
 
-func openingMessageRequestsResponse(request session.LiveRequest) bool {
-	if len(request.OpeningContentParts) > 0 {
-		return request.OpeningMessageResponse != session.LiveOpeningMessageQueued
-	}
-	return request.OpeningPromptPresent || request.OpeningPrompt != ""
-}
-
 func (h *handle) runReplay(ctx context.Context) {
 	defer h.runWG.Done()
 	plan := h.request.ReplayPlan
@@ -339,8 +309,6 @@ func (h *handle) runReplay(ctx context.Context) {
 			h.cancelReplayOnError(ctx, "replay audio", err)
 			return
 		}
-		// Keep each replay append behind the preceding response terminal so
-		// provider admission preserves source-session causal ordering.
 		if turnIndex+1 < len(plan.AudioTurns) {
 			if err := h.waitReplayResponse(ctx, turnIndex+1); err != nil {
 				h.cancelReplayOnError(ctx, fmt.Sprintf("wait for replay response %d", turnIndex+1), err)
@@ -348,7 +316,6 @@ func (h *handle) runReplay(ctx context.Context) {
 			}
 		}
 	}
-	// Mark admission after every captured turn crosses bounded ingress.
 	h.markCaptureComplete()
 }
 

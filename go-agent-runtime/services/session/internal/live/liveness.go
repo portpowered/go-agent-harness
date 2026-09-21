@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
@@ -12,6 +13,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/eventcodec"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 const (
@@ -248,4 +250,137 @@ func (h *handle) observeTerminalValue(msg messages.StreamMessage) {
 		h.terminalValue = value
 	}
 	h.mu.Unlock()
+}
+
+func terminalDrainFactory(factory session.LiveInferencerFactory) session.LiveInferencerFactory {
+	return func(ctx context.Context, request session.LiveRequest) (messages.SessionInferencer, error) {
+		inner, err := factory(ctx, request)
+		if err != nil || inner == nil {
+			return inner, err
+		}
+		if request.Replay.Kind == session.LiveReplayKindTurn {
+			inner = turnReplayMediaInferencer{inner: inner, sampleRate: request.OutputAudioSampleRate, continuous: request.OutputAudioContinuous}
+		}
+		return terminalDrainInferencer{inner: inner, continuous: request.OutputAudioContinuous}, nil
+	}
+}
+
+type terminalDrainInferencer struct {
+	inner      messages.SessionInferencer
+	continuous bool
+}
+
+func (i terminalDrainInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
+	s, err := i.inner.ConnectSession(ctx)
+	if err != nil || s == nil {
+		return s, err
+	}
+	if provider, ok := s.(sharedaudio.MediaSession); ok {
+		captureMediaEndpoints(s, provider, i.continuous)
+	}
+	source := s.Receive()
+	capacity := defaultEventCapacity
+	if source != nil && source.Cap() > 0 {
+		capacity = source.Cap()
+	}
+	d := &terminalDrainSession{inner: s, receive: messages.NewTypedBuffer[messages.StreamMessage](capacity), done: make(chan struct{}), stop: make(chan struct{})}
+	go d.forward(context.WithoutCancel(ctx), source, s.Done())
+	return d, nil
+}
+
+func (i terminalDrainInferencer) FlushCapture() error {
+	if flusher, ok := i.inner.(interface{ FlushCapture() error }); ok {
+		return flusher.FlushCapture()
+	}
+	return nil
+}
+
+func (s *terminalDrainSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
+	if requester, ok := s.inner.(messages.SessionResponseRequester); ok {
+		return requester.RequestResponse(ctx)
+	}
+	return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}
+}
+
+func (s *terminalDrainSession) SupportsResponseRequests() bool {
+	if capability, ok := s.inner.(messages.SessionResponseCapability); ok {
+		return capability.SupportsResponseRequests()
+	}
+	_, ok := s.inner.(messages.SessionResponseRequester)
+	return ok
+}
+
+func (s *terminalDrainSession) FlushOutbound(ctx context.Context) error {
+	if flusher, ok := s.inner.(messages.SessionOutboundFlusher); ok {
+		return flusher.FlushOutbound(ctx)
+	}
+	return nil
+}
+
+func (s *terminalDrainSession) TerminalError() error {
+	provider, ok := s.inner.(interface{ TerminalError() error })
+	if !ok {
+		return nil
+	}
+	return provider.TerminalError()
+}
+
+type terminalDrainSession struct {
+	inner      messages.Session
+	receive    *messages.TypedBuffer[messages.StreamMessage]
+	done, stop chan struct{}
+	close      sync.Once
+	closeErr   error
+}
+
+func (s *terminalDrainSession) forward(ctx context.Context, source *messages.TypedBuffer[messages.StreamMessage], sourceDone <-chan struct{}) {
+	defer close(s.done)
+	if source == nil {
+		return
+	}
+	for {
+		select {
+		case msg, ok := <-source.Chan():
+			if !ok || !s.forwardMessage(ctx, msg) {
+				return
+			}
+		case <-sourceDone:
+			s.drain(ctx, source)
+			return
+		case <-s.stop:
+			return
+		}
+	}
+}
+
+func (s *terminalDrainSession) drain(ctx context.Context, source *messages.TypedBuffer[messages.StreamMessage]) {
+	for {
+		msg, ok := source.Read()
+		if !ok || !s.forwardMessage(ctx, msg) {
+			return
+		}
+	}
+}
+
+func (s *terminalDrainSession) forwardMessage(ctx context.Context, msg messages.StreamMessage) bool {
+	if msg.Type == messages.StreamTypeSessionClose {
+		msg.ResponseID = ""
+	}
+	return s.receive.WriteWaitContextOrDone(ctx, s.stop, msg).OK()
+}
+
+func (s *terminalDrainSession) InitialSessionConfigSent() bool {
+	marker, ok := s.inner.(interface{ InitialSessionConfigSent() bool })
+	return ok && marker.InitialSessionConfigSent()
+}
+
+func captureResponseTarget(request session.LiveRequest) int {
+	if openingMessageRequestsResponse(request) {
+		return 1
+	}
+	return 0
+}
+
+func shouldWaitForCaptureResponse(index int, admission session.AudioTurnAdmission) bool {
+	return admission == session.AudioTurnAdmissionCompletionGated || index > 0
 }

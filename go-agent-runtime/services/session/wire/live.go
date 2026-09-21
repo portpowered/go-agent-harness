@@ -5,6 +5,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live"
+	durationrun "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/durationrun"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
@@ -33,7 +34,7 @@ type DurationDependencies struct {
 // NewDurationRunner assembles the bounded invocation owner behind the public
 // session contract.
 func NewDurationRunner(deps DurationDependencies) session.DurationRunner {
-	return live.NewDurationRunner(deps.DurationService, deps.LoopFactory)
+	return durationrun.NewDurationRunner(deps.DurationService, deps.LoopFactory)
 }
 
 // NewLiveService assembles the continuous session role. It does not connect a

@@ -60,46 +60,51 @@ func (c *controller) drainUntilQuiet(ctx context.Context, loop sessionduration.L
 	wallTimer := time.NewTimer(wallSafety)
 	defer wallTimer.Stop()
 	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-timer.C():
-			if drainPending(pending) {
-				var err error
-				timer, err = resetDrainTimer(clock, timer, quietPeriod)
-				if err != nil {
-					return err
-				}
-				continue
-			}
-			if err := c.drainAvailable(loop); err != nil {
-				return err
-			}
-			if drainPending(pending) {
-				var err error
-				timer, err = resetDrainTimer(clock, timer, quietPeriod)
-				if err != nil {
-					return err
-				}
-				continue
-			}
-			return nil
-		case <-wallTimer.C:
-			return nil
-		case msg, ok := <-loop.Deltas().Chan():
-			if !ok {
-				return nil
-			}
-			if err := c.admitAndPublishDrain(msg); err != nil {
-				return err
-			}
-			next, err := resetDrainTimer(clock, timer, quietPeriod)
-			if err != nil {
-				return err
-			}
-			timer = next
+		done, err := c.awaitDrainActivity(ctx, loop, clock, &timer, wallTimer.C, quietPeriod, pending)
+		if done || err != nil {
+			return err
 		}
 	}
+}
+
+func (c *controller) awaitDrainActivity(ctx context.Context, loop sessionduration.Loop, clock sessionduration.TimerScheduler, timer *sessionduration.Timer, wallDone <-chan time.Time, quietPeriod time.Duration, pending func() bool) (bool, error) {
+	select {
+	case <-ctx.Done():
+		return true, ctx.Err()
+	case <-(*timer).C():
+		return c.finishDrainQuietPeriod(loop, clock, timer, quietPeriod, pending)
+	case <-wallDone:
+		return true, nil
+	case msg, ok := <-loop.Deltas().Chan():
+		if !ok {
+			return true, nil
+		}
+		if err := c.admitAndPublishDrain(msg); err != nil {
+			return true, err
+		}
+		return false, extendDrainQuietPeriod(clock, timer, quietPeriod)
+	}
+}
+
+func (c *controller) finishDrainQuietPeriod(loop sessionduration.Loop, clock sessionduration.TimerScheduler, timer *sessionduration.Timer, quietPeriod time.Duration, pending func() bool) (bool, error) {
+	if drainPending(pending) {
+		return false, extendDrainQuietPeriod(clock, timer, quietPeriod)
+	}
+	if err := c.drainAvailable(loop); err != nil {
+		return true, err
+	}
+	if drainPending(pending) {
+		return false, extendDrainQuietPeriod(clock, timer, quietPeriod)
+	}
+	return true, nil
+}
+
+func extendDrainQuietPeriod(clock sessionduration.TimerScheduler, timer *sessionduration.Timer, quietPeriod time.Duration) error {
+	next, err := resetDrainTimer(clock, *timer, quietPeriod)
+	if err == nil {
+		*timer = next
+	}
+	return err
 }
 
 func drainPending(pending func() bool) bool { return pending != nil && pending() }

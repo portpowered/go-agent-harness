@@ -10,6 +10,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/sessionadapter"
 )
 
 func (h *handle) start(runCtx context.Context) error {
@@ -73,21 +74,20 @@ func (h *handle) prepareStart(runCtx context.Context) (messages.ToolExecutor, []
 }
 
 func (h *handle) buildLoop(inferencer messages.SessionInferencer, toolExecutor messages.ToolExecutor, toolDefinitions []messages.ToolDefinition) (*agentloop.AgentLoop, error) {
-	capturing := &capturingInferencer{
-		inner:             inferencer,
-		media:             h.media,
-		continuous:        h.request.OutputAudioContinuous,
-		flushOutbound:     h.request.FinishAfterResponse,
-		replayKind:        h.request.Replay.Kind,
-		outputSampleRate:  h.request.OutputAudioSampleRate,
-		requirements:      h.mediaRequirements,
-		onDispatch:        h.observeProviderDispatch,
-		onToolResult:      h.beginToolResultAdmission,
-		onContinuation:    h.beginContinuationAdmission,
-		onOpeningAdmitted: func() { h.markOpeningAdmitted(nil) },
-		onProviderDone:    h.providerDone,
-		onMediaAttached:   h.setProviderMediaAttached,
-	}
+	capturing := sessionadapter.NewCapturingInferencer(sessionadapter.CaptureOptions{
+		Inner:             inferencer,
+		Media:             h.media,
+		Continuous:        h.request.OutputAudioContinuous,
+		FlushOutbound:     h.request.FinishAfterResponse,
+		Requirements:      h.mediaRequirements,
+		CaptureMedia:      captureMediaEndpoints,
+		OnDispatch:        h.observeProviderDispatch,
+		OnToolResult:      h.beginToolResultAdmission,
+		OnContinuation:    h.beginContinuationAdmission,
+		OnOpeningAdmitted: func() { h.markOpeningAdmitted(nil) },
+		OnProviderDone:    h.providerDone,
+		OnMediaAttached:   h.setProviderMediaAttached,
+	})
 	h.providerTerminalError = capturing.TerminalError
 	options := []agentloop.Option{
 		agentloop.WithMode(engine.DuplexSession),

@@ -10,7 +10,6 @@ import (
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"strings"
-	"sync"
 )
 
 func (h *handle) validateTimingPolicy() error {
@@ -370,51 +369,4 @@ func (h *handle) deferProviderClose() bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return h.scheduledAudioCount > 0 && h.dispatchedAudioCount < h.scheduledAudioCount
-}
-
-type terminalDrainSession struct {
-	inner      messages.Session
-	receive    *messages.TypedBuffer[messages.StreamMessage]
-	done, stop chan struct{}
-	close      sync.Once
-	closeErr   error
-}
-
-func (s *terminalDrainSession) forward(ctx context.Context, source *messages.TypedBuffer[messages.StreamMessage], sourceDone <-chan struct{}) {
-	defer close(s.done)
-	if source == nil {
-		return
-	}
-	for {
-		select {
-		case msg, ok := <-source.Chan():
-			if !ok || !s.forwardMessage(ctx, msg) {
-				return
-			}
-		case <-sourceDone:
-			s.drain(ctx, source)
-			return
-		case <-s.stop:
-			return
-		}
-	}
-}
-func (s *terminalDrainSession) drain(ctx context.Context, source *messages.TypedBuffer[messages.StreamMessage]) {
-	for {
-		msg, ok := source.Read()
-		if !ok || !s.forwardMessage(ctx, msg) {
-			return
-		}
-	}
-}
-func (s *terminalDrainSession) forwardMessage(ctx context.Context, msg messages.StreamMessage) bool {
-	if msg.Type == messages.StreamTypeSessionClose {
-		msg.ResponseID = ""
-	}
-	return s.receive.WriteWaitContextOrDone(ctx, s.stop, msg).OK()
-}
-
-func (s *terminalDrainSession) InitialSessionConfigSent() bool {
-	marker, ok := s.inner.(interface{ InitialSessionConfigSent() bool })
-	return ok && marker.InitialSessionConfigSent()
 }

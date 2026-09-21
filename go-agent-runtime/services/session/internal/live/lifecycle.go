@@ -7,6 +7,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/sessionadapter"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"time"
@@ -351,12 +352,12 @@ func finalizeRecorder(recorder session.LiveRecorder, ctx context.Context, runErr
 }
 
 func (s *terminalDrainSession) SendMessage(ctx context.Context, msg messages.Message) bool {
-	sender, ok := s.inner.(completeMessageSender)
+	sender, ok := s.inner.(sessionadapter.CompleteMessageSender)
 	return ok && sender.SendMessage(ctx, msg)
 }
 
 func (s *terminalDrainSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
-	sender, ok := s.inner.(completeMessageWithoutResponseSender)
+	sender, ok := s.inner.(sessionadapter.CompleteMessageWithoutResponseSender)
 	return ok && sender.SendMessageWithoutResponse(ctx, msg)
 }
 

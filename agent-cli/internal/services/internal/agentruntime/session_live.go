@@ -456,7 +456,7 @@ func executeDurationRequest(ctx context.Context, out io.Writer, inferencer messa
 	}
 	runner := sessionwire.NewDurationRunner(sessionwire.DurationDependencies{
 		DurationService: durationService,
-		LoopFactory:     durationwire.NewDuplexLoopFactory(),
+		LoopFactory:     sessionwire.NewDuplexLoopFactory(),
 	})
 	return runner.RunDuration(request)
 }

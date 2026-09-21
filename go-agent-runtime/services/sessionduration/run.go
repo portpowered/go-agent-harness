@@ -1,0 +1,254 @@
+package sessionduration
+
+import (
+	"context"
+	"time"
+
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
+)
+
+// RunState contains the mutable session-loop decisions held by the duration
+// runner while one invocation is active. Handlers receive a copy and return
+// any updated value through MessageResult; they must not retain the value.
+type RunState struct {
+	promptSent            bool
+	closeSent             bool
+	closeAfterOpenPending bool
+	drainPlayback         bool
+	awaitingResponse      bool
+}
+
+// PromptSent reports whether the opening prompt was sent.
+func (s RunState) PromptSent() bool { return s.promptSent }
+
+// CloseSent reports whether a session close control was sent.
+func (s RunState) CloseSent() bool { return s.closeSent }
+
+// CloseAfterOpenPending reports whether a session close is waiting for readiness.
+func (s RunState) CloseAfterOpenPending() bool { return s.closeAfterOpenPending }
+
+// DrainPlayback reports whether finalization should drain session playback.
+func (s RunState) DrainPlayback() bool { return s.drainPlayback }
+
+// AwaitingResponse reports whether the last accepted end-of-turn dispatch is
+// still waiting for provider output.
+func (s RunState) AwaitingResponse() bool { return s.awaitingResponse }
+
+// WithPromptSent returns a state recording the opening prompt send.
+func (s RunState) WithPromptSent() RunState {
+	s.promptSent = true
+	return s
+}
+
+// WithCloseSent returns a state with the close-control result.
+func (s RunState) WithCloseSent(value bool) RunState {
+	s.closeSent = value
+	return s
+}
+
+// WithCloseAfterOpenPending returns a state with the pending-close decision.
+func (s RunState) WithCloseAfterOpenPending(value bool) RunState {
+	s.closeAfterOpenPending = value
+	return s
+}
+
+// WithDrainPlayback returns a state requesting bounded playback drain.
+func (s RunState) WithDrainPlayback() RunState {
+	s.drainPlayback = true
+	return s
+}
+
+// WithAwaitingResponse returns a state recording provider response wait.
+func (s RunState) WithAwaitingResponse(value bool) RunState {
+	s.awaitingResponse = value
+	return s
+}
+
+// MessageResult tells the duration service whether the host's ordinary
+// session completion rules selected a terminal boundary for the message.
+type MessageResult struct {
+	Stop    bool
+	Planned bool
+	State   *RunState
+}
+
+// ScheduledAudioDispatch selects when an already-admitted scheduled input may
+// be dispatched. The duration service owns the boundary decision; a host only
+// supplies the effect that sends the selected input.
+type ScheduledAudioDispatch string
+
+const (
+	ScheduledAudioCompletionGated ScheduledAudioDispatch = "completion-gated"
+	ScheduledAudioActiveResponse  ScheduledAudioDispatch = "active-response"
+)
+
+// RunPolicy contains the immutable, normalized session completion settings
+// used by the duration runner. It contains values, not decisions or mutable
+// invocation state.
+type RunPolicy struct {
+	Prompt                           string
+	PromptProvided                   bool
+	CloseAfterOpen                   bool
+	WaitForClose                     bool
+	HasAudioInput                    bool
+	RequireAssistantResponse         bool
+	RequireTerminalAssistantResponse bool
+	CloseAfterScheduledAudio         bool
+	ScheduledAudioDispatch           ScheduledAudioDispatch
+}
+
+// RunFacts are host observations used by service-owned run policy. These
+// callbacks must report facts only; they must not decide whether the run
+// continues or dispatch another input.
+type RunFacts struct {
+	LastMessageEndAdmitted              func() bool
+	HasToolLifecycleObligation          func() bool
+	HasTerminalToolContinuationFailure  func() bool
+	HasTerminalScheduledResponseFailure func() bool
+	AssistantResponseCompleted          func() bool
+	ProviderToolCallObserved            func() bool
+	ScheduledAudioComplete              func() bool
+	ScheduledAudioAwaitingConfiguration func() bool
+	ScheduledAudioReady                 func() bool
+}
+
+// RunObserver exposes session-owned observations to the bounded execution
+// service. Implementations report facts only; duration policy and the mutable
+// controller state remain service-owned.
+type RunObserver interface {
+	Active() bool
+	RunFacts() RunFacts
+	ToolLifecycleEvents() <-chan struct{}
+	SessionUpdatedPending() bool
+	SessionUpdatedReady() bool
+	EnrichLifecycleError(error) error
+	RetryDispatched(messages.StreamMessage)
+	ObserveStreamMessage(messages.StreamMessage)
+	NoteUserTextInput(string)
+	SetToolResultsEnabled(bool)
+	SetDurationController(Controller)
+	DispatchScheduledInputs(context.Context, ScheduledInputSender) error
+}
+
+// WakeResult carries facts observed while the host handles invocation-only
+// wake sources such as an audio reader or an event-driven input queue.
+type WakeResult struct {
+	AudioInputCompleted bool
+	AudioInputError     error
+}
+
+// RunEffects expose resource operations around service-owned message and
+// shutdown policy. They are called only after the service selects the
+// corresponding boundary.
+type RunEffects struct {
+	SessionCreated          func(context.Context, Loop) error
+	SessionOpened           func(context.Context, Loop) error
+	AwaitFirstTurn          func(context.Context) error
+	NoteUserTextInput       func(string)
+	DispatchScheduledInputs func(context.Context, Loop) error
+	OnWake                  func(context.Context, Loop) (WakeResult, error)
+}
+
+// MessageHandler is the narrow host callback for session-specific prompt,
+// tool, and scheduled-input behavior. It cannot bypass controller admission:
+// the service invokes it only for an admitted message.
+type MessageHandler func(context.Context, Loop, Controller, messages.StreamMessage, RunState) (MessageResult, error)
+
+// DrainHandler receives the runner-owned terminal state after the final
+// message and before loop cancellation.
+type DrainHandler func(context.Context, Loop, Controller, RunState) error
+
+// WakeHandler handles service wakeups using a runner-owned state snapshot.
+type WakeHandler func(context.Context, Loop, Controller, RunState) (RunState, error)
+
+// SessionUpdatedWait asks the runner to bound the acknowledgement after an
+// admitted session-open event. Pending and Ready expose host-observed facts;
+// timer ownership and timeout delivery remain with the service.
+type SessionUpdatedWait struct {
+	Timeout      time.Duration
+	Pending      func() bool
+	Ready        func() bool
+	TimeoutError error
+}
+
+// LoopFactory constructs one loop around the service-owned admission bridge.
+// The controller is supplied so host tool adapters can report local execution
+// boundaries to the same service-owned liveness state.
+type LoopFactory func(context.Context, AdmissionInferencer, Controller) (Loop, error)
+
+// AudioInputPort supplies one session's local audio reader. The implementation
+// owns only the source-specific binding and read operation; the duration
+// service owns the worker, cancellation, wake signal, result collection, and
+// shutdown join.
+type AudioInputPort struct {
+	BindContext func(context.Context)
+	Run         func(context.Context, Loop) error
+}
+
+// AudioInterruptionPort admits one finite audio turn after an external wake.
+// The source pump, pending-item bound, wake signal, and worker join belong to
+// the duration service; Dispatch is the host's ordered audio-send effect.
+type AudioInterruptionPort struct {
+	Source   <-chan audioio.ScheduledAudioInput
+	Dispatch func(context.Context, Loop, audioio.ScheduledAudioInput) error
+}
+
+// RunRequest describes one bounded session execution. Resource callbacks are
+// explicit ports so construction remains inert and the service retains the
+// shutdown order without importing a host or transport package.
+type RunRequest struct {
+	Context            context.Context
+	Inferencer         messages.SessionInferencer
+	Admission          AdmissionInferencer
+	Clock              TimerScheduler
+	LivenessClock      TimerScheduler
+	MaxDuration        time.Duration
+	AudioInput         AudioInputPort
+	AudioInterruptions AudioInterruptionPort
+	// AwaitingResponseOnCancel seeds response wait for sessions whose opening
+	// dispatch is initiated outside the duration loop handler.
+	AwaitingResponseOnCancel bool
+	// MaxDurationExpired returns any lifecycle failure that must survive the
+	// service's bounded terminal cause.
+	MaxDurationExpired func() error
+	Liveness           LivenessOptions
+	Retry              RetryPolicy
+	// RetryDispatched observes a successfully sent retry control for tracing.
+	// It must not make policy decisions or perform another transport write.
+	RetryDispatched func(messages.StreamMessage)
+	// Quiesce stops host-owned producers before draining accepted loop and
+	// playback work. The service invokes it once at the start of shutdown.
+	Quiesce        func() error
+	Terminal       TerminalSource
+	Publication    Publication
+	Artifacts      ArtifactLifecycle
+	LoopFactory    LoopFactory
+	Handle         MessageHandler
+	Drain          DrainHandler
+	DrainPolicy    DrainPolicy
+	Close          func() error
+	Binding        func() error
+	ExternalErrors <-chan error
+	// ExternalErrorSources is evaluated after LoopFactory returns, when host
+	// resource error channels become available. The duration service owns the
+	// bounded fan-in and stops its forwarding workers with Context.
+	ExternalErrorSources func() []<-chan error
+	Wake                 <-chan struct{}
+	// WakeSources are independent host observations that wake one invocation.
+	// The duration service coalesces them into its bounded runner signal.
+	WakeSources []<-chan struct{}
+	OnWake      WakeHandler
+	Done        <-chan struct{}
+	// DoneSources close the run when any host-owned completion signal closes.
+	DoneSources    []<-chan struct{}
+	DoneError      func() error
+	SessionUpdated SessionUpdatedWait
+	Policy         RunPolicy
+	Facts          RunFacts
+	Effects        RunEffects
+	// Observer supplies diagnostic facts used by the duration policy. The
+	// service derives Facts, observer wakeups, readiness observations, liveness
+	// and retry enablement from its presence.
+	Observer RunObserver
+}

@@ -139,7 +139,7 @@ func deviceRequestHasDirection(request devices.Request) bool {
 	return request.CaptureEnabled || request.PlaybackEnabled
 }
 
-func (r mediaRequirements) satisfiedBy(endpoints sharedaudio.MediaEndpoints) bool {
+func (r mediaRequirements) SatisfiedBy(endpoints sharedaudio.MediaEndpoints) bool {
 	return (!r.inbound || endpoints.Inbound != nil) && (!r.outbound || endpoints.Outbound != nil)
 }
 
@@ -326,111 +326,4 @@ func isExpectedMediaPumpError(err error) bool {
 		errors.Is(err, context.DeadlineExceeded) || errors.Is(err, session.ErrLiveClosed) ||
 		errors.Is(err, devicert.ErrRTCDeviceSourceClosed) || errors.Is(err, devicert.ErrRTCDeviceSinkClosed) ||
 		errors.Is(err, sharedaudio.ErrClosed) || errors.Is(err, sharedaudio.ErrSessionMediaClosed)
-}
-
-func (i *liveInvocation) wait() error {
-	waitResult := make(chan error, 1)
-	go func() { waitResult <- i.handle.Wait() }()
-	events := i.handle.Events()
-	var sinkErr error
-	for {
-		select {
-		case event, ok := <-events:
-			if !ok {
-				events = nil
-				continue
-			}
-			if i.options.Events != nil && sinkErr == nil {
-				if err := i.options.Events.Publish(i.ctx, event); err != nil {
-					sinkErr = fmt.Errorf("publish live event: %w", err)
-					i.handle.Cancel(sinkErr)
-				}
-			}
-		case waitErr := <-waitResult:
-			drainLiveEvents(events, i.options.Events, i.ctx, &sinkErr, i.handle)
-			return i.finish(waitErr, sinkErr)
-		}
-	}
-}
-
-func (i *liveInvocation) finish(waitErr, sinkErr error) error {
-	if i == nil {
-		return errors.New("live invocation is unavailable")
-	}
-	var playbackErr error
-	if shouldDrainPlayback(i.ctx, waitErr) {
-		playbackErr = drainPlayback(i.ctx, i.ports.Playback, i.options.PlaybackDrainTimeout)
-	}
-	if i.stopPumps != nil {
-		i.stopPumps()
-	}
-	// A capture worker may be blocked in a caller-provided stream read after a
-	// provider-owned terminal boundary. Close the admitted device handle before
-	// joining media workers so process-owned sources can interrupt that read;
-	// graceful playback has already drained above, and cancellation paths do not
-	// drain by design.
-	var deviceErr error
-	if i.device != nil {
-		deviceErr = i.device.Close()
-	}
-	var pumpErr error
-	for count := 0; count < i.count; count++ {
-		candidate := <-i.pumps
-		if !isExpectedMediaPumpError(candidate) {
-			pumpErr = errors.Join(pumpErr, candidate)
-		}
-	}
-	handleErr := i.handle.Close()
-	result := errors.Join(waitErr, sinkErr, pumpErr, playbackErr, deviceErr, handleErr)
-	return errors.Join(result, finalizeRecorder(i.options.Recorder, i.ctx, result))
-}
-
-func requestedTerminalError(s finishState) error {
-	err := s.requestedErr
-	if s.toolResultErr != nil && contextOnlyOrNil(s.requestedErr) {
-		err = errors.Join(err, s.toolResultErr)
-	}
-	if s.providerErr != nil && !isContextTermination(s.providerErr) && !errors.Is(err, s.providerErr) {
-		err = errors.Join(err, fmt.Errorf("session error: %w", s.providerErr))
-	}
-	return err
-}
-
-func (i *liveInvocation) closeAfterStartError(startErr error) error {
-	if i == nil {
-		return startErr
-	}
-	var deviceErr error
-	if i.device != nil {
-		deviceErr = i.device.Close()
-	}
-	handleErr := i.handle.Close()
-	result := errors.Join(startErr, deviceErr, handleErr)
-	return errors.Join(result, finalizeRecorder(i.options.Recorder, i.ctx, result))
-}
-
-// waitForResponseBoundary includes partial assistant terminals produced by
-// barge-in cancellation.
-func (h *handle) waitForResponseBoundary(ctx context.Context, target int) error {
-	if h == nil {
-		return context.Canceled
-	}
-	if ctx == nil {
-		return errors.New("response boundary context is required")
-	}
-	for {
-		h.mu.Lock()
-		ready := h.observedResponseTerminals >= target && !h.responseActive && !h.responsePending
-		terminalWake, responseWake := h.responseTerminalWake, h.replayResponseWake
-		h.mu.Unlock()
-		if ready {
-			return nil
-		}
-		select {
-		case <-terminalWake:
-		case <-responseWake:
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
 }

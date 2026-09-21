@@ -286,25 +286,6 @@ func (c *controller) observeOutputLocked(msg messages.StreamMessage) {
 	}
 }
 
-func (c *controller) Errors() <-chan error {
-	if c == nil {
-		return nil
-	}
-	return c.errors
-}
-
-func (c *controller) LivenessFailure() error {
-	if c == nil {
-		return nil
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if !c.livenessReported {
-		return nil
-	}
-	return c.livenessFailure
-}
-
 func (c *controller) BeginLocalToolExecution() {
 	if c == nil {
 		return

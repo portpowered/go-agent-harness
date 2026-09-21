@@ -10,6 +10,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+	durationrunner "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/internal/runner"
 )
 
 // Service is the private implementation of the sessionduration contract.
@@ -18,6 +19,73 @@ type Service struct{}
 const maxDurationReason = sessionduration.MaxDurationReason
 
 func New() *Service { return &Service{} }
+
+// Run executes one bounded session through the service-owned invocation loop.
+func (s *Service) Run(request sessionduration.RunRequest) error {
+	_, err := s.RunWithResult(request)
+	return err
+}
+
+// RunWithResult returns the service-owned terminal snapshot after cleanup.
+func (s *Service) RunWithResult(request sessionduration.RunRequest) (sessionduration.Result, error) {
+	if request.Context == nil {
+		request.Context = context.Background()
+	}
+	if err := s.validateRunRequest(request); err != nil {
+		return sessionduration.Result{}, err
+	}
+	admitted, err := s.runAdmission(request)
+	if err != nil {
+		return sessionduration.Result{}, err
+	}
+	deferAdmissionSessionClose(admitted)
+	request.Close = closeAdmissionSessionAfterHost(admitted, request.Close)
+	return durationrunner.RunWithResult(s, request, admitted, publish)
+}
+
+func (s *Service) validateRunRequest(request sessionduration.RunRequest) error {
+	if err := s.ValidateDuration(request.MaxDuration); err != nil {
+		return err
+	}
+	if request.Inferencer == nil && request.Admission == nil {
+		return errors.New("session duration inferencer is required")
+	}
+	if request.LoopFactory == nil {
+		return errors.New("session duration loop factory is required")
+	}
+	return nil
+}
+
+func (s *Service) runAdmission(request sessionduration.RunRequest) (sessionduration.AdmissionInferencer, error) {
+	if request.Admission != nil {
+		return request.Admission, nil
+	}
+	return s.NewAdmissionInferencer(request.Inferencer, s.NewEventAdmission(), nil), nil
+}
+
+type deferredAdmissionCloser interface {
+	deferSessionCloseUntilFinalization()
+	finalizeSessionClose() error
+}
+
+func deferAdmissionSessionClose(admitted sessionduration.AdmissionInferencer) {
+	if closer, ok := admitted.(deferredAdmissionCloser); ok {
+		closer.deferSessionCloseUntilFinalization()
+	}
+}
+
+func closeAdmissionSessionAfterHost(admitted sessionduration.AdmissionInferencer, closeHost func() error) func() error {
+	return func() error {
+		var hostErr error
+		if closeHost != nil {
+			hostErr = closeHost()
+		}
+		if closer, ok := admitted.(deferredAdmissionCloser); ok {
+			return errors.Join(hostErr, closer.finalizeSessionClose())
+		}
+		return hostErr
+	}
+}
 
 func (s *Service) NewState(source sessionduration.TerminalSource) sessionduration.State {
 	return &terminalState{source: source}

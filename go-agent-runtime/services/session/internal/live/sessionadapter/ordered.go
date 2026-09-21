@@ -1,97 +1,15 @@
-package live
+package sessionadapter
 
 import (
 	"context"
 	"errors"
-	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/mediagate"
-	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
-// capturingInferencer attaches optional provider media after session setup.
-type capturingInferencer struct {
-	inner             messages.SessionInferencer
-	media             *mediagate.Gate
-	continuous        bool
-	flushOutbound     bool
-	replayKind        session.LiveReplayKind
-	outputSampleRate  int
-	requirements      mediaRequirements
-	onDispatch        func(messages.StreamMessage)
-	onToolResult      func(string, string, bool) func()
-	onContinuation    func() func()
-	onOpeningAdmitted func()
-	onProviderDone    func(error)
-	onMediaAttached   func(bool)
-	captureMu         sync.Mutex
-	captureFlush      func() error
-	connectedSession  messages.Session
-}
-
-func (i *capturingInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
-	s, err := i.inner.ConnectSession(ctx)
-	if err != nil {
-		i.media.Fail(err)
-		return nil, err
-	}
-	if flusher, ok := i.inner.(interface{ FlushCapture() error }); ok {
-		i.captureMu.Lock()
-		i.captureFlush = flusher.FlushCapture
-		i.captureMu.Unlock()
-	}
-	i.captureMu.Lock()
-	i.connectedSession = s
-	i.captureMu.Unlock()
-	mediaAttached := false
-	if providerMedia, ok := s.(sharedaudio.MediaSession); ok {
-		endpoints := captureMediaEndpoints(s, providerMedia, i.continuous)
-		mediaAttached = i.requirements.satisfiedBy(endpoints)
-		i.media.Attach(ctx, endpoints)
-	}
-	if i.onMediaAttached != nil {
-		i.onMediaAttached(mediaAttached)
-	}
-	if !mediaAttached {
-		i.media.Fail(mediagate.ErrMediaUnavailable)
-	}
-	// Notify the live owner after the provider cleanup boundary, even if the
-	// runner context is already canceled.
-	if done := s.Done(); done != nil && i.onProviderDone != nil {
-		go func() {
-			<-done
-			i.onProviderDone(i.TerminalError())
-		}()
-	}
-	return &orderedSession{
-		inner:             s,
-		media:             i.media,
-		flushOutbound:     i.flushOutbound,
-		onDispatch:        i.onDispatch,
-		onToolResult:      i.onToolResult,
-		onContinuation:    i.onContinuation,
-		onOpeningAdmitted: i.onOpeningAdmitted,
-	}, nil
-}
-
-// FlushCapture forwards provider capture finalization after session join.
-func (i *capturingInferencer) FlushCapture() error {
-	if i == nil {
-		return nil
-	}
-	i.captureMu.Lock()
-	flush := i.captureFlush
-	i.captureMu.Unlock()
-	if flush == nil {
-		return nil
-	}
-	return flush()
-}
-
-// orderedSession serializes provider ingress with the public media bridge.
-type orderedSession struct {
+// OrderedSession serializes provider ingress with the public media bridge.
+type OrderedSession struct {
 	inner             messages.Session
 	media             *mediagate.Gate
 	flushOutbound     bool
@@ -101,11 +19,24 @@ type orderedSession struct {
 	onOpeningAdmitted func()
 }
 
-func (s *orderedSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
+// NewOrderedSession wraps a provider session with media admission ordering.
+func NewOrderedSession(inner messages.Session, media *mediagate.Gate) *OrderedSession {
+	return &OrderedSession{inner: inner, media: media}
+}
+
+func newOrderedSession(inner messages.Session, media *mediagate.Gate, flushOutbound bool, onDispatch func(messages.StreamMessage), onToolResult func(string, string, bool) func(), onContinuation func() func(), onOpeningAdmitted func()) *OrderedSession {
+	return &OrderedSession{
+		inner: inner, media: media, flushOutbound: flushOutbound,
+		onDispatch: onDispatch, onToolResult: onToolResult,
+		onContinuation: onContinuation, onOpeningAdmitted: onOpeningAdmitted,
+	}
+}
+
+func (s *OrderedSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
 	return s.SendWithOutcome(ctx, msg).OK()
 }
 
-func (s *orderedSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
+func (s *OrderedSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
 	if s == nil || s.inner == nil {
 		return messages.SessionSendOutcome{Status: messages.SessionSendClosed}
 	}
@@ -126,7 +57,7 @@ func (s *orderedSession) SendWithOutcome(ctx context.Context, msg messages.Strea
 	return s.sendAutomatic(ctx, msg)
 }
 
-func (s *orderedSession) sendMarkedControl(ctx context.Context, msg messages.StreamMessage, ackID string, canceled bool) messages.SessionSendOutcome {
+func (s *OrderedSession) sendMarkedControl(ctx context.Context, msg messages.StreamMessage, ackID string, canceled bool) messages.SessionSendOutcome {
 	if canceled {
 		s.media.CancelAck(ackID)
 		return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: context.Canceled}
@@ -157,7 +88,7 @@ func (s *orderedSession) sendMarkedControl(ctx context.Context, msg messages.Str
 	return outcome
 }
 
-func (s *orderedSession) sendAutomatic(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
+func (s *OrderedSession) sendAutomatic(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
 	return s.runAdmission(ctx, func() messages.SessionSendOutcome {
 		return s.sendInner(ctx, msg)
 	})
@@ -170,7 +101,20 @@ func sessionSendOutcomeForContext(err error) messages.SessionSendOutcome {
 	return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: err}
 }
 
-func (s *orderedSession) runAdmission(ctx context.Context, operation func() messages.SessionSendOutcome) messages.SessionSendOutcome {
+func sessionSendOutcomeForError(ctx context.Context, err error) messages.SessionSendOutcome {
+	if err == nil {
+		return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
+	}
+	if errors.Is(err, context.DeadlineExceeded) || (ctx != nil && errors.Is(ctx.Err(), context.DeadlineExceeded)) {
+		return messages.SessionSendOutcome{Status: messages.SessionSendTimedOut, Err: err}
+	}
+	if errors.Is(err, context.Canceled) || (ctx != nil && errors.Is(ctx.Err(), context.Canceled)) {
+		return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: err}
+	}
+	return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure, Err: err}
+}
+
+func (s *OrderedSession) runAdmission(ctx context.Context, operation func() messages.SessionSendOutcome) messages.SessionSendOutcome {
 	if operation == nil {
 		return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}
 	}
@@ -186,7 +130,7 @@ func (s *orderedSession) runAdmission(ctx context.Context, operation func() mess
 	return outcome
 }
 
-func (s *orderedSession) runAdmissionBool(ctx context.Context, operation func() bool) bool {
+func (s *OrderedSession) runAdmissionBool(ctx context.Context, operation func() bool) bool {
 	if operation == nil {
 		return false
 	}
@@ -205,7 +149,7 @@ func (s *orderedSession) runAdmissionBool(ctx context.Context, operation func() 
 	return outcome.OK()
 }
 
-func (s *orderedSession) sendInner(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
+func (s *OrderedSession) sendInner(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
 	rollback := s.beginAdmission(msg, false)
 	var outcome messages.SessionSendOutcome
 	if sender, ok := s.inner.(messages.SessionSendOutcomeSender); ok {
@@ -231,7 +175,7 @@ func (s *orderedSession) sendInner(ctx context.Context, msg messages.StreamMessa
 	return outcome
 }
 
-func (s *orderedSession) beginAdmission(msg messages.StreamMessage, completeMessage bool) func() {
+func (s *OrderedSession) beginAdmission(msg messages.StreamMessage, completeMessage bool) func() {
 	if s == nil {
 		return func() {}
 	}
@@ -255,28 +199,28 @@ func (s *orderedSession) beginAdmission(msg messages.StreamMessage, completeMess
 	return func() {}
 }
 
-func (s *orderedSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
+func (s *OrderedSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
 	if s == nil || s.inner == nil {
 		return nil
 	}
 	return s.inner.Receive()
 }
 
-func (s *orderedSession) Done() <-chan struct{} {
+func (s *OrderedSession) Done() <-chan struct{} {
 	if s == nil || s.inner == nil {
 		return nil
 	}
 	return s.inner.Done()
 }
 
-func (s *orderedSession) Close() error {
+func (s *OrderedSession) Close() error {
 	if s == nil || s.inner == nil {
 		return nil
 	}
 	return s.inner.Close()
 }
 
-func (s *orderedSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
+func (s *OrderedSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
 	if s == nil || s.inner == nil {
 		return messages.SessionSendOutcome{Status: messages.SessionSendClosed}
 	}
@@ -297,7 +241,7 @@ func (s *orderedSession) RequestResponse(ctx context.Context) messages.SessionSe
 	})
 }
 
-func (s *orderedSession) SupportsResponseRequests() bool {
+func (s *OrderedSession) SupportsResponseRequests() bool {
 	if s == nil || s.inner == nil {
 		return false
 	}
@@ -309,19 +253,19 @@ func (s *orderedSession) SupportsResponseRequests() bool {
 	return ok
 }
 
-type completeMessageSender interface {
+type CompleteMessageSender interface {
 	SendMessage(context.Context, messages.Message) bool
 }
 
-type completeMessageWithoutResponseSender interface {
+type CompleteMessageWithoutResponseSender interface {
 	SendMessageWithoutResponse(context.Context, messages.Message) bool
 }
 
-func (s *orderedSession) SendMessage(ctx context.Context, msg messages.Message) bool {
+func (s *OrderedSession) SendMessage(ctx context.Context, msg messages.Message) bool {
 	if s == nil || s.inner == nil {
 		return false
 	}
-	sender, ok := s.inner.(completeMessageSender)
+	sender, ok := s.inner.(CompleteMessageSender)
 	return ok && s.runAdmissionBool(ctx, func() bool {
 		admission := messages.StreamMessage{
 			Type:       messages.StreamTypeToolCallEnd,
@@ -343,11 +287,11 @@ func (s *orderedSession) SendMessage(ctx context.Context, msg messages.Message) 
 	})
 }
 
-func (s *orderedSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
+func (s *OrderedSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
 	if s == nil || s.inner == nil {
 		return false
 	}
-	sender, ok := s.inner.(completeMessageWithoutResponseSender)
+	sender, ok := s.inner.(CompleteMessageWithoutResponseSender)
 	return ok && s.runAdmissionBool(ctx, func() bool {
 		admission := messages.StreamMessage{
 			Type:       messages.StreamTypeToolCallEnd,
@@ -366,7 +310,7 @@ func (s *orderedSession) SendMessageWithoutResponse(ctx context.Context, msg mes
 	})
 }
 
-func (s *orderedSession) SupportsCompleteMessages() bool {
+func (s *OrderedSession) SupportsCompleteMessages() bool {
 	if s == nil || s.inner == nil {
 		return false
 	}
@@ -374,7 +318,7 @@ func (s *orderedSession) SupportsCompleteMessages() bool {
 	return ok && capability.SupportsCompleteMessages()
 }
 
-func (s *orderedSession) SupportsCompleteMessagesWithoutResponse() bool {
+func (s *OrderedSession) SupportsCompleteMessagesWithoutResponse() bool {
 	if s == nil || s.inner == nil {
 		return false
 	}
@@ -382,22 +326,10 @@ func (s *orderedSession) SupportsCompleteMessagesWithoutResponse() bool {
 	return ok && capability.SupportsCompleteMessagesWithoutResponse()
 }
 
-func (s *orderedSession) InitialSessionConfigSent() bool {
+func (s *OrderedSession) InitialSessionConfigSent() bool {
 	if s == nil || s.inner == nil {
 		return false
 	}
 	marker, ok := s.inner.(interface{ InitialSessionConfigSent() bool })
 	return ok && marker.InitialSessionConfigSent()
-}
-
-// TerminalError reads the joined provider state directly. Final classification
-// must not depend on when the asynchronous Done notification gets scheduled.
-func (i *capturingInferencer) TerminalError() error {
-	i.captureMu.Lock()
-	connected := i.connectedSession
-	i.captureMu.Unlock()
-	if provider, ok := connected.(interface{ TerminalError() error }); ok {
-		return provider.TerminalError()
-	}
-	return nil
 }
