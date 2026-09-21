@@ -5751,3 +5751,58 @@ candidate before pushing it and handing it to SCRIPT CI.
   every C271 functional, integration, race, hermetic, embed, Wire, ancestry,
   deletion/caller, and adapter-budget gate on one exact clean candidate before
   pushing or handing it to SCRIPT CI.
+
+### C271 disjoint self-play audit and live seam checkpoint — 2026-09-21
+
+- Re-read the required operating policy and implementation handoff, the
+  meta-planner handoff, the admitted manifest, `prd.json`, and this progress
+  log. From `FACTORY_ROOT`, `project-control.py verify-work --type task --name
+  audio-runtime-c271-recover-selfplay-retirement` returned `admitted` for
+  `audio-runtime/audio-runtime-v1`. `prd.branchName` matches the isolated
+  `codex/audio-runtime-c271-recover-selfplay-retirement` branch.
+- Fetched `origin main`; it remains
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`. C271 HEAD
+  `a075d7721468e4c69e7671d06f78d4256bd37ae4` is clean and has current main and
+  startup integration `8bdafc7f947a3a2c9856220abdc539437035bd21` as ancestors.
+  C249 remains clean at `86a1eed17b099d510b39ce3d3b4ee7d8f7998881` with C220
+  `1bf045dd8` ancestry; C249 is not yet an ancestor of C271. No host checkout
+  or peer source file was changed.
+- Canonical `~default` reports C271 `work-task-106` as `init` / `PROCESSING`
+  with no C271 review. C248 `work-task-45` and C269 `work-task-101` are also
+  `init` / `PROCESSING`, with active Worker Sessions
+  `efb716f4-148d-4e14-adda-5238201dee2a` and
+  `cfebad2f-c290-4ea6-9041-3254c699664f`, respectively. C248's latest recorded
+  checkpoint still has its architecture and C229-owned embed watcher failures;
+  C269's latest recorded checkpoint still lacks exact-head preflight and a
+  guarded merge. Neither exact shared seam is released.
+- Read the complete concluded C259 `work-review-78` feedback. Its findings are
+  bounded room-evidence admission, public recorder-failure degradation,
+  integrated room replay round-trip coverage, and exact-head preflight; none
+  identifies a self-play repair. C271 has no review-specific finding.
+- Audited the self-play public contract, private implementation and Wire path,
+  and searched production callers. The service paths are unchanged since the
+  focused-test checkpoint `b54fd4845a9acd5cf6b26c1c802e7dbe326076e2`, whose
+  recorded functional, race, and repeated cancellation/duration/shutdown/failure
+  checks passed 26/3, 26/3, and 180/3 respectively. This turn did not rerun tests
+  or claim the final local preflight. The CLI remains connected through the
+  obsolete `agent-cli/internal/services/selfplay/interface.go` projection
+  (68 lines); `agent-cli/internal/transport/cli/session_self_play.go` remains
+  85 lines and imports that projection for provider/model defaults, personas,
+  and the opening seed. The production caller and composition cutover is
+  therefore incomplete.
+- The owned legacy cluster is still `selfplay_service.go` (53 lines),
+  `session_self_play.go` (641), and `session_self_play_evidence.go` (716): 3
+  production files / 1,410 lines. The planned adapter is 1 file / 85 lines and
+  is not yet stateless. `git diff --check` passes. No production source changed;
+  no `make prepush`, PR, push, or SCRIPT handoff is claimed.
+- Exact next action: retain C271 at `CONTINUE`; keep C248's session-observability
+  and service-test caller seams and C269's room-evidence caller seam untouched
+  while their active workers finish. Refresh their canonical reviewed/released
+  state. Once both seams are released, fetch current main, preserve/reconcile
+  C249 and C220 additively, cut over every named and search-discovered caller,
+  remove the obsolete projection and temporary helper, delete the exact three
+  owned legacy files, and leave only a stateless adapter at or below 300 lines.
+  Then run `make prepush` plus every C271 functional, integration, race,
+  repeated-shutdown, nomicrophone, hermetic, embed, Wire, caller/deletion,
+  adapter-budget, ancestry and cleanliness command on one exact clean SHA
+  before push and SCRIPT handoff.
