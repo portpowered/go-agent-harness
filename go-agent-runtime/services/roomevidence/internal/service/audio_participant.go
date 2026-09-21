@@ -2,11 +2,26 @@ package service
 
 import (
 	"encoding/json"
+	"fmt"
 	streamanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/stream"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"sync"
 	"time"
 )
+
+func audioSamples(pcm []byte) ([]int16, error) {
+	if len(pcm) > maxAudioFrameBytes {
+		return nil, fmt.Errorf("PCM16 audio frame exceeds %d-byte bound", maxAudioFrameBytes)
+	}
+	if len(pcm)%2 != 0 {
+		return nil, fmt.Errorf("PCM16 audio delta has odd byte length %d", len(pcm))
+	}
+	if len(pcm) == 0 {
+		return nil, nil
+	}
+	return codec.DecodePCM16WithLimit(pcm, len(pcm))
+}
 
 const roomReplayParticipantStreamRoleCount = 3
 

@@ -32,9 +32,10 @@ func TestExternalRoomRecordsNoCapturedSamplesTruthfully(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	scheduler := clock.NewDeterministic(time.Unix(123, 0), time.Millisecond)
+	evidence := roomevidencewire.NewService()
 	host := roomswire.NewService(roomswire.Dependencies{
 		Clock:    scheduler,
-		Evidence: roomevidencewire.NewService(),
+		Evidence: evidence,
 		Media: rooms.MediaFactoryFunc(func(context.Context, rooms.Participant, rooms.AudioFormat) (rooms.MediaPorts, error) {
 			return rooms.MediaPorts{Capture: emptyRoomCapture{}}, nil
 		}),
@@ -69,7 +70,7 @@ func TestExternalRoomRecordsNoCapturedSamplesTruthfully(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("room did not join after duration bound")
 	}
-	plan, err := host.LoadReplayPlan(output)
+	plan, err := evidence.LoadPlan(output)
 	if err != nil {
 		t.Fatalf("load finalized empty recording: %v", err)
 	}

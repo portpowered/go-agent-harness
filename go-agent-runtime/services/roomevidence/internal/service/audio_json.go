@@ -10,8 +10,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/internal/pathguard"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	"io"
@@ -374,30 +372,4 @@ func formatOffset(start time.Time, at time.Time) float64 {
 		return 0
 	}
 	return offsetMillis(at.Sub(start))
-}
-
-func audioSamples(pcm []byte) ([]int16, error) {
-	if len(pcm) > maxAudioFrameBytes {
-		return nil, fmt.Errorf("PCM16 audio frame exceeds %d-byte bound", maxAudioFrameBytes)
-	}
-	if len(pcm)%2 != 0 {
-		return nil, fmt.Errorf("PCM16 audio delta has odd byte length %d", len(pcm))
-	}
-	if len(pcm) == 0 {
-		return nil, nil
-	}
-	return codec.DecodePCM16WithLimit(pcm, len(pcm))
-}
-
-func normalizedFormat(format rooms.AudioFormat) rooms.AudioFormat {
-	if format.SampleRate <= 0 {
-		format.SampleRate = defaultSampleRate
-	}
-	if format.Channels <= 0 {
-		format.Channels = defaultChannels
-	}
-	if format.FrameDuration <= 0 {
-		format.FrameDuration = defaultFrameDuration
-	}
-	return format
 }

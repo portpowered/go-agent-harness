@@ -154,12 +154,8 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 		if opts.WebSocketDialerFactory != nil {
 			sessionOptions.WebSocketDialer = opts.WebSocketDialerFactory(participant)
 		}
-		// Recording only applies on the genuine live-construction path
-		// (evidence enabled, not a replay run): NewLiveSessionInferencer is
-		// the only constructor that consults RecordSessionCapturePath. A
-		// custom SessionFactory or an injected SessionInferencer (both
-		// deterministic-test seams) ignore it, exactly like solo session
-		// recording never applies to an injected inferencer either.
+		// Record only on genuine live construction: NewLiveSessionInferencer
+		// consumes this path; injected inferencers and custom factories do not.
 		if evidence != nil {
 			if capturePath := evidence.Artifacts(participant.ID).Capture; capturePath != "" {
 				sessionOptions.RecordSessionCapturePath = filepath.Join(evidence.Destination(), filepath.FromSlash(capturePath))

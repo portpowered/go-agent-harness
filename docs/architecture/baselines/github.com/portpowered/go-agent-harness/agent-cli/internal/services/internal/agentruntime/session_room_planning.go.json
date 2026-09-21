@@ -18,7 +18,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_room_planning.go",
       "symbol": "buildRoomParticipantPlansWithContext",
-      "value": 105,
+      "value": 104,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -48,7 +48,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_room_planning.go",
       "symbol": "buildRoomParticipantPlansWithContext",
-      "value": 49,
+      "value": 48,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -67,7 +67,7 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_room_planning.go",
-      "value": 529,
+      "value": 526,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -87,7 +87,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_room_planning.go",
       "symbol": "buildRoomParticipantPlansWithContext",
-      "value": 221,
+      "value": 217,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },

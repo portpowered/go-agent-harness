@@ -19,6 +19,19 @@ import (
 	"unicode"
 )
 
+func normalizedFormat(format rooms.AudioFormat) rooms.AudioFormat {
+	if format.SampleRate <= 0 {
+		format.SampleRate = defaultSampleRate
+	}
+	if format.Channels <= 0 {
+		format.Channels = defaultChannels
+	}
+	if format.FrameDuration <= 0 {
+		format.FrameDuration = defaultFrameDuration
+	}
+	return format
+}
+
 func newRecorder(options roomevidence.RecordingRequest) (roomevidence.Recorder, error) {
 	destination := filepath.Clean(strings.TrimSpace(options.Destination))
 	if destination == "." || destination == "" {

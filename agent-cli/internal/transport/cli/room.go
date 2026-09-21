@@ -353,28 +353,6 @@ func resolveRoomReplayCommandOutputDir(requested string) string {
 	return requested
 }
 
-func resolveRoomCommandOutputDir(service roomevidence.Service, plan runtimeRooms.RoomLaunchPlan, requested string, explicit bool) (string, error) {
-	if !plan.Manifest.Room.RecordingEnabled() {
-		return "", nil
-	}
-	if !explicit {
-		if destination := plan.Manifest.Room.RecordingDirectory(); destination != "" {
-			return destination, nil
-		}
-		if plan.Mode == runtimeRooms.RoomLaunchModeBare {
-			if service == nil {
-				return "", errors.New("room evidence service is required")
-			}
-			return service.CreateFreshRunDirectory(plan.ConfigDir)
-		}
-	}
-	requested = strings.TrimSpace(requested)
-	if requested == "" {
-		requested = DefaultRoomOutputDir
-	}
-	return requested, nil
-}
-
 func defaultRoomSignalContext(parent context.Context) (context.Context, func()) {
 	return signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
 }

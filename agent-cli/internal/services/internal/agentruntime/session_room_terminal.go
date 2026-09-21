@@ -207,6 +207,52 @@ func participantTerminalFields(result RoomParticipantResult) map[string]string {
 	}
 }
 
+type roomParticipantFailureHandler struct {
+	runtime     *roomParticipantRuntime
+	evidence    roomevidence.Recorder
+	coordinator *roomCoordinator
+}
+
+func (h roomParticipantFailureHandler) observe(observation sessionTerminalObservation) {
+	if !observation.Failure || observation.Classification == providers.ErrorClassCancellation || h.providerClose(observation) {
+		return
+	}
+	h.recordProviderError(observation)
+	failure := roomParticipantFailure(h.runtime.plan.manifest.ID, h.failureError(observation), secretsForPlan(h.runtime.plan))
+	if observation.TerminalProvenance == string(messages.TerminalProvenanceProvider) && observation.FailingEvent == string(messages.StreamTypeError) {
+		h.coordinator.fail(failure)
+		return
+	}
+	h.coordinator.failParticipant(h.runtime.plan.manifest.ID, failure)
+}
+
+func (h roomParticipantFailureHandler) providerClose(observation sessionTerminalObservation) bool {
+	return observation.TerminalReason == string(messages.TerminalReasonProviderClose) && observation.FailingEvent == string(messages.StreamTypeSessionClose)
+}
+
+func (h roomParticipantFailureHandler) recordProviderError(observation sessionTerminalObservation) {
+	if h.evidence == nil || (observation.TerminalProvenance != string(messages.TerminalProvenanceProvider) && observation.FailingEvent != string(messages.StreamTypeError)) {
+		return
+	}
+	fields := map[string]string{"classification": observation.Classification}
+	if observation.Code != "" {
+		fields["code"] = observation.Code
+	}
+	_ = h.evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationProviderError, ParticipantID: h.runtime.plan.manifest.ID, Fields: fields})
+}
+
+func (h roomParticipantFailureHandler) failureError(observation sessionTerminalObservation) error {
+	if h.runtime.lifecycle != nil {
+		if transportErr := h.runtime.lifecycle.transportTerminalErrorSnapshot(); transportErr != nil {
+			return transportErr
+		}
+	}
+	if observation.Err != nil {
+		return observation.Err
+	}
+	return errors.New("session stream error")
+}
+
 func participantTerminationDiagnostic(result RoomParticipantResult) SessionDiagnosticRecord {
 	return SessionDiagnosticRecord{
 		Event:  SessionDiagnosticEventRoomBound,

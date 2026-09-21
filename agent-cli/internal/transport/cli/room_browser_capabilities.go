@@ -121,6 +121,28 @@ func validateRoomOutput(service roomevidence.Service, plans roomRunPlans, output
 	return nil
 }
 
+func resolveRoomCommandOutputDir(service roomevidence.Service, plan runtimeRooms.RoomLaunchPlan, requested string, explicit bool) (string, error) {
+	if !plan.Manifest.Room.RecordingEnabled() {
+		return "", nil
+	}
+	if !explicit {
+		if destination := plan.Manifest.Room.RecordingDirectory(); destination != "" {
+			return destination, nil
+		}
+		if plan.Mode == runtimeRooms.RoomLaunchModeBare {
+			if service == nil {
+				return "", errors.New("room evidence service is required")
+			}
+			return service.CreateFreshRunDirectory(plan.ConfigDir)
+		}
+	}
+	requested = strings.TrimSpace(requested)
+	if requested == "" {
+		requested = DefaultRoomOutputDir
+	}
+	return requested, nil
+}
+
 // NewRoomParticipantBrowserCapabilitiesFactory creates the production room
 // adapter. The session browser composition remains the single source for
 // broker tools, initialization, and cleanup; this adapter only changes the

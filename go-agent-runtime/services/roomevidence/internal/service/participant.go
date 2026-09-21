@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
@@ -218,4 +219,123 @@ func (p *participantRecorder) openCheck() error {
 		return roomevidence.ErrRecorderClosed
 	}
 	return p.owner.checkOpen()
+}
+
+func (r *recorder) Observe(observation roomevidence.Observation) error {
+	switch observation.Kind {
+	case roomevidence.ObservationTimeline, roomevidence.ObservationFinalTimeline:
+		return r.recordObservedTimeline(observation.At, observation.Event, observation.ParticipantID, observation.Fields)
+	case roomevidence.ObservationLiveEvent:
+		return r.RecordLiveEvent(observation.ParticipantID, observation.LiveEvent)
+	case roomevidence.ObservationProviderError:
+		return r.RecordProviderErrorTimeline(observation.ParticipantID, observation.Fields)
+	case roomevidence.ObservationParticipantReady:
+		return r.SetParticipantReady(observation.ParticipantReady)
+	case roomevidence.ObservationParticipantTerminated:
+		return r.SetParticipantTerminated(observation.ParticipantResult)
+	case roomevidence.ObservationSourceAudio,
+		roomevidence.ObservationReceivedAudio,
+		roomevidence.ObservationSpeakerAudio,
+		roomevidence.ObservationSpeechStopped,
+		roomevidence.ObservationProviderAudio,
+		roomevidence.ObservationPeerAudio:
+		return r.observeRoomAudio(observation)
+	case roomevidence.ObservationError:
+		r.MarkError(observation.ParticipantID, observation.Artifact, observation.Err)
+		return r.Error()
+	case roomevidence.ObservationDiagnostic,
+		roomevidence.ObservationDelta,
+		roomevidence.ObservationParticipantAudio,
+		roomevidence.ObservationSentAudio,
+		roomevidence.ObservationSentStream,
+		roomevidence.ObservationCloseSentSpeechSegment,
+		roomevidence.ObservationReceivedParticipantAudio,
+		roomevidence.ObservationAudioDropped,
+		roomevidence.ObservationParticipantError:
+		return r.observeParticipant(observation)
+	default:
+		return fmt.Errorf("unknown room evidence observation kind %q", observation.Kind)
+	}
+}
+
+func (r *recorder) observeRoomAudio(observation roomevidence.Observation) error {
+	switch observation.Kind {
+	case roomevidence.ObservationSourceAudio:
+		r.RecordSource(observation.ParticipantID, observation.AudioFrame)
+	case roomevidence.ObservationReceivedAudio:
+		r.RecordReceived(observation.ParticipantID, observation.AudioFrame)
+	case roomevidence.ObservationSpeakerAudio:
+		r.ObserveSpeakerAudio(observation.ParticipantID, observation.TargetIDs, observation.PCM)
+	case roomevidence.ObservationSpeechStopped:
+		r.ObserveSpeechStopped(observation.ParticipantID)
+	case roomevidence.ObservationProviderAudio:
+		r.ObserveProviderAudio(observation.ParticipantID, observation.RelatedID)
+	case roomevidence.ObservationPeerAudio:
+		r.ObservePeerAudio(observation.ParticipantID, observation.RelatedID, observation.PCM)
+	default:
+		return fmt.Errorf("unknown room audio observation kind %q", observation.Kind)
+	}
+	return r.Error()
+}
+
+func (r *recorder) observeParticipant(observation roomevidence.Observation) error {
+	participant, err := r.participantRecorder(observation.ParticipantID)
+	if err != nil {
+		return err
+	}
+	switch observation.Kind {
+	case roomevidence.ObservationDiagnostic:
+		diagnostic := observation.Diagnostic
+		if diagnostic.Event == "" {
+			diagnostic.Event = observation.Event
+		}
+		if diagnostic.Fields == nil {
+			diagnostic.Fields = observation.Fields
+		}
+		if diagnostic.At.IsZero() {
+			diagnostic.At = observation.At
+		}
+		return participant.RecordDiagnostic(diagnostic)
+	case roomevidence.ObservationDelta:
+		return participant.ObserveDelta(observation.StreamMessage)
+	case roomevidence.ObservationParticipantAudio:
+		return participant.ObserveAudio(observation.PCM)
+	case roomevidence.ObservationSentAudio:
+		return participant.ObserveSentAudio(observation.PCM)
+	case roomevidence.ObservationSentStream:
+		return participant.ObserveSentStream(observation.PCM)
+	case roomevidence.ObservationCloseSentSpeechSegment:
+		return participant.CloseSentSpeechSegment()
+	case roomevidence.ObservationReceivedParticipantAudio:
+		return participant.ObserveReceivedAudio(observation.PCM)
+	case roomevidence.ObservationAudioDropped:
+		return participant.RecordAudioDropped(observation.Artifact, observation.DroppedBytes)
+	case roomevidence.ObservationParticipantError:
+		return participant.MarkError(observation.Artifact, observation.Err)
+	default:
+		return fmt.Errorf("unknown participant evidence observation kind %q", observation.Kind)
+	}
+}
+
+func (r *recorder) recordObservedTimeline(at time.Time, event, participant string, fields map[string]string) error {
+	if r == nil {
+		return roomevidence.ErrRecorderClosed
+	}
+	r.operationMu.Lock()
+	defer r.operationMu.Unlock()
+	if err := r.checkOpen(); err != nil {
+		return err
+	}
+	if at.IsZero() {
+		at = r.clock.source.Now().UTC()
+	}
+	return r.writeTimelineAt(at.UTC(), event, participant, fields)
+}
+
+func (r *recorder) participantRecorder(id string) (*participantRecorder, error) {
+	participant := r.participant(id)
+	if participant != nil {
+		return participant, nil
+	}
+	return nil, fmt.Errorf("%w: %q", roomevidence.ErrParticipantUnknown, id)
 }

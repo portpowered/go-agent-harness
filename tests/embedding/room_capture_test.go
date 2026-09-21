@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	roomevidencewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	roomswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
@@ -28,7 +29,8 @@ func TestExternalRoomRejectsMissingProviderTrace(t *testing.T) {
 			return newEmbeddedLiveProvider(), nil
 		},
 	})
-	host := roomswire.NewService(roomswire.Dependencies{Clock: scheduler, Live: live, Evidence: roomevidencewire.NewService()})
+	evidence := roomevidencewire.NewService()
+	host := roomswire.NewService(roomswire.Dependencies{Clock: scheduler, Live: live, Evidence: evidence})
 	manifest := rooms.Manifest{SchemaVersion: rooms.SchemaVersion, Room: rooms.Room{MaxDuration: time.Second}}
 	for _, id := range []string{"alice", "bob"} {
 		manifest.Participants = append(manifest.Participants, rooms.Participant{ID: id, SystemPrompt: "agent", OpeningPrompt: "start", Provider: "fixture", Model: "fixture", APIKeyEnv: "UNRESOLVED_TEST_SELECTOR", Tools: []string{}})
@@ -59,7 +61,7 @@ func TestExternalRoomRejectsMissingProviderTrace(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("room did not finalize")
 	}
-	if _, err := host.LoadReplayPlan(output); !errors.Is(err, rooms.ErrReplayBundleIncomplete) {
+	if _, err := evidence.LoadPlan(output); !errors.Is(err, roomevidence.ErrRoomReplayBundleIncomplete) {
 		t.Fatalf("replay admission=%v, want incomplete evidence", err)
 	}
 	for _, participant := range manifest.Participants {

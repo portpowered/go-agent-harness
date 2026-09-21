@@ -1,6 +1,8 @@
 package agentruntime
 
 import (
+	"errors"
+	"strings"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
@@ -263,3 +265,36 @@ type RoomRunOptions struct {
 
 // RoomOptions is a concise alias for RoomRunOptions.
 type RoomOptions = RoomRunOptions
+
+func openRoomEvidence(opts RoomRunOptions, validation room.ValidationOptions, replayMode bool, roomClock platformclock.Source) (roomevidence.Recorder, []string, RoomRunOptions, error) {
+	if strings.TrimSpace(opts.OutputDir) == "" {
+		return nil, nil, opts, nil
+	}
+	if opts.Evidence == nil {
+		return nil, nil, opts, errors.New("room evidence service is unavailable")
+	}
+	outputDir, err := opts.Evidence.PrepareOutput(opts.OutputDir)
+	if err != nil {
+		return nil, nil, opts, err
+	}
+	opts.OutputDir = outputDir
+	var secrets []string
+	if !replayMode {
+		secrets = roomCredentialSecrets(opts.Manifest, validation)
+	}
+	recorder, err := opts.Evidence.Open(roomevidence.RecordingRequest{
+		Destination: outputDir,
+		Manifest:    opts.Manifest,
+		AudioFormat: runtimeAudioFormat(roomFormatForOptions(opts)),
+		Secrets:     secrets,
+		StartedAt:   roomClock.Now().UTC(),
+		Clock:       roomClock,
+	})
+	if err != nil {
+		return nil, secrets, opts, err
+	}
+	if opts.onRoomRecorderReady != nil {
+		opts.onRoomRecorderReady(recorder)
+	}
+	return recorder, secrets, opts, nil
+}

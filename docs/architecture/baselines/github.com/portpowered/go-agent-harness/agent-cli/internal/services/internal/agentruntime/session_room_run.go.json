@@ -68,7 +68,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_room_run.go",
       "symbol": "runRoomParticipant",
-      "value": 64,
+      "value": 63,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -148,7 +148,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_room_run.go",
       "symbol": "runRoomParticipant",
-      "value": 45,
+      "value": 44,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -167,7 +167,7 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_room_run.go",
-      "value": 1149,
+      "value": 1144,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -187,7 +187,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_room_run.go",
       "symbol": "observeRoomParticipantStream",
-      "value": 120,
+      "value": 119,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -207,7 +207,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_room_run.go",
       "symbol": "runRoomParticipant",
-      "value": 216,
+      "value": 211,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -247,7 +247,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_room_run.go",
       "symbol": "runRoomParticipant",
-      "value": 131,
+      "value": 127,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     }
