@@ -15,6 +15,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	runtimeSessionWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
+	duration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 )
 
 // RunSessionWithInstructions resolves the ask-path system-prompt contract and
@@ -114,11 +116,11 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 				}
 				return errors.Join(plan.run(ctx, output), output.errorValue())
 			}
-			durationCtx, err := prepareSessionDurationArtifacts(ctx)
+			durationCtx, err := durationwire.NewService().PrepareArtifacts(ctx)
 			if err != nil {
 				return err
 			}
-			admission := newSessionDurationAdmission()
+			admission := durationwire.NewService().NewEventAdmission()
 			// The seed substitution wrapper must sit INSIDE the admission
 			// boundary: the duration runner connects through
 			// admittedInferencer, so any wrapper composed outside it never
@@ -133,14 +135,10 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 				}
 			}
 			if admittedInner != nil {
-				plan.inferencer = &sessionDurationAdmissionInferencer{
-					inner:     admittedInner,
-					admission: admission,
-					closeDone: make(chan struct{}),
-				}
+				plan.inferencer = durationwire.NewService().NewAdmissionInferencer(admittedInner, admission, make(chan struct{}))
 			}
-			var admittedInferencer *sessionDurationAdmissionInferencer
-			if admitted, ok := plan.inferencer.(*sessionDurationAdmissionInferencer); ok {
+			var admittedInferencer duration.AdmissionInferencer
+			if admitted, ok := plan.inferencer.(duration.AdmissionInferencer); ok {
 				admittedInferencer = admitted
 			}
 			runErr = runSessionDurationPlanWithAdmission(durationCtx, output, plan, maxDuration, realSessionDurationClock{}, admittedInferencer)
@@ -149,7 +147,7 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 		if maxDuration == 0 {
 			return plan.run(ctx, out)
 		}
-		durationCtx, err := prepareSessionDurationArtifacts(ctx)
+		durationCtx, err := durationwire.NewService().PrepareArtifacts(ctx)
 		if err != nil {
 			return err
 		}
@@ -183,7 +181,7 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 		if maxDuration == 0 {
 			runErr = plan.run(ctx, sessionOut)
 		} else {
-			durationCtx, durationErr := prepareSessionDurationArtifacts(ctx)
+			durationCtx, durationErr := durationwire.NewService().PrepareArtifacts(ctx)
 			if durationErr != nil {
 				return durationErr
 			}
@@ -198,7 +196,7 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 	if maxDuration == 0 {
 		return plan.run(ctx, sessionOut)
 	}
-	durationCtx, err := prepareSessionDurationArtifacts(ctx)
+	durationCtx, err := durationwire.NewService().PrepareArtifacts(ctx)
 	if err != nil {
 		return err
 	}

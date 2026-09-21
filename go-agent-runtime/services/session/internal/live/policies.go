@@ -4,26 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
-	"regexp"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
-const (
-	defaultFirstTurnTimeout       = 30 * time.Second
-	defaultRateLimitRetryDelay    = 2 * time.Second
-	defaultRateLimitRetryMaxDelay = 15 * time.Second
-	rateLimitRetryCode            = "rate_limit_exceeded"
-)
-
-var rateLimitRetryDelayPattern = regexp.MustCompile(`(?i)\bplease\s+try\s+again\s+in\s+((?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+))s\b`)
+const defaultFirstTurnTimeout = 30 * time.Second
 
 type retryRequest struct {
 	loop     *agentloop.AgentLoop
@@ -119,37 +109,27 @@ func (h *handle) observeRateLimit(loop *agentloop.AgentLoop, msg messages.Stream
 	if !ok {
 		return
 	}
-	delay, eligible := rateLimitRetryDecision(terminal, h.request.RateLimitRetry)
-	if !eligible {
+	h.mu.Lock()
+	controller := h.durationController
+	h.mu.Unlock()
+	if controller == nil {
 		return
 	}
-	if !h.claimRateLimitRetry() {
-		h.Cancel(fmt.Errorf("%w: provider returned %s", session.ErrLiveRateLimitRetryExhausted, rateLimitRetryCode))
+	decision := controller.Retry(sessionduration.RetryRequest{Terminal: terminal})
+	if decision.Exhausted {
+		h.Cancel(fmt.Errorf("%w: provider returned rate_limit_exceeded", session.ErrLiveRateLimitRetryExhausted))
 		return
 	}
-	request := retryRequest{loop: loop, deadline: h.scheduler.Now().Add(delay)}
+	if !decision.Eligible {
+		return
+	}
+	request := retryRequest{loop: loop, deadline: h.scheduler.Now().Add(decision.Delay)}
 	select {
 	case h.retryRequests <- request:
 	case <-h.parentContext().Done():
 	}
 }
 
-func (h *handle) claimRateLimitRetry() bool {
-	if h == nil {
-		return false
-	}
-	h.retryMu.Lock()
-	defer h.retryMu.Unlock()
-	maxRetries := h.request.RateLimitRetry.MaxRetries
-	if maxRetries == 0 {
-		maxRetries = 1
-	}
-	if h.retriesUsed >= maxRetries {
-		return false
-	}
-	h.retriesUsed++
-	return true
-}
 func (h *handle) parentContext() context.Context {
 	if h == nil {
 		return context.Background()
@@ -222,83 +202,6 @@ func (h *handle) waitForRetry(ctx context.Context, deadline time.Time) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-}
-
-func rateLimitRetryDecision(terminal *messages.MessageEndValue, policy session.LiveRateLimitRetryPolicy) (time.Duration, bool) {
-	if terminal == nil || strings.ToLower(strings.TrimSpace(terminal.Status)) != "failed" {
-		return 0, false
-	}
-	if strings.EqualFold(strings.TrimSpace(string(terminal.TerminalReason)), string(messages.TerminalReasonCancellation)) {
-		return 0, false
-	}
-	if !strings.EqualFold(rateLimitErrorCode(terminal), rateLimitRetryCode) {
-		return 0, false
-	}
-	defaultDelay := policy.DefaultDelay
-	if defaultDelay <= 0 {
-		defaultDelay = defaultRateLimitRetryDelay
-	}
-	maxDelay := policy.MaxDelay
-	if maxDelay <= 0 {
-		maxDelay = defaultRateLimitRetryMaxDelay
-	}
-	delay := parseRateLimitRetryDelay(rateLimitErrorMessage(terminal), defaultDelay, maxDelay)
-	return delay, true
-}
-
-func rateLimitErrorCode(terminal *messages.MessageEndValue) string {
-	if terminal == nil {
-		return ""
-	}
-	if value := strings.TrimSpace(terminal.ProviderErrorCode); value != "" {
-		return value
-	}
-	return statusDetailField(terminal.StatusDetails, "code")
-}
-
-func rateLimitErrorMessage(terminal *messages.MessageEndValue) string {
-	if terminal == nil {
-		return ""
-	}
-	if value := strings.TrimSpace(terminal.ProviderErrorMessage); value != "" {
-		return value
-	}
-	return statusDetailField(terminal.StatusDetails, "message")
-}
-
-func statusDetailField(details, wanted string) string {
-	parts := strings.Split(details, ",")
-	for index, part := range parts {
-		key, value, ok := strings.Cut(part, "=")
-		if !ok || !strings.EqualFold(strings.TrimSpace(key), wanted) {
-			continue
-		}
-		value = strings.TrimSpace(value)
-		if wanted == "message" && index+1 < len(parts) {
-			value = strings.TrimSpace(strings.Join(append([]string{value}, parts[index+1:]...), ","))
-		}
-		return value
-	}
-	return ""
-}
-
-func parseRateLimitRetryDelay(message string, defaultDelay, maxDelay time.Duration) time.Duration {
-	match := rateLimitRetryDelayPattern.FindStringSubmatch(message)
-	if len(match) != 2 {
-		return defaultDelay
-	}
-	seconds, err := strconv.ParseFloat(match[1], 64)
-	if err != nil || math.IsNaN(seconds) || math.IsInf(seconds, 0) || seconds <= 0 {
-		return defaultDelay
-	}
-	delay := time.Duration(math.Round(seconds * float64(time.Second)))
-	if delay <= 0 {
-		delay = time.Nanosecond
-	}
-	if delay > maxDelay {
-		return maxDelay
-	}
-	return delay
 }
 
 type timedToolExecutor struct {

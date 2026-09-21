@@ -16,6 +16,8 @@ import (
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	duration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	sessiontrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
@@ -61,7 +63,7 @@ func (d *Dispatcher) Run(ctx context.Context, out io.Writer, request public.Requ
 		}
 		if capturePath != "" {
 			artifactBase := strings.TrimSuffix(capturePath, filepath.Ext(capturePath))
-			ctx = WithSessionDurationArtifactPaths(ctx, SessionDurationArtifactPaths{AudioPath: artifactBase + ".wav", TranscriptPath: artifactBase + ".jsonl"})
+			ctx = durationwire.NewService().WithArtifactPaths(ctx, duration.SessionDurationArtifactPaths{AudioPath: artifactBase + ".wav", TranscriptPath: artifactBase + ".jsonl"})
 		}
 	}
 	options, err := d.requestOptions(ctx, request)

@@ -9,6 +9,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	runtimeProviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
@@ -197,7 +198,7 @@ type RoomRunOptions struct {
 	// Nil derives timers from Clock when possible, otherwise each participant
 	// uses the host timer. A shared deterministic clock keeps room tests and
 	// participant watchdogs on one controllable timeline.
-	LivenessClock SessionLivenessClock
+	LivenessClock sessionduration.TimerScheduler
 	// BoundShutdownGrace is the fixed room-bound drain window. A zero value
 	// selects the documented production default; tests may override it with a
 	// small positive duration to make the bounded drain deterministic.
