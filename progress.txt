@@ -5210,3 +5210,21 @@ handoff sequence. No gate completion is claimed.
   port update, then run `make prepush` followed by all C251 functional,
   integration, race, hermetic, embed, Wire, absence, adapter, ancestry, and diff
   checks on that exact SHA. Push/open the PR only if all local gates pass.
+
+## C251 architecture gate compile repair checkpoint — 2026-09-21
+
+- Candidate `6976ffaa8103f4afbf691a08431da7d1bfb75382` passes formatting but
+  `make prepush` stopped during architecture type-loading. Two pre-existing
+  `agent-cli/test/integration` assertions compared the public string-valued
+  `UnresolvedToolResultsError.SendStatuses` entries with typed
+  `messages.SessionSendStatus` values; the same mismatch is present in fetched
+  `origin/main`.
+- Updated those two assertions to compare the serialized status strings with
+  `string(wantStatus)`. `rtk go test -count=1 -timeout 180s
+  ./agent-cli/test/integration -run '^$'` now compiles the full integration
+  package, and `rtk git diff --check` passes.
+- This local type-loading repair is not committed and no push/PR/CI handoff
+  exists. Exact next action: commit this repair, then rerun `make prepush` and
+  every planned C251 local functional, integration, race, hermetic, embed,
+  Wire, absence, adapter, ancestry, and diff gate on the resulting SHA before
+  any push or PR creation.
