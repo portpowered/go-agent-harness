@@ -4123,3 +4123,44 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   caller cutover, deleting the full three-file cluster and temporary helper,
   checking the sole adapter budget, and running the complete exact-head local
   preflight. Keep this task at `CONTINUE` until those steps are complete.
+
+# C271 current ownership checkpoint — 2026-09-21
+
+- Reverified `project-control.py verify-work --type task --name
+  audio-runtime-c271-recover-selfplay-retirement`: admitted under the sole
+  `audio-runtime` project. `prd.json.branchName` equals the isolated branch
+  `codex/audio-runtime-c271-recover-selfplay-retirement`. The clean candidate
+  is `2f428de613291edc1810c218d259f20bf97bbabe`; fetched `origin/main` remains
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44` and is an ancestor, as is startup
+  revision `8bdafc7f947a3a2c9856220abdc539437035bd21`.
+- Preserved C249 is still clean at
+  `86a1eed17b099d510b39ce3d3b4ee7d8f7998881`; C220
+  `1bf045dd8` is an ancestor of that checkpoint. No predecessor or peer worktree
+  was modified. C248 `work-task-45` and C269 `work-task-101` remain in
+  canonical `init`; neither reviewed release is available, so shared caller and
+  three-file legacy seams remain frozen.
+- C271 has no concluded review row; C267 has no review row and C249's task
+  failure is generic (`runner returned failed outcome`). Read C259's concluded
+  `work-review-78`: three room-evidence findings (bounded manifest/timeline
+  admission, recorder degradation behavior, and integrated room replay) plus
+  missing exact-head preflight evidence. Those findings belong to roomevidence
+  and do not justify self-play edits.
+- The disjoint service audit confirms the host-neutral public contract,
+  `services/selfplay/internal` implementation and service-local Wire graph.
+  The planned `selfplay_service.go` (53 lines), `session_self_play.go`
+  (641 lines), and `session_self_play_evidence.go` (716 lines) are still
+  present; the obsolete projection and temporary room-evidence helper also
+  remain. No deletion credit is claimed. The existing sole CLI command source
+  is 85 lines, but it has not yet been verified as a stateless adapter.
+- `rtk go test -timeout=5m -count=10
+  ./go-agent-runtime/services/selfplay/... -run
+  '(Cancel|Duration|Shutdown|Stop|Failure)'` passed 160 tests in 3 packages.
+  This is focused behavior evidence only; no `make prepush`, caller cutover,
+  adapter audit, full preflight, push or PR handoff has occurred.
+- Exact next action: continue only disjoint self-play service and caller audit
+  while watching canonical C248/C269 states. When both reviewed releases are
+  available, fetch `origin/main`, reconcile their behavior additively through
+  public contracts, then cut over every caller, remove both uncredited files
+  and the full three-file cluster, verify the one-file/300-line stateless
+  adapter limit, and run the complete planned preflight on the exact clean
+  candidate before any PR submission. Keep C271 at `CONTINUE` until then.
