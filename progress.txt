@@ -6007,3 +6007,38 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
 - Passed the bounded repro after repair: `rtk env CGO_ENABLED=0 go test -count=1 -tags=nomicrophone ./agent-cli/internal/transport/cli -run 'TestSession(Recorded|Unrecorded)WebMCPCastDeviceWAVStaysInteractive' -timeout 30s`.
 - Passed neighboring checks: `rtk env CGO_ENABLED=0 go test -count=1 -tags=nomicrophone ./agent-cli/internal/transport/cli/internal/livehost ./agent-cli/internal/transport/cli -run '(TestSession(Recorded|Unrecorded)WebMCPCastDeviceWAVStaysInteractive|TestSessionRecordOnlyLiveOpensDevicesAndDoesNotSelfClose|TestIsPassiveLiveInvocationMatrix)' -timeout 60s`, `rtk go test -count=1 ./go-agent-runtime/services/recording/... ./go-agent-runtime/services/replay/... ./go-agent-runtime/services/session/... -run '(Record|Recording|Replay|Close|Shutdown|WebMCP|Capture)' -timeout 120s`, and `rtk git diff --check`.
 - The seven integrated-main retirement files and six checkpoint-only replacement paths remain absent (13/13); browser boundary remains unchanged; named adapter inventory remains 0 files / 0 physical lines. C268 metrics/trace and C274 room-replay direct readers still require their reviewed owner releases or planner handoff. No full C276 preflight, `make prepush`, push, PR, or SCRIPT gate was run because the retirement is not complete. Decision remains CONTINUE.
+
+# C276 current-turn checkpoint - provider HTTP capture/replay ownership - 2026-09-21
+
+- Reverified the admitted task and branch before the change; the worktree was
+  clean at `01b66fb1cc4a8d7b851a01c7c90ae875a5d5423a`, and no predecessor or
+  peer worktree was modified. Canonical C276 has no concluded review findings;
+  peer review feedback remains the previously recorded C229 audio-policy and
+  C274 room-replay findings.
+- Committed `19f3bf4` (`Move provider HTTP capture behind runtime services`).
+  The recording service now owns the HTTP recorder, redacted header capture,
+  streaming response observation, incomplete-body failure latching, and
+  final publication through `recording.HTTPRecordingService`. The replay
+  service now owns HTTP capture-file admission, request matching, and response
+  reconstruction through `replay.HTTPReplayService`. Provider construction
+  delegates to those contracts and no longer imports the gateway testing
+  recorder/replayer. Existing provider HTTP behavior tests now exercise the
+  service-owned transports, including streaming, credential redaction,
+  request/read/close failures, capability preservation, and replay matching.
+- Exact focused checks on the changed tree passed: `rtk go test -count=1
+  ./go-agent-runtime/services/recording/... ./go-agent-runtime/services/replay/...
+  ./go-agent-runtime/services/providers/...` (249 tests / 18 packages), the
+  same command under `-race` (249 / 18), `rtk make wire-check` (all generated
+  Wire packages wrote no tracked changes), and `rtk git diff --check`.
+  Production import census now leaves only the known C268-owned
+  `agent-cli/internal/transport/cli/internal/livehost/trace.go` gateway capture
+  reader; the provider service's HTTP capture seam is service-owned.
+- The seven integrated-main deletion targets and six checkpoint-only replacement
+  paths remain absent; `session_browser_recording.go` remains byte-identical;
+  adapters remain 0 files / 0 lines. Full C276 caller integration, exact
+  pre-PR gate, `make prepush`, push, PR update, and SCRIPT handoff remain open.
+  Exact next action: continue the caller census only on owned/released seams;
+  consume reviewed C229/C268/C269/C274 releases or a planner handoff, cut over
+  the remaining direct readers and live callers, then run the complete C276-02
+  through C276-06 command set plus `make prepush` on one clean SHA. Decision
+  remains CONTINUE.
