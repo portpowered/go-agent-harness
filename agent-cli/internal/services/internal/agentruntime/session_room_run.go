@@ -100,29 +100,16 @@ func defaultRoomSessionFactory(participant room.Participant, options SessionRunO
 type roomParticipantDiagnosticSink struct {
 	participantID string
 	observer      RoomParticipantDiagnosticObserver
-}
-
-func (s roomParticipantDiagnosticSink) RecordSessionDiagnostic(record SessionDiagnosticRecord) {
-	if s.observer == nil {
-		return
-	}
-	s.observer(s.participantID, record)
-}
-
-type roomTurnTimelineDiagnosticSink struct {
-	participantID string
 	evidence      *roomEvidence
 }
 
-func (s roomTurnTimelineDiagnosticSink) RecordSessionDiagnostic(record SessionDiagnosticRecord) {
-	if s.evidence == nil || record.Event != SessionDiagnosticEventTurn {
-		return
+func (s roomParticipantDiagnosticSink) RecordSessionDiagnostic(record SessionDiagnosticRecord) {
+	if s.evidence != nil && record.Event == SessionDiagnosticEventTurn {
+		s.evidence.recordTimelineEvent("turn_completed", s.participantID, map[string]string{fieldTurnIndex: record.Fields[fieldTurnIndex]})
 	}
-	turnIndex := record.Fields[fieldTurnIndex]
-	if turnIndex == "" {
-		return
+	if s.observer != nil {
+		s.observer(s.participantID, record)
 	}
-	s.evidence.recordTimelineEvent("turn_completed", s.participantID, map[string]string{fieldTurnIndex: turnIndex})
 }
 
 func runRoomParticipant(
@@ -151,7 +138,7 @@ func runRoomParticipant(
 	// participant's teardown (see finishParticipant) can name this
 	// participant on a playback overflow the same way a provider
 	// participant's session diagnostics already do below.
-	runtime.diagnosticSink = combineDiagnosticSinks(roomParticipantDiagnosticSinksWithTimeline(runtime.plan, opts, evidence, participantEvidence)...)
+	runtime.diagnosticSink = combineDiagnosticSinks(roomParticipantDiagnosticSinks(runtime.plan, opts, participantEvidence, evidence)...)
 	var observer *sessionProgressObserver
 	if !roomParticipantIsHuman(runtime.plan) {
 		observer = newSessionProgressObserver(runtime.diagnosticSink, nil, runtime.plan.manifest.Provider, runtime.plan.manifest.Model)
@@ -243,7 +230,7 @@ func runRoomParticipant(
 		results <- roomParticipantRunResult{plan: runtime.plan, runtime: runtime, err: runErr, connected: connected, connectErr: connectErr}
 		return
 	}
-	diagnosticSinks := roomParticipantDiagnosticSinksWithTimeline(runtime.plan, opts, evidence, participantEvidence)
+	diagnosticSinks := roomParticipantDiagnosticSinks(runtime.plan, opts, participantEvidence, evidence)
 	observer = newSessionProgressObserver(combineDiagnosticSinks(diagnosticSinks...), nil, runtime.plan.manifest.Provider, runtime.plan.manifest.Model)
 	observer.livenessObserver = func(err error) {
 		runtime.lifecycle.markLivenessFailure(err)
@@ -425,12 +412,12 @@ func combineRoomDoneErrors(primary, secondary func() error) func() error {
 	}
 }
 
-func roomParticipantDiagnosticSinks(
-	plan *roomParticipantPlan,
-	opts RoomRunOptions,
-	participantEvidence *roomParticipantEvidence,
-) []SessionDiagnosticSink {
-	diagnosticSinks := make([]SessionDiagnosticSink, 0, 2)
+func roomParticipantDiagnosticSinks(plan *roomParticipantPlan, opts RoomRunOptions,
+	participantEvidence *roomParticipantEvidence, evidence ...*roomEvidence) []SessionDiagnosticSink {
+	diagnosticSinks := make([]SessionDiagnosticSink, 0, 3)
+	if len(evidence) > 0 && evidence[0] != nil {
+		diagnosticSinks = append(diagnosticSinks, roomParticipantDiagnosticSink{participantID: plan.manifest.ID, evidence: evidence[0]})
+	}
 	if participantEvidence != nil {
 		diagnosticSinks = append(diagnosticSinks, participantEvidence)
 	}
@@ -440,23 +427,6 @@ func roomParticipantDiagnosticSinks(
 			observer:      opts.OnDiagnostic,
 		})
 	}
-	return diagnosticSinks
-}
-
-func roomParticipantDiagnosticSinksWithTimeline(
-	plan *roomParticipantPlan,
-	opts RoomRunOptions,
-	evidence *roomEvidence,
-	participantEvidence *roomParticipantEvidence,
-) []SessionDiagnosticSink {
-	diagnosticSinks := make([]SessionDiagnosticSink, 0, 3)
-	if evidence != nil {
-		diagnosticSinks = append(diagnosticSinks, roomTurnTimelineDiagnosticSink{
-			participantID: plan.manifest.ID,
-			evidence:      evidence,
-		})
-	}
-	diagnosticSinks = append(diagnosticSinks, roomParticipantDiagnosticSinks(plan, opts, participantEvidence)...)
 	return diagnosticSinks
 }
 

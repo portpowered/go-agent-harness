@@ -23,6 +23,11 @@ const (
 	longConversationFramesPerTurn       = 3
 )
 
+type longConversationDiagnostic struct {
+	participantID string
+	record        SessionDiagnosticRecord
+}
+
 // TestRunRoomWithResult_LongConversationEndsBothParticipantsCleanly drives
 // the production room/session composition through eight ordered turns. Three
 // one-second mixer frames make each scripted turn multi-second-equivalent,
@@ -79,10 +84,7 @@ func TestRunRoomWithResult_LongConversationEndsBothParticipantsCleanly(t *testin
 	responseEnds := make(chan string, longConversationTurnsPerParticipant*len(manifest.Participants))
 	turnDiagnostics := make(chan string, longConversationTurnsPerParticipant*len(manifest.Participants))
 	participantTerminals := make(chan RoomParticipantResult, len(manifest.Participants))
-	diagnostics := make(chan struct {
-		participantID string
-		record        SessionDiagnosticRecord
-	}, 128)
+	diagnostics := make(chan longConversationDiagnostic, 128)
 	roomCtx, cancel := context.WithTimeout(context.Background(), roomRealtimeReplayTestTimeout)
 	defer cancel()
 
@@ -110,21 +112,7 @@ func TestRunRoomWithResult_LongConversationEndsBothParticipantsCleanly(t *testin
 		OnParticipantTerminated: func(result RoomParticipantResult) {
 			participantTerminals <- result
 		},
-		OnDiagnostic: func(participantID string, record SessionDiagnosticRecord) {
-			diagnostics <- struct {
-				participantID string
-				record        SessionDiagnosticRecord
-			}{participantID: participantID, record: record}
-			if record.Event == SessionDiagnosticEventTurn {
-				present, err := longConversationTurnIsInTimeline(filepath.Join(outputDir, RoomEvidenceTimelinePath), participantID, record.Fields[fieldTurnIndex])
-				if err != nil {
-					t.Errorf("read long-conversation timeline before turn diagnostic %q/%s: %v", participantID, record.Fields[fieldTurnIndex], err)
-				} else if !present {
-					t.Errorf("long-conversation turn diagnostic %q/%s was observable before its timeline entry", participantID, record.Fields[fieldTurnIndex])
-				}
-				turnDiagnostics <- participantID
-			}
-		},
+		OnDiagnostic: longConversationDiagnosticObserver(t, filepath.Join(outputDir, RoomEvidenceTimelinePath), diagnostics, turnDiagnostics),
 	}
 
 	runDone := make(chan roomTestRunOutcome, 1)
@@ -302,6 +290,28 @@ diagnosticsDrained:
 	}
 	if !sameRoomReplayStrings(timelineTurns, turnOrder) {
 		t.Fatalf("long-conversation timeline turn order = %v, want %v", timelineTurns, turnOrder)
+	}
+}
+
+func longConversationDiagnosticObserver(
+	t *testing.T,
+	timelinePath string,
+	diagnostics chan<- longConversationDiagnostic,
+	turnDiagnostics chan<- string,
+) RoomParticipantDiagnosticObserver {
+	t.Helper()
+	return func(participantID string, record SessionDiagnosticRecord) {
+		diagnostics <- longConversationDiagnostic{participantID: participantID, record: record}
+		if record.Event != SessionDiagnosticEventTurn {
+			return
+		}
+		present, err := longConversationTurnIsInTimeline(timelinePath, participantID, record.Fields[fieldTurnIndex])
+		if err != nil {
+			t.Errorf("read long-conversation timeline before turn diagnostic %q/%s: %v", participantID, record.Fields[fieldTurnIndex], err)
+		} else if !present {
+			t.Errorf("long-conversation turn diagnostic %q/%s was observable before its timeline entry", participantID, record.Fields[fieldTurnIndex])
+		}
+		turnDiagnostics <- participantID
 	}
 }
 
