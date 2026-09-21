@@ -4889,3 +4889,38 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   audit, then run every C234 exact-candidate functional, integration, race,
   hermetic, Wire, embedding and `make prepush` gate before pushing.
   Decision remains CONTINUE.
+
+# C234 continuation checkpoint — refreshed caller ownership audit — 2026-09-20
+
+- Reverified task admission with `project-control.py verify-work --type task
+  --name audio-runtime-c234-recover-recording-replay-retirement`; status is
+  `admitted` for `audio-runtime`. `prd.json.branchName` matches the isolated
+  branch. The canonical `~default` review query for C234 returns no review
+  Work, so there are no concluded C234 review findings to repair.
+- Fetched `origin/main` into `refs/remotes/origin/main`; it remains
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`. Required C217 source
+  `ca87a126b2cf8e7fc2aa510fcf2938e7c085836a`, recovery checkpoint
+  `03662c1b30bf2c0bead10fc14235c7e2df5224ce`, startup
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, planning main, and fetched main
+  are all ancestors of `a38ac31a91088040bb9c5f737248dc695f5ffbeb`. The
+  isolated worktree was clean at audit start; no host checkout or peer worktree
+  was changed.
+- Canonical Worker Sessions still show active C229 (`991295d8-86fa-422e-9e47-568b80f76564`),
+  C255 (`cb62a101-2ced-441e-89fc-825f8bce0cfc`), and C264
+  (`f7ea6549-881e-4b84-9aae-84f5ef088c36`) owners. Their remaining C234 caller
+  seams are respectively the stale live-session caller, `metrics_collector.go`
+  and `livehost/trace.go`, and the room replay integrity/scheduler paths.
+  None was edited.
+- Rechecked the 13 exact C234 legacy/replacement production paths: all are
+  absent. `session_browser_recording.go` has no diff from fetched `origin/main`.
+  The only named adapters remain stateless `recording_adapter.go` (20 lines)
+  and `replay_adapter.go` (25 lines), 45 total. The repository-wide capture
+  reader scan found no additional unleased agentruntime caller; remaining raw
+  room replay reads are assigned to C264 and gateway fixture-validation code
+  remains tooling.
+- No full C234 candidate preflight, `make prepush`, candidate push, PR update,
+  or SCRIPT handoff ran. Exact next action: preserve the live C229/C255/C264
+  leases, integrate their same-task caller checkpoints after owner release,
+  repair the resulting C234-local failures, repeat the production-reader audit,
+  then run the full exact-head C234 verification list and `make prepush` before
+  any push. Decision remains CONTINUE.
