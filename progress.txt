@@ -4131,3 +4131,27 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   claimed. Next: wait for exact reviewed/released peer seams, integrate those
   revisions additively, finish every caller cutover and complete legacy deletion,
   then run the full C280-03/C280-05 commands on one clean SHA. Return `CONTINUE`.
+
+# C280 canonical-release audit checkpoint 2026-09-21T23:08Z
+
+- Reverified the sole admitted `audio-runtime` task and exact branch identity at
+  `7bcf7dbfb40604d05984791afc8301e12c3f4a2f`; the worktree was clean before this
+  progress-only checkpoint. The canonical board still has C271 failed, C272 and
+  C276 unreleased, and C278 rejected in review for its output-directory admission
+  defect. Review-78 remains the applicable concluded feedback and its four
+  findings are repaired in this branch.
+- Fresh read-only C280 checks pass: full roomevidence/rooms tests `101` in `16`
+  packages; focused race selection `49` in `16` packages; `make wire-check`;
+  `make architecture-size-check` (`208` packages, `1,980` files, `29,331`
+  functions); and `git diff --check`. No generated source changed.
+- Retirement is intentionally incomplete: all eight owned agentruntime files
+  remain, all 19 duplicate `go-agent-runtime/services/rooms/internal/evidence`
+  production files remain (`3,509` lines), production callers still include the
+  legacy room evidence implementation, and the adapter budget remains `0/0`.
+  No caller cutover, deletion, prepush, PR, SCRIPT CI, review, or merge is
+  claimed.
+- Exact next action: refresh the canonical peer release state; after reviewed or
+  exact-path release of C271/C272/C276/C278, integrate those revisions
+  additively, cut over every named/discovered caller, delete the complete owned
+  cluster, and run C280-03/C280-05 including `make prepush` on one clean SHA.
+  Return `CONTINUE` while that actionable release/integration remains.
