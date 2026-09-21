@@ -107,6 +107,15 @@ func planWebRTCSessionRuntime(opts SessionRunOptions, selection SessionRuntimeSe
 		finalize       func(context.Context, io.Writer) error
 		mode           = sessionRuntimeModeInjectedLive
 	)
+	prepareCapture := func(dialer sessionRecordingDialer, announcement string) {
+		flushCapture = func() error { return dialer.FlushToFile(opts.RecordPath) }
+		flushCaptureTo = dialer.FlushToFile
+		announce = announcement
+		finalize = func(_ context.Context, out io.Writer) error {
+			_, writeErr := fmt.Fprintf(out, "Wrote session capture to %s\n", opts.RecordPath)
+			return writeErr
+		}
+	}
 
 	if opts.SessionInferencer != nil {
 		inner = opts.SessionInferencer
@@ -131,13 +140,7 @@ func planWebRTCSessionRuntime(opts SessionRunOptions, selection SessionRuntimeSe
 		if err != nil {
 			return closeOnPlanError(err)
 		}
-		flushCapture = func() error { return recordingDialer.FlushToFile(opts.RecordPath) }
-		flushCaptureTo = func(path string) error { return recordingDialer.FlushToFile(path) }
-		announce = fmt.Sprintf("Starting OpenAI realtime session recording to %s", opts.RecordPath)
-		finalize = func(_ context.Context, out io.Writer) error {
-			_, writeErr := fmt.Fprintf(out, "Wrote session capture to %s\n", opts.RecordPath)
-			return writeErr
-		}
+		prepareCapture(recordingDialer, fmt.Sprintf("Starting OpenAI realtime session recording to %s", opts.RecordPath))
 	} else {
 		sessionCfg, resolveErr := resolveGrokSessionConfig(opts)
 		if resolveErr != nil {
@@ -155,13 +158,7 @@ func planWebRTCSessionRuntime(opts SessionRunOptions, selection SessionRuntimeSe
 		if err != nil {
 			return closeOnPlanError(err)
 		}
-		flushCapture = func() error { return recordingDialer.FlushToFile(opts.RecordPath) }
-		flushCaptureTo = func(path string) error { return recordingDialer.FlushToFile(path) }
-		announce = fmt.Sprintf("Starting Grok session recording to %s", opts.RecordPath)
-		finalize = func(_ context.Context, out io.Writer) error {
-			_, writeErr := fmt.Fprintf(out, "Wrote session capture to %s\n", opts.RecordPath)
-			return writeErr
-		}
+		prepareCapture(recordingDialer, fmt.Sprintf("Starting Grok session recording to %s", opts.RecordPath))
 	}
 	if inner == nil {
 		return closeOnPlanError(wrapSessionRTCRuntimeError("create provider session", ErrSessionRTCRuntimeUnavailable))
