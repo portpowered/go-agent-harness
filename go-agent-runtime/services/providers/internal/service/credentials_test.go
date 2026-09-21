@@ -1,10 +1,12 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
 
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/internal/catalog"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
@@ -41,41 +43,60 @@ func TestProviderAdmissionAllowsExplicitAnonymousEndpoint(t *testing.T) {
 
 func TestSessionDialerRequiresExplicitProviderCaptureRole(t *testing.T) {
 	service := New(nil, nil, clock.Real{}, nil, catalog.New(), nil)
-	_, _, err := service.sessionDialer(providers.SessionConfig{RecordPath: "capture.json"}, "local", "local", clock.Real{})
+	service.recording = &recordingServiceStub{}
+	_, err := service.BuildSession(t.Context(), providers.SessionConfig{Provider: "local", Model: "local", APIKey: "test-key", RecordPath: "capture.json"})
 	if err == nil || !strings.Contains(err.Error(), "provider capture service is required") {
-		t.Fatalf("sessionDialer error = %v, want explicit provider capture role error", err)
+		t.Fatalf("BuildSession error = %v, want explicit provider capture role error", err)
 	}
 }
 
 func TestSessionDialerUsesExplicitBoundedProviderCaptureRole(t *testing.T) {
 	captures := &providerCaptureStub{sink: &providerCaptureSinkStub{}}
 	service := New(nil, nil, clock.Real{}, nil, catalog.New(), captures)
-	service.recording = recordingServiceStub{}
-	dialer, writer, err := service.sessionDialer(providers.SessionConfig{RecordPath: "capture.json"}, "local", "local", clock.Real{})
+	recorder := &recordingServiceStub{capture: recordingSessionCaptureStub{}}
+	service.recording = recorder
+	_, err := service.BuildSession(t.Context(), providers.SessionConfig{Provider: "local", Model: "local", APIKey: "test-key", RecordPath: "capture.json"})
 	if err != nil {
-		t.Fatalf("sessionDialer error = %v", err)
+		t.Fatalf("BuildSession error = %v", err)
 	}
-	if captures.options.Destination != "capture.json" {
-		t.Fatalf("capture destination = %q, want capture.json", captures.options.Destination)
+	if recorder.options.Destination != "capture.json" {
+		t.Fatalf("recording destination = %q, want capture.json", recorder.options.Destination)
 	}
-	if _, ok := dialer.(*gatewaytesting.StreamingRecordingWebSocketDialer); !ok {
-		t.Fatalf("dialer = %T, want bounded streaming recorder", dialer)
+	if recorder.options.Dialer == nil || recorder.options.Build == nil {
+		t.Fatal("recording contract did not receive provider dialer and builder")
 	}
-	if writer == nil {
-		t.Fatal("session writer is nil")
+	if recorder.capture == nil {
+		t.Fatal("recording contract returned no capture")
 	}
 }
 
 func TestSessionDialerRejectsNilProviderCaptureSink(t *testing.T) {
 	service := New(nil, nil, clock.Real{}, nil, catalog.New(), &providerCaptureStub{})
-	service.recording = recordingServiceStub{}
-	_, _, err := service.sessionDialer(providers.SessionConfig{RecordPath: "capture.json"}, "local", "local", clock.Real{})
-	if err == nil || !strings.Contains(err.Error(), "provider capture service returned a nil sink") {
-		t.Fatalf("sessionDialer error = %v, want nil sink error", err)
+	_, err := service.BuildSession(t.Context(), providers.SessionConfig{Provider: "local", Model: "local", APIKey: "test-key", RecordPath: "capture.json"})
+	if err == nil || !strings.Contains(err.Error(), "recording service is required") {
+		t.Fatalf("BuildSession error = %v, want recording service error", err)
 	}
 }
 
-type recordingServiceStub struct{ recording.Service }
+type recordingServiceStub struct {
+	recording.Service
+	options recording.ProviderSessionOptions
+	capture recording.SessionCapture
+}
+
+func (s *recordingServiceStub) RecordProviderSession(_ recording.ProviderCaptureService, options recording.ProviderSessionOptions) (recording.SessionCapture, error) {
+	s.options = options
+	return s.capture, nil
+}
+
+type recordingSessionCaptureStub struct{}
+
+func (recordingSessionCaptureStub) ConnectSession(context.Context) (messages.Session, error) {
+	return nil, errors.New("recording test capture does not connect")
+}
+
+func (recordingSessionCaptureStub) FlushCapture() error      { return nil }
+func (recordingSessionCaptureStub) FlushToFile(string) error { return nil }
 
 type providerCaptureStub struct {
 	options recording.ProviderCaptureOptions
