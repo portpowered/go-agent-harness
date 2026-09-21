@@ -1,23 +1,68 @@
 package cli
 
 import (
+	"context"
 	"errors"
+	"strings"
+	"testing"
+	"time"
+
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 	runtimedeviceswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
+	runtimeProviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
 	recordingwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/wire"
 	replaywire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
-	"strings"
-	"testing"
+	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	runtimeSessionWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
+	sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	runtimeModels "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
+
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
 
 // Tests compose the same runtime and use-case services as the application graph.
 func newTestSessionService(deps sessionservicewire.SessionDependencies) agentsession.SessionService {
 	deps.Runtime = sessionservicewire.NewSessionRuntime(audioiowire.NewService(), deps.Clock, deps.ToolService, sessionservicewire.NewSessionRuntimeFactory(), deps.RuntimeFactory, deps.SessionInferencer, deps.ToolExecutor, runtimedeviceswire.NewService(deps.DeviceRegistry, audioiowire.NewService()), deps.RuntimeObserver, deps.MetricSampler, deps.Logger, providerswire.NewModelCatalog(), recordingwire.NewService(deps.Clock), recordingwire.NewProviderCaptureService(deps.Clock), replaywire.NewService())
 	return sessionservicewire.NewSessionService(deps)
+}
+
+func newTestReplaySessionCommand(globalFlags *flags.GlobalFlags, registry devicegw.DeviceRegistry) *SessionCommand {
+	replayService := replaywire.NewService()
+	providerService := providerswire.NewService(providerswire.Dependencies{Replay: replayService})
+	liveService := runtimeSessionWire.NewLiveService(runtimeSessionWire.LiveDependencies{
+		InferencerFactory: func(ctx context.Context, request runtimeSession.LiveRequest) (messages.SessionInferencer, error) {
+			var tools []messages.ToolDefinition
+			if request.Capabilities != nil {
+				tools = append(tools, request.Capabilities.Definitions...)
+			}
+			return providerService.BuildSession(ctx, runtimeProviders.SessionConfig{
+				Provider: request.Provider, Model: request.Model, APIKey: "replay", BaseURL: request.BaseURL,
+				RealtimeURL: request.RealtimeURL, Instructions: request.Instructions, Voice: request.Voice,
+				ReasoningEffort: request.ReasoningEffort, InputAudioFormat: runtimeModels.AudioFormat(request.InputAudioFormat),
+				OutputAudioFormat:             runtimeModels.AudioFormat(request.OutputAudioFormat),
+				InputAudioSampleRate:          runtimeModels.SampleRate(request.InputAudioSampleRate),
+				OutputAudioSampleRate:         runtimeModels.SampleRate(request.OutputAudioSampleRate),
+				Tools:                         tools,
+				ClientOwnsAudioTurnBoundaries: request.ClientOwnsAudioTurnBoundaries,
+				ReplayPath:                    request.Replay.InputCapturePath, ReplayTiming: "fast",
+				SessionMessageReplay: request.Replay.Kind == runtimeSession.LiveReplayKindTurn,
+			})
+		},
+		Clock:     func() time.Time { return time.Now() },
+		Scheduler: sessionclock.Real{},
+	})
+	audioService := audioiowire.NewService()
+	return NewSessionCommandWithLive(
+		flags.NewAskFlags(), globalFlags, newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}, DeviceRegistry: registry}), nil,
+		liveService, replayService, runtimedeviceswire.NewService(registry, audioService),
+		FileDeviceService{Service: runtimedeviceswire.NewFileService(audioService), Scheduler: sessionclock.Real{}},
+		nil, nil, nil, nil, nil,
+	)
 }
 
 type chatFlagMatrixCase struct {
