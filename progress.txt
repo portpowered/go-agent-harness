@@ -5983,7 +5983,7 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
 - The 13 target/replacement paths remain absent, browser boundary matches origin/main, and adapter inventory is 0 files / 0 lines. No C276-05/06 full preflight, `make prepush`, push, PR update, SCRIPT gate, or review handoff ran because callers and public routes remain incomplete. Exact next action: consume the reviewed owner release/planner handoff for `services/providers/internal/service/session.go`, route its recording call through the recording contract, then reconcile the remaining released caller seams and public regressions before the exact-head C276-02 through C276-06 gate plus `make prepush`. Decision remains CONTINUE.
 
 
-# C276 current-turn checkpoint   replay source validation, codecs, and sealing   2026-09-21
+# C276 current-turn checkpoint  - replay source validation, codecs, and sealing  - 2026-09-21
 
 - Reverified the admitted task and branch before this turn; the branch remains `codex/audio-runtime-c276-recover-c270-recording-replay-finalization`, with the required baseline, startup, planning-main, C270, C234, C217, and fetched `origin/main=b9b2f90bf7e00430cd0ab6067179a5fb8005ec44` ancestry preserved.
 - Committed `1080932cff6e43238731542facab03749652314b`, moving replay probe source hygiene validation into `services/replay/internal/plan/probe` with deterministic payload traversal and a public credential-bearing source rejection regression. Committed `fa033442620dbfdd9ad2eabf2498dc6da16cb9cd`, moving replay stream-message JSON codecs and protected capture sealing into `services/replay/internal/capture`; production replay no longer delegates these decisions to gateway test helpers. No capture wire fields or digest coverage changed.
