@@ -5309,6 +5309,31 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   `make prepush` gates on the final clean SHA before any PR push. Decision
   remains CONTINUE.
 
+# C276 current-turn checkpoint - transcript codec caller cutover - 2026-09-21
+
+- The unleased production direct-reader census identified
+  `agent-cli/internal/probe/customer_simulation_suite_evidence.go:615`, which
+  only decoded one transcript stream message through the gateway testing
+  package. C276 added the public `replay.DecodeStreamMessage`/`EncodeStreamMessage`
+  codec boundary over the existing replay-owned codec and cut that caller over;
+  no C268/C269/C274-owned file was changed.
+- Committed `22afe82` (`Route transcript decoding through replay service`). The
+  replay service now owns this production transcript decode decision, while
+  file admission, ordering, and replay lifecycle remain private behind the
+  existing Service contract.
+- Passed on the changed source: `rtk go test -count=1
+  ./go-agent-runtime/services/replay/... ./agent-cli/internal/probe/...`
+  (351 tests / 12 packages) and `rtk git diff --check`.
+- The remaining production direct readers are the explicitly leased
+  C268 metrics/trace paths, C269/C274 room evidence/replay paths, and C271
+  self-play evidence path; no reviewed release or planner handoff is available
+  for those files. The seven integrated-main deletion targets and six
+  checkpoint-only replacements remain absent; adapters remain 0 files / 0
+  lines. Exact next action: continue only on owned/released seams while
+  preserving those leases, then integrate the peer releases/handoff, finish
+  all caller cutovers and run the complete C276-02 through C276-06 gate plus
+  `make prepush` on one clean SHA. Decision remains CONTINUE.
+
 # C270 continued partial checkpoint — exact-head retest and peer refresh — 2026-09-21
 
 - Reverified admission as `admitted`; `prd.json.branchName` exactly matches
