@@ -18,7 +18,6 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 	if o.streamObserver != nil {
 		o.streamObserver(msg)
 	}
-	o.observeProviderEvent(msg)
 	// Input-audio transcription belongs to the customer input stream. It must
 	// remain observable, but it cannot open, reset, or complete an assistant
 	// response—especially when a provider interleaves recognition with output.
@@ -297,7 +296,12 @@ func (o *sessionProgressObserver) observeSessionLifecycleBoundary(msg messages.S
 	case messages.StreamTypeSessionOpen:
 		o.sawSessionOpen = true
 		o.sessionID = ""
-		o.lifecycleEvent(sd.Event{Kind: sd.EventReset})
+		// Provider result acknowledgements can precede SESSION.OPEN. Let the
+		// reducer retain an accepted continuation, while clearing response
+		// identity left over from the previous provider connection.
+		if !o.hasPendingLifecycleContinuation() {
+			o.lifecycleEvent(sd.Event{Kind: sd.EventReset})
+		}
 		o.resetObservedResponseState()
 		if v, ok := msg.Value.(*messages.SessionOpenValue); ok && v != nil {
 			o.sessionID = v.SessionID

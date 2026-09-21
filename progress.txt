@@ -4714,3 +4714,309 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   mechanics behind `session/internal/live`, adapt the text/audio/image/recording
   callers to service contracts, then compile the full caller set and remove all
   five checkpoint-only replacement production files before full preflight.
+
+## C251 room-bound audio shutdown repair — 2026-09-20
+
+- Preserved the existing C251 dirty checkpoint and isolated branch. The admitted
+  task and matching `prd.branchName` remain unchanged; no PR or push exists.
+- Reproduced `TestRunRoom_StopsAtMaxDuration` failing 4/5 times under race on the
+  prior candidate. Duration-session admission wrapping hid the room's existing
+  closed-input capability, and the audio-send check could race the room bound.
+  The public duration session contract and wrapper now forward that capability;
+  a rejected audio send is treated as bounded teardown only when the room
+  admission boundary has closed by completion of that send.
+- Verification passes: normal and race tests for `sessionduration/...`,
+  `session/...`, and `go-agent-loop/pkg/participants`; the race-enabled room
+  max-duration test passes 20 consecutive runs. The full CLI/service preflight
+  has not run. The candidate is still dirty and incomplete; no commit, PR, push,
+  CI handoff or hosted-CI claim is made.
+- Exact next action: move the remaining state/dispatch/cleanup currently in
+  `durationServiceResources` behind service-owned contracts, cut over all
+  callers, and delete the five checkpoint-only production replacements plus
+  verify all nine baseline absences before running the mandatory exact-head
+  preflight.
+
+## C251 executor recovery checkpoint — 2026-09-20
+
+- Reverified canonical admission for `work-task-50` in `~default`; the sole
+  project is `audio-runtime/audio-runtime-v1`, and
+  `prd.branchName=codex/audio-runtime-c251-recover-shutdown-duration-retirement`
+  matches the isolated worktree. The canonical review-work query for this task
+  is empty and `gh pr view` found no PR on the branch, so there is no concluded
+  C251 review finding or submitted candidate to treat as accepted evidence.
+- Preserved the dirty checkpoint at `80d573cade496e334aaa33d77460bfc01a9ca07f`
+  and all existing predecessor commits. Fresh `rtk git fetch origin main`
+  returned `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`; it is already an ancestor
+  of HEAD, so no merge or history rewrite was needed.
+- The nine baseline production files and `session_runtime_duration.go` are
+  absent. Four checkpoint-only replacements remain:
+  `session_output.go` (355 lines), `session_service_duration.go` (401),
+  `session_service_duration_execution.go` (193), and
+  `session_service_duration_shutdown.go` (142). The sole named
+  `livehost/shutdown_adapter.go` is 59 physical lines.
+- The exact scoped compile command
+  `rtk go test -count=1 -run '^$' -timeout 120s ./agent-cli/internal/services/internal/agentruntime ./agent-cli/internal/services/servicetest ./agent-cli/internal/transport/cli/internal/livehost ./go-agent-runtime/services/session/internal/live ./go-agent-runtime/services/sessionturn/... ./go-agent-runtime/services/sessionduration/... ./go-agent-runtime/services/audioio/... ./go-agent-runtime/services/devices/...`
+  passed (`No tests found`, exit 0); this is compile evidence only. It does not
+  establish caller cutover or the required local preflight.
+- Exact next action: move remaining `durationServiceResources` state and its
+  prompt/audio/scheduled-close decisions behind the sessionduration-owned
+  contract, leave only loop and invocation effects behind session-owned ports,
+  cut over `session_live.go` and `session_runtime_plan.go` plus every newly
+  discovered caller, and remove all four remaining replacements. Then verify
+  the 14 planned absences and adapter budget before running the full exact-head
+  local preflight. No commit, push, PR, CI handoff, or completion is claimed.
+
+
+## C251 RTC terminal-drain repair — 2026-09-20
+
+- Fixed the devices RTC drain capability check in
+  `go-agent-runtime/services/devices/internal/rtc/binding_transport.go`. The
+  sessionturn wrapper exposes `RTCMedia() (endpoints, available)`, so the drain
+  now uses the shared capability accessor and closes inbound media before it
+  joins the playback pump. Removed temporary trace prints.
+- The previously failing accepted-provider-audio terminal-drain test and the
+  bounded room-close test pass together in normal and race mode:
+  `rtk go test -count=1 -timeout 120s ./agent-cli/internal/services/internal/agentruntime
+  -run '^(TestRunRoom_BoundsBlockedSessionCloseWithLifecycleDiagnostic|TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio)$'`
+  (2 tests) and the same command with `-race` and a 240s timeout (2 tests).
+- The C251 functional CLI selection passes: 468 tests in 21 packages; its race
+  selection passes: 237 tests in 20 packages. The sessionduration/session
+  focused normal and race selections each pass 88 tests in 15 packages.
+  `rtk git diff --check` passes. Temporary instrumentation search returns no
+  matches.
+- Exact legacy state: the nine baseline filenames and
+  `session_runtime_duration.go` are absent. Four checkpoint replacements remain:
+  `session_output.go`, `session_service_duration.go`,
+  `session_service_duration_execution.go`, and
+  `session_service_duration_shutdown.go`. The named shutdown adapter remains
+  one file / 59 physical lines. Caller cutover and duplicate-policy review are
+  incomplete. No full prepush, commit, PR, push, CI handoff, or completion is
+  claimed.
+- Exact next action: move the remaining run state, prompt/close dispatch and
+  stop decisions out of CLI `durationServiceResources` and its handler callbacks
+  into the public sessionduration contract and implementation; place the
+  transcript renderer under its existing service owner; cut over every caller;
+  then delete all four remaining replacement files and verify all fourteen
+  planned absences plus the adapter purity/cap before the exact-head preflight.
+
+## C251 session policy service checkpoint — 2026-09-20
+
+- Admission remains `audio-runtime/audio-runtime-v1`; `prd.branchName` matches
+  `codex/audio-runtime-c251-recover-shutdown-duration-retirement`. Fresh
+  `origin/main=b9b2f90bf7e00430cd0ab6067179a5fb8005ec44` is already an ancestor
+  of the preserved `80d573cade496e334aaa33d77460bfc01a9ca07f` checkpoint.
+  Canonical C251 review work and branch PR query remain empty; no concluded C251
+  review finding exists.
+- Moved prompt dispatch, scheduled-input boundary selection, close-after-open
+  decisions, terminal stop rules, and run state transitions into
+  `sessionduration/internal/service`. The CLI request now supplies normalized
+  policy values, observation facts, and resource effect callbacks. Reduced
+  `session_service_duration_execution.go` to audio invocation mechanics and
+  input-read facts. No legacy file deletion is claimed yet.
+- Fixed the existing one-send-at-a-time audio-input test's teardown ordering:
+  it now waits for the finite source to reach EOF before closing the provider.
+  That test passes 10 consecutive runs. `rtk git diff --check` passes.
+- Focused sessionduration/session behavior selection passes 88 tests in 15
+  packages in both normal and race modes. The same combined normal CLI package
+  run reported one `TestWebMCPAmbiguitySessionRejectsSilentContinuation`
+  failure; a targeted run of that test passed 5 consecutive runs. A parallel
+  normal bounded drain run had one `TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio`
+  failure; the identical targeted test passed 5 consecutive normal runs, and
+  the bounded normal/race pair passed 2 tests in race mode. Treat the broad
+  package selection as not yet clean; reproduce and resolve any repeatable
+  failure before full preflight.
+- Current exact legacy remainder is four production files / 1,051 physical
+  lines: `session_output.go`, `session_service_duration.go`,
+  `session_service_duration_execution.go`, and
+  `session_service_duration_shutdown.go`. The named adapter remains one file /
+  59 lines. Callers, completion-error policy, finalization, resource ownership,
+  renderer ownership, deletion, and complete exact-head preflight remain open.
+- Exact next action: move response-completion and scheduled-audio completion
+  decisions plus cancellation/finalization policy behind `sessionduration` and
+  `sessionterminal` contracts; move resource lifecycle mechanics under
+  `session/internal/live`; move transcript rendering under its service-owned
+  contract; cut over the remaining production callers and delete all four
+  remainder files. Then verify all 14 planned absences and adapter purity,
+  rerun the accumulated normal/race regressions, and only after complete
+  retirement run `make prepush` plus every C251 functional, integration, race,
+  hermetic, embed, Wire and deletion command on the exact candidate.
+
+## C251 completion and bounded-drain checkpoint — 2026-09-21
+
+- Admission and ancestry remain as recorded above: the branch is
+  `codex/audio-runtime-c251-recover-shutdown-duration-retirement`, `prd.json`
+  names the same branch, and preserved HEAD is `80d573cade496e334aaa33d77460bfc01a9ca07f`.
+  The refreshed `origin/main` (`b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`)
+  remains an ancestor. The worktree still contains predecessor and integrated
+  vertical changes; no reset, merge, commit, push, PR, or CI handoff was made.
+- Moved assistant-response and scheduled-audio completion classification into
+  `sessionduration.Service.Complete` and its internal implementation. The CLI
+  no longer owns `audioResponseCompletionError`,
+  `scheduledAudioCompletionError`, or their scheduled-audio incomplete error
+  type. Public service tests preserve cause identity, completion metadata, and
+  cancellation/duration suppression. The focused completion selection passed
+  normally and under race mode (9 tests in 4 packages each) before the later
+  drain adjustments.
+- Added service-owned pending-work observation to bounded loop drain so quiet
+  time alone cannot close the provider while an accepted tool continuation is
+  still producing output. Added a bounded public drain test. The accepted-audio
+  drain and bounded-drain tests passed 10 repetitions under `-race`. The first
+  broad normal run found two retry timing regressions at the 250 ms drain wall
+  bound. Terminal continuation/scheduled failure now ends that pending wait;
+  both rate-limit retry tests pass 10 repetitions normally and 10 repetitions
+  under race mode.
+- The accumulated normal command
+  `go test -count=1 -timeout 240s ./go-agent-runtime/services/session/... ./go-agent-runtime/services/sessionduration/... ./agent-cli/internal/services/internal/agentruntime`
+  still fails. It reports
+  `TestWebMCPAmbiguitySessionRejectsSilentContinuation` and
+  `TestWebMCPAmbiguitySessionUsesExactChoiceBeforePageWork`. A focused
+  `-count=10` rerun reproduces the choice case 2/10 times: it renders the final
+  assistant response but returns assistant-incomplete plus an unresolved tool
+  result for `call_choice_ambiguity`; the silent-continuation case passes all
+  10 repetitions. This is not resolved and blocks broader clean regression
+  evidence. `rtk git diff --check` passes after the current edits.
+- Exact retirement remainder is four production files / 1,063 physical lines:
+  `session_output.go` (355), `session_service_duration.go` (497),
+  `session_service_duration_execution.go` (69), and
+  `session_service_duration_shutdown.go` (142). Ten of fourteen planned
+  absences are confirmed, including all nine baseline files and
+  `session_runtime_duration.go`; the four checkpoint-only replacements remain.
+  The named `livehost/shutdown_adapter.go` remains one file / 59 lines.
+- Exact next action: reproduce and repair the WebMCP tool-result/lifecycle
+  identity race at the sessionduration/public-session seam while preserving
+  active C248 ownership, then rerun that test repeatedly and the accumulated
+  normal/race package selection. Continue moving resource lifecycle and
+  invocation mechanics behind the session/sessionduration contracts, migrate
+  the stateful transcript renderer, cut over every caller, and delete all four
+  remaining files. Verify all fourteen absences and the one-file/300-line
+  adapter cap before running the complete exact-commit local preflight and
+handoff sequence. No gate completion is claimed.
+
+## C251 transcript ownership recovery checkpoint — 2026-09-21
+
+- Preserved the admitted C251 worktree and predecessor state. The focused
+  WebMCP accepted-result/session-open race is repaired: its two ambiguity
+  tests plus incomplete-response identity test pass 40 normal repetitions and
+  20 race repetitions. No temporary trace remains.
+- Moved transcript formatting state and unscoped transcript/terminal output
+  into `sessionterminal/internal/service` behind the public
+  `TranscriptRenderer`, `WriteTranscriptMessage`, `WriteSessionClose`, and
+  `ErrorFields` contract. Cut over replay, live setup, duration output,
+  cancellation, shutdown flush, and terminal reporting callers. Deleted the
+  planned CLI `session_output.go`; existing CLI tests remain in place and call
+  the public service contract.
+- The affected CLI and sessionterminal packages compile with
+  `rtk go test -count=1 -run '^$' -timeout 180s
+  ./agent-cli/internal/services/internal/agentruntime
+  ./go-agent-runtime/services/sessionterminal/...` (compile only). The focused
+  transcript/renderer/terminal/cancellation selection passes 18 tests.
+  `rtk git diff --check` passes.
+- Exact planned-file status is now 11 of 14 absent. Only three checkpoint
+  replacements remain in the retired CLI region: `session_service_duration.go`
+  (499 lines), `session_service_duration_execution.go` (69), and
+  `session_service_duration_shutdown.go` (142), totaling 710 lines. The named
+  adapter remains one file / 59 lines. No prepush, PR, push, CI handoff, or
+  completion is claimed.
+- Exact next action: move the remaining `durationServiceResources` mutable
+  invocation and shutdown state behind the public session/sessionduration
+  contracts and their internal implementations; cut over every production
+  caller and remove those three replacements. Then verify all 14 planned
+  absences, duplicate ownership, and the adapter limit before running the
+  complete exact-head local preflight.
+
+## C251 service-owned run-signal checkpoint — 2026-09-21
+
+- Reverified Factory task admission and branch identity. Fetched `origin main`;
+  `origin/main` remains `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`, and the
+  task head `80d573cade496e334aaa33d77460bfc01a9ca07f` remains descended from
+  the required `ee9b68260ad69e8b72c2bcbed655435af877d5c3`, startup
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, and current main. Canonical C251
+  review work is empty; no review finding or PR exists.
+- Moved wake, done, and external-error channel fan-in into the public
+  `sessionduration.RunRequest` / internal runner boundary. The duration
+  service now coalesces wake sources, treats any done source as completion, and
+  cancels fan-in workers with the run context. Removed the duplicate channel
+  fan-in and error-forwarding helpers from the CLI duration files.
+- Verification passes: `rtk go test -count=1 -timeout 240s
+  ./go-agent-runtime/services/sessionduration/...` (63 tests, 3 packages), the
+  same command under `-race` (63 tests), affected CLI/runtime compile-only
+  selection (exit 0), C248 ambiguity and room-duration regressions at five
+  normal repetitions (15 tests), the same at three race repetitions (9 tests),
+  and `rtk git diff --check`.
+- Eleven of fourteen planned production files are absent. Three checkpoint
+  replacements remain in the legacy region: `session_service_duration.go`
+  (447 lines), `session_service_duration_execution.go` (69), and
+  `session_service_duration_shutdown.go` (84), totaling 600 lines. The named
+  shutdown adapter remains one file / 59 lines. No full prepush, commit, PR,
+  push, or CI handoff is claimed.
+- Exact next action: move `durationServiceResources` audio-input and shutdown
+  state plus loop/publication construction behind service-owned
+  session/sessionduration contracts, cut over every remaining production
+  caller, and delete all three replacements. Then verify all fourteen planned
+  absences and adapter purity before the complete exact-head local preflight.
+
+## C251 service-owned input-worker checkpoint — 2026-09-21
+
+- Admission is verified for `audio-runtime/audio-runtime-v1`; the PRD branch
+  matches `codex/audio-runtime-c251-recover-shutdown-duration-retirement`.
+  Preserved `HEAD=80d573cade496e334aaa33d77460bfc01a9ca07f` remains descended
+  from the required checkpoint, startup revision, and freshly fetched
+  `origin/main=b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`. The C251 PR query is
+  empty, so there is no concluded review finding to repair.
+- Added public `sessionduration.AudioInputPort` and
+  `AudioInterruptionPort` effect contracts. The internal run loop now owns the
+  audio-reader worker's cancellation, wake, result collection, and join, plus
+  the bounded interruption queue, source pump, wake, dispatch order, and pump
+  join. The CLI only binds/runs its source and provides the ordered send
+  effect. Removed these worker/queue states and the redundant CLI close-once
+  wrapper from `durationServiceResources`.
+- Verification passes: the focused service/session selection with
+  `AudioInterruption` passes 91 tests in 15 packages normally and under race;
+  the audio-input cancellation/order plus browser-interruption caller
+  selection passes 4 tests in one package normally and under race. The new
+  service regression `TestRunDispatchesAudioInterruptionAndJoinsItsPump`
+  passes normally and under race. `rtk git diff --check` passes.
+- The complete 14-file deletion target remains incomplete: 11 planned files
+  are absent and these three replacements still exist in the owned CLI region:
+  `session_service_duration.go` (404 lines),
+  `session_service_duration_execution.go` (16 lines), and
+  `session_service_duration_shutdown.go` (53 lines). This is not deletion
+  credit; all three files must be removed. The named stateless adapter remains
+  one file / 59 lines. No commit, PR, push, or CI handoff is claimed.
+- Exact next action: move observed-session wrapping, RTC error/readiness
+  channels, dynamic publication construction/lifetime, duplex-loop creation,
+  and the remaining resource/finalization state from `durationServiceResources`
+  behind the session-owned live invocation contract and internals; cut over
+  every caller and delete all three replacement files. Then prove all 14
+  planned absences, search for duplicate decisions/state, verify adapter purity,
+  and run `make prepush` plus every C251 functional, integration, race,
+  hermetic, embed, Wire, and deletion command on the exact candidate before
+  creating the PR.
+
+## C251 reducer reset regression checkpoint — 2026-09-21
+
+- The accumulated normal session/sessionduration/agentruntime selection first
+  failed `TestSessionProgressObserver_SessionOpenResetsReducerBeforeUntaggedResponse`.
+  Reproduction was deterministic across 10 runs. The response-boundary helper
+  was resetting the newly opened response, while `SESSION.OPEN` preserved an
+  old active response. Split the behavior: response starts preserve their new
+  reducer identity; `SESSION.OPEN` resets old identity unless an accepted tool
+  continuation is pending.
+- The focused test passes 10 repetitions normally and 10 under race. The
+  accumulated command
+  `rtk go test -count=1 -timeout 240s ./go-agent-runtime/services/session/... ./go-agent-runtime/services/sessionduration/... ./agent-cli/internal/services/internal/agentruntime`
+  passes 1,209 tests in 16 packages. Its exact `-race` counterpart also passes
+  1,209 tests in 16 packages. `rtk git diff --check` passes.
+- The required 14-file retirement remains incomplete: 11 target files are
+  absent; `session_service_duration.go` (404 lines),
+  `session_service_duration_execution.go` (16), and
+  `session_service_duration_shutdown.go` (53) remain, totaling 473 lines.
+  `livehost/shutdown_adapter.go` is one file / 59 lines. The canonical C251
+  review list and PR query remain empty. No prepush, commit, push, PR, or CI
+  handoff is claimed.
+- Exact next action: move observed-session wrapping, RTC error/readiness
+  channels, publication lifetime, duplex-loop creation, and remaining
+  resource/finalization state behind the session-owned live invocation
+  contract; cut over every production caller and delete all three remaining
+  files. Then verify all 14 exact absences and adapter purity before the full
+  exact-candidate local preflight.

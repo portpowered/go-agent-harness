@@ -157,6 +157,10 @@ func (o *sessionProgressObserver) rememberRateLimitRetryCandidate(responseID, li
 	o.lifecycleEvent(sd.Event{Kind: sd.EventRememberRetry, ResponseID: responseID, LifecycleID: lifecycleID, Terminal: lifecycleTerminal(terminal)})
 }
 
+func (o *sessionProgressObserver) noteScheduledRateLimitRetryDispatched() {
+	o.lifecycleEvent(sd.Event{Kind: sd.EventRetryDispatched})
+}
+
 //lint:ignore U1000 package tests exercise the response projection seam.
 func (o *sessionProgressObserver) bindScheduledResponseID(index int, id string) bool {
 	return o.indexEvent(sd.EventBindScheduledID, index, id).Accepted
