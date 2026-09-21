@@ -5203,3 +5203,45 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   fails, repeat the production caller audit, then run every C234-02 through
   C234-05 gate plus `make prepush` on one clean exact candidate before push.
   Decision remains CONTINUE.
+
+# C234 continuation checkpoint — current ownership and caller audit — 2026-09-21
+
+- Re-read the operating policy, implementation handoff, admitted manifest and
+  this task plan. `project-control.py verify-work --type task --name
+  audio-runtime-c234-recover-recording-replay-retirement` returned `admitted`;
+  `prd.json.branchName` matches this isolated branch. Canonical `~default`
+  C234 Work lists the task and plan but no C234 review Work or concluded review
+  findings. The fleet Worker Sessions endpoint returned
+  `FACTORY_UNREACHABLE`; no hosted CI was polled.
+- Fetched `origin main`; `origin/main` remains
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`. At clean HEAD
+  `dfbf00f35b4543d64a58f30a171656a658aec4d2`, ancestry checks pass for C217
+  source `ca87a126b2cf8e7fc2aa510fcf2938e7c085836a`, recovery checkpoint
+  `03662c1b30bf2c0bead10fc14235c7e2df5224ce`, startup
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, planning main and fetched main.
+- All thirteen exact C234 recording/replay deletion targets are absent. The
+  stateless adapters remain `recording_adapter.go` (20 lines) and
+  `replay_adapter.go` (25 lines), 45 combined. The separate C224
+  `session_browser_recording.go` matches fetched `origin/main`; `git diff
+  --check` passes.
+- The production capture-reader audit found three CLI callers still loading
+  gateway capture files directly: `metrics_collector.go:87`,
+  `livehost/trace.go:192`, and `session_room_replay_integrity.go:235`. C268
+  Work `work-task-96` is INITIAL and owns deletion of `metrics_collector.go`
+  plus a `session_runtime_plan.go` caller cutover after C229/C234/C251 release.
+  C264 Work `work-task-86` is `ci-pending`; its open PR #536 head
+  `202d80625dc80131995ad734402c97f8a8f39b30` deletes the room replay integrity
+  and scheduler files. C229 Work `work-task-16` is INITIAL; its peer worktree
+  has uncommitted replay/runtime and integration-test changes, and its branch
+  modifies shared `metrics_collector.go`, `session_options.go`,
+  `session_recording.go`, and `session_runtime_plan.go`. None of these peer
+  worktrees or files was changed or imported.
+- No production edits, tests, complete exact-candidate preflight,
+  `make prepush`, candidate push, C234 PR update or SCRIPT handoff ran. The
+  WebMCP record-only failure remains to be checked after C229's caller changes
+  are integrated. Exact next action: preserve C229/C264/C268 ownership; after
+  their applicable checkpoint/release, integrate the service-owned caller
+  changes without restoring C234 deletions, repeat the direct-capture caller
+  audit, repair any reproduced candidate failure, then run all C234-02 through
+  C234-05 commands and `make prepush` on one clean exact candidate before push.
+  Decision remains CONTINUE.
