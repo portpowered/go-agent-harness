@@ -4200,3 +4200,28 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   adapter cap and all callers; then run the full C248 functional, race,
   integration, hermetic, Wire, embedding, ancestry, cleanliness, and `make
   prepush` gates on one committed SHA before any PR update.
+
+### C248 publication ownership repair — 2026-09-20
+
+- Changed `sessionturn.BrowserRequest.Watch` to a callback stream. The service
+  now owns the bounded event queue, watcher goroutine, cancellation, and join;
+  the CLI bridge only translates broker events synchronously. Removed the
+  service-holding `TurnAdapter` and its fallback `Prepare`; publication now
+  uses the already prepared runtime. Deleted the now-unused livehost turn
+  adapter alias. The sole named transport adapter is 86 physical lines.
+- Replaced the `newSessionTurnService` wrapper with direct Wire construction at
+  callers. Exact checks pass: `go test -count=1
+  ./go-agent-runtime/services/sessionturn/...` (25 tests), `go test -race
+  -count=1 ./go-agent-runtime/services/sessionturn/...` (25), focused
+  agentruntime behavior selection (224), and `go test -count=1
+  ./agent-cli/internal/transport/...` (736). The checks ran before this
+  checkpoint; `git diff --check` is still required before commit.
+- The full vertical remains incomplete: four named replacement production
+  files remain (`session_image_entrypoints.go`,
+  `session_instruction_entrypoints.go`, `session_text_entrypoint.go`,
+  `session_turn_planning.go`); remaining caller cutover and adapter purity
+  review are pending. No complete preflight, PR update, push, or CI handoff.
+- Exact next action: move the remaining image/instruction/text/session
+  composition decisions behind the sessionturn contract, cut over the named
+  callers, remove the four replacement files, and verify every planned
+  original/replacement is absent before running the full pre-PR gate.

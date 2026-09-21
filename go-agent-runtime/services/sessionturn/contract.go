@@ -151,7 +151,7 @@ type Timer interface {
 type TimerFactory interface{ NewTimer(time.Duration) Timer }
 
 type BrowserRequest struct {
-	Watch        func(context.Context) <-chan BrowserEvent
+	Watch        func(context.Context, func(BrowserEvent) bool) error
 	Refresh      func(context.Context) ([]messages.ToolDefinition, error)
 	TimerFactory TimerFactory
 }

@@ -14,10 +14,6 @@ import (
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
-func newSessionTurnService() sessionturn.Service {
-	return sessionturnwire.NewDefaultService()
-}
-
 // prepareSessionTurnSeed transfers seed substitution and serialized output
 // ownership to the session-turn service. The planner only replaces the
 // provider edge and prompt value; it does not retain seed state.
@@ -25,7 +21,7 @@ func prepareSessionTurnSeed(ctx context.Context, plan *sessionRuntimePlan, seed 
 	if plan == nil || plan.inferencer == nil {
 		return nil, nil
 	}
-	runtime, err := newSessionTurnService().Prepare(ctx, sessionturn.Request{
+	runtime, err := sessionturnwire.NewDefaultService().Prepare(ctx, sessionturn.Request{
 		SessionInferencer: plan.inferencer,
 		Seed:              seed,
 		ToolExecutor:      plan.loop.ToolExecutor,
@@ -52,7 +48,7 @@ func sessionLoopToolExecutor(opts sessionLoopOptions) messages.ToolExecutor {
 			return opts.ToolExecutor
 		}
 		toolLifecycle := composeSessionToolLifecycleObserver(opts.toolLifecycleObserver, opts.observer, opts.runtime)
-		runtime, err := newSessionTurnService().Prepare(context.Background(), sessionturn.Request{
+		runtime, err := sessionturnwire.NewDefaultService().Prepare(context.Background(), sessionturn.Request{
 			ToolExecutor:          opts.ToolExecutor,
 			InteractiveToolPolicy: opts.InteractiveToolPolicy,
 			ToolExecutionTimeout:  opts.ToolExecutionTimeout,
@@ -173,7 +169,7 @@ func prepareSessionTurnRuntime(ctx context.Context, opts SessionRunOptions, plan
 		request.ToolDefinitionBase = append([]messages.ToolDefinition(nil), opts.ToolDefinitionBase...)
 		request.DynamicToolPolicy = opts.BrowserToolsInteractive
 	}
-	turnRuntime, err := newSessionTurnService().Prepare(ctx, request)
+	turnRuntime, err := sessionturnwire.NewDefaultService().Prepare(ctx, request)
 	if err != nil {
 		return fmt.Errorf("prepare session-turn runtime: %w", err)
 	}

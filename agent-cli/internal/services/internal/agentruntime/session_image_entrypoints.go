@@ -13,6 +13,7 @@ import (
 	sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
+	sessionturnwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn/wire"
 )
 
 type SessionImageRunOptions struct {
@@ -275,7 +276,7 @@ func prepareSessionImageRun(ctx context.Context, opts SessionRunOptions, sourceP
 	if err != nil {
 		return opts, nil, noOpSessionImageCleanup, err
 	}
-	turnService := newSessionTurnService()
+	turnService := sessionturnwire.NewDefaultService()
 	capabilityRequest := sessionturn.ImageCapabilityRequest{
 		Provider:        provider,
 		Model:           model,

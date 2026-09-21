@@ -747,9 +747,18 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 	// provider output drain can still run after the producer is quiesced.
 	audioCtx, cancelAudio := context.WithCancel(runCtx)
 	defer cancelAudio()
-	publisher, publisherErrors := sessiontransport.NewTurnAdapter(newSessionTurnService()).StartPublication(runCtx, loop, sessiontransport.TurnPublicationOptions{Runtime: opts.turnRuntime, Inferencer: sessionInferencer, ToolExecutor: opts.ToolExecutor, ToolDefinitions: opts.ToolDefinitions, InteractivePolicy: opts.InteractiveToolPolicy, ToolExecutionTimeout: opts.ToolExecutionTimeout, Browser: opts.turnBrowser, BrowserWatch: opts.BrowserWatch, RefreshToolDefinitions: opts.RefreshToolDefinitions, BaseDefinitions: opts.ToolDefinitionBase})
+	publisher, err := sessiontransport.StartSessionTurnPublication(runCtx, opts.turnRuntime, loop, opts.turnBrowser, opts.ToolDefinitionBase, opts.ToolDefinitions)
+	if err != nil {
+		return err
+	}
+	var publisherErrors <-chan error
+	if publisher != nil {
+		publisherErrors = publisher.Errors()
+	}
 	publisherErrors = mergeSessionErrorChannels(runCtx, publisherErrors, sessionLivenessErrorChannel(runCtx, opts.observer))
-	defer sessiontransport.StopPublication(publisher)
+	if publisher != nil {
+		defer publisher.Stop()
+	}
 	if err := bindSessionLoopInputs(runCtx, audioCtx, loop, opts); err != nil {
 		return err
 	}

@@ -73,8 +73,9 @@ func TestPublicationStopCancelsAndJoinsRefreshWithoutLatePublish(t *testing.T) {
 	var publishCalls atomic.Int32
 	publication, err := startPublication(context.Background(), sessionturn.PublicationRequest{
 		Browser: sessionturn.BrowserRequest{
-			Watch: func(context.Context) <-chan sessionturn.BrowserEvent {
-				return make(chan sessionturn.BrowserEvent)
+			Watch: func(ctx context.Context, _ func(sessionturn.BrowserEvent) bool) error {
+				<-ctx.Done()
+				return nil
 			},
 			Refresh: func(ctx context.Context) ([]messages.ToolDefinition, error) {
 				refreshActive.Add(1)

@@ -12,6 +12,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
+	sessionturnwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn/wire"
 )
 
 // RunSessionWithInstructions resolves the ask-path system-prompt contract and
@@ -204,7 +205,7 @@ func sessionInstructionText(ctx context.Context, opts SessionRunOptions, systemP
 	if err != nil {
 		return "", err
 	}
-	return newSessionTurnService().ResolveInstructions(ctx, sessionturn.InstructionRequest{Request: request})
+	return sessionturnwire.NewDefaultService().ResolveInstructions(ctx, sessionturn.InstructionRequest{Request: request})
 }
 
 func newSessionInstructionRequest(opts SessionRunOptions, systemPrompt string) (runtimeSession.InstructionRequest, error) {
@@ -229,7 +230,7 @@ func newSessionInstructionRequest(opts SessionRunOptions, systemPrompt string) (
 // service. Keeping this callable helper preserves the existing planner seams
 // without retaining a second policy implementation in the CLI.
 func composeSessionInstructions(opts SessionRunOptions, instructions string) string {
-	resolved, err := newSessionTurnService().ResolveInstructions(context.Background(), sessionturn.InstructionRequest{
+	resolved, err := sessionturnwire.NewDefaultService().ResolveInstructions(context.Background(), sessionturn.InstructionRequest{
 		Text: instructions,
 		Composition: &runtimeSession.InstructionComposition{
 			ToolDefinitions:        append([]messages.ToolDefinition(nil), opts.ToolDefinitions...),

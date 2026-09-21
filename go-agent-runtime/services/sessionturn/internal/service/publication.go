@@ -15,11 +15,12 @@ import (
 
 const (
 	publicationSettleWindow = 10 * time.Millisecond
+	publicationEventBuffer  = 16
 )
 
 type publication struct {
 	base, initial []messages.ToolDefinition
-	watch         func(context.Context) <-chan sessionturn.BrowserEvent
+	watch         func(context.Context, func(sessionturn.BrowserEvent) bool) error
 	refresh       func(context.Context) ([]messages.ToolDefinition, error)
 	timerFactory  sessionturn.TimerFactory
 	publish       func(context.Context, []messages.ToolDefinition) error
@@ -27,6 +28,7 @@ type publication struct {
 	readyOnce     sync.Once
 	stopOnce      sync.Once
 	done          chan struct{}
+	watchDone     chan struct{}
 	errors        chan error
 	cancel        context.CancelFunc
 
@@ -70,14 +72,26 @@ func startPublication(parent context.Context, request sessionturn.PublicationReq
 		timerFactory = wallTimerFactory{}
 	}
 	ctx, cancel := context.WithCancel(parent)
-	p := &publication{base: base, initial: initial, watch: request.Browser.Watch, refresh: request.Browser.Refresh, timerFactory: timerFactory, publish: request.Publish, ready: make(chan struct{}), done: make(chan struct{}), errors: make(chan error, 1), cancel: cancel, state: sessionturn.PublicationState{Lifecycle: sessionturn.PublicationStarting, DefinitionDigest: digest}}
-	events := p.watch(ctx)
-	if events == nil {
-		cancel()
-		return nil, errors.New("session turn browser watch returned a nil channel")
-	}
+	p := &publication{base: base, initial: initial, watch: request.Browser.Watch, refresh: request.Browser.Refresh, timerFactory: timerFactory, publish: request.Publish, ready: make(chan struct{}), done: make(chan struct{}), watchDone: make(chan struct{}), errors: make(chan error, 1), cancel: cancel, state: sessionturn.PublicationState{Lifecycle: sessionturn.PublicationStarting, DefinitionDigest: digest}}
+	events := make(chan sessionturn.BrowserEvent, publicationEventBuffer)
+	go p.forwardEvents(ctx, events)
 	go p.run(ctx, events)
 	return p, nil
+}
+
+func (p *publication) forwardEvents(ctx context.Context, events chan<- sessionturn.BrowserEvent) {
+	defer close(p.watchDone)
+	defer close(events)
+	if err := p.watch(ctx, func(event sessionturn.BrowserEvent) bool {
+		select {
+		case events <- event:
+			return true
+		case <-ctx.Done():
+			return false
+		}
+	}); err != nil && ctx.Err() == nil {
+		p.fail("watch", p.latestSequence(), err)
+	}
 }
 
 func (p *publication) MarkReady() {
@@ -106,6 +120,7 @@ func (p *publication) Stop() {
 	p.stopOnce.Do(func() {
 		p.cancel()
 		<-p.done
+		<-p.watchDone
 	})
 }
 
