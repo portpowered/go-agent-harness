@@ -335,6 +335,7 @@ func (r *runLoop) retry(msg messages.StreamMessage) error {
 	if err := sender.SendSessionEvent(r.runCtx, control); err != nil {
 		return fmt.Errorf("send rate-limit retry response: %w", err)
 	}
+	r.controller.ExpectProviderProgress()
 	if r.request.RetryDispatched != nil {
 		r.request.RetryDispatched(control)
 	}

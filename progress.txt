@@ -4679,3 +4679,38 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
 >>>>>>>>> Temporary merge branch 2
 =======
 >>>>>>> 7e12df1c284a2381cc3535b6053b0b402e497fa5
+
+# C251 service liveness and caller integration checkpoint — 2026-09-20
+
+- Reverified Factory admission for
+  `audio-runtime-c251-recover-shutdown-duration-retirement`; the admitted
+  project is `audio-runtime/audio-runtime-v1`, and the PRD branch matches the
+  isolated branch `codex/audio-runtime-c251-recover-shutdown-duration-retirement`.
+- Exposed `sessionduration.Controller.ExpectProviderProgress` so accepted
+  prompt/audio/retry dispatches arm the service-owned response watchdog. Retry
+  dispatch now rearms through the controller. The public max-duration reason
+  also comes from the `sessionduration` contract, and the restored C248 audio
+  queue is synchronized at its queue boundary.
+- Exact focused service gates pass: `rtk go test -count=1 -timeout 240s
+  ./go-agent-runtime/services/sessionduration/...` (57 tests, 3 packages) and
+  `rtk go test -race -count=1 -timeout 240s
+  ./go-agent-runtime/services/sessionduration/...` (57 tests, 3 packages).
+- The combined CLI/runtime compile gate remains red: `rtk go test -count=1
+  -run '^$' -timeout 120s ./agent-cli/internal/services/internal/agentruntime
+  ./agent-cli/internal/services/servicetest
+  ./agent-cli/internal/transport/cli/internal/livehost
+  ./go-agent-runtime/services/session/internal/live
+  ./go-agent-runtime/services/sessionturn/...
+  ./go-agent-runtime/services/sessionduration/...
+  ./go-agent-runtime/services/audioio/...
+  ./go-agent-runtime/services/devices/...` reports `0 passed, 2 failed in 23
+  packages`. Remaining compile errors show production callers in the old
+  `session_live.go` loop still refer to removed timer, liveness, and drain
+  helpers; duration plan entrypoints and their text/audio/image callers also
+  need full service cutover. No PR, push, local preflight, or CI handoff is
+  claimed.
+- Exact next action: cut `runAgentLoopSessionStream` and its policy callbacks
+  over to `sessionduration.Service.Run`, move any remaining invocation-only
+  mechanics behind `session/internal/live`, adapt the text/audio/image/recording
+  callers to service contracts, then compile the full caller set and remove all
+  five checkpoint-only replacement production files before full preflight.

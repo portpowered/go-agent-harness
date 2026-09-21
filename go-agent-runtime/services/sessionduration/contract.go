@@ -27,6 +27,9 @@ const (
 	ErrProviderLivenessTimeout sessionDurationError = "silent provider response timed out"
 	ErrSchedulerUnavailable    sessionDurationError = "session duration scheduler is required"
 	ErrFinalizationPanic       sessionDurationError = "session finalization panicked"
+	// MaxDurationReason is the stable terminal reason published when the
+	// duration controller ends a run at its configured bound.
+	MaxDurationReason messages.TerminalReason = "max_duration"
 )
 
 // Timer is the timer contract shared by duration and liveness controllers.
@@ -424,6 +427,9 @@ type Controller interface {
 	// default; Run uses deferred start so loop construction remains observable
 	// before an injected scheduler can block or fail.
 	Start() error
+	// ExpectProviderProgress arms the response watchdog after the host admits a
+	// response-producing provider dispatch such as a prompt or audio commit.
+	ExpectProviderProgress()
 	Observe(messages.StreamMessage) Admission
 	// ObserveDrain admits output already published by the loop while the
 	// bounded finalizer is draining. It is distinct from hot-path admission,

@@ -96,6 +96,12 @@ func (c *controller) Start() error {
 	return c.startErr
 }
 
+func (c *controller) ExpectProviderProgress() {
+	if c != nil {
+		c.armLiveness(false)
+	}
+}
+
 func (c *controller) startMaxDuration(maxDuration time.Duration) error {
 	if maxDuration <= 0 {
 		return nil

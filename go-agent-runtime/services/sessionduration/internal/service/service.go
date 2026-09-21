@@ -15,7 +15,7 @@ import (
 // Service is the private implementation of the sessionduration contract.
 type Service struct{}
 
-const maxDurationReason messages.TerminalReason = "max_duration"
+const maxDurationReason = sessionduration.MaxDurationReason
 
 func New() *Service { return &Service{} }
 

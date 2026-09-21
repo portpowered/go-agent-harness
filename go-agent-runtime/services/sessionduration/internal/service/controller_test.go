@@ -86,7 +86,7 @@ func TestControllerLivenessUsesGenerationAndPreservesTypedCause(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Begin: %v", err)
 	}
-	controller.Observe(messages.StreamMessage{Type: messages.StreamTypeMessageStart})
+	controller.ExpectProviderProgress()
 	controller.Observe(messages.StreamMessage{Type: messages.StreamTypeTextDelta})
 	clock.AdvanceBy(4 * time.Millisecond)
 	controller.Observe(messages.StreamMessage{Type: messages.StreamTypeTextDelta})
