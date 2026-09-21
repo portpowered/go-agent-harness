@@ -16,6 +16,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
@@ -273,6 +274,34 @@ func TestPlanSessionRuntime_WebRTCDispatchesThroughRuntimeFactory(t *testing.T) 
 	}
 	if err := runtime.Close(); err != nil {
 		t.Fatalf("cleanup test runtime: %v", err)
+	}
+
+	failedRuntime := &testSessionRTCRuntime{}
+	loaded := &config.Config{Model: config.ModelConfig{
+		Provider: config.ProviderOpenAI,
+		OpenAI:   &config.OpenAIConfig{Model: openAIRealtimeDefaultModel, APIKey: "openai-runtime-test-key"},
+	}}
+	_, err = planSessionRuntimeWithFactory(SessionRunOptions{
+		ModelCatalog: testModelCatalog(),
+		LoadedConfig: loaded,
+		Provider:     config.ProviderOpenAI,
+		Transport:    SessionTransportWebRTC,
+		Signaling:    "loopback://plan/transcription-failure",
+		MediaSource:  "fixture://plan/transcription-failure",
+		RTCBinding:   runtimedevices.RTCBindingRequest{InputPresent: true},
+	}, sessionRuntimeFactory{
+		newRTCRuntime: func(SessionRuntimeSelection) (SessionRTCRuntime, error) {
+			return failedRuntime, nil
+		},
+		newRecordingDialer: func(transport.Dialer, string, string) sessionRecordingDialer {
+			return &browserRecordingDialer{}
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "audio service is required for transcription resolution") {
+		t.Fatalf("WebRTC transcription preflight error = %v, want missing audio service", err)
+	}
+	if failedRuntime.closeCount != 1 {
+		t.Fatalf("WebRTC runtime close count after transcription preflight failure = %d, want 1", failedRuntime.closeCount)
 	}
 }
 

@@ -4389,3 +4389,25 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   lower only exact measured reductions, rerun the architecture gate, then run
   `make prepush` and every C229-05 command on one exact clean candidate before
   any PR or push.
+
+# C229 RTC runtime preflight cleanup checkpoint — 2026-09-20
+
+- The OpenAI/WebRTC planning path now closes its already-created RTC runtime
+  when audio-transcription preflight fails. A regression assertion in the
+  existing runtime-planning test verifies the error and exactly one cleanup;
+  the test was not moved. The full `rtk go test
+  ./agent-cli/internal/services/internal/agentruntime -count=1 -timeout=240s`
+  run passes all 927 tests.
+- `rtk make architecture-size-check` reports 42 findings across 208 packages
+  (`1789959305_make_architecture-size-check.log`). This is one more than the
+  prior scan because the regression assertion makes
+  `session_runtime_rtc_test.go` measure 1,132 against its 1,103 ceiling; the
+  other 41 source drifts remain. No baseline was widened.
+- The ten PRD legacy paths remain absent, and the two stateless adapters remain
+  19 and 13 lines (32 total). The worktree is being checkpointed on the same
+  admitted branch; `make prepush`, full C229 preflight, PR, push, and hosted CI
+  handoff remain pending.
+- Next: continue real reductions for the runtime planner, room planning/run,
+  replay, drain, self-play, and current RTC test-file drift; rerun the size
+  gate, then run the complete exact-candidate C229 local preflight before PR or
+  push.

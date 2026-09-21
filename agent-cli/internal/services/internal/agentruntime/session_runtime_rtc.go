@@ -125,7 +125,7 @@ func planWebRTCSessionRuntime(opts SessionRunOptions, selection SessionRuntimeSe
 		}
 		inputAudioTranscription, resolveErr := resolveSessionTranscription(opts, provider, opts.RTCBinding.HasInput())
 		if resolveErr != nil {
-			return sessionRuntimePlan{}, resolveErr
+			return closeOnPlanError(resolveErr)
 		}
 		inner, err = factory.newOpenAISessionInferencerForTools(sessionCfg, opts.Voice, recordingDialer, opts.ToolDefinitions, false, inputAudioTranscription)
 		if err != nil {
