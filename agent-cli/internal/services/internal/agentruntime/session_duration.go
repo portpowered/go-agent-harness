@@ -40,6 +40,22 @@ func sessionDurationClockFromSource(service audioio.Service, source platformcloc
 	return service.NewClock(source)
 }
 
+func sessionDurationRTCPumpErrors(opts sessionLoopOptions) <-chan error {
+	if opts.rtcDeviceBinding == nil {
+		return nil
+	}
+	return opts.rtcDeviceBinding.Errors()
+}
+
+func startSessionDurationObserver(opts sessionLoopOptions) func() {
+	if opts.observer == nil {
+		return func() {}
+	}
+	opts.observer.setLivenessClock(opts.livenessClock)
+	opts.observer.setToolResultsEnabled(opts.ToolExecutor != nil)
+	return opts.observer.stopLiveness
+}
+
 // RunSessionWithMaxDuration runs a session with an optional graceful duration
 // bound. A zero duration disables the controller; a positive duration requests
 // a session close and drains the accepted output before finalization.

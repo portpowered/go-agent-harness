@@ -167,53 +167,12 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 				sessionOptions.RecordSessionCapturePath = filepath.Join(evidence.destination, participantEvidence.artifacts.Capture)
 			}
 		}
-		if participant.BrowserTools != nil {
-			if opts.BrowserCapabilitiesFactory == nil {
-				markStartupFailure(ErrRoomParticipantBrowserToolsUnavailable)
-				continue
-			}
-			browserCapabilities, capabilityErr := opts.BrowserCapabilitiesFactory(participant)
-			if capabilityErr != nil {
-				markStartupFailure(fmt.Errorf("configure browser tools: %w", capabilityErr))
-				continue
-			}
-			plan.capabilityCoordinator = NewSessionCapabilityCoordinator(browserCapabilities.Close)
-			if capabilityErr := validateRoomParticipantBrowserCapabilities(participant, browserCapabilities); capabilityErr != nil {
-				if errors.Is(capabilityErr, ErrRoomParticipantBrowserToolMismatch) {
-					// Invalid browser definitions are a composition contract
-					// failure. Do not admit a room whose advertised capability
-					// surface cannot be routed safely.
-					return plans, secrets, fmt.Errorf("room participant %q browser capability contract: %w", participant.ID, capabilityErr)
-				}
-				markStartupFailure(capabilityErr)
-				continue
-			}
-			composed, capabilityErr := composeRoomParticipantBrowserCapabilities(participant, staticCapabilities, browserCapabilities)
-			if capabilityErr != nil {
-				return plans, secrets, fmt.Errorf("room participant %q browser composition contract: %w", participant.ID, capabilityErr)
-			}
-			if composed.Initialize != nil {
-				if initializeErr := composed.Initialize(ctx); initializeErr != nil {
-					markStartupFailure(fmt.Errorf("initialize browser tools: %w", initializeErr))
-					continue
-				}
-			}
-			if composed.RefreshToolDefinitions != nil {
-				refreshed, refreshErr := composed.RefreshToolDefinitions(ctx)
-				if refreshErr == nil {
-					composed.Definitions = cloneRoomToolDefinitions(refreshed)
-				} else if ctx.Err() != nil {
-					markStartupFailure(fmt.Errorf("refresh browser tools: %w", refreshErr))
-					continue
-				}
-			}
-			sessionOptions.ToolExecutor = composed.Executor
-			sessionOptions.ToolDefinitions = cloneRoomToolDefinitions(composed.Definitions)
-			sessionOptions.ToolDefinitionBase = cloneRoomToolDefinitions(composed.ToolDefinitionBase)
-			sessionOptions.RefreshToolDefinitions = composed.RefreshToolDefinitions
-			sessionOptions.BrowserWatch = composed.BrowserWatch
-			sessionOptions.BrowserToolsEnabled = true
-			sessionOptions.CapabilityClose = plan.capabilityCoordinator.Close
+		sessionOptions, skipParticipant, capabilityErr := configureRoomParticipantBrowserOptions(ctx, opts, participant, plan, sessionOptions, staticCapabilities, value)
+		if capabilityErr != nil {
+			return plans, secrets, capabilityErr
+		}
+		if skipParticipant {
+			continue
 		}
 		plan.options = sessionOptions
 		if inferencer, exists := opts.SessionInferencers[participant.ID]; exists {

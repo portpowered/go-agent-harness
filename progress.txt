@@ -4441,3 +4441,37 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   run `make prepush` and every C229-05 functional, integration, race, hermetic
   and Wire command on one exact clean candidate before opening/updating a PR or
   pushing.
+
+# C229 planning and timer architecture checkpoint — 2026-09-20
+
+- Refreshed `origin/main`; it remains `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`.
+  Admission and branch identity remain valid. The isolated candidate before
+  this repair was `9b3611b8e`; C218 remains clean and untouched.
+- Split session runtime plan configuration into same-package helpers while
+  preserving audio-service error handling, rate configuration, observer
+  wiring, RTC selection, and recording-claim cleanup. Extracted browser
+  capability setup from room plan construction, and shared the timer
+  stop-and-drain operation between duration and terminal drain paths. Existing
+  tests stayed in place; no proof fixtures or new tests were added.
+- Focused passing commands: `rtk go test
+  ./agent-cli/internal/services/internal/agentruntime -run
+  'TestPlanSessionRuntime|TestSessionRuntime' -count=1 -timeout=240s` (53 tests);
+  `rtk go test ./agent-cli/internal/services/internal/agentruntime -run
+  'Test.*Room.*Browser|TestBuildRoomParticipant|TestRunRoom' -count=1
+  -timeout=240s` (75 tests); and `rtk go test
+  ./agent-cli/internal/services/internal/agentruntime -run
+  'TestSessionStragglerDrain|TestRunAgentLoopSessionWithDuration|TestRunSessionWithMaxDuration'
+  -count=1 -timeout=240s` (44 tests). The RTC targeted run also passed 7 tests.
+- Only exact measured reductions were applied to the architecture baselines.
+  `rtk make architecture-size-check` fell from 40 findings at the starting
+  checkpoint to 27; current output is in
+  `1789962011_make_architecture-size-check.log`. The remaining measurements
+  are actionable and the local pre-PR gate has not passed.
+- The ten exact owned legacy production files remain absent. The two named
+  stateless adapters remain 2 files / 32 physical lines. No C229 PR, push, or
+  hosted CI handoff exists.
+- Next: reduce all 27 source-shape drifts reported by the current architecture
+  gate without widening baselines, then rerun the complete C229-05 local
+  preflight on one exact candidate. Before handoff, complete production caller
+  and Wire audits, confirm the owned cluster and adapter cap again, and only
+  then push/open or update the PR for SCRIPT CI.

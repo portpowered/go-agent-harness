@@ -56,17 +56,10 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 			closeDone: make(chan struct{}),
 		}
 	}
-	rtcPumpErrors := (<-chan error)(nil)
-	if opts.rtcDeviceBinding != nil {
-		rtcPumpErrors = opts.rtcDeviceBinding.Errors()
-	}
+	rtcPumpErrors := sessionDurationRTCPumpErrors(opts)
 	observedInferencer := newObservedSessionInferencer(admittedInferencer)
 	observedInferencer.progress = opts.observer
-	if opts.observer != nil {
-		opts.observer.setLivenessClock(opts.livenessClock)
-		opts.observer.setToolResultsEnabled(opts.ToolExecutor != nil)
-		defer opts.observer.stopLiveness()
-	}
+	defer startSessionDurationObserver(opts)()
 	loop, err := agentloop.New(duplexSessionLoopOptions(observedInferencer, opts)...)
 	if err != nil {
 		return fmt.Errorf("create session agent loop: %w", err)
@@ -507,12 +500,7 @@ func waitForDurationSessionLoopStragglers(out io.Writer, loop *agentloop.AgentLo
 			if err := writeDurationSessionReplayMessage(out, msg, artifacts); err != nil {
 				return err
 			}
-			if !timer.Stop() {
-				select {
-				case <-timer.C():
-				default:
-				}
-			}
+			stopAndDrainSessionTimer(timer)
 			timer = durationClock.NewTimer(quiet)
 			if timer == nil {
 				return errors.New("session duration clock returned a nil straggler timer")

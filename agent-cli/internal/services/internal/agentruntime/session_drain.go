@@ -517,12 +517,7 @@ func waitForSessionLoopStragglersWithContext(ctx context.Context, out io.Writer,
 			if err := writeSessionReplayMessage(out, msg); err != nil {
 				return err
 			}
-			if !idle.Stop() {
-				select {
-				case <-idle.C():
-				default:
-				}
-			}
+			stopAndDrainSessionTimer(idle)
 			var err error
 			idle, err = audioService.NewTimer(source, quiet)
 			if err != nil {

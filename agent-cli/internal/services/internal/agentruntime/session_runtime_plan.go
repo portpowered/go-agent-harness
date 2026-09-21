@@ -17,9 +17,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
-	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
@@ -381,140 +379,7 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	if err != nil {
 		return sessionRuntimePlan{}, err
 	}
-	plan.diagnostics = opts.Diagnostics
-	plan.metricsRecorder = opts.MetricsRecorder
-	plan.streamObserver = opts.StreamObserver
-	// A mode planner (for example a self-driving bare replay of a recorded
-	// scheduled-audio-turn capture) may have already populated audioInputs
-	// directly from the capture; opts.AudioInputs only fills that in when the
-	// planner left it unset.
-	if plan.audioInputs == nil {
-		plan.audioInputs = opts.AudioInputs
-	}
-	plan.scheduledAudioDispatch = scheduledAudioDispatch
-	plan.filesystemPolicy = opts.FilesystemPolicy
-	plan.voice = opts.Voice
-	plan.clockSource = platformclock.Ensure(opts.Clock)
-	plan.runtime = newSessionRuntimeObservationRecorder(opts.RuntimeObserver, plan.clockSource)
-	plan.loop.runtime = plan.runtime
-	plan.loop.audioService = opts.AudioService
-	plan.loop.clockSource = plan.clockSource
-	plan.loop.livenessClock = opts.LivenessClock
-	if plan.loop.livenessClock == nil {
-		if opts.AudioService == nil {
-			return sessionRuntimePlan{}, errors.New("audio service is required for session liveness timing")
-		}
-		plan.loop.livenessClock, err = opts.AudioService.NewClock(plan.clockSource)
-		if err != nil {
-			return sessionRuntimePlan{}, err
-		}
-	}
-	plan.loop.BareLive = plan.loop.BareLive || opts.BareLive
-	plan.loop.cancellationIntent = opts.CancellationIntent
-	plan.loop.toolDiagnostics = opts.ToolDiagnostics
-	plan.loop.SessionUpdatedTimeout = opts.SessionUpdatedTimeout
-	plan.loop.AudioInterruptions = opts.AudioInterruptions
-	plan.rtcDeviceRequest = opts.RTCBinding
-	plan.deviceService = opts.DeviceService
-	// Local device playback of this session's own synthesized voice must
-	// carry the same fixed per-voice loudness correction as every other
-	// output path, so --voice selection does not
-	// leave a live interactive session sounding louder or quieter than a
-	// recorded/room session using the same voice.
-	plan.rtcDeviceRequest.OutputVoice = opts.Voice
-	// Replay preserves the selected device pumps for lifecycle/round-trip
-	// callers, but its recorded media is not a live acoustic topology. Keep the
-	// explicit bypass at the binding boundary so replayed provider output cannot
-	// be mistaken for speaker-to-microphone feedback.
-	plan.rtcDeviceRequest.BypassSelfHearing = plan.rtcDeviceRequest.BypassSelfHearing || opts.ReplayPath != ""
-	// The single composed executor crosses into every session mode (live,
-	// replay, record) here; the duplex loop construction seam decides whether
-	// tool execution is enabled. The read_image binding is cloned per session
-	// so its capability snapshot cannot leak across concurrent sessions.
-	plan.loop.ToolExecutor = bindSessionImageToolExecutor(opts, plan)
-	plan.loop.ToolDefinitions = append([]messages.ToolDefinition(nil), opts.ToolDefinitions...)
-	policySnapshot := interactivePolicy.Clone()
-	plan.interactivePolicy = &policySnapshot
-	plan.loop.InteractiveToolPolicy = &policySnapshot
-	// The per-invocation adapter deadline override is a hermetic test seam;
-	// zero selects the class-specific policy budget.
-	plan.loop.ToolDefinitionBase = append([]messages.ToolDefinition(nil), opts.ToolDefinitionBase...)
-	plan.loop.RefreshToolDefinitions = opts.RefreshToolDefinitions
-	plan.loop.BrowserWatch = opts.BrowserWatch
-	// The per-invocation adapter deadline override crosses with the executor;
-	// zero keeps every production plan on defaultSessionToolExecutionTimeout.
-	plan.loop.ToolExecutionTimeout = opts.ToolExecutionTimeout
-	plan.loop.ScheduledAudioDispatch = scheduledAudioDispatch
-	if opts.AudioService == nil {
-		return sessionRuntimePlan{}, errors.New("audio service is required for session rate resolution")
-	}
-	inputRate, outputRate := plan.inputAudioSampleRate, plan.outputAudioSampleRate
-	if requested, ok := plan.inferencer.(sessionAudioRequestProvider); ok {
-		request := requested.Request().Config
-		if inputRate <= 0 {
-			inputRate = int(request.InputAudioSampleRate)
-		}
-		if outputRate <= 0 {
-			outputRate = int(request.OutputAudioSampleRate)
-		}
-	}
-	rates, err := opts.AudioService.ResolveRates(context.Background(), audioio.RateRequest{
-		Provider: plan.provider, Replay: opts.ReplayPath != "",
-		CapturedInputRate: inputRate, CapturedOutputRate: outputRate,
-	})
-	if err != nil {
-		return sessionRuntimePlan{}, err
-	}
-	plan.outputAudioSampleRate = rates.OutputRate
-	plan.inputAudioSampleRate = rates.InputRate
-	if configurer, ok := plan.inferencer.(runtimeAudioOutputConfigurer); ok {
-		configurer.SetSessionAudioOutput(models.AudioFormatPCM16, models.SampleRate(rates.OutputRate))
-	}
-	if configurer, ok := plan.inferencer.(runtimeAudioInputConfigurer); ok {
-		configurer.SetSessionAudioInput(models.AudioFormatPCM16, models.SampleRate(rates.InputRate))
-	}
-	plan.audioInputs, err = opts.AudioService.ConvertScheduledInputs(context.Background(), plan.audioInputs, plan.inputAudioSampleRate)
-	if err != nil {
-		return sessionRuntimePlan{}, err
-	}
-	plan.loop.InputAudioSampleRate = plan.inputAudioSampleRate
-	if plan.rtcDeviceRequest.HasOutput() && plan.outputAudioSampleRate > 0 {
-		plan.rtcDeviceRequest.OutputSampleRate = plan.outputAudioSampleRate
-	}
-	if plan.rtcDeviceRequest.HasInput() && plan.inputAudioSampleRate > 0 {
-		plan.rtcDeviceRequest.InputSampleRate = plan.inputAudioSampleRate
-	}
-	// The playback-overflow observer's sink is resolved (never trusted as-is)
-	// so an omitted SessionRunOptions.Diagnostics can no longer make a real
-	// device overflow invisible; see resolvePlaybackDiagnosticSink.
-	observabilityDependencies := opts.Observability
-	plan.rtcDeviceRequest.PlaybackObserver = combineRTCDevicePlaybackObservers(
-		plan.rtcDeviceRequest.PlaybackObserver,
-		sessionPlaybackDiagnosticObserver(resolvePlaybackDiagnosticSink(plan.diagnostics)),
-		sessionPlaybackObservabilityObserver(observabilityDependencies.MetricSampler, observabilityDependencies.Logger),
-	)
-	plan.rtcDeviceRequest.PlaybackReceiptObserver = combineRTCDevicePlaybackReceiptObservers(
-		plan.rtcDeviceRequest.PlaybackReceiptObserver,
-		func(receipt audio.PlaybackReceipt) {
-			if plan.runtime != nil {
-				plan.runtime.audioPlaybackReceipt(receipt)
-			}
-		},
-	)
-	plan.rtcDeviceRequest.CaptureObserver = combineRTCDeviceCaptureObservers(
-		plan.rtcDeviceRequest.CaptureObserver,
-		sessionCaptureObservabilityObserver(observabilityDependencies.MetricSampler, observabilityDependencies.Logger),
-	)
-	plan.selection = selection
-	plan.transport = selection.Transport
-	plan.signalingEndpoint = selection.SignalingEndpoint
-	plan.mediaSource = selection.MediaSource
-	if plan.rtcRuntime == nil && selection.Transport == SessionTransportWebRTC && opts.ReplayPath == "" {
-		return sessionRuntimePlan{}, wrapSessionRTCRuntimeError("create runtime", ErrSessionRTCRuntimeUnavailable)
-	}
-	plan.capabilityCoordinator = capabilityCoordinator
-	plan = wireSessionRecordingClaim(plan, recordingClaim)
-	return plan, nil
+	return configureSessionRuntimePlan(plan, opts, selection, interactivePolicy, scheduledAudioDispatch, capabilityCoordinator, recordingClaim)
 }
 
 // wireSessionRecordingClaim redirects one recording plan's capture flush
