@@ -5648,3 +5648,49 @@ candidate before pushing it and handing it to SCRIPT CI.
   reduce the sole adapter to stateless translation within 300 lines. Then run
   `make prepush` plus all C271-05/C271-06 commands on the same clean exact SHA
   before push and SCRIPT CI handoff.
+
+### C271 executor admission and release refresh — 2026-09-21
+
+- Read the required operating policy, implementation handoff, meta-planner
+  handoff, admitted manifest, this task's `prd.json`, this progress log, and
+  the latest concluded review recorded here: C259 `work-review-78` (PR #535,
+  `a187b9f13`). Its findings concern bounded room-evidence admission, public
+  recorder-failure degradation, public room replay round-trip coverage, and
+  exact-head preflight. It contains no C271 self-play repair; C271 has no
+  concluded review recorded in this checkpoint.
+- `project-control.py verify-work --type task --name
+  audio-runtime-c271-recover-selfplay-retirement` returned `admitted` for
+  `audio-runtime/audio-runtime-v1`. `prd.json.branchName` matches the isolated
+  branch. Before this progress edit, C271 was clean at
+  `b54fd4845a9acd5cf6b26c1c802e7dbe326076e2`; freshly fetched
+  `origin/main=b9b2f90bf7e00430cd0ab6067179a5fb8005ec44` and startup
+  integration `8bdafc7f947a3a2c9856220abdc539437035bd21` are ancestors.
+  Required C249 `86a1eed17b099d510b39ce3d3b4ee7d8f7998881` is not an
+  ancestor. Preserved C249 remains clean at that SHA and retains C220
+  `1bf045dd8` ancestry. No host checkout or peer source was changed.
+- Refreshed peer worktrees read-only. C248 is clean at `38b72e0a0`; its latest
+  checkpoint still has architecture findings and an `embed-check` timeout to
+  resolve, with no complete preflight or released caller seam. C269 source is
+  at `889b1a49a` (only its progress log is modified); its latest checkpoint
+  reports all eight planned legacy files and 19 duplicate evidence files
+  deleted, but architecture-size-check still has 15 C268/C272-owned findings
+  and the candidate has not passed full preflight or been released. Keep the
+  shared C248/C269 caller paths frozen.
+- C271 still has the full owned cluster: `selfplay_service.go` (53 lines),
+  `session_self_play.go` (641), and `session_self_play_evidence.go` (716),
+  total 3 production files / 1,410 lines. The uncredited projection remains
+  68 lines. The planned transport adapter remains 85 lines and retains policy,
+  so it does not satisfy the stateless adapter cap. C249's source delta also
+  removes the current candidate's public first-failure and bounded-shutdown
+  tests; preserve those public behavior checks while reconciling C249. No
+  production change, test run, `make prepush`, PR, push, or SCRIPT handoff was
+  made or claimed in this refresh.
+- Exact next action: keep C271 at `CONTINUE`; recheck canonical release status
+  for C248's caller seam and C269's guarded room-evidence merge. Once both are
+  released, fetch current main, integrate C249/C220 and both peer revisions
+  additively, then cut over every production caller, remove the projection and
+  temporary helper, delete the exact three-file / 1,410-line cluster, and make
+  the sole adapter stateless within 300 lines. Run `make prepush` plus every
+  planned C271 functional, integration, regression, race, repeated-shutdown,
+  nomicrophone, hermetic, embed, Wire, deletion/caller, ancestry, and cleanliness
+  gate on the same exact clean SHA before any push or SCRIPT CI handoff.
