@@ -5013,7 +5013,8 @@ handoff sequence. No gate completion is claimed.
   `session_service_duration_shutdown.go` (53) remain, totaling 473 lines.
   `livehost/shutdown_adapter.go` is one file / 59 lines. The canonical C251
   review list and PR query remain empty. No prepush, commit, push, PR, or CI
-  handoff is claimed.
+  handoff is claimed for the retirement candidate; partial checkpoint
+  `84cac75` records this reducer repair and progress.
 - Exact next action: move observed-session wrapping, RTC error/readiness
   channels, publication lifetime, duplex-loop creation, and remaining
   resource/finalization state behind the session-owned live invocation
