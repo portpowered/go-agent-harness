@@ -123,19 +123,10 @@ type ManagedBrowserManagerOptions struct {
 	LockStaleAfter time.Duration
 }
 
-// ManagedBrowserManager serializes launch/reuse for one agent config
-// directory and installs lifecycle-aware close behavior on every returned
-// browser.
+// ManagedBrowserManager serializes browser launch/reuse for one config and installs close hooks.
 type ManagedBrowserManager struct {
 	options  ManagedBrowserManagerOptions
-	watchMu  sync.Mutex
-	watching map[managedBrowserWatchKey]struct{}
-}
-
-type managedBrowserWatchKey struct {
-	profileDir string
-	pid        int
-	identity   string
+	watching sync.Map
 }
 
 // NewManagedBrowserManager constructs a side-effect-free lifecycle manager.
@@ -389,10 +380,8 @@ func (m *ManagedBrowserManager) launchFresh(ctx context.Context, options Managed
 
 func managedBrowserLaunchNeedsProfileRecovery(err error) bool {
 	var launchErr *ManagedBrowserLaunchError
-	if !errors.As(err, &launchErr) || launchErr == nil {
-		return false
-	}
-	return launchErr.Phase == "readiness" || launchErr.Phase == "startup"
+	return errors.As(err, &launchErr) && launchErr != nil &&
+		(launchErr.Phase == "readiness" || launchErr.Phase == "startup")
 }
 
 func (m *ManagedBrowserManager) restartVerifiedProfileOwner(ctx context.Context, profileDir string, shutdown time.Duration) (bool, error) {
@@ -414,9 +403,7 @@ func (m *ManagedBrowserManager) restartVerifiedProfileOwner(ctx context.Context,
 }
 
 func (m *ManagedBrowserManager) closeManagedBrowser(browser *ManagedBrowser, statePath string, expected ManagedBrowserState) error {
-	ctx := context.Background()
-	profileDir := expected.ProfileDir
-	lease, err := acquireManagedBrowserLease(ctx, filepath.Join(profileDir, managedBrowserLockName), m.options.LockTimeout, m.options.LockPoll, m.options.LockStaleAfter)
+	lease, err := acquireManagedBrowserLease(context.Background(), filepath.Join(expected.ProfileDir, managedBrowserLockName), m.options.LockTimeout, m.options.LockPoll, m.options.LockStaleAfter)
 	if err != nil {
 		return newManagedBrowserLifecycleError("close", err)
 	}
@@ -433,8 +420,7 @@ func (m *ManagedBrowserManager) closeManagedBrowser(browser *ManagedBrowser, sta
 		}
 	}
 	if present && !managedBrowserStatesMatch(current, expected) {
-		// A replacement owns the profile now. Never signal it from an older
-		// browser handle.
+		// A replacement owns the profile now. Never signal it from an older browser handle.
 		return nil
 	}
 	var stopErr error
@@ -452,26 +438,10 @@ func (m *ManagedBrowserManager) watchManagedBrowser(browser *ManagedBrowser, sta
 	if browser == nil || browser.Done() == nil {
 		return
 	}
-	key := managedBrowserWatchKey{
-		profileDir: filepath.Clean(expected.ProfileDir),
-		pid:        expected.PID,
-		identity:   expected.ProcessIdentity,
-	}
-	m.watchMu.Lock()
-	if m.watching == nil {
-		m.watching = make(map[managedBrowserWatchKey]struct{})
-	}
-	if _, alreadyWatching := m.watching[key]; alreadyWatching {
-		m.watchMu.Unlock()
+	if _, loaded := m.watching.LoadOrStore(expected, struct{}{}); loaded {
 		return
 	}
-	m.watching[key] = struct{}{}
-	m.watchMu.Unlock()
-	defer func() {
-		m.watchMu.Lock()
-		delete(m.watching, key)
-		m.watchMu.Unlock()
-	}()
+	defer m.watching.Delete(expected)
 	<-browser.Done()
 	lease, err := acquireManagedBrowserLease(context.Background(), filepath.Join(expected.ProfileDir, managedBrowserLockName), m.options.LockTimeout, m.options.LockPoll, m.options.LockStaleAfter)
 	if err != nil {
