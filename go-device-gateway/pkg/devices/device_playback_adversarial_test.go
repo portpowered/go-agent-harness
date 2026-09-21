@@ -75,9 +75,9 @@ func TestVirtualPlaybackCapacityAdversarial(t *testing.T) {
 		primeVirtualPlayback(t, output, high)
 		ctx, cancel := context.WithCancel(context.Background())
 		wait := startCapacityWait(output, ctx, 1)
-		assertCapacityWaitBlocked(t, wait)
+		assertObservedCapacityWaitBlocked(t, wait)
 		cancel()
-		if err := awaitCapacityWait(t, wait); !errors.Is(err, context.Canceled) {
+		if err := awaitObservedCapacityWait(t, wait); !errors.Is(err, context.Canceled) {
 			t.Fatalf("blocked wait cancellation = %v", err)
 		}
 	})
@@ -90,16 +90,17 @@ func TestVirtualPlaybackCapacityAdversarial(t *testing.T) {
 		}
 		primeVirtualPlayback(t, output, high)
 		wait := startCapacityWait(output, context.Background(), audio.FrameSize)
+		assertObservedCapacityWaitBlocked(t, wait)
 		for output.PlaybackStats().QueuedSamples-audio.FrameSize > low {
 			if err := input.ReadSamples(context.Background(), make([]int16, audio.FrameSize)); err != nil {
 				t.Fatal(err)
 			}
-			assertCapacityWaitBlocked(t, wait)
+			assertObservedCapacityWaitBlocked(t, wait)
 		}
 		if err := input.ReadSamples(context.Background(), make([]int16, audio.FrameSize)); err != nil {
 			t.Fatal(err)
 		}
-		if err := awaitCapacityWait(t, wait); err != nil {
+		if err := awaitObservedCapacityWait(t, wait); err != nil {
 			t.Fatalf("wait at low watermark: %v", err)
 		}
 	})
@@ -110,8 +111,9 @@ func TestVirtualPlaybackCapacityAdversarial(t *testing.T) {
 		primeVirtualPlayback(t, output, high)
 		ctx, cancel := context.WithCancel(context.Background())
 		wait := startCapacityWait(output, ctx, audio.FrameSize)
+		assertObservedCapacityWaitBlocked(t, wait)
 		cancel()
-		if err := awaitCapacityWait(t, wait); !errors.Is(err, context.Canceled) {
+		if err := awaitObservedCapacityWait(t, wait); !errors.Is(err, context.Canceled) {
 			t.Fatalf("cancelled capacity wait = %v", err)
 		}
 	})
@@ -132,10 +134,11 @@ func TestVirtualPlaybackCapacityAdversarial(t *testing.T) {
 		_, high, _ := audio.PlaybackQueueWatermarks(output.DeviceFormat())
 		primeVirtualPlayback(t, output, high)
 		wait := startCapacityWait(output, context.Background(), audio.FrameSize)
+		assertObservedCapacityWaitBlocked(t, wait)
 		if got := output.DiscardPlayback(); got != high {
 			t.Fatalf("discard = %d, want %d", got, high)
 		}
-		if err := awaitCapacityWait(t, wait); err != nil {
+		if err := awaitObservedCapacityWait(t, wait); err != nil {
 			t.Fatalf("capacity wait after discard: %v", err)
 		}
 	})
@@ -145,10 +148,11 @@ func TestVirtualPlaybackCapacityAdversarial(t *testing.T) {
 		_, high, _ := audio.PlaybackQueueWatermarks(output.DeviceFormat())
 		primeVirtualPlayback(t, output, high)
 		wait := startCapacityWait(output, context.Background(), audio.FrameSize)
+		assertObservedCapacityWaitBlocked(t, wait)
 		if err := output.Close(); err != nil {
 			t.Fatal(err)
 		}
-		if err := awaitCapacityWait(t, wait); !errors.Is(err, audio.ErrClosed) {
+		if err := awaitObservedCapacityWait(t, wait); !errors.Is(err, audio.ErrClosed) {
 			t.Fatalf("capacity wait after output close = %v, want ErrClosed", err)
 		}
 	})
@@ -158,10 +162,11 @@ func TestVirtualPlaybackCapacityAdversarial(t *testing.T) {
 		_, high, _ := audio.PlaybackQueueWatermarks(output.DeviceFormat())
 		primeVirtualPlayback(t, output, high)
 		wait := startCapacityWait(output, context.Background(), audio.FrameSize)
+		assertObservedCapacityWaitBlocked(t, wait)
 		if err := input.Close(); err != nil {
 			t.Fatal(err)
 		}
-		if err := awaitCapacityWait(t, wait); !errors.Is(err, audio.ErrClosed) {
+		if err := awaitObservedCapacityWait(t, wait); !errors.Is(err, audio.ErrClosed) {
 			t.Fatalf("capacity wait after peer close = %v, want ErrClosed", err)
 		}
 	})
@@ -171,10 +176,11 @@ func TestVirtualPlaybackCapacityAdversarial(t *testing.T) {
 		_, high, _ := audio.PlaybackQueueWatermarks(output.DeviceFormat())
 		primeVirtualPlayback(t, output, high)
 		wait := startCapacityWait(output, context.Background(), audio.FrameSize)
+		assertObservedCapacityWaitBlocked(t, wait)
 		if !registry.RemoveDevice("virtual:output") {
 			t.Fatal("remove output returned false")
 		}
-		if err := awaitCapacityWait(t, wait); !errors.Is(err, ErrDeviceLost) {
+		if err := awaitObservedCapacityWait(t, wait); !errors.Is(err, ErrDeviceLost) {
 			t.Fatalf("capacity wait after output removal = %v, want ErrDeviceLost", err)
 		}
 	})
@@ -184,10 +190,11 @@ func TestVirtualPlaybackCapacityAdversarial(t *testing.T) {
 		_, high, _ := audio.PlaybackQueueWatermarks(output.DeviceFormat())
 		primeVirtualPlayback(t, output, high)
 		wait := startCapacityWait(output, context.Background(), audio.FrameSize)
+		assertObservedCapacityWaitBlocked(t, wait)
 		if !registry.RemoveDevice("virtual:input") {
 			t.Fatal("remove input returned false")
 		}
-		if err := awaitCapacityWait(t, wait); !errors.Is(err, ErrDeviceLost) {
+		if err := awaitObservedCapacityWait(t, wait); !errors.Is(err, ErrDeviceLost) {
 			t.Fatalf("capacity wait after peer removal = %v, want ErrDeviceLost", err)
 		}
 	})
@@ -316,10 +323,57 @@ func primeVirtualPlayback(t *testing.T, output *VirtualStream, samples int) {
 	}
 }
 
-func startCapacityWait(output *VirtualStream, ctx context.Context, samples int) <-chan error {
+type capacityWait struct {
+	done    <-chan error
+	blocked <-chan struct{}
+}
+
+type observedCapacityContext struct {
+	context.Context
+	blocked chan struct{}
+}
+
+func (c *observedCapacityContext) Done() <-chan struct{} {
+	select {
+	case c.blocked <- struct{}{}:
+	default:
+	}
+	return c.Context.Done()
+}
+
+func startCapacityWait(output *VirtualStream, ctx context.Context, samples int) capacityWait {
 	done := make(chan error, 1)
-	go func() { done <- output.WaitForPlaybackCapacity(ctx, samples) }()
-	return done
+	blocked := make(chan struct{}, 1)
+	observed := &observedCapacityContext{Context: ctx, blocked: blocked}
+	go func() { done <- output.WaitForPlaybackCapacity(observed, samples) }()
+	return capacityWait{done: done, blocked: blocked}
+}
+
+func assertObservedCapacityWaitBlocked(t *testing.T, wait capacityWait) {
+	t.Helper()
+	select {
+	case <-wait.blocked:
+	case err := <-wait.done:
+		t.Fatalf("capacity wait returned while it should be blocked: %v", err)
+	case <-time.After(time.Second):
+		t.Fatal("capacity wait did not reach its blocked state")
+	}
+	select {
+	case err := <-wait.done:
+		t.Fatalf("capacity wait returned while it should be blocked: %v", err)
+	default:
+	}
+}
+
+func awaitObservedCapacityWait(t *testing.T, wait capacityWait) error {
+	t.Helper()
+	select {
+	case err := <-wait.done:
+		return err
+	case <-time.After(time.Second):
+		t.Fatal("capacity wait did not terminate")
+		return nil
+	}
 }
 
 func assertCapacityWaitBlocked(t *testing.T, done <-chan error) {
