@@ -20,6 +20,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
 func testManifest() rooms.Manifest {
@@ -199,6 +201,42 @@ func TestServiceRecordsEffectsAndIntegrity(t *testing.T) {
 		}
 		if !bytesContain(data, "[REDACTED]") {
 			t.Fatalf("evidence %s omitted redaction marker", path)
+		}
+	}
+}
+
+func TestServiceAnalyzesRecordedBundle(t *testing.T) {
+	destination, _ := finalizedReplayBundle(t)
+	service := NewService()
+	plan, err := service.LoadPlan(destination)
+	if err != nil {
+		t.Fatalf("load replay plan: %v", err)
+	}
+	bundle, err := service.Load(plan)
+	if err != nil {
+		t.Fatalf("load recorded bundle: %v", err)
+	}
+	analysis, err := service.Analyze(bundle)
+	if err != nil {
+		t.Fatalf("analyze recorded bundle: %v", err)
+	}
+	if len(analysis.Result.Streams) == 0 {
+		t.Fatal("analysis omitted recorded streams")
+	}
+	for _, participant := range bundle.Participants {
+		streamID := participant.WAV.StreamID
+		found := false
+		for _, stream := range analysis.Result.Streams {
+			if stream.StreamID == streamID {
+				found = true
+				if stream.SampleCount != len(participant.WAV.Samples) {
+					t.Fatalf("analysis sample count for %q = %d, want %d", streamID, stream.SampleCount, len(participant.WAV.Samples))
+				}
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("analysis omitted recorded WAV stream %q", streamID)
 		}
 	}
 }
@@ -496,6 +534,13 @@ func assertReplaySymlinkError(t *testing.T, err error, outside string) {
 	t.Helper()
 	if !errors.Is(err, roomevidence.ErrInvalidRoomReplayBundle) {
 		t.Fatalf("symlink error = %v, want invalid replay bundle", err)
+	}
+	var bundleErr *roomevidence.BundleError
+	if !errors.As(err, &bundleErr) || bundleErr.Kind != roomevidence.BundleMismatch {
+		t.Fatalf("symlink error = %v, want typed mismatch bundle error", err)
+	}
+	if !errors.Is(err, gateway.ErrReplayMismatch) || !errors.Is(err, providers.ErrReplayMismatch) {
+		t.Fatalf("symlink error = %v, want gateway and provider replay classifications", err)
 	}
 	if !strings.Contains(err.Error(), "symlink") {
 		t.Fatalf("symlink error = %v, want stable symlink diagnostic", err)

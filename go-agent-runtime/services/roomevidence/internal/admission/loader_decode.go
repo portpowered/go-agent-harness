@@ -8,6 +8,8 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
 // object is the deliberately narrow JSON shape used while admitting a room
@@ -84,11 +86,42 @@ func timestamp(value object, name string) (time.Time, error) {
 }
 
 func mismatch(field string, err error) error {
-	return &roomevidence.BundleError{Kind: roomevidence.BundleMismatch, Field: field, Err: fmt.Errorf("%w: %w", rooms.ErrInvalidReplayBundle, err)}
+	cause := fmt.Errorf("%w: %w", rooms.ErrInvalidReplayBundle, err)
+	return &roomevidence.BundleError{Kind: roomevidence.BundleMismatch, Field: field, Err: &classifiedAdmissionCause{
+		cause:           cause,
+		classifications: []error{roomevidence.ErrInvalidRoomReplayBundle, gateway.ErrReplayMismatch, providers.ErrReplayMismatch},
+	}}
 }
 
 func incomplete(field string, err error) error {
-	return &roomevidence.BundleError{Kind: roomevidence.BundleIncomplete, Field: field, Err: fmt.Errorf("%w: %w", rooms.ErrReplayBundleIncomplete, err)}
+	cause := fmt.Errorf("%w: %w", rooms.ErrReplayBundleIncomplete, err)
+	return &roomevidence.BundleError{Kind: roomevidence.BundleIncomplete, Field: field, Err: &classifiedAdmissionCause{
+		cause:           cause,
+		classifications: []error{roomevidence.ErrRoomReplayBundleIncomplete, gateway.ErrReplayIncomplete, providers.ErrReplayIncomplete},
+	}}
+}
+
+type classifiedAdmissionCause struct {
+	cause           error
+	classifications []error
+}
+
+func (e *classifiedAdmissionCause) Error() string {
+	if e == nil || e.cause == nil {
+		return "<nil>"
+	}
+	return e.cause.Error()
+}
+
+func (e *classifiedAdmissionCause) Unwrap() []error {
+	if e == nil {
+		return nil
+	}
+	errorsToUnwrap := make([]error, 0, len(e.classifications)+1)
+	if e.cause != nil {
+		errorsToUnwrap = append(errorsToUnwrap, e.cause)
+	}
+	return append(errorsToUnwrap, e.classifications...)
 }
 
 func normalizeParticipantKind(kind rooms.ParticipantKind) rooms.ParticipantKind {

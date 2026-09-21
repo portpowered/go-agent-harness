@@ -9,13 +9,13 @@ import (
 )
 
 func TestRoomReplayErrorsRetainStableClassifications(t *testing.T) {
-	mismatch := &BundleError{Kind: BundleMismatch, Field: "pcm", Expected: "16", Actual: "8", Err: gateway.ErrReplayMismatch}
+	mismatch := &BundleError{Kind: BundleMismatch, Field: "pcm", Expected: "16", Actual: "8", Err: errors.Join(ErrInvalidRoomReplayBundle, gateway.ErrReplayMismatch)}
 	if !errors.Is(mismatch, ErrInvalidRoomReplayBundle) || !errors.Is(mismatch, gateway.ErrReplayMismatch) || errors.Is(mismatch, gateway.ErrReplayIncomplete) {
-		t.Fatalf("mismatch classification failed: %v", mismatch)
+		t.Fatalf("mismatch cause classification failed: %v", mismatch)
 	}
-	incomplete := &BundleError{Kind: BundleIncomplete, Err: providers.ErrReplayIncomplete}
+	incomplete := &BundleError{Kind: BundleIncomplete, Err: errors.Join(ErrRoomReplayBundleIncomplete, providers.ErrReplayIncomplete, gateway.ErrReplayIncomplete)}
 	if !errors.Is(incomplete, ErrRoomReplayBundleIncomplete) || !errors.Is(incomplete, providers.ErrReplayIncomplete) || !errors.Is(incomplete, gateway.ErrReplayIncomplete) {
-		t.Fatalf("incomplete classification failed: %v", incomplete)
+		t.Fatalf("incomplete cause classification failed: %v", incomplete)
 	}
 	if (&BundleError{}).Error() == "" || (*BundleError)(nil).Error() != roomReplayNilString {
 		t.Fatal("bundle error formatting lost its nil/empty contract")

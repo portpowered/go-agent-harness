@@ -11,8 +11,6 @@ import (
 
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	roomanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
 // The plan and artifact shapes are owned by the room admission service. These
@@ -110,21 +108,6 @@ func (e *BundleError) Unwrap() error {
 		return nil
 	}
 	return e.Err
-}
-
-// Is preserves the repository's replay classifications for hosts that use the
-// shared gateway/provider error vocabulary.
-func (e *BundleError) Is(target error) bool {
-	if e == nil {
-		return false
-	}
-	if target == ErrInvalidRoomReplayBundle {
-		return e.Kind == BundleMismatch
-	}
-	if e.Kind == BundleIncomplete {
-		return target == ErrRoomReplayBundleIncomplete || target == gateway.ErrReplayIncomplete || target == providers.ErrReplayIncomplete
-	}
-	return target == gateway.ErrReplayMismatch || target == providers.ErrReplayMismatch
 }
 
 // ToleranceProfile is the immutable-by-convention analysis profile

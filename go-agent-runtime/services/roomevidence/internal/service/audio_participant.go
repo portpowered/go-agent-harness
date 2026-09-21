@@ -132,9 +132,11 @@ func loadRoomReplayWAVParticipant(plan RoomReplayPlan, participantID string, art
 
 func appendRoomReplayDeltaBoundaries(stream *AudioStream, deltas []AudioDelta) {
 	endSample := 0
-	for _, delta := range deltas {
+	for index, delta := range deltas {
 		endSample += len(delta.PCM) / 2
-		stream.ChunkBoundaries = append(stream.ChunkBoundaries, streamanalysis.ChunkBoundary{ID: delta.ID, SampleIndex: endSample})
+		if index < len(deltas)-1 {
+			stream.ChunkBoundaries = append(stream.ChunkBoundaries, streamanalysis.ChunkBoundary{ID: delta.ID, SampleIndex: endSample})
+		}
 	}
 }
 

@@ -13,6 +13,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	"io"
 	"os"
 	"strings"
@@ -31,10 +32,13 @@ func newRoomReplayBundleError(kind roomReplayBundleErrorKind, field, artifact, e
 		kind = BundleMismatch
 	}
 	var replayCause error
+	var classifications []error
 	if kind == BundleIncomplete {
 		replayCause = gateway.NewReplayIncompleteError(expected, actual, cause)
+		classifications = []error{roomevidence.ErrRoomReplayBundleIncomplete, providers.ErrReplayIncomplete}
 	} else {
 		replayCause = gateway.NewReplayMismatchError(expected, actual, cause)
+		classifications = []error{roomevidence.ErrInvalidRoomReplayBundle, providers.ErrReplayMismatch}
 	}
 	return &roomevidenceBundleError{
 		Kind:     kind,
@@ -42,8 +46,31 @@ func newRoomReplayBundleError(kind roomReplayBundleErrorKind, field, artifact, e
 		Artifact: artifact,
 		Expected: expected,
 		Actual:   actual,
-		Err:      replayCause,
+		Err:      &roomReplayBundleCause{cause: replayCause, classifications: classifications},
 	}
+}
+
+type roomReplayBundleCause struct {
+	cause           error
+	classifications []error
+}
+
+func (e *roomReplayBundleCause) Error() string {
+	if e == nil || e.cause == nil {
+		return "<nil>"
+	}
+	return e.cause.Error()
+}
+
+func (e *roomReplayBundleCause) Unwrap() []error {
+	if e == nil {
+		return nil
+	}
+	errorsToUnwrap := make([]error, 0, len(e.classifications)+1)
+	if e.cause != nil {
+		errorsToUnwrap = append(errorsToUnwrap, e.cause)
+	}
+	return append(errorsToUnwrap, e.classifications...)
 }
 
 // roomReplayBundleErrorKind keeps the service implementation independent of
