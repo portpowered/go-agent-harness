@@ -6141,3 +6141,37 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   replay-service injection and remaining direct readers additively, then run
   every C276-02 through C276-06 command plus `make prepush` on one clean exact
   candidate before any push. Decision remains CONTINUE.
+
+# C276 current-turn checkpoint - current-head bounded verification - 2026-09-21
+
+- Reverified sole `audio-runtime` admission with `project-control.py
+  verify-work --type task --name audio-runtime-c276-recover-c270-recording-replay-finalization`;
+  `prd.json.branchName` matches the isolated branch. Fetched `origin/main` at
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`; required startup, current-main,
+  C270, C234, and both C217 ancestry pins remain ancestors. The worktree was
+  clean at `1bbabb44d` before this checkpoint, and no predecessor or peer tree
+  was modified.
+- Current bounded public route passes:
+  `CGO_ENABLED=0 go test -count=1 -tags=nomicrophone
+  ./agent-cli/internal/transport/cli -run
+  'TestSession(Recorded|Unrecorded)WebMCPCastDeviceWAVStaysInteractive'
+  -timeout 30s`. Recording/replay/session focused behavior passes 163 tests
+  across 25 packages.
+- The bounded `^TestProbe` command remains red only at the known C268 seam:
+  `TestProbeRunS2SV7AMetricsModalityReconcilesOffline` cannot complete because
+  the production metrics collector invokes `RunSession` without replay-service
+  injection, and the dependent overcount test panics after no expectations are
+  emitted. C268 owns that caller and has no reviewed release or planner
+  handoff; C229, C269, and C274 likewise have no exact reviewed release
+  available. No peer-owned source was edited.
+- The seven integrated-main deletion targets and six checkpoint-only replacement
+  paths remain absent (13/13); `session_browser_recording.go` remains identical
+  to `origin/main`. The named adapter inventory remains 0 files / 0 lines until
+  a released caller establishes an actual stateless translation requirement.
+  No full C276-05/06 preflight, `make prepush`, push, PR update, SCRIPT gate,
+  review, or merge is claimed.
+- Exact next action: retain C276 ownership, consume exact reviewed C229/C268/
+  C269/C274 releases or a planner-recorded handoff, integrate the metrics
+  replay-service/direct-reader seams and any required stateless adapters
+  additively, then run every C276-02 through C276-06 command plus `make prepush`
+  on one clean exact candidate before any push. Decision remains CONTINUE.
