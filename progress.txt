@@ -4480,3 +4480,56 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   legacy deletion, verify the single stateless adapter cap, then run
   `make prepush` and every planned C271 local gate on the exact clean candidate
   before pushing it for SCRIPT CI.
+\
+
+# C271 refreshed service and shared-seam checkpoint — 2026-09-21
+
+- Re-read the operating policy, implementation handoff, meta-planner handoff,
+  PRD and progress history. `project-control.py verify-work --type task --name
+  audio-runtime-c271-recover-selfplay-retirement --root "$FACTORY_ROOT"`
+  returned `admitted` for `audio-runtime`. `prd.json.branchName` matches the
+  isolated branch `codex/audio-runtime-c271-recover-selfplay-retirement`.
+  Before this progress-only checkpoint, candidate source HEAD was
+  `00ca696f776a91eab72d549a2c31bdf308af352b`; `origin/main` was freshly fetched
+  at `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`. Both current main and startup
+  integration `8bdafc7f947a3a2c9856220abdc539437035bd21` are ancestors.
+- Preserved C249 remains clean at `86a1eed17b099d510b39ce3d3b4ee7d8f7998881`,
+  with C220 `1bf045dd8` ancestry reachable. The C248 and C269 source worktrees
+  remain dirty and unchanged. Exact planned caller overlaps are C248:
+  `agentruntime/session_live.go`, `services/servicetest/runtime.go`,
+  `services/wire/wire.go`, `transport/cli/session.go`,
+  `transport/cli/session_observability.go`, and `wire/wire_gen.go`; C269:
+  `agentruntime/session_playback_diagnostics.go` and
+  `agentruntime/session_room_evidence.go`. No shared path was modified.
+- The latest recorded concluded C259 `work-review-78` findings concern bounded
+  room-evidence manifest/timeline admission, recorder-failure degradation,
+  public room replay coverage, and exact-head preflight. They do not identify
+  a self-play service repair. Earlier task records report no concluded C271
+  review.
+- On source HEAD `00ca696f776a91eab72d549a2c31bdf308af352b`,
+  `rtk go test -timeout=3m -count=1 ./go-agent-runtime/services/selfplay/...`
+  passed 25 tests across 3 packages;
+  `rtk go test -race -timeout=5m -count=1
+  ./go-agent-runtime/services/selfplay/...` passed 25 across 3;
+  `rtk go test -timeout=5m -count=10 ./go-agent-runtime/services/selfplay/...
+  -run '(Cancel|Duration|Shutdown|Stop|Failure)'` passed 170 across 3.
+  `rtk make wire-check`, the self-play service boundary scan, and
+  `rtk git diff --check` passed; Wire regeneration left no tracked changes.
+- Current legacy inventory is 106 production Go files / 39,329 physical lines.
+  The entire owned retirement cluster remains present:
+  `selfplay_service.go` 53 lines, `session_self_play.go` 641, and
+  `session_self_play_evidence.go` 716, totaling 1,410 lines. The uncredited
+  obsolete `agent-cli/internal/services/selfplay/interface.go` projection
+  also remains. The one CLI self-play command file is 85 lines, but it still
+  imports that projection and consumes its defaults/persona/seed policy, so it
+  is not yet a compliant stateless adapter. The temporary
+  `session_room_evidence_files.go` helper is absent. No caller cutover, cluster
+  deletion, full local preflight, push, PR update, or SCRIPT handoff is claimed.
+- Exact next action: retain C271 at `CONTINUE`; keep the listed C248/C269-owned
+  shared paths untouched. Continue disjoint public service/caller audit only
+  while those dependencies remain active. After C248's reviewed caller release
+  and C269's guarded room-evidence merge, fetch current main, reconcile C249
+  and C220 ancestry plus both peer behaviors, cut over every caller, delete
+  the projection and exact 1,410-line legacy cluster, verify the one-file /
+  300-line stateless adapter boundary, then run the complete planned local
+  preflight on the exact candidate before any push or PR handoff.
