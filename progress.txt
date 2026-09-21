@@ -5142,3 +5142,37 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   functional, integration, race, hermetic, Wire, embedding, regression,
   deletion, adapter, ancestry, diff, and `make prepush` gate on one exact clean
   candidate before any push. Decision remains CONTINUE.
+
+# C234 continuation checkpoint — refreshed exact-head and ownership audit — 2026-09-20
+
+- Re-read the factory operating policy and implementation handoff before acting.
+  `project-control.py verify-work --type task --name
+  audio-runtime-c234-recover-recording-replay-retirement` returned `admitted`;
+  the PRD branch matches this isolated worktree. Fetched `origin/main` remains
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`. At candidate HEAD
+  `1a8f14ec38cf39b20037ac1dab9852a84bc90671`, the C217 source, recovery
+  checkpoint, startup revision, planning main and fetched main are ancestors;
+  the tree was clean before this note.
+- The canonical `~default` review query for C234 returns no review Work or
+  concluded findings. The 13 planned recording/replay legacy target paths are
+  absent. The only named adapters remain `recording_adapter.go` (20 physical
+  lines) and `replay_adapter.go` (25), 45 total. The C224
+  `session_browser_recording.go` matches `origin/main`; `git diff --check`
+  passes.
+- The read-only caller audit confirms remaining leased capture readers:
+  `metrics_collector.go:87` and `livehost/trace.go:192` are assigned to C268's
+  admitted recovery from failed C255 Work `work-task-59`; C268 Work
+  `work-task-96` is still INITIAL without a running implementation session.
+  `session_room_replay_integrity.go:235` remains with C264 Work `work-task-86`
+  and active Worker Session `ad906b1d-b9f9-49aa-96a7-756662ed7889`. C229 Work
+  `work-task-16` has active Worker Session
+  `991295d8-86fa-422e-9e47-568b80f76564`; its live-session/WebMCP caller seam
+  remains leased. No peer worktree or leased file was changed.
+- No production change, exact-candidate preflight, `make prepush`, push, PR
+  update or SCRIPT handoff ran. Exact next action: preserve the C229/C264/C268
+  ownership boundaries; integrate each caller checkpoint only after its owner
+  releases it, repair the service-owned WebMCP route if it still fails, repeat
+  the production caller audit, then run the full C234-02 through C234-05
+  functional, race, integration, hermetic, Wire, embedding, regression,
+  deletion, adapter, ancestry, diff and `make prepush` gates on one clean exact
+  candidate before pushing. Decision remains CONTINUE.
