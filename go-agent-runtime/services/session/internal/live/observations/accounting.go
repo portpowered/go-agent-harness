@@ -1,6 +1,7 @@
 package observations
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -14,6 +15,7 @@ type streamAccounting struct {
 	usage        messages.TokenUsage
 	outputInTurn bool
 	toolDeltas   map[string]struct{}
+	err          error
 }
 
 func newStreamAccounting() *streamAccounting {
@@ -124,9 +126,21 @@ func (a *streamAccounting) inputAudio(byteCount int) {
 }
 
 func (a *streamAccounting) record(direction metrics.Direction, modality metrics.Modality, byteCount int) {
-	if byteCount > 0 {
-		_ = a.sink.Record(direction, modality, int64(byteCount))
+	if byteCount <= 0 {
+		return
 	}
+	if err := a.sink.Record(direction, modality, int64(byteCount)); err != nil && a.err == nil {
+		a.err = fmt.Errorf("record %s/%s live metrics: %w", direction, modality, err)
+	}
+}
+
+func (a *streamAccounting) errorValue() error {
+	if a == nil {
+		return nil
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.err
 }
 
 func (a *streamAccounting) snapshot() *sessiontrace.SessionFinalAccounting {

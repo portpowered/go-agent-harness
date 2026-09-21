@@ -4648,3 +4648,10 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
 - Exact-candidate `rtk make prepush` on `bea4cc3a26f5e9e5a997699481821a3b01f1dcd6` stopped at architecture before tests: the metrics integration file baseline remained 737 lines after a measured reduction to 728, and `RuntimeTrace.accountMessage` measured cognitive complexity 21 and cyclomatic complexity 27 against 15.
 - Lowered only the metrics test file-lines baseline to the measured 728. Split the service-private stream fold into `observations/accounting.go`; no ceiling was raised. `rtk make architecture-size-check` now passes (208 packages, 1,935 files, 28,477 functions). Focused service tests pass (89) and the metrics reconciliation integration cases pass (2).
 - This repaired tree is not yet committed and has not passed `make prepush`. Next: record this checkpoint in a commit, then run `make prepush` and every C229-05 command on that new exact clean SHA; repair every local failure and repeat the complete set on any changed SHA. No push or PR exists.
+
+
+# C229 live-accounting lint repair checkpoint - 2026-09-21
+
+- Exact-candidate `rtk make prepush` on `1a09595996eed0b35d8d3ee1d2c8d1451176c8f0` passed formatting, architecture, Wire generation and vet, then pinned golangci-lint rejected the ignored return from the metrics sink in `observations/accounting.go`.
+- The service now retains the first accounting error and joins it into bounded live-session shutdown before terminal publication. `rtk make lint` passes all 15 modules with zero issues; the focused service suite passes (89 tests) and the two final-accounting integration cases pass.
+- This repair is uncommitted. Next: checkpoint it in a commit, then run `make prepush` and every C229-05 command on that exact clean SHA. Repair every locally reproducible failure and rerun the full command set on each changed candidate. No push or PR exists.

@@ -82,6 +82,14 @@ func (r *RuntimeTrace) now() time.Time {
 	return time.Time{}
 }
 
+// Error returns the first accounting failure retained during observation.
+func (r *RuntimeTrace) Error() error {
+	if r == nil {
+		return nil
+	}
+	return r.accounting.errorValue()
+}
+
 // AudioOutput copies each normalized response-audio delta into the observer.
 func (r *RuntimeTrace) AudioOutput(msg messages.StreamMessage) {
 	value, ok := msg.Value.(*messages.AudioDeltaValue)

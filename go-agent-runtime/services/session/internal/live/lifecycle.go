@@ -50,6 +50,9 @@ func (h *handle) finishOnceBody(err error) {
 	} else {
 		err = errors.Join(err, h.recorderError(), h.scheduledAudioError(), h.finiteAudioResponseError())
 	}
+	if h.runtimeTrace != nil {
+		err = errors.Join(err, h.runtimeTrace.Error())
+	}
 	h.mu.Lock()
 	h.terminalErr = err
 	h.mu.Unlock()
