@@ -1,7 +1,8 @@
-package plan
+package response
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -16,10 +17,17 @@ func (replayResponseIdentityUnavailableError) Error() string {
 	return "replay response identity unavailable"
 }
 
+func IsIdentityUnavailable(err error) bool {
+	var target replayResponseIdentityUnavailableError
+	return errors.As(err, &target)
+}
+
+const maxReplayResponseTarget = 128
+
 // replayCaptureResponseTarget derives finite completion from correlated
 // provider response identities. A cancelled interruption does not satisfy the
 // target when the capture contains a distinct replacement response.
-func replayCaptureResponseTarget(path string, records []gatewaytesting.CapturedSessionEvent) (int, bool, error) {
+func CaptureResponseTarget(path string, records []gatewaytesting.CapturedSessionEvent) (int, bool, error) {
 	state := newReplayResponseTargetState()
 	for _, record := range records {
 		if record.Direction != gatewaytesting.DirectionServerToClient {
@@ -30,6 +38,13 @@ func replayCaptureResponseTarget(path string, records []gatewaytesting.CapturedS
 		}
 	}
 	return state.result()
+}
+
+func replayRecordPayload(record gatewaytesting.CapturedSessionEvent) []byte {
+	if len(record.Payload) > 0 {
+		return record.Payload
+	}
+	return record.Data
 }
 
 type replayResponseTargetState struct {

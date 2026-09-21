@@ -1,4 +1,4 @@
-package plan
+package response
 
 import (
 	"encoding/json"
@@ -7,7 +7,7 @@ import (
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
-func replayHasInterruptionReplacement(records []gatewaytesting.CapturedSessionEvent) bool {
+func HasInterruptionReplacement(records []gatewaytesting.CapturedSessionEvent) bool {
 	cancelledResponseID := ""
 	for _, record := range records {
 		if record.Direction != gatewaytesting.DirectionServerToClient {
