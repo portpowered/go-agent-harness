@@ -4829,3 +4829,50 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   the sole stateless adapter cap, then run `make prepush` and every planned
   functional, integration, race, hermetic, embed and Wire gate on the exact
   clean candidate before push or PR handoff.
+
+### C271 canonical release and review refresh — 2026-09-21
+
+- Re-ran `rtk python3 factory/scripts/project-control.py verify-work --type
+  task --name audio-runtime-c271-recover-selfplay-retirement`; admission is
+  `admitted` for `audio-runtime/audio-runtime-v1`. `prd.json.branchName` exactly
+  matches `codex/audio-runtime-c271-recover-selfplay-retirement`. The clean
+  candidate is `53e28899a8b066f6f449e5cfec240e8bebf4367f`. Fetched `origin/main`
+  at `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`; current main and startup
+  integration `8bdafc7f947a3a2c9856220abdc539437035bd21` are ancestors.
+- Preserved C249 remains clean at
+  `86a1eed17b099d510b39ce3d3b4ee7d8f7998881`; C220 `1bf045dd8` remains an
+  ancestor. C249 itself is intentionally not reconciled into C271 until both
+  shared releases are available.
+- Canonical `~default` shows C248 `work-task-45` and C269 `work-task-101` still
+  `init`/`PROCESSING`, each with a `RUNNING` Worker Session. C248 worktree is
+  dirty at `fd999b18c3b6f277c1da4bc0511944a56037cae7`, including
+  `session_runtime_plan.go`, new `session_runtime_factory.go` and
+  `session_runtime_turn.go`, and sessionturn tool-lifecycle implementation.
+  C269 worktree is dirty at `d792accaf8244898f559962ae371e06263095a9b`, with
+  room-evidence admission/service, rooms lifecycle/service/Wire, policy, and
+  integration-test changes. No reviewed or guarded release is available; no
+  peer worktree or owned shared path was modified.
+- Read the full concluded canonical C259 `work-review-78` feedback. Its four
+  findings are: bound manifest bytes and total timeline admission; restore
+  public room-evidence degradation coverage for recorder failures; add a
+  public room-run/load/analyze replay round trip; and provide exact-head
+  preflight results. None identifies a self-play-specific repair. C271
+  production source is unchanged since tested commit
+  `6079c6cbdbaff3281b8545839a10a12819157a69` (`git diff` to this checkpoint
+  changes only `progress.txt`), so previously recorded focused functional,
+  race, repeated shutdown/failure, Wire, boundary, and diff results still apply;
+  no test or `make prepush` was rerun for this progress-only checkpoint.
+- Retirement remains incomplete. The exact owned legacy cluster is present:
+  `selfplay_service.go` (53 lines), `session_self_play.go` (641), and
+  `session_self_play_evidence.go` (716), totaling 3 files / 1,410 lines. The
+  obsolete CLI projection is 68 lines. The only candidate adapter is
+  `agent-cli/internal/transport/cli/session_self_play.go`, 1 file / 85 lines,
+  and still consumes the projection's defaults, personas, and opening-seed
+  policy, so it is not a compliant stateless adapter. There is no C271 PR,
+  caller cutover, legacy deletion, full preflight, push, or SCRIPT handoff.
+- Exact next action: retain C271 at `CONTINUE`; keep the active C248/C269 seams
+  untouched and refresh their canonical releases. Once both are released,
+  fetch current main, reconcile C249/C220 and both peer changes additively,
+  cut over every caller, delete the projection and exact three-file cluster,
+  verify the adapter budget, and run `make prepush` plus all planned local gates
+  on the exact clean candidate before pushing or updating the PR.
