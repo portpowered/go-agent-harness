@@ -10,7 +10,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
-	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"io"
 	"os"
 	"path/filepath"
@@ -28,7 +27,7 @@ func (r *directoryRecorder) processMessage(item directoryEvidenceItem) {
 		}
 		return
 	}
-	message, err := gatewaytesting.UnmarshalStreamMessage(item.payload)
+	message, err := unmarshalEvidenceStreamMessage(item.payload)
 	if err != nil {
 		// Keep the original admitted payload and subsequent PCM even when a
 		// convenience projection cannot interpret a newly introduced type.

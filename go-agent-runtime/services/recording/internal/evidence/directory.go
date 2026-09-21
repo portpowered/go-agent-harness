@@ -16,7 +16,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 const (
@@ -153,7 +152,7 @@ func (r *directoryRecorder) RecordMessage(ctx context.Context, record session.Li
 	if record.Timestamp.IsZero() {
 		r.latch(recordingWriteError("observe message clock", errors.New("message timestamp is unavailable")))
 	}
-	payload, err := gatewaytesting.MarshalStreamMessage(record.Message)
+	payload, err := marshalEvidenceStreamMessage(record.Message)
 	if err != nil {
 		r.latch(recordingWriteError("encode stream message", err))
 		return nil
