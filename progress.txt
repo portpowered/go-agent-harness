@@ -4074,3 +4074,38 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   same PR `#435`, update its body with the repair/evidence map, then return
   `ACCEPTED` to the script-owned current-head CI gate without polling; retain
   this task through `CONTINUE` for any exact CI rejection or actionable repair.
+
+# C280 recovery service-owner checkpoint 2026-09-21
+
+- Admission was reverified from `FACTORY_ROOT` for the sole `audio-runtime`
+  project at contract `audio-runtime-v1`; `prd.json.branchName` exactly matches
+  `codex/audio-runtime-c280-recover-c269-room-evidence-retirement`. Fresh
+  `origin/main` is `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`, and startup
+  integration `8bdafc7f947a3a2c9856220abdc539437035bd21` remains an ancestor.
+  The C269 source worktree at `889b1a49...` is read-only and has only its
+  pre-existing `progress.txt` modification; C259 remains reachable at
+  `2cdb46102...`. No host checkout, predecessor or peer worktree was changed.
+- The useful C269 service-owner history was transplanted without copying its
+  modified progress file. `fa311675` restores `go-agent-runtime/services/roomevidence`
+  and its service-local Wire; `00b1c711` preserves review-78's bounded manifest
+  admission and timestamped observation/empty-stream repairs. The recovered
+  legacy deletion and shared-caller changes remain uncommitted until their
+  exact C271/C272/C276/C278 release boundaries are available.
+- C280-owned checks pass on `00b1c711`: normal focused roomevidence/rooms tests
+  pass `56` tests in `16` packages; the race-focused selection passes `51` in
+  `16` packages; the private-boundary scan, `make wire-check`,
+  `make architecture-size-check`, and `git diff --check` pass. The working tree
+  is clean at this checkpoint.
+- Canonical C271/C272/C276/C278 Work still has no reviewed or explicitly
+  released caller seam. Therefore the eight room-evidence agentruntime files,
+  the 19 duplicate `rooms/internal/evidence` production files, and the legacy
+  caller graph remain present in this fresh branch; the C280 adapter budget is
+  still `0 files / 0 lines` (no adapter was added). No `make prepush`, full
+  vertical gate, push, PR, SCRIPT CI, review or merge is claimed.
+- Exact next action: refresh the canonical release/ownership state; once each
+  required peer seam is reviewed or explicitly released, fetch and integrate
+  those exact revisions additively, cut over every named and discovered caller,
+  delete the complete owned legacy cluster, rerun the full C280-03/C280-04
+  checks, then run `make prepush` plus the complete exact-head C280-05 gate on
+  one clean candidate before push and SCRIPT handoff. Return `CONTINUE` while
+  that actionable integration remains.
