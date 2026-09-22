@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
-	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
@@ -48,9 +48,9 @@ type roomReplaySpeechSegment struct {
 // contain no provider audio-input appends; retaining that no-audio path keeps
 // older finalized bundles compatible while audio bundles use the deterministic
 // room clock below.
-func newRoomReplaySchedule(ctx context.Context, replay RoomReplayPlan, plans []*roomParticipantPlan, format room.PCM16Format) (*roomReplaySchedule, error) {
+func newRoomReplaySchedule(ctx context.Context, replay RoomReplayPlan, plans []*roomParticipantPlan, format room.PCM16Format, audioService audioio.Service) (*roomReplaySchedule, error) {
 	if ctx == nil {
-		ctx = context.Background()
+		return nil, errors.New("room replay schedule context is required")
 	}
 	if format == (room.PCM16Format{}) {
 		format = room.DefaultPCM16Format()
@@ -93,9 +93,7 @@ func newRoomReplaySchedule(ctx context.Context, replay RoomReplayPlan, plans []*
 		if appendCount > 0 {
 			hasRecordedInboundAudio = true
 		}
-		if appendCount > expectedFrames {
-			expectedFrames = appendCount
-		}
+		expectedFrames = max(expectedFrames, appendCount)
 	}
 	if len(targetIDs) == 0 || !hasRecordedInboundAudio {
 		return nil, nil
@@ -116,7 +114,7 @@ func newRoomReplaySchedule(ctx context.Context, replay RoomReplayPlan, plans []*
 		if readErr != nil {
 			return nil, fmt.Errorf("read room replay participant %q sent PCM: %w", participant.ID, readErr)
 		}
-		pcm, readErr = normalizeRoomReplayPCM(pcm, replay.PCMFormat, format)
+		pcm, readErr = normalizeRoomReplayPCM(ctx, audioService, pcm, replay.PCMFormat, format)
 		if readErr != nil {
 			return nil, fmt.Errorf("normalize room replay participant %q sent PCM: %w", participant.ID, readErr)
 		}
@@ -193,9 +191,7 @@ func newRoomReplaySchedule(ctx context.Context, replay RoomReplayPlan, plans []*
 	}
 
 	totalFrames := expectedFrames
-	if maxFrame+1 > totalFrames {
-		totalFrames = maxFrame + 1
-	}
+	totalFrames = max(totalFrames, maxFrame+1)
 	if totalFrames == 0 {
 		return nil, fmt.Errorf("room replay contains inbound audio captures but no replayable sent PCM")
 	}
@@ -253,9 +249,6 @@ func (s *roomReplaySchedule) run(ctx context.Context, runtimes []*roomParticipan
 					continue
 				}
 				target := byID[targetID]
-				if target == nil || target.mixer == nil {
-					return fmt.Errorf("room replay frame %d target %q is missing", frameIndex, targetID)
-				}
 				if coordinator != nil && !coordinator.isActive(targetID) {
 					if coordinator.isStopping() {
 						return nil
@@ -360,11 +353,7 @@ func roomReplaySegmentFrameCount(startNanos, endNanos int64, frameDuration time.
 	if endNanos <= startNanos || frameDuration <= 0 {
 		return 1
 	}
-	frames := int(math.Ceil(float64(endNanos-startNanos) / float64(frameDuration)))
-	if frames < 1 {
-		return 1
-	}
-	return frames
+	return max(1, int(math.Ceil(float64(endNanos-startNanos)/float64(frameDuration))))
 }
 
 func roomReplayPCMFrame(pcm []byte, frameIndex, frameBytes int) []byte {
@@ -377,7 +366,7 @@ func roomReplayPCMFrame(pcm []byte, frameIndex, frameBytes int) []byte {
 	return frame
 }
 
-func normalizeRoomReplayPCM(pcm []byte, source RoomReplayPCMFormat, target room.PCM16Format) ([]byte, error) {
+func normalizeRoomReplayPCM(ctx context.Context, audioService audioio.Service, pcm []byte, source RoomReplayPCMFormat, target room.PCM16Format) ([]byte, error) {
 	sourceChannels := source.Channels
 	if sourceChannels <= 0 {
 		sourceChannels = 1
@@ -401,7 +390,13 @@ func normalizeRoomReplayPCM(pcm []byte, source RoomReplayPCMFormat, target room.
 	if source.SampleRate == target.SampleRate && sourceChannels == target.Channels {
 		return append([]byte(nil), pcm...), nil
 	}
-	converted, err := audio.ConvertPCM16Bytes(pcm, sourceChannels, source.SampleRate, target.Channels, target.SampleRate)
+	if audioService == nil {
+		return nil, errors.New("audio service is required for room replay conversion")
+	}
+	converted, err := audioService.ConvertPCM16(ctx, audioio.PCM16Request{
+		PCM: pcm, SourceRate: source.SampleRate, TargetRate: target.SampleRate,
+		SourceChannels: sourceChannels, TargetChannels: target.Channels,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("convert room replay PCM16: %w", err)
 	}

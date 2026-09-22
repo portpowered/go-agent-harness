@@ -8,7 +8,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_duration_termination_test.go",
       "symbol": "TestRunAgentLoopSessionWithDurationTerminalOutcomesAlwaysDrainAcceptedDelta",
-      "value": 32,
+      "value": 23,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -18,7 +18,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_duration_termination_test.go",
       "symbol": "TestRunAgentLoopSessionWithDurationTerminalOutcomesAlwaysDrainAcceptedDelta",
-      "value": 288,
+      "value": 272,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -28,7 +28,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_duration_termination_test.go",
       "symbol": "TestRunAgentLoopSessionWithDurationTerminalOutcomesAlwaysDrainAcceptedDelta",
-      "value": 124,
+      "value": 110,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     }

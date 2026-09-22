@@ -357,7 +357,7 @@ type RoomReplayDeltaReconstructionError struct {
 
 func (e *RoomReplayDeltaReconstructionError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return runtimeNilText
 	}
 	expectedByte := "<missing>"
 	if e.ExpectedByte >= 0 {

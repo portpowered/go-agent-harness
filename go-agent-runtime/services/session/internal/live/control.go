@@ -8,6 +8,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/eventcodec"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/mediagate"
 	"reflect"
 	"strings"
@@ -32,17 +33,10 @@ func (h *handle) Send(ctx context.Context, control session.LiveControl) error {
 	if ctx == nil {
 		return errors.New("live control context is required")
 	}
-	h.mu.Lock()
-	if !h.started || h.loop == nil {
-		h.mu.Unlock()
-		return session.ErrLiveNotStarted
+	loop, err := h.liveControlLoop()
+	if err != nil {
+		return err
 	}
-	if h.closed {
-		h.mu.Unlock()
-		return session.ErrLiveClosed
-	}
-	loop := h.loop
-	h.mu.Unlock()
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -53,14 +47,33 @@ func (h *handle) Send(ctx context.Context, control session.LiveControl) error {
 		h.Cancel(context.Canceled)
 		return nil
 	}
+	return h.sendLiveControl(ctx, loop, control)
+}
+
+func (h *handle) liveControlLoop() (*agentloop.AgentLoop, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if !h.started || h.loop == nil {
+		return nil, session.ErrLiveNotStarted
+	}
+	if h.closed {
+		return nil, session.ErrLiveClosed
+	}
+	return h.loop, nil
+}
+
+func (h *handle) sendLiveControl(ctx context.Context, loop *agentloop.AgentLoop, control session.LiveControl) error {
 	ackID, ack, err := h.media.RegisterAck()
 	if err != nil {
 		return err
 	}
-	event, err := liveControlEvent(control)
+	event, err := eventcodec.LiveControlMessage(control)
 	if err != nil {
 		h.media.AbortAck(ackID)
 		return err
+	}
+	if control.Kind == session.LiveControlAudioCommit && h.request.Replay.Kind == session.LiveReplayKindTurn {
+		event.Value = nil
 	}
 	event.ActorProvidedID = ackID
 	if err := loop.SendSessionEvent(ctx, event); err != nil {
@@ -72,12 +85,24 @@ func (h *handle) Send(ctx context.Context, control session.LiveControl) error {
 		if !accepted {
 			return fmt.Errorf("live provider rejected control %q", control.Kind)
 		}
+		if h.runtimeTrace != nil {
+			switch control.Kind {
+			case session.LiveControlAudioCommit:
+				h.runtimeTrace.InputCommit(false)
+				h.runtimeTrace.ResponseCreate(messages.StreamMessage{Type: messages.StreamTypeResponseCreate})
+			case session.LiveControlResponseCreate:
+				h.runtimeTrace.ResponseCreate(event)
+			case session.LiveControlText, session.LiveControlResponseCancel, session.LiveControlClose:
+				// Text and lifecycle controls have no dedicated runtime observation.
+			}
+		}
 		return nil
 	case <-ctx.Done():
 		h.media.CancelAck(ackID)
 		return ctx.Err()
 	}
 }
+
 func (h *handle) refreshLiveTools(ctx context.Context, loop *agentloop.AgentLoop) error {
 	h.mu.Lock()
 	refresh := h.capabilityRefresh
@@ -128,22 +153,6 @@ func (h *handle) refreshLiveTools(ctx context.Context, loop *agentloop.AgentLoop
 	case <-ctx.Done():
 		h.media.CancelAck(ackID)
 		return ctx.Err()
-	}
-}
-func liveControlEvent(control session.LiveControl) (messages.StreamMessage, error) {
-	switch control.Kind {
-	case session.LiveControlText:
-		return messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue(control.Text)}, nil
-	case session.LiveControlAudioCommit:
-		return messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{})}, nil
-	case session.LiveControlResponseCancel:
-		return messages.StreamMessage{Type: messages.StreamTypeResponseCancel, Value: messages.NewResponseCancelValue()}, nil
-	case session.LiveControlResponseCreate:
-		return messages.StreamMessage{Type: messages.StreamTypeResponseCreate, Value: messages.NewResponseCreateValue()}, nil
-	case session.LiveControlClose:
-		return messages.StreamMessage{}, errors.New("close control is handled by the live lifecycle")
-	default:
-		return messages.StreamMessage{}, fmt.Errorf("unsupported live control %q", control.Kind)
 	}
 }
 func (h *handle) Cancel(err error) {
@@ -289,18 +298,6 @@ func drainLiveEvents(events <-chan session.LiveEvent, sink session.LiveEventSink
 		}
 	}
 }
-func sessionSendOutcomeForError(ctx context.Context, err error) messages.SessionSendOutcome {
-	if err == nil {
-		return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
-	}
-	if errors.Is(err, context.DeadlineExceeded) || (ctx != nil && errors.Is(ctx.Err(), context.DeadlineExceeded)) {
-		return messages.SessionSendOutcome{Status: messages.SessionSendTimedOut, Err: err}
-	}
-	if errors.Is(err, context.Canceled) || (ctx != nil && errors.Is(ctx.Err(), context.Canceled)) {
-		return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: err}
-	}
-	return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure, Err: err}
-}
 func (h *handle) finiteResponseWasInterrupted(msg messages.StreamMessage) bool {
 	value, ok := msg.Value.(*messages.MessageEndValue)
 	if !ok || value == nil {
@@ -351,50 +348,46 @@ func shouldCancelMediaPumpFor(name string, pumpErr error, ctx context.Context) b
 	}
 	return shouldCancelMediaPump(pumpErr, ctx)
 }
-func (s *terminalDrainSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
-	return s.SendWithOutcome(ctx, msg).OK()
-}
-func (s *terminalDrainSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
-	if s == nil || s.inner == nil {
-		return messages.SessionSendOutcome{Status: messages.SessionSendClosed}
-	}
-	if sender, ok := s.inner.(messages.SessionSendOutcomeSender); ok {
-		return sender.SendWithOutcome(ctx, msg)
-	}
-	if s.inner.Send(ctx, msg) {
-		return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
-	}
-	if ctx != nil && ctx.Err() != nil {
-		status := messages.SessionSendCancelled
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			status = messages.SessionSendTimedOut
-		}
-		return messages.SessionSendOutcome{Status: status, Err: ctx.Err()}
-	}
-	return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}
-}
-func (s *terminalDrainSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
-	return s.receive
-}
-func (s *terminalDrainSession) Done() <-chan struct{} { return s.done }
-func (s *terminalDrainSession) Close() error {
-	if s == nil {
+
+func capabilityEventStream(ctx context.Context, watch func(context.Context) <-chan session.LiveCapabilityEvent) <-chan session.LiveCapabilityEvent {
+	if watch == nil {
 		return nil
 	}
-	s.close.Do(func() {
-		close(s.stop)
-		if s.inner != nil {
-			s.closeErr = s.inner.Close()
-		}
-	})
-	<-s.done
-	return s.closeErr
+	return watch(ctx)
 }
-func (s *terminalDrainSession) SupportsCompleteMessages() bool {
-	capability, ok := s.inner.(interface{ SupportsCompleteMessages() bool })
-	return ok && capability.SupportsCompleteMessages()
+
+func (h *handle) captureInterruptionsEnabled() bool {
+	if h == nil {
+		return false
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.captureInterruptionEvent != nil
 }
-func (s *terminalDrainSession) SupportsCompleteMessagesWithoutResponse() bool {
-	capability, ok := s.inner.(interface{ SupportsCompleteMessagesWithoutResponse() bool })
-	return ok && capability.SupportsCompleteMessagesWithoutResponse()
+
+func capabilityEvent(sessionID, participantID string, value session.LiveCapabilityEvent) session.LiveEvent {
+	copy := value
+	return session.LiveEvent{
+		Kind:          "browser." + strings.TrimSpace(value.Type),
+		SessionID:     sessionID,
+		ParticipantID: participantID,
+		Timestamp:     value.Timestamp,
+		BrowserID:     value.BrowserID,
+		TargetID:      value.TargetID,
+		Generation:    value.Generation,
+		InvocationID:  value.InvocationID,
+		State:         value.State,
+		Reason:        value.Reason,
+		Capability:    &copy,
+		Critical:      capabilityEventCritical(value),
+	}
+}
+
+func capabilityEventCritical(value session.LiveCapabilityEvent) bool {
+	typeName := strings.ToLower(strings.TrimSpace(value.Type))
+	state := strings.ToLower(strings.TrimSpace(value.State))
+	return strings.Contains(typeName, "closed") || strings.Contains(typeName, "disconnect") ||
+		strings.Contains(typeName, "error") || strings.Contains(typeName, "failed") ||
+		strings.Contains(state, "error") || strings.Contains(state, "failed") ||
+		strings.Contains(state, "canceled") || strings.Contains(state, "timed_out")
 }

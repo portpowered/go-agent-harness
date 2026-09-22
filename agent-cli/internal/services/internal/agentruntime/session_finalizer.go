@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"io"
 	"sync"
 )
@@ -22,8 +23,8 @@ var ErrSessionFinalizationPanic = errors.New("session finalization panicked")
 // finalizer idempotent means those wrappers can retain pre-plan guards without
 // creating a second cleanup owner after a plan has started.
 type sessionRuntimeFinalizer struct {
-	plan          sessionRuntimePlan
-	deviceBinding *RTCDeviceBinding
+	plan       sessionRuntimePlan
+	rtcBinding runtimedevices.RTCBinding
 
 	once sync.Once
 	mu   sync.Mutex
@@ -34,9 +35,9 @@ func newSessionRuntimeFinalizer(plan sessionRuntimePlan) *sessionRuntimeFinalize
 	return &sessionRuntimeFinalizer{plan: plan}
 }
 
-func (f *sessionRuntimeFinalizer) setDeviceBinding(binding *RTCDeviceBinding) {
+func (f *sessionRuntimeFinalizer) setRTCBinding(binding runtimedevices.RTCBinding) {
 	if f != nil {
-		f.deviceBinding = binding
+		f.rtcBinding = binding
 	}
 }
 
@@ -85,8 +86,8 @@ func (f *sessionRuntimeFinalizer) cleanup(ctx context.Context, out io.Writer) er
 	if f.plan.closeSession != nil {
 		appendErr(wrapSessionPhaseError("close WebRTC provider session", invokeSessionFinalizer(f.plan.closeSession)))
 	}
-	if f.deviceBinding != nil {
-		appendErr(wrapSessionPhaseError("close RTC device binding", invokeSessionFinalizer(f.deviceBinding.Close)))
+	if f.rtcBinding != nil {
+		appendErr(wrapSessionPhaseError("close RTC device service binding", invokeSessionFinalizer(f.rtcBinding.Close)))
 	}
 	if f.plan.rtcRuntime != nil {
 		appendErr(wrapSessionPhaseError("close WebRTC runtime", invokeSessionFinalizer(f.plan.rtcRuntime.Close)))

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
 const (
@@ -34,23 +33,6 @@ const (
 // deterministic clock without coupling liveness to wall time.
 type SessionLivenessTimer = SessionDurationTimer
 type SessionLivenessClock = SessionDurationClock
-
-type platformSessionLivenessClock struct {
-	source platformclock.TimerSource
-}
-
-func (c platformSessionLivenessClock) NewTimer(duration time.Duration) SessionLivenessTimer {
-	return c.source.NewTimer(duration)
-}
-
-func sessionLivenessClockFromSource(source platformclock.Source) SessionLivenessClock {
-	source = platformclock.Ensure(source)
-	timerSource, ok := source.(platformclock.TimerSource)
-	if !ok {
-		return nil
-	}
-	return platformSessionLivenessClock{source: timerSource}
-}
 
 var (
 	// ErrSilentProviderEmptyResponse is the stable sentinel for an explicit
@@ -356,7 +338,8 @@ func (o *sessionProgressObserver) setProviderProgress(onlyIfArmed bool) {
 	}
 	clock := o.livenessClock
 	if clock == nil {
-		clock = realSessionDurationClock{}
+		o.livenessMu.Unlock()
+		return
 	}
 	o.ensureLivenessStateLocked()
 	o.livenessMu.Unlock()

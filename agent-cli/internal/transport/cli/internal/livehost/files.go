@@ -12,7 +12,9 @@ import (
 
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	devicegateway "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
 
@@ -20,33 +22,13 @@ import (
 // the CLI edge; the runtime device service receives canonical audio ports and
 // owns them for the duration of Open.
 type FilePorts struct {
-	Input      *runtimeDevices.FileInput
-	InputTurns []runtimeDevices.FileInput
-	Output     *runtimeDevices.FileOutput
+	Input              *runtimeDevices.FileInput
+	InputTurns         []runtimeDevices.FileInput
+	InputInterruptions []runtimeDevices.FileInput
+	Output             *runtimeDevices.FileOutput
 
 	once     sync.Once
 	closeErr error
-}
-
-// frameAudioSource keeps the explicit legacy replay compatibility path on the
-// canonical fixed-frame AudioSource contract. Ordinary file and finite-turn
-// callers retain count-aware source tails.
-type frameAudioSource struct {
-	source audio.AudioSource
-}
-
-func (s *frameAudioSource) ReadFrame(ctx context.Context, buf []int16) error {
-	if s == nil || s.source == nil {
-		return io.EOF
-	}
-	return s.source.ReadFrame(ctx, buf)
-}
-
-func (s *frameAudioSource) Close() error {
-	if s == nil || s.source == nil {
-		return nil
-	}
-	return s.source.Close()
 }
 
 // interruptibleAudioSource owns a process-local duplicate of stdin. The
@@ -124,7 +106,7 @@ func (s *interruptibleAudioSource) Close() error {
 // invocation. A failed later admission closes every earlier port before
 // returning the joined error.
 func OpenFilePorts(request serviceSession.Request, out io.Writer, outputRate int) (*FilePorts, error) {
-	if !request.AudioInput.Present && len(request.AudioTurns) == 0 && request.AudioOutputPath == "" {
+	if !request.AudioInput.Present && len(request.AudioTurns) == 0 && len(request.AudioInterrupts) == 0 && request.AudioOutputPath == "" {
 		return nil, nil
 	}
 	ports := &FilePorts{}
@@ -142,6 +124,13 @@ func OpenFilePorts(request serviceSession.Request, out io.Writer, outputRate int
 		}
 		ports.InputTurns = append(ports.InputTurns, runtimeDevices.FileInput{Source: source, SampleRate: rate, Pace: path != "-", Continuous: path == "-"})
 	}
+	for index, path := range request.AudioInterrupts {
+		source, rate, err := openAudioInput(serviceSession.AudioInput{Path: path})
+		if err != nil {
+			return nil, errors.Join(fmt.Errorf("--audio-interrupt %d %q: %w", index+1, path, err), ports.Close())
+		}
+		ports.InputInterruptions = append(ports.InputInterruptions, runtimeDevices.FileInput{Source: source, SampleRate: rate, Pace: true})
+	}
 	if request.AudioOutputPath != "" {
 		sink, err := openAudioOutput(request, out, outputRate)
 		if err != nil {
@@ -156,7 +145,7 @@ func openAudioOutput(request serviceSession.Request, out io.Writer, outputRate i
 	if outputRate <= 0 {
 		outputRate = audio.SampleRate
 	}
-	if request.AudioInput.Present || len(request.AudioTurns) > 0 || request.AudioOutputDevicePresent || request.InteractiveDevices {
+	if request.AudioInput.Present || len(request.AudioTurns) > 0 || len(request.AudioInterrupts) > 0 || request.AudioOutputDevicePresent || request.InteractiveDevices {
 		return newNegotiatedFileSink(request.AudioOutputPath, out, outputRate)
 	}
 	return audio.NewFileSinkAtSampleRate(request.AudioOutputPath, out, outputRate)
@@ -218,35 +207,127 @@ func openFileAudioSource(input serviceSession.AudioInput) (audio.AudioSource, *o
 	return source, interruptibleInput, nil
 }
 
-// UseLegacyFrameSource preserves old raw replay captures whose handshake did
-// not record an input rate. It is intentionally opt-in and never changes the
-// normal count-aware finite source contract.
-func UseLegacyFrameSource(input *runtimeDevices.FileInput) {
-	if input == nil || input.Source == nil {
-		return
-	}
-	input.Source = &frameAudioSource{source: input.Source}
-}
-
 // Close releases every caller-opened source and sink exactly once.
 func (p *FilePorts) Close() error {
 	if p == nil {
 		return nil
 	}
-	p.once.Do(func() {
-		var errs []error
-		if p.Output != nil && p.Output.Sink != nil {
-			errs = append(errs, p.Output.Sink.Close())
-		}
-		if p.Input != nil && p.Input.Source != nil {
-			errs = append(errs, p.Input.Source.Close())
-		}
-		for index := range p.InputTurns {
-			if p.InputTurns[index].Source != nil {
-				errs = append(errs, p.InputTurns[index].Source.Close())
-			}
-		}
-		p.closeErr = errors.Join(errs...)
-	})
+	p.once.Do(func() { p.closeErr = closeFilePortSources(p) })
 	return p.closeErr
+}
+
+func closeFilePortSources(ports *FilePorts) error {
+	var errs []error
+	if ports.Output != nil {
+		errs = appendFilePortClose(errs, ports.Output.Sink)
+	}
+	if ports.Input != nil {
+		errs = appendFilePortClose(errs, ports.Input.Source)
+	}
+	for index := range ports.InputTurns {
+		errs = appendFilePortClose(errs, ports.InputTurns[index].Source)
+	}
+	for index := range ports.InputInterruptions {
+		errs = appendFilePortClose(errs, ports.InputInterruptions[index].Source)
+	}
+	return errors.Join(errs...)
+}
+
+func appendFilePortClose(errs []error, closer interface{ Close() error }) []error {
+	if closer == nil {
+		return errs
+	}
+	return append(errs, closer.Close())
+}
+
+func selectFileDevices(physical, finite runtimeDevices.Service, deviceRequest runtimeDevices.Request, filePorts *FilePorts) (runtimeDevices.Service, runtimeDevices.Request) {
+	if filePorts == nil {
+		return physical, deviceRequest
+	}
+	if filePorts.Input != nil {
+		deviceRequest.CaptureEnabled = false
+	}
+	if deviceRequest.CaptureEnabled || deviceRequest.PlaybackEnabled {
+		return physical, deviceRequest
+	}
+	if filePorts.Input != nil || filePorts.Output != nil {
+		deviceRequest.CaptureEnabled = filePorts.Input != nil
+		deviceRequest.PlaybackEnabled = filePorts.Output != nil
+		return finite, deviceRequest
+	}
+	if len(filePorts.InputTurns) > 0 || len(filePorts.InputInterruptions) > 0 {
+		return finite, deviceRequest
+	}
+	return nil, deviceRequest
+}
+
+func outputWriter(request serviceSession.Request, out io.Writer) io.Writer {
+	if request.AudioOutputPath == "-" {
+		return io.Discard
+	}
+	return out
+}
+
+func devicesRequest(request serviceSession.Request, liveRequest runtimeSession.LiveRequest) runtimeDevices.Request {
+	sampleRate := liveRequest.InputAudioSampleRate
+	if sampleRate <= 0 {
+		sampleRate = liveRequest.OutputAudioSampleRate
+	}
+	if sampleRate <= 0 {
+		sampleRate = 24000
+	}
+	return runtimeDevices.Request{
+		InputDevice: request.AudioInputDevice, OutputDevice: request.AudioOutputDevice,
+		RemoteEndpoint:  request.AudioDeviceServer,
+		CaptureEnabled:  request.InteractiveDevices || request.AudioInputDevicePresent,
+		PlaybackEnabled: request.InteractiveDevices || request.AudioOutputDevicePresent,
+		SampleRate:      sampleRate, Channels: audio.Channels, PlaybackProfile: "voice",
+		HoldToneConfig: request.HoldToneConfig,
+	}
+}
+
+func applyFileSchedulers(filePorts *FilePorts, scheduler clock.Scheduler) {
+	if filePorts == nil {
+		return
+	}
+	if filePorts.Input != nil {
+		filePorts.Input.Scheduler = scheduler
+	}
+	for index := range filePorts.InputTurns {
+		filePorts.InputTurns[index].Scheduler = scheduler
+	}
+	for index := range filePorts.InputInterruptions {
+		filePorts.InputInterruptions[index].Scheduler = scheduler
+	}
+}
+
+func audioTurnAdmission(request serviceSession.Request) runtimeSession.AudioTurnAdmission {
+	if request.AudioInTurnBarge {
+		return runtimeSession.AudioTurnAdmissionBarge
+	}
+	return runtimeSession.AudioTurnAdmissionCompletionGated
+}
+
+func captureTurns(filePorts *FilePorts) []runtimeDevices.FileInput {
+	if filePorts == nil {
+		return nil
+	}
+	return append([]runtimeDevices.FileInput(nil), filePorts.InputTurns...)
+}
+
+func captureInterruptions(filePorts *FilePorts) []runtimeDevices.FileInput {
+	if filePorts == nil {
+		return nil
+	}
+	return append([]runtimeDevices.FileInput(nil), filePorts.InputInterruptions...)
+}
+
+func captureCompleteControls(request serviceSession.Request, custom func(serviceSession.Request) []runtimeSession.LiveControl) []runtimeSession.LiveControl {
+	if custom != nil {
+		return custom(request)
+	}
+	if !request.AudioInput.Present && len(request.AudioTurns) == 0 {
+		return nil
+	}
+	return []runtimeSession.LiveControl{{Kind: runtimeSession.LiveControlAudioCommit}}
 }

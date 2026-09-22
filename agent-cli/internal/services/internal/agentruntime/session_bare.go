@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
 
@@ -109,25 +110,24 @@ func ResolveBareSessionOptions(opts SessionRunOptions) (SessionRunOptions, error
 	if err != nil {
 		return SessionRunOptions{}, err
 	}
-	transcription := resolveBareSessionTranscription(loadedCfg.Session)
-	if opts.NoInputTranscription {
-		transcription.Enabled = false
-		transcription.Model = ""
+	transcription, err := resolveBareSessionTranscription(opts.AudioService, provider, loadedCfg.Session, opts.NoInputTranscription)
+	if err != nil {
+		return SessionRunOptions{}, err
 	}
 	resolved.InputAudioTranscription = &transcription
 
 	if loadedCfg.Session != nil {
-		if !resolved.RTCDeviceBinding.InputPresent && resolved.RTCDeviceBinding.InputDevice == "" {
-			resolved.RTCDeviceBinding.InputDevice = loadedCfg.Session.InputDevice
+		if !resolved.RTCBinding.InputPresent && resolved.RTCBinding.InputDevice == "" {
+			resolved.RTCBinding.InputDevice = loadedCfg.Session.InputDevice
 		}
-		if !resolved.RTCDeviceBinding.OutputPresent && resolved.RTCDeviceBinding.OutputDevice == "" {
-			resolved.RTCDeviceBinding.OutputDevice = loadedCfg.Session.OutputDevice
+		if !resolved.RTCBinding.OutputPresent && resolved.RTCBinding.OutputDevice == "" {
+			resolved.RTCBinding.OutputDevice = loadedCfg.Session.OutputDevice
 		}
 	}
 	// Bare mode intentionally selects both directions. Empty and "default"
 	// selectors are left intact for the shared registry resolver.
-	resolved.RTCDeviceBinding.InputPresent = true
-	resolved.RTCDeviceBinding.OutputPresent = true
+	resolved.RTCBinding.InputPresent = true
+	resolved.RTCBinding.OutputPresent = true
 
 	return resolved, nil
 }
@@ -253,19 +253,25 @@ func resolveBareSessionTurnDetection(provider string, cfg *config.SessionConfig)
 	return turnDetection, nil
 }
 
-func resolveBareSessionTranscription(cfg *config.SessionConfig) models.InputAudioTranscriptionConfig {
-	transcription := models.InputAudioTranscriptionConfig{
-		Enabled: true,
-		Model:   models.DefaultInputAudioTranscriptionModel,
+func resolveBareSessionTranscription(audioService audioio.Service, provider string, cfg *config.SessionConfig, disabled bool) (models.InputAudioTranscriptionConfig, error) {
+	if audioService == nil {
+		return models.InputAudioTranscriptionConfig{}, errors.New("audio service is required for transcription resolution")
 	}
-	if cfg == nil || cfg.InputTranscription == nil {
-		return transcription
+	request := audioio.TranscriptionRequest{
+		Provider:          provider,
+		AcceptsAudioInput: true,
+		Disabled:          disabled,
 	}
-	if cfg.InputTranscription.Enabled != nil {
-		transcription.Enabled = *cfg.InputTranscription.Enabled
+	if cfg != nil && cfg.InputTranscription != nil {
+		if cfg.InputTranscription.Enabled != nil {
+			request.Disabled = !*cfg.InputTranscription.Enabled
+		}
+		request.Model = strings.TrimSpace(cfg.InputTranscription.Model)
 	}
-	if model := strings.TrimSpace(cfg.InputTranscription.Model); model != "" {
-		transcription.Model = model
+	if disabled {
+		request.Disabled = true
+		request.Model = ""
 	}
-	return transcription
+	resolved := audioService.ResolveTranscription(request)
+	return models.InputAudioTranscriptionConfig{Enabled: resolved.Enabled, Model: resolved.Model}, nil
 }

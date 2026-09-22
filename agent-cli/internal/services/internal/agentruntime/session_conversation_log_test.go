@@ -342,6 +342,7 @@ func TestSessionDirectoryRecordingCapturesCorrelatedToolLifecycle(t *testing.T) 
 		inner:     inferencer,
 		recording: recording,
 	}, sessionLoopOptions{
+		audioService:          newTestAudioIOService(),
 		Prompt:                "check the browser",
 		MaxDuration:           2 * time.Second,
 		WaitForClose:          true,

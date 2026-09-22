@@ -126,6 +126,7 @@ type roomEvidenceArtifactPaths struct {
 	Capture string `json:"capture,omitempty"`
 }
 
+//lint:ignore U1000 package tests exercise the context-free evidence seam.
 func newRoomEvidence(destination string, manifest room.Manifest, format room.PCM16Format, secrets []string, startedAt time.Time, sources ...platformclock.Source) (*roomEvidence, error) {
 	return newRoomEvidenceWithLatency(destination, manifest, format, secrets, startedAt, nil, sources...)
 }
@@ -199,7 +200,6 @@ func (e *roomEvidence) recordProviderErrorTimeline(participant string, fields ma
 	e.mu.Unlock()
 	e.recordTimelineEvent("provider_error", participant, fields)
 }
-
 func (e *roomEvidence) participant(id string) *roomParticipantEvidence {
 	if e == nil {
 		return nil
@@ -476,14 +476,14 @@ func (p *roomParticipantEvidence) observeDelta(msg messages.StreamMessage) error
 	return errors.Join(deltaErr, eventsErr)
 }
 
-func (p *roomParticipantEvidence) observeAudio(pcm []byte) error {
+func (p *roomParticipantEvidence) observeAudio(ctx context.Context, pcm []byte) error {
 	if p == nil {
 		return errors.New("room participant WAV sink is not initialized")
 	}
 	if p.audio == nil {
 		return p.recordError(p.artifacts.WAV, errors.New("room participant WAV sink is not initialized"))
 	}
-	return p.recordError(p.artifacts.WAV, p.audio.write(context.Background(), pcm))
+	return p.recordError(p.artifacts.WAV, p.audio.write(ctx, pcm))
 }
 
 // observeSentAudio records one chunk of this participant's own outbound
@@ -491,11 +491,11 @@ func (p *roomParticipantEvidence) observeAudio(pcm []byte) error {
 // the new raw participants/<id>/sent.pcm, the room's composite mix at this
 // chunk's real wall-clock offset, and a speech_start/speech_end room-timeline
 // transition derived from the chunk's own energy.
-func (p *roomParticipantEvidence) observeSentAudio(pcm []byte) error {
+func (p *roomParticipantEvidence) observeSentAudio(ctx context.Context, pcm []byte) error {
 	if p == nil || p.owner == nil {
 		return errors.New("room participant audio evidence is not initialized")
 	}
-	return errors.Join(p.observeAudio(pcm), p.observeSentStream(pcm))
+	return errors.Join(p.observeAudio(ctx, pcm), p.observeSentStream(pcm))
 }
 
 // observeSentStream records everything observeSentAudio does except the

@@ -188,6 +188,7 @@ func TestCloseAfterOpenWaitsForAcceptedRichToolResult(t *testing.T) {
 	go func() {
 		var out bytes.Buffer
 		runErr <- servicetest.RunSession(ctx, &out, servicetest.SessionRunOptions{
+			AudioService:      newTestAudioService(),
 			RecordPath:        filepath.Join(t.TempDir(), "close-after-open-rich.json"),
 			Provider:          "grok",
 			Model:             "grok-realtime",
@@ -314,6 +315,7 @@ func TestDurationAdmissionCloseAfterOpenWaitsForAcceptedRichToolResult(t *testin
 	runErr := make(chan error, 1)
 	go func() {
 		runErr <- servicetest.RunSessionWithMaxDurationClock(ctx, io.Discard, servicetest.SessionRunOptions{
+			AudioService:      newTestAudioService(),
 			RecordPath:        filepath.Join(t.TempDir(), "duration-close-after-open-rich.json"),
 			Provider:          "grok",
 			Model:             "grok-realtime",
