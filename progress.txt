@@ -4280,3 +4280,38 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   eight agentruntime files plus all 19 duplicate evidence files. Then execute
   the full C280-03/04 checks and `make prepush` plus every C280-05 command on
   one clean exact SHA; continue through locally reproducible repairs.
+
+# C280 bounded concurrent Close behavior checkpoint 2026-09-21
+
+- Admission remains active for `audio-runtime` / `audio-runtime-v1`; the task
+  branch matches `prd.json`. Fresh `origin/main` is
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`; startup integration and current
+  main are ancestors. The integrated-main legacy baseline verifies at 106
+  production files / 39,329 physical lines. Required C259/C269 checkpoints
+  remain reachable and unchanged.
+- Added public behavior test
+  `TestServiceConcurrentCloseIsBoundedAndIdempotent`: 16 simultaneous `Close`
+  calls start through a barrier, all must finish within five seconds, repeated
+  close remains idempotent, and the finalized manifest is readable. The
+  focused normal run, focused race run at count 20, and planned bounded-close
+  race matrix at count 20 pass. The C280 service/rooms normal suites pass 102
+  tests in 16 packages; focused race suites pass 52 tests in 16 packages and
+  the repeated bounds suite reports 120 passing runs in one package. The
+  private-boundary scan, `make wire-check`, and `git diff --check` pass; Wire
+  regeneration leaves no generated diff.
+- Review-78 was read in full: bounded manifest/timeline admission, recorder
+  degradation, and public load/analyze round-trip are repaired in the recovered
+  code; its exact-head preflight evidence is still outstanding. Current board
+  still has no caller release: C271 failed with C281 processing/init, C272 and
+  C276 processing/init, and C278 processing/init with review-142's output
+  destination probe and public `Run` regression outstanding.
+- The retirement remains incomplete: all eight owned agentruntime files
+  (3,619 lines) and 19 duplicate `rooms/internal/evidence` production files
+  (3,509 lines) remain; adapter budget is 0 files / 0 lines. No caller cutover,
+  deletion, full `make prepush`, push, PR, SCRIPT CI, review, or merge is
+  claimed.
+- Exact next action: refresh the exact C271/C281/C272/C276/C278 reviewed or
+  released seams, integrate only released revisions additively, cut over every
+  named and discovered caller, add public room-run degradation/round-trip
+  coverage, and delete the complete owned cluster. Then run C280-03/04 and
+  `make prepush` plus all C280-05 commands on one clean exact candidate SHA.

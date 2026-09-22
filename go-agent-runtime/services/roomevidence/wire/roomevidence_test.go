@@ -305,6 +305,53 @@ func TestServiceConcurrentObservationAndFinalize(t *testing.T) {
 	}
 }
 
+func TestServiceConcurrentCloseIsBoundedAndIdempotent(t *testing.T) {
+	recorder, destination, _ := openRecorder(t)
+	const callers = 16
+	start := make(chan struct{})
+	ready := make(chan struct{}, callers)
+	results := make(chan error, callers)
+	for range callers {
+		go func() {
+			ready <- struct{}{}
+			<-start
+			results <- recorder.Close()
+		}()
+	}
+	for range callers {
+		<-ready
+	}
+	close(start)
+
+	deadline := time.NewTimer(5 * time.Second)
+	defer deadline.Stop()
+	for range callers {
+		select {
+		case err := <-results:
+			if err != nil {
+				t.Fatalf("concurrent close: %v", err)
+			}
+		case <-deadline.C:
+			t.Fatal("concurrent Close calls did not finish within 5s")
+		}
+	}
+	if err := recorder.Close(); err != nil {
+		t.Fatalf("idempotent close after concurrent closes: %v", err)
+	}
+
+	manifestData, err := os.ReadFile(filepath.Join(destination, roomevidence.ManifestPath))
+	if err != nil {
+		t.Fatalf("read manifest finalized by Close: %v", err)
+	}
+	var manifest effectsManifest
+	if err := json.Unmarshal(manifestData, &manifest); err != nil {
+		t.Fatalf("decode manifest finalized by Close: %v", err)
+	}
+	if !manifest.Finalized {
+		t.Fatal("concurrent Close returned before the room evidence manifest was finalized")
+	}
+}
+
 func TestServiceRejectsPostFinalizeAndRetainsFirstTypedError(t *testing.T) {
 	recorder, _, source := openRecorder(t)
 	first := errors.New("first sink failure")
