@@ -1,4 +1,4 @@
-package service
+package audiobundle
 
 import (
 	"errors"

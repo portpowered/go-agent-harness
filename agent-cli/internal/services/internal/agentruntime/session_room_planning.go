@@ -250,11 +250,8 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 	return plans, secrets, nil
 }
 
-// buildRoomReplayParticipantPlans composes each provider participant through
-// the existing session replay planner. It deliberately does not consult the
-// live room manifest, credential lookup, capability factories, or injected
-// live session factories: the validated bundle is the complete source of
-// replay runtime configuration.
+// buildRoomReplayParticipantPlans composes admitted provider participants
+// with the session replay planner without consulting live configuration.
 func buildRoomReplayParticipantPlans(ctx context.Context, replay roomreplay.RoomReplayPlan, opts RoomRunOptions) ([]*roomParticipantPlan, []string, error) {
 	if ctx == nil {
 		ctx = context.Background()

@@ -8,7 +8,8 @@ import (
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay/internal/audiobundle"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay/internal/support"
 )
 
 type RoomReplayBundleErrorKind = roomreplay.RoomReplayBundleErrorKind
@@ -18,13 +19,6 @@ type RoomReplayPCMFormat = roomreplay.RoomReplayPCMFormat
 type RoomReplayArtifact = roomreplay.RoomReplayArtifact
 type RoomReplayParticipant = roomreplay.RoomReplayParticipant
 type RoomReplayTimelineEvent = roomreplay.RoomReplayTimelineEvent
-type RoomReplayAudioBundle = roomreplay.RoomReplayAudioBundle
-type RoomReplayAudioParticipant = roomreplay.RoomReplayAudioParticipant
-type RoomReplayAudioStream = roomreplay.RoomReplayAudioStream
-type RoomReplayAudioDelta = roomreplay.RoomReplayAudioDelta
-type RoomReplayAudioAnnotation = roomreplay.RoomReplayAudioAnnotation
-type RoomReplayToleranceProfile = roomreplay.RoomReplayToleranceProfile
-type RoomReplayDeltaReconstructionError = roomreplay.RoomReplayDeltaReconstructionError
 type ParticipantKind = roomreplay.ParticipantKind
 
 const (
@@ -37,12 +31,6 @@ const (
 const (
 	ErrInvalidRoomReplayBundle    = roomreplay.ErrInvalidRoomReplayBundle
 	ErrRoomReplayBundleIncomplete = roomreplay.ErrRoomReplayBundleIncomplete
-)
-
-var (
-	ErrRoomReplayDeltaReconstruction = roomreplay.ErrRoomReplayDeltaReconstruction
-	ErrRoomReplayAudioTimeline       = roomreplay.ErrRoomReplayAudioTimeline
-	ErrRoomReplayToleranceProfile    = roomreplay.ErrRoomReplayToleranceProfile
 )
 
 // Service owns the private parser, filesystem admission, and integrity
@@ -66,6 +54,58 @@ func (s *Service) Load(bundle string) (RoomReplayPlan, error) {
 		return RoomReplayPlan{}, newRoomReplayBundleError(kind, "run-manifest.json", manifestRelative, "readable JSON manifest", err.Error(), err)
 	}
 	return validateRoomReplayManifest(root, manifestPath, data)
+}
+
+func (s *Service) LoadAudioBundle(bundle string) (roomreplay.RoomReplayAudioBundle, error) {
+	plan, err := s.Load(bundle)
+	if err != nil {
+		return roomreplay.RoomReplayAudioBundle{}, err
+	}
+	return audiobundle.Load(plan)
+}
+
+func prepareReplayBuildRequest(request roomreplay.BuildRequest) (roomreplay.BuildRequest, error) {
+	plan := request.ReplayPlan
+	if plan == nil {
+		return request, nil
+	}
+	if len(request.Participants) != 0 || len(request.Timeline) != 0 || request.SourceFormat != (roomreplay.SourcePCM16Format{}) {
+		return roomreplay.BuildRequest{}, fmt.Errorf("%w: replay plan cannot be combined with explicit replay sources", roomreplay.ErrInvalidRequest)
+	}
+	request.SourceFormat = roomreplay.SourcePCM16Format{
+		SampleRate: plan.PCMFormat.SampleRate, Channels: plan.PCMFormat.Channels,
+		SampleWidthBits: plan.PCMFormat.SampleWidthBits, SampleWidthBit: plan.PCMFormat.SampleWidthBit,
+		ByteOrder: plan.PCMFormat.ByteOrder, Encoding: plan.PCMFormat.Encoding,
+	}
+	request.Timeline = make([]roomreplay.TimelineEvent, 0, len(plan.Timeline))
+	for _, event := range plan.Timeline {
+		request.Timeline = append(request.Timeline, roomreplay.TimelineEvent{
+			Sequence: event.Sequence, OffsetMS: event.OffsetMS, OffsetNanos: event.OffsetNanos,
+			Type: event.Type, ParticipantID: event.ParticipantID,
+		})
+	}
+	request.Participants = make([]roomreplay.Participant, 0, len(request.TargetIDs))
+	for _, id := range request.TargetIDs {
+		participant, ok := plan.Participant(id)
+		if !ok {
+			return roomreplay.BuildRequest{}, fmt.Errorf("replay participant %q is missing", id)
+		}
+		sentPath := ""
+		for _, artifact := range participant.Artifacts {
+			if artifact.Role == roomreplay.ArtifactRoleSentPCM {
+				sentPath = artifact.AbsolutePath
+				break
+			}
+		}
+		if sentPath == "" {
+			return roomreplay.BuildRequest{}, fmt.Errorf("replay participant %q sent PCM is missing", id)
+		}
+		request.Participants = append(request.Participants, roomreplay.Participant{
+			ID: participant.ID, CapturePath: participant.CapturePath, SentPCMPath: sentPath,
+		})
+	}
+	request.ReplayPlan = nil
+	return request, nil
 }
 
 func (s *Service) ValidateOutput(plan RoomReplayPlan, destination string) error {
@@ -143,23 +183,7 @@ func nearestExistingRoomReplayPath(output string) (string, []string, error) {
 }
 
 func newRoomReplayBundleError(kind RoomReplayBundleErrorKind, field, artifact, expected, actual string, cause error) error {
-	if kind == "" {
-		kind = RoomReplayBundleMismatch
-	}
-	var replayCause error
-	if kind == RoomReplayBundleIncomplete {
-		replayCause = gateway.NewReplayIncompleteError(expected, actual, cause)
-	} else {
-		replayCause = gateway.NewReplayMismatchError(expected, actual, cause)
-	}
-	return &roomreplay.RoomReplayBundleError{
-		Kind:     kind,
-		Field:    field,
-		Artifact: artifact,
-		Expected: expected,
-		Actual:   actual,
-		Err:      replayCause,
-	}
+	return support.BundleError(kind, field, artifact, expected, actual, cause)
 }
 
 var _ roomreplay.Service = (*Service)(nil)

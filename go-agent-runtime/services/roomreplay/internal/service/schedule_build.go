@@ -52,6 +52,10 @@ type participantFrameState struct {
 // immutable schedule. Text-only captures intentionally return a nil schedule.
 func (*Service) Build(ctx context.Context, request roomreplay.BuildRequest) (roomreplay.Schedule, error) {
 	ctx = nonNilContext(ctx)
+	request, err := prepareReplayBuildRequest(request)
+	if err != nil {
+		return nil, err
+	}
 	targetFormat, frameBytes, err := normalizeTargetFormat(request.TargetFormat)
 	if err != nil {
 		return nil, err

@@ -6,15 +6,14 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay/internal/support"
 )
 
-type roomReplayJSONObject map[string]json.RawMessage
+type roomReplayJSONObject = support.JSONObject
 
 func errOrDefault(err, fallback error) error {
-	if err != nil {
-		return err
-	}
-	return fallback
+	return support.ErrOrDefault(err, fallback)
 }
 
 func mustMarshal(value any) json.RawMessage {
@@ -26,14 +25,7 @@ func mustMarshal(value any) json.RawMessage {
 }
 
 func roomReplayObject(raw json.RawMessage) (roomReplayJSONObject, error) {
-	var object roomReplayJSONObject
-	if err := json.Unmarshal(raw, &object); err != nil {
-		return nil, err
-	}
-	if object == nil {
-		return nil, errors.New("expected JSON object")
-	}
-	return object, nil
+	return support.Object(raw)
 }
 
 func roomReplayRawField(object roomReplayJSONObject, names ...string) (json.RawMessage, bool) {
@@ -102,17 +94,7 @@ func firstRoomReplayIntField(primary, fallback roomReplayJSONObject, names ...st
 }
 
 func firstRoomReplayStringField(primary, fallback roomReplayJSONObject, names ...string) (string, bool, error) {
-	for _, object := range []roomReplayJSONObject{primary, fallback} {
-		if object == nil {
-			continue
-		}
-		for _, name := range names {
-			if value, present, err := roomReplayStringField(object, name); present {
-				return value, true, err
-			}
-		}
-	}
-	return "", false, errors.New("missing string")
+	return support.FirstString(primary, fallback, names...)
 }
 
 func roomReplayTimeField(object roomReplayJSONObject, name string) (time.Time, bool, error) {
@@ -132,11 +114,7 @@ func roomReplayTimeField(object roomReplayJSONObject, name string) (time.Time, b
 }
 
 func decodeRoomReplayString(raw json.RawMessage) (string, bool) {
-	var value string
-	if json.Unmarshal(raw, &value) != nil {
-		return "", false
-	}
-	return value, true
+	return support.String(raw)
 }
 
 func int64Pointer(value int) *int64 {

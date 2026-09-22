@@ -2,11 +2,13 @@ package agentruntime
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/roomreplayadapter"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
@@ -305,6 +307,33 @@ type RoomRunOptions struct {
 
 // RoomOptions is a concise alias for RoomRunOptions.
 type RoomOptions = RoomRunOptions
+
+func prepareRoomReplayOptions(opts RoomRunOptions, validation room.ValidationOptions) (RoomRunOptions, room.ValidationOptions, bool, error) {
+	replayPlan, replayMode, err := roomreplayadapter.LoadPlan(opts.ReplayService, opts.ReplayPlan, opts.ReplayPath)
+	if err != nil || !replayMode {
+		return opts, validation, replayMode, err
+	}
+	opts.ReplayPlan, opts.ReplayPath = &replayPlan, replayPlan.BundlePath
+	if opts.Manifest.SchemaVersion == 0 && len(opts.Manifest.Participants) == 0 {
+		return RoomRunOptions{}, validation, true, errors.New("replay room manifest is required")
+	}
+	opts.LaunchPlan, opts.DeviceRegistry, opts.CredentialLookup = nil, nil, nil
+	return opts, room.ValidationOptions{}, true, nil
+}
+
+func buildRoomReplaySchedule(ctx context.Context, replayMode bool, opts RoomRunOptions, plans []*roomParticipantPlan) (roomreplay.Schedule, error) {
+	if !replayMode || opts.ReplayPlan == nil {
+		return nil, nil
+	}
+	format := roomFormatForOptions(opts)
+	targetIDs := make([]string, 0, len(plans))
+	for _, plan := range plans {
+		if plan != nil && !roomParticipantIsHuman(plan) {
+			targetIDs = append(targetIDs, plan.manifest.ID)
+		}
+	}
+	return roomreplayadapter.BuildSchedule(ctx, opts.ReplayService, opts.ReplayPlan, targetIDs, roomreplay.PCM16Format{SampleRate: format.SampleRate, Channels: format.Channels, FrameDuration: format.FrameDuration})
+}
 
 func startRoomReplayScheduler(schedule roomreplay.Schedule, roomCtx context.Context, startGate <-chan struct{}, runtimes []*roomParticipantRuntime, coordinator *roomCoordinator, opts RoomRunOptions, wg *sync.WaitGroup) {
 	if schedule == nil || wg == nil {

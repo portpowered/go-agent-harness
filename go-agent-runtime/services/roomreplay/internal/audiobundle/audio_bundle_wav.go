@@ -1,4 +1,4 @@
-package service
+package audiobundle
 
 import (
 	"bytes"
@@ -111,22 +111,4 @@ func roomReplayAudioParticipantObjects(manifest roomReplayJSONObject) (map[strin
 		result[id] = object
 	}
 	return result, nil
-}
-
-func roomReplayAudioMismatch(field, artifact, expected, actual string, cause error) error {
-	if cause == nil {
-		cause = ErrInvalidRoomReplayBundle
-	}
-	return newRoomReplayBundleError(RoomReplayBundleMismatch, field, artifact, expected, actual, cause)
-}
-
-func roomReplayAudioIncomplete(field, artifact, expected, actual string, cause error) error {
-	if cause == nil {
-		cause = ErrRoomReplayBundleIncomplete
-	}
-	return newRoomReplayBundleError(RoomReplayBundleIncomplete, field, artifact, expected, actual, cause)
-}
-
-func roomReplayAudioTimeline(field, artifact, expected, actual string) error {
-	return newRoomReplayBundleError(RoomReplayBundleMismatch, field, artifact, expected, actual, errors.Join(ErrRoomReplayAudioTimeline, ErrInvalidRoomReplayBundle))
 }
