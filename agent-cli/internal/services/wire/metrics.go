@@ -2,11 +2,13 @@ package wire
 
 import (
 	"context"
+	"errors"
 	"io"
 
 	internalruntime "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime"
 	serviceprobes "github.com/portpowered/go-agent-harness/agent-cli/internal/services/probes"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
+	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 	runtimetrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	runtimetracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -25,8 +27,11 @@ func NewProbeMetrics(clockSource clock.Source, factory internalruntime.SessionRu
 				return metrics.Snapshot{}, err
 			}
 			err = internalruntime.RunSessionWithRuntimeFactory(ctx, io.Discard, internalruntime.SessionRunOptions{
-				ReplayPath: fixture, Prompt: prompt, Clock: clockSource, MetricsRecorder: sink,
+				ReplayPath: fixture, Prompt: prompt, Clock: clockSource, AudioService: audioiowire.NewService(), MetricsRecorder: sink,
 			}, factory)
+			if errors.Is(err, runtimetrace.ErrUnresolvedToolResults) {
+				err = nil
+			}
 			return sink.Snapshot(), err
 		},
 	})

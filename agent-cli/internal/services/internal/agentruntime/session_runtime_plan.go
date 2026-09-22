@@ -318,14 +318,6 @@ func (p sessionRuntimePlan) configureLoopObserver(loop *sessionLoopOptions) {
 	obs.ScheduleAudioInputs(p.audioInputs)
 	loop.observer = obs
 }
-func planSessionRuntime(opts SessionRunOptions) (sessionRuntimePlan, error) {
-	return planSessionRuntimeWithContext(context.Background(), opts)
-}
-
-//lint:ignore U1000 package tests exercise the context-free planning seam.
-func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
-	return planSessionRuntimeWithFactoryAndContext(context.Background(), opts, factory)
-}
 
 // wireSessionRecordingClaim redirects one recording plan's capture flush
 // through its destination claim. It is kept separate from planning because an
@@ -568,11 +560,4 @@ func decorateRateLimitedSessionRuntimeError(err error) error {
 
 func missingOwnedSessionDialerError(provider string) error {
 	return fmt.Errorf("%s session runtime requires an injected websocket dialer", provider)
-}
-
-func observeSessionWire(dialer transport.Dialer, opts SessionRunOptions) transport.Dialer {
-	if dialer == nil {
-		return nil
-	}
-	return sessiontracewire.NewProviderWireDialer(dialer, opts.RuntimeObserver, platformclock.Ensure(opts.Clock))
 }

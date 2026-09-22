@@ -3,7 +3,6 @@ package agentruntime
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -104,31 +103,3 @@ func sessionTerminalObservationForCancellation(outputState messages.TerminalOutp
 }
 
 func defaultSessionRuntimeFactory() SessionRuntimeFactory { return newDefaultSessionRuntimeFactory() }
-
-func sessionAudioFrame(seed int16) []int16 {
-	frame := make([]int16, 480)
-	for index := range frame {
-		frame[index] = seed + int16(index)
-	}
-	return frame
-}
-
-func pcm16Bytes(samples []int16) []byte {
-	data := make([]byte, len(samples)*2)
-	for index, sample := range samples {
-		binary.LittleEndian.PutUint16(data[index*2:], uint16(sample))
-	}
-	return data
-}
-
-func equalInt16(got, want []int16) bool {
-	if len(got) != len(want) {
-		return false
-	}
-	for index := range got {
-		if got[index] != want[index] {
-			return false
-		}
-	}
-	return true
-}

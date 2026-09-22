@@ -119,6 +119,41 @@ func traceContext(ctx context.Context) context.Context {
 	return context.WithoutCancel(ctx)
 }
 
+type liveRunAdmission struct {
+	runner           runtimeSession.LiveRunner
+	liveRequest      runtimeSession.LiveRequest
+	credentials      []string
+	credentialsReady bool
+	traceRun         runtimeSessionTrace.Prepared
+}
+
+func prepareLiveRun(ctx context.Context, request serviceSession.Request, deps Dependencies) (liveRunAdmission, error) {
+	traceRequested := request.TraceAudio || strings.TrimSpace(request.RecordDirectory) != ""
+	if traceRequested && deps.TraceService == nil {
+		return liveRunAdmission{}, errors.New("live session trace service is unavailable")
+	}
+	runner, err := liveRunner(deps.LiveService)
+	if err != nil {
+		return liveRunAdmission{}, err
+	}
+	if deps.BuildRequest == nil {
+		return liveRunAdmission{}, errors.New("live request builder is unavailable")
+	}
+	liveRequest, err := deps.BuildRequest(ctx, request, deps.ReplayInspection)
+	if err != nil {
+		return liveRunAdmission{}, err
+	}
+	credentials, credentialsReady, err := resolveTraceCredentials(request, &liveRequest, deps, traceRequested)
+	if err != nil {
+		return liveRunAdmission{}, err
+	}
+	traceRun, err := prepareLiveTrace(request, liveRequest, deps, credentials)
+	if err != nil {
+		return liveRunAdmission{}, err
+	}
+	return liveRunAdmission{runner: runner, liveRequest: liveRequest, credentials: credentials, credentialsReady: credentialsReady, traceRun: traceRun}, nil
+}
+
 func resolveTraceCredentials(request serviceSession.Request, liveRequest *runtimeSession.LiveRequest, deps Dependencies, traceRequested bool) ([]string, bool, error) {
 	if !traceRequested || deps.CredentialValues == nil {
 		return nil, false, nil
@@ -324,7 +359,7 @@ func liveRunOptions(out io.Writer, request serviceSession.Request, liveRequest r
 			deviceRequest.CaptureEnabled = true
 		}
 	}
-	if !deviceRequest.CaptureEnabled && !deviceRequest.PlaybackEnabled && (filePorts == nil || len(filePorts.InputTurns) == 0) {
+	if !deviceRequest.CaptureEnabled && !deviceRequest.PlaybackEnabled && (filePorts == nil || len(filePorts.InputTurns) == 0 && len(filePorts.InputInterruptions) == 0) {
 		deviceService = nil
 	}
 	deviceService = wrapTraceDeviceService(deviceService, traceRun)
@@ -335,6 +370,8 @@ func liveRunOptions(out io.Writer, request serviceSession.Request, liveRequest r
 		AudioTurnAdmission:      audioTurnAdmission(request),
 		Recorder:                recorder,
 		CaptureTurns:            captureTurns(filePorts),
+		CaptureInterruptions:    captureInterruptions(filePorts),
+		CaptureInterruptionTool: request.AudioInterruptTool,
 		CaptureCompleteControls: captureCompleteControls(request, deps.CaptureComplete),
 		Events: runtimeSession.LiveEventSinkFunc(func(eventContext context.Context, event runtimeSession.LiveEvent) error {
 			eventOut := outputWriter(request, out)

@@ -20,21 +20,7 @@ import (
 	gwproviders "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
-// sessionStragglerDrainPolicy bounds the quiet period used after a terminal
-// boundary. It is a caller-owned shutdown policy; sessiontrace only observes
-// the messages admitted during the bounded drain.
-type sessionStragglerDrainPolicy struct {
-	quietPeriod time.Duration
-}
-
-var errInvalidSessionStragglerDrainPolicy = errors.New("session straggler drain requires a positive quiet period")
-
-// sessionReplayMessageWriter is implemented by the stateful terminal renderer
-// used by a complete session run. Keeping the interface private preserves the
-// small writeSessionReplayMessage seam used by cancellation and unit tests.
-type sessionReplayMessageWriter interface {
-	writeSessionReplayMessage(messages.StreamMessage) error
-}
+type sessionStragglerDrainPolicy struct{ quietPeriod time.Duration }
 
 // sessionReplayRenderer keeps streamed transcript chunks on one labeled line
 // until the provider closes that transcript. A role change closes the current

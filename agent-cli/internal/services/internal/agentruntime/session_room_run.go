@@ -239,52 +239,7 @@ func runRoomParticipant(
 		}
 	})
 	observer.SetTerminalObserver(runtime.lifecycle.observeTerminal)
-	observer.SetFailureObserver(func(observation sessiontrace.TerminalObservation) {
-		if !observation.Failure || observation.Classification == providers.ErrorClassCancellation {
-			return
-		}
-		// A provider-close boundary is also the participant's terminal
-		// observation. Let the participant publish that result before a room
-		// cancellation can reorder sibling terminal callbacks; human-backed
-		// rooms still escalate the returned transport error in the collector.
-		if observation.TerminalReason == messages.TerminalReasonProviderClose &&
-			observation.FailingEvent == string(messages.StreamTypeSessionClose) {
-			return
-		}
-		if observation.TerminalProvenance == messages.TerminalProvenanceProvider || observation.FailingEvent == string(messages.StreamTypeError) {
-			fields := map[string]string{
-				"classification": observation.Classification,
-			}
-			if observation.Code != "" {
-				fields["code"] = observation.Code
-			}
-			evidence.recordProviderErrorTimeline(runtime.plan.manifest.ID, fields)
-		}
-		failureErr := observation.Err
-		if runtime.lifecycle != nil {
-			if transportErr := runtime.lifecycle.transportTerminalErrorSnapshot(); transportErr != nil {
-				// A transport watcher may know the provider's causal error even
-				// when the model runner reports only its generic stream fallback.
-				failureErr = transportErr
-			}
-		}
-		if failureErr == nil {
-			failureErr = errors.New("session stream error")
-		}
-		// Retire only the participant at the same boundary at which the lifecycle
-		// accepted the typed failure. If a bound cancellation won the race, the
-		// lifecycle rejects the observation and this callback is not invoked.
-		failure := roomParticipantFailure(runtime.plan.manifest.ID, failureErr, secretsForPlan(runtime.plan))
-		// An explicit provider ERROR is the room's authoritative failure
-		// contract. Transport-close and liveness faults remain participant-local
-		// so a viable sibling can continue, but a typed provider terminal failure
-		// must preserve the room-level error and cancel the room consistently.
-		if observation.TerminalProvenance == messages.TerminalProvenanceProvider && observation.FailingEvent == string(messages.StreamTypeError) {
-			coordinator.fail(failure)
-			return
-		}
-		coordinator.failParticipant(runtime.plan.manifest.ID, failure)
-	})
+	observer.SetFailureObserver(roomParticipantFailureObserver(coordinator, runtime, evidence))
 	observer.SetTurnAdmission(func(msg messages.StreamMessage) bool {
 		value, ok := msg.Value.(*messages.MessageEndValue)
 		if !ok || value == nil || value.TerminalReason == "" {
@@ -496,10 +451,7 @@ func observeRoomParticipantStream(
 		}
 	}
 	if participantEvidence != nil {
-		// The sent-PCM stream, room mix, and speech timeline stay on the
-		// critical path: they are offset-anchored, so deferring them past the
-		// handoff would misplace this participant's audio in the room mix.
-		// The WAV write, which nothing else is ordered against, moves below.
+		// Keep offset-anchored evidence on the handoff path; defer only WAV I/O.
 		_ = participantEvidence.observeSentStream(pcm)
 	}
 	if opts.OnAudioOutput != nil {
@@ -1005,4 +957,26 @@ func roomProviderInputPCM(runtime *roomParticipantRuntime, pcm []byte) ([]byte, 
 		return nil, fmt.Errorf("convert room participant %q input from %d Hz to provider rate %d Hz: convert session input from %d Hz to provider rate %d Hz: %w", runtime.plan.manifest.ID, sourceRate, providerRate, sourceRate, providerRate, err)
 	}
 	return converted, nil
+}
+
+func resolveSessionDurationFinishError(terminationErr, lifecycleErr, sessionErr, transportErr, runErr error, planned bool, out io.Writer, artifacts SessionDurationArtifactLifecycle, terminalState *sessionDurationTerminalState, terminalWritten *bool) error {
+	if terminationErr != nil {
+		return errors.Join(terminationErr, lifecycleErr, transportErr)
+	}
+	if lifecycleErr != nil {
+		return lifecycleErr
+	}
+	if sessionErr != nil {
+		return transportErr
+	}
+	if runErr != nil && !errors.Is(runErr, context.Canceled) {
+		return fmt.Errorf("session error: %w", runErr)
+	}
+	if planned && !terminalState.written() {
+		if err := terminalState.writeMaxDurationTerminal(out, artifacts, terminalState.outputState()); err != nil {
+			return err
+		}
+		*terminalWritten = terminalState.written()
+	}
+	return nil
 }

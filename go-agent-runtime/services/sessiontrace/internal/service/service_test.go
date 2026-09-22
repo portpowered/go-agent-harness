@@ -547,7 +547,6 @@ func TestFinishRejectsNilContext(t *testing.T) {
 }
 
 func nilContext() context.Context { return nil }
-
 func newPreparedTrace(t *testing.T, request sessiontrace.Request) *prepared {
 	t.Helper()
 	value, err := New().Prepare(request)
@@ -560,7 +559,6 @@ func newPreparedTrace(t *testing.T, request sessiontrace.Request) *prepared {
 	}
 	return result
 }
-
 func TestObserverChainSkipsNilObserver(t *testing.T) {
 	called := false
 	chain := observerChain{nil, sessiontrace.RuntimeObserverFunc(func(sessiontrace.SessionRuntimeObservation) { called = true })}

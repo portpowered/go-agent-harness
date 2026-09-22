@@ -3,16 +3,13 @@ package agentruntime
 import (
 	"context"
 	"errors"
-	"log"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
-	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 const (
@@ -472,113 +469,4 @@ func evidenceParticipant(evidence *roomEvidence, participantID string) *roomPart
 		return nil
 	}
 	return evidence.participant(participantID)
-}
-
-type logPlaybackDiagnosticSink struct{}
-
-func (logPlaybackDiagnosticSink) RecordSessionDiagnostic(record SessionDiagnosticRecord) {
-	log.Printf("session diagnostic (no SessionRunOptions.Diagnostics sink configured): event=%s fields=%v", record.Event, record.Fields)
-}
-
-var fallbackPlaybackDiagnosticSink SessionDiagnosticSink = logPlaybackDiagnosticSink{}
-
-func resolvePlaybackDiagnosticSink(sink SessionDiagnosticSink) SessionDiagnosticSink {
-	if sink != nil {
-		return sink
-	}
-	return fallbackPlaybackDiagnosticSink
-}
-
-func combineRTCDevicePlaybackObservers(observers ...runtimeDevices.PlaybackObserver) runtimeDevices.PlaybackObserver {
-	var active []runtimeDevices.PlaybackObserver
-	for _, observer := range observers {
-		if observer != nil {
-			active = append(active, observer)
-		}
-	}
-	if len(active) == 0 {
-		return nil
-	}
-	return func(id string, stats audio.PlaybackQueueStats) {
-		for _, observer := range active {
-			observer(id, stats)
-		}
-	}
-}
-
-func combineRTCDeviceCaptureObservers(observers ...runtimeDevices.CaptureObserver) runtimeDevices.CaptureObserver {
-	var active []runtimeDevices.CaptureObserver
-	for _, observer := range observers {
-		if observer != nil {
-			active = append(active, observer)
-		}
-	}
-	if len(active) == 0 {
-		return nil
-	}
-	return func(id string, stats audio.CaptureQueueStats) {
-		for _, observer := range active {
-			observer(id, stats)
-		}
-	}
-}
-
-func combineRTCDevicePlaybackReceiptObservers(observers ...runtimeDevices.PlaybackReceiptObserver) runtimeDevices.PlaybackReceiptObserver {
-	var active []runtimeDevices.PlaybackReceiptObserver
-	for _, observer := range observers {
-		if observer != nil {
-			active = append(active, observer)
-		}
-	}
-	if len(active) == 0 {
-		return nil
-	}
-	return func(receipt audio.PlaybackReceipt) {
-		for _, observer := range active {
-			observer(receipt)
-		}
-	}
-}
-
-func playbackOverflowDiagnosticFields(id string, stats audio.PlaybackQueueStats) map[string]string {
-	return map[string]string{
-		SessionDiagnosticFieldPlaybackDeviceID:            id,
-		SessionDiagnosticFieldPlaybackSampleRate:          strconv.Itoa(stats.Format.SampleRate),
-		SessionDiagnosticFieldPlaybackChannels:            strconv.Itoa(stats.Format.Channels),
-		SessionDiagnosticFieldPlaybackLatencyTargetMillis: strconv.FormatInt(stats.LatencyTarget.Milliseconds(), 10),
-		SessionDiagnosticFieldPlaybackCapacitySamples:     strconv.Itoa(stats.CapacitySamples),
-		SessionDiagnosticFieldPlaybackQueuedSamples:       strconv.Itoa(stats.QueuedSamples),
-		SessionDiagnosticFieldPlaybackPeakQueuedSamples:   strconv.Itoa(stats.PeakQueuedSamples),
-		SessionDiagnosticFieldPlaybackDroppedSamples:      strconv.FormatUint(stats.DroppedSamples, 10),
-		SessionDiagnosticFieldPlaybackOverflowEvents:      strconv.FormatUint(stats.OverflowEvents, 10),
-	}
-}
-
-func sessionPlaybackDiagnosticObserver(sink SessionDiagnosticSink) runtimeDevices.PlaybackObserver {
-	if sink == nil {
-		return nil
-	}
-	return func(id string, stats audio.PlaybackQueueStats) {
-		if stats.DroppedSamples == 0 {
-			return
-		}
-		sink.RecordSessionDiagnostic(SessionDiagnosticRecord{Event: SessionDiagnosticEventPlaybackOverflow, Fields: playbackOverflowDiagnosticFields(id, stats)})
-	}
-}
-
-func emitRoomParticipantPlaybackOverflowDiagnostic(participantID string, handle runtimeDevices.Handle, sink SessionDiagnosticSink) {
-	if handle == nil {
-		return
-	}
-	provider, ok := handle.(runtimeDevices.PlaybackStatsProvider)
-	if !ok {
-		return
-	}
-	deviceID, stats := provider.PlaybackStats()
-	if stats.DroppedSamples == 0 {
-		return
-	}
-	fields := playbackOverflowDiagnosticFields(deviceID, stats)
-	fields[SessionDiagnosticFieldPlaybackParticipantID] = participantID
-	resolvePlaybackDiagnosticSink(sink).RecordSessionDiagnostic(SessionDiagnosticRecord{Event: SessionDiagnosticEventPlaybackOverflow, Fields: fields})
 }

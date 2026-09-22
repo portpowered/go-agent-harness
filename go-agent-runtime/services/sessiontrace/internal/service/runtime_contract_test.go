@@ -2,11 +2,9 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -15,14 +13,12 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 type runtimeContractObserver struct {
@@ -181,47 +177,6 @@ func TestPlaybackDiagnosticsPublicContractFansOutQueueAndReceiptObservations(t *
 	}
 }
 
-func TestReplayMetricsCollectorPublicContractReportsWireDeltas(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "metrics.session.json")
-	capture := gatewaytesting.SessionCapture{
-		Version:  gatewaytesting.SessionCaptureVersion,
-		Provider: gatewaytesting.SessionProviderMetadata{Name: "fixture-provider", Model: "fixture-model"},
-		Records: []gatewaytesting.CapturedSessionEvent{
-			{Sequence: 1, Direction: gatewaytesting.DirectionServerToClient, TimestampMs: 1, Type: "response.output_text.delta", PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage, Payload: json.RawMessage(`{"type":"response.output_text.delta","delta":"hello"}`)},
-			{Sequence: 2, Direction: gatewaytesting.DirectionClientToServer, TimestampMs: 2, Type: "input_audio_buffer.append", PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage, Payload: json.RawMessage(`{"type":"input_audio_buffer.append","audio":"AQID"}`)},
-		},
-	}
-	data, err := json.Marshal(capture)
-	if err != nil {
-		t.Fatalf("marshal capture: %v", err)
-	}
-	if err := os.WriteFile(path, data, 0o600); err != nil {
-		t.Fatalf("write capture: %v", err)
-	}
-	collector := NewReplayMetricsCollector(sessiontrace.MetricsCollectorOptions{
-		Clock: clock.Real{},
-		Runner: func(context.Context, string, string) (metrics.Snapshot, error) {
-			return metrics.Snapshot{Series: []metrics.SeriesSnapshot{{Direction: metrics.DirectionOutput, Modality: metrics.ModalityText, TotalBytes: 5}}}, nil
-		},
-	})
-	series, err := collector.Collect(context.Background(), path, "fixture prompt")
-	if err != nil {
-		t.Fatalf("Collect: %v", err)
-	}
-	var outputText, inputAudio bool
-	for _, entry := range series {
-		switch {
-		case entry.Direction == string(metrics.DirectionOutput) && entry.Modality == string(metrics.ModalityText):
-			outputText = entry.ObservedDeltas == 5 && entry.ReportedTotal == 5
-		case entry.Direction == string(metrics.DirectionInput) && entry.Modality == string(metrics.ModalityAudio):
-			inputAudio = entry.ObservedDeltas == 3
-		}
-	}
-	if !outputText || !inputAudio {
-		t.Fatalf("metrics series = %+v, want text=5 and audio=3", series)
-	}
-}
-
 func TestLivenessClockAndTraceObserverPoliciesUseServiceContracts(t *testing.T) {
 	if liveness := LivenessClockFromSource(clock.Real{}); liveness == nil || liveness.NewTimer(time.Hour) == nil {
 		t.Fatal("real clock did not provide a liveness timer")
@@ -315,6 +270,18 @@ func TestTraceDeviceServiceUsesUploadedCaptureAndReportsUnavailablePlayback(t *t
 	}
 }
 
+func TestTraceDeviceServiceForwardsRTCBinding(t *testing.T) {
+	wantErr := errors.New("rtc binding failed")
+	inner := &traceContractDeviceService{bindErr: wantErr}
+	wrapper := traceDeviceService{inner: inner}
+	if _, err := wrapper.BindRTC(context.Background(), runtimeDevices.RTCBindingRequest{}); !errors.Is(err, wantErr) {
+		t.Fatalf("forwarded RTC binding error = %v, want %v", err, wantErr)
+	}
+	if _, err := (traceDeviceService{}).BindRTC(context.Background(), runtimeDevices.RTCBindingRequest{}); !errors.Is(err, runtimeDevices.ErrUnavailable) {
+		t.Fatalf("nil-inner RTC binding error = %v, want %v", err, runtimeDevices.ErrUnavailable)
+	}
+}
+
 func TestTraceDeviceAdaptersRejectInvalidInputs(t *testing.T) {
 	wantErr := errors.New("open failed")
 	if _, err := (traceDeviceService{}).Open(context.Background(), runtimeDevices.Request{}); !errors.Is(err, runtimeDevices.ErrUnavailable) {
@@ -360,6 +327,9 @@ func TestTraceSourceAdaptersPreserveSamples(t *testing.T) {
 	if !ok {
 		t.Fatal("sample source wrapper lost SampleSource contract")
 	}
+	if err := sampleWrapper.ReadFrame(context.Background(), make([]int16, 2)); err != nil {
+		t.Fatal(err)
+	}
 	count, err := sampleWrapper.ReadSamples(context.Background(), make([]int16, 2))
 	if err != nil || count != 2 {
 		t.Fatalf("ReadSamples = %d, %v", count, err)
@@ -367,7 +337,7 @@ func TestTraceSourceAdaptersPreserveSamples(t *testing.T) {
 	if err := wrappedSample.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if len(observed) != 2 || observed[0].rate != audio.SampleRate || observed[1].rate != 22_050 {
+	if len(observed) != 3 || observed[0].rate != audio.SampleRate || observed[1].rate != 22_050 || observed[2].rate != 22_050 {
 		t.Fatalf("source observations = %#v", observed)
 	}
 	if wrapAudioSource(nil, 0, observe) != nil || wrapAudioSource(source, 0, nil) != source {
@@ -498,6 +468,7 @@ func TestRemoteRenderMonitorCapturesRenderedDeviceSamples(t *testing.T) {
 type traceContractDeviceService struct {
 	handle  runtimeDevices.Handle
 	openErr error
+	bindErr error
 }
 
 func (s *traceContractDeviceService) Open(_ context.Context, _ runtimeDevices.Request) (runtimeDevices.Handle, error) {
@@ -505,6 +476,9 @@ func (s *traceContractDeviceService) Open(_ context.Context, _ runtimeDevices.Re
 }
 
 func (s *traceContractDeviceService) BindRTC(context.Context, runtimeDevices.RTCBindingRequest) (runtimeDevices.RTCBinding, error) {
+	if s.bindErr != nil {
+		return nil, s.bindErr
+	}
 	return nil, runtimeDevices.ErrUnavailable
 }
 

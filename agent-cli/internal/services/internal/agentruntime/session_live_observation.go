@@ -30,10 +30,6 @@ type observedSessionInferencer struct {
 	connectFinished bool
 }
 
-type playbackDrainingSession interface {
-	DrainPlayback(context.Context) error
-}
-
 type sessionTerminalErrorSource interface {
 	TerminalError() error
 }
@@ -152,13 +148,6 @@ func (i *observedSessionInferencer) DrainSessionPlayback(ctx context.Context) er
 		return nil
 	}
 	return drainer.DrainPlayback(ctx)
-}
-
-func closeBareSessionIfNeeded(bare bool, inferencer *observedSessionInferencer) error {
-	if !bare || inferencer == nil {
-		return nil
-	}
-	return inferencer.CloseSession()
 }
 
 // connectFailure returns the remembered connect error, if any.

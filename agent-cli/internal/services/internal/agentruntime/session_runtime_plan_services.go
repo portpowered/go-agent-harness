@@ -20,7 +20,24 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
+
+func planSessionRuntime(opts SessionRunOptions) (sessionRuntimePlan, error) {
+	return planSessionRuntimeWithContext(context.Background(), opts)
+}
+
+//lint:ignore U1000 package tests exercise the context-free planning seam.
+func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
+	return planSessionRuntimeWithFactoryAndContext(context.Background(), opts, factory)
+}
+
+func observeSessionWire(dialer transport.Dialer, opts SessionRunOptions) transport.Dialer {
+	if dialer == nil {
+		return nil
+	}
+	return sessiontracewire.NewProviderWireDialer(dialer, opts.RuntimeObserver, platformclock.Ensure(opts.Clock))
+}
 
 func planSessionRuntimeWithContext(ctx context.Context, opts SessionRunOptions) (sessionRuntimePlan, error) {
 	factory := opts.runtimeFactory
@@ -187,23 +204,7 @@ func configureSessionRuntimeLoop(plan *sessionRuntimePlan, opts SessionRunOption
 }
 
 func configureSessionRuntimeAudio(ctx context.Context, plan *sessionRuntimePlan, opts SessionRunOptions) error {
-	if opts.AudioService == nil {
-		return errors.New("audio service is required for session rate resolution")
-	}
-	inputRate, outputRate := plan.inputAudioSampleRate, plan.outputAudioSampleRate
-	if requested, ok := plan.inferencer.(sessionAudioRequestProvider); ok {
-		request := requested.Request().Config
-		if inputRate <= 0 {
-			inputRate = int(request.InputAudioSampleRate)
-		}
-		if outputRate <= 0 {
-			outputRate = int(request.OutputAudioSampleRate)
-		}
-	}
-	rates, err := opts.AudioService.ResolveRates(ctx, audioio.RateRequest{
-		Provider: plan.provider, Replay: opts.ReplayPath != "",
-		CapturedInputRate: inputRate, CapturedOutputRate: outputRate,
-	})
+	rates, err := resolveSessionRuntimeAudioRates(ctx, plan, opts)
 	if err != nil {
 		return err
 	}
@@ -215,18 +216,11 @@ func configureSessionRuntimeAudio(ctx context.Context, plan *sessionRuntimePlan,
 	if configurer, ok := plan.inferencer.(runtimeAudioInputConfigurer); ok {
 		configurer.SetSessionAudioInput(models.AudioFormatPCM16, models.SampleRate(rates.InputRate))
 	}
-	audioInputs := make([]audioio.ScheduledAudioInput, len(plan.audioInputs))
-	for index, input := range plan.audioInputs {
-		audioInputs[index] = audioio.ScheduledAudioInput{AfterCompletedTurns: input.AfterCompletedTurns, PCM: input.PCM, SourceSampleRate: input.SourceSampleRate, EndOfTurn: input.EndOfTurn}
-	}
-	convertedInputs, err := opts.AudioService.ConvertScheduledInputs(ctx, audioInputs, rates.InputRate)
+	convertedInputs, err := opts.AudioService.ConvertScheduledInputs(ctx, sessionRuntimeAudioInputs(plan.audioInputs), rates.InputRate)
 	if err != nil {
 		return err
 	}
-	plan.audioInputs = make([]sessiontrace.ScheduledAudioInput, len(convertedInputs))
-	for index, input := range convertedInputs {
-		plan.audioInputs[index] = sessiontrace.ScheduledAudioInput{AfterCompletedTurns: input.AfterCompletedTurns, PCM: input.PCM, SourceSampleRate: input.SourceSampleRate, EndOfTurn: input.EndOfTurn}
-	}
+	plan.audioInputs = sessionTraceAudioInputs(convertedInputs)
 	plan.loop.InputAudioSampleRate = rates.InputRate
 	if plan.rtcDeviceRequest.HasOutput() && rates.OutputRate > 0 {
 		plan.rtcDeviceRequest.OutputSampleRate = rates.OutputRate
@@ -235,6 +229,69 @@ func configureSessionRuntimeAudio(ctx context.Context, plan *sessionRuntimePlan,
 		plan.rtcDeviceRequest.InputSampleRate = rates.InputRate
 	}
 	return nil
+}
+
+func resolveSessionRuntimeAudioRates(ctx context.Context, plan *sessionRuntimePlan, opts SessionRunOptions) (audioio.RateResolution, error) {
+	if opts.AudioService == nil {
+		return audioio.RateResolution{}, errors.New("audio service is required for session rate resolution")
+	}
+	inputRate, outputRate := plan.inputAudioSampleRate, plan.outputAudioSampleRate
+	if requested, ok := plan.inferencer.(sessionAudioRequestProvider); ok {
+		request := requested.Request().Config
+		if inputRate <= 0 {
+			inputRate = int(request.InputAudioSampleRate)
+		}
+		if outputRate <= 0 {
+			outputRate = int(request.OutputAudioSampleRate)
+		}
+	}
+	return opts.AudioService.ResolveRates(ctx, audioio.RateRequest{
+		Provider: plan.provider, Replay: opts.ReplayPath != "",
+		CapturedInputRate: inputRate, CapturedOutputRate: outputRate,
+	})
+}
+
+func sessionRuntimeAudioInputs(inputs []sessiontrace.ScheduledAudioInput) []audioio.ScheduledAudioInput {
+	converted := make([]audioio.ScheduledAudioInput, len(inputs))
+	for index, input := range inputs {
+		converted[index] = audioio.ScheduledAudioInput(input)
+	}
+	return converted
+}
+
+func sessionTraceAudioInputs(inputs []audioio.ScheduledAudioInput) []sessiontrace.ScheduledAudioInput {
+	converted := make([]sessiontrace.ScheduledAudioInput, len(inputs))
+	for index, input := range inputs {
+		converted[index] = sessiontrace.ScheduledAudioInput(input)
+	}
+	return converted
+}
+
+func startLiveSessionUpdatedTimer(opts sessionLoopOptions, current platformclock.Timer) (platformclock.Timer, <-chan time.Time, error) {
+	if !opts.RequireSessionUpdated || opts.observer == nil || !opts.observer.ScheduledAudioAwaitingConfiguration() || current != nil {
+		if current == nil {
+			return nil, nil, nil
+		}
+		return current, current.C(), nil
+	}
+	timeout := opts.SessionUpdatedTimeout
+	if timeout <= 0 {
+		timeout = sessionScheduledAudioConfigTimeout
+	}
+	timer, err := opts.audioService.NewTimer(opts.clockSource, timeout)
+	if err != nil {
+		return nil, nil, err
+	}
+	return timer, timer.C(), nil
+}
+
+func stopLiveSessionUpdatedTimer(timer *platformclock.Timer, timeout *<-chan time.Time) {
+	if timer == nil || *timer == nil {
+		return
+	}
+	(*timer).Stop()
+	*timer = nil
+	*timeout = nil
 }
 
 func configureSessionRuntimeDeviceObservers(ctx context.Context, plan *sessionRuntimePlan, dependencies observability.Dependencies) {

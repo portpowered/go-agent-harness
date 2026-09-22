@@ -2,13 +2,31 @@ package agentruntime
 
 import (
 	"errors"
+	"io"
+	"strconv"
 	"strings"
+	"time"
 
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
-	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
+
+type invalidSessionStragglerDrainPolicyError string
+
+func (e invalidSessionStragglerDrainPolicyError) Error() string { return string(e) }
+
+const errInvalidSessionStragglerDrainPolicy invalidSessionStragglerDrainPolicyError = "session straggler drain requires a positive quiet period"
+
+// sessionReplayMessageWriter is implemented by the stateful terminal renderer
+// used by a complete session run. Keeping the interface private preserves the
+// small writeSessionReplayMessage seam used by cancellation and unit tests.
+type sessionReplayMessageWriter interface {
+	writeSessionReplayMessage(messages.StreamMessage) error
+}
 
 func (c *roomCoordinator) forceBoundShutdownOnce() {
 	c.mu.Lock()
@@ -54,17 +72,6 @@ func roomBoundShutdownFailure(runtimes []*roomParticipantRuntime) error {
 		}
 	}
 	return firstFailure
-}
-
-func recordRoomParticipantPlaybackOverflow(diagnostics sessiontrace.PlaybackDiagnostics, id string, output *devicegw.DeviceSink) {
-	if diagnostics != nil {
-		diagnostics.RecordParticipantPlaybackOverflow(id, output)
-	}
-}
-
-func newRoomParticipantPlaybackDiagnostics(runtime *roomParticipantRuntime, opts RoomRunOptions, participantEvidence *roomParticipantEvidence, evidence *roomEvidence) (SessionDiagnosticSink, sessiontrace.PlaybackDiagnostics) {
-	sink := sessiontracewire.CombineDiagnosticSinks(roomParticipantDiagnosticSinks(runtime.plan, opts, participantEvidence, evidence)...)
-	return sink, sessiontracewire.NewPlaybackDiagnostics(sessiontrace.PlaybackDiagnosticsOptions{Sink: sink})
 }
 
 func applyRoomParticipantTerminalMetadata(result *RoomParticipantResult, lifecycle *roomParticipantLifecycle, err error) {
@@ -182,4 +189,106 @@ func recordRoomParticipantBoundDiagnostic(opts RoomRunOptions, evidence *roomEvi
 	if opts.OnDiagnostic != nil {
 		opts.OnDiagnostic(result.ParticipantID, record)
 	}
+}
+
+func playbackOverflowDiagnosticFields(id string, stats audio.PlaybackQueueStats) map[string]string {
+	return map[string]string{
+		SessionDiagnosticFieldPlaybackDeviceID:            id,
+		SessionDiagnosticFieldPlaybackSampleRate:          strconv.Itoa(stats.Format.SampleRate),
+		SessionDiagnosticFieldPlaybackChannels:            strconv.Itoa(stats.Format.Channels),
+		SessionDiagnosticFieldPlaybackLatencyTargetMillis: strconv.FormatInt(stats.LatencyTarget.Milliseconds(), 10),
+		SessionDiagnosticFieldPlaybackCapacitySamples:     strconv.Itoa(stats.CapacitySamples),
+		SessionDiagnosticFieldPlaybackQueuedSamples:       strconv.Itoa(stats.QueuedSamples),
+		SessionDiagnosticFieldPlaybackPeakQueuedSamples:   strconv.Itoa(stats.PeakQueuedSamples),
+		SessionDiagnosticFieldPlaybackDroppedSamples:      strconv.FormatUint(stats.DroppedSamples, 10),
+		SessionDiagnosticFieldPlaybackOverflowEvents:      strconv.FormatUint(stats.OverflowEvents, 10),
+	}
+}
+
+func emitRoomParticipantPlaybackOverflowDiagnostic(participantID string, handle runtimeDevices.Handle, sink SessionDiagnosticSink) {
+	if handle == nil {
+		return
+	}
+	provider, ok := handle.(runtimeDevices.PlaybackStatsProvider)
+	if !ok {
+		return
+	}
+	deviceID, stats := provider.PlaybackStats()
+	if stats.DroppedSamples == 0 {
+		return
+	}
+	fields := playbackOverflowDiagnosticFields(deviceID, stats)
+	fields[SessionDiagnosticFieldPlaybackParticipantID] = participantID
+	if sink != nil {
+		sink.RecordSessionDiagnostic(SessionDiagnosticRecord{Event: SessionDiagnosticEventPlaybackOverflow, Fields: fields})
+	}
+}
+
+func startDurationSessionUpdatedTimer(durationClock SessionDurationClock, opts sessionLoopOptions, timer SessionDurationTimer, timeout <-chan time.Time) (SessionDurationTimer, <-chan time.Time, error) {
+	if !opts.RequireSessionUpdated || opts.observer == nil || !opts.observer.ScheduledAudioAwaitingConfiguration() || timer != nil {
+		return timer, timeout, nil
+	}
+	configuredTimeout := opts.SessionUpdatedTimeout
+	if configuredTimeout <= 0 {
+		configuredTimeout = sessionScheduledAudioConfigTimeout
+	}
+	timer = durationClock.NewTimer(configuredTimeout)
+	if timer == nil {
+		return nil, nil, errors.New("session duration clock returned a nil session-updated timer")
+	}
+	return timer, timer.C(), nil
+}
+
+func stopDurationSessionUpdatedTimer(timer *SessionDurationTimer, timeout *<-chan time.Time) {
+	if timer == nil || *timer == nil {
+		return
+	}
+	(*timer).Stop()
+	*timer = nil
+	*timeout = nil
+}
+
+func waitForDurationSessionLoopStragglers(out io.Writer, loop *agentloop.AgentLoop, policy sessionStragglerDrainPolicy, durationClock SessionDurationClock, planned bool, terminalWritten *bool, artifacts SessionDurationArtifactLifecycle, obs sessiontrace.Observer, terminalState *sessionDurationTerminalState) error {
+	quiet := policy.quietPeriod
+	if quiet <= 0 {
+		return errInvalidSessionStragglerDrainPolicy
+	}
+	timer, err := newDurationStragglerTimer(durationClock, quiet)
+	if err != nil {
+		return err
+	}
+	defer func() { timer.Stop() }()
+	for {
+		select {
+		case msg, ok := <-loop.Deltas().Chan():
+			if !ok {
+				return nil
+			}
+			timer, err = processDurationStragglerMessage(out, msg, planned, terminalWritten, artifacts, obs, terminalState, timer, durationClock, quiet)
+			if err != nil {
+				return err
+			}
+		case <-timer.C():
+			return nil
+		}
+	}
+}
+
+func processDurationStragglerMessage(out io.Writer, msg messages.StreamMessage, planned bool, terminalWritten *bool, artifacts SessionDurationArtifactLifecycle, obs sessiontrace.Observer, terminalState *sessionDurationTerminalState, timer SessionDurationTimer, durationClock SessionDurationClock, quiet time.Duration) (SessionDurationTimer, error) {
+	if terminalState != nil {
+		terminalState.observe(msg)
+		var shouldWrite bool
+		msg, shouldWrite = terminalState.admitTerminal(planned, msg)
+		*terminalWritten = terminalState.written()
+		if !shouldWrite {
+			return timer, nil
+		}
+	}
+	if obs != nil {
+		obs.Observe(msg)
+	}
+	if err := writeDurationSessionReplayMessage(out, msg, artifacts); err != nil {
+		return timer, err
+	}
+	return resetDurationStragglerTimer(timer, durationClock, quiet)
 }

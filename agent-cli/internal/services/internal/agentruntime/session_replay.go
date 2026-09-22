@@ -624,8 +624,7 @@ func grokReplayCaptureHasSessionClose(path string) bool {
 	if err != nil {
 		return false
 	}
-	capture := loaded.Capture
-	for _, record := range capture.Records {
+	for _, record := range loaded.Capture.Records {
 		if record.Direction == gwtesting.DirectionServerToClient && record.Type == "session.closed" {
 			return true
 		}
