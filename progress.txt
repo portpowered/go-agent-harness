@@ -4315,3 +4315,38 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   named and discovered caller, add public room-run degradation/round-trip
   coverage, and delete the complete owned cluster. Then run C280-03/04 and
   `make prepush` plus all C280-05 commands on one clean exact candidate SHA.
+
+# C280 independent service gate and release audit checkpoint 2026-09-21
+
+- Re-read the admitted task packet and current `prd.json`; task verification is
+  `admitted` for `audio-runtime` / `audio-runtime-v1`, and `prd.json.branchName`
+  matches `codex/audio-runtime-c280-recover-c269-room-evidence-retirement`.
+  Fetched `origin/main` at `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`; it and
+  startup integration `8bdafc7f947a3a2c9856220abdc539437035bd21` are ancestors
+  of code candidate `466aa73f9092c07c496c81649c20f923d217fb34`.
+- Re-read review-78 and refreshed canonical peers. Review-78's bounded
+  admission, public recorder degradation and public load/analyze round-trip
+  behavior repairs are present; exact-head preflight remains outstanding.
+  C271 remains failed with recovery C281 processing/init; C272, C276 and C278
+  remain processing/init without reviewed or exact-path releases. Review-142
+  still requires C278's writable-destination probe and public `Run` regression.
+  No peer branch or worktree was modified.
+- The exact integrated-main census is still 106 production Go files / 39,329
+  lines. C280's eight named agentruntime files remain present (3,619 lines),
+  as do all 19 duplicate `rooms/internal/evidence` production files (3,509
+  lines); planned CLI adapter remains 0 files / 0 lines. The room lifecycle,
+  recording/replay, replay-scheduler and self-play caller seams remain
+  unreleased, so no caller cutover or deletion is claimed.
+- C280 service checks pass on candidate `466aa73`: focused normal service/rooms
+  selection 57 tests / 16 packages; focused race selection 52 / 16; complete
+  normal service/rooms suites 102 / 16; repeated bounded-input, concurrent
+  observation/finalize and concurrent-close race matrix 120 runs / 1 package;
+  private-boundary scan; `make wire-check`; and `git diff --check`. Wire
+  regeneration produced no source diff, and the code worktree is clean.
+- No complete C280-03/04/05 gate, `make prepush`, push, PR, SCRIPT CI, review or
+  merge is claimed. Exact next action: refresh C271/C281/C272/C276/C278 release
+  state; integrate only reviewed or exact-path-released seams, cut over every
+  named/discovered caller, add the room-run degradation and public round-trip
+  coverage, and delete all eight legacy files plus all 19 duplicate evidence
+  files. Then run all C280-03/04 checks and `make prepush` plus every C280-05
+  command on one clean exact candidate SHA, continuing through local repairs.
