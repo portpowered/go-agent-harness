@@ -15,13 +15,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
+	roomreplaywire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay/wire"
+	roomanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
+
+func roomReplayAudioTestService() roomreplay.Service { return roomreplaywire.NewService() }
 
 func TestLoadRoomReplayAudioBundleResolvesIdentityTimingAndExactDeltas(t *testing.T) {
 	bundle, manifest, want := writeRoomReplayAudioBundle(t)
 
-	got, err := LoadRoomReplayAudioBundle(bundle)
+	got, err := roomReplayAudioTestService().LoadAudioBundle(bundle)
 	if err != nil {
 		t.Fatalf("LoadRoomReplayAudioBundle: %v", err)
 	}
@@ -32,7 +37,7 @@ func TestLoadRoomReplayAudioBundleResolvesIdentityTimingAndExactDeltas(t *testin
 	if got.Plan.BundlePath != resolvedBundle || got.Format.SampleRate != 24000 || got.Format.Channels != 1 || got.Format.SampleWidthBits != 16 {
 		t.Fatalf("bundle metadata = %+v, want resolved bundle and PCM16 format", got)
 	}
-	if got.Tolerances.StreamConfig != DefaultRoomReplayToleranceProfile().StreamConfig || got.Tolerances.RoomConfig != DefaultRoomReplayToleranceProfile().RoomConfig {
+	if got.Tolerances.StreamConfig != roomanalysis.DefaultPCM16AnalysisConfig() || got.Tolerances.RoomConfig != roomanalysis.DefaultPCM16RoomAnalysisConfig() {
 		t.Fatalf("default tolerance profile = %+v, want suite defaults", got.Tolerances)
 	}
 	if len(got.Participants) != 2 || got.Participants[0].ID != "alpha" || got.Participants[1].ID != "beta" {
@@ -78,8 +83,8 @@ func TestLoadRoomReplayAudioBundleRejectsMissingHashTimelineAndFormatEvidence(t 
 		if err := os.Remove(filepath.Join(bundle, "participants", "alpha", "sent.pcm")); err != nil {
 			t.Fatalf("remove sent PCM: %v", err)
 		}
-		_, err := LoadRoomReplayAudioBundle(bundle)
-		assertRoomReplayAudioError(t, err, ErrRoomReplayBundleIncomplete, "sent.pcm")
+		_, err := roomReplayAudioTestService().LoadAudioBundle(bundle)
+		assertRoomReplayAudioError(t, err, roomreplay.ErrRoomReplayBundleIncomplete, "sent.pcm")
 	})
 
 	t.Run("hash mismatch", func(t *testing.T) {
@@ -93,8 +98,8 @@ func TestLoadRoomReplayAudioBundleRejectsMissingHashTimelineAndFormatEvidence(t 
 		if err := os.WriteFile(path, data, 0o600); err != nil {
 			t.Fatalf("mutate received PCM: %v", err)
 		}
-		_, err = LoadRoomReplayAudioBundle(bundle)
-		assertRoomReplayAudioError(t, err, ErrInvalidRoomReplayBundle, "participants/beta/received.pcm")
+		_, err = roomReplayAudioTestService().LoadAudioBundle(bundle)
+		assertRoomReplayAudioError(t, err, roomreplay.ErrInvalidRoomReplayBundle, "participants/beta/received.pcm")
 		if !strings.Contains(err.Error(), "expected") || !strings.Contains(err.Error(), "actual") {
 			t.Fatalf("hash error = %v, want actual-versus-expected digest", err)
 		}
@@ -110,8 +115,8 @@ func TestLoadRoomReplayAudioBundleRejectsMissingHashTimelineAndFormatEvidence(t 
 		}
 		updateRoomReplayArtifact(t, manifest, "room_timeline", data)
 		writeRoomReplayAudioManifest(t, bundle, manifest)
-		_, err := LoadRoomReplayAudioBundle(bundle)
-		assertRoomReplayAudioError(t, err, ErrInvalidRoomReplayBundle, "room_timeline")
+		_, err := roomReplayAudioTestService().LoadAudioBundle(bundle)
+		assertRoomReplayAudioError(t, err, roomreplay.ErrInvalidRoomReplayBundle, "room_timeline")
 		if !strings.Contains(err.Error(), "ordered") {
 			t.Fatalf("timeline error = %v, want ordering diagnostic", err)
 		}
@@ -121,8 +126,8 @@ func TestLoadRoomReplayAudioBundleRejectsMissingHashTimelineAndFormatEvidence(t 
 		bundle, manifest, _ := writeRoomReplayAudioBundle(t)
 		manifest["pcm_format"].(map[string]any)["sample_rate_hz"] = 16000
 		writeRoomReplayAudioManifest(t, bundle, manifest)
-		_, err := LoadRoomReplayAudioBundle(bundle)
-		assertRoomReplayAudioError(t, err, ErrInvalidRoomReplayBundle, "pcm_format")
+		_, err := roomReplayAudioTestService().LoadAudioBundle(bundle)
+		assertRoomReplayAudioError(t, err, roomreplay.ErrInvalidRoomReplayBundle, "pcm_format")
 		if !strings.Contains(err.Error(), "rate=16000") || !strings.Contains(err.Error(), "24000") {
 			t.Fatalf("format error = %v, want declared and actual rates", err)
 		}
@@ -134,8 +139,8 @@ func TestLoadRoomReplayAudioBundleRejectsMissingHashTimelineAndFormatEvidence(t 
 		betaStreams := participants["beta"].(map[string]any)["streams"].(map[string]any)
 		betaStreams["sent"].(map[string]any)["stream_id"] = "alpha:sent"
 		writeRoomReplayAudioManifest(t, bundle, manifest)
-		_, err := LoadRoomReplayAudioBundle(bundle)
-		assertRoomReplayAudioError(t, err, ErrInvalidRoomReplayBundle, "streams.alpha:sent")
+		_, err := roomReplayAudioTestService().LoadAudioBundle(bundle)
+		assertRoomReplayAudioError(t, err, roomreplay.ErrInvalidRoomReplayBundle, "streams.alpha:sent")
 	})
 }
 
@@ -192,11 +197,11 @@ func TestLoadRoomReplayAudioBundleRejectsEveryDeltaReconstructionMutation(t *tes
 			updateRoomReplayParticipantArtifact(t, manifest, "alpha", "deltas", data)
 			writeRoomReplayAudioManifest(t, bundle, manifest)
 
-			_, err := LoadRoomReplayAudioBundle(bundle)
-			if err == nil || !errors.Is(err, ErrRoomReplayDeltaReconstruction) {
+			_, err := roomReplayAudioTestService().LoadAudioBundle(bundle)
+			if err == nil || !errors.Is(err, roomreplay.ErrRoomReplayDeltaReconstruction) {
 				t.Fatalf("%s error = %v, want typed reconstruction failure", test.name, err)
 			}
-			var reconstruction *RoomReplayDeltaReconstructionError
+			var reconstruction *roomreplay.RoomReplayDeltaReconstructionError
 			if !errors.As(err, &reconstruction) {
 				t.Fatalf("%s error = %v, want first-divergence details", test.name, err)
 			}
@@ -223,8 +228,8 @@ func TestLoadRoomReplayAudioBundleRejectsDuplicateDeltaIdentity(t *testing.T) {
 	updateRoomReplayParticipantArtifact(t, manifest, "alpha", "deltas", data)
 	writeRoomReplayAudioManifest(t, bundle, manifest)
 
-	_, err := LoadRoomReplayAudioBundle(bundle)
-	assertRoomReplayAudioError(t, err, ErrInvalidRoomReplayBundle, "unique delta identity")
+	_, err := roomReplayAudioTestService().LoadAudioBundle(bundle)
+	assertRoomReplayAudioError(t, err, roomreplay.ErrInvalidRoomReplayBundle, "unique delta identity")
 }
 
 func TestLoadRoomReplayAudioBundleEnforcesAnnotationIdentityAndToleranceBounds(t *testing.T) {
@@ -232,8 +237,8 @@ func TestLoadRoomReplayAudioBundleEnforcesAnnotationIdentityAndToleranceBounds(t
 		bundle, manifest, _ := writeRoomReplayAudioBundle(t)
 		manifest["annotations"] = []any{map[string]any{"kind": "overlap", "id": "bad-overlap", "start_ms": 10, "end_ms": 20, "participants": []any{"alpha", "missing"}}}
 		writeRoomReplayAudioManifest(t, bundle, manifest)
-		_, err := LoadRoomReplayAudioBundle(bundle)
-		assertRoomReplayAudioError(t, err, ErrInvalidRoomReplayBundle, "bad-overlap")
+		_, err := roomReplayAudioTestService().LoadAudioBundle(bundle)
+		assertRoomReplayAudioError(t, err, roomreplay.ErrInvalidRoomReplayBundle, "bad-overlap")
 		if !strings.Contains(err.Error(), "missing") {
 			t.Fatalf("annotation error = %v, want absent participant identity", err)
 		}
@@ -243,7 +248,7 @@ func TestLoadRoomReplayAudioBundleEnforcesAnnotationIdentityAndToleranceBounds(t
 		bundle, manifest, _ := writeRoomReplayAudioBundle(t)
 		manifest["tolerances"] = map[string]any{"name": "tight", "max_barge_in_latency": "250ms", "max_loudness_difference_db": 3}
 		writeRoomReplayAudioManifest(t, bundle, manifest)
-		got, err := LoadRoomReplayAudioBundle(bundle)
+		got, err := roomReplayAudioTestService().LoadAudioBundle(bundle)
 		if err != nil {
 			t.Fatalf("tightened profile: %v", err)
 		}
@@ -256,8 +261,8 @@ func TestLoadRoomReplayAudioBundleEnforcesAnnotationIdentityAndToleranceBounds(t
 		bundle, manifest, _ := writeRoomReplayAudioBundle(t)
 		manifest["tolerances"] = map[string]any{"max_barge_in_latency": "1s"}
 		writeRoomReplayAudioManifest(t, bundle, manifest)
-		_, err := LoadRoomReplayAudioBundle(bundle)
-		if err == nil || !errors.Is(err, ErrRoomReplayToleranceProfile) || !strings.Contains(err.Error(), "max_barge_in_latency") {
+		_, err := roomReplayAudioTestService().LoadAudioBundle(bundle)
+		if err == nil || !errors.Is(err, roomreplay.ErrRoomReplayToleranceProfile) || !strings.Contains(err.Error(), "max_barge_in_latency") {
 			t.Fatalf("loosened profile error = %v, want explicit profile rejection", err)
 		}
 	})
@@ -279,8 +284,8 @@ func TestLoadRoomReplayAudioBundleEnforcesAnnotationIdentityAndToleranceBounds(t
 		}
 		updateRoomReplayArtifact(t, manifest, "room_timeline", timeline)
 		writeRoomReplayAudioManifest(t, bundle, manifest)
-		_, err := LoadRoomReplayAudioBundle(bundle)
-		if err == nil || !errors.Is(err, ErrRoomReplayAudioTimeline) || !strings.Contains(err.Error(), "samples") {
+		_, err := roomReplayAudioTestService().LoadAudioBundle(bundle)
+		if err == nil || !errors.Is(err, roomreplay.ErrRoomReplayAudioTimeline) || !strings.Contains(err.Error(), "samples") {
 			t.Fatalf("out-of-range sample error = %v, want timeline diagnostic", err)
 		}
 	})
@@ -354,12 +359,12 @@ func writeRoomReplayAudioBundle(t *testing.T) (string, map[string]any, map[strin
 	for _, participantID := range []string{"alpha", "beta"} {
 		artifactValues := map[string]any{}
 		for role, name := range map[string]string{
-			roomReplayArtifactRoleWAV:         "participants/" + participantID + "/agent.wav",
-			roomReplayArtifactRoleDiagnostics: "participants/" + participantID + "/diagnostics.jsonl",
-			roomReplayArtifactRoleDeltas:      "participants/" + participantID + "/deltas.jsonl",
-			roomReplayArtifactRoleSentPCM:     "participants/" + participantID + "/sent.pcm",
-			roomReplayArtifactRoleReceivedPCM: "participants/" + participantID + "/received.pcm",
-			roomReplayArtifactRoleEvents:      "participants/" + participantID + "/events.jsonl",
+			roomreplay.ArtifactRoleWAV:         "participants/" + participantID + "/agent.wav",
+			roomreplay.ArtifactRoleDiagnostics: "participants/" + participantID + "/diagnostics.jsonl",
+			roomreplay.ArtifactRoleDeltas:      "participants/" + participantID + "/deltas.jsonl",
+			roomreplay.ArtifactRoleSentPCM:     "participants/" + participantID + "/sent.pcm",
+			roomreplay.ArtifactRoleReceivedPCM: "participants/" + participantID + "/received.pcm",
+			roomreplay.ArtifactRoleEvents:      "participants/" + participantID + "/events.jsonl",
 		} {
 			artifactValues[role] = roomReplayAudioArtifactValue(paths[name], name)
 		}
@@ -381,7 +386,7 @@ func writeRoomReplayAudioManifest(t *testing.T, bundle string, manifest map[stri
 	if err != nil {
 		t.Fatalf("marshal audio manifest: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(bundle, RoomReplayBundleManifestPath), append(data, '\n'), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(bundle, roomreplay.RoomReplayBundleManifestPath), append(data, '\n'), 0o600); err != nil {
 		t.Fatalf("write audio manifest: %v", err)
 	}
 }

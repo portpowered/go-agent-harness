@@ -51,6 +51,12 @@ func validateEmptyWritableDirectory(destination string) error {
 		return fmt.Errorf("prepare room evidence output parent %q: %w", destination, err)
 	}
 	info, err := os.Lstat(destination)
+	if errors.Is(err, os.ErrNotExist) {
+		if err := os.MkdirAll(destination, evidenceDirectoryMode); err != nil {
+			return fmt.Errorf("create room evidence output directory %q: %w", destination, err)
+		}
+		info, err = os.Lstat(destination)
+	}
 	if err == nil {
 		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
 			return fmt.Errorf("room evidence output target %q must be a non-symlink directory", destination)
@@ -65,7 +71,7 @@ func validateEmptyWritableDirectory(destination string) error {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("inspect room evidence output target %q: %w", destination, err)
 	}
-	probe, err := os.CreateTemp(parent, ".room-evidence-probe-")
+	probe, err := os.CreateTemp(destination, ".room-evidence-probe-")
 	if err != nil {
 		return fmt.Errorf("probe room evidence output target %q: %w", destination, err)
 	}
