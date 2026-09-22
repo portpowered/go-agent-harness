@@ -4239,3 +4239,44 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   this task, then run the full C280-03/04 gate and `make prepush` plus every
   C280-05 command on one clean exact candidate. Continue ownership through any
   locally reproducible repairs; return `CONTINUE` meanwhile.
+
+# C280 refreshed release audit checkpoint 2026-09-21T23:59Z
+
+- Re-read the admitted manifest, source-plan background, operating policy and
+  implementation handoff. `project-control.py status` reports active
+  `audio-runtime` / `audio-runtime-v1`; task verification returns `admitted`,
+  and `prd.json.branchName` matches the isolated branch. `git fetch origin
+  main` refreshed `origin/main` at `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`;
+  it and startup integration `8bdafc7f947a3a2c9856220abdc539437035bd21` are
+  ancestors of candidate `5810a7b51b691d25ba44191a1608b5f5968f313a`. The
+  integrated-main legacy baseline is exactly 106 production Go files / 39,329
+  physical lines.
+- Canonical peer state is still unreleased: C271 task `work-task-106` is
+  failed; recovery C281 `work-task-141` is processing/init; C272
+  `work-task-109` and C276 `work-task-121` are processing/init; C278
+  `work-task-134` is processing/init. PR #540 remains open at old head
+  `e868ea19c23120d42a1fc3b57de769ac61bd90e8` with no review decision or review
+  records. Its hosted checks are green for that old head, while the C278 branch
+  is at `0e2639ce7` (two commits ahead); no guarded release is recorded. No
+  peer branch or worktree was modified.
+- C280 still owns the entire retirement: all eight named agentruntime files
+  (`3,619` lines) and 19 duplicate `rooms/internal/evidence` production files
+  (`3,509` lines) remain. The CLI adapter budget is `0` files / `0` lines.
+  Review-78's bounded admission and direct public recorder/load/analyze checks
+  are present; the required room-run-to-public-analysis path and lifecycle
+  degradation proof still depend on integrating the new room-service caller
+  seam. The room-latency CLI caller already delegates through
+  `rooms.ReportingService`.
+- The previous C280-owned normal/race, repeated concurrency, boundary, Wire,
+  architecture-size and diff checks remain the latest passing evidence. No
+  caller integration or deletion has occurred, so the full C280-03/04 gate,
+  `make prepush`, push and PR handoff are not claimed. The code candidate was
+  clean at `5810a7b51b691d25ba44191a1608b5f5968f313a` before this
+  progress-only checkpoint.
+- Exact next action: obtain canonical reviewed or exact-path releases for the
+  C271/C272/C276/C278 shared caller paths, integrate only those revisions in
+  this C280 branch, cut over every named and discovered caller, add the needed
+  public room-run degradation/round-trip behavior coverage, and delete all
+  eight agentruntime files plus all 19 duplicate evidence files. Then execute
+  the full C280-03/04 checks and `make prepush` plus every C280-05 command on
+  one clean exact SHA; continue through locally reproducible repairs.
