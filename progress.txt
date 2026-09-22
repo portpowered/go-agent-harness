@@ -4162,3 +4162,23 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
 - Next action: commit this correction and checkpoint, then rerun the complete
   C282-03 preflight from the beginning on that exact clean candidate, including
   `make prepush`; do not update PR #541 until every command passes.
+
+# C278 exact-head retirement handoff checkpoint — 2026-09-22
+
+- Candidate `9a8ca3a943e36513632edde9cc26e2825e2ceeba` is clean and retains
+  `origin/main` `6f54ba004c0b6b587c9cc9cf2e7cb73db2bc5490` as an ancestor.
+  The final prepush initially exposed three newly moved packages missing from
+  coverage registration; the candidate registers those real packages at zero
+  minimum and the complete `rtk make prepush` then passed (exit 0).
+- Exact plan gates passed: roomreplay/rooms normal (125 tests), race subset
+  (85 tests), CGO-disabled hermetic room/CLI packages, replay CLI tests,
+  embedding consumer tests, `make test-integration` (agent-cli 307.586s and
+  loop functional), `make test-regressions`, `make architecture-size-check`,
+  and `make wire-check`.
+- Retirement audit passed: all planned `session_room_audio_bundle*` and
+  `session_room_replay_{bundle,integrity,manifest,scheduler}.go` production
+  files are absent from `agent-cli/internal/services/internal/agentruntime`;
+  the two stateless adapters total 57 physical lines; `git diff --check` and
+  the worktree are clean. No tests were added.
+- Next action: push this exact head to the existing PR #540 and submit the
+  complete retirement candidate to SCRIPT; hosted CI is not claimed green.
