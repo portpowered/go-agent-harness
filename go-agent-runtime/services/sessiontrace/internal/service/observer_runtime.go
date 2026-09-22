@@ -280,7 +280,7 @@ func (r *sessionRuntimeObservationRecorder) observeToolCall(call messages.ToolCa
 		return
 	}
 	payload, err := json.Marshal(call)
-	r.observe("tool_call", payload, 0, err == nil, err)
+	r.observe(runtimeObservationKindToolCall, payload, 0, err == nil, err)
 }
 func (r *sessionRuntimeObservationRecorder) observeToolResult(call messages.ToolCall, response messages.ToolCallResponse, failed bool) {
 	if r == nil {
@@ -292,5 +292,5 @@ func (r *sessionRuntimeObservationRecorder) observeToolResult(call messages.Tool
 		Response messages.ToolCallResponse `json:"response"`
 		Failed   bool                      `json:"failed"`
 	}{call.ID, call.Name, response, failed})
-	r.observe("tool_result", payload, 0, !failed && err == nil, err)
+	r.observe(runtimeObservationKindToolResult, payload, 0, !failed && err == nil, err)
 }

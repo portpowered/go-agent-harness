@@ -19,8 +19,10 @@ import (
 )
 
 const (
-	stagingDirectoryMode os.FileMode = 0o755
-	claimFileMode        os.FileMode = 0o600
+	stagingDirectoryMode             os.FileMode = 0o755
+	claimFileMode                    os.FileMode = 0o600
+	runtimeObservationKindToolCall               = "tool_call"
+	runtimeObservationKindToolResult             = "tool_result"
 )
 
 type Service struct{}
@@ -230,7 +232,7 @@ func (o *traceObserver) ObserveSessionRuntime(observation sessiontrace.RuntimeOb
 
 func runtimePayloadNeedsRedaction(kind sessiontrace.SessionRuntimeObservationKind) bool {
 	switch kind {
-	case "tool_call", "tool_result", "provider_wire_send", "provider_wire_receive":
+	case runtimeObservationKindToolCall, runtimeObservationKindToolResult, "provider_wire_send", "provider_wire_receive":
 		return true
 	case sessiontrace.SessionRuntimeObservationAudioOutput,
 		sessiontrace.SessionRuntimeObservationAudioInput,

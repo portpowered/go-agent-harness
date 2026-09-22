@@ -184,7 +184,7 @@ func traceMessageKind(message messages.StreamMessage) string {
 	switch {
 	case message.Type == messages.StreamTypeAudioStart || message.Type == messages.StreamTypeAudioDelta || message.Type == messages.StreamTypeAudioEnd:
 		if message.Role == messages.RoleTool {
-			return "tool_result"
+			return runtimeObservationKindToolResult
 		}
 		return string(sessiontrace.SessionRuntimeObservationAudioOutput)
 	case message.Type == messages.StreamTypeResponseCreate:
@@ -196,9 +196,9 @@ func traceMessageKind(message messages.StreamMessage) string {
 	case message.Type == messages.StreamTypeSessionClose:
 		return string(sessiontrace.SessionRuntimeObservationTerminal)
 	case message.Type == messages.StreamTypeToolCallStart || message.Type == messages.StreamTypeToolCallDelta || message.Type == messages.StreamTypeToolCallEnd:
-		return "tool_call"
+		return runtimeObservationKindToolCall
 	case message.Role == messages.RoleTool:
-		return "tool_result"
+		return runtimeObservationKindToolResult
 	default:
 		return ""
 	}
