@@ -197,7 +197,7 @@ def _require_green_checks(all_checks, github_required, policy_names):
 
 
 def _fresh_main(repo_path):
-    _git(repo_path, "fetch", "origin", "main")
+    _git(repo_path, "fetch", "origin", "main:refs/remotes/origin/main")
     main = _git_output(repo_path, "rev-parse", "origin/main")
     if not _valid_sha(main):
         raise GuardError("fresh origin/main is not a complete commit")
