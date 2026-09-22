@@ -5197,8 +5197,6 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   over every production caller, delete the obsolete projection and exact
   1,410-line cluster, verify the stateless adapter cap, then run `make prepush`
   and every planned exact-head C271 gate before pushing for SCRIPT CI.
-||||||| parent of 57faba95d (audio-runtime: verify selfplay failure precedence)
-
 # C271 first-failure public behavior checkpoint — 2026-09-21
 
 - Reverified `project-control.py verify-work --type task --name
@@ -5246,3 +5244,57 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   full caller census, remove the projection/helper and complete 1,410-line
   cluster, prove the sole one-file/300-line adapter cap, and run the exact-head
   full local preflight before opening/updating the PR.
+
+# C281 C249 recovery and retirement candidate checkpoint — 2026-09-21
+
+- `project-control.py verify-work --type task --name
+  audio-runtime-c281-recover-c271-selfplay-retirement` returned `admitted` for
+  the sole `audio-runtime` project. Canonical `work-task-141` remains `init`
+  and `prd.json.branchName` matches
+  `codex/audio-runtime-c281-recover-c271-selfplay-retirement`. Fetched
+  `origin/main=b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`; the current candidate
+  started at `b45583ca8225a5b290934e2907ebb731cbe40c60` and now has the required
+  C249 `86a1eed17b099d510b39ce3d3b4ee7d8f7998881` merge staged. C220
+  `1bf045dd80f7330a2c01f7eb867ea010a1d96fbb` is an ancestor of C249; startup
+  `8bdafc7f947a3a2c9856220abdc539437035bd21` and fetched main are ancestors
+  of this branch. No host checkout or peer worktree was changed.
+- Reconciled C249's direct service-local Wire construction and runtime-owned
+  contract with C281's later shutdown-timeout and first-failure fixes. The
+  candidate deletes the complete owned cluster—`selfplay_service.go` (53),
+  `session_self_play.go` (641), and `session_self_play_evidence.go` (716),
+  3 files / 1,410 baseline lines—plus the obsolete CLI projection and the
+  uncredited `session_room_evidence_files.go` helper. The only self-play CLI
+  production adapter is `agent-cli/internal/transport/cli/session_self_play.go`
+  at 84 lines. Production search finds no remaining legacy self-play method,
+  mutable state, projection, or composition symbols.
+- Shared room evidence previously used file-writer/redaction helpers from the
+  retiring self-play evidence file. To keep the candidate buildable after the
+  planned deletion, those helpers were relocated into existing room WAV/error
+  files (no new production file and no test moves). This touches C272/C280
+  caller-owned seams and remains unpushed pending their exact release and
+  additive reconciliation; it is not a claim that those peer releases are
+  available.
+- On the staged candidate, focused service/CLI/room tests passed (79 tests in
+  7 packages), self-play race passed (26 / 3 packages), repeated
+  cancellation/duration/shutdown/failure passed (180 / 3), the CGO-disabled
+  `nomicrophone` selected service/CLI run passed, `make wire-check` passed,
+  `make verify-architecture` passed (204 packages, 1,948 files, 28,862
+  functions), and `git diff --cached --check` passed. The architecture package
+  file baseline was reduced from 233 to the observed 232; no baseline was
+  enlarged. `make prepush` and the accumulated integration/regression/hermetic/
+  embed exact-head gate have not run because this merge is not yet a committed
+  exact candidate and peer-owned seams remain unreleased.
+- Canonical release audit: C279 `work-task-136` is FAILED with no reviewed or
+  merged release; C280 `work-task-139` and C272 `work-task-109` remain INIT,
+  with no reviewed or merged releases. C271 `work-task-106` is FAILED with an
+  unknown runner outcome and has no concluded C271 review. The only concluded
+  `work-review-78` is for C259; its findings concern bounded manifest/timeline
+  admission, evidence-write degradation, public room replay round-trip, and
+  exact-head preflight, not self-play implementation.
+- Exact next action: preserve this candidate without pushing it; obtain or
+  consume the explicit reviewed/exact-path releases for C279, C280, and C272,
+  reconcile those exact shared callers additively, then rerun caller/deletion/
+  adapter scans and the complete local exact-head gate (`make prepush` plus all
+  planned self-play, race, repeat, nomicrophone, integration, regression,
+  hermetic, embed, architecture, and Wire commands) before any PR update or
+  push. Decision remains `CONTINUE`; no SCRIPT CI handoff is claimed.

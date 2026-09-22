@@ -51,7 +51,7 @@ func TestObserveRoomParticipantStream_FansOutBeforeDurableAudioEvidence(t *testi
 		t.Fatalf("create delta evidence: %v", err)
 	}
 	audioPath := filepath.Join(t.TempDir(), "source.wav")
-	audio, err := newSelfPlayWAVRecorder(audioPath, 1000)
+	audio, err := newRoomWAVRecorder(audioPath, 1000)
 	if err != nil {
 		_ = deltasFile.Close()
 		t.Fatalf("create audio evidence: %v", err)
@@ -59,7 +59,7 @@ func TestObserveRoomParticipantStream_FansOutBeforeDurableAudioEvidence(t *testi
 	participantEvidence := &roomParticipantEvidence{
 		owner: owner,
 		id:    "source",
-		deltas: &selfPlayJSONLWriter{
+		deltas: &roomEvidenceJSONLWriter{
 			path: deltasPath,
 			file: deltasFile,
 		},

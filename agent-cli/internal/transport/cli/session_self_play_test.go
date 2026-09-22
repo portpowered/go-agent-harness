@@ -3,26 +3,30 @@ package cli
 import (
 	"bytes"
 	"context"
-	"io"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
-	runtimeSelfPlay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/selfplay"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/selfplay"
 )
+
+type selfPlayServiceFunc func(context.Context, selfplay.Request) (selfplay.Result, error)
+
+func (f selfPlayServiceFunc) Run(ctx context.Context, request selfplay.Request) (selfplay.Result, error) {
+	return f(ctx, request)
+}
 
 func TestSessionSelfPlayCommandParsesBoundedRunOptions(t *testing.T) {
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = t.TempDir()
-	subject := NewSessionSelfPlayCommand(globalFlags, nil)
-
-	var got runtimeSelfPlay.Request
-	subject.SetRunner(func(_ context.Context, _ io.Writer, opts runtimeSelfPlay.Request) error {
-		got = opts
-		return nil
+	var got selfplay.Request
+	runner := selfPlayServiceFunc(func(_ context.Context, request selfplay.Request) (selfplay.Result, error) {
+		got = request
+		return selfplay.Result{StopReason: selfplay.StopTurnTarget, Customer: selfplay.SideResult{CompletedTurns: request.MaxTurns}, Assistant: selfplay.SideResult{CompletedTurns: request.MaxTurns}}, nil
 	})
+	subject := NewSessionSelfPlayCommand(globalFlags, runner)
 
 	outputDir := filepath.Join(t.TempDir(), "self-play")
 	cmd := subject.Generate()
@@ -42,10 +46,13 @@ func TestSessionSelfPlayCommandParsesBoundedRunOptions(t *testing.T) {
 		t.Fatalf("execute self-play command: %v", err)
 	}
 	if got.APIKey != "sk-test" || got.OutputDir != outputDir || got.Provider != "openai" || got.Model != "gpt-realtime-2.1-mini" || got.BaseURL != "wss://example.test/realtime" {
-		t.Fatalf("parsed self-play options = %#v", got)
+		t.Fatalf("parsed self-play request = %#v", got)
 	}
 	if got.MaxDuration != 17*time.Second || got.MaxTurns != 4 {
 		t.Fatalf("parsed bounds = (%s, %d), want (17s, 4)", got.MaxDuration, got.MaxTurns)
+	}
+	if !strings.Contains(output.String(), "reason=turn_target customer_turns=4 assistant_turns=4") {
+		t.Fatalf("result presentation = %q", output.String())
 	}
 }
 
@@ -58,8 +65,8 @@ func TestSessionSelfPlayCommandHelpDocumentsFixedPhaseOneContract(t *testing.T) 
 	}
 	help := helpOutput.String()
 	for _, want := range []string{
-		"fixed personas",
-		"opening seed",
+		"fixed participant instructions",
+		"customer opening message",
 		"raw PCM16 audio",
 		"tools and transcript/text bridging are disabled",
 		"--api-key",

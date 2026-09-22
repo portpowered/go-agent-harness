@@ -1,7 +1,5 @@
 package agentruntime
 
-import "github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
-
 import (
 	"encoding/json"
 	"errors"
@@ -11,6 +9,8 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
 // roomClock stamps room evidence records with both a monotonic offset from
@@ -142,7 +142,7 @@ func (w *rawPCMWriter) write(pcm []byte) error {
 	if w.err != nil {
 		return w.err
 	}
-	written, err := writeSelfPlayAllCount(w.file, pcm)
+	written, err := writeRoomEvidenceAllCount(w.file, pcm)
 	w.bytes += uint64(written)
 	if err != nil {
 		w.err = fmt.Errorf("write %s: %w", w.path, err)
@@ -267,12 +267,12 @@ func (b *roomMixBuffer) finalize(span time.Duration, path string) error {
 		_ = os.Remove(path)
 		return err
 	}
-	if _, err := writeSelfPlayAllCount(file, header[:]); err != nil {
+	if _, err := writeRoomEvidenceAllCount(file, header[:]); err != nil {
 		_ = file.Close()
 		_ = os.Remove(path)
 		return fmt.Errorf("write room mix WAV header: %w", err)
 	}
-	if _, err := writeSelfPlayAllCount(file, pcm); err != nil {
+	if _, err := writeRoomEvidenceAllCount(file, pcm); err != nil {
 		_ = file.Close()
 		_ = os.Remove(path)
 		return fmt.Errorf("write room mix WAV data: %w", err)
@@ -302,7 +302,7 @@ type roomTimelineEntry struct {
 // conversation's shape (including cross-participant overlap) is machine
 // readable without reconstructing it from N separate per-participant files.
 type roomTimeline struct {
-	writer *selfPlayJSONLWriter
+	writer *roomEvidenceJSONLWriter
 	clock  roomClock
 
 	// mu serializes the clock read and the resulting write. record is called
@@ -317,7 +317,7 @@ type roomTimeline struct {
 }
 
 func newRoomTimeline(path string, clock roomClock) (*roomTimeline, error) {
-	writer, err := newSelfPlayJSONLWriter(path)
+	writer, err := newRoomEvidenceJSONLWriter(path)
 	if err != nil {
 		return nil, err
 	}

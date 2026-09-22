@@ -36,9 +36,6 @@ func TestSelfPlayServiceBridgesOnlyPCMAndWritesBoundedEvidence(t *testing.T) {
 	assertSessionSetup(t, configs, sessions)
 	assertSessionTraffic(t, sessions)
 	assertOneTurnPerSide(t, outputDir)
-	if _, err := os.Stat(filepath.Join(outputDir, "run-manifest.json")); err != nil {
-		t.Fatalf("manifest missing: %v", err)
-	}
 }
 
 func TestSelfPlayServiceHonorsConfiguredTurnTarget(t *testing.T) {

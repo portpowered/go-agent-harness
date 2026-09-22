@@ -30,8 +30,8 @@ const (
 	SessionDiagnosticFieldPlaybackOverflowEvents      = sessioncontract.SessionDiagnosticFieldPlaybackOverflowEvents
 	// SessionDiagnosticFieldPlaybackParticipantID identifies which room
 	// participant's local speaker queue dropped samples. It is set only by
-	// emitRoomParticipantPlaybackOverflowDiagnostic; the single-session and
-	// self-play paths have no participant to name.
+	// emitRoomParticipantPlaybackOverflowDiagnostic; the single-session path
+	// has no room participant to name.
 	SessionDiagnosticFieldPlaybackParticipantID = sessioncontract.SessionDiagnosticFieldPlaybackParticipantID
 
 	SessionLogMessagePlaybackSnapshot = "audio playback queue finalized"
@@ -61,7 +61,7 @@ var playbackMetricSamples = []struct {
 // installs whenever a caller did not wire one. This is the second time this
 // exact instrumentation has been found unwired end to end: #360 fixed the
 // CLI's SessionRunOptions.Diagnostics after #350's counters were found never
-// reaching it, and the room/self-play half was still missed. Patching each
+// reaching it, and the room playback half was still missed. Patching each
 // forgetful call site clearly does not close this class of bug, so instead
 // every place in this codebase that observes a playback queue overflow
 // (sessionPlaybackDiagnosticObserver below, and
