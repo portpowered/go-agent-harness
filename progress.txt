@@ -4122,3 +4122,22 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   on the repaired exact head; no result from `e70ec79` is handoff evidence for
   `7c712cf`. Next action: checkpoint this gate repair, then rerun the entire
   C282-03 command list including `make prepush` on one clean final candidate.
+
+# C282 repeated concurrency-check checkpoint — 2026-09-22
+
+- On the clean candidate `4fe84e8e354ec2b83752b64af1e3fe8be569e525`, browser
+  service normal/race (20 tests per run), adapter/WebMCP (34), repeated
+  nomicrophone runtime (50 normal/10 race), interleaving coverage (10), and
+  interleaving race (3) passed. The first prescribed interleaving normal
+  `-count=10` attempt passed 9 iterations and hit the harness's 2-minute
+  deadline once; the isolated `-count=1` reproduction and a complete retry
+  passed, 10/10. The broader session regression command then passed 130 normal
+  and 39 race tests. No test timeout or assertion was changed.
+- No code repair was indicated by that transient: the failure was not
+  reproducible in isolation or in the repeated normal/coverage/race commands,
+  and this vertical changes only browser recording redaction and recording
+  error classification. Preserve the first failed run as history.
+- Because this checkpoint changes the exact candidate revision, all C282-03
+  gates must run again from the beginning on its commit, including these
+  targeted and repeated session checks, repository integration/regression/
+  hermetic/coverage/architecture/Wire gates, and `make prepush`.
