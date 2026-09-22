@@ -22,6 +22,7 @@ type RoomReplayDeltaReconstructionError = roomreplay.RoomReplayDeltaReconstructi
 type roomReplayJSONObject = support.JSONObject
 
 const (
+	roomReplayStreamsPerParticipant   = 3
 	RoomReplayBundleMismatch          = roomreplay.RoomReplayBundleMismatch
 	RoomReplayBundleIncomplete        = roomreplay.RoomReplayBundleIncomplete
 	ErrInvalidRoomReplayBundle        = roomreplay.ErrInvalidRoomReplayBundle
@@ -36,6 +37,11 @@ const (
 	roomReplayArtifactRoleReceivedPCM = roomreplay.ArtifactRoleReceivedPCM
 	roomReplayArtifactRoleEvents      = roomreplay.ArtifactRoleEvents
 	roomReplayArtifactRoleCapture     = roomreplay.ArtifactRoleCapture
+	roomReplayAudioRoleWAV            = "wav"
+	roomReplayAudioRoleSent           = "sent"
+	roomReplayAudioRoleReceived       = "received"
+	roomReplayJSONLInitialBufferBytes = 64 * 1024
+	roomReplayJSONLMaxTokenBytes      = 4 * 1024 * 1024
 )
 
 func Load(plan roomreplay.RoomReplayPlan) (roomreplay.RoomReplayAudioBundle, error) {
@@ -62,7 +68,7 @@ func Load(plan roomreplay.RoomReplayPlan) (roomreplay.RoomReplayAudioBundle, err
 		Tolerances:   profile,
 		Participants: make([]RoomReplayAudioParticipant, 0, len(plan.Participants)),
 	}
-	streamParticipants := make(map[string]string, len(plan.Participants)*3)
+	streamParticipants := make(map[string]string, len(plan.Participants)*roomReplayStreamsPerParticipant)
 	for _, participant := range plan.Participants {
 		resolved, err := loadRoomReplayAudioParticipant(plan, participant, participantObjects[participant.ID])
 		if err != nil {
@@ -127,6 +133,14 @@ func roomReplayObject(raw json.RawMessage) (roomReplayJSONObject, error) {
 
 func firstRoomReplayStringField(primary, fallback roomReplayJSONObject, names ...string) (string, bool, error) {
 	return support.FirstString(primary, fallback, names...)
+}
+
+func optionalRoomReplayStringField(primary, fallback roomReplayJSONObject, names ...string) (string, bool) {
+	value, present, err := firstRoomReplayStringField(primary, fallback, names...)
+	if err != nil {
+		return "", present
+	}
+	return value, present
 }
 
 func decodeRoomReplayString(raw json.RawMessage) (string, bool) { return support.String(raw) }

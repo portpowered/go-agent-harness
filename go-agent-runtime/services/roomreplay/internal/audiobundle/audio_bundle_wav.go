@@ -4,16 +4,16 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	"strconv"
 	"strings"
 	"time"
 
 	"encoding/json"
 
-	roomanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room"
-	streamanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/stream"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
+
+const roomReplayPCM16SampleWidthBits = 16
 
 func roomReplaySampleDuration(samples, sampleRate int) time.Duration {
 	if samples <= 0 || sampleRate <= 0 {
@@ -22,13 +22,6 @@ func roomReplaySampleDuration(samples, sampleRate int) time.Duration {
 	seconds := int64(samples) / int64(sampleRate)
 	remainder := int64(samples) % int64(sampleRate)
 	return time.Duration(seconds)*time.Second + time.Duration(remainder)*time.Second/time.Duration(sampleRate)
-}
-
-func cloneTimedStream(stream roomanalysis.PCM16TimedStream) roomanalysis.PCM16TimedStream {
-	stream.Samples = append([]int16(nil), stream.Samples...)
-	stream.ExpectedSpeech = append([]streamanalysis.SpeechAnnotation(nil), stream.ExpectedSpeech...)
-	stream.ChunkBoundaries = append([]streamanalysis.ChunkBoundary(nil), stream.ChunkBoundaries...)
-	return stream
 }
 
 type roomReplayWAVPayload struct {
@@ -46,7 +39,7 @@ func decodeRoomReplayWAV(data []byte, artifact string) (roomReplayWAVPayload, er
 		}
 		return roomReplayWAVPayload{}, roomReplayAudioMismatch("artifact.wav", artifact, "PCM16 WAV", err.Error(), err)
 	}
-	return roomReplayWAVPayload{SampleRate: layout.SampleRate, Channels: 1, Bits: 16, PCM: append([]byte(nil), data[layout.DataOffset:layout.DataOffset+int64(layout.DataBytes)]...)}, nil
+	return roomReplayWAVPayload{SampleRate: layout.SampleRate, Channels: 1, Bits: roomReplayPCM16SampleWidthBits, PCM: append([]byte(nil), data[layout.DataOffset:layout.DataOffset+int64(layout.DataBytes)]...)}, nil
 }
 
 func validateRoomReplayWAVFormat(wav roomReplayWAVPayload, declared RoomReplayPCMFormat, artifact string) error {

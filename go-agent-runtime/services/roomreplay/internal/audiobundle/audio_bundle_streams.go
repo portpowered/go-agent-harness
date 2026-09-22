@@ -63,24 +63,24 @@ func loadRoomReplayAudioParticipant(plan RoomReplayPlan, participant RoomReplayP
 	}
 
 	metadata := make(map[string]roomReplayAudioStreamMetadata)
-	for _, role := range []string{"wav", "sent", "received"} {
+	for _, role := range []string{roomReplayAudioRoleWAV, roomReplayAudioRoleSent, roomReplayAudioRoleReceived} {
 		metadata[role] = parseRoomReplayStreamMetadata(object, role)
 	}
 	mergeRoomReplaySidecarMetadata(metadata, events)
 	mergeRoomReplaySidecarMetadata(metadata, diagnostics)
 
 	defaultWAVID := participant.ID + ":output"
-	wavMetadata := metadata["wav"]
+	wavMetadata := metadata[roomReplayAudioRoleWAV]
 	if wavMetadata.StreamID == "" {
 		wavMetadata.StreamID = defaultWAVID
 	}
 	defaultSentID := participant.ID + ":sent"
-	sentMetadata := metadata["sent"]
+	sentMetadata := metadata[roomReplayAudioRoleSent]
 	if sentMetadata.StreamID == "" {
 		sentMetadata.StreamID = defaultSentID
 	}
 	defaultReceivedID := participant.ID + ":received"
-	receivedMetadata := metadata["received"]
+	receivedMetadata := metadata[roomReplayAudioRoleReceived]
 	if receivedMetadata.StreamID == "" {
 		receivedMetadata.StreamID = defaultReceivedID
 	}
@@ -89,11 +89,11 @@ func loadRoomReplayAudioParticipant(plan RoomReplayPlan, participant RoomReplayP
 	if err != nil {
 		return RoomReplayAudioParticipant{}, err
 	}
-	wav, err := loadRoomReplayWAVStream(plan, wavArtifact, wavMetadata.StreamID, participant.ID, "wav")
+	wav, err := loadRoomReplayWAVStream(plan, wavArtifact, wavMetadata.StreamID, participant.ID, roomReplayAudioRoleWAV)
 	if err != nil {
 		return RoomReplayAudioParticipant{}, err
 	}
-	wav.Role = "wav"
+	wav.Role = roomReplayAudioRoleWAV
 	wav.DeltaArtifact = deltaArtifact
 	wav.Deltas = deltas
 	for index, delta := range deltas {
@@ -142,7 +142,7 @@ func loadRoomReplayAudioParticipant(plan RoomReplayPlan, participant RoomReplayP
 		return RoomReplayAudioParticipant{}, err
 	}
 
-	sent, err := loadRoomReplayPCMStream(plan, sentArtifact, sentMetadata.StreamID, participant.ID, "sent")
+	sent, err := loadRoomReplayPCMStream(plan, sentArtifact, sentMetadata.StreamID, participant.ID, roomReplayAudioRoleSent)
 	if err != nil {
 		return RoomReplayAudioParticipant{}, err
 	}
@@ -150,7 +150,7 @@ func loadRoomReplayAudioParticipant(plan RoomReplayPlan, participant RoomReplayP
 	if err := validateRoomReplayAudioStreamTimeline(sent, plan, "participants["+participant.ID+"].sent"); err != nil {
 		return RoomReplayAudioParticipant{}, err
 	}
-	received, err := loadRoomReplayPCMStream(plan, receivedArtifact, receivedMetadata.StreamID, participant.ID, "received")
+	received, err := loadRoomReplayPCMStream(plan, receivedArtifact, receivedMetadata.StreamID, participant.ID, roomReplayAudioRoleReceived)
 	if err != nil {
 		return RoomReplayAudioParticipant{}, err
 	}
@@ -177,7 +177,7 @@ func loadRoomReplayJSONL(artifact RoomReplayArtifact, field string) ([]json.RawM
 		return nil, roomReplayAudioIncomplete(field, artifact.Path, "readable JSONL", err.Error(), err)
 	}
 	scanner := bufio.NewScanner(bytes.NewReader(data))
-	scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
+	scanner.Buffer(make([]byte, roomReplayJSONLInitialBufferBytes), roomReplayJSONLMaxTokenBytes)
 	lines := make([]json.RawMessage, 0)
 	for lineNumber := 1; scanner.Scan(); lineNumber++ {
 		line := bytes.TrimSpace(scanner.Bytes())
@@ -387,7 +387,7 @@ func loadRoomReplayAudioDeltas(artifact RoomReplayArtifact, participantID, strea
 		return nil, roomReplayAudioIncomplete("participants["+participantID+"].deltas", artifact.Path, "readable delta JSONL", err.Error(), err)
 	}
 	scanner := bufio.NewScanner(bytes.NewReader(data))
-	scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
+	scanner.Buffer(make([]byte, roomReplayJSONLInitialBufferBytes), roomReplayJSONLMaxTokenBytes)
 	deltas := make([]RoomReplayAudioDelta, 0)
 	seenDeltaIDs := make(map[string]int)
 	var previousOffset time.Duration
@@ -474,7 +474,7 @@ func loadRoomReplayAudioDeltas(artifact RoomReplayArtifact, participantID, strea
 			return nil, roomReplayAudioMismatch(fmt.Sprintf("participants[%s].deltas.line[%d].id", participantID, lineNumber), artifact.Path, fmt.Sprintf("unique delta identity (first seen on line %d)", previousLine), id, nil)
 		}
 		seenDeltaIDs[id] = lineNumber
-		turnID, _, _ := firstRoomReplayStringField(object, nil, "turn_id", "turn", "response_id")
+		turnID, _ := optionalRoomReplayStringField(object, nil, "turn_id", "turn", "response_id")
 		deltas = append(deltas, RoomReplayAudioDelta{ID: id, Sequence: sequence, HasSequence: hasSequence, Offset: offset, HasOffset: hasOffset, TurnID: strings.TrimSpace(turnID), LineNumber: lineNumber, PCM: append([]byte(nil), payload...)})
 	}
 	if err := scanner.Err(); err != nil {
@@ -519,7 +519,7 @@ func roomReplayAudioPayload(object roomReplayJSONObject, kind string) ([]byte, b
 				continue
 			}
 			nestedKind := kind
-			if value, present, _ := firstRoomReplayStringField(nested, nil, "type", "event_type", "kind"); present {
+			if value, present := optionalRoomReplayStringField(nested, nil, "type", "event_type", "kind"); present {
 				nestedKind = value
 			}
 			payload, found, payloadErr := roomReplayAudioPayload(nested, nestedKind)
@@ -647,12 +647,12 @@ func parseRoomReplayStreamMetadata(object roomReplayJSONObject, role string) roo
 
 func roomReplayStreamRoleAliases(role string) []string {
 	switch role {
-	case "wav":
-		return []string{"wav", "output", "audio", "output_stream", "wav_stream"}
-	case "sent":
-		return []string{"sent", "sent_pcm", "sent_stream", "uplink"}
-	case "received":
-		return []string{"received", "received_pcm", "received_stream", "downlink"}
+	case roomReplayAudioRoleWAV:
+		return []string{roomReplayAudioRoleWAV, "output", "audio", "output_stream", "wav_stream"}
+	case roomReplayAudioRoleSent:
+		return []string{roomReplayAudioRoleSent, "sent_pcm", "sent_stream", "uplink"}
+	case roomReplayAudioRoleReceived:
+		return []string{roomReplayAudioRoleReceived, "received_pcm", "received_stream", "downlink"}
 	default:
 		return []string{role}
 	}
@@ -664,7 +664,7 @@ func parseRoomReplayStreamMetadataObject(raw json.RawMessage) roomReplayAudioStr
 	if err != nil {
 		return metadata
 	}
-	metadata.StreamID, _, _ = firstRoomReplayStringField(object, nil, "stream_id", "id", "identity")
+	metadata.StreamID, _ = optionalRoomReplayStringField(object, nil, "stream_id", "id", "identity")
 	if value, present, err := roomReplayFirstDurationField(object, "timeline_start_ms", "start_ms", "start_offset_ms", "timeline_start", "start"); err == nil && present {
 		metadata.TimelineStart, metadata.HasStart = value, true
 	}
@@ -713,7 +713,7 @@ func mergeRoomReplaySidecarMetadata(metadata map[string]roomReplayAudioStreamMet
 		if err != nil {
 			continue
 		}
-		role, _, _ := firstRoomReplayStringField(object, nil, "stream_role", "audio_role", "role")
+		role, _ := optionalRoomReplayStringField(object, nil, "stream_role", "audio_role", "role")
 		role = normalizeRoomReplayAudioRole(role)
 		if role == "" {
 			continue
@@ -732,12 +732,12 @@ func normalizeRoomReplayAudioRole(value string) string {
 	normalized := strings.ToLower(strings.TrimSpace(value))
 	normalized = strings.NewReplacer("-", "_", ".", "_", " ", "_").Replace(normalized)
 	switch normalized {
-	case "output", "wav", "audio", "output_stream", "wav_stream":
-		return "wav"
-	case "sent", "sent_pcm", "sent_stream", "uplink":
-		return "sent"
-	case "received", "received_pcm", "received_stream", "downlink":
-		return "received"
+	case "output", roomReplayAudioRoleWAV, "audio", "output_stream", "wav_stream":
+		return roomReplayAudioRoleWAV
+	case roomReplayAudioRoleSent, "sent_pcm", "sent_stream", "uplink":
+		return roomReplayAudioRoleSent
+	case roomReplayAudioRoleReceived, "received_pcm", "received_stream", "downlink":
+		return roomReplayAudioRoleReceived
 	default:
 		return ""
 	}
@@ -808,7 +808,7 @@ func parseRoomReplayChunkBoundaries(raw json.RawMessage) []streamanalysis.ChunkB
 		if err != nil {
 			continue
 		}
-		id, _, _ := firstRoomReplayStringField(object, nil, "id", "chunk_id", "name")
+		id, _ := optionalRoomReplayStringField(object, nil, "id", "chunk_id", "name")
 		if strings.TrimSpace(id) == "" {
 			id = fmt.Sprintf("chunk-%d", index)
 		}
@@ -835,7 +835,7 @@ func parseRoomReplaySpeechAnnotations(raw json.RawMessage) []streamanalysis.Spee
 		if startErr != nil || endErr != nil || !startPresent || !endPresent || end <= start {
 			continue
 		}
-		label, _, _ := firstRoomReplayStringField(object, nil, "label", "id", "name")
+		label, _ := optionalRoomReplayStringField(object, nil, "label", "id", "name")
 		annotations = append(annotations, streamanalysis.SpeechAnnotation{Label: label, Start: start, End: end})
 	}
 	return annotations

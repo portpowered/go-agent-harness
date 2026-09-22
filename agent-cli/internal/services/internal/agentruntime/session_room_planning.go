@@ -252,7 +252,7 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 
 // buildRoomReplayParticipantPlans composes admitted provider participants
 // with the session replay planner without consulting live configuration.
-func buildRoomReplayParticipantPlans(ctx context.Context, replay roomreplay.RoomReplayPlan, opts RoomRunOptions) ([]*roomParticipantPlan, []string, error) {
+func buildRoomReplayParticipantPlans(ctx context.Context, replay roomreplay.RoomReplayPlan, opts RoomRunOptions) ([]*roomParticipantPlan, []string, error) { //nolint:contextcheck // planSessionRuntime is synchronous and has no context-aware API; ctx is checked before each participant.
 	if ctx == nil {
 		ctx = context.Background()
 	}

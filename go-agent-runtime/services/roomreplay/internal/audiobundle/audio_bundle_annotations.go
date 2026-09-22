@@ -112,7 +112,7 @@ func parseRoomReplayAudioAnnotation(raw json.RawMessage, index int, plan RoomRep
 	if kind == "" || (!strings.Contains(kind, "overlap") && !strings.Contains(kind, "simultaneous") && !strings.Contains(kind, "barge") && !strings.Contains(kind, "interrupt") && !strings.Contains(kind, "loudness") && !strings.Contains(kind, "balance")) {
 		return RoomReplayAudioAnnotation{}, nil, nil, nil, false, nil
 	}
-	id, _, _ := firstRoomReplayStringField(object, nil, "id", "annotation_id", "name")
+	id, _ := optionalRoomReplayStringField(object, nil, "id", "annotation_id", "name")
 	if strings.TrimSpace(id) == "" {
 		id = fmt.Sprintf("%s-%d", kind, index)
 	}
@@ -196,7 +196,6 @@ func roomReplayAnnotationInterval(object roomReplayJSONObject) (time.Duration, t
 	if endErr != nil || !endPresent {
 		if duration, durationPresent, durationErr := roomReplayAnnotationDuration(object, "duration_ms", "duration"); durationErr == nil && durationPresent {
 			end = start + duration
-			endPresent = true
 		} else {
 			return 0, 0, errOrDefault(endErr, errors.New("end is missing"))
 		}
@@ -228,7 +227,7 @@ func roomReplayAnnotationEndpoint(object roomReplayJSONObject, names ...string) 
 			return strings.TrimSpace(value)
 		}
 		if nested, err := roomReplayObject(raw); err == nil {
-			value, _, _ := firstRoomReplayStringField(nested, nil, "participant_id", "participant", "speaker_id", "id", "stream_id")
+			value, _ := optionalRoomReplayStringField(nested, nil, "participant_id", "participant", "speaker_id", "id", "stream_id")
 			if value != "" {
 				return strings.TrimSpace(value)
 			}
