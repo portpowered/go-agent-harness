@@ -162,6 +162,11 @@ func (r *recorder) Snapshot() (browserconversation.RecordingSnapshot, error) {
 }
 
 func (r *recorder) record(event browserconversation.BrowserEvent) {
+	sourceBytes := recordingSourceBytes(event, r.request)
+	if sourceBytes > r.request.MaxBytes {
+		r.setError(errors.New("browser conversation recorder bound exceeded"))
+		return
+	}
 	value := browserconversation.RecordedBrowserEvent{
 		Sequence: event.Sequence, At: event.At, Type: event.Type,
 		BrowserID: event.BrowserID, TargetID: event.TargetID,
@@ -187,13 +192,45 @@ func (r *recorder) record(event browserconversation.BrowserEvent) {
 	if r.closed || r.err != nil {
 		return
 	}
-	if len(r.events) >= r.request.MaxEvents || r.bytes+len(encoded) > r.request.MaxBytes {
+	if len(r.events) >= r.request.MaxEvents || r.bytes+len(encoded)+sourceBytes > r.request.MaxBytes {
 		r.err = errors.New("browser conversation recorder bound exceeded")
 		return
 	}
 	r.events = append(r.events, value)
-	r.sourceEvents = append(r.sourceEvents, cloneBrowserEvent(event))
-	r.bytes += len(encoded)
+	r.sourceEvents = append(r.sourceEvents, cloneBrowserEventForRecording(event, r.request))
+	r.bytes += len(encoded) + sourceBytes
+}
+
+// recordingSourceBytes bounds raw event data retained for artifact projection
+// before sanitization or cloning can allocate copies of it.
+func recordingSourceBytes(event browserconversation.BrowserEvent, request browserconversation.RecordingRequest) int {
+	size := len(event.Type) + len(event.BrowserID) + len(event.TargetID) + len(event.InvocationID) + len(event.ToolName) + len(event.FrameID) + len(event.Status) + len(event.ErrorCode) + len(event.Reason)
+	if request.IncludeArguments {
+		size += len(event.Input)
+	}
+	if request.IncludeResults {
+		size += len(event.Output)
+	}
+	for _, tool := range event.Tools {
+		size += len(tool.Name) + len(tool.InputSchema)
+	}
+	for _, name := range event.RemovedToolNames {
+		size += len(name)
+	}
+	// Account for retained slice elements and fixed event metadata so a stream
+	// of tiny values cannot grow memory without consuming the byte budget.
+	size += 512 + len(event.Tools)*96 + len(event.RemovedToolNames)*16
+	return size
+}
+
+func cloneBrowserEventForRecording(event browserconversation.BrowserEvent, request browserconversation.RecordingRequest) browserconversation.BrowserEvent {
+	if !request.IncludeArguments {
+		event.Input = nil
+	}
+	if !request.IncludeResults {
+		event.Output = nil
+	}
+	return cloneBrowserEvent(event)
 }
 
 func (r *recorder) setError(err error) {

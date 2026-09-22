@@ -126,7 +126,9 @@ type BrowserEventWatcher interface {
 // is supplied by a host; the service owns lifecycle and never opens a browser
 // while its constructor runs.
 type Fixture interface {
-	Close() error
+	// Close must honor ctx so fixture shutdown cannot extend beyond the run's
+	// bounded cleanup window.
+	Close(context.Context) error
 	Navigate(context.Context, BrowserCustomerNavigation) error
 	ReadState(context.Context, string) (json.RawMessage, error)
 	ProbeTab(context.Context, string) (BrowserConversationTabStateProbeResult, error)

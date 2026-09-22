@@ -132,10 +132,9 @@ func browserConversationRecoveryGenerationsValid(recovery BrowserConversationRec
 }
 
 func browserConversationRecoveryFailures(scenario BrowserConversationScenario, result BrowserConversationResult) []string {
-	recoveries := result.Recovery
-	if len(recoveries) == 0 {
-		recoveries = deriveBrowserConversationRecovery(scenario, result)
-	}
+	// Recovery summaries are caller-provided claims. Derive evaluation evidence
+	// from ordered broker observations instead of trusting their Passed bits.
+	recoveries := deriveBrowserConversationRecovery(scenario, result)
 	var failures []string
 	for _, recovery := range recoveries {
 		failures = append(failures, browserConversationRecoveryFailureMessages(recovery)...)

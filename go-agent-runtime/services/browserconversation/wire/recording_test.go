@@ -72,6 +72,61 @@ func TestServiceRecorderEnforcesByteBound(t *testing.T) {
 	}
 }
 
+func TestServiceRecorderBoundsRawPayloadBeforeRedaction(t *testing.T) {
+	events := make(chan browserconversation.BrowserEvent, 1)
+	recorder, err := NewService().NewRecorder(browserconversation.RecordingRequest{
+		Watch:            func(context.Context) <-chan browserconversation.BrowserEvent { return events },
+		IncludeArguments: true, MaxBytes: 1024,
+	})
+	if err != nil {
+		t.Fatalf("NewRecorder: %v", err)
+	}
+	recorder.Start(context.Background())
+	events <- browserconversation.BrowserEvent{
+		Type: "tool_invoked", BrowserID: "browser-1", TargetID: "tab-1", InvocationID: "invocation-1",
+		Input: json.RawMessage(`{"api_key":"` + strings.Repeat("x", 4096) + `"}`),
+	}
+	close(events)
+	if err := recorder.Close(); err == nil {
+		t.Fatal("Close succeeded after oversized raw arguments exceeded the recorder byte bound")
+	}
+	snapshot, err := recorder.Snapshot()
+	if err == nil || len(snapshot.Events) != 0 {
+		t.Fatalf("Snapshot = %+v, error = %v; want bound failure and no retained events", snapshot, err)
+	}
+}
+
+func TestServiceRecorderDoesNotRetainExcludedRawPayload(t *testing.T) {
+	events := make(chan browserconversation.BrowserEvent, 1)
+	recorder, err := NewService().NewRecorder(browserconversation.RecordingRequest{
+		Watch:    func(context.Context) <-chan browserconversation.BrowserEvent { return events },
+		MaxBytes: 1024,
+	})
+	if err != nil {
+		t.Fatalf("NewRecorder: %v", err)
+	}
+	recorder.Start(context.Background())
+	events <- browserconversation.BrowserEvent{
+		Type: "tool_invoked", BrowserID: "browser-1", TargetID: "tab-1", InvocationID: "invocation-1",
+		Input: json.RawMessage(`{"value":"` + strings.Repeat("excluded", 2048) + `"}`),
+	}
+	close(events)
+	if err := recorder.Close(); err != nil {
+		t.Fatalf("Close with excluded payload: %v", err)
+	}
+	snapshot, err := recorder.Snapshot()
+	if err != nil {
+		t.Fatalf("Snapshot: %v", err)
+	}
+	encoded, err := json.Marshal(snapshot)
+	if err != nil {
+		t.Fatalf("marshal snapshot: %v", err)
+	}
+	if strings.Contains(string(encoded), "excluded") || strings.Contains(string(snapshot.Artifact.Data), "excluded") {
+		t.Fatalf("excluded arguments appeared in retained recording: %s / %s", encoded, snapshot.Artifact.Data)
+	}
+}
+
 func TestServiceRecorderCloseIsBounded(t *testing.T) {
 	events := make(chan browserconversation.BrowserEvent)
 	recorder, err := NewService().NewRecorder(browserconversation.RecordingRequest{Watch: func(context.Context) <-chan browserconversation.BrowserEvent { return events }})

@@ -144,10 +144,10 @@ func browserConversationCorrectionInvocationOrderValid(step BrowserConversationS
 }
 
 func browserConversationCorrectionFailures(scenario BrowserConversationScenario, result BrowserConversationResult) []string {
-	corrections := result.Corrections
-	if len(corrections) == 0 {
-		corrections = deriveBrowserConversationCorrections(scenario, result)
-	}
+	// The result's correction summaries are caller-provided claims. Evaluation
+	// always derives pass/fail from ordered turns, invocations, and oracle
+	// observations so a forged Passed bit cannot satisfy the scenario.
+	corrections := deriveBrowserConversationCorrections(scenario, result)
 	var failures []string
 	for _, correction := range corrections {
 		failures = append(failures, browserConversationCorrectionFailureMessages(correction)...)

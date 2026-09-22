@@ -221,6 +221,39 @@ func TestServiceRunBoundsPostSessionObservationsAfterCancellation(t *testing.T) 
 	}
 }
 
+func TestServiceRunBoundsFixtureCloseAfterCancellation(t *testing.T) {
+	scenario := testBrowserConversationScenario()
+	scenario.RunTimeout = 100 * time.Millisecond
+	scenario.Steps[0].Deadline = 50 * time.Millisecond
+	fixture := &behaviorFixture{close: func(ctx context.Context) error {
+		if _, ok := ctx.Deadline(); !ok {
+			return errors.New("fixture close context has no deadline")
+		}
+		if err := ctx.Err(); err != nil {
+			return errors.New("fixture close inherited caller cancellation")
+		}
+		<-ctx.Done()
+		return ctx.Err()
+	}}
+	callerContext, cancelCaller := context.WithCancel(context.Background())
+	defer cancelCaller()
+	started := time.Now()
+	_, err := NewService().Run(callerContext, browserconversation.RunRequest{
+		Scenario: scenario, AudioByStep: map[string][]byte{"step-1": {1, 2}},
+		Broker: &behaviorBroker{fixture: fixture}, Fixture: fixture,
+		SessionRunner: func(context.Context, io.Writer, browserconversation.SessionRequest) error {
+			cancelCaller()
+			return nil
+		},
+	})
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("Run took %s, want bounded fixture shutdown", elapsed)
+	}
+	if !errors.Is(err, browserconversation.ErrBrowserConversationCleanup) || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Run error = %v, want bounded fixture-close cleanup failure", err)
+	}
+}
+
 type blockingOracle struct {
 	readState func(context.Context) error
 }
@@ -261,10 +294,10 @@ func TestServiceDerivesOrderedCorrectionAndNavigationRecovery(t *testing.T) {
 			{Sequence: 10, StepID: "recovery", Operation: browserconversation.BrowserConversationInvoke, InvocationID: "invoke-fresh", ToolRef: "fresh-ref", ToolName: "set_priority", State: "completed", Terminal: true, Generation: 2},
 		},
 		Oracles: []browserconversation.BrowserConversationOracleSnapshot{
-			{StepID: "original", PageID: "home", Phase: browserconversation.BrowserConversationOracleBefore, State: json.RawMessage(`{"value":"before"}`)},
-			{StepID: "original", PageID: "home", Phase: browserconversation.BrowserConversationOracleAfter, State: json.RawMessage(`{"value":"old"}`)},
-			{StepID: "correction", PageID: "home", Phase: browserconversation.BrowserConversationOracleBefore, State: json.RawMessage(`{"value":"old"}`)},
-			{StepID: "correction", PageID: "home", Phase: browserconversation.BrowserConversationOracleAfter, State: json.RawMessage(`{"value":"new"}`)},
+			{Sequence: 11, StepID: "original", PageID: "home", Phase: browserconversation.BrowserConversationOracleBefore, State: json.RawMessage(`{"value":"before"}`)},
+			{Sequence: 12, StepID: "original", PageID: "home", Phase: browserconversation.BrowserConversationOracleAfter, State: json.RawMessage(`{"value":"old"}`)},
+			{Sequence: 13, StepID: "correction", PageID: "home", Phase: browserconversation.BrowserConversationOracleBefore, State: json.RawMessage(`{"value":"old"}`)},
+			{Sequence: 14, StepID: "correction", PageID: "home", Phase: browserconversation.BrowserConversationOracleAfter, State: json.RawMessage(`{"value":"new"}`)},
 		},
 	}
 
@@ -276,15 +309,34 @@ func TestServiceDerivesOrderedCorrectionAndNavigationRecovery(t *testing.T) {
 	if len(recoveries) != 1 || !recoveries[0].Passed || recoveries[0].StaleToolRef != "stale-ref" || recoveries[0].FreshToolRef != "fresh-ref" || recoveries[0].PreviousGeneration != 1 || recoveries[0].CurrentGeneration != 2 {
 		t.Fatalf("recovery evidence = %+v", recoveries)
 	}
+
+	result.ScenarioID, result.ScenarioName = scenario.ID, scenario.Name
+	result.Corrections, result.Recovery = corrections, recoveries
+	result.BrokerCalls = nil
+	evaluation, err := service.Evaluate(scenario, result, nil)
+	if err != nil {
+		t.Fatalf("Evaluate forged evidence: %v", err)
+	}
+	failures := strings.Join(evaluation.Failures, "\n")
+	if evaluation.Passed || !strings.Contains(failures, "correction lacks a completed terminal invocation") || !strings.Contains(failures, "customer navigation was not observed") {
+		t.Fatalf("evaluation trusted supplied correction/recovery claims: %+v", evaluation)
+	}
 }
 
 type behaviorFixture struct {
 	after      bool
 	closeCalls int
 	probeCalls int
+	close      func(context.Context) error
 }
 
-func (f *behaviorFixture) Close() error { f.closeCalls++; return nil }
+func (f *behaviorFixture) Close(ctx context.Context) error {
+	f.closeCalls++
+	if f.close != nil {
+		return f.close(ctx)
+	}
+	return nil
+}
 
 func (f *behaviorFixture) Navigate(context.Context, browserconversation.BrowserCustomerNavigation) error {
 	return nil

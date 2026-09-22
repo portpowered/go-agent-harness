@@ -148,7 +148,9 @@ func (e *browserConversationExecution) cleanup(ctx context.Context, request brow
 }
 
 func (e *browserConversationExecution) cleanupFixture(ctx context.Context, request browserconversation.RunRequest) {
-	if closeErr := e.fixture.Close(); closeErr != nil {
+	cleanupContext, cancelCleanup := context.WithTimeout(context.WithoutCancel(ctx), e.scenario.RunTimeout)
+	defer cancelCleanup()
+	if closeErr := e.fixture.Close(cleanupContext); closeErr != nil {
 		e.add(errors.Join(browserconversation.ErrBrowserConversationCleanup, closeErr))
 	}
 	pageID := e.scenario.PostSession.PageID
@@ -158,8 +160,6 @@ func (e *browserConversationExecution) cleanupFixture(ctx context.Context, reque
 			return fixture.ProbeTab(ctx, pageID)
 		}
 	}
-	cleanupContext, cancelCleanup := context.WithTimeout(context.WithoutCancel(ctx), e.scenario.RunTimeout)
-	defer cancelCleanup()
 	if health, err := probe(cleanupContext, e.fixture, pageID); err != nil {
 		e.add(errors.Join(browserconversation.ErrBrowserConversationCleanup, err))
 	} else {
