@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
@@ -45,8 +46,8 @@ func TestReplayPlannersRejectCapturedAsymmetricAudioRatesBeforeDialerConstructio
 					return nil, errors.New("must not construct replay dialer")
 				},
 			})
-			if !errors.Is(err, ErrSessionAudioSampleRateConflict) {
-				t.Fatalf("plan replay error = %v, want ErrSessionAudioSampleRateConflict", err)
+			if !errors.Is(err, audioio.ErrSampleRateConflict) {
+				t.Fatalf("plan replay error = %v, want audioio.ErrSampleRateConflict", err)
 			}
 			if dialerConstructed {
 				t.Fatal("replay dialer constructed before captured duplex rates were validated")

@@ -15,25 +15,26 @@ import (
 	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	runtimeBrowser "github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation"
+	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	sessiontrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
-	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
 )
 
 var _ contract.Runtime = (*Dispatcher)(nil)
 
 type Dependencies struct {
+	AudioService        audioio.Service
 	Clock               clock.Source
 	PlanFactory         sessionRuntimeFactory
 	ToolService         serviceTools.Service
 	RuntimeFactory      SessionRTCRuntimeFactory
 	SessionInferencer   messages.SessionInferencer
 	ToolExecutor        messages.ToolExecutor
-	DeviceRegistry      devicegw.DeviceRegistry
+	DeviceService       runtimedevices.Service
 	RuntimeObserver     SessionRuntimeObserver
 	Observability       observability.Dependencies
 	ModelCatalog        runtimeproviders.ModelCatalog
@@ -44,17 +45,26 @@ type Dispatcher struct{ deps Dependencies }
 
 func New(deps Dependencies) *Dispatcher { return &Dispatcher{deps: deps} }
 
-func audioInput(input public.AudioInput) SessionAudioInput {
-	return SessionAudioInput{Path: input.Path, Stdin: input.Stdin, SourceSampleRate: input.SourceSampleRate, CloseStdinOnCancel: input.CloseStdinOnCancel, MaxDuration: input.MaxDuration, Present: input.Present, DevicePresent: input.DevicePresent}
-}
-
 func textSeed(seed public.TextSeed) SessionTextSeed {
 	return SessionTextSeed{Value: seed.Value, Present: seed.Present}
 }
 
+// ErrLegacyAudioRuntimeRetired identifies requests that must enter through
+// the service-owned live host. The legacy dispatcher remains for text and
+// replay compatibility, but it must not retain a second file/device audio
+// implementation after C189.
+type legacyAudioRuntimeRetiredError string
+
+func (e legacyAudioRuntimeRetiredError) Error() string { return string(e) }
+
+const ErrLegacyAudioRuntimeRetired legacyAudioRuntimeRetiredError = "legacy session audio runtime is retired; use the service-owned live session"
+
 func (d *Dispatcher) Run(ctx context.Context, out io.Writer, request public.Request) (runErr error) {
 	if d == nil || d.deps.Clock == nil {
 		return errors.New("session clock is required")
+	}
+	if request.AudioInput.Present || len(request.AudioTurns) > 0 || request.AudioOutputPath != "" || len(request.AudioInterrupts) > 0 {
+		return ErrLegacyAudioRuntimeRetired
 	}
 	if request.MaxDuration > 0 {
 		capturePath := request.RecordPath
@@ -83,87 +93,34 @@ func (d *Dispatcher) Run(ctx context.Context, out io.Writer, request public.Requ
 	if out == nil {
 		return fmt.Errorf("session output is required")
 	}
-	if len(request.AudioTurns) > 0 {
-		if len(request.ImagePaths) > 0 {
-			return RunSessionWithImagesAndRecordingDirectoryAndAudioFilesAndOutputAndTextSeedAndMaxDuration(
-				ctx, out, SessionImageRunOptions{
-					SessionRunOptions: options,
-					ImagePaths:        append([]string(nil), request.ImagePaths...),
-				}, request.RecordDirectory, request.AudioOutputPath, request.MaxDuration,
-				textSeed(request.TextSeed), request.AudioTurns, request.SystemPrompt,
-			)
-		}
-		return RunSessionWithRecordingDirectoryAndInstructionsAndAudioFilesAndOutputAndTextSeedAndMaxDuration(
-			ctx, out, options, request.RecordDirectory, request.AudioOutputPath,
-			request.MaxDuration, textSeed(request.TextSeed), request.AudioTurns, request.SystemPrompt,
-		)
-	}
 	if len(request.ImagePaths) > 0 {
 		if request.RecordDirectory != "" {
-			if request.AudioInput.Present {
-				return RunSessionWithImagesAndRecordingDirectoryAndAudioInput(
-					ctx, out, SessionImageRunOptions{
-						SessionRunOptions: options,
-						ImagePaths:        append([]string(nil), request.ImagePaths...),
-						AudioOutPath:      request.AudioOutputPath,
-						MaxDuration:       request.MaxDuration,
-						TextSeed:          textSeed(request.TextSeed),
-						SystemPrompt:      request.SystemPrompt,
-					}, request.RecordDirectory, audioInput(request.AudioInput),
-				)
-			}
 			return RunSessionWithImagesAndRecordingDirectory(
 				ctx, out, SessionImageRunOptions{
 					SessionRunOptions: options,
 					ImagePaths:        append([]string(nil), request.ImagePaths...),
-					AudioOutPath:      request.AudioOutputPath,
 					MaxDuration:       request.MaxDuration,
 					TextSeed:          textSeed(request.TextSeed),
 					SystemPrompt:      request.SystemPrompt,
 				}, request.RecordDirectory,
 			)
 		}
-		if request.AudioInput.Present {
-			return RunSessionWithImagesAndAudioInput(
-				ctx, out, SessionImageRunOptions{
-					SessionRunOptions: options,
-					ImagePaths:        append([]string(nil), request.ImagePaths...),
-					AudioOutPath:      request.AudioOutputPath,
-					MaxDuration:       request.MaxDuration,
-					TextSeed:          textSeed(request.TextSeed),
-					SystemPrompt:      request.SystemPrompt,
-				}, audioInput(request.AudioInput),
-			)
-		}
 		return RunSessionWithImages(ctx, out, SessionImageRunOptions{
 			SessionRunOptions: options,
 			ImagePaths:        append([]string(nil), request.ImagePaths...),
-			AudioOutPath:      request.AudioOutputPath,
 			MaxDuration:       request.MaxDuration,
 			TextSeed:          textSeed(request.TextSeed),
 			SystemPrompt:      request.SystemPrompt,
 		})
 	}
-	if request.AudioInput.Present {
-		if request.RecordDirectory != "" {
-			return RunSessionWithRecordingDirectoryAndInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(
-				ctx, out, options, request.RecordDirectory, request.AudioOutputPath,
-				request.MaxDuration, textSeed(request.TextSeed), audioInput(request.AudioInput), request.SystemPrompt,
-			)
-		}
-		return RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(
-			ctx, out, options, request.AudioOutputPath, request.MaxDuration,
-			textSeed(request.TextSeed), audioInput(request.AudioInput), request.SystemPrompt,
-		)
-	}
 	if request.RecordDirectory != "" {
 		return RunSessionWithRecordingDirectoryAndInstructionsAndAudioOutAndTextSeedAndMaxDuration(
-			ctx, out, options, request.RecordDirectory, request.AudioOutputPath,
+			ctx, out, options, request.RecordDirectory, "",
 			request.MaxDuration, textSeed(request.TextSeed), request.SystemPrompt,
 		)
 	}
 	return RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(
-		ctx, out, options, request.AudioOutputPath, request.MaxDuration,
+		ctx, out, options, "", request.MaxDuration,
 		textSeed(request.TextSeed), request.SystemPrompt,
 	)
 }
@@ -184,9 +141,11 @@ func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request)
 		BrowserToolsEnabled: request.BrowserToolsEnabled, BrowserToolsInteractive: request.BrowserToolsInteractive, LoadedConfig: request.LoadedConfig,
 		CancellationIntent:   request.CancellationIntent,
 		ToolExecutionTimeout: request.ToolExecutionTimeout, Clock: d.deps.Clock,
+		AudioService:    d.deps.AudioService,
 		RuntimeObserver: d.deps.RuntimeObserver, Diagnostics: request.Diagnostics, ToolDiagnostics: request.ToolDiagnostics,
+		DeviceService: d.deps.DeviceService,
 		Observability: d.deps.Observability, StreamObserver: request.StreamObserver,
-		RTCDeviceBinding: RTCDeviceBindingRequest{HoldToneConfig: request.HoldToneConfig, Observability: d.deps.Observability},
+		RTCBinding:       runtimedevices.RTCBindingRequest{HoldToneConfig: request.HoldToneConfig, RemoteEndpoint: request.AudioDeviceServer},
 		AudioInTurnBarge: request.AudioInTurnBarge, ClientOwnsAudioTurnBoundaries: request.ClientOwnsAudioTurnBoundaries,
 		SessionUpdatedTimeout: request.SessionUpdatedTimeout, WaitForClose: request.WaitForClose,
 		runtimeFactory: d.deps.PlanFactory, ModelCatalog: d.deps.ModelCatalog, BrowserConversation: d.deps.BrowserConversation,
@@ -196,23 +155,20 @@ func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request)
 	}
 	// Populate device selection before bare-session preflight so persisted
 	// defaults resolve without acquiring external resources.
-	options.RTCDeviceBinding.InputDevice = devicegw.DeviceID(request.AudioInputDevice)
-	options.RTCDeviceBinding.OutputDevice = devicegw.DeviceID(request.AudioOutputDevice)
-	options.RTCDeviceBinding.InputPresent = request.AudioInputDevicePresent
-	options.RTCDeviceBinding.OutputPresent = request.AudioOutputDevicePresent
-	options.RTCDeviceBinding.FeedbackWarningWriter = request.FeedbackWarningWriter
+	options.RTCBinding.InputDevice = request.AudioInputDevice
+	options.RTCBinding.OutputDevice = request.AudioOutputDevice
+	options.RTCBinding.InputPresent = request.AudioInputDevicePresent
+	options.RTCBinding.OutputPresent = request.AudioOutputDevicePresent
+	options.RTCBinding.FeedbackWarningWriter = request.FeedbackWarningWriter
 	if request.InteractiveDevices {
-		if !options.RTCDeviceBinding.InputPresent && options.RTCDeviceBinding.InputDevice == "" && request.LoadedConfig != nil && request.LoadedConfig.Session != nil {
-			options.RTCDeviceBinding.InputDevice = devicegw.DeviceID(request.LoadedConfig.Session.InputDevice)
+		if !options.RTCBinding.InputPresent && options.RTCBinding.InputDevice == "" && request.LoadedConfig != nil && request.LoadedConfig.Session != nil {
+			options.RTCBinding.InputDevice = request.LoadedConfig.Session.InputDevice
 		}
-		if !options.RTCDeviceBinding.OutputPresent && options.RTCDeviceBinding.OutputDevice == "" && request.LoadedConfig != nil && request.LoadedConfig.Session != nil {
-			options.RTCDeviceBinding.OutputDevice = devicegw.DeviceID(request.LoadedConfig.Session.OutputDevice)
+		if !options.RTCBinding.OutputPresent && options.RTCBinding.OutputDevice == "" && request.LoadedConfig != nil && request.LoadedConfig.Session != nil {
+			options.RTCBinding.OutputDevice = request.LoadedConfig.Session.OutputDevice
 		}
-		options.RTCDeviceBinding.InputPresent = true
-		options.RTCDeviceBinding.OutputPresent = true
-	}
-	if options.RTCDeviceBinding.Registry == nil {
-		options.RTCDeviceBinding.Registry = d.deps.DeviceRegistry
+		options.RTCBinding.InputPresent = true
+		options.RTCBinding.OutputPresent = true
 	}
 	if request.BareLive {
 		var err error
@@ -223,13 +179,6 @@ func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request)
 	}
 	if options.RTCRuntimeFactory == nil {
 		options.RTCRuntimeFactory = d.deps.RuntimeFactory
-	}
-	if request.AudioDeviceServer != "" {
-		registry, err := devicegw.NewRemoteDeviceRegistry(request.AudioDeviceServer)
-		if err != nil {
-			return SessionRunOptions{}, fmt.Errorf("connect audio device server: %w", err)
-		}
-		options.RTCDeviceBinding.Registry = registry
 	}
 	if request.LoadedConfig != nil {
 		options.LoadedConfig = applyToolVisibility(request.LoadedConfig, request.ComputerUse, request.ExperimentalTools, request.NoTerminalTools)
@@ -264,23 +213,6 @@ func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request)
 		copyCfg := *options.LoadedConfig
 		copyCfg.FilesystemWorkDir, copyCfg.FilesystemAllowPaths = policy.PrimaryRoot(), policy.AdditionalRoots()
 		options.LoadedConfig = &copyCfg
-	}
-	if len(request.AudioInterrupts) > 0 {
-		if options.BrowserWatch == nil {
-			if options.CapabilityClose != nil {
-				_ = options.CapabilityClose()
-			}
-			return SessionRunOptions{}, errors.New("--audio-interrupt requires an enabled WebMCP session capability")
-		}
-		inputs, err := PrepareSessionAudioInputs(request.AudioInterrupts)
-		if err != nil {
-			if options.CapabilityClose != nil {
-				_ = options.CapabilityClose()
-			}
-			return SessionRunOptions{}, fmt.Errorf("prepare --audio-interrupt: %w", err)
-		}
-		interruptions, _ := StartSessionAudioInterruptionsOnBrowserTool(ctx, options.BrowserWatch(ctx), request.AudioInterruptTool, inputs)
-		options.AudioInterruptions = interruptions
 	}
 	return options, nil
 }
@@ -366,9 +298,9 @@ func traceCredentials(r *public.Request) []string {
 }
 
 func setTraceBinding(o *SessionRunOptions, b sessiontrace.DeviceBinding) {
-	o.RTCDeviceBinding.PreGateSamplesObserver = devicert.RTCDeviceCaptureSamplesObserver(b.PreGateSamplesObserver)
-	o.RTCDeviceBinding.UploadedSamplesObserver = devicert.RTCDeviceCaptureSamplesObserver(b.UploadedSamplesObserver)
-	o.RTCDeviceBinding.PlaybackSamplesObserver = devicert.RTCDevicePlaybackSamplesObserver(b.PlaybackSamplesObserver)
-	o.RTCDeviceBinding.RenderedSamplesObserver = devicert.RTCDeviceRenderedSamplesObserver(b.RenderedSamplesObserver)
-	o.RTCDeviceBinding.RenderedSamplesUnavailable = b.RenderedSamplesUnavailable
+	o.RTCBinding.PreGateSamplesObserver = runtimedevices.CaptureSamplesObserver(b.PreGateSamplesObserver)
+	o.RTCBinding.UploadedSamplesObserver = runtimedevices.CaptureSamplesObserver(b.UploadedSamplesObserver)
+	o.RTCBinding.PlaybackSamplesObserver = runtimedevices.PlaybackSamplesObserver(b.PlaybackSamplesObserver)
+	o.RTCBinding.RenderedSamplesObserver = runtimedevices.RenderedSamplesObserver(b.RenderedSamplesObserver)
+	o.RTCBinding.RenderedSamplesUnavailable = b.RenderedSamplesUnavailable
 }

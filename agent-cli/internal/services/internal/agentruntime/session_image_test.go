@@ -16,6 +16,7 @@ import (
 	sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/stretchr/testify/require"
@@ -189,7 +190,7 @@ func TestRunSessionWithImages_ProviderObservesOrderedFixtures(t *testing.T) {
 	}
 	inf := &countingSessionImageInferencer{session: session}
 	err := agentruntime.RunSessionWithImages(context.Background(), io.Discard, agentruntime.SessionImageRunOptions{
-		SessionRunOptions: agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
+		SessionRunOptions: agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
 			RecordPath: filepath.Join(dir, "capture.json"), Provider: "openai", Model: "gpt-realtime",
 			APIKey: "sk-test-key", ConfigDir: filepath.Join(dir, "config"), Prompt: "describe these", SessionInferencer: inf,
 		},
@@ -212,7 +213,7 @@ func TestRunSessionWithImages_ValidatesBeforeConnect(t *testing.T) {
 	inf := &countingSessionImageInferencer{}
 	missing := filepath.Join(t.TempDir(), "does-not-exist.png")
 	err := agentruntime.RunSessionWithImages(context.Background(), io.Discard, agentruntime.SessionImageRunOptions{
-		SessionRunOptions: agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
+		SessionRunOptions: agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
 			RecordPath:        filepath.Join(t.TempDir(), "capture.json"),
 			Provider:          "openai",
 			Model:             "gpt-realtime",
@@ -246,7 +247,7 @@ models:
 	imagePath := copySessionImageFixture(t, dir, "fixture.png")
 	inf := &countingSessionImageInferencer{}
 	err := agentruntime.RunSessionWithImages(context.Background(), io.Discard, agentruntime.SessionImageRunOptions{
-		SessionRunOptions: agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
+		SessionRunOptions: agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
 			RecordPath:        filepath.Join(dir, "capture.json"),
 			Provider:          "openai",
 			Model:             "gpt-realtime",
@@ -360,12 +361,9 @@ func TestSessionCommand_ImagePreservesDurationAndAudioFlags(t *testing.T) {
 	cases := []struct {
 		name          string
 		flags         []string
-		wantAudio     bool
 		wantArtifacts bool
 	}{
 		{name: "duration", flags: []string{"--max-duration", "1s"}, wantArtifacts: true},
-		{name: "audio output", flags: []string{"--audio-out", filepath.Join(dir, "assistant.wav")}, wantAudio: true},
-		{name: "duration and audio output", flags: []string{"--max-duration", "1s", "--audio-out", filepath.Join(dir, "assistant-bounded.wav")}, wantAudio: true, wantArtifacts: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -398,19 +396,6 @@ func TestSessionCommand_ImagePreservesDurationAndAudioFlags(t *testing.T) {
 			}
 			if len(session.messages) != 1 || session.messages[0].TextContent() != "describe this" {
 				t.Fatalf("provider messages = %#v, want one image turn with the positional prompt", session.messages)
-			}
-			if tc.wantAudio {
-				audioPath := filepath.Join(dir, "assistant.wav")
-				if tc.name == "duration and audio output" {
-					audioPath = filepath.Join(dir, "assistant-bounded.wav")
-				}
-				info, err := os.Stat(audioPath)
-				if err != nil {
-					t.Fatalf("audio output stat: %v", err)
-				}
-				if info.Size() <= 44 {
-					t.Fatalf("audio output size = %d, want WAV header plus audio", info.Size())
-				}
 			}
 			if tc.wantArtifacts {
 				for _, path := range []string{

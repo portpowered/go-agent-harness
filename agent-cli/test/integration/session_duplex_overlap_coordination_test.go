@@ -13,16 +13,18 @@ import (
 )
 
 const (
-	v8OverlapTick        uint64 = 7
-	v8OverlapTickLimit   uint64 = 8
-	v8TickDuration              = 10 * time.Millisecond
-	v8CommandMaxDuration        = time.Second
-	v8RunTimeout                = 2 * time.Second
-	v8VADThreshold              = 300.0
-	v8TurnBound                 = 2
-	v8PCMFrameBytes             = audio.FrameSize * 2
-	v8MultiTurnCount            = 3
-	v8MultiTurnFinalTick uint64 = 10
+	v8OverlapTick                 uint64 = 7
+	v8OverlapTickLimit            uint64 = 8
+	v8TickDuration                       = 10 * time.Millisecond
+	v8CommandMaxDuration                 = time.Second
+	v8RunTimeout                         = 2 * time.Second
+	v8MultiTurnCommandMaxDuration        = 5 * time.Second
+	v8MultiTurnRunTimeout                = 15 * time.Second
+	v8VADThreshold                       = 300.0
+	v8TurnBound                          = 2
+	v8PCMFrameBytes                      = audio.FrameSize * 2
+	v8MultiTurnCount                     = 3
+	v8MultiTurnFinalTick          uint64 = 10
 )
 
 const (

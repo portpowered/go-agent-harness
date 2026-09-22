@@ -1,20 +1,17 @@
 package agentruntime
 
-import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 import (
 	"context"
 	"errors"
-	"fmt"
+	"sync"
+	"time"
+
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	runtimeRoomsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
-	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-	"sort"
-	"strings"
-	"sync"
-	"time"
 )
 
 const (
@@ -39,24 +36,26 @@ type roomParticipantPlan struct {
 	capabilityCoordinator SessionCapabilityCoordinator
 }
 type roomParticipantRuntime struct {
-	plan             *roomParticipantPlan
-	ctx              context.Context
-	cancel           context.CancelFunc
-	admissionCtx     context.Context
-	admissionCancel  context.CancelFunc
-	loopReady        chan *agentloop.AgentLoop
-	participantDone  chan struct{}
-	mixerDone        chan struct{}
-	observerDone     chan struct{}
-	observerOnce     sync.Once
-	replayFrameAcks  chan struct{}
-	mixer            *room.PCM16Mixer
-	ingress          *roomAudioIngressLedger
-	input            *devicegw.DeviceSource
-	output           *devicegw.DeviceSink
-	lifecycle        *roomParticipantLifecycle
-	diagnosticSink   SessionDiagnosticSink
-	outboundLoudness *audio.LoudnessNormalizer
+	plan            *roomParticipantPlan
+	ctx             context.Context
+	cancel          context.CancelFunc
+	admissionCtx    context.Context
+	admissionCancel context.CancelFunc
+	loopReady       chan *agentloop.AgentLoop
+	participantDone chan struct{}
+	mixerDone       chan struct{}
+	observerDone    chan struct{}
+	observerOnce    sync.Once
+	replayFrameAcks chan struct{}
+	mixer           *room.PCM16Mixer
+	ingress         *roomAudioIngressLedger
+	deviceHandle    runtimeDevices.Handle
+	input           runtimeDevices.Capture
+	output          runtimeDevices.Playback
+	inputDeviceID   string
+	outputDeviceID  string
+	lifecycle       *roomParticipantLifecycle
+	diagnosticSink  SessionDiagnosticSink
 }
 
 func (r *roomParticipantRuntime) markObserverDone() {
@@ -95,41 +94,6 @@ func (w *roomCleanupWaiter) stop() {
 	w.timer = nil
 }
 
-type roomLifecycleWorkError struct {
-	outstanding []string
-}
-
-func (e *roomLifecycleWorkError) Error() string {
-	if e == nil || len(e.outstanding) == 0 {
-		return "room lifecycle work did not complete"
-	}
-	return "room lifecycle work did not complete: " + strings.Join(e.outstanding, "; ")
-}
-func newRoomLifecycleWorkError(outstanding ...string) error {
-	seen := make(map[string]struct{}, len(outstanding))
-	ordered := make([]string, 0, len(outstanding))
-	for _, item := range outstanding {
-		if item == "" {
-			continue
-		}
-		if _, exists := seen[item]; exists {
-			continue
-		}
-		seen[item] = struct{}{}
-		ordered = append(ordered, item)
-	}
-	if len(ordered) == 0 {
-		return nil
-	}
-	sort.Strings(ordered)
-	return &roomLifecycleWorkError{outstanding: ordered}
-}
-func roomLifecycleWorkLabel(participantID, phase string) string {
-	if participantID == "" {
-		return phase
-	}
-	return fmt.Sprintf("participant %q phase %s", participantID, phase)
-}
 func roomParticipantOutstandingWork(runtime *roomParticipantRuntime) []string {
 	if runtime == nil || runtime.plan == nil {
 		return []string{"participant runtime"}

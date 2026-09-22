@@ -17,6 +17,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
@@ -27,8 +28,7 @@ import (
 // OpenAI Realtime adapter writes to the websocket. Everything below the CLI
 // composition root is production code; only the browser transport and the
 // provider websocket are hermetic fakes. Asserting on the encoded wire frame
-// (rather than on internal registration bookkeeping) is what makes this test
-// track what the model can actually call.
+// (rather than internal registration bookkeeping) tracks what the model can call.
 func TestSessionAdvertisesConnectedPageToolsOnTheProviderWire(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -128,7 +128,7 @@ func TestSessionAdvertisesConnectedPageToolsOnTheProviderWire(t *testing.T) {
 	runErr := make(chan error, 1)
 	go func() {
 		runErr <- servicetest.RunSessionWithInstructions(sessionCtx, io.Discard, servicetest.SessionRunOptions{
-			Provider:               config.ProviderOpenAI,
+			Provider: config.ProviderOpenAI, AudioService: audioiowire.NewService(),
 			Model:                  "gpt-realtime",
 			ModelCatalog:           providerswire.NewModelCatalog(),
 			APIKey:                 "unused",
@@ -441,7 +441,7 @@ func TestSessionRepublishesLateConnectedPageToolsOnTheProviderWire(t *testing.T)
 	runErr := make(chan error, 1)
 	go func() {
 		runErr <- servicetest.RunSessionWithInstructions(sessionCtx, io.Discard, servicetest.SessionRunOptions{
-			Provider:               config.ProviderOpenAI,
+			Provider: config.ProviderOpenAI, AudioService: audioiowire.NewService(),
 			Model:                  "gpt-realtime",
 			ModelCatalog:           providerswire.NewModelCatalog(),
 			APIKey:                 "unused",
@@ -631,7 +631,7 @@ func TestSessionAdvertisesPageToolsOnTheWireAfterMidSessionSelection(t *testing.
 	runErr := make(chan error, 1)
 	go func() {
 		runErr <- servicetest.RunSessionWithInstructions(sessionCtx, io.Discard, servicetest.SessionRunOptions{
-			Provider:               config.ProviderOpenAI,
+			Provider: config.ProviderOpenAI, AudioService: audioiowire.NewService(),
 			Model:                  "gpt-realtime",
 			ModelCatalog:           providerswire.NewModelCatalog(),
 			APIKey:                 "unused",

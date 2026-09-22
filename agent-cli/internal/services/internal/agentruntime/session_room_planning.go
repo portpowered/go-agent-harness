@@ -10,6 +10,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 )
 
@@ -17,6 +18,7 @@ func roomParticipantIsHuman(plan *roomParticipantPlan) bool {
 	return plan != nil && room.NormalizeParticipantKind(plan.manifest.Kind) == room.ParticipantKindHuman
 }
 
+//lint:ignore U1000 package tests exercise the context-free planning seam.
 func buildRoomParticipantPlans(opts RoomRunOptions, validation room.ValidationOptions, evidences ...*roomEvidence) ([]*roomParticipantPlan, []string, error) {
 	return buildRoomParticipantPlansWithContext(context.Background(), opts, validation, evidences...)
 }
@@ -102,6 +104,7 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 			continue
 		}
 		sessionOptions := SessionRunOptions{
+			AudioService:  opts.AudioService,
 			Provider:      participant.Provider,
 			Model:         participant.Model,
 			ModelProvided: true,
@@ -165,53 +168,12 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 				sessionOptions.RecordSessionCapturePath = filepath.Join(evidence.destination, participantEvidence.artifacts.Capture)
 			}
 		}
-		if participant.BrowserTools != nil {
-			if opts.BrowserCapabilitiesFactory == nil {
-				markStartupFailure(ErrRoomParticipantBrowserToolsUnavailable)
-				continue
-			}
-			browserCapabilities, capabilityErr := opts.BrowserCapabilitiesFactory(participant)
-			if capabilityErr != nil {
-				markStartupFailure(fmt.Errorf("configure browser tools: %w", capabilityErr))
-				continue
-			}
-			plan.capabilityCoordinator = NewSessionCapabilityCoordinator(browserCapabilities.Close)
-			if capabilityErr := validateRoomParticipantBrowserCapabilities(participant, browserCapabilities); capabilityErr != nil {
-				if errors.Is(capabilityErr, ErrRoomParticipantBrowserToolMismatch) {
-					// Invalid browser definitions are a composition contract
-					// failure. Do not admit a room whose advertised capability
-					// surface cannot be routed safely.
-					return plans, secrets, fmt.Errorf("room participant %q browser capability contract: %w", participant.ID, capabilityErr)
-				}
-				markStartupFailure(capabilityErr)
-				continue
-			}
-			composed, capabilityErr := composeRoomParticipantBrowserCapabilities(participant, staticCapabilities, browserCapabilities)
-			if capabilityErr != nil {
-				return plans, secrets, fmt.Errorf("room participant %q browser composition contract: %w", participant.ID, capabilityErr)
-			}
-			if composed.Initialize != nil {
-				if initializeErr := composed.Initialize(ctx); initializeErr != nil {
-					markStartupFailure(fmt.Errorf("initialize browser tools: %w", initializeErr))
-					continue
-				}
-			}
-			if composed.RefreshToolDefinitions != nil {
-				refreshed, refreshErr := composed.RefreshToolDefinitions(ctx)
-				if refreshErr == nil {
-					composed.Definitions = cloneRoomToolDefinitions(refreshed)
-				} else if ctx.Err() != nil {
-					markStartupFailure(fmt.Errorf("refresh browser tools: %w", refreshErr))
-					continue
-				}
-			}
-			sessionOptions.ToolExecutor = composed.Executor
-			sessionOptions.ToolDefinitions = cloneRoomToolDefinitions(composed.Definitions)
-			sessionOptions.ToolDefinitionBase = cloneRoomToolDefinitions(composed.ToolDefinitionBase)
-			sessionOptions.RefreshToolDefinitions = composed.RefreshToolDefinitions
-			sessionOptions.BrowserWatch = composed.BrowserWatch
-			sessionOptions.BrowserToolsEnabled = true
-			sessionOptions.CapabilityClose = plan.capabilityCoordinator.Close
+		sessionOptions, skipParticipant, capabilityErr := configureRoomParticipantBrowserOptions(ctx, opts, participant, plan, sessionOptions, staticCapabilities, value)
+		if capabilityErr != nil {
+			return plans, secrets, capabilityErr
+		}
+		if skipParticipant {
+			continue
 		}
 		plan.options = sessionOptions
 		if inferencer, exists := opts.SessionInferencers[participant.ID]; exists {
@@ -235,15 +197,26 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 		plan.tracker = newRoomConnectTrackingInferencer(plan.inferencer)
 		if usesProductionSessionFactory {
 			if _, injected := opts.SessionInferencers[participant.ID]; !injected {
-				rate, rateErr := resolveSessionAudioSampleRate(sessionOptions, sessionRuntimePlan{
-					provider:   effectiveSessionProvider(sessionOptions),
-					inferencer: plan.inferencer,
+				inputRate, outputRate := 0, 0
+				if requested, ok := plan.inferencer.(sessionAudioRequestProvider); ok {
+					request := requested.Request().Config
+					inputRate, outputRate = int(request.InputAudioSampleRate), int(request.OutputAudioSampleRate)
+				}
+				if sessionOptions.AudioService == nil {
+					markStartupFailure(errors.New("audio service is required for session rate resolution"))
+					continue
+				}
+				rates, rateErr := sessionOptions.AudioService.ResolveRates(ctx, audioio.RateRequest{
+					Provider:           effectiveSessionProvider(sessionOptions),
+					Replay:             sessionOptions.ReplayPath != "",
+					CapturedInputRate:  inputRate,
+					CapturedOutputRate: outputRate,
 				})
 				if rateErr != nil {
 					markStartupFailure(rateErr)
 					continue
 				}
-				plan.inputAudioSampleRate = rate
+				plan.inputAudioSampleRate = rates.InputRate
 			}
 		}
 	}
@@ -278,6 +251,7 @@ func buildRoomReplayParticipantPlans(ctx context.Context, replay roomreplay.Room
 			return plans, nil, roomParticipantFailure(recorded.ID, errors.New("replay provider capture path is empty"), nil)
 		}
 		sessionOptions := SessionRunOptions{
+			AudioService:   opts.AudioService,
 			Provider:       recorded.Provider,
 			Model:          recorded.Model,
 			ModelProvided:  true,
@@ -316,7 +290,6 @@ func buildRoomReplayParticipantPlans(ctx context.Context, replay roomreplay.Room
 	}
 	return plans, nil, nil
 }
-
 func awaitRoomParticipantConnections(
 	ctx context.Context,
 	coordinator *roomCoordinator,

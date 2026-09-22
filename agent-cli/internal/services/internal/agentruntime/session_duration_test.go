@@ -59,7 +59,7 @@ func TestRunSessionWithMaxDuration_RejectsNegativeBeforePlanning(t *testing.T) {
 func TestRunSessionWithMaxDuration_ZeroDoesNotCreateTimer(t *testing.T) {
 	clock := &durationTestClock{}
 	var out bytes.Buffer
-	err := RunSessionWithMaxDurationClock(context.Background(), &out, SessionRunOptions{ModelCatalog: testModelCatalog(),
+	err := RunSessionWithMaxDurationClock(context.Background(), &out, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		ReplayPath:        "synthetic.session.json",
 		SessionInferencer: &durationTestInferencer{events: durationNaturalEvents()},
 	}, 0, clock)
@@ -171,7 +171,7 @@ func TestRunSessionWithMaxDuration_S2Table(t *testing.T) {
 			clock := &durationTestClock{}
 			if testCase.maxDuration < 0 {
 				inferencer := &durationTestInferencer{}
-				err := RunSessionWithMaxDurationClock(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(), SessionInferencer: inferencer}, testCase.maxDuration, clock)
+				err := RunSessionWithMaxDurationClock(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(), SessionInferencer: inferencer}, testCase.maxDuration, clock)
 				var durationErr *SessionMaxDurationError
 				if !errors.As(err, &durationErr) || inferencer.connected || clock.calls != testCase.wantTimerCall {
 					t.Fatalf("negative case error=%v connected=%v timer_calls=%d", err, inferencer.connected, clock.calls)
@@ -181,7 +181,7 @@ func TestRunSessionWithMaxDuration_S2Table(t *testing.T) {
 
 			if testCase.maxDuration == 0 {
 				var out bytes.Buffer
-				err := RunSessionWithMaxDurationClock(context.Background(), &out, SessionRunOptions{ModelCatalog: testModelCatalog(),
+				err := RunSessionWithMaxDurationClock(context.Background(), &out, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 					ReplayPath:        "synthetic.session.json",
 					SessionInferencer: &durationTestInferencer{events: durationNaturalEvents()},
 				}, testCase.maxDuration, clock)
@@ -206,7 +206,7 @@ func TestRunSessionWithMaxDuration_S2Table(t *testing.T) {
 				}
 				runErrCh := make(chan error, 1)
 				go func() {
-					runErrCh <- runAgentLoopSessionWithDurationClock(context.Background(), writer, inferencer, sessionLoopOptions{}, testCase.maxDuration, clock)
+					runErrCh <- runAgentLoopSessionWithDurationClock(context.Background(), writer, inferencer, sessionLoopOptions{audioService: newTestAudioIOService()}, testCase.maxDuration, clock)
 				}()
 				select {
 				case <-inferencer.connectedCh:
@@ -621,7 +621,7 @@ func TestRunSessionWithMaxDuration_FinalizesRealArtifactsAndRejectsLateFrame(t *
 		TranscriptPath: transcriptPath,
 	})
 	go func() {
-		runErrCh <- RunSessionWithMaxDurationClock(ctx, writer, SessionRunOptions{ModelCatalog: testModelCatalog(),
+		runErrCh <- RunSessionWithMaxDurationClock(ctx, writer, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 			ReplayPath:        filepath.Join(artifactDir, "fixture.session.json"),
 			SessionInferencer: inferencer,
 		}, time.Nanosecond, clock)
@@ -743,7 +743,7 @@ func TestRunSessionWithMaxDuration_FinalizesZeroSampleArtifactsBeforeFirstAudio(
 		TranscriptPath: transcriptPath,
 	})
 	go func() {
-		runErrCh <- RunSessionWithMaxDurationClock(ctx, &out, SessionRunOptions{ModelCatalog: testModelCatalog(),
+		runErrCh <- RunSessionWithMaxDurationClock(ctx, &out, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 			ReplayPath:        filepath.Join(artifactDir, "fixture.session.json"),
 			SessionInferencer: inferencer,
 		}, time.Nanosecond, clock)
@@ -840,7 +840,7 @@ func TestRunSessionWithMaxDuration_PreservesArtifactFlushAndCloseIdentity(t *tes
 			err := RunSessionWithMaxDurationClock(
 				WithSessionDurationArtifacts(context.Background(), lifecycle),
 				io.Discard,
-				SessionRunOptions{ModelCatalog: testModelCatalog(),
+				SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 					ReplayPath:        "artifact-failure.session.json",
 					SessionInferencer: &durationTestInferencer{events: durationNaturalEvents(), closeAfterEvents: true},
 				},
@@ -863,7 +863,7 @@ func TestRunAgentLoopSessionWithDuration_PreservesFailureIdentity(t *testing.T) 
 		context.Background(),
 		io.Discard,
 		&durationTestInferencer{connectErr: providerErr},
-		sessionLoopOptions{},
+		sessionLoopOptions{audioService: newTestAudioIOService()},
 		time.Hour,
 		&durationTestClock{},
 	)
@@ -876,7 +876,7 @@ func TestRunAgentLoopSessionWithDuration_PreservesFailureIdentity(t *testing.T) 
 		context.Background(),
 		failingDurationWriter{err: drainErr},
 		&durationTestInferencer{events: durationOutputEvents()},
-		sessionLoopOptions{},
+		sessionLoopOptions{audioService: newTestAudioIOService()},
 		time.Hour,
 		&durationTestClock{},
 	)
@@ -894,7 +894,7 @@ func TestRunAgentLoopSessionWithDuration_PreservesFailureIdentity(t *testing.T) 
 	closeRunErrCh := make(chan error, 1)
 	go func() {
 		closeRunErrCh <- runAgentLoopSessionWithDurationClock(
-			context.Background(), closeWriter, closeInferencer, sessionLoopOptions{}, time.Hour, closeClock,
+			context.Background(), closeWriter, closeInferencer, sessionLoopOptions{audioService: newTestAudioIOService()}, time.Hour, closeClock,
 		)
 	}()
 	closeWriter.waitFor(t, "accepted output")
@@ -947,7 +947,7 @@ func TestRunSessionWithMaxDuration_ReleasesTimerSessionAndProductionArtifacts(t 
 		TranscriptPath: transcriptPath,
 	})
 	go func() {
-		runErrCh <- RunSessionWithMaxDurationClock(ctx, writer, SessionRunOptions{ModelCatalog: testModelCatalog(),
+		runErrCh <- RunSessionWithMaxDurationClock(ctx, writer, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 			ReplayPath:        filepath.Join(artifactDir, "fixture.session.json"),
 			SessionInferencer: inferencer,
 		}, time.Nanosecond, clock)

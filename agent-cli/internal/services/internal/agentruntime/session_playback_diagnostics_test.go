@@ -9,6 +9,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 )
@@ -17,6 +18,7 @@ func TestSessionPlaybackObservabilitySamplesCompleteSnapshotAndContainsFailures(
 	var samples []observability.MetricSample
 	var records []observability.LogRecord
 	observer := sessionPlaybackObservabilityObserver(
+		context.Background(),
 		observability.MetricSamplerFunc(func(_ context.Context, sample observability.MetricSample) error {
 			samples = append(samples, sample)
 			if sample.Name == "audio.playback.zero_fill" {
@@ -53,6 +55,7 @@ func TestSessionPlaybackObservabilitySamplesCompleteSnapshotAndContainsFailures(
 
 	// A panicking observer is also contained and cannot change device teardown.
 	panicking := sessionPlaybackObservabilityObserver(
+		context.Background(),
 		observability.MetricSamplerFunc(func(context.Context, observability.MetricSample) error { panic("metric") }),
 		observability.LoggerFunc(func(context.Context, observability.LogRecord) error { panic("logger") }),
 	)
@@ -63,6 +66,7 @@ func TestSessionCaptureObservabilitySamplesDropOldestLoss(t *testing.T) {
 	var samples []observability.MetricSample
 	var records []observability.LogRecord
 	observer := sessionCaptureObservabilityObserver(
+		context.Background(),
 		observability.MetricSamplerFunc(func(_ context.Context, sample observability.MetricSample) error {
 			samples = append(samples, sample)
 			return nil
@@ -168,7 +172,8 @@ func TestEmitRoomParticipantPlaybackOverflowDiagnostic(t *testing.T) {
 	t.Cleanup(func() { _ = sink.Close() })
 
 	recorder := &recordingDiagnosticSink{}
-	emitRoomParticipantPlaybackOverflowDiagnostic("customer", sink, recorder)
+	handle := roomPlaybackDiagnosticTestHandle{sink: sink}
+	emitRoomParticipantPlaybackOverflowDiagnostic("customer", handle, recorder)
 	if len(recorder.records) != 0 {
 		t.Fatalf("emit fired with no overflow: %+v", recorder.records)
 	}
@@ -178,7 +183,7 @@ func TestEmitRoomParticipantPlaybackOverflowDiagnostic(t *testing.T) {
 		t.Fatalf("write overflowing samples: %v", err)
 	}
 
-	emitRoomParticipantPlaybackOverflowDiagnostic("customer", sink, recorder)
+	emitRoomParticipantPlaybackOverflowDiagnostic("customer", handle, recorder)
 	if len(recorder.records) != 1 {
 		t.Fatalf("caller-supplied sink recorded %d records after overflow, want 1", len(recorder.records))
 	}
@@ -195,7 +200,17 @@ func TestEmitRoomParticipantPlaybackOverflowDiagnostic(t *testing.T) {
 
 	// A nil sink must still resolve to the shared fallback rather than being
 	// silently skipped, exactly like the RTC path above.
-	emitRoomParticipantPlaybackOverflowDiagnostic("customer", sink, nil)
+	emitRoomParticipantPlaybackOverflowDiagnostic("customer", handle, nil)
+}
+
+type roomPlaybackDiagnosticTestHandle struct{ sink *devicegw.DeviceSink }
+
+func (h roomPlaybackDiagnosticTestHandle) Media() runtimeDevices.MediaPorts {
+	return runtimeDevices.MediaPorts{}
+}
+func (h roomPlaybackDiagnosticTestHandle) Close() error { return nil }
+func (h roomPlaybackDiagnosticTestHandle) PlaybackStats() (string, audio.PlaybackQueueStats) {
+	return string(h.sink.DeviceID()), h.sink.PlaybackStats()
 }
 
 // TestPlanSessionRuntimePlaybackObserverNonNilAcrossConstructionPaths is the
@@ -217,11 +232,11 @@ func TestPlanSessionRuntimePlaybackObserverNonNilAcrossConstructionPaths(t *test
 	}{
 		{
 			name: "generic minimal caller (a hypothetical future construction site)",
-			opts: SessionRunOptions{ModelCatalog: testModelCatalog()},
+			opts: SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService()},
 		},
 		{
 			name: "self-play (services.selfPlaySessionRunOptions)",
-			opts: selfPlaySessionRunOptions(SelfPlayRunOptions{}),
+			opts: selfPlaySessionRunOptions(SelfPlayRunOptions{audioService: newTestAudioIOService()}),
 		},
 		{
 			name: "room live participant (services.buildRoomParticipantPlans)",
@@ -233,7 +248,7 @@ func TestPlanSessionRuntimePlaybackObserverNonNilAcrossConstructionPaths(t *test
 			// (session_room_planning.go); Diagnostics is not among the fields
 			// that function sets today.
 			name: "room replay participant (services.buildRoomReplayParticipantPlans shape)",
-			opts: SessionRunOptions{ModelCatalog: testModelCatalog(),
+			opts: SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 				Provider:       "openai",
 				Model:          "gpt-realtime",
 				ModelProvided:  true,
@@ -274,6 +289,7 @@ func TestPlanSessionRuntimePlaybackObserverNonNilAcrossConstructionPaths(t *test
 func capturedRoomParticipantOptions(t *testing.T) SessionRunOptions {
 	t.Helper()
 	opts := RoomRunOptions{
+		AudioService: newTestAudioIOService(),
 		Manifest: room.Manifest{
 			SchemaVersion: room.SchemaVersion,
 			Room:          room.Room{Interactive: true},

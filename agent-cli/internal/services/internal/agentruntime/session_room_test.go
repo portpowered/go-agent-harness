@@ -87,7 +87,7 @@ func TestObserveRoomParticipantStream_FansOutBeforeDurableAudioEvidence(t *testi
 
 	pcm := []byte{0x34, 0x12, 0x78, 0x56}
 	order := make([]string, 0, 2)
-	opts := RoomRunOptions{
+	opts := RoomRunOptions{AudioService: newTestAudioIOService(),
 		OnAudioOutput: func(participantID string, got []byte) error {
 			if participantID != "source" || !bytes.Equal(got, pcm) {
 				t.Errorf("audio output = %q/%v, want source/%v", participantID, got, pcm)
@@ -339,7 +339,7 @@ func TestRunRoom_DeliversPeerPCMToEachProviderSession(t *testing.T) {
 		if !ok {
 			t.Fatalf("%s missing provider factory options", id)
 		}
-		if binding := factoryOptions.RTCDeviceBinding; binding.Registry != nil || binding.InputDevice != "" || binding.OutputDevice != "" || binding.InputPresent || binding.OutputPresent || binding.BypassSelfHearing {
+		if binding := factoryOptions.RTCBinding; binding.InputDevice != "" || binding.OutputDevice != "" || binding.InputPresent || binding.OutputPresent || binding.BypassSelfHearing {
 			t.Fatalf("%s room provider received local-device feedback binding = %+v, want room-owned peer ingress without local policy", id, binding)
 		}
 
@@ -1238,7 +1238,7 @@ func newRoomTestRunOptions(ids []string, inferencers map[string]*roomTestInferen
 		credentials["ROOM_"+strings.ToUpper(id)+"_KEY"] = "secret-" + id
 	}
 	opts := RoomRunOptions{
-		Manifest: room.Manifest{
+		AudioService: newTestAudioIOService(), Manifest: room.Manifest{
 			SchemaVersion: room.SchemaVersion,
 			Room:          room.Room{MaxDuration: 5 * time.Second},
 			Participants:  make([]room.Participant, 0, len(ids)),

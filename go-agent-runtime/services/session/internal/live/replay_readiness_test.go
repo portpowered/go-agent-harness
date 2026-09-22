@@ -7,6 +7,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/mediagate"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/sessionwrap"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/stretchr/testify/require"
@@ -459,12 +460,8 @@ func TestOrderedSessionAutomaticSendAheadOfPendingControlDoesNotDeadlock(t *test
 	automaticStarted := make(chan struct{})
 	releaseAutomatic := make(chan struct{})
 	controlSent := make(chan struct{})
-	provider := &orderingSession{
-		automaticStarted: automaticStarted,
-		releaseAutomatic: releaseAutomatic,
-		controlSent:      controlSent,
-	}
-	ordered := &orderedSession{inner: provider, media: gate}
+	provider := &orderingSession{automaticStarted: automaticStarted, releaseAutomatic: releaseAutomatic, controlSent: controlSent}
+	ordered := sessionwrap.WrapOrderedSession(provider, sessionwrap.OrderedSessionOptions{Media: gate})
 	automaticDone := make(chan messages.SessionSendOutcome, 1)
 	go func() {
 		automaticDone <- ordered.SendWithOutcome(context.Background(), messages.StreamMessage{

@@ -19,6 +19,10 @@ func (deviceServiceStub) Open(context.Context, runtimeDevices.Request) (runtimeD
 	return nil, runtimeDevices.ErrUnavailable
 }
 
+func (deviceServiceStub) BindRTC(context.Context, runtimeDevices.RTCBindingRequest) (runtimeDevices.RTCBinding, error) {
+	return nil, runtimeDevices.ErrUnavailable
+}
+
 func TestNewServiceDelegatesPublicRoomContract(t *testing.T) {
 	replay := runtimeReplayWire.NewService()
 	service := NewService(Dependencies{Replay: replay, Devices: deviceServiceStub{}})

@@ -10,15 +10,16 @@ import (
 	sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	serviceDevices "github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices"
 	impl "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime"
+	audioio "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 const DefaultOpenAIRealtimeModel = impl.DefaultOpenAIRealtimeModel
 
 var ErrInvalidOpenAIRealtimeVoice = sessioncontract.ErrInvalidOpenAIRealtimeVoice
-var ErrRTCSessionMediaUnavailable = impl.ErrRTCSessionMediaUnavailable
 var ErrRoomLaunchPathConflict = runtimeRooms.ErrLaunchPathConflict
 var ErrRoomReplayBundleIncomplete = roomreplay.ErrRoomReplayBundleIncomplete
 var ErrRoomReplaySourceConflict = runtimeRooms.ErrReplaySourceConflict
@@ -33,10 +34,6 @@ var NewOpenAIRealtimeSessionInferencerWithOptions = impl.NewOpenAIRealtimeSessio
 var NewOpenAIRealtimeSessionInferencerWithToolsAndOptions = impl.NewOpenAIRealtimeSessionInferencerWithToolsAndOptions
 var NewGrokSessionInferencer = impl.NewGrokSessionInferencer
 var NewGrokSessionInferencerWithOptions = impl.NewGrokSessionInferencerWithOptions
-
-func PrepareRTCDeviceBindings(request RTCDeviceBindingRequest) (*RTCDeviceBinding, error) {
-	return impl.PrepareRTCDeviceBindings(request)
-}
 
 func ValidateSessionAudioDeviceConflicts(audioInFile, audioOutFile, audioInDevice, audioOutDevice bool) error {
 	return serviceDevices.ValidateSessionAudioDeviceConflicts(audioInFile, audioOutFile, audioInDevice, audioOutDevice)
@@ -62,15 +59,11 @@ const ParticipantTerminationEnded = impl.ParticipantTerminationEnded
 const ParticipantTerminationError = impl.ParticipantTerminationError
 
 type InvalidOpenAIRealtimeVoiceError = sessioncontract.InvalidOpenAIRealtimeVoiceError
-type RTCMediaEndpoints = impl.RTCMediaEndpoints
-type RTCMediaSession = impl.RTCMediaSession
-type RTCDeviceBinding = impl.RTCDeviceBinding
-type RTCDeviceBindingRequest = impl.RTCDeviceBindingRequest
-type RTCDeviceBindingError = impl.RTCDeviceBindingError
-type ScheduledAudioInput = impl.ScheduledAudioInput
+type RTCMediaEndpoints = sharedaudio.MediaEndpoints
+type RTCMediaSession = sharedaudio.MediaSession
+type ScheduledAudioInput = audioio.ScheduledAudioInput
 type SelfPlayRunOptions = impl.SelfPlayRunOptions
-type SessionAudioInTurnBargeError = impl.SessionAudioInTurnBargeError
-type SessionAudioInput = impl.SessionAudioInput
+type SessionAudioInTurnBargeError = sessioncontract.SessionAudioInTurnBargeError
 type SessionTextSeed = impl.SessionTextSeed
 type SessionDiagnosticRecord = impl.SessionDiagnosticRecord
 type SessionDurationTimer = impl.SessionDurationTimer

@@ -86,6 +86,7 @@ func (r *sessionDirectoryRecording) startBrowser(ctx context.Context) {
 // closure repeats the same composition so a page catalog update cannot drop
 // static tools or accidentally route through another participant.
 func composeRoomParticipantBrowserCapabilities(
+	ctx context.Context,
 	participant room.Participant,
 	static RoomParticipantToolCapabilities,
 	browser RoomParticipantBrowserCapabilities,
@@ -93,8 +94,8 @@ func composeRoomParticipantBrowserCapabilities(
 	if err := validateRoomParticipantBrowserCapabilities(participant, browser); err != nil {
 		return RoomParticipantBrowserCapabilities{}, err
 	}
-	compose := func(browserDefinitions []messages.ToolDefinition) (runtimeTools.Capability, error) {
-		return runtimeToolsWire.NewService().Resolve(context.Background(), runtimeTools.Request{
+	compose := func(ctx context.Context, browserDefinitions []messages.ToolDefinition) (runtimeTools.Capability, error) {
+		return runtimeToolsWire.NewService().Resolve(ctx, runtimeTools.Request{
 			Executor:    static.Executor,
 			Definitions: static.Definitions,
 			Browser: &runtimeTools.BrowserSurface{
@@ -103,7 +104,7 @@ func composeRoomParticipantBrowserCapabilities(
 			},
 		})
 	}
-	initial, err := compose(browser.Definitions)
+	initial, err := compose(ctx, browser.Definitions)
 	if err != nil {
 		return RoomParticipantBrowserCapabilities{}, fmt.Errorf("compose participant browser tools: %w", err)
 	}
@@ -112,7 +113,7 @@ func composeRoomParticipantBrowserCapabilities(
 	if len(browserBase) == 0 {
 		browserBase = browser.Definitions
 	}
-	base, err := compose(browserBase)
+	base, err := compose(ctx, browserBase)
 	if err != nil {
 		return RoomParticipantBrowserCapabilities{}, fmt.Errorf("compose participant browser tool base: %w", err)
 	}
@@ -132,7 +133,7 @@ func composeRoomParticipantBrowserCapabilities(
 			if refreshErr != nil {
 				return nil, refreshErr
 			}
-			refreshed, composeErr := compose(browserDefinitions)
+			refreshed, composeErr := compose(ctx, browserDefinitions)
 			if composeErr != nil {
 				return nil, fmt.Errorf("compose refreshed participant browser tools: %w", composeErr)
 			}

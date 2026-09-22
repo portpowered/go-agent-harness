@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	devicewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
@@ -40,7 +41,7 @@ func (input *embeddedFrameInput) ReadFrame(context.Context) (audio.PCMFrame, err
 
 func TestExternalFilePlaybackPreservesMultipleResponseTails(t *testing.T) {
 	sink := &embeddedFileSink{}
-	handle, err := devicewire.NewFileService().Open(context.Background(), devices.Request{
+	handle, err := devicewire.NewFileService(wire.NewService()).Open(context.Background(), devices.Request{
 		PlaybackEnabled: true, SampleRate: 24000,
 		FileOutput: &devices.FileOutput{Sink: sink, SampleRate: 24000},
 	})
@@ -62,7 +63,7 @@ func TestExternalFilePlaybackPreservesMultipleResponseTails(t *testing.T) {
 
 func TestExternalFilePlaybackDoesNotAdmitCapture(t *testing.T) {
 	sink := &embeddedFileSink{}
-	host := devicewire.NewFileService()
+	host := devicewire.NewFileService(wire.NewService())
 	handle, err := host.Open(context.Background(), devices.Request{
 		PlaybackEnabled: true,
 		FileOutput:      &devices.FileOutput{Sink: sink, SampleRate: 24000},

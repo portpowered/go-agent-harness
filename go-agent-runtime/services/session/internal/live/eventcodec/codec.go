@@ -2,6 +2,7 @@ package eventcodec
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -174,6 +175,23 @@ func TerminalValue(msg messages.StreamMessage) *messages.SessionCloseValue {
 		return nil
 	}
 	return sessionCloseValueFromMessageEnd(candidate)
+}
+
+func LiveControlMessage(control session.LiveControl) (messages.StreamMessage, error) {
+	switch control.Kind {
+	case session.LiveControlText:
+		return messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue(control.Text)}, nil
+	case session.LiveControlAudioCommit:
+		return messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{})}, nil
+	case session.LiveControlResponseCancel:
+		return messages.StreamMessage{Type: messages.StreamTypeResponseCancel, Value: messages.NewResponseCancelValue()}, nil
+	case session.LiveControlResponseCreate:
+		return messages.StreamMessage{Type: messages.StreamTypeResponseCreate, Value: messages.NewResponseCreateValue()}, nil
+	case session.LiveControlClose:
+		return messages.StreamMessage{}, errors.New("close control is handled by the live lifecycle")
+	default:
+		return messages.StreamMessage{}, fmt.Errorf("unsupported live control %q", control.Kind)
+	}
 }
 
 func sessionCloseValueFromMessageEnd(value *messages.MessageEndValue) *messages.SessionCloseValue {

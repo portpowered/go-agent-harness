@@ -142,7 +142,9 @@ func (i *observedSessionInferencer) DrainSessionPlayback(ctx context.Context) er
 	if observed == nil {
 		return nil
 	}
-	drainer, ok := observed.Session.(playbackDrainingSession)
+	drainer, ok := observed.Session.(interface {
+		DrainPlayback(context.Context) error
+	})
 	if !ok {
 		return nil
 	}
@@ -382,19 +384,4 @@ func (s *observedSession) SupportsCompleteMessages() bool {
 func (s *observedSession) SupportsCompleteMessagesWithoutResponse() bool {
 	_, withoutResponse := completeMessageCapabilities(s.Session)
 	return withoutResponse
-}
-
-func (s *observedSession) Close() error {
-	if s == nil {
-		return nil
-	}
-	s.closeOnce.Do(func() {
-		s.closeErr = s.Session.Close()
-		s.markDone()
-	})
-	return s.closeErr
-}
-
-func (s *observedSession) markDone() {
-	s.once.Do(s.closeDone)
 }

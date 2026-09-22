@@ -10,6 +10,7 @@ package wire
 
 import (
 	"github.com/google/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/composite"
 	filemedia "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/file"
@@ -21,7 +22,7 @@ import (
 
 // NewService creates the process-scoped device service. It is inert until a
 // caller invokes Open with a normalized request.
-func NewService(registry devicegw.DeviceRegistry) devices.Service {
+func NewService(registry devicegw.DeviceRegistry, audioService audioio.Service) devices.Service {
 	wire.Build(newFactory, wire.Bind(new(devices.Service), new(*composite.Factory)))
 	return nil
 }
@@ -29,7 +30,7 @@ func NewService(registry devicegw.DeviceRegistry) devices.Service {
 // NewFileService assembles the finite file-backed device role. The returned
 // service is stateless; each Open call takes ownership of its caller-opened
 // source and sink only after successful admission.
-func NewFileService() devices.Service {
+func NewFileService(audioService audioio.Service) devices.Service {
 	wire.Build(newFileFactory, wire.Bind(new(devices.Service), new(*filemedia.Factory)))
 	return nil
 }
@@ -41,8 +42,10 @@ func NewProbeService(registry devicegw.DeviceRegistry, sessionFactory devices.Pr
 	return deviceprobe.New(registry, sessionFactory)
 }
 
-func newFactory(registry devicegw.DeviceRegistry) *composite.Factory {
-	return composite.NewFactory(media.NewFactory(registry, mixer.DefaultFormat()), filemedia.NewFactory())
+func newFactory(registry devicegw.DeviceRegistry, audioService audioio.Service) *composite.Factory {
+	return composite.NewFactory(media.NewFactory(registry, mixer.DefaultFormat()), filemedia.NewFactory(audioService))
 }
 
-func newFileFactory() *filemedia.Factory { return filemedia.NewFactory() }
+func newFileFactory(audioService audioio.Service) *filemedia.Factory {
+	return filemedia.NewFactory(audioService)
+}

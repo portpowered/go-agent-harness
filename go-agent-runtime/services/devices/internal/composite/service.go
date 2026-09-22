@@ -10,6 +10,8 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/endpoint"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 // Factory composes a registry-backed service with the finite file role. Each
@@ -25,6 +27,10 @@ type Factory struct {
 // tests without exposing implementation types through the public contract.
 func NewFactory(physical, file devices.Service) *Factory {
 	return &Factory{physical: physical, file: file}
+}
+
+func (f *Factory) ValidateRemoteEndpoint(value string) error {
+	return endpoint.ValidateRemoteEndpoint(value)
 }
 
 type openPlan struct {
@@ -87,6 +93,13 @@ func (f *Factory) Open(ctx context.Context, request devices.Request) (devices.Ha
 		return nil, errors.Join(err, closeHandle(physical), closeHandle(finite), closeTap(tap))
 	}
 	return handle, nil
+}
+
+func (f *Factory) BindRTC(ctx context.Context, request devices.RTCBindingRequest) (devices.RTCBinding, error) {
+	if f == nil || f.physical == nil {
+		return nil, devices.ErrUnavailable
+	}
+	return f.physical.BindRTC(ctx, request)
 }
 
 func (f *Factory) openPhysical(ctx context.Context, request devices.Request, plan openPlan) (devices.Handle, error) {
@@ -235,6 +248,28 @@ func (h *handle) Media() devices.MediaPorts {
 		return devices.MediaPorts{}
 	}
 	return h.ports
+}
+
+func (h *handle) SelectedDeviceIDs() (input, output string) {
+	if h == nil {
+		return "", ""
+	}
+	provider, ok := h.physical.(devices.DeviceSelectionProvider)
+	if !ok {
+		return "", ""
+	}
+	return provider.SelectedDeviceIDs()
+}
+
+func (h *handle) PlaybackStats() (deviceID string, stats audio.PlaybackQueueStats) {
+	if h == nil {
+		return "", audio.PlaybackQueueStats{}
+	}
+	provider, ok := h.physical.(devices.PlaybackStatsProvider)
+	if !ok {
+		return "", audio.PlaybackQueueStats{}
+	}
+	return provider.PlaybackStats()
 }
 
 func (h *handle) Close() error {

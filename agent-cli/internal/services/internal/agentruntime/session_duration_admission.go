@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 const sessionDurationAdmissionBufferCapacity = 1024
@@ -229,10 +230,9 @@ func (s *sessionDurationAdmissionSession) Done() <-chan struct{} {
 	return s.done
 }
 
-func (s *sessionDurationAdmissionSession) rtcMedia() (RTCMediaEndpoints, bool) {
-	return rtcMediaFromSession(s.inner)
+func (s *sessionDurationAdmissionSession) rtcMedia() (audio.MediaEndpoints, bool) {
+	return sessionMediaFromSession(s.inner)
 }
-
 func (s *sessionDurationAdmissionSession) TerminalError() error {
 	return terminalSessionError(s.inner)
 }

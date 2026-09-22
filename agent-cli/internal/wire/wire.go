@@ -23,6 +23,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	looplogging "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	runtimeDevicesWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
@@ -253,12 +254,12 @@ func provideRoomClock(source Clock) clock.Scheduler {
 // provideFileDeviceService keeps finite file conversion and pump ownership in
 // the reusable runtime device service. The CLI opens paths into canonical
 // audio ports, then injects those ports at invocation time.
-func provideFileDeviceService(source Clock) cli.FileDeviceService {
+func provideFileDeviceService(source Clock, audioService audioio.Service) cli.FileDeviceService {
 	var scheduler clock.Scheduler
 	if value, ok := source.(clock.Scheduler); ok {
 		scheduler = value
 	}
-	return cli.FileDeviceService{Service: runtimeDevicesWire.NewFileService(), Scheduler: scheduler}
+	return cli.FileDeviceService{Service: runtimeDevicesWire.NewFileService(audioService), Scheduler: scheduler}
 }
 
 func provideToolCapabilitiesService(override toolServiceOverride, toolExecutor messages.ToolExecutor, browserFactory serviceTools.BrowserFactory, displaySurface cliTools.DisplaySurface, runtimeService runtimeTools.Service) serviceTools.Service {

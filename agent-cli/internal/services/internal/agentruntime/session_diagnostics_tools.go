@@ -1,3 +1,4 @@
+//lint:file-ignore U1000 package-private diagnostic projection seams are exercised by package tests.
 package agentruntime
 
 import (
@@ -17,7 +18,6 @@ func (o *sessionProgressObserver) setToolResultsEnabled(enabled bool) {
 	o.toolResultsEnabled = enabled
 	o.toolStateMu.Unlock()
 }
-
 func (o *sessionProgressObserver) ensureToolStateLocked() {
 	if o.unresolvedToolCalls == nil {
 		o.unresolvedToolCalls = make(map[string]struct{})

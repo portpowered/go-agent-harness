@@ -1,7 +1,5 @@
 package integration
 
-import
-
 // The s2s-e2e-vision-describe vertical is verified exclusively through the
 // shipped 'agent session' CLI over the hermetic record/replay transport: a
 // customer speaks a question by voice about a committed image and the agent's
@@ -18,9 +16,6 @@ import
 //     the image part, one input_audio_buffer.append per streamed corpus frame,
 //     input_audio_buffer.commit plus exactly one response.create at
 //     end-of-turn, then the grounded spoken reply and provider close.
-sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
-
-import sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 
 import (
 	"bytes"
@@ -39,8 +34,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -233,10 +226,11 @@ func runVisionDescribeSessionWithoutRecordingDirectory(t *testing.T, fixturePath
 func runVisionDescribeSessionMode(t *testing.T, fixturePath, wavPath, imagePath, audioOutPath string, withRecordingDirectory bool) (string, error) {
 	t.Helper()
 	stdout := &syncBuffer{}
-	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}}), nil).Generate()
+	cmd := newTestSessionRootCommand(t)
 	cmd.SetOut(stdout)
 	cmd.SetErr(os.Stderr)
 	args := []string{
+		"session",
 		"--replay", fixturePath,
 		"--provider", "openai",
 		"--model", "gpt-realtime",
@@ -456,10 +450,10 @@ func TestSessionCommandVisionDescribeWithoutImageFailsTypedReplay(t *testing.T) 
 	wavPath := locateCLIFixture(t, visionDescribeQuestionWAV)
 
 	stdout := &syncBuffer{}
-	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}}), nil).Generate()
+	cmd := newTestSessionRootCommand(t)
 	cmd.SetOut(stdout)
 	cmd.SetErr(os.Stderr)
-	cmd.SetArgs([]string{"--replay", fixture, "--audio-in", wavPath})
+	cmd.SetArgs([]string{"session", "--replay", fixture, "--audio-in", wavPath})
 	runErr := cmd.ExecuteContext(t.Context())
 
 	if runErr == nil {

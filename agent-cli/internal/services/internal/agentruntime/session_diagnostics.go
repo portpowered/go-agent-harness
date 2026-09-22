@@ -8,12 +8,12 @@ import (
 	sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
-	runtimeBrowser "github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation"
 	sessiondiagnostics "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
 	sessiondiagnosticswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire"
 	"sync"
 )
 
+//lint:ignore U1000 retained names are part of package-test diagnostic compatibility.
 const (
 	// SessionDiagnosticEventFailure is emitted exactly once per terminal
 	// session failure with the canonical failure field map.
@@ -107,13 +107,6 @@ const (
 	failingEventRun     = "SESSION.RUN"
 )
 
-// ScheduledAudioInput schedules one raw PCM user-audio injection through the
-// loop's existing audio-input seam (AgentLoop.SendAudioInput). The default
-// completion-gated policy fires after AfterCompletedTurns assistant turns have
-// completed; the active-response policy may fire at the immediately preceding
-// response's non-terminal boundary. Its bytes are attributed to the then
-// in-flight turn (turn index AfterCompletedTurns+1).
-type ScheduledAudioInput = runtimeBrowser.ScheduledAudioInput
 type diagnosticSinkFanout []SessionDiagnosticSink
 
 func combineDiagnosticSinks(sinks ...SessionDiagnosticSink) SessionDiagnosticSink {
@@ -364,7 +357,6 @@ func newSessionProgressObserver(sink SessionDiagnosticSink, recorder metrics.Rec
 		completedResponseIDs:  make(map[string]struct{}),
 		retiredResponseIDs:    make(map[string]struct{}),
 		scheduledResponseByID: make(map[string]int),
-		livenessClock:         realSessionDurationClock{},
 		livenessWakeCh:        make(chan struct{}, 1),
 	}
 }
