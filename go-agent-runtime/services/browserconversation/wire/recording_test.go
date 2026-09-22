@@ -127,6 +127,41 @@ func TestServiceRecorderDoesNotRetainExcludedRawPayload(t *testing.T) {
 	}
 }
 
+func TestServiceRecorderBoundsRawToolDescriptorFieldsBeforeRetention(t *testing.T) {
+	tests := []struct {
+		name string
+		tool browserconversation.BrowserToolDescriptor
+	}{
+		{name: "reference", tool: browserconversation.BrowserToolDescriptor{Ref: strings.Repeat("r", 1<<20), Name: "lookup"}},
+		{name: "frame ID", tool: browserconversation.BrowserToolDescriptor{FrameID: strings.Repeat("f", 1<<20), Name: "lookup"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			events := make(chan browserconversation.BrowserEvent, 1)
+			recorder, err := NewService().NewRecorder(browserconversation.RecordingRequest{
+				Watch:    func(context.Context) <-chan browserconversation.BrowserEvent { return events },
+				MaxBytes: 1024,
+			})
+			if err != nil {
+				t.Fatalf("NewRecorder: %v", err)
+			}
+			recorder.Start(context.Background())
+			events <- browserconversation.BrowserEvent{
+				Type: "tools_added", BrowserID: "browser-1", TargetID: "tab-1",
+				Tools: []browserconversation.BrowserToolDescriptor{test.tool},
+			}
+			close(events)
+			if err := recorder.Close(); err == nil {
+				t.Fatal("Close succeeded after oversized raw tool descriptor data exceeded the recorder byte bound")
+			}
+			snapshot, err := recorder.Snapshot()
+			if err == nil || len(snapshot.Events) != 0 {
+				t.Fatalf("Snapshot = %+v, error = %v; want bound failure and no retained events", snapshot, err)
+			}
+		})
+	}
+}
+
 func TestServiceRecorderCloseIsBounded(t *testing.T) {
 	events := make(chan browserconversation.BrowserEvent)
 	recorder, err := NewService().NewRecorder(browserconversation.RecordingRequest{Watch: func(context.Context) <-chan browserconversation.BrowserEvent { return events }})

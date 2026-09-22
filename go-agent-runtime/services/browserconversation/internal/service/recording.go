@@ -215,7 +215,7 @@ func recordingSourceBytes(event browserconversation.BrowserEvent, request browse
 		size += len(event.Output)
 	}
 	for _, tool := range event.Tools {
-		size += len(tool.Name) + len(tool.InputSchema)
+		size += len(tool.Ref) + len(tool.Name) + len(tool.InputSchema) + len(tool.FrameID)
 	}
 	for _, name := range event.RemovedToolNames {
 		size += len(name)
