@@ -275,6 +275,16 @@ func redactRecordingObject(raw json.RawMessage, request browserconversation.Reco
 		if isRawCDPRecordingField(key) {
 			return nil, false, nil, errors.New("raw CDP field is not allowed in browser evidence")
 		}
+		if isSensitiveRecordingField(key) {
+			redacted, err := json.Marshal(recordingRedactionMarker)
+			if err != nil {
+				return nil, false, nil, err
+			}
+			result[key] = redacted
+			changed = true
+			rules["credential_field"] = true
+			continue
+		}
 		redacted, childChanged, childRules, err := redactRecordingJSON(value, request)
 		if err != nil {
 			return nil, false, nil, err
@@ -389,9 +399,20 @@ func isRawCDPRecordingField(name string) bool {
 	}
 }
 
+func isSensitiveRecordingField(name string) bool {
+	normalized := strings.ToLower(name)
+	normalized = strings.NewReplacer("_", "", "-", "", " ", "").Replace(normalized)
+	for _, marker := range []string{"authorization", "credential", "password", "secret", "token", "apikey", "privatekey"} {
+		if strings.Contains(normalized, marker) {
+			return true
+		}
+	}
+	return false
+}
+
 func orderedRecordingRules(rules map[string]bool) []string {
 	ordered := make([]string, 0, len(rules)+1)
-	for _, rule := range []string{"url_query", "url_fragment", "raw_cdp_disabled"} {
+	for _, rule := range []string{"url_query", "url_fragment", "credential_field", "raw_cdp_disabled"} {
 		if rules[rule] || rule == "raw_cdp_disabled" {
 			ordered = append(ordered, rule)
 		}

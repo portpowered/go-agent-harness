@@ -22,6 +22,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	runtimeBrowser "github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
@@ -1165,6 +1166,44 @@ func TestFinalizeSessionDirectoryRecordingReportsRecordingFailureWhenBundleIsNot
 			}
 		})
 	}
+}
+
+func TestSessionDirectoryRecordingWrapsBrowserFinalizationFailures(t *testing.T) {
+	destination := filepath.Join(t.TempDir(), "capture")
+	constructionErr := errors.New("browser recorder construction failed")
+	closeErr := errors.New("browser recorder close failed")
+	snapshotErr := errors.New("browser recorder snapshot failed")
+	recording := newSessionDirectoryRecording(destination, sessionRuntimePlan{provider: sessionProviderOpenAI}, SessionRunOptions{ModelCatalog: testModelCatalog(), Model: "gpt-realtime"})
+	writeSyntheticRecordingTranscript(t, recording, "client\n", "agent\n")
+	recording.browserErr = constructionErr
+	recording.browser = sessionRecordingBrowserRecorderStub{closeErr: closeErr, snapshotErr: snapshotErr}
+
+	err := recording.Finalize()
+	for _, cause := range []error{constructionErr, closeErr, snapshotErr, transcript.ErrRecordingWrite} {
+		if !errors.Is(err, cause) {
+			t.Errorf("finalize error = %v, want errors.Is(..., %v)", err, cause)
+		}
+	}
+	var recordingErr *transcript.RecordingError
+	if !errors.As(err, &recordingErr) {
+		t.Fatalf("finalize error = %v, want transcript.RecordingError", err)
+	}
+	if recordingErr.Path != destination || recordingErr.Operation != "finalize browser recording" {
+		t.Fatalf("browser recording error = %+v, want operation and destination context", recordingErr)
+	}
+}
+
+type sessionRecordingBrowserRecorderStub struct {
+	closeErr    error
+	snapshotErr error
+}
+
+func (sessionRecordingBrowserRecorderStub) Start(context.Context) {}
+
+func (r sessionRecordingBrowserRecorderStub) Close() error { return r.closeErr }
+
+func (r sessionRecordingBrowserRecorderStub) Snapshot() (runtimeBrowser.RecordingSnapshot, error) {
+	return runtimeBrowser.RecordingSnapshot{}, r.snapshotErr
 }
 
 func TestSessionDirectoryRecordingReportsTimingShortWrite(t *testing.T) {

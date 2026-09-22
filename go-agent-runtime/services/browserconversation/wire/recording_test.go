@@ -12,7 +12,7 @@ import (
 
 func TestServiceRecorderRedactsConfiguredAndCredentialShapedValues(t *testing.T) {
 	const credential = "browser-recorder-test-secret-20260913"
-	events := make(chan browserconversation.BrowserEvent, 1)
+	events := make(chan browserconversation.BrowserEvent, 2)
 	recorder, err := NewService().NewRecorder(browserconversation.RecordingRequest{
 		Watch: func(context.Context) <-chan browserconversation.BrowserEvent { return events }, IncludeArguments: true, IncludeResults: true,
 		RedactURLQuery: true, RedactURLFragment: true, Credentials: []string{credential},
@@ -21,7 +21,8 @@ func TestServiceRecorderRedactsConfiguredAndCredentialShapedValues(t *testing.T)
 		t.Fatalf("NewRecorder: %v", err)
 	}
 	recorder.Start(context.Background())
-	events <- browserconversation.BrowserEvent{Type: "tool_responded", BrowserID: "browser-1", TargetID: "tab-1", Generation: 1, InvocationID: "invocation-1", ToolName: "lookup", Input: json.RawMessage(`{"token":"browser-recorder-test-secret-20260913"}`), Output: json.RawMessage(`{"message":"Authorization: Bearer browser-recorder-test-secret-20260913"}`)}
+	events <- browserconversation.BrowserEvent{Type: "tool_invoked", BrowserID: "browser-1", TargetID: "tab-1", Generation: 1, InvocationID: "invocation-1", ToolName: "lookup", Input: json.RawMessage(`{"api_key":"unmarked-input-canary"}`)}
+	events <- browserconversation.BrowserEvent{Type: "tool_responded", BrowserID: "browser-1", TargetID: "tab-1", Generation: 1, InvocationID: "invocation-1", ToolName: "lookup", Input: json.RawMessage(`{"token":"browser-recorder-test-secret-20260913","api_key":"unmarked-input-canary"}`), Output: json.RawMessage(`{"message":"Authorization: Bearer browser-recorder-test-secret-20260913","nested":{"clientSecret":"unmarked-result-canary"}}`)}
 	close(events)
 	if err := recorder.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
@@ -33,8 +34,8 @@ func TestServiceRecorderRedactsConfiguredAndCredentialShapedValues(t *testing.T)
 	if err != nil {
 		t.Fatalf("Snapshot: %v", err)
 	}
-	if len(snapshot.Events) != 1 {
-		t.Fatalf("recorded events = %d, want 1", len(snapshot.Events))
+	if len(snapshot.Events) != 2 {
+		t.Fatalf("recorded events = %d, want 2", len(snapshot.Events))
 	}
 	encoded, err := json.Marshal(snapshot)
 	if err != nil {
@@ -43,8 +44,11 @@ func TestServiceRecorderRedactsConfiguredAndCredentialShapedValues(t *testing.T)
 	if strings.Contains(string(encoded), credential) || !strings.Contains(string(encoded), "[redacted]") {
 		t.Fatalf("snapshot redaction = %s", encoded)
 	}
-	if snapshot.Artifact == nil || !strings.Contains(string(snapshot.Artifact.Data), `"browser.invocation.completed"`) || strings.Contains(string(snapshot.Artifact.Data), credential) {
+	if snapshot.Artifact == nil || !strings.Contains(string(snapshot.Artifact.Data), `"browser.invocation.completed"`) || strings.Contains(string(snapshot.Artifact.Data), credential) || strings.Contains(string(snapshot.Artifact.Data), "unmarked-input-canary") || strings.Contains(string(snapshot.Artifact.Data), "unmarked-result-canary") {
 		t.Fatalf("canonical artifact = %#v, want redacted invocation evidence", snapshot.Artifact)
+	}
+	if !strings.Contains(string(snapshot.Artifact.Data), `"api_key":"REDACTED"`) || !strings.Contains(string(snapshot.Artifact.Data), `"clientSecret":"REDACTED"`) {
+		t.Fatalf("canonical artifact did not redact sensitive nested fields: %s", snapshot.Artifact.Data)
 	}
 	if err := snapshot.Artifact.Validate(); err != nil {
 		t.Fatalf("canonical artifact validation: %v", err)

@@ -56,6 +56,9 @@ func (r *sessionDirectoryRecording) Finalize() error {
 				browserArtifact = snapshot.Artifact
 			}
 		}
+		if browserErr != nil {
+			browserErr = recordingDestinationError(transcript.ErrRecordingWrite, "finalize browser recording", r.destination, browserErr)
+		}
 		r.eventMu.Lock()
 		defer r.eventMu.Unlock()
 		r.stopAndDrainSpoolWorker()
