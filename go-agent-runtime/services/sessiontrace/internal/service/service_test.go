@@ -458,16 +458,24 @@ func TestFinishDoesNotOverwriteConcurrentDestination(t *testing.T) {
 }
 
 func TestFinishHonorsCancellationAndCanCompleteLater(t *testing.T) {
-	prepared, err := New().Prepare(sessiontrace.Request{TraceAudio: true, RecordDirectory: filepath.Join(t.TempDir(), "requested"), Clock: clock.Real{}})
+	preparedValue, err := New().Prepare(sessiontrace.Request{TraceAudio: true, RecordDirectory: filepath.Join(t.TempDir(), "requested"), Clock: clock.Real{}})
 	if err != nil {
 		t.Fatal(err)
 	}
+	implementation, ok := preparedValue.(*prepared)
+	if !ok {
+		t.Fatal("prepared value has unexpected implementation")
+	}
+	if err := implementation.close(context.Background()); err != nil {
+		t.Fatalf("prepare completed close: %v", err)
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if err := prepared.Finish(ctx, "", true); !errors.Is(err, context.Canceled) {
+	if err := preparedValue.Finish(ctx, "", true); !errors.Is(err, context.Canceled) {
 		t.Fatalf("canceled finish error = %v", err)
 	}
-	if err := prepared.Finish(context.Background(), "", true); err != nil {
+	if err := preparedValue.Finish(context.Background(), "", true); err != nil {
 		t.Fatalf("finish after cancellation = %v", err)
 	}
 }
