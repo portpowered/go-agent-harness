@@ -157,6 +157,9 @@ func (p *prepared) close(ctx context.Context) error {
 	if !started {
 		select {
 		case <-p.closed:
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			return p.closeErr
 		case <-ctx.Done():
 			return ctx.Err()
@@ -166,10 +169,16 @@ func (p *prepared) close(ctx context.Context) error {
 	defer timer.Stop()
 	select {
 	case <-p.closed:
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		return p.closeErr
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-timer.C:
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		return fmt.Errorf("%w after %s", sessiontrace.ErrCloseTimeout, p.timeout)
 	}
 }

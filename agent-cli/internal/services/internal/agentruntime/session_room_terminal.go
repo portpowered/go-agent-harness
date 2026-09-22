@@ -62,8 +62,8 @@ func recordRoomParticipantPlaybackOverflow(diagnostics sessiontrace.PlaybackDiag
 	}
 }
 
-func newRoomParticipantPlaybackDiagnostics(runtime *roomParticipantRuntime, opts RoomRunOptions, evidence *roomParticipantEvidence) (SessionDiagnosticSink, sessiontrace.PlaybackDiagnostics) {
-	sink := sessiontracewire.CombineDiagnosticSinks(roomParticipantDiagnosticSinks(runtime.plan, opts, evidence)...)
+func newRoomParticipantPlaybackDiagnostics(runtime *roomParticipantRuntime, opts RoomRunOptions, participantEvidence *roomParticipantEvidence, evidence *roomEvidence) (SessionDiagnosticSink, sessiontrace.PlaybackDiagnostics) {
+	sink := sessiontracewire.CombineDiagnosticSinks(roomParticipantDiagnosticSinks(runtime.plan, opts, participantEvidence, evidence)...)
 	return sink, sessiontracewire.NewPlaybackDiagnostics(sessiontrace.PlaybackDiagnosticsOptions{Sink: sink})
 }
 

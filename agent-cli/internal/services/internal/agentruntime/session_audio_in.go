@@ -1,16 +1,10 @@
 package agentruntime
 
-import devicecontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices"
-
-import sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
-
 import (
 	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
-	sharedclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"io"
 	"os"
 	"path/filepath"
@@ -18,10 +12,14 @@ import (
 	"sync"
 	"time"
 
+	sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
+	devicecontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	sharedclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	devicegateway "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
@@ -54,8 +52,7 @@ func StartSessionAudioInterruptionsOnBrowserInvocation(
 func StartSessionAudioInterruptionsOnBrowserTool(
 	parent context.Context,
 	events <-chan webmcp.BrokerEvent,
-	toolName string,
-	inputs []ScheduledAudioInput,
+	toolName string, inputs []ScheduledAudioInput,
 ) (<-chan ScheduledAudioInput, func()) {
 	if parent == nil {
 		parent = context.Background()

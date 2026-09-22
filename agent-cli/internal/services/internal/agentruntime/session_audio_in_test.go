@@ -230,13 +230,13 @@ func TestStartSessionAudioInterruptionsReleasesOnlyFirstMatchingDispatch(t *test
 		context.Background(), events, "queue_cube_moves", inputs,
 	)
 	t.Cleanup(stop)
+	inputs[0].PCM[0], inputs[0].EndOfTurn = 9, false
 
 	send := func(event webmcp.BrokerEvent) {
 		t.Helper()
 		events <- event
 	}
 	assertNoInterruptAudio := func(label string) {
-		t.Helper()
 		select {
 		case input := <-interruptions:
 			t.Fatalf("%s released %#v", label, input)
@@ -269,7 +269,7 @@ func TestStartSessionAudioInterruptionsReleasesOnlyFirstMatchingDispatch(t *test
 		Type: webmcp.BrokerEventInvocationCreated, State: webmcp.InvocationDispatched,
 		InvocationID: "queue-1", ToolName: "queue_cube_moves",
 	})
-	for index, want := range inputs {
+	for index, want := range []agentruntime.ScheduledAudioInput{{PCM: []byte{1, 2}, EndOfTurn: true}, {PCM: []byte{3, 4}}} {
 		select {
 		case got, ok := <-interruptions:
 			if !ok {

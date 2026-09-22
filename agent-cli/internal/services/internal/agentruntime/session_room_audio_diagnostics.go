@@ -135,13 +135,13 @@ func newRoomParticipantIngress(plan *roomParticipantPlan, opts RoomRunOptions, e
 	if plan == nil {
 		return nil
 	}
-	participantID := plan.manifest.ID
 	sink := sessiontracewire.CombineDiagnosticSinks(roomParticipantDiagnosticSinks(
 		plan,
 		opts,
-		evidenceParticipant(evidence, participantID),
+		evidenceParticipant(evidence, plan.manifest.ID),
+		evidence,
 	)...)
-	return newRoomAudioIngressLedger(participantID, sink)
+	return newRoomAudioIngressLedger(plan.manifest.ID, sink)
 }
 func notifyRoomParticipantMixerReady(opts RoomRunOptions, participantID string, mixer *room.PCM16Mixer) {
 	if opts.onParticipantMixerReady != nil {

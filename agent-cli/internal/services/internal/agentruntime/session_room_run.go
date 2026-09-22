@@ -1,16 +1,10 @@
 package agentruntime
 
 import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-
 import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"strconv"
-	"sync"
-	"time"
-
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -21,6 +15,9 @@ import (
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
+	"io"
+	"sync"
+	"time"
 )
 
 // recordRoomTimelineEvent turns one participant's inbound stream message
@@ -104,15 +101,18 @@ func defaultRoomSessionFactory(participant room.Participant, options SessionRunO
 type roomParticipantDiagnosticSink struct {
 	participantID string
 	observer      RoomParticipantDiagnosticObserver
+	evidence      *roomEvidence
 }
 
 func (s roomParticipantDiagnosticSink) RecordSessionDiagnostic(record SessionDiagnosticRecord) {
+	if s.evidence != nil && record.Event == SessionDiagnosticEventTurn {
+		s.evidence.recordTimelineEvent("turn_completed", s.participantID, map[string]string{fieldTurnIndex: record.Fields[fieldTurnIndex]})
+	}
 	if s.observer == nil {
 		return
 	}
 	s.observer(s.participantID, record)
 }
-
 func runRoomParticipant(
 	roomCtx context.Context,
 	coordinator *roomCoordinator,
@@ -135,11 +135,10 @@ func runRoomParticipant(
 	if evidence != nil {
 		participantEvidence = evidence.participant(runtime.plan.manifest.ID)
 	}
-	// Computed once, before any result can reach the coordinator, so a human
 	// participant's teardown (see finishParticipant) can name this
 	// participant on a playback overflow the same way a provider
 	// participant's session diagnostics already do below.
-	runtime.diagnosticSink, runtime.playbackDiagnostics = newRoomParticipantPlaybackDiagnostics(runtime, opts, participantEvidence)
+	runtime.diagnosticSink, runtime.playbackDiagnostics = newRoomParticipantPlaybackDiagnostics(runtime, opts, participantEvidence, evidence)
 	var observer sessiontrace.Observer
 	if !roomParticipantIsHuman(runtime.plan) {
 		observer = sessiontracewire.NewObserver(sessiontrace.NewObserverOptions{Sink: runtime.diagnosticSink, Provider: runtime.plan.manifest.Provider, Model: runtime.plan.manifest.Model, TerminalService: sessionterminalwire.NewService()})
@@ -162,11 +161,7 @@ func runRoomParticipant(
 		observer.SetStreamObserver(func(msg messages.StreamMessage) {
 			observeRoomParticipantStream(coordinator, runtime, opts, evidence, participantEvidence, runtime.ctx, msg)
 		})
-		observer.SetAdmittedTurnObserver(func(messages.StreamMessage) {
-			turns := runtime.lifecycle.observeAdmittedTurn()
-			coordinator.noteTurn(runtime.plan.manifest.ID, turns)
-			evidence.recordTimelineEvent("turn_completed", runtime.plan.manifest.ID, map[string]string{"turn_index": strconv.Itoa(turns)})
-		})
+		observer.SetAdmittedTurnObserver(func(messages.StreamMessage) { observeRoomAdmittedTurn(runtime, coordinator) })
 	}
 	inputObserver := opts.OnAudioInput
 	if observer != nil {
@@ -193,7 +188,6 @@ func runRoomParticipant(
 		}
 		pumpRoomMixer(roomCtx, coordinator, runtime, startGate, opts.onParticipantAudioInput, inputObserver, participantEvidence, secrets)
 	}()
-
 	if startupErr := runtime.plan.startupErr; startupErr != nil {
 		// Setup failures are already retired from the coordinator's active set.
 		// Still use the ordinary result path so participant cleanup, evidence
@@ -212,7 +206,6 @@ func runRoomParticipant(
 		}
 		return
 	}
-
 	if roomParticipantIsHuman(runtime.plan) {
 		if runtime.plan.replay {
 			select {
@@ -232,7 +225,7 @@ func runRoomParticipant(
 		results <- roomParticipantRunResult{plan: runtime.plan, runtime: runtime, err: runErr, connected: connected, connectErr: connectErr}
 		return
 	}
-	diagnosticSinks := roomParticipantDiagnosticSinks(runtime.plan, opts, participantEvidence)
+	diagnosticSinks := roomParticipantDiagnosticSinks(runtime.plan, opts, participantEvidence, evidence)
 	observer = sessiontracewire.NewObserver(sessiontrace.NewObserverOptions{Sink: sessiontracewire.CombineDiagnosticSinks(diagnosticSinks...), Provider: runtime.plan.manifest.Provider, Model: runtime.plan.manifest.Model, TerminalService: sessionterminalwire.NewService()})
 	observer.SetLivenessObserver(func(err error) {
 		runtime.lifecycle.markLivenessFailure(err)
@@ -302,11 +295,7 @@ func runRoomParticipant(
 	observer.SetStreamObserver(func(msg messages.StreamMessage) {
 		observeRoomParticipantStream(coordinator, runtime, opts, evidence, participantEvidence, runtime.ctx, msg)
 	})
-	observer.SetAdmittedTurnObserver(func(messages.StreamMessage) {
-		turns := runtime.lifecycle.observeAdmittedTurn()
-		coordinator.noteTurn(runtime.plan.manifest.ID, turns)
-		evidence.recordTimelineEvent("turn_completed", runtime.plan.manifest.ID, map[string]string{"turn_index": strconv.Itoa(turns)})
-	})
+	observer.SetAdmittedTurnObserver(func(messages.StreamMessage) { observeRoomAdmittedTurn(runtime, coordinator) })
 	var latencyRuntime sessiontrace.RuntimeRecorder
 	if evidence != nil && evidence.latency != nil {
 		latencyRuntime = sessiontracewire.NewRuntimeRecorder(roomLatencyRuntimeObserver{
@@ -412,12 +401,21 @@ func combineRoomDoneErrors(primary, secondary func() error) func() error {
 		return errors.Join(primary(), secondary())
 	}
 }
+
+func observeRoomAdmittedTurn(runtime *roomParticipantRuntime, coordinator *roomCoordinator) {
+	turns := runtime.lifecycle.observeAdmittedTurn()
+	coordinator.noteTurn(runtime.plan.manifest.ID, turns)
+}
 func roomParticipantDiagnosticSinks(
 	plan *roomParticipantPlan,
 	opts RoomRunOptions,
 	participantEvidence *roomParticipantEvidence,
+	evidence *roomEvidence,
 ) []SessionDiagnosticSink {
-	diagnosticSinks := make([]SessionDiagnosticSink, 0, 2)
+	diagnosticSinks := make([]SessionDiagnosticSink, 0)
+	if evidence != nil {
+		diagnosticSinks = append(diagnosticSinks, roomParticipantDiagnosticSink{participantID: plan.manifest.ID, evidence: evidence})
+	}
 	if participantEvidence != nil {
 		diagnosticSinks = append(diagnosticSinks, participantEvidence)
 	}

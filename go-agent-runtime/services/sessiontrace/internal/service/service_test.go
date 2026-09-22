@@ -122,10 +122,7 @@ func TestPrepareReportsStagingDirectoryFailure(t *testing.T) {
 	}
 }
 func TestPreparedTracePoliciesAndNilDeviceCallbacks(t *testing.T) {
-	prepared, err := New().Prepare(sessiontrace.Request{TraceAudio: true, RecordDirectory: filepath.Join(t.TempDir(), "requested"), Clock: clock.Real{}, CloseTimeout: time.Second})
-	if err != nil {
-		t.Fatal(err)
-	}
+	prepared := newPreparedTrace(t, sessiontrace.Request{TraceAudio: true, RecordDirectory: filepath.Join(t.TempDir(), "requested"), Clock: clock.Real{}, CloseTimeout: time.Second})
 	provider, providerOK := prepared.RuntimeObserver().(sessiontrace.ProviderBoundaryObserver)
 	commit, commitOK := prepared.RuntimeObserver().(sessiontrace.CommitPayloadObserver)
 	if !providerOK || !provider.ObserveProviderBoundaries() || !commitOK || commit.RetainCommitPayload() {
@@ -485,10 +482,7 @@ func TestFinishRetainsStagedTraceOnUnpublishedDuplicateAndRenameFailure(t *testi
 }
 
 func TestFinishRejectsExistingAttachmentClaim(t *testing.T) {
-	prepared, err := New().Prepare(sessiontrace.Request{TraceAudio: true, RecordDirectory: filepath.Join(t.TempDir(), "requested"), Clock: clock.Real{}})
-	if err != nil {
-		t.Fatal(err)
-	}
+	prepared := newPreparedTrace(t, sessiontrace.Request{TraceAudio: true, RecordDirectory: filepath.Join(t.TempDir(), "requested"), Clock: clock.Real{}})
 	bundle := t.TempDir()
 	if err := os.WriteFile(filepath.Join(bundle, "audio-trace.claim"), []byte("claimed"), 0o600); err != nil {
 		t.Fatal(err)
@@ -502,17 +496,10 @@ func TestFinishRejectsExistingAttachmentClaim(t *testing.T) {
 }
 
 func TestFinishDoesNotOverwriteConcurrentDestination(t *testing.T) {
-	preparedValue, err := New().Prepare(sessiontrace.Request{TraceAudio: true, RecordDirectory: filepath.Join(t.TempDir(), "requested"), Clock: clock.Real{}})
-	if err != nil {
-		t.Fatal(err)
-	}
+	preparedValue := newPreparedTrace(t, sessiontrace.Request{TraceAudio: true, RecordDirectory: filepath.Join(t.TempDir(), "requested"), Clock: clock.Real{}})
 	bundle := t.TempDir()
 	destination := filepath.Join(bundle, "audio-trace")
-	preparedImpl, ok := preparedValue.(*prepared)
-	if !ok {
-		t.Fatal("prepared value has unexpected implementation")
-	}
-	preparedImpl.rename = func(oldPath, newPath string) error {
+	preparedValue.rename = func(oldPath, newPath string) error {
 		if err := os.Mkdir(newPath, 0o700); err != nil {
 			return err
 		}
@@ -522,7 +509,7 @@ func TestFinishDoesNotOverwriteConcurrentDestination(t *testing.T) {
 		return renameNoReplace(oldPath, newPath)
 	}
 
-	err = preparedValue.Finish(context.Background(), bundle, true)
+	err := preparedValue.Finish(context.Background(), bundle, true)
 	if !errors.Is(err, sessiontrace.ErrDestinationExists) {
 		t.Fatalf("concurrent destination error = %v", err)
 	}
@@ -535,25 +522,22 @@ func TestFinishDoesNotOverwriteConcurrentDestination(t *testing.T) {
 }
 
 func TestFinishHonorsCancellationAndCanCompleteLater(t *testing.T) {
-	prepared, err := New().Prepare(sessiontrace.Request{TraceAudio: true, RecordDirectory: filepath.Join(t.TempDir(), "requested"), Clock: clock.Real{}})
-	if err != nil {
-		t.Fatal(err)
+	preparedValue := newPreparedTrace(t, sessiontrace.Request{TraceAudio: true, RecordDirectory: filepath.Join(t.TempDir(), "requested"), Clock: clock.Real{}})
+	if err := preparedValue.close(context.Background()); err != nil {
+		t.Fatalf("prepare completed close: %v", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if err := prepared.Finish(ctx, "", true); !errors.Is(err, context.Canceled) {
+	if err := preparedValue.Finish(ctx, "", true); !errors.Is(err, context.Canceled) {
 		t.Fatalf("canceled finish error = %v", err)
 	}
-	if err := prepared.Finish(context.Background(), "", true); err != nil {
+	if err := preparedValue.Finish(context.Background(), "", true); err != nil {
 		t.Fatalf("finish after cancellation = %v", err)
 	}
 }
 
 func TestFinishRejectsNilContext(t *testing.T) {
-	prepared, err := New().Prepare(sessiontrace.Request{TraceAudio: true, RecordDirectory: filepath.Join(t.TempDir(), "requested"), Clock: clock.Real{}})
-	if err != nil {
-		t.Fatal(err)
-	}
+	prepared := newPreparedTrace(t, sessiontrace.Request{TraceAudio: true, RecordDirectory: filepath.Join(t.TempDir(), "requested"), Clock: clock.Real{}})
 	if err := prepared.Finish(nilContext(), "", true); err == nil {
 		t.Fatal("nil context returned nil error")
 	}
@@ -563,6 +547,19 @@ func TestFinishRejectsNilContext(t *testing.T) {
 }
 
 func nilContext() context.Context { return nil }
+
+func newPreparedTrace(t *testing.T, request sessiontrace.Request) *prepared {
+	t.Helper()
+	value, err := New().Prepare(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, ok := value.(*prepared)
+	if !ok {
+		t.Fatal("prepared value has unexpected implementation")
+	}
+	return result
+}
 
 func TestObserverChainSkipsNilObserver(t *testing.T) {
 	called := false

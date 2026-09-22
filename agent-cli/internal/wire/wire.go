@@ -308,6 +308,7 @@ var CliSet = wire.NewSet(
 	servicewire.DeviceSet,
 	servicewire.RoomSet,
 	servicewire.SessionSet,
+	wire.NewSet(servicewire.NewBrowserConversationService),
 	servicewire.NewReplayService,
 	servicewire.NewProbeMetrics,
 	provideDefaultRuntimeToolService,

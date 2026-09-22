@@ -1,6 +1,7 @@
 package agentruntime
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 
@@ -65,4 +66,16 @@ func convertScheduledAudioInputs(inputs []ScheduledAudioInput, providerRate int)
 		converted[index].SourceSampleRate = providerRate
 	}
 	return converted, nil
+}
+
+func cloneScheduledAudioInputs(inputs []ScheduledAudioInput) []ScheduledAudioInput {
+	if inputs == nil {
+		return nil
+	}
+	cloned := make([]ScheduledAudioInput, len(inputs))
+	for index, input := range inputs {
+		cloned[index] = input
+		cloned[index].PCM = bytes.Clone(input.PCM)
+	}
+	return cloned
 }
