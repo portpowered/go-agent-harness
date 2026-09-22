@@ -96,8 +96,7 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 			value = ""
 		}
 		if kind == room.ParticipantKindHuman {
-			// Human participants own local capture/playback rather than a
-			// provider session. Keep the manifest and its device selectors in
+			// Human participants own local capture/playback rather than a provider session. Keep the manifest and its device selectors in
 			// the plan, but do not construct a provider inferencer or resolve a
 			// credential for this participant.
 			plans = append(plans, &roomParticipantPlan{manifest: participant})
