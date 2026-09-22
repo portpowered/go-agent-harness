@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeRoomReplayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	roomswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
@@ -30,9 +31,10 @@ func (emptyRoomCapture) Pump(ctx context.Context, _ audio.OutboundMedia) error {
 func TestExternalRoomRecordsNoCapturedSamplesTruthfully(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	scheduler := clock.NewDeterministic(time.Unix(123, 0), time.Millisecond)
+	scheduler := clock.NewDeterministic(time.Unix(1700000000, 0).UTC(), time.Millisecond)
 	host := roomswire.NewService(roomswire.Dependencies{
-		Clock: scheduler,
+		Clock:  scheduler,
+		Replay: runtimeRoomReplayWire.NewService(),
 		Media: rooms.MediaFactoryFunc(func(context.Context, rooms.Participant, rooms.AudioFormat) (rooms.MediaPorts, error) {
 			return rooms.MediaPorts{Capture: emptyRoomCapture{}}, nil
 		}),

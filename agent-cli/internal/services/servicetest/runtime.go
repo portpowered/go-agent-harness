@@ -11,6 +11,7 @@ import (
 	serviceDevices "github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices"
 	impl "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime"
 	audioio "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
@@ -20,8 +21,8 @@ const DefaultOpenAIRealtimeModel = impl.DefaultOpenAIRealtimeModel
 
 var ErrInvalidOpenAIRealtimeVoice = sessioncontract.ErrInvalidOpenAIRealtimeVoice
 var ErrRoomLaunchPathConflict = runtimeRooms.ErrLaunchPathConflict
-var ErrRoomReplayBundleIncomplete = impl.ErrRoomReplayBundleIncomplete
-var ErrRoomReplaySourceConflict = impl.ErrRoomReplaySourceConflict
+var ErrRoomReplayBundleIncomplete = roomreplay.ErrRoomReplayBundleIncomplete
+var ErrRoomReplaySourceConflict = runtimeRooms.ErrReplaySourceConflict
 var ErrSessionAudioInputConflict = serviceDevices.ErrSessionAudioInputConflict
 var ErrSessionAudioOutputConflict = serviceDevices.ErrSessionAudioOutputConflict
 var ErrSessionAudioInTurnBargeRequiresSequence = impl.ErrSessionAudioInTurnBargeRequiresSequence

@@ -11,6 +11,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 )
 
 func roomParticipantIsHuman(plan *roomParticipantPlan) bool {
@@ -95,8 +96,7 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 			value = ""
 		}
 		if kind == room.ParticipantKindHuman {
-			// Human participants own local capture/playback rather than a
-			// provider session. Keep the manifest and its device selectors in
+			// Human participants own local capture/playback rather than a provider session. Keep the manifest and its device selectors in
 			// the plan, but do not construct a provider inferencer or resolve a
 			// credential for this participant.
 			plans = append(plans, &roomParticipantPlan{manifest: participant})
@@ -222,13 +222,13 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 	return plans, secrets, nil
 }
 
-// buildRoomReplayParticipantPlans composes each provider participant through
-// the existing session replay planner. It deliberately does not consult the
-// live room manifest, credential lookup, capability factories, or injected
-// live session factories: the validated bundle is the complete source of
-// replay runtime configuration.
-func buildRoomReplayParticipantPlans(ctx context.Context, replay RoomReplayPlan, opts RoomRunOptions) ([]*roomParticipantPlan, []string, error) {
-	manifest := replay.Manifest()
+// buildRoomReplayParticipantPlans composes admitted provider participants
+// with the session replay planner without consulting live configuration.
+func buildRoomReplayParticipantPlans(ctx context.Context, replay roomreplay.RoomReplayPlan, opts RoomRunOptions) ([]*roomParticipantPlan, []string, error) { //nolint:contextcheck // planSessionRuntime is synchronous and has no context-aware API; ctx is checked before each participant.
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	manifest := opts.Manifest
 	plans := make([]*roomParticipantPlan, 0, len(replay.Participants))
 	for index, recorded := range replay.Participants {
 		if err := ctx.Err(); err != nil {

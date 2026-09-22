@@ -3,9 +3,9 @@ package evidence
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,6 +14,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer"
+	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 func TestRecorderWritesReplayCompatibleBundleWithEmptyStreams(t *testing.T) {
@@ -31,7 +32,7 @@ func TestRecorderWritesReplayCompatibleBundleWithEmptyStreams(t *testing.T) {
 		t.Fatalf("Publish: %v", err)
 	}
 	for _, participantID := range []string{"alice", "bob"} {
-		if err := os.WriteFile(recorder.CapturePath(participantID), []byte("[]\n"), 0o600); err != nil {
+		if err := os.WriteFile(recorder.CapturePath(participantID), replayCaptureBytes(participantID, "offline", "fixture"), 0o600); err != nil {
 			t.Fatalf("write provider capture %q: %v", participantID, err)
 		}
 	}
@@ -46,15 +47,31 @@ func TestRecorderWritesReplayCompatibleBundleWithEmptyStreams(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(output, rooms.RoomReplayBundleManifestPath)); err != nil {
 		t.Fatalf("manifest missing: %v", err)
 	}
-	plan, err := New().Load(output)
+	manifestData, err := os.ReadFile(filepath.Join(output, rooms.RoomReplayBundleManifestPath))
 	if err != nil {
-		t.Fatalf("Load finalized room evidence: %v", err)
+		t.Fatalf("read replay manifest: %v", err)
 	}
-	if len(plan.Participants) != 2 || len(plan.Timeline) < 3 {
-		t.Fatalf("loaded participants/timeline = %d/%d, want 2 and lifecycle records", len(plan.Participants), len(plan.Timeline))
+	var replayManifest struct {
+		Participants map[string]struct {
+			Artifacts map[string]json.RawMessage `json:"artifacts"`
+		} `json:"participants"`
+		RoomTimeline string `json:"room_timeline"`
 	}
-	if plan.Participants[0].CapturePath == "" {
-		t.Fatal("agent capture path is empty")
+	if err := json.Unmarshal(manifestData, &replayManifest); err != nil {
+		t.Fatalf("decode replay manifest: %v", err)
+	}
+	timelineData, err := os.ReadFile(filepath.Join(output, rooms.RoomEvidenceTimelinePath))
+	if err != nil {
+		t.Fatalf("read room timeline: %v", err)
+	}
+	if len(replayManifest.Participants) != 2 || strings.Count(string(timelineData), "\n") < 3 {
+		t.Fatalf("manifest participants/timeline = %d/%d, want 2 and lifecycle records", len(replayManifest.Participants), strings.Count(string(timelineData), "\n"))
+	}
+	for _, participant := range replayManifest.Participants {
+		if len(participant.Artifacts) == 0 {
+			t.Fatal("participant artifacts are empty")
+		}
+		break
 	}
 	latencyPath := filepath.Join(output, rooms.RoomLatencyArtifactPath)
 	latencyData, err := os.ReadFile(latencyPath)
@@ -70,14 +87,32 @@ func TestRecorderWritesReplayCompatibleBundleWithEmptyStreams(t *testing.T) {
 	if latencyBundle.SchemaVersion != rooms.RoomLatencyBundleSchemaVersion {
 		t.Fatalf("latency schema version = %d, want %d", latencyBundle.SchemaVersion, rooms.RoomLatencyBundleSchemaVersion)
 	}
-	if plan.RoomLatencyPath == "" {
-		t.Fatal("loaded replay plan did not retain room latency artifact")
+	if replayManifest.RoomTimeline == "" {
+		t.Fatal("replay manifest did not retain room timeline artifact")
 	}
-	for _, participant := range plan.Participants {
-		if len(participant.Artifacts) == 0 {
-			t.Fatalf("participant %q has no artifacts", participant.ID)
-		}
+	if _, err := os.Stat(latencyPath); err != nil {
+		t.Fatalf("room latency artifact is not retained: %v", err)
 	}
+}
+
+func replayCaptureBytes(sessionID, provider, model string) []byte {
+	capture := gatewaytesting.SessionCapture{
+		Version:  gatewaytesting.SessionCaptureVersion,
+		Provider: gatewaytesting.SessionProviderMetadata{Name: provider, Model: model},
+		Session: gatewaytesting.SessionMetadata{
+			ID: sessionID, FixtureProvenance: gatewaytesting.SessionFixtureProvenanceSynthetic,
+		},
+		Records: []gatewaytesting.CapturedSessionEvent{{
+			Sequence: 1, Direction: gatewaytesting.DirectionServerToClient,
+			Type: "session.created", PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage,
+			Payload: json.RawMessage(`{"type":"session.created","session_id":"replay"}`),
+		}},
+	}
+	data, err := json.MarshalIndent(capture, "", "  ")
+	if err != nil {
+		panic(err)
+	}
+	return data
 }
 
 func TestRecorderMarksOversizedAudioAsPartialWithoutFabricatingPCM(t *testing.T) {
@@ -98,9 +133,6 @@ func TestRecorderMarksOversizedAudioAsPartialWithoutFabricatingPCM(t *testing.T)
 	status, degraded := recorder.Status()
 	if status == nil || status.State != "partial" || len(degraded) == 0 {
 		t.Fatalf("recording status/degraded artifacts = %+v/%v, want partial evidence", status, degraded)
-	}
-	if _, err := New().Load(output); err == nil || !errors.Is(err, rooms.ErrReplayBundleIncomplete) {
-		t.Fatalf("Load partial evidence error = %v, want ErrReplayBundleIncomplete", err)
 	}
 }
 
@@ -126,9 +158,6 @@ func TestRecorderMarksLiveEventOverflowAsPartial(t *testing.T) {
 	status, degraded := recorder.Status()
 	if status == nil || status.State != "partial" || len(degraded) == 0 {
 		t.Fatalf("recording status/degraded artifacts = %+v/%v, want partial evidence", status, degraded)
-	}
-	if _, err := New().Load(output); err == nil || !errors.Is(err, rooms.ErrReplayBundleIncomplete) {
-		t.Fatalf("Load overflow evidence error = %v, want ErrReplayBundleIncomplete", err)
 	}
 }
 

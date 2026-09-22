@@ -11,6 +11,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	runtimeRoomsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
 	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -302,13 +303,6 @@ func publishRoomParticipantsReady(coordinator *roomCoordinator, plans []*roomPar
 	}
 }
 
-func buildRoomReplaySchedule(ctx context.Context, replayMode bool, opts RoomRunOptions, plans []*roomParticipantPlan) (*roomReplaySchedule, error) {
-	if !replayMode {
-		return nil, nil
-	}
-	return newRoomReplaySchedule(ctx, *opts.ReplayPlan, plans, roomFormatForOptions(opts), opts.AudioService)
-}
-
 func roomReplayMixerConfig(opts RoomRunOptions, scheduled bool) room.PCM16MixerConfig {
 	config := roomMixerConfigForOptions(opts)
 	if scheduled {
@@ -327,7 +321,7 @@ func newRoomParticipantRuntime(
 	admissionCtx context.Context,
 	admissionCancel context.CancelFunc,
 	mixer *room.PCM16Mixer,
-	replaySchedule *roomReplaySchedule,
+	replaySchedule roomreplay.Schedule,
 	opts RoomRunOptions,
 	evidence *roomEvidence,
 	coordinator *roomCoordinator,
@@ -349,36 +343,11 @@ func newRoomParticipantRuntime(
 	}
 }
 
-func roomReplayFrameAckChannel(schedule *roomReplaySchedule, plan *roomParticipantPlan) chan struct{} {
+func roomReplayFrameAckChannel(schedule roomreplay.Schedule, plan *roomParticipantPlan) chan struct{} {
 	if schedule == nil || roomParticipantIsHuman(plan) {
 		return nil
 	}
 	return make(chan struct{}, 1)
-}
-
-func startRoomReplayScheduler(schedule *roomReplaySchedule, roomCtx context.Context, startGate <-chan struct{}, runtimes []*roomParticipantRuntime, coordinator *roomCoordinator, opts RoomRunOptions, wg *sync.WaitGroup) {
-	if schedule == nil || wg == nil {
-		return
-	}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		select {
-		case <-startGate:
-		case <-roomCtx.Done():
-			return
-		}
-		scheduleErr := schedule.run(roomCtx, runtimes, coordinator, opts)
-		if scheduleErr != nil {
-			if !coordinator.isStopping() {
-				coordinator.fail(fmt.Errorf("run room replay timeline: %w", scheduleErr))
-			}
-			return
-		}
-		if !coordinator.isStopping() {
-			coordinator.stop(RoomTerminationStopped, nil)
-		}
-	}()
 }
 
 func notifyRoomTerminated(observer RoomObserver, result RoomResult, roomErr error, secrets []string) (RoomResult, error) {
@@ -409,23 +378,6 @@ func notifyRoomTerminated(observer RoomObserver, result RoomResult, roomErr erro
 	result.Reason = RoomTerminationFailed
 	result.Error = sanitizeRoomError(roomErr, secrets)
 	return result, roomErr
-}
-
-func prepareRoomReplayOptions(opts RoomRunOptions, validation room.ValidationOptions) (RoomRunOptions, room.ValidationOptions, bool, error) {
-	replayPlan, replayMode, err := resolveRoomReplayPlan(opts)
-	if err != nil || !replayMode {
-		return opts, validation, replayMode, err
-	}
-	// The admitted bundle is the only configuration authority for replay. In
-	// particular, do not retain any live launch/device/credential seams while
-	// composing participants.
-	opts.ReplayPlan = &replayPlan
-	opts.ReplayPath = replayPlan.BundlePath
-	opts.Manifest = replayPlan.Manifest()
-	opts.LaunchPlan = nil
-	opts.DeviceService = nil
-	opts.CredentialLookup = nil
-	return opts, room.ValidationOptions{}, true, nil
 }
 
 func validateRoomRunAdmission(opts RoomRunOptions, validation room.ValidationOptions, replayMode bool) (RoomRunOptions, platformclock.Source, error) {
