@@ -63,7 +63,91 @@ func TestPreparedTracePoliciesAndNilDeviceCallbacks(t *testing.T) {
 		t.Fatal(err)
 	}
 }
-
+func TestFinishCanceledClosePrecedence(t *testing.T) {
+	t.Run("pre-canceled-before-close", testPreCanceledBeforeClose)
+	t.Run("simultaneous-ready", testSimultaneousReady)
+	t.Run("cancellation-at-completion", testCancellationAtCompletion)
+}
+func newCloseFixture(t *testing.T, cause error) (*prepared, chan struct{}, chan struct{}, *int) {
+	t.Helper()
+	release, started := make(chan struct{}), make(chan struct{})
+	calls := new(int)
+	prepared := &prepared{path: t.TempDir(), timeout: time.Second, closed: make(chan struct{}), closeTrace: func() error { (*calls)++; close(started); <-release; return cause }}
+	return prepared, release, started, calls
+}
+func waitForCloseSignal(t *testing.T, signal <-chan struct{}, message string) {
+	t.Helper()
+	select {
+	case <-signal:
+	case <-time.After(time.Second):
+		t.Fatal(message)
+	}
+}
+func assertCanceledClose(t *testing.T, prepared *prepared, err, cause error) {
+	t.Helper()
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled finish error = %v", err)
+	}
+	if cause != nil && !errors.Is(err, cause) {
+		t.Fatalf("canceled finish lost close cause: %v", err)
+	}
+	if err == nil || !strings.Contains(err.Error(), prepared.StagedPath()) {
+		t.Fatalf("canceled finish lost staged path: %v", err)
+	}
+}
+func assertOneClose(t *testing.T, calls *int) {
+	t.Helper()
+	if *calls != 1 {
+		t.Fatalf("closeTrace calls = %d, want one", *calls)
+	}
+}
+func testPreCanceledBeforeClose(t *testing.T) {
+	prepared, release, started, calls := newCloseFixture(t, errors.New("trace close sentinel"))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	result := make(chan error, 1)
+	go func() { result <- prepared.Finish(ctx, "", false) }()
+	waitForCloseSignal(t, started, "closeTrace did not start")
+	select {
+	case err := <-result:
+		assertCanceledClose(t, prepared, err, nil)
+	case <-time.After(time.Second):
+		t.Fatal("pre-canceled finish did not return")
+	}
+	close(release)
+	waitForCloseSignal(t, prepared.closed, "closeTrace did not complete")
+	assertOneClose(t, calls)
+}
+func testSimultaneousReady(t *testing.T) {
+	for trial := 0; trial < 100; trial++ {
+		cause := errors.New("trace close sentinel")
+		prepared, release, _, calls := newCloseFixture(t, cause)
+		close(release)
+		if err := prepared.Finish(context.Background(), "", false); !errors.Is(err, cause) {
+			t.Fatalf("trial %d initial finish lost close cause: %v", trial, err)
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		assertCanceledClose(t, prepared, prepared.Finish(ctx, "", false), cause)
+		assertOneClose(t, calls)
+	}
+}
+func testCancellationAtCompletion(t *testing.T) {
+	closeCause := errors.New("trace close sentinel")
+	prepared, release, started, calls := newCloseFixture(t, closeCause)
+	firstResult := make(chan error, 1)
+	go func() { firstResult <- prepared.Finish(context.Background(), "", false) }()
+	waitForCloseSignal(t, started, "closeTrace did not start")
+	close(release)
+	waitForCloseSignal(t, prepared.closed, "closeTrace did not complete")
+	if err := <-firstResult; !errors.Is(err, closeCause) {
+		t.Fatalf("initial completion lost close cause: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	assertCanceledClose(t, prepared, prepared.Finish(ctx, "", false), closeCause)
+	assertOneClose(t, calls)
+}
 func TestFinishCloseTimeoutRetainsStagedPath(t *testing.T) {
 	release := make(chan struct{})
 	completion := make(chan struct{})
@@ -109,7 +193,6 @@ func TestFinishCloseTimeoutRetainsStagedPath(t *testing.T) {
 		t.Fatalf("closeTrace calls = %d, want one", closeCalls)
 	}
 }
-
 func TestFinishRetryRetainsCloseCauseAndStagedPath(t *testing.T) {
 	closeCause := errors.New("trace close sentinel")
 	release := make(chan struct{})
@@ -130,7 +213,6 @@ func TestFinishRetryRetainsCloseCauseAndStagedPath(t *testing.T) {
 			close(completion)
 		}
 	}()
-
 	if err := prepared.Finish(context.Background(), "", false); !errors.Is(err, sessiontrace.ErrCloseTimeout) {
 		t.Fatalf("timeout error = %v", err)
 	}
@@ -141,7 +223,6 @@ func TestFinishRetryRetainsCloseCauseAndStagedPath(t *testing.T) {
 		t.Fatal("closeTrace did not start")
 	}
 	close(release)
-
 	retryResult := make(chan error, 1)
 	go func() {
 		retryResult <- prepared.Finish(context.Background(), "", false)
@@ -164,7 +245,6 @@ func TestFinishRetryRetainsCloseCauseAndStagedPath(t *testing.T) {
 		t.Fatalf("closeTrace calls = %d, want one", closeCalls)
 	}
 }
-
 func TestFinishRetryHonorsCancellationWhileCloseInFlight(t *testing.T) {
 	release := make(chan struct{})
 	released := make(chan struct{})
@@ -186,7 +266,6 @@ func TestFinishRetryHonorsCancellationWhileCloseInFlight(t *testing.T) {
 			close(completion)
 		}
 	}()
-
 	if err := prepared.Finish(context.Background(), "", true); !errors.Is(err, sessiontrace.ErrCloseTimeout) {
 		t.Fatalf("timeout error = %v", err)
 	}
@@ -201,7 +280,6 @@ func TestFinishRetryHonorsCancellationWhileCloseInFlight(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("closeTrace did not observe release")
 	}
-
 	retryContext, cancel := context.WithCancel(context.Background())
 	retryResult := make(chan error, 1)
 	go func() {
@@ -224,7 +302,6 @@ func TestFinishRetryHonorsCancellationWhileCloseInFlight(t *testing.T) {
 		t.Fatalf("closeTrace calls = %d, want one", closeCalls)
 	}
 }
-
 func TestFinishUnpublishedEmptyBundleRetainsCloseCauseAndStagedPath(t *testing.T) {
 	successfulClosePath := t.TempDir()
 	successfulClose := &prepared{

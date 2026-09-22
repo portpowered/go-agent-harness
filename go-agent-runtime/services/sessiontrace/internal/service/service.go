@@ -127,24 +127,50 @@ func (p *prepared) close(ctx context.Context) error {
 			close(p.closed)
 		}()
 	})
+	if err := p.contextError(ctx); err != nil {
+		return err
+	}
 	if !started {
 		select {
 		case <-p.closed:
-			return p.closeErr
+			return p.closeResult(ctx)
 		case <-ctx.Done():
-			return ctx.Err()
+			return p.contextError(ctx)
 		}
 	}
 	timer := time.NewTimer(p.timeout)
 	defer timer.Stop()
 	select {
 	case <-p.closed:
-		return p.closeErr
+		return p.closeResult(ctx)
 	case <-ctx.Done():
-		return ctx.Err()
+		return p.contextError(ctx)
 	case <-timer.C:
+		if err := p.contextError(ctx); err != nil {
+			return err
+		}
 		return fmt.Errorf("%w after %s", sessiontrace.ErrCloseTimeout, p.timeout)
 	}
+}
+
+func (p *prepared) contextError(ctx context.Context) error {
+	contextErr := ctx.Err()
+	if contextErr == nil {
+		return nil
+	}
+	select {
+	case <-p.closed:
+		return errors.Join(contextErr, p.closeErr)
+	default:
+		return contextErr
+	}
+}
+
+func (p *prepared) closeResult(ctx context.Context) error {
+	if contextErr := ctx.Err(); contextErr != nil {
+		return errors.Join(contextErr, p.closeErr)
+	}
+	return p.closeErr
 }
 
 func (p *prepared) retain(bundle string, err error) error {
