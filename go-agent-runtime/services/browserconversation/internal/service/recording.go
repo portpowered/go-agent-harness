@@ -14,10 +14,13 @@ import (
 )
 
 const (
-	defaultRecorderEvents = 4096
-	defaultRecorderBytes  = 16 << 20
-	recorderCloseTimeout  = time.Second
-	maxRecordingTextBytes = 4096
+	defaultRecorderEvents                        = 4096
+	defaultRecorderBytes                         = 16 << 20
+	recorderCloseTimeout                         = time.Second
+	maxRecordingTextBytes                        = 4096
+	recorderEventRetainedOverheadBytes           = 512
+	recorderToolRetainedOverheadBytes            = 96
+	recorderRemovedToolNameRetainedOverheadBytes = 16
 )
 
 type recorder struct {
@@ -219,7 +222,7 @@ func recordingSourceBytes(event browserconversation.BrowserEvent, request browse
 	}
 	// Account for retained slice elements and fixed event metadata so a stream
 	// of tiny values cannot grow memory without consuming the byte budget.
-	size += 512 + len(event.Tools)*96 + len(event.RemovedToolNames)*16
+	size += recorderEventRetainedOverheadBytes + len(event.Tools)*recorderToolRetainedOverheadBytes + len(event.RemovedToolNames)*recorderRemovedToolNameRetainedOverheadBytes
 	return size
 }
 
