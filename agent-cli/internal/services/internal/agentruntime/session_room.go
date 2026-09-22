@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/roomreplayadapter"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
@@ -309,11 +309,25 @@ type RoomRunOptions struct {
 type RoomOptions = RoomRunOptions
 
 func prepareRoomReplayOptions(opts RoomRunOptions, validation room.ValidationOptions) (RoomRunOptions, room.ValidationOptions, bool, error) {
-	replayPlan, replayMode, err := roomreplayadapter.LoadPlan(opts.ReplayService, opts.ReplayPlan, opts.ReplayPath)
-	if err != nil || !replayMode {
-		return opts, validation, replayMode, err
+	replayPlan := opts.ReplayPlan
+	replayMode := replayPlan != nil || strings.TrimSpace(opts.ReplayPath) != ""
+	if replayPlan == nil && strings.TrimSpace(opts.ReplayPath) != "" {
+		if opts.ReplayService == nil {
+			return opts, validation, true, errors.New("room replay service is required for replay path admission")
+		}
+		loaded, err := opts.ReplayService.Load(opts.ReplayPath)
+		if err != nil {
+			return opts, validation, true, err
+		}
+		replayPlan = &loaded
 	}
-	opts.ReplayPlan, opts.ReplayPath = &replayPlan, replayPlan.BundlePath
+	if !replayMode {
+		return opts, validation, false, nil
+	}
+	if replayPlan == nil {
+		return opts, validation, true, errors.New("replay plan is required")
+	}
+	opts.ReplayPlan, opts.ReplayPath = replayPlan, replayPlan.BundlePath
 	if opts.Manifest.SchemaVersion == 0 && len(opts.Manifest.Participants) == 0 {
 		return RoomRunOptions{}, validation, true, errors.New("replay room manifest is required")
 	}
@@ -332,7 +346,16 @@ func buildRoomReplaySchedule(ctx context.Context, replayMode bool, opts RoomRunO
 			targetIDs = append(targetIDs, plan.manifest.ID)
 		}
 	}
-	return roomreplayadapter.BuildSchedule(ctx, opts.ReplayService, opts.ReplayPlan, targetIDs, roomreplay.PCM16Format{SampleRate: format.SampleRate, Channels: format.Channels, FrameDuration: format.FrameDuration})
+	if opts.ReplayService == nil {
+		return nil, errors.New("room replay service is required")
+	}
+	return opts.ReplayService.Build(ctx, roomreplay.BuildRequest{
+		ReplayPlan: opts.ReplayPlan,
+		TargetIDs:  targetIDs,
+		TargetFormat: roomreplay.PCM16Format{
+			SampleRate: format.SampleRate, Channels: format.Channels, FrameDuration: format.FrameDuration,
+		},
+	})
 }
 
 func startRoomReplayScheduler(schedule roomreplay.Schedule, roomCtx context.Context, startGate <-chan struct{}, runtimes []*roomParticipantRuntime, coordinator *roomCoordinator, opts RoomRunOptions, wg *sync.WaitGroup) {

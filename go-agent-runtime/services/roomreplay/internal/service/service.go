@@ -84,21 +84,20 @@ func prepareReplayBuildRequest(request roomreplay.BuildRequest) (roomreplay.Buil
 			Type: event.Type, ParticipantID: event.ParticipantID,
 		})
 	}
-	request.Participants = make([]roomreplay.Participant, 0, len(request.TargetIDs))
 	for _, id := range request.TargetIDs {
 		participant, ok := plan.Participant(id)
 		if !ok {
 			return roomreplay.BuildRequest{}, fmt.Errorf("replay participant %q is missing", id)
 		}
-		sentPath := ""
-		for _, artifact := range participant.Artifacts {
-			if artifact.Role == roomreplay.ArtifactRoleSentPCM {
-				sentPath = artifact.AbsolutePath
-				break
-			}
-		}
-		if sentPath == "" {
+		if replayParticipantSentPCMPath(participant) == "" {
 			return roomreplay.BuildRequest{}, fmt.Errorf("replay participant %q sent PCM is missing", id)
+		}
+	}
+	request.Participants = make([]roomreplay.Participant, 0, len(plan.Participants))
+	for _, participant := range plan.Participants {
+		sentPath := replayParticipantSentPCMPath(participant)
+		if sentPath == "" {
+			continue
 		}
 		request.Participants = append(request.Participants, roomreplay.Participant{
 			ID: participant.ID, CapturePath: participant.CapturePath, SentPCMPath: sentPath,
@@ -106,6 +105,15 @@ func prepareReplayBuildRequest(request roomreplay.BuildRequest) (roomreplay.Buil
 	}
 	request.ReplayPlan = nil
 	return request, nil
+}
+
+func replayParticipantSentPCMPath(participant roomreplay.RoomReplayParticipant) string {
+	for _, artifact := range participant.Artifacts {
+		if artifact.Role == roomreplay.ArtifactRoleSentPCM {
+			return artifact.AbsolutePath
+		}
+	}
+	return ""
 }
 
 func (s *Service) ValidateOutput(plan RoomReplayPlan, destination string) error {
