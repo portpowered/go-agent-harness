@@ -43,6 +43,7 @@ func newInjectedSessionService(deps servicewire.SessionDependencies) serviceSess
 			deps.MetricSampler,
 			deps.Logger,
 			deps.ModelCatalog,
+			servicewire.NewBrowserConversationService(),
 		)
 	}
 	return servicewire.NewSessionService(deps)

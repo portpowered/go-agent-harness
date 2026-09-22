@@ -24,7 +24,7 @@ import (
 // Tests compose the same runtime and use-case services as the application graph.
 func newTestSessionService(deps sessionservicewire.SessionDependencies) agentsession.SessionService {
 	audioService := audioiowire.NewService()
-	deps.Runtime = sessionservicewire.NewSessionRuntime(audioService, deps.Clock, deps.ToolService, sessionservicewire.NewSessionRuntimeFactory(), deps.RuntimeFactory, deps.SessionInferencer, deps.ToolExecutor, runtimedeviceswire.NewService(deps.DeviceRegistry, audioService), deps.RuntimeObserver, deps.MetricSampler, deps.Logger, providerswire.NewModelCatalog())
+	deps.Runtime = sessionservicewire.NewSessionRuntime(audioService, deps.Clock, deps.ToolService, sessionservicewire.NewSessionRuntimeFactory(), deps.RuntimeFactory, deps.SessionInferencer, deps.ToolExecutor, runtimedeviceswire.NewService(deps.DeviceRegistry, audioService), deps.RuntimeObserver, deps.MetricSampler, deps.Logger, providerswire.NewModelCatalog(), sessionservicewire.NewBrowserConversationService())
 	return sessionservicewire.NewSessionService(deps)
 }
 

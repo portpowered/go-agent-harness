@@ -16,6 +16,7 @@ import (
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
+	runtimeBrowser "github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation"
 	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	sessiontrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
@@ -26,17 +27,18 @@ import (
 var _ contract.Runtime = (*Dispatcher)(nil)
 
 type Dependencies struct {
-	AudioService      audioio.Service
-	Clock             clock.Source
-	PlanFactory       sessionRuntimeFactory
-	ToolService       serviceTools.Service
-	RuntimeFactory    SessionRTCRuntimeFactory
-	SessionInferencer messages.SessionInferencer
-	ToolExecutor      messages.ToolExecutor
-	DeviceService     runtimedevices.Service
-	RuntimeObserver   SessionRuntimeObserver
-	Observability     observability.Dependencies
-	ModelCatalog      runtimeproviders.ModelCatalog
+	AudioService        audioio.Service
+	Clock               clock.Source
+	PlanFactory         sessionRuntimeFactory
+	ToolService         serviceTools.Service
+	RuntimeFactory      SessionRTCRuntimeFactory
+	SessionInferencer   messages.SessionInferencer
+	ToolExecutor        messages.ToolExecutor
+	DeviceService       runtimedevices.Service
+	RuntimeObserver     SessionRuntimeObserver
+	Observability       observability.Dependencies
+	ModelCatalog        runtimeproviders.ModelCatalog
+	BrowserConversation runtimeBrowser.Service
 }
 
 type Dispatcher struct{ deps Dependencies }
@@ -146,8 +148,7 @@ func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request)
 		RTCBinding:       runtimedevices.RTCBindingRequest{HoldToneConfig: request.HoldToneConfig, RemoteEndpoint: request.AudioDeviceServer},
 		AudioInTurnBarge: request.AudioInTurnBarge, ClientOwnsAudioTurnBoundaries: request.ClientOwnsAudioTurnBoundaries,
 		SessionUpdatedTimeout: request.SessionUpdatedTimeout, WaitForClose: request.WaitForClose,
-		runtimeFactory: d.deps.PlanFactory,
-		ModelCatalog:   d.deps.ModelCatalog,
+		runtimeFactory: d.deps.PlanFactory, ModelCatalog: d.deps.ModelCatalog, BrowserConversation: d.deps.BrowserConversation,
 	}
 	if err := validateSessionCaptureOptions(options); err != nil {
 		return SessionRunOptions{}, err

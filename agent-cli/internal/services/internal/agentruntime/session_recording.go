@@ -25,6 +25,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/sight"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	runtimeBrowser "github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -142,7 +143,7 @@ func runSessionWithImagesAndRecordingDirectory(
 	}
 	defer cleanup()
 	recording := newSessionDirectoryRecording(destination, plan, opts.SessionRunOptions)
-	recording.browser.start(ctx)
+	recording.startBrowser(ctx)
 	plan.loop.toolLifecycleObserver = recording
 	plan.loop.terminalSummaryRecorder = recording
 	if plan.inferencer != nil {
@@ -209,7 +210,7 @@ func runSessionWithRecordingDirectory(
 	defer cleanup()
 
 	recording := newSessionDirectoryRecording(destination, plan, opts)
-	recording.browser.start(ctx)
+	recording.startBrowser(ctx)
 	plan.loop.toolLifecycleObserver = recording
 	plan.loop.terminalSummaryRecorder = recording
 	if plan.inferencer != nil {
@@ -390,7 +391,8 @@ type sessionDirectoryRecording struct {
 	terminal         *transcript.RecordingTerminalSummary
 	conversation     sessionConversationCollector
 	imageArtifacts   []transcript.RecordingArtifact
-	browser          *sessionBrowserRecording
+	browser          runtimeBrowser.Recorder
+	browserErr       error
 
 	finalizeOnce sync.Once
 	finalizeErr  error
@@ -416,23 +418,24 @@ func newSessionDirectoryRecording(destination string, plan sessionRuntimePlan, o
 	// time. A fixed base makes paired captures comparable while the shared
 	// deterministic clock keeps both transcript sides on the same timeline.
 	base := sessionRecordingClockBase
-	return &sessionDirectoryRecording{
+	recording := &sessionDirectoryRecording{
 		destination:    destination,
 		directoryClaim: opts.recordingDirectoryClaim,
 		base:           base,
 		clock:          platformclock.NewDeterministic(base, time.Nanosecond),
 		conversation:   sessionConversationCollector{now: time.Now},
 		metadata: transcript.RecordingMetadata{
-			Transport: "websocket",
-			Model:     sessionRecordingModel(opts, plan),
-			ClockBase: base.Format(time.RFC3339Nano),
-			// The tick clock above is deliberately deterministic; the real
-			// wall-clock start anchors bundle timing for latency analysis.
+			Transport:      "websocket",
+			Model:          sessionRecordingModel(opts, plan),
+			ClockBase:      base.Format(time.RFC3339Nano),
 			WallClockStart: time.Now().UTC().Format(time.RFC3339Nano),
 		},
 		credentials: sessionRecordingCredentials(opts, plan),
-		browser:     newSessionBrowserRecording(opts, plan),
 	}
+	if opts.LoadedConfig != nil && opts.LoadedConfig.Browser.Recording.Enabled && opts.BrowserEventWatch != nil && opts.BrowserConversation != nil {
+		recording.browser, recording.browserErr = opts.BrowserConversation.NewRecorder(runtimeBrowser.RecordingRequest{Watch: opts.BrowserEventWatch, IncludeArguments: opts.LoadedConfig.Browser.Recording.IncludeArguments, IncludeResults: opts.LoadedConfig.Browser.Recording.IncludeResults, RedactURLQuery: opts.LoadedConfig.Browser.Recording.RedactURLQuery, RedactURLFragment: opts.LoadedConfig.Browser.Recording.RedactURLFragment, Credentials: recording.credentials})
+	}
+	return recording
 }
 
 func sessionRecordingCredentials(opts SessionRunOptions, plan sessionRuntimePlan) []string {
