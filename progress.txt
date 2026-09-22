@@ -4182,3 +4182,10 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   the worktree are clean. No tests were added.
 - Next action: push this exact head to the existing PR #540 and submit the
   complete retirement candidate to SCRIPT; hosted CI is not claimed green.
+
+# C278 merge-conflict recovery handoff checkpoint — 2026-09-22
+
+- The canonical review rejection identified PR #540 head `e3d190559b1bb18e2e26e18f4cad0630e718c126` as mergeable `CONFLICTING`. Fetched current `origin/main` at `233880feb8071d14367cb4fde149d354d9bac36a` and merged it into this same task branch without resetting the host checkout. Resolved the room/session, device-service, Wire, audio-bundle, and architecture-baseline conflicts while preserving the service-owned replay retirement and required predecessor ancestry.
+- The merge candidate `71af3e7b6` passed the focused suites, then the merged current-main device contract required the existing `rooms/wire` test stub to implement `BindRTC`. The final repair also reconciled the reduced room-planning file/function baselines and removed one non-semantic comment line so the baseline remained within current-main history. No new tests, production adapters, or legacy runtime files were added.
+- Exact repaired candidate `374e20f7398c1501f4b343a940c74e16fb66929b` is clean. `make prepush` passed with exit 0. Final vertical gates passed: roomreplay/rooms normal (125), race subset (85), CGO-disabled hermetic room/CLI packages, CLI replay, embedding consumer, `make test-integration` (agent-cli 311.666s; loop functional cached), `make test-regressions`, `make architecture-size-check`, `make wire-check`, and `git diff --check`. Retirement audit confirms all four planned replay production files are absent; the two stateless adapters total 57 physical lines.
+- Next action: push this exact head to the existing PR #540, update its handoff with the SHA and gate evidence, and submit the complete retirement candidate to SCRIPT. Hosted CI is not claimed green and will not be polled.
