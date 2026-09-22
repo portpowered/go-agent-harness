@@ -153,7 +153,7 @@ func NewSessionRuntimeFactory() agentruntime.SessionRuntimeFactory {
 var SessionSet = wire.NewSet(NewSessionRuntimeFactory, NewSessionRuntime, NewSessionService)
 
 // SelfPlaySet wires the service-owned constructor from its own dependency type.
-var SelfPlaySet = wire.NewSet(
+var SelfPlaySet = wire.NewSet( //nolint:gochecknoglobals // immutable Wire provider metadata
 	runtimeSelfPlayWire.NewService,
 	wire.Struct(new(runtimeSelfPlayWire.Dependencies), "SessionService", "ModelCatalog", "Clock"),
 )

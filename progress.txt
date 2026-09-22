@@ -5298,3 +5298,24 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   planned self-play, race, repeat, nomicrophone, integration, regression,
   hermetic, embed, architecture, and Wire commands) before any PR update or
   push. Decision remains `CONTINUE`; no SCRIPT CI handoff is claimed.
+
+# C281 local gate repair checkpoint — 2026-09-21
+
+- The repeated `make prepush` run on `f56fa47b8ca0834bb61f95af6c8bb7d1eac678c9`
+  got past the transient parallel-linter collision and reported one real
+  finding: the new immutable `SelfPlaySet` Wire provider metadata needs the
+  same `gochecknoglobals` annotation used by adjacent provider sets. Added
+  that annotation only; full exact-head reruns remain pending on the repaired
+  candidate.
+- `make test-hermetic` was attempted and failed in the existing broad
+  `agent-cli/test/integration` suite, including legacy session-runtime
+  retirement mismatches and missing session audio/recording dependencies.
+  These failures are outside the self-play cluster and overlap unreleased
+  session/room caller seams. Preserve their full captured output, do not
+  mask or waive them, and reconcile only after the corresponding exact-path
+  owners release those seams. The required integration, regression, embed,
+  and repaired exact-head prepush checks are still in progress.
+- No push, PR, or SCRIPT CI handoff occurred. Continue with the repaired
+  prepush and every remaining declared local command on one exact candidate;
+  retain `CONTINUE` until peer releases are consumed and all reproducible
+  candidate failures are repaired.
