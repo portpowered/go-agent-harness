@@ -103,8 +103,9 @@ func TestRunRoomReplaySchedulesOverlapThroughProductionMixer(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	result, err := RunRoomWithResult(ctx, io.Discard, RoomRunOptions{
-		ReplayPath: bundle,
-		PCMFormat:  room.PCM16Format{SampleRate: 100, Channels: 1, FrameDuration: 20 * time.Millisecond},
+		AudioService: newTestAudioIOService(),
+		ReplayPath:   bundle,
+		PCMFormat:    room.PCM16Format{SampleRate: 100, Channels: 1, FrameDuration: 20 * time.Millisecond},
 		OnAudioInput: func(id string, pcm []byte) error {
 			mu.Lock()
 			inputFrames[id] = append(inputFrames[id], append([]byte(nil), pcm...))
@@ -194,6 +195,7 @@ func TestRoomReplaySchedulerCancellationStopsManualMixer(t *testing.T) {
 	}
 	var cancelOnce sync.Once
 	err = schedule.run(ctx, []*roomParticipantRuntime{target}, nil, RoomRunOptions{
+		AudioService: newTestAudioIOService(),
 		onParticipantAudioFanned: func(string, string, []byte) {
 			cancelOnce.Do(cancel)
 		},

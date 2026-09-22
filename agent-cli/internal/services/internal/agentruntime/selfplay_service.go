@@ -7,7 +7,13 @@ import (
 	"io"
 
 	public "github.com/portpowered/go-agent-harness/agent-cli/internal/services/selfplay"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -17,13 +23,14 @@ var _ public.Service = (*SelfPlayService)(nil)
 // service contract. Keeping this adapter in agentruntime avoids a sideways
 // dependency between sibling private services.
 type SelfPlayService struct {
+	audioService audioio.Service
 	factory      sessionRuntimeFactory
 	clock        platformclock.Source
 	modelCatalog runtimeproviders.ModelCatalog
 }
 
-func NewSelfPlayService(factory SessionRuntimeFactory, clockSource platformclock.Source, modelCatalog runtimeproviders.ModelCatalog) public.Service {
-	return &SelfPlayService{factory: factory, clock: clockSource, modelCatalog: modelCatalog}
+func NewSelfPlayService(audioService audioio.Service, factory SessionRuntimeFactory, clockSource platformclock.Source, modelCatalog runtimeproviders.ModelCatalog) public.Service {
+	return &SelfPlayService{audioService: audioService, factory: factory, clock: clockSource, modelCatalog: modelCatalog}
 }
 
 func (s *SelfPlayService) Run(ctx context.Context, out io.Writer, options public.RunOptions) error {
@@ -45,9 +52,53 @@ func (s *SelfPlayService) Run(ctx context.Context, out io.Writer, options public
 		ConfigDir:      options.ConfigDir,
 		MaxDuration:    options.MaxDuration,
 		MaxTurns:       options.MaxTurns,
+		audioService:   s.audioService,
 		clock:          s.clock,
 		runtimeFactory: s.factory,
 		modelCatalog:   s.modelCatalog,
 	})
 	return err
+}
+
+func runSelfPlaySide(ctx context.Context, name string, side int, inferencer messages.SessionInferencer, prompt string, output *selfPlayPCMBridge, ready chan<- *agentloop.AgentLoop, opts SelfPlayRunOptions, livenessClock SessionLivenessClock, evidence *selfPlayEvidence, stop *selfPlayStopState, results chan<- selfPlaySideResult) {
+	sideEvidence := evidence.side(side)
+	sideEvidence.diagnosticErr = func(err error) {
+		wrapped := fmt.Errorf("%s diagnostic evidence: %w", name, err)
+		evidence.fail(wrapped)
+		stop.fail(wrapped)
+	}
+	observer := sessiontracewire.NewObserver(sessiontrace.NewObserverOptions{
+		Sink: sideEvidence, Provider: opts.Provider, Model: opts.Model,
+		RuntimeRecorder: sideEvidence.runtimeRecord,
+		TerminalService: wire.NewService(),
+	})
+	observer.SetTurnAdmission(func(messages.StreamMessage) bool {
+		return stop.recordTurn(side, opts.MaxTurns)
+	})
+	observer.SetStreamObserver(selfPlayStreamObserver(ctx, name, sideEvidence, evidence, stop, output))
+	err := runAgentLoopSession(ctx, io.Discard, inferencer, sessionLoopOptions{
+		audioService:  opts.audioService,
+		Prompt:        prompt,
+		WaitForClose:  true,
+		Done:          stop.done,
+		DoneErr:       stop.doneErr,
+		observer:      observer,
+		runtime:       sideEvidence.runtimeRecord,
+		loopReady:     ready,
+		clockSource:   opts.clock,
+		livenessClock: livenessClock,
+	})
+	results <- selfPlaySideResult{name: name, err: err}
+}
+
+func recordSelfPlaySideResult(result selfPlaySideResult, stop *selfPlayStopState) {
+	if result.err != nil {
+		if !stop.stopped() {
+			stop.fail(fmt.Errorf("%s session: %w", result.name, result.err))
+		}
+		return
+	}
+	if !stop.stopped() {
+		stop.fail(fmt.Errorf("%s session ended before a self-play bound", result.name))
+	}
 }

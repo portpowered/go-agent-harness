@@ -1,23 +1,23 @@
 package agentruntime
 
-import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"sync"
+	"time"
+
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	sessionterminalwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
-	"io"
-	"sync"
-	"time"
 )
 
 // recordRoomTimelineEvent turns one participant's inbound stream message
@@ -108,11 +108,11 @@ func (s roomParticipantDiagnosticSink) RecordSessionDiagnostic(record SessionDia
 	if s.evidence != nil && record.Event == SessionDiagnosticEventTurn {
 		s.evidence.recordTimelineEvent("turn_completed", s.participantID, map[string]string{fieldTurnIndex: record.Fields[fieldTurnIndex]})
 	}
-	if s.observer == nil {
-		return
+	if s.observer != nil {
+		s.observer(s.participantID, record)
 	}
-	s.observer(s.participantID, record)
 }
+
 func runRoomParticipant(
 	roomCtx context.Context,
 	coordinator *roomCoordinator,
@@ -131,17 +131,15 @@ func runRoomParticipant(
 			close(runtime.participantDone)
 		}
 	}()
-	participantEvidence := (*roomParticipantEvidence)(nil)
-	if evidence != nil {
-		participantEvidence = evidence.participant(runtime.plan.manifest.ID)
-	}
+	participantEvidence := roomParticipantEvidenceForRuntime(evidence, runtime)
+	// Computed once, before any result can reach the coordinator, so a human
 	// participant's teardown (see finishParticipant) can name this
 	// participant on a playback overflow the same way a provider
 	// participant's session diagnostics already do below.
-	runtime.diagnosticSink, runtime.playbackDiagnostics = newRoomParticipantPlaybackDiagnostics(runtime, opts, participantEvidence, evidence)
+	runtime.diagnosticSink = sessiontracewire.CombineDiagnosticSinks(roomParticipantDiagnosticSinks(runtime.plan, opts, participantEvidence, evidence)...)
 	var observer sessiontrace.Observer
 	if !roomParticipantIsHuman(runtime.plan) {
-		observer = sessiontracewire.NewObserver(sessiontrace.NewObserverOptions{Sink: runtime.diagnosticSink, Provider: runtime.plan.manifest.Provider, Model: runtime.plan.manifest.Model, TerminalService: sessionterminalwire.NewService()})
+		observer = sessiontracewire.NewObserver(sessiontrace.NewObserverOptions{Sink: runtime.diagnosticSink, Provider: runtime.plan.manifest.Provider, Model: runtime.plan.manifest.Model, TerminalService: wire.NewService()})
 		observer.SetLivenessObserver(func(err error) {
 			runtime.lifecycle.markLivenessFailure(err)
 			classification, _, _, _ := sessiontracewire.LivenessMetadata(err)
@@ -161,7 +159,10 @@ func runRoomParticipant(
 		observer.SetStreamObserver(func(msg messages.StreamMessage) {
 			observeRoomParticipantStream(coordinator, runtime, opts, evidence, participantEvidence, runtime.ctx, msg)
 		})
-		observer.SetAdmittedTurnObserver(func(messages.StreamMessage) { observeRoomAdmittedTurn(runtime, coordinator) })
+		observer.SetAdmittedTurnObserver(func(messages.StreamMessage) {
+			turns := runtime.lifecycle.observeAdmittedTurn()
+			coordinator.noteTurn(runtime.plan.manifest.ID, turns)
+		})
 	}
 	inputObserver := opts.OnAudioInput
 	if observer != nil {
@@ -183,11 +184,12 @@ func runRoomParticipant(
 			}
 		}()
 		if roomParticipantIsHuman(runtime.plan) {
-			pumpRoomHumanOutput(roomCtx, coordinator, runtime, startGate, participantEvidence, secrets)
+			pumpRoomHumanOutput(runtime.ctx, roomCtx, coordinator, runtime, startGate, participantEvidence, secrets)
 			return
 		}
 		pumpRoomMixer(roomCtx, coordinator, runtime, startGate, opts.onParticipantAudioInput, inputObserver, participantEvidence, secrets)
 	}()
+
 	if startupErr := runtime.plan.startupErr; startupErr != nil {
 		// Setup failures are already retired from the coordinator's active set.
 		// Still use the ordinary result path so participant cleanup, evidence
@@ -206,6 +208,7 @@ func runRoomParticipant(
 		}
 		return
 	}
+
 	if roomParticipantIsHuman(runtime.plan) {
 		if runtime.plan.replay {
 			select {
@@ -218,7 +221,7 @@ func runRoomParticipant(
 			results <- roomParticipantRunResult{plan: runtime.plan, runtime: runtime, connected: connected, connectErr: connectErr}
 			return
 		}
-		runErr := runRoomHumanCapture(roomCtx, coordinator, runtime, startGate, participantEvidence, opts, secrets)
+		runErr := runRoomHumanCapture(runtime.ctx, roomCtx, coordinator, runtime, startGate, participantEvidence, opts, secrets)
 		runErr = coordinator.participantRunError(runtime.plan.manifest.ID, runErr)
 		runtime.lifecycle.markRunDone(runErr)
 		connected, _, _, _, _, _, connectErr := runtime.lifecycle.snapshot()
@@ -226,7 +229,7 @@ func runRoomParticipant(
 		return
 	}
 	diagnosticSinks := roomParticipantDiagnosticSinks(runtime.plan, opts, participantEvidence, evidence)
-	observer = sessiontracewire.NewObserver(sessiontrace.NewObserverOptions{Sink: sessiontracewire.CombineDiagnosticSinks(diagnosticSinks...), Provider: runtime.plan.manifest.Provider, Model: runtime.plan.manifest.Model, TerminalService: sessionterminalwire.NewService()})
+	observer = sessiontracewire.NewObserver(sessiontrace.NewObserverOptions{Sink: sessiontracewire.CombineDiagnosticSinks(diagnosticSinks...), Provider: runtime.plan.manifest.Provider, Model: runtime.plan.manifest.Model, TerminalService: wire.NewService()})
 	observer.SetLivenessObserver(func(err error) {
 		runtime.lifecycle.markLivenessFailure(err)
 		classification, _, _, _ := sessiontracewire.LivenessMetadata(err)
@@ -295,7 +298,10 @@ func runRoomParticipant(
 	observer.SetStreamObserver(func(msg messages.StreamMessage) {
 		observeRoomParticipantStream(coordinator, runtime, opts, evidence, participantEvidence, runtime.ctx, msg)
 	})
-	observer.SetAdmittedTurnObserver(func(messages.StreamMessage) { observeRoomAdmittedTurn(runtime, coordinator) })
+	observer.SetAdmittedTurnObserver(func(messages.StreamMessage) {
+		turns := runtime.lifecycle.observeAdmittedTurn()
+		coordinator.noteTurn(runtime.plan.manifest.ID, turns)
+	})
 	var latencyRuntime sessiontrace.RuntimeRecorder
 	if evidence != nil && evidence.latency != nil {
 		latencyRuntime = sessiontracewire.NewRuntimeRecorder(roomLatencyRuntimeObserver{
@@ -313,6 +319,8 @@ func runRoomParticipant(
 	loopOptions := sessionLoopOptions{
 		Prompt:        runtime.plan.options.Prompt,
 		livenessClock: runtime.plan.options.LivenessClock,
+		audioService:  runtime.plan.options.AudioService,
+		clockSource:   platformclock.Ensure(runtime.plan.options.Clock),
 		WaitForClose:  true,
 		Done:          coordinator.done,
 		DoneErr: func() error {
@@ -373,6 +381,7 @@ func runRoomParticipant(
 	}
 	results <- roomParticipantRunResult{plan: runtime.plan, runtime: runtime, err: runErr, connected: connected, connectErr: connectErr}
 }
+
 func combineRoomDoneChannels(primary, secondary <-chan struct{}) <-chan struct{} {
 	if primary == nil {
 		return secondary
@@ -390,6 +399,7 @@ func combineRoomDoneChannels(primary, secondary <-chan struct{}) <-chan struct{}
 	}()
 	return done
 }
+
 func combineRoomDoneErrors(primary, secondary func() error) func() error {
 	if primary == nil {
 		return secondary
@@ -402,19 +412,11 @@ func combineRoomDoneErrors(primary, secondary func() error) func() error {
 	}
 }
 
-func observeRoomAdmittedTurn(runtime *roomParticipantRuntime, coordinator *roomCoordinator) {
-	turns := runtime.lifecycle.observeAdmittedTurn()
-	coordinator.noteTurn(runtime.plan.manifest.ID, turns)
-}
-func roomParticipantDiagnosticSinks(
-	plan *roomParticipantPlan,
-	opts RoomRunOptions,
-	participantEvidence *roomParticipantEvidence,
-	evidence *roomEvidence,
-) []SessionDiagnosticSink {
-	diagnosticSinks := make([]SessionDiagnosticSink, 0)
-	if evidence != nil {
-		diagnosticSinks = append(diagnosticSinks, roomParticipantDiagnosticSink{participantID: plan.manifest.ID, evidence: evidence})
+func roomParticipantDiagnosticSinks(plan *roomParticipantPlan, opts RoomRunOptions,
+	participantEvidence *roomParticipantEvidence, evidence ...*roomEvidence) []SessionDiagnosticSink {
+	diagnosticSinks := make([]SessionDiagnosticSink, 0, 2+len(evidence))
+	if len(evidence) > 0 && evidence[0] != nil {
+		diagnosticSinks = append(diagnosticSinks, roomParticipantDiagnosticSink{participantID: plan.manifest.ID, evidence: evidence[0]})
 	}
 	if participantEvidence != nil {
 		diagnosticSinks = append(diagnosticSinks, participantEvidence)
@@ -427,12 +429,14 @@ func roomParticipantDiagnosticSinks(
 	}
 	return diagnosticSinks
 }
+
 func observeRoomParticipantStream(
 	coordinator *roomCoordinator,
 	runtime *roomParticipantRuntime,
 	opts RoomRunOptions,
 	evidence *roomEvidence,
-	participantEvidence *roomParticipantEvidence, ctx context.Context,
+	participantEvidence *roomParticipantEvidence,
+	ctx context.Context,
 	msg messages.StreamMessage,
 ) {
 	plan := runtime.plan
@@ -473,19 +477,11 @@ func observeRoomParticipantStream(
 		coordinator.failParticipant(plan.manifest.ID, roomParticipantFailure(plan.manifest.ID, fmt.Errorf("AUDIO.DELTA has unexpected value %T", msg.Value), secretsForPlan(plan)))
 		return
 	}
-	pcm := append([]byte(nil), value.Content...)
-	if runtime.outboundLoudness != nil {
-		// Apply this participant's fixed, voice-specific gain (see
-		// VoiceLoudnessGainDB) before anything downstream observes it, so
-		// --voice selection cannot leave one room participant audibly
-		// quieter than another. msg.Value is updated to the same bytes so
-		// the recorded delta (below, via recordParticipantDelta) stays
-		// byte-identical to the WAV/mix artifacts derived from pcm -- a
-		// replay bundle must be able to reconstruct its WAV from its
-		// recorded deltas.
-		pcm = runtime.outboundLoudness.ProcessBytes(pcm)
-		msg.Value = messages.NewAudioDeltaValueWithMediaType(pcm, value.MediaType)
+	pcm, ok := applyRoomParticipantVoiceTransform(coordinator, runtime, opts, plan, append([]byte(nil), value.Content...))
+	if !ok {
+		return
 	}
+	msg.Value = messages.NewAudioDeltaValueWithMediaType(pcm, value.MediaType)
 	targets := coordinator.activeExcept(plan.manifest.ID)
 	targetIDs := make([]string, 0, len(targets))
 	for _, target := range targets {
@@ -512,7 +508,8 @@ func observeRoomParticipantStream(
 			return
 		}
 	}
-	// Room replay audio is released by the single room scheduler from the recorded logical timeline. Provider output remains observable above, but
+	// Room replay audio is released by the single room scheduler from the
+	// recorded logical timeline. Provider output remains observable above, but
 	// independently fanning it here would let goroutine timing choose the
 	// cross-participant order and overlap. Only the fan-out is skipped: the
 	// durable evidence writes below still run on the replay path, so a replayed
@@ -536,13 +533,17 @@ func observeRoomParticipantStream(
 			}
 		}
 	}
-	// Durable JSONL/WAV evidence is intentionally recorded after the bounded provider-to-peer handoff; a slow filesystem must not make the next room mixer frame wait before it can accept the first provider PCM delta.
+	// Durable JSONL/WAV evidence is intentionally recorded after the bounded
+	// provider-to-peer handoff. A slow filesystem must not make the next room
+	// mixer frame wait before it can accept the first provider PCM delta.
 	recordParticipantDelta()
 	if participantEvidence != nil {
-		// Durable WAV I/O only. A slow filesystem here must not delay the provider-to-peer handoff above.
-		participantEvidence.owner.recordError(participantEvidence.id, "", participantEvidence.observeAudio(ctx, pcm))
+		// Durable WAV I/O only. A slow filesystem here must not delay the
+		// provider-to-peer handoff above.
+		_ = participantEvidence.observeAudio(context.WithoutCancel(ctx), pcm) //nolint:errcheck // evidence status retains write failures without interrupting session delivery
 	}
 }
+
 func finalizeRoomParticipantResults(
 	coordinator *roomCoordinator,
 	plans []*roomParticipantPlan,
@@ -874,21 +875,6 @@ func cleanupRoomParticipantSetup(runtimes []*roomParticipantRuntime, mesh *room.
 	return cleanupErr
 }
 
-func closeRoomParticipantDevices(runtime *roomParticipantRuntime, cleanup *roomCleanupWaiter) error {
-	if runtime == nil || runtime.plan == nil {
-		return nil
-	}
-	id := runtime.plan.manifest.ID
-	var closeErr error
-	if runtime.input != nil {
-		closeErr = errors.Join(closeErr, boundedRoomCleanupOperation(cleanup, roomLifecycleWorkLabel(id, "input.device"), runtime.input.Close))
-	}
-	if runtime.output != nil {
-		closeErr = errors.Join(closeErr, boundedRoomCleanupOperation(cleanup, roomLifecycleWorkLabel(id, "output.device"), runtime.output.Close))
-	}
-	return closeErr
-}
-
 func finishRoomParticipant(coordinator *roomCoordinator, mesh *room.Mesh, result roomParticipantRunResult, secrets []string, cleanup *roomCleanupWaiter) {
 	if result.runtime == nil || result.plan == nil {
 		return
@@ -1008,177 +994,15 @@ func roomProviderInputPCM(runtime *roomParticipantRuntime, pcm []byte) ([]byte, 
 		// media seam; their mixer bytes are already at that seam's rate.
 		return pcm, nil
 	}
-	converted, err := convertSessionAudioPCM(pcm, sourceRate, providerRate)
+	service := runtime.plan.options.AudioService
+	if service == nil {
+		return nil, errors.New("audio service is required for room participant conversion")
+	}
+	converted, err := service.ConvertPCM16(context.Background(), audioio.PCM16Request{
+		PCM: pcm, SourceRate: sourceRate, TargetRate: providerRate,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("convert room participant %q input from %d Hz to provider rate %d Hz: %w", runtime.plan.manifest.ID, sourceRate, providerRate, err)
+		return nil, fmt.Errorf("convert room participant %q input from %d Hz to provider rate %d Hz: convert session input from %d Hz to provider rate %d Hz: %w", runtime.plan.manifest.ID, sourceRate, providerRate, sourceRate, providerRate, err)
 	}
 	return converted, nil
-}
-
-func runRoomHumanCapture(
-	roomCtx context.Context,
-	coordinator *roomCoordinator,
-	runtime *roomParticipantRuntime,
-	startGate <-chan struct{},
-	participantEvidence *roomParticipantEvidence,
-	opts RoomRunOptions,
-	secrets []string,
-) error {
-	if runtime == nil || runtime.plan == nil || runtime.input == nil || runtime.mixer == nil {
-		return errors.New("human participant input device is not ready")
-	}
-	select {
-	case <-startGate:
-	case <-runtime.ctx.Done():
-		return nil
-	case <-roomCtx.Done():
-		return nil
-	}
-
-	participantID := runtime.plan.manifest.ID
-	frame := make([]int16, audio.FrameSize)
-	for {
-		if err := runtime.input.ReadFrame(runtime.ctx, frame); err != nil {
-			if errors.Is(err, io.EOF) || runtime.ctx.Err() != nil || coordinator.isStopping() || errors.Is(err, context.Canceled) {
-				return nil
-			}
-			failure := roomParticipantFailure(participantID, fmt.Errorf("read human input device: %w", err), secrets)
-			coordinator.failParticipant(participantID, failure)
-			return failure
-		}
-		roomSamples, err := audio.ResamplePCM16(frame, audio.SampleRate, runtime.mixer.Format().SampleRate)
-		if err != nil {
-			failure := roomParticipantFailure(participantID, fmt.Errorf("convert human input audio: %w", err), secrets)
-			coordinator.failParticipant(participantID, failure)
-			return failure
-		}
-		pcm := encodeRoomPCM16(roomSamples)
-		if participantEvidence != nil {
-			// Evidence is best-effort and independent of human capture/fan-out.
-			participantEvidence.owner.recordError(participantEvidence.id, "", participantEvidence.observeSentAudio(roomCtx, pcm))
-		}
-		for _, target := range coordinator.activeExcept(participantID) {
-			if target == nil || target.mixer == nil {
-				continue
-			}
-			targetPCM := pcm
-			if target.mixer.Format() != runtime.mixer.Format() {
-				targetSamples, convertErr := audio.ResamplePCM16(frame, audio.SampleRate, target.mixer.Format().SampleRate)
-				if convertErr != nil {
-					failure := roomParticipantFailure(participantID, fmt.Errorf("convert human input audio for %s: %w", target.plan.manifest.ID, convertErr), secrets)
-					coordinator.failParticipant(participantID, failure)
-					return failure
-				}
-				targetPCM = encodeRoomPCM16(targetSamples)
-			}
-			if writeErr := routeRoomPeerPCM(runtime.ctx, participantID, target, targetPCM); writeErr != nil {
-				if coordinator.isActive(target.plan.manifest.ID) {
-					failure := roomParticipantFailure(target.plan.manifest.ID, fmt.Errorf("receive fan out human PCM from %s: %w", participantID, writeErr), secrets)
-					coordinator.failParticipant(target.plan.manifest.ID, failure)
-					return failure
-				}
-				continue
-			}
-			if opts.onParticipantAudioFanned != nil {
-				opts.onParticipantAudioFanned(participantID, target.plan.manifest.ID, append([]byte(nil), targetPCM...))
-			}
-		}
-	}
-}
-
-func pumpRoomHumanOutput(ctx context.Context, coordinator *roomCoordinator, runtime *roomParticipantRuntime, startGate <-chan struct{}, participantEvidence *roomParticipantEvidence, secrets []string) {
-	if runtime == nil || runtime.mixer == nil || runtime.output == nil {
-		return
-	}
-	select {
-	case <-startGate:
-	case <-runtime.ctx.Done():
-		return
-	case <-ctx.Done():
-		return
-	}
-	output := roomHumanOutputBuffer{}
-	// A human participant is this room's actual customer-facing speaker.
-	// The filler covers both measured dead-air cases uniformly: a
-	// turn-transition pause and a tool-call round trip both surface here as
-	// "the mixer has nothing active right now" (see audio.ApplyHoldTonePCM16).
-	roomClock := roomHumanOutputClock(runtime)
-	holdTone := audio.NewHoldToneFiller(audio.DefaultHoldToneConfig(), runtime.mixer.Format().SampleRate, roomClock.Now())
-	for {
-		mixed, err := runtime.mixer.ReadFrameWithSources(runtime.ctx)
-		if err != nil {
-			if errors.Is(err, context.Canceled) || errors.Is(err, room.ErrMixerClosed) || runtime.ctx.Err() != nil || coordinator.isStopping() {
-				return
-			}
-			coordinator.failParticipant(runtime.plan.manifest.ID, roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("read human output mixer: %w", err), secrets))
-			return
-		}
-		frame := audio.ApplyHoldTonePCM16(holdTone, roomClock.Now(), mixed.PCM)
-		if err := output.writeFrame(runtime.ctx, runtime.output, runtime.mixer.Format(), frame); err != nil {
-			if runtime.ingress != nil {
-				runtime.ingress.resolveFrame(mixed.Sources, len(frame), roomAudioIngressReasonParticipantOutputRejected)
-			}
-			if runtime.ctx.Err() != nil || coordinator.isStopping() {
-				return
-			}
-			coordinator.failParticipant(runtime.plan.manifest.ID, roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("write human output device: %w", err), secrets))
-			return
-		}
-		if runtime.ingress != nil {
-			runtime.ingress.resolveFrame(mixed.Sources, len(frame), "")
-		}
-		if participantEvidence != nil {
-			_ = participantEvidence.observeReceivedAudio(frame)
-		}
-	}
-}
-
-// roomHumanOutputClock keeps hold-tone elapsed deadlines in the room's
-// injected time domain. Room orchestration normalizes a nil source to the
-// live clock, while replay and deterministic tests provide a scheduler whose
-// elapsed time is advanced explicitly by the caller.
-func roomHumanOutputClock(runtime *roomParticipantRuntime) platformclock.Source {
-	if runtime != nil && runtime.plan != nil {
-		return platformclock.Ensure(runtime.plan.options.Clock)
-	}
-	return platformclock.Real{}
-}
-
-func encodeRoomPCM16(samples []int16) []byte {
-	return codec.EncodePCM16(samples)
-}
-
-type roomHumanOutputBuffer struct {
-	pending []int16
-}
-
-func (b *roomHumanOutputBuffer) writeFrame(ctx context.Context, sink *devicegw.DeviceSink, format room.PCM16Format, pcm []byte) error {
-	if sink == nil {
-		return errors.New("human participant output device is nil")
-	}
-	if format == (room.PCM16Format{}) {
-		format = room.DefaultPCM16Format()
-	}
-	if format.Channels != 1 {
-		return fmt.Errorf("human output requires mono mixer audio, got %d channels", format.Channels)
-	}
-	if len(pcm)%2 != 0 {
-		return errors.New("human output mixer produced an odd PCM16 frame")
-	}
-	samples, err := codec.DecodePCM16WithLimit(pcm, len(pcm))
-	if err != nil {
-		return fmt.Errorf("decode human output mixer PCM16: %w", err)
-	}
-	converted, err := audio.ResamplePCM16(samples, format.SampleRate, audio.SampleRate)
-	if err != nil {
-		return fmt.Errorf("resample mixer audio from %d Hz to %d Hz: %w", format.SampleRate, audio.SampleRate, err)
-	}
-	b.pending = append(b.pending, converted...)
-	for len(b.pending) >= audio.FrameSize {
-		if err := sink.WriteFrame(ctx, b.pending[:audio.FrameSize]); err != nil {
-			return err
-		}
-		b.pending = b.pending[audio.FrameSize:]
-	}
-	return nil
 }

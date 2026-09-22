@@ -18,6 +18,8 @@ import (
 	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
+	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 	runtimeBrowser "github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation"
 	runtimeBrowserWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation/wire"
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
@@ -40,10 +42,11 @@ func NewDeviceService(registry devicegw.DeviceRegistry) serviceDevices.DeviceSer
 // NewDeviceProbeSessionFactory keeps realtime session construction in the
 // application graph while the reusable runtime device service owns probe
 // execution.
-func NewDeviceProbeSessionFactory(modelCatalog runtimeProviders.ModelCatalog) serviceDevices.DeviceProbeSessionFactory {
+func NewDeviceProbeSessionFactory(audioService audioio.Service, modelCatalog runtimeProviders.ModelCatalog) serviceDevices.DeviceProbeSessionFactory {
 	return func(request serviceDevices.DeviceProbeRequest, instructions string) (messages.SessionInferencer, string, error) {
 		return agentruntime.NewLiveSessionInferencer(agentruntime.SessionRunOptions{
-			Provider: request.Provider, Model: request.Model, APIKey: request.APIKey,
+			AudioService: audioService,
+			Provider:     request.Provider, Model: request.Model, APIKey: request.APIKey,
 			BaseURL: request.BaseURL, ConfigDir: request.ConfigDir,
 			ModelCatalog: modelCatalog, WebSocketDialer: request.WebSocketDialer,
 		}, instructions)
@@ -110,13 +113,13 @@ func (s legacyToolCapabilitiesService) Resolve(cfg *config.Config) (serviceTools
 
 // NewSelfPlayService keeps the self-play runtime implementation private while
 // exposing only its value-oriented application contract to the CLI graph.
-func NewSelfPlayService(factory agentruntime.SessionRuntimeFactory, clockSource clock.Source, modelCatalog runtimeProviders.ModelCatalog) serviceSelfPlay.Service {
-	return agentruntime.NewSelfPlayService(factory, clockSource, modelCatalog)
+func NewSelfPlayService(audioService audioio.Service, factory agentruntime.SessionRuntimeFactory, clockSource clock.Source, modelCatalog runtimeProviders.ModelCatalog) serviceSelfPlay.Service {
+	return agentruntime.NewSelfPlayService(audioService, factory, clockSource, modelCatalog)
 }
 
 // DeviceSet is the device service's complete provider set. Application Wire
 // composition includes this set alongside the existing registry provider.
-var DeviceSet = wire.NewSet(NewDeviceService, NewDeviceProbeSessionFactory, NewDeviceProbeService, runtimeDevicesWire.NewService) //nolint:gochecknoglobals // immutable Wire provider metadata
+var DeviceSet = wire.NewSet(NewDeviceService, NewDeviceProbeSessionFactory, NewDeviceProbeService, audioiowire.NewService, runtimeDevicesWire.NewService) //nolint:gochecknoglobals // immutable Wire provider metadata
 
 // SessionDependencies are the process-scoped seams installed by application
 // Wire. Invocation requests carry values only; runtime and capability owners
@@ -144,14 +147,13 @@ func NewSessionService(deps SessionDependencies) serviceSession.SessionService {
 
 // NewSessionRuntime builds the private runtime implementation behind its
 // public contract. Application Wire never imports services/internal.
-func NewSessionRuntime(clockSource clock.Source, resolver serviceTools.Service, planFactory agentruntime.SessionRuntimeFactory, runtimeFactory agentruntime.SessionRTCRuntimeFactory, inferencer messages.SessionInferencer, toolExecutor messages.ToolExecutor, deviceRegistry devicegw.DeviceRegistry, observer agentruntime.SessionRuntimeObserver, metricSampler observability.MetricSampler, logger observability.Logger, modelCatalog runtimeProviders.ModelCatalog, browserConversation runtimeBrowser.Service) serviceRuntime.Runtime {
+func NewSessionRuntime(audioService audioio.Service, clockSource clock.Source, resolver serviceTools.Service, planFactory agentruntime.SessionRuntimeFactory, runtimeFactory agentruntime.SessionRTCRuntimeFactory, inferencer messages.SessionInferencer, toolExecutor messages.ToolExecutor, deviceService runtimeDevices.Service, observer agentruntime.SessionRuntimeObserver, metricSampler observability.MetricSampler, logger observability.Logger, modelCatalog runtimeProviders.ModelCatalog, browserConversation runtimeBrowser.Service) serviceRuntime.Runtime {
 	return agentruntime.New(agentruntime.Dependencies{
-		Clock: clockSource, PlanFactory: planFactory, ToolService: resolver, RuntimeFactory: runtimeFactory,
+		AudioService: audioService, Clock: clockSource, PlanFactory: planFactory, ToolService: resolver, RuntimeFactory: runtimeFactory,
 		SessionInferencer: inferencer, ToolExecutor: toolExecutor,
-		DeviceRegistry: deviceRegistry, RuntimeObserver: observer,
-		Observability:       observability.NewDependencies(metricSampler, logger),
-		ModelCatalog:        modelCatalog,
-		BrowserConversation: browserConversation,
+		DeviceService: deviceService, RuntimeObserver: observer,
+		Observability: observability.NewDependencies(metricSampler, logger),
+		ModelCatalog:  modelCatalog, BrowserConversation: browserConversation,
 	})
 }
 

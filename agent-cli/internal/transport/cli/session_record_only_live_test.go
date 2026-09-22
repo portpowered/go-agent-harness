@@ -101,7 +101,7 @@ model:
 	}
 
 	inferencer := newRecordOnlyLiveInferencer()
-	owner := NewSessionCommand(flags.NewAskFlags(), globalFlags, newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}, SessionInferencer: inferencer, DeviceRegistry: registry}), nil)
+	owner := newTestLiveSessionCommand(flags.NewAskFlags(), globalFlags, inferencer, registry)
 	command := owner.Generate()
 	command.SetOut(io.Discard)
 	recordPath := filepath.Join(t.TempDir(), "capture.json")
@@ -164,7 +164,7 @@ model:
 	}
 
 	inferencer := newRecordOnlyLiveInferencer()
-	owner := NewSessionCommand(flags.NewAskFlags(), globalFlags, newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}, SessionInferencer: inferencer, DeviceRegistry: registry}), nil)
+	owner := newTestLiveSessionCommand(flags.NewAskFlags(), globalFlags, inferencer, registry)
 	command := owner.Generate()
 	command.SetOut(io.Discard)
 	recordPath := filepath.Join(t.TempDir(), "test64.json")
@@ -238,7 +238,7 @@ model:
 	}
 
 	inferencer := newRecordOnlyLiveInferencer()
-	owner := NewSessionCommand(flags.NewAskFlags(), globalFlags, newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}, SessionInferencer: inferencer, DeviceRegistry: registry}), nil)
+	owner := newTestLiveSessionCommand(flags.NewAskFlags(), globalFlags, inferencer, registry)
 	command := owner.Generate()
 	command.SetOut(io.Discard)
 	audioPath := filepath.Join(t.TempDir(), "32.wav")

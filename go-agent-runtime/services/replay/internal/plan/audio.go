@@ -49,7 +49,11 @@ func (c *audioCursor) nextTurn() (session.LiveReplayAudioTurn, error) {
 		turn.Chunks = append(turn.Chunks, samples)
 		c.position++
 	}
-	if err := c.consume("input_audio_buffer.commit"); err != nil {
+	if c.position >= len(c.actions) || c.actions[c.position].Type != "input_audio_buffer.commit" {
+		if err := c.consume("input_audio_buffer.commit"); err != nil {
+			return turn, fmt.Errorf("%w: %w", errSelfDrivingPlanUnavailable, err)
+		}
+	} else if err := c.consume("input_audio_buffer.commit"); err != nil {
 		return turn, err
 	}
 	if err := c.consume("response.create"); err != nil {

@@ -145,7 +145,7 @@ func TestPlanSessionRuntimeThreadsResolvedInteractivePolicyBeforeProviderSetup(t
 	settings.LongRunningTimeout = 18 * time.Second
 	cfg := &config.Config{Tools: config.ToolsConfig{Interactive: settings}}
 
-	plan, err := planSessionRuntime(SessionRunOptions{ModelCatalog: testModelCatalog(),
+	plan, err := planSessionRuntime(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		ReplayPath:        "unused.json",
 		LoadedConfig:      cfg,
 		SessionInferencer: stubPlanSessionInferencer{},
@@ -177,7 +177,7 @@ func TestPlanSessionRuntimeLoadsInteractivePolicyFromConfigDir(t *testing.T) {
 		t.Fatalf("write config: %v", err)
 	}
 
-	plan, err := planSessionRuntime(SessionRunOptions{ModelCatalog: testModelCatalog(),
+	plan, err := planSessionRuntime(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		ConfigDir:         dir,
 		ReplayPath:        "unused.json",
 		SessionInferencer: stubPlanSessionInferencer{},

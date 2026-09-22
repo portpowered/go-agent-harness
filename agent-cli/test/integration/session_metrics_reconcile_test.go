@@ -3,9 +3,9 @@ package integration
 // The final-accounting proof drives the shipped `agent session` command over
 // the hermetic replay transport. The expected side is an independent fold of
 // the raw replay ledger; the actual side is the production-owned terminal
-// SessionRuntimeObservation.FinalAccounting value. Duration WAV and JSONL
-// artifacts remain user-visible output checks, but are never used as the
-// accounting source.
+// SessionRuntimeObservation.FinalAccounting value. The explicit recording
+// sidecar and --audio-out file remain user-visible output checks, but are
+// never used as the accounting source.
 
 import (
 	"bytes"
@@ -485,12 +485,12 @@ func removeOneNonEmptyOutputTextDelta(t *testing.T, ledger []ledgerEntry) ([]led
 	return nil, ledgerEntry{}
 }
 
-func readCommandObservation(t *testing.T) (fixturePath string, expectedPCM []byte, stdout string, fixtureLedger []ledgerEntry, finalAccounting *wire.SessionFinalAccounting, audioOut, durationAudio []byte, runErr error) {
+func readCommandObservation(t *testing.T) (fixturePath string, expectedPCM []byte, stdout string, fixtureLedger []ledgerEntry, finalAccounting *wire.SessionFinalAccounting, audioOut []byte, runErr error) {
 	t.Helper()
 	fixturePath, expectedPCM = buildMetricsReconcileFixture(t)
-	artifactBase := strings.TrimSuffix(fixturePath, filepath.Ext(fixturePath))
+	recordPath := filepath.Join(filepath.Dir(fixturePath), "metrics_reconcile_output.session.json")
+	artifactBase := strings.TrimSuffix(recordPath, filepath.Ext(recordPath))
 	transcriptPath := artifactBase + ".jsonl"
-	durationWAVPath := artifactBase + ".wav"
 	audioOutPath := filepath.Join(filepath.Dir(fixturePath), "assistant-reply.wav")
 
 	runtimeObserver := &runtimeObservationCapture{}
@@ -508,10 +508,10 @@ func readCommandObservation(t *testing.T) (fixturePath string, expectedPCM []byt
 	rootCmd.SetArgs([]string{
 		"session",
 		"--replay", fixturePath,
+		"--record", recordPath,
 		"--provider", "grok",
 		"--model", "grok-synthetic",
 		"--audio-out", audioOutPath,
-		"--max-duration", "2s",
 	})
 
 	bounded, cancel := context.WithTimeout(context.Background(), metricsReconcileDeadline)
@@ -525,10 +525,6 @@ func readCommandObservation(t *testing.T) (fixturePath string, expectedPCM []byt
 	}
 	if transcriptErr := validateTranscriptArtifact(transcriptPath, transcriptData); transcriptErr != nil {
 		t.Fatalf("validate command duration transcript: %v", transcriptErr)
-	}
-	durationAudio, readErr = os.ReadFile(durationWAVPath)
-	if readErr != nil {
-		t.Fatalf("read command duration WAV %s (run error: %v): %v", durationWAVPath, runErr, readErr)
 	}
 	audioOut, readErr = os.ReadFile(audioOutPath)
 	if readErr != nil {
@@ -556,7 +552,7 @@ func readCommandObservation(t *testing.T) (fixturePath string, expectedPCM []byt
 	if terminalCount != 1 || finalAccounting == nil {
 		t.Fatalf("runtime terminal observations = %d, final accounting nil = %t (run error: %v)", terminalCount, finalAccounting == nil, runErr)
 	}
-	return fixturePath, expectedPCM, stdout, fixtureLedger, finalAccounting, audioOut, durationAudio, runErr
+	return fixturePath, expectedPCM, stdout, fixtureLedger, finalAccounting, audioOut, runErr
 }
 
 func wavPCM(t *testing.T, name string, data []byte) []byte {
@@ -578,7 +574,7 @@ func wavPCM(t *testing.T, name string, data []byte) []byte {
 // terminal observation across every supported series and usage field, and
 // verifies the command reached SESSION.CLOSE.
 func TestSessionCommandMetricsReconcileMatchesIndependentFoldOverFullSession(t *testing.T) {
-	fixturePath, expectedPCM, stdout, fixtureLedger, captured, audioOut, durationAudio, runErr := readCommandObservation(t)
+	fixturePath, expectedPCM, stdout, fixtureLedger, captured, audioOut, runErr := readCommandObservation(t)
 	if runErr != nil {
 		t.Fatalf("session command returned an error over hermetic replay fixture %s: %v", fixturePath, runErr)
 	}
@@ -614,13 +610,8 @@ func TestSessionCommandMetricsReconcileMatchesIndependentFoldOverFullSession(t *
 		}
 	}
 
-	for name, wavData := range map[string][]byte{
-		"--audio-out WAV":       audioOut,
-		"duration artifact WAV": durationAudio,
-	} {
-		if got := wavPCM(t, name, wavData); !bytes.Equal(got, expectedPCM) {
-			t.Fatalf("%s PCM does not exactly equal the fixture audio fold: got %d bytes, want %d", name, len(got), len(expectedPCM))
-		}
+	if got := wavPCM(t, "--audio-out WAV", audioOut); !bytes.Equal(got, expectedPCM) {
+		t.Fatalf("--audio-out WAV PCM does not exactly equal the fixture audio fold: got %d bytes, want %d", len(got), len(expectedPCM))
 	}
 	if !strings.Contains(stdout, metricsReconcileText) {
 		t.Fatalf("stdout does not carry the command's text delta %q: %q", metricsReconcileText, stdout)
@@ -634,7 +625,7 @@ func TestSessionCommandMetricsReconcileMatchesIndependentFoldOverFullSession(t *
 // production final accounting using the same exact-equality verdict as the
 // positive case.
 func TestSessionCommandMetricsReconcileMissingOutputTextDeltaFails(t *testing.T) {
-	fixturePath, _, stdout, fixtureLedger, captured, _, _, runErr := readCommandObservation(t)
+	fixturePath, _, stdout, fixtureLedger, captured, _, runErr := readCommandObservation(t)
 	if runErr != nil {
 		t.Fatalf("session command returned an error over hermetic replay fixture %s: %v", fixturePath, runErr)
 	}

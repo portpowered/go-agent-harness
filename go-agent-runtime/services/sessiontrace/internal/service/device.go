@@ -63,6 +63,16 @@ func (s traceDeviceService) Open(ctx context.Context, request runtimeDevices.Req
 	return &traceDeviceHandle{inner: handle, capture: capture, monitor: monitor}, nil
 }
 
+// BindRTC forwards the host-neutral RTC binding request to the device
+// service. RTC observation hooks are part of the request contract, so the
+// wrapper does not create a second binding or retain device state here.
+func (s traceDeviceService) BindRTC(ctx context.Context, request runtimeDevices.RTCBindingRequest) (runtimeDevices.RTCBinding, error) {
+	if s.inner == nil {
+		return nil, runtimeDevices.ErrUnavailable
+	}
+	return s.inner.BindRTC(ctx, request)
+}
+
 func (s traceDeviceService) bindTraceCapture(port runtimeDevices.Capture, request runtimeDevices.Request) runtimeDevices.Capture {
 	if port == nil {
 		return nil

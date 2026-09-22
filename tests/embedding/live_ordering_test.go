@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	devicewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
@@ -128,7 +129,7 @@ func TestExternalFiniteCaptureTurnsRemainOrderedAndResponseGated(t *testing.T) {
 	}
 	err := runner.RunLive(context.Background(), session.LiveRunOptions{
 		Request:       session.LiveRequest{SessionID: "finite-turns", FinishAfterResponse: true, ExpectedResponses: 2},
-		Devices:       devicewire.NewFileService(),
+		Devices:       devicewire.NewFileService(audioiowire.NewService()),
 		DeviceRequest: devices.Request{SampleRate: 24000, Channels: audio.Channels},
 		CaptureTurns: []devices.FileInput{
 			{Source: audio.NewSliceSource([]int16{1, 2, 3}), SampleRate: audio.SampleRate},

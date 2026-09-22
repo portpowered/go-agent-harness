@@ -208,6 +208,7 @@ func TestScheduledSessionWaitsForAcceptedToolResultAfterResponseDone(t *testing.
 	runErr := make(chan error, 1)
 	go func() {
 		runErr <- servicetest.RunSession(ctx, io.Discard, servicetest.SessionRunOptions{
+			AudioService:      newTestAudioService(),
 			RecordPath:        "scheduled-tool-lifecycle.session.json",
 			Provider:          "grok",
 			Model:             "grok-realtime",

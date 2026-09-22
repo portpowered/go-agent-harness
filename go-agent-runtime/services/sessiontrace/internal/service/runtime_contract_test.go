@@ -504,6 +504,10 @@ func (s *traceContractDeviceService) Open(_ context.Context, _ runtimeDevices.Re
 	return s.handle, s.openErr
 }
 
+func (s *traceContractDeviceService) BindRTC(context.Context, runtimeDevices.RTCBindingRequest) (runtimeDevices.RTCBinding, error) {
+	return nil, runtimeDevices.ErrUnavailable
+}
+
 type traceContractHandle struct {
 	ports      runtimeDevices.MediaPorts
 	closeCount int

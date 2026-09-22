@@ -10,14 +10,14 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	sessionterminalwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
 // SessionMaxDurationReason is the stable terminal reason for a planned
 // duration cutoff.
-const SessionMaxDurationReason = sessionterminal.MaxDurationReason
+const SessionMaxDurationReason messages.TerminalReason = "max_duration"
 
 var ErrInvalidSessionMaxDuration = sessioncontract.ErrInvalidSessionMaxDuration
 
@@ -34,29 +34,40 @@ type SessionDurationClock interface {
 	NewTimer(time.Duration) SessionDurationTimer
 }
 
-func joinSessionAudioOutputError(runErr error, path string, outputErr error) error {
-	if outputErr == nil || errors.Is(runErr, outputErr) {
-		return runErr
+func sessionDurationClockFromSource(service audioio.Service, source platformclock.Source) (SessionDurationClock, error) {
+	if service == nil {
+		return nil, errors.New("audio service is required for session duration timing")
 	}
-	return errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", path, outputErr))
+	return service.NewClock(source)
 }
 
-func sessionDurationClockFromSource(source platformclock.Source) (SessionDurationClock, error) {
-	timerSource, err := sessionTimerSource(source)
-	if err != nil {
-		return nil, err
+func sessionDurationRTCPumpErrors(opts sessionLoopOptions) <-chan error {
+	if opts.rtcDeviceBinding == nil {
+		return nil
 	}
-	return timerSource, nil
+	return opts.rtcDeviceBinding.Errors()
+}
+
+func startSessionDurationObserver(opts sessionLoopOptions) func() {
+	if opts.observer == nil {
+		return func() {}
+	}
+	opts.observer.SetLivenessClock(opts.livenessClock)
+	opts.observer.SetToolResultsEnabled(opts.ToolExecutor != nil)
+	return opts.observer.StopLiveness
 }
 
 // RunSessionWithMaxDuration runs a session with an optional graceful duration
 // bound. A zero duration disables the controller; a positive duration requests
 // a session close and drains the accepted output before finalization.
 func RunSessionWithMaxDuration(ctx context.Context, out io.Writer, opts SessionRunOptions, maxDuration time.Duration) error {
+	if err := sessioncontract.ValidateSessionMaxDuration(maxDuration); err != nil {
+		return err
+	}
 	if maxDuration == 0 {
 		return RunSessionWithMaxDurationClock(ctx, out, opts, maxDuration, nil)
 	}
-	durationClock, err := sessionDurationClockFromSource(opts.Clock)
+	durationClock, err := sessionDurationClockFromSource(opts.AudioService, opts.Clock)
 	if err != nil {
 		return err
 	}
@@ -98,7 +109,10 @@ func RunSessionWithMaxDurationClock(ctx context.Context, out io.Writer, opts Ses
 		return err
 	}
 	if durationClock == nil {
-		durationClock = realSessionDurationClock{}
+		durationClock, err = sessionDurationClockFromSource(opts.AudioService, opts.Clock)
+		if err != nil {
+			return err
+		}
 	}
 	return runSessionDurationPlan(durationCtx, out, plan, maxDuration, durationClock)
 }
@@ -167,7 +181,7 @@ func RunSessionWithTextSeedAndMaxDuration(ctx context.Context, out io.Writer, op
 	if inner != nil {
 		plan.inferencer = admittedInferencer
 	}
-	durationClock, err := sessionDurationClockFromSource(opts.Clock)
+	durationClock, err := sessionDurationClockFromSource(opts.AudioService, opts.Clock)
 	if err != nil {
 		return err
 	}
@@ -180,26 +194,13 @@ func runSessionDurationPlan(ctx context.Context, out io.Writer, plan sessionRunt
 }
 
 func effectiveSessionDurationClock(plan sessionRuntimePlan, requested SessionDurationClock) (SessionDurationClock, error) {
-	// The legacy production callers pass realSessionDurationClock{} because
-	// that was the only implementation before SessionRunOptions.Clock became
-	// the shared timing dependency. Redirect that default through the plan's
-	// source so deterministic sessions do not accidentally schedule on host
-	// time. A non-default test clock remains authoritative.
 	if requested == nil {
-		return sessionDurationClockFromSource(plan.clockSource)
-	}
-	if _, isDefault := requested.(realSessionDurationClock); isDefault {
-		return sessionDurationClockFromSource(plan.clockSource)
+		return sessionDurationClockFromSource(plan.loop.audioService, plan.clockSource)
 	}
 	return requested, nil
 }
 
 func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, plan sessionRuntimePlan, maxDuration time.Duration, durationClock SessionDurationClock, admittedInferencer *sessionDurationAdmissionInferencer) (runErr error) {
-	var err error
-	durationClock, err = effectiveSessionDurationClock(plan, durationClock)
-	if err != nil {
-		return err
-	}
 	artifacts := sessionDurationArtifactsFromContext(ctx)
 	reporter := plan.loop.terminalReporter
 	if reporter == nil {
@@ -220,31 +221,21 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 		}
 		runErr = errors.Join(runErr, reporter.Publish(out, runErr))
 	}()
+	var err error
+	durationClock, err = effectiveSessionDurationClock(plan, durationClock)
+	if err != nil {
+		return err
+	}
 	if plan.replayIntegrityWarning != "" {
 		if _, err := fmt.Fprintln(out, plan.replayIntegrityWarning); err != nil {
 			return err
 		}
 	}
-	deviceBinding, err := PrepareRTCDeviceBindings(plan.rtcDeviceRequest)
-	if err != nil {
+	if err := plan.bindRTC(ctx, finalizer); err != nil {
 		return err
 	}
-	if deviceBinding != nil {
-		plan.loop.rtcDeviceBinding = deviceBinding
-		finalizer.setDeviceBinding(deviceBinding)
-	}
-	// Best-effort, same as the non-duration run path: this disclosure write
-	// must not pre-empt or masquerade as the session's own run/drain failure.
-	writeFilesystemScopeAnnouncement(out, plan.filesystemPolicy)
-	writeSessionToolAnnouncement(out, plan.toolDefinitionsForAnnouncement())
-	announcement := plan.announce
-	if plan.loop.BareLive {
-		announcement, plan.loop.ListeningBanner = plan.bareLiveOutput(deviceBinding)
-	}
-	if announcement != "" {
-		if _, err := fmt.Fprintln(out, announcement); err != nil {
-			return wrapSessionRuntimeError(plan, err)
-		}
+	if err := plan.writeAnnouncements(out, false); err != nil {
+		return wrapSessionRuntimeError(plan, err)
 	}
 
 	loopOut := out

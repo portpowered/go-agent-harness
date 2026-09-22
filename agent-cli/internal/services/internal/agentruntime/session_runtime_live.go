@@ -8,7 +8,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
+	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
@@ -22,6 +22,55 @@ func SessionRuntimeFactoryConfigured(factory SessionRuntimeFactory) bool { retur
 func RunSessionWithRuntimeFactory(ctx context.Context, out io.Writer, opts SessionRunOptions, factory SessionRuntimeFactory) error {
 	opts.runtimeFactory = factory
 	return RunSession(ctx, out, opts)
+}
+
+func (p *sessionRuntimePlan) bindRTC(ctx context.Context, finalizer *sessionRuntimeFinalizer) error {
+	if p.deviceService == nil {
+		if p.rtcDeviceRequest.HasDevices() {
+			return runtimedevices.ErrUnavailable
+		}
+		return nil
+	}
+	p.rtcDeviceRequest.Inferencer = p.inferencer
+	binding, err := p.deviceService.BindRTC(ctx, p.rtcDeviceRequest)
+	if err != nil {
+		return err
+	}
+	p.rtcBinding = binding
+	if binding == nil {
+		return nil
+	}
+	p.inferencer = binding.Inferencer()
+	p.loop.rtcDeviceBinding = binding
+	finalizer.setRTCBinding(binding)
+	if selected, ok := binding.(runtimedevices.RTCBindingDeviceSelection); ok {
+		inputDevice, outputDevice := selected.SelectedDeviceIDs()
+		if p.rtcDeviceRequest.InputDevice == "" {
+			p.rtcDeviceRequest.InputDevice = inputDevice
+		}
+		if p.rtcDeviceRequest.OutputDevice == "" {
+			p.rtcDeviceRequest.OutputDevice = outputDevice
+		}
+	}
+	return nil
+}
+
+func (p *sessionRuntimePlan) writeAnnouncements(out io.Writer, includeBrowser bool) error {
+	// These startup disclosures are best-effort and must not pre-empt the
+	// session's own run/drain failure when their writer is unavailable.
+	writeFilesystemScopeAnnouncement(out, p.filesystemPolicy)
+	writeSessionToolAnnouncement(out, p.toolDefinitionsForAnnouncement())
+	announcement := p.announce
+	if p.loop.BareLive {
+		announcement, p.loop.ListeningBanner = p.bareLiveOutput()
+	} else if includeBrowser && p.loop.BrowserToolsInteractive {
+		announcement, p.loop.ListeningBanner = p.browserLiveOutput()
+	}
+	if announcement == "" {
+		return nil
+	}
+	_, err := fmt.Fprintln(out, announcement)
+	return err
 }
 
 // planBareLiveSessionRuntime builds the alternate-free live voice path. The
@@ -77,61 +126,41 @@ func browserToolsInteractiveLive(opts SessionRunOptions) bool {
 // runtime that the new admission path needs.
 func planBrowserLiveSessionRuntime(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
 	interactive := browserToolsInteractiveLive(opts)
-	provider := effectiveSessionProvider(opts)
-	opts.Provider = provider
-	var (
-		openAISessionCfg config.OpenAIConfig
-		grokSessionCfg   config.GrokConfig
-		model            string
-		err              error
-	)
-	switch provider {
-	case sessionProviderOpenAI:
-		openAISessionCfg, err = resolveOpenAIRealtimeSessionConfig(opts)
-		model = openAISessionCfg.Model
-	case sessionProviderGrok:
-		grokSessionCfg, err = resolveGrokSessionConfig(opts)
-		model = grokSessionCfg.Model
-	default:
-		return sessionRuntimePlan{}, unsupportedRealtimeSessionProviderError(provider)
-	}
+	// Interactive browser sessions own input turn boundaries and stay open for
+	// the page capability lifecycle. The provider construction remains shared
+	// with ordinary live sessions.
+	return planLiveSessionRuntimeMode(opts, factory, interactive)
+}
+
+// planLiveSessionRuntime plans a live session without wrapping its provider
+// transport in a capture recorder. Capture ownership is selected by the
+// caller's explicit --record/--replay path; an empty path is the intentional
+// no-capture mode.
+func planLiveSessionRuntime(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
+	return planLiveSessionRuntimeMode(opts, factory, false)
+}
+
+type liveSessionProviderConfig struct {
+	provider string
+	model    string
+	openAI   config.OpenAIConfig
+	grok     config.GrokConfig
+}
+
+func planLiveSessionRuntimeMode(opts SessionRunOptions, factory sessionRuntimeFactory, interactive bool) (sessionRuntimePlan, error) {
+	providerConfig, err := resolveLiveSessionProviderConfig(opts)
 	if err != nil {
 		return sessionRuntimePlan{}, err
 	}
-
-	liveDialer := opts.WebSocketDialer
-	if liveDialer == nil && factory.newDefaultLiveDialer != nil {
-		liveDialer = factory.newDefaultLiveDialer()
-	}
-	if liveDialer == nil {
-		return sessionRuntimePlan{}, missingOwnedSessionDialerError(provider)
-	}
-
-	liveDialer = sessiontracewire.NewProviderWireDialer(liveDialer, opts.RuntimeObserver, opts.Clock)
-
-	var inferencer messages.SessionInferencer
-	switch provider {
-	case sessionProviderOpenAI:
-		clientOwnedAudio := opts.ClientOwnsAudioTurnBoundaries || len(opts.AudioInputs) > 0
-		inputAudioTranscription := resolveInputAudioTranscriptionPolicy(opts, provider, interactive || clientOwnedAudio || opts.RTCDeviceBinding.inputSelected())
-		inferencer, err = factory.newOpenAISessionInferencerForTools(openAISessionCfg, opts.Voice, liveDialer, opts.ToolDefinitions, clientOwnedAudio, inputAudioTranscription)
-	case sessionProviderGrok:
-		inferencer, err = factory.newGrokSessionInferencerForTools(grokSessionCfg, liveDialer, opts.ToolDefinitions)
-	}
+	inferencer, err := newLiveSessionInferencer(opts, factory, providerConfig, interactive)
 	if err != nil {
 		return sessionRuntimePlan{}, err
-	}
-	if inferencer == nil {
-		if opts.BrowserToolsEnabled {
-			return sessionRuntimePlan{}, fmt.Errorf("--browser-tools live session provider %q returned no session inferencer", provider)
-		}
-		return sessionRuntimePlan{}, fmt.Errorf("live session provider %q returned no session inferencer", provider)
 	}
 
 	return sessionRuntimePlan{
 		mode:       sessionRuntimeModeInjectedLive,
-		provider:   provider,
-		model:      model,
+		provider:   providerConfig.provider,
+		model:      providerConfig.model,
 		inferencer: inferencer,
 		loop: sessionLoopOptions{
 			Prompt:                   opts.Prompt,
@@ -144,84 +173,88 @@ func planBrowserLiveSessionRuntime(opts SessionRunOptions, factory sessionRuntim
 			// generic SESSION.UPDATE for the same surface after SESSION.CREATED;
 			// page-catalog changes remain result data and never re-advertise it.
 			AdvertiseToolDefinitions: false,
-			RequireSessionUpdated:    len(opts.AudioInputs) > 0 && provider == sessionProviderOpenAI,
+			RequireSessionUpdated:    len(opts.AudioInputs) > 0 && providerConfig.provider == sessionProviderOpenAI,
 		},
 	}, nil
 }
 
-// planLiveSessionRuntime plans a live session without wrapping its provider
-// transport in a capture recorder. Capture ownership is selected by the
-// caller's explicit --record/--replay path; an empty path is the intentional
-// no-capture mode.
-func planLiveSessionRuntime(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
+func resolveLiveSessionProviderConfig(opts SessionRunOptions) (liveSessionProviderConfig, error) {
 	provider := strings.ToLower(strings.TrimSpace(effectiveSessionProvider(opts)))
-	var (
-		openAISessionCfg config.OpenAIConfig
-		grokSessionCfg   config.GrokConfig
-		model            string
-		err              error
-	)
+	resolved := liveSessionProviderConfig{provider: provider}
+	var err error
 	switch provider {
 	case sessionProviderOpenAI:
-		openAISessionCfg, err = resolveOpenAIRealtimeSessionConfig(opts)
-		model = openAISessionCfg.Model
+		resolved.openAI, err = resolveOpenAIRealtimeSessionConfig(opts)
+		resolved.model = resolved.openAI.Model
 	case sessionProviderGrok:
-		grokSessionCfg, err = resolveGrokSessionConfig(opts)
-		model = grokSessionCfg.Model
+		resolved.grok, err = resolveGrokSessionConfig(opts)
+		resolved.model = resolved.grok.Model
 	default:
-		return sessionRuntimePlan{}, unsupportedRealtimeSessionProviderError(provider)
+		return liveSessionProviderConfig{}, unsupportedRealtimeSessionProviderError(provider)
 	}
+	return resolved, err
+}
+
+func newLiveSessionInferencer(
+	opts SessionRunOptions,
+	factory sessionRuntimeFactory,
+	providerConfig liveSessionProviderConfig,
+	interactive bool,
+) (messages.SessionInferencer, error) {
+	dialer, err := resolveLiveSessionDialer(opts, factory, providerConfig.provider)
 	if err != nil {
-		return sessionRuntimePlan{}, err
+		return nil, err
 	}
-
-	liveDialer := opts.WebSocketDialer
-	if liveDialer == nil && factory.newDefaultLiveDialer != nil {
-		liveDialer = factory.newDefaultLiveDialer()
-	}
-	if liveDialer == nil {
-		return sessionRuntimePlan{}, missingOwnedSessionDialerError(provider)
-	}
-
-	liveDialer = sessiontracewire.NewProviderWireDialer(liveDialer, opts.RuntimeObserver, opts.Clock)
-
 	var inferencer messages.SessionInferencer
-	switch provider {
+	switch providerConfig.provider {
 	case sessionProviderOpenAI:
-		clientOwnedAudio := opts.ClientOwnsAudioTurnBoundaries || len(opts.AudioInputs) > 0
-		inputAudioTranscription := resolveInputAudioTranscriptionPolicy(opts, provider, clientOwnedAudio || opts.RTCDeviceBinding.inputSelected())
-		inferencer, err = factory.newOpenAISessionInferencerForTools(openAISessionCfg, opts.Voice, liveDialer, opts.ToolDefinitions, clientOwnedAudio, inputAudioTranscription)
+		inferencer, err = newLiveOpenAISessionInferencer(opts, factory, providerConfig.openAI, dialer, interactive)
 	case sessionProviderGrok:
-		inferencer, err = factory.newGrokSessionInferencerForTools(grokSessionCfg, liveDialer, opts.ToolDefinitions)
+		inferencer, err = factory.newGrokSessionInferencerForTools(providerConfig.grok, dialer, opts.ToolDefinitions)
 	}
 	if err != nil {
-		return sessionRuntimePlan{}, err
+		return nil, err
 	}
 	if inferencer == nil {
-		return sessionRuntimePlan{}, fmt.Errorf("live session provider %q returned no session inferencer", provider)
+		if opts.BrowserToolsEnabled {
+			return nil, fmt.Errorf("--browser-tools live session provider %q returned no session inferencer", providerConfig.provider)
+		}
+		return nil, fmt.Errorf("live session provider %q returned no session inferencer", providerConfig.provider)
 	}
+	return inferencer, nil
+}
 
-	return sessionRuntimePlan{
-		mode:       sessionRuntimeModeInjectedLive,
-		provider:   provider,
-		model:      model,
-		inferencer: inferencer,
-		loop: sessionLoopOptions{
-			Prompt:                   opts.Prompt,
-			CloseAfterOpen:           !opts.WaitForClose && len(opts.AudioInputs) == 0,
-			WaitForClose:             opts.WaitForClose || len(opts.AudioInputs) > 0,
-			CloseAfterScheduledAudio: len(opts.AudioInputs) > 0,
-			// The provider-backed constructor receives the stable definitions in
-			// its initial Realtime session configuration. Do not send a second
-			// generic SESSION.UPDATE for the same surface after SESSION.CREATED;
-			// page-catalog changes remain result data and never re-advertise it.
-			AdvertiseToolDefinitions: false,
-			RequireSessionUpdated:    len(opts.AudioInputs) > 0 && provider == sessionProviderOpenAI,
-		},
-	}, nil
+func resolveLiveSessionDialer(opts SessionRunOptions, factory sessionRuntimeFactory, provider string) (transport.Dialer, error) {
+	dialer := opts.WebSocketDialer
+	if dialer == nil && factory.newDefaultLiveDialer != nil {
+		dialer = factory.newDefaultLiveDialer()
+	}
+	if dialer == nil {
+		return nil, missingOwnedSessionDialerError(provider)
+	}
+	return observeSessionWire(dialer, opts), nil
+}
+
+func newLiveOpenAISessionInferencer(
+	opts SessionRunOptions,
+	factory sessionRuntimeFactory,
+	sessionConfig config.OpenAIConfig,
+	dialer transport.Dialer,
+	interactive bool,
+) (messages.SessionInferencer, error) {
+	clientOwnedAudio := opts.ClientOwnsAudioTurnBoundaries || len(opts.AudioInputs) > 0
+	transcription, err := resolveSessionTranscription(opts, sessionProviderOpenAI, interactive || clientOwnedAudio || opts.RTCBinding.HasInput())
+	if err != nil {
+		return nil, err
+	}
+	return factory.newOpenAISessionInferencerForTools(sessionConfig, opts.Voice, dialer, opts.ToolDefinitions, clientOwnedAudio, transcription)
 }
 
 func planSessionWithResolvedInstructions(opts SessionRunOptions, instructions string) (sessionRuntimePlan, error) {
+	return planSessionWithResolvedInstructionsContext(context.Background(), opts, instructions)
+}
+
+func planSessionWithResolvedInstructionsContext(ctx context.Context, opts SessionRunOptions, instructions string) (sessionRuntimePlan, error) {
 	// This is the single service-owned boundary between prompt resolution and
 	// provider construction. The tool definitions in opts are the same snapshot
 	// that the runtime planner passes to the provider, so the grounding contract
@@ -236,7 +269,7 @@ func planSessionWithResolvedInstructions(opts SessionRunOptions, instructions st
 	if useInitialProviderInstructions {
 		planFactory = sessionRuntimeFactoryWithInstructions(planFactory, instructions)
 	}
-	plan, err := planSessionRuntimeWithFactory(opts, planFactory)
+	plan, err := planSessionRuntimeWithFactoryAndContext(ctx, opts, planFactory)
 	if err != nil {
 		return sessionRuntimePlan{}, err
 	}
@@ -307,6 +340,7 @@ func buildGrokSessionInferencerWithInstructionsAndTools(sessionCfg config.GrokCo
 	return inference.NewSessionGatewayInferencer(sessionGateway, inferenceOpts...), nil
 }
 
+//lint:ignore U1000 package tests exercise the OpenAI factory seam.
 func buildOpenAIRealtimeSessionInferencerWithInstructionsAndTools(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, instructions string, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
 	return buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndInputAudioTranscription(sessionCfg, voice, dialer, instructions, toolDefinitions, models.InputAudioTranscriptionConfig{})
 }

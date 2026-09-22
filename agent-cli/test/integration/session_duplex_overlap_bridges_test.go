@@ -106,6 +106,13 @@ func (b *v8MultiTurnBridge) waitForRuntimeInput(crossing v8Crossing) error {
 		return fmt.Errorf("%s runtime input observation does not match turn %d at tick %d", b.direction, crossing.Turn, crossing.Tick)
 	}
 	err := b.coordinator.complete(crossing)
+	if err == nil && crossing.Schedule < 4 {
+		// Keep the replay session at this input boundary until both directions
+		// in the tick pair have been consumed. Otherwise its next response can
+		// snapshot the old shared tick while the peer writer is still completing
+		// the other half of this scheduled crossing.
+		err = b.coordinator.waitForCompletion(crossing.Schedule ^ 1)
+	}
 	close(event.release)
 	return err
 }
@@ -187,29 +194,6 @@ func (b *v8MultiTurnBridge) write(data []byte) (int, error) {
 	}
 	if err := b.waitForRuntimeInput(crossing); err != nil {
 		return 0, err
-	}
-	// Do not let A's third server response take its runtime clock snapshot
-	// before B's second directional interval has completed. The replay streams
-	// intentionally expose those independent boundaries concurrently, so this
-	// release keeps the shared deterministic clock at the scheduled tick rather
-	// than asking the bridge to repair a stale observation after the fact.
-	switch crossing.Schedule {
-	case 0:
-		if err := b.coordinator.waitForCompletion(1); err != nil {
-			return 0, err
-		}
-	case 1:
-		if err := b.coordinator.waitForCompletion(0); err != nil {
-			return 0, err
-		}
-	case 2:
-		if err := b.coordinator.waitForCompletion(3); err != nil {
-			return 0, err
-		}
-	case 3:
-		if err := b.coordinator.waitForCompletion(2); err != nil {
-			return 0, err
-		}
 	}
 	b.mu.Lock()
 	b.writes++

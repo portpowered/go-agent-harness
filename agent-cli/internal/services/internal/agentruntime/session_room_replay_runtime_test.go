@@ -41,6 +41,7 @@ func TestBuildRoomReplayParticipantPlansBypassesLiveSeams(t *testing.T) {
 	}
 
 	plans, secrets, err := buildRoomParticipantPlansWithContext(context.Background(), RoomRunOptions{
+		AudioService: newTestAudioIOService(),
 		// The live manifest is intentionally unusable. Replay planning must use
 		// only the admitted plan projection below.
 		Manifest:         room.Manifest{SchemaVersion: 999},
@@ -124,8 +125,9 @@ func TestRunRoomWithResultReplaysAdmittedBundleWithoutLiveConfiguration(t *testi
 	roomCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	result, err := RunRoomWithResult(roomCtx, nil, RoomRunOptions{
-		Manifest:   room.Manifest{SchemaVersion: 999},
-		ReplayPath: bundle,
+		AudioService: newTestAudioIOService(),
+		Manifest:     room.Manifest{SchemaVersion: 999},
+		ReplayPath:   bundle,
 		CredentialLookup: func(string) (string, bool) {
 			credentialLookups.Add(1)
 			return "live-secret", true

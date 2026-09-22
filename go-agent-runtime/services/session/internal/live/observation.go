@@ -83,6 +83,7 @@ func (h *handle) consumeMessage(ctx context.Context, loop *agentloop.AgentLoop, 
 	}
 	continuationErr, toolContinuationComplete := h.observeToolLifecycle(msg)
 	h.publishMessage(msg) //nolint:contextcheck // recording owns the invocation evidence context.
+	h.observeRuntimeMessage(msg)
 	if continuationErr != nil {
 		h.Cancel(continuationErr)
 	}

@@ -13,11 +13,21 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	gwproviders "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
+
+// sessionStragglerDrainPolicy bounds the quiet period used after a terminal
+// boundary. It is a caller-owned shutdown policy; sessiontrace only observes
+// the messages admitted during the bounded drain.
+type sessionStragglerDrainPolicy struct {
+	quietPeriod time.Duration
+}
+
+var errInvalidSessionStragglerDrainPolicy = errors.New("session straggler drain requires a positive quiet period")
 
 // sessionReplayMessageWriter is implemented by the stateful terminal renderer
 // used by a complete session run. Keeping the interface private preserves the
@@ -460,12 +470,23 @@ func sessionTerminalFields(classification string, reason messages.TerminalReason
 	return strings.Join(fields, " ")
 }
 
-func waitForSessionLoopStragglersWithContext(ctx context.Context, out io.Writer, loop *agentloop.AgentLoop, quiet time.Duration, obs sessiontrace.Observer, source platformclock.Source) error {
+// waitForSessionLoopStragglers waits for provider deltas until the required
+// positive policy quiet period elapses. The terminal boundary is the only
+// caller; buffered-only cleanup has its own explicitly named operation.
+//
+//lint:ignore U1000 package tests exercise the context-free compatibility seam.
+func waitForSessionLoopStragglers(out io.Writer, loop *agentloop.AgentLoop, policy sessionStragglerDrainPolicy, obs sessiontrace.Observer) error {
+	return waitForSessionLoopStragglersWithContext(context.Background(), out, loop, policy, obs, nil, nil)
+}
+func waitForSessionLoopStragglersWithContext(ctx context.Context, out io.Writer, loop *agentloop.AgentLoop, policy sessionStragglerDrainPolicy, obs sessiontrace.Observer, source platformclock.Source, audioService audioio.Service) error {
+	quiet := policy.quietPeriod
 	if quiet <= 0 {
-		return errors.New("session straggler drain requires a positive quiet period")
+		return errInvalidSessionStragglerDrainPolicy
 	}
-
-	idle, err := newSessionTimer(source, quiet)
+	if audioService == nil {
+		return errors.New("audio service is required for session straggler drain timing")
+	}
+	idle, err := audioService.NewTimer(source, quiet)
 	if err != nil {
 		return err
 	}
@@ -507,14 +528,9 @@ func waitForSessionLoopStragglersWithContext(ctx context.Context, out io.Writer,
 			if err := writeSessionReplayMessage(out, msg); err != nil {
 				return err
 			}
-			if !idle.Stop() {
-				select {
-				case <-idle.C():
-				default:
-				}
-			}
+			stopAndDrainSessionTimer(idle)
 			var err error
-			idle, err = newSessionTimer(source, quiet)
+			idle, err = audioService.NewTimer(source, quiet)
 			if err != nil {
 				return err
 			}

@@ -8,6 +8,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
+	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 )
 
 // These small fixtures keep unrelated runtime and room tests independent of
@@ -65,7 +66,7 @@ func runSessionWithDiagnostics(t testingT, mutate func(*SessionRunOptions)) sess
 	if err != nil {
 		t.Fatalf("metrics.NewInMemorySink: %v", err)
 	}
-	opts := SessionRunOptions{ModelCatalog: testModelCatalog(), Diagnostics: sink, MetricsRecorder: metricSink}
+	opts := SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(), Diagnostics: sink, MetricsRecorder: metricSink}
 	if mutate != nil {
 		mutate(&opts)
 	}

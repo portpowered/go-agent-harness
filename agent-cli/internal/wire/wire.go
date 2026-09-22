@@ -23,6 +23,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	looplogging "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeAudioIO "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	runtimeDevicesWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
@@ -259,12 +260,12 @@ func provideSessionTraceService() runtimeSessionTrace.Service {
 	return runtimeSessionTraceWire.NewService()
 }
 
-func provideFileDeviceService(source Clock, traceService runtimeSessionTrace.Service) cli.FileDeviceService {
+func provideFileDeviceService(source Clock, audioService runtimeAudioIO.Service, traceService runtimeSessionTrace.Service) cli.FileDeviceService {
 	var scheduler clock.Scheduler
 	if value, ok := source.(clock.Scheduler); ok {
 		scheduler = value
 	}
-	return cli.FileDeviceService{Service: runtimeDevicesWire.NewFileService(), Scheduler: scheduler, TraceService: traceService}
+	return cli.FileDeviceService{Service: runtimeDevicesWire.NewFileService(audioService), Scheduler: scheduler, TraceService: traceService}
 }
 
 func provideToolCapabilitiesService(override toolServiceOverride, toolExecutor messages.ToolExecutor, browserFactory serviceTools.BrowserFactory, displaySurface cliTools.DisplaySurface, runtimeService runtimeTools.Service) serviceTools.Service {

@@ -371,7 +371,7 @@ func roomRealtimeReplaySessionUpdate(t *testing.T, model, instructions string) [
 
 func pID(participant *roomRealtimeReplayParticipant) string {
 	if participant == nil {
-		return "<nil>"
+		return runtimeNilText
 	}
 	return participant.id
 }
@@ -467,7 +467,7 @@ func TestRunRoomWithResult_UsesRealRealtimeStackAndStrictParticipantWires(t *tes
 	defer cancel()
 
 	opts := RoomRunOptions{
-		Manifest:  manifest,
+		Manifest: manifest, AudioService: newTestAudioIOService(),
 		ConfigDir: configDir, ModelCatalog: testModelCatalog(),
 		BaseURL:     "wss://room-replay.invalid/v1/realtime",
 		MixerConfig: mixerConfig,

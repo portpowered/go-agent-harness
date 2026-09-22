@@ -8,6 +8,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
@@ -103,12 +104,7 @@ type CancellationIntent interface {
 	SIGINTReceived() bool
 }
 
-type ScheduledAudioInput struct {
-	AfterCompletedTurns int
-	PCM                 []byte
-	SourceSampleRate    int
-	EndOfTurn           bool
-}
+type ScheduledAudioInput = audioio.ScheduledAudioInput
 
 type ScheduledAudioDispatchPolicy string
 

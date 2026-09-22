@@ -37,6 +37,7 @@ func TestSessionCommand_RecordThenReplayUsesCapturedHandshake(t *testing.T) {
 	recordDialer := newHandshakeReplayDialer()
 
 	err := servicetest.RunSessionWithInstructions(context.Background(), io.Discard, servicetest.SessionRunOptions{
+		AudioService: newTestAudioService(),
 		RecordPath:   recordPath,
 		Provider:     "openai",
 		Model:        "gpt-realtime",

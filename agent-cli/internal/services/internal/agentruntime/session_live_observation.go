@@ -30,6 +30,10 @@ type observedSessionInferencer struct {
 	connectFinished bool
 }
 
+type playbackDrainingSession interface {
+	DrainPlayback(context.Context) error
+}
+
 type sessionTerminalErrorSource interface {
 	TerminalError() error
 }
@@ -207,6 +211,13 @@ type observedSession struct {
 }
 
 var _ messages.Session = (*observedSession)(nil)
+
+func (s *observedSession) lockProviderBoundary() func() {
+	if s == nil || s.progress == nil {
+		return func() {}
+	}
+	return s.progress.LockProviderBoundary()
+}
 
 func (s *observedSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
 	return s.SendWithOutcome(ctx, msg).OK()

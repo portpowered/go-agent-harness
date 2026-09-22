@@ -411,7 +411,7 @@ func (s *RTCDeviceSink) writeProviderFrame(ctx context.Context, pending *audio.P
 		// Normalize before resampling so feedback suppression sees heard audio.
 		samples = s.loudness.Process(samples)
 	}
-	if err := s.observeHoldToneRealFrame(ctx, generation, blocked); err != nil {
+	if err := s.observeHoldToneRealFrame(ctx, samples, generation, blocked); err != nil {
 		return err
 	}
 	providerFrame.Samples = samples
