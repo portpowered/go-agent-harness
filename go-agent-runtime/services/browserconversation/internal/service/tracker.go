@@ -32,6 +32,7 @@ type evidenceTracker struct {
 	cancellationFinalized bool
 	suppressedLateEvents  int
 	deadlineTimer         *time.Timer
+	deadlineDone          chan struct{}
 	deadlineToken         uint64
 	stepChanged           chan struct{}
 }
@@ -335,8 +336,16 @@ func (t *evidenceTracker) startDeadlineLocked(step browserconversation.BrowserCo
 	t.deadlineToken++
 	token := t.deadlineToken
 	timer := time.NewTimer(step.Deadline)
+	done := make(chan struct{})
 	t.deadlineTimer = timer
-	go func() { <-timer.C; t.expireDeadline(token, step.ID, step.Deadline) }()
+	t.deadlineDone = done
+	go func() {
+		select {
+		case <-timer.C:
+			t.expireDeadline(token, step.ID, step.Deadline)
+		case <-done:
+		}
+	}()
 }
 
 func (t *evidenceTracker) expireDeadline(token uint64, stepID string, deadline time.Duration) {
@@ -354,10 +363,23 @@ func (t *evidenceTracker) expireDeadline(token uint64, stepID string, deadline t
 }
 func (t *evidenceTracker) stopDeadlineLocked() {
 	t.deadlineToken++
+	if t.deadlineDone != nil {
+		close(t.deadlineDone)
+		t.deadlineDone = nil
+	}
 	if t.deadlineTimer != nil {
 		t.deadlineTimer.Stop()
 		t.deadlineTimer = nil
 	}
+}
+
+func (t *evidenceTracker) close() {
+	if t == nil {
+		return
+	}
+	t.mu.Lock()
+	t.stopDeadlineLocked()
+	t.mu.Unlock()
 }
 func (t *evidenceTracker) signalStepChangedLocked() {
 	close(t.stepChanged)

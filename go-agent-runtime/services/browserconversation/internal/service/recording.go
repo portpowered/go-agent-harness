@@ -207,7 +207,7 @@ func (r *recorder) record(event browserconversation.BrowserEvent) {
 // recordingSourceBytes bounds raw event data retained for artifact projection
 // before sanitization or cloning can allocate copies of it.
 func recordingSourceBytes(event browserconversation.BrowserEvent, request browserconversation.RecordingRequest) int {
-	size := len(event.Type) + len(event.BrowserID) + len(event.TargetID) + len(event.InvocationID) + len(event.ToolName) + len(event.FrameID) + len(event.Status) + len(event.ErrorCode) + len(event.Reason)
+	size := len(event.Type) + len(event.BrowserID) + len(event.TargetID) + len(event.InvocationID) + len(event.ToolName) + len(event.FrameID) + len(event.State) + len(event.Status) + len(event.ErrorCode) + len(event.Reason)
 	if request.IncludeArguments {
 		size += len(event.Input)
 	}

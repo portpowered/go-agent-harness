@@ -66,7 +66,7 @@ func (e *browserConversationExecution) start(request browserconversation.RunRequ
 	} else if request.FixtureFactory == nil {
 		e.add(errors.Join(browserconversation.ErrBrowserConversationFixtureStartup, errors.New("fixture factory is required")))
 	} else {
-		fixture, err := request.FixtureFactory(e.runContext, e.scenario)
+		fixture, err := request.FixtureFactory(e.runContext, e.scenario.Clone())
 		e.fixture = fixture
 		if err != nil {
 			e.add(errors.Join(browserconversation.ErrBrowserConversationFixtureStartup, err))
@@ -100,7 +100,7 @@ func (e *browserConversationExecution) startSession(request browserconversation.
 	}
 	e.lifecycle.SessionStarted = true
 	sessionErr := request.SessionRunner(e.runContext, sessionOutput(request), browserconversation.SessionRequest{
-		Scenario: e.scenario, Fixture: e.fixture, Broker: observed,
+		Scenario: e.scenario.Clone(), Fixture: e.fixture, Broker: observed,
 		ToolExecutor: request.ToolExecutor, ToolDefinitions: append([]messages.ToolDefinition(nil), request.ToolDefinitions...),
 		AudioInputs: cloneAudioInputs(e.normalAudio), AudioInterruptions: interruptionInputs(e.interrupter),
 		StreamObserver: e.tracker.observe, CustomerNavigate: navigate,
@@ -222,6 +222,9 @@ func (e *browserConversationExecution) close() {
 	}
 	if e.interrupter != nil {
 		e.interrupter.close()
+	}
+	if e.tracker != nil {
+		e.tracker.close()
 	}
 	if e.cancel != nil {
 		e.cancel()
