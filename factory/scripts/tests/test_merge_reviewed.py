@@ -94,6 +94,20 @@ class MergeReviewedTests(unittest.TestCase):
 
         return fake, commands
 
+    def _no_github_required_checks(self, fake):
+        def command(args, **kwargs):
+            result = fake(args, **kwargs)
+            if args[:4] == ["gh", "pr", "checks", str(PR)] and "--required" in args:
+                return subprocess.CompletedProcess(
+                    args,
+                    1,
+                    "",
+                    "no required checks reported on the test branch",
+                )
+            return result
+
+        return command
+
     def test_exact_green_head_is_merged_with_guard_and_verified_revision(self):
         self.repo_path = self._repo_path()
         fake, commands = self._fake_command([_view(self.module), _view(self.module)])
@@ -125,6 +139,43 @@ class MergeReviewedTests(unittest.TestCase):
             with self.assertRaises(self.module.GuardError):
                 self.module.guarded_merge(REPO, PR, HEAD, repo_path=self.repo_path)
         self.assertFalse(any(command[:4] == ["gh", "pr", "merge", str(PR)] for command in commands))
+
+    def test_no_github_required_checks_still_merges_with_policy_checks_green(self):
+        self.repo_path = self._repo_path()
+        fake, commands = self._fake_command([_view(self.module), _view(self.module)])
+        with patch.object(self.module, "_command", side_effect=self._no_github_required_checks(fake)):
+            merged = self.module.guarded_merge(REPO, PR, HEAD, repo_path=self.repo_path)
+
+        self.assertEqual(merged, MERGED)
+        required_commands = [
+            command
+            for command in commands
+            if command[:4] == ["gh", "pr", "checks", str(PR)] and "--required" in command
+        ]
+        self.assertEqual(len(required_commands), 1)
+
+    def test_no_github_required_checks_does_not_skip_policy_checks(self):
+        self.repo_path = self._repo_path()
+        policy_checks = _checks(self.module)
+        fake, commands = self._fake_command(
+            [_view(self.module), _view(self.module)],
+            checks=policy_checks[:-1],
+        )
+        with patch.object(self.module, "_command", side_effect=self._no_github_required_checks(fake)):
+            with self.assertRaises(self.module.GuardError) as raised:
+                self.module.guarded_merge(REPO, PR, HEAD, repo_path=self.repo_path)
+        self.assertEqual(
+            str(raised.exception),
+            "required check is missing: " + policy_checks[-1]["name"],
+        )
+        self.assertFalse(any(command[:4] == ["gh", "pr", "merge", str(PR)] for command in commands))
+
+    def test_unrecognized_empty_github_required_response_fails_closed(self):
+        args = ["gh", "pr", "checks", str(PR), "--required", "--json", self.module.CHECK_FIELDS]
+        result = subprocess.CompletedProcess(args, 1, "", "permission denied")
+        with patch.object(self.module, "_command", return_value=result):
+            with self.assertRaisesRegex(self.module.GuardError, "command returned no JSON: gh"):
+                self.module._gh_checks(REPO, PR, required=True)
 
     def test_conflicting_or_unknown_mergeability_fails_closed(self):
         self.repo_path = self._repo_path()

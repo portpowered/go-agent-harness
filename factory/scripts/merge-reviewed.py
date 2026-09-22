@@ -59,11 +59,26 @@ def _command(args, *, cwd=None, check=True):
     return result
 
 
-def _json_command(args, *, cwd=None, allow_empty=False, allow_return_codes=()):
+def _json_command(
+    args,
+    *,
+    cwd=None,
+    allow_empty=False,
+    allow_return_codes=(),
+    allow_empty_error_prefix=None,
+):
     result = _command(args, cwd=cwd, check=False)
     stdout = (result.stdout or "").strip()
     if not stdout:
         if allow_empty and result.returncode == 0:
+            return []
+        stderr = (result.stderr or "").strip().lower()
+        if (
+            allow_empty
+            and result.returncode == 1
+            and allow_empty_error_prefix
+            and stderr.startswith(allow_empty_error_prefix.lower())
+        ):
             return []
         raise GuardError(f"command returned no JSON: {args[0]}")
     try:
@@ -120,7 +135,12 @@ def _gh_checks(repo, pr, *, required=False):
     if required:
         args.append("--required")
     args.extend(["--json", CHECK_FIELDS])
-    value = _json_command(args, allow_empty=required, allow_return_codes=(8,))
+    value = _json_command(
+        args,
+        allow_empty=required,
+        allow_return_codes=(8,),
+        allow_empty_error_prefix="no required checks reported",
+    )
     if not isinstance(value, list) or any(not isinstance(row, dict) for row in value):
         raise GuardError("GitHub PR checks were malformed")
     return value
