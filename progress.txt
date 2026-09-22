@@ -4098,3 +4098,27 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   review have not run on the repair. Next action: run the complete C282-03
   planned preflight on the clean candidate, then non-force update PR #541 only
   if every required local command passes.
+
+# C282 exact-head architecture-gate repair checkpoint — 2026-09-22
+
+- The first full preflight on `e70ec79287e9ec5cd18b7b8f03ab92f7c59ca845`
+  passed the browser normal/race suite (20 each across four packages), focused
+  adapter/WebMCP checks (34), repeated nomicrophone runtime checks (50 normal,
+  10 race), interleaving checks, accumulated session checks (130 normal/39
+  race), integration (agent-cli 309.899s; loop functional 156.034s), and
+  regression/replay fixtures. `make verify-architecture` then rejected the
+  candidate with ten issues: the new finalizer branch raised existing
+  complexity, the added test exceeded its existing file-line ceiling, and
+  `recording_artifact.go` exceeded its 400-line limit.
+- Commit `7c712cf0e36099df7ab35e2e11095893dff2bb0e` retains the same repair
+  behavior while returning the finalizer to its existing control-flow
+  complexity, keeping the focused test in the existing package test surface,
+  and consolidating recorder redaction helpers in existing `recording.go`.
+  No architecture baseline was edited and no new test or production file was
+  added. Focused redaction/finalization tests pass; `make verify-architecture`
+  now passes (207 packages, 1,966 files, 28,940 functions). Wire generation
+  reported no remaining working-tree changes.
+- The failed architecture attempt means the complete preflight must be rerun
+  on the repaired exact head; no result from `e70ec79` is handoff evidence for
+  `7c712cf`. Next action: checkpoint this gate repair, then rerun the entire
+  C282-03 command list including `make prepush` on one clean final candidate.
