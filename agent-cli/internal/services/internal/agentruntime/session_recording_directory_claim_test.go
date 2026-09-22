@@ -226,7 +226,9 @@ func TestSessionDirectoryRecordingWrapsBrowserFinalizationFailures(t *testing.T)
 		{name: "construction", make: func(destination string, cause error) *sessionDirectoryRecording {
 			return newSessionDirectoryRecording(destination, sessionRuntimePlan{provider: sessionProviderOpenAI}, SessionRunOptions{
 				LoadedConfig: &config.Config{Browser: config.BrowserConfig{Recording: config.BrowserRecordingConfig{Enabled: true}}},
-				BrowserEventWatch: func(context.Context) <-chan runtimeBrowser.BrowserEvent { return make(chan runtimeBrowser.BrowserEvent) },
+				BrowserEventWatch: func(context.Context) <-chan runtimeBrowser.BrowserEvent {
+					return make(chan runtimeBrowser.BrowserEvent)
+				},
 				BrowserConversation: sessionRecordingBrowserServiceStub{error: cause},
 			})
 		}},
