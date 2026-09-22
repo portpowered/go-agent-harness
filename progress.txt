@@ -4074,3 +4074,27 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   same PR `#435`, update its body with the repair/evidence map, then return
   `ACCEPTED` to the script-owned current-head CI gate without polling; retain
   this task through `CONTINUE` for any exact CI rejection or actionable repair.
+# C282 browser recording review repair checkpoint — 2026-09-22
+
+- Reverified sole-project task admission and the exact isolated C282 branch. The
+  preserved branch was clean at reviewed head `c267ea8551f2712573131a13f6569cdeccf33117`,
+  with PR #541 open on the same branch/head; fetched `origin/main` is
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`, and startup/main ancestry holds.
+- Read concluded reviews 4, 5, 9, 10, 11 and 13. The cumulative lifecycle,
+  defensive-copy, recorder-bound, parser-ownership, correction/recovery,
+  C275 timeout-history and guarded-merge-helper requirements remain preserved.
+  Latest review 13 identifies two remaining production defects: canonical
+  browser artifacts do not redact unmarked credential values under sensitive
+  property names, and browser finalization failures lost transcript write-error
+  identity and destination context.
+- Commit `55033c10b09f731ac07ffca1c3093b4106ebb0ab` adds recursive sensitive
+  field redaction (`credential_field` rule) and restores the
+  `transcript.RecordingError` wrapper while preserving joined constructor,
+  Close and Snapshot causes. Existing recorder behavior coverage now includes
+  unmarked nested `api_key`/`clientSecret` values; finalization coverage checks
+  `errors.Is`, `errors.As`, operation and path context.
+- Targeted browser recorder redaction and CLI recording-finalization tests pass
+  at `55033c10`. Exact local preflight, hosted CI refresh and fresh independent
+  review have not run on the repair. Next action: run the complete C282-03
+  planned preflight on the clean candidate, then non-force update PR #541 only
+  if every required local command passes.
