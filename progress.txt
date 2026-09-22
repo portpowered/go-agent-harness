@@ -4350,3 +4350,42 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   coverage, and delete all eight legacy files plus all 19 duplicate evidence
   files. Then run all C280-03/04 checks and `make prepush` plus every C280-05
   command on one clean exact candidate SHA, continuing through local repairs.
+
+# C280 refreshed admission and peer-release checkpoint 2026-09-22T00:46Z
+
+- Re-read the operating policy and implementation handoff. From `FACTORY_ROOT`,
+  `project-control.py verify-work --type task --name
+  audio-runtime-c280-recover-c269-room-evidence-retirement` returned `admitted`
+  for the sole `audio-runtime` / `audio-runtime-v1` project. `prd.json` names
+  `codex/audio-runtime-c280-recover-c269-room-evidence-retirement`, matching
+  this isolated branch. Fetched `origin/main` at
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`; it and startup integration
+  `8bdafc7f947a3a2c9856220abdc539437035bd21` are ancestors of clean HEAD
+  `685561ef1b00937e8f446422f6312a5b46994fe1`.
+- Refreshed canonical work: C271 (`work-task-106`) is failed; C281
+  (`work-task-141`) is processing/init; C272 (`work-task-109`) and C276
+  (`work-task-121`) are processing/init; C278 (`work-task-134`) is
+  ci-pending. None has supplied a reviewed integration or explicit exact-path
+  release for its shared caller seam. Read concluded review-78 in full: its
+  bounded manifest/timeline admission, recorder-degradation behavior,
+  room-produced public load/analyze round-trip and exact-head preflight
+  findings remain the required behavior/evidence to preserve. C278's current
+  ci-pending state does not release its caller path.
+- Fresh integrated-main inventory remains 106 production Go files / 39,329
+  physical lines. This task's complete eight-file agentruntime retirement
+  target remains present at 3,619 lines; all 19 duplicate
+  `rooms/internal/evidence` production files remain at 3,509 lines. The
+  planned CLI adapter is 0 files / 0 lines, and
+  `session_room_evidence_files.go` is absent. No caller cutover or retirement
+  is claimed. Latest C280-owned service checks recorded on unchanged source
+  SHA `466aa73` pass: 57 selected normal and 52 selected race tests across 16
+  packages, 102 full normal tests across 16 packages, 120 repeated race runs,
+  boundary scan, Wire, architecture-size and diff checks.
+- No full C280-03/04/05 gate, `make prepush`, push, PR, SCRIPT CI, review or
+  merge has run or is claimed. Exact next action: recheck canonical peer
+  releases, consume only reviewed or explicitly released revisions, cut over
+  all named and search-discovered production callers through the public
+  service contract, and delete all eight owned files plus all 19 duplicate
+  evidence files. Then run C280-03/04, `make prepush`, and every C280-05
+  command on one clean exact candidate SHA before pushing to SCRIPT. Continue
+  ownership while released caller integration or its local repairs remain.
