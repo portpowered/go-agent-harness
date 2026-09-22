@@ -297,6 +297,36 @@ func sanitizeRecordingText(value string, credentials []string) string {
 	return strings.TrimSpace(builder.String())
 }
 
+func recordingCredentialMarker(value string) bool {
+	lower := strings.ToLower(value)
+	for _, marker := range []string{"authorization:", "bearer ", "api_key", "api-key", "access_token", "refresh_token", "client_secret", "password", "-----begin ", "sk-"} {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func isRawCDPRecordingField(name string) bool {
+	normalized := strings.ToLower(strings.ReplaceAll(strings.ReplaceAll(name, "-", "_"), " ", "_"))
+	switch normalized {
+	case "raw_cdp", "raw_cdp_frame", "raw_cdp_frames", "cdp_frame", "cdp_frames":
+		return true
+	default:
+		return false
+	}
+}
+
+func isSensitiveRecordingField(name string) bool {
+	normalized := strings.NewReplacer("_", "", "-", "", " ", "").Replace(strings.ToLower(name))
+	for _, marker := range []string{"authorization", "credential", "password", "secret", "token", "apikey", "privatekey"} {
+		if strings.Contains(normalized, marker) {
+			return true
+		}
+	}
+	return false
+}
+
 func cloneBrowserEvent(event browserconversation.BrowserEvent) browserconversation.BrowserEvent {
 	clone := event
 	clone.Tools = make([]browserconversation.BrowserToolDescriptor, len(event.Tools))

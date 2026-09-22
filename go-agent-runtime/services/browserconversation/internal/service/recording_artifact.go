@@ -276,13 +276,8 @@ func redactRecordingObject(raw json.RawMessage, request browserconversation.Reco
 			return nil, false, nil, errors.New("raw CDP field is not allowed in browser evidence")
 		}
 		if isSensitiveRecordingField(key) {
-			redacted, err := json.Marshal(recordingRedactionMarker)
-			if err != nil {
-				return nil, false, nil, err
-			}
-			result[key] = redacted
-			changed = true
-			rules["credential_field"] = true
+			result[key] = json.RawMessage(`"REDACTED"`)
+			changed, rules["credential_field"] = true, true
 			continue
 		}
 		redacted, childChanged, childRules, err := redactRecordingJSON(value, request)
@@ -379,37 +374,6 @@ func recordingURL(value string) (*url.URL, bool) {
 		return nil, false
 	}
 }
-func recordingCredentialMarker(value string) bool {
-	lower := strings.ToLower(value)
-	for _, marker := range []string{"authorization:", "bearer ", "api_key", "api-key", "access_token", "refresh_token", "client_secret", "password", "-----begin ", "sk-"} {
-		if strings.Contains(lower, marker) {
-			return true
-		}
-	}
-	return false
-}
-
-func isRawCDPRecordingField(name string) bool {
-	normalized := strings.ToLower(strings.ReplaceAll(strings.ReplaceAll(name, "-", "_"), " ", "_"))
-	switch normalized {
-	case "raw_cdp", "raw_cdp_frame", "raw_cdp_frames", "cdp_frame", "cdp_frames":
-		return true
-	default:
-		return false
-	}
-}
-
-func isSensitiveRecordingField(name string) bool {
-	normalized := strings.ToLower(name)
-	normalized = strings.NewReplacer("_", "", "-", "", " ", "").Replace(normalized)
-	for _, marker := range []string{"authorization", "credential", "password", "secret", "token", "apikey", "privatekey"} {
-		if strings.Contains(normalized, marker) {
-			return true
-		}
-	}
-	return false
-}
-
 func orderedRecordingRules(rules map[string]bool) []string {
 	ordered := make([]string, 0, len(rules)+1)
 	for _, rule := range []string{"url_query", "url_fragment", "credential_field", "raw_cdp_disabled"} {

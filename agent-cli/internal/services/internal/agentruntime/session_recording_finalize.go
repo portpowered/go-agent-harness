@@ -47,17 +47,14 @@ func (r *sessionDirectoryRecording) Finalize() error {
 	r.finalizeOnce.Do(func() {
 		defer r.cleanupSpool()
 		var browserArtifact *transcript.BrowserArtifact
-		browserErr := r.browserErr
+		browserErr := browserRecordingError(r.destination, r.browserErr)
 		if r.browser != nil {
-			browserErr = errors.Join(browserErr, r.browser.Close())
+			browserErr = errors.Join(browserErr, browserRecordingError(r.destination, r.browser.Close()))
 			snapshot, snapshotErr := r.browser.Snapshot()
-			browserErr = errors.Join(browserErr, snapshotErr)
+			browserErr = errors.Join(browserErr, browserRecordingError(r.destination, snapshotErr))
 			if browserErr == nil {
 				browserArtifact = snapshot.Artifact
 			}
-		}
-		if browserErr != nil {
-			browserErr = recordingDestinationError(transcript.ErrRecordingWrite, "finalize browser recording", r.destination, browserErr)
 		}
 		r.eventMu.Lock()
 		defer r.eventMu.Unlock()
@@ -160,6 +157,13 @@ func (r *sessionDirectoryRecording) Finalize() error {
 		}
 	})
 	return r.finalizeErr
+}
+
+func browserRecordingError(destination string, cause error) error {
+	if cause == nil {
+		return nil
+	}
+	return recordingDestinationError(transcript.ErrRecordingWrite, "finalize browser recording", destination, cause)
 }
 
 func (r *sessionDirectoryRecording) stopAndDrainSpoolWorker() {
