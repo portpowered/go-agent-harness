@@ -311,7 +311,7 @@ type RoomOptions = RoomRunOptions
 func prepareRoomReplayOptions(opts RoomRunOptions, validation room.ValidationOptions) (RoomRunOptions, room.ValidationOptions, bool, error) {
 	replayPlan := opts.ReplayPlan
 	replayMode := replayPlan != nil || strings.TrimSpace(opts.ReplayPath) != ""
-	if replayPlan == nil && strings.TrimSpace(opts.ReplayPath) != "" {
+	if replayPlan == nil && replayMode {
 		if opts.ReplayService == nil {
 			return opts, validation, true, errors.New("room replay service is required for replay path admission")
 		}
@@ -324,38 +324,12 @@ func prepareRoomReplayOptions(opts RoomRunOptions, validation room.ValidationOpt
 	if !replayMode {
 		return opts, validation, false, nil
 	}
-	if replayPlan == nil {
-		return opts, validation, true, errors.New("replay plan is required")
-	}
 	opts.ReplayPlan, opts.ReplayPath = replayPlan, replayPlan.BundlePath
 	if opts.Manifest.SchemaVersion == 0 && len(opts.Manifest.Participants) == 0 {
 		return RoomRunOptions{}, validation, true, errors.New("replay room manifest is required")
 	}
 	opts.LaunchPlan, opts.DeviceService, opts.CredentialLookup = nil, nil, nil
 	return opts, room.ValidationOptions{}, true, nil
-}
-
-func buildRoomReplaySchedule(ctx context.Context, replayMode bool, opts RoomRunOptions, plans []*roomParticipantPlan) (roomreplay.Schedule, error) {
-	if !replayMode || opts.ReplayPlan == nil {
-		return nil, nil
-	}
-	format := roomFormatForOptions(opts)
-	targetIDs := make([]string, 0, len(plans))
-	for _, plan := range plans {
-		if plan != nil && !roomParticipantIsHuman(plan) {
-			targetIDs = append(targetIDs, plan.manifest.ID)
-		}
-	}
-	if opts.ReplayService == nil {
-		return nil, errors.New("room replay service is required")
-	}
-	return opts.ReplayService.Build(ctx, roomreplay.BuildRequest{
-		ReplayPlan: opts.ReplayPlan,
-		TargetIDs:  targetIDs,
-		TargetFormat: roomreplay.PCM16Format{
-			SampleRate: format.SampleRate, Channels: format.Channels, FrameDuration: format.FrameDuration,
-		},
-	})
 }
 
 func startRoomReplayScheduler(schedule roomreplay.Schedule, roomCtx context.Context, startGate <-chan struct{}, runtimes []*roomParticipantRuntime, coordinator *roomCoordinator, opts RoomRunOptions, wg *sync.WaitGroup) {

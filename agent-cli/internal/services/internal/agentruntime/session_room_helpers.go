@@ -10,9 +10,27 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
+
+func buildRoomReplaySchedule(ctx context.Context, replayMode bool, opts RoomRunOptions, plans []*roomParticipantPlan) (roomreplay.Schedule, error) {
+	if !replayMode || opts.ReplayPlan == nil {
+		return nil, nil
+	}
+	format := roomFormatForOptions(opts)
+	targetIDs := make([]string, 0, len(plans))
+	for _, plan := range plans {
+		if plan != nil && !roomParticipantIsHuman(plan) {
+			targetIDs = append(targetIDs, plan.manifest.ID)
+		}
+	}
+	if opts.ReplayService == nil {
+		return nil, errors.New("room replay service is required")
+	}
+	return opts.ReplayService.Build(ctx, roomreplay.BuildRequest{ReplayPlan: opts.ReplayPlan, TargetIDs: targetIDs, TargetFormat: roomreplay.PCM16Format{SampleRate: format.SampleRate, Channels: format.Channels, FrameDuration: format.FrameDuration}})
+}
 
 func nilInterface(value any) bool {
 	if value == nil {
