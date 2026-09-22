@@ -151,6 +151,87 @@ func TestServiceRunClosesFixtureAfterSessionFailure(t *testing.T) {
 	}
 }
 
+func TestServiceRunBoundsPostSessionObservationsAfterCancellation(t *testing.T) {
+	waitForCleanupDeadline := func(ctx context.Context) error {
+		if _, ok := ctx.Deadline(); !ok {
+			return errors.New("post-session cleanup context has no deadline")
+		}
+		if err := ctx.Err(); err != nil {
+			return errors.New("post-session cleanup inherited caller cancellation")
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Second):
+			return errors.New("post-session cleanup deadline did not bound observation")
+		}
+	}
+	tests := []struct {
+		name      string
+		configure func(*browserconversation.RunRequest)
+	}{
+		{
+			name: "browser probe",
+			configure: func(request *browserconversation.RunRequest) {
+				request.PostSessionProbe = func(ctx context.Context, _ browserconversation.Fixture, pageID string) (browserconversation.BrowserConversationTabStateProbeResult, error) {
+					return browserconversation.BrowserConversationTabStateProbeResult{PageID: pageID}, waitForCleanupDeadline(ctx)
+				}
+			},
+		},
+		{
+			name: "oracle read",
+			configure: func(request *browserconversation.RunRequest) {
+				request.PostSessionProbe = func(_ context.Context, _ browserconversation.Fixture, pageID string) (browserconversation.BrowserConversationTabStateProbeResult, error) {
+					return browserconversation.BrowserConversationTabStateProbeResult{PageID: pageID}, nil
+				}
+				request.Oracle = blockingOracle{readState: func(ctx context.Context) error {
+					return waitForCleanupDeadline(ctx)
+				}}
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			scenario := testBrowserConversationScenario()
+			scenario.RunTimeout = 100 * time.Millisecond
+			scenario.Steps[0].Deadline = 50 * time.Millisecond
+			fixture := &behaviorFixture{}
+			callerContext, cancelCaller := context.WithCancel(context.Background())
+			defer cancelCaller()
+			request := browserconversation.RunRequest{
+				Scenario:    scenario,
+				AudioByStep: map[string][]byte{"step-1": {1, 2}},
+				Broker:      &behaviorBroker{fixture: fixture},
+				Fixture:     fixture,
+				SessionRunner: func(context.Context, io.Writer, browserconversation.SessionRequest) error {
+					cancelCaller()
+					return nil
+				},
+			}
+			test.configure(&request)
+			started := time.Now()
+			_, err := NewService().Run(callerContext, request)
+			if elapsed := time.Since(started); elapsed > time.Second {
+				t.Fatalf("Run took %s, want bounded post-session cleanup", elapsed)
+			}
+			if !errors.Is(err, browserconversation.ErrBrowserConversationCleanup) || !errors.Is(err, context.DeadlineExceeded) {
+				t.Fatalf("Run error = %v, want bounded cleanup deadline failure", err)
+			}
+		})
+	}
+}
+
+type blockingOracle struct {
+	readState func(context.Context) error
+}
+
+func (o blockingOracle) ReadState(ctx context.Context, _ string) (json.RawMessage, error) {
+	if err := o.readState(ctx); err != nil {
+		return nil, err
+	}
+	return json.RawMessage(`{}`), nil
+}
+
 func TestServiceDerivesOrderedCorrectionAndNavigationRecovery(t *testing.T) {
 	service := NewService()
 	scenario := testBrowserConversationScenario()

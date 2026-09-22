@@ -158,7 +158,8 @@ func (e *browserConversationExecution) cleanupFixture(ctx context.Context, reque
 			return fixture.ProbeTab(ctx, pageID)
 		}
 	}
-	cleanupContext := context.WithoutCancel(ctx)
+	cleanupContext, cancelCleanup := context.WithTimeout(context.WithoutCancel(ctx), e.scenario.RunTimeout)
+	defer cancelCleanup()
 	if health, err := probe(cleanupContext, e.fixture, pageID); err != nil {
 		e.add(errors.Join(browserconversation.ErrBrowserConversationCleanup, err))
 	} else {
