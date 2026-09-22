@@ -18,6 +18,8 @@ import (
 	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeBrowser "github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation"
+	runtimeBrowserWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation/wire"
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeDevicesWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
 	runtimeProviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
@@ -144,13 +146,14 @@ func NewSessionService(deps SessionDependencies) serviceSession.SessionService {
 
 // NewSessionRuntime builds the private runtime implementation behind its
 // public contract. Application Wire never imports services/internal.
-func NewSessionRuntime(clockSource clock.Source, resolver serviceTools.Service, planFactory agentruntime.SessionRuntimeFactory, runtimeFactory agentruntime.SessionRTCRuntimeFactory, inferencer messages.SessionInferencer, toolExecutor messages.ToolExecutor, deviceRegistry devicegw.DeviceRegistry, observer agentruntime.SessionRuntimeObserver, metricSampler observability.MetricSampler, logger observability.Logger, modelCatalog runtimeProviders.ModelCatalog) serviceRuntime.Runtime {
+func NewSessionRuntime(clockSource clock.Source, resolver serviceTools.Service, planFactory agentruntime.SessionRuntimeFactory, runtimeFactory agentruntime.SessionRTCRuntimeFactory, inferencer messages.SessionInferencer, toolExecutor messages.ToolExecutor, deviceRegistry devicegw.DeviceRegistry, observer agentruntime.SessionRuntimeObserver, metricSampler observability.MetricSampler, logger observability.Logger, modelCatalog runtimeProviders.ModelCatalog, browserConversation runtimeBrowser.Service) serviceRuntime.Runtime {
 	return agentruntime.New(agentruntime.Dependencies{
 		Clock: clockSource, PlanFactory: planFactory, ToolService: resolver, RuntimeFactory: runtimeFactory,
 		SessionInferencer: inferencer, ToolExecutor: toolExecutor,
 		DeviceRegistry: deviceRegistry, RuntimeObserver: observer,
-		Observability: observability.NewDependencies(metricSampler, logger),
-		ModelCatalog:  modelCatalog,
+		Observability:       observability.NewDependencies(metricSampler, logger),
+		ModelCatalog:        modelCatalog,
+		BrowserConversation: browserConversation,
 	})
 }
 
@@ -162,3 +165,12 @@ var SessionSet = wire.NewSet(NewSessionRuntimeFactory, NewSessionRuntime, NewSes
 
 // SelfPlaySet is the self-play service's complete provider set.
 var SelfPlaySet = wire.NewSet(NewSelfPlayService)
+
+// NewBrowserConversationService exposes the complete browser-conversation
+// vertical through its service-owned Wire provider. The CLI graph receives
+// only the public contract and never imports the private implementation.
+func NewBrowserConversationService() runtimeBrowser.Service {
+	return runtimeBrowserWire.NewService()
+}
+
+func BrowserConversationSet() wire.ProviderSet { return wire.NewSet(NewBrowserConversationService) }

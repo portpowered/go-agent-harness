@@ -8,6 +8,7 @@ import (
 	sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
+	runtimeBrowser "github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation"
 	sessiondiagnostics "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
 	sessiondiagnosticswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire"
 	"sync"
@@ -112,17 +113,7 @@ const (
 // completed; the active-response policy may fire at the immediately preceding
 // response's non-terminal boundary. Its bytes are attributed to the then
 // in-flight turn (turn index AfterCompletedTurns+1).
-type ScheduledAudioInput struct {
-	AfterCompletedTurns int
-	PCM                 []byte
-	// SourceSampleRate is the native rate of PCM. Zero explicitly means the
-	// caller/replay bytes already use the resolved provider rate.
-	SourceSampleRate int
-	// EndOfTurn sends MESSAGE.END after this input so realtime providers
-	// commit the audio and create one response before the next scheduled turn.
-	// The zero value preserves the diagnostics-only injection behavior.
-	EndOfTurn bool
-}
+type ScheduledAudioInput = runtimeBrowser.ScheduledAudioInput
 type diagnosticSinkFanout []SessionDiagnosticSink
 
 func combineDiagnosticSinks(sinks ...SessionDiagnosticSink) SessionDiagnosticSink {

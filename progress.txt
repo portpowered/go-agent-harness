@@ -4074,3 +4074,91 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   same PR `#435`, update its body with the repair/evidence map, then return
   `ACCEPTED` to the script-owned current-head CI gate without polling; retain
   this task through `CONTINUE` for any exact CI rejection or actionable repair.
+# C282 browser recording review repair checkpoint — 2026-09-22
+
+- Reverified sole-project task admission and the exact isolated C282 branch. The
+  preserved branch was clean at reviewed head `c267ea8551f2712573131a13f6569cdeccf33117`,
+  with PR #541 open on the same branch/head; fetched `origin/main` is
+  `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`, and startup/main ancestry holds.
+- Read concluded reviews 4, 5, 9, 10, 11 and 13. The cumulative lifecycle,
+  defensive-copy, recorder-bound, parser-ownership, correction/recovery,
+  C275 timeout-history and guarded-merge-helper requirements remain preserved.
+  Latest review 13 identifies two remaining production defects: canonical
+  browser artifacts do not redact unmarked credential values under sensitive
+  property names, and browser finalization failures lost transcript write-error
+  identity and destination context.
+- Commit `55033c10b09f731ac07ffca1c3093b4106ebb0ab` adds recursive sensitive
+  field redaction (`credential_field` rule) and restores the
+  `transcript.RecordingError` wrapper while preserving joined constructor,
+  Close and Snapshot causes. Existing recorder behavior coverage now includes
+  unmarked nested `api_key`/`clientSecret` values; finalization coverage checks
+  `errors.Is`, `errors.As`, operation and path context.
+- Targeted browser recorder redaction and CLI recording-finalization tests pass
+  at `55033c10`. Exact local preflight, hosted CI refresh and fresh independent
+  review have not run on the repair. Next action: run the complete C282-03
+  planned preflight on the clean candidate, then non-force update PR #541 only
+  if every required local command passes.
+
+# C282 exact-head architecture-gate repair checkpoint — 2026-09-22
+
+- The first full preflight on `e70ec79287e9ec5cd18b7b8f03ab92f7c59ca845`
+  passed the browser normal/race suite (20 each across four packages), focused
+  adapter/WebMCP checks (34), repeated nomicrophone runtime checks (50 normal,
+  10 race), interleaving checks, accumulated session checks (130 normal/39
+  race), integration (agent-cli 309.899s; loop functional 156.034s), and
+  regression/replay fixtures. `make verify-architecture` then rejected the
+  candidate with ten issues: the new finalizer branch raised existing
+  complexity, the added test exceeded its existing file-line ceiling, and
+  `recording_artifact.go` exceeded its 400-line limit.
+- Commit `7c712cf0e36099df7ab35e2e11095893dff2bb0e` retains the same repair
+  behavior while returning the finalizer to its existing control-flow
+  complexity, keeping the focused test in the existing package test surface,
+  and consolidating recorder redaction helpers in existing `recording.go`.
+  No architecture baseline was edited and no new test or production file was
+  added. Focused redaction/finalization tests pass; `make verify-architecture`
+  now passes (207 packages, 1,966 files, 28,940 functions). Wire generation
+  reported no remaining working-tree changes.
+- The failed architecture attempt means the complete preflight must be rerun
+  on the repaired exact head; no result from `e70ec79` is handoff evidence for
+  `7c712cf`. Next action: checkpoint this gate repair, then rerun the entire
+  C282-03 command list including `make prepush` on one clean final candidate.
+
+# C282 repeated concurrency-check checkpoint — 2026-09-22
+
+- On the clean candidate `4fe84e8e354ec2b83752b64af1e3fe8be569e525`, browser
+  service normal/race (20 tests per run), adapter/WebMCP (34), repeated
+  nomicrophone runtime (50 normal/10 race), interleaving coverage (10), and
+  interleaving race (3) passed. The first prescribed interleaving normal
+  `-count=10` attempt passed 9 iterations and hit the harness's 2-minute
+  deadline once; the isolated `-count=1` reproduction and a complete retry
+  passed, 10/10. The broader session regression command then passed 130 normal
+  and 39 race tests. No test timeout or assertion was changed.
+- No code repair was indicated by that transient: the failure was not
+  reproducible in isolation or in the repeated normal/coverage/race commands,
+  and this vertical changes only browser recording redaction and recording
+  error classification. Preserve the first failed run as history.
+- Because this checkpoint changes the exact candidate revision, all C282-03
+  gates must run again from the beginning on its commit, including these
+  targeted and repeated session checks, repository integration/regression/
+  hermetic/coverage/architecture/Wire gates, and `make prepush`.
+
+# C282 exact-head prepush-format repair checkpoint — 2026-09-22
+
+- On exact candidate `40c3980296d110bb6b6f43899784c52fbdb59dac`, the service,
+  adapter/WebMCP, repeated runtime and concurrent-session normal/coverage/race
+  checks passed (20/20 browser tests, 34 adapter/WebMCP tests, 50/10 runtime
+  repetitions, 10/10 interleaving normal and coverage, 3 race, and accumulated
+  130 normal/39 race tests). Integration passed (agent-cli 310.956s; loop
+  functional cached); regression fixtures, all-module hermetic, embed,
+  architecture (207 packages / 1,966 files / 28,940 functions), library/CLI
+  coverage and coverage-gate (197 registered packages / seven profiles), and
+  generated Wire checks passed.
+- `make prepush` stopped at its fmt phase and named only
+  `agent-cli/internal/services/internal/agentruntime/session_recording_directory_claim_test.go`
+  for gofmt drift. The targeted `TestSessionDirectoryRecordingWrapsBrowserFinalizationFailures`
+  still passes (three subcases). Applied gofmt to that file only; the diff is
+  formatting-only (three lines inserted, one removed), with no generated or
+  unrelated changes. No push was made.
+- Next action: commit this correction and checkpoint, then rerun the complete
+  C282-03 preflight from the beginning on that exact clean candidate, including
+  `make prepush`; do not update PR #541 until every command passes.
