@@ -34,7 +34,9 @@ var NewOpenAIRealtimeSessionInferencerWithToolsAndOptions = impl.NewOpenAIRealti
 var NewGrokSessionInferencer = impl.NewGrokSessionInferencer
 var NewGrokSessionInferencerWithOptions = impl.NewGrokSessionInferencerWithOptions
 
-var ValidateSessionAudioDeviceConflicts = serviceDevices.ValidateSessionAudioDeviceConflicts
+func ValidateSessionAudioDeviceConflicts(audioInFile, audioOutFile, audioInDevice, audioOutDevice bool) error {
+	return serviceDevices.ValidateSessionAudioDeviceConflicts(audioInFile, audioOutFile, audioInDevice, audioOutDevice)
+}
 
 func RunSession(ctx context.Context, out io.Writer, opts SessionRunOptions) error {
 	return impl.RunSession(ctx, out, opts)
