@@ -192,7 +192,7 @@ type RoomRunOptions struct {
 	// ReplayPlan is the already-admitted form of ReplayPath. The CLI supplies
 	// both values so startup can pass a validated, immutable plan through the
 	// service boundary without reopening the source bundle.
-	ReplayPlan *RoomReplayPlan
+	ReplayPlan *roomreplay.RoomReplayPlan
 	// ReplayService is the admitted roomreplay owner used when a caller passes
 	// only ReplayPath. The room runtime never reopens replay files itself.
 	ReplayService roomreplay.Service

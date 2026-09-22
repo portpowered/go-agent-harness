@@ -10,6 +10,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 )
 
 func roomParticipantIsHuman(plan *roomParticipantPlan) bool {
@@ -254,7 +255,7 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 // live room manifest, credential lookup, capability factories, or injected
 // live session factories: the validated bundle is the complete source of
 // replay runtime configuration.
-func buildRoomReplayParticipantPlans(ctx context.Context, replay RoomReplayPlan, opts RoomRunOptions) ([]*roomParticipantPlan, []string, error) {
+func buildRoomReplayParticipantPlans(ctx context.Context, replay roomreplay.RoomReplayPlan, opts RoomRunOptions) ([]*roomParticipantPlan, []string, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}

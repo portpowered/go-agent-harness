@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	roomanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room"
 )
 
@@ -212,9 +213,9 @@ func TestDeliberateOverlapRoomReplayFixtureDefectsFailWithDirectionAndNumbers(t 
 	}
 }
 
-func loadDeliberateOverlapBundle(t *testing.T) RoomReplayAudioBundle {
+func loadDeliberateOverlapBundle(t *testing.T) roomreplay.RoomReplayAudioBundle {
 	t.Helper()
-	bundle, err := LoadRoomReplayAudioBundle(roomReplayAudioTestService(), deliberateOverlapFixturePath())
+	bundle, err := roomReplayAudioTestService().LoadAudioBundle(deliberateOverlapFixturePath())
 	if err != nil {
 		t.Fatalf("load deliberate-overlap bundle: %v", err)
 	}

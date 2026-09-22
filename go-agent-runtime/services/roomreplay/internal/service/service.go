@@ -18,6 +18,13 @@ type RoomReplayPCMFormat = roomreplay.RoomReplayPCMFormat
 type RoomReplayArtifact = roomreplay.RoomReplayArtifact
 type RoomReplayParticipant = roomreplay.RoomReplayParticipant
 type RoomReplayTimelineEvent = roomreplay.RoomReplayTimelineEvent
+type RoomReplayAudioBundle = roomreplay.RoomReplayAudioBundle
+type RoomReplayAudioParticipant = roomreplay.RoomReplayAudioParticipant
+type RoomReplayAudioStream = roomreplay.RoomReplayAudioStream
+type RoomReplayAudioDelta = roomreplay.RoomReplayAudioDelta
+type RoomReplayAudioAnnotation = roomreplay.RoomReplayAudioAnnotation
+type RoomReplayToleranceProfile = roomreplay.RoomReplayToleranceProfile
+type RoomReplayDeltaReconstructionError = roomreplay.RoomReplayDeltaReconstructionError
 type ParticipantKind = roomreplay.ParticipantKind
 
 const (
@@ -30,6 +37,12 @@ const (
 const (
 	ErrInvalidRoomReplayBundle    = roomreplay.ErrInvalidRoomReplayBundle
 	ErrRoomReplayBundleIncomplete = roomreplay.ErrRoomReplayBundleIncomplete
+)
+
+var (
+	ErrRoomReplayDeltaReconstruction = roomreplay.ErrRoomReplayDeltaReconstruction
+	ErrRoomReplayAudioTimeline       = roomreplay.ErrRoomReplayAudioTimeline
+	ErrRoomReplayToleranceProfile    = roomreplay.ErrRoomReplayToleranceProfile
 )
 
 // Service owns the private parser, filesystem admission, and integrity

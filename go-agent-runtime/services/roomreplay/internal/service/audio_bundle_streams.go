@@ -1,4 +1,4 @@
-package agentruntime
+package service
 
 import (
 	"bufio"
@@ -335,46 +335,6 @@ func validateRoomReplayDeltaStream(stream RoomReplayAudioStream, plan RoomReplay
 		}
 	}
 	return validateRoomReplayAudioStreamTimeline(stream, plan, "participants["+participantID+"].wav")
-}
-
-// RoomReplayDeltaReconstructionError points to the first divergent byte,
-// including the delta line responsible for that byte. A missing or extra
-// suffix uses ByteOffset at the end of the common prefix.
-type RoomReplayDeltaReconstructionError struct {
-	ParticipantID       string
-	StreamID            string
-	DeltaID             string
-	DeltaIndex          int
-	ByteOffset          int
-	ExpectedByte        int
-	ActualByte          int
-	ExpectedLength      int
-	ActualLength        int
-	ExpectedSampleCount int
-	ActualSampleCount   int
-	Cause               error
-}
-
-func (e *RoomReplayDeltaReconstructionError) Error() string {
-	if e == nil {
-		return "<nil>"
-	}
-	expectedByte := "<missing>"
-	if e.ExpectedByte >= 0 {
-		expectedByte = fmt.Sprintf("0x%02x", e.ExpectedByte)
-	}
-	actualByte := "<missing>"
-	if e.ActualByte >= 0 {
-		actualByte = fmt.Sprintf("0x%02x", e.ActualByte)
-	}
-	return fmt.Sprintf("%s: participant %q stream %q delta %q (index %d) first divergent byte %d: expected %s, actual %s; expected %d bytes/%d samples, reconstructed %d bytes/%d samples", ErrRoomReplayDeltaReconstruction, e.ParticipantID, e.StreamID, e.DeltaID, e.DeltaIndex, e.ByteOffset, expectedByte, actualByte, e.ExpectedLength, e.ExpectedSampleCount, e.ActualLength, e.ActualSampleCount)
-}
-
-func (e *RoomReplayDeltaReconstructionError) Unwrap() error {
-	if e == nil {
-		return nil
-	}
-	return errors.Join(ErrRoomReplayDeltaReconstruction, ErrInvalidRoomReplayBundle, e.Cause)
 }
 
 func reconstructRoomReplayDeltaStream(stream RoomReplayAudioStream, participantID string) error {

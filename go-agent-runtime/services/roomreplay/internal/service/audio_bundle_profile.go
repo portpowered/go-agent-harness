@@ -1,4 +1,4 @@
-package agentruntime
+package service
 
 import (
 	"bytes"
@@ -9,10 +9,19 @@ import (
 	"time"
 
 	"encoding/json"
+	roomanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room"
 )
 
+func defaultRoomReplayToleranceProfile() RoomReplayToleranceProfile {
+	return RoomReplayToleranceProfile{
+		Name:         "suite-default",
+		StreamConfig: roomanalysis.DefaultPCM16AnalysisConfig(),
+		RoomConfig:   roomanalysis.DefaultPCM16RoomAnalysisConfig(),
+	}
+}
+
 func parseRoomReplayToleranceProfile(manifest roomReplayJSONObject) (RoomReplayToleranceProfile, error) {
-	profile := DefaultRoomReplayToleranceProfile()
+	profile := defaultRoomReplayToleranceProfile()
 	raw, present := roomReplayProfileRawField(manifest, "tolerances", "tolerance_profile", "analysis_profile")
 	if !present {
 		return profile, nil
@@ -185,7 +194,7 @@ func roomReplayInt64Raw(raw json.RawMessage) (int64, error) {
 }
 
 func validateRoomReplayToleranceTightening(profile RoomReplayToleranceProfile) error {
-	defaults := DefaultRoomReplayToleranceProfile()
+	defaults := defaultRoomReplayToleranceProfile()
 	stream := profile.StreamConfig
 	baseStream := defaults.StreamConfig
 	checks := []struct {
