@@ -4645,3 +4645,25 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   and Wire commands on the exact clean commit, repair any reproduced task-owned
   issue, and continue the same task until reviewed peer releases allow complete
   caller cutover and exact legacy deletion. Decision remains CONTINUE.
+
+
+# C276 architecture repair checkpoint — 2026-09-23
+
+- Full `rtk make prepush` on exact candidate
+  `03e2ba71d3ec1d49abf540ab6fda2d9f52fb048f` passed fmt and stopped at
+  `verify-architecture`: the existing session composition test reached 609
+  lines and complexity 33 (limit 600 / baseline 22), the replay test file
+  reached 681 lines (limit 600), and its package complexity baseline rose from
+  126 to 127.
+- Kept every existing test in its original file. The capture cleanup stays in
+  the existing composition test's defer and now checks the joined close/flush
+  errors. Put only the newly authored public replay failure contracts in a
+  focused new test file. This restores both existing file budgets and package
+  complexity without changing production behavior or baselines.
+- `rtk make verify-architecture` now passes: 224 packages, 1,985 files, 29,258
+  functions. The focused hermetic cleanup test passes; replay functional and
+  race suites each pass 139 tests across 9 packages. No push or PR handoff.
+- Next: checkpoint this repair, then rerun complete `make prepush` plus C276
+  functional, integration, race, hermetic, and Wire commands on that exact
+  clean commit. Continue caller reconciliation with the same task when reviewed
+  C268/C269 release refs become available. Decision remains CONTINUE.

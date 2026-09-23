@@ -3,6 +3,7 @@ package agentruntime
 import (
 	"bytes"
 	"context"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -13,6 +14,7 @@ import (
 	recordingwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestLivePlannerFamiliesUseOneGroundingComposition(t *testing.T) {
@@ -143,22 +145,11 @@ func TestIndependentSessionCompositionsProduceIdenticalInstructionsAndProviderUp
 
 			request := sessionRequestFromPlanner(t, plan.inferencer)
 			instructions := []byte(request.Config.Instructions)
-			flushCapture := plan.flushCapture
-			if flushCapture == nil {
-				t.Fatal("recording plan has no capture finalizer")
-			}
 			session, err := plan.inferencer.ConnectSession(context.Background())
 			if err != nil {
 				t.Fatalf("connect composed provider session: %v", err)
 			}
-			t.Cleanup(func() {
-				if err := session.Close(); err != nil {
-					t.Errorf("close composed provider session: %v", err)
-				}
-				if err := flushCapture(); err != nil {
-					t.Errorf("flush composed provider capture: %v", err)
-				}
-			})
+			defer func() { assert.NoError(t, errors.Join(session.Close(), plan.flushCapture())) }()
 
 			conn.mu.Lock()
 			writes := make([][]byte, len(conn.writes))
