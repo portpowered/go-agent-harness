@@ -4425,3 +4425,31 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   only the recording redaction test after that attempted repair. Its result is
   superseded; the next action is to commit this correction and rerun the full
   C276 preflight on the new exact candidate before any push.
+
+
+# C276 ownership repair checkpoint — 2026-09-23
+
+- Continued the admitted task and same branch. Recorded two focused repair
+  commits: `3a185b8af62f30b14b4c93b8fc9b8d3095eaa3dd` restores sole recording
+  observation-error ownership to the recording service and reduces existing
+  source; `01be7d5be5e419d64debdee3d8e9e54d6fca8fb4` forwards caller context to
+  runtime planning, removes context-free replay wrappers, and preserves replay
+  capture close errors. Current `HEAD` is the latter commit.
+- `rtk make verify-architecture` passed on the candidate tree (224 packages,
+  1,977 files, 29,161 functions checked). `rtk go test -count=1
+  ./go-agent-runtime/services/recording/... ./go-agent-runtime/services/replay/...`
+  and the matching `-race` command each passed 203 tests across 13 packages;
+  `rtk go test -count=1 ./agent-cli/internal/services/internal/agentruntime`
+  passed 602 tests. The focused CLI/WebMCP normal and race selections and
+  `git diff --check` also passed. These are focused checkpoints, not the full
+  exact-candidate pre-PR gate.
+- All seven planned recording/replay legacy files and six absent replacement
+  paths remain absent. The two stateless adapters are 30 and 33 lines (63 total).
+  No push or PR exists. The worktree still contains ten uncommitted shared or
+  inherited files; these were preserved. Exact reviewed caller-release commits
+  for C229/C268/C269/C274 are not yet available for the shared cutover paths.
+- Next: continue this same task after the exact peer releases are available,
+  integrate every shared production caller without altering peer-owned changes,
+  commit the completed candidate, then run the full C276-01 through C276-06
+  preflight including `make prepush` on one clean unchanged SHA. Push/open or
+  update this same PR only if every local gate passes.
