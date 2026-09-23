@@ -4518,3 +4518,40 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   passed `rtk make prepush` with exit 0 and left the worktree clean. This
   checkpoint itself changes the candidate, so the complete planned preflight
   must be rerun from the next clean commit before push or handoff.
+
+# C280 current-main integration and release-blocked checkpoint — 2026-09-22
+
+- Reverified the admitted task from `FACTORY_ROOT`; verification returned
+  `admitted` for the sole `audio-runtime` / `audio-runtime-v1` project, and
+  `prd.json.branchName` matches this isolated worktree. Fetched current
+  `origin/main=2c87222155441baa84b22e8b9457ac5908df0a5f` and merged it
+  additively as `711fb8583`, preserving startup integration, C269 `889b1a49`
+  ancestry and predecessor checkpoints; `1c7c37892` repairs the merged Wire
+  architecture entry. The worktree is clean and no host or peer worktree was
+  modified.
+- The merged-tree C280 service checks pass: normal roomevidence/rooms tests
+  `105` in `16` packages, focused race tests `66` in `16` packages, `make
+  wire-check`, `make architecture-size-check` (`225` packages, `2,012` files,
+  `29,343` functions), and `git diff --check`.
+- Retirement remains intentionally incomplete. Current main has already
+  removed the five former room-audio-bundle files; the remaining owned CLI
+  legacy cluster is exactly `3` production files / `1,794` lines
+  (`session_room_evidence.go`, `_capture.go`, `_integrity.go`). The remaining
+  duplicate `rooms/internal/evidence` tree is `14` production files / `2,772`
+  lines. Six production references remain in the room service/lifecycle/Wire
+  callers and the legacy package itself. C280 owns `0` adapter files / `0`
+  lines; current-main's separate C278 `roomreplay/adapter.go` is `22` lines
+  and remains outside this vertical's ownership.
+- Canonical C272 and C276 task work is still `init`/processing, and no C281
+  recovery release exists; C278 is merged into current main but its repair
+  evidence remains a peer concern. The C269 deletion/caller cutover checkpoint
+  is therefore not consumed: its room lifecycle, Wire and shared agentruntime
+  edits overlap unreleased peer ownership. No prepush, push, PR, SCRIPT CI,
+  review or merge is claimed.
+- Exact next action: consume only reviewed or exact-path-released C272/C276/C281
+  seams, complete every room-evidence caller cutover through the public
+  `roomevidence` contract, delete the three remaining agentruntime files and
+  all production files under `rooms/internal/evidence`, then run the complete
+  C280-03/C280-04 checks and `make prepush` plus every C280-05 command on one
+  clean exact candidate. Return `CONTINUE` while that actionable release
+  integration remains.
