@@ -196,7 +196,7 @@ func replaceRedactedToken(value string, start, end int) string {
 func redactJSONValue(value any, secret string) any {
 	switch current := value.(type) {
 	case string:
-		return redactError(current, secret)
+		return redactJSONText(redactError(current, secret), secret)
 	case []any:
 		for index := range current {
 			current[index] = redactJSONValue(current[index], secret)
@@ -204,11 +204,60 @@ func redactJSONValue(value any, secret string) any {
 		return current
 	case map[string]any:
 		for key, nested := range current {
+			if sensitiveJSONKey(key) {
+				current[key] = redactSensitiveJSONValue(nested)
+				continue
+			}
 			current[key] = redactJSONValue(nested, secret)
 		}
 		return current
 	default:
 		return value
+	}
+}
+
+func redactJSONText(value, secret string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" || (trimmed[0] != '{' && trimmed[0] != '[') || !json.Valid([]byte(trimmed)) {
+		return value
+	}
+	var nested any
+	if err := json.Unmarshal([]byte(trimmed), &nested); err != nil {
+		return value
+	}
+	redacted, err := json.Marshal(redactJSONValue(nested, secret))
+	if err != nil {
+		return value
+	}
+	return string(redacted)
+}
+
+func redactSensitiveJSONValue(value any) any {
+	switch current := value.(type) {
+	case string:
+		return "[REDACTED]"
+	case []any:
+		for index := range current {
+			current[index] = redactSensitiveJSONValue(current[index])
+		}
+		return current
+	case map[string]any:
+		for key, nested := range current {
+			current[key] = redactSensitiveJSONValue(nested)
+		}
+		return current
+	default:
+		return value
+	}
+}
+
+func sensitiveJSONKey(key string) bool {
+	key = strings.ToLower(strings.NewReplacer("_", "", "-", "", " ", "").Replace(key))
+	switch key {
+	case "apikey", "apikeyvalue", "authorization", "bearertoken", "clientsecret", "credential", "credentials", "password", "refreshtoken", "secret", "token":
+		return true
+	default:
+		return false
 	}
 }
 
