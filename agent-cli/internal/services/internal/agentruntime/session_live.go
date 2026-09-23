@@ -291,8 +291,8 @@ type sessionLoopOptions struct {
 	SessionUpdatedTimeout time.Duration
 
 	// loopReady receives the constructed loop before its hot loop starts. The
-	// room coordinator uses this to bind peer audio to the session inbox without
-	// exposing the loop through SessionRunOptions.
+	// self-play coordinator uses this to bind an io.Pipe reader to the peer's
+	// session audio inbox without exposing the loop through SessionRunOptions.
 	loopReady chan<- *agentloop.AgentLoop
 
 	// quiesceUpstream stops an owner outside the session loop from producing new

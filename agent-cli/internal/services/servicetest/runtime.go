@@ -62,6 +62,7 @@ type InvalidOpenAIRealtimeVoiceError = sessioncontract.InvalidOpenAIRealtimeVoic
 type RTCMediaEndpoints = sharedaudio.MediaEndpoints
 type RTCMediaSession = sharedaudio.MediaSession
 type ScheduledAudioInput = audioio.ScheduledAudioInput
+type SelfPlayRunOptions = impl.SelfPlayRunOptions
 type SessionAudioInTurnBargeError = sessioncontract.SessionAudioInTurnBargeError
 type SessionTextSeed = impl.SessionTextSeed
 type SessionDiagnosticRecord = impl.SessionDiagnosticRecord

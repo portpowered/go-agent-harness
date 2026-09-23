@@ -1,17 +1,16 @@
 package agentruntime
 
+import "github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
+
 import (
 	"encoding/json"
 	"errors"
 	"fmt"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
-	"io"
 	"os"
 	"sync"
 	"time"
-
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
 // roomClock stamps room evidence records with both a monotonic offset from
@@ -143,7 +142,7 @@ func (w *rawPCMWriter) write(pcm []byte) error {
 	if w.err != nil {
 		return w.err
 	}
-	written, err := writeRoomEvidenceAllCount(w.file, pcm)
+	written, err := writeSelfPlayAllCount(w.file, pcm)
 	w.bytes += uint64(written)
 	if err != nil {
 		w.err = fmt.Errorf("write %s: %w", w.path, err)
@@ -268,12 +267,12 @@ func (b *roomMixBuffer) finalize(span time.Duration, path string) error {
 		_ = os.Remove(path)
 		return err
 	}
-	if _, err := writeRoomEvidenceAllCount(file, header[:]); err != nil {
+	if _, err := writeSelfPlayAllCount(file, header[:]); err != nil {
 		_ = file.Close()
 		_ = os.Remove(path)
 		return fmt.Errorf("write room mix WAV header: %w", err)
 	}
-	if _, err := writeRoomEvidenceAllCount(file, pcm); err != nil {
+	if _, err := writeSelfPlayAllCount(file, pcm); err != nil {
 		_ = file.Close()
 		_ = os.Remove(path)
 		return fmt.Errorf("write room mix WAV data: %w", err)
@@ -303,7 +302,7 @@ type roomTimelineEntry struct {
 // conversation's shape (including cross-participant overlap) is machine
 // readable without reconstructing it from N separate per-participant files.
 type roomTimeline struct {
-	writer *roomEvidenceJSONLWriter
+	writer *selfPlayJSONLWriter
 	clock  roomClock
 
 	// mu serializes the clock read and the resulting write. record is called
@@ -318,7 +317,7 @@ type roomTimeline struct {
 }
 
 func newRoomTimeline(path string, clock roomClock) (*roomTimeline, error) {
-	writer, err := newRoomEvidenceJSONLWriter(path)
+	writer, err := newSelfPlayJSONLWriter(path)
 	if err != nil {
 		return nil, err
 	}
@@ -358,28 +357,4 @@ func (t *roomTimeline) close() error {
 		return nil
 	}
 	return t.writer.close()
-}
-
-func writeRoomEvidenceAll(writer io.Writer, data []byte) error {
-	_, err := writeRoomEvidenceAllCount(writer, data)
-	return err
-}
-
-func writeRoomEvidenceAllCount(writer io.Writer, data []byte) (int, error) {
-	total := 0
-	for len(data) > 0 {
-		written, err := writer.Write(data)
-		if written < 0 || written > len(data) {
-			return total, fmt.Errorf("%w: writer returned invalid byte count %d", io.ErrShortWrite, written)
-		}
-		total += written
-		if err != nil {
-			return total, err
-		}
-		if written == 0 {
-			return total, io.ErrShortWrite
-		}
-		data = data[written:]
-	}
-	return total, nil
 }

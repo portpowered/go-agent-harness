@@ -112,7 +112,7 @@ func (c sessionModelCatalog) SupportedRealtimeModelIDs(provider string) []string
 	return ids
 }
 
-func TestModelAdmissionAdaptersPreserveSessionBoundary(t *testing.T) {
+func TestModelAdmissionAdaptersPreserveSessionAndSelfPlayBoundaries(t *testing.T) {
 	const customModelID = "custom-only"
 
 	custom := sessionModelCatalog{models: []OpenAIRealtimeModel{{ID: customModelID, SupportsAudio: true}}}
@@ -145,11 +145,21 @@ func TestModelAdmissionAdaptersPreserveSessionBoundary(t *testing.T) {
 		t.Fatalf("case-sensitive bare session boundary = %v, want legacy bypass", err)
 	}
 
+	if err := validateSelfPlayModel(SelfPlayRunOptions{modelCatalog: custom, Model: customModelID}); err != nil {
+		t.Fatalf("self-play custom model = %v", err)
+	}
+	selfPlayErr := validateSelfPlayModel(SelfPlayRunOptions{modelCatalog: custom, Model: " custom-only "})
+	if selfPlayErr == nil || !strings.Contains(selfPlayErr.Error(), `self-play model " custom-only " is not an OpenAI Realtime model`) {
+		t.Fatalf("self-play raw-model rejection = %v, want legacy presentation", selfPlayErr)
+	}
 }
 
 func TestModelAdmissionAdaptersPreserveNilCatalogContexts(t *testing.T) {
 	if err := unsupportedOpenAIRealtimeModelErrorFor(SessionRunOptions{}, "gpt-realtime"); !errors.Is(err, runtimeproviders.ErrModelCatalogRequired) || !strings.Contains(err.Error(), "OpenAI realtime model admission") {
 		t.Fatalf("session nil-catalog error = %v", err)
+	}
+	if err := validateSelfPlayModel(SelfPlayRunOptions{Model: "gpt-realtime"}); !errors.Is(err, runtimeproviders.ErrModelCatalogRequired) || !strings.Contains(err.Error(), "self-play model admission") {
+		t.Fatalf("self-play nil-catalog error = %v", err)
 	}
 }
 

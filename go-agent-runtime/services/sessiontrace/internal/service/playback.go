@@ -80,7 +80,7 @@ func recordPlaybackLog(logger observability.Logger, record observability.LogReco
 // installs whenever a caller did not wire one. This is the second time this
 // exact instrumentation has been found unwired end to end: #360 fixed the
 // CLI's SessionRunOptions.Diagnostics after #350's counters were found never
-// reaching it, and the room playback half was still missed. Patching each
+// reaching it, and the room/self-play half was still missed. Patching each
 // forgetful call site clearly does not close this class of bug, so instead
 // every place in this codebase that observes a playback queue overflow
 // (sessionPlaybackDiagnosticObserver below, and

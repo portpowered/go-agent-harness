@@ -13,13 +13,13 @@ import (
 	hostServices "github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	serviceDevices "github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices"
+	serviceSelfPlay "github.com/portpowered/go-agent-harness/agent-cli/internal/services/selfplay"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeProviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	runtimeRecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
-	runtimeSelfPlay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/selfplay"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	"github.com/spf13/cobra"
@@ -276,7 +276,7 @@ type SessionCommand struct {
 	storeFactory    runtimeSession.FileStoreFactory
 	streamObserver  serviceSession.SessionStreamObserver
 	sessionService  serviceSession.Service
-	selfPlayService runtimeSelfPlay.Service
+	selfPlayService serviceSelfPlay.Service
 	// liveService and deviceService are the embeddable runtime path used by
 	// production composition for continuous sessions. The legacy service
 	// remains optional so focused CLI tests can inject only the text/session

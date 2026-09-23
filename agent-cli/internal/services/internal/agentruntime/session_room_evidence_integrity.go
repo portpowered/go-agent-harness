@@ -146,19 +146,19 @@ func (e *roomEvidence) openParticipant(participant room.Participant, stem string
 		return fmt.Errorf("create room participant %q evidence directory: %w", participant.ID, err)
 	}
 	var err error
-	participantEvidence.audio, err = newRoomWAVRecorder(filepath.Join(e.destination, paths.WAV), e.audioFormat.SampleRate)
+	participantEvidence.audio, err = newSelfPlayWAVRecorder(filepath.Join(e.destination, paths.WAV), e.audioFormat.SampleRate)
 	if err != nil {
 		return fmt.Errorf("create room participant %q WAV evidence: %w", participant.ID, err)
 	}
-	participantEvidence.diagnostics, err = newRoomEvidenceJSONLWriter(filepath.Join(e.destination, paths.Diagnostics))
+	participantEvidence.diagnostics, err = newSelfPlayJSONLWriter(filepath.Join(e.destination, paths.Diagnostics))
 	if err != nil {
 		return fmt.Errorf("create room participant %q diagnostics evidence: %w", participant.ID, err)
 	}
-	participantEvidence.deltas, err = newRoomEvidenceJSONLWriter(filepath.Join(e.destination, paths.Deltas))
+	participantEvidence.deltas, err = newSelfPlayJSONLWriter(filepath.Join(e.destination, paths.Deltas))
 	if err != nil {
 		return fmt.Errorf("create room participant %q delta evidence: %w", participant.ID, err)
 	}
-	participantEvidence.events, err = newRoomEvidenceJSONLWriter(filepath.Join(e.destination, paths.Events))
+	participantEvidence.events, err = newSelfPlayJSONLWriter(filepath.Join(e.destination, paths.Events))
 	if err != nil {
 		return fmt.Errorf("create room participant %q event evidence: %w", participant.ID, err)
 	}

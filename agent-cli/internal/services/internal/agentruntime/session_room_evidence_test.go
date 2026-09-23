@@ -125,7 +125,7 @@ func TestRunRoom_WritesPerParticipantEvidenceAndManifest(t *testing.T) {
 		diagnostics := readRoomEvidenceJSONLLines(t, filepath.Join(outputDir, participantManifest.Artifacts.Diagnostics))
 		diagnosticTurns := 0
 		for _, line := range diagnostics {
-			var record roomDiagnosticLine
+			var record selfPlayDiagnosticLine
 			if err := json.Unmarshal(line, &record); err != nil {
 				t.Fatalf("decode participant %q diagnostic: %v", id, err)
 			}
