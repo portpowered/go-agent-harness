@@ -5618,3 +5618,45 @@ handoff sequence. No gate completion is claimed.
   released same-project C276/C285 seams into this branch, then rerun the fresh
   production caller/deletion/adapter audit and the complete C251 exact-head
   local preflight before any push or SCRIPT handoff.
+
+
+## C251 source-boundary and admission checkpoint — 2026-09-23
+
+- Reverified `verify-work`: C251 is admitted under `audio-runtime`;
+  `prd.branchName` matches `codex/audio-runtime-c251-recover-shutdown-duration-retirement`.
+  Fetched `origin/main=2f9f9736e1360802fc37e82de38540d92cb22631` is an ancestor
+  of `HEAD=52d8e402cc2d11c87c6eab24cc857d1ee1894b63`, as are recovery
+  `ee9b68260ad69e8b72c2bcbed655435af877d5c3` and startup
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`. The worktree was clean before
+  this checkpoint. No C251 PR exists.
+- Checked prior review records on C251's branch and related shutdown/recording/
+  turn and audio PRs #527, #526, #529 and #539: there are no review submissions
+  or inline review threads; issue comments are implementation/CI handoffs, not
+  review findings. No prior C251 review rejection is outstanding.
+- A fresh production scan confirms all fourteen planned legacy files are absent,
+  no caller imports `sessionduration/internal` or `session/internal/live`, and
+  the listed retired duration symbols are absent. The sole adapter remains
+  `livehost/shutdown_adapter.go`, one file / 59 lines. The scan also found
+  `runSessionDurationPlanWithAdmission` in `session_live_setup.go:148`, called
+  from `session_text_entrypoint.go:106`, `session_image_entrypoints.go:251` and
+  `session_instruction_entrypoints.go:175`. Its body still composes duration
+  validation/clock selection, finalizer invocation, pre-run effects and the
+  duration runner inside `agentruntime`. Treat this as an outstanding C251
+  service-boundary repair, not as a false-positive absence result.
+- The last documented `make prepush` on source candidate
+  `567e08405bb64075801590cd13fc559a4dbce938` stopped at architecture with 426
+  findings, including `agentruntime` package drift 205 versus baseline 138.
+  Current static inventory is 84 production Go files / 205 total in that CLI
+  package versus 58 / 138 on fetched main. No unchanged prepush retry, push,
+  PR, SCRIPT handoff or review was made.
+- C276 remains dirty on its own branch in `livehost/run.go` and three other
+  paths, with no PR; C285 remains clean with no PR and records a dependency on
+  C251's `agent-cli/internal/wire/live_service.go` seam. Their worktrees were
+  left untouched.
+- Exact next action: remove the remaining C251 duration/finalizer composition
+  from `agentruntime` by routing those callers through the service-owned run
+  contract, then reconcile current-main and reviewed/released peer seams without
+  importing unfinished peer changes. Rerun `make prepush` and every listed
+  C251 functional, integration, race, hermetic, Wire, embed, deletion, duplicate,
+  adapter, ancestry and diff command on the exact repaired commit before any
+  push or PR.
