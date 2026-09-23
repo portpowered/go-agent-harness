@@ -34,9 +34,6 @@ func (testDurationService) Begin(o sessionduration.Options) (sessionduration.Con
 	if o.MaxDuration > 0 && !scheduleTestDuration(o, o.MaxDuration, func() { firstTestDurationCause(o, sessionduration.ErrMaxDurationExceeded) }) {
 		return nil, sessionduration.ErrSchedulerUnavailable
 	}
-	if !o.Liveness.Enabled && !o.Retry.Enabled {
-		return nil, nil
-	}
 	return &testDurationController{options: o}, nil
 }
 func scheduleTestDuration(o sessionduration.Options, delay time.Duration, callback func()) bool {
@@ -90,6 +87,9 @@ func (c *testDurationController) arm(delay time.Duration, cause error) {
 func (c *testDurationController) Retry(request sessionduration.RetryRequest) sessionduration.RetryDecision {
 	if request.Terminal == nil || request.Terminal.ProviderErrorCode != "rate_limit_exceeded" || !c.options.Retry.Enabled {
 		return sessionduration.RetryDecision{}
+	}
+	if request.Dispatch != nil {
+		_ = request.Dispatch(c.options.Context)
 	}
 	return sessionduration.RetryDecision{Eligible: true, Delay: c.options.Retry.DefaultDelay}
 }

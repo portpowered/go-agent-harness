@@ -4,9 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"strings"
-	"sync"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
@@ -88,16 +87,12 @@ func (c *controller) armLiveness(onlyIfArmed bool) {
 		timer.Stop()
 		return
 	}
-	old, wake := c.installLivenessLocked(timer)
+	old := c.installLivenessLocked(timer)
 	c.mu.Unlock()
 	if old != nil {
 		old.Stop()
 	}
-	select {
-	case wake <- struct{}{}:
-	default:
-	}
-	go c.watchLiveness()
+	c.notifyTimerWorker()
 }
 
 func (c *controller) canArmLivenessLocked(onlyIfArmed bool) bool {
@@ -105,35 +100,12 @@ func (c *controller) canArmLivenessLocked(onlyIfArmed bool) bool {
 		(onlyIfArmed && c.livenessArmed || !onlyIfArmed && !c.livenessArmed)
 }
 
-func (c *controller) installLivenessLocked(timer sessionTimer) (sessionTimer, chan struct{}) {
+func (c *controller) installLivenessLocked(timer sessionTimer) sessionTimer {
 	old := c.livenessTimer
 	c.livenessTimer = timer
 	c.livenessArmed = true
 	c.livenessGeneration++
-	return old, c.livenessWake
-}
-
-func (c *controller) watchLiveness() {
-	for {
-		c.mu.Lock()
-		if c.closed || c.livenessStopped || !c.livenessArmed || c.livenessTimer == nil {
-			c.mu.Unlock()
-			return
-		}
-		generation := c.livenessGeneration
-		timer := c.livenessTimer
-		wake := c.livenessWake
-		ctx := c.ctx
-		c.mu.Unlock()
-		select {
-		case <-timer.C():
-			c.expireLiveness(generation)
-			return
-		case <-wake:
-		case <-ctx.Done():
-			return
-		}
-	}
+	return old
 }
 
 func (c *controller) expireLiveness(generation uint64) {
@@ -152,6 +124,7 @@ func (c *controller) expireLiveness(generation uint64) {
 	if timer != nil {
 		timer.Stop()
 	}
+	c.notifyTimerWorker()
 	c.reportLiveness(err)
 }
 
@@ -168,15 +141,11 @@ func (c *controller) stopLiveness() {
 	c.livenessGeneration++
 	timer := c.livenessTimer
 	c.livenessTimer = nil
-	wake := c.livenessWake
 	c.mu.Unlock()
 	if timer != nil {
 		timer.Stop()
 	}
-	select {
-	case wake <- struct{}{}:
-	default:
-	}
+	c.notifyTimerWorker()
 }
 
 func (c *controller) Errors() <-chan error {
@@ -206,7 +175,9 @@ func (c *controller) Finalize(ctx context.Context, request sessionduration.Final
 		c.livenessStopped = true
 		maxTimer := c.maxTimer
 		liveTimer := c.livenessTimer
-		c.maxTimer, c.livenessTimer = nil, nil
+		firstTimer := c.firstResponseTimer
+		c.maxTimer, c.livenessTimer, c.firstResponseTimer = nil, nil, nil
+		c.firstResponseVersion++
 		c.mu.Unlock()
 		if maxTimer != nil {
 			maxTimer.Stop()
@@ -214,7 +185,12 @@ func (c *controller) Finalize(ctx context.Context, request sessionduration.Final
 		if liveTimer != nil {
 			liveTimer.Stop()
 		}
+		if firstTimer != nil {
+			firstTimer.Stop()
+		}
 		c.cancel()
+		c.notifyTimerWorker()
+		c.timerWorkerWG.Wait()
 		failures := c.cleanup(ctx, request)
 		c.mu.Lock()
 		c.closed = true
@@ -305,89 +281,95 @@ func invokeCleanup(cleanup func() error) (err error) {
 	return cleanup()
 }
 
-func (s *Service) NewFinalizer(ports sessionduration.FinalizationPorts) sessionduration.Finalizer {
-	return &finalizer{ports: ports}
-}
-
-type finalizer struct {
-	ports   sessionduration.FinalizationPorts
-	binding func() error
-	once    sync.Once
-	mu      sync.Mutex
-	err     error
-}
-
-func (f *finalizer) SetDeviceBinding(binding func() error) {
-	if f == nil {
-		return
-	}
-	f.mu.Lock()
-	f.binding = binding
-	f.mu.Unlock()
-}
-
-func (f *finalizer) Finish(ctx context.Context, out io.Writer, primary error) error {
-	if f == nil {
-		return primary
-	}
-	if out == nil {
-		out = io.Discard
-	}
-	f.once.Do(func() {
-		cleanupErr := f.cleanup(ctx, out)
-		completionErr := f.complete(out, errors.Join(primary, cleanupErr))
-		f.mu.Lock()
-		f.err = errors.Join(cleanupErr, completionErr)
-		f.mu.Unlock()
-	})
-	f.mu.Lock()
-	cleanupErr := f.err
-	f.mu.Unlock()
-	return errors.Join(primary, cleanupErr)
-}
-
-func (f *finalizer) cleanup(ctx context.Context, out io.Writer) error {
-	if out == nil {
-		out = io.Discard
-	}
-	if ctx == nil {
-		ctx = context.Background() //nolint:contextcheck // standalone finalization has no caller context to inherit.
-	}
-	var failures []error
-	appendFailure := func(label string, cleanup func() error) {
-		if err := invokeFinalizer(cleanup); err != nil {
-			failures = append(failures, fmt.Errorf("%s: %w", label, err))
-		}
-	}
-
-	appendFailure("close session capabilities", f.ports.CloseCapabilities)
-	appendFailure("close WebRTC provider session", f.ports.CloseSession)
-	f.mu.Lock()
-	binding := f.binding
-	if binding == nil {
-		binding = f.ports.CloseBinding
-	}
-	f.mu.Unlock()
-	appendFailure("close RTC device binding", binding)
-	appendFailure("close WebRTC runtime", f.ports.CloseRuntime)
-	appendFailure("flush capture", f.ports.FlushCapture)
-	if f.ports.Finalize != nil {
-		appendFailure("finalize session", func() error { return f.ports.Finalize(ctx, out) })
-	}
-	appendFailure("release capture", f.ports.ReleaseCapture)
-	return errors.Join(failures...)
-}
-
-func invokeFinalizer(cleanup func() error) (err error) {
-	if cleanup == nil {
-		return nil
-	}
+func (c *controller) watchTimers() {
+	defer c.timerWorkerWG.Done()
+	var retryTimer sessionTimer
+	var retryDispatch func(context.Context) error
 	defer func() {
-		if recovered := recover(); recovered != nil {
-			err = fmt.Errorf("%w: %v", sessionduration.ErrFinalizationPanic, recovered)
+		if retryTimer != nil {
+			retryTimer.Stop()
 		}
 	}()
-	return cleanup()
+	for {
+		maxTimer, liveTimer, liveVersion, firstTimer, firstVersion := c.timerSnapshot()
+		retryRequests := retryRequestInput(c.retryRequests, retryTimer)
+		retryTimerC := timerChannel(retryTimer)
+		select {
+		case <-c.ctx.Done():
+			return
+		case <-c.timerWake:
+		case <-timerChannel(maxTimer):
+			c.expireMaxTimer(maxTimer)
+		case <-timerChannel(liveTimer):
+			c.expireLiveness(liveVersion)
+		case <-timerChannel(firstTimer):
+			c.expireFirstResponse(firstVersion)
+		case request := <-retryRequests:
+			retryTimer, retryDispatch = c.startRetry(request)
+		case <-retryTimerC:
+			retryTimer, retryDispatch = c.finishRetry(retryTimer, retryDispatch)
+		}
+	}
 }
 
-var _ sessionduration.Finalizer = (*finalizer)(nil)
+func timerChannel(timer sessionTimer) <-chan time.Time {
+	if timer == nil {
+		return nil
+	}
+	return timer.C()
+}
+
+func retryRequestInput(requests <-chan scheduledRetry, timer sessionTimer) <-chan scheduledRetry {
+	if timer != nil {
+		return nil
+	}
+	return requests
+}
+
+func (c *controller) timerSnapshot() (sessionTimer, sessionTimer, uint64, sessionTimer, uint64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.maxTimer, c.livenessTimer, c.livenessGeneration, c.firstResponseTimer, c.firstResponseVersion
+}
+
+func (c *controller) expireMaxTimer(timer sessionTimer) {
+	c.mu.Lock()
+	if c.maxTimer == timer {
+		c.maxTimer = nil
+	}
+	c.mu.Unlock()
+	c.notifyTimerWorker()
+	_ = c.Expire()
+}
+
+func (c *controller) startRetry(request scheduledRetry) (sessionTimer, func(context.Context) error) {
+	if request.delay <= 0 {
+		c.dispatchRetry(request.dispatch)
+		return nil, nil
+	}
+	timer := c.options.Clock.NewTimer(request.delay)
+	if timer == nil {
+		c.report(sessionduration.ErrSchedulerUnavailable)
+		return nil, nil
+	}
+	return timer, request.dispatch
+}
+
+func (c *controller) finishRetry(timer sessionTimer, dispatch func(context.Context) error) (sessionTimer, func(context.Context) error) {
+	if timer != nil {
+		timer.Stop()
+	}
+	c.dispatchRetry(dispatch)
+	return nil, nil
+}
+
+func (c *controller) dispatchRetry(dispatch func(context.Context) error) {
+	if dispatch == nil {
+		return
+	}
+	if err := dispatch(c.ctx); err != nil {
+		c.report(fmt.Errorf("send rate-limit retry response: %w", err))
+		return
+	}
+	c.ExpectProviderProgress()
+}

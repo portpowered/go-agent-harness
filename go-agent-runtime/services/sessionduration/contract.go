@@ -26,6 +26,8 @@ const (
 	ErrScheduledAudioIncomplete         sessionDurationError = "scheduled audio session ended before all turns completed"
 	ErrSchedulerUnavailable             sessionDurationError = "session duration scheduler is required"
 	ErrFinalizationPanic                sessionDurationError = "session finalization panicked"
+	ErrFirstResponseTimeout             sessionDurationError = "session first response timed out"
+	ErrRateLimitRetryExhausted          sessionDurationError = "session duration exhausted rate-limit retry budget"
 	LivenessClassificationEmptyResponse                      = "silent_provider_empty_response"
 	LivenessClassificationTimeout                            = "silent_provider_timeout"
 	// MaxDurationReason is the stable terminal reason published when the
@@ -130,6 +132,10 @@ type PlaybackDrainer interface {
 type LivenessOptions struct {
 	Enabled bool
 	Timeout time.Duration
+	// RequireFirstResponse starts a bounded first-response timer after the
+	// session opens. FirstResponseTimeout is normalized by the service.
+	RequireFirstResponse bool
+	FirstResponseTimeout time.Duration
 }
 
 // LivenessError carries bounded, credential-free provider facts while

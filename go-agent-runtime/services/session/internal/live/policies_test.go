@@ -4,21 +4,31 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/sessionwrap"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
 	"github.com/stretchr/testify/require"
 )
 
-func TestLiveFirstTurnTimeoutUsesInjectedScheduler(t *testing.T) {
+type recordingDurationService struct {
+	captured *sessionduration.Options
+}
+
+func (service recordingDurationService) Begin(options sessionduration.Options) (sessionduration.Controller, error) {
+	*service.captured = options
+	return newTestDurationService().Begin(options)
+}
+
+func TestLiveFirstTurnFailureMapsDurationError(t *testing.T) {
 	clock := platformclock.NewDeterministic(time.Unix(400, 0), time.Millisecond)
+	var durationOptions sessionduration.Options
 	provider := newTestSession()
 	if !provider.receive.Write(context.Background(), messages.StreamMessage{
 		Type:  messages.StreamTypeSessionOpen,
@@ -30,7 +40,7 @@ func TestLiveFirstTurnTimeoutUsesInjectedScheduler(t *testing.T) {
 		InferencerFactory: func(context.Context, session.LiveRequest) (messages.SessionInferencer, error) {
 			return &testInferencer{session: provider}, nil
 		},
-		Clock: clock.Now, Scheduler: clock,
+		Clock: clock.Now, Scheduler: clock, DurationService: recordingDurationService{captured: &durationOptions},
 	})
 	handle, err := service.OpenLive(context.Background(), session.LiveRequest{
 		SessionID: "first-turn-policy", RequireFirstTurn: true, FirstTurnTimeout: 7 * time.Millisecond,
@@ -41,23 +51,17 @@ func TestLiveFirstTurnTimeoutUsesInjectedScheduler(t *testing.T) {
 	if err := handle.Start(context.Background()); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	for {
-		event, ok := <-handle.Events()
-		if !ok {
-			t.Fatal("event stream closed before SESSION.OPEN")
-		}
-		if event.Kind == string(messages.StreamTypeSessionOpen) {
-			break
-		}
+	if !durationOptions.Liveness.RequireFirstResponse || durationOptions.Liveness.FirstResponseTimeout != 7*time.Millisecond || durationOptions.LivenessClock != clock {
+		t.Fatalf("duration policy = %+v, want first-response timeout and injected scheduler", durationOptions.Liveness)
 	}
-	clock.AdvanceBy(7 * time.Millisecond)
+	awaitSessionOpen(t, handle.Events())
+	durationOptions.FirstCause(sessionduration.ErrFirstResponseTimeout)
 	if err := handle.Wait(); !errors.Is(err, session.ErrLiveFirstTurnTimeout) {
-		t.Fatalf("Wait = %v, want ErrLiveFirstTurnTimeout", err)
+		t.Fatalf("Wait = %v, want ErrLiveFirstTurnTimeout from the duration service", err)
 	}
 }
-func TestLiveRateLimitRetryUsesInjectedScheduler(t *testing.T) {
+func TestLiveRateLimitRetryDispatchesThroughDurationService(t *testing.T) {
 	clock := platformclock.NewDeterministic(time.Unix(500, 0), time.Millisecond)
-	scheduler := &observingScheduler{Scheduler: clock, timerCreated: make(chan struct{})}
 	provider := newTestSession()
 	for _, message := range []messages.StreamMessage{
 		{Type: messages.StreamTypeSessionOpen, Value: messages.NewSessionOpenValue("provider-session", "audio_inference")},
@@ -74,7 +78,7 @@ func TestLiveRateLimitRetryUsesInjectedScheduler(t *testing.T) {
 		InferencerFactory: func(context.Context, session.LiveRequest) (messages.SessionInferencer, error) {
 			return &testInferencer{session: provider}, nil
 		},
-		Clock: clock.Now, Scheduler: scheduler, DurationService: newTestDurationService(),
+		Clock: clock.Now, Scheduler: clock, DurationService: newTestDurationService(),
 	})
 	handle, err := service.OpenLive(context.Background(), session.LiveRequest{
 		SessionID: "retry-policy", RateLimitRetry: session.LiveRateLimitRetryPolicy{
@@ -102,12 +106,6 @@ func TestLiveRateLimitRetryUsesInjectedScheduler(t *testing.T) {
 		}
 	}
 rateLimitObserved:
-	select {
-	case <-scheduler.timerCreated:
-	case <-time.After(time.Second):
-		t.Fatal("rate-limit retry timer was not scheduled")
-	}
-	clock.AdvanceBy(5 * time.Millisecond)
 	deadline = time.After(time.Second)
 	for !provider.hasType(messages.StreamTypeResponseCreate) {
 		select {
@@ -240,17 +238,7 @@ func TestTimedToolExecutorUsesSchedulerDeadline(t *testing.T) {
 }
 
 type blockingTool struct{ started chan struct{} }
-type observingScheduler struct {
-	platformclock.Scheduler
-	timerCreated chan struct{}
-	once         sync.Once
-}
 
-func (scheduler *observingScheduler) NewTimer(duration time.Duration) platformclock.Timer {
-	timer := scheduler.Scheduler.NewTimer(duration)
-	scheduler.once.Do(func() { close(scheduler.timerCreated) })
-	return timer
-}
 func (s *testSession) hasType(kind messages.StreamMessageType) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()

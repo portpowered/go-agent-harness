@@ -12,37 +12,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 )
 
-func TestRunPublishesAdmittedMessageAndPerformsPlannedBoundedStop(t *testing.T) {
-	loop := &gatedRunLoopProbe{deltas: messages.NewTypedBuffer[messages.StreamMessage](1)}
-	var published []messages.StreamMessage
-	err := New().Run(sessionduration.RunRequest{
-		Context:    context.Background(),
-		Inferencer: contractInferencer{session: newContractSession()},
-		LoopFactory: func(context.Context, sessionduration.AdmissionInferencer, sessionduration.Controller) (sessionduration.Loop, error) {
-			return loop, nil
-		},
-		Publication: sessionduration.Publication{Write: func(msg messages.StreamMessage) error {
-			published = append(published, msg)
-			return nil
-		}},
-		Handle: func(context.Context, sessionduration.Loop, sessionduration.Controller, messages.StreamMessage, sessionduration.RunState) (sessionduration.MessageResult, error) {
-			return sessionduration.MessageResult{Stop: true, Planned: true}, nil
-		},
-		Drain: func(context.Context, sessionduration.Loop, sessionduration.Controller, sessionduration.RunState) error {
-			return nil
-		},
-	})
-	if err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	if len(published) != 1 || published[0].Type != messages.StreamTypeTextDelta {
-		t.Fatalf("published messages = %+v, want one admitted delta", published)
-	}
-	if !loop.sent {
-		t.Fatal("planned stop did not send the loop close control message")
-	}
-}
-
 func TestRunOwnsLoopExecutionAndBoundedCleanup(t *testing.T) {
 	loop := newRunLoopProbe()
 	var drained, closed bool
@@ -53,7 +22,7 @@ func TestRunOwnsLoopExecutionAndBoundedCleanup(t *testing.T) {
 		LoopFactory: func(context.Context, sessionduration.AdmissionInferencer, sessionduration.Controller) (sessionduration.Loop, error) {
 			return loop, nil
 		},
-		Drain: func(context.Context, sessionduration.Loop, sessionduration.Controller, sessionduration.RunState) error {
+		Drain: func(context.Context) error {
 			drained = true
 			return nil
 		},
@@ -72,6 +41,32 @@ func TestRunOwnsLoopExecutionAndBoundedCleanup(t *testing.T) {
 	}
 	if !drained || !closed {
 		t.Fatalf("cleanup callbacks drained=%v closed=%v", drained, closed)
+	}
+}
+
+func TestRunSelectsPlannedStopAfterAdmittedMessageEnd(t *testing.T) {
+	loop := &gatedRunLoopProbe{deltas: messages.NewTypedBuffer[messages.StreamMessage](1)}
+	var published []messages.StreamMessage
+	err := New().Run(sessionduration.RunRequest{
+		Context:    context.Background(),
+		Inferencer: contractInferencer{session: newContractSession()},
+		LoopFactory: func(context.Context, sessionduration.AdmissionInferencer, sessionduration.Controller) (sessionduration.Loop, error) {
+			return loop, nil
+		},
+		Publication: sessionduration.Publication{Write: func(msg messages.StreamMessage) error {
+			published = append(published, msg)
+			return nil
+		}},
+		Drain: func(context.Context) error { return nil },
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(published) != 1 || published[0].Type != messages.StreamTypeMessageEnd {
+		t.Fatalf("published messages = %+v, want one admitted message end", published)
+	}
+	if !loop.sent {
+		t.Fatal("planned stop did not send the loop close control message")
 	}
 }
 

@@ -104,14 +104,6 @@ func (r *runLoop) observeWake() (error, error) {
 		result, err := r.request.Effects.OnWake(r.runCtx, r.loop)
 		return r.mergeWakeResult(result, inputResult), err
 	}
-	if r.request.OnWake != nil {
-		state, err := r.request.OnWake(r.runCtx, r.loop, r.controller, r.state)
-		r.state = state
-		if err != nil {
-			return nil, err
-		}
-		return r.applyAudioInputResult(inputResult), nil
-	}
 	return r.applyAudioInputResult(inputResult), nil
 }
 
@@ -127,7 +119,7 @@ func (r *runLoop) applyAudioInputResult(result sessionduration.WakeResult) error
 	if !result.AudioInputCompleted {
 		return nil
 	}
-	r.state = r.state.WithAwaitingResponse(result.AudioInputError == nil)
+	r.state = r.state.withAwaitingResponse(result.AudioInputError == nil)
 	return result.AudioInputError
 }
 

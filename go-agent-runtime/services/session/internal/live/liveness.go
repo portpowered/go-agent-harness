@@ -50,13 +50,15 @@ func (e *providerLivenessError) Unwrap() []error {
 	return causes
 }
 
-func (h *handle) providerLivenessEnabled() bool {
-	return h != nil && (h.request.ProviderLiveness.Enabled || h.request.ProviderLiveness.Timeout > 0)
+func durationServiceRequired(request session.LiveRequest) bool {
+	return request.MaxDuration > 0 || request.ProviderLiveness.Enabled || request.ProviderLiveness.Timeout > 0 ||
+		request.RateLimitRetry.MaxRetries > 0 || request.RateLimitRetry.DefaultDelay > 0 || request.RateLimitRetry.MaxDelay > 0 ||
+		request.RateLimitRetry.Enabled || request.RequireFirstTurn || request.FirstTurnTimeout > 0
 }
 
 func (h *handle) beginDurationController(ctx context.Context) (sessionduration.Controller, error) {
 	if h == nil || h.durationService == nil {
-		if h != nil && h.request.MaxDuration == 0 && !h.providerLivenessEnabled() && !h.rateLimitRetryEnabled() {
+		if h != nil && !durationServiceRequired(h.request) {
 			return nil, nil
 		}
 		return nil, errors.New("session duration service is unavailable")
@@ -64,8 +66,10 @@ func (h *handle) beginDurationController(ctx context.Context) (sessionduration.C
 	controller, err := h.durationService.Begin(sessionduration.Options{
 		Context: ctx, Clock: h.scheduler, LivenessClock: h.scheduler, MaxDuration: h.request.MaxDuration,
 		Liveness: sessionduration.LivenessOptions{
-			Enabled: h.providerLivenessEnabled(),
-			Timeout: h.request.ProviderLiveness.Timeout,
+			Enabled:              h.request.ProviderLiveness.Enabled,
+			Timeout:              h.request.ProviderLiveness.Timeout,
+			RequireFirstResponse: h.request.RequireFirstTurn,
+			FirstResponseTimeout: h.request.FirstTurnTimeout,
 		},
 		Retry: sessionduration.RetryPolicy{
 			Enabled:      h.request.RateLimitRetry.Enabled,
@@ -79,7 +83,18 @@ func (h *handle) beginDurationController(ctx context.Context) (sessionduration.C
 				h.Cancel(session.ErrLiveDurationExceeded)
 				return
 			}
-			h.publishProviderLiveness(cause)
+			switch {
+			case errors.Is(cause, sessionduration.ErrFirstResponseTimeout):
+				h.Cancel(session.ErrLiveFirstTurnTimeout)
+			case errors.Is(cause, sessionduration.ErrRateLimitRetryExhausted):
+				h.Cancel(session.ErrLiveRateLimitRetryExhausted)
+			case errors.Is(cause, sessionduration.ErrSchedulerUnavailable):
+				h.Cancel(fmt.Errorf("create live duration timer: %w", session.ErrLiveSchedulerUnavailable))
+			case livenessFailureFromError(cause) != nil:
+				h.publishProviderLiveness(cause)
+			default:
+				h.Cancel(cause)
+			}
 		},
 	})
 	if errors.Is(err, sessionduration.ErrInvalidDuration) {

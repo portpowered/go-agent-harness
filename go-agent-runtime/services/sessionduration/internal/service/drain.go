@@ -3,6 +3,9 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
+	"sync"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -142,3 +145,90 @@ func resetDrainTimer(clock sessionduration.TimerScheduler, timer sessionduration
 	}
 	return next, nil
 }
+
+func (s *Service) NewFinalizer(ports sessionduration.FinalizationPorts) sessionduration.Finalizer {
+	return &finalizer{ports: ports}
+}
+
+type finalizer struct {
+	ports   sessionduration.FinalizationPorts
+	binding func() error
+	once    sync.Once
+	mu      sync.Mutex
+	err     error
+}
+
+func (f *finalizer) SetDeviceBinding(binding func() error) {
+	if f == nil {
+		return
+	}
+	f.mu.Lock()
+	f.binding = binding
+	f.mu.Unlock()
+}
+
+func (f *finalizer) Finish(ctx context.Context, out io.Writer, primary error) error {
+	if f == nil {
+		return primary
+	}
+	if out == nil {
+		out = io.Discard
+	}
+	f.once.Do(func() {
+		cleanupErr := f.cleanup(ctx, out)
+		completionErr := f.complete(out, errors.Join(primary, cleanupErr))
+		f.mu.Lock()
+		f.err = errors.Join(cleanupErr, completionErr)
+		f.mu.Unlock()
+	})
+	f.mu.Lock()
+	cleanupErr := f.err
+	f.mu.Unlock()
+	return errors.Join(primary, cleanupErr)
+}
+
+func (f *finalizer) cleanup(ctx context.Context, out io.Writer) error {
+	if out == nil {
+		out = io.Discard
+	}
+	if ctx == nil {
+		ctx = context.Background() //nolint:contextcheck // standalone finalization has no caller context to inherit.
+	}
+	var failures []error
+	appendFailure := func(label string, cleanup func() error) {
+		if err := invokeFinalizer(cleanup); err != nil {
+			failures = append(failures, fmt.Errorf("%s: %w", label, err))
+		}
+	}
+
+	appendFailure("close session capabilities", f.ports.CloseCapabilities)
+	appendFailure("close WebRTC provider session", f.ports.CloseSession)
+	f.mu.Lock()
+	binding := f.binding
+	if binding == nil {
+		binding = f.ports.CloseBinding
+	}
+	f.mu.Unlock()
+	appendFailure("close RTC device binding", binding)
+	appendFailure("close WebRTC runtime", f.ports.CloseRuntime)
+	appendFailure("flush capture", f.ports.FlushCapture)
+	if f.ports.Finalize != nil {
+		appendFailure("finalize session", func() error { return f.ports.Finalize(ctx, out) })
+	}
+	appendFailure("release capture", f.ports.ReleaseCapture)
+	return errors.Join(failures...)
+}
+
+func invokeFinalizer(cleanup func() error) (err error) {
+	if cleanup == nil {
+		return nil
+	}
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("%w: %v", sessionduration.ErrFinalizationPanic, recovered)
+		}
+	}()
+	return cleanup()
+}
+
+var _ sessionduration.Finalizer = (*finalizer)(nil)

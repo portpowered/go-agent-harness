@@ -48,8 +48,13 @@ type Admission struct {
 	TerminalSeen bool
 }
 
-// RetryRequest contains a provider terminal candidate.
-type RetryRequest struct{ Terminal *messages.MessageEndValue }
+// RetryRequest contains a provider terminal candidate. Dispatch is an
+// invocation effect; when present, the controller owns the bounded delay and
+// calls it with the controller context after the service admits a retry.
+type RetryRequest struct {
+	Terminal *messages.MessageEndValue
+	Dispatch func(context.Context) error
+}
 
 // RetryDecision contains only bounded eligibility data. The caller owns the
 // actual wait and response.create dispatch.

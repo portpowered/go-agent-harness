@@ -83,7 +83,7 @@ func RunWithResult(service sessionduration.Service, request sessionduration.RunR
 		service:             service,
 		publish:             publish,
 	}
-	runner.state = runner.state.WithAwaitingResponse(request.AwaitingResponseOnCancel)
+	runner.state = runner.state.withAwaitingResponse(request.AudioInput.Run == nil)
 	runner.start()
 	if err := durationController.Start(); err != nil {
 		return runner.result, runner.finish(false, err)
@@ -190,7 +190,7 @@ type runLoop struct {
 	loopErr               error
 	loopDone              bool
 	pending               []messages.StreamMessage
-	state                 sessionduration.RunState
+	state                 runState
 	updatedTimer          sessionduration.Timer
 	updatedTimeout        <-chan time.Time
 	finishOnce            sync.Once
@@ -200,6 +200,44 @@ type runLoop struct {
 	result                sessionduration.Result
 	service               sessionduration.Service
 	publish               func(sessionduration.Publication, messages.StreamMessage) error
+}
+
+// runState contains decisions owned by one bounded invocation. It stays
+// private to the runner so callers can supply observations and effects without
+// replacing service policy or mutating the runner's state machine.
+type runState struct {
+	promptSent            bool
+	closeSent             bool
+	closeAfterOpenPending bool
+	awaitingResponse      bool
+}
+
+func (s runState) hasPromptSent() bool { return s.promptSent }
+
+func (s runState) hasCloseSent() bool { return s.closeSent }
+
+func (s runState) hasCloseAfterOpenPending() bool { return s.closeAfterOpenPending }
+
+func (s runState) isAwaitingResponse() bool { return s.awaitingResponse }
+
+func (s runState) withPromptSent() runState {
+	s.promptSent = true
+	return s
+}
+
+func (s runState) withCloseSent(value bool) runState {
+	s.closeSent = value
+	return s
+}
+
+func (s runState) withCloseAfterOpenPending(value bool) runState {
+	s.closeAfterOpenPending = value
+	return s
+}
+
+func (s runState) withAwaitingResponse(value bool) runState {
+	s.awaitingResponse = value
+	return s
 }
 
 type runLoopEvent struct {

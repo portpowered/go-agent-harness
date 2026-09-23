@@ -61,16 +61,15 @@ func (r *durationRunner) newRunRequest(request session.DurationRunRequest) sessi
 		completionObserver, _ = request.Observer.(sessionduration.CompletionObserver)
 	}
 	run := sessionduration.RunRequest{
-		Context:                  request.Context,
-		Inferencer:               request.Inferencer,
-		Admission:                request.Admission,
-		Clock:                    clock,
-		LivenessClock:            livenessClock,
-		MaxDuration:              request.MaxDuration,
-		AudioInput:               request.AudioInput,
-		AudioInterruptions:       request.AudioInterruptions,
-		AwaitingResponseOnCancel: request.AudioInput.Run == nil,
-		Observer:                 request.Observer,
+		Context:            request.Context,
+		Inferencer:         request.Inferencer,
+		Admission:          request.Admission,
+		Clock:              clock,
+		LivenessClock:      livenessClock,
+		MaxDuration:        request.MaxDuration,
+		AudioInput:         request.AudioInput,
+		AudioInterruptions: request.AudioInterruptions,
+		Observer:           request.Observer,
 		SessionUpdated: sessionduration.SessionUpdatedWait{
 			Timeout:      request.SessionUpdatedTimeout,
 			TimeoutError: request.SessionUpdatedTimeoutError,
@@ -296,7 +295,7 @@ func (r *durationResources) quiesce() error {
 	return r.request.QuiesceUpstream()
 }
 
-func (r *durationResources) drain(ctx context.Context, _ sessionduration.Loop, _ sessionduration.Controller, _ sessionduration.RunState) error {
+func (r *durationResources) drain(ctx context.Context) error {
 	if r == nil || r.lifecycle == nil {
 		return nil
 	}

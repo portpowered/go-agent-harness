@@ -23,26 +23,11 @@ func selectLegacyReplayFramePolicy(options *session.LiveRunOptions) {
 }
 
 func (h *handle) validateTimingPolicy() error {
-	if h.request.MaxDuration < 0 {
-		return errors.New("live session maximum duration must not be negative")
-	}
 	if h.request.SessionUpdatedTimeout < 0 {
 		return errors.New("live session.updated timeout must not be negative")
 	}
-	if h.request.FirstTurnTimeout < 0 {
-		return errors.New("live first-turn timeout must not be negative")
-	}
 	if h.request.ToolExecutionTimeout < 0 {
 		return errors.New("live tool execution timeout must not be negative")
-	}
-	if h.request.ProviderLiveness.Timeout < 0 {
-		return errors.New("live provider liveness timeout must not be negative")
-	}
-	if h.request.RateLimitRetry.MaxRetries < 0 {
-		return errors.New("live rate-limit retry count must not be negative")
-	}
-	if h.request.RateLimitRetry.DefaultDelay < 0 || h.request.RateLimitRetry.MaxDelay < 0 {
-		return errors.New("live rate-limit retry delays must not be negative")
 	}
 	if h.requiresScheduler() && h.scheduler == nil {
 		return fmt.Errorf("%w: request requires a scheduler", session.ErrLiveSchedulerUnavailable)
@@ -50,7 +35,9 @@ func (h *handle) validateTimingPolicy() error {
 	return nil
 }
 func (h *handle) requiresScheduler() bool {
-	return h.request.MaxDuration > 0 || h.request.RequireSessionUpdated || h.firstTurnPolicyEnabled() || h.rateLimitRetryEnabled() || h.request.ToolExecutionTimeout > 0 || h.providerLivenessEnabled()
+	retryRequested := h.request.RateLimitRetry.Enabled || h.request.RateLimitRetry.MaxRetries > 0 ||
+		h.request.RateLimitRetry.DefaultDelay > 0 || h.request.RateLimitRetry.MaxDelay > 0
+	return h.request.RequireSessionUpdated || h.request.ToolExecutionTimeout > 0 || retryRequested
 }
 func cloneLiveTerminalValue(value *messages.SessionCloseValue) *messages.SessionCloseValue {
 	if value == nil {

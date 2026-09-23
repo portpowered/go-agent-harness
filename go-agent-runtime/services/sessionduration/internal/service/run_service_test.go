@@ -24,7 +24,7 @@ func TestRunHandlesWakeAndDoneBoundaryFailures(t *testing.T) {
 		done         <-chan struct{}
 		doneSources  []<-chan struct{}
 		errorSources func() []<-chan error
-		onWake       func(context.Context, sessionduration.Loop, sessionduration.Controller, sessionduration.RunState) (sessionduration.RunState, error)
+		onWake       func(context.Context, sessionduration.Loop) (sessionduration.WakeResult, error)
 		doneError    func() error
 		want         error
 	}{
@@ -35,8 +35,8 @@ func TestRunHandlesWakeAndDoneBoundaryFailures(t *testing.T) {
 				wake <- struct{}{}
 				return wake
 			}(),
-			onWake: func(_ context.Context, _ sessionduration.Loop, _ sessionduration.Controller, state sessionduration.RunState) (sessionduration.RunState, error) {
-				return state, wakeErr
+			onWake: func(context.Context, sessionduration.Loop) (sessionduration.WakeResult, error) {
+				return sessionduration.WakeResult{}, wakeErr
 			},
 			want: wakeErr,
 		},
@@ -47,8 +47,8 @@ func TestRunHandlesWakeAndDoneBoundaryFailures(t *testing.T) {
 				wake <- struct{}{}
 				return wake
 			}()},
-			onWake: func(_ context.Context, _ sessionduration.Loop, _ sessionduration.Controller, state sessionduration.RunState) (sessionduration.RunState, error) {
-				return state, wakeErr
+			onWake: func(context.Context, sessionduration.Loop) (sessionduration.WakeResult, error) {
+				return sessionduration.WakeResult{}, wakeErr
 			},
 			want: wakeErr,
 		},
@@ -92,12 +92,12 @@ func TestRunHandlesWakeAndDoneBoundaryFailures(t *testing.T) {
 				},
 				Wake:                 test.wake,
 				WakeSources:          test.wakeSources,
-				OnWake:               test.onWake,
+				Effects:              sessionduration.RunEffects{OnWake: test.onWake},
 				Done:                 test.done,
 				DoneSources:          test.doneSources,
 				ExternalErrorSources: test.errorSources,
 				DoneError:            test.doneError,
-				Drain: func(context.Context, sessionduration.Loop, sessionduration.Controller, sessionduration.RunState) error {
+				Drain: func(context.Context) error {
 					return nil
 				},
 			}
@@ -276,7 +276,7 @@ func TestRunExpiresAtMaxDurationAndClosesLoop(t *testing.T) {
 			LoopFactory: func(context.Context, sessionduration.AdmissionInferencer, sessionduration.Controller) (sessionduration.Loop, error) {
 				return &idleRunLoopProbe{deltas: messages.NewTypedBuffer[messages.StreamMessage](1)}, nil
 			},
-			Drain: func(context.Context, sessionduration.Loop, sessionduration.Controller, sessionduration.RunState) error {
+			Drain: func(context.Context) error {
 				return nil
 			},
 		})

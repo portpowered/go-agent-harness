@@ -70,7 +70,6 @@ func (h *handle) consumeMessage(ctx context.Context, loop *agentloop.AgentLoop, 
 		if msg.Type == messages.StreamTypeSessionUpdated {
 			h.replayReadyOnce.Do(func() { close(h.replayReady) })
 		}
-		h.observeFirstTurn(ctx, msg)
 		h.observeRateLimit(loop, msg)
 	}
 	continuationErr, toolContinuationComplete := h.observeToolLifecycle(msg)

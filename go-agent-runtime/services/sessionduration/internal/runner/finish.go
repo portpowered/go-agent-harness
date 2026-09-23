@@ -19,6 +19,9 @@ func (r *runLoop) retry(msg messages.StreamMessage) (bool, error) {
 		return false, nil
 	}
 	decision := r.controller.Retry(sessionduration.RetryRequest{Terminal: terminal})
+	if decision.Exhausted {
+		return false, sessionduration.ErrRateLimitRetryExhausted
+	}
 	if !decision.Eligible {
 		return false, nil
 	}
@@ -77,7 +80,7 @@ func (r *runLoop) finish(planned bool, primary error) error {
 }
 
 func (r *runLoop) finalizationCause(primary error) error {
-	if errors.Is(primary, context.Canceled) && r.ctx.Err() != nil && r.state.AwaitingResponse() {
+	if errors.Is(primary, context.Canceled) && r.ctx.Err() != nil && r.state.isAwaitingResponse() {
 		return fmt.Errorf("session cancelled while awaiting model response after end-of-turn: %w", r.ctx.Err())
 	}
 	return primary
@@ -147,7 +150,7 @@ func (r *runLoop) quiesce() error {
 func (r *runLoop) drain(ctx context.Context, planned bool) error {
 	drainErr := r.drainPending()
 	if drainErr == nil && r.request.Drain != nil {
-		drainErr = r.request.Drain(ctx, r.loop, r.controller, r.state)
+		drainErr = r.request.Drain(ctx)
 	}
 	if planned {
 		drainErr = errors.Join(drainErr, sendLoopClose(r.runCtx, r.loop))

@@ -9,71 +9,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 )
 
-// RunState contains the mutable session-loop decisions held by the duration
-// runner while one invocation is active. Handlers receive a copy and return
-// any updated value through MessageResult; they must not retain the value.
-type RunState struct {
-	promptSent            bool
-	closeSent             bool
-	closeAfterOpenPending bool
-	drainPlayback         bool
-	awaitingResponse      bool
-}
-
-// PromptSent reports whether the opening prompt was sent.
-func (s RunState) PromptSent() bool { return s.promptSent }
-
-// CloseSent reports whether a session close control was sent.
-func (s RunState) CloseSent() bool { return s.closeSent }
-
-// CloseAfterOpenPending reports whether a session close is waiting for readiness.
-func (s RunState) CloseAfterOpenPending() bool { return s.closeAfterOpenPending }
-
-// DrainPlayback reports whether finalization should drain session playback.
-func (s RunState) DrainPlayback() bool { return s.drainPlayback }
-
-// AwaitingResponse reports whether the last accepted end-of-turn dispatch is
-// still waiting for provider output.
-func (s RunState) AwaitingResponse() bool { return s.awaitingResponse }
-
-// WithPromptSent returns a state recording the opening prompt send.
-func (s RunState) WithPromptSent() RunState {
-	s.promptSent = true
-	return s
-}
-
-// WithCloseSent returns a state with the close-control result.
-func (s RunState) WithCloseSent(value bool) RunState {
-	s.closeSent = value
-	return s
-}
-
-// WithCloseAfterOpenPending returns a state with the pending-close decision.
-func (s RunState) WithCloseAfterOpenPending(value bool) RunState {
-	s.closeAfterOpenPending = value
-	return s
-}
-
-// WithDrainPlayback returns a state requesting bounded playback drain.
-func (s RunState) WithDrainPlayback() RunState {
-	s.drainPlayback = true
-	return s
-}
-
-// WithAwaitingResponse returns a state recording provider response wait.
-func (s RunState) WithAwaitingResponse(value bool) RunState {
-	s.awaitingResponse = value
-	return s
-}
-
-// MessageResult tells the duration service whether the host's ordinary
-// session completion rules selected a terminal boundary for the message.
-type MessageResult struct {
-	Stop    bool
-	Planned bool
-	State   *RunState
-}
-
 // ScheduledAudioDispatch selects when an already-admitted scheduled input may
 // be dispatched. The duration service owns the boundary decision; a host only
 // supplies the effect that sends the selected input.
@@ -151,18 +86,6 @@ type RunEffects struct {
 	OnWake                  func(context.Context, Loop) (WakeResult, error)
 }
 
-// MessageHandler is the narrow host callback for session-specific prompt,
-// tool, and scheduled-input behavior. It cannot bypass controller admission:
-// the service invokes it only for an admitted message.
-type MessageHandler func(context.Context, Loop, Controller, messages.StreamMessage, RunState) (MessageResult, error)
-
-// DrainHandler receives the runner-owned terminal state after the final
-// message and before loop cancellation.
-type DrainHandler func(context.Context, Loop, Controller, RunState) error
-
-// WakeHandler handles service wakeups using a runner-owned state snapshot.
-type WakeHandler func(context.Context, Loop, Controller, RunState) (RunState, error)
-
 // SessionUpdatedWait asks the runner to bound the acknowledgement after an
 // admitted session-open event. Pending and Ready expose host-observed facts;
 // timer ownership and timeout delivery remain with the service.
@@ -207,9 +130,6 @@ type RunRequest struct {
 	MaxDuration        time.Duration
 	AudioInput         AudioInputPort
 	AudioInterruptions AudioInterruptionPort
-	// AwaitingResponseOnCancel seeds response wait for sessions whose opening
-	// dispatch is initiated outside the duration loop handler.
-	AwaitingResponseOnCancel bool
 	// MaxDurationExpired returns any lifecycle failure that must survive the
 	// service's bounded terminal cause.
 	MaxDurationExpired func() error
@@ -225,8 +145,7 @@ type RunRequest struct {
 	Publication    Publication
 	Artifacts      ArtifactLifecycle
 	LoopFactory    LoopFactory
-	Handle         MessageHandler
-	Drain          DrainHandler
+	Drain          func(context.Context) error
 	DrainPolicy    DrainPolicy
 	Close          func() error
 	Binding        func() error
@@ -239,7 +158,6 @@ type RunRequest struct {
 	// WakeSources are independent host observations that wake one invocation.
 	// The duration service coalesces them into its bounded runner signal.
 	WakeSources []<-chan struct{}
-	OnWake      WakeHandler
 	Done        <-chan struct{}
 	// DoneSources close the run when any host-owned completion signal closes.
 	DoneSources    []<-chan struct{}

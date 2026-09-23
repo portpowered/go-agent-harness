@@ -18,36 +18,148 @@ func normalizeOptions(options sessionduration.Options) (sessionduration.Options,
 	if options.MaxDuration < 0 {
 		return options, false, &sessionduration.InvalidDurationError{Duration: options.MaxDuration}
 	}
-	if options.Liveness.Timeout < 0 || options.Retry.MaxRetries < 0 || options.Retry.DefaultDelay < 0 || options.Retry.MaxDelay < 0 {
-		return options, false, fmt.Errorf("session duration policy values must be non-negative")
+	if err := validatePolicyValues(options); err != nil {
+		return options, false, err
 	}
-	if options.Liveness.Timeout > 0 {
-		options.Liveness.Enabled = true
-	}
-	if options.Retry.MaxRetries != 0 || options.Retry.DefaultDelay != 0 || options.Retry.MaxDelay != 0 {
-		options.Retry.Enabled = true
-	}
+	options.Liveness = normalizeLivenessPolicy(options.Liveness)
+	options.Retry = normalizeRetryPolicy(options.Retry)
 	if options.Context == nil {
 		options.Context = context.Background()
 	}
 	if options.LivenessClock == nil {
 		options.LivenessClock = options.Clock
 	}
-	if options.Liveness.Enabled && options.LivenessClock == nil {
+	if requiresLivenessClock(options.Liveness) && options.LivenessClock == nil {
 		return options, false, sessionduration.ErrSchedulerUnavailable
 	}
-	needsClock := options.MaxDuration > 0
-	return options, needsClock, nil
+	return options, options.MaxDuration > 0, nil
+}
+
+func validatePolicyValues(options sessionduration.Options) error {
+	if options.Liveness.Timeout < 0 || options.Liveness.FirstResponseTimeout < 0 ||
+		options.Retry.MaxRetries < 0 || options.Retry.DefaultDelay < 0 || options.Retry.MaxDelay < 0 {
+		return fmt.Errorf("session duration policy values must be non-negative")
+	}
+	return nil
+}
+
+func normalizeLivenessPolicy(policy sessionduration.LivenessOptions) sessionduration.LivenessOptions {
+	if policy.Timeout > 0 {
+		policy.Enabled = true
+	}
+	if policy.FirstResponseTimeout > 0 {
+		policy.RequireFirstResponse = true
+	}
+	if policy.RequireFirstResponse && policy.FirstResponseTimeout == 0 {
+		policy.FirstResponseTimeout = defaultFirstResponseTimeout
+	}
+	return policy
+}
+
+func normalizeRetryPolicy(policy sessionduration.RetryPolicy) sessionduration.RetryPolicy {
+	if policy.MaxRetries != 0 || policy.DefaultDelay != 0 || policy.MaxDelay != 0 {
+		policy.Enabled = true
+	}
+	return policy
+}
+
+func requiresLivenessClock(policy sessionduration.LivenessOptions) bool {
+	return policy.Enabled || policy.RequireFirstResponse
 }
 
 const (
-	defaultRetryDelay     = 2 * time.Second
-	defaultRetryMaxDelay  = 15 * time.Second
-	maxStatusDetailBytes  = 256
-	providerRateLimitCode = "rate_limit_exceeded"
+	defaultFirstResponseTimeout = 30 * time.Second
+	defaultRetryDelay           = 2 * time.Second
+	defaultRetryMaxDelay        = 15 * time.Second
+	maxStatusDetailBytes        = 256
+	providerRateLimitCode       = "rate_limit_exceeded"
 )
 
 const retryDelayPattern = `(?i)\bplease\s+try\s+again\s+in\s+((?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+))s\b`
+
+func (c *controller) observeFirstResponseLocked(msg messages.StreamMessage) (arm, stop bool) {
+	if !c.options.Liveness.RequireFirstResponse {
+		return false, false
+	}
+	if isFirstResponseBoundary(msg) {
+		c.firstResponseSeen = true
+		stop = c.firstResponseTimer != nil
+	}
+	if msg.Type == messages.StreamTypeSessionOpen && !c.firstResponseStarted && !c.firstResponseSeen {
+		c.firstResponseStarted = true
+		arm = true
+	}
+	return arm, stop
+}
+
+func isFirstResponseBoundary(msg messages.StreamMessage) bool {
+	switch msg.Type {
+	case messages.StreamTypeMessageStart, messages.StreamTypeMessageEnd, messages.StreamTypeTextStart,
+		messages.StreamTypeAudioStart, messages.StreamTypeImageStart, messages.StreamTypeToolCallStart,
+		messages.StreamTypeReasoningStart, messages.StreamTypeTranscriptStart, messages.StreamTypeError:
+		return true
+	default:
+		return false
+	}
+}
+
+func (c *controller) armFirstResponse() {
+	timer := c.options.LivenessClock.NewTimer(c.options.Liveness.FirstResponseTimeout)
+	if timer == nil {
+		c.mu.Lock()
+		c.firstResponseSeen = true
+		c.mu.Unlock()
+		c.report(sessionduration.ErrSchedulerUnavailable)
+		return
+	}
+	c.mu.Lock()
+	if c.closed || c.firstResponseSeen || !c.firstResponseStarted {
+		c.mu.Unlock()
+		timer.Stop()
+		return
+	}
+	previous := c.firstResponseTimer
+	c.firstResponseTimer = timer
+	c.firstResponseVersion++
+	c.mu.Unlock()
+	if previous != nil {
+		previous.Stop()
+	}
+	c.notifyTimerWorker()
+}
+
+func (c *controller) stopFirstResponse() {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	timer := c.firstResponseTimer
+	c.firstResponseTimer = nil
+	c.firstResponseVersion++
+	c.mu.Unlock()
+	if timer != nil {
+		timer.Stop()
+		c.notifyTimerWorker()
+	}
+}
+
+func (c *controller) expireFirstResponse(version uint64) {
+	c.mu.Lock()
+	if c.closed || c.firstResponseSeen || !c.firstResponseStarted || c.firstResponseVersion != version || c.firstResponseTimer == nil {
+		c.mu.Unlock()
+		return
+	}
+	timer := c.firstResponseTimer
+	c.firstResponseTimer = nil
+	c.firstResponseVersion++
+	c.firstResponseSeen = true
+	c.mu.Unlock()
+	if timer != nil {
+		timer.Stop()
+	}
+	c.notifyTimerWorker()
+	c.report(sessionduration.ErrFirstResponseTimeout)
+}
 
 // EvaluateRetry classifies one provider terminal without consuming retry
 // budget or waiting. Controller callers use it to keep provider parsing in

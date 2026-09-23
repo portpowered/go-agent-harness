@@ -143,7 +143,7 @@ func (h *handle) buildLoop(inferencer messages.SessionInferencer, toolExecutor m
 	if h.request.ToolExecutionTimeout > 0 {
 		toolExecutor = newTimedToolExecutor(toolExecutor, h.scheduler, h.request.ToolExecutionTimeout)
 	}
-	if h.providerLivenessEnabled() {
+	if h.durationControllerSnapshot() != nil {
 		toolExecutor = durationToolExecutor{inner: toolExecutor, handle: h}
 	}
 	h.mu.Lock()
@@ -317,8 +317,6 @@ type workerPlan struct {
 	capabilityEvents <-chan session.LiveCapabilityEvent
 	replay           bool
 	watchSession     bool
-	watchFirstTurn   bool
-	watchRateLimit   bool
 }
 
 func (h *handle) makeWorkerPlan(capabilityEvents <-chan session.LiveCapabilityEvent) workerPlan {
@@ -326,20 +324,12 @@ func (h *handle) makeWorkerPlan(capabilityEvents <-chan session.LiveCapabilityEv
 		capabilityEvents: capabilityEvents,
 		replay:           h.request.ReplayPlan != nil && len(h.request.ReplayPlan.AudioTurns) > 0,
 		watchSession:     h.request.RequireSessionUpdated,
-		watchFirstTurn:   h.firstTurnPolicyEnabled(),
-		watchRateLimit:   h.rateLimitRetryEnabled(),
 	}
 }
 
 func (p workerPlan) count() int {
 	count := 2
 	if p.watchSession {
-		count++
-	}
-	if p.watchFirstTurn {
-		count++
-	}
-	if p.watchRateLimit {
 		count++
 	}
 	if p.capabilityEvents != nil {
@@ -354,12 +344,6 @@ func (p workerPlan) count() int {
 func (p workerPlan) launch(h *handle, ctx context.Context, loop *agentloop.AgentLoop) {
 	if p.watchSession {
 		go h.watchSessionUpdated(ctx)
-	}
-	if p.watchFirstTurn {
-		go h.watchFirstTurn(ctx)
-	}
-	if p.watchRateLimit {
-		go h.runRateLimitRetry(ctx, loop)
 	}
 	if p.capabilityEvents != nil {
 		go h.consumeCapabilityEvents(ctx, loop, p.capabilityEvents)

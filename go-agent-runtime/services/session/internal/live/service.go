@@ -184,12 +184,6 @@ type handle struct {
 	sessionUpdatedTimerReady                         chan platformclock.Timer
 	sessionUpdatedTimerScheduled                     bool
 	sessionUpdatedSeen                               bool
-	firstTurnOnce                                    sync.Once
-	firstTurnSignal                                  chan struct{}
-	firstTurnTimerReady                              chan platformclock.Timer
-	firstTurnTimerScheduled                          bool
-	firstTurnSeen                                    bool
-	retryRequests                                    chan retryRequest
 	toolMu                                           sync.Mutex
 	toolContinuations                                map[string]*liveToolContinuation
 	continuationErr                                  error
@@ -280,9 +274,6 @@ func newHandle(request session.LiveRequest, factory session.LiveInferencerFactor
 		startDone:                make(chan struct{}),
 		sessionUpdatedSignal:     make(chan struct{}),
 		sessionUpdatedTimerReady: make(chan platformclock.Timer, 1),
-		firstTurnSignal:          make(chan struct{}),
-		firstTurnTimerReady:      make(chan platformclock.Timer, 1),
-		retryRequests:            make(chan retryRequest, 1),
 		replayResponseWake:       make(chan struct{}),
 		responseTerminalWake:     make(chan struct{}),
 		responseStartWake:        make(chan struct{}),

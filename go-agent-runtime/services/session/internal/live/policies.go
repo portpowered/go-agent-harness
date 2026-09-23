@@ -3,7 +3,6 @@ package live
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
@@ -12,8 +11,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
-
-const defaultFirstTurnTimeout = 30 * time.Second
 
 func (h *handle) finalizeDuration(err error) error {
 	h.mu.Lock()
@@ -65,99 +62,13 @@ func (h *handle) observeProviderDispatch(msg messages.StreamMessage) {
 		}
 		h.mu.Unlock()
 	}
-	if durationController != nil && h.providerLivenessEnabled() && (msg.Type == messages.StreamTypeMessageEnd || !acknowledgement) {
+	if durationController != nil && (msg.Type == messages.StreamTypeMessageEnd || !acknowledgement) {
 		durationController.ExpectProviderProgress()
 	}
 }
 
-type retryRequest struct {
-	loop     *agentloop.AgentLoop
-	deadline time.Time
-}
-
-func (h *handle) firstTurnPolicyEnabled() bool {
-	return h != nil && (h.request.RequireFirstTurn || h.request.FirstTurnTimeout > 0)
-}
-func (h *handle) firstTurnTimeout() time.Duration {
-	if h == nil || h.request.FirstTurnTimeout <= 0 {
-		return defaultFirstTurnTimeout
-	}
-	return h.request.FirstTurnTimeout
-}
-func (h *handle) rateLimitRetryEnabled() bool {
-	return h != nil && h.request.RateLimitRetry.Enabled
-}
-func (h *handle) observeFirstTurn(ctx context.Context, msg messages.StreamMessage) {
-	if h == nil || !h.firstTurnPolicyEnabled() {
-		return
-	}
-	if msg.Type == messages.StreamTypeSessionOpen {
-		h.policyMu.Lock()
-		if h.firstTurnTimerScheduled || h.firstTurnSeen {
-			h.policyMu.Unlock()
-			return
-		}
-		h.firstTurnTimerScheduled = true
-		h.policyMu.Unlock()
-		timer := h.scheduler.NewTimer(h.firstTurnTimeout())
-		if timer == nil {
-			h.Cancel(fmt.Errorf("create first-turn timer: %w", session.ErrLiveSchedulerUnavailable))
-			return
-		}
-		select {
-		case h.firstTurnTimerReady <- timer:
-		case <-ctx.Done():
-			timer.Stop()
-		}
-		return
-	}
-	if !isFirstTurnResponseBoundary(msg) {
-		return
-	}
-	h.policyMu.Lock()
-	if h.firstTurnSeen {
-		h.policyMu.Unlock()
-		return
-	}
-	h.firstTurnSeen = true
-	h.policyMu.Unlock()
-	h.firstTurnOnce.Do(func() { close(h.firstTurnSignal) })
-}
-
-func (h *handle) watchFirstTurn(ctx context.Context) {
-	defer h.runWG.Done()
-	var timer platformclock.Timer
-	select {
-	case timer = <-h.firstTurnTimerReady:
-	case <-h.firstTurnSignal:
-		return
-	case <-ctx.Done():
-		return
-	}
-	if timer == nil {
-		return
-	}
-	defer timer.Stop()
-	select {
-	case <-h.firstTurnSignal:
-	case <-timer.C():
-		h.Cancel(session.ErrLiveFirstTurnTimeout)
-	case <-ctx.Done():
-	}
-}
-func isFirstTurnResponseBoundary(msg messages.StreamMessage) bool {
-	return msg.Type == messages.StreamTypeMessageStart ||
-		msg.Type == messages.StreamTypeMessageEnd ||
-		msg.Type == messages.StreamTypeTextStart ||
-		msg.Type == messages.StreamTypeAudioStart ||
-		msg.Type == messages.StreamTypeImageStart ||
-		msg.Type == messages.StreamTypeToolCallStart ||
-		msg.Type == messages.StreamTypeReasoningStart ||
-		msg.Type == messages.StreamTypeTranscriptStart ||
-		msg.Type == messages.StreamTypeError
-}
 func (h *handle) observeRateLimit(loop *agentloop.AgentLoop, msg messages.StreamMessage) {
-	if h == nil || loop == nil || !h.rateLimitRetryEnabled() || msg.Type != messages.StreamTypeMessageEnd {
+	if h == nil || loop == nil || msg.Type != messages.StreamTypeMessageEnd {
 		return
 	}
 	terminal, ok := msg.Value.(*messages.MessageEndValue)
@@ -170,93 +81,15 @@ func (h *handle) observeRateLimit(loop *agentloop.AgentLoop, msg messages.Stream
 	if controller == nil {
 		return
 	}
-	decision := controller.Retry(sessionduration.RetryRequest{Terminal: terminal})
-	if decision.Exhausted {
-		h.Cancel(fmt.Errorf("%w: provider returned rate_limit_exceeded", session.ErrLiveRateLimitRetryExhausted))
-		return
-	}
-	if !decision.Eligible {
-		return
-	}
-	request := retryRequest{loop: loop, deadline: h.scheduler.Now().Add(decision.Delay)}
-	select {
-	case h.retryRequests <- request:
-	case <-h.parentContext().Done():
-	}
-}
-
-func (h *handle) parentContext() context.Context {
-	if h == nil {
-		return context.Background()
-	}
-	h.mu.Lock()
-	ctx := h.parentCtx
-	h.mu.Unlock()
-	if ctx == nil {
-		return context.Background()
-	}
-	return ctx
-}
-func (h *handle) runRateLimitRetry(ctx context.Context, defaultLoop *agentloop.AgentLoop) {
-	defer h.runWG.Done()
-	for {
-		request, ok := h.nextRetryRequest(ctx)
-		if !ok {
-			return
-		}
-		if err := h.sendRateLimitRetry(ctx, defaultLoop, request); err != nil {
-			h.Cancel(err)
-		}
-	}
-}
-
-func (h *handle) nextRetryRequest(ctx context.Context) (retryRequest, bool) {
-	select {
-	case <-ctx.Done():
-		return retryRequest{}, false
-	case request := <-h.retryRequests:
-		return request, true
-	}
-}
-
-func (h *handle) sendRateLimitRetry(ctx context.Context, defaultLoop *agentloop.AgentLoop, request retryRequest) error {
-	if err := h.waitForRetry(ctx, request.deadline); err != nil {
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return nil
-		}
-		return err
-	}
-	loop := request.loop
-	if loop == nil {
-		loop = defaultLoop
-	}
-	if loop == nil {
-		return errors.New("rate-limit retry loop is unavailable")
-	}
-	if err := loop.SendSessionEvent(ctx, messages.StreamMessage{
-		Type:  messages.StreamTypeResponseCreate,
-		Value: messages.NewResponseCreateValue(),
-	}); err != nil {
-		return fmt.Errorf("send rate-limit retry response: %w", err)
-	}
-	return nil
-}
-
-func (h *handle) waitForRetry(ctx context.Context, deadline time.Time) error {
-	if !deadline.After(h.scheduler.Now()) {
-		return nil
-	}
-	timer := h.scheduler.NewTimer(deadline.Sub(h.scheduler.Now()))
-	if timer == nil {
-		return fmt.Errorf("create rate-limit retry timer: %w", session.ErrLiveSchedulerUnavailable)
-	}
-	defer timer.Stop()
-	select {
-	case <-timer.C():
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
+	controller.Retry(sessionduration.RetryRequest{
+		Terminal: terminal,
+		Dispatch: func(ctx context.Context) error {
+			return loop.SendSessionEvent(ctx, messages.StreamMessage{
+				Type:  messages.StreamTypeResponseCreate,
+				Value: messages.NewResponseCreateValue(),
+			})
+		},
+	})
 }
 
 type timedToolExecutor struct {

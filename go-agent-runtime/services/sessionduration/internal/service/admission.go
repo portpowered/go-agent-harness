@@ -74,6 +74,63 @@ func (a *EventAdmission) admit(ctx context.Context, receive *messages.TypedBuffe
 	return receive.Write(ctx, msg)
 }
 
+func (c *controller) observeLivenessLocked(msg messages.StreamMessage) (arm, reset, disarm bool, failure error) {
+	if !c.options.Liveness.Enabled || msg.Role == messages.RoleTool || msg.ResponsePurpose == messages.ResponsePurposeToolAcknowledgement {
+		return false, false, false, nil
+	}
+	switch {
+	case msg.Type == messages.StreamTypeMessageStart:
+		arm = true
+	case msg.Type == messages.StreamTypeResponseCreate:
+		arm = true
+	case msg.Type == messages.StreamTypeMessageEnd:
+		if c.isEmptyResponseLocked(msg) {
+			failure = c.makeLivenessErrorLocked(msg, false)
+		}
+		disarm = true
+	case msg.Type == messages.StreamTypeSessionOpen:
+		// The provider has not started a response yet.
+	case isProviderOutput(msg) || msg.Type == messages.StreamTypeToolCallStart || msg.Type == messages.StreamTypeToolCallDelta || msg.Type == messages.StreamTypeToolCallEnd:
+		reset = true
+	case msg.Type == messages.StreamTypeError:
+		disarm = true
+	default:
+		// Provider metadata and unrelated stream messages do not affect liveness.
+	}
+	return arm, reset, disarm, failure
+}
+
+func (c *controller) observeOutputLocked(msg messages.StreamMessage) {
+	//nolint:exhaustive // only response output boundaries affect this state.
+	switch msg.Type {
+	case messages.StreamTypeMessageStart:
+		c.responseOutput = false
+		c.responseComplete = false
+		c.toolObligation = false
+	case messages.StreamTypeTextDelta, messages.StreamTypeReasoningDelta, messages.StreamTypeAudioDelta, messages.StreamTypeImageDelta, messages.StreamTypeVideoDelta, messages.StreamTypeFileDelta, messages.StreamTypeEmbeddingDelta, messages.StreamTypeToolCallDelta, messages.StreamTypeToolCallEnd, messages.StreamTypeRefusal:
+		if msg.Role != messages.RoleUser && msg.Role != messages.RoleTool {
+			c.responseOutput = true
+		}
+	case messages.StreamTypeTranscriptDelta:
+		if msg.Role != messages.RoleUser && msg.Role != messages.RoleTool {
+			c.responseOutput = true
+		}
+	case messages.StreamTypeToolCallStart:
+		c.toolObligation = true
+	case messages.StreamTypeMessageEnd:
+		c.responseComplete = true
+	default:
+		// Non-response messages do not change terminal output state.
+	}
+	if !c.responseOutput {
+		c.outputState = messages.TerminalOutputNone
+	} else if c.responseComplete {
+		c.outputState = messages.TerminalOutputComplete
+	} else {
+		c.outputState = messages.TerminalOutputPartial
+	}
+}
+
 // AdmissionInferencer inserts the admission boundary between
 // the provider session and the agent loop. The public Session interface exposes
 // a concrete receive buffer, so the wrapper forwards through its own buffer and

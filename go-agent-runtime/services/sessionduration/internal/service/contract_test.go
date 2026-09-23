@@ -409,7 +409,7 @@ type gatedRunLoopProbe struct {
 }
 
 func (l *gatedRunLoopProbe) Run(ctx context.Context) error {
-	if !l.deltas.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("hello")}) {
+	if !l.deltas.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: &messages.MessageEndValue{}}) {
 		return errors.New("could not publish loop delta")
 	}
 	<-ctx.Done()

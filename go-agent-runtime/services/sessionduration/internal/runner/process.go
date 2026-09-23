@@ -31,7 +31,7 @@ func (r *runLoop) admitMessage(msg messages.StreamMessage) (sessionduration.Admi
 		return admission, r.handleBoundaryError(err)
 	}
 	if admission.Message.Type == messages.StreamTypeMessageEnd && !retryDispatched {
-		r.state = r.state.WithAwaitingResponse(false)
+		r.state = r.state.withAwaitingResponse(false)
 	}
 	return admission, nil
 }
@@ -43,28 +43,17 @@ func (r *runLoop) processAdmittedMessage(msg messages.StreamMessage) error {
 	if err := r.startSessionUpdatedTimer(msg); err != nil {
 		return err
 	}
-	result, err := r.handleAdmittedMessage(msg)
-	if result.State != nil {
-		r.state = *result.State
-	}
+	result, err := r.handleSessionMessage(msg)
 	if err != nil {
 		return r.handleBoundaryError(err)
 	}
 	if r.request.SessionUpdated.Ready != nil && r.request.SessionUpdated.Ready() {
 		r.stopSessionUpdatedTimer()
 	}
-	if !result.Stop {
+	if !result.stop {
 		return nil
 	}
-	return r.finish(result.Planned, nil)
-}
-
-func (r *runLoop) handleAdmittedMessage(msg messages.StreamMessage) (sessionduration.MessageResult, error) {
-	if r.request.Handle == nil {
-		return r.handleSessionMessage(msg)
-	}
-	result, err := r.request.Handle(r.runCtx, r.loop, r.controller, msg, r.state)
-	return result, err
+	return r.finish(result.planned, nil)
 }
 
 func (r *runLoop) handleBoundaryError(err error) error {
@@ -74,29 +63,37 @@ func (r *runLoop) handleBoundaryError(err error) error {
 	return err
 }
 
-func (r *runLoop) handleSessionMessage(msg messages.StreamMessage) (sessionduration.MessageResult, error) {
+type messageResult struct {
+	stop    bool
+	planned bool
+	state   runState
+}
+
+func (r *runLoop) handleSessionMessage(msg messages.StreamMessage) (messageResult, error) {
 	state := r.state
 	if err := r.handleSessionLifecycle(msg, &state); err != nil {
-		return sessionduration.MessageResult{State: &state}, err
+		r.state = state
+		return messageResult{}, err
 	}
 	if err := r.dispatchScheduledMessageAudio(msg); err != nil {
-		return sessionduration.MessageResult{State: &state}, err
+		r.state = state
+		return messageResult{}, err
 	}
-	result, done := sessionStopResult(msg, r.request.Policy, r.request.Facts, state)
-	if result.State != nil {
-		state = *result.State
-	}
-	if done {
+	result := sessionStopResult(msg, r.request.Policy, r.request.Facts, state)
+	state = result.state
+	if result.stop {
+		r.state = state
 		return result, nil
 	}
 	state, err := r.closePendingSessionIfReady(r.runCtx, r.loop, state)
+	r.state = state
 	if err != nil {
-		return sessionduration.MessageResult{State: &state}, err
+		return messageResult{}, err
 	}
-	return sessionduration.MessageResult{State: &state}, nil
+	return messageResult{}, nil
 }
 
-func (r *runLoop) handleSessionLifecycle(msg messages.StreamMessage, state *sessionduration.RunState) error {
+func (r *runLoop) handleSessionLifecycle(msg messages.StreamMessage, state *runState) error {
 	if msg.Type == messages.StreamTypeSessionCreated && r.request.Effects.SessionCreated != nil {
 		if err := r.request.Effects.SessionCreated(r.runCtx, r.loop); err != nil {
 			return err
@@ -124,31 +121,33 @@ func (r *runLoop) dispatchScheduledMessageAudio(msg messages.StreamMessage) erro
 	return nil
 }
 
-func sessionStopResult(msg messages.StreamMessage, policy sessionduration.RunPolicy, facts sessionduration.RunFacts, state sessionduration.RunState) (sessionduration.MessageResult, bool) {
+func sessionStopResult(msg messages.StreamMessage, policy sessionduration.RunPolicy, facts sessionduration.RunFacts, state runState) messageResult {
 	if shouldQueueSessionClose(msg, policy, facts, state) {
 		// Queue the close and let closePendingSessionIfReady send it through the
 		// live loop. Returning a planned stop here would send the control during
 		// finalization and cancel the loop before its SESSION.CLOSE delta can be
 		// observed by the bounded runner.
-		state = state.WithCloseAfterOpenPending(true)
+		state = state.withCloseAfterOpenPending(true)
 	}
 	if policy.HasAudioInput {
 		if shouldStopAudioInputSession(msg, policy, facts, state) {
-			state = state.WithDrainPlayback()
-			return sessionduration.MessageResult{Stop: true, State: &state}, true
+			return messageResult{stop: true, planned: plannedSessionStop(msg, facts), state: state}
 		}
 	} else if shouldStopSession(msg, policy, facts) {
-		state = state.WithDrainPlayback()
-		return sessionduration.MessageResult{Stop: true, State: &state}, true
+		return messageResult{stop: true, planned: plannedSessionStop(msg, facts), state: state}
 	}
-	return sessionduration.MessageResult{State: &state}, false
+	return messageResult{state: state}
 }
 
-func (r *runLoop) openSession(ctx context.Context, loop sessionduration.Loop, state *sessionduration.RunState) error {
+func plannedSessionStop(msg messages.StreamMessage, facts sessionduration.RunFacts) bool {
+	return !isAuthoritativeSessionStop(msg) && !hasTerminalRunFailure(msg, facts)
+}
+
+func (r *runLoop) openSession(ctx context.Context, loop sessionduration.Loop, state *runState) error {
 	policy := r.request.Policy
 	promptProvided := policy.PromptProvided || policy.Prompt != ""
-	if promptProvided && !state.PromptSent() {
-		*state = state.WithPromptSent()
+	if promptProvided && !state.hasPromptSent() {
+		*state = state.withPromptSent()
 		message := messages.NewTextMessage(messages.RoleUser, policy.Prompt)
 		if err := loop.Send(ctx, []messages.Message{message}); err != nil {
 			return fmt.Errorf("send session message: %w", err)
@@ -162,18 +161,18 @@ func (r *runLoop) openSession(ctx context.Context, loop sessionduration.Loop, st
 			}
 		}
 	}
-	if policy.CloseAfterOpen && !promptProvided && !policy.HasAudioInput && !state.CloseSent() {
-		*state = state.WithCloseAfterOpenPending(true)
+	if policy.CloseAfterOpen && !promptProvided && !policy.HasAudioInput && !state.hasCloseSent() {
+		*state = state.withCloseAfterOpenPending(true)
 	}
 	return nil
 }
 
-func (r *runLoop) closePendingSessionIfReady(ctx context.Context, loop sessionduration.Loop, state sessionduration.RunState) (sessionduration.RunState, error) {
-	if state.CloseSent() || fact(r.request.Facts.HasToolLifecycleObligation) {
+func (r *runLoop) closePendingSessionIfReady(ctx context.Context, loop sessionduration.Loop, state runState) (runState, error) {
+	if state.hasCloseSent() || fact(r.request.Facts.HasToolLifecycleObligation) {
 		return state, nil
 	}
 	closeAfterOpen := r.request.Policy.CloseAfterOpen &&
-		(state.CloseAfterOpenPending() || (state.PromptSent() && fact(r.request.Facts.LastMessageEndAdmitted)))
+		(state.hasCloseAfterOpenPending() || (state.hasPromptSent() && fact(r.request.Facts.LastMessageEndAdmitted)))
 	closeAfterScheduled := r.request.Policy.CloseAfterScheduledAudio && fact(r.request.Facts.ScheduledAudioComplete)
 	if !closeAfterOpen && !closeAfterScheduled {
 		return state, nil
@@ -187,13 +186,13 @@ func (r *runLoop) closePendingSessionIfReady(ctx context.Context, loop sessiondu
 	if err := loop.Send(ctx, []messages.Message{message}); err != nil {
 		return state, fmt.Errorf("close session loop: %w", err)
 	}
-	return state.WithCloseSent(true), nil
+	return state.withCloseSent(true), nil
 }
 
-func shouldQueueSessionClose(msg messages.StreamMessage, policy sessionduration.RunPolicy, facts sessionduration.RunFacts, state sessionduration.RunState) bool {
+func shouldQueueSessionClose(msg messages.StreamMessage, policy sessionduration.RunPolicy, facts sessionduration.RunFacts, state runState) bool {
 	promptProvided := policy.PromptProvided || policy.Prompt != ""
 	return policy.CloseAfterOpen && promptProvided && msg.Type == messages.StreamTypeMessageEnd &&
-		fact(facts.LastMessageEndAdmitted) && !state.CloseSent()
+		fact(facts.LastMessageEndAdmitted) && !state.hasCloseSent()
 }
 
 func shouldStopSession(msg messages.StreamMessage, policy sessionduration.RunPolicy, facts sessionduration.RunFacts) bool {
@@ -219,8 +218,8 @@ func shouldStopSession(msg messages.StreamMessage, policy sessionduration.RunPol
 	}
 }
 
-func shouldStopAudioInputSession(msg messages.StreamMessage, policy sessionduration.RunPolicy, facts sessionduration.RunFacts, state sessionduration.RunState) bool {
-	if !state.AwaitingResponse() {
+func shouldStopAudioInputSession(msg messages.StreamMessage, policy sessionduration.RunPolicy, facts sessionduration.RunFacts, state runState) bool {
+	if !state.isAwaitingResponse() {
 		return msg.Type == messages.StreamTypeSessionClose
 	}
 	if hasTerminalRunFailure(msg, facts) {
