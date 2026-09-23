@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -16,26 +15,12 @@ import (
 // SessionSelfPlayCommand translates CLI input into the runtime-owned request.
 type SessionSelfPlayCommand struct {
 	globalFlags *flags.GlobalFlags
-	run         serviceSelfPlay.Service
+	service     serviceSelfPlay.Service
 }
 
-type selfPlayRunnerFunc func(context.Context, serviceSelfPlay.Request) (serviceSelfPlay.Result, error)
-
-func (f selfPlayRunnerFunc) Run(ctx context.Context, request serviceSelfPlay.Request) (serviceSelfPlay.Result, error) {
-	return f(ctx, request)
-}
-
-// NewSessionSelfPlayCommand creates the transport adapter for the self-play
-// service. A nil service is useful for parser tests that install a runner.
+// NewSessionSelfPlayCommand creates the transport adapter for the self-play service.
 func NewSessionSelfPlayCommand(globalFlags *flags.GlobalFlags, service serviceSelfPlay.Service) *SessionSelfPlayCommand {
-	return &SessionSelfPlayCommand{globalFlags: globalFlags, run: service}
-}
-
-// SetRunner replaces the service for hermetic command tests.
-func (c *SessionSelfPlayCommand) SetRunner(runner func(context.Context, serviceSelfPlay.Request) (serviceSelfPlay.Result, error)) {
-	if c != nil && runner != nil {
-		c.run = selfPlayRunnerFunc(runner)
-	}
+	return &SessionSelfPlayCommand{globalFlags: globalFlags, service: service}
 }
 
 // Generate returns the cobra command for the bounded self-play runner.
@@ -55,7 +40,7 @@ func (c *SessionSelfPlayCommand) Generate() *cobra.Command {
 			"Only emitted raw PCM16 audio crosses between agents; tools and transcript/text bridging are disabled.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if c == nil || c.run == nil {
+			if c == nil || c.service == nil {
 				return errors.New("self-play service is required")
 			}
 			duration, err := parseSelfPlayDuration(maxDuration)
@@ -74,7 +59,7 @@ func (c *SessionSelfPlayCommand) Generate() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			result, runErr := c.run.Run(cmd.Context(), serviceSelfPlay.Request{
+			result, runErr := c.service.Run(cmd.Context(), serviceSelfPlay.Request{
 				APIKey:      resolvedAPIKey,
 				OutputDir:   outputDir,
 				Provider:    provider,

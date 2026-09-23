@@ -12,16 +12,21 @@ import (
 	serviceSelfPlay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/selfplay"
 )
 
+type selfPlayCommandServiceFunc func(context.Context, serviceSelfPlay.Request) (serviceSelfPlay.Result, error)
+
+func (f selfPlayCommandServiceFunc) Run(ctx context.Context, request serviceSelfPlay.Request) (serviceSelfPlay.Result, error) {
+	return f(ctx, request)
+}
+
 func TestSessionSelfPlayCommandParsesBoundedRunOptions(t *testing.T) {
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = t.TempDir()
-	subject := NewSessionSelfPlayCommand(globalFlags, nil)
 
 	var got serviceSelfPlay.Request
-	subject.SetRunner(func(_ context.Context, opts serviceSelfPlay.Request) (serviceSelfPlay.Result, error) {
+	subject := NewSessionSelfPlayCommand(globalFlags, selfPlayCommandServiceFunc(func(_ context.Context, opts serviceSelfPlay.Request) (serviceSelfPlay.Result, error) {
 		got = opts
 		return serviceSelfPlay.Result{}, nil
-	})
+	}))
 
 	outputDir := filepath.Join(t.TempDir(), "self-play")
 	cmd := subject.Generate()
@@ -53,12 +58,11 @@ func TestSessionSelfPlayCommandResolvesProviderInputsFromConfig(t *testing.T) {
 	t.Setenv("AGENT_MODEL__OPENAI__BASE_URL", "wss://config.example.test/realtime")
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = t.TempDir()
-	subject := NewSessionSelfPlayCommand(globalFlags, nil)
 	var got serviceSelfPlay.Request
-	subject.SetRunner(func(_ context.Context, request serviceSelfPlay.Request) (serviceSelfPlay.Result, error) {
+	subject := NewSessionSelfPlayCommand(globalFlags, selfPlayCommandServiceFunc(func(_ context.Context, request serviceSelfPlay.Request) (serviceSelfPlay.Result, error) {
 		got = request
 		return serviceSelfPlay.Result{}, nil
-	})
+	}))
 	cmd := subject.Generate()
 	cmd.SetArgs([]string{"--output-dir", filepath.Join(t.TempDir(), "self-play")})
 	if err := cmd.ExecuteContext(context.Background()); err != nil {
