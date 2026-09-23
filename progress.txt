@@ -5758,3 +5758,36 @@ handoff sequence. No gate completion is claimed.
   race, hermetic, embed, Wire, deletion, duplicate, adapter, ancestry and diff
   command on the exact SHA. Repair C251-owned findings; preserve peer leases and
   integrate only reviewed or explicitly released seams before any submission.
+
+
+## C251 exact-head verification checkpoint — 2026-09-23
+
+- Verified the admitted task and branch identity remain C251 and
+  `codex/audio-runtime-c251-recover-shutdown-duration-retirement`. Source
+  candidate `767272eaeb81d3721f0a92abb92618d6865d4ee7` is clean, retains the
+  recovery/startup/fetched-main ancestry, and has no C251 PR or push.
+- Exact `rtk make prepush` on that source SHA completed formatting and stopped
+  at `verify-architecture`: 426 findings across 229 packages. Log:
+  `~/Library/Application Support/rtk/tee/1790171883_make_prepush.log`. No
+  baseline was raised. Findings remain in shared and peer-owned package/file
+  baselines; do not hand off while this local gate is red.
+- Exact-source C251 checks pass: sessionduration/session functional and race
+  suites each pass 271 tests in 19 packages; the focused CLI duration,
+  finalization, replay and shutdown selection passes 272 tests; wider caller
+  functional and race selections pass 457 tests in 21 packages and 453 in 20
+  packages respectively; the CGO-disabled `nomicrophone` selection passes.
+  `make test-sessions-race`, `make test-integration` (agent-cli 320.775s and
+  go-agent-loop 158.287s), `make test-regressions`, `make test-hermetic`,
+  `make wire-check`, and `make embed-check` all exit successfully.
+- The planned legacy/checkpoint path audit passes 14/14 absent. The sole
+  production shutdown adapter is
+  `agent-cli/internal/transport/cli/internal/livehost/shutdown_adapter.go`
+  at 59 physical lines. Production scans found no imports of service internals
+  from agent-cli, no named duplicate duration decisions, and no `init` or
+  environment reads in the duration/live service packages. Wire generation
+  left no diff; `git diff --check` passes.
+- Decision remains `CONTINUE`; no PR, push, hosted CI, or independent review is
+  claimed. Exact next action: continue C251 on this branch, resolve only the
+  locally actionable architecture findings without editing leased peer paths
+  or changing baselines, then rerun the full exact-head preflight and all
+  planned checks before the first push/PR.
