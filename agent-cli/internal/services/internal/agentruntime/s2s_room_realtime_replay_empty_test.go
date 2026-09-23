@@ -119,7 +119,7 @@ func TestRunRoomWithResult_EmptyResponseDoesNotAdvanceTurnLedger(t *testing.T) {
 	defer cancel()
 
 	opts := RoomRunOptions{
-		Manifest:  manifest,
+		Manifest: manifest, AudioService: newTestAudioIOService(),
 		ConfigDir: configDir, ModelCatalog: testModelCatalog(),
 		BaseURL:     "wss://room-replay.invalid/v1/realtime",
 		MixerConfig: mixerConfig,

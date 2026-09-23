@@ -10,6 +10,8 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -18,6 +20,37 @@ import (
 // SessionReplayCompleteClassification is the terminal classification emitted
 // after a capture-derived replay consumes the complete ordered event stream.
 const SessionReplayCompleteClassification = "replay_complete"
+
+func newOpenAIDeviceProbeSessionInferencer(opts SessionRunOptions, instructions string) (messages.SessionInferencer, string, error) {
+	sessionConfig, err := resolveOpenAIRealtimeSessionConfig(opts)
+	if err != nil {
+		return nil, "", err
+	}
+	model := sessionConfig.Model
+	request := deviceProbeSessionConfig(model, instructions, models.AudioFormatPCM16, models.AudioFormatPCM16)
+	transcription, err := resolveSessionTranscription(opts, sessionProviderOpenAI, true)
+	if err != nil {
+		return nil, "", err
+	}
+	request.InputAudioTranscription = &transcription
+	request.TurnDetection = cloneSessionTurnDetection(opts.TurnDetection)
+	request.Voice = opts.Voice
+	request.ReasoningEffort = sessionConfig.ReasoningEffort
+	request.Tools = append([]messages.ToolDefinition(nil), opts.ToolDefinitions...)
+	dialer, recorder := resolveSessionWebSocketDialer(opts, sessionProviderOpenAI, model, func() transport.Dialer { return oaiprovider.NewDefaultWebSocketDialer() })
+	providerOpts := []oaiprovider.Option{
+		oaiprovider.WithAPIKey(sessionConfig.APIKey),
+		oaiprovider.WithModel(sessionConfig.Model),
+		oaiprovider.WithRealtimeBaseURL(openAIRealtimeURL(sessionConfig)),
+		oaiprovider.WithWebSocketDialer(dialer),
+	}
+	providerGateway, err := gateway.NewSessionGateway(gateway.WithSessionProvider(oaiprovider.New(providerOpts...)))
+	if err != nil {
+		return nil, "", fmt.Errorf("create OpenAI realtime session gateway: %w", err)
+	}
+	inferencer := inference.NewSessionGatewayInferencer(providerGateway, inference.WithSessionRequest(inference.SessionRequest{Config: request}))
+	return wrapSessionInferencerCaptureFlush(inferencer, recorder, opts.RecordSessionCapturePath), model, nil
+}
 
 func planOpenAIRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
 	sessionCfg, err := resolveOpenAIRealtimeSessionConfig(opts)
@@ -35,7 +68,10 @@ func planOpenAIRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 	liveDialer = observeSessionWire(liveDialer, opts)
 	recordingDialer := factory.newRecordingDialer(liveDialer, sessionProviderOpenAI, sessionCfg.Model)
 	clientOwnedAudio := opts.ClientOwnsAudioTurnBoundaries || len(opts.AudioInputs) > 0
-	inputAudioTranscription := resolveInputAudioTranscriptionPolicy(opts, sessionProviderOpenAI, clientOwnedAudio || opts.RTCDeviceBinding.inputSelected())
+	inputAudioTranscription, err := resolveSessionTranscription(opts, sessionProviderOpenAI, clientOwnedAudio || opts.RTCBinding.HasInput())
+	if err != nil {
+		return sessionRuntimePlan{}, err
+	}
 	sessionInferencer, err := factory.newOpenAISessionInferencerForTools(sessionCfg, opts.Voice, recordingDialer, opts.ToolDefinitions, clientOwnedAudio, inputAudioTranscription)
 	if err != nil {
 		return sessionRuntimePlan{}, err
@@ -44,7 +80,7 @@ func planOpenAIRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 		SetSessionTurnDetection(*models.TurnDetectionConfig)
 	}); ok {
 		turnDetection := cloneSessionTurnDetection(opts.TurnDetection)
-		if turnDetection == nil && opts.RTCDeviceBinding.inputSelected() && !clientOwnedAudio {
+		if turnDetection == nil && opts.RTCBinding.HasInput() && !clientOwnedAudio {
 			turnDetection = &models.TurnDetectionConfig{Type: "semantic_vad"}
 		}
 		configurer.SetSessionTurnDetection(turnDetection)
@@ -226,10 +262,12 @@ func replaySessionToolNames(path string, sequence int, session map[string]json.R
 	return names, true, nil
 }
 
+//lint:ignore U1000 package tests exercise the OpenAI factory seam.
 func buildOpenAIRealtimeSessionInferencer(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer) (messages.SessionInferencer, error) {
 	return buildOpenAIRealtimeSessionInferencerWithInputAudioTranscription(sessionCfg, voice, dialer, models.InputAudioTranscriptionConfig{})
 }
 
+//lint:ignore U1000 package tests exercise the OpenAI factory seam.
 func buildOpenAIRealtimeSessionInferencerWithTools(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
 	return buildOpenAIRealtimeSessionInferencerWithToolsAndInputAudioTranscription(sessionCfg, voice, dialer, toolDefinitions, models.InputAudioTranscriptionConfig{})
 }

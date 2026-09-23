@@ -69,11 +69,19 @@ func readRecordedConversationToolEvents(t *testing.T, recordDir string) []record
 	if err != nil {
 		t.Fatalf("read recorded session log: %v", err)
 	}
-	var entry recordedConversationLog
-	if err := json.Unmarshal(bytes.TrimSpace(data), &entry); err != nil {
-		t.Fatalf("decode recorded session log: %v\n%s", err, data)
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	var events []recordedConversationToolEvent
+	for {
+		var entry recordedConversationLog
+		if err := decoder.Decode(&entry); err != nil {
+			if err == io.EOF {
+				break
+			}
+			t.Fatalf("decode recorded session log: %v\n%s", err, data)
+		}
+		events = append(events, entry.ToolEvents...)
 	}
-	return entry.ToolEvents
+	return events
 }
 
 func TestSessionToolCallConversationBrowserRecordingParity(t *testing.T) {

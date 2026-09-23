@@ -1,11 +1,5 @@
 package cli
 
-import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
-
-import sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
-
-import sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
-
 import (
 	"bytes"
 	"context"
@@ -22,7 +16,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
-
+	servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
 	webmcpTools "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/tools"
@@ -32,13 +26,10 @@ import (
 )
 
 const (
-	sessionAudioInterruptReadTool  = "read_cube_state"
-	sessionAudioInterruptQueueTool = "queue_cube_moves"
-)
-
-var (
-	sessionAudioInterruptScheduledPCM = []byte{0x11, 0x00, 0x12, 0x00}
-	sessionAudioInterruptOverlapPCM   = []byte{0x91, 0x00, 0x92, 0x00}
+	sessionAudioInterruptReadTool     = "read_cube_state"
+	sessionAudioInterruptQueueTool    = "queue_cube_moves"
+	sessionAudioInterruptScheduledPCM = "\x11\x20\x12\x20"
+	sessionAudioInterruptOverlapPCM   = "\x91\x20\x92\x20"
 )
 
 type sessionAudioInterruptScenario string
@@ -88,10 +79,10 @@ func runSessionCommandAudioInterruptScenario(t *testing.T, scenario sessionAudio
 	tempDir := t.TempDir()
 	scheduledPath := filepath.Join(tempDir, "scheduled.raw")
 	interruptPath := filepath.Join(tempDir, "interrupt.raw")
-	if err := os.WriteFile(scheduledPath, sessionAudioInterruptScheduledPCM, 0o600); err != nil {
+	if err := os.WriteFile(scheduledPath, bytes.Repeat([]byte(sessionAudioInterruptScheduledPCM), 160), 0o600); err != nil {
 		t.Fatalf("write scheduled audio fixture: %v", err)
 	}
-	if err := os.WriteFile(interruptPath, sessionAudioInterruptOverlapPCM, 0o600); err != nil {
+	if err := os.WriteFile(interruptPath, bytes.Repeat([]byte(sessionAudioInterruptOverlapPCM), 160), 0o600); err != nil {
 		t.Fatalf("write interruption audio fixture: %v", err)
 	}
 
@@ -113,11 +104,13 @@ func runSessionCommandAudioInterruptScenario(t *testing.T, scenario sessionAudio
 			Close: broker.Close,
 		}, nil
 	}
-	commandOwner := NewSessionCommand(flags.NewAskFlags(), globalFlags, newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}, SessionInferencer: inferencer, ToolService: SessionToolCapabilitiesFactory(capabilityFactory)}), nil)
-	command := commandOwner.Generate()
+	command := newTestLiveSessionCommand(
+		flags.NewAskFlags(), globalFlags, inferencer, nil,
+		SessionToolCapabilitiesFactory(capabilityFactory),
+	).Generate()
 	var output bytes.Buffer
 	command.SetOut(&output)
-	command.SetArgs(sessionAudioInterruptArgs(scenario, scheduledPath, interruptPath, filepath.Join(tempDir, "recording")))
+	command.SetArgs(sessionAudioInterruptArgs(scenario, scheduledPath, interruptPath))
 
 	// This only needs to bound a genuine hang; the assertions below no longer
 	// depend on how much of the budget was actually used, so the deadline can
@@ -141,14 +134,13 @@ func runSessionCommandAudioInterruptScenario(t *testing.T, scenario sessionAudio
 	assertSessionAudioInterruptScenario(t, scenario, wire.writesSnapshot(), ledger.eventsSnapshot())
 }
 
-func sessionAudioInterruptArgs(scenario sessionAudioInterruptScenario, scheduledPath, interruptPath, recordDir string) []string {
+func sessionAudioInterruptArgs(scenario sessionAudioInterruptScenario, scheduledPath, interruptPath string) []string {
 	args := []string{
 		"--browser-tools", "webmcp",
 		"--provider", "openai",
 		"--model", "gpt-realtime-2.1-mini",
 		"--api-key", "test-key",
-		"--record-dir", recordDir,
-		"--audio-in-turn", scheduledPath,
+		"--audio-in", scheduledPath,
 		"--audio-interrupt", interruptPath,
 	}
 	if scenario != sessionAudioInterruptUnfiltered {
@@ -418,7 +410,7 @@ func assertSessionAudioInterruptScenario(t *testing.T, scenario sessionAudioInte
 	if len(commits[0].appends) == 0 {
 		t.Fatalf("first audio commit had no nonempty append group; writes=%s", sessionAudioInterruptWriteSummary(writes))
 	}
-	if !sessionAudioInterruptGroupHasPrefix(commits[0].appends, sessionAudioInterruptScheduledPCM) {
+	if !sessionAudioInterruptGroupHasPrefix(commits[0].appends, []byte(sessionAudioInterruptScheduledPCM)) {
 		t.Fatalf("first audio commit did not contain scheduled audio; commits=%#v", commits)
 	}
 
@@ -430,7 +422,7 @@ func assertSessionAudioInterruptScenario(t *testing.T, scenario sessionAudioInte
 			t.Fatalf("unfiltered provider commits = %d, want exactly scheduled + interruption; commits=%#v", len(commits), commits)
 		}
 		assertSessionAudioInterruptCommitInSpan(t, commits[1], targetSpan)
-		if !sessionAudioInterruptGroupHasPrefix(commits[1].appends, sessionAudioInterruptOverlapPCM) {
+		if !sessionAudioInterruptGroupHasPrefix(commits[1].appends, []byte(sessionAudioInterruptOverlapPCM)) {
 			t.Fatalf("unfiltered interruption commit did not contain overlap audio; commits=%#v", commits)
 		}
 		// Require ordered transitions without a minimum wall-time duration.
@@ -449,7 +441,7 @@ func assertSessionAudioInterruptScenario(t *testing.T, scenario sessionAudioInte
 				readSpan.terminal.event.Sequence, targetSpan.start.event.Sequence, readSpan.start.at, readSpan.terminal.at, targetSpan.start.at)
 		}
 		assertSessionAudioInterruptCommitInSpan(t, commits[1], targetSpan)
-		if !sessionAudioInterruptGroupHasPrefix(commits[1].appends, sessionAudioInterruptOverlapPCM) {
+		if !sessionAudioInterruptGroupHasPrefix(commits[1].appends, []byte(sessionAudioInterruptOverlapPCM)) {
 			t.Fatalf("named interruption commit did not contain overlap audio; commits=%#v", commits)
 		}
 	case sessionAudioInterruptNegative:
@@ -461,7 +453,7 @@ func assertSessionAudioInterruptScenario(t *testing.T, scenario sessionAudioInte
 			t.Fatalf("negative named scenario unexpectedly invoked %q; events=%#v", sessionAudioInterruptQueueTool, events)
 		}
 		for _, commit := range commits {
-			if sessionAudioInterruptGroupHasPrefix(commit.appends, sessionAudioInterruptOverlapPCM) {
+			if sessionAudioInterruptGroupHasPrefix(commit.appends, []byte(sessionAudioInterruptOverlapPCM)) {
 				t.Fatalf("negative named scenario emitted interruption audio; commits=%#v", commits)
 			}
 		}
@@ -706,10 +698,10 @@ func (w *sessionAudioInterruptWire) recordAudioCommit() {
 	w.mu.Lock()
 	group := append([][]byte(nil), w.audioGroup...)
 	w.audioGroup = nil
-	if sessionAudioInterruptWireGroupHasPrefix(group, sessionAudioInterruptOverlapPCM) {
+	if sessionAudioInterruptWireGroupHasPrefix(group, []byte(sessionAudioInterruptOverlapPCM)) {
 		w.interrupts++
 	}
-	isInterrupt := sessionAudioInterruptWireGroupHasPrefix(group, sessionAudioInterruptOverlapPCM)
+	isInterrupt := sessionAudioInterruptWireGroupHasPrefix(group, []byte(sessionAudioInterruptOverlapPCM))
 	w.mu.Unlock()
 	if isInterrupt {
 		select {

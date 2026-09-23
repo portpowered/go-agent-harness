@@ -343,7 +343,7 @@ func replayTextPrompt(path string, record gatewaytesting.CapturedSessionEvent) (
 		return "", false, nil
 	}
 	if len(item.Content) != 1 || item.Content[0].Type != "input_text" || item.Content[0].Text == nil {
-		return "", false, fmt.Errorf("live replay plan %s: user item at sequence %d must contain exactly one input_text part", path, record.Sequence)
+		return "", false, fmt.Errorf("%w: live replay plan %s: user item at sequence %d must contain exactly one input_text part", errSelfDrivingPlanUnavailable, path, record.Sequence)
 	}
 	return *item.Content[0].Text, true, nil
 }

@@ -19,6 +19,9 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
+	runtimeBrowser "github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation"
+	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
@@ -88,6 +91,8 @@ type SessionAudioInTurnBargeError = sessioncontract.SessionAudioInTurnBargeError
 // planning always normalizes it to completion-gated behavior.
 type ScheduledAudioDispatchPolicy string
 
+type ScheduledAudioInput = audioio.ScheduledAudioInput
+
 const (
 	// ScheduledAudioDispatchCompletionGated preserves ordinary serialized
 	// --audio-in-turn behavior.
@@ -102,6 +107,29 @@ func scheduledAudioDispatchPolicyForOptions(opts SessionRunOptions) ScheduledAud
 		return ScheduledAudioDispatchActiveResponse
 	}
 	return ScheduledAudioDispatchCompletionGated
+}
+
+// resolveSessionTranscription delegates transcription policy to audioio and
+// translates the service result into the gateway's provider request shape.
+func resolveSessionTranscription(opts SessionRunOptions, provider string, acceptsAudioInput bool) (models.InputAudioTranscriptionConfig, error) {
+	if opts.AudioService == nil {
+		return models.InputAudioTranscriptionConfig{}, errors.New("audio service is required for transcription resolution")
+	}
+	var override *audioio.TranscriptionConfig
+	if opts.InputAudioTranscription != nil {
+		override = &audioio.TranscriptionConfig{
+			Enabled: opts.InputAudioTranscription.Enabled,
+			Model:   opts.InputAudioTranscription.Model,
+		}
+	}
+	resolved := opts.AudioService.ResolveTranscription(audioio.TranscriptionRequest{
+		Provider:          provider,
+		Replay:            opts.ReplayPath != "",
+		AcceptsAudioInput: acceptsAudioInput,
+		Disabled:          opts.NoInputTranscription,
+		Override:          override,
+	})
+	return models.InputAudioTranscriptionConfig{Enabled: resolved.Enabled, Model: resolved.Model}, nil
 }
 
 // SessionRuntimeSelectionError reports all fields that made a selection
@@ -134,6 +162,13 @@ func (e *SessionRuntimeSelectionError) Unwrap() error {
 
 // SessionRunOptions contains the user-facing agent session command options.
 type SessionRunOptions struct {
+	// AudioService is the application-composed audio contract. Audio policy,
+	// PCM conversion, and timers are delegated to this service.
+	AudioService audioio.Service
+	// DeviceService is the injected service-owned RTC/device boundary. The
+	// registry field below remains only for compatibility with older test and
+	// probe paths that do not install the service graph.
+	DeviceService runtimedevices.Service
 	// runtimeFactory is installed by the private service composition root.
 	// It is intentionally unexported so transport requests cannot construct
 	// provider gateways or dialers.
@@ -233,10 +268,9 @@ type SessionRunOptions struct {
 	// MediaSource is the selected opaque external media-source identity. It is
 	// consumed by the WebRTC runtime only; it must remain empty for WebSocket.
 	MediaSource string
-	// RTCDeviceBinding carries optional registry-backed local audio selectors.
-	// The runtime opens these devices only after planning succeeds and before
-	// provider/peer setup begins.
-	RTCDeviceBinding RTCDeviceBindingRequest
+	// RTCBinding carries the public device-service request. The runtime
+	// opens these devices only after planning succeeds and before provider setup.
+	RTCBinding runtimedevices.RTCBindingRequest
 
 	// ToolExecutor optionally injects the composed session tool executor.
 	// When nil, duplex loop construction stays byte-for-byte identical to the
@@ -259,10 +293,9 @@ type SessionRunOptions struct {
 	RefreshToolDefinitions func(context.Context) ([]messages.ToolDefinition, error)
 	// BrowserWatch supplies an independent subscription to semantic broker
 	// selection/catalog/generation events for this session.
-	BrowserWatch func(context.Context) <-chan webmcp.BrokerEvent
-	// BrowserEventWatch supplies the adapter-owned semantic browser events used
-	// only by the optional recording observer. It never owns session delivery.
-	BrowserEventWatch func(context.Context) <-chan webmcp.BrowserEvent
+	BrowserWatch        func(context.Context) <-chan webmcp.BrokerEvent
+	BrowserEventWatch   func(context.Context) <-chan runtimeBrowser.BrowserEvent
+	BrowserConversation runtimeBrowser.Service
 	// BrowserCapabilityState is the session-owned browser state used to compose
 	// model-facing selection grounding. It must not be inferred from the
 	// presence or absence of dynamic page definitions.
@@ -819,66 +852,11 @@ func NewLiveSessionInferencer(opts SessionRunOptions, instructions string) (mess
 	}
 	opts.Provider = providerName
 	instructions = composeSessionInstructions(opts, instructions)
-
-	var (
-		model  string
-		config models.SessionConfig
-	)
 	switch providerName {
 	case sessionProviderOpenAI:
-		sessionCfg, err := resolveOpenAIRealtimeSessionConfig(opts)
-		if err != nil {
-			return nil, "", err
-		}
-		model = sessionCfg.Model
-		config = deviceProbeSessionConfig(model, instructions, models.AudioFormatPCM16, models.AudioFormatPCM16)
-		inputAudioTranscription := resolveInputAudioTranscriptionPolicy(opts, providerName, true)
-		if opts.InputAudioTranscription != nil {
-			inputAudioTranscription = *opts.InputAudioTranscription
-		}
-		config.InputAudioTranscription = &inputAudioTranscription
-		config.TurnDetection = cloneSessionTurnDetection(opts.TurnDetection)
-		config.Voice = opts.Voice
-		config.ReasoningEffort = sessionCfg.ReasoningEffort
-		config.Tools = append([]messages.ToolDefinition(nil), opts.ToolDefinitions...)
-		dialer, recorder := resolveSessionWebSocketDialer(opts, providerName, model, func() transport.Dialer { return oaiprovider.NewDefaultWebSocketDialer() })
-		providerOpts := []oaiprovider.Option{
-			oaiprovider.WithAPIKey(sessionCfg.APIKey),
-			oaiprovider.WithModel(sessionCfg.Model),
-			oaiprovider.WithRealtimeBaseURL(openAIRealtimeURL(sessionCfg)),
-			oaiprovider.WithWebSocketDialer(dialer),
-		}
-		providerGateway, err := gateway.NewSessionGateway(gateway.WithSessionProvider(oaiprovider.New(providerOpts...)))
-		if err != nil {
-			return nil, "", fmt.Errorf("create OpenAI realtime session gateway: %w", err)
-		}
-		inferencer := inference.NewSessionGatewayInferencer(providerGateway, inference.WithSessionRequest(inference.SessionRequest{Config: config}))
-		return wrapSessionInferencerCaptureFlush(inferencer, recorder, opts.RecordSessionCapturePath), model, nil
+		return newOpenAIDeviceProbeSessionInferencer(opts, instructions)
 	case sessionProviderGrok:
-		sessionCfg, err := resolveGrokSessionConfig(opts)
-		if err != nil {
-			return nil, "", err
-		}
-		model = sessionCfg.Model
-		config = deviceProbeSessionConfig(model, instructions, models.AudioFormatPCM16, models.AudioFormatPCM16)
-		config.TurnDetection = cloneSessionTurnDetection(opts.TurnDetection)
-		inputAudioTranscription := resolveInputAudioTranscriptionPolicy(opts, providerName, true)
-		if opts.InputAudioTranscription != nil {
-			inputAudioTranscription = *opts.InputAudioTranscription
-		}
-		config.InputAudioTranscription = &inputAudioTranscription
-		config.Tools = append([]messages.ToolDefinition(nil), opts.ToolDefinitions...)
-		dialer, recorder := resolveSessionWebSocketDialer(opts, providerName, model, func() transport.Dialer { return grok.NewDefaultWebSocketDialer() })
-		providerOpts := []grok.Option{grok.WithAPIKey(sessionCfg.APIKey), grok.WithWebSocketDialer(dialer)}
-		if strings.TrimSpace(sessionCfg.BaseURL) != "" {
-			providerOpts = append(providerOpts, grok.WithBaseURL(sessionCfg.BaseURL))
-		}
-		providerGateway, err := gateway.NewSessionGateway(gateway.WithSessionProvider(grok.New(providerOpts...)))
-		if err != nil {
-			return nil, "", fmt.Errorf("create Grok realtime session gateway: %w", err)
-		}
-		inferencer := inference.NewSessionGatewayInferencer(providerGateway, inference.WithSessionRequest(inference.SessionRequest{Config: config}))
-		return wrapSessionInferencerCaptureFlush(inferencer, recorder, opts.RecordSessionCapturePath), model, nil
+		return newGrokDeviceProbeSessionInferencer(opts, instructions)
 	default:
 		return nil, "", fmt.Errorf("--devices real supports realtime providers %q and %q; got %q", sessionProviderOpenAI, sessionProviderGrok, providerName)
 	}

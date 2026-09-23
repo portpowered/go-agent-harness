@@ -122,7 +122,10 @@ func TestManagedBrowserManagerRecoversMalformedOrStaleStateWithoutSignalingOldPI
 	if control.terminate.Load() != 0 {
 		t.Fatalf("stale state signaled old PID: %d calls", control.terminate.Load())
 	}
-	_ = browser.Close()
+	if err := browser.Close(); err != nil {
+		t.Fatalf("Close() after stale-state recovery: %v", err)
+	}
+	waitForManagedLifecycleCleanup(t, configDir)
 }
 
 func TestManagedBrowserManagerRestartsVerifiedProfileOwnerAndRetriesOnce(t *testing.T) {

@@ -109,7 +109,7 @@ func (c *SessionCommand) runtimeLiveAdmission(ctx context.Context, request servi
 	if err != nil {
 		return false, nil, fmt.Errorf("replay session capture %s: %w", request.ReplayPath, err)
 	}
-	return inspection.IsRealtime(), &inspection, nil
+	return inspection.IsRealtime() || (inspection.Kind == runtimeReplay.CaptureKindTurn && replayRequestsAudio(request)), &inspection, nil
 }
 
 func (c *SessionCommand) legacyReplayOwnsPassiveInvocation(request serviceSession.Request) bool {

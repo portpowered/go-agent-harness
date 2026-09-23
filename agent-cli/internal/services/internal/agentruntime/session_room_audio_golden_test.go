@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	roomanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room"
 	streamanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/stream"
 )
@@ -29,7 +30,7 @@ func TestCleanTurnTakingRoomReplayFixturePassesAudioProperties(t *testing.T) {
 		if len(participant.Events) < 4 || len(participant.Diagnostics) < 2 {
 			t.Fatalf("participant %q sidecars = events:%d diagnostics:%d, want timestamped turns", participant.ID, len(participant.Events), len(participant.Diagnostics))
 		}
-		for _, stream := range []RoomReplayAudioStream{participant.WAV, participant.Sent, participant.Received} {
+		for _, stream := range []roomreplay.RoomReplayAudioStream{participant.WAV, participant.Sent, participant.Received} {
 			if stream.SampleCount == 0 || len(stream.PCM) == 0 {
 				t.Fatalf("participant %q stream %q is empty", participant.ID, stream.StreamID)
 			}
@@ -164,9 +165,9 @@ func TestCleanTurnTakingRoomReplaySelfCopyControlFails(t *testing.T) {
 	}
 }
 
-func loadCleanTurnTakingBundle(t *testing.T) RoomReplayAudioBundle {
+func loadCleanTurnTakingBundle(t *testing.T) roomreplay.RoomReplayAudioBundle {
 	t.Helper()
-	bundle, err := LoadRoomReplayAudioBundle(cleanTurnTakingFixturePath())
+	bundle, err := roomReplayAudioTestService().LoadAudioBundle(cleanTurnTakingFixturePath())
 	if err != nil {
 		t.Fatalf("load clean turn-taking bundle: %v", err)
 	}

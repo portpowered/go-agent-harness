@@ -374,6 +374,7 @@ func runV4DSession(t *testing.T, executor messages.ToolExecutor, timeout, runBou
 	ctx, cancel := context.WithTimeout(context.Background(), runBound)
 	defer cancel()
 	err := servicetest.RunSession(ctx, out, servicetest.SessionRunOptions{
+		AudioService:         newTestAudioService(),
 		ReplayPath:           filepathV4DScratch(t),
 		SessionInferencer:    inferencer,
 		WaitForClose:         true,

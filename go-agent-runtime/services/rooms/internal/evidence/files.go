@@ -1,6 +1,8 @@
 package evidence
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -81,6 +83,23 @@ func (w *jsonlWriter) errOr(fallback error) error {
 		return w.err
 	}
 	return fallback
+}
+
+func fileSHA256(path string) (digest string, err error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("close %s after hashing: %w", path, closeErr))
+		}
+	}()
+	hash := sha256.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
 type pcmWriter struct {

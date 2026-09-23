@@ -12,6 +12,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe/fleet"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	"github.com/spf13/cobra"
 )
@@ -46,7 +47,7 @@ func newTestRootCommandWithProbeFleetCommand(probeFleetCommand *ProbeFleetComman
 		NewInteractionCommand(),
 		NewInteractionReplayCommand(),
 		NewProbeCommand(),
-		NewProbeRunCommandWithDeviceService(newDevicesTestService(), nil, sessionservicewire.NewMetricsCollector(sessionclock.Real{}, sessionservicewire.NewSessionRuntimeFactory())),
+		NewProbeRunCommandWithDeviceService(newDevicesTestService(), nil, sessionservicewire.NewMetricsCollector(audioiowire.NewService(), sessionclock.Real{}, sessionservicewire.NewSessionRuntimeFactory())),
 		NewProbeGateCommand(),
 		NewProbeReportCommand(),
 		probeFleetCommand,

@@ -1,81 +1,28 @@
-// Package servicetest exposes runtime seams for external acceptance tests.
-// Production callers must use the injected service contracts instead.
+// Package servicetest exposes non-browser runtime seams for acceptance tests.
+// Browser-conversation tests import the public browserconversation contract.
 package servicetest
 
-import sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
+import (
+	"context"
+	"io"
+	"time"
 
-import serviceDevices "github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices"
-
-import impl "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime"
-
-import runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
-
-import runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
-
-const BrowserConversationAssistantTurn = impl.BrowserConversationAssistantTurn
-
-type BrowserConversationBrokerCall = impl.BrowserConversationBrokerCall
-
-const BrowserConversationCancel = impl.BrowserConversationCancel
-
-type BrowserConversationCancelRequest = impl.BrowserConversationCancelRequest
-type BrowserConversationCancellationEvidence = impl.BrowserConversationCancellationEvidence
-type BrowserConversationCorrection = impl.BrowserConversationCorrection
-
-const BrowserConversationCustomerNavigate = impl.BrowserConversationCustomerNavigate
-const BrowserConversationCustomerTurn = impl.BrowserConversationCustomerTurn
-
-type BrowserConversationFixture = impl.BrowserConversationFixture
-type BrowserConversationInterrupt = impl.BrowserConversationInterrupt
-
-const BrowserConversationInvoke = impl.BrowserConversationInvoke
-const BrowserConversationLifecycleCanceled = impl.BrowserConversationLifecycleCanceled
-
-type BrowserConversationLifecycleEvidence = impl.BrowserConversationLifecycleEvidence
-
-const BrowserConversationListTools = impl.BrowserConversationListTools
-const BrowserConversationOracleAfter = impl.BrowserConversationOracleAfter
-const BrowserConversationOracleBefore = impl.BrowserConversationOracleBefore
-
-type BrowserConversationOraclePhase = impl.BrowserConversationOraclePhase
-
-const BrowserConversationOraclePostSession = impl.BrowserConversationOraclePostSession
-
-type BrowserConversationOracleSnapshot = impl.BrowserConversationOracleSnapshot
-type BrowserConversationPage = impl.BrowserConversationPage
-type BrowserConversationReportMetadata = impl.BrowserConversationReportMetadata
-type BrowserConversationResult = impl.BrowserConversationResult
-type BrowserConversationScenario = impl.BrowserConversationScenario
-
-const BrowserConversationScenarioVersion = impl.BrowserConversationScenarioVersion
-
-type BrowserConversationStep = impl.BrowserConversationStep
-type BrowserConversationTabStateRequired = impl.BrowserConversationTabStateRequired
-type BrowserConversationTurn = impl.BrowserConversationTurn
-
-const BrowserConversationValidatorNotRun = impl.BrowserConversationValidatorNotRun
-
-type BrowserConversationValidatorVerdict = impl.BrowserConversationValidatorVerdict
-
-const BrowserConversationValidatorVersion = impl.BrowserConversationValidatorVersion
-
-type BrowserCustomerNavigation = impl.BrowserCustomerNavigation
-
-const BrowserInterruptOnInFlightInvocation = impl.BrowserInterruptOnInFlightInvocation
-
-type BrowserStateTransition = impl.BrowserStateTransition
-
-var ComputeBrowserConversationInputJSONValidity = impl.ComputeBrowserConversationInputJSONValidity
+	sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
+	serviceDevices "github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices"
+	impl "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime"
+	audioio "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
+	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
+	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+)
 
 const DefaultOpenAIRealtimeModel = impl.DefaultOpenAIRealtimeModel
 
-var DeriveBrowserConversationCorrections = impl.DeriveBrowserConversationCorrections
-var DeriveBrowserConversationRecovery = impl.DeriveBrowserConversationRecovery
 var ErrInvalidOpenAIRealtimeVoice = sessioncontract.ErrInvalidOpenAIRealtimeVoice
-var ErrRTCSessionMediaUnavailable = impl.ErrRTCSessionMediaUnavailable
 var ErrRoomLaunchPathConflict = runtimeRooms.ErrLaunchPathConflict
-var ErrRoomReplayBundleIncomplete = impl.ErrRoomReplayBundleIncomplete
-var ErrRoomReplaySourceConflict = impl.ErrRoomReplaySourceConflict
+var ErrRoomReplayBundleIncomplete = roomreplay.ErrRoomReplayBundleIncomplete
+var ErrRoomReplaySourceConflict = runtimeRooms.ErrReplaySourceConflict
 var ErrSessionAudioInputConflict = serviceDevices.ErrSessionAudioInputConflict
 var ErrSessionAudioOutputConflict = serviceDevices.ErrSessionAudioOutputConflict
 var ErrSessionAudioInTurnBargeRequiresSequence = impl.ErrSessionAudioInTurnBargeRequiresSequence
@@ -83,39 +30,56 @@ var ErrSessionAudioResponseIncomplete = impl.ErrSessionAudioResponseIncomplete
 var ErrSessionImageContinuationIncomplete = impl.ErrSessionImageContinuationIncomplete
 var ErrSessionScheduledAudioIncomplete = runtimeSession.ErrLiveScheduledAudioIncomplete
 var ErrSessionUnresolvedToolResults = sessioncontract.ErrSessionUnresolvedToolResults
-var EvaluateBrowserConversation = impl.EvaluateBrowserConversation
-
-type InvalidOpenAIRealtimeVoiceError = sessioncontract.InvalidOpenAIRealtimeVoiceError
-
-var NewBrowserConversationCommandValidator = impl.NewBrowserConversationCommandValidator
 var NewOpenAIRealtimeSessionInferencerWithOptions = impl.NewOpenAIRealtimeSessionInferencerWithOptions
 var NewOpenAIRealtimeSessionInferencerWithToolsAndOptions = impl.NewOpenAIRealtimeSessionInferencerWithToolsAndOptions
 var NewGrokSessionInferencer = impl.NewGrokSessionInferencer
 var NewGrokSessionInferencerWithOptions = impl.NewGrokSessionInferencerWithOptions
 
+func ValidateSessionAudioDeviceConflicts(audioInFile, audioOutFile, audioInDevice, audioOutDevice bool) error {
+	return serviceDevices.ValidateSessionAudioDeviceConflicts(audioInFile, audioOutFile, audioInDevice, audioOutDevice)
+}
+
+func RunSession(ctx context.Context, out io.Writer, opts SessionRunOptions) error {
+	return impl.RunSession(ctx, out, opts)
+}
+
+func RunSessionWithInstructions(ctx context.Context, out io.Writer, opts SessionRunOptions, systemPrompt string) error {
+	return impl.RunSessionWithInstructions(ctx, out, opts, systemPrompt)
+}
+
+func RunSessionWithMaxDuration(ctx context.Context, out io.Writer, opts SessionRunOptions, maxDuration time.Duration) error {
+	return impl.RunSessionWithMaxDuration(ctx, out, opts, maxDuration)
+}
+
+func RunSessionWithMaxDurationClock(ctx context.Context, out io.Writer, opts SessionRunOptions, maxDuration time.Duration, durationClock SessionDurationClock) error {
+	return impl.RunSessionWithMaxDurationClock(ctx, out, opts, maxDuration, durationClock)
+}
+
 const ParticipantTerminationEnded = impl.ParticipantTerminationEnded
 const ParticipantTerminationError = impl.ParticipantTerminationError
 
-type RTCMediaEndpoints = impl.RTCMediaEndpoints
-type RTCMediaSession = impl.RTCMediaSession
-type RTCDeviceBindingRequest = impl.RTCDeviceBindingRequest
-type RTCDeviceBindingError = impl.RTCDeviceBindingError
-
-var PrepareRTCDeviceBindings = impl.PrepareRTCDeviceBindings
-var ValidateSessionAudioDeviceConflicts = serviceDevices.ValidateSessionAudioDeviceConflicts
-
-var RenderBrowserConversationReport = impl.RenderBrowserConversationReport
-
-var RunSession = impl.RunSession
-var RunSessionWithInstructions = impl.RunSessionWithInstructions
-var RunSessionWithMaxDuration = impl.RunSessionWithMaxDuration
-var RunSessionWithMaxDurationClock = impl.RunSessionWithMaxDurationClock
-
-type ScheduledAudioInput = impl.ScheduledAudioInput
-type SessionAudioInTurnBargeError = impl.SessionAudioInTurnBargeError
-type SessionAudioInput = impl.SessionAudioInput
+type InvalidOpenAIRealtimeVoiceError = sessioncontract.InvalidOpenAIRealtimeVoiceError
+type RTCMediaEndpoints = sharedaudio.MediaEndpoints
+type RTCMediaSession = sharedaudio.MediaSession
+type ScheduledAudioInput = audioio.ScheduledAudioInput
+type SessionAudioInTurnBargeError = sessioncontract.SessionAudioInTurnBargeError
 type SessionTextSeed = impl.SessionTextSeed
+type SessionDiagnosticRecord = impl.SessionDiagnosticRecord
+type SessionDurationTimer = impl.SessionDurationTimer
+type SessionDurationClock = impl.SessionDurationClock
+type SessionImageContinuationError = impl.SessionImageContinuationError
+type SessionRTCComponents = impl.SessionRTCComponents
+type SessionRTCDataPlane = impl.SessionRTCDataPlane
+type SessionRunOptions = impl.SessionRunOptions
+type SessionRuntimeSelection = impl.SessionRuntimeSelection
+type SessionScheduledAudioIncompleteError = runtimeSession.LiveScheduledAudioIncompleteError
+type SessionToolContinuationError = impl.SessionToolContinuationError
+type SessionToolDiagnostic = impl.SessionToolDiagnostic
+type SessionUnresolvedToolResultsError = sessioncontract.SessionUnresolvedToolResultsError
 
+const SessionMaxDurationReason = impl.SessionMaxDurationReason
+const SessionSilentProviderTimeoutClassification = impl.SessionSilentProviderTimeoutClassification
+const SessionTransportWebRTC = impl.SessionTransportWebRTC
 const SessionDiagnosticEventFailure = impl.SessionDiagnosticEventFailure
 const SessionDiagnosticEventMetrics = impl.SessionDiagnosticEventMetrics
 const SessionDiagnosticEventToolCall = impl.SessionDiagnosticEventToolCall
@@ -124,26 +88,3 @@ const SessionDiagnosticFieldPendingToolContinuationCount = impl.SessionDiagnosti
 const SessionDiagnosticFieldPendingToolContinuationIDs = impl.SessionDiagnosticFieldPendingToolContinuationIDs
 const SessionDiagnosticFieldUnresolvedToolCallIDs = impl.SessionDiagnosticFieldUnresolvedToolCallIDs
 const SessionDiagnosticFieldUnresolvedToolResultCount = impl.SessionDiagnosticFieldUnresolvedToolResultCount
-
-type SessionDiagnosticRecord = impl.SessionDiagnosticRecord
-type SessionDurationTimer = impl.SessionDurationTimer
-type SessionImageContinuationError = impl.SessionImageContinuationError
-
-const SessionMaxDurationReason = impl.SessionMaxDurationReason
-
-type SessionRTCComponents = impl.SessionRTCComponents
-type SessionRTCDataPlane = impl.SessionRTCDataPlane
-type SessionRunOptions = impl.SessionRunOptions
-type SessionRuntimeSelection = impl.SessionRuntimeSelection
-type SessionScheduledAudioIncompleteError = runtimeSession.LiveScheduledAudioIncompleteError
-
-const SessionSilentProviderTimeoutClassification = impl.SessionSilentProviderTimeoutClassification
-
-type SessionToolContinuationError = impl.SessionToolContinuationError
-type SessionToolDiagnostic = impl.SessionToolDiagnostic
-
-const SessionTransportWebRTC = impl.SessionTransportWebRTC
-
-type SessionUnresolvedToolResultsError = sessioncontract.SessionUnresolvedToolResultsError
-
-var WriteBrowserConversationReport = impl.WriteBrowserConversationReport

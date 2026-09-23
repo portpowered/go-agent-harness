@@ -39,6 +39,12 @@ func (s *Service) BuildSession(ctx context.Context, cfg runtimeproviders.Session
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	if cfg.SessionMessageReplay {
+		if strings.TrimSpace(cfg.ReplayPath) == "" {
+			return nil, errors.New("session message replay requires a capture path")
+		}
+		return gatewaytesting.NewReplaySessionInferencer(cfg.ReplayPath), nil
+	}
 	providerName := strings.ToLower(strings.TrimSpace(cfg.Provider))
 	if providerName == "" {
 		providerName = providerOpenAI

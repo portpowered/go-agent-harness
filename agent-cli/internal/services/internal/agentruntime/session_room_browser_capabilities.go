@@ -8,6 +8,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeBrowser "github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 )
@@ -37,7 +38,7 @@ type RoomParticipantBrowserCapabilities struct {
 	ToolDefinitionBase     []messages.ToolDefinition
 	RefreshToolDefinitions func(context.Context) ([]messages.ToolDefinition, error)
 	BrowserWatch           func(context.Context) <-chan webmcp.BrokerEvent
-	BrowserEventWatch      func(context.Context) <-chan webmcp.BrowserEvent
+	BrowserEventWatch      func(context.Context) <-chan runtimeBrowser.BrowserEvent
 	Initialize             func(context.Context) error
 	Close                  func() error
 }
@@ -74,11 +75,18 @@ func validateRoomToolDefinitions(definitions []messages.ToolDefinition) error {
 	return nil
 }
 
+func (r *sessionDirectoryRecording) startBrowser(ctx context.Context) {
+	if r != nil && r.browser != nil {
+		r.browser.Start(ctx)
+	}
+}
+
 // composeRoomParticipantBrowserCapabilities combines the browser-only
 // capability with the participant's static tool capability. The refresh
 // closure repeats the same composition so a page catalog update cannot drop
 // static tools or accidentally route through another participant.
 func composeRoomParticipantBrowserCapabilities(
+	ctx context.Context,
 	participant room.Participant,
 	static RoomParticipantToolCapabilities,
 	browser RoomParticipantBrowserCapabilities,
@@ -86,8 +94,8 @@ func composeRoomParticipantBrowserCapabilities(
 	if err := validateRoomParticipantBrowserCapabilities(participant, browser); err != nil {
 		return RoomParticipantBrowserCapabilities{}, err
 	}
-	compose := func(browserDefinitions []messages.ToolDefinition) (runtimeTools.Capability, error) {
-		return runtimeToolsWire.NewService().Resolve(context.Background(), runtimeTools.Request{
+	compose := func(ctx context.Context, browserDefinitions []messages.ToolDefinition) (runtimeTools.Capability, error) {
+		return runtimeToolsWire.NewService().Resolve(ctx, runtimeTools.Request{
 			Executor:    static.Executor,
 			Definitions: static.Definitions,
 			Browser: &runtimeTools.BrowserSurface{
@@ -96,7 +104,7 @@ func composeRoomParticipantBrowserCapabilities(
 			},
 		})
 	}
-	initial, err := compose(browser.Definitions)
+	initial, err := compose(ctx, browser.Definitions)
 	if err != nil {
 		return RoomParticipantBrowserCapabilities{}, fmt.Errorf("compose participant browser tools: %w", err)
 	}
@@ -105,7 +113,7 @@ func composeRoomParticipantBrowserCapabilities(
 	if len(browserBase) == 0 {
 		browserBase = browser.Definitions
 	}
-	base, err := compose(browserBase)
+	base, err := compose(ctx, browserBase)
 	if err != nil {
 		return RoomParticipantBrowserCapabilities{}, fmt.Errorf("compose participant browser tool base: %w", err)
 	}
@@ -125,7 +133,7 @@ func composeRoomParticipantBrowserCapabilities(
 			if refreshErr != nil {
 				return nil, refreshErr
 			}
-			refreshed, composeErr := compose(browserDefinitions)
+			refreshed, composeErr := compose(ctx, browserDefinitions)
 			if composeErr != nil {
 				return nil, fmt.Errorf("compose refreshed participant browser tools: %w", composeErr)
 			}

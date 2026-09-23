@@ -76,6 +76,10 @@ func (s *fakeService) Open(_ context.Context, request devices.Request) (devices.
 	return s.handle, nil
 }
 
+func (s *fakeService) BindRTC(context.Context, devices.RTCBindingRequest) (devices.RTCBinding, error) {
+	return nil, devices.ErrUnavailable
+}
+
 type fakeHandle struct {
 	ports      devices.MediaPorts
 	closeErr   error

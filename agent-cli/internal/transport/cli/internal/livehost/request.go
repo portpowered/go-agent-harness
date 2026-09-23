@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -62,35 +63,15 @@ type requestInputs struct {
 	inputRate       int
 	outputRate      int
 	replayFinish    bool
+	turnCapture     bool
 }
 
 func resolveRequestInputs(ctx context.Context, request serviceSession.Request, replayInspection *runtimeReplay.CaptureInspection, deps RequestDependencies) (requestInputs, error) {
-	loaded, err := requireLiveConfig(request)
+	inputs, err := resolveProviderInputs(ctx, request, replayInspection, deps)
 	if err != nil {
 		return requestInputs{}, err
 	}
-	inspection, err := admitReplay(ctx, request.ReplayPath, replayInspection, deps.ReplayService)
-	if err != nil {
-		return requestInputs{}, err
-	}
-	if inspection != nil {
-		request.ReplayPath = inspection.CapturePath
-	}
-	effective := loaded.ApplyOverrides("", request.Model, request.Provider, request.BaseURL)
-	provider, model, apiKey, baseURL, err := ProviderValues(effective, request, inspection)
-	if err != nil {
-		return requestInputs{}, err
-	}
-	if deps.ModelAdmission != nil {
-		if err := deps.ModelAdmission.ValidateSessionModel(provider, model); err != nil {
-			return requestInputs{}, err
-		}
-	}
-	capabilities, err := buildCapabilities(loaded, request, deps)
-	if err != nil {
-		return requestInputs{}, err
-	}
-	instructions, err := resolveAndComposeInstructions(ctx, request, capabilities, deps)
+	instructions, err := resolveAndComposeInstructions(ctx, request, inputs.capabilities, deps)
 	if err != nil {
 		return requestInputs{}, err
 	}
@@ -99,19 +80,20 @@ func resolveRequestInputs(ctx context.Context, request serviceSession.Request, r
 	if err != nil {
 		return requestInputs{}, err
 	}
-	replayPlan, requestPrompt, promptPresent, err := buildReplayPlan(request, inspection, requestPrompt, promptPresent)
+	replayPlan, requestPrompt, promptPresent, err := buildReplayPlan(request, inputs.inspection, requestPrompt, promptPresent)
 	if err != nil {
 		return requestInputs{}, err
 	}
-	inputRate, outputRate := replayRates(replayPlan, request)
-	return requestInputs{
-		effective: effective, inspection: inspection, provider: provider, model: model, baseURL: baseURL,
-		credentialRef: resolveCredentialReference(apiKey, deps.CredentialReference), instructions: instructions,
-		capabilities: capabilities, requestPrompt: requestPrompt, promptPresent: promptPresent,
-		openingParts: openingParts, openingResponse: openingResponse, replayPlan: replayPlan,
-		inputRate: inputRate, outputRate: outputRate,
-		replayFinish: inspection != nil && (replayPlan == nil || replayPlan.StopAfterResponse),
-	}, nil
+	inputs.instructions = instructions
+	inputs.requestPrompt = requestPrompt
+	inputs.promptPresent = promptPresent
+	inputs.openingParts = openingParts
+	inputs.openingResponse = openingResponse
+	inputs.replayPlan = replayPlan
+	inputs.inputRate, inputs.outputRate = replayRates(replayPlan, request, inputs.inspection)
+	inputs.turnCapture = inputs.inspection != nil && inputs.inspection.Kind == runtimeReplay.CaptureKindTurn
+	inputs.replayFinish = inputs.inspection != nil && !inputs.turnCapture && (replayPlan == nil || replayPlan.StopAfterResponse)
+	return inputs, nil
 }
 
 func resolveAndComposeInstructions(ctx context.Context, request serviceSession.Request, capabilities *runtimeSession.LiveCapabilities, deps RequestDependencies) (string, error) {
@@ -233,8 +215,9 @@ func assembleLiveRequest(request serviceSession.Request, inputs requestInputs) r
 		OutputAudioSampleRate:         inputs.outputRate,
 		OutputAudioContinuous:         request.AudioOutputPath == "-",
 		TurnDetection:                 turnDetectionPolicy(inputs.effective),
-		ClientOwnsAudioTurnBoundaries: request.ClientOwnsAudioTurnBoundaries || len(request.AudioTurns) > 0,
+		ClientOwnsAudioTurnBoundaries: request.ClientOwnsAudioTurnBoundaries || len(request.AudioTurns) > 0 || len(request.AudioInterrupts) > 0,
 		Replay: runtimeSession.LiveReplayPolicy{
+			Kind:             replayKind(inputs.inspection),
 			InputCapturePath: inputCapturePath, OutputCapturePath: request.RecordPath,
 			Timing: replayTiming(request.ReplayTiming),
 		},
@@ -246,7 +229,9 @@ func assembleLiveRequest(request serviceSession.Request, inputs requestInputs) r
 		// override the ordinary finite audio/output policy so a completed
 		// response cannot cancel the provider stream before later stdin audio
 		// reaches the same session.
-		FinishAfterResponse: !request.WaitForClose && (inputs.promptPresent || hasAudioInput(request) || len(inputs.openingParts) > 0 || inputs.replayFinish || request.AudioOutputPath != ""),
+		// Provider-neutral turn captures own completion through their recorded
+		// SESSION.CLOSE, which may follow multiple output responses.
+		FinishAfterResponse: !request.WaitForClose && !inputs.turnCapture && (inputs.promptPresent || hasAudioInput(request) || len(inputs.openingParts) > 0 || inputs.replayFinish || request.AudioOutputPath != ""),
 		ExpectedResponses:   expectedResponses(request, inputs.promptPresent, inputs.openingParts, inputs.openingResponse),
 	}
 	appendToolNames(&result, inputs.capabilities)
@@ -258,8 +243,8 @@ func admitReplay(ctx context.Context, path string, inspection *runtimeReplay.Cap
 		return nil, nil
 	}
 	if inspection != nil {
-		if !inspection.IsRealtime() {
-			return nil, fmt.Errorf("replay capture %s is not a realtime session", path)
+		if !inspection.IsRealtime() && inspection.Kind != runtimeReplay.CaptureKindTurn {
+			return nil, fmt.Errorf("replay capture %s has unsupported session kind %q", path, inspection.Kind)
 		}
 		return inspection, nil
 	}
@@ -270,10 +255,24 @@ func admitReplay(ctx context.Context, path string, inspection *runtimeReplay.Cap
 	if err != nil {
 		return nil, err
 	}
-	if !loaded.IsRealtime() {
-		return nil, fmt.Errorf("replay capture %s is not a realtime session", path)
+	if !loaded.IsRealtime() && loaded.Kind != runtimeReplay.CaptureKindTurn {
+		return nil, fmt.Errorf("replay capture %s has unsupported session kind %q", path, loaded.Kind)
 	}
 	return &loaded, nil
+}
+
+func replayKind(inspection *runtimeReplay.CaptureInspection) runtimeSession.LiveReplayKind {
+	if inspection == nil {
+		return ""
+	}
+	switch inspection.Kind {
+	case runtimeReplay.CaptureKindRealtime:
+		return runtimeSession.LiveReplayKindRealtime
+	case runtimeReplay.CaptureKindTurn:
+		return runtimeSession.LiveReplayKindTurn
+	default:
+		return ""
+	}
 }
 
 func resolveCredentialReference(apiKey string, resolve func(string) string) string {
@@ -308,11 +307,15 @@ func openImages(paths []string, opener func([]string) ([]messages.ContentPart, e
 }
 
 func hasAudioInput(request serviceSession.Request) bool {
-	return request.AudioInput.Present || len(request.AudioTurns) > 0
+	return request.AudioInput.Present || len(request.AudioTurns) > 0 || len(request.AudioInterrupts) > 0
 }
 
 func buildReplayPlan(request serviceSession.Request, inspection *runtimeReplay.CaptureInspection, requestPrompt string, promptPresent bool) (*runtimeSession.LiveReplayPlan, string, bool, error) {
 	if inspection == nil {
+		return nil, requestPrompt, promptPresent, nil
+	}
+	if inspection.Kind == runtimeReplay.CaptureKindTurn {
+		// Turn captures replay the recorded output stream without a caller plan.
 		return nil, requestPrompt, promptPresent, nil
 	}
 	if inspection.LivePlan == nil {
@@ -344,4 +347,34 @@ func buildReplayPlan(request serviceSession.Request, inspection *runtimeReplay.C
 
 func replayPlanHasActions(plan runtimeSession.LiveReplayPlan) bool {
 	return plan.OpeningPromptPresent || len(plan.AudioTurns) > 0 || plan.StopAfterResponse || plan.ProviderCloseExpected
+}
+
+func realtimeEndpoint(provider, baseURL string) string {
+	baseURL = strings.TrimSpace(baseURL)
+	if baseURL == "" {
+		return ""
+	}
+	parsed, err := url.Parse(baseURL)
+	if err != nil || parsed.Scheme == "" {
+		return baseURL
+	}
+	if parsed.Scheme == "http" {
+		parsed.Scheme = "ws"
+	}
+	if parsed.Scheme == "https" {
+		parsed.Scheme = "wss"
+	}
+	if provider == config.ProviderOpenAI && !strings.HasSuffix(strings.TrimRight(parsed.Path, "/"), "/realtime") {
+		parsed.Path = strings.TrimRight(parsed.Path, "/") + "/realtime"
+	}
+	return parsed.String()
+}
+
+func appendToolNames(result *runtimeSession.LiveRequest, capabilities *runtimeSession.LiveCapabilities) {
+	if result == nil || capabilities == nil {
+		return
+	}
+	for _, definition := range capabilities.Definitions {
+		result.ToolNames = append(result.ToolNames, definition.Name)
+	}
 }

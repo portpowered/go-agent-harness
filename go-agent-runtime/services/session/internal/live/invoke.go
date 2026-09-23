@@ -13,6 +13,8 @@ import (
 	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
 )
 
+const liveMediaPumpCapacity = 3
+
 // RunLive owns the complete invocation boundary for hosts that have local
 // media. Device admission, provider startup, bounded event delivery, pump
 // cancellation, and terminal joining stay together so a CLI transport cannot
@@ -33,41 +35,52 @@ func (s *Service) RunLive(ctx context.Context, options session.LiveRunOptions) e
 }
 
 type liveInvocation struct {
-	ctx                  context.Context
-	options              session.LiveRunOptions
-	handle               session.LiveHandle
-	device               devices.Handle
-	captureBoundaryOwned bool
-	endpoints            sharedaudio.MediaEndpoints
-	ports                devices.MediaPorts
-	pumpCtx              context.Context
-	stopPumps            context.CancelFunc
-	pumps                chan error
-	count                int
+	ctx                       context.Context
+	options                   session.LiveRunOptions
+	handle                    session.LiveHandle
+	device                    devices.Handle
+	captureBoundaryOwned      bool
+	endpoints                 sharedaudio.MediaEndpoints
+	ports                     devices.MediaPorts
+	captureInterruptionEvents <-chan session.LiveCapabilityEvent
+	pumpCtx                   context.Context
+	stopPumps                 context.CancelFunc
+	pumps                     chan error
+	count                     int
 }
 
 func newLiveInvocation(s *Service, ctx context.Context, options session.LiveRunOptions) (*liveInvocation, error) {
-	handle, err := openLiveHandle(s, ctx, options)
+	selectLegacyReplayFramePolicy(&options)
+	liveHandle, err := openLiveHandle(s, ctx, options)
 	if err != nil {
 		return nil, err
 	}
-	captureBoundaryOwned := installCaptureBoundary(&options, handle)
+	captureBoundaryOwned := installCaptureBoundary(&options, liveHandle)
 	invocation := &liveInvocation{
 		ctx:                  ctx,
 		options:              options,
-		handle:               handle,
+		handle:               liveHandle,
 		captureBoundaryOwned: captureBoundaryOwned,
-		endpoints:            handle.Media(),
+		endpoints:            liveHandle.Media(),
 	}
-	if runtimeHandle, ok := handle.(interface{ configureScheduledAudio(int, int) }); ok {
+	if len(options.CaptureInterruptions) > 0 {
+		runtimeHandle, ok := liveHandle.(*handle)
+		if !ok {
+			return invocation.closeWithError(errors.New("capture interruptions require the built-in live session owner"))
+		}
+		invocation.captureInterruptionEvents = runtimeHandle.configureCaptureInterruption(options.CaptureInterruptionTool)
+	}
+	if runtimeHandle, ok := liveHandle.(interface{ configureScheduledAudio(int, int) }); ok {
 		runtimeHandle.configureScheduledAudio(len(options.CaptureTurns), captureResponseTarget(options.Request))
 	}
-	configureActiveScheduledAudio(handle, options.AudioTurnAdmission == session.AudioTurnAdmissionBarge)
-	if runtimeHandle, ok := handle.(interface{ configureCaptureSource(bool) }); ok {
+	configureActiveScheduledAudio(liveHandle, options.AudioTurnAdmission == session.AudioTurnAdmissionBarge)
+	if runtimeHandle, ok := liveHandle.(interface{ configureCaptureSource(bool) }); ok {
 		runtimeHandle.configureCaptureSource(options.DeviceRequest.CaptureEnabled || len(options.CaptureTurns) > 0)
 	}
-	if runtimeHandle, ok := handle.(interface{ configureMediaRequirements(bool, bool) }); ok {
-		runtimeHandle.configureMediaRequirements(options.DeviceRequest.PlaybackEnabled, options.DeviceRequest.CaptureEnabled)
+	if runtimeHandle, ok := liveHandle.(interface{ configureMediaRequirements(bool, bool) }); ok {
+		// Local capture is admitted through the loop's ordered audio ingress.
+		// Only provider playback requires an inbound PCM media endpoint.
+		runtimeHandle.configureMediaRequirements(options.DeviceRequest.PlaybackEnabled, false)
 	}
 	invocation.attachRecorder()
 	if err := invocation.validateDeviceAdmission(); err != nil {
@@ -153,8 +166,8 @@ func (i *liveInvocation) validateDeviceAdmission() error {
 	if i == nil {
 		return errors.New("live invocation is unavailable")
 	}
-	if len(i.options.CaptureTurns) > 0 && i.options.Devices == nil {
-		return errors.New("finite capture turns require a device service")
+	if (len(i.options.CaptureTurns) > 0 || len(i.options.CaptureInterruptions) > 0) && i.options.Devices == nil {
+		return errors.New("finite capture inputs require a device service")
 	}
 	return nil
 }
@@ -188,22 +201,31 @@ func (i *liveInvocation) start() error {
 		return err
 	}
 	i.pumpCtx, i.stopPumps = context.WithCancel(i.ctx)
-	i.startPumps()
-	return nil
+	return i.startPumps()
 }
 
-func (i *liveInvocation) startPumps() {
+func (i *liveInvocation) startPumps() error {
 	if i == nil {
-		return
+		return nil
+	}
+	if len(i.options.CaptureInterruptions) > 0 {
+		if i.endpoints.Outbound == nil {
+			return errors.New("capture interruptions require a live provider outbound media endpoint")
+		}
+		if i.captureInterruptionEvents == nil {
+			return errors.New("capture interruptions require browser invocation events")
+		}
 	}
 	i.startCapturePump()
+	i.startCaptureInterruptionPump()
 	i.startPlaybackPump()
+	return nil
 }
 
 func (i *liveInvocation) startCapturePump() {
 	if len(i.options.CaptureTurns) > 0 {
-		if i.endpoints.Outbound == nil {
-			i.handle.Cancel(errors.New("live provider has no outbound media endpoint"))
+		if !i.captureOutboundAvailable() {
+			i.handle.Cancel(errors.New("live provider has no audio input path"))
 			return
 		}
 		i.startPump("capture", i.runCaptureTurns)
@@ -212,14 +234,31 @@ func (i *liveInvocation) startCapturePump() {
 	if i.ports.Capture == nil {
 		return
 	}
-	if i.endpoints.Outbound == nil {
-		i.handle.Cancel(errors.New("live provider has no outbound media endpoint"))
+	if !i.captureOutboundAvailable() {
+		i.handle.Cancel(errors.New("live provider has no audio input path"))
 		return
 	}
 	target := i.captureOutbound()
 	i.startPump("capture", func(ctx context.Context) error {
 		return i.ports.Capture.Pump(ctx, target)
 	})
+}
+
+func (i *liveInvocation) captureOutboundAvailable() bool {
+	if i == nil {
+		return false
+	}
+	if _, ok := i.handle.(sessionAudioInputSender); ok {
+		return true
+	}
+	return i.endpoints.Outbound != nil
+}
+
+func (i *liveInvocation) startCaptureInterruptionPump() {
+	if i == nil || len(i.options.CaptureInterruptions) == 0 {
+		return
+	}
+	i.startPump("capture interruption", i.runCaptureInterruptions)
 }
 
 func (i *liveInvocation) startPlaybackPump() {
@@ -240,7 +279,7 @@ func (i *liveInvocation) startPump(name string, run func(context.Context) error)
 		return
 	}
 	if i.pumps == nil {
-		i.pumps = make(chan error, 2)
+		i.pumps = make(chan error, liveMediaPumpCapacity)
 	}
 	i.count++
 	go i.runPump(name, run)
@@ -358,43 +397,4 @@ func requestedTerminalError(s finishState) error {
 		err = errors.Join(err, fmt.Errorf("session error: %w", s.providerErr))
 	}
 	return err
-}
-
-func (i *liveInvocation) closeAfterStartError(startErr error) error {
-	if i == nil {
-		return startErr
-	}
-	var deviceErr error
-	if i.device != nil {
-		deviceErr = i.device.Close()
-	}
-	handleErr := i.handle.Close()
-	result := errors.Join(startErr, deviceErr, handleErr)
-	return errors.Join(result, finalizeRecorder(i.options.Recorder, i.ctx, result))
-}
-
-// waitForResponseBoundary includes partial assistant terminals produced by
-// barge-in cancellation.
-func (h *handle) waitForResponseBoundary(ctx context.Context, target int) error {
-	if h == nil {
-		return context.Canceled
-	}
-	if ctx == nil {
-		return errors.New("response boundary context is required")
-	}
-	for {
-		h.mu.Lock()
-		ready := h.observedResponseTerminals >= target && !h.responseActive && !h.responsePending
-		terminalWake, responseWake := h.responseTerminalWake, h.replayResponseWake
-		h.mu.Unlock()
-		if ready {
-			return nil
-		}
-		select {
-		case <-terminalWake:
-		case <-responseWake:
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
 }
