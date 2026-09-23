@@ -172,7 +172,7 @@ func TestRunRoom_PreservesFailedEvidenceAndRedactsSecrets(t *testing.T) {
 	const secret = "sk-room-evidence-secret"
 	ids := []string{"a", "b", "c"}
 	inferencers := map[string]*roomTestInferencer{
-		"a": {connectErr: fmt.Errorf("provider authorization: Bearer %s", secret)},
+		"a": {connectErr: fmt.Errorf("provider authorization: Bearer %s; retry authorization: Bearer %s", secret, secret)},
 		"b": {events: []messages.StreamMessage{roomTestSessionOpen("b")}},
 		"c": {events: []messages.StreamMessage{roomTestSessionOpen("c")}},
 	}

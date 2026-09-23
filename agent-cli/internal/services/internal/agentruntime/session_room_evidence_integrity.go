@@ -179,17 +179,7 @@ func (e *roomEvidence) hashArtifactInto(integrity map[string]roomEvidenceArtifac
 	}
 }
 
-// roomEvidenceSource and roomEvidenceStart establish one timestamp source for
-// every evidence writer. Keeping admission here with artifact integrity makes
-// the evidence lifecycle explicit: all resources are opened from one admitted
-// state, then finalized and hashed from that same state.
-func roomEvidenceSource(sources []platformclock.Source) platformclock.Source {
-	if len(sources) == 0 {
-		return nil
-	}
-	return sources[0]
-}
-
+// roomEvidenceStart establishes the initial UTC timestamp for room evidence.
 func roomEvidenceStart(startedAt time.Time, source platformclock.Source) time.Time {
 	if startedAt.IsZero() {
 		startedAt = source.Now()

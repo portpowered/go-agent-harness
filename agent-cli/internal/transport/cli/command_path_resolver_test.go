@@ -227,8 +227,7 @@ func TestRouterPreRunRejectsAskTildeAttachmentBeforeCommandExecution(t *testing.
 }
 
 func TestRouterPreRunNormalizesSelfPlayOutputDirectory(t *testing.T) {
-	currentHome := t.TempDir()
-	namedHome := t.TempDir()
+	currentHome, namedHome := t.TempDir(), t.TempDir()
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = t.TempDir()
 	var got runtimeSelfPlay.Request

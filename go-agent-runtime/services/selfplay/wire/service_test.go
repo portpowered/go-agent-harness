@@ -19,11 +19,7 @@ import (
 
 func TestSelfPlayServiceBridgesOnlyPCMAndWritesBoundedEvidence(t *testing.T) {
 	provider := newTestSessionService(t, "")
-	service := NewService(Dependencies{
-		SessionService: provider,
-		ModelCatalog:   testModelCatalog{},
-		Clock:          clock.Real{},
-	})
+	service := NewService(NewDependencies(provider, testModelCatalog{}, clock.Real{}))
 	outputDir := filepath.Join(t.TempDir(), "run")
 	result, err := service.Run(context.Background(), selfplay.Request{
 		APIKey:      "selfplay-test-key",
@@ -41,11 +37,7 @@ func TestSelfPlayServiceBridgesOnlyPCMAndWritesBoundedEvidence(t *testing.T) {
 
 func TestSelfPlayServiceHonorsConfiguredTurnTarget(t *testing.T) {
 	provider := newTestSessionService(t, "")
-	service := NewService(Dependencies{
-		SessionService: provider,
-		ModelCatalog:   testModelCatalog{},
-		Clock:          clock.Real{},
-	})
+	service := NewService(NewDependencies(provider, testModelCatalog{}, clock.Real{}))
 	outputDir := filepath.Join(t.TempDir(), "run")
 	result, err := service.Run(context.Background(), selfplay.Request{
 		APIKey:      "selfplay-test-key",
@@ -130,11 +122,7 @@ func assertCompletedTurnsPerSide(t *testing.T, outputDir string, want int) {
 
 func TestSelfPlayServiceRejectsUnsupportedModelBeforeOpeningOutputOrSession(t *testing.T) {
 	provider := newTestSessionService(t, "")
-	service := NewService(Dependencies{
-		SessionService: provider,
-		ModelCatalog:   testModelCatalog{allow: false},
-		Clock:          clock.Real{},
-	})
+	service := NewService(NewDependencies(provider, testModelCatalog{allow: false}, clock.Real{}))
 	outputDir := filepath.Join(t.TempDir(), "run")
 	_, err := service.Run(context.Background(), selfplay.Request{APIKey: "selfplay-test-key", OutputDir: outputDir, Model: "not-realtime"})
 	if !errors.Is(err, selfplay.ErrUnsupportedModel) {
@@ -152,11 +140,7 @@ func TestSelfPlayServiceRejectsUnsupportedModelBeforeOpeningOutputOrSession(t *t
 func TestSelfPlayServiceRedactsProviderFailureFromReturnedEvidence(t *testing.T) {
 	const secret = "selfplay-test-secret"
 	provider := newTestSessionService(t, "authorization: Bearer "+secret)
-	service := NewService(Dependencies{
-		SessionService: provider,
-		ModelCatalog:   testModelCatalog{},
-		Clock:          clock.Real{},
-	})
+	service := NewService(NewDependencies(provider, testModelCatalog{}, clock.Real{}))
 	outputDir := filepath.Join(t.TempDir(), "run")
 	result, err := service.Run(context.Background(), selfplay.Request{
 		APIKey:      secret,
@@ -188,11 +172,7 @@ func TestSelfPlayServiceRedactsProviderFailureFromReturnedEvidence(t *testing.T)
 }
 
 func TestSelfPlayServicePreservesFirstMeaningfulFailure(t *testing.T) {
-	service := NewService(Dependencies{
-		SessionService: &firstFailureSessionService{},
-		ModelCatalog:   testModelCatalog{},
-		Clock:          clock.Real{},
-	})
+	service := NewService(NewDependencies(&firstFailureSessionService{}, testModelCatalog{}, clock.Real{}))
 	result, err := service.Run(context.Background(), selfplay.Request{
 		APIKey:      "selfplay-test-key",
 		OutputDir:   filepath.Join(t.TempDir(), "run"),

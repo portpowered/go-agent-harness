@@ -73,6 +73,14 @@ func newRoomClock(start time.Time, sources ...platformclock.Source) roomClock {
 	return roomClock{start: start.UTC(), source: clock}
 }
 
+// roomEvidenceSource selects the injected clock used to timestamp evidence.
+func roomEvidenceSource(sources []platformclock.Source) platformclock.Source {
+	if len(sources) == 0 {
+		return nil
+	}
+	return sources[0]
+}
+
 // now returns the elapsed time since room start and the current wall-clock
 // time in Unix milliseconds.
 func (c roomClock) now() (time.Duration, int64) {
