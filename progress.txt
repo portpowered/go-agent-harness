@@ -5872,6 +5872,45 @@ handoff sequence. No gate completion is claimed.
 - Exact next action: reconcile the 426 architecture findings with their
   canonical path owners and integrate only reviewed or explicitly released
   same-project seams on this C251 branch. Then rerun `make prepush` and the full
-  C251-04 functional, integration, race, hermetic, Wire, embed, deletion,
-  duplicate, adapter, ancestry, and diff gate on the exact clean candidate
-  before any push or PR.
+C251-04 functional, integration, race, hermetic, Wire, embed, deletion,
+duplicate, adapter, ancestry, and diff gate on the exact clean candidate
+before any push or PR.
+
+
+## C251 exact checkpoint architecture reconciliation — 2026-09-23
+
+- Reverified sole-project admission and exact branch identity. `prd.json` names
+  `codex/audio-runtime-c251-recover-shutdown-duration-retirement`; current HEAD
+  is `75267289535e0888a4b8c71d7b2ccf5b5d8a6738`. Fetched
+  `origin/main=2f9f9736e1360802fc37e82de38540d92cb22631`; the preserved C251
+  checkpoint `ee9b68260ad69e8b72c2bcbed655435af877d5c3`, startup
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, and current main are all
+  ancestors. Canonical Work confirms there is no C251 PR or prior C251 review.
+- The exact `rtk make prepush` on HEAD `75267289535e0888a4b8c71d7b2ccf5b5d8a6738`
+  formats cleanly and fails `verify-architecture` with 426 issues across 229
+  packages. Log: `~/Library/Application Support/rtk/tee/1790199322_make_prepush.log`.
+  A detached temporary worktree at that same fetched `origin/main` passes the
+  architecture/size analyzer (219 packages, 1,957 files, 28,658 functions);
+  the temporary worktree was removed. The gate failure is in branch-only
+  changes, not the fetched main baseline.
+- The candidate contains 44 commits beyond current main, including preserved
+  predecessor vertical commits and checkpoints. Findings span multiple
+  unrelated agentruntime/runtime paths. Seven paths in the C251 `ownedPaths`
+  census have 33 findings; some are explicitly caller-only paths whose prior
+  owner held exclusive mutation until reviewed integration. Do not edit
+  peer-owned paths or architecture baselines to hide the failures. No push,
+  PR, SCRIPT CI, or independent C251 review is claimed.
+- Rechecked the complete owned legacy census: all 16 planned production paths
+  are absent (including the two current-main scope additions and five
+  checkpoint-only replacements). The only shutdown adapter is
+  `agent-cli/internal/transport/cli/internal/livehost/shutdown_adapter.go`,
+  one production file / 59 physical lines. Existing duration/session tests,
+  C251 caller selections, integration, regression, hermetic, race, Wire, and
+  embed checks remain recorded as passing on code candidate
+  `c385907fe6046dda8c33c1dc6f5406e3d73ae4f6`; HEAD since then changes only
+  `progress.txt`.
+- Decision remains `CONTINUE`. Next: reconcile each C251-owned architecture
+  finding with exact caller ownership and fix only actionable C251-owned
+  regressions; identify the canonical owner/integration route for inherited
+  peer-path findings, then rerun the full exact-head preflight and every
+  C251-04 check on the repaired clean candidate before any push or PR.
