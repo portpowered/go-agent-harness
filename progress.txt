@@ -4617,3 +4617,31 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   replay failure coverage and await exact reviewed C268/C269 caller releases.
   Complete every production caller cutover and rerun the complete preflight on
   the exact clean candidate before any PR handoff. Decision remains CONTINUE.
+
+
+# C276 hermetic pass and replay failure contract checkpoint — 2026-09-23
+
+- `rtk make test-hermetic` passed on exact checkpoint
+  `31d7366193ede85dc54dba97cdc95c1aec830f42` across all six Go modules. The
+  existing recording composition test passed after cleanup now closes the
+  provider session and flushes the capture before its temporary directory is
+  removed. The target emitted two ignored integration capture files; both were
+  removed and the worktree returned clean.
+- Added service-level regressions for public replay failures: realtime inspection
+  rejects structurally invalid directions and non-WebSocket payload types;
+  message replay reports an unsupported payload type without delivering a
+  message; and an expired send context retains the timeout outcome. The first
+  focused run confirmed general capture validation rejects the bad direction
+  before the WebSocket validator, and the test now asserts that public error.
+- Focused replay selection passes. Full replay functional and race commands each
+  pass 139 tests across 9 packages. The changed-candidate complete preflight
+  still needs to run; no push or PR handoff occurred.
+- Fresh `rtk git fetch origin` left `origin/main` at
+  `2f9f9736e1360802fc37e82de38540d92cb22631`; there are still no fetched C268 or
+  C269 release branches. Their shared production callers remain gated on exact
+  reviewed owner commits.
+- Next: commit these public failure tests and this checkpoint, run full
+  `make prepush` plus the remaining C276 functional, integration, race, hermetic,
+  and Wire commands on the exact clean commit, repair any reproduced task-owned
+  issue, and continue the same task until reviewed peer releases allow complete
+  caller cutover and exact legacy deletion. Decision remains CONTINUE.
