@@ -5829,3 +5829,49 @@ handoff sequence. No gate completion is claimed.
   integration (`get_weather`, `exec`, and browser tools), reconcile only exact
   reviewed or guarded-released peer seams, then run the complete C251-04 gate
   on the clean exact candidate before any push or PR.
+
+
+## C251 executor capability repair and exact-head gate checkpoint — 2026-09-23
+
+- Reverified the admitted task with `project-control.py verify-work --type
+  task`; `prd.branchName` matches the isolated branch. Fetched
+  `origin/main=2f9f9736e1360802fc37e82de38540d92cb22631`; checkpoint `ee9b6826`,
+  startup `8bdafc7f`, and current main remain ancestors. No C251 PR or prior
+  review findings exist.
+- On `b78544a6e0b87968620ba26a84f5730618b27608`, repaired the service-owned live
+  duration and timed tool wrappers to preserve the explicit injected-executor
+  capability marker through duration decoration and allowlisting. The existing
+  async collision integration test and its three controls pass.
+- The full `make test-integration` run then isolated one existing panic-control
+  fixture defect: it supplied `v4c_unknown_tool` through its executor without
+  advertising that tool in the test capability definitions. Updated the
+  existing test setup (no new test) to declare its test-only tool. The panic
+  and swallowed-error controls pass on `c385907fe6046dda8c33c1dc6f5406e3d73ae4f6`.
+- On exact candidate `c385907fe6046dda8c33c1dc6f5406e3d73ae4f6`, passed:
+  `rtk go test -count=1 -timeout 300s ./go-agent-runtime/services/sessionduration/... ./go-agent-runtime/services/session/...`;
+  the matching `-race` command; the C251 CLI functional selection (457 tests),
+  its race selection (226 tests), and the CGO-disabled `nomicrophone`
+  duration/shutdown selection; `rtk make test-sessions-race`; `rtk make
+  test-regressions`; `rtk make test-integration` (agent-cli 315.862s,
+  go-agent-loop 156.220s); `rtk make test-hermetic` (exit 0); `rtk make
+  wire-check`; and `rtk make embed-check`. `git diff --check` passes and Wire
+  generation left no worktree changes.
+- The exact 16-path owned legacy absence census passes 16/16. Production scans
+  found no retired duration symbols, no CLI imports of sessionduration or live
+  internals, and no service `init`/environment reads. The only shutdown adapter
+  remains `agent-cli/internal/transport/cli/internal/livehost/shutdown_adapter.go`
+  at one file / 59 lines.
+- `rtk make prepush` on this candidate completes formatting and fails
+  `verify-architecture` with 426 findings across 229 packages (log:
+  `~/Library/Application Support/rtk/tee/1790197154_make_prepush.log`). The
+  findings include `agentruntime` package drift at 205 files versus baseline
+  138 and shared/peer file diagnostics; the scan has no findings under
+  `services/sessionduration`, `services/session/internal/live`, or
+  `session_live_setup.go`. No baseline was raised. The candidate has not been
+  pushed; no PR, SCRIPT CI, review, or merge is claimed.
+- Exact next action: reconcile the 426 architecture findings with their
+  canonical path owners and integrate only reviewed or explicitly released
+  same-project seams on this C251 branch. Then rerun `make prepush` and the full
+  C251-04 functional, integration, race, hermetic, Wire, embed, deletion,
+  duplicate, adapter, ancestry, and diff gate on the exact clean candidate
+  before any push or PR.
