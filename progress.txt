@@ -5700,3 +5700,29 @@ handoff sequence. No gate completion is claimed.
   hermetic, embed, generated-Wire, deletion, duplicate, adapter, ancestry and
   diff command on the exact checkpoint SHA. Repair all locally reproducible
   failures before any push; do not hand off a red architecture gate.
+
+
+## C251 prepush architecture repair checkpoint — 2026-09-23
+
+- Exact `rtk make prepush` on `17d7a9f0e3815c50cf82fb3b22a4ef365f6a7038`
+  completed `fmt` and stopped at `verify-architecture`: 427 findings across
+  229 packages. Log: `~/Library/Application Support/rtk/tee/
+  1790170890_make_prepush.log`. The new finding was the duration service
+  `service.go` file-size limit (440 > 400) after adding `Execute`.
+- Split the real service implementation into `internal/service/execute.go`;
+  `service.go` is now exactly 400 lines and `execute.go` is 47 lines. No
+  baseline was raised. Focused sessionduration/session tests pass 271 across
+  19 packages; the focused CLI duration/finalization/replay/shutdown/timer
+  selection passes 272; `git diff --check` passes.
+- The remaining architecture findings include the existing CLI `agentruntime`
+  package drift (205 files versus baseline 138), broad baseline/complexity
+  debt, and service-boundary findings in shared/peer paths. They remain local
+  preflight failures and no push is ready.
+- No source PR, push, SCRIPT handoff, CI poll, independent review or merge is
+  claimed.
+- Exact next action: checkpoint this file-size repair on the same C251 branch,
+  recheck current path ownership for the remaining architecture diagnostics,
+  then run `make prepush` and the complete C251-04 local functional, integration,
+  race, hermetic, embed, Wire, deletion, duplicate, adapter, ancestry and diff
+  gate on the exact repaired SHA. Repair C251-owned failures without editing
+  leased peer paths or raising baselines.
