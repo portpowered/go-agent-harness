@@ -4737,3 +4737,35 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   C280-03/C280-04 checks and `make prepush` plus every C280-05 command on one
   clean exact SHA before push. Return `CONTINUE` while that release remains
   unavailable.
+
+# C280 release-blocked audit checkpoint — 2026-09-23T03:09Z
+
+- Re-read the operating policy and implementation handoff, then reverified
+  `project-control.py verify-work --type task --name
+  audio-runtime-c280-recover-c269-room-evidence-retirement` as admitted for
+  the sole `audio-runtime` / `audio-runtime-v1` project. `prd.json.branchName`
+  matches the isolated branch. Fetched `origin/main=2f9f9736e1360802fc37e82de38540d92cb22631`;
+  startup integration, C269 recovery, and origin/main ancestry remain present.
+- Re-read the preserved C259 `work-review-78` findings: unbounded manifest/
+  timeline admission, missing public evidence-write degradation coverage,
+  missing room-produced public `LoadPlan`/`Load`/`Analyze` coverage, and
+  missing exact-head preflight. The first three behavior repairs remain in the
+  recovered service owner; exact-head preflight remains outstanding.
+- Canonical peer refresh remains unreleased: C272 `work-task-13`, C276
+  `work-task-8`, and C281 `work-task-17` are still `init`; C278 `work-task-3`
+  is complete in current main. No unreleased peer head or worktree was
+  consumed or modified.
+- Fresh C280-owned checks on clean HEAD `8d4c1f2a70cbe2f2e414ec7161be8d1b7aa6b3f4`
+  pass: normal roomevidence/rooms `105` tests in `16` packages; focused race
+  `52` tests in `16` packages; repeated bounded-input/concurrent-close race
+  matrix `120` passes; private-boundary scan; `make wire-check` with no diff;
+  `git diff --check`; and clean status. The owned residual remains three
+  agentruntime production files / `1,794` lines and fourteen duplicate
+  rooms-evidence production files / `2,772` lines. C280 adapter budget remains
+  exactly `0` production files / `0` lines.
+- No caller cutover, legacy deletion, `make prepush`, push, PR, SCRIPT CI,
+  review, or merge is claimed. Exact next action: consume only reviewed or
+  explicit exact-path C272/C276/C281 releases, integrate them additively,
+  cut over every named/discovered caller, delete the complete remaining
+  cluster, then run C280-03/C280-04 and the full C280-05 preflight on one
+  clean exact SHA. Return `CONTINUE` while that release remains unavailable.
