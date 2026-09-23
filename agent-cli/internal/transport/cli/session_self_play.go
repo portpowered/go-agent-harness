@@ -68,12 +68,12 @@ func selfPlayRequest(options serviceSelfPlay.RunOptions) (runtimeSelfPlay.Reques
 		MaxTurns:    options.MaxTurns,
 	}
 	provider := strings.ToLower(strings.TrimSpace(options.Provider))
-	if provider != "" && provider != runtimeSelfPlay.DefaultProvider {
+	if provider != "" && provider != config.ProviderOpenAI {
 		return request, nil
 	}
 	configProvider := provider
 	if configProvider == "" {
-		configProvider = runtimeSelfPlay.DefaultProvider
+		configProvider = config.ProviderOpenAI
 	}
 	storage, err := config.NewDefaultConfigStorage(options.ConfigDir)
 	if err != nil {

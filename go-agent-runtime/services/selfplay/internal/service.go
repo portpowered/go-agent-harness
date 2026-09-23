@@ -16,10 +16,10 @@ import (
 )
 
 const (
-	defaultProvider    = selfplay.DefaultProvider
-	defaultModel       = selfplay.DefaultModel
-	defaultMaxDuration = selfplay.DefaultMaxDuration
-	defaultTurnTarget  = selfplay.DefaultTurnTarget
+	defaultProvider    = "openai"
+	defaultModel       = "gpt-realtime"
+	defaultMaxDuration = 2 * time.Minute
+	defaultTurnTarget  = 3
 
 	customerPersona  = "You are the customer. Speak naturally, briefly, and only as part of a spoken conversation. Ask one practical follow-up at a time. Do not call tools."
 	assistantPersona = "You are the helpful assistant. Speak naturally, briefly, and only as part of a spoken conversation. Answer the customer's latest request and ask one concise follow-up when useful. Do not call tools."

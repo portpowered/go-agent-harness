@@ -8,17 +8,6 @@ import (
 	"time"
 )
 
-const (
-	// DefaultProvider is the only provider enabled by the initial self-play service.
-	DefaultProvider = "openai"
-	// DefaultModel is the realtime model used when a request omits one.
-	DefaultModel = "gpt-realtime"
-	// DefaultMaxDuration bounds a request that omits its duration.
-	DefaultMaxDuration = 2 * time.Minute
-	// DefaultTurnTarget bounds a request that omits its completed-turn target.
-	DefaultTurnTarget = 3
-)
-
 // StopReason is the single terminal reason committed for one run.
 type StopReason string
 
