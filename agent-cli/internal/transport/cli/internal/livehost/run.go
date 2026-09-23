@@ -191,7 +191,7 @@ func openRecorder(request serviceSession.Request, liveRequest *runtimeSession.Li
 }
 
 func traceLiveRecorderIfRequested(request serviceSession.Request, replayInputPath string, recorder runtimeSession.LiveRecorder, liveRequest *runtimeSession.LiveRequest, deps Dependencies) (runtimeSession.LiveRecorder, error) {
-	if !request.TraceAudio {
+	if !request.TraceAudio && request.RecordDirectory == "" {
 		return recorder, nil
 	}
 	providerPath := liveProviderCapturePath(request.RecordPath, replayInputPath)
