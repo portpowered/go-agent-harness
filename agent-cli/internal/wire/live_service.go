@@ -76,7 +76,7 @@ func newLiveInferencerFactory(
 ) session.LiveInferencerFactory {
 	return func(ctx context.Context, request session.LiveRequest) (messages.SessionInferencer, error) {
 		if sessionInferencer != nil {
-			return configureInjectedLiveInferencer(sessionInferencer, request.Replay.OutputCapturePath, recordingService)
+			return configureInjectedLiveInferencer(sessionInferencer, request.Replay.OutputCapturePath, request.Replay.InjectedCaptureAllowed, recordingService)
 		}
 		if providerService == nil {
 			return nil, fmt.Errorf("live provider service is unavailable")
@@ -96,14 +96,17 @@ func newLiveInferencerFactory(
 	}
 }
 
-func configureInjectedLiveInferencer(inferencer messages.SessionInferencer, capturePath string, recordingService runtimeRecording.Service) (messages.SessionInferencer, error) {
+func configureInjectedLiveInferencer(inferencer messages.SessionInferencer, capturePath string, allowSessionCapture bool, recordingService runtimeRecording.Service) (messages.SessionInferencer, error) {
 	if configurator, ok := inferencer.(interface{ ConfigureProviderCapture(string) error }); ok {
+		if strings.TrimSpace(capturePath) == "" {
+			return inferencer, nil
+		}
 		if err := configurator.ConfigureProviderCapture(capturePath); err != nil {
 			return nil, fmt.Errorf("configure injected provider capture: %w", err)
 		}
 		return inferencer, nil
 	}
-	if path := strings.TrimSpace(capturePath); path != "" {
+	if path := strings.TrimSpace(capturePath); path != "" && allowSessionCapture {
 		if recordingService == nil {
 			return nil, fmt.Errorf("recording service is required for injected session capture")
 		}

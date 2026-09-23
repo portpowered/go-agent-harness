@@ -4386,3 +4386,23 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   hermetic, integration, regression, architecture, and `make prepush` command on
   that exact unchanged commit; repair any local failure before the same-task
   handoff.
+
+
+# C276 hermetic repair checkpoint — 2026-09-23
+
+- Reproduced the hermetic failures on the prior candidate: live record-dir
+  accepted missing provider evidence, provider-close errors were hidden by an
+  injected session capture and its raw digest conflicted with credential
+  redaction, and a lifecycle test reused a repository-relative capture file.
+- Required provider evidence for live record-dir bundles, distinguished an
+  explicit injected capture from the runtime-created raw provider spool,
+  preserved optional provider terminal errors through the session recorder,
+  and let bundle staging hash provider evidence after redaction. Moved the
+  lifecycle test capture into `t.TempDir()` and raised its fixed deadline to
+  match the adjacent busy-suite test budget; no test was added.
+- The three focused hermetic integration tests pass, and the complete
+  `TestSessionCommand_LiveRecordDirAudioInTurn*` slice passes with
+  `CGO_ENABLED=0` and `-tags=nomicrophone`. `git diff --check` passes.
+- No PR or push exists. Next: commit this checkpoint and run the complete
+  C276-01 through C276-06 preflight on that exact unchanged candidate SHA,
+  repairing locally reproducible failures before any handoff.

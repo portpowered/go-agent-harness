@@ -267,7 +267,8 @@ func assembleLiveRequest(request serviceSession.Request, inputs requestInputs) r
 		Replay: runtimeSession.LiveReplayPolicy{
 			Kind:             replayKind(inputs.inspection),
 			InputCapturePath: inputCapturePath, OutputCapturePath: request.RecordPath,
-			Timing: replayTiming(request.ReplayTiming),
+			InjectedCaptureAllowed: request.RecordPath != "",
+			Timing:                 replayTiming(request.ReplayTiming),
 		},
 		ReplayPlan:            inputs.replayPlan,
 		MaxDuration:           request.MaxDuration,

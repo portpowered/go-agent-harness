@@ -217,6 +217,18 @@ func (r *SessionRecorder) Done() <-chan struct{} {
 	return r.inner.Done()
 }
 
+// TerminalError preserves the wrapped provider's optional terminal error.
+func (r *SessionRecorder) TerminalError() error {
+	if r == nil || r.inner == nil {
+		return nil
+	}
+	provider, ok := r.inner.(interface{ TerminalError() error })
+	if !ok {
+		return nil
+	}
+	return provider.TerminalError()
+}
+
 // Close delegates to the inner session.
 func (r *SessionRecorder) Close() error {
 	closeErr := r.inner.Close()

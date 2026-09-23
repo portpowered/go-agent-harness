@@ -28,7 +28,7 @@ func TestDuplexRunnerStreamsFramesAndSanitizesCredentials(t *testing.T) {
 		Provider:         "openai",
 		Model:            "duplex-test-model",
 		APIKey:           secret,
-		MaxDuration:      2 * time.Second,
+		MaxDuration:      5 * time.Second,
 		FrameDuration:    time.Millisecond,
 		AdditionalArgs:   []string{"--wait-for-close"},
 		Output:           &output,

@@ -94,7 +94,11 @@ type LiveReplayPolicy struct {
 	Kind              LiveReplayKind
 	InputCapturePath  string
 	OutputCapturePath string
-	Timing            LiveReplayTiming
+	// InjectedCaptureAllowed is true only when the host explicitly requested
+	// an output capture. A runtime-created provider spool must not make an
+	// injected semantic session look like raw provider transport evidence.
+	InjectedCaptureAllowed bool
+	Timing                 LiveReplayTiming
 }
 
 // LiveReplayKind describes the session protocol represented by an admitted

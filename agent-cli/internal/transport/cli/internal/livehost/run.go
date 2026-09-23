@@ -255,6 +255,7 @@ func openRecorder(request serviceSession.Request, liveRequest *runtimeSession.Li
 		Model:                         liveRequest.Model,
 		Credentials:                   credentials,
 		ProviderCapturePath:           liveProviderCapturePath(request.RecordPath, replayInputPath),
+		ProviderCaptureRequired:       true,
 		DisableProviderCaptureSidecar: replayInputPath != "" && request.RecordPath == "",
 	})
 	if err != nil {
