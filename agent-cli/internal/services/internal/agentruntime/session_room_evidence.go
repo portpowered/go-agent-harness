@@ -210,7 +210,7 @@ func (e *roomEvidence) participant(id string) *roomParticipantEvidence {
 // setParticipantReady enriches the terminal manifest with runtime-selected
 // metadata. Human device IDs are resolved by the device registry at startup,
 // so they are not necessarily present in the original normalized manifest.
-func (e *roomEvidence) setParticipantReady(ready RoomParticipantReady) {
+func (e *roomEvidence) setParticipantReady(ready runtimeRooms.RoomParticipantReady) {
 	if e == nil || ready.ParticipantID == "" {
 		return
 	}
@@ -219,7 +219,7 @@ func (e *roomEvidence) setParticipantReady(ready RoomParticipantReady) {
 		if participant.ID != ready.ParticipantID {
 			continue
 		}
-		participant.Kind = room.NormalizeParticipantKind(ready.Kind)
+		participant.Kind = room.NormalizeParticipantKind(room.ParticipantKind(ready.Kind))
 		participant.InputDevice = ready.InputDevice
 		participant.OutputDevice = ready.OutputDevice
 		participant.Provider = ready.Provider
@@ -346,7 +346,7 @@ func (e *roomEvidence) recordingHealth() (*transcript.RecordingStatus, map[strin
 	return roomStatus, roomArtifacts, participantStatuses, participantArtifacts
 }
 
-func (e *roomEvidence) applyRecordingHealth(result *RoomResult) {
+func (e *roomEvidence) applyRecordingHealth(result *runtimeRooms.RoomResult) {
 	if e == nil || result == nil {
 		return
 	}
@@ -664,7 +664,7 @@ func redactRoomJSONValue(value any, redact func(string) string) any {
 	return value
 }
 
-func (e *roomEvidence) finalize(result RoomResult, runErr error, endedAt time.Time) error {
+func (e *roomEvidence) finalize(result runtimeRooms.RoomResult, runErr error, endedAt time.Time) error {
 	if e == nil {
 		return nil
 	}
@@ -677,8 +677,8 @@ type roomEvidenceManifest struct {
 	Finalized         bool                                       `json:"finalized"`
 	Timing            roomEvidenceTiming                         `json:"timing"`
 	Bounds            roomEvidenceBounds                         `json:"bounds"`
-	TerminationReason RoomTerminationReason                      `json:"termination_reason"`
-	Reason            RoomTerminationReason                      `json:"reason,omitempty"`
+	TerminationReason runtimeRooms.RoomTerminationReason         `json:"termination_reason"`
+	Reason            runtimeRooms.RoomTerminationReason         `json:"reason,omitempty"`
 	Participants      map[string]roomEvidenceParticipantManifest `json:"participants"`
 	TurnCounts        map[string]int                             `json:"turn_counts"`
 	// AudioFormat names the raw PCM16 rate/channel contract shared by every
@@ -756,35 +756,35 @@ type roomEvidenceBounds struct {
 }
 
 type roomEvidenceParticipantManifest struct {
-	ID                     string                       `json:"id"`
-	Kind                   room.ParticipantKind         `json:"kind"`
-	SystemPrompt           string                       `json:"system_prompt"`
-	OpeningPrompt          string                       `json:"opening_prompt,omitempty"`
-	Provider               string                       `json:"provider"`
-	Model                  string                       `json:"model"`
-	APIKeyEnv              string                       `json:"api_key_env"`
-	Voice                  string                       `json:"voice,omitempty"`
-	Tools                  []string                     `json:"tools"`
-	BrowserTools           *room.BrowserToolsConfig     `json:"browser_tools,omitempty"`
-	CompletedTurns         int                          `json:"completed_turns"`
-	TerminationReason      ParticipantTerminationReason `json:"termination_reason"`
-	Reason                 ParticipantTerminationReason `json:"reason,omitempty"`
-	TerminationTrigger     string                       `json:"termination_trigger"`
-	TerminationDisposition string                       `json:"termination_disposition"`
-	Classification         string                       `json:"classification"`
-	TerminalReason         string                       `json:"terminal_reason"`
-	TerminalProvenance     string                       `json:"terminal_provenance"`
-	OutputState            string                       `json:"output_state"`
-	Connected              bool                         `json:"connected"`
-	InputDevice            string                       `json:"input_device,omitempty"`
-	OutputDevice           string                       `json:"output_device,omitempty"`
-	Error                  string                       `json:"error,omitempty"`
-	Artifacts              roomEvidenceArtifactPaths    `json:"artifacts"`
-	RecordingStatus        *transcript.RecordingStatus  `json:"recording_status,omitempty"`
-	DegradedArtifacts      map[string]string            `json:"degraded_artifacts,omitempty"`
+	ID                     string                                    `json:"id"`
+	Kind                   room.ParticipantKind                      `json:"kind"`
+	SystemPrompt           string                                    `json:"system_prompt"`
+	OpeningPrompt          string                                    `json:"opening_prompt,omitempty"`
+	Provider               string                                    `json:"provider"`
+	Model                  string                                    `json:"model"`
+	APIKeyEnv              string                                    `json:"api_key_env"`
+	Voice                  string                                    `json:"voice,omitempty"`
+	Tools                  []string                                  `json:"tools"`
+	BrowserTools           *room.BrowserToolsConfig                  `json:"browser_tools,omitempty"`
+	CompletedTurns         int                                       `json:"completed_turns"`
+	TerminationReason      runtimeRooms.ParticipantTerminationReason `json:"termination_reason"`
+	Reason                 runtimeRooms.ParticipantTerminationReason `json:"reason,omitempty"`
+	TerminationTrigger     string                                    `json:"termination_trigger"`
+	TerminationDisposition string                                    `json:"termination_disposition"`
+	Classification         string                                    `json:"classification"`
+	TerminalReason         string                                    `json:"terminal_reason"`
+	TerminalProvenance     string                                    `json:"terminal_provenance"`
+	OutputState            string                                    `json:"output_state"`
+	Connected              bool                                      `json:"connected"`
+	InputDevice            string                                    `json:"input_device,omitempty"`
+	OutputDevice           string                                    `json:"output_device,omitempty"`
+	Error                  string                                    `json:"error,omitempty"`
+	Artifacts              roomEvidenceArtifactPaths                 `json:"artifacts"`
+	RecordingStatus        *transcript.RecordingStatus               `json:"recording_status,omitempty"`
+	DegradedArtifacts      map[string]string                         `json:"degraded_artifacts,omitempty"`
 }
 
-func (e *roomEvidence) writeManifest(result RoomResult, runErr error, endedAt time.Time) error {
+func (e *roomEvidence) writeManifest(result runtimeRooms.RoomResult, runErr error, endedAt time.Time) error {
 	if e == nil {
 		return nil
 	}
@@ -796,7 +796,7 @@ func (e *roomEvidence) writeManifest(result RoomResult, runErr error, endedAt ti
 		reason = result.Reason
 	}
 	if reason == "" {
-		reason = RoomTerminationFailed
+		reason = runtimeRooms.RoomTerminationFailed
 	}
 	recordingStatus, degradedArtifacts, participantStatuses, participantArtifacts := e.recordingHealth()
 	manifest := roomEvidenceManifest{
@@ -844,13 +844,13 @@ func (e *roomEvidence) writeManifest(result RoomResult, runErr error, endedAt ti
 		participantEvidence := e.participant(participant.ID)
 		participantResult, exists := result.Participants[participant.ID]
 		if !exists {
-			participantResult = RoomParticipantResult{
+			participantResult = runtimeRooms.RoomParticipantResult{
 				ID:                     participant.ID,
 				ParticipantID:          participant.ID,
-				TerminationReason:      ParticipantTerminationError,
-				Reason:                 ParticipantTerminationError,
-				TerminationTrigger:     ParticipantTerminationTriggerSessionFailure,
-				TerminationDisposition: ParticipantTerminationDispositionFailed,
+				TerminationReason:      runtimeRooms.ParticipantTerminationError,
+				Reason:                 runtimeRooms.ParticipantTerminationError,
+				TerminationTrigger:     "session_failure",
+				TerminationDisposition: "failed",
 				Classification:         providers.ErrorClassUnknown,
 				TerminalReason:         string(messages.TerminalReasonTerminalFailure),
 				TerminalProvenance:     string(messages.TerminalProvenanceSession),
@@ -863,7 +863,7 @@ func (e *roomEvidence) writeManifest(result RoomResult, runErr error, endedAt ti
 			participantReason = participantResult.Reason
 		}
 		if participantReason == "" {
-			participantReason = ParticipantTerminationError
+			participantReason = runtimeRooms.ParticipantTerminationError
 		}
 		paths := roomEvidenceArtifactPaths{}
 		if participantEvidence != nil {
@@ -1129,19 +1129,4 @@ func roomCredentialSecrets(manifest room.Manifest, options room.ValidationOption
 		}
 	}
 	return secrets
-}
-
-// roomMixerConfigForOptions centralizes the format selection used by both the
-// live mixer and its WAV evidence, preventing a test cadence override from
-// producing a misleading artifact header.
-func roomMixerConfigForOptions(opts RoomRunOptions) room.PCM16MixerConfig {
-	config := opts.MixerConfig
-	if opts.PCMFormat != (room.PCM16Format{}) {
-		config.Format = opts.PCMFormat
-	} else if opts.FrameSamples > 0 {
-		format := room.DefaultPCM16Format()
-		format.FrameDuration = time.Duration(opts.FrameSamples) * time.Second / time.Duration(format.SampleRate)
-		config.Format = format
-	}
-	return config
 }

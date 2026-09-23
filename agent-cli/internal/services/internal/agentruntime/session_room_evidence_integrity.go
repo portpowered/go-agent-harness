@@ -188,7 +188,7 @@ func roomEvidenceParticipantArtifactPaths(participant room.Participant, stem str
 	return paths
 }
 
-func (e *roomEvidence) finalizeResult(result RoomResult, runErr error, endedAt time.Time) {
+func (e *roomEvidence) finalizeResult(result runtimeRooms.RoomResult, runErr error, endedAt time.Time) {
 	reason := roomResultTerminationReason(result)
 	// run_terminated's own timestamp is read fresh here, strictly after the
 	// caller captured endedAt. Folding that instant into the declared span keeps
@@ -211,7 +211,7 @@ func (e *roomEvidence) finalizeResult(result RoomResult, runErr error, endedAt t
 	e.finalizeErr = errors.Join(e.err(), manifestErr)
 }
 
-func roomResultTerminationReason(result RoomResult) RoomTerminationReason {
+func roomResultTerminationReason(result runtimeRooms.RoomResult) runtimeRooms.RoomTerminationReason {
 	if result.TerminationReason != "" {
 		return result.TerminationReason
 	}
