@@ -4,16 +4,48 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/internal/pathguard"
 )
+
+// maxRoomLatencyBundleBytes matches the room artifact read bound used by replay.
+const maxRoomLatencyBundleBytes int64 = 64 << 20
 
 // ReadBundle loads one immutable room timing ledger. It does not inspect live
 // state or infer missing boundaries from other evidence artifacts.
 func ReadBundle(path string) (RoomLatencyBundle, error) {
-	data, err := os.ReadFile(path)
+	if err := pathguard.ValidateNoSymlinkPath(path); err != nil {
+		return RoomLatencyBundle{}, fmt.Errorf("room latency artifact path is unsafe: %w", err)
+	}
+	if err := pathguard.ValidateRegularFile(path); err != nil {
+		return RoomLatencyBundle{}, fmt.Errorf("room latency artifact must be a regular file: %w", err)
+	}
+	file, err := os.Open(path)
 	if err != nil {
 		return RoomLatencyBundle{}, fmt.Errorf("read room latency artifact: %w", err)
+	}
+	info, err := file.Stat()
+	if err != nil {
+		_ = file.Close()
+		return RoomLatencyBundle{}, fmt.Errorf("inspect room latency artifact: %w", err)
+	}
+	if info.Size() < 0 || info.Size() > maxRoomLatencyBundleBytes {
+		_ = file.Close()
+		return RoomLatencyBundle{}, fmt.Errorf("room latency artifact exceeds %d-byte limit", maxRoomLatencyBundleBytes)
+	}
+	data, readErr := io.ReadAll(io.LimitReader(file, maxRoomLatencyBundleBytes+1))
+	closeErr := file.Close()
+	if readErr != nil {
+		return RoomLatencyBundle{}, fmt.Errorf("read room latency artifact: %w", readErr)
+	}
+	if closeErr != nil {
+		return RoomLatencyBundle{}, fmt.Errorf("close room latency artifact: %w", closeErr)
+	}
+	if int64(len(data)) > maxRoomLatencyBundleBytes {
+		return RoomLatencyBundle{}, fmt.Errorf("room latency artifact exceeds %d-byte limit", maxRoomLatencyBundleBytes)
 	}
 	var bundle RoomLatencyBundle
 	if err := json.Unmarshal(data, &bundle); err != nil {

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -81,6 +82,21 @@ func TestServiceRejectsInvalidLatencyArtifacts(t *testing.T) {
 	if _, err := service.AnalyzeBundle(rooms.RoomLatencyBundle{SchemaVersion: rooms.RoomLatencyBundleSchemaVersion}); err == nil {
 		t.Fatal("AnalyzeBundle accepted an invalid PCM format")
 	}
+	oversized := filepath.Join(t.TempDir(), "oversized.json")
+	file, err := os.Create(oversized)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Truncate(maxRoomLatencyBundleBytes + 1); err != nil {
+		_ = file.Close()
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.ReadBundle(oversized); err == nil {
+		t.Fatal("ReadBundle accepted an oversized latency artifact")
+	}
 	if _, err := service.Report(t.TempDir()); err == nil {
 		t.Fatal("Report accepted a directory without a latency artifact")
 	}
@@ -90,7 +106,7 @@ func TestServiceRejectsInvalidLatencyArtifacts(t *testing.T) {
 	}
 }
 
-func mustAnalyze(t *testing.T, service rooms.LatencyService, bundle rooms.RoomLatencyBundle) rooms.RoomLatencyReport {
+func mustAnalyze(t *testing.T, service roomevidence.LatencyService, bundle rooms.RoomLatencyBundle) rooms.RoomLatencyReport {
 	t.Helper()
 	report, err := service.AnalyzeBundle(bundle)
 	if err != nil {
@@ -99,7 +115,7 @@ func mustAnalyze(t *testing.T, service rooms.LatencyService, bundle rooms.RoomLa
 	return report
 }
 
-func mustReport(t *testing.T, service rooms.LatencyService, destination string) rooms.RoomLatencyReport {
+func mustReport(t *testing.T, service roomevidence.LatencyService, destination string) rooms.RoomLatencyReport {
 	t.Helper()
 	report, err := service.Report(destination)
 	if err != nil {

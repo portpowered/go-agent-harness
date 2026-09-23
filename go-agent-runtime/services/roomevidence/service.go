@@ -76,7 +76,7 @@ type RecordingRequest struct {
 	Secrets     []string
 	StartedAt   time.Time
 	Clock       platformclock.Source
-	Latency     rooms.LatencyService
+	Latency     LatencyService
 	// LatencyRecorder lets an orchestrator share one invocation-scoped ledger
 	// with its live observations while keeping construction behind the service.
 	LatencyRecorder rooms.LatencyRecorder
@@ -94,6 +94,15 @@ type Service interface {
 	CreateFreshRunDirectory(string) (string, error)
 	Load(RoomReplayPlan) (Bundle, error)
 	Analyze(Bundle) (Analysis, error)
+}
+
+// LatencyService exposes the service-owned room timing recorder and report
+// operations through transport-neutral room contracts.
+type LatencyService interface {
+	NewRecorder(platformclock.Source, rooms.AudioFormat) rooms.LatencyRecorder
+	ReadBundle(string) (rooms.RoomLatencyBundle, error)
+	AnalyzeBundle(rooms.RoomLatencyBundle) (rooms.RoomLatencyReport, error)
+	Report(string) (rooms.RoomLatencyReport, error)
 }
 
 // Recorder owns one room's evidence lifecycle.
