@@ -12,6 +12,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
@@ -100,6 +101,7 @@ type Service interface {
 // operations through transport-neutral room contracts.
 type LatencyService interface {
 	NewRecorder(platformclock.Source, rooms.AudioFormat) rooms.LatencyRecorder
+	NewRuntimeObserver(rooms.LatencyRecorder, string) sessiontrace.RuntimeObserver
 	ReadBundle(string) (rooms.RoomLatencyBundle, error)
 	AnalyzeBundle(rooms.RoomLatencyBundle) (rooms.RoomLatencyReport, error)
 	Report(string) (rooms.RoomLatencyReport, error)

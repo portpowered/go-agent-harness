@@ -5,6 +5,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -17,6 +18,10 @@ func NewService() roomevidence.LatencyService { return Service{} }
 
 func (Service) NewRecorder(source platformclock.Source, format rooms.AudioFormat) rooms.LatencyRecorder {
 	return New(source, format)
+}
+
+func (Service) NewRuntimeObserver(recorder rooms.LatencyRecorder, participantID string) sessiontrace.RuntimeObserver {
+	return runtimeObserver{recorder: recorder, participantID: participantID}
 }
 
 func (Service) ReadBundle(path string) (rooms.RoomLatencyBundle, error) {
@@ -32,3 +37,29 @@ func (Service) Report(destination string) (rooms.RoomLatencyReport, error) {
 }
 
 var _ roomevidence.LatencyService = Service{}
+
+type runtimeObserver struct {
+	recorder      rooms.LatencyRecorder
+	participantID string
+}
+
+func (o runtimeObserver) ObserveSessionRuntime(observation sessiontrace.SessionRuntimeObservation) {
+	if o.recorder == nil {
+		return
+	}
+	var kind rooms.LatencyObservationKind
+	switch observation.Kind {
+	case sessiontrace.SessionRuntimeObservationInputCommit:
+		kind = rooms.LatencyObservationInputCommit
+	case sessiontrace.SessionRuntimeObservationResponseCreate:
+		kind = rooms.LatencyObservationResponseCreate
+	default:
+		return
+	}
+	o.recorder.ObserveRuntime(o.participantID, rooms.LatencyObservation{
+		Kind: kind, ResponseID: observation.ResponseID,
+		Timestamp: observation.Timestamp, Tick: observation.Tick,
+	})
+}
+
+var _ sessiontrace.RuntimeObserver = runtimeObserver{}
