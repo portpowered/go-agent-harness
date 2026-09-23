@@ -5592,3 +5592,29 @@ handoff sequence. No gate completion is claimed.
   embed, deletion, duplicate, adapter, ancestry, and diff check on one exact
   commit. Do not push or hand off to SCRIPT while the local architecture gate
   is red; do not create a successor task or change PR identity.
+
+
+## C251 peer-seam ownership checkpoint — 2026-09-23
+
+- Reverified the admitted C251 task, `prd.branchName`, and exact branch; current
+  progress-only HEAD is `35d3bb64c402f2e21cc5a6efd06167d14b818ae2`, with source
+  candidate `567e08405bb64075801590cd13fc559a4dbce938` unchanged and a clean
+  worktree. C251 has no PR or push.
+- The source inventory remains at the previously verified complete 14-path
+  absence census and one `shutdown_adapter.go` (59 physical lines). Focused
+  sessionduration/session normal and race suites each passed 270 tests across
+  19 packages, and the CLI duration/finalization/replay/shutdown selection
+  passed 269 tests on the source candidate.
+- The exact-source local prepush remains blocked at `verify-architecture` with
+  426 findings across 229 packages. Do not describe the vertical as ready for
+  SCRIPT or source review while this gate is red.
+- Factory ownership audit found C276 (`work-task-8`) still in `init` with its
+  recording/replay worktree dirty and C285 (`work-task-27`) still in `init`
+  with its unreleased core-composition seam; neither has a PR head to integrate.
+  Those shared paths remain leased, and no peer worktree or source file was
+  changed. Preserve this C251 identity while waiting for their reviewed or
+  guarded-released exact commits.
+- Exact next action: recheck Factory ownership and PR state, integrate only the
+  released same-project C276/C285 seams into this branch, then rerun the fresh
+  production caller/deletion/adapter audit and the complete C251 exact-head
+  local preflight before any push or SCRIPT handoff.
