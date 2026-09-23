@@ -22,6 +22,7 @@ package integration
 // Like the sibling v4a single-call lane, the fixture reuses an existing
 // committed corpus WAV (go-agent-loop/testdata/audio); no new binary assets
 // are added.
+
 import (
 	"bytes"
 	"context"
@@ -36,7 +37,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
+	agentwire "github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -231,6 +235,17 @@ func buildToolDuringAudioFixture(t *testing.T, wavPath string, pre, post [][]int
 	serverEvent("response.output_audio_transcript.done", `{"type":"response.output_audio_transcript.done","transcript":"Checking the weather now."}`)
 	serverEvent("response.output_audio.done", `{"type":"response.output_audio.done"}`)
 	serverEvent("response.done", `{"type":"response.done","response":{"id":"`+toolDuringAudioResponseID+`","status":"completed"}}`)
+	clientEvent("conversation.item.create", observabilityJSONPayload(t, map[string]any{
+		"type": "conversation.item.create",
+		"item": map[string]string{
+			"type": "function_call_output", "call_id": "call_weather_1", "output": toolSingleCallResultContent,
+		},
+	}))
+	clientEvent("response.create", json.RawMessage(`{"type":"response.create"}`))
+	serverEvent("response.created", `{"type":"response.created","response":{"id":"resp_tool_during_audio_followup"}}`)
+	serverEvent("response.output_text.delta", `{"type":"response.output_text.delta","delta":"Forecast delivered."}`)
+	serverEvent("response.output_text.done", `{"type":"response.output_text.done"}`)
+	serverEvent("response.done", `{"type":"response.done","response":{"id":"resp_tool_during_audio_followup","status":"completed"}}`)
 
 	baseCapture.Session.ID = toolDuringAudioSessionID
 	baseCapture.Session.FixtureProvenance = gwtesting.SessionFixtureProvenanceSynthetic
@@ -262,11 +277,22 @@ func buildToolDuringAudioFixture(t *testing.T, wavPath string, pre, post [][]int
 func runToolDuringAudio(t *testing.T, wavPath, wirePath string) (string, string, error) {
 	t.Helper()
 	outputPath := filepath.Join(t.TempDir(), "response.wav")
-	cmd := newTestLiveSessionCommand(t, flags.NewGlobalFlags()).Generate()
+	executor := &toolCallRecordingExecutor{}
+	toolService := serviceTools.Factory(func(*config.Config) (serviceTools.Capabilities, error) {
+		return serviceTools.Capabilities{
+			Executor: executor,
+			Definitions: []messages.ToolDefinition{{
+				Name: toolDuringAudioToolName, Description: "Get weather for one city.",
+				Parameters: []messages.ToolParameter{{Name: "city", Type: "string", Required: true}},
+			}},
+		}, nil
+	})
+	cmd := newTestSessionRootCommand(t, agentwire.NewToolServicePort(toolService))
 	var stdout bytes.Buffer
 	cmd.SetOut(&stdout)
 	cmd.SetErr(io.Discard)
 	cmd.SetArgs([]string{
+		"session",
 		"--replay", wirePath,
 		"--audio-in", wavPath,
 		"--audio-out", outputPath,

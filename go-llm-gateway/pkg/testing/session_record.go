@@ -219,8 +219,12 @@ func (r *SessionRecorder) Done() <-chan struct{} {
 
 // Close delegates to the inner session.
 func (r *SessionRecorder) Close() error {
+	closeErr := r.inner.Close()
+	// Let the wrapped session publish its terminal state before stopping the
+	// inbound relay. A duration-bounded caller relies on that final event to
+	// distinguish an intentional cutoff from cancellation.
 	r.cancel()
-	return r.inner.Close()
+	return closeErr
 }
 
 // FlushToFile writes all recorded events as a JSON envelope to the given path.

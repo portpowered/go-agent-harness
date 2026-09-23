@@ -65,15 +65,6 @@ func (h *handle) consumeCapabilityEvents(ctx context.Context, loop *agentloop.Ag
 	}
 }
 func (h *handle) consumeMessage(ctx context.Context, loop *agentloop.AgentLoop, msg messages.StreamMessage, allowOpening bool) bool {
-	h.mu.Lock()
-	durationController := h.durationController
-	h.mu.Unlock()
-	if durationController != nil {
-		admission := durationController.Observe(msg)
-		if !admission.Accepted && msg.Type != messages.StreamTypeSessionClose && msg.Type != messages.StreamTypeError {
-			return false
-		}
-	}
 	if eventcodec.OutputMessage(msg) {
 		h.mu.Lock()
 		h.outputObserved = true
@@ -81,6 +72,7 @@ func (h *handle) consumeMessage(ctx context.Context, loop *agentloop.AgentLoop, 
 	}
 	h.observeTerminalValue(msg)
 	h.observeResponseTerminal(msg)
+	h.observeProviderLiveness(ctx, msg)
 	if allowOpening {
 		h.observeSessionLifecycle(ctx, msg)
 		if msg.Type == messages.StreamTypeSessionUpdated {
@@ -91,6 +83,7 @@ func (h *handle) consumeMessage(ctx context.Context, loop *agentloop.AgentLoop, 
 	}
 	continuationErr, toolContinuationComplete := h.observeToolLifecycle(msg)
 	h.publishMessage(msg) //nolint:contextcheck // recording owns the invocation evidence context.
+	h.observeRuntimeMessage(msg)
 	if continuationErr != nil {
 		h.Cancel(continuationErr)
 	}
@@ -202,6 +195,23 @@ func (h *handle) failOpeningMessage(err error) {
 	h.pumpErr = err
 	h.mu.Unlock()
 	h.Cancel(err)
+}
+func (h *handle) observeTerminalValue(msg messages.StreamMessage) {
+	value := eventcodec.TerminalValue(msg)
+	if value == nil {
+		return
+	}
+	h.mu.Lock()
+	if msg.Type == messages.StreamTypeSessionClose {
+		if !h.providerCloseObserved || h.terminalValue == nil {
+			h.terminalValue = value
+		}
+		h.providerCloseObserved = true
+		h.terminalOnce.Do(func() { close(h.terminalObserved) })
+	} else if !h.providerCloseObserved {
+		h.terminalValue = value
+	}
+	h.mu.Unlock()
 }
 func (h *handle) markCaptureComplete() {
 	if h == nil {
@@ -350,11 +360,10 @@ func (h *handle) observeFiniteResponseEnd(msg messages.StreamMessage) {
 	}
 	h.replayResponses++
 }
-
 func (h *handle) observeResponseStartLocked(responseID string) bool {
 	responseID = strings.TrimSpace(responseID)
 	if responseID == "" {
-		if h.anonymousResponses > 0 {
+		if h.anonymousResponses > 0 { // Anonymous starts share one lifecycle owner.
 			return false
 		}
 		h.anonymousResponses++
@@ -370,7 +379,6 @@ func (h *handle) observeResponseStartLocked(responseID string) bool {
 	h.responsePending, h.responseActive = false, true
 	return true
 }
-
 func (h *handle) retireResponseLocked(responseID string) bool {
 	responseID = strings.TrimSpace(responseID)
 	switch {

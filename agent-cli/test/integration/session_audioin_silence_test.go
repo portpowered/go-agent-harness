@@ -12,7 +12,6 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -177,7 +176,7 @@ func buildAudioInWireFixture(t *testing.T, samples []int16, expectTurn bool) str
 // the hermetic replay transport with --audio-in and returns stdout.
 func runSessionAudioIn(t *testing.T, wavPath, wirePath, audioOutPath string) (string, error) {
 	t.Helper()
-	cmd := newTestLiveSessionCommand(t, flags.NewGlobalFlags()).Generate()
+	cmd := newTestSessionRootCommand(t)
 	stdout := &testStdoutBuffer{}
 	cmd.SetOut(stdout)
 	cmd.SetErr(io.Discard)
@@ -189,7 +188,7 @@ func runSessionAudioIn(t *testing.T, wavPath, wirePath, audioOutPath string) (st
 	if audioOutPath != "" {
 		args = append(args, "--audio-out", audioOutPath)
 	}
-	cmd.SetArgs(args)
+	cmd.SetArgs(append([]string{"session"}, args...))
 	err := cmd.ExecuteContext(context.Background())
 	return stdout.String(), err
 }

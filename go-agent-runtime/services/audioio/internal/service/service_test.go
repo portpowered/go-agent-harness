@@ -129,6 +129,38 @@ func TestServiceResolvesRatesAndAudioPolicies(t *testing.T) {
 	timer.Stop()
 }
 
+func TestServiceAppliesVoicePCM16OnceThroughPublicContract(t *testing.T) {
+	service := New()
+	input := make([]byte, 2*audio.FrameSize)
+	for index := 0; index < len(input); index += 2 {
+		input[index] = 0xe8
+		input[index+1] = 0x03
+	}
+	want := audio.NewLoudnessNormalizer(audio.LoudnessNormalizerConfig{GainDB: service.VoiceGainDB("verse")}).ProcessBytes(input)
+	got, err := service.ApplyVoicePCM16(context.Background(), audioio.VoicePCMRequest{Voice: "verse", PCM: input})
+	if err != nil {
+		t.Fatalf("ApplyVoicePCM16() error = %v", err)
+	}
+	if string(got) != string(want) {
+		t.Fatal("voice transform did not apply the service-owned gain exactly once")
+	}
+	if string(input) != string(makePCM16Bytes(1000, audio.FrameSize)) {
+		t.Fatal("voice transform mutated its input")
+	}
+	if _, err := service.ApplyVoicePCM16(context.Background(), audioio.VoicePCMRequest{PCM: []byte{1}}); !errors.Is(err, audioio.ErrPCM16Truncated) {
+		t.Fatalf("odd voice PCM error = %v, want ErrPCM16Truncated", err)
+	}
+}
+
+func makePCM16Bytes(sample int16, count int) []byte {
+	pcm := make([]byte, count*2)
+	for index := 0; index < count; index++ {
+		pcm[index*2] = byte(uint16(sample))
+		pcm[index*2+1] = byte(uint16(sample) >> 8)
+	}
+	return pcm
+}
+
 func TestServiceConvertsPCM16AndRejectsOddTail(t *testing.T) {
 	service := New()
 	ctx := context.Background()

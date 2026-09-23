@@ -6,13 +6,6 @@ import sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/int
 
 import sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 
-import audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
-import runtimedeviceswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
-import recordingwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/wire"
-import replaywire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
-import runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
-import runtimeSessionWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
-
 import (
 	"context"
 	"io"
@@ -108,7 +101,7 @@ model:
 	}
 
 	inferencer := newRecordOnlyLiveInferencer()
-	owner := newWebMCPRecordingLiveCommand(globalFlags, inferencer, registry)
+	owner := newTestLiveSessionCommand(flags.NewAskFlags(), globalFlags, inferencer, registry)
 	command := owner.Generate()
 	command.SetOut(io.Discard)
 	recordPath := filepath.Join(t.TempDir(), "capture.json")
@@ -171,7 +164,7 @@ model:
 	}
 
 	inferencer := newRecordOnlyLiveInferencer()
-	owner := newWebMCPRecordingLiveCommand(globalFlags, inferencer, registry)
+	owner := newTestLiveSessionCommand(flags.NewAskFlags(), globalFlags, inferencer, registry)
 	command := owner.Generate()
 	command.SetOut(io.Discard)
 	recordPath := filepath.Join(t.TempDir(), "test64.json")
@@ -245,7 +238,7 @@ model:
 	}
 
 	inferencer := newRecordOnlyLiveInferencer()
-	owner := newWebMCPRecordingLiveCommand(globalFlags, inferencer, registry)
+	owner := newTestLiveSessionCommand(flags.NewAskFlags(), globalFlags, inferencer, registry)
 	command := owner.Generate()
 	command.SetOut(io.Discard)
 	audioPath := filepath.Join(t.TempDir(), "32.wav")
@@ -291,29 +284,6 @@ model:
 	}
 }
 
-func newWebMCPRecordingLiveCommand(globalFlags *flags.GlobalFlags, inferencer messages.SessionInferencer, registry devicegw.DeviceRegistry) *SessionCommand {
-	audioService := audioiowire.NewService()
-	liveService := runtimeSessionWire.NewLiveService(runtimeSessionWire.LiveDependencies{
-		InferencerFactory: func(context.Context, runtimeSession.LiveRequest) (messages.SessionInferencer, error) {
-			return inferencer, nil
-		},
-		Clock:     func() time.Time { return sessionclock.Real{}.Now() },
-		Scheduler: sessionclock.Real{},
-	})
-	return NewSessionCommandWithLive(
-		flags.NewAskFlags(), globalFlags,
-		newTestSessionService(sessionservicewire.SessionDependencies{
-			Clock: sessionclock.Real{}, SessionInferencer: inferencer, DeviceRegistry: registry,
-		}), nil,
-		liveService,
-		replaywire.NewService(),
-		runtimedeviceswire.NewService(registry, audioService),
-		FileDeviceService{Service: runtimedeviceswire.NewFileService(audioService), Scheduler: sessionclock.Real{}},
-		nil, nil, nil,
-		recordingwire.NewService(sessionclock.Real{}), nil,
-	)
-}
-
 // recordOnlyLiveSession is a minimal messages.Session double: it opens
 // immediately, tracks whether the caller ever asked it to close, and only
 // terminates when the test simulates a provider-driven close.
@@ -321,7 +291,7 @@ type recordOnlyLiveSession struct {
 	receive        *messages.TypedBuffer[messages.StreamMessage]
 	done           chan struct{}
 	closeRequested chan struct{}
-	media          *sharedaudio.SessionMedia
+	media          *browserAdmissionMedia
 	requestOnce    sync.Once
 	closeOnce      sync.Once
 }
@@ -331,7 +301,7 @@ type recordOnlyLiveSession struct {
 // microphone/speaker pumps it drives are a separate, already-exercised path;
 // this test only needs them to exist, not to carry real audio.
 func (s *recordOnlyLiveSession) RTCMedia() sharedaudio.MediaEndpoints {
-	return s.media.Endpoints()
+	return sharedaudio.MediaEndpoints{Inbound: s.media, Outbound: s.media}
 }
 
 func (s *recordOnlyLiveSession) Send(_ context.Context, msg messages.StreamMessage) bool {
@@ -372,7 +342,7 @@ func (i *recordOnlyLiveInferencer) ConnectSession(ctx context.Context) (messages
 		receive:        messages.NewTypedBuffer[messages.StreamMessage](16),
 		done:           make(chan struct{}),
 		closeRequested: make(chan struct{}),
-		media:          sharedaudio.NewSessionMedia(nil),
+		media:          newBrowserAdmissionMedia(),
 	}
 	i.session = session
 	session.receive.Write(ctx, messages.StreamMessage{

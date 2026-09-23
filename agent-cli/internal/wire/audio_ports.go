@@ -4,9 +4,9 @@ import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/d
 
 import (
 	"context"
-	runtimecontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime"
 	"io"
 
+	sessiontrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
@@ -38,31 +38,31 @@ type LoggerFunc = observability.LoggerFunc
 // SessionRuntimeObserver is the optional runtime evidence sink used by
 // hermetic command-level tests. It observes events emitted from inside the
 // shipped session command, alongside the composed Clock.
-type SessionRuntimeObserver = runtimecontract.SessionRuntimeObserver
+type SessionRuntimeObserver = sessiontrace.SessionRuntimeObserver
 
 // SessionRuntimeObservation is the value delivered by SessionRuntimeObserver.
-type SessionRuntimeObservation = runtimecontract.SessionRuntimeObservation
+type SessionRuntimeObservation = sessiontrace.SessionRuntimeObservation
 
 const (
-	SessionRuntimeObservationAudioOutput    = runtimecontract.SessionRuntimeObservationAudioOutput
-	SessionRuntimeObservationAudioInput     = runtimecontract.SessionRuntimeObservationAudioInput
-	SessionRuntimeObservationInputCommit    = runtimecontract.SessionRuntimeObservationInputCommit
-	SessionRuntimeObservationResponseCreate = runtimecontract.SessionRuntimeObservationResponseCreate
-	SessionRuntimeObservationTurnCompleted  = runtimecontract.SessionRuntimeObservationTurnCompleted
-	SessionRuntimeObservationTerminal       = runtimecontract.SessionRuntimeObservationTerminal
+	SessionRuntimeObservationAudioOutput    = sessiontrace.SessionRuntimeObservationAudioOutput
+	SessionRuntimeObservationAudioInput     = sessiontrace.SessionRuntimeObservationAudioInput
+	SessionRuntimeObservationInputCommit    = sessiontrace.SessionRuntimeObservationInputCommit
+	SessionRuntimeObservationResponseCreate = sessiontrace.SessionRuntimeObservationResponseCreate
+	SessionRuntimeObservationTurnCompleted  = sessiontrace.SessionRuntimeObservationTurnCompleted
+	SessionRuntimeObservationTerminal       = sessiontrace.SessionRuntimeObservationTerminal
 )
 
 // SessionFinalAccounting is the production-owned terminal token and metrics
 // value carried by SessionRuntimeObservation.FinalAccounting.
-type SessionFinalAccounting = runtimecontract.SessionFinalAccounting
+type SessionFinalAccounting = sessiontrace.SessionFinalAccounting
 
 // SessionTokenUsageSemantics describes how provider MESSAGE.END usage values
 // contribute to SessionFinalAccounting's session totals.
-type SessionTokenUsageSemantics = runtimecontract.SessionTokenUsageSemantics
+type SessionTokenUsageSemantics = sessiontrace.SessionTokenUsageSemantics
 
 // SessionTokenUsageIncremental is the supported session usage contract: each
 // MESSAGE.END usage value contributes once for its completed turn.
-const SessionTokenUsageIncremental = runtimecontract.SessionTokenUsageIncremental
+const SessionTokenUsageIncremental = sessiontrace.SessionTokenUsageIncremental
 
 type inertAudioSource struct{}
 

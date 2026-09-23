@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/endpoint"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/rtc"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer"
@@ -41,6 +42,10 @@ func NewFactory(registry devicegw.DeviceRegistry, format mixer.Format) *Factory 
 	return &Factory{registry: registry, format: format}
 }
 
+func (f *Factory) ValidateRemoteEndpoint(value string) error {
+	return endpoint.ValidateRemoteEndpoint(value)
+}
+
 // Open admits the input and output workers as one lifecycle unit. If output
 // admission fails after capture succeeds, capture is closed before the error
 // is returned so partial startup cannot leak a device handle.
@@ -50,7 +55,7 @@ func (f *Factory) Open(ctx context.Context, request devices.Request) (devices.Ha
 	}
 	registry := f.registry
 	if endpoint := strings.TrimSpace(request.RemoteEndpoint); endpoint != "" {
-		if err := devices.RemoteEndpoint(endpoint).Validate(); err != nil {
+		if err := f.ValidateRemoteEndpoint(endpoint); err != nil {
 			return nil, err
 		}
 		var err error
@@ -83,15 +88,7 @@ func (f *Factory) BindRTC(ctx context.Context, request devices.RTCBindingRequest
 	if !inputSelected && !outputSelected {
 		return nil, nil
 	}
-	registry := f.registry
-	if endpoint := strings.TrimSpace(request.RemoteEndpoint); endpoint != "" {
-		var err error
-		registry, err = devicegw.NewRemoteDeviceRegistry(endpoint)
-		if err != nil {
-			return nil, fmt.Errorf("connect remote audio device server: %w", err)
-		}
-	}
-	return rtc.NewFactory(registry).BindRTC(ctx, request)
+	return rtc.NewFactory(f.registry).BindRTC(ctx, request)
 }
 
 func (f *Factory) validateRequest(ctx context.Context, request devices.Request) error {
@@ -111,7 +108,7 @@ func (f *Factory) openInput(registry devicegw.DeviceRegistry, request devices.Re
 	if !request.CaptureEnabled {
 		return nil, nil
 	}
-	input, err := devicert.NewRTCDeviceSourceAtRate(registry, devicegw.DeviceID(strings.TrimSpace(request.InputDevice)), rate)
+	input, err := devicert.NewRTCDeviceSourceAtRate(registry, normalizeSelector(request.InputDevice), rate)
 	if err != nil {
 		return nil, fmt.Errorf("open input device %q: %w", request.InputDevice, err)
 	}
@@ -123,7 +120,7 @@ func (f *Factory) openOutput(registry devicegw.DeviceRegistry, request devices.R
 		return nil, nil
 	}
 	output, err := devicert.NewRTCDeviceSinkAtRateWithOptions(
-		registry, devicegw.DeviceID(strings.TrimSpace(request.OutputDevice)), rate,
+		registry, normalizeSelector(request.OutputDevice), rate,
 		request.PlaybackProfile, nil,
 	)
 	if err != nil {
@@ -133,6 +130,14 @@ func (f *Factory) openOutput(registry devicegw.DeviceRegistry, request devices.R
 		output.SetHoldToneConfig(*request.HoldToneConfig)
 	}
 	return output, nil
+}
+
+func normalizeSelector(id string) devicegw.DeviceID {
+	trimmed := strings.TrimSpace(id)
+	if strings.EqualFold(trimmed, "default") {
+		return ""
+	}
+	return devicegw.DeviceID(trimmed)
 }
 
 func closeInput(input *devicert.RTCDeviceSource) error {

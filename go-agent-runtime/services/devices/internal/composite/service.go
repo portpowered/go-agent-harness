@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/endpoint"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
@@ -26,6 +27,10 @@ type Factory struct {
 // tests without exposing implementation types through the public contract.
 func NewFactory(physical, file devices.Service) *Factory {
 	return &Factory{physical: physical, file: file}
+}
+
+func (f *Factory) ValidateRemoteEndpoint(value string) error {
+	return endpoint.ValidateRemoteEndpoint(value)
 }
 
 type openPlan struct {

@@ -10,9 +10,11 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/sessionwrap"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
+	"github.com/stretchr/testify/require"
 )
 
 func TestLiveFirstTurnTimeoutUsesInjectedScheduler(t *testing.T) {
@@ -72,7 +74,7 @@ func TestLiveRateLimitRetryUsesInjectedScheduler(t *testing.T) {
 		InferencerFactory: func(context.Context, session.LiveRequest) (messages.SessionInferencer, error) {
 			return &testInferencer{session: provider}, nil
 		},
-		Clock: clock.Now, Scheduler: scheduler, DurationService: newTestDurationService(),
+		Clock: clock.Now, Scheduler: scheduler,
 	})
 	handle, err := service.OpenLive(context.Background(), session.LiveRequest{
 		SessionID: "retry-policy", RateLimitRetry: session.LiveRateLimitRetryPolicy{
@@ -504,10 +506,7 @@ func TestLateCaptureCompletionRespectsOutstandingResponseWork(t *testing.T) {
 	}
 }
 func TestFiniteAudioResponseErrorRetainsUnfinishedOrdinaryAudio(t *testing.T) {
-	unfinished := &handle{
-		request:             session.LiveRequest{FinishAfterResponse: true},
-		captureSourceActive: true,
-	}
+	unfinished := &handle{request: session.LiveRequest{FinishAfterResponse: true}, captureSourceActive: true}
 	if !errors.Is(unfinished.finiteAudioResponseError(), session.ErrLiveAudioResponseIncomplete) {
 		t.Fatal("unfinished finite audio did not retain ErrLiveAudioResponseIncomplete")
 	}
@@ -520,10 +519,7 @@ func TestFiniteAudioResponseErrorRetainsUnfinishedOrdinaryAudio(t *testing.T) {
 		{name: "scheduled has richer error", change: func(h *handle) { h.scheduledAudioCount = 1 }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			h := &handle{
-				request:             session.LiveRequest{FinishAfterResponse: true},
-				captureSourceActive: true,
-			}
+			h := &handle{request: session.LiveRequest{FinishAfterResponse: true}, captureSourceActive: true}
 			test.change(h)
 			if err := h.finiteAudioResponseError(); err != nil {
 				t.Fatalf("finite audio error = %v, want nil", err)
@@ -544,12 +540,16 @@ func TestMediaPumpProviderCloseIsAnExpectedStop(t *testing.T) {
 		t.Fatal("provider close classification changed")
 	}
 
-	d := &terminalDrainSession{receive: messages.NewTypedBuffer[messages.StreamMessage](1), stop: make(chan struct{})}
+	provider := newTestSession()
+	d := sessionwrap.WrapSession(context.Background(), provider, false, 1)
 	value := messages.NewSessionCloseValueWithTerminal("provider", "fixture_complete", "fixture", messages.TerminalReasonProviderAuthoredCompletion, messages.TerminalProvenanceProvider, messages.TerminalOutputComplete)
-	d.forwardMessage(context.Background(), messages.StreamMessage{Type: messages.StreamTypeSessionClose, ResponseID: "response", Value: value})
-	if msg, ok := d.receive.Read(); !ok || msg.ResponseID != "" || msg.Value != value {
+	provider.receive.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeSessionClose, ResponseID: "response", Value: value})
+	require.NoError(t, provider.Close())
+	<-d.Done()
+	if msg, ok := d.Receive().Read(); !ok || msg.ResponseID != "" || msg.Value != value {
 		t.Fatalf("forwarded close = %+v, want uncorrelated close with original metadata", msg)
 	}
+	require.NoError(t, d.Close())
 }
 func TestMediaPumpDeviceTeardownErrorsAreExpectedStops(t *testing.T) {
 	tests := []struct {
@@ -588,7 +588,7 @@ func TestMissingMediaCauseSurvivesImmediateProviderTerminal(t *testing.T) {
 		if err != nil {
 			t.Fatalf("OpenLive: %v", err)
 		}
-		h := opened.(*handle) //nolint:errcheck // this package's OpenLive implementation returns *handle.
+		h := requireLiveHandle(t, opened)
 		h.configureMediaRequirements(true, true)
 		if err := h.Start(context.Background()); err != nil {
 			t.Fatalf("Start: %v", err)

@@ -112,13 +112,6 @@ func (c *SessionCommand) runtimeLiveAdmission(ctx context.Context, request servi
 	return inspection.IsRealtime() || (inspection.Kind == runtimeReplay.CaptureKindTurn && replayRequestsAudio(request)), &inspection, nil
 }
 
-func replayRequestsAudio(request serviceSession.Request) bool {
-	return request.AudioInput.Present || request.AudioInput.DevicePresent ||
-		len(request.AudioTurns) > 0 || len(request.AudioInterrupts) > 0 ||
-		request.AudioOutputPath != "" || request.AudioOutputRequested ||
-		request.AudioInputDevicePresent || request.AudioOutputDevicePresent
-}
-
 func (c *SessionCommand) legacyReplayOwnsPassiveInvocation(request serviceSession.Request) bool {
 	if c == nil {
 		return false

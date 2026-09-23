@@ -138,8 +138,7 @@ func TestSessionAmbiguousTabsPublishOnlySelectedPageTools(t *testing.T) {
 	runErr := make(chan error, 1)
 	go func() {
 		runErr <- servicetest.RunSession(sessionCtx, io.Discard, servicetest.SessionRunOptions{
-			AudioService:           audioiowire.NewService(),
-			Provider:               config.ProviderGrok,
+			Provider: config.ProviderGrok, AudioService: audioiowire.NewService(),
 			Model:                  "ambiguous-session",
 			APIKey:                 "unused",
 			LoadedConfig:           cfg,
@@ -371,8 +370,7 @@ func TestSessionAmbiguousCubeConversationRequiresChoiceBeforePageWork(t *testing
 	runComplete := make(chan struct{})
 	go func() {
 		err := servicetest.RunSessionWithInstructions(sessionCtx, &output, servicetest.SessionRunOptions{
-			AudioService:           audioiowire.NewService(),
-			Provider:               config.ProviderGrok,
+			Provider: config.ProviderGrok, AudioService: audioiowire.NewService(),
 			Model:                  "ambiguous-session",
 			APIKey:                 "unused",
 			ConfigDir:              t.TempDir(),
@@ -400,8 +398,7 @@ func TestSessionAmbiguousCubeConversationRequiresChoiceBeforePageWork(t *testing
 			if err != nil && !errors.Is(err, context.Canceled) {
 				t.Errorf("session loop shutdown: %v", err)
 			}
-		case <-runComplete:
-			// The final assertion consumed the result.
+		case <-runComplete: // Final assertion consumed the result.
 		case <-time.After(time.Second):
 			t.Error("session loop did not stop after cancellation")
 		}

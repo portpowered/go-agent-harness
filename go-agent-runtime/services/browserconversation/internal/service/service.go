@@ -1,0 +1,260 @@
+package service
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation/internal/service/policy"
+)
+
+type BrowserConversationScenario = browserconversation.BrowserConversationScenario
+type BrowserScenario = browserconversation.BrowserScenario
+type WebMCPScenario = browserconversation.WebMCPScenario
+type WebMCPConversationScenario = browserconversation.WebMCPConversationScenario
+type BrowserConversationScenarioError = browserconversation.BrowserConversationScenarioError
+type BrowserConversationFixture = browserconversation.BrowserConversationFixture
+type BrowserConversationPage = browserconversation.BrowserConversationPage
+type BrowserConversationStep = browserconversation.BrowserConversationStep
+type ScheduledAudioInput = browserconversation.ScheduledAudioInput
+type BrowserStateTransition = browserconversation.BrowserStateTransition
+type BrowserCustomerNavigation = browserconversation.BrowserCustomerNavigation
+type BrowserConversationCorrection = browserconversation.BrowserConversationCorrection
+type BrowserConversationInterruptTrigger = browserconversation.BrowserConversationInterruptTrigger
+type BrowserConversationInterrupt = browserconversation.BrowserConversationInterrupt
+type BrowserConversationCancelRequest = browserconversation.BrowserConversationCancelRequest
+type BrowserConversationTabStateRequired = browserconversation.BrowserConversationTabStateRequired
+type BrowserConversationScenarioValue = browserconversation.BrowserConversationScenarioValue
+type BrowserConversationScenarioForSession = browserconversation.BrowserConversationScenarioForSession
+type BrowserConversationValidator = browserconversation.BrowserConversationValidator
+type BrowserConversationValidatorFunc = browserconversation.BrowserConversationValidatorFunc
+type BrowserConversationTurn = browserconversation.BrowserConversationTurn
+type BrowserConversationInvocationObservation = browserconversation.BrowserConversationInvocationObservation
+type BrowserConversationBrokerCall = browserconversation.BrowserConversationBrokerCall
+type BrowserConversationInputJSONAttempt = browserconversation.BrowserConversationInputJSONAttempt
+type BrowserConversationInputJSONValidity = browserconversation.BrowserConversationInputJSONValidity
+type BrowserConversationRecoveryEvidence = browserconversation.BrowserConversationRecoveryEvidence
+type BrowserConversationCorrectionEvidence = browserconversation.BrowserConversationCorrectionEvidence
+type BrowserConversationOracleSnapshot = browserconversation.BrowserConversationOracleSnapshot
+type BrowserConversationMechanicalEvaluation = browserconversation.BrowserConversationMechanicalEvaluation
+type BrowserConversationResult = browserconversation.BrowserConversationResult
+type BrowserConversationLifecycleEvidence = browserconversation.BrowserConversationLifecycleEvidence
+type BrowserConversationCancellationEvidence = browserconversation.BrowserConversationCancellationEvidence
+type BrowserConversationValidatorVerdict = browserconversation.BrowserConversationValidatorVerdict
+type BrowserConversationValidatorCheck = browserconversation.BrowserConversationValidatorCheck
+type BrowserConversationOraclePhase = browserconversation.BrowserConversationOraclePhase
+type BrowserConversationBrokerOperation = browserconversation.BrowserConversationBrokerOperation
+type BrowserConversationTurnDirection = browserconversation.BrowserConversationTurnDirection
+type BrowserConversationLifecycleOutcome = browserconversation.BrowserConversationLifecycleOutcome
+type BrowserConversationValidatorStatus = browserconversation.BrowserConversationValidatorStatus
+type BrowserConversationReportMetadata = browserconversation.BrowserConversationReportMetadata
+type BrowserConversationReport = browserconversation.BrowserConversationReport
+type BrowserConversationValidatorInput = browserconversation.BrowserConversationValidatorInput
+
+const (
+	BrowserConversationScenarioVersion         = browserconversation.BrowserConversationScenarioVersion
+	BrowserConversationReportVersion           = browserconversation.BrowserConversationReportVersion
+	BrowserConversationValidatorInputVersion   = browserconversation.BrowserConversationValidatorInputVersion
+	BrowserInterruptOnInFlightInvocation       = browserconversation.BrowserInterruptOnInFlightInvocation
+	BrowserConversationCustomerTurn            = browserconversation.BrowserConversationCustomerTurn
+	BrowserConversationAssistantTurn           = browserconversation.BrowserConversationAssistantTurn
+	BrowserConversationListTools               = browserconversation.BrowserConversationListTools
+	BrowserConversationInvoke                  = browserconversation.BrowserConversationInvoke
+	BrowserConversationCancel                  = browserconversation.BrowserConversationCancel
+	BrowserConversationSelectPage              = browserconversation.BrowserConversationSelectPage
+	BrowserConversationWaitReady               = browserconversation.BrowserConversationWaitReady
+	BrowserConversationCustomerNavigate        = browserconversation.BrowserConversationCustomerNavigate
+	BrowserConversationOracleBefore            = browserconversation.BrowserConversationOracleBefore
+	BrowserConversationOracleAfter             = browserconversation.BrowserConversationOracleAfter
+	BrowserConversationOraclePostSession       = browserconversation.BrowserConversationOraclePostSession
+	BrowserConversationLifecycleCanceled       = browserconversation.BrowserConversationLifecycleCanceled
+	BrowserConversationLifecycleCompleted      = browserconversation.BrowserConversationLifecycleCompleted
+	BrowserConversationLifecycleNotStarted     = browserconversation.BrowserConversationLifecycleNotStarted
+	BrowserConversationValidatorVersion        = browserconversation.BrowserConversationValidatorVersion
+	BrowserConversationValidatorPass           = browserconversation.BrowserConversationValidatorPass
+	BrowserConversationValidatorFail           = browserconversation.BrowserConversationValidatorFail
+	BrowserConversationValidatorNotRun         = browserconversation.BrowserConversationValidatorNotRun
+	ErrBrowserConversationSession              = browserconversation.ErrBrowserConversationSession
+	ErrBrowserConversationValidatorStart       = browserconversation.ErrBrowserConversationValidatorStart
+	ErrBrowserConversationValidatorFailed      = browserconversation.ErrBrowserConversationValidatorFailed
+	ErrBrowserConversationValidatorTimeout     = browserconversation.ErrBrowserConversationValidatorTimeout
+	ErrInvalidBrowserConversationScenario      = browserconversation.ErrInvalidBrowserConversationScenario
+	ErrInvalidBrowserConversationResult        = browserconversation.ErrInvalidBrowserConversationResult
+	ErrBrowserConversationRunFinalized         = browserconversation.ErrBrowserConversationRunFinalized
+	ErrBrowserConversationDuplicateObservation = browserconversation.ErrBrowserConversationDuplicateObservation
+	ErrBrowserConversationValidatorCommand     = browserconversation.ErrBrowserConversationValidatorCommand
+	ErrBrowserConversationValidatorOutput      = browserconversation.ErrBrowserConversationValidatorOutput
+	ErrBrowserConversationValidatorVerdict     = browserconversation.ErrBrowserConversationValidatorVerdict
+)
+
+// Service is the private implementation of the host-neutral browser
+// conversation contract. It carries no process-wide state.
+type Service struct{}
+
+func New() *Service { return &Service{} }
+
+func (*Service) ParseScenarioJSON(data []byte) (browserconversation.BrowserConversationScenario, error) {
+	return policy.ParseScenarioJSON(data)
+}
+
+func (*Service) Run(ctx context.Context, request browserconversation.RunRequest) (browserconversation.BrowserConversationResult, error) {
+	return runBrowserConversation(ctx, request)
+}
+
+func (*Service) ValidateScenario(scenario browserconversation.BrowserConversationScenario) (browserconversation.BrowserConversationScenario, error) {
+	return policy.AdmitScenario(scenario)
+}
+
+func (*Service) NewRecorder(request browserconversation.RecordingRequest) (browserconversation.Recorder, error) {
+	return newRecorder(request)
+}
+
+func (*Service) AdmitScenario(scenario browserconversation.BrowserConversationScenario) (browserconversation.BrowserConversationScenario, error) {
+	return policy.AdmitScenario(scenario)
+}
+
+func (*Service) ScheduleAudioInputs(scenario browserconversation.BrowserConversationScenario, audio map[string][]byte) ([]browserconversation.ScheduledAudioInput, error) {
+	return policy.ScheduleAudioInputs(scenario, audio)
+}
+
+func (*Service) NewScenarioValue(scenario browserconversation.BrowserConversationScenario) (browserconversation.BrowserConversationScenarioForSession, error) {
+	validated, err := policy.AdmitScenario(scenario)
+	if err != nil {
+		return browserconversation.BrowserConversationScenarioValue{}, err
+	}
+	return browserconversation.BrowserConversationScenarioValue{Scenario: validated}, nil
+}
+
+func (*Service) NewRun(scenario browserconversation.BrowserConversationScenario) (browserconversation.Run, error) {
+	validated, err := policy.AdmitScenario(scenario)
+	if err != nil {
+		return nil, err
+	}
+	return newBrowserConversationRun(validated), nil
+}
+
+func (*Service) ComputeInputJSONValidity(calls []browserconversation.BrowserConversationBrokerCall) browserconversation.BrowserConversationInputJSONValidity {
+	return policy.ComputeInputJSONValidity(calls)
+}
+
+func (*Service) SanitizeResult(result browserconversation.BrowserConversationResult) browserconversation.BrowserConversationResult {
+	return policy.SanitizeResult(result)
+}
+
+func (*Service) NewReport(result browserconversation.BrowserConversationResult, metadata browserconversation.BrowserConversationReportMetadata) (browserconversation.BrowserConversationReport, error) {
+	return policy.NewReport(result, metadata)
+}
+
+func (*Service) Report(result browserconversation.BrowserConversationResult, metadata browserconversation.BrowserConversationReportMetadata) (browserconversation.BrowserConversationReport, error) {
+	return policy.NewReport(result, metadata)
+}
+
+func (*Service) NewValidatorInput(result browserconversation.BrowserConversationResult) (browserconversation.BrowserConversationValidatorInput, error) {
+	return policy.NewValidatorInput(result)
+}
+
+func (*Service) RenderReport(result browserconversation.BrowserConversationResult, metadata browserconversation.BrowserConversationReportMetadata) (string, error) {
+	return policy.RenderReport(result, metadata)
+}
+
+func (*Service) WriteReport(out io.Writer, result browserconversation.BrowserConversationResult, metadata browserconversation.BrowserConversationReportMetadata) error {
+	return policy.WriteReport(out, result, metadata)
+}
+
+func (*Service) DeriveCorrections(scenario browserconversation.BrowserConversationScenario, result browserconversation.BrowserConversationResult) []browserconversation.BrowserConversationCorrectionEvidence {
+	return policy.DeriveBrowserConversationCorrections(scenario, result)
+}
+
+func (*Service) DeriveRecovery(scenario browserconversation.BrowserConversationScenario, result browserconversation.BrowserConversationResult) []browserconversation.BrowserConversationRecoveryEvidence {
+	return policy.DeriveBrowserConversationRecovery(scenario, result)
+}
+
+func (*Service) Evaluate(scenario browserconversation.BrowserConversationScenario, result browserconversation.BrowserConversationResult, rootErr error) (browserconversation.BrowserConversationMechanicalEvaluation, error) {
+	return policy.EvaluateBrowserConversation(scenario, result, rootErr)
+}
+
+func (*Service) ValidateJSONObject(path string, raw json.RawMessage) error {
+	return policy.ValidateJSONObject(path, raw)
+}
+
+func (*Service) ValidateResult(result browserconversation.BrowserConversationResult) error {
+	return policy.ValidateResult(result)
+}
+
+func (*Service) NewCommandValidator(config browserconversation.BrowserConversationValidatorCommand) (browserconversation.BrowserConversationValidator, error) {
+	validator, err := NewCommandValidator(config.Command, config.Timeout)
+	if err != nil {
+		return nil, err
+	}
+	command, ok := validator.(*commandValidator)
+	if !ok {
+		return nil, errors.New("command validator has unexpected implementation")
+	}
+	command.Dir = config.Dir
+	command.Env = append([]string(nil), config.Env...)
+	return command, nil
+}
+
+func (t *evidenceTracker) observe(message messages.StreamMessage) {
+	if t == nil || t.suppress(message) {
+		return
+	}
+	switch message.Type {
+	case messages.StreamTypeTranscriptEnd:
+		t.observeCustomerTurn(message)
+	case messages.StreamTypeMessageStart:
+		t.beginAssistantMessage()
+	case messages.StreamTypeTextDelta:
+		t.observeTextDelta(message)
+	case messages.StreamTypeMessageEnd:
+		t.observeAssistantTurn(message)
+	case messages.StreamTypeTextStart, messages.StreamTypeTextEnd,
+		messages.StreamTypeToolCallStart, messages.StreamTypeToolCallDelta, messages.StreamTypeToolCallEnd,
+		messages.StreamTypeAudioStart, messages.StreamTypeAudioDelta, messages.StreamTypeAudioEnd,
+		messages.StreamTypeImageStart, messages.StreamTypeImageDelta, messages.StreamTypeImageEnd,
+		messages.StreamTypeVideoStart, messages.StreamTypeVideoDelta, messages.StreamTypeVideoEnd,
+		messages.StreamTypeFileStart, messages.StreamTypeFileDelta, messages.StreamTypeFileEnd,
+		messages.StreamTypeEmbeddingStart, messages.StreamTypeEmbeddingDelta, messages.StreamTypeEmbeddingEnd,
+		messages.StreamTypeReasoningStart, messages.StreamTypeReasoningDelta, messages.StreamTypeReasoningEnd,
+		messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped,
+		messages.StreamTypeTranscriptStart, messages.StreamTypeTranscriptDelta,
+		messages.StreamTypeInputItemAdded, messages.StreamTypePong,
+		messages.StreamTypeSessionOpen, messages.StreamTypeSessionClose, messages.StreamTypeSessionCreated,
+		messages.StreamTypeSessionUpdated, messages.StreamTypeSessionUpdate,
+		messages.StreamTypeResponseCancel, messages.StreamTypeResponseCreate,
+		messages.StreamTypeRefusal, messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo,
+		messages.StreamTypeError, messages.StreamTypeSystemFullMessage:
+		return
+	}
+}
+
+func (t *evidenceTracker) noteLateEventLocked(message messages.StreamMessage) {
+	switch message.Type {
+	case messages.StreamTypeTranscriptEnd, messages.StreamTypeMessageStart, messages.StreamTypeTextDelta, messages.StreamTypeMessageEnd, messages.StreamTypeAudioDelta, messages.StreamTypeToolCallEnd, messages.StreamTypeToolCallStart:
+		t.suppressedLateEvents++
+		if err := t.run.ObserveInvocationPublication("late_event", t.inFlightInvocation, policy.InvocationCanceled, false); err != nil {
+			t.setErrorLocked(err)
+		}
+	case messages.StreamTypeTextStart, messages.StreamTypeTextEnd, messages.StreamTypeToolCallDelta,
+		messages.StreamTypeAudioStart, messages.StreamTypeAudioEnd,
+		messages.StreamTypeImageStart, messages.StreamTypeImageDelta, messages.StreamTypeImageEnd,
+		messages.StreamTypeVideoStart, messages.StreamTypeVideoDelta, messages.StreamTypeVideoEnd,
+		messages.StreamTypeFileStart, messages.StreamTypeFileDelta, messages.StreamTypeFileEnd,
+		messages.StreamTypeEmbeddingStart, messages.StreamTypeEmbeddingDelta, messages.StreamTypeEmbeddingEnd,
+		messages.StreamTypeReasoningStart, messages.StreamTypeReasoningDelta, messages.StreamTypeReasoningEnd,
+		messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped,
+		messages.StreamTypeTranscriptStart, messages.StreamTypeTranscriptDelta,
+		messages.StreamTypeInputItemAdded, messages.StreamTypePong,
+		messages.StreamTypeSessionOpen, messages.StreamTypeSessionClose, messages.StreamTypeSessionCreated,
+		messages.StreamTypeSessionUpdated, messages.StreamTypeSessionUpdate,
+		messages.StreamTypeResponseCancel, messages.StreamTypeResponseCreate,
+		messages.StreamTypeRefusal, messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo,
+		messages.StreamTypeError, messages.StreamTypeSystemFullMessage:
+		return
+	}
+}
+
+var _ browserconversation.Service = (*Service)(nil)

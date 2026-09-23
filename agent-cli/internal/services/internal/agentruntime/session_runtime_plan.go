@@ -161,7 +161,6 @@ type sessionRuntimePlan struct {
 	liveEvidence           runtimerecording.LiveEvidence
 	recordingSession       runtimerecording.SessionCapture
 	recordingSetup         func(*sessionRuntimePlan) error
-	browserRecording       *sessionBrowserRecording
 	interactivePolicy      *InteractiveToolPolicy
 	filesystemPolicy       *tools.FilesystemPolicy
 }
@@ -224,18 +223,6 @@ func (p sessionRuntimePlan) withLiveEvidence(ctx context.Context, run func(conte
 	return run(ctx, p)
 }
 
-func (p sessionRuntimePlan) finishBrowserRecording(ctx context.Context) error {
-	if p.browserRecording == nil {
-		return nil
-	}
-	p.browserRecording.stop()
-	artifact, err := p.browserRecording.artifact()
-	if err != nil || artifact == nil || p.liveEvidence == nil {
-		return err
-	}
-	return p.liveEvidence.RecordBrowserArtifact(context.WithoutCancel(ctx), artifact)
-}
-
 func (p sessionRuntimePlan) runPrepared(ctx context.Context, out io.Writer) (runErr error) {
 	reporter := p.loop.terminalReporter
 	if reporter == nil {
@@ -243,12 +230,6 @@ func (p sessionRuntimePlan) runPrepared(ctx context.Context, out io.Writer) (run
 		p.loop.terminalReporter = reporter
 	}
 	finalizer := durationwire.NewService().NewFinalizer(p.finalizationPorts())
-	if p.browserRecording != nil {
-		p.browserRecording.start(ctx)
-		defer func() {
-			runErr = errors.Join(runErr, p.finishBrowserRecording(ctx))
-		}()
-	}
 	defer func() {
 		runErr = finalizer.Finish(ctx, out, runErr)
 		if !sessionErrorHasIndependentFailure(runErr) && p.replayCompletion != nil {
@@ -406,6 +387,17 @@ func planSessionRuntimeWithFactoryContext(ctx context.Context, opts SessionRunOp
 	if err != nil {
 		return sessionRuntimePlan{}, err
 	}
+	if opts.SessionInferencer != nil && strings.TrimSpace(opts.RecordPath) != "" {
+		capture, captureErr := opts.RecordingService.TrackInjectedSession(plan.inferencer, opts.RecordPath)
+		if captureErr != nil {
+			return sessionRuntimePlan{}, fmt.Errorf("create injected session capture: %w", captureErr)
+		}
+		plan.recordingSession = capture
+		plan.flushCapture = capture.FlushCapture
+		plan.flushCaptureTo = capture.FlushToFile
+		plan.capturePath = opts.RecordPath
+		plan.inferencer = capture
+	}
 	plan.diagnostics = opts.Diagnostics
 	plan.metricsRecorder = opts.MetricsRecorder
 	plan.streamObserver = opts.StreamObserver
@@ -542,7 +534,6 @@ func planSessionRuntimeWithFactoryContext(ctx context.Context, opts SessionRunOp
 	if opts.RecordDirectory != "" {
 		evidenceOptions := sessionLiveEvidenceOptions(opts, plan, opts.RecordDirectory, opts.RecordMaxDuration)
 		plan.liveEvidenceOptions = &evidenceOptions
-		plan.browserRecording = newSessionBrowserRecording(opts, plan)
 	}
 	if plan.recordingSession != nil {
 		plan.inferencer = plan.recordingSession

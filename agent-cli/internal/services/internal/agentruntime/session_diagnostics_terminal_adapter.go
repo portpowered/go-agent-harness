@@ -319,6 +319,7 @@ func (o *sessionProgressObserver) finish(err error) error {
 		_ = o.liveRecorder.SetCompletion(context.Background(), runtimerecording.LiveCompletion{
 			RunError: err, UserCancelled: o.userCancelled,
 			RoomCancellationOnly: roomCancellationOnly(err),
+			DurationExpired:      o.durationExpired,
 			SawSessionOpen:       o.sawSessionOpen, TurnsCompleted: o.turnsCompleted,
 		})
 	}

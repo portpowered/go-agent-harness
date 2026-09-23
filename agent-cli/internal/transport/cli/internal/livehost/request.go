@@ -63,6 +63,7 @@ type requestInputs struct {
 	inputRate       int
 	outputRate      int
 	replayFinish    bool
+	turnCapture     bool
 }
 
 func resolveRequestInputs(ctx context.Context, request serviceSession.Request, replayInspection *runtimeReplay.CaptureInspection, deps RequestDependencies) (requestInputs, error) {
@@ -111,13 +112,15 @@ func resolveRequestInputs(ctx context.Context, request serviceSession.Request, r
 		return requestInputs{}, err
 	}
 	inputRate, outputRate := replayRates(replayPlan, request, inspection)
+	turnCapture := inspection != nil && inspection.Kind == runtimeReplay.CaptureKindTurn
 	return requestInputs{
 		effective: effective, inspection: inspection, provider: provider, model: model, baseURL: baseURL,
 		credentialRef: resolveCredentialReference(apiKey, deps.CredentialReference), instructions: instructions,
 		capabilities: capabilities, requestPrompt: requestPrompt, promptPresent: promptPresent,
 		openingParts: openingParts, openingResponse: openingResponse, replayPlan: replayPlan,
 		inputRate: inputRate, outputRate: outputRate,
-		replayFinish: inspection != nil && (replayPlan == nil || replayPlan.StopAfterResponse),
+		replayFinish: inspection != nil && !turnCapture && (replayPlan == nil || replayPlan.StopAfterResponse),
+		turnCapture:  turnCapture,
 	}, nil
 }
 
@@ -254,7 +257,9 @@ func assembleLiveRequest(request serviceSession.Request, inputs requestInputs) r
 		// override the ordinary finite audio/output policy so a completed
 		// response cannot cancel the provider stream before later stdin audio
 		// reaches the same session.
-		FinishAfterResponse: !request.WaitForClose && (inputs.promptPresent || hasAudioInput(request) || len(inputs.openingParts) > 0 || inputs.replayFinish || request.AudioOutputPath != ""),
+		// Provider-neutral turn captures own completion through their recorded
+		// SESSION.CLOSE, which may follow multiple output responses.
+		FinishAfterResponse: !request.WaitForClose && !inputs.turnCapture && (inputs.promptPresent || hasAudioInput(request) || len(inputs.openingParts) > 0 || inputs.replayFinish || request.AudioOutputPath != ""),
 		ExpectedResponses:   replayExpectedResponses(request, inputs, inputs.promptPresent, inputs.openingParts, inputs.openingResponse),
 	}
 	appendToolNames(&result, inputs.capabilities)
@@ -326,13 +331,10 @@ func buildReplayPlan(request serviceSession.Request, inspection *runtimeReplay.C
 	if inspection.LivePlan == nil {
 		// InspectCapture classifies caller-driven realtime captures even when
 		// their recorded client actions cannot be reproduced by the narrow
-		// self-driving plan. An explicit prompt, image, or audio input supplies
-		// the actions for this invocation, so strict provider replay can still
-		// consume the captured transport without inventing a plan.
-		if promptPresent || len(request.ImagePaths) > 0 || hasAudioInput(request) {
-			return nil, requestPrompt, promptPresent, nil
-		}
-		return nil, requestPrompt, promptPresent, errors.New("live replay plan is unavailable")
+		// self-driving plan. The strict provider replay still consumes the
+		// captured transport; the host must not invent client actions or reject
+		// a provider-only capture merely because it has no replay plan.
+		return nil, requestPrompt, promptPresent, nil
 	}
 	plan := *inspection.LivePlan
 	// Explicit caller input is checked by the strict replay transport, which

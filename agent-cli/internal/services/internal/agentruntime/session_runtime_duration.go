@@ -221,12 +221,6 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 		plan.loop.terminalReporter = reporter
 	}
 	finalizer := durationwire.NewService().NewFinalizer(plan.finalizationPorts())
-	if plan.browserRecording != nil {
-		plan.browserRecording.start(ctx)
-		defer func() {
-			runErr = errors.Join(runErr, plan.finishBrowserRecording(ctx))
-		}()
-	}
 	defer func() {
 		// The common finalizer must complete browser/provider/capture teardown
 		// before the duration sidecar is flushed and closed as the final bundle

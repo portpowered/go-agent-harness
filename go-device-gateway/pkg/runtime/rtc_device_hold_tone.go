@@ -228,7 +228,13 @@ func (s *RTCDeviceSink) holdToneObserveRealAudio(now time.Time) []int16 {
 // tail it returns (see HoldToneFiller.ObserveRealAudio) ahead of that real
 // frame so the cue never overlaps, or clicks against, real audio. Called
 // once per accepted provider frame, before that frame reaches the device.
-func (s *RTCDeviceSink) observeHoldToneRealFrame(ctx context.Context, generation uint64, blocked bool) error {
+func (s *RTCDeviceSink) observeHoldToneRealFrame(ctx context.Context, samples []int16, generation uint64, blocked bool) error {
+	// A room mixer emits bounded silent frames while it waits for the next
+	// provider delta. They are cadence markers, not genuine assistant audio;
+	// allowing them to reset the gap clock would disable the device-owned cue.
+	if s == nil || !pcm16SamplesHaveSignal(samples) {
+		return nil
+	}
 	scheduler, validClock := sessionTimingClock(ctx)
 	if !validClock || scheduler == nil {
 		return nil
@@ -238,6 +244,15 @@ func (s *RTCDeviceSink) observeHoldToneRealFrame(ctx context.Context, generation
 		return nil
 	}
 	return s.observedWriteHoldTone(ctx, tail, generation, blocked)
+}
+
+func pcm16SamplesHaveSignal(samples []int16) bool {
+	for _, sample := range samples {
+		if sample != 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *RTCDeviceSink) playbackSpanForInterruptionLocked(current uint64, requested rtcDevicePlaybackIdentity, requireRequested bool) (rtcDevicePlaybackSpan, bool) {

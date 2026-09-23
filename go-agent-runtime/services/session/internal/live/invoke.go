@@ -13,6 +13,8 @@ import (
 	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
 )
 
+const liveMediaPumpCapacity = 3
+
 // RunLive owns the complete invocation boundary for hosts that have local
 // media. Device admission, provider startup, bounded event delivery, pump
 // cancellation, and terminal joining stay together so a CLI transport cannot
@@ -48,6 +50,7 @@ type liveInvocation struct {
 }
 
 func newLiveInvocation(s *Service, ctx context.Context, options session.LiveRunOptions) (*liveInvocation, error) {
+	selectLegacyReplayFramePolicy(&options)
 	liveHandle, err := openLiveHandle(s, ctx, options)
 	if err != nil {
 		return nil, err
@@ -276,7 +279,7 @@ func (i *liveInvocation) startPump(name string, run func(context.Context) error)
 		return
 	}
 	if i.pumps == nil {
-		i.pumps = make(chan error, 3)
+		i.pumps = make(chan error, liveMediaPumpCapacity)
 	}
 	i.count++
 	go i.runPump(name, run)
@@ -394,43 +397,4 @@ func requestedTerminalError(s finishState) error {
 		err = errors.Join(err, fmt.Errorf("session error: %w", s.providerErr))
 	}
 	return err
-}
-
-func (i *liveInvocation) closeAfterStartError(startErr error) error {
-	if i == nil {
-		return startErr
-	}
-	var deviceErr error
-	if i.device != nil {
-		deviceErr = i.device.Close()
-	}
-	handleErr := i.handle.Close()
-	result := errors.Join(startErr, deviceErr, handleErr)
-	return errors.Join(result, finalizeRecorder(i.options.Recorder, i.ctx, result))
-}
-
-// waitForResponseBoundary includes partial assistant terminals produced by
-// barge-in cancellation.
-func (h *handle) waitForResponseBoundary(ctx context.Context, target int) error {
-	if h == nil {
-		return context.Canceled
-	}
-	if ctx == nil {
-		return errors.New("response boundary context is required")
-	}
-	for {
-		h.mu.Lock()
-		ready := h.observedResponseTerminals >= target && !h.responseActive && !h.responsePending
-		terminalWake, responseWake := h.responseTerminalWake, h.replayResponseWake
-		h.mu.Unlock()
-		if ready {
-			return nil
-		}
-		select {
-		case <-terminalWake:
-		case <-responseWake:
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
 }

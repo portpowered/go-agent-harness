@@ -9,7 +9,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/sessionwrap"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/stretchr/testify/require"
@@ -20,76 +20,12 @@ type testInferencer struct{ session messages.Session }
 func (i *testInferencer) ConnectSession(context.Context) (messages.Session, error) {
 	return i.session, nil
 }
-
-type testDurationService struct{}
-type testDurationController struct {
-	sessionduration.Controller
-	options sessionduration.Options
-	once    sync.Once
-}
-
-func newTestDurationService() sessionduration.ControllerService { return testDurationService{} }
-func (testDurationService) Begin(o sessionduration.Options) (sessionduration.Controller, error) {
-	if o.MaxDuration > 0 && !scheduleTestDuration(o, o.MaxDuration, func() { firstTestDurationCause(o, sessionduration.ErrMaxDurationExceeded) }) {
-		return nil, sessionduration.ErrSchedulerUnavailable
+func requireLiveHandle(t *testing.T, opened session.LiveHandle) *handle {
+	h, ok := opened.(*handle)
+	if !ok {
+		t.Fatalf("handle type = %T, want *handle", opened)
 	}
-	if !o.Liveness.Enabled && !o.Retry.Enabled {
-		return nil, nil
-	}
-	return &testDurationController{options: o}, nil
-}
-func scheduleTestDuration(o sessionduration.Options, delay time.Duration, callback func()) bool {
-	if o.Clock == nil {
-		return false
-	}
-	timer := o.Clock.NewTimer(delay)
-	if timer == nil {
-		return false
-	}
-	go func() {
-		select {
-		case <-timer.C():
-			callback()
-		case <-o.Context.Done():
-		}
-	}()
-	return true
-}
-func firstTestDurationCause(o sessionduration.Options, cause error) {
-	if o.FirstCause != nil {
-		o.FirstCause(cause)
-	}
-}
-func (c *testDurationController) expire(cause error) {
-	c.once.Do(func() { firstTestDurationCause(c.options, cause) })
-}
-func (c *testDurationController) Observe(msg messages.StreamMessage) sessionduration.Admission {
-	if c.options.Liveness.Enabled && isTestDurationResponseStart(msg) {
-		cause := &sessionduration.LivenessError{Classification: "silent_provider_timeout", ResponseID: msg.ResponseID, Cause: sessionduration.ErrProviderLivenessTimeout}
-		c.arm(c.options.Liveness.Timeout, cause)
-	}
-	if c.options.Liveness.Enabled && msg.Type == messages.StreamTypeMessageEnd {
-		failure := &sessionduration.LivenessError{Classification: "silent_provider_empty_response", ResponseID: msg.ResponseID, Cause: sessionduration.ErrProviderEmptyResponse}
-		c.expire(failure)
-	}
-	return sessionduration.Admission{Message: msg, Accepted: true, OutputState: messages.TerminalOutputPartial}
-}
-func (c *testDurationController) arm(delay time.Duration, cause error) {
-	scheduleTestDuration(c.options, delay, func() {
-		c.expire(cause)
-	})
-}
-func isTestDurationResponseStart(msg messages.StreamMessage) bool {
-	return msg.Type == messages.StreamTypeResponseCreate || msg.Type == messages.StreamTypeMessageStart
-}
-func (c *testDurationController) Retry(request sessionduration.RetryRequest) sessionduration.RetryDecision {
-	if request.Terminal == nil || request.Terminal.ProviderErrorCode != "rate_limit_exceeded" || !c.options.Retry.Enabled {
-		return sessionduration.RetryDecision{}
-	}
-	return sessionduration.RetryDecision{Eligible: true, Delay: c.options.Retry.DefaultDelay}
-}
-func (c *testDurationController) Finalize(_ context.Context, request sessionduration.FinalizeRequest) (sessionduration.Result, error) {
-	return sessionduration.Result{OutputState: messages.TerminalOutputPartial}, request.Primary
+	return h
 }
 
 type testSession struct {
@@ -187,14 +123,20 @@ func TestOpenLiveIsInertUntilStart(t *testing.T) {
 		return &testInferencer{session: s}, nil
 	}})
 	handle, err := service.OpenLive(context.Background(), session.LiveRequest{SessionID: "inert", OpeningPrompt: "hello"})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("OpenLive: %v", err)
+	}
 	select {
 	case <-called:
 		t.Fatal("provider factory called during OpenLive")
 	case <-time.After(20 * time.Millisecond):
 	}
-	require.ErrorIs(t, handle.Wait(), session.ErrLiveNotStarted)
-	require.NoError(t, handle.Close())
+	if err := handle.Wait(); !errors.Is(err, session.ErrLiveNotStarted) {
+		t.Fatalf("Wait before Start = %v, want ErrLiveNotStarted", err)
+	}
+	if err := handle.Close(); err != nil {
+		t.Fatalf("Close before Start: %v", err)
+	}
 }
 func TestLiveStartSendsOpeningPromptAndPreservesCancelCause(t *testing.T) {
 	s := newTestSession()
@@ -206,18 +148,26 @@ func TestLiveStartSendsOpeningPromptAndPreservesCancelCause(t *testing.T) {
 		return &testInferencer{session: s}, nil
 	}})
 	handle, err := service.OpenLive(context.Background(), session.LiveRequest{SessionID: "request-session", OpeningPrompt: "opening question"})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("OpenLive: %v", err)
+	}
 	//lint:ignore SA1012 Verify invalid admission leaves the handle available for a valid Start.
 	if err := handle.Start(nil); err == nil {
 		t.Fatal("nil Start context accepted")
 	}
-	require.ErrorIs(t, handle.Wait(), session.ErrLiveNotStarted)
-	require.NoError(t, handle.Start(context.Background()))
+	if err := handle.Wait(); !errors.Is(err, session.ErrLiveNotStarted) {
+		t.Fatalf("rejected Start changed lifecycle: %v", err)
+	}
+	if err := handle.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
 	got := awaitSessionOpen(t, handle.Events())
 	waitForSentText(t, s, "opening question")
 	wantErr := errors.New("room stopped")
 	handle.Cancel(wantErr)
-	require.ErrorIs(t, handle.Wait(), wantErr)
+	if err := handle.Wait(); !errors.Is(err, wantErr) {
+		t.Fatalf("Wait = %v, want cancellation cause", err)
+	}
 	got = append(got, collectTestLiveEvents(handle.Events())...)
 	if len(got) == 0 || got[len(got)-1].Kind != string(session.LiveEventTerminal) {
 		t.Fatalf("last event = %#v, want terminal", got)
@@ -228,8 +178,12 @@ func TestLiveCancelPreservesFirstCauseAcrossTeardown(t *testing.T) {
 		return &testInferencer{session: newTestSession()}, nil
 	}})
 	opened, err := service.OpenLive(context.Background(), session.LiveRequest{SessionID: "first-cause"})
-	require.NoError(t, err)
-	require.NoError(t, opened.Start(context.Background()))
+	if err != nil {
+		t.Fatalf("OpenLive: %v", err)
+	}
+	if err := opened.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
 	h, ok := opened.(*handle)
 	if !ok {
 		t.Fatalf("handle type = %T, want *handle", opened)
@@ -237,7 +191,9 @@ func TestLiveCancelPreservesFirstCauseAcrossTeardown(t *testing.T) {
 	cause := errors.New("provider liveness failure")
 	h.Cancel(cause)
 	h.Cancel(context.Canceled)
-	require.ErrorIs(t, h.Wait(), cause)
+	if waitErr := h.Wait(); !errors.Is(waitErr, cause) {
+		t.Fatalf("Wait = %v, want first cause %v", waitErr, cause)
+	}
 }
 func TestUserCancellationWinsOverUnresolvedToolResultTeardown(t *testing.T) {
 	state := finishState{
@@ -264,8 +220,12 @@ func TestLiveCapabilityHandleOwnsLifecycleAndBrowserEvents(t *testing.T) {
 		ParticipantID: "participant-a",
 		Capabilities:  &session.LiveCapabilities{Handle: capability},
 	})
-	require.NoError(t, err)
-	require.NoError(t, handle.Start(context.Background()))
+	if err != nil {
+		t.Fatalf("OpenLive: %v", err)
+	}
+	if err := handle.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
 	select {
 	case <-capability.initialized:
 	case <-time.After(time.Second):
@@ -297,7 +257,9 @@ observedEvent:
 	}
 	cause := errors.New("stop browser session")
 	handle.Cancel(cause)
-	require.ErrorIs(t, handle.Wait(), cause)
+	if err := handle.Wait(); !errors.Is(err, cause) {
+		t.Fatalf("Wait = %v, want cancellation cause", err)
+	}
 	select {
 	case <-capability.closed:
 	case <-time.After(time.Second):
@@ -310,19 +272,26 @@ func TestLiveMaxDurationUsesInjectedScheduler(t *testing.T) {
 		InferencerFactory: func(_ context.Context, _ session.LiveRequest) (messages.SessionInferencer, error) {
 			return &testInferencer{session: newTestSession()}, nil
 		},
-		Clock: clock.Now, Scheduler: clock, DurationService: newTestDurationService(),
+		Clock:     clock.Now,
+		Scheduler: clock,
 	})
 	handle, err := service.OpenLive(context.Background(), session.LiveRequest{
 		SessionID: "duration-policy", MaxDuration: 25 * time.Millisecond,
 	})
-	require.NoError(t, err)
-	require.NoError(t, handle.Start(context.Background()))
+	if err != nil {
+		t.Fatalf("OpenLive: %v", err)
+	}
+	if err := handle.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
 	clock.AdvanceBy(25 * time.Millisecond)
 	wait := make(chan error, 1)
 	go func() { wait <- handle.Wait() }()
 	select {
 	case err := <-wait:
-		require.ErrorIs(t, err, session.ErrLiveDurationExceeded)
+		if !errors.Is(err, session.ErrLiveDurationExceeded) {
+			t.Fatalf("Wait = %v, want ErrLiveDurationExceeded", err)
+		}
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for scheduled duration cancellation")
 	}
@@ -330,22 +299,29 @@ func TestLiveMaxDurationUsesInjectedScheduler(t *testing.T) {
 func TestLiveSessionUpdatedWatchdogUsesInjectedScheduler(t *testing.T) {
 	clock := platformclock.NewDeterministic(time.Unix(200, 0), time.Millisecond)
 	provider := newTestSession()
-	require.True(t, provider.receive.Write(context.Background(), messages.StreamMessage{
+	if !provider.receive.Write(context.Background(), messages.StreamMessage{
 		Type:  messages.StreamTypeSessionOpen,
 		Value: messages.NewSessionOpenValue("provider-session", "audio_inference"),
-	}))
+	}) {
+		t.Fatal("queue SESSION.OPEN")
+	}
 	service := New(Dependencies{
 		InferencerFactory: func(_ context.Context, _ session.LiveRequest) (messages.SessionInferencer, error) {
 			return &testInferencer{session: provider}, nil
 		},
-		Clock: clock.Now, Scheduler: clock, DurationService: newTestDurationService(),
+		Clock:     clock.Now,
+		Scheduler: clock,
 	})
 	handle, err := service.OpenLive(context.Background(), session.LiveRequest{
 		SessionID: "session-updated-policy", RequireSessionUpdated: true,
 		SessionUpdatedTimeout: 15 * time.Millisecond,
 	})
-	require.NoError(t, err)
-	require.NoError(t, handle.Start(context.Background()))
+	if err != nil {
+		t.Fatalf("OpenLive: %v", err)
+	}
+	if err := handle.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
 	for {
 		event, ok := <-handle.Events()
 		if !ok {
@@ -360,7 +336,9 @@ func TestLiveSessionUpdatedWatchdogUsesInjectedScheduler(t *testing.T) {
 	go func() { wait <- handle.Wait() }()
 	select {
 	case err := <-wait:
-		require.ErrorIs(t, err, session.ErrLiveSessionUpdatedTimeout)
+		if !errors.Is(err, session.ErrLiveSessionUpdatedTimeout) {
+			t.Fatalf("Wait = %v, want ErrLiveSessionUpdatedTimeout", err)
+		}
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for SESSION.UPDATED watchdog")
 	}
@@ -368,10 +346,14 @@ func TestLiveSessionUpdatedWatchdogUsesInjectedScheduler(t *testing.T) {
 func TestLiveTimingPolicyRequiresScheduler(t *testing.T) {
 	service := New(Dependencies{InferencerFactory: func(_ context.Context, _ session.LiveRequest) (messages.SessionInferencer, error) {
 		return &testInferencer{session: newTestSession()}, nil
-	}, DurationService: newTestDurationService()})
+	}})
 	handle, err := service.OpenLive(context.Background(), session.LiveRequest{MaxDuration: time.Second})
-	require.NoError(t, err)
-	require.ErrorIs(t, handle.Start(context.Background()), session.ErrLiveSchedulerUnavailable)
+	if err != nil {
+		t.Fatalf("OpenLive: %v", err)
+	}
+	if err := handle.Start(context.Background()); !errors.Is(err, session.ErrLiveSchedulerUnavailable) {
+		t.Fatalf("Start = %v, want ErrLiveSchedulerUnavailable", err)
+	}
 }
 func TestProviderLivenessEmptyResponsePublishesFaultBeforeTerminal(t *testing.T) {
 	clock := platformclock.NewDeterministic(time.Unix(700, 0), time.Millisecond)
@@ -387,15 +369,21 @@ func TestProviderLivenessEmptyResponsePublishesFaultBeforeTerminal(t *testing.T)
 		InferencerFactory: func(context.Context, session.LiveRequest) (messages.SessionInferencer, error) {
 			return &testInferencer{session: provider}, nil
 		},
-		Clock: clock.Now, Scheduler: clock, DurationService: newTestDurationService(),
+		Clock: clock.Now, Scheduler: clock,
 	})
 	handle, err := service.OpenLive(context.Background(), session.LiveRequest{
 		SessionID: "liveness-empty", ProviderLiveness: session.LiveLivenessPolicy{Enabled: true, Timeout: time.Second},
 	})
-	require.NoError(t, err)
-	require.NoError(t, handle.Start(context.Background()))
+	if err != nil {
+		t.Fatalf("OpenLive: %v", err)
+	}
+	if err := handle.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
 	waitErr := handle.Wait()
-	require.ErrorIs(t, waitErr, session.ErrLiveSilentProviderEmptyResponse)
+	if !errors.Is(waitErr, session.ErrLiveSilentProviderEmptyResponse) {
+		t.Fatalf("Wait = %v, want empty-response liveness error", waitErr)
+	}
 	assertEmptyResponseEvents(t, collectTestLiveEvents(handle.Events()))
 }
 func TestProviderLivenessTimeoutUsesInjectedScheduler(t *testing.T) {
@@ -405,17 +393,25 @@ func TestProviderLivenessTimeoutUsesInjectedScheduler(t *testing.T) {
 		InferencerFactory: func(context.Context, session.LiveRequest) (messages.SessionInferencer, error) {
 			return &testInferencer{session: provider}, nil
 		},
-		Clock: clock.Now, Scheduler: clock, DurationService: newTestDurationService(),
+		Clock: clock.Now, Scheduler: clock,
 	})
 	handle, err := service.OpenLive(context.Background(), session.LiveRequest{
 		SessionID: "liveness-timeout", ProviderLiveness: session.LiveLivenessPolicy{Enabled: true, Timeout: 9 * time.Millisecond},
 	})
-	require.NoError(t, err)
-	require.NoError(t, handle.Start(context.Background()))
-	require.NoError(t, handle.Send(context.Background(), session.LiveControl{Kind: session.LiveControlResponseCreate}))
+	if err != nil {
+		t.Fatalf("OpenLive: %v", err)
+	}
+	if err := handle.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if err := handle.Send(context.Background(), session.LiveControl{Kind: session.LiveControlResponseCreate}); err != nil {
+		t.Fatalf("Send response.create: %v", err)
+	}
 	clock.AdvanceBy(9 * time.Millisecond)
 	waitErr := handle.Wait()
-	require.ErrorIs(t, waitErr, session.ErrLiveSilentProviderTimeout)
+	if !errors.Is(waitErr, session.ErrLiveSilentProviderTimeout) {
+		t.Fatalf("Wait = %v, want timeout liveness error", waitErr)
+	}
 	var fault, terminal *session.LiveEvent
 	for event := range handle.Events() {
 		copy := event
@@ -444,12 +440,19 @@ func TestLiveEventsRemainBoundedAndTerminalIsRetained(t *testing.T) {
 		return &testInferencer{session: s}, nil
 	}})
 	handle, err := service.OpenLive(context.Background(), session.LiveRequest{SessionID: "bounded", ParticipantID: participantID})
-	require.NoError(t, err)
-	require.NoError(t, handle.Start(context.Background()))
+	if err != nil {
+		t.Fatalf("OpenLive: %v", err)
+	}
+	if err := handle.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
 	time.Sleep(20 * time.Millisecond)
 	handle.Cancel(errors.New("stop bounded fixture"))
-	err = handle.Wait()
-	require.True(t, err == nil || errors.Is(err, context.Canceled) || err.Error() == "stop bounded fixture")
+	if err := handle.Wait(); err != nil {
+		if !errors.Is(err, context.Canceled) && err.Error() != "stop bounded fixture" {
+			t.Fatalf("Wait: %v", err)
+		}
+	}
 	if len(handle.Events()) > 4 {
 		t.Fatalf("event queue length = %d, capacity = 4", len(handle.Events()))
 	}
@@ -568,19 +571,21 @@ func assertContinuationPending(t *testing.T, h *handle, msg messages.StreamMessa
 }
 func TestBindPlaybackControllerUsesVirtualCursorForReplayFileOutput(t *testing.T) {
 	provider := &mediaClaimOrderSession{testSession: newTestSession()}
-	connected, err := (terminalDrainInferencer{inner: &testInferencer{session: provider}}).ConnectSession(context.Background())
-	require.NoError(t, err)
+	connected, err := sessionwrap.TerminalDrain(&testInferencer{session: provider}, false, 32).ConnectSession(context.Background())
+	require.True(t, err == nil && len(provider.sent) > 0, "ConnectSession error=%v, media claims=%d", err, len(provider.sent))
 	t.Cleanup(func() { require.NoError(t, connected.Close()) })
-	require.NotEmpty(t, provider.sent)
 	media := sharedaudio.NewSessionMediaAtRate(nil, 24000)
 	t.Cleanup(func() { require.NoError(t, media.Close()) })
 	i := &liveInvocation{options: session.LiveRunOptions{Request: session.LiveRequest{ReplayPlan: &session.LiveReplayPlan{}}}, endpoints: media.Endpoints()}
 	i.bindPlaybackController()
 	response := sharedaudio.PlaybackResponse{ResponseID: "response", ItemID: "item"}
 	media.StartInboundResponse(response)
-	require.NoError(t, media.PushInbound(make([]int16, 720)))
-	_, err = media.Endpoints().Inbound.ReadFrame(context.Background())
-	require.NoError(t, err)
+	if err := media.PushInbound(make([]int16, 720)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := media.Endpoints().Inbound.ReadFrame(context.Background()); err != nil {
+		t.Fatal(err)
+	}
 	interrupted, ok := media.InterruptInbound()
 	if !ok || interrupted.PlaybackResponse != response || interrupted.AudioEndMS != 0 {
 		t.Fatalf("replay interruption = %+v/%t, want response at zero cursor", interrupted, ok)

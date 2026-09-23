@@ -248,7 +248,7 @@ func configureLegacyReplayInput(filePorts *FilePorts, request serviceSession.Req
 		return
 	}
 	if liveRequest.ReplayPlan.InputAudioSampleRate <= 0 {
-		UseLegacyFrameSource(filePorts.Input)
+		filePorts.Input.PadFinalFrame = true
 	}
 }
 

@@ -14,6 +14,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 // Service is an inert capture factory; invocation resources live in handles.
@@ -30,6 +31,22 @@ func (*Service) TrackSession(inner messages.SessionInferencer, writer recording.
 		return nil, errors.New("recording requires a session, writer and destination")
 	}
 	return &recordingSessionInferencer{inner: inner, recorder: writer, path: path, flushDone: make(chan struct{})}, nil
+}
+
+func (s *Service) TrackInjectedSession(inner messages.SessionInferencer, path string) (recording.SessionCapture, error) {
+	if inner == nil || path == "" {
+		return nil, errors.New("injected recording requires a session and destination")
+	}
+	claim, err := s.Claim(recording.ClaimOptions{Destination: path, Kind: recording.ClaimKindCapture})
+	if err != nil {
+		return nil, err
+	}
+	return &injectedSessionCapture{
+		inner:   gatewaytesting.NewRecordingSessionInferencerWithOptions(inner),
+		path:    path,
+		claim:   claim,
+		flushed: make(chan struct{}),
+	}, nil
 }
 
 func (s *Service) RecordProviderSession(captureService recording.ProviderCaptureService, options recording.ProviderSessionOptions) (recording.SessionCapture, error) {

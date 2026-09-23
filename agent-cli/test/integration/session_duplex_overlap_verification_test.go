@@ -430,7 +430,7 @@ func verifyV8MultiTurnRun(run v8DuplexRun, aToB, bToA [][]byte) error {
 		if result.Instruction != map[string]string{"A": v8HarnessAInstruction, "B": v8HarnessBInstruction}[name] {
 			return fmt.Errorf("multi-turn harness %s instruction = %q, want its distinct scripted instruction", name, result.Instruction)
 		}
-		if result.Elapsed > v8CommandMaxDuration+500*time.Millisecond {
+		if result.Elapsed > v8MultiTurnCommandMaxDuration+500*time.Millisecond {
 			return fmt.Errorf("multi-turn harness %s exceeded command bound: %s", name, result.Elapsed)
 		}
 		outputObservations := v8RuntimeObservations(result.Runtime, runtimecontract.SessionRuntimeObservationAudioOutput)

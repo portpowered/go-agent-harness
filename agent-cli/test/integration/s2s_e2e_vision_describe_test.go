@@ -16,6 +16,7 @@ package integration
 //     the image part, one input_audio_buffer.append per streamed corpus frame,
 //     input_audio_buffer.commit plus exactly one response.create at
 //     end-of-turn, then the grounded spoken reply and provider close.
+
 import (
 	"bytes"
 	"encoding/base64"
@@ -33,7 +34,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -226,10 +226,11 @@ func runVisionDescribeSessionWithoutRecordingDirectory(t *testing.T, fixturePath
 func runVisionDescribeSessionMode(t *testing.T, fixturePath, wavPath, imagePath, audioOutPath string, withRecordingDirectory bool) (string, error) {
 	t.Helper()
 	stdout := &syncBuffer{}
-	cmd := newTestLiveSessionCommand(t, flags.NewGlobalFlags()).Generate()
+	cmd := newTestSessionRootCommand(t)
 	cmd.SetOut(stdout)
 	cmd.SetErr(os.Stderr)
 	args := []string{
+		"session",
 		"--replay", fixturePath,
 		"--provider", "openai",
 		"--model", "gpt-realtime",
@@ -449,10 +450,10 @@ func TestSessionCommandVisionDescribeWithoutImageFailsTypedReplay(t *testing.T) 
 	wavPath := locateCLIFixture(t, visionDescribeQuestionWAV)
 
 	stdout := &syncBuffer{}
-	cmd := newTestLiveSessionCommand(t, flags.NewGlobalFlags()).Generate()
+	cmd := newTestSessionRootCommand(t)
 	cmd.SetOut(stdout)
 	cmd.SetErr(os.Stderr)
-	cmd.SetArgs([]string{"--replay", fixture, "--audio-in", wavPath})
+	cmd.SetArgs([]string{"session", "--replay", fixture, "--audio-in", wavPath})
 	runErr := cmd.ExecuteContext(t.Context())
 
 	if runErr == nil {

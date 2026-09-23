@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	endpointpolicy "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/endpoint"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
@@ -50,7 +51,7 @@ func admitBindRequest(ctx context.Context, f *Factory, request devices.RTCBindin
 func (f *Factory) resolveRegistry(request devices.RTCBindingRequest) (devicegw.DeviceRegistry, error) {
 	registry := f.registry
 	if endpoint := strings.TrimSpace(request.RemoteEndpoint); endpoint != "" {
-		if err := devices.RemoteEndpoint(endpoint).Validate(); err != nil {
+		if err := endpointpolicy.ValidateRemoteEndpoint(endpoint); err != nil {
 			return nil, err
 		}
 		var err error

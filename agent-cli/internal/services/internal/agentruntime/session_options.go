@@ -20,6 +20,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
+	runtimebrowser "github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation"
 	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	runtimerecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
@@ -163,6 +164,10 @@ func (e *SessionRuntimeSelectionError) Unwrap() error {
 
 // SessionRunOptions contains the user-facing agent session command options.
 type SessionRunOptions struct {
+	// BrowserConversation is the application-composed browser scenario
+	// contract. Browser scenario policy and lifecycle remain owned by the
+	// reusable runtime service.
+	BrowserConversation runtimebrowser.Service
 	// RecordingService, ProviderCaptureService, and ReplayService are
 	// application-composed contracts. Runtime callers that exercise the public
 	// test seam must provide the same dependencies as production composition.
@@ -305,7 +310,7 @@ type SessionRunOptions struct {
 	BrowserWatch func(context.Context) <-chan webmcp.BrokerEvent
 	// BrowserEventWatch supplies the adapter-owned semantic browser events used
 	// only by the optional recording observer. It never owns session delivery.
-	BrowserEventWatch func(context.Context) <-chan webmcp.BrowserEvent
+	BrowserEventWatch func(context.Context) <-chan runtimebrowser.BrowserEvent
 	// BrowserCapabilityState is the session-owned browser state used to compose
 	// model-facing selection grounding. It must not be inferred from the
 	// presence or absence of dynamic page definitions.

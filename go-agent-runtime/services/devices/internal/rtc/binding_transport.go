@@ -18,14 +18,18 @@ type boundSession struct {
 	messages.Session
 	binding                                  *binding
 	lifecycleCtx                             context.Context
+	stopPumps                                context.CancelFunc
 	receive                                  *messages.TypedBuffer[messages.StreamMessage]
 	forwardStop, forwardDone                 chan struct{}
 	forwardOnce                              sync.Once
 	terminalObserved, gracefulCloseRequested atomic.Bool
 }
 
-func newBoundSession(session messages.Session, binding *binding, lifecycleCtx context.Context) *boundSession {
+func newBoundSession(session messages.Session, binding *binding, lifecycleCtx context.Context, stopPumps ...context.CancelFunc) *boundSession {
 	bound := &boundSession{Session: session, binding: binding, lifecycleCtx: lifecycleCtx}
+	if len(stopPumps) > 0 {
+		bound.stopPumps = stopPumps[0]
+	}
 	bound.startReceiveForwarder(lifecycleCtx)
 	return bound
 }
@@ -257,6 +261,9 @@ func (s *boundSession) Close() error {
 		return nil
 	}
 	drainErr := s.drainIfTerminal()
+	if s.stopPumps != nil {
+		s.stopPumps()
+	}
 	sessionErr := s.Session.Close()
 	s.stopReceiveForwarder()
 	return errors.Join(drainErr, sessionErr, s.binding.Close())

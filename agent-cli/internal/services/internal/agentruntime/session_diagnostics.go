@@ -284,6 +284,7 @@ type sessionProgressObserver struct {
 	usageTotal         uint64
 	usageReasoning     uint64
 	usageSeen          bool
+	durationExpired    bool
 	livenessObserver   func(error)
 	livenessErrors     chan error
 	livenessController sessionduration.Controller

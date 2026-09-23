@@ -16,6 +16,7 @@ import (
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
+	runtimeBrowser "github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation"
 	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	runtimerecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
@@ -44,6 +45,7 @@ type Dependencies struct {
 	RecordingService       runtimerecording.Service
 	ProviderCaptureService runtimerecording.ProviderCaptureService
 	ReplayService          runtimereplay.Service
+	BrowserConversation    runtimeBrowser.Service
 }
 
 type Dispatcher struct{ deps Dependencies }
@@ -134,8 +136,9 @@ func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request)
 		RTCBinding:       runtimedevices.RTCBindingRequest{HoldToneConfig: request.HoldToneConfig, RemoteEndpoint: request.AudioDeviceServer},
 		AudioInTurnBarge: request.AudioInTurnBarge, ClientOwnsAudioTurnBoundaries: request.ClientOwnsAudioTurnBoundaries,
 		SessionUpdatedTimeout: request.SessionUpdatedTimeout, WaitForClose: request.WaitForClose,
-		runtimeFactory: d.deps.PlanFactory,
-		ModelCatalog:   d.deps.ModelCatalog,
+		runtimeFactory:      d.deps.PlanFactory,
+		ModelCatalog:        d.deps.ModelCatalog,
+		BrowserConversation: d.deps.BrowserConversation,
 	}
 	if err := validateSessionCaptureOptions(options); err != nil {
 		return SessionRunOptions{}, err

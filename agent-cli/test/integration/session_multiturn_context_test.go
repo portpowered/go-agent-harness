@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -258,10 +257,10 @@ func runMultiturnTurn(t *testing.T, fixturePath, wavPath string) (string, error)
 	t.Helper()
 
 	stdout := &syncBuffer{}
-	cmd := newTestLiveSessionCommand(t, flags.NewGlobalFlags()).Generate()
+	cmd := newTestSessionRootCommand(t)
 	cmd.SetOut(stdout)
 	cmd.SetErr(os.Stderr)
-	cmd.SetArgs([]string{"--replay", fixturePath, "--audio-in", wavPath})
+	cmd.SetArgs([]string{"session", "--replay", fixturePath, "--audio-in", wavPath})
 	err := cmd.ExecuteContext(t.Context())
 	if !stdout.waitFor("[session closed:", 10*time.Second) {
 		return stdout.String(), fmt.Errorf("timed out waiting for session close output after 10s")

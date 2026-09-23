@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 var _ messages.SessionInferencer = (*RecordingSessionInferencer)(nil)
@@ -16,12 +17,20 @@ var _ messages.SessionInferencer = (*ReplaySessionInferencer)(nil)
 type RecordingSessionInferencer struct {
 	inner    messages.SessionInferencer
 	recorder *SessionRecorder
+	options  []SessionRecorderOption
 }
 
 // NewRecordingSessionInferencer wraps the given inferencer so that every
 // session it produces is intercepted by a SessionRecorder.
 func NewRecordingSessionInferencer(inner messages.SessionInferencer) *RecordingSessionInferencer {
 	return &RecordingSessionInferencer{inner: inner}
+}
+
+// NewRecordingSessionInferencerWithOptions keeps the session relay lifecycle
+// explicit for hosts whose parent context represents a bounded run rather than
+// provider-session cancellation.
+func NewRecordingSessionInferencerWithOptions(inner messages.SessionInferencer, options ...SessionRecorderOption) *RecordingSessionInferencer {
+	return &RecordingSessionInferencer{inner: inner, options: append([]SessionRecorderOption(nil), options...)}
 }
 
 // ConnectSession delegates to the inner inferencer and wraps the returned
@@ -35,7 +44,11 @@ func (r *RecordingSessionInferencer) ConnectSession(ctx context.Context) (messag
 	if err != nil {
 		return nil, err
 	}
-	r.recorder = NewSessionRecorder(sess, WithSessionRelayContext(ctx))
+	options := append([]SessionRecorderOption(nil), r.options...)
+	if len(options) == 0 {
+		options = append(options, WithSessionRelayContext(ctx))
+	}
+	r.recorder = NewSessionRecorder(sess, options...)
 	return r.recorder, nil
 }
 
@@ -69,17 +82,48 @@ func (r *SessionRecorder) SendMessageWithoutResponse(ctx context.Context, msg me
 // SupportsCompleteMessages preserves the wrapped session's optional
 // multimodal capability declaration through the recording decorator.
 func (r *SessionRecorder) SupportsCompleteMessages() bool {
-	capabilities, ok := r.inner.(interface{ SupportsCompleteMessages() bool })
-	return ok && capabilities.SupportsCompleteMessages()
+	if capabilities, ok := r.inner.(interface{ SupportsCompleteMessages() bool }); ok {
+		return capabilities.SupportsCompleteMessages()
+	}
+	_, ok := r.inner.(interface {
+		SendMessage(context.Context, messages.Message) bool
+	})
+	return ok
 }
 
 // SupportsCompleteMessagesWithoutResponse preserves the wrapped session's
 // deferred multimodal capability declaration through the recording decorator.
 func (r *SessionRecorder) SupportsCompleteMessagesWithoutResponse() bool {
-	capabilities, ok := r.inner.(interface {
+	if capabilities, ok := r.inner.(interface {
 		SupportsCompleteMessagesWithoutResponse() bool
+	}); ok {
+		return capabilities.SupportsCompleteMessagesWithoutResponse()
+	}
+	_, ok := r.inner.(interface {
+		SendMessageWithoutResponse(context.Context, messages.Message) bool
 	})
-	return ok && capabilities.SupportsCompleteMessagesWithoutResponse()
+	return ok
+}
+
+// RTCMedia preserves the wrapped provider session's optional media capability
+// through the recording decorator. Device binding must still see the provider
+// endpoints when a host records a live RTC session.
+func (r *SessionRecorder) RTCMedia() sharedaudio.MediaEndpoints {
+	provider, ok := r.inner.(sharedaudio.MediaSession)
+	if !ok {
+		return sharedaudio.MediaEndpoints{}
+	}
+	return provider.RTCMedia()
+}
+
+// RTCMediaWithOptions preserves providers that expose continuous inbound
+// media configuration while recording is enabled.
+func (r *SessionRecorder) RTCMediaWithOptions(options sharedaudio.MediaSessionOptions) sharedaudio.MediaEndpoints {
+	provider, ok := r.inner.(sharedaudio.ConfigurableMediaSession)
+	if !ok {
+		return r.RTCMedia()
+	}
+	return provider.RTCMediaWithOptions(options)
 }
 
 // ReplaySessionInferencer implements messages.SessionInferencer by returning a

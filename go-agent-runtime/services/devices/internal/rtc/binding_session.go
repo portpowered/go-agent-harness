@@ -50,8 +50,9 @@ func (i *inferencer) ConnectSession(ctx context.Context) (messages.Session, erro
 	if err := validateMedia(i.binding, media); err != nil {
 		return nil, errors.Join(err, s.Close())
 	}
-	startMediaPumps(i, ctx, media)
-	return newBoundSession(s, i.binding, ctx), nil
+	pumpCtx, stopPumps := context.WithCancel(ctx)
+	startMediaPumps(i, pumpCtx, media)
+	return newBoundSession(s, i.binding, ctx, stopPumps), nil
 }
 
 func rtcMedia(session messages.Session) (audio.MediaEndpoints, bool) {

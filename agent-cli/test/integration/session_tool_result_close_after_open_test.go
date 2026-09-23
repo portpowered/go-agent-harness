@@ -187,7 +187,8 @@ func TestCloseAfterOpenWaitsForAcceptedRichToolResult(t *testing.T) {
 	runErr := make(chan error, 1)
 	go func() {
 		var out bytes.Buffer
-		runErr <- servicetest.RunSession(ctx, &out, withTestSessionRuntimeServices(servicetest.SessionRunOptions{
+		runErr <- servicetest.RunSession(ctx, &out, servicetest.SessionRunOptions{
+			AudioService:      newTestAudioService(),
 			RecordPath:        filepath.Join(t.TempDir(), "close-after-open-rich.json"),
 			Provider:          "grok",
 			Model:             "grok-realtime",
@@ -200,7 +201,7 @@ func TestCloseAfterOpenWaitsForAcceptedRichToolResult(t *testing.T) {
 					localCloseOnce.Do(func() { close(localClose) })
 				}
 			},
-		}))
+		})
 	}()
 
 	waitForCloseAfterOpenSignal(t, executor.started, "rich tool executor to start")
@@ -313,7 +314,8 @@ func TestDurationAdmissionCloseAfterOpenWaitsForAcceptedRichToolResult(t *testin
 	defer cancel()
 	runErr := make(chan error, 1)
 	go func() {
-		runErr <- servicetest.RunSessionWithMaxDurationClock(ctx, io.Discard, withTestSessionRuntimeServices(servicetest.SessionRunOptions{
+		runErr <- servicetest.RunSessionWithMaxDurationClock(ctx, io.Discard, servicetest.SessionRunOptions{
+			AudioService:      newTestAudioService(),
 			RecordPath:        filepath.Join(t.TempDir(), "duration-close-after-open-rich.json"),
 			Provider:          "grok",
 			Model:             "grok-realtime",
@@ -326,7 +328,7 @@ func TestDurationAdmissionCloseAfterOpenWaitsForAcceptedRichToolResult(t *testin
 					localCloseOnce.Do(func() { close(localClose) })
 				}
 			},
-		}), time.Hour, clock)
+		}, time.Hour, clock)
 	}()
 
 	waitForCloseAfterOpenSignal(t, executor.started, "duration rich tool executor to start")

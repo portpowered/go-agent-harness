@@ -1,14 +1,23 @@
 package agentruntime
 
 import (
+	"context"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
+	runtimesession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"strings"
 )
 
 func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 	if o == nil {
 		return
+	}
+	// The observer is the single inbound stream boundary for directory
+	// recording. Forward the accepted provider message here so the recording
+	// service owns both transcript and decoded output-audio evidence; the
+	// provider-facing adapter records only client-to-server messages.
+	if o.liveRecorder != nil {
+		_ = o.liveRecorder.ObserveMessage(context.Background(), runtimesession.LiveRecordAgent, msg)
 	}
 	unlockProviderBoundary := o.lockProviderBoundary()
 	defer unlockProviderBoundary()
@@ -251,6 +260,9 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 	case *messages.ErrorValue:
 		o.captureFailureFromError(v)
 	case *messages.SessionCloseValue:
+		if v.TerminalReason == messages.TerminalReason("max_duration") {
+			o.durationExpired = true
+		}
 		o.captureFailureFromClose(v)
 	}
 }

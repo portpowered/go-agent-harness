@@ -9,11 +9,7 @@ package devices
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
-	"net"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -34,40 +30,20 @@ var (
 	// drain already-admitted lifecycle messages before it tears down for this
 	// class of playback error.
 	ErrPlaybackInput = errors.New("provider playback input failed")
-	// ErrInvalidRemoteEndpoint identifies a malformed or non-loopback device
-	// server selector without exposing gateway implementation errors.
-	ErrInvalidRemoteEndpoint = errors.New("invalid remote audio-device server endpoint")
 )
 
-// RemoteEndpoint is the opaque endpoint selector accepted by the device
-// service. Validate performs its side-effect-free admission check before a
-// host opens replay captures or media ports.
-type RemoteEndpoint string
+type invalidRemoteEndpointError string
 
-func (endpoint RemoteEndpoint) Validate() error {
-	value := strings.TrimSpace(string(endpoint))
-	if value == "" {
-		return nil
-	}
-	if strings.Contains(value, "://") {
-		return fmt.Errorf("%w: want loopback host:port", ErrInvalidRemoteEndpoint)
-	}
-	host, port, err := net.SplitHostPort(value)
-	if err != nil || port == "" {
-		return fmt.Errorf("%w: want loopback host:port, got %q", ErrInvalidRemoteEndpoint, value)
-	}
-	portNumber, err := strconv.Atoi(port)
-	if err != nil || portNumber <= 0 || portNumber > 65535 {
-		return fmt.Errorf("%w: port %q is invalid", ErrInvalidRemoteEndpoint, port)
-	}
-	if host != "localhost" {
-		ip := net.ParseIP(host)
-		if ip == nil || !ip.IsLoopback() {
-			return fmt.Errorf("%w: host %q is not loopback", ErrInvalidRemoteEndpoint, host)
-		}
-	}
-	return nil
-}
+func (e invalidRemoteEndpointError) Error() string { return string(e) }
+
+// ErrInvalidRemoteEndpoint identifies a malformed or non-loopback device
+// server selector without exposing gateway implementation errors.
+const ErrInvalidRemoteEndpoint invalidRemoteEndpointError = "invalid remote audio-device server endpoint"
+
+// RemoteEndpoint is the opaque endpoint selector accepted by the device
+// service. The service validates it before opening replay captures or media
+// ports.
+type RemoteEndpoint string
 
 // Request is the normalized device admission input for one invocation. IDs
 // remain opaque strings at this boundary; the host or device implementation
@@ -109,6 +85,9 @@ type FileInput struct {
 	Source     audio.AudioSource
 	SampleRate int
 	Pace       bool
+	// PadFinalFrame preserves fixed-frame replay behavior when a legacy capture
+	// omitted its negotiated input rate.
+	PadFinalFrame bool
 	// Continuous keeps processed PCM flowing as soon as a provider frame is
 	// available. Finite inputs retain one frame of lookahead so an explicit
 	// source boundary can mark the final frame EndOfResponse; a continuously
@@ -204,6 +183,12 @@ type PlaybackStatsProvider interface {
 type Service interface {
 	Open(context.Context, Request) (Handle, error)
 	BindRTC(context.Context, RTCBindingRequest) (RTCBinding, error)
+}
+
+// RemoteEndpointValidator is an optional, side-effect-free capability for
+// validating remote device selectors before the service opens its workers.
+type RemoteEndpointValidator interface {
+	ValidateRemoteEndpoint(string) error
 }
 
 // RTCBindingRequest is the normalized, host-neutral RTC device request. The

@@ -31,27 +31,6 @@ type FilePorts struct {
 	closeErr error
 }
 
-// frameAudioSource keeps the explicit legacy replay compatibility path on the
-// canonical fixed-frame AudioSource contract. Ordinary file and finite-turn
-// callers retain count-aware source tails.
-type frameAudioSource struct {
-	source audio.AudioSource
-}
-
-func (s *frameAudioSource) ReadFrame(ctx context.Context, buf []int16) error {
-	if s == nil || s.source == nil {
-		return io.EOF
-	}
-	return s.source.ReadFrame(ctx, buf)
-}
-
-func (s *frameAudioSource) Close() error {
-	if s == nil || s.source == nil {
-		return nil
-	}
-	return s.source.Close()
-}
-
 // interruptibleAudioSource owns a process-local duplicate of stdin. The
 // generic AudioSource contract cannot cancel an in-flight io.ReadFull call,
 // while the live runtime must close and join a capture worker after the
@@ -228,43 +207,39 @@ func openFileAudioSource(input serviceSession.AudioInput) (audio.AudioSource, *o
 	return source, interruptibleInput, nil
 }
 
-// UseLegacyFrameSource preserves old raw replay captures whose handshake did
-// not record an input rate. It is intentionally opt-in and never changes the
-// normal count-aware finite source contract.
-func UseLegacyFrameSource(input *runtimeDevices.FileInput) {
-	if input == nil || input.Source == nil {
-		return
-	}
-	input.Source = &frameAudioSource{source: input.Source}
-}
-
 // Close releases every caller-opened source and sink exactly once.
 func (p *FilePorts) Close() error {
 	if p == nil {
 		return nil
 	}
-	p.once.Do(func() {
-		var errs []error
-		if p.Output != nil && p.Output.Sink != nil {
-			errs = append(errs, p.Output.Sink.Close())
-		}
-		if p.Input != nil && p.Input.Source != nil {
-			errs = append(errs, p.Input.Source.Close())
-		}
-		for index := range p.InputTurns {
-			if p.InputTurns[index].Source != nil {
-				errs = append(errs, p.InputTurns[index].Source.Close())
-			}
-		}
-		for index := range p.InputInterruptions {
-			if p.InputInterruptions[index].Source != nil {
-				errs = append(errs, p.InputInterruptions[index].Source.Close())
-			}
-		}
-		p.closeErr = errors.Join(errs...)
-	})
+	p.once.Do(func() { p.closeErr = closeFilePortSources(p) })
 	return p.closeErr
 }
+
+func closeFilePortSources(ports *FilePorts) error {
+	var errs []error
+	if ports.Output != nil {
+		errs = appendFilePortClose(errs, ports.Output.Sink)
+	}
+	if ports.Input != nil {
+		errs = appendFilePortClose(errs, ports.Input.Source)
+	}
+	for index := range ports.InputTurns {
+		errs = appendFilePortClose(errs, ports.InputTurns[index].Source)
+	}
+	for index := range ports.InputInterruptions {
+		errs = appendFilePortClose(errs, ports.InputInterruptions[index].Source)
+	}
+	return errors.Join(errs...)
+}
+
+func appendFilePortClose(errs []error, closer interface{ Close() error }) []error {
+	if closer == nil {
+		return errs
+	}
+	return append(errs, closer.Close())
+}
+
 func selectFileDevices(physical, finite runtimeDevices.Service, deviceRequest runtimeDevices.Request, filePorts *FilePorts) (runtimeDevices.Service, runtimeDevices.Request) {
 	if filePorts == nil {
 		return physical, deviceRequest
@@ -365,9 +340,5 @@ func captureCompleteControls(request serviceSession.Request, custom func(service
 	if !request.AudioInput.Present && len(request.AudioTurns) == 0 && len(request.AudioInterrupts) == 0 {
 		return nil
 	}
-	controls := []runtimeSession.LiveControl{{Kind: runtimeSession.LiveControlAudioCommit}}
-	if len(request.AudioTurns) > 0 || len(request.AudioInterrupts) > 0 {
-		controls = append(controls, runtimeSession.LiveControl{Kind: runtimeSession.LiveControlResponseCreate})
-	}
-	return controls
+	return []runtimeSession.LiveControl{{Kind: runtimeSession.LiveControlAudioCommit}}
 }

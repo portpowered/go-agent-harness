@@ -119,19 +119,39 @@ func compareJSONPayloads(expected, actual []byte, fallback string) error {
 	}
 	var expectedValue, actualValue any
 	if json.Unmarshal(expected, &expectedValue) == nil && json.Unmarshal(actual, &actualValue) == nil {
-		if pointer, ok := firstJSONDifference(expectedValue, actualValue, ""); ok {
-			location := "JSON pointer " + strconv.QuoteToASCII(pointer)[1:len(strconv.QuoteToASCII(pointer))-1]
-			return gateway.NewReplayPayloadDivergenceError(location, "<recorded>", "<sent>")
+		if difference := firstJSONDifference(expectedValue, actualValue, ""); difference != nil {
+			expectedBytes := jsonDifferenceBytes(difference.expected)
+			actualBytes := jsonDifferenceBytes(difference.actual)
+			offset := firstByteDifference(expectedBytes, actualBytes)
+			return gateway.NewReplayPayloadDivergenceError(
+				jsonPointerLocation(difference.pointer),
+				boundedJSONExcerpt(expectedBytes, offset), boundedJSONExcerpt(actualBytes, offset),
+			)
 		}
 	}
-	return gateway.NewReplayPayloadDivergenceError(fallback, "<recorded>", "<sent>")
+	offset := firstByteDifference(expected, actual)
+	return gateway.NewReplayPayloadDivergenceError(fallback, boundedRawExcerpt(expected, offset), boundedRawExcerpt(actual, offset))
 }
 
-func firstJSONDifference(expected, actual any, pointer string) (string, bool) {
+type jsonDifference struct {
+	pointer  string
+	expected any
+	actual   any
+}
+
+type missingJSONValue struct{}
+
+func firstJSONDifference(expected, actual any, pointer string) *jsonDifference {
+	if expected == nil || actual == nil {
+		if expected == nil && actual == nil {
+			return nil
+		}
+		return &jsonDifference{pointer: pointer, expected: expected, actual: actual}
+	}
 	if expectedMap, ok := expected.(map[string]any); ok {
 		actualMap, actualOK := actual.(map[string]any)
 		if !actualOK {
-			return pointer, true
+			return &jsonDifference{pointer: pointer, expected: expected, actual: actual}
 		}
 		keys := make(map[string]struct{}, len(expectedMap)+len(actualMap))
 		for key := range expectedMap {
@@ -149,35 +169,145 @@ func firstJSONDifference(expected, actual any, pointer string) (string, bool) {
 			want, wantOK := expectedMap[key]
 			got, gotOK := actualMap[key]
 			child := appendJSONPointer(pointer, key)
-			if !wantOK || !gotOK {
-				return child, true
+			if !wantOK {
+				return &jsonDifference{pointer: child, expected: missingJSONValue{}, actual: got}
 			}
-			if found, differs := firstJSONDifference(want, got, child); differs {
-				return found, true
+			if !gotOK {
+				return &jsonDifference{pointer: child, expected: want, actual: missingJSONValue{}}
+			}
+			if difference := firstJSONDifference(want, got, child); difference != nil {
+				return difference
 			}
 		}
-		return "", false
+		return nil
 	}
 	if expectedSlice, ok := expected.([]any); ok {
 		actualSlice, actualOK := actual.([]any)
 		if !actualOK {
-			return pointer, true
+			return &jsonDifference{pointer: pointer, expected: expected, actual: actual}
 		}
 		common := min(len(expectedSlice), len(actualSlice))
 		for index := 0; index < common; index++ {
-			if found, differs := firstJSONDifference(expectedSlice[index], actualSlice[index], appendJSONPointer(pointer, strconv.Itoa(index))); differs {
-				return found, true
+			if difference := firstJSONDifference(expectedSlice[index], actualSlice[index], appendJSONPointer(pointer, strconv.Itoa(index))); difference != nil {
+				return difference
 			}
 		}
 		if len(expectedSlice) != len(actualSlice) {
-			return appendJSONPointer(pointer, strconv.Itoa(common)), true
+			child := appendJSONPointer(pointer, strconv.Itoa(common))
+			if len(expectedSlice) < len(actualSlice) {
+				return &jsonDifference{pointer: child, expected: missingJSONValue{}, actual: actualSlice[common]}
+			}
+			return &jsonDifference{pointer: child, expected: expectedSlice[common], actual: missingJSONValue{}}
 		}
-		return "", false
+		return nil
 	}
 	if reflect.DeepEqual(expected, actual) {
-		return "", false
+		return nil
 	}
-	return pointer, true
+	return &jsonDifference{pointer: pointer, expected: expected, actual: actual}
+}
+
+func jsonPointerLocation(pointer string) string {
+	if pointer == "" {
+		return `JSON pointer ""`
+	}
+	quoted := strconv.QuoteToASCII(pointer)
+	return "JSON pointer " + quoted[1:len(quoted)-1]
+}
+
+func jsonDifferenceBytes(value any) []byte {
+	if _, missing := value.(missingJSONValue); missing {
+		return []byte("<missing>")
+	}
+	data, err := json.Marshal(value)
+	if err != nil {
+		return []byte("<unencodable>")
+	}
+	return data
+}
+
+func firstByteDifference(expected, actual []byte) int {
+	commonLength := len(expected)
+	if len(actual) < commonLength {
+		commonLength = len(actual)
+	}
+	for index := 0; index < commonLength; index++ {
+		if expected[index] != actual[index] {
+			return index
+		}
+	}
+	return commonLength
+}
+
+func boundedJSONExcerpt(data []byte, offset int) string {
+	return boundedExcerpt(data, offset, false)
+}
+
+func boundedRawExcerpt(data []byte, offset int) string {
+	return boundedExcerpt(data, offset, true)
+}
+
+func boundedExcerpt(data []byte, offset int, quote bool) string {
+	const limit = 96
+	const contextBytes = 24
+	const marker = "...(truncated)"
+	if len(data) == 0 {
+		if quote {
+			return `""`
+		}
+		return ""
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > len(data) {
+		offset = len(data)
+	}
+	start := offset - contextBytes
+	if start < 0 {
+		start = 0
+	}
+	end := offset + contextBytes
+	if end > len(data) {
+		end = len(data)
+	}
+	if start == end {
+		start = offset - 1
+		if start < 0 {
+			start = 0
+		}
+		end = offset + 1
+		if end > len(data) {
+			end = len(data)
+		}
+	}
+	for {
+		prefix, suffix := "", ""
+		if start > 0 {
+			prefix = marker
+		}
+		if end < len(data) {
+			suffix = marker
+		}
+		excerpt := string(data[start:end])
+		if quote {
+			excerpt = strconv.QuoteToASCII(excerpt)
+		}
+		candidate := prefix + excerpt + suffix
+		if len(candidate) <= limit {
+			return candidate
+		}
+		if end-start <= 1 {
+			return marker
+		}
+		if end-offset > offset-start {
+			end--
+		} else if start < offset {
+			start++
+		} else {
+			end--
+		}
+	}
 }
 
 func appendJSONPointer(pointer, token string) string {

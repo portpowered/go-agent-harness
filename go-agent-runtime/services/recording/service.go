@@ -313,6 +313,9 @@ type BrowserArtifactRecorder interface {
 type Service interface {
 	Claim(ClaimOptions) (DestinationClaim, error)
 	TrackSession(messages.SessionInferencer, Writer, string) (SessionCapture, error)
+	// TrackInjectedSession preserves capture behavior for a host-supplied
+	// inferencer without making the host own provider capture state.
+	TrackInjectedSession(messages.SessionInferencer, string) (SessionCapture, error)
 	RecordProviderSession(ProviderCaptureService, ProviderSessionOptions) (SessionCapture, error)
 	OpenLiveEvidence(LiveEvidenceOptions) (session.LiveRecorder, error)
 	// RunLiveEvidence owns one recorder from admission through bounded

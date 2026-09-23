@@ -398,14 +398,17 @@ func (o *parallelLifecycleObservation) closeCount() int {
 	return o.localCloseCount
 }
 
-func waitParallelLifecycleSignal(t *testing.T, signal <-chan struct{}, name string) {
+func waitParallelLifecycle[T any](t *testing.T, result <-chan T, name string, timeout time.Duration) T {
 	t.Helper()
-	timer := time.NewTimer(3 * time.Second)
+	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 	select {
-	case <-signal:
+	case value := <-result:
+		return value
 	case <-timer.C:
-		t.Fatalf("timed out waiting for %s", name)
+		t.Fatalf("timed out waiting for %s within %s", name, timeout)
+		var zero T
+		return zero
 	}
 }
 
@@ -515,8 +518,8 @@ func TestSessionCommand_OverlappingToolResultsWaitIndependently(t *testing.T) {
 	runErr := runParallelLifecycleCLI(t, executor, inferencer, observation)
 	defer executor.releaseAll()
 
-	waitParallelLifecycleSignal(t, inferencer.ready, "session connection")
-	waitParallelLifecycleSignal(t, executor.allStarted, "both tool calls to be in flight")
+	waitParallelLifecycle(t, inferencer.ready, "session connection", 3*time.Second)
+	waitParallelLifecycle(t, executor.allStarted, "both tool calls to be in flight", 3*time.Second)
 	select {
 	case <-observation.localClose:
 		t.Fatal("client close was sent while both tool results were unresolved")
@@ -528,8 +531,8 @@ func TestSessionCommand_OverlappingToolResultsWaitIndependently(t *testing.T) {
 	// first while bravo's send is held at the provider boundary.
 	executor.releaseCall(parallelLifecycleBravoID)
 	executor.releaseCall(parallelLifecycleAlphaID)
-	waitParallelLifecycleSignal(t, session.acceptedSignal(parallelLifecycleAlphaID), "first correlated result acceptance")
-	waitParallelLifecycleSignal(t, session.blockedResultStartedSignal(parallelLifecycleBravoID), "second result send to reach its acceptance boundary")
+	waitParallelLifecycle(t, session.acceptedSignal(parallelLifecycleAlphaID), "first correlated result acceptance", 3*time.Second)
+	waitParallelLifecycle(t, session.blockedResultStartedSignal(parallelLifecycleBravoID), "second result send to reach its acceptance boundary", 3*time.Second)
 	select {
 	case <-observation.localClose:
 		t.Fatal("client close was sent after one result while the other call remained unresolved")
@@ -537,15 +540,10 @@ func TestSessionCommand_OverlappingToolResultsWaitIndependently(t *testing.T) {
 	}
 
 	session.releaseResult(parallelLifecycleBravoID)
-	waitParallelLifecycleSignal(t, session.acceptedSignal(parallelLifecycleBravoID), "second correlated result acceptance")
-	waitParallelLifecycleSignal(t, observation.localClose, "client close after both accepted results")
+	waitParallelLifecycle(t, session.acceptedSignal(parallelLifecycleBravoID), "second correlated result acceptance", 3*time.Second)
+	waitParallelLifecycle(t, observation.localClose, "client close after both accepted results", 3*time.Second)
 
-	select {
-	case err := <-runErr:
-		assertExpectedSemanticLiveRunResult(t, err)
-	case <-time.After(sessionLifecycleSafetyTimeout):
-		t.Fatalf("session command did not finish after the final accepted result within %s", sessionLifecycleSafetyTimeout)
-	}
+	assertExpectedSemanticLiveRunResult(t, waitParallelLifecycle(t, runErr, "session command did not finish after the final accepted result", sessionLifecycleSafetyTimeout))
 
 	calls, completions := executor.callsSnapshot()
 	assertParallelLifecycleCalls(t, calls)
@@ -582,7 +580,8 @@ func TestSessionParallelToolResultsTerminalFailureNamesOnlyRemainingCall(t *test
 	defer cancel()
 	runErr := make(chan error, 1)
 	go func() {
-		runErr <- servicetest.RunSession(ctx, io.Discard, withTestSessionRuntimeServices(servicetest.SessionRunOptions{
+		runErr <- servicetest.RunSession(ctx, io.Discard, servicetest.SessionRunOptions{
+			AudioService:      newTestAudioService(),
 			RecordPath:        "parallel-tool-result-terminal-failure.session.json",
 			Provider:          "openai",
 			Model:             "gpt-realtime",
@@ -597,22 +596,17 @@ func TestSessionParallelToolResultsTerminalFailureNamesOnlyRemainingCall(t *test
 				PCM:                 []byte{1, 2, 3, 4},
 				EndOfTurn:           true,
 			}},
-		}))
+		})
 	}()
 	defer executor.releaseAll()
 
-	waitParallelLifecycleSignal(t, inferencer.ready, "terminal-path session connection")
-	waitParallelLifecycleSignal(t, executor.allStarted, "terminal-path tool calls to be in flight")
+	waitParallelLifecycle(t, inferencer.ready, "terminal-path session connection", 3*time.Second)
+	waitParallelLifecycle(t, executor.allStarted, "terminal-path tool calls to be in flight", 3*time.Second)
 	executor.releaseCall(parallelLifecycleBravoID)
 	executor.releaseCall(parallelLifecycleAlphaID)
-	waitParallelLifecycleSignal(t, session.acceptedSignal(parallelLifecycleAlphaID), "accepted result before terminal failure")
+	waitParallelLifecycle(t, session.acceptedSignal(parallelLifecycleAlphaID), "accepted result before terminal failure", 3*time.Second)
 
-	var err error
-	select {
-	case err = <-runErr:
-	case <-time.After(sessionLifecycleSafetyTimeout):
-		t.Fatal("terminal-path session did not return after the rejected result send")
-	}
+	err := waitParallelLifecycle(t, runErr, "terminal-path session did not return after the rejected result send", sessionLifecycleSafetyTimeout)
 	if err == nil {
 		t.Fatal("terminal-path session returned nil with one unresolved tool result")
 	}
