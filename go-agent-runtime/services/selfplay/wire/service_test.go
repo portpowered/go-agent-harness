@@ -320,9 +320,10 @@ func TestSelfPlayServiceReportsBoundedShutdownTimeout(t *testing.T) {
 	}
 }
 
-func TestSelfPlayServiceRejectsInvalidProviderAndBoundsBeforeSessionBuild(t *testing.T) {
+func TestSelfPlayServiceRejectsInvalidRequestsBeforeSideEffects(t *testing.T) {
 	provider := newTestSessionService(t, "")
 	service := NewService(Dependencies{SessionService: provider, ModelCatalog: testModelCatalog{}, Clock: clock.Real{}})
+	missingCredentialDir := filepath.Join(t.TempDir(), "missing-credential")
 	for _, testCase := range []struct {
 		name    string
 		request selfplay.Request
@@ -332,11 +333,17 @@ func TestSelfPlayServiceRejectsInvalidProviderAndBoundsBeforeSessionBuild(t *tes
 		{name: "duration", request: selfplay.Request{OutputDir: filepath.Join(t.TempDir(), "duration"), MaxDuration: -time.Second}, want: selfplay.ErrInvalidRequest},
 		{name: "turns", request: selfplay.Request{OutputDir: filepath.Join(t.TempDir(), "turns"), MaxTurns: -1}, want: selfplay.ErrInvalidRequest},
 		{name: "output", request: selfplay.Request{MaxTurns: 1}, want: selfplay.ErrInvalidRequest},
+		{name: "credential", request: selfplay.Request{Provider: "openai", Model: "gpt-realtime", OutputDir: missingCredentialDir}, want: selfplay.ErrCredentialRequired},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			_, err := service.Run(context.Background(), testCase.request)
 			if !errors.Is(err, testCase.want) {
 				t.Fatalf("Run error = %v, want %v", err, testCase.want)
+			}
+			if testCase.name == "credential" {
+				if _, err := os.Stat(missingCredentialDir); !os.IsNotExist(err) {
+					t.Fatalf("missing-credential request created its output directory: stat error = %v", err)
+				}
 			}
 		})
 	}
