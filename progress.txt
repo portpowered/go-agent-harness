@@ -4667,3 +4667,25 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   functional, integration, race, hermetic, and Wire commands on that exact
   clean commit. Continue caller reconciliation with the same task when reviewed
   C268/C269 release refs become available. Decision remains CONTINUE.
+
+
+# C276 prepush coverage suite rerun checkpoint — 2026-09-23
+
+- Exact `rtk make prepush` on `29ab07b68e996acc3e7c1e6ddf4e41ac7558bd07` passed
+  formatting, architecture (224 packages / 1,985 files / 29,258 functions),
+  vet, lint, staticcheck, build, full normal tests, test-tools, and coverage
+  registration. Its instrumented agent-cli suite exited at 5m21s (67% of its
+  eight-minute budget) on the existing
+  `TestManagedBrowserManagerRecoversMalformedOrStaleStateWithoutSignalingOldPID`
+  TempDir cleanup error in `agent-cli/internal/webmcp/chrome`. It was classified
+  as a test failure, not a timeout; no coverage-floor report was reached.
+- Reproduced the failing test with identical coverage flags for 25 runs; all
+  passed. The complete `agent-cli/internal/webmcp/chrome` package also passed
+  with the same coverage flags (4.931s). The failure has not reproduced in
+  isolation, so no unrelated production change was made. Removed the two
+  generated integration capture outputs.
+- Next: rerun full `make prepush` on the unchanged source to establish whether
+  the suite race recurs and reach the coverage floor report. If the same cleanup
+  failure reproduces in the full suite, repair its bounded cleanup locally;
+  otherwise address the exact coverage report without changing floors. Decision
+  remains CONTINUE.
