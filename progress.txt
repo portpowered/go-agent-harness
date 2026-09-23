@@ -4888,3 +4888,48 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   readers additively, refresh the production caller census, and run every
   C276 functional, integration, race, hermetic, Wire, and `make prepush` gate
   on one unchanged clean SHA. Decision remains CONTINUE.
+
+
+# C276 exact-head public regression and release-boundary checkpoint — 2026-09-23
+
+- Re-read the Factory operating policy, implementation handoff, `prd.json`,
+  progress history, and canonical Work/review records. From `FACTORY_ROOT`,
+  `project-control.py verify-work --type task --name
+  audio-runtime-c276-recover-c270-recording-replay-finalization` returned
+  `admitted`; `prd.json.branchName` matches this isolated worktree. The live
+  session lists C276 as `work-task-8` in `init`; its filtered C276/C270 records
+  contain no concluded review Work or findings.
+- Fetched `origin/main=2f9f9736e1360802fc37e82de38540d92cb22631`. Clean HEAD
+  `358b3f8048b88011b3bbb1afdf72b67f186d87d2` retains startup, C270, C234, both
+  C217 pins, and fetched main as ancestors. Its only difference from the last
+  full-prepush source candidate `34e089f900485fff3a1de291f51934b2d07536d9` is
+  `progress.txt`.
+- On this exact HEAD, `rtk go test -timeout=4m -count=1
+  ./go-agent-runtime/services/recording/... ./go-agent-runtime/services/replay/...`
+  passes (`277` tests / `13` packages), and the same command with `-race` passes
+  (`277` / `13`). `rtk proxy env CGO_ENABLED=0 go test -timeout=4m -count=1
+  -tags=nomicrophone ./agent-cli/internal/transport/cli -run
+  'TestSession(Recorded|Unrecorded)WebMCPCastDeviceWAVStaysInteractive'` passes.
+  All seven planned legacy files and all six checkpoint-only replacements remain
+  absent; the only adapters are
+  `recording_adapter.go` (30 lines) and `replay_adapter.go` (33 lines), 63 total.
+- A production symbol census confirms the remaining direct capture readers are
+  `services/sessiontrace/internal/service/metrics.go:64`,
+  `services/roomreplay/internal/service/integrity_artifacts.go:122`, and
+  `services/roomreplay/internal/service/schedule_build.go:155`. The current
+  session has no C268 Work; C280 (`work-task-15`, C269 recovery) remains `init`.
+  The relevant C278 room-replay review says earlier code findings were repaired
+  but requires the full local preflight on its repaired exact head before fresh
+  review; that release is unavailable. The C274 branch is not an ancestor of
+  fetched main. No peer source or worktree was modified.
+- The last full `make prepush` remains red only at the four shared coverage
+  floors recorded above: CLI Wire 79.00%/80%, session Wire 84.60%/95%, session
+  duration service 84.50%/90%, and session-terminal Wire 88.90%/95%. Source is
+  unchanged, so the failed full prepush was not repeated. No push, PR, SCRIPT CI,
+  or independent review handoff occurred.
+- Exact next action: retain this C276 task and branch; integrate the three
+  production reader cutovers only after the C268/C269/C274 owners provide exact
+  reviewed releases or explicit path handoffs, then refresh the caller census
+  and rerun every C276 functional, integration, race, hermetic, Wire, and
+  `make prepush` gate on one clean exact candidate before any push. Decision
+  remains CONTINUE.
