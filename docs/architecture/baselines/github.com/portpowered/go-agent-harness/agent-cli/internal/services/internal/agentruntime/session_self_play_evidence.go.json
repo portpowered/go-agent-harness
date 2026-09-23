@@ -17,8 +17,8 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_self_play_evidence.go",
-      "value": 716,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "value": 714,
+      "rationale": "Reduced from 716 lines by factoring repeated self-play cleanup path construction while preserving cleanup error reporting.",
       "phase": "P0"
     }
   ]

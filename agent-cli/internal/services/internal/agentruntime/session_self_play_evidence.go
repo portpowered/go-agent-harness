@@ -156,40 +156,38 @@ func newSelfPlayEvidence(destination string, opts SelfPlayRunOptions, startedAt 
 		var err error
 		side.audio, err = newSelfPlayWAVRecorder(filepath.Join(destination, config.wavPath), selfPlaySampleRate)
 		if err != nil {
-			evidence.cleanupSetup()
-			return nil, fmt.Errorf("create %s WAV evidence: %w", config.id, err)
+			return nil, errors.Join(fmt.Errorf("create %s WAV evidence: %w", config.id, err), evidence.cleanupSetup())
 		}
 		side.diagnostics, err = newSelfPlayJSONLWriter(filepath.Join(destination, config.diagnostics))
 		if err != nil {
-			evidence.cleanupSetup()
-			return nil, fmt.Errorf("create %s diagnostics evidence: %w", config.id, err)
+			return nil, errors.Join(fmt.Errorf("create %s diagnostics evidence: %w", config.id, err), evidence.cleanupSetup())
 		}
 		side.streamDeltas, err = newSelfPlayJSONLWriter(filepath.Join(destination, config.streamDeltas))
 		if err != nil {
-			evidence.cleanupSetup()
-			return nil, fmt.Errorf("create %s stream evidence: %w", config.id, err)
+			return nil, errors.Join(fmt.Errorf("create %s stream evidence: %w", config.id, err), evidence.cleanupSetup())
 		}
 		side.runtimeRecord = sessiontracewire.NewRuntimeRecorder(side.runtime, opts.clock)
 	}
 	return evidence, nil
 }
-func (e *selfPlayEvidence) cleanupSetup() {
+func (e *selfPlayEvidence) cleanupSetup() error {
 	if e == nil {
-		return
+		return nil
 	}
+	var cleanupErr error
 	for _, side := range e.sides {
 		if side == nil {
 			continue
 		}
-		_ = closeSelfPlayEvidenceSide(side)
-		for _, path := range []string{
-			filepath.Join(e.destination, side.id+".wav"),
-			filepath.Join(e.destination, side.id+"-diagnostics.jsonl"),
-			filepath.Join(e.destination, side.id+"-stream-deltas.jsonl"),
-		} {
-			_ = os.Remove(path)
+		cleanupErr = errors.Join(cleanupErr, closeSelfPlayEvidenceSide(side))
+		for _, suffix := range []string{".wav", "-diagnostics.jsonl", "-stream-deltas.jsonl"} {
+			path := filepath.Join(e.destination, side.id+suffix)
+			if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+				cleanupErr = errors.Join(cleanupErr, fmt.Errorf("remove partial self-play evidence %s: %w", filepath.Base(path), err))
+			}
 		}
 	}
+	return cleanupErr
 }
 
 func closeSelfPlayEvidenceSide(side *selfPlaySideEvidence) error {

@@ -65,7 +65,7 @@ model:
 	if _, ok := gotDialer.(runtimerecording.Writer); !ok {
 		t.Fatalf("OpenAI record inferencer received %T, want the public recording writer", gotDialer)
 	}
-	_, _ = gotDialer.Dial("fixture", nil)
+	assertDialFailure(t, gotDialer, observedRuntimeDialError)
 	if defaultDialer.calls != 1 {
 		t.Fatalf("recording service forwarded %d dial attempts to the caller-owned websocket dialer, want 1", defaultDialer.calls)
 	}
@@ -205,7 +205,7 @@ model:
 	if _, ok := gotDialer.(runtimerecording.Writer); !ok {
 		t.Fatalf("Grok session inferencer received %T, want the public recording writer", gotDialer)
 	}
-	_, _ = gotDialer.Dial("fixture", nil)
+	assertDialFailure(t, gotDialer, observedRuntimeDialError)
 	if callerDialer.calls != 1 {
 		t.Fatalf("recording service forwarded %d dial attempts to caller-owned dialer, want 1", callerDialer.calls)
 	}
@@ -956,7 +956,7 @@ type trackingRuntimeDialer struct{ calls int }
 
 func (d *trackingRuntimeDialer) Dial(string, map[string]string) (transport.Conn, error) {
 	d.calls++
-	return nil, errors.New("observed runtime dial")
+	return nil, observedRuntimeDialError
 }
 
 type replayHandshakeRecordingDialer struct {
