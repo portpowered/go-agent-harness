@@ -4885,3 +4885,36 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   residual cluster, then run C280-03/C280-04 and the full C280-05 preflight
   including `make prepush` on one clean exact candidate. Return `CONTINUE`
   while that actionable release integration remains unavailable.
+
+# C280 exact release audit and focused gate checkpoint — 2026-09-23T03:52Z
+
+- Re-read the required operating policy and implementation handoff, then
+  verified `project-control.py verify-work --type task --name
+  audio-runtime-c280-recover-c269-room-evidence-retirement`: admission is
+  `admitted` for the sole `audio-runtime` / `audio-runtime-v1` project.
+  `prd.json.branchName` exactly matches the isolated branch
+  `codex/audio-runtime-c280-recover-c269-room-evidence-retirement`.
+- Fetched `origin/main=2f9f9736e1360802fc37e82de38540d92cb22631`; clean HEAD is
+  `dfb7c495920e5bb6289b95fd3bf9528aae21da8d`, and both origin/main and startup
+  integration `8bdafc7f947a3a2c9856220abdc539437035bd21` remain ancestors.
+  No host, predecessor or peer worktree was modified.
+- Canonical Work still reports C272 `work-task-13`, C276 `work-task-8`, and
+  C281 `work-task-17` as unreleased `init` tasks; C278 is represented in
+  current main. No reviewed or explicit exact-path release exists for the
+  shared room, recording/replay, or self-play caller seams, so no peer head was
+  consumed.
+- Fresh census remains `58` agentruntime production files / `22,510` lines;
+  the exact C280 residual is three agentruntime files / `1,794` lines plus
+  fourteen `rooms/internal/evidence` production files / `2,772` lines. C280
+  retains exactly `0` adapter files / `0` adapter lines. The private boundary
+  scan passed. Focused normal tests passed `57` cases in `16` packages;
+  focused race tests passed `52` cases in `16` packages; architecture-size
+  passed `225` packages / `1,997` files / `29,200` functions; Wire generated
+  no diff; `git diff --check` and clean-status checks passed.
+- Caller cutover, legacy deletion, `make prepush`, push, PR, SCRIPT CI,
+  independent review, and merge remain unclaimed. Exact next action: consume
+  only a reviewed or explicit exact-path C272/C276/C281 release, integrate it
+  additively, cut over every named and discovered caller, delete the three
+  residual agentruntime files and all fourteen duplicate evidence files, then
+  run C280-03/C280-04 and the complete C280-05 preflight on one clean SHA.
+  Decision remains `CONTINUE` while that prerequisite is unavailable.
