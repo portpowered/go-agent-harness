@@ -1,131 +1,85 @@
 package cli
 
 import (
+	"context"
 	"errors"
-	"fmt"
-	"strconv"
-	"time"
+	"io"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
-	serviceSelfPlay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/selfplay"
+	serviceSelfPlay "github.com/portpowered/go-agent-harness/agent-cli/internal/services/selfplay"
 	"github.com/spf13/cobra"
 )
 
-// SessionSelfPlayCommand translates CLI input into the runtime-owned request.
+// SessionSelfPlayCommand exposes the bounded Phase 1 live two-agent audio
+// conversation under `yui session self-play`.
 type SessionSelfPlayCommand struct {
 	globalFlags *flags.GlobalFlags
-	service     serviceSelfPlay.Service
+	run         serviceSelfPlay.Service
 }
 
-// NewSessionSelfPlayCommand creates the transport adapter for the self-play service.
+// NewSessionSelfPlayCommand creates the self-play command from the public
+// service contract. A nil service is useful for parser tests that install a
+// runner with SetRunner.
 func NewSessionSelfPlayCommand(globalFlags *flags.GlobalFlags, service serviceSelfPlay.Service) *SessionSelfPlayCommand {
-	return &SessionSelfPlayCommand{globalFlags: globalFlags, service: service}
+	return &SessionSelfPlayCommand{
+		globalFlags: globalFlags,
+		run:         service,
+	}
+}
+
+// SetRunner replaces the service runner used by this command. It is intended
+// for hermetic command tests and does not change the production default.
+func (c *SessionSelfPlayCommand) SetRunner(runner func(context.Context, io.Writer, serviceSelfPlay.RunOptions) error) {
+	if c != nil && runner != nil {
+		c.run = serviceSelfPlay.RunFunc(runner)
+	}
 }
 
 // Generate returns the cobra command for the bounded self-play runner.
 func (c *SessionSelfPlayCommand) Generate() *cobra.Command {
 	var apiKey string
-	var provider string
-	var model string
-	var baseURL string
-	var outputDir string
-	var maxDuration string
-	var maxTurns string
+	provider := serviceSelfPlay.SelfPlayDefaultProvider
+	model := serviceSelfPlay.SelfPlayDefaultModel
+	baseURL := ""
+	outputDir := ""
+	maxDuration := serviceSelfPlay.SelfPlayDefaultMaxDuration
+	maxTurns := serviceSelfPlay.SelfPlayDefaultTurnTarget
 
 	cmd := &cobra.Command{
 		Use:   "self-play",
-		Short: "Run two fixed-persona live agents through the self-play service",
-		Long: "Run a bounded live self-play conversation through the runtime service.\n\n" +
+		Short: "Run two fixed-persona live agents through a PCM16 audio bridge",
+		Long: "Run the Phase 1 live self-play harness with two continuously open OpenAI Realtime sessions.\n\n" +
+			"Customer persona: " + serviceSelfPlay.SelfPlayCustomerPersona + "\n" +
+			"Assistant persona: " + serviceSelfPlay.SelfPlayAssistantPersona + "\n" +
+			"Opening seed (sent once as customer text): " + serviceSelfPlay.SelfPlayOpeningSeed + "\n\n" +
 			"Only emitted raw PCM16 audio crosses between agents; tools and transcript/text bridging are disabled.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if c == nil || c.service == nil {
+			if c == nil || c.run == nil {
 				return errors.New("self-play service is required")
-			}
-			duration, err := parseSelfPlayDuration(maxDuration)
-			if err != nil {
-				return err
-			}
-			turns, err := parseSelfPlayTurns(maxTurns)
-			if err != nil {
-				return err
 			}
 			configDir := ""
 			if c.globalFlags != nil {
 				configDir = c.globalFlags.ConfigDir()
 			}
-			resolvedAPIKey, resolvedBaseURL, err := resolveSelfPlayProviderInputs(configDir, apiKey, baseURL)
-			if err != nil {
-				return err
-			}
-			result, runErr := c.service.Run(cmd.Context(), serviceSelfPlay.Request{
-				APIKey:      resolvedAPIKey,
+			return c.run.Run(cmd.Context(), cmd.OutOrStdout(), serviceSelfPlay.RunOptions{
+				APIKey:      apiKey,
 				OutputDir:   outputDir,
 				Provider:    provider,
 				Model:       model,
-				BaseURL:     resolvedBaseURL,
-				MaxDuration: duration,
-				MaxTurns:    turns,
+				BaseURL:     baseURL,
+				ConfigDir:   configDir,
+				MaxDuration: maxDuration,
+				MaxTurns:    maxTurns,
 			})
-			if result.StopReason == "" {
-				return runErr
-			}
-			_, writeErr := fmt.Fprintf(cmd.OutOrStdout(), "self-play stopped: reason=%s customer_turns=%d assistant_turns=%d\n", result.StopReason, result.Customer.CompletedTurns, result.Assistant.CompletedTurns)
-			return errors.Join(runErr, writeErr)
 		},
 	}
-	cmd.Flags().StringVar(&apiKey, "api-key", "", "OpenAI Realtime API key; configuration is used when omitted")
+	cmd.Flags().StringVar(&apiKey, "api-key", "", "OpenAI API key; may also come from the configured AGENT_MODEL__OPENAI__API_KEY")
 	cmd.Flags().StringVar(&outputDir, "output-dir", "", "Empty directory for this self-play run (required)")
-	cmd.Flags().StringVar(&provider, "provider", "", "Realtime provider (default: service-defined)")
-	cmd.Flags().StringVar(&model, "model", "", "Realtime model (default: service-defined)")
-	cmd.Flags().StringVar(&baseURL, "base-url", "", "Optional Realtime endpoint override; configuration is used when omitted")
-	cmd.Flags().StringVar(&maxDuration, "max-duration", "", "Positive maximum run duration (default: service-defined)")
-	cmd.Flags().StringVar(&maxTurns, "max-turns", "", "Positive completed-turn target per side (default: service-defined)")
+	cmd.Flags().StringVar(&provider, "provider", provider, "Phase 1 realtime provider (openai only)")
+	cmd.Flags().StringVar(&model, "model", model, "OpenAI Realtime model (default: gpt-realtime)")
+	cmd.Flags().StringVar(&baseURL, "base-url", "", "Optional OpenAI Realtime WebSocket endpoint override")
+	cmd.Flags().DurationVar(&maxDuration, "max-duration", maxDuration, "Positive maximum run duration (default: 2m)")
+	cmd.Flags().IntVar(&maxTurns, "max-turns", maxTurns, "Positive completed-turn target per side (default: 3)")
 	return cmd
-}
-
-func resolveSelfPlayProviderInputs(configDir, apiKey, baseURL string) (string, string, error) {
-	if apiKey != "" && baseURL != "" {
-		return apiKey, baseURL, nil
-	}
-	storage, err := config.NewDefaultConfigStorage(configDir)
-	if err != nil {
-		return "", "", fmt.Errorf("self-play live session configuration: initialize config: %w", err)
-	}
-	loaded, err := storage.Load()
-	if err != nil {
-		return "", "", fmt.Errorf("self-play live session configuration: load config: %w", err)
-	}
-	if openAI := loaded.Model.OpenAI; openAI != nil {
-		if apiKey == "" {
-			apiKey = openAI.APIKey
-		}
-		if baseURL == "" {
-			baseURL = openAI.BaseURL
-		}
-	}
-	return apiKey, baseURL, nil
-}
-
-func parseSelfPlayDuration(value string) (time.Duration, error) {
-	if value == "" {
-		return 0, nil
-	}
-	duration, err := time.ParseDuration(value)
-	if err != nil {
-		return 0, fmt.Errorf("invalid --max-duration %q: %w", value, err)
-	}
-	return duration, nil
-}
-
-func parseSelfPlayTurns(value string) (int, error) {
-	if value == "" {
-		return 0, nil
-	}
-	turns, err := strconv.Atoi(value)
-	if err != nil {
-		return 0, fmt.Errorf("invalid --max-turns %q: %w", value, err)
-	}
-	return turns, nil
 }

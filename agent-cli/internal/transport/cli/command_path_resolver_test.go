@@ -16,8 +16,8 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe"
+	serviceSelfPlay "github.com/portpowered/go-agent-harness/agent-cli/internal/services/selfplay"
 	sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
-	serviceSelfPlay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/selfplay"
 	sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
@@ -230,12 +230,12 @@ func TestRouterPreRunNormalizesSelfPlayOutputDirectory(t *testing.T) {
 	currentHome := t.TempDir()
 	namedHome := t.TempDir()
 	globalFlags := flags.NewGlobalFlags()
-	var got serviceSelfPlay.Request
-	owner := NewSessionSelfPlayCommand(globalFlags, selfPlayCommandServiceFunc(func(_ context.Context, options serviceSelfPlay.Request) (serviceSelfPlay.Result, error) {
+	owner := NewSessionSelfPlayCommand(globalFlags, nil)
+	var got serviceSelfPlay.RunOptions
+	owner.SetRunner(func(_ context.Context, _ io.Writer, options serviceSelfPlay.RunOptions) error {
 		got = options
-		return serviceSelfPlay.Result{}, nil
-	}))
-	globalFlags.ConfigDirPath = t.TempDir()
+		return nil
+	})
 
 	sessionGroup := &cobra.Command{Use: "session"}
 	sessionGroup.AddCommand(owner.Generate())

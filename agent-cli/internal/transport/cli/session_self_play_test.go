@@ -3,30 +3,26 @@ package cli
 import (
 	"bytes"
 	"context"
+	"io"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
-	serviceSelfPlay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/selfplay"
+	serviceSelfPlay "github.com/portpowered/go-agent-harness/agent-cli/internal/services/selfplay"
 )
-
-type selfPlayCommandServiceFunc func(context.Context, serviceSelfPlay.Request) (serviceSelfPlay.Result, error)
-
-func (f selfPlayCommandServiceFunc) Run(ctx context.Context, request serviceSelfPlay.Request) (serviceSelfPlay.Result, error) {
-	return f(ctx, request)
-}
 
 func TestSessionSelfPlayCommandParsesBoundedRunOptions(t *testing.T) {
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = t.TempDir()
+	subject := NewSessionSelfPlayCommand(globalFlags, nil)
 
-	var got serviceSelfPlay.Request
-	subject := NewSessionSelfPlayCommand(globalFlags, selfPlayCommandServiceFunc(func(_ context.Context, opts serviceSelfPlay.Request) (serviceSelfPlay.Result, error) {
+	var got serviceSelfPlay.RunOptions
+	subject.SetRunner(func(_ context.Context, _ io.Writer, opts serviceSelfPlay.RunOptions) error {
 		got = opts
-		return serviceSelfPlay.Result{}, nil
-	}))
+		return nil
+	})
 
 	outputDir := filepath.Join(t.TempDir(), "self-play")
 	cmd := subject.Generate()
@@ -51,32 +47,12 @@ func TestSessionSelfPlayCommandParsesBoundedRunOptions(t *testing.T) {
 	if got.MaxDuration != 17*time.Second || got.MaxTurns != 4 {
 		t.Fatalf("parsed bounds = (%s, %d), want (17s, 4)", got.MaxDuration, got.MaxTurns)
 	}
-}
-
-func TestSessionSelfPlayCommandResolvesProviderInputsFromConfig(t *testing.T) {
-	t.Setenv("AGENT_MODEL__OPENAI__API_KEY", "sk-config")
-	t.Setenv("AGENT_MODEL__OPENAI__BASE_URL", "wss://config.example.test/realtime")
-	globalFlags := flags.NewGlobalFlags()
-	globalFlags.ConfigDirPath = t.TempDir()
-	var got serviceSelfPlay.Request
-	subject := NewSessionSelfPlayCommand(globalFlags, selfPlayCommandServiceFunc(func(_ context.Context, request serviceSelfPlay.Request) (serviceSelfPlay.Result, error) {
-		got = request
-		return serviceSelfPlay.Result{}, nil
-	}))
-	cmd := subject.Generate()
-	cmd.SetArgs([]string{"--output-dir", filepath.Join(t.TempDir(), "self-play")})
-	if err := cmd.ExecuteContext(context.Background()); err != nil {
-		t.Fatalf("execute self-play command: %v", err)
-	}
-	if got.APIKey != "sk-config" || got.BaseURL != "wss://config.example.test/realtime" {
-		t.Fatalf("resolved self-play provider inputs = (key %q, base %q)", got.APIKey, got.BaseURL)
-	}
-	if got.Provider != "" || got.Model != "" || got.MaxDuration != 0 || got.MaxTurns != 0 {
-		t.Fatalf("adapter supplied service-owned defaults: %#v", got)
+	if got.ConfigDir != globalFlags.ConfigDir() {
+		t.Fatalf("config dir = %q, want %q", got.ConfigDir, globalFlags.ConfigDir())
 	}
 }
 
-func TestSessionSelfPlayCommandHelpDocumentsServiceContract(t *testing.T) {
+func TestSessionSelfPlayCommandHelpDocumentsFixedPhaseOneContract(t *testing.T) {
 	cmd := NewSessionSelfPlayCommand(flags.NewGlobalFlags(), nil).Generate()
 	var helpOutput bytes.Buffer
 	cmd.SetOut(&helpOutput)
@@ -85,7 +61,9 @@ func TestSessionSelfPlayCommandHelpDocumentsServiceContract(t *testing.T) {
 	}
 	help := helpOutput.String()
 	for _, want := range []string{
-		"Run a bounded live self-play conversation through the runtime service.",
+		"Customer persona:",
+		"Assistant persona:",
+		"Opening seed (sent once as customer text):",
 		"raw PCM16 audio",
 		"tools and transcript/text bridging are disabled",
 		"--api-key",
