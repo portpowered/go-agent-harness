@@ -4665,3 +4665,45 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   the complete owned regions, and run the full C280-03/C280-05 preflight on one
   clean SHA. Return `CONTINUE` while that actionable release integration
   remains.
+
+# C280 current-main integration and unreleased-caller checkpoint — 2026-09-22
+
+- Reverified admission from `FACTORY_ROOT`: `project-control.py verify-work
+  --type task --name audio-runtime-c280-recover-c269-room-evidence-retirement`
+  returned `admitted` for the sole `audio-runtime` / `audio-runtime-v1` project.
+  The isolated branch remains `codex/audio-runtime-c280-recover-c269-room-evidence-retirement`,
+  matching `prd.json`.
+- Fetched `origin/main=2f9f9736e1360802fc37e82de38540d92cb22631` and merged it
+  additively as `ccec4d20c89cccac3231836cabd3ebe7dc7fbd38`, preserving startup
+  integration, C269 `889b1a49`, C259 `2cdb4610`, review repair `e6964569`,
+  predecessor evidence `a187b9f1`/`51c9df8d`, and the read-only source/peer
+  worktrees. The merge conflict was limited to the shared progress ledger;
+  both task and current-main checkpoints were retained. The candidate is clean.
+- On exact merged HEAD, `go test -count=1
+  ./go-agent-runtime/services/roomevidence/... ./go-agent-runtime/services/rooms/...`
+  passed 105 tests in 16 packages; `make architecture-size-check` passed with
+  225 packages, 1,997 files and 29,200 functions; `make wire-check` passed;
+  and `git diff --check` passed. No `make prepush`, push, PR, SCRIPT CI, review
+  or merge is claimed.
+- Current candidate inventory is 58 agentruntime production files / 22,510
+  lines. The C280-owned room-evidence target has five bundle files absent and
+  three legacy files still present: `session_room_evidence.go` (1,147),
+  `_capture.go` (360), and `_integrity.go` (287), totaling 1,794 lines. The
+  duplicate `go-agent-runtime/services/rooms/internal/evidence` owner still
+  has 14 production files / 2,772 lines. Existing adjacent agentruntime
+  adapters total 2 files / 79 lines (`session_duration_terminal_adapter.go`
+  and `session_room_latency_adapter.go`); C280 added 0 adapters and its
+  planned compatibility budget remains 0 files / 0 lines.
+- Canonical peers remain unreleased: C272 `work-task-13`, C276 `work-task-8`,
+  and C281 `work-task-17` are `ready/init` with no reviewed or exact-path
+  caller release. C278 `work-task-3` is complete and its code is already in
+  current main. Production room service/lifecycle callers still import the
+  duplicate evidence owner, and the legacy agentruntime room-evidence caller
+  graph remains present; no unreleased peer head was consumed.
+- Exact next action: when C272/C276/C281 provide reviewed or explicit
+  exact-path releases, fetch and integrate those revisions additively, cut over
+  every named and repository-discovered caller through the public `roomevidence`
+  contract, delete the remaining three agentruntime files and all 14 duplicate
+  evidence files, then run C280-03/C280-04 plus `make prepush` and every C280-05
+  command on one clean exact SHA before any push. Return `CONTINUE` while that
+  actionable release integration remains.
