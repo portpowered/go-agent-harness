@@ -26,6 +26,7 @@ func TestSelfPlayServiceBridgesOnlyPCMAndWritesBoundedEvidence(t *testing.T) {
 	})
 	outputDir := filepath.Join(t.TempDir(), "run")
 	result, err := service.Run(context.Background(), selfplay.Request{
+		APIKey:      "selfplay-test-key",
 		OutputDir:   outputDir,
 		MaxDuration: 10 * time.Second,
 		MaxTurns:    1,
@@ -47,6 +48,7 @@ func TestSelfPlayServiceHonorsConfiguredTurnTarget(t *testing.T) {
 	})
 	outputDir := filepath.Join(t.TempDir(), "run")
 	result, err := service.Run(context.Background(), selfplay.Request{
+		APIKey:      "selfplay-test-key",
 		OutputDir:   outputDir,
 		MaxDuration: 10 * time.Second,
 		MaxTurns:    2,
@@ -134,7 +136,7 @@ func TestSelfPlayServiceRejectsUnsupportedModelBeforeOpeningOutputOrSession(t *t
 		Clock:          clock.Real{},
 	})
 	outputDir := filepath.Join(t.TempDir(), "run")
-	_, err := service.Run(context.Background(), selfplay.Request{OutputDir: outputDir, Model: "not-realtime"})
+	_, err := service.Run(context.Background(), selfplay.Request{APIKey: "selfplay-test-key", OutputDir: outputDir, Model: "not-realtime"})
 	if !errors.Is(err, selfplay.ErrUnsupportedModel) {
 		t.Fatalf("Run error = %v, want unsupported model", err)
 	}
@@ -192,6 +194,7 @@ func TestSelfPlayServicePreservesFirstMeaningfulFailure(t *testing.T) {
 		Clock:          clock.Real{},
 	})
 	result, err := service.Run(context.Background(), selfplay.Request{
+		APIKey:      "selfplay-test-key",
 		OutputDir:   filepath.Join(t.TempDir(), "run"),
 		MaxDuration: 10 * time.Second,
 		MaxTurns:    1,
@@ -209,7 +212,7 @@ func TestSelfPlayServiceMaxDurationStopsOpenSessionsCleanly(t *testing.T) {
 	provider.silent = true
 	service := NewService(Dependencies{SessionService: provider, ModelCatalog: testModelCatalog{}, Clock: clock.Real{}})
 	started := time.Now()
-	result, err := service.Run(context.Background(), selfplay.Request{OutputDir: filepath.Join(t.TempDir(), "run"), MaxDuration: 100 * time.Millisecond, MaxTurns: 2})
+	result, err := service.Run(context.Background(), selfplay.Request{APIKey: "selfplay-test-key", OutputDir: filepath.Join(t.TempDir(), "run"), MaxDuration: 100 * time.Millisecond, MaxTurns: 2})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -236,7 +239,7 @@ func TestSelfPlayServiceCallerCancellationStopsBothSides(t *testing.T) {
 	}
 	done := make(chan outcome, 1)
 	go func() {
-		result, err := service.Run(ctx, selfplay.Request{OutputDir: filepath.Join(t.TempDir(), "run"), MaxDuration: 10 * time.Second, MaxTurns: 2})
+		result, err := service.Run(ctx, selfplay.Request{APIKey: "selfplay-test-key", OutputDir: filepath.Join(t.TempDir(), "run"), MaxDuration: 10 * time.Second, MaxTurns: 2})
 		done <- outcome{result: result, err: err}
 	}()
 	for range 2 {
@@ -285,7 +288,7 @@ func TestSelfPlayServiceReportsBoundedShutdownTimeout(t *testing.T) {
 	}
 	done := make(chan outcome, 1)
 	go func() {
-		result, err := service.Run(ctx, selfplay.Request{OutputDir: filepath.Join(t.TempDir(), "run"), MaxDuration: 30 * time.Second, MaxTurns: 2})
+		result, err := service.Run(ctx, selfplay.Request{APIKey: "selfplay-test-key", OutputDir: filepath.Join(t.TempDir(), "run"), MaxDuration: 30 * time.Second, MaxTurns: 2})
 		done <- outcome{result: result, err: err}
 	}()
 	for range 2 {
@@ -345,7 +348,7 @@ func TestSelfPlayServiceRejectsInvalidProviderAndBoundsBeforeSessionBuild(t *tes
 	if err := os.WriteFile(markerPath, []byte("preserve"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	_, err := service.Run(context.Background(), selfplay.Request{OutputDir: unsafeDir, MaxTurns: 1})
+	_, err := service.Run(context.Background(), selfplay.Request{APIKey: "selfplay-test-key", OutputDir: unsafeDir, MaxTurns: 1})
 	if !errors.Is(err, selfplay.ErrOutputTargetUnsafe) {
 		t.Fatalf("non-empty output error = %v, want unsafe output", err)
 	}

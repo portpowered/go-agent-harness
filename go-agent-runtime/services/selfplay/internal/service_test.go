@@ -20,7 +20,7 @@ func TestSelfPlayEvidenceWriteFailureIsReturnedAndRecorded(t *testing.T) {
 	files := &injectedFileSystem{writeFailure: agentADiagnosticsPath}
 	service := newInjectedService(files)
 	outputDir := filepath.Join(t.TempDir(), "run")
-	result, err := service.Run(context.Background(), selfplay.Request{OutputDir: outputDir, MaxDuration: time.Second, MaxTurns: 1})
+	result, err := service.Run(context.Background(), selfplay.Request{APIKey: "test-key", OutputDir: outputDir, MaxDuration: time.Second, MaxTurns: 1})
 	if err == nil || !strings.Contains(err.Error(), "diagnostic evidence") {
 		t.Fatalf("Run error = %v, want diagnostic write failure", err)
 	}
@@ -40,7 +40,7 @@ func TestSelfPlayEvidenceSetupFailureCleansCreatedArtifacts(t *testing.T) {
 	files := &injectedFileSystem{openFailure: agentBStreamDeltasPath}
 	service := newInjectedService(files)
 	outputDir := filepath.Join(t.TempDir(), "run")
-	_, err := service.Run(context.Background(), selfplay.Request{OutputDir: outputDir, MaxDuration: time.Second, MaxTurns: 1})
+	_, err := service.Run(context.Background(), selfplay.Request{APIKey: "test-key", OutputDir: outputDir, MaxDuration: time.Second, MaxTurns: 1})
 	if !errors.Is(err, errInjectedEvidence) {
 		t.Fatalf("Run error = %v, want injected setup failure", err)
 	}
@@ -53,7 +53,7 @@ func TestSelfPlayEvidenceCloseFailureReturnsCauseAndMarksArtifactIncomplete(t *t
 	files := &injectedFileSystem{closeFailure: agentADiagnosticsPath}
 	service := newInjectedService(files)
 	outputDir := filepath.Join(t.TempDir(), "run")
-	result, err := service.Run(context.Background(), selfplay.Request{OutputDir: outputDir, MaxDuration: 30 * time.Millisecond, MaxTurns: 1})
+	result, err := service.Run(context.Background(), selfplay.Request{APIKey: "test-key", OutputDir: outputDir, MaxDuration: 30 * time.Millisecond, MaxTurns: 1})
 	if !errors.Is(err, errInjectedEvidence) {
 		t.Fatalf("Run error = %v, want injected close failure", err)
 	}
@@ -73,7 +73,7 @@ func TestSelfPlayManifestFinalizationFailureReturnsCauseWithoutClaimingComplete(
 	files := &injectedFileSystem{manifestFailure: true}
 	service := newInjectedService(files)
 	outputDir := filepath.Join(t.TempDir(), "run")
-	result, err := service.Run(context.Background(), selfplay.Request{OutputDir: outputDir, MaxDuration: 30 * time.Millisecond, MaxTurns: 1})
+	result, err := service.Run(context.Background(), selfplay.Request{APIKey: "test-key", OutputDir: outputDir, MaxDuration: 30 * time.Millisecond, MaxTurns: 1})
 	if !errors.Is(err, errInjectedEvidence) {
 		t.Fatalf("Run error = %v, want injected manifest failure", err)
 	}
@@ -82,6 +82,22 @@ func TestSelfPlayManifestFinalizationFailureReturnsCauseWithoutClaimingComplete(
 	}
 	if _, statErr := os.Stat(filepath.Join(outputDir, manifestPath)); !errors.Is(statErr, os.ErrNotExist) {
 		t.Fatalf("manifest exists after failed finalization: %v", statErr)
+	}
+}
+
+func TestSelfPlayMissingCredentialFailsBeforeSessionOrFilesystemEffects(t *testing.T) {
+	sessions := &countingSessionService{}
+	service := NewService(sessions, injectedCatalog{}, clock.Real{})
+	outputDir := filepath.Join(t.TempDir(), "run")
+	_, err := service.Run(context.Background(), selfplay.Request{OutputDir: outputDir, MaxDuration: time.Second, MaxTurns: 1})
+	if !errors.Is(err, selfplay.ErrCredentialRequired) {
+		t.Fatalf("Run error = %v, want missing credential", err)
+	}
+	if sessions.buildCalls != 0 {
+		t.Fatalf("built %d sessions before rejecting the request", sessions.buildCalls)
+	}
+	if _, statErr := os.Stat(outputDir); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("missing credential created output directory: %v", statErr)
 	}
 }
 
@@ -102,6 +118,13 @@ func (injectedCatalog) LookupRealtimeModel(_, model string) (providers.RealtimeM
 type injectedSessionService struct{}
 
 func (injectedSessionService) BuildSession(context.Context, providers.SessionConfig) (messages.SessionInferencer, error) {
+	return injectedInferencer{}, nil
+}
+
+type countingSessionService struct{ buildCalls int }
+
+func (s *countingSessionService) BuildSession(context.Context, providers.SessionConfig) (messages.SessionInferencer, error) {
+	s.buildCalls++
 	return injectedInferencer{}, nil
 }
 

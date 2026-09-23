@@ -14,7 +14,6 @@ import (
 	devicesservice "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/devices"
 	toolsservice "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/tools"
 	roomwire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/rooms/wire"
-	serviceSelfPlay "github.com/portpowered/go-agent-harness/agent-cli/internal/services/selfplay"
 	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -28,6 +27,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	runtimeRoomReplayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay/wire"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
+	runtimeSelfPlay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/selfplay"
+	runtimeSelfPlayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/selfplay/wire"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -113,10 +114,10 @@ func (s legacyToolCapabilitiesService) Resolve(cfg *config.Config) (serviceTools
 	return capabilities, nil
 }
 
-// NewSelfPlayService keeps the self-play runtime implementation private while
-// exposing only its value-oriented application contract to the CLI graph.
-func NewSelfPlayService(audioService audioio.Service, factory agentruntime.SessionRuntimeFactory, clockSource clock.Source, modelCatalog runtimeProviders.ModelCatalog) serviceSelfPlay.Service {
-	return agentruntime.NewSelfPlayService(audioService, factory, clockSource, modelCatalog)
+// NewSelfPlayService composes the service-owned self-play contract from
+// explicit provider, catalog, and clock roles.
+func NewSelfPlayService(sessionService runtimeProviders.SessionService, modelCatalog runtimeProviders.ModelCatalog, clockSource clock.Source) runtimeSelfPlay.Service {
+	return runtimeSelfPlayWire.NewService(runtimeSelfPlayWire.NewDependencies(sessionService, modelCatalog, clockSource))
 }
 
 // DeviceSet is the device service's complete provider set. Application Wire

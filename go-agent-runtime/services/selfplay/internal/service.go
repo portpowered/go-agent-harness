@@ -16,10 +16,10 @@ import (
 )
 
 const (
-	defaultProvider    = "openai"
-	defaultModel       = "gpt-realtime"
-	defaultMaxDuration = 2 * time.Minute
-	defaultTurnTarget  = 3
+	defaultProvider    = selfplay.DefaultProvider
+	defaultModel       = selfplay.DefaultModel
+	defaultMaxDuration = selfplay.DefaultMaxDuration
+	defaultTurnTarget  = selfplay.DefaultTurnTarget
 
 	customerPersona  = "You are the customer. Speak naturally, briefly, and only as part of a spoken conversation. Ask one practical follow-up at a time. Do not call tools."
 	assistantPersona = "You are the helpful assistant. Speak naturally, briefly, and only as part of a spoken conversation. Answer the customer's latest request and ask one concise follow-up when useful. Do not call tools."
@@ -212,6 +212,9 @@ func normalizeRequest(request selfplay.Request) (selfplay.Request, error) {
 	}
 	if request.MaxTurns < 0 {
 		return selfplay.Request{}, fmt.Errorf("%w: maximum turns must be positive", selfplay.ErrInvalidRequest)
+	}
+	if request.APIKey == "" {
+		return selfplay.Request{}, fmt.Errorf("%w: provide an API key or configure one for the selected provider", selfplay.ErrCredentialRequired)
 	}
 	return request, nil
 }

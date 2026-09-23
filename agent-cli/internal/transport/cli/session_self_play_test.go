@@ -11,6 +11,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	serviceSelfPlay "github.com/portpowered/go-agent-harness/agent-cli/internal/services/selfplay"
+	runtimeSelfPlay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/selfplay"
 )
 
 func TestSessionSelfPlayCommandParsesBoundedRunOptions(t *testing.T) {
@@ -52,7 +53,7 @@ func TestSessionSelfPlayCommandParsesBoundedRunOptions(t *testing.T) {
 	}
 }
 
-func TestSessionSelfPlayCommandHelpDocumentsFixedPhaseOneContract(t *testing.T) {
+func TestSessionSelfPlayCommandHelpDocumentsTransportContract(t *testing.T) {
 	cmd := NewSessionSelfPlayCommand(flags.NewGlobalFlags(), nil).Generate()
 	var helpOutput bytes.Buffer
 	cmd.SetOut(&helpOutput)
@@ -61,9 +62,7 @@ func TestSessionSelfPlayCommandHelpDocumentsFixedPhaseOneContract(t *testing.T) 
 	}
 	help := helpOutput.String()
 	for _, want := range []string{
-		"Customer persona:",
-		"Assistant persona:",
-		"Opening seed (sent once as customer text):",
+		"bounded self-play harness",
 		"raw PCM16 audio",
 		"tools and transcript/text bridging are disabled",
 		"--api-key",
@@ -75,4 +74,50 @@ func TestSessionSelfPlayCommandHelpDocumentsFixedPhaseOneContract(t *testing.T) 
 			t.Fatalf("self-play help does not contain %q:\n%s", want, help)
 		}
 	}
+}
+
+func TestSelfPlayServiceAdapterTranslatesConfiguredRequestAndPresentsResult(t *testing.T) {
+	t.Setenv("AGENT_MODEL__OPENAI__API_KEY", "environment-key")
+	for _, test := range []struct {
+		name       string
+		apiKey     string
+		wantAPIKey string
+	}{
+		{name: "flag credential overrides config", apiKey: "flag-key", wantAPIKey: "flag-key"},
+		{name: "configured credential fallback", wantAPIKey: "environment-key"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var got runtimeSelfPlay.Request
+			runner := selfPlayRuntimeFunc(func(_ context.Context, request runtimeSelfPlay.Request) (runtimeSelfPlay.Result, error) {
+				got = request
+				return runtimeSelfPlay.Result{
+					StopReason: runtimeSelfPlay.StopTurnTarget,
+					Customer:   runtimeSelfPlay.SideResult{CompletedTurns: 2},
+					Assistant:  runtimeSelfPlay.SideResult{CompletedTurns: 2},
+				}, nil
+			})
+			adapter := NewSelfPlayServiceAdapter(runner)
+			var output bytes.Buffer
+			options := serviceSelfPlay.RunOptions{
+				APIKey: test.apiKey, ConfigDir: t.TempDir(), OutputDir: filepath.Join(t.TempDir(), "self-play"),
+				Provider: runtimeSelfPlay.DefaultProvider, Model: runtimeSelfPlay.DefaultModel,
+				BaseURL: "wss://example.test/realtime", MaxDuration: 17 * time.Second, MaxTurns: 4,
+			}
+			if err := adapter.Run(context.Background(), &output, options); err != nil {
+				t.Fatalf("adapt runtime self-play service: %v", err)
+			}
+			if got.APIKey != test.wantAPIKey || got.Provider != options.Provider || got.Model != options.Model || got.OutputDir != options.OutputDir || got.BaseURL != options.BaseURL || got.MaxDuration != options.MaxDuration || got.MaxTurns != options.MaxTurns {
+				t.Fatalf("runtime request = %#v", got)
+			}
+			if output.String() != "self-play stopped: reason=turn_target customer_turns=2 assistant_turns=2\n" {
+				t.Fatalf("presented result = %q", output.String())
+			}
+		})
+	}
+}
+
+type selfPlayRuntimeFunc func(context.Context, runtimeSelfPlay.Request) (runtimeSelfPlay.Result, error)
+
+func (f selfPlayRuntimeFunc) Run(ctx context.Context, request runtimeSelfPlay.Request) (runtimeSelfPlay.Result, error) {
+	return f(ctx, request)
 }

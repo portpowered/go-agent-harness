@@ -8,6 +8,17 @@ import (
 	"time"
 )
 
+const (
+	// DefaultProvider is the only provider enabled by the initial self-play service.
+	DefaultProvider = "openai"
+	// DefaultModel is the realtime model used when a request omits one.
+	DefaultModel = "gpt-realtime"
+	// DefaultMaxDuration bounds a request that omits its duration.
+	DefaultMaxDuration = 2 * time.Minute
+	// DefaultTurnTarget bounds a request that omits its completed-turn target.
+	DefaultTurnTarget = 3
+)
+
 // StopReason is the single terminal reason committed for one run.
 type StopReason string
 
@@ -44,6 +55,7 @@ const (
 	ErrInvalidRequest         SentinelError = "invalid self-play request"
 	ErrUnsupportedProvider    SentinelError = "unsupported self-play provider"
 	ErrUnsupportedModel       SentinelError = "unsupported self-play model"
+	ErrCredentialRequired     SentinelError = "self-play API credential is required"
 	ErrModelCatalogRequired   SentinelError = "self-play model catalog is required"
 	ErrSessionServiceRequired SentinelError = "self-play session service is required"
 	ErrOutputTargetUnsafe     SentinelError = "self-play output target is unsafe"

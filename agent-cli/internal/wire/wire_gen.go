@@ -16,6 +16,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime/transports"
+	selfplay2 "github.com/portpowered/go-agent-harness/agent-cli/internal/services/selfplay"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
 	wire11 "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools/wire"
 	wire2 "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
@@ -33,6 +34,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	wire12 "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
 	wire5 "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/selfplay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
@@ -96,8 +98,9 @@ func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transp
 	agentsessionSessionService := wire2.NewSessionService(sessionDependencies)
 	v5 := provideFleetEntryExecutors()
 	probeFleetCommand := cli.NewProbeFleetCommand(agentsessionSessionService, metricsCollector, v5...)
-	selfplayService := wire2.NewSelfPlayService(audioioService, v3, clockSource, modelCatalog)
 	providersSessionService := provideProviderSessionServiceRole(fullService)
+	selfplayService := wire2.NewSelfPlayService(providersSessionService, modelCatalog, clockSource)
+	service2 := provideSelfPlayCLIService(selfplayService)
 	wireLiveCredentialVault := provideLiveCredentialVault()
 	liveService := provideLiveService(providersSessionService, toolExecutor, toolDefs, sessionInferencer, transportDialer, clockSource, runtimeObserver, wireLiveCredentialVault)
 	replayService := provideLiveReplayService()
@@ -106,7 +109,7 @@ func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transp
 	sessionToolCapabilitiesFactory := cli.NewSessionToolCapabilitiesFactoryFromService(toolsService)
 	liveCredentialReference := provideLiveCredentialReference(wireLiveCredentialVault)
 	modelAdmission := provideProviderModelAdmission(fullService)
-	sessionCommand := cli.NewSessionCommandWithLive(askFlags, globalFlags, agentsessionSessionService, selfplayService, liveService, replayService, devicesService, fileDeviceService, sessionToolCapabilitiesFactory, liveCredentialReference, fileStoreFactory, recordingService, modelAdmission)
+	sessionCommand := cli.NewSessionCommandWithLive(askFlags, globalFlags, agentsessionSessionService, service2, liveService, replayService, devicesService, fileDeviceService, sessionToolCapabilitiesFactory, liveCredentialReference, fileStoreFactory, recordingService, modelAdmission)
 	sessionShowCommand := cli.NewSessionShowCommand(globalFlags, fileStoreFactory)
 	sessionListCommand := cli.NewSessionListCommand(globalFlags, fileStoreFactory)
 	sessionDeleteCommand := cli.NewSessionDeleteCommand(globalFlags, fileStoreFactory)
@@ -308,6 +311,10 @@ func provideProviderServiceRole(service providers.FullService) providers.Service
 	return service
 }
 
+func provideSelfPlayCLIService(service selfplay.Service) selfplay2.Service {
+	return cli.NewSelfPlayServiceAdapter(service)
+}
+
 func provideProviderSessionServiceRole(service providers.FullService) providers.SessionService {
 	return service
 }
@@ -398,5 +405,5 @@ var CliSet = wire6.NewSet(
 	provideSessionDependencies,
 	provideToolCapabilitiesService, cli.NewProbeRunCommandWithDeviceService, cli.NewProbeGateCommand, cli.NewProbeReportCommand, cli.NewProbeFleetCommand, provideFleetEntryExecutors,
 	provideAcceptanceCommands,
-	provideSessionRTCRuntimeFactory, cli.NewSessionToolCapabilitiesFactoryFromService, cli.NewSessionCommandWithLive, wire2.SelfPlaySet, cli.NewSessionReplayCommand, cli.NewRoomRunCommand, cli.NewSessionShowCommand, cli.NewSessionListCommand, cli.NewSessionDeleteCommand, cli.NewConfigCommand, cli.NewConfigAddLocalCommand, cli.NewRouter, cli.NewAgentCLI,
+	provideSessionRTCRuntimeFactory, cli.NewSessionToolCapabilitiesFactoryFromService, cli.NewSessionCommandWithLive, wire2.SelfPlaySet, provideSelfPlayCLIService, cli.NewSessionReplayCommand, cli.NewRoomRunCommand, cli.NewSessionShowCommand, cli.NewSessionListCommand, cli.NewSessionDeleteCommand, cli.NewConfigCommand, cli.NewConfigAddLocalCommand, cli.NewRouter, cli.NewAgentCLI,
 )

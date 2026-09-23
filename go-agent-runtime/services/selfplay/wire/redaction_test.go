@@ -31,6 +31,7 @@ func TestSelfPlayServiceRedactsUnmarkedSensitiveFieldsFromStreamEvidence(t *test
 	})
 	outputDir := filepath.Join(t.TempDir(), "run")
 	_, err := service.Run(context.Background(), selfplay.Request{
+		APIKey:      secret,
 		OutputDir:   outputDir,
 		MaxDuration: 10 * time.Second,
 		MaxTurns:    1,
