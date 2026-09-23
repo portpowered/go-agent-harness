@@ -9,6 +9,8 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
+	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
@@ -232,7 +234,7 @@ func resolveLiveSessionDialer(opts SessionRunOptions, factory sessionRuntimeFact
 	if dialer == nil {
 		return nil, missingOwnedSessionDialerError(provider)
 	}
-	return observeSessionWire(dialer, opts), nil
+	return wire.NewProviderWireDialer(dialer, opts.RuntimeObserver, platformclock.Ensure(opts.Clock)), nil
 }
 
 func newLiveOpenAISessionInferencer(

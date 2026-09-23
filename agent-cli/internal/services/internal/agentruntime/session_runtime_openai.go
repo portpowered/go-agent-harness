@@ -11,6 +11,8 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
+	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
@@ -66,7 +68,7 @@ func planOpenAIRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 	if liveDialer == nil {
 		return sessionRuntimePlan{}, missingOwnedSessionDialerError(sessionProviderOpenAI)
 	}
-	liveDialer = observeSessionWire(liveDialer, opts)
+	liveDialer = wire.NewProviderWireDialer(liveDialer, opts.RuntimeObserver, platformclock.Ensure(opts.Clock))
 	recordingDialer := factory.newRecordingDialer(liveDialer, sessionProviderOpenAI, sessionCfg.Model)
 	clientOwnedAudio := opts.ClientOwnsAudioTurnBoundaries || len(opts.AudioInputs) > 0
 	inputAudioTranscription, err := resolveSessionTranscription(opts, sessionProviderOpenAI, clientOwnedAudio || opts.RTCBinding.HasInput())

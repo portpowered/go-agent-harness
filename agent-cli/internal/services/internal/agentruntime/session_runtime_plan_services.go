@@ -20,7 +20,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 func planSessionRuntime(opts SessionRunOptions) (sessionRuntimePlan, error) {
@@ -30,13 +29,6 @@ func planSessionRuntime(opts SessionRunOptions) (sessionRuntimePlan, error) {
 //lint:ignore U1000 package tests exercise the context-free planning seam.
 func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
 	return planSessionRuntimeWithFactoryAndContext(context.Background(), opts, factory)
-}
-
-func observeSessionWire(dialer transport.Dialer, opts SessionRunOptions) transport.Dialer {
-	if dialer == nil {
-		return nil
-	}
-	return sessiontracewire.NewProviderWireDialer(dialer, opts.RuntimeObserver, platformclock.Ensure(opts.Clock))
 }
 
 func planSessionRuntimeWithContext(ctx context.Context, opts SessionRunOptions) (sessionRuntimePlan, error) {
