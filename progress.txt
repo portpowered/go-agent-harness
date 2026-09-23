@@ -4802,3 +4802,19 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   run C280-03/C280-04 and the full C280-05 preflight on one clean exact SHA.
   Decision remains `CONTINUE` while that actionable release integration is
   unavailable.
+
+# C280 recovery ancestry clarification — 2026-09-23T03:14Z
+
+- The refreshed baseline is `origin/main=2f9f9736e1360802fc37e82de38540d92cb22631`;
+  both `origin/main` and startup integration
+  `8bdafc7f947a3a2c9856220abdc539437035bd21` are ancestors of the current
+  branch. The C280 recovery branch was intentionally created from current
+  main and transplanted useful room-evidence content; it does not merge the
+  full C269 source branch.
+- Exact `git merge-base --is-ancestor` checks show that the predecessor/review
+  commits `2cdb46102`, `e6964569c`, `a187b9f13`, `51c9df8d` and C269
+  `889b1a49` are not ancestors of this fresh branch. They remain present and
+  inspectable through the preserved read-only source/peer refs and their
+  useful content is represented by the C280 recovery commits; no history was
+  rewritten and no source or peer worktree was modified. This replaces earlier
+  shorthand ledger wording that called those commits branch ancestors.
