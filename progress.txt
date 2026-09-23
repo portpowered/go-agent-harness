@@ -4818,3 +4818,34 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   useful content is represented by the C280 recovery commits; no history was
   rewritten and no source or peer worktree was modified. This replaces earlier
   shorthand ledger wording that called those commits branch ancestors.
+
+# C280 release refresh and service-gate checkpoint — 2026-09-22
+
+- Re-read the operating policy and implementation handoff, then reverified
+  `project-control.py verify-work --type task --name
+  audio-runtime-c280-recover-c269-room-evidence-retirement`: admission remains
+  `admitted` for the sole `audio-runtime` / `audio-runtime-v1` project, and
+  `prd.json.branchName` exactly matches this isolated worktree. Fetched
+  `origin/main=2f9f9736e1360802fc37e82de38540d92cb22631`; it is an ancestor of
+  clean HEAD `26276b1444fdd470647636b088415a2361750ffb`.
+- Refreshed the canonical board: C272 `work-task-13`, C276 `work-task-8`, and
+  C281 `work-task-17` remain `init` with no independent-review or exact-path
+  release; the C276 peer worktree remains dirty. No peer head or worktree was
+  consumed or modified. Review-78 findings were re-read; bounded admission,
+  public recorder degradation and public load/analyze behavior remain repaired
+  in the recovered service owner, while exact-head preflight is still open.
+- Current read-only C280 checks pass: normal roomevidence/rooms `105` tests in
+  `16` packages; focused race `31` tests in `16` packages; repeated bounded
+  input/concurrent-close race `120` passes in one package; the private-boundary
+  scan; `make wire-check` with no generated diff; `git diff --check`; and clean
+  status. The integrated candidate has `58` agentruntime production files /
+  `22,510` lines. The exact residual is three owned agentruntime files /
+  `1,794` lines and fourteen duplicate `rooms/internal/evidence` production
+  files / `2,772` lines. C280 still has `0` adapter files / `0` lines.
+- No caller cutover, legacy deletion, `make prepush`, push, PR, SCRIPT CI,
+  review or merge is claimed. Exact next action: consume only a reviewed or
+  explicit exact-path release from C272, C276 or C281, integrate it additively,
+  cut over every named and search-discovered caller, delete the complete
+  residual cluster, and run C280-03/C280-04 plus the full C280-05 preflight on
+  one clean exact SHA. Decision remains `CONTINUE` while that release remains
+  unavailable.
