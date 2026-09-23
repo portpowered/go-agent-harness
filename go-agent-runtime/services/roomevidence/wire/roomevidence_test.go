@@ -366,7 +366,11 @@ func TestServiceOutputSafety(t *testing.T) {
 		if err := os.Chmod(unwritable, 0o500); err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { _ = os.Chmod(unwritable, 0o700) })
+		t.Cleanup(func() {
+			if err := os.Chmod(unwritable, 0o700); err != nil {
+				t.Errorf("restore writable output permissions: %v", err)
+			}
+		})
 		if err := service.ValidateOutput(unwritable); !errors.Is(err, roomevidence.ErrInvalidOutput) {
 			t.Fatalf("unwritable output error = %v, want invalid output", err)
 		}

@@ -25,7 +25,9 @@ func TestServiceRejectsOversizedReplayManifest(t *testing.T) {
 		t.Fatalf("create manifest: %v", err)
 	}
 	if err := file.Truncate(admission.MaxManifestBytes + 1); err != nil {
-		_ = file.Close()
+		if closeErr := file.Close(); closeErr != nil {
+			t.Errorf("close manifest after truncate failure: %v", closeErr)
+		}
 		t.Fatalf("make oversized manifest: %v", err)
 	}
 	if err := file.Close(); err != nil {

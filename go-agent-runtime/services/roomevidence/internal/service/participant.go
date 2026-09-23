@@ -287,11 +287,13 @@ func (r *recorder) Observe(observation roomevidence.Observation) error {
 }
 
 func (r *recorder) RecordSessionDiagnostic(record roomevidence.DiagnosticRecord) {
-	_ = r.Observe(roomevidence.Observation{
+	if err := r.Observe(roomevidence.Observation{
 		Kind:          roomevidence.ObservationDiagnostic,
 		ParticipantID: record.ParticipantID,
 		Diagnostic:    record,
-	})
+	}); err != nil {
+		r.MarkError(record.ParticipantID, "", err)
+	}
 }
 
 func (r *recorder) observeRoomAudio(observation roomevidence.Observation) error {
