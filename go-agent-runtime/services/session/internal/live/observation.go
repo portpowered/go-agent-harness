@@ -6,29 +6,12 @@ import (
 	"fmt"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/input"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/eventcodec"
-	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"strings"
 )
 
-func (i *liveInvocation) bindPlaybackController() {
-	if i == nil || i.endpoints.Inbound == nil {
-		return
-	}
-	var controller sharedaudio.PlaybackController
-	if provider, ok := i.ports.Playback.(devices.PlaybackControllerProvider); ok {
-		controller = provider.PlaybackController()
-	}
-	if controller == nil && i.options.Request.ReplayPlan != nil {
-		controller = replayVirtualPlaybackController{}
-	}
-	if controlled, ok := i.endpoints.Inbound.(sharedaudio.PlaybackControlledInbound); ok && controller != nil {
-		controlled.SetPlaybackController(controller)
-	}
-}
 func (h *handle) consumeDeltas(ctx context.Context, loop *agentloop.AgentLoop) {
 	defer h.runWG.Done()
 	for {
@@ -107,24 +90,6 @@ func (h *handle) consumeMessage(ctx context.Context, loop *agentloop.AgentLoop, 
 		h.mu.Unlock()
 	}
 	return responseComplete
-}
-
-func (h *handle) observeTerminalValue(msg messages.StreamMessage) {
-	value := eventcodec.TerminalValue(msg)
-	if value == nil {
-		return
-	}
-	h.mu.Lock()
-	if msg.Type == messages.StreamTypeSessionClose {
-		if !h.providerCloseObserved || h.terminalValue == nil {
-			h.terminalValue = value
-		}
-		h.providerCloseObserved = true
-		h.terminalOnce.Do(func() { close(h.terminalObserved) })
-	} else if !h.providerCloseObserved {
-		h.terminalValue = value
-	}
-	h.mu.Unlock()
 }
 
 func (h *handle) observeResponseTerminal(msg messages.StreamMessage) {

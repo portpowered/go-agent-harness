@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
@@ -14,6 +15,89 @@ import (
 )
 
 const defaultFirstTurnTimeout = 30 * time.Second
+
+func (h *handle) finalizeDuration(err error) error {
+	h.mu.Lock()
+	durationController := h.durationController
+	h.mu.Unlock()
+	if durationController != nil {
+		_, durationErr := durationController.Finalize(context.WithoutCancel(h.evidenceContext()), sessionduration.FinalizeRequest{Primary: err})
+		return durationErr
+	}
+	return err
+}
+
+func (h *handle) joinPumpError(err error) error {
+	h.mu.Lock()
+	if !isContextTermination(h.pumpErr) {
+		err = errors.Join(err, h.pumpErr)
+	}
+	h.mu.Unlock()
+	return err
+}
+
+// observeProviderDispatch arms the participant watchdog when the loop admits
+// an operation that asks the provider to produce a response. The provider may
+// emit MESSAGE.START asynchronously, so arming at dispatch closes the gap
+// between a successful input admission and the first provider observation.
+func (h *handle) observeProviderDispatch(msg messages.StreamMessage) {
+	if h == nil {
+		return
+	}
+	h.mu.Lock()
+	durationController := h.durationController
+	h.mu.Unlock()
+	if durationController != nil {
+		durationController.Observe(msg)
+	}
+	h.recordMessage(session.LiveRecord{Direction: session.LiveRecordClient, Timestamp: h.now(), Message: msg})
+	if msg.Type != messages.StreamTypeResponseCreate && msg.Type != messages.StreamTypeMessageEnd {
+		return
+	}
+	value, hasCreate := msg.Value.(*messages.ResponseCreateValue)
+	acknowledgement := hasCreate && value != nil && value.IsToolAcknowledgement()
+	// Admission establishes pending work even before the provider's response
+	// starts. Keep that obligation separate from observed streaming progress.
+	if !acknowledgement && msg.Role != messages.RoleTool {
+		h.mu.Lock()
+		h.responseStarted, h.responsePending = true, true
+		if msg.Type == messages.StreamTypeResponseCreate {
+			h.responseActive = true
+		}
+		h.mu.Unlock()
+	}
+	if h.providerLivenessEnabled() && (msg.Type == messages.StreamTypeMessageEnd || !acknowledgement) {
+		h.armProviderLiveness()
+	}
+}
+
+func (h *handle) observeProviderMessageEnd(_ context.Context, msg messages.StreamMessage) {
+	value, ok := msg.Value.(*messages.MessageEndValue)
+	if !ok {
+		value = nil
+	}
+	h.livenessMu.Lock()
+	outputSeen := h.responseOutputSeen
+	toolObligation := h.responseToolObligation
+	h.responseOutputSeen = false
+	h.responseToolObligation = false
+	h.livenessMu.Unlock()
+	if isEmptyProviderResponse(msg, value, outputSeen, toolObligation) {
+		failure := session.LiveLivenessFailure{
+			Classification:     silentProviderEmptyResponse,
+			ResponseID:         strings.TrimSpace(msg.ResponseID),
+			TerminalReason:     messages.TerminalReasonTerminalFailure,
+			TerminalProvenance: messages.TerminalProvenanceSession,
+			OutputState:        messages.TerminalOutputNone,
+		}
+		if value != nil {
+			failure.Usage = value.Usage
+		}
+		h.latchProviderLiveness(failure) //nolint:contextcheck // Publication uses the handle's retained invocation evidence context, not this observation callback's cancellation.
+		return
+	}
+	h.disarmProviderLiveness()
+}
 
 type retryRequest struct {
 	loop     *agentloop.AgentLoop

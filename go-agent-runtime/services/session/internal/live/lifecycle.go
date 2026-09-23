@@ -7,76 +7,65 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	"time"
 )
 
 func (h *handle) finish(err error) {
 	h.finishOnce.Do(func() { h.finishOnceBody(err) })
 }
+
 func (h *handle) finishOnceBody(err error) {
 	h.stopProviderLiveness()
-	h.mu.Lock()
-	h.clearPendingToolCallsLocked()
-	if err == nil {
-		err = h.startErr
-	}
-	userCancelled := h.userCancelled
-	closeCapabilities, flushCapture := h.capabilityClose, h.captureFlush
-	h.capabilityClose, h.captureFlush = nil, nil
-	h.mu.Unlock()
-	if closeCapabilities != nil {
-		if closeErr := closeCapabilities(); closeErr != nil {
-			err = errors.Join(err, fmt.Errorf("close live capabilities: %w", closeErr))
-		}
-	}
-	if flushCapture != nil {
-		if flushErr := flushCapture(); flushErr != nil {
-			err = errors.Join(err, fmt.Errorf("flush live capture: %w", flushErr))
-		}
-	}
-	err = h.finishMedia(err, userCancelled)
-	h.mu.Lock()
-	durationController := h.durationController
-	h.mu.Unlock()
-	if durationController != nil {
-		_, durationErr := durationController.Finalize(context.WithoutCancel(h.evidenceContext()), sessionduration.FinalizeRequest{Primary: err})
-		err = durationErr
-	}
-	h.mu.Lock()
-	if !isContextTermination(h.pumpErr) {
-		err = errors.Join(err, h.pumpErr)
-	}
-	h.mu.Unlock()
+	var cleanup finishCleanup
+	err, cleanup = h.captureFinishCleanup(err)
+	err = cleanup.apply(err)
+	err = h.finishMedia(err, cleanup.userCancelled)
+	err = h.finalizeDuration(err)
+	err = h.joinPumpError(err)
+	h.publishFinished(err, cleanup.userCancelled)
+}
+
+func (h *handle) publishFinished(err error, userCancelled bool) {
 	h.emitSynthesizedSessionClose()
 	h.mu.Lock()
 	terminalValue := cloneLiveTerminalValue(h.terminalValue)
 	outputObserved := h.outputObserved
 	h.mu.Unlock()
-	if userCancelled {
-		err = errors.Join(err, h.recorderError())
-	} else {
-		err = errors.Join(err, h.recorderError(), h.scheduledAudioError(), h.finiteAudioResponseError())
-	}
+	err = h.finishObservationErrors(err, userCancelled)
 	if h.runtimeTrace != nil {
 		err = errors.Join(err, h.runtimeTrace.Error())
 	}
 	h.mu.Lock()
 	h.terminalErr = err
 	h.mu.Unlock()
+	h.recordFinishTrace(err)
+	terminalValue, liveness := h.finishTerminalValue(err, userCancelled, terminalValue, outputObserved)
+	h.publish(session.LiveEvent{Kind: string(session.LiveEventTerminal), SessionID: h.request.SessionID, Error: err, Liveness: liveness, Terminal: terminalValue, Critical: true}, true)
+	close(h.done)
+}
+
+func (h *handle) finishObservationErrors(err error, userCancelled bool) error {
+	if userCancelled {
+		return errors.Join(err, h.recorderError())
+	}
+	return errors.Join(err, h.recorderError(), h.scheduledAudioError(), h.finiteAudioResponseError())
+}
+
+func (h *handle) recordFinishTrace(err error) {
 	if h.runtimeTrace != nil {
 		h.runtimeTrace.Terminal(0, err)
 	}
+}
+
+func (h *handle) finishTerminalValue(err error, userCancelled bool, value *messages.SessionCloseValue, outputObserved bool) (*messages.SessionCloseValue, *session.LiveLivenessFailure) {
 	liveness := h.livenessFailureSnapshot()
 	if liveness == nil {
 		liveness = livenessFailureFromError(err)
 	}
 	if userCancelled && err == nil {
-		terminalValue = userCancellationTerminalValue(h.request.SessionID, outputObserved)
+		value = userCancellationTerminalValue(h.request.SessionID, outputObserved)
 	}
-	terminalValue = finalizeLiveTerminalValue(h.request, err, terminalValue, liveness)
-	h.publish(session.LiveEvent{Kind: string(session.LiveEventTerminal), SessionID: h.request.SessionID, Error: err, Liveness: liveness, Terminal: terminalValue, Critical: true}, true)
-	close(h.done)
+	return finalizeLiveTerminalValue(h.request, err, value, liveness), liveness
 }
 func (h *handle) markUserCancellation() {
 	if h == nil {
@@ -374,31 +363,4 @@ func drainPlayback(parent context.Context, playback devices.Playback, timeout ti
 		return fmt.Errorf("drain live playback: %w", err)
 	}
 	return nil
-}
-func (h *handle) finishMessageObservation(msg messages.StreamMessage) {
-	if msg.Type == messages.StreamTypeSessionClose && !h.deferProviderClose() {
-		h.stopGracefully()
-	}
-}
-func finalizeRecorder(recorder session.LiveRecorder, ctx context.Context, runErr error) error {
-	if recorder == nil {
-		return nil
-	}
-	if ctx == nil {
-		return errors.New("live recorder finalization context is required")
-	}
-	return recorder.Finalize(context.WithoutCancel(ctx), runErr)
-}
-
-func (i *liveInvocation) closeAfterStartError(startErr error) error {
-	if i == nil {
-		return startErr
-	}
-	var deviceErr error
-	if i.device != nil {
-		deviceErr = i.device.Close()
-	}
-	handleErr := i.handle.Close()
-	result := errors.Join(startErr, deviceErr, handleErr)
-	return errors.Join(result, finalizeRecorder(i.options.Recorder, i.ctx, result))
 }

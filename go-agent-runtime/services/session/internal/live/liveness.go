@@ -45,6 +45,47 @@ func (e *providerLivenessError) Unwrap() error {
 	return session.ErrLiveSilentProviderEmptyResponse
 }
 
+func isProviderOutputMessage(msg messages.StreamMessage) bool {
+	if msg.Role == messages.RoleUser || msg.Role == messages.RoleTool {
+		return false
+	}
+	switch msg.Type {
+	case messages.StreamTypeTextDelta, messages.StreamTypeAudioDelta, messages.StreamTypeImageDelta,
+		messages.StreamTypeVideoDelta, messages.StreamTypeFileDelta, messages.StreamTypeEmbeddingDelta,
+		messages.StreamTypeReasoningDelta, messages.StreamTypeTranscriptDelta,
+		messages.StreamTypeTextEnd, messages.StreamTypeAudioEnd, messages.StreamTypeImageEnd,
+		messages.StreamTypeVideoEnd, messages.StreamTypeFileEnd, messages.StreamTypeEmbeddingEnd,
+		messages.StreamTypeReasoningEnd, messages.StreamTypeTranscriptEnd:
+		return true
+	case messages.StreamTypeMessageStart, messages.StreamTypeMessageEnd, messages.StreamTypeTextStart,
+		messages.StreamTypeToolCallStart, messages.StreamTypeToolCallDelta, messages.StreamTypeToolCallEnd,
+		messages.StreamTypeAudioStart, messages.StreamTypeImageStart, messages.StreamTypeVideoStart,
+		messages.StreamTypeFileStart, messages.StreamTypeEmbeddingStart, messages.StreamTypeReasoningStart,
+		messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped, messages.StreamTypeTranscriptStart,
+		messages.StreamTypeInputItemAdded, messages.StreamTypePong, messages.StreamTypeSessionOpen,
+		messages.StreamTypeSessionClose, messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated,
+		messages.StreamTypeSessionUpdate, messages.StreamTypeResponseCancel, messages.StreamTypeResponseCreate,
+		messages.StreamTypeRefusal, messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo,
+		messages.StreamTypeError, messages.StreamTypeSystemFullMessage:
+		return false
+	default:
+		return false
+	}
+}
+
+func isEmptyProviderResponse(msg messages.StreamMessage, value *messages.MessageEndValue, outputSeen, toolObligation bool) bool {
+	if value == nil || outputSeen || toolObligation || msg.ResponsePurpose == messages.ResponsePurposeToolAcknowledgement {
+		return false
+	}
+	if value.TerminalReason != messages.TerminalReasonPartialOutput || value.OutputState != messages.TerminalOutputNone || value.Usage.CompletionTokens != 0 {
+		return false
+	}
+	if value.TerminalReason == messages.TerminalReasonCancellation || strings.EqualFold(strings.TrimSpace(value.Status), "cancelled") {
+		return false
+	}
+	return true
+}
+
 func (h *handle) providerLivenessEnabled() bool {
 	if h == nil {
 		return false
@@ -277,110 +318,6 @@ func (h *handle) observeProviderLiveness(ctx context.Context, msg messages.Strea
 		return
 	}
 	h.resetProviderLiveness()
-}
-
-// observeProviderDispatch arms the participant watchdog when the loop admits
-// an operation that asks the provider to produce a response. The provider may
-// emit MESSAGE.START asynchronously, so arming at dispatch closes the gap
-// between a successful input admission and the first provider observation.
-func (h *handle) observeProviderDispatch(msg messages.StreamMessage) {
-	if h == nil {
-		return
-	}
-	h.mu.Lock()
-	durationController := h.durationController
-	h.mu.Unlock()
-	if durationController != nil {
-		durationController.Observe(msg)
-	}
-	h.recordMessage(session.LiveRecord{Direction: session.LiveRecordClient, Timestamp: h.now(), Message: msg})
-	if msg.Type != messages.StreamTypeResponseCreate && msg.Type != messages.StreamTypeMessageEnd {
-		return
-	}
-	value, hasCreate := msg.Value.(*messages.ResponseCreateValue)
-	acknowledgement := hasCreate && value != nil && value.IsToolAcknowledgement()
-	// Admission establishes pending work even before the provider's response
-	// starts. Keep that obligation separate from observed streaming progress.
-	if !acknowledgement && msg.Role != messages.RoleTool {
-		h.mu.Lock()
-		h.responseStarted, h.responsePending = true, true
-		if msg.Type == messages.StreamTypeResponseCreate {
-			h.responseActive = true
-		}
-		h.mu.Unlock()
-	}
-	if h.providerLivenessEnabled() && (msg.Type == messages.StreamTypeMessageEnd || !acknowledgement) {
-		h.armProviderLiveness()
-	}
-}
-
-func (h *handle) observeProviderMessageEnd(_ context.Context, msg messages.StreamMessage) {
-	value, ok := msg.Value.(*messages.MessageEndValue)
-	if !ok {
-		value = nil
-	}
-	h.livenessMu.Lock()
-	outputSeen := h.responseOutputSeen
-	toolObligation := h.responseToolObligation
-	h.responseOutputSeen = false
-	h.responseToolObligation = false
-	h.livenessMu.Unlock()
-	if isEmptyProviderResponse(msg, value, outputSeen, toolObligation) {
-		failure := session.LiveLivenessFailure{
-			Classification:     silentProviderEmptyResponse,
-			ResponseID:         strings.TrimSpace(msg.ResponseID),
-			TerminalReason:     messages.TerminalReasonTerminalFailure,
-			TerminalProvenance: messages.TerminalProvenanceSession,
-			OutputState:        messages.TerminalOutputNone,
-		}
-		if value != nil {
-			failure.Usage = value.Usage
-		}
-		h.latchProviderLiveness(failure) //nolint:contextcheck // Publication uses the handle's retained invocation evidence context, not this observation callback's cancellation.
-		return
-	}
-	h.disarmProviderLiveness()
-}
-
-func isProviderOutputMessage(msg messages.StreamMessage) bool {
-	if msg.Role == messages.RoleUser || msg.Role == messages.RoleTool {
-		return false
-	}
-	switch msg.Type {
-	case messages.StreamTypeTextDelta, messages.StreamTypeAudioDelta, messages.StreamTypeImageDelta,
-		messages.StreamTypeVideoDelta, messages.StreamTypeFileDelta, messages.StreamTypeEmbeddingDelta,
-		messages.StreamTypeReasoningDelta, messages.StreamTypeTranscriptDelta,
-		messages.StreamTypeTextEnd, messages.StreamTypeAudioEnd, messages.StreamTypeImageEnd,
-		messages.StreamTypeVideoEnd, messages.StreamTypeFileEnd, messages.StreamTypeEmbeddingEnd,
-		messages.StreamTypeReasoningEnd, messages.StreamTypeTranscriptEnd:
-		return true
-	case messages.StreamTypeMessageStart, messages.StreamTypeMessageEnd, messages.StreamTypeTextStart,
-		messages.StreamTypeToolCallStart, messages.StreamTypeToolCallDelta, messages.StreamTypeToolCallEnd,
-		messages.StreamTypeAudioStart, messages.StreamTypeImageStart, messages.StreamTypeVideoStart,
-		messages.StreamTypeFileStart, messages.StreamTypeEmbeddingStart, messages.StreamTypeReasoningStart,
-		messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped, messages.StreamTypeTranscriptStart,
-		messages.StreamTypeInputItemAdded, messages.StreamTypePong, messages.StreamTypeSessionOpen,
-		messages.StreamTypeSessionClose, messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated,
-		messages.StreamTypeSessionUpdate, messages.StreamTypeResponseCancel, messages.StreamTypeResponseCreate,
-		messages.StreamTypeRefusal, messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo,
-		messages.StreamTypeError, messages.StreamTypeSystemFullMessage:
-		return false
-	default:
-		return false
-	}
-}
-
-func isEmptyProviderResponse(msg messages.StreamMessage, value *messages.MessageEndValue, outputSeen, toolObligation bool) bool {
-	if value == nil || outputSeen || toolObligation || msg.ResponsePurpose == messages.ResponsePurposeToolAcknowledgement {
-		return false
-	}
-	if value.TerminalReason != messages.TerminalReasonPartialOutput || value.OutputState != messages.TerminalOutputNone || value.Usage.CompletionTokens != 0 {
-		return false
-	}
-	if value.TerminalReason == messages.TerminalReasonCancellation || strings.EqualFold(strings.TrimSpace(value.Status), "cancelled") {
-		return false
-	}
-	return true
 }
 
 func (h *handle) latchProviderLiveness(failure session.LiveLivenessFailure) {

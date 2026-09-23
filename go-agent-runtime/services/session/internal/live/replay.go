@@ -6,14 +6,10 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
-
-type mediaRequirements struct{ inbound, outbound bool }
 
 // runCaptureTurns admits caller-owned finite audio into one persistent live
 // provider session. It shares the replay boundary helpers below because both
@@ -203,6 +199,173 @@ func (i *liveInvocation) waitForNextCaptureTurn(ctx context.Context, index int, 
 	return nil
 }
 
+func (h *handle) runReplay(ctx context.Context) {
+	defer h.runWG.Done()
+	plan := h.request.ReplayPlan
+	if plan == nil || len(plan.AudioTurns) == 0 {
+		return
+	}
+	if err := h.prepareReplay(ctx); err != nil {
+		h.cancelReplayOnError(ctx, "prepare replay", err)
+		return
+	}
+	for turnIndex, turn := range plan.AudioTurns {
+		if err := h.sendReplayTurn(ctx, turnIndex, turn); err != nil {
+			h.cancelReplayOnError(ctx, "replay audio", err)
+			return
+		}
+		// Keep each replay append behind the preceding response terminal so
+		// provider admission preserves source-session causal ordering.
+		if turnIndex+1 < len(plan.AudioTurns) {
+			if err := h.waitReplayResponse(ctx, turnIndex+1); err != nil {
+				h.cancelReplayOnError(ctx, fmt.Sprintf("wait for replay response %d", turnIndex+1), err)
+				return
+			}
+		}
+	}
+	// Mark admission after every captured turn crosses bounded ingress.
+	h.markCaptureComplete()
+}
+
+func (h *handle) prepareReplay(ctx context.Context) error {
+	if err := h.waitReplayReady(ctx); err != nil {
+		return fmt.Errorf("wait for replay provider readiness: %w", err)
+	}
+	if err := h.media.WaitReady(ctx); err != nil {
+		return fmt.Errorf("wait for replay media: %w", err)
+	}
+	return nil
+}
+
+func (h *handle) sendReplayTurn(ctx context.Context, turnIndex int, turn session.LiveReplayAudioTurn) error {
+	for chunkIndex, samples := range turn.Chunks {
+		if len(samples) == 0 {
+			continue
+		}
+		if err := h.media.Endpoints().Outbound.WriteFrame(ctx, sharedaudio.PCMFrame{Samples: samples}); err != nil {
+			return fmt.Errorf("send replay audio turn %d chunk %d: %w", turnIndex+1, chunkIndex+1, err)
+		}
+	}
+	if err := h.Send(ctx, session.LiveControl{Kind: session.LiveControlAudioCommit}); err != nil {
+		return fmt.Errorf("commit replay audio turn %d: %w", turnIndex+1, err)
+	}
+	return nil
+}
+
+func (h *handle) cancelReplayOnError(ctx context.Context, operation string, err error) {
+	if err == nil || ctx == nil || ctx.Err() != nil {
+		return
+	}
+	h.Cancel(fmt.Errorf("%s: %w", operation, err))
+}
+
+func (h *handle) waitReplayReady(ctx context.Context) error {
+	if h == nil || h.request.ReplayPlan == nil || !h.request.ReplayPlan.WaitForSessionUpdated {
+		return nil
+	}
+	if ctx == nil {
+		return errors.New("replay readiness context is required")
+	}
+	select {
+	case <-h.replayReady:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (h *handle) waitReplayResponse(ctx context.Context, target int) error {
+	return h.waitForResponse(ctx, target)
+}
+
+// waitForResponse waits for the requested number of non-tool response
+// terminals. It is shared by replay and finite multi-turn capture workers so
+// a later source cannot overtake the response that closes the preceding turn.
+func (h *handle) waitForResponse(ctx context.Context, target int) error {
+	if h == nil {
+		return context.Canceled
+	}
+	if ctx == nil {
+		return errors.New("response wait context is required")
+	}
+	for {
+		h.mu.Lock()
+		if h.replayResponses >= target {
+			h.mu.Unlock()
+			return nil
+		}
+		wake := h.replayResponseWake
+		h.mu.Unlock()
+		select {
+		case <-wake:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
+// waitForResponseBoundary includes partial assistant terminals produced by
+// barge-in cancellation.
+func (h *handle) waitForResponseBoundary(ctx context.Context, target int) error {
+	if h == nil {
+		return context.Canceled
+	}
+	if ctx == nil {
+		return errors.New("response boundary context is required")
+	}
+	for {
+		h.mu.Lock()
+		ready := h.observedResponseTerminals >= target && !h.responseActive && !h.responsePending
+		terminalWake, responseWake := h.responseTerminalWake, h.replayResponseWake
+		h.mu.Unlock()
+		if ready {
+			return nil
+		}
+		select {
+		case <-terminalWake:
+		case <-responseWake:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
+type finishCleanup struct {
+	userCancelled     bool
+	closeCapabilities func() error
+	flushCapture      func() error
+}
+
+func (h *handle) captureFinishCleanup(err error) (error, finishCleanup) {
+	h.mu.Lock()
+	h.clearPendingToolCallsLocked()
+	if err == nil {
+		err = h.startErr
+	}
+	cleanup := finishCleanup{
+		userCancelled:     h.userCancelled,
+		closeCapabilities: h.capabilityClose,
+		flushCapture:      h.captureFlush,
+	}
+	h.capabilityClose, h.captureFlush = nil, nil
+	h.mu.Unlock()
+	return err, cleanup
+}
+
+func (c finishCleanup) apply(err error) error {
+	if c.closeCapabilities != nil {
+		if closeErr := c.closeCapabilities(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("close live capabilities: %w", closeErr))
+		}
+	}
+	if c.flushCapture != nil {
+		if flushErr := c.flushCapture(); flushErr != nil {
+			err = errors.Join(err, fmt.Errorf("flush live capture: %w", flushErr))
+		}
+	}
+	return err
+}
+
 func shouldWaitForCaptureResponse(index int, admission session.AudioTurnAdmission) bool {
 	return admission == session.AudioTurnAdmissionCompletionGated || index > 0
 }
@@ -217,112 +380,4 @@ func normalizeAudioTurnAdmission(value session.AudioTurnAdmission) (session.Audi
 	default:
 		return "", fmt.Errorf("unsupported audio turn admission %q", value)
 	}
-}
-
-const finiteTurnFrameBudget = 48_000
-
-type sessionAudioInputSender interface {
-	sendAudioInput(context.Context, []byte, messages.SessionAudioInputPolicy) error
-}
-
-type loopAudioOutbound struct {
-	sender  sessionAudioInputSender
-	onAdmit func(sharedaudio.PCMFrame)
-}
-
-func (i *liveInvocation) captureOutbound() sharedaudio.OutboundMedia {
-	if i == nil {
-		return nil
-	}
-	sender, ok := i.handle.(sessionAudioInputSender)
-	if !ok || sender == nil {
-		return i.endpoints.Outbound
-	}
-	return &loopAudioOutbound{sender: sender, onAdmit: i.captureAdmitted}
-}
-
-// sendAudioInput keeps local capture on the model runner's ordered ingress;
-// peer media remains owned by the room graph.
-func (h *handle) sendAudioInput(ctx context.Context, pcm []byte, policy messages.SessionAudioInputPolicy) error {
-	if h == nil {
-		return errors.New("live audio input handle is unavailable")
-	}
-	h.mu.Lock()
-	loop := h.loop
-	started, closed := h.started, h.closed
-	providerClosed := h.providerCloseObserved
-	h.mu.Unlock()
-	if !started || loop == nil {
-		return session.ErrLiveNotStarted
-	}
-	if closed {
-		return session.ErrLiveClosed
-	}
-	if providerClosed {
-		if err := h.scheduledAudioError(); err != nil {
-			return err
-		}
-		return session.ErrLiveClosed
-	}
-	return loop.SendAudioInputWithPolicy(ctx, pcm, policy)
-}
-
-func (h *handle) recordCapturedAudio(frame sharedaudio.PCMFrame) {
-	if h == nil {
-		return
-	}
-	if h.runtimeTrace != nil {
-		h.runtimeTrace.CapturedAudio(frame)
-	}
-	if observer := h.observationPort(); observer != nil {
-		observer.QueueFrame(frame)
-	}
-}
-
-func (o *loopAudioOutbound) WriteFrame(ctx context.Context, frame sharedaudio.PCMFrame) error {
-	if o == nil || o.sender == nil {
-		return errors.New("ordered audio input sender is unavailable")
-	}
-	if len(frame.Samples) == 0 {
-		return sharedaudio.ErrSessionMediaEmptyFrame
-	}
-	if err := o.sender.sendAudioInput(ctx, codec.EncodePCM16(frame.Samples), messages.SessionAudioInputPolicyDefault); err != nil {
-		return fmt.Errorf("admit ordered audio input: %w", err)
-	}
-	if o.onAdmit != nil {
-		o.onAdmit(frame)
-	}
-	return nil
-}
-
-func (*loopAudioOutbound) Close() error { return nil }
-
-func (i *liveInvocation) captureAdmitted(frame sharedaudio.PCMFrame) {
-	if i == nil || i.handle == nil {
-		return
-	}
-	if observer, ok := i.handle.(interface{ recordCapturedAudio(sharedaudio.PCMFrame) }); ok {
-		observer.recordCapturedAudio(frame)
-	}
-}
-
-func newFiniteTurnOutbound(target sharedaudio.OutboundMedia) (*sharedaudio.FrameAccumulator, error) {
-	return sharedaudio.NewFrameAccumulator(target, finiteTurnFrameBudget)
-}
-
-func (i *liveInvocation) handleResponseIsActive() bool {
-	if i == nil || i.handle == nil {
-		return false
-	}
-	if snapshot, ok := i.handle.(interface{ responseIsActive() bool }); ok {
-		return snapshot.responseIsActive()
-	}
-	return false
-}
-
-func openingMessageRequestsResponse(request session.LiveRequest) bool {
-	if len(request.OpeningContentParts) > 0 {
-		return request.OpeningMessageResponse != session.LiveOpeningMessageQueued
-	}
-	return request.OpeningPromptPresent || request.OpeningPrompt != ""
 }

@@ -8,9 +8,53 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/sessionwrap"
+	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
+
+type mediaRequirements struct{ inbound, outbound bool }
+
+func deviceRequestHasDirection(request devices.Request) bool {
+	return request.CaptureEnabled || request.PlaybackEnabled
+}
+
+func (r mediaRequirements) satisfiedBy(endpoints sharedaudio.MediaEndpoints) bool {
+	return (!r.inbound || endpoints.Inbound != nil) && (!r.outbound || endpoints.Outbound != nil)
+}
+
+// SatisfiedBy retains the package-local contract used by the session tests
+// while the live host keeps the runtime check unexported.
+func (r mediaRequirements) SatisfiedBy(endpoints sharedaudio.MediaEndpoints) bool {
+	return r.satisfiedBy(endpoints)
+}
+
+func (h *handle) configureMediaRequirements(inbound, outbound bool) {
+	h.mu.Lock()
+	h.mediaRequirements = mediaRequirements{inbound: inbound, outbound: outbound}
+	h.mu.Unlock()
+}
+
+func (i *liveInvocation) attachRecorder() {
+	if i == nil || i.options.Recorder == nil {
+		return
+	}
+	setter, ok := i.handle.(interface{ setRecorder(session.LiveRecorder) })
+	if ok {
+		setter.setRecorder(i.options.Recorder)
+	}
+}
+
+func (i *liveInvocation) validateDeviceAdmission() error {
+	if i == nil {
+		return errors.New("live invocation is unavailable")
+	}
+	if (len(i.options.CaptureTurns) > 0 || len(i.options.CaptureInterruptions) > 0) && i.options.Devices == nil {
+		return errors.New("finite capture inputs require a device service")
+	}
+	return nil
+}
 
 func (h *handle) start(runCtx context.Context) error {
 	defer h.startFinish.Do(func() { close(h.startDone) })

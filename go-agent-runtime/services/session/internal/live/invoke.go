@@ -138,46 +138,6 @@ func installCaptureBoundary(options *session.LiveRunOptions, handle session.Live
 	options.DeviceRequest.FileInput = &input
 	return true
 }
-func deviceRequestHasDirection(request devices.Request) bool {
-	return request.CaptureEnabled || request.PlaybackEnabled
-}
-
-func (r mediaRequirements) satisfiedBy(endpoints sharedaudio.MediaEndpoints) bool {
-	return (!r.inbound || endpoints.Inbound != nil) && (!r.outbound || endpoints.Outbound != nil)
-}
-
-// SatisfiedBy retains the package-local contract used by the session tests
-// while the live host keeps the runtime check unexported.
-func (r mediaRequirements) SatisfiedBy(endpoints sharedaudio.MediaEndpoints) bool {
-	return r.satisfiedBy(endpoints)
-}
-
-func (h *handle) configureMediaRequirements(inbound, outbound bool) {
-	h.mu.Lock()
-	h.mediaRequirements = mediaRequirements{inbound: inbound, outbound: outbound}
-	h.mu.Unlock()
-}
-
-func (i *liveInvocation) attachRecorder() {
-	if i == nil || i.options.Recorder == nil {
-		return
-	}
-	setter, ok := i.handle.(interface{ setRecorder(session.LiveRecorder) })
-	if ok {
-		setter.setRecorder(i.options.Recorder)
-	}
-}
-
-func (i *liveInvocation) validateDeviceAdmission() error {
-	if i == nil {
-		return errors.New("live invocation is unavailable")
-	}
-	if (len(i.options.CaptureTurns) > 0 || len(i.options.CaptureInterruptions) > 0) && i.options.Devices == nil {
-		return errors.New("finite capture inputs require a device service")
-	}
-	return nil
-}
-
 func (i *liveInvocation) closeWithError(runErr error) (*liveInvocation, error) {
 	if i == nil {
 		return nil, runErr

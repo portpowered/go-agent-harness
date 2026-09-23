@@ -11,8 +11,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
-	lifecycle "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/internal/lifecycle"
-	lifecycleService "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/internal/lifecycle/service"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/internal/lifecycle"
+	service2 "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/internal/lifecycle/service"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/internal/observer"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/internal/service"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -27,9 +27,14 @@ func NewService() sessiontrace.Service {
 }
 
 func NewLifecycleService() sessiontrace.LifecycleService {
-	lifecycleServiceService := lifecycleService.New(lifecycle.Options{})
-	return lifecycleServiceService
+	options := _wireOptionsValue
+	v := service2.New(options)
+	return v
 }
+
+var (
+	_wireOptionsValue = lifecycle.Options{}
+)
 
 func NewLiveRecorder(options sessiontrace.LiveRecorderOptions) session.LiveRecorder {
 	liveRecorder := service.NewLiveRecorder(options)

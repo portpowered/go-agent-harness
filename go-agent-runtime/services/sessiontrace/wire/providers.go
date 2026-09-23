@@ -55,7 +55,7 @@ func NewService() sessiontrace.Service {
 }
 
 func NewLifecycleService() sessiontrace.LifecycleService {
-	wire.Build(lifecycleService.New)
+	wire.Build(lifecycleService.New, wire.Value(lifecycle.Options{}))
 	return nil
 }
 
