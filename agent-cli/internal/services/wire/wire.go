@@ -27,8 +27,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	runtimeRoomReplayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay/wire"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
-	runtimeSelfPlay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/selfplay"
-	runtimeSelfPlayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/selfplay/wire"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -114,12 +112,6 @@ func (s legacyToolCapabilitiesService) Resolve(cfg *config.Config) (serviceTools
 	return capabilities, nil
 }
 
-// NewSelfPlayService composes the service-owned self-play contract from
-// explicit provider, catalog, and clock roles.
-func NewSelfPlayService(sessionService runtimeProviders.SessionService, modelCatalog runtimeProviders.ModelCatalog, clockSource clock.Source) runtimeSelfPlay.Service {
-	return runtimeSelfPlayWire.NewService(runtimeSelfPlayWire.NewDependencies(sessionService, modelCatalog, clockSource))
-}
-
 // DeviceSet is the device service's complete provider set. Application Wire
 // composition includes this set alongside the existing registry provider.
 var DeviceSet = wire.NewSet(NewDeviceService, NewDeviceProbeSessionFactory, NewDeviceProbeService, audioiowire.NewService, runtimeDevicesWire.NewService) //nolint:gochecknoglobals // immutable Wire provider metadata
@@ -165,9 +157,6 @@ func NewSessionRuntimeFactory() agentruntime.SessionRuntimeFactory {
 }
 
 var SessionSet = wire.NewSet(NewSessionRuntimeFactory, NewSessionRuntime, NewSessionService)
-
-// SelfPlaySet is the self-play service's complete provider set.
-var SelfPlaySet = wire.NewSet(NewSelfPlayService)
 
 // NewBrowserConversationService exposes the complete browser-conversation
 // vertical through its service-owned Wire provider. The CLI graph receives

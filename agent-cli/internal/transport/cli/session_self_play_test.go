@@ -3,27 +3,24 @@ package cli
 import (
 	"bytes"
 	"context"
-	"io"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
-	serviceSelfPlay "github.com/portpowered/go-agent-harness/agent-cli/internal/services/selfplay"
 	runtimeSelfPlay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/selfplay"
 )
 
 func TestSessionSelfPlayCommandParsesBoundedRunOptions(t *testing.T) {
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = t.TempDir()
-	subject := NewSessionSelfPlayCommand(globalFlags, nil)
-
-	var got serviceSelfPlay.RunOptions
-	subject.SetRunner(func(_ context.Context, _ io.Writer, opts serviceSelfPlay.RunOptions) error {
-		got = opts
-		return nil
+	var got runtimeSelfPlay.Request
+	runner := selfPlayRuntimeFunc(func(_ context.Context, request runtimeSelfPlay.Request) (runtimeSelfPlay.Result, error) {
+		got = request
+		return runtimeSelfPlay.Result{}, nil
 	})
+	subject := NewSessionSelfPlayCommand(globalFlags, runner)
 
 	outputDir := filepath.Join(t.TempDir(), "self-play")
 	cmd := subject.Generate()
@@ -48,21 +45,17 @@ func TestSessionSelfPlayCommandParsesBoundedRunOptions(t *testing.T) {
 	if got.MaxDuration != 17*time.Second || got.MaxTurns != 4 {
 		t.Fatalf("parsed bounds = (%s, %d), want (17s, 4)", got.MaxDuration, got.MaxTurns)
 	}
-	if got.ConfigDir != globalFlags.ConfigDir() {
-		t.Fatalf("config dir = %q, want %q", got.ConfigDir, globalFlags.ConfigDir())
-	}
 }
 
 func TestSessionSelfPlayCommandLeavesOmittedDefaultsForService(t *testing.T) {
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = t.TempDir()
-	subject := NewSessionSelfPlayCommand(globalFlags, nil)
-
-	var got serviceSelfPlay.RunOptions
-	subject.SetRunner(func(_ context.Context, _ io.Writer, options serviceSelfPlay.RunOptions) error {
-		got = options
-		return nil
+	var got runtimeSelfPlay.Request
+	runner := selfPlayRuntimeFunc(func(_ context.Context, request runtimeSelfPlay.Request) (runtimeSelfPlay.Result, error) {
+		got = request
+		return runtimeSelfPlay.Result{}, nil
 	})
+	subject := NewSessionSelfPlayCommand(globalFlags, runner)
 
 	cmd := subject.Generate()
 	cmd.SetArgs([]string{"--output-dir", filepath.Join(t.TempDir(), "self-play")})
@@ -97,7 +90,7 @@ func TestSessionSelfPlayCommandHelpDocumentsTransportContract(t *testing.T) {
 	}
 }
 
-func TestSelfPlayServiceAdapterTranslatesConfiguredRequestAndPresentsResult(t *testing.T) {
+func TestSessionSelfPlayCommandTranslatesConfiguredRequestAndPresentsResult(t *testing.T) {
 	t.Setenv("AGENT_MODEL__OPENAI__API_KEY", "environment-key")
 	for _, test := range []struct {
 		name       string
@@ -117,16 +110,21 @@ func TestSelfPlayServiceAdapterTranslatesConfiguredRequestAndPresentsResult(t *t
 					Assistant:  runtimeSelfPlay.SideResult{CompletedTurns: 2},
 				}, nil
 			})
-			adapter := NewSelfPlayServiceAdapter(runner)
+			globalFlags := flags.NewGlobalFlags()
+			globalFlags.ConfigDirPath = t.TempDir()
+			command := NewSessionSelfPlayCommand(globalFlags, runner).Generate()
 			var output bytes.Buffer
-			options := serviceSelfPlay.RunOptions{
-				APIKey: test.apiKey, ConfigDir: t.TempDir(), OutputDir: filepath.Join(t.TempDir(), "self-play"),
-				BaseURL: "wss://example.test/realtime",
+			command.SetOut(&output)
+			outputDir := filepath.Join(t.TempDir(), "self-play")
+			args := []string{"--output-dir", outputDir, "--base-url", "wss://example.test/realtime"}
+			if test.apiKey != "" {
+				args = append(args, "--api-key", test.apiKey)
 			}
-			if err := adapter.Run(context.Background(), &output, options); err != nil {
-				t.Fatalf("adapt runtime self-play service: %v", err)
+			command.SetArgs(args)
+			if err := command.ExecuteContext(context.Background()); err != nil {
+				t.Fatalf("execute self-play command: %v", err)
 			}
-			if got.APIKey != test.wantAPIKey || got.Provider != options.Provider || got.Model != options.Model || got.OutputDir != options.OutputDir || got.BaseURL != options.BaseURL || got.MaxDuration != options.MaxDuration || got.MaxTurns != options.MaxTurns {
+			if got.APIKey != test.wantAPIKey || got.Provider != "" || got.Model != "" || got.OutputDir != outputDir || got.BaseURL != "wss://example.test/realtime" || got.MaxDuration != 0 || got.MaxTurns != 0 {
 				t.Fatalf("runtime request = %#v", got)
 			}
 			if output.String() != "self-play stopped: reason=turn_target customer_turns=2 assistant_turns=2\n" {

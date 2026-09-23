@@ -16,7 +16,6 @@ import (
 	hostServices "github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	serviceRuntime "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime"
 	rtcontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime/transports"
-	serviceSelfPlay "github.com/portpowered/go-agent-harness/agent-cli/internal/services/selfplay"
 	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
 	toolservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools/wire"
 	servicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
@@ -32,7 +31,7 @@ import (
 	recordingwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/wire"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	runtimeReplayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
-	runtimeSelfPlay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/selfplay"
+	runtimeSelfPlayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/selfplay/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	sessionwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
 	runtimeSessionTrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
@@ -232,10 +231,6 @@ func provideProviderServiceRole(service runtimeproviders.FullService) runtimepro
 	return service
 }
 
-func provideSelfPlayCLIService(service runtimeSelfPlay.Service) serviceSelfPlay.Service {
-	return cli.NewSelfPlayServiceAdapter(service)
-}
-
 func provideProviderSessionServiceRole(service runtimeproviders.FullService) runtimeproviders.SessionService {
 	return service
 }
@@ -350,8 +345,8 @@ var CliSet = wire.NewSet(
 	provideSessionRTCRuntimeFactory,
 	cli.NewSessionToolCapabilitiesFactoryFromService,
 	cli.NewSessionCommandWithLive,
-	servicewire.SelfPlaySet,
-	provideSelfPlayCLIService,
+	runtimeSelfPlayWire.NewDependencies,
+	runtimeSelfPlayWire.NewService,
 	cli.NewSessionReplayCommand,
 	cli.NewRoomRunCommand,
 	cli.NewSessionShowCommand,

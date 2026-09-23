@@ -85,9 +85,9 @@ type roomParticipantEvidence struct {
 	id    string
 
 	artifacts   roomEvidenceArtifactPaths
-	audio       *selfPlayWAVRecorder
-	diagnostics *selfPlayJSONLWriter
-	deltas      *selfPlayJSONLWriter
+	audio       *roomWAVRecorder
+	diagnostics *roomJSONLWriter
+	deltas      *roomJSONLWriter
 	// events is the participant-level event stream artifact role required by
 	// replay bundle admission (roomReplayArtifactRoleEvents), independently
 	// declared from deltas so the two artifact roles never share one
@@ -95,7 +95,7 @@ type roomParticipantEvidence struct {
 	// path as an ownership conflict). It currently carries the same
 	// wall-clock-stamped StreamMessage content as deltas: every event this
 	// participant's session observed.
-	events *selfPlayJSONLWriter
+	events *roomJSONLWriter
 
 	// sentPCM/receivedPCM capture both directions of this participant's raw
 	// audio: sentPCM is what this participant spoke into the room (mirrors
@@ -428,9 +428,9 @@ func (p *roomParticipantEvidence) RecordSessionDiagnostic(record SessionDiagnost
 		p.recordError(p.artifacts.Diagnostics, errors.New("diagnostics sink is not initialized"))
 		return
 	}
-	data, err := json.Marshal(selfPlayDiagnosticLine{
+	data, err := json.Marshal(roomDiagnosticLine{
 		Event:  record.Event,
-		Fields: cloneSelfPlayStringMap(record.Fields),
+		Fields: cloneRoomStringMap(record.Fields),
 	})
 	if err != nil {
 		p.recordError(p.artifacts.Diagnostics, fmt.Errorf("marshal diagnostic record: %w", err))
@@ -593,7 +593,7 @@ func (e *roomEvidence) redactText(value string) string {
 		return value
 	}
 	for _, secret := range e.secrets {
-		value = redactSelfPlayError(value, secret)
+		value = redactRoomErrorText(value, secret)
 	}
 	return value
 }
@@ -956,7 +956,7 @@ func writeRoomEvidenceManifestFile(path string, manifest roomEvidenceManifest, s
 			_ = os.Remove(temporaryPath)
 		}
 	}()
-	if err := writeSelfPlayAll(temporary, data); err != nil {
+	if err := writeRoomEvidenceAll(temporary, data); err != nil {
 		_ = temporary.Close()
 		return fmt.Errorf("write room run manifest temporary file: %w", err)
 	}
@@ -980,7 +980,7 @@ func redactRoomEvidenceJSON(data []byte, secrets []string) []byte {
 	}
 	redact := func(value string) string {
 		for _, secret := range secrets {
-			value = redactSelfPlayError(value, secret)
+			value = redactRoomErrorText(value, secret)
 		}
 		return value
 	}
