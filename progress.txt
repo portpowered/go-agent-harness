@@ -4689,3 +4689,27 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   failure reproduces in the full suite, repair its bounded cleanup locally;
   otherwise address the exact coverage report without changing floors. Decision
   remains CONTINUE.
+
+
+# C276 full prepush coverage checkpoint — 2026-09-23
+
+- Full `rtk make prepush` on exact candidate
+  `34e089f900485fff3a1de291f51934b2d07536d9` completed in 899 seconds. It
+  passed formatting, architecture (224 packages / 1,985 files / 29,258
+  functions), vet, lint, staticcheck, build, normal tests, test-tools, coverage
+  registration, and instrumented tests for all six modules plus embedding. The
+  prior Chrome TempDir race did not recur.
+- Coverage gate then reported four shared package-floor deficits: CLI Wire
+  79.00%/80%, session Wire 84.60%/95%, session-duration service 84.50%/90%,
+  session-terminal Wire 88.90%/95%. The task-owned replay engine now meets its
+  80% floor and is absent from the violation list. Floors remain unchanged; no
+  coverage-only tests were added.
+- Removed the two generated integration capture outputs; worktree is clean. No
+  push, PR, or hosted CI handoff occurred. The same-task caller census still
+  needs exact reviewed C268/C269 releases before those shared callers can be
+  changed and all seven legacy files can be verified absent for handoff.
+- Next: continue same-task caller reconciliation when the reviewed releases are
+  available, then run the complete local preflight and all vertical-specific
+  functional, integration, race, hermetic, and Wire commands on the exact
+  complete candidate. Do not submit until the locally required gates pass.
+  Decision remains CONTINUE.
