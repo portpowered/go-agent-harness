@@ -146,25 +146,25 @@ func RunSessionWithImages(ctx context.Context, out io.Writer, opts SessionImageR
 		return err
 	}
 	defer imageCleanup()
-	plan, wirePrompt, err := planSessionImageRuntime(opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, false)
+	plan, wirePrompt, err := planSessionImageRuntime(ctx, opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, false)
 	if err != nil {
 		return err
 	}
 	return runSessionImagePlan(ctx, out, plan, opts, wirePrompt)
 }
 
-func planSessionImageRuntime(opts SessionRunOptions, parts []messages.ImagePart, seed SessionTextSeed, systemPrompt string, deferResponse bool) (sessionRuntimePlan, string, error) {
+func planSessionImageRuntime(ctx context.Context, opts SessionRunOptions, parts []messages.ImagePart, seed SessionTextSeed, systemPrompt string, deferResponse bool) (sessionRuntimePlan, string, error) {
 	var (
 		plan         sessionRuntimePlan
 		err          error
 		instructions string
 	)
 	if opts.ReplayPath != "" {
-		plan, err = planSessionRuntime(opts)
+		plan, err = planSessionRuntimeContext(ctx, opts)
 	} else {
 		instructions, err = resolveSessionInstructions(opts, systemPrompt)
 		if err == nil {
-			plan, err = planSessionWithResolvedInstructions(opts, instructions)
+			plan, err = planSessionWithResolvedInstructionsContext(ctx, opts, instructions)
 		}
 	}
 	if err != nil {

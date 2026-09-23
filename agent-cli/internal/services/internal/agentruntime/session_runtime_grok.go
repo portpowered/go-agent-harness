@@ -146,10 +146,6 @@ func planGrokRTCRecording(opts SessionRunOptions, factory sessionRuntimeFactory,
 	}, nil
 }
 
-func planGrokReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
-	return planGrokReplayRuntimeContext(context.Background(), opts, factory)
-}
-
 func buildGrokSessionInferencer(sessionCfg config.GrokConfig, dialer transport.Dialer) (messages.SessionInferencer, error) {
 	return buildGrokSessionInferencerWithTools(sessionCfg, dialer, nil)
 }

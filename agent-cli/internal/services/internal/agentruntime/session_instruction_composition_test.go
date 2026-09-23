@@ -51,7 +51,7 @@ func TestLivePlannerFamiliesUseOneGroundingComposition(t *testing.T) {
 		{
 			name: "image-composed",
 			build: func(_ *testing.T, opts SessionRunOptions) (sessionRuntimePlan, func(), error) {
-				plan, _, err := planSessionImageRuntime(opts, []messages.ImagePart{{
+				plan, _, err := planSessionImageRuntime(context.Background(), opts, []messages.ImagePart{{
 					Bytes:     []byte{0x89, 'P', 'N', 'G'},
 					MediaType: "image/png",
 				}}, SessionTextSeed{}, "customer instructions", false)

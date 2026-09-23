@@ -104,10 +104,6 @@ func openAIRecordingSessionBuilder(opts SessionRunOptions, factory sessionRuntim
 	}
 }
 
-func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
-	return planOpenAIReplayRuntimeContext(context.Background(), opts, factory)
-}
-
 func replayAnnouncementToolDefinitions(definitions []messages.ToolDefinition, names []string, known bool) []messages.ToolDefinition {
 	if !known {
 		return nil
@@ -348,12 +344,12 @@ func replayScheduledAudioInputs(turns []session.LiveReplayAudioTurn) []Scheduled
 	return inputs
 }
 
-func runReplayCapture(ctx context.Context, out io.Writer, service replay.Service, path string) error {
+func runReplayCapture(ctx context.Context, out io.Writer, service replay.Service, path string) (runErr error) {
 	capture, err := service.Replay(ctx, path)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = capture.Close() }()
-	err = capture.Drain(ctx, func(msg messages.StreamMessage) error { return writeSessionReplayMessage(out, msg) })
-	return errors.Join(err, capture.Err())
+	defer func() { runErr = errors.Join(runErr, capture.Close()) }()
+	runErr = capture.Drain(ctx, func(msg messages.StreamMessage) error { return writeSessionReplayMessage(out, msg) })
+	return errors.Join(runErr, capture.Err())
 }
