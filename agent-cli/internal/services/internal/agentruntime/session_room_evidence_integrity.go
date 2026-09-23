@@ -29,7 +29,7 @@ type roomJSONLWriter struct {
 }
 
 func newRoomJSONLWriter(path string) (*roomJSONLWriter, error) {
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL|os.O_APPEND, 0o600)
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL|os.O_APPEND, roomEvidenceFileMode)
 	if err != nil {
 		return nil, err
 	}
@@ -86,15 +86,17 @@ func newRoomWAVRecorder(path string, sampleRate int) (*roomWAVRecorder, error) {
 	if sampleRate <= 0 {
 		return nil, fmt.Errorf("room WAV sample rate must be positive, got %d", sampleRate)
 	}
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, roomEvidenceFileMode)
 	if err != nil {
 		return nil, err
 	}
 	writer, err := wavio.NewStreamWriter(file, sampleRate)
 	if err != nil {
-		_ = file.Close()
-		_ = os.Remove(path)
-		return nil, fmt.Errorf("write room WAV header: %w", err)
+		return nil, errors.Join(
+			fmt.Errorf("write room WAV header: %w", err),
+			withRoomEvidenceContext("close "+path, file.Close()),
+			withRoomEvidenceContext("remove "+path, os.Remove(path)),
+		)
 	}
 	return &roomWAVRecorder{path: path, file: file, writer: writer}, nil
 }
@@ -135,7 +137,7 @@ func (w *roomWAVRecorder) close() error {
 	return w.err
 }
 
-const roomEvidenceDirectoryMode = 0o700
+const roomEvidenceDirectoryMode, roomEvidenceFileMode os.FileMode = 0o700, 0o600
 
 // roomEvidenceArtifactIntegrity is one entry of roomEvidenceManifest's
 // artifact_integrity map: the declared size and sha256 digest of one
