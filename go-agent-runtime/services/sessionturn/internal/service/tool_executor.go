@@ -35,6 +35,11 @@ type toolExecutor struct {
 	closeErr      error
 }
 
+type toolExecutionResult struct {
+	response messages.ToolCallResponse
+	err      error
+}
+
 func (*toolExecutor) SessionTurnToolExecutor() {}
 
 func newToolExecutor(inner messages.ToolExecutor, policy tools.InteractiveToolPolicy, timeout time.Duration, observeCall func(messages.ToolCall), observeResult func(messages.ToolCall, messages.ToolCallResponse, bool), diagnose func(messages.ToolCall, error), present func(messages.ToolCall, error) messages.ToolCallResponse) messages.ToolExecutor {
@@ -87,7 +92,21 @@ func (e *toolExecutor) Execute(ctx context.Context, call messages.ToolCall) (mes
 	if err := execCtx.Err(); err != nil {
 		return e.finish(call, messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name}, false, err)
 	}
-	response, err := invokeTool(execCtx, e.inner, call)
+	resultCh := make(chan toolExecutionResult, 1)
+	go func() {
+		response, err := invokeTool(execCtx, e.inner, call)
+		resultCh <- toolExecutionResult{response: response, err: err}
+	}()
+	var response messages.ToolCallResponse
+	var err error
+	select {
+	case result := <-resultCh:
+		response, err = result.response, result.err
+	case <-ctx.Done():
+		return e.finish(call, messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name}, false, ctx.Err())
+	case <-execCtx.Done():
+		return e.failed(call, fmt.Errorf("%w after %s", errToolTimeout, timeout))
+	}
 	if ctx.Err() != nil {
 		return e.finish(call, messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name}, false, ctx.Err())
 	}

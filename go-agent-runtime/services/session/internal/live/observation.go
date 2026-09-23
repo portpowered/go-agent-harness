@@ -74,6 +74,7 @@ func (h *handle) consumeMessage(ctx context.Context, loop *agentloop.AgentLoop, 
 			return false
 		}
 	}
+	h.observeRuntimeMessage(msg)
 	if eventcodec.OutputMessage(msg) {
 		h.mu.Lock()
 		h.outputObserved = true
@@ -107,6 +108,25 @@ func (h *handle) consumeMessage(ctx context.Context, loop *agentloop.AgentLoop, 
 	}
 	return responseComplete
 }
+
+func (h *handle) observeTerminalValue(msg messages.StreamMessage) {
+	value := eventcodec.TerminalValue(msg)
+	if value == nil {
+		return
+	}
+	h.mu.Lock()
+	if msg.Type == messages.StreamTypeSessionClose {
+		if !h.providerCloseObserved || h.terminalValue == nil {
+			h.terminalValue = value
+		}
+		h.providerCloseObserved = true
+		h.terminalOnce.Do(func() { close(h.terminalObserved) })
+	} else if !h.providerCloseObserved {
+		h.terminalValue = value
+	}
+	h.mu.Unlock()
+}
+
 func (h *handle) observeResponseTerminal(msg messages.StreamMessage) {
 	if h == nil || msg.Type != messages.StreamTypeMessageEnd || msg.Role == messages.RoleTool || (msg.Role != "" && msg.Role != messages.RoleAssistant) {
 		return

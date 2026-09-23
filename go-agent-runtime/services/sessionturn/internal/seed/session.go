@@ -47,7 +47,7 @@ func (s *session) SendWithOutcome(ctx context.Context, msg messages.StreamMessag
 	outcome := messages.SendSessionWithOutcome(ctx, s.inner, msg)
 	if msg.Type == messages.StreamTypeToolCallEnd {
 		if value, ok := msg.Value.(*messages.ToolCallEndValue); ok && value != nil {
-			s.observeToolResult(ctx, value.ToolCallID, outcome, false)
+			s.observeToolResult(ctx, value.ToolCallID, outcome, false, false)
 		}
 	}
 	if msg.Type == messages.StreamTypeResponseCreate && outcome.OK() {
@@ -70,7 +70,7 @@ func (s *session) SendMessage(ctx context.Context, msg messages.Message) bool {
 		return false
 	}
 	outcome := completeMessageOutcome(ctx, sender.SendMessage(ctx, msg))
-	s.observeToolResult(ctx, msg.ToolCallID, outcome, true)
+	s.observeToolResult(ctx, msg.ToolCallID, outcome, true, true)
 	return outcome.OK()
 }
 
@@ -80,11 +80,11 @@ func (s *session) SendMessageWithoutResponse(ctx context.Context, msg messages.M
 		return false
 	}
 	outcome := completeMessageOutcome(ctx, sender.SendMessageWithoutResponse(ctx, msg))
-	s.observeToolResult(ctx, msg.ToolCallID, outcome, false)
+	s.observeToolResult(ctx, msg.ToolCallID, outcome, false, true)
 	return outcome.OK()
 }
 
-func (s *session) observeToolResult(ctx context.Context, callID string, outcome messages.SessionSendOutcome, requestsContinuation bool) {
+func (s *session) observeToolResult(ctx context.Context, callID string, outcome messages.SessionSendOutcome, requestsContinuation, completeResponse bool) {
 	if s == nil || callID == "" || s.lifecycle == nil {
 		return
 	}
@@ -100,8 +100,19 @@ func (s *session) observeToolResult(ctx context.Context, callID string, outcome 
 		if err != nil || !observation.Accepted {
 			event.Type = sessionturn.ToolResultRejected
 			event.Status = messages.SessionSendClosed
-		} else if requestsContinuation {
-			s.observeToolContinuation(ctx, callID)
+		} else {
+			if completeResponse {
+				observation, err = s.lifecycle.Apply(ctx, sessiondiagnostics.Event{Kind: sessiondiagnostics.EventToolResponseComplete, CallID: callID})
+				if err != nil || !observation.Accepted {
+					event.Type = sessionturn.ToolResultRejected
+					event.Status = messages.SessionSendClosed
+				}
+			}
+			if event.Type == sessionturn.ToolResultRejected {
+				// Keep the lifecycle rejection visible to the host below.
+			} else if requestsContinuation {
+				s.observeToolContinuation(ctx, callID)
+			}
 		}
 	} else {
 		event.Type = sessionturn.ToolResultRejected

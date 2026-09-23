@@ -52,7 +52,7 @@ func prepareV8SessionExecutor(commandCLI *cli.AgentCLI, input io.Reader, output 
 		"--replay", replayPath,
 		"--audio-in", "-",
 		"--audio-out", "-",
-		"--max-duration", v8CommandMaxDuration.String(),
+		"--max-duration", v8MultiTurnCommandMaxDuration.String(),
 		instruction,
 	})
 	return root.ExecuteContext
@@ -308,13 +308,13 @@ func runV8MultiTurnDuplex(t *testing.T, aToB, bToA [][]byte) v8DuplexRun {
 	}
 	start("A", v8HarnessAInstruction, aReplay, aExecute, aObserver, aStream)
 	start("B", v8HarnessBInstruction, bReplay, bExecute, bObserver, bStream)
-	ctx, cancel := startGate.startContext(v8RunTimeout)
+	ctx, cancel := startGate.startContext(v8MultiTurnRunTimeout)
 	defer cancel()
 	startGate.release()
 
 	harnesses := make(map[string]v8HarnessResult, 2)
 	contextDone := ctx.Done()
-	cleanupTimer := time.NewTimer(v8RunTimeout + time.Second)
+	cleanupTimer := time.NewTimer(v8MultiTurnRunTimeout + time.Second)
 	defer cleanupTimer.Stop()
 	for len(harnesses) < 2 {
 		select {

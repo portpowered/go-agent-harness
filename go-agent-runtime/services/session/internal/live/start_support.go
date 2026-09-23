@@ -12,6 +12,16 @@ import (
 	"strings"
 )
 
+func selectLegacyReplayFramePolicy(options *session.LiveRunOptions) {
+	if options == nil || options.DeviceRequest.FileInput == nil || options.Request.Replay.InputCapturePath == "" ||
+		options.Request.ReplayPlan == nil || options.Request.ReplayPlan.InputAudioSampleRate > 0 {
+		return
+	}
+	input := *options.DeviceRequest.FileInput
+	input.PadFinalFrame = true
+	options.DeviceRequest.FileInput = &input
+}
+
 func (h *handle) validateTimingPolicy() error {
 	if h.request.MaxDuration < 0 {
 		return errors.New("live session maximum duration must not be negative")

@@ -87,6 +87,13 @@ func validateCaptureInvocation(i *liveInvocation) error {
 	return nil
 }
 
+func captureResponseTarget(request session.LiveRequest) int {
+	if openingMessageRequestsResponse(request) {
+		return 1
+	}
+	return 0
+}
+
 func (i *liveInvocation) runCaptureTurn(ctx context.Context, index int, input devices.FileInput, admission session.AudioTurnAdmission) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -196,6 +203,22 @@ func (i *liveInvocation) waitForNextCaptureTurn(ctx context.Context, index int, 
 	return nil
 }
 
+func shouldWaitForCaptureResponse(index int, admission session.AudioTurnAdmission) bool {
+	return admission == session.AudioTurnAdmissionCompletionGated || index > 0
+}
+
+func normalizeAudioTurnAdmission(value session.AudioTurnAdmission) (session.AudioTurnAdmission, error) {
+	if value == "" {
+		return session.AudioTurnAdmissionCompletionGated, nil
+	}
+	switch value {
+	case session.AudioTurnAdmissionCompletionGated, session.AudioTurnAdmissionBarge:
+		return value, nil
+	default:
+		return "", fmt.Errorf("unsupported audio turn admission %q", value)
+	}
+}
+
 const finiteTurnFrameBudget = 48_000
 
 type sessionAudioInputSender interface {
@@ -248,6 +271,9 @@ func (h *handle) recordCapturedAudio(frame sharedaudio.PCMFrame) {
 	if h == nil {
 		return
 	}
+	if h.runtimeTrace != nil {
+		h.runtimeTrace.CapturedAudio(frame)
+	}
 	if observer := h.observationPort(); observer != nil {
 		observer.QueueFrame(frame)
 	}
@@ -294,104 +320,9 @@ func (i *liveInvocation) handleResponseIsActive() bool {
 	return false
 }
 
-func (h *handle) runReplay(ctx context.Context) {
-	defer h.runWG.Done()
-	plan := h.request.ReplayPlan
-	if plan == nil || len(plan.AudioTurns) == 0 {
-		return
+func openingMessageRequestsResponse(request session.LiveRequest) bool {
+	if len(request.OpeningContentParts) > 0 {
+		return request.OpeningMessageResponse != session.LiveOpeningMessageQueued
 	}
-	if err := h.prepareReplay(ctx); err != nil {
-		h.cancelReplayOnError(ctx, "prepare replay", err)
-		return
-	}
-	for turnIndex, turn := range plan.AudioTurns {
-		if err := h.sendReplayTurn(ctx, turnIndex, turn); err != nil {
-			h.cancelReplayOnError(ctx, "replay audio", err)
-			return
-		}
-		if turnIndex+1 < len(plan.AudioTurns) {
-			if err := h.waitReplayResponse(ctx, turnIndex+1); err != nil {
-				h.cancelReplayOnError(ctx, fmt.Sprintf("wait for replay response %d", turnIndex+1), err)
-				return
-			}
-		}
-	}
-	h.markCaptureComplete()
-}
-
-func (h *handle) prepareReplay(ctx context.Context) error {
-	if err := h.waitReplayReady(ctx); err != nil {
-		return fmt.Errorf("wait for replay provider readiness: %w", err)
-	}
-	if err := h.media.WaitReady(ctx); err != nil {
-		return fmt.Errorf("wait for replay media: %w", err)
-	}
-	return nil
-}
-
-func (h *handle) sendReplayTurn(ctx context.Context, turnIndex int, turn session.LiveReplayAudioTurn) error {
-	for chunkIndex, samples := range turn.Chunks {
-		if len(samples) == 0 {
-			continue
-		}
-		if err := h.media.Endpoints().Outbound.WriteFrame(ctx, sharedaudio.PCMFrame{Samples: samples}); err != nil {
-			return fmt.Errorf("send replay audio turn %d chunk %d: %w", turnIndex+1, chunkIndex+1, err)
-		}
-	}
-	if err := h.Send(ctx, session.LiveControl{Kind: session.LiveControlAudioCommit}); err != nil {
-		return fmt.Errorf("commit replay audio turn %d: %w", turnIndex+1, err)
-	}
-	return nil
-}
-
-func (h *handle) cancelReplayOnError(ctx context.Context, operation string, err error) {
-	if err == nil || ctx == nil || ctx.Err() != nil {
-		return
-	}
-	h.Cancel(fmt.Errorf("%s: %w", operation, err))
-}
-
-func (h *handle) waitReplayReady(ctx context.Context) error {
-	if h == nil || h.request.ReplayPlan == nil || !h.request.ReplayPlan.WaitForSessionUpdated {
-		return nil
-	}
-	if ctx == nil {
-		return errors.New("replay readiness context is required")
-	}
-	select {
-	case <-h.replayReady:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-func (h *handle) waitReplayResponse(ctx context.Context, target int) error {
-	return h.waitForResponse(ctx, target)
-}
-
-// waitForResponse waits for the requested number of non-tool response
-// terminals. It is shared by replay and finite multi-turn capture workers so
-// a later source cannot overtake the response that closes the preceding turn.
-func (h *handle) waitForResponse(ctx context.Context, target int) error {
-	if h == nil {
-		return context.Canceled
-	}
-	if ctx == nil {
-		return errors.New("response wait context is required")
-	}
-	for {
-		h.mu.Lock()
-		if h.replayResponses >= target {
-			h.mu.Unlock()
-			return nil
-		}
-		wake := h.replayResponseWake
-		h.mu.Unlock()
-		select {
-		case <-wake:
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
+	return request.OpeningPromptPresent || request.OpeningPrompt != ""
 }

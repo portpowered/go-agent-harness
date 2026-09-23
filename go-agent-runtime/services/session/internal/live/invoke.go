@@ -13,6 +13,8 @@ import (
 	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
 )
 
+const liveMediaPumpCapacity = 3
+
 // RunLive owns the complete invocation boundary for hosts that have local
 // media. Device admission, provider startup, bounded event delivery, pump
 // cancellation, and terminal joining stay together so a CLI transport cannot
@@ -48,6 +50,7 @@ type liveInvocation struct {
 }
 
 func newLiveInvocation(s *Service, ctx context.Context, options session.LiveRunOptions) (*liveInvocation, error) {
+	selectLegacyReplayFramePolicy(&options)
 	liveHandle, err := openLiveHandle(s, ctx, options)
 	if err != nil {
 		return nil, err
@@ -139,8 +142,14 @@ func deviceRequestHasDirection(request devices.Request) bool {
 	return request.CaptureEnabled || request.PlaybackEnabled
 }
 
-func (r mediaRequirements) SatisfiedBy(endpoints sharedaudio.MediaEndpoints) bool {
+func (r mediaRequirements) satisfiedBy(endpoints sharedaudio.MediaEndpoints) bool {
 	return (!r.inbound || endpoints.Inbound != nil) && (!r.outbound || endpoints.Outbound != nil)
+}
+
+// SatisfiedBy retains the package-local contract used by the session tests
+// while the live host keeps the runtime check unexported.
+func (r mediaRequirements) SatisfiedBy(endpoints sharedaudio.MediaEndpoints) bool {
+	return r.satisfiedBy(endpoints)
 }
 
 func (h *handle) configureMediaRequirements(inbound, outbound bool) {
@@ -276,7 +285,7 @@ func (i *liveInvocation) startPump(name string, run func(context.Context) error)
 		return
 	}
 	if i.pumps == nil {
-		i.pumps = make(chan error, 3)
+		i.pumps = make(chan error, liveMediaPumpCapacity)
 	}
 	i.count++
 	go i.runPump(name, run)
@@ -326,4 +335,72 @@ func isExpectedMediaPumpError(err error) bool {
 		errors.Is(err, context.DeadlineExceeded) || errors.Is(err, session.ErrLiveClosed) ||
 		errors.Is(err, devicert.ErrRTCDeviceSourceClosed) || errors.Is(err, devicert.ErrRTCDeviceSinkClosed) ||
 		errors.Is(err, sharedaudio.ErrClosed) || errors.Is(err, sharedaudio.ErrSessionMediaClosed)
+}
+
+func (i *liveInvocation) wait() error {
+	waitResult := make(chan error, 1)
+	go func() { waitResult <- i.handle.Wait() }()
+	events := i.handle.Events()
+	var sinkErr error
+	for {
+		select {
+		case event, ok := <-events:
+			if !ok {
+				events = nil
+				continue
+			}
+			if i.options.Events != nil && sinkErr == nil {
+				if err := i.options.Events.Publish(i.ctx, event); err != nil {
+					sinkErr = fmt.Errorf("publish live event: %w", err)
+					i.handle.Cancel(sinkErr)
+				}
+			}
+		case waitErr := <-waitResult:
+			drainLiveEvents(events, i.options.Events, i.ctx, &sinkErr, i.handle)
+			return i.finish(waitErr, sinkErr)
+		}
+	}
+}
+
+func (i *liveInvocation) finish(waitErr, sinkErr error) error {
+	if i == nil {
+		return errors.New("live invocation is unavailable")
+	}
+	var playbackErr error
+	if shouldDrainPlayback(i.ctx, waitErr) {
+		playbackErr = drainPlayback(i.ctx, i.ports.Playback, i.options.PlaybackDrainTimeout)
+	}
+	if i.stopPumps != nil {
+		i.stopPumps()
+	}
+	// A capture worker may be blocked in a caller-provided stream read after a
+	// provider-owned terminal boundary. Close the admitted device handle before
+	// joining media workers so process-owned sources can interrupt that read;
+	// graceful playback has already drained above, and cancellation paths do not
+	// drain by design.
+	var deviceErr error
+	if i.device != nil {
+		deviceErr = i.device.Close()
+	}
+	var pumpErr error
+	for count := 0; count < i.count; count++ {
+		candidate := <-i.pumps
+		if !isExpectedMediaPumpError(candidate) {
+			pumpErr = errors.Join(pumpErr, candidate)
+		}
+	}
+	handleErr := i.handle.Close()
+	result := errors.Join(waitErr, sinkErr, pumpErr, playbackErr, deviceErr, handleErr)
+	return errors.Join(result, finalizeRecorder(i.options.Recorder, i.ctx, result))
+}
+
+func requestedTerminalError(s finishState) error {
+	err := s.requestedErr
+	if s.toolResultErr != nil && contextOnlyOrNil(s.requestedErr) {
+		err = errors.Join(err, s.toolResultErr)
+	}
+	if s.providerErr != nil && !isContextTermination(s.providerErr) && !errors.Is(err, s.providerErr) {
+		err = errors.Join(err, fmt.Errorf("session error: %w", s.providerErr))
+	}
+	return err
 }

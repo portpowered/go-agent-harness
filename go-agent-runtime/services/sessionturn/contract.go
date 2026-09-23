@@ -280,6 +280,7 @@ type ToolLifecycleEventType string
 const (
 	ToolResultAccepted        ToolLifecycleEventType = "tool-result-accepted"
 	ToolResultRejected        ToolLifecycleEventType = "tool-result-rejected"
+	ToolResponseComplete      ToolLifecycleEventType = "tool-response-complete"
 	ToolContinuationRequested ToolLifecycleEventType = "tool-continuation-requested"
 )
 

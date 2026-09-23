@@ -135,7 +135,6 @@ func Run(ctx context.Context, out io.Writer, request serviceSession.Request, dep
 	if filePorts != nil {
 		defer func() { runErr = errors.Join(runErr, filePorts.Close()) }()
 	}
-	configureLegacyReplayInput(filePorts, request, liveRequest)
 	options := liveRunOptions(out, request, liveRequest, recorder, filePorts, deps)
 	return suppressExpectedDuration(runner.RunLive(ctx, options))
 }
@@ -292,15 +291,6 @@ func configureCapturePath(request *runtimeSession.LiveRequest, path string) {
 		return
 	}
 	request.Replay.OutputCapturePath = path
-}
-
-func configureLegacyReplayInput(filePorts *FilePorts, request serviceSession.Request, liveRequest runtimeSession.LiveRequest) {
-	if filePorts == nil || filePorts.Input == nil || request.ReplayPath == "" || liveRequest.ReplayPlan == nil {
-		return
-	}
-	if liveRequest.ReplayPlan.InputAudioSampleRate <= 0 {
-		UseLegacyFrameSource(filePorts.Input)
-	}
 }
 
 func liveRunOptions(out io.Writer, request serviceSession.Request, liveRequest runtimeSession.LiveRequest, recorder runtimeSession.LiveRecorder, filePorts *FilePorts, deps Dependencies) runtimeSession.LiveRunOptions {

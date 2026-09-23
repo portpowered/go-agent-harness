@@ -143,6 +143,20 @@ func (s *Service) OpenOutput(ctx context.Context, request audioio.OutputRequest)
 	return newOutput(ctx, request)
 }
 
+func (s *Service) ApplyVoicePCM16(ctx context.Context, request audioio.VoicePCMRequest) ([]byte, error) {
+	if ctx == nil {
+		return nil, errors.New("audio voice transformation context is required")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if len(request.PCM)%2 != 0 {
+		return nil, fmt.Errorf("%w: %w", audioio.ErrPCM16Truncated, codec.ErrPCM16OddLength)
+	}
+	normalizer := sharedaudio.NewLoudnessNormalizer(sharedaudio.LoudnessNormalizerConfig{GainDB: s.VoiceGainDB(request.Voice)})
+	return normalizer.ProcessBytes(request.PCM), nil
+}
+
 func (s *Service) NewTimer(source platformclock.Source, duration time.Duration) (platformclock.Timer, error) {
 	timerSource, err := s.NewClock(source)
 	if err != nil {

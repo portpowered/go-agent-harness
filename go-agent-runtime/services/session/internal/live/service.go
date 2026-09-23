@@ -9,7 +9,9 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/input"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/mediagate"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/observations"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/sessionwrap"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+	sessiontrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"sync"
@@ -43,6 +45,8 @@ type Dependencies struct {
 	EventCapacity     int
 	Clock             session.LiveClock
 	Scheduler         platformclock.Scheduler
+	RuntimeObserver   sessiontrace.RuntimeObserver
+	Tick              func() uint64
 	DurationService   sessionduration.ControllerService
 }
 type Service struct {
@@ -53,6 +57,8 @@ type Service struct {
 	eventCapacity     int
 	clock             session.LiveClock
 	scheduler         platformclock.Scheduler
+	runtimeObserver   sessiontrace.RuntimeObserver
+	tick              func() uint64
 	durationService   sessionduration.ControllerService
 }
 
@@ -69,6 +75,8 @@ func New(deps Dependencies) *Service {
 		eventCapacity:     capacity,
 		clock:             deps.Clock,
 		scheduler:         deps.Scheduler,
+		runtimeObserver:   deps.RuntimeObserver,
+		tick:              deps.Tick,
 		durationService:   deps.DurationService,
 	}
 }
@@ -84,6 +92,7 @@ func (s *Service) OpenLive(ctx context.Context, request session.LiveRequest) (se
 	}
 	request = input.CloneLiveRequest(request)
 	h := newHandle(request, s.inferencerFactory, s.capabilityFactory, s.toolExecutor, s.toolDefinitions, s.eventCapacity, s.clock, s.scheduler, s.durationService)
+	h.runtimeTrace = observations.NewRuntimeTrace(s.runtimeObserver, s.clock, s.tick)
 	h.parentCtx = ctx
 	return h, nil
 }
@@ -102,6 +111,7 @@ type handle struct {
 	captureInterruptionOnce                          sync.Once
 	captureFlush                                     func() error
 	observer                                         *observations.Observer
+	runtimeTrace                                     *observations.RuntimeTrace
 	capabilityMu                                     sync.Mutex
 	eventCapacity                                    int
 	clock                                            session.LiveClock
@@ -180,9 +190,28 @@ type handle struct {
 	firstTurnTimerScheduled                          bool
 	firstTurnSeen                                    bool
 	retryRequests                                    chan retryRequest
+	retryMu                                          sync.Mutex
+	retriesUsed                                      int
+	livenessMu                                       sync.Mutex
+	livenessTimer                                    platformclock.Timer
+	livenessGeneration                               uint64
+	livenessArmed                                    bool
+	livenessStopped                                  bool
+	livenessWake                                     chan struct{}
+	livenessFailure                                  *session.LiveLivenessFailure
+	livenessErr                                      error
+	responseOutputSeen                               bool
+	responseToolObligation                           bool
 	toolMu                                           sync.Mutex
 	toolContinuations                                map[string]*liveToolContinuation
 	continuationErr                                  error
+}
+
+func (h *handle) observeRuntimeMessage(msg messages.StreamMessage) {
+	if h.runtimeTrace == nil {
+		return
+	}
+	h.runtimeTrace.Message(msg, h.finiteResponseWasInterrupted(msg))
 }
 
 func (h *handle) mediaFailure(err error) {
@@ -250,7 +279,7 @@ func (h *handle) recordEvent(event session.LiveEvent)     { h.observationPort().
 func newHandle(request session.LiveRequest, factory session.LiveInferencerFactory, capabilityFactory session.LiveCapabilityFactory, executor messages.ToolExecutor, definitions []messages.ToolDefinition, eventCapacity int, clock session.LiveClock, scheduler platformclock.Scheduler, durationService sessionduration.ControllerService) *handle {
 	h := &handle{
 		request:                  request,
-		factory:                  terminalDrainFactory(factory),
+		factory:                  sessionwrap.Factory(factory, eventCapacity),
 		capabilityFactory:        capabilityFactory,
 		toolExecutor:             executor,
 		toolDefinitions:          input.CloneToolDefinitions(definitions),
@@ -274,6 +303,7 @@ func newHandle(request session.LiveRequest, factory session.LiveInferencerFactor
 		openingReady:             make(chan struct{}),
 		providerDoneSignal:       make(chan struct{}),
 		terminalObserved:         make(chan struct{}),
+		livenessWake:             make(chan struct{}, 1),
 		toolContinuations:        make(map[string]*liveToolContinuation),
 		pendingToolCallResponses: make(map[string]string),
 		activeResponseIDs:        make(map[string]struct{}),

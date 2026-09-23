@@ -7,6 +7,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live"
 	durationrun "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/durationrun"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+	sessiontrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -22,6 +23,8 @@ type LiveDependencies struct {
 	Clock             session.LiveClock
 	Scheduler         platformclock.Scheduler
 	DurationService   sessionduration.Service
+	RuntimeObserver   sessiontrace.RuntimeObserver
+	Tick              func() uint64
 }
 
 // DurationDependencies contains the service-owned dependencies for one
@@ -49,5 +52,7 @@ func NewLiveService(deps LiveDependencies) session.LiveService {
 		Clock:             deps.Clock,
 		Scheduler:         deps.Scheduler,
 		DurationService:   deps.DurationService,
+		RuntimeObserver:   deps.RuntimeObserver,
+		Tick:              deps.Tick,
 	})
 }

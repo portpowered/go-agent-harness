@@ -4,13 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/sessionadapter"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/sessionwrap"
 )
 
 func (h *handle) start(runCtx context.Context) error {
@@ -74,19 +73,14 @@ func (h *handle) prepareStart(runCtx context.Context) (messages.ToolExecutor, []
 }
 
 func (h *handle) buildLoop(inferencer messages.SessionInferencer, toolExecutor messages.ToolExecutor, toolDefinitions []messages.ToolDefinition) (*agentloop.AgentLoop, error) {
-	capturing := sessionadapter.NewCapturingInferencer(sessionadapter.CaptureOptions{
-		Inner:             inferencer,
-		Media:             h.media,
-		Continuous:        h.request.OutputAudioContinuous,
-		FlushOutbound:     h.request.FinishAfterResponse,
-		Requirements:      h.mediaRequirements,
-		CaptureMedia:      captureMediaEndpoints,
-		OnDispatch:        h.observeProviderDispatch,
-		OnToolResult:      h.beginToolResultAdmission,
+	capturing := sessionwrap.NewCapturingInferencer(sessionwrap.CapturingInferencerOptions{
+		Inner: inferencer, Media: h.media, Continuous: h.request.OutputAudioContinuous,
+		FlushOutbound:  h.request.FinishAfterResponse,
+		RequireInbound: h.mediaRequirements.inbound, RequireOutbound: h.mediaRequirements.outbound,
+		OnDispatch: h.observeProviderDispatch, OnToolResult: h.beginToolResultAdmission,
 		OnContinuation:    h.beginContinuationAdmission,
 		OnOpeningAdmitted: func() { h.markOpeningAdmitted(nil) },
-		OnProviderDone:    h.providerDone,
-		OnMediaAttached:   h.setProviderMediaAttached,
+		OnProviderDone:    h.providerDone, OnMediaAttached: h.setProviderMediaAttached,
 	})
 	h.providerTerminalError = capturing.TerminalError
 	options := []agentloop.Option{
@@ -144,13 +138,11 @@ func (e activeCaptureToolExecutor) Execute(ctx context.Context, call messages.To
 	}
 	return e.inner.Execute(ctx, call)
 }
-
 func configureActiveScheduledAudio(handle session.LiveHandle, active bool) {
 	if runtimeHandle, ok := handle.(interface{ configureActiveScheduledAudio(bool) }); ok {
 		runtimeHandle.configureActiveScheduledAudio(active)
 	}
 }
-
 func (h *handle) configureActiveScheduledAudio(active bool) {
 	if h == nil {
 		return
@@ -159,7 +151,6 @@ func (h *handle) configureActiveScheduledAudio(active bool) {
 	h.activeScheduledAudio = active
 	h.mu.Unlock()
 }
-
 func (h *handle) waitForActiveCaptureTurn(ctx context.Context) error {
 	if h == nil {
 		return nil
@@ -248,6 +239,16 @@ func (e allowlistedToolExecutor) Execute(ctx context.Context, call messages.Tool
 	return e.inner.Execute(ctx, call)
 }
 
+func (h *handle) installLoop(loop *agentloop.AgentLoop) (func(context.Context) <-chan session.LiveCapabilityEvent, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.closed {
+		return nil, session.ErrLiveClosed
+	}
+	h.loop = loop
+	return h.capabilityWatch, nil
+}
+
 func (h *handle) prepareReplayCompletion() {
 	// An explicit capture source owns the boundary and must send its bytes first.
 	if h.captureSourceIsActive() {
@@ -266,22 +267,6 @@ func (h *handle) prepareReplayCompletion() {
 		(plan == nil || plan.StopAfterResponse) {
 		h.markCaptureComplete()
 	}
-}
-
-func capabilityEventStream(ctx context.Context, watch func(context.Context) <-chan session.LiveCapabilityEvent) <-chan session.LiveCapabilityEvent {
-	if watch == nil {
-		return nil
-	}
-	return watch(ctx)
-}
-
-func (h *handle) captureInterruptionsEnabled() bool {
-	if h == nil {
-		return false
-	}
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	return h.captureInterruptionEvent != nil
 }
 
 type workerPlan struct {
@@ -351,31 +336,4 @@ func (h *handle) launchWorkers(
 	go h.consumeDeltas(ctx, loop)
 	plan.launch(h, ctx, loop)
 	go h.finishWhenStopped() //nolint:contextcheck // lifecycle join owns the invocation evidence context.
-}
-
-func capabilityEvent(sessionID, participantID string, value session.LiveCapabilityEvent) session.LiveEvent {
-	copy := value
-	return session.LiveEvent{
-		Kind:          "browser." + strings.TrimSpace(value.Type),
-		SessionID:     sessionID,
-		ParticipantID: participantID,
-		Timestamp:     value.Timestamp,
-		BrowserID:     value.BrowserID,
-		TargetID:      value.TargetID,
-		Generation:    value.Generation,
-		InvocationID:  value.InvocationID,
-		State:         value.State,
-		Reason:        value.Reason,
-		Capability:    &copy,
-		Critical:      capabilityEventCritical(value),
-	}
-}
-
-func capabilityEventCritical(value session.LiveCapabilityEvent) bool {
-	typeName := strings.ToLower(strings.TrimSpace(value.Type))
-	state := strings.ToLower(strings.TrimSpace(value.State))
-	return strings.Contains(typeName, "closed") || strings.Contains(typeName, "disconnect") ||
-		strings.Contains(typeName, "error") || strings.Contains(typeName, "failed") ||
-		strings.Contains(state, "error") || strings.Contains(state, "failed") ||
-		strings.Contains(state, "canceled") || strings.Contains(state, "timed_out")
 }

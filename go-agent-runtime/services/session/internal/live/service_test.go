@@ -9,6 +9,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/sessionwrap"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -568,7 +569,7 @@ func assertContinuationPending(t *testing.T, h *handle, msg messages.StreamMessa
 }
 func TestBindPlaybackControllerUsesVirtualCursorForReplayFileOutput(t *testing.T) {
 	provider := &mediaClaimOrderSession{testSession: newTestSession()}
-	connected, err := (terminalDrainInferencer{inner: &testInferencer{session: provider}}).ConnectSession(context.Background())
+	connected, err := sessionwrap.TerminalDrain(&testInferencer{session: provider}, false, 128).ConnectSession(context.Background())
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, connected.Close()) })
 	require.NotEmpty(t, provider.sent)

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeRoomReplayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	roomswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
@@ -29,7 +30,7 @@ func TestExternalRoomRejectsMissingProviderTrace(t *testing.T) {
 			return newEmbeddedLiveProvider(), nil
 		},
 	})
-	host := roomswire.NewService(roomswire.Dependencies{Clock: scheduler, Live: live})
+	host := roomswire.NewService(roomswire.Dependencies{Clock: scheduler, Live: live, Replay: runtimeRoomReplayWire.NewService()})
 	manifest := rooms.Manifest{SchemaVersion: rooms.SchemaVersion, Room: rooms.Room{MaxDuration: time.Second}}
 	for _, id := range []string{"alice", "bob"} {
 		manifest.Participants = append(manifest.Participants, rooms.Participant{ID: id, SystemPrompt: "agent", OpeningPrompt: "start", Provider: "fixture", Model: "fixture", APIKeyEnv: "UNRESOLVED_TEST_SELECTOR", Tools: []string{}})

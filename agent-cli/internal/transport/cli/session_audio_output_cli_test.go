@@ -56,7 +56,11 @@ func runCLIAudioOutputCase(t *testing.T, testCase cliAudioOutputCase, wantSample
 		if err != nil {
 			t.Fatalf("open virtual output observer: %v", err)
 		}
-		defer observer.Close()
+		defer func() {
+			if err := observer.Close(); err != nil {
+				t.Errorf("close virtual output observer: %v", err)
+			}
+		}()
 	}
 	inferencer := newCLIAudioOutputInferencer(wantSamples, testCase.deviceOut, testCase.deviceOut)
 	execute, audioOutPath := newCLIAudioOutputCommand(t, testCase, inferencer, registry)

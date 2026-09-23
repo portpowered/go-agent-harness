@@ -122,10 +122,10 @@ func (r *runLoop) dispatchScheduledMessageAudio(msg messages.StreamMessage) erro
 
 func sessionStopResult(msg messages.StreamMessage, policy sessionduration.RunPolicy, facts sessionduration.RunFacts, state sessionduration.RunState) (sessionduration.MessageResult, bool) {
 	if shouldQueueSessionClose(msg, policy, facts, state) {
-		if !fact(facts.HasToolLifecycleObligation) {
-			state = state.WithCloseSent(true).WithCloseAfterOpenPending(false).WithDrainPlayback()
-			return sessionduration.MessageResult{Stop: true, Planned: true, State: &state}, true
-		}
+		// Queue the close and let closePendingSessionIfReady send it through the
+		// live loop. Returning a planned stop here would send the control during
+		// finalization and cancel the loop before its SESSION.CLOSE delta can be
+		// observed by the bounded runner.
 		state = state.WithCloseAfterOpenPending(true)
 	}
 	if policy.HasAudioInput {
@@ -168,7 +168,8 @@ func (r *runLoop) closePendingSessionIfReady(ctx context.Context, loop sessiondu
 	if state.CloseSent() || fact(r.request.Facts.HasToolLifecycleObligation) {
 		return state, nil
 	}
-	closeAfterOpen := r.request.Policy.CloseAfterOpen && state.CloseAfterOpenPending()
+	closeAfterOpen := r.request.Policy.CloseAfterOpen &&
+		(state.CloseAfterOpenPending() || (state.PromptSent() && fact(r.request.Facts.LastMessageEndAdmitted)))
 	closeAfterScheduled := r.request.Policy.CloseAfterScheduledAudio && fact(r.request.Facts.ScheduledAudioComplete)
 	if !closeAfterOpen && !closeAfterScheduled {
 		return state, nil

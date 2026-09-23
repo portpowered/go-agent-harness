@@ -100,6 +100,23 @@ func (r *reducer) toolResultRejectedLocked(callID, status string) sessiondiagnos
 	return sessiondiagnostics.Observation{Accepted: true}
 }
 
+func (r *reducer) toolResponseCompleteLocked(callID string) sessiondiagnostics.Observation {
+	callID = strings.TrimSpace(callID)
+	if callID == "" {
+		return sessiondiagnostics.Observation{}
+	}
+	state, ok := r.continuations[callID]
+	if !ok || !state.ProviderCallObserved || !state.ResultAccepted {
+		return sessiondiagnostics.Observation{}
+	}
+	state.ToolResponseComplete = true
+	if continuationCanComplete(state) {
+		state.ContinuationComplete = true
+	}
+	r.continuations[callID] = state
+	return sessiondiagnostics.Observation{Accepted: true}
+}
+
 func (r *reducer) continuationRequestedLocked(callID string) (sessiondiagnostics.Observation, time.Duration, bool, error) {
 	requested := 0
 	for id, state := range r.continuations {

@@ -137,7 +137,8 @@ func forwardWakes(ctx context.Context, source <-chan struct{}, wake chan<- struc
 			}
 			select {
 			case wake <- struct{}{}:
-			default:
+			case <-ctx.Done():
+				return
 			}
 		case <-ctx.Done():
 			return

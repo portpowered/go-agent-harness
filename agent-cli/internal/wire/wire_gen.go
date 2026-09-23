@@ -95,7 +95,7 @@ func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transp
 	selfplayService := wire2.NewSelfPlayService(audioioService, v3, clockSource, modelCatalog)
 	providersSessionService := provideProviderSessionServiceRole(fullService)
 	wireLiveCredentialVault := provideLiveCredentialVault()
-	liveService := provideLiveService(providersSessionService, toolExecutor, toolDefs, sessionInferencer, transportDialer, clockSource, wireLiveCredentialVault)
+	liveService := provideLiveService(providersSessionService, toolExecutor, toolDefs, sessionInferencer, transportDialer, clockSource, runtimeObserver, wireLiveCredentialVault)
 	replayService := provideLiveReplayService()
 	fileDeviceService := provideFileDeviceService(clockSource, audioioService)
 	sessionToolCapabilitiesFactory := cli.NewSessionToolCapabilitiesFactoryFromService(toolsService)

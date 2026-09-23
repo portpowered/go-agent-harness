@@ -128,6 +128,7 @@ func (o *sessionProgressObserver) noteToolContinuationRequestedForWithContext(ct
 	if o == nil || strings.TrimSpace(callID) == "" {
 		return
 	}
+	o.lifecycleEventWithContext(ctx, sd.Event{Kind: sd.EventToolResponseComplete, CallID: callID})
 	o.lifecycleEventWithContext(ctx, sd.Event{Kind: sd.EventContinuationRequested, CallID: callID})
 	o.noteToolContinuationRequestedWithContext(ctx)
 }
@@ -155,6 +156,14 @@ func (o *sessionProgressObserver) signalToolLifecycle() {
 	o.ensureToolStateLocked()
 	ch := o.toolLifecycleCh
 	o.toolStateMu.Unlock()
+	// Replace an already queued stale wake with the latest lifecycle state. The
+	// duration runner may consume the wake concurrently with this send; keeping
+	// one current marker in the source channel prevents the merged wake from
+	// losing the final admitted-turn transition.
+	select {
+	case <-ch:
+	default:
+	}
 	select {
 	case ch <- struct{}{}:
 	default:
@@ -298,7 +307,12 @@ func (o *sessionProgressObserver) hasPendingToolContinuations() bool {
 // tool kinds. An unresolved result and an accepted-but-not-terminal
 // continuation are both incomplete provider work.
 func (o *sessionProgressObserver) hasToolLifecycleObligation() bool {
-	return o != nil && (o.hasUnresolvedToolCalls() || o.hasPendingToolContinuations())
+	if o == nil {
+		return false
+	}
+	unresolved := o.hasUnresolvedToolCalls()
+	pending := o.hasPendingToolContinuations()
+	return unresolved || pending
 }
 
 // hasPendingImageContinuations is distinct from unresolved tool results. A

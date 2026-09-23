@@ -32,6 +32,7 @@ func (r *reducer) applyLocked(event sessiondiagnostics.Event) (sessiondiagnostic
 	case sessiondiagnostics.EventToolCall,
 		sessiondiagnostics.EventToolResultAccepted,
 		sessiondiagnostics.EventToolResultRejected,
+		sessiondiagnostics.EventToolResponseComplete,
 		sessiondiagnostics.EventContinuationRequested:
 		return r.applyToolLocked(event)
 	case sessiondiagnostics.EventReset:
@@ -120,6 +121,8 @@ func (r *reducer) applyToolLocked(event sessiondiagnostics.Event) (sessiondiagno
 		return r.toolResultAcceptedLocked(event.CallID), 0, false, nil
 	case sessiondiagnostics.EventToolResultRejected:
 		return r.toolResultRejectedLocked(event.CallID, event.ResultStatus), 0, false, nil
+	case sessiondiagnostics.EventToolResponseComplete:
+		return r.toolResponseCompleteLocked(event.CallID), 0, false, nil
 	case sessiondiagnostics.EventContinuationRequested:
 		return r.continuationRequestedLocked(event.CallID)
 	default:

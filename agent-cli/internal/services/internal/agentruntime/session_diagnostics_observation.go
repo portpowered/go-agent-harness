@@ -235,6 +235,13 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		o.messageEndAdmitted = admitted
 		o.toolStateMu.Unlock()
 		if admitted {
+			// The lifecycle reducer signals as soon as it observes the terminal
+			// continuation boundary. Publish one coalesced wake after the host
+			// admission facts are finalized so a bounded CloseAfterOpen runner
+			// cannot consume the earlier wake with stale lastMessageEndAdmitted.
+			o.signalToolLifecycle()
+		}
+		if admitted {
 			terminalAccepted := o.notifyTerminalObservation(sessionTerminalObservationFromMessageEnd(responseLifecycleID, v))
 			if !terminalAccepted {
 				o.finishObservedResponse(responseLifecycleID)

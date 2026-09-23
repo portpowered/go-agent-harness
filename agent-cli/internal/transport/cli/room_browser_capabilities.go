@@ -7,9 +7,11 @@ import (
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	roomreplayadapter "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/roomreplay"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 )
 
@@ -34,11 +36,17 @@ func (c *RoomRunCommand) resolveRoomRunPlans(configPath, manifestPath, replayPat
 			return roomRunPlans{}, fmt.Errorf("%w: --replay cannot be combined with --config or --manifest", runtimeRooms.ErrReplaySourceConflict)
 		}
 		var err error
-		plans.replayPlan, err = c.service.LoadReplayPlan(replayPath)
+		if replayService := roomReplayServiceFromRuntime(c.service); replayService != nil {
+			plans.replayPlan, err = roomreplayadapter.Load(replayService, replayPath)
+		} else if c.service != nil {
+			plans.replayPlan, err = c.service.LoadReplayPlan(replayPath)
+		} else {
+			err = runtimeRooms.ErrRoomServiceUnavailable
+		}
 		if err != nil {
 			return roomRunPlans{}, err
 		}
-		plans.manifest = plans.replayPlan.Manifest()
+		plans.manifest = c.service.ReplayManifest(plans.replayPlan)
 		return plans, nil
 	}
 	var err error
@@ -73,12 +81,28 @@ func validateRoomOutput(service runtimeRooms.Service, plans roomRunPlans, output
 		return nil
 	}
 	if plans.replayMode {
-		if err := service.ValidateReplayOutput(plans.replayPlan, outputDir); err != nil {
+		var err error
+		replayService := roomReplayServiceFromRuntime(service)
+		if replayService != nil {
+			err = roomreplayadapter.ValidateOutput(replayService, plans.replayPlan, outputDir)
+		} else if service != nil {
+			err = service.ValidateReplayOutput(plans.replayPlan, outputDir)
+		} else {
+			err = runtimeRooms.ErrRoomServiceUnavailable
+		}
+		if err != nil {
 			return fmt.Errorf("validate --out %q: %w", outputDir, err)
 		}
 	}
 	if err := service.ValidateEvidenceOutput(outputDir); err != nil {
 		return fmt.Errorf("validate --out %q: %w", outputDir, err)
+	}
+	return nil
+}
+
+func roomReplayServiceFromRuntime(service runtimeRooms.Service) roomreplay.Service {
+	if provider, ok := service.(interface{ ReplayService() roomreplay.Service }); ok {
+		return provider.ReplayService()
 	}
 	return nil
 }

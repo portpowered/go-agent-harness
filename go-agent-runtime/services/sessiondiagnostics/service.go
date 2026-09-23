@@ -59,6 +59,7 @@ const (
 	EventToolCall                  EventKind = "tool.call"
 	EventToolResultAccepted        EventKind = "tool.result_accepted"
 	EventToolResultRejected        EventKind = "tool.result_rejected"
+	EventToolResponseComplete      EventKind = "tool.response_complete"
 	EventContinuationRequested     EventKind = "tool.continuation_requested"
 	EventReset                     EventKind = "lifecycle.reset"
 )

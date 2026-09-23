@@ -92,7 +92,18 @@ func NewAdmissionSession(ctx context.Context, inner messages.Session, admission 
 }
 
 func (s *AdmissionSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
-	return s != nil && s.inner != nil && s.inner.Send(ctx, msg)
+	return s.SendWithOutcome(ctx, msg).OK()
+}
+
+// SendWithOutcome preserves the provider's typed admission result through the
+// duration boundary. The receive-side EventAdmission controls inbound
+// lifecycle events; outbound tool-result sends must retain buffer-full and
+// closed distinctions for terminal diagnostics.
+func (s *AdmissionSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
+	if s == nil || s.inner == nil {
+		return messages.SessionSendOutcome{Status: messages.SessionSendClosed}
+	}
+	return messages.SendSessionWithOutcome(ctx, s.inner, msg)
 }
 
 // RequestResponse forwards the optional explicit response capability while

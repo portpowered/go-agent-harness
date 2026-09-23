@@ -9,6 +9,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	sessionduration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 type observedSessionInferencer struct {
@@ -216,6 +217,14 @@ type observedSession struct {
 }
 
 var _ messages.Session = (*observedSession)(nil)
+
+// RTCMedia preserves the provider media capability through the observation
+// wrapper. The duration runner owns the admitted session, while the live
+// observation wrapper owns the session handed to the loop; hiding this
+// optional capability drops provider PCM from the output binding.
+func (s *observedSession) RTCMedia() audio.MediaEndpoints {
+	return sessionRTCMedia(s.Session)
+}
 
 func (s *observedSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
 	return s.SendWithOutcome(ctx, msg).OK()
