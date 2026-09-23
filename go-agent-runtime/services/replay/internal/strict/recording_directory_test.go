@@ -87,7 +87,7 @@ func TestValidateRecordingBundleRejectsSymlinkedOrNonRegularManifest(t *testing.
 
 func TestPrepareTraceDirectoryPreservesManifestlessTraceReplay(t *testing.T) {
 	root := writeBundle(t, true)
-	tracePath, err := prepareTraceDirectory(context.Background(), root, plan.New())
+	tracePath, err := stageTraceDirectory(context.Background(), root, plan.New())
 	if err != nil {
 		t.Fatalf("manifestless trace rejected: %v", err)
 	}

@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
-	runtimereplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
@@ -85,7 +84,7 @@ func normalizedRoomEvidenceFormat(format room.PCM16Format) room.PCM16Format {
 	return format
 }
 
-func newRoomEvidenceState(destination string, manifest room.Manifest, format room.PCM16Format, secrets []string, startedAt time.Time, source platformclock.Source, latencyService runtimeRooms.LatencyService, replayService runtimereplay.Service) *roomEvidence {
+func newRoomEvidenceState(destination string, manifest room.Manifest, format room.PCM16Format, secrets []string, startedAt time.Time, source platformclock.Source, latencyService runtimeRooms.LatencyService) *roomEvidence {
 	var latency runtimeRooms.LatencyRecorder
 	if latencyService != nil {
 		latency = latencyService.NewRecorder(source, runtimeRooms.AudioFormat{
@@ -102,7 +101,6 @@ func newRoomEvidenceState(destination string, manifest room.Manifest, format roo
 		artifactRecordErr:    make(map[string]error),
 		audioFormat:          format,
 		latency:              latency,
-		replayService:        replayService,
 		source:               source,
 		providerErrors:       make(map[string]struct{}, len(manifest.Participants)),
 	}

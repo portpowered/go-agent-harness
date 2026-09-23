@@ -35,5 +35,5 @@ all planned callers are integrated, the owned legacy production cluster is
 absent, the adapter cap is verified, focused and accumulated local checks have
 run, and the exact candidate has been pushed for script CI. Return `FAILED`
 only for unresolved ambiguity, ownership conflict, unavailable prerequisite,
-or demonstrated lack of progress that requires replanning; a red test alone is
-not escalation.
+or demonstrated lack of progress that requires replanning; a red test alone
+is not escalation.

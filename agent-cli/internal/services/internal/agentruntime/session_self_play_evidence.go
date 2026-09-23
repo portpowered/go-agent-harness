@@ -1,5 +1,7 @@
 package agentruntime
 
+import "github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
+
 import (
 	"context"
 	"encoding/json"
@@ -14,8 +16,9 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	runtimereplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
+	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 const (
@@ -35,15 +38,14 @@ const (
 )
 
 type selfPlayEvidence struct {
-	destination   string
-	startedAt     time.Time
-	apiKey        string
-	provider      string
-	model         string
-	maxDuration   time.Duration
-	maxTurns      int
-	replayService runtimereplay.Service
-	sides         [2]*selfPlaySideEvidence
+	destination string
+	startedAt   time.Time
+	apiKey      string
+	provider    string
+	model       string
+	maxDuration time.Duration
+	maxTurns    int
+	sides       [2]*selfPlaySideEvidence
 
 	mu        sync.Mutex
 	recordErr error
@@ -53,7 +55,6 @@ type selfPlayEvidence struct {
 }
 
 type selfPlaySideEvidence struct {
-	owner   *selfPlayEvidence
 	id      string
 	role    string
 	persona string
@@ -62,7 +63,7 @@ type selfPlaySideEvidence struct {
 	diagnostics   *selfPlayJSONLWriter
 	streamDeltas  *selfPlayJSONLWriter
 	runtime       *selfPlayRuntimeEvidence
-	runtimeRecord *sessionRuntimeObservationRecorder
+	runtimeRecord sessiontrace.RuntimeRecorder
 	diagnosticErr func(error)
 	maxTurns      int
 }
@@ -108,14 +109,13 @@ func (r *selfPlayRuntimeEvidence) snapshot() (turns int, terminalSeen bool, term
 
 func newSelfPlayEvidence(destination string, opts SelfPlayRunOptions, startedAt time.Time) (*selfPlayEvidence, error) {
 	evidence := &selfPlayEvidence{
-		destination:   destination,
-		startedAt:     startedAt.UTC(),
-		apiKey:        opts.APIKey,
-		provider:      opts.Provider,
-		model:         opts.Model,
-		maxDuration:   opts.MaxDuration,
-		maxTurns:      opts.MaxTurns,
-		replayService: opts.replayService,
+		destination: destination,
+		startedAt:   startedAt.UTC(),
+		apiKey:      opts.APIKey,
+		provider:    opts.Provider,
+		model:       opts.Model,
+		maxDuration: opts.MaxDuration,
+		maxTurns:    opts.MaxTurns,
 	}
 
 	configs := []struct {
@@ -146,7 +146,6 @@ func newSelfPlayEvidence(destination string, opts SelfPlayRunOptions, startedAt 
 
 	for index, config := range configs {
 		side := &selfPlaySideEvidence{
-			owner:    evidence,
 			id:       config.id,
 			role:     config.role,
 			persona:  config.persona,
@@ -171,12 +170,11 @@ func newSelfPlayEvidence(destination string, opts SelfPlayRunOptions, startedAt 
 			evidence.cleanupSetup()
 			return nil, fmt.Errorf("create %s stream evidence: %w", config.id, err)
 		}
-		side.runtimeRecord = newSessionRuntimeObservationRecorder(side.runtime, opts.clock)
+		side.runtimeRecord = sessiontracewire.NewRuntimeRecorder(side.runtime, opts.clock)
 		evidence.sides[index] = side
 	}
 	return evidence, nil
 }
-
 func (e *selfPlayEvidence) cleanupSetup() {
 	if e == nil {
 		return
@@ -203,7 +201,6 @@ func (e *selfPlayEvidence) cleanupSetup() {
 		}
 	}
 }
-
 func (e *selfPlayEvidence) side(index int) *selfPlaySideEvidence {
 	if e == nil || index < 0 || index >= len(e.sides) {
 		return nil
@@ -259,10 +256,7 @@ func (s *selfPlaySideEvidence) observeStreamDelta(msg messages.StreamMessage) er
 	if s == nil || s.streamDeltas == nil {
 		return errors.New("self-play stream sink is not initialized")
 	}
-	if s.owner == nil || s.owner.replayService == nil {
-		return errors.New("self-play replay service is not initialized")
-	}
-	payload, err := s.owner.replayService.EncodeStreamMessage(msg)
+	payload, err := gwtesting.MarshalStreamMessage(msg)
 	if err != nil {
 		return fmt.Errorf("marshal stream delta: %w", err)
 	}

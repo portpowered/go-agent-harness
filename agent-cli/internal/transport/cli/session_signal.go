@@ -14,7 +14,7 @@ import (
 // newSessionSignalContext keeps OS signal ownership at the CLI boundary while
 // passing an explicit, run-scoped intent into services. Parent-context
 // cancellation follows the normal cancellation path and never marks SIGINT.
-func newSessionSignalContext(parent context.Context) (context.Context, func(), *serviceSession.SessionCancellationIntent) {
+func newSessionSignalContext(parent context.Context) (context.Context, func(), serviceSession.SessionCancellationIntent) {
 	if parent == nil {
 		parent = context.Background()
 	}

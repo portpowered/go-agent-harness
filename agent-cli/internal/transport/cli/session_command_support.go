@@ -121,7 +121,7 @@ func (c *SessionCommand) runSessionCommand(cmd *cobra.Command, args []string, st
 	return c.runSessionRequest(sessionContext, cmd.OutOrStdout(), cmd.ErrOrStderr(), request)
 }
 
-func (c *SessionCommand) buildSessionRequest(cmd *cobra.Command, args []string, state sessionCommandRunState, selectedTransport string, bareSession, passiveLive, browserToolsInteractive bool, loadedConfig *config.Config, cancellationIntent *serviceSession.SessionCancellationIntent) (serviceSession.Request, error) {
+func (c *SessionCommand) buildSessionRequest(cmd *cobra.Command, args []string, state sessionCommandRunState, selectedTransport string, bareSession, passiveLive, browserToolsInteractive bool, loadedConfig *config.Config, cancellationIntent serviceSession.SessionCancellationIntent) (serviceSession.Request, error) {
 	audioInput := sessionAudioInputFromCommand(cmd, state.AudioInputPath)
 	if err := validateScheduledAudio(state, audioInput, c.askFlags.ReplayCapturePath); err != nil {
 		return serviceSession.Request{}, err

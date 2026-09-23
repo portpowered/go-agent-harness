@@ -24,6 +24,7 @@ import (
 	duration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	sessiontrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 )
@@ -83,12 +84,13 @@ func (d *Dispatcher) Run(ctx context.Context, out io.Writer, request public.Requ
 	if err != nil {
 		return err
 	}
-	trace, err := prepareTrace(&request, &options, d.deps.Clock)
+	trace, err := d.setupTrace(request, &options)
 	if err != nil {
 		return err
 	}
 	if trace != nil {
-		defer func() { runErr = errors.Join(runErr, trace.finish(request.RecordDirectory, runErr == nil)) }()
+		bindPreparedTrace(&options, trace)
+		defer func() { runErr = finishPreparedTrace(ctx, request.RecordDirectory, trace, runErr) }()
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -285,6 +287,23 @@ func traceCredentials(r *public.Request) []string {
 		}
 	}
 	return values
+}
+
+func (d *Dispatcher) setupTrace(request public.Request, options *SessionRunOptions) (sessiontrace.Prepared, error) {
+	return sessiontracewire.NewService().Prepare(sessiontrace.Request{
+		TraceAudio:      request.TraceAudio,
+		RecordDirectory: request.RecordDirectory,
+		Clock:           d.deps.Clock,
+		Credentials:     traceCredentials(&request),
+		RuntimeObserver: options.RuntimeObserver,
+		Device: sessiontrace.DeviceBinding{
+			PreGateSamplesObserver:     sessiontrace.CaptureSamplesObserver(options.RTCBinding.PreGateSamplesObserver),
+			UploadedSamplesObserver:    sessiontrace.CaptureSamplesObserver(options.RTCBinding.UploadedSamplesObserver),
+			PlaybackSamplesObserver:    sessiontrace.PlaybackSamplesObserver(options.RTCBinding.PlaybackSamplesObserver),
+			RenderedSamplesObserver:    sessiontrace.CaptureSamplesObserver(options.RTCBinding.RenderedSamplesObserver),
+			RenderedSamplesUnavailable: options.RTCBinding.RenderedSamplesUnavailable,
+		},
+	})
 }
 
 func setTraceBinding(o *SessionRunOptions, b sessiontrace.DeviceBinding) {

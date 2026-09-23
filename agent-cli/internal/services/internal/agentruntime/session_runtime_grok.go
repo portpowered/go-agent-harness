@@ -3,18 +3,47 @@ package agentruntime
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	runtimerecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
+	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
+
+func newGrokDeviceProbeSessionInferencer(opts SessionRunOptions, instructions string) (messages.SessionInferencer, string, error) {
+	sessionConfig, err := resolveGrokSessionConfig(opts)
+	if err != nil {
+		return nil, "", err
+	}
+	model := sessionConfig.Model
+	request := deviceProbeSessionConfig(model, instructions, models.AudioFormatPCM16, models.AudioFormatPCM16)
+	request.TurnDetection = cloneSessionTurnDetection(opts.TurnDetection)
+	transcription, err := resolveSessionTranscription(opts, sessionProviderGrok, true)
+	if err != nil {
+		return nil, "", err
+	}
+	request.InputAudioTranscription = &transcription
+	request.Tools = append([]messages.ToolDefinition(nil), opts.ToolDefinitions...)
+	dialer, recorder := resolveSessionWebSocketDialer(opts, sessionProviderGrok, model, func() transport.Dialer { return grok.NewDefaultWebSocketDialer() })
+	providerOpts := []grok.Option{grok.WithAPIKey(sessionConfig.APIKey), grok.WithWebSocketDialer(dialer)}
+	if strings.TrimSpace(sessionConfig.BaseURL) != "" {
+		providerOpts = append(providerOpts, grok.WithBaseURL(sessionConfig.BaseURL))
+	}
+	providerGateway, err := gateway.NewSessionGateway(gateway.WithSessionProvider(grok.New(providerOpts...)))
+	if err != nil {
+		return nil, "", fmt.Errorf("create Grok realtime session gateway: %w", err)
+	}
+	inferencer := inference.NewSessionGatewayInferencer(providerGateway, inference.WithSessionRequest(inference.SessionRequest{Config: request}))
+	return wrapSessionInferencerCaptureFlush(inferencer, recorder, opts.RecordSessionCapturePath), model, nil
+}
 
 func planGrokRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
 	sessionCfg, err := resolveGrokSessionConfig(opts)
@@ -22,110 +51,93 @@ func planGrokRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFactory
 		return sessionRuntimePlan{}, err
 	}
 
-	build := func(dialer transport.Dialer) (messages.SessionInferencer, error) {
-		return factory.newGrokSessionInferencerForTools(sessionCfg, dialer, opts.ToolDefinitions)
+	liveDialer := opts.WebSocketDialer
+	if liveDialer == nil {
+		liveDialer = factory.newDefaultLiveDialer()
 	}
-	plan := sessionRuntimePlan{
+	if liveDialer == nil {
+		return sessionRuntimePlan{}, missingOwnedSessionDialerError(sessionProviderGrok)
+	}
+	liveDialer = wire.NewProviderWireDialer(liveDialer, opts.RuntimeObserver, platformclock.Ensure(opts.Clock))
+	recordingDialer := factory.newRecordingDialer(liveDialer, sessionProviderGrok, sessionCfg.Model)
+	sessionInferencer, err := factory.newGrokSessionInferencerForTools(sessionCfg, recordingDialer, opts.ToolDefinitions)
+	if err != nil {
+		return sessionRuntimePlan{}, err
+	}
+
+	return sessionRuntimePlan{
 		mode:        sessionRuntimeModeRecordGrok,
 		provider:    sessionProviderGrok,
 		model:       sessionCfg.Model,
 		capturePath: opts.RecordPath,
 		announce:    fmt.Sprintf("Starting Grok session recording to %s", opts.RecordPath),
+		inferencer:  sessionInferencer,
 		loop: sessionLoopOptions{
 			Prompt:                   opts.Prompt,
 			CloseAfterOpen:           !opts.WaitForClose && len(opts.AudioInputs) == 0,
 			WaitForClose:             opts.WaitForClose || len(opts.AudioInputs) > 0,
 			CloseAfterScheduledAudio: len(opts.AudioInputs) > 0,
 		},
-		recordingSetup: func(plan *sessionRuntimePlan) error {
-			destination := opts.RecordPath
-			if destination == "" {
-				providerCapture, ok := plan.liveEvidence.(runtimerecording.ProviderCapture)
-				if !ok {
-					return errors.New("recording service does not expose its provider capture path")
-				}
-				destination = providerCapture.ProviderCapturePath()
-			}
-			dialer := opts.WebSocketDialer
-			if dialer == nil {
-				dialer = grok.NewDefaultWebSocketDialer()
-			}
-			capture, err := opts.RecordingService.RecordProviderSession(opts.ProviderCaptureService, runtimerecording.ProviderSessionOptions{
-				Destination: destination, Provider: sessionProviderGrok, Model: sessionCfg.Model,
-				Dialer: observeSessionWire(dialer, opts), Clock: opts.Clock, Build: build,
-			})
-			if err != nil {
-				return err
-			}
-			if configurer, ok := capture.(runtimeAudioOutputConfigurer); ok && plan.outputAudioSampleRate > 0 {
-				configurer.SetSessionAudioOutput(models.AudioFormatPCM16, models.SampleRate(plan.outputAudioSampleRate))
-			}
-			if configurer, ok := capture.(runtimeAudioInputConfigurer); ok && plan.inputAudioSampleRate > 0 {
-				configurer.SetSessionAudioInput(models.AudioFormatPCM16, models.SampleRate(plan.inputAudioSampleRate))
-			}
-			plan.inferencer = capture
-			plan.recordingSession = capture
-			plan.flushCapture = capture.FlushCapture
-			plan.flushCaptureTo = capture.FlushToFile
-			plan.capturePath = destination
-			return nil
+		flushCapture: func() error {
+			return recordingDialer.FlushToFile(opts.RecordPath)
 		},
-	}
-	if opts.RecordPath != "" {
-		if err := plan.recordingSetup(&plan); err != nil {
-			return sessionRuntimePlan{}, err
-		}
-		plan.recordingSetup = nil
-	}
-	if opts.RecordPath != "" {
-		plan.finalize = func(_ context.Context, out io.Writer) error {
+		flushCaptureTo: func(path string) error {
+			return recordingDialer.FlushToFile(path)
+		},
+		finalize: func(_ context.Context, out io.Writer) error {
 			_, err := fmt.Fprintf(out, "Wrote session capture to %s\n", opts.RecordPath)
 			return err
-		}
-	}
-	return plan, nil
+		},
+	}, nil
 }
 
-func planGrokReplayRuntimeContext(ctx context.Context, opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
-	prepared, replayDialer, inspection, err := prepareReplayLiveContext(ctx, opts)
+func planGrokReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
+	configuration, err := loadReplaySessionConfiguration(opts.ReplayPath)
 	if err != nil {
 		return sessionRuntimePlan{}, err
 	}
-	model := inspection.Model
+	replayDialer, err := factory.replayDialer(opts.ReplayPath, opts.ReplayTiming)
+	if err != nil {
+		return sessionRuntimePlan{}, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
+	}
+	model := configuration.model
+	if strings.TrimSpace(model) == "" {
+		model = replayDialer.Model()
+	}
 	if strings.TrimSpace(model) == "" {
 		model = "grok-replay"
 	}
+	// The initial provider configuration is captured wire data. The current
+	// tool definitions remain on plan.loop for local execution, but are not
+	// used to rebuild the provider handshake.
+	replayDialerWithConfiguration := newReplayInitialSessionUpdateDialer(replayDialer, configuration)
 	sessionInferencer, err := factory.newGrokSessionInferencerForTools(config.GrokConfig{
 		APIKey: "replay",
 		Model:  model,
-	}, replayDialer, nil)
+	}, replayDialerWithConfiguration, nil)
 	if err != nil {
-		return sessionRuntimePlan{}, closePreparedReplay(prepared, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err))
+		return sessionRuntimePlan{}, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
 	}
-	sessionInferencer = prepared.WrapInferencer(sessionInferencer)
-	replayDone, replayErr := prepared.Done(), prepared.Err
+	sessionInferencer = newWebSocketReplaySessionInferencer(sessionInferencer)
 	return sessionRuntimePlan{
 		mode:                  sessionRuntimeModeReplayGrok,
 		provider:              sessionProviderGrok,
 		model:                 model,
-		inputAudioSampleRate:  replayInputAudioSampleRate(inspection),
-		outputAudioSampleRate: replayOutputAudioSampleRate(inspection),
+		inputAudioSampleRate:  configuration.inputAudioSampleRate,
+		outputAudioSampleRate: configuration.outputAudioSampleRate,
 		inferencer:            sessionInferencer,
 		loop: sessionLoopOptions{
 			Prompt:       opts.Prompt,
-			WaitForClose: opts.WaitForClose || replayProviderCloseExpected(inspection),
-			MaxDuration:  replayMaxDuration(inspection),
-			Done:         replayDone,
-			DoneErr:      replayErr,
+			WaitForClose: opts.WaitForClose || grokReplayCaptureHasSessionClose(opts.ReplayPath),
+			MaxDuration:  replayLoopMaxDuration(opts.ReplayPath, opts.ReplayTiming),
+			Done:         replayDialer.Done(),
+			DoneErr:      replayDialer.Err,
 		},
 		finalize: func(_ context.Context, _ io.Writer) error {
-			var err error
-			if replayErr != nil {
-				if replayFailure := replayErr(); replayFailure != nil {
-					err = fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, replayFailure)
-				}
+			if err := replayDialer.Err(); err != nil {
+				return fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
 			}
-			return errors.Join(err, prepared.Close())
+			return nil
 		},
 	}, nil
 }

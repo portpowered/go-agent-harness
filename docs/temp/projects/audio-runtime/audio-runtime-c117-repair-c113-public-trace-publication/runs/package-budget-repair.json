@@ -1,0 +1,55 @@
+{
+  "schema_version": "audio-runtime-c117-package-budget-repair-v1",
+  "work": "audio-runtime-c117-repair-c113-public-trace-publication",
+  "checkpoint_parent": "424f6e5988f0f4e2966d969796d31a9a79058826",
+  "repair": {
+    "before_maintained_go_files": 16,
+    "package_file_limit": 15,
+    "removed_path": "agent-cli/internal/transport/cli/internal/livehost/run_trace_test.go",
+    "consolidated_path": "agent-cli/internal/transport/cli/internal/livehost/trace_test.go",
+    "production_files_changed": false,
+    "reason": "The static gate rejected the separate test file solely because the livehost package had 16 maintained Go files."
+  },
+  "static_gate": {
+    "command": "make architecture-size-check",
+    "exit_code": 0,
+    "summary": "186 package(s), 1896 file(s), 28056 function(s) checked"
+  },
+  "focused_tests": [
+    {
+      "command": "go test ./agent-cli/internal/transport/cli/internal/livehost -run Trace.*(Required|Propagation|FailClosed) -count=1 -timeout=180s",
+      "exit_code": 1,
+      "expected_red": true,
+      "oracle": "trace_test.go:230: Run error = <nil>, want fail-closed public trace-service diagnostic"
+    },
+    {
+      "command": "go test -race ./agent-cli/internal/transport/cli/internal/livehost -run Trace.*(Required|Propagation|FailClosed) -count=1 -timeout=180s",
+      "exit_code": 1,
+      "expected_red": true,
+      "oracle": "trace_test.go:230: Run error = <nil>, want fail-closed public trace-service diagnostic"
+    },
+    {
+      "command": "go test ./agent-cli/internal/transport/cli/internal/livehost -run ^TestLiveTraceRecorder -count=1 -timeout=180s",
+      "exit_code": 0
+    },
+    {
+      "command": "go test -race ./agent-cli/internal/transport/cli/internal/livehost -run ^TestLiveTraceRecorder -count=1 -timeout=180s",
+      "exit_code": 0
+    }
+  ],
+  "accumulated_regressions": {
+    "command": "COUNT=1 exec bash scripts/test-session-ci-regressions.sh all",
+    "modes": ["normal", "coverage", "race"],
+    "exit_code": 0,
+    "high_rate_audio_trials": 20
+  },
+  "dependency_state": {
+    "c112_pr": 498,
+    "c112_reviewed_guarded_merge": false,
+    "c79_pr": 470,
+    "c79_reviewed_guarded_merge": false,
+    "integration_blocked_until": "C112 public sessiontrace.Service and its C79-owned Wire/baseline changes reach reviewed guarded mainline"
+  },
+  "package_budget_repair_passes": true,
+  "candidate_ready_for_dependency_integration": false
+}

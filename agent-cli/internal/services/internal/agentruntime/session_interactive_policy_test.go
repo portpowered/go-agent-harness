@@ -200,7 +200,7 @@ func TestPlanSessionRuntimeRejectsInvalidInteractiveConfigBeforeProviderSetup(t 
 	settings := config.DefaultInteractiveToolConfig()
 	settings.FastReadTimeout = 10 * time.Second
 	providerCalls := 0
-	factory := defaultSessionRuntimeFactory
+	factory := defaultSessionRuntimeFactory()
 	factory.newGrokSessionWithTools = func(config.GrokConfig, transport.Dialer, []messages.ToolDefinition) (messages.SessionInferencer, error) {
 		providerCalls++
 		return nil, errors.New("provider must not be built")

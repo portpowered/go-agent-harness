@@ -11,6 +11,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 )
 
 func roomParticipantIsHuman(plan *roomParticipantPlan) bool {
@@ -95,24 +96,20 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 			value = ""
 		}
 		if kind == room.ParticipantKindHuman {
-			// Human participants own local capture/playback rather than a
-			// provider session. Keep the manifest and its device selectors in
+			// Human participants own local capture/playback rather than a provider session. Keep the manifest and its device selectors in
 			// the plan, but do not construct a provider inferencer or resolve a
 			// credential for this participant.
 			plans = append(plans, &roomParticipantPlan{manifest: participant})
 			continue
 		}
 		sessionOptions := SessionRunOptions{
-			AudioService:           opts.AudioService,
-			RecordingService:       opts.recordingService,
-			ProviderCaptureService: opts.providerCaptureService,
-			ReplayService:          opts.replayService,
-			Provider:               participant.Provider,
-			Model:                  participant.Model,
-			ModelProvided:          true,
-			APIKey:                 value,
-			BaseURL:                opts.BaseURL,
-			ConfigDir:              opts.ConfigDir, ModelCatalog: opts.ModelCatalog,
+			AudioService:  opts.AudioService,
+			Provider:      participant.Provider,
+			Model:         participant.Model,
+			ModelProvided: true,
+			APIKey:        value,
+			BaseURL:       opts.BaseURL,
+			ConfigDir:     opts.ConfigDir, ModelCatalog: opts.ModelCatalog,
 			Clock:            opts.Clock,
 			LivenessClock:    opts.LivenessClock,
 			WorkDir:          opts.WorkDir,
@@ -170,53 +167,12 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 				sessionOptions.RecordSessionCapturePath = filepath.Join(evidence.destination, participantEvidence.artifacts.Capture)
 			}
 		}
-		if participant.BrowserTools != nil {
-			if opts.BrowserCapabilitiesFactory == nil {
-				markStartupFailure(ErrRoomParticipantBrowserToolsUnavailable)
-				continue
-			}
-			browserCapabilities, capabilityErr := opts.BrowserCapabilitiesFactory(participant)
-			if capabilityErr != nil {
-				markStartupFailure(fmt.Errorf("configure browser tools: %w", capabilityErr))
-				continue
-			}
-			plan.capabilityCoordinator = NewSessionCapabilityCoordinator(browserCapabilities.Close)
-			if capabilityErr := validateRoomParticipantBrowserCapabilities(participant, browserCapabilities); capabilityErr != nil {
-				if errors.Is(capabilityErr, ErrRoomParticipantBrowserToolMismatch) {
-					// Invalid browser definitions are a composition contract
-					// failure. Do not admit a room whose advertised capability
-					// surface cannot be routed safely.
-					return plans, secrets, fmt.Errorf("room participant %q browser capability contract: %w", participant.ID, capabilityErr)
-				}
-				markStartupFailure(capabilityErr)
-				continue
-			}
-			composed, capabilityErr := composeRoomParticipantBrowserCapabilities(participant, staticCapabilities, browserCapabilities)
-			if capabilityErr != nil {
-				return plans, secrets, fmt.Errorf("room participant %q browser composition contract: %w", participant.ID, capabilityErr)
-			}
-			if composed.Initialize != nil {
-				if initializeErr := composed.Initialize(ctx); initializeErr != nil {
-					markStartupFailure(fmt.Errorf("initialize browser tools: %w", initializeErr))
-					continue
-				}
-			}
-			if composed.RefreshToolDefinitions != nil {
-				refreshed, refreshErr := composed.RefreshToolDefinitions(ctx)
-				if refreshErr == nil {
-					composed.Definitions = cloneRoomToolDefinitions(refreshed)
-				} else if ctx.Err() != nil {
-					markStartupFailure(fmt.Errorf("refresh browser tools: %w", refreshErr))
-					continue
-				}
-			}
-			sessionOptions.ToolExecutor = composed.Executor
-			sessionOptions.ToolDefinitions = cloneRoomToolDefinitions(composed.Definitions)
-			sessionOptions.ToolDefinitionBase = cloneRoomToolDefinitions(composed.ToolDefinitionBase)
-			sessionOptions.RefreshToolDefinitions = composed.RefreshToolDefinitions
-			sessionOptions.BrowserWatch = composed.BrowserWatch
-			sessionOptions.BrowserToolsEnabled = true
-			sessionOptions.CapabilityClose = plan.capabilityCoordinator.Close
+		sessionOptions, skipParticipant, capabilityErr := configureRoomParticipantBrowserOptions(ctx, opts, participant, plan, sessionOptions, staticCapabilities, value)
+		if capabilityErr != nil {
+			return plans, secrets, capabilityErr
+		}
+		if skipParticipant {
+			continue
 		}
 		plan.options = sessionOptions
 		if inferencer, exists := opts.SessionInferencers[participant.ID]; exists {
@@ -266,16 +222,13 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 	return plans, secrets, nil
 }
 
-// buildRoomReplayParticipantPlans composes each provider participant through
-// the existing session replay planner. It deliberately does not consult the
-// live room manifest, credential lookup, capability factories, or injected
-// live session factories: the validated bundle is the complete source of
-// replay runtime configuration.
-func buildRoomReplayParticipantPlans(ctx context.Context, replay RoomReplayPlan, opts RoomRunOptions) ([]*roomParticipantPlan, []string, error) {
+// buildRoomReplayParticipantPlans composes admitted provider participants
+// with the session replay planner without consulting live configuration.
+func buildRoomReplayParticipantPlans(ctx context.Context, replay roomreplay.RoomReplayPlan, opts RoomRunOptions) ([]*roomParticipantPlan, []string, error) { //nolint:contextcheck // planSessionRuntime is synchronous and has no context-aware API; ctx is checked before each participant.
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	manifest := replay.Manifest()
+	manifest := opts.Manifest
 	plans := make([]*roomParticipantPlan, 0, len(replay.Participants))
 	for index, recorded := range replay.Participants {
 		if err := ctx.Err(); err != nil {
@@ -297,18 +250,15 @@ func buildRoomReplayParticipantPlans(ctx context.Context, replay RoomReplayPlan,
 			return plans, nil, roomParticipantFailure(recorded.ID, errors.New("replay provider capture path is empty"), nil)
 		}
 		sessionOptions := SessionRunOptions{
-			AudioService:           opts.AudioService,
-			RecordingService:       opts.recordingService,
-			ProviderCaptureService: opts.providerCaptureService,
-			ReplayService:          opts.replayService,
-			Provider:               recorded.Provider,
-			Model:                  recorded.Model,
-			ModelProvided:          true,
-			ReplayPath:             recorded.CapturePath,
-			roomReplay:             true,
-			Prompt:                 recorded.OpeningPrompt,
-			PromptProvided:         recorded.OpeningPrompt != "",
-			Voice:                  recorded.Voice,
+			AudioService:   opts.AudioService,
+			Provider:       recorded.Provider,
+			Model:          recorded.Model,
+			ModelProvided:  true,
+			ReplayPath:     recorded.CapturePath,
+			roomReplay:     true,
+			Prompt:         recorded.OpeningPrompt,
+			PromptProvided: recorded.OpeningPrompt != "",
+			Voice:          recorded.Voice,
 			// Replay planning reads provider configuration from the captured
 			// session.update. Keep ConfigDir and APIKey empty so no live config
 			// or credential path can be consulted accidentally.

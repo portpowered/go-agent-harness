@@ -12,6 +12,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/sight"
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
@@ -46,16 +47,16 @@ type sessionToolLifecycleObserver interface {
 // the provider watchdog; the next accepted response.create re-arms it.
 type sessionToolLifecycleMux struct {
 	recording sessionToolLifecycleObserver
-	progress  *sessionProgressObserver
-	runtime   *sessionRuntimeObservationRecorder
+	progress  sessiontrace.Observer
+	runtime   sessiontrace.RuntimeRecorder
 }
 
 func (m sessionToolLifecycleMux) observeToolCall(call messages.ToolCall) {
 	if m.runtime != nil {
-		m.runtime.observeToolCall(call)
+		m.runtime.ObserveToolCall(call)
 	}
 	if m.progress != nil {
-		m.progress.beginLocalToolExecution()
+		m.progress.BeginLocalToolExecution()
 	}
 	if m.recording != nil {
 		m.recording.observeToolCall(call)
@@ -63,17 +64,16 @@ func (m sessionToolLifecycleMux) observeToolCall(call messages.ToolCall) {
 }
 func (m sessionToolLifecycleMux) observeToolResult(call messages.ToolCall, response messages.ToolCallResponse, failed bool) {
 	if m.runtime != nil {
-		m.runtime.observeToolResult(call, response, failed)
+		m.runtime.ObserveToolResult(call, response, failed)
 	}
 	if m.recording != nil {
 		m.recording.observeToolResult(call, response, failed)
 	}
 	if m.progress != nil {
-		m.progress.endLocalToolExecution()
+		m.progress.EndLocalToolExecution()
 	}
 }
-
-func composeSessionToolLifecycleObserver(recording sessionToolLifecycleObserver, progress *sessionProgressObserver, runtime *sessionRuntimeObservationRecorder) sessionToolLifecycleObserver {
+func composeSessionToolLifecycleObserver(recording sessionToolLifecycleObserver, progress sessiontrace.Observer, runtime sessiontrace.RuntimeRecorder) sessionToolLifecycleObserver {
 	if recording == nil && progress == nil && runtime == nil {
 		return nil
 	}
@@ -96,7 +96,7 @@ type sessionToolExecutor struct {
 	timeout            time.Duration
 	interactivePolicy  *InteractiveToolPolicy
 	observer           sessionToolLifecycleObserver
-	cancellationIntent *SessionCancellationIntent
+	cancellationIntent SessionCancellationIntent
 	diagnostics        SessionToolDiagnosticSink
 }
 
@@ -133,7 +133,7 @@ func newSessionToolExecutorWithTimeoutAndObserverAndCancellationIntent(
 	inner messages.ToolExecutor,
 	timeout time.Duration,
 	observer sessionToolLifecycleObserver,
-	cancellationIntent *SessionCancellationIntent,
+	cancellationIntent SessionCancellationIntent,
 ) *sessionToolExecutor {
 	if timeout <= 0 {
 		timeout = defaultSessionToolExecutionTimeout
@@ -151,7 +151,7 @@ func newSessionToolExecutorWithInteractivePolicyAndObserverAndCancellationIntent
 	policy *InteractiveToolPolicy,
 	timeoutOverride time.Duration,
 	observer sessionToolLifecycleObserver,
-	cancellationIntent *SessionCancellationIntent,
+	cancellationIntent SessionCancellationIntent,
 ) *sessionToolExecutor {
 	return newSessionToolExecutorWithInteractivePolicyAndObserverAndCancellationIntentAndDiagnostics(inner, policy, timeoutOverride, observer, cancellationIntent, nil)
 }
@@ -161,7 +161,7 @@ func newSessionToolExecutorWithInteractivePolicyAndObserverAndCancellationIntent
 	policy *InteractiveToolPolicy,
 	timeoutOverride time.Duration,
 	observer sessionToolLifecycleObserver,
-	cancellationIntent *SessionCancellationIntent,
+	cancellationIntent SessionCancellationIntent,
 	diagnostics SessionToolDiagnosticSink,
 ) *sessionToolExecutor {
 	if policy == nil {

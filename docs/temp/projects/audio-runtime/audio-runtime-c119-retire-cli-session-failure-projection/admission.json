@@ -1,0 +1,35 @@
+{
+  "project": "audio-runtime",
+  "contractRevision": "audio-runtime-v1",
+  "verifyWork": {
+    "type": "task",
+    "name": "audio-runtime-c119-retire-cli-session-failure-projection",
+    "status": "admitted"
+  },
+  "secondProject": false,
+  "acceptanceWaiver": false,
+  "branch": "codex/audio-runtime-c119-retire-cli-session-failure-projection",
+  "branchMatchesPRD": true,
+  "requiredAncestry": {
+    "startup": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+    "acceptedMain": "3963bc3566da24f8214634c17a9d0f79a6724171",
+    "startupIsAncestor": true,
+    "acceptedMainIsAncestor": true
+  },
+  "immutableSource": {
+    "path": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go",
+    "physicalLines": 246,
+    "sha256": "c6531d0c2a0f3556c2bc478f911a1687242456fd6ba920f370aa51eb0e7ecfd6"
+  },
+  "sharedLeases": {
+    "c79": [
+      "scripts/wire-packages.txt",
+      "docs/architecture/architecture-size-baseline.json"
+    ],
+    "released": false
+  },
+  "characterization": {
+    "c107": "non-authorizing",
+    "previousC119ReviewFindings": []
+  }
+}
