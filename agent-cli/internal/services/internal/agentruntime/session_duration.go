@@ -11,6 +11,8 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
+	runtimerecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
+	runtimeDuration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	sessionterminalwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
@@ -19,7 +21,7 @@ import (
 // duration cutoff.
 const SessionMaxDurationReason messages.TerminalReason = "max_duration"
 
-var ErrInvalidSessionMaxDuration = sessioncontract.ErrInvalidSessionMaxDuration
+const ErrInvalidSessionMaxDuration = runtimeDuration.ErrInvalidDuration
 
 type SessionMaxDurationError = sessioncontract.SessionMaxDurationError
 type InvalidSessionDurationError = sessioncontract.InvalidSessionDurationError
@@ -57,6 +59,16 @@ func startSessionDurationObserver(opts sessionLoopOptions) func() {
 	return opts.observer.StopLiveness
 }
 
+func resolveDurationFinishWithCompletion(terminationErr error, observed *observedSessionInferencer, admitted *sessionDurationAdmissionInferencer, runErr error, planned bool, out io.Writer, artifacts SessionDurationArtifactLifecycle, terminalState *sessionDurationTerminalState, terminalWritten *bool, complete func(bool, error) error) error {
+	sessionErr := observed.sessionFailure()
+	lifecycleErr := sessionDurationLifecycleError(admitted.runtimeError(), admitted.closeError(), nil)
+	finishErr := resolveSessionDurationFinishError(terminationErr, lifecycleErr, sessionErr, sessionTransportError(sessionErr), runErr, planned, out, artifacts, terminalState, terminalWritten)
+	if complete != nil {
+		finishErr = errors.Join(finishErr, complete(planned, finishErr))
+	}
+	return finishErr
+}
+
 // RunSessionWithMaxDuration runs a session with an optional graceful duration
 // bound. A zero duration disables the controller; a positive duration requests
 // a session close and drains the accepted output before finalization.
@@ -89,12 +101,6 @@ func RunSessionWithMaxDurationClock(ctx context.Context, out io.Writer, opts Ses
 	if err := validateSessionRunOptions(opts); err != nil {
 		return err
 	}
-	claim, err := ensureSessionRecordingClaim(&opts)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = claim.release() }()
-
 	plan, err := planSessionRuntime(opts)
 	if err != nil {
 		return err
@@ -114,7 +120,9 @@ func RunSessionWithMaxDurationClock(ctx context.Context, out io.Writer, opts Ses
 			return err
 		}
 	}
-	return runSessionDurationPlan(durationCtx, out, plan, maxDuration, durationClock)
+	return plan.withLiveEvidence(durationCtx, func(runCtx context.Context, prepared sessionRuntimePlan) error {
+		return runSessionDurationPlan(runCtx, out, prepared, maxDuration, durationClock)
+	})
 }
 
 // RunSessionWithTextSeedAndMaxDuration preserves the explicit --prompt seed
@@ -143,11 +151,6 @@ func RunSessionWithTextSeedAndMaxDuration(ctx context.Context, out io.Writer, op
 	if err := validateSessionRunOptions(opts); err != nil {
 		return err
 	}
-	claim, err := ensureSessionRecordingClaim(&opts)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = claim.release() }()
 	plan, err := planSessionRuntime(opts)
 	if err != nil {
 		return err
@@ -185,7 +188,9 @@ func RunSessionWithTextSeedAndMaxDuration(ctx context.Context, out io.Writer, op
 	if err != nil {
 		return err
 	}
-	err = runSessionDurationPlanWithAdmission(durationCtx, output, plan, maxDuration, durationClock, admittedInferencer)
+	err = plan.withLiveEvidence(durationCtx, func(runCtx context.Context, prepared sessionRuntimePlan) error {
+		return runSessionDurationPlanWithAdmission(runCtx, output, prepared, maxDuration, durationClock, admittedInferencer)
+	})
 	return errors.Join(err, output.errorValue())
 }
 
@@ -243,6 +248,15 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 		loopOut = plan.loopOut
 	}
 	plan.configureLoopObserver(&plan.loop)
+	if plan.liveEvidence != nil {
+		plan.loop.durationCompletionPublisher = func(expired bool, completionErr error) error {
+			state := plan.loop.observer.State()
+			return plan.liveEvidence.SetCompletion(context.WithoutCancel(ctx), runtimerecording.LiveCompletion{
+				RunError: completionErr, DurationExpired: expired, SawSessionOpen: state.SawSessionOpen,
+				TurnsCompleted: state.TurnsCompleted, OutputObserved: state.AssistantOutputObserved,
+			})
+		}
+	}
 	if plan.inferencer != nil {
 		reporter.MarkRunStarted()
 		runErr = runAgentLoopSessionWithDurationAdmissionClock(ctx, loopOut, plan.inferencer, plan.loop, maxDuration, durationClock, admittedInferencer)

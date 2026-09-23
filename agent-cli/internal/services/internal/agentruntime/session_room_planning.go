@@ -103,9 +103,9 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 			continue
 		}
 		sessionOptions := SessionRunOptions{
-			AudioService:  opts.AudioService,
-			Provider:      participant.Provider,
-			Model:         participant.Model,
+			AudioService: opts.AudioService, RecordingService: opts.RecordingService,
+			ProviderCaptureService: opts.ProviderCaptureService,
+			Provider:               participant.Provider, Model: participant.Model,
 			ModelProvided: true,
 			APIKey:        value,
 			BaseURL:       opts.BaseURL,

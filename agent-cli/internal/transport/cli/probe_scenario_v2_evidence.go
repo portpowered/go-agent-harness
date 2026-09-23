@@ -125,13 +125,7 @@ func (e *probeScenarioV2Executor) finalizeEvidence(destination string) (probeSce
 		return probeScenarioV2EvidenceSummary{}, probe.ObjectiveEvidence{}, fmt.Errorf("encode objective evidence: %w", err)
 	}
 
-	model := ""
-	if e.providerReport != nil {
-		model = e.providerReport.Model
-	}
-	if model == "" {
-		model = "fixture"
-	}
+	model := probeScenarioV2EvidenceModel(e.providerReport)
 	config := transcript.RecordingConfig{
 		Destination:      destination,
 		ClientTranscript: []byte("probe.scenario.v2:" + e.scenario.ID + "\n"),
@@ -142,15 +136,13 @@ func (e *probeScenarioV2Executor) finalizeEvidence(destination string) (probeSce
 			ClockBase: probeScenarioV2EvidenceClockBase(e),
 		},
 		ManifestVersion: transcript.RecordingManifestV2Version,
+		BrowserArtifact: browserArtifact,
 		AdditionalArtifacts: []transcript.RecordingArtifact{
 			{Path: probeScenarioV2ProviderArtifactPath, Data: providerCapture},
 			{Path: probeScenarioV2PageStateArtifactPath, Data: pageState},
 			{Path: probeScenarioV2WorkspaceArtifactPath, Data: workspace},
 			{Path: probeScenarioV2ObjectiveArtifactPath, Data: objective},
 		},
-	}
-	if browserArtifact != nil {
-		config.BrowserArtifact = browserArtifact
 	}
 	if err := transcript.WriteRecordingBundle(config); err != nil {
 		return probeScenarioV2EvidenceSummary{}, probe.ObjectiveEvidence{}, fmt.Errorf("finalize v2 evidence: %w", err)
@@ -180,6 +172,13 @@ func (e *probeScenarioV2Executor) finalizeEvidence(destination string) (probeSce
 		Verified:     post.Verified,
 	}
 	return summary, objectiveEvidence, nil
+}
+
+func probeScenarioV2EvidenceModel(report *runtimeReplay.CaptureProbeObservation) string {
+	if report == nil || report.Model == "" {
+		return "fixture"
+	}
+	return report.Model
 }
 
 func probeScenarioV2PageStateBytes(executor *probeScenarioV2Executor) ([]byte, error) {

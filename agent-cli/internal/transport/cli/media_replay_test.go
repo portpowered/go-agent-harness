@@ -27,9 +27,16 @@ import (
 type mediaReplayServiceStub struct {
 	runtimeReplay.Service
 	analyzeProbe func(context.Context, runtimeReplay.CaptureProbeRequest) (runtimeReplay.CaptureProbeObservation, error)
+	capturePath  *string
 }
 
 func (s mediaReplayServiceStub) AnalyzeProbe(ctx context.Context, request runtimeReplay.CaptureProbeRequest) (runtimeReplay.CaptureProbeObservation, error) {
+	if s.capturePath != nil {
+		*s.capturePath = request.SourcePath
+	}
+	if s.analyzeProbe == nil {
+		return runtimeReplay.CaptureProbeObservation{}, nil
+	}
 	return s.analyzeProbe(ctx, request)
 }
 

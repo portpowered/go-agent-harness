@@ -8,6 +8,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	runtimeRecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	sessionwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -21,6 +22,7 @@ import (
 // No provider, websocket, or replay implementation is constructed here.
 func provideLiveService(
 	providerService runtimeproviders.SessionService,
+	recordingService runtimeRecording.Service,
 	toolExecutor messages.ToolExecutor,
 	toolDefs []messages.ToolDefinition,
 	sessionInferencer messages.SessionInferencer,
@@ -30,7 +32,7 @@ func provideLiveService(
 	credentialVault *liveCredentialVault,
 ) session.LiveService {
 	return sessionwire.NewLiveService(sessionwire.LiveDependencies{
-		InferencerFactory: newLiveInferencerFactory(providerService, toolDefs, sessionInferencer, credentialVault, transportDialer),
+		InferencerFactory: newLiveInferencerFactory(providerService, recordingService, toolDefs, sessionInferencer, credentialVault, transportDialer),
 		ToolExecutor:      toolExecutor,
 		ToolDefinitions:   append([]messages.ToolDefinition(nil), toolDefs...),
 		Clock:             liveClock(clockSource),
@@ -66,6 +68,7 @@ func liveTick(source Clock) func() uint64 {
 
 func newLiveInferencerFactory(
 	providerService runtimeproviders.SessionService,
+	recordingService runtimeRecording.Service,
 	toolDefs []messages.ToolDefinition,
 	sessionInferencer messages.SessionInferencer,
 	credentialVault *liveCredentialVault,
@@ -73,18 +76,7 @@ func newLiveInferencerFactory(
 ) session.LiveInferencerFactory {
 	return func(ctx context.Context, request session.LiveRequest) (messages.SessionInferencer, error) {
 		if sessionInferencer != nil {
-			// Deterministic host seams may own a raw provider recorder without
-			// using the provider service. Give such a seam the invocation-owned
-			// spool selected by the live recording service; semantic-only doubles
-			// deliberately do not opt in and retain incomplete-evidence behavior.
-			if configurator, ok := sessionInferencer.(interface {
-				ConfigureProviderCapture(string) error
-			}); ok {
-				if err := configurator.ConfigureProviderCapture(request.Replay.OutputCapturePath); err != nil {
-					return nil, fmt.Errorf("configure injected provider capture: %w", err)
-				}
-			}
-			return sessionInferencer, nil
+			return configureInjectedLiveInferencer(sessionInferencer, request.Replay.OutputCapturePath, recordingService)
 		}
 		if providerService == nil {
 			return nil, fmt.Errorf("live provider service is unavailable")
@@ -102,6 +94,22 @@ func newLiveInferencerFactory(
 		}
 		return providerService.BuildSession(ctx, config)
 	}
+}
+
+func configureInjectedLiveInferencer(inferencer messages.SessionInferencer, capturePath string, recordingService runtimeRecording.Service) (messages.SessionInferencer, error) {
+	if configurator, ok := inferencer.(interface{ ConfigureProviderCapture(string) error }); ok {
+		if err := configurator.ConfigureProviderCapture(capturePath); err != nil {
+			return nil, fmt.Errorf("configure injected provider capture: %w", err)
+		}
+		return inferencer, nil
+	}
+	if path := strings.TrimSpace(capturePath); path != "" {
+		if recordingService == nil {
+			return nil, fmt.Errorf("recording service is required for injected session capture")
+		}
+		return recordingService.TrackInjectedSession(inferencer, path)
+	}
+	return inferencer, nil
 }
 
 func liveSessionConfig(request session.LiveRequest, apiKey string, toolDefs []messages.ToolDefinition) runtimeproviders.SessionConfig {

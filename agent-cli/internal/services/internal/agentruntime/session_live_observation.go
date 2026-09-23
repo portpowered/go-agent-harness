@@ -220,37 +220,41 @@ func (s *observedSession) SendWithOutcome(ctx context.Context, msg messages.Stre
 	defer unlockProviderBoundary()
 	outcome := messages.SendSessionWithOutcome(ctx, s.Session, msg)
 	if !outcome.OK() {
-		if msg.Type == messages.StreamTypeToolCallEnd && s.progress != nil {
-			if value, ok := msg.Value.(*messages.ToolCallEndValue); ok && value != nil {
-				s.progress.NoteToolResultRejected(value.ToolCallID, outcome)
-			}
-		}
+		s.observeRejectedProviderSend(msg, outcome)
 		return outcome
 	}
-	if msg.Type == messages.StreamTypeAudioDelta && s.runtime != nil {
-		if value, ok := msg.Value.(*messages.AudioDeltaValue); ok && value != nil {
-			s.runtime.ProviderAudioSent(value.Content)
-		}
+	s.observeAcceptedProviderSend(msg)
+	return outcome
+}
+
+func (s *observedSession) observeRejectedProviderSend(msg messages.StreamMessage, outcome messages.SessionSendOutcome) {
+	if msg.Type != messages.StreamTypeToolCallEnd || s.progress == nil {
+		return
 	}
-	if msg.Type == messages.StreamTypeMessageEnd && s.runtime != nil {
-		s.runtime.InputCommit()
-		s.runtime.ResponseCreate(msg)
+	value, ok := msg.Value.(*messages.ToolCallEndValue)
+	if ok && value != nil {
+		s.progress.NoteToolResultRejected(value.ToolCallID, outcome)
 	}
-	if msg.Type == messages.StreamTypeResponseCreate && s.runtime != nil {
-		s.runtime.ResponseCreate(msg)
+}
+
+func (s *observedSession) observeAcceptedProviderSend(msg messages.StreamMessage) {
+	s.observeRuntimeSend(msg)
+	s.observeProgressSend(msg)
+}
+
+func (s *observedSession) observeProgressSend(msg messages.StreamMessage) {
+	if s.progress == nil {
+		return
 	}
-	if msg.Type == messages.StreamTypeToolCallEnd && s.progress != nil {
+	switch msg.Type {
+	case messages.StreamTypeToolCallEnd:
 		if value, ok := msg.Value.(*messages.ToolCallEndValue); ok && value != nil {
 			s.progress.NoteToolResultAccepted(value.ToolCallID)
 		}
-	}
-	if msg.Type == messages.StreamTypeResponseCreate && s.progress != nil {
+	case messages.StreamTypeResponseCreate:
 		s.progress.NoteToolContinuationRequested()
 	}
-	if s.progress != nil {
-		s.progress.ObserveProviderDispatch(msg)
-	}
-	return outcome
+	s.progress.ObserveProviderDispatch(msg)
 }
 
 // SessionAdmissionClosed preserves the room's optional admission boundary
@@ -298,10 +302,6 @@ func (s *observedSession) RequestResponse(ctx context.Context) messages.SessionS
 		s.progress.ObserveProviderDispatch(messages.StreamMessage{Type: messages.StreamTypeResponseCreate})
 	}
 	return outcome
-}
-
-func (s *observedSession) SupportsResponseRequests() bool {
-	return messages.SupportsSessionResponseRequests(s.Session)
 }
 
 // SendMessage forwards the optional complete-message provider capability. The

@@ -245,74 +245,12 @@ func TestServiceHandlesNilPublicationPorts(t *testing.T) {
 	}
 }
 
-type artifactFunc func(messages.StreamMessage) error
-
-func (f artifactFunc) Accept(msg messages.StreamMessage) error { return f(msg) }
-
-func providerSource(provider messages.StreamMessage) sessionduration.TerminalSource {
-	value, ok := provider.Value.(*messages.SessionCloseValue)
-	if !ok {
-		panic("provider test message is not a session close")
-	}
-	return sessionduration.TerminalSource{
-		Message: func() (messages.StreamMessage, bool) { return provider, true },
-		Matches: func(msg messages.StreamMessage) bool {
-			candidate, ok := msg.Value.(*messages.SessionCloseValue)
-			return ok && candidate == value
-		},
-	}
-}
-
-func providerTerminal(reason string) messages.StreamMessage {
-	return messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValueWithTerminal(
-		"session", reason, "provider_close", messages.TerminalReasonProviderClose,
-		messages.TerminalProvenanceProvider, messages.TerminalOutputPartial,
-	)}
-}
-
-func TestServiceFacadeRetainsStateAndErrorContract(t *testing.T) {
-	service := New()
-	if err := service.ValidateDuration(-time.Second); !errors.Is(err, sessionduration.ErrInvalidDuration) {
+func TestServiceValidatesDuration(t *testing.T) {
+	if err := New().ValidateDuration(-time.Second); !errors.Is(err, sessionduration.ErrInvalidDuration) {
 		t.Fatalf("ValidateDuration() = %v, want invalid-duration identity", err)
 	}
-	if err := service.ValidateDuration(0); err != nil {
+	if err := New().ValidateDuration(0); err != nil {
 		t.Fatalf("ValidateDuration(0) = %v", err)
-	}
-
-	provider := providerTerminal("provider")
-	state := service.NewState(providerSource(provider))
-	state.Observe(messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant})
-	if got := state.OutputState(); got != messages.TerminalOutputPartial {
-		t.Fatalf("state output = %q, want partial", got)
-	}
-	if err := state.PublishProviderTerminal(sessionduration.Publication{}); err != nil {
-		t.Fatalf("PublishProviderTerminal: %v", err)
-	}
-	if !state.Written() {
-		t.Fatal("state did not retain terminal-written state")
-	}
-	if _, ok := state.Admit(true, provider); ok {
-		t.Fatal("state admitted a duplicate provider terminal")
-	}
-
-	var published messages.StreamMessage
-	if err := service.PublishMaxDuration(sessionduration.Publication{Write: func(msg messages.StreamMessage) error {
-		published = msg
-		return nil
-	}}, messages.TerminalOutputPartial); err != nil {
-		t.Fatalf("PublishMaxDuration: %v", err)
-	}
-	if published.Type != messages.StreamTypeSessionClose {
-		t.Fatalf("max-duration publication type = %q", published.Type)
-	}
-
-	runtimeErr := errors.New("runtime")
-	closeErr := errors.New("close")
-	if got := service.LifecycleError(sessionduration.LifecycleFailures{Runtime: runtimeErr, Close: closeErr}); !errors.Is(got, runtimeErr) || !errors.Is(got, closeErr) {
-		t.Fatalf("LifecycleError() = %v, missing causes", got)
-	}
-	if service.TransportError(nil) != nil || !errors.Is(service.TransportError(runtimeErr), runtimeErr) {
-		t.Fatal("TransportError did not preserve nil and wrapped identities")
 	}
 }
 
@@ -552,92 +490,6 @@ func TestRunRejectsRetryWhenLoopCannotSendSessionEvents(t *testing.T) {
 		t.Fatalf("Run() = %v, want the loop transport capability error", err)
 	}
 }
-
-type retryRunLoopProbe struct {
-	deltas *messages.TypedBuffer[messages.StreamMessage]
-	sent   chan messages.StreamMessage
-}
-
-func (l *retryRunLoopProbe) Run(ctx context.Context) error {
-	terminal := messages.StreamMessage{
-		Type: messages.StreamTypeMessageEnd,
-		Role: messages.RoleAssistant,
-		Value: &messages.MessageEndValue{
-			Status:               "failed",
-			ProviderErrorCode:    "rate_limit_exceeded",
-			ProviderErrorMessage: "retry after 1s",
-		},
-	}
-	if !l.deltas.Write(ctx, terminal) {
-		return ctx.Err()
-	}
-	<-ctx.Done()
-	return ctx.Err()
-}
-
-func (l *retryRunLoopProbe) Deltas() *messages.TypedBuffer[messages.StreamMessage] { return l.deltas }
-func (l *retryRunLoopProbe) Send(context.Context, []messages.Message) error        { return nil }
-func (l *retryRunLoopProbe) SendSessionEvent(ctx context.Context, msg messages.StreamMessage) error {
-	select {
-	case l.sent <- msg:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-type retryRunLoopWithoutSessionEvents struct {
-	deltas *messages.TypedBuffer[messages.StreamMessage]
-}
-
-func (l *retryRunLoopWithoutSessionEvents) Run(ctx context.Context) error {
-	terminal := messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: &messages.MessageEndValue{
-		Status:            "failed",
-		ProviderErrorCode: "rate_limit_exceeded",
-	}}
-	if !l.deltas.Write(ctx, terminal) {
-		return ctx.Err()
-	}
-	<-ctx.Done()
-	return ctx.Err()
-}
-
-func (l *retryRunLoopWithoutSessionEvents) Deltas() *messages.TypedBuffer[messages.StreamMessage] {
-	return l.deltas
-}
-func (l *retryRunLoopWithoutSessionEvents) Send(context.Context, []messages.Message) error {
-	return nil
-}
-
-func TestWaitForLoopNormalizesCancellation(t *testing.T) {
-	results := make(chan error, 2)
-	results <- context.Canceled
-	if err := waitForLoop(results); err != nil {
-		t.Fatalf("waitForLoop(cancellation) = %v, want nil", err)
-	}
-	failure := errors.New("loop failed")
-	results <- failure
-	if err := waitForLoop(results); !errors.Is(err, failure) {
-		t.Fatalf("waitForLoop(failure) = %v, want failure identity", err)
-	}
-}
-
-type triggerScheduler struct {
-	created chan *triggerTimer
-}
-
-type triggerTimer struct {
-	events chan time.Time
-}
-
-func (s *triggerScheduler) NewTimer(time.Duration) sessionduration.Timer {
-	timer := &triggerTimer{events: make(chan time.Time, 1)}
-	s.created <- timer
-	return timer
-}
-func (t *triggerTimer) C() <-chan time.Time      { return t.events }
-func (t *triggerTimer) Stop() bool               { return false }
-func (t *triggerTimer) Reset(time.Duration) bool { return true }
 
 func TestRunExpiresAtMaxDurationAndClosesLoop(t *testing.T) {
 	scheduler := &triggerScheduler{created: make(chan *triggerTimer, 1)}

@@ -285,6 +285,7 @@ type LiveCompletion struct {
 	DurationExpired      bool
 	SawSessionOpen       bool
 	TurnsCompleted       int
+	OutputObserved       bool
 }
 
 // LiveEvidence accepts ordered runtime observations for one admitted

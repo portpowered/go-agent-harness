@@ -13,6 +13,8 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe/fleet"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
+	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
+	recordingwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/wire"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	"github.com/spf13/cobra"
 )
@@ -37,6 +39,14 @@ func newTestRootCommandWithProbeFleetCommand(probeFleetCommand *ProbeFleetComman
 		injectedSessionInferencer = sessionInferencer[0]
 	}
 	registry := defaultTestDeviceRegistry{}
+	probeReplay := newReplayRuntimeServiceForTest()
+	probeClock := sessionclock.Real{}
+	probeRuntime := sessionservicewire.NewSessionRuntime(
+		audioiowire.NewService(), probeClock, nil, sessionservicewire.NewSessionRuntimeFactory(), nil,
+		nil, nil, nil, nil, nil, nil, providerswire.NewModelCatalog(),
+		sessionservicewire.NewBrowserConversationService(), recordingwire.NewService(probeClock),
+		recordingwire.NewProviderCaptureService(probeClock), probeReplay,
+	)
 
 	router := NewRouter(
 		globalFlags,
@@ -47,7 +57,7 @@ func newTestRootCommandWithProbeFleetCommand(probeFleetCommand *ProbeFleetComman
 		NewInteractionCommand(),
 		NewInteractionReplayCommand(),
 		NewProbeCommand(),
-		NewProbeRunCommandWithDeviceService(newDevicesTestService(), nil, sessionservicewire.NewMetricsCollector(audioiowire.NewService(), sessionclock.Real{}, sessionservicewire.NewSessionRuntimeFactory(), newReplayRuntimeServiceForTest()), newReplayRuntimeServiceForTest()),
+		NewProbeRunCommandWithDeviceService(newDevicesTestService(), nil, sessionservicewire.NewMetricsCollector(probeRuntime, probeReplay), probeReplay),
 		NewProbeGateCommand(),
 		NewProbeReportCommand(),
 		probeFleetCommand,

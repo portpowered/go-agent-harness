@@ -579,24 +579,6 @@ func (w *durationTestWriter) waitFor(t *testing.T, want string) {
 	}
 }
 
-func waitForDurationTextOrError(t *testing.T, writer *durationTestWriter, runErr <-chan error, want string) {
-	t.Helper()
-	timer := time.NewTimer(2 * time.Second)
-	defer timer.Stop()
-	for {
-		select {
-		case got := <-writer.writes:
-			if strings.Contains(got, want) {
-				return
-			}
-		case err := <-runErr:
-			t.Fatalf("duration session ended before %q: %v; output=%q", want, err, writer.String())
-		case <-timer.C:
-			t.Fatalf("timed out waiting for %q; output=%q", want, writer.String())
-		}
-	}
-}
-
 func TestRunAgentLoopSessionWithDuration_ProviderDoneDrainsAcceptedOutput(t *testing.T) {
 	clock := &durationTestClock{}
 	var out bytes.Buffer
@@ -800,44 +782,7 @@ func TestRunSessionWithMaxDuration_FinalizesZeroSampleArtifactsBeforeFirstAudio(
 		t.Fatalf("zero-sample WAV header has unexpected sizes: %v", wavData)
 	}
 
-	transcriptData, err := os.ReadFile(transcriptPath)
-	if err != nil {
-		t.Fatalf("reopen zero-sample transcript artifact: %v", err)
-	}
-	if !bytes.HasSuffix(transcriptData, []byte("\n")) {
-		t.Fatal("zero-sample transcript is missing its trailing JSONL newline")
-	}
-	scanner := bufio.NewScanner(bytes.NewReader(transcriptData))
-	var eventTypes []messages.StreamMessageType
-	var terminalPayload []byte
-	for scanner.Scan() {
-		record, err := transcript.Decode(scanner.Bytes())
-		if err != nil {
-			t.Fatalf("decode zero-sample transcript record: %v", err)
-		}
-		var event struct {
-			Type messages.StreamMessageType `json:"type"`
-		}
-		if err := json.Unmarshal(record.Payload, &event); err != nil {
-			t.Fatalf("decode zero-sample transcript payload: %v", err)
-		}
-		eventTypes = append(eventTypes, event.Type)
-		if event.Type == messages.StreamTypeSessionClose {
-			terminalPayload = append([]byte(nil), record.Payload...)
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		t.Fatalf("scan zero-sample transcript: %v", err)
-	}
-	wantTypes := []messages.StreamMessageType{
-		messages.StreamTypeSessionClose,
-	}
-	if !reflect.DeepEqual(eventTypes, wantTypes) {
-		t.Fatalf("zero-sample transcript event order = %v, want %v", eventTypes, wantTypes)
-	}
-	if !bytes.Contains(terminalPayload, []byte("max_duration")) {
-		t.Fatalf("zero-sample terminal record = %s, want max_duration", terminalPayload)
-	}
+	assertZeroSampleTerminalTranscript(t, transcriptPath)
 }
 
 func TestRunSessionWithMaxDuration_PreservesArtifactFlushAndCloseIdentity(t *testing.T) {

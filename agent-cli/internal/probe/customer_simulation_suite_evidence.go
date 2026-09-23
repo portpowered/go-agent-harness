@@ -17,8 +17,7 @@ import (
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 )
 
-// customerSimulationRecordingFacts are derived only from the copied product
-// record directory. They intentionally omit tool arguments and raw payloads.
+// Facts come only from copied product records and exclude tool arguments and raw payloads.
 type customerSimulationRecordingFacts struct {
 	responses         []customerSimulationResponse
 	tools             []ToolObservation
@@ -109,34 +108,24 @@ func readCustomerSimulationRecording(recordRoot string, scenario CustomerScenari
 		failures = append(failures, fmt.Errorf("read session-log: %v", err))
 	}
 
-	streamFacts, err := readCustomerSimulationStream(recordRoot, scenario, len(sessionLogResponses), replayService)
-	if err != nil {
-		failures = append(failures, err)
+	var streamFacts customerSimulationRecordingFacts
+	var streamErr error
+	if replayService == nil {
+		streamErr = errors.New("customer simulation replay service is required")
+	} else {
+		streamFacts, streamErr = readCustomerSimulationStream(recordRoot, scenario, len(sessionLogResponses), replayService)
 	}
-	if len(streamFacts.responses) > 0 {
-		// The raw stream is authoritative for response identity, timing, audio
-		// ranges, and cancellation. session-log.jsonl is used only when the raw
-		// stream is unavailable; it can contain tool continuations that do not
-		// line up one-for-one with the response boundaries needed by a correction
-		// ledger.
-		facts.responses = streamFacts.responses
-	} else if len(sessionLogResponses) > 0 {
+	if streamErr != nil {
+		failures = append(failures, streamErr)
+	}
+	facts = streamFacts
+	if len(facts.responses) == 0 && len(sessionLogResponses) > 0 {
 		facts.responses = sessionLogResponses
 	}
-	facts.tools = streamFacts.tools
-	facts.cancelObserved = streamFacts.cancelObserved
-	facts.cancelAt = streamFacts.cancelAt
-	facts.cancelWallAt = streamFacts.cancelWallAt
-	facts.cancelResponseID = streamFacts.cancelResponseID
-	facts.inputSpeechStarts = append([]time.Duration(nil), streamFacts.inputSpeechStarts...)
-	facts.recordingBase = streamFacts.recordingBase
 	return facts, errors.Join(failures...)
 }
 
 func readCustomerSimulationStream(recordRoot string, scenario CustomerScenario, knownResponses int, replayService runtimeReplay.StreamMessageCodec) (customerSimulationRecordingFacts, error) {
-	if replayService == nil {
-		return customerSimulationRecordingFacts{}, errors.New("customer simulation replay service is required")
-	}
 	var facts customerSimulationRecordingFacts
 	path := filepath.Join(recordRoot, "agent.transcript.jsonl")
 	file, err := os.Open(path)

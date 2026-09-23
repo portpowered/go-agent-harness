@@ -4,15 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
+	"strings"
 	"time"
 
 	sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
+	runtimerecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
@@ -24,6 +23,12 @@ import (
 
 func planSessionRuntime(opts SessionRunOptions) (sessionRuntimePlan, error) {
 	return planSessionRuntimeWithContext(context.Background(), opts)
+}
+
+const injectedSessionDefaultMaxDuration = 3 * time.Second
+
+func planSessionRuntimeContext(ctx context.Context, opts SessionRunOptions) (sessionRuntimePlan, error) {
+	return planSessionRuntimeWithContext(ctx, opts)
 }
 
 //lint:ignore U1000 package tests exercise the context-free planning seam.
@@ -46,10 +51,7 @@ func planSessionRuntimeWithFactoryAndContext(ctx context.Context, opts SessionRu
 	if err := ctx.Err(); err != nil {
 		return sessionRuntimePlan{}, err
 	}
-	recordingClaim, err := ensureSessionRecordingClaim(&opts)
-	if err != nil {
-		return sessionRuntimePlan{}, err
-	}
+	var err error
 	opts.ToolDefinitions = messages.CanonicalToolDefinitions(opts.ToolDefinitions)
 	opts, err = resolveSessionRuntimeFilesystem(opts)
 	if err != nil {
@@ -58,9 +60,6 @@ func planSessionRuntimeWithFactoryAndContext(ctx context.Context, opts SessionRu
 	var capabilityCoordinator SessionCapabilityCoordinator
 	opts, capabilityCoordinator = prepareSessionCapabilityCoordinator(opts)
 	defer func() {
-		if planErr != nil && recordingClaim != nil {
-			planErr = errors.Join(planErr, recordingClaim.release())
-		}
 		if planErr != nil {
 			closeSessionCapabilityIfNeeded(capabilityCoordinator, &planErr)
 		}
@@ -84,7 +83,7 @@ func planSessionRuntimeWithFactoryAndContext(ctx context.Context, opts SessionRu
 	if err != nil {
 		return sessionRuntimePlan{}, err
 	}
-	return configureSessionRuntimePlan(ctx, plan, opts, selection, interactivePolicy, scheduledAudioDispatchPolicyForOptions(opts), capabilityCoordinator, recordingClaim)
+	return configureSessionRuntimePlan(ctx, plan, opts, selection, interactivePolicy, scheduledAudioDispatchPolicyForOptions(opts), capabilityCoordinator)
 }
 
 func resolveSessionRuntimeFilesystem(opts SessionRunOptions) (SessionRunOptions, error) {
@@ -109,7 +108,7 @@ func planSessionRuntimeForSelection(opts SessionRunOptions, selection SessionRun
 	return planSessionRuntimeMode(opts, factory)
 }
 
-func configureSessionRuntimePlan(ctx context.Context, plan sessionRuntimePlan, opts SessionRunOptions, selection SessionRuntimeSelection, interactivePolicy InteractiveToolPolicy, scheduledAudioDispatch ScheduledAudioDispatchPolicy, capabilityCoordinator SessionCapabilityCoordinator, recordingClaim *sessionRecordingClaim) (sessionRuntimePlan, error) {
+func configureSessionRuntimePlan(ctx context.Context, plan sessionRuntimePlan, opts SessionRunOptions, selection SessionRuntimeSelection, interactivePolicy InteractiveToolPolicy, scheduledAudioDispatch ScheduledAudioDispatchPolicy, capabilityCoordinator SessionCapabilityCoordinator) (sessionRuntimePlan, error) {
 	if err := configureSessionRuntimeLoop(&plan, opts, interactivePolicy, scheduledAudioDispatch); err != nil {
 		return sessionRuntimePlan{}, err
 	}
@@ -125,7 +124,79 @@ func configureSessionRuntimePlan(ctx context.Context, plan sessionRuntimePlan, o
 		return sessionRuntimePlan{}, wrapSessionRTCRuntimeError("create runtime", ErrSessionRTCRuntimeUnavailable)
 	}
 	plan.capabilityCoordinator = capabilityCoordinator
-	return wireSessionRecordingClaim(plan, recordingClaim), nil
+	plan.recordingService = opts.RecordingService
+	if opts.RecordDirectory != "" {
+		evidenceOptions := sessionLiveEvidenceOptions(opts, plan, opts.RecordDirectory, opts.RecordMaxDuration)
+		plan.liveEvidenceOptions = &evidenceOptions
+	}
+	return plan, nil
+}
+
+func (s *observedSession) observeRuntimeSend(msg messages.StreamMessage) {
+	if s.runtime == nil {
+		return
+	}
+	switch msg.Type {
+	case messages.StreamTypeAudioDelta:
+		if value, ok := msg.Value.(*messages.AudioDeltaValue); ok && value != nil {
+			s.runtime.ProviderAudioSent(value.Content)
+		}
+	case messages.StreamTypeMessageEnd:
+		s.runtime.InputCommit()
+		s.runtime.ResponseCreate(msg)
+	case messages.StreamTypeResponseCreate:
+		s.runtime.ResponseCreate(msg)
+	}
+}
+
+func (s *observedSession) SupportsResponseRequests() bool {
+	return messages.SupportsSessionResponseRequests(s.Session)
+}
+
+func sessionLiveEvidenceOptions(opts SessionRunOptions, plan sessionRuntimePlan, destination string, maxDuration time.Duration) runtimerecording.LiveEvidenceOptions {
+	model := strings.TrimSpace(plan.model)
+	if model == "" {
+		model = strings.TrimSpace(opts.Model)
+	}
+	return runtimerecording.LiveEvidenceOptions{
+		Destination: destination, Provider: plan.provider, Model: model, OutputAudioRate: plan.outputAudioSampleRate,
+		ClockBase: plan.clockSource.Now(), WallClockStart: time.Now().UTC(),
+		Credentials:                   sessionRecordingCredentials(opts, plan),
+		ProviderCaptureRequired:       plan.mode == sessionRuntimeModeRecordOpenAI || plan.mode == sessionRuntimeModeRecordGrok,
+		ProviderCapturePath:           opts.RecordPath,
+		DisableProviderCaptureSidecar: strings.TrimSpace(opts.RecordPath) != "" && maxDuration > 0,
+	}
+}
+
+func sessionRecordingCredentials(opts SessionRunOptions, plan sessionRuntimePlan) []string {
+	credentials := appendRecordingCredential(nil, opts.APIKey)
+	if opts.LoadedConfig == nil {
+		return credentials
+	}
+	switch strings.ToLower(strings.TrimSpace(plan.provider)) {
+	case sessionProviderOpenAI:
+		if opts.LoadedConfig.Model.OpenAI != nil {
+			credentials = appendRecordingCredential(credentials, opts.LoadedConfig.Model.OpenAI.APIKey)
+		}
+	case sessionProviderGrok:
+		if opts.LoadedConfig.Model.Grok != nil {
+			credentials = appendRecordingCredential(credentials, opts.LoadedConfig.Model.Grok.APIKey)
+		}
+	}
+	return credentials
+}
+
+func appendRecordingCredential(credentials []string, value string) []string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return credentials
+	}
+	for _, existing := range credentials {
+		if existing == value {
+			return credentials
+		}
+	}
+	return append(credentials, value)
 }
 
 func newSessionRTCRuntimeForPlan(opts SessionRunOptions, selection SessionRuntimeSelection, factory sessionRuntimeFactory) (SessionRTCRuntime, error) {
@@ -324,69 +395,3 @@ func configureSessionRuntimeDeviceObservers(ctx context.Context, plan *sessionRu
 
 // prepareSessionStreamOutput gives an unowned stream its terminal renderer.
 // The returned finalizer preserves transcript errors before publishing status.
-func prepareSessionStreamOutput(out io.Writer, opts *sessionLoopOptions) (io.Writer, func(error) error) {
-	if opts.terminalReporter != nil {
-		return out, func(err error) error { return err }
-	}
-	reporter := wire.NewReporter()
-	opts.terminalReporter = reporter
-	reporter.MarkRunStarted()
-	renderer := newSessionReplayRenderer(out, reporter)
-	return renderer, func(runErr error) error {
-		runErr = errors.Join(runErr, renderer.finishTranscript())
-		return errors.Join(runErr, reporter.Publish(out, runErr))
-	}
-}
-
-func newObservedSessionLoop(inferencer messages.SessionInferencer, opts sessionLoopOptions) (*agentloop.AgentLoop, *observedSessionInferencer, <-chan error, error) {
-	observed := newObservedSessionInferencer(inferencer, opts.runtime)
-	observed.progress = opts.observer
-	if opts.observer != nil {
-		opts.observer.SetLivenessClock(opts.livenessClock)
-		opts.observer.SetToolResultsEnabled(opts.ToolExecutor != nil)
-	}
-	loop, err := agentloop.New(duplexSessionLoopOptions(observed, opts)...)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("create session agent loop: %w", err)
-	}
-	var deviceErrors <-chan error
-	if opts.rtcDeviceBinding != nil {
-		deviceErrors = opts.rtcDeviceBinding.Errors()
-	}
-	return loop, observed, deviceErrors, nil
-}
-
-func sessionStreamDeadline(opts sessionLoopOptions) (<-chan time.Time, func(), error) {
-	if opts.MaxDuration <= 0 {
-		return nil, func() {}, nil
-	}
-	if opts.audioService == nil {
-		return nil, nil, errors.New("audio service is required for session duration timing")
-	}
-	timer, err := opts.audioService.NewTimer(opts.clockSource, opts.MaxDuration)
-	if err != nil {
-		return nil, nil, err
-	}
-	return timer.C(), func() { timer.Stop() }, nil
-}
-
-func bindSessionLoopInputs(runCtx context.Context, loop *agentloop.AgentLoop, opts sessionLoopOptions) error {
-	if opts.loopReady != nil {
-		select {
-		case opts.loopReady <- loop:
-		case <-runCtx.Done():
-			return runCtx.Err()
-		}
-	}
-	return nil
-}
-
-func stopAndDrainSessionTimer(timer platformclock.Timer) {
-	if timer.Stop() {
-		return
-	}
-	select {
-	case <-timer.C():
-	default:
-	}
-}

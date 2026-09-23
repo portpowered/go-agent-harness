@@ -17,11 +17,11 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
-	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 const (
@@ -56,6 +56,7 @@ type roomEvidence struct {
 	participants   map[string]*roomParticipantEvidence
 	providerErrors map[string]struct{}
 	latency        runtimeRooms.LatencyRecorder
+	replay         runtimeReplay.Service
 	// source is the injectable platform clock the latency recorder samples;
 	// distinct from roomClock below, which anchors offsets to room start.
 	source platformclock.Source
@@ -116,13 +117,8 @@ type roomEvidenceArtifactPaths struct {
 	ReceivedPCM string `json:"received_pcm"`
 	// Events is always populated (see roomParticipantEvidence.events above).
 	Events string `json:"events"`
-	// Capture is empty for a human participant: it has no provider session
-	// to capture. It is also empty for a provider participant whose live
-	// session was constructed through an injected SessionInferencer/custom
-	// SessionFactory instead of the real websocket dialer (deterministic
-	// tests that never touch a real or hermetic websocket transport cannot
-	// produce one); recording only happens on the genuine live-construction
-	// path, matching how solo `agent session run --record` behaves.
+	// Capture is empty for human participants and injected/custom sessions,
+	// which do not use provider websocket capture.
 	Capture string `json:"capture,omitempty"`
 }
 
@@ -454,7 +450,7 @@ func (p *roomParticipantEvidence) observeDelta(msg messages.StreamMessage) error
 	if p.owner == nil || p.deltas == nil {
 		return p.recordError(p.artifacts.Deltas, errors.New("room participant delta sink is not initialized"))
 	}
-	data, err := gwtesting.MarshalStreamMessage(msg)
+	data, err := p.owner.replay.EncodeStreamMessage(msg)
 	if err != nil {
 		return p.recordError(p.artifacts.Deltas, fmt.Errorf("marshal stream delta: %w", err))
 	}

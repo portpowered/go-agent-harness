@@ -16,6 +16,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	runtimereplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -61,10 +62,8 @@ const (
 // opening seed while the assistant option does not.
 type SelfPlaySessionInferencerFactory func(SessionRunOptions, string) (messages.SessionInferencer, error)
 
-// SelfPlayRunOptions is the bounded Phase 1 self-play command configuration.
-// CustomerInferencer and AssistantInferencer are deterministic test seams. In
-// production both are nil and the service composes the existing live session
-// constructor twice.
+// SelfPlayRunOptions configures a bounded self-play run. Injected inferencers
+// are test seams; production composes both through the live session factory.
 type SelfPlayRunOptions struct {
 	APIKey      string
 	OutputDir   string
@@ -90,6 +89,7 @@ type SelfPlayRunOptions struct {
 	audioService   audioio.Service
 	runtimeFactory sessionRuntimeFactory
 	modelCatalog   runtimeproviders.ModelCatalog
+	replayService  runtimereplay.Service
 }
 
 // SelfPlayOptions is a concise alias for callers that do not need the Run

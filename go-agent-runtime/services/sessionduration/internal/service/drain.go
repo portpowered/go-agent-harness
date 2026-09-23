@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -115,4 +116,86 @@ func resetDrainTimer(clock sessionduration.TimerScheduler, timer sessionduration
 		return nil, errors.New("session duration clock returned a nil drain timer")
 	}
 	return next, nil
+}
+
+func loopJoinTimeout(policy sessionduration.DrainPolicy) time.Duration {
+	if policy.LoopJoinTimeout <= 0 {
+		return defaultLoopJoinTimeout
+	}
+	return policy.LoopJoinTimeout
+}
+
+func (r *runLoop) waitForLoop(ctx context.Context) error {
+	if !r.loopDone {
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		select {
+		case r.loopErr = <-r.runErrs:
+			r.loopDone = true
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	if errors.Is(r.loopErr, context.Canceled) {
+		return nil
+	}
+	return r.loopErr
+}
+
+func waitForLoop(results <-chan error) error {
+	err := <-results
+	if errors.Is(err, context.Canceled) {
+		return nil
+	}
+	return err
+}
+
+func (r *runLoop) cancelRun() {
+	if r.cancel != nil {
+		r.cancel()
+		r.cancel = nil
+	}
+}
+
+func sendLoopClose(ctx context.Context, loop sessionduration.Loop) error {
+	if loop == nil {
+		return nil
+	}
+	if err := loop.Send(ctx, []messages.Message{{
+		Role: messages.RoleUser,
+		ContentParts: []messages.ContentPart{
+			messages.ControlPlanePart{ControlPlaneMessageType: messages.ControlPlaneMessageTypeSessionClose},
+		},
+	}}); err != nil {
+		return fmt.Errorf("close session loop: %w", err)
+	}
+	return nil
+}
+
+func normalizeLoopError(ctx context.Context, err error) error {
+	if err == nil || errors.Is(err, context.Canceled) && ctx.Err() != nil {
+		return nil //nolint:nilerr // caller cancellation intentionally normalizes loop cancellation.
+	}
+	return err
+}
+
+func runLoopFailure(ctx context.Context, err error) error {
+	if errors.Is(err, context.Canceled) && ctx.Err() != nil {
+		return ctx.Err()
+	}
+	return normalizeLoopError(ctx, err)
+}
+
+func (r *runLoop) drainPending() error {
+	for _, msg := range r.pending {
+		admission := r.controller.ObserveDrain(msg)
+		if admission.Accepted {
+			if err := publish(r.request.Publication, admission.Message); err != nil {
+				return err
+			}
+		}
+	}
+	r.pending = nil
+	return nil
 }

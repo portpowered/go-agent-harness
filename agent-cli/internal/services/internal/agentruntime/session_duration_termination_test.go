@@ -1,10 +1,13 @@
 package agentruntime
 
 import (
+	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -13,8 +16,11 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	duration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
@@ -164,253 +170,25 @@ func (f *durationTerminalDrainFixture) sendProviderMessage(msg messages.StreamMe
 	}
 }
 
+type durationTerminalDrainCase struct {
+	name          string
+	setup         func(*durationTerminalDrainFixture) func()
+	wantErr       error
+	wantErrorText string
+	wantOutput    string
+}
+
 func TestRunAgentLoopSessionWithDurationTerminalOutcomesAlwaysDrainAcceptedDelta(t *testing.T) {
-	publicationErr := errors.New("duration page refresh failed")
-	schedulerErr := context.Canceled
-	doneErr := errors.New("duration transport done failed")
-	pumpErr := errors.New("duration RTC media pump failed")
-	loopErr := errors.New("duration agent loop failed")
-	providerErr := errors.New("duration provider terminal failure")
-	writeErr := errors.New("duration terminal output writer failed")
-
-	tests := []struct {
-		name          string
-		setup         func(*durationTerminalDrainFixture) func()
-		wantErr       error
-		wantErrorText string
-		wantOutput    string
-	}{
-		{
-			name: "deadline already ready",
-			setup: func(f *durationTerminalDrainFixture) func() {
-				clock := newGatedDurationTerminalDrainClock(false)
-				f.clock = clock
-				return func() {
-					f.acceptedOutput()
-					clock.fire()
-					clock.releaseTimer()
-				}
-			},
-			wantOutput: string(SessionMaxDurationReason),
-		},
-		{
-			name: "duration clock construction failure",
-			setup: func(f *durationTerminalDrainFixture) func() {
-				clock := newGatedDurationTerminalDrainClock(true)
-				f.clock = clock
-				return func() {
-					f.acceptedOutput()
-					clock.releaseTimer()
-				}
-			},
-			wantErrorText: "session duration clock returned a nil timer",
-		},
-		{
-			name: "dynamic publication failure",
-			setup: func(f *durationTerminalDrainFixture) func() {
-				watch := make(chan webmcp.BrokerEvent, 1)
-				f.options.BrowserWatch = func(context.Context) <-chan webmcp.BrokerEvent { return watch }
-				f.options.ToolDefinitionBase = []messages.ToolDefinition{{Name: "stable"}}
-				f.options.RefreshToolDefinitions = func(context.Context) ([]messages.ToolDefinition, error) {
-					return nil, publicationErr
-				}
-				f.inferencer.events = append(f.inferencer.events, messages.StreamMessage{
-					Type:  messages.StreamTypeSessionCreated,
-					Value: messages.NewSessionCreatedValue("duration-terminal-drain", "test"),
-				})
-				return func() {
-					f.acceptedOutput()
-					watch <- webmcp.BrokerEvent{Type: webmcp.BrokerEventCatalogChanged, Sequence: 1}
-				}
-			},
-			wantErr: publicationErr,
-		},
-		{
-			name: "scheduled dispatch failure",
-			setup: func(f *durationTerminalDrainFixture) func() {
-				observer := newSessionProgressObserver(nil, nil, "test", "test")
-				observer.scheduleAudioInputs([]ScheduledAudioInput{{AfterCompletedTurns: 0, PCM: []byte{1}}})
-				observer.streamObserver = func(msg messages.StreamMessage) {
-					if msg.Type == messages.StreamTypeSessionOpen {
-						f.acceptedOutput()
-						f.cancel()
-					}
-				}
-				f.options.observer = observer
-				return nil
-			},
-			wantErr: schedulerErr,
-		},
-		{
-			name: "timer expiry",
-			setup: func(f *durationTerminalDrainFixture) func() {
-				return func() {
-					f.acceptedOutput()
-					f.clock.(*durationTestClock).fire()
-				}
-			},
-			wantOutput: string(SessionMaxDurationReason),
-		},
-		{
-			name: "session updated timeout",
-			setup: func(f *durationTerminalDrainFixture) func() {
-				observer := newSessionProgressObserver(nil, nil, "test", "test")
-				observer.requireSessionUpdated = true
-				observer.scheduleAudioInputs([]ScheduledAudioInput{{AfterCompletedTurns: 0, PCM: []byte{1}}})
-				f.options.observer = observer
-				f.options.RequireSessionUpdated = true
-				f.options.SessionUpdatedTimeout = 15 * time.Millisecond
-				return func() { f.acceptedOutput() }
-			},
-			wantErr: ErrSessionScheduledAudioConfigTimeout,
-		},
-		{
-			name: "caller cancellation",
-			setup: func(f *durationTerminalDrainFixture) func() {
-				return func() {
-					f.acceptedOutput()
-					f.cancel()
-				}
-			},
-			wantErr: context.Canceled,
-		},
-		{
-			name: "transport done without error",
-			setup: func(f *durationTerminalDrainFixture) func() {
-				f.options.Done = f.done
-				f.options.DoneErr = func() error {
-					f.acceptedOutput()
-					return nil
-				}
-				return func() { close(f.done) }
-			},
-		},
-		{
-			name: "transport done with error",
-			setup: func(f *durationTerminalDrainFixture) func() {
-				f.options.Done = f.done
-				f.options.DoneErr = func() error {
-					f.acceptedOutput()
-					return doneErr
-				}
-				return func() { close(f.done) }
-			},
-			wantErr: doneErr,
-		},
-		{
-			name: "observed provider completion",
-			setup: func(f *durationTerminalDrainFixture) func() {
-				return func() {
-					f.acceptedOutput()
-					f.inferencer.session.end()
-				}
-			},
-			wantOutput: "terminal_reason=provider_close",
-		},
-		{
-			name: "RTC pump failure",
-			setup: func(f *durationTerminalDrainFixture) func() {
-				deviceErrors := make(chan error, 1)
-				f.options.rtcDeviceBinding = &testRTCBinding{errors: deviceErrors}
-				return func() {
-					f.acceptedOutput()
-					deviceErrors <- pumpErr
-				}
-			},
-			wantErr: pumpErr,
-		},
-		{
-			name: "closed delta stream after loop completion",
-			setup: func(f *durationTerminalDrainFixture) func() {
-				return func() {
-					f.acceptedOutput()
-					f.sendProviderMessage(messages.StreamMessage{Type: messages.StreamTypeLoopEnd, Value: messages.NewLoopEndValue()})
-				}
-			},
-		},
-		{
-			name: "loop failure",
-			setup: func(f *durationTerminalDrainFixture) func() {
-				return func() {
-					f.acceptedOutput()
-					f.sendProviderMessage(messages.StreamMessage{
-						Type:  messages.StreamTypeError,
-						Value: messages.NewErrorValueWithError(loopErr),
-					})
-				}
-			},
-			wantErr: loopErr,
-		},
-		{
-			name: "terminal provider message end",
-			setup: func(f *durationTerminalDrainFixture) func() {
-				return func() {
-					f.acceptedOutput()
-					f.sendProviderMessage(messages.StreamMessage{
-						Type:  messages.StreamTypeMessageEnd,
-						Role:  messages.RoleAssistant,
-						Value: messages.NewMessageEndValue(messages.TokenUsage{}),
-					})
-				}
-			},
-		},
-		{
-			name: "terminal provider text end",
-			setup: func(f *durationTerminalDrainFixture) func() {
-				return func() {
-					f.acceptedOutput()
-					f.sendProviderMessage(messages.StreamMessage{
-						Type:  messages.StreamTypeTextEnd,
-						Role:  messages.RoleAssistant,
-						Value: messages.NewTextEndValue(),
-					})
-				}
-			},
-		},
-		{
-			name: "terminal provider session close",
-			setup: func(f *durationTerminalDrainFixture) func() {
-				return func() {
-					f.acceptedOutput()
-					f.sendProviderMessage(messages.StreamMessage{
-						Type:  messages.StreamTypeSessionClose,
-						Value: messages.NewSessionCloseValue("duration-terminal-drain", "provider closed"),
-					})
-				}
-			},
-		},
-		{
-			name: "terminal provider error",
-			setup: func(f *durationTerminalDrainFixture) func() {
-				return func() {
-					f.acceptedOutput()
-					f.sendProviderMessage(messages.StreamMessage{
-						Type:  messages.StreamTypeError,
-						Value: messages.NewErrorValueWithError(providerErr),
-					})
-				}
-			},
-			wantErr: providerErr,
-		},
-		{
-			name: "message processing output failure",
-			setup: func(f *durationTerminalDrainFixture) func() {
-				// The renderer writes the actor label and accepted chunk
-				// separately. Fail on the following write so this case still
-				// exercises a terminal-output failure after accepted content.
-				f.writer = &durationTerminalDrainFailingWriter{target: &f.output, failAfter: 3, err: writeErr}
-				return func() {
-					f.acceptedOutput()
-					f.sendProviderMessage(messages.StreamMessage{
-						Type:  messages.StreamTypeSessionClose,
-						Value: messages.NewSessionCloseValue("duration-terminal-drain", "provider closed"),
-					})
-				}
-			},
-			wantErr: writeErr,
-		},
-	}
-
+	tests := durationTerminalDrainControlCases(
+		errors.New("duration page refresh failed"), context.Canceled,
+	)
+	tests = append(tests, durationTerminalDrainTransportCases(errors.New("duration transport done failed"))...)
+	tests = append(tests, durationTerminalDrainLoopCases(
+		errors.New("duration RTC media pump failed"), errors.New("duration agent loop failed"),
+	)...)
+	tests = append(tests, durationTerminalDrainProviderCases(
+		errors.New("duration provider terminal failure"), errors.New("duration terminal output writer failed"),
+	)...)
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
 			fixture := newDurationTerminalDrainFixture(t)
@@ -434,6 +212,203 @@ func TestRunAgentLoopSessionWithDurationTerminalOutcomesAlwaysDrainAcceptedDelta
 				t.Fatalf("duration terminal output = %q, missing %q", fixture.output.String(), testCase.wantOutput)
 			}
 		})
+	}
+}
+
+func durationTerminalDrainControlCases(publicationErr, schedulerErr error) []durationTerminalDrainCase {
+	return []durationTerminalDrainCase{
+		{
+			name: "deadline already ready",
+			setup: func(f *durationTerminalDrainFixture) func() {
+				clock := newGatedDurationTerminalDrainClock(false)
+				f.clock = clock
+				return func() { f.acceptedOutput(); clock.fire(); clock.releaseTimer() }
+			},
+			wantOutput: string(SessionMaxDurationReason),
+		},
+		{
+			name: "duration clock construction failure",
+			setup: func(f *durationTerminalDrainFixture) func() {
+				clock := newGatedDurationTerminalDrainClock(true)
+				f.clock = clock
+				return func() { f.acceptedOutput(); clock.releaseTimer() }
+			},
+			wantErrorText: "session duration clock returned a nil timer",
+		},
+		{
+			name: "dynamic publication failure",
+			setup: func(f *durationTerminalDrainFixture) func() {
+				watch := make(chan webmcp.BrokerEvent, 1)
+				f.options.BrowserWatch = func(context.Context) <-chan webmcp.BrokerEvent { return watch }
+				f.options.ToolDefinitionBase = []messages.ToolDefinition{{Name: "stable"}}
+				f.options.RefreshToolDefinitions = func(context.Context) ([]messages.ToolDefinition, error) { return nil, publicationErr }
+				f.inferencer.events = append(f.inferencer.events, messages.StreamMessage{Type: messages.StreamTypeSessionCreated, Value: messages.NewSessionCreatedValue("duration-terminal-drain", "test")})
+				return func() {
+					f.acceptedOutput()
+					watch <- webmcp.BrokerEvent{Type: webmcp.BrokerEventCatalogChanged, Sequence: 1}
+				}
+			},
+			wantErr: publicationErr,
+		},
+		{
+			name: "scheduled dispatch failure",
+			setup: func(f *durationTerminalDrainFixture) func() {
+				observer := sessiontracewire.NewObserver(sessiontrace.NewObserverOptions{Provider: "test", Model: "test"})
+				observer.ScheduleAudioInputs([]sessiontrace.ScheduledAudioInput{{AfterCompletedTurns: 0, PCM: []byte{1}}})
+				observer.SetStreamObserver(func(msg messages.StreamMessage) {
+					if msg.Type == messages.StreamTypeSessionOpen {
+						f.acceptedOutput()
+						f.cancel()
+					}
+				})
+				f.options.observer = observer
+				return nil
+			},
+			wantErr: schedulerErr,
+		},
+		{
+			name: "timer expiry",
+			setup: func(f *durationTerminalDrainFixture) func() {
+				return func() { f.acceptedOutput(); f.clock.(*durationTestClock).fire() }
+			},
+			wantOutput: string(SessionMaxDurationReason),
+		},
+		{
+			name: "session updated timeout",
+			setup: func(f *durationTerminalDrainFixture) func() {
+				observer := sessiontracewire.NewObserver(sessiontrace.NewObserverOptions{Provider: "test", Model: "test"})
+				observer.SetRequireSessionUpdated(true)
+				observer.ScheduleAudioInputs([]sessiontrace.ScheduledAudioInput{{AfterCompletedTurns: 0, PCM: []byte{1}}})
+				f.options.observer = observer
+				f.options.RequireSessionUpdated = true
+				f.options.SessionUpdatedTimeout = 15 * time.Millisecond
+				return func() { f.acceptedOutput() }
+			},
+			wantErr: ErrSessionScheduledAudioConfigTimeout,
+		},
+	}
+}
+
+func durationTerminalDrainTransportCases(doneErr error) []durationTerminalDrainCase {
+	return []durationTerminalDrainCase{
+		{
+			name: "caller cancellation",
+			setup: func(f *durationTerminalDrainFixture) func() {
+				return func() { f.acceptedOutput(); f.cancel() }
+			},
+			wantErr: context.Canceled,
+		},
+		{
+			name: "transport done without error",
+			setup: func(f *durationTerminalDrainFixture) func() {
+				f.options.Done = f.done
+				f.options.DoneErr = func() error { f.acceptedOutput(); return nil }
+				return func() { close(f.done) }
+			},
+		},
+		{
+			name: "transport done with error",
+			setup: func(f *durationTerminalDrainFixture) func() {
+				f.options.Done = f.done
+				f.options.DoneErr = func() error { f.acceptedOutput(); return doneErr }
+				return func() { close(f.done) }
+			},
+			wantErr: doneErr,
+		},
+	}
+}
+
+func durationTerminalDrainLoopCases(pumpErr, loopErr error) []durationTerminalDrainCase {
+	return []durationTerminalDrainCase{
+		{
+			name: "observed provider completion",
+			setup: func(f *durationTerminalDrainFixture) func() {
+				return func() { f.acceptedOutput(); f.inferencer.session.end() }
+			},
+			wantOutput: "terminal_reason=provider_close",
+		},
+		{
+			name: "RTC pump failure",
+			setup: func(f *durationTerminalDrainFixture) func() {
+				deviceErrors := make(chan error, 1)
+				f.options.rtcDeviceBinding = &testRTCBinding{errors: deviceErrors}
+				return func() { f.acceptedOutput(); deviceErrors <- pumpErr }
+			},
+			wantErr: pumpErr,
+		},
+		{
+			name: "closed delta stream after loop completion",
+			setup: func(f *durationTerminalDrainFixture) func() {
+				return func() {
+					f.acceptedOutput()
+					f.sendProviderMessage(messages.StreamMessage{Type: messages.StreamTypeLoopEnd, Value: messages.NewLoopEndValue()})
+				}
+			},
+		},
+		{
+			name: "loop failure",
+			setup: func(f *durationTerminalDrainFixture) func() {
+				return func() {
+					f.acceptedOutput()
+					f.sendProviderMessage(messages.StreamMessage{Type: messages.StreamTypeError, Value: messages.NewErrorValueWithError(loopErr)})
+				}
+			},
+			wantErr: loopErr,
+		},
+	}
+}
+
+func durationTerminalDrainProviderCases(providerErr, writeErr error) []durationTerminalDrainCase {
+	return []durationTerminalDrainCase{
+		{
+			name: "terminal provider message end",
+			setup: func(f *durationTerminalDrainFixture) func() {
+				return func() {
+					f.acceptedOutput()
+					f.sendProviderMessage(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})})
+				}
+			},
+		},
+		{
+			name: "terminal provider text end",
+			setup: func(f *durationTerminalDrainFixture) func() {
+				return func() {
+					f.acceptedOutput()
+					f.sendProviderMessage(messages.StreamMessage{Type: messages.StreamTypeTextEnd, Role: messages.RoleAssistant, Value: messages.NewTextEndValue()})
+				}
+			},
+		},
+		{
+			name: "terminal provider session close",
+			setup: func(f *durationTerminalDrainFixture) func() {
+				return func() {
+					f.acceptedOutput()
+					f.sendProviderMessage(messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValue("duration-terminal-drain", "provider closed")})
+				}
+			},
+		},
+		{
+			name: "terminal provider error",
+			setup: func(f *durationTerminalDrainFixture) func() {
+				return func() {
+					f.acceptedOutput()
+					f.sendProviderMessage(messages.StreamMessage{Type: messages.StreamTypeError, Value: messages.NewErrorValueWithError(providerErr)})
+				}
+			},
+			wantErr: providerErr,
+		},
+		{
+			name: "message processing output failure",
+			setup: func(f *durationTerminalDrainFixture) func() {
+				// Fail after the accepted chunk: the renderer writes its label first.
+				f.writer = &durationTerminalDrainFailingWriter{target: &f.output, failAfter: 3, err: writeErr}
+				return func() {
+					f.acceptedOutput()
+					f.sendProviderMessage(messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValue("duration-terminal-drain", "provider closed")})
+				}
+			},
+			wantErr: writeErr,
+		},
 	}
 }
 
@@ -557,3 +532,60 @@ func (w *durationTerminalDrainFailingWriter) Write(data []byte) (int, error) {
 var _ messages.SessionInferencer = (*durationTerminalDrainInferencer)(nil)
 var _ messages.Session = (*durationTerminalDrainSession)(nil)
 var _ SessionDurationClock = (*gatedDurationTerminalDrainClock)(nil)
+
+func waitForDurationTextOrError(t *testing.T, writer *durationTestWriter, runErr <-chan error, want string) {
+	t.Helper()
+	timer := time.NewTimer(2 * time.Second)
+	defer timer.Stop()
+	for {
+		select {
+		case got := <-writer.writes:
+			if strings.Contains(got, want) {
+				return
+			}
+		case err := <-runErr:
+			t.Fatalf("duration session ended before %q: %v; output=%q", want, err, writer.String())
+		case <-timer.C:
+			t.Fatalf("timed out waiting for %q; output=%q", want, writer.String())
+		}
+	}
+}
+
+func assertZeroSampleTerminalTranscript(t *testing.T, path string) {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reopen zero-sample transcript artifact: %v", err)
+	}
+	if !bytes.HasSuffix(data, []byte("\n")) {
+		t.Fatal("zero-sample transcript is missing its trailing JSONL newline")
+	}
+	scanner := bufio.NewScanner(bytes.NewReader(data))
+	var eventTypes []messages.StreamMessageType
+	var terminalPayload []byte
+	for scanner.Scan() {
+		record, err := transcript.Decode(scanner.Bytes())
+		if err != nil {
+			t.Fatalf("decode zero-sample transcript record: %v", err)
+		}
+		var event struct {
+			Type messages.StreamMessageType `json:"type"`
+		}
+		if err := json.Unmarshal(record.Payload, &event); err != nil {
+			t.Fatalf("decode zero-sample transcript payload: %v", err)
+		}
+		eventTypes = append(eventTypes, event.Type)
+		if event.Type == messages.StreamTypeSessionClose {
+			terminalPayload = append([]byte(nil), record.Payload...)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatalf("scan zero-sample transcript: %v", err)
+	}
+	if len(eventTypes) != 1 || eventTypes[0] != messages.StreamTypeSessionClose {
+		t.Fatalf("zero-sample transcript event order = %v, want only session_close", eventTypes)
+	}
+	if !bytes.Contains(terminalPayload, []byte("max_duration")) {
+		t.Fatalf("zero-sample terminal record = %s, want max_duration", terminalPayload)
+	}
+}

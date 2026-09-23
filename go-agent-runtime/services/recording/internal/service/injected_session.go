@@ -43,6 +43,10 @@ func (r *injectedSessionCapture) ConnectSession(ctx context.Context) (messages.S
 	r.mu.Lock()
 	r.done = session.Done()
 	r.mu.Unlock()
+	go func(done <-chan struct{}) {
+		<-done
+		_ = r.FlushCapture()
+	}(session.Done())
 	return session, nil
 }
 

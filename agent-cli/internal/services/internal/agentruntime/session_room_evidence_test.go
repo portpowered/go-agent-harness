@@ -16,7 +16,6 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
-	replaywire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	runtimeRoomsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
@@ -238,7 +237,7 @@ func TestRoomEvidence_RedactsJSONStringsWithoutCorruptingDeltas(t *testing.T) {
 			Tools:        []string{},
 		}},
 	}
-	evidence, err := newRoomEvidenceWithLatencyAndReplay(t.TempDir(), manifest, room.DefaultPCM16Format(), []string{secret}, time.Now(), nil, replaywire.NewService())
+	evidence, err := newRoomEvidence(t.TempDir(), manifest, room.DefaultPCM16Format(), []string{secret}, time.Now())
 	if err != nil {
 		t.Fatalf("newRoomEvidence: %v", err)
 	}

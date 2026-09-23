@@ -10,12 +10,36 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeaudioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimerecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
+	recordingwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/wire"
+	runtimereplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
+	replaywire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
+
+func newTestReplayService() runtimereplay.Service { return replaywire.NewService() }
+
+func newTestRecordingService() runtimerecording.Service {
+	return recordingwire.NewService(clock.Real{})
+}
+
+func newTestProviderCaptureService() runtimerecording.ProviderCaptureService {
+	return recordingwire.NewProviderCaptureService(clock.Real{})
+}
+
+func withTestRecordingServices(options SessionRunOptions) SessionRunOptions {
+	options.RecordingService = newTestRecordingService()
+	options.ProviderCaptureService = newTestProviderCaptureService()
+	if options.AudioService == nil {
+		options.AudioService = runtimeaudioiowire.NewService()
+	}
+	return options
+}
 
 func TestPlanSessionRuntime_BrowserToolsUsesUnrecordedLiveRuntime(t *testing.T) {
 	dialer := &stubRuntimeDialer{id: "browser-live"}
@@ -317,7 +341,7 @@ func TestPlanOpenAIRecordRuntimeDeviceInputDefaultsServerVAD(t *testing.T) {
 	inferencer := &turnDetectionRecordingInferencer{scriptedSessionInferencer: &scriptedSessionInferencer{}}
 	var transcription models.InputAudioTranscriptionConfig
 	factory := sessionRuntimeFactory{
-		newDefaultLiveDialer: defaultSessionRuntimeFactory.newDefaultLiveDialer,
+		newDefaultLiveDialer: newDefaultSessionRuntimeFactory().newDefaultLiveDialer,
 		newOpenAISessionWithTools: func(_ config.OpenAIConfig, _ string, _ transport.Dialer, _ []messages.ToolDefinition, policy models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
 			transcription = policy
 			return inferencer, nil

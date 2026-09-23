@@ -2,26 +2,40 @@ package agentruntime
 
 import (
 	"context"
+	"io"
 	"sync"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	duration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 const sessionDurationAdmissionBufferCapacity = 1024
 
+//lint:ignore U1000 package tests exercise the context-free admission seam.
+func runAgentLoopSessionWithDurationClock(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions, maxDuration time.Duration, durationClock SessionDurationClock) error {
+	return runAgentLoopSessionWithDurationAdmissionClock(ctx, out, sessionInferencer, opts, maxDuration, durationClock, nil)
+}
+
 // sessionDurationAdmission is the single admission boundary for provider
 // events. Closing it prevents a provider event from entering the loop after
 // the logical deadline while preserving events accepted before the close.
 type sessionDurationAdmission struct {
-	mu     sync.Mutex
-	closed bool
-	done   chan struct{}
-	once   sync.Once
+	service duration.Service
+	mu      sync.Mutex
+	closed  bool
+	done    chan struct{}
+	once    sync.Once
 }
 
 func newSessionDurationAdmission() *sessionDurationAdmission {
-	return &sessionDurationAdmission{done: make(chan struct{})}
+	return &sessionDurationAdmission{service: durationwire.NewService(), done: make(chan struct{})}
+}
+
+func (a *sessionDurationAdmission) forwards(msg messages.StreamMessage) bool {
+	return a.service.IsDurationForwardMessage(msg)
 }
 
 func (a *sessionDurationAdmission) close() {
@@ -120,29 +134,6 @@ func (i *sessionDurationAdmissionInferencer) waitForClose() {
 	}
 }
 
-func (i *sessionDurationAdmissionInferencer) providerTerminalMessage() (messages.StreamMessage, bool) {
-	if i == nil {
-		return messages.StreamMessage{}, false
-	}
-	i.mu.Lock()
-	session := i.session
-	i.mu.Unlock()
-	if session == nil {
-		return messages.StreamMessage{}, false
-	}
-	return session.providerTerminalMessage()
-}
-
-func (i *sessionDurationAdmissionInferencer) isProviderTerminalMessage(msg messages.StreamMessage) bool {
-	if i == nil {
-		return false
-	}
-	i.mu.Lock()
-	session := i.session
-	i.mu.Unlock()
-	return session != nil && session.isProviderTerminalMessage(msg)
-}
-
 func (i *sessionDurationAdmissionInferencer) closeAdmission() {
 	i.mu.Lock()
 	session := i.session
@@ -237,30 +228,6 @@ func (s *sessionDurationAdmissionSession) TerminalError() error {
 	return terminalSessionError(s.inner)
 }
 
-func (s *sessionDurationAdmissionSession) providerTerminalMessage() (messages.StreamMessage, bool) {
-	s.terminalMu.Lock()
-	defer s.terminalMu.Unlock()
-	if !s.providerTerminalSeen {
-		return messages.StreamMessage{}, false
-	}
-	msg := s.providerTerminal
-	if value, ok := msg.Value.(*messages.SessionCloseValue); ok {
-		clone := *value
-		msg.Value = &clone
-	}
-	return msg, true
-}
-
-func (s *sessionDurationAdmissionSession) isProviderTerminalMessage(msg messages.StreamMessage) bool {
-	value, ok := msg.Value.(*messages.SessionCloseValue)
-	if !ok {
-		return false
-	}
-	s.terminalMu.Lock()
-	defer s.terminalMu.Unlock()
-	return s.providerTerminalSeen && value == s.providerTerminalValue
-}
-
 func (s *sessionDurationAdmissionSession) observeProviderMessage(msg messages.StreamMessage) {
 	if msg.Type != messages.StreamTypeSessionClose {
 		return
@@ -321,9 +288,7 @@ func (s *sessionDurationAdmissionSession) drainSourceAfterClose() {
 			return
 		}
 		s.observeProviderMessage(msg)
-		if isDurationForwardMessage(msg) {
-			s.receive.Write(context.Background(), msg)
-		}
+		s.forwardTerminalMessage(msg)
 	}
 }
 
@@ -353,20 +318,23 @@ func (s *sessionDurationAdmissionSession) forward(ctx context.Context) {
 				s.closeDone()
 				return
 			}
-			s.observeProviderMessage(msg)
-			if admissionOpen {
-				if !s.admission.admit(s.receive, msg) {
-					admissionOpen = false
-					if isDurationForwardMessage(msg) {
-						s.receive.Write(context.Background(), msg)
-					}
-				}
-				continue
-			}
-			if isDurationForwardMessage(msg) {
-				s.receive.Write(context.Background(), msg)
-			}
+			admissionOpen = s.forwardSourceMessage(msg, admissionOpen)
 		}
+	}
+}
+
+func (s *sessionDurationAdmissionSession) forwardSourceMessage(msg messages.StreamMessage, admissionOpen bool) bool {
+	s.observeProviderMessage(msg)
+	if admissionOpen && s.admission.admit(s.receive, msg) {
+		return true
+	}
+	s.forwardTerminalMessage(msg)
+	return false
+}
+
+func (s *sessionDurationAdmissionSession) forwardTerminalMessage(msg messages.StreamMessage) {
+	if s.admission.forwards(msg) {
+		s.receive.Write(context.Background(), msg)
 	}
 }
 
@@ -383,18 +351,8 @@ func (s *sessionDurationAdmissionSession) drainSource(source *messages.TypedBuff
 			}
 			admissionOpen = false
 		}
-		if isDurationForwardMessage(msg) {
-			s.receive.Write(context.Background(), msg)
-		}
+		s.forwardTerminalMessage(msg)
 	}
-}
-
-func isDurationShutdownMessage(msg messages.StreamMessage) bool {
-	return msg.Type == messages.StreamTypeSessionClose || isTerminalErrorMessage(msg)
-}
-
-func isDurationForwardMessage(msg messages.StreamMessage) bool {
-	return isDurationShutdownMessage(msg) || msg.Type == messages.StreamTypeError
 }
 
 func (s *sessionDurationAdmissionSession) closeDone() {

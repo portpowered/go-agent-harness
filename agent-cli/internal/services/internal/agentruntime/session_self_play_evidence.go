@@ -1,7 +1,5 @@
 package agentruntime
 
-import "github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
-
 import (
 	"context"
 	"encoding/json"
@@ -16,14 +14,14 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimereplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
-	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
 const (
-	// These paths are part of the Phase 1 evidence bundle contract. They are
-	// relative to SelfPlayRunOptions.OutputDir and contain no user input.
+	// Bundle paths are contract constants relative to SelfPlayRunOptions.OutputDir; none includes user input.
 	SelfPlayAgentAWAVPath          = "agent-a.wav"
 	SelfPlayAgentBWAVPath          = "agent-b.wav"
 	SelfPlayAgentADiagnosticsPath  = "agent-a-diagnostics.jsonl"
@@ -66,6 +64,7 @@ type selfPlaySideEvidence struct {
 	runtimeRecord sessiontrace.RuntimeRecorder
 	diagnosticErr func(error)
 	maxTurns      int
+	replay        runtimereplay.Service
 }
 
 type selfPlayRuntimeEvidence struct {
@@ -151,7 +150,9 @@ func newSelfPlayEvidence(destination string, opts SelfPlayRunOptions, startedAt 
 			persona:  config.persona,
 			runtime:  &selfPlayRuntimeEvidence{},
 			maxTurns: opts.MaxTurns,
+			replay:   opts.replayService,
 		}
+		evidence.sides[index] = side
 		var err error
 		side.audio, err = newSelfPlayWAVRecorder(filepath.Join(destination, config.wavPath), selfPlaySampleRate)
 		if err != nil {
@@ -160,18 +161,15 @@ func newSelfPlayEvidence(destination string, opts SelfPlayRunOptions, startedAt 
 		}
 		side.diagnostics, err = newSelfPlayJSONLWriter(filepath.Join(destination, config.diagnostics))
 		if err != nil {
-			evidence.sides[index] = side
 			evidence.cleanupSetup()
 			return nil, fmt.Errorf("create %s diagnostics evidence: %w", config.id, err)
 		}
 		side.streamDeltas, err = newSelfPlayJSONLWriter(filepath.Join(destination, config.streamDeltas))
 		if err != nil {
-			evidence.sides[index] = side
 			evidence.cleanupSetup()
 			return nil, fmt.Errorf("create %s stream evidence: %w", config.id, err)
 		}
 		side.runtimeRecord = sessiontracewire.NewRuntimeRecorder(side.runtime, opts.clock)
-		evidence.sides[index] = side
 	}
 	return evidence, nil
 }
@@ -183,15 +181,7 @@ func (e *selfPlayEvidence) cleanupSetup() {
 		if side == nil {
 			continue
 		}
-		if side.audio != nil {
-			_ = side.audio.close()
-		}
-		if side.diagnostics != nil {
-			_ = side.diagnostics.close()
-		}
-		if side.streamDeltas != nil {
-			_ = side.streamDeltas.close()
-		}
+		_ = closeSelfPlayEvidenceSide(side)
 		for _, path := range []string{
 			filepath.Join(e.destination, side.id+".wav"),
 			filepath.Join(e.destination, side.id+"-diagnostics.jsonl"),
@@ -201,6 +191,24 @@ func (e *selfPlayEvidence) cleanupSetup() {
 		}
 	}
 }
+
+func closeSelfPlayEvidenceSide(side *selfPlaySideEvidence) error {
+	if side == nil {
+		return nil
+	}
+	var closeErr error
+	if side.audio != nil {
+		closeErr = errors.Join(closeErr, side.audio.close())
+	}
+	if side.diagnostics != nil {
+		closeErr = errors.Join(closeErr, side.diagnostics.close())
+	}
+	if side.streamDeltas != nil {
+		closeErr = errors.Join(closeErr, side.streamDeltas.close())
+	}
+	return closeErr
+}
+
 func (e *selfPlayEvidence) side(index int) *selfPlaySideEvidence {
 	if e == nil || index < 0 || index >= len(e.sides) {
 		return nil
@@ -256,7 +264,10 @@ func (s *selfPlaySideEvidence) observeStreamDelta(msg messages.StreamMessage) er
 	if s == nil || s.streamDeltas == nil {
 		return errors.New("self-play stream sink is not initialized")
 	}
-	payload, err := gwtesting.MarshalStreamMessage(msg)
+	if s.replay == nil {
+		return errors.New("self-play replay service is unavailable")
+	}
+	payload, err := s.replay.EncodeStreamMessage(msg)
 	if err != nil {
 		return fmt.Errorf("marshal stream delta: %w", err)
 	}
@@ -531,18 +542,7 @@ func (e *selfPlayEvidence) finalize(result SelfPlayResult, runErr error, endedAt
 	e.finalizeOnce.Do(func() {
 		var closeErr error
 		for _, side := range e.sides {
-			if side == nil {
-				continue
-			}
-			if side.audio != nil {
-				closeErr = errors.Join(closeErr, side.audio.close())
-			}
-			if side.diagnostics != nil {
-				closeErr = errors.Join(closeErr, side.diagnostics.close())
-			}
-			if side.streamDeltas != nil {
-				closeErr = errors.Join(closeErr, side.streamDeltas.close())
-			}
+			closeErr = errors.Join(closeErr, closeSelfPlayEvidenceSide(side))
 		}
 
 		effectiveErr := errors.Join(runErr, e.err(), closeErr)

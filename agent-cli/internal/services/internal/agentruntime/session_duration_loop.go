@@ -15,10 +15,6 @@ import (
 	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 )
 
-//lint:ignore U1000 package tests exercise the context-free admission seam.
-func runAgentLoopSessionWithDurationClock(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions, maxDuration time.Duration, durationClock SessionDurationClock) error {
-	return runAgentLoopSessionWithDurationAdmissionClock(ctx, out, sessionInferencer, opts, maxDuration, durationClock, nil)
-}
 func runAgentLoopSessionWithDurationAdmissionClock(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions, maxDuration time.Duration, durationClock SessionDurationClock, admittedInferencer *sessionDurationAdmissionInferencer) (runErr error) {
 	reporter := opts.terminalReporter
 	ownsReporter := reporter == nil
@@ -145,12 +141,7 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 		if opts.terminalReporter != nil {
 			opts.terminalReporter.MarkDurationExpiry(planned, terminalState.outputState())
 		}
-		sessionErr := observedInferencer.sessionFailure()
-		runtimeErr := admittedInferencer.runtimeError()
-		closeErr := admittedInferencer.closeError()
-		lifecycleErr := sessionDurationLifecycleError(runtimeErr, closeErr, nil)
-		transportErr := sessionTransportError(sessionErr)
-		return resolveSessionDurationFinishError(terminationErr, lifecycleErr, sessionErr, transportErr, runErr, planned, out, artifacts, terminalState, &durationTerminalWritten)
+		return resolveDurationFinishWithCompletion(terminationErr, observedInferencer, admittedInferencer, runErr, planned, out, artifacts, terminalState, &durationTerminalWritten, opts.durationCompletionPublisher)
 	}
 
 	timer := durationClock.NewTimer(maxDuration)

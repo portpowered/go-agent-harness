@@ -48,10 +48,8 @@ func TestRunSessionWithInstructions_SourceMatrix(t *testing.T) {
 		skipWorkspace     bool
 	}{
 		{
-			name: "absent AGENTS.md sends no instructions and creates no file",
-			setup: func(*testing.T, string) string {
-				return ""
-			},
+			name:  "absent AGENTS.md sends no instructions and creates no file",
+			setup: func(*testing.T, string) string { return "" },
 			want: func(t *testing.T, workspaceDir, _ string) string {
 				t.Helper()
 				if _, err := os.Stat(filepath.Join(workspaceDir, workspace.AgentsMDFileName)); !os.IsNotExist(err) {
@@ -68,9 +66,7 @@ func TestRunSessionWithInstructions_SourceMatrix(t *testing.T) {
 				writeFile(t, filepath.Join(workspaceDir, workspace.AgentsMDFileName), agentsInstructionsMarker)
 				return ""
 			},
-			want: func(_ *testing.T, _, _ string) string {
-				return agentsInstructionsMarker
-			},
+			want:            func(_ *testing.T, _, _ string) string { return agentsInstructionsMarker },
 			wantConfigCount: 1,
 		},
 		{
@@ -80,9 +76,7 @@ func TestRunSessionWithInstructions_SourceMatrix(t *testing.T) {
 				writeFile(t, filepath.Join(workspaceDir, workspace.AgentsMDFileName), "")
 				return ""
 			},
-			want: func(_ *testing.T, _, _ string) string {
-				return ""
-			},
+			want:            func(_ *testing.T, _, _ string) string { return "" },
 			wantConfigCount: 0,
 		},
 		{
@@ -119,9 +113,7 @@ func TestRunSessionWithInstructions_SourceMatrix(t *testing.T) {
 				writeFile(t, promptPath, fileInstructionsMarker)
 				return promptPath
 			},
-			want: func(_ *testing.T, _, _ string) string {
-				return fileInstructionsMarker
-			},
+			want:            func(_ *testing.T, _, _ string) string { return fileInstructionsMarker },
 			wantConfigCount: 1,
 		},
 		{
@@ -131,9 +123,7 @@ func TestRunSessionWithInstructions_SourceMatrix(t *testing.T) {
 				writeFile(t, filepath.Join(workspaceDir, workspace.AgentsMDFileName), agentsInstructionsMarker)
 				return rawInstructionsMarker
 			},
-			want: func(_ *testing.T, _, _ string) string {
-				return rawInstructionsMarker
-			},
+			want:            func(_ *testing.T, _, _ string) string { return rawInstructionsMarker },
 			wantConfigCount: 1,
 		},
 		{
@@ -143,9 +133,7 @@ func TestRunSessionWithInstructions_SourceMatrix(t *testing.T) {
 				writeFile(t, filepath.Join(workspaceDir, workspace.AgentsMDFileName), agentsInstructionsMarker)
 				return filepath.Join(workspaceDir, "missing-prompt.md")
 			},
-			want: func(_ *testing.T, _, explicit string) string {
-				return explicit
-			},
+			want:            func(_ *testing.T, _, explicit string) string { return explicit },
 			wantConfigCount: 1,
 		},
 	}

@@ -61,7 +61,11 @@ func textSeed(seed public.TextSeed) SessionTextSeed {
 // the service-owned live host. The legacy dispatcher remains for text and
 // replay compatibility, but it must not retain a second file/device audio
 // implementation after C189.
-var ErrLegacyAudioRuntimeRetired = errors.New("legacy session audio runtime is retired; use the service-owned live session")
+type legacyAudioRuntimeError string
+
+func (e legacyAudioRuntimeError) Error() string { return string(e) }
+
+const ErrLegacyAudioRuntimeRetired legacyAudioRuntimeError = "legacy session audio runtime is retired; use the service-owned live session"
 
 func (d *Dispatcher) Run(ctx context.Context, out io.Writer, request public.Request) (runErr error) {
 	if d == nil || d.deps.Clock == nil {
@@ -131,6 +135,7 @@ func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request)
 		CancellationIntent:   request.CancellationIntent,
 		ToolExecutionTimeout: request.ToolExecutionTimeout, Clock: d.deps.Clock,
 		AudioService:    d.deps.AudioService,
+		MetricsRecorder: request.MetricsRecorder,
 		RuntimeObserver: d.deps.RuntimeObserver, Diagnostics: request.Diagnostics, ToolDiagnostics: request.ToolDiagnostics,
 		DeviceService: d.deps.DeviceService,
 		Observability: d.deps.Observability, StreamObserver: request.StreamObserver,
@@ -175,25 +180,8 @@ func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request)
 	if request.LoadedConfig != nil {
 		options.LoadedConfig = applyToolVisibility(request.LoadedConfig, request.ComputerUse, request.ExperimentalTools, request.NoTerminalTools)
 	}
-	if d.deps.ToolService != nil {
-		capabilities, err := d.resolveSessionToolCapabilities(request, options.LoadedConfig)
-		if err != nil {
-			return SessionRunOptions{}, err
-		}
-		if capabilities.Initialize != nil {
-			if err := capabilities.Initialize(ctx); err != nil {
-				if capabilities.Close != nil {
-					_ = capabilities.Close()
-				}
-				return SessionRunOptions{}, fmt.Errorf("initialize session tools: %w", err)
-			}
-		}
-		options.ToolExecutor = capabilities.Executor
-		options.ToolDefinitions = append([]messages.ToolDefinition(nil), capabilities.Definitions...)
-		options.ToolDefinitionBase = append([]messages.ToolDefinition(nil), capabilities.Definitions...)
-		options.RefreshToolDefinitions = capabilities.RefreshDefinitionsWithError
-		options.BrowserWatch, options.BrowserEventWatch = capabilities.BrowserWatch, capabilities.BrowserEventWatch
-		options.BrowserCapabilityState, options.CapabilityClose = capabilities.BrowserCapabilityState, capabilities.Close
+	if err := d.initializeSessionTools(ctx, request, &options); err != nil {
+		return SessionRunOptions{}, err
 	}
 	policy, err := cliTools.ResolveFilesystemPolicy(request.WorkDir, request.AllowPaths...)
 	if err != nil {
@@ -207,6 +195,31 @@ func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request)
 		options.LoadedConfig = &copyCfg
 	}
 	return options, nil
+}
+
+func (d *Dispatcher) initializeSessionTools(ctx context.Context, request public.Request, options *SessionRunOptions) error {
+	if d.deps.ToolService == nil {
+		return nil
+	}
+	capabilities, err := d.resolveSessionToolCapabilities(request, options.LoadedConfig)
+	if err != nil {
+		return err
+	}
+	if capabilities.Initialize != nil {
+		if err := capabilities.Initialize(ctx); err != nil {
+			if capabilities.Close != nil {
+				_ = capabilities.Close()
+			}
+			return fmt.Errorf("initialize session tools: %w", err)
+		}
+	}
+	options.ToolExecutor = capabilities.Executor
+	options.ToolDefinitions = append([]messages.ToolDefinition(nil), capabilities.Definitions...)
+	options.ToolDefinitionBase = append([]messages.ToolDefinition(nil), capabilities.Definitions...)
+	options.RefreshToolDefinitions = capabilities.RefreshDefinitionsWithError
+	options.BrowserWatch, options.BrowserEventWatch = capabilities.BrowserWatch, capabilities.BrowserEventWatch
+	options.BrowserCapabilityState, options.CapabilityClose = capabilities.BrowserCapabilityState, capabilities.Close
+	return nil
 }
 
 // resolveSessionToolCapabilities applies request-scoped filesystem values to

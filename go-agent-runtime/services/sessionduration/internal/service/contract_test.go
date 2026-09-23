@@ -7,100 +7,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
-
-type contractSession struct {
-	receive       *messages.TypedBuffer[messages.StreamMessage]
-	done          chan struct{}
-	closeOnce     sync.Once
-	closeErr      error
-	responseSent  bool
-	messageSent   bool
-	withoutSent   bool
-	responseKnown bool
-	terminalErr   error
-}
-
-func newContractSession() *contractSession {
-	return &contractSession{receive: messages.NewTypedBuffer[messages.StreamMessage](8), done: make(chan struct{}), responseKnown: true}
-}
-
-func (s *contractSession) Send(context.Context, messages.StreamMessage) bool { return true }
-func (s *contractSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
-	return s.receive
-}
-func (s *contractSession) Done() <-chan struct{} { return s.done }
-func (s *contractSession) Close() error {
-	s.closeOnce.Do(func() { close(s.done) })
-	return s.closeErr
-}
-func (s *contractSession) RequestResponse(context.Context) messages.SessionSendOutcome {
-	s.responseSent = true
-	return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
-}
-func (s *contractSession) SupportsResponseRequests() bool { return s.responseKnown }
-func (s *contractSession) SendMessage(context.Context, messages.Message) bool {
-	s.messageSent = true
-	return true
-}
-func (s *contractSession) SendMessageWithoutResponse(context.Context, messages.Message) bool {
-	s.withoutSent = true
-	return true
-}
-func (s *contractSession) SupportsCompleteMessages() bool                { return true }
-func (s *contractSession) SupportsCompleteMessagesWithoutResponse() bool { return true }
-func (s *contractSession) RTCMedia() (audio.MediaEndpoints, bool) {
-	return audio.MediaEndpoints{}, true
-}
-func (s *contractSession) TerminalError() error { return s.terminalErr }
-
-type contractInferencer struct {
-	session *contractSession
-	err     error
-}
-
-func (i contractInferencer) ConnectSession(context.Context) (messages.Session, error) {
-	return i.session, i.err
-}
-
-func newConnectedAdmission(t *testing.T) (*AdmissionInferencer, *AdmissionSession, *contractSession) {
-	t.Helper()
-	inner := newContractSession()
-	inferencer := NewAdmissionInferencer(contractInferencer{session: inner}, nil, nil)
-	connected, err := inferencer.ConnectSession(context.Background())
-	if err != nil {
-		t.Fatalf("ConnectSession: %v", err)
-	}
-	wrapped, ok := connected.(*AdmissionSession)
-	if !ok {
-		t.Fatalf("wrapped session = %T, want *AdmissionSession", connected)
-	}
-	return inferencer, wrapped, inner
-}
-
-func closeAdmissionForTest(t *testing.T, inferencer *AdmissionInferencer, wrapped *AdmissionSession) {
-	t.Helper()
-	if err := wrapped.Close(); err != nil {
-		t.Fatalf("Close: %v", err)
-	}
-	select {
-	case <-wrapped.Done():
-	case <-time.After(time.Second):
-		t.Fatal("wrapped session did not close its done channel")
-	}
-	inferencer.WaitForClose()
-	if inferencer.CloseError() != nil || inferencer.RuntimeError() != nil {
-		t.Fatalf("unexpected admission errors: close=%v runtime=%v", inferencer.CloseError(), inferencer.RuntimeError())
-	}
-}
 
 func TestAdmissionContractForwardsCapabilities(t *testing.T) {
 	inferencer, wrapped, inner := newConnectedAdmission(t)
@@ -202,6 +115,36 @@ func (testNoopTimer) C() <-chan time.Time      { return make(chan time.Time) }
 func (testNoopTimer) Stop() bool               { return true }
 func (testNoopTimer) Reset(time.Duration) bool { return true }
 
+type artifactAudioSink struct {
+	samples  []int16
+	flushErr error
+	closeErr error
+}
+
+func (s *artifactAudioSink) WriteSamples(samples []int16) error {
+	s.samples = append(s.samples, samples...)
+	return nil
+}
+func (s *artifactAudioSink) Flush() error { return s.flushErr }
+func (s *artifactAudioSink) Close() error { return s.closeErr }
+
+type artifactTranscriptSink struct {
+	records  []transcript.Record
+	flushErr error
+	closeErr error
+	writeErr error
+}
+
+func (s *artifactTranscriptSink) Write(record transcript.Record) error {
+	if s.writeErr != nil {
+		return s.writeErr
+	}
+	s.records = append(s.records, record)
+	return nil
+}
+func (s *artifactTranscriptSink) Flush() error { return s.flushErr }
+func (s *artifactTranscriptSink) Close() error { return s.closeErr }
+
 func TestBeginRejectsUnavailableSchedulersAndNegativePolicyValues(t *testing.T) {
 	if controller, err := New().Begin(sessionduration.Options{MaxDuration: time.Second}); controller != nil || !errors.Is(err, sessionduration.ErrSchedulerUnavailable) {
 		t.Fatalf("Begin without scheduler = controller:%v err:%v", controller, err)
@@ -239,36 +182,6 @@ func TestControllerReportsUnavailableLivenessScheduler(t *testing.T) {
 		t.Fatalf("Finalize: %v", err)
 	}
 }
-
-type artifactAudioSink struct {
-	samples  []int16
-	flushErr error
-	closeErr error
-}
-
-func (s *artifactAudioSink) WriteSamples(samples []int16) error {
-	s.samples = append(s.samples, samples...)
-	return nil
-}
-func (s *artifactAudioSink) Flush() error { return s.flushErr }
-func (s *artifactAudioSink) Close() error { return s.closeErr }
-
-type artifactTranscriptSink struct {
-	records  []transcript.Record
-	flushErr error
-	closeErr error
-	writeErr error
-}
-
-func (s *artifactTranscriptSink) Write(record transcript.Record) error {
-	if s.writeErr != nil {
-		return s.writeErr
-	}
-	s.records = append(s.records, record)
-	return nil
-}
-func (s *artifactTranscriptSink) Flush() error { return s.flushErr }
-func (s *artifactTranscriptSink) Close() error { return s.closeErr }
 
 func TestArtifactsPreserveAcceptedAudioTranscriptAndLifecycleErrors(t *testing.T) {
 	audioErr := errors.New("audio flush")
@@ -377,77 +290,6 @@ func TestArtifactContextPreparationAndTerminalRecording(t *testing.T) {
 		t.Fatalf("terminal lifecycle Close: %v", err)
 	}
 }
-
-type terminalRecorderProbe struct {
-	summaries []transcript.RecordingTerminalSummary
-}
-
-func (r *terminalRecorderProbe) RecordTerminalSummary(summary transcript.RecordingTerminalSummary) error {
-	r.summaries = append(r.summaries, summary)
-	return nil
-}
-
-type runLoopProbe struct {
-	deltas *messages.TypedBuffer[messages.StreamMessage]
-	ran    chan struct{}
-	close  sync.Once
-}
-
-func newRunLoopProbe() *runLoopProbe {
-	return &runLoopProbe{deltas: messages.NewTypedBuffer[messages.StreamMessage](4), ran: make(chan struct{})}
-}
-
-func (l *runLoopProbe) Run(context.Context) error {
-	l.close.Do(func() { close(l.ran) })
-	return nil
-}
-func (l *runLoopProbe) Deltas() *messages.TypedBuffer[messages.StreamMessage] { return l.deltas }
-func (l *runLoopProbe) Send(context.Context, []messages.Message) error        { return nil }
-
-type gatedRunLoopProbe struct {
-	deltas *messages.TypedBuffer[messages.StreamMessage]
-	sent   bool
-}
-
-func (l *gatedRunLoopProbe) Run(ctx context.Context) error {
-	if !l.deltas.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("hello")}) {
-		return errors.New("could not publish loop delta")
-	}
-	<-ctx.Done()
-	return ctx.Err()
-}
-func (l *gatedRunLoopProbe) Deltas() *messages.TypedBuffer[messages.StreamMessage] { return l.deltas }
-func (l *gatedRunLoopProbe) Send(context.Context, []messages.Message) error {
-	l.sent = true
-	return nil
-}
-
-type idleRunLoopProbe struct {
-	deltas *messages.TypedBuffer[messages.StreamMessage]
-}
-
-func (l *idleRunLoopProbe) Run(ctx context.Context) error {
-	<-ctx.Done()
-	return ctx.Err()
-}
-func (l *idleRunLoopProbe) Deltas() *messages.TypedBuffer[messages.StreamMessage] { return l.deltas }
-func (l *idleRunLoopProbe) Send(context.Context, []messages.Message) error        { return nil }
-
-type contextWaitingRunLoopProbe struct {
-	deltas  *messages.TypedBuffer[messages.StreamMessage]
-	started chan struct{}
-	once    sync.Once
-}
-
-func (l *contextWaitingRunLoopProbe) Run(ctx context.Context) error {
-	l.once.Do(func() { close(l.started) })
-	<-ctx.Done()
-	return ctx.Err()
-}
-func (l *contextWaitingRunLoopProbe) Deltas() *messages.TypedBuffer[messages.StreamMessage] {
-	return l.deltas
-}
-func (l *contextWaitingRunLoopProbe) Send(context.Context, []messages.Message) error { return nil }
 
 func TestRunPublishesAdmittedMessageAndPerformsPlannedBoundedStop(t *testing.T) {
 	loop := &gatedRunLoopProbe{deltas: messages.NewTypedBuffer[messages.StreamMessage](1)}
@@ -643,6 +485,62 @@ func TestRunRejectsInvalidRequestsBeforeStartingResources(t *testing.T) {
 	}
 }
 
-func newRunLoopProbeWithNilDeltas() *runLoopProbe {
-	return &runLoopProbe{ran: make(chan struct{})}
+type retryRunLoopProbe struct {
+	deltas *messages.TypedBuffer[messages.StreamMessage]
+	sent   chan messages.StreamMessage
 }
+
+func (l *retryRunLoopProbe) Run(ctx context.Context) error {
+	terminal := messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: &messages.MessageEndValue{Status: "failed", ProviderErrorCode: "rate_limit_exceeded", ProviderErrorMessage: "retry after 1s"}}
+	if !l.deltas.Write(ctx, terminal) {
+		return ctx.Err()
+	}
+	<-ctx.Done()
+	return ctx.Err()
+}
+func (l *retryRunLoopProbe) Deltas() *messages.TypedBuffer[messages.StreamMessage] { return l.deltas }
+func (l *retryRunLoopProbe) Send(context.Context, []messages.Message) error        { return nil }
+func (l *retryRunLoopProbe) SendSessionEvent(ctx context.Context, msg messages.StreamMessage) error {
+	select {
+	case l.sent <- msg:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+type retryRunLoopWithoutSessionEvents struct {
+	deltas *messages.TypedBuffer[messages.StreamMessage]
+}
+
+func (l *retryRunLoopWithoutSessionEvents) Run(ctx context.Context) error {
+	terminal := messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: &messages.MessageEndValue{Status: "failed", ProviderErrorCode: "rate_limit_exceeded"}}
+	if !l.deltas.Write(ctx, terminal) {
+		return ctx.Err()
+	}
+	<-ctx.Done()
+	return ctx.Err()
+}
+func (l *retryRunLoopWithoutSessionEvents) Deltas() *messages.TypedBuffer[messages.StreamMessage] {
+	return l.deltas
+}
+func (l *retryRunLoopWithoutSessionEvents) Send(context.Context, []messages.Message) error {
+	return nil
+}
+
+type triggerScheduler struct {
+	created chan *triggerTimer
+}
+
+type triggerTimer struct {
+	events chan time.Time
+}
+
+func (s *triggerScheduler) NewTimer(time.Duration) sessionduration.Timer {
+	timer := &triggerTimer{events: make(chan time.Time, 1)}
+	s.created <- timer
+	return timer
+}
+func (t *triggerTimer) C() <-chan time.Time      { return t.events }
+func (t *triggerTimer) Stop() bool               { return false }
+func (t *triggerTimer) Reset(time.Duration) bool { return true }

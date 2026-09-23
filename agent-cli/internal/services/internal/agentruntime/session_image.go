@@ -212,7 +212,7 @@ func runSessionImagePlan(ctx context.Context, out io.Writer, plan sessionRuntime
 			admission := durationService.NewEventAdmission()
 			admittedInferencer := durationService.NewAdmissionInferencer(inner, admission, make(chan struct{}))
 			prepared.inferencer = admittedInferencer
-			err := runSessionDurationPlanWithAdmission(runCtx, output, prepared, opts.MaxDuration, nil, admittedInferencer)
+			err := runSessionDurationPlanWithAdmission(runCtx, output, prepared, opts.MaxDuration, nil, nil)
 			return errors.Join(err, output.errorValue())
 		})
 	}

@@ -15,7 +15,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	runtimeSessionWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
-	duration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 )
 
@@ -131,11 +130,7 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 				if admittedInner != nil {
 					prepared.inferencer = durationService.NewAdmissionInferencer(admittedInner, admission, make(chan struct{}))
 				}
-				var admittedInferencer duration.AdmissionInferencer
-				if admitted, ok := prepared.inferencer.(duration.AdmissionInferencer); ok {
-					admittedInferencer = admitted
-				}
-				runErr = runSessionDurationPlanWithAdmission(runCtx, output, prepared, maxDuration, nil, admittedInferencer)
+				runErr = runSessionDurationPlanWithAdmission(runCtx, output, prepared, maxDuration, nil, nil)
 				return errors.Join(runErr, output.errorValue())
 			})
 		}

@@ -13,7 +13,6 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	runtimerecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -111,64 +110,19 @@ func planWebRTCSessionRuntime(opts SessionRunOptions, selection SessionRuntimeSe
 
 	if opts.SessionInferencer != nil {
 		inner = opts.SessionInferencer
-	} else if strings.EqualFold(provider, sessionProviderOpenAI) {
-		sessionCfg, resolveErr := resolveOpenAIRealtimeSessionConfig(opts)
-		if resolveErr != nil {
-			return closeOnPlanError(resolveErr)
-		}
-		provider = sessionProviderOpenAI
-		model = sessionCfg.Model
-		mode = sessionRuntimeModeRecordOpenAI
-		dialer := &sessionRTCLazyDialer{runtime: runtime}
-		inputAudioTranscription, resolveErr := resolveSessionTranscription(opts, provider, opts.RTCBinding.HasInput())
-		if resolveErr != nil {
-			return closeOnPlanError(resolveErr)
-		}
-		build := func(recordingDialer transport.Dialer) (messages.SessionInferencer, error) {
-			return factory.newOpenAISessionInferencerForTools(sessionCfg, opts.Voice, recordingDialer, opts.ToolDefinitions, false, inputAudioTranscription)
-		}
-		capture, captureErr := opts.RecordingService.RecordProviderSession(opts.ProviderCaptureService, runtimerecording.ProviderSessionOptions{
-			Destination: opts.RecordPath, Provider: provider, Model: model,
-			Dialer: observeSessionWire(dialer, opts), Clock: opts.Clock, Build: build,
-		})
-		if captureErr != nil {
-			return closeOnPlanError(wrapSessionRTCRuntimeError("create recording transport", captureErr))
-		}
-		inner = capture
-		flushCapture = capture.FlushCapture
-		flushCaptureTo = capture.FlushToFile
-		announce = fmt.Sprintf("Starting OpenAI realtime session recording to %s", opts.RecordPath)
-		finalize = func(_ context.Context, out io.Writer) error {
-			_, writeErr := fmt.Fprintf(out, "Wrote session capture to %s\n", opts.RecordPath)
-			return writeErr
-		}
 	} else {
-		sessionCfg, resolveErr := resolveGrokSessionConfig(opts)
-		if resolveErr != nil {
-			return closeOnPlanError(resolveErr)
+		var recording sessionRTCProviderRecording
+		if strings.EqualFold(provider, sessionProviderOpenAI) {
+			recording, err = planOpenAIRTCRecording(opts, factory, runtime)
+		} else {
+			recording, err = planGrokRTCRecording(opts, factory, runtime)
 		}
-		provider = sessionProviderGrok
-		model = sessionCfg.Model
-		mode = sessionRuntimeModeRecordGrok
-		dialer := &sessionRTCLazyDialer{runtime: runtime}
-		build := func(recordingDialer transport.Dialer) (messages.SessionInferencer, error) {
-			return factory.newGrokSessionInferencerForTools(sessionCfg, recordingDialer, opts.ToolDefinitions)
+		if err != nil {
+			return closeOnPlanError(wrapSessionRTCRuntimeError("create recording transport", err))
 		}
-		capture, captureErr := opts.RecordingService.RecordProviderSession(opts.ProviderCaptureService, runtimerecording.ProviderSessionOptions{
-			Destination: opts.RecordPath, Provider: provider, Model: model,
-			Dialer: observeSessionWire(dialer, opts), Clock: opts.Clock, Build: build,
-		})
-		if captureErr != nil {
-			return closeOnPlanError(wrapSessionRTCRuntimeError("create recording transport", captureErr))
-		}
-		inner = capture
-		flushCapture = capture.FlushCapture
-		flushCaptureTo = capture.FlushToFile
-		announce = fmt.Sprintf("Starting Grok session recording to %s", opts.RecordPath)
-		finalize = func(_ context.Context, out io.Writer) error {
-			_, writeErr := fmt.Fprintf(out, "Wrote session capture to %s\n", opts.RecordPath)
-			return writeErr
-		}
+		provider, model, mode = recording.provider, recording.model, recording.mode
+		inner, flushCapture, flushCaptureTo = recording.inferencer, recording.flush, recording.flushTo
+		announce, finalize = recording.announce, recording.finalize
 	}
 	if inner == nil {
 		return closeOnPlanError(wrapSessionRTCRuntimeError("create provider session", ErrSessionRTCRuntimeUnavailable))
@@ -192,6 +146,24 @@ func planWebRTCSessionRuntime(opts SessionRunOptions, selection SessionRuntimeSe
 		rtcRuntime:   runtime,
 		closeSession: rtcInferencer.CloseSession,
 	}, nil
+}
+
+type sessionRTCProviderRecording struct {
+	provider   string
+	model      string
+	mode       sessionRuntimeMode
+	inferencer messages.SessionInferencer
+	flush      func() error
+	flushTo    func(string) error
+	announce   string
+	finalize   func(context.Context, io.Writer) error
+}
+
+func sessionCaptureFinalizer(path string) func(context.Context, io.Writer) error {
+	return func(_ context.Context, out io.Writer) error {
+		_, err := fmt.Fprintf(out, "Wrote session capture to %s\n", path)
+		return err
+	}
 }
 
 // SessionRTCRuntimeError adds bounded phase context while preserving the

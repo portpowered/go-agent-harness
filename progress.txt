@@ -4332,3 +4332,57 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   needs a source/baseline reconciliation against fetched `origin/main` that
   preserves the deletion-only architecture policy, followed by a complete
   exact-head preflight and only then the normal same-task handoff.
+
+# C276 duration-recording integration repair checkpoint — 2026-09-23
+
+- Continued on the same admitted task and branch at `1d43fbd6beafece9215a53432b1f0471cc9e1df1`; the worktree remains dirty with the inherited C276 candidate and this turn's source repairs. Required C217/C234/C270/C274/C278 ancestry and fetched `origin/main` are ancestors of the candidate. No host checkout, predecessor, or peer worktree was modified.
+- Repaired the existing CLI duration-recording regression through public service boundaries. The duration runner now forwards accepted assistant stream observations to the recording service, publishes its final bounded completion after drain, and supplies the resolved output rate so partial PCM is persisted. The recording service classifies observed partial output as partial. No tests were added or moved.
+- Focused checks passed: recording/replay normal `203` tests across `13` packages; duration/WebMCP CLI `6` tests; runtime recording/replay-focused `122` tests; recording/replay race `203`; and duration/WebMCP CLI race `5`. The targeted duration bundle now verifies terminal reason `max_duration`, partial output, transcript, and PCM audio.
+- Exact legacy audit: all seven planned recording/replay production files and six checkpoint-only replacement files are absent. The only adapters are `livehost/recording_adapter.go` (30 lines) and `livehost/replay_adapter.go` (33 lines), total `63`; `git diff --check` passes. The full browser-recording byte-identity check could not be run because that path is absent from both this tree and fetched `origin/main`.
+- `make verify-architecture` remains red at the first size-gate prerequisite: `62` issues across `224` packages, including baseline drift in room/probe/runtime files, an `agentruntime` package increase (`128 > 126`), duration/runtime complexity and line budgets, and oversized sessionduration source/tests. No baseline was raised or regenerated. `make prepush`, push, PR creation/update, and hosted CI were not run because the exact-candidate architecture prerequisite remains red.
+- Next action: reconcile the `62` architecture findings by source reductions/splitting within existing ownership and deletion-only baseline cleanup, without waivers or arbitrary baseline growth; rerun `make verify-architecture`, then the complete C276-05/06 exact-candidate preflight on a clean committed SHA before any push or handoff.
+
+# C276 architecture repair checkpoint — 2026-09-23
+
+- Continued the same admitted task, branch, and isolated worktree at
+  `1d43fbd6beafece9215a53432b1f0471cc9e1df1`; admission and `prd.branchName`
+  were previously verified. The existing tree remains dirty with preserved
+  task/predecessor changes; no push, PR update, host checkout mutation, or
+  hosted CI polling occurred.
+- `rtk make verify-architecture` reduced from 62 to 39 findings, then failed
+  on exact tree state. Remaining findings are source baseline drift in the
+  probe and agentruntime files, five transport/CLI source functions, several
+  related tests, and a hard 607/600 line limit in
+  `session_instruction_composition_test.go`; the latest complete report is
+  RTK tee `1790160762_make_verify-architecture.log`.
+- Next action: continue reducing the remaining source/test growth without
+  raising or regenerating baselines, run the architecture gate again, then
+  execute the complete C276-05/06 preflight on the exact clean candidate before
+  any push or handoff.
+
+
+# C276 architecture gate checkpoint — 2026-09-23 (recovered)
+
+- Re-verified Factory admission for the existing C276 task and confirmed
+  `prd.json.branchName` matches this isolated worktree. The canonical session has
+  no concluded C276 review Work; findings listed for other verticals are not
+  applicable to this task.
+- Fetched `origin/main`; startup, planning main, C270, C234, both C217 commits,
+  and current `origin/main` are ancestors of this candidate. No host checkout or
+  predecessor/peer worktree was changed.
+- `rtk proxy make verify-architecture` now passes: 224 packages, 1,977 files,
+  and 29,167 functions checked; its generated Wire steps completed. Reductions
+  were recorded only as exact lower measurements, and the stale complexity
+  entry was removed.
+- Earlier focused evidence remains: the complete agentruntime package tests
+  passed; recording/replay functional and race suites and the C276 duration/WebMCP
+  CLI focused tests passed. These are checkpoints, not the final exact-head gate.
+- The replay public-integrity test candidate was checked against architecture
+  constraints; retaining it here requires a forbidden Wire/private import, and
+  moving or duplicating it would violate the task's no-moved-tests instruction.
+  Its restoration was reverted. No new test file was added.
+- No PR or push exists. Next: checkpoint the complete candidate in a commit, then
+  run every C276-01 through C276-06 local functional, race, e2e, Wire, embed,
+  hermetic, integration, regression, architecture, and `make prepush` command on
+  that exact unchanged commit; repair any local failure before the same-task
+  handoff.

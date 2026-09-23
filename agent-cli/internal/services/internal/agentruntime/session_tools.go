@@ -87,10 +87,7 @@ var (
 	ErrSessionToolTimeout = errors.New("tool execution timed out")
 )
 
-// sessionToolExecutor is the session boundary around the executor composed by
-// the wire graph. It deliberately does not inspect or duplicate tool
-// definitions: the wrapped executor remains the owner of tool lookup and
-// argument validation.
+// sessionToolExecutor wraps the composed executor without owning lookup or validation.
 type sessionToolExecutor struct {
 	inner              messages.ToolExecutor
 	timeout            time.Duration
@@ -102,31 +99,15 @@ type sessionToolExecutor struct {
 
 var _ messages.ToolExecutor = (*sessionToolExecutor)(nil)
 
-// newSessionToolExecutor retains the legacy single-deadline adapter used by
-// non-policy callers. The duplex session path uses the interactive policy
-// constructor below.
-//
-// The duplex loop construction seam passes the returned executor to
-// agentloop.WithToolExecutor. Keeping the adapter at this boundary makes an
-// individual tool failure a correlated tool result instead of a fatal loop
-// error, so one bad call never terminates an ongoing voice session.
-//
-// Execution contract: inner executors must honor context cancellation
-// cooperatively; Go cannot terminate a goroutine that ignores its context. The
-// adapter guarantees only that the session itself continues after the deadline
-// and that a cooperative worker exits promptly once cancellation fires.
+// newSessionToolExecutor keeps failures correlated for non-policy callers;
+// workers must honor context cancellation because Go cannot stop a goroutine.
 func newSessionToolExecutor(inner messages.ToolExecutor) *sessionToolExecutor {
-	return newSessionToolExecutorWithTimeoutAndObserver(inner, 0, nil)
+	return newSessionToolExecutorWithTimeoutAndObserverAndCancellationIntent(inner, 0, nil, nil)
 }
 
-// newSessionToolExecutorWithTimeout is the deterministic seam for tests; a
-// non-positive timeout selects the session default.
+// newSessionToolExecutorWithTimeout is the test seam; non-positive uses default.
 func newSessionToolExecutorWithTimeout(inner messages.ToolExecutor, timeout time.Duration) *sessionToolExecutor {
-	return newSessionToolExecutorWithTimeoutAndObserver(inner, timeout, nil)
-}
-
-func newSessionToolExecutorWithTimeoutAndObserver(inner messages.ToolExecutor, timeout time.Duration, observer sessionToolLifecycleObserver) *sessionToolExecutor {
-	return newSessionToolExecutorWithTimeoutAndObserverAndCancellationIntent(inner, timeout, observer, nil)
+	return newSessionToolExecutorWithTimeoutAndObserverAndCancellationIntent(inner, timeout, nil, nil)
 }
 
 func newSessionToolExecutorWithTimeoutAndObserverAndCancellationIntent(
@@ -399,6 +380,17 @@ func invokeSessionTool(ctx context.Context, executor messages.ToolExecutor, call
 		}
 	}()
 	return executor.Execute(ctx, call)
+}
+
+func sessionToolContextFailure(err error) error {
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		return ErrSessionToolTimeout
+	case errors.Is(err, context.Canceled):
+		return errors.New("tool execution canceled")
+	default:
+		return fmt.Errorf("tool execution stopped: %w", err)
+	}
 }
 
 func sessionToolFailure(call messages.ToolCall, err error) messages.ToolCallResponse {

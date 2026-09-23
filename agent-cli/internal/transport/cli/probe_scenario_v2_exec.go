@@ -359,6 +359,7 @@ func newProbeScenarioV2Executor(scenario probe.ScenarioV2, replayService runtime
 	executor.clock = testkit.NewFakeClock(0)
 	executor.ids = testkit.NewDeterministicIDSource("probe")
 	if scenario.ProviderFixture != "" {
+		executor.providerPath = scenario.ProviderFixturePath
 		if replayService == nil {
 			return executor, errors.New("replay service is required for provider fixtures")
 		}
@@ -424,9 +425,6 @@ func newProbeScenarioV2Executor(scenario probe.ScenarioV2, replayService runtime
 			ToolRefFactory: webmcp.StableToolRef,
 		})
 	}
-	if scenario.ProviderFixture != "" {
-		executor.providerPath = scenario.ProviderFixturePath
-	}
 	executor.recorder, err = testkit.NewRecorder(&executor.eventOutput,
 		testkit.WithClock(executor.clock),
 		testkit.WithIDSource(executor.ids),
@@ -458,18 +456,12 @@ func (e *probeScenarioV2Executor) execute(ctx context.Context) error {
 	}
 	if e.providerPath != "" {
 		providerScenario := scenarioV2ProviderScenario(e.scenario, e.providerSteps)
-		request := runtimeReplay.CaptureProbeRequest{
-			SourcePath: e.providerPath,
-		}
-		report, err := e.replayService.AnalyzeProbe(ctx, request)
+		request := runtimeReplay.CaptureProbeRequest{SourcePath: e.providerPath}
+		report, observation, err := analyzeCaptureProbe(ctx, e.replayService, providerScenario, request)
 		if err != nil {
 			return fmt.Errorf("replay provider fixture %q: %w", e.scenario.ProviderFixture, err)
 		}
 		e.providerReport = &report
-		observation, err := observationFromCaptureProbe(ctx, providerScenario, request, report)
-		if err != nil {
-			return fmt.Errorf("replay provider fixture %q: %w", e.scenario.ProviderFixture, err)
-		}
 		e.provider = &observation
 	} else if len(e.providerSteps) > 0 {
 		return errors.New("provider session steps require provider_fixture")

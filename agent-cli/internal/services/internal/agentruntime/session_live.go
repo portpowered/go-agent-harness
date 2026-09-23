@@ -264,9 +264,9 @@ type sessionLoopOptions struct {
 
 	// CloseAfterScheduledAudio requests a live scheduled-audio session close
 	// only after every queued input has produced a terminal assistant turn.
-	// Replay plans leave this false so capture-derived close behavior remains
-	// authoritative.
-	CloseAfterScheduledAudio bool
+	// Replay keeps capture-owned close behavior.
+	CloseAfterScheduledAudio    bool
+	durationCompletionPublisher func(bool, error) error
 
 	// ScheduledAudioDispatch is the explicit policy selected for repeated
 	// scheduled audio. Runtime planning always supplies a non-zero value;

@@ -19,14 +19,26 @@ func observationFromSessionCapture(
 	request runtimeReplay.CaptureProbeRequest,
 	collectors ...serviceprobes.MetricsCollector,
 ) (probe.ObservationSnapshot, error) {
+	_, observation, err := analyzeCaptureProbe(ctx, replayService, scenario, request, collectors...)
+	return observation, err
+}
+
+func analyzeCaptureProbe(
+	ctx context.Context,
+	replayService runtimeReplay.Service,
+	scenario probe.Scenario,
+	request runtimeReplay.CaptureProbeRequest,
+	collectors ...serviceprobes.MetricsCollector,
+) (runtimeReplay.CaptureProbeObservation, probe.ObservationSnapshot, error) {
 	if replayService == nil {
-		return probe.ObservationSnapshot{}, fmt.Errorf("replay service is not configured")
+		return runtimeReplay.CaptureProbeObservation{}, probe.ObservationSnapshot{}, fmt.Errorf("replay service is not configured")
 	}
 	report, err := replayService.AnalyzeProbe(ctx, request)
 	if err != nil {
-		return probe.ObservationSnapshot{}, err
+		return runtimeReplay.CaptureProbeObservation{}, probe.ObservationSnapshot{}, err
 	}
-	return observationFromCaptureProbe(ctx, scenario, request, report, collectors...)
+	observation, err := observationFromCaptureProbe(ctx, scenario, request, report, collectors...)
+	return report, observation, err
 }
 
 func observationFromCaptureProbe(

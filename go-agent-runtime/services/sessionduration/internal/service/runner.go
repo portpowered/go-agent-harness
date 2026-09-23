@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
@@ -286,64 +285,6 @@ func (r *runLoop) process(msg messages.StreamMessage) error {
 	return r.finish(result.Planned, nil)
 }
 
-func (r *runLoop) retry(msg messages.StreamMessage) error {
-	if msg.Type != messages.StreamTypeMessageEnd {
-		return nil
-	}
-	terminal, ok := msg.Value.(*messages.MessageEndValue)
-	if !ok || terminal == nil {
-		return nil
-	}
-	decision := r.controller.Retry(sessionduration.RetryRequest{Terminal: terminal})
-	if !decision.Eligible {
-		return nil
-	}
-	sender, ok := r.loop.(sessionduration.SessionEventSender)
-	if !ok {
-		return errors.New("session duration loop does not support provider session events")
-	}
-	if err := r.waitForRetry(decision.Delay); err != nil {
-		return err
-	}
-	control := messages.StreamMessage{Type: messages.StreamTypeResponseCreate, Value: messages.NewResponseCreateValue()}
-	if err := sender.SendSessionEvent(r.runCtx, control); err != nil {
-		return fmt.Errorf("send rate-limit retry response: %w", err)
-	}
-	if r.request.RetryDispatched != nil {
-		r.request.RetryDispatched(control)
-	}
-	return nil
-}
-
-func (r *runLoop) waitForRetry(delay time.Duration) error {
-	if delay <= 0 {
-		return nil
-	}
-	if r.request.Clock == nil {
-		return sessionduration.ErrSchedulerUnavailable
-	}
-	timer := r.request.Clock.NewTimer(delay)
-	if timer == nil {
-		return errors.New("session duration clock returned a nil retry timer")
-	}
-	defer timer.Stop()
-	select {
-	case <-timer.C():
-		return nil
-	case err := <-r.controller.Errors():
-		return err
-	case <-r.request.Done:
-		if err := runLoopDoneError(r.request); err != nil {
-			return err
-		}
-		return context.Canceled
-	case <-r.ctx.Done():
-		return r.ctx.Err()
-	case <-r.runCtx.Done():
-		return r.runCtx.Err()
-	}
-}
-
 func (r *runLoop) finish(planned bool, primary error) error {
 	r.finishOnce.Do(func() {
 		r.admitted.CloseAdmission()
@@ -389,86 +330,4 @@ func (r *runLoop) finish(planned bool, primary error) error {
 		r.finished = true
 	})
 	return r.finishErr
-}
-
-func loopJoinTimeout(policy sessionduration.DrainPolicy) time.Duration {
-	if policy.LoopJoinTimeout <= 0 {
-		return defaultLoopJoinTimeout
-	}
-	return policy.LoopJoinTimeout
-}
-
-func (r *runLoop) waitForLoop(ctx context.Context) error {
-	if !r.loopDone {
-		if ctx == nil {
-			ctx = context.Background()
-		}
-		select {
-		case r.loopErr = <-r.runErrs:
-			r.loopDone = true
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-	if errors.Is(r.loopErr, context.Canceled) {
-		return nil
-	}
-	return r.loopErr
-}
-
-func waitForLoop(results <-chan error) error {
-	err := <-results
-	if errors.Is(err, context.Canceled) {
-		return nil
-	}
-	return err
-}
-
-func (r *runLoop) cancelRun() {
-	if r.cancel != nil {
-		r.cancel()
-		r.cancel = nil
-	}
-}
-
-func sendLoopClose(ctx context.Context, loop sessionduration.Loop) error {
-	if loop == nil {
-		return nil
-	}
-	if err := loop.Send(ctx, []messages.Message{{
-		Role: messages.RoleUser,
-		ContentParts: []messages.ContentPart{
-			messages.ControlPlanePart{ControlPlaneMessageType: messages.ControlPlaneMessageTypeSessionClose},
-		},
-	}}); err != nil {
-		return fmt.Errorf("close session loop: %w", err)
-	}
-	return nil
-}
-
-func normalizeLoopError(ctx context.Context, err error) error {
-	if err == nil || errors.Is(err, context.Canceled) && ctx.Err() != nil {
-		return nil //nolint:nilerr // caller cancellation intentionally normalizes loop cancellation.
-	}
-	return err
-}
-
-func runLoopFailure(ctx context.Context, err error) error {
-	if errors.Is(err, context.Canceled) && ctx.Err() != nil {
-		return ctx.Err()
-	}
-	return normalizeLoopError(ctx, err)
-}
-
-func (r *runLoop) drainPending() error {
-	for _, msg := range r.pending {
-		admission := r.controller.ObserveDrain(msg)
-		if admission.Accepted {
-			if err := publish(r.request.Publication, admission.Message); err != nil {
-				return err
-			}
-		}
-	}
-	r.pending = nil
-	return nil
 }

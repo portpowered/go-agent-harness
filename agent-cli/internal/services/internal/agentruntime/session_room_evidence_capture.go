@@ -6,12 +6,26 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	runtimeRecordingWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
+
+func ensureRoomEvidenceRecordingServices(opts *RoomRunOptions, replayMode bool, clock platformclock.Source) {
+	if opts == nil || replayMode || strings.TrimSpace(opts.OutputDir) == "" {
+		return
+	}
+	if opts.RecordingService == nil {
+		opts.RecordingService = runtimeRecordingWire.NewService(clock)
+	}
+	if opts.ProviderCaptureService == nil {
+		opts.ProviderCaptureService = runtimeRecordingWire.NewProviderCaptureService(clock)
+	}
+}
 
 // roomClock stamps room evidence records with both a monotonic offset from
 // the room's real start time and a Unix-millisecond wall-clock timestamp.

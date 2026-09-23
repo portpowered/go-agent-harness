@@ -17,6 +17,11 @@ import (
 
 const roomInputTranscriptionTestTimeout = 2 * time.Second
 
+const (
+	sessionUpdateEventType          = "session.update"
+	inputAudioBufferAppendEventType = "input_audio_buffer.append"
+)
+
 // TestRunRoomWithResult_EnablesInputTranscriptionOncePerParticipant exercises
 // the room's normal live composition rather than injecting SessionInferencers.
 // Each fake provider connection observes the generated handshake and emits a

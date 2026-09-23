@@ -175,7 +175,5 @@ func NewSessionRuntimeFactory() agentruntime.SessionRuntimeFactory {
 
 var SessionSet = wire.NewSet(NewSessionRuntimeFactory, NewSessionRuntime, NewSessionService)
 
-var BrowserConversationSet = wire.NewSet(NewBrowserConversationService) //nolint:gochecknoglobals // immutable Wire provider metadata
-
 // SelfPlaySet is the self-play service's complete provider set.
 var SelfPlaySet = wire.NewSet(NewSelfPlayService)

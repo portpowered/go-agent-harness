@@ -156,6 +156,21 @@ func (e *fileRoundTripExecutor) snapshots() ([]messages.ToolCall, []fileRoundTri
 	return calls, checkpoints
 }
 
+func runComposedFileToolSession(t *testing.T, ctx context.Context, out *signalingBuffer, inferencer messages.SessionInferencer, executor messages.ToolExecutor, definitions []messages.ToolDefinition, phase string) {
+	t.Helper()
+	if err := runAgentLoopSession(ctx, out, inferencer, sessionLoopOptions{
+		audioService:             newTestAudioIOService(),
+		MaxDuration:              4 * time.Second,
+		WaitForClose:             true,
+		ToolExecutor:             executor,
+		ToolDefinitions:          definitions,
+		ToolExecutionTimeout:     2 * time.Second,
+		AdvertiseToolDefinitions: true,
+	}); err != nil {
+		t.Fatalf("%s: %v\noutput:\n%s", phase, err, out.String())
+	}
+}
+
 // TestRunAgentLoopSession_FileToolRoundTripThroughRegistryAndComposition
 // drives the complete relative-file lifecycle through the existing scripted
 // provider seam. The registry, composed route, session adapter, tool runner,
@@ -226,17 +241,7 @@ func TestRunAgentLoopSession_FileToolRoundTripThroughRegistryAndComposition(t *t
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := runAgentLoopSession(ctx, out, inferencer, sessionLoopOptions{
-		audioService:             newTestAudioIOService(),
-		MaxDuration:              4 * time.Second,
-		WaitForClose:             true,
-		ToolExecutor:             recordingExecutor,
-		ToolDefinitions:          definitions,
-		ToolExecutionTimeout:     2 * time.Second,
-		AdvertiseToolDefinitions: true,
-	}); err != nil {
-		t.Fatalf("file round-trip session: %v\noutput:\n%s", err, out.String())
-	}
+	runComposedFileToolSession(t, ctx, out, inferencer, recordingExecutor, definitions, "file round-trip session")
 
 	gotCalls, checkpoints := recordingExecutor.snapshots()
 	if len(gotCalls) != len(calls) {
@@ -398,17 +403,7 @@ func TestRunAgentLoopSession_FileToolPermissionDeniedThroughRegistryAndCompositi
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := runAgentLoopSession(ctx, out, inferencer, sessionLoopOptions{
-		audioService:             newTestAudioIOService(),
-		MaxDuration:              4 * time.Second,
-		WaitForClose:             true,
-		ToolExecutor:             recordingExecutor,
-		ToolDefinitions:          definitions,
-		ToolExecutionTimeout:     2 * time.Second,
-		AdvertiseToolDefinitions: true,
-	}); err != nil {
-		t.Fatalf("permission-denied session: %v\noutput:\n%s", err, out.String())
-	}
+	runComposedFileToolSession(t, ctx, out, inferencer, recordingExecutor, definitions, "permission-denied session")
 
 	gotCalls, checkpoints := recordingExecutor.snapshots()
 	if len(gotCalls) != 1 || gotCalls[0].ID != call.id || gotCalls[0].Name != call.name || gotCalls[0].Arguments != call.arguments {

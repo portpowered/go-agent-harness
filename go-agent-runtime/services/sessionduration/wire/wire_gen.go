@@ -7,7 +7,6 @@
 package wire
 
 import (
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/internal/service"
 )
@@ -19,12 +18,4 @@ import (
 func NewService() sessionduration.Service {
 	serviceService := service.New()
 	return serviceService
-}
-
-// wire.go:
-
-// NewDuplexLoopFactory constructs the session-owned loop factory from the
-// session service's local Wire graph.
-func NewDuplexLoopFactory() sessionduration.DuplexLoopFactory {
-	return wire.NewDuplexLoopFactory()
 }

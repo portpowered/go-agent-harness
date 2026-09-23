@@ -314,7 +314,7 @@ var CliSet = wire.NewSet(
 	servicewire.SessionSet,
 	wire.NewSet(servicewire.NewBrowserConversationService),
 	servicewire.NewReplayService,
-	servicewire.NewProbeMetrics,
+	servicewire.NewMetricsCollector,
 	provideDefaultRuntimeToolService,
 	provideRuntimeToolService,
 	sessionwire.NewFileStoreFactory,

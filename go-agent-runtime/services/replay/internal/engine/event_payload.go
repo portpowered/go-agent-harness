@@ -149,62 +149,75 @@ func firstJSONDifference(expected, actual any, pointer string) *jsonDifference {
 		return &jsonDifference{pointer: pointer, expected: expected, actual: actual}
 	}
 	if expectedMap, ok := expected.(map[string]any); ok {
-		actualMap, actualOK := actual.(map[string]any)
-		if !actualOK {
-			return &jsonDifference{pointer: pointer, expected: expected, actual: actual}
-		}
-		keys := make(map[string]struct{}, len(expectedMap)+len(actualMap))
-		for key := range expectedMap {
-			keys[key] = struct{}{}
-		}
-		for key := range actualMap {
-			keys[key] = struct{}{}
-		}
-		ordered := make([]string, 0, len(keys))
-		for key := range keys {
-			ordered = append(ordered, key)
-		}
-		sort.Strings(ordered)
-		for _, key := range ordered {
-			want, wantOK := expectedMap[key]
-			got, gotOK := actualMap[key]
-			child := appendJSONPointer(pointer, key)
-			if !wantOK {
-				return &jsonDifference{pointer: child, expected: missingJSONValue{}, actual: got}
-			}
-			if !gotOK {
-				return &jsonDifference{pointer: child, expected: want, actual: missingJSONValue{}}
-			}
-			if difference := firstJSONDifference(want, got, child); difference != nil {
-				return difference
-			}
-		}
-		return nil
+		return firstJSONMapDifference(expectedMap, actual, pointer)
 	}
 	if expectedSlice, ok := expected.([]any); ok {
-		actualSlice, actualOK := actual.([]any)
-		if !actualOK {
-			return &jsonDifference{pointer: pointer, expected: expected, actual: actual}
-		}
-		common := min(len(expectedSlice), len(actualSlice))
-		for index := 0; index < common; index++ {
-			if difference := firstJSONDifference(expectedSlice[index], actualSlice[index], appendJSONPointer(pointer, strconv.Itoa(index))); difference != nil {
-				return difference
-			}
-		}
-		if len(expectedSlice) != len(actualSlice) {
-			child := appendJSONPointer(pointer, strconv.Itoa(common))
-			if len(expectedSlice) < len(actualSlice) {
-				return &jsonDifference{pointer: child, expected: missingJSONValue{}, actual: actualSlice[common]}
-			}
-			return &jsonDifference{pointer: child, expected: expectedSlice[common], actual: missingJSONValue{}}
-		}
-		return nil
+		return firstJSONSliceDifference(expectedSlice, actual, pointer)
 	}
 	if reflect.DeepEqual(expected, actual) {
 		return nil
 	}
 	return &jsonDifference{pointer: pointer, expected: expected, actual: actual}
+}
+
+func firstJSONMapDifference(expected map[string]any, actual any, pointer string) *jsonDifference {
+	actualMap, ok := actual.(map[string]any)
+	if !ok {
+		return &jsonDifference{pointer: pointer, expected: expected, actual: actual}
+	}
+	for _, key := range sortedJSONMapKeys(expected, actualMap) {
+		want, wantOK := expected[key]
+		got, gotOK := actualMap[key]
+		child := appendJSONPointer(pointer, key)
+		if !wantOK {
+			return &jsonDifference{pointer: child, expected: missingJSONValue{}, actual: got}
+		}
+		if !gotOK {
+			return &jsonDifference{pointer: child, expected: want, actual: missingJSONValue{}}
+		}
+		if difference := firstJSONDifference(want, got, child); difference != nil {
+			return difference
+		}
+	}
+	return nil
+}
+
+func sortedJSONMapKeys(expected, actual map[string]any) []string {
+	keys := make(map[string]struct{}, len(expected)+len(actual))
+	for key := range expected {
+		keys[key] = struct{}{}
+	}
+	for key := range actual {
+		keys[key] = struct{}{}
+	}
+	ordered := make([]string, 0, len(keys))
+	for key := range keys {
+		ordered = append(ordered, key)
+	}
+	sort.Strings(ordered)
+	return ordered
+}
+
+func firstJSONSliceDifference(expected []any, actual any, pointer string) *jsonDifference {
+	actualSlice, ok := actual.([]any)
+	if !ok {
+		return &jsonDifference{pointer: pointer, expected: expected, actual: actual}
+	}
+	common := min(len(expected), len(actualSlice))
+	for index := 0; index < common; index++ {
+		child := appendJSONPointer(pointer, strconv.Itoa(index))
+		if difference := firstJSONDifference(expected[index], actualSlice[index], child); difference != nil {
+			return difference
+		}
+	}
+	if len(expected) == len(actualSlice) {
+		return nil
+	}
+	child := appendJSONPointer(pointer, strconv.Itoa(common))
+	if len(expected) < len(actualSlice) {
+		return &jsonDifference{pointer: child, expected: missingJSONValue{}, actual: actualSlice[common]}
+	}
+	return &jsonDifference{pointer: child, expected: expected[common], actual: missingJSONValue{}}
 }
 
 func jsonPointerLocation(pointer string) string {
@@ -249,65 +262,62 @@ func boundedRawExcerpt(data []byte, offset int) string {
 
 func boundedExcerpt(data []byte, offset int, quote bool) string {
 	const limit = 96
-	const contextBytes = 24
 	const marker = "...(truncated)"
 	if len(data) == 0 {
-		if quote {
-			return `""`
-		}
-		return ""
+		return emptyExcerpt(quote)
 	}
-	if offset < 0 {
-		offset = 0
-	}
-	if offset > len(data) {
-		offset = len(data)
-	}
-	start := offset - contextBytes
-	if start < 0 {
-		start = 0
-	}
-	end := offset + contextBytes
-	if end > len(data) {
-		end = len(data)
-	}
-	if start == end {
-		start = offset - 1
-		if start < 0 {
-			start = 0
-		}
-		end = offset + 1
-		if end > len(data) {
-			end = len(data)
-		}
-	}
+	offset = min(max(offset, 0), len(data))
+	start, end := excerptWindow(len(data), offset)
 	for {
-		prefix, suffix := "", ""
-		if start > 0 {
-			prefix = marker
-		}
-		if end < len(data) {
-			suffix = marker
-		}
-		excerpt := string(data[start:end])
-		if quote {
-			excerpt = strconv.QuoteToASCII(excerpt)
-		}
-		candidate := prefix + excerpt + suffix
-		if len(candidate) <= limit {
+		if candidate := formatExcerpt(data, start, end, quote, marker); len(candidate) <= limit {
 			return candidate
 		}
 		if end-start <= 1 {
 			return marker
 		}
-		if end-offset > offset-start {
-			end--
-		} else if start < offset {
-			start++
-		} else {
-			end--
-		}
+		start, end = shrinkExcerptWindow(start, end, offset)
 	}
+}
+
+func emptyExcerpt(quote bool) string {
+	if quote {
+		return `""`
+	}
+	return ""
+}
+
+func excerptWindow(length, offset int) (int, int) {
+	start, end := max(offset-24, 0), min(offset+24, length)
+	if start == end {
+		start = max(offset-1, 0)
+		end = min(offset+1, length)
+	}
+	return start, end
+}
+
+func formatExcerpt(data []byte, start, end int, quote bool, marker string) string {
+	prefix, suffix := "", ""
+	if start > 0 {
+		prefix = marker
+	}
+	if end < len(data) {
+		suffix = marker
+	}
+	excerpt := string(data[start:end])
+	if quote {
+		excerpt = strconv.QuoteToASCII(excerpt)
+	}
+	return prefix + excerpt + suffix
+}
+
+func shrinkExcerptWindow(start, end, offset int) (int, int) {
+	if end-offset > offset-start {
+		return start, end - 1
+	}
+	if start < offset {
+		return start + 1, end
+	}
+	return start, end - 1
 }
 
 func appendJSONPointer(pointer, token string) string {

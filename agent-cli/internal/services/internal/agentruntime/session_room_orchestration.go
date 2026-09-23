@@ -50,7 +50,6 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		result := roomFailureResult(err, nil)
 		return result, err
 	}
-
 	var evidence *roomEvidence
 	var evidenceSecrets []string
 	startedAt := roomClock.Now().UTC()

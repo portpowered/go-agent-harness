@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
+	runtimeReplayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
@@ -100,6 +101,7 @@ func newRoomEvidenceState(destination string, manifest room.Manifest, format roo
 		participantRecordErr: make(map[string]error, len(manifest.Participants)),
 		artifactRecordErr:    make(map[string]error),
 		audioFormat:          format,
+		replay:               runtimeReplayWire.NewService(),
 		latency:              latency,
 		source:               source,
 		providerErrors:       make(map[string]struct{}, len(manifest.Participants)),

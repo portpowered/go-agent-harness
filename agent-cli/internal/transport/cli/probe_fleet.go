@@ -19,9 +19,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// FleetLiveSessionRunner is the production session-runtime seam used by live
-// fleet entries. Tests may replace it with a recorder-backed function without
-// changing the command's transport dispatch contract.
+// FleetLiveSessionRunner is the live session seam; tests can replace it without
+// changing transport dispatch.
 type FleetLiveSessionRunner func(context.Context, io.Writer, serviceSession.Request, serviceSession.AudioInput) error
 
 // ProbeFleetCommand executes every entry in a validated fleet manifest.
@@ -43,9 +42,8 @@ type ProbeFleetCommand struct {
 	LiveSessionRunner FleetLiveSessionRunner
 }
 
-// NewProbeFleetCommand returns the probe fleet command constructor. An
-// optional executor replaces the default replay-backed executor, which lets
-// callers test transport behavior without network or device dependencies.
+// NewProbeFleetCommand wires the services and optional executor.
+// The executor seam supports runs without network or device access.
 func NewProbeFleetCommand(sessionService serviceSession.SessionService, metricsCollector serviceProbes.MetricsCollector, replayService runtimeReplay.Service, executor ...fleet.EntryExecutor) *ProbeFleetCommand {
 	command := &ProbeFleetCommand{sessionService: sessionService, metricsCollector: metricsCollector, replayService: replayService}
 	if len(executor) > 0 {

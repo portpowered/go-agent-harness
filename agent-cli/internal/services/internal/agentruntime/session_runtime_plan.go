@@ -16,6 +16,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	runtimerecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
+	runtimesession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
 	sessionterminalwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
@@ -25,7 +27,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	gwproviders "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
-	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
@@ -42,18 +43,6 @@ const (
 	sessionRuntimeModeRecordOpenAI  sessionRuntimeMode = "record-openai"
 )
 
-type sessionRecordingDialer interface {
-	transport.Dialer
-	FlushToFile(path string) error
-}
-
-type sessionReplayDialer interface {
-	transport.Dialer
-	Done() <-chan struct{}
-	Err() error
-	Model() string
-}
-
 type runtimeAudioOutputConfigurer interface {
 	SetSessionAudioOutput(models.AudioFormat, models.SampleRate)
 }
@@ -68,10 +57,6 @@ type sessionAudioRequestProvider interface {
 
 type sessionRuntimeFactory struct {
 	newDefaultLiveDialer               func() transport.Dialer
-	newRecordingDialer                 func(transport.Dialer, string, string) sessionRecordingDialer
-	newReplayDialer                    func(string) (sessionReplayDialer, error)
-	newRecordedTimingReplayDialer      func(string) (sessionReplayDialer, error)
-	newReplayInferencer                func(string) messages.SessionInferencer
 	newGrokSessionInferencer           func(config.GrokConfig, transport.Dialer) (messages.SessionInferencer, error)
 	newOpenAISessionInf                func(config.OpenAIConfig, string, transport.Dialer, models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error)
 	newBareLiveSessionInferencer       func(SessionRunOptions) (messages.SessionInferencer, string, error)
@@ -89,24 +74,12 @@ type SessionRuntimeFactory = sessionRuntimeFactory
 func NewSessionRuntimeFactory() SessionRuntimeFactory { return newDefaultSessionRuntimeFactory() }
 
 func (f sessionRuntimeFactory) configured() bool {
-	return f.newDefaultLiveDialer != nil || f.newReplayDialer != nil || f.newBareLiveSessionInferencer != nil || f.newRTCRuntime != nil
+	return f.newDefaultLiveDialer != nil || f.newBareLiveSessionInferencer != nil || f.newRTCRuntime != nil
 }
 func newDefaultSessionRuntimeFactory() sessionRuntimeFactory {
 	return sessionRuntimeFactory{
 		newDefaultLiveDialer: func() transport.Dialer {
 			return grok.NewDefaultWebSocketDialer()
-		},
-		newRecordingDialer: func(inner transport.Dialer, providerName string, model string) sessionRecordingDialer {
-			return gwtesting.NewRecordingWebSocketDialer(inner, providerName, model)
-		},
-		newReplayDialer: func(path string) (sessionReplayDialer, error) {
-			return gwtesting.NewReplayWebSocketDialer(path)
-		},
-		newRecordedTimingReplayDialer: func(path string) (sessionReplayDialer, error) {
-			return gwtesting.NewReplayWebSocketDialer(path, gwtesting.WithRecordedSessionTiming())
-		},
-		newReplayInferencer: func(path string) messages.SessionInferencer {
-			return gwtesting.NewReplaySessionInferencer(path)
 		},
 		newGrokSessionInferencer: func(sessionCfg config.GrokConfig, dialer transport.Dialer) (messages.SessionInferencer, error) {
 			return buildGrokSessionInferencer(sessionCfg, dialer)
@@ -127,13 +100,6 @@ func newDefaultSessionRuntimeFactory() sessionRuntimeFactory {
 			return buildOpenAIRealtimeSessionInferencerWithScheduledAudioAndInputAudioTranscription(sessionCfg, voice, dialer, toolDefinitions, inputAudioTranscription)
 		},
 	}
-}
-
-func (f sessionRuntimeFactory) replayDialer(path, timing string) (sessionReplayDialer, error) {
-	if normalizedSessionReplayTiming(timing) == sessionReplayTimingRecorded && f.newRecordedTimingReplayDialer != nil {
-		return f.newRecordedTimingReplayDialer(path)
-	}
-	return f.newReplayDialer(path)
 }
 
 func (f sessionRuntimeFactory) newGrokSessionInferencerForTools(sessionCfg config.GrokConfig, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
@@ -188,8 +154,12 @@ type sessionRuntimePlan struct {
 	deviceService          runtimedevices.Service
 	rtcBinding             runtimedevices.RTCBinding
 	capabilityCoordinator  SessionCapabilityCoordinator
-	captureClaim           *sessionRecordingClaim
-	captureClaimWired      bool
+	recordingService       runtimerecording.Service
+	liveEvidenceOptions    *runtimerecording.LiveEvidenceOptions
+	liveEvidence           runtimerecording.LiveEvidence
+	liveEvidenceContext    context.Context
+	recordingSession       runtimerecording.SessionCapture
+	recordingSetup         func(*sessionRuntimePlan) error
 	interactivePolicy      *InteractiveToolPolicy
 	filesystemPolicy       *tools.FilesystemPolicy
 }
@@ -225,6 +195,35 @@ func (p sessionRuntimePlan) liveOutput(prefix string) (string, string) {
 }
 
 func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr error) {
+	return p.withLiveEvidence(ctx, func(runCtx context.Context, prepared sessionRuntimePlan) error {
+		return prepared.runPrepared(runCtx, out)
+	})
+}
+
+func (p sessionRuntimePlan) withLiveEvidence(ctx context.Context, run func(context.Context, sessionRuntimePlan) error) error {
+	if p.liveEvidenceOptions != nil && p.liveEvidence == nil {
+		if p.recordingService == nil {
+			return errors.New("recording service is not configured")
+		}
+		return p.recordingService.RunLiveEvidence(ctx, *p.liveEvidenceOptions, func(runCtx context.Context, evidence runtimerecording.LiveEvidence) error {
+			p.liveEvidence = evidence
+			p.liveEvidenceContext = runCtx
+			return p.withLiveEvidence(runCtx, run)
+		})
+	}
+	if p.recordingSetup != nil {
+		if err := p.recordingSetup(&p); err != nil {
+			return err
+		}
+		p.recordingSetup = nil
+		if p.recordingSession != nil {
+			p.inferencer = p.recordingSession
+		}
+	}
+	return run(ctx, p)
+}
+
+func (p sessionRuntimePlan) runPrepared(ctx context.Context, out io.Writer) (runErr error) {
 	reporter := p.loop.terminalReporter
 	if reporter == nil {
 		reporter = sessionterminalwire.NewReporter()
@@ -302,12 +301,29 @@ func (p sessionRuntimePlan) configureLoopObserver(loop *sessionLoopOptions) {
 	if loop == nil {
 		return
 	}
+	streamObserver := p.streamObserver
+	if p.liveEvidence != nil {
+		previous := streamObserver
+		streamObserver = func(message messages.StreamMessage) {
+			if previous != nil {
+				previous(message)
+			}
+			if message.Type == messages.StreamTypeSessionClose || message.Type == messages.StreamTypeError {
+				return
+			}
+			ctx := p.liveEvidenceContext
+			if ctx == nil {
+				ctx = context.Background()
+			}
+			_ = p.liveEvidence.ObserveMessage(context.WithoutCancel(ctx), runtimesession.LiveRecordAgent, message)
+		}
+	}
 	obs := sessiontracewire.NewObserver(sessiontrace.NewObserverOptions{
 		Sink:                   p.diagnostics,
 		Recorder:               p.metricsRecorder,
 		Provider:               p.provider,
 		Model:                  p.model,
-		StreamObserver:         p.streamObserver,
+		StreamObserver:         streamObserver,
 		RuntimeRecorder:        p.runtime,
 		TerminalService:        sessionterminalwire.NewService(),
 		CancellationIntent:     loop.cancellationIntent,
@@ -317,41 +333,6 @@ func (p sessionRuntimePlan) configureLoopObserver(loop *sessionLoopOptions) {
 	})
 	obs.ScheduleAudioInputs(p.audioInputs)
 	loop.observer = obs
-}
-
-// wireSessionRecordingClaim redirects one recording plan's capture flush
-// through its destination claim. It is kept separate from planning because an
-// injected session can add its fixture recorder after the generic runtime plan
-// has been built.
-func wireSessionRecordingClaim(plan sessionRuntimePlan, claim *sessionRecordingClaim) sessionRuntimePlan {
-	if claim == nil {
-		return plan
-	}
-	plan.captureClaim = claim
-	if plan.captureClaimWired || plan.flushCapture == nil {
-		return plan
-	}
-	flushTo := plan.flushCaptureTo
-	published := false
-	plan.flushCapture = func() error {
-		if flushTo == nil {
-			return fmt.Errorf("recording plan does not support private capture publication")
-		}
-		err := claim.publish(flushTo)
-		if err == nil {
-			published = true
-		}
-		return err
-	}
-	originalFinalize := plan.finalize
-	plan.finalize = func(ctx context.Context, out io.Writer) error {
-		if !published || originalFinalize == nil {
-			return nil
-		}
-		return originalFinalize(ctx, out)
-	}
-	plan.captureClaimWired = true
-	return plan
 }
 
 func resolveSessionInteractiveToolPolicy(opts SessionRunOptions, definitions []messages.ToolDefinition) (InteractiveToolPolicy, error) {
@@ -400,45 +381,7 @@ func planSessionRuntimeMode(opts SessionRunOptions, factory sessionRuntimeFactor
 		return planReplaySessionRuntime(opts, factory)
 	}
 	if opts.SessionInferencer != nil {
-		if err := validateInjectedLiveSession(opts); err != nil {
-			return sessionRuntimePlan{}, err
-		}
-		provider := strings.ToLower(effectiveSessionProvider(opts))
-		model := strings.TrimSpace(opts.Model)
-		if model == "" {
-			switch provider {
-			case sessionProviderOpenAI:
-				resolved, err := resolveOpenAIRealtimeSessionConfig(opts)
-				if err != nil {
-					return sessionRuntimePlan{}, err
-				}
-				model = resolved.Model
-			case sessionProviderGrok:
-				resolved, err := resolveGrokSessionConfig(opts)
-				if err != nil {
-					return sessionRuntimePlan{}, err
-				}
-				model = resolved.Model
-			}
-		}
-		interactive := browserToolsInteractiveLive(opts)
-		return sessionRuntimePlan{
-			mode:       sessionRuntimeModeInjectedLive,
-			provider:   provider,
-			model:      model,
-			inferencer: opts.SessionInferencer,
-			loop: sessionLoopOptions{
-				Prompt:                   opts.Prompt,
-				CloseAfterOpen:           !opts.BareLive && !interactive && !opts.WaitForClose && len(opts.AudioInputs) == 0,
-				WaitForClose:             opts.BareLive || interactive || opts.WaitForClose || len(opts.AudioInputs) > 0,
-				CloseAfterScheduledAudio: len(opts.AudioInputs) > 0,
-				MaxDuration:              injectedSessionMaxDuration(opts.BareLive || interactive),
-				AdvertiseToolDefinitions: true,
-				RequireSessionUpdated:    len(opts.AudioInputs) > 0 && strings.EqualFold(effectiveSessionProvider(opts), sessionProviderOpenAI),
-				BareLive:                 opts.BareLive,
-				BrowserToolsInteractive:  interactive,
-			},
-		}, nil
+		return planInjectedLiveSessionRuntime(opts)
 	}
 	if opts.BareLive {
 		return planBareLiveSessionRuntime(opts, factory)
@@ -460,64 +403,7 @@ func injectedSessionMaxDuration(bareLive bool) time.Duration {
 }
 
 func planReplaySessionRuntime(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
-	sessionInferencer := opts.SessionInferencer
-	if sessionInferencer != nil {
-		return sessionRuntimePlan{
-			mode:        sessionRuntimeModeReplayGeneric,
-			capturePath: opts.ReplayPath,
-			provider:    strings.ToLower(strings.TrimSpace(opts.Provider)),
-			model:       opts.Model,
-			inferencer:  sessionInferencer,
-			loop: sessionLoopOptions{
-				Prompt:                   opts.Prompt,
-				WaitForClose:             opts.WaitForClose,
-				MaxDuration:              3 * time.Second,
-				AdvertiseToolDefinitions: true,
-			},
-		}, nil
-	}
-
-	loaded, err := gwtesting.LoadSessionCaptureForReplay(opts.ReplayPath)
-	if err != nil {
-		return sessionRuntimePlan{}, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
-	}
-	replayIntegrityWarning := loaded.IntegrityWarning(opts.ReplayPath)
-
-	if _, err := os.Stat(opts.ReplayPath); err != nil {
-		return sessionRuntimePlan{}, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
-	}
-
-	if usesWebSocketCapture(opts.ReplayPath) {
-		if usesOpenAIWebSocketCapture(opts.ReplayPath) {
-			plan, err := planOpenAIReplayRuntime(opts, factory)
-			if err != nil {
-				return sessionRuntimePlan{}, err
-			}
-			plan.replayIntegrityWarning = replayIntegrityWarning
-			return plan, nil
-		}
-		plan, err := planGrokReplayRuntime(opts, factory)
-		if err != nil {
-			return sessionRuntimePlan{}, err
-		}
-		plan.replayIntegrityWarning = replayIntegrityWarning
-		return plan, nil
-	}
-
-	return sessionRuntimePlan{
-		mode:                   sessionRuntimeModeReplayGeneric,
-		capturePath:            opts.ReplayPath,
-		replayIntegrityWarning: replayIntegrityWarning,
-		loopOut:                io.Discard,
-		inferencer:             factory.newReplayInferencer(opts.ReplayPath),
-		loop: sessionLoopOptions{
-			Prompt:      opts.Prompt,
-			MaxDuration: 200 * time.Millisecond,
-		},
-		finalize: func(ctx context.Context, out io.Writer) error {
-			return replaySessionCapture(ctx, out, opts.ReplayPath)
-		},
-	}, nil
+	return planReplaySessionRuntimeContext(context.Background(), opts, factory)
 }
 
 func planRecordSessionRuntime(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {

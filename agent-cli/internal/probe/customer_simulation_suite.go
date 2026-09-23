@@ -34,10 +34,8 @@ var (
 	ErrCustomerSimulationRun       = errors.New("customer simulation run failed")
 )
 
-// CustomerSimulationRunSpec binds one declarative scenario to the ordered
-// PCM16 turns that will be sent to the shipped process. PCM16 is intentionally
-// passed as bytes so file formats and credential handling remain outside the
-// process-boundary package.
+// CustomerSimulationRunSpec binds a scenario to ordered PCM16 turns, keeping
+// file formats and credentials at the process boundary.
 type CustomerSimulationRunSpec struct {
 	Scenario CustomerScenario
 	Script   []CustomerScriptTurn
@@ -50,9 +48,8 @@ type CustomerSimulationRunSpec struct {
 	PatienceRepromptAudio []byte
 }
 
-// CustomerSimulationSuiteOptions configures one explicitly selected suite.
-// APIKey is held only in memory and is passed to the child through the
-// provider's supported AGENT_MODEL__... environment variable by DuplexRunner.
+// CustomerSimulationSuiteOptions configures a selected suite; APIKey stays in
+// memory and reaches the child through DuplexRunner's provider environment.
 type CustomerSimulationSuiteOptions struct {
 	BinaryPath string
 	RunRoot    string

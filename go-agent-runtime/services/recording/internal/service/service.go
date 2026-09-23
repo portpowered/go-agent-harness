@@ -222,7 +222,7 @@ func (e *liveEvidence) SetCompletion(ctx context.Context, completion recording.L
 	classification := string(reason)
 	provenance := messages.TerminalProvenanceLoop
 	output := messages.TerminalOutputNone
-	if completion.SawSessionOpen && completion.TurnsCompleted > 0 {
+	if completion.SawSessionOpen && (completion.TurnsCompleted > 0 || completion.OutputObserved) {
 		output = messages.TerminalOutputPartial
 	}
 	switch {

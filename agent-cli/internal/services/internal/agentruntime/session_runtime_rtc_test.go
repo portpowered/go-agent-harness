@@ -254,24 +254,13 @@ func TestPlanSessionRuntime_WebRTCDispatchesThroughRuntimeFactory(t *testing.T) 
 	if err != nil {
 		t.Fatalf("planSessionRuntimeWithFactory: %v", err)
 	}
-	if got != (SessionRuntimeSelection{
-		Transport:         SessionTransportWebRTC,
-		SignalingEndpoint: signaling,
-		MediaSource:       media,
-	}) {
-		t.Fatalf("runtime selection = %#v, want exact values", got)
+	if got != (SessionRuntimeSelection{Transport: SessionTransportWebRTC, SignalingEndpoint: signaling, MediaSource: media}) ||
+		plan.rtcRuntime != runtime || plan.transport != SessionTransportWebRTC ||
+		plan.signalingEndpoint != signaling || plan.mediaSource != media {
+		t.Fatalf("runtime selection = %#v; plan = (%q, %q, %q), want exact WebRTC values and owned runtime", got, plan.transport, plan.signalingEndpoint, plan.mediaSource)
 	}
-	if plan.rtcRuntime != runtime {
-		t.Fatal("WebRTC plan did not retain the owned runtime")
-	}
-	if plan.transport != SessionTransportWebRTC || plan.signalingEndpoint != signaling || plan.mediaSource != media {
-		t.Fatalf("plan selection fields = (%q, %q, %q), want exact WebRTC values", plan.transport, plan.signalingEndpoint, plan.mediaSource)
-	}
-	if _, ok := plan.inferencer.(*sessionRTCRuntimeInferencer); !ok {
-		t.Fatalf("plan inferencer = %T, want RTC lifecycle wrapper", plan.inferencer)
-	}
-	if runtime.closeCount != 0 {
-		t.Fatal("planning closed the RTC runtime before execution")
+	if _, ok := plan.inferencer.(*sessionRTCRuntimeInferencer); !ok || runtime.closeCount != 0 {
+		t.Fatalf("plan inferencer = %T, RTC close count = %d; want lifecycle wrapper and deferred close", plan.inferencer, runtime.closeCount)
 	}
 	if err := runtime.Close(); err != nil {
 		t.Fatalf("cleanup test runtime: %v", err)

@@ -353,14 +353,8 @@ func TestComposeSessionInstructionsAddsBoundedWebMCPAmbiguityRecovery(t *testing
 }
 
 // TestComposeSessionInstructionsCalibratesSingleMatchActImmediately covers
-// the ask-vs-act calibration's act side (required tests 1-3): a customer
-// request that resolves to exactly one eligible tab -- whether by exact
-// title, by an obvious paraphrase of that title, or by the page's stated
-// purpose or category -- must be switched to immediately, with confirmation
-// only after the switch, and never gated behind a pre-emptive clarifying
-// question. This is the Session-1 ("the document editor") and Session-4
-// ("the local first writing app" paraphrase) live failure: a single resolved
-// candidate still produced a clarifying question instead of a switch.
+// exact-title, paraphrase, and purpose matches: switch the one eligible tab
+// immediately and confirm afterward. It guards the prior Session-1/4 failures.
 func TestComposeSessionInstructionsCalibratesSingleMatchActImmediately(t *testing.T) {
 	got := composeSessionInstructions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		BrowserToolsEnabled: true,
@@ -457,11 +451,8 @@ func TestComposeSessionInstructionsFollowsExplicitMultiPageOrder(t *testing.T) {
 }
 
 // TestComposeSessionInstructionsCalibratesGenuineAmbiguityAsksNamingBoth
-// covers required test 4: when two or more tabs genuinely match, the
-// calibration must direct exactly one question naming every candidate, and
-// it must never fall back to declaring the capability unavailable. This
-// mirrors the working "genuinely ambiguous" probe on current main, which
-// this change must not regress.
+// covers genuine ambiguity: ask once naming all matching tabs; never report
+// the capability unavailable. It protects the current-main multi-tab case.
 func TestComposeSessionInstructionsCalibratesGenuineAmbiguityAsksNamingBoth(t *testing.T) {
 	got := composeSessionInstructions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		BrowserToolsEnabled: true,

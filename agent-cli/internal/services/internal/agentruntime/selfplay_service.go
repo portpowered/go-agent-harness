@@ -11,6 +11,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	runtimereplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
@@ -27,10 +28,11 @@ type SelfPlayService struct {
 	factory      sessionRuntimeFactory
 	clock        platformclock.Source
 	modelCatalog runtimeproviders.ModelCatalog
+	replay       runtimereplay.Service
 }
 
-func NewSelfPlayService(audioService audioio.Service, factory SessionRuntimeFactory, clockSource platformclock.Source, modelCatalog runtimeproviders.ModelCatalog) public.Service {
-	return &SelfPlayService{audioService: audioService, factory: factory, clock: clockSource, modelCatalog: modelCatalog}
+func NewSelfPlayService(audioService audioio.Service, factory SessionRuntimeFactory, clockSource platformclock.Source, modelCatalog runtimeproviders.ModelCatalog, replayService runtimereplay.Service) public.Service {
+	return &SelfPlayService{audioService: audioService, factory: factory, clock: clockSource, modelCatalog: modelCatalog, replay: replayService}
 }
 
 func (s *SelfPlayService) Run(ctx context.Context, out io.Writer, options public.RunOptions) error {
@@ -39,6 +41,9 @@ func (s *SelfPlayService) Run(ctx context.Context, out io.Writer, options public
 	}
 	if !s.factory.configured() {
 		return errors.New("self-play session runtime factory is required")
+	}
+	if s.replay == nil {
+		return errors.New("self-play replay service is required")
 	}
 	if _, err := platformclock.RequireTimerSource(s.clock); err != nil {
 		return fmt.Errorf("self-play clock: %w", err)
@@ -56,6 +61,7 @@ func (s *SelfPlayService) Run(ctx context.Context, out io.Writer, options public
 		clock:          s.clock,
 		runtimeFactory: s.factory,
 		modelCatalog:   s.modelCatalog,
+		replayService:  s.replay,
 	})
 	return err
 }

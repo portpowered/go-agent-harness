@@ -4,15 +4,19 @@ package agentruntime
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
-	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
@@ -24,199 +28,84 @@ import (
 // after a capture-derived replay consumes the complete ordered event stream.
 const SessionReplayCompleteClassification = "replay_complete"
 
-func newOpenAIDeviceProbeSessionInferencer(opts SessionRunOptions, instructions string) (messages.SessionInferencer, string, error) {
-	sessionConfig, err := resolveOpenAIRealtimeSessionConfig(opts)
-	if err != nil {
-		return nil, "", err
-	}
-	model := sessionConfig.Model
-	request := deviceProbeSessionConfig(model, instructions, models.AudioFormatPCM16, models.AudioFormatPCM16)
-	transcription, err := resolveSessionTranscription(opts, sessionProviderOpenAI, true)
-	if err != nil {
-		return nil, "", err
-	}
-	request.InputAudioTranscription = &transcription
-	request.TurnDetection = cloneSessionTurnDetection(opts.TurnDetection)
-	request.Voice = opts.Voice
-	request.ReasoningEffort = sessionConfig.ReasoningEffort
-	request.Tools = append([]messages.ToolDefinition(nil), opts.ToolDefinitions...)
-	dialer, recorder := resolveSessionWebSocketDialer(opts, sessionProviderOpenAI, model, func() transport.Dialer { return oaiprovider.NewDefaultWebSocketDialer() })
-	providerOpts := []oaiprovider.Option{
-		oaiprovider.WithAPIKey(sessionConfig.APIKey),
-		oaiprovider.WithModel(sessionConfig.Model),
-		oaiprovider.WithRealtimeBaseURL(openAIRealtimeURL(sessionConfig)),
-		oaiprovider.WithWebSocketDialer(dialer),
-	}
-	providerGateway, err := gateway.NewSessionGateway(gateway.WithSessionProvider(oaiprovider.New(providerOpts...)))
-	if err != nil {
-		return nil, "", fmt.Errorf("create OpenAI realtime session gateway: %w", err)
-	}
-	inferencer := inference.NewSessionGatewayInferencer(providerGateway, inference.WithSessionRequest(inference.SessionRequest{Config: request}))
-	return wrapSessionInferencerCaptureFlush(inferencer, recorder, opts.RecordSessionCapturePath), model, nil
-}
-
 func planOpenAIRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
 	sessionCfg, err := resolveOpenAIRealtimeSessionConfig(opts)
 	if err != nil {
 		return sessionRuntimePlan{}, err
 	}
 
-	liveDialer := opts.WebSocketDialer
-	if liveDialer == nil {
-		liveDialer = factory.newDefaultLiveDialer()
-	}
-	if liveDialer == nil {
-		return sessionRuntimePlan{}, missingOwnedSessionDialerError(sessionProviderOpenAI)
-	}
-	liveDialer = wire.NewProviderWireDialer(liveDialer, opts.RuntimeObserver, platformclock.Ensure(opts.Clock))
-	recordingDialer := factory.newRecordingDialer(liveDialer, sessionProviderOpenAI, sessionCfg.Model)
 	clientOwnedAudio := opts.ClientOwnsAudioTurnBoundaries || len(opts.AudioInputs) > 0
 	inputAudioTranscription, err := resolveSessionTranscription(opts, sessionProviderOpenAI, clientOwnedAudio || opts.RTCBinding.HasInput())
 	if err != nil {
 		return sessionRuntimePlan{}, err
 	}
-	sessionInferencer, err := factory.newOpenAISessionInferencerForTools(sessionCfg, opts.Voice, recordingDialer, opts.ToolDefinitions, clientOwnedAudio, inputAudioTranscription)
-	if err != nil {
-		return sessionRuntimePlan{}, err
-	}
-	if configurer, ok := sessionInferencer.(interface {
-		SetSessionTurnDetection(*models.TurnDetectionConfig)
-	}); ok {
-		turnDetection := cloneSessionTurnDetection(opts.TurnDetection)
-		if turnDetection == nil && opts.RTCBinding.HasInput() && !clientOwnedAudio {
-			turnDetection = &models.TurnDetectionConfig{Type: "semantic_vad"}
+	build := openAIRecordingSessionBuilder(opts, factory, sessionCfg, clientOwnedAudio, inputAudioTranscription)
+	dialer := func() transport.Dialer {
+		if opts.WebSocketDialer != nil {
+			return opts.WebSocketDialer
 		}
-		configurer.SetSessionTurnDetection(turnDetection)
+		return oaiprovider.NewDefaultWebSocketDialer()
 	}
+	loop := sessionLoopOptions{
+		Prompt:                   opts.Prompt,
+		CloseAfterOpen:           !opts.WaitForClose && len(opts.AudioInputs) == 0,
+		WaitForClose:             opts.WaitForClose || len(opts.AudioInputs) > 0,
+		CloseAfterScheduledAudio: len(opts.AudioInputs) > 0,
+		RequireSessionUpdated:    len(opts.AudioInputs) > 0,
+	}
+	return providerRecordingPlan(opts, sessionProviderOpenAI, sessionCfg.Model,
+		fmt.Sprintf("Starting OpenAI realtime session recording to %s", opts.RecordPath),
+		sessionRuntimeModeRecordOpenAI, loop, dialer, build)
+}
 
-	return sessionRuntimePlan{
-		mode:        sessionRuntimeModeRecordOpenAI,
-		provider:    sessionProviderOpenAI,
-		model:       sessionCfg.Model,
-		capturePath: opts.RecordPath,
-		announce:    fmt.Sprintf("Starting OpenAI realtime session recording to %s", opts.RecordPath),
-		inferencer:  sessionInferencer,
-		loop: sessionLoopOptions{
-			Prompt:                   opts.Prompt,
-			CloseAfterOpen:           !opts.WaitForClose && len(opts.AudioInputs) == 0,
-			WaitForClose:             opts.WaitForClose || len(opts.AudioInputs) > 0,
-			CloseAfterScheduledAudio: len(opts.AudioInputs) > 0,
-			RequireSessionUpdated:    len(opts.AudioInputs) > 0,
-		},
-		flushCapture: func() error {
-			return recordingDialer.FlushToFile(opts.RecordPath)
-		},
-		flushCaptureTo: func(path string) error {
-			return recordingDialer.FlushToFile(path)
-		},
-		finalize: func(_ context.Context, out io.Writer) error {
-			_, err := fmt.Fprintf(out, "Wrote session capture to %s\n", opts.RecordPath)
-			return err
-		},
+func planOpenAIRTCRecording(opts SessionRunOptions, factory sessionRuntimeFactory, runtime SessionRTCRuntime) (sessionRTCProviderRecording, error) {
+	sessionCfg, err := resolveOpenAIRealtimeSessionConfig(opts)
+	if err != nil {
+		return sessionRTCProviderRecording{}, err
+	}
+	transcription, err := resolveSessionTranscription(opts, sessionProviderOpenAI, opts.RTCBinding.HasInput())
+	if err != nil {
+		return sessionRTCProviderRecording{}, err
+	}
+	build := func(dialer transport.Dialer) (messages.SessionInferencer, error) {
+		return factory.newOpenAISessionInferencerForTools(sessionCfg, opts.Voice, dialer, opts.ToolDefinitions, false, transcription)
+	}
+	capture, err := opts.RecordingService.RecordProviderSession(opts.ProviderCaptureService, recording.ProviderSessionOptions{
+		Destination: opts.RecordPath, Provider: sessionProviderOpenAI, Model: sessionCfg.Model,
+		Dialer: &sessionRTCLazyDialer{runtime: runtime}, Clock: opts.Clock, Build: build,
+	})
+	if err != nil {
+		return sessionRTCProviderRecording{}, err
+	}
+	return sessionRTCProviderRecording{
+		provider: sessionProviderOpenAI, model: sessionCfg.Model, mode: sessionRuntimeModeRecordOpenAI,
+		inferencer: capture, flush: capture.FlushCapture, flushTo: capture.FlushToFile,
+		announce: fmt.Sprintf("Starting OpenAI realtime session recording to %s", opts.RecordPath),
+		finalize: sessionCaptureFinalizer(opts.RecordPath),
 	}, nil
 }
 
+func openAIRecordingSessionBuilder(opts SessionRunOptions, factory sessionRuntimeFactory, sessionCfg config.OpenAIConfig, clientOwnedAudio bool, inputAudioTranscription models.InputAudioTranscriptionConfig) func(transport.Dialer) (messages.SessionInferencer, error) {
+	return func(dialer transport.Dialer) (messages.SessionInferencer, error) {
+		inferencer, err := factory.newOpenAISessionInferencerForTools(sessionCfg, opts.Voice, dialer, opts.ToolDefinitions, clientOwnedAudio, inputAudioTranscription)
+		if err != nil {
+			return nil, err
+		}
+		if configurer, ok := inferencer.(interface {
+			SetSessionTurnDetection(*models.TurnDetectionConfig)
+		}); ok {
+			turnDetection := cloneSessionTurnDetection(opts.TurnDetection)
+			if turnDetection == nil && opts.RTCBinding.HasInput() && !clientOwnedAudio {
+				turnDetection = &models.TurnDetectionConfig{Type: "semantic_vad"}
+			}
+			configurer.SetSessionTurnDetection(turnDetection)
+		}
+		return inferencer, nil
+	}
+}
+
 func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
-	configuration, err := loadReplaySessionConfiguration(opts.ReplayPath)
-	if err != nil {
-		return sessionRuntimePlan{}, err
-	}
-	replayDialer, err := factory.replayDialer(opts.ReplayPath, opts.ReplayTiming)
-	if err != nil {
-		return sessionRuntimePlan{}, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
-	}
-	model := configuration.model
-	if strings.TrimSpace(model) == "" {
-		model = replayDialer.Model()
-	}
-	if strings.TrimSpace(model) == "" {
-		model = openAIRealtimeModel
-	}
-	prompt := opts.Prompt
-	promptProvided := opts.PromptProvided || prompt != ""
-	barePromptReplay := false
-	var bareAudioTurns []ScheduledAudioInput
-	if !promptProvided {
-		capturedPrompt, promptErr := loadReplaySessionPrompt(opts.ReplayPath)
-		if promptErr != nil {
-			return sessionRuntimePlan{}, promptErr
-		}
-		if capturedPrompt != nil {
-			prompt = capturedPrompt.text
-			promptProvided = true
-			barePromptReplay = true
-		} else if len(opts.AudioInputs) == 0 && !opts.ClientOwnsAudioTurnBoundaries && !opts.roomReplay {
-			// Without a recorded text prompt or caller-supplied audio turns, inspect
-			// the capture for a scheduled-audio-turn replay. A caller-owned streaming
-			// --audio-in source drives its own committed audio independently of
-			// ScheduledAudioInput and must keep reaching the strict replay dialer
-			// unchanged. Reconstruct scheduled turns directly from the recorded
-			// client frames so a bare replay never needs the caller to re-supply
-			// the original audio files.
-			audioTurns, audioErr := loadReplaySessionAudioTurns(opts.ReplayPath)
-			if audioErr != nil {
-				return sessionRuntimePlan{}, audioErr
-			}
-			bareAudioTurns = audioTurns
-		}
-	}
-	bareAudioTurnReplay := len(bareAudioTurns) > 0
-	scheduledAudio := len(opts.AudioInputs) > 0 || bareAudioTurnReplay
-	// The initial provider configuration is captured wire data. The current
-	// tool definitions remain on plan.loop for local execution, but are not
-	// used to rebuild the provider handshake.
-	replayDialerWithConfiguration := newReplayInitialSessionUpdateDialer(
-		replayDialer,
-		configuration,
-		barePromptReplay || bareAudioTurnReplay,
-	)
-	sessionInferencer, err := factory.newOpenAISessionInferencerForTools(config.OpenAIConfig{
-		APIKey: "replay",
-		Model:  model,
-	}, opts.Voice, replayDialerWithConfiguration, nil, scheduledAudio, models.InputAudioTranscriptionConfig{})
-	if err != nil {
-		return sessionRuntimePlan{}, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
-	}
-	sessionInferencer = newWebSocketReplaySessionInferencer(sessionInferencer)
-	plan := sessionRuntimePlan{
-		mode:                  sessionRuntimeModeReplayOpenAI,
-		provider:              sessionProviderOpenAI,
-		model:                 model,
-		inputAudioSampleRate:  configuration.inputAudioSampleRate,
-		outputAudioSampleRate: configuration.outputAudioSampleRate,
-		inferencer:            sessionInferencer,
-		announceTools:         replayAnnouncementToolDefinitions(opts.ToolDefinitions, configuration.initialToolNames, configuration.initialToolsKnown),
-		loop: sessionLoopOptions{
-			Prompt:         prompt,
-			PromptProvided: promptProvided,
-			WaitForClose:   opts.WaitForClose || captureHasEvent(opts.ReplayPath, sessionClosedEventType),
-			MaxDuration:    replayLoopMaxDuration(opts.ReplayPath, opts.ReplayTiming),
-			// Caller-supplied scheduled audio owns its close request. A bare
-			// replay must follow the capture's provider terminal instead of
-			// synthesizing a loop-authored client_close after the final turn.
-			CloseAfterScheduledAudio: len(opts.AudioInputs) > 0,
-			Done:                     replayDialer.Done(),
-			DoneErr:                  replayDialer.Err,
-		},
-		finalize: func(_ context.Context, _ io.Writer) error {
-			if err := replayDialer.Err(); err != nil {
-				return fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
-			}
-			return nil
-		},
-	}
-	if bareAudioTurnReplay {
-		// The recorded client frames are entirely self-driving: no
-		// caller-supplied audio, --record-dir, or --max-duration bound is
-		// needed to reach the recorded scheduled-audio turns.
-		plan.audioInputs = bareAudioTurns
-	}
-	if barePromptReplay || bareAudioTurnReplay {
-		plan.replayCompletion = func(reporter sessionterminal.Reporter) {
-			reporter.MarkReplayComplete()
-		}
-	}
-	return plan, nil
+	return planOpenAIReplayRuntimeContext(context.Background(), opts, factory)
 }
 
 func replayAnnouncementToolDefinitions(definitions []messages.ToolDefinition, names []string, known bool) []messages.ToolDefinition {
@@ -297,4 +186,174 @@ func buildOpenAIRealtimeSessionInferencerWithScheduledAudioAndInputAudioTranscri
 		oaiprovider.WithClientOwnedAudioTurnBoundaries(),
 	}
 	return newOpenAIRealtimeSessionInferencerWithVoiceAndToolsAndInputAudioTranscriptionAndOptions(sessionCfg, voice, toolDefinitions, inputAudioTranscription, opts...)
+}
+
+func newOpenAILiveSessionInferencer(opts SessionRunOptions, instructions string) (messages.SessionInferencer, string, error) {
+	sessionCfg, err := resolveOpenAIRealtimeSessionConfig(opts)
+	if err != nil {
+		return nil, "", err
+	}
+	model := sessionCfg.Model
+	request := deviceProbeSessionConfig(model, instructions, models.AudioFormatPCM16, models.AudioFormatPCM16)
+	transcription, err := resolveSessionTranscription(opts, sessionProviderOpenAI, true)
+	if err != nil {
+		return nil, "", err
+	}
+	request.InputAudioTranscription = &transcription
+	request.TurnDetection = cloneSessionTurnDetection(opts.TurnDetection)
+	request.Voice = opts.Voice
+	request.ReasoningEffort = sessionCfg.ReasoningEffort
+	request.Tools = append([]messages.ToolDefinition(nil), opts.ToolDefinitions...)
+	build := func(dialer transport.Dialer) (messages.SessionInferencer, error) {
+		providerGateway, err := gateway.NewSessionGateway(gateway.WithSessionProvider(oaiprovider.New(
+			oaiprovider.WithAPIKey(sessionCfg.APIKey),
+			oaiprovider.WithModel(sessionCfg.Model),
+			oaiprovider.WithRealtimeBaseURL(openAIRealtimeURL(sessionCfg)),
+			oaiprovider.WithWebSocketDialer(dialer),
+		)))
+		if err != nil {
+			return nil, fmt.Errorf("create OpenAI realtime session gateway: %w", err)
+		}
+		return inference.NewSessionGatewayInferencer(providerGateway, inference.WithSessionRequest(inference.SessionRequest{Config: request})), nil
+	}
+	return buildLiveProbeSession(opts, sessionProviderOpenAI, model, defaultDeviceProbeDialer(opts, sessionProviderOpenAI), build)
+}
+
+func planReplaySessionRuntimeContext(ctx context.Context, opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
+	if opts.SessionInferencer != nil {
+		return sessionRuntimePlan{
+			mode: sessionRuntimeModeReplayGeneric, capturePath: opts.ReplayPath,
+			provider: strings.ToLower(strings.TrimSpace(opts.Provider)), model: opts.Model, inferencer: opts.SessionInferencer,
+			announceTools: []messages.ToolDefinition{},
+			loop:          sessionLoopOptions{Prompt: opts.Prompt, WaitForClose: opts.WaitForClose, MaxDuration: injectedSessionDefaultMaxDuration},
+		}, nil
+	}
+	if opts.ReplayService == nil {
+		return sessionRuntimePlan{}, errors.New("replay service is not configured")
+	}
+	inspection, err := opts.ReplayService.InspectCapture(ctx, opts.ReplayPath)
+	if err != nil {
+		return sessionRuntimePlan{}, err
+	}
+	if inspection.IsRealtime() {
+		if strings.EqualFold(inspection.Provider, sessionProviderOpenAI) {
+			return planRealtimeReplayForProvider(ctx, opts, factory, inspection, sessionProviderOpenAI)
+		}
+		return planRealtimeReplayForProvider(ctx, opts, factory, inspection, sessionProviderGrok)
+	}
+	return sessionRuntimePlan{
+		mode: sessionRuntimeModeReplayGeneric, capturePath: opts.ReplayPath,
+		replayIntegrityWarning: inspection.IntegrityWarning, loopOut: io.Discard,
+		loop: sessionLoopOptions{Prompt: opts.Prompt},
+		finalize: func(runCtx context.Context, out io.Writer) error {
+			return runReplayCapture(runCtx, out, opts.ReplayService, opts.ReplayPath)
+		},
+	}, nil
+}
+
+func planRealtimeReplayForProvider(ctx context.Context, opts SessionRunOptions, factory sessionRuntimeFactory, inspection replay.CaptureInspection, provider string) (sessionRuntimePlan, error) {
+	var plan sessionRuntimePlan
+	var err error
+	if provider == sessionProviderOpenAI {
+		plan, err = planOpenAIReplayRuntimeContext(ctx, opts, factory)
+	} else {
+		plan, err = planGrokReplayRuntimeContext(ctx, opts, factory)
+	}
+	if err != nil {
+		return sessionRuntimePlan{}, err
+	}
+	plan.replayIntegrityWarning = inspection.IntegrityWarning
+	return plan, nil
+}
+
+func planOpenAIReplayRuntimeContext(ctx context.Context, opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
+	prepared, dialer, inspection, err := prepareReplayLiveContext(ctx, opts)
+	if err != nil {
+		return sessionRuntimePlan{}, err
+	}
+	model := strings.TrimSpace(inspection.Model)
+	if model == "" {
+		model = openAIRealtimeModel
+	}
+	prompt, promptProvided := replayOpeningPrompt(opts, inspection)
+	bareAudioTurns := []ScheduledAudioInput(nil)
+	if replayUsesCapturedAudioTurns(opts, inspection) {
+		bareAudioTurns = replayScheduledAudioInputs(inspection.LivePlan.AudioTurns)
+	}
+	scheduledAudio := len(opts.AudioInputs) > 0 || len(bareAudioTurns) > 0
+	inferencer, err := factory.newOpenAISessionInferencerForTools(config.OpenAIConfig{APIKey: "replay", Model: model}, opts.Voice, dialer, nil, scheduledAudio, models.InputAudioTranscriptionConfig{})
+	if err != nil {
+		return sessionRuntimePlan{}, closePreparedReplay(prepared, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err))
+	}
+	inferencer = prepared.WrapInferencer(inferencer)
+	planned := replayInspectionPlan(inspection)
+	plan := sessionRuntimePlan{
+		mode: sessionRuntimeModeReplayOpenAI, provider: sessionProviderOpenAI, model: model,
+		inputAudioSampleRate: planned.inputRate, outputAudioSampleRate: planned.outputRate, inferencer: inferencer,
+		announceTools: []messages.ToolDefinition{},
+		loop:          sessionLoopOptions{Prompt: prompt, PromptProvided: promptProvided, WaitForClose: opts.WaitForClose || planned.providerClose, MaxDuration: planned.maxDuration, CloseAfterScheduledAudio: len(opts.AudioInputs) > 0, Done: prepared.Done(), DoneErr: prepared.Err},
+		finalize:      func(_ context.Context, _ io.Writer) error { return errors.Join(prepared.Err(), prepared.Close()) },
+	}
+	if len(bareAudioTurns) > 0 {
+		plan.audioInputs = bareAudioTurns
+	}
+	if replayCompletesAfterScheduledAudio(bareAudioTurns, opts, promptProvided) {
+		plan.replayCompletion = func(reporter sessionterminal.Reporter) { reporter.MarkReplayComplete() }
+	}
+	return plan, nil
+}
+
+func replayOpeningPrompt(opts SessionRunOptions, inspection replay.CaptureInspection) (string, bool) {
+	prompt := opts.Prompt
+	promptProvided := opts.PromptProvided || prompt != ""
+	if !promptProvided && inspection.LivePlan != nil && inspection.LivePlan.OpeningPromptPresent {
+		return inspection.LivePlan.OpeningPrompt, true
+	}
+	return prompt, promptProvided
+}
+
+func replayUsesCapturedAudioTurns(opts SessionRunOptions, inspection replay.CaptureInspection) bool {
+	return len(opts.AudioInputs) == 0 && !opts.ClientOwnsAudioTurnBoundaries && !opts.roomReplay && inspection.LivePlan != nil
+}
+
+func replayCompletesAfterScheduledAudio(turns []ScheduledAudioInput, opts SessionRunOptions, promptProvided bool) bool {
+	return len(turns) > 0 || (promptProvided && !opts.PromptProvided && opts.Prompt == "")
+}
+
+type replayInspectionRuntimePlan struct {
+	inputRate, outputRate int
+	maxDuration           time.Duration
+	providerClose         bool
+}
+
+func replayInspectionPlan(inspection replay.CaptureInspection) replayInspectionRuntimePlan {
+	if inspection.LivePlan == nil {
+		return replayInspectionRuntimePlan{}
+	}
+	return replayInspectionRuntimePlan{inputRate: inspection.LivePlan.InputAudioSampleRate, outputRate: inspection.LivePlan.OutputAudioSampleRate, maxDuration: inspection.LivePlan.MaxDuration, providerClose: inspection.LivePlan.ProviderCloseExpected}
+}
+
+func replayScheduledAudioInputs(turns []session.LiveReplayAudioTurn) []ScheduledAudioInput {
+	inputs := make([]ScheduledAudioInput, 0, len(turns))
+	for index, turn := range turns {
+		var pcm []byte
+		for _, chunk := range turn.Chunks {
+			pcm = append(pcm, codec.EncodePCM16(chunk)...)
+		}
+		if len(pcm) == 0 {
+			continue
+		}
+		inputs = append(inputs, ScheduledAudioInput{AfterCompletedTurns: index, PCM: pcm, EndOfTurn: true})
+	}
+	return inputs
+}
+
+func runReplayCapture(ctx context.Context, out io.Writer, service replay.Service, path string) error {
+	capture, err := service.Replay(ctx, path)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = capture.Close() }()
+	err = capture.Drain(ctx, func(msg messages.StreamMessage) error { return writeSessionReplayMessage(out, msg) })
+	return errors.Join(err, capture.Err())
 }
