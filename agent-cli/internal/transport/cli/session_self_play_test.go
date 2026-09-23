@@ -53,6 +53,27 @@ func TestSessionSelfPlayCommandParsesBoundedRunOptions(t *testing.T) {
 	}
 }
 
+func TestSessionSelfPlayCommandLeavesOmittedDefaultsForService(t *testing.T) {
+	globalFlags := flags.NewGlobalFlags()
+	globalFlags.ConfigDirPath = t.TempDir()
+	subject := NewSessionSelfPlayCommand(globalFlags, nil)
+
+	var got serviceSelfPlay.RunOptions
+	subject.SetRunner(func(_ context.Context, _ io.Writer, options serviceSelfPlay.RunOptions) error {
+		got = options
+		return nil
+	})
+
+	cmd := subject.Generate()
+	cmd.SetArgs([]string{"--output-dir", filepath.Join(t.TempDir(), "self-play")})
+	if err := cmd.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("execute self-play command: %v", err)
+	}
+	if got.Provider != "" || got.Model != "" || got.MaxDuration != 0 || got.MaxTurns != 0 {
+		t.Fatalf("omitted self-play values = provider %q, model %q, duration %s, turns %d; want zero values for service defaults", got.Provider, got.Model, got.MaxDuration, got.MaxTurns)
+	}
+}
+
 func TestSessionSelfPlayCommandHelpDocumentsTransportContract(t *testing.T) {
 	cmd := NewSessionSelfPlayCommand(flags.NewGlobalFlags(), nil).Generate()
 	var helpOutput bytes.Buffer
@@ -100,8 +121,7 @@ func TestSelfPlayServiceAdapterTranslatesConfiguredRequestAndPresentsResult(t *t
 			var output bytes.Buffer
 			options := serviceSelfPlay.RunOptions{
 				APIKey: test.apiKey, ConfigDir: t.TempDir(), OutputDir: filepath.Join(t.TempDir(), "self-play"),
-				Provider: runtimeSelfPlay.DefaultProvider, Model: runtimeSelfPlay.DefaultModel,
-				BaseURL: "wss://example.test/realtime", MaxDuration: 17 * time.Second, MaxTurns: 4,
+				BaseURL: "wss://example.test/realtime",
 			}
 			if err := adapter.Run(context.Background(), &output, options); err != nil {
 				t.Fatalf("adapt runtime self-play service: %v", err)

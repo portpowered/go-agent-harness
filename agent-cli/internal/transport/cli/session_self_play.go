@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
@@ -67,11 +68,12 @@ func selfPlayRequest(options serviceSelfPlay.RunOptions) (runtimeSelfPlay.Reques
 		MaxTurns:    options.MaxTurns,
 	}
 	provider := strings.ToLower(strings.TrimSpace(options.Provider))
-	if provider == "" {
-		provider = runtimeSelfPlay.DefaultProvider
-	}
-	if provider != runtimeSelfPlay.DefaultProvider {
+	if provider != "" && provider != runtimeSelfPlay.DefaultProvider {
 		return request, nil
+	}
+	configProvider := provider
+	if configProvider == "" {
+		configProvider = runtimeSelfPlay.DefaultProvider
 	}
 	storage, err := config.NewDefaultConfigStorage(options.ConfigDir)
 	if err != nil {
@@ -81,7 +83,7 @@ func selfPlayRequest(options serviceSelfPlay.RunOptions) (runtimeSelfPlay.Reques
 	if err != nil {
 		return runtimeSelfPlay.Request{}, fmt.Errorf("self-play live session configuration: %w", err)
 	}
-	effective := loaded.ApplyOverrides(options.APIKey, options.Model, provider, options.BaseURL)
+	effective := loaded.ApplyOverrides(options.APIKey, options.Model, configProvider, options.BaseURL)
 	active, err := effective.ActiveOpenAIConfig()
 	if err != nil {
 		return runtimeSelfPlay.Request{}, fmt.Errorf("self-play live session configuration: %w", err)
@@ -101,13 +103,9 @@ func (c *SessionSelfPlayCommand) SetRunner(runner func(context.Context, io.Write
 
 // Generate returns the cobra command for the bounded self-play runner.
 func (c *SessionSelfPlayCommand) Generate() *cobra.Command {
-	apiKey := ""
-	provider := runtimeSelfPlay.DefaultProvider
-	model := runtimeSelfPlay.DefaultModel
-	baseURL := ""
-	outputDir := ""
-	maxDuration := runtimeSelfPlay.DefaultMaxDuration
-	maxTurns := runtimeSelfPlay.DefaultTurnTarget
+	var apiKey, provider, model, baseURL, outputDir string
+	var maxDuration time.Duration
+	var maxTurns int
 
 	cmd := &cobra.Command{
 		Use:   "self-play",
