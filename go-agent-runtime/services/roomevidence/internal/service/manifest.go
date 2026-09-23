@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 )
@@ -30,79 +29,12 @@ type diagnosticRecord struct {
 	TUnixMS   int64             `json:"t_unix_ms"`
 }
 
-type artifactIntegrity struct {
-	Size   int64  `json:"size"`
-	SHA256 string `json:"sha256"`
-}
-
-type manifestTiming struct {
-	StartedAt string `json:"started_at"`
-	EndedAt   string `json:"ended_at"`
-	Elapsed   string `json:"elapsed"`
-	ClockBase string `json:"clock_base"`
-}
-
-type manifestBounds struct {
-	MaxTurns    int    `json:"max_turns,omitempty"`
-	MaxDuration string `json:"max_duration,omitempty"`
-}
-
-type participantManifest struct {
-	ID                     string                             `json:"id"`
-	Kind                   rooms.ParticipantKind              `json:"kind"`
-	SystemPrompt           string                             `json:"system_prompt"`
-	OpeningPrompt          string                             `json:"opening_prompt,omitempty"`
-	Provider               string                             `json:"provider"`
-	Model                  string                             `json:"model"`
-	APIKeyEnv              string                             `json:"api_key_env"`
-	Voice                  string                             `json:"voice,omitempty"`
-	Tools                  []string                           `json:"tools"`
-	BrowserTools           *rooms.BrowserToolsConfig          `json:"browser_tools,omitempty"`
-	CompletedTurns         int                                `json:"completed_turns"`
-	TerminationReason      rooms.ParticipantTerminationReason `json:"termination_reason"`
-	Reason                 rooms.ParticipantTerminationReason `json:"reason,omitempty"`
-	TerminationTrigger     string                             `json:"termination_trigger"`
-	TerminationDisposition string                             `json:"termination_disposition"`
-	Classification         string                             `json:"classification"`
-	TerminalReason         string                             `json:"terminal_reason"`
-	TerminalProvenance     string                             `json:"terminal_provenance"`
-	OutputState            string                             `json:"output_state"`
-	Connected              bool                               `json:"connected"`
-	InputDevice            string                             `json:"input_device,omitempty"`
-	OutputDevice           string                             `json:"output_device,omitempty"`
-	Error                  string                             `json:"error,omitempty"`
-	Artifacts              roomevidence.ArtifactPaths         `json:"artifacts"`
-	RecordingStatus        *transcript.RecordingStatus        `json:"recording_status,omitempty"`
-	DegradedArtifacts      map[string]string                  `json:"degraded_artifacts,omitempty"`
-}
-
-type roomManifest struct {
-	SchemaVersion     int                            `json:"schema_version"`
-	Finalized         bool                           `json:"finalized"`
-	Timing            manifestTiming                 `json:"timing"`
-	Bounds            manifestBounds                 `json:"bounds"`
-	TerminationReason rooms.RoomTerminationReason    `json:"termination_reason"`
-	Reason            rooms.RoomTerminationReason    `json:"reason,omitempty"`
-	Participants      map[string]participantManifest `json:"participants"`
-	TurnCounts        map[string]int                 `json:"turn_counts"`
-	AudioFormat       roomAudioFormat                `json:"audio_format"`
-	RoomMix           string                         `json:"room_mix"`
-	RoomTimeline      string                         `json:"room_timeline"`
-	RoomLatency       string                         `json:"room_latency,omitempty"`
-	Artifacts         map[string]string              `json:"artifacts"`
-	ArtifactIntegrity map[string]artifactIntegrity   `json:"artifact_integrity,omitempty"`
-	RecordingStatus   *transcript.RecordingStatus    `json:"recording_status,omitempty"`
-	DegradedArtifacts map[string]string              `json:"degraded_artifacts,omitempty"`
-	Error             string                         `json:"error,omitempty"`
-}
-
-type roomAudioFormat struct {
-	SampleRate      int    `json:"sample_rate"`
-	Channels        int    `json:"channels"`
-	Encoding        string `json:"encoding"`
-	SampleWidthBits int    `json:"sample_width_bits"`
-	ByteOrder       string `json:"byte_order"`
-}
+type artifactIntegrity = roomevidence.ArtifactIntegrity
+type manifestTiming = roomevidence.ManifestTiming
+type manifestBounds = roomevidence.ManifestBounds
+type participantManifest = roomevidence.ManifestParticipant
+type roomManifest = roomevidence.RunManifest
+type roomAudioFormat = roomevidence.ManifestAudioFormat
 
 func (r *recorder) Finalize(finalization roomevidence.Finalization) (roomevidence.Result, error) {
 	if r == nil {

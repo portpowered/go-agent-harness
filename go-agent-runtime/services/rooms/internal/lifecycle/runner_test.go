@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	roomevidencewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
@@ -108,7 +109,7 @@ func TestRunnerRecordsBoundedRoomEvidenceThroughGraphLifecycle(t *testing.T) {
 	}}
 	output := t.TempDir()
 	clock := platformclock.NewDeterministic(time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC), time.Millisecond)
-	runner := New(Dependencies{Live: service, Clock: clock})
+	runner := New(Dependencies{Live: service, Clock: clock, Evidence: roomevidencewire.NewService(), Latency: roomevidencewire.NewLatencyService()})
 	result, err := runner.Run(context.Background(), nil, rooms.RoomRunOptions{Manifest: testManifest(), OutputDir: output})
 	if err != nil {
 		t.Fatalf("Run error = %v", err)

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	runtimeRoomWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
@@ -393,7 +394,7 @@ func (f *roomLiveLivenessFixture) assertEvidence(t *testing.T) {
 
 func (f *roomLiveLivenessFixture) assertTimeline(t *testing.T) {
 	t.Helper()
-	path := filepath.Join(f.destination, runtimeRooms.RoomEvidenceTimelinePath)
+	path := filepath.Join(f.destination, roomevidence.TimelinePath)
 	timelineFile, err := os.Open(path)
 	if err != nil {
 		t.Fatalf("open room timeline: %v", err)

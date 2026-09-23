@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	roomevidencewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle"
@@ -48,7 +49,8 @@ func TestServiceExposesReplayAndEvidenceBoundaries(t *testing.T) {
 	}
 	svc := New(Dependencies{
 		Planner: planning.New(), Replay: replay,
-		Runner: lifecycle.New(lifecycle.Dependencies{}),
+		Runner:   lifecycle.New(lifecycle.Dependencies{}),
+		Evidence: roomevidencewire.NewService(),
 	})
 	if svc == nil {
 		t.Fatal("New() returned nil")
@@ -113,7 +115,8 @@ func TestPublicRunRejectsNonEmptyReplayOutputBeforeParticipantEffects(t *testing
 	replay := replayServiceStub{plan: roomreplay.RoomReplayPlan{BundlePath: filepath.Join(t.TempDir(), "bundle")}}
 	service := New(Dependencies{
 		Planner: planning.New(), Replay: replay,
-		Runner: lifecycle.New(lifecycle.Dependencies{Clock: platformclock.Real{}}),
+		Runner:   lifecycle.New(lifecycle.Dependencies{Clock: platformclock.Real{}}),
+		Evidence: roomevidencewire.NewService(),
 	})
 	var public rooms.Service = service
 

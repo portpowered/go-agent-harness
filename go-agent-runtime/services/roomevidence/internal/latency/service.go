@@ -33,7 +33,7 @@ func (Service) AnalyzeBundle(bundle rooms.RoomLatencyBundle) (rooms.RoomLatencyR
 }
 
 func (Service) Report(destination string) (rooms.RoomLatencyReport, error) {
-	return AnalyzeFile(filepath.Join(destination, rooms.RoomLatencyArtifactPath))
+	return AnalyzeFile(filepath.Join(destination, roomevidence.LatencyPath))
 }
 
 var _ roomevidence.LatencyService = Service{}

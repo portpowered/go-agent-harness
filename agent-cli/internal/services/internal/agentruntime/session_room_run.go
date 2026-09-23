@@ -12,6 +12,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
+	roomevidencewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
@@ -19,59 +21,6 @@ import (
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
-
-// recordRoomTimelineEvent turns one participant's inbound stream message
-// into the room-level timeline entries that make a conversation's shape
-// machine readable: response boundaries, barge-in cancel outcomes, and tool
-// calls. It intentionally reads only already-observable inbound events (no
-// go-agent-loop changes), matching what a real provider actually echoes back
-// for a successful or failed RESPONSE.CANCEL.
-func recordRoomTimelineEvent(evidence *roomEvidence, participantID string, msg messages.StreamMessage) {
-	if evidence == nil || evidence.timeline == nil {
-		return
-	}
-	switch msg.Type {
-	case messages.StreamTypeMessageStart:
-		evidence.recordTimelineEvent("response_start", participantID, map[string]string{"response_id": msg.ResponseID})
-	case messages.StreamTypeMessageEnd:
-		fields := map[string]string{"response_id": msg.ResponseID}
-		if value, ok := msg.Value.(*messages.MessageEndValue); ok && value != nil {
-			fields["terminal_reason"] = string(value.TerminalReason)
-			fields["terminal_provenance"] = string(value.TerminalProvenance)
-			fields["output_state"] = string(value.OutputState)
-			evidence.recordTimelineEvent("response_end", participantID, fields)
-			if value.TerminalReason == messages.TerminalReasonCancellation {
-				// A provider only reports a response as cancelled when a
-				// RESPONSE.CANCEL it received actually took effect: this is
-				// the barge-in cancel's acknowledgement.
-				evidence.recordTimelineEvent("barge_in_cancel_acked", participantID, map[string]string{"response_id": msg.ResponseID})
-			}
-			return
-		}
-		evidence.recordTimelineEvent("response_end", participantID, fields)
-	case messages.StreamTypeError:
-		value, ok := msg.Value.(*messages.ErrorValue)
-		if !ok || value == nil {
-			return
-		}
-		// Keep raw provider prose out of the room timeline. The structured
-		// diagnostic/manifest fields carry the stable taxonomy; a provider error
-		// message can contain credentials, request bodies, or other sensitive
-		// transport detail even after the participant API key is redacted.
-		fields := map[string]string{"code": value.Code, "classification": value.Classification}
-		if value.Classification == providers.ErrorClassResponseCancelNotActive {
-			// The provider rejected a barge-in cancel because it had no
-			// active response to cancel: an observable cancel failure.
-			evidence.recordTimelineEvent("barge_in_cancel_failed", participantID, fields)
-			return
-		}
-		evidence.recordProviderErrorTimeline(participantID, fields)
-	case messages.StreamTypeToolCallStart:
-		evidence.recordTimelineEvent("tool_call_start", participantID, map[string]string{"tool_call_id": msg.ToolCallId})
-	case messages.StreamTypeToolCallEnd:
-		evidence.recordTimelineEvent("tool_call_end", participantID, map[string]string{"tool_call_id": msg.ToolCallId})
-	}
-}
 
 type roomParticipantRunResult struct {
 	plan       *roomParticipantPlan
@@ -101,12 +50,15 @@ func defaultRoomSessionFactory(participant room.Participant, options SessionRunO
 type roomParticipantDiagnosticSink struct {
 	participantID string
 	observer      RoomParticipantDiagnosticObserver
-	evidence      *roomEvidence
+	evidence      roomevidence.Recorder
 }
 
 func (s roomParticipantDiagnosticSink) RecordSessionDiagnostic(record SessionDiagnosticRecord) {
 	if s.evidence != nil && record.Event == SessionDiagnosticEventTurn {
-		s.evidence.recordTimelineEvent("turn_completed", s.participantID, map[string]string{fieldTurnIndex: record.Fields[fieldTurnIndex]})
+		_ = s.evidence.RecordTimeline("turn_completed", s.participantID, map[string]string{fieldTurnIndex: record.Fields[fieldTurnIndex]})
+	}
+	if s.evidence != nil {
+		s.evidence.RecordSessionDiagnostic(roomevidence.DiagnosticRecord{ParticipantID: s.participantID, Event: record.Event, Fields: record.Fields})
 	}
 	if s.observer != nil {
 		s.observer(s.participantID, record)
@@ -119,7 +71,7 @@ func runRoomParticipant(
 	runtime *roomParticipantRuntime,
 	startGate <-chan struct{},
 	opts RoomRunOptions,
-	evidence *roomEvidence,
+	evidence roomevidence.Recorder,
 	results chan<- roomParticipantRunResult,
 	runWG *sync.WaitGroup,
 	mixerWG *sync.WaitGroup,
@@ -131,12 +83,11 @@ func runRoomParticipant(
 			close(runtime.participantDone)
 		}
 	}()
-	participantEvidence := roomParticipantEvidenceForRuntime(evidence, runtime)
 	// Computed once, before any result can reach the coordinator, so a human
 	// participant's teardown (see finishParticipant) can name this
 	// participant on a playback overflow the same way a provider
 	// participant's session diagnostics already do below.
-	runtime.diagnosticSink = sessiontracewire.CombineDiagnosticSinks(roomParticipantDiagnosticSinks(runtime.plan, opts, participantEvidence, evidence)...)
+	runtime.diagnosticSink = sessiontracewire.CombineDiagnosticSinks(roomParticipantDiagnosticSinks(runtime.plan, opts, evidence)...)
 	var observer sessiontrace.Observer
 	if !roomParticipantIsHuman(runtime.plan) {
 		observer = sessiontracewire.NewObserver(sessiontrace.NewObserverOptions{Sink: runtime.diagnosticSink, Provider: runtime.plan.manifest.Provider, Model: runtime.plan.manifest.Model, TerminalService: wire.NewService()})
@@ -145,7 +96,9 @@ func runRoomParticipant(
 			classification, _, _, _ := sessiontracewire.LivenessMetadata(err)
 			if classification != "" {
 				participantID := runtime.plan.manifest.ID
-				evidence.recordTimelineEvent("participant_liveness_fault", participantID, map[string]string{"reason": classification})
+				if evidence != nil {
+					_ = evidence.RecordTimeline("participant_liveness_fault", participantID, map[string]string{"reason": classification})
+				}
 			}
 		})
 		observer.SetTurnAdmission(func(msg messages.StreamMessage) bool {
@@ -157,7 +110,7 @@ func runRoomParticipant(
 				value.TerminalReason == messages.TerminalReasonLoopSynthesizedCompletion
 		})
 		observer.SetStreamObserver(func(msg messages.StreamMessage) {
-			observeRoomParticipantStream(coordinator, runtime, opts, evidence, participantEvidence, runtime.ctx, msg)
+			observeRoomParticipantStream(coordinator, runtime, opts, evidence, runtime.ctx, msg)
 		})
 		observer.SetAdmittedTurnObserver(func(messages.StreamMessage) {
 			turns := runtime.lifecycle.observeAdmittedTurn()
@@ -184,10 +137,10 @@ func runRoomParticipant(
 			}
 		}()
 		if roomParticipantIsHuman(runtime.plan) {
-			pumpRoomHumanOutput(runtime.ctx, roomCtx, coordinator, runtime, startGate, participantEvidence, secrets)
+			pumpRoomHumanOutput(runtime.ctx, roomCtx, coordinator, runtime, startGate, evidence, secrets)
 			return
 		}
-		pumpRoomMixer(roomCtx, coordinator, runtime, startGate, opts.onParticipantAudioInput, inputObserver, participantEvidence, secrets)
+		pumpRoomMixer(roomCtx, coordinator, runtime, startGate, opts.onParticipantAudioInput, inputObserver, evidence, secrets)
 	}()
 
 	if startupErr := runtime.plan.startupErr; startupErr != nil {
@@ -221,21 +174,23 @@ func runRoomParticipant(
 			results <- roomParticipantRunResult{plan: runtime.plan, runtime: runtime, connected: connected, connectErr: connectErr}
 			return
 		}
-		runErr := runRoomHumanCapture(runtime.ctx, roomCtx, coordinator, runtime, startGate, participantEvidence, opts, secrets)
+		runErr := runRoomHumanCapture(runtime.ctx, roomCtx, coordinator, runtime, startGate, evidence, opts, secrets)
 		runErr = coordinator.participantRunError(runtime.plan.manifest.ID, runErr)
 		runtime.lifecycle.markRunDone(runErr)
 		connected, _, _, _, _, _, connectErr := runtime.lifecycle.snapshot()
 		results <- roomParticipantRunResult{plan: runtime.plan, runtime: runtime, err: runErr, connected: connected, connectErr: connectErr}
 		return
 	}
-	diagnosticSinks := roomParticipantDiagnosticSinks(runtime.plan, opts, participantEvidence, evidence)
+	diagnosticSinks := roomParticipantDiagnosticSinks(runtime.plan, opts, evidence)
 	observer = sessiontracewire.NewObserver(sessiontrace.NewObserverOptions{Sink: sessiontracewire.CombineDiagnosticSinks(diagnosticSinks...), Provider: runtime.plan.manifest.Provider, Model: runtime.plan.manifest.Model, TerminalService: wire.NewService()})
 	observer.SetLivenessObserver(func(err error) {
 		runtime.lifecycle.markLivenessFailure(err)
 		classification, _, _, _ := sessiontracewire.LivenessMetadata(err)
 		if classification != "" {
 			participantID := runtime.plan.manifest.ID
-			evidence.recordTimelineEvent("participant_liveness_fault", participantID, map[string]string{"reason": classification})
+			if evidence != nil {
+				_ = evidence.RecordTimeline("participant_liveness_fault", participantID, map[string]string{"reason": classification})
+			}
 		}
 	})
 	observer.SetTerminalObserver(runtime.lifecycle.observeTerminal)
@@ -251,18 +206,16 @@ func runRoomParticipant(
 		return runtime.lifecycle.admitResponseTerminal()
 	})
 	observer.SetStreamObserver(func(msg messages.StreamMessage) {
-		observeRoomParticipantStream(coordinator, runtime, opts, evidence, participantEvidence, runtime.ctx, msg)
+		observeRoomParticipantStream(coordinator, runtime, opts, evidence, runtime.ctx, msg)
 	})
 	observer.SetAdmittedTurnObserver(func(messages.StreamMessage) {
 		turns := runtime.lifecycle.observeAdmittedTurn()
 		coordinator.noteTurn(runtime.plan.manifest.ID, turns)
 	})
 	var latencyRuntime sessiontrace.RuntimeRecorder
-	if evidence != nil && evidence.latency != nil {
-		latencyRuntime = sessiontracewire.NewRuntimeRecorder(roomLatencyRuntimeObserver{
-			recorder:      evidence.latency,
-			participantID: runtime.plan.manifest.ID,
-		}, opts.Clock)
+	if evidence != nil && evidence.LatencyRecorder() != nil {
+		latencyRuntime = sessiontracewire.NewRuntimeRecorder(roomevidencewire.NewLatencyService().NewRuntimeObserver(
+			evidence.LatencyRecorder(), runtime.plan.manifest.ID), opts.Clock)
 		latencyRuntime.EnableProviderBoundaryObservations()
 		// Latency sampling is a live-path measurement only. A replayed room
 		// drives its own scheduler off the recorded timeline, so attaching the
@@ -314,8 +267,8 @@ func runRoomParticipant(
 	// rather than earlier -- is what makes it reflect the complete exchange
 	// instead of a possibly-truncated one.
 	if flusher, ok := runtime.plan.inferencer.(SessionInferencerCaptureFlusher); ok {
-		if flushErr := flusher.FlushCapture(); flushErr != nil && participantEvidence != nil {
-			participantEvidence.recordError(participantEvidence.artifacts.Capture, flushErr)
+		if flushErr := flusher.FlushCapture(); flushErr != nil && evidence != nil {
+			evidence.MarkError(runtime.plan.manifest.ID, evidence.Artifacts(runtime.plan.manifest.ID).Capture, flushErr)
 		}
 	}
 	if closeErr := closeRoomParticipantCapability(runtime.plan); closeErr != nil {
@@ -367,14 +320,10 @@ func combineRoomDoneErrors(primary, secondary func() error) func() error {
 	}
 }
 
-func roomParticipantDiagnosticSinks(plan *roomParticipantPlan, opts RoomRunOptions,
-	participantEvidence *roomParticipantEvidence, evidence ...*roomEvidence) []SessionDiagnosticSink {
-	diagnosticSinks := make([]SessionDiagnosticSink, 0, 2+len(evidence))
-	if len(evidence) > 0 && evidence[0] != nil {
-		diagnosticSinks = append(diagnosticSinks, roomParticipantDiagnosticSink{participantID: plan.manifest.ID, evidence: evidence[0]})
-	}
-	if participantEvidence != nil {
-		diagnosticSinks = append(diagnosticSinks, participantEvidence)
+func roomParticipantDiagnosticSinks(plan *roomParticipantPlan, opts RoomRunOptions, evidence roomevidence.Recorder) []SessionDiagnosticSink {
+	diagnosticSinks := make([]SessionDiagnosticSink, 0, 2)
+	if evidence != nil {
+		diagnosticSinks = append(diagnosticSinks, roomParticipantDiagnosticSink{participantID: plan.manifest.ID, evidence: evidence})
 	}
 	if opts.OnDiagnostic != nil {
 		diagnosticSinks = append(diagnosticSinks, roomParticipantDiagnosticSink{
@@ -389,38 +338,36 @@ func observeRoomParticipantStream(
 	coordinator *roomCoordinator,
 	runtime *roomParticipantRuntime,
 	opts RoomRunOptions,
-	evidence *roomEvidence,
-	participantEvidence *roomParticipantEvidence,
+	evidence roomevidence.Recorder,
 	ctx context.Context,
 	msg messages.StreamMessage,
 ) {
 	plan := runtime.plan
 	if evidence != nil && msg.Type == messages.StreamTypeVADSpeechStopped {
-		evidence.observeSpeechStopped(plan.manifest.ID)
+		_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationSpeechStopped, ParticipantID: plan.manifest.ID})
 	}
 	if opts.onParticipantStream != nil {
 		opts.onParticipantStream(plan.manifest.ID, msg)
 	}
 	recordParticipantDelta := func() {
-		if participantEvidence == nil {
+		if evidence == nil {
 			return
 		}
-		// A recording sink is observational. Its failure is retained by the
-		// participant evidence status, but never changes this participant's
-		// runtime outcome or cancellation context.
-		_ = participantEvidence.observeDelta(msg)
+		_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationDelta, ParticipantID: plan.manifest.ID, StreamMessage: msg})
 	}
 	runtime.lifecycle.observe(msg)
-	recordRoomTimelineEvent(evidence, plan.manifest.ID, msg)
+	if evidence != nil {
+		_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationStreamMessage, ParticipantID: plan.manifest.ID, StreamMessage: msg})
+	}
 	if msg.Type == messages.StreamTypeSessionOpen && opts.onParticipantSessionOpen != nil {
 		opts.onParticipantSessionOpen(plan.manifest.ID)
 	}
-	if msg.Type == messages.StreamTypeAudioEnd && assistantAudioDelta(msg) && participantEvidence != nil {
+	if msg.Type == messages.StreamTypeAudioEnd && assistantAudioDelta(msg) && evidence != nil {
 		// A provider audio segment can end without ever emitting a silent
 		// trailing chunk, so the energy-based tracker alone would never see
 		// the transition back to silence. AUDIO.END is the reliable signal
 		// that this participant's own speech segment is over.
-		participantEvidence.closeSentSpeechSegment()
+		_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationCloseSentSpeechSegment, ParticipantID: plan.manifest.ID})
 	}
 	if msg.Type != messages.StreamTypeAudioDelta || !assistantAudioDelta(msg) {
 		recordParticipantDelta()
@@ -445,14 +392,14 @@ func observeRoomParticipantStream(
 		}
 	}
 	if evidence != nil {
-		evidence.observeSpeakerAudio(plan.manifest.ID, targetIDs, pcm)
+		_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationSpeakerAudio, ParticipantID: plan.manifest.ID, TargetIDs: targetIDs, PCM: pcm})
 		if len(pcm) > 0 {
-			evidence.observeProviderAudio(plan.manifest.ID, msg.ResponseID)
+			_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationProviderAudio, ParticipantID: plan.manifest.ID, RelatedID: msg.ResponseID})
 		}
 	}
-	if participantEvidence != nil {
+	if evidence != nil {
 		// Keep offset-anchored evidence on the handoff path; defer only WAV I/O.
-		_ = participantEvidence.observeSentStream(pcm)
+		_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationSentStream, ParticipantID: plan.manifest.ID, PCM: pcm})
 	}
 	if opts.OnAudioOutput != nil {
 		if outputErr := opts.OnAudioOutput(plan.manifest.ID, append([]byte(nil), pcm...)); outputErr != nil {
@@ -478,7 +425,7 @@ func observeRoomParticipantStream(
 				continue
 			}
 			if evidence != nil {
-				evidence.observePeerAudio(plan.manifest.ID, target.plan.manifest.ID, pcm)
+				_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationPeerAudio, ParticipantID: plan.manifest.ID, RelatedID: target.plan.manifest.ID, PCM: pcm})
 			}
 			if opts.onParticipantAudioFanned != nil {
 				opts.onParticipantAudioFanned(plan.manifest.ID, target.plan.manifest.ID, append([]byte(nil), pcm...))
@@ -489,10 +436,10 @@ func observeRoomParticipantStream(
 	// provider-to-peer handoff. A slow filesystem must not make the next room
 	// mixer frame wait before it can accept the first provider PCM delta.
 	recordParticipantDelta()
-	if participantEvidence != nil {
+	if evidence != nil {
 		// Durable WAV I/O only. A slow filesystem here must not delay the
 		// provider-to-peer handoff above.
-		_ = participantEvidence.observeAudio(context.WithoutCancel(ctx), pcm) //nolint:errcheck // evidence status retains write failures without interrupting session delivery
+		_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationParticipantAudio, ParticipantID: plan.manifest.ID, PCM: pcm})
 	}
 }
 
@@ -840,7 +787,7 @@ func finishRoomParticipant(coordinator *roomCoordinator, mesh *room.Mesh, result
 	coordinator.finishParticipant(result.runtime, reason, result.err, secrets, mesh, cleanup)
 }
 
-func pumpRoomMixer(ctx context.Context, coordinator *roomCoordinator, runtime *roomParticipantRuntime, startGate <-chan struct{}, inputHook func(string, []byte) error, observer RoomParticipantAudioObserver, participantEvidence *roomParticipantEvidence, secrets []string) {
+func pumpRoomMixer(ctx context.Context, coordinator *roomCoordinator, runtime *roomParticipantRuntime, startGate <-chan struct{}, inputHook func(string, []byte) error, observer RoomParticipantAudioObserver, evidence roomevidence.Recorder, secrets []string) {
 	if runtime == nil || runtime.mixer == nil {
 		return
 	}
@@ -899,8 +846,8 @@ func pumpRoomMixer(ctx context.Context, coordinator *roomCoordinator, runtime *r
 			// Make a dropped delivery of real (non-silent) incoming audio an
 			// explicit, diagnosable event instead of leaving it
 			// indistinguishable from ordinary silence.
-			if participantEvidence != nil && audio.PCM16HasSignal(frame) {
-				participantEvidence.recordAudioDropped(err.Error(), len(frame))
+			if evidence != nil && audio.PCM16HasSignal(frame) {
+				_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationAudioDropped, ParticipantID: runtime.plan.manifest.ID, Artifact: err.Error(), DroppedBytes: len(frame)})
 			}
 			coordinator.failParticipant(runtime.plan.manifest.ID, roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("send mixed PCM: %w", err), secretsForPlan(runtime.plan)))
 			return
@@ -911,11 +858,11 @@ func pumpRoomMixer(ctx context.Context, coordinator *roomCoordinator, runtime *r
 			// identity and original delivered/backpressured disposition.
 			runtime.ingress.resolveFrame(mixed.Sources, len(frame), "")
 		}
-		if participantEvidence != nil {
+		if evidence != nil {
 			// received.pcm is the provider-bound artifact. Record it only after
 			// SendAudioInput succeeds so a downstream rejection cannot create a
 			// false received frame.
-			_ = participantEvidence.observeReceivedAudio(providerFrame)
+			_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationReceivedParticipantAudio, ParticipantID: runtime.plan.manifest.ID, PCM: providerFrame})
 		}
 		if observer != nil {
 			if err := observer(runtime.plan.manifest.ID, append([]byte(nil), providerFrame...)); err != nil {

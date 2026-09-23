@@ -1,20 +1,12 @@
-// Package roomevidence provides the host-neutral room recording contract.
-//
-// The package describes observations and finalized bundle state only. File
-// naming, writers, clocks, mixing, redaction, and integrity bookkeeping are
-// private to the service implementation composed by the sibling wire package.
+// Package roomevidence exposes the transport-neutral recording and replay
+// contract. File naming, writers, clocks, mixing, redaction and integrity
+// bookkeeping stay private to its service implementation.
 package roomevidence
 
 import (
-	"time"
-
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
 const (
@@ -28,9 +20,6 @@ const (
 	AudioByteOrder      = "little"
 )
 
-// These aliases keep the consumer-facing recording port to one package. The
-// underlying room metadata remains the shared runtime contract; no CLI or
-// provider registry is required to construct a bundle.
 type Manifest = rooms.Manifest
 type Room = rooms.Room
 type Participant = rooms.Participant
@@ -68,20 +57,7 @@ const (
 	ErrRecorderClosed     errorCode = "room evidence recorder is closed"
 )
 
-// RecordingRequest contains only normalized, credential-free room metadata. Secrets
-// are values used for defensive redaction and never enter the manifest.
-type RecordingRequest struct {
-	Destination string
-	Manifest    rooms.Manifest
-	AudioFormat rooms.AudioFormat
-	Secrets     []string
-	StartedAt   time.Time
-	Clock       platformclock.Source
-	Latency     LatencyService
-	// LatencyRecorder lets an orchestrator share one invocation-scoped ledger
-	// with its live observations while keeping construction behind the service.
-	LatencyRecorder rooms.LatencyRecorder
-}
+type RecordingRequest = rooms.EvidenceRecordingRequest
 
 // Service is an inert factory. It performs no filesystem or host discovery
 // work until PrepareOutput or Open is called.
@@ -97,121 +73,130 @@ type Service interface {
 	Analyze(Bundle) (Analysis, error)
 }
 
-// LatencyService exposes the service-owned room timing recorder and report
-// operations through transport-neutral room contracts.
 type LatencyService interface {
-	NewRecorder(platformclock.Source, rooms.AudioFormat) rooms.LatencyRecorder
+	rooms.LatencyService
 	NewRuntimeObserver(rooms.LatencyRecorder, string) sessiontrace.RuntimeObserver
-	ReadBundle(string) (rooms.RoomLatencyBundle, error)
-	AnalyzeBundle(rooms.RoomLatencyBundle) (rooms.RoomLatencyReport, error)
-	Report(string) (rooms.RoomLatencyReport, error)
 }
 
-// Recorder owns one room's evidence lifecycle.
-type Recorder interface {
-	Destination() string
-	StartedAt() time.Time
-	AudioFormat() rooms.AudioFormat
-	Artifacts(string) ArtifactPaths
-	Observe(Observation) error
-	RecordSessionDiagnostic(DiagnosticRecord)
-	Error() error
-	Health() Health
-	Finalize(Finalization) (Result, error)
-	Close() error
+type Recorder = rooms.EvidenceRecorder
+type Observation = rooms.EvidenceObservation
+type ObservationKind = rooms.EvidenceObservationKind
+type Finalization = rooms.EvidenceFinalization
+type Result = rooms.EvidenceResult
+type DiagnosticRecord = rooms.EvidenceDiagnosticRecord
+type ArtifactPaths = rooms.EvidenceArtifactPaths
+type Health = rooms.EvidenceHealth
+
+// RunManifest is the stable JSON projection written for one recording. The
+// service owns encoding, validation and integrity policy; this shape lets a
+// caller inspect the resulting public artifact without importing its writer.
+type RunManifest struct {
+	SchemaVersion     int                            `json:"schema_version"`
+	Finalized         bool                           `json:"finalized"`
+	Timing            ManifestTiming                 `json:"timing"`
+	Bounds            ManifestBounds                 `json:"bounds"`
+	TerminationReason rooms.RoomTerminationReason    `json:"termination_reason"`
+	Reason            rooms.RoomTerminationReason    `json:"reason,omitempty"`
+	Participants      map[string]ManifestParticipant `json:"participants"`
+	TurnCounts        map[string]int                 `json:"turn_counts"`
+	AudioFormat       ManifestAudioFormat            `json:"audio_format"`
+	RoomMix           string                         `json:"room_mix"`
+	RoomTimeline      string                         `json:"room_timeline"`
+	RoomLatency       string                         `json:"room_latency,omitempty"`
+	Artifacts         map[string]string              `json:"artifacts"`
+	ArtifactIntegrity map[string]ArtifactIntegrity   `json:"artifact_integrity,omitempty"`
+	RecordingStatus   *transcript.RecordingStatus    `json:"recording_status,omitempty"`
+	DegradedArtifacts map[string]string              `json:"degraded_artifacts,omitempty"`
+	Error             string                         `json:"error,omitempty"`
 }
 
-// ObservationKind identifies one transport-neutral room evidence event.
-type ObservationKind string
+type ManifestTiming struct {
+	StartedAt string `json:"started_at"`
+	EndedAt   string `json:"ended_at"`
+	Elapsed   string `json:"elapsed"`
+	ClockBase string `json:"clock_base"`
+}
+
+type ManifestBounds struct {
+	MaxTurns    int    `json:"max_turns,omitempty"`
+	MaxDuration string `json:"max_duration,omitempty"`
+}
+
+type ManifestAudioFormat struct {
+	SampleRate      int    `json:"sample_rate"`
+	Channels        int    `json:"channels"`
+	Encoding        string `json:"encoding"`
+	SampleWidthBits int    `json:"sample_width_bits"`
+	ByteOrder       string `json:"byte_order"`
+}
+
+type ManifestParticipant struct {
+	ID                     string                             `json:"id"`
+	Kind                   rooms.ParticipantKind              `json:"kind"`
+	SystemPrompt           string                             `json:"system_prompt"`
+	OpeningPrompt          string                             `json:"opening_prompt,omitempty"`
+	Provider               string                             `json:"provider"`
+	Model                  string                             `json:"model"`
+	APIKeyEnv              string                             `json:"api_key_env"`
+	Voice                  string                             `json:"voice,omitempty"`
+	Tools                  []string                           `json:"tools"`
+	BrowserTools           *rooms.BrowserToolsConfig          `json:"browser_tools,omitempty"`
+	CompletedTurns         int                                `json:"completed_turns"`
+	TerminationReason      rooms.ParticipantTerminationReason `json:"termination_reason"`
+	Reason                 rooms.ParticipantTerminationReason `json:"reason,omitempty"`
+	TerminationTrigger     string                             `json:"termination_trigger"`
+	TerminationDisposition string                             `json:"termination_disposition"`
+	Classification         string                             `json:"classification"`
+	TerminalReason         string                             `json:"terminal_reason"`
+	TerminalProvenance     string                             `json:"terminal_provenance"`
+	OutputState            string                             `json:"output_state"`
+	Connected              bool                               `json:"connected"`
+	InputDevice            string                             `json:"input_device,omitempty"`
+	OutputDevice           string                             `json:"output_device,omitempty"`
+	Error                  string                             `json:"error,omitempty"`
+	Artifacts              ArtifactPaths                      `json:"artifacts"`
+	RecordingStatus        *transcript.RecordingStatus        `json:"recording_status,omitempty"`
+	DegradedArtifacts      map[string]string                  `json:"degraded_artifacts,omitempty"`
+}
+
+type ArtifactIntegrity struct {
+	Size   int64  `json:"size"`
+	SHA256 string `json:"sha256"`
+}
+
+type TimelineEntry struct {
+	TOffsetMS     float64           `json:"t_offset_ms"`
+	TUnixMS       int64             `json:"t_unix_ms"`
+	Event         string            `json:"event"`
+	Participant   string            `json:"participant,omitempty"`
+	ParticipantID string            `json:"participant_id,omitempty"`
+	Fields        map[string]string `json:"fields,omitempty"`
+}
 
 const (
-	ObservationTimeline                 ObservationKind = "timeline"
-	ObservationFinalTimeline            ObservationKind = "final_timeline"
-	ObservationLiveEvent                ObservationKind = "live_event"
-	ObservationProviderError            ObservationKind = "provider_error"
-	ObservationParticipantReady         ObservationKind = "participant_ready"
-	ObservationParticipantTerminated    ObservationKind = "participant_terminated"
-	ObservationSourceAudio              ObservationKind = "source_audio"
-	ObservationReceivedAudio            ObservationKind = "received_audio"
-	ObservationSpeakerAudio             ObservationKind = "speaker_audio"
-	ObservationSpeechStopped            ObservationKind = "speech_stopped"
-	ObservationProviderAudio            ObservationKind = "provider_audio"
-	ObservationPeerAudio                ObservationKind = "peer_audio"
-	ObservationError                    ObservationKind = "error"
-	ObservationDiagnostic               ObservationKind = "diagnostic"
-	ObservationDelta                    ObservationKind = "delta"
-	ObservationParticipantAudio         ObservationKind = "participant_audio"
-	ObservationSentAudio                ObservationKind = "sent_audio"
-	ObservationSentStream               ObservationKind = "sent_stream"
-	ObservationCloseSentSpeechSegment   ObservationKind = "close_sent_speech_segment"
-	ObservationReceivedParticipantAudio ObservationKind = "received_participant_audio"
-	ObservationAudioDropped             ObservationKind = "audio_dropped"
-	ObservationParticipantError         ObservationKind = "participant_error"
+	ObservationTimeline                 = rooms.EvidenceObservationTimeline
+	ObservationFinalTimeline            = rooms.EvidenceObservationFinalTimeline
+	ObservationStreamMessage            = rooms.EvidenceObservationStreamMessage
+	ObservationLiveEvent                = rooms.EvidenceObservationLiveEvent
+	ObservationProviderError            = rooms.EvidenceObservationProviderError
+	ObservationParticipantReady         = rooms.EvidenceObservationParticipantReady
+	ObservationParticipantTerminated    = rooms.EvidenceObservationParticipantTerminated
+	ObservationSourceAudio              = rooms.EvidenceObservationSourceAudio
+	ObservationReceivedAudio            = rooms.EvidenceObservationReceivedAudio
+	ObservationSpeakerAudio             = rooms.EvidenceObservationSpeakerAudio
+	ObservationSpeechStopped            = rooms.EvidenceObservationSpeechStopped
+	ObservationProviderAudio            = rooms.EvidenceObservationProviderAudio
+	ObservationPeerAudio                = rooms.EvidenceObservationPeerAudio
+	ObservationError                    = rooms.EvidenceObservationError
+	ObservationDiagnostic               = rooms.EvidenceObservationDiagnostic
+	ObservationDelta                    = rooms.EvidenceObservationDelta
+	ObservationParticipantAudio         = rooms.EvidenceObservationParticipantAudio
+	ObservationSentAudio                = rooms.EvidenceObservationSentAudio
+	ObservationSentStream               = rooms.EvidenceObservationSentStream
+	ObservationCloseSentSpeechSegment   = rooms.EvidenceObservationCloseSentSpeechSegment
+	ObservationReceivedParticipantAudio = rooms.EvidenceObservationReceivedParticipantAudio
+	ObservationAudioDropped             = rooms.EvidenceObservationAudioDropped
+	ObservationParticipantError         = rooms.EvidenceObservationParticipantError
 )
 
-// Observation carries one correlated event or audio buffer into the recorder.
-// The service copies retained buffers and bounds all queued work.
-type Observation struct {
-	Kind              ObservationKind
-	ParticipantID     string
-	RelatedID         string
-	Event             string
-	Phase             string
-	Fields            map[string]string
-	At                time.Time
-	PCM               []byte
-	TargetIDs         []string
-	DroppedBytes      int
-	StreamMessage     messages.StreamMessage
-	LiveEvent         session.LiveEvent
-	AudioFrame        audio.PCMFrame
-	ParticipantReady  rooms.RoomParticipantReady
-	ParticipantResult rooms.RoomParticipantResult
-	Diagnostic        DiagnosticRecord
-	Artifact          string
-	Err               error
-}
-
-// Finalization captures the terminal room state used to close one recording.
-type Finalization struct {
-	Room    rooms.RoomResult
-	Err     error
-	EndedAt time.Time
-}
-
-// Result returns room state and the recording health produced at finalization.
-type Result struct {
-	Room      rooms.RoomResult
-	Health    Health
-	Err       error
-	StartedAt time.Time
-	EndedAt   time.Time
-}
-
-// DiagnosticRecord is the bounded, transport-neutral diagnostic projection.
-type DiagnosticRecord struct {
-	ParticipantID string
-	Event         string
-	Fields        map[string]string
-	At            time.Time
-}
-
-// ArtifactPaths is the stable relative-path inventory for one participant.
-type ArtifactPaths struct {
-	WAV         string `json:"wav"`
-	Diagnostics string `json:"diagnostics"`
-	Deltas      string `json:"deltas"`
-	SentPCM     string `json:"sent_pcm"`
-	ReceivedPCM string `json:"received_pcm"`
-	Events      string `json:"events"`
-	Capture     string `json:"capture,omitempty"`
-}
-
-// Health is the recording-only status projection. Runtime termination remains
-// owned by the room service and is not changed by a degraded sink.
-type Health struct {
-	Status               *transcript.RecordingStatus
-	DegradedArtifacts    map[string]string
-	ParticipantStatuses  map[string]*transcript.RecordingStatus
-	ParticipantArtifacts map[string]map[string]string
-}
+var _ rooms.EvidenceService = (Service)(nil)

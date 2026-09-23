@@ -9,6 +9,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
 func (p *participantRecorder) ID() string {
@@ -233,6 +234,8 @@ func (r *recorder) Observe(observation roomevidence.Observation) error {
 	switch observation.Kind {
 	case roomevidence.ObservationTimeline, roomevidence.ObservationFinalTimeline:
 		return r.recordObservedTimeline(observation.At, observation.Event, observation.ParticipantID, observation.Fields)
+	case roomevidence.ObservationStreamMessage:
+		return r.recordStreamMessageTimeline(observation.ParticipantID, observation.StreamMessage)
 	case roomevidence.ObservationLiveEvent:
 		if err := r.RecordLiveEvent(observation.ParticipantID, observation.LiveEvent); err != nil {
 			return err
@@ -304,17 +307,71 @@ func (r *recorder) observeRoomAudio(observation roomevidence.Observation) error 
 	case roomevidence.ObservationReceivedAudio:
 		r.RecordReceived(observation.ParticipantID, observation.AudioFrame)
 	case roomevidence.ObservationSpeakerAudio:
-		r.ObserveSpeakerAudio(observation.ParticipantID, observation.TargetIDs, observation.PCM)
+		if observation.AudioFrame.Samples != nil {
+			r.ObserveSpeakerAudio(observation.ParticipantID, observation.TargetIDs, observation.AudioFrame)
+		} else if r.latency != nil {
+			r.operationMu.Lock()
+			defer r.operationMu.Unlock()
+			if r.checkOpen() == nil {
+				r.latency.ObserveSpeakerBytes(observation.ParticipantID, observation.TargetIDs, len(observation.PCM))
+			}
+		}
 	case roomevidence.ObservationSpeechStopped:
 		r.ObserveSpeechStopped(observation.ParticipantID)
 	case roomevidence.ObservationProviderAudio:
 		r.ObserveProviderAudio(observation.ParticipantID, observation.RelatedID)
 	case roomevidence.ObservationPeerAudio:
-		r.ObservePeerAudio(observation.ParticipantID, observation.RelatedID, observation.PCM)
+		if observation.AudioFrame.Samples != nil {
+			r.ObservePeerAudio(observation.ParticipantID, observation.RelatedID, observation.AudioFrame)
+		} else if r.latency != nil {
+			r.operationMu.Lock()
+			defer r.operationMu.Unlock()
+			if r.checkOpen() == nil {
+				r.latency.ObservePeerBytes(observation.ParticipantID, observation.RelatedID, len(observation.PCM))
+			}
+		}
 	default:
 		return fmt.Errorf("unknown room audio observation kind %q", observation.Kind)
 	}
 	return r.Error()
+}
+
+func (r *recorder) recordStreamMessageTimeline(participantID string, msg messages.StreamMessage) error {
+	switch msg.Type {
+	case messages.StreamTypeMessageStart:
+		return r.RecordTimeline("response_start", participantID, map[string]string{"response_id": msg.ResponseID})
+	case messages.StreamTypeMessageEnd:
+		fields := map[string]string{"response_id": msg.ResponseID}
+		if value, ok := msg.Value.(*messages.MessageEndValue); ok && value != nil {
+			fields["terminal_reason"] = string(value.TerminalReason)
+			fields["terminal_provenance"] = string(value.TerminalProvenance)
+			fields["output_state"] = string(value.OutputState)
+			if err := r.RecordTimeline("response_end", participantID, fields); err != nil {
+				return err
+			}
+			if value.TerminalReason == messages.TerminalReasonCancellation {
+				return r.RecordTimeline("barge_in_cancel_acked", participantID, map[string]string{"response_id": msg.ResponseID})
+			}
+			return nil
+		}
+		return r.RecordTimeline("response_end", participantID, fields)
+	case messages.StreamTypeError:
+		value, ok := msg.Value.(*messages.ErrorValue)
+		if !ok || value == nil {
+			return nil
+		}
+		fields := map[string]string{"code": value.Code, "classification": value.Classification}
+		if value.Classification == providers.ErrorClassResponseCancelNotActive {
+			return r.RecordTimeline("barge_in_cancel_failed", participantID, fields)
+		}
+		return r.RecordProviderErrorTimeline(participantID, fields)
+	case messages.StreamTypeToolCallStart:
+		return r.RecordTimeline("tool_call_start", participantID, map[string]string{"tool_call_id": msg.ToolCallId})
+	case messages.StreamTypeToolCallEnd:
+		return r.RecordTimeline("tool_call_end", participantID, map[string]string{"tool_call_id": msg.ToolCallId})
+	default:
+		return nil
+	}
 }
 
 func (r *recorder) observeParticipant(observation roomevidence.Observation) error {

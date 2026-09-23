@@ -3,6 +3,7 @@ package agentruntime
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"path/filepath"
 	"testing"
@@ -10,9 +11,10 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 )
 
-func TestRunRoom_EvidenceWriteFailureDegradesWithoutStoppingParticipants(t *testing.T) {
+func TestRunRoom_EvidenceFailureDegradesWithoutStoppingParticipants(t *testing.T) {
 	ids := []string{"a", "b"}
 	inferencers := map[string]*roomTestInferencer{
 		"a": {events: []messages.StreamMessage{roomTestSessionOpen("a")}},
@@ -22,9 +24,8 @@ func TestRunRoom_EvidenceWriteFailureDegradesWithoutStoppingParticipants(t *test
 	opts, _ := newRoomTestRunOptions(ids, inferencers)
 	opts.OutputDir = outputDir
 
-	var injectionErr error
-	opts.onRoomEvidenceReady = func(evidence *roomEvidence) {
-		injectionErr = evidence.participant("a").deltas.close()
+	opts.onRoomEvidenceReady = func(evidence roomevidence.Recorder) {
+		evidence.MarkError("a", evidence.Artifacts("a").Deltas, errors.New("injected room evidence write failure"))
 	}
 	opened := make(chan string, len(ids))
 	streamedText := make(chan string, len(ids))
@@ -54,10 +55,6 @@ func TestRunRoom_EvidenceWriteFailureDegradesWithoutStoppingParticipants(t *test
 			t.Fatal("both participants did not become live")
 		}
 	}
-	if injectionErr != nil {
-		t.Fatalf("inject evidence failure: %v", injectionErr)
-	}
-
 	aSession := inferencers["a"].sessionsSnapshot()[0]
 	bSession := inferencers["b"].sessionsSnapshot()[0]
 	textDelta := messages.StreamMessage{

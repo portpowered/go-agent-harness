@@ -10,26 +10,27 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/evidence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle"
 	roommanifest "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/manifest"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/planning"
 )
 
 type Dependencies struct {
-	Planner planning.Planner
-	Replay  roomreplay.Service
-	Runner  lifecycle.Runner
+	Planner  planning.Planner
+	Replay   roomreplay.Service
+	Runner   lifecycle.Runner
+	Evidence rooms.EvidenceService
 }
 
 type Service struct {
-	planner planning.Planner
-	replay  roomreplay.Service
-	runner  lifecycle.Runner
+	planner  planning.Planner
+	replay   roomreplay.Service
+	runner   lifecycle.Runner
+	evidence rooms.EvidenceService
 }
 
 func New(dependencies Dependencies) rooms.Service {
-	return &Service{planner: dependencies.Planner, replay: dependencies.Replay, runner: dependencies.Runner}
+	return &Service{planner: dependencies.Planner, replay: dependencies.Replay, runner: dependencies.Runner, evidence: dependencies.Evidence}
 }
 
 func (s *Service) Run(ctx context.Context, out io.Writer, request rooms.RoomRunOptions) (rooms.RoomResult, error) {
@@ -61,7 +62,10 @@ func (s *Service) validateRunOutput(request rooms.RoomRunOptions) error {
 			return err
 		}
 	}
-	return evidence.ValidateEvidenceOutput(request.OutputDir)
+	if s.evidence == nil {
+		return rooms.ErrRoomServiceUnavailable
+	}
+	return s.evidence.ValidateEvidenceOutput(request.OutputDir)
 }
 
 func (s *Service) ResolveLaunchPlan(options rooms.RoomLaunchOptions) (rooms.RoomLaunchPlan, error) {
@@ -87,11 +91,17 @@ func (s *Service) ValidateReplayOutput(plan rooms.RoomReplayPlan, destination st
 }
 
 func (s *Service) ValidateEvidenceOutput(destination string) error {
-	return evidence.ValidateEvidenceOutput(destination)
+	if s == nil || s.evidence == nil {
+		return rooms.ErrRoomServiceUnavailable
+	}
+	return s.evidence.ValidateEvidenceOutput(destination)
 }
 
 func (s *Service) CreateFreshRunDirectory(configDir string) (string, error) {
-	return evidence.CreateFreshRunDirectory(configDir)
+	if s == nil || s.evidence == nil {
+		return "", rooms.ErrRoomServiceUnavailable
+	}
+	return s.evidence.CreateFreshRunDirectory(configDir)
 }
 
 var _ rooms.Service = (*Service)(nil)

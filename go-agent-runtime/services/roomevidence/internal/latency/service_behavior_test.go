@@ -41,7 +41,7 @@ func TestServiceRecordsAndReportsRoomLatency(t *testing.T) {
 	if len(bundle.Events) != 7 {
 		t.Fatalf("event count = %d, want 7", len(bundle.Events))
 	}
-	destination := filepath.Join(t.TempDir(), rooms.RoomLatencyArtifactPath)
+	destination := filepath.Join(t.TempDir(), roomevidence.LatencyPath)
 	if err := recorder.Write(destination); err != nil {
 		t.Fatalf("Write: %v", err)
 	}

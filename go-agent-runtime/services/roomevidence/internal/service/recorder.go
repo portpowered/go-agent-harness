@@ -79,6 +79,13 @@ func (r *recorder) AudioFormat() rooms.AudioFormat {
 	return r.format
 }
 
+func (r *recorder) LatencyRecorder() rooms.LatencyRecorder {
+	if r == nil {
+		return nil
+	}
+	return r.latency
+}
+
 func (s *Service) Analyze(bundle roomevidence.Bundle) (roomevidence.Analysis, error) {
 	result, err := roomanalysis.AnalyzePCM16Room(roomAnalysisInput(bundle), bundle.Tolerances.RoomConfig)
 	return roomevidence.Analysis{Result: result}, err
@@ -286,7 +293,7 @@ func (r *recorder) RecordReceived(participantID string, frame audio.PCMFrame) {
 	}
 }
 
-func (r *recorder) ObserveSpeakerAudio(sourceID string, targetIDs []string, pcm []byte) {
+func (r *recorder) ObserveSpeakerAudio(sourceID string, targetIDs []string, frame audio.PCMFrame) {
 	if r == nil || r.latency == nil {
 		return
 	}
@@ -295,7 +302,7 @@ func (r *recorder) ObserveSpeakerAudio(sourceID string, targetIDs []string, pcm 
 	if r.checkOpen() != nil {
 		return
 	}
-	r.latency.ObserveSpeakerBytes(sourceID, targetIDs, len(pcm))
+	r.latency.ObserveSpeakerAudio(sourceID, targetIDs, frame)
 }
 
 func (r *recorder) ObserveSpeechStopped(participantID string) {
@@ -320,14 +327,14 @@ func (r *recorder) ObserveProviderAudio(participantID, responseID string) {
 	}
 }
 
-func (r *recorder) ObservePeerAudio(sourceID, targetID string, pcm []byte) {
+func (r *recorder) ObservePeerAudio(sourceID, targetID string, frame audio.PCMFrame) {
 	if r != nil && r.latency != nil {
 		r.operationMu.Lock()
 		defer r.operationMu.Unlock()
 		if r.checkOpen() != nil {
 			return
 		}
-		r.latency.ObservePeerBytes(sourceID, targetID, len(pcm))
+		r.latency.ObservePeerAudio(sourceID, targetID, frame)
 	}
 }
 
