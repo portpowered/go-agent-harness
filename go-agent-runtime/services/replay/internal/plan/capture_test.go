@@ -282,7 +282,7 @@ func TestCaptureReplayDrainPreservesPublicMessageOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = replay.Close() }()
+	closeReplayTestResource(t, replay, "replay")
 	var got []string
 	if err := replay.Drain(t.Context(), func(message messages.StreamMessage) error {
 		value, ok := message.Value.(*messages.TextDeltaValue)
@@ -315,7 +315,7 @@ func TestSessionInferencerReplaysMessagesInOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = session.Close() }()
+	closeReplayTestResource(t, session, "replay session")
 	if session.Receive() == nil {
 		t.Fatal("replay session has no receive buffer")
 	}
@@ -393,7 +393,7 @@ func TestSessionInferencerValidatesOutboundBeforeDeliveringInbound(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = session.Close() }()
+	closeReplayTestResource(t, session, "replay session")
 	if outcome := messages.SendSessionWithOutcome(ctx, session, expected); !outcome.OK() {
 		t.Fatalf("recorded outbound send = %+v, want success", outcome)
 	}
@@ -433,7 +433,7 @@ func TestSessionInferencerStopsOnOutboundDivergence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = session.Close() }()
+	closeReplayTestResource(t, session, "replay session")
 	outcome := messages.SendSessionWithOutcome(ctx, session, messages.StreamMessage{Type: messages.StreamTypeResponseCancel})
 	if outcome.Status != messages.SessionSendTerminalFailure {
 		t.Fatalf("divergent outbound outcome = %+v, want terminal failure", outcome)
@@ -454,7 +454,7 @@ func TestSessionInferencerStopsOnOutboundDivergence(t *testing.T) {
 
 func TestPrepareLiveReplaysOrderedProviderTrafficAndDisconnect(t *testing.T) {
 	prepared := prepareLiveReplayForTest(t)
-	defer func() { _ = prepared.Close() }()
+	closeReplayTestResource(t, prepared, "prepared replay")
 	conn, err := prepared.WrapDialer(nil).Dial("ws://capture", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -500,7 +500,7 @@ func TestPrepareLiveReplaysOrderedProviderTrafficAndDisconnect(t *testing.T) {
 
 func TestPrepareLiveReportsOutboundDivergenceAndStops(t *testing.T) {
 	prepared := prepareLiveReplayForTest(t)
-	defer func() { _ = prepared.Close() }()
+	closeReplayTestResource(t, prepared, "prepared replay")
 	conn, err := prepared.WrapDialer(nil).Dial("ws://capture", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -575,4 +575,13 @@ func TestPlannerRejectsMalformedMetadataAndUnsupportedTextActions(t *testing.T) 
 			t.Fatalf("invalid plan accepted: %+v", records)
 		}
 	}
+}
+
+func closeReplayTestResource(t *testing.T, closer interface{ Close() error }, description string) {
+	t.Helper()
+	t.Cleanup(func() {
+		if err := closer.Close(); err != nil {
+			t.Errorf("close %s: %v", description, err)
+		}
+	})
 }

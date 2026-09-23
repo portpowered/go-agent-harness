@@ -125,6 +125,7 @@ func loopJoinTimeout(policy sessionduration.DrainPolicy) time.Duration {
 	return policy.LoopJoinTimeout
 }
 
+//nolint:contextcheck // Internal callers may omit a context while joining an owned loop.
 func (r *runLoop) waitForLoop(ctx context.Context) error {
 	if !r.loopDone {
 		if ctx == nil {
@@ -141,14 +142,6 @@ func (r *runLoop) waitForLoop(ctx context.Context) error {
 		return nil
 	}
 	return r.loopErr
-}
-
-func waitForLoop(results <-chan error) error {
-	err := <-results
-	if errors.Is(err, context.Canceled) {
-		return nil
-	}
-	return err
 }
 
 func (r *runLoop) cancelRun() {

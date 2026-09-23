@@ -246,6 +246,7 @@ func (s *observedSession) observeProgressSend(msg messages.StreamMessage) {
 	if s.progress == nil {
 		return
 	}
+	//nolint:exhaustive // Only tool-result and continuation sends affect progress ownership.
 	switch msg.Type {
 	case messages.StreamTypeToolCallEnd:
 		if value, ok := msg.Value.(*messages.ToolCallEndValue); ok && value != nil {
@@ -253,6 +254,8 @@ func (s *observedSession) observeProgressSend(msg messages.StreamMessage) {
 		}
 	case messages.StreamTypeResponseCreate:
 		s.progress.NoteToolContinuationRequested()
+	default:
+		// Other stream types do not change provider progress ownership.
 	}
 	s.progress.ObserveProviderDispatch(msg)
 }

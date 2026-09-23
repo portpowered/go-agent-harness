@@ -105,7 +105,9 @@ func chatCompletionShape(body []byte) *chatShape {
 	}
 	shape := &chatShape{Messages: make([]chatMessage, len(raw.Messages))}
 	for index, message := range raw.Messages {
-		_ = json.Unmarshal(message.Role, &shape.Messages[index].Role)
+		if err := json.Unmarshal(message.Role, &shape.Messages[index].Role); err != nil {
+			return nil
+		}
 		shape.Messages[index].Content = chatContentTypes(message.Content)
 	}
 	return shape

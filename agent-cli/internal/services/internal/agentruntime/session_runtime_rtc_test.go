@@ -736,16 +736,6 @@ func (testRTCConn) ReadMessage() (int, []byte, error) { return 0, nil, io.EOF }
 func (testRTCConn) WriteMessage(int, []byte) error    { return nil }
 func (testRTCConn) Close() error                      { return nil }
 
-type testForwardingRecordingDialer struct {
-	inner transport.Dialer
-}
-
-func (d *testForwardingRecordingDialer) Dial(endpoint string, headers map[string]string) (transport.Conn, error) {
-	return d.inner.Dial(endpoint, headers)
-}
-
-func (*testForwardingRecordingDialer) FlushToFile(string) error { return nil }
-
 type testSessionRTCRuntime struct {
 	dataPlane  SessionRTCDataPlane
 	start      func()

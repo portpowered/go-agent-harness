@@ -33,8 +33,7 @@ func TestRunSession_OpenAIAdvertisesRegistryExecDefinition(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	var err error
-	err = agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{AudioService: audioiowire.NewService(), ModelCatalog: testModelCatalog(),
+	err := agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{AudioService: audioiowire.NewService(), ModelCatalog: testModelCatalog(),
 		Provider:        "openai",
 		Model:           "gpt-realtime",
 		APIKey:          "test-api-key",

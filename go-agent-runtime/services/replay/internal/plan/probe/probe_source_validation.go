@@ -10,6 +10,15 @@ import (
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
+const (
+	probeWireConversationItemCreate       = "conversation.item.create"
+	probeWireResponseAudioDelta           = "response.audio.delta"
+	probeWireResponseAudioTranscriptDelta = "response.audio_transcript.delta"
+	probeWireResponseOutputTextDelta      = "response.output_text.delta"
+	probeWireResponseTextDelta            = "response.text.delta"
+	probeProvenanceProvider               = "provider"
+)
+
 type sourceValidationError struct {
 	file      string
 	fieldPath string
@@ -109,7 +118,7 @@ func walkSourcePayload(value any, path string, visit func(path, key string, valu
 
 func isProviderWireEventType(eventType string) bool {
 	switch eventType {
-	case string(models.SessionEventSessionUpdate), "conversation.item.create",
+	case string(models.SessionEventSessionUpdate), probeWireConversationItemCreate,
 		string(models.SessionEventInputAudioBufferAppend),
 		string(models.SessionEventInputAudioBufferCommit),
 		string(models.SessionEventInputAudioBufferClear),
@@ -129,9 +138,9 @@ func isProviderWireEventType(eventType string) bool {
 		string(models.SessionEventConversationItemInputAudioTranscriptionCompleted),
 		string(models.SessionEventResponseTextDelta),
 		string(models.SessionEventResponseTextDone),
-		"response.audio.delta", "response.audio.done",
-		"response.audio_transcript.delta", "response.audio_transcript.done",
-		"response.text.delta", "response.text.done",
+		probeWireResponseAudioDelta, "response.audio.done",
+		probeWireResponseAudioTranscriptDelta, "response.audio_transcript.done",
+		probeWireResponseTextDelta, "response.text.done",
 		string(models.SessionEventResponseFunctionCallArgumentsDelta),
 		string(models.SessionEventResponseFunctionCallArgumentsDone),
 		string(models.SessionEventResponseOutputItemAdded),

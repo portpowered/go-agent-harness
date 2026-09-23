@@ -172,9 +172,13 @@ func (c *MediaProbeCommand) runReplayProbe(ctx context.Context, out io.Writer) e
 	if err != nil {
 		return fmt.Errorf("media probe replay: session fixture validation failed before any probe observation: %w", err)
 	}
-	fmt.Fprintf(out, "Mode: replay\nSource: %s\nProvider: %s\nModel: %s\nProvenance: %s\nInbound frames: %d\nOutbound ticks: %d\n", c.ReplayFixture, report.Provider, report.Model, report.FixtureProvenance, report.InboundFrames, report.OutboundTicks)
+	if _, err := fmt.Fprintf(out, "Mode: replay\nSource: %s\nProvider: %s\nModel: %s\nProvenance: %s\nInbound frames: %d\nOutbound ticks: %d\n", c.ReplayFixture, report.Provider, report.Model, report.FixtureProvenance, report.InboundFrames, report.OutboundTicks); err != nil {
+		return err
+	}
 	for _, observation := range report.Observations {
-		fmt.Fprintf(out, "Observation: %d %s %s\n", observation.Sequence, observation.Direction, observation.Type)
+		if _, err := fmt.Fprintf(out, "Observation: %d %s %s\n", observation.Sequence, observation.Direction, observation.Type); err != nil {
+			return err
+		}
 	}
 	return nil
 }

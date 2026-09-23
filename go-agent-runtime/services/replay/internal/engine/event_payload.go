@@ -19,6 +19,8 @@ import (
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
+const excerptContextBytes = 24
+
 func cloneCaptureEvents(events []gatewaytesting.CapturedSessionEvent) []gatewaytesting.CapturedSessionEvent {
 	owned := make([]gatewaytesting.CapturedSessionEvent, len(events))
 	copy(owned, events)
@@ -287,7 +289,7 @@ func emptyExcerpt(quote bool) string {
 }
 
 func excerptWindow(length, offset int) (int, int) {
-	start, end := max(offset-24, 0), min(offset+24, length)
+	start, end := max(offset-excerptContextBytes, 0), min(offset+excerptContextBytes, length)
 	if start == end {
 		start = max(offset-1, 0)
 		end = min(offset+1, length)

@@ -352,6 +352,7 @@ func TestRunOwnsLoopExecutionAndBoundedCleanup(t *testing.T) {
 	}
 }
 
+//nolint:contextcheck // The test passes its request context into a goroutine to observe shutdown.
 func TestRunCancelsLoopBeforeWaitingWhenDrainCallbackIsMissing(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -361,7 +362,7 @@ func TestRunCancelsLoopBeforeWaitingWhenDrainCallbackIsMissing(t *testing.T) {
 	}
 	done := make(chan struct{})
 	result := make(chan error, 1)
-	go func() {
+	go func(ctx context.Context) {
 		result <- New().Run(sessionduration.RunRequest{
 			Context:    ctx,
 			Inferencer: contractInferencer{session: newContractSession()},
@@ -370,7 +371,7 @@ func TestRunCancelsLoopBeforeWaitingWhenDrainCallbackIsMissing(t *testing.T) {
 			},
 			Done: done,
 		})
-	}()
+	}(ctx)
 	select {
 	case <-loop.started:
 	case <-time.After(time.Second):

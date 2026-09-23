@@ -13,6 +13,11 @@ import (
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
+const (
+	captureJSONObject = "object"
+	captureJSONNull   = "null"
+)
+
 type ReplayLoad struct {
 	Capture           gatewaytesting.SessionCapture
 	IntegrityVerified bool
@@ -158,7 +163,7 @@ func validateCaptureEnvelopeFields(path string, fields map[string]json.RawMessag
 		if !ok {
 			return captureValidationError(path, gatewaytesting.SessionCaptureErrorClassStructure, "/"+field, 0, "present", "missing", gatewaytesting.ErrSessionCaptureStructure)
 		}
-		want := "object"
+		want := captureJSONObject
 		if field == "records" {
 			want = "array"
 		}
@@ -174,12 +179,12 @@ func validateCaptureIntegrityFields(path string, fields map[string]json.RawMessa
 	if !ok || captureJSONType(raw) == "null" {
 		return captureValidationError(path, gatewaytesting.SessionCaptureErrorClassIntegrityMetadata, "/integrity", 0, "object with algorithm, coverage, and digest", "missing", gatewaytesting.ErrSessionCaptureIntegrity)
 	}
-	if captureJSONType(raw) != "object" {
-		return captureValidationError(path, gatewaytesting.SessionCaptureErrorClassIntegrityMetadata, "/integrity", 0, "object", captureJSONType(raw), gatewaytesting.ErrSessionCaptureIntegrity)
+	if captureJSONType(raw) != captureJSONObject {
+		return captureValidationError(path, gatewaytesting.SessionCaptureErrorClassIntegrityMetadata, "/integrity", 0, captureJSONObject, captureJSONType(raw), gatewaytesting.ErrSessionCaptureIntegrity)
 	}
 	var integrityFields map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &integrityFields); err != nil || integrityFields == nil {
-		return captureValidationError(path, gatewaytesting.SessionCaptureErrorClassIntegrityMetadata, "/integrity", 0, "object", captureJSONType(raw), gatewaytesting.ErrSessionCaptureIntegrity)
+		return captureValidationError(path, gatewaytesting.SessionCaptureErrorClassIntegrityMetadata, "/integrity", 0, captureJSONObject, captureJSONType(raw), gatewaytesting.ErrSessionCaptureIntegrity)
 	}
 	for _, field := range []string{"algorithm", "coverage", "digest"} {
 		value, ok := integrityFields[field]
@@ -234,7 +239,7 @@ func validateReplayCaptureRecord(path string, index, previousSequence int, recor
 	if len(payload) == 0 {
 		payload = record.Data
 	}
-	if len(bytes.TrimSpace(payload)) == 0 || !json.Valid(payload) || captureJSONType(payload) == "null" {
+	if len(bytes.TrimSpace(payload)) == 0 || !json.Valid(payload) || captureJSONType(payload) == captureJSONNull {
 		return captureValidationError(path, gatewaytesting.SessionCaptureErrorClassStructure, field+"/payload", record.Sequence, "non-null JSON value", "missing or invalid", gatewaytesting.ErrSessionCaptureStructure)
 	}
 	return nil
@@ -259,7 +264,7 @@ func captureJSONType(raw []byte) string {
 	}
 	switch trimmed[0] {
 	case '{':
-		return "object"
+		return captureJSONObject
 	case '[':
 		return "array"
 	case '"':
@@ -267,7 +272,7 @@ func captureJSONType(raw []byte) string {
 	case 't', 'f':
 		return "boolean"
 	case 'n':
-		return "null"
+		return captureJSONNull
 	default:
 		return "number"
 	}

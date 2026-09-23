@@ -16,7 +16,6 @@ func testModelCatalog() providers.ModelCatalog { return providerswire.NewModelCa
 
 type countingSessionInferencer struct {
 	connects int
-	frames   int
 }
 
 func (i *countingSessionInferencer) ConnectSession(context.Context) (messages.Session, error) {

@@ -62,13 +62,13 @@ func (a *sessionDurationAdmission) closeWithDrain(receive, source *messages.Type
 	})
 }
 
-func (a *sessionDurationAdmission) admit(receive *messages.TypedBuffer[messages.StreamMessage], msg messages.StreamMessage) bool {
+func (a *sessionDurationAdmission) admit(ctx context.Context, receive *messages.TypedBuffer[messages.StreamMessage], msg messages.StreamMessage) bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.closed {
 		return false
 	}
-	return receive.Write(context.Background(), msg)
+	return receive.Write(ctx, msg)
 }
 
 // sessionDurationAdmissionInferencer inserts the admission boundary between
@@ -288,7 +288,7 @@ func (s *sessionDurationAdmissionSession) drainSourceAfterClose() {
 			return
 		}
 		s.observeProviderMessage(msg)
-		s.forwardTerminalMessage(msg)
+		s.forwardTerminalMessage(context.Background(), msg)
 	}
 }
 
@@ -300,7 +300,7 @@ func (s *sessionDurationAdmissionSession) forward(ctx context.Context) {
 	for {
 		select {
 		case <-s.inner.Done():
-			s.drainSource(source, admissionOpen)
+			s.drainSource(context.WithoutCancel(ctx), source, admissionOpen)
 			s.closeDone()
 			return
 		case <-ctx.Done():
@@ -318,27 +318,27 @@ func (s *sessionDurationAdmissionSession) forward(ctx context.Context) {
 				s.closeDone()
 				return
 			}
-			admissionOpen = s.forwardSourceMessage(msg, admissionOpen)
+			admissionOpen = s.forwardSourceMessage(ctx, msg, admissionOpen)
 		}
 	}
 }
 
-func (s *sessionDurationAdmissionSession) forwardSourceMessage(msg messages.StreamMessage, admissionOpen bool) bool {
+func (s *sessionDurationAdmissionSession) forwardSourceMessage(ctx context.Context, msg messages.StreamMessage, admissionOpen bool) bool {
 	s.observeProviderMessage(msg)
-	if admissionOpen && s.admission.admit(s.receive, msg) {
+	if admissionOpen && s.admission.admit(ctx, s.receive, msg) {
 		return true
 	}
-	s.forwardTerminalMessage(msg)
+	s.forwardTerminalMessage(context.WithoutCancel(ctx), msg)
 	return false
 }
 
-func (s *sessionDurationAdmissionSession) forwardTerminalMessage(msg messages.StreamMessage) {
+func (s *sessionDurationAdmissionSession) forwardTerminalMessage(ctx context.Context, msg messages.StreamMessage) {
 	if s.admission.forwards(msg) {
-		s.receive.Write(context.Background(), msg)
+		s.receive.Write(ctx, msg)
 	}
 }
 
-func (s *sessionDurationAdmissionSession) drainSource(source *messages.TypedBuffer[messages.StreamMessage], admissionOpen bool) {
+func (s *sessionDurationAdmissionSession) drainSource(ctx context.Context, source *messages.TypedBuffer[messages.StreamMessage], admissionOpen bool) {
 	for {
 		msg, ok := source.Read()
 		if !ok {
@@ -346,12 +346,12 @@ func (s *sessionDurationAdmissionSession) drainSource(source *messages.TypedBuff
 		}
 		s.observeProviderMessage(msg)
 		if admissionOpen {
-			if s.admission.admit(s.receive, msg) {
+			if s.admission.admit(ctx, s.receive, msg) {
 				continue
 			}
 			admissionOpen = false
 		}
-		s.forwardTerminalMessage(msg)
+		s.forwardTerminalMessage(ctx, msg)
 	}
 }
 

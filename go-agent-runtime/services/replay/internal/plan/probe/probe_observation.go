@@ -75,11 +75,13 @@ func observeProbeToolEvent(record gatewaytesting.CapturedSessionEvent, observati
 			CallID string `json:"call_id"`
 		} `json:"item"`
 	}
-	_ = json.Unmarshal(probeRecordPayload(record), &payload)
+	if err := json.Unmarshal(probeRecordPayload(record), &payload); err != nil {
+		return
+	}
 	switch {
 	case record.Direction == gatewaytesting.DirectionServerToClient && record.Type == "response.function_call_arguments.done" && payload.CallID != "":
 		observation.ToolCalls = append(observation.ToolCalls, payload.CallID)
-	case record.Direction == gatewaytesting.DirectionClientToServer && record.Type == "conversation.item.create" && payload.Item.Type == "function_call_output" && payload.Item.CallID != "":
+	case record.Direction == gatewaytesting.DirectionClientToServer && record.Type == probeWireConversationItemCreate && payload.Item.Type == "function_call_output" && payload.Item.CallID != "":
 		observation.ToolResultsDelivered = append(observation.ToolResultsDelivered, payload.Item.CallID)
 	case record.Direction == gatewaytesting.DirectionClientToServer && record.Type == "tool.result.discarded" && payload.CallID != "":
 		observation.ToolResultsDiscarded = append(observation.ToolResultsDiscarded, payload.CallID)
@@ -103,7 +105,7 @@ func observeProbeClientBargeIn(record gatewaytesting.CapturedSessionEvent, obser
 	switch record.Type {
 	case "input_audio_buffer.commit":
 		observation.UserTurnsCommitted++
-	case "conversation.item.create":
+	case probeWireConversationItemCreate:
 		if probeItemIsUserMessage(record) {
 			observation.UserTurnsCommitted++
 		}
@@ -154,7 +156,7 @@ func observeProbeAudioBounds(capture gatewaytesting.SessionCapture, observation 
 			position = index + 1
 		}
 		switch record.Type {
-		case "response.output_audio.delta", "response.audio.delta":
+		case "response.output_audio.delta", probeWireResponseAudioDelta:
 			observation.AssistantAudioStarted = true
 			if observation.AssistantAudioStartEvent == 0 {
 				observation.AssistantAudioStartEvent = position
@@ -175,7 +177,7 @@ func probeTranscript(capture gatewaytesting.SessionCapture) string {
 			continue
 		}
 		switch record.Type {
-		case "response.text.delta", "response.output_text.delta", "response.audio_transcript.delta":
+		case probeWireResponseTextDelta, probeWireResponseOutputTextDelta, probeWireResponseAudioTranscriptDelta:
 		default:
 			continue
 		}
@@ -196,7 +198,7 @@ func probeTerminalTriple(capture gatewaytesting.SessionCapture) (reason, provena
 			continue
 		}
 		switch record.Type {
-		case "response.text.delta", "response.output_text.delta", "response.audio_transcript.delta", "response.audio.delta", "response.output_audio.delta":
+		case probeWireResponseTextDelta, probeWireResponseOutputTextDelta, probeWireResponseAudioTranscriptDelta, probeWireResponseAudioDelta, "response.output_audio.delta":
 			var payload struct {
 				Delta string `json:"delta"`
 			}
@@ -208,13 +210,13 @@ func probeTerminalTriple(capture gatewaytesting.SessionCapture) (reason, provena
 		}
 	}
 	if classification := probeErrorClassification(capture); classification != "" {
-		return "error:" + classification, "provider", probeOutputState(hasOutput)
+		return "error:" + classification, probeProvenanceProvider, probeOutputState(hasOutput)
 	}
 	if capture.EndsWithDisconnect {
-		return "disconnect", "provider", probeOutputState(hasOutput)
+		return "disconnect", probeProvenanceProvider, probeOutputState(hasOutput)
 	}
 	if hasCompletion {
-		return "complete", "provider", "complete"
+		return "complete", probeProvenanceProvider, "complete"
 	}
 	return "", "", ""
 }
@@ -274,7 +276,7 @@ func isProbeResponseCancel(eventType string) bool {
 
 func isProbeTranscriptDelta(eventType string) bool {
 	switch eventType {
-	case "response.text.delta", "response.audio_transcript.delta", "response.output_text.delta", "response.output_audio_transcript.delta":
+	case probeWireResponseTextDelta, probeWireResponseAudioTranscriptDelta, probeWireResponseOutputTextDelta, "response.output_audio_transcript.delta":
 		return true
 	default:
 		return false

@@ -886,47 +886,6 @@ func writeSessionConfigFile(t *testing.T, configDir string, yaml string) {
 	}
 }
 
-func writeGenericSessionCapture(t *testing.T, path string, records []gwtesting.CapturedSessionEvent) {
-	t.Helper()
-
-	data, err := json.MarshalIndent(gwtesting.SessionCapture{
-		Version: gwtesting.SessionCaptureVersion,
-		Provider: gwtesting.SessionProviderMetadata{
-			Name:  sessionProviderGrok,
-			Model: "grok-replay-test",
-		},
-		Session: gwtesting.SessionMetadata{
-			ID:           "sess-replay-test",
-			StartedAtUTC: time.Now().UTC().Format(time.RFC3339Nano),
-		},
-		Records: records,
-	}, "", "  ")
-	if err != nil {
-		t.Fatalf("marshal replay capture: %v", err)
-	}
-	if err := os.WriteFile(path, data, 0o600); err != nil {
-		t.Fatalf("write replay capture: %v", err)
-	}
-}
-
-func capturedStreamEvent(direction gwtesting.SessionEventDirection, sequence int, timestampMs int64, msgType messages.StreamMessageType, value messages.StreamMessageValue) gwtesting.CapturedSessionEvent {
-	payload, err := gwtesting.MarshalStreamMessage(messages.StreamMessage{
-		Type:  msgType,
-		Value: value,
-	})
-	if err != nil {
-		panic(err)
-	}
-	return gwtesting.CapturedSessionEvent{
-		Sequence:    sequence,
-		Direction:   direction,
-		TimestampMs: timestampMs,
-		Type:        string(msgType),
-		PayloadType: gwtesting.SessionPayloadTypeStreamMessage,
-		Payload:     payload,
-	}
-}
-
 type lockedBuffer struct {
 	mu  sync.Mutex
 	buf bytes.Buffer

@@ -64,7 +64,7 @@ func UnmarshalStreamMessage(data json.RawMessage) (messages.StreamMessage, error
 		ActorID:            messages.ParticipantID(raw.ActorID),
 		LoopPassID:         raw.LoopPassID,
 	}
-	if len(raw.Value) > 0 && string(raw.Value) != "null" {
+	if len(raw.Value) > 0 && string(raw.Value) != captureJSONNull {
 		value, err := unmarshalStreamMessageValue(message.Type, raw.Value)
 		if err != nil {
 			return messages.StreamMessage{}, err
@@ -100,7 +100,7 @@ func newStreamMessageValue(messageType messages.StreamMessageType) (messages.Str
 
 func newStreamMessageValueOne(messageType messages.StreamMessageType) (messages.StreamMessageValue, bool) {
 	var value messages.StreamMessageValue
-	switch messageType {
+	switch messageType { //nolint:exhaustive // This decoder handles one disjoint value family; later decoders handle others.
 	case messages.StreamTypeMessageStart:
 		value = new(messages.MessageStartValue)
 	case messages.StreamTypeMessageEnd:
@@ -133,7 +133,7 @@ func newStreamMessageValueOne(messageType messages.StreamMessageType) (messages.
 
 func newStreamMessageValueTwo(messageType messages.StreamMessageType) (messages.StreamMessageValue, bool) {
 	var value messages.StreamMessageValue
-	switch messageType {
+	switch messageType { //nolint:exhaustive // This decoder handles one disjoint value family; later decoders handle others.
 	case messages.StreamTypeSessionOpen:
 		value = new(messages.SessionOpenValue)
 	case messages.StreamTypeSessionClose:
@@ -162,7 +162,7 @@ func newStreamMessageValueTwo(messageType messages.StreamMessageType) (messages.
 
 func newStreamMessageValueThree(messageType messages.StreamMessageType) (messages.StreamMessageValue, bool) {
 	var value messages.StreamMessageValue
-	switch messageType {
+	switch messageType { //nolint:exhaustive // This decoder handles one disjoint value family; later decoders handle others.
 	case messages.StreamTypeImageStart:
 		value = new(messages.ImageStartValue)
 	case messages.StreamTypeImageDelta:
@@ -195,7 +195,7 @@ func newStreamMessageValueThree(messageType messages.StreamMessageType) (message
 
 func newStreamMessageValueFour(messageType messages.StreamMessageType) (messages.StreamMessageValue, bool) {
 	var value messages.StreamMessageValue
-	switch messageType {
+	switch messageType { //nolint:exhaustive // This decoder handles one disjoint value family; later decoders handle others.
 	case messages.StreamTypeLoopEnd:
 		value = new(messages.LoopEndValue)
 	case messages.StreamTypeAudioStart:

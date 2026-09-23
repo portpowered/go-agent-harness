@@ -12,6 +12,8 @@ import (
 
 const defaultOutputSampleRateHz = 24000
 
+const millisecondsPerSecond = 1000
+
 type Report = replay.CaptureTimingReport
 type ResponseTiming = replay.CaptureResponseTiming
 type ToolTiming = replay.CaptureToolTiming
@@ -213,7 +215,7 @@ func setAudioTiming(state *responseState, sampleRate int) {
 	if state.audioBytes == 0 {
 		return
 	}
-	state.timing.AudioDurationMS = float64(state.audioBytes) * 1000 / float64(2*sampleRate)
+	state.timing.AudioDurationMS = float64(state.audioBytes) * millisecondsPerSecond / float64(2*sampleRate)
 	state.timing.AudioDeliverySpanMS = state.lastAudioMS - state.firstAudioMS
 	denominator := math.Max(1, float64(state.timing.AudioDeliverySpanMS))
 	state.timing.AudioBurstRatio = state.timing.AudioDurationMS / denominator
@@ -229,7 +231,9 @@ func responseID(event wireEvent) string {
 	var response struct {
 		ID string `json:"id"`
 	}
-	_ = json.Unmarshal(event.Response, &response)
+	if err := json.Unmarshal(event.Response, &response); err != nil {
+		return ""
+	}
 	return response.ID
 }
 

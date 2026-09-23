@@ -136,6 +136,7 @@ func (s *observedSession) observeRuntimeSend(msg messages.StreamMessage) {
 	if s.runtime == nil {
 		return
 	}
+	//nolint:exhaustive // Only media, commit, and response-create sends affect this trace.
 	switch msg.Type {
 	case messages.StreamTypeAudioDelta:
 		if value, ok := msg.Value.(*messages.AudioDeltaValue); ok && value != nil {
@@ -146,6 +147,8 @@ func (s *observedSession) observeRuntimeSend(msg messages.StreamMessage) {
 		s.runtime.ResponseCreate(msg)
 	case messages.StreamTypeResponseCreate:
 		s.runtime.ResponseCreate(msg)
+	default:
+		// Only media, commit, and response-create sends affect this trace.
 	}
 }
 
@@ -197,24 +200,6 @@ func appendRecordingCredential(credentials []string, value string) []string {
 		}
 	}
 	return append(credentials, value)
-}
-
-func newSessionRTCRuntimeForPlan(opts SessionRunOptions, selection SessionRuntimeSelection, factory sessionRuntimeFactory) (SessionRTCRuntime, error) {
-	runtimeFactory := opts.RTCRuntimeFactory
-	if runtimeFactory == nil {
-		runtimeFactory = factory.newRTCRuntime
-	}
-	if runtimeFactory == nil {
-		return nil, wrapSessionRTCRuntimeError("create runtime", ErrSessionRTCRuntimeUnavailable)
-	}
-	runtime, err := runtimeFactory(selection)
-	if err != nil {
-		return nil, wrapSessionRTCRuntimeError("create runtime", err)
-	}
-	if runtime == nil {
-		return nil, wrapSessionRTCRuntimeError("create runtime", ErrSessionRTCRuntimeUnavailable)
-	}
-	return runtime, nil
 }
 
 func configureSessionRuntimeLoop(plan *sessionRuntimePlan, opts SessionRunOptions, interactivePolicy InteractiveToolPolicy, scheduledAudioDispatch ScheduledAudioDispatchPolicy) error {

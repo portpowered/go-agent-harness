@@ -3,7 +3,6 @@ package agentruntime
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -104,50 +103,11 @@ func openAIRecordingSessionBuilder(opts SessionRunOptions, factory sessionRuntim
 	}
 }
 
-func replayAnnouncementToolDefinitions(definitions []messages.ToolDefinition, names []string, known bool) []messages.ToolDefinition {
-	if !known {
-		return nil
-	}
-	allowed := make(map[string]struct{}, len(names))
-	for _, name := range names {
-		if name = strings.TrimSpace(name); name != "" {
-			allowed[name] = struct{}{}
-		}
-	}
-	selected := make([]messages.ToolDefinition, 0, len(definitions))
-	for _, definition := range definitions {
-		if _, ok := allowed[strings.TrimSpace(definition.Name)]; ok {
-			selected = append(selected, definition)
-		}
-	}
-	return selected
-}
-
 func (p sessionRuntimePlan) toolDefinitionsForAnnouncement() []messages.ToolDefinition {
 	if p.announceTools != nil {
 		return p.announceTools
 	}
 	return p.loop.ToolDefinitions
-}
-
-func replaySessionToolNames(path string, sequence int, session map[string]json.RawMessage) ([]string, bool, error) {
-	raw, ok := session["tools"]
-	if !ok {
-		return []string{}, true, nil
-	}
-	var tools []struct {
-		Name string `json:"name"`
-	}
-	if err := json.Unmarshal(raw, &tools); err != nil {
-		return nil, true, fmt.Errorf("replay session capture %s: session.tools at sequence %d is invalid: %w", path, sequence, err)
-	}
-	names := make([]string, 0, len(tools))
-	for _, tool := range tools {
-		if name := strings.TrimSpace(tool.Name); name != "" {
-			names = append(names, name)
-		}
-	}
-	return names, true, nil
 }
 
 //lint:ignore U1000 package tests exercise the OpenAI factory seam.

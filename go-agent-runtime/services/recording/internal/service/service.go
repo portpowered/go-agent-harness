@@ -79,6 +79,7 @@ func (s *Service) OpenLiveEvidence(options recording.LiveEvidenceOptions) (sessi
 	return evidence.New(options, s.clock)
 }
 
+//nolint:contextcheck // Finalization must finish after cancellation and supports nil request contexts.
 func (s *Service) RunLiveEvidence(ctx context.Context, options recording.LiveEvidenceOptions, run func(context.Context, recording.LiveEvidence) error) (runErr error) {
 	if run == nil {
 		return errors.New("recording runtime callback is required")
@@ -159,7 +160,7 @@ func (e *liveEvidence) ObserveMessage(ctx context.Context, direction session.Liv
 			return e.latch(err)
 		}
 	}
-	switch message.Type {
+	switch message.Type { //nolint:exhaustive // Only terminal messages require terminal evidence; all messages are recorded above.
 	case messages.StreamTypeSessionClose:
 		terminal, ok := message.Value.(*messages.SessionCloseValue)
 		if ok && terminal != nil {

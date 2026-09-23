@@ -208,7 +208,7 @@ func (d *Dispatcher) initializeSessionTools(ctx context.Context, request public.
 	if capabilities.Initialize != nil {
 		if err := capabilities.Initialize(ctx); err != nil {
 			if capabilities.Close != nil {
-				_ = capabilities.Close()
+				err = errors.Join(err, capabilities.Close())
 			}
 			return fmt.Errorf("initialize session tools: %w", err)
 		}

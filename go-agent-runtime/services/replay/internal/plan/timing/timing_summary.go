@@ -5,6 +5,11 @@ import (
 	"slices"
 )
 
+const (
+	medianQuantile       = 0.50
+	percentile95Quantile = 0.95
+)
+
 func summarize(report Report, commits []int64) Summary {
 	responseSamples := collectResponseSamples(report.Responses)
 	toolSamples, unfinished := collectToolSamples(report.Tools)
@@ -133,8 +138,8 @@ func durationSummary(values []int64) DurationSummary {
 	slices.Sort(values)
 	return DurationSummary{
 		Count: len(values),
-		P50MS: percentile(values, 0.50),
-		P95MS: percentile(values, 0.95),
+		P50MS: percentile(values, medianQuantile),
+		P95MS: percentile(values, percentile95Quantile),
 		MaxMS: values[len(values)-1],
 	}
 }

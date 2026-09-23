@@ -14,6 +14,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 )
 
+const privateCaptureFileMode = 0o600
+
 type httpRecorder struct {
 	transport  http.RoundTripper
 	captures   []recording.HTTPCapturePair
@@ -89,7 +91,7 @@ func (t *httpRecorder) FlushToFile(path string) error {
 	if err != nil {
 		return fmt.Errorf("encode captures: %w", err)
 	}
-	if err := os.WriteFile(path, data, 0o600); err != nil {
+	if err := os.WriteFile(path, data, privateCaptureFileMode); err != nil {
 		return fmt.Errorf("write capture file: %w", err)
 	}
 	return nil

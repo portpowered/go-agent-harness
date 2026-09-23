@@ -321,15 +321,19 @@ func TestRecordProviderSessionReleasesAdmissionWhenProviderBuildFails(t *testing
 
 func TestRunLiveEvidenceReturnsLatchedObservationFailure(t *testing.T) {
 	service := New(clock.Real{})
+	var observeErr error
 	err := service.RunLiveEvidence(t.Context(), recording.LiveEvidenceOptions{
 		Destination: filepath.Join(t.TempDir(), "recording"), OutputAudioRate: 24000,
 	}, func(ctx context.Context, evidence recording.LiveEvidence) error {
-		_ = evidence.ObserveMessage(ctx, runtimesession.LiveRecordAgent, messages.StreamMessage{
+		observeErr = evidence.ObserveMessage(ctx, runtimesession.LiveRecordAgent, messages.StreamMessage{
 			Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue([]byte{1}),
 		})
+		if observeErr == nil {
+			return errors.New("invalid audio observation unexpectedly succeeded")
+		}
 		return nil
 	})
-	if err == nil {
-		t.Fatal("ignored live observation failure was not returned by recording service")
+	if !errors.Is(err, observeErr) {
+		t.Fatalf("run error = %v, want latched observation failure %v", err, observeErr)
 	}
 }

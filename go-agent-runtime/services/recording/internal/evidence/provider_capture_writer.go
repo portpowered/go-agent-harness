@@ -280,7 +280,7 @@ func unmarshalEvidenceValue(kind messages.StreamMessageType, data json.RawMessag
 }
 
 func newEvidenceConversationValue(kind messages.StreamMessageType) messages.StreamMessageValue {
-	switch kind {
+	switch kind { //nolint:exhaustive // Family-specific decoders return nil so the next decoder can handle other kinds.
 	case messages.StreamTypeMessageStart:
 		return new(messages.MessageStartValue)
 	case messages.StreamTypeMessageEnd:
@@ -309,7 +309,7 @@ func newEvidenceConversationValue(kind messages.StreamMessageType) messages.Stre
 }
 
 func newEvidenceLifecycleValue(kind messages.StreamMessageType) messages.StreamMessageValue {
-	switch kind {
+	switch kind { //nolint:exhaustive // Family-specific decoders return nil so the next decoder can handle other kinds.
 	case messages.StreamTypePong:
 		return new(messages.PongValue)
 	case messages.StreamTypeSessionOpen:
@@ -340,7 +340,7 @@ func newEvidenceLifecycleValue(kind messages.StreamMessageType) messages.StreamM
 }
 
 func newEvidenceArtifactValue(kind messages.StreamMessageType) messages.StreamMessageValue {
-	switch kind {
+	switch kind { //nolint:exhaustive // Family-specific decoders return nil so the next decoder can handle other kinds.
 	case messages.StreamTypeImageStart:
 		return new(messages.ImageStartValue)
 	case messages.StreamTypeImageDelta:
@@ -371,7 +371,7 @@ func newEvidenceArtifactValue(kind messages.StreamMessageType) messages.StreamMe
 }
 
 func newEvidenceAudioValue(kind messages.StreamMessageType) messages.StreamMessageValue {
-	switch kind {
+	switch kind { //nolint:exhaustive // Family-specific decoders return nil so the next decoder can handle other kinds.
 	case messages.StreamTypeAudioStart:
 		return new(messages.AudioStartValue)
 	case messages.StreamTypeAudioDelta:

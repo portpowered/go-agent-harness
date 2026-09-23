@@ -45,7 +45,7 @@ func (r *injectedSessionCapture) ConnectSession(ctx context.Context) (messages.S
 	r.mu.Unlock()
 	go func(done <-chan struct{}) {
 		<-done
-		_ = r.FlushCapture()
+		_ = r.FlushCapture() //nolint:errcheck // FlushCapture latches its result for the caller's bounded finalization.
 	}(session.Done())
 	return session, nil
 }

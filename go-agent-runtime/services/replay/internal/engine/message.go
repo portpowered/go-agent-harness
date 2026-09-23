@@ -53,6 +53,8 @@ var _ messages.SessionSendOutcomeSender = (*MessageSession)(nil)
 // bounded replay. validateOutbound must remain true for provider sessions; the
 // read-only CaptureReplay contract disables it because it only drains inbound
 // messages.
+//
+//nolint:contextcheck // The internal replay API accepts nil and has no parent context to inherit.
 func NewMessageSession(events []gatewaytesting.CapturedSessionEvent, ctx context.Context, validateOutbound bool) *MessageSession {
 	if ctx == nil {
 		ctx = context.Background()

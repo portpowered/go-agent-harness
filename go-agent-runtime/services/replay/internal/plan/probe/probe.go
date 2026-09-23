@@ -3,6 +3,7 @@ package probe
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -152,8 +153,8 @@ func replayProbe(ctx context.Context, capture gatewaytesting.SessionCapture) (re
 		Observations:       make([]replayProbeEvent, 0, len(capture.Records)),
 	}
 	fail := func(format string, args ...any) (replayProbeReport, error) {
-		_ = conn.Close()
-		return replayProbeReport{}, fmt.Errorf(format, args...)
+		closeErr := conn.Close()
+		return replayProbeReport{}, errors.Join(fmt.Errorf(format, args...), closeErr)
 	}
 	for _, record := range capture.Records {
 		if err := contextError(ctx); err != nil {

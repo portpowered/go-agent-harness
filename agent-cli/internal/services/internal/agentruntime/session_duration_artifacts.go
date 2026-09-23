@@ -13,10 +13,6 @@ func sessionDurationArtifactsFromContext(ctx context.Context) SessionDurationArt
 	return durationwire.NewService().ArtifactsFromContext(ctx)
 }
 
-func withSessionDurationTerminalRecorder(ctx context.Context, recorder sessionduration.TerminalRecorder) context.Context {
-	return durationwire.NewService().WithTerminalRecorder(ctx, recorder)
-}
-
 func prepareSessionDurationArtifacts(ctx context.Context) (context.Context, error) {
 	return durationwire.NewService().PrepareArtifacts(ctx)
 }

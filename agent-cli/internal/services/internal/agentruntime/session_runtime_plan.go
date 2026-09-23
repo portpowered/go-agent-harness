@@ -315,7 +315,7 @@ func (p sessionRuntimePlan) configureLoopObserver(loop *sessionLoopOptions) {
 			if ctx == nil {
 				ctx = context.Background()
 			}
-			_ = p.liveEvidence.ObserveMessage(context.WithoutCancel(ctx), runtimesession.LiveRecordAgent, message)
+			_ = p.liveEvidence.ObserveMessage(context.WithoutCancel(ctx), runtimesession.LiveRecordAgent, message) //nolint:errcheck // RunLiveEvidence joins latched failures.
 		}
 	}
 	obs := sessiontracewire.NewObserver(sessiontrace.NewObserverOptions{
