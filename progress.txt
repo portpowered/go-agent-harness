@@ -4756,3 +4756,51 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   full production caller census and any permitted public-behavior repair, then
   rerun all C276 verification and the complete `make prepush` on one clean
   candidate SHA before any push or PR update. Decision remains CONTINUE.
+
+
+# C276 current-head verification and release-dependency checkpoint — 2026-09-23
+
+- Re-read the factory policy and implementation handoff. From `FACTORY_ROOT`,
+  `project-control.py verify-work --type task --name
+  audio-runtime-c276-recover-c270-recording-replay-finalization` returned
+  `admitted`. Canonical `work-task-8` remains `init`; `prd.json.branchName`
+  matches `codex/audio-runtime-c276-recover-c270-recording-replay-finalization`.
+  No concluded C276 or C270 review Work exists. Fetched `origin/main` at
+  `2f9f9736e1360802fc37e82de38540d92cb22631`; it is an ancestor of clean
+  source checkpoint `aeace7c0fd64e2804a1c53a2cb447c663fe758cb`.
+- Bounded public reproduction on that source checkpoint passed both corrected
+  WebMCP selections and the cast-device WAV path:
+  `rtk proxy env CGO_ENABLED=0 go test -timeout 4m -count=1 -tags=nomicrophone
+  ./agent-cli/internal/transport/cli -run
+  'TestSession(Recorded|Unrecorded)WebMCPCastDeviceWAVStaysInteractive'`.
+  The PRD e2e invocation targets `agent-cli/test/e2e`, whose files require the
+  `e2e` build tag; the named regression is in `agent-cli/internal/transport/cli`.
+- Rechecked all seven planned recording/replay deletions and all six
+  checkpoint-only replacements: all thirteen production paths remain absent.
+  `recording_adapter.go` is 30 lines and `replay_adapter.go` is 33 lines,
+  63 combined. `session_browser_recording.go` is absent from both fetched main
+  and this candidate, so the comparison is unchanged. The production
+  `LoadSessionCapture` census still identifies three shared runtime readers:
+  `sessiontrace/internal/service/metrics.go:64`,
+  `roomreplay/internal/service/integrity_artifacts.go:122`, and
+  `roomreplay/internal/service/schedule_build.go:155`.
+- Release prerequisites remain unavailable. There is no C268 Work or C268
+  release ref. C280 (`work-task-15`, the C269 recovery) remains `init`, with no
+  C269 release ref. The room-replay candidate is not an exact reviewed release:
+  C278 review feedback rejected PR #540 for missing human sent-PCM scheduling,
+  rereading an admitted plan from disk, and an extra adapter; the later review
+  records those code findings repaired but still requires the complete local
+  preflight on exact head `f35683293d9a53651ce3e7296ada8bf6d40d962e` and fresh
+  review. No peer branch or worktree was modified.
+- The last full `make prepush` on `34e089f900485fff3a1de291f51934b2d07536d9`
+  passed all stages through instrumented module tests and stopped at four
+  existing shared coverage floors: CLI Wire 79.00%/80%, session Wire
+  84.60%/95%, session-duration service 84.50%/90%, and session-terminal Wire
+  88.90%/95%. The task-owned replay engine met its floor. Only `progress.txt`
+  differs between that tested source checkpoint and `aeace7c`; no production
+  or test source changed. Do not lower floors or add coverage-only tests.
+- No push, PR, or hosted CI handoff occurred. Next: integrate exact reviewed
+  C268/C269/C274 releases additively when available, finish the direct-reader
+  caller cutover without editing peer-owned work, then run every C276 functional,
+  integration, race, hermetic, Wire, and repository prepush command on one clean
+  exact candidate. Decision remains CONTINUE.
