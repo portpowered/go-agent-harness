@@ -207,7 +207,7 @@ func TestScheduledSessionWaitsForAcceptedToolResultAfterResponseDone(t *testing.
 	defer cancel()
 	runErr := make(chan error, 1)
 	go func() {
-		runErr <- servicetest.RunSession(ctx, io.Discard, servicetest.SessionRunOptions{
+		runErr <- servicetest.RunSession(ctx, io.Discard, withTestSessionRuntimeServices(servicetest.SessionRunOptions{
 			RecordPath:        "scheduled-tool-lifecycle.session.json",
 			Provider:          "grok",
 			Model:             "grok-realtime",
@@ -230,7 +230,7 @@ func TestScheduledSessionWaitsForAcceptedToolResultAfterResponseDone(t *testing.
 					responseDoneOnce.Do(func() { close(providerResponseDone) })
 				}
 			},
-		})
+		}))
 	}()
 
 	select {

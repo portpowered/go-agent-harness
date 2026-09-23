@@ -36,7 +36,7 @@ func TestSessionCommand_RecordThenReplayUsesCapturedHandshake(t *testing.T) {
 	recordPath := filepath.Join(t.TempDir(), "recorded.session.json")
 	recordDialer := newHandshakeReplayDialer()
 
-	err := servicetest.RunSessionWithInstructions(context.Background(), io.Discard, servicetest.SessionRunOptions{
+	err := servicetest.RunSessionWithInstructions(context.Background(), io.Discard, withTestSessionRuntimeServices(servicetest.SessionRunOptions{
 		RecordPath:   recordPath,
 		Provider:     "openai",
 		Model:        "gpt-realtime",
@@ -54,7 +54,7 @@ func TestSessionCommand_RecordThenReplayUsesCapturedHandshake(t *testing.T) {
 			}},
 		}},
 		WebSocketDialer: recordDialer,
-	}, sessionHandshakeReplayInstructions)
+	}), sessionHandshakeReplayInstructions)
 	if err != nil {
 		t.Fatalf("record hermetic OpenAI session: %v", err)
 	}

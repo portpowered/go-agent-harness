@@ -284,20 +284,6 @@ func admitReplay(ctx context.Context, path string, inspection *runtimeReplay.Cap
 	return &loaded, nil
 }
 
-func replayKind(inspection *runtimeReplay.CaptureInspection) runtimeSession.LiveReplayKind {
-	if inspection == nil {
-		return ""
-	}
-	switch inspection.Kind {
-	case runtimeReplay.CaptureKindRealtime:
-		return runtimeSession.LiveReplayKindRealtime
-	case runtimeReplay.CaptureKindTurn:
-		return runtimeSession.LiveReplayKindTurn
-	default:
-		return ""
-	}
-}
-
 func resolveCredentialReference(apiKey string, resolve func(string) string) string {
 	if apiKey == "" || resolve == nil {
 		return ""

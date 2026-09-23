@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	gatewaytransport "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
@@ -250,11 +249,11 @@ func (c *websocketConn) WriteMessage(_ int, payload []byte) error {
 			errors.New("got outbound before expected capture event"),
 		))
 	}
-	if !jsonPayloadEqual(eventPayload(event), payload) {
+	if mismatch := compareJSONPayloads(eventPayload(event), payload, "websocket message"); mismatch != nil {
 		return c.setErrLocked(replayMismatch(
 			eventDescription(event.Sequence, event.Type),
 			eventDescription(event.Sequence, websocketPayloadType(payload)),
-			gateway.NewReplayPayloadDivergenceError("websocket message", "<recorded>", "<sent>"),
+			mismatch,
 		))
 	}
 	index := c.index

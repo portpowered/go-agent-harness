@@ -9,6 +9,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
 	sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
@@ -63,6 +64,25 @@ func newTestReplaySessionCommand(globalFlags *flags.GlobalFlags, registry device
 		FileDeviceService{Service: runtimedeviceswire.NewFileService(audioService), Scheduler: sessionclock.Real{}},
 		nil, nil, nil, nil, nil,
 	)
+}
+
+func withTestSessionRuntimeServices(options servicetest.SessionRunOptions) servicetest.SessionRunOptions {
+	if options.AudioService == nil {
+		options.AudioService = audioiowire.NewService()
+	}
+	if options.RecordingService == nil {
+		options.RecordingService = recordingwire.NewService(sessionclock.Real{})
+	}
+	if options.ProviderCaptureService == nil {
+		options.ProviderCaptureService = recordingwire.NewProviderCaptureService(sessionclock.Real{})
+	}
+	if options.ReplayService == nil {
+		options.ReplayService = replaywire.NewService()
+	}
+	if options.ModelCatalog == nil {
+		options.ModelCatalog = providerswire.NewModelCatalog()
+	}
+	return options
 }
 
 type chatFlagMatrixCase struct {

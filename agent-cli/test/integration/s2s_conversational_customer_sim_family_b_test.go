@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe"
+	replaywire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
 )
 
 // TestShippedSessionProcessFamilyBCorrection drives one persistent shipped
@@ -223,6 +224,7 @@ func TestRunCustomerSimulationSuiteFamilyBUsesRecordedCorrectionBoundaries(t *te
 		BaseURL: fixture.WebSocketURL(), APIKey: "hermetic-key", SystemPrompt: scenario.TextSeed,
 		Runs:      []probe.CustomerSimulationRunSpec{{Scenario: scenario, Script: script, Audio: [][]byte{familyBFrame(1), familyBFrame(2)}}},
 		Validator: validator, MaxDuration: scenario.Deadline, FrameDuration: 5 * time.Millisecond, SilenceDuration: 5 * time.Millisecond, ShutdownGrace: time.Second,
+		ReplayService: replaywire.NewService(),
 	})
 	if runErr != nil {
 		t.Fatalf("RunCustomerSimulationSuite: %v\nprovider=%+v", runErr, fixture.Snapshot())

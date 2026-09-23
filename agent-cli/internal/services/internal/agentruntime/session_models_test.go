@@ -482,8 +482,8 @@ model:
 
 	err := RunSession(context.Background(), &strings.Builder{}, SessionRunOptions{
 		AudioService:           newTestAudioIOService(),
-		recordingService:       newTestRecordingService(),
-		providerCaptureService: newTestProviderCaptureService(),
+		RecordingService:       newTestRecordingService(),
+		ProviderCaptureService: newTestProviderCaptureService(),
 		ModelCatalog:           testModelCatalog(),
 		RecordPath:             filepath.Join(t.TempDir(), "openai-session.json"),
 		Provider:               config.ProviderOpenAI,
@@ -537,8 +537,8 @@ func runOpenAIRealtimeWithDialer(t *testing.T, configDir, model string, dialer t
 	var out strings.Builder
 	err := RunSession(context.Background(), &out, SessionRunOptions{
 		AudioService:           newTestAudioIOService(),
-		recordingService:       newTestRecordingService(),
-		providerCaptureService: newTestProviderCaptureService(),
+		RecordingService:       newTestRecordingService(),
+		ProviderCaptureService: newTestProviderCaptureService(),
 		ModelCatalog:           testModelCatalog(),
 		RecordPath:             filepath.Join(t.TempDir(), "openai-session.json"),
 		Provider:               config.ProviderOpenAI,

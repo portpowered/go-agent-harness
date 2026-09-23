@@ -83,7 +83,7 @@ func runSessionWithDiagnostics(t *testing.T, mutate func(*SessionRunOptions)) se
 	}
 	opts := SessionRunOptions{ModelCatalog: testModelCatalog(),
 		AudioService:    audioiowire.NewService(),
-		replayService:   newTestReplayService(),
+		ReplayService:   newTestReplayService(),
 		Diagnostics:     sink,
 		MetricsRecorder: metricSink,
 	}
@@ -395,7 +395,7 @@ func TestSessionDiagnostics_DrainPhaseFailureEmitsOneCanonicalRecord(t *testing.
 	sink := &diagnosticRecordSink{}
 	opts := SessionRunOptions{ModelCatalog: testModelCatalog(),
 		AudioService:      audioiowire.NewService(),
-		replayService:     newTestReplayService(),
+		ReplayService:     newTestReplayService(),
 		ReplayPath:        "scripted-drain-failure.session.json",
 		SessionInferencer: sessionInf,
 		WaitForClose:      true,

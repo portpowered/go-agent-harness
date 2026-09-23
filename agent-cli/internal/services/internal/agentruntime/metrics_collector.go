@@ -48,7 +48,7 @@ func (c metricsCollector) Collect(ctx context.Context, fixture, prompt string) (
 		Prompt:          prompt,
 		Clock:           c.clock,
 		runtimeFactory:  c.factory,
-		replayService:   c.replayService,
+		ReplayService:   c.replayService,
 		MetricsRecorder: sink,
 	}); err != nil {
 		return nil, fmt.Errorf("replay %s for metrics: %w", fixture, err)

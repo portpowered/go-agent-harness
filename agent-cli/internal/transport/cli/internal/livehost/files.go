@@ -362,8 +362,12 @@ func captureCompleteControls(request serviceSession.Request, custom func(service
 	if custom != nil {
 		return custom(request)
 	}
-	if !request.AudioInput.Present && len(request.AudioTurns) == 0 {
+	if !request.AudioInput.Present && len(request.AudioTurns) == 0 && len(request.AudioInterrupts) == 0 {
 		return nil
 	}
-	return []runtimeSession.LiveControl{{Kind: runtimeSession.LiveControlAudioCommit}}
+	controls := []runtimeSession.LiveControl{{Kind: runtimeSession.LiveControlAudioCommit}}
+	if len(request.AudioTurns) > 0 || len(request.AudioInterrupts) > 0 {
+		controls = append(controls, runtimeSession.LiveControl{Kind: runtimeSession.LiveControlResponseCreate})
+	}
+	return controls
 }

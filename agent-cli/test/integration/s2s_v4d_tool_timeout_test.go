@@ -373,7 +373,7 @@ func runV4DSession(t *testing.T, executor messages.ToolExecutor, timeout, runBou
 	inferencer := newV4DScriptedInferencer(out)
 	ctx, cancel := context.WithTimeout(context.Background(), runBound)
 	defer cancel()
-	err := servicetest.RunSession(ctx, out, servicetest.SessionRunOptions{
+	err := servicetest.RunSession(ctx, out, withTestSessionRuntimeServices(servicetest.SessionRunOptions{
 		ReplayPath:           filepathV4DScratch(t),
 		SessionInferencer:    inferencer,
 		WaitForClose:         true,
@@ -381,7 +381,7 @@ func runV4DSession(t *testing.T, executor messages.ToolExecutor, timeout, runBou
 		ToolExecutor:         executor,
 		ToolExecutionTimeout: timeout,
 		Diagnostics:          sink,
-	})
+	}))
 
 	var calls []messages.ToolCall
 	if recorder, ok := executor.(v4DCallRecorder); ok {

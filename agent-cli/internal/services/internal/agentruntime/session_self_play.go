@@ -269,7 +269,7 @@ func selfPlaySessionRunOptions(opts SelfPlayRunOptions) SessionRunOptions {
 		Clock:           opts.clock,
 		runtimeFactory:  opts.runtimeFactory,
 		ModelCatalog:    opts.modelCatalog,
-		replayService:   opts.replayService,
+		ReplayService:   opts.replayService,
 		// Phase 1 is intentionally no-tools. These fields stay nil even when
 		// callers provide a composed CLI executor elsewhere in the process.
 		ToolExecutor:    nil,

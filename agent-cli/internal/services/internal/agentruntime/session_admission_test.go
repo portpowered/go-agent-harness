@@ -98,7 +98,7 @@ func TestValidateSessionRunOptionsAdmitsRecordAndReplay(t *testing.T) {
 	if writeErr := os.WriteFile(replayPath, data, 0o600); writeErr != nil {
 		t.Fatalf("write capture: %v", writeErr)
 	}
-	if err := validateSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), ReplayPath: replayPath, replayService: newTestReplayService()}); err != nil {
+	if err := validateSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), ReplayPath: replayPath, ReplayService: newTestReplayService()}); err != nil {
 		t.Fatalf("validateSessionRunOptions(--replay) = %v, want admission", err)
 	}
 }

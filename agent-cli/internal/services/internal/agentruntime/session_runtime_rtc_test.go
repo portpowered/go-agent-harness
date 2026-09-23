@@ -395,8 +395,8 @@ model:
 		Transport:              SessionTransportWebRTC,
 		Signaling:              "loopback://record/sentinel",
 		MediaSource:            "fixture://record/sentinel",
-		recordingService:       wire.NewService(clockSource),
-		providerCaptureService: wire.NewProviderCaptureService(clockSource),
+		RecordingService:       wire.NewService(clockSource),
+		ProviderCaptureService: wire.NewProviderCaptureService(clockSource),
 	}, sessionRuntimeFactory{
 		newRTCRuntime: func(SessionRuntimeSelection) (SessionRTCRuntime, error) {
 			return runtime, nil
@@ -504,8 +504,8 @@ func TestRunSession_WebRTCCompletesHermeticTurnThroughExportedService(t *testing
 		MediaSource:            mediaSource,
 		SessionInferencer:      &hermeticSessionInferencer{fixture: fixture},
 		RTCRuntimeFactory:      runtimeFactory,
-		recordingService:       wire.NewService(clockSource),
-		providerCaptureService: wire.NewProviderCaptureService(clockSource),
+		RecordingService:       wire.NewService(clockSource),
+		ProviderCaptureService: wire.NewProviderCaptureService(clockSource),
 		Prompt:                 "complete one hermetic turn",
 		StreamObserver: func(msg messages.StreamMessage) {
 			observationsMu.Lock()

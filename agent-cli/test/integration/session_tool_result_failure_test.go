@@ -170,7 +170,7 @@ type sessionRunInputs struct {
 
 func runUnresolvedFailureSessionWithContext(ctx context.Context, inputs *sessionRunInputs) error {
 	var out bytes.Buffer
-	return servicetest.RunSession(ctx, &out, servicetest.SessionRunOptions{
+	return servicetest.RunSession(ctx, &out, withTestSessionRuntimeServices(servicetest.SessionRunOptions{
 		RecordPath:        "unresolved-tool-result.session.json",
 		Provider:          "grok",
 		Model:             "grok-realtime",
@@ -183,7 +183,7 @@ func runUnresolvedFailureSessionWithContext(ctx context.Context, inputs *session
 			PCM:                 []byte{1, 2, 3, 4},
 			EndOfTurn:           true,
 		}},
-	})
+	}))
 }
 
 type fixedUnresolvedFailureInferencer struct {

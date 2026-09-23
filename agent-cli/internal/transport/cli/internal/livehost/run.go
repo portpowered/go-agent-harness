@@ -116,7 +116,7 @@ func liveRunner(service runtimeSession.LiveService) (runtimeSession.LiveRunner, 
 
 func openRecorder(request serviceSession.Request, liveRequest *runtimeSession.LiveRequest, deps Dependencies) (runtimeSession.LiveRecorder, error) {
 	if request.RecordDirectory == "" {
-		recorder, err := openSemanticRecorder(request.RecordPath, deps.RecordingService)
+		recorder, err := openSemanticRecordingAdapter(request.RecordPath, deps.RecordingService)
 		if err != nil || !request.TraceAudio {
 			return recorder, err
 		}
@@ -239,31 +239,8 @@ func configureLiveCapturePath(request serviceSession.Request, replayInputPath st
 	}
 	path := strings.TrimSpace(providerCapture.ProviderCapturePath())
 	if path != "" {
-		configureCapturePath(liveRequest, path)
+		applyRecordingCapturePath(liveRequest, path)
 	}
-}
-
-func openSemanticRecorder(recordPath string, service runtimeRecording.Service) (runtimeSession.LiveRecorder, error) {
-	if recordPath == "" {
-		return nil, nil
-	}
-	if service == nil {
-		return nil, errors.New("live recording service is unavailable")
-	}
-	recorder, err := service.OpenLiveSemanticEvidence(recordPath)
-	if err != nil {
-		return nil, fmt.Errorf("open live semantic recording: %w", err)
-	}
-	return recorder, nil
-}
-
-// configureCapturePath exists as a narrow hook for the caller-owned request
-// copy. The recorder path is applied in Run before options are built.
-func configureCapturePath(request *runtimeSession.LiveRequest, path string) {
-	if request == nil || path == "" {
-		return
-	}
-	request.Replay.OutputCapturePath = path
 }
 
 func configureLegacyReplayInput(filePorts *FilePorts, request serviceSession.Request, liveRequest runtimeSession.LiveRequest) {

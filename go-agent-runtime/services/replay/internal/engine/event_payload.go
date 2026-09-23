@@ -8,6 +8,9 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"sort"
+	"strconv"
+	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/internal/capture"
@@ -80,8 +83,8 @@ func compareStreamEvent(expected gatewaytesting.CapturedSessionEvent, actual mes
 	if err != nil {
 		return fmt.Errorf("marshal outbound event %s: %w", actual.Type, err)
 	}
-	if !jsonPayloadEqual(payload, actualPayload) {
-		return gateway.NewReplayPayloadDivergenceError("stream message", "<recorded>", "<sent>")
+	if err := compareJSONPayloads(payload, actualPayload, "stream message"); err != nil {
+		return err
 	}
 	if expected.Type != "" && expected.Type != string(actual.Type) {
 		return fmt.Errorf("expected event type %q, got %q", expected.Type, actual.Type)
@@ -108,4 +111,89 @@ func jsonPayloadEqual(expected, actual []byte) bool {
 	expectedValue, expectedErr := decode(expected)
 	actualValue, actualErr := decode(actual)
 	return expectedErr == nil && actualErr == nil && reflect.DeepEqual(expectedValue, actualValue)
+}
+
+func compareJSONPayloads(expected, actual []byte, fallback string) error {
+	if jsonPayloadEqual(expected, actual) {
+		return nil
+	}
+	var expectedValue, actualValue any
+	if json.Unmarshal(expected, &expectedValue) == nil && json.Unmarshal(actual, &actualValue) == nil {
+		if pointer, ok := firstJSONDifference(expectedValue, actualValue, ""); ok {
+			location := "JSON pointer " + strconv.QuoteToASCII(pointer)[1:len(strconv.QuoteToASCII(pointer))-1]
+			return gateway.NewReplayPayloadDivergenceError(location, "<recorded>", "<sent>")
+		}
+	}
+	return gateway.NewReplayPayloadDivergenceError(fallback, "<recorded>", "<sent>")
+}
+
+func firstJSONDifference(expected, actual any, pointer string) (string, bool) {
+	if expectedMap, ok := expected.(map[string]any); ok {
+		actualMap, actualOK := actual.(map[string]any)
+		if !actualOK {
+			return pointer, true
+		}
+		keys := make(map[string]struct{}, len(expectedMap)+len(actualMap))
+		for key := range expectedMap {
+			keys[key] = struct{}{}
+		}
+		for key := range actualMap {
+			keys[key] = struct{}{}
+		}
+		ordered := make([]string, 0, len(keys))
+		for key := range keys {
+			ordered = append(ordered, key)
+		}
+		sort.Strings(ordered)
+		for _, key := range ordered {
+			want, wantOK := expectedMap[key]
+			got, gotOK := actualMap[key]
+			child := appendJSONPointer(pointer, key)
+			if !wantOK || !gotOK {
+				return child, true
+			}
+			if found, differs := firstJSONDifference(want, got, child); differs {
+				return found, true
+			}
+		}
+		return "", false
+	}
+	if expectedSlice, ok := expected.([]any); ok {
+		actualSlice, actualOK := actual.([]any)
+		if !actualOK {
+			return pointer, true
+		}
+		common := min(len(expectedSlice), len(actualSlice))
+		for index := 0; index < common; index++ {
+			if found, differs := firstJSONDifference(expectedSlice[index], actualSlice[index], appendJSONPointer(pointer, strconv.Itoa(index))); differs {
+				return found, true
+			}
+		}
+		if len(expectedSlice) != len(actualSlice) {
+			return appendJSONPointer(pointer, strconv.Itoa(common)), true
+		}
+		return "", false
+	}
+	if reflect.DeepEqual(expected, actual) {
+		return "", false
+	}
+	return pointer, true
+}
+
+func appendJSONPointer(pointer, token string) string {
+	var builder strings.Builder
+	builder.Grow(len(pointer) + len(token) + 1)
+	builder.WriteString(pointer)
+	builder.WriteByte('/')
+	for _, char := range token {
+		switch char {
+		case '~':
+			builder.WriteString("~0")
+		case '/':
+			builder.WriteString("~1")
+		default:
+			builder.WriteRune(char)
+		}
+	}
+	return builder.String()
 }

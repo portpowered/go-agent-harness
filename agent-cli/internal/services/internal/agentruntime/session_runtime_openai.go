@@ -75,7 +75,7 @@ func planOpenAIRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 			if dialer == nil {
 				dialer = oaiprovider.NewDefaultWebSocketDialer()
 			}
-			capture, err := opts.recordingService.RecordProviderSession(opts.providerCaptureService, runtimerecording.ProviderSessionOptions{
+			capture, err := opts.RecordingService.RecordProviderSession(opts.ProviderCaptureService, runtimerecording.ProviderSessionOptions{
 				Destination: destination, Provider: sessionProviderOpenAI, Model: sessionCfg.Model,
 				Dialer: observeSessionWire(dialer, opts), Clock: opts.Clock, Build: build,
 			})

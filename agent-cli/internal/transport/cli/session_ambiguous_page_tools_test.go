@@ -19,6 +19,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 )
 
 func TestSessionAmbiguousTabsPublishOnlySelectedPageTools(t *testing.T) {
@@ -137,6 +138,7 @@ func TestSessionAmbiguousTabsPublishOnlySelectedPageTools(t *testing.T) {
 	runErr := make(chan error, 1)
 	go func() {
 		runErr <- servicetest.RunSession(sessionCtx, io.Discard, servicetest.SessionRunOptions{
+			AudioService:           audioiowire.NewService(),
 			Provider:               config.ProviderGrok,
 			Model:                  "ambiguous-session",
 			APIKey:                 "unused",
@@ -369,6 +371,7 @@ func TestSessionAmbiguousCubeConversationRequiresChoiceBeforePageWork(t *testing
 	runComplete := make(chan struct{})
 	go func() {
 		err := servicetest.RunSessionWithInstructions(sessionCtx, &output, servicetest.SessionRunOptions{
+			AudioService:           audioiowire.NewService(),
 			Provider:               config.ProviderGrok,
 			Model:                  "ambiguous-session",
 			APIKey:                 "unused",

@@ -208,8 +208,8 @@ func TestPlanSessionRuntimeRejectsInvalidInteractiveConfigBeforeProviderSetup(t 
 
 	_, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		AudioService:           newTestAudioIOService(),
-		recordingService:       newTestRecordingService(),
-		providerCaptureService: newTestProviderCaptureService(),
+		RecordingService:       newTestRecordingService(),
+		ProviderCaptureService: newTestProviderCaptureService(),
 		LoadedConfig:           &config.Config{Tools: config.ToolsConfig{Interactive: settings}},
 		Provider:               config.ProviderGrok,
 		RecordPath:             "capture.json",

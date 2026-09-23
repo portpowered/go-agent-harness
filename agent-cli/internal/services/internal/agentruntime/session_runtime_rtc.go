@@ -127,7 +127,7 @@ func planWebRTCSessionRuntime(opts SessionRunOptions, selection SessionRuntimeSe
 		build := func(recordingDialer transport.Dialer) (messages.SessionInferencer, error) {
 			return factory.newOpenAISessionInferencerForTools(sessionCfg, opts.Voice, recordingDialer, opts.ToolDefinitions, false, inputAudioTranscription)
 		}
-		capture, captureErr := opts.recordingService.RecordProviderSession(opts.providerCaptureService, runtimerecording.ProviderSessionOptions{
+		capture, captureErr := opts.RecordingService.RecordProviderSession(opts.ProviderCaptureService, runtimerecording.ProviderSessionOptions{
 			Destination: opts.RecordPath, Provider: provider, Model: model,
 			Dialer: observeSessionWire(dialer, opts), Clock: opts.Clock, Build: build,
 		})
@@ -154,7 +154,7 @@ func planWebRTCSessionRuntime(opts SessionRunOptions, selection SessionRuntimeSe
 		build := func(recordingDialer transport.Dialer) (messages.SessionInferencer, error) {
 			return factory.newGrokSessionInferencerForTools(sessionCfg, recordingDialer, opts.ToolDefinitions)
 		}
-		capture, captureErr := opts.recordingService.RecordProviderSession(opts.providerCaptureService, runtimerecording.ProviderSessionOptions{
+		capture, captureErr := opts.RecordingService.RecordProviderSession(opts.ProviderCaptureService, runtimerecording.ProviderSessionOptions{
 			Destination: opts.RecordPath, Provider: provider, Model: model,
 			Dialer: observeSessionWire(dialer, opts), Clock: opts.Clock, Build: build,
 		})

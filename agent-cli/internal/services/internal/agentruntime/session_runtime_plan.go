@@ -353,10 +353,10 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 }
 
 func planSessionRuntimeWithFactoryContext(ctx context.Context, opts SessionRunOptions, factory sessionRuntimeFactory) (plan sessionRuntimePlan, planErr error) {
-	if (opts.RecordPath != "" || opts.RecordDirectory != "") && opts.recordingService == nil {
+	if (opts.RecordPath != "" || opts.RecordDirectory != "") && opts.RecordingService == nil {
 		return sessionRuntimePlan{}, errors.New("recording service is not configured")
 	}
-	if (opts.RecordPath != "" || opts.RecordDirectory != "") && opts.providerCaptureService == nil {
+	if (opts.RecordPath != "" || opts.RecordDirectory != "") && opts.ProviderCaptureService == nil {
 		return sessionRuntimePlan{}, errors.New("provider capture service is not configured")
 	}
 	opts.ToolDefinitions = messages.CanonicalToolDefinitions(opts.ToolDefinitions)
@@ -538,7 +538,7 @@ func planSessionRuntimeWithFactoryContext(ctx context.Context, opts SessionRunOp
 		return sessionRuntimePlan{}, wrapSessionRTCRuntimeError("create runtime", ErrSessionRTCRuntimeUnavailable)
 	}
 	plan.capabilityCoordinator = capabilityCoordinator
-	plan.recordingService = opts.recordingService
+	plan.recordingService = opts.RecordingService
 	if opts.RecordDirectory != "" {
 		evidenceOptions := sessionLiveEvidenceOptions(opts, plan, opts.RecordDirectory, opts.RecordMaxDuration)
 		plan.liveEvidenceOptions = &evidenceOptions
@@ -740,7 +740,7 @@ func planReplaySessionRuntimeContext(ctx context.Context, opts SessionRunOptions
 	if opts.SessionInferencer != nil {
 		return genericInjectedReplayPlan(opts), nil
 	}
-	service := opts.replayService
+	service := opts.ReplayService
 	if service == nil {
 		return sessionRuntimePlan{}, errors.New("replay service is not configured")
 	}
@@ -791,7 +791,7 @@ func planTurnReplay(opts SessionRunOptions, service runtimereplay.Service, inspe
 }
 
 func prepareReplayLiveContext(ctx context.Context, opts SessionRunOptions) (runtimereplay.LivePrepared, transport.Dialer, runtimereplay.CaptureInspection, error) {
-	service := opts.replayService
+	service := opts.ReplayService
 	if service == nil {
 		return nil, nil, runtimereplay.CaptureInspection{}, errors.New("replay service is not configured")
 	}

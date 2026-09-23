@@ -163,9 +163,12 @@ func (e *SessionRuntimeSelectionError) Unwrap() error {
 
 // SessionRunOptions contains the user-facing agent session command options.
 type SessionRunOptions struct {
-	recordingService       runtimerecording.Service
-	providerCaptureService runtimerecording.ProviderCaptureService
-	replayService          runtimereplay.Service
+	// RecordingService, ProviderCaptureService, and ReplayService are
+	// application-composed contracts. Runtime callers that exercise the public
+	// test seam must provide the same dependencies as production composition.
+	RecordingService       runtimerecording.Service
+	ProviderCaptureService runtimerecording.ProviderCaptureService
+	ReplayService          runtimereplay.Service
 	// AudioService is the application-composed audio contract. Audio policy,
 	// PCM conversion, and timers are delegated to this service.
 	AudioService audioio.Service
@@ -443,10 +446,10 @@ func validateSessionRunOptions(opts SessionRunOptions) error {
 	}
 	// Replay admission and path validation belong to the replay service.
 	if opts.ReplayPath != "" && opts.SessionInferencer == nil {
-		if opts.replayService == nil {
+		if opts.ReplayService == nil {
 			return errors.New("replay service is not configured")
 		}
-		if _, err := opts.replayService.InspectCapture(context.Background(), opts.ReplayPath); err != nil {
+		if _, err := opts.ReplayService.InspectCapture(context.Background(), opts.ReplayPath); err != nil {
 			return fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
 		}
 	}
@@ -843,10 +846,10 @@ func NewLiveSessionInferencer(opts SessionRunOptions, instructions string) (mess
 			dialer = oaiprovider.NewDefaultWebSocketDialer()
 		}
 		if strings.TrimSpace(opts.RecordSessionCapturePath) != "" {
-			if opts.recordingService == nil || opts.providerCaptureService == nil {
+			if opts.RecordingService == nil || opts.ProviderCaptureService == nil {
 				return nil, "", errors.New("recording services are not configured")
 			}
-			capture, err := opts.recordingService.RecordProviderSession(opts.providerCaptureService, runtimerecording.ProviderSessionOptions{
+			capture, err := opts.RecordingService.RecordProviderSession(opts.ProviderCaptureService, runtimerecording.ProviderSessionOptions{
 				Destination: opts.RecordSessionCapturePath, Provider: providerName, Model: model,
 				Dialer: observeSessionWire(dialer, opts), Clock: opts.Clock, Build: build,
 			})
@@ -890,10 +893,10 @@ func NewLiveSessionInferencer(opts SessionRunOptions, instructions string) (mess
 			dialer = grok.NewDefaultWebSocketDialer()
 		}
 		if strings.TrimSpace(opts.RecordSessionCapturePath) != "" {
-			if opts.recordingService == nil || opts.providerCaptureService == nil {
+			if opts.RecordingService == nil || opts.ProviderCaptureService == nil {
 				return nil, "", errors.New("recording services are not configured")
 			}
-			capture, err := opts.recordingService.RecordProviderSession(opts.providerCaptureService, runtimerecording.ProviderSessionOptions{
+			capture, err := opts.RecordingService.RecordProviderSession(opts.ProviderCaptureService, runtimerecording.ProviderSessionOptions{
 				Destination: opts.RecordSessionCapturePath, Provider: providerName, Model: model,
 				Dialer: observeSessionWire(dialer, opts), Clock: opts.Clock, Build: build,
 			})

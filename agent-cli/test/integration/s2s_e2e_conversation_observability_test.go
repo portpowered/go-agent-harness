@@ -1,9 +1,5 @@
 package integration
 
-import sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
-
-import sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
-
 import (
 	"bytes"
 	"crypto/sha256"
@@ -22,7 +18,6 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
@@ -230,7 +225,7 @@ func runObservabilityConversation(t *testing.T, fixturePath, recordDir string) [
 		args = append(args, "--audio-in-turn", wavPath)
 	}
 
-	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}}), nil).Generate()
+	cmd := newTestLiveSessionCommand(t, flags.NewGlobalFlags()).Generate()
 	cmd.SetOut(io.Discard)
 	cmd.SetErr(os.Stderr)
 	cmd.SetArgs(args)

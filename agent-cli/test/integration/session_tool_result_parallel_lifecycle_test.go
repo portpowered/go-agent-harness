@@ -582,7 +582,7 @@ func TestSessionParallelToolResultsTerminalFailureNamesOnlyRemainingCall(t *test
 	defer cancel()
 	runErr := make(chan error, 1)
 	go func() {
-		runErr <- servicetest.RunSession(ctx, io.Discard, servicetest.SessionRunOptions{
+		runErr <- servicetest.RunSession(ctx, io.Discard, withTestSessionRuntimeServices(servicetest.SessionRunOptions{
 			RecordPath:        "parallel-tool-result-terminal-failure.session.json",
 			Provider:          "openai",
 			Model:             "gpt-realtime",
@@ -597,7 +597,7 @@ func TestSessionParallelToolResultsTerminalFailureNamesOnlyRemainingCall(t *test
 				PCM:                 []byte{1, 2, 3, 4},
 				EndOfTurn:           true,
 			}},
-		})
+		}))
 	}()
 	defer executor.releaseAll()
 

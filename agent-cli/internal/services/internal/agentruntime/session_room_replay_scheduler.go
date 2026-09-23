@@ -78,10 +78,10 @@ func newRoomReplaySchedule(ctx context.Context, replay RoomReplayPlan, plans []*
 		if !ok || strings.TrimSpace(recorded.CapturePath) == "" {
 			return nil, fmt.Errorf("room replay participant %q has no recorded capture", plan.manifest.ID)
 		}
-		if plan.options.replayService == nil {
+		if plan.options.ReplayService == nil {
 			return nil, fmt.Errorf("room replay participant %q has no replay service", plan.manifest.ID)
 		}
-		inspection, inspectErr := plan.options.replayService.InspectCapture(ctx, recorded.CapturePath)
+		inspection, inspectErr := plan.options.ReplayService.InspectCapture(ctx, recorded.CapturePath)
 		if inspectErr != nil {
 			return nil, fmt.Errorf("inspect room replay participant %q capture: %w", plan.manifest.ID, inspectErr)
 		}

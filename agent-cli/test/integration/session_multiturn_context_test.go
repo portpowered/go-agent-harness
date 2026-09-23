@@ -1,9 +1,5 @@
 package integration
 
-import sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
-
-import sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
-
 import (
 	"bytes"
 	"context"
@@ -19,7 +15,6 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -263,7 +258,7 @@ func runMultiturnTurn(t *testing.T, fixturePath, wavPath string) (string, error)
 	t.Helper()
 
 	stdout := &syncBuffer{}
-	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}}), nil).Generate()
+	cmd := newTestLiveSessionCommand(t, flags.NewGlobalFlags()).Generate()
 	cmd.SetOut(stdout)
 	cmd.SetErr(os.Stderr)
 	cmd.SetArgs([]string{"--replay", fixturePath, "--audio-in", wavPath})

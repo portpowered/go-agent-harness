@@ -130,7 +130,7 @@ func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request)
 		RuntimeObserver: d.deps.RuntimeObserver, Diagnostics: request.Diagnostics, ToolDiagnostics: request.ToolDiagnostics,
 		DeviceService: d.deps.DeviceService,
 		Observability: d.deps.Observability, StreamObserver: request.StreamObserver,
-		recordingService: d.deps.RecordingService, providerCaptureService: d.deps.ProviderCaptureService, replayService: d.deps.ReplayService,
+		RecordingService: d.deps.RecordingService, ProviderCaptureService: d.deps.ProviderCaptureService, ReplayService: d.deps.ReplayService,
 		RTCBinding:       runtimedevices.RTCBindingRequest{HoldToneConfig: request.HoldToneConfig, RemoteEndpoint: request.AudioDeviceServer},
 		AudioInTurnBarge: request.AudioInTurnBarge, ClientOwnsAudioTurnBoundaries: request.ClientOwnsAudioTurnBoundaries,
 		SessionUpdatedTimeout: request.SessionUpdatedTimeout, WaitForClose: request.WaitForClose,

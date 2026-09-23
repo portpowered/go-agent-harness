@@ -50,7 +50,7 @@ func planGrokRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFactory
 			if dialer == nil {
 				dialer = grok.NewDefaultWebSocketDialer()
 			}
-			capture, err := opts.recordingService.RecordProviderSession(opts.providerCaptureService, runtimerecording.ProviderSessionOptions{
+			capture, err := opts.RecordingService.RecordProviderSession(opts.ProviderCaptureService, runtimerecording.ProviderSessionOptions{
 				Destination: destination, Provider: sessionProviderGrok, Model: sessionCfg.Model,
 				Dialer: observeSessionWire(dialer, opts), Clock: opts.Clock, Build: build,
 			})

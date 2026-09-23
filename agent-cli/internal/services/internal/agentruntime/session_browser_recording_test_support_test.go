@@ -25,8 +25,8 @@ func newTestProviderCaptureService() recording.ProviderCaptureService {
 }
 
 func withTestRecordingServices(options SessionRunOptions) SessionRunOptions {
-	options.recordingService = newTestRecordingService()
-	options.providerCaptureService = newTestProviderCaptureService()
+	options.RecordingService = newTestRecordingService()
+	options.ProviderCaptureService = newTestProviderCaptureService()
 	if options.AudioService == nil {
 		options.AudioService = audioiowire.NewService()
 	}
