@@ -4555,3 +4555,22 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   C280-03/C280-04 checks and `make prepush` plus every C280-05 command on one
   clean exact candidate. Return `CONTINUE` while that actionable release
   integration remains.
+
+# C280 latency composition seam checkpoint — 2026-09-22
+
+- Re-read the canonical task admission and peer states. C272 and C276 remain
+  `init`/processing and C281 has no task or release; C278 is already in the
+  fetched current main. No unreleased peer caller seam was consumed.
+- Cut the C280-owned `go-agent-runtime/services/rooms/wire/latency.go` seam
+  over to `go-agent-runtime/services/roomevidence/wire`, removing its direct
+  construction of the duplicate `rooms/internal/evidence/latency` owner.
+  Commit `27ef9908beeda2f9a864cd87ffce776d12b1ca62` is clean.
+- `go test -count=1 ./go-agent-runtime/services/roomevidence/... ./go-agent-runtime/services/rooms/...`
+  passed 105 tests across 16 packages; `git diff --check` passed. The three
+  agentruntime evidence files and fourteen rooms evidence production files
+  remain pending caller release and are not claimed deleted.
+- Exact next action: wait for reviewed or exact-path C272/C276/C281 releases,
+  then integrate only those revisions, cut over every remaining caller, delete
+  the complete owned regions, and run the full C280-03/C280-05 preflight on one
+  clean SHA. Return `CONTINUE` while that actionable release integration
+  remains.
