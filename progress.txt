@@ -4849,3 +4849,39 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   residual cluster, and run C280-03/C280-04 plus the full C280-05 preflight on
   one clean exact SHA. Decision remains `CONTINUE` while that release remains
   unavailable.
+
+# C280 architecture-gate repair and release audit — 2026-09-23T03:32Z
+
+- Reverified admission with `project-control.py verify-work --type task
+  --name audio-runtime-c280-recover-c269-room-evidence-retirement`: the sole
+  admitted project is `audio-runtime` at `audio-runtime-v1`, and
+  `prd.json.branchName` matches this isolated worktree. Fetched
+  `origin/main=2f9f9736e1360802fc37e82de38540d92cb22631`; the candidate was
+  clean at `328c664ba` before this repair and remains additive to current main.
+- Canonical Work remains unreleased at the required shared seams: C272 is
+  `work-task-13` init, C276 is `work-task-8` init with a dirty peer worktree,
+  and C281 is `work-task-17` init. C278 is already represented in current
+  main; its concluded review findings were read and are not a release for the
+  remaining C280 callers. No peer head or worktree was consumed or modified.
+  Review-78's bounded admission, recorder degradation, and public room
+  load/analyze findings remain repaired in the recovered owner; exact-head
+  preflight remains outstanding.
+- Fresh normal and race room/evidence checks each pass `105` tests in `16`
+  packages. The first fresh `make architecture-size-check` caught the
+  C280-owned `services/rooms/wire/latency.go` import of peer
+  `roomevidence/wire`, which violates the service composition boundary. The
+  repair restores the release-neutral room-local provider until the C272
+  caller seam is released; it does not claim the legacy owner deleted.
+  `make architecture-size-check` now passes (`225` packages, `1,997` files,
+  `29,200` functions), `make wire-check` passes, and `git diff --check` passes.
+- The retirement is still open: three owned agentruntime files remain
+  (`1,794` lines), fourteen duplicate `rooms/internal/evidence` production
+  files remain (`2,772` lines), and C280 retains exactly `0` adapter files /
+  `0` adapter lines. No caller cutover, deletion, `make prepush`, push, PR,
+  SCRIPT CI, review, or merge is claimed.
+- Exact next action: consume only a reviewed or explicit exact-path release
+  for C272/C276/C281, integrate it additively, cut over every named and
+  search-discovered caller through public `roomevidence`, delete the complete
+  residual cluster, then run C280-03/C280-04 and the full C280-05 preflight
+  including `make prepush` on one clean exact candidate. Return `CONTINUE`
+  while that actionable release integration remains unavailable.
