@@ -4406,3 +4406,22 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
 - No PR or push exists. Next: commit this checkpoint and run the complete
   C276-01 through C276-06 preflight on that exact unchanged candidate SHA,
   repairing locally reproducible failures before any handoff.
+
+
+# C276 recording-integrity correction — 2026-09-23
+
+- The first exact candidate recording-service gate caught a regression in my
+  attempted hash/redaction repair: `TestDirectoryRecorderDoesNotInvalidateProtectedCaptureToRedactIt`
+  requires protected provider bytes to remain integrity-valid or publication to
+  fail. Restored the raw provider digest check; genuine provider captures that
+  would be changed by credential redaction remain invalid and unpublished.
+- Kept the causal fix at capture admission: a runtime-generated provider spool
+  no longer wraps a semantic-only injected inferencer as if it were raw
+  provider evidence. Explicit injected captures and inferencers with their own
+  provider-capture configurator remain supported. The existing recording
+  functional suite passes (92 tests), as does the focused three-test
+  record-dir/scheduled-lifecycle integration command.
+- The exact prior candidate `fe6929470d5d53e3606c1356a4065e235023912d` failed
+  only the recording redaction test after that attempted repair. Its result is
+  superseded; the next action is to commit this correction and rerun the full
+  C276 preflight on the new exact candidate before any push.

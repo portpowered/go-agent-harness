@@ -1,7 +1,10 @@
 package evidence
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -20,9 +23,10 @@ func (r *directoryRecorder) ProviderCapturePath() string {
 	return filepath.Join(r.spool, "provider.json")
 }
 
-// providerArtifact admits the completed source for bundle staging. The bundle
-// writer computes its digest after credential redaction, so this service must
-// not attach a digest of the unredacted source.
+// providerArtifact fingerprints the completed source without allocating a
+// second capture-sized buffer. Bundle staging streams it again and checks
+// this digest, rejecting source changes or redaction that would invalidate a
+// provider capture's own integrity envelope.
 func (r *directoryRecorder) providerArtifact() (transcript.RecordingArtifact, bool, error) {
 	path := r.ProviderCapturePath()
 	file, err := os.Open(path)
@@ -44,10 +48,12 @@ func (r *directoryRecorder) providerArtifact() (transcript.RecordingArtifact, bo
 	if !info.Mode().IsRegular() || info.Size() == 0 {
 		return transcript.RecordingArtifact{}, false, errors.Join(errors.New("provider capture must be a non-empty regular file"), file.Close())
 	}
-	if err := file.Close(); err != nil {
+	digest := sha256.New()
+	_, copyErr := io.Copy(digest, file)
+	if err := errors.Join(copyErr, file.Close()); err != nil {
 		return transcript.RecordingArtifact{}, false, err
 	}
-	return transcript.RecordingArtifact{Path: "provider.json", SourcePath: path}, true, nil
+	return transcript.RecordingArtifact{Path: "provider.json", SourcePath: path, SHA256: hex.EncodeToString(digest.Sum(nil))}, true, nil
 }
 
 var _ recording.ProviderCapture = (*directoryRecorder)(nil)
