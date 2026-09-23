@@ -146,13 +146,13 @@ func (r *liveTraceRecorder) Finalize(ctx context.Context, runErr error) error {
 			innerErr = r.inner.Finalize(ctx, runErr)
 		}
 		projectionErr := error(nil)
-		if innerErr == nil && runErr == nil && r.providerCapturePath() != "" {
+		if suppressExpectedDuration(errors.Join(runErr, innerErr)) == nil && r.providerCapturePath() != "" {
 			projectionErr = projectProviderCapture(r.trace, r.providerCapturePath())
 		}
 		closeErr := r.trace.Close()
 		result := errors.Join(runErr, innerErr, projectionErr, closeErr)
-		if result == nil {
-			result = attachLiveTrace(r.tracePath, r.destination)
+		if suppressExpectedDuration(result) == nil {
+			result = errors.Join(result, attachLiveTrace(r.tracePath, r.destination))
 		} else {
 			result = errors.Join(result, fmt.Errorf("live session audio trace retained at %s", r.tracePath))
 		}

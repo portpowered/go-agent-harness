@@ -10,6 +10,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -176,8 +177,8 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 		plan.audioInputs = bareAudioTurns
 	}
 	if barePromptReplay || bareAudioTurnReplay {
-		plan.replayCompletion = func(reporter *sessionTerminalReporter) {
-			reporter.markReplayComplete()
+		plan.replayCompletion = func(reporter sessionterminal.Reporter) {
+			reporter.MarkReplayComplete()
 		}
 	}
 	return plan, nil

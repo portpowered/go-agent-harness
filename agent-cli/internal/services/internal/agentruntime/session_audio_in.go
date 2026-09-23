@@ -948,44 +948,6 @@ func isSessionCancellation(err error) bool {
 	return err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }
 
-// shouldStopAudioInputSessionLoop applies audio-aware stop rules. Before the
-// end-of-turn signal is accepted, only a provider-initiated SESSION.CLOSE may
-// stop the run. Once awaitingResponse is set (end-of-turn delivered after
-// local EOF), only a completed non-tool assistant response, a terminal ERROR,
-// or a provider SESSION.CLOSE ends the session. When the session has a real
-// executor, the provider's tool-call MESSAGE.END and the ToolRunner's
-// RoleTool MESSAGE.END are intermediate boundaries and must not stop the
-// session before the follow-up assistant response is consumed.
-func shouldStopAudioInputSessionLoop(msg messages.StreamMessage, opts sessionLoopOptions, closeSent, awaitingResponse bool) bool {
-	if !awaitingResponse {
-		return msg.Type == messages.StreamTypeSessionClose
-	}
-	if msg.Type == messages.StreamTypeMessageEnd && opts.observer != nil {
-		if opts.observer.hasTerminalToolContinuationFailure() || opts.observer.hasTerminalScheduledResponseFailure() {
-			return true
-		}
-	}
-	if opts.WaitForClose {
-		return isTerminalErrorMessage(msg) || msg.Type == messages.StreamTypeSessionClose
-	}
-	switch msg.Type {
-	case messages.StreamTypeMessageEnd:
-		if opts.observer != nil && !opts.observer.lastMessageEndAdmitted() {
-			return false
-		}
-		if opts.RequireAssistantResponse {
-			if msg.Role == messages.RoleTool || opts.observer == nil || !opts.observer.assistantResponseCompleted() {
-				return false
-			}
-		}
-		return true
-	case messages.StreamTypeSessionClose:
-		return true
-	default:
-		return isTerminalErrorMessage(msg)
-	}
-}
-
 // The shared audio source streams WAV samples at their declared rate. The
 // shared processor converts them continuously at the provider boundary without
 // loading the complete file or resetting DSP state between input packets.

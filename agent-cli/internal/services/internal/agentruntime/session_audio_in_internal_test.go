@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
@@ -328,106 +327,6 @@ func TestSessionWAVSourceCloseIsOnceAndGuardsReads(t *testing.T) {
 	}
 	if err := source.ReadFrame(context.Background(), frame); !errors.Is(err, contract.ErrClosed) {
 		t.Fatalf("post-close read = %v, want errors.Is(contract.ErrClosed)", err)
-	}
-}
-
-// TestShouldStopAudioInputAwaitingResponseSemantics pins the explicit
-// awaiting-response stop rules: local audio EOF alone never stops the run,
-// mid-response deltas never stop it, and only terminal response frames,
-// provider errors, or SESSION.CLOSE end an awaiting session.
-func TestShouldStopAudioInputAwaitingResponseSemantics(t *testing.T) {
-	cases := []struct {
-		name         string
-		msg          messages.StreamMessageType
-		awaiting     bool
-		waitForClose bool
-		wantStop     bool
-	}{
-		{"mid-response text end does not stop", messages.StreamTypeTextEnd, true, false, false},
-		{"audio delta does not stop", messages.StreamTypeAudioDelta, true, false, false},
-		{"transcript delta does not stop", messages.StreamTypeTranscriptDelta, true, false, false},
-		{"message end from response.done stops", messages.StreamTypeMessageEnd, true, false, true},
-		{"wait for close keeps response.done open", messages.StreamTypeMessageEnd, true, true, false},
-		{"provider error stops", messages.StreamTypeError, true, false, true},
-		{"session close stops", messages.StreamTypeSessionClose, true, false, true},
-		{"before end-of-turn message end does not stop", messages.StreamTypeMessageEnd, false, false, false},
-		{"before end-of-turn session close stops", messages.StreamTypeSessionClose, false, false, true},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got := shouldStopAudioInputSessionLoop(messages.StreamMessage{Type: tc.msg}, sessionLoopOptions{WaitForClose: tc.waitForClose}, false, tc.awaiting)
-			if got != tc.wantStop {
-				t.Fatalf("stop = %v; want %v", got, tc.wantStop)
-			}
-		})
-	}
-	nonTerminalError := messages.StreamMessage{
-		Type:  messages.StreamTypeError,
-		Value: messages.NewNonTerminalErrorValue("response is not active", "response_cancel_not_active"),
-	}
-	if shouldStopAudioInputSessionLoop(nonTerminalError, sessionLoopOptions{}, false, true) {
-		t.Fatal("nonterminal provider diagnostic stopped the awaiting audio session")
-	}
-}
-
-func TestShouldStopAudioInputSessionLoopWaitsForFinalAssistantResponse(t *testing.T) {
-	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
-	observer.setToolResultsEnabled(true)
-	observer.observe(messages.StreamMessage{
-		Type:  messages.StreamTypeToolCallEnd,
-		Role:  messages.RoleAssistant,
-		Value: messages.NewToolCallEndValue("call-1", "lookup", `{}`),
-	})
-
-	intermediateProviderEnd := messages.StreamMessage{
-		Type:  messages.StreamTypeMessageEnd,
-		Role:  messages.RoleAssistant,
-		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
-	}
-	observer.observe(intermediateProviderEnd)
-	if shouldStopAudioInputSessionLoop(intermediateProviderEnd, sessionLoopOptions{
-		RequireAssistantResponse: true,
-		observer:                 observer,
-	}, false, true) {
-		t.Fatal("provider tool-call MESSAGE.END stopped before the tool result and follow-up response")
-	}
-
-	toolRunnerEnd := messages.StreamMessage{
-		Type:  messages.StreamTypeMessageEnd,
-		Role:  messages.RoleTool,
-		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
-	}
-	observer.observe(toolRunnerEnd)
-	if shouldStopAudioInputSessionLoop(toolRunnerEnd, sessionLoopOptions{
-		RequireAssistantResponse: true,
-		observer:                 observer,
-	}, false, true) {
-		t.Fatal("ToolRunner RoleTool MESSAGE.END stopped before the follow-up response")
-	}
-
-	observer.noteToolResultAccepted("call-1")
-	observer.noteToolContinuationRequested()
-	observer.observe(messages.StreamMessage{
-		Type:  messages.StreamTypeMessageStart,
-		Role:  messages.RoleAssistant,
-		Value: messages.NewMessageStartValue(),
-	})
-	observer.observe(messages.StreamMessage{
-		Type:  messages.StreamTypeTextDelta,
-		Role:  messages.RoleAssistant,
-		Value: messages.NewTextDeltaValue("final answer"),
-	})
-	finalAssistantEnd := messages.StreamMessage{
-		Type:  messages.StreamTypeMessageEnd,
-		Role:  messages.RoleAssistant,
-		Value: &messages.MessageEndValue{Type: "message_end", Status: "completed"},
-	}
-	observer.observe(finalAssistantEnd)
-	if !shouldStopAudioInputSessionLoop(finalAssistantEnd, sessionLoopOptions{
-		RequireAssistantResponse: true,
-		observer:                 observer,
-	}, false, true) {
-		t.Fatal("completed non-tool assistant MESSAGE.END did not stop the awaiting audio session")
 	}
 }
 

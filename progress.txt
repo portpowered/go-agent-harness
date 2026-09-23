@@ -5258,3 +5258,269 @@ handoff sequence. No gate completion is claimed.
   planned C251 local gate on the new clean commit. Keep all remaining
   cross-service findings explicit for ownership review; do not submit a red
   candidate.
+
+## C251 executor recovery checkpoint — 2026-09-22
+
+- Reverified task admission with `project-control.py verify-work`; the sole
+  admitted project remains `audio-runtime/audio-runtime-v1`. `prd.json` names
+  branch `codex/audio-runtime-c251-recover-shutdown-duration-retirement`, which
+  matches this worktree. Fresh `origin/main=2f9f9736e1360802fc37e82de38540d92cb22631`
+  and required startup `8bdafc7f947a3a2c9856220abdc539437035bd21` and recovery
+  checkpoint `ee9b68260ad69e8b72c2bcbed655435af877d5c3` remain ancestors of
+  `HEAD=c254c43f94a6b6f0d79ae21ca91519fe7e29664b`. The Factory board has no
+  concluded C251 review record and GitHub has no PR for this head.
+- Confirmed all fourteen planned agentruntime production files are absent and
+  `livehost/shutdown_adapter.go` is the sole shutdown adapter at 59 lines. The
+  planned duplicate-policy symbol scan and `git diff --check` pass. Existing
+  dirty peer edits in `session_turn_planning.go`, `livehost/trace.go`, and
+  `sessiontrace/.../scheduled.go` remain preserved.
+- Refactored the existing public response-admission test assertions into a
+  helper; the test cases and behavior are unchanged. Its focused normal and
+  race runs each pass 5 cases, and the architecture result moved from 458 to
+  457 findings.
+- C251 focused checks pass: sessionduration/session normal and race runs each
+  pass 89 tests in 19 packages; caller normal and race runs pass 468/21 and
+  237/20 respectively; scoped `CGO_ENABLED=0` caller tests, `make
+  test-sessions-race`, `make test-regressions`, `make wire-check`, and `make
+  embed-check` pass. `make test-integration` passes (agent-cli 320.008s;
+  go-agent-loop 155.823s).
+- Current `make prepush` still stops at `verify-architecture`: 457 findings
+  across 229 packages. Categories include 101 cognitive-complexity, 83
+  baseline-drift, 70 cyclomatic-complexity, 62 mutable-global, 29
+  function-lines, 28 file-lines, 25 function-statements, 20
+  baseline-history-add, and 20 public-implementation-leak findings; no waiver
+  or baseline increase is claimed.
+- `make test-hermetic` fails at
+  `go-agent-runtime/services/sessionturn/internal/service`:
+  `TestToolExecutorCloseCancelsAndJoinsActiveInvocation` reports one active
+  callback after `Close`. One isolated run passes, but `go test -count=25
+  ./go-agent-runtime/services/sessionturn/internal/service -run
+  '^TestToolExecutorCloseCancelsAndJoinsActiveInvocation$'` fails 19/25 times.
+  Active peer task `work-task-23` owns sessionturn internals; preserve that
+  boundary and consume a reviewed exact-path repair before repeating hermetic.
+- No commit, push, PR, or SCRIPT handoff is claimed. Exact next action: continue
+  reducing C251-owned architecture violations in the retained runtime-plan and
+  duration-test paths without waivers or moved tests, obtain the reviewed
+  sessionturn repair through its owner, then run the entire exact-head local
+  preflight on a clean candidate before any push.
+
+## C251 retained runtime-plan architecture checkpoint — 2026-09-22
+
+- Preserved the admitted C251 branch, predecessor checkpoint and unrelated
+  dirty changes. No commit, push, PR, or SCRIPT handoff is claimed. The existing
+  admission check, PRD branch match, and `origin/main` ancestry remain as
+  verified in the preceding C251 recovery checkpoint.
+- Moved the retained session plan setup/finalization bridge into the existing
+  `session_live_setup.go` file and split planning into option preparation,
+  plan creation, runtime setup, audio, observer and transport steps. This is a
+  production refactor only; no test was moved. `session_runtime_plan.go` is now
+  505 lines (previously 777), and the existing file-lines baseline was lowered
+  from the branch-added 673 to the measured 505. Removed stale or newly added
+  baseline entries; no baseline ceiling was increased.
+- `rtk go test -count=1 -run '^$' -timeout 180s
+  ./agent-cli/internal/services/internal/agentruntime` compiled successfully
+  (no tests selected). The full command
+  `rtk go test -count=1 -timeout 180s
+  ./agent-cli/internal/services/internal/agentruntime` passed all 941 tests.
+  `git diff --check` passes.
+- `rtk make architecture-size-check` still fails with 439 findings across 229
+  packages. The retained runtime-plan file and its planner no longer appear in
+  the findings; remaining results include agentruntime package growth and
+  baseline/complexity findings across shared or peer-owned paths. No waiver is
+  claimed. The last exact `rtk make prepush` stopped at architecture with 451
+  findings before this reduction; do not submit until the current full gate is
+  rerun and passes.
+- The exact fourteen-file absence check passes. The production duplicate-policy
+  scan has no matches. `livehost/shutdown_adapter.go` remains the sole adapter:
+  one file / 59 physical lines. The previous exact hermetic reproduction
+  remains outstanding: peer-owned
+  `sessionturn/internal/service/TestToolExecutorCloseCancelsAndJoinsActiveInvocation`
+  failed 19 of 25 repetitions after reporting a surviving callback; obtain the
+  reviewed repair from owner `work-task-23` without crossing its path boundary.
+- Exact next action: continue only with C251-owned source findings; obtain the
+  reviewed sessionturn repair through its owner, then run the complete C251
+  exact-head local preflight (`make prepush`, functional, integration, race,
+  hermetic, Wire, embed, absence, adapter, ancestry and diff checks) on one clean
+  candidate before any push.
+
+## C251 bounded-drain architecture repair — 2026-09-23
+
+- Reverified admission with `project-control.py verify-work --type task`; the
+  canonical task remains `work-task-4` in `init`, on the matching isolated
+  branch. The current C251 review list is empty; there is no concluded review
+  finding or submitted PR to repair. Fetched `origin/main=2f9f9736`; recovery
+  `ee9b6826`, startup `8bdafc7f`, and fetched main are all ancestors of
+  `HEAD=c254c43f`.
+- Preserved the existing uncommitted C251 and peer changes. Refactored the
+  existing terminal-drain regression's case setup and assertions into helpers
+  without moving or adding tests. Its 19 subcases pass with
+  `rtk go test -count=1 -timeout 180s -run
+  '^TestRunAgentLoopSessionWithDurationTerminalOutcomesAlwaysDrainAcceptedDelta$'
+  ./agent-cli/internal/services/internal/agentruntime` and the matching
+  `-race` command. `rtk git diff --check` passes.
+- `rtk make architecture-size-check` now reports 436 findings across 229
+  packages (down from 439); the three C251 findings for the terminal-drain test
+  are gone. The remaining package-level agentruntime file-count drift is
+  206>138, alongside shared and peer-owned baseline/complexity findings. No
+  baseline was raised. `rtk make prepush` stops at `verify-architecture` after
+  formatting in 25 seconds; the candidate is not ready to push.
+- The exact fourteen planned production files remain absent. The sole adapter,
+  `livehost/shutdown_adapter.go`, is one file / 59 physical lines. C283's
+  `work-task-23` remains `init`; its latest checkpoint reports the flaky
+  sessionturn close test passing 25/25 on its own tree, but provides no reviewed
+  SHA or exact-path handoff. No peer source was imported or changed here.
+- Exact next action: keep this C251 task and branch; obtain the reviewed
+  sessionturn handoff through its owner, and use authorized integration of the
+  remaining shared architecture reductions before attempting C251's full local
+  gate again. Then rerun `make prepush` plus every C251 functional, integration,
+  race, hermetic, Wire, embed, deletion, duplicate, adapter, ancestry and diff
+  check on one clean exact candidate. No commit, push, PR or SCRIPT handoff is
+  claimed.
+
+## C251 live-controller ownership and full-gate checkpoint — 2026-09-23
+
+- Continued the same admitted C251 task and branch, preserving the existing
+  dirty C251/peer changes. No candidate commit, push, PR, CI handoff, review or
+  waiver is claimed. The previously verified admission, PRD branch identity,
+  startup/recovery/current-main ancestry, fourteen-file absence, and sole
+  `livehost/shutdown_adapter.go` (59 physical lines) remain in force.
+- Removed duplicate provider-liveness timers and failure/output state from
+  `session/internal/live`; the service-owned sessionduration Controller now
+  receives provider-progress and local-tool boundaries and emits the public
+  liveness failure before terminal publication. Updated the existing test
+  controller to model the public contract. No test was added or moved.
+- Service checks pass: `rtk go test -count=1
+  ./go-agent-runtime/services/sessionduration/... ./go-agent-runtime/services/session/...`
+  and the matching `-race` command each pass 270 tests in 19 packages. The
+  focused liveness public tests pass normally and under race. Caller selections
+  pass: functional 468 tests/21 packages, race 237 tests/20 packages, and
+  `CGO_ENABLED=0` with `nomicrophone`. `make test-sessions-race`,
+  `make test-integration` (agent-cli 321.723s; go-agent-loop 155.742s),
+  `make test-regressions`, `make test-hermetic`, `make wire-check`, and
+  `make embed-check` pass.
+- One initial full hermetic attempt failed once at
+  `agent-cli/internal/transport/cli/internal/events/TestRoomUsesLiveLivenessForPeerFilteredEventsAndEvidence`.
+  The focused hermetic test passed 25/25; the entire hermetic events package
+  passed; a subsequent complete `make test-hermetic` passed all modules. Treat
+  the initial result as non-reproducing, not as green evidence by itself.
+- The mandatory `rtk make prepush` rerun completed formatting and stopped at
+  `verify-architecture`: 436 findings across 229 packages. No findings remain
+  in `services/sessionduration` or `services/session/internal/live`. The report
+  still includes `agent-cli/internal/services/internal/agentruntime` package
+  drift at 206 files versus baseline 138, plus broad baseline/complexity and
+  peer-service findings. No architecture baseline was raised. The fourteen
+  planned production files remain absent, the duplicate-policy symbol scan is
+  empty, adapter cap is 1 file/59 lines, and `git diff --check` passes.
+- Exact next action: keep C251 on this branch and do not push. Reconcile the
+  remaining architecture findings with their canonical path owners; repair only
+  C251-owned in-scope findings or obtain the reviewed shared-path integration
+  needed to clear the mandatory architecture gate. Then create a clean exact
+  candidate and rerun `make prepush` plus the complete C251 local preflight on
+  that SHA before any PR or push.
+
+
+## C251 retirement repair and final local gate checkpoint — 2026-09-23
+
+- Continued the same admitted `work-task-4` on branch
+  `codex/audio-runtime-c251-recover-shutdown-duration-retirement`. `HEAD` stays
+  `c254c43f94a6b6f0d79ae21ca91519fe7e29664b`; fetched `origin/main` is
+  `2f9f9736e1360802fc37e82de38540d92cb22631`, and checkpoint/startup/main
+  ancestry checks pass. All predecessor and peer edits remain in the dirty
+  worktree; no commit, push, PR, hosted CI, review, or waiver was created.
+- Cut the remaining terminal reporter callers over to the public
+  `sessionterminal.Reporter` and Wire context helpers, deleted the duplicate
+  572-line `session_terminal_outcome.go`, and removed unused CLI termination
+  boundary/stop policy. The exact 14 planned production paths remain absent;
+  production duplicate-symbol searches and private sessionduration/session
+  internal import searches return no matches. The sole adapter remains
+  `agent-cli/internal/transport/cli/internal/livehost/shutdown_adapter.go` at
+  one file / 59 physical lines.
+- Hermetic testing first reproduced the caller-cancellation unresolved-tool
+  result failure (5/25 repetitions). The plan now creates the observer before
+  tool-runtime callbacks are built, binds it to the turn runtime's shared
+  lifecycle service, and registers audio inputs only after conversion. The
+  existing integration failure assertion now includes its diagnostic records.
+  After that correction, caller cancellation passed 25/25, scheduled barge-in
+  passed 5/5, full `make test-integration` passed (agent-cli 320.258s;
+  go-agent-loop functional cached), and full `make test-hermetic` exited 0
+  (agentruntime 103.155s). `make test-regressions`, `make test-sessions-race`,
+  `make wire-check`, and `make embed-check` pass. Sessionduration/session
+  normal and race suites each pass 270 tests/19 packages. The C251 CLI
+  nomicrophone selection and race selection pass (226 race tests/20 packages).
+- Final `rtk make prepush` completed `fmt` and stopped at
+  `verify-architecture`: 427 issues across 229 packages. `architecture-size-check`
+  still reports package drift at 205 files vs baseline 138, broad baseline and
+  complexity debt, shared agentruntime audio-input findings, and existing
+  sessionterminal architecture findings. No findings remain in
+  sessionduration or session/internal/live. No baseline was raised;
+  `session_live.go`'s file-lines baseline was lowered to its measured 640.
+  `git diff --check`, the exact 14-path absence check, adapter cap check, and
+  checkpoint/startup/fetched-main ancestry checks pass. Final gate log:
+  `~/Library/Application Support/rtk/tee/1790156489_make_prepush.log`.
+- Exact next action: keep C251 on this same task/branch and do not push. Reconcile
+  the red architecture findings with their canonical path owners and integrate
+  only reviewed shared reductions/releases; then run `make prepush` plus the
+  complete C251 local preflight on one clean exact candidate before any push or
+  PR. No hosted check is delegated for the locally failing architecture gate.
+
+
+## C251 duration retirement checkpoint — 2026-09-23
+
+- Reverified the admitted `audio-runtime/audio-runtime-v1` project and matching
+  C251 branch. Fresh `origin/main=2f9f9736e1360802fc37e82de38540d92cb22631`,
+  recovery `ee9b68260ad69e8b72c2bcbed655435af877d5c3`, and startup
+  `8bdafc7f947a3a2c9856220abdc539437035bd21` are ancestors of `HEAD=c254c43`.
+  Factory review feedback remains empty and `gh pr list` returns no C251 PR.
+- Removed the unused CLI `sessionStreamDeadline` helper, which retained a second
+  duration-timer decision, and grouped loop-observer setup with the existing
+  live setup code. `session_runtime_plan.go` fell from 505 to 487 physical
+  lines; its baseline was lowered to the measured reduction. No new or moved
+  tests were added.
+- The complete 14-path planned legacy absence check passes. The only shutdown
+  adapter is `agent-cli/internal/transport/cli/internal/livehost/shutdown_adapter.go`
+  at 59 lines. Duplicate-policy and private-import searches remain empty.
+- Focused service functional and race runs each pass 270 tests in 19 packages.
+  The focused caller functional selection passes 457 tests in 21 packages;
+  the race selection passes 226 tests in 20 packages. `git diff --check` passes.
+- `make prepush` passes `fmt` and stops at `verify-architecture` with 426
+  findings across 229 packages. The C251 sessionduration, session live, runtime
+  plan, and live setup files have no remaining file-level architecture finding.
+  Package drift remains 205 versus baseline 138, with the other findings
+  spread across pre-existing/shared and peer-owned paths. No baseline was
+  increased. No push, PR, CI handoff, or review is claimed.
+- Exact next action: reconcile the remaining architecture findings with their
+  canonical path owners and integrate only reviewed exact-path reductions. Then
+  rerun `make prepush` and every C251 functional, integration, race, hermetic,
+  Wire, embed, deletion, adapter, ancestry, and diff check on one clean exact
+  candidate before any push or SCRIPT handoff.
+
+
+### C251 follow-up source audit — 2026-09-23
+
+- A second production-source audit found that `session_live_setup.go` still
+  contains `runSessionDurationPlanWithAdmission` and `sessionRuntimePlan.run`
+  still coordinates finalizer and terminal reporter completion around the
+  duration runner. This is a remaining service-boundary question even though
+  the durable mutable controller and cleanup ordering are implemented in
+  `sessionduration/internal`; do not treat the absence census alone as proof of
+  full retirement.
+- Moved artifact finalization, artifact-result recording, replay-completion
+  gating, and terminal publication into the `sessionduration.Finalizer`
+  contract/implementation. The CLI now supplies explicit artifact and terminal
+  reporting ports; both duration and regular runtime-plan completion delegate
+  their ordered post-run effects to that service.
+- `rtk go test -count=1
+  ./go-agent-runtime/services/sessionduration/... ./go-agent-runtime/services/session/...
+  ./agent-cli/internal/services/internal/agentruntime -run
+  '(Duration|Finaliz|Replay|Shutdown|Close|Terminal)'` passes 315 tests across
+  20 packages. `gofmt` and `git diff --check` pass. One earlier focused attempt
+  caught an unused import after the move; it was removed and the rerun passed.
+- No candidate commit, push, PR, CI handoff, independent review, or merge is
+  claimed. The exact 14-path absence census and one-file/59-line adapter remain
+  as recorded above; fresh `origin/main=2f9f9736e1360802fc37e82de38540d92cb22631`
+  remains an ancestor of the task branch.
+- Exact next action: checkpoint the current candidate, then run `make prepush`
+  and every C251 functional, integration, race, hermetic, Wire, embed,
+  deletion, duplicate, adapter, ancestry, and diff check against that exact
+  commit. Repair all local failures before any push; the prior architecture
+  gate was red with 426 findings, so no SCRIPT handoff is yet ready.

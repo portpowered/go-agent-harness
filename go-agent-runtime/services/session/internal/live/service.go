@@ -190,18 +190,6 @@ type handle struct {
 	firstTurnTimerScheduled                          bool
 	firstTurnSeen                                    bool
 	retryRequests                                    chan retryRequest
-	retryMu                                          sync.Mutex
-	retriesUsed                                      int
-	livenessMu                                       sync.Mutex
-	livenessTimer                                    platformclock.Timer
-	livenessGeneration                               uint64
-	livenessArmed                                    bool
-	livenessStopped                                  bool
-	livenessWake                                     chan struct{}
-	livenessFailure                                  *session.LiveLivenessFailure
-	livenessErr                                      error
-	responseOutputSeen                               bool
-	responseToolObligation                           bool
 	toolMu                                           sync.Mutex
 	toolContinuations                                map[string]*liveToolContinuation
 	continuationErr                                  error
@@ -303,7 +291,6 @@ func newHandle(request session.LiveRequest, factory session.LiveInferencerFactor
 		openingReady:             make(chan struct{}),
 		providerDoneSignal:       make(chan struct{}),
 		terminalObserved:         make(chan struct{}),
-		livenessWake:             make(chan struct{}, 1),
 		toolContinuations:        make(map[string]*liveToolContinuation),
 		pendingToolCallResponses: make(map[string]string),
 		activeResponseIDs:        make(map[string]struct{}),

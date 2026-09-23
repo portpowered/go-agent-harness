@@ -15,7 +15,6 @@ func (h *handle) finish(err error) {
 }
 
 func (h *handle) finishOnceBody(err error) {
-	h.stopProviderLiveness()
 	var cleanup finishCleanup
 	err, cleanup = h.captureFinishCleanup(err)
 	err = cleanup.apply(err)
@@ -58,10 +57,7 @@ func (h *handle) recordFinishTrace(err error) {
 }
 
 func (h *handle) finishTerminalValue(err error, userCancelled bool, value *messages.SessionCloseValue, outputObserved bool) (*messages.SessionCloseValue, *session.LiveLivenessFailure) {
-	liveness := h.livenessFailureSnapshot()
-	if liveness == nil {
-		liveness = livenessFailureFromError(err)
-	}
+	liveness := livenessFailureFromError(err)
 	if userCancelled && err == nil {
 		value = userCancellationTerminalValue(h.request.SessionID, outputObserved)
 	}

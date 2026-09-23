@@ -1,11 +1,8 @@
 // This file owns the shared session-runtime modes, factories, plan state, generic planning and dispatch, execution, and cross-provider error handling.
 package agentruntime
 
-import sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
-
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -17,11 +14,11 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
-	duration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
+	terminalwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
-	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	gwproviders "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
@@ -159,7 +156,7 @@ type sessionRuntimePlan struct {
 	flushCapture           func() error
 	flushCaptureTo         func(string) error
 	finalize               func(context.Context, io.Writer) error
-	replayCompletion       func(*sessionTerminalReporter)
+	replayCompletion       func(sessionterminal.Reporter)
 	diagnostics            SessionDiagnosticSink
 	metricsRecorder        metrics.Recorder
 	streamObserver         SessionStreamObserver
@@ -217,16 +214,12 @@ func (p sessionRuntimePlan) liveOutput(prefix string) (string, string) {
 func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr error) {
 	reporter := p.loop.terminalReporter
 	if reporter == nil {
-		reporter = newSessionTerminalReporter()
+		reporter = terminalwire.NewReporter()
 		p.loop.terminalReporter = reporter
 	}
-	finalizer := durationwire.NewService().NewFinalizer(p.finalizationPorts())
+	finalizer := durationwire.NewService().NewFinalizer(p.finalizationPorts(nil, false))
 	defer func() {
 		runErr = finalizer.Finish(ctx, out, runErr)
-		if !sessionErrorHasIndependentFailure(runErr) && p.replayCompletion != nil {
-			p.replayCompletion(reporter)
-		}
-		runErr = errors.Join(runErr, reporter.publish(out, runErr))
 	}()
 	if p.replayIntegrityWarning != "" {
 		if _, err := fmt.Fprintln(out, p.replayIntegrityWarning); err != nil {
@@ -247,110 +240,10 @@ func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr erro
 	loop := p.loop
 	p.configureLoopObserver(&loop)
 	if p.inferencer != nil {
-		reporter.markRunStarted()
+		reporter.MarkRunStarted()
 		if err := runAgentLoopSession(ctx, loopOut, p.inferencer, loop); err != nil {
 			return wrapSessionRuntimeError(p, wrapSessionPhaseError("run session loop", err))
 		}
-	}
-	return nil
-}
-
-func (p sessionRuntimePlan) finalizationPorts() duration.FinalizationPorts {
-	ports := duration.FinalizationPorts{
-		CloseCapabilities: func() error {
-			if p.capabilityCoordinator == nil {
-				return nil
-			}
-			return p.capabilityCoordinator.Close()
-		},
-		CloseSession: p.closeSession,
-		CloseRuntime: func() error {
-			if p.rtcRuntime == nil {
-				return nil
-			}
-			return p.rtcRuntime.Close()
-		},
-		FlushCapture: p.flushCapture,
-		ReleaseCapture: func() error {
-			if p.captureClaim == nil {
-				return nil
-			}
-			return wrapSessionRuntimeError(p, p.captureClaim.release())
-		},
-	}
-	if p.finalize != nil {
-		ports.Finalize = func(ctx context.Context, out io.Writer) error {
-			if reporter := p.loop.terminalReporter; reporter != nil {
-				ctx = withSessionTerminalReporter(ctx, reporter)
-			}
-			return wrapSessionRuntimeError(p, p.finalize(ctx, out))
-		}
-	}
-	return ports
-}
-
-func runSessionDurationPlan(ctx context.Context, out io.Writer, plan sessionRuntimePlan, maxDuration time.Duration, clock duration.TimerScheduler) error {
-	return runSessionDurationPlanWithAdmission(ctx, out, plan, maxDuration, clock, nil)
-}
-
-func effectiveSessionDurationClock(plan sessionRuntimePlan, requested duration.TimerScheduler) duration.TimerScheduler {
-	if requested != nil {
-		if _, isDefault := requested.(realSessionDurationClock); !isDefault {
-			return requested
-		}
-	}
-	if source, ok := plan.clockSource.(duration.TimerScheduler); ok {
-		return source
-	}
-	return plan.loop.livenessClock
-}
-
-func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, plan sessionRuntimePlan, maxDuration time.Duration, clock duration.TimerScheduler, admitted duration.AdmissionInferencer) (runErr error) {
-	service := durationwire.NewService()
-	if err := service.ValidateDuration(maxDuration); err != nil {
-		return err
-	}
-	clock = effectiveSessionDurationClock(plan, clock)
-	artifacts := service.ArtifactsFromContext(ctx)
-	reporter := plan.loop.terminalReporter
-	if reporter == nil {
-		reporter = newSessionTerminalReporter()
-		plan.loop.terminalReporter = reporter
-	}
-	finalizer := service.NewFinalizer(plan.finalizationPorts())
-	defer func() {
-		runErr = finalizer.Finish(ctx, out, runErr)
-		artifactErr := service.FinalizeArtifacts(artifacts)
-		runErr = errors.Join(runErr, artifactErr)
-		reporter.recordArtifactFinalization(artifacts != nil, artifactErr)
-		if !sessionErrorHasIndependentFailure(runErr) && plan.replayCompletion != nil {
-			plan.replayCompletion(reporter)
-		}
-		runErr = errors.Join(runErr, reporter.publish(out, runErr))
-	}()
-
-	if plan.replayIntegrityWarning != "" {
-		if _, err := fmt.Fprintln(out, plan.replayIntegrityWarning); err != nil {
-			return err
-		}
-	}
-	if err := plan.bindRTC(ctx, nil); err != nil {
-		return err
-	}
-	if err := plan.writeAnnouncements(out, true); err != nil {
-		return wrapSessionRuntimeError(plan, err)
-	}
-	loopOut := out
-	if plan.loopOut != nil {
-		loopOut = plan.loopOut
-	}
-	plan.configureLoopObserver(&plan.loop)
-	if plan.inferencer == nil {
-		return nil
-	}
-	reporter.markRunStarted()
-	if err := runSessionDurationInvocation(ctx, loopOut, plan.inferencer, plan.loop, maxDuration, clock, admitted); err != nil {
-		return wrapSessionRuntimeError(plan, wrapSessionPhaseError("run session loop", err))
 	}
 	return nil
 }
@@ -384,194 +277,6 @@ func writeSessionToolAnnouncement(out io.Writer, definitions []messages.ToolDefi
 		return
 	}
 	_, _ = fmt.Fprintln(out, "Tools: "+strings.Join(names, ", "))
-}
-
-// configureLoopObserver installs the shared stream observer for every session
-// runner mode, including the duration-bounded path which executes plan.loop
-// directly instead of calling plan.run.
-func (p sessionRuntimePlan) configureLoopObserver(loop *sessionLoopOptions) {
-	if loop == nil {
-		return
-	}
-	obs := newSessionProgressObserver(p.diagnostics, p.metricsRecorder, p.provider, p.model)
-	if p.turnRuntime != nil && p.turnRuntime.Continuation() != nil {
-		obs.lifecycle = p.turnRuntime.Continuation()
-	}
-	obs.streamObserver = p.streamObserver
-	obs.runtime = p.runtime
-	obs.cancellationIntent = loop.cancellationIntent
-	obs.requireSessionUpdated = loop.RequireSessionUpdated
-	obs.scheduledAudioDispatch = loop.ScheduledAudioDispatch
-	obs.scheduleAudioInputs(p.audioInputs)
-	loop.observer = obs
-}
-
-func planSessionRuntimeWithFactory(ctx context.Context, opts SessionRunOptions, factory sessionRuntimeFactory) (plan sessionRuntimePlan, planErr error) {
-	opts.AudioService = sessionAudioService(opts.AudioService)
-	recordingClaim, err := ensureSessionRecordingClaim(&opts)
-	if err != nil {
-		return sessionRuntimePlan{}, err
-	}
-	opts.ToolDefinitions = messages.CanonicalToolDefinitions(opts.ToolDefinitions)
-	filesystemPolicy := opts.FilesystemPolicy
-	if filesystemPolicy == nil {
-		var err error
-		filesystemPolicy, err = tools.ResolveFilesystemPolicy(opts.WorkDir, opts.AllowPaths...)
-		if err != nil {
-			return sessionRuntimePlan{}, fmt.Errorf("resolve filesystem scope: %w", err)
-		}
-	}
-	opts.FilesystemPolicy = filesystemPolicy
-	opts.WorkDir = filesystemPolicy.PrimaryRoot()
-	opts.AllowPaths = filesystemPolicy.AdditionalRoots()
-	var capabilityCoordinator SessionCapabilityCoordinator
-	opts, capabilityCoordinator = prepareSessionCapabilityCoordinator(opts)
-	defer func() {
-		if planErr != nil && recordingClaim != nil {
-			_ = recordingClaim.release()
-		}
-		if planErr != nil {
-			closeSessionCapabilityIfNeeded(capabilityCoordinator, &planErr)
-		}
-	}()
-	if err := sessioncontract.ValidateSessionAudioInTurnBarge(opts.AudioInTurnBarge, len(opts.AudioInputs)); err != nil {
-		return sessionRuntimePlan{}, err
-	}
-	scheduledAudioDispatch := scheduledAudioDispatchPolicyForOptions(opts)
-
-	// Resolve the provider once at the session boundary so every live mode
-	// (bare, browser-enabled, recorded, injected, and RTC) consumes the same
-	// realtime-capable policy. Replay keeps its capture-owned provider identity.
-	if opts.ReplayPath == "" {
-		opts.Provider = effectiveSessionProvider(opts)
-	}
-
-	selection, err := resolveSessionRuntimeSelection(opts)
-	if err != nil {
-		return sessionRuntimePlan{}, err
-	}
-	if selection.Transport == SessionTransportWebRTC && opts.ReplayPath == "" {
-		plan, err = planWebRTCSessionRuntime(opts, selection, factory)
-	} else {
-		plan, err = planSessionRuntimeMode(opts, factory)
-	}
-	if err != nil {
-		return sessionRuntimePlan{}, err
-	}
-	plan.diagnostics = opts.Diagnostics
-	plan.metricsRecorder = opts.MetricsRecorder
-	plan.streamObserver = opts.StreamObserver
-	// A mode planner (for example a self-driving bare replay of a recorded
-	// scheduled-audio-turn capture) may have already populated audioInputs
-	// directly from the capture; opts.AudioInputs only fills that in when the
-	// planner left it unset.
-	if plan.audioInputs == nil {
-		plan.audioInputs = opts.AudioInputs
-	}
-	plan.scheduledAudioDispatch = scheduledAudioDispatch
-	plan.filesystemPolicy = opts.FilesystemPolicy
-	plan.clockSource = platformclock.Ensure(opts.Clock)
-	plan.runtime = newSessionRuntimeObservationRecorder(opts.RuntimeObserver, plan.clockSource)
-	plan.loop.runtime = plan.runtime
-	plan.loop.clockSource = plan.clockSource
-	plan.loop.audioService = opts.AudioService
-	plan.loop.livenessClock = opts.LivenessClock
-	if plan.loop.livenessClock == nil {
-		if opts.AudioService != nil {
-			plan.loop.livenessClock, err = opts.AudioService.NewClock(plan.clockSource)
-			if err != nil {
-				return sessionRuntimePlan{}, err
-			}
-		} else if timerSource, ok := plan.clockSource.(platformclock.TimerSource); ok {
-			plan.loop.livenessClock = timerSource
-		} else {
-			plan.loop.livenessClock = platformclock.Real{}
-		}
-	}
-	plan.loop.BareLive = plan.loop.BareLive || opts.BareLive
-	plan.loop.cancellationIntent = opts.CancellationIntent
-	plan.loop.toolDiagnostics = opts.ToolDiagnostics
-	plan.loop.SessionUpdatedTimeout = opts.SessionUpdatedTimeout
-	plan.loop.AudioInterruptions = opts.AudioInterruptions
-	plan.rtcDeviceRequest = opts.RTCBinding
-	plan.deviceService = opts.DeviceService
-	// Local device playback of this session's own synthesized voice must
-	// carry the same fixed per-voice loudness correction as every other
-	// output path (see VoiceLoudnessGainDB), so --voice selection does not
-	// leave a live interactive session sounding louder or quieter than a
-	// recorded/room session using the same voice.
-	plan.rtcDeviceRequest.OutputVoice = opts.Voice
-	// Replay preserves the selected device pumps for lifecycle/round-trip
-	// callers, but its recorded media is not a live acoustic topology. Keep the
-	// explicit bypass at the binding boundary so replayed provider output cannot
-	// be mistaken for speaker-to-microphone feedback.
-	plan.rtcDeviceRequest.BypassSelfHearing = plan.rtcDeviceRequest.BypassSelfHearing || opts.ReplayPath != ""
-	plan.loop.ToolExecutor = opts.ToolExecutor
-	plan.loop.ToolDefinitions = append([]messages.ToolDefinition(nil), opts.ToolDefinitions...)
-	if err := prepareSessionRuntimeToolsAndAudio(ctx, opts, &plan); err != nil {
-		return sessionRuntimePlan{}, err
-	}
-	policySnapshot := plan.turnRuntime.InteractiveToolPolicy()
-	plan.interactivePolicy = policySnapshot
-	plan.loop.InteractiveToolPolicy = policySnapshot
-	// The per-invocation adapter deadline override is a hermetic test seam;
-	// zero selects the class-specific policy budget.
-	plan.loop.ToolDefinitionBase = append([]messages.ToolDefinition(nil), opts.ToolDefinitionBase...)
-	plan.loop.RefreshToolDefinitions = opts.RefreshToolDefinitions
-	plan.loop.BrowserWatch = opts.BrowserWatch
-	// The per-invocation adapter deadline override crosses with the executor;
-	// zero keeps every production plan on defaultSessionToolExecutionTimeout.
-	plan.loop.ToolExecutionTimeout = opts.ToolExecutionTimeout
-	plan.loop.ScheduledAudioDispatch = scheduledAudioDispatch
-	if opts.AudioService == nil {
-		return sessionRuntimePlan{}, errors.New("audio service is required for session rate resolution")
-	}
-	plan.voiceGainDB = opts.AudioService.VoiceGainDB(opts.Voice)
-	if err := configureSessionAudioContract(opts, &plan); err != nil {
-		return sessionRuntimePlan{}, err
-	}
-	plan.audioInputs, err = opts.AudioService.ConvertScheduledInputs(ctx, plan.audioInputs, plan.inputAudioSampleRate)
-	if err != nil {
-		return sessionRuntimePlan{}, err
-	}
-	plan.loop.InputAudioSampleRate = plan.inputAudioSampleRate
-	if plan.rtcDeviceRequest.HasOutput() && plan.outputAudioSampleRate > 0 {
-		plan.rtcDeviceRequest.OutputSampleRate = plan.outputAudioSampleRate
-	}
-	if plan.rtcDeviceRequest.HasInput() && plan.inputAudioSampleRate > 0 {
-		plan.rtcDeviceRequest.InputSampleRate = plan.inputAudioSampleRate
-	}
-	// The playback-overflow observer's sink is resolved (never trusted as-is)
-	// so an omitted SessionRunOptions.Diagnostics can no longer make a real
-	// device overflow invisible; see resolvePlaybackDiagnosticSink.
-	observabilityDependencies := opts.Observability
-	plan.rtcDeviceRequest.PlaybackObserver = combineRTCDevicePlaybackObservers(
-		plan.rtcDeviceRequest.PlaybackObserver,
-		sessionPlaybackDiagnosticObserver(resolvePlaybackDiagnosticSink(plan.diagnostics)),
-		sessionPlaybackObservabilityObserver(observabilityDependencies.MetricSampler, observabilityDependencies.Logger),
-	)
-	plan.rtcDeviceRequest.PlaybackReceiptObserver = combineRTCDevicePlaybackReceiptObservers(
-		plan.rtcDeviceRequest.PlaybackReceiptObserver,
-		func(receipt audio.PlaybackReceipt) {
-			if plan.runtime != nil {
-				plan.runtime.audioPlaybackReceipt(receipt)
-			}
-		},
-	)
-	plan.rtcDeviceRequest.CaptureObserver = combineRTCDeviceCaptureObservers(
-		plan.rtcDeviceRequest.CaptureObserver,
-		sessionCaptureObservabilityObserver(observabilityDependencies.MetricSampler, observabilityDependencies.Logger),
-	)
-	plan.selection = selection
-	plan.transport = selection.Transport
-	plan.signalingEndpoint = selection.SignalingEndpoint
-	plan.mediaSource = selection.MediaSource
-	if plan.rtcRuntime == nil && selection.Transport == SessionTransportWebRTC && opts.ReplayPath == "" {
-		return sessionRuntimePlan{}, wrapSessionRTCRuntimeError("create runtime", ErrSessionRTCRuntimeUnavailable)
-	}
-	plan.capabilityCoordinator = capabilityCoordinator
-	plan = wireSessionRecordingClaim(plan, recordingClaim)
-	return plan, nil
 }
 
 // wireSessionRecordingClaim redirects one recording plan's capture flush

@@ -26,6 +26,14 @@ const (
 	maxRateLimitRetryDelay     = 15 * time.Second
 )
 
+type durationTerminalDrainCase struct {
+	name          string
+	setup         func(*durationTerminalDrainFixture) func()
+	wantErr       error
+	wantErrorText string
+	wantOutput    string
+}
+
 func rateLimitRetryDecision(terminal *messages.MessageEndValue) (time.Duration, bool) {
 	decision := durationwire.NewService().EvaluateRetry(duration.RetryPolicy{Enabled: true}, terminal)
 	return decision.Delay, decision.Eligible
@@ -166,6 +174,14 @@ func (f *durationTerminalDrainFixture) sendProviderMessage(msg messages.StreamMe
 }
 
 func TestRunAgentLoopSessionWithDurationTerminalOutcomesAlwaysDrainAcceptedDelta(t *testing.T) {
+	for _, testCase := range durationTerminalDrainCases() {
+		t.Run(testCase.name, func(t *testing.T) {
+			assertDurationTerminalDrainCase(t, testCase)
+		})
+	}
+}
+
+func durationTerminalDrainCases() []durationTerminalDrainCase {
 	publicationErr := errors.New("duration page refresh failed")
 	schedulerErr := context.Canceled
 	doneErr := errors.New("duration transport done failed")
@@ -173,14 +189,14 @@ func TestRunAgentLoopSessionWithDurationTerminalOutcomesAlwaysDrainAcceptedDelta
 	loopErr := errors.New("duration agent loop failed")
 	providerErr := errors.New("duration provider terminal failure")
 	writeErr := errors.New("duration terminal output writer failed")
+	cases := durationTerminalDrainClockCases(publicationErr)
+	cases = append(cases, durationTerminalDrainLifecycleCases(schedulerErr, doneErr, pumpErr)...)
+	cases = append(cases, durationTerminalDrainProviderCases(loopErr, providerErr, writeErr)...)
+	return cases
+}
 
-	tests := []struct {
-		name          string
-		setup         func(*durationTerminalDrainFixture) func()
-		wantErr       error
-		wantErrorText string
-		wantOutput    string
-	}{
+func durationTerminalDrainClockCases(publicationErr error) []durationTerminalDrainCase {
+	return []durationTerminalDrainCase{
 		{
 			name: "deadline already ready",
 			setup: func(f *durationTerminalDrainFixture) func() {
@@ -227,6 +243,21 @@ func TestRunAgentLoopSessionWithDurationTerminalOutcomesAlwaysDrainAcceptedDelta
 			wantErr: publicationErr,
 		},
 		{
+			name: "timer expiry",
+			setup: func(f *durationTerminalDrainFixture) func() {
+				return func() {
+					f.acceptedOutput()
+					f.clock.(*durationTestClock).fire()
+				}
+			},
+			wantOutput: string(duration.MaxDurationReason),
+		},
+	}
+}
+
+func durationTerminalDrainLifecycleCases(schedulerErr, doneErr, pumpErr error) []durationTerminalDrainCase {
+	return []durationTerminalDrainCase{
+		{
 			name: "scheduled dispatch failure",
 			setup: func(f *durationTerminalDrainFixture) func() {
 				observer := newSessionProgressObserver(nil, nil, "test", "test")
@@ -241,16 +272,6 @@ func TestRunAgentLoopSessionWithDurationTerminalOutcomesAlwaysDrainAcceptedDelta
 				return nil
 			},
 			wantErr: schedulerErr,
-		},
-		{
-			name: "timer expiry",
-			setup: func(f *durationTerminalDrainFixture) func() {
-				return func() {
-					f.acceptedOutput()
-					f.clock.(*durationTestClock).fire()
-				}
-			},
-			wantOutput: string(duration.MaxDurationReason),
 		},
 		{
 			name: "session updated timeout",
@@ -320,6 +341,11 @@ func TestRunAgentLoopSessionWithDurationTerminalOutcomesAlwaysDrainAcceptedDelta
 			},
 			wantErr: pumpErr,
 		},
+	}
+}
+
+func durationTerminalDrainProviderCases(loopErr, providerErr, writeErr error) []durationTerminalDrainCase {
+	return []durationTerminalDrainCase{
 		{
 			name: "closed delta stream after loop completion",
 			setup: func(f *durationTerminalDrainFixture) func() {
@@ -411,30 +437,29 @@ func TestRunAgentLoopSessionWithDurationTerminalOutcomesAlwaysDrainAcceptedDelta
 			wantErr: writeErr,
 		},
 	}
+}
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			fixture := newDurationTerminalDrainFixture(t)
-			err := fixture.run(t, testCase.setup)
-			if testCase.wantErr != nil && !errors.Is(err, testCase.wantErr) {
-				t.Fatalf("duration terminal error = %v, want errors.Is(..., %v)", err, testCase.wantErr)
-			}
-			if testCase.wantErr == nil && testCase.wantErrorText == "" && err != nil {
-				t.Fatalf("duration terminal error = %v, want clean completion", err)
-			}
-			if testCase.wantErrorText != "" && !strings.Contains(errorString(err), testCase.wantErrorText) {
-				t.Fatalf("duration terminal error = %v, want text %q", err, testCase.wantErrorText)
-			}
-			fixture.acceptedMu.RLock()
-			acceptedText := fixture.acceptedText
-			fixture.acceptedMu.RUnlock()
-			if !strings.Contains(fixture.output.String(), acceptedText) {
-				t.Fatalf("duration terminal path lost accepted output %q; rendered output=%q", acceptedText, fixture.output.String())
-			}
-			if testCase.wantOutput != "" && !strings.Contains(fixture.output.String(), testCase.wantOutput) {
-				t.Fatalf("duration terminal output = %q, missing %q", fixture.output.String(), testCase.wantOutput)
-			}
-		})
+func assertDurationTerminalDrainCase(t *testing.T, testCase durationTerminalDrainCase) {
+	t.Helper()
+	fixture := newDurationTerminalDrainFixture(t)
+	err := fixture.run(t, testCase.setup)
+	if testCase.wantErr != nil && !errors.Is(err, testCase.wantErr) {
+		t.Fatalf("duration terminal error = %v, want errors.Is(..., %v)", err, testCase.wantErr)
+	}
+	if testCase.wantErr == nil && testCase.wantErrorText == "" && err != nil {
+		t.Fatalf("duration terminal error = %v, want clean completion", err)
+	}
+	if testCase.wantErrorText != "" && !strings.Contains(errorString(err), testCase.wantErrorText) {
+		t.Fatalf("duration terminal error = %v, want text %q", err, testCase.wantErrorText)
+	}
+	fixture.acceptedMu.RLock()
+	acceptedText := fixture.acceptedText
+	fixture.acceptedMu.RUnlock()
+	if !strings.Contains(fixture.output.String(), acceptedText) {
+		t.Fatalf("duration terminal path lost accepted output %q; rendered output=%q", acceptedText, fixture.output.String())
+	}
+	if testCase.wantOutput != "" && !strings.Contains(fixture.output.String(), testCase.wantOutput) {
+		t.Fatalf("duration terminal output = %q, missing %q", fixture.output.String(), testCase.wantOutput)
 	}
 }
 

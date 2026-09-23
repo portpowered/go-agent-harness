@@ -206,7 +206,7 @@ func assertUnresolvedFailure(t *testing.T, err error, sink *unresolvedToolDiagno
 	}
 	var unresolved *servicetest.SessionUnresolvedToolResultsError
 	if !errors.As(err, &unresolved) {
-		t.Fatalf("RunSession error = %v, want SessionUnresolvedToolResultsError", err)
+		t.Fatalf("RunSession error = %v, want SessionUnresolvedToolResultsError; failure diagnostics = %#v", err, sink.failureRecords())
 	}
 	if !errors.Is(err, servicetest.ErrSessionUnresolvedToolResults) {
 		t.Fatalf("RunSession error = %v, want ErrSessionUnresolvedToolResults identity", err)

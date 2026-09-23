@@ -268,7 +268,7 @@ func (r *reducer) noteScheduledTerminalLocked(rawID string, terminal *sessiondia
 }
 
 func (r *reducer) rememberRetryLocked(responseID, lifecycleID string, terminal *sessiondiagnostics.Terminal) sessiondiagnostics.Observation {
-	_ = terminal
+	delay, eligible := retryDecision(terminal)
 	r.retryCandidateSet = false
 	r.retryCandidateID = ""
 	index, ok := r.scheduledIndexForLocked(lifecycleID)
@@ -278,7 +278,12 @@ func (r *reducer) rememberRetryLocked(responseID, lifecycleID string, terminal *
 	r.retryCandidateIndex = index
 	r.retryCandidateSet = true
 	r.retryCandidateID = strings.TrimSpace(responseID)
-	return sessiondiagnostics.Observation{Accepted: true, ScheduledIndex: index, HasScheduledIndex: true}
+	return sessiondiagnostics.Observation{
+		Accepted:          true,
+		ScheduledIndex:    index,
+		HasScheduledIndex: true,
+		Retry:             sessiondiagnostics.RetryRequest{Accepted: eligible, Delay: delay},
+	}
 }
 
 func (r *reducer) retryDispatchedLocked() sessiondiagnostics.Observation {

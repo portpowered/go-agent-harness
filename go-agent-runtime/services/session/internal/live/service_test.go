@@ -61,27 +61,31 @@ func firstTestDurationCause(o sessionduration.Options, cause error) {
 		o.FirstCause(cause)
 	}
 }
+func testLivenessFailure(classification, responseID string, cause error) *sessionduration.LivenessError {
+	return &sessionduration.LivenessError{
+		Classification: classification, ResponseID: responseID, TerminalReason: messages.TerminalReasonTerminalFailure,
+		TerminalProvenance: messages.TerminalProvenanceSession, OutputState: messages.TerminalOutputNone, Cause: cause,
+	}
+}
 func (c *testDurationController) expire(cause error) {
 	c.once.Do(func() { firstTestDurationCause(c.options, cause) })
 }
+func (c *testDurationController) ExpectProviderProgress() {
+	if c.options.Liveness.Enabled {
+		c.arm(c.options.Liveness.Timeout, testLivenessFailure(sessionduration.LivenessClassificationTimeout, "", sessionduration.ErrProviderLivenessTimeout))
+	}
+}
 func (c *testDurationController) Observe(msg messages.StreamMessage) sessionduration.Admission {
-	if c.options.Liveness.Enabled && isTestDurationResponseStart(msg) {
-		cause := &sessionduration.LivenessError{Classification: "silent_provider_timeout", ResponseID: msg.ResponseID, Cause: sessionduration.ErrProviderLivenessTimeout}
-		c.arm(c.options.Liveness.Timeout, cause)
+	if c.options.Liveness.Enabled && msg.Type == messages.StreamTypeMessageStart {
+		c.arm(c.options.Liveness.Timeout, testLivenessFailure(sessionduration.LivenessClassificationTimeout, msg.ResponseID, sessionduration.ErrProviderLivenessTimeout))
 	}
 	if c.options.Liveness.Enabled && msg.Type == messages.StreamTypeMessageEnd {
-		failure := &sessionduration.LivenessError{Classification: "silent_provider_empty_response", ResponseID: msg.ResponseID, Cause: sessionduration.ErrProviderEmptyResponse}
-		c.expire(failure)
+		c.expire(testLivenessFailure(sessionduration.LivenessClassificationEmptyResponse, msg.ResponseID, sessionduration.ErrProviderEmptyResponse))
 	}
 	return sessionduration.Admission{Message: msg, Accepted: true, OutputState: messages.TerminalOutputPartial}
 }
 func (c *testDurationController) arm(delay time.Duration, cause error) {
-	scheduleTestDuration(c.options, delay, func() {
-		c.expire(cause)
-	})
-}
-func isTestDurationResponseStart(msg messages.StreamMessage) bool {
-	return msg.Type == messages.StreamTypeResponseCreate || msg.Type == messages.StreamTypeMessageStart
+	scheduleTestDuration(c.options, delay, func() { c.expire(cause) })
 }
 func (c *testDurationController) Retry(request sessionduration.RetryRequest) sessionduration.RetryDecision {
 	if request.Terminal == nil || request.Terminal.ProviderErrorCode != "rate_limit_exceeded" || !c.options.Retry.Enabled {

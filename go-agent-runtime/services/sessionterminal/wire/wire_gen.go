@@ -42,3 +42,5 @@ func ReporterFromContext(ctx context.Context) sessionterminal.Reporter {
 }
 
 func HasIndependentFailure(err error) bool { return service.HasIndependentFailure(err) }
+
+func IsCancellation(err error) bool { return service.IsCancellation(err) }

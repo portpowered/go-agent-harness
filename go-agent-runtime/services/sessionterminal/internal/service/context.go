@@ -42,6 +42,10 @@ func HasIndependentFailure(err error) bool {
 	return false
 }
 
+func IsCancellation(err error) bool {
+	return sessionErrorIsCancellation(err)
+}
+
 func collectErrorLeaves(err error, leaves *[]error) {
 	if err == nil {
 		return

@@ -87,17 +87,22 @@ type DrainPolicy struct {
 	LoopJoinTimeout time.Duration
 }
 
-// FinalizationPorts are already-admitted host cleanup operations. The service
-// owns their order, panic recovery, and once-only execution; hosts only expose
-// individual resource effects.
+// FinalizationPorts are already-admitted host cleanup operations and terminal
+// reporting effects. The service owns their order, panic recovery, and
+// once-only execution; hosts only expose individual resource effects.
 type FinalizationPorts struct {
-	CloseCapabilities func() error
-	CloseSession      func() error
-	CloseBinding      func() error
-	CloseRuntime      func() error
-	FlushCapture      func() error
-	Finalize          func(context.Context, io.Writer) error
-	ReleaseCapture    func() error
+	CloseCapabilities          func() error
+	CloseSession               func() error
+	CloseBinding               func() error
+	CloseRuntime               func() error
+	FlushCapture               func() error
+	Finalize                   func(context.Context, io.Writer) error
+	ReleaseCapture             func() error
+	Artifacts                  ArtifactLifecycle
+	RecordArtifactFinalization func(bool, error)
+	HasIndependentFailure      func(error) bool
+	CompleteReplay             func()
+	PublishTerminal            func(io.Writer, error) error
 }
 
 // Finalizer is the standalone ordered cleanup boundary used by session modes

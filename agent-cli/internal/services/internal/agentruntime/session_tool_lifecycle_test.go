@@ -261,72 +261,6 @@ func TestSessionProgressObserver_ContinuationRequestBeforeCallObservation(t *tes
 	}
 }
 
-func TestShouldStopSessionLoopWaitsForReadImageResultAndContinuation(t *testing.T) {
-	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
-	observer.setToolResultsEnabled(true)
-	const callID = "call-read-image"
-
-	observer.observe(messages.StreamMessage{
-		Type:  messages.StreamTypeToolCallEnd,
-		Role:  messages.RoleAssistant,
-		Value: messages.NewToolCallEndValue(callID, "read_image", `{}`),
-	})
-	providerToolCallEnd := messages.StreamMessage{
-		Type:  messages.StreamTypeMessageEnd,
-		Role:  messages.RoleAssistant,
-		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
-	}
-	observer.observe(providerToolCallEnd)
-	if shouldStopSessionLoop(providerToolCallEnd, sessionLoopOptions{observer: observer}) {
-		t.Fatal("provider read_image MESSAGE.END stopped before the tool result")
-	}
-
-	toolRunnerEnd := messages.StreamMessage{
-		Type:  messages.StreamTypeMessageEnd,
-		Role:  messages.RoleTool,
-		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
-	}
-	observer.observe(toolRunnerEnd)
-	if shouldStopSessionLoop(toolRunnerEnd, sessionLoopOptions{observer: observer}) {
-		t.Fatal("ToolRunner MESSAGE.END stopped before the model continuation")
-	}
-
-	observer.noteToolResultAccepted(callID)
-	observer.noteToolContinuationRequested()
-	observer.observe(messages.StreamMessage{
-		Type:  messages.StreamTypeMessageStart,
-		Role:  messages.RoleAssistant,
-		Value: messages.NewMessageStartValue(),
-	})
-	observer.observe(messages.StreamMessage{
-		Type:  messages.StreamTypeTextDelta,
-		Role:  messages.RoleAssistant,
-		Value: messages.NewTextDeltaValue("read image answer"),
-	})
-	finalAssistantEnd := messages.StreamMessage{
-		Type:  messages.StreamTypeMessageEnd,
-		Role:  messages.RoleAssistant,
-		Value: &messages.MessageEndValue{Type: "message_end", Status: "completed"},
-	}
-	observer.observe(finalAssistantEnd)
-	if !shouldStopSessionLoop(finalAssistantEnd, sessionLoopOptions{observer: observer}) {
-		t.Fatal("completed read_image continuation did not stop the default session loop")
-	}
-
-	// Ordinary tools use the same continuation gate as image tools.
-	genericObserver := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
-	genericObserver.setToolResultsEnabled(true)
-	genericObserver.observe(messages.StreamMessage{
-		Type:  messages.StreamTypeToolCallEnd,
-		Role:  messages.RoleAssistant,
-		Value: messages.NewToolCallEndValue("call-generic", "lookup", `{}`),
-	})
-	genericObserver.observe(providerToolCallEnd)
-	if shouldStopSessionLoop(providerToolCallEnd, sessionLoopOptions{observer: genericObserver}) {
-		t.Fatal("ordinary tool MESSAGE.END stopped before the tool result")
-	}
-}
-
 func TestSessionProgressObserver_ImageContinuationFailurePreservesPrimaryCause(t *testing.T) {
 	sink := &diagnosticRecordSink{}
 	observer := newSessionProgressObserver(sink, nil, "openai", "gpt-realtime")
@@ -430,9 +364,6 @@ func TestSessionProgressObserverContinuationRequiresSuccessfulObservableOutput(t
 
 			if got := observer.hasTerminalToolContinuationFailure(); got != tc.wantError {
 				t.Fatalf("terminal failure = %v, want %v", got, tc.wantError)
-			}
-			if got := shouldStopSessionLoop(terminalMessage, sessionLoopOptions{observer: observer, WaitForClose: true}); got != tc.wantError {
-				t.Fatalf("wait-for-close stop = %v, want %v", got, tc.wantError)
 			}
 			err := observer.finish(nil)
 			if tc.wantError {

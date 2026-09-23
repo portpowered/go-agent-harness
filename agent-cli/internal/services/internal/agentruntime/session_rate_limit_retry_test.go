@@ -610,7 +610,7 @@ func TestScheduledFailureRetainsProviderMetadataWithoutRetry(t *testing.T) {
 	}
 	terminalMessage := messages.StreamMessage{Type: messages.StreamTypeMessageEnd, ResponseID: responseID, Role: messages.RoleAssistant, Value: terminal}
 	observer.observe(terminalMessage)
-	if !observer.hasTerminalScheduledResponseFailure() || !shouldStopSessionLoop(terminalMessage, sessionLoopOptions{observer: observer, CloseAfterScheduledAudio: true}) {
+	if !observer.hasTerminalScheduledResponseFailure() {
 		t.Fatal("scheduled provider failure was not treated as terminal")
 	}
 	if delay, retry := observer.claimScheduledRateLimitRetry(responseID, terminal); retry || delay != 0 {

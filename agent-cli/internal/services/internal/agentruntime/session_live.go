@@ -28,8 +28,6 @@ import (
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
-var errSessionMaxDurationExpired = errors.New("session max duration expired")
-
 // ErrSessionScheduledAudioConfigTimeout identifies a live scheduled-audio run
 // whose current session never acknowledged its initial configuration.
 var ErrSessionScheduledAudioConfigTimeout = errors.New("scheduled audio session timed out awaiting session.updated")
@@ -190,7 +188,7 @@ type sessionLoopOptions struct {
 	// terminalReporter is the services-owned consume-once boundary for the
 	// customer-facing terminal announcement. Stream consumers only contribute
 	// evidence; the enclosing runtime plan publishes it after finalization.
-	terminalReporter *sessionTerminalReporter
+	terminalReporter sessionterminal.Reporter
 
 	// AudioOutputError lets the audio-output wrapper report a concrete artifact
 	// failure before the incomplete-response guard classifies a tool round trip.
@@ -291,17 +289,17 @@ func runSessionDurationInvocation(ctx context.Context, out io.Writer, inferencer
 	reporter := opts.terminalReporter
 	ownsReporter := reporter == nil
 	if reporter == nil {
-		reporter = newSessionTerminalReporter()
+		reporter = terminalwire.NewReporter()
 		opts.terminalReporter = reporter
 	}
-	reporter.markRunStarted()
-	renderer := terminalwire.NewService().NewTranscriptRenderer(out, reporter.observeStreamMessage)
+	reporter.MarkRunStarted()
+	renderer := terminalwire.NewService().NewTranscriptRenderer(out, reporter.ObserveStreamMessage)
 	_, runErr = executeDurationRequest(ctx, renderer, inferencer, opts, maxDuration, clock, admitted)
 	if ownsReporter {
 		if err := renderer.Finish(); err != nil {
 			runErr = errors.Join(runErr, err)
 		}
-		runErr = errors.Join(runErr, reporter.publish(out, runErr))
+		runErr = errors.Join(runErr, reporter.Publish(out, runErr))
 	}
 	return runErr
 }
@@ -545,7 +543,7 @@ func publishSessionUserCancellation(out io.Writer, opts sessionLoopOptions, writ
 				errs = append(errs, err)
 			}
 		} else {
-			opts.terminalReporter.observeStreamMessage(terminal, true)
+			opts.terminalReporter.ObserveStreamMessage(terminal, true)
 		}
 	} else if write != nil {
 		if err := write(out, terminal); err != nil {

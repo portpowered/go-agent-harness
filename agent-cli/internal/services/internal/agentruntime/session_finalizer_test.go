@@ -15,7 +15,7 @@ import (
 type testSessionRuntimeFinalizer struct{ inner sessionduration.Finalizer }
 
 func newSessionRuntimeFinalizer(plan sessionRuntimePlan) *testSessionRuntimeFinalizer {
-	return &testSessionRuntimeFinalizer{inner: durationwire.NewService().NewFinalizer(plan.finalizationPorts())}
+	return &testSessionRuntimeFinalizer{inner: durationwire.NewService().NewFinalizer(plan.finalizationPorts(nil, false))}
 }
 
 func (f *testSessionRuntimeFinalizer) finish(ctx context.Context, out io.Writer, primary error) error {

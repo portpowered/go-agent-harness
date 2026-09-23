@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
@@ -66,37 +65,9 @@ func (h *handle) observeProviderDispatch(msg messages.StreamMessage) {
 		}
 		h.mu.Unlock()
 	}
-	if h.providerLivenessEnabled() && (msg.Type == messages.StreamTypeMessageEnd || !acknowledgement) {
-		h.armProviderLiveness()
+	if durationController != nil && h.providerLivenessEnabled() && (msg.Type == messages.StreamTypeMessageEnd || !acknowledgement) {
+		durationController.ExpectProviderProgress()
 	}
-}
-
-func (h *handle) observeProviderMessageEnd(_ context.Context, msg messages.StreamMessage) {
-	value, ok := msg.Value.(*messages.MessageEndValue)
-	if !ok {
-		value = nil
-	}
-	h.livenessMu.Lock()
-	outputSeen := h.responseOutputSeen
-	toolObligation := h.responseToolObligation
-	h.responseOutputSeen = false
-	h.responseToolObligation = false
-	h.livenessMu.Unlock()
-	if isEmptyProviderResponse(msg, value, outputSeen, toolObligation) {
-		failure := session.LiveLivenessFailure{
-			Classification:     silentProviderEmptyResponse,
-			ResponseID:         strings.TrimSpace(msg.ResponseID),
-			TerminalReason:     messages.TerminalReasonTerminalFailure,
-			TerminalProvenance: messages.TerminalProvenanceSession,
-			OutputState:        messages.TerminalOutputNone,
-		}
-		if value != nil {
-			failure.Usage = value.Usage
-		}
-		h.latchProviderLiveness(failure) //nolint:contextcheck // Publication uses the handle's retained invocation evidence context, not this observation callback's cancellation.
-		return
-	}
-	h.disarmProviderLiveness()
 }
 
 type retryRequest struct {

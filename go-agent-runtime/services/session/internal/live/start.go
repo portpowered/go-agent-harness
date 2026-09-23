@@ -144,7 +144,7 @@ func (h *handle) buildLoop(inferencer messages.SessionInferencer, toolExecutor m
 		toolExecutor = newTimedToolExecutor(toolExecutor, h.scheduler, h.request.ToolExecutionTimeout)
 	}
 	if h.providerLivenessEnabled() {
-		toolExecutor = livenessToolExecutor{inner: toolExecutor, handle: h}
+		toolExecutor = durationToolExecutor{inner: toolExecutor, handle: h}
 	}
 	h.mu.Lock()
 	explicitCapability := h.request.Capabilities != nil && !h.request.Capabilities.InheritDefaults

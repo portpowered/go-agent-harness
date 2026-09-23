@@ -12,18 +12,20 @@ import (
 	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 )
 
+type responseAdmissionCase struct {
+	name            string
+	setup           func(*sessionProgressObserver)
+	events          []messages.StreamMessage
+	wantTurns       int
+	wantTurnRecords int
+	wantInputText   uint64
+	wantOutputText  uint64
+	wantOutputAudio uint64
+	wantOutputTool  uint64
+}
+
 func TestSessionProgressObserver_AdmitsOnlyResponsesWithOutput(t *testing.T) {
-	tests := []struct {
-		name            string
-		setup           func(*sessionProgressObserver)
-		events          []messages.StreamMessage
-		wantTurns       int
-		wantTurnRecords int
-		wantInputText   uint64
-		wantOutputText  uint64
-		wantOutputAudio uint64
-		wantOutputTool  uint64
-	}{
+	tests := []responseAdmissionCase{
 		{
 			name: "empty response after text input",
 			setup: func(observer *sessionProgressObserver) {
@@ -80,40 +82,45 @@ func TestSessionProgressObserver_AdmitsOnlyResponsesWithOutput(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			sink := &diagnosticRecordSink{}
-			observer := newSessionProgressObserver(sink, nil, "test", "test-model")
-			if test.setup != nil {
-				test.setup(observer)
-			}
-			for _, event := range test.events {
-				observer.observe(event)
-			}
-
-			if observer.turnsCompleted != test.wantTurns {
-				t.Fatalf("completed turns = %d, want %d", observer.turnsCompleted, test.wantTurns)
-			}
-			if got := len(sink.events(SessionDiagnosticEventTurn)); got != test.wantTurnRecords {
-				t.Fatalf("turn diagnostic records = %d, want %d", got, test.wantTurnRecords)
-			}
-			if observer.lastMessageEndAdmitted() != (test.wantTurns > 0) {
-				t.Fatalf("last MESSAGE.END admitted = %t, want %t", observer.lastMessageEndAdmitted(), test.wantTurns > 0)
-			}
-			if observer.totals.inputText != test.wantInputText {
-				t.Fatalf("input text bytes = %d, want %d", observer.totals.inputText, test.wantInputText)
-			}
-			if observer.totals.outText != test.wantOutputText {
-				t.Fatalf("output text bytes = %d, want %d", observer.totals.outText, test.wantOutputText)
-			}
-			if observer.totals.outAudio != test.wantOutputAudio {
-				t.Fatalf("output audio bytes = %d, want %d", observer.totals.outAudio, test.wantOutputAudio)
-			}
-			if observer.totals.outTool != test.wantOutputTool {
-				t.Fatalf("output tool bytes = %d, want %d", observer.totals.outTool, test.wantOutputTool)
-			}
-			if test.wantTurns == 0 && observer.assistantResponseCompleted() {
-				t.Fatal("empty response was marked as a completed assistant response")
-			}
+			assertResponseAdmissionCase(t, test)
 		})
+	}
+}
+
+func assertResponseAdmissionCase(t *testing.T, test responseAdmissionCase) {
+	t.Helper()
+	sink := &diagnosticRecordSink{}
+	observer := newSessionProgressObserver(sink, nil, "test", "test-model")
+	if test.setup != nil {
+		test.setup(observer)
+	}
+	for _, event := range test.events {
+		observer.observe(event)
+	}
+
+	if observer.turnsCompleted != test.wantTurns {
+		t.Fatalf("completed turns = %d, want %d", observer.turnsCompleted, test.wantTurns)
+	}
+	if got := len(sink.events(SessionDiagnosticEventTurn)); got != test.wantTurnRecords {
+		t.Fatalf("turn diagnostic records = %d, want %d", got, test.wantTurnRecords)
+	}
+	if observer.lastMessageEndAdmitted() != (test.wantTurns > 0) {
+		t.Fatalf("last MESSAGE.END admitted = %t, want %t", observer.lastMessageEndAdmitted(), test.wantTurns > 0)
+	}
+	if observer.totals.inputText != test.wantInputText {
+		t.Fatalf("input text bytes = %d, want %d", observer.totals.inputText, test.wantInputText)
+	}
+	if observer.totals.outText != test.wantOutputText {
+		t.Fatalf("output text bytes = %d, want %d", observer.totals.outText, test.wantOutputText)
+	}
+	if observer.totals.outAudio != test.wantOutputAudio {
+		t.Fatalf("output audio bytes = %d, want %d", observer.totals.outAudio, test.wantOutputAudio)
+	}
+	if observer.totals.outTool != test.wantOutputTool {
+		t.Fatalf("output tool bytes = %d, want %d", observer.totals.outTool, test.wantOutputTool)
+	}
+	if test.wantTurns == 0 && observer.assistantResponseCompleted() {
+		t.Fatal("empty response was marked as a completed assistant response")
 	}
 }
 

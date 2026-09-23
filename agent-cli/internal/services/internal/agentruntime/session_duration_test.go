@@ -172,72 +172,7 @@ func TestRunSessionWithMaxDuration_S2Table(t *testing.T) {
 
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			clock := &durationTestClock{}
-			if testCase.maxDuration < 0 {
-				inferencer := &durationTestInferencer{}
-				err := RunSessionWithMaxDurationClock(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(), SessionInferencer: inferencer}, testCase.maxDuration, clock)
-				var durationErr *duration.InvalidDurationError
-				if !errors.As(err, &durationErr) || inferencer.connected || clock.calls != testCase.wantTimerCall {
-					t.Fatalf("negative case error=%v connected=%v timer_calls=%d", err, inferencer.connected, clock.calls)
-				}
-				return
-			}
-
-			if testCase.maxDuration == 0 {
-				var out bytes.Buffer
-				err := RunSessionWithMaxDurationClock(context.Background(), &out, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
-					ReplayPath:        "synthetic.session.json",
-					SessionInferencer: &durationTestInferencer{events: durationNaturalEvents()},
-				}, testCase.maxDuration, clock)
-				if err != nil {
-					t.Fatalf("unbounded case: %v", err)
-				}
-				if !strings.Contains(out.String(), "terminal_reason=provider_close") {
-					t.Fatalf("unbounded case lost natural terminal reason: %q", out.String())
-				}
-			} else {
-				writer := newDurationTestWriter()
-				events := durationOutputEvents()
-				closeAfterEvents := false
-				if testCase.name == "longer_than_session" {
-					events = durationNaturalEvents()
-					closeAfterEvents = true
-				}
-				inferencer := &durationTestInferencer{
-					events:           events,
-					connectedCh:      make(chan struct{}),
-					closeAfterEvents: closeAfterEvents,
-				}
-				runErrCh := make(chan error, 1)
-				go func() {
-					runErrCh <- runAgentLoopSessionWithDurationClock(context.Background(), writer, inferencer, sessionLoopOptions{audioService: newTestAudioIOService()}, testCase.maxDuration, clock)
-				}()
-				select {
-				case <-inferencer.connectedCh:
-				case <-time.After(2 * time.Second):
-					t.Fatal("session did not connect")
-				}
-				if testCase.name == "deadline_during_output" {
-					writer.waitFor(t, "accepted output")
-				}
-				if testCase.name != "longer_than_session" {
-					clock.fire()
-				}
-				select {
-				case err := <-runErrCh:
-					if err != nil {
-						t.Fatalf("bounded case: %v", err)
-					}
-				case <-time.After(2 * time.Second):
-					t.Fatal("bounded case did not finish")
-				}
-				if !strings.Contains(writer.String(), "terminal_reason="+testCase.wantReason) {
-					t.Fatalf("bounded case terminal output = %q", writer.String())
-				}
-			}
-			if clock.calls != testCase.wantTimerCall || testCase.maxDuration > 0 && (clock.timer == nil || !clock.timer.stopped) {
-				t.Fatalf("timer lifecycle calls=%d timer=%v", clock.calls, clock.timer)
-			}
+			runSessionDurationS2Case(t, testCase.name, testCase.maxDuration, testCase.wantTimerCall, testCase.wantReason)
 		})
 	}
 }

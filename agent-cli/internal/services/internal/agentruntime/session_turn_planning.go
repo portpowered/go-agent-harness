@@ -157,23 +157,8 @@ func prepareSessionTurnRuntime(ctx context.Context, opts SessionRunOptions, plan
 	if opts.ReplayPath == "" || opts.SessionInferencer != nil {
 		request.ToolDefinitions = append([]messages.ToolDefinition(nil), plan.loop.ToolDefinitions...)
 	}
-	request.InteractiveToolPolicy = opts.InteractiveToolPolicy
-	if opts.InteractiveToolPolicy == nil {
-		settings := runtimeTools.InteractiveToolPolicySettings{}
-		if opts.LoadedConfig != nil {
-			configured, err := opts.LoadedConfig.ResolveInteractiveToolConfig()
-			if err != nil {
-				return fmt.Errorf("resolve interactive tool policy settings: %w", err)
-			}
-			settings = runtimeTools.InteractiveToolPolicySettings{
-				FastReadTimeout:          configured.FastReadTimeout,
-				LongRunningTimeout:       configured.LongRunningTimeout,
-				AcknowledgementThreshold: configured.AcknowledgementThreshold,
-			}
-		}
-		request.ToolPolicySettings = &settings
-		request.ToolDefinitionBase = append([]messages.ToolDefinition(nil), opts.ToolDefinitionBase...)
-		request.DynamicToolPolicy = opts.BrowserToolsInteractive
+	if err := configureSessionTurnToolPolicy(opts, &request); err != nil {
+		return err
 	}
 	turnRuntime, err := sessionturnwire.NewDefaultService().Prepare(ctx, request)
 	if err != nil {
@@ -187,6 +172,29 @@ func prepareSessionTurnRuntime(ctx context.Context, opts SessionRunOptions, plan
 	if opts.SessionInferencer != nil && (opts.sessionInstructions != "" || len(opts.ToolDefinitions) != 0) {
 		plan.loop.AdvertiseToolDefinitions = false
 	}
+	return nil
+}
+
+func configureSessionTurnToolPolicy(opts SessionRunOptions, request *sessionturn.Request) error {
+	request.InteractiveToolPolicy = opts.InteractiveToolPolicy
+	if opts.InteractiveToolPolicy != nil {
+		return nil
+	}
+	settings := runtimeTools.InteractiveToolPolicySettings{}
+	if opts.LoadedConfig != nil {
+		configured, err := opts.LoadedConfig.ResolveInteractiveToolConfig()
+		if err != nil {
+			return fmt.Errorf("resolve interactive tool policy settings: %w", err)
+		}
+		settings = runtimeTools.InteractiveToolPolicySettings{
+			FastReadTimeout:          configured.FastReadTimeout,
+			LongRunningTimeout:       configured.LongRunningTimeout,
+			AcknowledgementThreshold: configured.AcknowledgementThreshold,
+		}
+	}
+	request.ToolPolicySettings = &settings
+	request.ToolDefinitionBase = append([]messages.ToolDefinition(nil), opts.ToolDefinitionBase...)
+	request.DynamicToolPolicy = opts.BrowserToolsInteractive
 	return nil
 }
 
@@ -236,6 +244,10 @@ func (m sessionToolLifecycleMux) observeToolCall(call messages.ToolCall) {
 		m.runtime.observeToolCall(call)
 	}
 	if m.progress != nil {
+		// The executor boundary carries the canonical call ID and can win the
+		// publication race with the provider stream observer. Register it here
+		// before cancellation can tear down the pending result.
+		m.progress.observeProviderToolCallWithIDForResponse(call.ID, call.Name, "")
 		if m.progress.durationController != nil {
 			m.progress.durationController.BeginLocalToolExecution()
 		}

@@ -23,6 +23,8 @@ func ReporterFromContext(ctx context.Context) sessionterminal.Reporter {
 
 func HasIndependentFailure(err error) bool { return service.HasIndependentFailure(err) }
 
+func IsCancellation(err error) bool { return service.IsCancellation(err) }
+
 // NewService assembles one stateless terminal policy service.
 func NewService() sessionterminal.Service {
 	wire.Build(service.New, wire.Bind(new(sessionterminal.Service), new(*service.Service)))
