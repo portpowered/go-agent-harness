@@ -1,9 +1,8 @@
 package chrome
 
-import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
-
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	looptranscript "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	browserconversation "github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation"
 )
 
 func TestBuildConversationalCustomerResultPreservesRecoveryOrderAndRawInput(t *testing.T) {
@@ -116,15 +116,15 @@ func TestBuildConversationalCustomerResultPreservesRecoveryOrderAndRawInput(t *t
 		{StepID: "correction", Event: webmcp.BrowserEvent{Type: webmcp.EventPageNavigated, Generation: 3, PreviousGeneration: 2}},
 	}
 	oracles := []conversationalCustomerOracleObservation{
-		{StepID: "initial_action", Phase: servicetest.BrowserConversationOracleBefore, Oracle: conversationalCustomerOracle{Page: conversationalCustomerHomePage, Ready: true, Label: "unset", Theme: "default", Priority: "normal", VisibleText: "unset/default"}},
-		{StepID: "initial_action", Phase: servicetest.BrowserConversationOracleAfter, Oracle: conversationalCustomerOracle{Page: conversationalCustomerHomePage, Ready: true, Label: conversationalCustomerLabel, Theme: "default", Priority: "normal", VisibleText: conversationalCustomerLabel + "/default"}},
-		{StepID: "second_action", Phase: servicetest.BrowserConversationOracleBefore, Oracle: conversationalCustomerOracle{Page: conversationalCustomerHomePage, Ready: true, Label: conversationalCustomerLabel, Theme: "default", Priority: "normal", VisibleText: conversationalCustomerLabel + "/default"}},
-		{StepID: "second_action", Phase: servicetest.BrowserConversationOracleAfter, Oracle: conversationalCustomerOracle{Page: conversationalCustomerHomePage, Ready: true, Label: conversationalCustomerLabel, Theme: conversationalCustomerTheme, Priority: "normal", VisibleText: conversationalCustomerLabel + "/" + conversationalCustomerTheme}},
-		{StepID: "stale_recovery", Phase: servicetest.BrowserConversationOracleBefore, Oracle: conversationalCustomerOracle{Page: conversationalCustomerSettingsPage, Ready: true, Label: conversationalCustomerLabel, Theme: conversationalCustomerTheme, Priority: "normal", VisibleText: "normal"}},
-		{StepID: "stale_recovery", Phase: servicetest.BrowserConversationOracleAfter, Oracle: conversationalCustomerOracle{Page: conversationalCustomerSettingsPage, Ready: true, Label: conversationalCustomerLabel, Theme: conversationalCustomerTheme, Priority: conversationalCustomerPriority, VisibleText: conversationalCustomerPriority}},
-		{StepID: "correction", Phase: servicetest.BrowserConversationOracleBefore, Oracle: conversationalCustomerOracle{Page: conversationalCustomerHomePage, Ready: true, Label: conversationalCustomerLabel, Theme: conversationalCustomerTheme, Priority: conversationalCustomerPriority, VisibleText: conversationalCustomerLabel + "/" + conversationalCustomerTheme}},
-		{StepID: "correction", Phase: servicetest.BrowserConversationOracleAfter, Oracle: conversationalCustomerOracle{Page: conversationalCustomerHomePage, Ready: true, Label: conversationalCustomerCorrected, Theme: conversationalCustomerTheme, Priority: conversationalCustomerPriority, VisibleText: conversationalCustomerCorrected + "/" + conversationalCustomerTheme}},
-		{Phase: servicetest.BrowserConversationOraclePostSession, Oracle: conversationalCustomerOracle{Page: conversationalCustomerHomePage, Ready: true, Label: conversationalCustomerCorrected, Theme: conversationalCustomerTheme, Priority: "normal", VisibleText: conversationalCustomerCorrected + "/" + conversationalCustomerTheme}},
+		{StepID: "initial_action", Phase: browserconversation.BrowserConversationOracleBefore, Oracle: conversationalCustomerOracle{Page: conversationalCustomerHomePage, Ready: true, Label: "unset", Theme: "default", Priority: "normal", VisibleText: "unset/default"}},
+		{StepID: "initial_action", Phase: browserconversation.BrowserConversationOracleAfter, Oracle: conversationalCustomerOracle{Page: conversationalCustomerHomePage, Ready: true, Label: conversationalCustomerLabel, Theme: "default", Priority: "normal", VisibleText: conversationalCustomerLabel + "/default"}},
+		{StepID: "second_action", Phase: browserconversation.BrowserConversationOracleBefore, Oracle: conversationalCustomerOracle{Page: conversationalCustomerHomePage, Ready: true, Label: conversationalCustomerLabel, Theme: "default", Priority: "normal", VisibleText: conversationalCustomerLabel + "/default"}},
+		{StepID: "second_action", Phase: browserconversation.BrowserConversationOracleAfter, Oracle: conversationalCustomerOracle{Page: conversationalCustomerHomePage, Ready: true, Label: conversationalCustomerLabel, Theme: conversationalCustomerTheme, Priority: "normal", VisibleText: conversationalCustomerLabel + "/" + conversationalCustomerTheme}},
+		{StepID: "stale_recovery", Phase: browserconversation.BrowserConversationOracleBefore, Oracle: conversationalCustomerOracle{Page: conversationalCustomerSettingsPage, Ready: true, Label: conversationalCustomerLabel, Theme: conversationalCustomerTheme, Priority: "normal", VisibleText: "normal"}},
+		{StepID: "stale_recovery", Phase: browserconversation.BrowserConversationOracleAfter, Oracle: conversationalCustomerOracle{Page: conversationalCustomerSettingsPage, Ready: true, Label: conversationalCustomerLabel, Theme: conversationalCustomerTheme, Priority: conversationalCustomerPriority, VisibleText: conversationalCustomerPriority}},
+		{StepID: "correction", Phase: browserconversation.BrowserConversationOracleBefore, Oracle: conversationalCustomerOracle{Page: conversationalCustomerHomePage, Ready: true, Label: conversationalCustomerLabel, Theme: conversationalCustomerTheme, Priority: conversationalCustomerPriority, VisibleText: conversationalCustomerLabel + "/" + conversationalCustomerTheme}},
+		{StepID: "correction", Phase: browserconversation.BrowserConversationOracleAfter, Oracle: conversationalCustomerOracle{Page: conversationalCustomerHomePage, Ready: true, Label: conversationalCustomerCorrected, Theme: conversationalCustomerTheme, Priority: conversationalCustomerPriority, VisibleText: conversationalCustomerCorrected + "/" + conversationalCustomerTheme}},
+		{Phase: browserconversation.BrowserConversationOraclePostSession, Oracle: conversationalCustomerOracle{Page: conversationalCustomerHomePage, Ready: true, Label: conversationalCustomerCorrected, Theme: conversationalCustomerTheme, Priority: "normal", VisibleText: conversationalCustomerCorrected + "/" + conversationalCustomerTheme}},
 	}
 	result, err := buildConversationalCustomerResult(
 		scenario,
@@ -158,7 +158,7 @@ func TestBuildConversationalCustomerResultPreservesRecoveryOrderAndRawInput(t *t
 	if result.InputJSONValidity.TotalAttempts != 12 || result.InputJSONValidity.ValidObjectStrings != 12 {
 		t.Fatalf("input_json validity = %+v, want all twelve invoke observations valid", result.InputJSONValidity)
 	}
-	if result.Lifecycle.ExternalBrowserID != "browser-a" || result.Lifecycle.ExternalTargetID != "target-a" {
+	if fmt.Sprint(result.Lifecycle.ExternalBrowserID) != "browser-a" || fmt.Sprint(result.Lifecycle.ExternalTargetID) != "target-a" {
 		t.Fatalf("lifecycle target identity = %+v, want probe identity", result.Lifecycle)
 	}
 }

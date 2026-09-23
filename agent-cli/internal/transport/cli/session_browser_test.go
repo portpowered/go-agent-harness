@@ -21,7 +21,6 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
 	"github.com/spf13/cobra"
 )
 
@@ -524,7 +523,7 @@ func newBrowserAdmissionMedia() *browserAdmissionMedia {
 func (m *browserAdmissionMedia) ReadFrame(ctx context.Context) (sharedaudio.PCMFrame, error) {
 	select {
 	case <-m.closed:
-		return sharedaudio.PCMFrame{}, rtc.ErrPeerClosed
+		return sharedaudio.PCMFrame{}, sharedaudio.ErrSessionMediaClosed
 	case <-ctx.Done():
 		return sharedaudio.PCMFrame{}, ctx.Err()
 	}
@@ -533,7 +532,7 @@ func (m *browserAdmissionMedia) ReadFrame(ctx context.Context) (sharedaudio.PCMF
 func (m *browserAdmissionMedia) WriteFrame(ctx context.Context, _ sharedaudio.PCMFrame) error {
 	select {
 	case <-m.closed:
-		return rtc.ErrPeerClosed
+		return sharedaudio.ErrSessionMediaClosed
 	case <-ctx.Done():
 		return ctx.Err()
 	}

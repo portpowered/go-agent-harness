@@ -9,19 +9,12 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
-type realSessionDurationClock struct{}
-
-func (realSessionDurationClock) NewTimer(duration time.Duration) SessionDurationTimer {
-	return platformclock.Real{}.NewTimer(duration)
-}
-
+//lint:ignore U1000 package tests exercise the context-free admission seam.
 func runAgentLoopSessionWithDurationClock(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions, maxDuration time.Duration, durationClock SessionDurationClock) error {
 	return runAgentLoopSessionWithDurationAdmissionClock(ctx, out, sessionInferencer, opts, maxDuration, durationClock, nil)
 }
-
 func runAgentLoopSessionWithDurationAdmissionClock(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions, maxDuration time.Duration, durationClock SessionDurationClock, admittedInferencer *sessionDurationAdmissionInferencer) (runErr error) {
 	reporter := opts.terminalReporter
 	ownsReporter := reporter == nil
@@ -63,21 +56,10 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 			closeDone: make(chan struct{}),
 		}
 	}
-	var rtcPumpErrors <-chan error
-	boundInferencer, rtcErrors := bindRTCDeviceSessionInferencer(admittedInferencer, opts.rtcDeviceBinding)
-	rtcPumpErrors = rtcErrors
-	if err := ensureRTCDeviceBindingBuffers(opts.rtcDeviceBinding); err != nil {
-		return err
-	}
-	observedInferencer := newObservedSessionInferencer(boundInferencer)
+	rtcPumpErrors := sessionDurationRTCPumpErrors(opts)
+	observedInferencer := newObservedSessionInferencer(admittedInferencer)
 	observedInferencer.progress = opts.observer
-	if opts.observer != nil {
-		opts.observer.setLivenessClock(opts.livenessClock)
-		opts.observer.setToolResultsEnabled(opts.ToolExecutor != nil)
-	}
-	if opts.observer != nil {
-		defer opts.observer.stopLiveness()
-	}
+	defer startSessionDurationObserver(opts)()
 	loop, err := agentloop.New(duplexSessionLoopOptions(observedInferencer, opts)...)
 	if err != nil {
 		return fmt.Errorf("create session agent loop: %w", err)
@@ -129,10 +111,12 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 			}
 			cancel()
 			providerErr := closeBareSessionIfNeeded(opts.BareLive, observedInferencer)
-			bindingErr := closeRTCDeviceBinding(opts.rtcDeviceBinding)
-			runTerminationErr := joinSessionTerminationErrors(waitRun(), nil)
+			var runTerminationErr error
+			if runErr := waitRun(); runErr != nil && !sessionErrorIsCancellation(runErr) {
+				runTerminationErr = fmt.Errorf("session error: %w", runErr)
+			}
 			admittedInferencer.waitForClose()
-			return errors.Join(drainErr, providerErr, runTerminationErr, bindingErr)
+			return errors.Join(drainErr, providerErr, runTerminationErr)
 		},
 		flushBuffered: func() error {
 			flushErr := flushBufferedDurationSessionLoopMessages(out, loop, terminationPlanned, &durationTerminalWritten, artifacts, opts.observer, terminalState)
@@ -377,7 +361,7 @@ func processDurationLoopMessage(ctx context.Context, sessionDone <-chan struct{}
 	if err := writeDurationSessionReplayMessage(out, msg, artifacts); err != nil {
 		return result, err
 	}
-	if err := retryScheduledRateLimitedResponseWithClock(ctx, sessionDone, deadline, loop, opts.observer, msg, opts.clockSource); err != nil {
+	if err := retryScheduledRateLimitedResponseWithClock(opts.audioService, ctx, sessionDone, deadline, loop, opts.observer, msg, opts.clockSource); err != nil {
 		return result, err
 	}
 	promptProvided := opts.PromptProvided || opts.Prompt != ""
@@ -390,7 +374,7 @@ func processDurationLoopMessage(ctx context.Context, sessionDone <-chan struct{}
 			}
 			opts.observer.noteUserTextInput(opts.Prompt)
 			if opts.awaitFirstTurn != nil {
-				if err := awaitSessionFirstTurnWithClock(ctx, opts.awaitFirstTurn, opts.clockSource); err != nil {
+				if err := awaitSessionFirstTurnWithClock(opts.audioService, ctx, opts.awaitFirstTurn, opts.clockSource); err != nil {
 					return result, fmt.Errorf("send session first turn: %w", err)
 				}
 			}
@@ -516,12 +500,7 @@ func waitForDurationSessionLoopStragglers(out io.Writer, loop *agentloop.AgentLo
 			if err := writeDurationSessionReplayMessage(out, msg, artifacts); err != nil {
 				return err
 			}
-			if !timer.Stop() {
-				select {
-				case <-timer.C():
-				default:
-				}
-			}
+			stopAndDrainSessionTimer(timer)
 			timer = durationClock.NewTimer(quiet)
 			if timer == nil {
 				return errors.New("session duration clock returned a nil straggler timer")

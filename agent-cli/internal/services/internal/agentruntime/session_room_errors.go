@@ -3,8 +3,47 @@ package agentruntime
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 )
+
+type roomLifecycleWorkError struct {
+	outstanding []string
+}
+
+func (e *roomLifecycleWorkError) Error() string {
+	if e == nil || len(e.outstanding) == 0 {
+		return "room lifecycle work did not complete"
+	}
+	return "room lifecycle work did not complete: " + strings.Join(e.outstanding, "; ")
+}
+
+func newRoomLifecycleWorkError(outstanding ...string) error {
+	seen := make(map[string]struct{}, len(outstanding))
+	ordered := make([]string, 0, len(outstanding))
+	for _, item := range outstanding {
+		if item == "" {
+			continue
+		}
+		if _, exists := seen[item]; exists {
+			continue
+		}
+		seen[item] = struct{}{}
+		ordered = append(ordered, item)
+	}
+	if len(ordered) == 0 {
+		return nil
+	}
+	sort.Strings(ordered)
+	return &roomLifecycleWorkError{outstanding: ordered}
+}
+
+func roomLifecycleWorkLabel(participantID, phase string) string {
+	if participantID == "" {
+		return phase
+	}
+	return fmt.Sprintf("participant %q phase %s", participantID, phase)
+}
 
 func roomParticipantFailure(participantID string, err error, secrets []string) error {
 	if err == nil {

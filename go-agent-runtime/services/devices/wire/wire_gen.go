@@ -7,6 +7,7 @@
 package wire
 
 import (
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	devices2 "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/composite"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/file"
@@ -20,16 +21,16 @@ import (
 
 // NewService creates the process-scoped device service. It is inert until a
 // caller invokes Open with a normalized request.
-func NewService(registry devices.DeviceRegistry) devices2.Service {
-	factory := newFactory(registry)
+func NewService(registry devices.DeviceRegistry, audioService audioio.Service) devices2.Service {
+	factory := newFactory(registry, audioService)
 	return factory
 }
 
 // NewFileService assembles the finite file-backed device role. The returned
 // service is stateless; each Open call takes ownership of its caller-opened
 // source and sink only after successful admission.
-func NewFileService() devices2.Service {
-	factory := newFileFactory()
+func NewFileService(audioService audioio.Service) devices2.Service {
+	factory := newFileFactory(audioService)
 	return factory
 }
 
@@ -42,8 +43,10 @@ func NewProbeService(registry devices.DeviceRegistry, sessionFactory devices2.Pr
 	return deviceprobe.New(registry, sessionFactory)
 }
 
-func newFactory(registry devices.DeviceRegistry) *composite.Factory {
-	return composite.NewFactory(media.NewFactory(registry, mixer.DefaultFormat()), file.NewFactory())
+func newFactory(registry devices.DeviceRegistry, audioService audioio.Service) *composite.Factory {
+	return composite.NewFactory(media.NewFactory(registry, mixer.DefaultFormat()), file.NewFactory(audioService))
 }
 
-func newFileFactory() *file.Factory { return file.NewFactory() }
+func newFileFactory(audioService audioio.Service) *file.Factory {
+	return file.NewFactory(audioService)
+}

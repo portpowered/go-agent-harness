@@ -14,6 +14,8 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	runtimeBrowser "github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation"
 )
 
 func TestRunSessionWithRecordingDirectoryConcurrentClaimHasOneProviderConnection(t *testing.T) {
@@ -32,7 +34,7 @@ func TestRunSessionWithRecordingDirectoryConcurrentClaimHasOneProviderConnection
 		go func() {
 			defer wait.Done()
 			<-start
-			results <- RunSessionWithRecordingDirectory(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
+			results <- RunSessionWithRecordingDirectory(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 				Provider:          config.ProviderOpenAI,
 				Model:             "gpt-realtime",
 				APIKey:            "test-key",
@@ -95,7 +97,7 @@ func TestSessionRecordingDirectoryClaimRejectsSymlinkAndNonDirectoryBeforeConnec
 			t.Skipf("symlink unavailable: %v", err)
 		}
 		inferencer := &countingSessionRecordingInferencer{}
-		err := RunSessionWithRecordingDirectory(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
+		err := RunSessionWithRecordingDirectory(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 			Provider:          config.ProviderOpenAI,
 			Model:             "gpt-realtime",
 			APIKey:            "test-key",
@@ -120,7 +122,7 @@ func TestSessionRecordingDirectoryClaimRejectsSymlinkAndNonDirectoryBeforeConnec
 			t.Fatal(err)
 		}
 		inferencer := &countingSessionRecordingInferencer{}
-		err := RunSessionWithRecordingDirectory(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
+		err := RunSessionWithRecordingDirectory(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 			Provider:          config.ProviderOpenAI,
 			Model:             "gpt-realtime",
 			APIKey:            "test-key",
@@ -214,4 +216,63 @@ func (i *blockingDirectoryClaimInferencer) ConnectSession(ctx context.Context) (
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
+}
+
+func TestSessionDirectoryRecordingWrapsBrowserFinalizationFailures(t *testing.T) {
+	for _, testCase := range []struct {
+		name string
+		make func(string, error) *sessionDirectoryRecording
+	}{
+		{name: "construction", make: func(destination string, cause error) *sessionDirectoryRecording {
+			return newSessionDirectoryRecording(destination, sessionRuntimePlan{provider: sessionProviderOpenAI}, SessionRunOptions{
+				LoadedConfig: &config.Config{Browser: config.BrowserConfig{Recording: config.BrowserRecordingConfig{Enabled: true}}},
+				BrowserEventWatch: func(context.Context) <-chan runtimeBrowser.BrowserEvent {
+					return make(chan runtimeBrowser.BrowserEvent)
+				},
+				BrowserConversation: sessionRecordingBrowserServiceStub{error: cause},
+			})
+		}},
+		{name: "close and snapshot", make: func(destination string, cause error) *sessionDirectoryRecording {
+			recording := newSessionDirectoryRecording(destination, sessionRuntimePlan{provider: sessionProviderOpenAI}, SessionRunOptions{ModelCatalog: testModelCatalog(), Model: "gpt-realtime"})
+			recording.browser = sessionRecordingBrowserRecorderStub{closeErr: cause, snapshotErr: cause}
+			return recording
+		}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			destination := filepath.Join(t.TempDir(), "capture")
+			cause := errors.New("browser recorder failed")
+			recording := testCase.make(destination, cause)
+			writeSyntheticRecordingTranscript(t, recording, "client\n", "agent\n")
+			err := recording.Finalize()
+			if !errors.Is(err, cause) || !errors.Is(err, transcript.ErrRecordingWrite) {
+				t.Fatalf("finalize error = %v, want browser cause and recording-write identity", err)
+			}
+			var recordingErr *transcript.RecordingError
+			if !errors.As(err, &recordingErr) || recordingErr.Path != destination || recordingErr.Operation != "finalize browser recording" {
+				t.Fatalf("finalize error = %v, want typed recording error with destination context", err)
+			}
+		})
+	}
+}
+
+type sessionRecordingBrowserServiceStub struct {
+	runtimeBrowser.Service
+	error error
+}
+
+func (s sessionRecordingBrowserServiceStub) NewRecorder(runtimeBrowser.RecordingRequest) (runtimeBrowser.Recorder, error) {
+	return nil, s.error
+}
+
+type sessionRecordingBrowserRecorderStub struct {
+	closeErr    error
+	snapshotErr error
+}
+
+func (sessionRecordingBrowserRecorderStub) Start(context.Context) {}
+
+func (r sessionRecordingBrowserRecorderStub) Close() error { return r.closeErr }
+
+func (r sessionRecordingBrowserRecorderStub) Snapshot() (runtimeBrowser.RecordingSnapshot, error) {
+	return runtimeBrowser.RecordingSnapshot{}, r.snapshotErr
 }

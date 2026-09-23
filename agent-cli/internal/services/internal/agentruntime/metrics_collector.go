@@ -10,6 +10,7 @@ import (
 	serviceprobes "github.com/portpowered/go-agent-harness/agent-cli/internal/services/probes"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -18,13 +19,14 @@ import (
 // NewMetricsCollector returns the production metrics reconciliation service.
 // It uses the same RunSession path as live sessions, with only a replay
 // capture and in-memory metrics sink supplied by the caller.
-func NewMetricsCollector(clockSource clock.Source, factory SessionRuntimeFactory) serviceprobes.MetricsCollector {
-	return metricsCollector{clock: clockSource, factory: factory}
+func NewMetricsCollector(audioService audioio.Service, clockSource clock.Source, factory SessionRuntimeFactory) serviceprobes.MetricsCollector {
+	return metricsCollector{audioService: audioService, clock: clockSource, factory: factory}
 }
 
 type metricsCollector struct {
-	clock   clock.Source
-	factory SessionRuntimeFactory
+	audioService audioio.Service
+	clock        clock.Source
+	factory      SessionRuntimeFactory
 }
 
 func (c metricsCollector) Collect(ctx context.Context, fixture, prompt string) ([]serviceprobes.MetricsSeries, error) {
@@ -39,6 +41,7 @@ func (c metricsCollector) Collect(ctx context.Context, fixture, prompt string) (
 		return nil, fmt.Errorf("construct metrics sink: %w", err)
 	}
 	if err := RunSession(ctx, io.Discard, SessionRunOptions{
+		AudioService:    c.audioService,
 		ReplayPath:      fixture,
 		Prompt:          prompt,
 		Clock:           c.clock,

@@ -157,7 +157,7 @@ func TestSessionDynamicToolPublisher_ReplacesDefinitionsInOneRunningSession(t *t
 	runErr := make(chan error, 1)
 	go func() {
 		runErr <- runAgentLoopSession(ctx, io.Discard, inferencer, sessionLoopOptions{
-			WaitForClose:             true,
+			WaitForClose: true, audioService: newTestAudioIOService(),
 			ToolExecutor:             &messages.DefaultToolExecutor{},
 			ToolDefinitions:          append(append([]messages.ToolDefinition(nil), base...), pageA...),
 			ToolDefinitionBase:       base,
@@ -263,7 +263,7 @@ func TestSessionDynamicToolPublisher_CoalescesSelectionCatalogBurst(t *testing.T
 	runErr := make(chan error, 1)
 	go func() {
 		runErr <- runAgentLoopSession(ctx, io.Discard, inferencer, sessionLoopOptions{
-			WaitForClose:             true,
+			WaitForClose: true, audioService: newTestAudioIOService(),
 			ToolExecutor:             &messages.DefaultToolExecutor{},
 			ToolDefinitions:          append(append([]messages.ToolDefinition(nil), base...), pageA...),
 			ToolDefinitionBase:       base,
@@ -394,7 +394,7 @@ func TestSessionDynamicToolPublisher_HermeticCatalogSwitchExecutesCurrentSurface
 	runErr := make(chan error, 1)
 	go func() {
 		runErr <- runAgentLoopSession(ctx, io.Discard, inferencer, sessionLoopOptions{
-			WaitForClose:             true,
+			WaitForClose: true, audioService: newTestAudioIOService(),
 			ToolExecutor:             toolSet.Executor(),
 			ToolDefinitions:          initialDefinitions,
 			ToolDefinitionBase:       base,

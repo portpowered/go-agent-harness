@@ -11,6 +11,7 @@ import (
 	"time"
 
 	agentruntime "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime"
+	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
@@ -87,7 +88,7 @@ func TestWireCapturePromptReachesConversationItemCreate(t *testing.T) {
 	const prompt = "Say hello in one short sentence."
 	recorder := gwtesting.NewRecordingWebSocketDialer(&scriptedRealtimeDialer{}, "openai", "gpt-realtime-2.1-mini")
 
-	opts := agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
+	opts := agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
 		Provider:        "openai",
 		Model:           "gpt-realtime-2.1-mini",
 		APIKey:          "test-key",
@@ -146,7 +147,7 @@ func TestWireCapturePromptReachesWireWithDurationBound(t *testing.T) {
 	const prompt = "Say hello in one short sentence."
 	recorder := gwtesting.NewRecordingWebSocketDialer(&scriptedRealtimeDialer{}, "openai", "gpt-realtime-2.1-mini")
 
-	opts := agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
+	opts := agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
 		Provider:        "openai",
 		Model:           "gpt-realtime-2.1-mini",
 		APIKey:          "test-key",

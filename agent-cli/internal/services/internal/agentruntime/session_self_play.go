@@ -14,6 +14,7 @@ import (
 	serviceSelfPlay "github.com/portpowered/go-agent-harness/agent-cli/internal/services/selfplay"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -85,6 +86,7 @@ type SelfPlayRunOptions struct {
 
 	// runtimeFactory is installed by the service constructor. It is private so
 	// command callers cannot bypass the process-scoped Wire composition.
+	audioService   audioio.Service
 	runtimeFactory sessionRuntimeFactory
 	modelCatalog   runtimeproviders.ModelCatalog
 }
@@ -254,6 +256,7 @@ func validateSelfPlayOutputTarget(path string) error {
 
 func selfPlaySessionRunOptions(opts SelfPlayRunOptions) SessionRunOptions {
 	return SessionRunOptions{
+		AudioService:    opts.audioService,
 		Provider:        opts.Provider,
 		Model:           opts.Model,
 		ModelProvided:   true,
@@ -456,7 +459,7 @@ func (b *selfPlayPCMBridge) pumpWithObserver(ctx context.Context, loopReady <-ch
 		if count > 0 {
 			pcm := append([]byte(nil), buffer[:count]...)
 			if sendErr := loop.SendAudioInput(ctx, pcm); sendErr != nil {
-				if !isSessionCancellation(sendErr) {
+				if !sessionErrorIsCancellation(sendErr) {
 					fail(fmt.Errorf("%s PCM bridge send: %w", name, sendErr))
 				}
 				return
@@ -469,7 +472,7 @@ func (b *selfPlayPCMBridge) pumpWithObserver(ctx context.Context, loopReady <-ch
 			b.mu.Lock()
 			closed := b.closed
 			b.mu.Unlock()
-			if !closed && !isSessionCancellation(err) {
+			if !closed && !sessionErrorIsCancellation(err) {
 				fail(fmt.Errorf("%s PCM bridge read: %w", name, err))
 			}
 			return
@@ -491,7 +494,14 @@ func runSelfPlayConversation(ctx context.Context, opts SelfPlayRunOptions, custo
 	if opts.clock == nil {
 		opts.clock = platformclock.Real{}
 	}
-	timer, err := newSessionTimer(opts.clock, opts.MaxDuration)
+	if opts.audioService == nil {
+		return SelfPlayResult{StopReason: SelfPlayStopFailure}, errors.New("audio service is required for self-play timing")
+	}
+	livenessClock, err := opts.audioService.NewClock(opts.clock)
+	if err != nil {
+		return SelfPlayResult{StopReason: SelfPlayStopFailure}, fmt.Errorf("self-play liveness clock: %w", err)
+	}
+	timer, err := opts.audioService.NewTimer(opts.clock, opts.MaxDuration)
 	if err != nil {
 		return SelfPlayResult{StopReason: SelfPlayStopFailure}, fmt.Errorf("self-play clock: %w", err)
 	}
@@ -533,36 +543,8 @@ func runSelfPlayConversation(ctx context.Context, opts SelfPlayRunOptions, custo
 	}()
 
 	results := make(chan selfPlaySideResult, 2)
-	runSide := func(name string, side int, inferencer messages.SessionInferencer, prompt string, output *selfPlayPCMBridge, ready chan<- *agentloop.AgentLoop) {
-		sideEvidence := evidence.side(side)
-		sideEvidence.diagnosticErr = func(err error) {
-			wrapped := fmt.Errorf("%s diagnostic evidence: %w", name, err)
-			evidence.fail(wrapped)
-			stop.fail(wrapped)
-		}
-		observer := newSessionProgressObserver(sideEvidence, nil, opts.Provider, opts.Model)
-		observer.runtime = sideEvidence.runtimeRecord
-		observer.turnAdmission = func(messages.StreamMessage) bool {
-			return stop.recordTurn(side, opts.MaxTurns)
-		}
-		observer.streamObserver = selfPlayStreamObserver(ctx, name, sideEvidence, evidence, stop, output)
-
-		err := runAgentLoopSession(ctx, io.Discard, inferencer, sessionLoopOptions{
-			Prompt:        prompt,
-			WaitForClose:  true,
-			Done:          stop.done,
-			DoneErr:       stop.doneErr,
-			observer:      observer,
-			runtime:       sideEvidence.runtimeRecord,
-			loopReady:     ready,
-			clockSource:   opts.clock,
-			livenessClock: sessionLivenessClockFromSource(opts.clock),
-		})
-		results <- selfPlaySideResult{name: name, err: err}
-	}
-
-	go runSide("customer", 0, customer, SelfPlayOpeningSeed, customerToAssistant, customerReady)
-	go runSide("assistant", 1, assistant, "", assistantToCustomer, assistantReady)
+	go runSelfPlaySide(ctx, "customer", 0, customer, SelfPlayOpeningSeed, customerToAssistant, customerReady, opts, livenessClock, evidence, stop, results)
+	go runSelfPlaySide(ctx, "assistant", 1, assistant, "", assistantToCustomer, assistantReady, opts, livenessClock, evidence, stop, results)
 
 	timerCh := timer.C()
 	var doneCh <-chan struct{} = stop.done
@@ -580,11 +562,7 @@ func runSelfPlayConversation(ctx context.Context, opts SelfPlayRunOptions, custo
 			stop.fail(ctx.Err())
 		case result := <-results:
 			remaining--
-			if result.err != nil && !stop.stopped() {
-				stop.fail(fmt.Errorf("%s session: %w", result.name, result.err))
-			} else if result.err == nil && !stop.stopped() {
-				stop.fail(fmt.Errorf("%s session ended before a self-play bound", result.name))
-			}
+			recordSelfPlaySideResult(result, stop)
 		}
 	}
 
@@ -619,7 +597,7 @@ func selfPlayStreamObserver(ctx context.Context, name string, sideEvidence *self
 			stop.fail(fmt.Errorf("%s emitted AUDIO.DELTA with unexpected value %T", name, msg.Value))
 			return
 		}
-		if err := output.write(value.Content); err != nil && !isSessionCancellation(err) && !stop.stopped() {
+		if err := output.write(value.Content); err != nil && !sessionErrorIsCancellation(err) && !stop.stopped() {
 			stop.fail(fmt.Errorf("%s PCM bridge write: %w", name, err))
 		}
 		if err := sideEvidence.observeAudio(ctx, value.Content); err != nil {

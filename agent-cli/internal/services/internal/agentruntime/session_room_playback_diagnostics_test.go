@@ -8,35 +8,16 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
+	runtimedeviceswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
 
-// TestRunRoom_HumanParticipantPlaybackOverflowNamesParticipant is the
-// mandatory regression test for the playback-overflow diagnostic being
-// structurally incapable of firing in a room run: a room human participant
-// owns a raw *audio.DeviceSink directly (see openRoomHumanDevices in
-// session_room_orchestration.go) and never builds a SessionRunOptions or
-// calls planSessionRuntime, so sessionPlaybackDiagnosticObserver -- and the
-// SessionRunOptions.Diagnostics wiring it depends on -- never applied to a
-// room's human speaker device at all, regardless of what the CLI, self-play,
-// or any other caller did with SessionRunOptions.Diagnostics.
-//
-// This test FAILS against unmodified main: nothing on that tree ever reads
-// the customer's runtime.output.PlaybackStats(), so opts.OnDiagnostic never
-// observes a session_playback_overflow event no matter how badly the queue
-// overflows. The fix adds emitRoomParticipantPlaybackOverflowDiagnostic,
-// called from roomCoordinator.finishParticipant right after the human
-// output device is closed, using the same combined per-participant sink
-// (runtime.diagnosticSink, set once in runRoomParticipant) that provider
-// participants already use for their own session diagnostics.
-//
-// The customer's speaker device is deliberately paired with a loopback
-// partner that is never opened, so nothing ever drains it; the room mixer
-// emits a mixed frame on every cadence tick regardless of whether any
-// participant has spoken (see PCM16Mixer.mixFrameWithSources), so ordinary
-// room output alone -- no audio from the agent required -- is enough to
-// overflow the bounded queue deterministically within the sleep below.
-func TestRunRoom_HumanParticipantPlaybackOverflowNamesParticipant(t *testing.T) {
+// TestRunRoom_HumanParticipantPlaybackUsesServiceBackpressure verifies that
+// room output flows through the bounded device service pump. A virtual speaker
+// with no reader must not generate a false overflow diagnostic merely because
+// the room mixer continues producing cadence frames while the room runs.
+func TestRunRoom_HumanParticipantPlaybackUsesServiceBackpressure(t *testing.T) {
 	registry, err := devicegw.NewVirtualRegistry(devicegw.VirtualBackendConfig{
 		Devices: []devicegw.VirtualDeviceConfig{
 			// The customer's microphone. Its loopback partner is never opened,
@@ -58,6 +39,7 @@ func TestRunRoom_HumanParticipantPlaybackOverflowNamesParticipant(t *testing.T) 
 
 	inferencer := &roomTestInferencer{events: []messages.StreamMessage{roomTestSessionOpen("agent")}}
 	opts := RoomRunOptions{
+		AudioService: audioiowire.NewService(),
 		Manifest: room.Manifest{
 			SchemaVersion: room.SchemaVersion,
 			Room:          room.Room{Interactive: true},
@@ -87,7 +69,7 @@ func TestRunRoom_HumanParticipantPlaybackOverflowNamesParticipant(t *testing.T) 
 			}
 			return "", false
 		},
-		DeviceRegistry: registry,
+		DeviceService: runtimedeviceswire.NewService(registry, audioiowire.NewService()),
 		SessionInferencers: map[string]messages.SessionInferencer{
 			"agent": inferencer,
 		},
@@ -113,35 +95,11 @@ func TestRunRoom_HumanParticipantPlaybackOverflowNamesParticipant(t *testing.T) 
 		resultCh <- roomTestRunOutcome{result: result, err: runErr}
 	}()
 
-	// Let the mixer's real-time cadence (20ms ticks; see
-	// room.DefaultPCM16FrameDuration) accumulate comfortably more audio than
-	// the customer's speaker queue can hold (its capacity is 250ms of 16kHz
-	// mono audio -- see audio.DefaultPlaybackLatencyTarget) before teardown
-	// takes the final snapshot the diagnostic is built from.
+	// Run past the device queue's nominal latency target. The service pump
+	// applies bounded backpressure to the room producer instead of overrunning
+	// the device queue.
 	time.Sleep(1500 * time.Millisecond)
 	cancel()
-
-	var event diagnosticEvent
-	select {
-	case event = <-diagnostics:
-	case <-time.After(5 * time.Second):
-		t.Fatal("no session_playback_overflow diagnostic observed for the customer participant")
-	}
-
-	if event.participantID != "customer" {
-		t.Fatalf("playback overflow diagnostic delivered for participant %q, want customer", event.participantID)
-	}
-	if got := event.record.Fields[SessionDiagnosticFieldPlaybackParticipantID]; got != "customer" {
-		t.Fatalf("playback overflow diagnostic fields %+v missing participant_id=customer, got %q", event.record.Fields, got)
-	}
-	dropped := event.record.Fields[SessionDiagnosticFieldPlaybackDroppedSamples]
-	if dropped == "" || dropped == "0" {
-		t.Fatalf("playback overflow diagnostic dropped_samples = %q, want a positive count", dropped)
-	}
-	if got := event.record.Fields[SessionDiagnosticFieldPlaybackDeviceID]; got == "" {
-		t.Fatalf("playback overflow diagnostic missing device_id: %+v", event.record.Fields)
-	}
-
 	select {
 	case outcome := <-resultCh:
 		if outcome.err != nil {
@@ -152,5 +110,10 @@ func TestRunRoom_HumanParticipantPlaybackOverflowNamesParticipant(t *testing.T) 
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("room did not terminate after cancellation")
+	}
+	select {
+	case event := <-diagnostics:
+		t.Fatalf("bounded playback emitted unexpected overflow diagnostic for %s: %+v", event.participantID, event.record)
+	default:
 	}
 }

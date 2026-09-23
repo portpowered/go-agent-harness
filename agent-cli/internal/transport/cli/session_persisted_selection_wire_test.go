@@ -16,6 +16,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
 )
 
@@ -155,7 +156,7 @@ func TestSessionKeepsBrowserUsableWhenPersistedSelectionIsStale(t *testing.T) {
 	runErr := make(chan error, 1)
 	go func() {
 		runErr <- servicetest.RunSessionWithInstructions(sessionCtx, io.Discard, servicetest.SessionRunOptions{
-			Provider:               config.ProviderOpenAI,
+			Provider: config.ProviderOpenAI, AudioService: audioiowire.NewService(),
 			Model:                  "gpt-realtime",
 			ModelCatalog:           providerswire.NewModelCatalog(),
 			APIKey:                 "unused",

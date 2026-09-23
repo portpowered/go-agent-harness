@@ -9,6 +9,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/input"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/mediagate"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/observations"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/sessionwrap"
+	sessiontrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"sync"
@@ -42,6 +44,8 @@ type Dependencies struct {
 	EventCapacity     int
 	Clock             session.LiveClock
 	Scheduler         platformclock.Scheduler
+	RuntimeObserver   sessiontrace.RuntimeObserver
+	Tick              func() uint64
 }
 type Service struct {
 	inferencerFactory session.LiveInferencerFactory
@@ -51,6 +55,8 @@ type Service struct {
 	eventCapacity     int
 	clock             session.LiveClock
 	scheduler         platformclock.Scheduler
+	runtimeObserver   sessiontrace.RuntimeObserver
+	tick              func() uint64
 }
 
 func New(deps Dependencies) *Service {
@@ -66,6 +72,8 @@ func New(deps Dependencies) *Service {
 		eventCapacity:     capacity,
 		clock:             deps.Clock,
 		scheduler:         deps.Scheduler,
+		runtimeObserver:   deps.RuntimeObserver,
+		tick:              deps.Tick,
 	}
 }
 func (s *Service) OpenLive(ctx context.Context, request session.LiveRequest) (session.LiveHandle, error) {
@@ -80,6 +88,7 @@ func (s *Service) OpenLive(ctx context.Context, request session.LiveRequest) (se
 	}
 	request = input.CloneLiveRequest(request)
 	h := newHandle(request, s.inferencerFactory, s.capabilityFactory, s.toolExecutor, s.toolDefinitions, s.eventCapacity, s.clock, s.scheduler)
+	h.runtimeTrace = observations.NewRuntimeTrace(s.runtimeObserver, s.clock, s.tick)
 	h.parentCtx = ctx
 	return h, nil
 }
@@ -93,8 +102,12 @@ type handle struct {
 	capabilityClose                                  func() error
 	capabilityRefresh                                func(context.Context) ([]messages.ToolDefinition, error)
 	capabilityWatch                                  func(context.Context) <-chan session.LiveCapabilityEvent
+	captureInterruptionTool                          string
+	captureInterruptionEvent                         chan session.LiveCapabilityEvent
+	captureInterruptionOnce                          sync.Once
 	captureFlush                                     func() error
 	observer                                         *observations.Observer
+	runtimeTrace                                     *observations.RuntimeTrace
 	capabilityMu                                     sync.Mutex
 	eventCapacity                                    int
 	clock                                            session.LiveClock
@@ -188,6 +201,13 @@ type handle struct {
 	continuationErr                                  error
 }
 
+func (h *handle) observeRuntimeMessage(msg messages.StreamMessage) {
+	if h.runtimeTrace == nil {
+		return
+	}
+	h.runtimeTrace.Message(msg, h.finiteResponseWasInterrupted(msg))
+}
+
 func (h *handle) mediaFailure(err error) {
 	if err == nil {
 		return
@@ -253,7 +273,7 @@ func (h *handle) recordEvent(event session.LiveEvent)     { h.observationPort().
 func newHandle(request session.LiveRequest, factory session.LiveInferencerFactory, capabilityFactory session.LiveCapabilityFactory, executor messages.ToolExecutor, definitions []messages.ToolDefinition, eventCapacity int, clock session.LiveClock, scheduler platformclock.Scheduler) *handle {
 	h := &handle{
 		request:                  request,
-		factory:                  terminalDrainFactory(factory),
+		factory:                  sessionwrap.Factory(factory, eventCapacity),
 		capabilityFactory:        capabilityFactory,
 		toolExecutor:             executor,
 		toolDefinitions:          input.CloneToolDefinitions(definitions),
@@ -333,68 +353,4 @@ func (h *handle) configureScheduledAudio(scheduled, responseBase int) {
 		h.scheduledResponseBase = responseBase
 	}
 	h.mu.Unlock()
-}
-func terminalDrainFactory(factory session.LiveInferencerFactory) session.LiveInferencerFactory {
-	return func(ctx context.Context, request session.LiveRequest) (messages.SessionInferencer, error) {
-		inner, err := factory(ctx, request)
-		if err != nil || inner == nil {
-			return inner, err
-		}
-		return terminalDrainInferencer{inner: inner, continuous: request.OutputAudioContinuous}, nil
-	}
-}
-
-type terminalDrainInferencer struct {
-	inner      messages.SessionInferencer
-	continuous bool
-}
-
-func (i terminalDrainInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
-	s, err := i.inner.ConnectSession(ctx)
-	if err != nil || s == nil {
-		return s, err
-	}
-	if provider, ok := s.(sharedaudio.MediaSession); ok {
-		captureMediaEndpoints(s, provider, i.continuous)
-	}
-	source := s.Receive()
-	capacity := defaultEventCapacity
-	if source != nil && source.Cap() > 0 {
-		capacity = source.Cap()
-	}
-	d := &terminalDrainSession{inner: s, receive: messages.NewTypedBuffer[messages.StreamMessage](capacity), done: make(chan struct{}), stop: make(chan struct{})}
-	go d.forward(context.WithoutCancel(ctx), source, s.Done())
-	return d, nil
-}
-func (i terminalDrainInferencer) FlushCapture() error {
-	if flusher, ok := i.inner.(interface{ FlushCapture() error }); ok {
-		return flusher.FlushCapture()
-	}
-	return nil
-}
-func (s *terminalDrainSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
-	if requester, ok := s.inner.(messages.SessionResponseRequester); ok {
-		return requester.RequestResponse(ctx)
-	}
-	return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}
-}
-func (s *terminalDrainSession) SupportsResponseRequests() bool {
-	if capability, ok := s.inner.(messages.SessionResponseCapability); ok {
-		return capability.SupportsResponseRequests()
-	}
-	_, ok := s.inner.(messages.SessionResponseRequester)
-	return ok
-}
-func (s *terminalDrainSession) FlushOutbound(ctx context.Context) error {
-	if flusher, ok := s.inner.(messages.SessionOutboundFlusher); ok {
-		return flusher.FlushOutbound(ctx)
-	}
-	return nil
-}
-func (s *terminalDrainSession) TerminalError() error {
-	provider, ok := s.inner.(interface{ TerminalError() error })
-	if !ok {
-		return nil
-	}
-	return provider.TerminalError()
 }

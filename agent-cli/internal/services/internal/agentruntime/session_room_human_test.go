@@ -14,6 +14,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimedeviceswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
@@ -24,7 +25,6 @@ func TestRunRoom_HumanParticipantRoutesDevicesAndReportsReadiness(t *testing.T) 
 	registry := newRoomHumanTestRegistry(t)
 	inferencer := &roomTestInferencer{events: []messages.StreamMessage{roomTestSessionOpen("agent")}}
 	opts := newRoomHumanRunOptions(registry, inferencer)
-
 	ready := make(chan RoomParticipantReady, 2)
 	inputToAgent := make(chan roomAudioFrame, 512)
 	fanned := make(chan [2]string, 8)
@@ -36,7 +36,6 @@ func TestRunRoom_HumanParticipantRoutesDevicesAndReportsReadiness(t *testing.T) 
 	opts.onParticipantAudioFanned = func(sourceID, targetID string, _ []byte) {
 		fanned <- [2]string{sourceID, targetID}
 	}
-
 	resultCh := make(chan roomTestRunOutcome, 1)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -498,7 +497,7 @@ func TestRunRoom_HumanProviderFailureFailsOnlyParticipant(t *testing.T) {
 
 func newRoomHumanRunOptions(registry *roomHumanTestRegistry, inferencer *roomTestInferencer) RoomRunOptions {
 	return RoomRunOptions{
-		Manifest: room.Manifest{
+		AudioService: newTestAudioIOService(), Manifest: room.Manifest{
 			SchemaVersion: room.SchemaVersion,
 			Room:          room.Room{Interactive: true},
 			Participants: []room.Participant{
@@ -527,7 +526,7 @@ func newRoomHumanRunOptions(registry *roomHumanTestRegistry, inferencer *roomTes
 			}
 			return "", false
 		},
-		DeviceRegistry: registry,
+		DeviceService: runtimedeviceswire.NewService(registry, newTestAudioIOService()),
 		SessionInferencers: map[string]messages.SessionInferencer{
 			"agent": inferencer,
 		},

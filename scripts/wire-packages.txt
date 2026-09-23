@@ -8,6 +8,7 @@ go-agent-runtime/services/sessiondiagnostics/wire
 go-agent-runtime/services/sessiontrace/wire
 go-agent-runtime/services/rooms/wire
 go-agent-runtime/services/roomevidence/wire
+go-agent-runtime/services/roomreplay/wire
 go-agent-runtime/services/tools/wire
 go-agent-runtime/services/replay/wire
 go-agent-runtime/services/recording/wire

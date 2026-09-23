@@ -12,9 +12,161 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	sessiontrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
+
+// RuntimeTrace emits bounded lifecycle observations at the live service boundary.
+type RuntimeTrace struct {
+	observer      sessiontrace.RuntimeObserver
+	clock         session.LiveClock
+	tick          func() uint64
+	sequence      atomic.Uint64
+	inputMu       sync.Mutex
+	input         []byte
+	inputOverflow bool
+	commits       int
+	turns         atomic.Int64
+	accounting    *streamAccounting
+}
+
+// NewRuntimeTrace constructs an inert observer for one live invocation.
+func NewRuntimeTrace(observer sessiontrace.RuntimeObserver, clock session.LiveClock, tick func() uint64) *RuntimeTrace {
+	if observer == nil {
+		return nil
+	}
+	return &RuntimeTrace{observer: observer, clock: clock, tick: tick, accounting: newStreamAccounting()}
+}
+
+func (r *RuntimeTrace) observe(kind sessiontrace.SessionRuntimeObservationKind, payload []byte, turns, commit int, response messages.StreamMessage, clean bool, runErr error) {
+	r.observeFinal(kind, payload, turns, commit, response, clean, runErr, nil)
+}
+
+func (r *RuntimeTrace) observeFinal(kind sessiontrace.SessionRuntimeObservationKind, payload []byte, turns, commit int, response messages.StreamMessage, clean bool, runErr error, finalAccounting *sessiontrace.SessionFinalAccounting) {
+	if r == nil || r.observer == nil {
+		return
+	}
+	tick := r.sequence.Add(1)
+	if r.tick != nil {
+		tick = r.tick()
+	}
+	r.observer.ObserveSessionRuntime(sessiontrace.SessionRuntimeObservation{
+		Kind: kind, Tick: tick, Timestamp: r.now(), Payload: append([]byte(nil), payload...),
+		TurnsCompleted: turns, InputCommit: commit, ResponseID: response.ResponseID,
+		ResponsePurpose: response.ResponsePurpose, StreamID: response.ActorStreamID,
+		LoopPassID: response.LoopPassID, Clean: clean, Error: runtimeTraceError(runErr), FinalAccounting: finalAccounting,
+	})
+}
+
+// Message accounts each normalized stream observation before publishing its
+// related trace events. Usage is accumulated only for completed responses
+// that emitted output, matching the live stream boundary rather than a
+// rendered transcript.
+func (r *RuntimeTrace) Message(msg messages.StreamMessage, interrupted bool) {
+	if r == nil {
+		return
+	}
+	r.accounting.observeMessage(msg)
+	r.AudioOutput(msg)
+	r.TurnCompleted(msg, interrupted)
+	if msg.Type == messages.StreamTypeInputItemAdded {
+		r.InputCommit(true)
+	}
+}
+
+func (r *RuntimeTrace) now() time.Time {
+	if r.clock != nil {
+		return r.clock()
+	}
+	return time.Time{}
+}
+
+// Error returns the first accounting failure retained during observation.
+func (r *RuntimeTrace) Error() error {
+	if r == nil {
+		return nil
+	}
+	return r.accounting.errorValue()
+}
+
+// AudioOutput copies each normalized response-audio delta into the observer.
+func (r *RuntimeTrace) AudioOutput(msg messages.StreamMessage) {
+	value, ok := msg.Value.(*messages.AudioDeltaValue)
+	if ok && value != nil {
+		r.observe(sessiontrace.SessionRuntimeObservationAudioOutput, value.Content, 0, 0, msg, false, nil)
+	}
+}
+
+// CapturedAudio records the accepted input frame and retains a bounded commit payload.
+func (r *RuntimeTrace) CapturedAudio(frame audio.PCMFrame) {
+	if r == nil {
+		return
+	}
+	payload := codec.EncodePCM16(frame.Samples)
+	r.accounting.inputAudio(len(payload))
+	r.inputMu.Lock()
+	if !r.inputOverflow && len(payload) <= codec.MaxPayloadBytes-len(r.input) {
+		r.input = append(r.input, payload...)
+	} else {
+		r.inputOverflow = true
+	}
+	r.inputMu.Unlock()
+	r.observe(sessiontrace.SessionRuntimeObservationAudioInput, payload, 0, 0, messages.StreamMessage{ActorStreamID: frame.StreamID}, false, nil)
+}
+
+// InputCommit emits one provider or caller-owned audio commit boundary.
+func (r *RuntimeTrace) InputCommit(providerCreated bool) {
+	if r == nil {
+		return
+	}
+	r.inputMu.Lock()
+	payload := append([]byte(nil), r.input...)
+	r.input = nil
+	if r.inputOverflow {
+		payload = nil
+		r.inputOverflow = false
+	}
+	commit := 0
+	if !providerCreated {
+		r.commits++
+		commit = r.commits
+	}
+	r.inputMu.Unlock()
+	r.observe(sessiontrace.SessionRuntimeObservationInputCommit, payload, 0, commit, messages.StreamMessage{}, true, nil)
+}
+
+// ResponseCreate records a response-request control accepted by the provider.
+func (r *RuntimeTrace) ResponseCreate(msg messages.StreamMessage) {
+	r.observe(sessiontrace.SessionRuntimeObservationResponseCreate, nil, 0, 0, msg, true, nil)
+}
+
+// TurnCompleted records assistant completion while excluding tool responses.
+func (r *RuntimeTrace) TurnCompleted(msg messages.StreamMessage, interrupted bool) {
+	if r == nil || msg.Type != messages.StreamTypeMessageEnd || msg.Role == messages.RoleTool || interrupted {
+		return
+	}
+	turns := int(r.turns.Add(1))
+	r.observe(sessiontrace.SessionRuntimeObservationTurnCompleted, nil, turns, 0, msg, true, nil)
+}
+
+// Terminal emits the bounded service result after its media workers join.
+func (r *RuntimeTrace) Terminal(turns int, err error) {
+	if r == nil {
+		return
+	}
+	if turns == 0 {
+		turns = int(r.turns.Load())
+	}
+	r.observeFinal(sessiontrace.SessionRuntimeObservationTerminal, nil, turns, 0, messages.StreamMessage{}, err == nil, err, r.accounting.snapshot())
+}
+
+func runtimeTraceError(err error) string {
+	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return ""
+	}
+	return err.Error()
+}
 
 // Observer is invocation-owned. Recorder admission must remain nonblocking;
 // failures are retained for the lifecycle join without interrupting audio.

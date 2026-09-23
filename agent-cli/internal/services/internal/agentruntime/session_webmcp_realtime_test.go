@@ -46,7 +46,7 @@ func TestOpenAIRealtimeWebMCPResultsCorrelateAndContinueOnce(t *testing.T) {
 	runErr := make(chan error, 1)
 	go func() {
 		runErr <- runAgentLoopSession(ctx, io.Discard, inferencer, sessionLoopOptions{
-			WaitForClose:    true,
+			audioService: newTestAudioIOService(), WaitForClose: true,
 			ToolExecutor:    toolSet.Executor(),
 			ToolDefinitions: toolSet.Definitions(),
 		})
@@ -240,6 +240,7 @@ func TestWebMCPAmbiguitySessionForwardsOneResultAndAsksOneQuestion(t *testing.T)
 	})
 
 	err := runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
+		audioService:    newTestAudioIOService(),
 		MaxDuration:     2 * time.Second,
 		WaitForClose:    true,
 		ToolExecutor:    executor,
@@ -337,6 +338,7 @@ func TestWebMCPAmbiguitySessionRejectsSilentContinuation(t *testing.T) {
 	)
 	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
 	err := runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
+		audioService: newTestAudioIOService(),
 		MaxDuration:  2 * time.Second,
 		WaitForClose: true,
 		ToolExecutor: sessionToolExecutorFunc(func(_ context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
@@ -419,6 +421,7 @@ func TestWebMCPAmbiguitySessionUsesExactChoiceBeforePageWork(t *testing.T) {
 	})
 
 	err := runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
+		audioService:    newTestAudioIOService(),
 		MaxDuration:     2 * time.Second,
 		WaitForClose:    true,
 		ToolExecutor:    executor,
@@ -475,76 +478,70 @@ func (i *webMCPChoiceInferencer) ConnectSession(ctx context.Context) (messages.S
 	i.sessionMu.Lock()
 	i.session = session
 	i.sessionMu.Unlock()
-	go func() {
-		if !session.recv.Write(ctx, messages.StreamMessage{
-			Type:  messages.StreamTypeSessionOpen,
-			Value: messages.NewSessionOpenValue("choice-session", "session"),
-		}) {
-			return
-		}
-		if !session.recv.Write(ctx, toolCallEvents("call_choice_ambiguity", webmcp.GetContextToolName, `{}`)[0]) {
-			return
-		}
-		for _, event := range toolCallEvents("call_choice_ambiguity", webmcp.GetContextToolName, `{}`)[1:] {
-			if !session.recv.Write(ctx, event) {
-				return
-			}
-		}
-		if !session.waitForSent(ctx, messages.StreamTypeResponseCreate) {
-			return
-		}
-
-		questionEvents := []messages.StreamMessage{
-			{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
-			{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue(i.question)},
-			{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue([]byte{4, 5, 6})},
-			{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
-		}
-		for _, event := range questionEvents {
-			if !session.recv.Write(ctx, event) {
-				return
-			}
-		}
-		if i.out != nil && !i.out.waitForOutput(i.question, 5*time.Second) {
-			return
-		}
-		for _, event := range []messages.StreamMessage{
-			{Type: messages.StreamTypeTranscriptStart, Role: messages.RoleUser, Value: messages.NewTranscriptStartValue()},
-			{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleUser, Value: messages.NewTranscriptDeltaValue("Orders")},
-			{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleUser, Value: messages.NewTranscriptEndValue("Orders")},
-		} {
-			if !session.recv.Write(ctx, event) {
-				return
-			}
-		}
-		for _, event := range toolCallEvents("call_choice_select", webmcp.SelectTabToolName, `{"browser_id":"browser-session","target_id":"target-orders"}`) {
-			if !session.recv.Write(ctx, event) {
-				return
-			}
-		}
-		if !session.waitForSent(ctx, messages.StreamTypeResponseCreate) {
-			return
-		}
-		for _, event := range toolCallEvents("call_choice_page", "orders_action", `{"move":"R"}`) {
-			if !session.recv.Write(ctx, event) {
-				return
-			}
-		}
-		if !session.waitForSent(ctx, messages.StreamTypeResponseCreate) {
-			return
-		}
-		for _, event := range []messages.StreamMessage{
-			{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
-			{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("Done on Orders.")},
-			{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
-			{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValue("choice-session", "choice complete")},
-		} {
-			if !session.recv.Write(ctx, event) {
-				return
-			}
-		}
-	}()
+	go i.runSession(ctx, session)
 	return session, nil
+}
+
+func (i *webMCPChoiceInferencer) runSession(ctx context.Context, session *roundTripSession) {
+	if !session.recv.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeSessionOpen,
+		Value: messages.NewSessionOpenValue("choice-session", "session"),
+	}) {
+		return
+	}
+	if !i.sendAmbiguityCall(ctx, session) || !i.askChoiceQuestion(ctx, session) || !i.selectChoicePage(ctx, session) || !i.invokeChoicePage(ctx, session) {
+		return
+	}
+	writeWebMCPChoiceEvents(ctx, session, []messages.StreamMessage{
+		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("Done on Orders.")},
+		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+		{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValue("choice-session", "choice complete")},
+	})
+}
+
+func (i *webMCPChoiceInferencer) sendAmbiguityCall(ctx context.Context, session *roundTripSession) bool {
+	return writeWebMCPChoiceEvents(ctx, session, toolCallEvents("call_choice_ambiguity", webmcp.GetContextToolName, `{}`)) &&
+		session.waitForSent(ctx, messages.StreamTypeResponseCreate)
+}
+
+func (i *webMCPChoiceInferencer) askChoiceQuestion(ctx context.Context, session *roundTripSession) bool {
+	questionEvents := []messages.StreamMessage{
+		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue(i.question)},
+		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue([]byte{4, 5, 6})},
+		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+	}
+	if !writeWebMCPChoiceEvents(ctx, session, questionEvents) {
+		return false
+	}
+	if i.out != nil && !i.out.waitForOutput(i.question, 5*time.Second) {
+		return false
+	}
+	return writeWebMCPChoiceEvents(ctx, session, []messages.StreamMessage{
+		{Type: messages.StreamTypeTranscriptStart, Role: messages.RoleUser, Value: messages.NewTranscriptStartValue()},
+		{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleUser, Value: messages.NewTranscriptDeltaValue("Orders")},
+		{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleUser, Value: messages.NewTranscriptEndValue("Orders")},
+	})
+}
+
+func (i *webMCPChoiceInferencer) selectChoicePage(ctx context.Context, session *roundTripSession) bool {
+	return writeWebMCPChoiceEvents(ctx, session, toolCallEvents("call_choice_select", webmcp.SelectTabToolName, `{"browser_id":"browser-session","target_id":"target-orders"}`)) &&
+		session.waitForSent(ctx, messages.StreamTypeResponseCreate)
+}
+
+func (i *webMCPChoiceInferencer) invokeChoicePage(ctx context.Context, session *roundTripSession) bool {
+	return writeWebMCPChoiceEvents(ctx, session, toolCallEvents("call_choice_page", "orders_action", `{"move":"R"}`)) &&
+		session.waitForSent(ctx, messages.StreamTypeResponseCreate)
+}
+
+func writeWebMCPChoiceEvents(ctx context.Context, session *roundTripSession, events []messages.StreamMessage) bool {
+	for _, event := range events {
+		if !session.recv.Write(ctx, event) {
+			return false
+		}
+	}
+	return true
 }
 
 func (i *webMCPChoiceInferencer) sessionSnapshot() *roundTripSession {
