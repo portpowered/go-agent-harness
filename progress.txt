@@ -4550,3 +4550,24 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   integrate exact reviewed C268/C269 releases additively, complete caller
   cutover, and rerun the entire preflight before the same-task PR handoff.
   Decision remains CONTINUE.
+
+
+# C276 local lint repair checkpoint — 2026-09-23
+
+- Exact prepush candidate `15c2a785659fc8c9d6b0363870ce479221bae9ab` reached
+  fmt, architecture, and vet, then stopped at lint. The pinned linter reported
+  nine issues in the new HTTP and recording contract tests: three unclosed
+  response bodies, unchecked errors/type assertions, and one repeated response
+  body literal.
+- Fixed all reported test defects by closing every response, checking HTTP
+  contract type assertions, checking panic-finalization and connection-close
+  errors, and sharing the repeated body constant. No suppression or baseline
+  change was made. `rtk make lint` now passes all 15 modules with zero issues;
+  `rtk go test -count=1 ./go-agent-runtime/services/recording/... ./go-agent-runtime/services/replay/...`
+  passes 272 tests across 13 packages.
+- This repair changes the candidate, so the complete `make prepush` and every
+  C276-05/06 check must rerun on the next clean commit before any push. No push,
+  PR, or hosted CI handoff occurred.
+- Next: commit the lint repair, rerun the complete local preflight and repair
+  any further local failures, then continue the same C276 task pending exact
+  reviewed C268/C269 caller releases. Decision remains CONTINUE.

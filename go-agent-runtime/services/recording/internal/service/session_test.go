@@ -95,10 +95,11 @@ func (c *providerRecorderConn) WriteMessage(_ int, _ []byte) error { return c.wr
 func (c *providerRecorderConn) Close() error                       { c.closed = true; return nil }
 
 type providerRecorderSession struct {
-	done    chan struct{}
-	conn    transport.Conn
-	once    sync.Once
-	inbound *messages.TypedBuffer[messages.StreamMessage]
+	done     chan struct{}
+	conn     transport.Conn
+	once     sync.Once
+	closeErr error
+	inbound  *messages.TypedBuffer[messages.StreamMessage]
 }
 
 func (*providerRecorderSession) Send(context.Context, messages.StreamMessage) bool { return false }
@@ -109,9 +110,9 @@ func (s *providerRecorderSession) Done() <-chan struct{} { return s.done }
 func (s *providerRecorderSession) Close() error {
 	s.once.Do(func() {
 		close(s.done)
-		_ = s.conn.Close()
+		s.closeErr = s.conn.Close()
 	})
-	return nil
+	return s.closeErr
 }
 
 type providerRecorderInferencer struct{ dialer transport.Dialer }

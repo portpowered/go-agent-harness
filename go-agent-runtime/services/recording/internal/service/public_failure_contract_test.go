@@ -450,9 +450,11 @@ func TestRunLiveEvidenceFinalizesBeforeRethrowingCallbackPanic(t *testing.T) {
 	var panicValue any
 	func() {
 		defer func() { panicValue = recover() }()
-		_ = New(clock.Real{}).RunLiveEvidence(t.Context(), recording.LiveEvidenceOptions{Destination: destination}, func(context.Context, recording.LiveEvidence) error {
+		if err := New(clock.Real{}).RunLiveEvidence(t.Context(), recording.LiveEvidenceOptions{Destination: destination}, func(context.Context, recording.LiveEvidence) error {
 			panic("callback panic")
-		})
+		}); err != nil {
+			t.Fatalf("live evidence returned before callback panic: %v", err)
+		}
 	}()
 	if panicValue != "callback panic" {
 		t.Fatalf("callback panic = %v", panicValue)

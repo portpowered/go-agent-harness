@@ -68,20 +68,29 @@ func TestHTTPReplayPublicContractMatchesRequestsAndReturnsRecordedResponses(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	response, err = transport.RoundTrip(request)
+	statusResponse, err := transport.RoundTrip(request)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if response.StatusCode != http.StatusNoContent {
-		t.Fatalf("bodyless replay status = %d, want 204", response.StatusCode)
+	if statusResponse.StatusCode != http.StatusNoContent {
+		t.Fatalf("bodyless replay status = %d, want 204", statusResponse.StatusCode)
+	}
+	if err := statusResponse.Body.Close(); err != nil {
+		t.Fatalf("close bodyless replay response: %v", err)
 	}
 
 	request, err = http.NewRequest(http.MethodPost, "https://provider.example.test/chat/completions", strings.NewReader(`{"messages":[{"role":"user","content":[{"type":"image_url","image_url":{"url":"https://example.test/image"}}]}]}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := transport.RoundTrip(request); err == nil || !strings.Contains(err.Error(), "no matching captures") {
-		t.Fatalf("divergent HTTP request error = %v, want no matching capture", err)
+	divergentResponse, divergentErr := transport.RoundTrip(request)
+	if divergentResponse != nil && divergentResponse.Body != nil {
+		if err := divergentResponse.Body.Close(); err != nil {
+			t.Fatalf("close divergent HTTP response: %v", err)
+		}
+	}
+	if divergentErr == nil || !strings.Contains(divergentErr.Error(), "no matching captures") {
+		t.Fatalf("divergent HTTP request error = %v, want no matching capture", divergentErr)
 	}
 }
 

@@ -14,17 +14,15 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
+const providerResponseBody = "provider response"
+
 type roundTripperFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
 
 func TestHTTPRecordingPublicContractCapturesConsumedTrafficWithoutSecrets(t *testing.T) {
 	var forwardedBody string
-	service := NewService(clock.Real{})
-	httpService, ok := service.(recording.HTTPRecordingService)
-	if !ok {
-		t.Fatal("recording service does not expose its HTTP capture contract")
-	}
+	httpService := mustHTTPRecordingService(t)
 	recorder, err := httpService.OpenHTTPRecorder(roundTripperFunc(func(req *http.Request) (*http.Response, error) {
 		body, err := io.ReadAll(req.Body)
 		if err != nil {
@@ -34,16 +32,13 @@ func TestHTTPRecordingPublicContractCapturesConsumedTrafficWithoutSecrets(t *tes
 		return &http.Response{
 			Status: "201 Created", StatusCode: http.StatusCreated,
 			Header: http.Header{"Set-Cookie": {"provider-secret"}, "X-Result": {"stored"}},
-			Body:   io.NopCloser(strings.NewReader("provider response")),
+			Body:   io.NopCloser(strings.NewReader(providerResponseBody)),
 		}, nil
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	transport, ok := recorder.(http.RoundTripper)
-	if !ok {
-		t.Fatalf("HTTP recorder %T cannot be installed as a transport", recorder)
-	}
+	transport := mustHTTPRoundTripper(t, recorder)
 	request, err := http.NewRequest(http.MethodPost, "https://provider.example.test/capture", strings.NewReader("request payload"))
 	if err != nil {
 		t.Fatal(err)
@@ -69,7 +64,7 @@ func TestHTTPRecordingPublicContractCapturesConsumedTrafficWithoutSecrets(t *tes
 	if err := response.Body.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if string(body) != "provider response" {
+	if string(body) != providerResponseBody {
 		t.Fatalf("provider response body = %q", body)
 	}
 	if err := recorder.FlushToFile(destination); err != nil {
@@ -85,7 +80,7 @@ func assertCapturedHTTPExchange(t *testing.T, recorder recording.HTTPRecorder, d
 		t.Fatalf("capture count = %d, want 1", len(captures))
 	}
 	got := captures[0]
-	if string(got.Request.Body) != "request payload" || string(got.Response.Body) != "provider response" {
+	if string(got.Request.Body) != "request payload" || string(got.Response.Body) != providerResponseBody {
 		t.Fatalf("captured bodies = %q / %q", got.Request.Body, got.Response.Body)
 	}
 	if _, ok := got.Request.Headers["Authorization"]; ok {
@@ -102,7 +97,7 @@ func assertCapturedHTTPExchange(t *testing.T, recorder recording.HTTPRecorder, d
 	}
 	got.Request.Headers["X-Request"][0] = "mutated"
 	got.Response.Body[0] = 'X'
-	if recorder.Captures()[0].Request.Headers["X-Request"][0] != "retained" || string(recorder.Captures()[0].Response.Body) != "provider response" {
+	if recorder.Captures()[0].Request.Headers["X-Request"][0] != "retained" || string(recorder.Captures()[0].Response.Body) != providerResponseBody {
 		t.Fatal("capture snapshot mutation changed recording-owned state")
 	}
 
@@ -114,14 +109,13 @@ func assertCapturedHTTPExchange(t *testing.T, recorder recording.HTTPRecorder, d
 	if err := json.Unmarshal(data, &persisted); err != nil {
 		t.Fatal(err)
 	}
-	if len(persisted) != 1 || string(persisted[0].Response.Body) != "provider response" {
+	if len(persisted) != 1 || string(persisted[0].Response.Body) != providerResponseBody {
 		t.Fatalf("persisted HTTP capture = %#v", persisted)
 	}
 }
 
 func TestHTTPRecordingDoesNotPublishAfterTransportFailure(t *testing.T) {
-	service := NewService(clock.Real{})
-	httpService := service.(recording.HTTPRecordingService)
+	httpService := mustHTTPRecordingService(t)
 	transportErr := errors.New("provider transport failed")
 	recorder, err := httpService.OpenHTTPRecorder(roundTripperFunc(func(*http.Request) (*http.Response, error) {
 		return nil, transportErr
@@ -129,13 +123,19 @@ func TestHTTPRecordingDoesNotPublishAfterTransportFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	transport := recorder.(http.RoundTripper)
+	transport := mustHTTPRoundTripper(t, recorder)
 	request, err := http.NewRequest(http.MethodGet, "https://provider.example.test/failure", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := transport.RoundTrip(request); !errors.Is(err, transportErr) {
-		t.Fatalf("transport result = %v, want original provider error", err)
+	response, roundTripErr := transport.RoundTrip(request)
+	if response != nil && response.Body != nil {
+		if err := response.Body.Close(); err != nil {
+			t.Fatalf("close partial transport response: %v", err)
+		}
+	}
+	if !errors.Is(roundTripErr, transportErr) {
+		t.Fatalf("transport result = %v, want original provider error", roundTripErr)
 	}
 	destination := filepath.Join(t.TempDir(), "failed-capture.json")
 	if err := recorder.FlushToFile(destination); !errors.Is(err, transportErr) {
@@ -147,8 +147,7 @@ func TestHTTPRecordingDoesNotPublishAfterTransportFailure(t *testing.T) {
 }
 
 func TestHTTPRecordingDoesNotPublishResponseClosedBeforeEOF(t *testing.T) {
-	service := NewService(clock.Real{})
-	httpService := service.(recording.HTTPRecordingService)
+	httpService := mustHTTPRecordingService(t)
 	const responseBody = "response body not consumed"
 	recorder, err := httpService.OpenHTTPRecorder(roundTripperFunc(func(*http.Request) (*http.Response, error) {
 		return &http.Response{
@@ -160,7 +159,7 @@ func TestHTTPRecordingDoesNotPublishResponseClosedBeforeEOF(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	transport := recorder.(http.RoundTripper)
+	transport := mustHTTPRoundTripper(t, recorder)
 	request, err := http.NewRequest(http.MethodGet, "https://provider.example.test/partial", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -182,8 +181,7 @@ func TestHTTPRecordingDoesNotPublishResponseClosedBeforeEOF(t *testing.T) {
 }
 
 func TestHTTPRecordingDoesNotPublishResponseShorterThanContentLength(t *testing.T) {
-	service := NewService(clock.Real{})
-	httpService := service.(recording.HTTPRecordingService)
+	httpService := mustHTTPRecordingService(t)
 	const responseBody = "short provider response"
 	recorder, err := httpService.OpenHTTPRecorder(roundTripperFunc(func(*http.Request) (*http.Response, error) {
 		return &http.Response{
@@ -195,7 +193,7 @@ func TestHTTPRecordingDoesNotPublishResponseShorterThanContentLength(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	transport := recorder.(http.RoundTripper)
+	transport := mustHTTPRoundTripper(t, recorder)
 	request, err := http.NewRequest(http.MethodGet, "https://provider.example.test/truncated", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -220,8 +218,26 @@ func TestHTTPRecordingDoesNotPublishResponseShorterThanContentLength(t *testing.
 }
 
 func TestHTTPRecordingRejectsNonTransportAdapter(t *testing.T) {
-	service := NewService(clock.Real{}).(recording.HTTPRecordingService)
+	service := mustHTTPRecordingService(t)
 	if _, err := service.OpenHTTPRecorder(struct{}{}); err == nil {
 		t.Fatal("non-transport HTTP adapter was accepted")
 	}
+}
+
+func mustHTTPRecordingService(t *testing.T) recording.HTTPRecordingService {
+	t.Helper()
+	service, ok := NewService(clock.Real{}).(recording.HTTPRecordingService)
+	if !ok {
+		t.Fatal("recording service does not expose its HTTP capture contract")
+	}
+	return service
+}
+
+func mustHTTPRoundTripper(t *testing.T, value any) http.RoundTripper {
+	t.Helper()
+	transport, ok := value.(http.RoundTripper)
+	if !ok {
+		t.Fatalf("HTTP recorder %T cannot be installed as a transport", value)
+	}
+	return transport
 }
