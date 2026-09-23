@@ -220,7 +220,12 @@ func runOverrideCLI(t *testing.T, executor messages.ToolExecutor) (string, strin
 	t.Helper()
 	globalFlags := flags.NewGlobalFlags()
 	rootCommand := cli.NewRootCommand(globalFlags)
-	service := newPublicTextSessionService(globalFlags, executor, &toolCallInferencer{}, services.DefaultToolDefs(nil))
+	definitions := append(services.DefaultToolDefs(nil), messages.ToolDefinition{
+		Name:        "v4c_unknown_tool",
+		Description: "tool-error integration control",
+		Parameters:  []messages.ToolParameter{{Name: "path", Type: "string", Required: true}},
+	})
+	service := newPublicTextSessionService(globalFlags, executor, &toolCallInferencer{}, definitions)
 	askFlags := flags.NewAskFlags()
 	loopFlags := flags.NewLoopFlags()
 	router := cli.NewRouter(
