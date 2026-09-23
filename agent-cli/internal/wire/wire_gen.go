@@ -9,7 +9,7 @@ package wire
 import (
 	"context"
 	"fmt"
-	wire5 "github.com/google/wire"
+	wire6 "github.com/google/wire"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe/fleet"
@@ -17,7 +17,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime/transports"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
-	wire9 "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools/wire"
+	wire10 "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools/wire"
 	wire2 "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
 	tools2 "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
@@ -27,15 +27,16 @@ import (
 	wire3 "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 	wire4 "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
-	wire7 "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
+	wire8 "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
-	wire6 "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/wire"
+	wire7 "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
-	wire10 "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
+	wire11 "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
+	wire5 "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
 	tools3 "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
-	wire8 "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
+	wire9 "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -87,7 +88,8 @@ func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transp
 	toolsService := provideToolCapabilitiesService(toolService, toolExecutor, browserFactory, v4, service)
 	sessionRTCRuntimeFactory := provideSessionRTCRuntimeFactory(rtcComponents, metricSampler, logger)
 	devicesService := wire4.NewService(deviceRegistry, audioioService)
-	runtime := wire2.NewSessionRuntime(audioioService, clockSource, toolsService, v3, sessionRTCRuntimeFactory, sessionInferencer, toolExecutor, devicesService, runtimeObserver, metricSampler, logger, modelCatalog)
+	browserconversationService := wire2.NewBrowserConversationService()
+	runtime := wire2.NewSessionRuntime(audioioService, clockSource, toolsService, v3, sessionRTCRuntimeFactory, sessionInferencer, toolExecutor, devicesService, runtimeObserver, metricSampler, logger, modelCatalog, browserconversationService)
 	sessionDependencies := provideSessionDependencies(clockSource, toolsService, sessionRTCRuntimeFactory, sessionInferencer, toolExecutor, deviceRegistry, runtimeObserver, metricSampler, logger, runtime)
 	agentsessionSessionService := wire2.NewSessionService(sessionDependencies)
 	v5 := provideFleetEntryExecutors()
@@ -108,7 +110,8 @@ func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transp
 	strictService := wire2.NewReplayService()
 	sessionReplayCommand := cli.NewSessionReplayCommand(strictService)
 	scheduler := provideRoomClock(clockSource)
-	roomsService := wire2.NewRoomServiceWithDevices(liveService, devicesService, deviceRegistry, scheduler)
+	roomreplayService := wire5.NewService()
+	roomsService := wire2.NewRoomServiceWithDevices(liveService, devicesService, deviceRegistry, scheduler, roomreplayService)
 	roomRunCommand := cli.NewRoomRunCommand(globalFlags, roomsService)
 	configCommand := cli.NewConfigCommand()
 	configAddLocalCommand := cli.NewConfigAddLocalCommand(globalFlags)
@@ -176,7 +179,7 @@ func unmarkToolExecutorReplacement(executor messages.ToolExecutor) messages.Tool
 }
 
 // FlagsSet provides global and command-specific CLI flags.
-var FlagsSet = wire5.NewSet(flags.NewGlobalFlags, flags.NewAskFlags, flags.NewChatFlags, flags.NewLoopFlags)
+var FlagsSet = wire6.NewSet(flags.NewGlobalFlags, flags.NewAskFlags, flags.NewChatFlags, flags.NewLoopFlags)
 
 // provideFleetEntryExecutors keeps the production fleet command on its
 // default transport dispatcher while leaving the executor injectable for
@@ -278,11 +281,11 @@ func (l sessionLoopLogger) Panic(message string, fields ...logging.Field) {
 // composition edge. The runtime receives only providers.Service and never
 // discovers an HTTP client or credential source on its own.
 func provideRecordingService(source Clock) recording.Service {
-	return wire6.NewService(source)
+	return wire7.NewService(source)
 }
 
 func provideProviderCaptureService(source Clock) recording.ProviderCaptureService {
-	return wire6.NewProviderCaptureService(source)
+	return wire7.NewProviderCaptureService(source)
 }
 
 func provideProviderService(clockSource Clock, recordingService recording.Service, providerCaptureService recording.ProviderCaptureService) (providers.FullService, error) {
@@ -290,7 +293,7 @@ func provideProviderService(clockSource Clock, recordingService recording.Servic
 	if err != nil {
 		return nil, fmt.Errorf("provider clock: %w", err)
 	}
-	return wire7.NewService(wire7.Dependencies{
+	return wire8.NewService(wire8.Dependencies{
 		HTTPClient:      http.DefaultClient,
 		Recording:       recordingService,
 		ProviderCapture: providerCaptureService,
@@ -346,18 +349,18 @@ func provideToolCapabilitiesService(override toolServiceOverride, toolExecutor m
 type defaultRuntimeToolService struct{ service tools3.Service }
 
 func provideDefaultRuntimeToolService() defaultRuntimeToolService {
-	return defaultRuntimeToolService{service: wire8.NewService()}
+	return defaultRuntimeToolService{service: wire9.NewService()}
 }
 
 // provideRuntimeToolService supplies the reusable session owner with a
 // runtime-only capability service. A CLI override is adapted once at this
 // composition boundary; session execution never receives CLI config types.
 func provideRuntimeToolService(override toolServiceOverride, defaults defaultRuntimeToolService) tools3.Service {
-	return wire9.NewRuntimeToolServiceAdapter(override.service, defaults.service)
+	return wire10.NewRuntimeToolServiceAdapter(override.service, defaults.service)
 }
 
 func provideLiveReplayService() replay.Service {
-	return wire10.NewService()
+	return wire11.NewService()
 }
 
 func provideSessionDependencies(clockSource Clock, resolver tools.Service, runtimeFactory transports.SessionRTCRuntimeFactory, inferencer messages.SessionInferencer, toolExecutor messages.ToolExecutor, deviceRegistry DeviceRegistry, observer SessionRuntimeObserver, metricSampler MetricSampler, logger Logger, runtime agentruntime.Runtime) wire2.SessionDependencies {
@@ -365,8 +368,8 @@ func provideSessionDependencies(clockSource Clock, resolver tools.Service, runti
 }
 
 // CliSet provides CLI commands, router, and root.
-var CliSet = wire5.NewSet(
-	FlagsSet, cli.NewRootCommand, cli.NewAskCommand, cli.NewChatCommand, cli.NewToolCommand, cli.NewInteractionCommand, cli.NewInteractionReplayCommand, cli.NewProbeCommand, wire2.DeviceSet, wire2.RoomSet, wire2.SessionSet, wire2.NewReplayService, wire2.NewMetricsCollector, provideDefaultRuntimeToolService,
+var CliSet = wire6.NewSet(
+	FlagsSet, cli.NewRootCommand, cli.NewAskCommand, cli.NewChatCommand, cli.NewToolCommand, cli.NewInteractionCommand, cli.NewInteractionReplayCommand, cli.NewProbeCommand, wire2.DeviceSet, wire2.RoomSet, wire2.SessionSet, wire6.NewSet(wire2.NewBrowserConversationService), wire2.NewReplayService, wire2.NewMetricsCollector, provideDefaultRuntimeToolService,
 	provideRuntimeToolService, wire.NewFileStoreFactory, provideRecordingService,
 	provideProviderCaptureService,
 	provideSessionBrowserCapabilityFactory,
