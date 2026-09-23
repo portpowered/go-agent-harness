@@ -5726,3 +5726,35 @@ handoff sequence. No gate completion is claimed.
   race, hermetic, embed, Wire, deletion, duplicate, adapter, ancestry and diff
   gate on the exact repaired SHA. Repair C251-owned failures without editing
   leased peer paths or raising baselines.
+
+
+## C251 service-file and owned-path reconciliation — 2026-09-23
+
+- On top of `9410edb8f679713b0e5d137ac02eb08edd4ef3e1`, kept the new
+  `sessionduration.Service.Execute` implementation in existing service files;
+  the service directory is back at its 15-file limit, `service.go` is 391
+  lines, `artifacts.go` 384, and `session_live_setup.go` 398. No extra service
+  file or baseline change remains. `runSessionDurationPlan` is now the direct
+  caller of `Service.Execute`; duration policy and ordering stay in the
+  service-owned implementation.
+- Reconciled exact caller ownership: C276 owns
+  `agent-cli/internal/services/internal/agentruntime/session_recording.go`;
+  its existing `runSessionDurationPlan` call form is preserved in the final
+  tree. No C276 worktree was edited.
+- Focused service/session functional and race runs each pass 271 tests across
+  19 packages; the CLI duration/finalization/replay/shutdown/timer selection
+  passes 272. `git diff --check` passes.
+- The fresh architecture check is down to the prior 426 findings, with no
+  remaining finding in the new service execution or duration-plan files. The
+  blocker set includes 205 agentruntime production files versus baseline 138,
+  room/replay and recording source/test diagnostics, and sessiontrace/sessionturn
+  boundary findings. C276 and the room/evidence/self-play/turn tasks retain
+  exact ownership of overlapping paths. No baseline was raised.
+- The exact planned 14-path absence census and one-file/59-line adapter remain
+  unchanged. No push, PR, SCRIPT handoff, CI poll, independent review or merge
+  is claimed.
+- Exact next action: checkpoint the service-file/complexity repair on this same
+  branch, then run `make prepush` plus every C251-04 functional, integration,
+  race, hermetic, embed, Wire, deletion, duplicate, adapter, ancestry and diff
+  command on the exact SHA. Repair C251-owned findings; preserve peer leases and
+  integrate only reviewed or explicitly released seams before any submission.

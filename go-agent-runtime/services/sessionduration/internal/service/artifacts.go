@@ -354,3 +354,31 @@ func FinalizeArtifacts(artifacts sessionduration.ArtifactLifecycle) error {
 		artifacts.Close(),
 	)
 }
+
+func (s *Service) WithArtifacts(ctx context.Context, artifacts sessionduration.ArtifactLifecycle) context.Context {
+	return WithSessionDurationArtifacts(ctx, artifacts)
+}
+
+func (s *Service) ArtifactsFromContext(ctx context.Context) sessionduration.ArtifactLifecycle {
+	return ArtifactsFromContext(ctx)
+}
+
+func (s *Service) WithTerminalRecorder(ctx context.Context, recorder sessionduration.TerminalRecorder) context.Context {
+	return WithTerminalRecorder(ctx, recorder)
+}
+
+func (s *Service) WithArtifactPaths(ctx context.Context, paths sessionduration.SessionDurationArtifactPaths) context.Context {
+	return WithSessionDurationArtifactPaths(ctx, paths)
+}
+
+func (s *Service) PrepareArtifacts(ctx context.Context) (context.Context, error) {
+	return PrepareArtifacts(ctx)
+}
+
+func (s *Service) FinalizeArtifacts(artifacts sessionduration.ArtifactLifecycle) error {
+	return FinalizeArtifacts(artifacts)
+}
+
+func (s *Service) RecordingTerminalSummaryFromMessage(msg messages.StreamMessage) (*transcript.RecordingTerminalSummary, bool, error) {
+	return RecordingTerminalSummaryFromMessage(msg)
+}

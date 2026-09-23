@@ -129,7 +129,8 @@ func (p sessionRuntimePlan) finalizationPorts(artifacts duration.ArtifactLifecyc
 	return ports
 }
 
-func executeSessionDurationPlan(ctx context.Context, out io.Writer, plan sessionRuntimePlan, maxDuration time.Duration, clock duration.TimerScheduler, admitted duration.AdmissionInferencer) error {
+func runSessionDurationPlan(ctx context.Context, out io.Writer, plan sessionRuntimePlan, maxDuration time.Duration, clock duration.TimerScheduler, admission ...duration.AdmissionInferencer) error {
+	admitted := optionalDurationAdmission(admission)
 	service := durationwire.NewService()
 	reporter := plan.loop.terminalReporter
 	if reporter == nil {
@@ -176,6 +177,13 @@ func executeSessionDurationPlan(ctx context.Context, out io.Writer, plan session
 		Run:          invoke,
 		Finalization: plan.finalizationPorts(nil, true),
 	})
+}
+
+func optionalDurationAdmission(admission []duration.AdmissionInferencer) duration.AdmissionInferencer {
+	if len(admission) == 0 {
+		return nil
+	}
+	return admission[0]
 }
 
 type sessionRuntimeSetup struct {

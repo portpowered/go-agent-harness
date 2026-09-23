@@ -220,7 +220,7 @@ func TestRunSessionDurationPlanUsesCommonFinalizerOnLoopFailure(t *testing.T) {
 	}
 
 	ctx := durationwire.NewService().WithArtifacts(context.Background(), artifacts)
-	gotErr := executeSessionDurationPlan(ctx, io.Discard, plan, 0, nil, nil)
+	gotErr := runSessionDurationPlan(ctx, io.Discard, plan, 0, nil)
 	for _, wantErr := range []error{primaryErr, capabilityErr, captureErr, finalizeErr, artifacts.closeErr} {
 		if !errors.Is(gotErr, wantErr) {
 			t.Fatalf("duration finalization error = %v, want errors.Is(..., %v)", gotErr, wantErr)

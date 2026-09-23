@@ -446,7 +446,7 @@ func runSessionWithRecordingDirectory(
 			return finalizeSessionDirectoryRecording(runErr, recording)
 		}
 		durationCtx = durationwire.NewService().WithTerminalRecorder(durationCtx, recording)
-		runErr = executeSessionDurationPlan(durationCtx, sessionOut, plan, maxDuration, nil, nil)
+		runErr = runSessionDurationPlan(durationCtx, sessionOut, plan, maxDuration, nil)
 	}
 
 	if audioWrapper != nil {

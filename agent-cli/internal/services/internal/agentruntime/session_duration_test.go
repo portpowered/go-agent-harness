@@ -859,7 +859,7 @@ func TestRunSessionDurationPlan_PreservesFlushAndFinalizeFailures(t *testing.T) 
 			return flushErr
 		},
 	}
-	if err := executeSessionDurationPlan(context.Background(), io.Discard, flushPlan, time.Hour, &durationTestClock{}, nil); !errors.Is(err, flushErr) {
+	if err := runSessionDurationPlan(context.Background(), io.Discard, flushPlan, time.Hour, &durationTestClock{}); !errors.Is(err, flushErr) {
 		t.Fatalf("flush failure = %v, want %v", err, flushErr)
 	}
 
@@ -871,7 +871,7 @@ func TestRunSessionDurationPlan_PreservesFlushAndFinalizeFailures(t *testing.T) 
 			return finalizeErr
 		},
 	}
-	if err := executeSessionDurationPlan(context.Background(), io.Discard, finalizePlan, time.Hour, &durationTestClock{}, nil); !errors.Is(err, finalizeErr) {
+	if err := runSessionDurationPlan(context.Background(), io.Discard, finalizePlan, time.Hour, &durationTestClock{}); !errors.Is(err, finalizeErr) {
 		t.Fatalf("finalize failure = %v, want %v", err, finalizeErr)
 	}
 }

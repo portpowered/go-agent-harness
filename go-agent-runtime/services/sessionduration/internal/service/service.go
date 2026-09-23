@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	durationrunner "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/internal/runner"
 )
@@ -25,6 +24,42 @@ func New() *Service { return &Service{} }
 func (s *Service) Run(request sessionduration.RunRequest) error {
 	_, err := s.RunWithResult(request)
 	return err
+}
+
+// Execute owns duration-run validation and the lifecycle order surrounding a
+// host's startup and invocation effects. Finalization runs even when either
+// effect returns an error.
+func (s *Service) Execute(request sessionduration.ExecutionRequest) (runErr error) {
+	ctx := request.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := s.ValidateDuration(request.MaxDuration); err != nil {
+		return err
+	}
+	clock := request.Clock
+	if clock == nil {
+		clock = request.SourceClock
+	}
+	if clock == nil {
+		clock = request.FallbackClock
+	}
+	if request.Finalization.Artifacts == nil {
+		request.Finalization.Artifacts = s.ArtifactsFromContext(ctx)
+	}
+	finalizer := s.NewFinalizer(request.Finalization)
+	defer func() {
+		runErr = finalizer.Finish(ctx, request.Output, runErr)
+	}()
+	if request.Prepare != nil {
+		if err := request.Prepare(ctx, request.Output); err != nil {
+			return err
+		}
+	}
+	if request.Run == nil {
+		return nil
+	}
+	return request.Run(ctx, request.Output, clock)
 }
 
 // RunWithResult returns the service-owned terminal snapshot after cleanup.
@@ -142,46 +177,6 @@ func (s *Service) NewEventAdmission() sessionduration.EventAdmission {
 	return NewEventAdmission()
 }
 
-func (s *Service) NewAdmissionInferencer(inner messages.SessionInferencer, admission sessionduration.EventAdmission, closeDone chan struct{}) sessionduration.AdmissionInferencer {
-	boundary, ok := admission.(*EventAdmission)
-	if !ok {
-		boundary = nil
-	}
-	return NewAdmissionInferencer(inner, boundary, closeDone)
-}
-
-func (s *Service) NewAdmissionSession(ctx context.Context, inner messages.Session, admission sessionduration.EventAdmission, onClose func(error)) sessionduration.AdmissionSession {
-	boundary, ok := admission.(*EventAdmission)
-	if !ok {
-		boundary = nil
-	}
-	return NewAdmissionSession(ctx, inner, boundary, onClose)
-}
-
-func (s *Service) WithArtifacts(ctx context.Context, artifacts sessionduration.ArtifactLifecycle) context.Context {
-	return WithSessionDurationArtifacts(ctx, artifacts)
-}
-
-func (s *Service) ArtifactsFromContext(ctx context.Context) sessionduration.ArtifactLifecycle {
-	return ArtifactsFromContext(ctx)
-}
-
-func (s *Service) WithTerminalRecorder(ctx context.Context, recorder sessionduration.TerminalRecorder) context.Context {
-	return WithTerminalRecorder(ctx, recorder)
-}
-
-func (s *Service) WithArtifactPaths(ctx context.Context, paths sessionduration.SessionDurationArtifactPaths) context.Context {
-	return WithSessionDurationArtifactPaths(ctx, paths)
-}
-
-func (s *Service) PrepareArtifacts(ctx context.Context) (context.Context, error) {
-	return PrepareArtifacts(ctx)
-}
-
-func (s *Service) FinalizeArtifacts(artifacts sessionduration.ArtifactLifecycle) error {
-	return FinalizeArtifacts(artifacts)
-}
-
 func (f *finalizer) complete(out io.Writer, runErr error) error {
 	var artifactErr error
 	if f.ports.Artifacts != nil {
@@ -221,10 +216,6 @@ func (s *Service) IsDurationShutdownMessage(msg messages.StreamMessage) bool {
 
 func (s *Service) IsDurationForwardMessage(msg messages.StreamMessage) bool {
 	return IsDurationForwardMessage(msg)
-}
-
-func (s *Service) RecordingTerminalSummaryFromMessage(msg messages.StreamMessage) (*transcript.RecordingTerminalSummary, bool, error) {
-	return RecordingTerminalSummaryFromMessage(msg)
 }
 
 func phaseError(phase string, err error) error { return fmt.Errorf("%s: %w", phase, err) }

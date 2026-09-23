@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 )
 
 const streamAdmissionBufferCapacity = 1024
@@ -22,6 +23,22 @@ type EventAdmission struct {
 
 func NewEventAdmission() *EventAdmission {
 	return &EventAdmission{done: make(chan struct{})}
+}
+
+func (s *Service) NewAdmissionInferencer(inner messages.SessionInferencer, admission sessionduration.EventAdmission, closeDone chan struct{}) sessionduration.AdmissionInferencer {
+	boundary, ok := admission.(*EventAdmission)
+	if !ok {
+		boundary = nil
+	}
+	return NewAdmissionInferencer(inner, boundary, closeDone)
+}
+
+func (s *Service) NewAdmissionSession(ctx context.Context, inner messages.Session, admission sessionduration.EventAdmission, onClose func(error)) sessionduration.AdmissionSession {
+	boundary, ok := admission.(*EventAdmission)
+	if !ok {
+		boundary = nil
+	}
+	return NewAdmissionSession(ctx, inner, boundary, onClose)
 }
 
 func (a *EventAdmission) close() {
