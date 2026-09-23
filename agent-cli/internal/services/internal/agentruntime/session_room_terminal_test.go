@@ -186,9 +186,9 @@ func TestRoomParticipantLifecycle_BoundFirstRejectsLateFailure(t *testing.T) {
 
 	accepted := lifecycle.observeTerminal(sessionTerminalObservation{
 		Classification:     providers.ErrorClassTransport,
-		TerminalReason:     string(messages.TerminalReasonTerminalFailure),
-		TerminalProvenance: string(messages.TerminalProvenanceProvider),
-		OutputState:        string(messages.TerminalOutputNone),
+		TerminalReason:     messages.TerminalReasonTerminalFailure,
+		TerminalProvenance: messages.TerminalProvenanceProvider,
+		OutputState:        messages.TerminalOutputNone,
 		Err:                context.DeadlineExceeded,
 		Failure:            true,
 	})
@@ -246,9 +246,9 @@ func TestRoomParticipantLifecycle_BoundCancellationRejectsLateCompletion(t *test
 
 	if lifecycle.observeTerminal(sessionTerminalObservation{
 		ResponseID:         "response-active",
-		TerminalReason:     string(messages.TerminalReasonProviderAuthoredCompletion),
-		TerminalProvenance: string(messages.TerminalProvenanceProvider),
-		OutputState:        string(messages.TerminalOutputComplete),
+		TerminalReason:     messages.TerminalReasonProviderAuthoredCompletion,
+		TerminalProvenance: messages.TerminalProvenanceProvider,
+		OutputState:        messages.TerminalOutputComplete,
 	}) {
 		t.Fatal("late provider completion replaced bound cancellation")
 	}
@@ -326,9 +326,9 @@ func TestRoomParticipantLifecycle_BoundTerminalAdmissionClosesAfterGraceCompleti
 	}
 	if !lifecycle.observeTerminal(sessionTerminalObservation{
 		ResponseID:         "response-active",
-		TerminalReason:     string(messages.TerminalReasonProviderAuthoredCompletion),
-		TerminalProvenance: string(messages.TerminalProvenanceProvider),
-		OutputState:        string(messages.TerminalOutputComplete),
+		TerminalReason:     messages.TerminalReasonProviderAuthoredCompletion,
+		TerminalProvenance: messages.TerminalProvenanceProvider,
+		OutputState:        messages.TerminalOutputComplete,
 	}) {
 		t.Fatal("active response terminal was not recorded")
 	}
@@ -345,9 +345,9 @@ func TestRoomParticipantLifecycle_FailureFirstSurvivesLaterBound(t *testing.T) {
 	lifecycle := &roomParticipantLifecycle{}
 	if !lifecycle.observeTerminal(sessionTerminalObservation{
 		Classification:     providers.ErrorClassTransport,
-		TerminalReason:     string(messages.TerminalReasonTerminalFailure),
-		TerminalProvenance: string(messages.TerminalProvenanceProvider),
-		OutputState:        string(messages.TerminalOutputNone),
+		TerminalReason:     messages.TerminalReasonTerminalFailure,
+		TerminalProvenance: messages.TerminalProvenanceProvider,
+		OutputState:        messages.TerminalOutputNone,
 		Err:                context.DeadlineExceeded,
 		Failure:            true,
 	}) {
@@ -375,9 +375,9 @@ func TestRoomCoordinator_FailureDuringGracePromotesRoomCause(t *testing.T) {
 
 	if !runtime.lifecycle.observeTerminal(sessionTerminalObservation{
 		Classification:     providers.ErrorClassTransport,
-		TerminalReason:     string(messages.TerminalReasonTerminalFailure),
-		TerminalProvenance: string(messages.TerminalProvenanceProvider),
-		OutputState:        string(messages.TerminalOutputPartial),
+		TerminalReason:     messages.TerminalReasonTerminalFailure,
+		TerminalProvenance: messages.TerminalProvenanceProvider,
+		OutputState:        messages.TerminalOutputPartial,
 		Err:                context.DeadlineExceeded,
 		Failure:            true,
 	}) {

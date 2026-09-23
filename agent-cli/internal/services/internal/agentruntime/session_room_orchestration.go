@@ -13,6 +13,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	runtimeRoomsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
+	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -405,11 +406,7 @@ func normalizeRoomClockOptions(opts RoomRunOptions) (RoomRunOptions, platformclo
 		if opts.AudioService == nil {
 			return opts, roomClock, errors.New("audio service is required for room liveness timing")
 		}
-		livenessClock, err := opts.AudioService.NewClock(roomClock)
-		if err != nil {
-			return opts, roomClock, err
-		}
-		opts.LivenessClock = livenessClock
+		opts.LivenessClock = sessiontracewire.LivenessClockFromSource(roomClock)
 	}
 	return opts, roomClock, nil
 }

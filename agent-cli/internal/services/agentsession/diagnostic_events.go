@@ -1,32 +1,34 @@
 package agentsession
 
+import sessiontrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+
 // Diagnostic event names and field keys form the presentation contract.
 const (
-	SessionDiagnosticEventFailure                          = "session_failure"
-	SessionDiagnosticEventTerminal                         = "session_terminal"
-	SessionDiagnosticEventTurn                             = "session_turn_completed"
-	SessionDiagnosticEventToolCall                         = "session_tool_call_unexecutable"
-	SessionDiagnosticEventMetrics                          = "session_metrics"
-	SessionDiagnosticEventRoomBound                        = "room_bound_shutdown"
-	SessionDiagnosticFieldUnresolvedToolResultCount        = "unresolved_tool_result_count"
-	SessionDiagnosticFieldUnresolvedToolCallIDs            = "unresolved_tool_call_ids"
-	SessionDiagnosticFieldPendingImageContinuationCount    = "pending_image_continuation_count"
-	SessionDiagnosticFieldPendingImageContinuationIDs      = "pending_image_continuation_call_ids"
-	SessionDiagnosticFieldPendingToolContinuationCount     = "pending_tool_continuation_count"
-	SessionDiagnosticFieldPendingToolContinuationIDs       = "pending_tool_continuation_call_ids"
-	SessionDiagnosticFieldScheduledInputCount              = "scheduled_input_count"
-	SessionDiagnosticFieldDispatchedInputCount             = "dispatched_input_count"
-	SessionDiagnosticFieldCompletedTurnCount               = "completed_turn_count"
-	SessionDiagnosticFieldPendingContinuationStatuses      = "pending_continuation_statuses"
-	SessionDiagnosticFieldPendingContinuationCodes         = "pending_continuation_codes"
-	SessionDiagnosticFieldPendingContinuationDetails       = "pending_continuation_details"
-	SessionDiagnosticFieldCancelledBy                      = "cancelled_by"
-	SessionDiagnosticFieldCancelledScheduledInputCount     = "cancelled_scheduled_input_count"
-	SessionDiagnosticFieldCancelledToolResultCount         = "cancelled_tool_result_count"
-	SessionDiagnosticFieldCancelledToolResultCallIDs       = "cancelled_tool_result_call_ids"
-	SessionDiagnosticFieldCancelledToolContinuationCount   = "cancelled_tool_continuation_count"
-	SessionDiagnosticFieldCancelledToolContinuationCallIDs = "cancelled_tool_continuation_call_ids"
-	SessionDiagnosticEventPlaybackOverflow                 = "session_playback_overflow"
+	SessionDiagnosticEventFailure                          = sessiontrace.SessionDiagnosticEventFailure
+	SessionDiagnosticEventTerminal                         = sessiontrace.SessionDiagnosticEventTerminal
+	SessionDiagnosticEventTurn                             = sessiontrace.SessionDiagnosticEventTurn
+	SessionDiagnosticEventToolCall                         = sessiontrace.SessionDiagnosticEventToolCall
+	SessionDiagnosticEventMetrics                          = sessiontrace.SessionDiagnosticEventMetrics
+	SessionDiagnosticEventRoomBound                        = sessiontrace.SessionDiagnosticEventRoomBound
+	SessionDiagnosticFieldUnresolvedToolResultCount        = sessiontrace.SessionDiagnosticFieldUnresolvedToolResultCount
+	SessionDiagnosticFieldUnresolvedToolCallIDs            = sessiontrace.SessionDiagnosticFieldUnresolvedToolCallIDs
+	SessionDiagnosticFieldPendingImageContinuationCount    = sessiontrace.SessionDiagnosticFieldPendingImageContinuationCount
+	SessionDiagnosticFieldPendingImageContinuationIDs      = sessiontrace.SessionDiagnosticFieldPendingImageContinuationIDs
+	SessionDiagnosticFieldPendingToolContinuationCount     = sessiontrace.SessionDiagnosticFieldPendingToolContinuationCount
+	SessionDiagnosticFieldPendingToolContinuationIDs       = sessiontrace.SessionDiagnosticFieldPendingToolContinuationIDs
+	SessionDiagnosticFieldScheduledInputCount              = sessiontrace.SessionDiagnosticFieldScheduledInputCount
+	SessionDiagnosticFieldDispatchedInputCount             = sessiontrace.SessionDiagnosticFieldDispatchedInputCount
+	SessionDiagnosticFieldCompletedTurnCount               = sessiontrace.SessionDiagnosticFieldCompletedTurnCount
+	SessionDiagnosticFieldPendingContinuationStatuses      = sessiontrace.SessionDiagnosticFieldPendingContinuationStatuses
+	SessionDiagnosticFieldPendingContinuationCodes         = sessiontrace.SessionDiagnosticFieldPendingContinuationCodes
+	SessionDiagnosticFieldPendingContinuationDetails       = sessiontrace.SessionDiagnosticFieldPendingContinuationDetails
+	SessionDiagnosticFieldCancelledBy                      = sessiontrace.SessionDiagnosticFieldCancelledBy
+	SessionDiagnosticFieldCancelledScheduledInputCount     = sessiontrace.SessionDiagnosticFieldCancelledScheduledInputCount
+	SessionDiagnosticFieldCancelledToolResultCount         = sessiontrace.SessionDiagnosticFieldCancelledToolResultCount
+	SessionDiagnosticFieldCancelledToolResultCallIDs       = sessiontrace.SessionDiagnosticFieldCancelledToolResultCallIDs
+	SessionDiagnosticFieldCancelledToolContinuationCount   = sessiontrace.SessionDiagnosticFieldCancelledToolContinuationCount
+	SessionDiagnosticFieldCancelledToolContinuationCallIDs = sessiontrace.SessionDiagnosticFieldCancelledToolContinuationCallIDs
+	SessionDiagnosticEventPlaybackOverflow                 = sessiontrace.SessionDiagnosticEventPlaybackOverflow
 	SessionDiagnosticFieldPlaybackDeviceID                 = "device_id"
 	SessionDiagnosticFieldPlaybackSampleRate               = "sample_rate"
 	SessionDiagnosticFieldPlaybackChannels                 = "channels"

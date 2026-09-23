@@ -4,9 +4,50 @@
 package sessionterminal
 
 import (
+	"context"
+	"io"
+	"time"
+
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 )
+
+const (
+	// MaxDurationReason is the stable reason used by the bounded duration
+	// controller. It is owned by terminal policy rather than a host runner.
+	MaxDurationReason messages.TerminalReason = "max_duration"
+	// ReplayCompleteClassification is the stable replay completion taxonomy.
+	ReplayCompleteClassification = "replay_complete"
+)
+
+type terminalErrorCode string
+
+func (e terminalErrorCode) Error() string { return string(e) }
+
+const (
+	ErrAlreadyPublished terminalErrorCode = "session terminal already published"
+	ErrDurationExpired  terminalErrorCode = "session max duration expired"
+)
+
+const (
+	StragglerDrainQuietPeriod = 25 * time.Millisecond
+	StragglerDrainWallSafety  = 250 * time.Millisecond
+)
+
+// TerminationOptions supplies host-owned resource callbacks around the
+// service-owned ordering and bounded shutdown policy.
+type TerminationOptions struct {
+	Context            context.Context
+	QuiesceUpstream    func() error
+	WaitForStragglers  func() error
+	StopOwnedResources func() error
+	FlushBuffered      func() error
+}
+
+// TerminationBoundary is the one-shot terminal cleanup boundary for a run.
+type TerminationBoundary interface {
+	Terminate(error) error
+}
 
 const (
 	// MaxDiagnosticItems bounds each collection crossing the terminal service
@@ -203,6 +244,18 @@ type Result struct {
 	Error      error
 	Records    []Record
 	Accounting *FinalAccounting
+}
+
+// Reporter is the invocation-local terminal side-effect boundary. It records
+// stream evidence without writing, reconciles all causes at Publish, and
+// consumes itself exactly once. Implementations are created by Wire.
+type Reporter interface {
+	MarkRunStarted()
+	ObserveStreamMessage(messages.StreamMessage, bool)
+	MarkDurationExpiry(bool, messages.TerminalOutputState)
+	MarkReplayComplete()
+	RecordArtifactFinalization(bool, error)
+	Publish(io.Writer, error) error
 }
 
 // Service owns terminal precedence, error classification, cancellation output

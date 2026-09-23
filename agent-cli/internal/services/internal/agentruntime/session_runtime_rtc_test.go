@@ -264,7 +264,7 @@ func TestPlanSessionRuntime_WebRTCDispatchesThroughRuntimeFactory(t *testing.T) 
 
 	failedRuntime := &testSessionRTCRuntime{}
 	loaded := &config.Config{Model: config.ModelConfig{Provider: config.ProviderOpenAI, OpenAI: &config.OpenAIConfig{Model: openAIRealtimeDefaultModel, APIKey: "openai-runtime-test-key"}}}
-	factory := defaultSessionRuntimeFactory
+	factory := defaultSessionRuntimeFactory()
 	factory.newRTCRuntime = func(SessionRuntimeSelection) (SessionRTCRuntime, error) { return failedRuntime, nil }
 	_, err = planSessionRuntimeWithFactory(SessionRunOptions{
 		ModelCatalog: testModelCatalog(), LoadedConfig: loaded, Provider: config.ProviderOpenAI,

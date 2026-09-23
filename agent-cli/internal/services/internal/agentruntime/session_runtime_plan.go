@@ -16,6 +16,10 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
+	sessionterminalwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
@@ -166,14 +170,14 @@ type sessionRuntimePlan struct {
 	flushCapture           func() error
 	flushCaptureTo         func(string) error
 	finalize               func(context.Context, io.Writer) error
-	replayCompletion       func(*sessionTerminalReporter)
+	replayCompletion       func(sessionterminal.Reporter)
 	diagnostics            SessionDiagnosticSink
 	metricsRecorder        metrics.Recorder
 	streamObserver         SessionStreamObserver
 	audioInputs            []ScheduledAudioInput
 	scheduledAudioDispatch ScheduledAudioDispatchPolicy
 	clockSource            platformclock.Source
-	runtime                *sessionRuntimeObservationRecorder
+	runtime                sessiontrace.RuntimeRecorder
 	rtcRuntime             SessionRTCRuntime
 	closeSession           func() error
 	selection              SessionRuntimeSelection
@@ -223,16 +227,16 @@ func (p sessionRuntimePlan) liveOutput(prefix string) (string, string) {
 func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr error) {
 	reporter := p.loop.terminalReporter
 	if reporter == nil {
-		reporter = newSessionTerminalReporter()
+		reporter = sessionterminalwire.NewReporter()
 		p.loop.terminalReporter = reporter
 	}
 	finalizer := newSessionRuntimeFinalizer(p)
 	defer func() {
 		runErr = finalizer.finish(ctx, out, runErr)
-		if !sessionErrorHasIndependentFailure(runErr) && p.replayCompletion != nil {
+		if !sessionterminalwire.HasIndependentFailure(runErr) && p.replayCompletion != nil {
 			p.replayCompletion(reporter)
 		}
-		runErr = errors.Join(runErr, reporter.publish(out, runErr))
+		runErr = errors.Join(runErr, reporter.Publish(out, runErr))
 	}()
 	if p.replayIntegrityWarning != "" {
 		if _, err := fmt.Fprintln(out, p.replayIntegrityWarning); err != nil {
@@ -252,7 +256,7 @@ func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr erro
 	loop := p.loop
 	p.configureLoopObserver(&loop)
 	if p.inferencer != nil {
-		reporter.markRunStarted()
+		reporter.MarkRunStarted()
 		if err := runAgentLoopSession(ctx, loopOut, p.inferencer, loop); err != nil {
 			return wrapSessionRuntimeError(p, wrapSessionPhaseError("run session loop", err))
 		}
@@ -298,26 +302,21 @@ func (p sessionRuntimePlan) configureLoopObserver(loop *sessionLoopOptions) {
 	if loop == nil {
 		return
 	}
-	obs := newSessionProgressObserver(p.diagnostics, p.metricsRecorder, p.provider, p.model)
-	obs.streamObserver = p.streamObserver
-	obs.runtime = p.runtime
-	obs.livenessClock = loop.livenessClock
-	if obs.livenessClock == nil {
-		obs.livenessClock = loop.livenessClock
-	}
-	obs.cancellationIntent = loop.cancellationIntent
-	obs.requireSessionUpdated = loop.RequireSessionUpdated
-	obs.scheduledAudioDispatch = loop.ScheduledAudioDispatch
-	obs.scheduleAudioInputs(p.audioInputs)
+	obs := sessiontracewire.NewObserver(sessiontrace.NewObserverOptions{
+		Sink:                   p.diagnostics,
+		Recorder:               p.metricsRecorder,
+		Provider:               p.provider,
+		Model:                  p.model,
+		StreamObserver:         p.streamObserver,
+		RuntimeRecorder:        p.runtime,
+		TerminalService:        sessionterminalwire.NewService(),
+		CancellationIntent:     loop.cancellationIntent,
+		LivenessClock:          loop.livenessClock,
+		RequireSessionUpdated:  loop.RequireSessionUpdated,
+		ScheduledAudioDispatch: sessiontrace.ScheduledAudioDispatchPolicy(loop.ScheduledAudioDispatch),
+	})
+	obs.ScheduleAudioInputs(p.audioInputs)
 	loop.observer = obs
-}
-func planSessionRuntime(opts SessionRunOptions) (sessionRuntimePlan, error) {
-	return planSessionRuntimeWithContext(context.Background(), opts)
-}
-
-//lint:ignore U1000 package tests exercise the context-free planning seam.
-func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
-	return planSessionRuntimeWithFactoryAndContext(context.Background(), opts, factory)
 }
 
 // wireSessionRecordingClaim redirects one recording plan's capture flush

@@ -7,8 +7,14 @@
 package wire
 
 import (
+	"context"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/internal/observer"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/internal/service"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 // Injectors from providers.go:
@@ -16,4 +22,64 @@ import (
 func NewService() sessiontrace.Service {
 	serviceService := service.New()
 	return serviceService
+}
+
+func NewLiveRecorder(options sessiontrace.LiveRecorderOptions) session.LiveRecorder {
+	liveRecorder := service.NewLiveRecorder(options)
+	return liveRecorder
+}
+
+func NewRuntimeRecorder(observer sessiontrace.RuntimeObserver, source clock.Source) sessiontrace.RuntimeRecorder {
+	runtimeRecorder := service.NewRuntimeRecorder(observer, source)
+	return runtimeRecorder
+}
+
+func NewProviderWireDialer(inner transport.Dialer, observer sessiontrace.RuntimeObserver, source clock.Source) sessiontrace.ProviderDialer {
+	providerDialer := service.NewProviderWireDialer(inner, observer, source)
+	return providerDialer
+}
+
+func NewReplayMetricsCollector(options sessiontrace.MetricsCollectorOptions) sessiontrace.MetricsCollector {
+	metricsCollector := service.NewReplayMetricsCollector(options)
+	return metricsCollector
+}
+
+func NewPlaybackDiagnostics(options sessiontrace.PlaybackDiagnosticsOptions) sessiontrace.PlaybackDiagnostics {
+	playbackDiagnostics := service.NewPlaybackDiagnostics(options)
+	return playbackDiagnostics
+}
+
+func NewObserver(options sessiontrace.NewObserverOptions) sessiontrace.Observer {
+	sessiontraceObserver := observer.NewObserver(options)
+	return sessiontraceObserver
+}
+
+// providers.go:
+
+func CombineDiagnosticSinks(sinks ...sessiontrace.DiagnosticSink) sessiontrace.DiagnosticSink {
+	return service.CombineDiagnosticSinks(sinks...)
+}
+
+func MergeErrorChannels(ctx context.Context, first, second <-chan error) <-chan error {
+	return service.MergeErrorChannels(ctx, first, second)
+}
+
+func NewCancellationIntent() sessiontrace.CancellationIntent {
+	return service.NewCancellationIntent()
+}
+
+func LivenessClockFromSource(source clock.Source) sessiontrace.LivenessClock {
+	return service.LivenessClockFromSource(source)
+}
+
+func LivenessMetadata(err error) (string, messages.TerminalReason, messages.TerminalProvenance, messages.TerminalOutputState) {
+	return service.LivenessMetadata(err)
+}
+
+func OutputStateForProgress(open bool, turns int) string {
+	return service.OutputStateForProgress(open, turns)
+}
+
+func NewUnresolvedToolResultsError(ids []string, statuses map[string]messages.SessionSendStatus) *sessiontrace.UnresolvedToolResultsError {
+	return observer.NewUnresolvedToolResultsError(ids, statuses)
 }

@@ -1,0 +1,27 @@
+{
+  "command": [
+    "python3",
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/factory/scripts/project-control.py",
+    "verify-work",
+    "--type",
+    "task",
+    "--name",
+    "audio-runtime-c117-repair-c113-public-trace-publication",
+    "--root",
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness"
+  ],
+  "manifest": {
+    "acceptance_waiver": false,
+    "baselineRevision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
+    "contractRevision": "audio-runtime-v1",
+    "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/factory/projects/audio-runtime/manifest.json",
+    "project": "audio-runtime",
+    "sha256": "47971e0cb27bcf4d8a863d7931e0956bff7aceca6fd2b6daa02417b7f165ec34",
+    "sole_project": true
+  },
+  "payload": {
+    "name": "audio-runtime-c117-repair-c113-public-trace-publication",
+    "project": "audio-runtime",
+    "status": "admitted"
+  }
+}

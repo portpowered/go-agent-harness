@@ -1,0 +1,63 @@
+{
+  "schema": "audio-runtime.c119.ci-rejection.v1",
+  "run": "34763656307",
+  "job": "103740708513",
+  "check": "CI (coverage)",
+  "source_head": "3e6453d266551c1772325909e94d2111ef0d33de",
+  "failed_step": "Run coverage profiles and coverage gate",
+  "command": "make coverage",
+  "failure": {
+    "package": "agent-cli/test/integration",
+    "test": "TestSessionCommand_ReplayCorruptedProducedCaptureReportsNestedDivergence",
+    "file": "agent-cli/test/integration/s2s_record_replay_diagnosis_test.go:405",
+    "expected": "replay mismatch",
+    "observed": "context deadline exceeded",
+    "agent_cli_coverage_elapsed": "6m42.27s",
+    "agent_cli_coverage_budget": "8m0s"
+  },
+  "inspection": {
+    "completed_job_log_read": true,
+    "only_assertion_failure_in_log": true,
+    "c119_owned_path": false,
+    "c119_cause_demonstrated": false,
+    "c119_repair_applied": false,
+    "waiver": false
+  },
+  "local_reproduction": [
+    {
+      "source_head": "c18b20d34",
+      "command": "rtk go test ./test/integration -tags=nomicrophone -run ^TestSessionCommand_ReplayCorruptedProducedCaptureReportsNestedDivergence$ -count=1 -timeout=120s -v",
+      "exit_code": 0
+    },
+    {
+      "source_head": "c18b20d34",
+      "command": "rtk go test ./test/integration -tags=nomicrophone -run ^TestSessionCommand_ReplayCorruptedProducedCaptureReportsNestedDivergence$ -count=1 -timeout=120s -coverpkg=github.com/portpowered/go-agent-harness/agent-cli/...,github.com/portpowered/go-agent-harness/go-agent-runtime/... -coverprofile=/tmp/c119-replay-diagnosis.cover.out -v",
+      "exit_code": 0
+    }
+  ],
+  "current_head_validation": {
+    "source_head": "c18b20d34",
+    "service_normal": "12 passed in 3 packages",
+    "service_race": "9 passed in 3 packages",
+    "external_consumer": "exit 0",
+    "causal_verifier": "accepted; both mutants failed their intended semantic oracles",
+    "accumulated_regressions": "exit 0 in normal, coverage, and race modes",
+    "fmt": 0,
+    "vet": 0,
+    "lint": "0 issues with pinned golangci-lint 2.9.0",
+    "staticcheck": "exit 0 with pinned Staticcheck 2026.1",
+    "wire": 0,
+    "architecture_size": "202 packages, 1938 files, 28752 functions",
+    "diff_check": 0
+  },
+  "remaining_prerequisite": {
+    "check": "make coverage-registration",
+    "exit_code": 1,
+    "missing_package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/causal",
+    "missing_manifest": "coverage-manifest/go-agent-runtime/services/session/internal/live/causal/package.json",
+    "owner": "peer C127 / primary ownership decision",
+    "c119_may_edit": false
+  },
+  "status": "executor-continue; no Script CI green claim",
+  "next_action": "Have the primary assign or release the peer C127 coverage manifest prerequisite; then integrate the accepted current origin/main into this same branch, rerun coverage registration and affected bounded checks, push the changed head, and submit the same task to Script CI without polling."
+}

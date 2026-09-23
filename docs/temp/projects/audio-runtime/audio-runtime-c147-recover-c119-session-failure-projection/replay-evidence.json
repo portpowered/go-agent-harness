@@ -1,0 +1,128 @@
+{
+  "schema": "audio-runtime.c147.replay-evidence.v1",
+  "candidate": {
+    "sourceRevision": "071ba33467249ce33970f5f42533deea94259552",
+    "currentMainRevision": "4a1c399ccbb3d780be95eb04316e84b8f11a6646",
+    "startupIntegrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+    "sourceArchive": {
+      "format": "tar",
+      "bytes": 367452160,
+      "sha256": "0f5c65744ab2bdec934b3efb8e2a1872276e610cdeba488d628027135bbcbdd6"
+    }
+  },
+  "binary": {
+    "path": "docs/temp/projects/audio-runtime/audio-runtime-c119-retire-cli-session-failure-projection/artifacts/yui",
+    "bytes": 53274914,
+    "sha256": "a011f38ee954afb0774cac224b29ac5c61602087c0de8167310cbd59a4629be4",
+    "builtFrom": "071ba33467249ce33970f5f42533deea94259552"
+  },
+  "runner": {
+    "path": "docs/temp/projects/audio-runtime/audio-runtime-c119-retire-cli-session-failure-projection/run.py",
+    "sha256": "3ae4a92ff115f5c0c20388c98291d9211dc9f7c48c7332e5bba12d6286d15e6c",
+    "artifactPath": "docs/temp/projects/audio-runtime/audio-runtime-c119-retire-cli-session-failure-projection/artifacts/run-1789333013-59752.json",
+    "artifactBytes": 16406,
+    "artifactSha256": "612e55e0c6039c3f9dd02902f9b1ad2ef405ffe8fd919907e3ab36289b08f448",
+    "status": "accepted",
+    "cases": [
+      "provider-error",
+      "synthesized-provider-close",
+      "cancellation-negative",
+      "healthy-audio-tool-continuation"
+    ],
+    "credentialFree": true,
+    "softwareReplay": true,
+    "realtimeSessions": 0,
+    "durationSeconds": 2.781697
+  },
+  "fixtures": [
+    {
+      "case": "provider-error",
+      "path": "go-llm-gateway/pkg/testing/testdata/session-fixtures/session_failure_auth.session.json",
+      "sha256": "1ae17d868b52b3eea6e33f9118d6fde51af9bd870012e2eacc2856169386022e"
+    },
+    {
+      "case": "synthesized-provider-close",
+      "path": "go-llm-gateway/pkg/testing/testdata/session-fixtures/s2s-v6b-error-disconnect-mid-session.session.json",
+      "sha256": "e9c4f23ff3e53b9a482437d968c222102a745910c050fe66341fdc6eac7fa706"
+    },
+    {
+      "case": "healthy-audio-tool-continuation",
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
+      "sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169"
+    }
+  ],
+  "records": [
+    {
+      "case": "provider-error",
+      "exitCode": 1,
+      "timedOut": false,
+      "reaped": true,
+      "groupAliveAfterExit": false,
+      "audioBytes": 44,
+      "terminal": {
+        "reason": "terminal_failure",
+        "classification": "terminal_failure",
+        "terminalReason": "terminal_failure",
+        "terminalProvenance": "session",
+        "outputState": "none"
+      },
+      "manifestPath": "docs/temp/projects/audio-runtime/audio-runtime-c119-retire-cli-session-failure-projection/artifacts/provider-error-1789333010730210000-59752/record/manifest.json",
+      "manifestSha256": "9f49d0d6b414de24169912224f410efb4e474a67cad988b58ef30f50fa44b4ec"
+    },
+    {
+      "case": "synthesized-provider-close",
+      "exitCode": 1,
+      "timedOut": false,
+      "reaped": true,
+      "groupAliveAfterExit": false,
+      "audioBytes": 44,
+      "terminal": {
+        "reason": "provider_closed",
+        "classification": "transport",
+        "terminalReason": "provider_close",
+        "terminalProvenance": "provider",
+        "outputState": "partial"
+      },
+      "manifestPath": "docs/temp/projects/audio-runtime/audio-runtime-c119-retire-cli-session-failure-projection/artifacts/synthesized-provider-close-1789333011230936000-59752/record/manifest.json",
+      "manifestSha256": "5a9e17ec47499b8cbdbd486375a8b944afded34e0e56b3aa66e7de0e83933b3b"
+    },
+    {
+      "case": "cancellation-negative",
+      "exitCode": 0,
+      "timedOut": false,
+      "reaped": true,
+      "groupAliveAfterExit": false,
+      "test": "TestSessionSIGINTCancellationDoesNotSuppressIndependentFailure",
+      "assertion": "cancellation path passed without a false failure"
+    },
+    {
+      "case": "healthy-audio-tool-continuation",
+      "exitCode": 0,
+      "timedOut": false,
+      "reaped": true,
+      "groupAliveAfterExit": false,
+      "audioBytes": 3244,
+      "observableMarker": "PROBE_TOOL_MARKER_9182",
+      "observableContinuation": "strict replay continuation",
+      "terminal": {
+        "reason": "fixture_complete",
+        "classification": "provider_close",
+        "terminalReason": "provider_close",
+        "terminalProvenance": "provider",
+        "outputState": "not_applicable"
+      },
+      "manifestPath": "docs/temp/projects/audio-runtime/audio-runtime-c119-retire-cli-session-failure-projection/artifacts/healthy-audio-tool-continuation-1789333013911349000-59752/record/manifest.json",
+      "manifestSha256": "d407b780cc02cd68d8799bde409ede8a0fea85e40f67cccb1422e0bf98004138"
+    }
+  ],
+  "identity": {
+    "serviceNormalRaceAndConsumer": "passed in final verifier artifact",
+    "errorsIsErrorsAs": "passed in the unchanged service identity tables",
+    "zeroSurvivors": true
+  },
+  "scope": {
+    "nativeWindowsHardware": "out of scope",
+    "physicalAcoustics": "out of scope",
+    "projectWideAcceptance": "not claimed"
+  }
+}
