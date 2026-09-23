@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
@@ -14,14 +14,14 @@ type session struct {
 	inner      messages.Session
 	wirePrompt string
 	seed       sessionturn.Seed
-	lifecycle  sessiondiagnostics.Service
+	lifecycle  sessiontrace.LifecycleService
 	observer   sessionturn.ToolLifecycleObserver
 	receive    *messages.TypedBuffer[messages.StreamMessage]
 	seedMu     sync.Mutex
 	seedSent   bool
 }
 
-func newSession(ctx context.Context, inner messages.Session, wirePrompt string, seed sessionturn.Seed, lifecycle sessiondiagnostics.Service, observer sessionturn.ToolLifecycleObserver) *session {
+func newSession(ctx context.Context, inner messages.Session, wirePrompt string, seed sessionturn.Seed, lifecycle sessiontrace.LifecycleService, observer sessionturn.ToolLifecycleObserver) *session {
 	s := &session{
 		inner:      inner,
 		wirePrompt: wirePrompt,
@@ -92,17 +92,17 @@ func (s *session) observeToolResult(ctx context.Context, callID string, outcome 
 	event := sessionturn.ToolLifecycleEvent{CallID: callID}
 	if outcome.OK() {
 		event.Type = sessionturn.ToolResultAccepted
-		observation, err := s.lifecycle.Apply(ctx, sessiondiagnostics.Event{Kind: sessiondiagnostics.EventToolResultAccepted, CallID: callID})
+		observation, err := s.lifecycle.Apply(ctx, sessiontrace.LifecycleEvent{Kind: sessiontrace.LifecycleEventToolResultAccepted, CallID: callID})
 		if (err != nil || !observation.Accepted) && !s.lifecycle.Snapshot().ActiveResponse {
-			_, _ = s.lifecycle.Apply(ctx, sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseOpen})
-			observation, err = s.lifecycle.Apply(ctx, sessiondiagnostics.Event{Kind: sessiondiagnostics.EventToolResultAccepted, CallID: callID})
+			_, _ = s.lifecycle.Apply(ctx, sessiontrace.LifecycleEvent{Kind: sessiontrace.LifecycleEventResponseOpen})
+			observation, err = s.lifecycle.Apply(ctx, sessiontrace.LifecycleEvent{Kind: sessiontrace.LifecycleEventToolResultAccepted, CallID: callID})
 		}
 		if err != nil || !observation.Accepted {
 			event.Type = sessionturn.ToolResultRejected
 			event.Status = messages.SessionSendClosed
 		} else {
 			if completeResponse {
-				observation, err = s.lifecycle.Apply(ctx, sessiondiagnostics.Event{Kind: sessiondiagnostics.EventToolResponseComplete, CallID: callID})
+				observation, err = s.lifecycle.Apply(ctx, sessiontrace.LifecycleEvent{Kind: sessiontrace.LifecycleEventToolResponseComplete, CallID: callID})
 				if err != nil || !observation.Accepted {
 					event.Type = sessionturn.ToolResultRejected
 					event.Status = messages.SessionSendClosed
@@ -117,7 +117,7 @@ func (s *session) observeToolResult(ctx context.Context, callID string, outcome 
 	} else {
 		event.Type = sessionturn.ToolResultRejected
 		event.Status = outcome.Status
-		_, _ = s.lifecycle.Apply(ctx, sessiondiagnostics.Event{Kind: sessiondiagnostics.EventToolResultRejected, CallID: callID, ResultStatus: string(outcome.Status)})
+		_, _ = s.lifecycle.Apply(ctx, sessiontrace.LifecycleEvent{Kind: sessiontrace.LifecycleEventToolResultRejected, CallID: callID, ResultStatus: string(outcome.Status)})
 	}
 	if s.observer != nil {
 		s.observer(event)
@@ -129,7 +129,7 @@ func (s *session) observeToolContinuation(ctx context.Context, callID string) {
 		return
 	}
 	ctx = lifecycleContext(ctx)
-	observation, err := s.lifecycle.Apply(ctx, sessiondiagnostics.Event{Kind: sessiondiagnostics.EventContinuationRequested, CallID: callID})
+	observation, err := s.lifecycle.Apply(ctx, sessiontrace.LifecycleEvent{Kind: sessiontrace.LifecycleEventContinuationRequested, CallID: callID})
 	if err == nil && observation.Accepted && s.observer != nil {
 		s.observer(sessionturn.ToolLifecycleEvent{Type: sessionturn.ToolContinuationRequested, CallID: callID})
 	}

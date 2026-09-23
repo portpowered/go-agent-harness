@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
-	sd "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
+	sd "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/lifecycle"
 )
 
 var ErrSessionUnresolvedToolResults = sessionterminal.ErrUnresolvedToolResults

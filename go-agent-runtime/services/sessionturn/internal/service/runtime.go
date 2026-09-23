@@ -8,7 +8,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn/internal/seed"
 	turns "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn/internal/turns"
@@ -21,7 +21,7 @@ type Dependencies struct {
 	ImageStaging       tools.ImageStaging
 	ToolService        tools.Service
 	InstructionService session.InstructionService
-	LifecycleFactory   func() sessiondiagnostics.Service
+	LifecycleFactory   func() sessiontrace.LifecycleService
 }
 
 type Service struct{ deps Dependencies }
@@ -60,7 +60,7 @@ func (s *Service) Prepare(ctx context.Context, request sessionturn.Request) (ses
 	if allocator == nil && s != nil {
 		allocator = s.deps.Allocator
 	}
-	var continuation sessiondiagnostics.Service
+	var continuation sessiontrace.LifecycleService
 	if s != nil && s.deps.LifecycleFactory != nil {
 		continuation = s.deps.LifecycleFactory()
 	}
@@ -268,7 +268,7 @@ type runtime struct {
 	policy          tools.InteractiveToolPolicy
 	output          *seed.Service
 	wirePrompt      string
-	continuation    sessiondiagnostics.Service
+	continuation    sessiontrace.LifecycleService
 	imageCleanup    func() error
 
 	mu          sync.Mutex
@@ -284,7 +284,7 @@ func (r *runtime) ToolDefinitions() []messages.ToolDefinition {
 }
 func (r *runtime) InteractiveToolPolicy() tools.InteractiveToolPolicy { return clonePolicy(r.policy) }
 func (r *runtime) WirePrompt() string                                 { return r.wirePrompt }
-func (r *runtime) Continuation() sessiondiagnostics.Service           { return r.continuation }
+func (r *runtime) Continuation() sessiontrace.LifecycleService        { return r.continuation }
 
 func (r *runtime) RunTurn(ctx context.Context, request sessionturn.TurnRequest) (sessionturn.TurnResult, error) {
 	turn, err := r.turns.RunTurn(ctx, request.Input, request.Direction, request.StartTick, request.EndTick)

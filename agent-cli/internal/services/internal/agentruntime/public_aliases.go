@@ -13,7 +13,7 @@ type SessionToolDiagnostic = public.SessionToolDiagnostic
 type SessionToolDiagnosticSink = public.SessionToolDiagnosticSink
 type SessionToolDiagnosticFunc = public.SessionToolDiagnosticFunc
 
-func NewSessionCancellationIntent() *SessionCancellationIntent {
+func NewSessionCancellationIntent() SessionCancellationIntent {
 	return public.NewSessionCancellationIntent()
 }
 

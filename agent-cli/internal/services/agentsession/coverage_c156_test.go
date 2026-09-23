@@ -226,11 +226,10 @@ func TestC156RequestAndAudioInputPreserveCallerMetadata(t *testing.T) {
 	}
 }
 
-func TestC156CancellationIntentIsNilSafeAndMonotonic(t *testing.T) {
-	var nilIntent *SessionCancellationIntent
-	nilIntent.MarkSIGINT()
-	if nilIntent.SIGINTReceived() {
-		t.Fatal("nil cancellation intent reported SIGINT")
+func TestC156CancellationIntentIsOptionalAndMonotonic(t *testing.T) {
+	var nilIntent SessionCancellationIntent
+	if nilIntent != nil {
+		t.Fatal("unset cancellation intent was non-nil")
 	}
 
 	intent := NewSessionCancellationIntent()

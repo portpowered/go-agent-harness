@@ -8,9 +8,9 @@ import (
 	sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
-	sessiondiagnostics "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
-	sessiondiagnosticswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+	sessiondiagnostics "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/lifecycle"
+	sessiondiagnosticswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	"sync"
 )
 
@@ -203,7 +203,7 @@ type sessionProgressObserver struct {
 	// state or evidence.
 	turnAdmission      func(messages.StreamMessage) bool
 	runtime            *sessionRuntimeObservationRecorder
-	cancellationIntent *SessionCancellationIntent
+	cancellationIntent SessionCancellationIntent
 	provider           string
 	model              string
 	sawSessionOpen     bool
@@ -424,7 +424,7 @@ func newSessionProgressObserver(sink SessionDiagnosticSink, recorder metrics.Rec
 		panic(err)
 	}
 	return &sessionProgressObserver{
-		lifecycle:            sessiondiagnosticswire.NewService(sessiondiagnostics.Options{}),
+		lifecycle:            sessiondiagnosticswire.NewLifecycleService(),
 		sink:                 sink,
 		recorder:             recorder,
 		productionSink:       productionSink,

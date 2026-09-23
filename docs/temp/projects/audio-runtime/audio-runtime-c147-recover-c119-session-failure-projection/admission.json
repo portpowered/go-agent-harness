@@ -1,0 +1,33 @@
+{
+  "schema": "audio-runtime.c147.admission.v1",
+  "project": "audio-runtime",
+  "contractRevision": "audio-runtime-v1",
+  "factorySession": "~default",
+  "verifyWork": {
+    "command": "python3 $FACTORY_ROOT/factory/scripts/project-control.py verify-work --type task --name audio-runtime-c147-recover-c119-session-failure-projection",
+    "status": "admitted",
+    "project": "audio-runtime",
+    "name": "audio-runtime-c147-recover-c119-session-failure-projection"
+  },
+  "secondProject": false,
+  "acceptanceWaiver": false,
+  "logicalBranch": "codex/audio-runtime-c147-recover-c119-session-failure-projection",
+  "adoptedBranch": "codex/audio-runtime-c119-retire-cli-session-failure-projection",
+  "adoptedWorktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c119-retire-cli-session-failure-projection",
+  "pullRequest": 505,
+  "startupIntegrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+  "planningBaseline": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
+  "currentMainRevision": "4a1c399ccbb3d780be95eb04316e84b8f11a6646",
+  "candidateBeforeRepair": "62cdc8657c3f515c66f311cfa577e45df9db8992",
+  "preservedRemoteHead": "a15b8112c84b7f3a6eb98c176094237b29d97e11",
+  "predecessor": {
+    "prdSha256": "9126fa29a974dfc23497245abc61472a6cb06f17f65946a04e05d2278223862f",
+    "progressSha256": "4ce380ea1a579cdf16b6e3b6706db47daa31a83899d9228d37a00e066e89941d",
+    "admissionSha256": "183781acee677d6f276bd81d4a326463fe5308e5d5ae72480aba33631674f92b",
+    "dirtyDiffSha256": "70e97ec45c91e0be3ba0f5de70a54bf2d3481b2cd19cf87ce706192abdfae767",
+    "rejectedArtifactSource": "a7459900",
+    "rejectedArtifactSha256Prefix": "2f6634",
+    "peerRegressionRun": 34747817964,
+    "peerRegression": "exactly 6,400 samples lost; retained as unwaived negative evidence"
+  }
+}

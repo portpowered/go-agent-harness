@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -12,7 +14,9 @@ import (
 	"testing"
 	"time"
 
+	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/recording"
 )
@@ -27,6 +31,85 @@ func TestPrepareRequiresClockAndNoOpsWhenDisabled(t *testing.T) {
 	}
 }
 
+func TestRemoteRenderMonitorStopIsBoundedBeforeFinalPoll(t *testing.T) {
+	requests := make(chan struct{}, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, request *http.Request) {
+		requests <- struct{}{}
+		<-request.Context().Done()
+	}))
+	defer server.Close()
+	monitor := &remoteRenderMonitor{endpoint: strings.TrimPrefix(server.URL, "http://"), observer: func(int, []int16) {}, cancel: func() {}, done: make(chan struct{})}
+	started := time.Now()
+	monitor.Stop()
+	if elapsed := time.Since(started); elapsed > remoteRenderStopTimeout+50*time.Millisecond {
+		t.Fatalf("remote render stop took %s, want at most %s", elapsed, remoteRenderStopTimeout+50*time.Millisecond)
+	}
+	if len(requests) != 0 {
+		t.Fatal("remote render stop polled after its deadline")
+	}
+}
+
+func TestTraceDeviceAdapterEdgePolicies(t *testing.T) {
+	if wrapDeviceService(nil, sessiontrace.DeviceBinding{}) != nil {
+		t.Fatal("nil device service was wrapped")
+	}
+	if handle, err := (traceDeviceService{inner: &traceContractDeviceService{}}).Open(context.Background(), runtimeDevices.Request{}); err != nil || handle != nil {
+		t.Fatalf("nil device handle = %v, %v; want nil handle without error", handle, err)
+	}
+	if (&traceDeviceHandle{}).Media() != (runtimeDevices.MediaPorts{}) {
+		t.Fatal("empty trace handle exposed media ports")
+	}
+	var nilHandle *traceDeviceHandle
+	if err := nilHandle.Close(); err != nil {
+		t.Fatalf("nil trace handle close = %v", err)
+	}
+
+	capture := &traceContractCapture{}
+	wrappedCapture := &traceCapture{inner: capture}
+	if err := wrappedCapture.Close(); err != nil || capture.closeCount != 1 {
+		t.Fatalf("capture close = %v, count %d", err, capture.closeCount)
+	}
+	var observedRate int
+	outbound := &traceCaptureOutbound{
+		target: &traceContractOutbound{},
+		rate:   12_345,
+		observer: func(rate int, samples []int16) {
+			observedRate = rate
+			if !reflect.DeepEqual(samples, []int16{1, 2}) {
+				t.Fatalf("observed samples = %v", samples)
+			}
+		},
+	}
+	if err := outbound.WriteFrame(context.Background(), audio.PCMFrame{Samples: []int16{1, 2}}); err != nil {
+		t.Fatal(err)
+	}
+	if observedRate != 12_345 {
+		t.Fatalf("fallback observation rate = %d", observedRate)
+	}
+	if err := outbound.WriteFrame(context.Background(), audio.PCMFrame{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := outbound.Close(); err != nil {
+		t.Fatalf("outbound close = %v", err)
+	}
+	if err := (&traceCaptureOutbound{}).Close(); err != nil {
+		t.Fatalf("empty outbound close = %v", err)
+	}
+
+	if err := (&traceAudioSource{}).Close(); err != nil {
+		t.Fatalf("empty audio source close = %v", err)
+	}
+	if err := (&traceSampleSource{}).Close(); err != nil {
+		t.Fatalf("empty sample source close = %v", err)
+	}
+	var nilContext context.Context
+	if remoteRenderProbeContext(nilContext) == nil {
+		t.Fatal("nil remote probe context returned nil")
+	}
+	if _, err := newRemoteRenderMonitor(context.Background(), runtimeDevices.Request{}, nil, func(int, []int16) {}); err == nil {
+		t.Fatal("empty remote render request unexpectedly created a monitor")
+	}
+}
 func TestPrepareReportsStagingDirectoryFailure(t *testing.T) {
 	root := t.TempDir()
 	parent := filepath.Join(root, "not-a-directory")
@@ -38,12 +121,8 @@ func TestPrepareReportsStagingDirectoryFailure(t *testing.T) {
 		t.Fatal("staging failure returned nil error")
 	}
 }
-
 func TestPreparedTracePoliciesAndNilDeviceCallbacks(t *testing.T) {
-	prepared, err := New().Prepare(sessiontrace.Request{TraceAudio: true, RecordDirectory: filepath.Join(t.TempDir(), "requested"), Clock: clock.Real{}, CloseTimeout: time.Second})
-	if err != nil {
-		t.Fatal(err)
-	}
+	prepared := newPreparedTrace(t, sessiontrace.Request{TraceAudio: true, RecordDirectory: filepath.Join(t.TempDir(), "requested"), Clock: clock.Real{}, CloseTimeout: time.Second})
 	provider, providerOK := prepared.RuntimeObserver().(sessiontrace.ProviderBoundaryObserver)
 	commit, commitOK := prepared.RuntimeObserver().(sessiontrace.CommitPayloadObserver)
 	if !providerOK || !provider.ObserveProviderBoundaries() || !commitOK || commit.RetainCommitPayload() {
@@ -63,7 +142,6 @@ func TestPreparedTracePoliciesAndNilDeviceCallbacks(t *testing.T) {
 		t.Fatal(err)
 	}
 }
-
 func TestFinishCloseTimeoutRetainsStagedPath(t *testing.T) {
 	release := make(chan struct{})
 	completion := make(chan struct{})
@@ -109,7 +187,6 @@ func TestFinishCloseTimeoutRetainsStagedPath(t *testing.T) {
 		t.Fatalf("closeTrace calls = %d, want one", closeCalls)
 	}
 }
-
 func TestFinishRetryRetainsCloseCauseAndStagedPath(t *testing.T) {
 	closeCause := errors.New("trace close sentinel")
 	release := make(chan struct{})
@@ -164,7 +241,6 @@ func TestFinishRetryRetainsCloseCauseAndStagedPath(t *testing.T) {
 		t.Fatalf("closeTrace calls = %d, want one", closeCalls)
 	}
 }
-
 func TestFinishRetryHonorsCancellationWhileCloseInFlight(t *testing.T) {
 	release := make(chan struct{})
 	released := make(chan struct{})
@@ -224,7 +300,6 @@ func TestFinishRetryHonorsCancellationWhileCloseInFlight(t *testing.T) {
 		t.Fatalf("closeTrace calls = %d, want one", closeCalls)
 	}
 }
-
 func TestFinishUnpublishedEmptyBundleRetainsCloseCauseAndStagedPath(t *testing.T) {
 	successfulClosePath := t.TempDir()
 	successfulClose := &prepared{
@@ -249,7 +324,6 @@ func TestFinishUnpublishedEmptyBundleRetainsCloseCauseAndStagedPath(t *testing.T
 		t.Fatalf("empty unpublished finish lost staged path: %v", err)
 	}
 }
-
 func TestPreparedCapturesEdgesRedactsAndPublishes(t *testing.T) {
 	root := t.TempDir()
 	prepared, callbackOrder, observed := newCausalTrace(t, root)
@@ -408,10 +482,7 @@ func TestFinishRetainsStagedTraceOnUnpublishedDuplicateAndRenameFailure(t *testi
 }
 
 func TestFinishRejectsExistingAttachmentClaim(t *testing.T) {
-	prepared, err := New().Prepare(sessiontrace.Request{TraceAudio: true, RecordDirectory: filepath.Join(t.TempDir(), "requested"), Clock: clock.Real{}})
-	if err != nil {
-		t.Fatal(err)
-	}
+	prepared := newPreparedTrace(t, sessiontrace.Request{TraceAudio: true, RecordDirectory: filepath.Join(t.TempDir(), "requested"), Clock: clock.Real{}})
 	bundle := t.TempDir()
 	if err := os.WriteFile(filepath.Join(bundle, "audio-trace.claim"), []byte("claimed"), 0o600); err != nil {
 		t.Fatal(err)
@@ -425,17 +496,10 @@ func TestFinishRejectsExistingAttachmentClaim(t *testing.T) {
 }
 
 func TestFinishDoesNotOverwriteConcurrentDestination(t *testing.T) {
-	preparedValue, err := New().Prepare(sessiontrace.Request{TraceAudio: true, RecordDirectory: filepath.Join(t.TempDir(), "requested"), Clock: clock.Real{}})
-	if err != nil {
-		t.Fatal(err)
-	}
+	preparedValue := newPreparedTrace(t, sessiontrace.Request{TraceAudio: true, RecordDirectory: filepath.Join(t.TempDir(), "requested"), Clock: clock.Real{}})
 	bundle := t.TempDir()
 	destination := filepath.Join(bundle, "audio-trace")
-	preparedImpl, ok := preparedValue.(*prepared)
-	if !ok {
-		t.Fatal("prepared value has unexpected implementation")
-	}
-	preparedImpl.rename = func(oldPath, newPath string) error {
+	preparedValue.rename = func(oldPath, newPath string) error {
 		if err := os.Mkdir(newPath, 0o700); err != nil {
 			return err
 		}
@@ -445,7 +509,7 @@ func TestFinishDoesNotOverwriteConcurrentDestination(t *testing.T) {
 		return renameNoReplace(oldPath, newPath)
 	}
 
-	err = preparedValue.Finish(context.Background(), bundle, true)
+	err := preparedValue.Finish(context.Background(), bundle, true)
 	if !errors.Is(err, sessiontrace.ErrDestinationExists) {
 		t.Fatalf("concurrent destination error = %v", err)
 	}
@@ -458,18 +522,10 @@ func TestFinishDoesNotOverwriteConcurrentDestination(t *testing.T) {
 }
 
 func TestFinishHonorsCancellationAndCanCompleteLater(t *testing.T) {
-	preparedValue, err := New().Prepare(sessiontrace.Request{TraceAudio: true, RecordDirectory: filepath.Join(t.TempDir(), "requested"), Clock: clock.Real{}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	implementation, ok := preparedValue.(*prepared)
-	if !ok {
-		t.Fatal("prepared value has unexpected implementation")
-	}
-	if err := implementation.close(context.Background()); err != nil {
+	preparedValue := newPreparedTrace(t, sessiontrace.Request{TraceAudio: true, RecordDirectory: filepath.Join(t.TempDir(), "requested"), Clock: clock.Real{}})
+	if err := preparedValue.close(context.Background()); err != nil {
 		t.Fatalf("prepare completed close: %v", err)
 	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if err := preparedValue.Finish(ctx, "", true); !errors.Is(err, context.Canceled) {
@@ -481,10 +537,7 @@ func TestFinishHonorsCancellationAndCanCompleteLater(t *testing.T) {
 }
 
 func TestFinishRejectsNilContext(t *testing.T) {
-	prepared, err := New().Prepare(sessiontrace.Request{TraceAudio: true, RecordDirectory: filepath.Join(t.TempDir(), "requested"), Clock: clock.Real{}})
-	if err != nil {
-		t.Fatal(err)
-	}
+	prepared := newPreparedTrace(t, sessiontrace.Request{TraceAudio: true, RecordDirectory: filepath.Join(t.TempDir(), "requested"), Clock: clock.Real{}})
 	if err := prepared.Finish(nilContext(), "", true); err == nil {
 		t.Fatal("nil context returned nil error")
 	}
@@ -494,7 +547,18 @@ func TestFinishRejectsNilContext(t *testing.T) {
 }
 
 func nilContext() context.Context { return nil }
-
+func newPreparedTrace(t *testing.T, request sessiontrace.Request) *prepared {
+	t.Helper()
+	value, err := New().Prepare(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, ok := value.(*prepared)
+	if !ok {
+		t.Fatal("prepared value has unexpected implementation")
+	}
+	return result
+}
 func TestObserverChainSkipsNilObserver(t *testing.T) {
 	called := false
 	chain := observerChain{nil, sessiontrace.RuntimeObserverFunc(func(sessiontrace.SessionRuntimeObservation) { called = true })}

@@ -1,0 +1,53 @@
+{
+  "schema": "audio-runtime.c119.ci-rejection.v1",
+  "source_revision": "494e91e106d2bd21ce5db5a78b28c71164259d44",
+  "origin_main": "1a8467246c6607a06ffc7289075da2595724ce8b",
+  "ci": {
+    "run_id": "34747817964",
+    "job_id": "103698870781",
+    "check": "CI (integration)",
+    "failed_step": "Run production-binary audio-device replay integration",
+    "url": "https://github.com/portpowered/go-agent-harness/actions/runs/34747817964/job/103698870781",
+    "conclusion": "failure"
+  },
+  "failure": {
+    "test": "TestAgentBinaryTest45HighRateToolAudioRegression/trial_18",
+    "rendered_samples": 171191,
+    "compared_samples": 177591,
+    "lost_samples": 6400,
+    "retained_percent": 96.4,
+    "dropped_samples": 0,
+    "overflow_events": 0,
+    "discarded_samples": 0,
+    "discard_events": 0,
+    "underflow_events": 34,
+    "underflow_samples": 16000,
+    "zero_filled_samples": 16000
+  },
+  "candidate_scope": {
+    "c119_diff_has_audio_device_transport_or_integration_paths": false,
+    "c119_owned_paths_changed": true,
+    "peer_audio_failure_retained": true
+  },
+  "reproduction": [
+    {
+      "command": "cd agent-cli && YUI_AUDIO_STRESS=1 go run ./cmd/testtimeout --timeout 480s -- go test ./test/integration -run ^TestAgentBinaryTest45HighRateToolAudioRegression$ -count=1 -timeout 480s",
+      "exit_code": 0,
+      "duration_seconds": 18.362,
+      "result": "20-trial Test45 pass"
+    },
+    {
+      "command": "make test-audio-device-server-integration",
+      "exit_code": 0,
+      "duration_seconds": 105.114,
+      "result": "rejected integration target pass, including Test45/Test46 and companion process/device cases"
+    }
+  ],
+  "disposition": {
+    "reproduced": false,
+    "c119_code_repair": false,
+    "assertions_or_deadlines_weakened": false,
+    "ci_green_claimed": false,
+    "next_action": "Submit this changed evidence head to the script CI gate without polling; retain the same task for any exact new rejection and route any reproduced production-audio loss to its existing owner."
+  }
+}

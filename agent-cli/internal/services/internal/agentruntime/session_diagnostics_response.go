@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	sd "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
-	sdw "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire"
+	sd "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/lifecycle"
+	sdw "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 )
 
 type scheduledAudioResponseDisposition = sd.Disposition
@@ -23,7 +23,7 @@ func (o *sessionProgressObserver) ensureLifecycle() sd.Service {
 		return nil
 	}
 	if o.lifecycle == nil {
-		o.lifecycle = sdw.NewService(sd.Options{})
+		o.lifecycle = sdw.NewLifecycleService()
 	}
 	return o.lifecycle
 }

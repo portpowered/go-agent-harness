@@ -33,7 +33,7 @@ func newSessionToolExecutorWithInteractivePolicyAndObserverAndCancellationIntent
 	policy runtimeTools.InteractiveToolPolicy,
 	timeout time.Duration,
 	observer sessionToolLifecycleObserver,
-	_ *SessionCancellationIntent,
+	_ SessionCancellationIntent,
 	diagnostics SessionToolDiagnosticSink,
 ) messages.ToolExecutor {
 	request := sessionturn.Request{

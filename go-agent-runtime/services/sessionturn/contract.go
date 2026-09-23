@@ -15,7 +15,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
+	sessiondiagnostics "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/lifecycle"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 

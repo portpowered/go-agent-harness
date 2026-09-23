@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	sd "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
+	sd "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/lifecycle"
 )
 
 func TestSessionProgressObserver_SyntheticToolEnvelopeBeforeAndAfterContinuationStart(t *testing.T) {

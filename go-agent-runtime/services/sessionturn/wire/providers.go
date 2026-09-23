@@ -10,7 +10,7 @@ package wire
 import (
 	"github.com/google/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn/internal/service"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
@@ -22,7 +22,7 @@ type Dependencies struct {
 	ImageStaging       tools.ImageStaging
 	ToolService        tools.Service
 	InstructionService session.InstructionService
-	LifecycleFactory   func() sessiondiagnostics.Service
+	LifecycleFactory   func() sessiontrace.LifecycleService
 }
 
 func NewService(deps Dependencies) sessionturn.Service {

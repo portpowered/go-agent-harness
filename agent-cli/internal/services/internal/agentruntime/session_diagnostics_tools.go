@@ -7,7 +7,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/sight"
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	sd "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
+	sd "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/lifecycle"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 	tools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	"sort"

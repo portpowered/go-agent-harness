@@ -15,7 +15,7 @@ import (
 // cancellationOnly reports whether every known cause is a consequence of
 // stopping the run for an operator signal. Timeouts remain independent
 // failures even when a signal is observed nearby.
-func cancellationOnly(err error, intent *SessionCancellationIntent) bool {
+func cancellationOnly(err error, intent SessionCancellationIntent) bool {
 	return intent != nil && intent.SIGINTReceived() && cancellationErrorOnly(err)
 }
 
@@ -72,7 +72,7 @@ func cancellationLeaf(err error) bool {
 
 // observerCancellationIsClean adds the observer's typed stream failure state
 // to the cancellation check. Provider failures remain independent evidence.
-func observerCancellationIsClean(err error, intent *SessionCancellationIntent, observer *sessionProgressObserver) bool {
+func observerCancellationIsClean(err error, intent SessionCancellationIntent, observer *sessionProgressObserver) bool {
 	if !cancellationOnly(err, intent) {
 		return false
 	}

@@ -7,7 +7,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
-	sd "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
+	sd "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/lifecycle"
 )
 
 // account is the single observation seam: every counted byte crosses here
