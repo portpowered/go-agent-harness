@@ -232,7 +232,7 @@ func captureDocument(ctx context.Context, resolvePath func(context.Context, stri
 		return gatewaytesting.SessionCapture{}, fmt.Errorf("select exactly one source capture or synthetic session ID")
 	}
 	if hasSynthetic {
-		return syntheticCapture(request.SyntheticSessionID), nil
+		return syntheticCapture(request.SyntheticSessionID)
 	}
 	path, err := resolvePath(ctx, request.SourcePath)
 	if err != nil {
@@ -251,8 +251,8 @@ func captureDocument(ctx context.Context, resolvePath func(context.Context, stri
 	return loaded.Capture, nil
 }
 
-func syntheticCapture(sessionID string) gatewaytesting.SessionCapture {
-	return gatewaytesting.SessionCapture{
+func syntheticCapture(sessionID string) (gatewaytesting.SessionCapture, error) {
+	return replaycapture.SealReplayCapture(gatewaytesting.SessionCapture{
 		Version:  gatewaytesting.SessionCaptureVersion,
 		Provider: gatewaytesting.SessionProviderMetadata{Name: "probe", Model: "fixture"},
 		Session: gatewaytesting.SessionMetadata{
@@ -260,7 +260,7 @@ func syntheticCapture(sessionID string) gatewaytesting.SessionCapture {
 			FixtureProvenance: gatewaytesting.SessionFixtureProvenanceSynthetic,
 		},
 		Records: []gatewaytesting.CapturedSessionEvent{},
-	}
+	})
 }
 
 func contextError(ctx context.Context) error {

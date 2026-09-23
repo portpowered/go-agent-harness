@@ -17,6 +17,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 func captureRecord(direction gatewaytesting.SessionEventDirection, kind, payload string) gatewaytesting.CapturedSessionEvent {
@@ -453,15 +454,7 @@ func TestSessionInferencerStopsOnOutboundDivergence(t *testing.T) {
 }
 
 func TestPrepareLiveReplaysOrderedProviderTrafficAndDisconnect(t *testing.T) {
-	prepared := prepareLiveReplayForTest(t)
-	closeReplayTestResource(t, prepared, "prepared replay")
-	conn, err := prepared.WrapDialer(nil).Dial("ws://capture", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := conn.WriteMessage(1, []byte(`{"type":"session.update"}`)); err != nil {
-		t.Fatalf("initial session update: %v", err)
-	}
+	prepared, conn := openReadyLiveReplay(t)
 	readType := func(want string) {
 		t.Helper()
 		_, payload, err := conn.ReadMessage()
@@ -475,7 +468,6 @@ func TestPrepareLiveReplaysOrderedProviderTrafficAndDisconnect(t *testing.T) {
 			t.Fatalf("replayed payload=%s, type error=%v, want %q", payload, err, want)
 		}
 	}
-	readType("session.updated")
 	if err := conn.WriteMessage(1, []byte(`{"type":"conversation.item.create","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"hello"}]}}`)); err != nil {
 		t.Fatalf("recorded user message: %v", err)
 	}
@@ -499,22 +491,11 @@ func TestPrepareLiveReplaysOrderedProviderTrafficAndDisconnect(t *testing.T) {
 }
 
 func TestPrepareLiveReportsOutboundDivergenceAndStops(t *testing.T) {
-	prepared := prepareLiveReplayForTest(t)
-	closeReplayTestResource(t, prepared, "prepared replay")
-	conn, err := prepared.WrapDialer(nil).Dial("ws://capture", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := conn.WriteMessage(1, []byte(`{"type":"session.update"}`)); err != nil {
-		t.Fatalf("initial session update: %v", err)
-	}
-	if _, _, err := conn.ReadMessage(); err != nil {
-		t.Fatalf("read initial acknowledgement: %v", err)
-	}
+	prepared, conn := openReadyLiveReplay(t)
 	if err := conn.WriteMessage(1, []byte(`{"type":"conversation.item.create","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"hello"}]}}`)); err != nil {
 		t.Fatalf("recorded user message: %v", err)
 	}
-	err = conn.WriteMessage(1, []byte(`{"type":"response.create","response":{"temperature":0}}`))
+	err := conn.WriteMessage(1, []byte(`{"type":"response.create","response":{"temperature":0}}`))
 	var mismatch *gateway.ReplayMismatchError
 	if !errors.As(err, &mismatch) {
 		t.Fatalf("divergent outbound error=%v, want replay mismatch", err)
@@ -527,6 +508,20 @@ func TestPrepareLiveReportsOutboundDivergenceAndStops(t *testing.T) {
 	var preparedMismatch *gateway.ReplayMismatchError
 	if !errors.As(prepared.Err(), &preparedMismatch) {
 		t.Fatalf("prepared replay error=%v, want replay mismatch", prepared.Err())
+	}
+}
+
+func TestPrepareLiveRejectsArrayPayloadDivergence(t *testing.T) {
+	prepared, conn := openReadyLiveReplay(t)
+	err := conn.WriteMessage(1, []byte(`{"type":"conversation.item.create","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"different"}]}}`))
+	var mismatch *gateway.ReplayMismatchError
+	if !errors.As(err, &mismatch) {
+		t.Fatalf("array payload divergence = %v, want replay mismatch", err)
+	}
+	select {
+	case <-prepared.Done():
+	default:
+		t.Fatal("array-divergent replay left its completion channel open")
 	}
 }
 
@@ -547,6 +542,23 @@ func prepareLiveReplayForTest(t *testing.T) replay.LivePrepared {
 		t.Fatalf("prepare live replay: %v", err)
 	}
 	return prepared
+}
+
+func openReadyLiveReplay(t *testing.T) (replay.LivePrepared, transport.Conn) {
+	t.Helper()
+	prepared := prepareLiveReplayForTest(t)
+	closeReplayTestResource(t, prepared, "prepared replay")
+	conn, err := prepared.WrapDialer(nil).Dial("ws://capture", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := conn.WriteMessage(1, []byte(`{"type":"session.update"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := conn.ReadMessage(); err != nil {
+		t.Fatal(err)
+	}
+	return prepared, conn
 }
 
 func TestPlannerAdmissionPreservesCancellationAndErrors(t *testing.T) {

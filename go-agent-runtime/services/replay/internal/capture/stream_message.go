@@ -123,6 +123,8 @@ func newStreamMessageValueOne(messageType messages.StreamMessageType) (messages.
 		value = new(messages.ReasoningDeltaValue)
 	case messages.StreamTypeReasoningEnd:
 		value = new(messages.ReasoningEndValue)
+	case messages.StreamTypeSystemFullMessage:
+		value = new(messages.InferenceResultValue)
 	case messages.StreamTypePong:
 		value = new(messages.PongValue)
 	default:

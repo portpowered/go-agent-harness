@@ -42,6 +42,7 @@ func (s *Service) TrackInjectedSession(inner messages.SessionInferencer, path st
 		return nil, err
 	}
 	return &injectedSessionCapture{
+		source:  inner,
 		inner:   gatewaytesting.NewRecordingSessionInferencerWithOptions(inner),
 		path:    path,
 		claim:   claim,

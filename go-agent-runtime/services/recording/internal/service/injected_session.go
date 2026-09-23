@@ -35,18 +35,23 @@ func (r *injectedSessionCapture) ConnectSession(ctx context.Context) (messages.S
 	}
 	session, err := r.inner.ConnectSession(ctx)
 	if err != nil {
-		return nil, err
+		return nil, errors.Join(err, r.FlushCapture())
 	}
-	if session == nil || session.Done() == nil {
-		return nil, errors.New("injected recording session has no termination signal")
+	if session == nil {
+		return nil, errors.Join(errors.New("injected recording session has no termination signal"), r.FlushCapture())
+	}
+	done := session.Done()
+	if done == nil {
+		closeErr := session.Close()
+		return nil, errors.Join(errors.New("injected recording session has no termination signal"), closeErr, r.FlushCapture())
 	}
 	r.mu.Lock()
-	r.done = session.Done()
+	r.done = done
 	r.mu.Unlock()
 	go func(done <-chan struct{}) {
 		<-done
 		_ = r.FlushCapture() //nolint:errcheck // FlushCapture latches its result for the caller's bounded finalization.
-	}(session.Done())
+	}(done)
 	return session, nil
 }
 
@@ -63,7 +68,11 @@ func (r *injectedSessionCapture) FlushCapture() error {
 		}
 		capture := r.inner.Recorder()
 		if capture == nil {
-			r.setFlushError(errors.New("injected recording session did not connect"))
+			flushErr := errors.New("injected recording session did not connect")
+			if r.claim != nil {
+				flushErr = errors.Join(flushErr, r.claim.Release())
+			}
+			r.setFlushError(flushErr)
 			return
 		}
 		var err error

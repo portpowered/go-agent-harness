@@ -16,6 +16,12 @@ import (
 
 const privateCaptureFileMode = 0o600
 
+type httpResponseBodyError string
+
+func (e httpResponseBodyError) Error() string { return string(e) }
+
+const errHTTPResponseBodyClosedEarly = httpResponseBodyError("HTTP response body closed before EOF")
+
 type httpRecorder struct {
 	transport  http.RoundTripper
 	captures   []recording.HTTPCapturePair
@@ -68,7 +74,7 @@ func (t *httpRecorder) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 	t.mu.Unlock()
 	if resp.Body != nil {
-		resp.Body = &httpResponseBody{inner: resp.Body, recorder: t, index: index}
+		resp.Body = &httpResponseBody{inner: resp.Body, recorder: t, index: index, expectedLength: resp.ContentLength}
 	}
 	return resp, nil
 }
@@ -157,19 +163,30 @@ func cloneHTTPHeaders(headers recording.HTTPHeaders) recording.HTTPHeaders {
 }
 
 type httpResponseBody struct {
-	inner     io.ReadCloser
-	recorder  *httpRecorder
-	index     int
-	closeOnce sync.Once
-	closeErr  error
+	inner          io.ReadCloser
+	recorder       *httpRecorder
+	index          int
+	readEOF        bool
+	readBytes      int64
+	expectedLength int64
+	closeOnce      sync.Once
+	closeErr       error
 }
 
 func (b *httpResponseBody) Read(buffer []byte) (int, error) {
 	count, err := b.inner.Read(buffer)
 	b.recorder.mu.Lock()
 	b.recorder.captures[b.index].Response.Body = append(b.recorder.captures[b.index].Response.Body, buffer[:count]...)
-	if err != nil {
-		b.recorder.finishBodyLocked(b.index, err)
+	b.readBytes += int64(count)
+	captureErr := err
+	if errors.Is(err, io.EOF) {
+		b.readEOF = true
+		if b.expectedLength > 0 && b.readBytes < b.expectedLength {
+			captureErr = io.ErrUnexpectedEOF
+		}
+	}
+	if captureErr != nil {
+		b.recorder.finishBodyLocked(b.index, captureErr)
 	}
 	b.recorder.mu.Unlock()
 	return count, err
@@ -179,7 +196,11 @@ func (b *httpResponseBody) Close() error {
 	b.closeOnce.Do(func() {
 		b.closeErr = b.inner.Close()
 		b.recorder.mu.Lock()
-		b.recorder.finishBodyLocked(b.index, b.closeErr)
+		captureErr := b.closeErr
+		if captureErr == nil && !b.readEOF && b.expectedLength > 0 && b.readBytes < b.expectedLength {
+			captureErr = errHTTPResponseBodyClosedEarly
+		}
+		b.recorder.finishBodyLocked(b.index, captureErr)
 		b.recorder.mu.Unlock()
 	})
 	return b.closeErr
