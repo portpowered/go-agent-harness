@@ -4586,3 +4586,34 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   `make prepush` and every remaining C276-05/06 command on the unchanged SHA,
   and repair any further local findings before continuing caller reconciliation.
   Decision remains CONTINUE.
+
+
+# C276 prepush coverage and hermetic cleanup checkpoint — 2026-09-23
+
+- Full `rtk make prepush` on exact candidate
+  `f9ec8074ed417e19826d7f36155c6c43193ef4b9` passed fmt, architecture, vet,
+  lint, staticcheck, build, embed, repository tests, and test-tools. It stopped
+  at `coverage-changed`: `agent-cli/internal/services/wire` was 79.00% (80%
+  floor), `go-agent-runtime/services/replay/internal/engine` 78.90% (80%),
+  `services/session/wire` 84.60% (95%),
+  `services/sessionduration/internal/service` 84.50% (90%), and
+  `services/sessionterminal/wire` 88.90% (95%). The four non-replay deficits
+  are pre-existing shared coverage gaps; do not lower floors or add coverage-
+  only tests. The replay engine remains task-owned and needs a public behavior
+  or failure test if a legitimate gap can be identified.
+- `make test-hermetic` exposed a TempDir cleanup race in the existing
+  `TestIndependentSessionCompositionsProduceIdenticalInstructionsAndProviderUpdate`
+  recording test. Its deferred session close did not wait for the public
+  capture finalizer. Updated that existing test to close the session and flush
+  the capture during cleanup, reporting either error. The focused test passes;
+  this is a cleanup reliability repair, not a new or moved test. Full hermetic
+  validation must be rerun on the checkpoint commit.
+- Other required local checks remain passing as previously recorded, including
+  `make test-sessions-race`, `make embed-check`, `make test-integration`,
+  `make test-regressions`, service functional/race selections, Wire check, lint,
+  and staticcheck. No push, PR, or hosted CI handoff occurred.
+- Next: commit this focused hermetic cleanup repair and checkpoint, rerun full
+  `make test-hermetic`, then continue investigating only meaningful public
+  replay failure coverage and await exact reviewed C268/C269 caller releases.
+  Complete every production caller cutover and rerun the complete preflight on
+  the exact clean candidate before any PR handoff. Decision remains CONTINUE.

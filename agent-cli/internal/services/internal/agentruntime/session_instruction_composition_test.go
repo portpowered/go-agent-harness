@@ -143,11 +143,22 @@ func TestIndependentSessionCompositionsProduceIdenticalInstructionsAndProviderUp
 
 			request := sessionRequestFromPlanner(t, plan.inferencer)
 			instructions := []byte(request.Config.Instructions)
+			flushCapture := plan.flushCapture
+			if flushCapture == nil {
+				t.Fatal("recording plan has no capture finalizer")
+			}
 			session, err := plan.inferencer.ConnectSession(context.Background())
 			if err != nil {
 				t.Fatalf("connect composed provider session: %v", err)
 			}
-			defer func() { _ = session.Close() }()
+			t.Cleanup(func() {
+				if err := session.Close(); err != nil {
+					t.Errorf("close composed provider session: %v", err)
+				}
+				if err := flushCapture(); err != nil {
+					t.Errorf("flush composed provider capture: %v", err)
+				}
+			})
 
 			conn.mu.Lock()
 			writes := make([][]byte, len(conn.writes))
