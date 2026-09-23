@@ -6,6 +6,7 @@ import (
 	"fmt"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+	"io"
 	"os"
 	"sync"
 	"time"
@@ -357,4 +358,28 @@ func (t *roomTimeline) close() error {
 		return nil
 	}
 	return t.writer.close()
+}
+
+func writeRoomEvidenceAll(writer io.Writer, data []byte) error {
+	_, err := writeRoomEvidenceAllCount(writer, data)
+	return err
+}
+
+func writeRoomEvidenceAllCount(writer io.Writer, data []byte) (int, error) {
+	total := 0
+	for len(data) > 0 {
+		written, err := writer.Write(data)
+		if written < 0 || written > len(data) {
+			return total, fmt.Errorf("%w: writer returned invalid byte count %d", io.ErrShortWrite, written)
+		}
+		total += written
+		if err != nil {
+			return total, err
+		}
+		if written == 0 {
+			return total, io.ErrShortWrite
+		}
+		data = data[written:]
+	}
+	return total, nil
 }

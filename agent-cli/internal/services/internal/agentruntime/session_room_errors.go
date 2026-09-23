@@ -395,27 +395,3 @@ func roomTokenBoundary(character byte) bool {
 func replaceRoomSecret(value string, start, end int) string {
 	return value[:start] + "[REDACTED]" + value[end:]
 }
-
-func writeRoomEvidenceAll(writer io.Writer, data []byte) error {
-	_, err := writeRoomEvidenceAllCount(writer, data)
-	return err
-}
-
-func writeRoomEvidenceAllCount(writer io.Writer, data []byte) (int, error) {
-	total := 0
-	for len(data) > 0 {
-		written, err := writer.Write(data)
-		if written < 0 || written > len(data) {
-			return total, fmt.Errorf("%w: writer returned invalid byte count %d", io.ErrShortWrite, written)
-		}
-		total += written
-		if err != nil {
-			return total, err
-		}
-		if written == 0 {
-			return total, io.ErrShortWrite
-		}
-		data = data[written:]
-	}
-	return total, nil
-}
