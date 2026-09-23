@@ -11,6 +11,9 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -64,12 +67,15 @@ func runSelfPlaySide(ctx context.Context, name string, side int, inferencer mess
 		evidence.fail(wrapped)
 		stop.fail(wrapped)
 	}
-	observer := newSessionProgressObserver(sideEvidence, nil, opts.Provider, opts.Model)
-	observer.runtime = sideEvidence.runtimeRecord
-	observer.turnAdmission = func(messages.StreamMessage) bool {
+	observer := sessiontracewire.NewObserver(sessiontrace.NewObserverOptions{
+		Sink: sideEvidence, Provider: opts.Provider, Model: opts.Model,
+		RuntimeRecorder: sideEvidence.runtimeRecord,
+		TerminalService: wire.NewService(),
+	})
+	observer.SetTurnAdmission(func(messages.StreamMessage) bool {
 		return stop.recordTurn(side, opts.MaxTurns)
-	}
-	observer.streamObserver = selfPlayStreamObserver(ctx, name, sideEvidence, evidence, stop, output)
+	})
+	observer.SetStreamObserver(selfPlayStreamObserver(ctx, name, sideEvidence, evidence, stop, output))
 	err := runAgentLoopSession(ctx, io.Discard, inferencer, sessionLoopOptions{
 		audioService:  opts.audioService,
 		Prompt:        prompt,

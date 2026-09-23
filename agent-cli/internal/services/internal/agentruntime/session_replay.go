@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
+	sessionterminalwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -583,7 +584,7 @@ func (c *replayInitialSessionUpdateConn) Close() error {
 }
 
 func replaySessionCapture(ctx context.Context, out io.Writer, path string) error {
-	renderer := newSessionReplayRenderer(out, sessionTerminalReporterFromContext(ctx))
+	renderer := newSessionReplayRenderer(out, sessionterminalwire.ReporterFromContext(ctx))
 	replayer, err := gwtesting.NewSessionReplayer(path, gwtesting.WithReplayOutboundValidation(false), gwtesting.WithReplayContext(ctx))
 	if err != nil {
 		return fmt.Errorf("replay session capture %s: %w", path, err)
@@ -623,8 +624,7 @@ func grokReplayCaptureHasSessionClose(path string) bool {
 	if err != nil {
 		return false
 	}
-	capture := loaded.Capture
-	for _, record := range capture.Records {
+	for _, record := range loaded.Capture.Records {
 		if record.Direction == gwtesting.DirectionServerToClient && record.Type == "session.closed" {
 			return true
 		}

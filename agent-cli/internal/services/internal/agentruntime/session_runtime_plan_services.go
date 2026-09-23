@@ -12,11 +12,24 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
-	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
+
+func planSessionRuntime(opts SessionRunOptions) (sessionRuntimePlan, error) {
+	return planSessionRuntimeWithContext(context.Background(), opts)
+}
+
+//lint:ignore U1000 package tests exercise the context-free planning seam.
+func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
+	return planSessionRuntimeWithFactoryAndContext(context.Background(), opts, factory)
+}
 
 func planSessionRuntimeWithContext(ctx context.Context, opts SessionRunOptions) (sessionRuntimePlan, error) {
 	factory := opts.runtimeFactory
@@ -146,20 +159,13 @@ func configureSessionRuntimeLoop(plan *sessionRuntimePlan, opts SessionRunOption
 	plan.filesystemPolicy = opts.FilesystemPolicy
 	plan.voice = opts.Voice
 	plan.clockSource = platformclock.Ensure(opts.Clock)
-	plan.runtime = newSessionRuntimeObservationRecorder(opts.RuntimeObserver, plan.clockSource)
+	plan.runtime = sessiontracewire.NewRuntimeRecorder(opts.RuntimeObserver, plan.clockSource)
 	plan.loop.runtime = plan.runtime
 	plan.loop.audioService = opts.AudioService
 	plan.loop.clockSource = plan.clockSource
 	plan.loop.livenessClock = opts.LivenessClock
 	if plan.loop.livenessClock == nil {
-		if opts.AudioService == nil {
-			return errors.New("audio service is required for session liveness timing")
-		}
-		var err error
-		plan.loop.livenessClock, err = opts.AudioService.NewClock(plan.clockSource)
-		if err != nil {
-			return err
-		}
+		plan.loop.livenessClock = sessiontracewire.LivenessClockFromSource(plan.clockSource)
 	}
 	plan.loop.BareLive = plan.loop.BareLive || opts.BareLive
 	plan.loop.cancellationIntent = opts.CancellationIntent
@@ -190,23 +196,7 @@ func configureSessionRuntimeLoop(plan *sessionRuntimePlan, opts SessionRunOption
 }
 
 func configureSessionRuntimeAudio(ctx context.Context, plan *sessionRuntimePlan, opts SessionRunOptions) error {
-	if opts.AudioService == nil {
-		return errors.New("audio service is required for session rate resolution")
-	}
-	inputRate, outputRate := plan.inputAudioSampleRate, plan.outputAudioSampleRate
-	if requested, ok := plan.inferencer.(sessionAudioRequestProvider); ok {
-		request := requested.Request().Config
-		if inputRate <= 0 {
-			inputRate = int(request.InputAudioSampleRate)
-		}
-		if outputRate <= 0 {
-			outputRate = int(request.OutputAudioSampleRate)
-		}
-	}
-	rates, err := opts.AudioService.ResolveRates(ctx, audioio.RateRequest{
-		Provider: plan.provider, Replay: opts.ReplayPath != "",
-		CapturedInputRate: inputRate, CapturedOutputRate: outputRate,
-	})
+	rates, err := resolveSessionRuntimeAudioRates(ctx, plan, opts)
 	if err != nil {
 		return err
 	}
@@ -218,10 +208,11 @@ func configureSessionRuntimeAudio(ctx context.Context, plan *sessionRuntimePlan,
 	if configurer, ok := plan.inferencer.(runtimeAudioInputConfigurer); ok {
 		configurer.SetSessionAudioInput(models.AudioFormatPCM16, models.SampleRate(rates.InputRate))
 	}
-	plan.audioInputs, err = opts.AudioService.ConvertScheduledInputs(ctx, plan.audioInputs, rates.InputRate)
+	convertedInputs, err := opts.AudioService.ConvertScheduledInputs(ctx, sessionRuntimeAudioInputs(plan.audioInputs), rates.InputRate)
 	if err != nil {
 		return err
 	}
+	plan.audioInputs = sessionTraceAudioInputs(convertedInputs)
 	plan.loop.InputAudioSampleRate = rates.InputRate
 	if plan.rtcDeviceRequest.HasOutput() && rates.OutputRate > 0 {
 		plan.rtcDeviceRequest.OutputSampleRate = rates.OutputRate
@@ -232,26 +223,103 @@ func configureSessionRuntimeAudio(ctx context.Context, plan *sessionRuntimePlan,
 	return nil
 }
 
+func resolveSessionRuntimeAudioRates(ctx context.Context, plan *sessionRuntimePlan, opts SessionRunOptions) (audioio.RateResolution, error) {
+	if opts.AudioService == nil {
+		return audioio.RateResolution{}, errors.New("audio service is required for session rate resolution")
+	}
+	inputRate, outputRate := plan.inputAudioSampleRate, plan.outputAudioSampleRate
+	if requested, ok := plan.inferencer.(sessionAudioRequestProvider); ok {
+		request := requested.Request().Config
+		if inputRate <= 0 {
+			inputRate = int(request.InputAudioSampleRate)
+		}
+		if outputRate <= 0 {
+			outputRate = int(request.OutputAudioSampleRate)
+		}
+	}
+	return opts.AudioService.ResolveRates(ctx, audioio.RateRequest{
+		Provider: plan.provider, Replay: opts.ReplayPath != "",
+		CapturedInputRate: inputRate, CapturedOutputRate: outputRate,
+	})
+}
+
+func sessionRuntimeAudioInputs(inputs []sessiontrace.ScheduledAudioInput) []audioio.ScheduledAudioInput {
+	converted := make([]audioio.ScheduledAudioInput, len(inputs))
+	for index, input := range inputs {
+		converted[index] = audioio.ScheduledAudioInput(input)
+	}
+	return converted
+}
+
+func sessionTraceAudioInputs(inputs []audioio.ScheduledAudioInput) []sessiontrace.ScheduledAudioInput {
+	converted := make([]sessiontrace.ScheduledAudioInput, len(inputs))
+	for index, input := range inputs {
+		converted[index] = sessiontrace.ScheduledAudioInput(input)
+	}
+	return converted
+}
+
+func startLiveSessionUpdatedTimer(opts sessionLoopOptions, current platformclock.Timer) (platformclock.Timer, <-chan time.Time, error) {
+	if !opts.RequireSessionUpdated || opts.observer == nil || !opts.observer.ScheduledAudioAwaitingConfiguration() || current != nil {
+		if current == nil {
+			return nil, nil, nil
+		}
+		return current, current.C(), nil
+	}
+	timeout := opts.SessionUpdatedTimeout
+	if timeout <= 0 {
+		timeout = sessionScheduledAudioConfigTimeout
+	}
+	timer, err := opts.audioService.NewTimer(opts.clockSource, timeout)
+	if err != nil {
+		return nil, nil, err
+	}
+	return timer, timer.C(), nil
+}
+
+func stopLiveSessionUpdatedTimer(timer *platformclock.Timer, timeout *<-chan time.Time) {
+	if timer == nil || *timer == nil {
+		return
+	}
+	(*timer).Stop()
+	*timer = nil
+	*timeout = nil
+}
+
 func configureSessionRuntimeDeviceObservers(ctx context.Context, plan *sessionRuntimePlan, dependencies observability.Dependencies) {
-	// Resolve the diagnostic sink so device overflow remains visible even when
-	// the caller omitted SessionRunOptions.Diagnostics.
-	plan.rtcDeviceRequest.PlaybackObserver = combineRTCDevicePlaybackObservers(
-		plan.rtcDeviceRequest.PlaybackObserver,
-		sessionPlaybackDiagnosticObserver(resolvePlaybackDiagnosticSink(plan.diagnostics)),
-		sessionPlaybackObservabilityObserver(context.WithoutCancel(ctx), dependencies.MetricSampler, dependencies.Logger),
-	)
-	plan.rtcDeviceRequest.PlaybackReceiptObserver = combineRTCDevicePlaybackReceiptObservers(
-		plan.rtcDeviceRequest.PlaybackReceiptObserver,
-		func(receipt audio.PlaybackReceipt) {
-			if plan.runtime != nil {
-				plan.runtime.audioPlaybackReceipt(receipt)
-			}
-		},
-	)
-	plan.rtcDeviceRequest.CaptureObserver = combineRTCDeviceCaptureObservers(
-		plan.rtcDeviceRequest.CaptureObserver,
-		sessionCaptureObservabilityObserver(context.WithoutCancel(ctx), dependencies.MetricSampler, dependencies.Logger),
-	)
+	playback := sessiontracewire.NewPlaybackDiagnostics(sessiontrace.PlaybackDiagnosticsOptions{
+		Sink: plan.diagnostics, MetricSampler: dependencies.MetricSampler, Logger: dependencies.Logger, Runtime: plan.runtime,
+	})
+	tracePlayback := playback.PlaybackObserver(nil)
+	priorPlayback := plan.rtcDeviceRequest.PlaybackObserver
+	plan.rtcDeviceRequest.PlaybackObserver = func(id string, stats audio.PlaybackQueueStats) {
+		if priorPlayback != nil {
+			priorPlayback(id, stats)
+		}
+		if tracePlayback != nil {
+			tracePlayback(devicegw.DeviceID(id), stats)
+		}
+	}
+	traceReceipt := playback.PlaybackReceiptObserver(nil)
+	priorReceipt := plan.rtcDeviceRequest.PlaybackReceiptObserver
+	plan.rtcDeviceRequest.PlaybackReceiptObserver = func(receipt audio.PlaybackReceipt) {
+		if priorReceipt != nil {
+			priorReceipt(receipt)
+		}
+		if traceReceipt != nil {
+			traceReceipt(receipt)
+		}
+	}
+	traceCapture := playback.CaptureObserver(nil)
+	priorCapture := plan.rtcDeviceRequest.CaptureObserver
+	plan.rtcDeviceRequest.CaptureObserver = func(id string, stats audio.CaptureQueueStats) {
+		if priorCapture != nil {
+			priorCapture(id, stats)
+		}
+		if traceCapture != nil {
+			traceCapture(devicegw.DeviceID(id), stats)
+		}
+	}
 }
 
 // prepareSessionStreamOutput gives an unowned stream its terminal renderer.
@@ -260,13 +328,13 @@ func prepareSessionStreamOutput(out io.Writer, opts *sessionLoopOptions) (io.Wri
 	if opts.terminalReporter != nil {
 		return out, func(err error) error { return err }
 	}
-	reporter := newSessionTerminalReporter()
+	reporter := wire.NewReporter()
 	opts.terminalReporter = reporter
-	reporter.markRunStarted()
+	reporter.MarkRunStarted()
 	renderer := newSessionReplayRenderer(out, reporter)
 	return renderer, func(runErr error) error {
 		runErr = errors.Join(runErr, renderer.finishTranscript())
-		return errors.Join(runErr, reporter.publish(out, runErr))
+		return errors.Join(runErr, reporter.Publish(out, runErr))
 	}
 }
 
@@ -274,8 +342,8 @@ func newObservedSessionLoop(inferencer messages.SessionInferencer, opts sessionL
 	observed := newObservedSessionInferencer(inferencer, opts.runtime)
 	observed.progress = opts.observer
 	if opts.observer != nil {
-		opts.observer.setLivenessClock(opts.livenessClock)
-		opts.observer.setToolResultsEnabled(opts.ToolExecutor != nil)
+		opts.observer.SetLivenessClock(opts.livenessClock)
+		opts.observer.SetToolResultsEnabled(opts.ToolExecutor != nil)
 	}
 	loop, err := agentloop.New(duplexSessionLoopOptions(observed, opts)...)
 	if err != nil {

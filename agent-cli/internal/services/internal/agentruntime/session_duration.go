@@ -11,6 +11,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
+	sessionterminalwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -51,9 +52,9 @@ func startSessionDurationObserver(opts sessionLoopOptions) func() {
 	if opts.observer == nil {
 		return func() {}
 	}
-	opts.observer.setLivenessClock(opts.livenessClock)
-	opts.observer.setToolResultsEnabled(opts.ToolExecutor != nil)
-	return opts.observer.stopLiveness
+	opts.observer.SetLivenessClock(opts.livenessClock)
+	opts.observer.SetToolResultsEnabled(opts.ToolExecutor != nil)
+	return opts.observer.StopLiveness
 }
 
 // RunSessionWithMaxDuration runs a session with an optional graceful duration
@@ -203,7 +204,7 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 	artifacts := sessionDurationArtifactsFromContext(ctx)
 	reporter := plan.loop.terminalReporter
 	if reporter == nil {
-		reporter = newSessionTerminalReporter()
+		reporter = sessionterminalwire.NewReporter()
 		plan.loop.terminalReporter = reporter
 	}
 	finalizer := newSessionRuntimeFinalizer(plan)
@@ -214,11 +215,11 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 		runErr = finalizer.finish(ctx, out, runErr)
 		artifactErr := finalizeSessionDurationArtifacts(artifacts)
 		runErr = errors.Join(runErr, artifactErr)
-		reporter.recordArtifactFinalization(artifacts != nil, artifactErr)
-		if !sessionErrorHasIndependentFailure(runErr) && plan.replayCompletion != nil {
+		reporter.RecordArtifactFinalization(artifacts != nil, artifactErr)
+		if !sessionterminalwire.HasIndependentFailure(runErr) && plan.replayCompletion != nil {
 			plan.replayCompletion(reporter)
 		}
-		runErr = errors.Join(runErr, reporter.publish(out, runErr))
+		runErr = errors.Join(runErr, reporter.Publish(out, runErr))
 	}()
 	var err error
 	durationClock, err = effectiveSessionDurationClock(plan, durationClock)
@@ -243,7 +244,7 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 	}
 	plan.configureLoopObserver(&plan.loop)
 	if plan.inferencer != nil {
-		reporter.markRunStarted()
+		reporter.MarkRunStarted()
 		runErr = runAgentLoopSessionWithDurationAdmissionClock(ctx, loopOut, plan.inferencer, plan.loop, maxDuration, durationClock, admittedInferencer)
 	}
 

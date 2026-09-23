@@ -2,14 +2,12 @@ package agentruntime
 
 import sessiontrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 
-// Session runtime observation types are owned by the reusable session trace
-// contract. These aliases preserve the CLI's existing composition API.
 type SessionRuntimeObservationKind = sessiontrace.SessionRuntimeObservationKind
 type SessionTokenUsageSemantics = sessiontrace.SessionTokenUsageSemantics
 type SessionFinalAccounting = sessiontrace.SessionFinalAccounting
 type SessionRuntimeFinalAccounting = sessiontrace.SessionRuntimeFinalAccounting
 type SessionRuntimeObservation = sessiontrace.SessionRuntimeObservation
-type SessionRuntimeObserver = sessiontrace.SessionRuntimeObserver
+type SessionRuntimeObserver = sessiontrace.RuntimeObserver
 
 const (
 	SessionRuntimeObservationAudioOutput               = sessiontrace.SessionRuntimeObservationAudioOutput

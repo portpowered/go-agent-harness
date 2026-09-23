@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	sessionterminalwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
 	"io"
 	"sync"
 )
@@ -103,7 +104,7 @@ func (f *sessionRuntimeFinalizer) cleanup(ctx context.Context, out io.Writer) er
 	if f.plan.finalize != nil {
 		finalizeCtx := ctx
 		if reporter := f.plan.loop.terminalReporter; reporter != nil {
-			finalizeCtx = withSessionTerminalReporter(ctx, reporter)
+			finalizeCtx = sessionterminalwire.WithReporter(ctx, reporter)
 		}
 		appendErr(wrapSessionRuntimeError(f.plan, invokeSessionFinalizer(func() error {
 			return f.plan.finalize(finalizeCtx, out)

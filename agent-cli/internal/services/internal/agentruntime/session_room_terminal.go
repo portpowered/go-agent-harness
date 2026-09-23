@@ -2,28 +2,96 @@ package agentruntime
 
 import (
 	"errors"
+	"io"
+	"strconv"
 	"strings"
+	"time"
 
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
+	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
-// sessionTerminalObservation is the private bridge between the session
-// diagnostic observer and the room lifecycle. It contains only the bounded,
-// provider-neutral terminal fields that the room exposes in its result and
-// evidence; Err is retained in-process solely so a genuine failure can keep
-// its error identity until the existing room redaction boundary.
-type sessionTerminalObservation struct {
-	ResponseID         string
-	Classification     string
-	TerminalReason     string
-	TerminalProvenance string
-	OutputState        string
-	Err                error
-	Failure            bool
-	RoomBound          bool
-	Code               string
-	FailingEvent       string
+type invalidSessionStragglerDrainPolicyError string
+
+func (e invalidSessionStragglerDrainPolicyError) Error() string { return string(e) }
+
+const errInvalidSessionStragglerDrainPolicy invalidSessionStragglerDrainPolicyError = "session straggler drain requires a positive quiet period"
+
+// sessionReplayMessageWriter is implemented by the stateful terminal renderer
+// used by a complete session run. Keeping the interface private preserves the
+// small writeSessionReplayMessage seam used by cancellation and unit tests.
+type sessionReplayMessageWriter interface {
+	writeSessionReplayMessage(messages.StreamMessage) error
+}
+
+func (c *roomCoordinator) forceBoundShutdownOnce() {
+	c.mu.Lock()
+	if !c.bound {
+		c.mu.Unlock()
+		return
+	}
+	c.boundForced = true
+	runtimes := c.boundRuntimes
+	firstFailure := roomBoundShutdownFailure(runtimes)
+	if firstFailure != nil {
+		c.reason, c.err, c.bound = RoomTerminationFailed, firstFailure, false
+	}
+	c.mu.Unlock()
+	if firstFailure == nil {
+		for _, runtime := range runtimes {
+			if runtime != nil && runtime.lifecycle != nil {
+				runtime.lifecycle.cancelActiveResponse()
+			}
+		}
+	}
+	c.boundCancellationOnce.Do(func() { close(c.boundCancellation) })
+	c.doneOnce.Do(func() { close(c.done) })
+	if c.cancel != nil {
+		c.cancel()
+	}
+}
+
+func roomBoundShutdownFailure(runtimes []*roomParticipantRuntime) error {
+	var firstFailure error
+	for _, runtime := range runtimes {
+		if runtime == nil || runtime.lifecycle == nil {
+			continue
+		}
+		runtime.lifecycle.markBoundCancellation()
+		observation := runtime.lifecycle.terminalObservationSnapshot()
+		if firstFailure == nil && observation.failure {
+			failureErr := observation.err
+			if failureErr == nil {
+				failureErr = errors.New("session stream error")
+			}
+			firstFailure = roomParticipantFailure(runtime.plan.manifest.ID, failureErr, secretsForPlan(runtime.plan))
+		}
+	}
+	return firstFailure
+}
+
+func applyRoomParticipantTerminalMetadata(result *RoomParticipantResult, lifecycle *roomParticipantLifecycle, err error) {
+	if result == nil {
+		return
+	}
+	classification, terminalReason, provenance, outputState := "", messages.TerminalReason(""), messages.TerminalProvenance(""), messages.TerminalOutputState("")
+	if lifecycle != nil {
+		classification, terminalReason, provenance, outputState = lifecycle.terminalMetadata()
+	}
+	if classification == "" {
+		classification, terminalReason, provenance, outputState = sessiontracewire.LivenessMetadata(err)
+	}
+	if classification == "" {
+		return
+	}
+	result.Classification = classification
+	result.TerminalReason = string(terminalReason)
+	result.TerminalProvenance = string(provenance)
+	result.OutputState = string(outputState)
 }
 
 type roomParticipantTerminalObservation struct {
@@ -64,116 +132,6 @@ func defaultRoomTerminalProvenance(disposition, reason string) string {
 		return string(messages.TerminalProvenanceLoop)
 	default:
 		return string(messages.TerminalProvenanceSession)
-	}
-}
-
-func (o *sessionProgressObserver) notifyFinalTerminalObservation(err error) {
-	if o == nil || o.terminalObserver == nil {
-		return
-	}
-	if o.failure != nil {
-		o.notifyFailureObservation(sessionTerminalObservationFromFailure(o.failure, err))
-		return
-	}
-	if o.roomBoundCancellation && roomCancellationOnly(err) {
-		o.notifyTerminalObservation(sessionTerminalObservationForCancellation(o.userCancellationOutputState(), true))
-		return
-	}
-	if o.userCancelled {
-		o.notifyTerminalObservation(sessionTerminalObservationForCancellation(o.userCancellationOutputState(), false))
-		return
-	}
-	if err != nil && !roomCancellationOnly(err) {
-		facts := factsFromSessionRunError(err)
-		if facts == nil {
-			classification := providers.ErrorClassification(err)
-			if classification == "" {
-				classification = providers.ErrorClassUnknown
-			}
-			facts = &failureFacts{
-				classification: classification,
-				terminalReason: string(messages.TerminalReasonTerminalFailure),
-				provenance:     string(messages.TerminalProvenanceCLI),
-				outputState:    deriveOutputState(o.sawSessionOpen, o.turnsCompleted),
-				failingEvent:   failingEventRun,
-			}
-		}
-		o.acceptFailureObservation(facts, err)
-		return
-	}
-	if err == nil || strings.TrimSpace(err.Error()) == "" {
-		return
-	}
-	// A cancellation that did not carry a room-bound marker is still useful to
-	// the room result, where it becomes an intentional stopped disposition.
-	if roomCancellationOnly(err) {
-		o.notifyTerminalObservation(sessionTerminalObservationForCancellation(o.userCancellationOutputState(), false))
-	}
-}
-
-func sessionTerminalObservationFromFailure(facts *failureFacts, err error) sessionTerminalObservation {
-	if facts == nil {
-		return sessionTerminalObservation{}
-	}
-	if err == nil && facts.errorType != "" {
-		err = errors.New(facts.errorType)
-	}
-	if err == nil {
-		err = errors.New("session stream error")
-	}
-	return sessionTerminalObservation{
-		Classification:     facts.classification,
-		TerminalReason:     facts.terminalReason,
-		TerminalProvenance: facts.provenance,
-		OutputState:        facts.outputState,
-		Err:                err,
-		Failure:            true,
-		Code:               facts.code,
-		FailingEvent:       facts.failingEvent,
-	}
-}
-
-func sessionTerminalObservationFromMessageEnd(responseID string, value *messages.MessageEndValue) sessionTerminalObservation {
-	if value == nil {
-		return sessionTerminalObservation{}
-	}
-	reason := value.TerminalReason
-	if reason == "" {
-		reason = messages.TerminalReasonProviderAuthoredCompletion
-	}
-	provenance := value.TerminalProvenance
-	if provenance == "" {
-		provenance = messages.TerminalProvenanceProvider
-	}
-	outputState := value.OutputState
-	if outputState == "" {
-		outputState = messages.TerminalOutputComplete
-	}
-	return sessionTerminalObservation{
-		ResponseID:         responseID,
-		Classification:     "",
-		TerminalReason:     string(reason),
-		TerminalProvenance: string(provenance),
-		OutputState:        string(outputState),
-	}
-}
-
-func sessionTerminalObservationForCancellation(outputState messages.TerminalOutputState, roomBound bool) sessionTerminalObservation {
-	if outputState == "" {
-		outputState = messages.TerminalOutputNone
-	}
-	classification := providers.ErrorClassCancellation
-	provenance := messages.TerminalProvenanceCLI
-	if roomBound {
-		classification = RoomBoundCancelledClassification
-		provenance = messages.TerminalProvenanceRoom
-	}
-	return sessionTerminalObservation{
-		Classification:     classification,
-		TerminalReason:     string(messages.TerminalReasonCancellation),
-		TerminalProvenance: string(provenance),
-		OutputState:        string(outputState),
-		RoomBound:          roomBound,
 	}
 }
 
@@ -231,4 +189,106 @@ func recordRoomParticipantBoundDiagnostic(opts RoomRunOptions, evidence *roomEvi
 	if opts.OnDiagnostic != nil {
 		opts.OnDiagnostic(result.ParticipantID, record)
 	}
+}
+
+func playbackOverflowDiagnosticFields(id string, stats audio.PlaybackQueueStats) map[string]string {
+	return map[string]string{
+		SessionDiagnosticFieldPlaybackDeviceID:            id,
+		SessionDiagnosticFieldPlaybackSampleRate:          strconv.Itoa(stats.Format.SampleRate),
+		SessionDiagnosticFieldPlaybackChannels:            strconv.Itoa(stats.Format.Channels),
+		SessionDiagnosticFieldPlaybackLatencyTargetMillis: strconv.FormatInt(stats.LatencyTarget.Milliseconds(), 10),
+		SessionDiagnosticFieldPlaybackCapacitySamples:     strconv.Itoa(stats.CapacitySamples),
+		SessionDiagnosticFieldPlaybackQueuedSamples:       strconv.Itoa(stats.QueuedSamples),
+		SessionDiagnosticFieldPlaybackPeakQueuedSamples:   strconv.Itoa(stats.PeakQueuedSamples),
+		SessionDiagnosticFieldPlaybackDroppedSamples:      strconv.FormatUint(stats.DroppedSamples, 10),
+		SessionDiagnosticFieldPlaybackOverflowEvents:      strconv.FormatUint(stats.OverflowEvents, 10),
+	}
+}
+
+func emitRoomParticipantPlaybackOverflowDiagnostic(participantID string, handle runtimeDevices.Handle, sink SessionDiagnosticSink) {
+	if handle == nil {
+		return
+	}
+	provider, ok := handle.(runtimeDevices.PlaybackStatsProvider)
+	if !ok {
+		return
+	}
+	deviceID, stats := provider.PlaybackStats()
+	if stats.DroppedSamples == 0 {
+		return
+	}
+	fields := playbackOverflowDiagnosticFields(deviceID, stats)
+	fields[SessionDiagnosticFieldPlaybackParticipantID] = participantID
+	if sink != nil {
+		sink.RecordSessionDiagnostic(SessionDiagnosticRecord{Event: SessionDiagnosticEventPlaybackOverflow, Fields: fields})
+	}
+}
+
+func startDurationSessionUpdatedTimer(durationClock SessionDurationClock, opts sessionLoopOptions, timer SessionDurationTimer, timeout <-chan time.Time) (SessionDurationTimer, <-chan time.Time, error) {
+	if !opts.RequireSessionUpdated || opts.observer == nil || !opts.observer.ScheduledAudioAwaitingConfiguration() || timer != nil {
+		return timer, timeout, nil
+	}
+	configuredTimeout := opts.SessionUpdatedTimeout
+	if configuredTimeout <= 0 {
+		configuredTimeout = sessionScheduledAudioConfigTimeout
+	}
+	timer = durationClock.NewTimer(configuredTimeout)
+	if timer == nil {
+		return nil, nil, errors.New("session duration clock returned a nil session-updated timer")
+	}
+	return timer, timer.C(), nil
+}
+
+func stopDurationSessionUpdatedTimer(timer *SessionDurationTimer, timeout *<-chan time.Time) {
+	if timer == nil || *timer == nil {
+		return
+	}
+	(*timer).Stop()
+	*timer = nil
+	*timeout = nil
+}
+
+func waitForDurationSessionLoopStragglers(out io.Writer, loop *agentloop.AgentLoop, policy sessionStragglerDrainPolicy, durationClock SessionDurationClock, planned bool, terminalWritten *bool, artifacts SessionDurationArtifactLifecycle, obs sessiontrace.Observer, terminalState *sessionDurationTerminalState) error {
+	quiet := policy.quietPeriod
+	if quiet <= 0 {
+		return errInvalidSessionStragglerDrainPolicy
+	}
+	timer, err := newDurationStragglerTimer(durationClock, quiet)
+	if err != nil {
+		return err
+	}
+	defer func() { timer.Stop() }()
+	for {
+		select {
+		case msg, ok := <-loop.Deltas().Chan():
+			if !ok {
+				return nil
+			}
+			timer, err = processDurationStragglerMessage(out, msg, planned, terminalWritten, artifacts, obs, terminalState, timer, durationClock, quiet)
+			if err != nil {
+				return err
+			}
+		case <-timer.C():
+			return nil
+		}
+	}
+}
+
+func processDurationStragglerMessage(out io.Writer, msg messages.StreamMessage, planned bool, terminalWritten *bool, artifacts SessionDurationArtifactLifecycle, obs sessiontrace.Observer, terminalState *sessionDurationTerminalState, timer SessionDurationTimer, durationClock SessionDurationClock, quiet time.Duration) (SessionDurationTimer, error) {
+	if terminalState != nil {
+		terminalState.observe(msg)
+		var shouldWrite bool
+		msg, shouldWrite = terminalState.admitTerminal(planned, msg)
+		*terminalWritten = terminalState.written()
+		if !shouldWrite {
+			return timer, nil
+		}
+	}
+	if obs != nil {
+		obs.Observe(msg)
+	}
+	if err := writeDurationSessionReplayMessage(out, msg, artifacts); err != nil {
+		return timer, err
+	}
+	return resetDurationStragglerTimer(timer, durationClock, quiet)
 }

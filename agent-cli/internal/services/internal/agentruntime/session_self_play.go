@@ -16,6 +16,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
@@ -497,10 +498,7 @@ func runSelfPlayConversation(ctx context.Context, opts SelfPlayRunOptions, custo
 	if opts.audioService == nil {
 		return SelfPlayResult{StopReason: SelfPlayStopFailure}, errors.New("audio service is required for self-play timing")
 	}
-	livenessClock, err := opts.audioService.NewClock(opts.clock)
-	if err != nil {
-		return SelfPlayResult{StopReason: SelfPlayStopFailure}, fmt.Errorf("self-play liveness clock: %w", err)
-	}
+	livenessClock := sessiontracewire.LivenessClockFromSource(opts.clock)
 	timer, err := opts.audioService.NewTimer(opts.clock, opts.MaxDuration)
 	if err != nil {
 		return SelfPlayResult{StopReason: SelfPlayStopFailure}, fmt.Errorf("self-play clock: %w", err)
@@ -529,7 +527,7 @@ func runSelfPlayConversation(ctx context.Context, opts SelfPlayRunOptions, custo
 		defer bridgeWG.Done()
 		customerToAssistant.pumpWithObserver(bridgeCtx, assistantReady, func(err error) { stop.fail(err) }, "customer-to-assistant", func(pcm []byte) {
 			if side := evidence.side(1); side != nil && side.runtimeRecord != nil {
-				side.runtimeRecord.audioInput(pcm)
+				side.runtimeRecord.AudioInput(pcm)
 			}
 		})
 	}()
@@ -537,7 +535,7 @@ func runSelfPlayConversation(ctx context.Context, opts SelfPlayRunOptions, custo
 		defer bridgeWG.Done()
 		assistantToCustomer.pumpWithObserver(bridgeCtx, customerReady, func(err error) { stop.fail(err) }, "assistant-to-customer", func(pcm []byte) {
 			if side := evidence.side(0); side != nil && side.runtimeRecord != nil {
-				side.runtimeRecord.audioInput(pcm)
+				side.runtimeRecord.AudioInput(pcm)
 			}
 		})
 	}()
@@ -606,7 +604,7 @@ func selfPlayStreamObserver(ctx context.Context, name string, sideEvidence *self
 			stop.fail(wrapped)
 		}
 		if sideEvidence.runtimeRecord != nil {
-			sideEvidence.runtimeRecord.audioOutputMessage(value.Content, msg)
+			sideEvidence.runtimeRecord.AudioOutputMessage(value.Content, msg)
 		}
 	}
 }
