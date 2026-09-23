@@ -4844,3 +4844,47 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   rerun the full C276 functional, integration, race, hermetic, Wire, and
   `make prepush` gates on one clean exact candidate before handoff. Decision
   remains CONTINUE.
+
+# C276 current-turn ownership refresh — 2026-09-23
+
+- Re-read the operating policy, implementation handoff, project manifest,
+  task PRD, progress history, and available review records. From `FACTORY_ROOT`,
+  `project-control.py verify-work --type task --name
+  audio-runtime-c276-recover-c270-recording-replay-finalization` returned
+  `admitted`. `prd.json.branchName` matches this isolated branch. No concluded
+  C276 or C270 review finding exists. The worktree was clean at HEAD
+  `d93b135175f9a7d782701e93e0466bc045859d02` before this progress update.
+- Fetched `origin/main=2f9f9736e1360802fc37e82de38540d92cb22631`. Startup
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, C270
+  `c590fe43a0b8ecbde9ab6de3ee00f898f2a12a02`, C234
+  `7e6022bac496975f6b91b05e2a19b36348083eb7`, both C217 pins, and fetched
+  main are ancestors of the current candidate. Since the last full-prepush
+  source candidate `34e089f900485fff3a1de291f51934b2d07536d9`, only
+  `progress.txt` differs.
+- Rechecked all seven owned legacy production files and six checkpoint-only
+  replacements: all thirteen are absent. The only CLI adapters remain
+  `recording_adapter.go` (30 lines) and `replay_adapter.go` (33 lines), 63
+  combined. The two corrected recorded-WebMCP selections and cast-device WAV
+  public regression were previously passing; no source or test changed since
+  those checks.
+- The remaining direct production capture reads are confirmed at
+  `sessiontrace/internal/service/metrics.go:64`,
+  `roomreplay/internal/service/integrity_artifacts.go:122`, and
+  `roomreplay/internal/service/schedule_build.go:155`. C268 and C269/C280
+  retain ownership of those caller seams. Their worktrees remain separate;
+  C268 is clean at `a16c249a2f6027d36ff44dbc49cd59617a7a126b`, C269 recovery is
+  at `889b1a49adaa8840f75a283f75cee1faff8baba1` with progress-only dirt, and
+  C280 is at `5a896c4aa43e5383b8c6b6d02677f3f514369d0b`. No C268/C269 reviewed
+  release refs or exact-path handoffs are available, and no peer worktree was
+  modified.
+- The last `make prepush` reached the existing four shared coverage floors
+  after all earlier stages: CLI Wire 79.00%/80%, session Wire 84.60%/95%,
+  session-duration service 84.50%/90%, and session-terminal Wire 88.90%/95%.
+  Do not lower floors or add coverage-only tests. This source dependency and
+  coverage result must be reconciled before handoff; no push, PR, SCRIPT CI,
+  or review is claimed.
+- Exact next action: continue this same C276 branch after the C268/C269 owners
+  provide reviewed releases or explicit exact-path handoffs; cut over the three
+  readers additively, refresh the production caller census, and run every
+  C276 functional, integration, race, hermetic, Wire, and `make prepush` gate
+  on one unchanged clean SHA. Decision remains CONTINUE.
