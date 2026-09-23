@@ -2,6 +2,7 @@ package sessionduration
 
 import (
 	"context"
+	"io"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -251,4 +252,21 @@ type RunRequest struct {
 	// service derives Facts, observer wakeups, readiness observations, liveness
 	// and retry enablement from its presence.
 	Observer RunObserver
+}
+
+// ExecutionRequest supplies host effects around one duration invocation.
+// The duration service validates before Prepare, selects the effective clock,
+// invokes Run when present, and finishes Finalization after any returned
+// preparation or invocation error. A nil Run means there is no provider
+// invocation, while preparation and finalization still occur.
+type ExecutionRequest struct {
+	Context       context.Context
+	Output        io.Writer
+	MaxDuration   time.Duration
+	Clock         TimerScheduler
+	SourceClock   TimerScheduler
+	FallbackClock TimerScheduler
+	Prepare       func(context.Context, io.Writer) error
+	Run           func(context.Context, io.Writer, TimerScheduler) error
+	Finalization  FinalizationPorts
 }

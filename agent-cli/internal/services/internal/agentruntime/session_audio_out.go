@@ -94,7 +94,7 @@ func runSessionAudioPlan(ctx context.Context, out io.Writer, plan sessionRuntime
 	if err != nil {
 		return err
 	}
-	return runSessionDurationPlan(durationCtx, out, plan, maxDuration, realSessionDurationClock{})
+	return executeSessionDurationPlan(durationCtx, out, plan, maxDuration, nil, nil)
 }
 
 // RunSessionWithAudioOut runs a session and writes assistant PCM to path; an empty path preserves normal output and "-" writes raw PCM16.

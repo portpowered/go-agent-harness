@@ -36,6 +36,7 @@ func (stateProbe) Written() bool { return false }
 type serviceProbe struct{}
 
 func (serviceProbe) Run(RunRequest) error                     { return nil }
+func (serviceProbe) Execute(ExecutionRequest) error           { return nil }
 func (serviceProbe) RunWithResult(RunRequest) (Result, error) { return Result{}, nil }
 func (serviceProbe) Complete(CompletionRequest) error         { return nil }
 func (serviceProbe) Begin(Options) (Controller, error)        { return nil, nil }

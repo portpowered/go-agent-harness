@@ -3,10 +3,13 @@ package agentruntime
 import (
 	"context"
 	"errors"
+	"io"
 	"testing"
 	"time"
 
 	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
+	duration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -72,15 +75,39 @@ func TestAwaitSessionFirstTurnUsesVirtualTimerAndParentCancellation(t *testing.T
 	}
 }
 
-func TestEffectiveSessionDurationClockUsesPlanSource(t *testing.T) {
+func TestDurationServiceSelectsPlanClockAndHonorsExplicitOverride(t *testing.T) {
+	service := durationwire.NewService()
 	virtual := platformclock.NewDeterministic(time.Unix(0, 0).UTC(), time.Second)
-	clock := effectiveSessionDurationClock(sessionRuntimePlan{clockSource: virtual, loop: sessionLoopOptions{audioService: audioiowire.NewService()}}, nil)
-	if clock != virtual {
-		t.Fatalf("duration clock=%T, want shared virtual clock", clock)
+	var selected duration.TimerScheduler
+	err := service.Execute(duration.ExecutionRequest{
+		MaxDuration: 0,
+		SourceClock: virtual,
+		Run: func(_ context.Context, _ io.Writer, clock duration.TimerScheduler) error {
+			selected = clock
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute with source clock: %v", err)
+	}
+	if selected != virtual {
+		t.Fatalf("duration clock=%T, want shared virtual clock", selected)
 	}
 	custom := &durationTestClock{}
-	clock = effectiveSessionDurationClock(sessionRuntimePlan{clockSource: virtual}, custom)
-	if clock != custom {
+	selected = nil
+	err = service.Execute(duration.ExecutionRequest{
+		MaxDuration: 0,
+		Clock:       custom,
+		SourceClock: virtual,
+		Run: func(_ context.Context, _ io.Writer, clock duration.TimerScheduler) error {
+			selected = clock
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute with explicit clock: %v", err)
+	}
+	if selected != custom {
 		t.Fatal("explicit test duration clock was replaced")
 	}
 }

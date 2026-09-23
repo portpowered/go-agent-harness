@@ -5660,3 +5660,43 @@ handoff sequence. No gate completion is claimed.
   C251 functional, integration, race, hermetic, Wire, embed, deletion, duplicate,
   adapter, ancestry and diff command on the exact repaired commit before any
   push or PR.
+
+
+## C251 duration execution-boundary checkpoint — 2026-09-23
+
+- Preserved the admitted C251 worktree, branch, checkpoint ancestry and the
+  fetched `origin/main=2f9f9736e1360802fc37e82de38540d92cb22631`. The Factory
+  admission check passes; the task-local `prd.json` branchName matches.
+  Canonical Work `work-task-4` reports no prior C251 review findings, and no
+  C251 pull request exists. C186 PR #531 is merged and included through current
+  main.
+- Removed the remaining duration/finalization policy composition from the CLI
+  run path. `sessionduration.Service.Execute` now owns validation-before-effect,
+  clock precedence, startup/invocation sequencing and ordered finalization;
+  agentruntime callers provide effects and delegate. Removed the intermediate
+  `runSessionDurationPlan` wrapper and routed all duration entrypoints through
+  `executeSessionDurationPlan`. Updated existing clock tests to assert the
+  public service contract; added one public failure/order regression test.
+- Focused checks pass on this source: `rtk go test -count=1
+  ./go-agent-runtime/services/sessionduration/... ./go-agent-runtime/services/session/...`
+  and the matching `-race` command each pass 271 tests in 19 packages;
+  `rtk go test -count=1 ./agent-cli/internal/services/internal/agentruntime
+  -run '(Duration|Finaliz|Replay|Shutdown|Close|Terminal|Timer)'` passes 272
+  tests.
+- Exact planned absence census passes 14/14 legacy/checkpoint paths. The only
+  shutdown adapter is `agent-cli/internal/transport/cli/internal/livehost/
+  shutdown_adapter.go`, one production file / 59 physical lines. The named
+  duplicate-policy symbols are absent. All checkpoint, startup and freshly
+  fetched `origin/main` ancestry checks pass.
+- Fresh `origin/main` has five of the nine named baseline files, totaling 1,671
+  physical lines; four were already absent there. All fourteen named paths are
+  absent on the candidate. No deletion credit is inferred from files already
+  absent on current main.
+- No candidate push, PR, SCRIPT handoff, CI poll, independent review or merge
+  is claimed. The complete exact-head C251-04 preflight has not run on this
+  repair yet.
+- Exact next action: checkpoint these source changes on the same C251 branch,
+  then run `make prepush` and every C251-04 functional, integration, race,
+  hermetic, embed, generated-Wire, deletion, duplicate, adapter, ancestry and
+  diff command on the exact checkpoint SHA. Repair all locally reproducible
+  failures before any push; do not hand off a red architecture gate.

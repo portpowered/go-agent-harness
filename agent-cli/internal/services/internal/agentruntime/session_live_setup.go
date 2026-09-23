@@ -129,63 +129,53 @@ func (p sessionRuntimePlan) finalizationPorts(artifacts duration.ArtifactLifecyc
 	return ports
 }
 
-func runSessionDurationPlan(ctx context.Context, out io.Writer, plan sessionRuntimePlan, maxDuration time.Duration, clock duration.TimerScheduler) error {
-	return runSessionDurationPlanWithAdmission(ctx, out, plan, maxDuration, clock, nil)
-}
-
-func effectiveSessionDurationClock(plan sessionRuntimePlan, requested duration.TimerScheduler) duration.TimerScheduler {
-	if requested != nil {
-		if _, isDefault := requested.(realSessionDurationClock); !isDefault {
-			return requested
-		}
-	}
-	if source, ok := plan.clockSource.(duration.TimerScheduler); ok {
-		return source
-	}
-	return plan.loop.livenessClock
-}
-
-func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, plan sessionRuntimePlan, maxDuration time.Duration, clock duration.TimerScheduler, admitted duration.AdmissionInferencer) (runErr error) {
+func executeSessionDurationPlan(ctx context.Context, out io.Writer, plan sessionRuntimePlan, maxDuration time.Duration, clock duration.TimerScheduler, admitted duration.AdmissionInferencer) error {
 	service := durationwire.NewService()
-	if err := service.ValidateDuration(maxDuration); err != nil {
-		return err
-	}
-	clock = effectiveSessionDurationClock(plan, clock)
-	artifacts := service.ArtifactsFromContext(ctx)
 	reporter := plan.loop.terminalReporter
 	if reporter == nil {
 		reporter = terminalwire.NewReporter()
 		plan.loop.terminalReporter = reporter
 	}
-	finalizer := service.NewFinalizer(plan.finalizationPorts(artifacts, true))
-	defer func() {
-		runErr = finalizer.Finish(ctx, out, runErr)
-	}()
-
-	if plan.replayIntegrityWarning != "" {
-		if _, err := fmt.Fprintln(out, plan.replayIntegrityWarning); err != nil {
-			return err
-		}
-	}
-	if err := plan.bindRTC(ctx, nil); err != nil {
-		return err
-	}
-	if err := plan.writeAnnouncements(out, true); err != nil {
-		return wrapSessionRuntimeError(plan, err)
-	}
 	loopOut := out
 	if plan.loopOut != nil {
 		loopOut = plan.loopOut
 	}
-	plan.configureLoopObserver(&plan.loop)
-	if plan.inferencer == nil {
-		return nil
+	sourceClock, _ := plan.clockSource.(duration.TimerScheduler)
+	var invoke func(context.Context, io.Writer, duration.TimerScheduler) error
+	if plan.inferencer != nil {
+		invoke = func(runCtx context.Context, _ io.Writer, selectedClock duration.TimerScheduler) error {
+			reporter.MarkRunStarted()
+			if err := runSessionDurationInvocation(runCtx, loopOut, plan.inferencer, plan.loop, maxDuration, selectedClock, admitted); err != nil {
+				return wrapSessionRuntimeError(plan, wrapSessionPhaseError("run session loop", err))
+			}
+			return nil
+		}
 	}
-	reporter.MarkRunStarted()
-	if err := runSessionDurationInvocation(ctx, loopOut, plan.inferencer, plan.loop, maxDuration, clock, admitted); err != nil {
-		return wrapSessionRuntimeError(plan, wrapSessionPhaseError("run session loop", err))
-	}
-	return nil
+	return service.Execute(duration.ExecutionRequest{
+		Context:       ctx,
+		Output:        out,
+		MaxDuration:   maxDuration,
+		Clock:         clock,
+		SourceClock:   sourceClock,
+		FallbackClock: plan.loop.livenessClock,
+		Prepare: func(runCtx context.Context, runOut io.Writer) error {
+			if plan.replayIntegrityWarning != "" {
+				if _, err := fmt.Fprintln(runOut, plan.replayIntegrityWarning); err != nil {
+					return err
+				}
+			}
+			if err := plan.bindRTC(runCtx, nil); err != nil {
+				return err
+			}
+			if err := plan.writeAnnouncements(runOut, true); err != nil {
+				return wrapSessionRuntimeError(plan, err)
+			}
+			plan.configureLoopObserver(&plan.loop)
+			return nil
+		},
+		Run:          invoke,
+		Finalization: plan.finalizationPorts(nil, true),
+	})
 }
 
 type sessionRuntimeSetup struct {

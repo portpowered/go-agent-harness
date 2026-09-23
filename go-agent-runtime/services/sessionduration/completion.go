@@ -167,6 +167,9 @@ type LifecycleFailures struct {
 type Service interface {
 	Begin(Options) (Controller, error)
 	Run(RunRequest) error
+	// Execute validates and coordinates host startup effects, one duration
+	// invocation, and ordered post-run finalization.
+	Execute(ExecutionRequest) error
 	// RunWithResult returns the immutable terminal snapshot produced by the
 	// service-owned controller along with the run error.
 	RunWithResult(RunRequest) (Result, error)

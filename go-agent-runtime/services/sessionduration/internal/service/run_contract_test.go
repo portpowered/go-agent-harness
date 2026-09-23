@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -204,6 +205,68 @@ func TestRunRejectsInvalidRequestsBeforeStartingResources(t *testing.T) {
 				t.Fatalf("Run() = %v, want %q", err, test.want)
 			}
 		})
+	}
+}
+
+func TestExecuteValidatesBeforeEffectsAndFinalizesAfterInvocation(t *testing.T) {
+	service := New()
+	var invalidEffectCalled bool
+	invalidErr := service.Execute(sessionduration.ExecutionRequest{
+		MaxDuration: -time.Second,
+		Prepare: func(context.Context, io.Writer) error {
+			invalidEffectCalled = true
+			return nil
+		},
+		Run: func(context.Context, io.Writer, sessionduration.TimerScheduler) error {
+			invalidEffectCalled = true
+			return nil
+		},
+		Finalization: sessionduration.FinalizationPorts{
+			PublishTerminal: func(io.Writer, error) error {
+				invalidEffectCalled = true
+				return nil
+			},
+		},
+	})
+	if invalidErr == nil || invalidEffectCalled {
+		t.Fatalf("invalid execution error=%v effects-called=%v; want validation before effects", invalidErr, invalidEffectCalled)
+	}
+
+	runFailure := errors.New("provider invocation failed")
+	var order []string
+	err := service.Execute(sessionduration.ExecutionRequest{
+		MaxDuration: 0,
+		Prepare: func(context.Context, io.Writer) error {
+			order = append(order, "prepare")
+			return nil
+		},
+		Run: func(_ context.Context, _ io.Writer, selected sessionduration.TimerScheduler) error {
+			order = append(order, "run")
+			if selected == nil {
+				t.Fatal("Execute did not select the supplied fallback clock")
+			}
+			return runFailure
+		},
+		FallbackClock: testNoopScheduler{},
+		Finalization: sessionduration.FinalizationPorts{
+			CloseSession: func() error {
+				order = append(order, "close")
+				return nil
+			},
+			PublishTerminal: func(_ io.Writer, runErr error) error {
+				order = append(order, "publish")
+				if !errors.Is(runErr, runFailure) {
+					t.Fatalf("terminal publication lost invocation error: %v", runErr)
+				}
+				return nil
+			},
+		},
+	})
+	if !errors.Is(err, runFailure) {
+		t.Fatalf("Execute() = %v, want invocation error identity", err)
+	}
+	if len(order) < 4 || order[0] != "prepare" || order[1] != "run" || order[len(order)-2] != "close" || order[len(order)-1] != "publish" {
+		t.Fatalf("execution/finalization order = %v, want prepare, run, close, publish", order)
 	}
 }
 

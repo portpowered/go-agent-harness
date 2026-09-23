@@ -248,7 +248,7 @@ func runSessionImageWithTextSeed(ctx context.Context, out io.Writer, plan sessio
 		return err
 	}
 	admittedInferencer := admitSessionDurationInferencer(&plan)
-	err = runSessionDurationPlanWithAdmission(durationCtx, output, plan, opts.MaxDuration, realSessionDurationClock{}, admittedInferencer)
+	err = executeSessionDurationPlan(durationCtx, output, plan, opts.MaxDuration, nil, admittedInferencer)
 	return errors.Join(err, output.Err())
 }
 
@@ -264,7 +264,7 @@ func runSessionImageDuration(ctx context.Context, out io.Writer, plan sessionRun
 	if err != nil {
 		return err
 	}
-	return runSessionDurationPlan(durationCtx, out, plan, maxDuration, realSessionDurationClock{})
+	return executeSessionDurationPlan(durationCtx, out, plan, maxDuration, nil, nil)
 }
 
 func prepareSessionImageRun(ctx context.Context, opts SessionRunOptions, sourcePaths []string, seed sessionturn.Seed) (SessionRunOptions, []messages.ImagePart, func() error, error) {

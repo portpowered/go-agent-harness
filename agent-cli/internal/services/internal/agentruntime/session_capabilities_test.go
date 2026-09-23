@@ -54,7 +54,7 @@ func TestSessionDurationPlanClosesTransferredCapabilityOnPreflightExit(t *testin
 		},
 	}
 
-	err := runSessionDurationPlan(context.Background(), io.Discard, plan, 1, nil)
+	err := executeSessionDurationPlan(context.Background(), io.Discard, plan, 1, nil, nil)
 	if err == nil {
 		t.Fatal("duration preflight unexpectedly succeeded")
 	}

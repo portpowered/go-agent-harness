@@ -103,7 +103,7 @@ func RunSessionWithTextSeedAndMaxDuration(ctx context.Context, out io.Writer, op
 	if output != nil {
 		writer = output
 	}
-	err = runSessionDurationPlanWithAdmission(durationCtx, writer, plan, maxDuration, nil, admitted)
+	err = executeSessionDurationPlan(durationCtx, writer, plan, maxDuration, nil, admitted)
 	if output != nil {
 		err = errors.Join(err, output.Err())
 	}

@@ -52,7 +52,7 @@ func RunSessionWithMaxDurationClock(ctx context.Context, out io.Writer, opts Ses
 	if err != nil {
 		return err
 	}
-	return runSessionDurationPlan(durationCtx, out, plan, maxDuration, clock)
+	return executeSessionDurationPlan(durationCtx, out, plan, maxDuration, clock, nil)
 }
 
 // RunSessionWithInstructions resolves the ask-path system-prompt contract and
@@ -172,7 +172,7 @@ func runSessionInstructionsWithSeed(ctx context.Context, out io.Writer, plan ses
 	// The seed substitution wrapper must sit inside the admission boundary so
 	// the duration runner never puts its wire sentinel on the live provider.
 	admittedInferencer := admitSessionDurationInferencer(&plan)
-	runErr := runSessionDurationPlanWithAdmission(durationCtx, output, plan, maxDuration, realSessionDurationClock{}, admittedInferencer)
+	runErr := executeSessionDurationPlan(durationCtx, output, plan, maxDuration, nil, admittedInferencer)
 	return errors.Join(runErr, output.Err())
 }
 
@@ -230,7 +230,7 @@ func runSessionInstructionsDurationOrPlan(ctx context.Context, out io.Writer, pl
 	if err != nil {
 		return err
 	}
-	return runSessionDurationPlan(durationCtx, out, plan, maxDuration, realSessionDurationClock{})
+	return executeSessionDurationPlan(durationCtx, out, plan, maxDuration, nil, nil)
 }
 
 // sessionInstructionText requests the reusable
