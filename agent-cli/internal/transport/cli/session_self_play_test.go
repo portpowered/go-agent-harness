@@ -3,7 +3,6 @@ package cli
 import (
 	"bytes"
 	"context"
-	"io"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -18,10 +17,10 @@ func TestSessionSelfPlayCommandParsesBoundedRunOptions(t *testing.T) {
 	globalFlags.ConfigDirPath = t.TempDir()
 	subject := NewSessionSelfPlayCommand(globalFlags, nil)
 
-	var got serviceSelfPlay.RunOptions
-	subject.SetRunner(func(_ context.Context, _ io.Writer, opts serviceSelfPlay.RunOptions) error {
+	var got serviceSelfPlay.Request
+	subject.SetRunner(func(_ context.Context, opts serviceSelfPlay.Request) (serviceSelfPlay.Result, error) {
 		got = opts
-		return nil
+		return serviceSelfPlay.Result{}, nil
 	})
 
 	outputDir := filepath.Join(t.TempDir(), "self-play")
@@ -47,12 +46,33 @@ func TestSessionSelfPlayCommandParsesBoundedRunOptions(t *testing.T) {
 	if got.MaxDuration != 17*time.Second || got.MaxTurns != 4 {
 		t.Fatalf("parsed bounds = (%s, %d), want (17s, 4)", got.MaxDuration, got.MaxTurns)
 	}
-	if got.ConfigDir != globalFlags.ConfigDir() {
-		t.Fatalf("config dir = %q, want %q", got.ConfigDir, globalFlags.ConfigDir())
+}
+
+func TestSessionSelfPlayCommandResolvesProviderInputsFromConfig(t *testing.T) {
+	t.Setenv("AGENT_MODEL__OPENAI__API_KEY", "sk-config")
+	t.Setenv("AGENT_MODEL__OPENAI__BASE_URL", "wss://config.example.test/realtime")
+	globalFlags := flags.NewGlobalFlags()
+	globalFlags.ConfigDirPath = t.TempDir()
+	subject := NewSessionSelfPlayCommand(globalFlags, nil)
+	var got serviceSelfPlay.Request
+	subject.SetRunner(func(_ context.Context, request serviceSelfPlay.Request) (serviceSelfPlay.Result, error) {
+		got = request
+		return serviceSelfPlay.Result{}, nil
+	})
+	cmd := subject.Generate()
+	cmd.SetArgs([]string{"--output-dir", filepath.Join(t.TempDir(), "self-play")})
+	if err := cmd.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("execute self-play command: %v", err)
+	}
+	if got.APIKey != "sk-config" || got.BaseURL != "wss://config.example.test/realtime" {
+		t.Fatalf("resolved self-play provider inputs = (key %q, base %q)", got.APIKey, got.BaseURL)
+	}
+	if got.Provider != "" || got.Model != "" || got.MaxDuration != 0 || got.MaxTurns != 0 {
+		t.Fatalf("adapter supplied service-owned defaults: %#v", got)
 	}
 }
 
-func TestSessionSelfPlayCommandHelpDocumentsFixedPhaseOneContract(t *testing.T) {
+func TestSessionSelfPlayCommandHelpDocumentsServiceContract(t *testing.T) {
 	cmd := NewSessionSelfPlayCommand(flags.NewGlobalFlags(), nil).Generate()
 	var helpOutput bytes.Buffer
 	cmd.SetOut(&helpOutput)
@@ -61,9 +81,7 @@ func TestSessionSelfPlayCommandHelpDocumentsFixedPhaseOneContract(t *testing.T) 
 	}
 	help := helpOutput.String()
 	for _, want := range []string{
-		"Customer persona:",
-		"Assistant persona:",
-		"Opening seed (sent once as customer text):",
+		"Run a bounded live self-play conversation through the runtime service.",
 		"raw PCM16 audio",
 		"tools and transcript/text bridging are disabled",
 		"--api-key",

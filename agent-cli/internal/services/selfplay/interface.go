@@ -6,10 +6,9 @@
 package selfplay
 
 import (
-	"context"
-	"errors"
-	"io"
 	"time"
+
+	runtimeselfplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/selfplay"
 )
 
 const (
@@ -30,39 +29,9 @@ const (
 	SelfPlayOpeningSeed = "Hi, I need help planning a simple weekend trip."
 )
 
-// RunOptions contains the admitted self-play command values. It deliberately
-// excludes concrete transports and inferencers so callers cannot bypass the
-// service composition boundary.
-type RunOptions struct {
-	APIKey      string
-	OutputDir   string
-	Provider    string
-	Model       string
-	BaseURL     string
-	ConfigDir   string
-	MaxDuration time.Duration
-	MaxTurns    int
-}
-
-// SelfPlayRunOptions preserves the descriptive spelling used by the former
-// runtime-owned command options for callers of the public contract.
-type SelfPlayRunOptions = RunOptions
-
-// Options is the concise spelling used by service-oriented callers.
-type Options = RunOptions
-
-// Service runs one bounded self-play conversation.
-type Service interface {
-	Run(context.Context, io.Writer, RunOptions) error
-}
-
-// RunFunc adapts a function to Service for command tests and composition
-// seams that do not need a concrete service value.
-type RunFunc func(context.Context, io.Writer, RunOptions) error
-
-func (f RunFunc) Run(ctx context.Context, out io.Writer, options RunOptions) error {
-	if f == nil {
-		return errors.New("self-play runner is required")
-	}
-	return f(ctx, out, options)
-}
+// Service, Request, and Result come from the runtime-owned self-play contract.
+// The aliases keep the unreleased CLI caller seams source-compatible while
+// their owner completes its exact-path cutover.
+type Service = runtimeselfplay.Service
+type Request = runtimeselfplay.Request
+type Result = runtimeselfplay.Result

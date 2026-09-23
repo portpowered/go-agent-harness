@@ -12,3 +12,9 @@ type Dependencies struct {
 	ModelCatalog   providers.ModelCatalog
 	Clock          clock.Source
 }
+
+// NewDependencies maps the application-owned provider roles into the
+// self-play service's own Wire boundary.
+func NewDependencies(sessionService providers.SessionService, modelCatalog providers.ModelCatalog, source clock.Source) Dependencies {
+	return Dependencies{SessionService: sessionService, ModelCatalog: modelCatalog, Clock: source}
+}

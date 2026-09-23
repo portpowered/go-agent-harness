@@ -231,11 +231,12 @@ func TestRouterPreRunNormalizesSelfPlayOutputDirectory(t *testing.T) {
 	namedHome := t.TempDir()
 	globalFlags := flags.NewGlobalFlags()
 	owner := NewSessionSelfPlayCommand(globalFlags, nil)
-	var got serviceSelfPlay.RunOptions
-	owner.SetRunner(func(_ context.Context, _ io.Writer, options serviceSelfPlay.RunOptions) error {
+	var got serviceSelfPlay.Request
+	owner.SetRunner(func(_ context.Context, options serviceSelfPlay.Request) (serviceSelfPlay.Result, error) {
 		got = options
-		return nil
+		return serviceSelfPlay.Result{}, nil
 	})
+	globalFlags.ConfigDirPath = t.TempDir()
 
 	sessionGroup := &cobra.Command{Use: "session"}
 	sessionGroup.AddCommand(owner.Generate())
