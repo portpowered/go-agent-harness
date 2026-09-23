@@ -24,6 +24,7 @@ const (
 	maxRoomReplayArtifactBytes               = 64 << 20
 	roomReplayJSONLScannerInitialBufferBytes = 64 << 10
 	roomReplayJSONLScannerMaxTokenBytes      = 4 << 20
+	maxRedactedJSONDepth                     = 16
 )
 
 func newRoomReplayBundleError(kind roomReplayBundleErrorKind, field, artifact, expected, actual string, cause error) error {
@@ -287,7 +288,7 @@ func stampJSONFields(data []byte, offset time.Duration, unixMS int64) ([]byte, e
 }
 
 func redactJSON(data []byte, secrets []string) []byte {
-	if len(data) == 0 || len(secrets) == 0 {
+	if len(data) == 0 {
 		return data
 	}
 	var value any
@@ -303,16 +304,31 @@ func redactJSON(data []byte, secrets []string) []byte {
 }
 
 func redactValue(value any, secrets []string) any {
+	return redactValueAtDepth(value, secrets, 0)
+}
+
+func redactValueAtDepth(value any, secrets []string, depth int) any {
+	if depth >= maxRedactedJSONDepth {
+		return "[REDACTED]"
+	}
 	switch typed := value.(type) {
 	case string:
 		return redactText(typed, secrets)
 	case []any:
 		for index := range typed {
-			typed[index] = redactValue(typed[index], secrets)
+			typed[index] = redactValueAtDepth(typed[index], secrets, depth+1)
 		}
 	case map[string]any:
 		for key, nested := range typed {
-			typed[key] = redactValue(nested, secrets)
+			if sensitiveJSONKey(key) {
+				typed[key] = "[REDACTED]"
+				continue
+			}
+			if text, ok := nested.(string); ok && jsonPayloadField(key) {
+				typed[key] = redactJSONPayload(text, secrets, depth+1)
+				continue
+			}
+			typed[key] = redactValueAtDepth(nested, secrets, depth+1)
 		}
 	}
 	return value
@@ -343,14 +359,6 @@ func cloneFields(values map[string]string) map[string]string {
 		clone[key] = value
 	}
 	return clone
-}
-
-func redactFields(values map[string]string, secrets []string) map[string]string {
-	fields := cloneFields(values)
-	for key, value := range fields {
-		fields[key] = redactText(value, secrets)
-	}
-	return fields
 }
 
 func cloneStatus(status *transcript.RecordingStatus) *transcript.RecordingStatus {

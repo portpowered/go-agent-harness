@@ -6,6 +6,7 @@ import (
 	streamanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/stream"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+	"strings"
 	"sync"
 	"time"
 )
@@ -251,4 +252,94 @@ func (t *speechTracker) transition(signal bool) string {
 		return "end"
 	}
 	return ""
+}
+
+func sensitiveJSONKey(key string) bool {
+	name := normalizedJSONKey(key)
+	// Environment variable names are references, not credential values.
+	if strings.HasSuffix(name, "env") || strings.HasSuffix(name, "environmentvariable") || strings.HasSuffix(name, "envvar") {
+		return false
+	}
+	for _, marker := range []string{"apikey", "apisecret", "authorization", "credential", "password", "privatekey", "secret"} {
+		if strings.Contains(name, marker) {
+			return true
+		}
+	}
+	if name == "token" || strings.HasSuffix(name, "token") || strings.HasSuffix(name, "bearer") {
+		return true
+	}
+	return false
+}
+
+func normalizedJSONKey(key string) string {
+	var normalized strings.Builder
+	normalized.Grow(len(key))
+	for _, char := range key {
+		if char >= 'A' && char <= 'Z' {
+			char += 'a' - 'A'
+		}
+		if char >= 'a' && char <= 'z' || char >= '0' && char <= '9' {
+			normalized.WriteRune(char)
+		}
+	}
+	return normalized.String()
+}
+
+func containsSensitiveJSONField(text string) bool {
+	normalized := normalizedJSONKey(text)
+	for _, marker := range []string{"apikey", "apisecret", "authorization", "credential", "password", "privatekey", "secret", "accesstoken", "refreshtoken", "bearertoken"} {
+		if strings.Contains(normalized, marker) {
+			return true
+		}
+	}
+	return strings.Contains(strings.ToLower(text), `"token"`)
+}
+
+func jsonPayloadField(key string) bool {
+	name := normalizedJSONKey(key)
+	return name == "arguments" || name == "partialjson" || strings.HasSuffix(name, "json")
+}
+
+func redactJSONPayload(text string, secrets []string, depth int) string {
+	if len(text) > roomReplayJSONLScannerMaxTokenBytes || depth >= maxRedactedJSONDepth {
+		return "[REDACTED]"
+	}
+	trimmed := strings.TrimSpace(text)
+	if !strings.HasPrefix(trimmed, "{") && !strings.HasPrefix(trimmed, "[") {
+		return redactText(text, secrets)
+	}
+	var nested any
+	if err := json.Unmarshal([]byte(text), &nested); err != nil {
+		if containsSensitiveJSONField(text) {
+			return "[REDACTED]"
+		}
+		return redactText(text, secrets)
+	}
+	switch nested.(type) {
+	case map[string]any, []any:
+		nested = redactValueAtDepth(nested, secrets, depth)
+		encoded, err := json.Marshal(nested)
+		if err == nil {
+			return string(encoded)
+		}
+		return "[REDACTED]"
+	default:
+		return redactText(text, secrets)
+	}
+}
+
+func redactFields(values map[string]string, secrets []string) map[string]string {
+	fields := cloneFields(values)
+	for key, value := range fields {
+		if sensitiveJSONKey(key) {
+			fields[key] = "[REDACTED]"
+			continue
+		}
+		if jsonPayloadField(key) {
+			fields[key] = redactJSONPayload(value, secrets, 0)
+			continue
+		}
+		fields[key] = redactText(value, secrets)
+	}
+	return fields
 }

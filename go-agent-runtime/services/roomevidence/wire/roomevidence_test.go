@@ -204,6 +204,95 @@ func TestServiceRecordsEffectsAndIntegrity(t *testing.T) {
 	}
 }
 
+func TestServiceRedactsCredentialFieldsWithoutConfiguredSecrets(t *testing.T) {
+	destination := filepath.Join(t.TempDir(), "bundle")
+	base := time.Date(2026, 9, 11, 20, 0, 0, 0, time.UTC)
+	source := clock.NewDeterministic(base, time.Millisecond)
+	recorder, err := NewService().Open(roomevidence.RecordingRequest{
+		Destination: destination,
+		Manifest:    testManifest(),
+		AudioFormat: rooms.AudioFormat{SampleRate: 24000, Channels: 1, FrameDuration: 20 * time.Millisecond},
+		StartedAt:   base,
+		Clock:       source,
+	})
+	if err != nil {
+		t.Fatalf("open recorder: %v", err)
+	}
+	message := messages.StreamMessage{
+		Type:  messages.StreamTypeToolCallEnd,
+		Value: messages.NewToolCallEndValue("call-1", "lookup", `{"api_key":"unconfigured-api-key","api_key_env":"ROOM_KEY","token_count":12,"nested":{"Authorization":"Bearer unconfigured-token"}}`),
+	}
+	if err := recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationDelta, ParticipantID: "speaker", StreamMessage: message}); err != nil {
+		t.Fatalf("record credential-bearing stream event: %v", err)
+	}
+	partial := messages.StreamMessage{Type: messages.StreamTypeToolCallDelta, Value: messages.NewToolCallDeltaValue(`{"api_key":"unconfigured-partial`)}
+	if err := recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationDelta, ParticipantID: "speaker", StreamMessage: partial}); err != nil {
+		t.Fatalf("record partial credential-bearing stream event: %v", err)
+	}
+	if err := recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationDiagnostic, ParticipantID: "speaker", Diagnostic: roomevidence.DiagnosticRecord{
+		Event:  "credential-bearing-diagnostic",
+		Fields: map[string]string{"client_secret": "unconfigured-client-secret"},
+	}}); err != nil {
+		t.Fatalf("record credential-bearing diagnostic: %v", err)
+	}
+	if _, err := finalizeForTest(recorder, testResult(), nil, source.Now()); err != nil {
+		t.Fatalf("finalize: %v", err)
+	}
+
+	artifacts := recorder.Artifacts("speaker")
+	deltaData, err := os.ReadFile(filepath.Join(destination, filepath.FromSlash(artifacts.Deltas)))
+	if err != nil {
+		t.Fatalf("read delta evidence: %v", err)
+	}
+	deltaLines := bytes.Split(bytes.TrimSpace(deltaData), []byte{'\n'})
+	if len(deltaLines) != 2 {
+		t.Fatalf("delta evidence lines = %d, want complete and partial stream records", len(deltaLines))
+	}
+	var delta struct {
+		Value struct {
+			Arguments string `json:"arguments"`
+		} `json:"value"`
+	}
+	if err := json.Unmarshal(deltaLines[0], &delta); err != nil {
+		t.Fatalf("decode delta evidence: %v", err)
+	}
+	var arguments map[string]any
+	if err := json.Unmarshal([]byte(delta.Value.Arguments), &arguments); err != nil {
+		t.Fatalf("decode recorded tool arguments: %v", err)
+	}
+	if arguments["api_key"] != "[REDACTED]" {
+		t.Errorf("api_key evidence = %v, want redaction marker", arguments["api_key"])
+	}
+	if arguments["api_key_env"] != "ROOM_KEY" {
+		t.Errorf("api_key_env evidence = %v, want environment variable name preserved", arguments["api_key_env"])
+	}
+	nested, ok := arguments["nested"].(map[string]any)
+	if !ok || nested["Authorization"] != "[REDACTED]" {
+		t.Errorf("authorization evidence = %v, want redaction marker", arguments["nested"])
+	}
+	if arguments["token_count"] != float64(12) {
+		t.Errorf("non-secret token_count = %v, want 12", arguments["token_count"])
+	}
+	var partialRecord struct {
+		Value struct {
+			PartialJSON string `json:"partial_json"`
+		} `json:"value"`
+	}
+	if err := json.Unmarshal(deltaLines[1], &partialRecord); err != nil {
+		t.Fatalf("decode partial delta evidence: %v", err)
+	}
+	if partialRecord.Value.PartialJSON != "[REDACTED]" {
+		t.Errorf("partial credential-bearing JSON = %q, want fail-closed redaction", partialRecord.Value.PartialJSON)
+	}
+	diagnosticData, err := os.ReadFile(filepath.Join(destination, filepath.FromSlash(artifacts.Diagnostics)))
+	if err != nil {
+		t.Fatalf("read diagnostic evidence: %v", err)
+	}
+	if bytesContain(diagnosticData, "unconfigured-client-secret") || !bytesContain(diagnosticData, "[REDACTED]") {
+		t.Fatalf("diagnostic evidence did not redact credential field: %s", diagnosticData)
+	}
+}
+
 func TestServiceMixSumsOverlapAndPadsToFinalSpan(t *testing.T) {
 	recorder, destination, source := openRecorder(t)
 	chunk := make([]byte, 10)
