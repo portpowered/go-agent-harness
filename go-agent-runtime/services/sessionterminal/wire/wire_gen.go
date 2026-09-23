@@ -7,6 +7,7 @@
 package wire
 
 import (
+	"context"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/internal/service"
 )
@@ -18,3 +19,26 @@ func NewService() sessionterminal.Service {
 	serviceService := service.New()
 	return serviceService
 }
+
+// NewReporter constructs one invocation-local terminal reporter.
+func NewReporter() sessionterminal.Reporter {
+	reporter := service.NewReporter()
+	return reporter
+}
+
+func NewTerminationBoundary(options sessionterminal.TerminationOptions) sessionterminal.TerminationBoundary {
+	terminationBoundary := service.NewTerminationBoundary(options)
+	return terminationBoundary
+}
+
+// wire.go:
+
+func WithReporter(ctx context.Context, reporter sessionterminal.Reporter) context.Context {
+	return service.WithReporter(ctx, reporter)
+}
+
+func ReporterFromContext(ctx context.Context) sessionterminal.Reporter {
+	return service.ReporterFromContext(ctx)
+}
+
+func HasIndependentFailure(err error) bool { return service.HasIndependentFailure(err) }

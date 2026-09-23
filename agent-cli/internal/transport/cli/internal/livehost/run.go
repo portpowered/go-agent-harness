@@ -5,15 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"path/filepath"
 	"strings"
 
-	cliOutput "github.com/portpowered/go-agent-harness/agent-cli/internal/output"
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeRecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	runtimeSessionTrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -32,44 +31,6 @@ type RequestBuilder func(context.Context, serviceSession.Request, *runtimeReplay
 // AnnouncementWriter owns operator-facing startup text at the CLI boundary.
 type AnnouncementWriter func(io.Writer, serviceSession.Request, runtimeSession.LiveRequest, *runtimeReplay.CaptureInspection) error
 
-func resolveProviderInputs(ctx context.Context, request serviceSession.Request, replayInspection *runtimeReplay.CaptureInspection, deps RequestDependencies) (requestInputs, error) {
-	loaded, err := requireLiveConfig(request)
-	if err != nil {
-		return requestInputs{}, err
-	}
-	inspection, err := admitReplay(ctx, request.ReplayPath, replayInspection, deps.ReplayService)
-	if err != nil {
-		return requestInputs{}, err
-	}
-	if inspection != nil {
-		request.ReplayPath = inspection.CapturePath
-	}
-	effective := loaded.ApplyOverrides("", request.Model, request.Provider, request.BaseURL)
-	providerInspection := inspection
-	if inspection != nil && inspection.Kind == runtimeReplay.CaptureKindTurn {
-		// Turn captures replay a provider-neutral message stream. Their recorded
-		// provider name is metadata, not a live provider selection.
-		providerInspection = nil
-	}
-	provider, model, apiKey, baseURL, err := ProviderValues(effective, request, providerInspection)
-	if err != nil {
-		return requestInputs{}, err
-	}
-	if deps.ModelAdmission != nil && (inspection == nil || inspection.Kind != runtimeReplay.CaptureKindTurn) {
-		if err := deps.ModelAdmission.ValidateSessionModel(provider, model); err != nil {
-			return requestInputs{}, err
-		}
-	}
-	capabilities, err := buildCapabilities(loaded, request, deps)
-	if err != nil {
-		return requestInputs{}, err
-	}
-	return requestInputs{
-		effective: effective, inspection: inspection, provider: provider, model: model, capabilities: capabilities,
-		baseURL: baseURL, credentialRef: resolveCredentialReference(apiKey, deps.CredentialReference),
-	}, nil
-}
-
 // Dependencies are the explicit host edges needed to run one live session.
 // No process-wide discovery or default runtime graph is performed here.
 type Dependencies struct {
@@ -86,6 +47,7 @@ type Dependencies struct {
 	RecordingService   runtimeRecording.Service
 	CredentialValues   func(serviceSession.Request) ([]string, error)
 	CaptureComplete    func(serviceSession.Request) []runtimeSession.LiveControl
+	TraceService       runtimeSessionTrace.Service
 }
 
 // Run admits a single host invocation into the reusable live runtime. File
@@ -93,16 +55,20 @@ type Dependencies struct {
 // this function joins the runtime. Provider, media, and terminal lifecycle
 // policy remains in runtimeSession.LiveRunner.
 func Run(ctx context.Context, out io.Writer, request serviceSession.Request, deps Dependencies) (runErr error) {
-	runner, err := liveRunner(deps.LiveService)
+	admission, err := prepareLiveRun(ctx, request, deps)
 	if err != nil {
 		return err
 	}
-	if deps.BuildRequest == nil {
-		return errors.New("live request builder is unavailable")
-	}
-	liveRequest, err := deps.BuildRequest(ctx, request, deps.ReplayInspection)
-	if err != nil {
-		return err
+	runner := admission.runner
+	liveRequest := admission.liveRequest
+	credentials := admission.credentials
+	credentialsReady := admission.credentialsReady
+	traceRun := admission.traceRun
+	if traceRun != nil {
+		defer func() {
+			bundle := strings.TrimSpace(request.RecordDirectory)
+			runErr = errors.Join(runErr, finishTrace(traceRun, traceContext(ctx), bundle, runErr == nil))
+		}()
 	}
 	cleanupImages, err := stageLiveOpeningImages(request, &liveRequest)
 	if err != nil {
@@ -118,9 +84,12 @@ func Run(ctx context.Context, out io.Writer, request serviceSession.Request, dep
 			return err
 		}
 	}
-	recorder, err := openRecorder(request, &liveRequest, deps)
+	recorder, err := openRecorder(request, &liveRequest, deps, credentials, credentialsReady)
 	if err != nil {
 		return err
+	}
+	if traceRun != nil {
+		recorder = wrapTraceRecorder(traceRun, recorder, liveRequest)
 	}
 	finishRecorder := func(cause error) error {
 		if recorder == nil {
@@ -135,8 +104,68 @@ func Run(ctx context.Context, out io.Writer, request serviceSession.Request, dep
 	if filePorts != nil {
 		defer func() { runErr = errors.Join(runErr, filePorts.Close()) }()
 	}
-	options := liveRunOptions(out, request, liveRequest, recorder, filePorts, deps)
+	configureLegacyReplayInput(filePorts, request, liveRequest)
+	if traceRun != nil {
+		wrapTraceFilePorts(traceRun, filePorts)
+	}
+	options := liveRunOptions(out, request, liveRequest, recorder, filePorts, deps, traceRun)
 	return suppressExpectedDuration(runner.RunLive(ctx, options))
+}
+
+func traceContext(ctx context.Context) context.Context {
+	if ctx == nil {
+		return context.Background()
+	}
+	return context.WithoutCancel(ctx)
+}
+
+type liveRunAdmission struct {
+	runner           runtimeSession.LiveRunner
+	liveRequest      runtimeSession.LiveRequest
+	credentials      []string
+	credentialsReady bool
+	traceRun         runtimeSessionTrace.Prepared
+}
+
+func prepareLiveRun(ctx context.Context, request serviceSession.Request, deps Dependencies) (liveRunAdmission, error) {
+	traceRequested := request.TraceAudio || strings.TrimSpace(request.RecordDirectory) != ""
+	if traceRequested && deps.TraceService == nil {
+		return liveRunAdmission{}, errors.New("live session trace service is unavailable")
+	}
+	runner, err := liveRunner(deps.LiveService)
+	if err != nil {
+		return liveRunAdmission{}, err
+	}
+	if deps.BuildRequest == nil {
+		return liveRunAdmission{}, errors.New("live request builder is unavailable")
+	}
+	liveRequest, err := deps.BuildRequest(ctx, request, deps.ReplayInspection)
+	if err != nil {
+		return liveRunAdmission{}, err
+	}
+	credentials, credentialsReady, err := resolveTraceCredentials(request, &liveRequest, deps, traceRequested)
+	if err != nil {
+		return liveRunAdmission{}, err
+	}
+	traceRun, err := prepareLiveTrace(request, liveRequest, deps, credentials)
+	if err != nil {
+		return liveRunAdmission{}, err
+	}
+	return liveRunAdmission{runner: runner, liveRequest: liveRequest, credentials: credentials, credentialsReady: credentialsReady, traceRun: traceRun}, nil
+}
+
+func resolveTraceCredentials(request serviceSession.Request, liveRequest *runtimeSession.LiveRequest, deps Dependencies, traceRequested bool) ([]string, bool, error) {
+	if !traceRequested || deps.CredentialValues == nil {
+		return nil, false, nil
+	}
+	values, err := deps.CredentialValues(liveCredentialRequest(request, liveRequest))
+	if err != nil {
+		return nil, false, err
+	}
+	if strings.TrimSpace(request.APIKey) != "" {
+		values = append(values, request.APIKey)
+	}
+	return append([]string(nil), values...), true, nil
 }
 
 // suppressExpectedDuration keeps the CLI's historical exit contract for an
@@ -203,28 +232,20 @@ func liveRunner(service runtimeSession.LiveService) (runtimeSession.LiveRunner, 
 	return runner, nil
 }
 
-func openRecorder(request serviceSession.Request, liveRequest *runtimeSession.LiveRequest, deps Dependencies) (runtimeSession.LiveRecorder, error) {
+func openRecorder(request serviceSession.Request, liveRequest *runtimeSession.LiveRequest, deps Dependencies, credentials []string, credentialsReady bool) (runtimeSession.LiveRecorder, error) {
 	if request.RecordDirectory == "" {
-		recorder, err := openSemanticRecorder(request.RecordPath, deps.RecordingService)
-		if err != nil || !request.TraceAudio {
-			return recorder, err
-		}
-		traced, traceErr := newLiveTraceRecorder(recorder, ".", request.RecordPath, liveTraceProviderRate(liveRequest), liveTraceSource(deps.FileDeviceService.Scheduler))
-		if traceErr != nil {
-			if recorder != nil {
-				traceErr = errors.Join(traceErr, recorder.Finalize(context.Background(), traceErr))
-			}
-			return nil, traceErr
-		}
-		return traced, nil
+		return openSemanticRecorder(request.RecordPath, deps.RecordingService)
 	}
 	if err := validateLiveRecorderDependencies(deps); err != nil {
 		return nil, err
 	}
 	replayInputPath := liveReplayInputPath(liveRequest)
-	credentials, err := deps.CredentialValues(liveCredentialRequest(request, liveRequest))
-	if err != nil {
-		return nil, err
+	if !credentialsReady {
+		var err error
+		credentials, err = deps.CredentialValues(liveCredentialRequest(request, liveRequest))
+		if err != nil {
+			return nil, err
+		}
 	}
 	recorder, err := deps.RecordingService.OpenLiveEvidence(runtimeRecording.LiveEvidenceOptions{
 		Destination:                   request.RecordDirectory,
@@ -240,40 +261,7 @@ func openRecorder(request serviceSession.Request, liveRequest *runtimeSession.Li
 		return nil, fmt.Errorf("open live recording: %w", err)
 	}
 	configureLiveCapturePath(request, replayInputPath, recorder, liveRequest)
-	return traceLiveRecorderIfRequested(request, replayInputPath, recorder, liveRequest, deps)
-}
-
-func traceLiveRecorderIfRequested(request serviceSession.Request, replayInputPath string, recorder runtimeSession.LiveRecorder, liveRequest *runtimeSession.LiveRequest, deps Dependencies) (runtimeSession.LiveRecorder, error) {
-	if !request.TraceAudio {
-		return recorder, nil
-	}
-	providerPath := liveProviderCapturePath(request.RecordPath, replayInputPath)
-	if providerPath == "" {
-		providerPath = filepath.Join(request.RecordDirectory, "provider.json")
-	}
-	traced, err := newLiveTraceRecorder(recorder, request.RecordDirectory, providerPath, liveTraceProviderRate(liveRequest), liveTraceSource(deps.FileDeviceService.Scheduler))
-	if err != nil {
-		return nil, errors.Join(err, recorder.Finalize(context.Background(), err))
-	}
-	return traced, nil
-}
-
-func liveTraceProviderRate(liveRequest *runtimeSession.LiveRequest) int {
-	if liveRequest == nil {
-		return 0
-	}
-	if strings.TrimSpace(liveRequest.Replay.InputCapturePath) != "" {
-		// A replayed provider can expose a file sink at a different rate from
-		// the provider media boundary. The canonical realtime PCM rate is the
-		// only safe fallback when the capture did not declare its native rate.
-		if plan := liveRequest.ReplayPlan; plan == nil || plan.OutputAudioSampleRate <= 0 {
-			return cliLiveDefaultRate
-		}
-	}
-	if plan := liveRequest.ReplayPlan; plan != nil && plan.OutputAudioSampleRate <= 0 {
-		return cliLiveDefaultRate
-	}
-	return liveRequest.OutputAudioSampleRate
+	return recorder, nil
 }
 
 func validateLiveRecorderDependencies(deps Dependencies) error {
@@ -346,7 +334,17 @@ func configureCapturePath(request *runtimeSession.LiveRequest, path string) {
 	request.Replay.OutputCapturePath = path
 }
 
-func liveRunOptions(out io.Writer, request serviceSession.Request, liveRequest runtimeSession.LiveRequest, recorder runtimeSession.LiveRecorder, filePorts *FilePorts, deps Dependencies) runtimeSession.LiveRunOptions {
+func configureLegacyReplayInput(filePorts *FilePorts, request serviceSession.Request, liveRequest runtimeSession.LiveRequest) {
+	if filePorts == nil || filePorts.Input == nil || request.ReplayPath == "" || liveRequest.ReplayPlan == nil {
+		return
+	}
+	if liveRequest.ReplayPlan.InputAudioSampleRate <= 0 {
+		UseLegacyFrameSource(filePorts.Input)
+	}
+}
+
+func liveRunOptions(out io.Writer, request serviceSession.Request, liveRequest runtimeSession.LiveRequest, recorder runtimeSession.LiveRecorder, filePorts *FilePorts, deps Dependencies, traceRun runtimeSessionTrace.Prepared) runtimeSession.LiveRunOptions {
+	terminalRenderer := newTerminalEventRenderer(request.ReplayPath != "")
 	deviceService := deps.DeviceService
 	deviceRequest := devicesRequest(request, liveRequest)
 	if filePorts != nil {
@@ -354,11 +352,17 @@ func liveRunOptions(out io.Writer, request serviceSession.Request, liveRequest r
 		deviceRequest.FileInput = filePorts.Input
 		deviceRequest.FileOutput = filePorts.Output
 		deviceService, deviceRequest = selectFileDevices(deviceService, deps.FileDeviceService.Service, deviceRequest, filePorts)
+		if filePorts.Input != nil {
+			// FileInput owns the physical capture role in the composite device
+			// service, but the live lifecycle still needs to know that capture is
+			// active so it waits for the source boundary before finishing.
+			deviceRequest.CaptureEnabled = true
+		}
 	}
 	if !deviceRequest.CaptureEnabled && !deviceRequest.PlaybackEnabled && (filePorts == nil || len(filePorts.InputTurns) == 0 && len(filePorts.InputInterruptions) == 0) {
 		deviceService = nil
 	}
-	renderer := cliOutput.NewLiveEventRenderer(request.ReplayPath != "")
+	deviceService = wrapTraceDeviceService(deviceService, traceRun)
 	return runtimeSession.LiveRunOptions{
 		Request:                 liveRequest,
 		Devices:                 deviceService,
@@ -371,7 +375,7 @@ func liveRunOptions(out io.Writer, request serviceSession.Request, liveRequest r
 		CaptureCompleteControls: captureCompleteControls(request, deps.CaptureComplete),
 		Events: runtimeSession.LiveEventSinkFunc(func(eventContext context.Context, event runtimeSession.LiveEvent) error {
 			eventOut := outputWriter(request, out)
-			if err := renderer.Render(eventContext, eventOut, event); err != nil {
+			if err := renderTerminalEventWithRenderer(eventContext, eventOut, terminalRenderer, event); err != nil {
 				return err
 			}
 			if request.StreamObserver != nil && event.Message != nil {

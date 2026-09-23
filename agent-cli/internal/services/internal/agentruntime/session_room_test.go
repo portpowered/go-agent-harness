@@ -113,7 +113,7 @@ func TestObserveRoomParticipantStream_FansOutBeforeDurableAudioEvidence(t *testi
 		source,
 		opts,
 		owner,
-		participantEvidence,
+		participantEvidence, context.Background(),
 		messages.StreamMessage{
 			Type:       messages.StreamTypeAudioDelta,
 			Role:       messages.RoleAssistant,

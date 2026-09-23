@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -64,6 +63,44 @@ type requestInputs struct {
 	outputRate      int
 	replayFinish    bool
 	turnCapture     bool
+}
+
+func resolveProviderInputs(ctx context.Context, request serviceSession.Request, replayInspection *runtimeReplay.CaptureInspection, deps RequestDependencies) (requestInputs, error) {
+	loaded, err := requireLiveConfig(request)
+	if err != nil {
+		return requestInputs{}, err
+	}
+	inspection, err := admitReplay(ctx, request.ReplayPath, replayInspection, deps.ReplayService)
+	if err != nil {
+		return requestInputs{}, err
+	}
+	if inspection != nil {
+		request.ReplayPath = inspection.CapturePath
+	}
+	effective := loaded.ApplyOverrides("", request.Model, request.Provider, request.BaseURL)
+	providerInspection := inspection
+	if inspection != nil && inspection.Kind == runtimeReplay.CaptureKindTurn {
+		// Turn captures replay a provider-neutral message stream. Their recorded
+		// provider name is metadata, not a live provider selection.
+		providerInspection = nil
+	}
+	provider, model, apiKey, baseURL, err := ProviderValues(effective, request, providerInspection)
+	if err != nil {
+		return requestInputs{}, err
+	}
+	if deps.ModelAdmission != nil && (inspection == nil || inspection.Kind != runtimeReplay.CaptureKindTurn) {
+		if err := deps.ModelAdmission.ValidateSessionModel(provider, model); err != nil {
+			return requestInputs{}, err
+		}
+	}
+	capabilities, err := buildCapabilities(loaded, request, deps)
+	if err != nil {
+		return requestInputs{}, err
+	}
+	return requestInputs{
+		effective: effective, inspection: inspection, provider: provider, model: model, capabilities: capabilities,
+		baseURL: baseURL, credentialRef: resolveCredentialReference(apiKey, deps.CredentialReference),
+	}, nil
 }
 
 func resolveRequestInputs(ctx context.Context, request serviceSession.Request, replayInspection *runtimeReplay.CaptureInspection, deps RequestDependencies) (requestInputs, error) {
@@ -347,27 +384,6 @@ func buildReplayPlan(request serviceSession.Request, inspection *runtimeReplay.C
 
 func replayPlanHasActions(plan runtimeSession.LiveReplayPlan) bool {
 	return plan.OpeningPromptPresent || len(plan.AudioTurns) > 0 || plan.StopAfterResponse || plan.ProviderCloseExpected
-}
-
-func realtimeEndpoint(provider, baseURL string) string {
-	baseURL = strings.TrimSpace(baseURL)
-	if baseURL == "" {
-		return ""
-	}
-	parsed, err := url.Parse(baseURL)
-	if err != nil || parsed.Scheme == "" {
-		return baseURL
-	}
-	if parsed.Scheme == "http" {
-		parsed.Scheme = "ws"
-	}
-	if parsed.Scheme == "https" {
-		parsed.Scheme = "wss"
-	}
-	if provider == config.ProviderOpenAI && !strings.HasSuffix(strings.TrimRight(parsed.Path, "/"), "/realtime") {
-		parsed.Path = strings.TrimRight(parsed.Path, "/") + "/realtime"
-	}
-	return parsed.String()
 }
 
 func appendToolNames(result *runtimeSession.LiveRequest, capabilities *runtimeSession.LiveCapabilities) {

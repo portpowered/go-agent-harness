@@ -4074,6 +4074,98 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   same PR `#435`, update its body with the repair/evidence map, then return
   `ACCEPTED` to the script-owned current-head CI gate without polling; retain
   this task through `CONTINUE` for any exact CI rejection or actionable repair.
+
+# C186 Review64 bounded remote-render shutdown repair — 2026-09-14
+
+- Admission remains `admitted` for the sole `audio-runtime` project; `work-task-16`
+  is on `codex/audio-runtime-c186-retire-session-observability-terminal-cluster`,
+  matching `prd.json`. Review 37's livehost lifecycle finding is already
+  represented by the deleted `events.go`/reduced `run_helpers.go`; Review 64's
+  remaining finding was the post-timeout background poll in
+  `remoteRenderMonitor.Stop`.
+- The repair uses one 250ms context deadline, returns without a final poll after
+  expiry, and passes the blocking-endpoint bounded-shutdown regression five
+  times. Sessiontrace normal/race (44 tests in 6 packages each), sessionterminal
+  normal/race (12 tests in 3 packages each), CLI focused (194 tests), shipped
+  SIGINT (3 tests), and accumulated session regressions (normal/coverage/race)
+  pass. All thirteen owned legacy files and the obsolete sessionfailure service/
+  adapter are absent; the two permitted adapters total 146 lines.
+- The missing task-referenced `factory/docs/implementation-handoff.md` was
+  restored byte-for-byte from preserved repository history. Current fetched
+  `origin/main` is `b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`; required startup,
+  planning, C177 and C119 ancestors remain present. No CI success, review,
+  merge, vertical acceptance or project acceptance is claimed. Next action:
+  commit this repair/checkpoint, run exact `make prepush`, push/update PR #531,
+  and return `ACCEPTED` to script CI without polling; retain ownership for any
+  exact rejection.
+
+# C186 local prepush budget repair — 2026-09-14
+
+- Exact commits `52750ce` and `74df734` passed formatting but `make prepush`
+  stopped at `verify-architecture`: the added strict shutdown regression first
+  exceeded the existing 600-line `service_test.go`, then a separate test file
+  exceeded the package's 15-file cap. The regression is now folded into the
+  existing file at exactly 600 lines; no production code or architecture limit
+  changed, and the package remains at 15 files. The focused bounded-shutdown
+  test passes five times after the repair.
+- This is an implementation checkpoint only; the next action is commit the
+  final test-budget repair and ledger, rerun exact `make prepush`, then
+  push/update PR #531 and return `ACCEPTED` to script CI without polling. No
+  CI, review, merge, vertical acceptance or project acceptance is claimed.
+
+# C186 prepush coverage-flake disposition — 2026-09-14
+
+- The exact `make prepush` on `fa184ff` passed through architecture, Wire, vet,
+  lint, staticcheck, build, embed, repository tests and coverage registration,
+  then failed only in `coverage-changed` at the unrelated
+  `agent-cli/internal/webmcp/chrome` test
+  `TestManagedBrowserManagerRestartsVerifiedProfileOwnerAndRetriesOnce` during
+  `TempDir` cleanup (`browser-profile` directory not empty). The same test
+  passes five normal repetitions and three repetitions with the exact coverage
+  flags; no C186 path is involved.
+- This remains a transient external test failure, not a C186 repair. No source
+  change or assertion/deadline weakening was made. Next action: rerun the
+  unchanged full `make prepush` candidate, then push/update PR #531 only after
+  the exact gate passes. No CI, review, merge, vertical acceptance or project
+  acceptance is claimed.
+
+
+# C186 review rejection repairs — 2026-09-19
+
+- Re-read the concluded canonical rejection for PR #531 at `5ee8918`. Review 64's
+  bounded remote-render shutdown fix is accepted. The remaining findings were the
+  concrete atomic cancellation marker exposed by `sessiontrace`, the unused
+  duplicate in `sessionterminal`, and deleted public audio-output failure and
+  cancellation coverage.
+- Changed `sessiontrace.CancellationIntent` to an opaque service-owned contract;
+  its sole `atomic.Bool` implementation now lives under
+  `services/sessiontrace/internal/service`. Removed the unused terminal marker
+  and updated the CLI/service callers. Added focused regressions in the existing
+  audio-output test file for preflight, preserving existing output on invalid
+  options, preserving sink/provider-close errors, and draining accepted output
+  across cancellation.
+- Focused results on the consolidated source pass: sessiontrace/sessionterminal
+  normal and race suites (56 tests across 9 packages each); marker, CLI signal,
+  and audio-output failure/cancellation tests normal and race (8 across 3
+  packages each); C186 livehost/agentruntime and shipped SIGINT checks; and the
+  bounded remote-render stop regression five repetitions.
+- `COUNT=1 scripts/test-session-ci-regressions.sh all` passes normal, coverage,
+  and race modes, including retained negative controls. `make wire-check`, pinned
+  staticcheck 2026.1, `make architecture-size-check` (202 packages, 1,923 files,
+  28,572 functions), and `git diff --check` pass.
+- An initial `make prepush` stopped at architecture because the marker implementation
+  and focused tests temporarily added one Go file to each capped package. Both are
+  now folded into existing files; no architecture limits or baselines changed,
+  and the standalone architecture gate passes. The full `make prepush` remains
+  to be rerun on the committed candidate.
+- Admission and `prd.branchName` match the isolated task worktree. Fetched
+  `origin/main=b9b2f90bf7e00430cd0ab6067179a5fb8005ec44`; startup, planning main,
+  C177, C119, and current main all remain ancestors. All 13 owned legacy
+  production files are absent; the two permitted adapters total 146 lines
+  (76 + 70).
+- Exact next action: commit this repair checkpoint, run `make prepush` on that
+  exact head, then push and update PR #531 with the passing local evidence and
+  return `ACCEPTED` to the script-owned full functional CI gate without polling.
 # C282 browser recording review repair checkpoint — 2026-09-22
 
 - Reverified sole-project task admission and the exact isolated C282 branch. The

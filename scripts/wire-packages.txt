@@ -5,7 +5,9 @@ go-agent-runtime/services/rtctransport/wire
 go-agent-runtime/services/providers/wire
 go-agent-runtime/services/session/wire
 go-agent-runtime/services/sessiondiagnostics/wire
+go-agent-runtime/services/sessionfailure/wire
 go-agent-runtime/services/sessiontrace/wire
+go-agent-runtime/services/sessionterminal/wire
 go-agent-runtime/services/rooms/wire
 go-agent-runtime/services/roomreplay/wire
 go-agent-runtime/services/tools/wire

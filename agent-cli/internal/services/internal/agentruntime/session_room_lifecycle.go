@@ -12,6 +12,7 @@ import (
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	runtimeRoomsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
+	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 )
 
 const (
@@ -189,7 +190,7 @@ func (l *roomParticipantLifecycle) markParticipantFailure(err error) {
 }
 func (l *roomParticipantLifecycle) markLivenessFailure(err error) {
 	if backend := l.backendLifecycle(); backend != nil {
-		classification, reason, provenance, output := sessionLivenessMetadata(err)
+		classification, reason, provenance, output := sessiontracewire.LivenessMetadata(err)
 		backend.MarkLivenessFailure(err, runtimeRooms.ParticipantLivenessMetadata{
 			Classification: classification, TerminalReason: reason,
 			TerminalProvenance: provenance, OutputState: output,
@@ -210,7 +211,7 @@ func (l *roomParticipantLifecycle) observeTerminal(observation sessionTerminalOb
 	if backend == nil {
 		return false
 	}
-	return backend.ObserveTerminal(runtimeRooms.SessionTerminalObservation{ResponseID: observation.ResponseID, Classification: observation.Classification, TerminalReason: observation.TerminalReason, TerminalProvenance: observation.TerminalProvenance, OutputState: observation.OutputState, Err: observation.Err, Failure: observation.Failure, RoomBound: observation.RoomBound, Code: observation.Code, FailingEvent: observation.FailingEvent})
+	return backend.ObserveTerminal(runtimeRooms.SessionTerminalObservation{ResponseID: observation.ResponseID, Classification: observation.Classification, TerminalReason: string(observation.TerminalReason), TerminalProvenance: string(observation.TerminalProvenance), OutputState: string(observation.OutputState), Err: observation.Err, Failure: observation.Failure, RoomBound: observation.RoomBound, Code: observation.Code, FailingEvent: observation.FailingEvent})
 }
 func (l *roomParticipantLifecycle) observe(msg messages.StreamMessage) int {
 	if backend := l.backendLifecycle(); backend != nil {

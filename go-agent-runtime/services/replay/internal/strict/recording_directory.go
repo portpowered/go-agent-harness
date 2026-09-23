@@ -43,7 +43,7 @@ func validateRecordingBundle(ctx context.Context, bundlePath string, admission p
 	return nil
 }
 
-func prepareTraceDirectory(ctx context.Context, bundlePath string, admission publicreplay.CaptureAdmission) (string, error) {
+func stageTraceDirectory(ctx context.Context, bundlePath string, admission publicreplay.CaptureAdmission) (string, error) {
 	if err := validateRecordingBundle(ctx, bundlePath, admission); err != nil {
 		return "", err
 	}

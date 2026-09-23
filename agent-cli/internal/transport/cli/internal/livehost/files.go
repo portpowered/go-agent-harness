@@ -31,6 +31,27 @@ type FilePorts struct {
 	closeErr error
 }
 
+// frameAudioSource keeps the explicit legacy replay compatibility path on the
+// canonical fixed-frame AudioSource contract. Ordinary file and finite-turn
+// callers retain count-aware source tails.
+type frameAudioSource struct {
+	source audio.AudioSource
+}
+
+func (s *frameAudioSource) ReadFrame(ctx context.Context, buf []int16) error {
+	if s == nil || s.source == nil {
+		return io.EOF
+	}
+	return s.source.ReadFrame(ctx, buf)
+}
+
+func (s *frameAudioSource) Close() error {
+	if s == nil || s.source == nil {
+		return nil
+	}
+	return s.source.Close()
+}
+
 // interruptibleAudioSource owns a process-local duplicate of stdin. The
 // generic AudioSource contract cannot cancel an in-flight io.ReadFull call,
 // while the live runtime must close and join a capture worker after the
@@ -205,6 +226,16 @@ func openFileAudioSource(input serviceSession.AudioInput) (audio.AudioSource, *o
 		return source, nil, nil
 	}
 	return source, interruptibleInput, nil
+}
+
+// UseLegacyFrameSource preserves old raw replay captures whose handshake did
+// not record an input rate. It is intentionally opt-in and never changes the
+// normal count-aware finite source contract.
+func UseLegacyFrameSource(input *runtimeDevices.FileInput) {
+	if input == nil || input.Source == nil {
+		return
+	}
+	input.Source = &frameAudioSource{source: input.Source}
 }
 
 // Close releases every caller-opened source and sink exactly once.

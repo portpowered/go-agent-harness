@@ -3,6 +3,7 @@ package livehost
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
@@ -298,4 +299,25 @@ func brokerCapabilityEvent(event webmcp.BrokerEvent) runtimeSession.LiveCapabili
 		Generation: event.Generation, InvocationID: string(event.InvocationID),
 		ToolName: event.ToolName, State: string(event.State), Reason: event.Reason,
 	}
+}
+
+func realtimeEndpoint(provider, baseURL string) string {
+	baseURL = strings.TrimSpace(baseURL)
+	if baseURL == "" {
+		return ""
+	}
+	parsed, err := url.Parse(baseURL)
+	if err != nil || parsed.Scheme == "" {
+		return baseURL
+	}
+	if parsed.Scheme == "http" {
+		parsed.Scheme = "ws"
+	}
+	if parsed.Scheme == "https" {
+		parsed.Scheme = "wss"
+	}
+	if provider == config.ProviderOpenAI && !strings.HasSuffix(strings.TrimRight(parsed.Path, "/"), "/realtime") {
+		parsed.Path = strings.TrimRight(parsed.Path, "/") + "/realtime"
+	}
+	return parsed.String()
 }

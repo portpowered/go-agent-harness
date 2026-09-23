@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 )
 
 type observedSessionInferencer struct {
@@ -16,8 +17,8 @@ type observedSessionInferencer struct {
 	connectDone chan struct{}
 	closeOnce   sync.Once
 	closeErr    error
-	runtime     *sessionRuntimeObservationRecorder
-	progress    *sessionProgressObserver
+	runtime     sessiontrace.RuntimeRecorder
+	progress    sessiontrace.Observer
 
 	mu              sync.Mutex
 	connectErr      error
@@ -35,8 +36,8 @@ type sessionTerminalErrorSource interface {
 
 var _ messages.SessionInferencer = (*observedSessionInferencer)(nil)
 
-func newObservedSessionInferencer(inner messages.SessionInferencer, runtime ...*sessionRuntimeObservationRecorder) *observedSessionInferencer {
-	var observationRecorder *sessionRuntimeObservationRecorder
+func newObservedSessionInferencer(inner messages.SessionInferencer, runtime ...sessiontrace.RuntimeRecorder) *observedSessionInferencer {
+	var observationRecorder sessiontrace.RuntimeRecorder
 	if len(runtime) > 0 {
 		observationRecorder = runtime[0]
 	}
@@ -142,20 +143,11 @@ func (i *observedSessionInferencer) DrainSessionPlayback(ctx context.Context) er
 	if observed == nil {
 		return nil
 	}
-	drainer, ok := observed.Session.(interface {
-		DrainPlayback(context.Context) error
-	})
+	drainer, ok := observed.Session.(playbackDrainingSession)
 	if !ok {
 		return nil
 	}
 	return drainer.DrainPlayback(ctx)
-}
-
-func closeBareSessionIfNeeded(bare bool, inferencer *observedSessionInferencer) error {
-	if !bare || inferencer == nil {
-		return nil
-	}
-	return inferencer.CloseSession()
 }
 
 // connectFailure returns the remembered connect error, if any.
@@ -200,14 +192,21 @@ func (i *observedSessionInferencer) closeDone() {
 type observedSession struct {
 	messages.Session
 	closeDone func()
-	runtime   *sessionRuntimeObservationRecorder
-	progress  *sessionProgressObserver
+	runtime   sessiontrace.RuntimeRecorder
+	progress  sessiontrace.Observer
 	once      sync.Once
 	closeOnce sync.Once
 	closeErr  error
 }
 
 var _ messages.Session = (*observedSession)(nil)
+
+func (s *observedSession) lockProviderBoundary() func() {
+	if s == nil || s.progress == nil {
+		return func() {}
+	}
+	return s.progress.LockProviderBoundary()
+}
 
 func (s *observedSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
 	return s.SendWithOutcome(ctx, msg).OK()
@@ -217,39 +216,39 @@ func (s *observedSession) Send(ctx context.Context, msg messages.StreamMessage) 
 // session lifecycle boundary. Tool calls are resolved only after this method
 // reports success from the wrapped provider session.
 func (s *observedSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
-	unlockProviderBoundary := s.progress.lockProviderBoundary()
+	unlockProviderBoundary := s.lockProviderBoundary()
 	defer unlockProviderBoundary()
 	outcome := messages.SendSessionWithOutcome(ctx, s.Session, msg)
 	if !outcome.OK() {
 		if msg.Type == messages.StreamTypeToolCallEnd && s.progress != nil {
 			if value, ok := msg.Value.(*messages.ToolCallEndValue); ok && value != nil {
-				s.progress.noteToolResultRejected(value.ToolCallID, outcome)
+				s.progress.NoteToolResultRejected(value.ToolCallID, outcome)
 			}
 		}
 		return outcome
 	}
 	if msg.Type == messages.StreamTypeAudioDelta && s.runtime != nil {
 		if value, ok := msg.Value.(*messages.AudioDeltaValue); ok && value != nil {
-			s.runtime.providerAudioSent(value.Content)
+			s.runtime.ProviderAudioSent(value.Content)
 		}
 	}
 	if msg.Type == messages.StreamTypeMessageEnd && s.runtime != nil {
-		s.runtime.inputCommit()
-		s.runtime.responseCreate(msg)
+		s.runtime.InputCommit()
+		s.runtime.ResponseCreate(msg)
 	}
 	if msg.Type == messages.StreamTypeResponseCreate && s.runtime != nil {
-		s.runtime.responseCreate(msg)
+		s.runtime.ResponseCreate(msg)
 	}
 	if msg.Type == messages.StreamTypeToolCallEnd && s.progress != nil {
 		if value, ok := msg.Value.(*messages.ToolCallEndValue); ok && value != nil {
-			s.progress.noteToolResultAccepted(value.ToolCallID)
+			s.progress.NoteToolResultAccepted(value.ToolCallID)
 		}
 	}
 	if msg.Type == messages.StreamTypeResponseCreate && s.progress != nil {
-		s.progress.noteToolContinuationRequested()
+		s.progress.NoteToolContinuationRequested()
 	}
 	if s.progress != nil {
-		s.progress.observeProviderDispatch(msg)
+		s.progress.ObserveProviderDispatch(msg)
 	}
 	return outcome
 }
@@ -286,17 +285,17 @@ func (s *observedSession) SessionAdmissionAllowsCompleteMessage(msg messages.Mes
 // RequestResponse forwards the optional explicit response request while
 // preserving the capability boundary of replay and injected sessions.
 func (s *observedSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
-	unlockProviderBoundary := s.progress.lockProviderBoundary()
+	unlockProviderBoundary := s.lockProviderBoundary()
 	defer unlockProviderBoundary()
 	if s.SessionAdmissionClosed() && !s.SessionAdmissionAllows(messages.StreamMessage{Type: messages.StreamTypeResponseCreate}) {
 		return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: context.Canceled}
 	}
 	outcome := messages.RequestSessionResponse(ctx, s.Session)
 	if outcome.OK() && s.runtime != nil {
-		s.runtime.responseCreate(messages.StreamMessage{Type: messages.StreamTypeResponseCreate})
+		s.runtime.ResponseCreate(messages.StreamMessage{Type: messages.StreamTypeResponseCreate})
 	}
 	if outcome.OK() && s.progress != nil {
-		s.progress.observeProviderDispatch(messages.StreamMessage{Type: messages.StreamTypeResponseCreate})
+		s.progress.ObserveProviderDispatch(messages.StreamMessage{Type: messages.StreamTypeResponseCreate})
 	}
 	return outcome
 }
@@ -309,7 +308,7 @@ func (s *observedSession) SupportsResponseRequests() bool {
 // observation wrapper embeds the stream-only public Session interface, so it
 // must preserve the rich tool-result path used by multimodal sessions.
 func (s *observedSession) SendMessage(ctx context.Context, msg messages.Message) bool {
-	unlockProviderBoundary := s.progress.lockProviderBoundary()
+	unlockProviderBoundary := s.lockProviderBoundary()
 	defer unlockProviderBoundary()
 	if s.SessionAdmissionClosed() && !s.SessionAdmissionAllowsCompleteMessage(msg) {
 		return false
@@ -326,7 +325,7 @@ func (s *observedSession) SendMessage(ctx context.Context, msg messages.Message)
 // SendMessageWithoutResponse preserves deferred rich-message delivery for
 // callers that batch tool results before requesting one provider response.
 func (s *observedSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
-	unlockProviderBoundary := s.progress.lockProviderBoundary()
+	unlockProviderBoundary := s.lockProviderBoundary()
 	defer unlockProviderBoundary()
 	if s.SessionAdmissionClosed() && !s.SessionAdmissionAllowsCompleteMessage(msg) {
 		return false
@@ -361,18 +360,18 @@ func (s *observedSession) observeCompleteMessageToolResult(msg messages.Message,
 	}
 	if outcome.OK() {
 		if msg.ToolCallID != "" {
-			s.progress.noteToolResultAccepted(msg.ToolCallID)
+			s.progress.NoteToolResultAccepted(msg.ToolCallID)
 		}
 		if requestsContinuation {
 			if msg.ToolCallID != "" {
-				s.progress.noteToolContinuationRequestedFor(msg.ToolCallID)
+				s.progress.NoteToolContinuationRequestedFor(msg.ToolCallID)
 			}
-			s.progress.armProviderProgress()
+			s.progress.ArmProviderProgress()
 		}
 		return
 	}
 	if msg.ToolCallID != "" {
-		s.progress.noteToolResultRejected(msg.ToolCallID, outcome)
+		s.progress.NoteToolResultRejected(msg.ToolCallID, outcome)
 	}
 }
 
@@ -384,4 +383,15 @@ func (s *observedSession) SupportsCompleteMessages() bool {
 func (s *observedSession) SupportsCompleteMessagesWithoutResponse() bool {
 	_, withoutResponse := completeMessageCapabilities(s.Session)
 	return withoutResponse
+}
+
+func (s *observedSession) Close() error {
+	if s == nil {
+		return nil
+	}
+	s.closeOnce.Do(func() {
+		s.closeErr = s.Session.Close()
+		s.markDone()
+	})
+	return s.closeErr
 }

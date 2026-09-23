@@ -1,0 +1,80 @@
+{
+  "schema": "audio-runtime.c147.quality-evidence.v1",
+  "testedSourceRevision": "071ba33467249ce33970f5f42533deea94259552",
+  "currentMainRevision": "4a1c399ccbb3d780be95eb04316e84b8f11a6646",
+  "startupIntegrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+  "ancestry": {
+    "startupIsAncestor": true,
+    "currentMainIsAncestor": true,
+    "historyWasRewritten": false,
+    "hostCheckoutWasMergedOrReset": false
+  },
+  "scope": {
+    "legacySessionFailureSourceAbsent": true,
+    "adapterPhysicalLines": 74,
+    "adapterLimit": 86,
+    "retiredAcceptedMainProductionLines": 246,
+    "requiredRetirement": 160,
+    "wireAndArchitectureSharedChanges": "retained only the demonstrated sessionfailure registration; architecture baseline unchanged",
+    "c147EvidencePrefix": "docs/temp/projects/audio-runtime/audio-runtime-c147-recover-c119-session-failure-projection/"
+  },
+  "focused": {
+    "serviceNormal": {"command": "rtk proxy env GOWORK=off go test ./services/sessionfailure/... -count=3 -timeout=240s", "exitCode": 0},
+    "serviceRace": {"command": "rtk proxy env GOWORK=off go test -race ./services/sessionfailure/... -count=3 -timeout=360s", "exitCode": 0},
+    "consumer": {"command": "rtk proxy env GOWORK=off go test ./... -count=1 -timeout=120s", "workdir": "docs/temp/projects/audio-runtime/audio-runtime-c119-retire-cli-session-failure-projection/external-consumer", "exitCode": 0},
+    "cliFocusedNormal": {"command": "rtk proxy go test ./agent-cli/internal/services/internal/agentruntime -run named unchanged session failure/cancellation regressions -count=1 -timeout=360s", "exitCode": 0},
+    "cliFocusedRace": {"command": "rtk proxy go test -race ./agent-cli/internal/services/internal/agentruntime -run session/room/provider failure and cancellation regressions -count=3 -timeout=480s", "exitCode": 0},
+    "wirePackageCoverage": "100.0%"
+  },
+  "causalVerifier": {
+    "artifactPath": "docs/temp/projects/audio-runtime/audio-runtime-c119-retire-cli-session-failure-projection/artifacts/verify-61283.json",
+    "artifactSha256": "e390bdaff7c343a725d6952b3b4c10484c26b61e3726ecde6cf54f029773e37b",
+    "mode": "all",
+    "exitCode": 0,
+    "dropTerminalFactsMutantSurvived": false,
+    "convertCancellationMutantSurvived": false
+  },
+  "qualityGates": {
+    "format": {"command": "rtk make fmt", "exitCode": 0},
+    "vet": {"command": "rtk make vet", "exitCode": 0},
+    "lint": {"command": "rtk make lint", "exitCode": 0, "pinnedVersion": "v2.9.0", "issues": 0},
+    "staticcheck": {"command": "rtk make staticcheck", "exitCode": 0, "pinnedVersion": "2026.1"},
+    "coverageRegistration": {"command": "rtk make coverage-registration", "exitCode": 0, "packages": 195},
+    "changedCoverage": {"command": "rtk make coverage-changed COVERAGE_BASE=4a1c399ccbb3d780be95eb04316e84b8f11a6646", "exitCode": 0},
+    "wire": {"command": "rtk make wire-check", "exitCode": 0},
+    "architectureSize": {"command": "rtk make architecture-size-check", "exitCode": 0, "packages": 205, "files": 1946, "functions": 28804},
+    "accumulatedRegressions": {"command": "rtk proxy env COUNT=1 bash scripts/test-session-ci-regressions.sh all", "exitCode": 0, "modes": ["normal", "coverage", "race"], "highRateTrials": 20}
+  },
+  "replayEvidence": {
+    "manifest": "docs/temp/projects/audio-runtime/audio-runtime-c147-recover-c119-session-failure-projection/replay-evidence.json",
+    "sourceArchiveSha256": "0f5c65744ab2bdec934b3efb8e2a1872276e610cdeba488d628027135bbcbdd6",
+    "binarySha256": "a011f38ee954afb0774cac224b29ac5c61602087c0de8167310cbd59a4629be4",
+    "binaryBytes": 53274914,
+    "runStatus": "accepted",
+    "realtimeSessions": 0,
+    "zeroSurvivors": true
+  },
+  "preservation": {
+    "predecessorPrdSha256": "9126fa29a974dfc23497245abc61472a6cb06f17f65946a04e05d2278223862f",
+    "predecessorProgressSha256": "4ce380ea1a579cdf16b6e3b6706db47daa31a83899d9228d37a00e066e89941d",
+    "initialDirtyDiffSha256": "70e97ec45c91e0be3ba0f5de70a54bf2d3481b2cd19cf87ce706192abdfae767",
+    "rejectedArtifactSource": "a7459900",
+    "rejectedArtifactSha256Prefix": "2f6634",
+    "peerRegressionRun": 34747817964,
+    "peerRegressionLostSamples": 6400,
+    "peerRegressionWaived": false,
+    "oldNineGreenRun": 34770679211,
+    "oldNineGreenRunIsAcceptance": false
+  },
+  "delivery": {
+    "pullRequest": 505,
+    "adoptedBranch": "codex/audio-runtime-c119-retire-cli-session-failure-projection",
+    "testedHeadBeforeEvidenceCommit": "071ba33467249ce33970f5f42533deea94259552",
+    "scriptCi": "pending single handoff; executor will not poll",
+    "independentReview": "pending after fresh exact-head Script CI result",
+    "guardedMerge": "pending",
+    "verticalProbe": "OPEN for primary after guarded merge",
+    "projectWideGates": "AUDIO, DEVICE, EMBED, SERVICE, TRACE, REPLAY, FAILURES, QUALITY, PARITY remain OPEN"
+  },
+  "status": "ready-for-script-ci-handoff"
+}

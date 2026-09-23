@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	sessiontrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
 )
@@ -82,7 +84,8 @@ func TestRTCDeviceSinkPublishesCumulativePlaybackOverflow(t *testing.T) {
 	}
 	defer func() { _ = source.Close() }()
 	diagnostics := &diagnosticRecordSink{}
-	sink, err := devicert.NewRTCDeviceSinkAtRateWithOptions(registry, "virtual:output", providerRate, "", sessionPlaybackDiagnosticObserver(diagnostics))
+	playback := sessiontracewire.NewPlaybackDiagnostics(sessiontrace.PlaybackDiagnosticsOptions{Sink: diagnostics})
+	sink, err := devicert.NewRTCDeviceSinkAtRateWithOptions(registry, "virtual:output", providerRate, "", playback.PlaybackObserver(nil))
 	if err != nil {
 		t.Fatalf("new RTC device sink: %v", err)
 	}
