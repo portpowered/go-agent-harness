@@ -5060,3 +5060,43 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
 - The compile-only check rtk go test -run '^$' ./agent-cli/internal/services/internal/agentruntime fails at C280/C272 contract seams: C272-owned session_room_helpers.go references removed roomMixerConfigForOptions; session_room_orchestration.go passes local RoomResult and RoomParticipantReady values where the C280 public rooms types are now required; legacy tests compare the duplicate local termination enums. A compatibility alias or wrapper would preserve duplicate ownership and violate this plan's zero-adapter budget. The canonical board still has C272 work-task-13, C276 work-task-8, and C281 work-task-17 unreleased; C281 also has a rejected review. No peer changes were consumed.
 - Current deletion census is three C280 agentruntime files / 1,779 physical lines and fourteen rooms/internal/evidence production files / 2,772 lines. Adapter inventory is 0 files / 0 lines. Caller cutover and deletion remain incomplete; make prepush, full C280-05 preflight, push, PR, SCRIPT CI, and independent review were not run or claimed.
 - Exact next action: consume a reviewed or explicit exact-path C272 release additively, then only released C276/C281 seams; cut over every named and discovered caller, delete all three residual agentruntime files and every production file under rooms/internal/evidence, and run the complete exact-head C280-05 preflight including make prepush before any push. Continue ownership until those changes and checks are complete.
+
+# C280 current-head recovery checkpoint — 2026-09-23T14:47Z
+
+- Re-read the operating policy, implementation handoff, admitted project
+  manifest, task PRD and current progress. `project-control.py verify-work`
+  returned admitted for audio-runtime/audio-runtime-v1; `prd.json.branchName`
+  matches this worktree. Fetched `origin/main=2f9f9736e1360802fc37e82de38540d92cb22631`,
+  which remains an ancestor of clean C280 HEAD
+  `e9c9f086009f47b98d1ea588531e0b7538cf85c4`.
+- Re-read the preserved C259 `work-review-78` findings: cap manifest admission
+  at 8 MiB and timeline admission at 32 MiB/100,000 events; prove write failure
+  degrades recording while room termination remains room-owned; prove a
+  room-produced bundle through public LoadPlan/Load/Analyze; and run exact-head
+  preflight. The first three repairs and focused checks are recorded above; the
+  complete preflight remains open.
+- Reproduced the current CLI package compile failure with
+  `rtk go test -run '^$' ./agent-cli/internal/services/internal/agentruntime`:
+  C272-owned `session_room_helpers.go` references removed
+  `roomMixerConfigForOptions`; C272-owned `session_room_orchestration.go` still
+  passes local result/readiness types to the public rooms contract; existing
+  legacy evidence tests also compare types no longer owned by this package.
+  These caller and test seams have no reviewed or explicit exact-path release;
+  no compatibility alias or policy wrapper was restored.
+- Direct inventory confirms the whole selected residual cluster remains:
+  three `agentruntime` production files / 1,779 lines and fourteen duplicate
+  `rooms/internal/evidence` production files / 2,772 lines. Adapter inventory
+  is zero production files / zero lines. The repository search still finds
+  production imports of `rooms/internal/evidence` from lifecycle, room service
+  and room Wire callers.
+- Canonical C272 `work-task-13`, C276 `work-task-8` and C281 `work-task-17`
+  still provide no reviewed or exact-path caller release. No peer worktree or
+  shared caller was changed. No full preflight, push, PR update, SCRIPT CI,
+  review or merge is claimed.
+- Exact next action: continue this same C280 task after reviewed integration or
+  explicit exact-path release for C272 room callers, then integrate only
+  released C276 recording/replay and C281 self-play callers. Cut over every
+  named and repository-discovered caller; delete the three `agentruntime`
+  files and all fourteen duplicate evidence production files; then run
+  `make prepush` and the complete vertical preflight on one clean exact SHA
+  before pushing. Decision remains `CONTINUE`.
