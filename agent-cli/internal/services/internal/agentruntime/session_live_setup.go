@@ -63,9 +63,8 @@ func bindSessionLoopInputs(runCtx context.Context, loop *agentloop.AgentLoop, op
 	return nil
 }
 
-// configureLoopObserver installs the shared stream observer for every session
-// runner mode, including the duration-bounded path which executes plan.loop
-// directly instead of calling plan.run.
+// configureLoopObserver installs the shared observer for all runners,
+// including duration runs that invoke plan.loop directly.
 func (p sessionRuntimePlan) configureLoopObserver(loop *sessionLoopOptions) {
 	if loop == nil {
 		return

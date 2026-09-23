@@ -5524,3 +5524,38 @@ handoff sequence. No gate completion is claimed.
   deletion, duplicate, adapter, ancestry, and diff check against that exact
   commit. Repair all local failures before any push; the prior architecture
   gate was red with 426 findings, so no SCRIPT handoff is yet ready.
+
+
+## C251 architecture gate repair checkpoint — 2026-09-23
+
+- Kept the same admitted task, branch, worktree, predecessor history, and
+  fetched-main ancestry. The prior source checkpoint is
+  `36d07c92cbc1def0a8aeefdbfa6d176a24f33730`; no push, PR, CI handoff, review,
+  or merge was made.
+- Completed the remaining post-run ownership move: the sessionduration service
+  now owns artifact finalization, replay-completion gating, and terminal
+  publication. C251 supplies host/reporting ports. Reduced the changed setup
+  and finalizer files to their existing 400-line limits, and lowered the
+  `session_runtime_plan.go` line baseline from 487 to its measured 482 after
+  the source reduction. No baseline was raised.
+- Focused verification on the repaired worktree passes: complete session
+  duration/session normal and race suites each pass 270 tests in 19 packages;
+  the focused CLI duration/finalization/replay/shutdown selection passes 269
+  tests. Formatting completed and `git diff --check` passed before this
+  checkpoint.
+- `rtk make verify-architecture` still fails with 426 findings across 229
+  packages. The C251 changes no longer trigger file-line findings. Remaining
+  findings include shared/peer-owned diagnostics, recording, audio, and core
+  runtime paths; the active C268, C276, and C285 PRDs reserve overlapping
+  files, and C285 records those paths as untouched pending C251's reviewed
+  seam or exact-path release. No peer worktree was changed and no baseline was
+  bulk-edited.
+- `rtk make prepush` on the previous exact commit
+  `36d07c92cbc1def0a8aeefdbfa6d176a24f33730` failed at `verify-architecture`
+  with 429 findings. The repaired source has since passed `verify-architecture`
+  with 426, but has not yet been committed or run through `make prepush`.
+- Exact next action: commit this C251 repair checkpoint and rerun
+  `make prepush` on its exact SHA. Keep C251 on the same task/branch; integrate
+  reviewed/guarded-released peer seams as path ownership clears, then rerun
+  the full local preflight on one exact candidate. No push or SCRIPT handoff
+  is ready while the local architecture gate remains red.

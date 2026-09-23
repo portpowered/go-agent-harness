@@ -346,35 +346,6 @@ func (f *finalizer) Finish(ctx context.Context, out io.Writer, primary error) er
 	return errors.Join(primary, cleanupErr)
 }
 
-func (f *finalizer) complete(out io.Writer, runErr error) error {
-	var artifactErr error
-	if f.ports.Artifacts != nil {
-		artifactErr = invokeCleanup(func() error { return FinalizeArtifacts(f.ports.Artifacts) })
-	}
-	if f.ports.RecordArtifactFinalization != nil {
-		recordErr := invokeCleanup(func() error {
-			f.ports.RecordArtifactFinalization(f.ports.Artifacts != nil, artifactErr)
-			return nil
-		})
-		artifactErr = errors.Join(artifactErr, recordErr)
-	}
-	runErr = errors.Join(runErr, artifactErr)
-
-	var completionErr error
-	canCompleteReplay := f.ports.HasIndependentFailure == nil || !f.ports.HasIndependentFailure(runErr)
-	if canCompleteReplay && f.ports.CompleteReplay != nil {
-		completionErr = invokeCleanup(func() error {
-			f.ports.CompleteReplay()
-			return nil
-		})
-	}
-	if f.ports.PublishTerminal != nil {
-		publishErr := invokeCleanup(func() error { return f.ports.PublishTerminal(out, runErr) })
-		completionErr = errors.Join(completionErr, publishErr)
-	}
-	return errors.Join(artifactErr, completionErr)
-}
-
 func (f *finalizer) cleanup(ctx context.Context, out io.Writer) error {
 	if out == nil {
 		out = io.Discard

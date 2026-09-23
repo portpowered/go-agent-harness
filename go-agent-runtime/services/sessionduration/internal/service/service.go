@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"sync"
 	"time"
 
@@ -179,6 +180,35 @@ func (s *Service) PrepareArtifacts(ctx context.Context) (context.Context, error)
 
 func (s *Service) FinalizeArtifacts(artifacts sessionduration.ArtifactLifecycle) error {
 	return FinalizeArtifacts(artifacts)
+}
+
+func (f *finalizer) complete(out io.Writer, runErr error) error {
+	var artifactErr error
+	if f.ports.Artifacts != nil {
+		artifactErr = invokeCleanup(func() error { return FinalizeArtifacts(f.ports.Artifacts) })
+	}
+	if f.ports.RecordArtifactFinalization != nil {
+		recordErr := invokeCleanup(func() error {
+			f.ports.RecordArtifactFinalization(f.ports.Artifacts != nil, artifactErr)
+			return nil
+		})
+		artifactErr = errors.Join(artifactErr, recordErr)
+	}
+	runErr = errors.Join(runErr, artifactErr)
+
+	var completionErr error
+	canCompleteReplay := f.ports.HasIndependentFailure == nil || !f.ports.HasIndependentFailure(runErr)
+	if canCompleteReplay && f.ports.CompleteReplay != nil {
+		completionErr = invokeCleanup(func() error {
+			f.ports.CompleteReplay()
+			return nil
+		})
+	}
+	if f.ports.PublishTerminal != nil {
+		publishErr := invokeCleanup(func() error { return f.ports.PublishTerminal(out, runErr) })
+		completionErr = errors.Join(completionErr, publishErr)
+	}
+	return errors.Join(artifactErr, completionErr)
 }
 
 func (s *Service) EvaluateRetry(policy sessionduration.RetryPolicy, terminal *messages.MessageEndValue) sessionduration.RetryDecision {
