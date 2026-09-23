@@ -4804,3 +4804,43 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   caller cutover without editing peer-owned work, then run every C276 functional,
   integration, race, hermetic, Wire, and repository prepush command on one clean
   exact candidate. Decision remains CONTINUE.
+
+
+# C276 current-turn release and prepush checkpoint — 2026-09-23
+
+- Re-read the Factory operating policy, implementation handoff, meta-planner
+  handoff, task PRD, progress history, and available prior review records.
+  `project-control.py verify-work --type task --name
+  audio-runtime-c276-recover-c270-recording-replay-finalization` from
+  `FACTORY_ROOT` returned `admitted`; the PRD branch matches this worktree.
+  No concluded C276 or C270 review finding is available to repair.
+- Fetched `origin/main=2f9f9736e1360802fc37e82de38540d92cb22631`. Candidate
+  `77b1f1f2b078b4e40517b8de7d243a048a23a89a` retains startup, preserved C276
+  and C270 checkpoints, C234/C217 pins, and fetched main as ancestors. Its only
+  difference from the last full-prepush source candidate
+  `34e089f900485fff3a1de291f51934b2d07536d9` is the existing progress log.
+- Rechecked all seven owned legacy production targets and all six
+  checkpoint-only replacement paths: all are absent. The only adapters remain
+  `recording_adapter.go` (30 lines) and `replay_adapter.go` (33 lines), 63
+  combined. The three direct production capture readers remain at
+  `sessiontrace/internal/service/metrics.go:64`,
+  `roomreplay/internal/service/integrity_artifacts.go:122`, and
+  `roomreplay/internal/service/schedule_build.go:155`.
+- The required caller releases remain unavailable. C268's separate worktree is
+  clean at `a16c249a2f6027d36ff44dbc49cd59617a7a126b`; C269's separate worktree
+  is at `889b1a49adaa8840f75a283f75cee1faff8baba1` with only progress dirt.
+  Neither has a remote release branch. These three caller files remain
+  peer-owned; no peer source or worktree was modified.
+- `rtk make coverage-gate` reproduced four existing floors from the last full
+  coverage profiles: CLI Wire 79.00%/80%, session Wire 84.60%/95%, session
+  duration service 84.50%/90%, and session-terminal Wire 88.90%/95%. The prior
+  full `make prepush` on `34e089f900485fff3a1de291f51934b2d07536d9` reached the
+  same four failures after passing all earlier phases. Floors remain
+  unchanged; no coverage-only tests were added.
+- No candidate push, PR, or hosted CI handoff occurred. Exact next action:
+  integrate the recording/replay reader cutovers only after their owners
+  provide exact reviewed releases or path handoffs, then resolve the remaining
+  locally reproducible coverage failures through the owning/released seams and
+  rerun the full C276 functional, integration, race, hermetic, Wire, and
+  `make prepush` gates on one clean exact candidate before handoff. Decision
+  remains CONTINUE.
