@@ -21,6 +21,7 @@ import (
 func TestRunLiveEvidenceFinalizesWithNilRequestContext(t *testing.T) {
 	destination := filepath.Join(t.TempDir(), "nil-context-recording")
 	service := New(clock.Real{})
+	//lint:ignore SA1012 Exercise public normalization of a nil request context.
 	if err := service.RunLiveEvidence(nil, recording.LiveEvidenceOptions{Destination: destination}, func(context.Context, recording.LiveEvidence) error {
 		return nil
 	}); err != nil {

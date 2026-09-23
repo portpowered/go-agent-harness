@@ -4571,3 +4571,18 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
 - Next: commit the lint repair, rerun the complete local preflight and repair
   any further local failures, then continue the same C276 task pending exact
   reviewed C268/C269 caller releases. Decision remains CONTINUE.
+
+
+# C276 staticcheck repair checkpoint — 2026-09-23
+
+- Prepush on `1b5e9b0aa0956b0ef8885248421dc13babbf79cf` passed fmt, architecture,
+  vet, and lint, then staticcheck identified SA1012 in the public test that
+  verifies nil request contexts are normalized and finalized.
+- Added a narrow `lint:ignore SA1012` annotation documenting that public case;
+  `rtk make staticcheck` now passes across all 15 modules with pinned 2026.1.
+  No production behavior, assertions, or baselines changed.
+- Exact prepush must rerun after this checkpoint commit. No push, PR, or hosted
+  CI handoff occurred. Next: commit this focused test annotation, rerun
+  `make prepush` and every remaining C276-05/06 command on the unchanged SHA,
+  and repair any further local findings before continuing caller reconciliation.
+  Decision remains CONTINUE.
