@@ -1,11 +1,11 @@
 package wire
 
 import (
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
-	roomlatency "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/evidence/latency"
 )
 
-// NewLatencyService composes the private room latency implementation behind
-// its public service contract. Observation and report logic stays in the
-// evidence owner; Wire only chooses the implementation.
-func NewLatencyService() rooms.LatencyService { return roomlatency.NewService() }
+// NewLatencyService composes the room latency implementation from the
+// service-owned evidence package. The rooms graph retains only the public
+// latency contract; policy and state stay behind roomevidence Wire.
+func NewLatencyService() rooms.LatencyService { return wire.NewLatencyService() }
