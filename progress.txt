@@ -4707,3 +4707,33 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   evidence files, then run C280-03/C280-04 plus `make prepush` and every C280-05
   command on one clean exact SHA before any push. Return `CONTINUE` while that
   actionable release integration remains.
+
+# C280 latency composition checkpoint — 2026-09-22
+
+- Reverified the sole admitted `audio-runtime` / `audio-runtime-v1` task and
+  exact branch identity from `FACTORY_ROOT`. The worktree was clean at
+  `32c1b3d3b` before this bounded repair; current-main and startup ancestry
+  remain preserved. No host, predecessor or peer worktree was changed.
+- Reapplied the C280-owned `go-agent-runtime/services/rooms/wire/latency.go`
+  cutover in commit `fb0c3bd082b07c50168a5a1009713e061178317e`: room Wire now
+  delegates latency construction to `services/roomevidence/wire` and no
+  longer imports the duplicate `rooms/internal/evidence/latency` owner. No
+  adapter, test file, baseline or unrelated caller was added.
+- On the exact committed candidate, `go test -count=1
+  ./go-agent-runtime/services/roomevidence/... ./go-agent-runtime/services/rooms/...`
+  passed `105` tests in `16` packages; `make wire-check` passed with no
+  generated diff; and `git diff --check` passed. The worktree is clean.
+- Canonical C272 (`work-task-13`), C276 (`work-task-8`) and C281
+  (`work-task-17`) remain `init` with no reviewed or exact-path release. The
+  remaining C280-owned cluster is exactly three agentruntime production files
+  (`1,794` lines) and fourteen `rooms/internal/evidence` production files
+  (`2,772` lines); the C280 adapter budget remains `0 files / 0 lines`.
+  Production room service/lifecycle callers still import the duplicate owner,
+  so deletion and the full caller cutover remain open.
+- Exact next action: consume only a reviewed or explicit exact-path release for
+  C272/C276/C281, integrate it additively, cut over every named and discovered
+  caller through public `roomevidence`, delete the three residual agentruntime
+  files and all fourteen duplicate evidence files, then run the complete
+  C280-03/C280-04 checks and `make prepush` plus every C280-05 command on one
+  clean exact SHA before push. Return `CONTINUE` while that release remains
+  unavailable.
