@@ -5791,3 +5791,41 @@ handoff sequence. No gate completion is claimed.
   locally actionable architecture findings without editing leased peer paths
   or changing baselines, then rerun the full exact-head preflight and all
   planned checks before the first push/PR.
+
+
+## C251 local preflight checkpoint — 2026-09-23
+
+- Admission and branch identity still verify for the sole `audio-runtime`
+  project. Fetched `origin/main=2f9f9736e1360802fc37e82de38540d92cb22631`;
+  checkpoint `ee9b68260ad69e8b72c2bcbed655435af877d5c3`, startup
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, and current main are ancestors.
+  Source checkpoint is `e63e44a35ffd27598f0bdfb0b4991e20971ececb` on the
+  unchanged C251 branch.
+- Repaired the service-owned duration timer/retry/liveness boundary and the
+  two C251-owned architecture findings. Fresh architecture scan has 426 issues
+  across 229 packages and none under `services/sessionduration` or
+  `services/session/internal/live`. The inherited CLI `agentruntime` inventory
+  remains 205 production files versus baseline 138; no baseline was edited.
+- Normal and race sessionduration/session suites each pass 271 tests across 19
+  packages. Live package tests pass 72. The CGO-disabled `nomicrophone`
+  duration/shutdown selection, `make test-sessions-race`,
+  `make test-regressions`, `make wire-check`, and `make embed-check` pass.
+  Fourteen planned agentruntime production paths remain absent; the sole
+  adapter is `agent-cli/internal/transport/cli/internal/livehost/shutdown_adapter.go`
+  at 59 lines.
+- `make prepush` ran on the exact source tree later committed as `e63e44a` and
+  stops at `verify-architecture` with 426 findings. Log:
+  `~/Library/Application Support/rtk/tee/1790181575_make_prepush.log`.
+  `make test-integration` and `make test-hermetic` both fail in the same CLI
+  tool-call fixtures because the runtime advertises `Tools: none`; examples
+  report unavailable `get_weather`/`exec`. Logs:
+  `~/Library/Application Support/rtk/tee/1790181073_make_test-integration.log`
+  and `~/Library/Application Support/rtk/tee/1790181437_make_test-hermetic.log`.
+  The required local fixture capability set is not present; no fixture or test
+  was added to mask that prerequisite.
+- Canonical C251 Work and review scan show no C251 PR or prior C251 review
+  rejection. No push, PR, script CI, review, or merge is claimed. Next: keep
+  this task/branch, restore the local test harness capabilities required by
+  integration (`get_weather`, `exec`, and browser tools), reconcile only exact
+  reviewed or guarded-released peer seams, then run the complete C251-04 gate
+  on the clean exact candidate before any push or PR.
