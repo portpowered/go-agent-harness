@@ -4955,3 +4955,31 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   run C280-03/C280-04 and the complete C280-05 preflight including
   `make prepush` on one clean exact SHA. Decision remains `CONTINUE` while
   that actionable release prerequisite is unavailable.
+
+# C280 release prerequisite recheck — 2026-09-22
+
+- Reverified the admitted task with `project-control.py verify-work --type task
+  --name audio-runtime-c280-recover-c269-room-evidence-retirement`: the sole
+  project is `audio-runtime` at `audio-runtime-v1`, and the isolated branch
+  matches `prd.json.branchName`. Fetched `origin/main=2f9f9736e1360802fc37e82de38540d92cb22631`;
+  clean HEAD remains `e8b2e0debed56fd6b6cc74a5b331848869091eee`, with startup
+  integration and origin/main ancestry preserved. The five required recovery /
+  review revisions remain readable, and no host, predecessor, or peer worktree
+  was modified.
+- Canonical Work still reports C272 `work-task-13`, C276 `work-task-8`, and
+  C281 `work-task-17` as `init` with no reviewed or exact-path release. C276's
+  candidate feedback records functional checks passing but `make
+  verify-architecture` and `make prepush` failing on 315 baseline issues;
+  C272 and C281 have no release feedback. No unreleased peer head was
+  consumed.
+- The exact residual census is unchanged: three C280-owned agentruntime
+  production files / `1,794` lines and fourteen duplicate
+  `rooms/internal/evidence` production files / `2,772` lines. Production room
+  callers still reference both legacy owners. C280 retains exactly `0` adapter
+  files / `0` adapter lines.
+- No caller cutover, legacy deletion, prepush, push, PR, SCRIPT CI, review, or
+  merge is claimed. Exact next action: consume only a reviewed or explicit
+  exact-path C272/C276/C281 release, integrate it additively, cut over every
+  named and repository-discovered caller, delete the complete residual cluster,
+  then run C280-03/C280-04 and the complete C280-05 preflight on one clean exact
+  SHA. Decision remains `CONTINUE` while that prerequisite is unavailable.
