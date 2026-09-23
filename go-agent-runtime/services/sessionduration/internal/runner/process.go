@@ -82,7 +82,11 @@ func (r *runLoop) handleSessionMessage(msg messages.StreamMessage) (sessiondurat
 	if err := r.dispatchScheduledMessageAudio(msg); err != nil {
 		return sessionduration.MessageResult{State: &state}, err
 	}
-	if result, done := sessionStopResult(msg, r.request.Policy, r.request.Facts, state); done {
+	result, done := sessionStopResult(msg, r.request.Policy, r.request.Facts, state)
+	if result.State != nil {
+		state = *result.State
+	}
+	if done {
 		return result, nil
 	}
 	state, err := r.closePendingSessionIfReady(r.runCtx, r.loop, state)

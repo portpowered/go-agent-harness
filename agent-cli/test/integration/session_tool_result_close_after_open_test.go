@@ -308,7 +308,12 @@ func TestDurationAdmissionCloseAfterOpenWaitsForAcceptedRichToolResult(t *testin
 	}
 	clock := &closeAfterOpenDurationClock{}
 	localClose := make(chan struct{})
+	continuationObserved := make(chan struct{})
+	continuationTerminalObserved := make(chan struct{})
 	var localCloseOnce sync.Once
+	var continuationOnce sync.Once
+	var continuationTerminalOnce sync.Once
+	var continuationTextSeen bool
 
 	ctx, cancel := context.WithTimeout(context.Background(), sessionLifecycleSafetyTimeout)
 	defer cancel()
@@ -326,6 +331,15 @@ func TestDurationAdmissionCloseAfterOpenWaitsForAcceptedRichToolResult(t *testin
 			StreamObserver: func(msg messages.StreamMessage) {
 				if msg.Type == messages.StreamTypeSessionClose {
 					localCloseOnce.Do(func() { close(localClose) })
+				}
+				if msg.Type == messages.StreamTypeTextDelta {
+					if value, ok := msg.Value.(*messages.TextDeltaValue); ok && value != nil && value.Content == "final grounded continuation" {
+						continuationTextSeen = true
+						continuationOnce.Do(func() { close(continuationObserved) })
+					}
+				}
+				if continuationTextSeen && msg.Type == messages.StreamTypeMessageEnd && msg.Role == messages.RoleAssistant {
+					continuationTerminalOnce.Do(func() { close(continuationTerminalObserved) })
 				}
 			},
 		}, time.Hour, clock)
@@ -347,6 +361,8 @@ func TestDurationAdmissionCloseAfterOpenWaitsForAcceptedRichToolResult(t *testin
 	}
 	session.releaseContinuation()
 	waitForCloseAfterOpenSignal(t, session.continuationDone, "duration terminal rich continuation")
+	waitForCloseAfterOpenSignal(t, continuationObserved, "duration observer to consume rich continuation")
+	waitForCloseAfterOpenSignal(t, continuationTerminalObserved, "duration observer to consume rich continuation end")
 	waitForCloseAfterOpenSignal(t, localClose, "duration SESSION.CLOSE after rich result acceptance")
 
 	select {
