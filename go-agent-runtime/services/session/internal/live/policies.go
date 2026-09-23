@@ -124,6 +124,11 @@ func (e timedToolExecutor) Execute(ctx context.Context, call messages.ToolCall) 
 	return response, err
 }
 
+func (e timedToolExecutor) AllowUnadvertisedTools() bool {
+	replacement, ok := e.inner.(interface{ AllowUnadvertisedTools() bool })
+	return ok && replacement.AllowUnadvertisedTools()
+}
+
 func (h *handle) openingAdmissionRequired() bool {
 	return h != nil && len(h.request.OpeningContentParts) > 0
 }

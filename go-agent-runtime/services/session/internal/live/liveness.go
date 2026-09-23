@@ -169,3 +169,8 @@ func (e durationToolExecutor) Execute(ctx context.Context, call messages.ToolCal
 	}
 	return e.inner.Execute(ctx, call)
 }
+
+func (e durationToolExecutor) AllowUnadvertisedTools() bool {
+	replacement, ok := e.inner.(interface{ AllowUnadvertisedTools() bool })
+	return ok && replacement.AllowUnadvertisedTools()
+}
