@@ -5559,3 +5559,36 @@ handoff sequence. No gate completion is claimed.
   reviewed/guarded-released peer seams as path ownership clears, then rerun
   the full local preflight on one exact candidate. No push or SCRIPT handoff
   is ready while the local architecture gate remains red.
+
+
+## C251 exact-head prepush checkpoint — 2026-09-23
+
+- C251 remains admitted as `audio-runtime/audio-runtime-v1` on branch
+  `codex/audio-runtime-c251-recover-shutdown-duration-retirement` at
+  `567e08405bb64075801590cd13fc559a4dbce938`; `prd.branchName` matches, the
+  worktree is clean, and recovery/startup/fetched-main ancestry is preserved.
+  The task branch has no C251 PR, push, hosted CI run, review, or merge.
+- Exact `rtk make prepush` on `567e08405bb64075801590cd13fc559a4dbce938`
+  passes formatting and stops at `verify-architecture` with 426 findings
+  across 229 packages. Full log:
+  `~/Library/Application Support/rtk/tee/1790162073_make_prepush.log`.
+  C251-owned setup/finalizer files are within their 400-line budgets and the
+  reduced runtime-plan line baseline is 482; the remaining findings are in
+  shared or peer-reserved paths, including C268 diagnostics, C276 recording,
+  C285 core/session composition, and the C229 audio output caller. No baseline
+  was raised or bulk-regenerated.
+- Exact-source focused checks pass: sessionduration/session normal and race
+  suites each pass 270 tests in 19 packages; the runtime duration/finalization/
+  replay/shutdown selection passes 269 tests. The planned 14 production paths
+  remain absent, `shutdown_adapter.go` is the sole adapter at 59 physical lines,
+  ancestry passes, and `git diff --check` is clean. The wider functional,
+  race, integration, regression, hermetic, Wire, and embed checks passed on
+  the earlier `36d07c92` checkpoint before the final small source-file move;
+  rerun the complete set on the eventual exact submission candidate.
+- Decision remains `CONTINUE`. Exact next action: keep ownership of this same
+  C251 task and branch; integrate only reviewed/guarded-released same-project
+  seams when the exact overlapping C268/C276/C285 ownership clears, then run
+  `make prepush` plus every C251 functional, integration, race, hermetic, Wire,
+  embed, deletion, duplicate, adapter, ancestry, and diff check on one exact
+  commit. Do not push or hand off to SCRIPT while the local architecture gate
+  is red; do not create a successor task or change PR identity.
