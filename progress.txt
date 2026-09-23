@@ -5010,3 +5010,43 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
 - `rtk gofmt -w` on the two changed files and `rtk git diff --check` passed. A source scan confirmed the three C280 evidence files no longer refer to local `agentruntime` room result/readiness/termination/options types. No tests or `make prepush` were run; the current C280 callers still use local types and await the C272 public-contract cutover, so a handoff candidate is not ready.
 - Full retirement is still open: the three C280 `agentruntime` files and fourteen duplicate `rooms/internal/evidence` production files remain; adapter inventory is 0 files / 0 lines. C276 and C281 releases remain unavailable. No peer branch or worktree was changed.
 - Exact next action: checkpoint this owned-file contract alignment, then consume it only through a reviewed C272 integration or explicit exact-path release. After integrating the released C272/C276/C281 callers, finish the complete caller audit and deletion before the full C280-05 preflight. Decision remains `CONTINUE`.
+
+# C280 post-public-contract compile checkpoint — 2026-09-23T13:39Z
+
+- Reverified task admission with `project-control.py verify-work --type task
+  --name audio-runtime-c280-recover-c269-room-evidence-retirement`: admitted
+  for the sole `audio-runtime` / `audio-runtime-v1` project. `prd.json.branchName`
+  matches the isolated branch. Fetched `origin/main=2f9f9736e1360802fc37e82de38540d92cb22631`;
+  HEAD `9ce8d5b336c7fb07f5dc75aaa2cc0d9813675f06` retains the C280 checkpoint
+  `e5640be2a963ea9e718a1f3517ed566d31159f2a`, startup integration
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, and fetched main as ancestors.
+- Read the recorded C259 `work-review-78` findings: bounded manifest/timeline
+  admission, evidence-write degradation, public room-produced LoadPlan/Load/
+  Analyze coverage, and exact-head preflight. Current public service checks
+  pass: `rtk go test -count=1 ./go-agent-runtime/services/roomevidence/...`
+  (58 cases / 6 packages); focused race tests across roomevidence and rooms
+  pass (31 / 16); the repeated admission/finalization/close matrix passes
+  (120 runs / 1 package).
+- `rtk make architecture-size-check` is blocked by the unreleased C272 caller
+  seam: `session_room_helpers.go` still calls the removed
+  `roomMixerConfigForOptions`, while C272-owned `session_room_orchestration.go`
+  still passes local `RoomResult` and `RoomParticipantReady` values to the
+  C280 evidence code now aligned to public `rooms` contract types. The exact
+  caller files are peer-owned; none was edited. Canonical C272 (`work-task-13`),
+  C276 (`work-task-8`), and C281 (`work-task-17`) remain `init`; C278 is already
+  represented in current main. No reviewed or explicit exact-path release is
+  available.
+- Current inventory: all three C280 `agentruntime` legacy files remain (1,779
+  current physical lines) and all fourteen duplicate
+  `rooms/internal/evidence` production files remain (2,772 lines). The adapter
+  inventory remains 0 files / 0 lines. These counts are census only; the
+  required outcome remains deletion of the complete owned files and caller
+  cutover.
+- No C280 caller cutover or owned-cluster deletion, full prepush, PR, push,
+  SCRIPT CI, independent review, or merge is claimed. Exact next action:
+  consume a reviewed C272 integration or exact-path release, integrate its
+  callers additively to resolve the compile seam, then consume only released
+  C276/C281 callers; complete all caller cutovers and delete the three legacy
+  files plus every production file under `rooms/internal/evidence`; then run
+  C280-04 and the entire C280-05 exact-head preflight including `make prepush`
+  before any push. Decision remains `CONTINUE`.
