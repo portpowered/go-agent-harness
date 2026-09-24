@@ -77,13 +77,11 @@ type ChromeForTestingDownload struct {
 }
 
 // ChromeForTestingOptions configures the verified fallback implementation.
-// Empty values are resolved from the acquisition request or repository/cache
-// defaults at call time.
+// Empty values resolve from the request or repository/cache defaults.
 type ChromeForTestingOptions struct {
-	LockPath       string
-	CacheDir       string
-	HTTPClient     *http.Client
-	VersionTimeout time.Duration
+	LockPath, CacheDir string
+	HTTPClient         *http.Client
+	VersionTimeout     time.Duration
 }
 
 // ChromeForTestingAcquirer downloads and verifies the repository-pinned
@@ -94,9 +92,6 @@ type ChromeForTestingAcquirer struct {
 
 // NewChromeForTestingAcquirer constructs the verified fallback acquirer.
 func NewChromeForTestingAcquirer(options ChromeForTestingOptions) *ChromeForTestingAcquirer {
-	if options.VersionTimeout <= 0 {
-		options.VersionTimeout = defaultChromeVersionTimeout
-	}
 	return &ChromeForTestingAcquirer{options: options}
 }
 

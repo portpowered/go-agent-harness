@@ -122,8 +122,7 @@ func (e *ManagedChromeAcquisitionError) Unwrap() error {
 }
 
 // ManagedChromeAcquisitionOptions configures managed executable selection.
-// Nil slices and functions select production defaults; a non-nil empty
-// StockPaths deliberately disables stock probing for hermetic tests.
+// Nil slices/functions select defaults; empty non-nil StockPaths disables stock probing.
 type ManagedChromeAcquisitionOptions struct {
 	GOOS            string
 	GOARCH          string
