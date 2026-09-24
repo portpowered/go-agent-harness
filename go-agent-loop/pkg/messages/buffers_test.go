@@ -521,3 +521,55 @@ func TestSendSessionWithOutcome(t *testing.T) {
 		}
 	}
 }
+
+type cancelOnSecondDoneContext struct {
+	done  chan struct{}
+	calls atomic.Int32
+}
+
+func (c *cancelOnSecondDoneContext) Deadline() (time.Time, bool) {
+	return time.Time{}, false
+}
+
+func (c *cancelOnSecondDoneContext) Done() <-chan struct{} {
+	if c.calls.Add(1) == 2 {
+		close(c.done)
+	}
+	return c.done
+}
+
+func (c *cancelOnSecondDoneContext) Err() error {
+	select {
+	case <-c.done:
+		return context.Canceled
+	default:
+		return nil
+	}
+}
+
+func (c *cancelOnSecondDoneContext) Value(any) any {
+	return nil
+}
+
+func TestTypedBufferWriteContextCancellationAfterInitialCheck(t *testing.T) {
+	buffer := NewTypedBuffer[int](1)
+	if outcome := buffer.WriteContext(context.Background(), 41); outcome.Status != BufferWriteSucceeded {
+		t.Fatalf("setup write returned %+v", outcome)
+	}
+	var dropCount atomic.Int64
+	buffer.SetOnDrop(func(_ int) {
+		dropCount.Add(1)
+	})
+
+	ctx := &cancelOnSecondDoneContext{done: make(chan struct{})}
+	outcome := buffer.WriteContext(ctx, 99)
+	if outcome.Status != BufferWriteCancelled || !errors.Is(outcome.Err, context.Canceled) {
+		t.Fatalf("write returned %+v, want cancellation after the initial context check", outcome)
+	}
+	if got := dropCount.Load(); got != 0 {
+		t.Fatalf("cancellation invoked %d drop callbacks", got)
+	}
+	if value, ok := buffer.Read(); !ok || value != 41 {
+		t.Fatalf("cancellation disturbed retained value=%d ok=%v", value, ok)
+	}
+}

@@ -9,7 +9,7 @@ func TestTypedCoverageMatchesAdvertisedWebMCP(t *testing.T) {
 		Events:    []string{"toolsAdded", "toolsRemoved", "toolInvoked", "toolResponded"},
 	})
 
-	if report.Verdict != "complete typed coverage" {
+	if report.Verdict != verdictCompleteTypedCoverage {
 		t.Fatalf("coverage verdict = %q, want complete typed coverage", report.Verdict)
 	}
 	if len(report.MissingCommands) != 0 || len(report.MissingEvents) != 0 {
@@ -38,20 +38,20 @@ func TestNativeVerdictRequiresNativePageAndCDPInvocation(t *testing.T) {
 		Fixture: fixtureStateReport{
 			Registration: fixtureRegistrationReport{Outcome: "registered"},
 		},
-		ProducerDiscovery:  pageOperationReport{Outcome: "success"},
-		ProducerInvocation: pageOperationReport{Outcome: "success"},
+		ProducerDiscovery:  pageOperationReport{Outcome: outcomeSuccess},
+		ProducerInvocation: pageOperationReport{Outcome: outcomeSuccess},
 	}
 	cdpReport := cdpProbeReport{
 		Advertised: advertisedProtocolReport{Available: true},
-		Typed:      typedCoverageReport{Verdict: "complete typed coverage"},
-		Enable:     cdpAttemptReport{Outcome: "success"},
+		Typed:      typedCoverageReport{Verdict: verdictCompleteTypedCoverage},
+		Enable:     cdpAttemptReport{Outcome: outcomeSuccess},
 		Invocation: cdpInvocationReport{Outcome: "response", Status: "Completed"},
 	}
 
-	if got := nativeVerdict(pageReport, cdpReport); got != "PASS" {
+	if got := nativeVerdict(pageReport, cdpReport); got != verdictPass {
 		t.Fatalf("native verdict = %q, want PASS", got)
 	}
-	cdpReport.Invocation.Outcome = "error"
+	cdpReport.Invocation.Outcome = outcomeError
 	if got := nativeVerdict(pageReport, cdpReport); got != "PARTIAL" {
 		t.Fatalf("native verdict without CDP response = %q, want PARTIAL", got)
 	}

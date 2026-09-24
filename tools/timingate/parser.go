@@ -29,8 +29,7 @@ type packageState struct {
 func Parse(r io.Reader) ([]Observation, error) {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 64*1024), 16*1024*1024)
-	states := make(map[string]packageState)
-	observations := make([]Observation, 0)
+	parser := timingParser{states: make(map[string]packageState), observations: make([]Observation, 0)}
 	lineNumber := 0
 
 	for scanner.Scan() {
@@ -39,58 +38,77 @@ func Parse(r io.Reader) ([]Observation, error) {
 		if len(line) == 0 {
 			continue
 		}
-
-		event, err := decodeEvent(line)
-		if err != nil {
-			return nil, &MalformedInputError{Line: lineNumber, Cause: err}
+		if err := parser.consume(line, lineNumber); err != nil {
+			return nil, err
 		}
-		if len(event.Elapsed) > 0 {
-			if _, err := parseElapsed(event.Elapsed); err != nil {
-				return nil, &MalformedInputError{Line: lineNumber, Cause: fmt.Errorf("elapsed: %w", err)}
-			}
-		}
-		if event.Package == "" {
-			continue
-		}
-
-		state, seen := states[event.Package]
-		if event.Action == "start" {
-			if seen && state.pending {
-				return nil, &MissingTimingError{Package: event.Package}
-			}
-			states[event.Package] = packageState{pending: true}
-			continue
-		}
-
-		if !seen {
-			state.pending = true
-		}
-		if isPackageTerminal(event.Action) && event.Test == "" {
-			if len(event.Elapsed) == 0 {
-				return nil, &MissingTimingError{Package: event.Package, Terminal: true}
-			}
-			elapsed, err := parseElapsed(event.Elapsed)
-			if err != nil {
-				return nil, &MalformedInputError{Line: lineNumber, Cause: fmt.Errorf("elapsed: %w", err)}
-			}
-			observations = append(observations, Observation{Package: event.Package, Elapsed: elapsed})
-			state.pending = false
-			state.completed = true
-			states[event.Package] = state
-			continue
-		}
-
-		if !state.completed {
-			state.pending = true
-		}
-		states[event.Package] = state
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, &MalformedInputError{Line: lineNumber, Cause: err}
 	}
+	return parser.finish()
+}
 
+// timingParser accumulates per-package terminal state across go test -json events.
+type timingParser struct {
+	states       map[string]packageState
+	observations []Observation
+}
+
+func (p *timingParser) consume(line []byte, lineNumber int) error {
+	event, err := decodeEvent(line)
+	if err != nil {
+		return &MalformedInputError{Line: lineNumber, Cause: err}
+	}
+	if len(event.Elapsed) > 0 {
+		if _, err := parseElapsed(event.Elapsed); err != nil {
+			return &MalformedInputError{Line: lineNumber, Cause: fmt.Errorf("elapsed: %w", err)}
+		}
+	}
+	if event.Package == "" {
+		return nil
+	}
+
+	state, seen := p.states[event.Package]
+	if event.Action == "start" {
+		if seen && state.pending {
+			return &MissingTimingError{Package: event.Package}
+		}
+		p.states[event.Package] = packageState{pending: true}
+		return nil
+	}
+
+	if !seen {
+		state.pending = true
+	}
+	if isPackageTerminal(event.Action) && event.Test == "" {
+		return p.recordTerminal(event, state, lineNumber)
+	}
+
+	if !state.completed {
+		state.pending = true
+	}
+	p.states[event.Package] = state
+	return nil
+}
+
+func (p *timingParser) recordTerminal(event rawEvent, state packageState, lineNumber int) error {
+	if len(event.Elapsed) == 0 {
+		return &MissingTimingError{Package: event.Package, Terminal: true}
+	}
+	elapsed, err := parseElapsed(event.Elapsed)
+	if err != nil {
+		return &MalformedInputError{Line: lineNumber, Cause: fmt.Errorf("elapsed: %w", err)}
+	}
+	p.observations = append(p.observations, Observation{Package: event.Package, Elapsed: elapsed})
+	state.pending = false
+	state.completed = true
+	p.states[event.Package] = state
+	return nil
+}
+
+func (p *timingParser) finish() ([]Observation, error) {
 	pending := make([]string, 0)
-	for packagePath, state := range states {
+	for packagePath, state := range p.states {
 		if state.pending {
 			pending = append(pending, packagePath)
 		}
@@ -99,10 +117,10 @@ func Parse(r io.Reader) ([]Observation, error) {
 		sort.Strings(pending)
 		return nil, &MissingTimingError{Package: pending[0]}
 	}
-	if len(observations) == 0 {
+	if len(p.observations) == 0 {
 		return nil, &EmptyRunError{}
 	}
-	return observations, nil
+	return p.observations, nil
 }
 
 func decodeEvent(line []byte) (rawEvent, error) {

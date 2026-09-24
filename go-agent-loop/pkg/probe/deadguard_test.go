@@ -258,7 +258,7 @@ func TestDeadSessionGuardEvaluatesTypedExpectationControls(t *testing.T) {
 		{name: "event-mismatch", expectation: ExpectedBehavior{Type: ExpectEvent, Value: "ready"}, observation: full, wantErr: ErrExpectationMismatch},
 		{name: "tool-call-mismatch", expectation: ExpectedBehavior{Type: ExpectToolCall, ToolCallID: "weather"}, observation: full, wantErr: ErrExpectationMismatch},
 		{name: "tool-result-mismatch", expectation: ExpectedBehavior{Type: ExpectToolResult, ToolCallID: "calendar"}, observation: full, wantErr: ErrExpectationMismatch},
-		{name: "unknown-expectation", expectation: ExpectedBehavior{Type: "unknown"}, observation: full, wantErr: ErrInvalidExpectation},
+		{name: "unknown-expectation", expectation: ExpectedBehavior{Type: unknownLabel}, observation: full, wantErr: ErrInvalidExpectation},
 		{name: "tool-call-invalid", expectation: ExpectedBehavior{Type: ExpectToolCall}, observation: full, wantErr: ErrInvalidExpectation},
 		{name: "time-invalid", expectation: ExpectedBehavior{Type: ExpectTime}, observation: full, wantErr: ErrInvalidExpectation},
 		{name: "contains-alias-conflict", expectation: ExpectedBehavior{Type: ExpectContains, Text: "a", Value: "b"}, observation: full, wantErr: ErrInvalidExpectation},
@@ -280,6 +280,15 @@ func TestDeadSessionGuardEvaluatesTypedExpectationControls(t *testing.T) {
 }
 
 func TestDeadSessionRegistryLifecycleAndGuardConstructionSeams(t *testing.T) {
+	assertNilScenarioRegistryIsInert(t)
+	registry := exerciseScenarioRegistryLifecycle(t)
+	assertLiveRegistryAliasesAndTopLevelGuard(t)
+	assertDeadSessionGuardOptionConstruction(t, registry)
+	assertDeadSessionSubjectSeams(t)
+}
+
+func assertNilScenarioRegistryIsInert(t *testing.T) {
+	t.Helper()
 	var nilRegistry *ScenarioRegistry
 	if nilRegistry.Entries() != nil || len(nilRegistry.Snapshot()) != 0 {
 		t.Fatal("nil registry unexpectedly returned a snapshot")
@@ -289,7 +298,12 @@ func TestDeadSessionRegistryLifecycleAndGuardConstructionSeams(t *testing.T) {
 	if err := nilRegistry.Register(terminalScenario("nil")); !errors.Is(err, ErrInvalidScenarioRegistration) {
 		t.Fatalf("nil registry error: %v", err)
 	}
+}
 
+// exerciseScenarioRegistryLifecycle leaves the registry holding only the
+// "options-entry" scenario used by the option-construction seam.
+func exerciseScenarioRegistryLifecycle(t *testing.T) *ScenarioRegistry {
+	t.Helper()
 	registry := &ScenarioRegistry{}
 	scenario := terminalScenario("registry-entry")
 	if err := registry.Register(Scenario{}); !errors.Is(err, ErrInvalidScenarioRegistration) {
@@ -301,7 +315,7 @@ func TestDeadSessionRegistryLifecycleAndGuardConstructionSeams(t *testing.T) {
 	if got := registry.Snapshot(); len(got) != 1 || got[0].ID != scenario.ID {
 		t.Fatalf("registry snapshot: %#v", got)
 	}
-	if err := registry.Register(scenario, DeadSessionControl("unknown")); !errors.Is(err, ErrInvalidScenarioRegistration) {
+	if err := registry.Register(scenario, DeadSessionControl(unknownLabel)); !errors.Is(err, ErrInvalidScenarioRegistration) {
 		t.Fatalf("unknown control error: %v", err)
 	}
 	registry.Unregister(scenario.ID)
@@ -322,7 +336,11 @@ func TestDeadSessionRegistryLifecycleAndGuardConstructionSeams(t *testing.T) {
 	if err := registry.Register(terminalScenario("options-entry")); err != nil {
 		t.Fatal(err)
 	}
+	return registry
+}
 
+func assertLiveRegistryAliasesAndTopLevelGuard(t *testing.T) {
+	t.Helper()
 	if LiveScenarioRegistry() != LiveRegistry || LiveScenarioRegistry() != DefaultScenarioRegistry {
 		t.Fatal("live registry aliases diverged")
 	}
@@ -346,7 +364,10 @@ func TestDeadSessionRegistryLifecycleAndGuardConstructionSeams(t *testing.T) {
 	if err := CheckDeadSessionGuard(context.Background()); err != nil {
 		t.Fatalf("top-level guard check: %v", err)
 	}
+}
 
+func assertDeadSessionGuardOptionConstruction(t *testing.T, registry *ScenarioRegistry) {
+	t.Helper()
 	runner := ScenarioRunnerFunc(func(ctx context.Context, scenario Scenario, subject DeadSessionSubject) (ScenarioRunResult, error) {
 		return ExpectationScenarioRunner{}.Run(ctx, scenario, subject)
 	})
@@ -371,6 +392,10 @@ func TestDeadSessionRegistryLifecycleAndGuardConstructionSeams(t *testing.T) {
 	if _, err := DefaultDeadSessionSubjectFactory(DeadSessionControl("bad"), Scenario{}); err == nil {
 		t.Fatal("unknown subject control unexpectedly succeeded")
 	}
+}
+
+func assertDeadSessionSubjectSeams(t *testing.T) {
+	t.Helper()
 	if NewNullSubject() == nil || NewEchoSubject() == nil || NewSilenceSubject() == nil {
 		t.Fatal("subject constructors returned nil")
 	}
@@ -466,7 +491,7 @@ func TestDeadSessionGuardFailsClosedForSetupAndEvidenceFailures(t *testing.T) {
 		t.Fatal("empty guard error contract changed")
 	}
 	var nilError *DeadSessionGuardError
-	if nilError.Error() != "<nil>" {
+	if nilError.Error() != nilErrorText {
 		t.Fatalf("nil error text: %q", nilError.Error())
 	}
 	if errors.Is(&DeadSessionGuardError{}, errors.New("unrelated")) {

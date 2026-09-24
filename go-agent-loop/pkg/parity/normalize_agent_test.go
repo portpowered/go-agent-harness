@@ -403,14 +403,15 @@ func TestNormalizeAgentDeterministicAndConcurrent(t *testing.T) {
 	}
 }
 
-func TestNormalizeAgentS4Errors(t *testing.T) {
-	valid := agentFixtureRecords()[0]
-	tests := []struct {
-		name       string
-		input      []byte
-		field      string
-		reasonPart string
-	}{
+type agentNormalizationErrorCase struct {
+	name       string
+	input      []byte
+	field      string
+	reasonPart string
+}
+
+func TestNormalizeAgentS4RecordAndPayloadErrors(t *testing.T) {
+	runAgentNormalizationErrorCases(t, []agentNormalizationErrorCase{
 		{
 			name:       "unknown projection kind",
 			input:      encodeAgentRecords(t, []transcript.Record{agentRecord(1, transcript.DirectionIn, transcript.StreamWS, `{"kind":"future.event"}`)}),
@@ -429,6 +430,12 @@ func TestNormalizeAgentS4Errors(t *testing.T) {
 			field:      "records[0].record",
 			reasonPart: "must be a JSON object",
 		},
+	})
+}
+
+func TestNormalizeAgentS4EnvelopeErrors(t *testing.T) {
+	valid := agentFixtureRecords()[0]
+	runAgentNormalizationErrorCases(t, []agentNormalizationErrorCase{
 		{
 			name:       "missing required version",
 			input:      mutateAgentEnvelope(t, valid, func(fields map[string]json.RawMessage) { delete(fields, "v") }),
@@ -507,7 +514,11 @@ func TestNormalizeAgentS4Errors(t *testing.T) {
 			field:      "records[0].stream",
 			reasonPart: "unknown stream",
 		},
-	}
+	})
+}
+
+func runAgentNormalizationErrorCases(t *testing.T, tests []agentNormalizationErrorCase) {
+	t.Helper()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := NormalizeAgent("S4-agent", tt.input)

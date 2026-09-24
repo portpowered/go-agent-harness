@@ -55,60 +55,57 @@ func compareJSONValue(path string, expected, actual any, differences *[]Differen
 			appendDifference(differences, path, expected, actual)
 			return
 		}
-
-		keys := make([]string, 0, len(expectedValue)+len(actualValue))
-		for key := range expectedValue {
-			keys = append(keys, key)
-		}
-		for key := range actualValue {
-			if _, exists := expectedValue[key]; !exists {
-				keys = append(keys, key)
-			}
-		}
-		sort.Strings(keys)
-
-		for _, key := range keys {
-			childPath := key
-			if path != "" {
-				childPath = path + "." + key
-			}
-			expectedMember, expectedPresent := expectedValue[key]
-			actualMember, actualPresent := actualValue[key]
-			if !expectedPresent {
-				expectedMember = nil
-			}
-			if !actualPresent {
-				actualMember = nil
-			}
-			compareJSONValue(childPath, expectedMember, actualMember, differences)
-		}
-
+		compareJSONObject(path, expectedValue, actualValue, differences)
 	case []any:
 		actualValue, ok := actual.([]any)
 		if !ok {
 			appendDifference(differences, path, expected, actual)
 			return
 		}
-
-		length := len(expectedValue)
-		if len(actualValue) > length {
-			length = len(actualValue)
-		}
-		for index := 0; index < length; index++ {
-			var expectedMember, actualMember any
-			if index < len(expectedValue) {
-				expectedMember = expectedValue[index]
-			}
-			if index < len(actualValue) {
-				actualMember = actualValue[index]
-			}
-			compareJSONValue(fmt.Sprintf("%s[%d]", path, index), expectedMember, actualMember, differences)
-		}
-
+		compareJSONArray(path, expectedValue, actualValue, differences)
 	default:
 		if !sameJSONValue(expected, actual) {
 			appendDifference(differences, path, expected, actual)
 		}
+	}
+}
+
+// compareJSONObject compares the union of both objects' members in sorted key
+// order; a member missing on one side compares as JSON null.
+func compareJSONObject(path string, expectedValue, actualValue map[string]any, differences *[]Difference) {
+	keys := make([]string, 0, len(expectedValue)+len(actualValue))
+	for key := range expectedValue {
+		keys = append(keys, key)
+	}
+	for key := range actualValue {
+		if _, exists := expectedValue[key]; !exists {
+			keys = append(keys, key)
+		}
+	}
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		childPath := key
+		if path != "" {
+			childPath = path + "." + key
+		}
+		compareJSONValue(childPath, expectedValue[key], actualValue[key], differences)
+	}
+}
+
+// compareJSONArray compares elements by index up to the longer length; a
+// missing element compares as JSON null.
+func compareJSONArray(path string, expectedValue, actualValue []any, differences *[]Difference) {
+	length := max(len(actualValue), len(expectedValue))
+	for index := 0; index < length; index++ {
+		var expectedMember, actualMember any
+		if index < len(expectedValue) {
+			expectedMember = expectedValue[index]
+		}
+		if index < len(actualValue) {
+			actualMember = actualValue[index]
+		}
+		compareJSONValue(fmt.Sprintf("%s[%d]", path, index), expectedMember, actualMember, differences)
 	}
 }
 

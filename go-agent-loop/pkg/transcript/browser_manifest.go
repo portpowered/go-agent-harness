@@ -337,7 +337,16 @@ func (m RecordingManifest) Validate() error {
 	default:
 		return fmt.Errorf("%w: %d", ErrUnknownRecordingManifestVersion, m.FormatVersion)
 	}
+	if err := m.validateArtifactList(); err != nil {
+		return err
+	}
+	if err := m.validateTranscriptPresence(); err != nil {
+		return err
+	}
+	return m.validateBrowserEvidence()
+}
 
+func (m RecordingManifest) validateArtifactList() error {
 	seenPaths := make(map[string]struct{}, len(m.Artifacts))
 	for index, artifact := range m.Artifacts {
 		if err := validateRecordingArtifactPath(artifact.Path); err != nil {
@@ -351,6 +360,12 @@ func (m RecordingManifest) Validate() error {
 		}
 		seenPaths[artifact.Path] = struct{}{}
 	}
+	return nil
+}
+
+// validateTranscriptPresence checks the transcript artifacts against the
+// declared (or implicit complete) recording status.
+func (m RecordingManifest) validateTranscriptPresence() error {
 	clientTranscript := false
 	agentTranscript := false
 	for _, artifact := range m.Artifacts {
@@ -365,22 +380,27 @@ func (m RecordingManifest) Validate() error {
 		if clientTranscript != agentTranscript {
 			return invalidRecordingManifest("implicit complete recording requires both transcript artifacts")
 		}
-	} else {
-		if err := m.RecordingStatus.Validate(); err != nil {
-			return invalidRecordingManifest("recording_status: %v", err)
+		return nil
+	}
+	if err := m.RecordingStatus.Validate(); err != nil {
+		return invalidRecordingManifest("recording_status: %v", err)
+	}
+	switch m.RecordingStatus.State {
+	case RecordingStatusComplete:
+		if !clientTranscript || !agentTranscript {
+			return invalidRecordingManifest("complete recording requires both transcript artifacts")
 		}
-		switch m.RecordingStatus.State {
-		case RecordingStatusComplete:
-			if !clientTranscript || !agentTranscript {
-				return invalidRecordingManifest("complete recording requires both transcript artifacts")
-			}
-		case RecordingStatusPartial:
-			if !clientTranscript && !agentTranscript {
-				return invalidRecordingManifest("partial recording requires at least one transcript artifact")
-			}
+	case RecordingStatusPartial:
+		if !clientTranscript && !agentTranscript {
+			return invalidRecordingManifest("partial recording requires at least one transcript artifact")
 		}
 	}
+	return nil
+}
 
+// validateBrowserEvidence checks optional v2 browser evidence and its unique,
+// hash-matching entry in the artifacts list.
+func (m RecordingManifest) validateBrowserEvidence() error {
 	if m.Browser == nil {
 		return nil
 	}
@@ -439,40 +459,6 @@ func (m *RecordingManifest) UnmarshalJSON(data []byte) error {
 	}
 	*m = result
 	return nil
-}
-
-func normalizeBrowserArtifactForRecording(input *BrowserArtifact, destination string, redactor credentialRedactor) (*normalizedBrowserArtifact, error) {
-	if input == nil {
-		return nil, nil
-	}
-	normalized, err := input.Normalize()
-	if err != nil {
-		return nil, recordingError(ErrInvalidRecording, "validate browser artifact", destination, err, redactor)
-	}
-	if containsCredential(normalized.Data, redactor.values) {
-		return nil, recordingError(
-			ErrRecordingUnsafeArtifact,
-			"verify browser credential redaction",
-			filepath.Join(destination, filepath.FromSlash(normalized.Path)),
-			errors.New("credential found in browser artifact"),
-			redactor,
-		)
-	}
-	return &normalizedBrowserArtifact{
-		format:    normalized.Format,
-		path:      normalized.Path,
-		data:      normalized.Data,
-		sha256:    normalized.SHA256,
-		redaction: normalized.Redaction,
-	}, nil
-}
-
-type normalizedBrowserArtifact struct {
-	format    string
-	path      string
-	data      []byte
-	sha256    string
-	redaction BrowserRedactionPolicy
 }
 
 func normalizeRecordingManifestVersion(requested int, hasBrowser bool) (int, error) {

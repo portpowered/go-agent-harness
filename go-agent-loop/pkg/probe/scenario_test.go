@@ -222,7 +222,7 @@ func TestLookupAdaptersAndTypedValidation(t *testing.T) {
 		t.Fatalf("mixed typed payload was accepted")
 	}
 	unknown := valid
-	unknown.Steps = []Step{{Type: StepKind("unknown")}, {Type: StepClose, Kind: StepClose}}
+	unknown.Steps = []Step{{Type: StepKind(unknownLabel)}, {Type: StepClose, Kind: StepClose}}
 	if !errors.Is(unknown.Validate(), ErrUnknownVariant) {
 		t.Fatalf("unknown typed variant was accepted")
 	}
@@ -358,7 +358,7 @@ func TestErrorFormattingAndMarshalAliases(t *testing.T) {
 	if scenarioErr.Error() != "invalid_field at steps[2].text: must not be empty" || scenarioErr.Kind != CategoryInvalidField {
 		t.Fatalf("error formatting: %q %#v", scenarioErr.Error(), scenarioErr)
 	}
-	if (*ScenarioError)(nil).Error() != "<nil>" {
+	if (*ScenarioError)(nil).Error() != nilErrorText {
 		t.Fatal("nil error formatting")
 	}
 	ref, marshalErr := json.Marshal(AudioCorpusReference{CorpusID: "a"})

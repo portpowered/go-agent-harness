@@ -304,6 +304,32 @@ func runDuplexScenario(t *testing.T, run int) duplexRun {
 		t.Fatalf("run %d session startup capture: %v", run, err)
 	}
 
+	paths := registerDuplexPaths(t, run, functionalTime, session, inferencer, capture)
+	for _, path := range paths {
+		if path.clock != sharedClock {
+			t.Fatalf("run %d %s received a different deterministic clock: got %p, want %p", run, path.name, path.clock, sharedClock)
+		}
+	}
+
+	trace := driveDuplexTicks(t, run, functionalTime, paths)
+
+	if err := session.Stop(3 * time.Second); err != nil {
+		t.Fatalf("run %d stop session: %v", run, err)
+	}
+	stopped = true
+
+	return duplexRun{
+		trace:  trace.snapshot(),
+		client: capture.collector.ClientRecords(),
+		agent:  capture.collector.AgentRecords(),
+	}
+}
+
+// registerDuplexPaths registers both direction participants on the shared
+// logical clock and connects each direction's audio source.
+func registerDuplexPaths(t *testing.T, run int, functionalTime *timeharness.Scenario, session *sessions.SessionScenario, inferencer *sessions.MockSessionInferencer, capture *sessionCapture) []directionPath {
+	t.Helper()
+	sharedClock := functionalTime.Clock()
 	aToB, err := functionalTime.Register(directionAToB)
 	if err != nil {
 		t.Fatalf("run %d register %s: %v", run, directionAToB, err)
@@ -313,7 +339,7 @@ func runDuplexScenario(t *testing.T, run int) duplexRun {
 		t.Fatalf("run %d register %s: %v", run, directionBToA, err)
 	}
 
-	paths := []directionPath{
+	return []directionPath{
 		{
 			name:            directionAToB,
 			clock:           sharedClock,
@@ -341,12 +367,12 @@ func runDuplexScenario(t *testing.T, run int) duplexRun {
 			capture: capture,
 		},
 	}
-	for _, path := range paths {
-		if path.clock != sharedClock {
-			t.Fatalf("run %d %s received a different deterministic clock: got %p, want %p", run, path.name, path.clock, sharedClock)
-		}
-	}
+}
 
+// driveDuplexTicks advances every logical tick of the canonical trace and
+// waits for both direction workers to complete each one.
+func driveDuplexTicks(t *testing.T, run int, functionalTime *timeharness.Scenario, paths []directionPath) *traceRecorder {
+	t.Helper()
 	trace := &traceRecorder{}
 	completions := make(chan tickCompletion, 2)
 	workerErrors := make(chan error, 2)
@@ -371,17 +397,7 @@ func runDuplexScenario(t *testing.T, run int) duplexRun {
 		t.Fatalf("run %d direction worker: %v", run, err)
 	default:
 	}
-
-	if err := session.Stop(3 * time.Second); err != nil {
-		t.Fatalf("run %d stop session: %v", run, err)
-	}
-	stopped = true
-
-	return duplexRun{
-		trace:  trace.snapshot(),
-		client: capture.collector.ClientRecords(),
-		agent:  capture.collector.AgentRecords(),
-	}
+	return trace
 }
 
 func eventsForDirection(direction string) map[uint64]duplexEvent {

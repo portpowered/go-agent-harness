@@ -84,11 +84,11 @@ func (g *Generator) WaitReady(ctx context.Context) error {
 		}
 		resp, err := g.Client.Do(req)
 		if err == nil {
-			resp.Body.Close()
-			if resp.StatusCode == http.StatusOK {
+			ready, probeErr := readinessOutcome(resp)
+			if ready {
 				return nil
 			}
-			lastErr = fmt.Errorf("readyz status %d", resp.StatusCode)
+			lastErr = probeErr
 		} else {
 			lastErr = err
 		}
@@ -121,10 +121,9 @@ func (g *Generator) Synthesize(ctx context.Context, text, outputPath string) err
 	if err != nil {
 		return fmt.Errorf("ttscorpus: synthesis request failed against %s: %w", g.Endpoint, err)
 	}
-	defer resp.Body.Close()
-	data, err := io.ReadAll(resp.Body)
+	data, err := readAndCloseBody(resp)
 	if err != nil {
-		return fmt.Errorf("ttscorpus: read synthesis response: %w", err)
+		return err
 	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("ttscorpus: synthesis failed with status %d: %s", resp.StatusCode, truncate(string(data), 512))
@@ -136,6 +135,32 @@ func (g *Generator) Synthesize(ctx context.Context, text, outputPath string) err
 		return fmt.Errorf("ttscorpus: write %s: %w", outputPath, err)
 	}
 	return nil
+}
+
+// readinessOutcome closes one readiness probe response and reports whether the
+// backend answered 200; any non-ready status or close failure is returned.
+func readinessOutcome(resp *http.Response) (bool, error) {
+	if err := resp.Body.Close(); err != nil {
+		return false, fmt.Errorf("close readyz response: %w", err)
+	}
+	if resp.StatusCode == http.StatusOK {
+		return true, nil
+	}
+	return false, fmt.Errorf("readyz status %d", resp.StatusCode)
+}
+
+// readAndCloseBody drains and closes a synthesis response body, surfacing
+// both read and close failures.
+func readAndCloseBody(resp *http.Response) ([]byte, error) {
+	data, readErr := io.ReadAll(resp.Body)
+	closeErr := resp.Body.Close()
+	if readErr != nil {
+		return nil, fmt.Errorf("ttscorpus: read synthesis response: %w", readErr)
+	}
+	if closeErr != nil {
+		return nil, fmt.Errorf("ttscorpus: close synthesis response: %w", closeErr)
+	}
+	return data, nil
 }
 
 type corpusFile struct {

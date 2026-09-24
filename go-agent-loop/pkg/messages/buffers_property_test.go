@@ -55,187 +55,181 @@ func FuzzTypedBufferConservationAndOrdering(f *testing.F) {
 		if len(input) > 0 {
 			operations = input[1:]
 		}
-		buffer := NewTypedBuffer[fuzzBufferValue](capacity)
-
-		dropCount := 0
-		buffer.SetOnDrop(func(_ fuzzBufferValue) {
-			dropCount++
-		})
-
-		readCancellationBuffer := NewTypedBuffer[fuzzBufferValue](1)
-		closedReadBuffer := NewTypedBuffer[fuzzBufferValue](1)
-		closedDone := make(chan struct{})
-		close(closedDone)
-
-		acceptedValues := make([]fuzzBufferValue, 0, len(input))
-		offered := 0
-		accepted := 0
-		dropped := 0
-		cancelled := 0
-		timedOut := 0
-		expectedCancelled := 0
-		expectedTimedOut := 0
-		delivered := 0
-
-		recordRead := func(value fuzzBufferValue, ok bool) {
-			if !ok {
-				return
-			}
-			if delivered >= len(acceptedValues) {
-				t.Fatalf("read value %+v without a preceding accepted value", value)
-			}
-			if value != acceptedValues[delivered] {
-				t.Fatalf("read value %+v at position %d, want %+v", value, delivered, acceptedValues[delivered])
-			}
-			delivered++
-		}
-
+		h := newFuzzBufferHarness(t, capacity, len(input))
 		for operation, raw := range operations {
-			value := fuzzBufferValue{ID: operation, Payload: raw}
-			switch raw % 8 {
-			case 0, 7: // An open offer is either accepted or explicitly full.
-				offered++
-				outcome := buffer.WriteContext(context.Background(), value)
-				switch outcome.Status {
-				case BufferWriteSucceeded:
-					if !outcome.OK() || outcome.Err != nil {
-						t.Fatalf("successful write returned %+v", outcome)
-					}
-					accepted++
-					acceptedValues = append(acceptedValues, value)
-				case BufferWriteBufferFull:
-					if outcome.OK() || outcome.Err != nil {
-						t.Fatalf("full write returned %+v", outcome)
-					}
-					dropped++
-				default:
-					t.Fatalf("open write returned unexpected status %q", outcome.Status)
-				}
-			case 1, 4: // Immediate reads preserve the accepted FIFO sequence.
-				recordRead(buffer.Read())
-			case 2: // A pre-closed write is cancellation, never a drop.
-				expectedCancelled++
-				beforeDrops := dropCount
-				ctx, cancel := context.WithCancel(context.Background())
-				cancel()
-				outcome := buffer.WriteContext(ctx, value)
-				cancelled++
-				if outcome.Status != BufferWriteCancelled || !errors.Is(outcome.Err, context.Canceled) {
-					t.Fatalf("cancelled write returned %+v", outcome)
-				}
-				if dropCount != beforeDrops {
-					t.Fatalf("cancelled write changed drop count from %d to %d", beforeDrops, dropCount)
-				}
-			case 3: // An expired deadline exercises the distinct timeout outcome.
-				expectedTimedOut++
-				beforeDrops := dropCount
-				ctx, cancel := context.WithDeadline(context.Background(), time.Unix(0, 0))
-				outcome := buffer.WriteContext(ctx, value)
-				cancel()
-				timedOut++
-				if outcome.Status != BufferWriteTimedOut || !errors.Is(outcome.Err, context.DeadlineExceeded) {
-					t.Fatalf("timed-out write returned %+v", outcome)
-				}
-				if dropCount != beforeDrops {
-					t.Fatalf("timed-out write changed drop count from %d to %d", beforeDrops, dropCount)
-				}
-			case 5: // Keep a cancelled read empty so its outcome is deterministic.
-				ctx, cancel := context.WithCancel(context.Background())
-				cancel()
-				value, err := readCancellationBuffer.ReadContext(ctx)
-				if !errors.Is(err, context.Canceled) || value != (fuzzBufferValue{}) {
-					t.Fatalf("cancelled read returned value=%+v err=%v", value, err)
-				}
-			case 6: // The existing done-channel closure surface must terminate.
-				value, ok := closedReadBuffer.ReadBlocking(closedDone)
-				if ok || value != (fuzzBufferValue{}) {
-					t.Fatalf("closed read returned value=%+v ok=%v", value, ok)
-				}
-			}
-
-			if length := buffer.Len(); length > buffer.Cap() {
-				t.Fatalf("buffer length %d exceeded capacity %d", length, buffer.Cap())
-			}
-			if buffer.HasData() != (buffer.Len() > 0) {
-				t.Fatalf("HasData disagreed with Len: has_data=%v len=%d", buffer.HasData(), buffer.Len())
-			}
+			h.apply(fuzzBufferValue{ID: operation, Payload: raw}, raw)
+			h.checkInvariants()
 		}
-
-		for {
-			value, ok := buffer.Read()
-			if !ok {
-				break
-			}
-			recordRead(value, true)
-		}
-
-		if accepted != delivered {
-			t.Fatalf("accepted=%d delivered=%d", accepted, delivered)
-		}
-		if dropped+delivered != offered {
-			t.Fatalf("dropped=%d delivered=%d offered=%d", dropped, delivered, offered)
-		}
-		if dropCount != dropped {
-			t.Fatalf("drop callback count=%d, full outcomes=%d", dropCount, dropped)
-		}
-		if buffer.Len() != 0 || buffer.HasData() {
-			t.Fatalf("buffer was not drained: len=%d has_data=%v", buffer.Len(), buffer.HasData())
-		}
-		if cancelled != expectedCancelled || timedOut != expectedTimedOut {
-			t.Fatalf("cancelled=%d (want %d), timed_out=%d (want %d)", cancelled, expectedCancelled, timedOut, expectedTimedOut)
-		}
+		h.drain()
+		h.verifyConservation()
 	})
 }
 
-func TestTypedBufferFullDropsNewest(t *testing.T) {
-	buffer := NewTypedBuffer[int](1)
-	var dropCount atomic.Int64
-	buffer.SetOnDrop(func(_ int) {
-		dropCount.Add(1)
+// fuzzBufferHarness drives one fuzz operation stream against a real buffer
+// and records the outcome counters used by the conservation checks.
+type fuzzBufferHarness struct {
+	t                      *testing.T
+	buffer                 *TypedBuffer[fuzzBufferValue]
+	readCancellationBuffer *TypedBuffer[fuzzBufferValue]
+	closedReadBuffer       *TypedBuffer[fuzzBufferValue]
+	closedDone             chan struct{}
+
+	acceptedValues    []fuzzBufferValue
+	dropCount         int
+	offered           int
+	accepted          int
+	dropped           int
+	cancelled         int
+	timedOut          int
+	expectedCancelled int
+	expectedTimedOut  int
+	delivered         int
+}
+
+func newFuzzBufferHarness(t *testing.T, capacity, inputLen int) *fuzzBufferHarness {
+	h := &fuzzBufferHarness{
+		t:                      t,
+		buffer:                 NewTypedBuffer[fuzzBufferValue](capacity),
+		readCancellationBuffer: NewTypedBuffer[fuzzBufferValue](1),
+		closedReadBuffer:       NewTypedBuffer[fuzzBufferValue](1),
+		closedDone:             make(chan struct{}),
+		acceptedValues:         make([]fuzzBufferValue, 0, inputLen),
+	}
+	h.buffer.SetOnDrop(func(_ fuzzBufferValue) {
+		h.dropCount++
 	})
+	close(h.closedDone)
+	return h
+}
 
-	first := buffer.WriteContext(context.Background(), 41)
-	if first.Status != BufferWriteSucceeded || !first.OK() {
-		t.Fatalf("first write returned %+v", first)
+func (h *fuzzBufferHarness) apply(value fuzzBufferValue, raw byte) {
+	switch raw % 8 {
+	case 0, 7: // An open offer is either accepted or explicitly full.
+		h.offer(value)
+	case 1, 4: // Immediate reads preserve the accepted FIFO sequence.
+		h.recordRead(h.buffer.Read())
+	case 2: // A pre-closed write is cancellation, never a drop.
+		h.writeCancelled(value)
+	case 3: // An expired deadline exercises the distinct timeout outcome.
+		h.writeTimedOut(value)
+	case 5: // Keep a cancelled read empty so its outcome is deterministic.
+		h.readCancelled()
+	case 6: // The existing done-channel closure surface must terminate.
+		value, ok := h.closedReadBuffer.ReadBlocking(h.closedDone)
+		if ok || value != (fuzzBufferValue{}) {
+			h.t.Fatalf("closed read returned value=%+v ok=%v", value, ok)
+		}
 	}
+}
 
-	result := make(chan BufferWriteOutcome, 1)
-	go func() {
-		result <- buffer.WriteContext(context.Background(), 99)
-	}()
+func (h *fuzzBufferHarness) recordRead(value fuzzBufferValue, ok bool) {
+	if !ok {
+		return
+	}
+	if h.delivered >= len(h.acceptedValues) {
+		h.t.Fatalf("read value %+v without a preceding accepted value", value)
+	}
+	if value != h.acceptedValues[h.delivered] {
+		h.t.Fatalf("read value %+v at position %d, want %+v", value, h.delivered, h.acceptedValues[h.delivered])
+	}
+	h.delivered++
+}
 
-	var newest BufferWriteOutcome
-	select {
-	case newest = <-result:
-	case <-time.After(time.Second):
-		t.Fatal("full-buffer write blocked")
+func (h *fuzzBufferHarness) offer(value fuzzBufferValue) {
+	h.offered++
+	outcome := h.buffer.WriteContext(context.Background(), value)
+	switch outcome.Status {
+	case BufferWriteSucceeded:
+		if !outcome.OK() || outcome.Err != nil {
+			h.t.Fatalf("successful write returned %+v", outcome)
+		}
+		h.accepted++
+		h.acceptedValues = append(h.acceptedValues, value)
+	case BufferWriteBufferFull:
+		if outcome.OK() || outcome.Err != nil {
+			h.t.Fatalf("full write returned %+v", outcome)
+		}
+		h.dropped++
+	case BufferWriteCancelled, BufferWriteTimedOut, BufferWriteStopped:
+		fallthrough
+	default:
+		h.t.Fatalf("open write returned unexpected status %q", outcome.Status)
 	}
-	if newest.Status != BufferWriteBufferFull || newest.OK() || newest.Err != nil {
-		t.Fatalf("newest write returned %+v, want buffer_full", newest)
-	}
-	if got := dropCount.Load(); got != 1 {
-		t.Fatalf("drop callback count=%d, want 1", got)
-	}
-	if buffer.Len() != 1 || !buffer.HasData() {
-		t.Fatalf("full buffer state len=%d has_data=%v", buffer.Len(), buffer.HasData())
-	}
+}
 
-	retained, ok := buffer.Read()
-	if !ok || retained != 41 {
-		t.Fatalf("retained value=%d ok=%v, want 41", retained, ok)
-	}
-	if _, ok := buffer.Read(); ok {
-		t.Fatal("newest rejected value was delivered")
-	}
-
+func (h *fuzzBufferHarness) writeCancelled(value fuzzBufferValue) {
+	h.expectedCancelled++
+	beforeDrops := h.dropCount
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	cancelled := buffer.WriteContext(ctx, 123)
-	if cancelled.Status != BufferWriteCancelled || !errors.Is(cancelled.Err, context.Canceled) {
-		t.Fatalf("cancelled write returned %+v", cancelled)
+	outcome := h.buffer.WriteContext(ctx, value)
+	h.cancelled++
+	if outcome.Status != BufferWriteCancelled || !errors.Is(outcome.Err, context.Canceled) {
+		h.t.Fatalf("cancelled write returned %+v", outcome)
 	}
-	if got := dropCount.Load(); got != 1 {
-		t.Fatalf("cancelled write changed drop callback count to %d", got)
+	if h.dropCount != beforeDrops {
+		h.t.Fatalf("cancelled write changed drop count from %d to %d", beforeDrops, h.dropCount)
+	}
+}
+
+func (h *fuzzBufferHarness) writeTimedOut(value fuzzBufferValue) {
+	h.expectedTimedOut++
+	beforeDrops := h.dropCount
+	ctx, cancel := context.WithDeadline(context.Background(), time.Unix(0, 0))
+	outcome := h.buffer.WriteContext(ctx, value)
+	cancel()
+	h.timedOut++
+	if outcome.Status != BufferWriteTimedOut || !errors.Is(outcome.Err, context.DeadlineExceeded) {
+		h.t.Fatalf("timed-out write returned %+v", outcome)
+	}
+	if h.dropCount != beforeDrops {
+		h.t.Fatalf("timed-out write changed drop count from %d to %d", beforeDrops, h.dropCount)
+	}
+}
+
+func (h *fuzzBufferHarness) readCancelled() {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	value, err := h.readCancellationBuffer.ReadContext(ctx)
+	if !errors.Is(err, context.Canceled) || value != (fuzzBufferValue{}) {
+		h.t.Fatalf("cancelled read returned value=%+v err=%v", value, err)
+	}
+}
+
+func (h *fuzzBufferHarness) checkInvariants() {
+	if length := h.buffer.Len(); length > h.buffer.Cap() {
+		h.t.Fatalf("buffer length %d exceeded capacity %d", length, h.buffer.Cap())
+	}
+	if h.buffer.HasData() != (h.buffer.Len() > 0) {
+		h.t.Fatalf("HasData disagreed with Len: has_data=%v len=%d", h.buffer.HasData(), h.buffer.Len())
+	}
+}
+
+func (h *fuzzBufferHarness) drain() {
+	for {
+		value, ok := h.buffer.Read()
+		if !ok {
+			return
+		}
+		h.recordRead(value, true)
+	}
+}
+
+func (h *fuzzBufferHarness) verifyConservation() {
+	if h.accepted != h.delivered {
+		h.t.Fatalf("accepted=%d delivered=%d", h.accepted, h.delivered)
+	}
+	if h.dropped+h.delivered != h.offered {
+		h.t.Fatalf("dropped=%d delivered=%d offered=%d", h.dropped, h.delivered, h.offered)
+	}
+	if h.dropCount != h.dropped {
+		h.t.Fatalf("drop callback count=%d, full outcomes=%d", h.dropCount, h.dropped)
+	}
+	if h.buffer.Len() != 0 || h.buffer.HasData() {
+		h.t.Fatalf("buffer was not drained: len=%d has_data=%v", h.buffer.Len(), h.buffer.HasData())
+	}
+	if h.cancelled != h.expectedCancelled || h.timedOut != h.expectedTimedOut {
+		h.t.Fatalf("cancelled=%d (want %d), timed_out=%d (want %d)", h.cancelled, h.expectedCancelled, h.timedOut, h.expectedTimedOut)
 	}
 }
 
@@ -257,58 +251,6 @@ func TestTypedBufferReadBlockingContext(t *testing.T) {
 	}
 }
 
-type cancelOnSecondDoneContext struct {
-	done  chan struct{}
-	calls atomic.Int32
-}
-
-func (c *cancelOnSecondDoneContext) Deadline() (time.Time, bool) {
-	return time.Time{}, false
-}
-
-func (c *cancelOnSecondDoneContext) Done() <-chan struct{} {
-	if c.calls.Add(1) == 2 {
-		close(c.done)
-	}
-	return c.done
-}
-
-func (c *cancelOnSecondDoneContext) Err() error {
-	select {
-	case <-c.done:
-		return context.Canceled
-	default:
-		return nil
-	}
-}
-
-func (c *cancelOnSecondDoneContext) Value(any) any {
-	return nil
-}
-
-func TestTypedBufferWriteContextCancellationAfterInitialCheck(t *testing.T) {
-	buffer := NewTypedBuffer[int](1)
-	if outcome := buffer.WriteContext(context.Background(), 41); outcome.Status != BufferWriteSucceeded {
-		t.Fatalf("setup write returned %+v", outcome)
-	}
-	var dropCount atomic.Int64
-	buffer.SetOnDrop(func(_ int) {
-		dropCount.Add(1)
-	})
-
-	ctx := &cancelOnSecondDoneContext{done: make(chan struct{})}
-	outcome := buffer.WriteContext(ctx, 99)
-	if outcome.Status != BufferWriteCancelled || !errors.Is(outcome.Err, context.Canceled) {
-		t.Fatalf("write returned %+v, want cancellation after the initial context check", outcome)
-	}
-	if got := dropCount.Load(); got != 0 {
-		t.Fatalf("cancellation invoked %d drop callbacks", got)
-	}
-	if value, ok := buffer.Read(); !ok || value != 41 {
-		t.Fatalf("cancellation disturbed retained value=%d ok=%v", value, ok)
-	}
-}
-
 type concurrentBufferValue struct {
 	Producer int
 	Sequence int
@@ -323,105 +265,142 @@ func TestTypedBufferConcurrentProducersConsumers(t *testing.T) {
 
 func runTypedBufferConcurrentIteration(t *testing.T, iteration int) {
 	t.Helper()
-	buffer := NewTypedBuffer[concurrentBufferValue](concurrentBufferCapacity)
-	var dropCount atomic.Int64
-	buffer.SetOnDrop(func(_ concurrentBufferValue) {
-		dropCount.Add(1)
-	})
-
-	statuses := make([][]BufferWriteStatus, concurrentProducerCount)
-	for producer := range statuses {
-		statuses[producer] = make([]BufferWriteStatus, concurrentValuesPerProducer)
-	}
-	var maxLen atomic.Int64
+	run := newConcurrentBufferRun(iteration)
 
 	var producerWG sync.WaitGroup
 	producerWG.Add(concurrentProducerCount)
 	for producer := 0; producer < concurrentProducerCount; producer++ {
 		go func(producer int) {
 			defer producerWG.Done()
-			rng := rand.New(rand.NewSource(int64(0x51f15e + iteration*97 + producer*13)))
-			for sequence := 0; sequence < concurrentValuesPerProducer; sequence++ {
-				if rng.Intn(3) == 0 {
-					runtime.Gosched()
-				}
-				value := concurrentBufferValueFor(iteration, producer, sequence)
-				statuses[producer][sequence] = buffer.WriteContext(context.Background(), value).Status
-				recordBufferMaxLen(buffer, &maxLen)
-				if rng.Intn(4) == 0 {
-					runtime.Gosched()
-				}
-			}
+			run.produce(producer)
 		}(producer)
 	}
 
-	producersDone := make(chan struct{})
-	var deliveryMu sync.Mutex
-	delivered := make([]concurrentBufferValue, 0, concurrentProducerCount*concurrentValuesPerProducer)
 	var consumerWG sync.WaitGroup
 	consumerWG.Add(concurrentConsumerCount)
 	for consumer := 0; consumer < concurrentConsumerCount; consumer++ {
 		go func(consumer int) {
 			defer consumerWG.Done()
-			rng := rand.New(rand.NewSource(int64(0x9e3779b9 + iteration*101 + consumer*17)))
-			for {
-				if rng.Intn(3) == 0 {
-					runtime.Gosched()
-				}
-
-				// Serialize the receive and append so the ledger observes the
-				// channel's actual receive order rather than goroutine handoff order.
-				deliveryMu.Lock()
-				value, ok := buffer.ReadBlocking(producersDone)
-				if ok {
-					delivered = append(delivered, value)
-					recordBufferMaxLen(buffer, &maxLen)
-					deliveryMu.Unlock()
-					if rng.Intn(4) == 0 {
-						runtime.Gosched()
-					}
-					continue
-				}
-
-				// Once all producers are done, ReadBlocking may select the done
-				// signal while values remain. Drain those values before returning.
-				for {
-					value, ok = buffer.Read()
-					if !ok {
-						break
-					}
-					delivered = append(delivered, value)
-					recordBufferMaxLen(buffer, &maxLen)
-				}
-				deliveryMu.Unlock()
-				return
-			}
+			run.consume(consumer)
 		}(consumer)
 	}
 
 	producerWG.Wait()
-	close(producersDone)
+	close(run.producersDone)
 	consumerWG.Wait()
 
-	if maxLen := maxLen.Load(); maxLen > int64(buffer.Cap()) {
-		t.Fatalf("observed buffer length %d exceeded capacity %d", maxLen, buffer.Cap())
+	if maxLen := run.maxLen.Load(); maxLen > int64(run.buffer.Cap()) {
+		t.Fatalf("observed buffer length %d exceeded capacity %d", maxLen, run.buffer.Cap())
 	}
-	if buffer.Len() != 0 || buffer.HasData() {
-		t.Fatalf("concurrent consumers left values: len=%d has_data=%v", buffer.Len(), buffer.HasData())
+	if run.buffer.Len() != 0 || run.buffer.HasData() {
+		t.Fatalf("concurrent consumers left values: len=%d has_data=%v", run.buffer.Len(), run.buffer.HasData())
 	}
+	expected, accepted := run.tallyStatuses(t)
+	run.verifyDeliveries(t, expected, accepted)
+}
 
+// concurrentBufferRun is one iteration of the concurrent producer/consumer
+// property: per-producer write outcomes and the consumers' receive ledger.
+type concurrentBufferRun struct {
+	iteration     int
+	buffer        *TypedBuffer[concurrentBufferValue]
+	dropCount     atomic.Int64
+	maxLen        atomic.Int64
+	statuses      [][]BufferWriteStatus
+	producersDone chan struct{}
+	deliveryMu    sync.Mutex
+	delivered     []concurrentBufferValue
+}
+
+func newConcurrentBufferRun(iteration int) *concurrentBufferRun {
+	run := &concurrentBufferRun{
+		iteration:     iteration,
+		buffer:        NewTypedBuffer[concurrentBufferValue](concurrentBufferCapacity),
+		statuses:      make([][]BufferWriteStatus, concurrentProducerCount),
+		producersDone: make(chan struct{}),
+		delivered:     make([]concurrentBufferValue, 0, concurrentProducerCount*concurrentValuesPerProducer),
+	}
+	run.buffer.SetOnDrop(func(_ concurrentBufferValue) {
+		run.dropCount.Add(1)
+	})
+	for producer := range run.statuses {
+		run.statuses[producer] = make([]BufferWriteStatus, concurrentValuesPerProducer)
+	}
+	return run
+}
+
+func (run *concurrentBufferRun) produce(producer int) {
+	rng := rand.New(rand.NewSource(int64(0x51f15e + run.iteration*97 + producer*13)))
+	for sequence := 0; sequence < concurrentValuesPerProducer; sequence++ {
+		if rng.Intn(3) == 0 {
+			runtime.Gosched()
+		}
+		value := concurrentBufferValueFor(run.iteration, producer, sequence)
+		run.statuses[producer][sequence] = run.buffer.WriteContext(context.Background(), value).Status
+		recordBufferMaxLen(run.buffer, &run.maxLen)
+		if rng.Intn(4) == 0 {
+			runtime.Gosched()
+		}
+	}
+}
+
+func (run *concurrentBufferRun) consume(consumer int) {
+	rng := rand.New(rand.NewSource(int64(0x9e3779b9 + run.iteration*101 + consumer*17)))
+	for {
+		if rng.Intn(3) == 0 {
+			runtime.Gosched()
+		}
+
+		// Serialize the receive and append so the ledger observes the
+		// channel's actual receive order rather than goroutine handoff order.
+		run.deliveryMu.Lock()
+		value, ok := run.buffer.ReadBlocking(run.producersDone)
+		if !ok {
+			// Once all producers are done, ReadBlocking may select the done
+			// signal while values remain. Drain those values before returning.
+			run.drainLocked()
+			run.deliveryMu.Unlock()
+			return
+		}
+		run.delivered = append(run.delivered, value)
+		recordBufferMaxLen(run.buffer, &run.maxLen)
+		run.deliveryMu.Unlock()
+		if rng.Intn(4) == 0 {
+			runtime.Gosched()
+		}
+	}
+}
+
+// drainLocked must be called with deliveryMu held.
+func (run *concurrentBufferRun) drainLocked() {
+	for {
+		value, ok := run.buffer.Read()
+		if !ok {
+			return
+		}
+		run.delivered = append(run.delivered, value)
+		recordBufferMaxLen(run.buffer, &run.maxLen)
+	}
+}
+
+// tallyStatuses checks write-outcome conservation and returns the set of
+// accepted values with its size.
+func (run *concurrentBufferRun) tallyStatuses(t *testing.T) (map[concurrentBufferValue]struct{}, int) {
+	t.Helper()
 	expected := make(map[concurrentBufferValue]struct{}, concurrentProducerCount*concurrentValuesPerProducer)
 	offered := concurrentProducerCount * concurrentValuesPerProducer
 	accepted := 0
 	dropped := 0
-	for producer, producerStatuses := range statuses {
+	for producer, producerStatuses := range run.statuses {
 		for sequence, status := range producerStatuses {
 			switch status {
 			case BufferWriteSucceeded:
 				accepted++
-				expected[concurrentBufferValueFor(iteration, producer, sequence)] = struct{}{}
+				expected[concurrentBufferValueFor(run.iteration, producer, sequence)] = struct{}{}
 			case BufferWriteBufferFull:
 				dropped++
+			case BufferWriteCancelled, BufferWriteTimedOut, BufferWriteStopped:
+				fallthrough
 			default:
 				t.Fatalf("producer %d sequence %d returned unexpected status %q", producer, sequence, status)
 			}
@@ -430,19 +409,25 @@ func runTypedBufferConcurrentIteration(t *testing.T, iteration int) {
 	if accepted+dropped != offered {
 		t.Fatalf("accepted=%d dropped=%d offered=%d", accepted, dropped, offered)
 	}
-	if got := int(dropCount.Load()); got != dropped {
+	if got := int(run.dropCount.Load()); got != dropped {
 		t.Fatalf("drop callback count=%d, full outcomes=%d", got, dropped)
 	}
-	if accepted == 0 || len(delivered) != accepted {
-		t.Fatalf("accepted=%d delivered=%d", accepted, len(delivered))
+	if accepted == 0 || len(run.delivered) != accepted {
+		t.Fatalf("accepted=%d delivered=%d", accepted, len(run.delivered))
 	}
+	return expected, accepted
+}
 
-	seen := make(map[concurrentBufferValue]struct{}, len(delivered))
+// verifyDeliveries checks that every delivered value was accepted exactly
+// once and that each producer's values arrived in sequence order.
+func (run *concurrentBufferRun) verifyDeliveries(t *testing.T, expected map[concurrentBufferValue]struct{}, accepted int) {
+	t.Helper()
+	seen := make(map[concurrentBufferValue]struct{}, len(run.delivered))
 	lastSequence := make([]int, concurrentProducerCount)
 	for producer := range lastSequence {
 		lastSequence[producer] = -1
 	}
-	for index, value := range delivered {
+	for index, value := range run.delivered {
 		if _, ok := expected[value]; !ok {
 			t.Fatalf("delivered unexpected value at index %d: %+v", index, value)
 		}

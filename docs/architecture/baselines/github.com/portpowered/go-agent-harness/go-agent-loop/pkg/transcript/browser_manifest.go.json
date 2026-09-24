@@ -7,28 +7,8 @@
       "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
       "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript",
       "file": "pkg/transcript/browser_manifest.go",
-      "symbol": "RecordingManifest.Validate",
-      "value": 32,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
-      "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript",
-      "file": "pkg/transcript/browser_manifest.go",
       "symbol": "decodeRecordingJSONObject",
       "value": 18,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cyclomatic-complexity",
-      "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
-      "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript",
-      "file": "pkg/transcript/browser_manifest.go",
-      "symbol": "RecordingManifest.Validate",
-      "value": 25,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -47,7 +27,7 @@
       "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
       "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript",
       "file": "pkg/transcript/browser_manifest.go",
-      "value": 784,
+      "value": 770,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },

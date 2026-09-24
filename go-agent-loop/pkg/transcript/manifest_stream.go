@@ -149,7 +149,7 @@ func digestRecordingFile(path string) ([sha256.Size]byte, error) {
 	return digest, nil
 }
 
-func recordingFileContainsCredential(path string, secrets [][]byte) (bool, error) {
+func recordingFileContainsCredential(path string, secrets [][]byte) (found bool, returnErr error) {
 	maxSecret := 0
 	for _, secret := range secrets {
 		if len(secret) > maxSecret {
@@ -163,11 +163,21 @@ func recordingFileContainsCredential(path string, secrets [][]byte) (bool, error
 	if err != nil {
 		return false, err
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil && returnErr == nil {
+			returnErr = closeErr
+		}
+	}()
+	return readerContainsCredential(file, secrets, maxSecret)
+}
+
+// readerContainsCredential scans source in chunks, keeping the last
+// maxSecret-1 bytes so a credential split across reads is still found.
+func readerContainsCredential(source io.Reader, secrets [][]byte, maxSecret int) (bool, error) {
 	buffer := make([]byte, 64*1024)
 	var pending []byte
 	for {
-		n, readErr := file.Read(buffer)
+		n, readErr := source.Read(buffer)
 		if n > 0 {
 			combined := append(pending, buffer[:n]...)
 			if containsCredential(combined, secrets) {
@@ -250,4 +260,57 @@ func digestRedactedArtifact(path string, redactor credentialRedactor) (string, e
 		return "", fmt.Errorf("read artifact source: %w", err)
 	}
 	return hex.EncodeToString(hasher.Sum(nil)), nil
+}
+
+func validateRecordingInputPath(sourcePath, side, destination string, redactor credentialRedactor) error {
+	info, err := os.Stat(sourcePath)
+	if err != nil {
+		return recordingError(ErrInvalidRecording, "inspect "+side+" transcript", destination, err, redactor)
+	}
+	if !info.Mode().IsRegular() {
+		return recordingError(ErrInvalidRecording, "inspect "+side+" transcript", destination, errors.New("source path is not a regular file"), redactor)
+	}
+	return nil
+}
+
+func recordingInputPathPresent(sourcePath string) bool {
+	info, err := os.Stat(sourcePath)
+	return err == nil && info.Size() > 0
+}
+
+func normalizeRecordingInputPaths(paths []string, side, destination string, redactor credentialRedactor) ([]string, error) {
+	if len(paths) == 0 {
+		return nil, nil
+	}
+	normalized := make([]string, 0, len(paths))
+	for index, sourcePath := range paths {
+		if err := validateRecordingInputPath(sourcePath, fmt.Sprintf("%s audio segment %d", side, index), destination, redactor); err != nil {
+			return nil, err
+		}
+		if !recordingInputPathPresent(sourcePath) {
+			return nil, recordingError(ErrInvalidRecording, "validate "+side+" audio", destination, fmt.Errorf("segment %d is empty", index), redactor)
+		}
+		normalized = append(normalized, sourcePath)
+	}
+	return normalized, nil
+}
+
+func validateSegments(segments [][]byte, name, destination string, redactor credentialRedactor) error {
+	if len(segments) == 0 {
+		return nil
+	}
+	for index, segment := range segments {
+		if len(segment) == 0 {
+			return recordingError(ErrInvalidRecording, "validate "+name+" audio", destination, fmt.Errorf("segment %d is empty", index), redactor)
+		}
+	}
+	return nil
+}
+
+func copySegments(segments [][]byte) [][]byte {
+	copyOf := make([][]byte, len(segments))
+	for index, segment := range segments {
+		copyOf[index] = append([]byte(nil), segment...)
+	}
+	return copyOf
 }

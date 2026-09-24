@@ -131,10 +131,14 @@ func execute(cfg config, stdout, stderr io.Writer) error {
 
 	first := runAttempt(cfg, moduleDir, sessionsRunPattern, "", stdout, stderr)
 	if retryTest, ok := eligibleRetryTest(first); ok {
-		fmt.Fprintf(stdout, "concurrent session race gate: attempt 1 failed with the recognized watchdog for %s; starting attempt 2 with only that test\n", retryTest)
+		if _, err := fmt.Fprintf(stdout, "concurrent session race gate: attempt 1 failed with the recognized watchdog for %s; starting attempt 2 with only that test\n", retryTest); err != nil {
+			return fmt.Errorf("report retry start: %w", err)
+		}
 		retry := runAttempt(cfg, moduleDir, exactTestRunPattern(retryTest), retryTest, stdout, stderr)
 		if retry.commandErr == nil && retry.verificationErr == nil {
-			fmt.Fprintf(stdout, "concurrent session race gate: recovered %s; attempt 1 watchdog failure and attempt 2 passed all required checks\n", retryTest)
+			if _, err := fmt.Fprintf(stdout, "concurrent session race gate: recovered %s; attempt 1 watchdog failure and attempt 2 passed all required checks\n", retryTest); err != nil {
+				return fmt.Errorf("report retry recovery: %w", err)
+			}
 			return nil
 		}
 		return retryFailure(retryTest, first, retry)

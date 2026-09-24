@@ -57,83 +57,16 @@ func DiscoverWorkspacePackageDetails(ctx context.Context, goBinary string, modul
 	seenModules := make(map[string]struct{}, len(moduleDirs))
 	for _, rawModuleDir := range moduleDirs {
 		moduleDir := strings.TrimSpace(rawModuleDir)
-		if moduleDir == "" {
-			return nil, fmt.Errorf("%w: workspace module directory is empty", ErrChangedPackageSelection)
-		}
-		absoluteModuleDir, err := filepath.Abs(moduleDir)
+		absoluteModuleDir, err := resolveDetailModuleDirectory(moduleDir, seenModules)
 		if err != nil {
-			return nil, fmt.Errorf("%w: resolve workspace module directory %q: %v", ErrChangedPackageSelection, moduleDir, err)
+			return nil, err
 		}
-		absoluteModuleDir = filepath.Clean(absoluteModuleDir)
-		absoluteModuleDir = canonicalPath(absoluteModuleDir)
-		if _, duplicate := seenModules[absoluteModuleDir]; duplicate {
-			return nil, fmt.Errorf("%w: workspace module directory %q was provided more than once", ErrChangedPackageSelection, moduleDir)
-		}
-		seenModules[absoluteModuleDir] = struct{}{}
-		info, err := os.Stat(absoluteModuleDir)
+		listing, err := listModulePackagesJSON(ctx, goBinary, absoluteModuleDir, moduleDir)
 		if err != nil {
-			return nil, fmt.Errorf("%w: inspect workspace module directory %q: %v", ErrChangedPackageSelection, moduleDir, err)
+			return nil, err
 		}
-		if !info.IsDir() {
-			return nil, fmt.Errorf("%w: workspace module path %q is not a directory", ErrChangedPackageSelection, moduleDir)
-		}
-
-		var stdout, stderr strings.Builder
-		command := exec.CommandContext(ctx, goBinary, "list", "-json", "./...")
-		command.Dir = absoluteModuleDir
-		workspaceFile := nearestWorkspaceFile(absoluteModuleDir)
-		if workspaceFile == "" {
-			workspaceFile = "off"
-		}
-		command.Env = setEnvironment(os.Environ(), "GOWORK", workspaceFile)
-		command.Stdout = &stdout
-		command.Stderr = &stderr
-		if err := command.Run(); err != nil {
-			return nil, externalCommandError(ErrChangedPackageSelection, "go list", err, stdout.String(), stderr.String(), moduleDir)
-		}
-
-		decoder := json.NewDecoder(strings.NewReader(stdout.String()))
-		modulePackages := 0
-		for {
-			var listed struct {
-				ImportPath string
-				Dir        string
-			}
-			err := decoder.Decode(&listed)
-			if errors.Is(err, io.EOF) {
-				break
-			}
-			if err != nil {
-				return nil, fmt.Errorf("%w: decode go list output in %q: %v", ErrChangedPackageSelection, moduleDir, err)
-			}
-			if strings.TrimSpace(listed.ImportPath) == "" || strings.TrimSpace(listed.Dir) == "" {
-				return nil, fmt.Errorf("%w: go list returned a package without import path or directory in %q", ErrChangedPackageSelection, moduleDir)
-			}
-			listedDir := listed.Dir
-			if !filepath.IsAbs(listedDir) {
-				listedDir = filepath.Join(absoluteModuleDir, listedDir)
-			}
-			packageDir, err := filepath.Abs(listedDir)
-			if err != nil {
-				return nil, fmt.Errorf("%w: resolve directory for package %q: %v", ErrChangedPackageSelection, listed.ImportPath, err)
-			}
-			packageDir = filepath.Clean(packageDir)
-			packageDir = canonicalPath(packageDir)
-			if !pathWithin(absoluteModuleDir, packageDir) {
-				return nil, fmt.Errorf("%w: package %q directory %q is outside module %q", ErrChangedPackageSelection, listed.ImportPath, packageDir, moduleDir)
-			}
-			modulePackages++
-			if previous, duplicate := packages[listed.ImportPath]; duplicate {
-				return nil, fmt.Errorf("%w: package %q was listed by both %q and %q", ErrChangedPackageSelection, listed.ImportPath, previous.ModuleDirectory, absoluteModuleDir)
-			}
-			packages[listed.ImportPath] = WorkspacePackage{
-				ImportPath:      listed.ImportPath,
-				Directory:       packageDir,
-				ModuleDirectory: absoluteModuleDir,
-			}
-		}
-		if modulePackages == 0 {
-			return nil, fmt.Errorf("%w: go list in %q returned no packages", ErrChangedPackageSelection, moduleDir)
+		if err := collectListedPackages(listing, absoluteModuleDir, moduleDir, packages); err != nil {
+			return nil, err
 		}
 	}
 
@@ -145,6 +78,108 @@ func DiscoverWorkspacePackageDetails(ctx context.Context, goBinary string, modul
 		return result[i].ImportPath < result[j].ImportPath
 	})
 	return result, nil
+}
+
+// resolveDetailModuleDirectory canonicalizes one workspace module directory
+// and rejects empty, duplicate, missing, or non-directory inputs.
+func resolveDetailModuleDirectory(moduleDir string, seenModules map[string]struct{}) (string, error) {
+	if moduleDir == "" {
+		return "", fmt.Errorf("%w: workspace module directory is empty", ErrChangedPackageSelection)
+	}
+	absoluteModuleDir, err := filepath.Abs(moduleDir)
+	if err != nil {
+		return "", fmt.Errorf("%w: resolve workspace module directory %q: %w", ErrChangedPackageSelection, moduleDir, err)
+	}
+	absoluteModuleDir = canonicalPath(filepath.Clean(absoluteModuleDir))
+	if _, duplicate := seenModules[absoluteModuleDir]; duplicate {
+		return "", fmt.Errorf("%w: workspace module directory %q was provided more than once", ErrChangedPackageSelection, moduleDir)
+	}
+	seenModules[absoluteModuleDir] = struct{}{}
+	info, err := os.Stat(absoluteModuleDir)
+	if err != nil {
+		return "", fmt.Errorf("%w: inspect workspace module directory %q: %w", ErrChangedPackageSelection, moduleDir, err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("%w: workspace module path %q is not a directory", ErrChangedPackageSelection, moduleDir)
+	}
+	return absoluteModuleDir, nil
+}
+
+// listModulePackagesJSON runs go list -json for one module, honoring the
+// nearest go.work file or module mode when none contains the module.
+func listModulePackagesJSON(ctx context.Context, goBinary, absoluteModuleDir, moduleDir string) (string, error) {
+	var stdout, stderr strings.Builder
+	command := exec.CommandContext(ctx, goBinary, "list", "-json", "./...")
+	command.Dir = absoluteModuleDir
+	workspaceFile := nearestWorkspaceFile(absoluteModuleDir)
+	if workspaceFile == "" {
+		workspaceFile = "off"
+	}
+	command.Env = setEnvironment(os.Environ(), "GOWORK", workspaceFile)
+	command.Stdout = &stdout
+	command.Stderr = &stderr
+	if err := command.Run(); err != nil {
+		return "", externalCommandError(ErrChangedPackageSelection, "go list", err, stdout.String(), stderr.String(), moduleDir)
+	}
+	return stdout.String(), nil
+}
+
+type listedPackage struct {
+	ImportPath string
+	Dir        string
+}
+
+// collectListedPackages decodes go list -json output for one module into
+// packages, rejecting incomplete, escaping, and duplicate package entries.
+func collectListedPackages(listing, absoluteModuleDir, moduleDir string, packages map[string]WorkspacePackage) error {
+	decoder := json.NewDecoder(strings.NewReader(listing))
+	modulePackages := 0
+	for {
+		var listed listedPackage
+		err := decoder.Decode(&listed)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("%w: decode go list output in %q: %w", ErrChangedPackageSelection, moduleDir, err)
+		}
+		packageDir, err := listedPackageDirectory(listed, absoluteModuleDir, moduleDir)
+		if err != nil {
+			return err
+		}
+		modulePackages++
+		if previous, duplicate := packages[listed.ImportPath]; duplicate {
+			return fmt.Errorf("%w: package %q was listed by both %q and %q", ErrChangedPackageSelection, listed.ImportPath, previous.ModuleDirectory, absoluteModuleDir)
+		}
+		packages[listed.ImportPath] = WorkspacePackage{
+			ImportPath:      listed.ImportPath,
+			Directory:       packageDir,
+			ModuleDirectory: absoluteModuleDir,
+		}
+	}
+	if modulePackages == 0 {
+		return fmt.Errorf("%w: go list in %q returned no packages", ErrChangedPackageSelection, moduleDir)
+	}
+	return nil
+}
+
+func listedPackageDirectory(listed listedPackage, absoluteModuleDir, moduleDir string) (string, error) {
+	if strings.TrimSpace(listed.ImportPath) == "" || strings.TrimSpace(listed.Dir) == "" {
+		return "", fmt.Errorf("%w: go list returned a package without import path or directory in %q", ErrChangedPackageSelection, moduleDir)
+	}
+	listedDir := listed.Dir
+	if !filepath.IsAbs(listedDir) {
+		listedDir = filepath.Join(absoluteModuleDir, listedDir)
+	}
+	packageDir, err := filepath.Abs(listedDir)
+	if err != nil {
+		return "", fmt.Errorf("%w: resolve directory for package %q: %w", ErrChangedPackageSelection, listed.ImportPath, err)
+	}
+	packageDir = canonicalPath(filepath.Clean(packageDir))
+	if !pathWithin(absoluteModuleDir, packageDir) {
+		return "", fmt.Errorf("%w: package %q directory %q is outside module %q", ErrChangedPackageSelection, listed.ImportPath, packageDir, moduleDir)
+	}
+	return packageDir, nil
 }
 
 // SelectChangedPackages resolves Go files changed since base, staged,

@@ -73,62 +73,16 @@ func DiscoverWorkspacePackages(ctx context.Context, goBinary string, moduleDirs 
 	seenModules := make(map[string]struct{}, len(moduleDirs))
 	for _, moduleDir := range moduleDirs {
 		moduleDir = strings.TrimSpace(moduleDir)
-		if moduleDir == "" {
-			return nil, fmt.Errorf("%w: workspace module directory is empty", ErrPackageDiscovery)
-		}
-		absoluteModuleDir, err := filepath.Abs(moduleDir)
+		absoluteModuleDir, err := resolveDiscoveryModuleDirectory(moduleDir, seenModules)
 		if err != nil {
-			return nil, fmt.Errorf("%w: resolve workspace module directory %q: %v", ErrPackageDiscovery, moduleDir, err)
+			return nil, err
 		}
-		absoluteModuleDir = filepath.Clean(absoluteModuleDir)
-		if _, alreadySeen := seenModules[absoluteModuleDir]; alreadySeen {
-			return nil, fmt.Errorf("%w: workspace module directory %q was provided more than once", ErrPackageDiscovery, moduleDir)
-		}
-		seenModules[absoluteModuleDir] = struct{}{}
-
-		info, err := os.Stat(absoluteModuleDir)
+		listing, err := listModuleImportPaths(ctx, goBinary, absoluteModuleDir, moduleDir)
 		if err != nil {
-			return nil, fmt.Errorf("%w: inspect workspace module directory %q: %v", ErrPackageDiscovery, moduleDir, err)
+			return nil, err
 		}
-		if !info.IsDir() {
-			return nil, fmt.Errorf("%w: workspace module path %q is not a directory", ErrPackageDiscovery, moduleDir)
-		}
-
-		var stdout, stderr strings.Builder
-		command := exec.CommandContext(ctx, goBinary, "list", "-f", "{{.ImportPath}}", "./...")
-		command.Dir = absoluteModuleDir
-		workspaceFile := nearestWorkspaceFile(absoluteModuleDir)
-		if workspaceFile == "" {
-			workspaceFile = "off"
-		}
-		command.Env = setEnvironment(os.Environ(), "GOWORK", workspaceFile)
-		command.Stdout = &stdout
-		command.Stderr = &stderr
-		if err := command.Run(); err != nil {
-			detail := strings.TrimSpace(stderr.String())
-			if detail == "" {
-				detail = strings.TrimSpace(stdout.String())
-			}
-			if detail != "" {
-				return nil, fmt.Errorf("%w: go list in %q failed: %v: %s", ErrPackageDiscovery, moduleDir, err, detail)
-			}
-			return nil, fmt.Errorf("%w: go list in %q failed: %v", ErrPackageDiscovery, moduleDir, err)
-		}
-
-		modulePackages := 0
-		for _, rawPath := range strings.Split(stdout.String(), "\n") {
-			packagePath := strings.TrimSpace(rawPath)
-			if packagePath == "" {
-				continue
-			}
-			modulePackages++
-			if previousModule, alreadyDiscovered := packages[packagePath]; alreadyDiscovered {
-				return nil, fmt.Errorf("%w: package %q was listed by both %q and %q", ErrRegistrationDuplicate, packagePath, previousModule, moduleDir)
-			}
-			packages[packagePath] = moduleDir
-		}
-		if modulePackages == 0 {
-			return nil, fmt.Errorf("%w: go list in %q returned no packages", ErrPackageDiscovery, moduleDir)
+		if err := collectImportPaths(listing, moduleDir, packages); err != nil {
+			return nil, err
 		}
 	}
 
@@ -138,6 +92,79 @@ func DiscoverWorkspacePackages(ctx context.Context, goBinary string, moduleDirs 
 	}
 	sort.Strings(paths)
 	return paths, nil
+}
+
+// resolveDiscoveryModuleDirectory cleans one workspace module directory and
+// rejects empty, duplicate, missing, or non-directory inputs.
+func resolveDiscoveryModuleDirectory(moduleDir string, seenModules map[string]struct{}) (string, error) {
+	if moduleDir == "" {
+		return "", fmt.Errorf("%w: workspace module directory is empty", ErrPackageDiscovery)
+	}
+	absoluteModuleDir, err := filepath.Abs(moduleDir)
+	if err != nil {
+		return "", fmt.Errorf("%w: resolve workspace module directory %q: %w", ErrPackageDiscovery, moduleDir, err)
+	}
+	absoluteModuleDir = filepath.Clean(absoluteModuleDir)
+	if _, alreadySeen := seenModules[absoluteModuleDir]; alreadySeen {
+		return "", fmt.Errorf("%w: workspace module directory %q was provided more than once", ErrPackageDiscovery, moduleDir)
+	}
+	seenModules[absoluteModuleDir] = struct{}{}
+
+	info, err := os.Stat(absoluteModuleDir)
+	if err != nil {
+		return "", fmt.Errorf("%w: inspect workspace module directory %q: %w", ErrPackageDiscovery, moduleDir, err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("%w: workspace module path %q is not a directory", ErrPackageDiscovery, moduleDir)
+	}
+	return absoluteModuleDir, nil
+}
+
+// listModuleImportPaths runs go list for one module, honoring the nearest
+// go.work file or module mode when none contains the module.
+func listModuleImportPaths(ctx context.Context, goBinary, absoluteModuleDir, moduleDir string) (string, error) {
+	var stdout, stderr strings.Builder
+	command := exec.CommandContext(ctx, goBinary, "list", "-f", "{{.ImportPath}}", "./...")
+	command.Dir = absoluteModuleDir
+	workspaceFile := nearestWorkspaceFile(absoluteModuleDir)
+	if workspaceFile == "" {
+		workspaceFile = "off"
+	}
+	command.Env = setEnvironment(os.Environ(), "GOWORK", workspaceFile)
+	command.Stdout = &stdout
+	command.Stderr = &stderr
+	if err := command.Run(); err != nil {
+		detail := strings.TrimSpace(stderr.String())
+		if detail == "" {
+			detail = strings.TrimSpace(stdout.String())
+		}
+		if detail != "" {
+			return "", fmt.Errorf("%w: go list in %q failed: %w: %s", ErrPackageDiscovery, moduleDir, err, detail)
+		}
+		return "", fmt.Errorf("%w: go list in %q failed: %w", ErrPackageDiscovery, moduleDir, err)
+	}
+	return stdout.String(), nil
+}
+
+// collectImportPaths records one module's listed import paths and rejects
+// packages listed by more than one module.
+func collectImportPaths(listing, moduleDir string, packages map[string]string) error {
+	modulePackages := 0
+	for _, rawPath := range strings.Split(listing, "\n") {
+		packagePath := strings.TrimSpace(rawPath)
+		if packagePath == "" {
+			continue
+		}
+		modulePackages++
+		if previousModule, alreadyDiscovered := packages[packagePath]; alreadyDiscovered {
+			return fmt.Errorf("%w: package %q was listed by both %q and %q", ErrRegistrationDuplicate, packagePath, previousModule, moduleDir)
+		}
+		packages[packagePath] = moduleDir
+	}
+	if modulePackages == 0 {
+		return fmt.Errorf("%w: go list in %q returned no packages", ErrPackageDiscovery, moduleDir)
+	}
+	return nil
 }
 
 // DiscoverPackages is kept as a short alias for callers that only need the
