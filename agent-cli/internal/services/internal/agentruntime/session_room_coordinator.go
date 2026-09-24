@@ -72,19 +72,6 @@ func roomParticipantFailureObserver(coordinator *roomCoordinator, runtime *roomP
 	}
 }
 
-func roomParticipantTerminalFailure(runtime *roomParticipantRuntime, observation sessiontrace.TerminalObservation) error {
-	failureErr := observation.Err
-	if runtime.lifecycle != nil {
-		if transportErr := runtime.lifecycle.transportTerminalErrorSnapshot(); transportErr != nil {
-			failureErr = transportErr
-		}
-	}
-	if failureErr == nil {
-		failureErr = errors.New("session stream error")
-	}
-	return roomParticipantFailure(runtime.plan.manifest.ID, failureErr, secretsForPlan(runtime.plan))
-}
-
 func newRoomCoordinator(cancel context.CancelFunc, maxTurns int, args ...interface{}) *roomCoordinator {
 	var boundGrace time.Duration
 	var onParticipant RoomParticipantObserver

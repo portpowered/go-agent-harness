@@ -325,24 +325,8 @@ func TestRunRoom_DeliversPeerPCMToEachProviderSession(t *testing.T) {
 		outcome <- roomTestRunOutcome{result: result, err: err}
 	}()
 
-	seenOpened := make(map[string]struct{}, len(ids))
-	for len(seenOpened) < len(ids) {
-		select {
-		case id := <-opened:
-			seenOpened[id] = struct{}{}
-		case <-time.After(2 * time.Second):
-			t.Fatalf("session-open observations = %v, want %d participants", seenOpened, len(ids))
-		}
-	}
-	seenStarted := make(map[string]struct{}, len(ids))
-	for len(seenStarted) < len(ids) {
-		select {
-		case id := <-started:
-			seenStarted[id] = struct{}{}
-		case <-time.After(2 * time.Second):
-			t.Fatalf("response-start observations = %v, want %d participants", seenStarted, len(ids))
-		}
-	}
+	waitForRoomParticipants(t, opened, ids, "session-open observations did not include all participants")
+	waitForRoomParticipants(t, started, ids, "response-start observations did not include all participants")
 	close(releaseAudio)
 
 	want := map[string][]byte{
@@ -399,15 +383,7 @@ func TestRunRoom_DeliversPeerPCMToEachProviderSession(t *testing.T) {
 	}
 
 	close(releaseEnd)
-	seenEnded := make(map[string]struct{}, len(ids))
-	for len(seenEnded) < len(ids) {
-		select {
-		case id := <-ended:
-			seenEnded[id] = struct{}{}
-		case <-time.After(2 * time.Second):
-			t.Fatalf("response-end observations = %v, want %d participants", seenEnded, len(ids))
-		}
-	}
+	waitForRoomParticipants(t, ended, ids, "response-end observations did not include all participants")
 	cancel()
 	got := <-outcome
 	if got.err != nil {
@@ -1258,6 +1234,8 @@ func newRoomTestRunOptions(ids []string, inferencers map[string]*roomTestInferen
 			Room:          room.Room{MaxDuration: 5 * time.Second},
 			Participants:  make([]room.Participant, 0, len(ids)),
 		},
+		evidenceService: roomevidencewire.NewService(),
+		latencyService:  roomevidencewire.NewLatencyService(),
 		CredentialLookup: func(name string) (string, bool) {
 			value, ok := credentials[name]
 			return value, ok

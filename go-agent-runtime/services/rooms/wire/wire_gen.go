@@ -7,7 +7,6 @@
 package wire
 
 import (
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle"
@@ -21,10 +20,8 @@ import (
 
 func NewService(dependencies Dependencies) rooms.Service {
 	planner := newPlanner()
-	evidenceService := newEvidenceService()
-	latencyService := newLatencyService()
-	runner := newRunner(dependencies, evidenceService, latencyService)
-	serviceDependencies := newServiceDependencies(planner, runner, dependencies, evidenceService)
+	runner := newRunner(dependencies)
+	serviceDependencies := newServiceDependencies(planner, runner, dependencies)
 	roomsService := service.New(serviceDependencies)
 	return roomsService
 }
@@ -32,25 +29,23 @@ func NewService(dependencies Dependencies) rooms.Service {
 // providers.go:
 
 type Dependencies struct {
-	Live   session.LiveService
-	Media  rooms.MediaFactory
-	Replay roomreplay.Service
-	Clock  clock.Scheduler
+	Live     session.LiveService
+	Media    rooms.MediaFactory
+	Replay   roomreplay.Service
+	Clock    clock.Scheduler
+	Evidence rooms.EvidenceService
+	Latency  rooms.LatencyService
 }
 
 func newPlanner() planning.Planner { return planning.New() }
 
-func newEvidenceService() rooms.EvidenceService { return wire.NewService() }
-
-func newLatencyService() rooms.LatencyService { return wire.NewLatencyService() }
-
-func newRunner(dependencies Dependencies, evidenceService rooms.EvidenceService, latency rooms.LatencyService) lifecycle.Runner {
+func newRunner(dependencies Dependencies) lifecycle.Runner {
 	return lifecycle.New(lifecycle.Dependencies{
 		Live: dependencies.Live, Media: dependencies.Media, Clock: dependencies.Clock,
-		Evidence: evidenceService, Latency: latency,
+		Evidence: dependencies.Evidence, Latency: dependencies.Latency,
 	})
 }
 
-func newServiceDependencies(planner planning.Planner, runner lifecycle.Runner, dependencies Dependencies, evidenceService rooms.EvidenceService) service.Dependencies {
-	return service.Dependencies{Planner: planner, Replay: dependencies.Replay, Runner: runner, Evidence: evidenceService}
+func newServiceDependencies(planner planning.Planner, runner lifecycle.Runner, dependencies Dependencies) service.Dependencies {
+	return service.Dependencies{Planner: planner, Replay: dependencies.Replay, Runner: runner, Evidence: dependencies.Evidence}
 }

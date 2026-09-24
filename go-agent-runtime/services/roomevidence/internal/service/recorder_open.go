@@ -370,7 +370,7 @@ func (r *recorder) observeLatencyEvent(participantID string, event session.LiveE
 		r.latency.ObserveRuntime(participantID, rooms.LatencyObservation{Kind: rooms.LatencyObservationInputCommit, Timestamp: event.Timestamp})
 	case "response_create", "response_created":
 		r.latency.ObserveRuntime(participantID, rooms.LatencyObservation{Kind: rooms.LatencyObservationResponseCreate, ResponseID: event.ResponseID, Timestamp: event.Timestamp})
-	case "audio_delta":
+	case "audio_delta", "audio.delta":
 		if event.ResponseID == "" {
 			return
 		}

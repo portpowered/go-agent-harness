@@ -2,7 +2,9 @@ package service
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	streamanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/stream"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
@@ -22,6 +24,48 @@ func audioSamples(pcm []byte) ([]int16, error) {
 		return nil, nil
 	}
 	return codec.DecodePCM16WithLimit(pcm, len(pcm))
+}
+
+func (p *participantRecorder) ObserveAudio(pcm []byte) error {
+	if p == nil || p.owner == nil {
+		return roomevidence.ErrRecorderClosed
+	}
+	p.owner.operationMu.Lock()
+	defer p.owner.operationMu.Unlock()
+	return p.observeAudio(pcm)
+}
+
+func (p *participantRecorder) observeAudio(pcm []byte) error {
+	if err := p.openCheck(); err != nil {
+		return err
+	}
+	if _, err := audioSamples(pcm); err != nil {
+		return p.MarkError(p.artifacts.WAV, err)
+	}
+	return p.MarkError(p.artifacts.WAV, p.wav.write(pcm))
+}
+
+func (p *participantRecorder) RecordAudioDropped(reason string, bytes int) error {
+	if p == nil || p.owner == nil {
+		return roomevidence.ErrRecorderClosed
+	}
+	p.owner.operationMu.Lock()
+	defer p.owner.operationMu.Unlock()
+	return p.recordAudioDropped(reason, bytes)
+}
+
+func (p *participantRecorder) recordAudioDropped(reason string, bytes int) error {
+	fields := map[string]string{"reason": reason, "bytes": fmt.Sprintf("%d", bytes)}
+	err := p.recordDiagnostic(roomevidence.DiagnosticRecord{Event: "room.audio.input_dropped", Fields: fields})
+	_, timelineErr := p.owner.recordOpenTimeline("audio_input_dropped", p.id, fields)
+	return errors.Join(err, timelineErr)
+}
+
+func (p *participantRecorder) MarkError(artifact string, err error) error {
+	if err != nil && p != nil && p.owner != nil {
+		p.owner.recordError(p.id, artifact, err)
+	}
+	return err
 }
 
 const roomReplayParticipantStreamRoleCount = 3

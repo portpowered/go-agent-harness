@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	roomevidencewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle"
@@ -20,6 +19,23 @@ type replayServiceStub struct {
 	plan        roomreplay.RoomReplayPlan
 	loadErr     error
 	validateErr error
+}
+
+type evidenceServiceStub struct {
+	validationErr error
+}
+
+func (evidenceServiceStub) Open(rooms.EvidenceRecordingRequest) (rooms.EvidenceRecorder, error) {
+	return nil, nil
+}
+
+func (s evidenceServiceStub) ValidateEvidenceOutput(string) error { return s.validationErr }
+
+func (evidenceServiceStub) CreateFreshRunDirectory(configDir string) (string, error) {
+	if err := os.MkdirAll(configDir, 0o700); err != nil {
+		return "", err
+	}
+	return os.MkdirTemp(configDir, "room-")
 }
 
 func (s replayServiceStub) Load(string) (roomreplay.RoomReplayPlan, error) {
@@ -50,7 +66,7 @@ func TestServiceExposesReplayAndEvidenceBoundaries(t *testing.T) {
 	svc := New(Dependencies{
 		Planner: planning.New(), Replay: replay,
 		Runner:   lifecycle.New(lifecycle.Dependencies{}),
-		Evidence: roomevidencewire.NewService(),
+		Evidence: evidenceServiceStub{},
 	})
 	if svc == nil {
 		t.Fatal("New() returned nil")
@@ -116,7 +132,7 @@ func TestPublicRunRejectsNonEmptyReplayOutputBeforeParticipantEffects(t *testing
 	service := New(Dependencies{
 		Planner: planning.New(), Replay: replay,
 		Runner:   lifecycle.New(lifecycle.Dependencies{Clock: platformclock.Real{}}),
-		Evidence: roomevidencewire.NewService(),
+		Evidence: evidenceServiceStub{validationErr: errors.New("room evidence output must be empty")},
 	})
 	var public rooms.Service = service
 

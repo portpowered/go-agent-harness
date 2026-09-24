@@ -93,25 +93,6 @@ func (p *participantRecorder) recordDelta(message messages.StreamMessage, at tim
 	return errors.Join(deltaErr, eventErr)
 }
 
-func (p *participantRecorder) ObserveAudio(pcm []byte) error {
-	if p == nil || p.owner == nil {
-		return roomevidence.ErrRecorderClosed
-	}
-	p.owner.operationMu.Lock()
-	defer p.owner.operationMu.Unlock()
-	return p.observeAudio(pcm)
-}
-
-func (p *participantRecorder) observeAudio(pcm []byte) error {
-	if err := p.openCheck(); err != nil {
-		return err
-	}
-	if _, err := audioSamples(pcm); err != nil {
-		return p.MarkError(p.artifacts.WAV, err)
-	}
-	return p.MarkError(p.artifacts.WAV, p.wav.write(pcm))
-}
-
 func (p *participantRecorder) ObserveSentAudio(pcm []byte) error {
 	if p == nil || p.owner == nil {
 		return roomevidence.ErrRecorderClosed
@@ -198,29 +179,6 @@ func (p *participantRecorder) observeReceivedAudio(pcm []byte) error {
 		return errors.Join(writeErr, timelineErr)
 	}
 	return writeErr
-}
-
-func (p *participantRecorder) RecordAudioDropped(reason string, bytes int) error {
-	if p == nil || p.owner == nil {
-		return roomevidence.ErrRecorderClosed
-	}
-	p.owner.operationMu.Lock()
-	defer p.owner.operationMu.Unlock()
-	return p.recordAudioDropped(reason, bytes)
-}
-
-func (p *participantRecorder) recordAudioDropped(reason string, bytes int) error {
-	fields := map[string]string{"reason": reason, "bytes": fmt.Sprintf("%d", bytes)}
-	err := p.recordDiagnostic(roomevidence.DiagnosticRecord{Event: "room.audio.input_dropped", Fields: fields})
-	_, timelineErr := p.owner.recordOpenTimeline("audio_input_dropped", p.id, fields)
-	return errors.Join(err, timelineErr)
-}
-
-func (p *participantRecorder) MarkError(artifact string, err error) error {
-	if err != nil && p != nil && p.owner != nil {
-		p.owner.recordError(p.id, artifact, err)
-	}
-	return err
 }
 
 func (p *participantRecorder) openCheck() error {

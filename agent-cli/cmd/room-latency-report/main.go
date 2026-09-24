@@ -9,12 +9,12 @@ import (
 	"os"
 	"strings"
 
+	servicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
 )
 
 func main() {
-	if err := run(os.Args[1:], os.Stdout, os.Stderr, wire.NewLatencyService()); err != nil {
+	if err := run(os.Args[1:], os.Stdout, os.Stderr, servicewire.NewRoomLatencyService()); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

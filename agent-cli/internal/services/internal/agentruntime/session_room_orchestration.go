@@ -7,7 +7,6 @@ import (
 	"io"
 	"maps"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -15,17 +14,10 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
-	roomevidencewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
-
-// RunRoom runs a manifest-defined room and discards the structured result.
-func RunRoom(ctx context.Context, out io.Writer, opts RoomRunOptions) error {
-	_, err := RunRoomWithResult(ctx, out, opts)
-	return err
-}
 
 // RunRoomWithResult validates all participant configuration, constructs all
 // session inferencers, establishes the local mesh, and then runs one persistent
@@ -56,52 +48,22 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 	}
 
 	var evidence roomevidence.Recorder
-	var recordingService = roomevidencewire.NewService()
-	var latencyService = roomevidencewire.NewLatencyService()
 	var evidenceSecrets []string
 	startedAt := roomClock.Now().UTC()
-	if strings.TrimSpace(opts.OutputDir) != "" {
-		outputDir, outputErr := recordingService.PrepareOutput(opts.OutputDir)
-		if outputErr != nil {
-			result := roomFailureResult(outputErr, nil)
-			return result, outputErr
-		}
-		opts.OutputDir = outputDir
-		if !replayMode {
-			evidenceSecrets = roomCredentialSecrets(opts.Manifest, validation)
-		}
-		format := roomFormatForOptions(opts)
-		evidence, err = recordingService.Open(roomevidence.RecordingRequest{
-			Destination: outputDir, Manifest: opts.Manifest, AudioFormat: roomevidence.AudioFormat{
-				SampleRate: format.SampleRate, Channels: format.Channels, FrameDuration: format.FrameDuration,
-			},
-			Secrets: evidenceSecrets, StartedAt: startedAt, Clock: roomClock, Latency: latencyService,
-		})
-		if err != nil {
-			result := roomFailureResult(err, evidenceSecrets)
-			return result, err
-		}
-		if opts.onRoomEvidenceReady != nil {
-			opts.onRoomEvidenceReady(evidence)
-		}
-	}
-	finalizeEvidence := func(result RoomResult, runErr error) (RoomResult, error) {
-		if evidence != nil {
-			finalized, _ := evidence.Finalize(roomevidence.Finalization{Room: result, Err: runErr, EndedAt: roomClock.Now().UTC()})
-			result = finalized.Room
-		}
-		return result, runErr
+	opts, evidence, evidenceSecrets, err = prepareRoomEvidence(opts, validation, replayMode, roomClock, startedAt)
+	if err != nil {
+		return roomFailureResult(err, evidenceSecrets), err
 	}
 
 	plans, secrets, err := buildRoomParticipantPlansWithContext(ctx, opts, validation, evidence)
 	if err != nil {
 		result := roomFailureResult(err, secrets)
-		return finalizeEvidence(result, err)
+		return finalizeRoomEvidence(evidence, roomClock, result, err)
 	}
 	replaySchedule, err := buildRoomReplaySchedule(ctx, replayMode, opts, plans)
 	if err != nil {
 		result := roomFailureResult(err, secrets)
-		return finalizeEvidence(result, err)
+		return finalizeRoomEvidence(evidence, roomClock, result, err)
 	}
 
 	// Keep caller cancellation out of participant contexts until the coordinator
@@ -131,7 +93,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 			safeErr := roomParticipantFailure(plan.manifest.ID, err, secrets)
 			safeErr = errors.Join(safeErr, closeMeshNow(), closeRoomParticipantPlanCapabilities(plans))
 			result := roomFailureResult(safeErr, secrets)
-			return finalizeEvidence(result, safeErr)
+			return finalizeRoomEvidence(evidence, roomClock, result, safeErr)
 		}
 		if evidence != nil {
 			_ = evidence.RecordTimeline("participant_joined", plan.manifest.ID, nil)
@@ -176,7 +138,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 			participantCancel()
 			roomErr := errors.Join(coordinator.roomError(), cleanupSetup())
 			result := roomFailureResult(roomErr, secrets)
-			return finalizeEvidence(result, roomErr)
+			return finalizeRoomEvidence(evidence, roomClock, result, roomErr)
 		}
 		runtime := newRoomParticipantRuntime(plan, participantCtx, participantCancel, admissionCtx, admissionCancel, mixer, replaySchedule, opts, evidence, coordinator)
 		plan.participant = runtime
@@ -285,7 +247,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 	if roomErr != nil {
 		result.Error = sanitizeRoomError(roomErr, secrets)
 	}
-	result, roomErr = finalizeEvidence(result, roomErr)
+	result, roomErr = finalizeRoomEvidence(evidence, roomClock, result, roomErr)
 	result, roomErr = notifyRoomTerminated(opts.OnRoomTerminated, result, roomErr, secrets)
 	if _, writeErr := fmt.Fprintf(out, "room stopped: reason=%s participants=%d active=%d\n", result.Reason, len(result.Participants), len(result.ActiveParticipants)); writeErr != nil {
 		roomErr = errors.Join(roomErr, fmt.Errorf("write room result: %w", writeErr))

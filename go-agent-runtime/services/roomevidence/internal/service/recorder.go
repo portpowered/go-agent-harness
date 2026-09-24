@@ -273,7 +273,7 @@ func (r *recorder) RecordSource(participantID string, frame audio.PCMFrame) {
 	if participant == nil {
 		return
 	}
-	if err := participant.observeSentAudio(codec.EncodePCM16(append([]int16(nil), frame.Samples...))); err != nil {
+	if err := participant.observeSentStream(codec.EncodePCM16(append([]int16(nil), frame.Samples...))); err != nil {
 		r.recordError(participantID, participant.artifacts.SentPCM, err)
 	}
 }

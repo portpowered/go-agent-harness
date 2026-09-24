@@ -184,6 +184,10 @@ type RoomRunOptions struct {
 	// the service's observational-only mode for callers that do not need
 	// artifacts; the room CLI supplies a concrete, empty directory.
 	OutputDir string
+	// Evidence services are supplied by the application composition root. The
+	// room runner consumes only the service-owned public contract.
+	evidenceService roomevidence.Service
+	latencyService  roomevidence.LatencyService
 	// DeviceService admits and owns human participant capture and playback
 	// workers for the duration of the room.
 	DeviceService runtimeDevices.Service

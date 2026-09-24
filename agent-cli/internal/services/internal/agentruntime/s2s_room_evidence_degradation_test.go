@@ -46,15 +46,7 @@ func TestRunRoom_EvidenceFailureDegradesWithoutStoppingParticipants(t *testing.T
 		outcome <- roomTestRunOutcome{result: result, err: err}
 	}()
 
-	seenOpened := make(map[string]bool, len(ids))
-	for len(seenOpened) != len(ids) {
-		select {
-		case participantID := <-opened:
-			seenOpened[participantID] = true
-		case <-time.After(2 * time.Second):
-			t.Fatal("both participants did not become live")
-		}
-	}
+	waitForRoomParticipants(t, opened, ids, "both participants did not become live")
 	aSession := inferencers["a"].sessionsSnapshot()[0]
 	bSession := inferencers["b"].sessionsSnapshot()[0]
 	textDelta := messages.StreamMessage{
@@ -64,29 +56,51 @@ func TestRunRoom_EvidenceFailureDegradesWithoutStoppingParticipants(t *testing.T
 	}
 	aSession.publish(textDelta)
 	bSession.publish(textDelta)
-	seenText := make(map[string]bool, len(ids))
-	for len(seenText) != len(ids) {
-		select {
-		case participantID := <-streamedText:
-			seenText[participantID] = true
-		case <-time.After(2 * time.Second):
-			t.Fatal("evidence failure interrupted participant stream processing")
-		}
-	}
-	if aSession.doneSnapshot() || bSession.doneSnapshot() {
-		t.Fatalf("participant sessions stopped after evidence failure: a_done=%v b_done=%v", aSession.doneSnapshot(), bSession.doneSnapshot())
-	}
-	if aSession.closeCallsSnapshot() != 0 || bSession.closeCallsSnapshot() != 0 {
-		t.Fatalf("participant sessions were cleaned up before room stop: a_close=%d b_close=%d", aSession.closeCallsSnapshot(), bSession.closeCallsSnapshot())
-	}
+	waitForRoomParticipants(t, streamedText, ids, "evidence failure interrupted participant stream processing")
+	assertRoomParticipantsStillLive(t, aSession, bSession)
 
 	cancel()
-	var got roomTestRunOutcome
+	got := waitForRoomOutcome(t, outcome)
+	assertDegradedRoomResult(t, got)
+	assertDegradedRoomManifest(t, filepath.Join(outputDir, RoomEvidenceManifestPath))
+}
+
+func waitForRoomParticipants(t *testing.T, events <-chan string, ids []string, failure string) {
+	t.Helper()
+	seen := make(map[string]bool, len(ids))
+	for len(seen) < len(ids) {
+		select {
+		case id := <-events:
+			seen[id] = true
+		case <-time.After(2 * time.Second):
+			t.Fatalf("%s; observed participants: %v", failure, seen)
+		}
+	}
+}
+
+func assertRoomParticipantsStillLive(t *testing.T, a, b *roomTestSession) {
+	t.Helper()
+	if a.doneSnapshot() || b.doneSnapshot() {
+		t.Fatalf("participant sessions stopped after evidence failure: a_done=%v b_done=%v", a.doneSnapshot(), b.doneSnapshot())
+	}
+	if a.closeCallsSnapshot() != 0 || b.closeCallsSnapshot() != 0 {
+		t.Fatalf("participant sessions were cleaned up before room stop: a_close=%d b_close=%d", a.closeCallsSnapshot(), b.closeCallsSnapshot())
+	}
+}
+
+func waitForRoomOutcome(t *testing.T, outcome <-chan roomTestRunOutcome) roomTestRunOutcome {
+	t.Helper()
 	select {
-	case got = <-outcome:
+	case got := <-outcome:
+		return got
 	case <-time.After(3 * time.Second):
 		t.Fatal("room did not finish after explicit stop")
+		return roomTestRunOutcome{}
 	}
+}
+
+func assertDegradedRoomResult(t *testing.T, got roomTestRunOutcome) {
+	t.Helper()
 	if got.err != nil {
 		t.Fatalf("evidence failure became a room error: %v", got.err)
 	}
@@ -105,8 +119,11 @@ func TestRunRoom_EvidenceFailureDegradesWithoutStoppingParticipants(t *testing.T
 	if _, ok := got.result.DegradedArtifacts["agent-a.deltas.jsonl"]; !ok {
 		t.Fatalf("room degraded artifacts = %v, want a's delta artifact", got.result.DegradedArtifacts)
 	}
+}
 
-	manifestData := readRoomEvidenceFile(t, filepath.Join(outputDir, RoomEvidenceManifestPath))
+func assertDegradedRoomManifest(t *testing.T, path string) {
+	t.Helper()
+	manifestData := readRoomEvidenceFile(t, path)
 	var manifest roomEvidenceManifest
 	if err := json.Unmarshal(manifestData, &manifest); err != nil {
 		t.Fatalf("decode room manifest: %v", err)

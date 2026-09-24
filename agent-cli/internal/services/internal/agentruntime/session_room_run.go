@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"time"
 
@@ -13,7 +14,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
-	roomevidencewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
+	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
@@ -28,6 +29,113 @@ type roomParticipantRunResult struct {
 	err        error
 	connected  bool
 	connectErr error
+}
+
+// RunRoom runs a manifest-defined room and discards the structured result.
+func RunRoom(ctx context.Context, out io.Writer, opts RoomRunOptions) error {
+	_, err := RunRoomWithResult(ctx, out, opts)
+	return err
+}
+
+func prepareRoomEvidence(opts RoomRunOptions, validation room.ValidationOptions, replayMode bool, clockSource platformclock.Source, startedAt time.Time) (RoomRunOptions, roomevidence.Recorder, []string, error) {
+	if strings.TrimSpace(opts.OutputDir) == "" {
+		return opts, nil, nil, nil
+	}
+	if opts.evidenceService == nil {
+		return opts, nil, nil, runtimeRooms.ErrRoomServiceUnavailable
+	}
+	outputDir, err := opts.evidenceService.PrepareOutput(opts.OutputDir)
+	if err != nil {
+		return opts, nil, nil, err
+	}
+	opts.OutputDir = outputDir
+	var secrets []string
+	if !replayMode {
+		secrets = roomCredentialSecrets(opts.Manifest, validation)
+	}
+	format := roomFormatForOptions(opts)
+	evidence, err := opts.evidenceService.Open(roomevidence.RecordingRequest{
+		Destination: outputDir, Manifest: opts.Manifest,
+		AudioFormat: roomevidence.AudioFormat{
+			SampleRate: format.SampleRate, Channels: format.Channels, FrameDuration: format.FrameDuration,
+		},
+		Secrets: secrets, StartedAt: startedAt, Clock: clockSource, Latency: opts.latencyService,
+	})
+	if err != nil {
+		return opts, nil, secrets, err
+	}
+	if opts.onRoomEvidenceReady != nil {
+		opts.onRoomEvidenceReady(evidence)
+	}
+	return opts, evidence, secrets, nil
+}
+
+func finalizeRoomEvidence(evidence roomevidence.Recorder, clockSource platformclock.Source, result RoomResult, runErr error) (RoomResult, error) {
+	if evidence != nil {
+		finalized, _ := evidence.Finalize(roomevidence.Finalization{Room: result, Err: runErr, EndedAt: clockSource.Now().UTC()})
+		result = finalized.Room
+	}
+	return result, runErr
+}
+
+func newRoomParticipantObserver(coordinator *roomCoordinator, runtime *roomParticipantRuntime, opts RoomRunOptions, evidence roomevidence.Recorder) sessiontrace.Observer {
+	runtime.diagnosticSink = sessiontracewire.CombineDiagnosticSinks(roomParticipantDiagnosticSinks(runtime.plan, opts, evidence)...)
+	if roomParticipantIsHuman(runtime.plan) {
+		return nil
+	}
+	observer := sessiontracewire.NewObserver(sessiontrace.NewObserverOptions{Sink: runtime.diagnosticSink, Provider: runtime.plan.manifest.Provider, Model: runtime.plan.manifest.Model, TerminalService: wire.NewService()})
+	observer.SetLivenessObserver(func(err error) {
+		runtime.lifecycle.markLivenessFailure(err)
+		classification, _, _, _ := sessiontracewire.LivenessMetadata(err)
+		if classification != "" && evidence != nil {
+			_ = evidence.RecordTimeline("participant_liveness_fault", runtime.plan.manifest.ID, map[string]string{"reason": classification})
+		}
+	})
+	observer.SetTerminalObserver(runtime.lifecycle.observeTerminal)
+	observer.SetFailureObserver(roomParticipantFailureObserver(coordinator, runtime, evidence))
+	observer.SetTurnAdmission(func(msg messages.StreamMessage) bool {
+		value, ok := msg.Value.(*messages.MessageEndValue)
+		if !ok || value == nil || value.TerminalReason == "" {
+			return runtime.lifecycle.admitResponseTerminal()
+		}
+		if value.TerminalReason != messages.TerminalReasonProviderAuthoredCompletion && value.TerminalReason != messages.TerminalReasonLoopSynthesizedCompletion {
+			return false
+		}
+		return runtime.lifecycle.admitResponseTerminal()
+	})
+	observer.SetStreamObserver(func(msg messages.StreamMessage) {
+		observeRoomParticipantStream(coordinator, runtime, opts, evidence, runtime.ctx, msg)
+	})
+	observer.SetAdmittedTurnObserver(func(messages.StreamMessage) {
+		turns := runtime.lifecycle.observeAdmittedTurn()
+		coordinator.noteTurn(runtime.plan.manifest.ID, turns)
+	})
+	attachRoomLatencyObserver(observer, runtime, opts, evidence)
+	return observer
+}
+
+func attachRoomLatencyObserver(observer sessiontrace.Observer, runtime *roomParticipantRuntime, opts RoomRunOptions, evidence roomevidence.Recorder) {
+	if evidence == nil || evidence.LatencyRecorder() == nil || opts.latencyService == nil {
+		return
+	}
+	latencyRuntime := sessiontracewire.NewRuntimeRecorder(opts.latencyService.NewRuntimeObserver(evidence.LatencyRecorder(), runtime.plan.manifest.ID), opts.Clock)
+	latencyRuntime.EnableProviderBoundaryObservations()
+	if !runtime.plan.replay {
+		observer.SetRuntimeRecorder(latencyRuntime)
+	}
+}
+
+func roomParticipantTerminalFailure(runtime *roomParticipantRuntime, observation sessiontrace.TerminalObservation) error {
+	failureErr := observation.Err
+	if runtime.lifecycle != nil {
+		if transportErr := runtime.lifecycle.transportTerminalErrorSnapshot(); transportErr != nil {
+			failureErr = transportErr
+		}
+	}
+	if failureErr == nil {
+		failureErr = errors.New("session stream error")
+	}
+	return roomParticipantFailure(runtime.plan.manifest.ID, failureErr, secretsForPlan(runtime.plan))
 }
 
 func defaultRoomSessionFactory(participant room.Participant, options SessionRunOptions) (messages.SessionInferencer, error) {
@@ -83,40 +191,9 @@ func runRoomParticipant(
 			close(runtime.participantDone)
 		}
 	}()
-	// Computed once, before any result can reach the coordinator, so a human
-	// participant's teardown (see finishParticipant) can name this
-	// participant on a playback overflow the same way a provider
-	// participant's session diagnostics already do below.
-	runtime.diagnosticSink = sessiontracewire.CombineDiagnosticSinks(roomParticipantDiagnosticSinks(runtime.plan, opts, evidence)...)
-	var observer sessiontrace.Observer
-	if !roomParticipantIsHuman(runtime.plan) {
-		observer = sessiontracewire.NewObserver(sessiontrace.NewObserverOptions{Sink: runtime.diagnosticSink, Provider: runtime.plan.manifest.Provider, Model: runtime.plan.manifest.Model, TerminalService: wire.NewService()})
-		observer.SetLivenessObserver(func(err error) {
-			runtime.lifecycle.markLivenessFailure(err)
-			classification, _, _, _ := sessiontracewire.LivenessMetadata(err)
-			if classification != "" {
-				participantID := runtime.plan.manifest.ID
-				if evidence != nil {
-					_ = evidence.RecordTimeline("participant_liveness_fault", participantID, map[string]string{"reason": classification})
-				}
-			}
-		})
-		observer.SetTurnAdmission(func(msg messages.StreamMessage) bool {
-			value, ok := msg.Value.(*messages.MessageEndValue)
-			if !ok || value == nil || value.TerminalReason == "" {
-				return true
-			}
-			return value.TerminalReason == messages.TerminalReasonProviderAuthoredCompletion ||
-				value.TerminalReason == messages.TerminalReasonLoopSynthesizedCompletion
-		})
-		observer.SetStreamObserver(func(msg messages.StreamMessage) {
-			observeRoomParticipantStream(coordinator, runtime, opts, evidence, runtime.ctx, msg)
-		})
-		observer.SetAdmittedTurnObserver(func(messages.StreamMessage) {
-			turns := runtime.lifecycle.observeAdmittedTurn()
-			coordinator.noteTurn(runtime.plan.manifest.ID, turns)
-		})
-	}
+	// Keep the observer available before either pump starts so provider and
+	// human audio input follows the same diagnostic and accounting path.
+	observer := newRoomParticipantObserver(coordinator, runtime, opts, evidence)
 	inputObserver := opts.OnAudioInput
 	if observer != nil {
 		inputObserver = func(participantID string, pcm []byte) error {
@@ -180,49 +257,6 @@ func runRoomParticipant(
 		connected, _, _, _, _, _, connectErr := runtime.lifecycle.snapshot()
 		results <- roomParticipantRunResult{plan: runtime.plan, runtime: runtime, err: runErr, connected: connected, connectErr: connectErr}
 		return
-	}
-	diagnosticSinks := roomParticipantDiagnosticSinks(runtime.plan, opts, evidence)
-	observer = sessiontracewire.NewObserver(sessiontrace.NewObserverOptions{Sink: sessiontracewire.CombineDiagnosticSinks(diagnosticSinks...), Provider: runtime.plan.manifest.Provider, Model: runtime.plan.manifest.Model, TerminalService: wire.NewService()})
-	observer.SetLivenessObserver(func(err error) {
-		runtime.lifecycle.markLivenessFailure(err)
-		classification, _, _, _ := sessiontracewire.LivenessMetadata(err)
-		if classification != "" {
-			participantID := runtime.plan.manifest.ID
-			if evidence != nil {
-				_ = evidence.RecordTimeline("participant_liveness_fault", participantID, map[string]string{"reason": classification})
-			}
-		}
-	})
-	observer.SetTerminalObserver(runtime.lifecycle.observeTerminal)
-	observer.SetFailureObserver(roomParticipantFailureObserver(coordinator, runtime, evidence))
-	observer.SetTurnAdmission(func(msg messages.StreamMessage) bool {
-		value, ok := msg.Value.(*messages.MessageEndValue)
-		if !ok || value == nil || value.TerminalReason == "" {
-			return runtime.lifecycle.admitResponseTerminal()
-		}
-		if value.TerminalReason != messages.TerminalReasonProviderAuthoredCompletion && value.TerminalReason != messages.TerminalReasonLoopSynthesizedCompletion {
-			return false
-		}
-		return runtime.lifecycle.admitResponseTerminal()
-	})
-	observer.SetStreamObserver(func(msg messages.StreamMessage) {
-		observeRoomParticipantStream(coordinator, runtime, opts, evidence, runtime.ctx, msg)
-	})
-	observer.SetAdmittedTurnObserver(func(messages.StreamMessage) {
-		turns := runtime.lifecycle.observeAdmittedTurn()
-		coordinator.noteTurn(runtime.plan.manifest.ID, turns)
-	})
-	var latencyRuntime sessiontrace.RuntimeRecorder
-	if evidence != nil && evidence.LatencyRecorder() != nil {
-		latencyRuntime = sessiontracewire.NewRuntimeRecorder(roomevidencewire.NewLatencyService().NewRuntimeObserver(
-			evidence.LatencyRecorder(), runtime.plan.manifest.ID), opts.Clock)
-		latencyRuntime.EnableProviderBoundaryObservations()
-		// Latency sampling is a live-path measurement only. A replayed room
-		// drives its own scheduler off the recorded timeline, so attaching the
-		// runtime observer there emits outbound audio after replay completed.
-		if !runtime.plan.replay {
-			observer.SetRuntimeRecorder(latencyRuntime)
-		}
 	}
 	loopOptions := sessionLoopOptions{
 		Prompt:        runtime.plan.options.Prompt,
@@ -349,33 +383,14 @@ func observeRoomParticipantStream(
 	if opts.onParticipantStream != nil {
 		opts.onParticipantStream(plan.manifest.ID, msg)
 	}
-	recordParticipantDelta := func() {
-		if evidence == nil {
-			return
-		}
-		_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationDelta, ParticipantID: plan.manifest.ID, StreamMessage: msg})
-	}
-	runtime.lifecycle.observe(msg)
-	if evidence != nil {
-		_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationStreamMessage, ParticipantID: plan.manifest.ID, StreamMessage: msg})
-	}
-	if msg.Type == messages.StreamTypeSessionOpen && opts.onParticipantSessionOpen != nil {
-		opts.onParticipantSessionOpen(plan.manifest.ID)
-	}
-	if msg.Type == messages.StreamTypeAudioEnd && assistantAudioDelta(msg) && evidence != nil {
-		// A provider audio segment can end without ever emitting a silent
-		// trailing chunk, so the energy-based tracker alone would never see
-		// the transition back to silence. AUDIO.END is the reliable signal
-		// that this participant's own speech segment is over.
-		_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationCloseSentSpeechSegment, ParticipantID: plan.manifest.ID})
-	}
+	observeRoomParticipantStreamLifecycle(runtime, opts, evidence, plan, msg)
 	if msg.Type != messages.StreamTypeAudioDelta || !assistantAudioDelta(msg) {
-		recordParticipantDelta()
+		recordRoomParticipantDelta(evidence, plan, msg)
 		return
 	}
 	value, ok := msg.Value.(*messages.AudioDeltaValue)
 	if !ok || value == nil {
-		recordParticipantDelta()
+		recordRoomParticipantDelta(evidence, plan, msg)
 		coordinator.failParticipant(plan.manifest.ID, roomParticipantFailure(plan.manifest.ID, fmt.Errorf("AUDIO.DELTA has unexpected value %T", msg.Value), secretsForPlan(plan)))
 		return
 	}
@@ -384,6 +399,36 @@ func observeRoomParticipantStream(
 		return
 	}
 	msg.Value = messages.NewAudioDeltaValueWithMediaType(pcm, value.MediaType)
+	if !deliverRoomParticipantAudio(coordinator, runtime, opts, evidence, plan, msg, pcm) {
+		return
+	}
+	recordRoomParticipantDelta(evidence, plan, msg)
+	if evidence != nil {
+		_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationParticipantAudio, ParticipantID: plan.manifest.ID, PCM: pcm})
+	}
+}
+
+func observeRoomParticipantStreamLifecycle(runtime *roomParticipantRuntime, opts RoomRunOptions, evidence roomevidence.Recorder, plan *roomParticipantPlan, msg messages.StreamMessage) {
+	runtime.lifecycle.observe(msg)
+	if evidence != nil {
+		_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationStreamMessage, ParticipantID: plan.manifest.ID, StreamMessage: msg})
+		if msg.Type == messages.StreamTypeAudioEnd && assistantAudioDelta(msg) {
+			// AUDIO.END closes a segment when no silent trailing chunk arrives.
+			_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationCloseSentSpeechSegment, ParticipantID: plan.manifest.ID})
+		}
+	}
+	if msg.Type == messages.StreamTypeSessionOpen && opts.onParticipantSessionOpen != nil {
+		opts.onParticipantSessionOpen(plan.manifest.ID)
+	}
+}
+
+func recordRoomParticipantDelta(evidence roomevidence.Recorder, plan *roomParticipantPlan, msg messages.StreamMessage) {
+	if evidence != nil {
+		_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationDelta, ParticipantID: plan.manifest.ID, StreamMessage: msg})
+	}
+}
+
+func deliverRoomParticipantAudio(coordinator *roomCoordinator, runtime *roomParticipantRuntime, opts RoomRunOptions, evidence roomevidence.Recorder, plan *roomParticipantPlan, msg messages.StreamMessage, pcm []byte) bool {
 	targets := coordinator.activeExcept(plan.manifest.ID)
 	targetIDs := make([]string, 0, len(targets))
 	for _, target := range targets {
@@ -396,50 +441,46 @@ func observeRoomParticipantStream(
 		if len(pcm) > 0 {
 			_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationProviderAudio, ParticipantID: plan.manifest.ID, RelatedID: msg.ResponseID})
 		}
-	}
-	if evidence != nil {
-		// Keep offset-anchored evidence on the handoff path; defer only WAV I/O.
+		// Keep offset-anchored evidence on the provider-to-peer handoff path.
 		_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationSentStream, ParticipantID: plan.manifest.ID, PCM: pcm})
 	}
 	if opts.OnAudioOutput != nil {
 		if outputErr := opts.OnAudioOutput(plan.manifest.ID, append([]byte(nil), pcm...)); outputErr != nil {
 			coordinator.failParticipant(plan.manifest.ID, roomParticipantFailure(plan.manifest.ID, outputErr, secretsForPlan(plan)))
-			return
+			return false
 		}
 	}
-	// Room replay audio is released by the single room scheduler from the
-	// recorded logical timeline. Provider output remains observable above, but
-	// independently fanning it here would let goroutine timing choose the
-	// cross-participant order and overlap. Only the fan-out is skipped: the
-	// durable evidence writes below still run on the replay path, so a replayed
-	// room produces the same artifacts as the live room it was recorded from.
-	if !plan.replay {
-		for _, target := range targets {
-			if target == nil || target.mixer == nil {
-				continue
-			}
-			if writeErr := routeRoomPeerPCM(runtime.ctx, plan.manifest.ID, target, pcm); writeErr != nil {
-				if coordinator.isActive(target.plan.manifest.ID) {
-					coordinator.failParticipant(target.plan.manifest.ID, roomParticipantFailure(target.plan.manifest.ID, fmt.Errorf("receive fan out PCM from %s: %w", plan.manifest.ID, writeErr), secretsForPlan(target.plan)))
-				}
-				continue
-			}
-			if evidence != nil {
-				_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationPeerAudio, ParticipantID: plan.manifest.ID, RelatedID: target.plan.manifest.ID, PCM: pcm})
-			}
-			if opts.onParticipantAudioFanned != nil {
-				opts.onParticipantAudioFanned(plan.manifest.ID, target.plan.manifest.ID, append([]byte(nil), pcm...))
-			}
-		}
+	fanoutRoomParticipantAudio(coordinator, runtime, opts, evidence, plan, targets, pcm)
+	return true
+}
+
+func fanoutRoomParticipantAudio(coordinator *roomCoordinator, runtime *roomParticipantRuntime, opts RoomRunOptions, evidence roomevidence.Recorder, plan *roomParticipantPlan, targets []*roomParticipantRuntime, pcm []byte) {
+	// Replay uses the room scheduler to preserve recorded cross-participant order.
+	if plan.replay {
+		return
 	}
-	// Durable JSONL/WAV evidence is intentionally recorded after the bounded
-	// provider-to-peer handoff. A slow filesystem must not make the next room
-	// mixer frame wait before it can accept the first provider PCM delta.
-	recordParticipantDelta()
+	for _, target := range targets {
+		if target == nil || target.mixer == nil {
+			continue
+		}
+		fanoutRoomParticipantAudioToPeer(coordinator, runtime, opts, evidence, plan, target, pcm)
+	}
+}
+
+func fanoutRoomParticipantAudioToPeer(coordinator *roomCoordinator, runtime *roomParticipantRuntime, opts RoomRunOptions, evidence roomevidence.Recorder, plan *roomParticipantPlan, target *roomParticipantRuntime, pcm []byte) {
+	targetID := target.plan.manifest.ID
+	if writeErr := routeRoomPeerPCM(runtime.ctx, plan.manifest.ID, target, pcm); writeErr != nil {
+		if coordinator.isActive(targetID) {
+			cause := fmt.Errorf("receive fan out PCM from %s: %w", plan.manifest.ID, writeErr)
+			coordinator.failParticipant(targetID, roomParticipantFailure(targetID, cause, secretsForPlan(target.plan)))
+		}
+		return
+	}
 	if evidence != nil {
-		// Durable WAV I/O only. A slow filesystem here must not delay the
-		// provider-to-peer handoff above.
-		_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationParticipantAudio, ParticipantID: plan.manifest.ID, PCM: pcm})
+		_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationPeerAudio, ParticipantID: plan.manifest.ID, RelatedID: targetID, PCM: pcm})
+	}
+	if opts.onParticipantAudioFanned != nil {
+		opts.onParticipantAudioFanned(plan.manifest.ID, targetID, append([]byte(nil), pcm...))
 	}
 }
 

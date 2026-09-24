@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	roomevidencewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 )
 
@@ -173,9 +172,6 @@ func requireValidationError(t *testing.T, err, cause error, field, label string)
 func TestOtherRoomWireConstructorsRemainInert(t *testing.T) {
 	if NewService(Dependencies{}) == nil {
 		t.Fatal("NewService() returned nil")
-	}
-	if roomevidencewire.NewLatencyService() == nil {
-		t.Fatal("roomevidence.NewLatencyService() returned nil")
 	}
 	factory := NewMediaFactory(nil)
 	if factory == nil {
