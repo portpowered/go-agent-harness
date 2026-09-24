@@ -6148,3 +6148,41 @@ before any push or PR.
 - Exact next action: commit this correction and checkpoint, rerun full prepush
   on the exact SHA, then complete all remaining C251-04 commands before push
   or PR.
+
+
+## C251 exact-head functional repair checkpoint — 2026-09-24
+
+- Exact `rtk make prepush` on `085f493b724c2d2ab05c01d8c6d8547cee639009`
+  passed formatting, architecture (234 packages, 2,038 files, 29,927
+  functions), Wire generation, vet, lint, and staticcheck. The full agent-cli
+  functional suite then failed in existing session acceptance tests with
+  `session duration runner is required` in several public service-test paths;
+  CLI duration artifact cases also did not produce their expected WAV artifact.
+  Log: `~/Library/Application Support/rtk/tee/1790250907_make_prepush.log`.
+- Found that the existing `services/servicetest` wrappers still invoked the
+  legacy runtime entrypoints without the service-owned duration factory. They
+  now compose the same public service Wire factory used by production. No test
+  cases were added, moved, or weakened. The artifact failures remain under
+  investigation.
+- Exact next action: run the existing focused service-test and CLI artifact
+  checks, repair any remaining production defect, then rerun the entire C251-04
+  gate on one exact clean commit before any push or PR.
+
+
+## C251 focused functional repairs checkpoint — 2026-09-24
+
+- Updated the existing `services/servicetest` entrypoints to compose the public
+  Wire duration service/runner, matching production rather than taking the
+  now-incomplete default runtime path. No test cases were added or moved.
+- Fixed duration artifact preparation in `sessionduration/internal/service`.
+  When a terminal recorder wraps a not-yet-prepared artifact path, service
+  `PrepareArtifacts` now opens the configured sinks and preserves the recorder
+  wrapper; run validation still occurs first. Existing service and public
+  artifact behavior remains behind the duration contract.
+- Focused checks pass: 10/10 selected `agent-cli/internal/transport/cli` cases
+  (including max-duration artifact success and invalid-PCM failure), and 14/14
+  selected `agent-cli/test/integration` cases covering provider advertisement,
+  handshake replay, bounded tool results, and timeout/cancellation outcomes.
+- Exact next action: commit these repairs and this checkpoint, then rerun
+  `make prepush` and all C251-04 checks against that exact clean SHA before
+  push or PR.

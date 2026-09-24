@@ -142,8 +142,13 @@ func ArtifactPathsFromContext(ctx context.Context) (sessionduration.SessionDurat
 }
 
 func PrepareArtifacts(ctx context.Context) (context.Context, error) {
-	if ArtifactsFromContext(ctx) != nil {
-		return ctx, nil
+	var terminalWrapper *sessionDurationArtifactLifecycleWithTerminal
+	if artifacts := ArtifactsFromContext(ctx); artifacts != nil {
+		var ok bool
+		terminalWrapper, ok = artifacts.(*sessionDurationArtifactLifecycleWithTerminal)
+		if !ok || terminalWrapper.artifacts != nil {
+			return ctx, nil
+		}
 	}
 	paths, ok := ArtifactPathsFromContext(ctx)
 	if !ok || (paths.AudioPath == "" && paths.TranscriptPath == "") {
@@ -155,6 +160,11 @@ func PrepareArtifacts(ctx context.Context) (context.Context, error) {
 	artifacts, err := NewSessionDurationArtifactSet(paths.AudioPath, paths.TranscriptPath)
 	if err != nil {
 		return nil, fmt.Errorf("open session duration artifacts: %w", err)
+	}
+	if terminalWrapper != nil {
+		return WithSessionDurationArtifacts(ctx, &sessionDurationArtifactLifecycleWithTerminal{
+			artifacts: artifacts, recorder: terminalWrapper.recorder,
+		}), nil
 	}
 	return WithSessionDurationArtifacts(ctx, artifacts), nil
 }

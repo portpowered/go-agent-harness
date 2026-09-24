@@ -75,6 +75,14 @@ func (s *Service) RunWithResult(request sessionduration.RunRequest) (sessiondura
 	if err := s.validateRunRequest(request); err != nil {
 		return sessionduration.Result{}, err
 	}
+	preparedContext, err := s.PrepareArtifacts(request.Context)
+	if err != nil {
+		return sessionduration.Result{}, err
+	}
+	request.Context = preparedContext
+	if request.Artifacts == nil {
+		request.Artifacts = s.ArtifactsFromContext(preparedContext)
+	}
 	admitted, err := s.runAdmission(request)
 	if err != nil {
 		return sessionduration.Result{}, err

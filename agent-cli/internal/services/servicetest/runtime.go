@@ -10,6 +10,7 @@ import (
 	sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	serviceDevices "github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices"
 	impl "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime"
+	servicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
 	audioio "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
@@ -41,14 +42,16 @@ func ValidateSessionAudioDeviceConflicts(audioInFile, audioOutFile, audioInDevic
 }
 
 func RunSession(ctx context.Context, out io.Writer, opts SessionRunOptions) error {
-	return impl.RunSession(ctx, out, opts)
+	return impl.RunSessionWithRuntimeFactory(ctx, out, opts, servicewire.NewSessionRuntimeFactory())
 }
 
 func RunSessionWithInstructions(ctx context.Context, out io.Writer, opts SessionRunOptions, systemPrompt string) error {
+	opts = opts.WithRuntimeFactory(servicewire.NewSessionRuntimeFactory())
 	return impl.RunSessionWithInstructions(ctx, out, opts, systemPrompt)
 }
 
 func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.Context, out io.Writer, opts SessionRunOptions, audioPath string, maxDuration time.Duration, seed SessionTextSeed, systemPrompt string) error {
+	opts = opts.WithRuntimeFactory(servicewire.NewSessionRuntimeFactory())
 	return impl.RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx, out, opts, audioPath, maxDuration, seed, systemPrompt)
 }
 
