@@ -1,6 +1,10 @@
 package webmcp
 
-import "context"
+import (
+	"context"
+	"encoding/json"
+	"time"
+)
 
 // waitForAdmissionDispatch gives a result that has already crossed the
 // dispatch handoff priority over context cancellation. The browser call and
@@ -72,4 +76,45 @@ func admissionDispatchOutcome(outcome invocationDispatch, fallback error) (Invok
 		return InvokeResult{}, fallback
 	}
 	return cloneInvokeResult(outcome.result), outcome.err
+}
+
+// admissionRecordLocked requires the broker to be open, the selection to be
+// the same connected session, and ref to be current for that session.
+func (b *StatefulBroker) admissionRecordLocked(selected *brokerSession, ref ToolRef, reason string) (refRecord, error) {
+	if b.closed {
+		return refRecord{}, ErrClosed
+	}
+	if b.selected != selected || !selected.active || !selected.context.Connected {
+		return refRecord{}, selectionStateErrorLocked(selected, "lifecycle", reason)
+	}
+	record, ok := b.refs[ref]
+	if !ok || !refCurrentLocked(selected, record) {
+		return refRecord{}, staleToolRefError(ref, selected.context.Generation)
+	}
+	return record, nil
+}
+
+// newBrokerInvocationLocked builds the queued lease for one admitted call.
+func (b *StatefulBroker) newBrokerInvocationLocked(ctx context.Context, selected *brokerSession, id InvocationID, request InvokeRequest, descriptor ToolDescriptor, input json.RawMessage, invocationTimeout time.Duration) *brokerInvocation {
+	now := b.clock.Now()
+	return &brokerInvocation{
+		selected: selected,
+		ctx:      ctx,
+		invocation: Invocation{
+			ID:          id,
+			Tool:        cloneToolDescriptor(descriptor),
+			Arguments:   cloneJSON(input),
+			State:       InvocationQueued,
+			Operation:   classifyOperation(descriptor),
+			ModelCallID: request.ModelCallID,
+			SessionID:   request.SessionID,
+			ResponseID:  request.ResponseID,
+			CreatedAt:   now,
+			QueuedAt:    now,
+			Deadline:    now.Add(invocationTimeout),
+		},
+		dispatchDone: make(chan invocationDispatch, 1),
+		terminal:     make(chan struct{}),
+		admissionSeq: b.eventSequence + 1,
+	}
 }

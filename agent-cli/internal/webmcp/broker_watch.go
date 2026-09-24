@@ -1,6 +1,10 @@
 package webmcp
 
-import "context"
+import (
+	"context"
+	"strings"
+	"time"
+)
 
 // brokerWatcher reserves one extra channel slot for its terminal failure
 // event. The ordinary capacity remains bounded by capacity; the reserved slot
@@ -283,4 +287,103 @@ func (b *StatefulBroker) removeBrowserEventWatcher(watcher *browserEventWatcher)
 	}
 	delete(b.browserWatchers, watcher)
 	close(watcher.events)
+}
+
+// observeBrowserInvocationLocked consumes owned events as a provenance barrier
+// and records protocol invocations initiated by other command-scoped brokers.
+func (b *StatefulBroker) observeBrowserInvocationLocked(selected *brokerSession, event BrowserEvent) {
+	if selected == nil || event.InvocationID == "" {
+		return
+	}
+	if invocation, owned := b.browserInvocations[event.InvocationID]; owned {
+		b.observeOwnedBrowserInvocationLocked(selected, event, invocation)
+		return
+	}
+	if _, observed := selected.observedInvocations[event.InvocationID]; observed {
+		return
+	}
+	if _, terminal := b.browserTerminalSeen[event.InvocationID]; terminal {
+		return
+	}
+
+	generation := event.Generation
+	if generation == 0 {
+		generation = selected.context.Generation
+	}
+	if generation > selected.context.Generation {
+		b.advanceGenerationLocked(selected, generation, "invocation_generation")
+	}
+	if generation != selected.context.Generation {
+		return
+	}
+	observed := observedInvocation{
+		browserID:  selected.context.Key.BrowserID,
+		targetID:   selected.context.Key.TargetID,
+		generation: generation,
+	}
+	if descriptor, ok := observedToolDescriptorLocked(selected, event, generation); ok {
+		observed.toolRef = descriptor.Ref
+		observed.toolName = descriptor.Name
+	}
+	selected.observedInvocations[event.InvocationID] = observed
+	b.emitLocked(BrokerEvent{
+		Type:         BrokerEventInvocationCreated,
+		BrowserID:    observed.browserID,
+		TargetID:     observed.targetID,
+		Generation:   observed.generation,
+		InvocationID: event.InvocationID,
+		ToolRef:      observed.toolRef,
+		ToolName:     observed.toolName,
+		State:        InvocationDispatched,
+		Reason:       "browser_observed",
+	})
+	if terminal, ok := b.takeEarlyTerminalLocked(event.InvocationID, observed.generation); ok {
+		b.recordBrowserTerminalIDLocked(event.InvocationID)
+		b.emitObservedBrowserTerminalLocked(observed, event.InvocationID, terminal.status, terminal.errorCode, terminal.reason, terminal.at)
+	}
+}
+
+func (b *StatefulBroker) reconcileObservedBrowserResponseLocked(selected *brokerSession, event BrowserEvent) bool {
+	if selected == nil || event.InvocationID == "" {
+		return false
+	}
+	if _, owned := b.browserInvocations[event.InvocationID]; owned {
+		return false
+	}
+	if !b.acceptBrowserEventGenerationLocked(selected, event) {
+		return true
+	}
+	if _, terminal := b.browserTerminalSeen[event.InvocationID]; terminal {
+		return true
+	}
+	observed, ok := selected.observedInvocations[event.InvocationID]
+	if !ok {
+		return false
+	}
+	delete(selected.observedInvocations, event.InvocationID)
+	b.recordBrowserTerminalIDLocked(event.InvocationID)
+	b.emitObservedBrowserTerminalLocked(observed, event.InvocationID, event.Status, event.ErrorCode, event.Reason, event.At)
+	return true
+}
+
+func (b *StatefulBroker) emitObservedBrowserTerminalLocked(observed observedInvocation, id InvocationID, status, errorCode, reason string, at time.Time) {
+	state, _ := terminalState(status)
+	if errorCode != "" {
+		reason = errorCode
+	}
+	if reason == "" {
+		reason = strings.ToLower(strings.TrimSpace(status))
+	}
+	b.emitLocked(BrokerEvent{
+		Type:         BrokerEventInvocationTerminal,
+		At:           at,
+		BrowserID:    observed.browserID,
+		TargetID:     observed.targetID,
+		Generation:   observed.generation,
+		InvocationID: id,
+		ToolRef:      observed.toolRef,
+		ToolName:     observed.toolName,
+		State:        state,
+		Reason:       reason,
+	})
 }

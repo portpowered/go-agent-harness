@@ -9,6 +9,19 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
 )
 
+// crossProcessTargetID is the watched target shared by every independent
+// client phase.
+const crossProcessTargetID = "tab-a"
+
+// crossProcessWatch is the watched broker state shared by the independent
+// client phases of the cross-process observation test.
+type crossProcessWatch struct {
+	runtime   *testkit.ScriptedBrowserRuntime
+	broker    *webmcp.StatefulBroker
+	events    <-chan webmcp.BrokerEvent
+	candidate webmcp.BrowserCandidate
+}
+
 func TestStatefulBrokerObservesIndependentClientCatalogAndInvocationEvents(t *testing.T) {
 	candidate := webmcp.BrowserCandidate{ID: "browser-a", Product: "fixture", Loopback: true}
 	otherCandidate := webmcp.BrowserCandidate{ID: "browser-b", Product: "fixture", Loopback: true}
@@ -17,7 +30,7 @@ func TestStatefulBrokerObservesIndependentClientCatalogAndInvocationEvents(t *te
 			Candidate: candidate,
 			Targets: []testkit.TargetConfig{
 				testkit.NewTargetConfig(
-					webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page"},
+					webmcp.Target{BrowserID: candidate.ID, ID: crossProcessTargetID, Type: "page"},
 					testkit.WithInitialCatalog(pageTool("read_state", "frame-1", `{}`)),
 				),
 				testkit.NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: "tab-b", Type: "page"}),
@@ -45,42 +58,75 @@ func TestStatefulBrokerObservesIndependentClientCatalogAndInvocationEvents(t *te
 	}()
 	watchContext, cancelWatch := context.WithCancel(context.Background())
 	defer cancelWatch()
-	events := broker.Watch(watchContext)
+	watch := crossProcessWatch{runtime: runtime, broker: broker, events: broker.Watch(watchContext), candidate: candidate}
 
-	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: "tab-a"}); err != nil {
+	readRef := selectCrossProcessWatchedTarget(t, watch)
+	externalHandle, externalSession := attachCrossProcessExternalClient(t, watch)
+	assertCrossProcessEarlyResponseBuffered(t, watch, externalSession, readRef)
+	writeTool := pageTool("write_state", "frame-1", `{}`)
+	writeRef := addCrossProcessExternalTool(t, watch, externalSession, writeTool)
+	assertCrossProcessExternalInvocation(t, watch, externalSession, writeTool, writeRef)
+	assertCrossProcessUnresolvedInvocation(t, watch, externalSession, writeTool)
+	assertCrossProcessStaleGenerationIgnored(t, watch, externalSession)
+	assertCrossProcessOtherTargetsIgnored(t, watch, externalHandle, otherCandidate)
+
+	cancelWatch()
+	select {
+	case _, ok := <-watch.events:
+		if ok {
+			t.Fatal("watch stream remained open after cancellation")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("watch stream did not close after cancellation")
+	}
+}
+
+func requireBrokerStep(t *testing.T, err error, step string) {
+	t.Helper()
+	if err != nil {
+		t.Fatalf("%s: %v", step, err)
+	}
+}
+
+func requireWatchedCatalogEvent(t *testing.T, watch crossProcessWatch, reason, label string) {
+	t.Helper()
+	event := waitForBrokerEvent(t, watch.events, webmcp.BrokerEventCatalogChanged)
+	if event.BrowserID != watch.candidate.ID || event.TargetID != crossProcessTargetID || event.Generation != 1 || event.Reason != reason {
+		t.Fatalf("%s = %#v, want watched target generation-one %s", label, event, reason)
+	}
+}
+
+func selectCrossProcessWatchedTarget(t *testing.T, watch crossProcessWatch) webmcp.ToolRef {
+	t.Helper()
+	if _, err := watch.broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: watch.candidate.ID, TargetID: crossProcessTargetID}); err != nil {
 		t.Fatalf("select watched target: %v", err)
 	}
-	selectedEvent := waitForBrokerEvent(t, events, webmcp.BrokerEventSelected)
-	if selectedEvent.BrowserID != candidate.ID || selectedEvent.TargetID != "tab-a" || selectedEvent.Generation != 1 {
+	selectedEvent := waitForBrokerEvent(t, watch.events, webmcp.BrokerEventSelected)
+	if selectedEvent.BrowserID != watch.candidate.ID || selectedEvent.TargetID != crossProcessTargetID || selectedEvent.Generation != 1 {
 		t.Fatalf("selected event = %#v, want watched target generation one", selectedEvent)
 	}
-	initialCatalogEvent := waitForBrokerEvent(t, events, webmcp.BrokerEventCatalogChanged)
-	if initialCatalogEvent.BrowserID != candidate.ID || initialCatalogEvent.TargetID != "tab-a" || initialCatalogEvent.Generation != 1 || initialCatalogEvent.Reason != "tools_added" {
-		t.Fatalf("initial catalog event = %#v, want watched target catalog admission", initialCatalogEvent)
-	}
-	snapshot, err := broker.ListTools(context.Background(), webmcp.ListToolsOptions{IncludeSchemas: true})
+	requireWatchedCatalogEvent(t, watch, "tools_added", "initial catalog event")
+	snapshot, err := watch.broker.ListTools(context.Background(), webmcp.ListToolsOptions{IncludeSchemas: true})
 	if err != nil {
 		t.Fatalf("list initial tools: %v", err)
 	}
 	if len(snapshot.Tools) != 1 {
 		t.Fatalf("initial tools = %#v, want one tool", snapshot.Tools)
 	}
+	return snapshot.Tools[0].Ref
+}
 
-	externalHandleValue, err := runtime.Open(context.Background(), candidate)
-	if err != nil {
-		t.Fatalf("open external client: %v", err)
-	}
-	externalSessionValue, err := externalHandleValue.Attach(context.Background(), "tab-a", webmcp.TargetOwnershipExternal)
-	if err != nil {
-		t.Fatalf("attach external client: %v", err)
-	}
+func attachCrossProcessExternalClient(t *testing.T, watch crossProcessWatch) (webmcp.BrowserHandle, *testkit.ScriptedTargetSession) {
+	t.Helper()
+	externalHandleValue, err := watch.runtime.Open(context.Background(), watch.candidate)
+	requireBrokerStep(t, err, "open external client")
+	externalSessionValue, err := externalHandleValue.Attach(context.Background(), crossProcessTargetID, webmcp.TargetOwnershipExternal)
+	requireBrokerStep(t, err, "attach external client")
 	externalSession := externalSessionValue.(*testkit.ScriptedTargetSession)
 	if externalSession == nil {
 		t.Fatal("external session is nil")
 	}
-	if err := externalSession.EnableWebMCP(context.Background()); err != nil {
-		t.Fatalf("enable external client: %v", err)
-	}
+	requireBrokerStep(t, externalSession.EnableWebMCP(context.Background()), "enable external client")
 	if event := waitForTestkitEvent(t, externalSession.Events()); event.Type != webmcp.EventTargetAttached {
 		t.Fatalf("external attach event = %#v, want target_attached", event)
 	}
@@ -90,52 +136,46 @@ func TestStatefulBrokerObservesIndependentClientCatalogAndInvocationEvents(t *te
 	// The initial descriptor is already present in the watcher's catalog. The
 	// second client's enable echo is therefore a no-op and must not create a
 	// duplicate semantic catalog event.
-	if _, err := broker.ListTools(context.Background(), webmcp.ListToolsOptions{IncludeSchemas: true}); err != nil {
-		t.Fatalf("flush external initial catalog: %v", err)
-	}
-	assertNoBrokerEvent(t, events, "duplicate initial catalog descriptor")
+	_, err = watch.broker.ListTools(context.Background(), webmcp.ListToolsOptions{IncludeSchemas: true})
+	requireBrokerStep(t, err, "flush external initial catalog")
+	assertNoBrokerEvent(t, watch.events, "duplicate initial catalog descriptor")
+	return externalHandleValue, externalSession
+}
 
+func assertCrossProcessEarlyResponseBuffered(t *testing.T, watch crossProcessWatch, externalSession *testkit.ScriptedTargetSession, readRef webmcp.ToolRef) {
+	t.Helper()
 	earlyInvocationID := webmcp.InvocationID("external-early")
-	if err := externalSession.Emit(webmcp.BrowserEvent{
+	requireBrokerStep(t, externalSession.Emit(webmcp.BrowserEvent{
 		Type:         webmcp.EventToolResponded,
 		Generation:   1,
 		InvocationID: earlyInvocationID,
 		Status:       "Completed",
 		Output:       []byte(`{"early":true}`),
-	}); err != nil {
-		t.Fatalf("emit response before invocation: %v", err)
-	}
-	assertNoBrokerEvent(t, events, "response before invocation")
-	if err := externalSession.Emit(webmcp.BrowserEvent{
+	}), "emit response before invocation")
+	assertNoBrokerEvent(t, watch.events, "response before invocation")
+	requireBrokerStep(t, externalSession.Emit(webmcp.BrowserEvent{
 		Type:         webmcp.EventToolInvoked,
 		Generation:   1,
 		FrameID:      "frame-1",
 		ToolName:     "read_state",
 		InvocationID: earlyInvocationID,
-	}); err != nil {
-		t.Fatalf("emit invocation after response: %v", err)
-	}
-	earlyCreated := waitForBrokerEvent(t, events, webmcp.BrokerEventInvocationCreated)
-	if earlyCreated.InvocationID != earlyInvocationID || earlyCreated.ToolRef != snapshot.Tools[0].Ref || earlyCreated.State != webmcp.InvocationDispatched || earlyCreated.Generation != 1 {
+	}), "emit invocation after response")
+	earlyCreated := waitForBrokerEvent(t, watch.events, webmcp.BrokerEventInvocationCreated)
+	if earlyCreated.InvocationID != earlyInvocationID || earlyCreated.ToolRef != readRef || earlyCreated.State != webmcp.InvocationDispatched || earlyCreated.Generation != 1 {
 		t.Fatalf("early invocation created event = %#v, want catalog-bound observation", earlyCreated)
 	}
-	earlyTerminal := waitForBrokerEvent(t, events, webmcp.BrokerEventInvocationTerminal)
-	if earlyTerminal.InvocationID != earlyInvocationID || earlyTerminal.ToolRef != snapshot.Tools[0].Ref || earlyTerminal.State != webmcp.InvocationCompleted || earlyTerminal.Generation != 1 {
+	earlyTerminal := waitForBrokerEvent(t, watch.events, webmcp.BrokerEventInvocationTerminal)
+	if earlyTerminal.InvocationID != earlyInvocationID || earlyTerminal.ToolRef != readRef || earlyTerminal.State != webmcp.InvocationCompleted || earlyTerminal.Generation != 1 {
 		t.Fatalf("early invocation terminal event = %#v, want one buffered completion", earlyTerminal)
 	}
+}
 
-	writeTool := pageTool("write_state", "frame-1", `{}`)
-	if err := externalSession.EmitToolsAdded(writeTool); err != nil {
-		t.Fatalf("emit external catalog change: %v", err)
-	}
-	catalogEvent := waitForBrokerEvent(t, events, webmcp.BrokerEventCatalogChanged)
-	if catalogEvent.BrowserID != candidate.ID || catalogEvent.TargetID != "tab-a" || catalogEvent.Generation != 1 || catalogEvent.Reason != "tools_added" {
-		t.Fatalf("catalog event = %#v, want watched target generation-one change", catalogEvent)
-	}
-	updated, err := broker.ListTools(context.Background(), webmcp.ListToolsOptions{IncludeSchemas: true})
-	if err != nil {
-		t.Fatalf("list updated tools: %v", err)
-	}
+func addCrossProcessExternalTool(t *testing.T, watch crossProcessWatch, externalSession *testkit.ScriptedTargetSession, writeTool webmcp.ToolDescriptor) webmcp.ToolRef {
+	t.Helper()
+	requireBrokerStep(t, externalSession.EmitToolsAdded(writeTool), "emit external catalog change")
+	requireWatchedCatalogEvent(t, watch, "tools_added", "catalog event")
+	updated, err := watch.broker.ListTools(context.Background(), webmcp.ListToolsOptions{IncludeSchemas: true})
+	requireBrokerStep(t, err, "list updated tools")
 	var writeRef webmcp.ToolRef
 	for _, tool := range updated.Tools {
 		if tool.Name == writeTool.Name {
@@ -145,140 +185,100 @@ func TestStatefulBrokerObservesIndependentClientCatalogAndInvocationEvents(t *te
 	if writeRef == "" {
 		t.Fatalf("updated tools = %#v, want external tool", updated.Tools)
 	}
+	return writeRef
+}
 
+func assertCrossProcessExternalInvocation(t *testing.T, watch crossProcessWatch, externalSession *testkit.ScriptedTargetSession, writeTool webmcp.ToolDescriptor, writeRef webmcp.ToolRef) {
+	t.Helper()
 	externalInvocationID, err := externalSession.InvokeWebMCP(context.Background(), writeTool.FrameID, writeTool.Name, []byte(`{"step":1}`))
-	if err != nil {
-		t.Fatalf("invoke from external client: %v", err)
-	}
-	created := waitForBrokerEvent(t, events, webmcp.BrokerEventInvocationCreated)
-	if created.InvocationID != externalInvocationID || created.ToolRef != writeRef || created.State != webmcp.InvocationDispatched || created.BrowserID != candidate.ID || created.TargetID != "tab-a" || created.Generation != 1 || created.Reason != "browser_observed" {
+	requireBrokerStep(t, err, "invoke from external client")
+	created := waitForBrokerEvent(t, watch.events, webmcp.BrokerEventInvocationCreated)
+	if created.InvocationID != externalInvocationID || created.ToolRef != writeRef || created.State != webmcp.InvocationDispatched || created.BrowserID != watch.candidate.ID || created.TargetID != crossProcessTargetID || created.Generation != 1 || created.Reason != "browser_observed" {
 		t.Fatalf("external invocation created event = %#v, want one correlated observation", created)
 	}
 
-	if err := externalSession.EmitToolResponse(externalInvocationID, "Completed", []byte(`{"ok":true}`)); err != nil {
-		t.Fatalf("respond from external client: %v", err)
-	}
-	terminal := waitForBrokerEvent(t, events, webmcp.BrokerEventInvocationTerminal)
-	if terminal.InvocationID != externalInvocationID || terminal.ToolRef != writeRef || terminal.State != webmcp.InvocationCompleted || terminal.BrowserID != candidate.ID || terminal.TargetID != "tab-a" || terminal.Generation != 1 {
+	requireBrokerStep(t, externalSession.EmitToolResponse(externalInvocationID, "Completed", []byte(`{"ok":true}`)), "respond from external client")
+	terminal := waitForBrokerEvent(t, watch.events, webmcp.BrokerEventInvocationTerminal)
+	if terminal.InvocationID != externalInvocationID || terminal.ToolRef != writeRef || terminal.State != webmcp.InvocationCompleted || terminal.BrowserID != watch.candidate.ID || terminal.TargetID != crossProcessTargetID || terminal.Generation != 1 {
 		t.Fatalf("external invocation terminal event = %#v, want one correlated completion", terminal)
 	}
-	if err := externalSession.EmitToolResponse(externalInvocationID, "Completed", []byte(`{"duplicate":true}`)); err != nil {
-		t.Fatalf("emit duplicate external response: %v", err)
-	}
-	assertNoBrokerEvent(t, events, "duplicate external response")
+	requireBrokerStep(t, externalSession.EmitToolResponse(externalInvocationID, "Completed", []byte(`{"duplicate":true}`)), "emit duplicate external response")
+	assertNoBrokerEvent(t, watch.events, "duplicate external response")
+}
 
-	// A protocol invocation can still be observed when its catalog descriptor
-	// has disappeared. The watcher preserves the lifecycle and ID without
-	// guessing a stale reference.
-	if err := externalSession.EmitToolsRemoved("frame-1", writeTool.Name); err != nil {
-		t.Fatalf("emit external catalog removal: %v", err)
-	}
-	removed := waitForBrokerEvent(t, events, webmcp.BrokerEventCatalogChanged)
-	if removed.BrowserID != candidate.ID || removed.TargetID != "tab-a" || removed.Generation != 1 || removed.Reason != "tools_removed" {
-		t.Fatalf("catalog removal event = %#v, want watched target removal", removed)
-	}
+// assertCrossProcessUnresolvedInvocation covers a protocol invocation that
+// is observed after its catalog descriptor has disappeared. The watcher
+// preserves the lifecycle and ID without guessing a stale reference.
+func assertCrossProcessUnresolvedInvocation(t *testing.T, watch crossProcessWatch, externalSession *testkit.ScriptedTargetSession, writeTool webmcp.ToolDescriptor) {
+	t.Helper()
+	requireBrokerStep(t, externalSession.EmitToolsRemoved("frame-1", writeTool.Name), "emit external catalog removal")
+	requireWatchedCatalogEvent(t, watch, "tools_removed", "catalog removal event")
 	unresolvedID := webmcp.InvocationID("external-unresolved")
-	if err := externalSession.Emit(webmcp.BrowserEvent{
+	requireBrokerStep(t, externalSession.Emit(webmcp.BrowserEvent{
 		Type:         webmcp.EventToolInvoked,
 		Generation:   1,
 		FrameID:      "frame-1",
 		ToolName:     writeTool.Name,
 		InvocationID: unresolvedID,
-	}); err != nil {
-		t.Fatalf("emit unresolved invocation: %v", err)
-	}
-	unresolvedCreated := waitForBrokerEvent(t, events, webmcp.BrokerEventInvocationCreated)
+	}), "emit unresolved invocation")
+	unresolvedCreated := waitForBrokerEvent(t, watch.events, webmcp.BrokerEventInvocationCreated)
 	if unresolvedCreated.InvocationID != unresolvedID || unresolvedCreated.ToolRef != "" {
 		t.Fatalf("unresolved created event = %#v, want empty current ref", unresolvedCreated)
 	}
-	if err := externalSession.Emit(webmcp.BrowserEvent{
+	requireBrokerStep(t, externalSession.Emit(webmcp.BrowserEvent{
 		Type:         webmcp.EventToolResponded,
 		Generation:   1,
 		InvocationID: unresolvedID,
 		Status:       "Completed",
 		Output:       []byte(`{"unresolved":true}`),
-	}); err != nil {
-		t.Fatalf("respond to unresolved invocation: %v", err)
-	}
-	unresolvedTerminal := waitForBrokerEvent(t, events, webmcp.BrokerEventInvocationTerminal)
+	}), "respond to unresolved invocation")
+	unresolvedTerminal := waitForBrokerEvent(t, watch.events, webmcp.BrokerEventInvocationTerminal)
 	if unresolvedTerminal.InvocationID != unresolvedID || unresolvedTerminal.ToolRef != "" || unresolvedTerminal.State != webmcp.InvocationCompleted {
 		t.Fatalf("unresolved terminal event = %#v, want completed event without ref", unresolvedTerminal)
 	}
-	if err := externalSession.EmitToolsRemoved("frame-1", writeTool.Name); err != nil {
-		t.Fatalf("emit repeated external catalog removal: %v", err)
-	}
-	assertNoBrokerEvent(t, events, "repeated catalog removal")
-	if err := externalSession.EmitToolsAdded(writeTool); err != nil {
-		t.Fatalf("re-add external catalog tool: %v", err)
-	}
-	readded := waitForBrokerEvent(t, events, webmcp.BrokerEventCatalogChanged)
-	if readded.BrowserID != candidate.ID || readded.TargetID != "tab-a" || readded.Generation != 1 || readded.Reason != "tools_added" {
-		t.Fatalf("catalog re-add event = %#v, want watched target generation-one change", readded)
-	}
-	if err := externalSession.EmitToolsRemoved("frame-1", writeTool.Name); err != nil {
-		t.Fatalf("emit external catalog removal: %v", err)
-	}
-	removed = waitForBrokerEvent(t, events, webmcp.BrokerEventCatalogChanged)
-	if removed.BrowserID != candidate.ID || removed.TargetID != "tab-a" || removed.Generation != 1 || removed.Reason != "tools_removed" {
-		t.Fatalf("catalog removal event = %#v, want watched target removal", removed)
-	}
+	requireBrokerStep(t, externalSession.EmitToolsRemoved("frame-1", writeTool.Name), "emit repeated external catalog removal")
+	assertNoBrokerEvent(t, watch.events, "repeated catalog removal")
+	requireBrokerStep(t, externalSession.EmitToolsAdded(writeTool), "re-add external catalog tool")
+	requireWatchedCatalogEvent(t, watch, "tools_added", "catalog re-add event")
+	requireBrokerStep(t, externalSession.EmitToolsRemoved("frame-1", writeTool.Name), "emit external catalog removal")
+	requireWatchedCatalogEvent(t, watch, "tools_removed", "catalog removal event")
+}
 
-	if err := externalSession.Navigate("https://fixture.test/next", "https://fixture.test"); err != nil {
-		t.Fatalf("navigate watched target: %v", err)
-	}
-	generationEvent := waitForBrokerEvent(t, events, webmcp.BrokerEventGenerationChanged)
-	if generationEvent.BrowserID != candidate.ID || generationEvent.TargetID != "tab-a" || generationEvent.Generation != 2 {
+func assertCrossProcessStaleGenerationIgnored(t *testing.T, watch crossProcessWatch, externalSession *testkit.ScriptedTargetSession) {
+	t.Helper()
+	requireBrokerStep(t, externalSession.Navigate("https://fixture.test/next", "https://fixture.test"), "navigate watched target")
+	generationEvent := waitForBrokerEvent(t, watch.events, webmcp.BrokerEventGenerationChanged)
+	if generationEvent.BrowserID != watch.candidate.ID || generationEvent.TargetID != crossProcessTargetID || generationEvent.Generation != 2 {
 		t.Fatalf("generation event = %#v, want generation two", generationEvent)
 	}
-	if err := externalSession.Emit(webmcp.BrowserEvent{
+	requireBrokerStep(t, externalSession.Emit(webmcp.BrowserEvent{
 		Type:       webmcp.EventToolsAdded,
 		Generation: 1,
 		Tools:      []webmcp.ToolDescriptor{pageTool("stale_tool", "frame-1", `{}`)},
-	}); err != nil {
-		t.Fatalf("emit stale catalog event: %v", err)
-	}
-	assertNoBrokerEvent(t, events, "stale generation catalog event")
-	current, err := broker.ListTools(context.Background(), webmcp.ListToolsOptions{IncludeSchemas: true})
-	if err != nil {
-		t.Fatalf("list catalog after stale event: %v", err)
-	}
+	}), "emit stale catalog event")
+	assertNoBrokerEvent(t, watch.events, "stale generation catalog event")
+	current, err := watch.broker.ListTools(context.Background(), webmcp.ListToolsOptions{IncludeSchemas: true})
+	requireBrokerStep(t, err, "list catalog after stale event")
 	if current.Generation != 2 || len(current.Tools) != 0 {
 		t.Fatalf("catalog after stale event = %#v, want empty generation-two catalog", current)
 	}
+}
 
-	otherTargetValue, err := externalHandleValue.Attach(context.Background(), "tab-b", webmcp.TargetOwnershipExternal)
-	if err != nil {
-		t.Fatalf("attach other target: %v", err)
-	}
+func assertCrossProcessOtherTargetsIgnored(t *testing.T, watch crossProcessWatch, externalHandle webmcp.BrowserHandle, otherCandidate webmcp.BrowserCandidate) {
+	t.Helper()
+	otherTargetValue, err := externalHandle.Attach(context.Background(), "tab-b", webmcp.TargetOwnershipExternal)
+	requireBrokerStep(t, err, "attach other target")
 	otherTarget := otherTargetValue.(*testkit.ScriptedTargetSession)
-	if err := otherTarget.EmitToolsAdded(pageTool("other_target_tool", "frame-1", `{}`)); err != nil {
-		t.Fatalf("emit other-target catalog event: %v", err)
-	}
-	assertNoBrokerEvent(t, events, "other-target catalog event")
+	requireBrokerStep(t, otherTarget.EmitToolsAdded(pageTool("other_target_tool", "frame-1", `{}`)), "emit other-target catalog event")
+	assertNoBrokerEvent(t, watch.events, "other-target catalog event")
 
-	otherBrowserHandle, err := runtime.Open(context.Background(), otherCandidate)
-	if err != nil {
-		t.Fatalf("open other browser client: %v", err)
-	}
+	otherBrowserHandle, err := watch.runtime.Open(context.Background(), otherCandidate)
+	requireBrokerStep(t, err, "open other browser client")
 	otherBrowserSessionValue, err := otherBrowserHandle.Attach(context.Background(), "tab-other", webmcp.TargetOwnershipExternal)
-	if err != nil {
-		t.Fatalf("attach other browser target: %v", err)
-	}
+	requireBrokerStep(t, err, "attach other browser target")
 	otherBrowserSession := otherBrowserSessionValue.(*testkit.ScriptedTargetSession)
-	if err := otherBrowserSession.EmitToolsAdded(pageTool("other_browser_tool", "frame-1", `{}`)); err != nil {
-		t.Fatalf("emit other-browser catalog event: %v", err)
-	}
-	assertNoBrokerEvent(t, events, "other-browser catalog event")
-
-	cancelWatch()
-	select {
-	case _, ok := <-events:
-		if ok {
-			t.Fatal("watch stream remained open after cancellation")
-		}
-	case <-time.After(time.Second):
-		t.Fatal("watch stream did not close after cancellation")
-	}
+	requireBrokerStep(t, otherBrowserSession.EmitToolsAdded(pageTool("other_browser_tool", "frame-1", `{}`)), "emit other-browser catalog event")
+	assertNoBrokerEvent(t, watch.events, "other-browser catalog event")
 }
 
 func waitForBrokerEvent(t *testing.T, events <-chan webmcp.BrokerEvent, want webmcp.BrokerEventType) webmcp.BrokerEvent {

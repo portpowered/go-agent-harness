@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 )
@@ -445,189 +444,33 @@ func (b *StatefulBroker) selectWithOptions(ctx context.Context, selector TargetS
 		return PageContext{}, ErrClosed
 	}
 	b.flushSelected()
-	b.mu.Lock()
-	if b.closed {
-		b.mu.Unlock()
-		return PageContext{}, ErrClosed
+	current, page, reused, err := b.reuseSelection(ctx, selector, options)
+	if reused || err != nil {
+		return page, err
 	}
-	current := b.selected
-	if current != nil && current.active &&
-		current.context.Key.BrowserID == selector.BrowserID && current.context.Key.TargetID == selector.TargetID {
-		handle := current.handle
-		contextValue := clonePageContext(current.context)
-		b.mu.Unlock()
-		if err := b.selectedStateError(current, "lifecycle", "selection_not_connected"); err != nil {
-			return PageContext{}, err
-		}
-		if options.Activate {
-			if err := handle.Activate(ctx, selector.TargetID); err != nil {
-				if _, lifecycle := lifecycleClassifiedError(err); lifecycle {
-					return PageContext{}, err
-				}
-				if failure := b.promoteActivationLoss(current, selector, "activate", err); failure != nil {
-					return PageContext{}, failure
-				}
-				// Foreground activation is ancillary to the already-ready target
-				// session. A live browser may reject the operation (notably in
-				// headless mode) without making the exact WebMCP selection unusable.
-			}
-			if failure := b.selectedStateError(current, "activate", "selection_not_connected"); failure != nil {
-				return PageContext{}, failure
-			}
-		}
-		return contextValue, nil
-	}
-	b.mu.Unlock()
-	if current != nil && current.context.Key.BrowserID == selector.BrowserID {
-		if err := b.selectedStateError(current, "selection", "selection_not_connected"); err != nil {
-			return PageContext{}, err
-		}
-	}
-
-	candidate, err := b.candidateFor(ctx, selector.BrowserID)
+	newSession, err := b.attachSelection(ctx, current, selector)
 	if err != nil {
-		if failure := b.promoteBrowserLoss(current, selector, "discover", err); failure != nil {
-			return PageContext{}, failure
-		}
 		return PageContext{}, err
 	}
-	handle, err := b.handleFor(ctx, candidate)
+	b.mu.Lock()
+	old, err := b.installSelectionLocked(newSession)
 	if err != nil {
-		if failure := b.promoteBrowserLoss(current, selector, "open", err); failure != nil {
-			return PageContext{}, failure
-		}
+		b.mu.Unlock()
+		discardCloseError(newSession.session.Close)
 		return PageContext{}, err
 	}
-	targets, err := handle.ListTargets(ctx)
-	if err != nil {
-		if failure := b.promoteBrowserLoss(current, TargetSelector{BrowserID: selector.BrowserID}, "list_targets", err); failure != nil {
-			return PageContext{}, failure
-		}
-		return PageContext{}, targetAttachError(selector, "list_targets", err)
-	}
-	target, ok := findTarget(targets, selector.TargetID)
-	if !ok {
-		return PageContext{}, staleSelectionError(selector.BrowserID, selector.TargetID, 0, "target_not_present")
-	}
-	if target.BrowserID == "" {
-		target.BrowserID = candidate.ID
-	}
-	session, err := handle.Attach(ctx, selector.TargetID, b.ownershipValue())
-	if err != nil {
-		if failure := b.promoteBrowserLoss(current, selector, "attach", err); failure != nil {
-			return PageContext{}, failure
-		}
-		return PageContext{}, targetAttachError(selector, "attach", err)
-	}
-	page := session.Context()
-	page = normalizePageContext(page, candidate.ID, target)
-	if page.SelectedAt.IsZero() {
-		page.SelectedAt = b.clock.Now()
-	}
-	newSession := &brokerSession{
-		handle:              handle,
-		session:             session,
-		target:              cloneTarget(target),
-		context:             page,
-		active:              true,
-		catalog:             make(map[catalogKey]ToolDescriptor),
-		flush:               make(chan chan struct{}),
-		loopDone:            make(chan struct{}),
-		queueWake:           make(chan struct{}, 1),
-		queueStop:           make(chan struct{}),
-		queueWorkerDone:     make(chan struct{}),
-		observedInvocations: make(map[InvocationID]observedInvocation),
-		directCancellations: make(map[InvocationID]*directCancellation),
-		catalogSignal:       make(chan struct{}),
-		catalogUpdate:       make(chan struct{}),
-	}
-	if page.CatalogReady {
-		close(newSession.catalogSignal)
-		newSession.catalogSignal = nil
-	}
-
-	b.mu.Lock()
-	if b.closed {
-		b.mu.Unlock()
-		_ = session.Close()
-		return PageContext{}, ErrClosed
-	}
-	old := b.selected
-	if old != nil {
-		b.retireSessionLocked(old, "target_switch")
-	}
-	b.selected = newSession
-	b.emitLocked(BrokerEvent{Type: BrokerEventSelected, BrowserID: page.Key.BrowserID, TargetID: page.Key.TargetID, Generation: page.Generation, Reason: "selected"})
 	b.wg.Add(2)
 	go b.runSession(newSession)
 	go b.runInvocationQueue(newSession)
 	b.mu.Unlock()
 
 	if old != nil {
-		_ = old.session.Close()
+		discardCloseError(old.session.Close)
 	}
-	if err := session.EnableWebMCP(ctx); err != nil {
-		if failure := b.promoteBrowserLoss(newSession, selector, "enable_webmcp", err); failure != nil {
-			_ = session.Close()
-			return PageContext{}, failure
-		}
-		b.invalidateSession(newSession, "enable_failed")
-		_ = session.Close()
-		return PageContext{}, targetAttachError(selector, "enable_webmcp", err)
+	if err := b.enableSelection(ctx, newSession, selector); err != nil {
+		return PageContext{}, err
 	}
-	b.flushSession(newSession)
-	b.syncSessionReadiness(newSession)
-	if err := b.waitForInitialCatalog(ctx, newSession); err != nil {
-		if failure := b.promoteBrowserLoss(newSession, selector, "catalog", err); failure != nil {
-			_ = session.Close()
-			return PageContext{}, failure
-		}
-		// A catalog deadline is an operation result, not a lifecycle
-		// transition. Keep the connected selection and its event consumer
-		// alive so a later toolsAdded/catalog-ready event can recover it.
-		if isCatalogEvidenceError(err) {
-			b.mu.Lock()
-			if b.selected == newSession && newSession.active {
-				newSession.catalogEvidencePending = true
-			}
-			b.mu.Unlock()
-			b.flushSession(newSession)
-			return PageContext{}, err
-		}
-		b.invalidateSession(newSession, "catalog_wait_canceled")
-		_ = session.Close()
-		return PageContext{}, targetAttachError(selector, "catalog", err)
-	}
-	b.flushSession(newSession)
-	b.mu.Lock()
-	if b.selected != newSession || !newSession.active || !newSession.context.Connected {
-		failure := sessionLifecycleFailure(newSession)
-		if failure == nil {
-			failure = staleSelectionForSession(newSession, "selection_not_connected")
-		}
-		b.mu.Unlock()
-		_ = session.Close()
-		return PageContext{}, failure
-	}
-	b.updateReadinessLocked(newSession)
-	page = clonePageContext(newSession.context)
-	b.mu.Unlock()
-	if options.Activate {
-		if err := handle.Activate(ctx, selector.TargetID); err != nil {
-			if failure := b.promoteActivationLoss(newSession, selector, "activate", err); failure != nil {
-				_ = session.Close()
-				return PageContext{}, failure
-			}
-			// Foreground activation is best effort once exact attachment and
-			// catalog readiness have succeeded. Check the session after the
-			// operation so a concurrent target/browser loss still wins.
-		}
-		if failure := b.selectedStateError(newSession, "activate", "selection_not_connected"); failure != nil {
-			_ = session.Close()
-			return PageContext{}, failure
-		}
-	}
-	return page, nil
+	return b.confirmNewSelection(ctx, newSession, selector, options)
 }
 
 // Invoke admits one validated page call into the selected target's FIFO. The
@@ -650,65 +493,6 @@ func (b *StatefulBroker) Cancel(ctx context.Context, request CancelRequest) erro
 // target or depends on this broker having admitted the original invocation.
 func (b *StatefulBroker) CancelDirect(ctx context.Context, request DirectCancelRequest) error {
 	return b.cancelDirectInvocation(ctx, request)
-}
-
-// Close retires every session-local reference and closes the broker-owned
-// handles. It is idempotent; a later call returns the first aggregate error.
-func (b *StatefulBroker) Close() error {
-	if b == nil {
-		return nil
-	}
-	b.mu.Lock()
-	if b.closed {
-		done := b.closeDone
-		b.mu.Unlock()
-		<-done
-		b.mu.Lock()
-		err := b.closeErr
-		b.mu.Unlock()
-		return err
-	}
-	b.closed = true
-	close(b.closedCh)
-	selected := b.selected
-	if selected != nil {
-		b.retireSessionLocked(selected, "broker_close")
-	}
-	handles := make([]BrowserHandle, 0, len(b.browsers))
-	seenHandles := make(map[BrowserHandle]struct{}, len(b.browsers))
-	for _, state := range b.browsers {
-		if state.handle == nil {
-			continue
-		}
-		if _, seen := seenHandles[state.handle]; seen {
-			continue
-		}
-		seenHandles[state.handle] = struct{}{}
-		handles = append(handles, state.handle)
-	}
-	for watcher := range b.watchers {
-		delete(b.watchers, watcher)
-		close(watcher.events)
-	}
-	for watcher := range b.browserWatchers {
-		delete(b.browserWatchers, watcher)
-		close(watcher.events)
-	}
-	b.mu.Unlock()
-
-	var joined error
-	if selected != nil {
-		joined = errors.Join(joined, invokeBrokerCloseWithTimeout(b.closeTimeout, "target session", selected.session.Close))
-	}
-	for _, handle := range handles {
-		joined = errors.Join(joined, invokeBrokerCloseWithTimeout(b.closeTimeout, "browser handle", handle.Close))
-	}
-	joined = errors.Join(joined, waitForBrokerWorkersWithTimeout(b.closeTimeout, &b.wg))
-	b.mu.Lock()
-	b.closeErr = joined
-	close(b.closeDone)
-	b.mu.Unlock()
-	return joined
 }
 
 func (b *StatefulBroker) candidateFor(ctx context.Context, browserID BrowserID) (BrowserCandidate, error) {
@@ -896,105 +680,6 @@ func (b *StatefulBroker) applyBrowserEvent(selected *brokerSession, event Browse
 			b.invalidateSessionLocked(selected, event.Reason)
 		}
 	}
-}
-
-// observeBrowserInvocationLocked consumes owned events as a provenance barrier
-// and records protocol invocations initiated by other command-scoped brokers.
-func (b *StatefulBroker) observeBrowserInvocationLocked(selected *brokerSession, event BrowserEvent) {
-	if selected == nil || event.InvocationID == "" {
-		return
-	}
-	if invocation, owned := b.browserInvocations[event.InvocationID]; owned {
-		b.observeOwnedBrowserInvocationLocked(selected, event, invocation)
-		return
-	}
-	if _, observed := selected.observedInvocations[event.InvocationID]; observed {
-		return
-	}
-	if _, terminal := b.browserTerminalSeen[event.InvocationID]; terminal {
-		return
-	}
-
-	generation := event.Generation
-	if generation == 0 {
-		generation = selected.context.Generation
-	}
-	if generation > selected.context.Generation {
-		b.advanceGenerationLocked(selected, generation, "invocation_generation")
-	}
-	if generation != selected.context.Generation {
-		return
-	}
-	observed := observedInvocation{
-		browserID:  selected.context.Key.BrowserID,
-		targetID:   selected.context.Key.TargetID,
-		generation: generation,
-	}
-	if descriptor, ok := observedToolDescriptorLocked(selected, event, generation); ok {
-		observed.toolRef = descriptor.Ref
-		observed.toolName = descriptor.Name
-	}
-	selected.observedInvocations[event.InvocationID] = observed
-	b.emitLocked(BrokerEvent{
-		Type:         BrokerEventInvocationCreated,
-		BrowserID:    observed.browserID,
-		TargetID:     observed.targetID,
-		Generation:   observed.generation,
-		InvocationID: event.InvocationID,
-		ToolRef:      observed.toolRef,
-		ToolName:     observed.toolName,
-		State:        InvocationDispatched,
-		Reason:       "browser_observed",
-	})
-	if terminal, ok := b.takeEarlyTerminalLocked(event.InvocationID, observed.generation); ok {
-		b.recordBrowserTerminalIDLocked(event.InvocationID)
-		b.emitObservedBrowserTerminalLocked(observed, event.InvocationID, terminal.status, terminal.errorCode, terminal.reason, terminal.at)
-	}
-}
-
-func (b *StatefulBroker) reconcileObservedBrowserResponseLocked(selected *brokerSession, event BrowserEvent) bool {
-	if selected == nil || event.InvocationID == "" {
-		return false
-	}
-	if _, owned := b.browserInvocations[event.InvocationID]; owned {
-		return false
-	}
-	if !b.acceptBrowserEventGenerationLocked(selected, event) {
-		return true
-	}
-	if _, terminal := b.browserTerminalSeen[event.InvocationID]; terminal {
-		return true
-	}
-	observed, ok := selected.observedInvocations[event.InvocationID]
-	if !ok {
-		return false
-	}
-	delete(selected.observedInvocations, event.InvocationID)
-	b.recordBrowserTerminalIDLocked(event.InvocationID)
-	b.emitObservedBrowserTerminalLocked(observed, event.InvocationID, event.Status, event.ErrorCode, event.Reason, event.At)
-	return true
-}
-
-func (b *StatefulBroker) emitObservedBrowserTerminalLocked(observed observedInvocation, id InvocationID, status, errorCode, reason string, at time.Time) {
-	state, _ := terminalState(status)
-	if errorCode != "" {
-		reason = errorCode
-	}
-	if reason == "" {
-		reason = strings.ToLower(strings.TrimSpace(status))
-	}
-	b.emitLocked(BrokerEvent{
-		Type:         BrokerEventInvocationTerminal,
-		At:           at,
-		BrowserID:    observed.browserID,
-		TargetID:     observed.targetID,
-		Generation:   observed.generation,
-		InvocationID: id,
-		ToolRef:      observed.toolRef,
-		ToolName:     observed.toolName,
-		State:        state,
-		Reason:       reason,
-	})
 }
 
 func (b *StatefulBroker) acceptBrowserEventGenerationLocked(selected *brokerSession, event BrowserEvent) bool {
@@ -1265,35 +950,41 @@ func (b *StatefulBroker) mintToolRefLocked(descriptor ToolDescriptor) (ToolRef, 
 		if err != nil {
 			return "", err
 		}
-		if err := validateToolRefSyntax(ref); err != nil {
+		if validateToolRefSyntax(ref) != nil {
 			continue
 		}
 		if _, active := b.refs[ref]; active {
 			continue
 		}
-		if _, wasRetired := b.retired[ref]; wasRetired {
-			// A stable factory cannot produce a second value for the same
-			// descriptor. Fall back to the configured ID source after a
-			// same-generation remove/re-add so a retired ref stays stale.
-			if b.toolRefFactory != nil {
-				ref, err = b.ids.NewToolRef()
-				if err != nil {
-					return "", err
-				}
-				if err := validateToolRefSyntax(ref); err != nil {
-					continue
-				}
-				if _, active := b.refs[ref]; active {
-					continue
-				}
-				if _, wasRetired := b.retired[ref]; wasRetired {
-					continue
-				}
-				return ref, nil
-			}
+		if _, wasRetired := b.retired[ref]; !wasRetired {
+			return ref, nil
+		}
+		// A stable factory cannot produce a second value for the same
+		// descriptor. Fall back to the configured ID source after a
+		// same-generation remove/re-add so a retired ref stays stale.
+		if b.toolRefFactory == nil {
 			continue
 		}
-		return ref, nil
+		ref, err = b.ids.NewToolRef()
+		if err != nil {
+			return "", err
+		}
+		if b.toolRefUnusedLocked(ref) {
+			return ref, nil
+		}
 	}
 	return "", errors.New("webmcp: tool ref source did not produce a unique valid ref")
+}
+
+// toolRefUnusedLocked reports whether ref is valid and neither active nor
+// retired.
+func (b *StatefulBroker) toolRefUnusedLocked(ref ToolRef) bool {
+	if validateToolRefSyntax(ref) != nil {
+		return false
+	}
+	if _, active := b.refs[ref]; active {
+		return false
+	}
+	_, wasRetired := b.retired[ref]
+	return !wasRetired
 }

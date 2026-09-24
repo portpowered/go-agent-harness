@@ -50,3 +50,21 @@ type failingOpenRuntime struct {
 func (r failingOpenRuntime) Open(context.Context, webmcp.BrowserCandidate) (webmcp.BrowserHandle, error) {
 	return nil, r.err
 }
+
+// assertLifecycleTerminalDetails checks the frozen safe details of a
+// detach or disconnect terminal result.
+func assertLifecycleTerminalDetails(t *testing.T, terminal webmcp.InvokeResult, wantCode webmcp.ErrorCode, browserID webmcp.BrowserID, wantReason string) {
+	t.Helper()
+	details := terminal.ErrorDetails
+	if wantCode == webmcp.ErrorTargetDetached {
+		if details["browser_id"] != string(browserID) || details["target_id"] != "tab-a" || details["generation"] != uint64(1) || details["reason"] != wantReason {
+			t.Fatalf("detach details = %#v, want frozen safe details", details)
+		}
+		return
+	}
+	if wantCode == webmcp.ErrorBrowserDisconnected {
+		if details["browser_id"] != string(browserID) || details["target_id"] != "tab-a" || details["phase"] != "lifecycle" || details["reconnect_required"] != true {
+			t.Fatalf("disconnect details = %#v, want frozen safe details", details)
+		}
+	}
+}

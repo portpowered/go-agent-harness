@@ -1,12 +1,14 @@
 package webmcp
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 )
 
@@ -229,4 +231,73 @@ func staleToolRefError(ref ToolRef, generation uint64) error {
 		"current_generation": generation,
 		"refresh_required":   true,
 	}, ErrStaleToolRef)
+}
+
+func selectedTargetSelector(selected *brokerSession) TargetSelector {
+	return TargetSelector{BrowserID: selected.context.Key.BrowserID, TargetID: selected.context.Key.TargetID}
+}
+
+// refreshSelectedCatalog re-enables the semantic catalog stream for the
+// selected page and waits for current-generation catalog evidence.
+func (b *StatefulBroker) refreshSelectedCatalog(ctx context.Context, selected *brokerSession) error {
+	if err := selected.session.EnableWebMCP(ctx); err != nil {
+		if failure := b.promoteBrowserLoss(selected, selectedTargetSelector(selected), "refresh", err); failure != nil {
+			return failure
+		}
+		return targetAttachError(selectedTargetSelector(selected), "refresh", err)
+	}
+	b.flushSession(selected)
+	b.syncSessionReadiness(selected)
+	if err := b.waitForCatalog(ctx, selected, false); err != nil {
+		if failure := b.promoteBrowserLoss(selected, selectedTargetSelector(selected), "refresh", err); failure != nil {
+			return failure
+		}
+		if isCatalogEvidenceError(err) {
+			return err
+		}
+		return targetAttachError(selectedTargetSelector(selected), "refresh", err)
+	}
+	return nil
+}
+
+// waitForPendingCatalogEvidence handles a selection that returned a retryable
+// catalog deadline before the page published its producer. Later list calls
+// stay event-driven and bounded for that exact attachment. A page navigation
+// starts a fresh document, where an empty catalog is a valid snapshot until
+// new evidence arrives; the next catalog event still updates the same
+// generation.
+func (b *StatefulBroker) waitForPendingCatalogEvidence(ctx context.Context, selected *brokerSession) error {
+	b.mu.Lock()
+	catalogEvidencePending := selected.catalogEvidencePending
+	b.mu.Unlock()
+	if !catalogEvidencePending {
+		return nil
+	}
+	if err := b.waitForCatalog(ctx, selected, false); err != nil {
+		if failure := b.promoteBrowserLoss(selected, selectedTargetSelector(selected), "catalog", err); failure != nil {
+			return failure
+		}
+		return err
+	}
+	return nil
+}
+
+func filteredCatalogToolsLocked(selected *brokerSession, options ListToolsOptions) []ToolDescriptor {
+	tools := make([]ToolDescriptor, 0, len(selected.catalog))
+	for _, descriptor := range selected.catalog {
+		if options.NameContains != "" && !strings.Contains(descriptor.Name, options.NameContains) {
+			continue
+		}
+		if options.FrameID != "" && descriptor.FrameID != options.FrameID {
+			continue
+		}
+		tools = append(tools, cloneToolDescriptor(descriptor))
+	}
+	sort.Slice(tools, func(i, j int) bool {
+		if tools[i].FrameID != tools[j].FrameID {
+			return tools[i].FrameID < tools[j].FrameID
+		}
+		return tools[i].Name < tools[j].Name
+	})
+	return tools
 }

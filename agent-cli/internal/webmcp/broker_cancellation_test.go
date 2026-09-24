@@ -529,16 +529,7 @@ func TestStatefulBrokerDetachAndDisconnectClassifyUnresolvedWork(t *testing.T) {
 			if terminal.State != webmcp.InvocationError || terminal.ErrorCode != string(testCase.wantCode) {
 				t.Fatalf("lifecycle result = %#v, want %s", terminal, testCase.wantCode)
 			}
-			switch testCase.wantCode {
-			case webmcp.ErrorTargetDetached:
-				if terminal.ErrorDetails["browser_id"] != string(candidate.ID) || terminal.ErrorDetails["target_id"] != "tab-a" || terminal.ErrorDetails["generation"] != uint64(1) || terminal.ErrorDetails["reason"] != testCase.wantReason {
-					t.Fatalf("detach details = %#v, want frozen safe details", terminal.ErrorDetails)
-				}
-			case webmcp.ErrorBrowserDisconnected:
-				if terminal.ErrorDetails["browser_id"] != string(candidate.ID) || terminal.ErrorDetails["target_id"] != "tab-a" || terminal.ErrorDetails["phase"] != "lifecycle" || terminal.ErrorDetails["reconnect_required"] != true {
-					t.Fatalf("disconnect details = %#v, want frozen safe details", terminal.ErrorDetails)
-				}
-			}
+			assertLifecycleTerminalDetails(t, terminal, testCase.wantCode, candidate.ID, testCase.wantReason)
 			if pending := broker.PendingInvocations(); len(pending) != 0 {
 				t.Fatalf("pending after %s = %#v, want empty", testCase.name, pending)
 			}
@@ -902,26 +893,26 @@ func newInvocationBroker(t *testing.T, runtime *testkit.ScriptedBrowserRuntime, 
 		InvocationTimeout: timeout,
 	})
 	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: "tab-a"}); err != nil {
-		broker.Close()
+		closeFailedSetupBroker(t, broker)
 		t.Fatalf("select target: %v", err)
 	}
 	snapshot, err := broker.ListTools(context.Background(), webmcp.ListToolsOptions{IncludeSchemas: true})
 	if err != nil {
-		broker.Close()
+		closeFailedSetupBroker(t, broker)
 		t.Fatalf("list tools: %v", err)
 	}
 	if len(snapshot.Tools) != 1 {
-		broker.Close()
+		closeFailedSetupBroker(t, broker)
 		t.Fatalf("tools = %#v, want one page tool", snapshot.Tools)
 	}
 	handleValue, err := runtime.Open(context.Background(), candidate)
 	if err != nil {
-		broker.Close()
+		closeFailedSetupBroker(t, broker)
 		t.Fatalf("open fixture handle: %v", err)
 	}
 	session := handleValue.(*testkit.ScriptedBrowserHandle).TargetSession("tab-a")
 	if session == nil {
-		broker.Close()
+		closeFailedSetupBroker(t, broker)
 		t.Fatal("fixture session is nil")
 	}
 	t.Cleanup(func() { _ = broker.Close() })

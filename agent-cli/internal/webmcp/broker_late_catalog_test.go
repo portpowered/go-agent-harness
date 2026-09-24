@@ -13,6 +13,13 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
+// Catalog-evidence diagnostic values shared by the late and loading catalog
+// tests.
+const (
+	catalogDeadlineReason       = "deadline_exceeded"
+	catalogUnverifiedReasonCode = "page_tools_unverified"
+)
+
 func TestStatefulBrokerReevaluatesLateCatalogOnTheSameAttachment(t *testing.T) {
 	candidate := webmcp.BrowserCandidate{ID: "browser-late", Product: "fixture", Loopback: true}
 	runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate,
@@ -34,22 +41,7 @@ func TestStatefulBrokerReevaluatesLateCatalogOnTheSameAttachment(t *testing.T) {
 		BrowserID: candidate.ID,
 		TargetID:  "tab-late",
 	})
-	if err == nil {
-		t.Fatal("select succeeded without catalog evidence")
-	}
-	var classified *webmcp.ClassifiedError
-	if !errors.As(err, &classified) {
-		t.Fatalf("select error = %T %v, want classified catalog error", err, err)
-	}
-	if classified.Code != webmcp.ErrorBrowserProtocol || !classified.Retryable {
-		t.Fatalf("select error = %+v, want retryable browser protocol error", classified)
-	}
-	if classified.Details["reason_code"] != "page_tools_unverified" || classified.Details["reason"] != "deadline_exceeded" {
-		t.Fatalf("select details = %#v, want page_tools_unverified/deadline_exceeded", classified.Details)
-	}
-	if classified.Details["browser_id"] != string(candidate.ID) || classified.Details["target_id"] != "tab-late" || classified.Details["generation"] != uint64(1) {
-		t.Fatalf("select identity details = %#v, want original browser/target/generation", classified.Details)
-	}
+	assertLateCatalogSelectDeadline(t, err, candidate.ID)
 
 	selected, err := broker.Selected(context.Background())
 	if err != nil {
@@ -59,25 +51,7 @@ func TestStatefulBrokerReevaluatesLateCatalogOnTheSameAttachment(t *testing.T) {
 		t.Fatalf("selected after timeout = %+v, want connected unready generation one", selected)
 	}
 
-	toolSet := webmcptools.NewBrokerToolSet(broker)
-	response, err := toolSet.Executor().Execute(context.Background(), messages.ToolCall{
-		ID:        "late-list-before-registration",
-		Name:      webmcp.ListToolsToolName,
-		Arguments: `{}`,
-	})
-	if err != nil {
-		t.Fatalf("model-facing list before registration: %v", err)
-	}
-	envelope, err := webmcp.UnmarshalToolResult([]byte(response.Content))
-	if err != nil {
-		t.Fatalf("decode retryable model result: %v", err)
-	}
-	if envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorBrowserProtocol) || !envelope.Error.Retryable {
-		t.Fatalf("model-facing list result = %#v, want retryable browser protocol failure", envelope)
-	}
-	if envelope.Error.Details["reason_code"] != "page_tools_unverified" || envelope.Error.Details["reason"] != "deadline_exceeded" {
-		t.Fatalf("model-facing details = %#v, want catalog deadline details", envelope.Error.Details)
-	}
+	assertModelFacingLateListRetryable(t, broker)
 
 	handle := runtime.Browser(candidate.ID)
 	if handle == nil {
@@ -134,5 +108,48 @@ func TestStatefulBrokerReevaluatesLateCatalogOnTheSameAttachment(t *testing.T) {
 	}
 	if counts[testkit.OperationInvoke] != 1 {
 		t.Fatalf("invoke operations = %#v, want one late-tool invocation", counts)
+	}
+}
+
+func assertLateCatalogSelectDeadline(t *testing.T, err error, browserID webmcp.BrowserID) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("select succeeded without catalog evidence")
+	}
+	var classified *webmcp.ClassifiedError
+	if !errors.As(err, &classified) {
+		t.Fatalf("select error = %T %v, want classified catalog error", err, err)
+	}
+	if classified.Code != webmcp.ErrorBrowserProtocol || !classified.Retryable {
+		t.Fatalf("select error = %+v, want retryable browser protocol error", classified)
+	}
+	if classified.Details["reason_code"] != catalogUnverifiedReasonCode || classified.Details["reason"] != catalogDeadlineReason {
+		t.Fatalf("select details = %#v, want page_tools_unverified/deadline_exceeded", classified.Details)
+	}
+	if classified.Details["browser_id"] != string(browserID) || classified.Details["target_id"] != "tab-late" || classified.Details["generation"] != uint64(1) {
+		t.Fatalf("select identity details = %#v, want original browser/target/generation", classified.Details)
+	}
+}
+
+func assertModelFacingLateListRetryable(t *testing.T, broker *webmcp.StatefulBroker) {
+	t.Helper()
+	toolSet := webmcptools.NewBrokerToolSet(broker)
+	response, err := toolSet.Executor().Execute(context.Background(), messages.ToolCall{
+		ID:        "late-list-before-registration",
+		Name:      webmcp.ListToolsToolName,
+		Arguments: `{}`,
+	})
+	if err != nil {
+		t.Fatalf("model-facing list before registration: %v", err)
+	}
+	envelope, err := webmcp.UnmarshalToolResult([]byte(response.Content))
+	if err != nil {
+		t.Fatalf("decode retryable model result: %v", err)
+	}
+	if envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorBrowserProtocol) || !envelope.Error.Retryable {
+		t.Fatalf("model-facing list result = %#v, want retryable browser protocol failure", envelope)
+	}
+	if envelope.Error.Details["reason_code"] != catalogUnverifiedReasonCode || envelope.Error.Details["reason"] != catalogDeadlineReason {
+		t.Fatalf("model-facing details = %#v, want catalog deadline details", envelope.Error.Details)
 	}
 }

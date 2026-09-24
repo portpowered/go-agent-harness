@@ -66,64 +66,8 @@ func TestStatefulBrokerSerializesTargetAdmissionsUntilTerminalResponse(t *testin
 	defer cancelWatch()
 	watch := broker.Watch(watchCtx)
 
-	firstDone := make(chan invocationCall, 1)
-	go func() {
-		result, invokeErr := broker.Invoke(context.Background(), webmcp.InvokeRequest{
-			ToolRef:     refs["write_state"],
-			Input:       []byte(`{"step":1}`),
-			ModelCallID: "model-call-1",
-			SessionID:   "session-1",
-			ResponseID:  "response-1",
-		})
-		firstDone <- invocationCall{result: result, err: invokeErr}
-	}()
-	firstCreated := assertInvocationCreated(t, watch, refs["write_state"])
-	first := receiveInvocationCall(t, firstDone)
-	if first.err != nil || first.result.State != webmcp.InvocationDispatched || first.result.InvocationID == "" {
-		t.Fatalf("first invoke = %#v, %v; want dispatched", first.result, first.err)
-	}
-	if firstCreated.InvocationID != first.result.InvocationID {
-		t.Fatalf("first creation ID = %q, dispatched ID = %q; want one public ID", firstCreated.InvocationID, first.result.InvocationID)
-	}
-	firstStarted := assertInvocationStarted(t, watch, first.result.InvocationID, refs["write_state"])
-	if firstStarted.ToolName != "write_state" || firstStarted.Reason != "dispatched" {
-		t.Fatalf("first dispatch event = %#v, want canonical tool and dispatched reason", firstStarted)
-	}
-	firstRecord, err := session.WaitForInvocation(context.Background())
-	if err != nil {
-		t.Fatalf("observe first target invocation: %v", err)
-	}
-	if firstRecord.ID != first.result.InvocationID {
-		t.Fatalf("first IDs = broker %q, target %q; want correlation", first.result.InvocationID, firstRecord.ID)
-	}
-	firstSnapshot, ok := broker.Invocation(first.result.InvocationID)
-	if !ok {
-		t.Fatal("first invocation missing from registry while response is blocked")
-	}
-	if firstSnapshot.Operation != webmcp.OperationUnknown || firstSnapshot.ModelCallID != "model-call-1" || firstSnapshot.SessionID != "session-1" || firstSnapshot.ResponseID != "response-1" || firstSnapshot.Deadline.IsZero() {
-		t.Fatalf("first registry snapshot = %#v, want correlation metadata and unknown operation", firstSnapshot)
-	}
-
-	secondDone := make(chan invocationCall, 1)
-	go func() {
-		result, invokeErr := broker.Invoke(context.Background(), webmcp.InvokeRequest{
-			ToolRef: refs["read_state"],
-			Input:   []byte(`{"step":2}`),
-		})
-		secondDone <- invocationCall{result: result, err: invokeErr}
-	}()
-	secondCreated := assertInvocationCreated(t, watch, refs["read_state"])
-	if pending := broker.PendingInvocations(); len(pending) != 2 || pending[0].ID != first.result.InvocationID || pending[1].ID != secondCreated.InvocationID || pending[1].State != webmcp.InvocationQueued {
-		t.Fatalf("broker pending registry after second admission = %#v, want dispatched head and queued tail", pending)
-	}
-	if invocations := session.Invocations(); len(invocations) != 1 {
-		t.Fatalf("target invocations before first terminal = %#v, want only FIFO head", invocations)
-	}
-	select {
-	case second := <-secondDone:
-		t.Fatalf("second invoke returned before first terminal: %#v", second)
-	default:
-	}
+	first := dispatchFirstSerializedInvocation(t, broker, session, watch, refs["write_state"])
+	secondDone := admitQueuedSerializedInvocation(t, broker, session, watch, refs["read_state"], first.result.InvocationID)
 
 	if err := session.ReleaseInvocation(first.result.InvocationID, []byte(`{"first":90071992547409931234567890}`)); err != nil {
 		t.Fatalf("release first invocation: %v", err)
@@ -145,14 +89,91 @@ func TestStatefulBrokerSerializesTargetAdmissionsUntilTerminalResponse(t *testin
 	if err := session.ReleaseInvocation(second.result.InvocationID, []byte(`["second",true]`)); err != nil {
 		t.Fatalf("release second invocation: %v", err)
 	}
-	firstResult, err := broker.WaitInvocation(context.Background(), first.result.InvocationID)
+	assertSerializedTerminalResults(t, broker, session, first.result.InvocationID, second.result.InvocationID)
+	assertInvokeOperationOrder(t, runtime, first.result.InvocationID, second.result.InvocationID)
+}
+
+// dispatchFirstSerializedInvocation admits the FIFO head and verifies its
+// public ID, dispatch event, target correlation, and registry metadata.
+func dispatchFirstSerializedInvocation(t *testing.T, broker *webmcp.StatefulBroker, session *testkit.ScriptedTargetSession, watch <-chan webmcp.BrokerEvent, ref webmcp.ToolRef) invocationCall {
+	t.Helper()
+	firstDone := make(chan invocationCall, 1)
+	go func() {
+		result, invokeErr := broker.Invoke(context.Background(), webmcp.InvokeRequest{
+			ToolRef:     ref,
+			Input:       []byte(`{"step":1}`),
+			ModelCallID: "model-call-1",
+			SessionID:   "session-1",
+			ResponseID:  "response-1",
+		})
+		firstDone <- invocationCall{result: result, err: invokeErr}
+	}()
+	firstCreated := assertInvocationCreated(t, watch, ref)
+	first := receiveInvocationCall(t, firstDone)
+	if first.err != nil || first.result.State != webmcp.InvocationDispatched || first.result.InvocationID == "" {
+		t.Fatalf("first invoke = %#v, %v; want dispatched", first.result, first.err)
+	}
+	if firstCreated.InvocationID != first.result.InvocationID {
+		t.Fatalf("first creation ID = %q, dispatched ID = %q; want one public ID", firstCreated.InvocationID, first.result.InvocationID)
+	}
+	firstStarted := assertInvocationStarted(t, watch, first.result.InvocationID, ref)
+	if firstStarted.ToolName != "write_state" || firstStarted.Reason != "dispatched" {
+		t.Fatalf("first dispatch event = %#v, want canonical tool and dispatched reason", firstStarted)
+	}
+	firstRecord, err := session.WaitForInvocation(context.Background())
+	if err != nil {
+		t.Fatalf("observe first target invocation: %v", err)
+	}
+	if firstRecord.ID != first.result.InvocationID {
+		t.Fatalf("first IDs = broker %q, target %q; want correlation", first.result.InvocationID, firstRecord.ID)
+	}
+	firstSnapshot, ok := broker.Invocation(first.result.InvocationID)
+	if !ok {
+		t.Fatal("first invocation missing from registry while response is blocked")
+	}
+	if firstSnapshot.Operation != webmcp.OperationUnknown || firstSnapshot.ModelCallID != "model-call-1" || firstSnapshot.SessionID != "session-1" || firstSnapshot.ResponseID != "response-1" || firstSnapshot.Deadline.IsZero() {
+		t.Fatalf("first registry snapshot = %#v, want correlation metadata and unknown operation", firstSnapshot)
+	}
+	return first
+}
+
+// admitQueuedSerializedInvocation admits a second call behind the blocked
+// FIFO head and verifies it stays queued without reaching the target.
+func admitQueuedSerializedInvocation(t *testing.T, broker *webmcp.StatefulBroker, session *testkit.ScriptedTargetSession, watch <-chan webmcp.BrokerEvent, ref webmcp.ToolRef, firstID webmcp.InvocationID) <-chan invocationCall {
+	t.Helper()
+	secondDone := make(chan invocationCall, 1)
+	go func() {
+		result, invokeErr := broker.Invoke(context.Background(), webmcp.InvokeRequest{
+			ToolRef: ref,
+			Input:   []byte(`{"step":2}`),
+		})
+		secondDone <- invocationCall{result: result, err: invokeErr}
+	}()
+	secondCreated := assertInvocationCreated(t, watch, ref)
+	if pending := broker.PendingInvocations(); len(pending) != 2 || pending[0].ID != firstID || pending[1].ID != secondCreated.InvocationID || pending[1].State != webmcp.InvocationQueued {
+		t.Fatalf("broker pending registry after second admission = %#v, want dispatched head and queued tail", pending)
+	}
+	if invocations := session.Invocations(); len(invocations) != 1 {
+		t.Fatalf("target invocations before first terminal = %#v, want only FIFO head", invocations)
+	}
+	select {
+	case second := <-secondDone:
+		t.Fatalf("second invoke returned before first terminal: %#v", second)
+	default:
+	}
+	return secondDone
+}
+
+func assertSerializedTerminalResults(t *testing.T, broker *webmcp.StatefulBroker, session *testkit.ScriptedTargetSession, firstID, secondID webmcp.InvocationID) {
+	t.Helper()
+	firstResult, err := broker.WaitInvocation(context.Background(), firstID)
 	if err != nil {
 		t.Fatalf("wait first terminal result: %v", err)
 	}
 	if firstResult.State != webmcp.InvocationCompleted || string(firstResult.Output) != `{"first":90071992547409931234567890}` {
 		t.Fatalf("first terminal result = %#v, want raw object output", firstResult)
 	}
-	secondResult, err := broker.WaitInvocation(context.Background(), second.result.InvocationID)
+	secondResult, err := broker.WaitInvocation(context.Background(), secondID)
 	if err != nil {
 		t.Fatalf("wait second terminal result: %v", err)
 	}
@@ -165,14 +186,17 @@ func TestStatefulBrokerSerializesTargetAdmissionsUntilTerminalResponse(t *testin
 	if pending := session.PendingInvocations(); len(pending) != 0 {
 		t.Fatalf("target pending registry = %#v, want empty", pending)
 	}
+}
 
+func assertInvokeOperationOrder(t *testing.T, runtime *testkit.ScriptedBrowserRuntime, firstID, secondID webmcp.InvocationID) {
+	t.Helper()
 	var invokeOperations []testkit.Operation
 	for _, operation := range runtime.Operations() {
 		if operation.Kind == testkit.OperationInvoke {
 			invokeOperations = append(invokeOperations, operation)
 		}
 	}
-	if len(invokeOperations) != 2 || invokeOperations[0].InvocationID != first.result.InvocationID || invokeOperations[1].InvocationID != second.result.InvocationID || invokeOperations[0].Sequence >= invokeOperations[1].Sequence {
+	if len(invokeOperations) != 2 || invokeOperations[0].InvocationID != firstID || invokeOperations[1].InvocationID != secondID || invokeOperations[0].Sequence >= invokeOperations[1].Sequence {
 		t.Fatalf("invoke operation order = %#v, want correlated FIFO order", invokeOperations)
 	}
 }

@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"strings"
 	"time"
@@ -122,19 +121,8 @@ func (b *StatefulBroker) admitInvocation(ctx context.Context, request InvokeRequ
 		return InvokeResult{}, err
 	}
 	b.mu.Lock()
-	if b.closed {
-		b.mu.Unlock()
-		return InvokeResult{}, ErrClosed
-	}
-	if b.selected != selected || !selected.active || !selected.context.Connected {
-		err := selectionStateErrorLocked(selected, "lifecycle", "selection_not_connected")
-		b.mu.Unlock()
-		return InvokeResult{}, err
-	}
-	record, ok := b.refs[request.ToolRef]
-	if !ok || !refCurrentLocked(selected, record) {
-		generation := selected.context.Generation
-		err := staleToolRefError(request.ToolRef, generation)
+	record, err := b.admissionRecordLocked(selected, request.ToolRef, "selection_not_connected")
+	if err != nil {
 		b.mu.Unlock()
 		return InvokeResult{}, err
 	}
@@ -155,18 +143,7 @@ func (b *StatefulBroker) admitInvocation(ctx context.Context, request InvokeRequ
 		input = json.RawMessage(`{}`)
 	}
 	b.mu.Lock()
-	if b.closed {
-		b.mu.Unlock()
-		return InvokeResult{}, ErrClosed
-	}
-	if b.selected != selected || !selected.active || !selected.context.Connected {
-		err := selectionStateErrorLocked(selected, "lifecycle", "selection_changed_before_admission")
-		b.mu.Unlock()
-		return InvokeResult{}, err
-	}
-	record, ok = b.refs[request.ToolRef]
-	if !ok || !refCurrentLocked(selected, record) {
-		err := staleToolRefError(request.ToolRef, selected.context.Generation)
+	if _, err := b.admissionRecordLocked(selected, request.ToolRef, "selection_changed_before_admission"); err != nil {
 		b.mu.Unlock()
 		return InvokeResult{}, err
 	}
@@ -176,27 +153,7 @@ func (b *StatefulBroker) admitInvocation(ctx context.Context, request InvokeRequ
 		b.mu.Unlock()
 		return InvokeResult{}, err
 	}
-	now := b.clock.Now()
-	invocation := &brokerInvocation{
-		selected: selected,
-		ctx:      ctx,
-		invocation: Invocation{
-			ID:          id,
-			Tool:        cloneToolDescriptor(descriptor),
-			Arguments:   cloneJSON(input),
-			State:       InvocationQueued,
-			Operation:   classifyOperation(descriptor),
-			ModelCallID: request.ModelCallID,
-			SessionID:   request.SessionID,
-			ResponseID:  request.ResponseID,
-			CreatedAt:   now,
-			QueuedAt:    now,
-			Deadline:    now.Add(invocationTimeout),
-		},
-		dispatchDone: make(chan invocationDispatch, 1),
-		terminal:     make(chan struct{}),
-		admissionSeq: b.eventSequence + 1,
-	}
+	invocation := b.newBrokerInvocationLocked(ctx, selected, id, request, descriptor, input, invocationTimeout)
 	b.invocations[id] = invocation
 	selected.queue = append(selected.queue, invocation)
 	b.startInvocationTimerLocked(invocation)
@@ -286,12 +243,7 @@ func (b *StatefulBroker) timeoutInvocation(invocation *brokerInvocation) {
 	}
 	action := b.claimTargetCancellationLocked(invocation, context.Background())
 	wait := b.cancellationWaitLocked(invocation, action)
-	phase := "queue"
-	if invocation.invocation.State == InvocationDispatching {
-		phase = "dispatch"
-	} else if invocation.invocation.State == InvocationDispatched {
-		phase = "result"
-	}
+	phase := invocationTimeoutPhase(invocation.invocation.State)
 	timeoutMilliseconds := b.invocationTimeout.Milliseconds()
 	result := invocationFailureResult(invocation, InvocationTimedOut, ErrorInvocationTimedOut, map[string]any{
 		"invocation_id":       string(invocation.invocation.ID),
@@ -310,6 +262,17 @@ func (b *StatefulBroker) timeoutInvocation(invocation *brokerInvocation) {
 	}
 	b.finishInvocationLocked(invocation, result)
 	b.mu.Unlock()
+}
+
+// invocationTimeoutPhase names the lane phase an invocation timed out in.
+func invocationTimeoutPhase(state InvocationState) string {
+	if state == InvocationDispatching {
+		return "dispatch"
+	}
+	if state == InvocationDispatched {
+		return "result"
+	}
+	return "queue"
 }
 
 // runInvocationQueue owns one target-local FIFO. It intentionally waits for
@@ -365,221 +328,6 @@ func (b *StatefulBroker) dispatchQueuedInvocation(invocation *brokerInvocation) 
 	selected.dispatchMu.Unlock()
 	performTargetCancellation(action)
 	b.waitForInvocationLane(invocation)
-}
-
-func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvocation) {
-	selected := invocation.selected
-	b.mu.Lock()
-	if invocation.terminalized {
-		var dispatchErr error
-		if ErrorCode(invocation.finalResult.ErrorCode) == ErrorBrowserDisconnected {
-			dispatchErr = browserDisconnectedErrorForSession(selected, "list_targets", sessionLifecycleFailure(selected))
-		}
-		b.reportDispatchLocked(invocation, invocation.finalResult, dispatchErr)
-		b.mu.Unlock()
-		return
-	}
-	if b.closed || b.selected != selected || !selected.active || !selected.context.Connected {
-		err := selectionStateErrorLocked(selected, "lifecycle", "selection_changed_before_dispatch")
-		result := invocationFailureResultForError(invocation, err, ErrorStaleSelection)
-		b.reportDispatchLocked(invocation, result, err)
-		b.finishInvocationLocked(invocation, result)
-		b.mu.Unlock()
-		return
-	}
-	record, ok := b.refs[invocation.invocation.Tool.Ref]
-	if !ok || !refCurrentLocked(selected, record) {
-		err := staleToolRefError(invocation.invocation.Tool.Ref, selected.context.Generation)
-		result := invocationFailureResult(invocation, InvocationError, ErrorStaleToolRef, nil)
-		b.reportDispatchLocked(invocation, result, err)
-		b.finishInvocationLocked(invocation, result)
-		b.mu.Unlock()
-		return
-	}
-	handle := selected.handle
-	session := selected.session
-	descriptor := cloneToolDescriptor(invocation.invocation.Tool)
-	ctx := invocation.ctx
-	b.mu.Unlock()
-
-	// The target check is repeated for every dequeued call. This prevents a
-	// target disappearing while an earlier invocation occupied the lane.
-	targets, err := handle.ListTargets(ctx)
-	if err != nil || !targetPresent(targets, descriptor.TargetID) {
-		failure := err
-		if failure == nil {
-			failure = staleSelectionError(descriptor.BrowserID, descriptor.TargetID, descriptor.Generation, "target_not_current")
-		}
-		b.mu.Lock()
-		failure = reconcileTargetLossLocked(invocation, failure)
-		if b.selected == selected && (isBrowserEndpointLossError(failure) || isBrowserDisconnectedTransportError(failure)) {
-			if promoted := b.browserDisconnectedLocked(selected, "list_targets", failure); promoted != nil {
-				failure = promoted
-			}
-		}
-		result := invocationFailureResultForError(invocation, failure, ErrorStaleSelection)
-		b.reportDispatchLocked(invocation, result, failure)
-		b.finishInvocationLocked(invocation, result)
-		b.mu.Unlock()
-		return
-	}
-
-	b.mu.Lock()
-	if invocation.terminalized {
-		var dispatchErr error
-		if ErrorCode(invocation.finalResult.ErrorCode) == ErrorBrowserDisconnected {
-			dispatchErr = browserDisconnectedErrorForSession(selected, "list_targets", sessionLifecycleFailure(selected))
-		}
-		b.reportDispatchLocked(invocation, invocation.finalResult, dispatchErr)
-		b.mu.Unlock()
-		return
-	}
-	if b.closed || b.selected != selected || !selected.active || !selected.context.Connected {
-		err = selectionStateErrorLocked(selected, "lifecycle", "selection_changed_before_dispatch")
-		result := invocationFailureResultForError(invocation, err, ErrorStaleSelection)
-		b.reportDispatchLocked(invocation, result, err)
-		b.finishInvocationLocked(invocation, result)
-		b.mu.Unlock()
-		return
-	}
-	record, ok = b.refs[invocation.invocation.Tool.Ref]
-	if !ok || !refCurrentLocked(selected, record) {
-		err = staleToolRefError(invocation.invocation.Tool.Ref, selected.context.Generation)
-		result := invocationFailureResult(invocation, InvocationError, ErrorStaleToolRef, nil)
-		b.reportDispatchLocked(invocation, result, err)
-		b.finishInvocationLocked(invocation, result)
-		b.mu.Unlock()
-		return
-	}
-	// Bind broker-owned replay IDs before the target can synchronously publish
-	// terminal events. Opaque production IDs retain the post-return path below.
-	provisionalID := InvocationID("")
-	if _, deterministic := session.(targetSessionInvokerWithID); deterministic {
-		candidateID := invocation.invocation.ID
-		if _, externallyObserved := selected.observedInvocations[candidateID]; !externallyObserved {
-			provisionalID = candidateID
-			invocation.browserID = provisionalID
-			b.browserInvocations[provisionalID] = invocation
-		}
-	}
-	b.mu.Unlock()
-
-	id, invokeErr := invokeWebMCP(ctx, session, invocation.invocation.ID, descriptor.FrameID, descriptor.Name, cloneJSON(invocation.invocation.Arguments))
-
-	b.mu.Lock()
-	invokeErr = reconcileTargetLossLocked(invocation, invokeErr)
-	if id == "" {
-		if provisionalID != "" {
-			delete(b.browserInvocations, provisionalID)
-			invocation.browserID = ""
-		}
-		if b.selected == selected && (isBrowserEndpointLossError(invokeErr) || isBrowserDisconnectedTransportError(session.Err())) {
-			if failure := b.browserDisconnectedLocked(selected, "invoke", invokeErr); failure != nil {
-				invokeErr = failure
-			}
-		}
-		result := invocationFailureResultForError(invocation, invokeErr, ErrorInvocationFailed)
-		b.reportDispatchLocked(invocation, result, invokeErr)
-		b.finishInvocationLocked(invocation, result)
-		b.mu.Unlock()
-		return
-	}
-	if invocation.terminalized {
-		if provisionalID != "" && provisionalID != id {
-			delete(b.browserInvocations, provisionalID)
-		}
-		invocation.browserID = id
-		invocation.finalResult.BrowserInvocationID = id
-		b.recordBrowserTerminalIDLocked(id)
-		b.takeEarlyTerminalLocked(id, 0)
-		b.rebindTerminalInvocationLocked(invocation)
-		b.reportDispatchLocked(invocation, invocation.finalResult, nil)
-		b.mu.Unlock()
-		return
-	}
-	if provisionalID != "" && provisionalID != id {
-		delete(b.browserInvocations, provisionalID)
-		invocation.browserID = ""
-	}
-
-	if existing, ok := b.browserInvocations[id]; ok && existing != invocation {
-		err = fmt.Errorf("webmcp: duplicate target invocation ID %q", id)
-		result := invocationFailureResult(invocation, InvocationError, ErrorInvocationFailed, map[string]any{
-			"invocation_id":       string(id),
-			"phase":               "correlation",
-			"side_effect_unknown": true,
-		})
-		b.reportDispatchLocked(invocation, result, err)
-		b.finishInvocationLocked(invocation, result)
-		b.mu.Unlock()
-		return
-	}
-	if _, observed := selected.observedInvocations[id]; observed {
-		err = fmt.Errorf("webmcp: target invocation ID %q is still observed by another client", id)
-		result := invocationFailureResult(invocation, InvocationError, ErrorInvocationFailed, map[string]any{
-			"invocation_id":       string(id),
-			"phase":               "correlation",
-			"side_effect_unknown": true,
-		})
-		b.reportDispatchLocked(invocation, result, err)
-		b.finishInvocationLocked(invocation, result)
-		b.mu.Unlock()
-		return
-	}
-	if _, terminal := b.browserTerminalSeen[id]; terminal {
-		err = fmt.Errorf("webmcp: reused terminal target invocation ID %q", id)
-		result := invocationFailureResult(invocation, InvocationError, ErrorInvocationFailed, map[string]any{
-			"invocation_id":       string(id),
-			"phase":               "correlation",
-			"side_effect_unknown": true,
-		})
-		b.reportDispatchLocked(invocation, result, err)
-		b.finishInvocationLocked(invocation, result)
-		b.mu.Unlock()
-		return
-	}
-	invocation.browserID = id
-
-	invocation.invocation.State = InvocationDispatched
-	invocation.invocation.DispatchedAt = b.clock.Now()
-	b.browserInvocations[id] = invocation
-	// The queued admission event identifies the broker invocation before the
-	// browser call starts. Publish the same identity again at the authoritative
-	// dispatch transition so session-scoped consumers can act inside the real
-	// browser invocation window rather than polling broker state or waiting for
-	// a terminal response.
-	b.emitLocked(BrokerEvent{
-		Type:         BrokerEventInvocationCreated,
-		At:           invocation.invocation.DispatchedAt,
-		BrowserID:    invocation.invocation.Tool.BrowserID,
-		TargetID:     invocation.invocation.Tool.TargetID,
-		Generation:   invocation.invocation.Tool.Generation,
-		InvocationID: invocation.invocation.ID,
-		ToolRef:      invocation.invocation.Tool.Ref,
-		ToolName:     invocation.invocation.Tool.Name,
-		State:        InvocationDispatched,
-		Reason:       "dispatched",
-	})
-	result := InvokeResult{InvocationID: invocation.invocation.ID, BrowserInvocationID: id, State: InvocationDispatched}
-	if _, ok := b.takeEarlyTerminalLocked(id, 0); ok {
-		// An early response has no invocation provenance. It may be a stale
-		// response from a previous call which happened to reuse this protocol
-		// ID, so it must fail closed instead of becoming a successful result.
-		b.finishInvocationLocked(invocation, freshnessFailureResult(invocation, "terminal_provenance", "terminal_before_invocation", true))
-		b.mu.Unlock()
-		return
-	}
-	var dispatchErr error
-	if invokeErr != nil && !invocation.terminalized {
-		result = invocationFailureResultForError(invocation, invokeErr, ErrorInvocationFailed)
-		dispatchErr = invokeErr
-		b.reportDispatchLocked(invocation, result, dispatchErr)
-		b.finishInvocationLocked(invocation, result)
-		b.mu.Unlock()
-		return
-	}
-	b.reportDispatchLocked(invocation, result, dispatchErr)
-	b.mu.Unlock()
 }
 
 func (b *StatefulBroker) clearCurrentInvocation(selected *brokerSession, invocation *brokerInvocation) {
@@ -1172,84 +920,6 @@ func (b *StatefulBroker) terminalizeSessionInvocationsLocked(selected *brokerSes
 		b.finishLifecycleInvocationLocked(invocation, state, code, reason, previousGeneration)
 	}
 	signalInvocationQueueLocked(selected)
-}
-func closeInvocationQueueLocked(selected *brokerSession) {
-	if selected == nil || selected.queueClosed {
-		return
-	}
-	selected.queueClosed = true
-	selected.queue = nil // queued entries were terminalized before lane close.
-	close(selected.queueStop)
-	signalInvocationQueueLocked(selected)
-}
-
-func removeQueuedInvocationLocked(selected *brokerSession, target *brokerInvocation) bool {
-	if selected == nil || target == nil {
-		return false
-	}
-	for i, invocation := range selected.queue {
-		if invocation != target {
-			continue
-		}
-		copy(selected.queue[i:], selected.queue[i+1:])
-		selected.queue[len(selected.queue)-1] = nil
-		selected.queue = selected.queue[:len(selected.queue)-1]
-		signalInvocationQueueLocked(selected)
-		return true
-	}
-	return false
-}
-
-func signalInvocationQueueLocked(selected *brokerSession) {
-	if selected == nil {
-		return
-	}
-	select {
-	case selected.queueWake <- struct{}{}:
-	default:
-	}
-}
-
-// Invocation returns a defensive snapshot of an active or recently terminal
-// call. The terminal cache is bounded and exists only to close the race
-// between browser completion and a consumer asking for the result.
-func (b *StatefulBroker) Invocation(id InvocationID) (Invocation, bool) {
-	if b == nil {
-		return Invocation{}, false
-	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if invocation, ok := b.invocations[id]; ok {
-		return cloneInvocation(invocation.invocation), true
-	}
-	if terminal, ok := b.terminalResults[id]; ok {
-		return cloneInvocation(terminal.invocation), true
-	}
-	return Invocation{}, false
-}
-
-// PendingInvocations returns active registry entries in admission order. It
-// is an observation seam for tests and diagnostics, not a provider API.
-func (b *StatefulBroker) PendingInvocations() []Invocation {
-	if b == nil {
-		return nil
-	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	entries := make([]*brokerInvocation, 0, len(b.invocations))
-	for _, invocation := range b.invocations {
-		entries = append(entries, invocation)
-	}
-	for i := 1; i < len(entries); i++ {
-		for j := i; j > 0 && entries[j].admissionSeq < entries[j-1].admissionSeq; j-- {
-			entries[j], entries[j-1] = entries[j-1], entries[j]
-		}
-	}
-	result := make([]Invocation, 0, len(entries))
-	for _, invocation := range entries {
-		result = append(result, cloneInvocation(invocation.invocation))
-	}
-	return result
 }
 
 // WaitInvocation waits for one terminal broker result and consumes its

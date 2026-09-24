@@ -5,6 +5,8 @@ import (
 	"strings"
 )
 
+const capturePagePhase = "capture_page"
+
 // CapturePageScreenshot captures the currently selected page through the
 // existing target session. The selection's dispatch lock remains held from
 // the final lifecycle check through the adapter call, so a late detach or
@@ -42,7 +44,7 @@ func (b *StatefulBroker) CapturePageScreenshot(ctx context.Context) (PageScreens
 		b.mu.Unlock()
 		return PageScreenshot{}, err
 	}
-	if err := b.captureSelectionStateErrorLocked(selected, "capture_page", "selection_not_connected"); err != nil {
+	if err := b.captureSelectionStateErrorLocked(selected, capturePagePhase, "selection_not_connected"); err != nil {
 		b.mu.Unlock()
 		return PageScreenshot{}, err
 	}
@@ -50,22 +52,9 @@ func (b *StatefulBroker) CapturePageScreenshot(ctx context.Context) (PageScreens
 	session := selected.session
 	b.mu.Unlock()
 
-	if !strings.EqualFold(strings.TrimSpace(target.Type), "page") {
-		return PageScreenshot{}, classified(ErrorUnsupportedWebMCP, "the selected browser target does not support page capture", map[string]any{
-			"browser_id":  string(target.BrowserID),
-			"target_id":   string(target.ID),
-			"phase":       "capture_page",
-			"target_type": strings.ToLower(strings.TrimSpace(target.Type)),
-		}, nil)
-	}
-	capturer, ok := session.(PageScreenshotter)
-	if !ok {
-		return PageScreenshot{}, classified(ErrorUnsupportedWebMCP, "the selected browser page does not support screenshot capture", map[string]any{
-			"browser_id": string(target.BrowserID),
-			"target_id":  string(target.ID),
-			"phase":      "capture_page",
-			"capability": PageCaptureScreenshotMethod,
-		}, nil)
+	capturer, err := pageScreenshotCapturer(target, session)
+	if err != nil {
+		return PageScreenshot{}, err
 	}
 
 	screenshot, err := capturer.CapturePageScreenshot(ctx)
@@ -73,46 +62,74 @@ func (b *StatefulBroker) CapturePageScreenshot(ctx context.Context) (PageScreens
 		return PageScreenshot{}, captureErr
 	}
 	if err != nil {
-		// A neutral adapter may report a transport error before its lifecycle
-		// event reaches the broker loop. Preserve that stronger classification
-		// at the capture boundary when the session already knows the cause.
-		b.mu.Lock()
-		if b.selected == selected {
-			if failure := sessionLifecycleFailure(selected); failure != nil {
-				b.mu.Unlock()
-				return PageScreenshot{}, failure
-			}
-			if isBrowserEndpointLossError(session.Err()) {
-				b.invalidateSessionWithCodeLocked(selected, ErrorBrowserDisconnected, "capture_page")
-				failure := browserDisconnectedErrorForSession(selected, "capture_page", session.Err())
-				b.mu.Unlock()
-				return PageScreenshot{}, failure
-			}
-		}
-		b.mu.Unlock()
-		return PageScreenshot{}, err
+		return PageScreenshot{}, b.pageCaptureFailure(selected, session, err)
 	}
 
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	return b.finishPageScreenshotLocked(selected, screenshot)
+}
+
+func pageScreenshotCapturer(target Target, session TargetSession) (PageScreenshotter, error) {
+	if !strings.EqualFold(strings.TrimSpace(target.Type), "page") {
+		return nil, classified(ErrorUnsupportedWebMCP, "the selected browser target does not support page capture", map[string]any{
+			"browser_id":  string(target.BrowserID),
+			"target_id":   string(target.ID),
+			"phase":       capturePagePhase,
+			"target_type": strings.ToLower(strings.TrimSpace(target.Type)),
+		}, nil)
+	}
+	capturer, ok := session.(PageScreenshotter)
+	if !ok {
+		return nil, classified(ErrorUnsupportedWebMCP, "the selected browser page does not support screenshot capture", map[string]any{
+			"browser_id": string(target.BrowserID),
+			"target_id":  string(target.ID),
+			"phase":      capturePagePhase,
+			"capability": PageCaptureScreenshotMethod,
+		}, nil)
+	}
+	return capturer, nil
+}
+
+// pageCaptureFailure classifies an adapter capture error. A neutral adapter
+// may report a transport error before its lifecycle event reaches the broker
+// loop. Preserve that stronger classification at the capture boundary when
+// the session already knows the cause.
+func (b *StatefulBroker) pageCaptureFailure(selected *brokerSession, session TargetSession, err error) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.selected != selected {
+		return err
+	}
+	if failure := sessionLifecycleFailure(selected); failure != nil {
+		return failure
+	}
+	if isBrowserEndpointLossError(session.Err()) {
+		b.invalidateSessionWithCodeLocked(selected, ErrorBrowserDisconnected, capturePagePhase)
+		return browserDisconnectedErrorForSession(selected, capturePagePhase, session.Err())
+	}
+	return err
+}
+
+func (b *StatefulBroker) finishPageScreenshotLocked(selected *brokerSession, screenshot PageScreenshot) (PageScreenshot, error) {
 	if b.closed {
 		return PageScreenshot{}, ErrClosed
 	}
 	if b.selected != selected {
 		return PageScreenshot{}, staleSelectionForSession(selected, "selection_changed")
 	}
-	if err := b.captureSelectionStateErrorLocked(selected, "capture_page", "selection_changed"); err != nil {
+	if err := b.captureSelectionStateErrorLocked(selected, capturePagePhase, "selection_changed"); err != nil {
 		return PageScreenshot{}, err
 	}
 	if screenshot.BrowserID != "" && screenshot.BrowserID != selected.context.Key.BrowserID {
 		return PageScreenshot{}, classified(ErrorBrowserProtocol, "the browser returned a screenshot for a different browser", map[string]any{
-			"phase":       "capture_page",
+			"phase":       capturePagePhase,
 			"reason_code": "browser_id_mismatch",
 		}, nil)
 	}
 	if screenshot.TargetID != "" && screenshot.TargetID != selected.context.Key.TargetID {
 		return PageScreenshot{}, classified(ErrorBrowserProtocol, "the browser returned a screenshot for a different target", map[string]any{
-			"phase":       "capture_page",
+			"phase":       capturePagePhase,
 			"reason_code": "target_id_mismatch",
 		}, nil)
 	}
