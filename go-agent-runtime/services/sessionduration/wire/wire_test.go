@@ -23,6 +23,35 @@ func TestNewServiceReturnsPublicContract(t *testing.T) {
 	}
 }
 
+func TestPublicStatePreservesProviderOutputAcrossNonProviderEvents(t *testing.T) {
+	state := NewService().NewState(sessionduration.TerminalSource{})
+	state.Observe(messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant})
+	for _, role := range []messages.Role{messages.RoleUser, messages.RoleSystem, messages.RoleTool} {
+		state.Observe(messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: role})
+		state.Observe(messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: role})
+		state.Observe(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: role})
+		if got := state.OutputState(); got != messages.TerminalOutputPartial {
+			t.Fatalf("role %q changed provider output state to %q", role, got)
+		}
+	}
+	state.Observe(messages.StreamMessage{
+		Type:  messages.StreamTypeResponseCreate,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewToolAcknowledgementResponseCreateValue(),
+	})
+	if got := state.OutputState(); got != messages.TerminalOutputPartial {
+		t.Fatalf("tool acknowledgement changed provider output state to %q", got)
+	}
+	state.Observe(messages.StreamMessage{
+		Type:  messages.StreamTypeResponseCreate,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewResponseCreateValue(),
+	})
+	if got := state.OutputState(); got != messages.TerminalOutputNone {
+		t.Fatalf("new response retained prior output state %q", got)
+	}
+}
+
 func TestPublicLivenessIgnoresUserAndSystemMessages(t *testing.T) {
 	for _, role := range []messages.Role{messages.RoleUser, messages.RoleSystem} {
 		t.Run(string(role), func(t *testing.T) { assertPublicLivenessRole(t, role) })
@@ -199,6 +228,52 @@ func TestPublicRunSurfacesMissingRetryScheduler(t *testing.T) {
 	}
 	if loop.sentEvents != 0 {
 		t.Fatalf("retry sent %d session events without a scheduler", loop.sentEvents)
+	}
+}
+
+func TestPublicRunDoneSignalInterruptsRateLimitBackoff(t *testing.T) {
+	scheduler := &publicManualScheduler{created: make(chan *publicManualTimer, 3)}
+	done := make(chan struct{})
+	doneErr := errors.New("host completed the session")
+	loop := &publicLoop{deltas: messages.NewTypedBuffer[messages.StreamMessage](1)}
+	if !loop.deltas.Write(context.Background(), messages.StreamMessage{
+		Type: messages.StreamTypeMessageEnd,
+		Value: &messages.MessageEndValue{
+			Status:            "failed",
+			ProviderErrorCode: "rate_limit_exceeded",
+		},
+	}) {
+		t.Fatal("rate-limit terminal was not queued")
+	}
+	result := make(chan error, 1)
+	go func() {
+		result <- NewService().Run(sessionduration.RunRequest{
+			Context:    context.Background(),
+			Inferencer: publicInferencer{session: newPublicSession()},
+			Clock:      scheduler,
+			Retry:      sessionduration.RetryPolicy{Enabled: true, MaxRetries: 1},
+			Done:       done,
+			DoneError:  func() error { return doneErr },
+			LoopFactory: func(context.Context, sessionduration.AdmissionInferencer, sessionduration.Controller) (sessionduration.Loop, error) {
+				return loop, nil
+			},
+		})
+	}()
+	if timer := receivePublicTimer(t, scheduler); timer.duration != 2*time.Second {
+		t.Fatalf("retry timer duration = %v, want default backoff", timer.duration)
+	}
+	close(done)
+	receivePublicTimer(t, scheduler).Fire() // bounded finalization quiet period
+	select {
+	case err := <-result:
+		if !errors.Is(err, doneErr) {
+			t.Fatalf("Run after done during retry = %v, want host completion error", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Run did not stop when Done interrupted retry backoff")
+	}
+	if loop.sentEvents != 0 {
+		t.Fatalf("Run dispatched %d retry events after Done", loop.sentEvents)
 	}
 }
 

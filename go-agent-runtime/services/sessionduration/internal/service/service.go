@@ -161,10 +161,18 @@ func (s *terminalState) Observe(msg messages.StreamMessage) {
 }
 
 func (s *terminalState) observe(msg messages.StreamMessage) {
+	if isNonProviderRole(msg.Role) {
+		return
+	}
 	switch msg.Type {
 	case messages.StreamTypeMessageStart:
 		s.responseOutput = false
 		s.responseComplete = false
+	case messages.StreamTypeResponseCreate:
+		if !isToolAcknowledgementResponse(msg) {
+			s.responseOutput = false
+			s.responseComplete = false
+		}
 	case messages.StreamTypeTextDelta,
 		messages.StreamTypeReasoningDelta,
 		messages.StreamTypeAudioDelta,
@@ -175,13 +183,9 @@ func (s *terminalState) observe(msg messages.StreamMessage) {
 		messages.StreamTypeToolCallDelta,
 		messages.StreamTypeToolCallEnd,
 		messages.StreamTypeRefusal:
-		if msg.Role != messages.RoleUser && msg.Role != messages.RoleTool {
-			s.responseOutput = true
-		}
+		s.responseOutput = true
 	case messages.StreamTypeTranscriptDelta:
-		if msg.Role != messages.RoleUser && msg.Role != messages.RoleTool {
-			s.responseOutput = true
-		}
+		s.responseOutput = true
 	case messages.StreamTypeMessageEnd:
 		s.responseComplete = true
 	case messages.StreamTypeTextStart,
@@ -211,7 +215,6 @@ func (s *terminalState) observe(msg messages.StreamMessage) {
 		messages.StreamTypeSessionUpdated,
 		messages.StreamTypeSessionUpdate,
 		messages.StreamTypeResponseCancel,
-		messages.StreamTypeResponseCreate,
 		messages.StreamTypeLoopEnd,
 		messages.StreamTypeUsageInfo,
 		messages.StreamTypeError,
