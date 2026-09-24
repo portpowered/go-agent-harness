@@ -40,10 +40,9 @@ const (
 	// 16-bit little-endian samples. They are constants, not derived values,
 	// because nothing in the room runtime ever records a different width or
 	// byte order.
-	roomEvidenceAudioEncoding        = "pcm_s16le"
-	roomEvidenceAudioSampleWidthBits = 16
-	roomEvidenceAudioByteOrder       = "little"
-	roomEvidenceOutputDirectoryMode  = 0o700
+	roomEvidenceAudioEncoding                                                                = "pcm_s16le"
+	roomEvidenceAudioSampleWidthBits, roomEvidencePCM16MaxSample, roomEvidencePCM16MinSample = 16, int32(1<<15 - 1), -int32(1 << 15)
+	roomEvidenceAudioByteOrder, roomEvidenceOutputDirectoryMode, roomEvidenceCaptureFileMode = "little", 0o700, 0o600
 )
 
 // roomEvidence owns all file-backed observations for one room. Participant
@@ -368,44 +367,35 @@ func (e *roomEvidence) err() error {
 	return e.recordErr
 }
 
-func (e *roomEvidence) cleanupSetup() error {
+func (e *roomEvidence) cleanupSetup() {
 	if e == nil {
-		return nil
-	}
-	var failures []error
-	appendFailure := func(label string, err error) {
-		if err != nil {
-			failures = append(failures, fmt.Errorf("cleanup %s: %w", label, err))
-		}
+		return
 	}
 	if e.timeline != nil {
-		appendFailure("room timeline", e.timeline.close())
-		path := filepath.Join(e.destination, RoomEvidenceTimelinePath)
-		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-			appendFailure(path, err)
-		}
+		_ = e.timeline.close()                                                //nolint:errcheck // Setup has already failed; cleanup preserves the primary setup error.
+		_ = os.Remove(filepath.Join(e.destination, RoomEvidenceTimelinePath)) //nolint:errcheck // Partial output removal is best-effort during failed setup.
 	}
 	for _, participant := range e.participants {
 		if participant == nil {
 			continue
 		}
 		if participant.audio != nil {
-			appendFailure("participant audio", participant.audio.close())
+			_ = participant.audio.close() //nolint:errcheck // Setup has already failed; cleanup preserves the primary setup error.
 		}
 		if participant.diagnostics != nil {
-			appendFailure("participant diagnostics", participant.diagnostics.close())
+			_ = participant.diagnostics.close() //nolint:errcheck // Setup has already failed; cleanup preserves the primary setup error.
 		}
 		if participant.deltas != nil {
-			appendFailure("participant deltas", participant.deltas.close())
+			_ = participant.deltas.close() //nolint:errcheck // Setup has already failed; cleanup preserves the primary setup error.
 		}
 		if participant.events != nil {
-			appendFailure("participant events", participant.events.close())
+			_ = participant.events.close() //nolint:errcheck // Setup has already failed; cleanup preserves the primary setup error.
 		}
 		if participant.sentPCM != nil {
-			appendFailure("participant sent PCM", participant.sentPCM.close())
+			_ = participant.sentPCM.close() //nolint:errcheck // Setup has already failed; cleanup preserves the primary setup error.
 		}
 		if participant.receivedPCM != nil {
-			appendFailure("participant received PCM", participant.receivedPCM.close())
+			_ = participant.receivedPCM.close() //nolint:errcheck // Setup has already failed; cleanup preserves the primary setup error.
 		}
 		for _, path := range []string{
 			filepath.Join(e.destination, participant.artifacts.WAV),
@@ -415,12 +405,9 @@ func (e *roomEvidence) cleanupSetup() error {
 			filepath.Join(e.destination, participant.artifacts.ReceivedPCM),
 			filepath.Join(e.destination, participant.artifacts.Events),
 		} {
-			if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-				appendFailure(path, err)
-			}
+			_ = os.Remove(path) //nolint:errcheck // Partial output removal is best-effort during failed setup.
 		}
 	}
-	return errors.Join(failures...)
 }
 
 // RecordSessionDiagnostic implements SessionDiagnosticSink. The diagnostic
@@ -434,8 +421,7 @@ func (p *roomParticipantEvidence) RecordSessionDiagnostic(record SessionDiagnost
 		return
 	}
 	if p.diagnostics == nil {
-		//nolint:errcheck // The evidence owner retains this error for status projection.
-		_ = p.recordError(p.artifacts.Diagnostics, errors.New("diagnostics sink is not initialized"))
+		_ = p.recordError(p.artifacts.Diagnostics, errors.New("diagnostics sink is not initialized")) //nolint:errcheck // The evidence owner retains this error for status projection.
 		return
 	}
 	data, err := json.Marshal(roomDiagnosticLine{
@@ -443,20 +429,17 @@ func (p *roomParticipantEvidence) RecordSessionDiagnostic(record SessionDiagnost
 		Fields: cloneRoomStringMap(record.Fields),
 	})
 	if err != nil {
-		//nolint:errcheck // The evidence owner retains this error for status projection.
-		_ = p.recordError(p.artifacts.Diagnostics, fmt.Errorf("marshal diagnostic record: %w", err))
+		_ = p.recordError(p.artifacts.Diagnostics, fmt.Errorf("marshal diagnostic record: %w", err)) //nolint:errcheck // The evidence owner retains this error for status projection.
 		return
 	}
 	data = p.owner.redactJSON(data)
 	stamped, stampErr := p.owner.stampWallClock(data)
 	if stampErr != nil {
-		//nolint:errcheck // The evidence owner retains this error for status projection.
-		_ = p.recordError(p.artifacts.Diagnostics, fmt.Errorf("stamp diagnostic wall clock: %w", stampErr))
+		_ = p.recordError(p.artifacts.Diagnostics, fmt.Errorf("stamp diagnostic wall clock: %w", stampErr)) //nolint:errcheck // The evidence owner retains this error for status projection.
 		return
 	}
 	if err := p.diagnostics.writeRaw(stamped); err != nil {
-		//nolint:errcheck // The evidence owner retains this error for status projection.
-		p.recordError(p.artifacts.Diagnostics, err)
+		_ = p.recordError(p.artifacts.Diagnostics, err) //nolint:errcheck // The evidence owner retains this error for status projection.
 	}
 }
 

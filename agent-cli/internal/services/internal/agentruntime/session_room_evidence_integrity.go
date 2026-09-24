@@ -225,7 +225,8 @@ func newRoomEvidenceState(destination string, manifest room.Manifest, format roo
 func (e *roomEvidence) openTimeline() error {
 	timeline, err := newRoomTimeline(filepath.Join(e.destination, RoomEvidenceTimelinePath), e.clock)
 	if err != nil {
-		return errors.Join(fmt.Errorf("create room timeline evidence: %w", err), e.cleanupSetup())
+		e.cleanupSetup()
+		return fmt.Errorf("create room timeline evidence: %w", err)
 	}
 	e.timeline = timeline
 	return nil
@@ -235,7 +236,8 @@ func (e *roomEvidence) openParticipants() error {
 	stems := roomEvidenceArtifactStems(e.manifest.Participants)
 	for _, participant := range e.manifest.Participants {
 		if err := e.openParticipant(participant, stems[participant.ID]); err != nil {
-			return errors.Join(err, e.cleanupSetup())
+			e.cleanupSetup()
+			return err
 		}
 	}
 	return nil
