@@ -44,6 +44,7 @@ func TestReporterContextAndExpectedCancellationClassification(t *testing.T) {
 	if got := ReporterFromContext(ctx); got != reporter {
 		t.Fatal("reporter context did not preserve the invocation reporter")
 	}
+	//lint:ignore SA1012 nil is supported by this public lookup and must remain nil-safe.
 	if ReporterFromContext(nil) != nil {
 		t.Fatal("nil context returned a reporter")
 	}

@@ -374,7 +374,8 @@ func assertAudioOutputForwards(t *testing.T, session sessionturn.Session, provid
 	if !session.Send(context.Background(), stream) || !session.SendWithOutcome(context.Background(), stream).OK() {
 		t.Fatal("audio output session did not forward stream sends")
 	}
-	if (<-provider.sent).Type != messages.StreamTypeTextDelta || (<-provider.sent).Type != messages.StreamTypeTextDelta {
+	first, second := <-provider.sent, <-provider.sent
+	if first.Type != messages.StreamTypeTextDelta || second.Type != messages.StreamTypeTextDelta {
 		t.Fatal("audio output session changed a forwarded stream send")
 	}
 	if !session.SendMessage(context.Background(), messages.Message{ToolCallID: runtimeContractCompleteID}) || !session.SendMessageWithoutResponse(context.Background(), messages.Message{ToolCallID: runtimeContractDeferredID}) {

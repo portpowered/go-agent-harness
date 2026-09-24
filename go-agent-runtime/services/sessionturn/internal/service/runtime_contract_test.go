@@ -93,7 +93,8 @@ func assertInstructionSessionForwards(t *testing.T, wrapped sessionturn.Session,
 	if !wrapped.Send(context.Background(), stream) || !wrapped.SendWithOutcome(context.Background(), stream).OK() {
 		t.Fatal("instruction session did not forward stream sends")
 	}
-	if (<-provider.sent).Type != messages.StreamTypeTextDelta || (<-provider.sent).Type != messages.StreamTypeTextDelta {
+	first, second := <-provider.sent, <-provider.sent
+	if first.Type != messages.StreamTypeTextDelta || second.Type != messages.StreamTypeTextDelta {
 		t.Fatal("instruction session changed a forwarded stream send")
 	}
 	if !wrapped.SendMessage(context.Background(), messages.Message{ToolCallID: "complete"}) || !wrapped.SendMessageWithoutResponse(context.Background(), messages.Message{ToolCallID: "deferred"}) {
