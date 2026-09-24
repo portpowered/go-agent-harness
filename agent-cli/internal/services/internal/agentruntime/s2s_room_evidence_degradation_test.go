@@ -6,6 +6,8 @@ import (
 	"errors"
 	"io"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -23,10 +25,8 @@ func TestRunRoom_EvidenceFailureDegradesWithoutStoppingParticipants(t *testing.T
 	outputDir := filepath.Join(t.TempDir(), "room-run")
 	opts, _ := newRoomTestRunOptions(ids, inferencers)
 	opts.OutputDir = outputDir
-
-	opts.onRoomEvidenceReady = func(evidence roomevidence.Recorder) {
-		evidence.MarkError("a", evidence.Artifacts("a").Deltas, errors.New("injected room evidence write failure"))
-	}
+	failure := &roomEvidenceOperationFailure{err: errors.New("injected room evidence delta write failure")}
+	opts.evidenceService = roomEvidenceFailureService{Service: opts.evidenceService, failure: failure}
 	opened := make(chan string, len(ids))
 	streamedText := make(chan string, len(ids))
 	opts.onParticipantSessionOpen = func(participantID string) {
@@ -57,12 +57,55 @@ func TestRunRoom_EvidenceFailureDegradesWithoutStoppingParticipants(t *testing.T
 	aSession.publish(textDelta)
 	bSession.publish(textDelta)
 	waitForRoomParticipants(t, streamedText, ids, "evidence failure interrupted participant stream processing")
+	if !failure.triggered.Load() {
+		t.Fatal("room evidence recorder did not exercise the injected public write failure")
+	}
 	assertRoomParticipantsStillLive(t, aSession, bSession)
 
 	cancel()
 	got := waitForRoomOutcome(t, outcome)
 	assertDegradedRoomResult(t, got)
 	assertDegradedRoomManifest(t, filepath.Join(outputDir, RoomEvidenceManifestPath))
+}
+
+type roomEvidenceOperationFailure struct {
+	once      sync.Once
+	triggered atomic.Bool
+	err       error
+}
+
+type roomEvidenceFailureService struct {
+	roomevidence.Service
+	failure *roomEvidenceOperationFailure
+}
+
+func (s roomEvidenceFailureService) Open(request roomevidence.RecordingRequest) (roomevidence.Recorder, error) {
+	recorder, err := s.Service.Open(request)
+	if err != nil {
+		return nil, err
+	}
+	return roomEvidenceFailureRecorder{Recorder: recorder, failure: s.failure}, nil
+}
+
+type roomEvidenceFailureRecorder struct {
+	roomevidence.Recorder
+	failure *roomEvidenceOperationFailure
+}
+
+func (r roomEvidenceFailureRecorder) Observe(observation roomevidence.Observation) error {
+	if observation.Kind == roomevidence.ObservationDelta &&
+		observation.ParticipantID == "a" &&
+		observation.StreamMessage.Type == messages.StreamTypeTextDelta {
+		injected := false
+		r.failure.once.Do(func() {
+			r.failure.triggered.Store(true)
+			injected = true
+		})
+		if injected {
+			return r.failure.err
+		}
+	}
+	return r.Recorder.Observe(observation)
 }
 
 func waitForRoomParticipants(t *testing.T, events <-chan string, ids []string, failure string) {
