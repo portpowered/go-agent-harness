@@ -57,6 +57,10 @@ func validateArtifact(root string, seen map[string]string, ref artifactRef, meta
 	if err != nil {
 		return rooms.RoomReplayArtifact{}, err
 	}
+	limit, field := artifactSizeLimit(ref)
+	if info.Size() > limit {
+		return rooms.RoomReplayArtifact{}, mismatch(field, fmt.Errorf("artifact exceeds the %d-byte limit", limit))
+	}
 	if err := validateArtifactSize(artifact, info.Size(), ref.owner); err != nil {
 		return rooms.RoomReplayArtifact{}, err
 	}
@@ -65,6 +69,13 @@ func validateArtifact(root string, seen map[string]string, ref artifactRef, meta
 	}
 	artifact.Owner, artifact.Role, artifact.AbsolutePath = ref.owner, ref.role, absolute
 	return artifact, nil
+}
+
+func artifactSizeLimit(ref artifactRef) (int64, string) {
+	if ref.role == roomTimelineRole {
+		return MaxTimelineBytes, roomTimelineRole
+	}
+	return MaxArtifactBytes, ref.owner
 }
 
 func regularArtifactInfo(absolute, relative, owner string) (os.FileInfo, error) {

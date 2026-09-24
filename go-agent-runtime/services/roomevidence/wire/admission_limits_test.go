@@ -62,6 +62,42 @@ func TestServiceBoundsReplayTimelineBytesAndEventCount(t *testing.T) {
 	})
 }
 
+func TestServiceRejectsOversizedReplayFilesBeforeHashing(t *testing.T) {
+	t.Run("timeline", func(t *testing.T) {
+		bundle, _ := finalizedReplayBundle(t)
+		rewriteOversizedReplayFile(t, bundle, roomevidence.TimelinePath, admission.MaxTimelineBytes+1)
+
+		_, err := NewService().LoadPlan(bundle)
+		assertAdmissionLimitError(t, err, "room_timeline")
+	})
+	t.Run("artifact", func(t *testing.T) {
+		bundle, recorder := finalizedReplayBundle(t)
+		artifact := recorder.Artifacts("speaker").SentPCM
+		rewriteOversizedReplayFile(t, bundle, artifact, admission.MaxArtifactBytes+1)
+
+		_, err := NewService().LoadPlan(bundle)
+		assertAdmissionLimitError(t, err, "participant:speaker:sent_pcm")
+	})
+}
+
+func rewriteOversizedReplayFile(t *testing.T, bundle, relative string, size int64) {
+	t.Helper()
+	path := filepath.Join(bundle, filepath.FromSlash(relative))
+	file, err := os.OpenFile(path, os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatalf("open replay artifact: %v", err)
+	}
+	truncateErr := file.Truncate(size)
+	closeErr := file.Close()
+	if truncateErr != nil {
+		t.Fatalf("make oversized replay artifact: %v (close: %v)", truncateErr, closeErr)
+	}
+	if closeErr != nil {
+		t.Fatalf("close oversized replay artifact: %v", closeErr)
+	}
+	rewriteReplayArtifactIntegrity(t, bundle, relative, size, strings.Repeat("0", sha256.Size*2))
+}
+
 func assertAdmissionLimitError(t *testing.T, err error, field string) {
 	t.Helper()
 	var bundleErr *roomevidence.BundleError
@@ -125,6 +161,11 @@ func rewriteReplayTimeline(t *testing.T, bundle string, write func(io.Writer) er
 	if err != nil {
 		t.Fatalf("hash timeline: %v", err)
 	}
+	rewriteReplayArtifactIntegrity(t, bundle, roomevidence.TimelinePath, info.Size(), hash)
+}
+
+func rewriteReplayArtifactIntegrity(t *testing.T, bundle, relative string, size int64, hash string) {
+	t.Helper()
 	manifestPath := filepath.Join(bundle, roomevidence.ManifestPath)
 	manifestData, err := os.ReadFile(manifestPath)
 	if err != nil {
@@ -142,7 +183,7 @@ func rewriteReplayTimeline(t *testing.T, bundle string, write func(io.Writer) er
 	if err := json.Unmarshal(manifest["artifact_integrity"], &integrity); err != nil {
 		t.Fatalf("decode artifact integrity: %v", err)
 	}
-	integrity[roomevidence.TimelinePath] = integrityEntry{Size: info.Size(), SHA256: hash}
+	integrity[relative] = integrityEntry{Size: size, SHA256: hash}
 	updatedIntegrity, err := json.Marshal(integrity)
 	if err != nil {
 		t.Fatalf("encode artifact integrity: %v", err)

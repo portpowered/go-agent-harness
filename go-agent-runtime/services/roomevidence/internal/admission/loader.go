@@ -23,8 +23,12 @@ const (
 	participantArtifactRoleCapacity = 7
 )
 
-// MaxManifestBytes bounds metadata allocation before JSON decoding.
-const MaxManifestBytes int64 = 8 << 20
+// MaxManifestBytes and MaxArtifactBytes bound filesystem reads before decoding
+// or hashing. Timeline data has a smaller limit in timeline.go.
+const (
+	MaxManifestBytes int64 = 8 << 20
+	MaxArtifactBytes int64 = 64 << 20
+)
 
 func requiredParticipantRoles() []string {
 	return []string{"wav", "diagnostics", "deltas", "sent_pcm", "received_pcm", "events", "capture"}

@@ -21,7 +21,7 @@ import (
 
 const (
 	maxRoomReplayManifestBytes               = admission.MaxManifestBytes
-	maxRoomReplayArtifactBytes               = 64 << 20
+	maxRoomReplayArtifactBytes               = admission.MaxArtifactBytes
 	roomReplayJSONLScannerInitialBufferBytes = 64 << 10
 	roomReplayJSONLScannerMaxTokenBytes      = 4 << 20
 	maxRedactedJSONDepth                     = 16
