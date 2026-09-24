@@ -91,45 +91,90 @@ func reportedVersion(output string) (string, error) {
 	return normalizeVersion(matches[2])
 }
 
+// diagnosticLog forwards resolver progress to the caller's writer and keeps
+// the first write failure so resolution can report it instead of dropping it.
+type diagnosticLog struct {
+	writer io.Writer
+	err    error
+}
+
+func (d *diagnosticLog) printf(format string, args ...any) {
+	if d.err != nil {
+		return
+	}
+	if _, err := fmt.Fprintf(d.writer, format, args...); err != nil {
+		d.err = fmt.Errorf("write analyzer diagnostics: %w", err)
+	}
+}
+
 func resolve(ctx context.Context, cfg config, diagnostics io.Writer) (string, error) {
 	if diagnostics == nil {
 		diagnostics = io.Discard
 	}
+	log := &diagnosticLog{writer: diagnostics}
+	resolved, err := resolveWithLog(ctx, cfg, log)
+	if err != nil {
+		return "", err
+	}
+	if log.err != nil {
+		return "", log.err
+	}
+	return resolved, nil
+}
 
+func resolveWithLog(ctx context.Context, cfg config, log *diagnosticLog) (string, error) {
 	cachePath := installedPath(cfg)
 	observed := make([]string, 0, 3)
-	if candidatePath, err := candidateExecutable(cfg); err == nil {
-		if version, probeErr := probeVersion(ctx, candidatePath, cfg); probeErr == nil {
-			if version == cfg.expectedVersion {
-				return candidatePath, nil
-			}
-			observed = append(observed, fmt.Sprintf("candidate %q reported %s", candidatePath, version))
-			fmt.Fprintf(diagnostics, "analyzergate: %s candidate %q reports %s, expected %s\n", cfg.tool, candidatePath, version, cfg.expectedVersion)
-		} else {
-			observed = append(observed, fmt.Sprintf("candidate %q version probe failed (%v)", candidatePath, probeErr))
-			fmt.Fprintf(diagnostics, "analyzergate: %s candidate %q could not be version-checked: %v\n", cfg.tool, candidatePath, probeErr)
-		}
-	} else {
-		observed = append(observed, fmt.Sprintf("candidate %q was unavailable or not executable", cfg.candidate))
-		fmt.Fprintf(diagnostics, "analyzergate: %s candidate %q is unavailable or not executable\n", cfg.tool, cfg.candidate)
+	if resolved, ok := resolveCandidate(ctx, cfg, log, &observed); ok {
+		return resolved, nil
 	}
-
-	if cachePath != "" && cachePath != cfg.candidate {
-		if executableFile(cachePath) {
-			if version, probeErr := probeVersion(ctx, cachePath, cfg); probeErr == nil {
-				if version == cfg.expectedVersion {
-					fmt.Fprintf(diagnostics, "analyzergate: using cached %s %s at %s\n", cfg.tool, cfg.expectedVersion, cachePath)
-					return cachePath, nil
-				}
-				observed = append(observed, fmt.Sprintf("cached executable %q reported %s", cachePath, version))
-				fmt.Fprintf(diagnostics, "analyzergate: cached %s reports %s, expected %s\n", cfg.tool, version, cfg.expectedVersion)
-			} else {
-				observed = append(observed, fmt.Sprintf("cached executable %q version probe failed (%v)", cachePath, probeErr))
-				fmt.Fprintf(diagnostics, "analyzergate: cached %s could not be version-checked: %v\n", cfg.tool, probeErr)
-			}
-		}
+	if resolved, ok := resolveCached(ctx, cfg, cachePath, log, &observed); ok {
+		return resolved, nil
 	}
+	return installPinned(ctx, cfg, cachePath, log, observed)
+}
 
+func resolveCandidate(ctx context.Context, cfg config, log *diagnosticLog, observed *[]string) (string, bool) {
+	candidatePath, err := candidateExecutable(cfg)
+	if err != nil {
+		*observed = append(*observed, fmt.Sprintf("candidate %q was unavailable or not executable", cfg.candidate))
+		log.printf("analyzergate: %s candidate %q is unavailable or not executable\n", cfg.tool, cfg.candidate)
+		return "", false
+	}
+	version, probeErr := probeVersion(ctx, candidatePath, cfg)
+	if probeErr != nil {
+		*observed = append(*observed, fmt.Sprintf("candidate %q version probe failed (%v)", candidatePath, probeErr))
+		log.printf("analyzergate: %s candidate %q could not be version-checked: %v\n", cfg.tool, candidatePath, probeErr)
+		return "", false
+	}
+	if version == cfg.expectedVersion {
+		return candidatePath, true
+	}
+	*observed = append(*observed, fmt.Sprintf("candidate %q reported %s", candidatePath, version))
+	log.printf("analyzergate: %s candidate %q reports %s, expected %s\n", cfg.tool, candidatePath, version, cfg.expectedVersion)
+	return "", false
+}
+
+func resolveCached(ctx context.Context, cfg config, cachePath string, log *diagnosticLog, observed *[]string) (string, bool) {
+	if cachePath == "" || cachePath == cfg.candidate || !executableFile(cachePath) {
+		return "", false
+	}
+	version, probeErr := probeVersion(ctx, cachePath, cfg)
+	if probeErr != nil {
+		*observed = append(*observed, fmt.Sprintf("cached executable %q version probe failed (%v)", cachePath, probeErr))
+		log.printf("analyzergate: cached %s could not be version-checked: %v\n", cfg.tool, probeErr)
+		return "", false
+	}
+	if version == cfg.expectedVersion {
+		log.printf("analyzergate: using cached %s %s at %s\n", cfg.tool, cfg.expectedVersion, cachePath)
+		return cachePath, true
+	}
+	*observed = append(*observed, fmt.Sprintf("cached executable %q reported %s", cachePath, version))
+	log.printf("analyzergate: cached %s reports %s, expected %s\n", cfg.tool, version, cfg.expectedVersion)
+	return "", false
+}
+
+func installPinned(ctx context.Context, cfg config, cachePath string, log *diagnosticLog, observed []string) (string, error) {
 	installPackage := cfg.installPackage + "@" + cfg.pinnedVersion
 	installDirectory := filepath.Dir(cachePath)
 	attempted := fmt.Sprintf("install %s into %s", installPackage, installDirectory)
@@ -144,7 +189,7 @@ func resolve(ctx context.Context, cfg config, diagnostics io.Writer) (string, er
 		}
 	}
 
-	fmt.Fprintf(diagnostics, "analyzergate: installing pinned %s %s into %s\n", cfg.tool, cfg.expectedVersion, installDirectory)
+	log.printf("analyzergate: installing pinned %s %s into %s\n", cfg.tool, cfg.expectedVersion, installDirectory)
 	installOutput, err := install(ctx, cfg, installPackage, installDirectory)
 	if err != nil {
 		if detail := strings.TrimSpace(installOutput); detail != "" {
@@ -159,7 +204,10 @@ func resolve(ctx context.Context, cfg config, diagnostics io.Writer) (string, er
 			Cause:     fmt.Errorf("go install failed: %w", err),
 		}
 	}
+	return verifyInstalled(ctx, cfg, cachePath, attempted, observed)
+}
 
+func verifyInstalled(ctx context.Context, cfg config, cachePath, attempted string, observed []string) (string, error) {
 	if !executableFile(cachePath) {
 		return "", &resolutionError{
 			Tool:      cfg.tool,

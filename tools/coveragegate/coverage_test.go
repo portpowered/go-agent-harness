@@ -12,125 +12,93 @@ import (
 
 func TestManifestErrorModes(t *testing.T) {
 	tests := []struct {
-		name  string
-		data  string
-		check func(t *testing.T, err error)
+		name     string
+		data     string
+		sentinel error
+		want     string
 	}{
 		{
-			name: "unregistered package",
-			data: manifestJSON(`{"package":"example/a","minimum":0.00}`),
-			check: func(t *testing.T, err error) {
-				t.Helper()
-				manifest := mustParseManifest(t, manifestJSON(`{"package":"example/a","minimum":0.00}`))
-				got := Compare(manifest, map[string]Coverage{
-					"example/a":       {Covered: 1, Total: 1},
-					"example/missing": {Covered: 1, Total: 1},
-				})
-				if !errors.Is(got, ErrUnregisteredPackage) {
-					t.Fatalf("errors.Is(%v, ErrUnregisteredPackage) = false", got)
-				}
-				want := "coverage gate found unregistered packages:\n- example/missing"
-				if got.Error() != want {
-					t.Fatalf("error = %q, want %q", got, want)
-				}
-			},
+			name:     "malformed decimal precision",
+			data:     manifestJSON(`{"package":"example/a","minimum":80.0}`),
+			sentinel: ErrManifestMinimumPrecision,
+			want:     `coverage manifest package "example/a" minimum must use exactly two decimal places: got 80.0`,
 		},
 		{
-			name: "floor violation",
-			data: manifestJSON(`{"package":"example/a","minimum":80.00}`),
-			check: func(t *testing.T, err error) {
-				t.Helper()
-				manifest := mustParseManifest(t, manifestJSON(`{"package":"example/a","minimum":80.00}`))
-				got := Compare(manifest, map[string]Coverage{"example/a": {Covered: 7, Total: 10}})
-				if !errors.Is(got, ErrCoverageFloorViolation) {
-					t.Fatalf("errors.Is(%v, ErrCoverageFloorViolation) = false", got)
-				}
-				want := "coverage gate found coverage floor violations:\n- example/a: expected minimum 80.00%, actual 70.00%, delta -10.00%"
-				if got.Error() != want {
-					t.Fatalf("error = %q, want %q", got, want)
-				}
-			},
+			name:     "unsorted package array",
+			data:     `{"packages":[{"package":"example/z","minimum":0.00},{"package":"example/a","minimum":0.00}]}`,
+			sentinel: ErrManifestUnsorted,
+			want:     `coverage manifest packages must be strictly sorted by import path: "example/a" follows "example/z"`,
 		},
 		{
-			name: "malformed decimal precision",
-			data: manifestJSON(`{"package":"example/a","minimum":80.0}`),
-			check: func(t *testing.T, err error) {
-				t.Helper()
-				if !errors.Is(err, ErrManifestMinimumPrecision) {
-					t.Fatalf("errors.Is(%v, ErrManifestMinimumPrecision) = false", err)
-				}
-				want := `coverage manifest package "example/a" minimum must use exactly two decimal places: got 80.0`
-				if err.Error() != want {
-					t.Fatalf("error = %q, want %q", err, want)
-				}
-			},
+			name:     "both minimum and exception",
+			data:     manifestJSON(`{"package":"example/a","minimum":0.00,"exception":"later"}`),
+			sentinel: ErrManifestBothFields,
+			want:     `coverage manifest package "example/a" must define exactly one of minimum or exception; found both`,
 		},
 		{
-			name: "unsorted package array",
-			data: `{"packages":[{"package":"example/z","minimum":0.00},{"package":"example/a","minimum":0.00}]}`,
-			check: func(t *testing.T, err error) {
-				t.Helper()
-				if !errors.Is(err, ErrManifestUnsorted) {
-					t.Fatalf("errors.Is(%v, ErrManifestUnsorted) = false", err)
-				}
-				want := `coverage manifest packages must be strictly sorted by import path: "example/a" follows "example/z"`
-				if err.Error() != want {
-					t.Fatalf("error = %q, want %q", err, want)
-				}
-			},
-		},
-		{
-			name: "both minimum and exception",
-			data: manifestJSON(`{"package":"example/a","minimum":0.00,"exception":"later"}`),
-			check: func(t *testing.T, err error) {
-				t.Helper()
-				if !errors.Is(err, ErrManifestBothFields) {
-					t.Fatalf("errors.Is(%v, ErrManifestBothFields) = false", err)
-				}
-				want := `coverage manifest package "example/a" must define exactly one of minimum or exception; found both`
-				if err.Error() != want {
-					t.Fatalf("error = %q, want %q", err, want)
-				}
-			},
-		},
-		{
-			name: "neither minimum nor exception",
-			data: manifestJSON(`{"package":"example/a"}`),
-			check: func(t *testing.T, err error) {
-				t.Helper()
-				if !errors.Is(err, ErrManifestNeitherField) {
-					t.Fatalf("errors.Is(%v, ErrManifestNeitherField) = false", err)
-				}
-				want := `coverage manifest package "example/a" must define exactly one of minimum or exception; found neither`
-				if err.Error() != want {
-					t.Fatalf("error = %q, want %q", err, want)
-				}
-			},
+			name:     "neither minimum nor exception",
+			data:     manifestJSON(`{"package":"example/a"}`),
+			sentinel: ErrManifestNeitherField,
+			want:     `coverage manifest package "example/a" must define exactly one of minimum or exception; found neither`,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := ParseManifest([]byte(tt.data))
-			if tt.name == "unregistered package" || tt.name == "floor violation" {
-				if err != nil {
-					t.Fatalf("ParseManifest() error = %v", err)
-				}
-				manifest := mustParseManifest(t, tt.data)
-				if tt.name == "unregistered package" {
-					err = Compare(manifest, map[string]Coverage{
-						"example/a":       {Covered: 1, Total: 1},
-						"example/missing": {Covered: 1, Total: 1},
-					})
-				} else {
-					err = Compare(manifest, map[string]Coverage{"example/a": {Covered: 7, Total: 10}})
-				}
-			}
-			if err == nil {
-				t.Fatal("expected an error")
-			}
-			tt.check(t, err)
+			assertManifestError(t, err, tt.sentinel, tt.want)
 		})
+	}
+}
+
+func TestManifestCompareErrorModes(t *testing.T) {
+	tests := []struct {
+		name         string
+		data         string
+		measurements map[string]Coverage
+		sentinel     error
+		want         string
+	}{
+		{
+			name: "unregistered package",
+			data: manifestJSON(`{"package":"example/a","minimum":0.00}`),
+			measurements: map[string]Coverage{
+				"example/a":       {Covered: 1, Total: 1},
+				"example/missing": {Covered: 1, Total: 1},
+			},
+			sentinel: ErrUnregisteredPackage,
+			want:     "coverage gate found unregistered packages:\n- example/missing",
+		},
+		{
+			name:         "floor violation",
+			data:         manifestJSON(`{"package":"example/a","minimum":80.00}`),
+			measurements: map[string]Coverage{"example/a": {Covered: 7, Total: 10}},
+			sentinel:     ErrCoverageFloorViolation,
+			want:         "coverage gate found coverage floor violations:\n- example/a: expected minimum 80.00%, actual 70.00%, delta -10.00%",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := ParseManifest([]byte(tt.data)); err != nil {
+				t.Fatalf("ParseManifest() error = %v", err)
+			}
+			manifest := mustParseManifest(t, tt.data)
+			assertManifestError(t, Compare(manifest, tt.measurements), tt.sentinel, tt.want)
+		})
+	}
+}
+
+func assertManifestError(t *testing.T, err, sentinel error, want string) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("errors.Is(%v, %v) = false", err, sentinel)
+	}
+	if err.Error() != want {
+		t.Fatalf("error = %q, want %q", err, want)
 	}
 }
 
