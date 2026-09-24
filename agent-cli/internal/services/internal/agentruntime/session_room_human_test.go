@@ -526,7 +526,7 @@ func newRoomHumanRunOptions(registry *roomHumanTestRegistry, inferencer *roomTes
 			}
 			return "", false
 		},
-		DeviceService: runtimedeviceswire.NewService(registry, newTestAudioIOService()),
+		DeviceService: runtimedeviceswire.NewService(registry, newTestAudioIOService()), RecordingService: newTestRecordingService(), ProviderCaptureService: newTestProviderCaptureService(), ReplayMessageCodec: newTestReplayService(),
 		SessionInferencers: map[string]messages.SessionInferencer{
 			"agent": inferencer,
 		},

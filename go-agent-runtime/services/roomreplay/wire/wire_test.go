@@ -8,8 +8,8 @@ import (
 )
 
 func TestNewServiceReturnsIndependentAdmissionServices(t *testing.T) {
-	first := NewService()
-	second := NewService()
+	first := NewService(nil)
+	second := NewService(nil)
 	if first == nil || second == nil {
 		t.Fatal("NewService returned nil")
 	}
@@ -22,7 +22,7 @@ func TestNewServiceReturnsIndependentAdmissionServices(t *testing.T) {
 func TestServiceValidateOutputRejectsSourceAndAllowsExternalDestination(t *testing.T) {
 	source := t.TempDir()
 	plan := roomreplay.RoomReplayPlan{BundlePath: source}
-	service := NewService()
+	service := NewService(nil)
 	if err := service.ValidateOutput(plan, filepath.Join(source, "output")); err == nil {
 		t.Fatal("source child was accepted as replay output")
 	}

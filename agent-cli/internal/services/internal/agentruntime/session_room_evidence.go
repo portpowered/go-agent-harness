@@ -56,7 +56,7 @@ type roomEvidence struct {
 	participants   map[string]*roomParticipantEvidence
 	providerErrors map[string]struct{}
 	latency        runtimeRooms.LatencyRecorder
-	replay         runtimeReplay.Service
+	replay         roomEvidenceMessageCodec
 	// source is the injectable platform clock the latency recorder samples;
 	// distinct from roomClock below, which anchors offsets to room start.
 	source platformclock.Source
@@ -80,6 +80,8 @@ type roomEvidence struct {
 	finalizeOnce sync.Once
 	finalizeErr  error
 }
+
+type roomEvidenceMessageCodec = runtimeReplay.StreamMessageCodec
 
 type roomParticipantEvidence struct {
 	owner *roomEvidence
@@ -122,19 +124,17 @@ type roomEvidenceArtifactPaths struct {
 	Capture string `json:"capture,omitempty"`
 }
 
-//lint:ignore U1000 package tests exercise the context-free evidence seam.
-func newRoomEvidence(destination string, manifest room.Manifest, format room.PCM16Format, secrets []string, startedAt time.Time, sources ...platformclock.Source) (*roomEvidence, error) {
-	return newRoomEvidenceWithLatency(destination, manifest, format, secrets, startedAt, nil, sources...)
-}
-
-func newRoomEvidenceWithLatency(destination string, manifest room.Manifest, format room.PCM16Format, secrets []string, startedAt time.Time, latencyService runtimeRooms.LatencyService, sources ...platformclock.Source) (*roomEvidence, error) {
+func newRoomEvidenceWithLatency(destination string, manifest room.Manifest, format room.PCM16Format, secrets []string, startedAt time.Time, latencyService runtimeRooms.LatencyService, replayCodec roomEvidenceMessageCodec, sources ...platformclock.Source) (*roomEvidence, error) {
 	if strings.TrimSpace(destination) == "" {
 		return nil, errors.New("room evidence output directory is empty")
+	}
+	if replayCodec == nil {
+		return nil, errors.New("room evidence replay message codec is required")
 	}
 	clock := platformclock.Ensure(roomEvidenceSource(sources))
 	startedAt = roomEvidenceStart(startedAt, clock)
 	format = normalizedRoomEvidenceFormat(format)
-	evidence := newRoomEvidenceState(destination, manifest, format, secrets, startedAt, clock, latencyService)
+	evidence := newRoomEvidenceState(destination, manifest, format, secrets, startedAt, clock, latencyService, replayCodec)
 	if err := evidence.openTimeline(); err != nil {
 		return nil, err
 	}

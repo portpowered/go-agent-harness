@@ -16,6 +16,7 @@ import (
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeProviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	runtimeRecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
+	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -190,6 +191,7 @@ type RoomRunOptions struct {
 	AudioService           audioio.Service
 	RecordingService       runtimeRecording.Service
 	ProviderCaptureService runtimeRecording.ProviderCaptureService
+	ReplayMessageCodec     runtimeReplay.StreamMessageCodec
 	Manifest               room.Manifest
 	// ReplayPath selects a finalized room evidence directory (or its
 	// run-manifest.json) as the sole source of participant runtime settings.
@@ -325,7 +327,6 @@ func prepareRoomReplayOptions(opts RoomRunOptions, validation room.ValidationOpt
 		replayPlan = &loaded
 	}
 	if !replayMode {
-		ensureRoomEvidenceRecordingServices(&opts, false, opts.Clock)
 		return opts, validation, false, nil
 	}
 	opts.ReplayPlan, opts.ReplayPath = replayPlan, replayPlan.BundlePath

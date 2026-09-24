@@ -76,7 +76,12 @@ func NewRoomServiceWithDevices(live runtimeSession.LiveService, deviceService ru
 	return roomwire.NewService(roomwire.Dependencies{Live: live, Devices: deviceService, Registry: registry, Clock: clockSource, Replay: replay})
 }
 
-var RoomSet = wire.NewSet(runtimeRoomReplayWire.NewService, NewRoomServiceWithDevices) //nolint:gochecknoglobals // immutable Wire provider metadata
+// NewRoomReplayService composes room bundle admission with the shared replay inspector.
+func NewRoomReplayService(replayService runtimeReplay.Service) runtimeRoomReplay.Service {
+	return runtimeRoomReplayWire.NewService(replayService)
+}
+
+var RoomSet = wire.NewSet(NewRoomReplayService, NewRoomServiceWithDevices) //nolint:gochecknoglobals // immutable Wire provider metadata
 
 // NewToolCapabilitiesService keeps session tool composition in the private
 // service implementation while allowing the CLI to provide its browser seam.

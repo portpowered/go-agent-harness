@@ -11,12 +11,11 @@ import (
 )
 
 type metricsCollector struct {
-	options       sessiontrace.MetricsCollectorOptions
-	replayService replay.Service
+	options sessiontrace.MetricsCollectorOptions
 }
 
-func NewReplayMetricsCollector(options sessiontrace.MetricsCollectorOptions, replayService replay.Service) sessiontrace.MetricsCollector {
-	return metricsCollector{options: options, replayService: replayService}
+func NewReplayMetricsCollector(options sessiontrace.MetricsCollectorOptions) sessiontrace.MetricsCollector {
+	return metricsCollector{options: options}
 }
 
 func (c metricsCollector) Collect(ctx context.Context, fixture, prompt string) ([]probe.MetricsSeries, error) {
@@ -29,14 +28,14 @@ func (c metricsCollector) Collect(ctx context.Context, fixture, prompt string) (
 	if c.options.Runner == nil {
 		return nil, fmt.Errorf("metrics collector requires an injected replay runner")
 	}
-	if c.replayService == nil {
+	if c.options.ReplayInspector == nil {
 		return nil, fmt.Errorf("metrics collector requires the replay service")
 	}
 	snapshot, err := c.options.Runner(ctx, fixture, prompt)
 	if err != nil {
 		return nil, fmt.Errorf("replay %s for metrics: %w", fixture, err)
 	}
-	observed, err := observedFixtureDeltaSums(ctx, c.replayService, fixture)
+	observed, err := observedFixtureDeltaSums(ctx, c.options.ReplayInspector, fixture)
 	if err != nil {
 		return nil, err
 	}
@@ -61,8 +60,8 @@ func (c metricsCollector) Collect(ctx context.Context, fixture, prompt string) (
 	return series, nil
 }
 
-func observedFixtureDeltaSums(ctx context.Context, replayService replay.Service, fixture string) (map[string]int64, error) {
-	inspection, err := replayService.InspectCapture(ctx, fixture)
+func observedFixtureDeltaSums(ctx context.Context, replayInspector replay.CaptureInspector, fixture string) (map[string]int64, error) {
+	inspection, err := replayInspector.InspectCapture(ctx, fixture)
 	if err != nil {
 		return nil, fmt.Errorf("inspect replay fixture %q: %w", fixture, err)
 	}

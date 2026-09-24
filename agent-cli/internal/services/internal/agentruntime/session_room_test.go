@@ -1238,7 +1238,7 @@ func newRoomTestRunOptions(ids []string, inferencers map[string]*roomTestInferen
 		credentials["ROOM_"+strings.ToUpper(id)+"_KEY"] = "secret-" + id
 	}
 	opts := RoomRunOptions{
-		AudioService: newTestAudioIOService(), Manifest: room.Manifest{
+		AudioService: newTestAudioIOService(), RecordingService: newTestRecordingService(), ProviderCaptureService: newTestProviderCaptureService(), ReplayMessageCodec: newTestReplayService(), Manifest: room.Manifest{
 			SchemaVersion: room.SchemaVersion,
 			Room:          room.Room{MaxDuration: 5 * time.Second},
 			Participants:  make([]room.Participant, 0, len(ids)),

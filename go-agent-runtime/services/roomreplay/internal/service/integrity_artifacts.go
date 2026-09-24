@@ -100,7 +100,7 @@ func statRoomReplayArtifact(ref roomReplayArtifactRef, normalized, absolute stri
 	return nil, newRoomReplayBundleError(kind, ref.Field, normalized, fmt.Sprintf("size %d", declaredSize), fmt.Sprintf("size %d", info.Size()), cause)
 }
 
-func validateRoomReplayCaptures(replayService replay.Service, plan *RoomReplayPlan) error {
+func validateRoomReplayCaptures(replayService replay.CaptureInspector, plan *RoomReplayPlan) error {
 	if replayService == nil {
 		return newRoomReplayBundleError(RoomReplayBundleMismatch, "participants.capture", "", "replay service", "unavailable", ErrInvalidRoomReplayBundle)
 	}
@@ -116,7 +116,7 @@ func validateRoomReplayCaptures(replayService replay.Service, plan *RoomReplayPl
 	return nil
 }
 
-func validateRoomReplayCapture(replayService replay.Service, participant RoomReplayParticipant) error {
+func validateRoomReplayCapture(replayService replay.CaptureInspector, participant RoomReplayParticipant) error {
 	if participant.Capture.AbsolutePath == "" {
 		return newRoomReplayBundleError(RoomReplayBundleIncomplete, "participants["+participant.ID+"].capture", "", "provider capture", "missing", ErrRoomReplayBundleIncomplete)
 	}

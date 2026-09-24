@@ -38,10 +38,10 @@ const (
 // validation implementation. It has no invocation state and is safe to share
 // as a constructor across independent hosts.
 type Service struct {
-	replayService replay.Service
+	replayService replay.CaptureInspector
 }
 
-func New(replayService replay.Service) *Service {
+func New(replayService replay.CaptureInspector) *Service {
 	return &Service{replayService: replayService}
 }
 

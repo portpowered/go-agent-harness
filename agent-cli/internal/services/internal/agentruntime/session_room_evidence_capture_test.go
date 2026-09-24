@@ -120,7 +120,7 @@ func TestRoomParticipantEvidence_RecordAudioDroppedIsExplicitNotSilent(t *testin
 			Tools:        []string{},
 		}},
 	}
-	evidence, err := newRoomEvidence(t.TempDir(), manifest, room.DefaultPCM16Format(), nil, time.Now())
+	evidence, err := newRoomEvidence(t.TempDir(), manifest, room.DefaultPCM16Format(), nil, time.Now(), newTestReplayService())
 	if err != nil {
 		t.Fatalf("newRoomEvidence: %v", err)
 	}

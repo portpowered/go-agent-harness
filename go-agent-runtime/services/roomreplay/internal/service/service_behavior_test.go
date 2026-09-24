@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -12,13 +13,46 @@ import (
 	"testing"
 	"time"
 
-	replaywire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
-func roomReplayServiceForTest() roomreplay.Service { return New(replaywire.NewService()) }
+func roomReplayServiceForTest() roomreplay.Service { return New(roomReplayTestInspector{}) }
+
+type roomReplayTestInspector struct{}
+
+func (roomReplayTestInspector) InspectCapture(ctx context.Context, path string) (replay.CaptureInspection, error) {
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return replay.CaptureInspection{}, err
+		}
+	}
+	loaded, err := gwtesting.LoadSessionCaptureForReplay(path)
+	if err != nil {
+		return replay.CaptureInspection{}, err
+	}
+	facts := replay.CaptureFacts{Version: loaded.Capture.Version, EventCount: len(loaded.Capture.Records)}
+	allWebSocketMessages := len(loaded.Capture.Records) > 0
+	for _, record := range loaded.Capture.Records {
+		if record.PayloadType != gwtesting.SessionPayloadTypeWebSocketMessage {
+			allWebSocketMessages = false
+		}
+		if record.Direction == gwtesting.DirectionClientToServer && record.Type == "input_audio_buffer.append" {
+			facts.ClientAudioAppendCount++
+		}
+	}
+	kind := replay.CaptureKindTurn
+	if allWebSocketMessages {
+		if _, err := gwtesting.NewReplayWebSocketDialerFromCapture(loaded.Capture); err != nil {
+			return replay.CaptureInspection{}, err
+		}
+		kind = replay.CaptureKindRealtime
+		facts.RealtimeWebSocketReplayable = true
+	}
+	return replay.CaptureInspection{SourcePath: path, CapturePath: path, Kind: kind, Provider: loaded.Capture.Provider.Name, Model: loaded.Capture.Provider.Model, Facts: facts}, nil
+}
 
 func TestLoadRoomReplayPlanValidatesCompleteBundleBeforeRuntime(t *testing.T) {
 	bundle, manifest := writeRoomReplayBundle(t)

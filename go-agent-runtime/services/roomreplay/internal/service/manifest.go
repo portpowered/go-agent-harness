@@ -44,7 +44,7 @@ type roomReplayArtifactRef struct {
 	Field  string
 }
 
-func validateRoomReplayManifest(root, manifestPath string, data []byte, replayService replay.Service) (RoomReplayPlan, error) {
+func validateRoomReplayManifest(root, manifestPath string, data []byte, replayService replay.CaptureInspector) (RoomReplayPlan, error) {
 	document, err := parseRoomReplayManifest(data)
 	if err != nil {
 		return RoomReplayPlan{}, err

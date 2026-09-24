@@ -112,7 +112,7 @@ func participantIndex(participants []roomreplay.Participant) (map[string]roomrep
 	return index, nil
 }
 
-func inspectTargets(ctx context.Context, ids []string, participants map[string]roomreplay.Participant, replayService replay.Service) ([]string, int, bool, error) {
+func inspectTargets(ctx context.Context, ids []string, participants map[string]roomreplay.Participant, replayService replay.CaptureInspector) ([]string, int, bool, error) {
 	targetIDs := make([]string, 0, len(ids))
 	seen := make(map[string]struct{}, len(ids))
 	expectedFrames := 0
@@ -133,7 +133,7 @@ func inspectTargets(ctx context.Context, ids []string, participants map[string]r
 	return targetIDs, expectedFrames, hasInboundAudio, nil
 }
 
-func inspectTarget(ctx context.Context, rawID string, seen map[string]struct{}, participants map[string]roomreplay.Participant, replayService replay.Service) (string, int, error) {
+func inspectTarget(ctx context.Context, rawID string, seen map[string]struct{}, participants map[string]roomreplay.Participant, replayService replay.CaptureInspector) (string, int, error) {
 	if err := ctx.Err(); err != nil {
 		return "", 0, err
 	}

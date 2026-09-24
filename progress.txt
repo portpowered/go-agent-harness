@@ -4933,3 +4933,39 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   and rerun every C276 functional, integration, race, hermetic, Wire, and
   `make prepush` gate on one clean exact candidate before any push. Decision
   remains CONTINUE.
+
+# C276 complete caller cutover and local gate checkpoint — 2026-09-23
+
+- Applied the current operator directive on this same isolated C276 branch. It
+  supersedes the older requirement to wait for reviewed C268/C269 path leases.
+  The fetched `origin/main=afd918cdc09a739181531cba8d8b603a7376ed26` merge and
+  all required predecessor ancestry remain preserved.
+- Cut over the final three runtime capture readers in sessiontrace and
+  roomreplay to `replay.CaptureInspector`. Replay Wire construction now occurs
+  in the CLI application graph, not inside peer services. The legacy room
+  runtime receives a replay message codec and recording dependencies explicitly;
+  its recording/replay Wire fallback constructors were removed.
+- Full production capture-reader census now finds no runtime service caller
+  outside replay; the remaining direct loaders are in gateway-owned testing
+  utilities and the fixture-validator command. All seven planned legacy production
+  files and six checkpoint-only replacement paths remain absent. The only
+  adapters remain `recording_adapter.go` (30 lines) and `replay_adapter.go`
+  (33 lines), 63 total.
+- Lowered the agentruntime package-files baseline from 126 to the measured 123
+  current package files after the retirement. No line or coverage floor was
+  raised. `rtk make verify-architecture` passes: 226 packages, 1,995 files,
+  29,399 functions. `rtk make wire-check` passes, and `rtk make embed-check`
+  passes (`example.com/agent-runtime-consumer`).
+- Focused functional checks pass: `rtk go test -count=1
+  ./go-agent-runtime/services/sessiontrace/... ./go-agent-runtime/services/roomreplay/...
+  ./agent-cli/internal/services/rooms/wire ./agent-cli/internal/services/wire
+  ./agent-cli/internal/transport/cli` (840 tests / 14 packages) and
+  `rtk go test -count=1 ./agent-cli/internal/services/internal/agentruntime
+  -run 'Test(RunRoom|InjectRoom|ObserveRoom)'` (63 tests / 1 package).
+  The earlier root `go test ./tests/embedding` invocation was not a supported
+  workspace command; the required `make embed-check` succeeded.
+- No push or PR handoff yet. Exact next action: commit this implementation
+  checkpoint, then run the complete `make prepush` and every C276 functional,
+  integration, race, hermetic, and Wire command on the final exact SHA. Repair
+  any locally reproducible issue before pushing and opening the same-task PR.
+  Decision remains CONTINUE.

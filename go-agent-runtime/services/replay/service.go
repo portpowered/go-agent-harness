@@ -143,6 +143,12 @@ type CaptureFacts struct {
 	MetricDeltas                []CaptureMetricDelta
 }
 
+// CaptureInspector is the narrow replay contract used by services that need
+// admitted capture metadata without constructing replay execution behavior.
+type CaptureInspector interface {
+	InspectCapture(context.Context, string) (CaptureInspection, error)
+}
+
 // CaptureProbeRequest describes one deterministic offline probe over a
 // recorded provider capture. AudioSamples, when non-nil, replace the fixture's
 // placeholder audio append events with framed PCM before replay.
@@ -274,10 +280,10 @@ func (i CaptureInspection) IsRealtime() bool { return i.Kind == CaptureKindRealt
 // Execution and device attachment remain owned by the session service.
 type Service interface {
 	StreamMessageCodec
+	CaptureInspector
 	// InspectCapture validates and classifies a raw capture or finalized
 	// recording directory, returning provider metadata and any self-driving
 	// live plan. The returned paths are safe for the provider replay adapter.
-	InspectCapture(context.Context, string) (CaptureInspection, error)
 	TraceCapture(context.Context, string) ([]CaptureTraceEvent, error)
 	LoadLivePlan(context.Context, string) (session.LiveReplayPlan, error)
 	// ResolveCapturePath admits either a raw provider capture or a finalized

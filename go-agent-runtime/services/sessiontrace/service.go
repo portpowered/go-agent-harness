@@ -10,6 +10,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -275,9 +276,10 @@ type MetricsCollector interface {
 type MetricsRunner func(context.Context, string, string) (metrics.Snapshot, error)
 
 type MetricsCollectorOptions struct {
-	Clock        clock.Source
-	Runner       MetricsRunner
-	FactoryReady func() bool
+	Clock           clock.Source
+	Runner          MetricsRunner
+	FactoryReady    func() bool
+	ReplayInspector replay.CaptureInspector
 }
 
 // ProviderBoundaryObserver is an optional runtime policy preference.

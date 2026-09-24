@@ -9,12 +9,12 @@ package wire
 
 import (
 	"github.com/google/wire"
-	replaywire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay/internal/service"
 )
 
-func NewService() roomreplay.Service {
-	wire.Build(service.New, replaywire.NewService, wire.Bind(new(roomreplay.Service), new(*service.Service)))
+func NewService(inspector replay.CaptureInspector) roomreplay.Service {
+	wire.Build(service.New, wire.Bind(new(roomreplay.Service), new(*service.Service)))
 	return nil
 }

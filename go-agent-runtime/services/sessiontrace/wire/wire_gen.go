@@ -9,7 +9,6 @@ package wire
 import (
 	"context"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/internal/observer"
@@ -41,8 +40,7 @@ func NewProviderWireDialer(inner transport.Dialer, observer sessiontrace.Runtime
 }
 
 func NewReplayMetricsCollector(options sessiontrace.MetricsCollectorOptions) sessiontrace.MetricsCollector {
-	replayService := wire.NewService()
-	metricsCollector := service.NewReplayMetricsCollector(options, replayService)
+	metricsCollector := service.NewReplayMetricsCollector(options)
 	return metricsCollector
 }
 

@@ -22,6 +22,10 @@ import (
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
+func newRoomEvidence(destination string, manifest room.Manifest, format room.PCM16Format, secrets []string, startedAt time.Time, replayCodec roomEvidenceMessageCodec) (*roomEvidence, error) {
+	return newRoomEvidenceWithLatency(destination, manifest, format, secrets, startedAt, nil, replayCodec)
+}
+
 func TestRunRoom_WritesPerParticipantEvidenceAndManifest(t *testing.T) {
 	ids := []string{"alpha", "beta", "gamma"}
 	inferencers := make(map[string]*roomTestInferencer, len(ids))
@@ -237,7 +241,7 @@ func TestRoomEvidence_RedactsJSONStringsWithoutCorruptingDeltas(t *testing.T) {
 			Tools:        []string{},
 		}},
 	}
-	evidence, err := newRoomEvidence(t.TempDir(), manifest, room.DefaultPCM16Format(), []string{secret}, time.Now())
+	evidence, err := newRoomEvidence(t.TempDir(), manifest, room.DefaultPCM16Format(), []string{secret}, time.Now(), newTestReplayService())
 	if err != nil {
 		t.Fatalf("newRoomEvidence: %v", err)
 	}
@@ -285,7 +289,7 @@ func TestRoomEvidence_RecordingHealthRetainsFirstSanitizedFailure(t *testing.T) 
 			Tools:     []string{},
 		}},
 	}
-	evidence, err := newRoomEvidence(t.TempDir(), manifest, room.DefaultPCM16Format(), []string{secret}, time.Now())
+	evidence, err := newRoomEvidence(t.TempDir(), manifest, room.DefaultPCM16Format(), []string{secret}, time.Now(), newTestReplayService())
 	if err != nil {
 		t.Fatalf("newRoomEvidence: %v", err)
 	}
@@ -343,7 +347,7 @@ func TestRoomEvidence_FinalizeIsIdempotent(t *testing.T) {
 			Tools:        []string{},
 		}},
 	}
-	evidence, err := newRoomEvidence(t.TempDir(), manifest, room.DefaultPCM16Format(), nil, time.Now())
+	evidence, err := newRoomEvidence(t.TempDir(), manifest, room.DefaultPCM16Format(), nil, time.Now(), newTestReplayService())
 	if err != nil {
 		t.Fatalf("newRoomEvidence: %v", err)
 	}
@@ -377,7 +381,7 @@ func TestRoomEvidenceManifest_RecordsSanitizedParticipantBrowserTools(t *testing
 			{ID: "other", SystemPrompt: "other", Provider: "openai", Model: "model", APIKeyEnv: "ROOM_KEY", Tools: []string{}},
 		},
 	}
-	evidence, err := newRoomEvidence(t.TempDir(), manifest, room.DefaultPCM16Format(), nil, time.Now())
+	evidence, err := newRoomEvidence(t.TempDir(), manifest, room.DefaultPCM16Format(), nil, time.Now(), newTestReplayService())
 	if err != nil {
 		t.Fatalf("newRoomEvidence: %v", err)
 	}
