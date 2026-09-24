@@ -314,3 +314,72 @@ func normalizedRealtimeImageMIME(raw string) (string, bool) {
 	mediaType = strings.ToLower(strings.TrimSpace(mediaType))
 	return mediaType, mediaType != "" && strings.HasPrefix(mediaType, "image/")
 }
+
+func cloneSessionEvents(events []models.SessionEvent) []models.SessionEvent {
+	cloned := make([]models.SessionEvent, len(events))
+	for index, event := range events {
+		cloned[index] = event
+		if event.Data != nil {
+			cloned[index].Data = append(json.RawMessage(nil), event.Data...)
+		}
+	}
+	return cloned
+}
+
+// firstReservingResponseCreate returns the first in-band response.create,
+// which reserves the provider's single active response slot.
+func firstReservingResponseCreate(events []models.SessionEvent) (models.SessionEvent, bool) {
+	for _, event := range events {
+		if event.Type == models.SessionEventResponseCreate && !realtimeResponseCreateIsOutOfBand(event) {
+			return event, true
+		}
+	}
+	return models.SessionEvent{}, false
+}
+
+func withoutDefaultResponseCreate(events []models.SessionEvent) []models.SessionEvent {
+	kept := make([]models.SessionEvent, 0, len(events))
+	for _, event := range events {
+		if event.Type == models.SessionEventResponseCreate && !realtimeResponseCreateIsOutOfBand(event) {
+			continue
+		}
+		kept = append(kept, event)
+	}
+	return kept
+}
+
+func responseCreateEvents(events []models.SessionEvent) []models.SessionEvent {
+	kept := make([]models.SessionEvent, 0, 1)
+	for _, event := range events {
+		if event.Type == models.SessionEventResponseCreate && !realtimeResponseCreateIsOutOfBand(event) {
+			kept = append(kept, event)
+		}
+	}
+	return kept
+}
+
+func responseIntentHasAudioCommit(intent responseIntent) bool {
+	for _, event := range intent.events {
+		if event.Type == models.SessionEventInputAudioBufferCommit {
+			return true
+		}
+	}
+	return false
+}
+
+func responseIntentSettlement(intent responseIntent) chan messages.SessionSendOutcome {
+	if !responseIntentHasAudioCommit(intent) {
+		return nil
+	}
+	return make(chan messages.SessionSendOutcome, 1)
+}
+
+func settleResponseIntent(intent responseIntent, outcome messages.SessionSendOutcome) {
+	if intent.settled == nil {
+		return
+	}
+	select {
+	case intent.settled <- outcome:
+	default:
+	}
+}

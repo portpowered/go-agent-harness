@@ -38,53 +38,8 @@ func TestConnectSession_PreparesRTCMediaBeforeReadLoopForConsumer(t *testing.T) 
 
 func TestConnectSession_NormalizesOpenAIRealtimeEventsInOrder(t *testing.T) {
 	conn := newMockWebSocketConn()
-	audioB64 := base64.StdEncoding.EncodeToString([]byte("audio-chunk"))
-	conn.addServerEvent("response.created", nil)
-	conn.addServerEvent("conversation.item.input_audio_transcription.delta", map[string]any{"delta": "hello "})
-	conn.addServerEvent("conversation.item.input_audio_transcription.completed", map[string]any{"transcript": "hello world"})
-	conn.addServerEvent("response.output_text.delta", map[string]any{"delta": "hello"})
-	conn.addServerEvent("response.output_audio.delta", map[string]any{
-		"delta":  audioB64,
-		"format": "pcm16",
-	})
-	conn.addServerEvent("response.output_audio_transcript.delta", map[string]any{"delta": "spoken"})
-	conn.addServerEvent("response.output_item.added", map[string]any{
-		"item": map[string]any{
-			"type":    "function_call",
-			"call_id": "call-weather",
-			"name":    "lookup_weather",
-		},
-	})
-	conn.addServerEvent("response.function_call_arguments.delta", map[string]any{
-		"call_id": "call-weather",
-		"delta":   `{"city":`,
-	})
-	conn.addServerEvent("response.function_call_arguments.done", map[string]any{
-		"call_id":   "call-weather",
-		"name":      "lookup_weather",
-		"arguments": `{"city":"Seattle"}`,
-	})
-	conn.addServerEvent("response.output_audio_transcript.done", map[string]any{"transcript": "spoken words"})
-	conn.addServerEvent("response.output_text.done", nil)
-	conn.addServerEvent("response.output_audio.done", nil)
-	conn.addServerEvent("response.done", nil)
-	conn.addServerEvent("session.closed", map[string]any{
-		"session_id": "sess-openai-normalize",
-		"reason":     "fixture_complete",
-	})
-	dialer := &mockWebSocketDialer{conn: conn}
-	provider := New(
-		WithAPIKey("test-key"),
-		WithRealtimeBaseURL("wss://mock.openai.test/v1/realtime"),
-		WithWebSocketDialer(dialer),
-	)
-
-	ctx := newRealtimeTestContext(t)
-	session, err := provider.ConnectSession(ctx, models.SessionConfig{Model: "gpt-realtime"})
-	if err != nil {
-		t.Fatalf("ConnectSession: %v", err)
-	}
-	defer func() { _ = session.Close() }()
+	addNormalizationFixtureServerEvents(conn)
+	session, ctx := connectMockRealtimeSession(t, conn)
 
 	wantTypes := []messages.StreamMessageType{
 		messages.StreamTypeMessageStart,
@@ -138,6 +93,50 @@ func TestConnectSession_NormalizesOpenAIRealtimeEventsInOrder(t *testing.T) {
 	if !ok || inputTranscript.FullText != "hello world" {
 		t.Fatalf("input transcript end: got %#v", gotMessages[2].Value)
 	}
+	assertNormalizedToolEndAndSessionClose(t, gotMessages)
+}
+
+// addNormalizationFixtureServerEvents scripts the provider events whose
+// normalized order TestConnectSession_NormalizesOpenAIRealtimeEventsInOrder checks.
+func addNormalizationFixtureServerEvents(conn *mockWebSocketConn) {
+	audioB64 := base64.StdEncoding.EncodeToString([]byte("audio-chunk"))
+	conn.addServerEvent("response.created", nil)
+	conn.addServerEvent("conversation.item.input_audio_transcription.delta", map[string]any{"delta": "hello "})
+	conn.addServerEvent("conversation.item.input_audio_transcription.completed", map[string]any{"transcript": "hello world"})
+	conn.addServerEvent("response.output_text.delta", map[string]any{"delta": "hello"})
+	conn.addServerEvent("response.output_audio.delta", map[string]any{
+		"delta":  audioB64,
+		"format": "pcm16",
+	})
+	conn.addServerEvent("response.output_audio_transcript.delta", map[string]any{"delta": "spoken"})
+	conn.addServerEvent("response.output_item.added", map[string]any{
+		"item": map[string]any{
+			"type":    "function_call",
+			"call_id": "call-weather",
+			"name":    "lookup_weather",
+		},
+	})
+	conn.addServerEvent("response.function_call_arguments.delta", map[string]any{
+		"call_id": "call-weather",
+		"delta":   `{"city":`,
+	})
+	conn.addServerEvent("response.function_call_arguments.done", map[string]any{
+		"call_id":   "call-weather",
+		"name":      "lookup_weather",
+		"arguments": `{"city":"Seattle"}`,
+	})
+	conn.addServerEvent("response.output_audio_transcript.done", map[string]any{"transcript": "spoken words"})
+	conn.addServerEvent("response.output_text.done", nil)
+	conn.addServerEvent("response.output_audio.done", nil)
+	conn.addServerEvent("response.done", nil)
+	conn.addServerEvent("session.closed", map[string]any{
+		"session_id": "sess-openai-normalize",
+		"reason":     "fixture_complete",
+	})
+}
+
+func assertNormalizedToolEndAndSessionClose(t *testing.T, gotMessages []messages.StreamMessage) {
+	t.Helper()
 	toolDone, ok := gotMessages[8].Value.(*messages.ToolCallEndValue)
 	if !ok {
 		t.Fatalf("tool end: got %T", gotMessages[8].Value)
@@ -160,6 +159,52 @@ func TestConnectSession_NormalizesOpenAIRealtimeEventsInOrder(t *testing.T) {
 	}
 }
 
+// realtimeAdmissionTestTimeout bounds one directly started realtime session.
+const realtimeAdmissionTestTimeout = 2 * time.Second
+
+// startMockRealtimeSession starts a realtime session over conn. Its context is
+// cancelled and the session closed (close first) when the test ends.
+func startMockRealtimeSession(t *testing.T, conn *mockWebSocketConn) (*realtimeSession, context.Context) {
+	t.Helper()
+	session := newRealtimeSession(conn, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), realtimeAdmissionTestTimeout)
+	t.Cleanup(cancel)
+	session.start(ctx)
+	t.Cleanup(func() { closeRealtimeTestSession(t, session) })
+	return session, ctx
+}
+
+// connectMockRealtimeSession connects a provider session over conn and closes
+// it when the test ends.
+func connectMockRealtimeSession(t *testing.T, conn *mockWebSocketConn) (messages.Session, context.Context) {
+	t.Helper()
+	provider := newMockRealtimeProvider(conn)
+	ctx := newRealtimeTestContext(t)
+	session, err := provider.ConnectSession(ctx, models.SessionConfig{Model: "gpt-realtime"})
+	if err != nil {
+		t.Fatalf("ConnectSession: %v", err)
+	}
+	t.Cleanup(func() { closeRealtimeTestSession(t, session) })
+	return session, ctx
+}
+
+// newMockRealtimeProvider builds a provider that dials conn at the mock
+// realtime endpoint; options are applied after the defaults.
+func newMockRealtimeProvider(conn *mockWebSocketConn, options ...Option) *OpenAIProvider {
+	return New(append([]Option{
+		WithAPIKey("test-key"),
+		WithRealtimeBaseURL("wss://mock.openai.test/v1/realtime"),
+		WithWebSocketDialer(&mockWebSocketDialer{conn: conn}),
+	}, options...)...)
+}
+
+func closeRealtimeTestSession(t *testing.T, session messages.Session) {
+	t.Helper()
+	if err := session.Close(); err != nil {
+		t.Errorf("close realtime session: %v", err)
+	}
+}
+
 func TestConnectSession_NormalizesOpenAIRealtimeErrorDetails(t *testing.T) {
 	conn := newMockWebSocketConn()
 	conn.addServerEvent("error", map[string]any{
@@ -171,19 +216,7 @@ func TestConnectSession_NormalizesOpenAIRealtimeErrorDetails(t *testing.T) {
 			"message":  "Invalid realtime event.",
 		},
 	})
-	dialer := &mockWebSocketDialer{conn: conn}
-	provider := New(
-		WithAPIKey("test-key"),
-		WithRealtimeBaseURL("wss://mock.openai.test/v1/realtime"),
-		WithWebSocketDialer(dialer),
-	)
-
-	ctx := newRealtimeTestContext(t)
-	session, err := provider.ConnectSession(ctx, models.SessionConfig{Model: "gpt-realtime"})
-	if err != nil {
-		t.Fatalf("ConnectSession: %v", err)
-	}
-	defer func() { _ = session.Close() }()
+	session, ctx := connectMockRealtimeSession(t, conn)
 
 	got, ok := session.Receive().ReadBlockingContext(ctx)
 	if !ok {
@@ -213,19 +246,7 @@ func TestConnectSession_NormalizesOpenAIRealtimeErrorDetails(t *testing.T) {
 
 func TestConnectSession_IgnoresInactiveCancelRejectionAndContinuesResponse(t *testing.T) {
 	conn := newMockWebSocketConn()
-	dialer := &mockWebSocketDialer{conn: conn}
-	provider := New(
-		WithAPIKey("test-key"),
-		WithRealtimeBaseURL("wss://mock.openai.test/v1/realtime"),
-		WithWebSocketDialer(dialer),
-	)
-
-	ctx := newRealtimeTestContext(t)
-	session, err := provider.ConnectSession(ctx, models.SessionConfig{Model: "gpt-realtime"})
-	if err != nil {
-		t.Fatalf("ConnectSession: %v", err)
-	}
-	defer func() { _ = session.Close() }()
+	session, ctx := connectMockRealtimeSession(t, conn)
 
 	var initial struct {
 		Type string `json:"type"`
@@ -308,11 +329,7 @@ func TestConnectSession_IgnoresInactiveCancelRejectionAndContinuesResponse(t *te
 
 func TestRealtimeSession_QueuesLateToolContinuationUntilResponseDone(t *testing.T) {
 	conn := newMockWebSocketConn()
-	session := newRealtimeSession(conn, nil)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	session.start(ctx)
-	defer func() { _ = session.Close() }()
+	session, ctx := startMockRealtimeSession(t, conn)
 
 	if outcome := session.RequestResponse(ctx); !outcome.OK() {
 		t.Fatalf("initial response request: %#v", outcome)
@@ -354,11 +371,7 @@ func TestRealtimeSession_QueuesLateToolContinuationUntilResponseDone(t *testing.
 
 func TestRealtimeSession_DropsStaleResponseCreateBeforeReplacementToolResult(t *testing.T) {
 	conn := newMockWebSocketConn()
-	session := newRealtimeSession(conn, nil)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	session.start(ctx)
-	defer func() { _ = session.Close() }()
+	session, ctx := startMockRealtimeSession(t, conn)
 
 	if outcome := session.RequestResponse(ctx); !outcome.OK() {
 		t.Fatalf("initial response admission: %#v", outcome)
@@ -414,11 +427,7 @@ func TestRealtimeSession_DropsStaleResponseCreateBeforeReplacementToolResult(t *
 
 func TestRealtimeSession_CancelClearsFunctionCallResponseSuppression(t *testing.T) {
 	conn := newMockWebSocketConn()
-	session := newRealtimeSession(conn, nil)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	session.start(ctx)
-	defer func() { _ = session.Close() }()
+	session, ctx := startMockRealtimeSession(t, conn)
 
 	session.observeResponseCreated(models.SessionEvent{
 		Type: models.SessionEventResponseCreated,
@@ -451,11 +460,7 @@ func TestRealtimeSession_CancelClearsFunctionCallResponseSuppression(t *testing.
 
 func TestRealtimeSession_PreservesFreshUserTurnWhileFunctionCallPending(t *testing.T) {
 	conn := newMockWebSocketConn()
-	session := newRealtimeSession(conn, nil)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	session.start(ctx)
-	defer func() { _ = session.Close() }()
+	session, ctx := startMockRealtimeSession(t, conn)
 
 	session.observeResponseCreated(models.SessionEvent{
 		Type: models.SessionEventResponseCreated,
@@ -485,11 +490,7 @@ func TestRealtimeSession_PreservesFreshUserTurnWhileFunctionCallPending(t *testi
 
 func TestRealtimeSession_PreservesAudioCommitWhenSuppressingStaleResponse(t *testing.T) {
 	conn := newMockWebSocketConn()
-	session := newRealtimeSession(conn, nil)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	session.start(ctx)
-	defer func() { _ = session.Close() }()
+	session, ctx := startMockRealtimeSession(t, conn)
 
 	session.observeResponseCreated(models.SessionEvent{
 		Type: models.SessionEventResponseCreated,
@@ -529,11 +530,7 @@ func TestRealtimeSession_PreservesAudioCommitWhenSuppressingStaleResponse(t *tes
 
 func TestRealtimeSession_PreservesFreshAudioResponseAfterFunctionCall(t *testing.T) {
 	conn := newMockWebSocketConn()
-	session := newRealtimeSession(conn, nil)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	session.start(ctx)
-	defer func() { _ = session.Close() }()
+	session, ctx := startMockRealtimeSession(t, conn)
 
 	session.observeResponseCreated(models.SessionEvent{
 		Type: models.SessionEventResponseCreated,
@@ -569,88 +566,9 @@ func TestRealtimeSession_PreservesFreshAudioResponseAfterFunctionCall(t *testing
 	}
 }
 
-func TestRealtimeSession_ResponseDoneRequiresMatchingIdentity(t *testing.T) {
-	session := newRealtimeSession(newMockWebSocketConn(), nil)
-	session.observeResponseCreated(models.SessionEvent{
-		Type: models.SessionEventResponseCreated,
-		Data: []byte(`{"response":{"id":"resp-current"}}`),
-	})
-	session.observeResponseDone(models.SessionEvent{
-		Type: models.SessionEventResponseDone,
-		Data: []byte(`{"response":{"status":"completed"}}`),
-	})
-	session.responseMu.Lock()
-	active := session.responseActive
-	session.responseMu.Unlock()
-	if !active {
-		t.Fatal("response.done without an id released the active response")
-	}
-	session.observeResponseDone(models.SessionEvent{
-		Type: models.SessionEventResponseDone,
-		Data: []byte(`{"response":{"id":"resp-current","conversation":"none"}}`),
-	})
-	session.responseMu.Lock()
-	active = session.responseActive
-	session.responseMu.Unlock()
-	if !active {
-		t.Fatal("out-of-band response.done released the active response")
-	}
-	session.observeResponseDone(models.SessionEvent{
-		Type: models.SessionEventResponseDone,
-		Data: []byte(`{"response":{"id":"resp-current","status":"completed"}}`),
-	})
-	session.responseMu.Lock()
-	active = session.responseActive
-	session.responseMu.Unlock()
-	if active {
-		t.Fatal("matching response.done did not release the active response")
-	}
-
-	session.observeResponseCreated(models.SessionEvent{Type: models.SessionEventResponseCreated})
-	session.observeResponseDone(models.SessionEvent{
-		Type: models.SessionEventResponseDone,
-		Data: []byte(`{"response":{"id":"unexpected"}}`),
-	})
-	session.responseMu.Lock()
-	active = session.responseActive
-	session.responseMu.Unlock()
-	if !active {
-		t.Fatal("response.done id released response with unknown local identity")
-	}
-}
-
-func TestRealtimeSession_ToolResultBufferFullDoesNotAdmitResult(t *testing.T) {
-	session := newRealtimeSession(newMockWebSocketConn(), nil)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	session.observeResponseCreated(models.SessionEvent{
-		Type: models.SessionEventResponseCreated,
-		Data: []byte(`{"response":{"id":"resp-tool"}}`),
-	})
-	session.responseMu.Lock()
-	session.pendingResponseIntents = make([]responseIntent, maxPendingResponseIntents)
-	session.responseMu.Unlock()
-	if outcome := session.SendWithOutcome(ctx, messages.StreamMessage{
-		Type:  messages.StreamTypeToolCallEnd,
-		Value: messages.NewToolCallEndValue("call-full", "tool", "result"),
-	}); outcome.Status != messages.SessionSendBufferFull {
-		t.Fatalf("tool result admission = %#v, want buffer full", outcome)
-	}
-	session.responseMu.Lock()
-	admitted := session.toolResultAdmitted
-	session.responseMu.Unlock()
-	if admitted {
-		t.Fatal("buffer-full tool result was marked admitted")
-	}
-}
-
 func TestRealtimeSession_AllowsMultipleToolResultsBeforeContinuation(t *testing.T) {
 	conn := newMockWebSocketConn()
-	session := newRealtimeSession(conn, nil)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	session.start(ctx)
-	defer func() { _ = session.Close() }()
+	session, ctx := startMockRealtimeSession(t, conn)
 
 	session.observeResponseCreated(models.SessionEvent{
 		Type: models.SessionEventResponseCreated,
@@ -684,11 +602,7 @@ func TestRealtimeSession_AllowsMultipleToolResultsBeforeContinuation(t *testing.
 
 func TestRealtimeSession_CancellingQueuedContinuationInvalidatesIt(t *testing.T) {
 	conn := newMockWebSocketConn()
-	session := newRealtimeSession(conn, nil)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	session.start(ctx)
-	defer func() { _ = session.Close() }()
+	session, ctx := startMockRealtimeSession(t, conn)
 
 	if outcome := session.RequestResponse(ctx); !outcome.OK() {
 		t.Fatalf("initial response request: %#v", outcome)
@@ -845,11 +759,7 @@ func TestRealtimeSession_DispatchFailureInvalidatesBeforeFreshAdmission(t *testi
 
 func TestRealtimeSession_CancelRejectionInvalidatesQueuedContinuation(t *testing.T) {
 	conn := newMockWebSocketConn()
-	session := newRealtimeSession(conn, nil)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	session.start(ctx)
-	defer func() { _ = session.Close() }()
+	session, ctx := startMockRealtimeSession(t, conn)
 
 	if outcome := session.RequestResponse(ctx); !outcome.OK() {
 		t.Fatalf("initial response request: %#v", outcome)
@@ -882,81 +792,9 @@ func TestRealtimeSession_CancelRejectionInvalidatesQueuedContinuation(t *testing
 	}
 }
 
-func TestRealtimeSession_IgnoresStaleResponseDoneForCurrentResponse(t *testing.T) {
-	session := newRealtimeSession(newMockWebSocketConn(), nil)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
-	session.observeResponseCreated(models.SessionEvent{Type: models.SessionEventResponseCreated, Data: []byte(`{"response":{"id":"resp-old"}}`)})
-	session.observeResponseDone(models.SessionEvent{Type: models.SessionEventResponseDone, Data: []byte(`{"response":{"id":"resp-old"}}`)})
-	if outcome := session.sendEvents(ctx, []models.SessionEvent{models.NewResponseCreateEvent()}); !outcome.OK() {
-		t.Fatalf("current response admission: %#v", outcome)
-	}
-	session.observeResponseCreated(models.SessionEvent{Type: models.SessionEventResponseCreated, Data: []byte(`{"response":{"id":"resp-current"}}`)})
-	session.observeResponseDone(models.SessionEvent{Type: models.SessionEventResponseDone, Data: []byte(`{"response":{"id":"resp-old"}}`)})
-	session.responseMu.Lock()
-	active := session.responseActive
-	session.responseMu.Unlock()
-	if !active {
-		t.Fatal("stale response.done released the current response admission")
-	}
-	session.observeResponseDone(models.SessionEvent{Type: models.SessionEventResponseDone, Data: []byte(`{"response":{"id":"resp-current"}}`)})
-	session.responseMu.Lock()
-	active = session.responseActive
-	session.responseMu.Unlock()
-	if active {
-		t.Fatal("current response.done did not release response admission")
-	}
-}
-
-func TestRealtimeSession_ResponseAdmissionExcludesOutOfBandCreate(t *testing.T) {
-	oob := models.SessionEvent{
-		Type: models.SessionEventResponseCreate,
-		Data: []byte(`{"response":{"conversation":"none"}}`),
-	}
-	if realtimeEventNeedsResponseAdmission(oob) {
-		t.Fatal("out-of-band response.create was incorrectly serialized with default conversation")
-	}
-	defaultConversation := models.SessionEvent{Type: models.SessionEventResponseCreate}
-	if !realtimeEventNeedsResponseAdmission(defaultConversation) {
-		t.Fatal("default response.create was not admitted")
-	}
-}
-
-func TestRealtimeSession_CloneSessionEventsCopiesRawData(t *testing.T) {
-	original := []models.SessionEvent{{Type: models.SessionEventResponseCreate, Data: []byte(`{"response":{"conversation":"none"}}`)}}
-	cloned := cloneSessionEvents(original)
-	if len(cloned) != 1 || &cloned[0].Data[0] == &original[0].Data[0] {
-		t.Fatal("clone retained raw event backing storage")
-	}
-	original[0].Data[0] = 'x'
-	if cloned[0].Data[0] == 'x' {
-		t.Fatal("mutating source event changed queued intent")
-	}
-}
-
-func TestRealtimeSession_ResponseIntentOverflowIsExplicit(t *testing.T) {
-	session := newRealtimeSession(newMockWebSocketConn(), nil)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	session.observeResponseCreated(models.SessionEvent{Type: models.SessionEventResponseCreated})
-	for i := 0; i < maxPendingResponseIntents; i++ {
-		if outcome := session.RequestResponse(ctx); !outcome.OK() {
-			t.Fatalf("pending response intent %d: %#v", i, outcome)
-		}
-	}
-	if outcome := session.RequestResponse(ctx); outcome.Status != messages.SessionSendBufferFull {
-		t.Fatalf("overflow response intent = %#v, want buffer_full", outcome)
-	}
-}
-
 func TestRealtimeSession_RetriesOwnedCreateAfterActiveResponseRejection(t *testing.T) {
 	conn := newMockWebSocketConn()
-	session := newRealtimeSession(conn, nil)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	session.start(ctx)
-	defer func() { _ = session.Close() }()
+	session, ctx := startMockRealtimeSession(t, conn)
 
 	if outcome := session.RequestResponse(ctx); !outcome.OK() {
 		t.Fatalf("initial response request: %#v", outcome)

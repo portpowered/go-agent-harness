@@ -206,12 +206,13 @@ func runFailure(t *testing.T, h ConformanceHarness, failure FailureCase, operati
 	if operation != "close" {
 		defer func() { _ = conn.Close() }()
 	}
-	if operation == "read" {
+	switch operation {
+	case "read":
 		_, _, err = conn.ReadMessage()
-	} else if operation == "write" {
+	case "write":
 		message := h.Outbound[0]
 		err = conn.WriteMessage(message.Type, append([]byte(nil), message.Payload...))
-	} else {
+	default:
 		err = conn.Close()
 	}
 	checkFailure(t, err, failure)

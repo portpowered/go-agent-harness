@@ -135,124 +135,114 @@ func (p *FalProvider) InferStream(ctx context.Context, req providers.InferenceRe
 // extractAudioAndTextFromMessages takes the last user message and returns an audio URL
 // (or data URI from inline bytes) and concatenated text from text parts.
 func extractAudioAndTextFromMessages(msgs []models.Message) (audioURL, text string, err error) {
-	for i := len(msgs) - 1; i >= 0; i-- {
-		if msgs[i].Role != models.RoleUser {
-			continue
+	audioURL, text, found := extractMediaAndTextFromMessages(msgs, func(part models.ContentPart) (string, bool) {
+		v, ok := part.(models.AudioPart)
+		if !ok {
+			return "", false
 		}
-		var parts []models.ContentPart
-		if len(msgs[i].ContentParts) > 0 {
-			parts = msgs[i].ContentParts
-		} else if msgs[i].TextContent() != "" {
-			parts = []models.ContentPart{models.TextPart{Text: msgs[i].TextContent()}}
+		if len(v.Bytes) == 0 {
+			return v.URL, true
 		}
-		for _, part := range parts {
-			switch v := part.(type) {
-			case models.TextPart:
-				if text != "" {
-					text += " "
-				}
-				text += v.Text
-			case models.AudioPart:
-				if audioURL != "" {
-					continue
-				}
-				audioURL = v.URL
-				if len(v.Bytes) > 0 {
-					mediaType := v.MediaType
-					if mediaType == "" {
-						mediaType = "audio/mpeg"
-					}
-					audioURL = "data:" + mediaType + ";base64," + codec.EncodeBase64(v.Bytes)
-				}
-			}
-		}
-		if audioURL != "" || text != "" {
-			return audioURL, text, nil
-		}
+		return mediaDataURI(v.MediaType, "audio/mpeg", codec.EncodeBase64(v.Bytes)), true
+	})
+	if !found {
+		return "", "", fmt.Errorf("fal provider: no user message with audio or text found")
 	}
-	return "", "", fmt.Errorf("fal provider: no user message with audio or text found")
+	return audioURL, text, nil
 }
 
 // extractEmbeddingAndTextFromMessages scans messages from the end, finds the last user message,
 // extracts an EmbeddingPart URL (converting inline bytes to a data URI) and concatenated text parts.
 func extractEmbeddingAndTextFromMessages(msgs []models.Message) (embeddingURL, text string, err error) {
-	for i := len(msgs) - 1; i >= 0; i-- {
-		if msgs[i].Role != models.RoleUser {
-			continue
+	embeddingURL, text, found := extractMediaAndTextFromMessages(msgs, func(part models.ContentPart) (string, bool) {
+		v, ok := part.(models.EmbeddingPart)
+		if !ok {
+			return "", false
 		}
-		var parts []models.ContentPart
-		if len(msgs[i].ContentParts) > 0 {
-			parts = msgs[i].ContentParts
-		} else if msgs[i].TextContent() != "" {
-			parts = []models.ContentPart{models.TextPart{Text: msgs[i].TextContent()}}
+		if len(v.Bytes) == 0 {
+			return v.URL, true
 		}
-		for _, part := range parts {
-			switch v := part.(type) {
-			case models.TextPart:
-				if text != "" {
-					text += " "
-				}
-				text += v.Text
-			case models.EmbeddingPart:
-				if embeddingURL != "" {
-					continue
-				}
-				embeddingURL = v.URL
-				if len(v.Bytes) > 0 {
-					mediaType := v.MediaType
-					if mediaType == "" {
-						mediaType = "application/octet-stream"
-					}
-					embeddingURL = "data:" + mediaType + ";base64," + base64.StdEncoding.EncodeToString(v.Bytes)
-				}
-			}
-		}
-		if embeddingURL != "" || text != "" {
-			return embeddingURL, text, nil
-		}
+		return mediaDataURI(v.MediaType, "application/octet-stream", base64.StdEncoding.EncodeToString(v.Bytes)), true
+	})
+	if !found {
+		return "", "", fmt.Errorf("fal provider: no user message with embedding or text found")
 	}
-	return "", "", fmt.Errorf("fal provider: no user message with embedding or text found")
+	return embeddingURL, text, nil
 }
 
 // extractImageAndTextFromMessages takes the last user message and returns an image URL
 // (or data URI from inline bytes) and concatenated text from text parts.
 func extractImageAndTextFromMessages(msgs []models.Message) (imageURL, text string, err error) {
+	imageURL, text, found := extractMediaAndTextFromMessages(msgs, func(part models.ContentPart) (string, bool) {
+		v, ok := part.(models.ImagePart)
+		if !ok {
+			return "", false
+		}
+		if len(v.Bytes) == 0 {
+			return v.URL, true
+		}
+		return mediaDataURI(v.MediaType, "image/png", base64.StdEncoding.EncodeToString(v.Bytes)), true
+	})
+	if !found {
+		return "", "", fmt.Errorf("fal provider: no user message with image or text found")
+	}
+	return imageURL, text, nil
+}
+
+// extractMediaAndTextFromMessages scans user messages from the end and returns
+// the first media reference that media recognizes plus the space-joined text
+// parts of the first user message that carries either. found is false when no
+// user message yields media or text.
+func extractMediaAndTextFromMessages(msgs []models.Message, media func(models.ContentPart) (string, bool)) (mediaURL, text string, found bool) {
 	for i := len(msgs) - 1; i >= 0; i-- {
 		if msgs[i].Role != models.RoleUser {
 			continue
 		}
-		var parts []models.ContentPart
-		if len(msgs[i].ContentParts) > 0 {
-			parts = msgs[i].ContentParts
-		} else if msgs[i].TextContent() != "" {
-			parts = []models.ContentPart{models.TextPart{Text: msgs[i].TextContent()}}
-		}
-		for _, part := range parts {
-			switch v := part.(type) {
-			case models.TextPart:
-				if text != "" {
-					text += " "
-				}
-				text += v.Text
-			case models.ImagePart:
-				if imageURL != "" {
-					continue
-				}
-				imageURL = v.URL
-				if len(v.Bytes) > 0 {
-					mediaType := v.MediaType
-					if mediaType == "" {
-						mediaType = "image/png"
-					}
-					imageURL = "data:" + mediaType + ";base64," + base64.StdEncoding.EncodeToString(v.Bytes)
-				}
-			}
-		}
-		if imageURL != "" || text != "" {
-			return imageURL, text, nil
+		mediaURL, text = scanMediaAndTextParts(userMessageParts(msgs[i]), media, mediaURL, text)
+		if mediaURL != "" || text != "" {
+			return mediaURL, text, true
 		}
 	}
-	return "", "", fmt.Errorf("fal provider: no user message with image or text found")
+	return "", "", false
+}
+
+// scanMediaAndTextParts appends text parts to text and keeps the first media
+// reference recognized by media, starting from the given accumulators.
+func scanMediaAndTextParts(parts []models.ContentPart, media func(models.ContentPart) (string, bool), mediaURL, text string) (string, string) {
+	for _, part := range parts {
+		if v, ok := part.(models.TextPart); ok {
+			if text != "" {
+				text += " "
+			}
+			text += v.Text
+			continue
+		}
+		if url, ok := media(part); ok && mediaURL == "" {
+			mediaURL = url
+		}
+	}
+	return mediaURL, text
+}
+
+// userMessageParts returns the structured parts of msg, falling back to a
+// single text part for plain-text messages.
+func userMessageParts(msg models.Message) []models.ContentPart {
+	if len(msg.ContentParts) > 0 {
+		return msg.ContentParts
+	}
+	if msg.TextContent() != "" {
+		return []models.ContentPart{models.TextPart{Text: msg.TextContent()}}
+	}
+	return nil
+}
+
+// mediaDataURI encodes inline media as a data URI, using fallbackType when the
+// part carries no media type.
+func mediaDataURI(mediaType, fallbackType, encoded string) string {
+	if mediaType == "" {
+		mediaType = fallbackType
+	}
+	return "data:" + mediaType + ";base64," + encoded
 }
 
 // --- LTX audio-to-video ---

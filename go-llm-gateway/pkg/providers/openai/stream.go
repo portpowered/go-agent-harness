@@ -25,6 +25,32 @@ const (
 	contentStateToolCall
 )
 
+const (
+	// sseStreamDefaultIndex is the actor-provided index of non-tool events.
+	sseStreamDefaultIndex = 0
+	// sseScannerBufferBytes bounds one SSE line. The default bufio.Scanner
+	// buffer is 64KB, which can truncate large SSE payloads (e.g. tool call
+	// arguments with big JSON or base64 audio chunks), so use 1MB to handle
+	// large payloads without silent truncation.
+	sseScannerBufferBytes = 1 << 20
+	sseDataPrefix         = "data: "
+	sseDoneMarker         = "[DONE]"
+)
+
+// sseToolCallAccumulator accumulates one streamed tool call by index.
+type sseToolCallAccumulator struct{ id, name, args string }
+
+// sseStreamState owns the per-stream mapping state for streamSSEToGateway.
+type sseStreamState struct {
+	ch              chan<- messages.StreamMessage
+	curContentState contentState
+	toolCalls       map[int]sseToolCallAccumulator
+	toolCallEnded   map[int]bool
+	lastUsage       messages.TokenUsage
+	messageEndSent  bool
+	refusalBuf      strings.Builder // accumulates delta.refusal chunks
+}
+
 // streamSSEToGateway reads an OpenAI SSE stream from reader and emits gateway StreamMessages on ch.
 // It parses SSE data lines, decodes JSON chunks, and maps them to typed events:
 // MESSAGE.START, TEXT.*, AUDIO.*, REASONING.*, TOOLCALL.*, USAGE_INFO, MESSAGE.END.
@@ -32,248 +58,237 @@ const (
 // When closeBody is provided, it must complete before MESSAGE.END so callers
 // can flush a recorder only after the HTTP response body is inactive.
 func streamSSEToGateway(reader io.Reader, ch chan<- messages.StreamMessage, closeBody ...func() error) {
-	const defaultIndex = 0
-
 	ch <- messages.StreamMessage{
 		Type:               messages.StreamTypeMessageStart,
-		ActorProvidedIndex: defaultIndex,
+		ActorProvidedIndex: sseStreamDefaultIndex,
 		Value:              messages.NewMessageStartValue(),
 	}
 
-	var (
-		curContentState = contentStateNone
-		toolCalls       = make(map[int]struct{ id, name, args string })
-		toolCallEnded   = make(map[int]bool)
-		lastUsage       messages.TokenUsage
-		messageEndSent  bool
-		refusalBuf      strings.Builder // accumulates delta.refusal chunks
-	)
-
-	sendMessageEnd := func() {
-		if messageEndSent {
-			return
-		}
-		// Emit accumulated refusal (if any) before MESSAGE.END.
-		if refusalBuf.Len() > 0 {
-			ch <- messages.StreamMessage{
-				Type:               messages.StreamTypeRefusal,
-				ActorProvidedIndex: defaultIndex,
-				Value:              messages.NewRefusalValue(refusalBuf.String()),
-			}
-		}
-		messageEndSent = true
-		ch <- messages.StreamMessage{
-			Type:               messages.StreamTypeMessageEnd,
-			ActorProvidedIndex: defaultIndex,
-			Value:              messages.NewMessageEndValue(lastUsage),
-		}
-		if lastUsage.PromptTokens != 0 || lastUsage.CompletionTokens != 0 || lastUsage.TotalTokens != 0 || lastUsage.ReasoningTokens != 0 {
-			ch <- messages.StreamMessage{
-				Type:               messages.StreamTypeUsageInfo,
-				ActorProvidedIndex: defaultIndex,
-				Value:              messages.NewUsageInfoValue(lastUsage),
-			}
-		}
-	}
-
-	// endContentState emits the appropriate END event for the current content type.
-	endContentState := func() {
-		switch curContentState {
-		case contentStateReasoning:
-			ch <- messages.StreamMessage{
-				Type:               messages.StreamTypeReasoningEnd,
-				ActorProvidedIndex: defaultIndex,
-				Value:              messages.NewReasoningEndValue(),
-			}
-		case contentStateText:
-			ch <- messages.StreamMessage{
-				Type:               messages.StreamTypeTextEnd,
-				ActorProvidedIndex: defaultIndex,
-				Value:              messages.NewTextEndValue(),
-			}
-		case contentStateAudio:
-			ch <- messages.StreamMessage{
-				Type:               messages.StreamTypeAudioEnd,
-				ActorProvidedIndex: defaultIndex,
-				Value:              messages.NewAudioEndValue(),
-			}
-		case contentStateToolCall:
-			for idx, acc := range toolCalls {
-				if !toolCallEnded[idx] {
-					toolCallEnded[idx] = true
-					ch <- messages.StreamMessage{
-						Type:               messages.StreamTypeToolCallEnd,
-						ActorProvidedIndex: idx,
-						Value:              messages.NewToolCallEndValue(acc.id, acc.name, acc.args),
-					}
-				}
-			}
-		}
-		curContentState = contentStateNone
-	}
-
-	// transitionTo switches to a new content type: ends current if different, then starts new.
-	transitionTo := func(next contentState, startType messages.StreamMessageType, startValue messages.StreamMessageValue) {
-		if curContentState != next {
-			endContentState()
-			curContentState = next
-			ch <- messages.StreamMessage{Type: startType, ActorProvidedIndex: defaultIndex, Value: startValue}
-		}
+	state := &sseStreamState{
+		ch:              ch,
+		curContentState: contentStateNone,
+		toolCalls:       make(map[int]sseToolCallAccumulator),
+		toolCallEnded:   make(map[int]bool),
 	}
 
 	scanner := bufio.NewScanner(reader)
-	// Default bufio.Scanner buffer is 64KB which can truncate large SSE payloads
-	// (e.g. tool call arguments with big JSON or base64 audio chunks).
-	// Use a 1MB buffer to handle large payloads without silent truncation.
-	scanner.Buffer(make([]byte, 0, 1<<20), 1<<20)
+	scanner.Buffer(make([]byte, 0, sseScannerBufferBytes), sseScannerBufferBytes)
 	for scanner.Scan() {
-		line := scanner.Text()
-		if !strings.HasPrefix(line, "data: ") {
-			continue
-		}
-		data := strings.TrimPrefix(line, "data: ")
-		if data == "[DONE]" {
+		if state.handleLine(scanner.Text()) {
 			break
-		}
-
-		var chunk streamChunk
-		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
-			continue
-		}
-
-		// Capture usage (present in last chunk when stream_options.include_usage is set)
-		if chunk.Usage != nil {
-			lastUsage = messages.TokenUsage{
-				PromptTokens:     chunk.Usage.PromptTokens,
-				CompletionTokens: chunk.Usage.CompletionTokens,
-				TotalTokens:      chunk.Usage.TotalTokens,
-			}
-			if chunk.Usage.CompletionTokensDetails != nil {
-				lastUsage.ReasoningTokens = chunk.Usage.CompletionTokensDetails.ReasoningTokens
-			}
-		}
-
-		if len(chunk.Choices) == 0 {
-			continue
-		}
-		delta := chunk.Choices[0].Delta
-		finishReason := chunk.Choices[0].FinishReason
-
-		// Reasoning tokens (OpenRouter / DeepInfra thinking tokens via delta.reasoning)
-		if delta.Reasoning != "" {
-			transitionTo(contentStateReasoning, messages.StreamTypeReasoningStart, messages.NewReasoningStartValue())
-			ch <- messages.StreamMessage{
-				Type:               messages.StreamTypeReasoningDelta,
-				ActorProvidedIndex: defaultIndex,
-				Value:              messages.NewReasoningDeltaValue(delta.Reasoning),
-			}
-		}
-
-		// Audio output (delta.audio.data is base64-encoded PCM)
-		if delta.Audio != nil && delta.Audio.Data != "" {
-			decoded, err := codec.DecodeBase64(delta.Audio.Data)
-			if err == nil && len(decoded) > 0 {
-				transitionTo(contentStateAudio, messages.StreamTypeAudioStart, messages.NewAudioStartValue())
-				ch <- messages.StreamMessage{
-					Type:               messages.StreamTypeAudioDelta,
-					ActorProvidedIndex: defaultIndex,
-					Value:              messages.NewAudioDeltaValue(decoded),
-				}
-			}
-		}
-
-		// Refusal deltas: accumulate silently, emit once after stream ends.
-		if delta.Refusal != "" {
-			refusalBuf.WriteString(delta.Refusal)
-		}
-
-		// Text content
-		if delta.Content != "" {
-			transitionTo(contentStateText, messages.StreamTypeTextStart, messages.NewTextStartValue())
-			ch <- messages.StreamMessage{
-				Type:               messages.StreamTypeTextDelta,
-				ActorProvidedIndex: defaultIndex,
-				Value:              messages.NewTextDeltaValue(delta.Content),
-			}
-		}
-
-		// Tool calls: streamed as repeated deltas per index (id/name first, then arguments appended)
-		if len(delta.ToolCalls) > 0 && curContentState != contentStateToolCall {
-			endContentState()
-			curContentState = contentStateToolCall
-		}
-		for _, tc := range delta.ToolCalls {
-			idx := tc.Index
-			acc, exists := toolCalls[idx]
-			if !exists {
-				acc = struct{ id, name, args string }{id: tc.ID, name: tc.Function.Name, args: tc.Function.Arguments}
-				toolCalls[idx] = acc
-				ch <- messages.StreamMessage{
-					Type:               messages.StreamTypeToolCallStart,
-					ActorProvidedIndex: idx,
-					Value:              messages.NewToolCallStartValue(tc.ID, tc.Function.Name),
-				}
-			} else {
-				acc.args += tc.Function.Arguments
-				toolCalls[idx] = acc
-			}
-			if tc.Function.Arguments != "" {
-				ch <- messages.StreamMessage{
-					Type:               messages.StreamTypeToolCallDelta,
-					ActorProvidedIndex: idx,
-					Value:              messages.NewToolCallDeltaValue(tc.Function.Arguments),
-				}
-			}
-		}
-
-		// On finish_reason, close the current content block but do NOT return:
-		// the API may send additional chunks (e.g. a usage-only chunk) before [DONE].
-		switch finishReason {
-		case "stop", "length", "content_filter":
-			endContentState()
-		case "tool_calls":
-			for idx, acc := range toolCalls {
-				if toolCallEnded[idx] {
-					continue
-				}
-				toolCallEnded[idx] = true
-				ch <- messages.StreamMessage{
-					Type:               messages.StreamTypeToolCallEnd,
-					ActorProvidedIndex: idx,
-					Value:              messages.NewToolCallEndValue(acc.id, acc.name, acc.args),
-				}
-			}
-			endContentState()
 		}
 	}
 
 	// Stream ended without explicit finish_reason (connection close, context cancellation, etc.)
-	endContentState()
-	for idx, acc := range toolCalls {
-		if !toolCallEnded[idx] {
-			ch <- messages.StreamMessage{
-				Type:               messages.StreamTypeToolCallEnd,
+	state.finishOpenContent()
+	scanErr := scanner.Err()
+	closeResponseBody(closeBody, ch, state.sendMessageEnd)
+	if scanErr != nil {
+		emitSSEScanError(ch, scanErr)
+	}
+}
+
+// handleLine maps one SSE line and reports whether the [DONE] marker ended the stream.
+func (s *sseStreamState) handleLine(line string) bool {
+	if !strings.HasPrefix(line, sseDataPrefix) {
+		return false
+	}
+	data := strings.TrimPrefix(line, sseDataPrefix)
+	if data == sseDoneMarker {
+		return true
+	}
+
+	var chunk streamChunk
+	if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+		return false
+	}
+	s.applyChunk(chunk)
+	return false
+}
+
+func (s *sseStreamState) applyChunk(chunk streamChunk) {
+	// Capture usage (present in last chunk when stream_options.include_usage is set)
+	if chunk.Usage != nil {
+		s.lastUsage = messages.TokenUsage{
+			PromptTokens:     chunk.Usage.PromptTokens,
+			CompletionTokens: chunk.Usage.CompletionTokens,
+			TotalTokens:      chunk.Usage.TotalTokens,
+		}
+		if chunk.Usage.CompletionTokensDetails != nil {
+			s.lastUsage.ReasoningTokens = chunk.Usage.CompletionTokensDetails.ReasoningTokens
+		}
+	}
+
+	if len(chunk.Choices) == 0 {
+		return
+	}
+	s.applyDelta(chunk.Choices[0].Delta)
+	s.applyFinishReason(chunk.Choices[0].FinishReason)
+}
+
+func (s *sseStreamState) applyDelta(delta streamDelta) {
+	// Reasoning tokens (OpenRouter / DeepInfra thinking tokens via delta.reasoning)
+	if delta.Reasoning != "" {
+		s.transitionTo(contentStateReasoning, messages.StreamTypeReasoningStart, messages.NewReasoningStartValue())
+		s.emit(messages.StreamTypeReasoningDelta, messages.NewReasoningDeltaValue(delta.Reasoning))
+	}
+
+	// Audio output (delta.audio.data is base64-encoded PCM)
+	if delta.Audio != nil && delta.Audio.Data != "" {
+		decoded, err := codec.DecodeBase64(delta.Audio.Data)
+		if err == nil && len(decoded) > 0 {
+			s.transitionTo(contentStateAudio, messages.StreamTypeAudioStart, messages.NewAudioStartValue())
+			s.emit(messages.StreamTypeAudioDelta, messages.NewAudioDeltaValue(decoded))
+		}
+	}
+
+	// Refusal deltas: accumulate silently, emit once after stream ends.
+	if delta.Refusal != "" {
+		s.refusalBuf.WriteString(delta.Refusal)
+	}
+
+	// Text content
+	if delta.Content != "" {
+		s.transitionTo(contentStateText, messages.StreamTypeTextStart, messages.NewTextStartValue())
+		s.emit(messages.StreamTypeTextDelta, messages.NewTextDeltaValue(delta.Content))
+	}
+
+	s.applyToolCallDeltas(delta.ToolCalls)
+}
+
+// applyToolCallDeltas maps tool calls streamed as repeated deltas per index
+// (id/name first, then arguments appended).
+func (s *sseStreamState) applyToolCallDeltas(toolCalls []streamToolCall) {
+	if len(toolCalls) > 0 && s.curContentState != contentStateToolCall {
+		s.endContentState()
+		s.curContentState = contentStateToolCall
+	}
+	for _, tc := range toolCalls {
+		idx := tc.Index
+		acc, exists := s.toolCalls[idx]
+		if !exists {
+			acc = sseToolCallAccumulator{id: tc.ID, name: tc.Function.Name, args: tc.Function.Arguments}
+			s.toolCalls[idx] = acc
+			s.ch <- messages.StreamMessage{
+				Type:               messages.StreamTypeToolCallStart,
 				ActorProvidedIndex: idx,
-				Value:              messages.NewToolCallEndValue(acc.id, acc.name, acc.args),
+				Value:              messages.NewToolCallStartValue(tc.ID, tc.Function.Name),
+			}
+		} else {
+			acc.args += tc.Function.Arguments
+			s.toolCalls[idx] = acc
+		}
+		if tc.Function.Arguments != "" {
+			s.ch <- messages.StreamMessage{
+				Type:               messages.StreamTypeToolCallDelta,
+				ActorProvidedIndex: idx,
+				Value:              messages.NewToolCallDeltaValue(tc.Function.Arguments),
 			}
 		}
 	}
-	scanErr := scanner.Err()
-	closeResponseBody(closeBody, ch, sendMessageEnd)
-	if scanErr != nil {
-		streamErr := gateway.NewTransportError("openai", "chat completions stream", scanErr)
-		classification := providers.ErrorClassTransport
-		if cancellationErr := gateway.CancellationErrorOrNil("openai: chat completions stream cancelled", scanErr); cancellationErr != nil {
-			streamErr = cancellationErr
-			classification = providers.ErrorClassCancellation
+}
+
+// applyFinishReason closes the current content block on finish_reason but does
+// not end the stream: the API may send additional chunks (e.g. a usage-only
+// chunk) before [DONE].
+func (s *sseStreamState) applyFinishReason(finishReason string) {
+	switch finishReason {
+	case "stop", "length", "content_filter":
+		s.endContentState()
+	case "tool_calls":
+		for idx, acc := range s.toolCalls {
+			if s.toolCallEnded[idx] {
+				continue
+			}
+			s.toolCallEnded[idx] = true
+			s.emitToolCallEnd(idx, acc)
 		}
-		errValue := messages.NewErrorValueWithError(streamErr)
-		errValue.Classification = classification
-		ch <- messages.StreamMessage{
-			Type:               messages.StreamTypeError,
-			ActorProvidedIndex: 0,
-			Value:              errValue,
+		s.endContentState()
+	}
+}
+
+// finishOpenContent ends open content and emits TOOLCALL.END for tool calls
+// that never received one.
+func (s *sseStreamState) finishOpenContent() {
+	s.endContentState()
+	for idx, acc := range s.toolCalls {
+		if !s.toolCallEnded[idx] {
+			s.emitToolCallEnd(idx, acc)
 		}
+	}
+}
+
+func (s *sseStreamState) sendMessageEnd() {
+	if s.messageEndSent {
+		return
+	}
+	// Emit accumulated refusal (if any) before MESSAGE.END.
+	if s.refusalBuf.Len() > 0 {
+		s.emit(messages.StreamTypeRefusal, messages.NewRefusalValue(s.refusalBuf.String()))
+	}
+	s.messageEndSent = true
+	s.emit(messages.StreamTypeMessageEnd, messages.NewMessageEndValue(s.lastUsage))
+	usage := s.lastUsage
+	if usage.PromptTokens != 0 || usage.CompletionTokens != 0 || usage.TotalTokens != 0 || usage.ReasoningTokens != 0 {
+		s.emit(messages.StreamTypeUsageInfo, messages.NewUsageInfoValue(usage))
+	}
+}
+
+// endContentState emits the appropriate END event for the current content type.
+func (s *sseStreamState) endContentState() {
+	switch s.curContentState {
+	case contentStateNone:
+	case contentStateReasoning:
+		s.emit(messages.StreamTypeReasoningEnd, messages.NewReasoningEndValue())
+	case contentStateText:
+		s.emit(messages.StreamTypeTextEnd, messages.NewTextEndValue())
+	case contentStateAudio:
+		s.emit(messages.StreamTypeAudioEnd, messages.NewAudioEndValue())
+	case contentStateToolCall:
+		for idx, acc := range s.toolCalls {
+			if !s.toolCallEnded[idx] {
+				s.toolCallEnded[idx] = true
+				s.emitToolCallEnd(idx, acc)
+			}
+		}
+	}
+	s.curContentState = contentStateNone
+}
+
+// transitionTo switches to a new content type: ends current if different, then starts new.
+func (s *sseStreamState) transitionTo(next contentState, startType messages.StreamMessageType, startValue messages.StreamMessageValue) {
+	if s.curContentState != next {
+		s.endContentState()
+		s.curContentState = next
+		s.emit(startType, startValue)
+	}
+}
+
+func (s *sseStreamState) emit(messageType messages.StreamMessageType, value messages.StreamMessageValue) {
+	s.ch <- messages.StreamMessage{Type: messageType, ActorProvidedIndex: sseStreamDefaultIndex, Value: value}
+}
+
+func (s *sseStreamState) emitToolCallEnd(idx int, acc sseToolCallAccumulator) {
+	s.ch <- messages.StreamMessage{
+		Type:               messages.StreamTypeToolCallEnd,
+		ActorProvidedIndex: idx,
+		Value:              messages.NewToolCallEndValue(acc.id, acc.name, acc.args),
+	}
+}
+
+func emitSSEScanError(ch chan<- messages.StreamMessage, scanErr error) {
+	streamErr := gateway.NewTransportError("openai", "chat completions stream", scanErr)
+	classification := providers.ErrorClassTransport
+	if cancellationErr := gateway.CancellationErrorOrNil("openai: chat completions stream cancelled", scanErr); cancellationErr != nil {
+		streamErr = cancellationErr
+		classification = providers.ErrorClassCancellation
+	}
+	errValue := messages.NewErrorValueWithError(streamErr)
+	errValue.Classification = classification
+	ch <- messages.StreamMessage{
+		Type:               messages.StreamTypeError,
+		ActorProvidedIndex: 0,
+		Value:              errValue,
 	}
 }
 

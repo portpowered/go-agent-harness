@@ -1,6 +1,6 @@
 package openai
 
-// This file owns OpenAI Realtime event parsing and inbound/outbound translation, including audio decoding and nested event-field helpers.
+// This file owns OpenAI Realtime event parsing and inbound/outbound translation, including nested event-field helpers.
 import (
 	"encoding/json"
 	"fmt"
@@ -57,35 +57,13 @@ func realtimeInboundMessages(event models.SessionEvent) []messages.StreamMessage
 	case models.SessionEventInputAudioBufferSpeechStopped:
 		return []messages.StreamMessage{{Type: messages.StreamTypeVADSpeechStopped, Value: messages.NewVADSpeechStoppedValue()}}
 	case models.SessionEventSessionClosed:
-		sessionID := firstStringField(event.Data, "session_id", "session.id", "id")
-		reason := firstStringField(event.Data, "reason", "session.reason")
-		return []messages.StreamMessage{
-			{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValueWithTerminal(
-				sessionID,
-				reason,
-				string(messages.TerminalReasonProviderClose),
-				messages.TerminalReasonProviderClose,
-				messages.TerminalProvenanceProvider,
-				messages.TerminalOutputNotApplicable,
-			)},
-		}
+		return realtimeSessionClosedMessages(event.Data)
 	case models.SessionEventResponseCreated:
 		return []messages.StreamMessage{{Type: messages.StreamTypeMessageStart, ResponseID: responseID, Value: messages.NewMessageStartValue()}}
 	case models.SessionEventResponseDone:
 		return []messages.StreamMessage{{Type: messages.StreamTypeMessageEnd, ResponseID: responseID, Value: realtimeResponseDoneMessageEnd(event.Data)}}
 	case models.SessionEventResponseOutputItemAdded:
-		itemType := firstStringField(event.Data, "item.type")
-		if itemType != "function_call" {
-			return nil
-		}
-		callID := firstStringField(event.Data, "item.call_id", "item.id")
-		name := firstStringField(event.Data, "item.name")
-		return []messages.StreamMessage{{
-			Type:       messages.StreamTypeToolCallStart,
-			ToolCallId: callID,
-			ResponseID: responseID,
-			Value:      messages.NewToolCallStartValue(callID, name),
-		}}
+		return realtimeOutputItemAddedMessages(event.Data, responseID)
 	case models.SessionEventResponseTextDelta:
 		text := firstStringField(event.Data, "delta")
 		if text == "" {
@@ -156,44 +134,72 @@ func realtimeInboundMessages(event models.SessionEvent) []messages.StreamMessage
 			Value:      messages.NewToolCallEndValue(callID, name, args),
 		}}
 	case models.SessionEventError:
-		msg := firstStringField(event.Data, "message", "error.message")
-		if msg == "" {
-			msg = "session error"
-		}
-		errorType := firstStringField(event.Data, "error.type")
-		code := firstStringField(event.Data, "error.code")
-		param := firstStringField(event.Data, "error.param")
-		eventID := firstStringField(event.Data, "error.event_id")
-		var value *messages.ErrorValue
-		if errorType == realtimeInvalidRequestErrorType && code == realtimeResponseCancelNotActiveCode {
-			value = messages.NewNonTerminalErrorValueWithDetails(msg, errorType, code, param, eventID)
-			value.Classification = providers.ErrorClassResponseCancelNotActive
-		} else if errorType == realtimeInvalidRequestErrorType && code == realtimeResponseCreateActiveCode {
-			// This exact provider rejection is recoverable at the response
-			// admission boundary. It must not terminate the session or make the
-			// caller lose the already accepted continuation intent.
-			value = messages.NewNonTerminalErrorValueWithDetails(msg, errorType, code, param, eventID)
-			value.Classification = realtimeResponseCreateActiveClass
-		} else {
-			value = messages.NewErrorValueWithTerminal(
-				msg,
-				providers.SessionErrorClassification(errorType, code),
-				messages.TerminalReasonTerminalFailure,
-				messages.TerminalProvenanceProvider,
-				messages.TerminalOutputNone,
-			)
-			value.ErrorType = errorType
-			value.Code = code
-			value.Param = param
-			value.EventID = eventID
-		}
-		return []messages.StreamMessage{{
-			Type:  messages.StreamTypeError,
-			Value: value,
-		}}
+		return []messages.StreamMessage{{Type: messages.StreamTypeError, Value: realtimeSessionErrorValue(event.Data)}}
 	default:
 		return nil
 	}
+}
+
+func realtimeSessionClosedMessages(data json.RawMessage) []messages.StreamMessage {
+	sessionID := firstStringField(data, "session_id", "session.id", "id")
+	reason := firstStringField(data, "reason", "session.reason")
+	return []messages.StreamMessage{
+		{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValueWithTerminal(
+			sessionID,
+			reason,
+			string(messages.TerminalReasonProviderClose),
+			messages.TerminalReasonProviderClose,
+			messages.TerminalProvenanceProvider,
+			messages.TerminalOutputNotApplicable,
+		)},
+	}
+}
+
+// realtimeOutputItemAddedMessages starts a tool call for function_call items;
+// other output items have no stream representation.
+func realtimeOutputItemAddedMessages(data json.RawMessage, responseID string) []messages.StreamMessage {
+	itemType := firstStringField(data, "item.type")
+	if itemType != "function_call" {
+		return nil
+	}
+	callID := firstStringField(data, "item.call_id", "item.id")
+	name := firstStringField(data, "item.name")
+	return []messages.StreamMessage{{
+		Type:       messages.StreamTypeToolCallStart,
+		ToolCallId: callID,
+		ResponseID: responseID,
+		Value:      messages.NewToolCallStartValue(callID, name),
+	}}
+}
+
+// realtimeSessionErrorValue maps a provider error event, keeping the exact
+// recoverable rejections non-terminal.
+func realtimeSessionErrorValue(data json.RawMessage) *messages.ErrorValue {
+	msg := firstStringField(data, "message", "error.message")
+	if msg == "" {
+		msg = "session error"
+	}
+	errorType := firstStringField(data, "error.type")
+	code := firstStringField(data, "error.code")
+	param := firstStringField(data, "error.param")
+	eventID := firstStringField(data, "error.event_id")
+	if errorType == realtimeInvalidRequestErrorType && code == realtimeResponseCancelNotActiveCode {
+		value := messages.NewNonTerminalErrorValueWithDetails(msg, errorType, code, param, eventID)
+		value.Classification = providers.ErrorClassResponseCancelNotActive
+		return value
+	}
+	if errorType == realtimeInvalidRequestErrorType && code == realtimeResponseCreateActiveCode {
+		// This exact provider rejection is recoverable at the response
+		// admission boundary. It must not terminate the session or make the
+		// caller lose the already accepted continuation intent.
+		value := messages.NewNonTerminalErrorValueWithDetails(msg, errorType, code, param, eventID)
+		value.Classification = realtimeResponseCreateActiveClass
+		return value
+	}
+	value := messages.NewErrorValueWithTerminal(msg, providers.SessionErrorClassification(errorType, code),
+		messages.TerminalReasonTerminalFailure, messages.TerminalProvenanceProvider, messages.TerminalOutputNone)
+	value.ErrorType, value.Code, value.Param, value.EventID = errorType, code, param, eventID
+	return value
 }
 
 // realtimeResponseDoneMessageEnd carries the provider terminal outcome across
@@ -387,32 +393,6 @@ func realtimeOutboundEvents(msg messages.StreamMessage) ([]models.SessionEvent, 
 		}, true
 	default:
 		return nil, false
-	}
-}
-
-func realtimeAudioBytes(data json.RawMessage) []byte {
-	encoded := firstStringField(data, "delta")
-	if encoded == "" {
-		return nil
-	}
-	decoded, err := codec.DecodeBase64(encoded)
-	if err != nil {
-		return nil
-	}
-	return decoded
-}
-
-func realtimeAudioMediaType(data json.RawMessage) string {
-	format := firstStringField(data, "format", "format.type", "audio_format", "response.audio.output.format.type", "response.output_audio_format")
-	switch format {
-	case "pcm16":
-		return "audio/pcm"
-	case "g711_ulaw":
-		return "audio/g711-ulaw"
-	case "g711_alaw":
-		return "audio/g711-alaw"
-	default:
-		return format
 	}
 }
 

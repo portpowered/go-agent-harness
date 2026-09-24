@@ -338,12 +338,7 @@ func TestS4StreamValueTablePreservesTerminalContractAndCauses(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			value := tc.build(tc.err)
-			if value == nil || value.Type != "error" {
-				t.Fatalf("stream value = %#v, want error value", value)
-			}
-			if got := value.Classification; got != tc.wantClass {
-				t.Fatalf("classification = %q, want %q", got, tc.wantClass)
-			}
+			assertTerminalStreamErrorValue(t, value, tc.wantClass)
 			if got := IsRetryable(tc.err); got != tc.wantRetry {
 				t.Fatalf("IsRetryable(%v) = %v, want %v", tc.err, got, tc.wantRetry)
 			}
@@ -359,18 +354,37 @@ func TestS4StreamValueTablePreservesTerminalContractAndCauses(t *testing.T) {
 					t.Fatalf("preserved cause = %v, want original %v", value.Err, tc.err)
 				}
 			}
-			if value.TerminalReason != messages.TerminalReasonTerminalFailure {
-				t.Fatalf("terminal reason = %q, want %q", value.TerminalReason, messages.TerminalReasonTerminalFailure)
-			}
-			if value.TerminalProvenance != messages.TerminalProvenanceProvider {
-				t.Fatalf("terminal provenance = %q, want %q", value.TerminalProvenance, messages.TerminalProvenanceProvider)
-			}
-			if value.OutputState != messages.TerminalOutputNone {
-				t.Fatalf("output state = %q, want %q", value.OutputState, messages.TerminalOutputNone)
-			}
 		})
 	}
 
+	assertStreamValuesPreserveProviderTaxonomy(t, providerErr, wrappedTransport)
+}
+
+// assertTerminalStreamErrorValue checks the classification and provider
+// terminal contract shared by every stream error value.
+func assertTerminalStreamErrorValue(t *testing.T, value *messages.ErrorValue, wantClass string) {
+	t.Helper()
+	if value == nil || value.Type != "error" {
+		t.Fatalf("stream value = %#v, want error value", value)
+	}
+	if got := value.Classification; got != wantClass {
+		t.Fatalf("classification = %q, want %q", got, wantClass)
+	}
+	if value.TerminalReason != messages.TerminalReasonTerminalFailure {
+		t.Fatalf("terminal reason = %q, want %q", value.TerminalReason, messages.TerminalReasonTerminalFailure)
+	}
+	if value.TerminalProvenance != messages.TerminalProvenanceProvider {
+		t.Fatalf("terminal provenance = %q, want %q", value.TerminalProvenance, messages.TerminalProvenanceProvider)
+	}
+	if value.OutputState != messages.TerminalOutputNone {
+		t.Fatalf("output state = %q, want %q", value.OutputState, messages.TerminalOutputNone)
+	}
+}
+
+// assertStreamValuesPreserveProviderTaxonomy checks that stream values keep
+// provider sentinels, typed details, retryability, and wrapped reader causes.
+func assertStreamValuesPreserveProviderTaxonomy(t *testing.T, providerErr, wrappedTransport error) {
+	t.Helper()
 	value := NewStreamErrorValue(providerErr)
 	if !errors.Is(value.Err, ErrProviderRejected) || !errors.Is(value.Err, ErrRateLimited) {
 		t.Fatal("stream value lost provider taxonomy")

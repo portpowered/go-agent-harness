@@ -205,37 +205,57 @@ func TestBuildRealtimeSessionUpdateInputAudioTranscriptionUsesSelectedWireContra
 				t.Fatalf("decode session.update: %v", err)
 			}
 			if !testCase.legacy {
-				audio, ok := envelope.Session["audio"].(map[string]any)
-				var transcription map[string]any
-				if ok {
-					input, inputOK := audio["input"].(map[string]any)
-					if inputOK {
-						transcription, _ = input["transcription"].(map[string]any)
-					}
-				}
-				if testCase.wantTranscribe != (transcription != nil) {
-					t.Fatalf("GA transcription present = %t, want %t", transcription != nil, testCase.wantTranscribe)
-				}
-				if transcription != nil && transcription["model"] != testCase.wantModel {
-					t.Fatalf("GA transcription model = %#v, want %q", transcription["model"], testCase.wantModel)
-				}
-				if _, legacy := envelope.Session["input_audio_transcription"]; legacy {
-					t.Fatal("GA session.update unexpectedly included legacy input_audio_transcription")
-				}
+				assertGAInputAudioTranscription(t, envelope.Session, testCase.wantTranscribe, testCase.wantModel)
 				return
 			}
-
-			if _, ga := envelope.Session["audio"]; ga {
-				t.Fatal("non-GA session.update unexpectedly included nested GA audio")
-			}
-			transcription, ok := envelope.Session["input_audio_transcription"].(map[string]any)
-			if testCase.wantTranscribe != ok {
-				t.Fatalf("legacy transcription present = %t, want %t", ok, testCase.wantTranscribe)
-			}
-			if ok && transcription["model"] != testCase.wantModel {
-				t.Fatalf("legacy transcription model = %#v, want %q", transcription["model"], testCase.wantModel)
-			}
+			assertLegacyInputAudioTranscription(t, envelope.Session, testCase.wantTranscribe, testCase.wantModel)
 		})
+	}
+}
+
+func assertGAInputAudioTranscription(t *testing.T, session map[string]any, wantTranscribe bool, wantModel string) {
+	t.Helper()
+	transcription := gaInputAudioTranscription(session)
+	if wantTranscribe != (transcription != nil) {
+		t.Fatalf("GA transcription present = %t, want %t", transcription != nil, wantTranscribe)
+	}
+	if transcription != nil && transcription["model"] != wantModel {
+		t.Fatalf("GA transcription model = %#v, want %q", transcription["model"], wantModel)
+	}
+	if _, legacy := session["input_audio_transcription"]; legacy {
+		t.Fatal("GA session.update unexpectedly included legacy input_audio_transcription")
+	}
+}
+
+// gaInputAudioTranscription returns session.audio.input.transcription, or nil
+// when any level is absent or not an object.
+func gaInputAudioTranscription(session map[string]any) map[string]any {
+	audio, ok := session["audio"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	input, ok := audio["input"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	transcription, ok := input["transcription"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	return transcription
+}
+
+func assertLegacyInputAudioTranscription(t *testing.T, session map[string]any, wantTranscribe bool, wantModel string) {
+	t.Helper()
+	if _, ga := session["audio"]; ga {
+		t.Fatal("non-GA session.update unexpectedly included nested GA audio")
+	}
+	transcription, ok := session["input_audio_transcription"].(map[string]any)
+	if wantTranscribe != ok {
+		t.Fatalf("legacy transcription present = %t, want %t", ok, wantTranscribe)
+	}
+	if ok && transcription["model"] != wantModel {
+		t.Fatalf("legacy transcription model = %#v, want %q", transcription["model"], wantModel)
 	}
 }
 

@@ -169,42 +169,69 @@ func (x *loopbackExchange) next(i, mode int, want string) (any, bool, <-chan str
 		return nil, true, wake, x.opErr()
 	}
 	if mode == descriptionMode {
-		remote := 1 - i
-		if (want == "answer" && len(x.messages[0]) == 0) || x.read[remote] != 0 {
-			return nil, true, wake, x.stop(ErrInvalidSignalingOrder)
-		}
-		if messages := x.messages[remote]; len(messages) > 0 {
-			got := messages[0].(SessionDescription)
-			x.read[remote] = 1
-			if !validDescription(got, want) {
-				bad := ErrMalformedAnswer
-				if want == "offer" {
-					bad = ErrMalformedOffer
-				}
-				return SessionDescription{}, true, wake, x.stop(bad)
-			}
-			return got, true, wake, nil
-		}
-		return nil, false, wake, nil
+		return x.nextDescription(i, want, wake)
 	}
 	if mode == candidateMode {
-		remote, messages := 1-i, x.messages[1-i]
-		if x.read[remote] == 0 {
+		return x.nextCandidate(i, wake)
+	}
+	return x.nextGathering(i, wake)
+}
+
+// nextDescription reads the remote description for endpoint i. The caller
+// holds x.mu.
+func (x *loopbackExchange) nextDescription(i int, want string, wake <-chan struct{}) (any, bool, <-chan struct{}, error) {
+	remote := 1 - i
+	if (want == "answer" && len(x.messages[0]) == 0) || x.read[remote] != 0 {
+		return nil, true, wake, x.stop(ErrInvalidSignalingOrder)
+	}
+	if messages := x.messages[remote]; len(messages) > 0 {
+		got, ok := messages[0].(SessionDescription)
+		if !ok {
+			// send only stores a description in the first slot; anything else
+			// is an ordering violation rather than a panic.
 			return nil, true, wake, x.stop(ErrInvalidSignalingOrder)
 		}
-		if x.read[remote] < len(messages)-1 {
-			c := messages[x.read[remote]].(ICECandidate)
-			x.read[remote]++
-			return c, true, wake, nil
-		}
-		if len(messages) > 1 && messages[len(messages)-1] == nil {
-			if len(messages) == 2 {
-				return nil, true, wake, x.stop(ErrNoCandidates)
+		x.read[remote] = 1
+		if !validDescription(got, want) {
+			bad := ErrMalformedAnswer
+			if want == "offer" {
+				bad = ErrMalformedOffer
 			}
-			return ICECandidate{}, true, wake, ErrGatheringComplete
+			return SessionDescription{}, true, wake, x.stop(bad)
 		}
-		return nil, false, wake, nil
+		return got, true, wake, nil
 	}
+	return nil, false, wake, nil
+}
+
+// nextCandidate reads the next remote candidate for endpoint i. The caller
+// holds x.mu.
+func (x *loopbackExchange) nextCandidate(i int, wake <-chan struct{}) (any, bool, <-chan struct{}, error) {
+	remote, messages := 1-i, x.messages[1-i]
+	if x.read[remote] == 0 {
+		return nil, true, wake, x.stop(ErrInvalidSignalingOrder)
+	}
+	if x.read[remote] < len(messages)-1 {
+		c, ok := messages[x.read[remote]].(ICECandidate)
+		if !ok {
+			return nil, true, wake, x.stop(ErrInvalidSignalingOrder)
+		}
+		x.read[remote]++
+		return c, true, wake, nil
+	}
+	if len(messages) > 1 && messages[len(messages)-1] == nil {
+		if len(messages) == 2 {
+			return nil, true, wake, x.stop(ErrNoCandidates)
+		}
+		return ICECandidate{}, true, wake, ErrGatheringComplete
+	}
+	return nil, false, wake, nil
+}
+
+// nextGathering reports whether endpoint i completed candidate gathering and
+// ends the exchange once both sides have gathered and drained. The caller
+// holds x.mu.
+func (x *loopbackExchange) nextGathering(i int, wake <-chan struct{}) (any, bool, <-chan struct{}, error) {
 	if len(x.messages[i]) < 2 || x.messages[i][len(x.messages[i])-1] != nil {
 		return nil, false, wake, nil
 	}

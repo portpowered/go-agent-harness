@@ -52,204 +52,225 @@ func TestRecordingWebSocketDialerSharedTransportS11Conformance(t *testing.T) {
 // fails, and Close always returns nil), so each applicable contract point is
 // proven directly against the observable replay behavior.
 func TestReplayWebSocketDialerSharedTransportContract(t *testing.T) {
-	t.Run("dial ignores endpoint and headers without network access", func(t *testing.T) {
-		path := writeReplayConformanceCapture(t, []CapturedSessionEvent{
-			websocketCapture(DirectionServerToClient, 1, `{"type":"session.created","session_id":"sess-1"}`),
-		})
-		dialer, err := NewReplayWebSocketDialer(path)
-		if err != nil {
-			t.Fatalf("NewReplayWebSocketDialer: %v", err)
-		}
-		headers := map[string]string{"Authorization": "Bearer replay"}
-		conn, err := dialer.Dial("wss://127.0.0.1:1/unreachable", headers)
-		if err != nil {
-			t.Fatalf("Dial must never open a connection or fail: %v", err)
-		}
-		if conn == nil {
-			t.Fatal("Dial returned a nil connection with nil error")
-		}
-		if len(headers) != 1 || headers["Authorization"] != "Bearer replay" {
-			t.Fatalf("Dial mutated caller-owned headers: %#v", headers)
-		}
+	t.Run("dial ignores endpoint and headers without network access", testReplayDialerIgnoresEndpointAndHeaders)
+	t.Run("inbound replays in order with preserved types and payloads", testReplayDialerInboundOrderAndPayloads)
+	t.Run("divergent outbound yields typed error through Err and errors.As", testReplayDialerDivergentOutboundTypedError)
+	t.Run("close with pending expected outbound reports incompleteness once", testReplayDialerCloseReportsIncompleteness)
+	t.Run("Done closes exactly once across divergence and close", testReplayDialerDoneClosesOnce)
+}
+
+func testReplayDialerIgnoresEndpointAndHeaders(t *testing.T) {
+	path := writeReplayConformanceCapture(t, []CapturedSessionEvent{
+		websocketCapture(DirectionServerToClient, 1, `{"type":"session.created","session_id":"sess-1"}`),
 	})
+	dialer, err := NewReplayWebSocketDialer(path)
+	if err != nil {
+		t.Fatalf("NewReplayWebSocketDialer: %v", err)
+	}
+	headers := map[string]string{"Authorization": "Bearer replay"}
+	conn, err := dialer.Dial("wss://127.0.0.1:1/unreachable", headers)
+	if err != nil {
+		t.Fatalf("Dial must never open a connection or fail: %v", err)
+	}
+	if conn == nil {
+		t.Fatal("Dial returned a nil connection with nil error")
+	}
+	if len(headers) != 1 || headers["Authorization"] != "Bearer replay" {
+		t.Fatalf("Dial mutated caller-owned headers: %#v", headers)
+	}
+}
 
-	t.Run("inbound replays in order with preserved types and payloads", func(t *testing.T) {
-		outbound := []byte(`{"type":"input_audio_buffer.commit"}`)
-		for run := range 2 {
-			path := writeReplayConformanceCapture(t, []CapturedSessionEvent{
-				websocketCapture(DirectionServerToClient, 1, `{"type":"session.created","session_id":"sess-1"}`),
-				websocketCapture(DirectionServerToClient, 2, `{"type":"response.text_delta","delta":"hello"}`),
-				websocketCapture(DirectionClientToServer, 3, string(outbound)),
-				websocketCapture(DirectionServerToClient, 4, `{"type":"response.done"}`),
-			})
-			capture, err := LoadSessionCapture(path)
-			if err != nil {
-				t.Fatalf("run %d: LoadSessionCapture: %v", run, err)
-			}
-			var inbound [][]byte
-			for _, evt := range capture.Records {
-				if evt.Direction == DirectionServerToClient {
-					inbound = append(inbound, []byte(evt.Payload))
-				}
-			}
-			if len(inbound) != 3 {
-				t.Fatalf("run %d: fixture scripted %d inbound messages, want 3", run, len(inbound))
-			}
-			dialer, err := NewReplayWebSocketDialer(path)
-			if err != nil {
-				t.Fatalf("run %d: NewReplayWebSocketDialer: %v", run, err)
-			}
-			conn, err := dialer.Dial("", nil)
-			if err != nil {
-				t.Fatalf("run %d: Dial: %v", run, err)
-			}
-			for i := range 2 {
-				gotType, gotPayload, err := conn.ReadMessage()
-				if err != nil {
-					t.Fatalf("run %d: ReadMessage[%d]: %v", run, i, err)
-				}
-				if gotType != 1 {
-					t.Fatalf("run %d: ReadMessage[%d] type = %d, want 1 (text)", run, i, gotType)
-				}
-				if !bytes.Equal(gotPayload, inbound[i]) {
-					t.Fatalf("run %d: ReadMessage[%d] = %s, want capture bytes %s", run, i, gotPayload, inbound[i])
-				}
-			}
-			if err := conn.WriteMessage(1, append([]byte(nil), outbound...)); err != nil {
-				t.Fatalf("run %d: expected outbound rejected: %v", run, err)
-			}
-			gotType, gotPayload, err := conn.ReadMessage()
-			if err != nil {
-				t.Fatalf("run %d: ReadMessage after outbound: %v", run, err)
-			}
-			if gotType != 1 || !bytes.Equal(gotPayload, inbound[2]) {
-				t.Fatalf("run %d: post-outbound read = (%d, %s), want (1, %s)", run, gotType, gotPayload, inbound[2])
-			}
-			if err := conn.Close(); err != nil {
-				t.Fatalf("run %d: Close: %v", run, err)
-			}
-			if err := dialer.Err(); err != nil {
-				t.Fatalf("run %d: fully consumed replay diverged: %v", run, err)
-			}
-		}
+func testReplayDialerInboundOrderAndPayloads(t *testing.T) {
+	outbound := []byte(`{"type":"input_audio_buffer.commit"}`)
+	for run := range 2 {
+		runReplayDialerInboundOrderScenario(t, run, outbound)
+	}
+}
+
+// runReplayDialerInboundOrderScenario replays one fresh capture and checks the
+// typed, byte-exact inbound order around the expected outbound message.
+func runReplayDialerInboundOrderScenario(t *testing.T, run int, outbound []byte) {
+	t.Helper()
+	path := writeReplayConformanceCapture(t, []CapturedSessionEvent{
+		websocketCapture(DirectionServerToClient, 1, `{"type":"session.created","session_id":"sess-1"}`),
+		websocketCapture(DirectionServerToClient, 2, `{"type":"response.text_delta","delta":"hello"}`),
+		websocketCapture(DirectionClientToServer, 3, string(outbound)),
+		websocketCapture(DirectionServerToClient, 4, `{"type":"response.done"}`),
 	})
-
-	t.Run("divergent outbound yields typed error through Err and errors.As", func(t *testing.T) {
-		path := writeReplayConformanceCapture(t, []CapturedSessionEvent{
-			websocketCapture(DirectionClientToServer, 1, `{"type":"session.update","session":{"model":"m"}}`),
-		})
-		dialer, err := NewReplayWebSocketDialer(path)
+	inbound := loadReplayServerPayloads(t, run, path)
+	if len(inbound) != 3 {
+		t.Fatalf("run %d: fixture scripted %d inbound messages, want 3", run, len(inbound))
+	}
+	dialer, err := NewReplayWebSocketDialer(path)
+	if err != nil {
+		t.Fatalf("run %d: NewReplayWebSocketDialer: %v", run, err)
+	}
+	conn, err := dialer.Dial("", nil)
+	if err != nil {
+		t.Fatalf("run %d: Dial: %v", run, err)
+	}
+	for i := range 2 {
+		gotType, gotPayload, err := conn.ReadMessage()
 		if err != nil {
-			t.Fatalf("NewReplayWebSocketDialer: %v", err)
+			t.Fatalf("run %d: ReadMessage[%d]: %v", run, i, err)
 		}
-		conn, err := dialer.Dial("wss://ignored.invalid", nil)
-		if err != nil {
-			t.Fatalf("Dial: %v", err)
+		if gotType != 1 {
+			t.Fatalf("run %d: ReadMessage[%d] type = %d, want 1 (text)", run, i, gotType)
 		}
+		if !bytes.Equal(gotPayload, inbound[i]) {
+			t.Fatalf("run %d: ReadMessage[%d] = %s, want capture bytes %s", run, i, gotPayload, inbound[i])
+		}
+	}
+	if err := conn.WriteMessage(1, append([]byte(nil), outbound...)); err != nil {
+		t.Fatalf("run %d: expected outbound rejected: %v", run, err)
+	}
+	gotType, gotPayload, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("run %d: ReadMessage after outbound: %v", run, err)
+	}
+	if gotType != 1 || !bytes.Equal(gotPayload, inbound[2]) {
+		t.Fatalf("run %d: post-outbound read = (%d, %s), want (1, %s)", run, gotType, gotPayload, inbound[2])
+	}
+	if err := conn.Close(); err != nil {
+		t.Fatalf("run %d: Close: %v", run, err)
+	}
+	if err := dialer.Err(); err != nil {
+		t.Fatalf("run %d: fully consumed replay diverged: %v", run, err)
+	}
+}
 
-		err = conn.WriteMessage(1, []byte(`{"type":"session.update","session":{"model":"wrong"}}`))
-		if err == nil {
-			t.Fatal("expected divergence error for unexpected outbound payload")
+// loadReplayServerPayloads returns the server-to-client payload bytes scripted
+// in the capture at path, in capture order.
+func loadReplayServerPayloads(t *testing.T, run int, path string) [][]byte {
+	t.Helper()
+	capture, err := LoadSessionCapture(path)
+	if err != nil {
+		t.Fatalf("run %d: LoadSessionCapture: %v", run, err)
+	}
+	var inbound [][]byte
+	for _, evt := range capture.Records {
+		if evt.Direction == DirectionServerToClient {
+			inbound = append(inbound, []byte(evt.Payload))
 		}
-		if !errors.Is(err, gateway.ErrReplayMismatch) {
-			t.Fatalf("divergence error should match ErrReplayMismatch, got %v", err)
-		}
-		var mismatch *gateway.ReplayMismatchError
-		if !errors.As(err, &mismatch) {
-			t.Fatalf("divergence error should expose typed details via errors.As, got %v", err)
-		}
-		errViaErr := dialer.Err()
-		if !errors.Is(errViaErr, gateway.ErrReplayMismatch) {
-			t.Fatalf("Err() should preserve the divergence classification, got %v", errViaErr)
-		}
-		var mismatchViaErr *gateway.ReplayMismatchError
-		if !errors.As(errViaErr, &mismatchViaErr) {
-			t.Fatalf("Err() should stay reachable via errors.As, got %v", errViaErr)
-		}
+	}
+	return inbound
+}
 
-		_, _, readErr := conn.ReadMessage()
-		if !errors.Is(readErr, gateway.ErrReplayMismatch) || !errors.Is(readErr, err) {
-			t.Fatalf("reads after divergence should return the same typed error, got %v", readErr)
-		}
-		select {
-		case <-dialer.Done():
-		case <-time.After(sessionTestSafetyTimeout):
-			t.Fatalf("Done did not close after divergence within %s", sessionTestSafetyTimeout)
-		}
+func testReplayDialerDivergentOutboundTypedError(t *testing.T) {
+	path := writeReplayConformanceCapture(t, []CapturedSessionEvent{
+		websocketCapture(DirectionClientToServer, 1, `{"type":"session.update","session":{"model":"m"}}`),
 	})
+	dialer, err := NewReplayWebSocketDialer(path)
+	if err != nil {
+		t.Fatalf("NewReplayWebSocketDialer: %v", err)
+	}
+	conn, err := dialer.Dial("wss://ignored.invalid", nil)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
 
-	t.Run("close with pending expected outbound reports incompleteness once", func(t *testing.T) {
-		path := writeReplayConformanceCapture(t, []CapturedSessionEvent{
-			websocketCapture(DirectionServerToClient, 1, `{"type":"session.created","session_id":"sess-1"}`),
-			websocketCapture(DirectionClientToServer, 2, `{"type":"conversation.item.create"}`),
-		})
-		dialer, err := NewReplayWebSocketDialer(path)
-		if err != nil {
-			t.Fatalf("NewReplayWebSocketDialer: %v", err)
-		}
-		conn, err := dialer.Dial("", nil)
-		if err != nil {
-			t.Fatalf("Dial: %v", err)
-		}
-		if _, _, err := conn.ReadMessage(); err != nil {
-			t.Fatalf("ReadMessage: %v", err)
-		}
+	err = conn.WriteMessage(1, []byte(`{"type":"session.update","session":{"model":"wrong"}}`))
+	if err == nil {
+		t.Fatal("expected divergence error for unexpected outbound payload")
+	}
+	if !errors.Is(err, gateway.ErrReplayMismatch) {
+		t.Fatalf("divergence error should match ErrReplayMismatch, got %v", err)
+	}
+	var mismatch *gateway.ReplayMismatchError
+	if !errors.As(err, &mismatch) {
+		t.Fatalf("divergence error should expose typed details via errors.As, got %v", err)
+	}
+	errViaErr := dialer.Err()
+	if !errors.Is(errViaErr, gateway.ErrReplayMismatch) {
+		t.Fatalf("Err() should preserve the divergence classification, got %v", errViaErr)
+	}
+	var mismatchViaErr *gateway.ReplayMismatchError
+	if !errors.As(errViaErr, &mismatchViaErr) {
+		t.Fatalf("Err() should stay reachable via errors.As, got %v", errViaErr)
+	}
 
-		if err := conn.Close(); err != nil {
-			t.Fatalf("Close: %v", err)
-		}
-		err = dialer.Err()
-		if !errors.Is(err, gateway.ErrReplayIncomplete) {
-			t.Fatalf("close with pending expected outbound should report incompleteness, got %v", err)
-		}
-		if errors.Is(err, gateway.ErrReplayMismatch) {
-			t.Fatal("incompleteness should not match the mismatch class")
-		}
-		var incomplete *gateway.ReplayIncompleteError
-		if !errors.As(err, &incomplete) {
-			t.Fatalf("incompleteness should expose typed details via errors.As, got %v", err)
-		}
+	_, _, readErr := conn.ReadMessage()
+	if !errors.Is(readErr, gateway.ErrReplayMismatch) || !errors.Is(readErr, err) {
+		t.Fatalf("reads after divergence should return the same typed error, got %v", readErr)
+	}
+	select {
+	case <-dialer.Done():
+	case <-time.After(sessionTestSafetyTimeout):
+		t.Fatalf("Done did not close after divergence within %s", sessionTestSafetyTimeout)
+	}
+}
 
-		if err := conn.Close(); err != nil {
-			t.Fatalf("second Close: %v", err)
-		}
-		select {
-		case <-dialer.Done():
-		default:
-			t.Fatal("Done should be closed after connection close")
-		}
+func testReplayDialerCloseReportsIncompleteness(t *testing.T) {
+	path := writeReplayConformanceCapture(t, []CapturedSessionEvent{
+		websocketCapture(DirectionServerToClient, 1, `{"type":"session.created","session_id":"sess-1"}`),
+		websocketCapture(DirectionClientToServer, 2, `{"type":"conversation.item.create"}`),
 	})
+	dialer, err := NewReplayWebSocketDialer(path)
+	if err != nil {
+		t.Fatalf("NewReplayWebSocketDialer: %v", err)
+	}
+	conn, err := dialer.Dial("", nil)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	if _, _, err := conn.ReadMessage(); err != nil {
+		t.Fatalf("ReadMessage: %v", err)
+	}
 
-	t.Run("Done closes exactly once across divergence and close", func(t *testing.T) {
-		path := writeReplayConformanceCapture(t, []CapturedSessionEvent{
-			websocketCapture(DirectionClientToServer, 1, `{"type":"session.update"}`),
-		})
-		dialer, err := NewReplayWebSocketDialer(path)
-		if err != nil {
-			t.Fatalf("NewReplayWebSocketDialer: %v", err)
-		}
-		conn, err := dialer.Dial("", nil)
-		if err != nil {
-			t.Fatalf("Dial: %v", err)
-		}
-		if err := conn.WriteMessage(1, []byte(`{"type":"unexpected"}`)); err == nil {
-			t.Fatal("expected divergence error")
-		}
-		select {
-		case <-dialer.Done():
-		case <-time.After(sessionTestSafetyTimeout):
-			t.Fatalf("Done did not close after divergence within %s", sessionTestSafetyTimeout)
-		}
-		if err := conn.Close(); err != nil {
-			t.Fatalf("Close after divergence: %v", err)
-		}
-		if err := conn.Close(); err != nil {
-			t.Fatalf("repeat Close: %v", err)
-		}
-		if err := dialer.Err(); !errors.Is(err, gateway.ErrReplayMismatch) {
-			t.Fatalf("close after divergence must not replace the recorded divergence error, got %v", err)
-		}
+	if err := conn.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	err = dialer.Err()
+	if !errors.Is(err, gateway.ErrReplayIncomplete) {
+		t.Fatalf("close with pending expected outbound should report incompleteness, got %v", err)
+	}
+	if errors.Is(err, gateway.ErrReplayMismatch) {
+		t.Fatal("incompleteness should not match the mismatch class")
+	}
+	var incomplete *gateway.ReplayIncompleteError
+	if !errors.As(err, &incomplete) {
+		t.Fatalf("incompleteness should expose typed details via errors.As, got %v", err)
+	}
+
+	if err := conn.Close(); err != nil {
+		t.Fatalf("second Close: %v", err)
+	}
+	select {
+	case <-dialer.Done():
+	default:
+		t.Fatal("Done should be closed after connection close")
+	}
+}
+
+func testReplayDialerDoneClosesOnce(t *testing.T) {
+	path := writeReplayConformanceCapture(t, []CapturedSessionEvent{
+		websocketCapture(DirectionClientToServer, 1, `{"type":"session.update"}`),
 	})
+	dialer, err := NewReplayWebSocketDialer(path)
+	if err != nil {
+		t.Fatalf("NewReplayWebSocketDialer: %v", err)
+	}
+	conn, err := dialer.Dial("", nil)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	if err := conn.WriteMessage(1, []byte(`{"type":"unexpected"}`)); err == nil {
+		t.Fatal("expected divergence error")
+	}
+	select {
+	case <-dialer.Done():
+	case <-time.After(sessionTestSafetyTimeout):
+		t.Fatalf("Done did not close after divergence within %s", sessionTestSafetyTimeout)
+	}
+	if err := conn.Close(); err != nil {
+		t.Fatalf("Close after divergence: %v", err)
+	}
+	if err := conn.Close(); err != nil {
+		t.Fatalf("repeat Close: %v", err)
+	}
+	if err := dialer.Err(); !errors.Is(err, gateway.ErrReplayMismatch) {
+		t.Fatalf("close after divergence must not replace the recorded divergence error, got %v", err)
+	}
 }
 
 // dialerTransportOperationError is a typed per-operation failure used to prove

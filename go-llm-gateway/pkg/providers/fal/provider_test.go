@@ -78,21 +78,11 @@ func TestFalProvider_Infer_InvalidRequests(t *testing.T) {
 			wantField: "model",
 		},
 		{
-			name: "no user message",
-			req: providers.InferenceRequest{
-				Model:    ModelLTXAudioToVideo,
-				Messages: []models.Message{models.NewTextMessage(models.RoleAssistant, "ok")},
-			},
+			name:    "no user message",
+			req:     providers.InferenceRequest{Model: ModelLTXAudioToVideo, Messages: []models.Message{models.NewTextMessage(models.RoleAssistant, "ok")}},
 			wantErr: "no user message with audio or text found",
 		},
-		{
-			name: "empty messages",
-			req: providers.InferenceRequest{
-				Model:    ModelLTXAudioToVideo,
-				Messages: []models.Message{},
-			},
-			wantErr: "no user message with audio or text found",
-		},
+		{name: "empty messages", req: providers.InferenceRequest{Model: ModelLTXAudioToVideo, Messages: []models.Message{}}, wantErr: "no user message with audio or text found"},
 		{
 			name: "LTX with text only (no audio)",
 			req: providers.InferenceRequest{
@@ -123,25 +113,32 @@ func TestFalProvider_Infer_InvalidRequests(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := p.Infer(ctx, tt.req)
-			if err == nil {
-				t.Fatalf("Infer() expected error containing %q, got nil", tt.wantErr)
-			}
-			if !strings.Contains(err.Error(), tt.wantErr) {
-				t.Errorf("Infer() error = %v, want substring %q", err, tt.wantErr)
-			}
-			if tt.wantClass != nil && !errors.Is(err, tt.wantClass) {
-				t.Fatalf("Infer() error = %v, want class %v", err, tt.wantClass)
-			}
-			if tt.wantField != "" {
-				var validationErr *providers.ValidationError
-				if !errors.As(err, &validationErr) {
-					t.Fatalf("Infer() error = %T, want ValidationError", err)
-				}
-				if validationErr.Provider != "fal" || validationErr.Feature != tt.wantField {
-					t.Fatalf("ValidationError = %+v, want provider fal feature %q", validationErr, tt.wantField)
-				}
-			}
+			assertFalInvalidRequestError(t, err, tt.wantErr, tt.wantClass, tt.wantField)
 		})
+	}
+}
+
+// assertFalInvalidRequestError checks that err carries wantErr, wraps
+// wantClass when set, and is a fal ValidationError for wantField when set.
+func assertFalInvalidRequestError(t *testing.T, err error, wantErr string, wantClass error, wantField string) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("Infer() expected error containing %q, got nil", wantErr)
+	}
+	if !strings.Contains(err.Error(), wantErr) {
+		t.Errorf("Infer() error = %v, want substring %q", err, wantErr)
+	}
+	if wantClass != nil && !errors.Is(err, wantClass) {
+		t.Fatalf("Infer() error = %v, want class %v", err, wantClass)
+	}
+	if wantField != "" {
+		var validationErr *providers.ValidationError
+		if !errors.As(err, &validationErr) {
+			t.Fatalf("Infer() error = %T, want ValidationError", err)
+		}
+		if validationErr.Provider != "fal" || validationErr.Feature != wantField {
+			t.Fatalf("ValidationError = %+v, want provider fal feature %q", validationErr, wantField)
+		}
 	}
 }
 

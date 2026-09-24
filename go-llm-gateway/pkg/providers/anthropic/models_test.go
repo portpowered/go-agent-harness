@@ -11,6 +11,9 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
 
+// wantToolSchemaObjectType is the JSON Schema root type Anthropic requires.
+const wantToolSchemaObjectType = "object"
+
 func TestMapToolToInputSchemaPreservesCompletePageSchema(t *testing.T) {
 	schema := json.RawMessage(`{"type":"object","properties":{"moves":{"type":"array","items":{"type":"object","properties":{"face":{"type":"string","enum":["R","U"]},"turns":{"type":"integer","minimum":1}},"required":["face","turns"],"additionalProperties":false}}},"required":["moves"],"additionalProperties":false}`)
 	input := mapToolToInputSchema(models.ToolDefinition{ParameterSchema: schema})
@@ -63,61 +66,16 @@ func TestCompleteToolInputSchema(t *testing.T) {
 			wantOK: false,
 		},
 		{
-			name:   "object schema with no properties defaults to an empty map",
-			raw:    json.RawMessage(`{"type":"object","required":["x"],"additionalProperties":false}`),
-			wantOK: true,
-			checkFn: func(t *testing.T, schema anthropic.ToolInputSchemaParam) {
-				props, ok := schema.Properties.(map[string]any)
-				if !ok {
-					t.Fatalf("expected Properties to be map[string]any, got %T", schema.Properties)
-				}
-				if len(props) != 0 {
-					t.Errorf("expected empty properties map, got %v", props)
-				}
-				if !reflect.DeepEqual(schema.Required, []string{"x"}) {
-					t.Errorf("expected required [x], got %v", schema.Required)
-				}
-				if schema.ExtraFields["additionalProperties"] != false {
-					t.Errorf("expected additionalProperties carried through ExtraFields, got %v", schema.ExtraFields)
-				}
-				for _, key := range []string{"type", "properties", "required"} {
-					if _, present := schema.ExtraFields[key]; present {
-						t.Errorf("expected ExtraFields to omit %q, got %v", key, schema.ExtraFields)
-					}
-				}
-			},
+			name:    "object schema with no properties defaults to an empty map",
+			raw:     json.RawMessage(`{"type":"object","required":["x"],"additionalProperties":false}`),
+			wantOK:  true,
+			checkFn: checkEmptyPropertiesToolSchema,
 		},
 		{
-			name:   "omitted type defaults to object and preserves nested properties plus root extensions",
-			raw:    json.RawMessage(`{"properties":{"move":{"type":"object","properties":{"face":{"type":"string","enum":["R","U"]}},"required":["face"]}},"required":["move"],"$schema":"https://json-schema.org/draft/2020-12/schema"}`),
-			wantOK: true,
-			checkFn: func(t *testing.T, schema anthropic.ToolInputSchemaParam) {
-				if string(schema.Type) != "object" {
-					t.Errorf("expected type object, got %q", schema.Type)
-				}
-				props, ok := schema.Properties.(map[string]any)
-				if !ok {
-					t.Fatalf("expected Properties to be map[string]any, got %T", schema.Properties)
-				}
-				var wantMove any
-				if err := json.Unmarshal(json.RawMessage(`{"type":"object","properties":{"face":{"type":"string","enum":["R","U"]}},"required":["face"]}`), &wantMove); err != nil {
-					t.Fatalf("decode expected nested schema: %v", err)
-				}
-				if !reflect.DeepEqual(props["move"], wantMove) {
-					t.Fatalf("nested move schema = %#v, want %#v", props["move"], wantMove)
-				}
-				if !reflect.DeepEqual(schema.Required, []string{"move"}) {
-					t.Errorf("expected required [move], got %v", schema.Required)
-				}
-				if schema.ExtraFields["$schema"] != "https://json-schema.org/draft/2020-12/schema" {
-					t.Errorf("expected $schema carried through ExtraFields, got %v", schema.ExtraFields)
-				}
-				for _, key := range []string{"type", "properties", "required"} {
-					if _, present := schema.ExtraFields[key]; present {
-						t.Errorf("expected ExtraFields to omit %q, got %v", key, schema.ExtraFields)
-					}
-				}
-			},
+			name:    "omitted type defaults to object and preserves nested properties plus root extensions",
+			raw:     json.RawMessage(`{"properties":{"move":{"type":"object","properties":{"face":{"type":"string","enum":["R","U"]}},"required":["face"]}},"required":["move"],"$schema":"https://json-schema.org/draft/2020-12/schema"}`),
+			wantOK:  true,
+			checkFn: checkNestedMoveToolSchema,
 		},
 	}
 	for _, tc := range tests {
@@ -133,6 +91,60 @@ func TestCompleteToolInputSchema(t *testing.T) {
 	}
 }
 
+func checkEmptyPropertiesToolSchema(t *testing.T, schema anthropic.ToolInputSchemaParam) {
+	t.Helper()
+	props, ok := schema.Properties.(map[string]any)
+	if !ok {
+		t.Fatalf("expected Properties to be map[string]any, got %T", schema.Properties)
+	}
+	if len(props) != 0 {
+		t.Errorf("expected empty properties map, got %v", props)
+	}
+	if !reflect.DeepEqual(schema.Required, []string{"x"}) {
+		t.Errorf("expected required [x], got %v", schema.Required)
+	}
+	if schema.ExtraFields["additionalProperties"] != false {
+		t.Errorf("expected additionalProperties carried through ExtraFields, got %v", schema.ExtraFields)
+	}
+	assertToolSchemaExtraFieldsOmitRootKeys(t, schema)
+}
+
+func checkNestedMoveToolSchema(t *testing.T, schema anthropic.ToolInputSchemaParam) {
+	t.Helper()
+	if string(schema.Type) != wantToolSchemaObjectType {
+		t.Errorf("expected type object, got %q", schema.Type)
+	}
+	props, ok := schema.Properties.(map[string]any)
+	if !ok {
+		t.Fatalf("expected Properties to be map[string]any, got %T", schema.Properties)
+	}
+	var wantMove any
+	if err := json.Unmarshal(json.RawMessage(`{"type":"object","properties":{"face":{"type":"string","enum":["R","U"]}},"required":["face"]}`), &wantMove); err != nil {
+		t.Fatalf("decode expected nested schema: %v", err)
+	}
+	if !reflect.DeepEqual(props["move"], wantMove) {
+		t.Fatalf("nested move schema = %#v, want %#v", props["move"], wantMove)
+	}
+	if !reflect.DeepEqual(schema.Required, []string{"move"}) {
+		t.Errorf("expected required [move], got %v", schema.Required)
+	}
+	if schema.ExtraFields["$schema"] != "https://json-schema.org/draft/2020-12/schema" {
+		t.Errorf("expected $schema carried through ExtraFields, got %v", schema.ExtraFields)
+	}
+	assertToolSchemaExtraFieldsOmitRootKeys(t, schema)
+}
+
+// assertToolSchemaExtraFieldsOmitRootKeys checks that keys mapped onto typed
+// schema fields are not duplicated in ExtraFields.
+func assertToolSchemaExtraFieldsOmitRootKeys(t *testing.T, schema anthropic.ToolInputSchemaParam) {
+	t.Helper()
+	for _, key := range []string{"type", "properties", "required"} {
+		if _, present := schema.ExtraFields[key]; present {
+			t.Errorf("expected ExtraFields to omit %q, got %v", key, schema.ExtraFields)
+		}
+	}
+}
+
 func TestMapToolToInputSchemaFallsBackWithoutParameterSchema(t *testing.T) {
 	// A tool with a malformed/absent ParameterSchema must fall back to the
 	// flattened models.ToolParameter list rather than returning an empty schema.
@@ -142,7 +154,7 @@ func TestMapToolToInputSchemaFallsBackWithoutParameterSchema(t *testing.T) {
 			{Name: "city", Type: "string", Description: "City name", Required: true},
 		},
 	})
-	if string(input.Type) != "object" {
+	if string(input.Type) != wantToolSchemaObjectType {
 		t.Errorf("expected fallback type object, got %q", input.Type)
 	}
 	props, ok := input.Properties.(map[string]any)

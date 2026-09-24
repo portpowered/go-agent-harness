@@ -268,12 +268,7 @@ func TestConnectSession_OpenAIRealtimeSessionCreatedThroughGateway(t *testing.T)
 
 func TestConnectSession_SendsGARealtimeSessionUpdateBeforeUserInput(t *testing.T) {
 	conn := newMockWebSocketConn()
-	dialer := &mockWebSocketDialer{conn: conn}
-	provider := New(
-		WithAPIKey("test-key"),
-		WithRealtimeBaseURL("wss://mock.openai.test/v1/realtime"),
-		WithWebSocketDialer(dialer),
-	)
+	provider := newMockRealtimeProvider(conn)
 
 	ctx := newRealtimeTestContext(t)
 
@@ -342,6 +337,12 @@ func TestConnectSession_SendsGARealtimeSessionUpdateBeforeUserInput(t *testing.T
 		t.Fatal("default OpenAI realtime session.update should not use legacy flat turn_detection")
 	}
 
+	assertGARealtimeAudioConfig(t, sessionPayload)
+	assertRealtimeLookupWeatherTool(t, sessionPayload)
+}
+
+func assertGARealtimeAudioConfig(t *testing.T, sessionPayload map[string]any) {
+	t.Helper()
 	audio, ok := sessionPayload["audio"].(map[string]any)
 	if !ok {
 		t.Fatalf("audio config missing or wrong type: %T", sessionPayload["audio"])
@@ -377,7 +378,10 @@ func TestConnectSession_SendsGARealtimeSessionUpdateBeforeUserInput(t *testing.T
 	}
 	assertStringField(t, outputFormat, "type", "audio/pcmu")
 	assertStringField(t, output, "voice", "marin")
+}
 
+func assertRealtimeLookupWeatherTool(t *testing.T, sessionPayload map[string]any) {
+	t.Helper()
 	tools, ok := sessionPayload["tools"].([]any)
 	if !ok || len(tools) != 1 {
 		t.Fatalf("tools: got %#v, want one tool", sessionPayload["tools"])
@@ -404,81 +408,80 @@ func TestConnectSession_ClientOwnedAudioTurnBoundariesDisableTurnDetection(t *te
 		if legacy {
 			name = "legacy"
 		}
-		t.Run(name, func(t *testing.T) {
-			conn := newMockWebSocketConn()
-			dialer := &mockWebSocketDialer{conn: conn}
-			options := []Option{
-				WithAPIKey("test-key"),
-				WithRealtimeBaseURL("wss://mock.openai.test/v1/realtime"),
-				WithWebSocketDialer(dialer),
-				WithClientOwnedAudioTurnBoundaries(),
-			}
-			if legacy {
-				options = append(options, WithLegacyRealtimeSessionUpdate())
-			}
-			provider := New(options...)
-
-			createResponse := true
-			session, err := provider.ConnectSession(context.Background(), models.SessionConfig{
-				Model: "gpt-realtime",
-				TurnDetection: &models.TurnDetectionConfig{
-					Type:           "server_vad",
-					CreateResponse: &createResponse,
-				},
-			})
-			if err != nil {
-				t.Fatalf("ConnectSession: %v", err)
-			}
-			defer func() { _ = session.Close() }()
-
-			clientMessages := conn.getClientMessages()
-			if len(clientMessages) != 1 {
-				t.Fatalf("client messages: got %d, want initial session.update only", len(clientMessages))
-			}
-			var envelope map[string]json.RawMessage
-			if err := json.Unmarshal(clientMessages[0], &envelope); err != nil {
-				t.Fatalf("unmarshal session.update: %v", err)
-			}
-			var sessionPayload map[string]json.RawMessage
-			if err := json.Unmarshal(envelope["session"], &sessionPayload); err != nil {
-				t.Fatalf("unmarshal session payload: %v", err)
-			}
-
-			var turnDetection json.RawMessage
-			if legacy {
-				turnDetection = sessionPayload["turn_detection"]
-				if len(turnDetection) == 0 {
-					t.Fatal("legacy turn_detection field is missing")
-				}
-			} else {
-				var audio map[string]json.RawMessage
-				if err := json.Unmarshal(sessionPayload["audio"], &audio); err != nil {
-					t.Fatalf("decode audio config: %v", err)
-				}
-				var input map[string]json.RawMessage
-				if err := json.Unmarshal(audio["input"], &input); err != nil {
-					t.Fatalf("decode audio.input config: %v", err)
-				}
-				turnDetection = input["turn_detection"]
-				if len(turnDetection) == 0 {
-					t.Fatal("audio.input.turn_detection field is missing")
-				}
-			}
-			if strings.TrimSpace(string(turnDetection)) != "null" {
-				t.Fatalf("turn_detection = %s, want explicit null", turnDetection)
-			}
-		})
+		t.Run(name, func(t *testing.T) { assertClientOwnedTurnDetectionIsNull(t, legacy) })
 	}
+}
+
+func assertClientOwnedTurnDetectionIsNull(t *testing.T, legacy bool) {
+	conn := newMockWebSocketConn()
+	options := []Option{WithClientOwnedAudioTurnBoundaries()}
+	if legacy {
+		options = append(options, WithLegacyRealtimeSessionUpdate())
+	}
+	provider := newMockRealtimeProvider(conn, options...)
+
+	createResponse := true
+	session, err := provider.ConnectSession(context.Background(), models.SessionConfig{
+		Model: "gpt-realtime",
+		TurnDetection: &models.TurnDetectionConfig{
+			Type:           "server_vad",
+			CreateResponse: &createResponse,
+		},
+	})
+	if err != nil {
+		t.Fatalf("ConnectSession: %v", err)
+	}
+	defer closeRealtimeTestSession(t, session)
+
+	clientMessages := conn.getClientMessages()
+	if len(clientMessages) != 1 {
+		t.Fatalf("client messages: got %d, want initial session.update only", len(clientMessages))
+	}
+	var envelope map[string]json.RawMessage
+	if err := json.Unmarshal(clientMessages[0], &envelope); err != nil {
+		t.Fatalf("unmarshal session.update: %v", err)
+	}
+	var sessionPayload map[string]json.RawMessage
+	if err := json.Unmarshal(envelope["session"], &sessionPayload); err != nil {
+		t.Fatalf("unmarshal session payload: %v", err)
+	}
+
+	turnDetection := clientOwnedTurnDetection(t, sessionPayload, legacy)
+	if strings.TrimSpace(string(turnDetection)) != "null" {
+		t.Fatalf("turn_detection = %s, want explicit null", turnDetection)
+	}
+}
+
+// clientOwnedTurnDetection returns the raw turn_detection field from the
+// legacy flat payload or the GA audio.input payload.
+func clientOwnedTurnDetection(t *testing.T, sessionPayload map[string]json.RawMessage, legacy bool) json.RawMessage {
+	t.Helper()
+	var turnDetection json.RawMessage
+	if legacy {
+		turnDetection = sessionPayload["turn_detection"]
+		if len(turnDetection) == 0 {
+			t.Fatal("legacy turn_detection field is missing")
+		}
+	} else {
+		var audio map[string]json.RawMessage
+		if err := json.Unmarshal(sessionPayload["audio"], &audio); err != nil {
+			t.Fatalf("decode audio config: %v", err)
+		}
+		var input map[string]json.RawMessage
+		if err := json.Unmarshal(audio["input"], &input); err != nil {
+			t.Fatalf("decode audio.input config: %v", err)
+		}
+		turnDetection = input["turn_detection"]
+		if len(turnDetection) == 0 {
+			t.Fatal("audio.input.turn_detection field is missing")
+		}
+	}
+	return turnDetection
 }
 
 func TestConnectSession_SendsGARealtimeG711AudioFormatValues(t *testing.T) {
 	conn := newMockWebSocketConn()
-	dialer := &mockWebSocketDialer{conn: conn}
-	provider := New(
-		WithAPIKey("test-key"),
-		WithRealtimeBaseURL("wss://mock.openai.test/v1/realtime"),
-		WithWebSocketDialer(dialer),
-	)
+	provider := newMockRealtimeProvider(conn)
 
 	session, err := provider.ConnectSession(context.Background(), models.SessionConfig{
 		Model:             "gpt-realtime",
@@ -570,12 +573,7 @@ func TestConnectSession_LegacyRealtimeSessionUpdateIsExplicit(t *testing.T) {
 
 func TestConnectSession_SendsResponseCreateAfterTextInput(t *testing.T) {
 	conn := newMockWebSocketConn()
-	dialer := &mockWebSocketDialer{conn: conn}
-	provider := New(
-		WithAPIKey("test-key"),
-		WithRealtimeBaseURL("wss://mock.openai.test/v1/realtime"),
-		WithWebSocketDialer(dialer),
-	)
+	provider := newMockRealtimeProvider(conn)
 
 	ctx := newRealtimeTestContext(t)
 	session, err := provider.ConnectSession(ctx, models.SessionConfig{Model: "gpt-realtime"})
@@ -614,12 +612,7 @@ func TestConnectSession_SendsResponseCreateAfterTextInput(t *testing.T) {
 
 func TestConnectSession_SendsExplicitResponseCreate(t *testing.T) {
 	conn := newMockWebSocketConn()
-	dialer := &mockWebSocketDialer{conn: conn}
-	provider := New(
-		WithAPIKey("test-key"),
-		WithRealtimeBaseURL("wss://mock.openai.test/v1/realtime"),
-		WithWebSocketDialer(dialer),
-	)
+	provider := newMockRealtimeProvider(conn)
 
 	ctx := newRealtimeTestContext(t)
 	session, err := provider.ConnectSession(ctx, models.SessionConfig{Model: "gpt-realtime"})
@@ -651,12 +644,7 @@ func TestConnectSession_VADObservationsDoNotCreateAnOutboundTurnBoundary(t *test
 	conn := newMockWebSocketConn()
 	conn.addServerEvent("input_audio_buffer.speech_started", nil)
 	conn.addServerEvent("input_audio_buffer.speech_stopped", nil)
-	dialer := &mockWebSocketDialer{conn: conn}
-	provider := New(
-		WithAPIKey("test-key"),
-		WithRealtimeBaseURL("wss://mock.openai.test/v1/realtime"),
-		WithWebSocketDialer(dialer),
-	)
+	provider := newMockRealtimeProvider(conn)
 
 	ctx := newRealtimeTestContext(t)
 	session, err := provider.ConnectSession(ctx, models.SessionConfig{Model: "gpt-realtime"})

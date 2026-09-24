@@ -133,34 +133,13 @@ func unmarshalValue(t messages.StreamMessageType, data json.RawMessage) (message
 		v = new(messages.ErrorValue)
 	case messages.StreamTypeRefusal:
 		v = new(messages.RefusalValue)
-	case messages.StreamTypeImageStart:
-		v = new(messages.ImageStartValue)
-	case messages.StreamTypeImageDelta:
-		v = new(messages.ImageDeltaValue)
-	case messages.StreamTypeImageEnd:
-		v = new(messages.ImageEndValue)
-	case messages.StreamTypeVideoStart:
-		v = new(messages.VideoStartValue)
-	case messages.StreamTypeVideoDelta:
-		v = new(messages.VideoDeltaValue)
-	case messages.StreamTypeVideoEnd:
-		v = new(messages.VideoEndValue)
-	case messages.StreamTypeFileStart:
-		v = new(messages.FileStartValue)
-	case messages.StreamTypeFileDelta:
-		v = new(messages.FileDeltaValue)
-	case messages.StreamTypeFileEnd:
-		v = new(messages.FileEndValue)
-	case messages.StreamTypeEmbeddingStart:
-		v = new(messages.EmbeddingStartValue)
-	case messages.StreamTypeEmbeddingDelta:
-		v = new(messages.EmbeddingDeltaValue)
-	case messages.StreamTypeEmbeddingEnd:
-		v = new(messages.EmbeddingEndValue)
 	case messages.StreamTypeLoopEnd:
 		v = new(messages.LoopEndValue)
 	default:
 		v = unmarshalAudioValue(t)
+		if v == nil {
+			v = unmarshalMediaValue(t)
+		}
 		if v == nil {
 			return nil, fmt.Errorf("unknown stream message type: %s", t)
 		}
@@ -232,6 +211,93 @@ func unmarshalAudioValue(t messages.StreamMessageType) messages.StreamMessageVal
 	default:
 		return nil
 	}
+}
+
+// unmarshalMediaValue maps image, video, file, and embedding stream types to
+// their concrete value; every other type returns nil.
+func unmarshalMediaValue(t messages.StreamMessageType) messages.StreamMessageValue {
+	switch t {
+	case messages.StreamTypeImageStart:
+		return new(messages.ImageStartValue)
+	case messages.StreamTypeImageDelta:
+		return new(messages.ImageDeltaValue)
+	case messages.StreamTypeImageEnd:
+		return new(messages.ImageEndValue)
+	case messages.StreamTypeVideoStart:
+		return new(messages.VideoStartValue)
+	case messages.StreamTypeVideoDelta:
+		return new(messages.VideoDeltaValue)
+	case messages.StreamTypeVideoEnd:
+		return new(messages.VideoEndValue)
+	case messages.StreamTypeFileStart:
+		return new(messages.FileStartValue)
+	case messages.StreamTypeFileDelta:
+		return new(messages.FileDeltaValue)
+	case messages.StreamTypeFileEnd:
+		return new(messages.FileEndValue)
+	case messages.StreamTypeEmbeddingStart:
+		return new(messages.EmbeddingStartValue)
+	case messages.StreamTypeEmbeddingDelta:
+		return new(messages.EmbeddingDeltaValue)
+	case messages.StreamTypeEmbeddingEnd:
+		return new(messages.EmbeddingEndValue)
+	case messages.StreamTypeMessageStart, messages.StreamTypeMessageEnd,
+		messages.StreamTypeTextStart, messages.StreamTypeTextDelta, messages.StreamTypeTextEnd,
+		messages.StreamTypeToolCallStart, messages.StreamTypeToolCallDelta, messages.StreamTypeToolCallEnd,
+		messages.StreamTypeReasoningStart, messages.StreamTypeReasoningDelta, messages.StreamTypeReasoningEnd,
+		messages.StreamTypeAudioStart, messages.StreamTypeAudioDelta, messages.StreamTypeAudioEnd,
+		messages.StreamTypeTranscriptStart, messages.StreamTypeTranscriptDelta, messages.StreamTypeTranscriptEnd,
+		messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped, messages.StreamTypeInputItemAdded,
+		messages.StreamTypePong, messages.StreamTypeSessionOpen, messages.StreamTypeSessionClose,
+		messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated, messages.StreamTypeSessionUpdate,
+		messages.StreamTypeResponseCancel, messages.StreamTypeResponseCreate, messages.StreamTypeRefusal,
+		messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo, messages.StreamTypeError,
+		messages.StreamTypeSystemFullMessage:
+		return nil
+	default:
+		return nil
+	}
+}
+
+// deserializeStreamMessage converts a CapturedSessionEvent back into a
+// StreamMessage using the type-aware UnmarshalStreamMessage helper.
+func deserializeStreamMessage(evt CapturedSessionEvent) (messages.StreamMessage, error) {
+	payload := evt.Payload
+	if len(payload) == 0 {
+		payload = evt.Data
+	}
+	if len(payload) == 0 {
+		return messages.StreamMessage{}, fmt.Errorf("missing payload")
+	}
+	if evt.PayloadType != "" && evt.PayloadType != SessionPayloadTypeStreamMessage {
+		return messages.StreamMessage{}, fmt.Errorf("unsupported payload type: %s", evt.PayloadType)
+	}
+	return UnmarshalStreamMessage(payload)
+}
+
+func compareCapturedStreamMessage(expected CapturedSessionEvent, actual messages.StreamMessage) error {
+	expectedPayload := expected.Payload
+	if len(expectedPayload) == 0 {
+		expectedPayload = expected.Data
+	}
+	if len(expectedPayload) == 0 {
+		return fmt.Errorf("expected outbound event %s is missing payload", expected.Type)
+	}
+	if expected.PayloadType != "" && expected.PayloadType != SessionPayloadTypeStreamMessage {
+		return fmt.Errorf("expected outbound event %s has unsupported payload type %s", expected.Type, expected.PayloadType)
+	}
+
+	actualPayload, err := MarshalStreamMessage(actual)
+	if err != nil {
+		return fmt.Errorf("marshal outbound event %s: %w", actual.Type, err)
+	}
+	if err := compareReplayPayloads(expectedPayload, actualPayload); err != nil {
+		return err
+	}
+	if expected.Type != "" && expected.Type != string(actual.Type) {
+		return fmt.Errorf("expected event type %q, got %q", expected.Type, actual.Type)
+	}
+	return nil
 }
 
 func eventPayload(evt CapturedSessionEvent) []byte {

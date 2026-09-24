@@ -75,34 +75,15 @@ func translateInbound(event models.SessionEvent) []messages.StreamMessage {
 	case models.SessionEventSessionCreated:
 		// session.created from the server signals the session is established.
 		// Emit SESSION.OPEN (agent loop signal) and SESSION.CREATED (carries server config).
-		sessionID := extractStringField(event.Data, "session_id")
-		model := extractStringField(event.Data, "model")
-		return []messages.StreamMessage{
-			{Type: messages.StreamTypeSessionOpen, Value: messages.NewSessionOpenValue(sessionID, "audio_inference")},
-			{Type: messages.StreamTypeSessionCreated, Value: messages.NewSessionCreatedValue(sessionID, model)},
-		}
-
+		return grokSessionCreatedMessages(event.Data)
 	case models.SessionEventSessionUpdated:
 		// session.updated confirms a session configuration update.
 		sessionID := extractStringField(event.Data, "session_id")
 		return []messages.StreamMessage{
 			{Type: messages.StreamTypeSessionUpdated, Value: messages.NewSessionUpdatedValue(sessionID)},
 		}
-
 	case models.SessionEventSessionClosed:
-		sessionID := extractStringField(event.Data, "session_id")
-		reason := extractStringField(event.Data, "reason")
-		return []messages.StreamMessage{
-			{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValueWithTerminal(
-				sessionID,
-				reason,
-				providers.ErrorClassTransport,
-				messages.TerminalReasonProviderClose,
-				messages.TerminalProvenanceProvider,
-				messages.TerminalOutputNotApplicable,
-			)},
-		}
-
+		return grokSessionClosedMessages(event.Data)
 	case models.SessionEventResponseOutputAudioDelta, grokSessionEventResponseAudioDelta:
 		audioBytes := extractAudioBytes(event.Data)
 		if audioBytes == nil {
@@ -111,40 +92,18 @@ func translateInbound(event models.SessionEvent) []messages.StreamMessage {
 		return []messages.StreamMessage{
 			{Type: messages.StreamTypeAudioDelta, ResponseID: responseID, Value: messages.NewAudioDeltaValue(audioBytes)},
 		}
-
 	case models.SessionEventResponseOutputAudioDone, grokSessionEventResponseAudioDone:
 		return []messages.StreamMessage{
 			{Type: messages.StreamTypeAudioEnd, ResponseID: responseID, Value: messages.NewAudioEndValue()},
 		}
-
 	case models.SessionEventResponseOutputAudioTranscriptDelta, grokSessionEventResponseAudioTranscriptDelta:
-		text := extractStringField(event.Data, "delta")
-		if text == "" {
-			return nil
-		}
-		return []messages.StreamMessage{
-			{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleAssistant, ResponseID: responseID, Value: messages.NewTranscriptDeltaValue(text)},
-		}
-
+		return grokTranscriptDeltaMessages(event.Data, messages.RoleAssistant, responseID)
 	case models.SessionEventResponseOutputAudioTranscriptDone, grokSessionEventResponseAudioTranscriptDone:
-		text := extractStringField(event.Data, "transcript")
-		return []messages.StreamMessage{
-			{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleAssistant, ResponseID: responseID, Value: messages.NewTranscriptEndValue(text)},
-		}
+		return grokTranscriptEndMessages(event.Data, messages.RoleAssistant, responseID)
 	case models.SessionEventConversationItemInputAudioTranscriptionDelta:
-		text := extractStringField(event.Data, "delta")
-		if text == "" {
-			return nil
-		}
-		return []messages.StreamMessage{
-			{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleUser, Value: messages.NewTranscriptDeltaValue(text)},
-		}
+		return grokTranscriptDeltaMessages(event.Data, messages.RoleUser, "")
 	case models.SessionEventConversationItemInputAudioTranscriptionCompleted:
-		text := extractStringField(event.Data, "transcript")
-		return []messages.StreamMessage{
-			{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleUser, Value: messages.NewTranscriptEndValue(text)},
-		}
-
+		return grokTranscriptEndMessages(event.Data, messages.RoleUser, "")
 	case models.SessionEventResponseTextDelta, grokSessionEventResponseTextDelta:
 		text := extractStringField(event.Data, "delta")
 		if text == "" {
@@ -153,12 +112,10 @@ func translateInbound(event models.SessionEvent) []messages.StreamMessage {
 		return []messages.StreamMessage{
 			{Type: messages.StreamTypeTextDelta, ResponseID: responseID, Value: messages.NewTextDeltaValue(text)},
 		}
-
 	case models.SessionEventResponseTextDone, grokSessionEventResponseTextDone:
 		return []messages.StreamMessage{
 			{Type: messages.StreamTypeTextEnd, ResponseID: responseID, Value: messages.NewTextEndValue()},
 		}
-
 	case models.SessionEventResponseFunctionCallArgumentsDelta:
 		partial := extractStringField(event.Data, "delta")
 		if partial == "" {
@@ -167,56 +124,93 @@ func translateInbound(event models.SessionEvent) []messages.StreamMessage {
 		return []messages.StreamMessage{
 			{Type: messages.StreamTypeToolCallDelta, ResponseID: responseID, Value: messages.NewToolCallDeltaValue(partial)},
 		}
-
 	case models.SessionEventResponseFunctionCallArgumentsDone:
-		callID := extractStringField(event.Data, "call_id")
-		name := extractStringField(event.Data, "name")
-		args := extractStringField(event.Data, "arguments")
-		return []messages.StreamMessage{
-			{Type: messages.StreamTypeToolCallEnd, ResponseID: responseID, Value: messages.NewToolCallEndValue(callID, name, args)},
-		}
-
+		return grokToolCallEndMessages(event.Data, responseID)
 	case models.SessionEventResponseCreated:
 		return []messages.StreamMessage{
 			{Type: messages.StreamTypeMessageStart, ResponseID: responseID, Value: messages.NewMessageStartValue()},
 		}
-
 	case models.SessionEventResponseDone:
 		return []messages.StreamMessage{
 			{Type: messages.StreamTypeMessageEnd, ResponseID: responseID, Value: grokResponseDoneMessageEnd(event.Data)},
 		}
-
 	case models.SessionEventInputAudioBufferSpeechStarted:
 		return []messages.StreamMessage{
 			{Type: messages.StreamTypeVADSpeechStarted, Value: messages.NewVADSpeechStartedValue()},
 		}
-
 	case models.SessionEventInputAudioBufferSpeechStopped:
 		return []messages.StreamMessage{
 			{Type: messages.StreamTypeVADSpeechStopped, Value: messages.NewVADSpeechStoppedValue()},
 		}
-
 	case models.SessionEventError:
-		msg := extractStringField(event.Data, "message")
-		if msg == "" {
-			msg = "session error"
-		}
-		value := messages.NewErrorValueWithTerminal(
-			msg,
-			sessionErrorClassification(event.Data),
-			messages.TerminalReasonTerminalFailure,
-			messages.TerminalProvenanceProvider,
-			messages.TerminalOutputNone,
-		)
-		value.ErrorType = extractErrorDetailField(event.Data, "type")
-		value.Code = extractErrorDetailField(event.Data, "code")
-		return []messages.StreamMessage{
-			{Type: messages.StreamTypeError, Value: value},
-		}
-
+		return grokSessionErrorMessages(event.Data)
 	default:
 		// Unknown or informational events (session.updated, etc.) are silently dropped.
 		return nil
+	}
+}
+
+// grokSessionCreatedMessages emits SESSION.OPEN then SESSION.CREATED.
+func grokSessionCreatedMessages(data json.RawMessage) []messages.StreamMessage {
+	sessionID := extractStringField(data, "session_id")
+	model := extractStringField(data, "model")
+	return []messages.StreamMessage{
+		{Type: messages.StreamTypeSessionOpen, Value: messages.NewSessionOpenValue(sessionID, "audio_inference")},
+		{Type: messages.StreamTypeSessionCreated, Value: messages.NewSessionCreatedValue(sessionID, model)},
+	}
+}
+
+// grokSessionClosedMessages maps a provider close into a terminal SESSION.CLOSE.
+func grokSessionClosedMessages(data json.RawMessage) []messages.StreamMessage {
+	sessionID := extractStringField(data, "session_id")
+	reason := extractStringField(data, "reason")
+	return []messages.StreamMessage{
+		{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValueWithTerminal(sessionID, reason,
+			providers.ErrorClassTransport, messages.TerminalReasonProviderClose, messages.TerminalProvenanceProvider, messages.TerminalOutputNotApplicable)},
+	}
+}
+
+// grokTranscriptDeltaMessages maps a non-empty transcript delta for role.
+func grokTranscriptDeltaMessages(data json.RawMessage, role messages.Role, responseID string) []messages.StreamMessage {
+	text := extractStringField(data, "delta")
+	if text == "" {
+		return nil
+	}
+	return []messages.StreamMessage{
+		{Type: messages.StreamTypeTranscriptDelta, Role: role, ResponseID: responseID, Value: messages.NewTranscriptDeltaValue(text)},
+	}
+}
+
+// grokTranscriptEndMessages maps a completed transcript for role.
+func grokTranscriptEndMessages(data json.RawMessage, role messages.Role, responseID string) []messages.StreamMessage {
+	text := extractStringField(data, "transcript")
+	return []messages.StreamMessage{
+		{Type: messages.StreamTypeTranscriptEnd, Role: role, ResponseID: responseID, Value: messages.NewTranscriptEndValue(text)},
+	}
+}
+
+// grokToolCallEndMessages maps completed function-call arguments to TOOL_CALL.END.
+func grokToolCallEndMessages(data json.RawMessage, responseID string) []messages.StreamMessage {
+	callID := extractStringField(data, "call_id")
+	name := extractStringField(data, "name")
+	args := extractStringField(data, "arguments")
+	return []messages.StreamMessage{
+		{Type: messages.StreamTypeToolCallEnd, ResponseID: responseID, Value: messages.NewToolCallEndValue(callID, name, args)},
+	}
+}
+
+// grokSessionErrorMessages maps a provider error event into a terminal ERROR.
+func grokSessionErrorMessages(data json.RawMessage) []messages.StreamMessage {
+	msg := extractStringField(data, "message")
+	if msg == "" {
+		msg = "session error"
+	}
+	value := messages.NewErrorValueWithTerminal(msg, sessionErrorClassification(data),
+		messages.TerminalReasonTerminalFailure, messages.TerminalProvenanceProvider, messages.TerminalOutputNone)
+	value.ErrorType = extractErrorDetailField(data, "type")
+	value.Code = extractErrorDetailField(data, "code")
+	return []messages.StreamMessage{
+		{Type: messages.StreamTypeError, Value: value},
 	}
 }
 

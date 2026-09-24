@@ -21,143 +21,23 @@ type streamIterator = func(yield func(*genai.GenerateContentResponse, error) boo
 func streamGeminiToGateway(iter streamIterator, ch chan<- messages.StreamMessage) {
 	defer close(ch)
 
-	var (
-		inText         bool
-		toolCallIndex  int
-		lastUsage      messages.TokenUsage
-		messageStarted bool
-		messageEndSent bool
-		streamErr      error
-	)
-
-	sendMessageStart := func() {
-		if messageStarted {
-			return
-		}
-		messageStarted = true
-		ch <- messages.StreamMessage{
-			Type:               messages.StreamTypeMessageStart,
-			ActorProvidedIndex: defaultStreamIndex,
-			Value:              messages.NewMessageStartValue(),
-		}
-	}
-
-	sendMessageEnd := func() {
-		if messageEndSent {
-			return
-		}
-		messageEndSent = true
-		ch <- messages.StreamMessage{
-			Type:               messages.StreamTypeMessageEnd,
-			ActorProvidedIndex: defaultStreamIndex,
-			Value:              messages.NewMessageEndValue(lastUsage),
-		}
-		if lastUsage.PromptTokens != 0 || lastUsage.CompletionTokens != 0 || lastUsage.TotalTokens != 0 {
-			ch <- messages.StreamMessage{
-				Type:               messages.StreamTypeUsageInfo,
-				ActorProvidedIndex: defaultStreamIndex,
-				Value:              messages.NewUsageInfoValue(lastUsage),
-			}
-		}
-	}
-
-	endTextBlock := func() {
-		if !inText {
-			return
-		}
-		inText = false
-		ch <- messages.StreamMessage{
-			Type:               messages.StreamTypeTextEnd,
-			ActorProvidedIndex: defaultStreamIndex,
-			Value:              messages.NewTextEndValue(),
-		}
-	}
+	state := &geminiStreamState{ch: ch}
+	var streamErr error
 
 	iter(func(resp *genai.GenerateContentResponse, err error) bool {
 		if err != nil {
 			streamErr = err
 			return false
 		}
-
-		sendMessageStart()
-
-		// Extract usage metadata (typically present on last chunk).
-		if resp.UsageMetadata != nil {
-			prompt := resp.UsageMetadata.PromptTokenCount
-			completion := resp.UsageMetadata.CandidatesTokenCount
-			lastUsage = messages.TokenUsage{
-				PromptTokens:     int(prompt),
-				CompletionTokens: int(completion),
-				TotalTokens:      int(prompt + completion),
-			}
-		}
-
-		if len(resp.Candidates) == 0 {
-			return true
-		}
-		candidate := resp.Candidates[0]
-		if candidate.Content == nil {
-			return true
-		}
-
-		for _, part := range candidate.Content.Parts {
-			// Text content
-			if part.Text != "" {
-				if !inText {
-					inText = true
-					ch <- messages.StreamMessage{
-						Type:               messages.StreamTypeTextStart,
-						ActorProvidedIndex: defaultStreamIndex,
-						Value:              messages.NewTextStartValue(),
-					}
-				}
-				ch <- messages.StreamMessage{
-					Type:               messages.StreamTypeTextDelta,
-					ActorProvidedIndex: defaultStreamIndex,
-					Value:              messages.NewTextDeltaValue(part.Text),
-				}
-			}
-
-			// Function call (tool call) — Gemini sends complete FunctionCall parts per chunk.
-			if part.FunctionCall != nil {
-				endTextBlock()
-
-				fc := part.FunctionCall
-				argsJSON, jsonErr := json.Marshal(fc.Args)
-				if jsonErr != nil {
-					argsJSON = []byte("{}")
-				}
-				args := string(argsJSON)
-
-				ch <- messages.StreamMessage{
-					Type:               messages.StreamTypeToolCallStart,
-					ActorProvidedIndex: toolCallIndex,
-					Value:              messages.NewToolCallStartValue(fc.ID, fc.Name),
-				}
-				if args != "" && args != "null" {
-					ch <- messages.StreamMessage{
-						Type:               messages.StreamTypeToolCallDelta,
-						ActorProvidedIndex: toolCallIndex,
-						Value:              messages.NewToolCallDeltaValue(args),
-					}
-				}
-				ch <- messages.StreamMessage{
-					Type:               messages.StreamTypeToolCallEnd,
-					ActorProvidedIndex: toolCallIndex,
-					Value:              messages.NewToolCallEndValue(fc.ID, fc.Name, args),
-				}
-				toolCallIndex++
-			}
-		}
-
+		state.handleResponse(resp)
 		return true
 	})
 
 	// Close any open text block.
-	endTextBlock()
+	state.endTextBlock()
 
 	// Ensure MESSAGE.START was sent even if the stream yielded nothing useful.
-	sendMessageStart()
+	state.sendMessageStart()
 
 	// Send error before MESSAGE.END so consumers can handle partial responses.
 	if streamErr != nil {
@@ -168,5 +48,139 @@ func streamGeminiToGateway(iter streamIterator, ch chan<- messages.StreamMessage
 		}
 	}
 
-	sendMessageEnd()
+	state.sendMessageEnd()
+}
+
+// geminiStreamState tracks message framing, the open text block, tool-call
+// ordinals, and usage while one Gemini stream is translated.
+type geminiStreamState struct {
+	ch             chan<- messages.StreamMessage
+	inText         bool
+	toolCallIndex  int
+	lastUsage      messages.TokenUsage
+	messageStarted bool
+	messageEndSent bool
+}
+
+// handleResponse translates one successful stream chunk.
+func (s *geminiStreamState) handleResponse(resp *genai.GenerateContentResponse) {
+	s.sendMessageStart()
+
+	// Extract usage metadata (typically present on last chunk).
+	if resp.UsageMetadata != nil {
+		prompt := resp.UsageMetadata.PromptTokenCount
+		completion := resp.UsageMetadata.CandidatesTokenCount
+		s.lastUsage = messages.TokenUsage{
+			PromptTokens:     int(prompt),
+			CompletionTokens: int(completion),
+			TotalTokens:      int(prompt + completion),
+		}
+	}
+
+	if len(resp.Candidates) == 0 {
+		return
+	}
+	candidate := resp.Candidates[0]
+	if candidate.Content == nil {
+		return
+	}
+
+	for _, part := range candidate.Content.Parts {
+		// Text content
+		if part.Text != "" {
+			s.emitText(part.Text)
+		}
+
+		// Function call (tool call) — Gemini sends complete FunctionCall parts per chunk.
+		if part.FunctionCall != nil {
+			s.endTextBlock()
+			s.emitFunctionCall(part.FunctionCall)
+		}
+	}
+}
+
+func (s *geminiStreamState) emitText(text string) {
+	if !s.inText {
+		s.inText = true
+		s.ch <- messages.StreamMessage{
+			Type:               messages.StreamTypeTextStart,
+			ActorProvidedIndex: defaultStreamIndex,
+			Value:              messages.NewTextStartValue(),
+		}
+	}
+	s.ch <- messages.StreamMessage{
+		Type:               messages.StreamTypeTextDelta,
+		ActorProvidedIndex: defaultStreamIndex,
+		Value:              messages.NewTextDeltaValue(text),
+	}
+}
+
+func (s *geminiStreamState) emitFunctionCall(fc *genai.FunctionCall) {
+	argsJSON, jsonErr := json.Marshal(fc.Args)
+	if jsonErr != nil {
+		argsJSON = []byte("{}")
+	}
+	args := string(argsJSON)
+
+	s.ch <- messages.StreamMessage{
+		Type:               messages.StreamTypeToolCallStart,
+		ActorProvidedIndex: s.toolCallIndex,
+		Value:              messages.NewToolCallStartValue(fc.ID, fc.Name),
+	}
+	if args != "" && args != "null" {
+		s.ch <- messages.StreamMessage{
+			Type:               messages.StreamTypeToolCallDelta,
+			ActorProvidedIndex: s.toolCallIndex,
+			Value:              messages.NewToolCallDeltaValue(args),
+		}
+	}
+	s.ch <- messages.StreamMessage{
+		Type:               messages.StreamTypeToolCallEnd,
+		ActorProvidedIndex: s.toolCallIndex,
+		Value:              messages.NewToolCallEndValue(fc.ID, fc.Name, args),
+	}
+	s.toolCallIndex++
+}
+
+func (s *geminiStreamState) sendMessageStart() {
+	if s.messageStarted {
+		return
+	}
+	s.messageStarted = true
+	s.ch <- messages.StreamMessage{
+		Type:               messages.StreamTypeMessageStart,
+		ActorProvidedIndex: defaultStreamIndex,
+		Value:              messages.NewMessageStartValue(),
+	}
+}
+
+func (s *geminiStreamState) sendMessageEnd() {
+	if s.messageEndSent {
+		return
+	}
+	s.messageEndSent = true
+	s.ch <- messages.StreamMessage{
+		Type:               messages.StreamTypeMessageEnd,
+		ActorProvidedIndex: defaultStreamIndex,
+		Value:              messages.NewMessageEndValue(s.lastUsage),
+	}
+	if s.lastUsage.PromptTokens != 0 || s.lastUsage.CompletionTokens != 0 || s.lastUsage.TotalTokens != 0 {
+		s.ch <- messages.StreamMessage{
+			Type:               messages.StreamTypeUsageInfo,
+			ActorProvidedIndex: defaultStreamIndex,
+			Value:              messages.NewUsageInfoValue(s.lastUsage),
+		}
+	}
+}
+
+func (s *geminiStreamState) endTextBlock() {
+	if !s.inText {
+		return
+	}
+	s.inText = false
+	s.ch <- messages.StreamMessage{
+		Type:               messages.StreamTypeTextEnd,
+		ActorProvidedIndex: defaultStreamIndex,
+		Value:              messages.NewTextEndValue(),
+	}
 }

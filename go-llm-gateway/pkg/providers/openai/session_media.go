@@ -236,3 +236,29 @@ func (s *realtimeSession) enqueueWireEventWithMode(ctx context.Context, event mo
 	}
 	return outcome
 }
+
+func realtimeAudioBytes(data json.RawMessage) []byte {
+	encoded := firstStringField(data, "delta")
+	if encoded == "" {
+		return nil
+	}
+	decoded, err := codec.DecodeBase64(encoded)
+	if err != nil {
+		return nil
+	}
+	return decoded
+}
+
+func realtimeAudioMediaType(data json.RawMessage) string {
+	format := firstStringField(data, "format", "format.type", "audio_format", "response.audio.output.format.type", "response.output_audio_format")
+	switch format {
+	case "pcm16":
+		return "audio/pcm"
+	case "g711_ulaw":
+		return "audio/g711-ulaw"
+	case "g711_alaw":
+		return "audio/g711-alaw"
+	default:
+		return format
+	}
+}
