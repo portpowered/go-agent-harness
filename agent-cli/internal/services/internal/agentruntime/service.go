@@ -19,6 +19,7 @@ import (
 	runtimeBrowser "github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation"
 	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	sessiontrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -68,13 +69,10 @@ func (d *Dispatcher) Run(ctx context.Context, out io.Writer, request public.Requ
 		return ErrLegacyAudioRuntimeRetired
 	}
 	if request.MaxDuration > 0 {
-		capturePath := request.RecordPath
-		if capturePath == "" {
-			capturePath = request.ReplayPath
-		}
-		if capturePath != "" {
-			artifactBase := strings.TrimSuffix(capturePath, filepath.Ext(capturePath))
-			ctx = WithSessionDurationArtifactPaths(ctx, SessionDurationArtifactPaths{AudioPath: artifactBase + ".wav", TranscriptPath: artifactBase + ".jsonl"})
+		var err error
+		ctx, err = sessionDurationArtifactContext(ctx, request, d.deps.PlanFactory.durationService)
+		if err != nil {
+			return err
 		}
 	}
 	options, err := d.requestOptions(ctx, request)
@@ -125,6 +123,24 @@ func (d *Dispatcher) Run(ctx context.Context, out io.Writer, request public.Requ
 		ctx, out, options, "", request.MaxDuration,
 		textSeed(request.TextSeed), request.SystemPrompt,
 	)
+}
+
+func sessionDurationArtifactContext(ctx context.Context, request public.Request, service sessionduration.Service) (context.Context, error) {
+	capturePath := request.RecordPath
+	if capturePath == "" {
+		capturePath = request.ReplayPath
+	}
+	if capturePath == "" {
+		return ctx, nil
+	}
+	if service == nil {
+		return nil, errors.New("session duration service is required for artifact paths")
+	}
+	artifactBase := strings.TrimSuffix(capturePath, filepath.Ext(capturePath))
+	paths := sessionduration.SessionDurationArtifactPaths{
+		AudioPath: artifactBase + ".wav", TranscriptPath: artifactBase + ".jsonl",
+	}
+	return service.WithArtifactPaths(ctx, paths), nil
 }
 
 func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request) (SessionRunOptions, error) {

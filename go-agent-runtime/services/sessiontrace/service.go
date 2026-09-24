@@ -11,33 +11,12 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
-	lifecycle "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/internal/lifecycle"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
-)
-
-// LifecycleService is the public, host-neutral continuation reducer contract.
-// The mutable implementation remains private to sessiontrace.
-type LifecycleService = lifecycle.Service
-type LifecycleEvent = lifecycle.Event
-type LifecycleSnapshot = lifecycle.Snapshot
-type LifecycleTerminal = lifecycle.Terminal
-type LifecycleResponsePurpose = lifecycle.ResponsePurpose
-
-const (
-	LifecycleEventResponseOpen          = lifecycle.EventResponseOpen
-	LifecycleEventResponseEnd           = lifecycle.EventResponseEnd
-	LifecycleEventContinuationRequested = lifecycle.EventContinuationRequested
-	LifecycleEventToolResultAccepted    = lifecycle.EventToolResultAccepted
-	LifecycleEventToolResultRejected    = lifecycle.EventToolResultRejected
-	LifecycleEventToolResponseComplete  = lifecycle.EventToolResponseComplete
-	LifecycleEventReset                 = lifecycle.EventReset
-	LifecycleEventEnsureScheduled       = lifecycle.EventEnsureScheduled
-	LifecycleResponsePurposeNormal      = lifecycle.ResponsePurposeNormal
 )
 
 // DiagnosticRecord is the bounded, transport-neutral session diagnostic.

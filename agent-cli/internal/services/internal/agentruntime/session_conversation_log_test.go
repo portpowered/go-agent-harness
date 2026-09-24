@@ -338,7 +338,7 @@ func TestSessionDirectoryRecordingCapturesCorrelatedToolLifecycle(t *testing.T) 
 		return messages.ToolCallResponse{Content: secondResult}, nil
 	})
 
-	err := runAgentLoopSession(context.Background(), out, &sessionDirectoryRecordingInferencer{
+	err := runTestAgentLoopSession(context.Background(), out, &sessionDirectoryRecordingInferencer{
 		inner:     inferencer,
 		recording: recording,
 	}, sessionLoopOptions{

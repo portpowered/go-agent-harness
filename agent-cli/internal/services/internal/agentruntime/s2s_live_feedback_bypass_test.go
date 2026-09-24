@@ -63,7 +63,7 @@ func TestRunSessionHeadphoneShapedPlaybackPreservesIndependentSpeech(t *testing.
 
 	runErr := make(chan error, 1)
 	go func() {
-		runErr <- services.RunSession(ctx, io.Discard, services.SessionRunOptions{
+		runErr <- runSessionForTest(ctx, io.Discard, services.SessionRunOptions{
 			AudioService:      audioiowire.NewService(),
 			Provider:          "openai",
 			Model:             services.DefaultOpenAIRealtimeModel,
@@ -178,7 +178,7 @@ func TestRunSessionReplayBypassesPairedDeviceFeedbackController(t *testing.T) {
 
 	runErr := make(chan error, 1)
 	go func() {
-		runErr <- services.RunSession(ctx, io.Discard, services.SessionRunOptions{
+		runErr <- runSessionForTest(ctx, io.Discard, services.SessionRunOptions{
 			AudioService:      audioiowire.NewService(),
 			ReplayPath:        "synthetic.json",
 			SessionInferencer: inferencer,

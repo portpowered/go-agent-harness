@@ -1,186 +1,73 @@
-// Package lifecycle contains the private sessiontrace response lifecycle
-// contract used by the trace observer. It is not a host-facing package.
+// Package lifecycle contains the private implementation aliases for the
+// sessiontrace continuation contract.
 package lifecycle
 
-import (
-	"context"
-	"time"
-)
+import "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 
-type ResponsePurpose string
+type ResponsePurpose = sessiontrace.LifecycleResponsePurpose
 
 const (
-	ResponsePurposeNormal              ResponsePurpose = ""
-	ResponsePurposeToolAcknowledgement ResponsePurpose = "tool_acknowledgement"
+	ResponsePurposeNormal              = sessiontrace.LifecycleResponsePurposeNormal
+	ResponsePurposeToolAcknowledgement = sessiontrace.LifecycleResponsePurposeToolAcknowledgement
 )
 
-type Role string
+type Role = sessiontrace.LifecycleRole
 
 const (
-	RoleAssistant Role = "assistant"
-	RoleTool      Role = "tool"
+	RoleAssistant = sessiontrace.LifecycleRoleAssistant
+	RoleTool      = sessiontrace.LifecycleRoleTool
 )
 
-type Disposition string
+type Disposition = sessiontrace.LifecycleDisposition
 
 const (
-	DispositionPending   Disposition = "pending"
-	DispositionCompleted Disposition = "completed"
-	DispositionCancelled Disposition = "cancelled"
+	DispositionPending   = sessiontrace.LifecycleDispositionPending
+	DispositionCompleted = sessiontrace.LifecycleDispositionCompleted
+	DispositionCancelled = sessiontrace.LifecycleDispositionCancelled
 )
 
-type EventKind string
+type EventKind = sessiontrace.LifecycleEventKind
 
 const (
-	EventResponseOpen              EventKind = "response.open"
-	EventResponseAdopt             EventKind = "response.adopt"
-	EventResponseBelongs           EventKind = "response.belongs"
-	EventResponseOwnsEnd           EventKind = "response.owns_end"
-	EventResponseContent           EventKind = "response.content"
-	EventResponseContentBoundary   EventKind = "response.content_boundary"
-	EventResponseEnd               EventKind = "response.end"
-	EventResponseFinish            EventKind = "response.finish"
-	EventBindScheduledBoundary     EventKind = "scheduled.bind_boundary"
-	EventBindScheduledTerminalOnly EventKind = "scheduled.bind_terminal_only"
-	EventBindScheduledID           EventKind = "scheduled.bind_id"
-	EventSetScheduledOwner         EventKind = "scheduled.set_owner"
-	EventEnsureScheduled           EventKind = "scheduled.ensure"
-	EventNoteScheduledTerminal     EventKind = "scheduled.note_terminal"
-	EventRememberRetry             EventKind = "scheduled.remember_retry"
-	EventClaimRetry                EventKind = "scheduled.claim_retry"
-	EventRetryDispatched           EventKind = "scheduled.retry_dispatched"
-	EventScheduledDisposition      EventKind = "scheduled.disposition"
-	EventToolCall                  EventKind = "tool.call"
-	EventToolResultAccepted        EventKind = "tool.result_accepted"
-	EventToolResultRejected        EventKind = "tool.result_rejected"
-	EventToolResponseComplete      EventKind = "tool.response_complete"
-	EventContinuationRequested     EventKind = "tool.continuation_requested"
-	EventReset                     EventKind = "lifecycle.reset"
+	EventResponseOpen              = sessiontrace.LifecycleEventResponseOpen
+	EventResponseAdopt             = sessiontrace.LifecycleEventResponseAdopt
+	EventResponseBelongs           = sessiontrace.LifecycleEventResponseBelongs
+	EventResponseOwnsEnd           = sessiontrace.LifecycleEventResponseOwnsEnd
+	EventResponseContent           = sessiontrace.LifecycleEventResponseContent
+	EventResponseContentBoundary   = sessiontrace.LifecycleEventResponseContentBoundary
+	EventResponseEnd               = sessiontrace.LifecycleEventResponseEnd
+	EventResponseFinish            = sessiontrace.LifecycleEventResponseFinish
+	EventBindScheduledBoundary     = sessiontrace.LifecycleEventBindScheduledBoundary
+	EventBindScheduledTerminalOnly = sessiontrace.LifecycleEventBindScheduledTerminalOnly
+	EventBindScheduledID           = sessiontrace.LifecycleEventBindScheduledID
+	EventSetScheduledOwner         = sessiontrace.LifecycleEventSetScheduledOwner
+	EventEnsureScheduled           = sessiontrace.LifecycleEventEnsureScheduled
+	EventNoteScheduledTerminal     = sessiontrace.LifecycleEventNoteScheduledTerminal
+	EventRememberRetry             = sessiontrace.LifecycleEventRememberRetry
+	EventClaimRetry                = sessiontrace.LifecycleEventClaimRetry
+	EventRetryDispatched           = sessiontrace.LifecycleEventRetryDispatched
+	EventScheduledDisposition      = sessiontrace.LifecycleEventScheduledDisposition
+	EventToolCall                  = sessiontrace.LifecycleEventToolCall
+	EventToolResultAccepted        = sessiontrace.LifecycleEventToolResultAccepted
+	EventToolResultRejected        = sessiontrace.LifecycleEventToolResultRejected
+	EventToolResponseComplete      = sessiontrace.LifecycleEventToolResponseComplete
+	EventContinuationRequested     = sessiontrace.LifecycleEventContinuationRequested
+	EventReset                     = sessiontrace.LifecycleEventReset
 )
 
-type Terminal struct {
-	Status               string
-	ErrorCode            string
-	ErrorMessage         string
-	StatusDetails        string
-	Reason               string
-	ProviderCancellation bool
-}
-
-type Event struct {
-	Kind         EventKind
-	ResponseID   string
-	LifecycleID  string
-	Purpose      ResponsePurpose
-	Role         Role
-	CallID       string
-	ToolName     string
-	ResultStatus string
-	Terminal     *Terminal
-	Output       bool
-	Disposition  Disposition
-	Index        int
-	Count        int
-}
-
-type RetryScheduler func(context.Context, time.Duration) error
-
-type Options struct {
-	RetryScheduler RetryScheduler
-}
-
-type RetryRequest struct {
-	Accepted  bool
-	Delay     time.Duration
-	Exhausted bool
-}
-
-type Observation struct {
-	Accepted             bool
-	NewResponse          bool
-	OwnsResponse         bool
-	Candidate            bool
-	Admitted             bool
-	ContinuationChanged  bool
-	ResponseID           string
-	ScheduledIndex       int
-	HasScheduledIndex    bool
-	Disposition          Disposition
-	PendingContinuations int
-	Retry                RetryRequest
-}
-
-type ScheduledState struct {
-	Bound                 bool
-	ResponseIDs           []string
-	Disposition           Disposition
-	RetryUsed             bool
-	RetryPending          bool
-	TerminalFailure       bool
-	TerminalStatus        string
-	TerminalErrorCode     string
-	TerminalStatusDetails string
-}
-
-type ContinuationState struct {
-	CallID                     string
-	ToolName                   string
-	ResponseID                 string
-	ProviderCallObserved       bool
-	ResultAccepted             bool
-	ResultRejected             bool
-	ResultRejectionStatus      string
-	ToolResponseComplete       bool
-	ContinuationRequested      bool
-	ContinuationResponseID     string
-	ContinuationScheduledIndex int
-	ContinuationScheduledSet   bool
-	ContinuationTerminalSeen   bool
-	ContinuationStatus         string
-	ContinuationErrorCode      string
-	ContinuationStatusDetails  string
-	ContinuationReason         string
-	ContinuationOutput         bool
-	ContinuationFailure        bool
-	ContinuationComplete       bool
-}
-
-type Snapshot struct {
-	Closed                bool
-	ActiveResponse        bool
-	ActiveResponseID      string
-	ActivePurpose         ResponsePurpose
-	CompletedResponseIDs  []string
-	RetiredResponseIDs    []string
-	Scheduled             []ScheduledState
-	ScheduledResponseByID map[string]int
-	NextScheduledResponse int
-	ActiveScheduledIndex  int
-	ActiveScheduledID     string
-	ActiveScheduledSet    bool
-	LogicalScheduledIndex int
-	LogicalScheduledID    string
-	LogicalScheduledSet   bool
-	CompletedScheduled    int
-	RetryCandidateIndex   int
-	RetryCandidateSet     bool
-	RetryCandidateID      string
-	ContinuationStates    []ContinuationState
-}
-
-type lifecycleError string
-
-func (e lifecycleError) Error() string { return string(e) }
+type Terminal = sessiontrace.LifecycleTerminal
+type Event = sessiontrace.LifecycleEvent
+type RetryScheduler = sessiontrace.LifecycleRetryScheduler
+type Options = sessiontrace.LifecycleOptions
+type RetryRequest = sessiontrace.LifecycleRetryRequest
+type Observation = sessiontrace.LifecycleObservation
+type ScheduledState = sessiontrace.LifecycleScheduledState
+type ContinuationState = sessiontrace.LifecycleContinuationState
+type Snapshot = sessiontrace.LifecycleSnapshot
+type Service = sessiontrace.LifecycleService
 
 const (
-	ErrClosed            lifecycleError = "session diagnostics lifecycle is closed"
-	ErrMalformedSequence lifecycleError = "malformed session diagnostics sequence"
-	ErrRetryExhausted    lifecycleError = "session diagnostics retry budget exhausted"
+	ErrClosed            = sessiontrace.ErrLifecycleClosed
+	ErrMalformedSequence = sessiontrace.ErrLifecycleMalformedSequence
+	ErrRetryExhausted    = sessiontrace.ErrLifecycleRetryExhausted
 )
-
-type Service interface {
-	Apply(context.Context, Event) (Observation, error)
-	Snapshot() Snapshot
-	Reset()
-	Close() error
-}

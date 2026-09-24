@@ -51,10 +51,13 @@ func newLiveTerminalDrainFixture(t *testing.T) *liveTerminalDrainFixture {
 		done:         make(chan struct{}),
 		acceptedText: liveTerminalDrainAcceptedOutput,
 	}
+	factory := testSessionRuntimeFactory()
 	f.writer = &f.output
 	f.options = sessionLoopOptions{
-		loopReady:    f.loopReady,
-		audioService: newTestAudioIOService(),
+		durationService: factory.durationService,
+		durationRunner:  factory.durationRunner,
+		loopReady:       f.loopReady,
+		audioService:    newTestAudioIOService(),
 	}
 	f.session.opened = func() {
 		// ConnectSession has accepted SESSION.OPEN. The service may not have
@@ -70,7 +73,7 @@ func (f *liveTerminalDrainFixture) run(t *testing.T, setup func(*liveTerminalDra
 	trigger := setup(f)
 	result := make(chan error, 1)
 	go func() {
-		result <- runAgentLoopSessionStream(f.ctx, f.writer, &liveTerminalDrainInferencer{session: f.session}, f.options)
+		result <- runTestAgentLoopSession(f.ctx, f.writer, &liveTerminalDrainInferencer{session: f.session}, f.options)
 	}()
 
 	select {

@@ -109,6 +109,56 @@ func ensureSessionRecordingDirectoryClaim(opts *SessionRunOptions, directory str
 	return claim, path, nil
 }
 
+func prepareSessionRecordingDestination(path string) (string, error) {
+	if strings.TrimSpace(path) == "" {
+		return "", recordingDestinationError(transcript.ErrRecordingDestination, "validate destination", path, errors.New("destination is required"))
+	}
+	destination := filepath.Clean(path)
+	parent := filepath.Dir(destination)
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		return "", recordingDestinationError(transcript.ErrRecordingDestination, "prepare destination", destination, err)
+	}
+
+	info, err := os.Lstat(destination)
+	if err == nil {
+		if info.Mode()&os.ModeSymlink != 0 {
+			return "", recordingDestinationError(transcript.ErrRecordingDestination, "validate destination", destination, ErrSessionRecordingDirectorySymlink)
+		}
+		if !info.IsDir() {
+			return "", recordingDestinationError(transcript.ErrRecordingDestination, "validate destination", destination, ErrSessionRecordingDirectoryNotDirectory)
+		}
+		entries, readErr := os.ReadDir(destination)
+		if readErr != nil {
+			return "", recordingDestinationError(transcript.ErrRecordingDestination, "inspect destination", destination, readErr)
+		}
+		if len(entries) != 0 {
+			return "", recordingDestinationError(transcript.ErrRecordingDestinationNotEmpty, "validate destination", destination, errors.New("destination is not empty"))
+		}
+		parent = destination
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return "", recordingDestinationError(transcript.ErrRecordingDestination, "inspect destination", destination, err)
+	}
+
+	probe, err := os.CreateTemp(parent, ".recording-probe-")
+	if err != nil {
+		return "", recordingDestinationError(transcript.ErrRecordingDestination, "probe destination", destination, err)
+	}
+	probePath := probe.Name()
+	closeErr := probe.Close()
+	removeErr := os.Remove(probePath)
+	if closeErr != nil {
+		return "", recordingDestinationError(transcript.ErrRecordingDestination, "probe destination", destination, closeErr)
+	}
+	if removeErr != nil {
+		return "", recordingDestinationError(transcript.ErrRecordingDestination, "remove destination probe", destination, removeErr)
+	}
+	return destination, nil
+}
+
+func recordingDestinationError(kind error, operation, path string, cause error) error {
+	return &transcript.RecordingError{Kind: kind, Operation: operation, Path: path, Cause: cause}
+}
+
 func acquireSessionRecordingDirectoryClaim(path string) (*sessionRecordingDirectoryClaim, error) {
 	if strings.TrimSpace(path) == "" {
 		return nil, recordingDestinationError(transcript.ErrRecordingDestination, "validate destination", path, errors.New("destination is required"))

@@ -4,10 +4,9 @@ import (
 	"context"
 	"errors"
 	"io"
-	"strconv"
 	"sync"
-	"sync/atomic"
 
+	"github.com/google/uuid"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
@@ -65,13 +64,10 @@ func RunSessionWithTextSeed(ctx context.Context, out io.Writer, opts SessionRunO
 	return errors.Join(plan.run(ctx, output), output.errorValue())
 }
 
-var sessionTextWireSequence uint64
-
 const sessionTextWirePrefix = "\x00agent-cli-session-text-seed:"
 
 func nextSessionTextWirePrompt() string {
-	sequence := atomic.AddUint64(&sessionTextWireSequence, 1)
-	return sessionTextWirePrefix + strconv.FormatUint(sequence, 10)
+	return sessionTextWirePrefix + uuid.NewString()
 }
 
 type sessionTextSeedInferencer struct {

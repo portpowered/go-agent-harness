@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 )
 
@@ -133,6 +134,14 @@ func (i *observedSessionInferencer) CloseSession() error {
 	return i.closeErr
 }
 
+func (i *observedSessionInferencer) Close() error { return i.CloseSession() }
+
+func (i *observedSessionInferencer) DrainPlayback(ctx context.Context) error {
+	return i.DrainSessionPlayback(ctx)
+}
+
+func (i *observedSessionInferencer) Error() error { return i.sessionFailure() }
+
 func (i *observedSessionInferencer) DrainSessionPlayback(ctx context.Context) error {
 	if i == nil {
 		return nil
@@ -143,7 +152,7 @@ func (i *observedSessionInferencer) DrainSessionPlayback(ctx context.Context) er
 	if observed == nil {
 		return nil
 	}
-	drainer, ok := observed.Session.(playbackDrainingSession)
+	drainer, ok := observed.Session.(sessionduration.PlaybackDrainer)
 	if !ok {
 		return nil
 	}
@@ -373,16 +382,6 @@ func (s *observedSession) observeCompleteMessageToolResult(msg messages.Message,
 	if msg.ToolCallID != "" {
 		s.progress.NoteToolResultRejected(msg.ToolCallID, outcome)
 	}
-}
-
-func (s *observedSession) SupportsCompleteMessages() bool {
-	complete, _ := completeMessageCapabilities(s.Session)
-	return complete
-}
-
-func (s *observedSession) SupportsCompleteMessagesWithoutResponse() bool {
-	_, withoutResponse := completeMessageCapabilities(s.Session)
-	return withoutResponse
 }
 
 func (s *observedSession) Close() error {

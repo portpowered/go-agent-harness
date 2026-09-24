@@ -9,9 +9,16 @@ type sessionMediaForwarder interface {
 	rtcMedia() (audio.MediaEndpoints, bool)
 }
 
+type durationMediaForwarder interface {
+	RTCMedia() (audio.MediaEndpoints, bool)
+}
+
 func sessionMediaFromSession(session messages.Session) (audio.MediaEndpoints, bool) {
 	if owner, ok := session.(audio.MediaSession); ok {
 		return owner.RTCMedia(), true
+	}
+	if forwarder, ok := session.(durationMediaForwarder); ok {
+		return forwarder.RTCMedia()
 	}
 	if forwarder, ok := session.(sessionMediaForwarder); ok {
 		return forwarder.rtcMedia()
@@ -22,10 +29,6 @@ func sessionMediaFromSession(session messages.Session) (audio.MediaEndpoints, bo
 func sessionRTCMedia(session messages.Session) audio.MediaEndpoints {
 	media, _ := sessionMediaFromSession(session)
 	return media
-}
-
-func (s *sessionDurationAdmissionSession) RTCMedia() audio.MediaEndpoints {
-	return sessionRTCMedia(s.inner)
 }
 
 func (s *sessionImageSession) RTCMedia() audio.MediaEndpoints {

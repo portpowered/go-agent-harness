@@ -77,7 +77,7 @@ func TestRunRoom_FailureTerminalEvidenceIsAuthoritative(t *testing.T) {
 		}{participantID: participantID, record: record}
 	}
 
-	result, err := RunRoomWithResult(context.Background(), io.Discard, opts)
+	result, err := runRoomForTest(context.Background(), io.Discard, opts)
 	if err == nil {
 		t.Fatal("provider failure returned nil room error")
 	}

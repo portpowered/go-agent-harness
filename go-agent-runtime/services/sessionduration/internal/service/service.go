@@ -37,6 +37,11 @@ func (s *Service) Execute(request sessionduration.ExecutionRequest) (runErr erro
 	if err := s.ValidateDuration(request.MaxDuration); err != nil {
 		return err
 	}
+	preparedContext, err := s.PrepareArtifacts(ctx)
+	if err != nil {
+		return s.NewFinalizer(request.Finalization).Finish(ctx, request.Output, err)
+	}
+	ctx = preparedContext
 	clock := request.Clock
 	if clock == nil {
 		clock = request.SourceClock
@@ -75,13 +80,16 @@ func (s *Service) RunWithResult(request sessionduration.RunRequest) (sessiondura
 		return sessionduration.Result{}, err
 	}
 	deferAdmissionSessionClose(admitted)
-	request.Close = closeAdmissionSessionAfterHost(admitted, request.Close)
+	request.Close = closeAdmissionSessionAfterHost(admitted, request.Close, request.CloseTimeout)
 	return durationrunner.RunWithResult(s, request, admitted, publish)
 }
 
 func (s *Service) validateRunRequest(request sessionduration.RunRequest) error {
 	if err := s.ValidateDuration(request.MaxDuration); err != nil {
 		return err
+	}
+	if request.CloseTimeout < 0 {
+		return errors.New("session close timeout must be non-negative")
 	}
 	if request.Inferencer == nil && request.Admission == nil {
 		return errors.New("session duration inferencer is required")
@@ -97,30 +105,6 @@ func (s *Service) runAdmission(request sessionduration.RunRequest) (sessiondurat
 		return request.Admission, nil
 	}
 	return s.NewAdmissionInferencer(request.Inferencer, s.NewEventAdmission(), nil), nil
-}
-
-type deferredAdmissionCloser interface {
-	deferSessionCloseUntilFinalization()
-	finalizeSessionClose() error
-}
-
-func deferAdmissionSessionClose(admitted sessionduration.AdmissionInferencer) {
-	if closer, ok := admitted.(deferredAdmissionCloser); ok {
-		closer.deferSessionCloseUntilFinalization()
-	}
-}
-
-func closeAdmissionSessionAfterHost(admitted sessionduration.AdmissionInferencer, closeHost func() error) func() error {
-	return func() error {
-		var hostErr error
-		if closeHost != nil {
-			hostErr = closeHost()
-		}
-		if closer, ok := admitted.(deferredAdmissionCloser); ok {
-			return errors.Join(hostErr, closer.finalizeSessionClose())
-		}
-		return hostErr
-	}
 }
 
 func (s *Service) NewState(source sessionduration.TerminalSource) sessionduration.State {

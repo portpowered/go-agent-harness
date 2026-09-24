@@ -7,8 +7,69 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 )
+
+func (o *observerState) Active() bool { return o != nil }
+
+func (o *observerState) RunFacts() sessionduration.RunFacts {
+	if o == nil {
+		return sessionduration.RunFacts{}
+	}
+	return sessionduration.RunFacts{
+		LastMessageEndAdmitted:              o.lastMessageEndAdmitted,
+		HasToolLifecycleObligation:          o.hasToolLifecycleObligation,
+		HasTerminalToolContinuationFailure:  o.hasTerminalToolContinuationFailure,
+		HasTerminalScheduledResponseFailure: o.hasTerminalScheduledResponseFailure,
+		AssistantResponseCompleted:          o.assistantResponseCompleted,
+		ProviderToolCallObserved:            o.providerToolCallObserved,
+		ScheduledAudioComplete:              o.scheduledAudioComplete,
+		ScheduledAudioAwaitingConfiguration: o.scheduledAudioAwaitingConfiguration,
+		ScheduledAudioReady:                 o.scheduledAudioReady,
+	}
+}
+
+func (o *observerState) CompletionFacts() sessionduration.CompletionFacts {
+	if o == nil {
+		return sessionduration.CompletionFacts{}
+	}
+	completed, dispatched, scheduled := o.scheduledAudioCounts()
+	status, code, details := o.scheduledAudioFailureMetadata()
+	return sessionduration.CompletionFacts{
+		ProviderToolCallObserved:     o.providerToolCallObserved(),
+		AssistantResponseCompleted:   o.assistantResponseCompleted(),
+		ScheduledAudioIncomplete:     o.scheduledAudioIncomplete(),
+		ScheduledAudioCompleted:      completed,
+		ScheduledAudioDispatched:     dispatched,
+		ScheduledAudioCount:          scheduled,
+		ProviderScheduledStatus:      status,
+		ProviderScheduledErrorCode:   code,
+		ProviderScheduledErrorDetail: details,
+	}
+}
+
+func (o *observerState) SessionUpdatedPending() bool {
+	return o != nil && o.scheduledAudioAwaitingConfiguration()
+}
+
+func (o *observerState) SessionUpdatedReady() bool {
+	return o == nil || o.scheduledAudioReady()
+}
+
+func (o *observerState) EnrichLifecycleError(err error) error { return err }
+
+func (o *observerState) RetryDispatched(message messages.StreamMessage) {
+	if o != nil {
+		o.observeProviderDispatch(message)
+	}
+}
+
+func (o *observerState) ObserveStreamMessage(message messages.StreamMessage) {
+	if o != nil {
+		o.observe(message)
+	}
+}
 
 // NewObserver constructs the one invocation-scoped observer owned by the
 // sessiontrace service. Callers can configure callbacks and immutable request

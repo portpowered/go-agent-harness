@@ -2,32 +2,15 @@ package agentruntime
 
 import (
 	"errors"
-	"io"
 	"strconv"
 	"strings"
-	"time"
 
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
-
-type invalidSessionStragglerDrainPolicyError string
-
-func (e invalidSessionStragglerDrainPolicyError) Error() string { return string(e) }
-
-const errInvalidSessionStragglerDrainPolicy invalidSessionStragglerDrainPolicyError = "session straggler drain requires a positive quiet period"
-
-// sessionReplayMessageWriter is implemented by the stateful terminal renderer
-// used by a complete session run. Keeping the interface private preserves the
-// small writeSessionReplayMessage seam used by cancellation and unit tests.
-type sessionReplayMessageWriter interface {
-	writeSessionReplayMessage(messages.StreamMessage) error
-}
 
 func (c *roomCoordinator) forceBoundShutdownOnce() {
 	c.mu.Lock()
@@ -223,71 +206,72 @@ func emitRoomParticipantPlaybackOverflowDiagnostic(participantID string, handle 
 	}
 }
 
-func startDurationSessionUpdatedTimer(durationClock SessionDurationClock, opts sessionLoopOptions, timer SessionDurationTimer, timeout <-chan time.Time) (SessionDurationTimer, <-chan time.Time, error) {
-	if !opts.RequireSessionUpdated || opts.observer == nil || !opts.observer.ScheduledAudioAwaitingConfiguration() || timer != nil {
-		return timer, timeout, nil
+func roomParticipantOutstandingWork(runtime *roomParticipantRuntime) []string {
+	if runtime == nil || runtime.plan == nil {
+		return []string{"participant runtime"}
 	}
-	configuredTimeout := opts.SessionUpdatedTimeout
-	if configuredTimeout <= 0 {
-		configuredTimeout = sessionScheduledAudioConfigTimeout
+	id := runtime.plan.manifest.ID
+	outstanding := roomParticipantStartupWork(runtime, id)
+	if runtime.lifecycle == nil {
+		return append(outstanding, roomLifecycleWorkLabel(id, "lifecycle"))
 	}
-	timer = durationClock.NewTimer(configuredTimeout)
-	if timer == nil {
-		return nil, nil, errors.New("session duration clock returned a nil session-updated timer")
-	}
-	return timer, timer.C(), nil
+	return append(outstanding, roomParticipantOwnedWork(runtime, id)...)
 }
 
-func stopDurationSessionUpdatedTimer(timer *SessionDurationTimer, timeout *<-chan time.Time) {
-	if timer == nil || *timer == nil {
-		return
+func roomParticipantStartupWork(runtime *roomParticipantRuntime, id string) []string {
+	outstanding := make([]string, 0, 1)
+	if runtime.plan.startupErr != nil {
+		return outstanding
 	}
-	(*timer).Stop()
-	*timer = nil
-	*timeout = nil
+	if roomParticipantIsHuman(runtime.plan) {
+		return roomParticipantDeviceWork(runtime, id)
+	}
+	if runtime.plan.tracker == nil {
+		return append(outstanding, roomLifecycleWorkLabel(id, "connect"))
+	}
+	if _, ready := runtime.plan.tracker.outcome(); !ready {
+		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "connect"))
+	}
+	return outstanding
 }
 
-func waitForDurationSessionLoopStragglers(out io.Writer, loop *agentloop.AgentLoop, policy sessionStragglerDrainPolicy, durationClock SessionDurationClock, planned bool, terminalWritten *bool, artifacts SessionDurationArtifactLifecycle, obs sessiontrace.Observer, terminalState *sessionDurationTerminalState) error {
-	quiet := policy.quietPeriod
-	if quiet <= 0 {
-		return errInvalidSessionStragglerDrainPolicy
+func roomParticipantDeviceWork(runtime *roomParticipantRuntime, id string) []string {
+	if runtime.lifecycle == nil || !runtime.lifecycle.deviceHasReady() {
+		return []string{roomLifecycleWorkLabel(id, "devices")}
 	}
-	timer, err := newDurationStragglerTimer(durationClock, quiet)
-	if err != nil {
-		return err
-	}
-	defer func() { timer.Stop() }()
-	for {
-		select {
-		case msg, ok := <-loop.Deltas().Chan():
-			if !ok {
-				return nil
-			}
-			timer, err = processDurationStragglerMessage(out, msg, planned, terminalWritten, artifacts, obs, terminalState, timer, durationClock, quiet)
-			if err != nil {
-				return err
-			}
-		case <-timer.C():
-			return nil
-		}
-	}
+	return nil
 }
 
-func processDurationStragglerMessage(out io.Writer, msg messages.StreamMessage, planned bool, terminalWritten *bool, artifacts SessionDurationArtifactLifecycle, obs sessiontrace.Observer, terminalState *sessionDurationTerminalState, timer SessionDurationTimer, durationClock SessionDurationClock, quiet time.Duration) (SessionDurationTimer, error) {
-	if terminalState != nil {
-		terminalState.observe(msg)
-		var shouldWrite bool
-		msg, shouldWrite = terminalState.admitTerminal(planned, msg)
-		*terminalWritten = terminalState.written()
-		if !shouldWrite {
-			return timer, nil
-		}
+func roomParticipantOwnedWork(runtime *roomParticipantRuntime, id string) []string {
+	outstanding := roomParticipantSessionWork(runtime, id)
+	return append(outstanding, roomParticipantLoopWork(runtime, id)...)
+}
+
+func roomParticipantSessionWork(runtime *roomParticipantRuntime, id string) []string {
+	created, closed, transportDone, closeErr := runtime.lifecycle.ownedSessionSnapshot()
+	outstanding := make([]string, 0, 3)
+	if created && !closed {
+		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "session.close"))
 	}
-	if obs != nil {
-		obs.Observe(msg)
+	if closeErr != nil {
+		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "session.close.error"))
 	}
-	if err := writeDurationSessionReplayMessage(out, msg, artifacts); err != nil {
-		return timer, err
+	if created && !roomChannelClosed(transportDone) {
+		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "session.transport"))
 	}
-	return resetDurationStragglerTimer(timer, durationClock, quiet)
+	return outstanding
+}
+
+func roomParticipantLoopWork(runtime *roomParticipantRuntime, id string) []string {
+	outstanding := make([]string, 0, 3)
+	if runtime.participantDone != nil && !roomChannelClosed(runtime.participantDone) {
+		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "participant.loop"))
+	}
+	if runtime.mixerDone != nil && !roomChannelClosed(runtime.mixerDone) {
+		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "mixer"))
+	}
+	if runtime.observerDone != nil && !roomChannelClosed(runtime.observerDone) {
+		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "observer"))
+	}
+	return outstanding
 }

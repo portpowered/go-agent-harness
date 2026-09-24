@@ -2,12 +2,7 @@ package agentruntime
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"errors"
-	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -16,10 +11,14 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
+type sessionDynamicToolPublicationError string
+
+func (e sessionDynamicToolPublicationError) Error() string { return string(e) }
+
 // ErrSessionDynamicToolPublication identifies a failed live page-tool
 // refresh or provider session.update delivery. The last successful surface is
 // deliberately retained when this error is reported.
-var ErrSessionDynamicToolPublication = errors.New("session dynamic tool publication failed")
+const ErrSessionDynamicToolPublication sessionDynamicToolPublicationError = "session dynamic tool publication failed"
 
 // sessionDynamicToolPublicationSettleWindow is long enough to collect the
 // selection/generation/catalog notifications emitted by one browser change,
@@ -39,23 +38,6 @@ const (
 	SessionDynamicToolPublicationStopped   SessionDynamicToolPublicationLifecycle = "stopped"
 	SessionDynamicToolPublicationWatchGone SessionDynamicToolPublicationLifecycle = "watch_closed"
 )
-
-// SessionDynamicToolPublicationState is a diagnostic snapshot for one live
-// session. Definitions are copied on the way in and out so callers cannot
-// mutate the state used by the publisher.
-type SessionDynamicToolPublicationState struct {
-	StaticStableDefinitions     []messages.ToolDefinition
-	LastSuccessfulDefinitions   []messages.ToolDefinition
-	LastSuccessfulDigest        string
-	LastSuccessfulBrowserID     webmcp.BrowserID
-	LastSuccessfulTargetID      webmcp.TargetID
-	LastSuccessfulGeneration    uint64
-	LastSuccessfulEventSequence uint64
-	LatestEventSequence         uint64
-	Lifecycle                   SessionDynamicToolPublicationLifecycle
-	Err                         error
-	PublicationCount            uint64
-}
 
 type sessionDynamicToolPublicationEvent struct {
 	browserID  webmcp.BrowserID
@@ -197,6 +179,12 @@ func (p *sessionDynamicToolPublisher) errors() <-chan error {
 	return p.errCh
 }
 
+func (p *sessionDynamicToolPublisher) MarkReady() { p.markSessionReady() }
+
+func (p *sessionDynamicToolPublisher) Errors() <-chan error { return p.errors() }
+
+func (p *sessionDynamicToolPublisher) Stop() { p.stop() }
+
 func (p *sessionDynamicToolPublisher) stop() {
 	if p == nil {
 		return
@@ -229,173 +217,66 @@ func (p *sessionDynamicToolPublisher) stateSnapshot() SessionDynamicToolPublicat
 	state.LastSuccessfulDefinitions = messages.CanonicalToolDefinitions(state.LastSuccessfulDefinitions)
 	return state
 }
-func (p *sessionDynamicToolPublisher) run(ctx context.Context, loop *agentloop.AgentLoop, events <-chan webmcp.BrokerEvent) {
-	defer close(p.done)
-	ready := p.ready
-	var settleTimer webmcp.Timer
-	var settleC <-chan time.Time
-	pendingRefresh := false
-	resetSettleTimer := func() {
-		if settleTimer == nil {
-			settleTimer = p.timerFactory.NewTimer(sessionDynamicToolPublicationSettleWindow)
-		} else {
-			if !settleTimer.Stop() {
-				select {
-				case <-settleTimer.C():
-				default:
-				}
-			}
-			settleTimer.Reset(sessionDynamicToolPublicationSettleWindow)
-		}
-		settleC = settleTimer.C()
-	}
-	stopSettleTimer := func() {
-		if settleTimer == nil {
-			return
-		}
-		if !settleTimer.Stop() {
-			select {
-			case <-settleTimer.C():
-			default:
-			}
-		}
-		settleC = nil
-	}
-	defer stopSettleTimer()
-
-	drainEvents := func() bool {
-		for {
-			select {
-			case event, ok := <-events:
-				if !ok {
-					p.setLifecycle(SessionDynamicToolPublicationWatchGone)
-					return false
-				}
-				if p.consumeEvent(event) {
-					pendingRefresh = true
-				}
-			default:
-				return true
-			}
-		}
-	}
-	for {
-		select {
-		case <-ctx.Done():
-			p.setLifecycle(SessionDynamicToolPublicationStopped)
-			return
-		case <-ready:
-			ready = nil
-			p.setLifecycle(SessionDynamicToolPublicationReady)
-			// Events can arrive while the provider handshake is in flight. Drain
-			// the already queued portion before taking the first snapshot so the
-			// initial publication observes the latest catalog state.
-			if !drainEvents() {
-				return
-			}
-			pendingRefresh = false
-			if err := p.refreshAndPublish(ctx, loop, "session_ready"); err != nil {
-				return
-			}
-		case event, ok := <-events:
-			if !ok {
-				p.setLifecycle(SessionDynamicToolPublicationWatchGone)
-				return
-			}
-			if !p.consumeEvent(event) || ready != nil {
-				continue
-			}
-			pendingRefresh = true
-			resetSettleTimer()
-		case <-settleC:
-			stopSettleTimer()
-			if !pendingRefresh {
-				continue
-			}
-			// A buffered broker watch is a complete notification burst at this
-			// boundary. Fold it in before reading the catalog so related
-			// selection, generation, and catalog events publish only once.
-			if !drainEvents() {
-				return
-			}
-			pendingRefresh = false
-			if err := p.refreshAndPublish(ctx, loop, "broker_event"); err != nil {
-				return
-			}
-		}
-	}
-}
-
-type sessionDynamicToolPublicationWallTimerFactory struct{}
-
-func (sessionDynamicToolPublicationWallTimerFactory) NewTimer(duration time.Duration) webmcp.Timer {
-	return sessionDynamicToolPublicationWallTimer{timer: time.NewTimer(duration)}
-}
-
-type sessionDynamicToolPublicationWallTimer struct {
-	timer *time.Timer
-}
-
-func (t sessionDynamicToolPublicationWallTimer) C() <-chan time.Time {
-	return t.timer.C
-}
-
-func (t sessionDynamicToolPublicationWallTimer) Stop() bool {
-	return t.timer.Stop()
-}
-
-func (t sessionDynamicToolPublicationWallTimer) Reset(duration time.Duration) bool {
-	return t.timer.Reset(duration)
-}
-
 func (p *sessionDynamicToolPublisher) consumeEvent(event webmcp.BrokerEvent) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if event.Sequence != 0 && event.Sequence <= p.state.LatestEventSequence {
+	if !p.acceptEventSequence(event.Sequence) {
 		return false
 	}
-	if event.Sequence > p.state.LatestEventSequence {
-		p.state.LatestEventSequence = event.Sequence
+	if !isDynamicToolPublicationEvent(event.Type) {
+		return false
 	}
+	candidate := publicationEventFromBroker(event)
+	if p.hasStaleGeneration(candidate) {
+		return false
+	}
+	p.pending = p.inheritPublicationGeneration(candidate)
+	p.hasPending = true
+	return true
+}
 
-	switch event.Type {
-	case webmcp.BrokerEventSelected, webmcp.BrokerEventCatalogChanged, webmcp.BrokerEventGenerationChanged:
-		candidate := sessionDynamicToolPublicationEvent{
-			browserID:  event.BrowserID,
-			targetID:   event.TargetID,
-			generation: event.Generation,
-			sequence:   event.Sequence,
-		}
-		// Sequence is authoritative for ordering across different targets. A
-		// generation never moves backwards for the same target, even when a
-		// producer omitted its sequence while replaying a stale notification.
-		if p.hasPending && samePublicationTarget(candidate, p.pending) &&
-			candidate.generation != 0 && p.pending.generation != 0 && candidate.generation < p.pending.generation {
-			return false
-		}
-		if samePublicationTarget(candidate, sessionDynamicToolPublicationEvent{
-			browserID:  p.state.LastSuccessfulBrowserID,
-			targetID:   p.state.LastSuccessfulTargetID,
-			generation: p.state.LastSuccessfulGeneration,
-		}) && candidate.generation != 0 && p.state.LastSuccessfulGeneration != 0 && candidate.generation < p.state.LastSuccessfulGeneration {
-			return false
-		}
-		if candidate.generation == 0 {
-			if p.hasPending && samePublicationTarget(candidate, p.pending) {
-				candidate.generation = p.pending.generation
-			} else if samePublicationTarget(candidate, sessionDynamicToolPublicationEvent{
-				browserID: p.state.LastSuccessfulBrowserID,
-				targetID:  p.state.LastSuccessfulTargetID,
-			}) {
-				candidate.generation = p.state.LastSuccessfulGeneration
-			}
-		}
-		p.pending = candidate
-		p.hasPending = true
-		return true
-	default:
+func (p *sessionDynamicToolPublisher) acceptEventSequence(sequence uint64) bool {
+	if sequence != 0 && sequence <= p.state.LatestEventSequence {
 		return false
 	}
+	if sequence > p.state.LatestEventSequence {
+		p.state.LatestEventSequence = sequence
+	}
+	return true
+}
+
+func (p *sessionDynamicToolPublisher) hasStaleGeneration(candidate sessionDynamicToolPublicationEvent) bool {
+	if p.hasPending && samePublicationTarget(candidate, p.pending) &&
+		isOlderPublicationGeneration(candidate.generation, p.pending.generation) {
+		return true
+	}
+	lastSuccessful := sessionDynamicToolPublicationEvent{
+		browserID: p.state.LastSuccessfulBrowserID, targetID: p.state.LastSuccessfulTargetID,
+		generation: p.state.LastSuccessfulGeneration,
+	}
+	return samePublicationTarget(candidate, lastSuccessful) &&
+		isOlderPublicationGeneration(candidate.generation, p.state.LastSuccessfulGeneration)
+}
+
+func isOlderPublicationGeneration(candidate, current uint64) bool {
+	return candidate != 0 && current != 0 && candidate < current
+}
+
+func (p *sessionDynamicToolPublisher) inheritPublicationGeneration(candidate sessionDynamicToolPublicationEvent) sessionDynamicToolPublicationEvent {
+	if candidate.generation != 0 {
+		return candidate
+	}
+	if p.hasPending && samePublicationTarget(candidate, p.pending) {
+		candidate.generation = p.pending.generation
+		return candidate
+	}
+	lastSuccessful := sessionDynamicToolPublicationEvent{
+		browserID: p.state.LastSuccessfulBrowserID, targetID: p.state.LastSuccessfulTargetID,
+	}
+	if samePublicationTarget(candidate, lastSuccessful) {
+		candidate.generation = p.state.LastSuccessfulGeneration
+	}
+	return candidate
 }
 
 func (p *sessionDynamicToolPublisher) refreshAndPublish(ctx context.Context, loop *agentloop.AgentLoop, phase string) error {
@@ -503,91 +384,4 @@ func (p *sessionDynamicToolPublisher) fail(phase string, sequence uint64, err er
 	default:
 	}
 	return publicationErr
-}
-
-// SessionDynamicToolPublicationError contains only bounded phase and event
-// metadata in its public text while retaining the underlying cause for tests
-// and programmatic classification.
-type SessionDynamicToolPublicationError struct {
-	Phase    string
-	Sequence uint64
-	Err      error
-}
-
-func (e *SessionDynamicToolPublicationError) Error() string {
-	if e == nil {
-		return ErrSessionDynamicToolPublication.Error()
-	}
-	message := strings.TrimSpace(e.ErrString())
-	if message == "" {
-		message = "unknown error"
-	}
-	return fmt.Sprintf("%s: phase=%s sequence=%d: %s", ErrSessionDynamicToolPublication, e.Phase, e.Sequence, message)
-}
-
-func (e *SessionDynamicToolPublicationError) ErrString() string {
-	if e == nil || e.Err == nil {
-		return ""
-	}
-	message := strings.TrimSpace(e.Err.Error())
-	const maxPublicationErrorText = 256
-	if len(message) > maxPublicationErrorText {
-		return message[:maxPublicationErrorText] + "..."
-	}
-	return message
-}
-
-func (e *SessionDynamicToolPublicationError) Unwrap() error {
-	if e == nil {
-		return ErrSessionDynamicToolPublication
-	}
-	return errors.Join(ErrSessionDynamicToolPublication, e.Err)
-}
-
-func mergeSessionToolDefinitionBase(base, definitions []messages.ToolDefinition) []messages.ToolDefinition {
-	canonicalBase := messages.CanonicalToolDefinitions(base)
-	canonicalDefinitions := messages.CanonicalToolDefinitions(definitions)
-	if len(canonicalBase) == 0 {
-		return canonicalDefinitions
-	}
-	merged := append([]messages.ToolDefinition(nil), canonicalBase...)
-	baseNames := make(map[string]struct{}, len(canonicalBase))
-	for _, definition := range canonicalBase {
-		baseNames[definition.Name] = struct{}{}
-	}
-	for _, definition := range canonicalDefinitions {
-		if _, isBase := baseNames[definition.Name]; isBase {
-			continue
-		}
-		merged = append(merged, definition)
-	}
-	return messages.CanonicalToolDefinitions(merged)
-}
-
-func sessionToolDefinitionDigest(definitions []messages.ToolDefinition) (string, error) {
-	canonical := messages.CanonicalToolDefinitions(definitions)
-	payload := make([]sessionToolDefinitionDigestEntry, 0, len(canonical))
-	for _, definition := range canonical {
-		payload = append(payload, sessionToolDefinitionDigestEntry{
-			Name:             definition.Name,
-			Description:      definition.Description,
-			Parameters:       definition.Parameters,
-			ParameterSchema:  string(definition.ParameterSchema),
-			ParametersClosed: definition.ParametersClosed,
-		})
-	}
-	encoded, err := json.Marshal(payload)
-	if err != nil {
-		return "", err
-	}
-	digest := sha256.Sum256(encoded)
-	return hex.EncodeToString(digest[:]), nil
-}
-
-type sessionToolDefinitionDigestEntry struct {
-	Name             string                   `json:"name"`
-	Description      string                   `json:"description"`
-	Parameters       []messages.ToolParameter `json:"parameters"`
-	ParameterSchema  string                   `json:"parameter_schema,omitempty"`
-	ParametersClosed bool                     `json:"parameters_closed"`
 }

@@ -100,7 +100,7 @@ func TestSessionRecordingClaimRejectsExistingCaptureWithoutChangingBytes(t *test
 		t.Fatalf("write existing capture: %v", err)
 	}
 
-	err := RunSession(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+	err := runSessionForTest(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		RecordPath: path,
 		Provider:   config.ProviderGrok,
 	})
@@ -170,7 +170,7 @@ func TestSessionRecordingClaimReleasesAfterPreDialAndWriteFailure(t *testing.T) 
 		t.Fatalf("plan pre-dial failure: %v", err)
 	}
 	var output bytes.Buffer
-	err = plan.run(context.Background(), &output)
+	err = runTestSessionRuntimePlan(context.Background(), &output, plan)
 	if !errors.Is(err, connectErr) || !errors.Is(err, flushErr) {
 		t.Fatalf("pre-dial/write failure = %v, want provider and capture errors", err)
 	}

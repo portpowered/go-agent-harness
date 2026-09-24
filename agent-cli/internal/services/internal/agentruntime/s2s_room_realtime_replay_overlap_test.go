@@ -227,7 +227,7 @@ func newRoomSpeechOverlapScenario(t *testing.T, peerOutput []byte) *roomSpeechOv
 	}
 	runDone := make(chan roomTestRunOutcome, 1)
 	go func() {
-		result, err := RunRoomWithResult(roomCtx, io.Discard, opts)
+		result, err := runRoomForTest(roomCtx, io.Discard, opts)
 		runDone <- roomTestRunOutcome{result: result, err: err}
 	}()
 
@@ -538,7 +538,7 @@ func TestRunRoomWithResult_BidirectionalOverlapRecordsPeerOnlyEvidence(t *testin
 	})
 	runDone := make(chan roomTestRunOutcome, 1)
 	go func() {
-		result, err := RunRoomWithResult(roomCtx, io.Discard, opts)
+		result, err := runRoomForTest(roomCtx, io.Discard, opts)
 		runDone <- roomTestRunOutcome{result: result, err: err}
 	}()
 

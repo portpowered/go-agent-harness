@@ -6,9 +6,9 @@
       "rule": "cognitive-complexity",
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_duration_test.go",
-      "symbol": "TestRunSessionWithMaxDuration_FinalizesRealArtifactsAndRejectsLateFrame",
-      "value": 27,
+      "file": "internal/services/internal/agentruntime/session_tools_test.go",
+      "symbol": "TestRunAgentLoopSession_FailureTableKeepsSessionAlive",
+      "value": 25,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -16,29 +16,49 @@
       "rule": "cognitive-complexity",
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_duration_test.go",
-      "symbol": "TestRunSessionWithMaxDuration_FinalizesZeroSampleArtifactsBeforeFirstAudio",
-      "value": 22,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cyclomatic-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_duration_test.go",
-      "symbol": "TestRunSessionWithMaxDuration_FinalizesRealArtifactsAndRejectsLateFrame",
-      "value": 25,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cyclomatic-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_duration_test.go",
-      "symbol": "TestRunSessionWithMaxDuration_FinalizesZeroSampleArtifactsBeforeFirstAudio",
+      "file": "internal/services/internal/agentruntime/session_tools_test.go",
+      "symbol": "TestRunAgentLoopSession_InteractivePolicyTimeoutDeliversOneCorrelatedContinuation",
       "value": 23,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_tools_test.go",
+      "symbol": "TestRunAgentLoopSession_InteractiveTimeoutPreservesParallelSiblingResults",
+      "value": 29,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_tools_test.go",
+      "symbol": "TestSessionToolExecutor_ScreenTimeoutRecheckPreservesTimeoutForNonDenial",
+      "value": 42,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cyclomatic-complexity",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_tools_test.go",
+      "symbol": "TestRunAgentLoopSession_InteractivePolicyTimeoutDeliversOneCorrelatedContinuation",
+      "value": 23,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cyclomatic-complexity",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_tools_test.go",
+      "symbol": "TestRunAgentLoopSession_InteractiveTimeoutPreservesParallelSiblingResults",
+      "value": 27,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -46,18 +66,8 @@
       "rule": "file-lines",
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_duration_test.go",
-      "value": 1002,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "function-lines",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_duration_test.go",
-      "symbol": "TestRunSessionWithMaxDuration_FinalizesRealArtifactsAndRejectsLateFrame",
-      "value": 122,
+      "file": "internal/services/internal/agentruntime/session_tools_test.go",
+      "value": 1273,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     }

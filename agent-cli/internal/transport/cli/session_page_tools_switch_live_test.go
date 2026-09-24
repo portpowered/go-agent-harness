@@ -123,7 +123,7 @@ func TestSessionPageToolsSwitchAgainstLiveChrome(t *testing.T) {
 	sessionCtx, cancelSession := context.WithCancel(ctx)
 	runErr := make(chan error, 1)
 	go func() {
-		runErr <- servicetest.RunSessionWithMaxDuration(sessionCtx, io.Discard, servicetest.SessionRunOptions{
+		runErr <- servicetest.RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(sessionCtx, io.Discard, servicetest.SessionRunOptions{
 			Provider:               config.ProviderGrok,
 			Model:                  "session-shape-fake",
 			APIKey:                 "unused",
@@ -136,7 +136,7 @@ func TestSessionPageToolsSwitchAgainstLiveChrome(t *testing.T) {
 			RefreshToolDefinitions: capabilities.RefreshDefinitionsWithError,
 			BrowserWatch:           capabilities.BrowserWatch,
 			SessionInferencer:      provider,
-		}, 4*time.Minute)
+		}, "", 4*time.Minute, servicetest.SessionTextSeed{}, "")
 	}()
 	defer func() {
 		cancelSession()

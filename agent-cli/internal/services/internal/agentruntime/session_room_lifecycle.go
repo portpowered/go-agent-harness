@@ -67,74 +67,51 @@ func (r *roomParticipantRuntime) markObserverDone() {
 }
 
 type roomCleanupWaiter struct {
-	timer *time.Timer
+	mu      sync.Mutex
+	timer   *time.Timer
+	expired chan time.Time
+	started bool
+	stopped bool
 }
 
 func (w *roomCleanupWaiter) start() {
-	if w == nil || w.timer != nil {
+	if w == nil {
 		return
 	}
-	w.timer = time.NewTimer(roomCleanupTimeout)
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.started || w.stopped {
+		return
+	}
+	w.started = true
+	w.expired = make(chan time.Time)
+	expired := w.expired
+	w.timer = time.AfterFunc(roomCleanupTimeout, func() { close(expired) })
 }
 func (w *roomCleanupWaiter) done() <-chan time.Time {
-	if w == nil || w.timer == nil {
+	if w == nil {
 		return nil
 	}
-	return w.timer.C
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if !w.started {
+		return nil
+	}
+	return w.expired
 }
 func (w *roomCleanupWaiter) stop() {
-	if w == nil || w.timer == nil {
+	if w == nil {
 		return
 	}
-	if !w.timer.Stop() {
-		select {
-		case <-w.timer.C:
-		default:
-		}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.stopped {
+		return
 	}
-	w.timer = nil
-}
-
-func roomParticipantOutstandingWork(runtime *roomParticipantRuntime) []string {
-	if runtime == nil || runtime.plan == nil {
-		return []string{"participant runtime"}
+	w.stopped = true
+	if w.timer != nil && w.timer.Stop() {
+		close(w.expired)
 	}
-	id := runtime.plan.manifest.ID
-	outstanding := make([]string, 0, 6)
-	if runtime.plan.startupErr != nil {
-	} else if roomParticipantIsHuman(runtime.plan) {
-		if runtime.lifecycle == nil || !runtime.lifecycle.deviceHasReady() {
-			outstanding = append(outstanding, roomLifecycleWorkLabel(id, "devices"))
-		}
-	} else if runtime.plan.tracker == nil {
-		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "connect"))
-	} else if _, ready := runtime.plan.tracker.outcome(); !ready {
-		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "connect"))
-	}
-	if runtime.lifecycle == nil {
-		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "lifecycle"))
-		return outstanding
-	}
-	created, closed, transportDone, closeErr := runtime.lifecycle.ownedSessionSnapshot()
-	if created && !closed {
-		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "session.close"))
-	}
-	if closeErr != nil {
-		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "session.close.error"))
-	}
-	if created && !roomChannelClosed(transportDone) {
-		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "session.transport"))
-	}
-	if runtime.participantDone != nil && !roomChannelClosed(runtime.participantDone) {
-		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "participant.loop"))
-	}
-	if runtime.mixerDone != nil && !roomChannelClosed(runtime.mixerDone) {
-		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "mixer"))
-	}
-	if runtime.observerDone != nil && !roomChannelClosed(runtime.observerDone) {
-		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "observer"))
-	}
-	return outstanding
 }
 
 // Deprecated: retained only as a decision-free adapter for the legacy room host.

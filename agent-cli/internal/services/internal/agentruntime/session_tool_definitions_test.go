@@ -34,7 +34,7 @@ func TestRunSession_OpenAIAdvertisesRegistryExecDefinition(t *testing.T) {
 	defer cancel()
 
 	var err error
-	err = agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
+	err = runSessionForTest(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
 		RecordPath:      recordPath,
 		Provider:        "openai",
 		Model:           "gpt-realtime",
@@ -179,7 +179,7 @@ func TestRunSession_OpenAIAdvertisesComposedWebMCPDefinitions(t *testing.T) {
 	conn := newRecordingRealtimeTestConn()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	if err := agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
+	if err := runSessionForTest(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
 		Provider:            config.ProviderOpenAI,
 		Model:               "gpt-realtime",
 		APIKey:              "test-api-key",

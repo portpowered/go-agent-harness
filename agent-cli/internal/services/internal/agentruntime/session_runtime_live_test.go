@@ -170,7 +170,7 @@ func runNoCaptureProviderCase(t *testing.T, testCase noCaptureProviderCase) {
 	}
 	assertNoCapturePlan(t, plan, opts, testCase.provider, testCase.model, liveDialer, gotDialer, defaultDialerCalls, recordingDialerCalls)
 	var out bytes.Buffer
-	if err := plan.run(context.Background(), &out); err != nil {
+	if err := runTestSessionRuntimePlan(context.Background(), &out, plan); err != nil {
 		t.Fatalf("run no-capture %s plan: %v", testCase.provider, err)
 	}
 	assertNoCaptureOutput(t, out.String(), testCase.provider, destination)
@@ -427,7 +427,7 @@ func TestPlanSessionRuntime_BrowserToolsWithRecordingPreservesCaptureLifecycle(t
 			}
 
 			var out bytes.Buffer
-			if err := plan.run(context.Background(), &out); err != nil {
+			if err := runTestSessionRuntimePlan(context.Background(), &out, plan); err != nil {
 				t.Fatalf("run browser recording plan: %v", err)
 			}
 			if recordingDialer.flushCalls != 1 || filepath.Dir(recordingDialer.path) != filepath.Dir(recordPath) || !strings.HasPrefix(filepath.Base(recordingDialer.path), "."+filepath.Base(recordPath)+".tmp-") {

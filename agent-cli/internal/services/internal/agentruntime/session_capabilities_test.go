@@ -26,14 +26,19 @@ func TestPlanSessionRuntimeClosesTransferredCapabilityOnPlanningFailure(t *testi
 
 func TestSessionRuntimePlanClosesTransferredCapabilityOnNormalExit(t *testing.T) {
 	closeCalls := 0
+	factory := testSessionRuntimeFactory()
 	plan := sessionRuntimePlan{
+		loop: sessionLoopOptions{
+			durationService: factory.durationService,
+			durationRunner:  factory.durationRunner,
+		},
 		capabilityCoordinator: NewSessionCapabilityCoordinator(func() error {
 			closeCalls++
 			return nil
 		}),
 	}
 
-	if err := plan.run(context.Background(), io.Discard); err != nil {
+	if err := runTestSessionRuntimePlan(context.Background(), io.Discard, plan); err != nil {
 		t.Fatalf("plan run: %v", err)
 	}
 	if closeCalls != 1 {
@@ -43,18 +48,24 @@ func TestSessionRuntimePlanClosesTransferredCapabilityOnNormalExit(t *testing.T)
 
 func TestSessionDurationPlanClosesTransferredCapabilityOnPreflightExit(t *testing.T) {
 	closeCalls := 0
+	factory := testSessionRuntimeFactory()
 	plan := sessionRuntimePlan{
+		loop: sessionLoopOptions{
+			durationService: factory.durationService,
+			durationRunner:  factory.durationRunner,
+			audioService:    newTestAudioIOService(),
+		},
 		capabilityCoordinator: NewSessionCapabilityCoordinator(func() error {
 			closeCalls++
 			return nil
 		}),
-		loop: sessionLoopOptions{audioService: newTestAudioIOService()},
 		rtcDeviceRequest: runtimedevices.RTCBindingRequest{
 			InputPresent: true,
 		},
 	}
 
-	err := runSessionDurationPlan(context.Background(), io.Discard, plan, 1, nil)
+	plan.loop.MaxDuration = 1
+	err := runTestSessionRuntimePlan(context.Background(), io.Discard, plan)
 	if err == nil {
 		t.Fatal("duration preflight unexpectedly succeeded")
 	}

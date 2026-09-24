@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"errors"
 	"sync"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
@@ -317,4 +319,34 @@ func IsDurationForwardMessage(msg messages.StreamMessage) bool {
 
 func (s *AdmissionSession) closeDone() {
 	s.doneOnce.Do(func() { close(s.done) })
+}
+
+const defaultSessionCloseTimeout = 5 * time.Second
+
+type deferredAdmissionCloser interface {
+	deferSessionCloseUntilFinalization()
+	finalizeSessionClose() error
+}
+
+func deferAdmissionSessionClose(admitted sessionduration.AdmissionInferencer) {
+	if closer, ok := admitted.(deferredAdmissionCloser); ok {
+		closer.deferSessionCloseUntilFinalization()
+	}
+}
+
+func closeAdmissionSessionAfterHost(admitted sessionduration.AdmissionInferencer, closeHost func() error, timeout time.Duration) func() error {
+	return func() error {
+		if timeout <= 0 {
+			timeout = defaultSessionCloseTimeout
+		}
+		deadline := time.Now().Add(timeout)
+		hostErr := closeWithinDeadline("host session resources", closeHost, deadline)
+		if errors.Is(hostErr, sessionduration.ErrSessionCloseTimeout) {
+			return hostErr
+		}
+		if closer, ok := admitted.(deferredAdmissionCloser); ok {
+			return errors.Join(hostErr, closeWithinDeadline("admitted provider session", closer.finalizeSessionClose, deadline))
+		}
+		return hostErr
+	}
 }

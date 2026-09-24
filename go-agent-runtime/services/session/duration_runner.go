@@ -48,6 +48,7 @@ type DurationRunRequest struct {
 	Clock                      sessionduration.TimerScheduler
 	LivenessClock              sessionduration.TimerScheduler
 	MaxDuration                time.Duration
+	CloseTimeout               time.Duration
 	Prompt                     string
 	PromptProvided             bool
 	CloseAfterOpen             bool

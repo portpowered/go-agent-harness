@@ -66,7 +66,7 @@ func TestRunRoom_ProviderInputRejectionPreservesPeerAttributionAndArtifact(t *te
 	defer cancel()
 	outcome := make(chan roomTestRunOutcome, 1)
 	go func() {
-		result, err := RunRoomWithResult(ctx, io.Discard, options)
+		result, err := runRoomForTest(ctx, io.Discard, options)
 		outcome <- roomTestRunOutcome{result: result, err: err}
 	}()
 	seenStarted := make(map[string]struct{}, 2)
@@ -317,7 +317,7 @@ func runClosedTargetRoom(t *testing.T, options RoomRunOptions) (RoomResult, erro
 	defer cancel()
 	outcome := make(chan roomTestRunOutcome, 1)
 	go func() {
-		result, err := RunRoomWithResult(ctx, io.Discard, options)
+		result, err := runRoomForTest(ctx, io.Discard, options)
 		outcome <- roomTestRunOutcome{result: result, err: err}
 	}()
 	waitForClosedTargetSignal(t, ctx, lifecycle.rejected, "closed-target rejection was not observed before the room deadline")

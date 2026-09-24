@@ -16,6 +16,13 @@ func providerSentInitialSessionConfig(session messages.Session) bool {
 	return ok && marker.InitialSessionConfigSent()
 }
 
+func sessionAudioSendErrorIfAdmitted(session messages.Session, outcome messages.SessionSendOutcome) error {
+	if outcome.OK() || sessionAdmissionClosed(session) {
+		return nil
+	}
+	return sessionAudioSendError("audio", outcome)
+}
+
 func (r *ModelRunner) forwardInitialSessionConfig(ctx context.Context, session messages.Session, state *sessionRunState, msg messages.StreamMessage) {
 	if (msg.Type != messages.StreamTypeSessionOpen && msg.Type != messages.StreamTypeSessionCreated) ||
 		r.sessionConfig == nil || state == nil || state.initialSessionConfigSent || providerSentInitialSessionConfig(session) {

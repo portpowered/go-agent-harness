@@ -200,7 +200,7 @@ func TestRunRoom_FansPCMToEveryOtherParticipant(t *testing.T) {
 	defer cancel()
 	outcome := make(chan roomTestRunOutcome, 1)
 	go func() {
-		result, err := RunRoomWithResult(ctx, io.Discard, opts)
+		result, err := runRoomForTest(ctx, io.Discard, opts)
 		outcome <- roomTestRunOutcome{result: result, err: err}
 	}()
 
@@ -321,7 +321,7 @@ func TestRunRoom_DeliversPeerPCMToEachProviderSession(t *testing.T) {
 	defer cancel()
 	outcome := make(chan roomTestRunOutcome, 1)
 	go func() {
-		result, err := RunRoomWithResult(ctx, io.Discard, opts)
+		result, err := runRoomForTest(ctx, io.Discard, opts)
 		outcome <- roomTestRunOutcome{result: result, err: err}
 	}()
 
@@ -467,7 +467,7 @@ func TestRunRoom_ParticipantCloseDoesNotStopViableRoom(t *testing.T) {
 	defer cancel()
 	outcome := make(chan roomTestRunOutcome, 1)
 	go func() {
-		result, err := RunRoomWithResult(ctx, io.Discard, opts)
+		result, err := runRoomForTest(ctx, io.Discard, opts)
 		outcome <- roomTestRunOutcome{result: result, err: err}
 	}()
 
@@ -522,7 +522,7 @@ func TestRunRoom_WaitsForMixerWorkBeforeReturning(t *testing.T) {
 	defer cancel()
 	outcome := make(chan roomTestRunOutcome, 1)
 	go func() {
-		result, err := RunRoomWithResult(ctx, io.Discard, opts)
+		result, err := runRoomForTest(ctx, io.Discard, opts)
 		outcome <- roomTestRunOutcome{result: result, err: err}
 	}()
 
@@ -565,7 +565,7 @@ func TestRunRoom_BoundsBlockedSessionCloseWithLifecycleDiagnostic(t *testing.T) 
 	defer cancel()
 	outcome := make(chan roomTestRunOutcome, 1)
 	go func() {
-		result, err := RunRoomWithResult(ctx, io.Discard, opts)
+		result, err := runRoomForTest(ctx, io.Discard, opts)
 		outcome <- roomTestRunOutcome{result: result, err: err}
 	}()
 
@@ -632,7 +632,7 @@ func TestRunRoom_BoundsBlockedRoomObserverWithLifecycleDiagnostic(t *testing.T) 
 	defer cancel()
 	outcome := make(chan roomTestRunOutcome, 1)
 	go func() {
-		result, err := RunRoomWithResult(ctx, io.Discard, opts)
+		result, err := runRoomForTest(ctx, io.Discard, opts)
 		outcome <- roomTestRunOutcome{result: result, err: err}
 	}()
 
@@ -708,7 +708,7 @@ func TestRunRoom_StartupParticipantFailurePreservesViableParticipants(t *testing
 	defer cancel()
 	outcome := make(chan roomTestRunOutcome, 1)
 	go func() {
-		result, err := RunRoomWithResult(ctx, io.Discard, opts)
+		result, err := runRoomForTest(ctx, io.Discard, opts)
 		outcome <- roomTestRunOutcome{result: result, err: err}
 	}()
 
@@ -816,7 +816,7 @@ func TestRunRoom_SessionConstructionFailurePreservesViableParticipant(t *testing
 	defer cancel()
 	outcomeCh := make(chan roomTestRunOutcome, 1)
 	go func() {
-		result, err := RunRoomWithResult(ctx, io.Discard, opts)
+		result, err := runRoomForTest(ctx, io.Discard, opts)
 		outcomeCh <- roomTestRunOutcome{result: result, err: err}
 	}()
 
@@ -876,7 +876,7 @@ func TestRunRoom_StopsWhenEveryParticipantReachesMaxTurns(t *testing.T) {
 	}
 	opts, _ := newRoomTestRunOptions(ids, inferencers)
 	opts.Manifest.Room.MaxTurns = 2
-	result, err := RunRoomWithResult(context.Background(), io.Discard, opts)
+	result, err := runRoomForTest(context.Background(), io.Discard, opts)
 	if err != nil {
 		t.Fatalf("max-turn room: %v", err)
 	}
@@ -899,7 +899,7 @@ func TestRunRoom_StopsAtMaxDuration(t *testing.T) {
 	}
 	opts, _ := newRoomTestRunOptions(ids, inferencers)
 	opts.Manifest.Room.MaxDuration = 100 * time.Millisecond
-	result, err := RunRoomWithResult(context.Background(), io.Discard, opts)
+	result, err := runRoomForTest(context.Background(), io.Discard, opts)
 	if err != nil {
 		t.Fatalf("duration-bounded room: %v", err)
 	}
@@ -917,7 +917,7 @@ func TestRunRoom_CompletesWhenEveryParticipantTerminates(t *testing.T) {
 			roomTestSessionClose(id, "complete"),
 		}}
 	}
-	result, err := RunRoomWithResult(context.Background(), io.Discard, func() RoomRunOptions {
+	result, err := runRoomForTest(context.Background(), io.Discard, func() RoomRunOptions {
 		opts, _ := newRoomTestRunOptions(ids, inferencers)
 		return opts
 	}())
@@ -963,7 +963,7 @@ func TestRunRoom_ClassifiesTransportEndAsParticipantDisconnect(t *testing.T) {
 	defer cancel()
 	outcome := make(chan roomTestRunOutcome, 1)
 	go func() {
-		result, err := RunRoomWithResult(ctx, io.Discard, opts)
+		result, err := runRoomForTest(ctx, io.Discard, opts)
 		outcome <- roomTestRunOutcome{result: result, err: err}
 	}()
 
@@ -1229,7 +1229,7 @@ func newRoomTestRunOptions(ids []string, inferencers map[string]*roomTestInferen
 		credentials["ROOM_"+strings.ToUpper(id)+"_KEY"] = "secret-" + id
 	}
 	opts := RoomRunOptions{
-		AudioService: newTestAudioIOService(), Manifest: room.Manifest{
+		AudioService: newTestAudioIOService(), RuntimeFactory: testSessionRuntimeFactory(), Manifest: room.Manifest{
 			SchemaVersion: room.SchemaVersion,
 			Room:          room.Room{MaxDuration: 5 * time.Second},
 			Participants:  make([]room.Participant, 0, len(ids)),

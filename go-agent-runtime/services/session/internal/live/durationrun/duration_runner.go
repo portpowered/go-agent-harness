@@ -74,6 +74,7 @@ func (r *durationRunner) newRunRequest(request session.DurationRunRequest) sessi
 		Clock:              clock,
 		LivenessClock:      livenessClock,
 		MaxDuration:        request.MaxDuration,
+		CloseTimeout:       request.CloseTimeout,
 		AudioInput:         request.AudioInput,
 		AudioInterruptions: request.AudioInterruptions,
 		Observer:           request.Observer,
@@ -222,7 +223,6 @@ func (r *durationResources) buildLoop(ctx context.Context, admitted sessiondurat
 func (r *durationResources) prepareInferencer(admitted sessionduration.AdmissionInferencer, controller sessionduration.Controller) (messages.SessionInferencer, error) {
 	if observer := r.run.Observer; observer != nil {
 		observer.SetToolResultsEnabled(r.loopOptions.ToolExecutor != nil)
-		observer.SetDurationController(controller)
 	}
 	inferencer := messages.SessionInferencer(admitted)
 	if r.request.WrapInferencer != nil {

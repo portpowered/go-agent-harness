@@ -473,7 +473,7 @@ model:
 `)
 	dialer := &recordingGrokRealtimeDialer{dialErr: errors.New("dial should not be reached")}
 
-	err := RunSession(context.Background(), &strings.Builder{}, SessionRunOptions{
+	err := runSessionForTest(context.Background(), &strings.Builder{}, SessionRunOptions{
 		ModelCatalog:    testModelCatalog(),
 		AudioService:    newTestAudioIOService(),
 		RecordPath:      filepath.Join(t.TempDir(), "openai-session.json"),
@@ -526,7 +526,7 @@ model:
 func runOpenAIRealtimeWithDialer(t *testing.T, configDir, model string, dialer transport.Dialer) (string, error) {
 	t.Helper()
 	var out strings.Builder
-	err := RunSession(context.Background(), &out, SessionRunOptions{
+	err := runSessionForTest(context.Background(), &out, SessionRunOptions{
 		ModelCatalog:    testModelCatalog(),
 		AudioService:    newTestAudioIOService(),
 		RecordPath:      filepath.Join(t.TempDir(), "openai-session.json"),

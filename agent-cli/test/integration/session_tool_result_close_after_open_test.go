@@ -243,61 +243,8 @@ func TestCloseAfterOpenWaitsForAcceptedRichToolResult(t *testing.T) {
 	}
 }
 
-type closeAfterOpenDurationClock struct {
-	mu    sync.Mutex
-	timer *closeAfterOpenDurationTimer
-	calls int
-}
-
-func (c *closeAfterOpenDurationClock) NewTimer(_ time.Duration) servicetest.SessionDurationTimer {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.calls++
-	timer := &closeAfterOpenDurationTimer{ch: make(chan time.Time, 1)}
-	if c.calls > 1 {
-		// The production controller uses this clock for its terminal quiet
-		// period as well as the overall bound. This fixture intentionally never
-		// fires the hour bound, so drive the bounded drain timer explicitly once
-		// the close boundary is entered.
-		timer.signal()
-	}
-	c.timer = timer
-	return c.timer
-}
-
-type closeAfterOpenDurationTimer struct {
-	ch         chan time.Time
-	mu         sync.Mutex
-	stopped    bool
-	signalOnce sync.Once
-}
-
-func (t *closeAfterOpenDurationTimer) C() <-chan time.Time { return t.ch }
-
-func (t *closeAfterOpenDurationTimer) Stop() bool {
-	t.mu.Lock()
-	t.stopped = true
-	t.mu.Unlock()
-	return true
-}
-
-func (t *closeAfterOpenDurationTimer) signal() {
-	t.signalOnce.Do(func() { t.ch <- time.Time{} })
-}
-
-func (c *closeAfterOpenDurationClock) stopped() bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.timer == nil {
-		return false
-	}
-	c.timer.mu.Lock()
-	defer c.timer.mu.Unlock()
-	return c.timer.stopped
-}
-
 // TestDurationAdmissionCloseAfterOpenWaitsForAcceptedRichToolResult drives
-// the same replay through RunSessionWithMaxDurationClock. The bounded
+// the live session through the session service duration contract. The bounded
 // controller must retain the observer and wake its close predicate when the
 // rich result crosses the complete-message provider boundary.
 func TestDurationAdmissionCloseAfterOpenWaitsForAcceptedRichToolResult(t *testing.T) {
@@ -306,7 +253,6 @@ func TestDurationAdmissionCloseAfterOpenWaitsForAcceptedRichToolResult(t *testin
 		started: make(chan struct{}),
 		release: make(chan struct{}),
 	}
-	clock := &closeAfterOpenDurationClock{}
 	localClose := make(chan struct{})
 	continuationObserved := make(chan struct{})
 	continuationTerminalObserved := make(chan struct{})
@@ -319,7 +265,7 @@ func TestDurationAdmissionCloseAfterOpenWaitsForAcceptedRichToolResult(t *testin
 	defer cancel()
 	runErr := make(chan error, 1)
 	go func() {
-		runErr <- servicetest.RunSessionWithMaxDurationClock(ctx, io.Discard, servicetest.SessionRunOptions{
+		runErr <- servicetest.RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx, io.Discard, servicetest.SessionRunOptions{
 			AudioService:      newTestAudioService(),
 			RecordPath:        filepath.Join(t.TempDir(), "duration-close-after-open-rich.json"),
 			Provider:          "grok",
@@ -342,7 +288,7 @@ func TestDurationAdmissionCloseAfterOpenWaitsForAcceptedRichToolResult(t *testin
 					continuationTerminalOnce.Do(func() { close(continuationTerminalObserved) })
 				}
 			},
-		}, time.Hour, clock)
+		}, "", time.Hour, servicetest.SessionTextSeed{}, "")
 	}()
 
 	waitForCloseAfterOpenSignal(t, executor.started, "duration rich tool executor to start")
@@ -372,9 +318,6 @@ func TestDurationAdmissionCloseAfterOpenWaitsForAcceptedRichToolResult(t *testin
 		}
 	case <-time.After(sessionLifecycleSafetyTimeout):
 		t.Fatalf("duration CloseAfterOpen session did not finish within %s", sessionLifecycleSafetyTimeout)
-	}
-	if !clock.stopped() {
-		t.Fatal("duration controller did not stop its timer")
 	}
 }
 

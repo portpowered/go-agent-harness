@@ -2,9 +2,11 @@ package agentruntime
 
 import (
 	"context"
+	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 // websocketReplaySessionInferencer keeps strict websocket replays on their
@@ -97,4 +99,25 @@ func (s *websocketReplaySession) RTCMedia() audio.MediaEndpoints {
 
 func (s *websocketReplaySession) TerminalError() error {
 	return terminalSessionError(s.Session)
+}
+
+func usesWebSocketCapture(path string) bool {
+	loaded, err := gwtesting.LoadSessionCaptureForReplay(path)
+	if err != nil {
+		return false
+	}
+	for _, record := range loaded.Capture.Records {
+		if record.PayloadType == gwtesting.SessionPayloadTypeWebSocketMessage {
+			return true
+		}
+	}
+	return false
+}
+
+func usesOpenAIWebSocketCapture(path string) bool {
+	loaded, err := gwtesting.LoadSessionCaptureForReplay(path)
+	if err != nil {
+		return false
+	}
+	return strings.EqualFold(loaded.Capture.Provider.Name, sessionProviderOpenAI)
 }

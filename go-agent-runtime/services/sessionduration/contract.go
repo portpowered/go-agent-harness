@@ -26,6 +26,7 @@ const (
 	ErrScheduledAudioIncomplete         sessionDurationError = "scheduled audio session ended before all turns completed"
 	ErrSchedulerUnavailable             sessionDurationError = "session duration scheduler is required"
 	ErrFinalizationPanic                sessionDurationError = "session finalization panicked"
+	ErrSessionCloseTimeout              sessionDurationError = "session close timed out"
 	ErrFirstResponseTimeout             sessionDurationError = "session first response timed out"
 	ErrRateLimitRetryExhausted          sessionDurationError = "session duration exhausted rate-limit retry budget"
 	LivenessClassificationEmptyResponse                      = "silent_provider_empty_response"

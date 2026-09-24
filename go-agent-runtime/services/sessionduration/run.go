@@ -63,8 +63,6 @@ type RunObserver interface {
 	ObserveStreamMessage(messages.StreamMessage)
 	NoteUserTextInput(string)
 	SetToolResultsEnabled(bool)
-	SetDurationController(Controller)
-	DispatchScheduledInputs(context.Context, ScheduledInputSender) error
 }
 
 // WakeResult carries facts observed while the host handles invocation-only
@@ -160,8 +158,11 @@ type RunRequest struct {
 	WakeSources []<-chan struct{}
 	Done        <-chan struct{}
 	// DoneSources close the run when any host-owned completion signal closes.
-	DoneSources    []<-chan struct{}
-	DoneError      func() error
+	DoneSources []<-chan struct{}
+	DoneError   func() error
+	// CloseTimeout bounds the host close effect and the admitted provider
+	// session close during shutdown. Zero selects the service default.
+	CloseTimeout   time.Duration
 	SessionUpdated SessionUpdatedWait
 	Policy         RunPolicy
 	Facts          RunFacts

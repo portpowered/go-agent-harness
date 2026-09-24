@@ -5,18 +5,18 @@ import (
 	"io"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	sessiondiagnostics "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/lifecycle"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 )
 
 type Service struct {
 	allocator sessionturn.Allocator
-	lifecycle sessiondiagnostics.Service
+	lifecycle sessiontrace.LifecycleService
 	observer  sessionturn.ToolLifecycleObserver
 }
 
 type Options struct {
-	Lifecycle sessiondiagnostics.Service
+	Lifecycle sessiontrace.LifecycleService
 	Observer  sessionturn.ToolLifecycleObserver
 }
 
@@ -24,7 +24,7 @@ func New(allocator sessionturn.Allocator, options ...Options) *Service {
 	if allocator == nil {
 		allocator = newDefaultAllocator()
 	}
-	var lifecycle sessiondiagnostics.Service
+	var lifecycle sessiontrace.LifecycleService
 	var observer sessionturn.ToolLifecycleObserver
 	if len(options) > 0 {
 		lifecycle, observer = options[0].Lifecycle, options[0].Observer

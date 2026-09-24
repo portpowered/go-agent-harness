@@ -15,10 +15,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 )
 
-func roomParticipantIsHuman(plan *roomParticipantPlan) bool {
-	return plan != nil && room.NormalizeParticipantKind(plan.manifest.Kind) == room.ParticipantKindHuman
-}
-
 //lint:ignore U1000 package tests exercise the context-free planning seam.
 func buildRoomParticipantPlans(opts RoomRunOptions, validation room.ValidationOptions, evidences ...roomevidence.Recorder) ([]*roomParticipantPlan, []string, error) {
 	return buildRoomParticipantPlansWithContext(context.Background(), opts, validation, evidences...)
@@ -99,24 +95,7 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 			plans = append(plans, &roomParticipantPlan{manifest: participant})
 			continue
 		}
-		sessionOptions := SessionRunOptions{
-			AudioService:  opts.AudioService,
-			Provider:      participant.Provider,
-			Model:         participant.Model,
-			ModelProvided: true,
-			APIKey:        value,
-			BaseURL:       opts.BaseURL,
-			ConfigDir:     opts.ConfigDir, ModelCatalog: opts.ModelCatalog,
-			Clock:            opts.Clock,
-			LivenessClock:    opts.LivenessClock,
-			WorkDir:          opts.WorkDir,
-			AllowPaths:       append([]string(nil), opts.AllowPaths...),
-			FilesystemPolicy: filesystemPolicy,
-			Prompt:           participant.OpeningPrompt,
-			Voice:            participant.Voice,
-			WebSocketDialer:  opts.WebSocketDialer,
-			WaitForClose:     true,
-		}
+		sessionOptions := newRoomParticipantSessionOptions(opts, participant, value, filesystemPolicy)
 		plan := &roomParticipantPlan{manifest: participant, options: sessionOptions, secret: value}
 		plans = append(plans, plan)
 		markStartupFailure := func(err error) {

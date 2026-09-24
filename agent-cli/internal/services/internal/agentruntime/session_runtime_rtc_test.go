@@ -491,7 +491,7 @@ func TestRunSession_WebRTCCompletesHermeticTurnThroughExportedService(t *testing
 	}
 
 	var out bytes.Buffer
-	err := RunSession(ctx, &out, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+	err := runSessionForTest(ctx, &out, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		RecordPath:        filepath.Join(t.TempDir(), "hermetic.session.json"),
 		Transport:         SessionTransportWebRTC,
 		Signaling:         signalingEndpoint,

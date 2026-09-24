@@ -89,39 +89,58 @@ func (s *session) observeToolResult(ctx context.Context, callID string, outcome 
 		return
 	}
 	ctx = lifecycleContext(ctx)
-	event := sessionturn.ToolLifecycleEvent{CallID: callID}
+	var event sessionturn.ToolLifecycleEvent
 	if outcome.OK() {
-		event.Type = sessionturn.ToolResultAccepted
-		observation, err := s.lifecycle.Apply(ctx, sessiontrace.LifecycleEvent{Kind: sessiontrace.LifecycleEventToolResultAccepted, CallID: callID})
-		if (err != nil || !observation.Accepted) && !s.lifecycle.Snapshot().ActiveResponse {
-			_, _ = s.lifecycle.Apply(ctx, sessiontrace.LifecycleEvent{Kind: sessiontrace.LifecycleEventResponseOpen})
-			observation, err = s.lifecycle.Apply(ctx, sessiontrace.LifecycleEvent{Kind: sessiontrace.LifecycleEventToolResultAccepted, CallID: callID})
-		}
-		if err != nil || !observation.Accepted {
-			event.Type = sessionturn.ToolResultRejected
-			event.Status = messages.SessionSendClosed
-		} else {
-			if completeResponse {
-				observation, err = s.lifecycle.Apply(ctx, sessiontrace.LifecycleEvent{Kind: sessiontrace.LifecycleEventToolResponseComplete, CallID: callID})
-				if err != nil || !observation.Accepted {
-					event.Type = sessionturn.ToolResultRejected
-					event.Status = messages.SessionSendClosed
-				}
-			}
-			if event.Type == sessionturn.ToolResultRejected {
-				// Keep the lifecycle rejection visible to the host below.
-			} else if requestsContinuation {
-				s.observeToolContinuation(ctx, callID)
-			}
-		}
+		event = s.acceptToolResult(ctx, callID, requestsContinuation, completeResponse)
 	} else {
-		event.Type = sessionturn.ToolResultRejected
-		event.Status = outcome.Status
-		_, _ = s.lifecycle.Apply(ctx, sessiontrace.LifecycleEvent{Kind: sessiontrace.LifecycleEventToolResultRejected, CallID: callID, ResultStatus: string(outcome.Status)})
+		event = s.rejectToolResult(ctx, callID, outcome.Status)
 	}
 	if s.observer != nil {
 		s.observer(event)
 	}
+}
+
+func (s *session) acceptToolResult(ctx context.Context, callID string, requestsContinuation, completeResponse bool) sessionturn.ToolLifecycleEvent {
+	event := sessionturn.ToolLifecycleEvent{Type: sessionturn.ToolResultAccepted, CallID: callID}
+	observation, err := s.applyToolResultAccepted(ctx, callID)
+	if err != nil || !observation.Accepted {
+		return rejectedToolResultEvent(callID)
+	}
+	if completeResponse && !s.completeToolResponse(ctx, callID) {
+		return rejectedToolResultEvent(callID)
+	}
+	if requestsContinuation {
+		s.observeToolContinuation(ctx, callID)
+	}
+	return event
+}
+
+func (s *session) applyToolResultAccepted(ctx context.Context, callID string) (sessiontrace.LifecycleObservation, error) {
+	event := sessiontrace.LifecycleEvent{Kind: sessiontrace.LifecycleEventToolResultAccepted, CallID: callID}
+	observation, err := s.lifecycle.Apply(ctx, event)
+	if err == nil && observation.Accepted || s.lifecycle.Snapshot().ActiveResponse {
+		return observation, err
+	}
+	_, _ = s.lifecycle.Apply(ctx, sessiontrace.LifecycleEvent{Kind: sessiontrace.LifecycleEventResponseOpen})
+	return s.lifecycle.Apply(ctx, event)
+}
+
+func (s *session) completeToolResponse(ctx context.Context, callID string) bool {
+	observation, err := s.lifecycle.Apply(ctx, sessiontrace.LifecycleEvent{
+		Kind: sessiontrace.LifecycleEventToolResponseComplete, CallID: callID,
+	})
+	return err == nil && observation.Accepted
+}
+
+func (s *session) rejectToolResult(ctx context.Context, callID string, status messages.SessionSendStatus) sessionturn.ToolLifecycleEvent {
+	_, _ = s.lifecycle.Apply(ctx, sessiontrace.LifecycleEvent{
+		Kind: sessiontrace.LifecycleEventToolResultRejected, CallID: callID, ResultStatus: string(status),
+	})
+	return sessionturn.ToolLifecycleEvent{Type: sessionturn.ToolResultRejected, CallID: callID, Status: status}
+}
+
+func rejectedToolResultEvent(callID string) sessionturn.ToolLifecycleEvent {
+	return sessionturn.ToolLifecycleEvent{Type: sessionturn.ToolResultRejected, CallID: callID, Status: messages.SessionSendClosed}
 }
 
 func (s *session) observeToolContinuation(ctx context.Context, callID string) {

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 )
 
 type roomLifecycleWorkError struct {
@@ -55,6 +57,19 @@ func roomParticipantFailure(participantID string, err error, secrets []string) e
 		cause:         err,
 		secrets:       append([]string(nil), secrets...),
 	}
+}
+
+func roomParticipantTerminalFailure(runtime *roomParticipantRuntime, observation sessiontrace.TerminalObservation) error {
+	failureErr := observation.Err
+	if runtime.lifecycle != nil {
+		if transportErr := runtime.lifecycle.transportTerminalErrorSnapshot(); transportErr != nil {
+			failureErr = transportErr
+		}
+	}
+	if failureErr == nil {
+		failureErr = errors.New("session stream error")
+	}
+	return roomParticipantFailure(runtime.plan.manifest.ID, failureErr, secretsForPlan(runtime.plan))
 }
 
 // roomParticipantFailureReason returns the credential-free cause carried by a

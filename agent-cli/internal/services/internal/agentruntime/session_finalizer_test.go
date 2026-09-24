@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 )
 
 type sessionFinalizerRuntimeProbe struct {
@@ -65,8 +66,9 @@ func TestSessionRuntimeFinalizerRunsOrderedStagesOnceAndJoinsFailures(t *testing
 		},
 	}
 
-	finalizer := newSessionRuntimeFinalizer(plan)
-	gotErr := finalizer.finish(context.Background(), io.Discard, primaryErr)
+	service := testSessionRuntimeFactory().durationService
+	finalizer := service.NewFinalizer(plan.finalizationPorts(nil, false))
+	gotErr := finalizer.Finish(context.Background(), io.Discard, primaryErr)
 	for _, wantErr := range []error{primaryErr, capabilityErr, providerErr, runtimeErr, captureErr, finalizeErr} {
 		if !errors.Is(gotErr, wantErr) {
 			t.Fatalf("finalizer error = %v, want errors.Is(..., %v)", gotErr, wantErr)
@@ -79,7 +81,7 @@ func TestSessionRuntimeFinalizerRunsOrderedStagesOnceAndJoinsFailures(t *testing
 		t.Fatalf("finalization calls = capability:%d capture:%d finalize:%d, want one each", capabilityCalls, flushCalls, finalizeCalls)
 	}
 
-	secondErr := finalizer.finish(context.Background(), io.Discard, nil)
+	secondErr := finalizer.Finish(context.Background(), io.Discard, nil)
 	for _, wantErr := range []error{capabilityErr, providerErr, runtimeErr, captureErr, finalizeErr} {
 		if !errors.Is(secondErr, wantErr) {
 			t.Fatalf("second finalizer error = %v, want errors.Is(..., %v)", secondErr, wantErr)
@@ -112,8 +114,9 @@ func TestSessionRuntimeFinalizerContinuesAfterCleanupPanic(t *testing.T) {
 		},
 	}
 
-	gotErr := newSessionRuntimeFinalizer(plan).finish(context.Background(), io.Discard, primaryErr)
-	if !errors.Is(gotErr, primaryErr) || !errors.Is(gotErr, ErrSessionFinalizationPanic) {
+	service := testSessionRuntimeFactory().durationService
+	gotErr := service.NewFinalizer(plan.finalizationPorts(nil, false)).Finish(context.Background(), io.Discard, primaryErr)
+	if !errors.Is(gotErr, primaryErr) || !errors.Is(gotErr, sessionduration.ErrFinalizationPanic) {
 		t.Fatalf("panic finalization error = %v, want primary and panic identities", gotErr)
 	}
 	if want := []string{"provider", "runtime", "capture", "finalize"}; !reflect.DeepEqual(order, want) {
@@ -127,10 +130,15 @@ func (w sessionFinalizerFailingWriter) Write([]byte) (int, error) { return 0, w.
 
 func TestSessionRuntimePlanFinalizesAfterAnnouncementOutputFailure(t *testing.T) {
 	primaryErr := errors.New("announcement output failed")
+	factory := testSessionRuntimeFactory()
 	capabilityCalls := 0
 	flushCalls := 0
 	finalizeCalls := 0
 	plan := sessionRuntimePlan{
+		loop: sessionLoopOptions{
+			durationService: factory.durationService,
+			durationRunner:  factory.durationRunner,
+		},
 		mode:        sessionRuntimeModeRecordGrok,
 		announce:    "starting session",
 		capturePath: "capture.json",
@@ -148,7 +156,7 @@ func TestSessionRuntimePlanFinalizesAfterAnnouncementOutputFailure(t *testing.T)
 		},
 	}
 
-	gotErr := plan.run(context.Background(), sessionFinalizerFailingWriter{err: primaryErr})
+	gotErr := runTestSessionRuntimePlan(context.Background(), sessionFinalizerFailingWriter{err: primaryErr}, plan)
 	if !errors.Is(gotErr, primaryErr) {
 		t.Fatalf("announcement error = %v, want errors.Is(..., %v)", gotErr, primaryErr)
 	}
@@ -188,11 +196,16 @@ func TestRunSessionDurationPlanUsesCommonFinalizerOnLoopFailure(t *testing.T) {
 	capabilityCalls := 0
 	flushCalls := 0
 	finalizeCalls := 0
+	factory := testSessionRuntimeFactory()
 	plan := sessionRuntimePlan{
-		loop:        sessionLoopOptions{audioService: newTestAudioIOService()},
+		loop: sessionLoopOptions{
+			durationService: factory.durationService,
+			durationRunner:  factory.durationRunner,
+			audioService:    newTestAudioIOService(),
+		},
 		mode:        sessionRuntimeModeRecordOpenAI,
 		capturePath: "capture.json",
-		inferencer:  &durationTestInferencer{connectErr: primaryErr},
+		inferencer:  &captureClaimConnectErrorInferencer{err: primaryErr},
 		capabilityCoordinator: NewSessionCapabilityCoordinator(func() error {
 			capabilityCalls++
 			return capabilityErr
@@ -208,7 +221,7 @@ func TestRunSessionDurationPlanUsesCommonFinalizerOnLoopFailure(t *testing.T) {
 	}
 
 	ctx := WithSessionDurationArtifacts(context.Background(), artifacts)
-	gotErr := runSessionDurationPlan(ctx, io.Discard, plan, 0, nil)
+	gotErr := runTestSessionRuntimePlan(ctx, io.Discard, plan)
 	for _, wantErr := range []error{primaryErr, capabilityErr, captureErr, finalizeErr, artifacts.closeErr} {
 		if !errors.Is(gotErr, wantErr) {
 			t.Fatalf("duration finalization error = %v, want errors.Is(..., %v)", gotErr, wantErr)

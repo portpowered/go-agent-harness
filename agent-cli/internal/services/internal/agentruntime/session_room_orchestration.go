@@ -31,10 +31,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		out = io.Discard
 	}
 	var err error
-	validation := opts.Validation
-	if opts.CredentialLookup != nil {
-		validation.LookupCredential = opts.CredentialLookup
-	}
+	validation := roomValidationOptions(opts)
 	var replayMode bool
 	opts, validation, replayMode, err = prepareRoomReplayOptions(opts, validation)
 	if err != nil {

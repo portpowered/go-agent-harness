@@ -293,19 +293,8 @@ func (s *audioOutputSession) Close() error {
 }
 
 func (s *audioOutputSession) forwardMessage(ctx context.Context, msg messages.StreamMessage, retaining bool) bool {
-	if msg.Type == messages.StreamTypeAudioDelta && assistantAudioDelta(msg) {
-		value, ok := msg.Value.(*messages.AudioDeltaValue)
-		if !ok {
-			s.recordErr(fmt.Errorf("AUDIO.DELTA has unexpected value %T", msg.Value))
-			s.closeInner()
-			return false
-		}
-		if s.observe != nil {
-			if err := s.observe(ctx, value.Content, msg); err != nil {
-				s.closeInner()
-				return false
-			}
-		}
+	if !s.observeAudioDelta(ctx, msg) {
+		return false
 	}
 	for {
 		outcome := s.receive.WriteContext(ctx, msg)
@@ -326,6 +315,24 @@ func (s *audioOutputSession) forwardMessage(ctx context.Context, msg messages.St
 		case <-time.After(time.Millisecond):
 		}
 	}
+}
+
+func (s *audioOutputSession) observeAudioDelta(ctx context.Context, msg messages.StreamMessage) bool {
+	if msg.Type == messages.StreamTypeAudioDelta && assistantAudioDelta(msg) {
+		value, ok := msg.Value.(*messages.AudioDeltaValue)
+		if !ok {
+			s.recordErr(fmt.Errorf("AUDIO.DELTA has unexpected value %T", msg.Value))
+			s.closeInner()
+			return false
+		}
+		if s.observe != nil {
+			if err := s.observe(ctx, value.Content, msg); err != nil {
+				s.closeInner()
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func assistantAudioDelta(msg messages.StreamMessage) bool {

@@ -37,6 +37,18 @@ func RunRoom(ctx context.Context, out io.Writer, opts RoomRunOptions) error {
 	return err
 }
 
+func roomValidationOptions(opts RoomRunOptions) room.ValidationOptions {
+	validation := opts.Validation
+	if opts.CredentialLookup != nil {
+		validation.LookupCredential = opts.CredentialLookup
+	}
+	return validation
+}
+
+func roomParticipantIsHuman(plan *roomParticipantPlan) bool {
+	return plan != nil && room.NormalizeParticipantKind(plan.manifest.Kind) == room.ParticipantKindHuman
+}
+
 func prepareRoomEvidence(opts RoomRunOptions, validation room.ValidationOptions, replayMode bool, clockSource platformclock.Source, startedAt time.Time) (RoomRunOptions, roomevidence.Recorder, []string, error) {
 	if strings.TrimSpace(opts.OutputDir) == "" {
 		return opts, nil, nil, nil
@@ -126,19 +138,6 @@ func attachRoomLatencyObserver(observer sessiontrace.Observer, runtime *roomPart
 	}
 }
 
-func roomParticipantTerminalFailure(runtime *roomParticipantRuntime, observation sessiontrace.TerminalObservation) error {
-	failureErr := observation.Err
-	if runtime.lifecycle != nil {
-		if transportErr := runtime.lifecycle.transportTerminalErrorSnapshot(); transportErr != nil {
-			failureErr = transportErr
-		}
-	}
-	if failureErr == nil {
-		failureErr = errors.New("session stream error")
-	}
-	return roomParticipantFailure(runtime.plan.manifest.ID, failureErr, secretsForPlan(runtime.plan))
-}
-
 func defaultRoomSessionFactory(participant room.Participant, options SessionRunOptions) (messages.SessionInferencer, error) {
 	if options.ReplayPath != "" {
 		plan, err := planSessionRuntime(options)
@@ -195,16 +194,7 @@ func runRoomParticipant(
 	// Keep the observer available before either pump starts so provider and
 	// human audio input follows the same diagnostic and accounting path.
 	observer := newRoomParticipantObserver(coordinator, runtime, opts, evidence)
-	inputObserver := opts.OnAudioInput
-	if observer != nil {
-		inputObserver = func(participantID string, pcm []byte) error {
-			observer.AccountRoomAudioInput(len(pcm))
-			if opts.OnAudioInput != nil {
-				return opts.OnAudioInput(participantID, pcm)
-			}
-			return nil
-		}
-	}
+	inputObserver := roomAudioInputObserver(observer, opts.OnAudioInput)
 	go func() {
 		if mixerWG != nil {
 			defer mixerWG.Done()
@@ -260,12 +250,15 @@ func runRoomParticipant(
 		return
 	}
 	loopOptions := sessionLoopOptions{
-		Prompt:        runtime.plan.options.Prompt,
-		livenessClock: runtime.plan.options.LivenessClock,
-		audioService:  runtime.plan.options.AudioService,
-		clockSource:   platformclock.Ensure(runtime.plan.options.Clock),
-		WaitForClose:  true,
-		Done:          coordinator.done,
+		durationService: runtime.plan.options.runtimeFactory.durationService,
+		durationRunner:  runtime.plan.options.runtimeFactory.durationRunner,
+		closeTimeout:    roomCleanupTimeout,
+		Prompt:          runtime.plan.options.Prompt,
+		livenessClock:   runtime.plan.options.LivenessClock,
+		audioService:    runtime.plan.options.AudioService,
+		clockSource:     platformclock.Ensure(runtime.plan.options.Clock),
+		WaitForClose:    true,
+		Done:            coordinator.done,
 		DoneErr: func() error {
 			if failedID := coordinator.failedParticipantID(); failedID != "" && failedID != runtime.plan.manifest.ID {
 				return nil
@@ -323,6 +316,19 @@ func runRoomParticipant(
 		connected = connectErr == nil
 	}
 	results <- roomParticipantRunResult{plan: runtime.plan, runtime: runtime, err: runErr, connected: connected, connectErr: connectErr}
+}
+
+func roomAudioInputObserver(observer sessiontrace.Observer, callback RoomParticipantAudioObserver) RoomParticipantAudioObserver {
+	if observer == nil {
+		return callback
+	}
+	return func(participantID string, pcm []byte) error {
+		observer.AccountRoomAudioInput(len(pcm))
+		if callback != nil {
+			return callback(participantID, pcm)
+		}
+		return nil
+	}
 }
 
 func combineRoomDoneChannels(primary, secondary <-chan struct{}) <-chan struct{} {
@@ -765,9 +771,10 @@ func boundedRoomCleanupOperation(cleanup *roomCleanupWaiter, label string, opera
 
 	var timeout <-chan time.Time
 	var timer *time.Timer
-	if cleanup != nil && cleanup.timer != nil {
+	if cleanup != nil {
 		timeout = cleanup.done()
-	} else {
+	}
+	if timeout == nil {
 		timer = time.NewTimer(roomCleanupTimeout)
 		timeout = timer.C
 		defer timer.Stop()
@@ -945,26 +952,4 @@ func roomProviderInputPCM(runtime *roomParticipantRuntime, pcm []byte) ([]byte, 
 		return nil, fmt.Errorf("convert room participant %q input from %d Hz to provider rate %d Hz: convert session input from %d Hz to provider rate %d Hz: %w", runtime.plan.manifest.ID, sourceRate, providerRate, sourceRate, providerRate, err)
 	}
 	return converted, nil
-}
-
-func resolveSessionDurationFinishError(terminationErr, lifecycleErr, sessionErr, transportErr, runErr error, planned bool, out io.Writer, artifacts SessionDurationArtifactLifecycle, terminalState *sessionDurationTerminalState, terminalWritten *bool) error {
-	if terminationErr != nil {
-		return errors.Join(terminationErr, lifecycleErr, transportErr)
-	}
-	if lifecycleErr != nil {
-		return lifecycleErr
-	}
-	if sessionErr != nil {
-		return transportErr
-	}
-	if runErr != nil && !errors.Is(runErr, context.Canceled) {
-		return fmt.Errorf("session error: %w", runErr)
-	}
-	if planned && !terminalState.written() {
-		if err := terminalState.writeMaxDurationTerminal(out, artifacts, terminalState.outputState()); err != nil {
-			return err
-		}
-		*terminalWritten = terminalState.written()
-	}
-	return nil
 }

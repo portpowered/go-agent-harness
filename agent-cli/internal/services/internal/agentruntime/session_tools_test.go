@@ -224,7 +224,7 @@ func TestRunAgentLoopSession_ScreenTimeoutDeniedRecheckDeliversOneContinuation(t
 		executor.setPermission(cliTools.DisplayPermission{State: cliTools.DisplayPermissionDenied, Reason: "permission became ineffective during capture"})
 	}()
 
-	err = runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
+	err = runTestAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
 		audioService: newTestAudioIOService(), MaxDuration: 2 * time.Second,
 		WaitForClose:          true,
 		ToolExecutor:          executor,
@@ -757,7 +757,7 @@ func TestRunAgentLoopSession_InteractivePolicyTimeoutDeliversOneCorrelatedContin
 	})
 
 	startedAt := time.Now()
-	err = runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
+	err = runTestAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
 		audioService: newTestAudioIOService(), MaxDuration: 2 * time.Second,
 		WaitForClose:          true,
 		ToolExecutor:          executor,
@@ -864,7 +864,7 @@ func TestRunAgentLoopSession_InteractiveTimeoutPreservesParallelSiblingResults(t
 		return messages.ToolCallResponse{Content: "parallel-fast-result"}, nil
 	})
 
-	err = runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
+	err = runTestAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
 		audioService: newTestAudioIOService(), MaxDuration: 2 * time.Second,
 		WaitForClose:          true,
 		ToolExecutor:          executor,
@@ -989,7 +989,7 @@ func TestRunAgentLoopSession_ExecutesScriptedCallsInOrderAndKeepsSessionUsable(t
 	)
 	executor := &recordingSessionExecutor{}
 
-	err := runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
+	err := runTestAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
 		audioService: newTestAudioIOService(), MaxDuration: 2 * time.Second,
 		WaitForClose: true,
 		ToolExecutor: executor,
@@ -1102,7 +1102,7 @@ func TestRunAgentLoopSession_FailureTableKeepsSessionAlive(t *testing.T) {
 				return tc.executor(ctx, call)
 			})
 
-			err := runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
+			err := runTestAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
 				audioService: newTestAudioIOService(), MaxDuration: 2 * time.Second,
 				WaitForClose:         true,
 				ToolExecutor:         executor,
@@ -1151,7 +1151,7 @@ func TestRunAgentLoopSession_TimeoutWorkerExitsBoundedly(t *testing.T) {
 		return messages.ToolCallResponse{}, ctx.Err()
 	})
 
-	err := runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
+	err := runTestAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
 		audioService: newTestAudioIOService(), MaxDuration: 2 * time.Second,
 		WaitForClose:         true,
 		ToolExecutor:         executor,

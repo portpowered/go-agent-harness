@@ -2,13 +2,12 @@ package sessionterminal
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 )
 
 // ErrUnresolvedToolResults identifies provider-requested tool results that did
 // not cross the provider-facing send boundary before session termination.
-var ErrUnresolvedToolResults = unresolvedToolResultsError("session ended with unresolved tool results")
+const ErrUnresolvedToolResults unresolvedToolResultsError = "session ended with unresolved tool results"
 
 type unresolvedToolResultsError string
 
@@ -19,30 +18,6 @@ func (e unresolvedToolResultsError) Error() string { return string(e) }
 type UnresolvedToolResultsError struct {
 	CallIDs      []string
 	SendStatuses map[string]string
-}
-
-func NewUnresolvedToolResultsError(ids []string, statuses map[string]string) *UnresolvedToolResultsError {
-	ordered := make([]string, 0, len(ids))
-	seen := make(map[string]struct{}, len(ids))
-	for _, id := range ids {
-		id = strings.TrimSpace(id)
-		if id == "" {
-			continue
-		}
-		if _, ok := seen[id]; ok {
-			continue
-		}
-		seen[id] = struct{}{}
-		ordered = append(ordered, id)
-	}
-	sort.Strings(ordered)
-	owned := make(map[string]string, len(ordered))
-	for _, id := range ordered {
-		if status := strings.TrimSpace(statuses[id]); status != "" {
-			owned[id] = status
-		}
-	}
-	return &UnresolvedToolResultsError{CallIDs: ordered, SendStatuses: owned}
 }
 
 func (e *UnresolvedToolResultsError) Error() string {

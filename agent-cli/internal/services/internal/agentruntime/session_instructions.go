@@ -75,11 +75,8 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 	if audioPath != "" {
 		return ErrLegacyAudioRuntimeRetired
 	}
-	if opts.ReplayPath != "" && opts.SessionInferencer == nil {
-		if maxDuration == 0 {
-			return RunSessionWithTextSeed(ctx, out, opts, seed)
-		}
-		return RunSessionWithTextSeedAndMaxDuration(ctx, out, opts, maxDuration, seed)
+	if opts.ReplayPath != "" && opts.SessionInferencer == nil && maxDuration == 0 {
+		return RunSessionWithTextSeed(ctx, out, opts, seed)
 	}
 	if seed.Present {
 		opts.Prompt = seed.Value
@@ -93,71 +90,54 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 		return err
 	}
 	defer func() { _ = claim.release() }()
-	instructions, err := resolveSessionInstructions(opts, systemPrompt)
+	var plan sessionRuntimePlan
+	if opts.ReplayPath != "" && opts.SessionInferencer == nil {
+		plan, err = planSessionRuntime(opts)
+	} else {
+		var instructions string
+		instructions, err = resolveSessionInstructions(opts, systemPrompt)
+		if err == nil {
+			plan, err = planSessionWithResolvedInstructions(opts, instructions)
+		}
+	}
 	if err != nil {
 		return err
 	}
-	plan, err := planSessionWithResolvedInstructions(opts, instructions)
-	if err != nil {
-		return err
-	}
+	return runSessionPlanWithDuration(ctx, out, plan, maxDuration, seed, "")
+}
 
-	{
-		if seed.Present {
-			wirePrompt := nextSessionTextWirePrompt()
-			plan.loop.Prompt = wirePrompt
-			output := &sessionTextOutput{writer: out}
-			if maxDuration == 0 {
-				if plan.inferencer != nil {
-					plan.inferencer = &sessionTextSeedInferencer{
-						inner:      plan.inferencer,
-						wirePrompt: wirePrompt,
-						value:      seed.Value,
-					}
-				}
-				return errors.Join(plan.run(ctx, output), output.errorValue())
-			}
-			durationCtx, err := prepareSessionDurationArtifacts(ctx)
-			if err != nil {
-				return err
-			}
-			admission := newSessionDurationAdmission()
-			// The seed substitution wrapper must sit INSIDE the admission
-			// boundary: the duration runner connects through
-			// admittedInferencer, so any wrapper composed outside it never
-			// observes the session and the sentinel prompt would leak onto
-			// the live wire.
-			var admittedInner messages.SessionInferencer
-			if plan.inferencer != nil {
-				admittedInner = &sessionTextSeedInferencer{
-					inner:      plan.inferencer,
-					wirePrompt: wirePrompt,
-					value:      seed.Value,
-				}
-			}
-			if admittedInner != nil {
-				plan.inferencer = &sessionDurationAdmissionInferencer{
-					inner:     admittedInner,
-					admission: admission,
-					closeDone: make(chan struct{}),
-				}
-			}
-			var admittedInferencer *sessionDurationAdmissionInferencer
-			if admitted, ok := plan.inferencer.(*sessionDurationAdmissionInferencer); ok {
-				admittedInferencer = admitted
-			}
-			runErr = runSessionDurationPlanWithAdmission(durationCtx, output, plan, maxDuration, nil, admittedInferencer)
-			return errors.Join(runErr, output.errorValue())
-		}
-		if maxDuration == 0 {
-			return plan.run(ctx, out)
-		}
-		durationCtx, err := prepareSessionDurationArtifacts(ctx)
-		if err != nil {
-			return err
-		}
-		return runSessionDurationPlan(durationCtx, out, plan, maxDuration, nil)
+func runSessionPlanWithDuration(ctx context.Context, out io.Writer, plan sessionRuntimePlan, maxDuration time.Duration, seed SessionTextSeed, wirePrompt string) error {
+	plan.loop.MaxDuration = maxDuration
+	if err := prepareSessionDurationClock(&plan, maxDuration); err != nil {
+		return err
 	}
+	if !seed.Present {
+		return plan.run(ctx, out)
+	}
+	if wirePrompt == "" {
+		wirePrompt = nextSessionTextWirePrompt()
+	}
+	plan.loop.Prompt = wirePrompt
+	if plan.inferencer != nil {
+		plan.inferencer = &sessionTextSeedInferencer{inner: plan.inferencer, wirePrompt: wirePrompt, value: seed.Value}
+	}
+	output := &sessionTextOutput{writer: out}
+	return errors.Join(plan.run(ctx, output), output.errorValue())
+}
+
+func prepareSessionDurationClock(plan *sessionRuntimePlan, maxDuration time.Duration) error {
+	if maxDuration <= 0 || plan.inferencer == nil {
+		return nil
+	}
+	if plan.loop.audioService == nil {
+		return errors.New("audio service is required for session duration timing")
+	}
+	clock, err := plan.loop.audioService.NewClock(plan.loop.clockSource)
+	if err != nil {
+		return err
+	}
+	plan.loop.durationClock = clock
+	return nil
 }
 
 // resolveSessionInstructions is a compatibility adapter around the reusable

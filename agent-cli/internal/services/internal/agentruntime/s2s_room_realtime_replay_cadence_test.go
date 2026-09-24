@@ -138,7 +138,7 @@ func TestRunRoomWithResult_SilenceCadenceDoesNotCancelActiveResponse(t *testing.
 
 	runDone := make(chan roomTestRunOutcome, 1)
 	go func() {
-		result, err := RunRoomWithResult(roomCtx, io.Discard, opts)
+		result, err := runRoomForTest(roomCtx, io.Discard, opts)
 		runDone <- roomTestRunOutcome{result: result, err: err}
 	}()
 

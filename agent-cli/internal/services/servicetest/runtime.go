@@ -48,12 +48,8 @@ func RunSessionWithInstructions(ctx context.Context, out io.Writer, opts Session
 	return impl.RunSessionWithInstructions(ctx, out, opts, systemPrompt)
 }
 
-func RunSessionWithMaxDuration(ctx context.Context, out io.Writer, opts SessionRunOptions, maxDuration time.Duration) error {
-	return impl.RunSessionWithMaxDuration(ctx, out, opts, maxDuration)
-}
-
-func RunSessionWithMaxDurationClock(ctx context.Context, out io.Writer, opts SessionRunOptions, maxDuration time.Duration, durationClock runtimeSessionDuration.TimerScheduler) error {
-	return impl.RunSessionWithMaxDurationClock(ctx, out, opts, maxDuration, durationClock)
+func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.Context, out io.Writer, opts SessionRunOptions, audioPath string, maxDuration time.Duration, seed SessionTextSeed, systemPrompt string) error {
+	return impl.RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx, out, opts, audioPath, maxDuration, seed, systemPrompt)
 }
 
 const ParticipantTerminationEnded = impl.ParticipantTerminationEnded
@@ -66,8 +62,6 @@ type ScheduledAudioInput = audioio.ScheduledAudioInput
 type SessionAudioInTurnBargeError = sessioncontract.SessionAudioInTurnBargeError
 type SessionTextSeed = impl.SessionTextSeed
 type SessionDiagnosticRecord = impl.SessionDiagnosticRecord
-type SessionDurationTimer = runtimeSessionDuration.Timer
-type SessionDurationClock = runtimeSessionDuration.TimerScheduler
 type SessionImageContinuationError = runtimeSession.LiveImageContinuationError
 type SessionRTCComponents = impl.SessionRTCComponents
 type SessionRTCDataPlane = impl.SessionRTCDataPlane

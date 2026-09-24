@@ -70,7 +70,7 @@ func runRoomInputTranscriptionScenario(t *testing.T, model string, servers map[s
 	defer cancel()
 	runDone := make(chan roomTestRunOutcome, 1)
 	go func() {
-		result, err := RunRoomWithResult(ctx, io.Discard, opts)
+		result, err := runRoomForTest(ctx, io.Discard, opts)
 		runDone <- roomTestRunOutcome{result: result, err: err}
 	}()
 	advanceRoomInputTranscriptionMedia(t, ctx, servers, cadenceReady, opened, runDone)

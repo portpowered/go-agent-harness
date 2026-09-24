@@ -6036,3 +6036,32 @@ before any push or PR.
   main's caller path, remove every owned legacy file and duplicate caller,
   verify all production callers use the service contract, then run the exact
   C251-04 local gate before any push or PR.
+
+
+## C251 caller retirement and pre-gate checkpoint — 2026-09-24
+
+- Reverified admission with `factory/scripts/project-control.py verify-work
+  --type task --name audio-runtime-c251-recover-shutdown-duration-retirement`:
+  admitted. `prd.branchName` matches
+  `codex/audio-runtime-c251-recover-shutdown-duration-retirement`. Fetched
+  `origin/main` at `2b85cb9cac6e739082549854d6d2775293237661`; the recovery
+  checkpoint `ee9b6826`, startup revision `8bdafc7f`, and fetched main are all
+  ancestors of the same branch. No C251 review rejection or PR is recorded.
+- Removed the fallback duration service/runner constructors from the production
+  `agentruntime` package. Production construction is now only in
+  `agent-cli/internal/services/wire/wire.go`; session and room execution consume
+  the injected service contracts. Updated existing runtime tests to compose the
+  same public Wire factory through test helpers; no new tests or assertions were
+  added. `rtk go test -count=1 -timeout 300s
+  ./agent-cli/internal/services/internal/agentruntime` passes: 624 tests.
+- `rtk make architecture-size-check` passes across 234 packages, 2,038 files,
+  and 29,941 functions. `git diff --check` passes. Exact 14-path retirement
+  census and the broader 16-path check pass; duplicate production symbol scan
+  has no matches. The only shutdown adapter is
+  `agent-cli/internal/transport/cli/internal/livehost/shutdown_adapter.go` at
+  59 lines. The branch remains based on the admitted project and preserves all
+  required ancestry.
+- No candidate commit, full C251-04 gate, push, PR, SCRIPT CI, or independent
+  review is claimed. Exact next action: commit this candidate, then run
+  `make prepush` and every C251-04 command on that clean SHA; repair any local
+  failure and rerun the complete gate before pushing or opening/updating a PR.

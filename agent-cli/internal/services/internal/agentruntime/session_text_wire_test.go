@@ -97,7 +97,7 @@ func TestWireCapturePromptReachesConversationItemCreate(t *testing.T) {
 		WebSocketDialer: recorder,
 	}
 	out := &bytes.Buffer{}
-	err := agentruntime.RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(
+	err := runSessionWithInstructionsAndOptionsForTest(
 		context.Background(), out, opts, "", 0,
 		agentruntime.SessionTextSeed{Value: prompt, Present: true}, "",
 	)
@@ -156,7 +156,7 @@ func TestWireCapturePromptReachesWireWithDurationBound(t *testing.T) {
 		WebSocketDialer: recorder,
 	}
 	out := &bytes.Buffer{}
-	err := agentruntime.RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(
+	err := runSessionWithInstructionsAndOptionsForTest(
 		context.Background(), out, opts, "", 2*time.Second,
 		agentruntime.SessionTextSeed{Value: prompt, Present: true}, "",
 	)

@@ -1,9 +1,8 @@
-// This file owns the shared session-runtime modes, factories, plan state, generic planning and dispatch, execution, and cross-provider error handling.
+// This file owns shared session-runtime mode planning, plan state, dispatch, and cross-provider error handling.
 package agentruntime
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -21,12 +20,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	gwproviders "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 type sessionRuntimeMode string
@@ -41,117 +36,6 @@ const (
 	sessionRuntimeModeRecordGrok    sessionRuntimeMode = "record-grok"
 	sessionRuntimeModeRecordOpenAI  sessionRuntimeMode = "record-openai"
 )
-
-type sessionRecordingDialer interface {
-	transport.Dialer
-	FlushToFile(path string) error
-}
-
-type sessionReplayDialer interface {
-	transport.Dialer
-	Done() <-chan struct{}
-	Err() error
-	Model() string
-}
-
-type runtimeAudioOutputConfigurer interface {
-	SetSessionAudioOutput(models.AudioFormat, models.SampleRate)
-}
-
-type runtimeAudioInputConfigurer interface {
-	SetSessionAudioInput(models.AudioFormat, models.SampleRate)
-}
-
-type sessionAudioRequestProvider interface {
-	Request() inference.SessionRequest
-}
-
-type sessionRuntimeFactory struct {
-	newDefaultLiveDialer               func() transport.Dialer
-	newRecordingDialer                 func(transport.Dialer, string, string) sessionRecordingDialer
-	newReplayDialer                    func(string) (sessionReplayDialer, error)
-	newRecordedTimingReplayDialer      func(string) (sessionReplayDialer, error)
-	newReplayInferencer                func(string) messages.SessionInferencer
-	newGrokSessionInferencer           func(config.GrokConfig, transport.Dialer) (messages.SessionInferencer, error)
-	newOpenAISessionInf                func(config.OpenAIConfig, string, transport.Dialer, models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error)
-	newBareLiveSessionInferencer       func(SessionRunOptions) (messages.SessionInferencer, string, error)
-	newGrokSessionWithTools            func(config.GrokConfig, transport.Dialer, []messages.ToolDefinition) (messages.SessionInferencer, error)
-	newOpenAISessionWithTools          func(config.OpenAIConfig, string, transport.Dialer, []messages.ToolDefinition, models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error)
-	newOpenAIScheduledSessionWithTools func(config.OpenAIConfig, string, transport.Dialer, []messages.ToolDefinition, models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error)
-	newRTCRuntime                      SessionRTCRuntimeFactory
-}
-
-// SessionRuntimeFactory is the process-scoped provider construction owner.
-// Wire creates one instance and every session/room planner receives that
-// instance, keeping provider construction out of request dispatch.
-type SessionRuntimeFactory = sessionRuntimeFactory
-
-func NewSessionRuntimeFactory() SessionRuntimeFactory { return newDefaultSessionRuntimeFactory() }
-
-func (f sessionRuntimeFactory) configured() bool {
-	return f.newDefaultLiveDialer != nil || f.newReplayDialer != nil || f.newBareLiveSessionInferencer != nil || f.newRTCRuntime != nil
-}
-func newDefaultSessionRuntimeFactory() sessionRuntimeFactory {
-	return sessionRuntimeFactory{
-		newDefaultLiveDialer: func() transport.Dialer {
-			return grok.NewDefaultWebSocketDialer()
-		},
-		newRecordingDialer: func(inner transport.Dialer, providerName string, model string) sessionRecordingDialer {
-			return gwtesting.NewRecordingWebSocketDialer(inner, providerName, model)
-		},
-		newReplayDialer: func(path string) (sessionReplayDialer, error) {
-			return gwtesting.NewReplayWebSocketDialer(path)
-		},
-		newRecordedTimingReplayDialer: func(path string) (sessionReplayDialer, error) {
-			return gwtesting.NewReplayWebSocketDialer(path, gwtesting.WithRecordedSessionTiming())
-		},
-		newReplayInferencer: func(path string) messages.SessionInferencer {
-			return gwtesting.NewReplaySessionInferencer(path)
-		},
-		newGrokSessionInferencer: func(sessionCfg config.GrokConfig, dialer transport.Dialer) (messages.SessionInferencer, error) {
-			return buildGrokSessionInferencer(sessionCfg, dialer)
-		},
-		newOpenAISessionInf: func(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, inputAudioTranscription models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
-			return buildOpenAIRealtimeSessionInferencerWithInputAudioTranscription(sessionCfg, voice, dialer, inputAudioTranscription)
-		},
-		newBareLiveSessionInferencer: func(opts SessionRunOptions) (messages.SessionInferencer, string, error) {
-			return NewLiveSessionInferencer(opts, "")
-		},
-		newGrokSessionWithTools: func(sessionCfg config.GrokConfig, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
-			return buildGrokSessionInferencerWithTools(sessionCfg, dialer, toolDefinitions)
-		},
-		newOpenAISessionWithTools: func(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition, inputAudioTranscription models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
-			return buildOpenAIRealtimeSessionInferencerWithToolsAndInputAudioTranscription(sessionCfg, voice, dialer, toolDefinitions, inputAudioTranscription)
-		},
-		newOpenAIScheduledSessionWithTools: func(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition, inputAudioTranscription models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
-			return buildOpenAIRealtimeSessionInferencerWithScheduledAudioAndInputAudioTranscription(sessionCfg, voice, dialer, toolDefinitions, inputAudioTranscription)
-		},
-	}
-}
-
-func (f sessionRuntimeFactory) replayDialer(path, timing string) (sessionReplayDialer, error) {
-	if normalizedSessionReplayTiming(timing) == sessionReplayTimingRecorded && f.newRecordedTimingReplayDialer != nil {
-		return f.newRecordedTimingReplayDialer(path)
-	}
-	return f.newReplayDialer(path)
-}
-
-func (f sessionRuntimeFactory) newGrokSessionInferencerForTools(sessionCfg config.GrokConfig, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
-	if f.newGrokSessionWithTools != nil {
-		return f.newGrokSessionWithTools(sessionCfg, dialer, toolDefinitions)
-	}
-	return f.newGrokSessionInferencer(sessionCfg, dialer)
-}
-
-func (f sessionRuntimeFactory) newOpenAISessionInferencerForTools(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition, scheduledAudio bool, inputAudioTranscription models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
-	if scheduledAudio && f.newOpenAIScheduledSessionWithTools != nil {
-		return f.newOpenAIScheduledSessionWithTools(sessionCfg, voice, dialer, toolDefinitions, inputAudioTranscription)
-	}
-	if f.newOpenAISessionWithTools != nil {
-		return f.newOpenAISessionWithTools(sessionCfg, voice, dialer, toolDefinitions, inputAudioTranscription)
-	}
-	return f.newOpenAISessionInf(sessionCfg, voice, dialer, inputAudioTranscription)
-}
 
 type sessionRuntimePlan struct {
 	mode                   sessionRuntimeMode
@@ -222,46 +106,6 @@ func (p sessionRuntimePlan) liveOutput(prefix string) (string, string) {
 	}
 	identity := fmt.Sprintf("provider=%s model=%s transport=%s input-device=%s output-device=%s", p.provider, p.model, transport, inputDevice, outputDevice)
 	return prefix + identity, "Listening: " + identity
-}
-
-func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr error) {
-	reporter := p.loop.terminalReporter
-	if reporter == nil {
-		reporter = sessionterminalwire.NewReporter()
-		p.loop.terminalReporter = reporter
-	}
-	finalizer := newSessionRuntimeFinalizer(p)
-	defer func() {
-		runErr = finalizer.finish(ctx, out, runErr)
-		if !sessionterminalwire.HasIndependentFailure(runErr) && p.replayCompletion != nil {
-			p.replayCompletion(reporter)
-		}
-		runErr = errors.Join(runErr, reporter.Publish(out, runErr))
-	}()
-	if p.replayIntegrityWarning != "" {
-		if _, err := fmt.Fprintln(out, p.replayIntegrityWarning); err != nil {
-			return err
-		}
-	}
-	if err := p.bindRTC(ctx, finalizer); err != nil {
-		return err
-	}
-	if err := p.writeAnnouncements(out, true); err != nil {
-		return err
-	}
-	loopOut := out
-	if p.loopOut != nil {
-		loopOut = p.loopOut
-	}
-	loop := p.loop
-	p.configureLoopObserver(&loop)
-	if p.inferencer != nil {
-		reporter.MarkRunStarted()
-		if err := runAgentLoopSession(ctx, loopOut, p.inferencer, loop); err != nil {
-			return wrapSessionRuntimeError(p, wrapSessionPhaseError("run session loop", err))
-		}
-	}
-	return nil
 }
 
 func writeFilesystemScopeAnnouncement(out io.Writer, policy *tools.FilesystemPolicy) {
@@ -356,43 +200,63 @@ func wireSessionRecordingClaim(plan sessionRuntimePlan, claim *sessionRecordingC
 
 func resolveSessionInteractiveToolPolicy(opts SessionRunOptions, definitions []messages.ToolDefinition) (InteractiveToolPolicy, error) {
 	if opts.InteractiveToolPolicy != nil {
-		policy := opts.InteractiveToolPolicy.Clone()
-		if err := policy.Validate(); err != nil {
-			return InteractiveToolPolicy{}, fmt.Errorf("resolve interactive tool policy: %w", err)
-		}
-		return policy, nil
+		return validatedInteractiveToolPolicy(*opts.InteractiveToolPolicy)
 	}
+	loadedConfig, err := loadInteractiveToolConfig(opts)
+	if err != nil {
+		return InteractiveToolPolicy{}, err
+	}
+	settings, err := interactiveToolSettings(loadedConfig)
+	if err != nil {
+		return InteractiveToolPolicy{}, err
+	}
+	return NewInteractiveToolPolicyForSession(settings, definitions, opts.ToolDefinitionBase, opts.BrowserToolsEnabled)
+}
 
-	loadedConfig := opts.LoadedConfig
-	if loadedConfig == nil && opts.ConfigDir != "" {
-		// The CLI composition root supplies LoadedConfig alongside its tool
-		// definitions. Direct service callers may only provide ConfigDir; honor
-		// an existing file there without creating a new config as a planning
-		// side effect. Provider resolution retains ownership of default-file
-		// creation when no file exists.
-		configPath := filepath.Join(opts.ConfigDir, config.ConfigFileName)
-		if _, err := os.Stat(configPath); err == nil {
-			storage, storageErr := config.NewDefaultConfigStorage(opts.ConfigDir)
-			if storageErr != nil {
-				return InteractiveToolPolicy{}, fmt.Errorf("initialize interactive tool configuration: %w", storageErr)
-			}
-			loadedConfig, storageErr = storage.Load()
-			if storageErr != nil {
-				return InteractiveToolPolicy{}, fmt.Errorf("load interactive tool configuration: %w", storageErr)
-			}
-		} else if !os.IsNotExist(err) {
-			return InteractiveToolPolicy{}, fmt.Errorf("inspect interactive tool configuration: %w", err)
-		}
+func validatedInteractiveToolPolicy(policy InteractiveToolPolicy) (InteractiveToolPolicy, error) {
+	policy = policy.Clone()
+	if err := policy.Validate(); err != nil {
+		return InteractiveToolPolicy{}, fmt.Errorf("resolve interactive tool policy: %w", err)
 	}
+	return policy, nil
+}
+
+func loadInteractiveToolConfig(opts SessionRunOptions) (*config.Config, error) {
+	if opts.LoadedConfig != nil || opts.ConfigDir == "" {
+		return opts.LoadedConfig, nil
+	}
+	// The CLI composition root supplies LoadedConfig alongside its tool
+	// definitions. Direct service callers may only provide ConfigDir; honor
+	// an existing file there without creating a new config as a planning
+	// side effect. Provider resolution retains ownership of default-file
+	// creation when no file exists.
+	configPath := filepath.Join(opts.ConfigDir, config.ConfigFileName)
+	if _, err := os.Stat(configPath); err == nil {
+		storage, storageErr := config.NewDefaultConfigStorage(opts.ConfigDir)
+		if storageErr != nil {
+			return nil, fmt.Errorf("initialize interactive tool configuration: %w", storageErr)
+		}
+		loadedConfig, storageErr := storage.Load()
+		if storageErr != nil {
+			return nil, fmt.Errorf("load interactive tool configuration: %w", storageErr)
+		}
+		return loadedConfig, nil
+	} else if !os.IsNotExist(err) {
+		return nil, fmt.Errorf("inspect interactive tool configuration: %w", err)
+	}
+	return nil, nil
+}
+
+func interactiveToolSettings(loadedConfig *config.Config) (config.InteractiveToolConfig, error) {
 	settings := config.DefaultInteractiveToolConfig()
 	if loadedConfig != nil {
 		resolved, err := loadedConfig.ResolveInteractiveToolConfig()
 		if err != nil {
-			return InteractiveToolPolicy{}, fmt.Errorf("resolve interactive tool policy: %w", err)
+			return config.InteractiveToolConfig{}, fmt.Errorf("resolve interactive tool policy: %w", err)
 		}
 		settings = resolved
 	}
-	return NewInteractiveToolPolicyForSession(settings, definitions, opts.ToolDefinitionBase, opts.BrowserToolsEnabled)
+	return settings, nil
 }
 
 func planSessionRuntimeMode(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
@@ -545,6 +409,13 @@ func wrapSessionRuntimeError(plan sessionRuntimePlan, err error) error {
 	default:
 		return err
 	}
+}
+
+func wrapSessionPhaseError(phase string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("%s: %w", phase, err)
 }
 
 func decorateRateLimitedSessionRuntimeError(err error) error {

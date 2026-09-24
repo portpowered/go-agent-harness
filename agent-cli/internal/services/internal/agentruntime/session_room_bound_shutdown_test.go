@@ -473,7 +473,7 @@ func runRoomBoundTest(t *testing.T, opts RoomRunOptions) <-chan roomTestRunOutco
 	t.Helper()
 	outcome := make(chan roomTestRunOutcome, 1)
 	go func() {
-		result, err := RunRoomWithResult(context.Background(), io.Discard, opts)
+		result, err := runRoomForTest(context.Background(), io.Discard, opts)
 		outcome <- roomTestRunOutcome{result: result, err: err}
 	}()
 	return outcome

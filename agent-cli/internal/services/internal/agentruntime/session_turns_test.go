@@ -10,8 +10,6 @@ import (
 
 const turnFact = "fact: the marigold key is hidden under stone seven"
 
-var noTurnSetup = func(*SessionTurns) {}
-
 func TestSessionTurns_FiveTurnsUseOnePersistentSessionAndExactLifecycle(t *testing.T) {
 	inferencer := &turnTestSession{scriptedSession: newScriptedSession()}
 	var session *SessionTurns
@@ -49,6 +47,7 @@ func TestSessionTurns_FiveTurnsUseOnePersistentSessionAndExactLifecycle(t *testi
 	}
 }
 func TestSessionTurns_InvalidTransitionsKeepStateAndEvents(t *testing.T) {
+	noTurnSetup := func(*SessionTurns) {}
 	cases := []struct {
 		name                  string
 		setup                 func(*SessionTurns)

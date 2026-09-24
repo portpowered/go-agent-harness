@@ -55,11 +55,20 @@ func (in TurnInput) Empty() bool                     { return strings.TrimSpace(
 const TurnDirectionUser, TurnDirectionAssistant, TurnDirectionClientToServer, TurnDirectionServerToClient TurnDirection = "user", "assistant", "client_to_server", "server_to_client"
 const TurnEventStart, TurnEventEnd TurnEventType = "turn-start", "turn-end"
 
-var (
-	ErrTurnAlreadyActive, ErrTurnEndWithoutStart                = errors.New("turn start while another turn is active"), errors.New("turn end without start: no active turn")
-	ErrEmptyTurn, ErrInvalidTurnDirection                       = errors.New("turn content must not be empty"), errors.New("turn direction is invalid")
-	ErrInvalidTurnTick, ErrSessionEndedWithActiveTurn           = errors.New("turn tick must be strictly increasing"), errors.New("session ended with active turn")
-	ErrSessionClosed, ErrTurnMismatch, ErrMissingTurnInferencer = errors.New("session is closed"), errors.New("turn does not match the active turn"), errors.New("session turn inferencer is not configured")
+type sessionTurnError string
+
+func (e sessionTurnError) Error() string { return string(e) }
+
+const (
+	ErrTurnAlreadyActive          sessionTurnError = "turn start while another turn is active"
+	ErrTurnEndWithoutStart        sessionTurnError = "turn end without start: no active turn"
+	ErrEmptyTurn                  sessionTurnError = "turn content must not be empty"
+	ErrInvalidTurnDirection       sessionTurnError = "turn direction is invalid"
+	ErrInvalidTurnTick            sessionTurnError = "turn tick must be strictly increasing"
+	ErrSessionEndedWithActiveTurn sessionTurnError = "session ended with active turn"
+	ErrSessionClosed              sessionTurnError = "session is closed"
+	ErrTurnMismatch               sessionTurnError = "turn does not match the active turn"
+	ErrMissingTurnInferencer      sessionTurnError = "session turn inferencer is not configured"
 )
 
 func transitionError(op string, cause error) error { return fmt.Errorf("%s turn: %w", op, cause) }
@@ -214,19 +223,12 @@ func readTurnResponse(ctx context.Context, session messages.Session) (messages.M
 		case <-session.Done():
 			return messages.Message{}, transitionError("read", ErrSessionClosed)
 		}
-		switch msg.Type {
-		case messages.StreamTypeError:
-			value, _ := msg.Value.(*messages.ErrorValue)
-			if value != nil && value.IsNonTerminal() {
+		if msg.Type == messages.StreamTypeError {
+			err, ignore := sessionTurnStreamError(msg)
+			if ignore {
 				continue
 			}
-			if value != nil && value.Err != nil {
-				return messages.Message{}, value.Err
-			}
-			if value == nil || strings.TrimSpace(value.Message) == "" {
-				return messages.Message{}, errors.New("session returned an error")
-			}
-			return messages.Message{}, errors.New(value.Message)
+			return messages.Message{}, err
 		}
 		deltas = append(deltas, msg)
 		if msg.Type == messages.StreamTypeMessageEnd {
@@ -234,6 +236,21 @@ func readTurnResponse(ctx context.Context, session messages.Session) (messages.M
 		}
 	}
 }
+
+func sessionTurnStreamError(msg messages.StreamMessage) (error, bool) {
+	value, _ := msg.Value.(*messages.ErrorValue)
+	if value != nil && value.IsNonTerminal() {
+		return nil, true
+	}
+	if value != nil && value.Err != nil {
+		return value.Err, false
+	}
+	if value == nil || strings.TrimSpace(value.Message) == "" {
+		return errors.New("session returned an error"), false
+	}
+	return errors.New(value.Message), false
+}
+
 func copyInput(in TurnInput) TurnInput           { in.Audio = append([]byte(nil), in.Audio...); return in }
 func cloneTurn(turn SessionTurn) SessionTurn     { turn.Input = copyInput(turn.Input); return turn }
 func hasAudio(parts []messages.ContentPart) bool { return slices.ContainsFunc(parts, audioContent) }

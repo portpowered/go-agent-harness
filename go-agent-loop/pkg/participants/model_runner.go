@@ -377,13 +377,7 @@ func (r *ModelRunner) forwardSessionAudioWithPolicyWithState(ctx context.Context
 		Type:  messages.StreamTypeAudioDelta,
 		Value: messages.NewAudioDeltaValue(pcm),
 	})
-	if !audioOutcome.OK() {
-		if sessionAdmissionClosed(session) {
-			return nil
-		}
-		return sessionAudioSendError("audio", audioOutcome)
-	}
-	return nil
+	return sessionAudioSendErrorIfAdmitted(session, audioOutcome)
 }
 
 func (r *ModelRunner) forwardSessionMessageWithState(ctx context.Context, session messages.Session, msg messages.StreamMessage, state *sessionResponseState) bool {

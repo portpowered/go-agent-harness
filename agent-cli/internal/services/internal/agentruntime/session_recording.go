@@ -102,22 +102,22 @@ func runSessionWithImagesAndRecordingDirectory(
 	if len(paths) == 0 {
 		return runSessionWithRecordingDirectory(ctx, out, opts.SessionRunOptions, directory, "", opts.MaxDuration, opts.TextSeed, opts.SystemPrompt, true)
 	}
-	if err := sessioncontract.ValidateSessionMaxDuration(opts.MaxDuration); err != nil {
+	return runSessionWithImageArtifacts(ctx, out, opts, directory, paths)
+}
+
+func runSessionWithImageArtifacts(ctx context.Context, out io.Writer, opts SessionImageRunOptions, directory string, paths []string) error {
+	if err := validateSessionRecordingRun(opts.SessionRunOptions, opts.AudioOutPath, opts.MaxDuration); err != nil {
 		return err
 	}
-	if err := validateSessionRecordingOptions(opts.SessionRunOptions); err != nil {
-		return err
-	}
-	claim, err := ensureSessionRecordingClaim(&opts.SessionRunOptions)
+	destination, releaseClaims, err := claimSessionRecordingDirectory(&opts.SessionRunOptions, directory)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = claim.release() }()
-	directoryClaim, destination, err := ensureSessionRecordingDirectoryClaim(&opts.SessionRunOptions, directory)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = directoryClaim.release() }()
+	defer releaseClaims()
+	return runSessionImageRecording(ctx, out, opts, destination, paths)
+}
+
+func runSessionImageRecording(ctx context.Context, out io.Writer, opts SessionImageRunOptions, destination string, paths []string) error {
 	metadata, err := resolveSessionImageCapabilities(opts.SessionRunOptions)
 	if err != nil {
 		return err
@@ -152,7 +152,7 @@ func runSessionWithImagesAndRecordingDirectory(
 			recording: recording,
 		}
 	}
-	runErr = runSessionImagePlan(ctx, out, plan, opts, wirePrompt)
+	runErr := runSessionImagePlan(ctx, out, plan, opts, wirePrompt)
 	return finalizeSessionDirectoryRecording(runErr, recording)
 }
 func runSessionWithRecordingDirectory(
@@ -172,42 +172,23 @@ func runSessionWithRecordingDirectory(
 	}()
 
 	if strings.TrimSpace(directory) == "" {
-		if audioOutPath != "" {
-			return ErrLegacyAudioRuntimeRetired
-		}
-		if withInstructions {
-			return RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx, out, opts, "", maxDuration, seed, systemPrompt)
-		}
-		if maxDuration == 0 {
-			return RunSessionWithTextSeed(ctx, out, opts, seed)
-		}
-		return RunSessionWithTextSeedAndMaxDuration(ctx, out, opts, maxDuration, seed)
+		return runSessionRecordingWithoutDirectory(ctx, out, opts, audioOutPath, maxDuration, seed, systemPrompt, withInstructions)
 	}
-	if audioOutPath != "" {
-		return ErrLegacyAudioRuntimeRetired
-	}
-	if err := sessioncontract.ValidateSessionMaxDuration(maxDuration); err != nil {
+	if err := validateSessionRecordingRun(opts, audioOutPath, maxDuration); err != nil {
 		return err
 	}
-	if err := validateSessionRecordingOptions(opts); err != nil {
-		return err
-	}
-	claim, err := ensureSessionRecordingClaim(&opts)
+	destination, releaseClaims, err := claimSessionRecordingDirectory(&opts, directory)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = claim.release() }()
-	directoryClaim, destination, err := ensureSessionRecordingDirectoryClaim(&opts, directory)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = directoryClaim.release() }()
+	defer releaseClaims()
 
 	plan, cleanup, err := planSessionForDirectoryRecordingWithInstructionsAndContext(ctx, opts, systemPrompt, withInstructions)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
+	plan.loop.MaxDuration = maxDuration
 
 	recording := newSessionDirectoryRecording(destination, plan, opts)
 	recording.startBrowser(ctx)
@@ -238,19 +219,37 @@ func runSessionWithRecordingDirectory(
 	if textOutput != nil {
 		sessionOut = textOutput
 	}
-	if maxDuration == 0 {
-		runErr = plan.run(ctx, sessionOut)
-	} else {
-		durationCtx, durationErr := prepareSessionDurationArtifacts(ctx)
-		if durationErr != nil {
-			runErr = durationErr
-			return finalizeSessionDirectoryRecording(runErr, recording)
+	if maxDuration > 0 {
+		ctx = plan.loop.durationService.WithTerminalRecorder(ctx, recording)
+		if plan.inferencer != nil {
+			if opts.AudioService == nil {
+				runErr = errors.New("audio service is required for session duration timing")
+				return finalizeSessionDirectoryRecording(runErr, recording)
+			}
+			durationClock, durationErr := opts.AudioService.NewClock(opts.Clock)
+			if durationErr != nil {
+				runErr = durationErr
+				return finalizeSessionDirectoryRecording(runErr, recording)
+			}
+			plan.loop.durationClock = durationClock
 		}
-		durationCtx = withSessionDurationTerminalRecorder(durationCtx, recording)
-		runErr = runSessionDurationPlan(durationCtx, sessionOut, plan, maxDuration, nil)
 	}
+	runErr = plan.run(ctx, sessionOut)
 
 	return finalizeSessionDirectoryRecording(runErr, recording)
+}
+
+func runSessionRecordingWithoutDirectory(ctx context.Context, out io.Writer, opts SessionRunOptions, audioOutPath string, maxDuration time.Duration, seed SessionTextSeed, systemPrompt string, withInstructions bool) error {
+	if audioOutPath != "" {
+		return ErrLegacyAudioRuntimeRetired
+	}
+	if withInstructions {
+		return RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx, out, opts, "", maxDuration, seed, systemPrompt)
+	}
+	if maxDuration == 0 {
+		return RunSessionWithTextSeed(ctx, out, opts, seed)
+	}
+	return RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx, out, opts, "", maxDuration, seed, "")
 }
 
 // finalizeSessionDirectoryRecording joins provider, cancellation, or runtime
@@ -268,6 +267,33 @@ func validateSessionRecordingOptions(opts SessionRunOptions) error {
 		return nil
 	}
 	return validateSessionRunOptions(opts)
+}
+
+func validateSessionRecordingRun(opts SessionRunOptions, audioOutPath string, maxDuration time.Duration) error {
+	if audioOutPath != "" {
+		return ErrLegacyAudioRuntimeRetired
+	}
+	if err := sessioncontract.ValidateSessionMaxDuration(maxDuration); err != nil {
+		return err
+	}
+	return validateSessionRecordingOptions(opts)
+}
+
+func claimSessionRecordingDirectory(opts *SessionRunOptions, directory string) (string, func(), error) {
+	claim, err := ensureSessionRecordingClaim(opts)
+	if err != nil {
+		return "", func() {}, err
+	}
+	directoryClaim, destination, err := ensureSessionRecordingDirectoryClaim(opts, directory)
+	if err != nil {
+		_ = claim.release()
+		return "", func() {}, err
+	}
+	release := func() {
+		_ = directoryClaim.release()
+		_ = claim.release()
+	}
+	return destination, release, nil
 }
 
 func planSessionForDirectoryRecordingWithInstructionsAndContext(ctx context.Context, opts SessionRunOptions, systemPrompt string, withInstructions bool) (sessionRuntimePlan, func(), error) {
@@ -311,56 +337,6 @@ func buildSessionDirectoryRecordingPlan(ctx context.Context, opts SessionRunOpti
 		return sessionRuntimePlan{}, err
 	}
 	return planSessionWithResolvedInstructionsContext(ctx, opts, instructions)
-}
-
-func prepareSessionRecordingDestination(path string) (string, error) {
-	if strings.TrimSpace(path) == "" {
-		return "", recordingDestinationError(transcript.ErrRecordingDestination, "validate destination", path, errors.New("destination is required"))
-	}
-	destination := filepath.Clean(path)
-	parent := filepath.Dir(destination)
-	if err := os.MkdirAll(parent, 0o755); err != nil {
-		return "", recordingDestinationError(transcript.ErrRecordingDestination, "prepare destination", destination, err)
-	}
-
-	info, err := os.Lstat(destination)
-	if err == nil {
-		if info.Mode()&os.ModeSymlink != 0 {
-			return "", recordingDestinationError(transcript.ErrRecordingDestination, "validate destination", destination, ErrSessionRecordingDirectorySymlink)
-		}
-		if !info.IsDir() {
-			return "", recordingDestinationError(transcript.ErrRecordingDestination, "validate destination", destination, ErrSessionRecordingDirectoryNotDirectory)
-		}
-		entries, readErr := os.ReadDir(destination)
-		if readErr != nil {
-			return "", recordingDestinationError(transcript.ErrRecordingDestination, "inspect destination", destination, readErr)
-		}
-		if len(entries) != 0 {
-			return "", recordingDestinationError(transcript.ErrRecordingDestinationNotEmpty, "validate destination", destination, errors.New("destination is not empty"))
-		}
-		parent = destination
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return "", recordingDestinationError(transcript.ErrRecordingDestination, "inspect destination", destination, err)
-	}
-
-	probe, err := os.CreateTemp(parent, ".recording-probe-")
-	if err != nil {
-		return "", recordingDestinationError(transcript.ErrRecordingDestination, "probe destination", destination, err)
-	}
-	probePath := probe.Name()
-	closeErr := probe.Close()
-	removeErr := os.Remove(probePath)
-	if closeErr != nil {
-		return "", recordingDestinationError(transcript.ErrRecordingDestination, "probe destination", destination, closeErr)
-	}
-	if removeErr != nil {
-		return "", recordingDestinationError(transcript.ErrRecordingDestination, "remove destination probe", destination, removeErr)
-	}
-	return destination, nil
-}
-
-func recordingDestinationError(kind error, operation, path string, cause error) error {
-	return &transcript.RecordingError{Kind: kind, Operation: operation, Path: path, Cause: cause}
 }
 
 type sessionDirectoryRecording struct {

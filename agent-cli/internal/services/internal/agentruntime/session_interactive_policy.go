@@ -1,6 +1,10 @@
 package agentruntime
 
 import (
+	"errors"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/sight"
+	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
@@ -151,5 +155,55 @@ func browserLongRunningToolNames() []string {
 		webmcp.ListCastDevicesToolName,
 		webmcp.CastTabToolName,
 		webmcp.StopCastingToolName,
+	}
+}
+
+func (e *sessionToolExecutor) pageSightTool(call messages.ToolCall) bool {
+	if e == nil || e.inner == nil {
+		return false
+	}
+	router, ok := e.inner.(runtimeTools.PageSightToolRouter)
+	return ok && router.IsPageSightTool(call.Name)
+}
+
+func (e *sessionToolExecutor) toolFailure(call messages.ToolCall, err error) messages.ToolCallResponse {
+	e.recordToolDiagnostic(call, err)
+	if e.pageSightTool(call) {
+		return sessionPageSightFailure(call)
+	}
+	return sessionToolFailure(call, err)
+}
+
+func (e *sessionToolExecutor) recordToolDiagnostic(call messages.ToolCall, err error) {
+	if e == nil || e.diagnostics == nil || err == nil {
+		return
+	}
+	diagnostic := SessionToolDiagnostic{
+		ToolCallID: call.ID,
+		ToolName:   call.Name,
+		Error:      err,
+	}
+	if e.pageSightTool(call) {
+		diagnostic.Source = sight.SourceBrowserPage
+		diagnostic.ErrorCode = SessionPageSightUnavailableErrorCode
+	} else if cliTools.IsPhysicalDisplayToolName(call.Name) {
+		diagnostic.Source = sight.SourceScreen
+		diagnostic.ErrorCode = cliTools.ScreenToolErrorCode(err)
+	}
+	e.diagnostics.RecordSessionToolDiagnostic(diagnostic)
+}
+
+func sessionPageSightFailure(call messages.ToolCall) messages.ToolCallResponse {
+	result := sight.NewError(sight.SourceBrowserPage, errors.New("browser-page sight unavailable"))
+	result.Error = "Browser-page sight is unavailable."
+	result.ErrorCode = SessionPageSightUnavailableErrorCode
+	encoded, err := sight.Encode(result)
+	if err != nil {
+		encoded = []byte(`{"version":2,"status":"error","source":"browser_page","error_code":"page_sight_unavailable","error":"Browser-page sight is unavailable."}`)
+	}
+	return messages.ToolCallResponse{
+		ToolCallID: call.ID,
+		Name:       call.Name,
+		Content:    string(encoded),
 	}
 }

@@ -9,11 +9,9 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/sight"
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
-	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
 // defaultSessionToolExecutionTimeout bounds one tool invocation without
@@ -75,12 +73,14 @@ func composeSessionToolLifecycleObserver(recording sessionToolLifecycleObserver,
 	return sessionToolLifecycleMux{recording: recording, progress: progress, runtime: runtime}
 }
 
-var (
-	// ErrSessionToolTimeout is retained behind the correlated tool-result
-	// contract so callers and tests can classify a local deadline without
-	// parsing the human-readable response content.
-	ErrSessionToolTimeout = errors.New("tool execution timed out")
-)
+type sessionToolTimeoutError string
+
+func (e sessionToolTimeoutError) Error() string { return string(e) }
+
+// ErrSessionToolTimeout is retained behind the correlated tool-result
+// contract so callers and tests can classify a local deadline without
+// parsing the human-readable response content.
+const ErrSessionToolTimeout sessionToolTimeoutError = "tool execution timed out"
 
 // sessionToolExecutor is the session boundary around the executor composed by
 // the wire graph. It deliberately does not inspect or duplicate tool
@@ -183,6 +183,7 @@ func newSessionToolExecutorWithInteractivePolicyAndObserverAndCancellationIntent
 type sessionToolExecutionResult struct {
 	response messages.ToolCallResponse
 	err      error
+	timeout  time.Duration
 }
 
 type sessionScreenPermissionRecheckResult struct {
@@ -204,110 +205,73 @@ func (e *sessionToolExecutor) Execute(ctx context.Context, call messages.ToolCal
 	if e.observer != nil {
 		e.observer.observeToolCall(call)
 	}
-	finish := func(response messages.ToolCallResponse, failed bool) (messages.ToolCallResponse, error) {
-		// The provider's call identity is authoritative even if an injected
-		// executor omits or changes the response metadata.
-		response.ToolCallID = call.ID
-		response.Name = call.Name
-		if e.observer != nil {
-			e.observer.observeToolResult(call, response, failed)
-		}
-		return response, nil
-	}
 	if e.inner == nil {
-		return finish(e.toolFailure(call, errors.New("session tool executor is not configured")), true)
+		return e.finish(call, e.toolFailure(call, errors.New("session tool executor is not configured")), true)
 	}
+	result := e.executeWithinTimeout(ctx, call)
+	if result.err == nil {
+		return e.finish(call, result.response, sessionToolResponseFailed(result.response.Content))
+	}
+	return e.finishFailure(ctx, call, result.err, result.timeout)
+}
 
+func (e *sessionToolExecutor) finish(call messages.ToolCall, response messages.ToolCallResponse, failed bool) (messages.ToolCallResponse, error) {
+	response.ToolCallID = call.ID
+	response.Name = call.Name
+	if e.observer != nil {
+		e.observer.observeToolResult(call, response, failed)
+	}
+	return response, nil
+}
+
+func (e *sessionToolExecutor) executionTimeout(call messages.ToolCall) time.Duration {
 	timeout := e.timeout
 	if timeout <= 0 && e.interactivePolicy != nil {
 		timeout = e.interactivePolicy.TimeoutForTool(call.Name)
 	}
 	if timeout <= 0 {
-		timeout = defaultSessionToolExecutionTimeout
+		return defaultSessionToolExecutionTimeout
 	}
+	return timeout
+}
+
+func (e *sessionToolExecutor) executeWithinTimeout(ctx context.Context, call messages.ToolCall) sessionToolExecutionResult {
+	timeout := e.executionTimeout(call)
 	execCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-
 	resultCh := make(chan sessionToolExecutionResult, 1)
 	go func() {
 		response, err := invokeSessionTool(execCtx, e.inner, call)
 		resultCh <- sessionToolExecutionResult{response: response, err: err}
 	}()
-
 	select {
 	case result := <-resultCh:
-		if result.err != nil {
-			if e.sigintCancelled(execCtx, result.err) {
-				return correlatedSessionToolCancellation(call, result.err)
-			}
-			return finish(e.toolFailure(call, result.err), true)
-		}
-		return finish(result.response, sessionToolResponseFailed(result.response.Content))
+		result.timeout = timeout
+		return result
 	case <-execCtx.Done():
-		if e.sigintCancelled(execCtx, execCtx.Err()) {
-			return correlatedSessionToolCancellation(call, execCtx.Err())
-		}
-		if errors.Is(execCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
-			if denial, ok := e.screenPermissionDeniedAfterTimeout(ctx, call); ok {
-				return finish(e.toolFailure(call, denial), true)
-			}
-		}
-		failure := sessionToolContextFailure(execCtx.Err())
-		if errors.Is(failure, ErrSessionToolTimeout) {
-			failure = fmt.Errorf("%w after %s", ErrSessionToolTimeout, timeout)
-		}
-		return finish(e.toolFailure(call, failure), true)
+		return sessionToolExecutionResult{err: execCtx.Err(), timeout: timeout}
 	}
 }
 
-func (e *sessionToolExecutor) pageSightTool(call messages.ToolCall) bool {
-	if e == nil || e.inner == nil {
-		return false
+func (e *sessionToolExecutor) finishFailure(ctx context.Context, call messages.ToolCall, err error, timeout time.Duration) (messages.ToolCallResponse, error) {
+	if e.sigintCancelled(ctx, err) {
+		return correlatedSessionToolCancellation(call, err)
 	}
-	router, ok := e.inner.(runtimeTools.PageSightToolRouter)
-	return ok && router.IsPageSightTool(call.Name)
+	if denial, ok := e.screenTimeoutDenial(ctx, call, err); ok {
+		return e.finish(call, e.toolFailure(call, denial), true)
+	}
+	failure := sessionToolContextFailure(err)
+	if errors.Is(failure, ErrSessionToolTimeout) {
+		failure = fmt.Errorf("%w after %s", ErrSessionToolTimeout, timeout)
+	}
+	return e.finish(call, e.toolFailure(call, failure), true)
 }
 
-func (e *sessionToolExecutor) toolFailure(call messages.ToolCall, err error) messages.ToolCallResponse {
-	e.recordToolDiagnostic(call, err)
-	if e.pageSightTool(call) {
-		return sessionPageSightFailure(call)
+func (e *sessionToolExecutor) screenTimeoutDenial(ctx context.Context, call messages.ToolCall, err error) (*cliTools.ScreenCaptureError, bool) {
+	if !errors.Is(err, context.DeadlineExceeded) || ctx.Err() != nil {
+		return nil, false
 	}
-	return sessionToolFailure(call, err)
-}
-
-func (e *sessionToolExecutor) recordToolDiagnostic(call messages.ToolCall, err error) {
-	if e == nil || e.diagnostics == nil || err == nil {
-		return
-	}
-	diagnostic := SessionToolDiagnostic{
-		ToolCallID: call.ID,
-		ToolName:   call.Name,
-		Error:      err,
-	}
-	if e.pageSightTool(call) {
-		diagnostic.Source = sight.SourceBrowserPage
-		diagnostic.ErrorCode = SessionPageSightUnavailableErrorCode
-	} else if cliTools.IsPhysicalDisplayToolName(call.Name) {
-		diagnostic.Source = sight.SourceScreen
-		diagnostic.ErrorCode = cliTools.ScreenToolErrorCode(err)
-	}
-	e.diagnostics.RecordSessionToolDiagnostic(diagnostic)
-}
-
-func sessionPageSightFailure(call messages.ToolCall) messages.ToolCallResponse {
-	result := sight.NewError(sight.SourceBrowserPage, errors.New("browser-page sight unavailable"))
-	result.Error = "Browser-page sight is unavailable."
-	result.ErrorCode = SessionPageSightUnavailableErrorCode
-	encoded, err := sight.Encode(result)
-	if err != nil {
-		encoded = []byte(`{"version":2,"status":"error","source":"browser_page","error_code":"page_sight_unavailable","error":"Browser-page sight is unavailable."}`)
-	}
-	return messages.ToolCallResponse{
-		ToolCallID: call.ID,
-		Name:       call.Name,
-		Content:    string(encoded),
-	}
+	return e.screenPermissionDeniedAfterTimeout(ctx, call)
 }
 
 // screenPermissionDeniedAfterTimeout performs the one optional macOS

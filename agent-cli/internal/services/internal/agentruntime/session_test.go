@@ -1221,7 +1221,7 @@ func TestRunSession_WithInjectedSessionInferencer_UsesAgentLoopSessionPath(t *te
 	}
 	var out bytes.Buffer
 
-	if err := RunSession(context.Background(), &out, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+	if err := runSessionForTest(context.Background(), &out, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		ReplayPath:        "synthetic.json",
 		Prompt:            "hello session",
 		SessionInferencer: sessionInf,
@@ -1250,7 +1250,7 @@ func TestRunSession_OpenAIRealtimeRecordWithInjectedInferencer_UsesSessionPath(t
 	}
 	var out bytes.Buffer
 
-	if err := RunSession(context.Background(), &out, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+	if err := runSessionForTest(context.Background(), &out, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		RecordPath:        filepath.Join(t.TempDir(), "openai-session.json"),
 		Provider:          config.ProviderOpenAI,
 		Model:             "gpt-realtime",
@@ -1274,7 +1274,7 @@ func TestRunSession_SessionProviderCloseExitsPromptly(t *testing.T) {
 	sessionInf := &closingSessionInferencer{}
 	started := time.Now()
 
-	if err := RunSession(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+	if err := runSessionForTest(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		RecordPath:        filepath.Join(t.TempDir(), "openai-session.json"),
 		Provider:          config.ProviderOpenAI,
 		Model:             "gpt-realtime",
@@ -1296,7 +1296,7 @@ func TestRunSession_SessionProviderCloseExitsPromptly(t *testing.T) {
 func TestRunSession_OpenAISessionRejectsNonRealtimeModelBeforeDial(t *testing.T) {
 	dialer := &failingDialer{}
 
-	err := RunSession(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+	err := runSessionForTest(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		RecordPath:      filepath.Join(t.TempDir(), "openai-session.json"),
 		Provider:        config.ProviderOpenAI,
 		Model:           "gpt-4o",
@@ -1328,7 +1328,7 @@ func TestRunSession_RecordFlushesCaptureWhenContextCanceled(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	err := RunSession(ctx, &out, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+	err := runSessionForTest(ctx, &out, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		RecordPath:      recordPath,
 		Provider:        config.ProviderGrok,
 		Model:           "grok-record-test",
@@ -1363,23 +1363,6 @@ func TestRunSession_RecordFlushesCaptureWhenContextCanceled(t *testing.T) {
 	assertCapturedDirectionAndType(t, capture.Records, gwtesting.DirectionServerToClient, "session.created")
 }
 
-func TestSessionRunTerminationErrorPreservesCallerCancellationAfterCleanLoopExit(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	err := sessionRunTerminationError(ctx, nil)
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("clean loop termination after caller cancellation = %v, want context.Canceled", err)
-	}
-}
-
-func TestSessionRunTerminationErrorPreservesCleanupFailure(t *testing.T) {
-	wantErr := errors.New("session cleanup failed")
-	if err := sessionRunTerminationError(context.Background(), wantErr); !errors.Is(err, wantErr) {
-		t.Fatalf("cleanup failure = %v, want %v", err, wantErr)
-	}
-}
-
 func TestPlanSessionRuntime_GenericReplayHonorsCallerCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
@@ -1407,7 +1390,7 @@ func TestPlanSessionRuntime_GenericReplayHonorsCallerCancellation(t *testing.T) 
 	plan.finalize = nil
 	plan.loop.MaxDuration = time.Second
 	go func() {
-		errCh <- plan.run(ctx, io.Discard)
+		errCh <- runTestSessionRuntimePlan(ctx, io.Discard, plan)
 	}()
 
 	deadline := time.Now().Add(2 * time.Second)
@@ -1468,7 +1451,7 @@ func TestRunAgentLoopSession_ReturnsOnCleanDoneSignal(t *testing.T) {
 	var out bytes.Buffer
 
 	start := time.Now()
-	err := runAgentLoopSession(context.Background(), &out, sessionInf, sessionLoopOptions{
+	err := runTestAgentLoopSession(context.Background(), &out, sessionInf, sessionLoopOptions{
 		audioService: newTestAudioIOService(), MaxDuration: time.Second,
 		Done: done,
 		DoneErr: func() error {
@@ -1497,7 +1480,7 @@ func TestRunAgentLoopSession_TimeoutCancelsLoopWithoutCallerCancellationError(t 
 	var out bytes.Buffer
 
 	start := time.Now()
-	err := runAgentLoopSession(context.Background(), &out, sessionInf, sessionLoopOptions{
+	err := runTestAgentLoopSession(context.Background(), &out, sessionInf, sessionLoopOptions{
 		audioService: newTestAudioIOService(), MaxDuration: 75 * time.Millisecond,
 	})
 	if err != nil {

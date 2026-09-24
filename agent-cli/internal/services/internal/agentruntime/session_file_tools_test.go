@@ -226,7 +226,7 @@ func TestRunAgentLoopSession_FileToolRoundTripThroughRegistryAndComposition(t *t
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := runAgentLoopSession(ctx, out, inferencer, sessionLoopOptions{
+	if err := runTestAgentLoopSession(ctx, out, inferencer, sessionLoopOptions{
 		MaxDuration: 4 * time.Second, audioService: newTestAudioIOService(),
 		WaitForClose:             true,
 		ToolExecutor:             recordingExecutor,
@@ -397,7 +397,7 @@ func TestRunAgentLoopSession_FileToolPermissionDeniedThroughRegistryAndCompositi
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := runAgentLoopSession(ctx, out, inferencer, sessionLoopOptions{
+	if err := runTestAgentLoopSession(ctx, out, inferencer, sessionLoopOptions{
 		MaxDuration: 4 * time.Second, audioService: newTestAudioIOService(),
 		WaitForClose:             true,
 		ToolExecutor:             recordingExecutor,
@@ -515,7 +515,7 @@ func TestRunAgentLoopSession_FilesystemRefusalIsHonestAndRecoverable(t *testing.
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := runAgentLoopSession(ctx, out, inferencer, sessionLoopOptions{
+	if err := runTestAgentLoopSession(ctx, out, inferencer, sessionLoopOptions{
 		MaxDuration: 4 * time.Second, audioService: newTestAudioIOService(),
 		WaitForClose:             true,
 		ToolExecutor:             recordingExecutor,

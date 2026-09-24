@@ -4,15 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"time"
 
 	sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
@@ -84,6 +80,8 @@ func planSessionRuntimeWithFactoryAndContext(ctx context.Context, opts SessionRu
 	if err != nil {
 		return sessionRuntimePlan{}, err
 	}
+	plan.loop.durationService = factory.durationService
+	plan.loop.durationRunner = factory.durationRunner
 	return configureSessionRuntimePlan(ctx, plan, opts, selection, interactivePolicy, scheduledAudioDispatchPolicyForOptions(opts), capabilityCoordinator, recordingClaim)
 }
 
@@ -259,33 +257,6 @@ func sessionTraceAudioInputs(inputs []audioio.ScheduledAudioInput) []sessiontrac
 	return converted
 }
 
-func startLiveSessionUpdatedTimer(opts sessionLoopOptions, current platformclock.Timer) (platformclock.Timer, <-chan time.Time, error) {
-	if !opts.RequireSessionUpdated || opts.observer == nil || !opts.observer.ScheduledAudioAwaitingConfiguration() || current != nil {
-		if current == nil {
-			return nil, nil, nil
-		}
-		return current, current.C(), nil
-	}
-	timeout := opts.SessionUpdatedTimeout
-	if timeout <= 0 {
-		timeout = sessionScheduledAudioConfigTimeout
-	}
-	timer, err := opts.audioService.NewTimer(opts.clockSource, timeout)
-	if err != nil {
-		return nil, nil, err
-	}
-	return timer, timer.C(), nil
-}
-
-func stopLiveSessionUpdatedTimer(timer *platformclock.Timer, timeout *<-chan time.Time) {
-	if timer == nil || *timer == nil {
-		return
-	}
-	(*timer).Stop()
-	*timer = nil
-	*timeout = nil
-}
-
 func configureSessionRuntimeDeviceObservers(ctx context.Context, plan *sessionRuntimePlan, dependencies observability.Dependencies) {
 	playback := sessiontracewire.NewPlaybackDiagnostics(sessiontrace.PlaybackDiagnosticsOptions{
 		Sink: plan.diagnostics, MetricSampler: dependencies.MetricSampler, Logger: dependencies.Logger, Runtime: plan.runtime,
@@ -319,74 +290,5 @@ func configureSessionRuntimeDeviceObservers(ctx context.Context, plan *sessionRu
 		if traceCapture != nil {
 			traceCapture(devicegw.DeviceID(id), stats)
 		}
-	}
-}
-
-// prepareSessionStreamOutput gives an unowned stream its terminal renderer.
-// The returned finalizer preserves transcript errors before publishing status.
-func prepareSessionStreamOutput(out io.Writer, opts *sessionLoopOptions) (io.Writer, func(error) error) {
-	if opts.terminalReporter != nil {
-		return out, func(err error) error { return err }
-	}
-	reporter := wire.NewReporter()
-	opts.terminalReporter = reporter
-	reporter.MarkRunStarted()
-	renderer := newSessionReplayRenderer(out, reporter)
-	return renderer, func(runErr error) error {
-		runErr = errors.Join(runErr, renderer.finishTranscript())
-		return errors.Join(runErr, reporter.Publish(out, runErr))
-	}
-}
-
-func newObservedSessionLoop(inferencer messages.SessionInferencer, opts sessionLoopOptions) (*agentloop.AgentLoop, *observedSessionInferencer, <-chan error, error) {
-	observed := newObservedSessionInferencer(inferencer, opts.runtime)
-	observed.progress = opts.observer
-	if opts.observer != nil {
-		opts.observer.SetLivenessClock(opts.livenessClock)
-		opts.observer.SetToolResultsEnabled(opts.ToolExecutor != nil)
-	}
-	loop, err := agentloop.New(duplexSessionLoopOptions(observed, opts)...)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("create session agent loop: %w", err)
-	}
-	var deviceErrors <-chan error
-	if opts.rtcDeviceBinding != nil {
-		deviceErrors = opts.rtcDeviceBinding.Errors()
-	}
-	return loop, observed, deviceErrors, nil
-}
-
-func sessionStreamDeadline(opts sessionLoopOptions) (<-chan time.Time, func(), error) {
-	if opts.MaxDuration <= 0 {
-		return nil, func() {}, nil
-	}
-	if opts.audioService == nil {
-		return nil, nil, errors.New("audio service is required for session duration timing")
-	}
-	timer, err := opts.audioService.NewTimer(opts.clockSource, opts.MaxDuration)
-	if err != nil {
-		return nil, nil, err
-	}
-	return timer.C(), func() { timer.Stop() }, nil
-}
-
-func bindSessionLoopInputs(runCtx context.Context, loop *agentloop.AgentLoop, opts sessionLoopOptions) error {
-	if opts.loopReady != nil {
-		select {
-		case opts.loopReady <- loop:
-		case <-runCtx.Done():
-			return runCtx.Err()
-		}
-	}
-	return nil
-}
-
-func stopAndDrainSessionTimer(timer platformclock.Timer) {
-	if timer.Stop() {
-		return
-	}
-	select {
-	case <-timer.C():
-	default:
 	}
 }

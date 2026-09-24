@@ -373,3 +373,23 @@ func (c *controller) dispatchRetry(dispatch func(context.Context) error) {
 	}
 	c.ExpectProviderProgress()
 }
+
+func closeWithinDeadline(label string, closeFn func() error, deadline time.Time) error {
+	if closeFn == nil {
+		return nil
+	}
+	remaining := time.Until(deadline)
+	if remaining <= 0 {
+		return fmt.Errorf("%s: %w", label, sessionduration.ErrSessionCloseTimeout)
+	}
+	done := make(chan error, 1)
+	go func() { done <- invokeCleanup(closeFn) }()
+	timer := time.NewTimer(remaining)
+	defer timer.Stop()
+	select {
+	case err := <-done:
+		return err
+	case <-timer.C:
+		return fmt.Errorf("%s: %w", label, sessionduration.ErrSessionCloseTimeout)
+	}
+}

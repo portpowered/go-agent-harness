@@ -195,7 +195,7 @@ func TestRunAgentLoopSession_PageSightUsesOneSourceForSuccessiveQuestions(t *tes
 		scriptedTurn{events: toolCallEvents("broad-page-call", runtimeTools.ScreenToolID, `{}`)},
 		scriptedTurn{events: toolCallEvents("literal-page-call", cliTools.PageSightToolID, `{}`), after: `"source":"browser_page"`},
 	)
-	if err := runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
+	if err := runTestAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
 		audioService:    newTestAudioIOService(),
 		MaxDuration:     2 * time.Second,
 		WaitForClose:    true,

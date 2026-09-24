@@ -8,7 +8,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
-	sessionturnwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn/wire"
 )
 
 // SessionTurnBrowserRequest translates broker events at the host boundary.
@@ -18,27 +17,35 @@ func SessionTurnBrowserRequest(watch func(context.Context) <-chan webmcp.BrokerE
 	if watch == nil {
 		return request
 	}
-	request.Watch = func(ctx context.Context, emit func(sessionturn.BrowserEvent) bool) error {
+	request.Watch = adaptBrowserWatch(watch)
+	return request
+}
+
+func adaptBrowserWatch(watch func(context.Context) <-chan webmcp.BrokerEvent) func(context.Context, func(sessionturn.BrowserEvent) bool) error {
+	return func(ctx context.Context, emit func(sessionturn.BrowserEvent) bool) error {
 		input := watch(ctx)
 		if input == nil {
 			return errors.New("browser event watch returned a nil channel")
 		}
-		for {
-			select {
-			case <-ctx.Done():
+		return forwardBrowserEvents(ctx, input, emit)
+	}
+}
+
+func forwardBrowserEvents(ctx context.Context, input <-chan webmcp.BrokerEvent, emit func(sessionturn.BrowserEvent) bool) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case event, ok := <-input:
+			if !ok {
 				return nil
-			case event, ok := <-input:
-				if !ok {
-					return nil
-				}
-				converted, ok := browserEvent(event)
-				if ok && !emit(converted) {
-					return nil
-				}
+			}
+			converted, accepted := browserEvent(event)
+			if accepted && !emit(converted) {
+				return nil
 			}
 		}
 	}
-	return request
 }
 
 // StartSessionTurnPublication forwards provider updates through the already
@@ -58,7 +65,7 @@ func StartSessionTurnPublication(ctx context.Context, runtime sessionturn.Runtim
 	if runtime != nil {
 		return runtime.StartPublication(ctx, request)
 	}
-	return sessionturnwire.NewDefaultService().StartPublication(ctx, request)
+	return nil, errors.New("sessionturn runtime is required")
 }
 
 func StopPublication(publication sessionturn.Publication) {

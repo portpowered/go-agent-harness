@@ -395,34 +395,3 @@ func (r *reducer) canBindUnidentifiedLocked(rawID string) bool {
 	}
 	return !r.logicalScheduledSet || r.logicalScheduledID == "" || r.logicalScheduledID == id
 }
-
-func (r *reducer) ownerMatchesLocked(index int, rawID string) bool {
-	id := strings.TrimSpace(rawID)
-	if id == "" {
-		return r.activeScheduledSet && r.activeScheduledIndex == index && r.activeScheduledID == ""
-	}
-	if r.activeScheduledSet && r.activeScheduledIndex == index {
-		return r.activeScheduledID == id
-	}
-	if r.logicalScheduledSet && r.logicalScheduledIndex == index {
-		return r.logicalScheduledID == id
-	}
-	return true
-}
-
-func (r *reducer) clearScheduledOwnerLocked(index int, rawID string) {
-	id := strings.TrimSpace(rawID)
-	r.clearActiveOwnerLocked(index, id)
-	if r.logicalScheduledSet && r.logicalScheduledIndex == index && r.logicalScheduledID == id {
-		r.logicalScheduledSet = false
-		r.logicalScheduledID = ""
-	}
-}
-
-func (r *reducer) clearActiveOwnerLocked(index int, rawID string) {
-	id := strings.TrimSpace(rawID)
-	if r.activeScheduledSet && r.activeScheduledIndex == index && r.activeScheduledID == id {
-		r.activeScheduledSet = false
-		r.activeScheduledID = ""
-	}
-}

@@ -475,7 +475,7 @@ func TestRunSessionWithRecordingDirectoryRejectsNonEmptyDestinationBeforeConnect
 		t.Fatal(err)
 	}
 	inferencer := &countingSessionRecordingInferencer{}
-	err := RunSessionWithRecordingDirectory(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+	err := runSessionWithRecordingDirectoryForTest(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		Provider:          config.ProviderOpenAI,
 		Model:             "gpt-realtime",
 		APIKey:            "test-key",
@@ -496,7 +496,7 @@ func TestRunSessionWithRecordingDirectoryRejectsNonEmptyDestinationBeforeConnect
 func TestRunSessionWithRecordingDirectoryPreservesProviderAndRecordingErrorsOverEmptyRecording(t *testing.T) {
 	authErr := errors.New("openai realtime authentication failed")
 	destination := filepath.Join(t.TempDir(), "auth-failure")
-	err := RunSessionWithRecordingDirectory(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+	err := runSessionWithRecordingDirectoryForTest(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		Provider:          config.ProviderOpenAI,
 		Model:             "gpt-realtime",
 		APIKey:            "invalid-test-key",
@@ -532,7 +532,7 @@ func TestRunSessionWithRecordingDirectoryRejectsUnwritableDestinationBeforeConne
 
 	destination := filepath.Join(parent, "capture")
 	inferencer := &countingSessionRecordingInferencer{}
-	err := RunSessionWithRecordingDirectory(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
+	err := runSessionWithRecordingDirectoryForTest(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		Provider:          config.ProviderOpenAI,
 		Model:             "gpt-realtime",
 		APIKey:            "test-key",

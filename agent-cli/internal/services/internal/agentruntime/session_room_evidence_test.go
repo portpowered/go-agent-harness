@@ -65,7 +65,7 @@ func TestRunRoom_WritesPerParticipantEvidenceAndManifest(t *testing.T) {
 	// sample rate here.
 	opts.MixerConfig = room.PCM16MixerConfig{}
 
-	result, err := RunRoomWithResult(context.Background(), io.Discard, opts)
+	result, err := runRoomForTest(context.Background(), io.Discard, opts)
 	if err != nil {
 		t.Fatalf("RunRoomWithResult: %v", err)
 	}
@@ -213,7 +213,7 @@ func TestRunRoom_PreservesFailedEvidenceAndRedactsSecrets(t *testing.T) {
 		}, nil
 	}
 
-	result, err := RunRoomWithResult(context.Background(), io.Discard, opts)
+	result, err := runRoomForTest(context.Background(), io.Discard, opts)
 	if err == nil {
 		t.Fatal("failed room returned nil error")
 	}

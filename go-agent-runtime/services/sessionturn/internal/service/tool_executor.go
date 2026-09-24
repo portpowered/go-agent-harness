@@ -31,6 +31,7 @@ type toolExecutor struct {
 	closed        bool
 	activeCount   int
 	activeIdle    chan struct{}
+	innerCalls    sync.WaitGroup
 	closeOnce     sync.Once
 	closeErr      error
 }
@@ -63,13 +64,11 @@ func (e *toolExecutor) Execute(ctx context.Context, call messages.ToolCall) (mes
 	if e.observeCall != nil {
 		e.observeCall(call)
 	}
-	timeout := e.timeout
-	if timeout <= 0 && e.policy != nil {
-		timeout = e.policy.TimeoutForTool(call.Name)
-	}
-	if timeout <= 0 {
-		timeout = defaultToolExecutionTimeout
-	}
+	return e.executeBoundedCall(ctx, call)
+}
+
+func (e *toolExecutor) executeBoundedCall(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
+	timeout := e.executionTimeout(call)
 	callCtx, cancelCall := context.WithCancel(ctx)
 	stopClose := context.AfterFunc(e.ctx, cancelCall) //nolint:contextcheck // The separately owned executor lifetime must also cancel this caller-derived tool.
 	defer func() {
@@ -78,46 +77,77 @@ func (e *toolExecutor) Execute(ctx context.Context, call messages.ToolCall) (mes
 	}()
 	execCtx, cancel := context.WithTimeout(callCtx, timeout)
 	defer cancel()
-	e.mu.Lock()
-	if e.closed {
-		e.mu.Unlock()
+	if !e.beginCall() {
 		return e.failed(call, sessionturn.ErrSessionClosed)
+	}
+	defer e.finishCall()
+	if err := execCtx.Err(); err != nil {
+		return e.finish(call, messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name}, false, err)
+	}
+	result, cancelled, err := e.awaitToolResult(ctx, execCtx, call, timeout)
+	if err != nil {
+		if cancelled {
+			return e.finish(call, messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name}, false, err)
+		}
+		return e.failed(call, err)
+	}
+	return e.finishToolResult(ctx, execCtx, call, result, timeout)
+}
+
+func (e *toolExecutor) executionTimeout(call messages.ToolCall) time.Duration {
+	timeout := e.timeout
+	if timeout <= 0 && e.policy != nil {
+		timeout = e.policy.TimeoutForTool(call.Name)
+	}
+	if timeout <= 0 {
+		return defaultToolExecutionTimeout
+	}
+	return timeout
+}
+
+func (e *toolExecutor) beginCall() bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.closed {
+		return false
 	}
 	if e.activeCount == 0 {
 		e.activeIdle = make(chan struct{})
 	}
 	e.activeCount++
-	e.mu.Unlock()
-	defer e.finishCall()
-	if err := execCtx.Err(); err != nil {
-		return e.finish(call, messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name}, false, err)
-	}
+	e.innerCalls.Add(1)
+	return true
+}
+
+func (e *toolExecutor) awaitToolResult(ctx context.Context, execCtx context.Context, call messages.ToolCall, timeout time.Duration) (toolExecutionResult, bool, error) {
 	resultCh := make(chan toolExecutionResult, 1)
 	go func() {
+		defer e.innerCalls.Done()
 		response, err := invokeTool(execCtx, e.inner, call)
 		resultCh <- toolExecutionResult{response: response, err: err}
 	}()
-	var response messages.ToolCallResponse
-	var err error
 	select {
 	case result := <-resultCh:
-		response, err = result.response, result.err
+		return result, false, nil
 	case <-ctx.Done():
-		return e.finish(call, messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name}, false, ctx.Err())
+		return toolExecutionResult{}, true, ctx.Err()
 	case <-execCtx.Done():
-		return e.failed(call, fmt.Errorf("%w after %s", errToolTimeout, timeout))
+		return toolExecutionResult{}, false, fmt.Errorf("%w after %s", errToolTimeout, timeout)
 	}
+}
+
+func (e *toolExecutor) finishToolResult(ctx, execCtx context.Context, call messages.ToolCall, result toolExecutionResult, timeout time.Duration) (messages.ToolCallResponse, error) {
 	if ctx.Err() != nil {
 		return e.finish(call, messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name}, false, ctx.Err())
 	}
 	if errors.Is(execCtx.Err(), context.DeadlineExceeded) {
 		return e.failed(call, fmt.Errorf("%w after %s", errToolTimeout, timeout))
 	}
-	if err != nil {
-		return e.failed(call, err)
+	if result.err != nil {
+		return e.failed(call, result.err)
 	}
-	response.ToolCallID, response.Name = call.ID, call.Name
-	return e.finish(call, response, toolResponseFailed(response.Content), nil)
+	result.response.ToolCallID, result.response.Name = call.ID, call.Name
+	return e.finish(call, result.response, toolResponseFailed(result.response.Content), nil)
 }
 
 func (e *toolExecutor) Close() error {
@@ -133,6 +163,7 @@ func (e *toolExecutor) Close() error {
 		idle := e.activeIdle
 		e.mu.Unlock()
 		<-idle
+		e.innerCalls.Wait()
 	})
 	return e.closeErr
 }

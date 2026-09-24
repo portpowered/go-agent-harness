@@ -1,13 +1,17 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
+	gwproviders "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
 func (r *terminalReporter) reconcileFailure(o *sessionTerminalOutcome) (*sessionTerminalCandidate, bool) {
@@ -133,6 +137,100 @@ func writePublishedSessionTerminal(out io.Writer, candidate *sessionTerminalCand
 		return err
 	}
 	return nil
+}
+
+func writeTranscriptError(out io.Writer, value *messages.ErrorValue) error {
+	if value == nil || value.IsNonTerminal() {
+		return nil
+	}
+	fields := transcriptErrorFields(value)
+	wrapCause := func(message string) error {
+		if value.Err == nil {
+			return errors.New(message)
+		}
+		return fmt.Errorf("%s: %w", message, value.Err)
+	}
+	if value.Message != "" {
+		if fields != "" {
+			return wrapCause(fmt.Sprintf("session error: %s [%s]", value.Message, fields))
+		}
+		return wrapCause(fmt.Sprintf("session error: %s", value.Message))
+	}
+	if fields != "" {
+		return wrapCause(fmt.Sprintf("session error [%s]", fields))
+	}
+	return wrapCause("session error")
+}
+
+func writeTranscriptClose(out io.Writer, value *messages.SessionCloseValue, leadingNewline bool) error {
+	if value == nil {
+		return nil
+	}
+	if value.Reason != "" {
+		prefix := ""
+		if leadingNewline {
+			prefix = "\n"
+		}
+		if _, err := fmt.Fprintf(out, "%s[session closed: %s]\n", prefix, value.Reason); err != nil {
+			return err
+		}
+	}
+	if fields := transcriptTerminalFields(value.Classification, value.TerminalReason, value.TerminalProvenance, value.OutputState); fields != "" {
+		_, err := fmt.Fprintf(out, "[session terminal: %s]\n", fields)
+		return err
+	}
+	return nil
+}
+
+func transcriptErrorFields(value *messages.ErrorValue) string {
+	if value == nil {
+		return ""
+	}
+	classification := value.Classification
+	if classification == "" && (value.ErrorType != "" || value.Code != "" || value.Message != "") {
+		classification = gwproviders.SessionErrorClassification(value.ErrorType, value.Code, value.Message)
+	}
+	fields := transcriptTerminalFields(classification, value.TerminalReason, value.TerminalProvenance, value.OutputState)
+	providerFields := make([]string, 0, 2)
+	if value.ErrorType != "" {
+		providerFields = append(providerFields, "error_type="+value.ErrorType)
+	}
+	if value.Code != "" {
+		providerFields = append(providerFields, "code="+value.Code)
+	}
+	if fields != "" {
+		providerFields = append([]string{fields}, providerFields...)
+	}
+	return strings.Join(providerFields, " ")
+}
+
+func transcriptTerminalFields(classification string, reason messages.TerminalReason, provenance messages.TerminalProvenance, outputState messages.TerminalOutputState) string {
+	var fields []string
+	if classification != "" {
+		fields = append(fields, "classification="+classification)
+	}
+	if reason != "" {
+		fields = append(fields, "terminal_reason="+string(reason))
+	}
+	if provenance != "" {
+		fields = append(fields, "terminal_provenance="+string(provenance))
+	}
+	if outputState != "" {
+		fields = append(fields, "output_state="+string(outputState))
+	}
+	return strings.Join(fields, " ")
+}
+
+func compactSessionToolText(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	var compact bytes.Buffer
+	if json.Compact(&compact, []byte(value)) == nil {
+		return compact.String()
+	}
+	return strings.Join(strings.Fields(value), " ")
 }
 
 func sessionErrorHasIndependentFailure(err error) bool {

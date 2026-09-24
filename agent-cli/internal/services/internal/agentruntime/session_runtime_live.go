@@ -26,7 +26,7 @@ func RunSessionWithRuntimeFactory(ctx context.Context, out io.Writer, opts Sessi
 	return RunSession(ctx, out, opts)
 }
 
-func (p *sessionRuntimePlan) bindRTC(ctx context.Context, finalizer *sessionRuntimeFinalizer) error {
+func (p *sessionRuntimePlan) bindRTC(ctx context.Context) error {
 	if p.deviceService == nil {
 		if p.rtcDeviceRequest.HasDevices() {
 			return runtimedevices.ErrUnavailable
@@ -44,7 +44,6 @@ func (p *sessionRuntimePlan) bindRTC(ctx context.Context, finalizer *sessionRunt
 	}
 	p.inferencer = binding.Inferencer()
 	p.loop.rtcDeviceBinding = binding
-	finalizer.setRTCBinding(binding)
 	if selected, ok := binding.(runtimedevices.RTCBindingDeviceSelection); ok {
 		inputDevice, outputDevice := selected.SelectedDeviceIDs()
 		if p.rtcDeviceRequest.InputDevice == "" {

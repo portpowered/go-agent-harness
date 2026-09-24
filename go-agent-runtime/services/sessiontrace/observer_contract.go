@@ -6,6 +6,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
@@ -81,6 +82,14 @@ type FailureState struct {
 // Observer is the service-owned session stream observer. Mutable lifecycle,
 // accounting, liveness, and failure state live behind the sessiontrace Wire.
 type Observer interface {
+	Active() bool
+	RunFacts() sessionduration.RunFacts
+	CompletionFacts() sessionduration.CompletionFacts
+	SessionUpdatedPending() bool
+	SessionUpdatedReady() bool
+	EnrichLifecycleError(error) error
+	RetryDispatched(messages.StreamMessage)
+	ObserveStreamMessage(messages.StreamMessage)
 	Observe(messages.StreamMessage)
 	ScheduleAudioInputs([]ScheduledAudioInput)
 	DispatchScheduledInputs(context.Context, ScheduledInputSender) error

@@ -118,15 +118,6 @@ func attachRunObserver(request sessionduration.RunRequest) sessionduration.RunRe
 	if request.Effects.NoteUserTextInput == nil {
 		request.Effects.NoteUserTextInput = observer.NoteUserTextInput
 	}
-	if request.Effects.DispatchScheduledInputs == nil {
-		request.Effects.DispatchScheduledInputs = func(ctx context.Context, loop sessionduration.Loop) error {
-			sender, ok := loop.(sessionduration.ScheduledInputSender)
-			if !ok {
-				return errors.New("session loop does not support scheduled audio input")
-			}
-			return observer.DispatchScheduledInputs(ctx, sender)
-		}
-	}
 	priorWrite := request.Publication.Write
 	request.Publication.Write = func(message messages.StreamMessage) error {
 		observer.ObserveStreamMessage(message)

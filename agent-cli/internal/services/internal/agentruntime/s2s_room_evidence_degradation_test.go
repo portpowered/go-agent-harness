@@ -42,7 +42,7 @@ func TestRunRoom_EvidenceFailureDegradesWithoutStoppingParticipants(t *testing.T
 	defer cancel()
 	outcome := make(chan roomTestRunOutcome, 1)
 	go func() {
-		result, err := RunRoomWithResult(ctx, io.Discard, opts)
+		result, err := runRoomForTest(ctx, io.Discard, opts)
 		outcome <- roomTestRunOutcome{result: result, err: err}
 	}()
 

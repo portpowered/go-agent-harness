@@ -40,7 +40,7 @@ func TestRunRoom_HumanParticipantRoutesDevicesAndReportsReadiness(t *testing.T) 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go func() {
-		result, err := RunRoomWithResult(ctx, io.Discard, opts)
+		result, err := runRoomForTest(ctx, io.Discard, opts)
 		resultCh <- roomTestRunOutcome{result: result, err: err}
 	}()
 
@@ -155,7 +155,7 @@ func TestRunRoom_HumanCancellationFinalizesAllDefaultEvidence(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go func() {
-		result, err := RunRoomWithResult(ctx, io.Discard, opts)
+		result, err := runRoomForTest(ctx, io.Discard, opts)
 		resultCh <- roomTestRunOutcome{result: result, err: err}
 	}()
 
@@ -321,7 +321,7 @@ func TestRunRoom_HumanDeviceReadFailureFailsOnlyParticipant(t *testing.T) {
 	defer cancel()
 	resultCh := make(chan roomTestRunOutcome, 1)
 	go func() {
-		result, err := RunRoomWithResult(ctx, io.Discard, opts)
+		result, err := runRoomForTest(ctx, io.Discard, opts)
 		resultCh <- roomTestRunOutcome{result: result, err: err}
 	}()
 
@@ -377,7 +377,7 @@ func TestRunRoom_HumanDeviceStartupFailureFailsOnlyParticipant(t *testing.T) {
 	defer cancel()
 	resultCh := make(chan roomTestRunOutcome, 1)
 	go func() {
-		result, err := RunRoomWithResult(ctx, io.Discard, opts)
+		result, err := runRoomForTest(ctx, io.Discard, opts)
 		resultCh <- roomTestRunOutcome{result: result, err: err}
 	}()
 
@@ -442,7 +442,7 @@ func TestRunRoom_HumanProviderFailureFailsOnlyParticipant(t *testing.T) {
 	defer cancel()
 	resultCh := make(chan roomTestRunOutcome, 1)
 	go func() {
-		result, err := RunRoomWithResult(ctx, io.Discard, opts)
+		result, err := runRoomForTest(ctx, io.Discard, opts)
 		resultCh <- roomTestRunOutcome{result: result, err: err}
 	}()
 	select {

@@ -174,38 +174,84 @@ func (s *Service) Enrich(request sessionterminal.Request) error {
 		return err
 	}
 	lifecycle := request.Lifecycle
-	if len(lifecycle.UnresolvedToolResultCallIDs) > 0 {
-		var existing *sessionterminal.UnresolvedToolResultsError
-		if !errors.As(err, &existing) {
-			unresolved := sessionterminal.NewUnresolvedToolResultsError(lifecycle.UnresolvedToolResultCallIDs, lifecycle.UnresolvedToolResultStatuses)
-			if err == nil {
-				err = unresolved
-			} else {
-				err = errors.Join(err, unresolved)
-			}
-		}
-	}
-	if len(lifecycle.PendingToolContinuationIDs) > 0 {
-		var existing *runtimeSession.LiveToolContinuationError
-		if !errors.As(err, &existing) {
-			continuation := &runtimeSession.LiveToolContinuationError{CallIDs: lifecycle.PendingToolContinuationIDs, ProviderStatuses: lifecycle.PendingContinuations.Statuses, ProviderCodes: lifecycle.PendingContinuations.Codes, ProviderDetails: lifecycle.PendingContinuations.Details}
-			if err == nil {
-				err = continuation
-			} else {
-				err = errors.Join(err, continuation)
-			}
-		}
-	}
-	if len(lifecycle.PendingImageContinuationIDs) > 0 {
-		var existing *runtimeSession.LiveImageContinuationError
-		if !errors.As(err, &existing) {
-			continuation := &runtimeSession.LiveImageContinuationError{CallIDs: lifecycle.PendingImageContinuationIDs, ProviderStatuses: lifecycle.PendingContinuations.Statuses, ProviderCodes: lifecycle.PendingContinuations.Codes, ProviderDetails: lifecycle.PendingContinuations.Details}
-			if err == nil {
-				err = continuation
-			} else {
-				err = errors.Join(err, continuation)
-			}
-		}
-	}
+	err = enrichUnresolvedResults(err, lifecycle)
+	err = enrichToolContinuation(err, lifecycle)
+	err = enrichImageContinuation(err, lifecycle)
 	return err
+}
+
+func enrichUnresolvedResults(err error, lifecycle sessionterminal.LifecycleSnapshot) error {
+	if len(lifecycle.UnresolvedToolResultCallIDs) == 0 {
+		return err
+	}
+	var existing *sessionterminal.UnresolvedToolResultsError
+	if errors.As(err, &existing) {
+		return err
+	}
+	return joinTerminalCause(err, newUnresolvedToolResultsError(lifecycle.UnresolvedToolResultCallIDs, lifecycle.UnresolvedToolResultStatuses))
+}
+
+func enrichToolContinuation(err error, lifecycle sessionterminal.LifecycleSnapshot) error {
+	if len(lifecycle.PendingToolContinuationIDs) == 0 {
+		return err
+	}
+	var existing *runtimeSession.LiveToolContinuationError
+	if errors.As(err, &existing) {
+		return err
+	}
+	continuation := &runtimeSession.LiveToolContinuationError{
+		CallIDs:          lifecycle.PendingToolContinuationIDs,
+		ProviderStatuses: lifecycle.PendingContinuations.Statuses,
+		ProviderCodes:    lifecycle.PendingContinuations.Codes,
+		ProviderDetails:  lifecycle.PendingContinuations.Details,
+	}
+	return joinTerminalCause(err, continuation)
+}
+
+func enrichImageContinuation(err error, lifecycle sessionterminal.LifecycleSnapshot) error {
+	if len(lifecycle.PendingImageContinuationIDs) == 0 {
+		return err
+	}
+	var existing *runtimeSession.LiveImageContinuationError
+	if errors.As(err, &existing) {
+		return err
+	}
+	continuation := &runtimeSession.LiveImageContinuationError{
+		CallIDs:          lifecycle.PendingImageContinuationIDs,
+		ProviderStatuses: lifecycle.PendingContinuations.Statuses,
+		ProviderCodes:    lifecycle.PendingContinuations.Codes,
+		ProviderDetails:  lifecycle.PendingContinuations.Details,
+	}
+	return joinTerminalCause(err, continuation)
+}
+
+func joinTerminalCause(err, cause error) error {
+	if err == nil {
+		return cause
+	}
+	return errors.Join(err, cause)
+}
+
+func newUnresolvedToolResultsError(ids []string, statuses map[string]string) *sessionterminal.UnresolvedToolResultsError {
+	seen := make(map[string]struct{}, len(ids))
+	ordered := make([]string, 0, len(ids))
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		ordered = append(ordered, id)
+	}
+	sort.Strings(ordered)
+	owned := make(map[string]string, len(ordered))
+	for _, id := range ordered {
+		if status := strings.TrimSpace(statuses[id]); status != "" {
+			owned[id] = status
+		}
+	}
+	return &sessionterminal.UnresolvedToolResultsError{CallIDs: ordered, SendStatuses: owned}
 }

@@ -5,16 +5,20 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
-	sessionterminalwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
-	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 	"io"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
+	sessionterminalwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 const (
@@ -584,7 +588,13 @@ func (c *replayInitialSessionUpdateConn) Close() error {
 }
 
 func replaySessionCapture(ctx context.Context, out io.Writer, path string) error {
-	renderer := newSessionReplayRenderer(out, sessionterminalwire.ReporterFromContext(ctx))
+	terminal := sessionterminalwire.NewService()
+	reporter := sessionterminalwire.ReporterFromContext(ctx)
+	var observer sessionterminal.TranscriptObserver
+	if reporter != nil {
+		observer = func(msg messages.StreamMessage, _ bool) { reporter.ObserveStreamMessage(msg, false) }
+	}
+	renderer := terminal.NewTranscriptRenderer(out, observer)
 	replayer, err := gwtesting.NewSessionReplayer(path, gwtesting.WithReplayOutboundValidation(false), gwtesting.WithReplayContext(ctx))
 	if err != nil {
 		return fmt.Errorf("replay session capture %s: %w", path, err)
@@ -593,27 +603,28 @@ func replaySessionCapture(ctx context.Context, out io.Writer, path string) error
 		select {
 		case <-ctx.Done():
 			_ = replayer.Close()
-			return ctx.Err()
+			return errors.Join(ctx.Err(), renderer.Finish())
 		case <-replayer.Done():
-			return drainSessionReplayMessages(renderer, replayer)
+			return errors.Join(drainSessionReplayMessages(renderer, replayer), renderer.Finish())
 		case msg, ok := <-replayer.Receive().Chan():
 			if !ok {
 				continue
 			}
-			if err := writeSessionReplayMessage(renderer, msg); err != nil {
-				return err
+			if err := terminal.WriteTranscriptMessage(renderer, msg); err != nil {
+				return errors.Join(err, renderer.Finish())
 			}
 		}
 	}
 }
 
 func drainSessionReplayMessages(out io.Writer, replayer *gwtesting.SessionReplayer) error {
+	terminal := sessionterminalwire.NewService()
 	for {
 		msg, ok := replayer.Receive().Read()
 		if !ok {
 			return nil
 		}
-		if err := writeSessionReplayMessage(out, msg); err != nil {
+		if err := terminal.WriteTranscriptMessage(out, msg); err != nil {
 			return err
 		}
 	}
@@ -630,29 +641,6 @@ func grokReplayCaptureHasSessionClose(path string) bool {
 		}
 	}
 	return false
-}
-
-func usesWebSocketCapture(path string) bool {
-	loaded, err := gwtesting.LoadSessionCaptureForReplay(path)
-	if err != nil {
-		return false
-	}
-	capture := loaded.Capture
-	for _, record := range capture.Records {
-		if record.PayloadType == gwtesting.SessionPayloadTypeWebSocketMessage {
-			return true
-		}
-	}
-	return false
-}
-
-func usesOpenAIWebSocketCapture(path string) bool {
-	loaded, err := gwtesting.LoadSessionCaptureForReplay(path)
-	if err != nil {
-		return false
-	}
-	capture := loaded.Capture
-	return strings.EqualFold(capture.Provider.Name, sessionProviderOpenAI)
 }
 
 func captureHasEvent(path string, eventType string) bool {

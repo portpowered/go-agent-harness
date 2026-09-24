@@ -440,7 +440,7 @@ func newRoomLifecycleRun(t *testing.T, ids []string) *roomLifecycleRun {
 		results: make(chan roomTestRunOutcome, 1), cancel: cancel, ctx: ctx,
 	}
 	go func() {
-		result, err := RunRoomWithResult(ctx, io.Discard, base)
+		result, err := runRoomForTest(ctx, io.Discard, base)
 		ledger.markReturned()
 		run.results <- roomTestRunOutcome{result: result, err: err}
 	}()
