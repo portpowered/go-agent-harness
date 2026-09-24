@@ -22,7 +22,6 @@ type observedSessionInferencer struct {
 	progress    sessiontrace.Observer
 
 	mu              sync.Mutex
-	connectErr      error
 	sessionErr      error
 	session         messages.Session
 	observed        *observedSession
@@ -50,9 +49,7 @@ func newObservedSessionInferencer(inner messages.SessionInferencer, runtime ...s
 	}
 }
 
-// ConnectSession wraps the inner connect and remembers a failed connect so
-// the session runner can surface it: the engine runs model runners as
-// background participants whose errors are not propagated to the hot loop.
+// ConnectSession wraps the inner connect while tracking the returned session.
 func (i *observedSessionInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
 	i.mu.Lock()
 	i.connectStarted = true
@@ -65,9 +62,6 @@ func (i *observedSessionInferencer) ConnectSession(ctx context.Context) (message
 	}()
 	session, err := i.inner.ConnectSession(ctx)
 	if err != nil {
-		i.mu.Lock()
-		i.connectErr = err
-		i.mu.Unlock()
 		i.closeDone()
 		return nil, err
 	}
@@ -157,13 +151,6 @@ func (i *observedSessionInferencer) DrainSessionPlayback(ctx context.Context) er
 		return nil
 	}
 	return drainer.DrainPlayback(ctx)
-}
-
-// connectFailure returns the remembered connect error, if any.
-func (i *observedSessionInferencer) connectFailure() error {
-	i.mu.Lock()
-	defer i.mu.Unlock()
-	return i.connectErr
 }
 
 // sessionFailure returns an unexpected terminal error reported by the

@@ -6116,3 +6116,20 @@ before any push or PR.
 - Exact next action: commit these measured repairs and this checkpoint, then
   rerun `make prepush` and the complete C251-04 gate on that exact clean SHA
   before any push or PR.
+
+
+## C251 staticcheck repair checkpoint — 2026-09-24
+
+- Exact `rtk make prepush` on `1e521c3d885f044fe06732713d78107df88774a0`
+  passed architecture (234 packages, 2,038 files, 29,928 functions), generated
+  Wire verification, vet, and lint (0 findings per module/tool), then stopped
+  at staticcheck. Pinned staticcheck 2026.1 found the now-unreferenced
+  `observedSessionInferencer.connectFailure` accessor and its stored error in
+  `session_live_observation.go`. Log:
+  `~/Library/Application Support/rtk/tee/1790250285_make_prepush.log`.
+- Removed that unused legacy accessor/state. `ConnectSession` still returns the
+  connection error directly and closes its completion signal on failure; no
+  policy or failure behavior is discarded.
+- Exact next action: commit the source repair and this checkpoint, rerun
+  `make prepush` on its exact clean SHA, then run every C251-04 local command
+  before push or PR.
