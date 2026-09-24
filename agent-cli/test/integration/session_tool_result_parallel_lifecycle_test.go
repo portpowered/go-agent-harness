@@ -620,7 +620,7 @@ func TestSessionParallelToolResultsTerminalFailureNamesOnlyRemainingCall(t *test
 	if got := unresolved.UnresolvedCallIDs(); len(got) != 1 || got[0] != parallelLifecycleBravoID {
 		t.Fatalf("terminal-path unresolved IDs = %v, want only [%s]", got, parallelLifecycleBravoID)
 	}
-	if got := unresolved.SendStatuses[parallelLifecycleBravoID]; got != string(messages.SessionSendBufferFull) {
+	if got := unresolved.SendStatuses[parallelLifecycleBravoID]; got != messages.SessionSendBufferFull {
 		t.Fatalf("terminal-path send status = %q, want %q", got, messages.SessionSendBufferFull)
 	}
 	var continuation *servicetest.SessionToolContinuationError

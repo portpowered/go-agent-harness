@@ -27,7 +27,7 @@ var ErrRoomReplaySourceConflict = runtimeRooms.ErrReplaySourceConflict
 var ErrSessionAudioInputConflict = serviceDevices.ErrSessionAudioInputConflict
 var ErrSessionAudioOutputConflict = serviceDevices.ErrSessionAudioOutputConflict
 var ErrSessionAudioInTurnBargeRequiresSequence = impl.ErrSessionAudioInTurnBargeRequiresSequence
-var ErrSessionAudioResponseIncomplete = impl.ErrSessionAudioResponseIncomplete
+var ErrSessionAudioResponseIncomplete = runtimeSession.ErrLiveAudioResponseIncomplete
 var ErrSessionImageContinuationIncomplete = runtimeSession.ErrLiveImageContinuationIncomplete
 var ErrSessionScheduledAudioIncomplete = runtimeSession.ErrLiveScheduledAudioIncomplete
 var ErrSessionUnresolvedToolResults = sessioncontract.ErrSessionUnresolvedToolResults
@@ -74,7 +74,7 @@ type SessionRTCDataPlane = impl.SessionRTCDataPlane
 type SessionRunOptions = impl.SessionRunOptions
 type SessionRuntimeSelection = impl.SessionRuntimeSelection
 type SessionScheduledAudioIncompleteError = runtimeSession.LiveScheduledAudioIncompleteError
-type SessionToolContinuationError = impl.SessionToolContinuationError
+type SessionToolContinuationError = runtimeSession.LiveToolContinuationError
 type SessionToolDiagnostic = impl.SessionToolDiagnostic
 type SessionUnresolvedToolResultsError = sessioncontract.SessionUnresolvedToolResultsError
 

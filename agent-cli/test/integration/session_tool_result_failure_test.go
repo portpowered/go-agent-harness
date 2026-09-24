@@ -215,7 +215,7 @@ func assertUnresolvedFailure(t *testing.T, err error, sink *unresolvedToolDiagno
 		t.Fatalf("unresolved IDs = %v, want [%s]", got, unresolvedToolCallID)
 	}
 	if wantStatus != "" {
-		if got := unresolved.SendStatuses[unresolvedToolCallID]; got != string(wantStatus) {
+		if got := unresolved.SendStatuses[unresolvedToolCallID]; got != wantStatus {
 			t.Fatalf("unresolved send status = %q, want %q", got, wantStatus)
 		}
 	}
