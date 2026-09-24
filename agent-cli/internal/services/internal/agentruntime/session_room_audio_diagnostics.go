@@ -9,6 +9,8 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
+	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 )
 
 const (
@@ -130,19 +132,13 @@ func newRoomAudioIngressLedger(participantID string, sink SessionDiagnosticSink)
 	}
 }
 
-func newRoomParticipantIngress(plan *roomParticipantPlan, opts RoomRunOptions, evidence *roomEvidence) *roomAudioIngressLedger {
+func newRoomParticipantIngress(plan *roomParticipantPlan, opts RoomRunOptions, evidence roomevidence.Recorder) *roomAudioIngressLedger {
 	if plan == nil {
 		return nil
 	}
-	participantID := plan.manifest.ID
-	sink := combineDiagnosticSinks(roomParticipantDiagnosticSinks(
-		plan,
-		opts,
-		evidenceParticipant(evidence, participantID),
-	)...)
-	return newRoomAudioIngressLedger(participantID, sink)
+	sink := sessiontracewire.CombineDiagnosticSinks(roomParticipantDiagnosticSinks(plan, opts, evidence)...)
+	return newRoomAudioIngressLedger(plan.manifest.ID, sink)
 }
-
 func notifyRoomParticipantMixerReady(opts RoomRunOptions, participantID string, mixer *room.PCM16Mixer) {
 	if opts.onParticipantMixerReady != nil {
 		opts.onParticipantMixerReady(participantID, mixer)
@@ -462,11 +458,4 @@ func routeRoomPeerPCM(ctx context.Context, sourceID string, target *roomParticip
 		target.ingress.record(sourceID, disposition, reason, len(pcm))
 	}
 	return writeErr
-}
-
-func evidenceParticipant(evidence *roomEvidence, participantID string) *roomParticipantEvidence {
-	if evidence == nil {
-		return nil
-	}
-	return evidence.participant(participantID)
 }

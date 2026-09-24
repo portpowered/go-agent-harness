@@ -5,23 +5,19 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
+	"maps"
+	"os"
 	"sync"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
-	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
-	runtimeRoomsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
-	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
+	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
-
-// RunRoom runs a manifest-defined room and discards the structured result.
-func RunRoom(ctx context.Context, out io.Writer, opts RoomRunOptions) error {
-	_, err := RunRoomWithResult(ctx, out, opts)
-	return err
-}
 
 // RunRoomWithResult validates all participant configuration, constructs all
 // session inferencers, establishes the local mesh, and then runs one persistent
@@ -45,60 +41,29 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		result := roomFailureResult(err, nil)
 		return result, err
 	}
-	if err = validateRoomRunAdmission(opts, validation, replayMode); err != nil {
-		result := roomFailureResult(err, nil)
-		return result, err
-	}
-	var roomClock platformclock.Source
-	opts, roomClock, err = normalizeRoomClockOptions(opts)
+	opts, roomClock, err := validateRoomRunAdmission(opts, validation, replayMode)
 	if err != nil {
 		result := roomFailureResult(err, nil)
 		return result, err
 	}
 
-	var evidence *roomEvidence
+	var evidence roomevidence.Recorder
 	var evidenceSecrets []string
 	startedAt := roomClock.Now().UTC()
-	if strings.TrimSpace(opts.OutputDir) != "" {
-		outputDir, outputErr := prepareRoomEvidenceOutput(opts.OutputDir)
-		if outputErr != nil {
-			result := roomFailureResult(outputErr, nil)
-			return result, outputErr
-		}
-		opts.OutputDir = outputDir
-		if !replayMode {
-			evidenceSecrets = roomCredentialSecrets(opts.Manifest, validation)
-		}
-		evidence, err = newRoomEvidenceWithLatency(outputDir, opts.Manifest, roomFormatForOptions(opts), evidenceSecrets, startedAt, runtimeRoomsWire.NewLatencyService(), roomClock)
-		if err != nil {
-			result := roomFailureResult(err, evidenceSecrets)
-			return result, err
-		}
-		if opts.onRoomEvidenceReady != nil {
-			opts.onRoomEvidenceReady(evidence)
-		}
-	}
-	finalizeEvidence := func(result RoomResult, runErr error) (RoomResult, error) {
-		if evidence != nil {
-			// Evidence finalization may report a degraded sink, but it is not a
-			// room runtime failure. The status projection is applied to the
-			// returned result after all close/mix/manifest callbacks have had a
-			// chance to latch their first error.
-			_ = evidence.finalize(result, runErr, roomClock.Now().UTC())
-			evidence.applyRecordingHealth(&result)
-		}
-		return result, runErr
+	opts, evidence, evidenceSecrets, err = prepareRoomEvidence(opts, validation, replayMode, roomClock, startedAt)
+	if err != nil {
+		return roomFailureResult(err, evidenceSecrets), err
 	}
 
 	plans, secrets, err := buildRoomParticipantPlansWithContext(ctx, opts, validation, evidence)
 	if err != nil {
 		result := roomFailureResult(err, secrets)
-		return finalizeEvidence(result, err)
+		return finalizeRoomEvidence(evidence, roomClock, result, err)
 	}
 	replaySchedule, err := buildRoomReplaySchedule(ctx, replayMode, opts, plans)
 	if err != nil {
 		result := roomFailureResult(err, secrets)
-		return finalizeEvidence(result, err)
+		return finalizeRoomEvidence(evidence, roomClock, result, err)
 	}
 
 	// Keep caller cancellation out of participant contexts until the coordinator
@@ -128,16 +93,20 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 			safeErr := roomParticipantFailure(plan.manifest.ID, err, secrets)
 			safeErr = errors.Join(safeErr, closeMeshNow(), closeRoomParticipantPlanCapabilities(plans))
 			result := roomFailureResult(safeErr, secrets)
-			return finalizeEvidence(result, safeErr)
+			return finalizeRoomEvidence(evidence, roomClock, result, safeErr)
 		}
-		evidence.recordTimelineEvent("participant_joined", plan.manifest.ID, nil)
+		if evidence != nil {
+			evidence.MarkError(plan.manifest.ID, roomevidence.TimelinePath, evidence.RecordTimeline("participant_joined", plan.manifest.ID, nil))
+		}
 	}
 
 	onParticipantTerminated := opts.OnParticipantTerminated
 	if onParticipantTerminated != nil || evidence != nil {
 		onParticipantTerminated = func(result RoomParticipantResult) {
 			recordRoomParticipantBoundDiagnostic(opts, evidence, result)
-			evidence.recordTimelineEvent("participant_terminated", result.ParticipantID, participantTerminalFields(result))
+			if evidence != nil {
+				evidence.MarkError(result.ParticipantID, roomevidence.TimelinePath, evidence.RecordTimeline("participant_terminated", result.ParticipantID, participantTerminalFields(result)))
+			}
 			if opts.OnParticipantTerminated != nil {
 				opts.OnParticipantTerminated(result)
 			}
@@ -146,7 +115,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 	coordinator := newRoomCoordinator(roomCancel, opts.Manifest.Room.MaxTurns, opts.BoundShutdownGrace, onParticipantTerminated, opts.onRoomBoundShutdown)
 	coordinator.setParticipantFailureObserver(func(participantID, reason string) {
 		if evidence != nil {
-			evidence.recordTimelineEvent("participant_failed", participantID, map[string]string{"reason": reason})
+			evidence.MarkError(participantID, roomevidence.TimelinePath, evidence.RecordTimeline("participant_failed", participantID, map[string]string{"reason": reason}))
 		}
 	})
 	coordinator.blockEmptyStop()
@@ -169,7 +138,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 			participantCancel()
 			roomErr := errors.Join(coordinator.roomError(), cleanupSetup())
 			result := roomFailureResult(roomErr, secrets)
-			return finalizeEvidence(result, roomErr)
+			return finalizeRoomEvidence(evidence, roomClock, result, roomErr)
 		}
 		runtime := newRoomParticipantRuntime(plan, participantCtx, participantCancel, admissionCtx, admissionCancel, mixer, replaySchedule, opts, evidence, coordinator)
 		plan.participant = runtime
@@ -278,7 +247,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 	if roomErr != nil {
 		result.Error = sanitizeRoomError(roomErr, secrets)
 	}
-	result, roomErr = finalizeEvidence(result, roomErr)
+	result, roomErr = finalizeRoomEvidence(evidence, roomClock, result, roomErr)
 	result, roomErr = notifyRoomTerminated(opts.OnRoomTerminated, result, roomErr, secrets)
 	if _, writeErr := fmt.Fprintf(out, "room stopped: reason=%s participants=%d active=%d\n", result.Reason, len(result.Participants), len(result.ActiveParticipants)); writeErr != nil {
 		roomErr = errors.Join(roomErr, fmt.Errorf("write room result: %w", writeErr))
@@ -286,10 +255,24 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 	return result, roomErr
 }
 
+func roomCredentialSecrets(manifest room.Manifest, options room.ValidationOptions) []string {
+	lookup := options.LookupCredential
+	if lookup == nil {
+		lookup = os.LookupEnv
+	}
+	secrets := make([]string, 0, len(manifest.Participants))
+	for _, participant := range manifest.Participants {
+		if value, ok := lookup(participant.APIKeyEnv); ok && value != "" {
+			secrets = append(secrets, value)
+		}
+	}
+	return secrets
+}
+
 // publishRoomParticipantsReady announces every started participant as ready:
 // it enriches the evidence manifest with runtime-selected metadata, records
 // the room-timeline transition, and notifies the stream/callback observers.
-func publishRoomParticipantsReady(coordinator *roomCoordinator, plans []*roomParticipantPlan, opts RoomRunOptions, evidence *roomEvidence) {
+func publishRoomParticipantsReady(coordinator *roomCoordinator, plans []*roomParticipantPlan, opts RoomRunOptions, evidence roomevidence.Recorder) {
 	for _, plan := range plans {
 		if plan == nil {
 			continue
@@ -299,20 +282,13 @@ func publishRoomParticipantsReady(coordinator *roomCoordinator, plans []*roomPar
 		}
 		ready := roomParticipantReady(plan)
 		if evidence != nil {
-			evidence.setParticipantReady(ready)
+			evidence.MarkError(ready.ParticipantID, roomevidence.ManifestPath, evidence.SetParticipantReady(ready))
+			evidence.MarkError(ready.ParticipantID, roomevidence.TimelinePath, evidence.RecordTimeline("participant_ready", ready.ParticipantID, nil))
 		}
-		evidence.recordTimelineEvent("participant_ready", ready.ParticipantID, nil)
 		if opts.OnParticipantReady != nil {
 			opts.OnParticipantReady(ready)
 		}
 	}
-}
-
-func buildRoomReplaySchedule(ctx context.Context, replayMode bool, opts RoomRunOptions, plans []*roomParticipantPlan) (*roomReplaySchedule, error) {
-	if !replayMode {
-		return nil, nil
-	}
-	return newRoomReplaySchedule(ctx, *opts.ReplayPlan, plans, roomFormatForOptions(opts), opts.AudioService)
 }
 
 func roomReplayMixerConfig(opts RoomRunOptions, scheduled bool) room.PCM16MixerConfig {
@@ -324,8 +300,8 @@ func roomReplayMixerConfig(opts RoomRunOptions, scheduled bool) room.PCM16MixerC
 	return config
 }
 
-// newRoomParticipantRuntime assembles one participant's runtime state, including
-// its fixed per-voice outbound loudness gain from the audio service.
+// newRoomParticipantRuntime assembles one participant's routing and lifecycle
+// state. Audio policy remains owned by the audio and device services.
 func newRoomParticipantRuntime(
 	plan *roomParticipantPlan,
 	participantCtx context.Context,
@@ -333,59 +309,33 @@ func newRoomParticipantRuntime(
 	admissionCtx context.Context,
 	admissionCancel context.CancelFunc,
 	mixer *room.PCM16Mixer,
-	replaySchedule *roomReplaySchedule,
+	replaySchedule roomreplay.Schedule,
 	opts RoomRunOptions,
-	evidence *roomEvidence,
+	evidence roomevidence.Recorder,
 	coordinator *roomCoordinator,
 ) *roomParticipantRuntime {
 	return &roomParticipantRuntime{
-		plan:             plan,
-		ctx:              participantCtx,
-		cancel:           participantCancel,
-		admissionCtx:     admissionCtx,
-		admissionCancel:  admissionCancel,
-		loopReady:        make(chan *agentloop.AgentLoop, 1),
-		participantDone:  make(chan struct{}),
-		mixerDone:        make(chan struct{}),
-		observerDone:     make(chan struct{}),
-		replayFrameAcks:  roomReplayFrameAckChannel(replaySchedule, plan),
-		mixer:            mixer,
-		ingress:          newRoomParticipantIngress(plan, opts, evidence),
-		lifecycle:        &roomParticipantLifecycle{stateChanged: coordinator.progress, admissionClosed: coordinator.admissionDone()},
-		outboundLoudness: audio.NewLoudnessNormalizer(audio.LoudnessNormalizerConfig{GainDB: opts.AudioService.VoiceGainDB(plan.manifest.Voice)}),
+		plan:            plan,
+		ctx:             participantCtx,
+		cancel:          participantCancel,
+		admissionCtx:    admissionCtx,
+		admissionCancel: admissionCancel,
+		loopReady:       make(chan *agentloop.AgentLoop, 1),
+		participantDone: make(chan struct{}),
+		mixerDone:       make(chan struct{}),
+		observerDone:    make(chan struct{}),
+		replayFrameAcks: roomReplayFrameAckChannel(replaySchedule, plan),
+		mixer:           mixer,
+		ingress:         newRoomParticipantIngress(plan, opts, evidence),
+		lifecycle:       &roomParticipantLifecycle{stateChanged: coordinator.progress, admissionClosed: coordinator.admissionDone()},
 	}
 }
 
-func roomReplayFrameAckChannel(schedule *roomReplaySchedule, plan *roomParticipantPlan) chan struct{} {
+func roomReplayFrameAckChannel(schedule roomreplay.Schedule, plan *roomParticipantPlan) chan struct{} {
 	if schedule == nil || roomParticipantIsHuman(plan) {
 		return nil
 	}
 	return make(chan struct{}, 1)
-}
-
-func startRoomReplayScheduler(schedule *roomReplaySchedule, roomCtx context.Context, startGate <-chan struct{}, runtimes []*roomParticipantRuntime, coordinator *roomCoordinator, opts RoomRunOptions, wg *sync.WaitGroup) {
-	if schedule == nil || wg == nil {
-		return
-	}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		select {
-		case <-startGate:
-		case <-roomCtx.Done():
-			return
-		}
-		scheduleErr := schedule.run(roomCtx, runtimes, coordinator, opts)
-		if scheduleErr != nil {
-			if !coordinator.isStopping() {
-				coordinator.fail(fmt.Errorf("run room replay timeline: %w", scheduleErr))
-			}
-			return
-		}
-		if !coordinator.isStopping() {
-			coordinator.stop(RoomTerminationStopped, nil)
-		}
-	}()
 }
 
 func notifyRoomTerminated(observer RoomObserver, result RoomResult, roomErr error, secrets []string) (RoomResult, error) {
@@ -404,7 +354,7 @@ func notifyRoomTerminated(observer RoomObserver, result RoomResult, roomErr erro
 		ActiveParticipants: append([]string(nil), result.ActiveParticipants...),
 		Error:              result.Error,
 		RecordingStatus:    cloneRoomRecordingStatus(result.RecordingStatus),
-		DegradedArtifacts:  cloneRoomStringMap(result.DegradedArtifacts),
+		DegradedArtifacts:  maps.Clone(result.DegradedArtifacts),
 	}
 	observerErr := boundedRoomObserver(observerCleanup, "room observer", func() { observer(*observerResult) }, nil)
 	observerCleanup.stop()
@@ -418,24 +368,15 @@ func notifyRoomTerminated(observer RoomObserver, result RoomResult, roomErr erro
 	return result, roomErr
 }
 
-func prepareRoomReplayOptions(opts RoomRunOptions, validation room.ValidationOptions) (RoomRunOptions, room.ValidationOptions, bool, error) {
-	replayPlan, replayMode, err := resolveRoomReplayPlan(opts)
-	if err != nil || !replayMode {
-		return opts, validation, replayMode, err
+func cloneRoomRecordingStatus(status *transcript.RecordingStatus) *transcript.RecordingStatus {
+	if status == nil {
+		return nil
 	}
-	// The admitted bundle is the only configuration authority for replay. In
-	// particular, do not retain any live launch/device/credential seams while
-	// composing participants.
-	opts.ReplayPlan = &replayPlan
-	opts.ReplayPath = replayPlan.BundlePath
-	opts.Manifest = replayPlan.Manifest()
-	opts.LaunchPlan = nil
-	opts.DeviceService = nil
-	opts.CredentialLookup = nil
-	return opts, room.ValidationOptions{}, true, nil
+	copy := *status
+	return &copy
 }
 
-func validateRoomRunAdmission(opts RoomRunOptions, validation room.ValidationOptions, replayMode bool) error {
+func validateRoomRunAdmission(opts RoomRunOptions, validation room.ValidationOptions, replayMode bool) (RoomRunOptions, platformclock.Source, error) {
 	if !replayMode {
 		// A caller that already supplies its own session or transport seam
 		// (SessionFactory, SessionInferencers, or WebSocketDialerFactory) owns
@@ -448,10 +389,10 @@ func validateRoomRunAdmission(opts RoomRunOptions, validation room.ValidationOpt
 			validation.AllowMissingOpener = true
 		}
 		if err := opts.Manifest.Validate(validation); err != nil {
-			return err
+			return opts, nil, err
 		}
 	}
-	return nil
+	return normalizeRoomClockOptions(opts)
 }
 
 func normalizeRoomClockOptions(opts RoomRunOptions) (RoomRunOptions, platformclock.Source, error) {
@@ -461,11 +402,7 @@ func normalizeRoomClockOptions(opts RoomRunOptions) (RoomRunOptions, platformclo
 		if opts.AudioService == nil {
 			return opts, roomClock, errors.New("audio service is required for room liveness timing")
 		}
-		livenessClock, err := opts.AudioService.NewClock(roomClock)
-		if err != nil {
-			return opts, roomClock, err
-		}
-		opts.LivenessClock = livenessClock
+		opts.LivenessClock = sessiontracewire.LivenessClockFromSource(roomClock)
 	}
 	return opts, roomClock, nil
 }
@@ -493,35 +430,4 @@ func roomParticipantReady(plan *roomParticipantPlan) RoomParticipantReady {
 		}
 	}
 	return ready
-}
-
-func openRoomHumanDevices(runtime *roomParticipantRuntime, service runtimeDevices.Service) error {
-	if runtime == nil || runtime.plan == nil {
-		return errors.New("human participant runtime is nil")
-	}
-	if service == nil {
-		return runtimeDevices.ErrUnavailable
-	}
-	participant := runtime.plan.manifest
-	handle, err := service.Open(runtime.ctx, runtimeDevices.Request{
-		InputDevice: participant.InputDevice, OutputDevice: participant.OutputDevice,
-		CaptureEnabled: true, PlaybackEnabled: true, SampleRate: runtime.mixer.Format().SampleRate, Channels: 1,
-	})
-	if err != nil {
-		return fmt.Errorf("open human participant devices: %w", err)
-	}
-	if handle == nil {
-		return fmt.Errorf("%w: device service returned a nil handle", runtimeDevices.ErrUnavailable)
-	}
-	ports := handle.Media()
-	if ports.Capture == nil || ports.Playback == nil {
-		return errors.Join(fmt.Errorf("%w: device service omitted room capture or playback", runtimeDevices.ErrUnavailable), handle.Close())
-	}
-	runtime.deviceHandle = handle
-	runtime.input, runtime.output = ports.Capture, ports.Playback
-	if selection, ok := handle.(runtimeDevices.DeviceSelectionProvider); ok {
-		runtime.inputDeviceID, runtime.outputDeviceID = selection.SelectedDeviceIDs()
-	}
-	runtime.lifecycle.markDeviceReady()
-	return nil
 }

@@ -26,8 +26,6 @@ const (
 	RoomReplayBundleManifestPath  = roomreplay.RoomReplayBundleManifestPath
 	RoomReplayBundleMismatch      = roomreplay.RoomReplayBundleMismatch
 	RoomReplayBundleIncomplete    = roomreplay.RoomReplayBundleIncomplete
-	RoomEvidenceTimelinePath      = "room-timeline.jsonl"
-	RoomEvidenceMixPath           = "room-mix.wav"
 )
 
 // Service is the public room lifecycle and admission contract. Implementations

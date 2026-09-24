@@ -10,6 +10,10 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
 type roomCoordinator struct {
@@ -42,6 +46,30 @@ type roomCoordinator struct {
 	onParticipantFailed func(string, string)
 	participantFailures map[string]struct{}
 	onBoundShutdown     func(RoomTerminationReason)
+}
+
+func roomParticipantFailureObserver(coordinator *roomCoordinator, runtime *roomParticipantRuntime, evidence roomevidence.Recorder) func(sessiontrace.TerminalObservation) {
+	return func(observation sessiontrace.TerminalObservation) {
+		if !observation.Failure || observation.Classification == providers.ErrorClassCancellation {
+			return
+		}
+		if observation.TerminalReason == messages.TerminalReasonProviderClose && observation.FailingEvent == string(messages.StreamTypeSessionClose) {
+			return
+		}
+		if observation.TerminalProvenance == messages.TerminalProvenanceProvider || observation.FailingEvent == string(messages.StreamTypeError) {
+			fields := map[string]string{"classification": observation.Classification}
+			if observation.Code != "" {
+				fields["code"] = observation.Code
+			}
+			evidence.MarkError(runtime.plan.manifest.ID, roomevidence.TimelinePath, evidence.RecordProviderErrorTimeline(runtime.plan.manifest.ID, fields))
+		}
+		failure := roomParticipantTerminalFailure(runtime, observation)
+		if observation.TerminalProvenance == messages.TerminalProvenanceProvider && observation.FailingEvent == string(messages.StreamTypeError) {
+			coordinator.fail(failure)
+			return
+		}
+		coordinator.failParticipant(runtime.plan.manifest.ID, failure)
+	}
 }
 
 func newRoomCoordinator(cancel context.CancelFunc, maxTurns int, args ...interface{}) *roomCoordinator {
@@ -182,55 +210,7 @@ func (c *roomCoordinator) forceBoundShutdown() {
 	if c == nil {
 		return
 	}
-	c.forceOnce.Do(func() {
-		c.mu.Lock()
-		if !c.bound {
-			c.mu.Unlock()
-			return
-		}
-		c.boundForced = true
-		var firstFailure error
-		runtimes := c.boundRuntimes
-		for _, runtime := range runtimes {
-			if runtime != nil {
-				if runtime.lifecycle != nil {
-					// The bound-start mark remains authoritative through the grace window.
-					runtime.lifecycle.markBoundCancellation()
-					observation := runtime.lifecycle.terminalObservationSnapshot()
-					if firstFailure == nil && observation.failure {
-						failureErr := observation.err
-						if failureErr == nil {
-							failureErr = errors.New("session stream error")
-						}
-						firstFailure = roomParticipantFailure(runtime.plan.manifest.ID, failureErr, secretsForPlan(runtime.plan))
-					}
-				}
-			}
-		}
-		if firstFailure != nil {
-			// A failure may have been accepted by the lifecycle immediately before
-			// the force phase acquired the coordinator lock. Preserve that failure
-			// rather than allowing the force phase to erase it as cancellation.
-			c.reason = RoomTerminationFailed
-			c.err = firstFailure
-			c.bound = false
-		}
-		c.mu.Unlock()
-
-		if firstFailure == nil {
-			for _, runtime := range runtimes {
-				if runtime != nil && runtime.lifecycle != nil {
-					runtime.lifecycle.cancelActiveResponse()
-				}
-			}
-		}
-
-		c.boundCancellationOnce.Do(func() { close(c.boundCancellation) })
-		c.doneOnce.Do(func() { close(c.done) })
-		if c.cancel != nil {
-			c.cancel()
-		}
-	})
+	c.forceOnce.Do(c.forceBoundShutdownOnce)
 }
 
 func (c *roomCoordinator) stopImmediately(reason RoomTerminationReason, err error) {
@@ -693,7 +673,7 @@ func (c *roomCoordinator) finishParticipant(runtime *roomParticipantRuntime, rea
 	}
 	if observation.outputState == "" {
 		if observation.failure {
-			observation.outputState = deriveOutputState(connected, turns)
+			observation.outputState = sessiontracewire.OutputStateForProgress(connected, turns)
 		} else {
 			observation.outputState = string(messages.TerminalOutputNone)
 		}

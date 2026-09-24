@@ -21,6 +21,19 @@ type replayServiceStub struct {
 	validateErr error
 }
 
+type evidenceServiceStub struct {
+	validationErr error
+}
+
+func (s evidenceServiceStub) ValidateEvidenceOutput(string) error { return s.validationErr }
+
+func (evidenceServiceStub) CreateFreshRunDirectory(configDir string) (string, error) {
+	if err := os.MkdirAll(configDir, 0o700); err != nil {
+		return "", err
+	}
+	return os.MkdirTemp(configDir, "room-")
+}
+
 func (s replayServiceStub) Load(string) (roomreplay.RoomReplayPlan, error) {
 	return s.plan, s.loadErr
 }
@@ -48,7 +61,8 @@ func TestServiceExposesReplayAndEvidenceBoundaries(t *testing.T) {
 	}
 	svc := New(Dependencies{
 		Planner: planning.New(), Replay: replay,
-		Runner: lifecycle.New(lifecycle.Dependencies{}),
+		Runner:   lifecycle.New(lifecycle.Dependencies{}),
+		Evidence: evidenceServiceStub{},
 	})
 	if svc == nil {
 		t.Fatal("New() returned nil")
@@ -113,7 +127,8 @@ func TestPublicRunRejectsNonEmptyReplayOutputBeforeParticipantEffects(t *testing
 	replay := replayServiceStub{plan: roomreplay.RoomReplayPlan{BundlePath: filepath.Join(t.TempDir(), "bundle")}}
 	service := New(Dependencies{
 		Planner: planning.New(), Replay: replay,
-		Runner: lifecycle.New(lifecycle.Dependencies{Clock: platformclock.Real{}}),
+		Runner:   lifecycle.New(lifecycle.Dependencies{Clock: platformclock.Real{}}),
+		Evidence: evidenceServiceStub{validationErr: errors.New("room evidence output must be empty")},
 	})
 	var public rooms.Service = service
 

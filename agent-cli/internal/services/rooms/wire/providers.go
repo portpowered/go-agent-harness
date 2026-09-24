@@ -11,9 +11,10 @@ import (
 	"github.com/google/wire"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services/rooms/internal/launch"
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
-	runtimeWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
+	runtimeRoomsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
@@ -29,6 +30,8 @@ type Dependencies struct {
 	Replay   roomreplay.Service
 	Registry devicegw.DeviceRegistry
 	Clock    platformclock.Scheduler
+	Evidence roomevidence.Service
+	Latency  roomevidence.LatencyService
 }
 
 // NewService returns the runtime room service with a CLI launch resolver. The
@@ -37,10 +40,11 @@ type Dependencies struct {
 func NewService(deps Dependencies) runtimeRooms.Service {
 	media := deps.Media
 	if media == nil && deps.Devices != nil {
-		media = runtimeWire.NewMediaFactory(deps.Devices)
+		media = runtimeRoomsWire.NewMediaFactory(deps.Devices)
 	}
-	runtimeService := runtimeWire.NewService(runtimeWire.Dependencies{
+	runtimeService := runtimeRoomsWire.NewService(runtimeRoomsWire.Dependencies{
 		Live: deps.Live, Media: media, Replay: deps.Replay, Clock: deps.Clock,
+		Evidence: deps.Evidence, Latency: deps.Latency,
 	})
 	return &service{runtime: runtimeService, replay: deps.Replay, launch: launch.NewPlanner(deps.Registry)}
 }

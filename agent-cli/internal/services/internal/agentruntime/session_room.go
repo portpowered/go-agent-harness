@@ -1,17 +1,22 @@
 package agentruntime
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeProviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -19,13 +24,13 @@ import (
 
 // RoomTerminationReason is the room-level terminal taxonomy. A room has one
 // reason even when individual participants finish at different times.
-type RoomTerminationReason string
+type RoomTerminationReason = runtimeRooms.RoomTerminationReason
 
 const (
-	RoomTerminationStopped            RoomTerminationReason = "stopped"
-	RoomTerminationMaxTurnsReached    RoomTerminationReason = "max_turns_reached"
-	RoomTerminationMaxDurationReached RoomTerminationReason = "max_duration_reached"
-	RoomTerminationFailed             RoomTerminationReason = "failed"
+	RoomTerminationStopped            = runtimeRooms.RoomTerminationStopped
+	RoomTerminationMaxTurnsReached    = runtimeRooms.RoomTerminationMaxTurnsReached
+	RoomTerminationMaxDurationReached = runtimeRooms.RoomTerminationMaxDurationReached
+	RoomTerminationFailed             = runtimeRooms.RoomTerminationFailed
 )
 
 // RoomStopReason is a descriptive alias used by callers that name the room
@@ -45,12 +50,12 @@ const (
 
 // ParticipantTerminationReason is the participant-level terminal taxonomy.
 // It intentionally remains independent of the room reason.
-type ParticipantTerminationReason string
+type ParticipantTerminationReason = runtimeRooms.ParticipantTerminationReason
 
 const (
-	ParticipantTerminationEnded        ParticipantTerminationReason = "ended"
-	ParticipantTerminationDisconnected ParticipantTerminationReason = "disconnected"
-	ParticipantTerminationError        ParticipantTerminationReason = "error"
+	ParticipantTerminationEnded        = runtimeRooms.ParticipantTerminationEnded
+	ParticipantTerminationDisconnected = runtimeRooms.ParticipantTerminationDisconnected
+	ParticipantTerminationError        = runtimeRooms.ParticipantTerminationError
 )
 
 // ParticipantTerminationTrigger identifies the event that caused a
@@ -88,42 +93,11 @@ const RoomBoundCancelledClassification = providers.ErrorClassRoomBoundCancelled
 // RoomParticipantResult contains the observable outcome for one participant.
 // Error is already sanitized; the resolved API-key value is never retained in
 // the result.
-type RoomParticipantResult struct {
-	// ID and TerminationReason are the joined run-manifest names. The
-	// ParticipantID and Reason aliases keep the result convenient for runtime
-	// callers that use the same terminology as RoomParticipantEvent.
-	ID                     string                       `json:"id"`
-	ParticipantID          string                       `json:"participant_id,omitempty"`
-	TerminationReason      ParticipantTerminationReason `json:"termination_reason"`
-	Reason                 ParticipantTerminationReason `json:"reason,omitempty"`
-	TerminationTrigger     string                       `json:"termination_trigger"`
-	TerminationDisposition string                       `json:"termination_disposition"`
-	Classification         string                       `json:"classification"`
-	TerminalReason         string                       `json:"terminal_reason"`
-	TerminalProvenance     string                       `json:"terminal_provenance"`
-	OutputState            string                       `json:"output_state"`
-	TurnsCompleted         int                          `json:"turns_completed"`
-	Connected              bool                         `json:"connected"`
-	Error                  string                       `json:"error,omitempty"`
-	// RecordingStatus is nil for a healthy evidence bundle and partial when
-	// one or more participant-owned recording artifacts degraded. It is
-	// independent from the participant runtime termination reason.
-	RecordingStatus *transcript.RecordingStatus `json:"recording_status,omitempty"`
-}
+type RoomParticipantResult = runtimeRooms.RoomParticipantResult
 
 // RoomResult contains the room outcome and every participant outcome. The map
 // is keyed by the manifest's stable participant ID.
-type RoomResult struct {
-	TerminationReason  RoomTerminationReason            `json:"termination_reason"`
-	Reason             RoomTerminationReason            `json:"reason,omitempty"`
-	Participants       map[string]RoomParticipantResult `json:"participants"`
-	ActiveParticipants []string                         `json:"active_participants,omitempty"`
-	Error              string                           `json:"error,omitempty"`
-	// RecordingStatus reports evidence health separately from the room's live
-	// termination taxonomy. Recording failures never change TerminationReason.
-	RecordingStatus   *transcript.RecordingStatus `json:"recording_status,omitempty"`
-	DegradedArtifacts map[string]string           `json:"degraded_artifacts,omitempty"`
-}
+type RoomResult = runtimeRooms.RoomResult
 
 // RoomRunResult is the descriptive result name used by callers that model a
 // room execution as a value rather than a generic room state.
@@ -159,15 +133,7 @@ type RoomParticipantObserver func(RoomParticipantResult)
 // participant. Human participants report their selected device IDs; provider
 // participants report their provider/model. The resolved credential value is
 // intentionally absent.
-type RoomParticipantReady struct {
-	ID            string               `json:"id"`
-	ParticipantID string               `json:"participant_id"`
-	Kind          room.ParticipantKind `json:"kind"`
-	InputDevice   string               `json:"input_device,omitempty"`
-	OutputDevice  string               `json:"output_device,omitempty"`
-	Provider      string               `json:"provider,omitempty"`
-	Model         string               `json:"model,omitempty"`
-}
+type RoomParticipantReady = runtimeRooms.RoomParticipantReady
 
 // RoomParticipantReadyObserver receives one event for each participant after
 // all required human devices and provider sessions have passed admission.
@@ -183,8 +149,8 @@ type RoomObserver func(RoomResult)
 type RoomRunOptions struct {
 	AudioService audioio.Service
 	Manifest     room.Manifest
-	// RuntimeFactory is installed by service composition and shares the
-	// provider and duration runtime with every participant session.
+	// RuntimeFactory is installed by service composition and shares provider
+	// construction and session duration dependencies across participants.
 	RuntimeFactory SessionRuntimeFactory
 	// ReplayPath selects a finalized room evidence directory (or its
 	// run-manifest.json) as the sole source of participant runtime settings.
@@ -194,7 +160,10 @@ type RoomRunOptions struct {
 	// ReplayPlan is the already-admitted form of ReplayPath. The CLI supplies
 	// both values so startup can pass a validated, immutable plan through the
 	// service boundary without reopening the source bundle.
-	ReplayPlan *RoomReplayPlan
+	ReplayPlan *roomreplay.RoomReplayPlan
+	// ReplayService is the admitted roomreplay owner used when a caller passes
+	// only ReplayPath. The room runtime never reopens replay files itself.
+	ReplayService roomreplay.Service
 	// Clock is the shared room timestamp source used by runtime landmarks and
 	// finalized evidence. Nil selects the host clock; deterministic callers
 	// should inject one source for all participants.
@@ -203,7 +172,7 @@ type RoomRunOptions struct {
 	// Nil derives timers from Clock when possible, otherwise each participant
 	// uses the host timer. A shared deterministic clock keeps room tests and
 	// participant watchdogs on one controllable timeline.
-	LivenessClock sessionduration.TimerScheduler
+	LivenessClock SessionLivenessClock
 	// BoundShutdownGrace is the fixed room-bound drain window. A zero value
 	// selects the documented production default; tests may override it with a
 	// small positive duration to make the bounded drain deterministic.
@@ -218,6 +187,10 @@ type RoomRunOptions struct {
 	// the service's observational-only mode for callers that do not need
 	// artifacts; the room CLI supplies a concrete, empty directory.
 	OutputDir string
+	// Evidence services are supplied by the application composition root. The
+	// room runner consumes only the service-owned public contract.
+	evidenceService roomevidence.Service
+	latencyService  roomevidence.LatencyService
 	// DeviceService admits and owns human participant capture and playback
 	// workers for the duration of the room.
 	DeviceService runtimeDevices.Service
@@ -294,7 +267,7 @@ type RoomRunOptions struct {
 	// onRoomEvidenceReady is an internal deterministic test seam. It runs after
 	// all room evidence sinks are opened and before participant work starts, so
 	// package tests can inject a sink failure without changing live APIs.
-	onRoomEvidenceReady func(*roomEvidence)
+	onRoomEvidenceReady func(roomevidence.Recorder)
 	// onRoomBoundShutdown is an internal deterministic lifecycle seam used by
 	// package tests to release a response after bound admission has closed.
 	onRoomBoundShutdown func(RoomTerminationReason)
@@ -302,3 +275,87 @@ type RoomRunOptions struct {
 
 // RoomOptions is a concise alias for RoomRunOptions.
 type RoomOptions = RoomRunOptions
+
+func prepareRoomReplayOptions(opts RoomRunOptions, validation room.ValidationOptions) (RoomRunOptions, room.ValidationOptions, bool, error) {
+	replayPlan := opts.ReplayPlan
+	replayMode := replayPlan != nil || strings.TrimSpace(opts.ReplayPath) != ""
+	if replayPlan == nil && replayMode {
+		if opts.ReplayService == nil {
+			return opts, validation, true, errors.New("room replay service is required for replay path admission")
+		}
+		loaded, err := opts.ReplayService.Load(opts.ReplayPath)
+		if err != nil {
+			return opts, validation, true, err
+		}
+		replayPlan = &loaded
+	}
+	if !replayMode {
+		return opts, validation, false, nil
+	}
+	opts.ReplayPlan, opts.ReplayPath = replayPlan, replayPlan.BundlePath
+	if opts.Manifest.SchemaVersion == 0 && len(opts.Manifest.Participants) == 0 {
+		return RoomRunOptions{}, validation, true, errors.New("replay room manifest is required")
+	}
+	opts.LaunchPlan, opts.DeviceService, opts.CredentialLookup = nil, nil, nil
+	return opts, room.ValidationOptions{}, true, nil
+}
+
+func startRoomReplayScheduler(schedule roomreplay.Schedule, roomCtx context.Context, startGate <-chan struct{}, runtimes []*roomParticipantRuntime, coordinator *roomCoordinator, opts RoomRunOptions, wg *sync.WaitGroup) {
+	if schedule == nil || wg == nil {
+		return
+	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		select {
+		case <-startGate:
+		case <-roomCtx.Done():
+			return
+		}
+		targets, waitFor := roomReplayTargets(runtimes, coordinator)
+		scheduleErr := schedule.Run(roomCtx, roomreplay.RunRequest{Targets: targets, WaitFor: waitFor, IsStopping: coordinator.isStopping, OnContribution: func(contribution roomreplay.Contribution) {
+			if opts.onParticipantAudioFanned != nil {
+				opts.onParticipantAudioFanned(contribution.SourceID, contribution.TargetID, append([]byte(nil), contribution.PCM...))
+			}
+		}})
+		if scheduleErr != nil {
+			if !coordinator.isStopping() {
+				coordinator.fail(fmt.Errorf("run room replay timeline: %w", scheduleErr))
+			}
+			return
+		}
+		if !coordinator.isStopping() {
+			coordinator.stop(RoomTerminationStopped, nil)
+		}
+	}()
+}
+
+func roomReplayTargets(runtimes []*roomParticipantRuntime, coordinator *roomCoordinator) ([]roomreplay.Target, []roomreplay.Waiter) {
+	targets := make([]roomreplay.Target, 0, len(runtimes))
+	waitFor := make([]roomreplay.Waiter, 0, len(runtimes))
+	for _, runtime := range runtimes {
+		if runtime == nil || runtime.plan == nil || roomParticipantIsHuman(runtime.plan) {
+			continue
+		}
+		target := runtime
+		targets = append(targets, roomreplay.Target{
+			ID: target.plan.manifest.ID, Active: func() bool { return coordinator.isActive(target.plan.manifest.ID) },
+			Release: func(ctx context.Context, sourceID string, pcm []byte) error {
+				return routeRoomPeerPCM(ctx, sourceID, target, pcm)
+			},
+			Advance: func(ctx context.Context) error { return target.mixer.Advance(ctx) },
+			AwaitAcknowledgement: func(ctx context.Context) error {
+				select {
+				case <-target.replayFrameAcks:
+					return nil
+				case <-target.ctx.Done():
+					return roomreplay.ErrTargetStopped
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			},
+		})
+		waitFor = append(waitFor, roomreplay.Waiter{ID: target.plan.manifest.ID, Done: target.participantDone})
+	}
+	return targets, waitFor
+}

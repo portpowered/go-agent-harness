@@ -162,7 +162,7 @@ diagnosticsDrained:
 	failedDiagnostics := readRoomEvidenceJSONLLines(t, filepath.Join(opts.OutputDir, manifestParticipant.Artifacts.Diagnostics))
 	failureCount := 0
 	for _, line := range failedDiagnostics {
-		var record roomDiagnosticLine
+		var record roomEvidenceDiagnosticLine
 		if err := json.Unmarshal(line, &record); err != nil {
 			t.Fatalf("decode participant diagnostic: %v", err)
 		}

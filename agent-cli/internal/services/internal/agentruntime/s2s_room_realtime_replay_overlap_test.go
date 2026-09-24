@@ -174,10 +174,9 @@ func newRoomSpeechOverlapScenario(t *testing.T, peerOutput []byte) *roomSpeechOv
 	roomCtx, cancel := context.WithTimeout(context.Background(), roomRealtimeReplayTestTimeout)
 	t.Cleanup(cancel)
 
-	opts := newTestRoomRunOptions(RoomRunOptions{
-		AudioService: newTestAudioIOService(),
-		Manifest:     manifest,
-		ConfigDir:    configDir, ModelCatalog: testModelCatalog(),
+	opts := RoomRunOptions{
+		AudioService: newTestAudioIOService(), Manifest: manifest,
+		ConfigDir: configDir, ModelCatalog: testModelCatalog(),
 		BaseURL:     "wss://room-replay.invalid/v1/realtime",
 		MixerConfig: mixerConfig,
 		CredentialLookup: func(name string) (string, bool) {
@@ -225,7 +224,8 @@ func newRoomSpeechOverlapScenario(t *testing.T, peerOutput []byte) *roomSpeechOv
 				diagnosticTurns <- participantID
 			}
 		},
-	})
+	}
+	opts = newTestRoomRunOptions(opts)
 	runDone := make(chan roomTestRunOutcome, 1)
 	go func() {
 		result, err := RunRoomWithResult(roomCtx, io.Discard, opts)
@@ -276,114 +276,10 @@ func newRoomSpeechOverlapScenario(t *testing.T, peerOutput []byte) *roomSpeechOv
 func TestRunRoomWithResult_SpeechOverlapPreservesOrdinaryResponses(t *testing.T) {
 	t.Run("speech overlap", func(t *testing.T) {
 		scenario := newRoomSpeechOverlapScenario(t, []byte{0x20, 0x03, 0xe0, 0xfc})
-
-		scenario.targetCadence.Advance()
-		assertRoomSpeechOverlapAppend(t, scenario.harness.participant("target"), scenario.silence)
-		awaitRoomSpeechOverlapInput(t, scenario.targetInput, scenario.silence)
-		awaitRoomSpeechOverlapAudio(t, scenario.targetAudio, scenario.targetOutput)
-		awaitRoomSpeechOverlapFanout(t, scenario.fanouts, "target", "speaker", scenario.targetOutput)
-
-		// The speaker's first mixer frame is the target's response audio. Its
-		// scripted response then emits two speech-shaped frames to the target
-		// while the target response remains open.
-		scenario.peerCadence.Advance()
-		assertRoomSpeechOverlapAppend(t, scenario.harness.participant("speaker"), scenario.targetOutput)
-		awaitRoomSpeechOverlapAudio(t, scenario.peerAudio, scenario.peerOutput)
-		awaitRoomSpeechOverlapFanout(t, scenario.fanouts, "speaker", "target", scenario.peerOutput)
-
-		scenario.targetCadence.Advance()
-		awaitRoomSpeechOverlapInput(t, scenario.targetInput, scenario.expectedSpeech)
-		awaitRoomSpeechOverlapAudio(t, scenario.targetAudio, scenario.secondTargetOutput)
-		awaitRoomSpeechOverlapFanout(t, scenario.fanouts, "target", "speaker", scenario.secondTargetOutput)
-
-		// The peer response remains open until this target output reaches its
-		// mixer, then emits a second output frame while the target response is
-		// still waiting for its second peer frame.
-		scenario.peerCadence.Advance()
-		assertRoomSpeechOverlapAppend(t, scenario.harness.participant("speaker"), scenario.secondTargetOutput)
-		awaitRoomSpeechOverlapAudio(t, scenario.peerAudio, scenario.peerOutput)
-		awaitRoomSpeechOverlapFanout(t, scenario.fanouts, "speaker", "target", scenario.peerOutput)
-
-		// Both contentful peer frames are forwarded unchanged. The target
-		// response then completes normally, proving peer speech did not
-		// structurally suppress its own output or terminal boundary.
-		scenario.targetCadence.Advance()
-		assertRoomSpeechOverlapAppend(t, scenario.harness.participant("target"), scenario.expectedSpeech)
-		awaitRoomSpeechOverlapTargetEnd(t, scenario.targetEnds)
-		awaitRoomSpeechOverlapMessageEnd(t, scenario.speakerEnds, "speaker")
-
-		outcome := awaitRoomSpeechOverlapRun(t, scenario)
-		if outcome.err != nil {
-			t.Fatalf("speech-overlap room replay: %v", outcome.err)
-		}
-		if outcome.result.Reason != RoomTerminationMaxTurnsReached {
-			t.Fatalf("speech-overlap room termination = %q, want %q", outcome.result.Reason, RoomTerminationMaxTurnsReached)
-		}
-		for _, participantID := range []string{"speaker", "target"} {
-			participantResult, ok := outcome.result.Participants[participantID]
-			if !ok {
-				t.Fatalf("speech-overlap result missing participant %q", participantID)
-			}
-			if !participantResult.Connected || participantResult.TurnsCompleted != 1 {
-				t.Fatalf("speech-overlap participant %q result = %+v, want one normal completed turn", participantID, participantResult)
-			}
-			if err := scenario.harness.participant(participantID).dialer.Err(); err != nil {
-				t.Fatalf("speech-overlap participant %q strict wire: %v", participantID, err)
-			}
-		}
-
-		diagnosticCounts := map[string]int{}
-		for range []int{0, 1} {
-			select {
-			case participantID := <-scenario.diagnostic:
-				diagnosticCounts[participantID]++
-			case <-scenario.ctx.Done():
-				t.Fatalf("speech-overlap diagnostics did not report both normal turns: %v", scenario.ctx.Err())
-			}
-		}
-		if diagnosticCounts["speaker"] != 1 || diagnosticCounts["target"] != 1 {
-			t.Fatalf("speech-overlap diagnostic turns = %v, want one completed turn per participant", diagnosticCounts)
-		}
-
-		targetWrites := scenario.harness.participant("target").outboundSnapshot()
-		wantTypes := []string{"session.update", "input_audio_buffer.append", "input_audio_buffer.append", "input_audio_buffer.append"}
-		gotTypes := make([]string, 0, len(targetWrites))
-		for _, write := range targetWrites {
-			gotTypes = append(gotTypes, write.Type)
-		}
-		if !sameRoomReplayStrings(gotTypes, wantTypes) {
-			t.Fatalf("target overlap outbound types = %v, want %v", gotTypes, wantTypes)
-		}
-		wantAppends := [][]byte{scenario.silence, scenario.expectedSpeech, scenario.expectedSpeech}
-		appendWriteIndexes := []int{1, 2, 3}
-		for index, wantPCM := range wantAppends {
-			assertRoomSpeechOverlapWireAppendPayload(t, targetWrites[appendWriteIndexes[index]], wantPCM)
-		}
-		appendCount := 0
-		for _, write := range targetWrites {
-			if write.Type == "input_audio_buffer.append" {
-				appendCount++
-			}
-		}
-		if got := appendCount; got != len(wantAppends) {
-			t.Fatalf("target overlap append count = %d, want %d", got, len(wantAppends))
-		}
-		speakerWrites := scenario.harness.participant("speaker").outboundSnapshot()
-		if got := len(speakerWrites); got != 3 {
-			t.Fatalf("speaker overlap outbound count = %d, want session.update plus two appends", got)
-		}
-		for index, wantPCM := range [][]byte{scenario.targetOutput, scenario.secondTargetOutput} {
-			assertRoomSpeechOverlapWireAppendPayload(t, speakerWrites[index+1], wantPCM)
-		}
-		if got := countRoomReplayWireType(targetWrites, "response.cancel"); got != 0 {
-			t.Fatalf("target peer overlap response.cancel count = %d, want zero", got)
-		}
-		if got := scenario.harness.participant("target").inboundTypes(); !sameRoomReplayStrings(got, []string{
-			"session.created", "response.created", "response.output_audio.delta", "response.output_audio.delta",
-			"response.output_audio.done", "response.done",
-		}) {
-			t.Fatalf("target overlap inbound provider events = %v", got)
-		}
+		outcome := runRoomSpeechOverlapExchange(t, scenario)
+		assertRoomSpeechOverlapOutcome(t, scenario, outcome)
+		assertRoomSpeechOverlapDiagnostics(t, scenario)
+		assertRoomSpeechOverlapWire(t, scenario)
 	})
 
 	t.Run("digital silence remains non-interrupting", func(t *testing.T) {
@@ -391,30 +287,7 @@ func TestRunRoomWithResult_SpeechOverlapPreservesOrdinaryResponses(t *testing.T)
 		// control keeps the contentful gate explicit while using the same
 		// response-completion contract as the speech case.
 		scenario := newRoomSpeechOverlapScenario(t, []byte{0, 0, 0, 0})
-
-		scenario.targetCadence.Advance()
-		assertRoomSpeechOverlapAppend(t, scenario.harness.participant("target"), scenario.silence)
-		awaitRoomSpeechOverlapInput(t, scenario.targetInput, scenario.silence)
-		awaitRoomSpeechOverlapAudio(t, scenario.targetAudio, scenario.targetOutput)
-		awaitRoomSpeechOverlapFanout(t, scenario.fanouts, "target", "speaker", scenario.targetOutput)
-		scenario.peerCadence.Advance()
-		assertRoomSpeechOverlapAppend(t, scenario.harness.participant("speaker"), scenario.targetOutput)
-		awaitRoomSpeechOverlapAudio(t, scenario.peerAudio, scenario.peerOutput)
-		awaitRoomSpeechOverlapFanout(t, scenario.fanouts, "speaker", "target", scenario.peerOutput)
-
-		scenario.targetCadence.Advance()
-		awaitRoomSpeechOverlapInput(t, scenario.targetInput, scenario.expectedSpeech)
-		awaitRoomSpeechOverlapAudio(t, scenario.targetAudio, scenario.secondTargetOutput)
-		awaitRoomSpeechOverlapFanout(t, scenario.fanouts, "target", "speaker", scenario.secondTargetOutput)
-		scenario.peerCadence.Advance()
-		assertRoomSpeechOverlapAppend(t, scenario.harness.participant("speaker"), scenario.secondTargetOutput)
-		awaitRoomSpeechOverlapAudio(t, scenario.peerAudio, scenario.peerOutput)
-		awaitRoomSpeechOverlapFanout(t, scenario.fanouts, "speaker", "target", scenario.peerOutput)
-		scenario.targetCadence.Advance()
-		assertRoomSpeechOverlapAppend(t, scenario.harness.participant("target"), scenario.expectedSpeech)
-		awaitRoomSpeechOverlapTargetEnd(t, scenario.targetEnds)
-		awaitRoomSpeechOverlapMessageEnd(t, scenario.speakerEnds, "speaker")
-		outcome := awaitRoomSpeechOverlapRun(t, scenario)
+		outcome := runRoomSpeechOverlapExchange(t, scenario)
 		if outcome.err != nil || outcome.result.Reason != RoomTerminationMaxTurnsReached {
 			t.Fatalf("digital-silence control outcome = (%v, %q), want clean max-turn completion", outcome.err, outcome.result.Reason)
 		}
@@ -426,6 +299,103 @@ func TestRunRoomWithResult_SpeechOverlapPreservesOrdinaryResponses(t *testing.T)
 			t.Fatalf("digital-silence target outbound count = %d, want update plus three exact appends", got)
 		}
 	})
+}
+
+func runRoomSpeechOverlapExchange(t *testing.T, scenario *roomSpeechOverlapScenario) roomTestRunOutcome {
+	t.Helper()
+	scenario.targetCadence.Advance()
+	assertRoomSpeechOverlapAppend(t, scenario.harness.participant("target"), scenario.silence)
+	awaitRoomSpeechOverlapInput(t, scenario.targetInput, scenario.silence)
+	awaitRoomSpeechOverlapAudio(t, scenario.targetAudio, scenario.targetOutput)
+	awaitRoomSpeechOverlapFanout(t, scenario.fanouts, "target", "speaker", scenario.targetOutput)
+	scenario.peerCadence.Advance()
+	assertRoomSpeechOverlapAppend(t, scenario.harness.participant("speaker"), scenario.targetOutput)
+	awaitRoomSpeechOverlapAudio(t, scenario.peerAudio, scenario.peerOutput)
+	awaitRoomSpeechOverlapFanout(t, scenario.fanouts, "speaker", "target", scenario.peerOutput)
+	scenario.targetCadence.Advance()
+	awaitRoomSpeechOverlapInput(t, scenario.targetInput, scenario.expectedSpeech)
+	awaitRoomSpeechOverlapAudio(t, scenario.targetAudio, scenario.secondTargetOutput)
+	awaitRoomSpeechOverlapFanout(t, scenario.fanouts, "target", "speaker", scenario.secondTargetOutput)
+	scenario.peerCadence.Advance()
+	assertRoomSpeechOverlapAppend(t, scenario.harness.participant("speaker"), scenario.secondTargetOutput)
+	awaitRoomSpeechOverlapAudio(t, scenario.peerAudio, scenario.peerOutput)
+	awaitRoomSpeechOverlapFanout(t, scenario.fanouts, "speaker", "target", scenario.peerOutput)
+	scenario.targetCadence.Advance()
+	assertRoomSpeechOverlapAppend(t, scenario.harness.participant("target"), scenario.expectedSpeech)
+	awaitRoomSpeechOverlapTargetEnd(t, scenario.targetEnds)
+	awaitRoomSpeechOverlapMessageEnd(t, scenario.speakerEnds, "speaker")
+	return awaitRoomSpeechOverlapRun(t, scenario)
+}
+
+func assertRoomSpeechOverlapOutcome(t *testing.T, scenario *roomSpeechOverlapScenario, outcome roomTestRunOutcome) {
+	t.Helper()
+	if outcome.err != nil {
+		t.Fatalf("speech-overlap room replay: %v", outcome.err)
+	}
+	if outcome.result.Reason != RoomTerminationMaxTurnsReached {
+		t.Fatalf("speech-overlap room termination = %q, want %q", outcome.result.Reason, RoomTerminationMaxTurnsReached)
+	}
+	for _, participantID := range []string{"speaker", "target"} {
+		participantResult, ok := outcome.result.Participants[participantID]
+		if !ok {
+			t.Fatalf("speech-overlap result missing participant %q", participantID)
+		}
+		if !participantResult.Connected || participantResult.TurnsCompleted != 1 {
+			t.Fatalf("speech-overlap participant %q result = %+v, want one normal completed turn", participantID, participantResult)
+		}
+		if err := scenario.harness.participant(participantID).dialer.Err(); err != nil {
+			t.Fatalf("speech-overlap participant %q strict wire: %v", participantID, err)
+		}
+	}
+}
+
+func assertRoomSpeechOverlapDiagnostics(t *testing.T, scenario *roomSpeechOverlapScenario) {
+	t.Helper()
+	diagnosticCounts := map[string]int{}
+	for range []int{0, 1} {
+		select {
+		case participantID := <-scenario.diagnostic:
+			diagnosticCounts[participantID]++
+		case <-scenario.ctx.Done():
+			t.Fatalf("speech-overlap diagnostics did not report both normal turns: %v", scenario.ctx.Err())
+		}
+	}
+	if diagnosticCounts["speaker"] != 1 || diagnosticCounts["target"] != 1 {
+		t.Fatalf("speech-overlap diagnostic turns = %v, want one completed turn per participant", diagnosticCounts)
+	}
+}
+
+func assertRoomSpeechOverlapWire(t *testing.T, scenario *roomSpeechOverlapScenario) {
+	t.Helper()
+	targetWrites := scenario.harness.participant("target").outboundSnapshot()
+	wantTypes := []string{"session.update", "input_audio_buffer.append", "input_audio_buffer.append", "input_audio_buffer.append"}
+	gotTypes := make([]string, 0, len(targetWrites))
+	for _, write := range targetWrites {
+		gotTypes = append(gotTypes, write.Type)
+	}
+	if !sameRoomReplayStrings(gotTypes, wantTypes) {
+		t.Fatalf("target overlap outbound types = %v, want %v", gotTypes, wantTypes)
+	}
+	wantAppends := [][]byte{scenario.silence, scenario.expectedSpeech, scenario.expectedSpeech}
+	for index, wantPCM := range wantAppends {
+		assertRoomSpeechOverlapWireAppendPayload(t, targetWrites[index+1], wantPCM)
+	}
+	speakerWrites := scenario.harness.participant("speaker").outboundSnapshot()
+	if got := len(speakerWrites); got != 3 {
+		t.Fatalf("speaker overlap outbound count = %d, want session.update plus two appends", got)
+	}
+	for index, wantPCM := range [][]byte{scenario.targetOutput, scenario.secondTargetOutput} {
+		assertRoomSpeechOverlapWireAppendPayload(t, speakerWrites[index+1], wantPCM)
+	}
+	if got := countRoomReplayWireType(targetWrites, "response.cancel"); got != 0 {
+		t.Fatalf("target peer overlap response.cancel count = %d, want zero", got)
+	}
+	if got := scenario.harness.participant("target").inboundTypes(); !sameRoomReplayStrings(got, []string{
+		"session.created", "response.created", "response.output_audio.delta", "response.output_audio.delta",
+		"response.output_audio.done", "response.done",
+	}) {
+		t.Fatalf("target overlap inbound provider events = %v", got)
+	}
 }
 
 func TestRunRoomWithResult_BidirectionalOverlapRecordsPeerOnlyEvidence(t *testing.T) {
@@ -521,11 +491,11 @@ func TestRunRoomWithResult_BidirectionalOverlapRecordsPeerOnlyEvidence(t *testin
 	outputDir := filepath.Join(t.TempDir(), "room-run")
 	roomCtx, cancel := context.WithTimeout(context.Background(), roomRealtimeReplayTestTimeout)
 	t.Cleanup(cancel)
+	responseAudioRelease := make(chan struct{})
 
-	opts := newTestRoomRunOptions(RoomRunOptions{
-		AudioService: newTestAudioIOService(),
-		Manifest:     manifest,
-		ConfigDir:    configDir, ModelCatalog: testModelCatalog(),
+	opts := withRoomTestEvidence(RoomRunOptions{
+		AudioService: newTestAudioIOService(), Manifest: manifest,
+		ConfigDir: configDir, ModelCatalog: testModelCatalog(),
 		OutputDir:   outputDir,
 		BaseURL:     "wss://room-replay.invalid/v1/realtime",
 		MixerConfig: mixerConfig,
@@ -551,10 +521,7 @@ func TestRunRoomWithResult_BidirectionalOverlapRecordsPeerOnlyEvidence(t *testin
 				messageEnds <- participantID
 			}
 		},
-		OnAudioOutput: func(participantID string, pcm []byte) error {
-			audioOutputs <- roomSpeechOverlapFanout{targetID: participantID, pcm: append([]byte(nil), pcm...)}
-			return nil
-		},
+		OnAudioOutput: gatedRoomAudioOutput(roomCtx, responseAudioRelease, audioOutputs),
 		OnAudioInput: func(participantID string, pcm []byte) error {
 			audioInputs <- roomSpeechOverlapFanout{targetID: participantID, pcm: append([]byte(nil), pcm...)}
 			return nil
@@ -599,9 +566,8 @@ func TestRunRoomWithResult_BidirectionalOverlapRecordsPeerOnlyEvidence(t *testin
 	// response's peer frame to arrive. This is the controlled overlap point.
 	aliceCadence.Advance()
 	bobCadence.Advance()
-	awaitRoomBidirectionalFrames(t, audioInputs, map[string][]byte{aliceID: silence, bobID: silence})
-	assertRoomSpeechOverlapAppend(t, harness.participant(aliceID), silence)
-	assertRoomSpeechOverlapAppend(t, harness.participant(bobID), silence)
+	awaitRoomBidirectionalInputs(t, audioInputs, harness.participant, map[string][]byte{aliceID: silence, bobID: silence})
+	close(responseAudioRelease)
 	awaitRoomBidirectionalFrames(t, audioOutputs, map[string][]byte{aliceID: alicePCM, bobID: bobPCM})
 	awaitRoomBidirectionalFanouts(t, fanouts, map[string][]byte{
 		aliceID + "\x00" + bobID: alicePCM,
@@ -613,9 +579,7 @@ func TestRunRoomWithResult_BidirectionalOverlapRecordsPeerOnlyEvidence(t *testin
 	// peer frames are appended.
 	aliceCadence.Advance()
 	bobCadence.Advance()
-	awaitRoomBidirectionalFrames(t, audioInputs, map[string][]byte{aliceID: bobPCM, bobID: alicePCM})
-	assertRoomSpeechOverlapAppend(t, harness.participant(aliceID), bobPCM)
-	assertRoomSpeechOverlapAppend(t, harness.participant(bobID), alicePCM)
+	awaitRoomBidirectionalInputs(t, audioInputs, harness.participant, map[string][]byte{aliceID: bobPCM, bobID: alicePCM})
 	awaitRoomBidirectionalIDs(t, vadStarted, aliceID, bobID)
 	awaitRoomBidirectionalIDs(t, messageEnds, aliceID, bobID)
 

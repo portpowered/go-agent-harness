@@ -16,6 +16,9 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
+	roomevidencewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
 const (
@@ -44,31 +47,29 @@ func TestObserveRoomParticipantStream_FansOutBeforeDurableAudioEvidence(t *testi
 		t.Fatalf("add source mixer input: %v", err)
 	}
 
-	owner := &roomEvidence{}
-	deltasPath := filepath.Join(t.TempDir(), "source.deltas.jsonl")
-	deltasFile, err := os.OpenFile(deltasPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
-	if err != nil {
-		t.Fatalf("create delta evidence: %v", err)
+	outputDir := filepath.Join(t.TempDir(), "room-evidence")
+	evidenceService := roomevidencewire.NewService()
+	if _, err := evidenceService.PrepareOutput(outputDir); err != nil {
+		t.Fatalf("prepare room evidence: %v", err)
 	}
-	audioPath := filepath.Join(t.TempDir(), "source.wav")
-	audio, err := newRoomWAVRecorder(audioPath, 1000)
-	if err != nil {
-		_ = deltasFile.Close()
-		t.Fatalf("create audio evidence: %v", err)
-	}
-	participantEvidence := &roomParticipantEvidence{
-		owner: owner,
-		id:    "source",
-		deltas: &roomJSONLWriter{
-			path: deltasPath,
-			file: deltasFile,
+	owner, err := evidenceService.Open(roomevidence.RecordingRequest{
+		Destination: outputDir,
+		Manifest: room.Manifest{
+			SchemaVersion: room.SchemaVersion,
+			Room:          room.Room{MaxTurns: 1},
+			Participants: []room.Participant{{
+				ID: "source", Provider: "provider", Model: "model", APIKeyEnv: "ROOM_KEY", Tools: []string{},
+			}},
 		},
-		audio: audio,
-	}
-	t.Cleanup(func() {
-		_ = participantEvidence.deltas.close()
-		_ = participantEvidence.audio.close()
+		AudioFormat: roomevidence.AudioFormat{SampleRate: 16000, Channels: 1, FrameDuration: 20 * time.Millisecond},
+		StartedAt:   time.Now(),
+		Latency:     roomevidencewire.NewLatencyService(),
 	})
+	if err != nil {
+		t.Fatalf("open room evidence: %v", err)
+	}
+	cleanupRoomEvidence(t, owner.Close)
+	deltasPath := filepath.Join(outputDir, owner.Artifacts("source").Deltas)
 
 	source := &roomParticipantRuntime{
 		plan:      &roomParticipantPlan{manifest: room.Participant{ID: "source"}},
@@ -87,7 +88,7 @@ func TestObserveRoomParticipantStream_FansOutBeforeDurableAudioEvidence(t *testi
 
 	pcm := []byte{0x34, 0x12, 0x78, 0x56}
 	order := make([]string, 0, 2)
-	opts := newTestRoomRunOptions(RoomRunOptions{
+	opts := RoomRunOptions{AudioService: newTestAudioIOService(),
 		OnAudioOutput: func(participantID string, got []byte) error {
 			if participantID != "source" || !bytes.Equal(got, pcm) {
 				t.Errorf("audio output = %q/%v, want source/%v", participantID, got, pcm)
@@ -99,7 +100,7 @@ func TestObserveRoomParticipantStream_FansOutBeforeDurableAudioEvidence(t *testi
 			if sourceID != "source" || targetID != "target" || !bytes.Equal(got, pcm) {
 				t.Errorf("fanned audio = %q -> %q/%v, want source -> target/%v", sourceID, targetID, got, pcm)
 			}
-			info, statErr := deltasFile.Stat()
+			info, statErr := os.Stat(deltasPath)
 			if statErr != nil {
 				t.Errorf("stat delta evidence before fanout callback: %v", statErr)
 			} else if info.Size() != 0 {
@@ -107,13 +108,13 @@ func TestObserveRoomParticipantStream_FansOutBeforeDurableAudioEvidence(t *testi
 			}
 			order = append(order, "fanout")
 		},
-	})
+	}
 	observeRoomParticipantStream(
 		coordinator,
 		source,
 		opts,
 		owner,
-		participantEvidence,
+		context.Background(),
 		messages.StreamMessage{
 			Type:       messages.StreamTypeAudioDelta,
 			Role:       messages.RoleAssistant,
@@ -125,13 +126,27 @@ func TestObserveRoomParticipantStream_FansOutBeforeDurableAudioEvidence(t *testi
 	if got, want := fmt.Sprint(order), "[output fanout]"; got != want {
 		t.Fatalf("critical path order = %s, want %s", got, want)
 	}
-	if info, statErr := deltasFile.Stat(); statErr != nil {
+	if info, statErr := os.Stat(deltasPath); statErr != nil {
 		t.Fatalf("stat delta evidence after fanout: %v", statErr)
 	} else if info.Size() == 0 {
 		t.Fatal("delta evidence was not written after fanout")
 	}
-	if got := audio.writer.BytesWritten(); got != uint64(len(pcm)) {
-		t.Fatalf("audio evidence bytes = %d, want %d", got, len(pcm))
+	if _, err := owner.Finalize(roomevidence.Finalization{
+		Room: roomevidence.RoomResult{
+			TerminationReason: roomevidence.RoomTerminationStopped,
+			Participants: map[string]roomevidence.RoomParticipantResult{
+				"source": {ID: "source", TerminationReason: roomevidence.ParticipantTerminationEnded},
+			},
+		},
+		EndedAt: time.Now(),
+	}); err != nil {
+		t.Fatalf("finalize room evidence: %v", err)
+	}
+	wavData := readRoomEvidenceFile(t, filepath.Join(outputDir, owner.Artifacts("source").WAV))
+	if _, samples, err := wavio.Read(bytes.NewReader(wavData)); err != nil {
+		t.Fatalf("decode WAV evidence: %v", err)
+	} else if len(samples) != len(pcm)/2 {
+		t.Fatalf("audio evidence samples = %d, want %d", len(samples), len(pcm)/2)
 	}
 }
 
@@ -310,24 +325,8 @@ func TestRunRoom_DeliversPeerPCMToEachProviderSession(t *testing.T) {
 		outcome <- roomTestRunOutcome{result: result, err: err}
 	}()
 
-	seenOpened := make(map[string]struct{}, len(ids))
-	for len(seenOpened) < len(ids) {
-		select {
-		case id := <-opened:
-			seenOpened[id] = struct{}{}
-		case <-time.After(2 * time.Second):
-			t.Fatalf("session-open observations = %v, want %d participants", seenOpened, len(ids))
-		}
-	}
-	seenStarted := make(map[string]struct{}, len(ids))
-	for len(seenStarted) < len(ids) {
-		select {
-		case id := <-started:
-			seenStarted[id] = struct{}{}
-		case <-time.After(2 * time.Second):
-			t.Fatalf("response-start observations = %v, want %d participants", seenStarted, len(ids))
-		}
-	}
+	waitForRoomParticipants(t, opened, ids, "session-open observations did not include all participants")
+	waitForRoomParticipants(t, started, ids, "response-start observations did not include all participants")
 	close(releaseAudio)
 
 	want := map[string][]byte{
@@ -384,15 +383,7 @@ func TestRunRoom_DeliversPeerPCMToEachProviderSession(t *testing.T) {
 	}
 
 	close(releaseEnd)
-	seenEnded := make(map[string]struct{}, len(ids))
-	for len(seenEnded) < len(ids) {
-		select {
-		case id := <-ended:
-			seenEnded[id] = struct{}{}
-		case <-time.After(2 * time.Second):
-			t.Fatalf("response-end observations = %v, want %d participants", seenEnded, len(ids))
-		}
-	}
+	waitForRoomParticipants(t, ended, ids, "response-end observations did not include all participants")
 	cancel()
 	got := <-outcome
 	if got.err != nil {
@@ -1237,13 +1228,14 @@ func newRoomTestRunOptions(ids []string, inferencers map[string]*roomTestInferen
 	for _, id := range ids {
 		credentials["ROOM_"+strings.ToUpper(id)+"_KEY"] = "secret-" + id
 	}
-	opts := newTestRoomRunOptions(RoomRunOptions{
-		AudioService: newTestAudioIOService(),
-		Manifest: room.Manifest{
+	opts := RoomRunOptions{
+		AudioService: newTestAudioIOService(), Manifest: room.Manifest{
 			SchemaVersion: room.SchemaVersion,
 			Room:          room.Room{MaxDuration: 5 * time.Second},
 			Participants:  make([]room.Participant, 0, len(ids)),
 		},
+		evidenceService: roomevidencewire.NewService(),
+		latencyService:  roomevidencewire.NewLatencyService(),
 		CredentialLookup: func(name string) (string, bool) {
 			value, ok := credentials[name]
 			return value, ok
@@ -1253,7 +1245,7 @@ func newRoomTestRunOptions(ids []string, inferencers map[string]*roomTestInferen
 			InputQueueFrames:  4,
 			OutputQueueFrames: 8,
 		},
-	})
+	}
 	for index, id := range ids {
 		participant := room.Participant{
 			ID:           id,
@@ -1283,6 +1275,7 @@ func newRoomTestRunOptions(ids []string, inferencers map[string]*roomTestInferen
 		}
 		return inferencer, nil
 	}
+	opts = newTestRoomRunOptions(opts)
 	return opts, factoryCalls
 }
 

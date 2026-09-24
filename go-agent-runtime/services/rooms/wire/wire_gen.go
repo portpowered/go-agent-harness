@@ -7,6 +7,7 @@
 package wire
 
 import (
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle"
@@ -29,10 +30,12 @@ func NewService(dependencies Dependencies) rooms.Service {
 // providers.go:
 
 type Dependencies struct {
-	Live   session.LiveService
-	Media  rooms.MediaFactory
-	Replay roomreplay.Service
-	Clock  clock.Scheduler
+	Live     session.LiveService
+	Media    rooms.MediaFactory
+	Replay   roomreplay.Service
+	Clock    clock.Scheduler
+	Evidence roomevidence.Service
+	Latency  rooms.LatencyService
 }
 
 func newPlanner() planning.Planner { return planning.New() }
@@ -40,9 +43,10 @@ func newPlanner() planning.Planner { return planning.New() }
 func newRunner(dependencies Dependencies) lifecycle.Runner {
 	return lifecycle.New(lifecycle.Dependencies{
 		Live: dependencies.Live, Media: dependencies.Media, Clock: dependencies.Clock,
+		Evidence: dependencies.Evidence, Latency: dependencies.Latency,
 	})
 }
 
 func newServiceDependencies(planner planning.Planner, runner lifecycle.Runner, dependencies Dependencies) service.Dependencies {
-	return service.Dependencies{Planner: planner, Replay: dependencies.Replay, Runner: runner}
+	return service.Dependencies{Planner: planner, Replay: dependencies.Replay, Runner: runner, Evidence: dependencies.Evidence}
 }

@@ -3,8 +3,6 @@ package rooms
 import "time"
 
 const (
-	// RoomLatencyArtifactPath is the stable room-level timing ledger.
-	RoomLatencyArtifactPath = "room-latency.json"
 	// RoomLatencyBundleSchemaVersion is incremented when ledger semantics
 	// change. Reports are derived from this ledger rather than live state.
 	RoomLatencyBundleSchemaVersion = 1

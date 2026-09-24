@@ -5983,3 +5983,29 @@ before any push or PR.
   locally reproducible architecture findings without dropping C229/C234/C248
   behavior or changing baselines. Rerun the full C251-04 local gate against one
   clean exact candidate before any push or PR.
+
+
+## C251 current-main C280 merge checkpoint — 2026-09-23
+
+- Verified admitted task `audio-runtime-c251-recover-shutdown-duration-retirement`
+  with `project-control.py verify-work --type task`; `prd.branchName` matches
+  `codex/audio-runtime-c251-recover-shutdown-duration-retirement`. Fetched and
+  merged `origin/main=2b85cb9cac6e739082549854d6d2775293237661` on this same
+  branch. Recovery checkpoint `ee9b6826`, startup ancestry `8bdafc7f`, and the
+  fetched main commit are ancestors. No C251 PR or review finding is recorded.
+- Resolved the conflicting room paths in favor of current main's
+  service-owned `roomevidence` implementation and preserved C251's duration
+  factory propagation into the remaining internal room loop. Existing room
+  test helpers now inject service Wire dependencies; no test assertions were
+  added.
+- `rtk go test -count=1 -timeout 300s
+  ./agent-cli/internal/services/internal/agentruntime
+  ./agent-cli/internal/services/wire` currently fails to build the merged
+  package: duplicate room terminal/playback helper declarations and stale
+  references to the previous local liveness/terminal types remain after the
+  current-main ownership move. No push, PR, SCRIPT CI, review or merge handoff
+  is claimed.
+- Exact next action: reconcile the remaining candidate-only legacy runtime
+  files with current main's service-owned contracts, resolve those build
+  errors without restoring duplicate policy, then run the focused C251 checks
+  and full exact-head C251-04 preflight before any push or PR.

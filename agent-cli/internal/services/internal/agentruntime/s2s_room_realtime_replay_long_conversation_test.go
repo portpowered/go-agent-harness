@@ -1,11 +1,13 @@
 package agentruntime
 
 import (
+	"bufio"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -20,6 +22,11 @@ const (
 	longConversationTurnsPerParticipant = 4
 	longConversationFramesPerTurn       = 3
 )
+
+type longConversationDiagnostic struct {
+	participantID string
+	record        SessionDiagnosticRecord
+}
 
 // TestRunRoomWithResult_LongConversationEndsBothParticipantsCleanly drives
 // the production room/session composition through eight ordered turns. Three
@@ -77,18 +84,14 @@ func TestRunRoomWithResult_LongConversationEndsBothParticipantsCleanly(t *testin
 	responseEnds := make(chan string, longConversationTurnsPerParticipant*len(manifest.Participants))
 	turnDiagnostics := make(chan string, longConversationTurnsPerParticipant*len(manifest.Participants))
 	participantTerminals := make(chan RoomParticipantResult, len(manifest.Participants))
-	diagnostics := make(chan struct {
-		participantID string
-		record        SessionDiagnosticRecord
-	}, 128)
+	diagnostics := make(chan longConversationDiagnostic, 128)
 	roomCtx, cancel := context.WithTimeout(context.Background(), roomRealtimeReplayTestTimeout)
 	defer cancel()
 
 	outputDir := filepath.Join(t.TempDir(), "long-room")
-	opts := newTestRoomRunOptions(RoomRunOptions{
-		AudioService: newTestAudioIOService(),
-		Manifest:     manifest,
-		ConfigDir:    configDir, ModelCatalog: testModelCatalog(),
+	opts := withRoomTestEvidence(RoomRunOptions{
+		Manifest: manifest, AudioService: newTestAudioIOService(),
+		ConfigDir: configDir, ModelCatalog: testModelCatalog(),
 		BaseURL:            "wss://room-replay.invalid/v1/realtime",
 		MixerConfig:        mixerConfig,
 		OutputDir:          outputDir,
@@ -109,15 +112,7 @@ func TestRunRoomWithResult_LongConversationEndsBothParticipantsCleanly(t *testin
 		OnParticipantTerminated: func(result RoomParticipantResult) {
 			participantTerminals <- result
 		},
-		OnDiagnostic: func(participantID string, record SessionDiagnosticRecord) {
-			diagnostics <- struct {
-				participantID string
-				record        SessionDiagnosticRecord
-			}{participantID: participantID, record: record}
-			if record.Event == SessionDiagnosticEventTurn {
-				turnDiagnostics <- participantID
-			}
-		},
+		OnDiagnostic: longConversationDiagnosticObserver(t, filepath.Join(outputDir, RoomEvidenceTimelinePath), diagnostics, turnDiagnostics),
 	})
 
 	runDone := make(chan roomTestRunOutcome, 1)
@@ -296,6 +291,56 @@ diagnosticsDrained:
 	if !sameRoomReplayStrings(timelineTurns, turnOrder) {
 		t.Fatalf("long-conversation timeline turn order = %v, want %v", timelineTurns, turnOrder)
 	}
+}
+
+func longConversationDiagnosticObserver(
+	t *testing.T,
+	timelinePath string,
+	diagnostics chan<- longConversationDiagnostic,
+	turnDiagnostics chan<- string,
+) RoomParticipantDiagnosticObserver {
+	t.Helper()
+	return func(participantID string, record SessionDiagnosticRecord) {
+		diagnostics <- longConversationDiagnostic{participantID: participantID, record: record}
+		if record.Event != SessionDiagnosticEventTurn {
+			return
+		}
+		present, err := longConversationTurnIsInTimeline(timelinePath, participantID, record.Fields[fieldTurnIndex])
+		if err != nil {
+			t.Errorf("read long-conversation timeline before turn diagnostic %q/%s: %v", participantID, record.Fields[fieldTurnIndex], err)
+		} else if !present {
+			t.Errorf("long-conversation turn diagnostic %q/%s was observable before its timeline entry", participantID, record.Fields[fieldTurnIndex])
+		}
+		turnDiagnostics <- participantID
+	}
+}
+
+func longConversationTurnIsInTimeline(path, participantID, turnIndex string) (present bool, err error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return false, err
+	}
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil && err == nil {
+			present = false
+			err = closeErr
+		}
+	}()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		var entry roomTimelineEntry
+		if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
+			return false, err
+		}
+		if entry.Event == "turn_completed" && entry.Participant == participantID && entry.Fields[fieldTurnIndex] == turnIndex {
+			return true, nil
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return false, err
+	}
+	return false, nil
 }
 
 func roomRealtimeLongConversationCapture(t *testing.T, participantID, model string, input []byte, responses []string) gwtesting.SessionCapture {

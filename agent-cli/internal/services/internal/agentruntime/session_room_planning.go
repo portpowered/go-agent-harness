@@ -11,6 +11,8 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 )
 
 func roomParticipantIsHuman(plan *roomParticipantPlan) bool {
@@ -18,24 +20,20 @@ func roomParticipantIsHuman(plan *roomParticipantPlan) bool {
 }
 
 //lint:ignore U1000 package tests exercise the context-free planning seam.
-func buildRoomParticipantPlans(opts RoomRunOptions, validation room.ValidationOptions, evidences ...*roomEvidence) ([]*roomParticipantPlan, []string, error) {
+func buildRoomParticipantPlans(opts RoomRunOptions, validation room.ValidationOptions, evidences ...roomevidence.Recorder) ([]*roomParticipantPlan, []string, error) {
 	return buildRoomParticipantPlansWithContext(context.Background(), opts, validation, evidences...)
 }
 
 // buildRoomParticipantPlansWithContext accepts the room's evidence sink as an
-// optional trailing argument (mirroring newRoomEvidence's own sources
-// ...platformclock.Source pattern) so every existing two-argument call site
+// optional trailing argument so existing two-argument test seam calls
 // -- almost all of them deterministic tests with no evidence bundle -- keeps
 // compiling unchanged. When evidence is supplied and recording is not a
 // replay, it is used to wire each live provider participant's websocket
 // dialer for capture recording; see the loop below.
-func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptions, validation room.ValidationOptions, evidences ...*roomEvidence) (plans []*roomParticipantPlan, secrets []string, planErr error) {
-	var evidence *roomEvidence
+func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptions, validation room.ValidationOptions, evidences ...roomevidence.Recorder) (plans []*roomParticipantPlan, secrets []string, planErr error) {
+	var evidence roomevidence.Recorder
 	if len(evidences) > 0 {
 		evidence = evidences[0]
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	filesystemPolicy := opts.FilesystemPolicy
 	if filesystemPolicy == nil {
@@ -95,22 +93,21 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 			value = ""
 		}
 		if kind == room.ParticipantKindHuman {
-			// Human participants own local capture/playback rather than a
-			// provider session. Keep the manifest and its device selectors in
+			// Human participants own local capture/playback rather than a provider session. Keep the manifest and its device selectors in
 			// the plan, but do not construct a provider inferencer or resolve a
 			// credential for this participant.
 			plans = append(plans, &roomParticipantPlan{manifest: participant})
 			continue
 		}
 		sessionOptions := SessionRunOptions{
-			AudioService:   opts.AudioService,
+			AudioService:  opts.AudioService,
 			RuntimeFactory: opts.RuntimeFactory,
-			Provider:       participant.Provider,
-			Model:          participant.Model,
-			ModelProvided:  true,
-			APIKey:         value,
-			BaseURL:        opts.BaseURL,
-			ConfigDir:      opts.ConfigDir, ModelCatalog: opts.ModelCatalog,
+			Provider:      participant.Provider,
+			Model:         participant.Model,
+			ModelProvided: true,
+			APIKey:        value,
+			BaseURL:       opts.BaseURL,
+			ConfigDir:     opts.ConfigDir, ModelCatalog: opts.ModelCatalog,
 			Clock:            opts.Clock,
 			LivenessClock:    opts.LivenessClock,
 			WorkDir:          opts.WorkDir,
@@ -164,57 +161,16 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 		// deterministic-test seams) ignore it, exactly like solo session
 		// recording never applies to an injected inferencer either.
 		if evidence != nil {
-			if participantEvidence := evidence.participant(participant.ID); participantEvidence != nil && participantEvidence.artifacts.Capture != "" {
-				sessionOptions.RecordSessionCapturePath = filepath.Join(evidence.destination, participantEvidence.artifacts.Capture)
+			if capture := evidence.Artifacts(participant.ID).Capture; capture != "" {
+				sessionOptions.RecordSessionCapturePath = filepath.Join(evidence.Destination(), capture)
 			}
 		}
-		if participant.BrowserTools != nil {
-			if opts.BrowserCapabilitiesFactory == nil {
-				markStartupFailure(ErrRoomParticipantBrowserToolsUnavailable)
-				continue
-			}
-			browserCapabilities, capabilityErr := opts.BrowserCapabilitiesFactory(participant)
-			if capabilityErr != nil {
-				markStartupFailure(fmt.Errorf("configure browser tools: %w", capabilityErr))
-				continue
-			}
-			plan.capabilityCoordinator = NewSessionCapabilityCoordinator(browserCapabilities.Close)
-			if capabilityErr := validateRoomParticipantBrowserCapabilities(participant, browserCapabilities); capabilityErr != nil {
-				if errors.Is(capabilityErr, ErrRoomParticipantBrowserToolMismatch) {
-					// Invalid browser definitions are a composition contract
-					// failure. Do not admit a room whose advertised capability
-					// surface cannot be routed safely.
-					return plans, secrets, fmt.Errorf("room participant %q browser capability contract: %w", participant.ID, capabilityErr)
-				}
-				markStartupFailure(capabilityErr)
-				continue
-			}
-			composed, capabilityErr := composeRoomParticipantBrowserCapabilities(participant, staticCapabilities, browserCapabilities)
-			if capabilityErr != nil {
-				return plans, secrets, fmt.Errorf("room participant %q browser composition contract: %w", participant.ID, capabilityErr)
-			}
-			if composed.Initialize != nil {
-				if initializeErr := composed.Initialize(ctx); initializeErr != nil {
-					markStartupFailure(fmt.Errorf("initialize browser tools: %w", initializeErr))
-					continue
-				}
-			}
-			if composed.RefreshToolDefinitions != nil {
-				refreshed, refreshErr := composed.RefreshToolDefinitions(ctx)
-				if refreshErr == nil {
-					composed.Definitions = cloneRoomToolDefinitions(refreshed)
-				} else if ctx.Err() != nil {
-					markStartupFailure(fmt.Errorf("refresh browser tools: %w", refreshErr))
-					continue
-				}
-			}
-			sessionOptions.ToolExecutor = composed.Executor
-			sessionOptions.ToolDefinitions = cloneRoomToolDefinitions(composed.Definitions)
-			sessionOptions.ToolDefinitionBase = cloneRoomToolDefinitions(composed.ToolDefinitionBase)
-			sessionOptions.RefreshToolDefinitions = composed.RefreshToolDefinitions
-			sessionOptions.BrowserWatch = composed.BrowserWatch
-			sessionOptions.BrowserToolsEnabled = true
-			sessionOptions.CapabilityClose = plan.capabilityCoordinator.Close
+		sessionOptions, skipParticipant, capabilityErr := configureRoomParticipantBrowserOptions(ctx, opts, participant, plan, sessionOptions, staticCapabilities, value)
+		if capabilityErr != nil {
+			return plans, secrets, capabilityErr
+		}
+		if skipParticipant {
+			continue
 		}
 		plan.options = sessionOptions
 		if inferencer, exists := opts.SessionInferencers[participant.ID]; exists {
@@ -264,16 +220,13 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 	return plans, secrets, nil
 }
 
-// buildRoomReplayParticipantPlans composes each provider participant through
-// the existing session replay planner. It deliberately does not consult the
-// live room manifest, credential lookup, capability factories, or injected
-// live session factories: the validated bundle is the complete source of
-// replay runtime configuration.
-func buildRoomReplayParticipantPlans(ctx context.Context, replay RoomReplayPlan, opts RoomRunOptions) ([]*roomParticipantPlan, []string, error) {
+// buildRoomReplayParticipantPlans composes admitted provider participants
+// with the session replay planner without consulting live configuration.
+func buildRoomReplayParticipantPlans(ctx context.Context, replay roomreplay.RoomReplayPlan, opts RoomRunOptions) ([]*roomParticipantPlan, []string, error) { //nolint:contextcheck // planSessionRuntime is synchronous and has no context-aware API; ctx is checked before each participant.
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	manifest := replay.Manifest()
+	manifest := opts.Manifest
 	plans := make([]*roomParticipantPlan, 0, len(replay.Participants))
 	for index, recorded := range replay.Participants {
 		if err := ctx.Err(); err != nil {

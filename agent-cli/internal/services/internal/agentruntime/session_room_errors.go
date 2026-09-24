@@ -106,13 +106,6 @@ func sanitizeRoomError(err error, secrets []string) string {
 	return redactRoomErrorText(value, "")
 }
 
-func withRoomEvidenceContext(operation string, err error) error {
-	if err == nil {
-		return nil
-	}
-	return fmt.Errorf("%s: %w", operation, err)
-}
-
 func redactRoomErrorText(value, secret string) string {
 	if value == "" {
 		return ""
