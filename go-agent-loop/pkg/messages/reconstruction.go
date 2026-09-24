@@ -2,28 +2,81 @@ package messages
 
 import "strings"
 
+// binaryAccumulator collects copied delta chunks for one binary content kind.
+type binaryAccumulator struct {
+	chunks    [][]byte
+	mediaType string
+}
+
+func (a *binaryAccumulator) add(content []byte) {
+	chunk := make([]byte, len(content))
+	copy(chunk, content)
+	a.chunks = append(a.chunks, chunk)
+}
+
+func (a *binaryAccumulator) present() bool { return len(a.chunks) > 0 }
+
+func (a *binaryAccumulator) bytes() []byte {
+	combined := make([]byte, 0)
+	for _, c := range a.chunks {
+		combined = append(combined, c...)
+	}
+	return combined
+}
+
+// binaryReconstructionState holds the binary content kinds shared by model
+// and tool reconstruction.
+type binaryReconstructionState struct {
+	image     binaryAccumulator
+	audio     binaryAccumulator
+	video     binaryAccumulator
+	file      binaryAccumulator
+	fileName  string
+	embedding binaryAccumulator
+}
+
+func (m *binaryReconstructionState) appendImagePart(parts []ContentPart) []ContentPart {
+	if m.image.present() {
+		parts = append(parts, ImagePart{Bytes: m.image.bytes(), MediaType: m.image.mediaType})
+	}
+	return parts
+}
+
+// appendTrailingParts appends video, file, and embedding parts, which follow
+// the same order in model and tool messages.
+func (m *binaryReconstructionState) appendTrailingParts(parts []ContentPart) []ContentPart {
+	if m.video.present() {
+		parts = append(parts, VideoPart{Bytes: m.video.bytes(), MediaType: m.video.mediaType})
+	}
+	if m.file.present() {
+		parts = append(parts, FilePart{Bytes: m.file.bytes(), MediaType: m.file.mediaType, Name: m.fileName})
+	}
+	if m.embedding.present() {
+		parts = append(parts, EmbeddingPart{Bytes: m.embedding.bytes(), MediaType: m.embedding.mediaType})
+	}
+	return parts
+}
+
 // modelReconstructionState holds transient state while walking model deltas
-// for reconstruction (current tool call id/name for TOOLCALL.END).
+// for reconstruction (current tool call id/name for TOOLCALL.END) and the
+// accumulated message content.
 type modelReconstructionState struct {
 	currentToolID   string
 	currentToolName string
+	text            strings.Builder
+	hasTextPart     bool
+	reasoning       strings.Builder
+	transcript      strings.Builder
+	refusal         string
+	toolCalls       []ToolCall
+	media           binaryReconstructionState
 }
 
 // toolReconstructionState holds per-tool accumulation when reconstructing
 // tool batch deltas into messages.
 type toolReconstructionState struct {
-	textBuilder        strings.Builder
-	imageChunks        [][]byte
-	imageMediaType     string
-	audioChunks        [][]byte
-	audioMediaType     string
-	videoChunks        [][]byte
-	videoMediaType     string
-	fileChunks         [][]byte
-	fileMediaType      string
-	fileName           string
-	embeddingChunks    [][]byte
-	embeddingMediaType string
+	text  strings.Builder
+	media binaryReconstructionState
 }
 
 // ReconstructModelMessageFromDeltas builds a single assistant Message from a slice
@@ -31,153 +84,114 @@ type toolReconstructionState struct {
 // partial/interrupted streams (e.g. only TEXT.DELTA so far). Deltas are processed
 // in order; content is accumulated into one Message.
 func ReconstructModelMessageFromDeltas(deltas []StreamMessage) Message {
-	var (
-		textBuilder        strings.Builder
-		hasTextPart        bool
-		reasoningBuilder   strings.Builder
-		transcriptBuilder  strings.Builder
-		refusal            string
-		toolCalls          []ToolCall
-		audioChunks        [][]byte
-		audioMediaType     string
-		imageChunks        [][]byte
-		imageMediaType     string
-		videoChunks        [][]byte
-		videoMediaType     string
-		fileChunks         [][]byte
-		fileMediaType      string
-		fileName           string
-		embeddingChunks    [][]byte
-		embeddingMediaType string
-	)
-	st := modelReconstructionState{}
-
+	st := &modelReconstructionState{}
 	for _, d := range deltas {
-		switch v := d.Value.(type) {
-		case *TextStartValue:
-			hasTextPart = true
-		case *TextDeltaValue:
-			hasTextPart = true
-			textBuilder.WriteString(v.Content)
-		case *ReasoningStartValue:
-			reasoningBuilder.WriteString("<thinking>\n")
-		case *ReasoningDeltaValue:
-			reasoningBuilder.WriteString(v.Content)
-		case *ReasoningEndValue:
-			reasoningBuilder.WriteString("\n</thinking>")
-		case *ToolCallStartValue:
-			st.currentToolID = v.ToolCallID
-			st.currentToolName = v.Name
-		case *ToolCallEndValue:
-			id := v.ToolCallID
-			if id == "" {
-				id = st.currentToolID
-			}
-			name := v.Name
-			if name == "" {
-				name = st.currentToolName
-			}
-			toolCalls = append(toolCalls, ToolCall{ID: id, Name: name, Arguments: v.Arguments})
-			st.currentToolID = ""
-			st.currentToolName = ""
-		case *AudioDeltaValue:
-			chunk := make([]byte, len(v.Content))
-			copy(chunk, v.Content)
-			audioChunks = append(audioChunks, chunk)
-			if v.MediaType != "" {
-				audioMediaType = v.MediaType
-			}
-		case *ImageStartValue:
-			imageMediaType = v.MediaType
-		case *ImageDeltaValue:
-			chunk := make([]byte, len(v.Content))
-			copy(chunk, v.Content)
-			imageChunks = append(imageChunks, chunk)
-		case *VideoStartValue:
-			videoMediaType = v.MediaType
-		case *VideoDeltaValue:
-			chunk := make([]byte, len(v.Content))
-			copy(chunk, v.Content)
-			videoChunks = append(videoChunks, chunk)
-		case *FileStartValue:
-			fileMediaType = v.MediaType
-			fileName = v.Name
-		case *FileDeltaValue:
-			chunk := make([]byte, len(v.Content))
-			copy(chunk, v.Content)
-			fileChunks = append(fileChunks, chunk)
-		case *RefusalValue:
-			refusal = v.Message
-		case *EmbeddingStartValue:
-			embeddingMediaType = v.MediaType
-		case *EmbeddingDeltaValue:
-			chunk := make([]byte, len(v.Content))
-			copy(chunk, v.Content)
-			embeddingChunks = append(embeddingChunks, chunk)
-		case *TranscriptDeltaValue:
-			transcriptBuilder.WriteString(v.Text)
-		case *TranscriptEndValue:
-			if v.FullText != "" {
-				transcriptBuilder.Reset()
-				transcriptBuilder.WriteString(v.FullText)
-			}
-		// VAD events are session-level signals, not message content — skip.
-		case *VADSpeechStartedValue, *VADSpeechStoppedValue:
-		case *TranscriptStartValue:
+		if !st.applyTextual(d.Value) {
+			st.applyMedia(d.Value)
 		}
 	}
+	return Message{Role: RoleAssistant, Refusal: st.refusal, ToolCalls: st.toolCalls, ContentParts: st.parts()}
+}
 
-	msg := Message{Role: RoleAssistant, Refusal: refusal, ToolCalls: toolCalls}
+// applyTextual accumulates text, reasoning, transcript, refusal, and tool call
+// deltas. It reports whether the value was one of those kinds. VAD events and
+// TRANSCRIPT.START are session-level signals, not message content, and are
+// ignored by both apply methods.
+func (st *modelReconstructionState) applyTextual(value StreamMessageValue) bool {
+	switch v := value.(type) {
+	case *TextStartValue:
+		st.hasTextPart = true
+	case *TextDeltaValue:
+		st.hasTextPart = true
+		st.text.WriteString(v.Content)
+	case *ReasoningStartValue:
+		st.reasoning.WriteString("<thinking>\n")
+	case *ReasoningDeltaValue:
+		st.reasoning.WriteString(v.Content)
+	case *ReasoningEndValue:
+		st.reasoning.WriteString("\n</thinking>")
+	case *ToolCallStartValue:
+		st.currentToolID = v.ToolCallID
+		st.currentToolName = v.Name
+	case *ToolCallEndValue:
+		st.endToolCall(v)
+	case *RefusalValue:
+		st.refusal = v.Message
+	case *TranscriptDeltaValue:
+		st.transcript.WriteString(v.Text)
+	case *TranscriptEndValue:
+		if v.FullText != "" {
+			st.transcript.Reset()
+			st.transcript.WriteString(v.FullText)
+		}
+	default:
+		return false
+	}
+	return true
+}
+
+func (st *modelReconstructionState) endToolCall(v *ToolCallEndValue) {
+	id := v.ToolCallID
+	if id == "" {
+		id = st.currentToolID
+	}
+	name := v.Name
+	if name == "" {
+		name = st.currentToolName
+	}
+	st.toolCalls = append(st.toolCalls, ToolCall{ID: id, Name: name, Arguments: v.Arguments})
+	st.currentToolID = ""
+	st.currentToolName = ""
+}
+
+func (st *modelReconstructionState) applyMedia(value StreamMessageValue) {
+	media := &st.media
+	switch v := value.(type) {
+	case *AudioDeltaValue:
+		media.audio.add(v.Content)
+		if v.MediaType != "" {
+			media.audio.mediaType = v.MediaType
+		}
+	case *ImageStartValue:
+		media.image.mediaType = v.MediaType
+	case *ImageDeltaValue:
+		media.image.add(v.Content)
+	case *VideoStartValue:
+		media.video.mediaType = v.MediaType
+	case *VideoDeltaValue:
+		media.video.add(v.Content)
+	case *FileStartValue:
+		media.file.mediaType = v.MediaType
+		media.fileName = v.Name
+	case *FileDeltaValue:
+		media.file.add(v.Content)
+	case *EmbeddingStartValue:
+		media.embedding.mediaType = v.MediaType
+	case *EmbeddingDeltaValue:
+		media.embedding.add(v.Content)
+	}
+}
+
+func (st *modelReconstructionState) parts() []ContentPart {
 	var parts []ContentPart
-	if t := textBuilder.String(); hasTextPart || t != "" {
+	if t := st.text.String(); st.hasTextPart || t != "" {
 		parts = append(parts, NewTextPart(t))
 	}
-	if r := reasoningBuilder.String(); r != "" {
+	if r := st.reasoning.String(); r != "" {
 		parts = append(parts, NewReasoningPart(r))
 	}
-	if tr := transcriptBuilder.String(); tr != "" {
+	if tr := st.transcript.String(); tr != "" {
 		parts = append(parts, TranscriptPart{Text: tr})
 	}
-	if len(audioChunks) > 0 {
-		combined := make([]byte, 0)
-		for _, c := range audioChunks {
-			combined = append(combined, c...)
-		}
+	if st.media.audio.present() {
+		audioMediaType := st.media.audio.mediaType
 		if audioMediaType == "" {
 			audioMediaType = "audio/pcm"
 		}
-		parts = append(parts, AudioPart{Bytes: combined, MediaType: audioMediaType})
+		parts = append(parts, AudioPart{Bytes: st.media.audio.bytes(), MediaType: audioMediaType})
 	}
-	if len(imageChunks) > 0 {
-		combined := make([]byte, 0)
-		for _, c := range imageChunks {
-			combined = append(combined, c...)
-		}
-		parts = append(parts, ImagePart{Bytes: combined, MediaType: imageMediaType})
-	}
-	if len(videoChunks) > 0 {
-		combined := make([]byte, 0)
-		for _, c := range videoChunks {
-			combined = append(combined, c...)
-		}
-		parts = append(parts, VideoPart{Bytes: combined, MediaType: videoMediaType})
-	}
-	if len(fileChunks) > 0 {
-		combined := make([]byte, 0)
-		for _, c := range fileChunks {
-			combined = append(combined, c...)
-		}
-		parts = append(parts, FilePart{Bytes: combined, MediaType: fileMediaType, Name: fileName})
-	}
-	if len(embeddingChunks) > 0 {
-		combined := make([]byte, 0)
-		for _, c := range embeddingChunks {
-			combined = append(combined, c...)
-		}
-		parts = append(parts, EmbeddingPart{Bytes: combined, MediaType: embeddingMediaType})
-	}
-	msg.ContentParts = parts
-	return msg
+	parts = st.media.appendImagePart(parts)
+	return st.media.appendTrailingParts(parts)
 }
 
 // ReconstructToolMessagesFromDeltas builds one Message per tool result from a
@@ -185,131 +199,100 @@ func ReconstructModelMessageFromDeltas(deltas []StreamMessage) Message {
 // MESSAGE.END to end it; ToolCallId on each delta associates content with a tool.
 // Works for full batches and for partial/interrupted (partial content per tool).
 func ReconstructToolMessagesFromDeltas(deltas []StreamMessage) []Message {
-	perTool := make(map[string]*toolReconstructionState)
-	var toolOrder []string
-
-	ensure := func(id string) *toolReconstructionState {
-		if _, exists := perTool[id]; !exists {
-			toolOrder = append(toolOrder, id)
-			perTool[id] = &toolReconstructionState{}
-		}
-		return perTool[id]
-	}
-
+	batch := &toolReconstructionBatch{perTool: make(map[string]*toolReconstructionState)}
 	for _, d := range deltas {
-		switch v := d.Value.(type) {
-		case *MessageStartValue:
-			perTool = make(map[string]*toolReconstructionState)
-			toolOrder = nil
-		case *TextStartValue:
-			_ = v
-			ensure(d.ToolCallId)
-		case *TextDeltaValue:
-			if st := perTool[d.ToolCallId]; st != nil {
-				st.textBuilder.WriteString(v.Content)
-			}
-		case *ImageStartValue:
-			st := ensure(d.ToolCallId)
-			st.imageMediaType = v.MediaType
-		case *ImageDeltaValue:
-			if st := perTool[d.ToolCallId]; st != nil {
-				chunk := make([]byte, len(v.Content))
-				copy(chunk, v.Content)
-				st.imageChunks = append(st.imageChunks, chunk)
-			}
-		case *AudioStartValue:
-			st := ensure(d.ToolCallId)
-			st.audioMediaType = "audio/pcm"
-		case *AudioDeltaValue:
-			if st := perTool[d.ToolCallId]; st != nil {
-				chunk := make([]byte, len(v.Content))
-				copy(chunk, v.Content)
-				st.audioChunks = append(st.audioChunks, chunk)
-			}
-		case *VideoStartValue:
-			st := ensure(d.ToolCallId)
-			st.videoMediaType = v.MediaType
-		case *VideoDeltaValue:
-			if st := perTool[d.ToolCallId]; st != nil {
-				chunk := make([]byte, len(v.Content))
-				copy(chunk, v.Content)
-				st.videoChunks = append(st.videoChunks, chunk)
-			}
-		case *FileStartValue:
-			st := ensure(d.ToolCallId)
-			st.fileMediaType = v.MediaType
-			st.fileName = v.Name
-		case *FileDeltaValue:
-			if st := perTool[d.ToolCallId]; st != nil {
-				chunk := make([]byte, len(v.Content))
-				copy(chunk, v.Content)
-				st.fileChunks = append(st.fileChunks, chunk)
-			}
-		case *EmbeddingStartValue:
-			st := ensure(d.ToolCallId)
-			st.embeddingMediaType = v.MediaType
-		case *EmbeddingDeltaValue:
-			if st := perTool[d.ToolCallId]; st != nil {
-				chunk := make([]byte, len(v.Content))
-				copy(chunk, v.Content)
-				st.embeddingChunks = append(st.embeddingChunks, chunk)
-			}
+		batch.apply(d)
+	}
+	return batch.messages()
+}
+
+// toolReconstructionBatch tracks per-tool state in first-seen order.
+type toolReconstructionBatch struct {
+	perTool map[string]*toolReconstructionState
+	order   []string
+}
+
+func (b *toolReconstructionBatch) ensure(id string) *toolReconstructionState {
+	if _, exists := b.perTool[id]; !exists {
+		b.order = append(b.order, id)
+		b.perTool[id] = &toolReconstructionState{}
+	}
+	return b.perTool[id]
+}
+
+// apply handles batch and content-start boundaries, which create per-tool
+// state. Content deltas are applied only to a tool whose content started.
+func (b *toolReconstructionBatch) apply(d StreamMessage) {
+	switch v := d.Value.(type) {
+	case *MessageStartValue:
+		b.perTool = make(map[string]*toolReconstructionState)
+		b.order = nil
+	case *TextStartValue:
+		b.ensure(d.ToolCallId)
+	case *ImageStartValue:
+		b.ensure(d.ToolCallId).media.image.mediaType = v.MediaType
+	case *AudioStartValue:
+		b.ensure(d.ToolCallId).media.audio.mediaType = "audio/pcm"
+	case *VideoStartValue:
+		b.ensure(d.ToolCallId).media.video.mediaType = v.MediaType
+	case *FileStartValue:
+		st := b.ensure(d.ToolCallId)
+		st.media.file.mediaType = v.MediaType
+		st.media.fileName = v.Name
+	case *EmbeddingStartValue:
+		b.ensure(d.ToolCallId).media.embedding.mediaType = v.MediaType
+	default:
+		if st := b.perTool[d.ToolCallId]; st != nil {
+			st.applyDelta(d.Value)
 		}
 	}
+}
 
+func (st *toolReconstructionState) applyDelta(value StreamMessageValue) {
+	switch v := value.(type) {
+	case *TextDeltaValue:
+		st.text.WriteString(v.Content)
+	case *ImageDeltaValue:
+		st.media.image.add(v.Content)
+	case *AudioDeltaValue:
+		st.media.audio.add(v.Content)
+	case *VideoDeltaValue:
+		st.media.video.add(v.Content)
+	case *FileDeltaValue:
+		st.media.file.add(v.Content)
+	case *EmbeddingDeltaValue:
+		st.media.embedding.add(v.Content)
+	}
+}
+
+func (b *toolReconstructionBatch) messages() []Message {
 	var out []Message
-	for _, id := range toolOrder {
-		st := perTool[id]
+	for _, id := range b.order {
+		st := b.perTool[id]
 		if st == nil {
 			continue
 		}
-		var parts []ContentPart
-		if text := st.textBuilder.String(); text != "" {
-			parts = append(parts, NewTextPart(text))
-		}
-		if len(st.imageChunks) > 0 {
-			combined := make([]byte, 0)
-			for _, c := range st.imageChunks {
-				combined = append(combined, c...)
-			}
-			parts = append(parts, ImagePart{Bytes: combined, MediaType: st.imageMediaType})
-		}
-		if len(st.audioChunks) > 0 {
-			combined := make([]byte, 0)
-			for _, c := range st.audioChunks {
-				combined = append(combined, c...)
-			}
-			parts = append(parts, AudioPart{Bytes: combined, MediaType: st.audioMediaType})
-		}
-		if len(st.videoChunks) > 0 {
-			combined := make([]byte, 0)
-			for _, c := range st.videoChunks {
-				combined = append(combined, c...)
-			}
-			parts = append(parts, VideoPart{Bytes: combined, MediaType: st.videoMediaType})
-		}
-		if len(st.fileChunks) > 0 {
-			combined := make([]byte, 0)
-			for _, c := range st.fileChunks {
-				combined = append(combined, c...)
-			}
-			parts = append(parts, FilePart{Bytes: combined, MediaType: st.fileMediaType, Name: st.fileName})
-		}
-		if len(st.embeddingChunks) > 0 {
-			combined := make([]byte, 0)
-			for _, c := range st.embeddingChunks {
-				combined = append(combined, c...)
-			}
-			parts = append(parts, EmbeddingPart{Bytes: combined, MediaType: st.embeddingMediaType})
-		}
-		if len(parts) == 0 {
-			parts = []ContentPart{NewTextPart("")}
-		}
 		out = append(out, Message{
 			Role:         RoleTool,
-			ContentParts: parts,
+			ContentParts: st.parts(),
 			ToolCallID:   id,
 		})
 	}
 	return out
+}
+
+func (st *toolReconstructionState) parts() []ContentPart {
+	var parts []ContentPart
+	if text := st.text.String(); text != "" {
+		parts = append(parts, NewTextPart(text))
+	}
+	parts = st.media.appendImagePart(parts)
+	if st.media.audio.present() {
+		parts = append(parts, AudioPart{Bytes: st.media.audio.bytes(), MediaType: st.media.audio.mediaType})
+	}
+	parts = st.media.appendTrailingParts(parts)
+	if len(parts) == 0 {
+		parts = []ContentPart{NewTextPart("")}
+	}
+	return parts
 }

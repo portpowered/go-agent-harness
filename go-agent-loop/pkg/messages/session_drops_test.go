@@ -2,8 +2,11 @@ package messages
 
 import (
 	"context"
+	"errors"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // captureLogger records every Warn call so tests can assert the exact
@@ -112,5 +115,57 @@ func TestAttachDefaultDropObserverNoopOnNil(t *testing.T) {
 	buf.Write(context.Background(), "dropped") //nolint:errcheck // deliberate overflow
 	if got := buf.Drops(); got != 1 {
 		t.Fatalf("Drops() = %d, want 1 even without observer wiring", got)
+	}
+}
+
+func TestTypedBufferFullDropsNewest(t *testing.T) {
+	buffer := NewTypedBuffer[int](1)
+	var dropCount atomic.Int64
+	buffer.SetOnDrop(func(_ int) {
+		dropCount.Add(1)
+	})
+
+	first := buffer.WriteContext(context.Background(), 41)
+	if first.Status != BufferWriteSucceeded || !first.OK() {
+		t.Fatalf("first write returned %+v", first)
+	}
+
+	result := make(chan BufferWriteOutcome, 1)
+	go func() {
+		result <- buffer.WriteContext(context.Background(), 99)
+	}()
+
+	var newest BufferWriteOutcome
+	select {
+	case newest = <-result:
+	case <-time.After(time.Second):
+		t.Fatal("full-buffer write blocked")
+	}
+	if newest.Status != BufferWriteBufferFull || newest.OK() || newest.Err != nil {
+		t.Fatalf("newest write returned %+v, want buffer_full", newest)
+	}
+	if got := dropCount.Load(); got != 1 {
+		t.Fatalf("drop callback count=%d, want 1", got)
+	}
+	if buffer.Len() != 1 || !buffer.HasData() {
+		t.Fatalf("full buffer state len=%d has_data=%v", buffer.Len(), buffer.HasData())
+	}
+
+	retained, ok := buffer.Read()
+	if !ok || retained != 41 {
+		t.Fatalf("retained value=%d ok=%v, want 41", retained, ok)
+	}
+	if _, ok := buffer.Read(); ok {
+		t.Fatal("newest rejected value was delivered")
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	cancelled := buffer.WriteContext(ctx, 123)
+	if cancelled.Status != BufferWriteCancelled || !errors.Is(cancelled.Err, context.Canceled) {
+		t.Fatalf("cancelled write returned %+v", cancelled)
+	}
+	if got := dropCount.Load(); got != 1 {
+		t.Fatalf("cancelled write changed drop callback count to %d", got)
 	}
 }

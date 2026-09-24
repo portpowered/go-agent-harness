@@ -141,16 +141,25 @@ func NewSequencer(plan SequencePlan) (*Sequencer, error) {
 	return sequencer, nil
 }
 
+// forParticipant selects the handler owned by one sequencing participant.
+func (h ParticipantHandlers) forParticipant(name Participant) ParticipantHandler {
+	switch name {
+	case Client:
+		return h.Client
+	case Agent:
+		return h.Agent
+	case ScenarioDriver:
+		return h.Driver
+	default:
+		return h.Driver
+	}
+}
+
 func (s *Sequencer) Run(handlers ParticipantHandlers) (SequenceResult, error) {
 	var groups sync.WaitGroup
 	for i := range s.participants {
 		current := &s.participants[i]
-		fn := handlers.Driver
-		if current.name == Client {
-			fn = handlers.Client
-		} else if current.name == Agent {
-			fn = handlers.Agent
-		}
+		fn := handlers.forParticipant(current.name)
 		groups.Add(1)
 		current.barrier.Run(func() {
 			defer groups.Done()

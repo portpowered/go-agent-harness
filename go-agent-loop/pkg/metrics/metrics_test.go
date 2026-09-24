@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestValidationErrorsCoverEveryInputAndConfigurationBranch(t *testing.T) {
+func TestValidationErrorsCoverEveryConfigurationBranch(t *testing.T) {
 	type constructorCase struct {
 		name        string
 		bounds      [][]int64
@@ -61,7 +61,9 @@ func TestValidationErrorsCoverEveryInputAndConfigurationBranch(t *testing.T) {
 			}
 		})
 	}
+}
 
+func TestValidationErrorsCoverEveryInputBranch(t *testing.T) {
 	sink, err := NewInMemorySink([]int64{0, 10})
 	if err != nil {
 		t.Fatalf("construct valid sink: %v", err)

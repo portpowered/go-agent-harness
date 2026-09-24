@@ -402,63 +402,9 @@ func (r *ModelRunner) forwardSessionMessageWithState(ctx context.Context, sessio
 	// and can no longer mutate the current lifecycle.
 	switch msg.Type {
 	case messages.StreamTypeMessageStart, messages.StreamTypeAudioStart:
-		if beginSessionResponse(state, msgID) {
-			state.hasOutput = false
-			state.responseCompleted = false
-			state.responseCancelSent = false
-			state.responseInFlight = true
-			if acknowledgementResponse && state.acknowledgementCancelled {
-				state.responseCancelSent = true
-				if msgID != "" {
-					state.cancelledResponseIDs[msgID] = struct{}{}
-				}
-			}
-		}
+		startSessionResponse(state, msgID, acknowledgementResponse)
 	case messages.StreamTypeMessageEnd:
-		if ownsSessionResponseEnd(state, msgID) {
-			ownedID := msgID
-			if ownedID == "" {
-				ownedID = state.currentResponseID
-			}
-			state.responseInFlight = false
-			if state.responseCancelSent {
-				// Realtime providers normally acknowledge RESPONSE.CANCEL with a
-				// response.done event. Preserve that wire boundary so the next
-				// input can proceed, but mark it as interrupted rather than a
-				// normally completed assistant turn.
-				if value, ok := msg.Value.(*messages.MessageEndValue); ok && value != nil {
-					outputState := messages.TerminalOutputNone
-					if state.hasOutput {
-						outputState = messages.TerminalOutputPartial
-					}
-					msg.Value = messages.NewMessageEndValueWithTerminal(
-						value.Usage,
-						messages.TerminalReasonPartialOutput,
-						messages.TerminalProvenanceLoop,
-						outputState,
-					)
-				}
-				state.responseCompleted = false
-			} else if acknowledgementResponse {
-				// A progress acknowledgement is never the assistant turn that
-				// satisfies a user input or a tool continuation.
-				state.responseCompleted = false
-			} else {
-				state.responseCompleted = true
-			}
-			if ownedID != "" {
-				state.terminalResponseIDs[ownedID] = struct{}{}
-			}
-			state.currentResponseID = ""
-			messageEndOwned = true
-			if acknowledgementResponse {
-				state.acknowledgementOutstanding = false
-				state.acknowledgementCancelled = false
-				state.acknowledgementEnded = true
-				state.responseCancelSent = false
-				state.hasOutput = false
-			}
-		}
+		messageEndOwned = endSessionResponse(state, &msg, msgID, acknowledgementResponse)
 	case messages.StreamTypeSessionClose:
 		state.sessionClosed = true
 		msg = normalizeSessionCloseMessage(msg)

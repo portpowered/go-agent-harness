@@ -216,258 +216,27 @@ func (m *MockInferencer) InferStream(ctx context.Context, req messages.Inference
 
 	// Record the call and advance the counter via Infer.
 	result, err := m.Infer(ctx, req)
-	// Retrieve the entry before callCount was incremented (callCount was already incremented by Infer).
-	entryIdx := m.callCount - 1
-	if entryIdx >= len(m.entries) {
-		entryIdx = len(m.entries) - 1
-	}
-	var chunks []string
-	var reasoningChunks []string
-	var imageChunks [][]byte
-	var audioChunks [][]byte
-	var videoChunks [][]byte
-	var fileChunks [][]byte
-	if entryIdx >= 0 && len(m.entries) > 0 {
-		chunks = m.entries[entryIdx].chunks
-		reasoningChunks = m.entries[entryIdx].reasoningChunks
-		imageChunks = m.entries[entryIdx].imageChunks
-		audioChunks = m.entries[entryIdx].audioChunks
-		videoChunks = m.entries[entryIdx].videoChunks
-		fileChunks = m.entries[entryIdx].fileChunks
-	}
-
+	entry := m.streamedEntry()
 	if err != nil {
 		ch <- messages.StreamMessage{Type: messages.StreamTypeError, Value: messages.NewErrorValue(err.Error())}
 		close(ch)
 		return ch, nil
 	}
 
-	// Tool-call response: emit TOOLCALL events.
-	for i, tc := range result.ToolCalls {
-		ch <- messages.StreamMessage{
-			Type:               messages.StreamTypeToolCallStart,
-			ActorProvidedIndex: i,
-			Value:              messages.NewToolCallStartValue(tc.ID, tc.Name),
-		}
-		if tc.Arguments != "" {
-			ch <- messages.StreamMessage{
-				Type:               messages.StreamTypeToolCallDelta,
-				ActorProvidedIndex: i,
-				Value:              messages.NewToolCallDeltaValue(tc.Arguments),
-			}
-		}
-		ch <- messages.StreamMessage{
-			Type:               messages.StreamTypeToolCallEnd,
-			ActorProvidedIndex: i,
-			Value:              messages.NewToolCallEndValue(tc.ID, tc.Name, tc.Arguments),
-		}
-	}
-
+	emitToolCallEvents(ch, result.ToolCalls)
 	// Text response: emit REASONING then TEXT events (only when there are no tool calls).
 	if len(result.ToolCalls) == 0 {
 		// Emit reasoning deltas first so the ordering layer records a reasoning message.
-		if len(reasoningChunks) > 0 {
-			ch <- messages.StreamMessage{
-				Type:               messages.StreamTypeReasoningStart,
-				ActorProvidedIndex: 0,
-				Role:               messages.RoleAssistant,
-				Value:              messages.NewReasoningStartValue(),
-			}
-			for i, chunk := range reasoningChunks {
-				ch <- messages.StreamMessage{
-					Type:               messages.StreamTypeReasoningDelta,
-					ActorProvidedIndex: i,
-					Role:               messages.RoleAssistant,
-					Value:              messages.NewReasoningDeltaValue(chunk),
-				}
-			}
-			ch <- messages.StreamMessage{
-				Type:               messages.StreamTypeReasoningEnd,
-				ActorProvidedIndex: len(reasoningChunks),
-				Role:               messages.RoleAssistant,
-				Value:              messages.NewReasoningEndValue(),
-			}
-		}
+		emitReasoningEvents(ch, entry.reasoningChunks)
 		if text := result.Message.TextContent(); text != "" {
-			ch <- messages.StreamMessage{
-				Type:               messages.StreamTypeTextStart,
-				ActorProvidedIndex: 0,
-				Role:               messages.RoleAssistant,
-				Value:              messages.NewTextStartValue(),
-			}
-			if len(chunks) > 0 {
-				// Emit each chunk as a separate TEXT.DELTA.
-				for i, chunk := range chunks {
-					ch <- messages.StreamMessage{
-						Type:               messages.StreamTypeTextDelta,
-						ActorProvidedIndex: i,
-						Role:               messages.RoleAssistant,
-						Value:              messages.NewTextDeltaValue(chunk),
-					}
-				}
-			} else {
-				ch <- messages.StreamMessage{
-					Type:               messages.StreamTypeTextDelta,
-					ActorProvidedIndex: 0,
-					Role:               messages.RoleAssistant,
-					Value:              messages.NewTextDeltaValue(text),
-				}
-			}
-			ch <- messages.StreamMessage{
-				Type:               messages.StreamTypeTextEnd,
-				ActorProvidedIndex: 0,
-				Role:               messages.RoleAssistant,
-				Value:              messages.NewTextEndValue(),
-			}
+			emitTextEvents(ch, text, entry.chunks)
 		}
-
-		// Image response: emit IMAGE events for any ImagePart in the result.
-		// When imageChunks is set (via AddChunkedImageResponse), each chunk is
-		// emitted as its own IMAGE.DELTA event; otherwise the full bytes are sent
-		// in a single IMAGE.DELTA.
-		for i, part := range result.Message.ContentParts {
-			if ip, ok := part.(messages.ImagePart); ok && len(ip.Bytes) > 0 {
-				ch <- messages.StreamMessage{
-					Type:               messages.StreamTypeImageStart,
-					ActorProvidedIndex: i,
-					Role:               messages.RoleAssistant,
-					Value:              messages.NewImageStartValue(ip.MediaType),
-				}
-				if len(imageChunks) > 0 {
-					for j, chunk := range imageChunks {
-						ch <- messages.StreamMessage{
-							Type:               messages.StreamTypeImageDelta,
-							ActorProvidedIndex: j,
-							Role:               messages.RoleAssistant,
-							Value:              messages.NewImageDeltaValue(chunk),
-						}
-					}
-				} else {
-					ch <- messages.StreamMessage{
-						Type:               messages.StreamTypeImageDelta,
-						ActorProvidedIndex: i,
-						Role:               messages.RoleAssistant,
-						Value:              messages.NewImageDeltaValue(ip.Bytes),
-					}
-				}
-				ch <- messages.StreamMessage{
-					Type:               messages.StreamTypeImageEnd,
-					ActorProvidedIndex: i,
-					Role:               messages.RoleAssistant,
-					Value:              messages.NewImageEndValue(),
-				}
-			}
-		}
-
-		// Audio response: emit AUDIO events for any AudioPart in the result.
-		// When audioChunks is set, each chunk is emitted as its own AUDIO.DELTA
-		// event; otherwise the full bytes are sent in a single AUDIO.DELTA.
-		for i, part := range result.Message.ContentParts {
-			if ap, ok := part.(messages.AudioPart); ok && len(ap.Bytes) > 0 {
-				ch <- messages.StreamMessage{
-					Type:               messages.StreamTypeAudioStart,
-					ActorProvidedIndex: i,
-					Role:               messages.RoleAssistant,
-					Value:              messages.NewAudioStartValue(),
-				}
-				if len(audioChunks) > 0 {
-					for j, chunk := range audioChunks {
-						ch <- messages.StreamMessage{
-							Type:               messages.StreamTypeAudioDelta,
-							ActorProvidedIndex: j,
-							Role:               messages.RoleAssistant,
-							Value:              messages.NewAudioDeltaValue(chunk),
-						}
-					}
-				} else {
-					ch <- messages.StreamMessage{
-						Type:               messages.StreamTypeAudioDelta,
-						ActorProvidedIndex: i,
-						Role:               messages.RoleAssistant,
-						Value:              messages.NewAudioDeltaValue(ap.Bytes),
-					}
-				}
-				ch <- messages.StreamMessage{
-					Type:               messages.StreamTypeAudioEnd,
-					ActorProvidedIndex: i,
-					Role:               messages.RoleAssistant,
-					Value:              messages.NewAudioEndValue(),
-				}
-			}
-		}
-
-		// Video response: emit VIDEO events for any VideoPart in the result.
-		// When videoChunks is set, each chunk is emitted as its own VIDEO.DELTA
-		// event; otherwise the full bytes are sent in a single VIDEO.DELTA.
-		for i, part := range result.Message.ContentParts {
-			if vp, ok := part.(messages.VideoPart); ok && len(vp.Bytes) > 0 {
-				ch <- messages.StreamMessage{
-					Type:               messages.StreamTypeVideoStart,
-					ActorProvidedIndex: i,
-					Role:               messages.RoleAssistant,
-					Value:              messages.NewVideoStartValue(vp.MediaType),
-				}
-				if len(videoChunks) > 0 {
-					for j, chunk := range videoChunks {
-						ch <- messages.StreamMessage{
-							Type:               messages.StreamTypeVideoDelta,
-							ActorProvidedIndex: j,
-							Role:               messages.RoleAssistant,
-							Value:              messages.NewVideoDeltaValue(chunk),
-						}
-					}
-				} else {
-					ch <- messages.StreamMessage{
-						Type:               messages.StreamTypeVideoDelta,
-						ActorProvidedIndex: i,
-						Role:               messages.RoleAssistant,
-						Value:              messages.NewVideoDeltaValue(vp.Bytes),
-					}
-				}
-				ch <- messages.StreamMessage{
-					Type:               messages.StreamTypeVideoEnd,
-					ActorProvidedIndex: i,
-					Role:               messages.RoleAssistant,
-					Value:              messages.NewVideoEndValue(),
-				}
-			}
-		}
-
-		// File response: emit FILE events for any FilePart in the result.
-		// When fileChunks is set, each chunk is emitted as its own FILE.DELTA
-		// event; otherwise the full bytes are sent in a single FILE.DELTA.
-		for i, part := range result.Message.ContentParts {
-			if fp, ok := part.(messages.FilePart); ok && len(fp.Bytes) > 0 {
-				ch <- messages.StreamMessage{
-					Type:               messages.StreamTypeFileStart,
-					ActorProvidedIndex: i,
-					Role:               messages.RoleAssistant,
-					Value:              messages.NewFileStartValue(fp.MediaType, fp.Name),
-				}
-				if len(fileChunks) > 0 {
-					for j, chunk := range fileChunks {
-						ch <- messages.StreamMessage{
-							Type:               messages.StreamTypeFileDelta,
-							ActorProvidedIndex: j,
-							Role:               messages.RoleAssistant,
-							Value:              messages.NewFileDeltaValue(chunk),
-						}
-					}
-				} else {
-					ch <- messages.StreamMessage{
-						Type:               messages.StreamTypeFileDelta,
-						ActorProvidedIndex: i,
-						Role:               messages.RoleAssistant,
-						Value:              messages.NewFileDeltaValue(fp.Bytes),
-					}
-				}
-				ch <- messages.StreamMessage{
-					Type:               messages.StreamTypeFileEnd,
-					ActorProvidedIndex: i,
-					Role:               messages.RoleAssistant,
-					Value:              messages.NewFileEndValue(),
-				}
-			}
+		// Binary responses: emit IMAGE, AUDIO, VIDEO, then FILE events for the
+		// matching content parts. When chunks are set for a modality, each chunk
+		// is emitted as its own DELTA event; otherwise the full bytes are sent in
+		// a single DELTA.
+		for _, stream := range binaryPartStreams(entry) {
+			stream.emit(ch, result.Message.ContentParts)
 		}
 	}
 
@@ -478,6 +247,129 @@ func (m *MockInferencer) InferStream(ctx context.Context, req messages.Inference
 	}
 	close(ch)
 	return ch, nil
+}
+
+// streamedEntry returns the entry consumed by the call Infer just recorded
+// (callCount was already incremented by Infer).
+func (m *MockInferencer) streamedEntry() inferenceEntry {
+	entryIdx := m.callCount - 1
+	if entryIdx >= len(m.entries) {
+		entryIdx = len(m.entries) - 1
+	}
+	if entryIdx >= 0 && len(m.entries) > 0 {
+		return m.entries[entryIdx]
+	}
+	return inferenceEntry{}
+}
+
+func emitToolCallEvents(ch chan<- messages.StreamMessage, calls []messages.ToolCall) {
+	for i, tc := range calls {
+		ch <- messages.StreamMessage{Type: messages.StreamTypeToolCallStart, ActorProvidedIndex: i, Value: messages.NewToolCallStartValue(tc.ID, tc.Name)}
+		if tc.Arguments != "" {
+			ch <- messages.StreamMessage{Type: messages.StreamTypeToolCallDelta, ActorProvidedIndex: i, Value: messages.NewToolCallDeltaValue(tc.Arguments)}
+		}
+		ch <- messages.StreamMessage{Type: messages.StreamTypeToolCallEnd, ActorProvidedIndex: i, Value: messages.NewToolCallEndValue(tc.ID, tc.Name, tc.Arguments)}
+	}
+}
+
+func assistantEvent(kind messages.StreamMessageType, index int, value messages.StreamMessageValue) messages.StreamMessage {
+	return messages.StreamMessage{Type: kind, ActorProvidedIndex: index, Role: messages.RoleAssistant, Value: value}
+}
+
+func emitReasoningEvents(ch chan<- messages.StreamMessage, chunks []string) {
+	if len(chunks) == 0 {
+		return
+	}
+	ch <- assistantEvent(messages.StreamTypeReasoningStart, 0, messages.NewReasoningStartValue())
+	for i, chunk := range chunks {
+		ch <- assistantEvent(messages.StreamTypeReasoningDelta, i, messages.NewReasoningDeltaValue(chunk))
+	}
+	ch <- assistantEvent(messages.StreamTypeReasoningEnd, len(chunks), messages.NewReasoningEndValue())
+}
+
+// emitTextEvents emits each chunk as a separate TEXT.DELTA, or the full text
+// as one TEXT.DELTA when the entry is not chunked.
+func emitTextEvents(ch chan<- messages.StreamMessage, text string, chunks []string) {
+	ch <- assistantEvent(messages.StreamTypeTextStart, 0, messages.NewTextStartValue())
+	if len(chunks) == 0 {
+		chunks = []string{text}
+	}
+	for i, chunk := range chunks {
+		ch <- assistantEvent(messages.StreamTypeTextDelta, i, messages.NewTextDeltaValue(chunk))
+	}
+	ch <- assistantEvent(messages.StreamTypeTextEnd, 0, messages.NewTextEndValue())
+}
+
+// binaryPartStream describes the START/DELTA/END events for one binary
+// content-part modality.
+type binaryPartStream struct {
+	start, delta, end messages.StreamMessageType
+	chunks            [][]byte
+	// open returns the part bytes and START value when part is this modality.
+	open       func(part messages.ContentPart) ([]byte, messages.StreamMessageValue, bool)
+	deltaValue func(content []byte) messages.StreamMessageValue
+	endValue   func() messages.StreamMessageValue
+}
+
+func binaryPartStreams(entry inferenceEntry) []binaryPartStream {
+	return []binaryPartStream{
+		{
+			start: messages.StreamTypeImageStart, delta: messages.StreamTypeImageDelta, end: messages.StreamTypeImageEnd, chunks: entry.imageChunks,
+			open: func(part messages.ContentPart) ([]byte, messages.StreamMessageValue, bool) {
+				ip, ok := part.(messages.ImagePart)
+				return ip.Bytes, messages.NewImageStartValue(ip.MediaType), ok
+			},
+			deltaValue: func(content []byte) messages.StreamMessageValue { return messages.NewImageDeltaValue(content) },
+			endValue:   func() messages.StreamMessageValue { return messages.NewImageEndValue() },
+		},
+		{
+			start: messages.StreamTypeAudioStart, delta: messages.StreamTypeAudioDelta, end: messages.StreamTypeAudioEnd, chunks: entry.audioChunks,
+			open: func(part messages.ContentPart) ([]byte, messages.StreamMessageValue, bool) {
+				ap, ok := part.(messages.AudioPart)
+				return ap.Bytes, messages.NewAudioStartValue(), ok
+			},
+			deltaValue: func(content []byte) messages.StreamMessageValue { return messages.NewAudioDeltaValue(content) },
+			endValue:   func() messages.StreamMessageValue { return messages.NewAudioEndValue() },
+		},
+		{
+			start: messages.StreamTypeVideoStart, delta: messages.StreamTypeVideoDelta, end: messages.StreamTypeVideoEnd, chunks: entry.videoChunks,
+			open: func(part messages.ContentPart) ([]byte, messages.StreamMessageValue, bool) {
+				vp, ok := part.(messages.VideoPart)
+				return vp.Bytes, messages.NewVideoStartValue(vp.MediaType), ok
+			},
+			deltaValue: func(content []byte) messages.StreamMessageValue { return messages.NewVideoDeltaValue(content) },
+			endValue:   func() messages.StreamMessageValue { return messages.NewVideoEndValue() },
+		},
+		{
+			start: messages.StreamTypeFileStart, delta: messages.StreamTypeFileDelta, end: messages.StreamTypeFileEnd, chunks: entry.fileChunks,
+			open: func(part messages.ContentPart) ([]byte, messages.StreamMessageValue, bool) {
+				fp, ok := part.(messages.FilePart)
+				return fp.Bytes, messages.NewFileStartValue(fp.MediaType, fp.Name), ok
+			},
+			deltaValue: func(content []byte) messages.StreamMessageValue { return messages.NewFileDeltaValue(content) },
+			endValue:   func() messages.StreamMessageValue { return messages.NewFileEndValue() },
+		},
+	}
+}
+
+// emit streams every non-empty part of this modality. Chunked deltas are
+// indexed by chunk; an unchunked delta shares the part index.
+func (s binaryPartStream) emit(ch chan<- messages.StreamMessage, parts []messages.ContentPart) {
+	for i, part := range parts {
+		payload, startValue, ok := s.open(part)
+		if !ok || len(payload) == 0 {
+			continue
+		}
+		ch <- assistantEvent(s.start, i, startValue)
+		if len(s.chunks) > 0 {
+			for j, chunk := range s.chunks {
+				ch <- assistantEvent(s.delta, j, s.deltaValue(chunk))
+			}
+		} else {
+			ch <- assistantEvent(s.delta, i, s.deltaValue(payload))
+		}
+		ch <- assistantEvent(s.end, i, s.endValue())
+	}
 }
 
 // ---------------------------------------------------------------------------

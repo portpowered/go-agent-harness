@@ -66,117 +66,125 @@ func (c *Coordinator) Execute(ctx context.Context, curr *state.LoopState) error 
 	if err != nil {
 		return err
 	}
+	// The engine output is authoritative for a single response. Overlapping
+	// responses dispatch completed assemblies only after their boundary.
 	if c.modelResponsesOverlap {
 		c.replaceEngineModelOutputs(curr, completedModelResponses)
-	} else { // The engine output is authoritative for a single response.
 	}
-	// Completed response assemblies are dispatched only after their boundary.
-	// This keeps overlapping provider responses correlated before tool routing.
-	// Each completed assembly is retired before the next continuation tick.
-
-	if len(curr.Inputs.ToolOutputMessage) > 0 {
-		c.logInfo("Coordinator: tool text output message", logging.Field{Key: "curr.Inputs.ToolOutputMessage", Value: curr.Inputs.ToolOutputMessage})
-		// Dispatch tool messages to kernel via unified delta inbox.
-		for _, message := range curr.Inputs.ToolOutputMessage {
-			c.sendInferenceResult(ctx, curr, messages.Tool, message)
-		}
-		// if the input receives a message from the tool gateway, then trigger a new assistant message from that call.
-		curr.History.ModelDeltaStartIndex = len(curr.History.ConversationDeltaBuffer)
-		curr.History.CurrentModelDeltaCount = 0
-		passID := c.nextToolContinuationPass(curr)
-		// The kernel records full messages asynchronously through the shared
-		// delta inbox. Include this completed tool batch in the request snapshot
-		// as well, so a session model runner can deliver rich results to the
-		// provider before the kernel's history tick catches up.
-		conversation := append([]messages.Message(nil), curr.History.ConversationBuffer...)
-		if !toolResultsAtHistoryTail(conversation, curr.Inputs.ToolOutputMessage) {
-			conversation = append(conversation, curr.Inputs.ToolOutputMessage...)
-		}
-		curr.Outputs.ModelInbox.Write(ctx, messages.NewInferenceRequest(
-			conversation, curr.Tools, passID, curr.InferenceDefaults,
-		))
-		return nil
-	} else if len(curr.Inputs.ModelOutputMessage) > 0 {
-		// Dispatch model messages to kernel via unified delta inbox. Ordering is
-		// guaranteed because SYSTEM.FULL_MESSAGE and streaming deltas share the
-		// same FIFO queue. CoordinatorDelta (which runs after Coordinator) sends
-		// LOOP.END through that same queue, so the kernel always processes all
-		// messages before the stream closes.
-		for _, message := range curr.Inputs.ModelOutputMessage {
-			c.sendInferenceResult(ctx, curr, messages.Model, message)
-		}
-		// Decide whether to trigger a tool call or deliver to the user.
-		// Reasoning-only messages are recorded above but do not trigger further actions.
-		hasFinalResponse := false
-		for _, message := range curr.Inputs.ModelOutputMessage {
-			switch {
-			case len(message.ToolCalls) > 0 && !curr.ToolExecutionAvailable:
-				// No tool executor is configured for this loop, so a
-				// provider-issued tool call cannot be executed. Deliver the
-				// message like a final response instead of dispatching a
-				// batch into the idle default executor, whose guaranteed
-				// failure surfaces as a racy terminal error after the
-				// response already completed.
-				c.logInfo("Coordinator: model tool call without a configured executor delivered as final response",
-					logging.Field{Key: "tool_calls", Value: len(message.ToolCalls)})
-				curr.Outputs.UserInbox.Write(ctx, messages.UserRequest{Message: message})
-				hasFinalResponse = true
-			case len(message.ToolCalls) > 0:
-				c.logInfo("Coordinator: model tool call output message", logging.Field{Key: "message", Value: message})
-				passID := c.nextToolBatchPass(curr)
-				curr.Outputs.ToolInbox.Write(ctx, messages.ToolBatchRequest{
-					Calls:      message.ToolCalls,
-					LoopPassID: passID,
-				})
-			case !message.HasOnlyReasoning():
-				c.logInfo("Coordinator: model output message", logging.Field{Key: "message", Value: message})
-				curr.Outputs.UserInbox.Write(ctx, messages.UserRequest{
-					Message: message,
-				})
-				hasFinalResponse = true
-			default:
-				c.logInfo("Coordinator: model reasoning output message", logging.Field{Key: "message", Value: message})
-			}
-		}
-		// Set TerminateLoop so CoordinatorDelta sends LOOP.END through the same
-		// delta inbox. Because CoordinatorDelta runs after Coordinator (higher tick
-		// group), LOOP.END is always enqueued after all SYSTEM.FULL_MESSAGE
-		// messages, preserving ordering guarantees.
-		//
-		// In DuplexSession, auto-termination on final response is suppressed.
-		// The session persists until explicitly closed via control plane
-		// (session_close or stop).
-		if hasFinalResponse && curr.Mode != state.DuplexSession {
-			c.logInfo("Coordinator: terminating loop", logging.Field{Key: "hasFinalResponse", Value: hasFinalResponse})
-			curr.Inputs.TerminateLoop = true
-		}
-		// The model delta window belongs to one provider response. Reset it after
-		// dispatching the completed response so a later response (for example an
-		// acknowledgement or an interruption response) cannot reconstruct and
-		// execute tool calls from this response a second time.
-		c.resetModelDeltaWindow(curr)
-		return nil
-	}
-
-	// In DuplexSession, check for session_close or stop control plane messages.
-	if curr.Mode == state.DuplexSession && c.hasSessionCloseControl(curr) {
+	switch {
+	case len(curr.Inputs.ToolOutputMessage) > 0:
+		c.dispatchToolOutputs(ctx, curr)
+	case len(curr.Inputs.ModelOutputMessage) > 0:
+		c.dispatchModelOutputs(ctx, curr)
+	case curr.Mode == state.DuplexSession && c.hasSessionCloseControl(curr):
+		// In DuplexSession, session_close or stop control plane messages end the loop.
 		curr.Inputs.TerminateLoop = true
-	} else {
-		if len(curr.Inputs.UserOutputMessage) > 0 {
-			// Dispatch user messages to kernel via unified delta inbox.
-			for _, message := range curr.Inputs.UserOutputMessage {
-				c.logInfo("Coordinator: user text output message", logging.Field{Key: "message", Value: message})
-				c.sendInferenceResult(ctx, curr, messages.User, message)
-			}
-			c.resetModelDeltaWindow(curr)
-			curr.History.CurrentPassID++
-			curr.Outputs.ModelInbox.Write(ctx, messages.NewInferenceRequest(
-				curr.History.ConversationBuffer, curr.Tools, curr.History.CurrentPassID, curr.InferenceDefaults,
-			))
-		} else { // No user message needs dispatch on this tick.
-		}
+	case len(curr.Inputs.UserOutputMessage) > 0:
+		c.dispatchUserOutputs(ctx, curr)
 	}
 	return nil
+}
+
+// dispatchToolOutputs records completed tool results and requests the model
+// continuation that consumes them.
+func (c *Coordinator) dispatchToolOutputs(ctx context.Context, curr *state.LoopState) {
+	c.logInfo("Coordinator: tool text output message", logging.Field{Key: "curr.Inputs.ToolOutputMessage", Value: curr.Inputs.ToolOutputMessage})
+	// Dispatch tool messages to kernel via unified delta inbox.
+	for _, message := range curr.Inputs.ToolOutputMessage {
+		c.sendInferenceResult(ctx, curr, messages.Tool, message)
+	}
+	// if the input receives a message from the tool gateway, then trigger a new assistant message from that call.
+	curr.History.ModelDeltaStartIndex = len(curr.History.ConversationDeltaBuffer)
+	curr.History.CurrentModelDeltaCount = 0
+	passID := c.nextToolContinuationPass(curr)
+	// The kernel records full messages asynchronously through the shared
+	// delta inbox. Include this completed tool batch in the request snapshot
+	// as well, so a session model runner can deliver rich results to the
+	// provider before the kernel's history tick catches up.
+	conversation := append([]messages.Message(nil), curr.History.ConversationBuffer...)
+	if !toolResultsAtHistoryTail(conversation, curr.Inputs.ToolOutputMessage) {
+		conversation = append(conversation, curr.Inputs.ToolOutputMessage...)
+	}
+	curr.Outputs.ModelInbox.Write(ctx, messages.NewInferenceRequest(
+		conversation, curr.Tools, passID, curr.InferenceDefaults,
+	))
+}
+
+// dispatchModelOutputs records completed model messages and routes each one to
+// the tool executor or the user.
+func (c *Coordinator) dispatchModelOutputs(ctx context.Context, curr *state.LoopState) {
+	// Dispatch model messages to kernel via unified delta inbox. Ordering is
+	// guaranteed because SYSTEM.FULL_MESSAGE and streaming deltas share the
+	// same FIFO queue. CoordinatorDelta (which runs after Coordinator) sends
+	// LOOP.END through that same queue, so the kernel always processes all
+	// messages before the stream closes.
+	for _, message := range curr.Inputs.ModelOutputMessage {
+		c.sendInferenceResult(ctx, curr, messages.Model, message)
+	}
+	// Decide whether to trigger a tool call or deliver to the user.
+	// Reasoning-only messages are recorded above but do not trigger further actions.
+	hasFinalResponse := false
+	for _, message := range curr.Inputs.ModelOutputMessage {
+		if c.routeModelOutput(ctx, curr, message) {
+			hasFinalResponse = true
+		}
+	}
+	// Set TerminateLoop so CoordinatorDelta (a later tick group) enqueues
+	// LOOP.END after all SYSTEM.FULL_MESSAGE messages in the same delta inbox.
+	// DuplexSession suppresses auto-termination; the session persists until
+	// the control plane closes it (session_close or stop).
+	if hasFinalResponse && curr.Mode != state.DuplexSession {
+		c.logInfo("Coordinator: terminating loop", logging.Field{Key: "hasFinalResponse", Value: hasFinalResponse})
+		curr.Inputs.TerminateLoop = true
+	}
+	// The model delta window belongs to one provider response. Reset it after
+	// dispatching the completed response so a later response (for example an
+	// acknowledgement or an interruption response) cannot reconstruct and
+	// execute tool calls from this response a second time.
+	c.resetModelDeltaWindow(curr)
+}
+
+// routeModelOutput dispatches one model message and reports whether it was
+// delivered to the user as a final response.
+func (c *Coordinator) routeModelOutput(ctx context.Context, curr *state.LoopState, message messages.Message) bool {
+	switch {
+	case len(message.ToolCalls) > 0 && !curr.ToolExecutionAvailable:
+		// No tool executor is configured for this loop, so a provider-issued
+		// tool call cannot be executed. Deliver the message like a final
+		// response instead of dispatching a batch into the idle default
+		// executor, whose guaranteed failure surfaces as a racy terminal error
+		// after the response already completed.
+		c.logInfo("Coordinator: model tool call without a configured executor delivered as final response",
+			logging.Field{Key: "tool_calls", Value: len(message.ToolCalls)})
+		curr.Outputs.UserInbox.Write(ctx, messages.UserRequest{Message: message})
+		return true
+	case len(message.ToolCalls) > 0:
+		c.logInfo("Coordinator: model tool call output message", logging.Field{Key: "message", Value: message})
+		passID := c.nextToolBatchPass(curr)
+		curr.Outputs.ToolInbox.Write(ctx, messages.ToolBatchRequest{Calls: message.ToolCalls, LoopPassID: passID})
+		return false
+	case !message.HasOnlyReasoning():
+		c.logInfo("Coordinator: model output message", logging.Field{Key: "message", Value: message})
+		curr.Outputs.UserInbox.Write(ctx, messages.UserRequest{Message: message})
+		return true
+	default:
+		c.logInfo("Coordinator: model reasoning output message", logging.Field{Key: "message", Value: message})
+		return false
+	}
+}
+
+// dispatchUserOutputs records user messages and starts the next model pass.
+func (c *Coordinator) dispatchUserOutputs(ctx context.Context, curr *state.LoopState) {
+	// Dispatch user messages to kernel via unified delta inbox.
+	for _, message := range curr.Inputs.UserOutputMessage {
+		c.logInfo("Coordinator: user text output message", logging.Field{Key: "message", Value: message})
+		c.sendInferenceResult(ctx, curr, messages.User, message)
+	}
+	c.resetModelDeltaWindow(curr)
+	curr.History.CurrentPassID++
+	curr.Outputs.ModelInbox.Write(ctx, messages.NewInferenceRequest(
+		curr.History.ConversationBuffer, curr.Tools, curr.History.CurrentPassID, curr.InferenceDefaults,
+	))
 }
 
 // TickGroup implements [Subsystem].

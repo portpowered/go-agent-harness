@@ -170,9 +170,11 @@ func readFile(root fs.FS, profile, name string) ([]byte, error) {
 
 func validProfileName(name string) bool {
 	return name != "" && name == strings.TrimSpace(name) && fs.ValidPath(name) &&
-		!strings.ContainsAny(name, `/\`) && strings.IndexFunc(name, func(r rune) bool {
-		return !(r == '-' || r == '_' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9')
-	}) == -1
+		!strings.ContainsAny(name, `/\`) && strings.IndexFunc(name, func(r rune) bool { return !profileNameRune(r) }) == -1
+}
+
+func profileNameRune(r rune) bool {
+	return r == '-' || r == '_' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9'
 }
 
 func findDeclaration(root fs.FS, profile string) (string, error) {
@@ -207,29 +209,17 @@ type outcomeDeclaration struct {
 }
 
 func parseOutcome(data []byte) (ExpectedOutcome, error) {
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	var declaration outcomeDeclaration
-	if err := decoder.Decode(&declaration); err != nil {
-		return ExpectedOutcome{}, fmt.Errorf("decode expected-outcome declaration: %v", err)
+	declaration, err := decodeOutcomeDeclaration(data)
+	if err != nil {
+		return ExpectedOutcome{}, err
 	}
-	var extra any
-	if err := decoder.Decode(&extra); err != io.EOF {
-		if err == nil {
-			return ExpectedOutcome{}, errors.New("expected-outcome declaration contains multiple JSON values")
-		}
-		return ExpectedOutcome{}, fmt.Errorf("decode trailing expected-outcome data: %v", err)
-	}
-
 	kind := OutcomeKind(declaration.Kind)
 	switch kind {
 	case OutcomeShellCommand, OutcomeFileRead, OutcomeImageDescription, OutcomeOrderedTools, OutcomeNoTools:
 	default:
 		return ExpectedOutcome{}, fmt.Errorf("invalid outcome kind %q", declaration.Kind)
 	}
-	if (declaration.Command != nil && kind != OutcomeShellCommand) || (declaration.TargetFile != nil && kind != OutcomeFileRead) ||
-		(declaration.ImageRequirement != nil && kind != OutcomeImageDescription) || (declaration.OrderedCalls != nil && kind != OutcomeOrderedTools) ||
-		(declaration.FirstResultInformsSecond != nil && kind != OutcomeOrderedTools) || (declaration.CallCount != nil && kind != OutcomeNoTools) {
+	if declaration.hasForeignFields(kind) {
 		return ExpectedOutcome{}, fmt.Errorf("outcome contains fields not valid for outcome kind %q", kind)
 	}
 	switch kind {
@@ -249,18 +239,7 @@ func parseOutcome(data []byte) (ExpectedOutcome, error) {
 		}
 		return ExpectedOutcome{Kind: kind, ImageRequirement: *declaration.ImageRequirement}, nil
 	case OutcomeOrderedTools:
-		if declaration.OrderedCalls == nil || len(*declaration.OrderedCalls) != 2 {
-			return ExpectedOutcome{}, errors.New("ordered-multi-tool outcome requires exactly two ordered_calls")
-		}
-		for i, call := range *declaration.OrderedCalls {
-			if strings.TrimSpace(call) == "" {
-				return ExpectedOutcome{}, fmt.Errorf("ordered-multi-tool outcome call %d must be non-empty", i)
-			}
-		}
-		if declaration.FirstResultInformsSecond == nil || !*declaration.FirstResultInformsSecond {
-			return ExpectedOutcome{}, errors.New("ordered-multi-tool outcome requires first_result_informs_second=true")
-		}
-		return ExpectedOutcome{Kind: kind, OrderedCalls: append([]string(nil), (*declaration.OrderedCalls)...), FirstResultInformsSecond: true}, nil
+		return declaration.orderedToolsOutcome()
 	case OutcomeNoTools:
 		if declaration.CallCount == nil || *declaration.CallCount != 0 {
 			return ExpectedOutcome{}, errors.New("no-tools outcome requires call_count=0")
@@ -268,6 +247,52 @@ func parseOutcome(data []byte) (ExpectedOutcome, error) {
 		return ExpectedOutcome{Kind: kind, CallCount: 0}, nil
 	}
 	return ExpectedOutcome{}, fmt.Errorf("invalid outcome kind %q", declaration.Kind)
+}
+
+// decodeOutcomeDeclaration strictly decodes exactly one JSON declaration.
+func decodeOutcomeDeclaration(data []byte) (outcomeDeclaration, error) {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	var declaration outcomeDeclaration
+	if err := decoder.Decode(&declaration); err != nil {
+		return outcomeDeclaration{}, fmt.Errorf("decode expected-outcome declaration: %w", err)
+	}
+	var extra any
+	err := decoder.Decode(&extra)
+	switch {
+	case errors.Is(err, io.EOF):
+		return declaration, nil
+	case err == nil:
+		return outcomeDeclaration{}, errors.New("expected-outcome declaration contains multiple JSON values")
+	default:
+		return outcomeDeclaration{}, fmt.Errorf("decode trailing expected-outcome data: %w", err)
+	}
+}
+
+// hasForeignFields reports whether the declaration sets a field that belongs
+// to a different outcome kind.
+func (d outcomeDeclaration) hasForeignFields(kind OutcomeKind) bool {
+	return (d.Command != nil && kind != OutcomeShellCommand) ||
+		(d.TargetFile != nil && kind != OutcomeFileRead) ||
+		(d.ImageRequirement != nil && kind != OutcomeImageDescription) ||
+		(d.OrderedCalls != nil && kind != OutcomeOrderedTools) ||
+		(d.FirstResultInformsSecond != nil && kind != OutcomeOrderedTools) ||
+		(d.CallCount != nil && kind != OutcomeNoTools)
+}
+
+func (d outcomeDeclaration) orderedToolsOutcome() (ExpectedOutcome, error) {
+	if d.OrderedCalls == nil || len(*d.OrderedCalls) != 2 {
+		return ExpectedOutcome{}, errors.New("ordered-multi-tool outcome requires exactly two ordered_calls")
+	}
+	for i, call := range *d.OrderedCalls {
+		if strings.TrimSpace(call) == "" {
+			return ExpectedOutcome{}, fmt.Errorf("ordered-multi-tool outcome call %d must be non-empty", i)
+		}
+	}
+	if d.FirstResultInformsSecond == nil || !*d.FirstResultInformsSecond {
+		return ExpectedOutcome{}, errors.New("ordered-multi-tool outcome requires first_result_informs_second=true")
+	}
+	return ExpectedOutcome{Kind: OutcomeOrderedTools, OrderedCalls: append([]string(nil), (*d.OrderedCalls)...), FirstResultInformsSecond: true}, nil
 }
 
 func validTargetFile(name string) bool {

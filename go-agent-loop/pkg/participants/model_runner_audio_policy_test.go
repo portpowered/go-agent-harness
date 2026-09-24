@@ -123,29 +123,66 @@ func TestModelRunner_ExplicitSessionAudioPolicyControlsCancellation(t *testing.T
 				t.Fatalf("forwardSessionAudioInputWithState: %v", err)
 			}
 
-			sent := session.sentMessages()
-			if len(sent) != test.wantSentCount {
-				t.Fatalf("sent %d messages = %#v, want %d", len(sent), sent, test.wantSentCount)
-			}
-			cancelCount := 0
-			for _, msg := range sent {
-				if msg.Type == messages.StreamTypeResponseCancel {
-					cancelCount++
-				}
-			}
-			if (cancelCount == 1) != test.wantCancel {
-				t.Fatalf("RESPONSE.CANCEL count = %d, want cancel=%t", cancelCount, test.wantCancel)
-			}
-			if sent[len(sent)-1].Type != messages.StreamTypeAudioDelta {
-				t.Fatalf("last sent message = %s, want AUDIO.DELTA", sent[len(sent)-1].Type)
-			}
-			if got := sent[len(sent)-1].Value.(*messages.AudioDeltaValue).Content; string(got) != string([]byte{1, 2, 3, 4}) {
-				t.Fatalf("forwarded PCM = %v, want [1 2 3 4]", got)
-			}
+			assertPolicyAudioForwarded(t, session.sentMessages(), test.wantSentCount, test.wantCancel)
 			if state.responseInFlight != true {
 				t.Fatalf("response state = %+v, want response to remain in flight until provider MESSAGE.END", state)
 			}
 		})
+	}
+}
+
+// assertPolicyAudioForwarded checks the provider sends for one policy case:
+// the expected count, at most the expected cancellation, and the original PCM
+// as the final AUDIO.DELTA.
+func assertPolicyAudioForwarded(t *testing.T, sent []messages.StreamMessage, wantSentCount int, wantCancel bool) {
+	t.Helper()
+	if len(sent) != wantSentCount {
+		t.Fatalf("sent %d messages = %#v, want %d", len(sent), sent, wantSentCount)
+	}
+	cancelCount := 0
+	for _, msg := range sent {
+		if msg.Type == messages.StreamTypeResponseCancel {
+			cancelCount++
+		}
+	}
+	if (cancelCount == 1) != wantCancel {
+		t.Fatalf("RESPONSE.CANCEL count = %d, want cancel=%t", cancelCount, wantCancel)
+	}
+	if sent[len(sent)-1].Type != messages.StreamTypeAudioDelta {
+		t.Fatalf("last sent message = %s, want AUDIO.DELTA", sent[len(sent)-1].Type)
+	}
+	value, ok := sent[len(sent)-1].Value.(*messages.AudioDeltaValue)
+	if !ok {
+		t.Fatalf("last sent value = %T, want *messages.AudioDeltaValue", sent[len(sent)-1].Value)
+	}
+	if got := value.Content; string(got) != string([]byte{1, 2, 3, 4}) {
+		t.Fatalf("forwarded PCM = %v, want [1 2 3 4]", got)
+	}
+}
+
+func TestModelRunner_DrainSessionAudioForwardsQueuedFrames(t *testing.T) {
+	session := newRecordingSession()
+	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
+	runner.UserAudioInbox <- []byte{4, 5, 6}
+
+	responseInFlight := false
+	responseCancelSent := false
+	if err := runner.drainSessionAudio(context.Background(), session, &responseInFlight, &responseCancelSent); err != nil {
+		t.Fatalf("drain queued audio: %v", err)
+	}
+
+	sent := session.sentMessages()
+	if len(sent) != 1 || sent[0].Type != messages.StreamTypeAudioDelta {
+		t.Fatalf("drained sends = %#v, want one AUDIO.DELTA", sent)
+	}
+	value, ok := sent[0].Value.(*messages.AudioDeltaValue)
+	if !ok || string(value.Content) != string([]byte{4, 5, 6}) {
+		t.Fatalf("drained audio = %#v, want original frame", sent[0].Value)
+	}
+
+	close(runner.UserAudioInbox)
+	if err := runner.drainSessionAudio(context.Background(), session, &responseInFlight, &responseCancelSent); err != nil {
+		t.Fatalf("drain closed audio inbox: %v", err)
 	}
 }
 

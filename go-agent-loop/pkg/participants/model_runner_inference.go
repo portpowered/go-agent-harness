@@ -327,3 +327,15 @@ func isCustomerOutputDelta(msg messages.StreamMessage) bool {
 		return false
 	}
 }
+
+func interruptedMessageEndValue(value messages.StreamMessageValue, hasOutput bool) messages.StreamMessageValue {
+	end, ok := value.(*messages.MessageEndValue)
+	if !ok || end == nil {
+		return value
+	}
+	outputState := messages.TerminalOutputNone
+	if hasOutput {
+		outputState = messages.TerminalOutputPartial
+	}
+	return messages.NewMessageEndValueWithTerminal(end.Usage, messages.TerminalReasonPartialOutput, messages.TerminalProvenanceLoop, outputState)
+}

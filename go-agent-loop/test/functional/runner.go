@@ -252,87 +252,22 @@ func RunPackageTests(m *testing.M, packagePath string) {
 	if !flag.Parsed() {
 		flag.Parse()
 	}
+	os.Exit(runSelectedPackageTests(m, packagePath))
+}
 
-	manifest, err := ReadConfiguredManifest()
+// runSelectedPackageTests runs one package under its manifest selection and
+// returns the process exit code.
+func runSelectedPackageTests(m *testing.M, packagePath string) int {
+	selection, selected, err := selectPackageTests(packagePath)
+	if err == nil && selected {
+		err = applyPackageSelection(selection)
+	}
 	if err != nil {
 		writePackageRunnerError(err)
-		os.Exit(1)
+		return 1
 	}
-	if len(manifest.Entries) == 0 {
-		os.Exit(m.Run())
-	}
-
-	moduleRoot, err := functionalModuleRootPath()
-	if err != nil {
-		writePackageRunnerError(err)
-		os.Exit(1)
-	}
-	inventory, err := DiscoverFunctionalInventory(context.Background(), moduleRoot)
-	if err != nil {
-		writePackageRunnerError(err)
-		os.Exit(1)
-	}
-	if _, err := Select(manifest, inventory); err != nil {
-		writePackageRunnerError(err)
-		os.Exit(1)
-	}
-
-	var localEntries []Entry
-	for _, entry := range manifest.Entries {
-		if entry.Package == packagePath {
-			localEntries = append(localEntries, entry)
-		}
-	}
-	if len(localEntries) == 0 {
-		os.Exit(m.Run())
-	}
-
-	var currentPackage InventoryPackage
-	for _, discoveredPackage := range inventory.Packages {
-		if discoveredPackage.Path == packagePath {
-			currentPackage = discoveredPackage
-			break
-		}
-	}
-	if currentPackage.Path == "" {
-		writePackageRunnerError(&ValidationError{
-			Field:    "inventory.packages",
-			Selector: packagePath,
-			Problem:  "does not resolve to the current discovered package",
-		})
-		os.Exit(1)
-	}
-	selection, err := Select(
-		Manifest{Version: manifest.Version, Suite: manifest.Suite, Entries: localEntries},
-		Inventory{Packages: []InventoryPackage{currentPackage}},
-	)
-	if err != nil {
-		writePackageRunnerError(err)
-		os.Exit(1)
-	}
-	for _, record := range selection.Quarantined {
-		if _, err := fmt.Fprintf(
-			os.Stdout,
-			"quarantine: selector=%s bucket=%s reason=%q exitCondition=%q count=%d observed=skip\n",
-			record.Entry.Selector(),
-			record.Entry.Bucket,
-			record.Entry.Reason,
-			record.Entry.ExitCondition,
-			len(record.Tests),
-		); err != nil {
-			writePackageRunnerError(fmt.Errorf("write quarantine report: %w", err))
-			os.Exit(1)
-		}
-	}
-
-	pattern, err := packageRunPattern(selection.Selected)
-	if err != nil {
-		writePackageRunnerError(err)
-		os.Exit(1)
-	}
-	if err := flag.CommandLine.Set("test.run", pattern); err != nil {
-		writePackageRunnerError(fmt.Errorf("set package test selection: %w", err))
-		os.Exit(1)
+	if !selected {
+		return m.Run()
 	}
 
 	exitCode := m.Run()
@@ -349,9 +284,73 @@ func RunPackageTests(m *testing.M, packagePath string) {
 	}
 	if _, err := fmt.Fprintln(os.Stdout, report.Summary()); err != nil {
 		writePackageRunnerError(fmt.Errorf("write package summary: %w", err))
-		os.Exit(1)
+		return 1
 	}
-	os.Exit(exitCode)
+	return exitCode
+}
+
+// selectPackageTests validates the configured manifest against the whole
+// discovered inventory, then selects this package's tests. selected is false
+// when no manifest entry applies to the package.
+func selectPackageTests(packagePath string) (Selection, bool, error) {
+	manifest, err := ReadConfiguredManifest()
+	if err != nil || len(manifest.Entries) == 0 {
+		return Selection{}, false, err
+	}
+	moduleRoot, err := functionalModuleRootPath()
+	if err != nil {
+		return Selection{}, false, err
+	}
+	inventory, err := DiscoverFunctionalInventory(context.Background(), moduleRoot)
+	if err != nil {
+		return Selection{}, false, err
+	}
+	if _, err := Select(manifest, inventory); err != nil {
+		return Selection{}, false, err
+	}
+
+	var localEntries []Entry
+	for _, entry := range manifest.Entries {
+		if entry.Package == packagePath {
+			localEntries = append(localEntries, entry)
+		}
+	}
+	if len(localEntries) == 0 {
+		return Selection{}, false, nil
+	}
+
+	var currentPackage InventoryPackage
+	for _, discoveredPackage := range inventory.Packages {
+		if discoveredPackage.Path == packagePath {
+			currentPackage = discoveredPackage
+			break
+		}
+	}
+	if currentPackage.Path == "" {
+		return Selection{}, false, &ValidationError{Field: "inventory.packages", Selector: packagePath, Problem: "does not resolve to the current discovered package"}
+	}
+	localManifest := Manifest{Version: manifest.Version, Suite: manifest.Suite, Entries: localEntries}
+	selection, err := Select(localManifest, Inventory{Packages: []InventoryPackage{currentPackage}})
+	return selection, err == nil, err
+}
+
+// applyPackageSelection reports quarantined selectors and narrows test.run to
+// the selected tests.
+func applyPackageSelection(selection Selection) error {
+	for _, record := range selection.Quarantined {
+		if _, err := fmt.Fprintf(os.Stdout, "quarantine: selector=%s bucket=%s reason=%q exitCondition=%q count=%d observed=skip\n",
+			record.Entry.Selector(), record.Entry.Bucket, record.Entry.Reason, record.Entry.ExitCondition, len(record.Tests)); err != nil {
+			return fmt.Errorf("write quarantine report: %w", err)
+		}
+	}
+	pattern, err := packageRunPattern(selection.Selected)
+	if err != nil {
+		return err
+	}
+	if err := flag.CommandLine.Set("test.run", pattern); err != nil {
+		return fmt.Errorf("set package test selection: %w", err)
+	}
+	return nil
 }
 
 func packageRunPattern(selected []TestSelector) (string, error) {

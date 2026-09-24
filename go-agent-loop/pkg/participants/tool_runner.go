@@ -134,102 +134,109 @@ func (r *ToolRunner) Tick(ctx context.Context) error {
 // (MESSAGE.START, MESSAGE.END) uses one stream; each tool call's TEXT.START/DELTA/END uses
 // its own stream so parallel tool calls have separate streams.
 func (r *ToolRunner) emitResultDeltas(ctx context.Context, loopPassID int, results []messages.ToolCallResponse) {
-	messageStreamID := mustStreamID("tool-msg")
-	writeInStream := func(streamID string, idx int, sm messages.StreamMessage) {
-		sm.ActorStreamID = streamID
-		sm.ActorProvidedIndex = idx
-		sm.ActorProvidedID = fmt.Sprintf("tool-%s-%d", streamID, idx)
-		sm.ActorID = messages.Tool
-		sm.LoopPassID = loopPassID
-		r.DeltaOutbox.Write(ctx, sm)
-	}
-
-	writeInStream(messageStreamID, 0, messages.StreamMessage{
-		Type:  messages.StreamTypeMessageStart,
-		Role:  messages.RoleTool,
-		Value: messages.NewMessageStartValue(),
-	})
-
+	envelope := toolStreamWriter{runner: r, ctx: ctx, loopPassID: loopPassID, streamID: mustStreamID("tool-msg")}
+	envelope.write(messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleTool, Value: messages.NewMessageStartValue()})
 	for _, result := range results {
-		toolStreamID := mustStreamID("tool-call")
-		idx := 0
-		contentEmitted := false
-		writeToolDelta := func(sm messages.StreamMessage) {
-			writeInStream(toolStreamID, idx, sm)
-			idx++
-		}
-		if len(result.ContentParts) > 0 {
-			// Emit each content part as the appropriate delta sequence.
-			for _, part := range result.ContentParts {
-				switch p := part.(type) {
-				case messages.TextPart:
-					// Preserve the text boundaries even for an empty result. The
-					// ToolCallId on TEXT.START is the stream-only correlation
-					// mechanism used by the ordering layer and must survive a
-					// successful empty tool response.
-					contentEmitted = true
-					writeToolDelta(messages.StreamMessage{Type: messages.StreamTypeTextStart, Role: messages.RoleTool, Value: messages.NewTextStartValue(), ToolCallId: result.ToolCallID})
-					if p.Text != "" {
-						writeToolDelta(messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleTool, Value: messages.NewTextDeltaValue(p.Text), ToolCallId: result.ToolCallID})
-					}
-					writeToolDelta(messages.StreamMessage{Type: messages.StreamTypeTextEnd, Role: messages.RoleTool, Value: messages.NewTextEndValue(), ToolCallId: result.ToolCallID})
-				case messages.ImagePart:
-					if len(p.Bytes) > 0 {
-						contentEmitted = true
-						writeToolDelta(messages.StreamMessage{Type: messages.StreamTypeImageStart, Role: messages.RoleTool, Value: messages.NewImageStartValue(p.MediaType), ToolCallId: result.ToolCallID})
-						writeToolDelta(messages.StreamMessage{Type: messages.StreamTypeImageDelta, Role: messages.RoleTool, Value: messages.NewImageDeltaValue(p.Bytes), ToolCallId: result.ToolCallID})
-						writeToolDelta(messages.StreamMessage{Type: messages.StreamTypeImageEnd, Role: messages.RoleTool, Value: messages.NewImageEndValue(), ToolCallId: result.ToolCallID})
-						contentEmitted = true
-					}
-				case messages.AudioPart:
-					if len(p.Bytes) > 0 {
-						contentEmitted = true
-						writeToolDelta(messages.StreamMessage{Type: messages.StreamTypeAudioStart, Role: messages.RoleTool, Value: messages.NewAudioStartValue(), ToolCallId: result.ToolCallID})
-						writeToolDelta(messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Role: messages.RoleTool, Value: messages.NewAudioDeltaValue(p.Bytes), ToolCallId: result.ToolCallID})
-						writeToolDelta(messages.StreamMessage{Type: messages.StreamTypeAudioEnd, Role: messages.RoleTool, Value: messages.NewAudioEndValue(), ToolCallId: result.ToolCallID})
-						contentEmitted = true
-					}
-				case messages.VideoPart:
-					if len(p.Bytes) > 0 {
-						contentEmitted = true
-						writeToolDelta(messages.StreamMessage{Type: messages.StreamTypeVideoStart, Role: messages.RoleTool, Value: messages.NewVideoStartValue(p.MediaType), ToolCallId: result.ToolCallID})
-						writeToolDelta(messages.StreamMessage{Type: messages.StreamTypeVideoDelta, Role: messages.RoleTool, Value: messages.NewVideoDeltaValue(p.Bytes), ToolCallId: result.ToolCallID})
-						writeToolDelta(messages.StreamMessage{Type: messages.StreamTypeVideoEnd, Role: messages.RoleTool, Value: messages.NewVideoEndValue(), ToolCallId: result.ToolCallID})
-						contentEmitted = true
-					}
-				case messages.FilePart:
-					if len(p.Bytes) > 0 {
-						contentEmitted = true
-						writeToolDelta(messages.StreamMessage{Type: messages.StreamTypeFileStart, Role: messages.RoleTool, Value: messages.NewFileStartValue(p.MediaType, p.Name), ToolCallId: result.ToolCallID})
-						writeToolDelta(messages.StreamMessage{Type: messages.StreamTypeFileDelta, Role: messages.RoleTool, Value: messages.NewFileDeltaValue(p.Bytes), ToolCallId: result.ToolCallID})
-						writeToolDelta(messages.StreamMessage{Type: messages.StreamTypeFileEnd, Role: messages.RoleTool, Value: messages.NewFileEndValue(), ToolCallId: result.ToolCallID})
-						contentEmitted = true
-					}
-				}
-			}
-
-		} else if text := result.Content; text != "" {
-			// Fallback: emit text from the flat Content field.
-			contentEmitted = true
-			writeToolDelta(messages.StreamMessage{Type: messages.StreamTypeTextStart, Role: messages.RoleTool, Value: messages.NewTextStartValue(), ToolCallId: result.ToolCallID})
-			writeToolDelta(messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleTool, Value: messages.NewTextDeltaValue(text), ToolCallId: result.ToolCallID})
-			writeToolDelta(messages.StreamMessage{Type: messages.StreamTypeTextEnd, Role: messages.RoleTool, Value: messages.NewTextEndValue(), ToolCallId: result.ToolCallID})
-			contentEmitted = true
-		}
-		if !contentEmitted {
-			// A successful empty result still needs one reconstructible content
-			// boundary. Without it, the tool message loses its call ID and the
-			// provider cannot receive the result or request its continuation.
-			writeToolDelta(messages.StreamMessage{Type: messages.StreamTypeTextStart, Role: messages.RoleTool, Value: messages.NewTextStartValue(), ToolCallId: result.ToolCallID})
-			writeToolDelta(messages.StreamMessage{Type: messages.StreamTypeTextEnd, Role: messages.RoleTool, Value: messages.NewTextEndValue(), ToolCallId: result.ToolCallID})
-		}
+		call := toolStreamWriter{runner: r, ctx: ctx, loopPassID: loopPassID, streamID: mustStreamID("tool-call"), toolCallID: result.ToolCallID}
+		call.emitResult(result)
 	}
+	usage := messages.TokenUsage{PromptTokens: 0, CompletionTokens: 0, TotalTokens: 0}
+	envelope.write(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleTool, Value: messages.NewMessageEndValue(usage)})
+}
 
-	writeInStream(messageStreamID, 1, messages.StreamMessage{
-		Type:  messages.StreamTypeMessageEnd,
-		Role:  messages.RoleTool,
-		Value: messages.NewMessageEndValue(messages.TokenUsage{PromptTokens: 0, CompletionTokens: 0, TotalTokens: 0}),
-	})
+// toolStreamWriter tags deltas for one tool stream with sequential actor
+// indexes. The envelope stream and each tool call stream own separate writers.
+type toolStreamWriter struct {
+	runner     *ToolRunner
+	ctx        context.Context
+	loopPassID int
+	streamID   string
+	toolCallID string
+	idx        int
+}
+
+func (w *toolStreamWriter) write(sm messages.StreamMessage) {
+	sm.ActorStreamID = w.streamID
+	sm.ActorProvidedIndex = w.idx
+	sm.ActorProvidedID = fmt.Sprintf("tool-%s-%d", w.streamID, w.idx)
+	sm.ActorID = messages.Tool
+	sm.LoopPassID = w.loopPassID
+	w.idx++
+	w.runner.DeltaOutbox.Write(w.ctx, sm)
+}
+
+func (w *toolStreamWriter) writeContent(streamType messages.StreamMessageType, value messages.StreamMessageValue) {
+	w.write(messages.StreamMessage{Type: streamType, Role: messages.RoleTool, Value: value, ToolCallId: w.toolCallID})
+}
+
+// emitResult writes one tool result's content boundaries. Structured parts
+// take precedence over the flat Content fallback.
+func (w *toolStreamWriter) emitResult(result messages.ToolCallResponse) {
+	contentEmitted := false
+	if len(result.ContentParts) > 0 {
+		for _, part := range result.ContentParts {
+			if w.emitContentPart(part) {
+				contentEmitted = true
+			}
+		}
+	} else if text := result.Content; text != "" {
+		// Fallback: emit text from the flat Content field.
+		w.emitText(text)
+		contentEmitted = true
+	}
+	if !contentEmitted {
+		// A successful empty result still needs one reconstructible content
+		// boundary. Without it, the tool message loses its call ID and the
+		// provider cannot receive the result or request its continuation.
+		w.writeContent(messages.StreamTypeTextStart, messages.NewTextStartValue())
+		w.writeContent(messages.StreamTypeTextEnd, messages.NewTextEndValue())
+	}
+}
+
+// emitText preserves the text boundaries even for an empty result. The
+// ToolCallId on TEXT.START is the stream-only correlation mechanism used by
+// the ordering layer and must survive a successful empty tool response.
+func (w *toolStreamWriter) emitText(text string) {
+	w.writeContent(messages.StreamTypeTextStart, messages.NewTextStartValue())
+	if text != "" {
+		w.writeContent(messages.StreamTypeTextDelta, messages.NewTextDeltaValue(text))
+	}
+	w.writeContent(messages.StreamTypeTextEnd, messages.NewTextEndValue())
+}
+
+// binaryBoundary is one START/DELTA/END triple for a binary content part.
+type binaryBoundary struct {
+	startType, deltaType, endType messages.StreamMessageType
+	start, delta, end             messages.StreamMessageValue
+}
+
+// emitContentPart writes the delta sequence for one content part and reports
+// whether any content boundary was emitted. Empty binary parts are skipped.
+func (w *toolStreamWriter) emitContentPart(part messages.ContentPart) bool {
+	switch p := part.(type) {
+	case messages.TextPart:
+		w.emitText(p.Text)
+		return true
+	case messages.ImagePart:
+		return w.emitBinary(p.Bytes, binaryBoundary{messages.StreamTypeImageStart, messages.StreamTypeImageDelta, messages.StreamTypeImageEnd, messages.NewImageStartValue(p.MediaType), messages.NewImageDeltaValue(p.Bytes), messages.NewImageEndValue()})
+	case messages.AudioPart:
+		return w.emitBinary(p.Bytes, binaryBoundary{messages.StreamTypeAudioStart, messages.StreamTypeAudioDelta, messages.StreamTypeAudioEnd, messages.NewAudioStartValue(), messages.NewAudioDeltaValue(p.Bytes), messages.NewAudioEndValue()})
+	case messages.VideoPart:
+		return w.emitBinary(p.Bytes, binaryBoundary{messages.StreamTypeVideoStart, messages.StreamTypeVideoDelta, messages.StreamTypeVideoEnd, messages.NewVideoStartValue(p.MediaType), messages.NewVideoDeltaValue(p.Bytes), messages.NewVideoEndValue()})
+	case messages.FilePart:
+		return w.emitBinary(p.Bytes, binaryBoundary{messages.StreamTypeFileStart, messages.StreamTypeFileDelta, messages.StreamTypeFileEnd, messages.NewFileStartValue(p.MediaType, p.Name), messages.NewFileDeltaValue(p.Bytes), messages.NewFileEndValue()})
+	}
+	return false
+}
+
+func (w *toolStreamWriter) emitBinary(payload []byte, boundary binaryBoundary) bool {
+	if len(payload) == 0 {
+		return false
+	}
+	w.writeContent(boundary.startType, boundary.start)
+	w.writeContent(boundary.deltaType, boundary.delta)
+	w.writeContent(boundary.endType, boundary.end)
+	return true
 }
 
 func mustStreamID(prefix string) string {
@@ -251,61 +258,94 @@ func (r *ToolRunner) executeBatch(ctx context.Context, calls []messages.ToolCall
 		return nil, nil
 	}
 
-	results := make([]messages.ToolCallResponse, len(calls))
-	errs := make([]error, len(calls))
-	type executionResult struct {
-		index    int
-		response messages.ToolCallResponse
-		err      error
+	batch := &toolBatch{
+		calls:              calls,
+		results:            make([]messages.ToolCallResponse, len(calls)),
+		errs:               make([]error, len(calls)),
+		pendingLongRunning: r.longRunningCalls(calls),
 	}
-	resultCh := make(chan executionResult, len(calls))
+	resultCh := make(chan toolExecutionResult, len(calls))
+	for i, tc := range calls {
+		go func(idx int, call messages.ToolCall) {
+			resp, err := r.executor.Execute(ctx, call)
+			resultCh <- toolExecutionResult{index: idx, response: resp, err: err}
+		}(i, tc)
+	}
+	r.collectBatch(ctx, batch, resultCh)
+
+	// Return all errors aggregated so callers see every failure, not just the first.
+	if joined := errors.Join(batch.errs...); joined != nil {
+		return nil, joined
+	}
+
+	return batch.results, nil
+}
+
+type toolExecutionResult struct {
+	index    int
+	response messages.ToolCallResponse
+	err      error
+}
+
+// toolBatch holds the ordered outcomes of one executeBatch call and the
+// long-running calls that have not completed yet.
+type toolBatch struct {
+	calls               []messages.ToolCall
+	results             []messages.ToolCallResponse
+	errs                []error
+	pendingLongRunning  map[int]messages.ToolCall
+	acknowledgementSent bool
+}
+
+func (b *toolBatch) record(result toolExecutionResult) {
+	if result.err != nil {
+		b.errs[result.index] = fmt.Errorf("tool %q failed: %w", b.calls[result.index].Name, result.err)
+	} else {
+		b.results[result.index] = result.response
+	}
+	delete(b.pendingLongRunning, result.index)
+}
+
+// pendingCalls returns the still-running long-running calls in input order.
+func (b *toolBatch) pendingCalls() []messages.ToolCall {
+	pending := make([]messages.ToolCall, 0, len(b.pendingLongRunning))
+	for i := range b.calls {
+		if call, ok := b.pendingLongRunning[i]; ok {
+			pending = append(pending, call)
+		}
+	}
+	return pending
+}
+
+func (r *ToolRunner) longRunningCalls(calls []messages.ToolCall) map[int]messages.ToolCall {
 	pendingLongRunning := make(map[int]messages.ToolCall)
 	for i, call := range calls {
 		if r.acknowledgementThreshold > 0 && r.isLongRunningTool != nil && r.isLongRunningTool(call.Name) {
 			pendingLongRunning[i] = call
 		}
 	}
+	return pendingLongRunning
+}
 
-	for i, tc := range calls {
-		go func(idx int, call messages.ToolCall) {
-			resp, err := r.executor.Execute(ctx, call)
-			resultCh <- executionResult{index: idx, response: resp, err: err}
-		}(i, tc)
-	}
-
+// collectBatch waits for every worker outcome while at most once requesting
+// an acknowledgement for long-running calls that outlive the threshold.
+func (r *ToolRunner) collectBatch(ctx context.Context, batch *toolBatch, resultCh <-chan toolExecutionResult) {
 	var acknowledgementTimer *time.Timer
 	var acknowledgementCh <-chan time.Time
-	if len(pendingLongRunning) > 0 {
+	if len(batch.pendingLongRunning) > 0 {
 		acknowledgementTimer = time.NewTimer(r.acknowledgementThreshold)
 		acknowledgementCh = acknowledgementTimer.C
 		defer acknowledgementTimer.Stop()
 	}
 	ctxDone := ctx.Done()
-	acknowledgementSent := false
 	completed := 0
-	for completed < len(calls) {
+	for completed < len(batch.calls) {
 		select {
 		case result := <-resultCh:
-			if result.err != nil {
-				errs[result.index] = fmt.Errorf("tool %q failed: %w", calls[result.index].Name, result.err)
-			} else {
-				results[result.index] = result.response
-			}
-			delete(pendingLongRunning, result.index)
+			batch.record(result)
 			completed++
 		case <-acknowledgementCh:
-			if !acknowledgementSent && len(pendingLongRunning) > 0 && ctx.Err() == nil {
-				acknowledgementSent = true
-				if r.sendAcknowledgement != nil {
-					pending := make([]messages.ToolCall, 0, len(pendingLongRunning))
-					for i := range calls {
-						if call, ok := pendingLongRunning[i]; ok {
-							pending = append(pending, call)
-						}
-					}
-					r.sendAcknowledgement(ctx, pending)
-				}
-			}
+			r.acknowledgePending(ctx, batch)
 			acknowledgementCh = nil
 		case <-ctxDone:
 			// Keep collecting worker outcomes so the existing batch error
@@ -318,13 +358,16 @@ func (r *ToolRunner) executeBatch(ctx context.Context, calls []messages.ToolCall
 			acknowledgementCh = nil
 		}
 	}
+}
 
-	// Return all errors aggregated so callers see every failure, not just the first.
-	if joined := errors.Join(errs...); joined != nil {
-		return nil, joined
+func (r *ToolRunner) acknowledgePending(ctx context.Context, batch *toolBatch) {
+	if batch.acknowledgementSent || len(batch.pendingLongRunning) == 0 || ctx.Err() != nil {
+		return
 	}
-
-	return results, nil
+	batch.acknowledgementSent = true
+	if r.sendAcknowledgement != nil {
+		r.sendAcknowledgement(ctx, batch.pendingCalls())
+	}
 }
 
 // admitCalls records provider call IDs before execution starts and removes
