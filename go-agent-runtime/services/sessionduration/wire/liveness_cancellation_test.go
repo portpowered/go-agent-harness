@@ -3,10 +3,13 @@ package wire
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 )
 
@@ -224,6 +227,41 @@ func TestPublicNilArtifactLifecycleIsNoop(t *testing.T) {
 	}
 }
 
+func TestPublicTerminalRecorderPreservesArtifactPathsDuringPreparation(t *testing.T) {
+	service := NewService()
+	directory := t.TempDir()
+	paths := sessionduration.SessionDurationArtifactPaths{
+		AudioPath:      filepath.Join(directory, "session.wav"),
+		TranscriptPath: filepath.Join(directory, "session.jsonl"),
+	}
+	ctx := service.WithArtifactPaths(context.Background(), paths)
+	recorder := &publicCapturingTerminalRecorder{}
+	ctx = service.WithTerminalRecorder(ctx, recorder)
+	prepared, err := service.PrepareArtifacts(ctx)
+	if err != nil {
+		t.Fatalf("PrepareArtifacts: %v", err)
+	}
+	for _, path := range []string{paths.AudioPath, paths.TranscriptPath} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("artifact path %q was not opened: %v", path, err)
+		}
+	}
+	lifecycle := service.ArtifactsFromContext(prepared)
+	terminal := messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValueWithTerminal(
+		"session", "done", "provider_close", messages.TerminalReasonProviderClose,
+		messages.TerminalProvenanceProvider, messages.TerminalOutputPartial,
+	)}
+	if err := lifecycle.Accept(terminal); err != nil {
+		t.Fatalf("terminal Accept: %v", err)
+	}
+	if len(recorder.summaries) != 1 || recorder.summaries[0].TerminalReason != messages.TerminalReasonProviderClose {
+		t.Fatalf("recorded terminal summaries = %+v", recorder.summaries)
+	}
+	if err := service.FinalizeArtifacts(lifecycle); err != nil {
+		t.Fatalf("FinalizeArtifacts: %v", err)
+	}
+}
+
 func TestPublicRunBoundsLoopThatIgnoresCancellation(t *testing.T) {
 	done := make(chan struct{})
 	close(done)
@@ -278,6 +316,15 @@ func (l *publicStubbornLoop) Run(context.Context) error {
 }
 func (l *publicStubbornLoop) Deltas() *messages.TypedBuffer[messages.StreamMessage] { return l.deltas }
 func (*publicStubbornLoop) Send(context.Context, []messages.Message) error          { return nil }
+
+type publicCapturingTerminalRecorder struct {
+	summaries []transcript.RecordingTerminalSummary
+}
+
+func (r *publicCapturingTerminalRecorder) RecordTerminalSummary(summary transcript.RecordingTerminalSummary) error {
+	r.summaries = append(r.summaries, summary)
+	return nil
+}
 
 type publicNilTimerScheduler struct{}
 
