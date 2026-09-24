@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
-	runtimeEvidenceWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
 	captureReplayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
+	runtimeEvidenceWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	runtimeReplayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay/wire"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
