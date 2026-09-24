@@ -88,8 +88,8 @@ func defaultRoomSessionFactory(participant room.Participant, options SessionRunO
 		}
 		return plan.inferencer, nil
 	}
-	if options.runtimeFactory.configured() && options.runtimeFactory.newBareLiveSessionInferencer != nil {
-		factory := sessionRuntimeFactoryWithInstructions(options.runtimeFactory, participant.SystemPrompt)
+	if options.RuntimeFactory.configured() && options.RuntimeFactory.newBareLiveSessionInferencer != nil {
+		factory := sessionRuntimeFactoryWithInstructions(options.RuntimeFactory, participant.SystemPrompt)
 		inferencer, _, err := factory.newBareLiveSessionInferencer(options)
 		return inferencer, err
 	}
@@ -318,12 +318,14 @@ func runRoomParticipant(
 		}
 	}
 	loopOptions := sessionLoopOptions{
-		Prompt:        runtime.plan.options.Prompt,
-		livenessClock: runtime.plan.options.LivenessClock,
-		audioService:  runtime.plan.options.AudioService,
-		clockSource:   platformclock.Ensure(runtime.plan.options.Clock),
-		WaitForClose:  true,
-		Done:          coordinator.done,
+		durationService: runtime.plan.options.RuntimeFactory.durationService,
+		durationRunner:  runtime.plan.options.RuntimeFactory.durationRunner,
+		Prompt:          runtime.plan.options.Prompt,
+		livenessClock:   runtime.plan.options.LivenessClock,
+		audioService:    runtime.plan.options.AudioService,
+		clockSource:     platformclock.Ensure(runtime.plan.options.Clock),
+		WaitForClose:    true,
+		Done:            coordinator.done,
 		DoneErr: func() error {
 			if failedID := coordinator.failedParticipantID(); failedID != "" && failedID != runtime.plan.manifest.ID {
 				return nil

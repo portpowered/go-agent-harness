@@ -17,9 +17,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
-	sessionwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
-	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
 	terminalwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
@@ -62,11 +60,13 @@ func awaitSessionFirstTurnWithClock(ctx context.Context, ack <-chan error, audio
 }
 
 type sessionLoopOptions struct {
-	Prompt         string
-	PromptProvided bool
-	CloseAfterOpen bool
-	WaitForClose   bool
-	MaxDuration    time.Duration
+	durationService sessionduration.Service
+	durationRunner  runtimeSession.DurationRunner
+	Prompt          string
+	PromptProvided  bool
+	CloseAfterOpen  bool
+	WaitForClose    bool
+	MaxDuration     time.Duration
 	// BareLive keeps a default-device voice session open until its owner
 	// cancels it instead of applying the ordinary single-turn close policy.
 	BareLive bool
@@ -314,14 +314,15 @@ func writeDurationSessionReplayMessage(out io.Writer, msg messages.StreamMessage
 }
 
 func executeDurationRequest(ctx context.Context, out io.Writer, inferencer messages.SessionInferencer, opts sessionLoopOptions, maxDuration time.Duration, clock sessionduration.TimerScheduler, admitted sessionduration.AdmissionInferencer) (sessionduration.Result, error) {
-	durationService := durationwire.NewService()
-	builder := newDurationRequestBuilder(ctx, out, inferencer, opts, maxDuration, clock, admitted, durationService)
+	if opts.durationService == nil {
+		return sessionduration.Result{}, errors.New("session duration service is required")
+	}
+	if opts.durationRunner == nil {
+		return sessionduration.Result{}, errors.New("session duration runner is required")
+	}
+	builder := newDurationRequestBuilder(ctx, out, inferencer, opts, maxDuration, clock, admitted, opts.durationService)
 	request := builder.Build()
-	runner := sessionwire.NewDurationRunner(sessionwire.DurationDependencies{
-		DurationService: durationService,
-		LoopFactory:     sessionwire.NewDuplexLoopFactory(),
-	})
-	return runner.RunDuration(request)
+	return opts.durationRunner.RunDuration(request)
 }
 
 type durationRequestBuilder struct {
@@ -528,8 +529,9 @@ func publishSessionUserCancellation(out io.Writer, opts sessionLoopOptions, writ
 	terminal := sessionUserCancelledTerminalMessage(opts.observer)
 	var errs []error
 	if opts.terminalSummaryRecorder != nil {
-		summary, present, err := durationwire.NewService().RecordingTerminalSummaryFromMessage(terminal)
-		if err != nil {
+		if opts.durationService == nil {
+			errs = append(errs, errors.New("session duration service is required for terminal recording"))
+		} else if summary, present, err := opts.durationService.RecordingTerminalSummaryFromMessage(terminal); err != nil {
 			errs = append(errs, fmt.Errorf("record user cancellation terminal summary: %w", err))
 		} else if present {
 			if err := opts.terminalSummaryRecorder.RecordTerminalSummary(*summary); err != nil {

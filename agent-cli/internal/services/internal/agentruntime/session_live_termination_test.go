@@ -50,10 +50,10 @@ func newLiveTerminalDrainFixture(t *testing.T) *liveTerminalDrainFixture {
 		acceptedText: liveTerminalDrainAcceptedOutput,
 	}
 	f.writer = &f.output
-	f.options = sessionLoopOptions{
+	f.options = newTestSessionLoopOptions(sessionLoopOptions{
 		loopReady:    f.loopReady,
 		audioService: newTestAudioIOService(),
-	}
+	})
 	f.session.opened = func() {
 		// ConnectSession has accepted SESSION.OPEN. The service may not have
 		// consumed it yet, but every trigger below remains buffered until the

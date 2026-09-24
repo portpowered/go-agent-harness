@@ -127,7 +127,7 @@ func assertGoroutinesSettled(t *testing.T, baseline int, operation string) {
 
 func TestSessionDirectoryRecordingCloseDrainsPendingProviderOutput(t *testing.T) {
 	destination := filepath.Join(t.TempDir(), "pending-output")
-	recording := newSessionDirectoryRecording(destination, sessionRuntimePlan{provider: sessionProviderOpenAI}, SessionRunOptions{ModelCatalog: testModelCatalog(), Model: "gpt-realtime"})
+	recording := newSessionDirectoryRecording(destination, newTestSessionRuntimePlan(sessionRuntimePlan{provider: sessionProviderOpenAI}), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), Model: "gpt-realtime"}))
 	inner := newSessionRecordingTestSession()
 	ctx := context.Background()
 	wrapper := &sessionDirectoryRecordingSession{

@@ -22,6 +22,13 @@ func NewDurationRunner(durationService sessionduration.Service, loopFactory sess
 	return &durationRunner{durationService: durationService, loopFactory: loopFactory}
 }
 
+func (r *durationRunner) Execute(request sessionduration.ExecutionRequest) error {
+	if r == nil || r.durationService == nil {
+		return errors.New("session duration service is required")
+	}
+	return r.durationService.Execute(request)
+}
+
 func (r *durationRunner) RunDuration(request session.DurationRunRequest) (sessionduration.Result, error) {
 	if err := r.validate(); err != nil {
 		return sessionduration.Result{}, err

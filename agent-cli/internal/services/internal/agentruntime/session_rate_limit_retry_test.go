@@ -295,14 +295,14 @@ func TestRunAgentLoopSessionMaxDurationStopsRateLimitRetry(t *testing.T) {
 	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime-2.1-mini")
 	observer.scheduleAudioInputs([]ScheduledAudioInput{{AfterCompletedTurns: 0, PCM: []byte{1, 2}, EndOfTurn: true}})
 
-	err := runAgentLoopSessionWithDurationClock(context.Background(), io.Discard, &rateLimitRetrySessionInferencer{session: session}, sessionLoopOptions{
+	err := runAgentLoopSessionWithDurationClock(context.Background(), io.Discard, &rateLimitRetrySessionInferencer{session: session}, newTestSessionLoopOptions(sessionLoopOptions{
 		audioService:             newTestAudioIOService(),
 		MaxDuration:              100 * time.Millisecond,
 		CloseAfterScheduledAudio: true,
 		ToolExecutor:             &rateLimitRetryToolExecutor{},
 		ToolDefinitions:          []messages.ToolDefinition{{Name: "lookup", Description: "Look up one value."}},
 		observer:                 observer,
-	}, 100*time.Millisecond, realSessionDurationClock{})
+	}), 100*time.Millisecond, realSessionDurationClock{})
 	if err != nil {
 		t.Fatalf("service-owned session run: %v; timeline=%v", err, session.timelineSnapshot())
 	}
@@ -340,12 +340,12 @@ func TestRunAgentLoopSessionWithDurationMaxDurationStopsRateLimitRetry(t *testin
 			context.Background(),
 			io.Discard,
 			&rateLimitRetrySessionInferencer{session: session},
-			sessionLoopOptions{
+			newTestSessionLoopOptions(sessionLoopOptions{
 				audioService:    newTestAudioIOService(),
 				ToolExecutor:    &rateLimitRetryToolExecutor{},
 				ToolDefinitions: []messages.ToolDefinition{{Name: "lookup", Description: "Look up one value."}},
 				observer:        observer,
-			},
+			}),
 			time.Hour,
 			clock,
 		)
@@ -431,13 +431,13 @@ func TestRunAgentLoopSessionRetriesScheduledToolContinuationOnce(t *testing.T) {
 	})
 	executor := &rateLimitRetryToolExecutor{}
 	started := time.Now()
-	err := runAgentLoopSession(context.Background(), io.Discard, inferencer, sessionLoopOptions{
+	err := runAgentLoopSession(context.Background(), io.Discard, inferencer, newTestSessionLoopOptions(sessionLoopOptions{
 		audioService:             newTestAudioIOService(),
 		CloseAfterScheduledAudio: true,
 		ToolExecutor:             executor,
 		ToolDefinitions:          []messages.ToolDefinition{{Name: "lookup", Description: "Look up one value."}},
 		observer:                 observer,
-	})
+	}))
 	elapsed := time.Since(started)
 	if err != nil {
 		snapshot := lifecycleSnapshotForTest(observer)
@@ -485,13 +485,13 @@ func TestRunAgentLoopSessionStopsAfterConsecutiveRateLimitFailure(t *testing.T) 
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 	started := time.Now()
-	err := runAgentLoopSession(ctx, io.Discard, &rateLimitRetrySessionInferencer{session: session}, sessionLoopOptions{
+	err := runAgentLoopSession(ctx, io.Discard, &rateLimitRetrySessionInferencer{session: session}, newTestSessionLoopOptions(sessionLoopOptions{
 		audioService:             newTestAudioIOService(),
 		CloseAfterScheduledAudio: true,
 		ToolExecutor:             executor,
 		ToolDefinitions:          []messages.ToolDefinition{{Name: "lookup", Description: "Look up one value."}},
 		observer:                 observer,
-	})
+	}))
 	elapsed := time.Since(started)
 	if errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("consecutive failure did not terminate promptly: %v; timeline=%v", err, session.timelineSnapshot())
@@ -554,13 +554,13 @@ func TestRunAgentLoopSessionDoesNotRetryNonRateLimitFailure(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 	started := time.Now()
-	err := runAgentLoopSession(ctx, io.Discard, &rateLimitRetrySessionInferencer{session: session}, sessionLoopOptions{
+	err := runAgentLoopSession(ctx, io.Discard, &rateLimitRetrySessionInferencer{session: session}, newTestSessionLoopOptions(sessionLoopOptions{
 		audioService:             newTestAudioIOService(),
 		CloseAfterScheduledAudio: true,
 		ToolExecutor:             executor,
 		ToolDefinitions:          []messages.ToolDefinition{{Name: "lookup", Description: "Look up one value."}},
 		observer:                 observer,
-	})
+	}))
 	elapsed := time.Since(started)
 	if errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("non-rate-limit failure did not terminate promptly: %v; timeline=%v", err, session.timelineSnapshot())

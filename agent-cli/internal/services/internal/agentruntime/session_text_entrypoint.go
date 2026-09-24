@@ -6,7 +6,6 @@ import (
 	"io"
 
 	duration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
-	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 	"time"
 )
@@ -55,15 +54,18 @@ func RunSessionWithTextSeed(ctx context.Context, out io.Writer, opts SessionRunO
 // RunSessionWithTextSeedAndMaxDuration preserves explicit prompt-seed behavior
 // while applying duration admission before the seed adapter reaches a provider.
 func RunSessionWithTextSeedAndMaxDuration(ctx context.Context, out io.Writer, opts SessionRunOptions, maxDuration time.Duration, seed SessionTextSeed) (runErr error) {
-	service := durationwire.NewService()
-	if err := service.ValidateDuration(maxDuration); err != nil {
-		return err
-	}
 	if !seed.Present {
 		return RunSessionWithMaxDuration(ctx, out, opts, maxDuration)
 	}
 	if maxDuration == 0 {
 		return RunSessionWithTextSeed(ctx, out, opts, seed)
+	}
+	service, err := durationServiceForOptions(opts)
+	if err != nil {
+		return err
+	}
+	if err := service.ValidateDuration(maxDuration); err != nil {
+		return err
 	}
 	var coordinator SessionCapabilityCoordinator
 	opts, coordinator = prepareSessionCapabilityCoordinator(opts)
@@ -82,7 +84,7 @@ func RunSessionWithTextSeedAndMaxDuration(ctx context.Context, out io.Writer, op
 	if err != nil {
 		return err
 	}
-	durationCtx, err := service.PrepareArtifacts(ctx)
+	durationCtx, err := plan.durationService.PrepareArtifacts(ctx)
 	if err != nil {
 		return err
 	}
@@ -96,7 +98,7 @@ func RunSessionWithTextSeedAndMaxDuration(ctx context.Context, out io.Writer, op
 	}
 	var admitted duration.AdmissionInferencer
 	if plan.inferencer != nil {
-		admitted = service.NewAdmissionInferencer(plan.inferencer, service.NewEventAdmission(), make(chan struct{}))
+		admitted = plan.durationService.NewAdmissionInferencer(plan.inferencer, plan.durationService.NewEventAdmission(), make(chan struct{}))
 		plan.inferencer = admitted
 	}
 	var writer io.Writer = out

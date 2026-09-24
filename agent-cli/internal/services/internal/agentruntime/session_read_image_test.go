@@ -81,7 +81,7 @@ func TestRunAgentLoopSession_ReadImageResultReachesNextModelTurn(t *testing.T) {
 		}
 	}
 
-	err = runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
+	err = runAgentLoopSession(context.Background(), out, inferencer, newTestSessionLoopOptions(sessionLoopOptions{
 		audioService:         newTestAudioIOService(),
 		MaxDuration:          2 * time.Second,
 		WaitForClose:         true,
@@ -89,7 +89,7 @@ func TestRunAgentLoopSession_ReadImageResultReachesNextModelTurn(t *testing.T) {
 		ToolDefinitions:      plan.loop.ToolDefinitions,
 		ToolExecutionTimeout: 2 * time.Second,
 		observer:             observer,
-	})
+	}))
 	if err != nil {
 		t.Fatalf("runAgentLoopSession: %v\nlifecycle: %#v\noutput:\n%s", err, observer.terminalRequest(err).Lifecycle, out.String())
 	}
@@ -136,7 +136,7 @@ func TestRunAgentLoopSession_FailedImageContinuationReturnsTypedFailure(t *testi
 	observer := newSessionProgressObserver(sink, nil, "openai", "gpt-realtime")
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	err = runAgentLoopSession(ctx, newSignalingBuffer(), inferencer, sessionLoopOptions{
+	err = runAgentLoopSession(ctx, newSignalingBuffer(), inferencer, newTestSessionLoopOptions(sessionLoopOptions{
 		audioService:         newTestAudioIOService(),
 		MaxDuration:          2 * time.Second,
 		WaitForClose:         true,
@@ -144,7 +144,7 @@ func TestRunAgentLoopSession_FailedImageContinuationReturnsTypedFailure(t *testi
 		ToolDefinitions:      plan.loop.ToolDefinitions,
 		ToolExecutionTimeout: 2 * time.Second,
 		observer:             observer,
-	})
+	}))
 	if err == nil {
 		t.Fatal("failed image continuation returned clean success")
 	}
@@ -255,7 +255,7 @@ func TestRunAgentLoopSession_ReadImageFailureKeepsSessionAlive(t *testing.T) {
 		observedMu.Unlock()
 	}
 
-	err = runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
+	err = runAgentLoopSession(context.Background(), out, inferencer, newTestSessionLoopOptions(sessionLoopOptions{
 		audioService:         newTestAudioIOService(),
 		MaxDuration:          2 * time.Second,
 		WaitForClose:         true,
@@ -263,7 +263,7 @@ func TestRunAgentLoopSession_ReadImageFailureKeepsSessionAlive(t *testing.T) {
 		ToolDefinitions:      plan.loop.ToolDefinitions,
 		ToolExecutionTimeout: 2 * time.Second,
 		observer:             observer,
-	})
+	}))
 	if err != nil {
 		t.Fatalf("runAgentLoopSession: %v\noutput:\n%s", err, out.String())
 	}
@@ -414,7 +414,7 @@ func (i *readImageResultGatedInferencer) ConnectSession(ctx context.Context) (me
 
 func planReadImageTestSession(t *testing.T, configDir, workDir string, executor messages.ToolExecutor, definitions []messages.ToolDefinition) sessionRuntimePlan {
 	t.Helper()
-	plan, err := planSessionRuntime(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+	plan, err := planSessionRuntime(newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		ReplayPath:           "synthetic.json",
 		Provider:             "openai",
 		Model:                "gpt-realtime",
@@ -425,7 +425,7 @@ func planReadImageTestSession(t *testing.T, configDir, workDir string, executor 
 		ToolExecutor:         executor,
 		ToolDefinitions:      definitions,
 		ToolExecutionTimeout: 2 * time.Second,
-	})
+	}))
 	if err != nil {
 		t.Fatalf("planSessionRuntime: %v", err)
 	}

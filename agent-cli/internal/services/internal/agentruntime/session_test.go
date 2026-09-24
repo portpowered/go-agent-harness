@@ -46,14 +46,14 @@ model:
 	var gotCfg config.OpenAIConfig
 	var gotDialer transport.Dialer
 
-	plan, err := planSessionRuntimeWithFactory(context.Background(), SessionRunOptions{ModelCatalog: testModelCatalog(),
+	plan, err := planSessionRuntimeWithFactory(context.Background(), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		RecordPath: filepath.Join(t.TempDir(), "openai.session.json"),
 		Provider:   config.ProviderOpenAI,
 		Model:      "gpt-realtime",
 		APIKey:     "sk-override-key",
 		ConfigDir:  configDir,
 		Voice:      "marin",
-	}, sessionRuntimeFactory{
+	}), sessionRuntimeFactory{
 		newDefaultLiveDialer: func() transport.Dialer { return defaultDialer },
 		newRecordingDialer: func(inner transport.Dialer, providerName string, model string) sessionRecordingDialer {
 			gotInner = inner
@@ -138,7 +138,7 @@ func TestPlanSessionRuntime_ScheduledAudioUsesPersistentLiveLifecycle(t *testing
 			}
 			testCase.configure(&factory)
 
-			plan, err := testCase.plan(SessionRunOptions{ModelCatalog: testModelCatalog(),
+			plan, err := testCase.plan(newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 				RecordPath: recordPath,
 				Provider:   testCase.provider,
 				Model:      testCase.model,
@@ -148,7 +148,7 @@ func TestPlanSessionRuntime_ScheduledAudioUsesPersistentLiveLifecycle(t *testing
 					{AfterCompletedTurns: 0, PCM: []byte{1, 2}, EndOfTurn: true},
 					{AfterCompletedTurns: 1, PCM: []byte{3, 4}, EndOfTurn: true},
 				},
-			}, factory)
+			}), factory)
 			if err != nil {
 				t.Fatalf("plan scheduled %s runtime: %v", testCase.provider, err)
 			}
@@ -188,14 +188,14 @@ model:
 	var gotCfg config.GrokConfig
 	var gotDialer transport.Dialer
 
-	plan, err := planSessionRuntimeWithFactory(context.Background(), SessionRunOptions{ModelCatalog: testModelCatalog(),
+	plan, err := planSessionRuntimeWithFactory(context.Background(), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		RecordPath:      filepath.Join(t.TempDir(), "grok.session.json"),
 		Provider:        config.ProviderGrok,
 		Model:           "grok-override-model",
 		APIKey:          "xai-override-key",
 		ConfigDir:       configDir,
 		WebSocketDialer: callerDialer,
-	}, sessionRuntimeFactory{
+	}), sessionRuntimeFactory{
 		newDefaultLiveDialer: func() transport.Dialer {
 			defaultDialerCalled = true
 			return &stubRuntimeDialer{id: "unexpected-default"}
@@ -241,11 +241,11 @@ model:
     api_key: xai-config-key
 `)
 
-	_, err := planSessionRuntimeWithFactory(context.Background(), SessionRunOptions{ModelCatalog: testModelCatalog(),
+	_, err := planSessionRuntimeWithFactory(context.Background(), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		RecordPath: filepath.Join(t.TempDir(), "grok.session.json"),
 		Provider:   config.ProviderGrok,
 		ConfigDir:  configDir,
-	}, sessionRuntimeFactory{
+	}), sessionRuntimeFactory{
 		newDefaultLiveDialer: func() transport.Dialer { return nil },
 	})
 	if err == nil {
@@ -266,11 +266,11 @@ func TestPlanSessionRuntime_OpenAIReplayRoutesThroughOpenAIRuntimeSeam(t *testin
 		done:              make(chan struct{}),
 	}
 
-	plan, err := planSessionRuntimeWithFactory(context.Background(), SessionRunOptions{ModelCatalog: testModelCatalog(),
+	plan, err := planSessionRuntimeWithFactory(context.Background(), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath: filepath.Join("..", "..", "..", "..", "test", "integration", "testdata", "openai_realtime_text.session.json"),
 		Prompt:     "hello realtime",
 		Voice:      "cedar",
-	}, sessionRuntimeFactory{
+	}), sessionRuntimeFactory{
 		newReplayDialer: func(path string) (sessionReplayDialer, error) {
 			if !strings.Contains(path, "openai_realtime_text.session.json") {
 				t.Fatalf("unexpected replay path: %s", path)
@@ -347,10 +347,10 @@ func TestPlanSessionRuntime_OpenAIReplayUsesCapturedHandshakeAndKeepsLoopToolDef
 				done:              make(chan struct{}),
 			}
 			var gotProviderDefinitions []messages.ToolDefinition
-			plan, err := planSessionRuntimeWithFactory(context.Background(), SessionRunOptions{ModelCatalog: testModelCatalog(),
+			plan, err := planSessionRuntimeWithFactory(context.Background(), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 				ReplayPath:      path,
 				ToolDefinitions: []messages.ToolDefinition{definition},
-			}, sessionRuntimeFactory{
+			}), sessionRuntimeFactory{
 				newReplayDialer: func(string) (sessionReplayDialer, error) {
 					return replayDialer, nil
 				},
@@ -1121,7 +1121,7 @@ func TestWriteSessionReplayMessage_ReturnsSessionErrorTerminalFields(t *testing.
 }
 
 func TestWrapSessionRuntimeErrorClassifiesQuotaMessage(t *testing.T) {
-	err := wrapSessionRuntimeError(sessionRuntimePlan{mode: sessionRuntimeModeReplayOpenAI}, errors.New("session error: You have no credits remaining."))
+	err := wrapSessionRuntimeError(newTestSessionRuntimePlan(sessionRuntimePlan{mode: sessionRuntimeModeReplayOpenAI}), errors.New("session error: You have no credits remaining."))
 	if err == nil || !strings.Contains(err.Error(), "classification=rate_limited") {
 		t.Fatalf("quota runtime error = %v, want rate_limited classification", err)
 	}
@@ -1222,11 +1222,11 @@ func TestRunSession_WithInjectedSessionInferencer_UsesAgentLoopSessionPath(t *te
 	}
 	var out bytes.Buffer
 
-	if err := RunSession(context.Background(), &out, SessionRunOptions{ModelCatalog: testModelCatalog(),
+	if err := RunSession(context.Background(), &out, newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        "synthetic.json",
 		Prompt:            "hello session",
 		SessionInferencer: sessionInf,
-	}); err != nil {
+	})); err != nil {
 		t.Fatalf("RunSession: %v", err)
 	}
 
@@ -1251,7 +1251,7 @@ func TestRunSession_OpenAIRealtimeRecordWithInjectedInferencer_UsesSessionPath(t
 	}
 	var out bytes.Buffer
 
-	if err := RunSession(context.Background(), &out, SessionRunOptions{ModelCatalog: testModelCatalog(),
+	if err := RunSession(context.Background(), &out, newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		RecordPath:        filepath.Join(t.TempDir(), "openai-session.json"),
 		Provider:          config.ProviderOpenAI,
 		Model:             "gpt-realtime",
@@ -1259,7 +1259,7 @@ func TestRunSession_OpenAIRealtimeRecordWithInjectedInferencer_UsesSessionPath(t
 		ConfigDir:         t.TempDir(),
 		Prompt:            "hello realtime",
 		SessionInferencer: sessionInf,
-	}); err != nil {
+	})); err != nil {
 		t.Fatalf("RunSession: %v", err)
 	}
 
@@ -1275,14 +1275,14 @@ func TestRunSession_SessionProviderCloseExitsPromptly(t *testing.T) {
 	sessionInf := &closingSessionInferencer{}
 	started := time.Now()
 
-	if err := RunSession(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
+	if err := RunSession(context.Background(), io.Discard, newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		RecordPath:        filepath.Join(t.TempDir(), "openai-session.json"),
 		Provider:          config.ProviderOpenAI,
 		Model:             "gpt-realtime",
 		APIKey:            "sk-test-key",
 		ConfigDir:         t.TempDir(),
 		SessionInferencer: sessionInf,
-	}); err != nil {
+	})); err != nil {
 		t.Fatalf("RunSession: %v", err)
 	}
 
@@ -1297,14 +1297,14 @@ func TestRunSession_SessionProviderCloseExitsPromptly(t *testing.T) {
 func TestRunSession_OpenAISessionRejectsNonRealtimeModelBeforeDial(t *testing.T) {
 	dialer := &failingDialer{}
 
-	err := RunSession(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
+	err := RunSession(context.Background(), io.Discard, newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		RecordPath:      filepath.Join(t.TempDir(), "openai-session.json"),
 		Provider:        config.ProviderOpenAI,
 		Model:           "gpt-4o",
 		APIKey:          "sk-test-key",
 		ConfigDir:       t.TempDir(),
 		WebSocketDialer: dialer,
-	})
+	}))
 	if err == nil {
 		t.Fatal("expected non-realtime OpenAI model to be rejected")
 	}
@@ -1329,7 +1329,7 @@ func TestRunSession_RecordFlushesCaptureWhenContextCanceled(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	err := RunSession(ctx, &out, SessionRunOptions{ModelCatalog: testModelCatalog(),
+	err := RunSession(ctx, &out, newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		RecordPath:      recordPath,
 		Provider:        config.ProviderGrok,
 		Model:           "grok-record-test",
@@ -1337,7 +1337,7 @@ func TestRunSession_RecordFlushesCaptureWhenContextCanceled(t *testing.T) {
 		ConfigDir:       t.TempDir(),
 		Prompt:          "keep the recorded session open until cancellation",
 		WebSocketDialer: dialer,
-	})
+	}))
 	if err == nil {
 		t.Fatal("expected canceled record session error")
 	}
@@ -1391,9 +1391,9 @@ func TestPlanSessionRuntime_GenericReplayHonorsCallerCancellation(t *testing.T) 
 		capturedStreamEvent(gwtesting.DirectionServerToClient, 2, 200, messages.StreamTypeTextDelta, messages.NewTextDeltaValue("after cancel")),
 	})
 
-	plan, err := planSessionRuntimeWithFactory(context.Background(), SessionRunOptions{ModelCatalog: testModelCatalog(),
+	plan, err := planSessionRuntimeWithFactory(context.Background(), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath: capturePath,
-	}, sessionRuntimeFactory{
+	}), sessionRuntimeFactory{
 		newReplayInferencer: func(path string) messages.SessionInferencer {
 			return gwtesting.NewReplaySessionInferencer(path, gwtesting.WithReplayTiming())
 		},
@@ -1469,13 +1469,13 @@ func TestRunAgentLoopSession_ReturnsOnCleanDoneSignal(t *testing.T) {
 	var out bytes.Buffer
 
 	start := time.Now()
-	err := runAgentLoopSession(context.Background(), &out, sessionInf, sessionLoopOptions{
+	err := runAgentLoopSession(context.Background(), &out, sessionInf, newTestSessionLoopOptions(sessionLoopOptions{
 		MaxDuration: time.Second,
 		Done:        done,
 		DoneErr: func() error {
 			return nil
 		},
-	})
+	}))
 	if err != nil {
 		t.Fatalf("runAgentLoopSession: %v", err)
 	}
@@ -1498,9 +1498,9 @@ func TestRunAgentLoopSession_TimeoutCancelsLoopWithoutCallerCancellationError(t 
 	var out bytes.Buffer
 
 	start := time.Now()
-	err := runAgentLoopSession(context.Background(), &out, sessionInf, sessionLoopOptions{
+	err := runAgentLoopSession(context.Background(), &out, sessionInf, newTestSessionLoopOptions(sessionLoopOptions{
 		MaxDuration: 75 * time.Millisecond,
-	})
+	}))
 	if err != nil {
 		t.Fatalf("runAgentLoopSession timeout should not report caller cancellation: %v", err)
 	}

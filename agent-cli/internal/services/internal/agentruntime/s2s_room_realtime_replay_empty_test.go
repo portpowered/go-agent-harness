@@ -118,7 +118,7 @@ func TestRunRoomWithResult_EmptyResponseDoesNotAdvanceTurnLedger(t *testing.T) {
 	roomCtx, cancel := context.WithTimeout(context.Background(), roomRealtimeReplayTestTimeout)
 	defer cancel()
 
-	opts := RoomRunOptions{
+	opts := newTestRoomRunOptions(RoomRunOptions{
 		AudioService: newTestAudioIOService(),
 		Manifest:     manifest,
 		ConfigDir:    configDir, ModelCatalog: testModelCatalog(),
@@ -142,7 +142,7 @@ func TestRunRoomWithResult_EmptyResponseDoesNotAdvanceTurnLedger(t *testing.T) {
 				turns <- participantID
 			}
 		},
-	}
+	})
 
 	runDone := make(chan roomTestRunOutcome, 1)
 	go func() {

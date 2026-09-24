@@ -39,13 +39,13 @@ func TestPlanSessionRuntime_BrowserToolsUsesUnrecordedLiveRuntime(t *testing.T) 
 		},
 	}
 	definitions := []messages.ToolDefinition{{Name: "browser_test"}}
-	plan, err := planSessionRuntimeWithFactory(context.Background(), SessionRunOptions{ModelCatalog: testModelCatalog(),
+	plan, err := planSessionRuntimeWithFactory(context.Background(), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		Provider:                config.ProviderGrok,
 		BrowserToolsEnabled:     true,
 		BrowserToolsInteractive: true,
 		LoadedConfig:            loaded,
 		ToolDefinitions:         definitions,
-	}, factory)
+	}), factory)
 	if err != nil {
 		t.Fatalf("plan browser live runtime: %v", err)
 	}
@@ -85,13 +85,13 @@ func TestPlanSessionRuntime_BrowserToolsDefaultProviderFallsBackToOpenAI(t *test
 		},
 	}
 
-	plan, err := planSessionRuntimeWithFactory(context.Background(), SessionRunOptions{ModelCatalog: testModelCatalog(),
+	plan, err := planSessionRuntimeWithFactory(context.Background(), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		BrowserToolsEnabled: true,
 		LoadedConfig:        loaded,
 		APIKey:              "openai-default-key",
 		Prompt:              "use the browser",
 		ToolDefinitions:     []messages.ToolDefinition{{Name: "browser_test"}},
-	}, factory)
+	}), factory)
 	if err != nil {
 		t.Fatalf("plan browser default runtime: %v", err)
 	}
@@ -164,12 +164,12 @@ func TestPlanSessionRuntime_NoCaptureUsesLiveProviderWithoutCaptureLifecycle(t *
 				loaded.Model.Grok = &config.GrokConfig{Model: testCase.model, APIKey: testCase.apiKey}
 			}
 
-			opts := SessionRunOptions{ModelCatalog: testModelCatalog(),
+			opts := newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 				Provider:        testCase.provider,
 				LoadedConfig:    loaded,
 				ToolDefinitions: []messages.ToolDefinition{{Name: "live_test"}},
 				ConfigDir:       filepath.Dir(destination),
-			}
+			})
 			if err := validateSessionRunOptions(opts); err != nil {
 				t.Fatalf("validate no-capture options: %v", err)
 			}
@@ -216,10 +216,10 @@ func TestPlanSessionRuntime_NoCaptureUsesLiveProviderWithoutCaptureLifecycle(t *
 }
 
 func TestPlanSessionRuntime_BrowserToolsRejectsUnsupportedProvider(t *testing.T) {
-	_, err := planSessionRuntimeWithFactory(context.Background(), SessionRunOptions{ModelCatalog: testModelCatalog(),
+	_, err := planSessionRuntimeWithFactory(context.Background(), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		Provider:            "unsupported-provider",
 		BrowserToolsEnabled: true,
-	}, sessionRuntimeFactory{
+	}), sessionRuntimeFactory{
 		newDefaultLiveDialer: func() transport.Dialer { return &stubRuntimeDialer{id: "unused"} },
 	})
 	want := unsupportedRealtimeSessionProviderError("unsupported-provider").Error()
@@ -236,11 +236,11 @@ func TestPlanSessionRuntime_UnsupportedProviderDiagnosticsAreShared(t *testing.T
 	}{
 		{
 			name: "browser tools",
-			opts: SessionRunOptions{ModelCatalog: testModelCatalog(), Provider: provider, BrowserToolsEnabled: true},
+			opts: newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), Provider: provider, BrowserToolsEnabled: true}),
 		},
 		{
 			name: "recording",
-			opts: SessionRunOptions{ModelCatalog: testModelCatalog(), Provider: provider, RecordPath: filepath.Join(t.TempDir(), "capture.json")},
+			opts: newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), Provider: provider, RecordPath: filepath.Join(t.TempDir(), "capture.json")}),
 		},
 	}
 
@@ -288,13 +288,13 @@ func TestPlanSessionRuntime_RecordDefaultProviderFallsBackToOpenAI(t *testing.T)
 		},
 	}
 
-	plan, err := planSessionRuntimeWithFactory(context.Background(), SessionRunOptions{ModelCatalog: testModelCatalog(),
+	plan, err := planSessionRuntimeWithFactory(context.Background(), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		RecordPath:   recordPath,
 		LoadedConfig: loaded,
 		APIKey:       "openai-default-key",
 		Prompt:       "answer after the audio turn",
 		AudioInputs:  []ScheduledAudioInput{{AfterCompletedTurns: 0, PCM: []byte{1, 2}, EndOfTurn: true}},
-	}, factory)
+	}), factory)
 	if err != nil {
 		t.Fatalf("plan record default runtime: %v", err)
 	}
@@ -328,11 +328,11 @@ func TestPlanOpenAIRecordRuntimeDeviceInputDefaultsServerVAD(t *testing.T) {
 			return inferencer, nil
 		},
 	}
-	plan, err := planSessionRuntimeWithFactory(context.Background(), SessionRunOptions{ModelCatalog: testModelCatalog(),
+	plan, err := planSessionRuntimeWithFactory(context.Background(), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		Provider: config.ProviderOpenAI, Model: openAIRealtimeModel, APIKey: "test-key",
 		RecordPath: filepath.Join(t.TempDir(), "device-vad.session.json"),
 		RTCBinding: runtimedevices.RTCBindingRequest{InputPresent: true, OutputPresent: true},
-	}, factory)
+	}), factory)
 	if err != nil {
 		t.Fatalf("plan recorded device session: %v", err)
 	}
@@ -397,13 +397,13 @@ func TestPlanSessionRuntime_BrowserToolsWithRecordingPreservesCaptureLifecycle(t
 				}
 			}
 
-			plan, err := planSessionRuntimeWithFactory(context.Background(), SessionRunOptions{ModelCatalog: testModelCatalog(),
+			plan, err := planSessionRuntimeWithFactory(context.Background(), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 				RecordPath:          recordPath,
 				Provider:            testCase.provider,
 				BrowserToolsEnabled: true,
 				LoadedConfig:        loaded,
 				ToolDefinitions:     []messages.ToolDefinition{{Name: "browser_test"}},
-			}, factory)
+			}), factory)
 			if err != nil {
 				t.Fatalf("plan browser recording runtime: %v", err)
 			}

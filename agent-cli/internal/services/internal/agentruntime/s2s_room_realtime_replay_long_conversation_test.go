@@ -85,7 +85,7 @@ func TestRunRoomWithResult_LongConversationEndsBothParticipantsCleanly(t *testin
 	defer cancel()
 
 	outputDir := filepath.Join(t.TempDir(), "long-room")
-	opts := RoomRunOptions{
+	opts := newTestRoomRunOptions(RoomRunOptions{
 		AudioService: newTestAudioIOService(),
 		Manifest:     manifest,
 		ConfigDir:    configDir, ModelCatalog: testModelCatalog(),
@@ -118,7 +118,7 @@ func TestRunRoomWithResult_LongConversationEndsBothParticipantsCleanly(t *testin
 				turnDiagnostics <- participantID
 			}
 		},
-	}
+	})
 
 	runDone := make(chan roomTestRunOutcome, 1)
 	go func() {

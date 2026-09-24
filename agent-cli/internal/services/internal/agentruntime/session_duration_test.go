@@ -34,9 +34,9 @@ func TestRunSessionWithMaxDuration_RejectsNegativeBeforePlanning(t *testing.T) {
 	err := RunSessionWithMaxDuration(durationwire.NewService().WithArtifactPaths(context.Background(), duration.SessionDurationArtifactPaths{
 		AudioPath:      wavPath,
 		TranscriptPath: transcriptPath,
-	}), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
+	}), io.Discard, newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		SessionInferencer: inferencer,
-	}, -time.Millisecond)
+	}), -time.Millisecond)
 	if err == nil {
 		t.Fatal("negative max duration returned nil")
 	}
@@ -61,10 +61,10 @@ func TestRunSessionWithMaxDuration_RejectsNegativeBeforePlanning(t *testing.T) {
 func TestRunSessionWithMaxDuration_ZeroDoesNotCreateTimer(t *testing.T) {
 	clock := &durationTestClock{}
 	var out bytes.Buffer
-	err := RunSessionWithMaxDurationClock(context.Background(), &out, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+	err := RunSessionWithMaxDurationClock(context.Background(), &out, newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		ReplayPath:        "synthetic.session.json",
 		SessionInferencer: &durationTestInferencer{events: durationNaturalEvents()},
-	}, 0, clock)
+	}), 0, clock)
 	if err != nil {
 		t.Fatalf("zero max duration: %v", err)
 	}
@@ -186,7 +186,7 @@ func TestRunSessionWithMaxDuration_GracefullyClosesAtDeadline(t *testing.T) {
 			context.Background(),
 			writer,
 			&durationTestInferencer{events: durationOutputEvents()},
-			sessionLoopOptions{},
+			newTestSessionLoopOptions(sessionLoopOptions{}),
 			time.Minute,
 			clock,
 		)
@@ -225,7 +225,7 @@ func TestRunSessionWithMaxDuration_NaturalCompletionKeepsNaturalReason(t *testin
 		context.Background(),
 		&out,
 		&durationTestInferencer{events: durationNaturalEvents()},
-		sessionLoopOptions{},
+		newTestSessionLoopOptions(sessionLoopOptions{}),
 		time.Hour,
 		clock,
 	)
@@ -268,7 +268,7 @@ func TestRunSessionWithMaxDuration_PreservesProviderTerminalDuringShutdown(t *te
 			context.Background(),
 			writer,
 			inferencer,
-			sessionLoopOptions{},
+			newTestSessionLoopOptions(sessionLoopOptions{}),
 			time.Minute,
 			clock,
 		)
@@ -534,7 +534,7 @@ func TestRunAgentLoopSessionWithDuration_ProviderDoneDrainsAcceptedOutput(t *tes
 			events:           durationOutputEvents(),
 			closeAfterEvents: true,
 		},
-		sessionLoopOptions{},
+		newTestSessionLoopOptions(sessionLoopOptions{}),
 		time.Hour,
 		clock,
 	)
@@ -566,10 +566,10 @@ func TestRunSessionWithMaxDuration_FinalizesRealArtifactsAndRejectsLateFrame(t *
 		TranscriptPath: transcriptPath,
 	})
 	go func() {
-		runErrCh <- RunSessionWithMaxDurationClock(ctx, writer, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+		runErrCh <- RunSessionWithMaxDurationClock(ctx, writer, newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 			ReplayPath:        filepath.Join(artifactDir, "fixture.session.json"),
 			SessionInferencer: inferencer,
-		}, time.Nanosecond, clock)
+		}), time.Nanosecond, clock)
 	}()
 
 	// The ready marker is emitted only after the production artifact lifecycle
@@ -688,10 +688,10 @@ func TestRunSessionWithMaxDuration_FinalizesZeroSampleArtifactsBeforeFirstAudio(
 		TranscriptPath: transcriptPath,
 	})
 	go func() {
-		runErrCh <- RunSessionWithMaxDurationClock(ctx, &out, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+		runErrCh <- RunSessionWithMaxDurationClock(ctx, &out, newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 			ReplayPath:        filepath.Join(artifactDir, "fixture.session.json"),
 			SessionInferencer: inferencer,
-		}, time.Nanosecond, clock)
+		}), time.Nanosecond, clock)
 	}()
 	select {
 	case <-inferencer.connectedCh:
@@ -785,10 +785,10 @@ func TestRunSessionWithMaxDuration_PreservesArtifactFlushAndCloseIdentity(t *tes
 			err := RunSessionWithMaxDurationClock(
 				durationwire.NewService().WithArtifacts(context.Background(), lifecycle),
 				io.Discard,
-				SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+				newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 					ReplayPath:        "artifact-failure.session.json",
 					SessionInferencer: &durationTestInferencer{events: durationNaturalEvents(), closeAfterEvents: true},
-				},
+				}),
 				time.Hour,
 				&durationTestClock{},
 			)
@@ -808,7 +808,7 @@ func TestRunAgentLoopSessionWithDuration_PreservesFailureIdentity(t *testing.T) 
 		context.Background(),
 		io.Discard,
 		&durationTestInferencer{connectErr: providerErr},
-		sessionLoopOptions{audioService: newTestAudioIOService()},
+		newTestSessionLoopOptions(sessionLoopOptions{audioService: newTestAudioIOService()}),
 		time.Hour,
 		&durationTestClock{},
 	)
@@ -821,7 +821,7 @@ func TestRunAgentLoopSessionWithDuration_PreservesFailureIdentity(t *testing.T) 
 		context.Background(),
 		failingDurationWriter{err: drainErr},
 		&durationTestInferencer{events: durationOutputEvents()},
-		sessionLoopOptions{audioService: newTestAudioIOService()},
+		newTestSessionLoopOptions(sessionLoopOptions{audioService: newTestAudioIOService()}),
 		time.Hour,
 		&durationTestClock{},
 	)
@@ -839,7 +839,7 @@ func TestRunAgentLoopSessionWithDuration_PreservesFailureIdentity(t *testing.T) 
 	closeRunErrCh := make(chan error, 1)
 	go func() {
 		closeRunErrCh <- runAgentLoopSessionWithDurationClock(
-			context.Background(), closeWriter, closeInferencer, sessionLoopOptions{audioService: newTestAudioIOService()}, time.Hour, closeClock,
+			context.Background(), closeWriter, closeInferencer, newTestSessionLoopOptions(sessionLoopOptions{audioService: newTestAudioIOService()}), time.Hour, closeClock,
 		)
 	}()
 	closeWriter.waitFor(t, "accepted output")
@@ -852,25 +852,25 @@ func TestRunAgentLoopSessionWithDuration_PreservesFailureIdentity(t *testing.T) 
 
 func TestRunSessionDurationPlan_PreservesFlushAndFinalizeFailures(t *testing.T) {
 	flushErr := errors.New("capture flush failed")
-	flushPlan := sessionRuntimePlan{
+	flushPlan := newTestSessionRuntimePlan(sessionRuntimePlan{
 		mode:       sessionRuntimeModeInjectedLive,
 		inferencer: &durationTestInferencer{events: durationNaturalEvents(), closeAfterEvents: true},
 		flushCapture: func() error {
 			return flushErr
 		},
-	}
+	})
 	if err := runSessionDurationPlan(context.Background(), io.Discard, flushPlan, time.Hour, &durationTestClock{}); !errors.Is(err, flushErr) {
 		t.Fatalf("flush failure = %v, want %v", err, flushErr)
 	}
 
 	finalizeErr := errors.New("transcript finalize failed")
-	finalizePlan := sessionRuntimePlan{
+	finalizePlan := newTestSessionRuntimePlan(sessionRuntimePlan{
 		mode:       sessionRuntimeModeInjectedLive,
 		inferencer: &durationTestInferencer{events: durationNaturalEvents(), closeAfterEvents: true},
 		finalize: func(context.Context, io.Writer) error {
 			return finalizeErr
 		},
-	}
+	})
 	if err := runSessionDurationPlan(context.Background(), io.Discard, finalizePlan, time.Hour, &durationTestClock{}); !errors.Is(err, finalizeErr) {
 		t.Fatalf("finalize failure = %v, want %v", err, finalizeErr)
 	}
@@ -892,10 +892,10 @@ func TestRunSessionWithMaxDuration_ReleasesTimerSessionAndProductionArtifacts(t 
 		TranscriptPath: transcriptPath,
 	})
 	go func() {
-		runErrCh <- RunSessionWithMaxDurationClock(ctx, writer, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+		runErrCh <- RunSessionWithMaxDurationClock(ctx, writer, newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 			ReplayPath:        filepath.Join(artifactDir, "fixture.session.json"),
 			SessionInferencer: inferencer,
-		}, time.Nanosecond, clock)
+		}), time.Nanosecond, clock)
 	}()
 	writer.waitFor(t, "artifact-ready")
 	clock.fire()

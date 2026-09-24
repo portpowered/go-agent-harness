@@ -40,7 +40,7 @@ func TestBuildRoomReplayParticipantPlansBypassesLiveSeams(t *testing.T) {
 		return nil, errors.New("live session factory called")
 	}
 
-	plans, secrets, err := buildRoomParticipantPlansWithContext(context.Background(), RoomRunOptions{
+	plans, secrets, err := buildRoomParticipantPlansWithContext(context.Background(), newTestRoomRunOptions(RoomRunOptions{
 		AudioService: newTestAudioIOService(),
 		// The live manifest is intentionally unusable. Replay planning must use
 		// only the admitted plan projection below.
@@ -60,7 +60,7 @@ func TestBuildRoomReplayParticipantPlansBypassesLiveSeams(t *testing.T) {
 			capabilityFactories.Add(1)
 			return RoomParticipantBrowserCapabilities{}, nil
 		},
-	}, room.ValidationOptions{LookupCredential: forbiddenCredentialLookup})
+	}), room.ValidationOptions{LookupCredential: forbiddenCredentialLookup})
 	if err != nil {
 		t.Fatalf("buildRoomParticipantPlansWithContext: %v", err)
 	}
@@ -124,7 +124,7 @@ func TestRunRoomWithResultReplaysAdmittedBundleWithoutLiveConfiguration(t *testi
 	var dialerFactories atomic.Int32
 	roomCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	result, err := RunRoomWithResult(roomCtx, nil, RoomRunOptions{
+	result, err := RunRoomWithResult(roomCtx, nil, newTestRoomRunOptions(RoomRunOptions{
 		AudioService: newTestAudioIOService(),
 		Manifest:     room.Manifest{SchemaVersion: 999},
 		ReplayPath:   bundle,
@@ -140,7 +140,7 @@ func TestRunRoomWithResultReplaysAdmittedBundleWithoutLiveConfiguration(t *testi
 			dialerFactories.Add(1)
 			return nil
 		},
-	})
+	}))
 	if err != nil {
 		t.Fatalf("RunRoomWithResult replay: %v", err)
 	}

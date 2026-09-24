@@ -12,7 +12,7 @@ import (
 )
 
 func TestResolveSessionRuntimeSelection_DefaultsToWebSocket(t *testing.T) {
-	selection, err := resolveSessionRuntimeSelection(SessionRunOptions{ModelCatalog: testModelCatalog()})
+	selection, err := resolveSessionRuntimeSelection(newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog()}))
 	if err != nil {
 		t.Fatalf("resolveSessionRuntimeSelection: %v", err)
 	}
@@ -25,13 +25,13 @@ func TestPlanSessionRuntime_RetainsExactWebRTCSelection(t *testing.T) {
 	const signaling = " loopback://sentinel/signaling?token=exact "
 	const media = "rtsp://fixture:secret@sentinel.example/camera/main"
 
-	plan, err := planSessionRuntimeWithFactory(context.Background(), SessionRunOptions{ModelCatalog: testModelCatalog(),
+	plan, err := planSessionRuntimeWithFactory(context.Background(), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        "synthetic.session.json",
 		SessionInferencer: &selectionTestInferencer{},
 		Transport:         " WebRTC ",
 		SignalingEndpoint: signaling,
 		MediaSource:       media,
-	}, sessionRuntimeFactory{})
+	}), sessionRuntimeFactory{})
 	if err != nil {
 		t.Fatalf("planSessionRuntimeWithFactory: %v", err)
 	}
@@ -62,25 +62,25 @@ func TestPlanSessionRuntime_InvalidSelectionFailsBeforeFactorySideEffects(t *tes
 	}{
 		{
 			name:   "unknown transport",
-			opts:   SessionRunOptions{ModelCatalog: testModelCatalog(), Transport: "quic", RecordPath: filepath.Join(t.TempDir(), "capture.json")},
+			opts:   newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), Transport: "quic", RecordPath: filepath.Join(t.TempDir(), "capture.json")}),
 			fields: []string{"transport"},
 			cause:  ErrInvalidSessionTransport,
 		},
 		{
 			name:   "signaling on websocket",
-			opts:   SessionRunOptions{ModelCatalog: testModelCatalog(), Signaling: "loopback", RecordPath: filepath.Join(t.TempDir(), "capture.json")},
+			opts:   newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), Signaling: "loopback", RecordPath: filepath.Join(t.TempDir(), "capture.json")}),
 			fields: []string{"transport", "signaling"},
 			cause:  ErrSessionSignalingRequiresWebRTC,
 		},
 		{
 			name:   "media on websocket",
-			opts:   SessionRunOptions{ModelCatalog: testModelCatalog(), MediaSource: "fixture", RecordPath: filepath.Join(t.TempDir(), "capture.json")},
+			opts:   newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), MediaSource: "fixture", RecordPath: filepath.Join(t.TempDir(), "capture.json")}),
 			fields: []string{"transport", "media-source"},
 			cause:  ErrSessionMediaSourceRequiresWebRTC,
 		},
 		{
 			name:   "webrtc without signaling or media",
-			opts:   SessionRunOptions{ModelCatalog: testModelCatalog(), Transport: SessionTransportWebRTC, RecordPath: filepath.Join(t.TempDir(), "capture.json")},
+			opts:   newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), Transport: SessionTransportWebRTC, RecordPath: filepath.Join(t.TempDir(), "capture.json")}),
 			fields: []string{"transport", "signaling", "media-source"},
 			cause:  ErrSessionWebRTCRequiresSignaling,
 		},
@@ -140,11 +140,11 @@ func TestPlanSessionRuntime_InvalidSelectionFailsBeforeFactorySideEffects(t *tes
 
 func TestRunSession_InvalidRTCSelectionDoesNotMutateCapturePath(t *testing.T) {
 	recordPath := filepath.Join(t.TempDir(), "rejected.session.json")
-	err := RunSession(context.Background(), os.Stdout, SessionRunOptions{ModelCatalog: testModelCatalog(),
+	err := RunSession(context.Background(), os.Stdout, newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		RecordPath: recordPath,
 		Transport:  SessionTransportWebRTC,
 		Signaling:  "loopback",
-	})
+	}))
 	if err == nil {
 		t.Fatal("invalid WebRTC selection returned nil")
 	}

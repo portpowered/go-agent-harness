@@ -32,13 +32,13 @@ func TestRunSessionWithRecordingDirectoryConcurrentClaimHasOneProviderConnection
 		go func() {
 			defer wait.Done()
 			<-start
-			results <- RunSessionWithRecordingDirectory(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+			results <- RunSessionWithRecordingDirectory(context.Background(), io.Discard, newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 				Provider:          config.ProviderOpenAI,
 				Model:             "gpt-realtime",
 				APIKey:            "test-key",
 				ConfigDir:         t.TempDir(),
 				SessionInferencer: inferencer,
-			}, destination)
+			}), destination)
 		}()
 	}
 	close(start)
@@ -95,13 +95,13 @@ func TestSessionRecordingDirectoryClaimRejectsSymlinkAndNonDirectoryBeforeConnec
 			t.Skipf("symlink unavailable: %v", err)
 		}
 		inferencer := &countingSessionRecordingInferencer{}
-		err := RunSessionWithRecordingDirectory(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+		err := RunSessionWithRecordingDirectory(context.Background(), io.Discard, newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 			Provider:          config.ProviderOpenAI,
 			Model:             "gpt-realtime",
 			APIKey:            "test-key",
 			ConfigDir:         t.TempDir(),
 			SessionInferencer: inferencer,
-		}, destination)
+		}), destination)
 		if !errors.Is(err, ErrSessionRecordingDirectorySymlink) {
 			t.Fatalf("error = %v, want symlink classification", err)
 		}
@@ -120,13 +120,13 @@ func TestSessionRecordingDirectoryClaimRejectsSymlinkAndNonDirectoryBeforeConnec
 			t.Fatal(err)
 		}
 		inferencer := &countingSessionRecordingInferencer{}
-		err := RunSessionWithRecordingDirectory(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+		err := RunSessionWithRecordingDirectory(context.Background(), io.Discard, newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 			Provider:          config.ProviderOpenAI,
 			Model:             "gpt-realtime",
 			APIKey:            "test-key",
 			ConfigDir:         t.TempDir(),
 			SessionInferencer: inferencer,
-		}, destination)
+		}), destination)
 		if !errors.Is(err, ErrSessionRecordingDirectoryNotDirectory) {
 			t.Fatalf("error = %v, want non-directory classification", err)
 		}
@@ -147,10 +147,10 @@ func TestSessionRecordingDirectoryClaimRetainsOwnershipThroughFinalization(t *te
 	}
 	defer func() { _ = claim.release() }()
 
-	recording := newSessionDirectoryRecording(destination, sessionRuntimePlan{provider: sessionProviderOpenAI}, SessionRunOptions{ModelCatalog: testModelCatalog(),
+	recording := newSessionDirectoryRecording(destination, newTestSessionRuntimePlan(sessionRuntimePlan{provider: sessionProviderOpenAI}), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		Model:                   "gpt-realtime",
 		recordingDirectoryClaim: claim,
-	})
+	}))
 	writeSyntheticRecordingTranscript(t, recording, "client\n", "agent\n")
 	if err := recording.Finalize(); err != nil {
 		t.Fatalf("finalize recording: %v", err)
@@ -176,10 +176,10 @@ func TestSessionRecordingDirectoryClaimLostPreventsPublication(t *testing.T) {
 		t.Fatalf("acquire directory claim: %v", err)
 	}
 	defer func() { _ = claim.release() }()
-	recording := newSessionDirectoryRecording(destination, sessionRuntimePlan{provider: sessionProviderOpenAI}, SessionRunOptions{ModelCatalog: testModelCatalog(),
+	recording := newSessionDirectoryRecording(destination, newTestSessionRuntimePlan(sessionRuntimePlan{provider: sessionProviderOpenAI}), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		Model:                   "gpt-realtime",
 		recordingDirectoryClaim: claim,
-	})
+	}))
 	writeSyntheticRecordingTranscript(t, recording, "client\n", "agent\n")
 	if err := os.Remove(claim.lockPath); err != nil {
 		t.Fatalf("remove claim sidecar: %v", err)

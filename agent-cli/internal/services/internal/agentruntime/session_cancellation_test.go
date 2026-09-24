@@ -78,7 +78,7 @@ func TestSessionSIGINTCancellationResolvesPendingObligations(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	if err := publishSessionUserCancellation(&out, sessionLoopOptions{observer: observer}, terminalwire.NewService().WriteTranscriptMessage); err != nil {
+	if err := publishSessionUserCancellation(&out, newTestSessionLoopOptions(sessionLoopOptions{observer: observer}), terminalwire.NewService().WriteTranscriptMessage); err != nil {
 		t.Fatalf("publish cancellation terminal: %v", err)
 	}
 	output := out.String()

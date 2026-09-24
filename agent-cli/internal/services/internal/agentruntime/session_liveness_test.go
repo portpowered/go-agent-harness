@@ -104,12 +104,12 @@ func TestRunAgentLoopSessionWithDuration_WatchdogWakesLoop(t *testing.T) {
 			ctx,
 			io.Discard,
 			inferencer,
-			sessionLoopOptions{
+			newTestSessionLoopOptions(sessionLoopOptions{
 				Prompt:        "wait for a response",
 				WaitForClose:  true,
 				observer:      observer,
 				livenessClock: livenessClock,
-			},
+			}),
 		)
 	}()
 

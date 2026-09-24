@@ -19,7 +19,6 @@ import (
 	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	duration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
-	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	sessiontrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
@@ -83,7 +82,10 @@ func (d *Dispatcher) Run(ctx context.Context, out io.Writer, request public.Requ
 		}
 		if capturePath != "" {
 			artifactBase := strings.TrimSuffix(capturePath, filepath.Ext(capturePath))
-			ctx = durationwire.NewService().WithArtifactPaths(ctx, duration.SessionDurationArtifactPaths{AudioPath: artifactBase + ".wav", TranscriptPath: artifactBase + ".jsonl"})
+			if d.deps.PlanFactory.durationService == nil {
+				return errors.New("session duration service is required")
+			}
+			ctx = d.deps.PlanFactory.durationService.WithArtifactPaths(ctx, duration.SessionDurationArtifactPaths{AudioPath: artifactBase + ".wav", TranscriptPath: artifactBase + ".jsonl"})
 		}
 	}
 	options, err := d.requestOptions(ctx, request)
@@ -211,7 +213,7 @@ func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request)
 		RTCBinding:       runtimedevices.RTCBindingRequest{HoldToneConfig: request.HoldToneConfig, RemoteEndpoint: request.AudioDeviceServer},
 		AudioInTurnBarge: request.AudioInTurnBarge, ClientOwnsAudioTurnBoundaries: request.ClientOwnsAudioTurnBoundaries,
 		SessionUpdatedTimeout: request.SessionUpdatedTimeout, WaitForClose: request.WaitForClose,
-		runtimeFactory: d.deps.PlanFactory,
+		RuntimeFactory: d.deps.PlanFactory,
 		ModelCatalog:   d.deps.ModelCatalog,
 	}
 	if err := validateSessionCaptureOptions(options); err != nil {

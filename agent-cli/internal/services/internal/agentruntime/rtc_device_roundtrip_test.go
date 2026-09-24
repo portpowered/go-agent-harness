@@ -164,14 +164,14 @@ func closeRTCDeviceRoundtripResources(t *testing.T, providerSession messages.Ses
 func startRTCDeviceSession(ctx context.Context, inferencer messages.SessionInferencer, registry *devicegw.VirtualRegistry) <-chan error {
 	runErrCh := make(chan error, 1)
 	go func() {
-		runErrCh <- agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
+		runErrCh <- agentruntime.RunSession(ctx, io.Discard, newTestSessionRunOptions(agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
 			ReplayPath: "synthetic.json", SessionInferencer: inferencer,
 			DeviceService: newTestDeviceService(registry),
 			RTCBinding: runtimedevices.RTCBindingRequest{
 				InputDevice: rtcRoundtripInputID, OutputDevice: rtcRoundtripOutputID,
 				InputPresent: true, OutputPresent: true,
 			},
-		})
+		}))
 	}()
 	return runErrCh
 }

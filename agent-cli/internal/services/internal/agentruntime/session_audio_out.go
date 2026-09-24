@@ -11,7 +11,6 @@ import (
 	sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
-	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
@@ -83,7 +82,7 @@ func runSessionAudioPlan(ctx context.Context, out io.Writer, plan sessionRuntime
 	if maxDuration == 0 {
 		return plan.run(ctx, out)
 	}
-	durationCtx, err := durationwire.NewService().PrepareArtifacts(ctx)
+	durationCtx, err := plan.durationService.PrepareArtifacts(ctx)
 	if err != nil {
 		return err
 	}

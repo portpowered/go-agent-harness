@@ -466,7 +466,7 @@ func TestRunRoomWithResult_UsesRealRealtimeStackAndStrictParticipantWires(t *tes
 	roomCtx, cancel := context.WithTimeout(context.Background(), roomRealtimeReplayTestTimeout)
 	defer cancel()
 
-	opts := RoomRunOptions{
+	opts := newTestRoomRunOptions(RoomRunOptions{
 		AudioService: newTestAudioIOService(),
 		Manifest:     manifest,
 		ConfigDir:    configDir, ModelCatalog: testModelCatalog(),
@@ -489,7 +489,7 @@ func TestRunRoomWithResult_UsesRealRealtimeStackAndStrictParticipantWires(t *tes
 				diagnosticTurns <- participantID
 			}
 		},
-	}
+	})
 
 	runDone := make(chan roomTestRunOutcome, 1)
 	go func() {

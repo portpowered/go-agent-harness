@@ -174,7 +174,7 @@ func newRoomSpeechOverlapScenario(t *testing.T, peerOutput []byte) *roomSpeechOv
 	roomCtx, cancel := context.WithTimeout(context.Background(), roomRealtimeReplayTestTimeout)
 	t.Cleanup(cancel)
 
-	opts := RoomRunOptions{
+	opts := newTestRoomRunOptions(RoomRunOptions{
 		AudioService: newTestAudioIOService(),
 		Manifest:     manifest,
 		ConfigDir:    configDir, ModelCatalog: testModelCatalog(),
@@ -225,7 +225,7 @@ func newRoomSpeechOverlapScenario(t *testing.T, peerOutput []byte) *roomSpeechOv
 				diagnosticTurns <- participantID
 			}
 		},
-	}
+	})
 	runDone := make(chan roomTestRunOutcome, 1)
 	go func() {
 		result, err := RunRoomWithResult(roomCtx, io.Discard, opts)
@@ -522,7 +522,7 @@ func TestRunRoomWithResult_BidirectionalOverlapRecordsPeerOnlyEvidence(t *testin
 	roomCtx, cancel := context.WithTimeout(context.Background(), roomRealtimeReplayTestTimeout)
 	t.Cleanup(cancel)
 
-	opts := RoomRunOptions{
+	opts := newTestRoomRunOptions(RoomRunOptions{
 		AudioService: newTestAudioIOService(),
 		Manifest:     manifest,
 		ConfigDir:    configDir, ModelCatalog: testModelCatalog(),
@@ -569,7 +569,7 @@ func TestRunRoomWithResult_BidirectionalOverlapRecordsPeerOnlyEvidence(t *testin
 			}
 			diagnosticMu.Unlock()
 		},
-	}
+	})
 	runDone := make(chan roomTestRunOutcome, 1)
 	go func() {
 		result, err := RunRoomWithResult(roomCtx, io.Discard, opts)

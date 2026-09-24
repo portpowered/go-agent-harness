@@ -161,10 +161,9 @@ func (e *SessionRuntimeSelectionError) Unwrap() error {
 type SessionRunOptions struct {
 	AudioService  audioio.Service
 	DeviceService runtimedevices.Service
-	// runtimeFactory is installed by the private service composition root.
-	// It is intentionally unexported so transport requests cannot construct
-	// provider gateways or dialers.
-	runtimeFactory sessionRuntimeFactory
+	// RuntimeFactory is installed by service composition and owns provider
+	// construction plus the injected session duration service/runner.
+	RuntimeFactory SessionRuntimeFactory
 	// ModelCatalog is installed by service composition and owns the immutable
 	// provider capability metadata used during session planning.
 	ModelCatalog runtimeproviders.ModelCatalog

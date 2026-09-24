@@ -238,12 +238,12 @@ func TestPlanSessionRuntime_WebRTCDispatchesThroughRuntimeFactory(t *testing.T) 
 	)
 	runtime := &testSessionRTCRuntime{}
 	var got SessionRuntimeSelection
-	plan, err := planSessionRuntimeWithFactory(context.Background(), SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+	plan, err := planSessionRuntimeWithFactory(context.Background(), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		SessionInferencer: &selectionTestInferencer{},
 		Transport:         "WebRTC",
 		Signaling:         signaling,
 		MediaSource:       media,
-	}, sessionRuntimeFactory{
+	}), sessionRuntimeFactory{
 		newRTCRuntime: func(selection SessionRuntimeSelection) (SessionRTCRuntime, error) {
 			got = selection
 			return runtime, nil
@@ -386,13 +386,13 @@ model:
 		return newScriptedSession(), nil
 	}}
 
-	plan, err := planSessionRuntimeWithFactory(context.Background(), SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+	plan, err := planSessionRuntimeWithFactory(context.Background(), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		RecordPath:  filepath.Join(t.TempDir(), "rtc.session.json"),
 		ConfigDir:   configDir,
 		Transport:   SessionTransportWebRTC,
 		Signaling:   "loopback://record/sentinel",
 		MediaSource: "fixture://record/sentinel",
-	}, sessionRuntimeFactory{
+	}), sessionRuntimeFactory{
 		newRTCRuntime: func(SessionRuntimeSelection) (SessionRTCRuntime, error) {
 			return runtime, nil
 		},
@@ -428,12 +428,12 @@ model:
     model: grok-websocket-test
     api_key: test-key
 `)
-	plan, err := planSessionRuntimeWithFactory(context.Background(), SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+	plan, err := planSessionRuntimeWithFactory(context.Background(), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		SessionInferencer: &selectionTestInferencer{},
 		Transport:         SessionTransportWebSocket,
 		Provider:          config.ProviderGrok,
 		ConfigDir:         configDir,
-	}, sessionRuntimeFactory{
+	}), sessionRuntimeFactory{
 		newRTCRuntime: func(SessionRuntimeSelection) (SessionRTCRuntime, error) {
 			t.Fatal("WebSocket planning constructed an RTC runtime")
 			return nil, nil
@@ -448,13 +448,13 @@ model:
 }
 
 func TestPlanSessionRuntime_ReplayDoesNotConstructLiveRTCRuntime(t *testing.T) {
-	plan, err := planSessionRuntimeWithFactory(context.Background(), SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+	plan, err := planSessionRuntimeWithFactory(context.Background(), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		ReplayPath:        "synthetic.session.json",
 		SessionInferencer: &selectionTestInferencer{},
 		Transport:         SessionTransportWebRTC,
 		Signaling:         "loopback://replay/sentinel",
 		MediaSource:       "fixture://replay/sentinel",
-	}, sessionRuntimeFactory{
+	}), sessionRuntimeFactory{
 		newRTCRuntime: func(SessionRuntimeSelection) (SessionRTCRuntime, error) {
 			t.Fatal("replay planning constructed a live RTC runtime")
 			return nil, nil
@@ -491,7 +491,7 @@ func TestRunSession_WebRTCCompletesHermeticTurnThroughExportedService(t *testing
 	}
 
 	var out bytes.Buffer
-	err := RunSession(ctx, &out, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+	err := RunSession(ctx, &out, newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		RecordPath:        filepath.Join(t.TempDir(), "hermetic.session.json"),
 		Transport:         SessionTransportWebRTC,
 		Signaling:         signalingEndpoint,
@@ -504,7 +504,7 @@ func TestRunSession_WebRTCCompletesHermeticTurnThroughExportedService(t *testing
 			observations = append(observations, msg)
 			observationsMu.Unlock()
 		},
-	})
+	}))
 	if err != nil {
 		t.Fatalf("RunSession WebRTC fixture: %v", err)
 	}

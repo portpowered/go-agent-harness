@@ -12,7 +12,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	duration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
-	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	terminalwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -69,6 +68,8 @@ func (p sessionRuntimePlan) configureLoopObserver(loop *sessionLoopOptions) {
 	if loop == nil {
 		return
 	}
+	loop.durationService = p.durationService
+	loop.durationRunner = p.durationRunner
 	if loop.observer == nil {
 		loop.observer = newSessionProgressObserver(p.diagnostics, p.metricsRecorder, p.provider, p.model)
 	}
@@ -130,8 +131,10 @@ func (p sessionRuntimePlan) finalizationPorts(artifacts duration.ArtifactLifecyc
 }
 
 func runSessionDurationPlan(ctx context.Context, out io.Writer, plan sessionRuntimePlan, maxDuration time.Duration, clock duration.TimerScheduler, admission ...duration.AdmissionInferencer) error {
+	if plan.durationRunner == nil {
+		return errors.New("session duration runner is required")
+	}
 	admitted := optionalDurationAdmission(admission)
-	service := durationwire.NewService()
 	reporter := plan.loop.terminalReporter
 	if reporter == nil {
 		reporter = terminalwire.NewReporter()
@@ -152,7 +155,7 @@ func runSessionDurationPlan(ctx context.Context, out io.Writer, plan sessionRunt
 			return nil
 		}
 	}
-	return service.Execute(duration.ExecutionRequest{
+	return plan.durationRunner.Execute(duration.ExecutionRequest{
 		Context:       ctx,
 		Output:        out,
 		MaxDuration:   maxDuration,
@@ -216,6 +219,18 @@ func planSessionRuntimeWithFactory(ctx context.Context, opts SessionRunOptions, 
 	if planErr = configureSessionRuntimePlan(ctx, setup, &plan); planErr != nil {
 		return sessionRuntimePlan{}, planErr
 	}
+	durationService := factory.durationService
+	durationRunner := factory.durationRunner
+	if durationService == nil {
+		durationService = opts.RuntimeFactory.durationService
+	}
+	if durationRunner == nil {
+		durationRunner = opts.RuntimeFactory.durationRunner
+	}
+	plan.durationService = durationService
+	plan.durationRunner = durationRunner
+	plan.loop.durationService = durationService
+	plan.loop.durationRunner = durationRunner
 	plan.capabilityCoordinator = setup.capabilityCoordinator
 	return wireSessionRecordingClaim(plan, setup.recordingClaim), nil
 }

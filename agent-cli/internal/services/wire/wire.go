@@ -28,6 +28,8 @@ import (
 	runtimeRoomReplayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay/wire"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	sessionwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
@@ -154,7 +156,12 @@ func NewSessionRuntime(audioService audioio.Service, clockSource clock.Source, r
 }
 
 func NewSessionRuntimeFactory() agentruntime.SessionRuntimeFactory {
-	return agentruntime.NewSessionRuntimeFactory()
+	durationService := durationwire.NewService()
+	durationRunner := sessionwire.NewDurationRunner(sessionwire.DurationDependencies{
+		DurationService: durationService,
+		LoopFactory:     sessionwire.NewDuplexLoopFactory(),
+	})
+	return agentruntime.NewSessionRuntimeFactory(durationService, durationRunner)
 }
 
 var SessionSet = wire.NewSet(NewSessionRuntimeFactory, NewSessionRuntime, NewSessionService)

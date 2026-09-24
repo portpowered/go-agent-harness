@@ -5,6 +5,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
+	agentruntime "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime"
 	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
 	servicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
@@ -47,6 +48,11 @@ func newInjectedSessionService(deps servicewire.SessionDependencies) serviceSess
 		)
 	}
 	return servicewire.NewSessionService(deps)
+}
+
+func newTestSessionRunOptions(opts agentruntime.SessionRunOptions) agentruntime.SessionRunOptions {
+	opts.RuntimeFactory = servicewire.NewSessionRuntimeFactory()
+	return opts
 }
 
 func newTestDeviceService(registry devicegw.DeviceRegistry) runtimedevices.Service {

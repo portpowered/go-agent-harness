@@ -86,4 +86,6 @@ type DurationRunRequest struct {
 // kept behind the session service contract.
 type DurationRunner interface {
 	RunDuration(DurationRunRequest) (sessionduration.Result, error)
+	// Execute runs a duration lifecycle whose effects are supplied by the host.
+	Execute(sessionduration.ExecutionRequest) error
 }

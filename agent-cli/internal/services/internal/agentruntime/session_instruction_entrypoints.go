@@ -12,7 +12,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	duration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
-	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 	sessionturnwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn/wire"
 )
@@ -26,7 +25,10 @@ func RunSessionWithMaxDuration(ctx context.Context, out io.Writer, opts SessionR
 // RunSessionWithMaxDurationClock exposes the deterministic scheduler seam used
 // by public duration behavior tests and injected runtime callers.
 func RunSessionWithMaxDurationClock(ctx context.Context, out io.Writer, opts SessionRunOptions, maxDuration time.Duration, clock duration.TimerScheduler) (runErr error) {
-	service := durationwire.NewService()
+	service, err := durationServiceForOptions(opts)
+	if err != nil {
+		return err
+	}
 	if err := service.ValidateDuration(maxDuration); err != nil {
 		return err
 	}
@@ -165,7 +167,7 @@ func runSessionInstructionsWithSeed(ctx context.Context, out io.Writer, plan ses
 	if maxDuration == 0 {
 		return errors.Join(plan.run(ctx, output), output.Err())
 	}
-	durationCtx, err := durationwire.NewService().PrepareArtifacts(ctx)
+	durationCtx, err := plan.durationService.PrepareArtifacts(ctx)
 	if err != nil {
 		return err
 	}
@@ -180,7 +182,10 @@ func admitSessionDurationInferencer(plan *sessionRuntimePlan) duration.Admission
 	if plan.inferencer == nil {
 		return nil
 	}
-	service := durationwire.NewService()
+	service := plan.durationService
+	if service == nil {
+		return nil
+	}
 	admitted := service.NewAdmissionInferencer(plan.inferencer, service.NewEventAdmission(), make(chan struct{}))
 	plan.inferencer = admitted
 	return admitted
@@ -226,7 +231,7 @@ func runSessionInstructionsDurationOrPlan(ctx context.Context, out io.Writer, pl
 	if maxDuration == 0 {
 		return plan.run(ctx, out)
 	}
-	durationCtx, err := durationwire.NewService().PrepareArtifacts(ctx)
+	durationCtx, err := plan.durationService.PrepareArtifacts(ctx)
 	if err != nil {
 		return err
 	}

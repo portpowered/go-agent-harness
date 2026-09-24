@@ -55,7 +55,7 @@ func TestReplayServiceConsumesActualWireObservationEnvelope(t *testing.T) {
 		[]byte(`{"type":"session.created"}`),
 		[]byte(`{"type":"response.done"}`),
 	}}
-	dialer := observeSessionWire(replayObservationDialer{conn: conn}, SessionRunOptions{ModelCatalog: testModelCatalog(), Clock: scheduler, RuntimeObserver: TraceRuntimeObserver{Trace: trace}})
+	dialer := observeSessionWire(replayObservationDialer{conn: conn}, newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), Clock: scheduler, RuntimeObserver: TraceRuntimeObserver{Trace: trace}}))
 	transportConn, err := dialer.Dial("offline", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -129,9 +129,9 @@ func TestReplayServiceRunsRealCoreLoopAgainstRecordedWire(t *testing.T) {
 		[]byte(`{"type":"response.output_text.done","response_id":"resp-2"}`),
 		[]byte(`{"type":"response.done","response":{"id":"resp-2","status":"completed"}}`),
 	})
-	dialer := observeSessionWire(scriptedReplaySourceDialer{conn: sourceConn}, SessionRunOptions{ModelCatalog: testModelCatalog(),
+	dialer := observeSessionWire(scriptedReplaySourceDialer{conn: sourceConn}, newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		Clock: scheduler, RuntimeObserver: scriptedTraceObserver{trace: trace, conn: sourceConn},
-	})
+	}))
 	provider := oaiprovider.New(oaiprovider.WithAPIKey("offline"), oaiprovider.WithModel("gpt-test"), oaiprovider.WithRealtimeBaseURL("ws://offline.invalid/realtime"), oaiprovider.WithWebSocketDialer(dialer))
 	session, err := provider.ConnectSession(ctx, models.SessionConfig{Model: "gpt-test"})
 	if err != nil {

@@ -14,7 +14,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
-	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
+	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
 	terminalwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
@@ -52,6 +53,8 @@ type sessionReplayDialer interface {
 }
 
 type sessionRuntimeFactory struct {
+	durationService                    sessionduration.Service
+	durationRunner                     runtimeSession.DurationRunner
 	newDefaultLiveDialer               func() transport.Dialer
 	newRecordingDialer                 func(transport.Dialer, string, string) sessionRecordingDialer
 	newReplayDialer                    func(string) (sessionReplayDialer, error)
@@ -71,10 +74,26 @@ type sessionRuntimeFactory struct {
 // instance, keeping provider construction out of request dispatch.
 type SessionRuntimeFactory = sessionRuntimeFactory
 
-func NewSessionRuntimeFactory() SessionRuntimeFactory { return newDefaultSessionRuntimeFactory() }
+func NewSessionRuntimeFactory(service sessionduration.Service, runner runtimeSession.DurationRunner) SessionRuntimeFactory {
+	factory := newDefaultSessionRuntimeFactory()
+	factory.durationService = service
+	factory.durationRunner = runner
+	return factory
+}
+
+func durationServiceForOptions(opts SessionRunOptions) (sessionduration.Service, error) {
+	factory := opts.RuntimeFactory
+	if !factory.configured() {
+		factory = newDefaultSessionRuntimeFactory()
+	}
+	if factory.durationService == nil {
+		return nil, fmt.Errorf("session duration service is required")
+	}
+	return factory.durationService, nil
+}
 
 func (f sessionRuntimeFactory) configured() bool {
-	return f.newDefaultLiveDialer != nil || f.newReplayDialer != nil || f.newBareLiveSessionInferencer != nil || f.newRTCRuntime != nil
+	return f.durationService != nil || f.durationRunner != nil || f.newDefaultLiveDialer != nil || f.newReplayDialer != nil || f.newBareLiveSessionInferencer != nil || f.newRTCRuntime != nil
 }
 
 func newDefaultSessionRuntimeFactory() sessionRuntimeFactory {
@@ -140,6 +159,8 @@ func (f sessionRuntimeFactory) newOpenAISessionInferencerForTools(sessionCfg con
 }
 
 type sessionRuntimePlan struct {
+	durationService        sessionduration.Service
+	durationRunner         runtimeSession.DurationRunner
 	mode                   sessionRuntimeMode
 	provider               string
 	model                  string
@@ -217,7 +238,10 @@ func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr erro
 		reporter = terminalwire.NewReporter()
 		p.loop.terminalReporter = reporter
 	}
-	finalizer := durationwire.NewService().NewFinalizer(p.finalizationPorts(nil, false))
+	if p.durationService == nil {
+		return fmt.Errorf("session duration service is required")
+	}
+	finalizer := p.durationService.NewFinalizer(p.finalizationPorts(nil, false))
 	defer func() {
 		runErr = finalizer.Finish(ctx, out, runErr)
 	}()

@@ -154,10 +154,10 @@ func TestRunSessionWithAudioInputPreflightMatrix(t *testing.T) {
 				}
 			}
 			inferencer := &countingSessionInferencer{}
-			err := agentruntime.RunSessionWithAudioInput(context.Background(), io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
+			err := agentruntime.RunSessionWithAudioInput(context.Background(), io.Discard, newTestSessionRunOptions(agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 				ReplayPath:        "synthetic.json",
 				SessionInferencer: inferencer,
-			}, tc.input)
+			}), tc.input)
 			if err == nil {
 				t.Fatal("expected preflight error")
 			}
@@ -186,10 +186,10 @@ func TestRunSessionWithAudioInputRejectsEmptySourceBeforeCommit(t *testing.T) {
 	inferencer := functional.NewMockSessionInferencer()
 	t.Cleanup(inferencer.Close)
 
-	err := agentruntime.RunSessionWithAudioInput(context.Background(), io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
+	err := agentruntime.RunSessionWithAudioInput(context.Background(), io.Discard, newTestSessionRunOptions(agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        "synthetic.json",
 		SessionInferencer: inferencer,
-	}, agentruntime.SessionAudioInput{
+	}), agentruntime.SessionAudioInput{
 		Path:    "empty.wav",
 		Present: true,
 		Source:  audio.NewSliceSource(nil),
@@ -639,10 +639,10 @@ func TestSessionCommandWithoutAudioInputDeliversZeroFrames(t *testing.T) {
 	baselineGoroutines := runtime.NumGoroutine()
 	capturePath := committedSessionAudioInputStreamCapturePath(t)
 	recorded := gwtesting.NewRecordingSessionInferencer(gwtesting.NewReplaySessionInferencer(capturePath))
-	err := agentruntime.RunSessionWithAudioInput(context.Background(), io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
+	err := agentruntime.RunSessionWithAudioInput(context.Background(), io.Discard, newTestSessionRunOptions(agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        capturePath,
 		SessionInferencer: recorded,
-	}, agentruntime.SessionAudioInput{})
+	}), agentruntime.SessionAudioInput{})
 	if err != nil {
 		t.Fatalf("disconnected-hook session error = %v", err)
 	}
@@ -756,10 +756,10 @@ func TestRunSessionWithAudioInputAwaitsSendBeforeNextRead(t *testing.T) {
 	}
 	result := make(chan error, 1)
 	go func() {
-		result <- agentruntime.RunSessionWithAudioInput(context.Background(), io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
+		result <- agentruntime.RunSessionWithAudioInput(context.Background(), io.Discard, newTestSessionRunOptions(agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 			ReplayPath:        "synthetic.json",
 			SessionInferencer: signaledInferencer,
-		}, agentruntime.SessionAudioInput{
+		}), agentruntime.SessionAudioInput{
 			Path:           "gated.raw",
 			Present:        true,
 			Source:         source,
@@ -1006,10 +1006,10 @@ func TestRunSessionWithAudioInputTerminalErrorsCloseSourceExactlyOnce(t *testing
 			}
 			result := make(chan error, 1)
 			go func() {
-				result <- agentruntime.RunSessionWithAudioInput(context.Background(), io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
+				result <- agentruntime.RunSessionWithAudioInput(context.Background(), io.Discard, newTestSessionRunOptions(agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 					ReplayPath:        "synthetic.json",
 					SessionInferencer: signaledInferencer,
-				}, agentruntime.SessionAudioInput{
+				}), agentruntime.SessionAudioInput{
 					Path:           "test.raw",
 					Present:        true,
 					Source:         tc.source,

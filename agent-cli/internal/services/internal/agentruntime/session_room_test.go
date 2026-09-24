@@ -87,7 +87,7 @@ func TestObserveRoomParticipantStream_FansOutBeforeDurableAudioEvidence(t *testi
 
 	pcm := []byte{0x34, 0x12, 0x78, 0x56}
 	order := make([]string, 0, 2)
-	opts := RoomRunOptions{
+	opts := newTestRoomRunOptions(RoomRunOptions{
 		OnAudioOutput: func(participantID string, got []byte) error {
 			if participantID != "source" || !bytes.Equal(got, pcm) {
 				t.Errorf("audio output = %q/%v, want source/%v", participantID, got, pcm)
@@ -107,7 +107,7 @@ func TestObserveRoomParticipantStream_FansOutBeforeDurableAudioEvidence(t *testi
 			}
 			order = append(order, "fanout")
 		},
-	}
+	})
 	observeRoomParticipantStream(
 		coordinator,
 		source,
@@ -1237,7 +1237,7 @@ func newRoomTestRunOptions(ids []string, inferencers map[string]*roomTestInferen
 	for _, id := range ids {
 		credentials["ROOM_"+strings.ToUpper(id)+"_KEY"] = "secret-" + id
 	}
-	opts := RoomRunOptions{
+	opts := newTestRoomRunOptions(RoomRunOptions{
 		AudioService: newTestAudioIOService(),
 		Manifest: room.Manifest{
 			SchemaVersion: room.SchemaVersion,
@@ -1253,7 +1253,7 @@ func newRoomTestRunOptions(ids []string, inferencers map[string]*roomTestInferen
 			InputQueueFrames:  4,
 			OutputQueueFrames: 8,
 		},
-	}
+	})
 	for index, id := range ids {
 		participant := room.Participant{
 			ID:           id,

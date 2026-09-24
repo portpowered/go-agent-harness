@@ -27,7 +27,7 @@ func TestPlanSessionRuntimeScheduledAudioDispatchPolicy(t *testing.T) {
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			plan, err := planSessionRuntimeWithFactory(context.Background(), SessionRunOptions{ModelCatalog: testModelCatalog(),
+			plan, err := planSessionRuntimeWithFactory(context.Background(), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 				Provider:          sessionProviderOpenAI,
 				Model:             "gpt-realtime",
 				APIKey:            "test-key",
@@ -35,7 +35,7 @@ func TestPlanSessionRuntimeScheduledAudioDispatchPolicy(t *testing.T) {
 				SessionInferencer: &scriptedSessionInferencer{},
 				AudioInTurnBarge:  testCase.barge,
 				AudioInputs:       []ScheduledAudioInput{{AfterCompletedTurns: 0, PCM: []byte{1}, EndOfTurn: true}, {AfterCompletedTurns: 1, PCM: []byte{2}, EndOfTurn: true}},
-			}, sessionRuntimeFactory{})
+			}), sessionRuntimeFactory{})
 			if err != nil {
 				t.Fatalf("plan session runtime: %v", err)
 			}

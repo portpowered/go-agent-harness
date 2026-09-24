@@ -281,7 +281,7 @@ func planSessionRuntime(opts SessionRunOptions) (sessionRuntimePlan, error) {
 }
 
 func planSessionRuntimeWithContext(ctx context.Context, opts SessionRunOptions) (sessionRuntimePlan, error) {
-	factory := opts.runtimeFactory
+	factory := opts.RuntimeFactory
 	if !factory.configured() {
 		factory = newDefaultSessionRuntimeFactory()
 	}
@@ -291,7 +291,7 @@ func planSessionRuntimeWithContext(ctx context.Context, opts SessionRunOptions) 
 func planSessionWithResolvedInstructionsContext(ctx context.Context, opts SessionRunOptions, instructions string) (sessionRuntimePlan, error) {
 	opts.ToolDefinitions = messages.CanonicalToolDefinitions(opts.ToolDefinitions)
 	opts.sessionInstructions = instructions
-	planFactory := opts.runtimeFactory
+	planFactory := opts.RuntimeFactory
 	if !planFactory.configured() {
 		planFactory = newDefaultSessionRuntimeFactory()
 	}

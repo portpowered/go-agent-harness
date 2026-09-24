@@ -45,12 +45,12 @@ func TestOpenAIRealtimeWebMCPResultsCorrelateAndContinueOnce(t *testing.T) {
 	defer cancel()
 	runErr := make(chan error, 1)
 	go func() {
-		runErr <- runAgentLoopSession(ctx, io.Discard, inferencer, sessionLoopOptions{
+		runErr <- runAgentLoopSession(ctx, io.Discard, inferencer, newTestSessionLoopOptions(sessionLoopOptions{
 			audioService:    newTestAudioIOService(),
 			WaitForClose:    true,
 			ToolExecutor:    toolSet.Executor(),
 			ToolDefinitions: toolSet.Definitions(),
-		})
+		}))
 	}()
 
 	select {
@@ -240,14 +240,14 @@ func TestWebMCPAmbiguitySessionForwardsOneResultAndAsksOneQuestion(t *testing.T)
 		return messages.ToolCallResponse{Content: ambiguity}, nil
 	})
 
-	err := runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
+	err := runAgentLoopSession(context.Background(), out, inferencer, newTestSessionLoopOptions(sessionLoopOptions{
 		audioService:    newTestAudioIOService(),
 		MaxDuration:     2 * time.Second,
 		WaitForClose:    true,
 		ToolExecutor:    executor,
 		ToolDefinitions: []messages.ToolDefinition{{Name: webmcp.GetContextToolName}},
 		observer:        observer,
-	})
+	}))
 	if err != nil {
 		t.Fatalf("run ambiguous WebMCP session: %v\noutput:\n%s", err, out.String())
 	}
@@ -338,7 +338,7 @@ func TestWebMCPAmbiguitySessionRejectsSilentContinuation(t *testing.T) {
 		scriptedTurn{events: toolCallEvents("call_silent_ambiguity", webmcp.GetContextToolName, `{}`)},
 	)
 	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
-	err := runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
+	err := runAgentLoopSession(context.Background(), out, inferencer, newTestSessionLoopOptions(sessionLoopOptions{
 		audioService: newTestAudioIOService(),
 		MaxDuration:  2 * time.Second,
 		WaitForClose: true,
@@ -347,7 +347,7 @@ func TestWebMCPAmbiguitySessionRejectsSilentContinuation(t *testing.T) {
 		}),
 		ToolDefinitions: []messages.ToolDefinition{{Name: webmcp.GetContextToolName}},
 		observer:        observer,
-	})
+	}))
 	if !errors.Is(err, ErrSessionAudioResponseIncomplete) {
 		t.Fatalf("silent ambiguity continuation error = %v, want ErrSessionAudioResponseIncomplete", err)
 	}
@@ -421,14 +421,14 @@ func TestWebMCPAmbiguitySessionUsesExactChoiceBeforePageWork(t *testing.T) {
 		}
 	})
 
-	err := runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
+	err := runAgentLoopSession(context.Background(), out, inferencer, newTestSessionLoopOptions(sessionLoopOptions{
 		audioService:    newTestAudioIOService(),
 		MaxDuration:     2 * time.Second,
 		WaitForClose:    true,
 		ToolExecutor:    executor,
 		ToolDefinitions: []messages.ToolDefinition{{Name: webmcp.GetContextToolName}, {Name: webmcp.SelectTabToolName}, {Name: "orders_action"}},
 		observer:        observer,
-	})
+	}))
 	if err != nil {
 		t.Fatalf("run choice WebMCP session: %v\noutput:\n%s", err, out.String())
 	}

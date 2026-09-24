@@ -34,7 +34,7 @@ func TestRunSession_OpenAIAdvertisesRegistryExecDefinition(t *testing.T) {
 	defer cancel()
 
 	var err error
-	err = agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
+	err = agentruntime.RunSession(ctx, io.Discard, newTestSessionRunOptions(agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
 		RecordPath:      recordPath,
 		Provider:        "openai",
 		Model:           "gpt-realtime",
@@ -44,7 +44,7 @@ func TestRunSession_OpenAIAdvertisesRegistryExecDefinition(t *testing.T) {
 		ToolExecutor:    capability.Executor,
 		ToolDefinitions: capability.Definitions,
 		WebSocketDialer: &recordingRealtimeTestDialer{conn: conn},
-	})
+	}))
 	if err != nil {
 		t.Fatalf("RunSession: %v", err)
 	}
@@ -179,7 +179,7 @@ func TestRunSession_OpenAIAdvertisesComposedWebMCPDefinitions(t *testing.T) {
 	conn := newRecordingRealtimeTestConn()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	if err := agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
+	if err := agentruntime.RunSession(ctx, io.Discard, newTestSessionRunOptions(agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
 		Provider:            config.ProviderOpenAI,
 		Model:               "gpt-realtime",
 		APIKey:              "test-api-key",
@@ -190,7 +190,7 @@ func TestRunSession_OpenAIAdvertisesComposedWebMCPDefinitions(t *testing.T) {
 		ToolDefinitions:     capabilities.Definitions,
 		CapabilityClose:     capabilities.Close,
 		WebSocketDialer:     &recordingRealtimeTestDialer{conn: conn},
-	}); err != nil {
+	})); err != nil {
 		t.Fatalf("RunSession: %v", err)
 	}
 

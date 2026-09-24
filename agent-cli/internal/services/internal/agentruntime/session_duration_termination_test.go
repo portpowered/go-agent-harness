@@ -94,7 +94,7 @@ func newDurationTerminalDrainFixture(t *testing.T) *durationTerminalDrainFixture
 		acceptedText: durationTerminalDrainAcceptedOutput,
 	}
 	fixture.writer = &fixture.output
-	fixture.options = sessionLoopOptions{loopReady: fixture.loopReady, audioService: newTestAudioIOService()}
+	fixture.options = newTestSessionLoopOptions(sessionLoopOptions{loopReady: fixture.loopReady, audioService: newTestAudioIOService()})
 	return fixture
 }
 

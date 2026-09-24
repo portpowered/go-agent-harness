@@ -102,7 +102,7 @@ func TestRunRoomReplaySchedulesOverlapThroughProductionMixer(t *testing.T) {
 	var fanouts [][2]string
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	result, err := RunRoomWithResult(ctx, io.Discard, RoomRunOptions{
+	result, err := RunRoomWithResult(ctx, io.Discard, newTestRoomRunOptions(RoomRunOptions{
 		AudioService: newTestAudioIOService(),
 		ReplayPath:   bundle,
 		PCMFormat:    room.PCM16Format{SampleRate: 100, Channels: 1, FrameDuration: 20 * time.Millisecond},
@@ -117,7 +117,7 @@ func TestRunRoomReplaySchedulesOverlapThroughProductionMixer(t *testing.T) {
 			fanouts = append(fanouts, [2]string{sourceID, targetID})
 			mu.Unlock()
 		},
-	})
+	}))
 	if err != nil {
 		t.Fatalf("room replay: %v", err)
 	}
@@ -194,12 +194,12 @@ func TestRoomReplaySchedulerCancellationStopsManualMixer(t *testing.T) {
 		targetIDs: []string{"target"},
 	}
 	var cancelOnce sync.Once
-	err = schedule.run(ctx, []*roomParticipantRuntime{target}, nil, RoomRunOptions{
+	err = schedule.run(ctx, []*roomParticipantRuntime{target}, nil, newTestRoomRunOptions(RoomRunOptions{
 		AudioService: newTestAudioIOService(),
 		onParticipantAudioFanned: func(string, string, []byte) {
 			cancelOnce.Do(cancel)
 		},
-	})
+	}))
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("scheduler cancellation error = %v, want context cancellation", err)
 	}

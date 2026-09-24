@@ -514,14 +514,14 @@ func (s *scheduledTurnDiagnosticSink) recordsSnapshot() []agentruntime.SessionDi
 
 func liveAudioInRunOptions(t *testing.T, dialer *audioInLifecycleServer, recordPath string) agentruntime.SessionRunOptions {
 	t.Helper()
-	return agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
+	return newTestSessionRunOptions(agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 		RecordPath:      recordPath,
 		Provider:        "openai",
 		Model:           "gpt-realtime-2.1-mini",
 		APIKey:          "test-key",
 		ConfigDir:       t.TempDir(),
 		WebSocketDialer: dialer,
-	}
+	})
 }
 
 // TestLiveRecordRuntimeAudioInCompletesRoundTrip drives the real OpenAI
@@ -646,7 +646,7 @@ func TestLiveRecordRuntimeScheduledAudioCompletesWithoutCapturedSessionClose(t *
 		result <- agentruntime.RunSessionWithRecordingDirectoryAndInstructionsAndAudioFilesAndOutputAndTextSeedAndMaxDuration(
 			context.Background(),
 			io.Discard,
-			agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
+			newTestSessionRunOptions(agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 				RecordPath:      recordPath,
 				Provider:        "openai",
 				Model:           "gpt-realtime",
@@ -655,7 +655,7 @@ func TestLiveRecordRuntimeScheduledAudioCompletesWithoutCapturedSessionClose(t *
 				WebSocketDialer: server,
 				ToolExecutor:    &messages.DefaultToolExecutor{},
 				ToolDefinitions: toolDefinitions,
-			},
+			}),
 			destination,
 			"",
 			0,
@@ -794,7 +794,7 @@ func TestLiveRecordRuntimeScheduledAudioContinuesAfterEmptyDirectoryResult(t *te
 		result <- agentruntime.RunSessionWithRecordingDirectoryAndInstructionsAndAudioFilesAndOutputAndTextSeedAndMaxDuration(
 			ctx,
 			io.Discard,
-			agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
+			newTestSessionRunOptions(agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 				RecordPath:      recordPath,
 				Provider:        "openai",
 				Model:           "gpt-realtime",
@@ -804,7 +804,7 @@ func TestLiveRecordRuntimeScheduledAudioContinuesAfterEmptyDirectoryResult(t *te
 				ToolExecutor:    executor,
 				ToolDefinitions: toolDefinitions,
 				Diagnostics:     diagnostics,
-			},
+			}),
 			destination,
 			"",
 			0,
@@ -924,7 +924,7 @@ func TestLiveRecordRuntimeScheduledAudioBargeInUsesActiveResponseBoundary(t *tes
 		result <- agentruntime.RunSessionWithRecordingDirectoryAndInstructionsAndAudioFilesAndOutputAndTextSeedAndMaxDuration(
 			ctx,
 			io.Discard,
-			agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
+			newTestSessionRunOptions(agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 				RecordPath:       recordPath,
 				Provider:         "openai",
 				Model:            "gpt-realtime",
@@ -935,7 +935,7 @@ func TestLiveRecordRuntimeScheduledAudioBargeInUsesActiveResponseBoundary(t *tes
 				StreamObserver: func(msg messages.StreamMessage) {
 					observed = append(observed, msg)
 				},
-			},
+			}),
 			destination,
 			"",
 			0,
@@ -1018,7 +1018,7 @@ func TestLiveRecordRuntimeScheduledAudioBargeInWaitsForPromptResponse(t *testing
 		result <- agentruntime.RunSessionWithRecordingDirectoryAndInstructionsAndAudioFilesAndOutputAndTextSeedAndMaxDuration(
 			ctx,
 			io.Discard,
-			agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
+			newTestSessionRunOptions(agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 				RecordPath:       recordPath,
 				Provider:         "openai",
 				Model:            "gpt-realtime",
@@ -1028,7 +1028,7 @@ func TestLiveRecordRuntimeScheduledAudioBargeInWaitsForPromptResponse(t *testing
 				Prompt:           "initial prompt",
 				AudioInTurnBarge: true,
 				Diagnostics:      diagnostics,
-			},
+			}),
 			destination,
 			"",
 			0,
@@ -1096,14 +1096,14 @@ func TestLiveRecordRuntimeScheduledAudioWaitsForSessionUpdated(t *testing.T) {
 		result <- agentruntime.RunSessionWithRecordingDirectoryAndInstructionsAndAudioFilesAndOutputAndTextSeedAndMaxDuration(
 			context.Background(),
 			io.Discard,
-			agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
+			newTestSessionRunOptions(agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 				RecordPath:      recordPath,
 				Provider:        "openai",
 				Model:           "gpt-realtime",
 				APIKey:          "test-key",
 				ConfigDir:       t.TempDir(),
 				WebSocketDialer: server,
-			},
+			}),
 			destination,
 			"",
 			0,
@@ -1180,7 +1180,7 @@ func TestLiveRecordRuntimeScheduledAudioConfigTimeoutSendsNoTurn(t *testing.T) {
 		result <- agentruntime.RunSessionWithRecordingDirectoryAndInstructionsAndAudioFilesAndOutputAndTextSeedAndMaxDuration(
 			context.Background(),
 			io.Discard,
-			agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
+			newTestSessionRunOptions(agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 				RecordPath:            recordPath,
 				Provider:              "openai",
 				Model:                 "gpt-realtime",
@@ -1188,7 +1188,7 @@ func TestLiveRecordRuntimeScheduledAudioConfigTimeoutSendsNoTurn(t *testing.T) {
 				ConfigDir:             t.TempDir(),
 				WebSocketDialer:       server,
 				SessionUpdatedTimeout: 25 * time.Millisecond,
-			},
+			}),
 			destination,
 			"",
 			0,
@@ -1339,10 +1339,10 @@ func TestRunSessionWithAudioInputEndOfTurnLostSurfacesError(t *testing.T) {
 	defer cancel()
 	result := make(chan error, 1)
 	go func() {
-		result <- agentruntime.RunSessionWithAudioInput(ctx, os.Stdout, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
+		result <- agentruntime.RunSessionWithAudioInput(ctx, os.Stdout, newTestSessionRunOptions(agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 			ReplayPath:        "synthetic.json",
 			SessionInferencer: baseInferencer,
-		}, input)
+		}), input)
 	}()
 
 	select {

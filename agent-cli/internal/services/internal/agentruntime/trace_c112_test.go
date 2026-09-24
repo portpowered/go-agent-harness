@@ -15,7 +15,7 @@ import (
 
 func TestC112TraceAdapterRequiresInjectedClock(t *testing.T) {
 	request := public.Request{TraceAudio: true, RecordDirectory: filepath.Join(t.TempDir(), "requested")}
-	if _, err := prepareTrace(&request, &SessionRunOptions{}, nil); !errors.Is(err, sessiontrace.ErrClockRequired) {
+	if _, err := prepareTrace(&request, newTestSessionRunOptionsPointer(SessionRunOptions{}), nil); !errors.Is(err, sessiontrace.ErrClockRequired) {
 		t.Fatalf("missing clock error = %v", err)
 	}
 }
@@ -23,13 +23,13 @@ func TestC112TraceAdapterRequiresInjectedClock(t *testing.T) {
 func TestC112TraceAdapterKeepsDeviceErrorsAndObserverPolicy(t *testing.T) {
 	priorErr := errors.New("prior playback failed")
 	observer := &traceC112Observer{}
-	options := SessionRunOptions{
+	options := newTestSessionRunOptions(SessionRunOptions{
 		ModelCatalog:    testModelCatalog(),
 		RuntimeObserver: observer,
 		RTCBinding: runtimedevices.RTCBindingRequest{
 			PlaybackSamplesObserver: func(context.Context, int, []int16) error { return priorErr },
 		},
-	}
+	})
 	request := public.Request{TraceAudio: true, RecordDirectory: filepath.Join(t.TempDir(), "requested")}
 	prepared, err := prepareTrace(&request, &options, clock.NewDeterministic(time.Unix(0, 0).UTC(), time.Millisecond))
 	if err != nil {

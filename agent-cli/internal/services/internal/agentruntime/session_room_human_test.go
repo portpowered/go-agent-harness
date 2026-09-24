@@ -505,7 +505,7 @@ func TestRunRoom_HumanProviderFailureFailsOnlyParticipant(t *testing.T) {
 }
 
 func newRoomHumanRunOptions(registry *roomHumanTestRegistry, inferencer *roomTestInferencer) RoomRunOptions {
-	return RoomRunOptions{
+	return newTestRoomRunOptions(RoomRunOptions{
 		AudioService: audioiowire.NewService(),
 		Manifest: room.Manifest{
 			SchemaVersion: room.SchemaVersion,
@@ -540,7 +540,7 @@ func newRoomHumanRunOptions(registry *roomHumanTestRegistry, inferencer *roomTes
 		SessionInferencers: map[string]messages.SessionInferencer{
 			"agent": inferencer,
 		},
-	}
+	})
 }
 
 func newRoomHumanDeviceService(registry devicegw.DeviceRegistry) runtimedevices.Service {

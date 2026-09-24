@@ -88,14 +88,14 @@ func TestWireCapturePromptReachesConversationItemCreate(t *testing.T) {
 	const prompt = "Say hello in one short sentence."
 	recorder := gwtesting.NewRecordingWebSocketDialer(&scriptedRealtimeDialer{}, "openai", "gpt-realtime-2.1-mini")
 
-	opts := agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
+	opts := newTestSessionRunOptions(agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
 		Provider:        "openai",
 		Model:           "gpt-realtime-2.1-mini",
 		APIKey:          "test-key",
 		RecordPath:      t.TempDir() + "/capture.json",
 		ConfigDir:       t.TempDir(),
 		WebSocketDialer: recorder,
-	}
+	})
 	out := &bytes.Buffer{}
 	err := agentruntime.RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(
 		context.Background(), out, opts, "", 0,
@@ -147,14 +147,14 @@ func TestWireCapturePromptReachesWireWithDurationBound(t *testing.T) {
 	const prompt = "Say hello in one short sentence."
 	recorder := gwtesting.NewRecordingWebSocketDialer(&scriptedRealtimeDialer{}, "openai", "gpt-realtime-2.1-mini")
 
-	opts := agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
+	opts := newTestSessionRunOptions(agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
 		Provider:        "openai",
 		Model:           "gpt-realtime-2.1-mini",
 		APIKey:          "test-key",
 		RecordPath:      t.TempDir() + "/capture.json",
 		ConfigDir:       t.TempDir(),
 		WebSocketDialer: recorder,
-	}
+	})
 	out := &bytes.Buffer{}
 	err := agentruntime.RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(
 		context.Background(), out, opts, "", 2*time.Second,

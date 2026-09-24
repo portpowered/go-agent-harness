@@ -80,10 +80,10 @@ func runSessionWithDiagnostics(t *testing.T, mutate func(*SessionRunOptions)) se
 	if err != nil {
 		t.Fatalf("metrics.NewInMemorySink: %v", err)
 	}
-	opts := SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+	opts := newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		Diagnostics:     sink,
 		MetricsRecorder: metricSink,
-	}
+	})
 	if mutate != nil {
 		mutate(&opts)
 	}
@@ -390,12 +390,12 @@ func TestSessionDiagnostics_DrainPhaseFailureEmitsOneCanonicalRecord(t *testing.
 		},
 	}
 	sink := &diagnosticRecordSink{}
-	opts := SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+	opts := newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		ReplayPath:        "scripted-drain-failure.session.json",
 		SessionInferencer: sessionInf,
 		WaitForClose:      true,
 		Diagnostics:       sink,
-	}
+	})
 	runErr := RunSession(context.Background(), failingWriter{err: errors.New("unwritable")}, opts)
 	if runErr == nil {
 		t.Fatal("expected RunSession to surface the drain write failure")

@@ -279,7 +279,7 @@ func TestRoomRunRecordThenReplay_FullEndToEndReplaySucceeds(t *testing.T) {
 
 	recordCtx, recordCancel := context.WithTimeout(context.Background(), roomRealtimeReplayTestTimeout)
 	defer recordCancel()
-	recordResult, err := RunRoomWithResult(recordCtx, io.Discard, RoomRunOptions{
+	recordResult, err := RunRoomWithResult(recordCtx, io.Discard, newTestRoomRunOptions(RoomRunOptions{
 		AudioService: newTestAudioIOService(),
 		Manifest:     manifest,
 		ConfigDir:    configDir, ModelCatalog: testModelCatalog(),
@@ -303,7 +303,7 @@ func TestRoomRunRecordThenReplay_FullEndToEndReplaySucceeds(t *testing.T) {
 		MixerConfig: room.PCM16MixerConfig{CadenceFactory: func(time.Duration) room.PCM16Cadence {
 			return newRoomRealtimeReplayCadence()
 		}},
-	})
+	}))
 	if err != nil {
 		t.Fatalf("record pass RunRoomWithResult: %v", err)
 	}
@@ -363,7 +363,7 @@ func TestRoomRunRecordThenReplay_FullEndToEndReplaySucceeds(t *testing.T) {
 	// to fail the test if RunRoomWithResult ever touches it.
 	replayCtx, replayCancel := context.WithTimeout(context.Background(), roomRealtimeReplayTestTimeout)
 	defer replayCancel()
-	replayResult, err := RunRoomWithResult(replayCtx, io.Discard, RoomRunOptions{
+	replayResult, err := RunRoomWithResult(replayCtx, io.Discard, newTestRoomRunOptions(RoomRunOptions{
 		AudioService: newTestAudioIOService(),
 		Manifest:     room.Manifest{SchemaVersion: 999},
 		ReplayPlan:   &plan,
@@ -390,7 +390,7 @@ func TestRoomRunRecordThenReplay_FullEndToEndReplaySucceeds(t *testing.T) {
 		MixerConfig: room.PCM16MixerConfig{CadenceFactory: func(time.Duration) room.PCM16Cadence {
 			return newRoomRealtimeReplayCadence()
 		}},
-	})
+	}))
 	if err != nil {
 		t.Fatalf("replay pass RunRoomWithResult: %v", err)
 	}

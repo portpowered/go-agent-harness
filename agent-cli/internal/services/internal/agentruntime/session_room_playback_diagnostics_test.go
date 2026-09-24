@@ -37,7 +37,7 @@ func TestRunRoom_HumanParticipantPlaybackUsesServiceBackpressure(t *testing.T) {
 	}
 
 	inferencer := &roomTestInferencer{events: []messages.StreamMessage{roomTestSessionOpen("agent")}}
-	opts := RoomRunOptions{
+	opts := newTestRoomRunOptions(RoomRunOptions{
 		AudioService: audioiowire.NewService(),
 		Manifest: room.Manifest{
 			SchemaVersion: room.SchemaVersion,
@@ -72,7 +72,7 @@ func TestRunRoom_HumanParticipantPlaybackUsesServiceBackpressure(t *testing.T) {
 		SessionInferencers: map[string]messages.SessionInferencer{
 			"agent": inferencer,
 		},
-	}
+	})
 
 	type diagnosticEvent struct {
 		participantID string

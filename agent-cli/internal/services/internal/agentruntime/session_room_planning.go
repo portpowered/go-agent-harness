@@ -103,13 +103,14 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 			continue
 		}
 		sessionOptions := SessionRunOptions{
-			AudioService:  opts.AudioService,
-			Provider:      participant.Provider,
-			Model:         participant.Model,
-			ModelProvided: true,
-			APIKey:        value,
-			BaseURL:       opts.BaseURL,
-			ConfigDir:     opts.ConfigDir, ModelCatalog: opts.ModelCatalog,
+			AudioService:   opts.AudioService,
+			RuntimeFactory: opts.RuntimeFactory,
+			Provider:       participant.Provider,
+			Model:          participant.Model,
+			ModelProvided:  true,
+			APIKey:         value,
+			BaseURL:        opts.BaseURL,
+			ConfigDir:      opts.ConfigDir, ModelCatalog: opts.ModelCatalog,
 			Clock:            opts.Clock,
 			LivenessClock:    opts.LivenessClock,
 			WorkDir:          opts.WorkDir,
@@ -295,6 +296,7 @@ func buildRoomReplayParticipantPlans(ctx context.Context, replay RoomReplayPlan,
 		}
 		sessionOptions := SessionRunOptions{
 			AudioService:   opts.AudioService,
+			RuntimeFactory: opts.RuntimeFactory,
 			Provider:       recorded.Provider,
 			Model:          recorded.Model,
 			ModelProvided:  true,

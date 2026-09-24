@@ -114,12 +114,12 @@ func TestSessionTransportDoneDrainsAcceptedOutputWhenTransportErrored(t *testing
 	}()
 
 	out := &bytes.Buffer{}
-	runErr := runAgentLoopSessionWithDurationClock(ctx, out, &transportDoneDrainInferencer{session: session}, sessionLoopOptions{
+	runErr := runAgentLoopSessionWithDurationClock(ctx, out, &transportDoneDrainInferencer{session: session}, newTestSessionLoopOptions(sessionLoopOptions{
 		audioService: newTestAudioIOService(),
 		Done:         transportDone,
 		DoneErr:      doneErr,
 		observer:     observer,
-	}, 0, platformclock.Real{})
+	}), 0, platformclock.Real{})
 
 	if !errors.Is(runErr, transportErr) {
 		t.Fatalf("transport-done run error = %v, want the reported transport failure %v", runErr, transportErr)
@@ -173,11 +173,11 @@ func TestSessionDurationTransportDoneDrainsAcceptedOutputWhenTransportErrored(t 
 	}()
 
 	out := &bytes.Buffer{}
-	runErr := runAgentLoopSessionWithDurationClock(ctx, out, &transportDoneDrainInferencer{session: session}, sessionLoopOptions{
+	runErr := runAgentLoopSessionWithDurationClock(ctx, out, &transportDoneDrainInferencer{session: session}, newTestSessionLoopOptions(sessionLoopOptions{
 		Done:     transportDone,
 		DoneErr:  doneErr,
 		observer: observer,
-	}, 30*time.Second, platformclock.Real{})
+	}), 30*time.Second, platformclock.Real{})
 
 	if !errors.Is(runErr, transportErr) {
 		t.Fatalf("duration transport-done run error = %v, want the reported transport failure %v", runErr, transportErr)
