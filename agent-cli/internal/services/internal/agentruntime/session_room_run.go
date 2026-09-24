@@ -885,9 +885,8 @@ func pumpRoomMixer(ctx context.Context, coordinator *roomCoordinator, runtime *r
 			if runtime.ctx.Err() != nil || coordinator.isStopping() {
 				return
 			}
-			// Make a dropped delivery of real (non-silent) incoming audio an
-			// explicit, diagnosable event instead of leaving it
-			// indistinguishable from ordinary silence.
+			// Make dropped delivery of real (non-silent) incoming audio explicit,
+			// rather than leaving it indistinguishable from ordinary silence.
 			if evidence != nil && audio.PCM16HasSignal(frame) {
 				evidence.MarkError(runtime.plan.manifest.ID, roomevidence.TimelinePath, evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationAudioDropped, ParticipantID: runtime.plan.manifest.ID, Artifact: err.Error(), DroppedBytes: len(frame)}))
 			}
