@@ -19,6 +19,10 @@ import (
 	runtimeBrowser "github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation"
 	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	runtimerecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
+	runtimereplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
+	duration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	sessiontrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -28,18 +32,21 @@ import (
 var _ contract.Runtime = (*Dispatcher)(nil)
 
 type Dependencies struct {
-	AudioService        audioio.Service
-	Clock               clock.Source
-	PlanFactory         sessionRuntimeFactory
-	ToolService         serviceTools.Service
-	RuntimeFactory      SessionRTCRuntimeFactory
-	SessionInferencer   messages.SessionInferencer
-	ToolExecutor        messages.ToolExecutor
-	DeviceService       runtimedevices.Service
-	RuntimeObserver     SessionRuntimeObserver
-	Observability       observability.Dependencies
-	ModelCatalog        runtimeproviders.ModelCatalog
-	BrowserConversation runtimeBrowser.Service
+	AudioService           audioio.Service
+	Clock                  clock.Source
+	PlanFactory            sessionRuntimeFactory
+	ToolService            serviceTools.Service
+	RuntimeFactory         SessionRTCRuntimeFactory
+	SessionInferencer      messages.SessionInferencer
+	ToolExecutor           messages.ToolExecutor
+	DeviceService          runtimedevices.Service
+	RuntimeObserver        SessionRuntimeObserver
+	Observability          observability.Dependencies
+	ModelCatalog           runtimeproviders.ModelCatalog
+	RecordingService       runtimerecording.Service
+	ProviderCaptureService runtimerecording.ProviderCaptureService
+	ReplayService          runtimereplay.Service
+	BrowserConversation    runtimeBrowser.Service
 }
 
 type Dispatcher struct{ deps Dependencies }
@@ -54,11 +61,11 @@ func textSeed(seed public.TextSeed) SessionTextSeed {
 // the service-owned live host. The legacy dispatcher remains for text and
 // replay compatibility, but it must not retain a second file/device audio
 // implementation after C189.
-type legacyAudioRuntimeRetiredError string
+type legacyAudioRuntimeError string
 
-func (e legacyAudioRuntimeRetiredError) Error() string { return string(e) }
+func (e legacyAudioRuntimeError) Error() string { return string(e) }
 
-const ErrLegacyAudioRuntimeRetired legacyAudioRuntimeRetiredError = "legacy session audio runtime is retired; use the service-owned live session"
+const ErrLegacyAudioRuntimeRetired legacyAudioRuntimeError = "legacy session audio runtime is retired; use the service-owned live session"
 
 func (d *Dispatcher) Run(ctx context.Context, out io.Writer, request public.Request) (runErr error) {
 	if d == nil || d.deps.Clock == nil {
@@ -74,7 +81,7 @@ func (d *Dispatcher) Run(ctx context.Context, out io.Writer, request public.Requ
 		}
 		if capturePath != "" {
 			artifactBase := strings.TrimSuffix(capturePath, filepath.Ext(capturePath))
-			ctx = WithSessionDurationArtifactPaths(ctx, SessionDurationArtifactPaths{AudioPath: artifactBase + ".wav", TranscriptPath: artifactBase + ".jsonl"})
+			ctx = durationwire.NewService().WithArtifactPaths(ctx, duration.SessionDurationArtifactPaths{AudioPath: artifactBase + ".wav", TranscriptPath: artifactBase + ".jsonl"})
 		}
 	}
 	options, err := d.requestOptions(ctx, request)
@@ -96,17 +103,6 @@ func (d *Dispatcher) Run(ctx context.Context, out io.Writer, request public.Requ
 		return fmt.Errorf("session output is required")
 	}
 	if len(request.ImagePaths) > 0 {
-		if request.RecordDirectory != "" {
-			return RunSessionWithImagesAndRecordingDirectory(
-				ctx, out, SessionImageRunOptions{
-					SessionRunOptions: options,
-					ImagePaths:        append([]string(nil), request.ImagePaths...),
-					MaxDuration:       request.MaxDuration,
-					TextSeed:          textSeed(request.TextSeed),
-					SystemPrompt:      request.SystemPrompt,
-				}, request.RecordDirectory,
-			)
-		}
 		return RunSessionWithImages(ctx, out, SessionImageRunOptions{
 			SessionRunOptions: options,
 			ImagePaths:        append([]string(nil), request.ImagePaths...),
@@ -114,12 +110,6 @@ func (d *Dispatcher) Run(ctx context.Context, out io.Writer, request public.Requ
 			TextSeed:          textSeed(request.TextSeed),
 			SystemPrompt:      request.SystemPrompt,
 		})
-	}
-	if request.RecordDirectory != "" {
-		return RunSessionWithRecordingDirectoryAndInstructionsAndAudioOutAndTextSeedAndMaxDuration(
-			ctx, out, options, request.RecordDirectory, "",
-			request.MaxDuration, textSeed(request.TextSeed), request.SystemPrompt,
-		)
 	}
 	return RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(
 		ctx, out, options, "", request.MaxDuration,
@@ -129,7 +119,8 @@ func (d *Dispatcher) Run(ctx context.Context, out io.Writer, request public.Requ
 
 func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request) (SessionRunOptions, error) {
 	options := SessionRunOptions{
-		RecordPath: request.RecordPath, ReplayPath: request.ReplayPath, ReplayTiming: request.ReplayTiming,
+		RecordPath: request.RecordPath, RecordDirectory: request.RecordDirectory,
+		RecordMaxDuration: request.MaxDuration, ReplayPath: request.ReplayPath, ReplayTiming: request.ReplayTiming,
 		Provider: request.Provider, ProviderProvided: request.ProviderProvided, Model: request.Model, ModelProvided: request.ModelProvided,
 		NoInputTranscription: request.NoInputTranscription,
 		APIKey:               request.APIKey, BaseURL: request.BaseURL, ConfigDir: request.ConfigDir, WorkDir: request.WorkDir,
@@ -144,13 +135,17 @@ func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request)
 		CancellationIntent:   request.CancellationIntent,
 		ToolExecutionTimeout: request.ToolExecutionTimeout, Clock: d.deps.Clock,
 		AudioService:    d.deps.AudioService,
+		MetricsRecorder: request.MetricsRecorder,
 		RuntimeObserver: d.deps.RuntimeObserver, Diagnostics: request.Diagnostics, ToolDiagnostics: request.ToolDiagnostics,
 		DeviceService: d.deps.DeviceService,
 		Observability: d.deps.Observability, StreamObserver: request.StreamObserver,
+		RecordingService: d.deps.RecordingService, ProviderCaptureService: d.deps.ProviderCaptureService, ReplayService: d.deps.ReplayService,
 		RTCBinding:       runtimedevices.RTCBindingRequest{HoldToneConfig: request.HoldToneConfig, RemoteEndpoint: request.AudioDeviceServer},
 		AudioInTurnBarge: request.AudioInTurnBarge, ClientOwnsAudioTurnBoundaries: request.ClientOwnsAudioTurnBoundaries,
 		SessionUpdatedTimeout: request.SessionUpdatedTimeout, WaitForClose: request.WaitForClose,
-		runtimeFactory: d.deps.PlanFactory, ModelCatalog: d.deps.ModelCatalog, BrowserConversation: d.deps.BrowserConversation,
+		runtimeFactory:      d.deps.PlanFactory,
+		ModelCatalog:        d.deps.ModelCatalog,
+		BrowserConversation: d.deps.BrowserConversation,
 	}
 	if err := validateSessionCaptureOptions(options); err != nil {
 		return SessionRunOptions{}, err
@@ -185,25 +180,8 @@ func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request)
 	if request.LoadedConfig != nil {
 		options.LoadedConfig = applyToolVisibility(request.LoadedConfig, request.ComputerUse, request.ExperimentalTools, request.NoTerminalTools)
 	}
-	if d.deps.ToolService != nil {
-		capabilities, err := d.resolveSessionToolCapabilities(request, options.LoadedConfig)
-		if err != nil {
-			return SessionRunOptions{}, err
-		}
-		if capabilities.Initialize != nil {
-			if err := capabilities.Initialize(ctx); err != nil {
-				if capabilities.Close != nil {
-					_ = capabilities.Close()
-				}
-				return SessionRunOptions{}, fmt.Errorf("initialize session tools: %w", err)
-			}
-		}
-		options.ToolExecutor = capabilities.Executor
-		options.ToolDefinitions = append([]messages.ToolDefinition(nil), capabilities.Definitions...)
-		options.ToolDefinitionBase = append([]messages.ToolDefinition(nil), capabilities.Definitions...)
-		options.RefreshToolDefinitions = capabilities.RefreshDefinitionsWithError
-		options.BrowserWatch, options.BrowserEventWatch = capabilities.BrowserWatch, capabilities.BrowserEventWatch
-		options.BrowserCapabilityState, options.CapabilityClose = capabilities.BrowserCapabilityState, capabilities.Close
+	if err := d.initializeSessionTools(ctx, request, &options); err != nil {
+		return SessionRunOptions{}, err
 	}
 	policy, err := cliTools.ResolveFilesystemPolicy(request.WorkDir, request.AllowPaths...)
 	if err != nil {
@@ -217,6 +195,31 @@ func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request)
 		options.LoadedConfig = &copyCfg
 	}
 	return options, nil
+}
+
+func (d *Dispatcher) initializeSessionTools(ctx context.Context, request public.Request, options *SessionRunOptions) error {
+	if d.deps.ToolService == nil {
+		return nil
+	}
+	capabilities, err := d.resolveSessionToolCapabilities(request, options.LoadedConfig)
+	if err != nil {
+		return err
+	}
+	if capabilities.Initialize != nil {
+		if err := capabilities.Initialize(ctx); err != nil {
+			if capabilities.Close != nil {
+				err = errors.Join(err, capabilities.Close())
+			}
+			return fmt.Errorf("initialize session tools: %w", err)
+		}
+	}
+	options.ToolExecutor = capabilities.Executor
+	options.ToolDefinitions = append([]messages.ToolDefinition(nil), capabilities.Definitions...)
+	options.ToolDefinitionBase = append([]messages.ToolDefinition(nil), capabilities.Definitions...)
+	options.RefreshToolDefinitions = capabilities.RefreshDefinitionsWithError
+	options.BrowserWatch, options.BrowserEventWatch = capabilities.BrowserWatch, capabilities.BrowserEventWatch
+	options.BrowserCapabilityState, options.CapabilityClose = capabilities.BrowserCapabilityState, capabilities.Close
+	return nil
 }
 
 // resolveSessionToolCapabilities applies request-scoped filesystem values to

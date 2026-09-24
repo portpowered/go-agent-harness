@@ -13,7 +13,11 @@ import (
 // ErrSessionFinalizationPanic identifies a panic from a non-capability
 // finalizer callback. A cleanup panic must not skip the remaining ordered
 // stages or escape the session command.
-var ErrSessionFinalizationPanic = errors.New("session finalization panicked")
+type sessionFinalizationError string
+
+func (e sessionFinalizationError) Error() string { return string(e) }
+
+const ErrSessionFinalizationPanic sessionFinalizationError = "session finalization panicked"
 
 // sessionRuntimeFinalizer is the one post-loop owner for a planned session.
 // The loop is responsible for stopping admission and reconciling pending
@@ -110,10 +114,6 @@ func (f *sessionRuntimeFinalizer) cleanup(ctx context.Context, out io.Writer) er
 			return f.plan.finalize(finalizeCtx, out)
 		})))
 	}
-	if f.plan.captureClaim != nil {
-		appendErr(wrapSessionRuntimeError(f.plan, invokeSessionFinalizer(f.plan.captureClaim.release)))
-	}
-
 	return errors.Join(errs...)
 }
 

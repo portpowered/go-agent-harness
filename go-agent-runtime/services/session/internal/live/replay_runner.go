@@ -5,7 +5,12 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	audiosubsystem "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems/audio"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
@@ -139,3 +144,77 @@ func (h *handle) waitForResponseBoundary(ctx context.Context, target int) error 
 		}
 	}
 }
+
+// DuplexLoopFactory builds the session loop from values admitted by the
+// session-duration contract; providers and hosts cannot supply raw options.
+type DuplexLoopFactory struct{}
+
+func NewDuplexLoopFactory() *DuplexLoopFactory { return &DuplexLoopFactory{} }
+
+func (*DuplexLoopFactory) Build(ctx context.Context, inferencer messages.SessionInferencer, config sessionduration.DuplexLoopOptions) (sessionduration.Loop, error) {
+	if err := validateDuplexBuild(ctx, inferencer); err != nil {
+		return nil, err
+	}
+	return agentloop.New(duplexBuildOptions(inferencer, config)...)
+}
+
+func validateDuplexBuild(ctx context.Context, inferencer messages.SessionInferencer) error {
+	if ctx != nil && ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if inferencer == nil {
+		return errors.New("session execution inferencer is required")
+	}
+	return nil
+}
+
+func duplexBuildOptions(inferencer messages.SessionInferencer, config sessionduration.DuplexLoopOptions) []agentloop.Option {
+	options := []agentloop.Option{agentloop.WithMode(engine.DuplexSession), agentloop.WithSessionInferencer(inferencer)}
+	options = appendAudioPortOption(options, config.AudioPorts)
+	if config.ToolExecutor == nil {
+		return append(options, agentloop.WithToolExecutionDisabled())
+	}
+	options = appendToolDefinitionOptions(options, config)
+	options = append(options, agentloop.WithToolExecutor(config.ToolExecutor))
+	return appendToolAcknowledgementOption(options, config.ToolAcknowledgementPolicy)
+}
+
+func appendAudioPortOption(options []agentloop.Option, ports *audiosubsystem.Ports) []agentloop.Option {
+	if ports != nil && (ports.Capture != nil || ports.Playback != nil || ports.Commands != nil) {
+		return append(options, agentloop.WithAudioSubsystem(audiosubsystem.New(*ports)))
+	}
+	return options
+}
+
+func appendToolDefinitionOptions(options []agentloop.Option, config sessionduration.DuplexLoopOptions) []agentloop.Option {
+	definitions := append([]messages.ToolDefinition(nil), config.ToolDefinitions...)
+	if len(definitions) == 0 {
+		return options
+	}
+	options = append(options, agentloop.WithTools(definitions))
+	if config.AdvertiseToolDefinitions {
+		options = append(options, agentloop.WithSessionConfig(messages.SessionUpdateConfig{Tools: definitions}))
+	}
+	return options
+}
+
+func appendToolAcknowledgementOption(options []agentloop.Option, policy *sessionduration.DuplexToolAcknowledgementPolicy) []agentloop.Option {
+	if policy == nil {
+		return options
+	}
+	longRunning := make(map[string]struct{}, len(policy.LongRunningToolNames))
+	for _, name := range policy.LongRunningToolNames {
+		if name != "" {
+			longRunning[name] = struct{}{}
+		}
+	}
+	return append(options, agentloop.WithToolAcknowledgementPolicy(agentloop.ToolAcknowledgementPolicy{
+		Threshold: policy.Threshold,
+		IsLongRunning: func(name string) bool {
+			_, ok := longRunning[name]
+			return ok
+		},
+	}))
+}
+
+var _ sessionduration.DuplexLoopFactory = (*DuplexLoopFactory)(nil)

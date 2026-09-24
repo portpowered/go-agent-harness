@@ -217,10 +217,26 @@ func (r *SessionRecorder) Done() <-chan struct{} {
 	return r.inner.Done()
 }
 
+// TerminalError preserves the wrapped provider's optional terminal error.
+func (r *SessionRecorder) TerminalError() error {
+	if r == nil || r.inner == nil {
+		return nil
+	}
+	provider, ok := r.inner.(interface{ TerminalError() error })
+	if !ok {
+		return nil
+	}
+	return provider.TerminalError()
+}
+
 // Close delegates to the inner session.
 func (r *SessionRecorder) Close() error {
+	closeErr := r.inner.Close()
+	// Let the wrapped session publish its terminal state before stopping the
+	// inbound relay. A duration-bounded caller relies on that final event to
+	// distinguish an intentional cutoff from cancellation.
 	r.cancel()
-	return r.inner.Close()
+	return closeErr
 }
 
 // FlushToFile writes all recorded events as a JSON envelope to the given path.

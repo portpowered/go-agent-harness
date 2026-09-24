@@ -24,16 +24,8 @@ func sessionRTCMedia(session messages.Session) audio.MediaEndpoints {
 	return media
 }
 
-func (s *sessionDurationAdmissionSession) RTCMedia() audio.MediaEndpoints {
-	return sessionRTCMedia(s.inner)
-}
-
 func (s *sessionImageSession) RTCMedia() audio.MediaEndpoints {
 	return sessionRTCMedia(s.Session)
-}
-
-func (s *sessionDirectoryRecordingSession) RTCMedia() audio.MediaEndpoints {
-	return sessionRTCMedia(s.inner)
 }
 
 func (s *sessionRTCRuntimeSession) RTCMedia() audio.MediaEndpoints {

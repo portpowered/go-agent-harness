@@ -122,8 +122,7 @@ func (e *ManagedChromeAcquisitionError) Unwrap() error {
 }
 
 // ManagedChromeAcquisitionOptions configures managed executable selection.
-// Nil slices and functions select production defaults; a non-nil empty
-// StockPaths deliberately disables stock probing for hermetic tests.
+// Nil slices/functions select defaults; empty non-nil StockPaths disables stock probing.
 type ManagedChromeAcquisitionOptions struct {
 	GOOS            string
 	GOARCH          string
@@ -231,9 +230,10 @@ func (a *ManagedChromeAcquirer) Acquire(ctx context.Context) (ChromeExecutable, 
 	fallback := a.options.PinnedAcquirer
 	if fallback == nil {
 		fallback = NewChromeForTestingAcquirer(ChromeForTestingOptions{
-			LockPath:   a.options.LockPath,
-			CacheDir:   a.options.CacheDir,
-			HTTPClient: a.options.HTTPClient,
+			LockPath:       a.options.LockPath,
+			CacheDir:       a.options.CacheDir,
+			HTTPClient:     a.options.HTTPClient,
+			VersionTimeout: a.options.VersionTimeout,
 		})
 	}
 	request := PinnedChromeRequest{

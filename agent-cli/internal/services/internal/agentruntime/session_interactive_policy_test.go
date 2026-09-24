@@ -145,7 +145,8 @@ func TestPlanSessionRuntimeThreadsResolvedInteractivePolicyBeforeProviderSetup(t
 	settings.LongRunningTimeout = 18 * time.Second
 	cfg := &config.Config{Tools: config.ToolsConfig{Interactive: settings}}
 
-	plan, err := planSessionRuntime(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+	plan, err := planSessionRuntime(SessionRunOptions{ModelCatalog: testModelCatalog(),
+		AudioService:      newTestAudioIOService(),
 		ReplayPath:        "unused.json",
 		LoadedConfig:      cfg,
 		SessionInferencer: stubPlanSessionInferencer{},
@@ -177,7 +178,8 @@ func TestPlanSessionRuntimeLoadsInteractivePolicyFromConfigDir(t *testing.T) {
 		t.Fatalf("write config: %v", err)
 	}
 
-	plan, err := planSessionRuntime(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+	plan, err := planSessionRuntime(SessionRunOptions{ModelCatalog: testModelCatalog(),
+		AudioService:      newTestAudioIOService(),
 		ConfigDir:         dir,
 		ReplayPath:        "unused.json",
 		SessionInferencer: stubPlanSessionInferencer{},
@@ -205,10 +207,13 @@ func TestPlanSessionRuntimeRejectsInvalidInteractiveConfigBeforeProviderSetup(t 
 	}
 
 	_, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
-		LoadedConfig:    &config.Config{Tools: config.ToolsConfig{Interactive: settings}},
-		Provider:        config.ProviderGrok,
-		RecordPath:      "capture.json",
-		ToolDefinitions: []messages.ToolDefinition{{Name: "read_file"}},
+		AudioService:           newTestAudioIOService(),
+		RecordingService:       newTestRecordingService(),
+		ProviderCaptureService: newTestProviderCaptureService(),
+		LoadedConfig:           &config.Config{Tools: config.ToolsConfig{Interactive: settings}},
+		Provider:               config.ProviderGrok,
+		RecordPath:             "capture.json",
+		ToolDefinitions:        []messages.ToolDefinition{{Name: "read_file"}},
 	}, factory)
 	if err == nil || !strings.Contains(err.Error(), "fast_read_timeout") {
 		t.Fatalf("plan error = %v, want fast-read validation", err)

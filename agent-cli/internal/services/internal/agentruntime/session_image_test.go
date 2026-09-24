@@ -190,8 +190,8 @@ func TestRunSessionWithImages_ProviderObservesOrderedFixtures(t *testing.T) {
 	}
 	inf := &countingSessionImageInferencer{session: session}
 	err := agentruntime.RunSessionWithImages(context.Background(), io.Discard, agentruntime.SessionImageRunOptions{
-		SessionRunOptions: agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
-			RecordPath: filepath.Join(dir, "capture.json"), Provider: "openai", Model: "gpt-realtime",
+		SessionRunOptions: agentruntime.SessionRunOptions{AudioService: audioiowire.NewService(), ModelCatalog: testModelCatalog(),
+			Provider: "openai", Model: "gpt-realtime",
 			APIKey: "sk-test-key", ConfigDir: filepath.Join(dir, "config"), Prompt: "describe these", SessionInferencer: inf,
 		},
 		ImagePaths: []string{png, jpeg},
@@ -213,7 +213,7 @@ func TestRunSessionWithImages_ValidatesBeforeConnect(t *testing.T) {
 	inf := &countingSessionImageInferencer{}
 	missing := filepath.Join(t.TempDir(), "does-not-exist.png")
 	err := agentruntime.RunSessionWithImages(context.Background(), io.Discard, agentruntime.SessionImageRunOptions{
-		SessionRunOptions: agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
+		SessionRunOptions: agentruntime.SessionRunOptions{AudioService: audioiowire.NewService(), ModelCatalog: testModelCatalog(),
 			RecordPath:        filepath.Join(t.TempDir(), "capture.json"),
 			Provider:          "openai",
 			Model:             "gpt-realtime",
@@ -247,7 +247,7 @@ models:
 	imagePath := copySessionImageFixture(t, dir, "fixture.png")
 	inf := &countingSessionImageInferencer{}
 	err := agentruntime.RunSessionWithImages(context.Background(), io.Discard, agentruntime.SessionImageRunOptions{
-		SessionRunOptions: agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
+		SessionRunOptions: agentruntime.SessionRunOptions{AudioService: audioiowire.NewService(), ModelCatalog: testModelCatalog(),
 			RecordPath:        filepath.Join(dir, "capture.json"),
 			Provider:          "openai",
 			Model:             "gpt-realtime",

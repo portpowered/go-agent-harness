@@ -17,6 +17,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe"
+	replaywire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
 )
 
 type familyEShippedMode string
@@ -131,6 +132,7 @@ func runFamilyEShipped(t *testing.T, mode familyEShippedMode) (probe.CustomerSim
 			PatienceRepromptAudio: familyEFrame(2),
 		}},
 		Validator: validator, MaxDuration: scenario.Deadline, FrameDuration: time.Millisecond, SilenceDuration: 5 * time.Millisecond, ShutdownGrace: time.Second,
+		ReplayService: replaywire.NewService(),
 	})
 	observation := fixture.Snapshot()
 	fixture.Close()

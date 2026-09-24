@@ -4295,3 +4295,1042 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   passed `rtk make prepush` with exit 0 and left the worktree clean. This
   checkpoint itself changes the candidate, so the complete planned preflight
   must be rerun from the next clean commit before push or handoff.
+
+# C276 recording/replay retirement recovery checkpoint — 2026-09-22
+
+- Continued the admitted task on branch
+  `codex/audio-runtime-c276-recover-c270-recording-replay-finalization` in its
+  matching isolated worktree. No host checkout or peer worktree was reset or
+  modified. The exact seven-file integrated-main recording/replay cluster and
+  six checkpoint-only replacement files are absent from
+  `agent-cli/internal/services/internal/agentruntime`.
+- Repaired the remaining public recorded-WebMCP failure causally: the
+  service-owned injected recording decorator preserved rich-message capability
+  but dropped the provider's optional RTC media capability, so device binding
+  saw an opened provider session without endpoints. `SessionRecorder` now
+  forwards `RTCMedia` and configurable media options; the live observation
+  boundary also forwards provider messages into the service-owned recorder for
+  bounded partial audio evidence. The two rich tool-result close tests and the
+  WebMCP record/replay loopback test pass together.
+- Exact local evidence on this candidate: recording services normal `92` tests;
+  recording/replay race `207`; the nomicrophone CLI/session vertical matrix
+  `257` normal and `257` race; session race gate; Wire; embed; hermetic all
+  modules; `make test-integration` (agent-cli `320.990s`, go-agent-loop
+  functional `156.497s`); and `make test-regressions` all passed. The final
+  hermetic run passed the previously failing scheduled lifecycle, rich result,
+  and WebMCP cases after generated captures were cleaned between runs.
+- Retirement audit reports exactly two stateless adapters: recording `30`
+  lines and replay `33` lines, total `63`; no duplicate legacy symbols were
+  found in the retired agentruntime directory. `git diff --check` is clean.
+- The required `make verify-architecture` and `make prepush` were run on this
+  exact tree. Both stop at architecture-size validation with the same
+  reproducible `315` issues across `224` packages: stale baseline entries and
+  baseline drift, including broad room/probe/runtime history outside the owned
+  seven-file cluster. No baseline was bulk-regenerated, raised, waived, or
+  treated as evidence of completion. No push or hosted CI polling was done.
+- Status remains implementation `CONTINUE`; the current partial candidate
+  needs a source/baseline reconciliation against fetched `origin/main` that
+  preserves the deletion-only architecture policy, followed by a complete
+  exact-head preflight and only then the normal same-task handoff.
+
+# C276 duration-recording integration repair checkpoint — 2026-09-23
+
+- Continued on the same admitted task and branch at `1d43fbd6beafece9215a53432b1f0471cc9e1df1`; the worktree remains dirty with the inherited C276 candidate and this turn's source repairs. Required C217/C234/C270/C274/C278 ancestry and fetched `origin/main` are ancestors of the candidate. No host checkout, predecessor, or peer worktree was modified.
+- Repaired the existing CLI duration-recording regression through public service boundaries. The duration runner now forwards accepted assistant stream observations to the recording service, publishes its final bounded completion after drain, and supplies the resolved output rate so partial PCM is persisted. The recording service classifies observed partial output as partial. No tests were added or moved.
+- Focused checks passed: recording/replay normal `203` tests across `13` packages; duration/WebMCP CLI `6` tests; runtime recording/replay-focused `122` tests; recording/replay race `203`; and duration/WebMCP CLI race `5`. The targeted duration bundle now verifies terminal reason `max_duration`, partial output, transcript, and PCM audio.
+- Exact legacy audit: all seven planned recording/replay production files and six checkpoint-only replacement files are absent. The only adapters are `livehost/recording_adapter.go` (30 lines) and `livehost/replay_adapter.go` (33 lines), total `63`; `git diff --check` passes. The full browser-recording byte-identity check could not be run because that path is absent from both this tree and fetched `origin/main`.
+- `make verify-architecture` remains red at the first size-gate prerequisite: `62` issues across `224` packages, including baseline drift in room/probe/runtime files, an `agentruntime` package increase (`128 > 126`), duration/runtime complexity and line budgets, and oversized sessionduration source/tests. No baseline was raised or regenerated. `make prepush`, push, PR creation/update, and hosted CI were not run because the exact-candidate architecture prerequisite remains red.
+- Next action: reconcile the `62` architecture findings by source reductions/splitting within existing ownership and deletion-only baseline cleanup, without waivers or arbitrary baseline growth; rerun `make verify-architecture`, then the complete C276-05/06 exact-candidate preflight on a clean committed SHA before any push or handoff.
+
+# C276 architecture repair checkpoint — 2026-09-23
+
+- Continued the same admitted task, branch, and isolated worktree at
+  `1d43fbd6beafece9215a53432b1f0471cc9e1df1`; admission and `prd.branchName`
+  were previously verified. The existing tree remains dirty with preserved
+  task/predecessor changes; no push, PR update, host checkout mutation, or
+  hosted CI polling occurred.
+- `rtk make verify-architecture` reduced from 62 to 39 findings, then failed
+  on exact tree state. Remaining findings are source baseline drift in the
+  probe and agentruntime files, five transport/CLI source functions, several
+  related tests, and a hard 607/600 line limit in
+  `session_instruction_composition_test.go`; the latest complete report is
+  RTK tee `1790160762_make_verify-architecture.log`.
+- Next action: continue reducing the remaining source/test growth without
+  raising or regenerating baselines, run the architecture gate again, then
+  execute the complete C276-05/06 preflight on the exact clean candidate before
+  any push or handoff.
+
+
+# C276 architecture gate checkpoint — 2026-09-23 (recovered)
+
+- Re-verified Factory admission for the existing C276 task and confirmed
+  `prd.json.branchName` matches this isolated worktree. The canonical session has
+  no concluded C276 review Work; findings listed for other verticals are not
+  applicable to this task.
+- Fetched `origin/main`; startup, planning main, C270, C234, both C217 commits,
+  and current `origin/main` are ancestors of this candidate. No host checkout or
+  predecessor/peer worktree was changed.
+- `rtk proxy make verify-architecture` now passes: 224 packages, 1,977 files,
+  and 29,167 functions checked; its generated Wire steps completed. Reductions
+  were recorded only as exact lower measurements, and the stale complexity
+  entry was removed.
+- Earlier focused evidence remains: the complete agentruntime package tests
+  passed; recording/replay functional and race suites and the C276 duration/WebMCP
+  CLI focused tests passed. These are checkpoints, not the final exact-head gate.
+- The replay public-integrity test candidate was checked against architecture
+  constraints; retaining it here requires a forbidden Wire/private import, and
+  moving or duplicating it would violate the task's no-moved-tests instruction.
+  Its restoration was reverted. No new test file was added.
+- No PR or push exists. Next: checkpoint the complete candidate in a commit, then
+  run every C276-01 through C276-06 local functional, race, e2e, Wire, embed,
+  hermetic, integration, regression, architecture, and `make prepush` command on
+  that exact unchanged commit; repair any local failure before the same-task
+  handoff.
+
+
+# C276 hermetic repair checkpoint — 2026-09-23
+
+- Reproduced the hermetic failures on the prior candidate: live record-dir
+  accepted missing provider evidence, provider-close errors were hidden by an
+  injected session capture and its raw digest conflicted with credential
+  redaction, and a lifecycle test reused a repository-relative capture file.
+- Required provider evidence for live record-dir bundles, distinguished an
+  explicit injected capture from the runtime-created raw provider spool,
+  preserved optional provider terminal errors through the session recorder,
+  and let bundle staging hash provider evidence after redaction. Moved the
+  lifecycle test capture into `t.TempDir()` and raised its fixed deadline to
+  match the adjacent busy-suite test budget; no test was added.
+- The three focused hermetic integration tests pass, and the complete
+  `TestSessionCommand_LiveRecordDirAudioInTurn*` slice passes with
+  `CGO_ENABLED=0` and `-tags=nomicrophone`. `git diff --check` passes.
+- No PR or push exists. Next: commit this checkpoint and run the complete
+  C276-01 through C276-06 preflight on that exact unchanged candidate SHA,
+  repairing locally reproducible failures before any handoff.
+
+
+# C276 recording-integrity correction — 2026-09-23
+
+- The first exact candidate recording-service gate caught a regression in my
+  attempted hash/redaction repair: `TestDirectoryRecorderDoesNotInvalidateProtectedCaptureToRedactIt`
+  requires protected provider bytes to remain integrity-valid or publication to
+  fail. Restored the raw provider digest check; genuine provider captures that
+  would be changed by credential redaction remain invalid and unpublished.
+- Kept the causal fix at capture admission: a runtime-generated provider spool
+  no longer wraps a semantic-only injected inferencer as if it were raw
+  provider evidence. Explicit injected captures and inferencers with their own
+  provider-capture configurator remain supported. The existing recording
+  functional suite passes (92 tests), as does the focused three-test
+  record-dir/scheduled-lifecycle integration command.
+- The exact prior candidate `fe6929470d5d53e3606c1356a4065e235023912d` failed
+  only the recording redaction test after that attempted repair. Its result is
+  superseded; the next action is to commit this correction and rerun the full
+  C276 preflight on the new exact candidate before any push.
+
+
+# C276 ownership repair checkpoint — 2026-09-23
+
+- Continued the admitted task and same branch. Recorded two focused repair
+  commits: `3a185b8af62f30b14b4c93b8fc9b8d3095eaa3dd` restores sole recording
+  observation-error ownership to the recording service and reduces existing
+  source; `01be7d5be5e419d64debdee3d8e9e54d6fca8fb4` forwards caller context to
+  runtime planning, removes context-free replay wrappers, and preserves replay
+  capture close errors. Current `HEAD` is the latter commit.
+- `rtk make verify-architecture` passed on the candidate tree (224 packages,
+  1,977 files, 29,161 functions checked). `rtk go test -count=1
+  ./go-agent-runtime/services/recording/... ./go-agent-runtime/services/replay/...`
+  and the matching `-race` command each passed 203 tests across 13 packages;
+  `rtk go test -count=1 ./agent-cli/internal/services/internal/agentruntime`
+  passed 602 tests. The focused CLI/WebMCP normal and race selections and
+  `git diff --check` also passed. These are focused checkpoints, not the full
+  exact-candidate pre-PR gate.
+- All seven planned recording/replay legacy files and six absent replacement
+  paths remain absent. The two stateless adapters are 30 and 33 lines (63 total).
+  No push or PR exists. The worktree still contains ten uncommitted shared or
+  inherited files; these were preserved. Exact reviewed caller-release commits
+  for C229/C268/C269/C274 are not yet available for the shared cutover paths.
+- Next: continue this same task after the exact peer releases are available,
+  integrate every shared production caller without altering peer-owned changes,
+  commit the completed candidate, then run the full C276-01 through C276-06
+  preflight including `make prepush` on one clean unchanged SHA. Push/open or
+  update this same PR only if every local gate passes.
+
+
+# C276 public-contract and lifecycle checkpoint — 2026-09-23
+
+- Reverified admission with `project-control.py verify-work --type task --name
+  audio-runtime-c276-recover-c270-recording-replay-finalization`; it remains
+  admitted and `prd.json.branchName` matches this worktree. Fetched `origin/main`
+  (`2f9f9736e1360802fc37e82de38540d92cb22631`), which is an ancestor of HEAD
+  `e541e0a40560bc634682f65f17135c48545dc27b`. The candidate tree is dirty; no
+  commit, push, or PR was created.
+- Repaired injected-session cleanup and provider configuration forwarding,
+  response-body premature-close integrity, replay system-full-message decoding,
+  and synthetic probe-capture sealing. Added/retained only public-contract,
+  important-failure, and finalization tests in the existing service and wire
+  test locations; no tests were moved.
+- Current-tree checks passed: `rtk go test -count=1
+  ./go-agent-runtime/services/recording/... ./go-agent-runtime/services/replay/...`
+  (272 tests / 13 packages); the corresponding `-race` command (272 / 13);
+  `rtk make verify-architecture` (224 packages, 1,984 files, 29,251 functions,
+  with Wire generation); `rtk proxy env CGO_ENABLED=0 go test -count=1
+  -tags=nomicrophone ./agent-cli/test/integration -run
+  '(SessionWebMCPDeviceLoopbackRecordsAndReplaysAudio|WebMCP|CastDevice|WAV)'`;
+  `rtk go test -count=1 ./agent-cli/internal/acceptance -run
+  'TestAskRecordsAndReplaysThroughProviderService|TestAskStreamingCaptureJoinsResponseBodyBeforeFlush'`
+  (4 tests); and `git diff --check`.
+- Runtime coverage generation passed, but `rtk make coverage-gate` remains red:
+  recording/internal/service is 86.50% against 90%; agent-cli/internal/services/wire
+  is 79.00% against 80%; replay/internal/engine is 78.90% against 80%;
+  session/wire is 84.60% against 95%; sessionduration/internal/service is
+  84.50% against 90%; and sessionterminal/wire is 88.90% against 95%. Do not
+  lower floors or add coverage-only cases. Assess any additional recording
+  tests against the public behavior/failure and bounded-shutdown criteria.
+- Exact audit: all seven planned recording/replay legacy files and all six
+  checkpoint-only replacements remain absent; the only adapters are the two
+  stateless livehost files at 30 and 33 lines (63 combined). The browser-owned
+  `session_browser_recording.go` path is absent both at HEAD and `origin/main`.
+  Caller releases for C229/C268/C269/C274 are not yet available in reviewed
+  form, so complete caller cutover and the full retirement handoff remain open.
+  A production import scan also found remaining `internal/agentruntime` imports
+  in `agent-cli/internal/services/wire/wire.go` and `wire/rtc.go`; they currently
+  compose device-probe, self-play, session-runtime and RTC seams. Classify and
+  cut over any recording/replay-owned behavior there when reconciling released
+  callers; preserve unrelated runtime functionality.
+- The planned `agent-cli/test/e2e` recorded-WebMCP selection still fails before
+  test execution because the package files require the `e2e` build tag; the
+  required named cast-device WAV test is not present in the current worktree.
+  The existing public WebMCP recording/replay integration test above passes.
+  Do not create a synthetic external-consumer fixture to manufacture that
+  selection.
+- Decision remains CONTINUE. Next: keep this task/branch/worktree, obtain and
+  integrate the exact reviewed caller-release commits (including C229, C268,
+  C269, and C274) additively, finish every production caller cutover, map the
+  recorded-WebMCP and cast-device WAV plan selections to their released public
+  callers, and repair any remaining required gate failure through permitted
+  public behavior. Then commit the complete candidate and run every C276-01
+  through C276-06 command, including `make prepush`, on that exact clean SHA
+  before any push or PR update.
+
+
+# C276 task-turn checkpoint — public WebMCP and service regression verification — 2026-09-23
+
+- Reverified Factory admission for the admitted C276 task and confirmed the PRD
+  branch matches this worktree. Read the C276 PRD/progress and the read-only C270
+  recovery source progress; they record no concluded C276 or C270 review findings.
+  No predecessor or peer worktree was changed.
+- Fetched current origin refs. `origin/main` is `2f9f9736e1360802fc37e82de38540d92cb22631`
+  and remains an ancestor with startup, planning-main, C270, C234, and both C217
+  pins. The C229 and C278 release branches are ancestors of current main; C268
+  (`a16c249a2f6027d36ff44dbc49cd59617a7a126b`) and C269
+  (`889b1a49adaa8840f75a283f75cee1faff8baba1`) candidate heads are not in main
+  and have no fetched remote refs. C274 branch tip is unreleased, while its C278
+  reviewed release is in main.
+- Reproduced the two public WebMCP selections directly with
+  `rtk proxy env CGO_ENABLED=0 go test -count=1 -tags=nomicrophone
+  ./agent-cli/internal/transport/cli -run
+  TestSession(Recorded|Unrecorded)WebMCPCastDeviceWAVStaysInteractive`;
+  both pass on the current tree. The virtual-device WebMCP integration selection
+  passes.
+- Current-tree checks pass: recording/replay functional and race suites each
+  report 272 tests across 13 packages; focused CLI/session functional and race
+  selections pass; `make verify-architecture` passes (224 packages, 1,984 files,
+  29,251 functions); `make wire-check` passes; and `git diff --check` passes.
+- The seven owned production files and six checkpoint-only replacements are all
+  absent (13/13); only `recording_adapter.go` (30 lines) and `replay_adapter.go`
+  (33 lines) remain, 63 combined. The browser boundary file is absent both at
+  HEAD and `origin/main`. Removed two generated session captures left by existing
+  integration tests; they are not committed fixtures.
+- Caller census still identifies unreleased direct readers in
+  `sessiontrace/internal/service/metrics.go` and
+  `roomreplay/internal/service/{integrity_artifacts.go,schedule_build.go}`.
+  C268/C269 reviewed releases are required before those shared caller changes can
+  be integrated. No PR, push, or hosted CI handoff occurred.
+- Next: checkpoint these service-owned fixes, run the full C276 local preflight
+  on that exact commit and repair any locally reproducible failures. Then
+  integrate exact reviewed C268/C269 releases additively, complete caller
+  cutover, and rerun the entire preflight before the same-task PR handoff.
+  Decision remains CONTINUE.
+
+
+# C276 local lint repair checkpoint — 2026-09-23
+
+- Exact prepush candidate `15c2a785659fc8c9d6b0363870ce479221bae9ab` reached
+  fmt, architecture, and vet, then stopped at lint. The pinned linter reported
+  nine issues in the new HTTP and recording contract tests: three unclosed
+  response bodies, unchecked errors/type assertions, and one repeated response
+  body literal.
+- Fixed all reported test defects by closing every response, checking HTTP
+  contract type assertions, checking panic-finalization and connection-close
+  errors, and sharing the repeated body constant. No suppression or baseline
+  change was made. `rtk make lint` now passes all 15 modules with zero issues;
+  `rtk go test -count=1 ./go-agent-runtime/services/recording/... ./go-agent-runtime/services/replay/...`
+  passes 272 tests across 13 packages.
+- This repair changes the candidate, so the complete `make prepush` and every
+  C276-05/06 check must rerun on the next clean commit before any push. No push,
+  PR, or hosted CI handoff occurred.
+- Next: commit the lint repair, rerun the complete local preflight and repair
+  any further local failures, then continue the same C276 task pending exact
+  reviewed C268/C269 caller releases. Decision remains CONTINUE.
+
+
+# C276 staticcheck repair checkpoint — 2026-09-23
+
+- Prepush on `1b5e9b0aa0956b0ef8885248421dc13babbf79cf` passed fmt, architecture,
+  vet, and lint, then staticcheck identified SA1012 in the public test that
+  verifies nil request contexts are normalized and finalized.
+- Added a narrow `lint:ignore SA1012` annotation documenting that public case;
+  `rtk make staticcheck` now passes across all 15 modules with pinned 2026.1.
+  No production behavior, assertions, or baselines changed.
+- Exact prepush must rerun after this checkpoint commit. No push, PR, or hosted
+  CI handoff occurred. Next: commit this focused test annotation, rerun
+  `make prepush` and every remaining C276-05/06 command on the unchanged SHA,
+  and repair any further local findings before continuing caller reconciliation.
+  Decision remains CONTINUE.
+
+
+# C276 prepush coverage and hermetic cleanup checkpoint — 2026-09-23
+
+- Full `rtk make prepush` on exact candidate
+  `f9ec8074ed417e19826d7f36155c6c43193ef4b9` passed fmt, architecture, vet,
+  lint, staticcheck, build, embed, repository tests, and test-tools. It stopped
+  at `coverage-changed`: `agent-cli/internal/services/wire` was 79.00% (80%
+  floor), `go-agent-runtime/services/replay/internal/engine` 78.90% (80%),
+  `services/session/wire` 84.60% (95%),
+  `services/sessionduration/internal/service` 84.50% (90%), and
+  `services/sessionterminal/wire` 88.90% (95%). The four non-replay deficits
+  are pre-existing shared coverage gaps; do not lower floors or add coverage-
+  only tests. The replay engine remains task-owned and needs a public behavior
+  or failure test if a legitimate gap can be identified.
+- `make test-hermetic` exposed a TempDir cleanup race in the existing
+  `TestIndependentSessionCompositionsProduceIdenticalInstructionsAndProviderUpdate`
+  recording test. Its deferred session close did not wait for the public
+  capture finalizer. Updated that existing test to close the session and flush
+  the capture during cleanup, reporting either error. The focused test passes;
+  this is a cleanup reliability repair, not a new or moved test. Full hermetic
+  validation must be rerun on the checkpoint commit.
+- Other required local checks remain passing as previously recorded, including
+  `make test-sessions-race`, `make embed-check`, `make test-integration`,
+  `make test-regressions`, service functional/race selections, Wire check, lint,
+  and staticcheck. No push, PR, or hosted CI handoff occurred.
+- Next: commit this focused hermetic cleanup repair and checkpoint, rerun full
+  `make test-hermetic`, then continue investigating only meaningful public
+  replay failure coverage and await exact reviewed C268/C269 caller releases.
+  Complete every production caller cutover and rerun the complete preflight on
+  the exact clean candidate before any PR handoff. Decision remains CONTINUE.
+
+
+# C276 hermetic pass and replay failure contract checkpoint — 2026-09-23
+
+- `rtk make test-hermetic` passed on exact checkpoint
+  `31d7366193ede85dc54dba97cdc95c1aec830f42` across all six Go modules. The
+  existing recording composition test passed after cleanup now closes the
+  provider session and flushes the capture before its temporary directory is
+  removed. The target emitted two ignored integration capture files; both were
+  removed and the worktree returned clean.
+- Added service-level regressions for public replay failures: realtime inspection
+  rejects structurally invalid directions and non-WebSocket payload types;
+  message replay reports an unsupported payload type without delivering a
+  message; and an expired send context retains the timeout outcome. The first
+  focused run confirmed general capture validation rejects the bad direction
+  before the WebSocket validator, and the test now asserts that public error.
+- Focused replay selection passes. Full replay functional and race commands each
+  pass 139 tests across 9 packages. The changed-candidate complete preflight
+  still needs to run; no push or PR handoff occurred.
+- Fresh `rtk git fetch origin` left `origin/main` at
+  `2f9f9736e1360802fc37e82de38540d92cb22631`; there are still no fetched C268 or
+  C269 release branches. Their shared production callers remain gated on exact
+  reviewed owner commits.
+- Next: commit these public failure tests and this checkpoint, run full
+  `make prepush` plus the remaining C276 functional, integration, race, hermetic,
+  and Wire commands on the exact clean commit, repair any reproduced task-owned
+  issue, and continue the same task until reviewed peer releases allow complete
+  caller cutover and exact legacy deletion. Decision remains CONTINUE.
+
+
+# C276 architecture repair checkpoint — 2026-09-23
+
+- Full `rtk make prepush` on exact candidate
+  `03e2ba71d3ec1d49abf540ab6fda2d9f52fb048f` passed fmt and stopped at
+  `verify-architecture`: the existing session composition test reached 609
+  lines and complexity 33 (limit 600 / baseline 22), the replay test file
+  reached 681 lines (limit 600), and its package complexity baseline rose from
+  126 to 127.
+- Kept every existing test in its original file. The capture cleanup stays in
+  the existing composition test's defer and now checks the joined close/flush
+  errors. Put only the newly authored public replay failure contracts in a
+  focused new test file. This restores both existing file budgets and package
+  complexity without changing production behavior or baselines.
+- `rtk make verify-architecture` now passes: 224 packages, 1,985 files, 29,258
+  functions. The focused hermetic cleanup test passes; replay functional and
+  race suites each pass 139 tests across 9 packages. No push or PR handoff.
+- Next: checkpoint this repair, then rerun complete `make prepush` plus C276
+  functional, integration, race, hermetic, and Wire commands on that exact
+  clean commit. Continue caller reconciliation with the same task when reviewed
+  C268/C269 release refs become available. Decision remains CONTINUE.
+
+
+# C276 prepush coverage suite rerun checkpoint — 2026-09-23
+
+- Exact `rtk make prepush` on `29ab07b68e996acc3e7c1e6ddf4e41ac7558bd07` passed
+  formatting, architecture (224 packages / 1,985 files / 29,258 functions),
+  vet, lint, staticcheck, build, full normal tests, test-tools, and coverage
+  registration. Its instrumented agent-cli suite exited at 5m21s (67% of its
+  eight-minute budget) on the existing
+  `TestManagedBrowserManagerRecoversMalformedOrStaleStateWithoutSignalingOldPID`
+  TempDir cleanup error in `agent-cli/internal/webmcp/chrome`. It was classified
+  as a test failure, not a timeout; no coverage-floor report was reached.
+- Reproduced the failing test with identical coverage flags for 25 runs; all
+  passed. The complete `agent-cli/internal/webmcp/chrome` package also passed
+  with the same coverage flags (4.931s). The failure has not reproduced in
+  isolation, so no unrelated production change was made. Removed the two
+  generated integration capture outputs.
+- Next: rerun full `make prepush` on the unchanged source to establish whether
+  the suite race recurs and reach the coverage floor report. If the same cleanup
+  failure reproduces in the full suite, repair its bounded cleanup locally;
+  otherwise address the exact coverage report without changing floors. Decision
+  remains CONTINUE.
+
+
+# C276 full prepush coverage checkpoint — 2026-09-23
+
+- Full `rtk make prepush` on exact candidate
+  `34e089f900485fff3a1de291f51934b2d07536d9` completed in 899 seconds. It
+  passed formatting, architecture (224 packages / 1,985 files / 29,258
+  functions), vet, lint, staticcheck, build, normal tests, test-tools, coverage
+  registration, and instrumented tests for all six modules plus embedding. The
+  prior Chrome TempDir race did not recur.
+- Coverage gate then reported four shared package-floor deficits: CLI Wire
+  79.00%/80%, session Wire 84.60%/95%, session-duration service 84.50%/90%,
+  session-terminal Wire 88.90%/95%. The task-owned replay engine now meets its
+  80% floor and is absent from the violation list. Floors remain unchanged; no
+  coverage-only tests were added.
+- Removed the two generated integration capture outputs; worktree is clean. No
+  push, PR, or hosted CI handoff occurred. The same-task caller census still
+  needs exact reviewed C268/C269 releases before those shared callers can be
+  changed and all seven legacy files can be verified absent for handoff.
+- Next: continue same-task caller reconciliation when the reviewed releases are
+  available, then run the complete local preflight and all vertical-specific
+  functional, integration, race, hermetic, and Wire commands on the exact
+  complete candidate. Do not submit until the locally required gates pass.
+  Decision remains CONTINUE.
+
+
+# C276 exact-head caller and review reconciliation checkpoint — 2026-09-23
+
+- Re-read the factory operating policy and implementation handoff. From
+  `FACTORY_ROOT`, task admission returned `admitted`; canonical Work is
+  `work-task-8` in `init`, and its branch matches this isolated worktree.
+  `origin/main` was fetched at `2f9f9736e1360802fc37e82de38540d92cb22631`.
+  Current clean HEAD is `efe87d41934b583f7fe4ba73a22b0ae326ad908d`; startup
+  integration, C270, C234, both C217 pins, and fetched main are ancestors.
+- Queried the canonical task and review inbox and read the preserved C270
+  recovery progress. No concluded C276 or C270 review Work exists, so there are
+  no prior review findings to apply. No peer or predecessor worktree was
+  modified.
+- Rechecked the owned inventory: all seven planned legacy production targets
+  and all six checkpoint-only replacement paths remain absent. The only
+  adapters are `recording_adapter.go` (30 lines) and `replay_adapter.go`
+  (33 lines), 63 combined. The two corrected public WebMCP selections pass on
+  this head with `rtk proxy env CGO_ENABLED=0 go test -count=1 -tags=nomicrophone
+  ./agent-cli/internal/transport/cli -run
+  'TestSession(Recorded|Unrecorded)WebMCPCastDeviceWAVStaysInteractive'`.
+- The remaining direct capture readers are in the shared C268 metrics path
+  `go-agent-runtime/services/sessiontrace/internal/service/metrics.go` and the
+  C269 room-replay paths
+  `go-agent-runtime/services/roomreplay/internal/service/integrity_artifacts.go`
+  and `schedule_build.go`. Their exact reviewed releases are unavailable:
+  canonical Work has no C268 item, C280 (C269 recovery) is still `init`, and
+  `git ls-remote` returns no C268 or C269 release branch. Preserve these shared
+  files until exact reviewed owner commits can be integrated additively.
+  `wire.go`/`wire/rtc.go` still compose unrelated device, self-play, session,
+  and RTC runtime APIs; preserve those unrelated owners and cut over only any
+  recording/replay behavior found at released seams.
+- The prior exact `make prepush` on `34e089f900485fff3a1de291f51934b2d07536d9`
+  passed through all instrumented module tests and coverage registration, then
+  remained red only on the recorded shared CLI Wire, session Wire,
+  session-duration service, and session-terminal Wire floors. Do not add
+  coverage-only tests or lower floors. No push, PR, or hosted CI handoff has
+  occurred.
+- Next: retain this same C276 task and branch. Reconcile the three exact shared
+  reader files only after reviewed C268/C269 releases are available; finish the
+  full production caller census and any permitted public-behavior repair, then
+  rerun all C276 verification and the complete `make prepush` on one clean
+  candidate SHA before any push or PR update. Decision remains CONTINUE.
+
+
+# C276 current-head verification and release-dependency checkpoint — 2026-09-23
+
+- Re-read the factory policy and implementation handoff. From `FACTORY_ROOT`,
+  `project-control.py verify-work --type task --name
+  audio-runtime-c276-recover-c270-recording-replay-finalization` returned
+  `admitted`. Canonical `work-task-8` remains `init`; `prd.json.branchName`
+  matches `codex/audio-runtime-c276-recover-c270-recording-replay-finalization`.
+  No concluded C276 or C270 review Work exists. Fetched `origin/main` at
+  `2f9f9736e1360802fc37e82de38540d92cb22631`; it is an ancestor of clean
+  source checkpoint `aeace7c0fd64e2804a1c53a2cb447c663fe758cb`.
+- Bounded public reproduction on that source checkpoint passed both corrected
+  WebMCP selections and the cast-device WAV path:
+  `rtk proxy env CGO_ENABLED=0 go test -timeout 4m -count=1 -tags=nomicrophone
+  ./agent-cli/internal/transport/cli -run
+  'TestSession(Recorded|Unrecorded)WebMCPCastDeviceWAVStaysInteractive'`.
+  The PRD e2e invocation targets `agent-cli/test/e2e`, whose files require the
+  `e2e` build tag; the named regression is in `agent-cli/internal/transport/cli`.
+- Rechecked all seven planned recording/replay deletions and all six
+  checkpoint-only replacements: all thirteen production paths remain absent.
+  `recording_adapter.go` is 30 lines and `replay_adapter.go` is 33 lines,
+  63 combined. `session_browser_recording.go` is absent from both fetched main
+  and this candidate, so the comparison is unchanged. The production
+  `LoadSessionCapture` census still identifies three shared runtime readers:
+  `sessiontrace/internal/service/metrics.go:64`,
+  `roomreplay/internal/service/integrity_artifacts.go:122`, and
+  `roomreplay/internal/service/schedule_build.go:155`.
+- Release prerequisites remain unavailable. There is no C268 Work or C268
+  release ref. C280 (`work-task-15`, the C269 recovery) remains `init`, with no
+  C269 release ref. The room-replay candidate is not an exact reviewed release:
+  C278 review feedback rejected PR #540 for missing human sent-PCM scheduling,
+  rereading an admitted plan from disk, and an extra adapter; the later review
+  records those code findings repaired but still requires the complete local
+  preflight on exact head `f35683293d9a53651ce3e7296ada8bf6d40d962e` and fresh
+  review. No peer branch or worktree was modified.
+- The last full `make prepush` on `34e089f900485fff3a1de291f51934b2d07536d9`
+  passed all stages through instrumented module tests and stopped at four
+  existing shared coverage floors: CLI Wire 79.00%/80%, session Wire
+  84.60%/95%, session-duration service 84.50%/90%, and session-terminal Wire
+  88.90%/95%. The task-owned replay engine met its floor. Only `progress.txt`
+  differs between that tested source checkpoint and `aeace7c`; no production
+  or test source changed. Do not lower floors or add coverage-only tests.
+- No push, PR, or hosted CI handoff occurred. Next: integrate exact reviewed
+  C268/C269/C274 releases additively when available, finish the direct-reader
+  caller cutover without editing peer-owned work, then run every C276 functional,
+  integration, race, hermetic, Wire, and repository prepush command on one clean
+  exact candidate. Decision remains CONTINUE.
+
+
+# C276 current-turn release and prepush checkpoint — 2026-09-23
+
+- Re-read the Factory operating policy, implementation handoff, meta-planner
+  handoff, task PRD, progress history, and available prior review records.
+  `project-control.py verify-work --type task --name
+  audio-runtime-c276-recover-c270-recording-replay-finalization` from
+  `FACTORY_ROOT` returned `admitted`; the PRD branch matches this worktree.
+  No concluded C276 or C270 review finding is available to repair.
+- Fetched `origin/main=2f9f9736e1360802fc37e82de38540d92cb22631`. Candidate
+  `77b1f1f2b078b4e40517b8de7d243a048a23a89a` retains startup, preserved C276
+  and C270 checkpoints, C234/C217 pins, and fetched main as ancestors. Its only
+  difference from the last full-prepush source candidate
+  `34e089f900485fff3a1de291f51934b2d07536d9` is the existing progress log.
+- Rechecked all seven owned legacy production targets and all six
+  checkpoint-only replacement paths: all are absent. The only adapters remain
+  `recording_adapter.go` (30 lines) and `replay_adapter.go` (33 lines), 63
+  combined. The three direct production capture readers remain at
+  `sessiontrace/internal/service/metrics.go:64`,
+  `roomreplay/internal/service/integrity_artifacts.go:122`, and
+  `roomreplay/internal/service/schedule_build.go:155`.
+- The required caller releases remain unavailable. C268's separate worktree is
+  clean at `a16c249a2f6027d36ff44dbc49cd59617a7a126b`; C269's separate worktree
+  is at `889b1a49adaa8840f75a283f75cee1faff8baba1` with only progress dirt.
+  Neither has a remote release branch. These three caller files remain
+  peer-owned; no peer source or worktree was modified.
+- `rtk make coverage-gate` reproduced four existing floors from the last full
+  coverage profiles: CLI Wire 79.00%/80%, session Wire 84.60%/95%, session
+  duration service 84.50%/90%, and session-terminal Wire 88.90%/95%. The prior
+  full `make prepush` on `34e089f900485fff3a1de291f51934b2d07536d9` reached the
+  same four failures after passing all earlier phases. Floors remain
+  unchanged; no coverage-only tests were added.
+- No candidate push, PR, or hosted CI handoff occurred. Exact next action:
+  integrate the recording/replay reader cutovers only after their owners
+  provide exact reviewed releases or path handoffs, then resolve the remaining
+  locally reproducible coverage failures through the owning/released seams and
+  rerun the full C276 functional, integration, race, hermetic, Wire, and
+  `make prepush` gates on one clean exact candidate before handoff. Decision
+  remains CONTINUE.
+
+# C276 current-turn ownership refresh — 2026-09-23
+
+- Re-read the operating policy, implementation handoff, project manifest,
+  task PRD, progress history, and available review records. From `FACTORY_ROOT`,
+  `project-control.py verify-work --type task --name
+  audio-runtime-c276-recover-c270-recording-replay-finalization` returned
+  `admitted`. `prd.json.branchName` matches this isolated branch. No concluded
+  C276 or C270 review finding exists. The worktree was clean at HEAD
+  `d93b135175f9a7d782701e93e0466bc045859d02` before this progress update.
+- Fetched `origin/main=2f9f9736e1360802fc37e82de38540d92cb22631`. Startup
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, C270
+  `c590fe43a0b8ecbde9ab6de3ee00f898f2a12a02`, C234
+  `7e6022bac496975f6b91b05e2a19b36348083eb7`, both C217 pins, and fetched
+  main are ancestors of the current candidate. Since the last full-prepush
+  source candidate `34e089f900485fff3a1de291f51934b2d07536d9`, only
+  `progress.txt` differs.
+- Rechecked all seven owned legacy production files and six checkpoint-only
+  replacements: all thirteen are absent. The only CLI adapters remain
+  `recording_adapter.go` (30 lines) and `replay_adapter.go` (33 lines), 63
+  combined. The two corrected recorded-WebMCP selections and cast-device WAV
+  public regression were previously passing; no source or test changed since
+  those checks.
+- The remaining direct production capture reads are confirmed at
+  `sessiontrace/internal/service/metrics.go:64`,
+  `roomreplay/internal/service/integrity_artifacts.go:122`, and
+  `roomreplay/internal/service/schedule_build.go:155`. C268 and C269/C280
+  retain ownership of those caller seams. Their worktrees remain separate;
+  C268 is clean at `a16c249a2f6027d36ff44dbc49cd59617a7a126b`, C269 recovery is
+  at `889b1a49adaa8840f75a283f75cee1faff8baba1` with progress-only dirt, and
+  C280 is at `5a896c4aa43e5383b8c6b6d02677f3f514369d0b`. No C268/C269 reviewed
+  release refs or exact-path handoffs are available, and no peer worktree was
+  modified.
+- The last `make prepush` reached the existing four shared coverage floors
+  after all earlier stages: CLI Wire 79.00%/80%, session Wire 84.60%/95%,
+  session-duration service 84.50%/90%, and session-terminal Wire 88.90%/95%.
+  Do not lower floors or add coverage-only tests. This source dependency and
+  coverage result must be reconciled before handoff; no push, PR, SCRIPT CI,
+  or review is claimed.
+- Exact next action: continue this same C276 branch after the C268/C269 owners
+  provide reviewed releases or explicit exact-path handoffs; cut over the three
+  readers additively, refresh the production caller census, and run every
+  C276 functional, integration, race, hermetic, Wire, and `make prepush` gate
+  on one unchanged clean SHA. Decision remains CONTINUE.
+
+
+# C276 exact-head public regression and release-boundary checkpoint — 2026-09-23
+
+- Re-read the Factory operating policy, implementation handoff, `prd.json`,
+  progress history, and canonical Work/review records. From `FACTORY_ROOT`,
+  `project-control.py verify-work --type task --name
+  audio-runtime-c276-recover-c270-recording-replay-finalization` returned
+  `admitted`; `prd.json.branchName` matches this isolated worktree. The live
+  session lists C276 as `work-task-8` in `init`; its filtered C276/C270 records
+  contain no concluded review Work or findings.
+- Fetched `origin/main=2f9f9736e1360802fc37e82de38540d92cb22631`. Clean HEAD
+  `358b3f8048b88011b3bbb1afdf72b67f186d87d2` retains startup, C270, C234, both
+  C217 pins, and fetched main as ancestors. Its only difference from the last
+  full-prepush source candidate `34e089f900485fff3a1de291f51934b2d07536d9` is
+  `progress.txt`.
+- On this exact HEAD, `rtk go test -timeout=4m -count=1
+  ./go-agent-runtime/services/recording/... ./go-agent-runtime/services/replay/...`
+  passes (`277` tests / `13` packages), and the same command with `-race` passes
+  (`277` / `13`). `rtk proxy env CGO_ENABLED=0 go test -timeout=4m -count=1
+  -tags=nomicrophone ./agent-cli/internal/transport/cli -run
+  'TestSession(Recorded|Unrecorded)WebMCPCastDeviceWAVStaysInteractive'` passes.
+  All seven planned legacy files and all six checkpoint-only replacements remain
+  absent; the only adapters are
+  `recording_adapter.go` (30 lines) and `replay_adapter.go` (33 lines), 63 total.
+- A production symbol census confirms the remaining direct capture readers are
+  `services/sessiontrace/internal/service/metrics.go:64`,
+  `services/roomreplay/internal/service/integrity_artifacts.go:122`, and
+  `services/roomreplay/internal/service/schedule_build.go:155`. The current
+  session has no C268 Work; C280 (`work-task-15`, C269 recovery) remains `init`.
+  The relevant C278 room-replay review says earlier code findings were repaired
+  but requires the full local preflight on its repaired exact head before fresh
+  review; that release is unavailable. The C274 branch is not an ancestor of
+  fetched main. No peer source or worktree was modified.
+- The last full `make prepush` remains red only at the four shared coverage
+  floors recorded above: CLI Wire 79.00%/80%, session Wire 84.60%/95%, session
+  duration service 84.50%/90%, and session-terminal Wire 88.90%/95%. Source is
+  unchanged, so the failed full prepush was not repeated. No push, PR, SCRIPT CI,
+  or independent review handoff occurred.
+- Exact next action: retain this C276 task and branch; integrate the three
+  production reader cutovers only after the C268/C269/C274 owners provide exact
+  reviewed releases or explicit path handoffs, then refresh the caller census
+  and rerun every C276 functional, integration, race, hermetic, Wire, and
+  `make prepush` gate on one clean exact candidate before any push. Decision
+  remains CONTINUE.
+
+# C276 complete caller cutover and local gate checkpoint — 2026-09-23
+
+- Applied the current operator directive on this same isolated C276 branch. It
+  supersedes the older requirement to wait for reviewed C268/C269 path leases.
+  The fetched `origin/main=afd918cdc09a739181531cba8d8b603a7376ed26` merge and
+  all required predecessor ancestry remain preserved.
+- Cut over the final three runtime capture readers in sessiontrace and
+  roomreplay to `replay.CaptureInspector`. Replay Wire construction now occurs
+  in the CLI application graph, not inside peer services. The legacy room
+  runtime receives a replay message codec and recording dependencies explicitly;
+  its recording/replay Wire fallback constructors were removed.
+- Full production capture-reader census now finds no runtime service caller
+  outside replay; the remaining direct loaders are in gateway-owned testing
+  utilities and the fixture-validator command. All seven planned legacy production
+  files and six checkpoint-only replacement paths remain absent. The only
+  adapters remain `recording_adapter.go` (30 lines) and `replay_adapter.go`
+  (33 lines), 63 total.
+- Lowered the agentruntime package-files baseline from 126 to the measured 123
+  current package files after the retirement. No line or coverage floor was
+  raised. `rtk make verify-architecture` passes: 226 packages, 1,995 files,
+  29,399 functions. `rtk make wire-check` passes, and `rtk make embed-check`
+  passes (`example.com/agent-runtime-consumer`).
+- Focused functional checks pass: `rtk go test -count=1
+  ./go-agent-runtime/services/sessiontrace/... ./go-agent-runtime/services/roomreplay/...
+  ./agent-cli/internal/services/rooms/wire ./agent-cli/internal/services/wire
+  ./agent-cli/internal/transport/cli` (840 tests / 14 packages) and
+  `rtk go test -count=1 ./agent-cli/internal/services/internal/agentruntime
+  -run 'Test(RunRoom|InjectRoom|ObserveRoom)'` (63 tests / 1 package).
+  The earlier root `go test ./tests/embedding` invocation was not a supported
+  workspace command; the required `make embed-check` succeeded.
+- No push or PR handoff yet. Exact next action: commit this implementation
+  checkpoint, then run the complete `make prepush` and every C276 functional,
+  integration, race, hermetic, and Wire command on the final exact SHA. Repair
+  any locally reproducible issue before pushing and opening the same-task PR.
+  Decision remains CONTINUE.
+
+# C276 public contract repairs and exact-head gate checkpoint — 2026-09-23
+
+- Added public session Wire contract tests for session ID allocation, literal
+  instruction resolution, managed-store opening, and missing inferencer errors;
+  added terminal Wire checks for reporter context, independent failure
+  classification, and one-shot cleanup ordering.
+- Added a CLI metrics collector regression for replay-service injection,
+  service-derived capture delta reconciliation, and the explicit missing replay
+  service failure. Added session-duration regressions for malformed PCM,
+  artifact close failure after provider terminal recording, output retained
+  after admission closes, and late-output drain bounded by wall safety.
+- Focused checks pass: `rtk go test -count=1
+  ./go-agent-runtime/services/session/wire
+  ./go-agent-runtime/services/sessionterminal/wire
+  ./go-agent-runtime/services/sessionduration/internal/service` (66 tests / 3
+  packages) and `rtk go test -count=1 ./agent-cli/internal/services/wire` (2
+  tests / 1 package). Package-local coverage is 100% for session Wire and
+  session-terminal Wire; CLI wire coverage joined with the existing full-module
+  profile is 80.65%. Session-duration service remains 84.8% against its 90% floor.
+- `make prepush` on exact source candidate `23f500edbfa64f836adee3dfa11b57a0f7f781e2`
+  passed format, architecture, Wire, vet, lint, staticcheck, build, functional,
+  and instrumented test stages, then failed the four shared coverage floors
+  (CLI Wire 79.00/80%, session Wire 84.60/95%, session-duration service
+  84.50/90%, terminal Wire 88.90/95%). That exact-head run predates the contract
+  tests above; no full gate has yet been run on their candidate.
+- No push or PR handoff. Exact next action: commit this test checkpoint, rerun
+  `make prepush` on that exact SHA, and continue repairing only demonstrated
+  behavior gaps without coverage-only tests. Run the planned C276 functional,
+  integration, race, hermetic, and Wire gates on the final candidate before
+  any PR submission. Decision remains CONTINUE.
+
+# C276 prepush file-budget repair checkpoint — 2026-09-24
+
+- `rtk make prepush` on exact commit
+  `046cac5f370a7fd10689cca16cd22b4a086fd3e6` stopped at architecture because
+  `sessionduration/internal/service/contract_test.go` reached 663 lines against
+  its 600-line ceiling. No coverage or functional phase ran in that invocation.
+- Reorganized only the newly added cases within the existing service test files;
+  the three larger service test files are now 576, 594, and 594 lines. The
+  focused session-duration package check passes (58 tests / 1 package).
+  `rtk make verify-architecture` passes: 226 packages, 1,997 files, 29,425
+  functions; its Wire generation left no additional tracked changes.
+- Exact next action: commit this file-budget repair, then rerun `rtk make prepush`
+  on that exact commit and continue with the planned C276 functional,
+  integration, race, hermetic, and Wire gates. Do not hand off while a local
+  preflight remains red. Decision remains CONTINUE.
+
+# C276 local lint repair checkpoint — 2026-09-24
+
+- `rtk make prepush` on `41ec4dfa871ac9b1dd9c778f70c929657f12c9cd` passed
+  format, architecture, Wire, vet, then failed lint with 38 diagnostics. The
+  source issues were locally reproducible error handling, context propagation,
+  magic constants, and stream projection exhaustiveness; the original log is
+  `/Users/abdifamily/Library/Application Support/rtk/tee/1790233757_make_prepush.log`.
+- Repaired evidence cleanup to retain close/remove failures, tightened nil
+  context handling, and documented intentional evidence-observer error
+  retention. Updated the termination contract assertion to test wrapped
+  primary-error preservation with `errors.Is`. `rtk make lint` now passes all
+  modules (0 issues). `rtk go test -count=1
+  ./agent-cli/internal/services/internal/agentruntime` passes (602 tests / 1
+  package).
+- No push or PR handoff. Exact next action: commit this checkpoint, run
+  `rtk make prepush` on that exact SHA, and repair every locally reproducible
+  failure before running the remaining planned C276 functional, integration,
+  race, hermetic, and Wire checks. Decision remains CONTINUE.
+
+# C276 architecture-budget repair checkpoint — 2026-09-24
+
+- `rtk make prepush` on `f86dd2cd77fed2b44a6c82236800d9159f47bbfa` stopped at
+  `verify-architecture`: lint repairs had exceeded existing room-runtime file,
+  function, and complexity budgets. No other prepush phase ran. The exact log is
+  `/Users/abdifamily/Library/Application Support/rtk/tee/1790234822_make_prepush.log`.
+- Reworked the local fixes to keep the existing architecture baseline unchanged,
+  retain evidence-owner error recording, and join room-mix write/close/remove
+  failures with their primary error. Best-effort secondary cleanup in failed
+  room setup now carries precise `errcheck` rationales. `rtk make verify-architecture`
+  passes (226 packages, 1,997 files, 29,425 functions); `rtk make lint` passes
+  all modules (0 issues); `rtk go test -count=1
+  ./agent-cli/internal/services/internal/agentruntime
+  ./go-agent-runtime/services/sessionterminal/wire` passes (605 tests / 2
+  packages). Wire generation from architecture verification made no tracked
+  changes.
+- No push or PR handoff. Exact next action: commit this repair checkpoint, run
+  `rtk make prepush` on that clean exact SHA, then execute the C276-05/06
+  verification commands on the same candidate before any handoff. Decision
+  remains CONTINUE.
+
+# C276 session-duration lifecycle repair checkpoint — 2026-09-24
+
+- Reverified admission with `project-control.py verify-work --type task`;
+  `prd.json.branchName` matches the isolated C276 branch. The exact seven-file
+  recording/replay production cluster remains absent, both CLI adapters remain
+  stateless and total 63 lines, and fetched `origin/main` remains an ancestor.
+- Repaired a controller lifecycle defect: `EndLocalToolExecution` now rearms
+  provider liveness after a local tool ends. Extended the public liveness
+  regression to cover a timeout during the tool interval, rearming afterward,
+  and an assistant audio event resetting the timer. The retry wait regression
+  now proves caller cancellation stops `Run` within one second; artifact tests
+  preserve both sink flush causes and verify a failed transcript write does not
+  consume the next transcript tick.
+- Focused normal and race tests pass for
+  `services/sessionduration/internal/service`; full `make lint` and
+  `make verify-architecture` pass, with the three capped test files at no more
+  than 600 lines. Direct `-tags=nomicrophone -cover` remains 86.0% against the
+  existing 90.0% floor. The prior exact-base `make prepush` reached all earlier
+  phases and failed only that package coverage floor at 85.50%; this full gate
+  has not been rerun on the current worktree changes. No push, PR, hosted CI,
+  or review handoff occurred. The two unrelated untracked integration fixtures
+  remain untouched.
+- Exact next action: continue inspecting session-duration public failure and
+  bounded-shutdown paths for real defects that justify regression coverage;
+  do not add coverage-only tests or weaken floors. Once every locally
+  reproducible behavior repair is complete, commit the candidate and rerun
+  `make prepush` plus every C276 functional, integration, race, hermetic, and
+  Wire command on that exact SHA. Decision remains CONTINUE.
+
+# C276 public-runtime repair checkpoint — 2026-09-24
+
+- On the same admitted branch, repaired four public runtime defects: user/system
+  messages no longer start liveness timers or clear provider output state;
+  retry fallback respects `MaxDelay`; closed wake channels are disabled instead
+  of repeatedly invoking `OnWake`; liveness timeout errors retain the active
+  provider response ID. Added public regressions for those behaviors, retry
+  scheduler failure/deadline interruption, terminal-recorder error propagation,
+  and host/publication/loop-close error propagation.
+- `rtk go test -count=1 ./go-agent-runtime/services/sessionduration/...` and
+  its `-race` form pass (75 tests / 3 packages); `rtk make lint` passes all
+  modules; `rtk make verify-architecture` passes (230 packages, 2,015 files,
+  29,765 functions). The fresh runtime coverage profile measures
+  `sessionduration/internal/service` at 87.43% (1,106/1,265), still below the
+  required 90.00% floor. The prior full prepush at `3b13b1d1` also stopped only
+  at that package floor (86.4% on that earlier candidate).
+- Rechecked all 13 retirement/checkpoint paths are absent, both stateless
+  adapters total 63 lines, the browser recording boundary matches `origin/main`,
+  and fetched `origin/main` is an ancestor. The two unrelated integration
+  fixtures remain untouched. No push, PR, hosted CI, or review handoff occurred.
+- Exact next action: inspect the remaining uncovered session-duration paths for
+  concrete public failures or bounded-shutdown defects; do not add tests only to
+  reach the floor. Repair any confirmed defect, then rerun local focused and
+  full C276-05/06 checks plus `make prepush` on one committed exact SHA before
+  any push. Decision remains CONTINUE.
+
+# C276 response/cancellation boundary checkpoint — 2026-09-24
+
+- Further public-path review found two liveness defects: tool acknowledgement
+  purpose arrives in `ResponseCreateValue`, so checking only the stream metadata
+  armed the provider watchdog during tool work; and user-role `RESPONSE.CANCEL`
+  did not disarm the watchdog. The service now ignores acknowledgements in both
+  liveness and output projection, clears prior output on a normal new response,
+  and disarms on cancellation. Public regressions cover cancellation, fresh
+  response identity, timeout identity, and prior-output isolation.
+- The focused session-duration normal and race suites pass (76 tests / 3
+  packages), `rtk make lint` passes all modules, and `rtk make
+  verify-architecture` passes (230 packages, 2,015 files, 29,769 functions).
+  Fresh runtime coverage is 87.86% (1,122/1,277) for
+  `sessionduration/internal/service`, below the required 90.00% floor.
+- No caller or retirement paths changed: all 13 named paths remain absent, the
+  stateless adapters remain 63 lines, and browser preservation and main ancestry
+  checks pass. No push, PR, hosted CI, or review handoff occurred.
+- Exact next action: continue the code review of remaining uncovered paths for
+  concrete public behavior defects, then commit the causal repairs and rerun the
+  complete C276-05/06 suite and `make prepush` on the same exact candidate. Keep
+  coverage floors unchanged and add no coverage-only tests. Decision remains
+  CONTINUE.
+
+- Follow-up: a tool-acknowledgement response request is not a provider turn;
+  normal `RESPONSE.CREATE` begins a fresh output projection, while user-role
+  `RESPONSE.CANCEL` stops the silence watchdog. Added a public regression for
+  all three boundaries and for rearming with the subsequent response ID.
+  Normal/race focused checks now pass (76 tests / 3 packages), lint and
+  architecture pass, and the refreshed service coverage is 87.86%
+  (1,122/1,277). This remains below the unchanged 90.00% floor; no prepush or
+  C276-05/06 full suite has been run on checkpoint `e8c481d`.
+
+# C276 state-facade and completion checkpoint — 2026-09-24
+
+- Extended the response projection repair to the public `NewState()` facade,
+  which had the same non-provider boundary and tool-acknowledgement gaps as the
+  controller. Added a public state regression for user/system/tool events,
+  acknowledgement requests, and normal response creation. Added a public
+  bounded retry-wait case proving the host `Done` signal preserves its error
+  and prevents retry dispatch.
+- Session-duration normal/race suites pass (78 tests / 3 packages), `rtk make
+  lint` passes, and `rtk make verify-architecture` passes (230 packages, 2,015
+  files, 29,774 functions). The refreshed runtime coverage profile measures
+  `sessionduration/internal/service` at 87.97% (1,126/1,280), still below the
+  90.00% minimum. C276-05/06 and exact-head `make prepush` remain pending.
+- The exact 13 retired/checkpoint paths are absent, adapters remain 63 lines,
+  and the browser recording/main ancestry audits still pass. No push, PR, hosted
+  CI, or review handoff occurred.
+- Exact next action: continue reviewing the remaining low-coverage production
+  branches for actual public failures or bounded lifecycle defects. Do not add
+  coverage-only tests or weaken the 90.00% floor. After behavior repairs, run
+  the full C276-05/06 suite and `make prepush` on one committed exact candidate.
+  Decision remains CONTINUE.
+
+# C276 session-duration cancellation and drain checkpoint — 2026-09-24
+
+- Canonical Factory Work remains `init`; the session has no concluded C276 or
+  C270 review Work/findings. Reconfirmed the PRD branch matches this isolated
+  branch, required startup/C270/C234/C217/main ancestry is present, the 13
+  retired paths are absent, and the two stateless adapters total 63 lines.
+- Found three public lifecycle defects while reviewing duration paths: each
+  liveness rearm could leave another watcher parked; cancellation during local
+  tool execution could rearm the canceled response; and the pre-timer drain
+  loop could starve shutdown under continuous buffer replenishment. Fixed these
+  and found a cancellation race when `NewTimer` is blocked: a cancel could
+  arrive before timer installation and the returned timer would still arm.
+  Liveness arming now respects the cancellation latch. Added a public race case
+  proving cancel disarms that timer while a later response starts normally, and
+  a public continuously-replenished-buffer shutdown case. Tests use existing
+  public service/Wire seams; no fixture or coverage-only test was added.
+- Focused sessionduration normal/race checks pass (80 tests / 3 packages), and
+  `rtk make verify-architecture` passes (230 packages, 2,016 files, 29,787
+  functions). Wire generation left no tracked changes. `make prepush`, C276-05/06
+  accumulated checks, and a fresh coverage measurement remain pending on a
+  committed exact candidate; no push, PR, hosted CI, or review handoff occurred.
+- Exact next action: commit only the intended duration implementation/tests and
+  this checkpoint, preserving the two unrelated untracked integration fixtures;
+  then run the entire C276-05/06 gate and `make prepush` on that exact SHA and
+  repair any locally reproducible failure before handoff. Decision remains
+  CONTINUE.
+
+# C276 parallel-tool liveness checkpoint — 2026-09-24
+
+- Further review found a public concurrency defect: parallel local tool calls
+  share the provider watchdog, but ending the first call cleared a boolean and
+  rearmed liveness while a sibling call was still active. The controller now
+  counts active local executions and rearms only when the final call completes.
+  Added a public Wire regression proving both suppression during overlap and
+  rearming after all calls finish.
+- Full sessionduration normal and race suites pass (81 tests / 3 packages each).
+  The focused public cancellation and parallel-tool Wire cases also pass in
+  normal and race modes. The previous exact-head `make prepush` stopped only at
+  sessionduration coverage (88.30% versus the 90.00% floor); the full C276-05/06
+  checks and prepush must be rerun on the new committed candidate.
+- No caller or retirement paths changed: the 13 retired paths remain absent,
+  adapters remain 63 lines, and the unrelated untracked integration fixtures
+  are preserved. No push, PR, hosted CI, or review handoff occurred.
+- Exact next action: commit these causal source/test changes and this checkpoint,
+  then run the complete C276-05/06 suite and `make prepush` against that SHA.
+  Decision remains CONTINUE.
+
+# C276 duration lifecycle and scheduler-error checkpoint — 2026-09-24
+
+- Continued source review found that a canceled controller could rearm an
+  unwatched provider timer, and a scheduler that returned a nil retry/drain
+  timer lost the public `ErrSchedulerUnavailable` identity. Liveness now
+  respects the controller context through arming and expiration, canceled
+  liveness watchers stop their timer, max-duration watchers stop timers on
+  exit, and nil or missing retry/drain timers preserve the stable scheduler
+  error. Added public regressions for cancellation, nil retry/initial-drain/
+  reset-drain timers, and an uncooperative loop bounded by the join timeout.
+- Focused Wire regressions pass in normal and race modes (6 cases each). Full
+  sessionduration normal/race suites pass (86 tests / 3 packages each). The
+  exact `make prepush` on `a2622b51866d758bcae83c5e9b283f3171acfa67` passed all
+  earlier phases and stopped at the unchanged sessionduration coverage floor:
+  88.40% against 90.00%. This source change invalidates that result; the exact
+  candidate gate must run again after checkpointing.
+- The 13 retired paths remain absent, adapters remain 63 lines, browser
+  preservation remains clean, and the two unrelated untracked fixtures are
+  preserved. No push, PR, hosted CI, or review handoff occurred.
+- Exact next action: commit the causal duration source/tests and this progress
+  checkpoint, then rerun all C276-01 through C276-06 checks plus `make prepush`
+  on the new exact SHA. Decision remains CONTINUE.
+
+# C276 nil-artifact setup checkpoint — 2026-09-24
+
+- The exact `make prepush` on `345555151155fcdea10f964a57c1a47a854723cd`
+  cleared all earlier phases and stopped at sessionduration coverage: 89.00%
+  against the unchanged 90.00% floor. Continued public API review found
+  `WithArtifacts(ctx, nil)` panicked because `context.WithValue` rejects a nil
+  value. Nil artifact lifecycles now leave the context unchanged, matching the
+  public nil-recorder no-op behavior, with a public Wire regression.
+- Full sessionduration normal/race suites pass (87 tests / 3 packages each).
+  The 13 retired production paths remain absent, adapters remain 63 lines, and
+  browser preservation remains clean. The two unrelated untracked integration
+  fixtures remain untouched. No push, PR, hosted CI, or review handoff occurred.
+- Exact next action: commit this causal fix/test and checkpoint, then rerun all
+  C276-01 through C276-06 commands and `make prepush` on the new exact SHA.
+  Decision remains CONTINUE.
+
+# C276 terminal-recorder artifact setup checkpoint — 2026-09-24
+
+- Public API review found that attaching a terminal recorder after artifact paths
+  made `PrepareArtifacts` treat the recorder-only lifecycle as already prepared,
+  leaving the requested audio and transcript paths unopened. Preparation now
+  creates artifacts while preserving the terminal recorder. A public Wire
+  regression verifies both files are opened, the terminal is recorded, and
+  finalization completes.
+- Focused regression and full sessionduration normal/race suites pass (88 tests /
+  3 packages each). The prior exact prepush on `345555151155fcdea10f964a57c1a47a854723cd`
+  stopped only at sessionduration coverage (89.00% vs. 90.00%); this candidate
+  still needs the complete gate on its exact SHA. The legacy cluster remains
+  absent, adapters remain 63 lines, browser preservation is clean, and unrelated
+  fixtures are preserved. No push, PR, hosted CI, or review handoff occurred.
+- Exact next action: commit this causal repair and checkpoint, then rerun every
+  C276 gate plus `make prepush` against the new exact SHA. Decision remains
+  CONTINUE.
+
+# C276 exact-head prepush and public artifact-contract checkpoint — 2026-09-24
+
+- Exact `make prepush` on `cdd470ba593345a3d2ba4f37adf90c6149cbed97` passed
+  formatting, architecture, vet, lint, staticcheck, build, embedding, full test,
+  and coverage registration phases. The final coverage gate stopped at
+  `sessionduration/internal/service` 89.00% against the unchanged 90.00% floor.
+  The complete functional, race, hermetic, integration (agent-cli 317.647s),
+  replay-regression, Wire, embedding, and architecture checks passed on that
+  exact source candidate; its retirement audit found all 13 paths absent, the
+  adapters at 63 combined lines, and the browser boundary identical to main.
+- The plan's no-microphone e2e selector failed before test selection because the
+  `agent-cli/test/e2e` package excludes all files without the `e2e` build tag.
+  The corrected `-tags='e2e,nomicrophone'` selection built and passed the CLI
+  packages (no matching e2e test); the actual public cast-device WAV regression
+  passed in `agent-cli/internal/transport/cli`.
+- Public review identified two unverified contract boundaries: incomplete
+  structured terminal summaries must fail without being recorded, and injected
+  artifact lifecycles must take precedence over configured filesystem paths.
+  Added public Wire regressions for both. Full sessionduration normal/race suites
+  pass with 90 tests / 3 packages each. These tests validate observable behavior;
+  they are not evidence substitutes or a coverage threshold adjustment.
+- No push, PR, hosted CI, or review handoff occurred. The unrelated integration
+  fixtures remain untouched. Exact next action: commit these regressions and
+  this checkpoint, measure the updated behavioral coverage, and then run every
+  C276 functional/integration/race/hermetic/Wire command plus `make prepush` on
+  one clean exact SHA. Keep decision CONTINUE unless all local gates pass.
+
+# C276 artifact/liveness boundary checkpoint — 2026-09-24
+
+- The exact coverage run on `5fe1f988d32f93c4b69f9caf57a66c13d8b73b91` remained
+  at 89.70%. Added public regressions for artifact-write failure ordering,
+  audio-path open failure, stale and ID-less response cancellation, usage-bearing
+  partial responses, and nil-context artifact setup. These cases protect the
+  public artifact and liveness contracts. Focused checks pass; full sessionduration
+  normal/race suites pass (97 tests / 3 packages each). A combined profile of the
+  full prior runtime corpus and current Wire tests measures 90.03% (1,192/1,324);
+  the full coverage gate still must confirm that result on the committed head.
+- No production implementation changed in this checkpoint. The 13 retired paths,
+  63-line adapter total, and browser boundary audit remain unchanged. No push,
+  PR, hosted CI, or review handoff occurred; unrelated fixtures remain preserved.
+- Exact next action: commit these tests and this checkpoint, run every C276
+  functional/integration/race/hermetic/Wire command plus the full `make prepush`
+  on the new exact SHA, then repair any locally reproducible failure before
+  considering handoff. Decision remains CONTINUE.
+
+# C276 public test file-budget repair checkpoint — 2026-09-24
+
+- Exact-head architecture verification on `00f6eddb815726679051656e555f6dc275c06635`
+  found `services/sessionduration/wire/wire_test.go` at 734 lines against the
+  600-line cap. Separated only the newly authored liveness-contract regressions
+  into `liveness_contract_test.go`; the existing file is now 599 lines and the
+  new file is 147 lines. No legacy-cluster tests were moved and no production
+  source changed. Focused liveness regressions pass, and architecture plus Wire
+  passes (2,017 files / 29,823 functions).
+- On `00f6eddb`, recording/replay functional and race, no-microphone normal/race,
+  sessionduration normal/race, tagged CLI/e2e selection, actual public cast-device
+  WAV regression, session race, Wire, embedding, hermetic, integration (312.718s),
+  and replay-regression checks passed. The exact-head architecture issue kept
+  prepush/handoff pending. The planned untagged e2e selection again failed at
+  package build constraints; tagged selection passed, with no e2e test match.
+- No push, PR, hosted CI, or review handoff occurred; unrelated integration
+  fixtures remain preserved. Exact next action: commit the file-budget repair and
+  this checkpoint, then rerun all C276 local commands and full `make prepush` on
+  the new exact SHA. Decision remains CONTINUE.

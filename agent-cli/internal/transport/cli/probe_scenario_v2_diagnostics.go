@@ -12,7 +12,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
-	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 )
 
 // probeScenarioV2Divergence is the stable, redacted explanation attached to a
@@ -520,30 +520,28 @@ func isProbeScenarioV2ProviderObjective(kind probe.ScenarioV2ExpectationType) bo
 }
 
 func probeScenarioV2ProviderObjectiveCheck(
-	capture gatewaytesting.SessionCapture,
+	capture runtimeReplay.CaptureProbeObservation,
 	expectation probe.ScenarioV2Expectation,
 ) probeScenarioV2ObservationCheck {
 	check := probeScenarioV2ObservationCheck{EvidenceArtifact: probeScenarioV2ProviderArtifactPath}
 	switch expectation.Type {
 	case probe.ScenarioV2ExpectationTranscriptContains:
-		present := strings.Contains(replayTranscriptFromCapture(capture), expectation.Text)
+		present := strings.Contains(capture.Transcript, expectation.Text)
 		check.Expected = "text-present"
 		check.Actual = safeProbeScenarioV2Text(present)
 		check.Passed = present
 		return check
 	case probe.ScenarioV2ExpectationAssistantAudioStarted:
-		started, position, _ := probeScenarioV2ProviderAudioBounds(capture)
 		check.Expected = "audio-started"
-		check.Actual = probeScenarioV2Presence(started)
-		check.EventPosition = position
-		check.Passed = started
+		check.Actual = probeScenarioV2Presence(capture.AssistantAudioStarted)
+		check.EventPosition = capture.AssistantAudioStartEvent
+		check.Passed = capture.AssistantAudioStarted
 		return check
 	case probe.ScenarioV2ExpectationAssistantAudioStopped:
-		_, position, stopped := probeScenarioV2ProviderAudioBounds(capture)
 		check.Expected = "audio-stopped"
-		check.Actual = probeScenarioV2Presence(stopped)
-		check.EventPosition = position
-		check.Passed = stopped
+		check.Actual = probeScenarioV2Presence(capture.AssistantAudioStopped)
+		check.EventPosition = capture.AssistantAudioStopEvent
+		check.Passed = capture.AssistantAudioStopped
 		return check
 	default:
 		check.Expected = "provider objective"
@@ -551,31 +549,6 @@ func probeScenarioV2ProviderObjectiveCheck(
 		check.ErrorCode = "unsupported_expectation"
 		return check
 	}
-}
-
-func probeScenarioV2ProviderAudioBounds(capture gatewaytesting.SessionCapture) (started bool, position int, stopped bool) {
-	for index, record := range capture.Records {
-		if record.Direction != gatewaytesting.DirectionServerToClient {
-			continue
-		}
-		currentPosition := record.Sequence
-		if currentPosition <= 0 {
-			currentPosition = index + 1
-		}
-		switch record.Type {
-		case "response.output_audio.delta", "response.audio.delta":
-			started = true
-			if position == 0 {
-				position = currentPosition
-			}
-		case "response.output_audio.done", "response.audio.done":
-			if started {
-				stopped = true
-				position = currentPosition
-			}
-		}
-	}
-	return started, position, stopped
 }
 
 func probeScenarioV2SelectedTarget(evidence probeScenarioV2PersistedBrowserEvidence) (probeScenarioV2PersistedTarget, bool) {

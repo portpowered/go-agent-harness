@@ -16,6 +16,16 @@ import (
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
+type testStreamMessageCodec struct{}
+
+func (testStreamMessageCodec) EncodeStreamMessage(message messages.StreamMessage) ([]byte, error) {
+	return gatewaytesting.MarshalStreamMessage(message)
+}
+
+func (testStreamMessageCodec) DecodeStreamMessage(data []byte) (messages.StreamMessage, error) {
+	return gatewaytesting.UnmarshalStreamMessage(json.RawMessage(data))
+}
+
 func TestCustomerSimulationScenariosForSelectorsExpandsDAndRejectsDuplicates(t *testing.T) {
 	scenarios, err := CustomerSimulationScenariosForSelectors("A", "D")
 	if err != nil {
@@ -158,7 +168,7 @@ func TestReadCustomerSimulationStreamCorrelatesCompleteToolMessage(t *testing.T)
 		t.Fatalf("write transcript: %v", err)
 	}
 
-	facts, err := readCustomerSimulationStream(root, NewFamilyAScenario(), 0)
+	facts, err := readCustomerSimulationStream(root, NewFamilyAScenario(), 0, testStreamMessageCodec{})
 	if err != nil {
 		t.Fatalf("readCustomerSimulationStream: %v", err)
 	}
@@ -202,7 +212,7 @@ func TestReadCustomerSimulationStreamIgnoresNonMessageAgentFrames(t *testing.T) 
 	if err := os.WriteFile(filepath.Join(root, "agent.transcript.jsonl"), data.Bytes(), 0o600); err != nil {
 		t.Fatalf("write transcript: %v", err)
 	}
-	facts, err := readCustomerSimulationStream(root, NewFamilyAScenario(), 0)
+	facts, err := readCustomerSimulationStream(root, NewFamilyAScenario(), 0, testStreamMessageCodec{})
 	if err != nil {
 		t.Fatalf("readCustomerSimulationStream: %v", err)
 	}
@@ -270,7 +280,7 @@ func TestReadCustomerSimulationStreamUsesRecordedCorrectionBoundaries(t *testing
 		t.Fatalf("write transcript: %v", err)
 	}
 
-	facts, err := readCustomerSimulationStream(root, NewFamilyBScenario(), 0)
+	facts, err := readCustomerSimulationStream(root, NewFamilyBScenario(), 0, testStreamMessageCodec{})
 	if err != nil {
 		t.Fatalf("readCustomerSimulationStream: %v", err)
 	}

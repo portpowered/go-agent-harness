@@ -75,12 +75,6 @@ func validateRoomToolDefinitions(definitions []messages.ToolDefinition) error {
 	return nil
 }
 
-func (r *sessionDirectoryRecording) startBrowser(ctx context.Context) {
-	if r != nil && r.browser != nil {
-		r.browser.Start(ctx)
-	}
-}
-
 // composeRoomParticipantBrowserCapabilities combines the browser-only
 // capability with the participant's static tool capability. The refresh
 // closure repeats the same composition so a page catalog update cannot drop

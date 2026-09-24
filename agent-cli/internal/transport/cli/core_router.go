@@ -90,6 +90,12 @@ func NewRouter(
 		probeRunCommand.SetGlobalFlags(flags)
 		probeRunCommand.SetBrowserExecutorFactory(productionWebMCPFactory)
 	}
+	mediaCommand := NewMediaCommand()
+	customerSimulationCommand := NewCustomerSimulationCommand(flags)
+	if sessionCommand != nil {
+		mediaCommand.ReplayService = sessionCommand.liveReplayService
+		customerSimulationCommand.ReplayService = sessionCommand.liveReplayService
+	}
 	return &Router{
 		Flags:                     flags,
 		pathResolver:              newPathResolver(),
@@ -106,8 +112,8 @@ func NewRouter(
 		ProbeReportCommand:        probeReportCommand,
 		ProbeAcceptanceCommand:    acceptanceCommand,
 		ProbeFleetCommand:         probeFleetCommand,
-		CustomerSimulationCommand: NewCustomerSimulationCommand(flags),
-		MediaCommand:              NewMediaCommand(),
+		CustomerSimulationCommand: customerSimulationCommand,
+		MediaCommand:              mediaCommand,
 		SessionCommand:            sessionCommand,
 		SessionShowCommand:        sessionShowCommand,
 		SessionListCommand:        sessionListCommand,

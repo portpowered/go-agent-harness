@@ -5,6 +5,8 @@ import (
 	"errors"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"sync"
 )
 
@@ -105,11 +107,58 @@ func (r *recordingSessionInferencer) FlushCapture() error {
 	r.mu.Lock()
 	ready := r.connecting || r.connected || r.flushStarted
 	flushDone := r.flushDone
+	if !ready {
+		r.flushStarted = true
+	}
 	r.mu.Unlock()
-	if ready && flushDone != nil {
+	if !ready {
+		r.finishFlush()
+	} else if flushDone != nil {
 		<-flushDone
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.flushErr
+}
+
+func (r *recordingSessionInferencer) FlushToFile(path string) error {
+	if r == nil || r.recorder == nil {
+		return errors.New("recording session has no provider writer")
+	}
+	return r.recorder.FlushToFile(path)
+}
+
+func (r *recordingSessionInferencer) Request() inference.SessionRequest {
+	if r == nil {
+		return inference.SessionRequest{}
+	}
+	requester, ok := r.inner.(interface {
+		Request() inference.SessionRequest
+	})
+	if !ok {
+		return inference.SessionRequest{}
+	}
+	return requester.Request()
+}
+
+func (r *recordingSessionInferencer) SetSessionAudioOutput(format models.AudioFormat, rate models.SampleRate) {
+	if r == nil {
+		return
+	}
+	if configurer, ok := r.inner.(interface {
+		SetSessionAudioOutput(models.AudioFormat, models.SampleRate)
+	}); ok {
+		configurer.SetSessionAudioOutput(format, rate)
+	}
+}
+
+func (r *recordingSessionInferencer) SetSessionAudioInput(format models.AudioFormat, rate models.SampleRate) {
+	if r == nil {
+		return
+	}
+	if configurer, ok := r.inner.(interface {
+		SetSessionAudioInput(models.AudioFormat, models.SampleRate)
+	}); ok {
+		configurer.SetSessionAudioInput(format, rate)
+	}
 }

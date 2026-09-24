@@ -179,8 +179,8 @@ func TestRunSessionReplayBypassesPairedDeviceFeedbackController(t *testing.T) {
 	runErr := make(chan error, 1)
 	go func() {
 		runErr <- services.RunSession(ctx, io.Discard, services.SessionRunOptions{
-			AudioService:      audioiowire.NewService(),
 			ReplayPath:        "synthetic.json",
+			AudioService:      audioiowire.NewService(),
 			SessionInferencer: inferencer,
 			DeviceService:     newTestDeviceService(registry),
 			RTCBinding: runtimedevices.RTCBindingRequest{

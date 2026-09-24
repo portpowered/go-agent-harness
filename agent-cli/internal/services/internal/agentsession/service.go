@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 
 	runtime "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime"
 	public "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
@@ -43,5 +44,9 @@ func (s *Service) Run(ctx context.Context, out io.Writer, request public.Request
 	if s.runtime == nil {
 		return fmt.Errorf("session runtime is required")
 	}
-	return s.runtime.Run(ctx, out, request)
+	err := s.runtime.Run(ctx, out, request)
+	if err != nil && strings.TrimSpace(request.ReplayPath) != "" {
+		return fmt.Errorf("replay session capture %s: %w", request.ReplayPath, err)
+	}
+	return err
 }

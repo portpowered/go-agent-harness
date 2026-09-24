@@ -15,6 +15,8 @@ import (
 	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 	runtimedeviceswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
 	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
+	recordingwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/wire"
+	replaywire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	sessionwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
@@ -24,8 +26,7 @@ import (
 
 // Tests compose the same runtime and use-case services as the application graph.
 func newTestSessionService(deps sessionservicewire.SessionDependencies) agentsession.SessionService {
-	audioService := audioiowire.NewService()
-	deps.Runtime = sessionservicewire.NewSessionRuntime(audioService, deps.Clock, deps.ToolService, sessionservicewire.NewSessionRuntimeFactory(), deps.RuntimeFactory, deps.SessionInferencer, deps.ToolExecutor, runtimedeviceswire.NewService(deps.DeviceRegistry, audioService), deps.RuntimeObserver, deps.MetricSampler, deps.Logger, providerswire.NewModelCatalog(), sessionservicewire.NewBrowserConversationService())
+	deps.Runtime = sessionservicewire.NewSessionRuntime(audioiowire.NewService(), deps.Clock, deps.ToolService, sessionservicewire.NewSessionRuntimeFactory(), deps.RuntimeFactory, deps.SessionInferencer, deps.ToolExecutor, runtimedeviceswire.NewService(deps.DeviceRegistry, audioiowire.NewService()), deps.RuntimeObserver, deps.MetricSampler, deps.Logger, providerswire.NewModelCatalog(), sessionservicewire.NewBrowserConversationService(), recordingwire.NewService(deps.Clock), recordingwire.NewProviderCaptureService(deps.Clock), replaywire.NewService())
 	return sessionservicewire.NewSessionService(deps)
 }
 
@@ -70,6 +71,7 @@ func newPublicTextSessionService(globalFlags *flags.GlobalFlags, toolExecutor me
 		Inferencer:      inferencer,
 		RelaxValidation: true,
 		Resolver:        resolver,
+		ReplayService:   replaywire.NewService(),
 	})
 }
 

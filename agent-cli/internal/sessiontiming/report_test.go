@@ -3,8 +3,12 @@ package sessiontiming
 import (
 	"encoding/base64"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 
+	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
+	runtimeReplayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
@@ -34,10 +38,7 @@ func TestAnalyzeCaptureReconstructsToolChainAndResetsPlaybackAtUserTurn(t *testi
 		},
 	}
 
-	report, err := AnalyzeCapture(capture)
-	if err != nil {
-		t.Fatal(err)
-	}
+	report := analyzeCapture(t, capture)
 	if report.SampleRateHz != 24000 || len(report.Responses) != 4 || len(report.Tools) != 2 {
 		t.Fatalf("report topology = rate %d responses %d tools %d", report.SampleRateHz, len(report.Responses), len(report.Tools))
 	}
@@ -75,13 +76,39 @@ func TestAnalyzeCaptureRejectsMalformedAudioDelta(t *testing.T) {
 		record(1, 0, "server_to_client", "response.created", `{"response":{"id":"r1"}}`),
 		record(2, 1, "server_to_client", "response.output_audio.delta", `{"response_id":"r1","delta":"%%%"}`),
 	}}
-	if _, err := AnalyzeCapture(capture); err == nil {
+	if _, err := analyzeCaptureResult(t, capture); err == nil {
 		t.Fatal("malformed provider audio was accepted")
 	}
 }
 
+func analyzeCapture(t *testing.T, capture gwtesting.SessionCapture) runtimeReplay.CaptureTimingReport {
+	t.Helper()
+	report, err := analyzeCaptureResult(t, capture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return report
+}
+
+func analyzeCaptureResult(t *testing.T, capture gwtesting.SessionCapture) (runtimeReplay.CaptureTimingReport, error) {
+	t.Helper()
+	protected, err := gwtesting.SealSessionCapture(capture)
+	if err != nil {
+		return runtimeReplay.CaptureTimingReport{}, err
+	}
+	data, err := json.Marshal(protected)
+	if err != nil {
+		return runtimeReplay.CaptureTimingReport{}, err
+	}
+	path := filepath.Join(t.TempDir(), "capture.session.json")
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		return runtimeReplay.CaptureTimingReport{}, err
+	}
+	return runtimeReplayWire.NewService().AnalyzeTiming(t.Context(), path)
+}
+
 func record(sequence int, timestamp int64, direction, eventType, body string) gwtesting.CapturedSessionEvent {
-	return gwtesting.CapturedSessionEvent{Sequence: sequence, TimestampMs: timestamp, Direction: gwtesting.SessionEventDirection(direction), Type: eventType, Payload: json.RawMessage(body)}
+	return gwtesting.CapturedSessionEvent{Sequence: sequence, TimestampMs: timestamp, Direction: gwtesting.SessionEventDirection(direction), Type: eventType, PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage, Payload: json.RawMessage(body)}
 }
 
 func payload(value any) string {

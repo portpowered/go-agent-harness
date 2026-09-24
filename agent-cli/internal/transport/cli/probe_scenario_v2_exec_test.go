@@ -13,7 +13,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
-	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 )
 
 func TestProbeRunScenarioV2ExecutesBrowserFixtureWithoutReplayFlag(t *testing.T) {
@@ -385,11 +385,11 @@ func TestProbeScenarioV2ObjectiveVerifierUsesPersistedPageState(t *testing.T) {
 		Payload:   testkit.MustJSONValue(map[string]any{"candidate_count": 1}),
 		Redaction: testkit.RedactionMetadata{Mode: testkit.RedactionNone},
 	}}
-	wrong := verifyProbeScenarioV2EvidenceData(scenario, events, json.RawMessage(`{"value":"wrong"}`), gatewaytesting.SessionCapture{}, true)
+	wrong := verifyProbeScenarioV2EvidenceData(scenario, events, json.RawMessage(`{"value":"wrong"}`), runtimeReplay.CaptureProbeObservation{}, true)
 	if wrong.Verified || !strings.Contains(wrong.Error, "page_state_equals") || strings.Contains(wrong.Error, "wrong") {
 		t.Fatalf("wrong oracle verification = %+v, want a safe mismatch", wrong)
 	}
-	right := verifyProbeScenarioV2EvidenceData(scenario, events, json.RawMessage(`{"value":"expected"}`), gatewaytesting.SessionCapture{}, true)
+	right := verifyProbeScenarioV2EvidenceData(scenario, events, json.RawMessage(`{"value":"expected"}`), runtimeReplay.CaptureProbeObservation{}, true)
 	if !right.Verified {
 		t.Fatalf("matching oracle verification = %+v, want verified", right)
 	}
@@ -404,18 +404,7 @@ func TestProbeScenarioV2ObjectiveVerifierUsesProviderCaptureForTranscript(t *tes
 			Text: "expected-secret-transcript",
 		}},
 	}
-	capture := gatewaytesting.SessionCapture{
-		Version:  gatewaytesting.SessionCaptureVersion,
-		Provider: gatewaytesting.SessionProviderMetadata{Name: "fixture", Model: "fixture"},
-		Session:  gatewaytesting.SessionMetadata{ID: scenario.ID, FixtureProvenance: gatewaytesting.SessionFixtureProvenanceSynthetic},
-		Records: []gatewaytesting.CapturedSessionEvent{{
-			Sequence:    1,
-			Direction:   gatewaytesting.DirectionServerToClient,
-			Type:        "response.output_text.delta",
-			PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage,
-			Payload:     json.RawMessage(`{"delta":"expected-secret-transcript"}`),
-		}},
-	}
+	capture := runtimeReplay.CaptureProbeObservation{Transcript: "expected-secret-transcript"}
 	verification := verifyProbeScenarioV2EvidenceData(scenario, nil, json.RawMessage(`null`), capture, false)
 	if !verification.Verified {
 		t.Fatalf("provider transcript verification = %+v, want verified", verification)
@@ -449,13 +438,13 @@ func TestProbeScenarioV2ObjectiveVerifierMatchesStaleToolReference(t *testing.T)
 		Payload:    testkit.MustJSONValue(map[string]any{"code": string(webmcp.ErrorStaleToolRef), "tool_ref": toolRef}),
 		Redaction:  testkit.RedactionMetadata{Mode: testkit.RedactionNone},
 	}}
-	verification := verifyProbeScenarioV2EvidenceData(scenario, events, json.RawMessage(`{}`), gatewaytesting.SessionCapture{}, true)
+	verification := verifyProbeScenarioV2EvidenceData(scenario, events, json.RawMessage(`{}`), runtimeReplay.CaptureProbeObservation{}, true)
 	if !verification.Verified {
 		t.Fatalf("matching stale reference verification = %+v, want verified", verification)
 	}
 	wrong := scenario
 	wrong.Expectations = []probe.ScenarioV2Expectation{{Type: probe.ScenarioV2ExpectationStaleToolRejected, ToolRef: "webmcp.tool-ref.v1:BBBBBBBBBBBBBBBBBBBBBB"}}
-	failed := verifyProbeScenarioV2EvidenceData(wrong, events, json.RawMessage(`{}`), gatewaytesting.SessionCapture{}, true)
+	failed := verifyProbeScenarioV2EvidenceData(wrong, events, json.RawMessage(`{}`), runtimeReplay.CaptureProbeObservation{}, true)
 	if failed.Verified || !strings.Contains(failed.Error, "stale_tool_rejected") || !strings.Contains(failed.Error, "stale_tool_ref") {
 		t.Fatalf("mismatched stale reference verification = %+v", failed)
 	}

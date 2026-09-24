@@ -105,7 +105,7 @@ func TestProbeFleetDispatchesLiveEntryThroughSessionRuntime(t *testing.T) {
 
 	var gotOptions serviceSession.Request
 	var gotInput serviceSession.AudioInput
-	command := NewProbeFleetCommand(nil, nil)
+	command := NewProbeFleetCommand(nil, nil, newReplayRuntimeServiceForTest())
 	command.LiveSessionRunner = func(_ context.Context, _ io.Writer, options serviceSession.Request, input serviceSession.AudioInput) error {
 		gotOptions = options
 		gotInput = input

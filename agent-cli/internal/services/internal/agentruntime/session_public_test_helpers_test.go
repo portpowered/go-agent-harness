@@ -3,12 +3,20 @@ package agentruntime
 import (
 	"bytes"
 	"context"
+	"errors"
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
+
+type runtimeDialTestError string
+
+func (e runtimeDialTestError) Error() string { return string(e) }
+
+const observedRuntimeDialError runtimeDialTestError = "observed runtime dial"
 
 // These small fixtures keep unrelated runtime and room tests independent of
 // the retired observability implementation. They record only the public
@@ -77,6 +85,13 @@ func runSessionWithDiagnostics(t testingT, mutate func(*SessionRunOptions)) sess
 type testingT interface {
 	Helper()
 	Fatalf(string, ...any)
+}
+
+func assertDialFailure(t testingT, dialer transport.Dialer, want error) {
+	t.Helper()
+	if _, err := dialer.Dial("fixture", nil); !errors.Is(err, want) {
+		t.Fatalf("dial through recording writer = %v, want cause %v", err, want)
+	}
 }
 
 type recordingSessionRuntimeObserver struct {

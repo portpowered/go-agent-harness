@@ -218,7 +218,7 @@ func TestChromeForTestingAcquirerVerifiesAndCachesOneCompleteArtifact(t *testing
 	}
 	client := &http.Client{Transport: transport}
 	cacheDir := filepath.Join(t.TempDir(), "cache")
-	acquirer := NewChromeForTestingAcquirer(ChromeForTestingOptions{HTTPClient: client})
+	acquirer := NewChromeForTestingAcquirer(ChromeForTestingOptions{HTTPClient: client, VersionTimeout: 10 * time.Second})
 	request := PinnedChromeRequest{Platform: platform, RequiredMajor: MinimumManagedChromeMajor, LockPath: lockPath, CacheDir: cacheDir, HTTPClient: client}
 
 	first, err := acquirer.AcquirePinnedChrome(context.Background(), request)
@@ -269,7 +269,7 @@ func TestChromeForTestingAcquirerConcurrentCallersPublishOnlyReadyCache(t *testi
 	}
 	client := &http.Client{Transport: transport}
 	cacheDir := filepath.Join(t.TempDir(), "cache")
-	acquirer := NewChromeForTestingAcquirer(ChromeForTestingOptions{HTTPClient: client})
+	acquirer := NewChromeForTestingAcquirer(ChromeForTestingOptions{HTTPClient: client, VersionTimeout: 10 * time.Second})
 	request := PinnedChromeRequest{Platform: platform, RequiredMajor: MinimumManagedChromeMajor, LockPath: lockPath, CacheDir: cacheDir, HTTPClient: client}
 
 	const callers = 6

@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/internal/catalog"
+	runtimeRecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
+	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	llmproviders "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	"io"
@@ -102,7 +103,8 @@ func TestBuildProviderHTTPRuntime_RecordModeReturnsRecorderBackedClient(t *testi
 	if runtime.Recorder == nil {
 		t.Fatal("expected recorder in record mode")
 	}
-	if runtime.Client.Transport != runtime.Recorder {
+	recorderTransport, ok := runtime.Recorder.(http.RoundTripper)
+	if !ok || runtime.Client.Transport != recorderTransport {
 		t.Fatal("expected recorder transport to back the client")
 	}
 }
@@ -125,7 +127,8 @@ func TestBuildProviderHTTPRuntime_RecordModeWrapsInjectedBaseTransport(t *testin
 	if runtime.Recorder == nil {
 		t.Fatal("expected recorder in record mode")
 	}
-	if runtime.Client.Transport != runtime.Recorder {
+	recorderTransport, ok := runtime.Recorder.(http.RoundTripper)
+	if !ok || runtime.Client.Transport != recorderTransport {
 		t.Fatal("expected recorder transport to back the client")
 	}
 
@@ -286,7 +289,7 @@ func TestBuildProviderHTTPRuntime_ReplayModePropagatesFixtureErrors(t *testing.T
 // production graph is now owned by the provider service.
 type providerHTTPTestRuntime struct {
 	Client   *http.Client
-	Recorder *gwtesting.RecordRoundTripper
+	Recorder runtimeRecording.HTTPRecorder
 }
 
 func buildProviderHTTPRuntime(cfg *providers.Config, transports ...http.RoundTripper) (providerHTTPTestRuntime, error) {
@@ -294,19 +297,19 @@ func buildProviderHTTPRuntime(cfg *providers.Config, transports ...http.RoundTri
 	if len(transports) != 0 {
 		client.Transport = transports[0]
 	}
-	invocation, recorder, err := New(client, nil, clock.Real{}, nil, catalog.New(), nil).httpRuntime(*cfg)
+	invocation, recorder, err := NewWithReplay(
+		client,
+		nil,
+		clock.Real{},
+		&recordingServiceStub{},
+		catalog.New(),
+		nil,
+		&replayServiceStub{},
+	).httpRuntime(*cfg)
 	if err != nil {
 		return providerHTTPTestRuntime{}, err
 	}
-	var concrete *gwtesting.RecordRoundTripper
-	if recorder != nil {
-		var ok bool
-		concrete, ok = recorder.(*gwtesting.RecordRoundTripper)
-		if !ok {
-			return providerHTTPTestRuntime{}, fmt.Errorf("unexpected recorder type %T", recorder)
-		}
-	}
-	return providerHTTPTestRuntime{Client: invocation.httpClient, Recorder: concrete}, nil
+	return providerHTTPTestRuntime{Client: invocation.httpClient, Recorder: recorder}, nil
 }
 func closeHTTPResponseForTest(t *testing.T, response *http.Response) {
 	t.Helper()
@@ -316,7 +319,15 @@ func closeHTTPResponseForTest(t *testing.T, response *http.Response) {
 }
 
 func TestHTTPRecordingPreservesProviderCapabilities(t *testing.T) {
-	service := New(nil, nil, clock.Real{}, nil, catalog.New(), nil)
+	service := NewWithReplay(
+		nil,
+		nil,
+		clock.Real{},
+		&recordingServiceStub{},
+		catalog.New(),
+		nil,
+		&replayServiceStub{},
+	)
 	cfg := providers.Config{Provider: "openai", Model: "model", APIKey: "configured-test-key"}
 	plain, err := service.Build(t.Context(), cfg)
 	if err != nil {
@@ -335,6 +346,46 @@ func TestHTTPRecordingPreservesProviderCapabilities(t *testing.T) {
 	if !reflect.DeepEqual(plainReporter.Capabilities(), recordedReporter.Capabilities()) {
 		t.Fatal("recording changed provider capabilities")
 	}
+}
+
+func (s *recordingServiceStub) OpenHTTPRecorder(value any) (runtimeRecording.HTTPRecorder, error) {
+	transport, ok := value.(http.RoundTripper)
+	if !ok {
+		return nil, errors.New("test recording transport is invalid")
+	}
+	return &testHTTPRecorder{inner: gwtesting.NewRecordRoundTripper(transport)}, nil
+}
+
+type testHTTPRecorder struct{ inner *gwtesting.RecordRoundTripper }
+
+func (r *testHTTPRecorder) RoundTrip(request *http.Request) (*http.Response, error) {
+	return r.inner.RoundTrip(request)
+}
+
+func (r *testHTTPRecorder) FlushToFile(path string) error { return r.inner.FlushToFile(path) }
+
+func (r *testHTTPRecorder) Captures() []runtimeRecording.HTTPCapturePair {
+	captures := r.inner.Captures()
+	result := make([]runtimeRecording.HTTPCapturePair, len(captures))
+	for index, capture := range captures {
+		result[index] = runtimeRecording.HTTPCapturePair{
+			Request: runtimeRecording.HTTPCapturedRequest{
+				Method: capture.Request.Method, URL: capture.Request.URL,
+				Headers: runtimeRecording.HTTPHeaders(capture.Request.Headers), Body: runtimeRecording.HTTPBody(capture.Request.Body),
+			},
+			Response: runtimeRecording.HTTPCapturedResponse{
+				StatusCode: capture.Response.StatusCode, Status: capture.Response.Status,
+				Headers: runtimeRecording.HTTPHeaders(capture.Response.Headers), Body: runtimeRecording.HTTPBody(capture.Response.Body),
+			},
+		}
+	}
+	return result
+}
+
+type replayServiceStub struct{ runtimeReplay.Service }
+
+func (*replayServiceStub) OpenHTTPReplay(path string) (any, error) {
+	return gwtesting.NewReplayRoundTripper(path)
 }
 
 type observedHTTPBody struct {

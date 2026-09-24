@@ -24,7 +24,6 @@ import (
 	runtimeSelfPlay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/selfplay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	sessionwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
-	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/spf13/cobra"
 )
 
@@ -311,10 +310,7 @@ func TestRouterPreRunNormalizesMediaReplayFixtureAndLeavesURLOperandAlone(t *tes
 	currentHome := t.TempDir()
 	fixturePath := filepath.Join(currentHome, "session.json")
 	var gotFixture string
-	probe := NewMediaProbeCommandWithOptions(WithSessionReplayProbe(func(_ context.Context, fixture string) (gatewaytesting.SessionReplayProbeReport, error) {
-		gotFixture = fixture
-		return gatewaytesting.SessionReplayProbeReport{}, nil
-	}))
+	probe := NewMediaProbeCommandWithOptions(WithReplayService(mediaReplayServiceStub{capturePath: &gotFixture}))
 	mediaGroup := &cobra.Command{Use: "media"}
 	mediaGroup.AddCommand(probe.Generate())
 	root := newPathPreflightRoot(mediaGroup, &pathResolver{
@@ -380,7 +376,7 @@ func TestRouterPreRunNormalizesProbeRunPathsAndWritesUnderExpandedHomes(t *testi
 	firstScenario := writeProbeScenario(t, currentHome, "home-scenario-one", len(observation.Observations))
 	secondScenario := writeProbeScenario(t, namedHome, "home-scenario-two", len(observation.Observations))
 
-	owner := NewProbeRunCommandWithDeviceService(newDevicesTestService(), nil, nil)
+	owner := NewProbeRunCommandWithDeviceService(newDevicesTestService(), nil, nil, newReplayRuntimeServiceForTest())
 	command := owner.Generate()
 	root := newProbePathPreflightRoot(command, testPathResolver(currentHome, namedHome))
 	firstScenarioArg := "~/" + filepath.Base(firstScenario)
@@ -630,7 +626,7 @@ func TestRouterPreRunRejectsCustomerSimulationPathBeforeRunner(t *testing.T) {
 }
 
 func TestRouterPreRunNormalizesProbeFleetPaths(t *testing.T) {
-	owner := NewProbeFleetCommand(nil, nil)
+	owner := NewProbeFleetCommand(nil, nil, newReplayRuntimeServiceForTest())
 	command := owner.Generate()
 	command.RunE = func(*cobra.Command, []string) error { return nil }
 	currentHome := t.TempDir()

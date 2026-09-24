@@ -77,12 +77,11 @@ type ChromeForTestingDownload struct {
 }
 
 // ChromeForTestingOptions configures the verified fallback implementation.
-// Empty values are resolved from the acquisition request or repository/cache
-// defaults at call time.
+// Empty values resolve from the request or repository/cache defaults.
 type ChromeForTestingOptions struct {
-	LockPath   string
-	CacheDir   string
-	HTTPClient *http.Client
+	LockPath, CacheDir string
+	HTTPClient         *http.Client
+	VersionTimeout     time.Duration
 }
 
 // ChromeForTestingAcquirer downloads and verifies the repository-pinned
@@ -281,7 +280,7 @@ func (a *ChromeForTestingAcquirer) acquireCached(ctx context.Context, client *ht
 	}
 	defer unlock()
 
-	if executable, ok := readReadyChromeCache(ctx, finalDir, lock, requiredMajor); ok {
+	if executable, ok := readReadyChromeCache(ctx, finalDir, lock, requiredMajor, a.options.VersionTimeout); ok {
 		return executable, nil
 	}
 	if err := os.RemoveAll(finalDir); err != nil && !os.IsNotExist(err) {
@@ -311,7 +310,7 @@ func (a *ChromeForTestingAcquirer) acquireCached(ctx context.Context, client *ht
 	if err := checkChromeExecutable(executablePath); err != nil {
 		return ChromeExecutable{}, newChromeForTestingError("executable_unavailable", err)
 	}
-	version, err := boundedVersionQuery(ctx, queryChromeVersion, executablePath, defaultChromeVersionTimeout)
+	version, err := boundedVersionQuery(ctx, queryChromeVersion, executablePath, a.options.VersionTimeout)
 	if err != nil {
 		return ChromeExecutable{}, newChromeForTestingError("version_unverified", err)
 	}
@@ -371,7 +370,7 @@ type chromeForTestingReadyMarker struct {
 	ExecutableRelative string `json:"executable"`
 }
 
-func readReadyChromeCache(ctx context.Context, finalDir string, lock ChromeForTestingLock, requiredMajor int) (ChromeExecutable, bool) {
+func readReadyChromeCache(ctx context.Context, finalDir string, lock ChromeForTestingLock, requiredMajor int, versionTimeout time.Duration) (ChromeExecutable, bool) {
 	data, err := os.ReadFile(filepath.Join(finalDir, chromeForTestingReadyName))
 	if err != nil || len(data) > chromeForTestingReadyLimit {
 		return ChromeExecutable{}, false
@@ -388,7 +387,7 @@ func readReadyChromeCache(ctx context.Context, finalDir string, lock ChromeForTe
 	if err := checkChromeExecutable(executable); err != nil {
 		return ChromeExecutable{}, false
 	}
-	version, err := boundedVersionQuery(ctx, queryChromeVersion, executable, defaultChromeVersionTimeout)
+	version, err := boundedVersionQuery(ctx, queryChromeVersion, executable, versionTimeout)
 	if err != nil || !strings.Contains(version, lock.Version) {
 		return ChromeExecutable{}, false
 	}

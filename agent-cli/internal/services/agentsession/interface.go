@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
@@ -37,6 +38,7 @@ type Request struct {
 	RecordPath                    string
 	ReplayPath                    string
 	ReplayTiming                  string
+	MetricsRecorder               metrics.Recorder
 	Provider                      string
 	ProviderProvided              bool
 	Model                         string

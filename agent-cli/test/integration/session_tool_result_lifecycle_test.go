@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -209,7 +210,7 @@ func TestScheduledSessionWaitsForAcceptedToolResultAfterResponseDone(t *testing.
 	go func() {
 		runErr <- servicetest.RunSession(ctx, io.Discard, servicetest.SessionRunOptions{
 			AudioService:      newTestAudioService(),
-			RecordPath:        "scheduled-tool-lifecycle.session.json",
+			RecordPath:        filepath.Join(t.TempDir(), "scheduled-tool-lifecycle.session.json"),
 			Provider:          "grok",
 			Model:             "grok-realtime",
 			APIKey:            "test-key",

@@ -116,16 +116,16 @@ func (s *mediaSession) Close() error {
 		return nil
 	}
 	s.closeOnce.Do(func() {
-		close(s.stop)
-		var mediaErr error
-		if s.media != nil {
-			mediaErr = s.media.Close()
-		}
 		var innerErr error
 		if s.inner != nil {
 			innerErr = s.inner.Close()
 		}
 		<-s.forwarded
+		close(s.stop)
+		var mediaErr error
+		if s.media != nil {
+			mediaErr = s.media.Close()
+		}
 		s.closeErr = errors.Join(mediaErr, innerErr)
 	})
 	return s.closeErr

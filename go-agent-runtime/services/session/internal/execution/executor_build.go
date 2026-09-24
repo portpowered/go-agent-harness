@@ -10,7 +10,6 @@ import (
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"os"
 )
 
@@ -62,7 +61,10 @@ func (e *Executor) BuildLoop(ctx context.Context, cfg *Config) (*RunData, error)
 		return nil, err
 	}
 
-	loopOpts := e.loopOptions(cfg, inf, toolCapability, systemPrompt, initialHistory)
+	loopOpts, err := e.loopOptions(ctx, cfg, inf, toolCapability, systemPrompt, initialHistory)
+	if err != nil {
+		return nil, err
+	}
 
 	loop, err := agentloop.New(loopOpts...)
 	if err != nil {
@@ -148,7 +150,7 @@ func (e *Executor) resolveSystemPrompt(ctx context.Context, cfg *Config) (string
 	return systemPrompt, nil
 }
 
-func (e *Executor) loopOptions(cfg *Config, inf messages.Inferencer, capability runtimeTools.Capability, systemPrompt string, initialHistory []messages.Message) []agentloop.Option {
+func (e *Executor) loopOptions(ctx context.Context, cfg *Config, inf messages.Inferencer, capability runtimeTools.Capability, systemPrompt string, initialHistory []messages.Message) ([]agentloop.Option, error) {
 	loopLogger := e.logger
 	if loopLogger == nil {
 		loopLogger = looplogging.DummyLogger()
@@ -177,10 +179,16 @@ func (e *Executor) loopOptions(cfg *Config, inf messages.Inferencer, capability 
 	if cfg.ReplayCapturePath != "" {
 		sessionCapturePath := cfg.ReplayCapturePath + ".session.json"
 		if _, statErr := os.Stat(sessionCapturePath); statErr == nil {
-			replayInf := testing.NewReplaySessionInferencer(sessionCapturePath)
+			if e.replayService == nil {
+				return nil, fmt.Errorf("replay service is required for session capture %q", sessionCapturePath)
+			}
+			replayInf, err := e.replayService.NewSessionInferencer(ctx, sessionCapturePath)
+			if err != nil {
+				return nil, fmt.Errorf("prepare session replay %q: %w", sessionCapturePath, err)
+			}
 			loopOpts = append(loopOpts, agentloop.WithSessionInferencer(replayInf))
 		}
 	}
 
-	return loopOpts
+	return loopOpts, nil
 }

@@ -10,10 +10,10 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/internal/engine"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/internal/plan"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/recording"
-	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
@@ -115,7 +115,7 @@ func (s *Service) Prepare(ctx context.Context, request replay.Request) (replay.P
 	if err != nil {
 		return nil, err
 	}
-	dialer, err := gwtesting.NewReplayWebSocketDialerFromCapture(capture)
+	dialer, err := engine.NewWebSocketDialer(capture, false)
 	if err != nil {
 		return nil, fmt.Errorf("%w: construct replay dialer: %w", replay.ErrBundleMismatch, err)
 	}

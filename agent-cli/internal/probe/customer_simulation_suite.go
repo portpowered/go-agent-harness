@@ -15,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 )
 
 const (
@@ -32,10 +34,8 @@ var (
 	ErrCustomerSimulationRun       = errors.New("customer simulation run failed")
 )
 
-// CustomerSimulationRunSpec binds one declarative scenario to the ordered
-// PCM16 turns that will be sent to the shipped process. PCM16 is intentionally
-// passed as bytes so file formats and credential handling remain outside the
-// process-boundary package.
+// CustomerSimulationRunSpec binds a scenario to ordered PCM16 turns, keeping
+// file formats and credentials at the process boundary.
 type CustomerSimulationRunSpec struct {
 	Scenario CustomerScenario
 	Script   []CustomerScriptTurn
@@ -48,9 +48,8 @@ type CustomerSimulationRunSpec struct {
 	PatienceRepromptAudio []byte
 }
 
-// CustomerSimulationSuiteOptions configures one explicitly selected suite.
-// APIKey is held only in memory and is passed to the child through the
-// provider's supported AGENT_MODEL__... environment variable by DuplexRunner.
+// CustomerSimulationSuiteOptions configures a selected suite; APIKey stays in
+// memory and reaches the child through DuplexRunner's provider environment.
 type CustomerSimulationSuiteOptions struct {
 	BinaryPath string
 	RunRoot    string
@@ -68,6 +67,7 @@ type CustomerSimulationSuiteOptions struct {
 	FrameDuration     time.Duration
 	SilenceDuration   time.Duration
 	ShutdownGrace     time.Duration
+	ReplayService     runtimeReplay.StreamMessageCodec
 	CaptureOutputSink io.Writer
 	CaptureErrorSink  io.Writer
 }
@@ -476,7 +476,7 @@ func runCustomerSimulation(ctx context.Context, suiteRoot string, index int, spe
 		checkpointMu.Unlock()
 	}
 
-	recordingFacts, recordingErr := readCustomerSimulationRecording(recordRoot, spec.Scenario)
+	recordingFacts, recordingErr := readCustomerSimulationRecording(recordRoot, spec.Scenario, options.ReplayService)
 	transcripts := buildCustomerSimulationTranscripts(spec.Scenario, script, duplexResult, recordingFacts)
 	audioEvents := customerSimulationAudioEvents(spec.Scenario, duplexResult, options.FrameDuration, recordingFacts)
 	toolObservations := recordingFacts.tools

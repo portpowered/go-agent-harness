@@ -41,7 +41,7 @@ func TestSessionAudioOutputDeviceFlagErrors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			inferencer := &flagErrorSessionInferencer{}
-			root := newTestRootCommandWithProbeFleetCommand(NewProbeFleetCommand(nil, nil), inferencer)
+			root := newTestRootCommandWithProbeFleetCommand(NewProbeFleetCommand(nil, nil, newReplayRuntimeServiceForTest()), inferencer)
 			var stdout, stderr bytes.Buffer
 			root.SetOut(&stdout)
 			root.SetErr(&stderr)

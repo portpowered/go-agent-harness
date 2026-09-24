@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	captureReplayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
 	roomevidencewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
 	runtimeRoomReplayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
@@ -30,7 +31,7 @@ func TestExternalRoomRejectsMissingProviderTrace(t *testing.T) {
 		},
 	})
 	host := roomswire.NewService(roomswire.Dependencies{
-		Clock: scheduler, Live: live, Replay: runtimeRoomReplayWire.NewService(),
+		Clock: scheduler, Live: live, Replay: runtimeRoomReplayWire.NewService(captureReplayWire.NewService()),
 		Evidence: roomevidencewire.NewService(), Latency: roomevidencewire.NewLatencyService(),
 	})
 	manifest := rooms.Manifest{SchemaVersion: rooms.SchemaVersion, Room: rooms.Room{MaxDuration: time.Second}}

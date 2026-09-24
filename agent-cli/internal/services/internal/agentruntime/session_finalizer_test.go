@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 )
 
 type sessionFinalizerRuntimeProbe struct {
@@ -189,9 +190,9 @@ func TestRunSessionDurationPlanUsesCommonFinalizerOnLoopFailure(t *testing.T) {
 	flushCalls := 0
 	finalizeCalls := 0
 	plan := sessionRuntimePlan{
-		loop:        sessionLoopOptions{audioService: newTestAudioIOService()},
 		mode:        sessionRuntimeModeRecordOpenAI,
 		capturePath: "capture.json",
+		loop:        sessionLoopOptions{audioService: newTestAudioIOService()},
 		inferencer:  &durationTestInferencer{connectErr: primaryErr},
 		capabilityCoordinator: NewSessionCapabilityCoordinator(func() error {
 			capabilityCalls++
@@ -207,7 +208,7 @@ func TestRunSessionDurationPlanUsesCommonFinalizerOnLoopFailure(t *testing.T) {
 		},
 	}
 
-	ctx := WithSessionDurationArtifacts(context.Background(), artifacts)
+	ctx := durationwire.NewService().WithArtifacts(context.Background(), artifacts)
 	gotErr := runSessionDurationPlan(ctx, io.Discard, plan, 0, nil)
 	for _, wantErr := range []error{primaryErr, capabilityErr, captureErr, finalizeErr, artifacts.closeErr} {
 		if !errors.Is(gotErr, wantErr) {

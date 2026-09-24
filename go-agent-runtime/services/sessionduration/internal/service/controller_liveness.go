@@ -1,0 +1,252 @@
+package service
+
+import (
+	"strings"
+
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+)
+
+func (c *controller) isEmptyResponseLocked(msg messages.StreamMessage) bool {
+	value, ok := msg.Value.(*messages.MessageEndValue)
+	if !ok || value == nil || c.responseOutput || c.toolObligation || msg.ResponsePurpose == messages.ResponsePurposeToolAcknowledgement {
+		return false
+	}
+	if value.TerminalReason != messages.TerminalReasonPartialOutput || value.OutputState != messages.TerminalOutputNone || value.Usage.CompletionTokens != 0 {
+		return false
+	}
+	if value.TerminalReason == messages.TerminalReasonCancellation || value.TerminalProvenance == messages.TerminalProvenanceLoop || strings.EqualFold(strings.TrimSpace(value.Status), "cancelled") {
+		return false
+	}
+	return true
+}
+
+func (c *controller) makeLivenessErrorLocked(msg messages.StreamMessage, timeout bool) error {
+	classification := "silent_provider_empty_response"
+	cause := sessionduration.ErrProviderEmptyResponse
+	if timeout {
+		classification = "silent_provider_timeout"
+		cause = sessionduration.ErrProviderLivenessTimeout
+	}
+	responseID := strings.TrimSpace(msg.ResponseID)
+	if responseID == "" {
+		responseID = c.livenessResponseID
+	}
+	err := &sessionduration.LivenessError{
+		Classification:     classification,
+		ResponseID:         responseID,
+		TerminalReason:     messages.TerminalReasonTerminalFailure,
+		TerminalProvenance: messages.TerminalProvenanceSession,
+		OutputState:        messages.TerminalOutputNone,
+		Cause:              cause,
+	}
+	if value, ok := msg.Value.(*messages.MessageEndValue); ok && value != nil {
+		err.Usage = value.Usage
+	}
+	return err
+}
+
+func (c *controller) observeLivenessResponseIDLocked(msg messages.StreamMessage) {
+	if msg.Type == messages.StreamTypeMessageStart || msg.Type == messages.StreamTypeResponseCreate {
+		c.livenessResponseID = strings.TrimSpace(msg.ResponseID)
+		return
+	}
+	if responseID := strings.TrimSpace(msg.ResponseID); responseID != "" {
+		c.livenessResponseID = responseID
+	}
+}
+
+func (c *controller) observeCancellationLocked(msg messages.StreamMessage) (handled, disarm bool) {
+	cancelledID := strings.TrimSpace(msg.ResponseID)
+	if cancelledID != "" && c.livenessResponseID != "" && cancelledID != c.livenessResponseID {
+		return true, false
+	}
+	if cancelledID == "" {
+		cancelledID = c.livenessResponseID
+	}
+	c.livenessCancelled = true
+	c.livenessCancelID = cancelledID
+	return true, true
+}
+
+func (c *controller) prepareLivenessObservationLocked(msg messages.StreamMessage) (handled, disarm bool) {
+	if msg.Type == messages.StreamTypeResponseCancel {
+		return c.observeCancellationLocked(msg)
+	}
+	if isNonProviderRole(msg.Role) || isToolAcknowledgementResponse(msg) {
+		return true, false
+	}
+	if msg.Type == messages.StreamTypeResponseCreate || msg.Type == messages.StreamTypeMessageStart {
+		c.prepareLivenessResponseLocked(msg)
+	}
+	return false, false
+}
+
+func (c *controller) prepareLivenessResponseLocked(msg messages.StreamMessage) {
+	responseID := strings.TrimSpace(msg.ResponseID)
+	if msg.Type == messages.StreamTypeResponseCreate || c.livenessCancelID == "" || responseID != c.livenessCancelID {
+		c.livenessCancelled = false
+		c.livenessCancelID = ""
+	}
+}
+
+func isProviderOutput(msg messages.StreamMessage) bool {
+	if isNonProviderRole(msg.Role) {
+		return false
+	}
+	//nolint:exhaustive // only provider output boundaries affect liveness.
+	switch msg.Type {
+	case messages.StreamTypeTextDelta, messages.StreamTypeAudioDelta, messages.StreamTypeImageDelta, messages.StreamTypeVideoDelta, messages.StreamTypeFileDelta, messages.StreamTypeEmbeddingDelta, messages.StreamTypeReasoningDelta, messages.StreamTypeTranscriptDelta, messages.StreamTypeTextEnd, messages.StreamTypeAudioEnd, messages.StreamTypeImageEnd, messages.StreamTypeVideoEnd, messages.StreamTypeFileEnd, messages.StreamTypeEmbeddingEnd, messages.StreamTypeReasoningEnd, messages.StreamTypeTranscriptEnd:
+		return true
+	default:
+		return false
+	}
+}
+
+func isToolAcknowledgementResponse(msg messages.StreamMessage) bool {
+	if msg.ResponsePurpose == messages.ResponsePurposeToolAcknowledgement {
+		return true
+	}
+	if msg.Type != messages.StreamTypeResponseCreate {
+		return false
+	}
+	value, ok := msg.Value.(*messages.ResponseCreateValue)
+	return ok && value.IsToolAcknowledgement()
+}
+
+func isNonProviderRole(role messages.Role) bool {
+	return role == messages.RoleUser || role == messages.RoleSystem || role == messages.RoleTool
+}
+
+func (c *controller) armLiveness(onlyIfArmed bool) {
+	if c == nil || !c.options.Liveness.Enabled || c.options.LivenessClock == nil {
+		return
+	}
+	c.armMu.Lock()
+	defer c.armMu.Unlock()
+	timeout := c.options.Liveness.Timeout
+	if timeout <= 0 {
+		timeout = defaultLivenessTimeout
+	}
+	c.mu.Lock()
+	if !c.canArmLivenessLocked(onlyIfArmed) {
+		c.mu.Unlock()
+		return
+	}
+	c.mu.Unlock()
+	timer := c.options.LivenessClock.NewTimer(timeout)
+	if timer == nil {
+		c.report(sessionduration.ErrSchedulerUnavailable)
+		return
+	}
+	c.mu.Lock()
+	if !c.canArmLivenessLocked(onlyIfArmed) {
+		c.mu.Unlock()
+		timer.Stop()
+		return
+	}
+	old, wake := c.installLivenessLocked(timer)
+	c.mu.Unlock()
+	if old != nil {
+		old.Stop()
+	}
+	select {
+	case wake <- struct{}{}:
+	default:
+	}
+	c.livenessWatchOnce.Do(func() { go c.watchLiveness() })
+}
+
+func (c *controller) canArmLivenessLocked(onlyIfArmed bool) bool {
+	return c.ctx.Err() == nil && !c.closed && !c.livenessStopped && !c.localToolActive && !c.livenessCancelled && c.livenessFailure == nil &&
+		(onlyIfArmed && c.livenessArmed || !onlyIfArmed && !c.livenessArmed)
+}
+
+func (c *controller) installLivenessLocked(timer sessionTimer) (sessionTimer, chan struct{}) {
+	old := c.livenessTimer
+	c.livenessTimer = timer
+	c.livenessArmed = true
+	c.livenessGeneration++
+	return old, c.livenessWake
+}
+
+func (c *controller) watchLiveness() {
+	for {
+		c.mu.Lock()
+		if c.closed || c.livenessStopped {
+			c.mu.Unlock()
+			return
+		}
+		generation := c.livenessGeneration
+		timer := c.livenessTimer
+		wake := c.livenessWake
+		ctx := c.ctx
+		armed := c.livenessArmed && timer != nil
+		c.mu.Unlock()
+		if !armed {
+			select {
+			case <-wake:
+				continue
+			case <-ctx.Done():
+				c.stopLiveness()
+				return
+			}
+		}
+		select {
+		case <-timer.C():
+			c.expireLiveness(generation)
+		case <-wake:
+		case <-ctx.Done():
+			c.stopLiveness()
+			return
+		}
+	}
+}
+
+func (c *controller) expireLiveness(generation uint64) {
+	c.mu.Lock()
+	if c.ctx.Err() != nil || c.closed || c.livenessStopped || c.localToolActive || !c.livenessArmed || c.livenessGeneration != generation {
+		c.mu.Unlock()
+		return
+	}
+	var err error
+	if c.livenessFailure == nil {
+		err = c.makeLivenessErrorLocked(messages.StreamMessage{}, true)
+		c.livenessFailure = err
+	}
+	c.livenessArmed = false
+	timer := c.livenessTimer
+	c.livenessTimer = nil
+	c.livenessGeneration++
+	c.mu.Unlock()
+	if timer != nil {
+		timer.Stop()
+	}
+	if err != nil {
+		c.reportLiveness(err)
+	}
+}
+
+func (c *controller) stopLiveness() {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	if !c.livenessArmed && c.livenessTimer == nil {
+		c.mu.Unlock()
+		return
+	}
+	c.livenessArmed = false
+	c.livenessGeneration++
+	timer := c.livenessTimer
+	c.livenessTimer = nil
+	wake := c.livenessWake
+	c.mu.Unlock()
+	if timer != nil {
+		timer.Stop()
+	}
+	select {
+	case wake <- struct{}{}:
+	default:
+	}
+}

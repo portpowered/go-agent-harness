@@ -16,7 +16,8 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/wire"
+	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
@@ -240,8 +241,10 @@ func TestPlanSessionRuntime_WebRTCDispatchesThroughRuntimeFactory(t *testing.T) 
 	runtime := &testSessionRTCRuntime{}
 	var got SessionRuntimeSelection
 	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
-		SessionInferencer: &selectionTestInferencer{}, Transport: SessionTransportWebRTC,
-		Signaling: signaling, MediaSource: media,
+		SessionInferencer: &selectionTestInferencer{},
+		Transport:         "WebRTC",
+		Signaling:         signaling,
+		MediaSource:       media,
 	}, sessionRuntimeFactory{
 		newRTCRuntime: func(selection SessionRuntimeSelection) (SessionRTCRuntime, error) {
 			got = selection
@@ -252,7 +255,8 @@ func TestPlanSessionRuntime_WebRTCDispatchesThroughRuntimeFactory(t *testing.T) 
 		t.Fatalf("planSessionRuntimeWithFactory: %v", err)
 	}
 	if got != (SessionRuntimeSelection{Transport: SessionTransportWebRTC, SignalingEndpoint: signaling, MediaSource: media}) ||
-		plan.rtcRuntime != runtime || plan.transport != SessionTransportWebRTC || plan.signalingEndpoint != signaling || plan.mediaSource != media {
+		plan.rtcRuntime != runtime || plan.transport != SessionTransportWebRTC ||
+		plan.signalingEndpoint != signaling || plan.mediaSource != media {
 		t.Fatalf("runtime selection = %#v; plan = (%q, %q, %q), want exact WebRTC values and owned runtime", got, plan.transport, plan.signalingEndpoint, plan.mediaSource)
 	}
 	if _, ok := plan.inferencer.(*sessionRTCRuntimeInferencer); !ok || runtime.closeCount != 0 {
@@ -260,19 +264,6 @@ func TestPlanSessionRuntime_WebRTCDispatchesThroughRuntimeFactory(t *testing.T) 
 	}
 	if err := runtime.Close(); err != nil {
 		t.Fatalf("cleanup test runtime: %v", err)
-	}
-
-	failedRuntime := &testSessionRTCRuntime{}
-	loaded := &config.Config{Model: config.ModelConfig{Provider: config.ProviderOpenAI, OpenAI: &config.OpenAIConfig{Model: openAIRealtimeDefaultModel, APIKey: "openai-runtime-test-key"}}}
-	factory := defaultSessionRuntimeFactory()
-	factory.newRTCRuntime = func(SessionRuntimeSelection) (SessionRTCRuntime, error) { return failedRuntime, nil }
-	_, err = planSessionRuntimeWithFactory(SessionRunOptions{
-		ModelCatalog: testModelCatalog(), LoadedConfig: loaded, Provider: config.ProviderOpenAI,
-		Transport: SessionTransportWebRTC, Signaling: "loopback://plan/transcription-failure", MediaSource: "fixture://plan/transcription-failure",
-		RTCBinding: runtimedevices.RTCBindingRequest{InputPresent: true},
-	}, factory)
-	if err == nil || !strings.Contains(err.Error(), "audio service is required for transcription resolution") || failedRuntime.closeCount != 1 {
-		t.Fatalf("WebRTC transcription preflight error = %v, RTC close count = %d; want missing audio service and one close", err, failedRuntime.closeCount)
 	}
 }
 
@@ -386,18 +377,18 @@ model:
 		return newScriptedSession(), nil
 	}}
 
+	clockSource := platformclock.Real{}
 	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
-		RecordPath:  filepath.Join(t.TempDir(), "rtc.session.json"),
-		ConfigDir:   configDir,
-		Transport:   SessionTransportWebRTC,
-		Signaling:   "loopback://record/sentinel",
-		MediaSource: "fixture://record/sentinel",
+		RecordPath:             filepath.Join(t.TempDir(), "rtc.session.json"),
+		ConfigDir:              configDir,
+		Transport:              SessionTransportWebRTC,
+		Signaling:              "loopback://record/sentinel",
+		MediaSource:            "fixture://record/sentinel",
+		RecordingService:       wire.NewService(clockSource),
+		ProviderCaptureService: wire.NewProviderCaptureService(clockSource),
 	}, sessionRuntimeFactory{
 		newRTCRuntime: func(SessionRuntimeSelection) (SessionRTCRuntime, error) {
 			return runtime, nil
-		},
-		newRecordingDialer: func(inner transport.Dialer, _, _ string) sessionRecordingDialer {
-			return &testForwardingRecordingDialer{inner: inner}
 		},
 		newGrokSessionInferencer: func(_ config.GrokConfig, dialer transport.Dialer) (messages.SessionInferencer, error) {
 			providerDialer = dialer
@@ -414,6 +405,9 @@ model:
 	if err := session.Close(); err != nil {
 		t.Fatalf("close planned WebRTC provider: %v", err)
 	}
+	if err := plan.flushCapture(); err != nil {
+		t.Fatalf("flush planned WebRTC recording: %v", err)
+	}
 	if want := []string{"start runtime", "connect provider", "dial provider-endpoint", "close runtime"}; !reflect.DeepEqual(order, want) {
 		t.Fatalf("provider handoff order = %v, want %v", order, want)
 	}
@@ -428,7 +422,7 @@ model:
     model: grok-websocket-test
     api_key: test-key
 `)
-	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{AudioService: newTestAudioIOService(), ModelCatalog: testModelCatalog(),
 		SessionInferencer: &selectionTestInferencer{},
 		Transport:         SessionTransportWebSocket,
 		Provider:          config.ProviderGrok,
@@ -491,14 +485,17 @@ func TestRunSession_WebRTCCompletesHermeticTurnThroughExportedService(t *testing
 	}
 
 	var out bytes.Buffer
+	clockSource := platformclock.Real{}
 	err := RunSession(ctx, &out, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
-		RecordPath:        filepath.Join(t.TempDir(), "hermetic.session.json"),
-		Transport:         SessionTransportWebRTC,
-		Signaling:         signalingEndpoint,
-		MediaSource:       mediaSource,
-		SessionInferencer: &hermeticSessionInferencer{fixture: fixture},
-		RTCRuntimeFactory: runtimeFactory,
-		Prompt:            "complete one hermetic turn",
+		RecordPath:             filepath.Join(t.TempDir(), "hermetic.session.json"),
+		Transport:              SessionTransportWebRTC,
+		Signaling:              signalingEndpoint,
+		MediaSource:            mediaSource,
+		SessionInferencer:      &hermeticSessionInferencer{fixture: fixture},
+		RTCRuntimeFactory:      runtimeFactory,
+		RecordingService:       wire.NewService(clockSource),
+		ProviderCaptureService: wire.NewProviderCaptureService(clockSource),
+		Prompt:                 "complete one hermetic turn",
 		StreamObserver: func(msg messages.StreamMessage) {
 			observationsMu.Lock()
 			observations = append(observations, msg)
@@ -738,16 +735,6 @@ type testRTCConn struct{}
 func (testRTCConn) ReadMessage() (int, []byte, error) { return 0, nil, io.EOF }
 func (testRTCConn) WriteMessage(int, []byte) error    { return nil }
 func (testRTCConn) Close() error                      { return nil }
-
-type testForwardingRecordingDialer struct {
-	inner transport.Dialer
-}
-
-func (d *testForwardingRecordingDialer) Dial(endpoint string, headers map[string]string) (transport.Conn, error) {
-	return d.inner.Dial(endpoint, headers)
-}
-
-func (*testForwardingRecordingDialer) FlushToFile(string) error { return nil }
 
 type testSessionRTCRuntime struct {
 	dataPlane  SessionRTCDataPlane

@@ -13,6 +13,8 @@ import (
 	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimedeviceswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
 	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
+	recordingwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/wire"
+	replaywire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
@@ -44,6 +46,9 @@ func newInjectedSessionService(deps servicewire.SessionDependencies) serviceSess
 			deps.Logger,
 			deps.ModelCatalog,
 			servicewire.NewBrowserConversationService(),
+			recordingwire.NewService(deps.Clock),
+			recordingwire.NewProviderCaptureService(deps.Clock),
+			replaywire.NewService(),
 		)
 	}
 	return servicewire.NewSessionService(deps)

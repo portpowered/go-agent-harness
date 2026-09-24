@@ -11,10 +11,13 @@ import (
 	serviceDevices "github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices"
 	impl "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime"
 	audioio "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
+	recordingwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/wire"
+	replaywire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
 const DefaultOpenAIRealtimeModel = impl.DefaultOpenAIRealtimeModel
@@ -40,19 +43,35 @@ func ValidateSessionAudioDeviceConflicts(audioInFile, audioOutFile, audioInDevic
 }
 
 func RunSession(ctx context.Context, out io.Writer, opts SessionRunOptions) error {
-	return impl.RunSession(ctx, out, opts)
+	return impl.RunSession(ctx, out, withDefaultRuntimeServices(opts))
 }
 
 func RunSessionWithInstructions(ctx context.Context, out io.Writer, opts SessionRunOptions, systemPrompt string) error {
-	return impl.RunSessionWithInstructions(ctx, out, opts, systemPrompt)
+	return impl.RunSessionWithInstructions(ctx, out, withDefaultRuntimeServices(opts), systemPrompt)
 }
 
 func RunSessionWithMaxDuration(ctx context.Context, out io.Writer, opts SessionRunOptions, maxDuration time.Duration) error {
-	return impl.RunSessionWithMaxDuration(ctx, out, opts, maxDuration)
+	return impl.RunSessionWithMaxDuration(ctx, out, withDefaultRuntimeServices(opts), maxDuration)
 }
 
 func RunSessionWithMaxDurationClock(ctx context.Context, out io.Writer, opts SessionRunOptions, maxDuration time.Duration, durationClock SessionDurationClock) error {
-	return impl.RunSessionWithMaxDurationClock(ctx, out, opts, maxDuration, durationClock)
+	return impl.RunSessionWithMaxDurationClock(ctx, out, withDefaultRuntimeServices(opts), maxDuration, durationClock)
+}
+
+// withDefaultRuntimeServices keeps the acceptance seam aligned with the
+// application composition root while allowing focused fixtures to specify only
+// the provider and transport behavior under test.
+func withDefaultRuntimeServices(opts SessionRunOptions) SessionRunOptions {
+	if opts.RecordingService == nil {
+		opts.RecordingService = recordingwire.NewService(clock.Real{})
+	}
+	if opts.ProviderCaptureService == nil {
+		opts.ProviderCaptureService = recordingwire.NewProviderCaptureService(clock.Real{})
+	}
+	if opts.ReplayService == nil {
+		opts.ReplayService = replaywire.NewService()
+	}
+	return opts
 }
 
 const ParticipantTerminationEnded = impl.ParticipantTerminationEnded

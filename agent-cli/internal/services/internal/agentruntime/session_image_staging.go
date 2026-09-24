@@ -19,6 +19,10 @@ import (
 // inline image turn still uses the validated parts supplied by the caller;
 // staging is only needed for a later model-issued read_image call.
 func prepareSessionImageToolAccess(opts SessionRunOptions, sourcePaths []string, parts []messages.ImagePart) (SessionRunOptions, func(), error) {
+	return prepareSessionImageToolAccessContext(context.Background(), opts, sourcePaths, parts)
+}
+
+func prepareSessionImageToolAccessContext(ctx context.Context, opts SessionRunOptions, sourcePaths []string, parts []messages.ImagePart) (SessionRunOptions, func(), error) {
 	if !sessionHasTool(opts.ToolDefinitions, runtimeTools.ReadImageToolID) {
 		return opts, noOpSessionImageCleanup, nil
 	}
@@ -30,7 +34,7 @@ func prepareSessionImageToolAccess(opts SessionRunOptions, sourcePaths []string,
 	if err != nil {
 		return opts, noOpSessionImageCleanup, fmt.Errorf("stage session images: %w", err)
 	}
-	staged, err := runtimeToolsWire.NewImageStaging().Stage(context.Background(), runtimeTools.ImageStagingRequest{
+	staged, err := runtimeToolsWire.NewImageStaging().Stage(ctx, runtimeTools.ImageStagingRequest{
 		StagingRoot:            configDir,
 		SourcePaths:            sourcePaths,
 		ImageParts:             parts,

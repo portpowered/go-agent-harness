@@ -2,18 +2,15 @@ package wire
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
-	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 func TestNewServiceBuildsIndependentFactories(t *testing.T) {
@@ -165,24 +162,16 @@ func TestPublicWireLiveRecorderClassifiesProviderMessages(t *testing.T) {
 }
 
 func TestPublicWireReplayMetricsReconcilesAllWireModalities(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "metrics.session.json")
-	capture := gatewaytesting.SessionCapture{Version: gatewaytesting.SessionCaptureVersion, Records: []gatewaytesting.CapturedSessionEvent{
-		{Sequence: 1, Direction: gatewaytesting.DirectionServerToClient, Type: "response.output_text.delta", PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage, Payload: json.RawMessage(`{"type":"response.output_text.delta","delta":"hello"}`)},
-		{Sequence: 2, Direction: gatewaytesting.DirectionClientToServer, Type: "input_audio_buffer.append", PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage, Payload: json.RawMessage(`{"type":"input_audio_buffer.append","audio":"AQID"}`)},
-		{Sequence: 3, Direction: gatewaytesting.DirectionServerToClient, Type: "response.audio.delta", PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage, Payload: json.RawMessage(`{"type":"response.audio.delta","delta":"AQID"}`)},
-		{Sequence: 4, Direction: gatewaytesting.DirectionServerToClient, Type: "response.function_call_arguments.delta", PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage, Payload: json.RawMessage(`{"type":"response.function_call_arguments.delta","call_id":"call-1","delta":"x"}`)},
-		{Sequence: 5, Direction: gatewaytesting.DirectionServerToClient, Type: "response.function_call_arguments.done", PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage, Payload: json.RawMessage(`{"type":"response.function_call_arguments.done","call_id":"call-2","arguments":"args"}`)},
-		{Sequence: 6, Direction: gatewaytesting.DirectionClientToServer, Type: "conversation.item.create", PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage, Payload: json.RawMessage(`{"type":"conversation.item.create","item":{"content":[{"type":"input_text","text":"hey"}]}}`)},
-	}}
-	data, err := json.Marshal(capture)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, data, 0o600); err != nil {
-		t.Fatal(err)
-	}
+	path := "fixture.capture"
 	collector := NewReplayMetricsCollector(sessiontrace.MetricsCollectorOptions{
 		Clock: clock.Real{},
+		ReplayInspector: metricsCaptureInspector{facts: replay.CaptureFacts{MetricDeltas: []replay.CaptureMetricDelta{
+			{Direction: metrics.DirectionOutput, Modality: metrics.ModalityText, Bytes: 5},
+			{Direction: metrics.DirectionOutput, Modality: metrics.ModalityAudio, Bytes: 3},
+			{Direction: metrics.DirectionOutput, Modality: metrics.ModalityTool, Bytes: 5},
+			{Direction: metrics.DirectionInput, Modality: metrics.ModalityAudio, Bytes: 3},
+			{Direction: metrics.DirectionInput, Modality: metrics.ModalityText, Bytes: 3},
+		}}},
 		Runner: func(context.Context, string, string) (metrics.Snapshot, error) {
 			return metrics.Snapshot{Series: []metrics.SeriesSnapshot{
 				{Direction: metrics.DirectionOutput, Modality: metrics.ModalityText, TotalBytes: 5},
@@ -207,4 +196,10 @@ func TestPublicWireReplayMetricsReconcilesAllWireModalities(t *testing.T) {
 			t.Fatalf("metrics[%s] = %v, want %v", key, got[key], expected)
 		}
 	}
+}
+
+type metricsCaptureInspector struct{ facts replay.CaptureFacts }
+
+func (i metricsCaptureInspector) InspectCapture(context.Context, string) (replay.CaptureInspection, error) {
+	return replay.CaptureInspection{Facts: i.facts}, nil
 }

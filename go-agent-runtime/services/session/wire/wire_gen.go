@@ -10,11 +10,14 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/execution"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/instructions"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live"
 	session2 "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/persistence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/service"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
@@ -44,6 +47,13 @@ func NewFileStoreFactory() session.FileStoreFactory {
 	return factory
 }
 
+// NewDuplexLoopFactory assembles the session execution loop constructor behind
+// the duration service's narrow factory contract.
+func NewDuplexLoopFactory() sessionduration.DuplexLoopFactory {
+	duplexLoopFactory := live.NewDuplexLoopFactory()
+	return duplexLoopFactory
+}
+
 // providers.go:
 
 // Dependencies contains the provider-neutral edges for a text session.
@@ -58,6 +68,7 @@ type Dependencies struct {
 	Store           session.SessionStore
 	TraceStore      session.TraceStore
 	ProviderService providers.Service
+	ReplayService   replay.Service
 	ToolService     tools.Service
 	Logger          logging.Logger
 }
@@ -65,8 +76,9 @@ type Dependencies struct {
 func newFileStoreFactory() *session2.Factory { return session2.NewFactory() }
 
 func newExecutor(deps Dependencies) *agent.Executor {
-	return agent.NewExecutorWithToolServiceAndLogger(
+	return agent.NewExecutorWithReplayServiceAndToolServiceAndLogger(
 		deps.ToolService,
+		deps.ReplayService,
 		deps.ToolExecutor,
 		append([]messages.ToolDefinition(nil), deps.ToolDefinitions...),
 		deps.Inferencer,

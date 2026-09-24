@@ -108,6 +108,10 @@ func resolveRequestInputs(ctx context.Context, request serviceSession.Request, r
 	if err != nil {
 		return requestInputs{}, err
 	}
+	inspection := inputs.inspection
+	if inspection != nil {
+		request.ReplayPath = inspection.CapturePath
+	}
 	instructions, err := resolveAndComposeInstructions(ctx, request, inputs.capabilities, deps)
 	if err != nil {
 		return requestInputs{}, err
@@ -117,20 +121,27 @@ func resolveRequestInputs(ctx context.Context, request serviceSession.Request, r
 	if err != nil {
 		return requestInputs{}, err
 	}
-	replayPlan, requestPrompt, promptPresent, err := buildReplayPlan(request, inputs.inspection, requestPrompt, promptPresent)
+	replayPlan, requestPrompt, promptPresent, err := buildReplayPlan(request, inspection, requestPrompt, promptPresent)
 	if err != nil {
 		return requestInputs{}, err
 	}
+	inputRate, outputRate := replayRates(replayPlan, request, inspection)
+	turnCapture := inspection != nil && inspection.Kind == runtimeReplay.CaptureKindTurn
 	inputs.instructions = instructions
 	inputs.requestPrompt = requestPrompt
 	inputs.promptPresent = promptPresent
 	inputs.openingParts = openingParts
 	inputs.openingResponse = openingResponse
 	inputs.replayPlan = replayPlan
-	inputs.inputRate, inputs.outputRate = replayRates(replayPlan, request, inputs.inspection)
-	inputs.turnCapture = inputs.inspection != nil && inputs.inspection.Kind == runtimeReplay.CaptureKindTurn
-	inputs.replayFinish = inputs.inspection != nil && !inputs.turnCapture && (replayPlan == nil || replayPlan.StopAfterResponse)
+	inputs.inputRate = inputRate
+	inputs.outputRate = outputRate
+	inputs.replayFinish = replayFinishesAtBoundary(inspection, replayPlan, turnCapture)
+	inputs.turnCapture = turnCapture
 	return inputs, nil
+}
+
+func replayFinishesAtBoundary(inspection *runtimeReplay.CaptureInspection, plan *runtimeSession.LiveReplayPlan, turnCapture bool) bool {
+	return inspection != nil && !turnCapture && (plan == nil || plan.StopAfterResponse)
 }
 
 func resolveAndComposeInstructions(ctx context.Context, request serviceSession.Request, capabilities *runtimeSession.LiveCapabilities, deps RequestDependencies) (string, error) {
@@ -256,7 +267,8 @@ func assembleLiveRequest(request serviceSession.Request, inputs requestInputs) r
 		Replay: runtimeSession.LiveReplayPolicy{
 			Kind:             replayKind(inputs.inspection),
 			InputCapturePath: inputCapturePath, OutputCapturePath: request.RecordPath,
-			Timing: replayTiming(request.ReplayTiming),
+			InjectedCaptureAllowed: request.RecordPath != "",
+			Timing:                 replayTiming(request.ReplayTiming),
 		},
 		ReplayPlan:            inputs.replayPlan,
 		MaxDuration:           request.MaxDuration,
@@ -269,7 +281,7 @@ func assembleLiveRequest(request serviceSession.Request, inputs requestInputs) r
 		// Provider-neutral turn captures own completion through their recorded
 		// SESSION.CLOSE, which may follow multiple output responses.
 		FinishAfterResponse: !request.WaitForClose && !inputs.turnCapture && (inputs.promptPresent || hasAudioInput(request) || len(inputs.openingParts) > 0 || inputs.replayFinish || request.AudioOutputPath != ""),
-		ExpectedResponses:   expectedResponses(request, inputs.promptPresent, inputs.openingParts, inputs.openingResponse),
+		ExpectedResponses:   replayExpectedResponses(request, inputs, inputs.promptPresent, inputs.openingParts, inputs.openingResponse),
 	}
 	appendToolNames(&result, inputs.capabilities)
 	return result
@@ -290,26 +302,12 @@ func admitReplay(ctx context.Context, path string, inspection *runtimeReplay.Cap
 	}
 	loaded, err := service.InspectCapture(ctx, path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("replay session capture %s: %w", path, err)
 	}
 	if !loaded.IsRealtime() && loaded.Kind != runtimeReplay.CaptureKindTurn {
 		return nil, fmt.Errorf("replay capture %s has unsupported session kind %q", path, loaded.Kind)
 	}
 	return &loaded, nil
-}
-
-func replayKind(inspection *runtimeReplay.CaptureInspection) runtimeSession.LiveReplayKind {
-	if inspection == nil {
-		return ""
-	}
-	switch inspection.Kind {
-	case runtimeReplay.CaptureKindRealtime:
-		return runtimeSession.LiveReplayKindRealtime
-	case runtimeReplay.CaptureKindTurn:
-		return runtimeSession.LiveReplayKindTurn
-	default:
-		return ""
-	}
 }
 
 func resolveCredentialReference(apiKey string, resolve func(string) string) string {
@@ -351,20 +349,13 @@ func buildReplayPlan(request serviceSession.Request, inspection *runtimeReplay.C
 	if inspection == nil {
 		return nil, requestPrompt, promptPresent, nil
 	}
-	if inspection.Kind == runtimeReplay.CaptureKindTurn {
-		// Turn captures replay the recorded output stream without a caller plan.
-		return nil, requestPrompt, promptPresent, nil
-	}
 	if inspection.LivePlan == nil {
 		// InspectCapture classifies caller-driven realtime captures even when
 		// their recorded client actions cannot be reproduced by the narrow
-		// self-driving plan. An explicit prompt, image, or audio input supplies
-		// the actions for this invocation, so strict provider replay can still
-		// consume the captured transport without inventing a plan.
-		if promptPresent || len(request.ImagePaths) > 0 || hasAudioInput(request) {
-			return nil, requestPrompt, promptPresent, nil
-		}
-		return nil, requestPrompt, promptPresent, errors.New("live replay plan is unavailable")
+		// self-driving plan. The strict provider replay still consumes the
+		// captured transport; the host must not invent client actions or reject
+		// a provider-only capture merely because it has no replay plan.
+		return nil, requestPrompt, promptPresent, nil
 	}
 	plan := *inspection.LivePlan
 	// Explicit caller input is checked by the strict replay transport, which
@@ -383,7 +374,14 @@ func buildReplayPlan(request serviceSession.Request, inspection *runtimeReplay.C
 }
 
 func replayPlanHasActions(plan runtimeSession.LiveReplayPlan) bool {
-	return plan.OpeningPromptPresent || len(plan.AudioTurns) > 0 || plan.StopAfterResponse || plan.ProviderCloseExpected
+	return plan.OpeningPromptPresent || len(plan.AudioTurns) > 0 || plan.StopAfterResponse || plan.ProviderCloseExpected || plan.ExpectedResponses > 0
+}
+
+func replayExpectedResponses(request serviceSession.Request, inputs requestInputs, promptPresent bool, openingParts []messages.ContentPart, openingResponse runtimeSession.LiveOpeningMessageResponse) int {
+	if inputs.replayPlan != nil && inputs.replayPlan.ExpectedResponses > 0 {
+		return inputs.replayPlan.ExpectedResponses
+	}
+	return expectedResponses(request, promptPresent, openingParts, openingResponse)
 }
 
 func appendToolNames(result *runtimeSession.LiveRequest, capabilities *runtimeSession.LiveCapabilities) {

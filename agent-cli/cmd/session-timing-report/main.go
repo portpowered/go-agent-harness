@@ -1,14 +1,14 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/sessiontiming"
-	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+	runtimeReplayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
 )
 
 func main() {
@@ -27,11 +27,7 @@ func run(args []string, output io.Writer) error {
 	if *capturePath == "" {
 		return fmt.Errorf("session timing report requires -capture")
 	}
-	capture, err := gwtesting.LoadSessionCapture(*capturePath)
-	if err != nil {
-		return err
-	}
-	report, err := sessiontiming.AnalyzeCapture(capture)
+	report, err := runtimeReplayWire.NewService().AnalyzeTiming(context.Background(), *capturePath)
 	if err != nil {
 		return err
 	}

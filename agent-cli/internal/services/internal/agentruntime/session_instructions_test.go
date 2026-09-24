@@ -66,9 +66,7 @@ func TestRunSessionWithInstructions_SourceMatrix(t *testing.T) {
 				writeFile(t, filepath.Join(workspaceDir, workspace.AgentsMDFileName), agentsInstructionsMarker)
 				return ""
 			},
-			want: func(_ *testing.T, _, _ string) string {
-				return agentsInstructionsMarker
-			},
+			want:            func(_ *testing.T, _, _ string) string { return agentsInstructionsMarker },
 			wantConfigCount: 1,
 		},
 		{
@@ -78,9 +76,7 @@ func TestRunSessionWithInstructions_SourceMatrix(t *testing.T) {
 				writeFile(t, filepath.Join(workspaceDir, workspace.AgentsMDFileName), "")
 				return ""
 			},
-			want: func(_ *testing.T, _, _ string) string {
-				return ""
-			},
+			want:            func(_ *testing.T, _, _ string) string { return "" },
 			wantConfigCount: 0,
 		},
 		{
@@ -117,9 +113,7 @@ func TestRunSessionWithInstructions_SourceMatrix(t *testing.T) {
 				writeFile(t, promptPath, fileInstructionsMarker)
 				return promptPath
 			},
-			want: func(_ *testing.T, _, _ string) string {
-				return fileInstructionsMarker
-			},
+			want:            func(_ *testing.T, _, _ string) string { return fileInstructionsMarker },
 			wantConfigCount: 1,
 		},
 		{
@@ -129,9 +123,7 @@ func TestRunSessionWithInstructions_SourceMatrix(t *testing.T) {
 				writeFile(t, filepath.Join(workspaceDir, workspace.AgentsMDFileName), agentsInstructionsMarker)
 				return rawInstructionsMarker
 			},
-			want: func(_ *testing.T, _, _ string) string {
-				return rawInstructionsMarker
-			},
+			want:            func(_ *testing.T, _, _ string) string { return rawInstructionsMarker },
 			wantConfigCount: 1,
 		},
 		{
@@ -141,9 +133,7 @@ func TestRunSessionWithInstructions_SourceMatrix(t *testing.T) {
 				writeFile(t, filepath.Join(workspaceDir, workspace.AgentsMDFileName), agentsInstructionsMarker)
 				return filepath.Join(workspaceDir, "missing-prompt.md")
 			},
-			want: func(_ *testing.T, _, explicit string) string {
-				return explicit
-			},
+			want:            func(_ *testing.T, _, explicit string) string { return explicit },
 			wantConfigCount: 1,
 		},
 	}
@@ -161,7 +151,7 @@ func TestRunSessionWithInstructions_SourceMatrix(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 
-			err := agentruntime.RunSessionWithInstructions(ctx, bytes.NewBuffer(nil), agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
+			err := agentruntime.RunSessionWithInstructions(ctx, bytes.NewBuffer(nil), agentruntime.SessionRunOptions{AudioService: audioiowire.NewService(), ModelCatalog: testModelCatalog(),
 				ReplayPath:        filepath.Join(workspaceDir, "session.json"),
 				ConfigDir:         workspaceDir,
 				Prompt:            userTurnMarker,
@@ -203,7 +193,7 @@ func TestRunSessionWithInstructions_MissingAgentsMDSendsNoToolGroundingOrFile(t 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	err := agentruntime.RunSessionWithInstructions(ctx, bytes.NewBuffer(nil), agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
+	err := agentruntime.RunSessionWithInstructions(ctx, bytes.NewBuffer(nil), agentruntime.SessionRunOptions{AudioService: audioiowire.NewService(), ModelCatalog: testModelCatalog(),
 		ReplayPath:        filepath.Join(workspaceDir, "session.json"),
 		ConfigDir:         workspaceDir,
 		Prompt:            userTurnMarker,
@@ -232,7 +222,7 @@ func TestRunSessionWithInstructions_ExplicitPromptDoesNotReconcileAgentsMD(t *te
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	err := agentruntime.RunSessionWithInstructions(ctx, bytes.NewBuffer(nil), agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
+	err := agentruntime.RunSessionWithInstructions(ctx, bytes.NewBuffer(nil), agentruntime.SessionRunOptions{AudioService: audioiowire.NewService(), ModelCatalog: testModelCatalog(),
 		ReplayPath:        filepath.Join(workspaceDir, "session.json"),
 		ConfigDir:         workspaceDir,
 		Prompt:            userTurnMarker,
@@ -256,12 +246,11 @@ func TestRunSessionWithInstructions_OpenAIInitialConfigCarriesGroundingWithTools
 	writeFile(t, filepath.Join(workspaceDir, workspace.AgentsMDFileName), agentsInstructionsMarker)
 	writeFile(t, filepath.Join(workspaceDir, config.ConfigFileName), "model:\n  provider: openai\n")
 	realtimeConn := newRecordingRealtimeTestConn()
-	recordPath := filepath.Join(t.TempDir(), "openai-grounding.session.json")
+	recorder := gwtesting.NewRecordingWebSocketDialer(&recordingRealtimeTestDialer{conn: realtimeConn}, "openai", "gpt-realtime")
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	err := agentruntime.RunSessionWithInstructions(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
-		RecordPath:      recordPath,
+	err := agentruntime.RunSessionWithInstructions(ctx, io.Discard, agentruntime.SessionRunOptions{AudioService: audioiowire.NewService(), ModelCatalog: testModelCatalog(),
 		Provider:        config.ProviderOpenAI,
 		Model:           "gpt-realtime",
 		APIKey:          "test-api-key",
@@ -269,16 +258,13 @@ func TestRunSessionWithInstructions_OpenAIInitialConfigCarriesGroundingWithTools
 		Prompt:          userTurnMarker,
 		ToolExecutor:    &messages.DefaultToolExecutor{},
 		ToolDefinitions: []messages.ToolDefinition{{Name: "inspect_machine", Description: "Inspect machine state"}},
-		WebSocketDialer: &recordingRealtimeTestDialer{conn: realtimeConn},
+		WebSocketDialer: recorder,
 	}, "")
 	if err != nil {
 		t.Fatalf("RunSessionWithInstructions: %v", err)
 	}
 
-	capture, err := gwtesting.LoadSessionCapture(recordPath)
-	if err != nil {
-		t.Fatalf("LoadSessionCapture: %v", err)
-	}
+	capture := recorder.Capture()
 	configCount := 0
 	configIndex := -1
 	userIndex := -1
@@ -459,7 +445,7 @@ func TestRunSessionWithInstructionsAndOptions_PreservesExplicitSeed(t *testing.T
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	err := agentruntime.RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
+	err := agentruntime.RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx, io.Discard, agentruntime.SessionRunOptions{AudioService: audioiowire.NewService(), ModelCatalog: testModelCatalog(),
 		ReplayPath:        filepath.Join(workspaceDir, "session.json"),
 		ConfigDir:         workspaceDir,
 		SessionInferencer: inferencer,
@@ -476,28 +462,24 @@ func TestRunSessionWithInstructions_OpenAIInitialConfigPrecedesUserTurn(t *testi
 	writeFile(t, filepath.Join(workspaceDir, config.ConfigFileName), "model:\n  provider: openai\n")
 	realtimeConn := newRecordingRealtimeTestConn()
 	realtimeDialer := &recordingRealtimeTestDialer{conn: realtimeConn}
-	recordPath := filepath.Join(t.TempDir(), "openai-session.json")
+	recorder := gwtesting.NewRecordingWebSocketDialer(realtimeDialer, "openai", "gpt-realtime")
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	err := agentruntime.RunSessionWithInstructions(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
-		RecordPath:      recordPath,
+	err := agentruntime.RunSessionWithInstructions(ctx, io.Discard, agentruntime.SessionRunOptions{AudioService: audioiowire.NewService(), ModelCatalog: testModelCatalog(),
 		Provider:        config.ProviderOpenAI,
 		Model:           "gpt-realtime",
 		APIKey:          "test-api-key",
 		ConfigDir:       workspaceDir,
 		Prompt:          userTurnMarker,
 		Voice:           "marin",
-		WebSocketDialer: realtimeDialer,
+		WebSocketDialer: recorder,
 	}, "")
 	if err != nil {
 		t.Fatalf("RunSessionWithInstructions: %v", err)
 	}
 
-	capture, err := gwtesting.LoadSessionCapture(recordPath)
-	if err != nil {
-		t.Fatalf("LoadSessionCapture: %v", err)
-	}
+	capture := recorder.Capture()
 	configIndex := -1
 	userIndex := -1
 	configCount := 0
@@ -583,8 +565,7 @@ model:
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	err := agentruntime.RunSessionWithInstructions(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
-		RecordPath:      filepath.Join(t.TempDir(), "grok-session.json"),
+	err := agentruntime.RunSessionWithInstructions(ctx, io.Discard, agentruntime.SessionRunOptions{AudioService: audioiowire.NewService(), ModelCatalog: testModelCatalog(),
 		Provider:        config.ProviderGrok,
 		Model:           "grok-3-mini",
 		APIKey:          "test-api-key",
@@ -609,7 +590,7 @@ func TestRunSessionWithInstructions_ConfigurationSendFailureStopsBeforeUserTurn(
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	err := agentruntime.RunSessionWithInstructions(ctx, &out, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
+	err := agentruntime.RunSessionWithInstructions(ctx, &out, agentruntime.SessionRunOptions{AudioService: audioiowire.NewService(), ModelCatalog: testModelCatalog(),
 		ReplayPath:        filepath.Join(workspaceDir, "session.json"),
 		ConfigDir:         workspaceDir,
 		Prompt:            userTurnMarker,

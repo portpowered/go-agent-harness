@@ -83,6 +83,12 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/test/integration",
       "file": "test/integration/session_service_composition_test.go",
       "reason": "CLI integration host assembles the public session wire"
+    },
+    {
+      "module": "github.com/portpowered/go-agent-harness/go-agent-runtime",
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay",
+      "file": "services/replay/service_public_integrity_test.go",
+      "reason": "replay public contract test exercises the service through generated Wire"
     }
   ],
   "module_rules": [

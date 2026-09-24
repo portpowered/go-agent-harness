@@ -19,6 +19,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
+	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
@@ -34,13 +35,11 @@ const (
 	defaultCustomerSimulationSecretFile        = "~/.you-agent-factory/secrets/OPENAPI_API_KEY"
 )
 
-// CustomerSimulationSuiteRunner is the command's process-runner seam. The
-// production constructor installs probe.RunCustomerSimulationSuite; tests can
-// replace it with a credential-free fake without touching the live command.
+// CustomerSimulationSuiteRunner is the process seam; tests may replace the
+// production suite runner with a credential-free fake.
 type CustomerSimulationSuiteRunner func(context.Context, probe.CustomerSimulationSuiteOptions) (probe.CustomerSimulationSuiteResult, error)
 
-// CustomerSimulationCommand exposes one explicit opt-in command for the
-// billed, process-boundary customer simulation suite.
+// CustomerSimulationCommand exposes the opt-in billed process-boundary suite.
 type CustomerSimulationCommand struct {
 	Live                      bool
 	Required                  bool
@@ -70,14 +69,14 @@ type CustomerSimulationCommand struct {
 	ShutdownGrace       time.Duration
 	ReportPath          string
 
-	globalFlags *flags.GlobalFlags
-	run         CustomerSimulationSuiteRunner
-	validator   probe.CustomerSimulationValidatorAgent
+	globalFlags   *flags.GlobalFlags
+	run           CustomerSimulationSuiteRunner
+	validator     probe.CustomerSimulationValidatorAgent
+	ReplayService runtimeReplay.StreamMessageCodec
 }
 
-// NewCustomerSimulationCommand constructs the opt-in customer simulation
-// command. It performs no network or filesystem work until Execute is called
-// with --live.
+// NewCustomerSimulationCommand constructs the opt-in command without I/O before
+// Execute is called with --live.
 func NewCustomerSimulationCommand(globalFlags *flags.GlobalFlags) *CustomerSimulationCommand {
 	return &CustomerSimulationCommand{
 		Provider:            defaultCustomerSimulationProvider,
@@ -234,6 +233,7 @@ func (c *CustomerSimulationCommand) runCommand(cmd *cobra.Command, positional []
 	result, runErr := runner(cmd.Context(), probe.CustomerSimulationSuiteOptions{
 		BinaryPath: binaryPath, RunRoot: c.RunRoot, Provider: c.Provider, Model: c.Model, BaseURL: c.BaseURL, APIKey: apiKey, SystemPrompt: c.SystemPrompt,
 		Runs: runs, Validator: validator, ValidatorTimeout: c.ValidatorTimeout, MaxDuration: c.MaxDuration, FrameDuration: c.FrameDuration, SilenceDuration: c.SilenceDuration, ShutdownGrace: c.ShutdownGrace,
+		ReplayService: c.ReplayService,
 	})
 	if writeErr := writeCustomerSimulationReport(cmd, c.ReportPath, result, apiKey, validatorAPIKey); writeErr != nil {
 		return writeErr
@@ -246,10 +246,7 @@ func (c *CustomerSimulationCommand) runCommand(cmd *cobra.Command, positional []
 	}
 	fmt.Fprintf(cmd.ErrOrStderr(), "customer-simulation: %d/%d validator verdicts WORKED; evidence root %s\n", passed, len(result.Runs), result.Root)
 	resultErr := validateCustomerSimulationCommandResult(result, scenarios)
-	if runErr != nil || resultErr != nil {
-		return errors.Join(runErr, resultErr)
-	}
-	return nil
+	return errors.Join(runErr, resultErr)
 }
 
 // validateCustomerSimulationCommandResult is the CLI's final fail-closed

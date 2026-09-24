@@ -88,11 +88,11 @@ func TestWireCapturePromptReachesConversationItemCreate(t *testing.T) {
 	const prompt = "Say hello in one short sentence."
 	recorder := gwtesting.NewRecordingWebSocketDialer(&scriptedRealtimeDialer{}, "openai", "gpt-realtime-2.1-mini")
 
-	opts := agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
+	opts := agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
+		AudioService:    audioiowire.NewService(),
 		Provider:        "openai",
 		Model:           "gpt-realtime-2.1-mini",
 		APIKey:          "test-key",
-		RecordPath:      t.TempDir() + "/capture.json",
 		ConfigDir:       t.TempDir(),
 		WebSocketDialer: recorder,
 	}
@@ -147,11 +147,11 @@ func TestWireCapturePromptReachesWireWithDurationBound(t *testing.T) {
 	const prompt = "Say hello in one short sentence."
 	recorder := gwtesting.NewRecordingWebSocketDialer(&scriptedRealtimeDialer{}, "openai", "gpt-realtime-2.1-mini")
 
-	opts := agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
+	opts := agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
+		AudioService:    audioiowire.NewService(),
 		Provider:        "openai",
 		Model:           "gpt-realtime-2.1-mini",
 		APIKey:          "test-key",
-		RecordPath:      t.TempDir() + "/capture.json",
 		ConfigDir:       t.TempDir(),
 		WebSocketDialer: recorder,
 	}

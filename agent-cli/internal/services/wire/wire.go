@@ -24,9 +24,11 @@ import (
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeDevicesWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
 	runtimeProviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	runtimeRecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
+	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	runtimeRoomEvidenceWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
+	runtimeRoomReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	runtimeRoomReplayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay/wire"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
@@ -73,9 +75,9 @@ func NewRoomLatencyService() roomevidence.LatencyService {
 	return runtimeRoomEvidenceWire.NewLatencyService()
 }
 
-func NewRoomService(live runtimeSession.LiveService, media runtimeRooms.MediaFactory, registry devicegw.DeviceRegistry, clockSource clock.Scheduler, replay roomreplay.Service, evidence roomevidence.Service, latency roomevidence.LatencyService) runtimeRooms.Service {
+func NewRoomService(live runtimeSession.LiveService, media runtimeRooms.MediaFactory, registry devicegw.DeviceRegistry, clockSource clock.Scheduler, replay runtimeRoomReplay.Service, evidence roomevidence.Service, latency roomevidence.LatencyService) runtimeRooms.Service {
 	return roomwire.NewService(roomwire.Dependencies{
-		Live: live, Media: media, Replay: replay, Registry: registry, Clock: clockSource,
+		Live: live, Media: media, Registry: registry, Clock: clockSource, Replay: replay,
 		Evidence: evidence, Latency: latency,
 	})
 }
@@ -83,14 +85,19 @@ func NewRoomService(live runtimeSession.LiveService, media runtimeRooms.MediaFac
 // NewRoomServiceWithDevices lets application composition inject the complete
 // device service. The room adapter is constructed in the room service wire
 // package, keeping device registries and gateway workers out of room policy.
-func NewRoomServiceWithDevices(live runtimeSession.LiveService, deviceService runtimeDevices.Service, registry devicegw.DeviceRegistry, clockSource clock.Scheduler, replay roomreplay.Service, evidence roomevidence.Service, latency roomevidence.LatencyService) runtimeRooms.Service {
+func NewRoomServiceWithDevices(live runtimeSession.LiveService, deviceService runtimeDevices.Service, registry devicegw.DeviceRegistry, clockSource clock.Scheduler, replay runtimeRoomReplay.Service, evidence roomevidence.Service, latency roomevidence.LatencyService) runtimeRooms.Service {
 	return roomwire.NewService(roomwire.Dependencies{
-		Live: live, Devices: deviceService, Replay: replay, Registry: registry, Clock: clockSource,
+		Live: live, Devices: deviceService, Registry: registry, Clock: clockSource, Replay: replay,
 		Evidence: evidence, Latency: latency,
 	})
 }
 
-var RoomSet = wire.NewSet(runtimeRoomReplayWire.NewService, NewRoomEvidenceService, NewRoomLatencyService, NewRoomServiceWithDevices) //nolint:gochecknoglobals // immutable Wire provider metadata
+// NewRoomReplayService composes room bundle admission with the shared replay inspector.
+func NewRoomReplayService(replayService runtimeReplay.Service) runtimeRoomReplay.Service {
+	return runtimeRoomReplayWire.NewService(replayService)
+}
+
+var RoomSet = wire.NewSet(NewRoomReplayService, NewRoomEvidenceService, NewRoomLatencyService, NewRoomServiceWithDevices) //nolint:gochecknoglobals // immutable Wire provider metadata
 
 // NewToolCapabilitiesService keeps session tool composition in the private
 // service implementation while allowing the CLI to provide its browser seam.
@@ -128,6 +135,12 @@ func (s legacyToolCapabilitiesService) Resolve(cfg *config.Config) (serviceTools
 	return capabilities, nil
 }
 
+// NewBrowserConversationService keeps browser conversation orchestration in
+// the reusable runtime service while exposing only its public contract.
+func NewBrowserConversationService() runtimeBrowser.Service {
+	return runtimeBrowserWire.NewService()
+}
+
 // DeviceSet is the device service's complete provider set. Application Wire
 // composition includes this set alongside the existing registry provider.
 var DeviceSet = wire.NewSet(NewDeviceService, NewDeviceProbeSessionFactory, NewDeviceProbeService, audioiowire.NewService, runtimeDevicesWire.NewService) //nolint:gochecknoglobals // immutable Wire provider metadata
@@ -158,13 +171,15 @@ func NewSessionService(deps SessionDependencies) serviceSession.SessionService {
 
 // NewSessionRuntime builds the private runtime implementation behind its
 // public contract. Application Wire never imports services/internal.
-func NewSessionRuntime(audioService audioio.Service, clockSource clock.Source, resolver serviceTools.Service, planFactory agentruntime.SessionRuntimeFactory, runtimeFactory agentruntime.SessionRTCRuntimeFactory, inferencer messages.SessionInferencer, toolExecutor messages.ToolExecutor, deviceService runtimeDevices.Service, observer agentruntime.SessionRuntimeObserver, metricSampler observability.MetricSampler, logger observability.Logger, modelCatalog runtimeProviders.ModelCatalog, browserConversation runtimeBrowser.Service) serviceRuntime.Runtime {
+func NewSessionRuntime(audioService audioio.Service, clockSource clock.Source, resolver serviceTools.Service, planFactory agentruntime.SessionRuntimeFactory, runtimeFactory agentruntime.SessionRTCRuntimeFactory, inferencer messages.SessionInferencer, toolExecutor messages.ToolExecutor, deviceService runtimeDevices.Service, observer agentruntime.SessionRuntimeObserver, metricSampler observability.MetricSampler, logger observability.Logger, modelCatalog runtimeProviders.ModelCatalog, browserConversation runtimeBrowser.Service, recordingService runtimeRecording.Service, providerCaptureService runtimeRecording.ProviderCaptureService, replayService runtimeReplay.Service) serviceRuntime.Runtime {
 	return agentruntime.New(agentruntime.Dependencies{
 		AudioService: audioService, Clock: clockSource, PlanFactory: planFactory, ToolService: resolver, RuntimeFactory: runtimeFactory,
 		SessionInferencer: inferencer, ToolExecutor: toolExecutor,
 		DeviceService: deviceService, RuntimeObserver: observer,
-		Observability: observability.NewDependencies(metricSampler, logger),
-		ModelCatalog:  modelCatalog, BrowserConversation: browserConversation,
+		Observability:       observability.NewDependencies(metricSampler, logger),
+		ModelCatalog:        modelCatalog,
+		BrowserConversation: browserConversation,
+		RecordingService:    recordingService, ProviderCaptureService: providerCaptureService, ReplayService: replayService,
 	})
 }
 
@@ -173,12 +188,3 @@ func NewSessionRuntimeFactory() agentruntime.SessionRuntimeFactory {
 }
 
 var SessionSet = wire.NewSet(NewSessionRuntimeFactory, NewSessionRuntime, NewSessionService)
-
-// NewBrowserConversationService exposes the complete browser-conversation
-// vertical through its service-owned Wire provider. The CLI graph receives
-// only the public contract and never imports the private implementation.
-func NewBrowserConversationService() runtimeBrowser.Service {
-	return runtimeBrowserWire.NewService()
-}
-
-func BrowserConversationSet() wire.ProviderSet { return wire.NewSet(NewBrowserConversationService) }

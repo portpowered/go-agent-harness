@@ -308,13 +308,24 @@ func devicesRequest(request serviceSession.Request, liveRequest runtimeSession.L
 		sampleRate = 24000
 	}
 	return runtimeDevices.Request{
-		InputDevice: request.AudioInputDevice, OutputDevice: request.AudioOutputDevice,
+		InputDevice: normalizeDeviceSelector(request.AudioInputDevice), OutputDevice: normalizeDeviceSelector(request.AudioOutputDevice),
 		RemoteEndpoint:  request.AudioDeviceServer,
 		CaptureEnabled:  request.InteractiveDevices || request.AudioInputDevicePresent,
 		PlaybackEnabled: request.InteractiveDevices || request.AudioOutputDevicePresent,
 		SampleRate:      sampleRate, Channels: audio.Channels, PlaybackProfile: "voice",
 		HoldToneConfig: request.HoldToneConfig,
 	}
+}
+
+// normalizeDeviceSelector translates the CLI's historical "default" spelling
+// to the service contract's empty-selector default. Device IDs remain opaque;
+// only this stateless compatibility spelling is handled at the host edge.
+func normalizeDeviceSelector(selector string) string {
+	selector = strings.TrimSpace(selector)
+	if strings.EqualFold(selector, "default") {
+		return ""
+	}
+	return selector
 }
 
 func applyFileSchedulers(filePorts *FilePorts, scheduler clock.Scheduler) {
@@ -357,7 +368,7 @@ func captureCompleteControls(request serviceSession.Request, custom func(service
 	if custom != nil {
 		return custom(request)
 	}
-	if !request.AudioInput.Present && len(request.AudioTurns) == 0 {
+	if !request.AudioInput.Present && len(request.AudioTurns) == 0 && len(request.AudioInterrupts) == 0 {
 		return nil
 	}
 	return []runtimeSession.LiveControl{{Kind: runtimeSession.LiveControlAudioCommit}}

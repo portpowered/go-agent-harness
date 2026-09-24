@@ -15,13 +15,16 @@ import (
 	"testing"
 	"time"
 
+	replaywire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	roomreplaywire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay/wire"
 	roomanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
-func roomReplayAudioTestService() roomreplay.Service { return roomreplaywire.NewService() }
+func roomReplayAudioTestService() roomreplay.Service {
+	return roomreplaywire.NewService(replaywire.NewService())
+}
 
 func TestLoadRoomReplayAudioBundleResolvesIdentityTimingAndExactDeltas(t *testing.T) {
 	bundle, manifest, want := writeRoomReplayAudioBundle(t)

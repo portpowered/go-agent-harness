@@ -20,6 +20,8 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	duration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
@@ -29,7 +31,7 @@ func TestRunSessionWithMaxDuration_RejectsNegativeBeforePlanning(t *testing.T) {
 	artifactDir := t.TempDir()
 	wavPath := filepath.Join(artifactDir, "negative.wav")
 	transcriptPath := filepath.Join(artifactDir, "negative.jsonl")
-	err := RunSessionWithMaxDuration(WithSessionDurationArtifactPaths(context.Background(), SessionDurationArtifactPaths{
+	err := RunSessionWithMaxDuration(durationwire.NewService().WithArtifactPaths(context.Background(), duration.SessionDurationArtifactPaths{
 		AudioPath:      wavPath,
 		TranscriptPath: transcriptPath,
 	}), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
@@ -38,12 +40,9 @@ func TestRunSessionWithMaxDuration_RejectsNegativeBeforePlanning(t *testing.T) {
 	if err == nil {
 		t.Fatal("negative max duration returned nil")
 	}
-	var durationErr *SessionMaxDurationError
-	if !errors.As(err, &durationErr) {
-		t.Fatalf("error type = %T, want *SessionMaxDurationError: %v", err, err)
-	}
-	if !errors.Is(err, ErrInvalidSessionMaxDuration) {
-		t.Fatalf("error does not preserve ErrInvalidSessionMaxDuration: %v", err)
+	var durationErr *duration.InvalidDurationError
+	if !errors.As(err, &durationErr) || !errors.Is(err, duration.ErrInvalidDuration) {
+		t.Fatalf("error = %T/%v, want InvalidDurationError wrapping ErrInvalidDuration", err, err)
 	}
 	if inferencer.connected {
 		t.Fatal("negative duration started the injected session")
@@ -55,11 +54,11 @@ func TestRunSessionWithMaxDuration_RejectsNegativeBeforePlanning(t *testing.T) {
 		t.Fatalf("negative duration opened transcript artifact: %v", statErr)
 	}
 }
-
 func TestRunSessionWithMaxDuration_ZeroDoesNotCreateTimer(t *testing.T) {
 	clock := &durationTestClock{}
 	var out bytes.Buffer
-	err := RunSessionWithMaxDurationClock(context.Background(), &out, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+	err := RunSessionWithMaxDurationClock(context.Background(), &out, SessionRunOptions{ModelCatalog: testModelCatalog(),
+		AudioService:      newTestAudioIOService(),
 		ReplayPath:        "synthetic.session.json",
 		SessionInferencer: &durationTestInferencer{events: durationNaturalEvents()},
 	}, 0, clock)
@@ -73,13 +72,12 @@ func TestRunSessionWithMaxDuration_ZeroDoesNotCreateTimer(t *testing.T) {
 		t.Fatalf("zero duration did not preserve natural output/reason: %q", out.String())
 	}
 }
-
 func TestSessionDurationAdmission_PreservesCompleteMessageCapabilities(t *testing.T) {
 	inner := &durationCompleteMessageSession{
 		complete:        true,
 		withoutResponse: true,
 	}
-	wrapped := &sessionDurationAdmissionSession{inner: inner}
+	wrapped := durationwire.NewService().NewAdmissionSession(context.Background(), inner, durationwire.NewService().NewEventAdmission(), nil)
 	message := messages.NewTextMessage(messages.RoleUser, "image result")
 
 	if !wrapped.SendMessage(context.Background(), message) {
@@ -98,20 +96,18 @@ func TestSessionDurationAdmission_PreservesCompleteMessageCapabilities(t *testin
 		t.Fatalf("forwarded complete messages = %d/%d, want one of each", len(inner.messages), len(inner.deferredMessages))
 	}
 }
-
 func TestSessionDurationAdmission_ForwardsNonTerminalDiagnosticWithoutShutdown(t *testing.T) {
 	msg := messages.StreamMessage{
 		Type:  messages.StreamTypeError,
 		Value: messages.NewNonTerminalErrorValue("response is not active", "response_cancel_not_active"),
 	}
-	if isDurationShutdownMessage(msg) {
+	if durationwire.NewService().IsDurationShutdownMessage(msg) {
 		t.Fatal("nonterminal provider diagnostic is a shutdown message")
 	}
-	if !isDurationForwardMessage(msg) {
+	if !durationwire.NewService().IsDurationForwardMessage(msg) {
 		t.Fatal("nonterminal provider diagnostic was not retained for forwarding")
 	}
 }
-
 func TestSessionCommandHelpAndOmittedDurationBehavior(t *testing.T) {
 	_, testFile, _, ok := runtime.Caller(0)
 	if !ok {
@@ -151,13 +147,15 @@ func TestSessionCommandHelpAndOmittedDurationBehavior(t *testing.T) {
 	}
 }
 
+type durationS2Case struct {
+	name          string
+	maxDuration   time.Duration
+	wantTimerCall int
+	wantReason    string
+}
+
 func TestRunSessionWithMaxDuration_S2Table(t *testing.T) {
-	cases := []struct {
-		name          string
-		maxDuration   time.Duration
-		wantTimerCall int
-		wantReason    string
-	}{
+	cases := []durationS2Case{
 		{name: "omitted", maxDuration: 0, wantTimerCall: 0, wantReason: "provider_close"},
 		{name: "zero", maxDuration: 0, wantTimerCall: 0, wantReason: "provider_close"},
 		{name: "negative", maxDuration: -time.Millisecond, wantTimerCall: 0},
@@ -167,74 +165,75 @@ func TestRunSessionWithMaxDuration_S2Table(t *testing.T) {
 	}
 
 	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			clock := &durationTestClock{}
-			if testCase.maxDuration < 0 {
-				inferencer := &durationTestInferencer{}
-				err := RunSessionWithMaxDurationClock(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(), SessionInferencer: inferencer}, testCase.maxDuration, clock)
-				var durationErr *SessionMaxDurationError
-				if !errors.As(err, &durationErr) || inferencer.connected || clock.calls != testCase.wantTimerCall {
-					t.Fatalf("negative case error=%v connected=%v timer_calls=%d", err, inferencer.connected, clock.calls)
-				}
-				return
-			}
-
-			if testCase.maxDuration == 0 {
-				var out bytes.Buffer
-				err := RunSessionWithMaxDurationClock(context.Background(), &out, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
-					ReplayPath:        "synthetic.session.json",
-					SessionInferencer: &durationTestInferencer{events: durationNaturalEvents()},
-				}, testCase.maxDuration, clock)
-				if err != nil {
-					t.Fatalf("unbounded case: %v", err)
-				}
-				if !strings.Contains(out.String(), "terminal_reason=provider_close") {
-					t.Fatalf("unbounded case lost natural terminal reason: %q", out.String())
-				}
-			} else {
-				writer := newDurationTestWriter()
-				events := durationOutputEvents()
-				closeAfterEvents := false
-				if testCase.name == "longer_than_session" {
-					events = durationNaturalEvents()
-					closeAfterEvents = true
-				}
-				inferencer := &durationTestInferencer{
-					events:           events,
-					connectedCh:      make(chan struct{}),
-					closeAfterEvents: closeAfterEvents,
-				}
-				runErrCh := make(chan error, 1)
-				go func() {
-					runErrCh <- runAgentLoopSessionWithDurationClock(context.Background(), writer, inferencer, sessionLoopOptions{audioService: newTestAudioIOService()}, testCase.maxDuration, clock)
-				}()
-				select {
-				case <-inferencer.connectedCh:
-				case <-time.After(2 * time.Second):
-					t.Fatal("session did not connect")
-				}
-				if testCase.name == "deadline_during_output" {
-					writer.waitFor(t, "accepted output")
-				}
-				if testCase.name != "longer_than_session" {
-					clock.fire()
-				}
-				select {
-				case err := <-runErrCh:
-					if err != nil {
-						t.Fatalf("bounded case: %v", err)
-					}
-				case <-time.After(2 * time.Second):
-					t.Fatal("bounded case did not finish")
-				}
-				if !strings.Contains(writer.String(), "terminal_reason="+testCase.wantReason) {
-					t.Fatalf("bounded case terminal output = %q", writer.String())
-				}
-			}
-			if clock.calls != testCase.wantTimerCall || testCase.maxDuration > 0 && (clock.timer == nil || !clock.timer.stopped) {
-				t.Fatalf("timer lifecycle calls=%d timer=%v", clock.calls, clock.timer)
-			}
-		})
+		t.Run(testCase.name, func(t *testing.T) { runDurationS2Case(t, testCase) })
+	}
+}
+func runDurationS2Case(t *testing.T, testCase durationS2Case) {
+	clock := &durationTestClock{}
+	if testCase.maxDuration < 0 {
+		runNegativeDurationCase(t, testCase, clock)
+		return
+	}
+	if testCase.maxDuration == 0 {
+		runUnboundedDurationCase(t, testCase, clock)
+	} else {
+		runBoundedDurationCase(t, testCase, clock)
+	}
+	if clock.calls != testCase.wantTimerCall || testCase.maxDuration > 0 && (clock.timer == nil || !clock.timer.stopped) {
+		t.Fatalf("timer lifecycle calls=%d timer=%v", clock.calls, clock.timer)
+	}
+}
+func runNegativeDurationCase(t *testing.T, testCase durationS2Case, clock *durationTestClock) {
+	inferencer := &durationTestInferencer{}
+	err := RunSessionWithMaxDurationClock(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(), SessionInferencer: inferencer}, testCase.maxDuration, clock)
+	var durationErr *duration.InvalidDurationError
+	if !errors.As(err, &durationErr) || inferencer.connected || clock.calls != testCase.wantTimerCall {
+		t.Fatalf("negative case error=%v connected=%v timer_calls=%d", err, inferencer.connected, clock.calls)
+	}
+}
+func runUnboundedDurationCase(t *testing.T, testCase durationS2Case, clock *durationTestClock) {
+	var out bytes.Buffer
+	err := RunSessionWithMaxDurationClock(context.Background(), &out, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(), ReplayPath: "synthetic.session.json", SessionInferencer: &durationTestInferencer{events: durationNaturalEvents()}}, testCase.maxDuration, clock)
+	if err != nil {
+		t.Fatalf("unbounded case: %v", err)
+	}
+	if !strings.Contains(out.String(), "terminal_reason=provider_close") {
+		t.Fatalf("unbounded case lost natural terminal reason: %q", out.String())
+	}
+}
+func runBoundedDurationCase(t *testing.T, testCase durationS2Case, clock *durationTestClock) {
+	writer := newDurationTestWriter()
+	events := durationOutputEvents()
+	closeAfterEvents := testCase.name == "longer_than_session"
+	if closeAfterEvents {
+		events = durationNaturalEvents()
+	}
+	inferencer := &durationTestInferencer{events: events, connectedCh: make(chan struct{}), closeAfterEvents: closeAfterEvents}
+	runErrCh := make(chan error, 1)
+	go func() {
+		runErrCh <- runAgentLoopSessionWithDurationClock(context.Background(), writer, inferencer, sessionLoopOptions{}, testCase.maxDuration, clock)
+	}()
+	select {
+	case <-inferencer.connectedCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("session did not connect")
+	}
+	if testCase.name == "deadline_during_output" {
+		writer.waitFor(t, "accepted output")
+	}
+	if !closeAfterEvents {
+		clock.fire()
+	}
+	select {
+	case err := <-runErrCh:
+		if err != nil {
+			t.Fatalf("bounded case: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("bounded case did not finish")
+	}
+	if !strings.Contains(writer.String(), "terminal_reason="+testCase.wantReason) {
+		t.Fatalf("bounded case terminal output = %q", writer.String())
 	}
 }
 
@@ -278,7 +277,6 @@ func TestRunSessionWithMaxDuration_GracefullyClosesAtDeadline(t *testing.T) {
 		t.Fatalf("duration timer lifecycle = calls:%d stopped:%v, want one stopped timer", clock.calls, clock.timer.stopped)
 	}
 }
-
 func TestRunSessionWithMaxDuration_NaturalCompletionKeepsNaturalReason(t *testing.T) {
 	clock := &durationTestClock{}
 	var out bytes.Buffer
@@ -417,25 +415,27 @@ func (c *durationTestClock) NewTimer(time.Duration) SessionDurationTimer {
 	if firstTimer {
 		c.calls++
 	}
-	c.timer = &durationTestTimer{ch: make(chan time.Time, 1)}
+	timer := &durationTestTimer{ch: make(chan time.Time, 1)}
+	if firstTimer {
+		c.timer = timer
+	}
 	if c.pending {
 		c.pending = false
-		c.timer.signal()
+		timer.signal()
 	} else if !firstTimer {
 		// The real drain timer gives buffered provider output a brief chance to
 		// arrive before the terminal boundary closes resources. This legacy seam
 		// has no autonomous clock, so model that small quiet interval locally
 		// while preserving the primary-bound call count above.
-		timer := c.timer
 		timer.wake = time.AfterFunc(25*time.Millisecond, timer.signal)
 	}
-	return c.timer
+	return timer
 }
 
 func (c *durationTestClock) fire() {
 	c.mu.Lock()
-	c.pending = true
 	timer := c.timer
+	c.pending = timer == nil
 	c.mu.Unlock()
 	if timer != nil {
 		timer.signal()
@@ -616,7 +616,7 @@ func TestRunSessionWithMaxDuration_FinalizesRealArtifactsAndRejectsLateFrame(t *
 	}
 	writer := newDurationTestWriter()
 	runErrCh := make(chan error, 1)
-	ctx := WithSessionDurationArtifactPaths(context.Background(), SessionDurationArtifactPaths{
+	ctx := durationwire.NewService().WithArtifactPaths(context.Background(), duration.SessionDurationArtifactPaths{
 		AudioPath:      wavPath,
 		TranscriptPath: transcriptPath,
 	})
@@ -629,7 +629,7 @@ func TestRunSessionWithMaxDuration_FinalizesRealArtifactsAndRejectsLateFrame(t *
 
 	// The ready marker is emitted only after the production artifact lifecycle
 	// has accepted every preceding audio/transcript message.
-	writer.waitFor(t, "artifact-ready")
+	waitForDurationTextOrError(t, writer, runErrCh, "artifact-ready")
 	clock.fire()
 	if inferencer.session == nil {
 		t.Fatal("duration session was not connected")
@@ -738,7 +738,7 @@ func TestRunSessionWithMaxDuration_FinalizesZeroSampleArtifactsBeforeFirstAudio(
 	}
 	var out bytes.Buffer
 	runErrCh := make(chan error, 1)
-	ctx := WithSessionDurationArtifactPaths(context.Background(), SessionDurationArtifactPaths{
+	ctx := durationwire.NewService().WithArtifactPaths(context.Background(), duration.SessionDurationArtifactPaths{
 		AudioPath:      wavPath,
 		TranscriptPath: transcriptPath,
 	})
@@ -750,6 +750,8 @@ func TestRunSessionWithMaxDuration_FinalizesZeroSampleArtifactsBeforeFirstAudio(
 	}()
 	select {
 	case <-inferencer.connectedCh:
+	case err := <-runErrCh:
+		t.Fatalf("zero-sample duration session ended before connect: %v", err)
 	case <-time.After(2 * time.Second):
 		t.Fatal("zero-sample session did not connect")
 	}
@@ -780,44 +782,7 @@ func TestRunSessionWithMaxDuration_FinalizesZeroSampleArtifactsBeforeFirstAudio(
 		t.Fatalf("zero-sample WAV header has unexpected sizes: %v", wavData)
 	}
 
-	transcriptData, err := os.ReadFile(transcriptPath)
-	if err != nil {
-		t.Fatalf("reopen zero-sample transcript artifact: %v", err)
-	}
-	if !bytes.HasSuffix(transcriptData, []byte("\n")) {
-		t.Fatal("zero-sample transcript is missing its trailing JSONL newline")
-	}
-	scanner := bufio.NewScanner(bytes.NewReader(transcriptData))
-	var eventTypes []messages.StreamMessageType
-	var terminalPayload []byte
-	for scanner.Scan() {
-		record, err := transcript.Decode(scanner.Bytes())
-		if err != nil {
-			t.Fatalf("decode zero-sample transcript record: %v", err)
-		}
-		var event struct {
-			Type messages.StreamMessageType `json:"type"`
-		}
-		if err := json.Unmarshal(record.Payload, &event); err != nil {
-			t.Fatalf("decode zero-sample transcript payload: %v", err)
-		}
-		eventTypes = append(eventTypes, event.Type)
-		if event.Type == messages.StreamTypeSessionClose {
-			terminalPayload = append([]byte(nil), record.Payload...)
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		t.Fatalf("scan zero-sample transcript: %v", err)
-	}
-	wantTypes := []messages.StreamMessageType{
-		messages.StreamTypeSessionClose,
-	}
-	if !reflect.DeepEqual(eventTypes, wantTypes) {
-		t.Fatalf("zero-sample transcript event order = %v, want %v", eventTypes, wantTypes)
-	}
-	if !bytes.Contains(terminalPayload, []byte("max_duration")) {
-		t.Fatalf("zero-sample terminal record = %s, want max_duration", terminalPayload)
-	}
+	assertZeroSampleTerminalTranscript(t, transcriptPath)
 }
 
 func TestRunSessionWithMaxDuration_PreservesArtifactFlushAndCloseIdentity(t *testing.T) {
@@ -838,7 +803,7 @@ func TestRunSessionWithMaxDuration_PreservesArtifactFlushAndCloseIdentity(t *tes
 				closeErr: testCase.closeErr,
 			}
 			err := RunSessionWithMaxDurationClock(
-				WithSessionDurationArtifacts(context.Background(), lifecycle),
+				durationwire.NewService().WithArtifacts(context.Background(), lifecycle),
 				io.Discard,
 				SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 					ReplayPath:        "artifact-failure.session.json",
@@ -863,7 +828,7 @@ func TestRunAgentLoopSessionWithDuration_PreservesFailureIdentity(t *testing.T) 
 		context.Background(),
 		io.Discard,
 		&durationTestInferencer{connectErr: providerErr},
-		sessionLoopOptions{audioService: newTestAudioIOService()},
+		sessionLoopOptions{},
 		time.Hour,
 		&durationTestClock{},
 	)
@@ -876,7 +841,7 @@ func TestRunAgentLoopSessionWithDuration_PreservesFailureIdentity(t *testing.T) 
 		context.Background(),
 		failingDurationWriter{err: drainErr},
 		&durationTestInferencer{events: durationOutputEvents()},
-		sessionLoopOptions{audioService: newTestAudioIOService()},
+		sessionLoopOptions{},
 		time.Hour,
 		&durationTestClock{},
 	)
@@ -894,7 +859,7 @@ func TestRunAgentLoopSessionWithDuration_PreservesFailureIdentity(t *testing.T) 
 	closeRunErrCh := make(chan error, 1)
 	go func() {
 		closeRunErrCh <- runAgentLoopSessionWithDurationClock(
-			context.Background(), closeWriter, closeInferencer, sessionLoopOptions{audioService: newTestAudioIOService()}, time.Hour, closeClock,
+			context.Background(), closeWriter, closeInferencer, sessionLoopOptions{}, time.Hour, closeClock,
 		)
 	}()
 	closeWriter.waitFor(t, "accepted output")
@@ -942,7 +907,7 @@ func TestRunSessionWithMaxDuration_ReleasesTimerSessionAndProductionArtifacts(t 
 	}
 	writer := newDurationTestWriter()
 	runErrCh := make(chan error, 1)
-	ctx := WithSessionDurationArtifactPaths(context.Background(), SessionDurationArtifactPaths{
+	ctx := durationwire.NewService().WithArtifactPaths(context.Background(), duration.SessionDurationArtifactPaths{
 		AudioPath:      wavPath,
 		TranscriptPath: transcriptPath,
 	})
@@ -952,7 +917,7 @@ func TestRunSessionWithMaxDuration_ReleasesTimerSessionAndProductionArtifacts(t 
 			SessionInferencer: inferencer,
 		}, time.Nanosecond, clock)
 	}()
-	writer.waitFor(t, "artifact-ready")
+	waitForDurationTextOrError(t, writer, runErrCh, "artifact-ready")
 	clock.fire()
 	if err := <-runErrCh; err != nil {
 		t.Fatalf("resource cutoff: %v", err)
@@ -1054,4 +1019,4 @@ var _ SessionImageMessageSender = (*durationCompleteMessageSession)(nil)
 var _ SessionImageMessageSenderWithoutResponse = (*durationCompleteMessageSession)(nil)
 var _ SessionDurationClock = (*durationTestClock)(nil)
 var _ SessionDurationTimer = (*durationTestTimer)(nil)
-var _ SessionDurationArtifactLifecycle = (*durationArtifactLifecycleProbe)(nil)
+var _ duration.ArtifactLifecycle = (*durationArtifactLifecycleProbe)(nil)

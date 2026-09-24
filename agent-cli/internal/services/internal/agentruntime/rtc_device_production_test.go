@@ -217,7 +217,7 @@ func TestRunSessionRTCBindingUsesProductionProviderMediaOwner(t *testing.T) {
 
 	runErrCh := make(chan error, 1)
 	go func() {
-		runErrCh <- agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
+		runErrCh <- agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{AudioService: audioiowire.NewService(), ModelCatalog: testModelCatalog(),
 			ReplayPath:        "synthetic.json",
 			SessionInferencer: inferencer,
 			DeviceService:     newTestDeviceService(registry),

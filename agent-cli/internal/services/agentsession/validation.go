@@ -5,41 +5,26 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 )
 
 // ErrInvalidSessionMaxDuration identifies a negative --max-duration value.
-var ErrInvalidSessionMaxDuration = errors.New("invalid session max duration")
+var ErrInvalidSessionMaxDuration = sessionduration.ErrInvalidDuration
 
 // SessionMaxDurationError describes a duration that cannot be used as a
 // session bound. It is returned before runtime planning or session startup.
-type SessionMaxDurationError struct {
-	Duration time.Duration
-}
+type SessionMaxDurationError = sessionduration.InvalidDurationError
 
 // InvalidSessionDurationError is retained as a descriptive alias for callers
 // that use the validation error by its general duration name.
 type InvalidSessionDurationError = SessionMaxDurationError
 
-// Error returns an actionable validation message for the CLI.
-func (e *SessionMaxDurationError) Error() string {
-	if e == nil {
-		return ErrInvalidSessionMaxDuration.Error()
-	}
-	return fmt.Sprintf("--max-duration must be non-negative, got %s", e.Duration)
-}
-
-// Unwrap preserves a stable errors.Is identity for duration validation.
-func (e *SessionMaxDurationError) Unwrap() error {
-	return ErrInvalidSessionMaxDuration
-}
-
 // ValidateSessionMaxDuration validates the optional session duration before
 // any provider, session, or output resource is planned.
 func ValidateSessionMaxDuration(duration time.Duration) error {
-	if duration < 0 {
-		return &SessionMaxDurationError{Duration: duration}
-	}
-	return nil
+	return durationwire.NewService().ValidateDuration(duration)
 }
 
 var ErrSessionAudioInTurnBargeRequiresSequence = errors.New("--audio-in-turn-barge requires at least two --audio-in-turn values")

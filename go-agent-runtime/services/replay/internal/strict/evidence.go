@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/internal/capture"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/recording"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
@@ -42,7 +43,7 @@ func deriveEvidence(events []recording.Event, request replay.Request) (gwtesting
 		return gwtesting.SessionCapture{}, nil, nil, 0, 0, err
 	}
 	builder.finishCapture(request)
-	sealed, err := gwtesting.SealSessionCapture(builder.capture)
+	sealed, err := capture.SealReplayCapture(builder.capture)
 	if err != nil {
 		return gwtesting.SessionCapture{}, nil, nil, 0, 0, fmt.Errorf("%w: seal derived capture: %w", replay.ErrBundleMismatch, err)
 	}

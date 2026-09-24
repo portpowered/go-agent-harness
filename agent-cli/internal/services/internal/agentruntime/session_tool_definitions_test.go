@@ -29,13 +29,11 @@ func TestRunSession_OpenAIAdvertisesRegistryExecDefinition(t *testing.T) {
 		t.Fatalf("write config: %v", err)
 	}
 	conn := newRecordingRealtimeTestConn()
-	recordPath := filepath.Join(t.TempDir(), "openai-tools.session.json")
+	recorder := gwtesting.NewRecordingWebSocketDialer(&recordingRealtimeTestDialer{conn: conn}, "openai", "gpt-realtime")
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	var err error
-	err = agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
-		RecordPath:      recordPath,
+	err := agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{AudioService: audioiowire.NewService(), ModelCatalog: testModelCatalog(),
 		Provider:        "openai",
 		Model:           "gpt-realtime",
 		APIKey:          "test-api-key",
@@ -43,16 +41,13 @@ func TestRunSession_OpenAIAdvertisesRegistryExecDefinition(t *testing.T) {
 		Prompt:          "advertise the default tools",
 		ToolExecutor:    capability.Executor,
 		ToolDefinitions: capability.Definitions,
-		WebSocketDialer: &recordingRealtimeTestDialer{conn: conn},
+		WebSocketDialer: recorder,
 	})
 	if err != nil {
 		t.Fatalf("RunSession: %v", err)
 	}
 
-	capture, err := gwtesting.LoadSessionCapture(recordPath)
-	if err != nil {
-		t.Fatalf("LoadSessionCapture: %v", err)
-	}
+	capture := recorder.Capture()
 	var sessionUpdate json.RawMessage
 	for _, record := range capture.Records {
 		if record.Direction == gwtesting.DirectionClientToServer && record.Type == "session.update" {
@@ -179,7 +174,7 @@ func TestRunSession_OpenAIAdvertisesComposedWebMCPDefinitions(t *testing.T) {
 	conn := newRecordingRealtimeTestConn()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	if err := agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
+	if err := agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{AudioService: audioiowire.NewService(), ModelCatalog: testModelCatalog(),
 		Provider:            config.ProviderOpenAI,
 		Model:               "gpt-realtime",
 		APIKey:              "test-api-key",

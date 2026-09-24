@@ -80,7 +80,7 @@ func TestRunSessionRTCBindingPropagatesPumpError(t *testing.T) {
 	})
 	runErrCh := make(chan error, 1)
 	go func() {
-		runErrCh <- agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
+		runErrCh <- agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{AudioService: audioiowire.NewService(), ModelCatalog: testModelCatalog(),
 			ReplayPath:        "synthetic.json",
 			SessionInferencer: sessionInferencer,
 			DeviceService:     newTestDeviceService(registry),
@@ -92,6 +92,8 @@ func TestRunSessionRTCBindingPropagatesPumpError(t *testing.T) {
 	}()
 	select {
 	case <-sessionInferencer.connected:
+	case err := <-runErrCh:
+		t.Fatalf("RunSession exited before provider connect: %v", err)
 	case <-ctx.Done():
 		t.Fatalf("provider session did not connect: %v", ctx.Err())
 	}
@@ -317,7 +319,8 @@ func TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio(t *tes
 	runErr := make(chan error, 1)
 	go func() {
 		runErr <- agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{
-			ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(), Provider: "grok", Model: "test-model", APIKey: "test-key", WaitForClose: true, BareLive: true,
+			AudioService: audioiowire.NewService(),
+			ModelCatalog: testModelCatalog(), Provider: "grok", Model: "test-model", APIKey: "test-key", WaitForClose: true, BareLive: true,
 			SessionInferencer: &terminalDrainExternalInferencer{session: s.provider}, DeviceService: newTestDeviceService(s.registry), RTCBinding: s.request,
 			ToolExecutor: s.toolExecutor, ToolDefinitions: []messages.ToolDefinition{{Name: terminalDrainFirstToolName}, {Name: terminalDrainSecondToolName}},
 			StreamObserver: func(msg messages.StreamMessage) {

@@ -31,12 +31,14 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
-// LiveCredentialReference stores a host-owned credential and returns an opaque
-// selector; raw credential material never crosses the runtime request.
+// LiveCredentialReference stores a host-owned credential and returns an
+// opaque selector suitable for session.LiveRequest. The raw credential never
+// crosses the runtime request or event boundary.
 type LiveCredentialReference func(string) string
 
-// FileDeviceService is a named composition edge for finite file media; its
-// command stores only the common contract while the graph stays explicit.
+// FileDeviceService is a named composition edge for finite file media. The
+// name keeps the generated host graph distinct from the registry-backed
+// devices.Service while the command itself stores only the common contract.
 type FileDeviceService struct {
 	runtimeDevices.Service
 	Scheduler    clock.Scheduler
@@ -44,7 +46,8 @@ type FileDeviceService struct {
 }
 
 // NewSessionCommand creates the session command with both public service
-// contracts. Tests pass nil for self-play when they do not invoke it.
+// contracts. Tests pass nil for the self-play service when they do not invoke
+// that subcommand.
 func NewSessionCommand(
 	askFlags *flags.AskFlags,
 	globalFlags *flags.GlobalFlags,
@@ -169,21 +172,31 @@ func (c *SessionCommand) runRuntimeLiveSessionWithAnnouncements(ctx context.Cont
 		// belong on stderr and stdout must remain byte-clean.
 		announcementOut = out
 	}
-	return livehost.AdaptLiveTerminalError(livehost.Run(ctx, out, request, livehost.Dependencies{
+	return adaptLiveRuntimeCompatibility(livehost.Run(ctx, out, request, livehost.Dependencies{
 		LiveService:        c.liveService,
 		ReplayInspection:   replayInspection,
 		BuildRequest:       c.runtimeLiveRequest,
 		WriteAnnouncements: writeRuntimeLiveAnnouncements,
 		AnnouncementOutput: announcementOut,
 		DeviceService:      c.deviceService,
-		FileDeviceService: livehost.FileDeviceService{
-			Service:   c.fileDeviceService.Service,
-			Scheduler: c.fileDeviceService.Scheduler,
-		},
-		RecordingService: c.recordingService,
-		CredentialValues: runtimeLiveCredentialValues,
-		TraceService:     c.fileDeviceService.TraceService,
+		FileDeviceService:  livehost.FileDeviceService{Service: c.fileDeviceService.Service, Scheduler: c.fileDeviceService.Scheduler},
+		RecordingService:   c.recordingService,
+		TraceService:       c.fileDeviceService.TraceService,
+		CredentialValues:   runtimeLiveCredentialValues,
 	}))
+}
+
+func adaptLiveRuntimeCompatibility(err error) error {
+	if err == nil {
+		return nil
+	}
+	var unresolved *runtimeSession.LiveUnresolvedToolResultsError
+	if !errors.As(err, &unresolved) {
+		return err
+	}
+	return errors.Join(err, &serviceSession.SessionUnresolvedToolResultsError{
+		CallIDs: unresolved.UnresolvedCallIDs(),
+	})
 }
 
 func (c *SessionCommand) runtimeLiveRequest(ctx context.Context, request serviceSession.Request, replayInspection *runtimeReplay.CaptureInspection) (runtimeSession.LiveRequest, error) {

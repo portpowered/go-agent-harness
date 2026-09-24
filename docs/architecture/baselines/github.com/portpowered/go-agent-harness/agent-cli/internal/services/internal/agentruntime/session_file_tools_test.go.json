@@ -8,7 +8,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_file_tools_test.go",
       "symbol": "TestRunAgentLoopSession_FileToolPermissionDeniedThroughRegistryAndComposition",
-      "value": 47,
+      "value": 46,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -18,7 +18,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_file_tools_test.go",
       "symbol": "TestRunAgentLoopSession_FileToolRoundTripThroughRegistryAndComposition",
-      "value": 50,
+      "value": 49,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -28,7 +28,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_file_tools_test.go",
       "symbol": "TestRunAgentLoopSession_FileToolPermissionDeniedThroughRegistryAndComposition",
-      "value": 44,
+      "value": 43,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -38,7 +38,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_file_tools_test.go",
       "symbol": "TestRunAgentLoopSession_FileToolRoundTripThroughRegistryAndComposition",
-      "value": 41,
+      "value": 40,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -48,7 +48,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_file_tools_test.go",
       "symbol": "TestRunAgentLoopSession_FileToolPermissionDeniedThroughRegistryAndComposition",
-      "value": 141,
+      "value": 132,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -58,7 +58,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_file_tools_test.go",
       "symbol": "TestRunAgentLoopSession_FileToolRoundTripThroughRegistryAndComposition",
-      "value": 181,
+      "value": 172,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -68,7 +68,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_file_tools_test.go",
       "symbol": "TestRunAgentLoopSession_FileToolPermissionDeniedThroughRegistryAndComposition",
-      "value": 91,
+      "value": 89,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -78,7 +78,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_file_tools_test.go",
       "symbol": "TestRunAgentLoopSession_FileToolRoundTripThroughRegistryAndComposition",
-      "value": 95,
+      "value": 93,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },

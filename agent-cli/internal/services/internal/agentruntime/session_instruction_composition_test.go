@@ -3,6 +3,7 @@ package agentruntime
 import (
 	"bytes"
 	"context"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -10,7 +11,10 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	recordingwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/wire"
+	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestLivePlannerFamiliesUseOneGroundingComposition(t *testing.T) {
@@ -32,8 +36,10 @@ func TestLivePlannerFamiliesUseOneGroundingComposition(t *testing.T) {
 		},
 		{
 			name: "recording directory",
-			build: func(_ *testing.T, opts SessionRunOptions) (sessionRuntimePlan, func(), error) {
-				return planSessionForDirectoryRecordingWithInstructionsAndContext(context.Background(), opts, "customer instructions", true)
+			build: func(t *testing.T, opts SessionRunOptions) (sessionRuntimePlan, func(), error) {
+				opts.RecordDirectory = filepath.Join(t.TempDir(), "session-evidence")
+				plan, err := planSessionWithResolvedInstructions(opts, "customer instructions")
+				return plan, func() {}, err
 			},
 		},
 		{
@@ -61,13 +67,15 @@ func TestLivePlannerFamiliesUseOneGroundingComposition(t *testing.T) {
 			configDir := t.TempDir()
 			writeSessionConfigFile(t, configDir, "model:\n  provider: openai\n")
 			opts := SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
-				RecordPath:      filepath.Join(t.TempDir(), "session.json"),
-				Provider:        config.ProviderOpenAI,
-				Model:           openAIRealtimeDefaultModel,
-				APIKey:          "test-key",
-				ConfigDir:       configDir,
-				ToolExecutor:    &messages.DefaultToolExecutor{},
-				ToolDefinitions: append([]messages.ToolDefinition(nil), toolDefinitions...),
+				RecordPath:             filepath.Join(t.TempDir(), "session.json"),
+				Provider:               config.ProviderOpenAI,
+				Model:                  openAIRealtimeDefaultModel,
+				APIKey:                 "test-key",
+				ConfigDir:              configDir,
+				RecordingService:       recordingwire.NewService(platformclock.Real{}),
+				ProviderCaptureService: recordingwire.NewProviderCaptureService(platformclock.Real{}),
+				ToolExecutor:           &messages.DefaultToolExecutor{},
+				ToolDefinitions:        append([]messages.ToolDefinition(nil), toolDefinitions...),
 			}
 
 			plan, cleanup, err := test.build(t, opts)
@@ -118,14 +126,16 @@ func TestIndependentSessionCompositionsProduceIdenticalInstructionsAndProviderUp
 			writeSessionConfigFile(t, configDir, "model:\n  provider: openai\n")
 			conn := &replayHandshakeRecordingConn{}
 			opts := SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
-				RecordPath:      filepath.Join(t.TempDir(), "session.json"),
-				Provider:        config.ProviderOpenAI,
-				Model:           openAIRealtimeDefaultModel,
-				APIKey:          "test-key",
-				ConfigDir:       configDir,
-				ToolExecutor:    &messages.DefaultToolExecutor{},
-				ToolDefinitions: definitions,
-				WebSocketDialer: &replayHandshakeRecordingDialer{conn: conn},
+				RecordPath:             filepath.Join(t.TempDir(), "session.json"),
+				Provider:               config.ProviderOpenAI,
+				Model:                  openAIRealtimeDefaultModel,
+				APIKey:                 "test-key",
+				ConfigDir:              configDir,
+				RecordingService:       recordingwire.NewService(platformclock.Real{}),
+				ProviderCaptureService: recordingwire.NewProviderCaptureService(platformclock.Real{}),
+				ToolExecutor:           &messages.DefaultToolExecutor{},
+				ToolDefinitions:        definitions,
+				WebSocketDialer:        &replayHandshakeRecordingDialer{conn: conn},
 			}
 
 			plan, err := planSessionWithResolvedInstructions(opts, "customer instructions")
@@ -139,7 +149,7 @@ func TestIndependentSessionCompositionsProduceIdenticalInstructionsAndProviderUp
 			if err != nil {
 				t.Fatalf("connect composed provider session: %v", err)
 			}
-			defer func() { _ = session.Close() }()
+			defer func() { assert.NoError(t, errors.Join(session.Close(), plan.flushCapture())) }()
 
 			conn.mu.Lock()
 			writes := make([][]byte, len(conn.writes))
@@ -264,13 +274,16 @@ func TestComposeSessionInstructionsDistinguishesConnectedUnselectedBrowser(t *te
 func TestProviderInitialInstructionsCarryConnectedUnselectedBrowserContract(t *testing.T) {
 	configDir := t.TempDir()
 	writeSessionConfigFile(t, configDir, "model:\n  provider: openai\n")
-	opts := SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
-		RecordPath:   filepath.Join(t.TempDir(), "session.json"),
-		Provider:     config.ProviderOpenAI,
-		Model:        openAIRealtimeDefaultModel,
-		APIKey:       "test-key",
-		ConfigDir:    configDir,
-		ToolExecutor: &messages.DefaultToolExecutor{},
+	opts := SessionRunOptions{ModelCatalog: testModelCatalog(),
+		AudioService:           newTestAudioIOService(),
+		RecordPath:             filepath.Join(t.TempDir(), "session.json"),
+		Provider:               config.ProviderOpenAI,
+		Model:                  openAIRealtimeDefaultModel,
+		APIKey:                 "test-key",
+		ConfigDir:              configDir,
+		RecordingService:       recordingwire.NewService(platformclock.Real{}),
+		ProviderCaptureService: recordingwire.NewProviderCaptureService(platformclock.Real{}),
+		ToolExecutor:           &messages.DefaultToolExecutor{},
 		ToolDefinitions: []messages.ToolDefinition{
 			{Name: webmcp.ListTabsToolName},
 			{Name: webmcp.SelectTabToolName},
@@ -342,14 +355,8 @@ func TestComposeSessionInstructionsAddsBoundedWebMCPAmbiguityRecovery(t *testing
 }
 
 // TestComposeSessionInstructionsCalibratesSingleMatchActImmediately covers
-// the ask-vs-act calibration's act side (required tests 1-3): a customer
-// request that resolves to exactly one eligible tab -- whether by exact
-// title, by an obvious paraphrase of that title, or by the page's stated
-// purpose or category -- must be switched to immediately, with confirmation
-// only after the switch, and never gated behind a pre-emptive clarifying
-// question. This is the Session-1 ("the document editor") and Session-4
-// ("the local first writing app" paraphrase) live failure: a single resolved
-// candidate still produced a clarifying question instead of a switch.
+// exact-title, paraphrase, and purpose matches: switch the one eligible tab
+// immediately and confirm afterward. It guards the prior Session-1/4 failures.
 func TestComposeSessionInstructionsCalibratesSingleMatchActImmediately(t *testing.T) {
 	got := composeSessionInstructions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		BrowserToolsEnabled: true,
@@ -446,11 +453,8 @@ func TestComposeSessionInstructionsFollowsExplicitMultiPageOrder(t *testing.T) {
 }
 
 // TestComposeSessionInstructionsCalibratesGenuineAmbiguityAsksNamingBoth
-// covers required test 4: when two or more tabs genuinely match, the
-// calibration must direct exactly one question naming every candidate, and
-// it must never fall back to declaring the capability unavailable. This
-// mirrors the working "genuinely ambiguous" probe on current main, which
-// this change must not regress.
+// covers genuine ambiguity: ask once naming all matching tabs; never report
+// the capability unavailable. It protects the current-main multi-tab case.
 func TestComposeSessionInstructionsCalibratesGenuineAmbiguityAsksNamingBoth(t *testing.T) {
 	got := composeSessionInstructions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		BrowserToolsEnabled: true,

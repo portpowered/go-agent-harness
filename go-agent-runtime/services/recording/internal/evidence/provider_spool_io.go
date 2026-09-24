@@ -152,7 +152,11 @@ func providerCaptureEnvelopeOverhead(capture gatewaytesting.SessionCapture) (int
 	return total, nil
 }
 
-func publishProviderCapture(path string, capture gatewaytesting.SessionCapture, reader gatewaytesting.SessionCaptureRecordReader) (returnErr error) {
+type providerCaptureRecordReader interface {
+	Next() (gatewaytesting.CapturedSessionEvent, bool, error)
+}
+
+func publishProviderCapture(path string, capture gatewaytesting.SessionCapture, reader providerCaptureRecordReader) (returnErr error) {
 	directory := filepath.Dir(path)
 	base := filepath.Base(path)
 	placeholder, err := os.CreateTemp(directory, "."+base+".provider-publish-")
@@ -174,7 +178,7 @@ func publishProviderCapture(path string, capture gatewaytesting.SessionCapture, 
 			}
 		}
 	}()
-	if err := gatewaytesting.WriteSessionCaptureFromReader(stagePath, capture, reader); err != nil {
+	if err := writeProviderCaptureFromReader(stagePath, capture, reader); err != nil {
 		return err
 	}
 	if err := os.Link(stagePath, path); err != nil {
@@ -310,4 +314,22 @@ func (s *providerCaptureSpool) releaseLocked(bytes int64) {
 
 var _ recording.ProviderCaptureSink = (*providerCaptureSpool)(nil)
 var _ recording.ResourceUsageReporter = (*providerCaptureSpool)(nil)
-var _ gatewaytesting.SessionCaptureRecordReader = (*providerCaptureSpoolReader)(nil)
+var _ providerCaptureRecordReader = (*providerCaptureSpoolReader)(nil)
+
+func writeProviderCaptureJSONField(writer io.Writer, prefix string, value any) error {
+	if _, err := io.WriteString(writer, prefix); err != nil {
+		return fmt.Errorf("write provider capture field: %w", err)
+	}
+	return writeProviderCaptureJSONValue(writer, value)
+}
+
+func writeProviderCaptureJSONValue(writer io.Writer, value any) error {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return fmt.Errorf("encode provider capture field: %w", err)
+	}
+	if _, err := writer.Write(encoded); err != nil {
+		return fmt.Errorf("write provider capture field: %w", err)
+	}
+	return nil
+}

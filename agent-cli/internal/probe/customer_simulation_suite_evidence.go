@@ -14,11 +14,10 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
-	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 )
 
-// customerSimulationRecordingFacts are derived only from the copied product
-// record directory. They intentionally omit tool arguments and raw payloads.
+// Facts come only from copied product records and exclude tool arguments and raw payloads.
 type customerSimulationRecordingFacts struct {
 	responses         []customerSimulationResponse
 	tools             []ToolObservation
@@ -88,7 +87,7 @@ type customerSimulationSessionLogEntry struct {
 	} `json:"response"`
 }
 
-func readCustomerSimulationRecording(recordRoot string, scenario CustomerScenario) (customerSimulationRecordingFacts, error) {
+func readCustomerSimulationRecording(recordRoot string, scenario CustomerScenario, replayService runtimeReplay.StreamMessageCodec) (customerSimulationRecordingFacts, error) {
 	var facts customerSimulationRecordingFacts
 	var sessionLogResponses []customerSimulationResponse
 	var failures []error
@@ -109,31 +108,24 @@ func readCustomerSimulationRecording(recordRoot string, scenario CustomerScenari
 		failures = append(failures, fmt.Errorf("read session-log: %v", err))
 	}
 
-	streamFacts, err := readCustomerSimulationStream(recordRoot, scenario, len(sessionLogResponses))
-	if err != nil {
-		failures = append(failures, err)
+	var streamFacts customerSimulationRecordingFacts
+	var streamErr error
+	if replayService == nil {
+		streamErr = errors.New("customer simulation replay service is required")
+	} else {
+		streamFacts, streamErr = readCustomerSimulationStream(recordRoot, scenario, len(sessionLogResponses), replayService)
 	}
-	if len(streamFacts.responses) > 0 {
-		// The raw stream is authoritative for response identity, timing, audio
-		// ranges, and cancellation. session-log.jsonl is used only when the raw
-		// stream is unavailable; it can contain tool continuations that do not
-		// line up one-for-one with the response boundaries needed by a correction
-		// ledger.
-		facts.responses = streamFacts.responses
-	} else if len(sessionLogResponses) > 0 {
+	if streamErr != nil {
+		failures = append(failures, streamErr)
+	}
+	facts = streamFacts
+	if len(facts.responses) == 0 && len(sessionLogResponses) > 0 {
 		facts.responses = sessionLogResponses
 	}
-	facts.tools = streamFacts.tools
-	facts.cancelObserved = streamFacts.cancelObserved
-	facts.cancelAt = streamFacts.cancelAt
-	facts.cancelWallAt = streamFacts.cancelWallAt
-	facts.cancelResponseID = streamFacts.cancelResponseID
-	facts.inputSpeechStarts = append([]time.Duration(nil), streamFacts.inputSpeechStarts...)
-	facts.recordingBase = streamFacts.recordingBase
 	return facts, errors.Join(failures...)
 }
 
-func readCustomerSimulationStream(recordRoot string, scenario CustomerScenario, knownResponses int) (customerSimulationRecordingFacts, error) {
+func readCustomerSimulationStream(recordRoot string, scenario CustomerScenario, knownResponses int, replayService runtimeReplay.StreamMessageCodec) (customerSimulationRecordingFacts, error) {
 	var facts customerSimulationRecordingFacts
 	path := filepath.Join(recordRoot, "agent.transcript.jsonl")
 	file, err := os.Open(path)
@@ -165,7 +157,7 @@ func readCustomerSimulationStream(recordRoot string, scenario CustomerScenario, 
 		if parseErr == nil && !base.IsZero() && wallAt.After(base) {
 			at = wallAt.Sub(base)
 		}
-		parsed, keep, err := parseCustomerSimulationRecord(record, at, wallAt, completedToolIDs)
+		parsed, keep, err := parseCustomerSimulationRecord(record, at, wallAt, completedToolIDs, replayService)
 		if err != nil {
 			return facts, err
 		}
@@ -605,14 +597,14 @@ func toolObservationIDsNotComplete(tools []ToolObservation) []string {
 	return result
 }
 
-func parseCustomerSimulationRecord(record transcript.Record, at time.Duration, wallAt time.Time, completedToolIDs map[string]time.Duration) (customerSimulationRecordedMessage, bool, error) {
+func parseCustomerSimulationRecord(record transcript.Record, at time.Duration, wallAt time.Time, completedToolIDs map[string]time.Duration, replayService runtimeReplay.StreamMessageCodec) (customerSimulationRecordedMessage, bool, error) {
 	parsed := customerSimulationRecordedMessage{at: at, wallAt: wallAt, dir: record.Direction}
 	if record.Stream == transcript.StreamRuntimeAudio {
 		media, err := decodeCustomerSimulationMedia(record)
 		parsed.media = media
 		return parsed, media != nil, err
 	}
-	message, err := gatewaytesting.UnmarshalStreamMessage(record.Payload)
+	message, err := replayService.DecodeStreamMessage(record.Payload)
 	if err == nil {
 		parsed.message = message
 		return parsed, true, nil
