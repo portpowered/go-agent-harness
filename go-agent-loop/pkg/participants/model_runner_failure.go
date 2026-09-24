@@ -38,6 +38,14 @@ func (r *ModelRunner) forwardInitialSessionConfig(ctx context.Context, session m
 // background goroutine.
 const sessionAudioSendFailureClassification = "session_audio_send_failed"
 
+// Classifications for provider-boundary sends that leave a tool obligation
+// or session update unresolved.
+const (
+	unresolvedToolResultClassification       = "unresolved_tool_result"
+	unresolvedSessionUpdateClassification    = "unresolved_session_update"
+	unresolvedToolContinuationClassification = "unresolved_tool_continuation"
+)
+
 // publishSessionAudioFailure makes a fatal audio forwarding error observable
 // to the engine before runSession returns it. ActiveParticipant intentionally
 // owns runner lifecycle and does not consume Run's error return, so returning
@@ -63,6 +71,16 @@ func (r *ModelRunner) publishSessionAudioFailure(err error, hasOutput bool) {
 		LoopPassID: r.currentPassID,
 		Value:      value,
 	})
+}
+
+// endSession finishes runSession: a live-context failure is published before
+// deferred send failures are flushed, and err is returned unchanged.
+func (r *ModelRunner) endSession(ctx context.Context, state *sessionRunState, err error) error {
+	if err != nil && ctx.Err() == nil {
+		r.publishSessionAudioFailure(err, state.hasOutput)
+	}
+	r.flushPendingSessionSendErrors(ctx, state.pendingSendErrors)
+	return err
 }
 
 func (r *ModelRunner) EnqueueSessionAudioInput(ctx context.Context, pcm []byte) error {
@@ -110,4 +128,104 @@ func (r *ModelRunner) enqueueSessionAudioInputLocked(ctx context.Context, pcm []
 	default:
 		return ErrSessionInputQueueFull
 	}
+}
+
+// sessionStepResult ends the session loop when a forwarding step failed.
+func (r *ModelRunner) sessionStepResult(ctx context.Context, state *sessionRunState, err error) (bool, error) {
+	if err != nil {
+		return true, r.endSession(ctx, state, err)
+	}
+	return false, nil
+}
+
+// finishClosedSession drains the provider's final queued messages and, unless
+// the provider already reported its own close, emits the terminal SESSION.CLOSE.
+func (r *ModelRunner) finishClosedSession(ctx context.Context, session messages.Session, state *sessionRunState) {
+	for {
+		msg, ok := session.Receive().Read()
+		if !ok {
+			break
+		}
+		r.forwardSessionMessageState(ctx, session, state, msg)
+	}
+	r.flushPendingSessionSendErrors(ctx, state.pendingSendErrors)
+	if state.sessionClosed {
+		return
+	}
+	terminalProvenance := messages.TerminalProvenanceProvider
+	terminalOutputState := outputState(state.hasOutput)
+	if state.responseCompleted {
+		// Preserve the existing session teardown contract after a
+		// completed response. A transport close before any response
+		// boundary remains provider-authored and uses observed output.
+		terminalProvenance = messages.TerminalProvenanceSession
+		terminalOutputState = messages.TerminalOutputNotApplicable
+	}
+	r.DeltaOutbox.Write(ctx, messages.StreamMessage{
+		Type: messages.StreamTypeSessionClose,
+		Value: messages.NewSessionCloseValueWithTerminal(
+			"",
+			"provider_closed",
+			"transport",
+			messages.TerminalReasonProviderClose,
+			terminalProvenance,
+			terminalOutputState,
+		),
+	})
+}
+
+func startSessionResponse(state *sessionResponseState, msgID string, acknowledgementResponse bool) {
+	if !beginSessionResponse(state, msgID) {
+		return
+	}
+	state.hasOutput = false
+	state.responseCompleted = false
+	state.responseCancelSent = false
+	state.responseInFlight = true
+	if acknowledgementResponse && state.acknowledgementCancelled {
+		state.responseCancelSent = true
+		if msgID != "" {
+			state.cancelledResponseIDs[msgID] = struct{}{}
+		}
+	}
+}
+
+// endSessionResponse applies an owned MESSAGE.END to the response lifecycle
+// and reports whether this message ended the current response.
+func endSessionResponse(state *sessionResponseState, msg *messages.StreamMessage, msgID string, acknowledgementResponse bool) bool {
+	if !ownsSessionResponseEnd(state, msgID) {
+		return false
+	}
+	ownedID := msgID
+	if ownedID == "" {
+		ownedID = state.currentResponseID
+	}
+	state.responseInFlight = false
+	switch {
+	case state.responseCancelSent:
+		// Realtime providers normally acknowledge RESPONSE.CANCEL with a
+		// response.done event. Preserve that wire boundary so the next
+		// input can proceed, but mark it as interrupted rather than a
+		// normally completed assistant turn.
+		msg.Value = interruptedMessageEndValue(msg.Value, state.hasOutput)
+		state.responseCompleted = false
+	case acknowledgementResponse:
+		// A progress acknowledgement is never the assistant turn that
+		// satisfies a user input or a tool continuation.
+		state.responseCompleted = false
+	default:
+		state.responseCompleted = true
+	}
+	if ownedID != "" {
+		state.terminalResponseIDs[ownedID] = struct{}{}
+	}
+	state.currentResponseID = ""
+	if acknowledgementResponse {
+		state.acknowledgementOutstanding = false
+		state.acknowledgementCancelled = false
+		state.acknowledgementEnded = true
+		state.responseCancelSent = false
+		state.hasOutput = false
+	}
+	return true
 }

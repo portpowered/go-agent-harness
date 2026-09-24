@@ -505,158 +505,157 @@ type concurrentDriverOptions struct {
 // pipeline into a failure instead of a hang.
 func runConcurrentSessions(t *testing.T, options concurrentDriverOptions) *concurrentRun {
 	t.Helper()
-
 	functionalTime := timeharness.New(time.Date(2026, time.August, 23, 9, 0, 0, 0, time.UTC), time.Millisecond)
 	defer functionalTime.Close()
-	sharedClock := functionalTime.Clock()
-	trace := newConcurrentTrace()
-	results := make([]*concurrentSessionResult, options.SessionCount)
-	for id := range results {
-		token := concurrentSessionToken(id)
-		sink := &tracedSink{session: id, token: token, collector: NewSessionTranscript(), trace: trace}
-		inf := NewMockSessionInferencer()
-		tool := NewMockToolExecutor().AddResult(concurrentToolName, fmt.Sprintf("result-for-%s", token))
-		scenario := NewSessionScenarioWithConfig(t, inf, tool, SessionScenarioOptions{
-			Clock:   sharedClock,
-			Capture: sink,
-		}, agentloop.WithTickRate(concurrentEngineTickRate))
-		if clock, ok := scenario.Clock().(*clock.Deterministic); !ok || clock != sharedClock {
-			t.Fatalf("session %d received a different clock: got %T/%p, want shared %p", id, scenario.Clock(), clock, sharedClock)
-		}
-		results[id] = &concurrentSessionResult{
-			ID:         id,
-			Token:      token,
-			Scenario:   scenario,
-			Inferencer: inf,
-			Tool:       tool,
-			Collector:  sink.collector,
-		}
-		scenario.Start()
+	driver := &concurrentDriver{
+		t: t, options: options, functionalTime: functionalTime, sharedClock: functionalTime.Clock(), trace: newConcurrentTrace(),
+		victimDone: make(chan *concurrentSessionResult, 1), workerErrors: make(chan error, options.SessionCount+1), tick: uint64(concurrentOpenTick),
 	}
-
-	cancelled := -1
-	if options.CancelID >= 0 {
-		cancelled = options.CancelID
-	}
+	driver.startSessions()
 	if options.CancelID >= 0 && options.CancelAfter >= len(options.Turns) {
 		t.Fatalf("CancelAfter=%d must leave unexecuted turns so cancellation stays observable", options.CancelAfter)
 	}
-	victimDone := make(chan *concurrentSessionResult, 1)
+	driver.launchWorkers()
+	driver.advanceUntilScriptsFinish()
+	driver.drainToQuiescence()
+	return driver.finish()
+}
 
-	workerErrors := make(chan error, options.SessionCount+1)
-	var workers sync.WaitGroup
-	workers.Add(options.SessionCount)
-	live := int64(options.SessionCount)
-	for id, result := range results {
-		result := result
+// concurrentDriver holds one run's state; a negative CancelID disables cancellation.
+type concurrentDriver struct {
+	t              *testing.T
+	options        concurrentDriverOptions
+	functionalTime *timeharness.Scenario
+	sharedClock    *clock.Deterministic
+	trace          *concurrentTrace
+	results        []*concurrentSessionResult
+	victimDone     chan *concurrentSessionResult
+	stopVictim     bool
+	workerErrors   chan error
+	workers        sync.WaitGroup
+	live           int64
+	tick           uint64
+}
+
+func (d *concurrentDriver) startSessions() {
+	d.results = make([]*concurrentSessionResult, d.options.SessionCount)
+	for id := range d.results {
+		token := concurrentSessionToken(id)
+		sink := &tracedSink{session: id, token: token, collector: NewSessionTranscript(), trace: d.trace}
+		inf := NewMockSessionInferencer()
+		tool := NewMockToolExecutor().AddResult(concurrentToolName, fmt.Sprintf("result-for-%s", token))
+		scenario := NewSessionScenarioWithConfig(d.t, inf, tool, SessionScenarioOptions{Clock: d.sharedClock, Capture: sink}, agentloop.WithTickRate(concurrentEngineTickRate))
+		if clock, ok := scenario.Clock().(*clock.Deterministic); !ok || clock != d.sharedClock {
+			d.t.Fatalf("session %d received a different clock: got %T/%p, want shared %p", id, scenario.Clock(), clock, d.sharedClock)
+		}
+		d.results[id] = &concurrentSessionResult{ID: id, Token: token, Scenario: scenario, Inferencer: inf, Tool: tool, Collector: sink.collector}
+		scenario.Start()
+	}
+}
+
+// launchWorkers registers one participant per session and runs its script;
+// the cancelled session runs only its first CancelAfter turns.
+func (d *concurrentDriver) launchWorkers() {
+	d.workers.Add(d.options.SessionCount)
+	d.live = int64(d.options.SessionCount)
+	for id, result := range d.results {
 		done := func() {}
-		report := func(err error) { workerErrors <- err }
-		if id == cancelled {
-			result := result
-			done = func() { victimDone <- result }
+		report := func(err error) { d.workerErrors <- err }
+		turns := d.options.Turns
+		if id == d.options.CancelID {
+			done = func() { d.victimDone <- result }
+			turns = d.options.Turns[:d.options.CancelAfter]
 		}
-		turns := options.Turns
-		if id == cancelled {
-			turns = options.Turns[:options.CancelAfter]
-		}
-		participant, err := functionalTime.Register(result.Token)
+		participant, err := d.functionalTime.Register(result.Token)
 		if err != nil {
-			t.Fatalf("register %s: %v", result.Token, err)
+			d.t.Fatalf("register %s: %v", result.Token, err)
 		}
 		participant.Run(func() {
-			defer workers.Done()
-			defer atomic.AddInt64(&live, -1)
+			defer d.workers.Done()
+			defer atomic.AddInt64(&d.live, -1)
 			runSessionScript(participant, result, turns, done, report)
 		})
 	}
+}
 
-	stopVictim := false
-	tick := uint64(concurrentOpenTick)
+// advanceUntilScriptsFinish advances logical ticks until every worker is done,
+// stopping the cancelled session once it completes its partial script.
+func (d *concurrentDriver) advanceUntilScriptsFinish() {
 	deadline := time.Now().Add(concurrentRunBudget)
-	for atomic.LoadInt64(&live) > 0 {
+	for atomic.LoadInt64(&d.live) > 0 {
 		if time.Now().After(deadline) {
-			t.Fatalf("concurrent run did not finish within %v (stuck sessions likely)", concurrentRunBudget)
+			d.t.Fatalf("concurrent run did not finish within %v (stuck sessions likely)", concurrentRunBudget)
 		}
-		if _, err := functionalTime.AdvanceTo(tick); err != nil {
-			t.Fatalf("advance to logical tick %d: %v", tick, err)
+		if _, err := d.functionalTime.AdvanceTo(d.tick); err != nil {
+			d.t.Fatalf("advance to logical tick %d: %v", d.tick, err)
 		}
-		tick++
+		d.tick++
 		select {
-		case victim := <-victimDone:
-			if stopVictim {
+		case victim := <-d.victimDone:
+			if d.stopVictim {
 				continue
 			}
-			stopVictim = true
+			d.stopVictim = true
 			if err := victim.Scenario.Stop(10 * time.Second); err != nil {
-				t.Fatalf("cancel session %s: %v", victim.Token, err)
+				d.t.Fatalf("cancel session %s: %v", victim.Token, err)
 			}
 		default:
 		}
-		if err := drainWorkerError(workerErrors); err != nil {
-			t.Fatalf("logical tick %d: %v", tick-1, err)
+		if err := drainWorkerError(d.workerErrors); err != nil {
+			d.t.Fatalf("logical tick %d: %v", d.tick-1, err)
 		}
 	}
-	workers.Wait()
-	if err := drainWorkerError(workerErrors); err != nil {
-		t.Fatalf("session worker: %v", err)
+	d.workers.Wait()
+	if err := drainWorkerError(d.workerErrors); err != nil {
+		d.t.Fatalf("session worker: %v", err)
 	}
+}
 
-	// Drain to quiescence on logical ticks. After the last MESSAGE.END the
-	// engine still delivers executed-tool results and lifecycle records
-	// through asynchronous pipeline stages; stopping a scenario before that
-	// tail lands would truncate its captures by a scheduling-dependent
-	// amount and make reference comparisons flaky. Advancing ticks until
-	// every capture has been stable for consecutiveStableTicks keeps the
-	// teardown point deterministic without any wall-clock polling.
+// drainToQuiescence drains on logical ticks. After the last MESSAGE.END the
+// engine still delivers tool results and lifecycle records asynchronously;
+// stopping before that tail lands would truncate captures by a
+// scheduling-dependent amount. Advancing until every capture is stable for
+// consecutiveStableTicks keeps teardown deterministic without wall-clock polling.
+func (d *concurrentDriver) drainToQuiescence() {
 	stable := 0
-	lastCounts := make([]int, len(results))
-	for i := range results {
+	lastCounts := make([]int, len(d.results))
+	for i := range d.results {
 		lastCounts[i] = -1
 	}
 	for drained := 0; drained < concurrentMaxDrainTicks && stable < consecutiveStableTicks; drained++ {
-		if _, err := functionalTime.AdvanceTo(tick); err != nil {
-			t.Fatalf("drain advance to logical tick %d: %v", tick, err)
+		if _, err := d.functionalTime.AdvanceTo(d.tick); err != nil {
+			d.t.Fatalf("drain advance to logical tick %d: %v", d.tick, err)
 		}
-		tick++
-		moved := false
-		for i := range results {
-			count := len(results[i].Collector.Records())
-			if count != lastCounts[i] {
+		d.tick++
+		stable++
+		for i := range d.results {
+			if count := len(d.results[i].Collector.Records()); count != lastCounts[i] {
 				lastCounts[i] = count
-				moved = true
+				stable = 0
 			}
-		}
-		if moved {
-			stable = 0
-		} else {
-			stable++
 		}
 	}
 	if stable < consecutiveStableTicks {
-		t.Fatalf("captures never stabilized after %d drain ticks", concurrentMaxDrainTicks)
+		d.t.Fatalf("captures never stabilized after %d drain ticks", concurrentMaxDrainTicks)
 	}
+}
 
-	states := make([]concurrentSessionState, 0, len(results))
+// finish stops every surviving session and snapshots all captures.
+func (d *concurrentDriver) finish() *concurrentRun {
+	states := make([]concurrentSessionState, 0, len(d.results))
 	var cancelledState *concurrentSessionState
-	for id, result := range results {
-		if id == cancelled && stopVictim {
+	for id, result := range d.results {
+		if id == d.options.CancelID && d.stopVictim {
 			state := result.snapshot(true)
 			cancelledState = &state
 			continue
 		}
 		if err := result.Scenario.Stop(10 * time.Second); err != nil {
-			t.Fatalf("stop session %s: %v", result.Token, err)
+			d.t.Fatalf("stop session %s: %v", result.Token, err)
 		}
 		states = append(states, result.snapshot(false))
 	}
-
-	return &concurrentRun{
-		States:    states,
-		Cancelled: cancelledState,
-		Trace:     trace,
-		FinalTick: tick - 1,
-		Clock:     sharedClock,
-	}
+	return &concurrentRun{States: states, Cancelled: cancelledState, Trace: d.trace, FinalTick: d.tick - 1, Clock: d.sharedClock}
 }
 
 func drainWorkerError(workerErrors <-chan error) error {

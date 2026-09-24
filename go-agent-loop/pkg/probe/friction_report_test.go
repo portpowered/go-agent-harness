@@ -169,7 +169,7 @@ func TestAggregateFrictionReportUsesLexicographicTieBreaks(t *testing.T) {
 	if got := first.TerminalReasons[0].Reason; got != "a-reason" {
 		t.Fatalf("terminal reason order starts with %q, want a-reason", got)
 	}
-	if got := first.ErrorClasses[0].Class; got != "unknown" {
+	if got := first.ErrorClasses[0].Class; got != unknownLabel {
 		t.Fatalf("error class order starts with %q, want unknown", got)
 	}
 }
@@ -250,7 +250,7 @@ func TestAggregateFrictionReportClassifiesFallbackErrorMessages(t *testing.T) {
 		{class: "transport", message: "network connection reset"},
 		{class: "timeout", message: "deadline exceeded"},
 		{class: "panic", message: "provider panic"},
-		{class: "unknown", message: "unexpected provider failure"},
+		{class: unknownLabel, message: "unexpected provider failure"},
 	}
 	results := make([]ScenarioResult, 0, len(cases))
 	for _, testCase := range cases {
@@ -287,7 +287,7 @@ func TestAggregateAliasUsesScenarioAggregation(t *testing.T) {
 
 func TestFrictionReportErrorNilMethods(t *testing.T) {
 	var reportErr *FrictionReportError
-	if got := reportErr.Error(); got != "<nil>" {
+	if got := reportErr.Error(); got != nilErrorText {
 		t.Fatalf("nil Error() = %q, want <nil>", got)
 	}
 	if got := reportErr.Unwrap(); got != nil {

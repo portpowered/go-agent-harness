@@ -222,20 +222,9 @@ func parseStep(raw json.RawMessage, index int) (Step, error) {
 	if err := unknown(value, stepFields, location); err != nil {
 		return Step{}, err
 	}
-	discriminator, key, ok, err := field(value, location, "type", "kind")
+	kind, err := parseStepKind(value, location)
 	if err != nil {
 		return Step{}, err
-	}
-	if !ok {
-		return Step{}, makeError(CategoryMissingField, location+".type", "step discriminator is required")
-	}
-	name, err := stringValue(discriminator, location+"."+key)
-	if err != nil {
-		return Step{}, err
-	}
-	kind, ok := stepKind(name)
-	if !ok {
-		return Step{}, makeError(CategoryUnknownVariant, location+"."+key, "unknown step variant %q", name)
 	}
 	fields, err := payload(value, location)
 	if err != nil {
@@ -251,43 +240,43 @@ func parseStep(raw json.RawMessage, index int) (Step, error) {
 	if err := unknown(fields, allowed[kind], location); err != nil {
 		return Step{}, err
 	}
-	step := Step{Type: kind, Kind: kind}
-	switch kind {
+	return parseStepPayload(Step{Type: kind, Kind: kind}, fields, location)
+}
+
+func parseStepKind(value object, location string) (StepKind, error) {
+	discriminator, key, ok, err := field(value, location, "type", "kind")
+	if err != nil {
+		return "", err
+	}
+	if !ok {
+		return "", makeError(CategoryMissingField, location+".type", "step discriminator is required")
+	}
+	name, err := stringValue(discriminator, location+"."+key)
+	if err != nil {
+		return "", err
+	}
+	kind, ok := stepKind(name)
+	if !ok {
+		return "", makeError(CategoryUnknownVariant, location+"."+key, "unknown step variant %q", name)
+	}
+	return kind, nil
+}
+
+// parseStepPayload decodes the variant fields already filtered by parseStep.
+func parseStepPayload(step Step, fields object, location string) (Step, error) {
+	var err error
+	var ok bool
+	switch step.Kind {
 	case StepSendText:
-		step.Text, err = requiredString(fields, location, "text", "value")
-		if err != nil {
+		if step.Text, err = requiredString(fields, location, "text", "value"); err != nil {
 			return Step{}, err
 		}
 	case StepSendAudio:
-		step.CorpusID, err = corpusID(fields, location)
-		if err != nil {
-			return Step{}, err
-		}
-		step.Text, err = optionalString(fields, location, "text")
-		if err != nil {
-			return Step{}, err
-		}
-		step.Corpus = AudioCorpusReference{ID: step.CorpusID, CorpusID: step.CorpusID}
+		return parseSendAudioStep(step, fields, location)
 	case StepSendToolResult:
-		step.ToolCallID, err = requiredString(fields, location, "tool_call_id", "toolCallID")
-		if err != nil {
-			return Step{}, err
-		}
-		result, _, ok, err := field(fields, location, "result", "tool_result", "value")
-		if err != nil {
-			return Step{}, err
-		}
-		if !ok {
-			return Step{}, makeError(CategoryMissingField, location+".result", "required field is missing")
-		}
-		step.ToolName, err = optionalString(fields, location, "tool_name", "toolName")
-		if err != nil {
-			return Step{}, err
-		}
-		step.ToolResult, step.Result = append(json.RawMessage(nil), result...), append(json.RawMessage(nil), result...)
+		return parseSendToolResultStep(step, fields, location)
 	case StepAdvanceTo:
-		step.At, _, ok, err = logicalField(fields, location, "at", "time", "logical_time", "logicalTime")
-		if err != nil {
+		if step.At, _, ok, err = logicalField(fields, location, "at", "time", "logical_time", "logicalTime"); err != nil {
 			return Step{}, err
 		}
 		if !ok {
@@ -295,16 +284,46 @@ func parseStep(raw json.RawMessage, index int) (Step, error) {
 		}
 		step.Time = step.At
 	case StepWait:
-		step.Duration, _, ok, err = logicalField(fields, location, "duration")
-		if err != nil {
+		if step.Duration, _, ok, err = logicalField(fields, location, "duration"); err != nil {
 			return Step{}, err
 		}
 		if !ok {
 			return Step{}, makeError(CategoryMissingField, location+".duration", "required duration field is missing")
 		}
 	case StepClose:
-		// The empty allowed set above rejects every close payload.
+		// The empty allowed set in parseStep rejects every close payload.
 	}
+	return step, nil
+}
+
+func parseSendAudioStep(step Step, fields object, location string) (Step, error) {
+	var err error
+	if step.CorpusID, err = corpusID(fields, location); err != nil {
+		return Step{}, err
+	}
+	if step.Text, err = optionalString(fields, location, "text"); err != nil {
+		return Step{}, err
+	}
+	step.Corpus = AudioCorpusReference{ID: step.CorpusID, CorpusID: step.CorpusID}
+	return step, nil
+}
+
+func parseSendToolResultStep(step Step, fields object, location string) (Step, error) {
+	var err error
+	if step.ToolCallID, err = requiredString(fields, location, "tool_call_id", "toolCallID"); err != nil {
+		return Step{}, err
+	}
+	result, _, ok, err := field(fields, location, "result", "tool_result", "value")
+	if err != nil {
+		return Step{}, err
+	}
+	if !ok {
+		return Step{}, makeError(CategoryMissingField, location+".result", "required field is missing")
+	}
+	if step.ToolName, err = optionalString(fields, location, "tool_name", "toolName"); err != nil {
+		return Step{}, err
+	}
+	step.ToolResult, step.Result = append(json.RawMessage(nil), result...), append(json.RawMessage(nil), result...)
 	return step, nil
 }
 func corpusID(value object, location string) (string, error) {

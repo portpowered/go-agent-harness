@@ -158,7 +158,7 @@ type GoalCatalogValidationError struct {
 // Error returns an actionable catalog validation diagnostic.
 func (e *GoalCatalogValidationError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	location := "catalog"
 	if e.Index >= 0 {
@@ -216,37 +216,52 @@ func (c GoalCatalog) Validate() error {
 			return catalogValidationError(index, goal.ID, "id", ErrDuplicateGoalID, fmt.Sprintf("duplicates goal at index %d", firstIndex))
 		}
 		seen[goal.ID] = index
-
-		if strings.TrimSpace(goal.Text) == "" {
-			return catalogValidationError(index, goal.ID, "text", ErrBlankGoalText, "must be non-empty plain English")
-		}
-		if strings.TrimSpace(string(goal.Capability)) == "" {
-			return catalogValidationError(index, goal.ID, "capability", ErrBlankGoalCapability, "must name a supported capability area")
-		}
-		if !isSupportedCapability(goal.Capability) {
-			return catalogValidationError(index, goal.ID, "capability", ErrUnknownGoalCapability, fmt.Sprintf("%q is not supported", goal.Capability))
-		}
-		if reason := blindProbeGoalTextViolation(goal.Text); reason != "" {
-			return catalogValidationError(index, goal.ID, "text", ErrGoalTextNotBlindProbeReady, reason)
-		}
-		if strings.TrimSpace(goal.Expectation.ArtifactClass) == "" {
-			return catalogValidationError(index, goal.ID, "expectation.artifact_class", ErrMissingGoalExpectation, "must name the recorded artifact class")
-		}
-		if strings.TrimSpace(goal.Expectation.Description) == "" {
-			return catalogValidationError(index, goal.ID, "expectation.description", ErrMissingGoalExpectation, "must describe objective recorded evidence")
-		}
-		if goal.Capability == CapabilityMultimodalInput {
-			if goal.InputSource == nil {
-				return &GoalCatalogValidationError{Index: index, GoalID: goal.ID, Field: "input_source", Kind: ErrMissingGoalInputSource, Reason: "multimodal goals require a deterministic image"}
-			}
-			if goal.InputSource.Kind != GoalInputSourceEmbeddedAsset || goal.InputSource.AssetID != GoalInputAssetRedApple || goal.InputSource.MediaType != "image/png" || len(goal.InputSource.Data) == 0 {
-				return &GoalCatalogValidationError{Index: index, GoalID: goal.ID, Field: "input_source", Kind: ErrInvalidGoalInputSource, Reason: "must contain the shipped red apple PNG asset"}
-			}
-		} else if goal.InputSource != nil {
-			return &GoalCatalogValidationError{Index: index, GoalID: goal.ID, Field: "input_source", Kind: ErrInvalidGoalInputSource, Reason: "only multimodal goals may declare an input source"}
+		if err := validateCatalogGoal(index, goal); err != nil {
+			return err
 		}
 	}
+	return validateRequiredGoals(c, seen)
+}
 
+// validateCatalogGoal checks one entry's fields after its identity is known
+// to be present and unique.
+func validateCatalogGoal(index int, goal Goal) error {
+	if strings.TrimSpace(goal.Text) == "" {
+		return catalogValidationError(index, goal.ID, "text", ErrBlankGoalText, "must be non-empty plain English")
+	}
+	if strings.TrimSpace(string(goal.Capability)) == "" {
+		return catalogValidationError(index, goal.ID, "capability", ErrBlankGoalCapability, "must name a supported capability area")
+	}
+	if !isSupportedCapability(goal.Capability) {
+		return catalogValidationError(index, goal.ID, "capability", ErrUnknownGoalCapability, fmt.Sprintf("%q is not supported", goal.Capability))
+	}
+	if reason := blindProbeGoalTextViolation(goal.Text); reason != "" {
+		return catalogValidationError(index, goal.ID, "text", ErrGoalTextNotBlindProbeReady, reason)
+	}
+	if strings.TrimSpace(goal.Expectation.ArtifactClass) == "" {
+		return catalogValidationError(index, goal.ID, "expectation.artifact_class", ErrMissingGoalExpectation, "must name the recorded artifact class")
+	}
+	if strings.TrimSpace(goal.Expectation.Description) == "" {
+		return catalogValidationError(index, goal.ID, "expectation.description", ErrMissingGoalExpectation, "must describe objective recorded evidence")
+	}
+	return validateGoalInputSource(index, goal)
+}
+
+func validateGoalInputSource(index int, goal Goal) error {
+	if goal.Capability == CapabilityMultimodalInput {
+		if goal.InputSource == nil {
+			return &GoalCatalogValidationError{Index: index, GoalID: goal.ID, Field: "input_source", Kind: ErrMissingGoalInputSource, Reason: "multimodal goals require a deterministic image"}
+		}
+		if goal.InputSource.Kind != GoalInputSourceEmbeddedAsset || goal.InputSource.AssetID != GoalInputAssetRedApple || goal.InputSource.MediaType != "image/png" || len(goal.InputSource.Data) == 0 {
+			return &GoalCatalogValidationError{Index: index, GoalID: goal.ID, Field: "input_source", Kind: ErrInvalidGoalInputSource, Reason: "must contain the shipped red apple PNG asset"}
+		}
+	} else if goal.InputSource != nil {
+		return &GoalCatalogValidationError{Index: index, GoalID: goal.ID, Field: "input_source", Kind: ErrInvalidGoalInputSource, Reason: "only multimodal goals may declare an input source"}
+	}
+	return nil
+}
+
+func validateRequiredGoals(c GoalCatalog, seen map[string]int) error {
 	// Structural validation above protects each entry. This second pass protects
 	// the fleet contract itself: every canonical goal must still be present and
 	// must remain assigned to its declared capability area.

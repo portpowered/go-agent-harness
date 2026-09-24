@@ -217,7 +217,7 @@ func TestScenarioResultsPreserveOrderAndRejectNoOpEvidence(t *testing.T) {
 
 func TestMalformedExpectationsHaveTypedValidationIdentity(t *testing.T) {
 	tests := []ExpectedBehavior{
-		{Type: ExpectationKind("unknown")},
+		{Type: ExpectationKind(unknownLabel)},
 		expect(ExpectTranscriptContains, "", 0),
 		expect(ExpectToolCalled, "", 0),
 		expect(ExpectLatencyWithinTicks, "", -1),
@@ -309,18 +309,18 @@ func TestDiagnosticErrorsAndEvaluationWrapper(t *testing.T) {
 		t.Fatalf("evaluation wrapper: %v", err)
 	}
 
-	err := EvaluateExpectation(ExpectedBehavior{Type: ExpectationKind("unknown")}, ObservationSnapshot{})
+	err := EvaluateExpectation(ExpectedBehavior{Type: ExpectationKind(unknownLabel)}, ObservationSnapshot{})
 	var validation *ExpectationValidationError
 	if !errors.As(err, &validation) || validation.Error() == "" || validation.Unwrap() != ErrInvalidExpectation {
 		t.Fatalf("validation diagnostic: %v", err)
 	}
 
 	var nilValidation *ExpectationValidationError
-	if nilValidation.Error() != "<nil>" {
+	if nilValidation.Error() != nilErrorText {
 		t.Fatalf("nil validation diagnostic: %q", nilValidation.Error())
 	}
 	var nilMismatch *ExpectationMismatchError
-	if nilMismatch.Error() != "<nil>" {
+	if nilMismatch.Error() != nilErrorText {
 		t.Fatalf("nil mismatch diagnostic: %q", nilMismatch.Error())
 	}
 }

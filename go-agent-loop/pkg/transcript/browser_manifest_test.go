@@ -195,6 +195,48 @@ func TestWriteRecordingBundleIncludesValidatedAdditionalArtifacts(t *testing.T) 
 	}
 }
 
+func TestWriteRecordingBundleRejectsAdditionalArtifactCollisionWithAbsentTranscript(t *testing.T) {
+	tests := []struct {
+		name      string
+		client    []byte
+		agent     []byte
+		collision string
+	}{
+		{
+			name:      "client-only cannot fabricate agent transcript",
+			client:    []byte("client evidence\n"),
+			collision: "agent.transcript.jsonl",
+		},
+		{
+			name:      "agent-only cannot fabricate client transcript",
+			agent:     []byte("agent evidence\n"),
+			collision: "client.transcript.jsonl",
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			destination := filepath.Join(t.TempDir(), "recording")
+			err := WriteRecordingBundle(RecordingConfig{
+				Destination:      destination,
+				ClientTranscript: testCase.client,
+				AgentTranscript:  testCase.agent,
+				RecordingStatus:  &RecordingStatus{State: RecordingStatusPartial, Reason: "sink unavailable"},
+				AdditionalArtifacts: []RecordingArtifact{{
+					Path: testCase.collision,
+					Data: []byte("fabricated transcript\n"),
+				}},
+			})
+			if !errors.Is(err, ErrInvalidRecording) {
+				t.Fatalf("error = %v, want ErrInvalidRecording", err)
+			}
+			if _, statErr := os.Stat(destination); !errors.Is(statErr, os.ErrNotExist) {
+				t.Fatalf("rejected destination stat error = %v, want absent", statErr)
+			}
+		})
+	}
+}
+
 func TestWriteRecordingBundleRejectsMutatedAdditionalArtifact(t *testing.T) {
 	destination := filepath.Join(t.TempDir(), "mutated")
 	writeFile := func(path string, data []byte, mode os.FileMode) (int, error) {

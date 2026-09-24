@@ -291,35 +291,6 @@ func browserHTTPEndpoint(browserWebSocket string) (string, error) {
 	return "http://" + parsed.Host, nil
 }
 
-func readCrossProcessTarget(ctx context.Context, httpEndpoint, targetID string) (crossProcessTargetInfo, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, httpEndpoint+"/json/list", nil)
-	if err != nil {
-		return crossProcessTargetInfo{}, fmt.Errorf("create target-list request: %w", err)
-	}
-	client := &http.Client{Timeout: 2 * time.Second}
-	response, err := client.Do(request)
-	if err != nil {
-		return crossProcessTargetInfo{}, fmt.Errorf("read target list: %w", err)
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return crossProcessTargetInfo{}, fmt.Errorf("target list status = %s", response.Status)
-	}
-	var targets []crossProcessTargetInfo
-	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&targets); err != nil {
-		return crossProcessTargetInfo{}, fmt.Errorf("decode target list: %w", err)
-	}
-	for _, targetInfo := range targets {
-		if targetInfo.ID == targetID {
-			return targetInfo, nil
-		}
-	}
-	return crossProcessTargetInfo{}, fmt.Errorf("target %s is not present", targetID)
-}
-
 func waitForCrossProcessTarget(ctx context.Context, httpEndpoint, targetID string, attached *bool) (crossProcessTargetInfo, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -363,7 +334,7 @@ func targetIDFromContext(ctx context.Context) (string, error) {
 
 func isLoopbackWatchFixtureURL(value string) bool {
 	parsed, err := url.Parse(value)
-	return err == nil && parsed.Scheme == "http" && parsed.Hostname() == "127.0.0.1" && parsed.Path == "/" && parsed.RawQuery == "" && parsed.Fragment == ""
+	return err == nil && parsed.Scheme == schemeHTTP && parsed.Hostname() == "127.0.0.1" && parsed.Path == "/" && parsed.RawQuery == "" && parsed.Fragment == ""
 }
 
 func stateHasInvocation(state crossProcessPageState, value string) bool {
@@ -377,47 +348,6 @@ func stateHasInvocation(state crossProcessPageState, value string) bool {
 
 func stateMatchesInvocation(state crossProcessPageState, value string) bool {
 	return state.Ready && state.Value == "invoked:"+value && state.VisibleText == "invoked:"+value && stateHasInvocation(state, value)
-}
-
-func waitForHTTPOracle(ctx context.Context, stateURL string, predicate func(crossProcessPageState) bool) (crossProcessPageState, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
-	var last crossProcessPageState
-	var lastErr error
-	for {
-		request, err := http.NewRequestWithContext(ctx, http.MethodGet, stateURL, nil)
-		if err == nil {
-			response, requestErr := (&http.Client{Timeout: 2 * time.Second}).Do(request)
-			if requestErr == nil {
-				if response.StatusCode == http.StatusOK {
-					decodeErr := json.NewDecoder(io.LimitReader(response.Body, 64<<10)).Decode(&last)
-					response.Body.Close()
-					if decodeErr == nil && (predicate == nil || predicate(last)) {
-						return cloneCrossProcessPageState(last), nil
-					}
-					lastErr = decodeErr
-				} else {
-					lastErr = fmt.Errorf("oracle status = %s", response.Status)
-					response.Body.Close()
-				}
-			} else {
-				lastErr = requestErr
-			}
-		} else {
-			lastErr = err
-		}
-		select {
-		case <-ticker.C:
-		case <-ctx.Done():
-			if lastErr != nil {
-				return crossProcessPageState{}, fmt.Errorf("wait for HTTP oracle: %w: %v (last state=%+v)", ctx.Err(), lastErr, last)
-			}
-			return crossProcessPageState{}, fmt.Errorf("wait for HTTP oracle: %w (last state=%+v)", ctx.Err(), last)
-		}
-	}
 }
 
 func trimWatchProcessOutput(value string) string {

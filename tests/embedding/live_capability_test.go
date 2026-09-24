@@ -247,7 +247,8 @@ func (fixture *liveCapabilityRefreshFixture) assertOrderedMessages(t *testing.T)
 			if message.Type == messages.StreamTypeSessionUpdate {
 				fixture.assertUpdatedTools(t, message)
 				sawUpdate = true
-			} else if message.Type == messages.StreamTypeTextDelta {
+			}
+			if message.Type == messages.StreamTypeTextDelta {
 				sawText = true
 			}
 		case <-deadline:

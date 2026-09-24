@@ -11,6 +11,9 @@ import (
 	"testing"
 )
 
+// serverEventError is the realtime server event type that reports a failure.
+const serverEventError = "error"
+
 func requireNonSilentAudio(audio []byte) error {
 	rms, err := pcm16RMS(audio)
 	if err != nil {

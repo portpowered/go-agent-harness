@@ -6,22 +6,10 @@ import (
 	"testing"
 )
 
-// TestReconstructModelMessageFromDeltas_RoundTripAllFields verifies that every
-// field on the Message struct that ReconstructModelMessageFromDeltas can populate
-// survives the full streaming round-trip (encode to stream deltas → reconstruct).
-//
-// If a new exported field is added to Message, this test will fail in the
-// reflect-based guard at the bottom, forcing the developer to either:
-//   - add reconstruction support and update this test, or
-//   - explicitly mark the field as not-reconstructed.
-//
-// The three conversion paths that must handle every Message field:
-//   - responseToMessage()              (go-llm-gateway, non-streaming)
-//   - streamSSEToGateway()             (go-llm-gateway, streaming → deltas)
-//   - ReconstructModelMessageFromDeltas (go-agent-loop, deltas → Message)
-func TestReconstructModelMessageFromDeltas_RoundTripAllFields(t *testing.T) {
-	// Build deltas that exercise every content type the reconstruction handles.
-	deltas := []StreamMessage{
+// roundTripAllFieldDeltas builds deltas that exercise every content type the
+// reconstruction handles.
+func roundTripAllFieldDeltas() []StreamMessage {
+	return []StreamMessage{
 		// Text
 		{Type: StreamTypeTextDelta, Value: NewTextDeltaValue("hello ")},
 		{Type: StreamTypeTextDelta, Value: NewTextDeltaValue("world")},
@@ -58,8 +46,23 @@ func TestReconstructModelMessageFromDeltas_RoundTripAllFields(t *testing.T) {
 		{Type: StreamTypeEmbeddingStart, Value: NewEmbeddingStartValue("application/vnd.safetensors")},
 		{Type: StreamTypeEmbeddingDelta, Value: NewEmbeddingDeltaValue([]byte{0xEE})},
 	}
+}
 
-	msg := ReconstructModelMessageFromDeltas(deltas)
+// TestReconstructModelMessageFromDeltas_RoundTripAllFields verifies that every
+// field on the Message struct that ReconstructModelMessageFromDeltas can populate
+// survives the full streaming round-trip (encode to stream deltas → reconstruct).
+//
+// If a new exported field is added to Message, this test will fail in the
+// reflect-based guard at the bottom, forcing the developer to either:
+//   - add reconstruction support and update this test, or
+//   - explicitly mark the field as not-reconstructed.
+//
+// The three conversion paths that must handle every Message field:
+//   - responseToMessage()              (go-llm-gateway, non-streaming)
+//   - streamSSEToGateway()             (go-llm-gateway, streaming → deltas)
+//   - ReconstructModelMessageFromDeltas (go-agent-loop, deltas → Message)
+func TestReconstructModelMessageFromDeltas_RoundTripAllFields(t *testing.T) {
+	msg := ReconstructModelMessageFromDeltas(roundTripAllFieldDeltas())
 
 	// --- Assert each reconstructed field ---
 

@@ -90,16 +90,16 @@ func TestCrossProcessFixtureProvidesAnIndependentHTTPStateOracle(t *testing.T) {
 	}
 	if response.StatusCode != http.StatusNoContent {
 		body, _ := io.ReadAll(response.Body)
-		response.Body.Close()
+		closeResponseBody(t, response)
 		t.Fatalf("post fixture state status = %s body=%q", response.Status, body)
 	}
-	response.Body.Close()
+	closeResponseBody(t, response)
 
 	response, err = http.Get(fixture.StateURL())
 	if err != nil {
 		t.Fatalf("get fixture state: %v", err)
 	}
-	defer response.Body.Close()
+	defer closeResponseBody(t, response)
 	if response.StatusCode != http.StatusOK {
 		t.Fatalf("get fixture state status = %s", response.Status)
 	}
@@ -109,5 +109,12 @@ func TestCrossProcessFixtureProvidesAnIndependentHTTPStateOracle(t *testing.T) {
 	}
 	if !stateMatchesInvocation(state, "test") {
 		t.Fatalf("fixture oracle state = %+v, want test invocation", state)
+	}
+}
+
+func closeResponseBody(t *testing.T, response *http.Response) {
+	t.Helper()
+	if err := response.Body.Close(); err != nil {
+		t.Errorf("close response body: %v", err)
 	}
 }

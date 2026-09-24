@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -455,67 +454,6 @@ func ReadProfiles(paths []string) (map[string]Coverage, error) {
 		measurements[block.packagePath] = current
 	}
 	return measurements, nil
-}
-
-func parseProfile(reader io.Reader, name string, blocks map[string]profileBlock) (string, error) {
-	scanner := bufio.NewScanner(reader)
-	scanner.Buffer(make([]byte, 1024), 1024*1024)
-	lineNumber := 0
-	mode := ""
-	for scanner.Scan() {
-		lineNumber++
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
-			continue
-		}
-		if mode == "" {
-			if !strings.HasPrefix(line, "mode: ") {
-				return "", profileError(name, lineNumber, "first non-empty line must declare mode")
-			}
-			mode = strings.TrimSpace(strings.TrimPrefix(line, "mode: "))
-			if mode == "" {
-				return "", profileError(name, lineNumber, "coverage mode is empty")
-			}
-			continue
-		}
-
-		fields := strings.Fields(line)
-		if len(fields) != 3 {
-			return "", profileError(name, lineNumber, "coverage block must contain file range, statements, and count")
-		}
-		fileRange := fields[0]
-		colon := strings.LastIndexByte(fileRange, ':')
-		if colon <= 0 || !strings.Contains(fileRange[colon+1:], ",") {
-			return "", profileError(name, lineNumber, "coverage block has an invalid file range")
-		}
-		packagePath := fileRange[:colon]
-		if slash := strings.LastIndexByte(packagePath, '/'); slash <= 0 || slash == len(packagePath)-1 {
-			return "", profileError(name, lineNumber, "coverage block has an invalid import path")
-		} else {
-			packagePath = packagePath[:slash]
-		}
-		statements, err := strconv.ParseInt(fields[1], 10, 64)
-		if err != nil || statements < 0 {
-			return "", profileError(name, lineNumber, "statement count is invalid")
-		}
-		count, err := strconv.ParseInt(fields[2], 10, 64)
-		if err != nil || count < 0 {
-			return "", profileError(name, lineNumber, "execution count is invalid")
-		}
-		if statements == 0 {
-			continue
-		}
-		if err := mergeProfileBlock(blocks, fileRange, profileBlock{packagePath: packagePath, statements: statements, covered: count > 0}); err != nil {
-			return "", profileError(name, lineNumber, err.Error())
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		return "", fmt.Errorf("%w: read %q: %w", ErrProfileInvalid, name, err)
-	}
-	if mode == "" {
-		return "", profileError(name, lineNumber+1, "profile does not declare a coverage mode")
-	}
-	return mode, nil
 }
 
 func profileError(name string, line int, detail string) error {

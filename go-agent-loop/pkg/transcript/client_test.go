@@ -133,12 +133,22 @@ func TestClientCaptureRecordsOrderedDeviceAndWebSocketBoundaries(t *testing.T) {
 	if metadataCalls != len(want) {
 		t.Fatalf("metadata calls = %d, want %d", metadataCalls, len(want))
 	}
-	if len(sink.records) != len(want) {
-		t.Fatalf("captured records = %d, want exactly %d", len(sink.records), len(want))
+	assertOrderedClientRecords(t, sink.records, want)
+	if !bytes.Equal(output.Bytes(), bytes.Join(played, nil)) {
+		t.Fatalf("device output bytes = %x, want %x", output.Bytes(), bytes.Join(played, nil))
+	}
+}
+
+// assertOrderedClientRecords checks exact record order, per-boundary counts,
+// and that each payload was recorded exactly once.
+func assertOrderedClientRecords(t *testing.T, records, want []Record) {
+	t.Helper()
+	if len(records) != len(want) {
+		t.Fatalf("captured records = %d, want exactly %d", len(records), len(want))
 	}
 	for index := range want {
-		if !recordsEqual(sink.records[index], want[index]) {
-			t.Fatalf("record %d = %+v, want %+v", index, sink.records[index], want[index])
+		if !recordsEqual(records[index], want[index]) {
+			t.Fatalf("record %d = %+v, want %+v", index, records[index], want[index])
 		}
 	}
 
@@ -149,24 +159,21 @@ func TestClientCaptureRecordsOrderedDeviceAndWebSocketBoundaries(t *testing.T) {
 		string(DirectionOut) + "/" + string(StreamDeviceOut): 2,
 	}
 	gotCounts := make(map[string]int)
-	for _, record := range sink.records {
+	for _, record := range records {
 		gotCounts[string(record.Direction)+"/"+string(record.Stream)]++
 	}
 	if !reflect.DeepEqual(gotCounts, wantCounts) {
 		t.Fatalf("stream counts = %v, want %v", gotCounts, wantCounts)
 	}
 
-	seen := make(map[string]int, len(sink.records))
-	for _, record := range sink.records {
+	seen := make(map[string]int, len(records))
+	for _, record := range records {
 		seen[string(record.Payload)]++
 	}
 	for _, record := range want {
 		if seen[string(record.Payload)] != 1 {
 			t.Fatalf("payload %x appeared %d times, want exactly once", record.Payload, seen[string(record.Payload)])
 		}
-	}
-	if !bytes.Equal(output.Bytes(), bytes.Join(played, nil)) {
-		t.Fatalf("device output bytes = %x, want %x", output.Bytes(), bytes.Join(played, nil))
 	}
 }
 
@@ -183,6 +190,18 @@ func TestClientCaptureLeavesLiveResultsUnchangedWhenTranscriptDegrades(t *testin
 		reports = append(reports, err)
 	})
 
+	assertDegradedDeviceInputUnchanged(t, capture, liveReadErr)
+	assertDegradedDeviceOutputUnchanged(t, capture, liveWriteErr)
+	assertPartialDeviceOutputRecordsAcceptedPrefix(t, liveWriteErr)
+	assertDegradedWebSocketFailuresUnchanged(t, capture, liveSendErr, liveReceiveErr)
+	assertDegradedWebSocketSuccessUnchanged(t, capture)
+	if len(reports) != 1 || !errors.Is(reports[0], recordingErr) {
+		t.Fatalf("transcript reports = %v, want one report retaining sink error", reports)
+	}
+}
+
+func assertDegradedDeviceInputUnchanged(t *testing.T, capture *ClientCapture, liveReadErr error) {
+	t.Helper()
 	readPayload := []byte{0x01, 0xff, 0x00}
 	baselineReader := &scriptedReader{chunks: [][]byte{readPayload}, err: liveReadErr}
 	capturedReader := &scriptedReader{chunks: [][]byte{readPayload}, err: liveReadErr}
@@ -196,18 +215,32 @@ func TestClientCaptureLeavesLiveResultsUnchangedWhenTranscriptDegrades(t *testin
 			capturedN, capturedErr, capturedBuffer, capturedReader.calls,
 			baselineN, baselineErr, baselineBuffer, baselineReader.calls)
 	}
+}
 
+// degradedWritePayload is partially accepted (two bytes) by the scripted
+// live writers used by the device output checks.
+func degradedWritePayload() []byte { return []byte{0x02, 0xfe, 0x03, 0xfd} }
+
+func assertDegradedDeviceOutputUnchanged(t *testing.T, capture *ClientCapture, liveWriteErr error) {
+	t.Helper()
 	baselineWriter := &scriptedWriter{n: 2, err: liveWriteErr}
 	capturedWriter := &scriptedWriter{n: 2, err: liveWriteErr}
-	writePayload := []byte{0x02, 0xfe, 0x03, 0xfd}
-	baselineN, baselineErr = baselineWriter.Write(writePayload)
-	capturedN, capturedErr = capture.WrapDeviceOutput(capturedWriter).Write(writePayload)
+	writePayload := degradedWritePayload()
+	baselineN, baselineErr := baselineWriter.Write(writePayload)
+	capturedN, capturedErr := capture.WrapDeviceOutput(capturedWriter).Write(writePayload)
 	if capturedN != baselineN || capturedErr != baselineErr || !errors.Is(capturedErr, liveWriteErr) ||
 		!bytes.Equal(capturedWriter.seen, baselineWriter.seen) || capturedWriter.calls != baselineWriter.calls {
 		t.Fatalf("device output changed: captured=(%d,%v,%x,%d), baseline=(%d,%v,%x,%d)",
 			capturedN, capturedErr, capturedWriter.seen, capturedWriter.calls,
 			baselineN, baselineErr, baselineWriter.seen, baselineWriter.calls)
 	}
+}
+
+func assertPartialDeviceOutputRecordsAcceptedPrefix(t *testing.T, liveWriteErr error) {
+	t.Helper()
+	writePayload := degradedWritePayload()
+	baselineWriter := &scriptedWriter{n: 2, err: liveWriteErr}
+	baselineN, baselineErr := baselineWriter.Write(writePayload)
 	partialSink := &clientRecordSink{}
 	partialCapture := NewClientCapture(partialSink, func() (uint64, time.Time) {
 		return 18, time.Unix(18, 0)
@@ -227,14 +260,17 @@ func TestClientCaptureLeavesLiveResultsUnchangedWhenTranscriptDegrades(t *testin
 	if !recordsEqual(partialSink.records[0], wantPartialRecord) {
 		t.Fatalf("partial device output record = %+v, want %+v", partialSink.records[0], wantPartialRecord)
 	}
+}
 
+func assertDegradedWebSocketFailuresUnchanged(t *testing.T, capture *ClientCapture, liveSendErr, liveReceiveErr error) {
+	t.Helper()
 	baselineTransport := &scriptedWebSocket{sendErr: liveSendErr, receiveErr: liveReceiveErr}
 	capturedTransport := &scriptedWebSocket{sendErr: liveSendErr, receiveErr: liveReceiveErr}
 	baselineConnection := baselineTransport
 	capturedConnection := capture.WrapWebSocket(capturedTransport)
 	sendPayload := []byte{0x04, 0xfc}
 	baselineSendErr := baselineConnection.WriteMessage(9, sendPayload)
-	capturedErr = capturedConnection.WriteMessage(9, sendPayload)
+	capturedErr := capturedConnection.WriteMessage(9, sendPayload)
 	if capturedErr != baselineSendErr ||
 		!errors.Is(capturedErr, liveSendErr) || capturedTransport.sendCalls != baselineTransport.sendCalls {
 		t.Fatalf("websocket send changed: captured=(%v,%d), baseline=(%v,%d)", capturedErr, capturedTransport.sendCalls, baselineSendErr, baselineTransport.sendCalls)
@@ -247,6 +283,10 @@ func TestClientCaptureLeavesLiveResultsUnchangedWhenTranscriptDegrades(t *testin
 			gotType, gotPayload, capturedErr, capturedTransport.receiveCalls,
 			wantType, wantPayload, baselineErr, baselineTransport.receiveCalls)
 	}
+}
+
+func assertDegradedWebSocketSuccessUnchanged(t *testing.T, capture *ClientCapture) {
+	t.Helper()
 	successIncoming := []scriptedWebSocketMessage{
 		{messageType: 11, payload: []byte{0x05, 0xfb, 0x06}},
 		{messageType: 12, payload: []byte{0x07, 0xf9}},
@@ -289,9 +329,6 @@ func TestClientCaptureLeavesLiveResultsUnchangedWhenTranscriptDegrades(t *testin
 		!reflect.DeepEqual(successCapturedTransport.received, successIncoming) ||
 		!reflect.DeepEqual(successCapturedTransport.received, successBaselineTransport.received) {
 		t.Fatalf("successful websocket receives = baseline=%+v captured=%+v, want %+v", successBaselineTransport.received, successCapturedTransport.received, successIncoming)
-	}
-	if len(reports) != 1 || !errors.Is(reports[0], recordingErr) {
-		t.Fatalf("transcript reports = %v, want one report retaining sink error", reports)
 	}
 }
 

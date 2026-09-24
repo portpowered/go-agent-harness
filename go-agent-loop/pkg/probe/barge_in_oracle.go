@@ -217,7 +217,7 @@ type BargeInValidationError struct {
 
 func (e *BargeInValidationError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	violations := make([]string, 0, len(e.Report.Violations))
 	for _, violation := range e.Report.Violations {
@@ -586,187 +586,236 @@ func (l *BargeInLedger) Check(contract BargeInContract) BargeInValidationReport 
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	violations := append([]BargeInViolation(nil), l.violations...)
-	addViolation := func(boundary, detail string) {
-		violations = append(violations, BargeInViolation{Boundary: boundary, Detail: detail})
+	check := newBargeInCheck(l)
+	check.inputs(contract.Inputs)
+	check.responses(contract.Responses)
+	check.tools(contract.Tools)
+	check.sessionTerminal(contract.RequireSessionTerminal)
+	observed := append([]BargeInEventSummary(nil), l.events...)
+	return BargeInValidationReport{
+		Valid:      len(check.violations) == 0,
+		Violations: check.violations,
+		Observed:   observed,
+		Unresolved: check.unresolved,
 	}
+}
+
+// bargeInCheck accumulates one Check evaluation. The ledger lock is held by
+// the caller for the lifetime of the value; the ledger itself is not mutated.
+type bargeInCheck struct {
+	ledger        *BargeInLedger
+	violations    []BargeInViolation
+	unresolved    []string
+	unresolvedSet map[string]struct{}
+}
+
+func newBargeInCheck(l *BargeInLedger) *bargeInCheck {
 	unresolved := l.unresolvedLocked()
 	unresolvedSet := make(map[string]struct{}, len(unresolved))
 	for _, identity := range unresolved {
 		unresolvedSet[identity] = struct{}{}
 	}
-	addUnresolved := func(identity string) {
-		if _, exists := unresolvedSet[identity]; exists {
-			return
-		}
-		unresolvedSet[identity] = struct{}{}
-		unresolved = append(unresolved, identity)
+	return &bargeInCheck{
+		ledger:        l,
+		violations:    append([]BargeInViolation(nil), l.violations...),
+		unresolved:    unresolved,
+		unresolvedSet: unresolvedSet,
 	}
+}
 
-	inputs := make(map[string]struct{}, len(contract.Inputs))
-	for _, expected := range contract.Inputs {
-		if expected.ID == "" || expected.TurnID == "" {
-			addViolation("contract.inputs", "expected input identity and turn identity are required")
-			continue
-		}
-		if _, exists := inputs[expected.ID]; exists {
-			addViolation("contract.inputs", fmt.Sprintf("input %q is expected more than once", expected.ID))
-		}
-		inputs[expected.ID] = struct{}{}
-		state := l.inputs[expected.ID]
-		if state == nil {
-			addViolation("contract.inputs", fmt.Sprintf("missing input %q", expected.ID))
-			addUnresolved("input:" + expected.ID + ":missing")
-			continue
-		}
-		if state.turnID != expected.TurnID {
-			addViolation("contract.inputs", fmt.Sprintf("input %q has wrong turn identity", expected.ID))
-		}
-		if len(state.appendGroups) != 1 {
-			addViolation("input.append", fmt.Sprintf("input %q has %d append groups, want exactly one", expected.ID, len(state.appendGroups)))
-		}
-		if !state.nonEmpty {
-			addViolation("input.append", fmt.Sprintf("input %q has no non-empty append", expected.ID))
-		}
-		if state.commit == 0 {
-			addViolation("input.commit", fmt.Sprintf("input %q has no commit", expected.ID))
-		}
-		if state.userTurn == 0 {
-			addViolation("user.turn", fmt.Sprintf("input %q has no user-turn representation", expected.ID))
-		}
-	}
-	if len(inputs) > 0 {
-		for id := range l.inputs {
-			if _, expected := inputs[id]; !expected {
-				addViolation("input", fmt.Sprintf("unexpected input identity %q", id))
-			}
-		}
-	}
+func (c *bargeInCheck) violate(boundary, detail string) {
+	c.violations = append(c.violations, BargeInViolation{Boundary: boundary, Detail: detail})
+}
 
-	responses := make(map[string]BargeInResponseExpectation, len(contract.Responses))
-	for _, expected := range contract.Responses {
-		if expected.ID == "" || expected.InputID == "" || expected.TurnID == "" {
-			addViolation("contract.responses", "expected response identity, input identity, and turn identity are required")
-			continue
-		}
-		if _, exists := responses[expected.ID]; exists {
-			addViolation("contract.responses", fmt.Sprintf("response %q is expected more than once", expected.ID))
-		}
-		responses[expected.ID] = expected
-		state := l.responses[expected.ID]
-		if state == nil {
-			addViolation("response.created", fmt.Sprintf("missing response %q", expected.ID))
-			addUnresolved("response:" + expected.ID + ":missing")
-			continue
-		}
-		if state.inputID != expected.InputID || state.turnID != expected.TurnID {
-			addViolation("response.created", fmt.Sprintf("response %q has wrong owner identity", expected.ID))
-		}
-		if state.terminal == 0 {
-			addViolation("response.terminal", fmt.Sprintf("response %q has unresolved terminal disposition", expected.ID))
-		} else if expected.Disposition != "" && state.disposition != expected.Disposition {
-			addViolation("response.terminal", fmt.Sprintf("response %q disposition is %q, want %q", expected.ID, state.disposition, expected.Disposition))
-		}
-		if state.cancel > 0 {
-			interruptingInput := l.inputs[state.cancelInputID]
-			if interruptingInput == nil || !interruptingInput.nonEmpty {
-				addViolation("response.cancel", fmt.Sprintf("response %q references unknown or empty interrupting input %q", expected.ID, state.cancelInputID))
-			} else if state.cancelInputID == state.inputID {
-				addViolation("response.cancel", fmt.Sprintf("response %q cancellation does not identify a distinct interrupting input", expected.ID))
-			}
-		}
-		if expected.RequireCancel && state.cancel == 0 {
-			addViolation("response.cancel", fmt.Sprintf("response %q is missing required cancellation", expected.ID))
-		}
-		if expected.ForbidCancel && state.cancel != 0 {
-			addViolation("response.cancel", fmt.Sprintf("response %q was cancelled although completion had precedence", expected.ID))
-		}
-		if expected.RequireOutput && state.outputCount == 0 {
-			addViolation("response.output", fmt.Sprintf("response %q has no non-empty output before interruption", expected.ID))
-		}
-		if expected.ForbidOutput && state.outputCount != 0 {
-			addViolation("response.output", fmt.Sprintf("response %q emitted %d non-empty output events although output is forbidden", expected.ID, state.outputCount))
-		}
-		if expected.RequireContinuation && state.continuation == 0 {
-			addViolation("continuation", fmt.Sprintf("response %q has no continuation identity", expected.ID))
-		}
+func (c *bargeInCheck) addUnresolved(identity string) {
+	if _, exists := c.unresolvedSet[identity]; exists {
+		return
 	}
-	if len(responses) > 0 {
-		for id := range l.responses {
-			if _, expected := responses[id]; !expected {
-				addViolation("response", fmt.Sprintf("unexpected response identity %q", id))
-			}
-		}
-	}
+	c.unresolvedSet[identity] = struct{}{}
+	c.unresolved = append(c.unresolved, identity)
+}
 
-	tools := make(map[string]BargeInToolExpectation, len(contract.Tools))
-	for _, expected := range contract.Tools {
-		if expected.ID == "" || expected.ResponseID == "" || expected.TurnID == "" {
-			addViolation("contract.tools", "expected tool identity, response identity, and turn identity are required")
+// reportUnexpected flags observed identities absent from a non-empty contract.
+func reportUnexpected[S any](c *bargeInCheck, observed map[string]S, expected map[string]struct{}, boundary, label string) {
+	if len(expected) == 0 {
+		return
+	}
+	for id := range observed {
+		if _, ok := expected[id]; !ok {
+			c.violate(boundary, fmt.Sprintf("unexpected %s identity %q", label, id))
+		}
+	}
+}
+
+// expectIdentity records one contract identity and reports duplicates.
+func (c *bargeInCheck) expectIdentity(expected map[string]struct{}, id, boundary, label string) {
+	if _, exists := expected[id]; exists {
+		c.violate(boundary, fmt.Sprintf("%s %q is expected more than once", label, id))
+	}
+	expected[id] = struct{}{}
+}
+
+func (c *bargeInCheck) inputs(expectations []BargeInInputExpectation) {
+	expected := make(map[string]struct{}, len(expectations))
+	for _, expectation := range expectations {
+		if expectation.ID == "" || expectation.TurnID == "" {
+			c.violate("contract.inputs", "expected input identity and turn identity are required")
 			continue
 		}
-		if _, exists := tools[expected.ID]; exists {
-			addViolation("contract.tools", fmt.Sprintf("tool call %q is expected more than once", expected.ID))
-		}
-		tools[expected.ID] = expected
-		state := l.tools[expected.ID]
-		if state == nil {
-			addViolation("tool.call", fmt.Sprintf("missing tool call %q", expected.ID))
-			addUnresolved("tool:" + expected.ID + ":missing")
+		c.expectIdentity(expected, expectation.ID, "contract.inputs", "input")
+		c.input(expectation)
+	}
+	reportUnexpected(c, c.ledger.inputs, expected, "input", "input")
+}
+
+func (c *bargeInCheck) input(expected BargeInInputExpectation) {
+	state := c.ledger.inputs[expected.ID]
+	if state == nil {
+		c.violate("contract.inputs", fmt.Sprintf("missing input %q", expected.ID))
+		c.addUnresolved("input:" + expected.ID + ":missing")
+		return
+	}
+	if state.turnID != expected.TurnID {
+		c.violate("contract.inputs", fmt.Sprintf("input %q has wrong turn identity", expected.ID))
+	}
+	if len(state.appendGroups) != 1 {
+		c.violate("input.append", fmt.Sprintf("input %q has %d append groups, want exactly one", expected.ID, len(state.appendGroups)))
+	}
+	if !state.nonEmpty {
+		c.violate("input.append", fmt.Sprintf("input %q has no non-empty append", expected.ID))
+	}
+	if state.commit == 0 {
+		c.violate("input.commit", fmt.Sprintf("input %q has no commit", expected.ID))
+	}
+	if state.userTurn == 0 {
+		c.violate("user.turn", fmt.Sprintf("input %q has no user-turn representation", expected.ID))
+	}
+}
+
+func (c *bargeInCheck) responses(expectations []BargeInResponseExpectation) {
+	expected := make(map[string]struct{}, len(expectations))
+	for _, expectation := range expectations {
+		if expectation.ID == "" || expectation.InputID == "" || expectation.TurnID == "" {
+			c.violate("contract.responses", "expected response identity, input identity, and turn identity are required")
 			continue
 		}
-		if state.responseID != expected.ResponseID || state.turnID != expected.TurnID {
-			addViolation("tool.call", fmt.Sprintf("tool call %q has wrong owner identity", expected.ID))
-		}
-		if state.result == 0 {
-			addViolation("tool.result", fmt.Sprintf("tool call %q has unresolved result disposition", expected.ID))
-		} else if expected.Disposition != "" && state.disposition != expected.Disposition {
-			addViolation("tool.result", fmt.Sprintf("tool call %q disposition is %q, want %q", expected.ID, state.disposition, expected.Disposition))
-		}
-		if expected.ForbidResultAfterCancel {
-			response := l.responses[state.responseID]
-			if response != nil && response.cancel > 0 && state.result > response.cancel && state.disposition == BargeInDispositionDelivered {
-				addViolation("tool.result", fmt.Sprintf("tool result for %q was delivered after response cancellation", expected.ID))
-			}
-		}
+		c.expectIdentity(expected, expectation.ID, "contract.responses", "response")
+		c.response(expectation)
 	}
-	if len(tools) > 0 {
-		for id := range l.tools {
-			if _, expected := tools[id]; !expected {
-				addViolation("tool.call", fmt.Sprintf("unexpected tool-call identity %q", id))
-			}
-		}
-	}
+	reportUnexpected(c, c.ledger.responses, expected, "response", "response")
+}
 
-	if contract.RequireSessionTerminal && l.session == nil {
-		addViolation("session.terminal", "missing terminal observation")
+func (c *bargeInCheck) response(expected BargeInResponseExpectation) {
+	state := c.ledger.responses[expected.ID]
+	if state == nil {
+		c.violate("response.created", fmt.Sprintf("missing response %q", expected.ID))
+		c.addUnresolved("response:" + expected.ID + ":missing")
+		return
 	}
-	if l.session != nil && l.session.clean {
-		for _, response := range l.responses {
-			if response.terminal == 0 {
-				addViolation("session.terminal", fmt.Sprintf("clean success has unresolved response %q", response.id))
-			}
-		}
-		for _, tool := range l.tools {
-			if tool.result == 0 {
-				addViolation("session.terminal", fmt.Sprintf("clean success has unresolved tool call %q", tool.id))
-			}
-		}
+	if state.inputID != expected.InputID || state.turnID != expected.TurnID {
+		c.violate("response.created", fmt.Sprintf("response %q has wrong owner identity", expected.ID))
 	}
+	if state.terminal == 0 {
+		c.violate("response.terminal", fmt.Sprintf("response %q has unresolved terminal disposition", expected.ID))
+	} else if expected.Disposition != "" && state.disposition != expected.Disposition {
+		c.violate("response.terminal", fmt.Sprintf("response %q disposition is %q, want %q", expected.ID, state.disposition, expected.Disposition))
+	}
+	c.responseCancellation(expected, state)
+	c.responseOutput(expected, state)
+}
 
-	if !contract.RequireSessionTerminal && l.session == nil {
-		unresolved = removeUnresolved(unresolved, "session:terminal")
+func (c *bargeInCheck) responseCancellation(expected BargeInResponseExpectation, state *bargeInResponseState) {
+	if state.cancel > 0 {
+		interruptingInput := c.ledger.inputs[state.cancelInputID]
+		if interruptingInput == nil || !interruptingInput.nonEmpty {
+			c.violate("response.cancel", fmt.Sprintf("response %q references unknown or empty interrupting input %q", expected.ID, state.cancelInputID))
+		} else if state.cancelInputID == state.inputID {
+			c.violate("response.cancel", fmt.Sprintf("response %q cancellation does not identify a distinct interrupting input", expected.ID))
+		}
 	}
-	sort.Strings(unresolved)
-	if len(unresolved) > 0 && l.session != nil {
-		addViolation("session.terminal", "terminal observation arrived with unresolved ledger identities")
+	if expected.RequireCancel && state.cancel == 0 {
+		c.violate("response.cancel", fmt.Sprintf("response %q is missing required cancellation", expected.ID))
 	}
-	observed := append([]BargeInEventSummary(nil), l.events...)
-	return BargeInValidationReport{
-		Valid:      len(violations) == 0,
-		Violations: violations,
-		Observed:   observed,
-		Unresolved: unresolved,
+	if expected.ForbidCancel && state.cancel != 0 {
+		c.violate("response.cancel", fmt.Sprintf("response %q was cancelled although completion had precedence", expected.ID))
+	}
+}
+
+func (c *bargeInCheck) responseOutput(expected BargeInResponseExpectation, state *bargeInResponseState) {
+	if expected.RequireOutput && state.outputCount == 0 {
+		c.violate("response.output", fmt.Sprintf("response %q has no non-empty output before interruption", expected.ID))
+	}
+	if expected.ForbidOutput && state.outputCount != 0 {
+		c.violate("response.output", fmt.Sprintf("response %q emitted %d non-empty output events although output is forbidden", expected.ID, state.outputCount))
+	}
+	if expected.RequireContinuation && state.continuation == 0 {
+		c.violate("continuation", fmt.Sprintf("response %q has no continuation identity", expected.ID))
+	}
+}
+
+func (c *bargeInCheck) tools(expectations []BargeInToolExpectation) {
+	expected := make(map[string]struct{}, len(expectations))
+	for _, expectation := range expectations {
+		if expectation.ID == "" || expectation.ResponseID == "" || expectation.TurnID == "" {
+			c.violate("contract.tools", "expected tool identity, response identity, and turn identity are required")
+			continue
+		}
+		c.expectIdentity(expected, expectation.ID, "contract.tools", "tool call")
+		c.tool(expectation)
+	}
+	reportUnexpected(c, c.ledger.tools, expected, "tool.call", "tool-call")
+}
+
+func (c *bargeInCheck) tool(expected BargeInToolExpectation) {
+	state := c.ledger.tools[expected.ID]
+	if state == nil {
+		c.violate("tool.call", fmt.Sprintf("missing tool call %q", expected.ID))
+		c.addUnresolved("tool:" + expected.ID + ":missing")
+		return
+	}
+	if state.responseID != expected.ResponseID || state.turnID != expected.TurnID {
+		c.violate("tool.call", fmt.Sprintf("tool call %q has wrong owner identity", expected.ID))
+	}
+	if state.result == 0 {
+		c.violate("tool.result", fmt.Sprintf("tool call %q has unresolved result disposition", expected.ID))
+	} else if expected.Disposition != "" && state.disposition != expected.Disposition {
+		c.violate("tool.result", fmt.Sprintf("tool call %q disposition is %q, want %q", expected.ID, state.disposition, expected.Disposition))
+	}
+	if expected.ForbidResultAfterCancel {
+		response := c.ledger.responses[state.responseID]
+		if response != nil && response.cancel > 0 && state.result > response.cancel && state.disposition == BargeInDispositionDelivered {
+			c.violate("tool.result", fmt.Sprintf("tool result for %q was delivered after response cancellation", expected.ID))
+		}
+	}
+}
+
+func (c *bargeInCheck) sessionTerminal(required bool) {
+	session := c.ledger.session
+	if required && session == nil {
+		c.violate("session.terminal", "missing terminal observation")
+	}
+	if session != nil && session.clean {
+		c.cleanSuccessUnresolved()
+	}
+	if !required && session == nil {
+		c.unresolved = removeUnresolved(c.unresolved, "session:terminal")
+	}
+	sort.Strings(c.unresolved)
+	if len(c.unresolved) > 0 && session != nil {
+		c.violate("session.terminal", "terminal observation arrived with unresolved ledger identities")
+	}
+}
+
+func (c *bargeInCheck) cleanSuccessUnresolved() {
+	for _, response := range c.ledger.responses {
+		if response.terminal == 0 {
+			c.violate("session.terminal", fmt.Sprintf("clean success has unresolved response %q", response.id))
+		}
+	}
+	for _, tool := range c.ledger.tools {
+		if tool.result == 0 {
+			c.violate("session.terminal", fmt.Sprintf("clean success has unresolved tool call %q", tool.id))
+		}
 	}
 }
 
@@ -853,7 +902,7 @@ type BargeInWaitError struct {
 
 func (e *BargeInWaitError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	observed := make([]string, 0, len(e.Observed))
 	for _, event := range e.Observed {
@@ -913,148 +962,6 @@ func (l *BargeInLedger) waitError(boundary string, timeout time.Duration, cause 
 		Observed:   l.ObservedSequence(),
 		Unresolved: l.UnresolvedIdentities(),
 	}
-}
-
-// BargeInCoordinator owns the bounded context shared by event gates and
-// observer workers in a proof. Workers must honor the context passed to their
-// function; StopAndWait gives them a second, bounded join boundary during
-// teardown instead of using an unbounded WaitGroup.Wait.
-type BargeInCoordinator struct {
-	ctx    context.Context
-	cancel context.CancelFunc
-	ledger *BargeInLedger
-	bound  time.Duration
-
-	workerMu    sync.Mutex
-	workerCount int
-	workersDone chan struct{}
-}
-
-// NewBargeInCoordinator creates one shared, bounded proof context.
-func NewBargeInCoordinator(parent context.Context, timeout time.Duration, ledger *BargeInLedger) (*BargeInCoordinator, error) {
-	if parent == nil {
-		return nil, fmt.Errorf("%w: coordinator parent context is required", ErrBargeInWait)
-	}
-	if timeout <= 0 {
-		return nil, fmt.Errorf("%w: coordinator timeout must be positive", ErrBargeInWait)
-	}
-	ctx, cancel := context.WithTimeout(parent, timeout)
-	coordinator := &BargeInCoordinator{
-		ctx:         ctx,
-		cancel:      cancel,
-		ledger:      ledger,
-		bound:       timeout,
-		workersDone: make(chan struct{}),
-	}
-	close(coordinator.workersDone)
-	return coordinator, nil
-}
-
-// Context is the shared cancellation path for all proof work.
-func (c *BargeInCoordinator) Context() context.Context {
-	if c == nil {
-		return nil
-	}
-	return c.ctx
-}
-
-// Go starts one context-aware proof worker. Calls to Go must be complete before
-// WaitForWorkers or StopAndWait begins.
-func (c *BargeInCoordinator) Go(worker func(context.Context)) {
-	if c == nil || worker == nil {
-		return
-	}
-	c.workerMu.Lock()
-	if c.workerCount == 0 {
-		c.workersDone = make(chan struct{})
-	}
-	c.workerCount++
-	c.workerMu.Unlock()
-	go func() {
-		defer c.workerFinished()
-		worker(c.ctx)
-	}()
-}
-
-func (c *BargeInCoordinator) workerFinished() {
-	c.workerMu.Lock()
-	defer c.workerMu.Unlock()
-	c.workerCount--
-	if c.workerCount == 0 {
-		close(c.workersDone)
-	}
-}
-
-// WaitFor waits for an event gate under the coordinator's shared deadline.
-func (c *BargeInCoordinator) WaitFor(boundary string, signal <-chan struct{}) error {
-	if c == nil {
-		return fmt.Errorf("%w: coordinator is nil", ErrBargeInWait)
-	}
-	return c.ledger.WaitFor(c.ctx, boundary, signal, c.remaining())
-}
-
-// WaitForWorkers waits for all workers while respecting the shared deadline.
-// A worker that ignores Context is reported as a bounded teardown failure.
-func (c *BargeInCoordinator) WaitForWorkers(boundary string) error {
-	if c == nil {
-		return fmt.Errorf("%w: coordinator is nil", ErrBargeInWait)
-	}
-	c.workerMu.Lock()
-	done := c.workersDone
-	c.workerMu.Unlock()
-	select {
-	case <-done:
-		return nil
-	case <-c.ctx.Done():
-		select {
-		case <-done:
-			return nil
-		default:
-		}
-		return c.ledger.waitError(boundary, c.bound, c.ctx.Err())
-	}
-}
-
-// StopAndWait cancels every worker and joins them for at most the smaller of
-// the proof bound and one second. A cooperative worker normally returns before
-// this grace bound; a non-cooperative worker produces a diagnostic error.
-func (c *BargeInCoordinator) StopAndWait(boundary string) error {
-	if c == nil {
-		return fmt.Errorf("%w: coordinator is nil", ErrBargeInWait)
-	}
-	c.cancel()
-	c.workerMu.Lock()
-	done := c.workersDone
-	c.workerMu.Unlock()
-	joinTimeout := c.bound
-	if joinTimeout > time.Second {
-		joinTimeout = time.Second
-	}
-	timer := time.NewTimer(joinTimeout)
-	defer timer.Stop()
-	select {
-	case <-done:
-		return nil
-	case <-timer.C:
-		select {
-		case <-done:
-			return nil
-		default:
-		}
-		return c.ledger.waitError(boundary, joinTimeout, context.DeadlineExceeded)
-	}
-}
-
-func (c *BargeInCoordinator) remaining() time.Duration {
-	deadline, ok := c.ctx.Deadline()
-	if !ok {
-		return c.bound
-	}
-	remaining := time.Until(deadline)
-	if remaining <= 0 {
-		return time.Nanosecond
-	}
-	return remaining
 }
 
 func validResponseDisposition(disposition BargeInDisposition) bool {

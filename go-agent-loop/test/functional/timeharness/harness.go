@@ -243,7 +243,9 @@ func (s *Scenario) checkWatchdog(target uint64) {
 func (p *Participant) bind() {
 	var stack [64]byte
 	var id uint64
-	fmt.Sscanf(string(stack[:runtime.Stack(stack[:], false)]), "goroutine %d ", &id)
+	if _, err := fmt.Sscanf(string(stack[:runtime.Stack(stack[:], false)]), "goroutine %d ", &id); err != nil {
+		return
+	}
 	p.gid.CompareAndSwap(0, id)
 }
 func sleepingGoroutines() map[uint64]bool {
@@ -255,7 +257,9 @@ func sleepingGoroutines() map[uint64]bool {
 			continue
 		}
 		var id uint64
-		fmt.Sscanf(block, "goroutine %d ", &id)
+		if _, err := fmt.Sscanf(block, "goroutine %d ", &id); err != nil {
+			continue
+		}
 		result[id] = true
 	}
 	return result

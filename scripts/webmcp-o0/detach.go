@@ -138,8 +138,8 @@ func detachExternalTarget(targetContext context.Context, cancelTarget context.Ca
 
 func detachTransition(phase string) (expected, next string, err error) {
 	switch phase {
-	case "initial":
-		return "initial", "attached", nil
+	case hermeticInitialValue:
+		return hermeticInitialValue, "attached", nil
 	case "reattach":
 		return "attached", "reattached", nil
 	default:
@@ -215,16 +215,16 @@ func runDetachProbe(endpoint, targetID, phase string) (report detachProbeReport,
 		FixtureURL: before.URL,
 		Before:     before,
 		After:      after,
-		Verdict:    "PASS",
+		Verdict:    verdictPass,
 	}, nil
 }
 
 func isLoopbackFixtureURL(value string) bool {
 	parsed, err := url.Parse(value)
-	return err == nil && parsed.Scheme == "http" && parsed.Hostname() == "127.0.0.1" && parsed.Path == "/" && parsed.RawQuery == "" && parsed.Fragment == ""
+	return err == nil && parsed.Scheme == schemeHTTP && parsed.Hostname() == "127.0.0.1" && parsed.Path == "/" && parsed.RawQuery == "" && parsed.Fragment == ""
 }
 
-func serveDetachFixture() error {
+func serveDetachFixture() (err error) {
 	html, err := detachFixtureHTML.ReadFile(detachFixturePath)
 	if err != nil {
 		return fmt.Errorf("read embedded detach fixture: %w", err)
@@ -233,7 +233,7 @@ func serveDetachFixture() error {
 	if err != nil {
 		return fmt.Errorf("listen on loopback: %w", err)
 	}
-	defer listener.Close()
+	defer closeListenerInto(&err, listener)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
@@ -269,4 +269,29 @@ func serveDetachFixture() error {
 		}
 		return nil
 	}
+}
+
+// crossProcessAttachment is one independent CDP client attached to the
+// fixture target. It is detached during cleanup unless the probe already
+// detached it successfully.
+type crossProcessAttachment struct {
+	ctx      context.Context
+	cancel   context.CancelFunc
+	attached bool
+}
+
+func (a *crossProcessAttachment) detach() error {
+	if _, err := detachExternalTarget(a.ctx, a.cancel); err != nil {
+		return err
+	}
+	a.attached = false
+	return nil
+}
+
+func (a *crossProcessAttachment) cleanup() error {
+	if a == nil || !a.attached {
+		return nil
+	}
+	_, err := detachExternalTarget(a.ctx, a.cancel)
+	return err
 }

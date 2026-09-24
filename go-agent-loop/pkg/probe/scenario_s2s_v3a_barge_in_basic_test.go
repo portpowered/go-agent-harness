@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 )
 
 type v3aCorpusLookup map[string]bool
@@ -250,4 +251,24 @@ func firstFailedOutcomeError(t *testing.T, result map[string]any) string {
 	}
 	t.Fatalf("result has no failed outcome: %v", result)
 	return ""
+}
+
+// coordinatorAccountingTimeout bounds how long a test waits for a released
+// worker's completion to be recorded; it only guards against a hung test.
+const coordinatorAccountingTimeout = 5 * time.Second
+
+// awaitCoordinatorWorkerAccounting waits until the coordinator itself has
+// recorded that every worker returned. A signal sent from inside a worker body
+// precedes the coordinator's deferred bookkeeping, so a join attempted on an
+// already-expired context could otherwise still observe the worker running.
+func awaitCoordinatorWorkerAccounting(t *testing.T, coordinator *BargeInCoordinator) {
+	t.Helper()
+	coordinator.workerMu.Lock()
+	done := coordinator.workersDone
+	coordinator.workerMu.Unlock()
+	select {
+	case <-done:
+	case <-time.After(coordinatorAccountingTimeout):
+		t.Fatal("coordinator did not record worker completion")
+	}
 }

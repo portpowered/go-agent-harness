@@ -25,116 +25,75 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 		// a scheduled audio frame remains ordered before its own commit and
 		// response.create boundary.
 		handled, closed, audioErr := r.forwardPendingSessionInputs(ctx, session, &state)
-		if audioErr != nil {
-			if ctx.Err() == nil {
-				r.publishSessionAudioFailure(audioErr, state.hasOutput)
-			}
-			r.flushPendingSessionSendErrors(ctx, state.pendingSendErrors)
-			return audioErr
-		}
-		if closed {
-			r.flushPendingSessionSendErrors(ctx, state.pendingSendErrors)
-			return nil
+		if audioErr != nil || closed {
+			return r.endSession(ctx, &state, audioErr)
 		}
 		if handled {
 			continue
 		}
-		select {
-		case <-ctx.Done():
-			r.flushPendingSessionSendErrors(ctx, state.pendingSendErrors)
-			return ctx.Err()
-		case <-session.Done():
-			for {
-				msg, ok := session.Receive().Read()
-				if !ok {
-					break
-				}
-				r.forwardSessionMessageState(ctx, session, &state, msg)
-			}
-			r.flushPendingSessionSendErrors(ctx, state.pendingSendErrors)
-			if !state.sessionClosed {
-				terminalProvenance := messages.TerminalProvenanceProvider
-				terminalOutputState := outputState(state.hasOutput)
-				if state.responseCompleted {
-					// Preserve the existing session teardown contract after a
-					// completed response. A transport close before any response
-					// boundary remains provider-authored and uses observed output.
-					terminalProvenance = messages.TerminalProvenanceSession
-					terminalOutputState = messages.TerminalOutputNotApplicable
-				}
-				r.DeltaOutbox.Write(ctx, messages.StreamMessage{
-					Type: messages.StreamTypeSessionClose,
-					Value: messages.NewSessionCloseValueWithTerminal(
-						"",
-						"provider_closed",
-						"transport",
-						messages.TerminalReasonProviderClose,
-						terminalProvenance,
-						terminalOutputState,
-					),
-				})
-			}
-			return nil
-		case input, ok := <-r.sessionInputInbox:
-			if !ok {
-				r.flushPendingSessionSendErrors(ctx, state.pendingSendErrors)
-				return nil
-			}
-			if input.kind == sessionInputAudio {
-				// Observe provider completion queued after the preflight, before barge-in.
-				r.forwardPendingSessionMessages(ctx, session, &state)
-			}
-			if err := r.forwardSessionInput(ctx, session, &state, input); err != nil {
-				if ctx.Err() == nil {
-					r.publishSessionAudioFailure(err, state.hasOutput)
-				}
-				r.flushPendingSessionSendErrors(ctx, state.pendingSendErrors)
-				return err
-			}
-		case pcm, ok := <-r.UserAudioInbox:
-			if !ok {
-				r.flushPendingSessionSendErrors(ctx, state.pendingSendErrors)
-				return nil
-			}
-			// The provider may have queued its terminal boundary after the
-			// preflight but before this select chose the audio branch. Observe
-			// those messages once more before evaluating barge-in state.
-			r.forwardPendingSessionMessages(ctx, session, &state)
-			if err := r.forwardSessionAudioWithState(ctx, session, pcm, &state); err != nil {
-				if ctx.Err() == nil {
-					r.publishSessionAudioFailure(err, state.hasOutput)
-				}
-				r.flushPendingSessionSendErrors(ctx, state.pendingSendErrors)
-				return err
-			}
-		case evt, ok := <-r.UserEventInbox:
-			if !ok {
-				r.flushPendingSessionSendErrors(ctx, state.pendingSendErrors)
-				return nil
-			}
-			r.forwardPendingSessionMessages(ctx, session, &state)
-			if err := r.drainSessionAudioWithState(ctx, session, &state); err != nil {
-				if ctx.Err() == nil {
-					r.publishSessionAudioFailure(err, state.hasOutput)
-				}
-				r.flushPendingSessionSendErrors(ctx, state.pendingSendErrors)
-				return err
-			}
-			r.forwardQueuedSessionEvent(ctx, session, &state, evt)
-		case req, ok := <-r.Inbox.Chan():
-			if !ok {
-				r.flushPendingSessionSendErrors(ctx, state.pendingSendErrors)
-				return nil
-			}
-			r.sendLatestUserText(ctx, session, req)
-		case msg, ok := <-session.Receive().Chan():
-			if !ok {
-				r.flushPendingSessionSendErrors(ctx, state.pendingSendErrors)
-				return nil
-			}
-			r.forwardSessionMessageState(ctx, session, &state, msg)
+		if done, err := r.awaitSessionStep(ctx, session, &state); done {
+			return err
 		}
 	}
+}
+
+// awaitSessionStep blocks for the next provider, user, or lifecycle event and
+// reports whether the session loop has finished along with its result.
+func (r *ModelRunner) awaitSessionStep(ctx context.Context, session messages.Session, state *sessionRunState) (bool, error) {
+	select {
+	case <-ctx.Done():
+		return true, r.endSession(ctx, state, ctx.Err())
+	case <-session.Done():
+		r.finishClosedSession(ctx, session, state)
+		return true, nil
+	case input, ok := <-r.sessionInputInbox:
+		if !ok {
+			return true, r.endSession(ctx, state, nil)
+		}
+		return r.awaitedSessionInput(ctx, session, state, input)
+	case pcm, ok := <-r.UserAudioInbox:
+		if !ok {
+			return true, r.endSession(ctx, state, nil)
+		}
+		// The provider may have queued its terminal boundary after the
+		// preflight but before this select chose the audio branch. Observe
+		// those messages once more before evaluating barge-in state.
+		r.forwardPendingSessionMessages(ctx, session, state)
+		return r.sessionStepResult(ctx, state, r.forwardSessionAudioWithState(ctx, session, pcm, state))
+	case evt, ok := <-r.UserEventInbox:
+		if !ok {
+			return true, r.endSession(ctx, state, nil)
+		}
+		return r.awaitedSessionEvent(ctx, session, state, evt)
+	case req, ok := <-r.Inbox.Chan():
+		if !ok {
+			return true, r.endSession(ctx, state, nil)
+		}
+		r.sendLatestUserText(ctx, session, req)
+	case msg, ok := <-session.Receive().Chan():
+		if !ok {
+			return true, r.endSession(ctx, state, nil)
+		}
+		r.forwardSessionMessageState(ctx, session, state, msg)
+	}
+	return false, nil
+}
+
+func (r *ModelRunner) awaitedSessionInput(ctx context.Context, session messages.Session, state *sessionRunState, input sessionInput) (bool, error) {
+	if input.kind == sessionInputAudio {
+		// Observe provider completion queued after the preflight, before barge-in.
+		r.forwardPendingSessionMessages(ctx, session, state)
+	}
+	return r.sessionStepResult(ctx, state, r.forwardSessionInput(ctx, session, state, input))
+}
+
+func (r *ModelRunner) awaitedSessionEvent(ctx context.Context, session messages.Session, state *sessionRunState, evt messages.StreamMessage) (bool, error) {
+	r.forwardPendingSessionMessages(ctx, session, state)
+	if err := r.drainSessionAudioWithState(ctx, session, state); err != nil {
+		return true, r.endSession(ctx, state, err)
+	}
+	r.forwardQueuedSessionEvent(ctx, session, state, evt)
+	return false, nil
 }
 
 // forwardPendingSessionInputs first drains provider messages that are already
@@ -248,16 +207,17 @@ func (r *ModelRunner) forwardSessionEventOutcome(ctx context.Context, session me
 		return messages.StreamMessage{}, false, msg.Type == messages.StreamTypeResponseCreate, true
 	}
 	callID := ""
-	classification := "unresolved_tool_result"
+	classification := unresolvedToolResultClassification
 	if value, ok := msg.Value.(*messages.ToolCallEndValue); ok && value != nil {
 		callID = value.ToolCallID
 	}
 	message := fmt.Sprintf("tool result %q was not delivered: session send status %q", callID, outcome.Status)
 	if msg.Type == messages.StreamTypeSessionUpdate {
-		classification = "unresolved_session_update"
+		classification = unresolvedSessionUpdateClassification
 		message = fmt.Sprintf("session tool definition update was not delivered: session send status %q", outcome.Status)
-	} else if msg.Type == messages.StreamTypeResponseCreate {
-		classification = "unresolved_tool_continuation"
+	}
+	if msg.Type == messages.StreamTypeResponseCreate {
+		classification = unresolvedToolContinuationClassification
 		message = fmt.Sprintf("tool continuation was not requested: session send status %q", outcome.Status)
 	}
 	if msg.Type != messages.StreamTypeSessionUpdate && msg.Type != messages.StreamTypeToolCallEnd && msg.Type != messages.StreamTypeResponseCreate {
