@@ -269,24 +269,17 @@ func TestTraceDeviceServiceBindsCaptureAndPlaybackObservers(t *testing.T) {
 	if err := ports.Capture.Pump(context.Background(), outbound); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(preGate, []int16{1, 2}) || !reflect.DeepEqual(uploaded, []int16{3, 4}) {
-		t.Fatalf("capture observations = pre-gate %v uploaded %v", preGate, uploaded)
+	if !reflect.DeepEqual(preGate, []int16{1, 2}) || !reflect.DeepEqual(uploaded, []int16{3, 4}) ||
+		len(outbound.frames) != 1 || !reflect.DeepEqual(outbound.frames[0].Samples, []int16{3, 4}) {
+		t.Fatalf("capture=%v uploaded=%v outbound=%#v", preGate, uploaded, outbound.frames)
 	}
-	if len(outbound.frames) != 1 || !reflect.DeepEqual(outbound.frames[0].Samples, []int16{3, 4}) {
-		t.Fatalf("outbound frames = %#v", outbound.frames)
-	}
-	if err := playback.playbackObserver(context.Background(), 24_000, []int16{5, 6}); err != nil {
-		t.Fatal(err)
-	}
+	playbackErr := playback.playbackObserver(context.Background(), 24_000, []int16{5, 6})
 	playback.renderedObserver(16_000, []int16{7, 8})
-	if !reflect.DeepEqual(playbackSamples, []int16{5, 6}) || !reflect.DeepEqual(rendered, []int16{7, 8}) {
+	if playbackErr != nil || !reflect.DeepEqual(playbackSamples, []int16{5, 6}) || !reflect.DeepEqual(rendered, []int16{7, 8}) {
 		t.Fatalf("playback observations = enqueued %v rendered %v", playbackSamples, rendered)
 	}
-	if err := handle.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if innerHandle.closeCount != 1 {
-		t.Fatalf("handle close count = %d", innerHandle.closeCount)
+	if err := handle.Close(); err != nil || innerHandle.closeCount != 1 {
+		t.Fatalf("handle close = %v count = %d", err, innerHandle.closeCount)
 	}
 }
 
@@ -317,11 +310,10 @@ func TestTraceDeviceServiceForwardsRTCBinding(t *testing.T) {
 	wantErr := errors.New("rtc binding failed")
 	inner := &traceContractDeviceService{bindErr: wantErr}
 	wrapper := traceDeviceService{inner: inner}
-	if _, err := wrapper.BindRTC(context.Background(), runtimeDevices.RTCBindingRequest{}); !errors.Is(err, wantErr) {
-		t.Fatalf("forwarded RTC binding error = %v, want %v", err, wantErr)
-	}
-	if _, err := (traceDeviceService{}).BindRTC(context.Background(), runtimeDevices.RTCBindingRequest{}); !errors.Is(err, runtimeDevices.ErrUnavailable) {
-		t.Fatalf("nil-inner RTC binding error = %v, want %v", err, runtimeDevices.ErrUnavailable)
+	_, forwardedErr := wrapper.BindRTC(context.Background(), runtimeDevices.RTCBindingRequest{})
+	_, unavailableErr := (traceDeviceService{}).BindRTC(context.Background(), runtimeDevices.RTCBindingRequest{})
+	if !errors.Is(forwardedErr, wantErr) || !errors.Is(unavailableErr, runtimeDevices.ErrUnavailable) {
+		t.Fatalf("RTC binding errors = forwarded:%v unavailable:%v", forwardedErr, unavailableErr)
 	}
 }
 
@@ -513,6 +505,7 @@ type traceContractDeviceService struct {
 	openErr error
 	bindErr error
 }
+
 func (s *traceContractDeviceService) Open(_ context.Context, _ runtimeDevices.Request) (runtimeDevices.Handle, error) {
 	return s.handle, s.openErr
 }
@@ -522,10 +515,12 @@ func (s *traceContractDeviceService) BindRTC(context.Context, runtimeDevices.RTC
 	}
 	return nil, runtimeDevices.ErrUnavailable
 }
+
 type traceContractHandle struct {
 	ports      runtimeDevices.MediaPorts
 	closeCount int
 }
+
 func (h *traceContractHandle) Media() runtimeDevices.MediaPorts { return h.ports }
 func (h *traceContractHandle) Close() error                     { h.closeCount++; return nil }
 
@@ -533,6 +528,7 @@ type traceContractCapture struct {
 	preGate    func(int, []int16)
 	closeCount int
 }
+
 func (c *traceContractCapture) Pump(ctx context.Context, outbound audio.OutboundMedia) error {
 	return outbound.WriteFrame(ctx, audio.PCMFrame{Samples: []int16{3, 4}, Format: audio.PCM16DeviceFormat(24_000)})
 }
@@ -545,11 +541,13 @@ type traceContractUploadedCapture struct {
 	traceContractCapture
 	uploadedObserver func(int, []int16)
 }
+
 func (c *traceContractUploadedCapture) SetUploadedSamplesObserver(observer func(int, []int16)) {
 	c.uploadedObserver = observer
 }
 
 type traceContractOutbound struct{ frames []audio.PCMFrame }
+
 func (o *traceContractOutbound) WriteFrame(_ context.Context, frame audio.PCMFrame) error {
 	frame.Samples = append([]int16(nil), frame.Samples...)
 	o.frames = append(o.frames, frame)
@@ -574,6 +572,7 @@ func (p *traceContractPlayback) SetRenderedSamplesObserver(observer func(int, []
 }
 
 type traceContractLegacyPlayback struct{ renderedObserver func(int, []int16) }
+
 func (traceContractLegacyPlayback) Pump(context.Context, audio.InboundMedia) error { return nil }
 func (traceContractLegacyPlayback) Close() error                                   { return nil }
 func (p *traceContractLegacyPlayback) SetPlaybackRenderObserver(observer audio.PlaybackRenderObserver) {
@@ -581,6 +580,7 @@ func (p *traceContractLegacyPlayback) SetPlaybackRenderObserver(observer audio.P
 }
 
 type traceContractBarePlayback struct{}
+
 func (traceContractBarePlayback) Pump(context.Context, audio.InboundMedia) error { return nil }
 func (traceContractBarePlayback) Close() error                                   { return nil }
 func (traceContractBarePlayback) DeviceSampleRate() int                          { return 24_000 }

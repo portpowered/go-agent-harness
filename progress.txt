@@ -6282,3 +6282,17 @@ before any push or PR.
   the complete C251-04 vertical functional/race/integration/hermetic/Wire/
   embed/deletion/adapter/ancestry matrix on the exact clean candidate. Repair
   every locally reproducible failure before any push or PR.
+
+
+## C251 formatting repair checkpoint — 2026-09-24
+
+- `rtk make prepush` on `ac4465b` stopped in `fmt` because the trace contract
+  fixture section had missing gofmt spacing after meeting its 600-line cap.
+  Restored standard formatting and combined related trace-observation checks;
+  the test file is 600 lines.
+- `rtk make architecture-size-check` passes (233 packages, 2,043 files,
+  30,105 functions), and `rtk go test ./services/sessiontrace/internal/service
+  -count=1 -timeout=120s` passes 29 tests.
+- Exact next action: commit the formatting repair, then rerun the full
+  `rtk make prepush` on the clean head and repair each local failure before
+  continuing through the required C251-04 matrix.
