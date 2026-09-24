@@ -1,9 +1,11 @@
 package probe
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -766,20 +768,12 @@ func evaluateGuardExpectation(expectation ExpectedBehavior, observation Observat
 			return mismatch(expectation, declaredKind(expectation), "non-silent audio", pcm16RMS(observation.PCM16Samples))
 		}
 	case ExpectToolCall:
-		want := expectation.ToolCallID
-		if want == "" {
-			want = expectation.ToolName
-		}
-		if want == "" {
-			want = expectation.Value
-		}
+		want := cmp.Or(expectation.ToolCallID, expectation.ToolName, expectation.Value)
 		if want == "" {
 			return invalid(expectation, declaredKind(expectation), "tool_call_id", "expected tool identity must not be empty")
 		}
-		for _, call := range observation.ToolCalls {
-			if call == want {
-				return nil
-			}
+		if slices.Contains(observation.ToolCalls, want) {
+			return nil
 		}
 		return mismatch(expectation, declaredKind(expectation), want, observation.ToolCalls)
 	case ExpectToolResult:
@@ -789,21 +783,25 @@ func evaluateGuardExpectation(expectation ExpectedBehavior, observation Observat
 			return mismatch(expectation, declaredKind(expectation), "terminal event", "no terminal event")
 		}
 	case ExpectTime:
-		want := expectation.At
-		if expectation.HasAt || expectation.At != 0 {
-			if !observation.HasObservedTick && observation.ObservedTick == 0 {
-				return mismatch(expectation, declaredKind(expectation), want, "missing observed tick")
-			}
-			if observation.ObservedTick != want {
-				return mismatch(expectation, declaredKind(expectation), want, observation.ObservedTick)
-			}
-			return nil
-		}
-		return invalid(expectation, declaredKind(expectation), "at", "expected logical time is required")
+		return evaluateGuardLogicalTime(expectation, observation)
 	case ExpectEvent:
 		return mismatch(expectation, declaredKind(expectation), expectation.Value, "no event")
 	default:
 		return invalid(expectation, declaredKind(expectation), "type", "unknown measurable expectation")
+	}
+	return nil
+}
+
+func evaluateGuardLogicalTime(expectation ExpectedBehavior, observation ObservationSnapshot) error {
+	want := expectation.At
+	if !expectation.HasAt && expectation.At == 0 {
+		return invalid(expectation, declaredKind(expectation), "at", "expected logical time is required")
+	}
+	if !observation.HasObservedTick && observation.ObservedTick == 0 {
+		return mismatch(expectation, declaredKind(expectation), want, "missing observed tick")
+	}
+	if observation.ObservedTick != want {
+		return mismatch(expectation, declaredKind(expectation), want, observation.ObservedTick)
 	}
 	return nil
 }

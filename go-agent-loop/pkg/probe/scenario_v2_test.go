@@ -14,83 +14,76 @@ import (
 
 const validScenarioV2ToolRef = "webmcp.tool-ref.v1:AAAAAAAAAAAAAAAAAAAAAA"
 
+// Frozen grammar fixture files contain their own names as bytes.
+const (
+	frozenBrowserFixtureName  = "browser.json"
+	frozenProviderFixtureName = "provider.jsonl"
+)
+
 type scenarioV2Corpus map[string]bool
 
 func (c scenarioV2Corpus) Has(id string) bool { return c[id] }
 
-func TestLoadScenarioV2AcceptsFrozenGrammarAndPreservesJSON(t *testing.T) {
-	root := t.TempDir()
-	scenarioDir := filepath.Join(root, "scenarios")
+// readScenarioV2Fixture opens, reads, and closes one fixture stream.
+func readScenarioV2Fixture(t *testing.T, label string, open func() (io.ReadCloser, error)) string {
+	t.Helper()
+	fixture, err := open()
+	if err != nil {
+		t.Fatalf("open %s fixture: %v", label, err)
+	}
+	data, err := io.ReadAll(fixture)
+	if closeErr := fixture.Close(); closeErr != nil {
+		t.Fatalf("close %s fixture: %v", label, closeErr)
+	}
+	if err != nil {
+		t.Fatalf("read %s fixture: %v", label, err)
+	}
+	return string(data)
+}
+
+// writeFrozenScenarioV2Fixtures creates the fixture tree referenced by the
+// frozen grammar document and returns the scenario directory.
+func writeFrozenScenarioV2Fixtures(t *testing.T) string {
+	t.Helper()
+	scenarioDir := filepath.Join(t.TempDir(), "scenarios")
 	if err := os.MkdirAll(filepath.Join(scenarioDir, "fixtures"), 0o755); err != nil {
 		t.Fatalf("create fixture directory: %v", err)
 	}
-	for _, name := range []string{"browser.json", "provider.jsonl"} {
+	for _, name := range []string{frozenBrowserFixtureName, frozenProviderFixtureName} {
 		if err := os.WriteFile(filepath.Join(scenarioDir, "fixtures", name), []byte(name), 0o600); err != nil {
 			t.Fatalf("write fixture %s: %v", name, err)
 		}
 	}
+	return scenarioDir
+}
+
+func TestLoadScenarioV2AcceptsFrozenGrammarAndPreservesJSON(t *testing.T) {
+	scenarioDir := writeFrozenScenarioV2Fixtures(t)
 	scenarioPath := filepath.Join(scenarioDir, "case.json")
-	data := []byte(`{
-  "schema_version": "probe.scenario.v2",
-  "id": "webmcp-object-output-and-voice",
-  "name": "WebMCP object output and voice",
-  "description": "all frozen step and expectation variants",
-  "browser_fixture": "fixtures/browser.json",
-  "provider_fixture": "fixtures/provider.jsonl",
-  "steps": [
-    {"type":"browser_connect","browser_id":"browser-1","endpoint_id":"endpoint-1"},
-    {"type":"browser_discover","browser_id":"browser-1","origin_contains":"fixture.test","eligible_only":true,"include_zero_tool_pages":true},
-    {"type":"browser_select","browser_id":"browser-1","target_id":"tab-1","activate":false},
-    {"type":"browser_activate","browser_id":"browser-1","target_id":"tab-1"},
-    {"type":"browser_disconnect","browser_id":"browser-1"},
-	{"type":"browser_navigate_fixture","fixture":"fixtures/browser.json"},
-    {"type":"webmcp_wait_ready"},
-    {"type":"webmcp_list_tools","refresh":true,"name_contains":"read","include_schemas":true,"frame_id":"frame-1"},
-    {"type":"webmcp_invoke","tool_ref":"webmcp.tool-ref.v1:AAAAAAAAAAAAAAAAAAAAAA","input_json":"{\"count\":9007199254740993}","reason":"read the state"},
-    {"type":"webmcp_cancel","invocation_id":"inv-1","reason":"stop the request"},
-    {"type":"send_text","text":"Continue."},
-    {"type":"send_audio","corpus_id":"read-state","text":"Read the current state."},
-    {"type":"interrupt","after_event":"assistant_audio_started"},
-    {"type":"close_tab","browser_id":"browser-1","target_id":"tab-1"},
-    {"type":"open_tab","browser_id":"browser-1","url":"https://fixture.test/new"},
-    {"type":"switch_browser","browser_id":"browser-2"},
-    {"type":"sleep_fake","duration_ms":25},
-    {"type":"close"}
-  ],
-  "expectations": [
-    {"type":"browser_count_equals","equals":1},
-    {"type":"eligible_tab_count_equals","equals":2},
-    {"type":"selected_tab_equals","target_id":"tab-1"},
-    {"type":"selected_origin_equals","origin":"https://fixture.test"},
-    {"type":"catalog_generation_equals","equals":7},
-    {"type":"tool_catalog_contains","name":"read_state"},
-    {"type":"tool_catalog_not_contains","name":"write_state"},
-    {"type":"tool_schema_equals","name":"read_state","schema":{"type":"object","properties":{"count":{"type":"integer"}}}},
-    {"type":"tool_invocation_count","name":"read_state","equals":1},
-    {"type":"tool_input_json_equals","name":"read_state","input_json":"{\"count\":9007199254740993}"},
-    {"type":"tool_result_jsonpath_equals","name":"read_state","path":"$.data.output.value","value":9007199254740993},
-    {"type":"tool_status_equals","name":"read_state","status":"completed"},
-    {"type":"chrome_operation_order","operations":["connect","select","invoke"]},
-    {"type":"no_unexpected_chrome_operations","operations":[]},
-    {"type":"generated_cdp_method_order","methods":["WebMCP.enable","WebMCP.invokeTool"]},
-    {"type":"no_unexpected_generated_cdp_methods","methods":[]},
-    {"type":"no_pending_invocations"},
-    {"type":"page_state_equals","path":"$.cube.face[0]","value":{"color":"blue","count":9007199254740993}},
-    {"type":"response_canceled"},
-    {"type":"assistant_audio_started"},
-    {"type":"assistant_audio_stopped"},
-    {"type":"transcript_contains","text":"state"},
-    {"type":"approval_requested","tool_ref":"webmcp.tool-ref.v1:AAAAAAAAAAAAAAAAAAAAAA"},
-    {"type":"approval_not_requested"},
-    {"type":"stale_tool_rejected","tool_ref":"webmcp.tool-ref.v1:AAAAAAAAAAAAAAAAAAAAAA"},
-    {"type":"browser_connection_closed"}
-  ]
-}`)
+	data, err := os.ReadFile(filepath.Join("testdata", "scenario_v2", "frozen_grammar.json"))
+	if err != nil {
+		t.Fatalf("read frozen grammar document: %v", err)
+	}
 
 	got, err := LoadScenarioV2(data, scenarioPath, scenarioV2Corpus{"read-state": true})
 	if err != nil {
 		t.Fatalf("LoadScenarioV2: %v", err)
 	}
+	assertFrozenScenarioV2Identity(t, got, scenarioDir)
+	assertFrozenScenarioV2Values(t, got)
+	if err := got.Validate(scenarioV2Corpus{"read-state": true}); err != nil {
+		t.Fatalf("typed validation: %v", err)
+	}
+	if data := readScenarioV2Fixture(t, "browser", got.OpenBrowserFixture); data != frozenBrowserFixtureName {
+		t.Fatalf("browser fixture bytes = %q", data)
+	}
+	if data := readScenarioV2Fixture(t, "provider", got.OpenProviderFixture); data != frozenProviderFixtureName {
+		t.Fatalf("provider fixture bytes = %q", data)
+	}
+}
+
+func assertFrozenScenarioV2Identity(t *testing.T, got ScenarioV2, scenarioDir string) {
+	t.Helper()
 	if got.SchemaVersion != ScenarioV2Version || got.ID != "webmcp-object-output-and-voice" || got.Name == "" {
 		t.Fatalf("identity = %#v", got)
 	}
@@ -107,6 +100,10 @@ func TestLoadScenarioV2AcceptsFrozenGrammarAndPreservesJSON(t *testing.T) {
 	if len(got.Steps) != 18 || len(got.Expectations) != 26 {
 		t.Fatalf("variant counts = %d steps, %d expectations", len(got.Steps), len(got.Expectations))
 	}
+}
+
+func assertFrozenScenarioV2Values(t *testing.T, got ScenarioV2) {
+	t.Helper()
 	if got.Steps[7].Refresh != true || !got.Steps[7].HasRefresh || !got.Steps[16].HasDurationMS || got.Steps[16].DurationMS != 25 {
 		t.Fatalf("optional control fields were not preserved: %#v", got.Steps[7:8])
 	}
@@ -122,28 +119,6 @@ func TestLoadScenarioV2AcceptsFrozenGrammarAndPreservesJSON(t *testing.T) {
 	}
 	if got.Expectations[10].Path != "$.data.output.value" || got.Expectations[10].JSONPath != got.Expectations[10].Path {
 		t.Fatalf("JSONPath = %#v", got.Expectations[10])
-	}
-	if err := got.Validate(scenarioV2Corpus{"read-state": true}); err != nil {
-		t.Fatalf("typed validation: %v", err)
-	}
-
-	browser, err := got.OpenBrowserFixture()
-	if err != nil {
-		t.Fatalf("open browser fixture: %v", err)
-	}
-	browserData, err := io.ReadAll(browser)
-	_ = browser.Close()
-	if err != nil || string(browserData) != "browser.json" {
-		t.Fatalf("browser fixture bytes = %q, err=%v", browserData, err)
-	}
-	provider, err := got.OpenProviderFixture()
-	if err != nil {
-		t.Fatalf("open provider fixture: %v", err)
-	}
-	providerData, err := io.ReadAll(provider)
-	_ = provider.Close()
-	if err != nil || string(providerData) != "provider.jsonl" {
-		t.Fatalf("provider fixture bytes = %q, err=%v", providerData, err)
 	}
 }
 
@@ -370,15 +345,13 @@ func TestScenarioV2APIAliasesAndTypedValidation(t *testing.T) {
 	if err != nil || !fileScenario.Valid() {
 		t.Fatalf("LoadProbeScenarioV2File = %#v, %v", fileScenario, err)
 	}
-	opened, err := OpenScenarioV2Fixture(scenarioPath, "browser.json")
-	if err != nil {
-		t.Fatalf("OpenScenarioV2Fixture: %v", err)
+	openFixture := func() (io.ReadCloser, error) { return OpenScenarioV2Fixture(scenarioPath, "browser.json") }
+	if openedData := readScenarioV2Fixture(t, "OpenScenarioV2Fixture", openFixture); openedData != "fixture" {
+		t.Fatalf("opened fixture = %q", openedData)
 	}
-	openedData, readErr := io.ReadAll(opened)
-	_ = opened.Close()
-	if readErr != nil || string(openedData) != "fixture" {
-		t.Fatalf("opened fixture = %q, %v", openedData, readErr)
-	}
+}
+
+func TestScenarioV2TypedAPIWithoutFixtureRootAndErrorWrapping(t *testing.T) {
 	withoutFixture := ScenarioV2{SchemaVersion: ScenarioV2Version, ID: "typed", Steps: []ScenarioV2Step{{Type: ScenarioV2StepClose}}, Expectations: []ScenarioV2Expectation{{Type: ScenarioV2ExpectationNoPendingInvocations}}}
 	if !withoutFixture.Valid() {
 		t.Fatal("minimal typed scenario should be valid")
@@ -514,6 +487,12 @@ func TestScenarioV2ErrorsAndFixtureOpeningStaySafe(t *testing.T) {
 	if resolveErr != nil || missingParent != filepath.Join(canonicalRoot, "new", "fixture.json") {
 		t.Fatalf("missing parent resolution = %q, %v; want %q", missingParent, resolveErr, filepath.Join(canonicalRoot, "new", "fixture.json"))
 	}
+	assertScenarioV2FixtureEscapesAndMissingFilesFail(t, root, scenario, data)
+}
+
+func assertScenarioV2FixtureEscapesAndMissingFilesFail(t *testing.T, root string, scenario ScenarioV2, data []byte) {
+	t.Helper()
+	scenarioPath := filepath.Join(root, "case.json")
 	if _, err := scenario.ResolveFixture("../outside.json"); err == nil || !errors.Is(err, ErrScenarioV2FixturePath) {
 		t.Fatalf("scenario ResolveFixture accepted escape: %v", err)
 	}
@@ -546,7 +525,9 @@ func TestScenarioV2ErrorsAndFixtureOpeningStaySafe(t *testing.T) {
 	if _, err := LoadScenarioV2(data, ""); err == nil || !errors.Is(err, ErrInvalidScenarioV2) {
 		t.Fatalf("fixture scenario without source path was accepted: %v", err)
 	}
+}
 
+func TestScenarioV2WrappedErrorsPreserveCauseAndPath(t *testing.T) {
 	cause := errors.New("private cause")
 	plain := wrapScenarioV2Error("outer", cause)
 	if !errors.Is(plain, cause) || !strings.Contains(plain.Error(), "outer") || !strings.Contains(plain.Error(), "private cause") {
@@ -569,15 +550,25 @@ func TestScenarioV2ErrorsAndFixtureOpeningStaySafe(t *testing.T) {
 	}
 }
 
-func TestScenarioV2TypedValidationRejectsInvalidValues(t *testing.T) {
-	minimal := func() ScenarioV2 {
-		return ScenarioV2{
-			SchemaVersion: ScenarioV2Version,
-			ID:            "typed",
-			Steps:         []ScenarioV2Step{{Type: ScenarioV2StepClose}},
-			Expectations:  []ScenarioV2Expectation{{Type: ScenarioV2ExpectationNoPendingInvocations}},
-		}
+func minimalTypedScenarioV2() ScenarioV2 {
+	return ScenarioV2{
+		SchemaVersion: ScenarioV2Version,
+		ID:            "typed",
+		Steps:         []ScenarioV2Step{{Type: ScenarioV2StepClose}},
+		Expectations:  []ScenarioV2Expectation{{Type: ScenarioV2ExpectationNoPendingInvocations}},
 	}
+}
+
+func requireInvalidTypedScenarioV2(t *testing.T, mutate func(*ScenarioV2)) {
+	t.Helper()
+	scenario := minimalTypedScenarioV2()
+	mutate(&scenario)
+	if err := scenario.Validate(); err == nil {
+		t.Fatal("invalid typed scenario unexpectedly validated")
+	}
+}
+
+func TestScenarioV2TypedValidationRejectsInvalidValues(t *testing.T) {
 	tests := []struct {
 		name   string
 		mutate func(*ScenarioV2)
@@ -587,82 +578,68 @@ func TestScenarioV2TypedValidationRejectsInvalidValues(t *testing.T) {
 		{"missing expectations", func(s *ScenarioV2) { s.Expectations = nil }},
 		{"fixture without root", func(s *ScenarioV2) { s.BrowserFixture = "browser.json" }},
 		{"unknown step", func(s *ScenarioV2) { s.Steps[0].Type = "unknown" }},
-		{"select without target", func(s *ScenarioV2) { s.Steps[0] = ScenarioV2Step{Type: ScenarioV2StepBrowserSelect} }},
-		{"navigate without target", func(s *ScenarioV2) { s.Steps[0] = ScenarioV2Step{Type: ScenarioV2StepBrowserNavigateFixture} }},
-		{"invoke without tool", func(s *ScenarioV2) {
-			s.Steps[0] = ScenarioV2Step{Type: ScenarioV2StepWebMCPInvoke, InputJSON: "{}", Reason: "read"}
-		}},
-		{"invoke without input", func(s *ScenarioV2) {
-			s.Steps[0] = ScenarioV2Step{Type: ScenarioV2StepWebMCPInvoke, ToolRef: validScenarioV2ToolRef, Reason: "read"}
-		}},
-		{"invoke without reason", func(s *ScenarioV2) {
-			s.Steps[0] = ScenarioV2Step{Type: ScenarioV2StepWebMCPInvoke, ToolRef: validScenarioV2ToolRef, InputJSON: "{}"}
-		}},
-		{"cancel without id", func(s *ScenarioV2) { s.Steps[0] = ScenarioV2Step{Type: ScenarioV2StepWebMCPCancel} }},
-		{"text without text", func(s *ScenarioV2) { s.Steps[0] = ScenarioV2Step{Type: ScenarioV2StepSendText} }},
-		{"audio without corpus", func(s *ScenarioV2) { s.Steps[0] = ScenarioV2Step{Type: ScenarioV2StepSendAudio} }},
-		{"interrupt without event", func(s *ScenarioV2) { s.Steps[0] = ScenarioV2Step{Type: ScenarioV2StepInterrupt} }},
-		{"open tab without url", func(s *ScenarioV2) { s.Steps[0] = ScenarioV2Step{Type: ScenarioV2StepOpenTab} }},
-		{"switch without browser", func(s *ScenarioV2) { s.Steps[0] = ScenarioV2Step{Type: ScenarioV2StepSwitchBrowser} }},
-		{"sleep without duration", func(s *ScenarioV2) { s.Steps[0] = ScenarioV2Step{Type: ScenarioV2StepSleepFake} }},
-		{"negative duration", func(s *ScenarioV2) {
-			s.Steps[0] = ScenarioV2Step{Type: ScenarioV2StepSleepFake, DurationMS: -1, HasDurationMS: true}
-		}},
 		{"unknown expectation", func(s *ScenarioV2) { s.Expectations[0].Type = "unknown" }},
-		{"selected tab without target", func(s *ScenarioV2) {
-			s.Expectations[0] = ScenarioV2Expectation{Type: ScenarioV2ExpectationSelectedTabEquals}
-		}},
-		{"selected origin without origin", func(s *ScenarioV2) {
-			s.Expectations[0] = ScenarioV2Expectation{Type: ScenarioV2ExpectationSelectedOriginEquals}
-		}},
-		{"catalog name missing", func(s *ScenarioV2) {
-			s.Expectations[0] = ScenarioV2Expectation{Type: ScenarioV2ExpectationToolCatalogContains}
-		}},
-		{"input name missing", func(s *ScenarioV2) {
-			s.Expectations[0] = ScenarioV2Expectation{Type: ScenarioV2ExpectationToolInputJSONEquals, InputJSON: "{}"}
-		}},
-		{"input json missing", func(s *ScenarioV2) {
-			s.Expectations[0] = ScenarioV2Expectation{Type: ScenarioV2ExpectationToolInputJSONEquals, Name: "read"}
-		}},
-		{"status missing name", func(s *ScenarioV2) {
-			s.Expectations[0] = ScenarioV2Expectation{Type: ScenarioV2ExpectationToolStatusEquals, Status: "completed"}
-		}},
-		{"status missing value", func(s *ScenarioV2) {
-			s.Expectations[0] = ScenarioV2Expectation{Type: ScenarioV2ExpectationToolStatusEquals, Name: "read"}
-		}},
-		{"schema missing value", func(s *ScenarioV2) {
-			s.Expectations[0] = ScenarioV2Expectation{Type: ScenarioV2ExpectationToolSchemaEquals}
-		}},
-		{"result missing path", func(s *ScenarioV2) {
-			s.Expectations[0] = ScenarioV2Expectation{Type: ScenarioV2ExpectationToolResultJSONPathEquals, Value: json.RawMessage(`true`)}
-		}},
-		{"result missing value", func(s *ScenarioV2) {
-			s.Expectations[0] = ScenarioV2Expectation{Type: ScenarioV2ExpectationToolResultJSONPathEquals, Path: "$.value"}
-		}},
-		{"operation order missing list", func(s *ScenarioV2) {
-			s.Expectations[0] = ScenarioV2Expectation{Type: ScenarioV2ExpectationChromeOperationOrder}
-		}},
-		{"cdp order missing list", func(s *ScenarioV2) {
-			s.Expectations[0] = ScenarioV2Expectation{Type: ScenarioV2ExpectationGeneratedCDPMethodOrder}
-		}},
-		{"transcript missing text", func(s *ScenarioV2) {
-			s.Expectations[0] = ScenarioV2Expectation{Type: ScenarioV2ExpectationTranscriptContains}
-		}},
-		{"negative equals", func(s *ScenarioV2) {
-			s.Expectations[0] = ScenarioV2Expectation{Type: ScenarioV2ExpectationBrowserCountEquals, Equals: -1, HasEquals: true}
-		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) { requireInvalidTypedScenarioV2(t, test.mutate) })
+	}
+}
+
+func TestScenarioV2TypedValidationRejectsInvalidSteps(t *testing.T) {
+	tests := []struct {
+		name string
+		step ScenarioV2Step
+	}{
+		{"select without target", ScenarioV2Step{Type: ScenarioV2StepBrowserSelect}},
+		{"navigate without target", ScenarioV2Step{Type: ScenarioV2StepBrowserNavigateFixture}},
+		{"invoke without tool", ScenarioV2Step{Type: ScenarioV2StepWebMCPInvoke, InputJSON: "{}", Reason: "read"}},
+		{"invoke without input", ScenarioV2Step{Type: ScenarioV2StepWebMCPInvoke, ToolRef: validScenarioV2ToolRef, Reason: "read"}},
+		{"invoke without reason", ScenarioV2Step{Type: ScenarioV2StepWebMCPInvoke, ToolRef: validScenarioV2ToolRef, InputJSON: "{}"}},
+		{"cancel without id", ScenarioV2Step{Type: ScenarioV2StepWebMCPCancel}},
+		{"text without text", ScenarioV2Step{Type: ScenarioV2StepSendText}},
+		{"audio without corpus", ScenarioV2Step{Type: ScenarioV2StepSendAudio}},
+		{"interrupt without event", ScenarioV2Step{Type: ScenarioV2StepInterrupt}},
+		{"open tab without url", ScenarioV2Step{Type: ScenarioV2StepOpenTab}},
+		{"switch without browser", ScenarioV2Step{Type: ScenarioV2StepSwitchBrowser}},
+		{"sleep without duration", ScenarioV2Step{Type: ScenarioV2StepSleepFake}},
+		{"negative duration", ScenarioV2Step{Type: ScenarioV2StepSleepFake, DurationMS: -1, HasDurationMS: true}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			scenario := minimal()
-			test.mutate(&scenario)
-			if err := scenario.Validate(); err == nil {
-				t.Fatal("invalid typed scenario unexpectedly validated")
-			}
+			requireInvalidTypedScenarioV2(t, func(s *ScenarioV2) { s.Steps[0] = test.step })
 		})
 	}
+}
 
-	validWithValues := minimal()
+func TestScenarioV2TypedValidationRejectsInvalidExpectations(t *testing.T) {
+	tests := []struct {
+		name        string
+		expectation ScenarioV2Expectation
+	}{
+		{"selected tab without target", ScenarioV2Expectation{Type: ScenarioV2ExpectationSelectedTabEquals}},
+		{"selected origin without origin", ScenarioV2Expectation{Type: ScenarioV2ExpectationSelectedOriginEquals}},
+		{"catalog name missing", ScenarioV2Expectation{Type: ScenarioV2ExpectationToolCatalogContains}},
+		{"input name missing", ScenarioV2Expectation{Type: ScenarioV2ExpectationToolInputJSONEquals, InputJSON: "{}"}},
+		{"input json missing", ScenarioV2Expectation{Type: ScenarioV2ExpectationToolInputJSONEquals, Name: "read"}},
+		{"status missing name", ScenarioV2Expectation{Type: ScenarioV2ExpectationToolStatusEquals, Status: "completed"}},
+		{"status missing value", ScenarioV2Expectation{Type: ScenarioV2ExpectationToolStatusEquals, Name: "read"}},
+		{"schema missing value", ScenarioV2Expectation{Type: ScenarioV2ExpectationToolSchemaEquals}},
+		{"result missing path", ScenarioV2Expectation{Type: ScenarioV2ExpectationToolResultJSONPathEquals, Value: json.RawMessage(`true`)}},
+		{"result missing value", ScenarioV2Expectation{Type: ScenarioV2ExpectationToolResultJSONPathEquals, Path: "$.value"}},
+		{"operation order missing list", ScenarioV2Expectation{Type: ScenarioV2ExpectationChromeOperationOrder}},
+		{"cdp order missing list", ScenarioV2Expectation{Type: ScenarioV2ExpectationGeneratedCDPMethodOrder}},
+		{"transcript missing text", ScenarioV2Expectation{Type: ScenarioV2ExpectationTranscriptContains}},
+		{"negative equals", ScenarioV2Expectation{Type: ScenarioV2ExpectationBrowserCountEquals, Equals: -1, HasEquals: true}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			requireInvalidTypedScenarioV2(t, func(s *ScenarioV2) { s.Expectations[0] = test.expectation })
+		})
+	}
+}
+
+func TestScenarioV2TypedValidationAcceptsPopulatedValues(t *testing.T) {
+	validWithValues := minimalTypedScenarioV2()
 	canonicalTypedRoot, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatalf("canonicalize typed fixture root: %v", err)

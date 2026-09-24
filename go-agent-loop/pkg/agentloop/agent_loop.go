@@ -56,44 +56,67 @@ func New(opts ...Option) (*AgentLoop, error) {
 		return nil, err
 	}
 
-	// Resolve per-participant buffer capacities. Per-participant overrides
-	// take precedence over the global BufferCapacity default.
-	bufCap := cfg.BufferCapacity
-	modelCap := bufCap
-	if cfg.ModelBufferCapacity > 0 {
-		modelCap = cfg.ModelBufferCapacity
-	}
-	toolCap := bufCap
-	if cfg.ToolBufferCapacity > 0 {
-		toolCap = cfg.ToolBufferCapacity
-	}
-	userCap := bufCap
-	if cfg.UserBufferCapacity > 0 {
-		userCap = cfg.UserBufferCapacity
-	}
-	kernelCap := bufCap
-	if cfg.KernelBufferCapacity > 0 {
-		kernelCap = cfg.KernelBufferCapacity
+	// Per-participant overrides take precedence over the global BufferCapacity default.
+	kernelCap := capacityOrDefault(cfg.KernelBufferCapacity, cfg.BufferCapacity)
+	modelRunner := newModelRunner(cfg)
+	userRunner := participants.NewUserRunner(capacityOrDefault(cfg.UserBufferCapacity, cfg.BufferCapacity))
+	kernelRunner := participants.NewKernelRunner(cfg.Logger, kernelCap)
+	interactionRunner := participants.NewInteractionRunner(cfg.BufferCapacity)
+	toolRunner := newToolRunner(cfg, modelRunner)
+	if cfg.Logger != nil {
+		logBufferDrops(cfg.Logger, modelRunner, toolRunner, userRunner, kernelRunner)
 	}
 
-	// Create active participant runners
-	var modelRunner *participants.ModelRunner
-	if cfg.SessionInferencer != nil {
-		modelRunner = participants.NewSessionModelRunner(cfg.SessionInferencer, modelCap, cfg.SessionConfig)
-	} else {
-		modelRunner = participants.NewModelRunner(cfg.Inferencer, modelCap)
+	hlps, err := buildSubsystems(cfg, modelRunner, toolRunner, userRunner, kernelRunner)
+	if err != nil {
+		return nil, err
 	}
-	userRunner := participants.NewUserRunner(userCap)
-	kernelRunner := participants.NewKernelRunner(cfg.Logger, kernelCap)
-	interactionRunner := participants.NewInteractionRunner(bufCap)
+
+	eng := engine.NewEngine(cfg.Mode, cfg.Logger, hlps, modelRunner, toolRunner, userRunner, kernelRunner, cfg.Tools, cfg.Clock)
+	// Record real executor availability so subsystems can distinguish
+	// executable tool calls from provider-issued calls that cannot run: the
+	// fallback runner above is idle plumbing, not a public executor.
+	eng.State().LoopState.ToolExecutionAvailable = cfg.ToolExecutor != nil
+	eng.SetInteractionRunner(interactionRunner)
+	eng.State().LoopState.InferenceDefaults = cfg.InferenceDefaults
+	if cfg.TickRate > 0 {
+		eng.SetTickRate(cfg.TickRate)
+	}
+	seedHistory(eng, cfg)
+
+	return &AgentLoop{
+		engine: eng,
+		config: cfg,
+		logger: cfg.Logger,
+		deltas: messages.NewTypedBuffer[messages.StreamMessage](kernelCap),
+	}, nil
+}
+
+func capacityOrDefault(override, fallback int) int {
+	if override > 0 {
+		return override
+	}
+	return fallback
+}
+
+func newModelRunner(cfg AgentLoopConfig) *participants.ModelRunner {
+	modelCap := capacityOrDefault(cfg.ModelBufferCapacity, cfg.BufferCapacity)
+	if cfg.SessionInferencer != nil {
+		return participants.NewSessionModelRunner(cfg.SessionInferencer, modelCap, cfg.SessionConfig)
+	}
+	return participants.NewModelRunner(cfg.Inferencer, modelCap)
+}
+
+// newToolRunner keeps an idle tool participant wired for internal loop
+// plumbing even in explicit no-tools mode. validateToolConfiguration guarantees
+// the loop never advertises tools without either an executor or an explicit
+// no-tools decision, so the idle runner does not act as a public fallback.
+func newToolRunner(cfg AgentLoopConfig, modelRunner *participants.ModelRunner) *participants.ToolRunner {
+	toolCap := capacityOrDefault(cfg.ToolBufferCapacity, cfg.BufferCapacity)
 	var toolRunner *participants.ToolRunner
 	if cfg.ToolExecutor != nil {
 		toolRunner = participants.NewToolRunner(cfg.ToolExecutor, toolCap)
 	} else {
-		// Keep an idle tool participant wired for internal loop plumbing even in
-		// explicit no-tools mode. validateToolConfiguration guarantees the loop
-		// never advertises tools without either an executor or an explicit
-		// no-tools decision, so this runner does not act as a public fallback.
 		toolRunner = participants.NewToolRunner(&messages.DefaultToolExecutor{}, toolCap)
 	}
 	if cfg.SessionInferencer != nil && cfg.ToolAcknowledgement != nil {
@@ -107,40 +130,29 @@ func New(opts ...Option) (*AgentLoop, error) {
 			}
 		})
 	}
+	return toolRunner
+}
 
-	// Set OnDrop callbacks so operators are alerted when buffers are full.
-	if cfg.Logger != nil {
-		modelRunner.Inbox.SetOnDrop(func(_ messages.InferenceRequest) {
-			cfg.Logger.Warn("buffer drop", logging.Field{Key: "buffer", Value: "model.Inbox"}, logging.Field{Key: "type", Value: "InferenceRequest"})
-		})
-		modelRunner.DeltaOutbox.SetOnDrop(func(_ messages.StreamMessage) {
-			cfg.Logger.Warn("buffer drop", logging.Field{Key: "buffer", Value: "model.DeltaOutbox"}, logging.Field{Key: "type", Value: "StreamMessage"})
-		})
-		toolRunner.Inbox.SetOnDrop(func(_ messages.ToolBatchRequest) {
-			cfg.Logger.Warn("buffer drop", logging.Field{Key: "buffer", Value: "tool.Inbox"}, logging.Field{Key: "type", Value: "ToolBatchRequest"})
-		})
-		toolRunner.DeltaOutbox.SetOnDrop(func(_ messages.StreamMessage) {
-			cfg.Logger.Warn("buffer drop", logging.Field{Key: "buffer", Value: "tool.DeltaOutbox"}, logging.Field{Key: "type", Value: "StreamMessage"})
-		})
-		userRunner.Inbox.SetOnDrop(func(_ messages.UserRequest) {
-			cfg.Logger.Warn("buffer drop", logging.Field{Key: "buffer", Value: "user.Inbox"}, logging.Field{Key: "type", Value: "UserRequest"})
-		})
-		userRunner.Outbox.SetOnDrop(func(_ messages.UserResponse) {
-			cfg.Logger.Warn("buffer drop", logging.Field{Key: "buffer", Value: "user.Outbox"}, logging.Field{Key: "type", Value: "UserResponse"})
-		})
-		kernelRunner.DeltaInbox.SetOnDrop(func(_ messages.KernelDeltaRequest) {
-			cfg.Logger.Warn("buffer drop", logging.Field{Key: "buffer", Value: "kernel.DeltaInbox"}, logging.Field{Key: "type", Value: "KernelDeltaRequest"})
-		})
+// logBufferDrops sets OnDrop callbacks so operators are alerted when buffers are full.
+func logBufferDrops(logger logging.Logger, modelRunner *participants.ModelRunner, toolRunner *participants.ToolRunner, userRunner *participants.UserRunner, kernelRunner *participants.KernelRunner) {
+	warn := func(buffer, kind string) {
+		logger.Warn("buffer drop", logging.Field{Key: "buffer", Value: buffer}, logging.Field{Key: "type", Value: kind})
 	}
+	modelRunner.Inbox.SetOnDrop(func(_ messages.InferenceRequest) { warn("model.Inbox", "InferenceRequest") })
+	modelRunner.DeltaOutbox.SetOnDrop(func(_ messages.StreamMessage) { warn("model.DeltaOutbox", "StreamMessage") })
+	toolRunner.Inbox.SetOnDrop(func(_ messages.ToolBatchRequest) { warn("tool.Inbox", "ToolBatchRequest") })
+	toolRunner.DeltaOutbox.SetOnDrop(func(_ messages.StreamMessage) { warn("tool.DeltaOutbox", "StreamMessage") })
+	userRunner.Inbox.SetOnDrop(func(_ messages.UserRequest) { warn("user.Inbox", "UserRequest") })
+	userRunner.Outbox.SetOnDrop(func(_ messages.UserResponse) { warn("user.Outbox", "UserResponse") })
+	kernelRunner.DeltaInbox.SetOnDrop(func(_ messages.KernelDeltaRequest) { warn("kernel.DeltaInbox", "KernelDeltaRequest") })
+}
 
-	// Build passive helpers only (recorder, token counter)
-	hlps := []subsystems.Subsystem{}
-
+// buildSubsystems assembles the passive helpers in tick order.
+func buildSubsystems(cfg AgentLoopConfig, modelRunner *participants.ModelRunner, toolRunner *participants.ToolRunner, userRunner *participants.UserRunner, kernelRunner *participants.KernelRunner) ([]subsystems.Subsystem, error) {
 	// InterruptHandler runs at TickGroup=-1 (before all other subsystems) so it
 	// can cancel in-flight executions and reset pass state before the Coordinator
 	// reacts to the current tick's inputs.
-	interruptHandler := subsystems.NewInterruptHandler(modelRunner, toolRunner, cfg.Logger)
-	hlps = append(hlps, interruptHandler)
+	hlps := []subsystems.Subsystem{subsystems.NewInterruptHandler(modelRunner, toolRunner, cfg.Logger)}
 	if cfg.Audio != nil {
 		hlps = append(hlps, cfg.Audio)
 	}
@@ -152,34 +164,30 @@ func New(opts ...Option) (*AgentLoop, error) {
 	// the result-driven follow-up request. Coordinator then enqueues full
 	// messages; CoordinatorDelta runs after it (tick group 5) and enqueues
 	// LOOP.END, ensuring it always arrives after all messages.
-	coordDelta := subsystems.NewCoordinatorDelta(kernelRunner.DeltaInbox, cfg.Logger)
-	hlps = append(hlps, coordDelta)
-
-	coord := subsystems.NewCoordinator(cfg.Logger)
-	hlps = append(hlps, coord)
-
-	interactionEvents := subsystems.NewInteractionEvents(cfg.Logger)
-	hlps = append(hlps, interactionEvents)
+	hlps = append(hlps,
+		subsystems.NewCoordinatorDelta(kernelRunner.DeltaInbox, cfg.Logger),
+		subsystems.NewCoordinator(cfg.Logger),
+		subsystems.NewInteractionEvents(cfg.Logger),
+	)
 
 	// PingPong is only useful in session mode where keepalive pings are expected.
 	if cfg.Mode == engine.DuplexSession {
 		// Forward completed tool results before Coordinator emits the
 		// result-driven model request. This preserves provider-wire
 		// queue/sequence ordering when both are ready in the same tick.
-		hlps = append(hlps, subsystems.NewToolResultForwarderWithEnqueuer(modelRunner.EnqueueSessionEvent, cfg.Logger))
-		pingPong := subsystems.NewPingPongWithClock(kernelRunner.DeltaInbox, cfg.Logger, cfg.Clock)
-		hlps = append(hlps, pingPong)
+		hlps = append(hlps,
+			subsystems.NewToolResultForwarderWithEnqueuer(modelRunner.EnqueueSessionEvent, cfg.Logger),
+			subsystems.NewPingPongWithClock(kernelRunner.DeltaInbox, cfg.Logger, cfg.Clock),
+		)
 	}
-
 	if cfg.Recorder != nil {
 		hlps = append(hlps, subsystems.NewRecorder(cfg.Recorder, 0))
 	}
-
-	if cfg.TokenCounter != nil && cfg.MaxTokens > 0 {
-		hlps = append(hlps, subsystems.NewTokenCounter(cfg.TokenCounter, cfg.MaxTokens))
+	if cfg.TokenCounter == nil || cfg.MaxTokens <= 0 {
+		return hlps, nil
 	}
-
-	if cfg.TokenCounter != nil && cfg.MaxTokens > 0 && cfg.PressureThreshold > 0 {
+	hlps = append(hlps, subsystems.NewTokenCounter(cfg.TokenCounter, cfg.MaxTokens))
+	if cfg.PressureThreshold > 0 {
 		notifier, err := subsystems.NewContextPressureNotifier(
 			cfg.TokenCounter, cfg.MaxTokens, cfg.PressureThreshold, cfg.PressureMessage, userRunner)
 		if err != nil {
@@ -187,20 +195,13 @@ func New(opts ...Option) (*AgentLoop, error) {
 		}
 		hlps = append(hlps, notifier)
 	}
+	return hlps, nil
+}
 
-	eng := engine.NewEngine(cfg.Mode, cfg.Logger, hlps, modelRunner, toolRunner, userRunner, kernelRunner, cfg.Tools, cfg.Clock)
-	// Record real executor availability so subsystems can distinguish
-	// executable tool calls from provider-issued calls that cannot run: the
-	// fallback runner above is idle plumbing, not a public executor.
-	eng.State().LoopState.ToolExecutionAvailable = cfg.ToolExecutor != nil
-	eng.SetInteractionRunner(interactionRunner)
-	eng.State().LoopState.InferenceDefaults = cfg.InferenceDefaults
-	if cfg.TickRate > 0 {
-		eng.SetTickRate(cfg.TickRate)
-	}
-
-	// Add system prompt only if InitialHistory does not already start with a system message
-	// (e.g. when continuing a session that was saved with the system message in history).
+// seedHistory adds the system prompt only if InitialHistory does not already
+// start with a system message (e.g. when continuing a session that was saved
+// with the system message in history), then appends InitialHistory.
+func seedHistory(eng *engine.Engine, cfg AgentLoopConfig) {
 	hasSystemInHistory := len(cfg.InitialHistory) > 0 && cfg.InitialHistory[0].Role == messages.RoleSystem
 	if cfg.SystemPrompt != "" && !hasSystemInHistory {
 		systemMessage := messages.NewTextMessage(messages.RoleSystem, cfg.SystemPrompt)
@@ -212,13 +213,6 @@ func New(opts ...Option) (*AgentLoop, error) {
 			cfg.InitialHistory...,
 		)
 	}
-
-	return &AgentLoop{
-		engine: eng,
-		config: cfg,
-		logger: cfg.Logger,
-		deltas: messages.NewTypedBuffer[messages.StreamMessage](kernelCap),
-	}, nil
 }
 
 func validateToolConfiguration(cfg *AgentLoopConfig) error {

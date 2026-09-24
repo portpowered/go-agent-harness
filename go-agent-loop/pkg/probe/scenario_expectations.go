@@ -50,20 +50,9 @@ func parseExpectation(raw json.RawMessage, index int) (ExpectedBehavior, error) 
 	if err := unknown(value, expectationFields, location); err != nil {
 		return ExpectedBehavior{}, err
 	}
-	discriminator, key, ok, err := field(value, location, "type", "kind")
+	kind, err := parseExpectationKind(value, location)
 	if err != nil {
 		return ExpectedBehavior{}, err
-	}
-	if !ok {
-		return ExpectedBehavior{}, makeError(CategoryMissingField, location+".type", "expectation discriminator is required")
-	}
-	name, err := stringValue(discriminator, location+"."+key)
-	if err != nil {
-		return ExpectedBehavior{}, err
-	}
-	kind, ok := expectationKind(name)
-	if !ok {
-		return ExpectedBehavior{}, makeError(CategoryUnknownVariant, location+"."+key, "unknown expectation variant %q", name)
 	}
 	fields, err := payload(value, location)
 	if err != nil {
@@ -73,98 +62,126 @@ func parseExpectation(raw json.RawMessage, index int) (ExpectedBehavior, error) 
 		return ExpectedBehavior{}, err
 	}
 	expectation := ExpectedBehavior{Type: kind, Kind: kind, StepIndex: -1, Step: -1}
-	if raw, _, ok, err := field(fields, location, "text", "value", "message", "event"); err != nil {
-		return expectation, err
-	} else if ok {
-		text, textErr := stringValue(raw, location+".value")
-		err = textErr
+	for _, decoder := range expectationFieldDecoders() {
+		raw, _, ok, err := field(fields, location, decoder.aliases...)
 		if err != nil {
 			return expectation, err
 		}
-		if kind == ExpectText || kind == ExpectTranscript || kind == ExpectContains {
-			expectation.Text = text
-		} else {
-			expectation.Value = text
+		if !ok {
+			continue
 		}
-	}
-	if raw, _, ok, err := field(fields, location, "corpus_id", "corpusID"); err != nil {
-		return expectation, err
-	} else if ok {
-		expectation.CorpusID, err = requiredValue(raw, location+".corpus_id")
-		if err != nil {
+		if err := decoder.decode(&expectation, raw, location); err != nil {
 			return expectation, err
 		}
-	}
-	if raw, _, ok, err := field(fields, location, "tool_call_id", "toolCallID"); err != nil {
-		return expectation, err
-	} else if ok {
-		expectation.ToolCallID, err = requiredValue(raw, location+".tool_call_id")
-		if err != nil {
-			return expectation, err
-		}
-	}
-	if raw, _, ok, err := field(fields, location, "tool_name", "toolName", "name"); err != nil {
-		return expectation, err
-	} else if ok {
-		expectation.ToolName, err = requiredValue(raw, location+".tool_name")
-		if err != nil {
-			return expectation, err
-		}
-	}
-	if raw, _, ok, err := field(fields, location, "result"); err != nil {
-		return expectation, err
-	} else if ok {
-		expectation.Result = append(json.RawMessage(nil), raw...)
-	}
-	if raw, _, ok, err := field(fields, location, "at", "time", "logical_time", "logicalTime"); err != nil {
-		return expectation, err
-	} else if ok {
-		expectation.At, err = parseLogical(raw, location+".at")
-		if err != nil {
-			return expectation, err
-		}
-		expectation.Time, expectation.HasAt = expectation.At, true
-	}
-	if raw, _, ok, err := field(fields, location, "count"); err != nil {
-		return expectation, err
-	} else if ok {
-		expectation.Count, err = integer(raw, location+".count")
-		if err != nil {
-			return expectation, err
-		}
-	}
-	if raw, _, ok, err := field(fields, location, "step", "step_index"); err != nil {
-		return expectation, err
-	} else if ok {
-		expectation.StepIndex, err = integer(raw, location+".step")
-		if err != nil {
-			return expectation, err
-		}
-		expectation.Step, expectation.HasStep = expectation.StepIndex, true
-	}
-	if raw, _, ok, err := field(fields, location, "after", "after_step"); err != nil {
-		return expectation, err
-	} else if ok {
-		expectation.AfterStep, err = integer(raw, location+".after")
-		if err != nil {
-			return expectation, err
-		}
-		expectation.HasAfter = true
-	}
-	if raw, _, ok, err := field(fields, location, "before", "before_step"); err != nil {
-		return expectation, err
-	} else if ok {
-		expectation.BeforeStep, err = integer(raw, location+".before")
-		if err != nil {
-			return expectation, err
-		}
-		expectation.HasBefore = true
 	}
 	if err := validateExpectationFields(expectation, location); err != nil {
 		return ExpectedBehavior{}, err
 	}
 	return expectation, nil
 }
+
+func parseExpectationKind(value object, location string) (ExpectationKind, error) {
+	discriminator, key, ok, err := field(value, location, "type", "kind")
+	if err != nil {
+		return "", err
+	}
+	if !ok {
+		return "", makeError(CategoryMissingField, location+".type", "expectation discriminator is required")
+	}
+	name, err := stringValue(discriminator, location+"."+key)
+	if err != nil {
+		return "", err
+	}
+	kind, ok := expectationKind(name)
+	if !ok {
+		return "", makeError(CategoryUnknownVariant, location+"."+key, "unknown expectation variant %q", name)
+	}
+	return kind, nil
+}
+
+// expectationFieldDecoder applies one optional payload field, located by any
+// of its aliases, to the expectation being decoded.
+type expectationFieldDecoder struct {
+	aliases []string
+	decode  func(expectation *ExpectedBehavior, raw json.RawMessage, location string) error
+}
+
+// expectationFieldDecoders lists payload fields in their decoding order.
+func expectationFieldDecoders() []expectationFieldDecoder {
+	return []expectationFieldDecoder{
+		{[]string{"text", "value", "message", "event"}, decodeExpectationText},
+		{[]string{"corpus_id", "corpusID"}, func(e *ExpectedBehavior, raw json.RawMessage, location string) (err error) {
+			e.CorpusID, err = requiredValue(raw, location+".corpus_id")
+			return err
+		}},
+		{[]string{"tool_call_id", "toolCallID"}, func(e *ExpectedBehavior, raw json.RawMessage, location string) (err error) {
+			e.ToolCallID, err = requiredValue(raw, location+".tool_call_id")
+			return err
+		}},
+		{[]string{"tool_name", "toolName", "name"}, func(e *ExpectedBehavior, raw json.RawMessage, location string) (err error) {
+			e.ToolName, err = requiredValue(raw, location+".tool_name")
+			return err
+		}},
+		{[]string{"result"}, func(e *ExpectedBehavior, raw json.RawMessage, _ string) error {
+			e.Result = append(json.RawMessage(nil), raw...)
+			return nil
+		}},
+		{[]string{"at", "time", "logical_time", "logicalTime"}, decodeExpectationAt},
+		{[]string{"count"}, func(e *ExpectedBehavior, raw json.RawMessage, location string) (err error) {
+			e.Count, err = integer(raw, location+".count")
+			return err
+		}},
+		{[]string{"step", "step_index"}, decodeExpectationStep},
+		{[]string{"after", "after_step"}, decodeExpectationAfter},
+		{[]string{"before", "before_step"}, decodeExpectationBefore},
+	}
+}
+
+func decodeExpectationText(e *ExpectedBehavior, raw json.RawMessage, location string) error {
+	text, err := stringValue(raw, location+".value")
+	if err != nil {
+		return err
+	}
+	if e.Kind == ExpectText || e.Kind == ExpectTranscript || e.Kind == ExpectContains {
+		e.Text = text
+	} else {
+		e.Value = text
+	}
+	return nil
+}
+
+func decodeExpectationAt(e *ExpectedBehavior, raw json.RawMessage, location string) (err error) {
+	if e.At, err = parseLogical(raw, location+".at"); err != nil {
+		return err
+	}
+	e.Time, e.HasAt = e.At, true
+	return nil
+}
+
+func decodeExpectationStep(e *ExpectedBehavior, raw json.RawMessage, location string) (err error) {
+	if e.StepIndex, err = integer(raw, location+".step"); err != nil {
+		return err
+	}
+	e.Step, e.HasStep = e.StepIndex, true
+	return nil
+}
+
+func decodeExpectationAfter(e *ExpectedBehavior, raw json.RawMessage, location string) (err error) {
+	if e.AfterStep, err = integer(raw, location+".after"); err != nil {
+		return err
+	}
+	e.HasAfter = true
+	return nil
+}
+
+func decodeExpectationBefore(e *ExpectedBehavior, raw json.RawMessage, location string) (err error) {
+	if e.BeforeStep, err = integer(raw, location+".before"); err != nil {
+		return err
+	}
+	e.HasBefore = true
+	return nil
+}
+
 func integer(raw json.RawMessage, location string) (int, error) {
 	var value int64
 	if json.Unmarshal(raw, &value) != nil || value > math.MaxInt || value < math.MinInt {
@@ -202,6 +219,19 @@ var typedExpectationFieldsByKind = map[ExpectationKind]map[string]bool{
 	ExpectToolResultDiscarded: {"tool_call_id": true}, ExpectNoOrphanedToolResult: {}, ExpectClose: {},
 	ExpectTime:  {"at": true},
 	ExpectEvent: {"value": true},
+
+	// Measurable expectation kinds.
+	ExpectAudioEnergy:        {},
+	ExpectTranscriptContains: {"text": true},
+	ExpectToolCalled:         {"tool_name": true},
+	ExpectLatencyWithinTicks: {"at": true},
+	ExpectTerminalReason:     {"value": true},
+	ExpectTerminalProvenance: {"value": true},
+	ExpectOutputState:        {"value": true},
+	ExpectFrameCount:         {},
+	ExpectBufferDisposition:  {"value": true},
+	ExpectMetricsReconcile:   {},
+	ExpectResponseCancel:     {"value": true, "at": true},
 }
 
 func rejectTypedExpectationFields(value ExpectedBehavior, location string, hasAt bool) error {

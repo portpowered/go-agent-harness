@@ -20,11 +20,11 @@ func TestWaitReadyAndSynthesizeAgainstPinnedContract(t *testing.T) {
 	sawRequest := map[string]any{}
 	var sawReadyz bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.URL.Path == "/readyz":
+		switch r.URL.Path {
+		case "/readyz":
 			sawReadyz = true
 			w.WriteHeader(http.StatusOK)
-		case r.URL.Path == "/v1/audio/speech":
+		case "/v1/audio/speech":
 			if err := json.NewDecoder(r.Body).Decode(&sawRequest); err != nil {
 				t.Errorf("decode request: %v", err)
 			}

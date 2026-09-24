@@ -9,12 +9,18 @@ import (
 	"io"
 	"net/url"
 	"os"
-	"path"
 	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+)
+
+// Bundle staging permissions: directories are traversable and artifacts are
+// readable by the sharing audience.
+const (
+	recordingDirectoryMode os.FileMode = 0o755
+	recordingFileMode      os.FileMode = 0o644
 )
 
 const (
@@ -446,144 +452,12 @@ func WriteRecordingBundle(config RecordingConfig) error {
 	if err := os.Mkdir(filepath.Join(staging, "audio"), 0o755); err != nil {
 		return recordingError(ErrRecordingDestination, "create audio directory", destination, err, redactor)
 	}
-	writeFile := normalized.writeFile
-	write := func(relative string, data []byte) error {
-		if containsCredential(data, redactor.values) {
-			return recordingError(
-				ErrRecordingUnsafeArtifact,
-				"verify credential redaction",
-				filepath.Join(destination, filepath.FromSlash(relative)),
-				errors.New("credential found in artifact"),
-				redactor,
-			)
-		}
-		path := filepath.Join(staging, filepath.FromSlash(relative))
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			return recordingError(ErrRecordingDestination, "prepare artifact directory", filepath.Join(destination, filepath.FromSlash(relative)), err, redactor)
-		}
-		n, writeErr := writeFile(path, data, 0o644)
-		if writeErr == nil && n != len(data) {
-			writeErr = io.ErrShortWrite
-		}
-		if writeErr != nil {
-			return recordingError(ErrRecordingWrite, "write artifact", filepath.Join(destination, filepath.FromSlash(relative)), writeErr, redactor)
-		}
-		return nil
-	}
-	writePath := func(relative, sourcePath string) error {
-		if strings.TrimSpace(sourcePath) == "" {
-			return recordingError(ErrInvalidRecording, "validate artifact source", filepath.Join(destination, filepath.FromSlash(relative)), errors.New("source path is required"), redactor)
-		}
-		source, err := os.Open(sourcePath)
-		if err != nil {
-			return recordingError(ErrRecordingWrite, "open artifact source", filepath.Join(destination, filepath.FromSlash(relative)), err, redactor)
-		}
-		defer source.Close()
-		path := filepath.Join(staging, filepath.FromSlash(relative))
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			return recordingError(ErrRecordingDestination, "prepare artifact directory", filepath.Join(destination, filepath.FromSlash(relative)), err, redactor)
-		}
-		stream := normalized.writeStream
-		if stream == nil {
-			stream = defaultRecordingWriteStream
-		}
-		reader := &countingReader{source: newRedactingReader(source, redactor)}
-		written, writeErr := stream(path, reader, 0o644)
-		if writeErr == nil && written != reader.bytesRead {
-			writeErr = io.ErrShortWrite
-		}
-		if writeErr != nil {
-			return recordingError(ErrRecordingWrite, "write artifact", filepath.Join(destination, filepath.FromSlash(relative)), writeErr, redactor)
-		}
-		return nil
-	}
-
-	if len(normalized.clientTranscript) > 0 {
-		if err := write("client.transcript.jsonl", redactor.apply(normalized.clientTranscript)); err != nil {
-			return err
-		}
-	}
-	if normalized.clientTranscriptPath != "" {
-		if err := writePath("client.transcript.jsonl", normalized.clientTranscriptPath); err != nil {
-			return err
-		}
-	}
-	if len(normalized.agentTranscript) > 0 {
-		if err := write("agent.transcript.jsonl", redactor.apply(normalized.agentTranscript)); err != nil {
-			return err
-		}
-	}
-	if normalized.agentTranscriptPath != "" {
-		if err := writePath("agent.transcript.jsonl", normalized.agentTranscriptPath); err != nil {
-			return err
-		}
-	}
-	if len(normalized.sessionLog) > 0 {
-		if err := write("session-log.jsonl", redactor.apply(normalized.sessionLog)); err != nil {
-			return err
-		}
-	}
-	for index, segment := range normalized.inputSegments {
-		path := fmt.Sprintf("audio/in-%03d.pcm", index)
-		if err := write(path, segment); err != nil {
-			return err
-		}
-	}
-	for index, segmentPath := range normalized.inputSegmentPaths {
-		path := fmt.Sprintf("audio/in-%03d.pcm", index)
-		if err := writePath(path, segmentPath); err != nil {
-			return err
-		}
-	}
-	for index, segment := range normalized.outputSegments {
-		path := fmt.Sprintf("audio/out-%03d.pcm", index)
-		if err := write(path, segment); err != nil {
-			return err
-		}
-	}
-	for index, segmentPath := range normalized.outputSegmentPaths {
-		path := fmt.Sprintf("audio/out-%03d.pcm", index)
-		if err := writePath(path, segmentPath); err != nil {
-			return err
-		}
-	}
-	if normalized.browser != nil {
-		if err := write(normalized.browser.path, normalized.browser.data); err != nil {
-			return err
-		}
-	}
-	if err := writeAdditionalArtifacts(normalized.additional, write, writePath); err != nil {
+	stage := &recordingStage{normalized: &normalized, redactor: redactor, staging: staging, destination: destination}
+	if err := stage.writeArtifacts(); err != nil {
 		return err
 	}
-	if err := verifyAdditionalArtifactHashes(staging, normalized.additional); err != nil {
-		return recordingError(ErrRecordingWrite, "verify additional artifact hashes", destination, err, redactor)
-	}
-
-	artifacts, err := hashArtifacts(staging, normalized.artifactPaths)
-	if err != nil {
-		return recordingError(ErrRecordingWrite, "hash artifacts", destination, err, redactor)
-	}
-	manifest := buildManifest(normalized, redactor, artifacts)
-	manifestBytes, err := marshalRecordingManifest(manifest)
-	if err != nil {
-		return recordingError(ErrRecordingWrite, "encode manifest", filepath.Join(destination, "manifest.json"), err, redactor)
-	}
-	if err := write("manifest.json", manifestBytes); err != nil {
+	if err := stage.writeManifestAndVerify(); err != nil {
 		return err
-	}
-	if err := verifyRecordingLayout(staging, normalized.expectedPaths); err != nil {
-		return recordingError(ErrRecordingLayout, "verify layout", destination, err, redactor)
-	}
-	if err := verifyArtifactHashes(staging, artifacts); err != nil {
-		return recordingError(ErrRecordingWrite, "verify artifact hashes", destination, err, redactor)
-	}
-	if err := scanForCredentials(staging, redactor.values); err != nil {
-		return recordingError(ErrRecordingUnsafeArtifact, "verify credential redaction", destination, err, redactor)
-	}
-	if normalized.beforeCommit != nil {
-		if err := normalized.beforeCommit(); err != nil {
-			return recordingError(ErrRecordingDestination, "verify destination claim", destination, err, redactor)
-		}
 	}
 	if err := commitRecording(staging, destination, existingEmpty); err != nil {
 		return recordingErrorForDestination(err, destination, redactor)
@@ -592,353 +466,173 @@ func WriteRecordingBundle(config RecordingConfig) error {
 	return nil
 }
 
-type normalizedRecording struct {
-	destination          string
-	clientTranscript     []byte
-	agentTranscript      []byte
-	clientTranscriptPath string
-	agentTranscriptPath  string
-	recordingStatus      *RecordingStatus
-	inputSegments        [][]byte
-	outputSegments       [][]byte
-	inputSegmentPaths    []string
-	outputSegmentPaths   []string
-	sessionLog           []byte
-	metadata             RecordingMetadata
-	terminal             *RecordingTerminalSummary
-	corpus               []CorpusHash
-	artifactPaths        []string
-	expectedPaths        []string
-	writeFile            RecordingWriteFile
-	writeStream          RecordingWriteStream
-	beforeCommit         func() error
-	manifestVersion      int
-	browser              *normalizedBrowserArtifact
-	additional           []normalizedRecordingArtifact
+// recordingStage writes one bundle's artifacts into its staging directory.
+// Errors name the artifact's final destination path, never the staging path.
+type recordingStage struct {
+	normalized  *normalizedRecording
+	redactor    credentialRedactor
+	staging     string
+	destination string
 }
 
-type normalizedRecordingArtifact struct {
-	sourcePath string
-	path       string
-	data       []byte
-	sha256     string
+func (s *recordingStage) destinationPath(relative string) string {
+	return filepath.Join(s.destination, filepath.FromSlash(relative))
 }
 
-type credentialRedactor struct {
-	values [][]byte
+// stagingPath prepares the parent directory of one staged artifact.
+func (s *recordingStage) stagingPath(relative string) (string, error) {
+	path := filepath.Join(s.staging, filepath.FromSlash(relative))
+	if err := os.MkdirAll(filepath.Dir(path), recordingDirectoryMode); err != nil {
+		return "", recordingError(ErrRecordingDestination, "prepare artifact directory", s.destinationPath(relative), err, s.redactor)
+	}
+	return path, nil
 }
 
-func normalizeRecordingConfig(config RecordingConfig) (normalizedRecording, credentialRedactor, error) {
-	redactor, err := newCredentialRedactor(config.Credentials)
-	if err != nil {
-		return normalizedRecording{}, credentialRedactor{}, err
-	}
-	destination := config.Destination
-	if strings.TrimSpace(destination) == "" {
-		return normalizedRecording{}, redactor, recordingError(ErrInvalidRecording, "validate destination", "", errors.New("destination is required"), redactor)
-	}
-	clientTranscript := config.ClientTranscript
-	clientTranscriptPath := ""
-	if len(clientTranscript) == 0 && config.ClientTranscriptPath != "" {
-		if err := validateRecordingInputPath(config.ClientTranscriptPath, "client", destination, redactor); err != nil {
-			return normalizedRecording{}, redactor, err
-		}
-		if recordingInputPathPresent(config.ClientTranscriptPath) {
-			clientTranscriptPath = config.ClientTranscriptPath
-		}
-	}
-	agentTranscript := config.AgentTranscript
-	agentTranscriptPath := ""
-	if len(agentTranscript) == 0 && config.AgentTranscriptPath != "" {
-		if err := validateRecordingInputPath(config.AgentTranscriptPath, "agent", destination, redactor); err != nil {
-			return normalizedRecording{}, redactor, err
-		}
-		if recordingInputPathPresent(config.AgentTranscriptPath) {
-			agentTranscriptPath = config.AgentTranscriptPath
-		}
-	}
-	clientPresent := len(clientTranscript) > 0 || clientTranscriptPath != ""
-	agentPresent := len(agentTranscript) > 0 || agentTranscriptPath != ""
-	recordingStatus, err := normalizeRecordingStatus(
-		config.RecordingStatus,
-		clientPresent,
-		agentPresent,
-		destination,
-		redactor,
-	)
-	if err != nil {
-		return normalizedRecording{}, redactor, err
-	}
-	inputSegments := config.InputSegments
-	outputSegments := config.OutputSegments
-	if len(inputSegments) > 0 && len(config.InputSegmentPaths) > 0 {
-		return normalizedRecording{}, redactor, recordingError(ErrInvalidRecording, "validate input audio", destination, errors.New("input segments and input segment paths are alternatives"), redactor)
-	}
-	if len(outputSegments) > 0 && len(config.OutputSegmentPaths) > 0 {
-		return normalizedRecording{}, redactor, recordingError(ErrInvalidRecording, "validate output audio", destination, errors.New("output segments and output segment paths are alternatives"), redactor)
-	}
-	inputSegmentPaths, err := normalizeRecordingInputPaths(config.InputSegmentPaths, "input", destination, redactor)
-	if err != nil {
-		return normalizedRecording{}, redactor, err
-	}
-	outputSegmentPaths, err := normalizeRecordingInputPaths(config.OutputSegmentPaths, "output", destination, redactor)
-	if err != nil {
-		return normalizedRecording{}, redactor, err
-	}
-	if err := validateSegments(inputSegments, "input", destination, redactor); err != nil {
-		return normalizedRecording{}, redactor, err
-	}
-	if err := validateSegments(outputSegments, "output", destination, redactor); err != nil {
-		return normalizedRecording{}, redactor, err
-	}
-	metadata := config.Metadata
-	terminal := cloneRecordingTerminalSummary(config.Terminal)
-	if err := terminal.Validate(); err != nil {
-		return normalizedRecording{}, redactor, recordingError(ErrInvalidRecording, "validate terminal summary", destination, err, redactor)
-	}
-	corpus := config.Corpus
-	writeFile := config.WriteFile
-	if writeFile == nil {
-		writeFile = defaultRecordingWriteFile
-	}
-	manifestVersion, err := normalizeRecordingManifestVersion(config.ManifestVersion, config.BrowserArtifact != nil)
-	if err != nil {
-		return normalizedRecording{}, redactor, recordingError(ErrInvalidRecording, "validate manifest version", destination, err, redactor)
-	}
-	browser, err := normalizeBrowserArtifactForRecording(config.BrowserArtifact, destination, redactor)
-	if err != nil {
-		return normalizedRecording{}, redactor, err
-	}
-	artifactPaths := make([]string, 0, 2)
-	expectedPaths := make([]string, 0, 2)
-	if clientPresent {
-		artifactPaths = append(artifactPaths, "client.transcript.jsonl")
-		expectedPaths = append(expectedPaths, "client.transcript.jsonl")
-	}
-	if agentPresent {
-		artifactPaths = append(artifactPaths, "agent.transcript.jsonl")
-		expectedPaths = append(expectedPaths, "agent.transcript.jsonl")
-	}
-	if len(config.SessionLog) > 0 {
-		artifactPaths = append(artifactPaths, "session-log.jsonl")
-		expectedPaths = append(expectedPaths, "session-log.jsonl")
-	}
-	expectedPaths = append(expectedPaths, "audio")
-	for index := range inputSegments {
-		path := fmt.Sprintf("audio/in-%03d.pcm", index)
-		artifactPaths = append(artifactPaths, path)
-		expectedPaths = append(expectedPaths, path)
-	}
-	for index := range inputSegmentPaths {
-		path := fmt.Sprintf("audio/in-%03d.pcm", index)
-		artifactPaths = append(artifactPaths, path)
-		expectedPaths = append(expectedPaths, path)
-	}
-	for index := range outputSegments {
-		path := fmt.Sprintf("audio/out-%03d.pcm", index)
-		artifactPaths = append(artifactPaths, path)
-		expectedPaths = append(expectedPaths, path)
-	}
-	for index := range outputSegmentPaths {
-		path := fmt.Sprintf("audio/out-%03d.pcm", index)
-		artifactPaths = append(artifactPaths, path)
-		expectedPaths = append(expectedPaths, path)
-	}
-	if browser != nil {
-		if err := appendBrowserArtifactPath(&artifactPaths, &expectedPaths, browser.path); err != nil {
-			return normalizedRecording{}, redactor, recordingError(ErrInvalidRecording, "validate browser artifact path", destination, err, redactor)
-		}
-	}
-	additional, err := normalizeAdditionalRecordingArtifacts(config.AdditionalArtifacts, artifactPaths, expectedPaths, redactor, destination)
-	if err != nil {
-		return normalizedRecording{}, redactor, err
-	}
-	for _, artifact := range additional {
-		artifactPaths = append(artifactPaths, artifact.path)
-		appendRecordingArtifactParents(&expectedPaths, artifact.path)
-		expectedPaths = append(expectedPaths, artifact.path)
-	}
-	expectedPaths = append(expectedPaths, "manifest.json")
-	return normalizedRecording{
-		destination:          destination,
-		clientTranscript:     append([]byte(nil), clientTranscript...),
-		agentTranscript:      append([]byte(nil), agentTranscript...),
-		clientTranscriptPath: clientTranscriptPath,
-		agentTranscriptPath:  agentTranscriptPath,
-		recordingStatus:      recordingStatus,
-		inputSegments:        copySegments(inputSegments),
-		outputSegments:       copySegments(outputSegments),
-		inputSegmentPaths:    append([]string(nil), inputSegmentPaths...),
-		outputSegmentPaths:   append([]string(nil), outputSegmentPaths...),
-		sessionLog:           append([]byte(nil), config.SessionLog...),
-		metadata:             metadata,
-		terminal:             terminal,
-		corpus:               append([]CorpusHash(nil), corpus...),
-		artifactPaths:        artifactPaths,
-		expectedPaths:        expectedPaths,
-		writeFile:            writeFile,
-		writeStream:          config.WriteStream,
-		beforeCommit:         config.BeforeCommit,
-		manifestVersion:      manifestVersion,
-		browser:              browser,
-		additional:           additional,
-	}, redactor, nil
-}
-
-func normalizeRecordingStatus(
-	input *RecordingStatus,
-	clientPresent, agentPresent bool,
-	destination string,
-	redactor credentialRedactor,
-) (*RecordingStatus, error) {
-	if input == nil {
-		if !clientPresent || !agentPresent {
-			return nil, recordingError(
-				ErrInvalidRecording,
-				"validate recording status",
-				destination,
-				errors.New("one-sided transcripts require recording status partial"),
-				redactor,
-			)
-		}
-		return nil, nil
-	}
-
-	status := cloneRecordingStatus(input)
-	status.Reason = strings.TrimSpace(redactor.string(status.Reason))
-	if err := status.Validate(); err != nil {
-		return nil, recordingError(ErrInvalidRecording, "validate recording status", destination, err, redactor)
-	}
-	if status.State == RecordingStatusComplete && (!clientPresent || !agentPresent) {
-		return nil, recordingError(
-			ErrInvalidRecording,
-			"validate recording status",
-			destination,
-			errors.New("complete recordings require both transcripts to be non-empty"),
-			redactor,
+func (s *recordingStage) write(relative string, data []byte) error {
+	if containsCredential(data, s.redactor.values) {
+		return recordingError(
+			ErrRecordingUnsafeArtifact,
+			"verify credential redaction",
+			s.destinationPath(relative),
+			errors.New("credential found in artifact"),
+			s.redactor,
 		)
 	}
-	if status.State == RecordingStatusPartial && !clientPresent && !agentPresent {
-		return nil, recordingError(
-			ErrInvalidRecording,
-			"validate recording status",
-			destination,
-			errors.New("partial recordings require at least one non-empty transcript"),
-			redactor,
-		)
-	}
-	return status, nil
-}
-
-func normalizeAdditionalRecordingArtifacts(
-	artifacts []RecordingArtifact,
-	artifactPaths []string,
-	expectedPaths []string,
-	redactor credentialRedactor,
-	destination string,
-) ([]normalizedRecordingArtifact, error) {
-	if len(artifacts) == 0 {
-		return nil, nil
-	}
-	seen := make(map[string]struct{}, len(artifacts))
-	for _, path := range artifactPaths {
-		seen[path] = struct{}{}
-	}
-	for _, path := range expectedPaths {
-		seen[path] = struct{}{}
-	}
-	// Reserve both built-in transcript names even when one side is absent from
-	// this partial recording. Otherwise an additional artifact could fabricate
-	// the missing transcript path and make the bundle ambiguous to readers.
-	for _, path := range []string{"client.transcript.jsonl", "agent.transcript.jsonl"} {
-		seen[path] = struct{}{}
-	}
-	normalized := make([]normalizedRecordingArtifact, 0, len(artifacts))
-	for _, artifact := range artifacts {
-		if err := validateRecordingArtifactPath(artifact.Path); err != nil {
-			return nil, recordingError(ErrInvalidRecording, "validate additional artifact path", destination, fmt.Errorf("%q: %w", artifact.Path, err), redactor)
-		}
-		if artifact.Path == "audio" || strings.HasPrefix(artifact.Path, "audio/") {
-			return nil, recordingError(ErrInvalidRecording, "validate additional artifact path", destination, fmt.Errorf("%q: audio paths are reserved", artifact.Path), redactor)
-		}
-		if _, exists := seen[artifact.Path]; exists {
-			return nil, recordingError(ErrInvalidRecording, "validate additional artifact path", destination, fmt.Errorf("%q duplicates another recording path", artifact.Path), redactor)
-		}
-		seen[artifact.Path] = struct{}{}
-		item, err := normalizeAdditionalArtifactData(artifact, redactor)
-		if err != nil {
-			return nil, recordingError(ErrInvalidRecording, "validate additional artifact", destination, fmt.Errorf("%q: %w", artifact.Path, err), redactor)
-		}
-		normalized = append(normalized, item)
-	}
-	sort.Slice(normalized, func(i, j int) bool { return normalized[i].path < normalized[j].path })
-	for index := 1; index < len(normalized); index++ {
-		if strings.HasPrefix(normalized[index].path, normalized[index-1].path+"/") {
-			return nil, recordingError(ErrInvalidRecording, "validate additional artifact path", destination, fmt.Errorf("%q is a parent of another recording path", normalized[index-1].path), redactor)
-		}
-	}
-	return normalized, nil
-}
-
-func appendRecordingArtifactParents(expectedPaths *[]string, artifactPath string) {
-	for parent := path.Dir(artifactPath); parent != "."; parent = path.Dir(parent) {
-		if !containsRecordingPath(*expectedPaths, parent) {
-			*expectedPaths = append(*expectedPaths, parent)
-		}
-	}
-}
-
-func validateRecordingInputPath(sourcePath, side, destination string, redactor credentialRedactor) error {
-	info, err := os.Stat(sourcePath)
+	path, err := s.stagingPath(relative)
 	if err != nil {
-		return recordingError(ErrInvalidRecording, "inspect "+side+" transcript", destination, err, redactor)
+		return err
 	}
-	if !info.Mode().IsRegular() {
-		return recordingError(ErrInvalidRecording, "inspect "+side+" transcript", destination, errors.New("source path is not a regular file"), redactor)
+	n, writeErr := s.normalized.writeFile(path, data, recordingFileMode)
+	if writeErr == nil && n != len(data) {
+		writeErr = io.ErrShortWrite
+	}
+	if writeErr != nil {
+		return recordingError(ErrRecordingWrite, "write artifact", s.destinationPath(relative), writeErr, s.redactor)
 	}
 	return nil
 }
 
-func recordingInputPathPresent(sourcePath string) bool {
-	info, err := os.Stat(sourcePath)
-	return err == nil && info.Size() > 0
+func (s *recordingStage) writePath(relative, sourcePath string) (returnErr error) {
+	if strings.TrimSpace(sourcePath) == "" {
+		return recordingError(ErrInvalidRecording, "validate artifact source", s.destinationPath(relative), errors.New("source path is required"), s.redactor)
+	}
+	source, err := os.Open(sourcePath)
+	if err != nil {
+		return recordingError(ErrRecordingWrite, "open artifact source", s.destinationPath(relative), err, s.redactor)
+	}
+	defer func() {
+		if closeErr := source.Close(); closeErr != nil && returnErr == nil {
+			returnErr = recordingError(ErrRecordingWrite, "close artifact source", s.destinationPath(relative), closeErr, s.redactor)
+		}
+	}()
+	path, err := s.stagingPath(relative)
+	if err != nil {
+		return err
+	}
+	stream := s.normalized.writeStream
+	if stream == nil {
+		stream = defaultRecordingWriteStream
+	}
+	reader := &countingReader{source: newRedactingReader(source, s.redactor)}
+	written, writeErr := stream(path, reader, recordingFileMode)
+	if writeErr == nil && written != reader.bytesRead {
+		writeErr = io.ErrShortWrite
+	}
+	if writeErr != nil {
+		return recordingError(ErrRecordingWrite, "write artifact", s.destinationPath(relative), writeErr, s.redactor)
+	}
+	return nil
 }
 
-func normalizeRecordingInputPaths(paths []string, side, destination string, redactor credentialRedactor) ([]string, error) {
-	if len(paths) == 0 {
-		return nil, nil
-	}
-	normalized := make([]string, 0, len(paths))
-	for index, sourcePath := range paths {
-		if err := validateRecordingInputPath(sourcePath, fmt.Sprintf("%s audio segment %d", side, index), destination, redactor); err != nil {
-			return nil, err
+// writeTranscript stages an inline transcript (redacted) and then a
+// file-backed one; configuration normalization admits at most one of them.
+func (s *recordingStage) writeTranscript(relative string, inline []byte, sourcePath string) error {
+	if len(inline) > 0 {
+		if err := s.write(relative, s.redactor.apply(inline)); err != nil {
+			return err
 		}
-		if !recordingInputPathPresent(sourcePath) {
-			return nil, recordingError(ErrInvalidRecording, "validate "+side+" audio", destination, fmt.Errorf("segment %d is empty", index), redactor)
-		}
-		normalized = append(normalized, sourcePath)
 	}
-	return normalized, nil
+	if sourcePath != "" {
+		return s.writePath(relative, sourcePath)
+	}
+	return nil
 }
 
-func validateSegments(segments [][]byte, name, destination string, redactor credentialRedactor) error {
-	if len(segments) == 0 {
-		return nil
-	}
+func (s *recordingStage) writeSegments(format string, segments [][]byte, sourcePaths []string) error {
 	for index, segment := range segments {
-		if len(segment) == 0 {
-			return recordingError(ErrInvalidRecording, "validate "+name+" audio", destination, fmt.Errorf("segment %d is empty", index), redactor)
+		if err := s.write(fmt.Sprintf(format, index), segment); err != nil {
+			return err
+		}
+	}
+	for index, segmentPath := range sourcePaths {
+		if err := s.writePath(fmt.Sprintf(format, index), segmentPath); err != nil {
+			return err
 		}
 	}
 	return nil
 }
 
-func copySegments(segments [][]byte) [][]byte {
-	copyOf := make([][]byte, len(segments))
-	for index, segment := range segments {
-		copyOf[index] = append([]byte(nil), segment...)
+func (s *recordingStage) writeArtifacts() error {
+	normalized := s.normalized
+	if err := s.writeTranscript("client.transcript.jsonl", normalized.clientTranscript, normalized.clientTranscriptPath); err != nil {
+		return err
 	}
-	return copyOf
+	if err := s.writeTranscript("agent.transcript.jsonl", normalized.agentTranscript, normalized.agentTranscriptPath); err != nil {
+		return err
+	}
+	if err := s.writeTranscript("session-log.jsonl", normalized.sessionLog, ""); err != nil {
+		return err
+	}
+	if err := s.writeSegments("audio/in-%03d.pcm", normalized.inputSegments, normalized.inputSegmentPaths); err != nil {
+		return err
+	}
+	if err := s.writeSegments("audio/out-%03d.pcm", normalized.outputSegments, normalized.outputSegmentPaths); err != nil {
+		return err
+	}
+	if normalized.browser != nil {
+		if err := s.write(normalized.browser.path, normalized.browser.data); err != nil {
+			return err
+		}
+	}
+	if err := writeAdditionalArtifacts(normalized.additional, s.write, s.writePath); err != nil {
+		return err
+	}
+	if err := verifyAdditionalArtifactHashes(s.staging, normalized.additional); err != nil {
+		return recordingError(ErrRecordingWrite, "verify additional artifact hashes", s.destination, err, s.redactor)
+	}
+	return nil
+}
+
+// writeManifestAndVerify hashes the staged artifacts, stages the manifest,
+// and checks layout, hashes, redaction, and the destination claim.
+func (s *recordingStage) writeManifestAndVerify() error {
+	artifacts, err := hashArtifacts(s.staging, s.normalized.artifactPaths)
+	if err != nil {
+		return recordingError(ErrRecordingWrite, "hash artifacts", s.destination, err, s.redactor)
+	}
+	manifest := buildManifest(*s.normalized, s.redactor, artifacts)
+	manifestBytes, err := marshalRecordingManifest(manifest)
+	if err != nil {
+		return recordingError(ErrRecordingWrite, "encode manifest", filepath.Join(s.destination, "manifest.json"), err, s.redactor)
+	}
+	if err := s.write("manifest.json", manifestBytes); err != nil {
+		return err
+	}
+	if err := verifyRecordingLayout(s.staging, s.normalized.expectedPaths); err != nil {
+		return recordingError(ErrRecordingLayout, "verify layout", s.destination, err, s.redactor)
+	}
+	if err := verifyArtifactHashes(s.staging, artifacts); err != nil {
+		return recordingError(ErrRecordingWrite, "verify artifact hashes", s.destination, err, s.redactor)
+	}
+	if err := scanForCredentials(s.staging, s.redactor.values); err != nil {
+		return recordingError(ErrRecordingUnsafeArtifact, "verify credential redaction", s.destination, err, s.redactor)
+	}
+	if s.normalized.beforeCommit != nil {
+		if err := s.normalized.beforeCommit(); err != nil {
+			return recordingError(ErrRecordingDestination, "verify destination claim", s.destination, err, s.redactor)
+		}
+	}
+	return nil
 }
 
 func newCredentialRedactor(credentials []string) (credentialRedactor, error) {

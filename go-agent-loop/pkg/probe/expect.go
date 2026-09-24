@@ -3,6 +3,7 @@ package probe
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -232,78 +233,18 @@ func Evaluate(expectation ExpectedBehavior, observation ObservationSnapshot) err
 		if err != nil {
 			return err
 		}
-		for _, name := range observation.ToolCalls {
-			if name == want {
-				return nil
-			}
+		if slices.Contains(observation.ToolCalls, want) {
+			return nil
 		}
 		return mismatch(expectation, kind, want, append([]string(nil), observation.ToolCalls...))
 	case ExpectLatencyWithinTicks:
-		if expectation.Count < 0 {
-			return invalid(expectation, kind, "count", "maximum tick delta must not be negative")
-		}
-		declaredStart := expectation.HasAt || expectation.At != 0 || expectation.Time != 0
-		var start LogicalTime
-		if !declaredStart {
-			if !observation.HasInterruptTick && observation.InterruptTick == 0 {
-				return mismatch(expectation, kind, "interrupting input tick", "missing input_audio_buffer.append tick")
-			}
-			start = observation.InterruptTick
-			if start < 0 {
-				return mismatch(expectation, kind, "non-negative interrupting input tick", start)
-			}
-		} else {
-			var err error
-			start, err = startTick(expectation)
-			if err != nil {
-				return err
-			}
-		}
-		var observed LogicalTime
-		var ok bool
-		if !declaredStart && !observation.HasResponseCancel {
-			return mismatch(expectation, kind,
-				"RESPONSE.CANCEL observed after the interrupting input", "none")
-		}
-		observed, ok = observationTick(observation)
-		if !ok {
-			return mismatch(expectation, kind,
-				fmt.Sprintf("non-negative tick delta <= %d", expectation.Count), "missing observed tick")
-		}
-		if observed < start {
-			return mismatch(expectation, kind,
-				fmt.Sprintf("non-negative tick delta <= %d", expectation.Count),
-				fmt.Sprintf("observed tick %d precedes start tick %d", observed, start))
-		}
-		delta := observed - start
-		if delta > LogicalTime(expectation.Count) {
-			return mismatch(expectation, kind,
-				fmt.Sprintf("non-negative tick delta <= %d", expectation.Count), delta)
-		}
+		return evaluateLatencyWithinTicks(expectation, kind, observation)
 	case ExpectTerminalReason:
-		want, err := aliasString(expectation, kind, "reason", expectation.Value, expectation.Text)
-		if err != nil {
-			return err
-		}
-		if observation.TerminalReason != want {
-			return mismatch(expectation, kind, want, observation.TerminalReason)
-		}
+		return expectObservedString(expectation, kind, "reason", observation.TerminalReason)
 	case ExpectTerminalProvenance:
-		want, err := aliasString(expectation, kind, "provenance", expectation.Value, expectation.Text)
-		if err != nil {
-			return err
-		}
-		if observation.TerminalProvenance != want {
-			return mismatch(expectation, kind, want, observation.TerminalProvenance)
-		}
+		return expectObservedString(expectation, kind, "provenance", observation.TerminalProvenance)
 	case ExpectOutputState:
-		want, err := aliasString(expectation, kind, "output state", expectation.Value, expectation.Text)
-		if err != nil {
-			return err
-		}
-		if observation.OutputState != want {
-			return mismatch(expectation, kind, want, observation.OutputState)
-		}
+		return expectObservedString(expectation, kind, "output state", observation.OutputState)
 	case ExpectFrameCount:
 		if expectation.Count < 0 {
 			return invalid(expectation, kind, "count", "expected frame count must not be negative")
@@ -312,23 +253,9 @@ func Evaluate(expectation ExpectedBehavior, observation ObservationSnapshot) err
 			return mismatch(expectation, kind, expectation.Count, observation.FrameCount)
 		}
 	case ExpectToolResultDelivered:
-		want, err := aliasString(expectation, kind, "tool_call_id", expectation.ToolCallID, expectation.Value)
-		if err != nil {
-			return err
-		}
-		if !containsID(observation.ToolResultsDelivered, want) {
-			return mismatch(expectation, kind, "delivered tool result for "+want,
-				observedIDs(observation.ToolResultsDelivered))
-		}
+		return expectToolResultID(expectation, kind, "delivered tool result for ", observation.ToolResultsDelivered)
 	case ExpectToolResultDiscarded:
-		want, err := aliasString(expectation, kind, "tool_call_id", expectation.ToolCallID, expectation.Value)
-		if err != nil {
-			return err
-		}
-		if !containsID(observation.ToolResultsDiscarded, want) {
-			return mismatch(expectation, kind, "explicit discard event for "+want,
-				observedIDs(observation.ToolResultsDiscarded))
-		}
+		return expectToolResultID(expectation, kind, "explicit discard event for ", observation.ToolResultsDiscarded)
 	case ExpectNoOrphanedToolResult:
 		orphaned := orphanedToolCalls(observation)
 		if len(orphaned) != 0 {
@@ -337,20 +264,7 @@ func Evaluate(expectation ExpectedBehavior, observation ObservationSnapshot) err
 				"orphaned: "+diagnosticValue(orphaned))
 		}
 	case ExpectBufferDisposition:
-		want, err := aliasString(expectation, kind, "value", expectation.Value, expectation.Text)
-		if err != nil {
-			return err
-		}
-		switch want {
-		case BufferDispositionCommitted, BufferDispositionDiscarded:
-		default:
-			return invalid(expectation, kind, "value",
-				"buffer disposition must be committed or discarded")
-		}
-		if observedBufferDisposition(observation.BufferDisposition) != want {
-			return mismatch(expectation, kind, want,
-				observedBufferDisposition(observation.BufferDisposition))
-		}
+		return evaluateBufferDisposition(expectation, kind, observation)
 	case ExpectMetricsReconcile:
 		return evaluateMetricsReconciliation(expectation, observation.Metrics)
 	case ExpectBargeInCancelOnce:
@@ -358,13 +272,89 @@ func Evaluate(expectation ExpectedBehavior, observation ObservationSnapshot) err
 	case ExpectMessageCountsReconcile:
 		return evaluateMessageCountsReconciliation(expectation, observation)
 	case ExpectResponseCancel:
-		if err := evaluateResponseCancel(expectation, kind, observation); err != nil {
-			return err
-		}
+		return evaluateResponseCancel(expectation, kind, observation)
 	default:
 		return invalid(expectation, kind, "type", "unsupported measurable expectation")
 	}
 	return nil
+}
+
+// expectObservedString compares one terminal or output string field.
+func expectObservedString(expectation ExpectedBehavior, kind ExpectationKind, field, observed string) error {
+	want, err := aliasString(expectation, kind, field, expectation.Value, expectation.Text)
+	if err != nil {
+		return err
+	}
+	if observed != want {
+		return mismatch(expectation, kind, want, observed)
+	}
+	return nil
+}
+
+func expectToolResultID(expectation ExpectedBehavior, kind ExpectationKind, label string, observed []string) error {
+	want, err := aliasString(expectation, kind, "tool_call_id", expectation.ToolCallID, expectation.Value)
+	if err != nil {
+		return err
+	}
+	if !containsID(observed, want) {
+		return mismatch(expectation, kind, label+want, observedIDs(observed))
+	}
+	return nil
+}
+
+func evaluateBufferDisposition(expectation ExpectedBehavior, kind ExpectationKind, observation ObservationSnapshot) error {
+	want, err := aliasString(expectation, kind, "value", expectation.Value, expectation.Text)
+	if err != nil {
+		return err
+	}
+	if want != BufferDispositionCommitted && want != BufferDispositionDiscarded {
+		return invalid(expectation, kind, "value", "buffer disposition must be committed or discarded")
+	}
+	if observedBufferDisposition(observation.BufferDisposition) != want {
+		return mismatch(expectation, kind, want, observedBufferDisposition(observation.BufferDisposition))
+	}
+	return nil
+}
+
+func evaluateLatencyWithinTicks(expectation ExpectedBehavior, kind ExpectationKind, observation ObservationSnapshot) error {
+	if expectation.Count < 0 {
+		return invalid(expectation, kind, "count", "maximum tick delta must not be negative")
+	}
+	declaredStart := expectation.HasAt || expectation.At != 0 || expectation.Time != 0
+	start, err := latencyStartTick(expectation, kind, observation, declaredStart)
+	if err != nil {
+		return err
+	}
+	if !declaredStart && !observation.HasResponseCancel {
+		return mismatch(expectation, kind, "RESPONSE.CANCEL observed after the interrupting input", "none")
+	}
+	want := fmt.Sprintf("non-negative tick delta <= %d", expectation.Count)
+	observed, ok := observationTick(observation)
+	if !ok {
+		return mismatch(expectation, kind, want, "missing observed tick")
+	}
+	if observed < start {
+		return mismatch(expectation, kind, want, fmt.Sprintf("observed tick %d precedes start tick %d", observed, start))
+	}
+	if delta := observed - start; delta > LogicalTime(expectation.Count) {
+		return mismatch(expectation, kind, want, delta)
+	}
+	return nil
+}
+
+// latencyStartTick uses the declared start tick, or the interrupting input
+// tick when the expectation measures from the barge-in boundary.
+func latencyStartTick(expectation ExpectedBehavior, kind ExpectationKind, observation ObservationSnapshot, declaredStart bool) (LogicalTime, error) {
+	if declaredStart {
+		return startTick(expectation)
+	}
+	if !observation.HasInterruptTick && observation.InterruptTick == 0 {
+		return 0, mismatch(expectation, kind, "interrupting input tick", "missing input_audio_buffer.append tick")
+	}
+	if observation.InterruptTick < 0 {
+		return 0, mismatch(expectation, kind, "non-negative interrupting input tick", observation.InterruptTick)
+	}
+	return observation.InterruptTick, nil
 }
 
 func EvaluateExpectation(expectation ExpectedBehavior, observation ObservationSnapshot) error {

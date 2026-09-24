@@ -1,6 +1,7 @@
 package probe
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -18,21 +19,71 @@ func LoadScenarioV2(input any, scenarioPath string, lookups ...CorpusLookup) (Sc
 	if len(lookups) > 1 {
 		return ScenarioV2{}, newScenarioV2Error("corpus_lookup", "only one corpus lookup is permitted")
 	}
+	root, err := decodeScenarioV2Root(input)
+	if err != nil {
+		return ScenarioV2{}, err
+	}
+	result, err := decodeScenarioV2Header(root)
+	if err != nil {
+		return ScenarioV2{}, err
+	}
+	result.SourcePath = scenarioPath
+	hasFixtures := result.BrowserFixture != "" || result.ProviderFixture != ""
+	if result.FixtureRoot, err = scenarioV2FixtureRoot(scenarioPath, hasFixtures); err != nil {
+		return ScenarioV2{}, err
+	}
+	stepValues, err := requiredScenarioV2Array(root, "steps", "step")
+	if err != nil {
+		return ScenarioV2{}, err
+	}
+	expectationValues, err := requiredScenarioV2Array(root, "expectations", "expectation")
+	if err != nil {
+		return ScenarioV2{}, err
+	}
+	var lookup CorpusLookup
+	if len(lookups) == 1 {
+		lookup = lookups[0]
+	}
+	result.Steps = make([]ScenarioV2Step, len(stepValues))
+	for index, raw := range stepValues {
+		if result.Steps[index], err = parseScenarioV2Step(raw, index, lookup, result.FixtureRoot); err != nil {
+			return ScenarioV2{}, err
+		}
+	}
+	result.Expectations = make([]ScenarioV2Expectation, len(expectationValues))
+	for index, raw := range expectationValues {
+		if result.Expectations[index], err = parseScenarioV2Expectation(raw, index); err != nil {
+			return ScenarioV2{}, err
+		}
+	}
+	if err := resolveScenarioV2Fixtures(&result); err != nil {
+		return ScenarioV2{}, err
+	}
+	return result, nil
+}
+
+// decodeScenarioV2Root reads one UTF-8 JSON object and rejects unknown root
+// fields.
+func decodeScenarioV2Root(input any) (scenarioV2Object, error) {
 	data, err := readInput(input)
 	if err != nil {
-		return ScenarioV2{}, newScenarioV2Error("document", "%v", err)
+		return nil, newScenarioV2Error("document", "%v", err)
 	}
 	if !utf8.Valid(data) {
-		return ScenarioV2{}, newScenarioV2Error("document", "input is not valid UTF-8")
+		return nil, newScenarioV2Error("document", "input is not valid UTF-8")
 	}
 	root, err := decodeScenarioV2Object(data, "scenario")
 	if err != nil {
-		return ScenarioV2{}, err
+		return nil, err
 	}
 	if err := rejectScenarioV2Fields(root, scenarioV2RootFields, "scenario"); err != nil {
-		return ScenarioV2{}, err
+		return nil, err
 	}
+	return root, nil
+}
 
+// decodeScenarioV2Header decodes the scalar root fields in document order.
+func decodeScenarioV2Header(root scenarioV2Object) (ScenarioV2, error) {
 	version, err := requiredScenarioV2String(root, "scenario", "schema_version")
 	if err != nil {
 		return ScenarioV2{}, err
@@ -40,112 +91,83 @@ func LoadScenarioV2(input any, scenarioPath string, lookups ...CorpusLookup) (Sc
 	if version != ScenarioV2Version {
 		return ScenarioV2{}, newScenarioV2Error("scenario.schema_version", "unsupported version")
 	}
-	id, err := requiredScenarioV2String(root, "scenario", "id")
-	if err != nil {
+	result := ScenarioV2{SchemaVersion: version}
+	if result.ID, err = requiredScenarioV2String(root, "scenario", "id"); err != nil {
 		return ScenarioV2{}, err
 	}
-	name, err := optionalScenarioV2String(root, "scenario", "name")
-	if err != nil {
+	if result.Name, err = optionalScenarioV2String(root, "scenario", "name"); err != nil {
 		return ScenarioV2{}, err
 	}
-	description, err := optionalScenarioV2String(root, "scenario", "description")
-	if err != nil {
+	if result.Description, err = optionalScenarioV2String(root, "scenario", "description"); err != nil {
 		return ScenarioV2{}, err
 	}
-	browserFixture, err := optionalScenarioV2String(root, "scenario", "browser_fixture")
-	if err != nil {
+	if result.BrowserFixture, err = optionalScenarioV2String(root, "scenario", "browser_fixture"); err != nil {
 		return ScenarioV2{}, err
 	}
-	providerFixture, err := optionalScenarioV2String(root, "scenario", "provider_fixture")
-	if err != nil {
+	if result.ProviderFixture, err = optionalScenarioV2String(root, "scenario", "provider_fixture"); err != nil {
 		return ScenarioV2{}, err
 	}
-	if _, exists := root["browser_fixture"]; exists && strings.TrimSpace(browserFixture) == "" {
-		return ScenarioV2{}, &ScenarioV2Error{Path: "scenario.browser_fixture", Cause: ErrScenarioV2FixturePath}
-	}
-	if _, exists := root["provider_fixture"]; exists && strings.TrimSpace(providerFixture) == "" {
-		return ScenarioV2{}, &ScenarioV2Error{Path: "scenario.provider_fixture", Cause: ErrScenarioV2FixturePath}
-	}
-
-	var fixtureRoot string
-	if (browserFixture != "" || providerFixture != "") && strings.TrimSpace(scenarioPath) == "" {
-		return ScenarioV2{}, newScenarioV2Error("scenario", "scenario path is required when fixture references are present")
-	}
-	if strings.TrimSpace(scenarioPath) != "" {
-		fixtureRoot, err = canonicalScenarioV2Dir(scenarioPath)
-		if err != nil && (browserFixture != "" || providerFixture != "") {
-			return ScenarioV2{}, wrapScenarioV2Error("scenario", err)
-		}
-	}
-
-	rawSteps, ok := root["steps"]
-	if !ok {
-		return ScenarioV2{}, newScenarioV2Error("scenario.steps", "required field is missing")
-	}
-	stepValues, err := scenarioV2Array(rawSteps, "scenario.steps")
-	if err != nil {
+	if err := rejectBlankScenarioV2Fixture(root, "browser_fixture", result.BrowserFixture); err != nil {
 		return ScenarioV2{}, err
 	}
-	if len(stepValues) == 0 {
-		return ScenarioV2{}, newScenarioV2Error("scenario.steps", "must contain at least one step")
-	}
-
-	rawExpectations, ok := root["expectations"]
-	if !ok {
-		return ScenarioV2{}, newScenarioV2Error("scenario.expectations", "required field is missing")
-	}
-	expectationValues, err := scenarioV2Array(rawExpectations, "scenario.expectations")
-	if err != nil {
+	if err := rejectBlankScenarioV2Fixture(root, "provider_fixture", result.ProviderFixture); err != nil {
 		return ScenarioV2{}, err
-	}
-	if len(expectationValues) == 0 {
-		return ScenarioV2{}, newScenarioV2Error("scenario.expectations", "must contain at least one expectation")
-	}
-
-	var lookup CorpusLookup
-	if len(lookups) == 1 {
-		lookup = lookups[0]
-	}
-	result := ScenarioV2{
-		SchemaVersion:   version,
-		ID:              id,
-		Name:            name,
-		Description:     description,
-		BrowserFixture:  browserFixture,
-		ProviderFixture: providerFixture,
-		SourcePath:      scenarioPath,
-		FixtureRoot:     fixtureRoot,
-		Steps:           make([]ScenarioV2Step, len(stepValues)),
-		Expectations:    make([]ScenarioV2Expectation, len(expectationValues)),
-	}
-	for index, raw := range stepValues {
-		result.Steps[index], err = parseScenarioV2Step(raw, index, lookup, fixtureRoot)
-		if err != nil {
-			return ScenarioV2{}, err
-		}
-	}
-	for index, raw := range expectationValues {
-		result.Expectations[index], err = parseScenarioV2Expectation(raw, index)
-		if err != nil {
-			return ScenarioV2{}, err
-		}
-	}
-
-	if browserFixture != "" || providerFixture != "" {
-		if browserFixture != "" {
-			result.BrowserFixturePath, err = resolveScenarioV2FixturePathFromRoot(fixtureRoot, browserFixture)
-			if err != nil {
-				return ScenarioV2{}, wrapScenarioV2Error("scenario.browser_fixture", err)
-			}
-		}
-		if providerFixture != "" {
-			result.ProviderFixturePath, err = resolveScenarioV2FixturePathFromRoot(fixtureRoot, providerFixture)
-			if err != nil {
-				return ScenarioV2{}, wrapScenarioV2Error("scenario.provider_fixture", err)
-			}
-		}
 	}
 	return result, nil
+}
+
+func rejectBlankScenarioV2Fixture(root scenarioV2Object, fieldName, reference string) error {
+	if _, exists := root[fieldName]; exists && strings.TrimSpace(reference) == "" {
+		return &ScenarioV2Error{Path: "scenario." + fieldName, Cause: ErrScenarioV2FixturePath}
+	}
+	return nil
+}
+
+// scenarioV2FixtureRoot canonicalizes the scenario directory. The directory
+// is mandatory only when the document references fixtures.
+func scenarioV2FixtureRoot(scenarioPath string, hasFixtures bool) (string, error) {
+	if strings.TrimSpace(scenarioPath) == "" {
+		if hasFixtures {
+			return "", newScenarioV2Error("scenario", "scenario path is required when fixture references are present")
+		}
+		return "", nil
+	}
+	fixtureRoot, err := canonicalScenarioV2Dir(scenarioPath)
+	if err != nil && hasFixtures {
+		return "", wrapScenarioV2Error("scenario", err)
+	}
+	return fixtureRoot, nil
+}
+
+func requiredScenarioV2Array(root scenarioV2Object, fieldName, noun string) ([]json.RawMessage, error) {
+	location := "scenario." + fieldName
+	raw, ok := root[fieldName]
+	if !ok {
+		return nil, newScenarioV2Error(location, "required field is missing")
+	}
+	values, err := scenarioV2Array(raw, location)
+	if err != nil {
+		return nil, err
+	}
+	if len(values) == 0 {
+		return nil, newScenarioV2Error(location, "must contain at least one %s", noun)
+	}
+	return values, nil
+}
+
+func resolveScenarioV2Fixtures(result *ScenarioV2) error {
+	var err error
+	if result.BrowserFixture != "" {
+		if result.BrowserFixturePath, err = resolveScenarioV2FixturePathFromRoot(result.FixtureRoot, result.BrowserFixture); err != nil {
+			return wrapScenarioV2Error("scenario.browser_fixture", err)
+		}
+	}
+	if result.ProviderFixture != "" {
+		if result.ProviderFixturePath, err = resolveScenarioV2FixturePathFromRoot(result.FixtureRoot, result.ProviderFixture); err != nil {
+			return wrapScenarioV2Error("scenario.provider_fixture", err)
+		}
+	}
+	return nil
 }
 
 // DecodeScenarioV2 is an alias for LoadScenarioV2.

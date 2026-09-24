@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -146,147 +148,144 @@ func AggregateFrictionReport(inputs ...FrictionReportInput) (FrictionReport, err
 // useful to callers whose artifact reader is managed elsewhere and shares the
 // same deterministic ordering as AggregateFrictionReport.
 func AggregateScenarioResults(results []ScenarioResult) FrictionReport {
-	type scenarioCounts struct {
-		total, passed, failed, stuck int
+	aggregator := frictionAggregator{
+		byScenario:        make(map[string]*scenarioCounts),
+		terminalReasons:   make(map[string]int),
+		errorClasses:      make(map[string]int),
+		expectationMisses: make(map[ExpectationKind]*scenarioNames),
+		frictions:         make(map[frictionIdentity]*frictionBucket),
 	}
+	for _, result := range results {
+		aggregator.add(result)
+	}
+	return aggregator.report()
+}
 
+type scenarioCounts struct {
+	total, passed, failed, stuck int
+}
+
+// frictionAggregator accumulates the unordered counts that report() sorts.
+type frictionAggregator struct {
+	total, passed, failed, stuck int
+	byScenario                   map[string]*scenarioCounts
+	terminalReasons              map[string]int
+	errorClasses                 map[string]int
+	expectationMisses            map[ExpectationKind]*scenarioNames
+	frictions                    map[frictionIdentity]*frictionBucket
+}
+
+func (a *frictionAggregator) addFriction(category, key, scenario string) {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		key = "unknown"
+	}
+	identity := frictionIdentity{Category: category, Key: key}
+	bucket := a.frictions[identity]
+	if bucket == nil {
+		bucket = &frictionBucket{Scenarios: make(map[string]struct{})}
+		a.frictions[identity] = bucket
+	}
+	bucket.Count++
+	if scenario != "" {
+		bucket.Scenarios[scenario] = struct{}{}
+	}
+}
+
+func (a *frictionAggregator) add(result ScenarioResult) {
+	a.total++
+	counts := a.byScenario[result.Name]
+	if counts == nil {
+		counts = &scenarioCounts{}
+		a.byScenario[result.Name] = counts
+	}
+	counts.total++
+	stuck := result.TerminalReason == StuckTerminalReason
+	if stuck {
+		a.stuck++
+		counts.stuck++
+	}
+	if result.Pass && !stuck {
+		a.passed++
+		counts.passed++
+	} else {
+		a.failed++
+		counts.failed++
+	}
+	if result.TerminalReason != "" {
+		a.terminalReasons[result.TerminalReason]++
+	}
+	if class := resultErrorClass(result); class != "" {
+		a.errorClasses[class]++
+	}
+	a.addExpectationMisses(result)
+	if !result.Pass || stuck {
+		a.addFailureFrictions(result, stuck)
+	}
+}
+
+func (a *frictionAggregator) addExpectationMisses(result ScenarioResult) {
+	for _, outcome := range result.ScenarioExpectationOutcomes {
+		if outcome.Passed {
+			continue
+		}
+		kind := outcome.Kind
+		if strings.TrimSpace(string(kind)) == "" {
+			kind = ExpectationKind("unknown")
+		}
+		misses := a.expectationMisses[kind]
+		if misses == nil {
+			misses = &scenarioNames{Values: make(map[string]struct{})}
+			a.expectationMisses[kind] = misses
+		}
+		misses.Count++
+		if result.Name != "" {
+			misses.Values[result.Name] = struct{}{}
+		}
+		a.addFriction(FrictionCategoryExpectation, string(kind), result.Name)
+	}
+}
+
+func (a *frictionAggregator) addFailureFrictions(result ScenarioResult, stuck bool) {
+	if stuck {
+		a.addFriction(FrictionCategoryStuck, StuckTerminalReason, result.Name)
+	}
+	reason := strings.TrimSpace(result.TerminalReason)
+	if reason != "" && reason != StuckTerminalReason {
+		a.addFriction(FrictionCategoryTerminalReason, reason, result.Name)
+	}
+	class := resultErrorClass(result)
+	if class != "" {
+		a.addFriction(FrictionCategoryErrorClass, class, result.Name)
+	}
+	if !stuck && reason == "" && class == "" && len(result.ScenarioExpectationOutcomes) == 0 {
+		a.addFriction(FrictionCategoryFailure, "unknown", result.Name)
+	}
+}
+
+func (a *frictionAggregator) report() FrictionReport {
 	report := FrictionReport{
+		Total: a.total, Passed: a.passed, Failed: a.failed, Stuck: a.stuck,
 		Scenarios:         make([]ScenarioRollup, 0),
 		TerminalReasons:   make([]TerminalReasonCount, 0),
 		ErrorClasses:      make([]ErrorClassCount, 0),
 		ExpectationMisses: make([]ExpectationMissCount, 0),
-		TopFrictions:      make([]TopFriction, 0),
 	}
-	byScenario := make(map[string]*scenarioCounts)
-	terminalReasons := make(map[string]int)
-	errorClasses := make(map[string]int)
-	expectationMisses := make(map[ExpectationKind]*scenarioNames)
-	frictions := make(map[frictionIdentity]*frictionBucket)
-	addFriction := func(category, key, scenario string) {
-		key = strings.TrimSpace(key)
-		if key == "" {
-			key = "unknown"
-		}
-		identity := frictionIdentity{Category: category, Key: key}
-		bucket := frictions[identity]
-		if bucket == nil {
-			bucket = &frictionBucket{Scenarios: make(map[string]struct{})}
-			frictions[identity] = bucket
-		}
-		bucket.Count++
-		if scenario != "" {
-			bucket.Scenarios[scenario] = struct{}{}
-		}
+	for _, name := range slices.Sorted(maps.Keys(a.byScenario)) {
+		counts := a.byScenario[name]
+		report.Scenarios = append(report.Scenarios, ScenarioRollup{Name: name, Total: counts.total, Passed: counts.passed, Failed: counts.failed, Stuck: counts.stuck})
 	}
-
-	for _, result := range results {
-		report.Total++
-		counts := byScenario[result.Name]
-		if counts == nil {
-			counts = &scenarioCounts{}
-			byScenario[result.Name] = counts
-		}
-		counts.total++
-
-		stuck := result.TerminalReason == StuckTerminalReason
-		if stuck {
-			report.Stuck++
-			counts.stuck++
-		}
-		if result.Pass && !stuck {
-			report.Passed++
-			counts.passed++
-		} else {
-			report.Failed++
-			counts.failed++
-		}
-
-		if result.TerminalReason != "" {
-			terminalReasons[result.TerminalReason]++
-		}
-		if class := resultErrorClass(result); class != "" {
-			errorClasses[class]++
-		}
-
-		for _, outcome := range result.ScenarioExpectationOutcomes {
-			if outcome.Passed {
-				continue
-			}
-			kind := outcome.Kind
-			if strings.TrimSpace(string(kind)) == "" {
-				kind = ExpectationKind("unknown")
-			}
-			misses := expectationMisses[kind]
-			if misses == nil {
-				misses = &scenarioNames{Values: make(map[string]struct{})}
-				expectationMisses[kind] = misses
-			}
-			misses.Count++
-			if result.Name != "" {
-				misses.Values[result.Name] = struct{}{}
-			}
-			addFriction(FrictionCategoryExpectation, string(kind), result.Name)
-		}
-
-		failure := !result.Pass || stuck
-		if !failure {
-			continue
-		}
-		if stuck {
-			addFriction(FrictionCategoryStuck, StuckTerminalReason, result.Name)
-		}
-		reason := strings.TrimSpace(result.TerminalReason)
-		if reason != "" && reason != StuckTerminalReason {
-			addFriction(FrictionCategoryTerminalReason, reason, result.Name)
-		}
-		class := resultErrorClass(result)
-		if class != "" {
-			addFriction(FrictionCategoryErrorClass, class, result.Name)
-		}
-		if !stuck && reason == "" && class == "" && len(result.ScenarioExpectationOutcomes) == 0 {
-			addFriction(FrictionCategoryFailure, "unknown", result.Name)
-		}
+	for _, reason := range sortedCountKeys(a.terminalReasons) {
+		report.TerminalReasons = append(report.TerminalReasons, TerminalReasonCount{Reason: reason, Count: a.terminalReasons[reason]})
 	}
-
-	scenarioNames := make([]string, 0, len(byScenario))
-	for name := range byScenario {
-		scenarioNames = append(scenarioNames, name)
+	for _, class := range sortedCountKeys(a.errorClasses) {
+		report.ErrorClasses = append(report.ErrorClasses, ErrorClassCount{Class: class, Count: a.errorClasses[class]})
 	}
-	sort.Strings(scenarioNames)
-	for _, name := range scenarioNames {
-		counts := byScenario[name]
-		report.Scenarios = append(report.Scenarios, ScenarioRollup{
-			Name:   name,
-			Total:  counts.total,
-			Passed: counts.passed,
-			Failed: counts.failed,
-			Stuck:  counts.stuck,
-		})
+	for _, kind := range sortedExpectationKinds(a.expectationMisses) {
+		misses := a.expectationMisses[kind]
+		report.ExpectationMisses = append(report.ExpectationMisses, ExpectationMissCount{Kind: kind, Count: misses.Count, Scenarios: sortedScenarioNames(misses.Values)})
 	}
-
-	for _, reason := range sortedCountKeys(terminalReasons) {
-		report.TerminalReasons = append(report.TerminalReasons, TerminalReasonCount{
-			Reason: reason,
-			Count:  terminalReasons[reason],
-		})
-	}
-	for _, class := range sortedCountKeys(errorClasses) {
-		report.ErrorClasses = append(report.ErrorClasses, ErrorClassCount{
-			Class: class,
-			Count: errorClasses[class],
-		})
-	}
-
-	for _, kind := range sortedExpectationKinds(expectationMisses) {
-		misses := expectationMisses[kind]
-		report.ExpectationMisses = append(report.ExpectationMisses, ExpectationMissCount{
-			Kind:      kind,
-			Count:     misses.Count,
-			Scenarios: sortedScenarioNames(misses.Values),
-		})
-	}
-
-	report.TopFrictions = sortedTopFrictions(frictions)
+	report.TopFrictions = sortedTopFrictions(a.frictions)
 	return report
 }
 

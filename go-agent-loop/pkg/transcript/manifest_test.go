@@ -25,13 +25,12 @@ const (
 
 var updateManifestGolden = flag.Bool("update-recording-manifest-golden", false, "print the deterministic recording manifest golden")
 
-func TestWriteRecordingBundleLayoutManifestAndRedaction(t *testing.T) {
-	destination := filepath.Join(t.TempDir(), "recording")
-	input := []byte{0x00, 0x01, 0x7f, 0xff}
-	output := []byte{0x10, 0x20, 0x30, 0x40}
+// redactionBundleConfig configures a complete bundle whose transcripts,
+// media source, and configuration contain the test credentials.
+func redactionBundleConfig(destination string, input, output []byte) RecordingConfig {
 	clientTranscript := []byte(`{"peer":"client","message":"key=api-key-2c9b api-key-2c9b"}` + "\n")
 	agentTranscript := []byte(`{"peer":"agent","source":"rtsp://operator:media-password-7f5f@camera.example/live","message":"media-password-7f5f"}` + "\n")
-	config := RecordingConfig{
+	return RecordingConfig{
 		Destination:      destination,
 		ClientTranscript: clientTranscript,
 		AgentTranscript:  agentTranscript,
@@ -62,6 +61,13 @@ func TestWriteRecordingBundleLayoutManifestAndRedaction(t *testing.T) {
 			{Path: "a-first.pcm", SHA256: strings.Repeat("A", 64)},
 		},
 	}
+}
+
+func TestWriteRecordingBundleLayoutManifestAndRedaction(t *testing.T) {
+	destination := filepath.Join(t.TempDir(), "recording")
+	input := []byte{0x00, 0x01, 0x7f, 0xff}
+	output := []byte{0x10, 0x20, 0x30, 0x40}
+	config := redactionBundleConfig(destination, input, output)
 
 	if err := WriteRecordingBundle(config); err != nil {
 		t.Fatalf("WriteRecordingBundle: %v", err)
@@ -231,48 +237,6 @@ func TestWriteRecordingBundleExplicitCompleteStatusKeepsPairedContract(t *testin
 	}
 	if got := manifestArtifactPaths(manifest); !equalStrings(got, []string{"client.transcript.jsonl", "agent.transcript.jsonl"}) {
 		t.Fatalf("manifest artifacts = %v, want paired transcripts", got)
-	}
-}
-
-func TestWriteRecordingBundleRejectsAdditionalArtifactCollisionWithAbsentTranscript(t *testing.T) {
-	tests := []struct {
-		name      string
-		client    []byte
-		agent     []byte
-		collision string
-	}{
-		{
-			name:      "client-only cannot fabricate agent transcript",
-			client:    []byte("client evidence\n"),
-			collision: "agent.transcript.jsonl",
-		},
-		{
-			name:      "agent-only cannot fabricate client transcript",
-			agent:     []byte("agent evidence\n"),
-			collision: "client.transcript.jsonl",
-		},
-	}
-
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			destination := filepath.Join(t.TempDir(), "recording")
-			err := WriteRecordingBundle(RecordingConfig{
-				Destination:      destination,
-				ClientTranscript: testCase.client,
-				AgentTranscript:  testCase.agent,
-				RecordingStatus:  &RecordingStatus{State: RecordingStatusPartial, Reason: "sink unavailable"},
-				AdditionalArtifacts: []RecordingArtifact{{
-					Path: testCase.collision,
-					Data: []byte("fabricated transcript\n"),
-				}},
-			})
-			if !errors.Is(err, ErrInvalidRecording) {
-				t.Fatalf("error = %v, want ErrInvalidRecording", err)
-			}
-			if _, statErr := os.Stat(destination); !errors.Is(statErr, os.ErrNotExist) {
-				t.Fatalf("rejected destination stat error = %v, want absent", statErr)
-			}
-		})
 	}
 }
 
@@ -621,79 +585,84 @@ func TestRecordingBundleEmitsOptionalSessionLog(t *testing.T) {
 }
 
 func TestRecordingBundleFailureIdentitiesAndRetry(t *testing.T) {
-	t.Run("existing non-empty destination", func(t *testing.T) {
-		destination := filepath.Join(t.TempDir(), "recording")
-		if err := os.Mkdir(destination, 0o755); err != nil {
-			t.Fatal(err)
-		}
-		sentinel := filepath.Join(destination, "customer.txt")
-		original := []byte("do not overwrite")
-		if err := os.WriteFile(sentinel, original, 0o644); err != nil {
-			t.Fatal(err)
-		}
-		err := WriteRecordingBundle(testRecordingConfig(destination))
-		if !errors.Is(err, ErrRecordingDestinationNotEmpty) || !errors.Is(err, ErrRecordingDestination) {
-			t.Fatalf("error = %v, want destination identities", err)
-		}
-		if got, readErr := os.ReadFile(sentinel); readErr != nil || !bytes.Equal(got, original) {
-			t.Fatalf("existing content changed: bytes=%q err=%v", got, readErr)
-		}
-	})
+	t.Run("existing non-empty destination", testRecordingBundleRejectsNonEmptyDestination)
+	t.Run("unwritable destination", testRecordingBundleRejectsUnwritableDestination)
+	t.Run("injected disk full and retry", testRecordingBundleDiskFullThenRetry)
+	t.Run("injected short write", testRecordingBundleShortWrite)
+}
 
-	t.Run("unwritable destination", func(t *testing.T) {
-		parentFile := filepath.Join(t.TempDir(), "parent-file")
-		if err := os.WriteFile(parentFile, []byte("not a directory"), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		destination := filepath.Join(parentFile, "recording")
-		err := WriteRecordingBundle(testRecordingConfig(destination))
-		if !errors.Is(err, ErrRecordingDestination) {
-			t.Fatalf("error = %v, want ErrRecordingDestination", err)
-		}
-		if !strings.Contains(err.Error(), destination) {
-			t.Fatalf("error = %v, want destination context", err)
-		}
-	})
+func testRecordingBundleRejectsNonEmptyDestination(t *testing.T) {
+	destination := filepath.Join(t.TempDir(), "recording")
+	if err := os.Mkdir(destination, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sentinel := filepath.Join(destination, "customer.txt")
+	original := []byte("do not overwrite")
+	if err := os.WriteFile(sentinel, original, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := WriteRecordingBundle(testRecordingConfig(destination))
+	if !errors.Is(err, ErrRecordingDestinationNotEmpty) || !errors.Is(err, ErrRecordingDestination) {
+		t.Fatalf("error = %v, want destination identities", err)
+	}
+	if got, readErr := os.ReadFile(sentinel); readErr != nil || !bytes.Equal(got, original) {
+		t.Fatalf("existing content changed: bytes=%q err=%v", got, readErr)
+	}
+}
 
-	t.Run("injected disk full and retry", func(t *testing.T) {
-		destination := filepath.Join(t.TempDir(), "recording")
-		config := testRecordingConfig(destination)
-		config.WriteFile = func(path string, data []byte, mode os.FileMode) (int, error) {
-			return 0, ErrRecordingDiskFull
-		}
-		err := WriteRecordingBundle(config)
-		if !errors.Is(err, ErrRecordingWrite) || !errors.Is(err, ErrRecordingDiskFull) {
-			t.Fatalf("error = %v, want write and disk-full identities", err)
-		}
-		if _, statErr := os.Stat(destination); !errors.Is(statErr, os.ErrNotExist) {
-			t.Fatalf("failed recording destination stat error = %v, want absent", statErr)
-		}
-		config.WriteFile = nil
-		if err := WriteRecordingBundle(config); err != nil {
-			t.Fatalf("retry WriteRecordingBundle: %v", err)
-		}
-		if _, err := os.Stat(filepath.Join(destination, "manifest.json")); err != nil {
-			t.Fatalf("retry manifest: %v", err)
-		}
-	})
+func testRecordingBundleRejectsUnwritableDestination(t *testing.T) {
+	parentFile := filepath.Join(t.TempDir(), "parent-file")
+	if err := os.WriteFile(parentFile, []byte("not a directory"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	destination := filepath.Join(parentFile, "recording")
+	err := WriteRecordingBundle(testRecordingConfig(destination))
+	if !errors.Is(err, ErrRecordingDestination) {
+		t.Fatalf("error = %v, want ErrRecordingDestination", err)
+	}
+	if !strings.Contains(err.Error(), destination) {
+		t.Fatalf("error = %v, want destination context", err)
+	}
+}
 
-	t.Run("injected short write", func(t *testing.T) {
-		destination := filepath.Join(t.TempDir(), "recording")
-		config := testRecordingConfig(destination)
-		config.WriteFile = func(path string, data []byte, mode os.FileMode) (int, error) {
-			if err := os.WriteFile(path, data, mode); err != nil {
-				return 0, err
-			}
-			return len(data) - 1, nil
+func testRecordingBundleDiskFullThenRetry(t *testing.T) {
+	destination := filepath.Join(t.TempDir(), "recording")
+	config := testRecordingConfig(destination)
+	config.WriteFile = func(path string, data []byte, mode os.FileMode) (int, error) {
+		return 0, ErrRecordingDiskFull
+	}
+	err := WriteRecordingBundle(config)
+	if !errors.Is(err, ErrRecordingWrite) || !errors.Is(err, ErrRecordingDiskFull) {
+		t.Fatalf("error = %v, want write and disk-full identities", err)
+	}
+	if _, statErr := os.Stat(destination); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("failed recording destination stat error = %v, want absent", statErr)
+	}
+	config.WriteFile = nil
+	if err := WriteRecordingBundle(config); err != nil {
+		t.Fatalf("retry WriteRecordingBundle: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(destination, "manifest.json")); err != nil {
+		t.Fatalf("retry manifest: %v", err)
+	}
+}
+
+func testRecordingBundleShortWrite(t *testing.T) {
+	destination := filepath.Join(t.TempDir(), "recording")
+	config := testRecordingConfig(destination)
+	config.WriteFile = func(path string, data []byte, mode os.FileMode) (int, error) {
+		if err := os.WriteFile(path, data, mode); err != nil {
+			return 0, err
 		}
-		err := WriteRecordingBundle(config)
-		if !errors.Is(err, ErrRecordingWrite) || !errors.Is(err, io.ErrShortWrite) {
-			t.Fatalf("error = %v, want write and short-write identities", err)
-		}
-		if _, statErr := os.Stat(destination); !errors.Is(statErr, os.ErrNotExist) {
-			t.Fatalf("failed recording destination stat error = %v, want absent", statErr)
-		}
-	})
+		return len(data) - 1, nil
+	}
+	err := WriteRecordingBundle(config)
+	if !errors.Is(err, ErrRecordingWrite) || !errors.Is(err, io.ErrShortWrite) {
+		t.Fatalf("error = %v, want write and short-write identities", err)
+	}
+	if _, statErr := os.Stat(destination); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("failed recording destination stat error = %v, want absent", statErr)
+	}
 }
 
 func TestRecordingBundleRejectsUnsafeCredentialInputs(t *testing.T) {

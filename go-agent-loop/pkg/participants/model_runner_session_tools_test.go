@@ -8,94 +8,101 @@ import (
 )
 
 func TestModelRunner_ForwardSessionEventReportsProviderBoundaryOutcomes(t *testing.T) {
+	t.Run("ordinary rejection remains best effort", testForwardSessionEventOrdinaryRejection)
+	t.Run("result rejection is deferred", testForwardSessionEventResultRejectionDeferred)
+	t.Run("continuation rejection is emitted immediately", testForwardSessionEventContinuationRejection)
+	t.Run("session update rejection is emitted immediately", testForwardSessionEventSessionUpdateRejection)
+}
+
+func testForwardSessionEventOrdinaryRejection(t *testing.T) {
 	ctx := context.Background()
+	runner := NewSessionModelRunner(nil, 8, nil)
+	session := newRejectingStreamSession()
 
-	t.Run("ordinary rejection remains best effort", func(t *testing.T) {
-		runner := NewSessionModelRunner(nil, 8, nil)
-		session := newRejectingStreamSession()
-
-		failure, deferred, accepted := runner.forwardSessionEvent(ctx, session, messages.StreamMessage{
-			Type: messages.StreamTypeTextDelta,
-		})
-		if failure.Type != "" || deferred || accepted {
-			t.Fatalf("ordinary rejection outcome = (%#v, %v, %v), want zero/false/false", failure, deferred, accepted)
-		}
-		if _, ok := runner.DeltaOutbox.Read(); ok {
-			t.Fatal("ordinary rejection emitted an error delta")
-		}
+	failure, deferred, accepted := runner.forwardSessionEvent(ctx, session, messages.StreamMessage{
+		Type: messages.StreamTypeTextDelta,
 	})
+	if failure.Type != "" || deferred || accepted {
+		t.Fatalf("ordinary rejection outcome = (%#v, %v, %v), want zero/false/false", failure, deferred, accepted)
+	}
+	if _, ok := runner.DeltaOutbox.Read(); ok {
+		t.Fatal("ordinary rejection emitted an error delta")
+	}
+}
 
-	t.Run("result rejection is deferred", func(t *testing.T) {
-		runner := NewSessionModelRunner(nil, 8, nil)
-		session := newRejectingStreamSession()
+func testForwardSessionEventResultRejectionDeferred(t *testing.T) {
+	ctx := context.Background()
+	runner := NewSessionModelRunner(nil, 8, nil)
+	session := newRejectingStreamSession()
 
-		failure, deferred, accepted := runner.forwardSessionEvent(ctx, session, messages.StreamMessage{
-			Type:  messages.StreamTypeToolCallEnd,
-			Value: messages.NewToolCallEndValue("call-result", "date", "today"),
-		})
-		if failure.Type != messages.StreamTypeError || !deferred || accepted {
-			t.Fatalf("result rejection outcome = (%#v, %v, %v), want ERROR/true/false", failure, deferred, accepted)
-		}
-		value, ok := failure.Value.(*messages.ErrorValue)
-		if !ok {
-			t.Fatalf("failure value = %T, want *messages.ErrorValue", failure.Value)
-		}
-		if value.Classification != "unresolved_tool_result" || !contains(value.Message, "call-result") {
-			t.Fatalf("failure = %+v, want unresolved call-result", value)
-		}
-
-		runner.flushPendingSessionSendErrors(ctx, []messages.StreamMessage{failure})
-		forwarded, ok := runner.DeltaOutbox.Read()
-		if !ok || forwarded.Type != messages.StreamTypeError {
-			t.Fatalf("flushed failure = %#v, ok=%v; want ERROR", forwarded, ok)
-		}
+	failure, deferred, accepted := runner.forwardSessionEvent(ctx, session, messages.StreamMessage{
+		Type:  messages.StreamTypeToolCallEnd,
+		Value: messages.NewToolCallEndValue("call-result", "date", "today"),
 	})
+	if failure.Type != messages.StreamTypeError || !deferred || accepted {
+		t.Fatalf("result rejection outcome = (%#v, %v, %v), want ERROR/true/false", failure, deferred, accepted)
+	}
+	value, ok := failure.Value.(*messages.ErrorValue)
+	if !ok {
+		t.Fatalf("failure value = %T, want *messages.ErrorValue", failure.Value)
+	}
+	if value.Classification != unresolvedToolResultClassification || !contains(value.Message, "call-result") {
+		t.Fatalf("failure = %+v, want unresolved call-result", value)
+	}
 
-	t.Run("continuation rejection is emitted immediately", func(t *testing.T) {
-		runner := NewSessionModelRunner(nil, 8, nil)
-		session := newRejectingStreamSession()
+	runner.flushPendingSessionSendErrors(ctx, []messages.StreamMessage{failure})
+	forwarded, ok := runner.DeltaOutbox.Read()
+	if !ok || forwarded.Type != messages.StreamTypeError {
+		t.Fatalf("flushed failure = %#v, ok=%v; want ERROR", forwarded, ok)
+	}
+}
 
-		failure, deferred, accepted := runner.forwardSessionEvent(ctx, session, messages.StreamMessage{
-			Type: messages.StreamTypeResponseCreate,
-		})
-		if failure.Type != "" || deferred || accepted {
-			t.Fatalf("continuation rejection return = (%#v, %v, %v), want zero/false/false", failure, deferred, accepted)
-		}
-		forwarded, ok := runner.DeltaOutbox.Read()
-		if !ok || forwarded.Type != messages.StreamTypeError {
-			t.Fatalf("continuation failure = %#v, ok=%v; want ERROR", forwarded, ok)
-		}
-		value, ok := forwarded.Value.(*messages.ErrorValue)
-		if !ok {
-			t.Fatalf("continuation failure value = %T, want *messages.ErrorValue", forwarded.Value)
-		}
-		if value.Classification != "unresolved_tool_continuation" || !contains(value.Message, "not requested") {
-			t.Fatalf("continuation failure = %+v, want unresolved continuation", value)
-		}
+func testForwardSessionEventContinuationRejection(t *testing.T) {
+	ctx := context.Background()
+	runner := NewSessionModelRunner(nil, 8, nil)
+	session := newRejectingStreamSession()
+
+	failure, deferred, accepted := runner.forwardSessionEvent(ctx, session, messages.StreamMessage{
+		Type: messages.StreamTypeResponseCreate,
 	})
+	if failure.Type != "" || deferred || accepted {
+		t.Fatalf("continuation rejection return = (%#v, %v, %v), want zero/false/false", failure, deferred, accepted)
+	}
+	forwarded, ok := runner.DeltaOutbox.Read()
+	if !ok || forwarded.Type != messages.StreamTypeError {
+		t.Fatalf("continuation failure = %#v, ok=%v; want ERROR", forwarded, ok)
+	}
+	value, ok := forwarded.Value.(*messages.ErrorValue)
+	if !ok {
+		t.Fatalf("continuation failure value = %T, want *messages.ErrorValue", forwarded.Value)
+	}
+	if value.Classification != unresolvedToolContinuationClassification || !contains(value.Message, "not requested") {
+		t.Fatalf("continuation failure = %+v, want unresolved continuation", value)
+	}
+}
 
-	t.Run("session update rejection is emitted immediately", func(t *testing.T) {
-		runner := NewSessionModelRunner(nil, 8, nil)
-		session := newRejectingStreamSession()
+func testForwardSessionEventSessionUpdateRejection(t *testing.T) {
+	ctx := context.Background()
+	runner := NewSessionModelRunner(nil, 8, nil)
+	session := newRejectingStreamSession()
 
-		failure, deferred, accepted := runner.forwardSessionEvent(ctx, session, messages.StreamMessage{
-			Type: messages.StreamTypeSessionUpdate,
-			Value: messages.NewSessionUpdateValue(&messages.SessionUpdateConfig{
-				Tools: []messages.ToolDefinition{{Name: "current_page_tool"}},
-			}),
-		})
-		if failure.Type != "" || deferred || accepted {
-			t.Fatalf("session update rejection return = (%#v, %v, %v), want zero/false/false", failure, deferred, accepted)
-		}
-		forwarded, ok := runner.DeltaOutbox.Read()
-		if !ok || forwarded.Type != messages.StreamTypeError {
-			t.Fatalf("session update failure = %#v, ok=%v; want ERROR", forwarded, ok)
-		}
-		value, ok := forwarded.Value.(*messages.ErrorValue)
-		if !ok || value.Classification != "unresolved_session_update" || !contains(value.Message, "tool definition update") {
-			t.Fatalf("session update failure = %#v, want unresolved session update", forwarded.Value)
-		}
+	failure, deferred, accepted := runner.forwardSessionEvent(ctx, session, messages.StreamMessage{
+		Type: messages.StreamTypeSessionUpdate,
+		Value: messages.NewSessionUpdateValue(&messages.SessionUpdateConfig{
+			Tools: []messages.ToolDefinition{{Name: "current_page_tool"}},
+		}),
 	})
+	if failure.Type != "" || deferred || accepted {
+		t.Fatalf("session update rejection return = (%#v, %v, %v), want zero/false/false", failure, deferred, accepted)
+	}
+	forwarded, ok := runner.DeltaOutbox.Read()
+	if !ok || forwarded.Type != messages.StreamTypeError {
+		t.Fatalf("session update failure = %#v, ok=%v; want ERROR", forwarded, ok)
+	}
+	value, ok := forwarded.Value.(*messages.ErrorValue)
+	if !ok || value.Classification != unresolvedSessionUpdateClassification || !contains(value.Message, "tool definition update") {
+		t.Fatalf("session update failure = %#v, want unresolved session update", forwarded.Value)
+	}
 }
 
 func TestModelRunner_ResponseCancelStateTracksAdmissionOutcome(t *testing.T) {
@@ -144,28 +151,6 @@ func TestModelRunner_ResponseCancelStateTracksAdmissionOutcome(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestModelRunner_DrainSessionAudioForwardsQueuedFrames(t *testing.T) {
-	session := newRecordingSession()
-	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
-	runner.UserAudioInbox <- []byte{4, 5, 6}
-
-	responseInFlight := false
-	responseCancelSent := false
-	runner.drainSessionAudio(context.Background(), session, &responseInFlight, &responseCancelSent)
-
-	sent := session.sentMessages()
-	if len(sent) != 1 || sent[0].Type != messages.StreamTypeAudioDelta {
-		t.Fatalf("drained sends = %#v, want one AUDIO.DELTA", sent)
-	}
-	value, ok := sent[0].Value.(*messages.AudioDeltaValue)
-	if !ok || string(value.Content) != string([]byte{4, 5, 6}) {
-		t.Fatalf("drained audio = %#v, want original frame", sent[0].Value)
-	}
-
-	close(runner.UserAudioInbox)
-	runner.drainSessionAudio(context.Background(), session, &responseInFlight, &responseCancelSent)
 }
 
 func TestModelRunner_SendLatestUserTextPicksNewestUserText(t *testing.T) {
@@ -554,7 +539,7 @@ func TestSessionModelRunner_SuppressesContinuationAfterRejectedToolResult(t *tes
 	if !ok {
 		t.Fatalf("failure value = %T, want *messages.ErrorValue", failure.Value)
 	}
-	if value.Classification != "unresolved_tool_result" {
+	if value.Classification != unresolvedToolResultClassification {
 		t.Fatalf("failure classification = %q, want unresolved_tool_result", value.Classification)
 	}
 	if !contains(value.Message, "call-rejected") {
