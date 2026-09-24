@@ -1,3 +1,12 @@
+// Package discovery implements the browser-neutral WebMCP endpoint
+// discovery boundary.
+//
+// The package deliberately stops at normalized browser/target records and a
+// selection state boundary. It does not import a browser protocol
+// implementation and does not expose transport URLs in discovery results,
+// errors, selections, or semantic events. Browser runtimes can be added behind
+// the endpoint, target, attach, and activation seams without changing this
+// contract.
 package discovery
 
 import (
@@ -7,7 +16,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -244,6 +252,143 @@ func (s *Service) Discover(ctx context.Context, inputs ConnectionInputs) (Browse
 	s.mu.Lock()
 	defer s.unlockDiscovery()
 
+	s.emitDiscoveryStarted()
+
+	scan := &discoveryScan{}
+	if candidate, done, err := s.discoverExplicitLocked(ctx, inputs, scan); done {
+		return candidate, err
+	}
+
+	// Process enumeration is deliberately deferred until every higher-priority
+	// source has failed. This makes the call boundary observable and avoids
+	// scanning processes when a configured endpoint already works.
+	if scan.best == nil || inputs.AllowProcessScan {
+		if inputs.AllowProcessScan && s.processEnumerator != nil {
+			if candidate, done, err := s.discoverProcessesLocked(ctx, inputs, scan); done {
+				return candidate, err
+			}
+		}
+	}
+
+	best := scan.best
+	if best == nil {
+		best = newEndpointNotFound(EndpointKindCDPHTTP, Source(SourceConfigured))
+	}
+	if !scan.attempted && best.Code == "" {
+		best = newEndpointNotFound(EndpointKindCDPHTTP, SourceConfigured)
+	}
+	s.emit(EventDiscoveryCompleted, "", map[string]any{
+		"candidate_count": 0,
+		"success":         false,
+		"code":            string(best.Code),
+	})
+	return BrowserCandidate{}, best
+}
+
+// discoveryScan accumulates the non-terminal outcome of one discovery call:
+// the most useful failure observed so far, whether any endpoint was tried,
+// and (for DiscoverAll) the candidates of the current source tier.
+type discoveryScan struct {
+	best       *DiscoveryError
+	attempted  bool
+	candidates []BrowserCandidate
+}
+
+// discoverExplicitLocked tries the explicit, active-port, and configured
+// sources in order. done reports that Discover must return the given result.
+func (s *Service) discoverExplicitLocked(ctx context.Context, inputs ConnectionInputs, scan *discoveryScan) (BrowserCandidate, bool, error) {
+	for _, attempt := range s.explicitAttempts(inputs) {
+		if err := ctx.Err(); err != nil {
+			failure := newEndpointUnreachable(attempt.kind, addressClassFromEndpointKind(attempt.kind), "discovery", err)
+			scan.best = preferFailure(scan.best, failure)
+			break
+		}
+		candidate, failure := s.tryAttempt(ctx, attempt, inputs.AllowRemoteCDP)
+		if candidate.ID != "" {
+			return s.completeDiscoverySuccess(candidate)
+		}
+		if failure != nil && failure.Code == CodeBrowserDisconnected {
+			return s.completeDiscoveryDisconnected(failure, "discovery")
+		}
+		scan.attempted = scan.attempted || failure != nil
+		scan.best = preferFailure(scan.best, failure)
+	}
+	return BrowserCandidate{}, false, nil
+}
+
+// discoverProcessesLocked enumerates debuggable browser processes after the
+// higher-priority sources failed. done reports a terminal Discover result.
+func (s *Service) discoverProcessesLocked(ctx context.Context, inputs ConnectionInputs, scan *discoveryScan) (BrowserCandidate, bool, error) {
+	infos, err := s.processEnumerator.List(ctx)
+	if err != nil {
+		if isBrowserDisconnected(err) {
+			return s.completeDiscoveryDisconnected(newBrowserDisconnectedFromError(err, "", "", "process"), "process")
+		}
+		scan.best = preferFailure(scan.best, newEndpointUnreachable(EndpointKindProcess, "non_loopback", "process", err))
+		return BrowserCandidate{}, false, nil
+	}
+	for _, info := range infos {
+		if candidate, done, err := s.discoverProcessLocked(ctx, info, inputs, scan); done {
+			return candidate, done, err
+		}
+	}
+	return BrowserCandidate{}, false, nil
+}
+
+func (s *Service) discoverProcessLocked(ctx context.Context, info ProcessInfo, inputs ConnectionInputs, scan *discoveryScan) (BrowserCandidate, bool, error) {
+	if !info.DebuggingEnabled {
+		return BrowserCandidate{}, false, nil
+	}
+	endpoint, disconnected, skip := s.resolveProcessEndpoint(ctx, info, scan)
+	if disconnected != nil {
+		return s.completeDiscoveryDisconnected(disconnected, "active_port")
+	}
+	if skip {
+		return BrowserCandidate{}, false, nil
+	}
+	if strings.TrimSpace(endpoint.CDPURL) == "" && strings.TrimSpace(endpoint.BrowserWSEndpoint) == "" {
+		return BrowserCandidate{}, false, nil
+	}
+	scan.attempted = true
+	candidate, failure := s.tryAttempt(ctx, endpointAttempt{
+		source:  SourceProcess,
+		kind:    EndpointKindProcess,
+		resolve: func(context.Context) (Endpoint, error) { return endpoint, nil },
+	}, inputs.AllowRemoteCDP)
+	if candidate.ID != "" {
+		return s.completeDiscoverySuccess(candidate)
+	}
+	if failure != nil && failure.Code == CodeBrowserDisconnected {
+		return s.completeDiscoveryDisconnected(failure, "process")
+	}
+	scan.best = preferFailure(scan.best, failure)
+	return BrowserCandidate{}, false, nil
+}
+
+// resolveProcessEndpoint returns the process endpoint, reading the profile's
+// active-port record when the process did not advertise one. A disconnected
+// failure is terminal; skip reports a recorded non-terminal failure.
+func (s *Service) resolveProcessEndpoint(ctx context.Context, info ProcessInfo, scan *discoveryScan) (Endpoint, *DiscoveryError, bool) {
+	endpoint := info.Endpoint
+	if endpoint.CDPURL != "" || endpoint.BrowserWSEndpoint != "" || info.UserDataDir == "" {
+		return endpoint, nil, false
+	}
+	active, readErr := s.activePortReader.Read(ctx, info.UserDataDir)
+	if readErr == nil {
+		endpoint, readErr = endpointFromActivePort(active)
+	}
+	if readErr == nil {
+		return endpoint, nil, false
+	}
+	failure := classifyActivePortError(readErr, SourceProcess)
+	if failure.Code == CodeBrowserDisconnected {
+		return Endpoint{}, failure, true
+	}
+	scan.best = preferFailure(scan.best, failure)
+	return Endpoint{}, nil, true
+}
+
+func (s *Service) emitDiscoveryStarted() {
 	s.emit(EventDiscoveryStarted, "", map[string]any{
 		"source_plan": []string{
 			string(SourceExplicitCDPHTTP),
@@ -253,126 +398,35 @@ func (s *Service) Discover(ctx context.Context, inputs ConnectionInputs) (Browse
 			string(SourceProcess),
 		},
 	})
+}
 
-	attempts := s.explicitAttempts(inputs)
-	var best *DiscoveryError
-	attempted := false
-	for _, attempt := range attempts {
-		if err := ctx.Err(); err != nil {
-			failure := newEndpointUnreachable(attempt.kind, addressClassFromEndpointKind(attempt.kind), "discovery", err)
-			best = preferFailure(best, failure)
-			break
-		}
-		candidate, failure := s.tryAttempt(ctx, attempt, inputs.AllowRemoteCDP)
-		if candidate.ID != "" {
-			s.emit(EventDiscoveryCompleted, candidate.ID, map[string]any{
-				"candidate_count": 1,
-				"source":          string(candidate.Source),
-				"success":         true,
-			})
-			return candidate, nil
-		}
-		if failure != nil && failure.Code == CodeBrowserDisconnected {
-			s.noteBrowserDisconnectedFailureLocked(failure, "", "", "discovery")
-			s.emit(EventDiscoveryCompleted, detailString(failure.Details, "browser_id"), map[string]any{
-				"candidate_count": 0,
-				"success":         false,
-				"code":            string(failure.Code),
-			})
-			return BrowserCandidate{}, failure
-		}
-		attempted = attempted || failure != nil
-		best = preferFailure(best, failure)
-	}
+func (s *Service) emitDiscoverySucceeded(candidate BrowserCandidate) {
+	s.emit(EventDiscoveryCompleted, candidate.ID, map[string]any{
+		"candidate_count": 1,
+		"source":          string(candidate.Source),
+		"success":         true,
+	})
+}
 
-	// Process enumeration is deliberately deferred until every higher-priority
-	// source has failed. This makes the call boundary observable and avoids
-	// scanning processes when a configured endpoint already works.
-	if best == nil || inputs.AllowProcessScan {
-		if inputs.AllowProcessScan && s.processEnumerator != nil {
-			infos, err := s.processEnumerator.List(ctx)
-			if err != nil {
-				if isBrowserDisconnected(err) {
-					failure := newBrowserDisconnectedFromError(err, "", "", "process")
-					s.noteBrowserDisconnectedFailureLocked(failure, "", "", "process")
-					s.emit(EventDiscoveryCompleted, detailString(failure.Details, "browser_id"), map[string]any{
-						"candidate_count": 0,
-						"success":         false,
-						"code":            string(failure.Code),
-					})
-					return BrowserCandidate{}, failure
-				}
-				best = preferFailure(best, newEndpointUnreachable(EndpointKindProcess, "non_loopback", "process", err))
-			} else {
-				for _, info := range infos {
-					if !info.DebuggingEnabled {
-						continue
-					}
-					endpoint := info.Endpoint
-					if endpoint.CDPURL == "" && endpoint.BrowserWSEndpoint == "" && info.UserDataDir != "" {
-						active, readErr := s.activePortReader.Read(ctx, info.UserDataDir)
-						if readErr == nil {
-							endpoint, readErr = endpointFromActivePort(active)
-						}
-						if readErr != nil {
-							failure := classifyActivePortError(readErr, SourceProcess)
-							if failure.Code == CodeBrowserDisconnected {
-								s.noteBrowserDisconnectedFailureLocked(failure, "", "", "active_port")
-								s.emit(EventDiscoveryCompleted, detailString(failure.Details, "browser_id"), map[string]any{
-									"candidate_count": 0,
-									"success":         false,
-									"code":            string(failure.Code),
-								})
-								return BrowserCandidate{}, failure
-							}
-							best = preferFailure(best, failure)
-							continue
-						}
-					}
-					if strings.TrimSpace(endpoint.CDPURL) == "" && strings.TrimSpace(endpoint.BrowserWSEndpoint) == "" {
-						continue
-					}
-					attempted = true
-					candidate, failure := s.tryAttempt(ctx, endpointAttempt{
-						source:  SourceProcess,
-						kind:    EndpointKindProcess,
-						resolve: func(context.Context) (Endpoint, error) { return endpoint, nil },
-					}, inputs.AllowRemoteCDP)
-					if candidate.ID != "" {
-						s.emit(EventDiscoveryCompleted, candidate.ID, map[string]any{
-							"candidate_count": 1,
-							"source":          string(candidate.Source),
-							"success":         true,
-						})
-						return candidate, nil
-					}
-					if failure != nil && failure.Code == CodeBrowserDisconnected {
-						s.noteBrowserDisconnectedFailureLocked(failure, "", "", "process")
-						s.emit(EventDiscoveryCompleted, detailString(failure.Details, "browser_id"), map[string]any{
-							"candidate_count": 0,
-							"success":         false,
-							"code":            string(failure.Code),
-						})
-						return BrowserCandidate{}, failure
-					}
-					best = preferFailure(best, failure)
-				}
-			}
-		}
-	}
+func (s *Service) completeDiscoverySuccess(candidate BrowserCandidate) (BrowserCandidate, bool, error) {
+	s.emitDiscoverySucceeded(candidate)
+	return candidate, true, nil
+}
 
-	if best == nil {
-		best = newEndpointNotFound(EndpointKindCDPHTTP, Source(SourceConfigured))
-	}
-	if !attempted && best.Code == "" {
-		best = newEndpointNotFound(EndpointKindCDPHTTP, SourceConfigured)
-	}
-	s.emit(EventDiscoveryCompleted, "", map[string]any{
+func (s *Service) completeDiscoveryDisconnected(failure *DiscoveryError, phase string) (BrowserCandidate, bool, error) {
+	return BrowserCandidate{}, true, s.failDiscoveryDisconnectedLocked(failure, phase)
+}
+
+// failDiscoveryDisconnectedLocked records a terminal disconnected discovery
+// failure, emits the failed completion event, and returns the failure.
+func (s *Service) failDiscoveryDisconnectedLocked(failure *DiscoveryError, phase string) error {
+	s.noteBrowserDisconnectedFailureLocked(failure, "", "", phase)
+	s.emit(EventDiscoveryCompleted, detailString(failure.Details, "browser_id"), map[string]any{
 		"candidate_count": 0,
 		"success":         false,
-		"code":            string(best.Code),
+		"code":            string(failure.Code),
 	})
-	return BrowserCandidate{}, best
+	return failure
 }
 
 type endpointAttempt struct {
@@ -480,7 +534,7 @@ func (s *Service) tryHTTP(ctx context.Context, rawURL string, source Source, kin
 		return BrowserCandidate{}, newEndpointUnreachable(kind, addressClass(loopback), "version", errors.New("nil response"))
 	}
 	if response.Body != nil {
-		defer response.Body.Close()
+		defer closeAfterRead(response.Body)
 	}
 	if response.StatusCode == http.StatusNotFound {
 		return BrowserCandidate{}, newEndpointNotFound(kind, source)
@@ -772,114 +826,6 @@ func (s *Service) retireReplacedBrowserLocked(browserID string) {
 		"reason":         "browser_replaced",
 		"ownership_mode": ownership,
 	})
-}
-
-type parseURLFailure struct{ reason string }
-
-func (e *parseURLFailure) Error() string {
-	if e == nil {
-		return "invalid endpoint"
-	}
-	return e.reason
-}
-
-func parseHTTPURL(raw string) (*url.URL, *parseURLFailure) {
-	trimmed := strings.TrimSpace(raw)
-	parsed, err := url.Parse(trimmed)
-	if err != nil || parsed == nil {
-		return nil, &parseURLFailure{reason: "malformed_endpoint"}
-	}
-	parsed.Scheme = strings.ToLower(parsed.Scheme)
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return nil, &parseURLFailure{reason: "unsupported_endpoint_scheme"}
-	}
-	if parsed.Host == "" || parsed.Hostname() == "" {
-		return nil, &parseURLFailure{reason: "missing_endpoint_host"}
-	}
-	if parsed.User != nil {
-		return nil, &parseURLFailure{reason: "credentials_not_allowed"}
-	}
-	if parsed.Port() != "" {
-		port, err := strconv.Atoi(parsed.Port())
-		if err != nil || port < 1 || port > 65535 {
-			return nil, &parseURLFailure{reason: "invalid_endpoint_port"}
-		}
-	}
-	parsed.RawQuery = ""
-	parsed.Fragment = ""
-	return parsed, nil
-}
-
-type normalizedWebSocketURL struct {
-	url      *url.URL
-	loopback bool
-}
-
-func parseBrowserWebSocketURL(raw string) (normalizedWebSocketURL, *parseURLFailure) {
-	trimmed := strings.TrimSpace(raw)
-	parsed, err := url.Parse(trimmed)
-	if err != nil || parsed == nil {
-		return normalizedWebSocketURL{}, &parseURLFailure{reason: "malformed_browser_websocket"}
-	}
-	parsed.Scheme = strings.ToLower(parsed.Scheme)
-	if parsed.Scheme != "ws" && parsed.Scheme != "wss" {
-		return normalizedWebSocketURL{}, &parseURLFailure{reason: "unsupported_websocket_scheme"}
-	}
-	if parsed.Host == "" || parsed.Hostname() == "" {
-		return normalizedWebSocketURL{}, &parseURLFailure{reason: "missing_websocket_host"}
-	}
-	if parsed.User != nil {
-		return normalizedWebSocketURL{}, &parseURLFailure{reason: "credentials_not_allowed"}
-	}
-	if !strings.HasPrefix(parsed.Path, "/devtools/browser/") || strings.TrimPrefix(parsed.Path, "/devtools/browser/") == "" {
-		if strings.HasPrefix(parsed.Path, "/devtools/page/") {
-			return normalizedWebSocketURL{}, &parseURLFailure{reason: "page_websocket_not_browser_websocket"}
-		}
-		return normalizedWebSocketURL{}, &parseURLFailure{reason: "browser_websocket_path_required"}
-	}
-	if parsed.Port() != "" {
-		port, err := strconv.Atoi(parsed.Port())
-		if err != nil || port < 1 || port > 65535 {
-			return normalizedWebSocketURL{}, &parseURLFailure{reason: "invalid_websocket_port"}
-		}
-	}
-	parsed.RawQuery = ""
-	parsed.Fragment = ""
-	return normalizedWebSocketURL{url: parsed, loopback: isLoopbackHost(parsed.Hostname())}, nil
-}
-
-func versionPath(path string) string {
-	path = strings.TrimRight(path, "/")
-	if path == "" || path == "/" {
-		return "/json/version"
-	}
-	if strings.HasSuffix(path, "/json/version") {
-		return path
-	}
-	return path + "/json/version"
-}
-
-func isLoopbackHost(host string) bool {
-	host = strings.TrimSpace(strings.Trim(host, "[]"))
-	if strings.EqualFold(host, "localhost") || strings.EqualFold(host, "localhost.") {
-		return true
-	}
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
-}
-
-func addressClass(loopback bool) string {
-	if loopback {
-		return "loopback"
-	}
-	return "non_loopback"
-}
-
-func addressClassFromEndpointKind(kind EndpointKind) string {
-	if kind == EndpointKindCDPHTTP || kind == EndpointKindBrowserWebSocket || kind == EndpointKindActivePort {
-		return "loopback"
-	}
-	return "non_loopback"
 }
 
 func safeProduct(value string) string {

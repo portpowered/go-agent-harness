@@ -74,7 +74,7 @@ func TestLifecycleNavigationAdvancesOnceAndRejectsStaleSelection(t *testing.T) {
 	}
 
 	_, err = service.ValidateSelection(context.Background(), selected)
-	stale := assertDiscoveryError(t, err, CodeStaleSelection)
+	stale := discoveryErrorWithCode(t, err, CodeStaleSelection)
 	if stale.Details["browser_id"] != browser.ID || stale.Details["target_id"] != targetID || stale.Details["selected_generation"] != uint64(1) || stale.Details["reason"] != "generation_changed" {
 		t.Fatalf("stale selection details = %#v", stale.Details)
 	}
@@ -163,7 +163,7 @@ func TestLifecycleTargetCloseInvalidatesAndDetachesOnly(t *testing.T) {
 		t.Fatalf("closed target state = %#v", state)
 	}
 	_, err = service.ValidateSelection(context.Background(), selected)
-	stale := assertDiscoveryError(t, err, CodeStaleSelection)
+	stale := discoveryErrorWithCode(t, err, CodeStaleSelection)
 	if stale.Details["selected_generation"] != uint64(1) || stale.Details["reason"] != "target_closed" {
 		t.Fatalf("closed stale details = %#v", stale.Details)
 	}
@@ -193,7 +193,6 @@ func TestLifecycleTargetCloseInvalidatesAndDetachesOnly(t *testing.T) {
 
 func TestLifecycleRefreshRejectsMissingWebMCPWithoutReadySelection(t *testing.T) {
 	browser := BrowserCandidate{ID: "browser-capability-refresh", Source: SourceConfigured, Loopback: true}
-	webmcp := true
 	descriptor := targetDescriptor("raw-page", "Page", "https://capability-refresh.test", 1)
 	lister := &lifecycleTargetLister{descriptors: []TargetDescriptor{descriptor}}
 	service := New(Options{TargetLister: lister})
@@ -203,7 +202,7 @@ func TestLifecycleRefreshRejectsMissingWebMCPWithoutReadySelection(t *testing.T)
 		t.Fatalf("initial selection: %v", err)
 	}
 
-	webmcp = false
+	webmcp := false
 	*lister.descriptors[0].WebMCPSupported = webmcp
 	refreshed, err := service.HandleLifecycle(context.Background(), LifecycleEvent{
 		Type:      LifecycleDocumentReplaced,
@@ -211,7 +210,7 @@ func TestLifecycleRefreshRejectsMissingWebMCPWithoutReadySelection(t *testing.T)
 		TargetID:  targetID,
 		EventID:   "document-replacement-1",
 	})
-	unsupported := assertDiscoveryError(t, err, CodeUnsupportedWebMCP)
+	unsupported := discoveryErrorWithCode(t, err, CodeUnsupportedWebMCP)
 	if unsupported.Details["browser_id"] != browser.ID || unsupported.Details["target_id"] != targetID {
 		t.Fatalf("unsupported details = %#v", unsupported.Details)
 	}

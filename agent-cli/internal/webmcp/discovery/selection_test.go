@@ -37,6 +37,40 @@ func (d *selectionDetacher) Detach(context.Context) error {
 	return nil
 }
 
+func assertAmbiguousTabChoices(t *testing.T, ambiguous *DiscoveryError, browserID string) {
+	t.Helper()
+	ids, ok := ambiguous.Details["candidate_target_ids"].([]string)
+	if !ok || len(ids) != 2 || !strings.HasPrefix(ids[0], "target-") || ids[0] >= ids[1] {
+		t.Fatalf("ambiguous target IDs = %#v", ambiguous.Details["candidate_target_ids"])
+	}
+	choices, ok := ambiguous.Details["candidate_choices"].([]map[string]any)
+	if !ok || len(choices) != 2 {
+		t.Fatalf("ambiguous candidate choices = %#v", ambiguous.Details["candidate_choices"])
+	}
+	if choices[0]["target_id"] != ids[0] || choices[1]["target_id"] != ids[1] {
+		t.Fatalf("candidate choices are not ID ordered: %#v", choices)
+	}
+	for _, choice := range choices {
+		if choice["browser_id"] != browserID {
+			t.Fatalf("candidate browser identity = %#v, want %q", choice["browser_id"], browserID)
+		}
+		if _, ok := choice["url"]; ok {
+			t.Fatalf("candidate choice exposed URL: %#v", choice)
+		}
+		if _, ok := choice["title"].(string); !ok {
+			t.Fatalf("candidate choice omitted title: %#v", choice)
+		}
+		origin, ok := choice["origin"].(string)
+		if !ok || origin != "https://a.test" && origin != "https://b.test" {
+			t.Fatalf("candidate origin = %#v", choice["origin"])
+		}
+	}
+	recovery, ok := ambiguous.Details["recovery"].(map[string]any)
+	if !ok || recovery["action"] != "ask_customer" || recovery["retry_after"] != "customer_input" {
+		t.Fatalf("ambiguity recovery = %#v", ambiguous.Details["recovery"])
+	}
+}
+
 func TestSelectTargetRequiresExactIDsAndPreservesPriorSelectionOnFailure(t *testing.T) {
 	browser := BrowserCandidate{ID: "browser-selection", Source: SourceConfigured, Loopback: true}
 	descriptors := []TargetDescriptor{
@@ -65,36 +99,8 @@ func TestSelectTargetRequiresExactIDsAndPreservesPriorSelectionOnFailure(t *test
 		Browser:   browser,
 		BrowserID: browser.ID,
 	})
-	ambiguous := assertDiscoveryError(t, err, CodeAmbiguousTab)
-	if ids, ok := ambiguous.Details["candidate_target_ids"].([]string); !ok || len(ids) != 2 || !strings.HasPrefix(ids[0], "target-") || ids[0] >= ids[1] {
-		t.Fatalf("ambiguous target IDs = %#v", ambiguous.Details["candidate_target_ids"])
-	}
-	choices, ok := ambiguous.Details["candidate_choices"].([]map[string]any)
-	if !ok || len(choices) != 2 {
-		t.Fatalf("ambiguous candidate choices = %#v", ambiguous.Details["candidate_choices"])
-	}
-	if choices[0]["target_id"] != ambiguous.Details["candidate_target_ids"].([]string)[0] || choices[1]["target_id"] != ambiguous.Details["candidate_target_ids"].([]string)[1] {
-		t.Fatalf("candidate choices are not ID ordered: %#v", choices)
-	}
-	for _, choice := range choices {
-		if choice["browser_id"] != browser.ID {
-			t.Fatalf("candidate browser identity = %#v, want %q", choice["browser_id"], browser.ID)
-		}
-		if _, ok := choice["url"]; ok {
-			t.Fatalf("candidate choice exposed URL: %#v", choice)
-		}
-		if _, ok := choice["title"].(string); !ok {
-			t.Fatalf("candidate choice omitted title: %#v", choice)
-		}
-		origin, ok := choice["origin"].(string)
-		if !ok || origin != "https://a.test" && origin != "https://b.test" {
-			t.Fatalf("candidate origin = %#v", choice["origin"])
-		}
-	}
-	recovery, ok := ambiguous.Details["recovery"].(map[string]any)
-	if !ok || recovery["action"] != "ask_customer" || recovery["retry_after"] != "customer_input" {
-		t.Fatalf("ambiguity recovery = %#v", ambiguous.Details["recovery"])
-	}
+	ambiguous := discoveryErrorWithCode(t, err, CodeAmbiguousTab)
+	assertAmbiguousTabChoices(t, ambiguous, browser.ID)
 	if attachCalls != 0 || activator.calls != 0 {
 		t.Fatalf("ambiguous selection caused side effects: attach=%d activate=%d", attachCalls, activator.calls)
 	}
@@ -301,7 +307,7 @@ func TestSelectTargetDoesNotCommitWhenAttachmentFails(t *testing.T) {
 	})
 	targetID := (HashTargetIDMapper{}).TargetID(TargetIdentity{BrowserID: browser.ID, RawID: descriptor.ID})
 	_, err := service.SelectTarget(context.Background(), browser, targetID)
-	attachErr := assertDiscoveryError(t, err, CodeTargetAttachFailed)
+	attachErr := discoveryErrorWithCode(t, err, CodeTargetAttachFailed)
 	if attachErr.Details["browser_id"] != browser.ID || attachErr.Details["target_id"] != targetID || strings.Contains(err.Error(), "transport") {
 		t.Fatalf("safe attachment error = %#v (%v)", attachErr, err)
 	}

@@ -7,28 +7,8 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery",
       "file": "internal/webmcp/discovery/persistence.go",
-      "symbol": "*Service.Reconnect",
-      "value": 35,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery",
-      "file": "internal/webmcp/discovery/persistence.go",
       "symbol": "*Service.commitReconnectSelectionLocked",
       "value": 27,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery",
-      "file": "internal/webmcp/discovery/persistence.go",
-      "symbol": "*Service.reconnectExact",
-      "value": 48,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -47,28 +27,8 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery",
       "file": "internal/webmcp/discovery/persistence.go",
-      "symbol": "*Service.Reconnect",
-      "value": 22,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cyclomatic-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery",
-      "file": "internal/webmcp/discovery/persistence.go",
       "symbol": "*Service.commitReconnectSelectionLocked",
       "value": 17,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cyclomatic-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery",
-      "file": "internal/webmcp/discovery/persistence.go",
-      "symbol": "*Service.reconnectExact",
-      "value": 35,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -97,17 +57,7 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery",
       "file": "internal/webmcp/discovery/persistence.go",
-      "value": 1110,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "function-lines",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery",
-      "file": "internal/webmcp/discovery/persistence.go",
-      "symbol": "*Service.reconnectExact",
-      "value": 90,
+      "value": 932,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -118,16 +68,6 @@
       "file": "internal/webmcp/discovery/persistence.go",
       "symbol": "*Service.reconnectPersisted",
       "value": 96,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "function-statements",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery",
-      "file": "internal/webmcp/discovery/persistence.go",
-      "symbol": "*Service.reconnectExact",
-      "value": 59,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },

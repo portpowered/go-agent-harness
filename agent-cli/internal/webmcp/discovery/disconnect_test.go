@@ -16,7 +16,7 @@ func TestDisconnectDuringDiscoveryReturnsSafeClassifiedFailure(t *testing.T) {
 	_, err := service.Discover(context.Background(), ConnectionInputs{
 		CDPURL: "http://127.0.0.1:9222?token=http-secret#fragment",
 	})
-	disconnected := assertDiscoveryError(t, err, CodeBrowserDisconnected)
+	disconnected := discoveryErrorWithCode(t, err, CodeBrowserDisconnected)
 	if !publicIDPattern.MatchString(disconnected.Details["browser_id"].(string)) {
 		t.Fatalf("browser ID = %#v, want normalized identifier", disconnected.Details["browser_id"])
 	}
@@ -122,7 +122,7 @@ func TestDisconnectDuringRefreshInvalidatesSelectionAndBlocksReuse(t *testing.T)
 
 	disconnected = true
 	refreshed, err := service.RefreshSelection(context.Background())
-	failure := assertDiscoveryError(t, err, CodeBrowserDisconnected)
+	failure := discoveryErrorWithCode(t, err, CodeBrowserDisconnected)
 	if failure.Details["browser_id"] != browser.ID || failure.Details["target_id"] != targetID || failure.Details["phase"] != "targets" || failure.Details["reconnect_required"] != true {
 		t.Fatalf("refresh disconnect details = %#v", failure.Details)
 	}
@@ -160,7 +160,7 @@ func TestRetainedEndpointLossIsBrowserDisconnectedButInitialLossStaysUnreachable
 	}
 	endpointLost = true
 	_, err := service.ListTargets(context.Background(), browser)
-	failure := assertDiscoveryError(t, err, CodeEndpointUnreachable)
+	failure := discoveryErrorWithCode(t, err, CodeEndpointUnreachable)
 	if failure.Details["phase"] != "targets" {
 		t.Fatalf("initial endpoint failure details = %#v, want target phase", failure.Details)
 	}
@@ -171,7 +171,7 @@ func TestRetainedEndpointLossIsBrowserDisconnectedButInitialLossStaysUnreachable
 	}
 	endpointLost = true
 	_, err = service.RefreshSelection(context.Background())
-	failure = assertDiscoveryError(t, err, CodeBrowserDisconnected)
+	failure = discoveryErrorWithCode(t, err, CodeBrowserDisconnected)
 	if failure.Details["browser_id"] != browser.ID || failure.Details["target_id"] != targetID || failure.Details["phase"] != "targets" || failure.Details["reconnect_required"] != true {
 		t.Fatalf("retained endpoint failure details = %#v", failure.Details)
 	}
@@ -204,14 +204,14 @@ func TestReconnectUsesExactDisconnectedSelectionAndAdvancesGeneration(t *testing
 		BrowserID: browser.ID,
 		TargetID:  targetID,
 		Phase:     "transport",
-	}); assertDiscoveryError(t, err, CodeBrowserDisconnected).Details["target_id"] != targetID {
+	}); discoveryErrorWithCode(t, err, CodeBrowserDisconnected).Details["target_id"] != targetID {
 		t.Fatal("disconnect did not retain exact target identity")
 	}
 
 	// A single alternative must not be selected after the exact target is lost.
 	descriptors = []TargetDescriptor{targetDescriptor("raw-b", "B", "https://reconnect.test/b", 1)}
 	_, err = service.Reconnect(context.Background(), reconnectInputs(), ReconnectOptions{AutoSelect: AutoSelectSingle})
-	stale := assertDiscoveryError(t, err, CodeStaleSelection)
+	stale := discoveryErrorWithCode(t, err, CodeStaleSelection)
 	if stale.Details["browser_id"] != browser.ID || stale.Details["target_id"] != targetID || stale.Details["reason"] != "target_missing_after_reconnect" {
 		t.Fatalf("alternative reconnect failure = %#v", stale.Details)
 	}
@@ -271,7 +271,7 @@ func TestDisconnectedReconnectRejectsChangedContinuityMarker(t *testing.T) {
 
 	descriptors[0].ContinuityMarker = "document-b"
 	_, err = service.Reconnect(context.Background(), reconnectInputs(), ReconnectOptions{AutoSelect: AutoSelectSingle})
-	stale := assertDiscoveryError(t, err, CodeStaleSelection)
+	stale := discoveryErrorWithCode(t, err, CodeStaleSelection)
 	if stale.Details["browser_id"] != browser.ID || stale.Details["target_id"] != targetID || stale.Details["selected_generation"] != selected.Generation || stale.Details["reason"] != "continuity_changed" {
 		t.Fatalf("changed continuity failure = %#v", stale.Details)
 	}
@@ -329,7 +329,7 @@ func TestSelectionAttachDisconnectIsClassifiedAndBlocksRetry(t *testing.T) {
 	})
 
 	_, err := service.SelectTarget(context.Background(), browser, targetID)
-	failure := assertDiscoveryError(t, err, CodeBrowserDisconnected)
+	failure := discoveryErrorWithCode(t, err, CodeBrowserDisconnected)
 	if failure.Details["browser_id"] != browser.ID || failure.Details["target_id"] != targetID || failure.Details["phase"] != "attach" || failure.Details["reconnect_required"] != true {
 		t.Fatalf("attach disconnect details = %#v", failure.Details)
 	}

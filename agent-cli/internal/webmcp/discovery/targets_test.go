@@ -202,7 +202,7 @@ func TestListTargetsReturnsNoEligibleAndUnsupportedClassifications(t *testing.T)
 	})})
 
 	snapshot, err := service.ListTargetSnapshot(context.Background(), browser)
-	noEligible := assertDiscoveryError(t, err, CodeNoEligibleTab)
+	noEligible := discoveryErrorWithCode(t, err, CodeNoEligibleTab)
 	if snapshot.CandidateCount != 1 || snapshot.EligibleCount != 0 || noEligible.Retryable != true {
 		t.Fatalf("no-eligible result = snapshot %#v error %#v", snapshot, noEligible)
 	}
@@ -212,7 +212,7 @@ func TestListTargetsReturnsNoEligibleAndUnsupportedClassifications(t *testing.T)
 
 	targetID := (HashTargetIDMapper{}).TargetID(TargetIdentity{BrowserID: browser.ID, RawID: descriptor.ID})
 	_, err = service.ListTargetSnapshot(context.Background(), browser, TargetListOptions{TargetID: targetID})
-	unsupportedErr := assertDiscoveryError(t, err, CodeUnsupportedWebMCP)
+	unsupportedErr := discoveryErrorWithCode(t, err, CodeUnsupportedWebMCP)
 	if unsupportedErr.Details["browser_id"] != browser.ID || unsupportedErr.Details["target_id"] != targetID {
 		t.Fatalf("unsupported details = %#v", unsupportedErr.Details)
 	}
@@ -229,7 +229,7 @@ func TestDiscoverAndListTargetsRequiresExactBrowserWhenSeveralConfigured(t *test
 		StaticConfiguredSource{SourceName: "two", Value: Endpoint{CDPURL: "http://127.0.0.1:9223"}},
 	}}
 	_, err := service.DiscoverAndListTargets(context.Background(), inputs, TargetListOptions{})
-	ambiguous := assertDiscoveryError(t, err, CodeAmbiguousBrowser)
+	ambiguous := discoveryErrorWithCode(t, err, CodeAmbiguousBrowser)
 	ids, ok := ambiguous.Details["candidate_browser_ids"].([]string)
 	if !ok || len(ids) != 2 || !sort.StringsAreSorted(ids) {
 		t.Fatalf("ambiguous browser IDs = %#v", ambiguous.Details["candidate_browser_ids"])

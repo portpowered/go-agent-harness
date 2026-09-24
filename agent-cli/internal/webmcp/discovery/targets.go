@@ -168,157 +168,49 @@ func (s *Service) DiscoverAll(ctx context.Context, inputs ConnectionInputs) ([]B
 	s.mu.Lock()
 	defer s.unlockDiscovery()
 
-	s.emit(EventDiscoveryStarted, "", map[string]any{
-		"source_plan": []string{
-			string(SourceExplicitCDPHTTP),
-			string(SourceExplicitBrowserWS),
-			string(SourceDevToolsActivePort),
-			string(SourceConfigured),
-			string(SourceProcess),
-		},
-	})
+	s.emitDiscoveryStarted()
 
 	attempts := s.explicitAttempts(inputs)
-	configured := make([]endpointAttempt, 0, len(inputs.ConfiguredSources))
-	var best *DiscoveryError
+	scan := &discoveryScan{}
 	for _, attempt := range attempts {
 		if attempt.source == SourceConfigured {
-			configured = append(configured, attempt)
 			continue
 		}
 		candidate, failure := s.tryAttempt(ctx, attempt, inputs.AllowRemoteCDP)
 		if candidate.ID != "" {
-			s.emit(EventDiscoveryCompleted, candidate.ID, map[string]any{
-				"candidate_count": 1,
-				"source":          string(candidate.Source),
-				"success":         true,
-			})
+			s.emitDiscoverySucceeded(candidate)
 			return []BrowserCandidate{candidate}, nil
 		}
 		if failure != nil && failure.Code == CodeBrowserDisconnected {
-			s.noteBrowserDisconnectedFailureLocked(failure, "", "", "discovery")
-			s.emit(EventDiscoveryCompleted, detailString(failure.Details, "browser_id"), map[string]any{
-				"candidate_count": 0,
-				"success":         false,
-				"code":            string(failure.Code),
-			})
-			return nil, failure
+			return nil, s.failDiscoveryDisconnectedLocked(failure, "discovery")
 		}
-		best = preferFailure(best, failure)
+		scan.best = preferFailure(scan.best, failure)
 	}
 
-	candidates := make([]BrowserCandidate, 0)
-	for _, attempt := range configured {
-		candidate, failure := s.tryAttempt(ctx, attempt, inputs.AllowRemoteCDP)
-		if candidate.ID != "" {
-			if !containsBrowser(candidates, candidate.ID) {
-				candidates = append(candidates, candidate)
-			}
+	scan.candidates = make([]BrowserCandidate, 0)
+	for _, attempt := range attempts {
+		if attempt.source != SourceConfigured {
 			continue
 		}
-		if failure != nil && failure.Code == CodeBrowserDisconnected {
-			s.noteBrowserDisconnectedFailureLocked(failure, "", "", "discovery")
-			s.emit(EventDiscoveryCompleted, detailString(failure.Details, "browser_id"), map[string]any{
-				"candidate_count": 0,
-				"success":         false,
-				"code":            string(failure.Code),
-			})
-			return nil, failure
+		candidate, failure := s.tryAttempt(ctx, attempt, inputs.AllowRemoteCDP)
+		if err := s.absorbTierAttemptLocked(scan, candidate, failure, "discovery"); err != nil {
+			return nil, err
 		}
-		best = preferFailure(best, failure)
 	}
-	if len(candidates) > 0 {
-		sort.Slice(candidates, func(i, j int) bool { return candidates[i].ID < candidates[j].ID })
-		s.emit(EventDiscoveryCompleted, "", map[string]any{
-			"candidate_count": len(candidates),
-			"success":         true,
-		})
-		return candidates, nil
+	if len(scan.candidates) > 0 {
+		return s.completeDiscoverAllLocked(scan.candidates), nil
 	}
 
 	if inputs.AllowProcessScan && s.processEnumerator != nil {
-		infos, enumerateErr := s.processEnumerator.List(ctx)
-		if enumerateErr != nil {
-			if isBrowserDisconnected(enumerateErr) {
-				failure := newBrowserDisconnectedFromError(enumerateErr, "", "", "process")
-				s.noteBrowserDisconnectedFailureLocked(failure, "", "", "process")
-				s.emit(EventDiscoveryCompleted, detailString(failure.Details, "browser_id"), map[string]any{
-					"candidate_count": 0,
-					"success":         false,
-					"code":            string(failure.Code),
-				})
-				return nil, failure
-			}
-			best = preferFailure(best, newEndpointUnreachable(EndpointKindProcess, "non_loopback", "process", enumerateErr))
-		} else {
-			for _, info := range infos {
-				if !info.DebuggingEnabled {
-					continue
-				}
-				endpoint := info.Endpoint
-				if strings.TrimSpace(endpoint.CDPURL) == "" && strings.TrimSpace(endpoint.BrowserWSEndpoint) == "" && info.UserDataDir != "" {
-					active, readErr := s.activePortReader.Read(ctx, info.UserDataDir)
-					if readErr != nil {
-						failure := classifyActivePortError(readErr, SourceProcess)
-						if failure.Code == CodeBrowserDisconnected {
-							s.noteBrowserDisconnectedFailureLocked(failure, "", "", "active_port")
-							s.emit(EventDiscoveryCompleted, detailString(failure.Details, "browser_id"), map[string]any{
-								"candidate_count": 0,
-								"success":         false,
-								"code":            string(failure.Code),
-							})
-							return nil, failure
-						}
-						best = preferFailure(best, failure)
-						continue
-					}
-					endpoint, readErr = endpointFromActivePort(active)
-					if readErr != nil {
-						failure := classifyActivePortError(readErr, SourceProcess)
-						if failure.Code == CodeBrowserDisconnected {
-							s.noteBrowserDisconnectedFailureLocked(failure, "", "", "active_port")
-							return nil, failure
-						}
-						best = preferFailure(best, failure)
-						continue
-					}
-				}
-				if strings.TrimSpace(endpoint.CDPURL) == "" && strings.TrimSpace(endpoint.BrowserWSEndpoint) == "" {
-					continue
-				}
-				candidate, failure := s.tryAttempt(ctx, endpointAttempt{
-					source:  SourceProcess,
-					kind:    EndpointKindProcess,
-					resolve: func(context.Context) (Endpoint, error) { return endpoint, nil },
-				}, inputs.AllowRemoteCDP)
-				if candidate.ID != "" {
-					if !containsBrowser(candidates, candidate.ID) {
-						candidates = append(candidates, candidate)
-					}
-					continue
-				}
-				if failure != nil && failure.Code == CodeBrowserDisconnected {
-					s.noteBrowserDisconnectedFailureLocked(failure, "", "", "process")
-					s.emit(EventDiscoveryCompleted, detailString(failure.Details, "browser_id"), map[string]any{
-						"candidate_count": 0,
-						"success":         false,
-						"code":            string(failure.Code),
-					})
-					return nil, failure
-				}
-				best = preferFailure(best, failure)
-			}
+		if err := s.discoverAllProcessesLocked(ctx, inputs, scan); err != nil {
+			return nil, err
 		}
 	}
-	if len(candidates) > 0 {
-		sort.Slice(candidates, func(i, j int) bool { return candidates[i].ID < candidates[j].ID })
-		s.emit(EventDiscoveryCompleted, "", map[string]any{
-			"candidate_count": len(candidates),
-			"success":         true,
-		})
-		return candidates, nil
+	if len(scan.candidates) > 0 {
+		return s.completeDiscoverAllLocked(scan.candidates), nil
 	}
 
+	best := scan.best
 	if best == nil {
 		best = newEndpointNotFound(EndpointKindCDPHTTP, SourceConfigured)
 	}
@@ -328,6 +220,95 @@ func (s *Service) DiscoverAll(ctx context.Context, inputs ConnectionInputs) ([]B
 		"code":            string(best.Code),
 	})
 	return nil, best
+}
+
+// absorbTierAttemptLocked records one attempt of a multi-candidate source
+// tier. A non-nil error is a terminal disconnected failure.
+func (s *Service) absorbTierAttemptLocked(scan *discoveryScan, candidate BrowserCandidate, failure *DiscoveryError, phase string) error {
+	if candidate.ID != "" {
+		if !containsBrowser(scan.candidates, candidate.ID) {
+			scan.candidates = append(scan.candidates, candidate)
+		}
+		return nil
+	}
+	if failure != nil && failure.Code == CodeBrowserDisconnected {
+		return s.failDiscoveryDisconnectedLocked(failure, phase)
+	}
+	scan.best = preferFailure(scan.best, failure)
+	return nil
+}
+
+func (s *Service) completeDiscoverAllLocked(candidates []BrowserCandidate) []BrowserCandidate {
+	sort.Slice(candidates, func(i, j int) bool { return candidates[i].ID < candidates[j].ID })
+	s.emit(EventDiscoveryCompleted, "", map[string]any{
+		"candidate_count": len(candidates),
+		"success":         true,
+	})
+	return candidates
+}
+
+// discoverAllProcessesLocked adds every debuggable process candidate to the
+// scan. A non-nil error is a terminal disconnected failure.
+func (s *Service) discoverAllProcessesLocked(ctx context.Context, inputs ConnectionInputs, scan *discoveryScan) error {
+	infos, enumerateErr := s.processEnumerator.List(ctx)
+	if enumerateErr != nil {
+		if isBrowserDisconnected(enumerateErr) {
+			return s.failDiscoveryDisconnectedLocked(newBrowserDisconnectedFromError(enumerateErr, "", "", "process"), "process")
+		}
+		scan.best = preferFailure(scan.best, newEndpointUnreachable(EndpointKindProcess, "non_loopback", "process", enumerateErr))
+		return nil
+	}
+	for _, info := range infos {
+		if !info.DebuggingEnabled {
+			continue
+		}
+		endpoint, ok, err := s.discoverAllProcessEndpointLocked(ctx, info, scan)
+		if err != nil {
+			return err
+		}
+		if !ok || (strings.TrimSpace(endpoint.CDPURL) == "" && strings.TrimSpace(endpoint.BrowserWSEndpoint) == "") {
+			continue
+		}
+		candidate, failure := s.tryAttempt(ctx, endpointAttempt{
+			source:  SourceProcess,
+			kind:    EndpointKindProcess,
+			resolve: func(context.Context) (Endpoint, error) { return endpoint, nil },
+		}, inputs.AllowRemoteCDP)
+		if err := s.absorbTierAttemptLocked(scan, candidate, failure, "process"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// discoverAllProcessEndpointLocked resolves a process endpoint, reading the
+// profile active-port record when needed. ok is false when the process must
+// be skipped; a non-nil error is a terminal disconnected failure.
+func (s *Service) discoverAllProcessEndpointLocked(ctx context.Context, info ProcessInfo, scan *discoveryScan) (Endpoint, bool, error) {
+	endpoint := info.Endpoint
+	if strings.TrimSpace(endpoint.CDPURL) != "" || strings.TrimSpace(endpoint.BrowserWSEndpoint) != "" || info.UserDataDir == "" {
+		return endpoint, true, nil
+	}
+	active, readErr := s.activePortReader.Read(ctx, info.UserDataDir)
+	if readErr != nil {
+		failure := classifyActivePortError(readErr, SourceProcess)
+		if failure.Code == CodeBrowserDisconnected {
+			return Endpoint{}, false, s.failDiscoveryDisconnectedLocked(failure, "active_port")
+		}
+		scan.best = preferFailure(scan.best, failure)
+		return Endpoint{}, false, nil
+	}
+	endpoint, readErr = endpointFromActivePort(active)
+	if readErr != nil {
+		failure := classifyActivePortError(readErr, SourceProcess)
+		if failure.Code == CodeBrowserDisconnected {
+			s.noteBrowserDisconnectedFailureLocked(failure, "", "", "active_port")
+			return Endpoint{}, false, failure
+		}
+		scan.best = preferFailure(scan.best, failure)
+		return Endpoint{}, false, nil
+	}
+	return endpoint, true, nil
 }
 
 func firstTargetListOptions(options []TargetListOptions) TargetListOptions {
@@ -394,7 +375,7 @@ func (s *Service) listTargetDescriptorsLocked(ctx context.Context, browser Brows
 		return nil, newEndpointUnreachable(EndpointKindCDPHTTP, addressClass(browser.Loopback), "targets", errors.New("nil response"))
 	}
 	if response.Body != nil {
-		defer response.Body.Close()
+		defer closeAfterRead(response.Body)
 	}
 	if response.StatusCode == 404 {
 		return nil, newEndpointNotFound(EndpointKindCDPHTTP, browser.Source)

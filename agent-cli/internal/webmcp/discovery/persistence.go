@@ -1,15 +1,11 @@
 package discovery
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
-	"io"
 	"os"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -121,214 +117,6 @@ type ReconnectOptions struct {
 
 // SelectionReconnectOptions is a descriptive alias for ReconnectOptions.
 type SelectionReconnectOptions = ReconnectOptions
-
-// selectionStoreAdapter normalizes the supported fake/store method shapes so
-// the service has one atomic typed boundary internally.
-type selectionStoreAdapter struct {
-	load func(context.Context) (PersistedSelection, error)
-	save func(context.Context, PersistedSelection) error
-}
-
-func firstConfiguredStore(options Options) any {
-	for _, candidate := range []any{
-		options.SelectionStore,
-		options.Persistence,
-		options.SelectionPersistence,
-		options.Store,
-	} {
-		if candidate != nil {
-			return candidate
-		}
-	}
-	return nil
-}
-
-func adaptSelectionStore(value any) (selectionStoreAdapter, error) {
-	if value == nil {
-		return selectionStoreAdapter{}, nil
-	}
-	switch store := value.(type) {
-	case interface {
-		Load(context.Context) (PersistedSelection, error)
-		SaveAtomic(context.Context, PersistedSelection) error
-	}:
-		return selectionStoreAdapter{load: store.Load, save: store.SaveAtomic}, nil
-	case interface {
-		Load(context.Context) (PersistedSelection, error)
-		Save(context.Context, PersistedSelection) error
-	}:
-		return selectionStoreAdapter{load: store.Load, save: store.Save}, nil
-	case interface {
-		LoadSelection(context.Context) (PersistedSelection, error)
-		SaveSelectionAtomic(context.Context, PersistedSelection) error
-	}:
-		return selectionStoreAdapter{load: store.LoadSelection, save: store.SaveSelectionAtomic}, nil
-	case interface {
-		LoadSelection(context.Context) (PersistedSelection, error)
-		SaveSelection(context.Context, PersistedSelection) error
-	}:
-		return selectionStoreAdapter{load: store.LoadSelection, save: store.SaveSelection}, nil
-	case interface {
-		Load(context.Context) ([]byte, error)
-		SaveAtomic(context.Context, []byte) error
-	}:
-		return byteSelectionStoreAdapter(store.Load, store.SaveAtomic), nil
-	case interface {
-		Load(context.Context) ([]byte, error)
-		Save(context.Context, []byte) error
-	}:
-		return byteSelectionStoreAdapter(store.Load, store.Save), nil
-	case interface {
-		LoadSelection(context.Context) ([]byte, error)
-		SaveSelectionAtomic(context.Context, []byte) error
-	}:
-		return byteSelectionStoreAdapter(store.LoadSelection, store.SaveSelectionAtomic), nil
-	case interface {
-		LoadSelection(context.Context) ([]byte, error)
-		SaveSelection(context.Context, []byte) error
-	}:
-		return byteSelectionStoreAdapter(store.LoadSelection, store.SaveSelection), nil
-	case interface {
-		Load() (PersistedSelection, error)
-		Save(PersistedSelection) error
-	}:
-		return selectionStoreAdapter{
-			load: func(context.Context) (PersistedSelection, error) { return store.Load() },
-			save: func(_ context.Context, record PersistedSelection) error { return store.Save(record) },
-		}, nil
-	case interface {
-		Load() ([]byte, error)
-		Save([]byte) error
-	}:
-		return byteSelectionStoreAdapter(
-			func(context.Context) ([]byte, error) { return store.Load() },
-			func(_ context.Context, data []byte) error { return store.Save(data) },
-		), nil
-	default:
-		return selectionStoreAdapter{}, errors.New("unsupported webmcp selection store")
-	}
-}
-
-func byteSelectionStoreAdapter(
-	load func(context.Context) ([]byte, error),
-	save func(context.Context, []byte) error,
-) selectionStoreAdapter {
-	return selectionStoreAdapter{
-		load: func(ctx context.Context) (PersistedSelection, error) {
-			data, err := load(ctx)
-			if err != nil {
-				return PersistedSelection{}, err
-			}
-			if len(bytes.TrimSpace(data)) == 0 {
-				return PersistedSelection{}, ErrSelectionNotFound
-			}
-			return decodePersistedSelection(data)
-		},
-		save: func(ctx context.Context, record PersistedSelection) error {
-			data, err := marshalPersistedSelection(record)
-			if err != nil {
-				return err
-			}
-			return save(ctx, data)
-		},
-	}
-}
-
-// MemorySelectionStore is a small atomic store for deterministic tests and
-// local composition. It retains the exact JSON bytes so tests can inspect the
-// persistence boundary for accidental transport-secret leakage.
-type MemorySelectionStore struct {
-	mu     sync.Mutex
-	data   []byte
-	writes int
-}
-
-// NewMemorySelectionStore constructs an empty in-memory selection store.
-func NewMemorySelectionStore() *MemorySelectionStore { return &MemorySelectionStore{} }
-
-// Load returns a validated copy of the stored versioned record.
-func (s *MemorySelectionStore) Load(ctx context.Context) (PersistedSelection, error) {
-	if err := contextError(ctx); err != nil {
-		return PersistedSelection{}, err
-	}
-	s.mu.Lock()
-	data := append([]byte(nil), s.data...)
-	s.mu.Unlock()
-	if len(bytes.TrimSpace(data)) == 0 {
-		return PersistedSelection{}, ErrSelectionNotFound
-	}
-	return decodePersistedSelection(data)
-}
-
-// Save atomically replaces the record after validating its safe shape.
-func (s *MemorySelectionStore) Save(ctx context.Context, record PersistedSelection) error {
-	if err := contextError(ctx); err != nil {
-		return err
-	}
-	data, err := marshalPersistedSelection(record)
-	if err != nil {
-		return err
-	}
-	s.mu.Lock()
-	s.data = append(s.data[:0], data...)
-	s.writes++
-	s.mu.Unlock()
-	return nil
-}
-
-// SaveAtomic is the explicit atomic spelling of Save.
-func (s *MemorySelectionStore) SaveAtomic(ctx context.Context, record PersistedSelection) error {
-	return s.Save(ctx, record)
-}
-
-// Bytes returns a copy of the persisted JSON bytes.
-func (s *MemorySelectionStore) Bytes() []byte {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return append([]byte(nil), s.data...)
-}
-
-// Writes reports the number of successful atomic replacements.
-func (s *MemorySelectionStore) Writes() int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.writes
-}
-
-// SetBytes installs raw bytes for corrupt/unknown-version tests.
-func (s *MemorySelectionStore) SetBytes(data []byte) {
-	s.mu.Lock()
-	s.data = append(s.data[:0], data...)
-	s.mu.Unlock()
-}
-
-// InMemorySelectionStore is a descriptive alias for MemorySelectionStore.
-type InMemorySelectionStore = MemorySelectionStore
-
-func marshalPersistedSelection(record PersistedSelection) ([]byte, error) {
-	record, err := normalizePersistedSelection(record)
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(record)
-}
-
-func decodePersistedSelection(data []byte) (PersistedSelection, error) {
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	var record PersistedSelection
-	if err := decoder.Decode(&record); err != nil {
-		return PersistedSelection{}, newSelectionStateError("malformed_json", err)
-	}
-	var trailing any
-	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
-		if err == nil {
-			return PersistedSelection{}, newSelectionStateError("trailing_data", nil)
-		}
-		return PersistedSelection{}, newSelectionStateError("malformed_json", err)
-	}
-	return normalizePersistedSelection(record)
-}
 
 func normalizePersistedSelection(record PersistedSelection) (PersistedSelection, error) {
 	if record.Version != SelectionPersistenceVersion {
@@ -564,41 +352,7 @@ func (s *Service) Reconnect(ctx context.Context, inputs ConnectionInputs, option
 	}
 
 	if reconnectOptions.hasExplicitSelection() {
-		if strings.TrimSpace(reconnectOptions.TargetID) == "" {
-			if browserID, _, phase, disconnected := s.disconnectedBrowser(); disconnected &&
-				(strings.TrimSpace(reconnectOptions.BrowserID) == "" || strings.TrimSpace(reconnectOptions.BrowserID) == browserID) {
-				return Selection{}, newBrowserDisconnected(browserID, "", phase, nil)
-			}
-			if reconnectOptions.resolvedAutoSelect() == AutoSelectSingle {
-				return s.reconnectSingle(ctx, inputs, reconnectOptions)
-			}
-			return Selection{}, newNoEligibleTab(strings.TrimSpace(reconnectOptions.BrowserID), TargetListOptions{
-				BrowserID:      strings.TrimSpace(reconnectOptions.BrowserID),
-				OriginContains: strings.TrimSpace(reconnectOptions.Origin),
-				EligibleOnly:   Bool(true),
-			}, 0)
-		}
-		var persisted PersistedSelection
-		var persistedPresent bool
-		if reconnectOptions.RejectPersistedConflict {
-			var failure *DiscoveryError
-			persisted, persistedPresent, failure = s.loadPersistedSelection(ctx)
-			if failure != nil {
-				return Selection{}, failure
-			}
-		}
-		candidates, err := s.DiscoverAll(ctx, inputs)
-		if err != nil {
-			return Selection{}, err
-		}
-		browser, failure := reconnectBrowser(candidates, reconnectOptions.BrowserID)
-		if failure != nil {
-			return Selection{}, failure
-		}
-		if persistedPresent && persistedSelectionConflicts(persisted, reconnectOptions) {
-			return Selection{}, newStaleSelection(persisted.BrowserID, persisted.TargetID, persisted.Generation, "explicit_selection_conflict")
-		}
-		return s.reconnectExact(ctx, browser, reconnectOptions)
+		return s.reconnectExplicit(ctx, inputs, reconnectOptions)
 	}
 
 	switch reconnectOptions.resolvedAutoSelect() {
@@ -608,23 +362,74 @@ func (s *Service) Reconnect(ctx context.Context, inputs ConnectionInputs, option
 			EligibleOnly: Bool(true),
 		}, 0)
 	case AutoSelectSingle:
-		if browserID, targetID, phase, disconnected := s.disconnectedBrowser(); disconnected {
-			if current, hasSelection := s.disconnectedSelection(); hasSelection && current.BrowserID == browserID {
-				return s.reconnectCurrentSelection(ctx, inputs, current, reconnectOptions)
-			}
-			if targetID == "" {
-				return Selection{}, newBrowserDisconnected(browserID, "", phase, nil)
-			}
-			reconnectOptions.BrowserID = browserID
-			reconnectOptions.TargetID = targetID
-			return s.reconnectExactDisconnectedTarget(ctx, inputs, reconnectOptions)
-		}
-		return s.reconnectSingle(ctx, inputs, reconnectOptions)
+		return s.reconnectAutoSingle(ctx, inputs, reconnectOptions)
 	case AutoSelectPersisted:
 		return s.reconnectPersisted(ctx, inputs, reconnectOptions)
 	default:
 		return Selection{}, newSelectionStateError("auto_select_invalid", nil)
 	}
+}
+
+// reconnectExplicit handles caller-supplied browser, target, or origin IDs.
+// Explicit IDs take precedence over persisted state.
+func (s *Service) reconnectExplicit(ctx context.Context, inputs ConnectionInputs, reconnectOptions ReconnectOptions) (Selection, error) {
+	if strings.TrimSpace(reconnectOptions.TargetID) == "" {
+		return s.reconnectExplicitWithoutTarget(ctx, inputs, reconnectOptions)
+	}
+	var persisted PersistedSelection
+	var persistedPresent bool
+	if reconnectOptions.RejectPersistedConflict {
+		var failure *DiscoveryError
+		persisted, persistedPresent, failure = s.loadPersistedSelection(ctx)
+		if failure != nil {
+			return Selection{}, failure
+		}
+	}
+	candidates, err := s.DiscoverAll(ctx, inputs)
+	if err != nil {
+		return Selection{}, err
+	}
+	browser, failure := reconnectBrowser(candidates, reconnectOptions.BrowserID)
+	if failure != nil {
+		return Selection{}, failure
+	}
+	if persistedPresent && persistedSelectionConflicts(persisted, reconnectOptions) {
+		return Selection{}, newStaleSelection(persisted.BrowserID, persisted.TargetID, persisted.Generation, "explicit_selection_conflict")
+	}
+	return s.reconnectExact(ctx, browser, reconnectOptions)
+}
+
+func (s *Service) reconnectExplicitWithoutTarget(ctx context.Context, inputs ConnectionInputs, reconnectOptions ReconnectOptions) (Selection, error) {
+	if browserID, _, phase, disconnected := s.disconnectedBrowser(); disconnected &&
+		(strings.TrimSpace(reconnectOptions.BrowserID) == "" || strings.TrimSpace(reconnectOptions.BrowserID) == browserID) {
+		return Selection{}, newBrowserDisconnected(browserID, "", phase, nil)
+	}
+	if reconnectOptions.resolvedAutoSelect() == AutoSelectSingle {
+		return s.reconnectSingle(ctx, inputs, reconnectOptions)
+	}
+	return Selection{}, newNoEligibleTab(strings.TrimSpace(reconnectOptions.BrowserID), TargetListOptions{
+		BrowserID:      strings.TrimSpace(reconnectOptions.BrowserID),
+		OriginContains: strings.TrimSpace(reconnectOptions.Origin),
+		EligibleOnly:   Bool(true),
+	}, 0)
+}
+
+// reconnectAutoSingle prefers recovering a disconnected selection before
+// falling back to the single-target automatic mode.
+func (s *Service) reconnectAutoSingle(ctx context.Context, inputs ConnectionInputs, reconnectOptions ReconnectOptions) (Selection, error) {
+	browserID, targetID, phase, disconnected := s.disconnectedBrowser()
+	if !disconnected {
+		return s.reconnectSingle(ctx, inputs, reconnectOptions)
+	}
+	if current, hasSelection := s.disconnectedSelection(); hasSelection && current.BrowserID == browserID {
+		return s.reconnectCurrentSelection(ctx, inputs, current, reconnectOptions)
+	}
+	if targetID == "" {
+		return Selection{}, newBrowserDisconnected(browserID, "", phase, nil)
+	}
+	reconnectOptions.BrowserID = browserID
+	reconnectOptions.TargetID = targetID
+	return s.reconnectExactDisconnectedTarget(ctx, inputs, reconnectOptions)
 }
 
 func (s *Service) disconnectedSelection() (Selection, bool) {
@@ -758,6 +563,20 @@ func reconnectBrowser(candidates []BrowserCandidate, requestedID string) (Browse
 
 func (s *Service) reconnectExact(ctx context.Context, browser BrowserCandidate, options ReconnectOptions) (Selection, error) {
 	s.mu.Lock()
+	selected, previousHandle, selectionFailure := s.reconnectExactLocked(ctx, browser, options)
+	s.mu.Unlock()
+	if selectionFailure != nil {
+		return Selection{}, selectionFailure
+	}
+	if previousHandle != nil && previousHandle != selected.Handle {
+		discardTargetHandle(ctx, previousHandle)
+	}
+	return selected, nil
+}
+
+// reconnectExactLocked resolves and commits the exact reconnect target while
+// the caller holds s.mu. It never substitutes a different target.
+func (s *Service) reconnectExactLocked(ctx context.Context, browser BrowserCandidate, options ReconnectOptions) (Selection, *TargetHandle, *DiscoveryError) {
 	if s.browsers == nil {
 		s.browsers = make(map[string]BrowserCandidate)
 	}
@@ -769,82 +588,85 @@ func (s *Service) reconnectExact(ctx context.Context, browser BrowserCandidate, 
 		IncludeZeroToolPages: true,
 	})
 	if failure != nil {
-		s.mu.Unlock()
-		return Selection{}, failure
+		return Selection{}, nil, failure
 	}
 	targetID := strings.TrimSpace(options.TargetID)
 	if targetID == "" {
-		matches := make([]Target, 0, len(targets))
-		for _, candidate := range targets {
-			if candidate.Eligible && candidate.WebMCP && candidate.WebMCPKnown && (options.Origin == "" || candidate.Origin == options.Origin) {
-				matches = append(matches, candidate)
-			}
-		}
-		switch len(matches) {
-		case 0:
-			s.mu.Unlock()
-			return Selection{}, newNoEligibleTab(browser.ID, TargetListOptions{BrowserID: browser.ID, EligibleOnly: Bool(true), IncludeZeroToolPages: true}, len(targets))
-		case 1:
-			targetID = matches[0].ID
-		default:
-			s.mu.Unlock()
-			return Selection{}, newAmbiguousTabForTargets(browser.ID, matches)
+		targetID, failure = uniqueReconnectTargetID(browser.ID, targets, options.Origin)
+		if failure != nil {
+			return Selection{}, nil, failure
 		}
 	}
 	target, failure := exactReconnectTarget(browser.ID, targets, targetID, options.Origin)
 	if failure != nil {
-		if options.ContinuityMarker != "" {
-			if state, exists := s.targets[browser.ID][targetID]; exists && state.target.ID == targetID {
-				reason := ""
-				switch {
-				case options.Origin != "" && state.target.Origin != options.Origin:
-					reason = "origin_changed"
-				case state.target.ContinuityMarker != options.ContinuityMarker:
-					reason = "continuity_changed"
-				}
-				if reason != "" {
-					selectedGeneration := state.generation
-					if s.selection != nil && s.selection.BrowserID == browser.ID && s.selection.TargetID == targetID {
-						selectedGeneration = s.selection.Generation
-					}
-					s.mu.Unlock()
-					return Selection{}, newStaleSelection(browser.ID, targetID, selectedGeneration, reason)
-				}
-			}
+		if stale := s.staleKnownReconnectTargetLocked(browser.ID, targetID, options); stale != nil {
+			return Selection{}, nil, stale
 		}
-		s.mu.Unlock()
-		return Selection{}, failure
+		return Selection{}, nil, failure
 	}
 	if options.ContinuityMarker != "" {
-		reason := ""
-		switch {
-		case options.Origin != "" && target.Origin != options.Origin:
-			reason = "origin_changed"
-		case target.ContinuityMarker != options.ContinuityMarker:
-			reason = "continuity_changed"
-		}
-		if reason != "" {
-			selectedGeneration := target.Generation
-			if s.selection != nil && s.selection.BrowserID == browser.ID && s.selection.TargetID == targetID {
-				selectedGeneration = s.selection.Generation
-			}
-			s.mu.Unlock()
-			return Selection{}, newStaleSelection(browser.ID, targetID, selectedGeneration, reason)
+		if reason := reconnectContinuityReason(target, options); reason != "" {
+			selectedGeneration := s.selectedGenerationLocked(browser.ID, targetID, target.Generation)
+			return Selection{}, nil, newStaleSelection(browser.ID, targetID, selectedGeneration, reason)
 		}
 	}
 	if generationFailure := s.advanceDisconnectedSelectionGenerationLocked(browser.ID, target.ID, &target); generationFailure != nil {
-		s.mu.Unlock()
-		return Selection{}, generationFailure
+		return Selection{}, nil, generationFailure
 	}
-	selected, previousHandle, selectionFailure := s.commitReconnectSelectionLocked(ctx, browser, target, options, time.Time{})
-	s.mu.Unlock()
-	if selectionFailure != nil {
-		return Selection{}, selectionFailure
+	return s.commitReconnectSelectionLocked(ctx, browser, target, options, time.Time{})
+}
+
+// uniqueReconnectTargetID picks the only eligible WebMCP target, optionally
+// constrained to an origin, and refuses to guess among several.
+func uniqueReconnectTargetID(browserID string, targets []Target, origin string) (string, *DiscoveryError) {
+	matches := make([]Target, 0, len(targets))
+	for _, candidate := range targets {
+		if candidate.Eligible && candidate.WebMCP && candidate.WebMCPKnown && (origin == "" || candidate.Origin == origin) {
+			matches = append(matches, candidate)
+		}
 	}
-	if previousHandle != nil && previousHandle != selected.Handle {
-		_ = previousHandle.Close()
+	switch len(matches) {
+	case 0:
+		return "", newNoEligibleTab(browserID, TargetListOptions{BrowserID: browserID, EligibleOnly: Bool(true), IncludeZeroToolPages: true}, len(targets))
+	case 1:
+		return matches[0].ID, nil
+	default:
+		return "", newAmbiguousTabForTargets(browserID, matches)
 	}
-	return selected, nil
+}
+
+// staleKnownReconnectTargetLocked reports a stale selection when an exact
+// target lookup failed but the previously known target changed identity.
+func (s *Service) staleKnownReconnectTargetLocked(browserID, targetID string, options ReconnectOptions) *DiscoveryError {
+	if options.ContinuityMarker == "" {
+		return nil
+	}
+	state, exists := s.targets[browserID][targetID]
+	if !exists || state.target.ID != targetID {
+		return nil
+	}
+	reason := reconnectContinuityReason(state.target, options)
+	if reason == "" {
+		return nil
+	}
+	return newStaleSelection(browserID, targetID, s.selectedGenerationLocked(browserID, targetID, state.generation), reason)
+}
+
+func reconnectContinuityReason(target Target, options ReconnectOptions) string {
+	switch {
+	case options.Origin != "" && target.Origin != options.Origin:
+		return "origin_changed"
+	case target.ContinuityMarker != options.ContinuityMarker:
+		return "continuity_changed"
+	}
+	return ""
+}
+
+func (s *Service) selectedGenerationLocked(browserID, targetID string, fallback uint64) uint64 {
+	if s.selection != nil && s.selection.BrowserID == browserID && s.selection.TargetID == targetID {
+		return s.selection.Generation
+	}
+	return fallback
 }
 
 func (s *Service) reconnectSingle(ctx context.Context, inputs ConnectionInputs, options ReconnectOptions) (Selection, error) {

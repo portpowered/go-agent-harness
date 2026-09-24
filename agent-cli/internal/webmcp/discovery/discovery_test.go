@@ -76,7 +76,14 @@ func validVersionJSON(ws string) string {
 	return `{"Browser":"Chrome/151.0.0.0","Protocol-Version":"1.3","webSocketDebuggerUrl":"` + ws + `"}`
 }
 
-func assertDiscoveryError(t *testing.T, err error, code Code) *DiscoveryError {
+func assertDiscoveryError(t *testing.T, err error, code Code) {
+	t.Helper()
+	if discoveryErrorWithCode(t, err, code) == nil {
+		t.Fatalf("expected %s, got no discovery error", code)
+	}
+}
+
+func discoveryErrorWithCode(t *testing.T, err error, code Code) *DiscoveryError {
 	t.Helper()
 	if err == nil {
 		t.Fatalf("expected %s, got nil", code)
@@ -280,15 +287,17 @@ func TestDiscoverFallsThroughInOrderAndProcessScanIsOptIn(t *testing.T) {
 	})
 }
 
+type endpointFailureCase struct {
+	name       string
+	inputs     ConnectionInputs
+	client     *fakeHTTPClient
+	wantCode   Code
+	wantDetail map[string]any
+	wantHTTP   int
+}
+
 func TestDiscoverClassifiesEndpointFailuresWithoutLeakingEndpointData(t *testing.T) {
-	tests := []struct {
-		name       string
-		inputs     ConnectionInputs
-		client     *fakeHTTPClient
-		wantCode   Code
-		wantDetail map[string]any
-		wantHTTP   int
-	}{
+	tests := []endpointFailureCase{
 		{
 			name:     "missing endpoint",
 			inputs:   ConnectionInputs{CDPURL: "http://127.0.0.1:9222"},
@@ -364,26 +373,31 @@ func TestDiscoverClassifiesEndpointFailuresWithoutLeakingEndpointData(t *testing
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			service := New(Options{HTTPClient: test.client})
-			_, err := service.Discover(context.Background(), test.inputs)
-			discoveryErr := assertDiscoveryError(t, err, test.wantCode)
-			if len(test.client.calls) != test.wantHTTP {
-				t.Fatalf("HTTP calls = %d, want %d", len(test.client.calls), test.wantHTTP)
-			}
-			if !reflectDeepEqual(test.wantDetail, discoveryErr.Details) {
-				t.Fatalf("details = %#v, want %#v", discoveryErr.Details, test.wantDetail)
-			}
-			if strings.Contains(err.Error(), "secret") || strings.Contains(err.Error(), "ws://") || strings.Contains(err.Error(), "127.0.0.1") {
-				t.Fatalf("error message leaked endpoint data: %q", err)
-			}
-			encoded, marshalErr := json.Marshal(discoveryErr)
-			if marshalErr != nil {
-				t.Fatalf("marshal DiscoveryError: %v", marshalErr)
-			}
-			if strings.Contains(string(encoded), "secret") || strings.Contains(string(encoded), "user:pass") || strings.Contains(string(encoded), "ws://") {
-				t.Fatalf("error JSON leaked endpoint data: %s", encoded)
-			}
+			assertEndpointFailureRedacted(t, test)
 		})
+	}
+}
+
+func assertEndpointFailureRedacted(t *testing.T, test endpointFailureCase) {
+	t.Helper()
+	service := New(Options{HTTPClient: test.client})
+	_, err := service.Discover(context.Background(), test.inputs)
+	discoveryErr := discoveryErrorWithCode(t, err, test.wantCode)
+	if len(test.client.calls) != test.wantHTTP {
+		t.Fatalf("HTTP calls = %d, want %d", len(test.client.calls), test.wantHTTP)
+	}
+	if !reflectDeepEqual(test.wantDetail, discoveryErr.Details) {
+		t.Fatalf("details = %#v, want %#v", discoveryErr.Details, test.wantDetail)
+	}
+	if strings.Contains(err.Error(), "secret") || strings.Contains(err.Error(), "ws://") || strings.Contains(err.Error(), "127.0.0.1") {
+		t.Fatalf("error message leaked endpoint data: %q", err)
+	}
+	encoded, marshalErr := json.Marshal(discoveryErr)
+	if marshalErr != nil {
+		t.Fatalf("marshal DiscoveryError: %v", marshalErr)
+	}
+	if strings.Contains(string(encoded), "secret") || strings.Contains(string(encoded), "user:pass") || strings.Contains(string(encoded), "ws://") {
+		t.Fatalf("error JSON leaked endpoint data: %s", encoded)
 	}
 }
 
@@ -392,7 +406,7 @@ func TestDiscoverRejectsMalformedExplicitEndpointAndPageWebSocket(t *testing.T) 
 	service := New(Options{HTTPClient: client})
 
 	_, err := service.Discover(context.Background(), ConnectionInputs{CDPURL: "file:///tmp/debug"})
-	protocolErr := assertDiscoveryError(t, err, CodeBrowserProtocolInvalid)
+	protocolErr := discoveryErrorWithCode(t, err, CodeBrowserProtocolInvalid)
 	if protocolErr.Details["reason_code"] != "unsupported_endpoint_scheme" {
 		t.Fatalf("malformed endpoint reason = %#v", protocolErr.Details)
 	}
@@ -401,7 +415,7 @@ func TestDiscoverRejectsMalformedExplicitEndpointAndPageWebSocket(t *testing.T) 
 	}
 
 	_, err = service.Discover(context.Background(), ConnectionInputs{BrowserWSEndpoint: "ws://127.0.0.1:9222/devtools/page/page-id"})
-	protocolErr = assertDiscoveryError(t, err, CodeBrowserProtocolInvalid)
+	protocolErr = discoveryErrorWithCode(t, err, CodeBrowserProtocolInvalid)
 	if protocolErr.Details["reason_code"] != "page_websocket_not_browser_websocket" {
 		t.Fatalf("page websocket reason = %#v", protocolErr.Details)
 	}
