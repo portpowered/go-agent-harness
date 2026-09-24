@@ -45,6 +45,24 @@ func TestStateProjectsOutputStates(t *testing.T) {
 	}
 }
 
+func TestArtifactsRejectMalformedPCMWithoutLosingLaterTranscript(t *testing.T) {
+	audio := &artifactAudioSink{}
+	transcriptSink := &artifactTranscriptSink{}
+	artifacts := NewSessionDurationArtifactSetWithSinks(audio, transcriptSink)
+	if err := artifacts.Accept(messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue([]byte{0x01})}); err == nil {
+		t.Fatal("odd-length PCM frame was accepted")
+	}
+	if len(audio.samples) != 0 {
+		t.Fatalf("malformed PCM produced samples: %v", audio.samples)
+	}
+	if err := artifacts.Accept(messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("transcript remains usable")}); err != nil {
+		t.Fatalf("Accept transcript after malformed PCM: %v", err)
+	}
+	if len(transcriptSink.records) != 1 {
+		t.Fatalf("transcript records = %d, want one after rejected PCM", len(transcriptSink.records))
+	}
+}
+
 func TestStateAdmitsProviderTerminalBeforeLoopClose(t *testing.T) {
 	provider := providerTerminal("provider-close")
 	state := New().NewState(providerSource(provider))

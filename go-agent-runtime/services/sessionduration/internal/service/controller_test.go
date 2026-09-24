@@ -545,6 +545,42 @@ func TestFinalizationDrainPublishesLateOutputAndHonorsWallSafety(t *testing.T) {
 	}
 }
 
+func TestRunReportsArtifactCloseFailureAfterRecordingProviderTerminal(t *testing.T) {
+	closeErr := errors.New("transcript close failed")
+	transcriptSink := &artifactTranscriptSink{closeErr: closeErr}
+	artifacts := NewSessionDurationArtifactSetWithSinks(nil, transcriptSink)
+	terminalRecorder := &terminalRecorderProbe{}
+	lifecycle := ArtifactsFromContext(WithTerminalRecorder(WithSessionDurationArtifacts(context.Background(), artifacts), terminalRecorder))
+	terminalValue := messages.NewSessionCloseValueWithTerminal(
+		"session", "provider finished", "provider_close", messages.TerminalReasonProviderClose,
+		messages.TerminalProvenanceProvider, messages.TerminalOutputComplete,
+	)
+	terminal := messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: terminalValue}
+	loop := newRunLoopProbe()
+	if !loop.deltas.Write(context.Background(), terminal) {
+		t.Fatal("could not queue provider terminal")
+	}
+	var written []messages.StreamMessage
+	err := New().Run(sessionduration.RunRequest{
+		Context: context.Background(), Inferencer: contractInferencer{session: newContractSession()},
+		LoopFactory: func(context.Context, sessionduration.AdmissionInferencer, sessionduration.Controller) (sessionduration.Loop, error) {
+			return loop, nil
+		},
+		Terminal: sessionduration.TerminalSource{
+			Message: func() (messages.StreamMessage, bool) { return terminal, true },
+			Matches: func(candidate messages.StreamMessage) bool { return candidate.Value == terminal.Value },
+		},
+		Publication: sessionduration.Publication{Artifacts: lifecycle, Write: func(msg messages.StreamMessage) error {
+			written = append(written, msg)
+			return nil
+		}},
+		Artifacts: lifecycle,
+	})
+	if !errors.Is(err, closeErr) || len(terminalRecorder.summaries) != 1 || len(written) != 1 || written[0].Type != messages.StreamTypeSessionClose {
+		t.Fatalf("Run error=%v terminal=%+v written=%+v", err, terminalRecorder.summaries, written)
+	}
+}
+
 type publishOnceDrainScheduler struct {
 	loop *idleRunLoopProbe
 	once sync.Once

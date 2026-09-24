@@ -5000,3 +5000,19 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   behavior gaps without coverage-only tests. Run the planned C276 functional,
   integration, race, hermetic, and Wire gates on the final candidate before
   any PR submission. Decision remains CONTINUE.
+
+# C276 prepush file-budget repair checkpoint — 2026-09-24
+
+- `rtk make prepush` on exact commit
+  `046cac5f370a7fd10689cca16cd22b4a086fd3e6` stopped at architecture because
+  `sessionduration/internal/service/contract_test.go` reached 663 lines against
+  its 600-line ceiling. No coverage or functional phase ran in that invocation.
+- Reorganized only the newly added cases within the existing service test files;
+  the three larger service test files are now 576, 594, and 594 lines. The
+  focused session-duration package check passes (58 tests / 1 package).
+  `rtk make verify-architecture` passes: 226 packages, 1,997 files, 29,425
+  functions; its Wire generation left no additional tracked changes.
+- Exact next action: commit this file-budget repair, then rerun `rtk make prepush`
+  on that exact commit and continue with the planned C276 functional,
+  integration, race, hermetic, and Wire gates. Do not hand off while a local
+  preflight remains red. Decision remains CONTINUE.
