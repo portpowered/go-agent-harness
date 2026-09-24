@@ -63,10 +63,6 @@ func (r *durationRunner) newRunRequest(request session.DurationRunRequest) sessi
 	if dispatch == "" {
 		dispatch = sessionduration.ScheduledAudioCompletionGated
 	}
-	completionObserver := request.CompletionObserver
-	if completionObserver == nil {
-		completionObserver, _ = request.Observer.(sessionduration.CompletionObserver)
-	}
 	run := sessionduration.RunRequest{
 		Context:            request.Context,
 		Inferencer:         request.Inferencer,
@@ -143,7 +139,9 @@ func (r *durationRunner) complete(request session.DurationRunRequest, result ses
 	durationExpired := result.Expired && request.CloseAfterScheduledAudio && request.Observer != nil
 	completionObserver := request.CompletionObserver
 	if completionObserver == nil {
-		completionObserver, _ = request.Observer.(sessionduration.CompletionObserver)
+		if observer, ok := request.Observer.(sessionduration.CompletionObserver); ok {
+			completionObserver = observer
+		}
 	}
 	runErr = r.durationService.Complete(sessionduration.CompletionRequest{
 		RunError:                      runErr,

@@ -6081,3 +6081,21 @@ before any push or PR.
   commit. No push or PR exists. Exact next action: commit the generated graph,
   rerun the entire prepush and every C251-04 local command on the changed clean
   SHA, and repair any further locally reproducible failure before push.
+
+
+## C251 pinned-lint repair checkpoint — 2026-09-24
+
+- On candidate `5db641a265d2e6ec6ea64dc50d0531a74d514419`, the pinned
+  golangci-lint 2.9.0 run first reported 46 findings in `go-agent-runtime`;
+  the prior agent-cli findings were repaired and its module reported zero.
+  Repaired context propagation and bounded cleanup handling, checked cleanup
+  and file-close errors, removed unused replay/helper code, made partial event
+  policies explicit, and preserved lifecycle failures for observers. Existing
+  test helpers now check their returned errors; no test cases were added or
+  moved.
+- Final `rtk make lint` passes with 0 issues across all modules and tools,
+  including agent-cli and go-agent-runtime. No full C251-04 gate, push, PR,
+  SCRIPT CI, or independent review is claimed.
+- Exact next action: commit these source repairs and this checkpoint on the
+  same branch, then run `make prepush` and every C251-04 command on the exact
+  clean commit; repair every locally reproducible failure before push or PR.

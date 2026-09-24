@@ -73,6 +73,7 @@ func TestServiceCompletesBoundedResponseAndScheduleFailures(t *testing.T) {
 		incomplete.ProviderDetails != "reason=error, code=server_error" {
 		t.Fatalf("scheduled-audio evidence = %+v", incomplete)
 	}
+	//nolint:errorlint // exact identity proves repeated completion does not wrap the result again.
 	if again := service.Complete(sessionduration.CompletionRequest{
 		RunError:                 err,
 		CloseAfterScheduledAudio: true,

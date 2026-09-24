@@ -105,7 +105,7 @@ func runSessionWithImagesAndRecordingDirectory(
 	return runSessionWithImageArtifacts(ctx, out, opts, directory, paths)
 }
 
-func runSessionWithImageArtifacts(ctx context.Context, out io.Writer, opts SessionImageRunOptions, directory string, paths []string) error {
+func runSessionWithImageArtifacts(ctx context.Context, out io.Writer, opts SessionImageRunOptions, directory string, paths []string) (runErr error) {
 	if err := validateSessionRecordingRun(opts.SessionRunOptions, opts.AudioOutPath, opts.MaxDuration); err != nil {
 		return err
 	}
@@ -113,7 +113,7 @@ func runSessionWithImageArtifacts(ctx context.Context, out io.Writer, opts Sessi
 	if err != nil {
 		return err
 	}
-	defer releaseClaims()
+	defer func() { runErr = errors.Join(runErr, releaseClaims()) }()
 	return runSessionImageRecording(ctx, out, opts, destination, paths)
 }
 
@@ -181,7 +181,7 @@ func runSessionWithRecordingDirectory(
 	if err != nil {
 		return err
 	}
-	defer releaseClaims()
+	defer func() { runErr = errors.Join(runErr, releaseClaims()) }()
 
 	plan, cleanup, err := planSessionForDirectoryRecordingWithInstructionsAndContext(ctx, opts, systemPrompt, withInstructions)
 	if err != nil {
@@ -279,19 +279,17 @@ func validateSessionRecordingRun(opts SessionRunOptions, audioOutPath string, ma
 	return validateSessionRecordingOptions(opts)
 }
 
-func claimSessionRecordingDirectory(opts *SessionRunOptions, directory string) (string, func(), error) {
+func claimSessionRecordingDirectory(opts *SessionRunOptions, directory string) (string, func() error, error) {
 	claim, err := ensureSessionRecordingClaim(opts)
 	if err != nil {
-		return "", func() {}, err
+		return "", func() error { return nil }, err
 	}
 	directoryClaim, destination, err := ensureSessionRecordingDirectoryClaim(opts, directory)
 	if err != nil {
-		_ = claim.release()
-		return "", func() {}, err
+		return "", func() error { return nil }, errors.Join(err, claim.release())
 	}
-	release := func() {
-		_ = directoryClaim.release()
-		_ = claim.release()
+	release := func() error {
+		return errors.Join(directoryClaim.release(), claim.release())
 	}
 	return destination, release, nil
 }

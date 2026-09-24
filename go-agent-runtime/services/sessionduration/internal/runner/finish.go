@@ -153,7 +153,7 @@ func (r *runLoop) drain(ctx context.Context, planned bool) error {
 		drainErr = r.request.Drain(ctx)
 	}
 	if planned {
-		drainErr = errors.Join(drainErr, sendLoopClose(r.runCtx, r.loop))
+		drainErr = errors.Join(drainErr, sendLoopClose(ctx, r.loop))
 	}
 	r.cancelRun()
 	return drainErr
@@ -287,7 +287,7 @@ func loopJoinTimeout(policy sessionduration.DrainPolicy) time.Duration {
 func (r *runLoop) waitForLoop(ctx context.Context) error {
 	if !r.loopDone {
 		if ctx == nil {
-			ctx = context.Background()
+			return errors.New("session loop join context is required")
 		}
 		select {
 		case r.loopErr = <-r.runErrs:
@@ -300,14 +300,6 @@ func (r *runLoop) waitForLoop(ctx context.Context) error {
 		return nil
 	}
 	return r.loopErr
-}
-
-func waitForLoop(results <-chan error) error {
-	err := <-results
-	if errors.Is(err, context.Canceled) {
-		return nil
-	}
-	return err
 }
 
 func (r *runLoop) cancelRun() {

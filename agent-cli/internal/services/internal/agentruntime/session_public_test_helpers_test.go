@@ -470,9 +470,9 @@ func pageToolRef(catalog webmcp.ToolCatalogSnapshot, name string) webmcp.ToolRef
 	return ""
 }
 
-func executeDynamicPublisherPageCall(t *testing.T, executor messages.ToolExecutor, id, name, arguments string) webmcp.ToolResultEnvelope {
+func executeDynamicPublisherPageCall(t *testing.T, ctx context.Context, executor messages.ToolExecutor, id, name, arguments string) webmcp.ToolResultEnvelope {
 	t.Helper()
-	response, err := executor.Execute(context.Background(), messages.ToolCall{ID: id, Name: name, Arguments: arguments})
+	response, err := executor.Execute(ctx, messages.ToolCall{ID: id, Name: name, Arguments: arguments})
 	if err != nil {
 		t.Fatalf("execute %s: %v", name, err)
 	}

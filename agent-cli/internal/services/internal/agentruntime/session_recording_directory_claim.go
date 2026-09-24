@@ -13,7 +13,10 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 )
 
-const sessionRecordingDirectoryClaimSuffix = ".lock"
+const (
+	sessionRecordingDirectoryClaimSuffix = ".lock"
+	sessionRecordingDirectoryParentMode  = 0o755
+)
 
 var (
 	// ErrSessionRecordingDirectoryClaimed identifies a record directory that is
@@ -115,7 +118,7 @@ func prepareSessionRecordingDestination(path string) (string, error) {
 	}
 	destination := filepath.Clean(path)
 	parent := filepath.Dir(destination)
-	if err := os.MkdirAll(parent, 0o755); err != nil {
+	if err := os.MkdirAll(parent, sessionRecordingDirectoryParentMode); err != nil {
 		return "", recordingDestinationError(transcript.ErrRecordingDestination, "prepare destination", destination, err)
 	}
 
@@ -165,7 +168,7 @@ func acquireSessionRecordingDirectoryClaim(path string) (*sessionRecordingDirect
 	}
 	path = filepath.Clean(path)
 	parent := filepath.Dir(path)
-	if err := os.MkdirAll(parent, 0o755); err != nil {
+	if err := os.MkdirAll(parent, sessionRecordingDirectoryParentMode); err != nil {
 		return nil, recordingDestinationError(transcript.ErrRecordingDestination, "prepare destination", path, err)
 	}
 

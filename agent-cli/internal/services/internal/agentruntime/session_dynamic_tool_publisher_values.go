@@ -116,6 +116,8 @@ func isDynamicToolPublicationEvent(kind webmcp.BrokerEventType) bool {
 	switch kind {
 	case webmcp.BrokerEventSelected, webmcp.BrokerEventCatalogChanged, webmcp.BrokerEventGenerationChanged:
 		return true
+	case webmcp.BrokerEventInvocationCreated, webmcp.BrokerEventInvocationTerminal, webmcp.BrokerEventSessionClosed:
+		return false
 	default:
 		return false
 	}

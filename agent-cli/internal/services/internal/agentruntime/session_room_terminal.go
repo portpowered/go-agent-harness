@@ -229,7 +229,8 @@ func roomParticipantStartupWork(runtime *roomParticipantRuntime, id string) []st
 	if runtime.plan.tracker == nil {
 		return append(outstanding, roomLifecycleWorkLabel(id, "connect"))
 	}
-	if _, ready := runtime.plan.tracker.outcome(); !ready {
+	connectErr, ready := runtime.plan.tracker.outcome()
+	if connectErr == nil && !ready {
 		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "connect"))
 	}
 	return outstanding
@@ -249,7 +250,7 @@ func roomParticipantOwnedWork(runtime *roomParticipantRuntime, id string) []stri
 
 func roomParticipantSessionWork(runtime *roomParticipantRuntime, id string) []string {
 	created, closed, transportDone, closeErr := runtime.lifecycle.ownedSessionSnapshot()
-	outstanding := make([]string, 0, 3)
+	var outstanding []string
 	if created && !closed {
 		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "session.close"))
 	}
@@ -263,7 +264,7 @@ func roomParticipantSessionWork(runtime *roomParticipantRuntime, id string) []st
 }
 
 func roomParticipantLoopWork(runtime *roomParticipantRuntime, id string) []string {
-	outstanding := make([]string, 0, 3)
+	var outstanding []string
 	if runtime.participantDone != nil && !roomChannelClosed(runtime.participantDone) {
 		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "participant.loop"))
 	}

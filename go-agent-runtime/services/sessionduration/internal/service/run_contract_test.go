@@ -80,6 +80,7 @@ func TestRunCancelsLoopBeforeWaitingWhenDrainCallbackIsMissing(t *testing.T) {
 	done := make(chan struct{})
 	result := make(chan error, 1)
 	go func() {
+		//nolint:contextcheck // RunRequest carries the caller context being canceled by this test.
 		result <- New().Run(sessionduration.RunRequest{
 			Context:    ctx,
 			Inferencer: contractInferencer{session: newContractSession()},

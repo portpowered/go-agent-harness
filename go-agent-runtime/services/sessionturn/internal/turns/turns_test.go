@@ -50,18 +50,19 @@ type testSession struct {
 
 type heldCloseSession struct {
 	*testSession
-	started chan struct{}
-	release chan struct{}
-	once    sync.Once
+	started     chan struct{}
+	release     chan struct{}
+	once        sync.Once
+	closeResult error
 }
 
 func (s *heldCloseSession) Close() error {
 	s.once.Do(func() {
 		close(s.started)
 		<-s.release
-		_ = s.testSession.Close()
+		s.closeResult = s.testSession.Close()
 	})
-	return s.closeErr
+	return s.closeResult
 }
 
 func newTestSession() *testSession {

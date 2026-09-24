@@ -124,14 +124,14 @@ func (s *dynamicPublisherCatalogSwitch) switchToB(t *testing.T, ctx context.Cont
 	pageDefinitions := pageDefinitionsFromCatalog(t, s.toolSet, ctx, s.pageB)
 	assertDynamicPublisherSurface(t, got, s.base, pageDefinitions, "A-to-B")
 	assertDynamicPublisherDefinition(t, got, "create_document", "create document B", 2)
-	s.assertStaleCallRecovery(t)
-	s.assertBInvocations(t)
+	s.assertStaleCallRecovery(t, ctx)
+	s.assertBInvocations(t, ctx)
 }
 
-func (s *dynamicPublisherCatalogSwitch) assertStaleCallRecovery(t *testing.T) {
+func (s *dynamicPublisherCatalogSwitch) assertStaleCallRecovery(t *testing.T, ctx context.Context) {
 	t.Helper()
 	invocationsBefore := s.broker.InvocationCount()
-	response := executeDynamicPublisherPageCall(t, s.toolSet.Executor(), "stale-a", "cube_state", `{}`)
+	response := executeDynamicPublisherPageCall(t, ctx, s.toolSet.Executor(), "stale-a", "cube_state", `{}`)
 	if response.OK || response.Error == nil || response.Error.Code != string(webmcp.ErrorStaleToolRef) {
 		t.Fatalf("stale A-only response = %#v, want stale guidance envelope", response)
 	}
@@ -143,9 +143,9 @@ func (s *dynamicPublisherCatalogSwitch) assertStaleCallRecovery(t *testing.T) {
 	}
 }
 
-func (s *dynamicPublisherCatalogSwitch) assertBInvocations(t *testing.T) {
+func (s *dynamicPublisherCatalogSwitch) assertBInvocations(t *testing.T, ctx context.Context) {
 	t.Helper()
-	created := executeDynamicPublisherPageCall(t, s.toolSet.Executor(), "create-b", "create_document", `{"title":"switch-proof","content":"catalog B"}`)
+	created := executeDynamicPublisherPageCall(t, ctx, s.toolSet.Executor(), "create-b", "create_document", `{"title":"switch-proof","content":"catalog B"}`)
 	if !created.OK {
 		t.Fatalf("newly advertised B tool response = %#v, want success", created)
 	}
@@ -153,7 +153,7 @@ func (s *dynamicPublisherCatalogSwitch) assertBInvocations(t *testing.T) {
 	if last.ToolRef != pageToolRef(s.pageB, "create_document") || string(last.Input) != `{"title":"switch-proof","content":"catalog B"}` {
 		t.Fatalf("B invocation = %#v, want current create_document ref and input", last)
 	}
-	shared := executeDynamicPublisherPageCall(t, s.toolSet.Executor(), "shared-b", "shared_action", `{"value":"B"}`)
+	shared := executeDynamicPublisherPageCall(t, ctx, s.toolSet.Executor(), "shared-b", "shared_action", `{"value":"B"}`)
 	if !shared.OK || s.broker.LastInvocation().ToolRef != pageToolRef(s.pageB, "shared_action") {
 		t.Fatalf("same-name B invocation = envelope=%#v invocation=%#v, want B ref", shared, s.broker.LastInvocation())
 	}
@@ -167,7 +167,7 @@ func (s *dynamicPublisherCatalogSwitch) switchBackToA(t *testing.T, ctx context.
 	got := readDynamicPublisherUpdate(t, ctx, s.session)
 	pageDefinitions := pageDefinitionsFromCatalog(t, s.toolSet, ctx, s.pageA)
 	assertDynamicPublisherSurface(t, got, s.base, pageDefinitions, "B-to-A")
-	shared := executeDynamicPublisherPageCall(t, s.toolSet.Executor(), "shared-a", "shared_action", `{"value":"A"}`)
+	shared := executeDynamicPublisherPageCall(t, ctx, s.toolSet.Executor(), "shared-a", "shared_action", `{"value":"A"}`)
 	if !shared.OK || s.broker.LastInvocation().ToolRef != pageToolRef(s.pageA, "shared_action") {
 		t.Fatalf("same-name A invocation = envelope=%#v invocation=%#v, want A ref", shared, s.broker.LastInvocation())
 	}

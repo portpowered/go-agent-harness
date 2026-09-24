@@ -29,7 +29,10 @@ func (t *cancelableTool) Execute(ctx context.Context, call messages.ToolCall) (m
 func TestToolExecutorCloseCancelsAndJoinsActiveInvocation(t *testing.T) {
 	inner := &cancelableTool{started: make(chan struct{})}
 	executor := newToolExecutor(inner, nil, time.Hour, nil, nil, nil, nil)
-	closer := executor.(interface{ Close() error })
+	closer, ok := executor.(interface{ Close() error })
+	if !ok {
+		t.Fatal("tool executor does not implement Close")
+	}
 	callDone := make(chan error, 1)
 	go func() {
 		_, err := executor.Execute(context.Background(), messages.ToolCall{ID: "held", Name: "slow"})

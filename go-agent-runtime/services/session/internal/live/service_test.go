@@ -89,7 +89,9 @@ func (c *testDurationController) Retry(request sessionduration.RetryRequest) ses
 		return sessionduration.RetryDecision{}
 	}
 	if request.Dispatch != nil {
-		_ = request.Dispatch(c.options.Context)
+		if err := request.Dispatch(c.options.Context); err != nil {
+			return sessionduration.RetryDecision{}
+		}
 	}
 	return sessionduration.RetryDecision{Eligible: true, Delay: c.options.Retry.DefaultDelay}
 }

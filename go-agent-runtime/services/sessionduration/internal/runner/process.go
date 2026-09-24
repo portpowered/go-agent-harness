@@ -202,6 +202,7 @@ func shouldStopSession(msg messages.StreamMessage, policy sessionduration.RunPol
 	if policy.CloseAfterOpen || policy.WaitForClose {
 		return false
 	}
+	//nolint:exhaustive // only these terminal message boundaries can stop a session.
 	switch msg.Type {
 	case messages.StreamTypeMessageEnd:
 		if !fact(facts.LastMessageEndAdmitted) || fact(facts.HasToolLifecycleObligation) {
@@ -228,6 +229,7 @@ func shouldStopAudioInputSession(msg messages.StreamMessage, policy sessiondurat
 	if policy.WaitForClose {
 		return isRunTerminalErrorMessage(msg) || msg.Type == messages.StreamTypeSessionClose
 	}
+	//nolint:exhaustive // only these boundaries can stop an audio-input session.
 	switch msg.Type {
 	case messages.StreamTypeMessageEnd:
 		if !fact(facts.LastMessageEndAdmitted) {
@@ -262,6 +264,7 @@ func isRunTerminalErrorMessage(msg messages.StreamMessage) bool {
 }
 
 func shouldDispatchScheduledAudio(msg messages.StreamMessage, policy sessionduration.ScheduledAudioDispatch) bool {
+	//nolint:exhaustive // only these stream types are terminal error boundaries.
 	switch msg.Type {
 	case messages.StreamTypeSessionOpen, messages.StreamTypeMessageEnd, messages.StreamTypeSessionUpdated:
 		return true

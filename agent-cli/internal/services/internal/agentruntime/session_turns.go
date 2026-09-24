@@ -238,14 +238,14 @@ func readTurnResponse(ctx context.Context, session messages.Session) (messages.M
 }
 
 func sessionTurnStreamError(msg messages.StreamMessage) (error, bool) {
-	value, _ := msg.Value.(*messages.ErrorValue)
-	if value != nil && value.IsNonTerminal() {
+	value, ok := msg.Value.(*messages.ErrorValue)
+	if ok && value != nil && value.IsNonTerminal() {
 		return nil, true
 	}
-	if value != nil && value.Err != nil {
+	if ok && value != nil && value.Err != nil {
 		return value.Err, false
 	}
-	if value == nil || strings.TrimSpace(value.Message) == "" {
+	if !ok || value == nil || strings.TrimSpace(value.Message) == "" {
 		return errors.New("session returned an error"), false
 	}
 	return errors.New(value.Message), false

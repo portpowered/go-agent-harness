@@ -204,14 +204,16 @@ func (c *controller) Finalize(ctx context.Context, request sessionduration.Final
 }
 
 func (c *controller) cleanup(ctx context.Context, request sessionduration.FinalizeRequest) []error {
+	var cleanupCtx context.Context
 	if ctx == nil {
-		ctx = c.ctx
-		if ctx == nil {
-			ctx = context.Background()
+		if c.ctx == nil {
+			return []error{errors.New("session duration cleanup context is required")}
 		}
+		//nolint:contextcheck // normalized controller context is the fallback when Finalize has no caller context.
+		cleanupCtx = context.WithoutCancel(c.ctx)
+	} else {
+		cleanupCtx = context.WithoutCancel(ctx)
 	}
-	//nolint:contextcheck // finalization cleanup must outlive caller cancellation.
-	ctx = context.WithoutCancel(ctx)
 	var failures []error
 	appendFailure := func(label string, cleanup func() error) {
 		if cleanup == nil {
@@ -223,12 +225,12 @@ func (c *controller) cleanup(ctx context.Context, request sessionduration.Finali
 	}
 	appendFailure("quiesce session input", request.Quiesce)
 	if request.DrainLoop != nil {
-		appendFailure("drain session", func() error { return c.drainLoop(ctx, request.DrainLoop, request.DrainPolicy) })
+		appendFailure("drain session", func() error { return c.drainLoop(cleanupCtx, request.DrainLoop, request.DrainPolicy) })
 	}
 	if request.Drain != nil {
 		appendFailure("drain session resources", func() error {
 			_, wallSafety := drainDurations(request.DrainPolicy)
-			drainCtx, cancel := context.WithTimeout(ctx, wallSafety)
+			drainCtx, cancel := context.WithTimeout(cleanupCtx, wallSafety)
 			defer cancel()
 			return request.Drain(drainCtx)
 		})
@@ -339,7 +341,9 @@ func (c *controller) expireMaxTimer(timer sessionTimer) {
 	}
 	c.mu.Unlock()
 	c.notifyTimerWorker()
-	_ = c.Expire()
+	if err := c.Expire(); err != nil {
+		c.report(err)
+	}
 }
 
 func (c *controller) startRetry(request scheduledRetry) (sessionTimer, func(context.Context) error) {

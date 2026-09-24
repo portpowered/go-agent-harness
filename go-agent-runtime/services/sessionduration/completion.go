@@ -87,7 +87,7 @@ func (e *ScheduledAudioIncompleteError) Error() string {
 		return ErrScheduledAudioIncomplete.Error()
 	}
 	message := fmt.Sprintf("%s: completed=%d dispatched=%d scheduled=%d", ErrScheduledAudioIncomplete, e.Completed, e.Dispatched, e.Scheduled)
-	annotations := make([]string, 0, 3)
+	var annotations []string
 	if status := strings.TrimSpace(e.ProviderStatus); status != "" {
 		annotations = append(annotations, "status="+status)
 	}

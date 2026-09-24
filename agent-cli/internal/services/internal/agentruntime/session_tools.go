@@ -269,10 +269,12 @@ func (e *sessionToolExecutor) finishFailure(ctx context.Context, call messages.T
 
 func (e *sessionToolExecutor) screenTimeoutDenial(ctx context.Context, call messages.ToolCall, err error) (*cliTools.ScreenCaptureError, bool) {
 	if !errors.Is(err, context.DeadlineExceeded) || ctx.Err() != nil {
-		return nil, false
+		return noScreenTimeoutDenial()
 	}
 	return e.screenPermissionDeniedAfterTimeout(ctx, call)
 }
+
+func noScreenTimeoutDenial() (*cliTools.ScreenCaptureError, bool) { return nil, false }
 
 // screenPermissionDeniedAfterTimeout performs the one optional macOS
 // permission re-check allowed for a timed-out physical-screen call. It uses

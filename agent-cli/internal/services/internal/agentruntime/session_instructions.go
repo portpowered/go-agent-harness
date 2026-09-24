@@ -46,12 +46,12 @@ func RunSessionWithInstructions(ctx context.Context, out io.Writer, opts Session
 	}
 	defer func() { _ = claim.release() }()
 
-	instructions, err := resolveSessionInstructions(opts, systemPrompt)
+	instructions, err := resolveSessionInstructionsContext(ctx, opts, systemPrompt)
 	if err != nil {
 		return err
 	}
 
-	plan, err := planSessionWithResolvedInstructions(opts, instructions)
+	plan, err := planSessionWithResolvedInstructionsContext(ctx, opts, instructions)
 	if err != nil {
 		return err
 	}
@@ -92,12 +92,12 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 	defer func() { _ = claim.release() }()
 	var plan sessionRuntimePlan
 	if opts.ReplayPath != "" && opts.SessionInferencer == nil {
-		plan, err = planSessionRuntime(opts)
+		plan, err = planSessionRuntimeWithContext(ctx, opts)
 	} else {
 		var instructions string
-		instructions, err = resolveSessionInstructions(opts, systemPrompt)
+		instructions, err = resolveSessionInstructionsContext(ctx, opts, systemPrompt)
 		if err == nil {
-			plan, err = planSessionWithResolvedInstructions(opts, instructions)
+			plan, err = planSessionWithResolvedInstructionsContext(ctx, opts, instructions)
 		}
 	}
 	if err != nil {

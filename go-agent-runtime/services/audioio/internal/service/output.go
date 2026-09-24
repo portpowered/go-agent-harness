@@ -17,7 +17,10 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
-const fileOutputWAVMaxDataSize = uint64(^uint32(0)) - 36
+const (
+	fileOutputWAVMaxDataSize uint64      = uint64(^uint32(0)) - 36
+	pcm16FileOutputMode      os.FileMode = 0o644
+)
 
 type output struct {
 	sink       sharedaudio.AudioSink
@@ -235,15 +238,16 @@ func (s *Service) OpenPCM16FileOutput(ctx context.Context, request audioio.PCM16
 	if err != nil {
 		return nil, err
 	}
-	_ = probe.Close()
-	file, err := os.OpenFile(request.Path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
+	if err := probe.Close(); err != nil {
+		return nil, err
+	}
+	file, err := os.OpenFile(request.Path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, pcm16FileOutputMode)
 	if err != nil {
 		return nil, err
 	}
 	raw, err := sharedaudio.NewFileSink("-", file)
 	if err != nil {
-		_ = file.Close()
-		return nil, err
+		return nil, errors.Join(err, file.Close())
 	}
 	sink := &pcm16FileOutput{
 		path: request.Path, raw: raw, writer: file, file: file,
@@ -251,8 +255,7 @@ func (s *Service) OpenPCM16FileOutput(ctx context.Context, request audioio.PCM16
 	}
 	if sink.wav {
 		if err := sink.updateWAVHeaderLocked(); err != nil {
-			_ = file.Close()
-			return nil, err
+			return nil, errors.Join(err, file.Close())
 		}
 	}
 	return sink, nil

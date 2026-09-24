@@ -90,7 +90,7 @@ func (p *publication) forwardEvents(ctx context.Context, events chan<- sessiontu
 			return false
 		}
 	}); err != nil && ctx.Err() == nil {
-		p.fail("watch", p.latestSequence(), err)
+		p.recordFailure("watch", p.latestSequence(), err)
 	}
 }
 
@@ -301,15 +301,21 @@ func (p *publication) lifecycle(value sessionturn.PublicationLifecycle) {
 	}
 }
 func (p *publication) fail(phase string, sequence uint64, err error) error {
+	p.recordFailure(phase, sequence, err)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.state.Err
+}
+
+func (p *publication) recordFailure(phase string, sequence uint64, err error) {
 	if err == nil {
 		err = errors.New("unknown publication failure")
 	}
 	failure := &sessionturn.PublicationError{Phase: phase, Sequence: sequence, Err: err}
 	p.mu.Lock()
 	if p.state.Lifecycle == sessionturn.PublicationFailed {
-		existing := p.state.Err
 		p.mu.Unlock()
-		return existing
+		return
 	}
 	p.state.Lifecycle = sessionturn.PublicationFailed
 	p.state.Err = failure
@@ -318,7 +324,6 @@ func (p *publication) fail(phase string, sequence uint64, err error) error {
 	case p.errors <- failure:
 	default:
 	}
-	return failure
 }
 
 func sameTarget(a, b sessionturn.BrowserEvent) bool {

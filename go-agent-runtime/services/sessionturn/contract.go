@@ -237,6 +237,7 @@ type ToolLifecycleEvent struct {
 	Type   ToolLifecycleEventType
 	CallID string
 	Status messages.SessionSendStatus
+	Err    error
 }
 
 type ToolLifecycleObserver func(ToolLifecycleEvent)

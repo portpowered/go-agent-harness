@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
-	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
-	"strings"
 )
 
 func selectLegacyReplayFramePolicy(options *session.LiveRunOptions) {
@@ -349,15 +349,6 @@ func waitForOpeningContent(value any, ctx context.Context) error {
 		return nil
 	}
 	return ready.waitOpeningReady(ctx)
-}
-func captureMediaEndpoints(session messages.Session, providerMedia sharedaudio.MediaSession, continuous bool) sharedaudio.MediaEndpoints {
-	if !continuous {
-		return providerMedia.RTCMedia()
-	}
-	if configurable, ok := session.(sharedaudio.ConfigurableMediaSession); ok {
-		return configurable.RTCMediaWithOptions(sharedaudio.MediaSessionOptions{InboundContinuous: true})
-	}
-	return providerMedia.RTCMedia()
 }
 func (h *handle) deferProviderClose() bool {
 	if h == nil {

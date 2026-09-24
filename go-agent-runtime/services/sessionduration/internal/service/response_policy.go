@@ -93,6 +93,7 @@ func (c *controller) observeFirstResponseLocked(msg messages.StreamMessage) (arm
 }
 
 func isFirstResponseBoundary(msg messages.StreamMessage) bool {
+	//nolint:exhaustive // only the enumerated events count as first-response evidence.
 	switch msg.Type {
 	case messages.StreamTypeMessageStart, messages.StreamTypeMessageEnd, messages.StreamTypeTextStart,
 		messages.StreamTypeAudioStart, messages.StreamTypeImageStart, messages.StreamTypeToolCallStart,

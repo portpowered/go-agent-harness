@@ -2,6 +2,7 @@ package seed
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -104,7 +105,9 @@ func (s *session) acceptToolResult(ctx context.Context, callID string, requestsC
 	event := sessionturn.ToolLifecycleEvent{Type: sessionturn.ToolResultAccepted, CallID: callID}
 	observation, err := s.applyToolResultAccepted(ctx, callID)
 	if err != nil || !observation.Accepted {
-		return rejectedToolResultEvent(callID)
+		rejected := rejectedToolResultEvent(callID)
+		rejected.Err = err
+		return rejected
 	}
 	if completeResponse && !s.completeToolResponse(ctx, callID) {
 		return rejectedToolResultEvent(callID)
@@ -121,7 +124,9 @@ func (s *session) applyToolResultAccepted(ctx context.Context, callID string) (s
 	if err == nil && observation.Accepted || s.lifecycle.Snapshot().ActiveResponse {
 		return observation, err
 	}
-	_, _ = s.lifecycle.Apply(ctx, sessiontrace.LifecycleEvent{Kind: sessiontrace.LifecycleEventResponseOpen})
+	if _, openErr := s.lifecycle.Apply(ctx, sessiontrace.LifecycleEvent{Kind: sessiontrace.LifecycleEventResponseOpen}); openErr != nil {
+		return observation, errors.Join(err, openErr)
+	}
 	return s.lifecycle.Apply(ctx, event)
 }
 
@@ -133,10 +138,10 @@ func (s *session) completeToolResponse(ctx context.Context, callID string) bool 
 }
 
 func (s *session) rejectToolResult(ctx context.Context, callID string, status messages.SessionSendStatus) sessionturn.ToolLifecycleEvent {
-	_, _ = s.lifecycle.Apply(ctx, sessiontrace.LifecycleEvent{
+	_, err := s.lifecycle.Apply(ctx, sessiontrace.LifecycleEvent{
 		Kind: sessiontrace.LifecycleEventToolResultRejected, CallID: callID, ResultStatus: string(status),
 	})
-	return sessionturn.ToolLifecycleEvent{Type: sessionturn.ToolResultRejected, CallID: callID, Status: status}
+	return sessionturn.ToolLifecycleEvent{Type: sessionturn.ToolResultRejected, CallID: callID, Status: status, Err: err}
 }
 
 func rejectedToolResultEvent(callID string) sessionturn.ToolLifecycleEvent {
