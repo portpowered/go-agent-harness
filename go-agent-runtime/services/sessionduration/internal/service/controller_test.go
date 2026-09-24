@@ -515,3 +515,44 @@ func TestControllerFinalizationDrainsLoopUntilQuiet(t *testing.T) {
 		t.Fatalf("published loop deltas = %+v, want both queued deltas", published)
 	}
 }
+
+func TestFinalizationDrainPublishesLateOutputAndHonorsWallSafety(t *testing.T) {
+	loop := &idleRunLoopProbe{deltas: messages.NewTypedBuffer[messages.StreamMessage](1)}
+	scheduler := &publishOnceDrainScheduler{loop: loop}
+	var published []messages.StreamMessage
+	controller, err := New().Begin(sessionduration.Options{Publication: sessionduration.Publication{Write: func(msg messages.StreamMessage) error {
+		published = append(published, msg)
+		return nil
+	}}})
+	if err != nil {
+		t.Fatalf("Begin: %v", err)
+	}
+	started := time.Now()
+	_, err = controller.Finalize(context.Background(), sessionduration.FinalizeRequest{
+		DrainLoop: loop,
+		DrainPolicy: sessionduration.DrainPolicy{
+			Clock: scheduler, QuietPeriod: time.Minute, WallSafety: 30 * time.Millisecond,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Finalize: %v", err)
+	}
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("finalization drain took %s, exceeded wall-safety bound", elapsed)
+	}
+	if len(published) != 1 || published[0].Type != messages.StreamTypeTextDelta {
+		t.Fatalf("drained output = %+v, want one late text delta", published)
+	}
+}
+
+type publishOnceDrainScheduler struct {
+	loop *idleRunLoopProbe
+	once sync.Once
+}
+
+func (s *publishOnceDrainScheduler) NewTimer(time.Duration) sessionduration.Timer {
+	s.once.Do(func() {
+		s.loop.deltas.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant})
+	})
+	return testNoopTimer{}
+}

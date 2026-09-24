@@ -4969,3 +4969,34 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   integration, race, hermetic, and Wire command on the final exact SHA. Repair
   any locally reproducible issue before pushing and opening the same-task PR.
   Decision remains CONTINUE.
+
+# C276 public contract repairs and exact-head gate checkpoint — 2026-09-23
+
+- Added public session Wire contract tests for session ID allocation, literal
+  instruction resolution, managed-store opening, and missing inferencer errors;
+  added terminal Wire checks for reporter context, independent failure
+  classification, and one-shot cleanup ordering.
+- Added a CLI metrics collector regression for replay-service injection,
+  service-derived capture delta reconciliation, and the explicit missing replay
+  service failure. Added session-duration regressions for malformed PCM,
+  artifact close failure after provider terminal recording, output retained
+  after admission closes, and late-output drain bounded by wall safety.
+- Focused checks pass: `rtk go test -count=1
+  ./go-agent-runtime/services/session/wire
+  ./go-agent-runtime/services/sessionterminal/wire
+  ./go-agent-runtime/services/sessionduration/internal/service` (66 tests / 3
+  packages) and `rtk go test -count=1 ./agent-cli/internal/services/wire` (2
+  tests / 1 package). Package-local coverage is 100% for session Wire and
+  session-terminal Wire; CLI wire coverage joined with the existing full-module
+  profile is 80.65%. Session-duration service remains 84.8% against its 90% floor.
+- `make prepush` on exact source candidate `23f500edbfa64f836adee3dfa11b57a0f7f781e2`
+  passed format, architecture, Wire, vet, lint, staticcheck, build, functional,
+  and instrumented test stages, then failed the four shared coverage floors
+  (CLI Wire 79.00/80%, session Wire 84.60/95%, session-duration service
+  84.50/90%, terminal Wire 88.90/95%). That exact-head run predates the contract
+  tests above; no full gate has yet been run on their candidate.
+- No push or PR handoff. Exact next action: commit this test checkpoint, rerun
+  `make prepush` on that exact SHA, and continue repairing only demonstrated
+  behavior gaps without coverage-only tests. Run the planned C276 functional,
+  integration, race, hermetic, and Wire gates on the final candidate before
+  any PR submission. Decision remains CONTINUE.

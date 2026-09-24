@@ -72,6 +72,35 @@ func TestAdmissionContractRetainsProviderTerminal(t *testing.T) {
 	}
 }
 
+func TestAdmissionDrainRetainsOutputAndTerminalAfterAdmissionCloses(t *testing.T) {
+	inner := newContractSession()
+	output := messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("already read")}
+	terminal := messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValueWithTerminal(
+		"session", "provider finished", "provider_close", messages.TerminalReasonProviderClose,
+		messages.TerminalProvenanceProvider, messages.TerminalOutputComplete,
+	)}
+	source := messages.NewTypedBuffer[messages.StreamMessage](2)
+	if !source.Write(context.Background(), output) || !source.Write(context.Background(), terminal) {
+		t.Fatal("could not queue provider output for close drain")
+	}
+	wrapped := &AdmissionSession{
+		inner: inner, admission: NewEventAdmission(),
+		receive: messages.NewTypedBuffer[messages.StreamMessage](2), done: make(chan struct{}),
+	}
+	wrapped.drainSource(context.Background(), source, false)
+	gotOutput, ok := wrapped.receive.Read()
+	if !ok || gotOutput.Value != output.Value {
+		t.Fatalf("first drained message = %+v, want already-read output", gotOutput)
+	}
+	gotTerminal, ok := wrapped.receive.Read()
+	if !ok || gotTerminal.Value != terminal.Value {
+		t.Fatalf("second drained message = %+v, want provider terminal", gotTerminal)
+	}
+	if !wrapped.IsProviderTerminalMessage(gotTerminal) {
+		t.Fatal("close drain lost provider terminal identity")
+	}
+}
+
 func TestAdmissionInferencerRecordsConnectionFailureAndClosesEmptyBoundary(t *testing.T) {
 	failure := errors.New("connect failed")
 	inferencer := NewAdmissionInferencer(contractInferencer{err: failure}, nil, nil)
@@ -222,6 +251,24 @@ func TestArtifactsPreserveAcceptedAudioTranscriptAndLifecycleErrors(t *testing.T
 	}
 }
 
+func TestArtifactsRejectMalformedPCMWithoutLosingLaterTranscript(t *testing.T) {
+	audio := &artifactAudioSink{}
+	transcriptSink := &artifactTranscriptSink{}
+	artifacts := NewSessionDurationArtifactSetWithSinks(audio, transcriptSink)
+	if err := artifacts.Accept(messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue([]byte{0x01})}); err == nil {
+		t.Fatal("odd-length PCM frame was accepted")
+	}
+	if len(audio.samples) != 0 {
+		t.Fatalf("malformed PCM produced samples: %v", audio.samples)
+	}
+	if err := artifacts.Accept(messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("transcript remains usable")}); err != nil {
+		t.Fatalf("Accept transcript after malformed PCM: %v", err)
+	}
+	if len(transcriptSink.records) != 1 {
+		t.Fatalf("transcript records = %d, want one after rejected PCM", len(transcriptSink.records))
+	}
+}
+
 func TestArtifactContextPreparationAndTerminalRecording(t *testing.T) {
 	var nilContext context.Context
 	if ArtifactsFromContext(nilContext) != nil {
@@ -351,6 +398,75 @@ func TestRunOwnsLoopExecutionAndBoundedCleanup(t *testing.T) {
 		t.Fatalf("cleanup callbacks drained=%v closed=%v", drained, closed)
 	}
 }
+
+func TestRunReportsArtifactCloseFailureAfterRecordingProviderTerminal(t *testing.T) {
+	closeErr := errors.New("transcript close failed")
+	transcriptSink := &artifactTranscriptSink{closeErr: closeErr}
+	artifacts := NewSessionDurationArtifactSetWithSinks(nil, transcriptSink)
+	terminalRecorder := &terminalRecorderProbe{}
+	lifecycleContext := WithTerminalRecorder(WithSessionDurationArtifacts(context.Background(), artifacts), terminalRecorder)
+	lifecycle := ArtifactsFromContext(lifecycleContext)
+	terminalValue := messages.NewSessionCloseValueWithTerminal(
+		"session", "provider finished", "provider_close", messages.TerminalReasonProviderClose,
+		messages.TerminalProvenanceProvider, messages.TerminalOutputComplete,
+	)
+	terminal := messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: terminalValue}
+	loop := &artifactFinalizationRunLoop{
+		deltas: messages.NewTypedBuffer[messages.StreamMessage](2),
+		messages: []messages.StreamMessage{
+			{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("finished")},
+			terminal,
+		},
+	}
+	var written []messages.StreamMessage
+	err := New().Run(sessionduration.RunRequest{
+		Context:    context.Background(),
+		Inferencer: contractInferencer{session: newContractSession()},
+		LoopFactory: func(context.Context, sessionduration.AdmissionInferencer, sessionduration.Controller) (sessionduration.Loop, error) {
+			return loop, nil
+		},
+		Terminal: sessionduration.TerminalSource{
+			Message: func() (messages.StreamMessage, bool) { return terminal, true },
+			Matches: func(candidate messages.StreamMessage) bool { return candidate.Value == terminal.Value },
+		},
+		Publication: sessionduration.Publication{
+			Artifacts: lifecycle,
+			Write: func(msg messages.StreamMessage) error {
+				written = append(written, msg)
+				return nil
+			},
+		},
+		Artifacts: lifecycle,
+	})
+	if !errors.Is(err, closeErr) {
+		t.Fatalf("Run error = %v, want transcript close failure", err)
+	}
+	if len(terminalRecorder.summaries) != 1 || terminalRecorder.summaries[0].Classification != "provider_close" {
+		t.Fatalf("recorded terminal summaries = %+v, want provider terminal", terminalRecorder.summaries)
+	}
+	if len(written) == 0 || written[len(written)-1].Type != messages.StreamTypeSessionClose {
+		t.Fatalf("published stream = %+v, want provider terminal at the end", written)
+	}
+}
+
+type artifactFinalizationRunLoop struct {
+	deltas   *messages.TypedBuffer[messages.StreamMessage]
+	messages []messages.StreamMessage
+}
+
+func (l *artifactFinalizationRunLoop) Run(ctx context.Context) error {
+	for _, msg := range l.messages {
+		if !l.deltas.Write(ctx, msg) {
+			return ctx.Err()
+		}
+	}
+	return nil
+}
+
+func (l *artifactFinalizationRunLoop) Deltas() *messages.TypedBuffer[messages.StreamMessage] {
+	return l.deltas
+}
+func (l *artifactFinalizationRunLoop) Send(context.Context, []messages.Message) error { return nil }
 
 //nolint:contextcheck // The test passes its request context into a goroutine to observe shutdown.
 func TestRunCancelsLoopBeforeWaitingWhenDrainCallbackIsMissing(t *testing.T) {
