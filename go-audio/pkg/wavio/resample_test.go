@@ -151,28 +151,35 @@ func TestResampleBoundarySignalsStayInPCM16Range(t *testing.T) {
 					if err != nil {
 						t.Fatalf("Resample() error = %v", err)
 					}
-					energy := 0
-					for index, sample := range got {
-						value := int64(sample)
-						if value < pcm16Minimum || value > pcm16Maximum {
-							t.Fatalf("sample %d = %d, outside PCM16 range", index, sample)
-						}
-						if sample != 0 {
-							energy++
-						}
-						if test.wantPolari > 0 && sample <= 0 {
-							t.Fatalf("sample %d = %d, crossed positive polarity", index, sample)
-						}
-						if test.wantPolari < 0 && sample >= 0 {
-							t.Fatalf("sample %d = %d, crossed negative polarity", index, sample)
-						}
-					}
-					if energy == 0 {
-						t.Fatal("boundary signal lost all energy")
-					}
+					assertBoundaryResampleOutput(t, got, test.wantPolari)
 				})
 			}
 		}
+	}
+}
+
+// assertBoundaryResampleOutput checks that resampled boundary signals stay in
+// PCM16 range, keep the expected polarity, and retain some energy.
+func assertBoundaryResampleOutput(t *testing.T, got []int16, wantPolarity int) {
+	t.Helper()
+	energy := 0
+	for index, sample := range got {
+		value := int64(sample)
+		if value < pcm16Minimum || value > pcm16Maximum {
+			t.Fatalf("sample %d = %d, outside PCM16 range", index, sample)
+		}
+		if sample != 0 {
+			energy++
+		}
+		if wantPolarity > 0 && sample <= 0 {
+			t.Fatalf("sample %d = %d, crossed positive polarity", index, sample)
+		}
+		if wantPolarity < 0 && sample >= 0 {
+			t.Fatalf("sample %d = %d, crossed negative polarity", index, sample)
+		}
+	}
+	if energy == 0 {
+		t.Fatal("boundary signal lost all energy")
 	}
 }
 

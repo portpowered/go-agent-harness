@@ -207,20 +207,6 @@ func (g *PCM16FeedbackGate) WritePlayback(ctx context.Context, samples []int16, 
 	return nil
 }
 
-func (g *PCM16FeedbackGate) captureNeedsReanchorLocked() bool {
-	if !g.playbackSeen {
-		return true
-	}
-	leadBound := g.config.AnalysisWindow
-	if lag := g.config.CorrelationLagWindow.Min; lag < 0 && -lag > leadBound {
-		leadBound = -lag
-	}
-	if lag := g.config.CorrelationLagWindow.Max; lag > leadBound {
-		leadBound = lag
-	}
-	return g.capturePosition > addPCM16FeedbackDuration(g.playbackPosition, leadBound)
-}
-
 // FilterCapture observes raw microphone PCM before provider delivery. Frames
 // that cannot yet be classified remain bounded by MaximumReleaseLatency;
 // confirmed feedback is discarded and all other released frames preserve
@@ -251,16 +237,7 @@ func (g *PCM16FeedbackGate) FilterCapture(ctx context.Context, samples []int16) 
 		// input. Do not retain it in the detector: otherwise a later speaker
 		// frame could be compared with stale microphone audio from before
 		// playback began (or after the acoustic tail ended).
-		g.resetCaptureEvidenceLocked()
-		g.state = pcm16FeedbackGateIdle
-		var released [][]int16
-		if g.startupAmbiguousEvidence {
-			g.pending = nil
-		} else {
-			released = g.releaseAllLocked()
-		}
-		g.startupAmbiguousEvidence = false
-		return append(released, owned), nil
+		return g.releaseOutsidePlaybackLocked(owned), nil
 	}
 	if g.state == pcm16FeedbackGateSuppressing || g.state == pcm16FeedbackGateDraining {
 		return g.classifySuppressedCaptureLocked(ctx, owned, start, end)
@@ -276,47 +253,66 @@ func (g *PCM16FeedbackGate) FilterCapture(ctx context.Context, samples []int16) 
 	g.pending = append(g.pending, heldPCM16CaptureFrame{samples: owned, start: start})
 
 	if observation.Confirmed() {
-		lag := observation.Measurement.BestAbsoluteLag
-		g.confirmedLag = lag
-		tolerance := pcm16DeviceDurationAtRate(FrameSize, g.captureRate)
-		probeWindow := selfhearing.PCM16LagWindow{Min: lag - tolerance, Max: lag + tolerance}
-		// Each assistant response may have a different device/callback lag. Clamp
-		// to the immutable session policy, not the probe's prior response window:
-		// disjoint successive windows would otherwise clamp into Min > Max.
-		configuredWindow := g.config.CorrelationLagWindow
-		if probeWindow.Min < configuredWindow.Min {
-			probeWindow.Min = configuredWindow.Min
-		}
-		if probeWindow.Max > configuredWindow.Max {
-			probeWindow.Max = configuredWindow.Max
-		}
-		if err := g.probe.RetargetCorrelationLagWindow(probeWindow); err != nil {
-			return nil, err
-		}
-		g.state = pcm16FeedbackGateSuppressing
-		g.suppressUntil = g.playbackTailEndLocked()
-		g.pending = nil
-		g.startupAmbiguousEvidence = false
-		g.resetCaptureEvidenceLocked()
-		g.warnOnceLocked()
-		return nil, nil
+		return nil, g.enterSuppressionLocked(observation.Measurement.BestAbsoluteLag)
 	}
+	return g.releaseObservedLocked(observation, start, end), nil
+}
 
-	// A rolling detector can find enough samples for a below-threshold
-	// candidate before the full startup window has overlapped both streams. In
-	// that short interval, retain the capture rather than releasing a genuine
-	// loop on the basis of a truncated alignment. The default analysis window
-	// is also the documented maximum release latency, so this does not extend
-	// the user-visible bound.
-	stableNonFeedback := observation.Classification == selfhearing.PCM16SelfHearingNonFeedback && end >= g.config.AnalysisWindow
+// releaseOutsidePlaybackLocked handles capture outside the playback horizon:
+// ambiguous startup evidence is dropped, other held frames are released, and
+// the new frame follows them in capture order.
+func (g *PCM16FeedbackGate) releaseOutsidePlaybackLocked(owned []int16) [][]int16 {
+	g.resetCaptureEvidenceLocked()
+	g.state = pcm16FeedbackGateIdle
+	var released [][]int16
+	if g.startupAmbiguousEvidence {
+		g.pending = nil
+	} else {
+		released = g.releaseAllLocked()
+	}
+	g.startupAmbiguousEvidence = false
+	return append(released, owned)
+}
+
+// enterSuppressionLocked records a confirmed feedback lag, retargets the
+// probe around it, and discards held capture while the gate suppresses.
+func (g *PCM16FeedbackGate) enterSuppressionLocked(lag time.Duration) error {
+	g.confirmedLag = lag
+	tolerance := pcm16DeviceDurationAtRate(FrameSize, g.captureRate)
+	probeWindow := selfhearing.PCM16LagWindow{Min: lag - tolerance, Max: lag + tolerance}
+	// Each assistant response may have a different device/callback lag. Clamp
+	// to the immutable session policy, not the probe's prior response window:
+	// disjoint successive windows would otherwise clamp into Min > Max.
+	configuredWindow := g.config.CorrelationLagWindow
+	if probeWindow.Min < configuredWindow.Min {
+		probeWindow.Min = configuredWindow.Min
+	}
+	if probeWindow.Max > configuredWindow.Max {
+		probeWindow.Max = configuredWindow.Max
+	}
+	if err := g.probe.RetargetCorrelationLagWindow(probeWindow); err != nil {
+		return err
+	}
+	g.state = pcm16FeedbackGateSuppressing
+	g.suppressUntil = g.playbackTailEndLocked()
+	g.pending = nil
+	g.startupAmbiguousEvidence = false
+	g.resetCaptureEvidenceLocked()
+	g.warnOnceLocked()
+	return nil
+}
+
+// releaseObservedLocked applies a non-confirmed primary classification to the
+// held capture queue and returns the frames that may reach the provider.
+func (g *PCM16FeedbackGate) releaseObservedLocked(observation selfhearing.PCM16SelfHearingObservation, start, end time.Duration) [][]int16 {
 	if observation.Classification == selfhearing.PCM16SelfHearingNoEvidence && g.startupAmbiguousEvidence && g.playbackIsRelevantLocked(start) {
 		g.pending = nil
 		g.startupAmbiguousEvidence = false
 		g.resetCaptureEvidenceLocked()
 		g.state = pcm16FeedbackGateIdle
-		return nil, nil
+		return nil
 	}
-	if !g.playbackIsRelevantLocked(start) || observation.Classification == selfhearing.PCM16SelfHearingNoEvidence || observation.Classification == selfhearing.PCM16SelfHearingRateMismatch || stableNonFeedback {
+	if g.observationReleasesHeldLocked(observation, start, end) {
 		if g.state == pcm16FeedbackGateSuppressing && g.playbackIsRelevantLocked(start) {
 			g.state = pcm16FeedbackGateDraining
 		} else {
@@ -327,7 +323,7 @@ func (g *PCM16FeedbackGate) FilterCapture(ctx context.Context, samples []int16) 
 		if observation.Classification != selfhearing.PCM16SelfHearingNonFeedback {
 			g.resetCaptureEvidenceLocked()
 		}
-		return released, nil
+		return released
 	}
 
 	if g.state == pcm16FeedbackGateIdle {
@@ -337,9 +333,24 @@ func (g *PCM16FeedbackGate) FilterCapture(ctx context.Context, samples []int16) 
 		g.startupAmbiguousEvidence = true
 	}
 	if g.startupAmbiguousEvidence {
-		return nil, nil
+		return nil
 	}
-	return g.releaseExpiredLocked(end), nil
+	return g.releaseExpiredLocked(end)
+}
+
+// observationReleasesHeldLocked reports whether a non-confirmed observation
+// ends analysis: playback is no longer relevant, there is no comparable
+// evidence, the rates mismatch, or non-feedback evidence spans the startup
+// analysis window.
+func (g *PCM16FeedbackGate) observationReleasesHeldLocked(observation selfhearing.PCM16SelfHearingObservation, start, end time.Duration) bool {
+	// A rolling detector can find enough samples for a below-threshold
+	// candidate before the full startup window has overlapped both streams. In
+	// that short interval, retain the capture rather than releasing a genuine
+	// loop on the basis of a truncated alignment. The default analysis window
+	// is also the documented maximum release latency, so this does not extend
+	// the user-visible bound.
+	stableNonFeedback := observation.Classification == selfhearing.PCM16SelfHearingNonFeedback && end >= g.config.AnalysisWindow
+	return !g.playbackIsRelevantLocked(start) || observation.Classification == selfhearing.PCM16SelfHearingNoEvidence || observation.Classification == selfhearing.PCM16SelfHearingRateMismatch || stableNonFeedback
 }
 
 // classifySuppressedCaptureLocked re-classifies one already-confirmed-loop
@@ -508,27 +519,6 @@ func (g *PCM16FeedbackGate) releaseExpiredLocked(currentEnd time.Duration) [][]i
 		g.pending = nil
 	}
 	return released
-}
-
-func (g *PCM16FeedbackGate) playbackIsRelevantLocked(captureStart time.Duration) bool {
-	if !g.playbackSeen {
-		return false
-	}
-	// Capture can be ahead of the sink by one bounded correlation lag. The
-	// acoustic tail then covers late speaker bleed after the last accepted
-	// playback frame.
-	horizon := g.suppressUntil
-	if horizon < g.playbackTailEndLocked() {
-		horizon = g.playbackTailEndLocked()
-	}
-	if maxLag := g.config.CorrelationLagWindow.Max; maxLag > 0 {
-		horizon += maxLag
-	}
-	return captureStart < horizon
-}
-
-func (g *PCM16FeedbackGate) playbackTailEndLocked() time.Duration {
-	return addPCM16FeedbackDuration(g.lastPlaybackEnd, g.config.PostPlaybackAcousticTail)
 }
 
 // FeedbackConfirmed reports whether this gate has ever classified captured

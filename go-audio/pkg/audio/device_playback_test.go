@@ -46,7 +46,7 @@ func TestPlaybackQueueWatermarksLeaveCallbackReserveBelowHardCapacity(t *testing
 		if want := rate * int(DefaultPlaybackHighWatermark/time.Millisecond) / 1000; high != want {
 			t.Fatalf("%d Hz high watermark = %d, want %d", rate, high, want)
 		}
-		if !(0 < low && low < high && high < capacity) {
+		if low <= 0 || low >= high || high >= capacity {
 			t.Fatalf("%d Hz watermarks = low:%d high:%d capacity:%d, want strict ordering", rate, low, high, capacity)
 		}
 	}
@@ -161,8 +161,7 @@ func TestPlaybackQueueHandlesInvalidInputsAndPCM16Callbacks(t *testing.T) {
 	if got := q.ReadPCM16(bytes); got != 2 {
 		t.Fatalf("ReadPCM16 count = %d, want 2", got)
 	}
-	decoded := make([]int16, 2)
-	codec.DecodePCM16Into(decoded, bytes)
+	decoded := decodePCM16ForTest(t, bytes)
 	if !reflect.DeepEqual(decoded, []int16{101, -202}) {
 		t.Fatalf("ReadPCM16 decoded = %v, want [101 -202]", decoded)
 	}
@@ -258,6 +257,17 @@ func TestPlaybackQueueRingWrapPreservesFIFO(t *testing.T) {
 	if got, want := q.Dequeue(16), int16Samples(9, 16); !reflect.DeepEqual(got, want) {
 		t.Fatalf("wrapped FIFO = %v, want %v", got, want)
 	}
+}
+
+// decodePCM16ForTest decodes little-endian PCM16 bytes, failing the test on a
+// codec error.
+func decodePCM16ForTest(t *testing.T, pcm []byte) []int16 {
+	t.Helper()
+	decoded := make([]int16, len(pcm)/2)
+	if err := codec.DecodePCM16Into(decoded, pcm); err != nil {
+		t.Fatalf("DecodePCM16Into() = %v", err)
+	}
+	return decoded
 }
 
 func int16Samples(start, count int) []int16 {

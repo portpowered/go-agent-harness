@@ -1,6 +1,7 @@
 package selfhearing_test
 
 import (
+	"context"
 	"errors"
 	"math"
 	"strings"
@@ -86,12 +87,13 @@ func TestPCM16SelfHearingRejectsSampleRateThatOverflowsBufferConversion(t *testi
 func TestPCM16SelfHearingContextNilIsTreatedAsUncancelled(t *testing.T) {
 	detector := newSelfHearingDetector(t, selfhearing.DefaultSelfHearingConfig())
 	frame := selfhearing.PCM16TimedFrame{Samples: testSignal(20, 89), SampleRate: 1000}
-	//lint:ignore SA1012 deliberately exercising the documented nil-context fast path in ObservePlaybackContext.
-	if err := detector.ObservePlaybackContext(nil, frame); err != nil {
+	// A typed nil variable deliberately exercises the documented nil-context
+	// fast path without passing a literal nil Context.
+	var nilContext context.Context
+	if err := detector.ObservePlaybackContext(nilContext, frame); err != nil {
 		t.Fatalf("ObservePlaybackContext(nil, frame) = %v, want nil", err)
 	}
-	//lint:ignore SA1012 deliberately exercising the documented nil-context fast path in ObserveCaptureContext.
-	if _, err := detector.ObserveCaptureContext(nil, frame); err != nil {
+	if _, err := detector.ObserveCaptureContext(nilContext, frame); err != nil {
 		t.Fatalf("ObserveCaptureContext(nil, frame) = %v, want nil", err)
 	}
 }

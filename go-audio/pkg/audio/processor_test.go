@@ -17,32 +17,7 @@ func TestProcessorChunkInvariantAndExactTail(t *testing.T) {
 			input[i] = int16((i*137)%15000 - 7500)
 		}
 		process := func(chunk int) ([]int16, int) {
-			p, err := audio.NewProcessor(audio.PCM16DeviceFormat(rates[0]), audio.PCM16DeviceFormat(rates[1]), 480)
-			if err != nil {
-				t.Fatal(err)
-			}
-			var got []int16
-			ends := 0
-			for i := 0; i < len(input); i += chunk {
-				end := min(i+chunk, len(input))
-				frames, err := p.Process(audio.PCMFrame{Samples: input[i:end], EndOfResponse: end == len(input), StreamID: "s", Epoch: 2})
-				if err != nil {
-					t.Fatal(err)
-				}
-				for _, f := range frames {
-					if f.StartSample != uint64(len(got)) || f.Epoch != 2 || f.StreamID != "s" || f.Format.SampleRate != rates[1] {
-						t.Fatalf("lineage=%+v", f)
-					}
-					got = append(got, f.Samples...)
-					if f.EndOfResponse {
-						ends++
-					}
-				}
-			}
-			if _, err := p.Process(audio.PCMFrame{}); !errors.Is(err, wavio.ErrResamplerEnded) {
-				t.Fatalf("double flush=%v", err)
-			}
-			return got, ends
+			return processChunkedForTest(t, input, rates, chunk)
 		}
 		whole, _ := process(len(input))
 		for _, size := range []int{1, 7, 159, 480, 997} {
@@ -52,6 +27,42 @@ func TestProcessorChunkInvariantAndExactTail(t *testing.T) {
 			}
 		}
 	}
+}
+
+// processorTestFrameSamples is the output frame size used by chunking tests.
+const processorTestFrameSamples = 480
+
+// processChunkedForTest feeds input to a fresh processor in chunk-sized
+// frames, checks per-frame lineage, and returns the concatenated output and
+// the number of end-of-response markers observed.
+func processChunkedForTest(t *testing.T, input []int16, rates [2]int, chunk int) ([]int16, int) {
+	t.Helper()
+	p, err := audio.NewProcessor(audio.PCM16DeviceFormat(rates[0]), audio.PCM16DeviceFormat(rates[1]), processorTestFrameSamples)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []int16
+	ends := 0
+	for i := 0; i < len(input); i += chunk {
+		end := min(i+chunk, len(input))
+		frames, err := p.Process(audio.PCMFrame{Samples: input[i:end], EndOfResponse: end == len(input), StreamID: "s", Epoch: 2})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, f := range frames {
+			if f.StartSample != uint64(len(got)) || f.Epoch != 2 || f.StreamID != "s" || f.Format.SampleRate != rates[1] {
+				t.Fatalf("lineage=%+v", f)
+			}
+			got = append(got, f.Samples...)
+			if f.EndOfResponse {
+				ends++
+			}
+		}
+	}
+	if _, err := p.Process(audio.PCMFrame{}); !errors.Is(err, wavio.ErrResamplerEnded) {
+		t.Fatalf("double flush=%v", err)
+	}
+	return got, ends
 }
 
 func TestProcessorResetDiscardsPendingWithoutPadding(t *testing.T) {

@@ -111,10 +111,8 @@ func ConvertPCM16Bytes(pcm []byte, sourceChannels, sourceRate, targetChannels, t
 	if err != nil {
 		return nil, err
 	}
+	source := pcm16FrameSource{samples: sourceSamples, channels: sourceChannels, frames: sourceFrames}
 	outputSamples := make([]int16, outputSampleCount)
-	readSample := func(frame, channel int) int16 {
-		return sourceSamples[frame*sourceChannels+channel]
-	}
 	for outputFrame := 0; outputFrame < outputFrames; outputFrame++ {
 		position := float64(outputFrame) * float64(sourceRate) / float64(targetRate)
 		lower := int(position)
@@ -127,35 +125,57 @@ func ConvertPCM16Bytes(pcm []byte, sourceChannels, sourceRate, targetChannels, t
 		}
 		fraction := position - float64(lower)
 		for targetChannel := 0; targetChannel < targetChannels; targetChannel++ {
-			var value float64
-			switch {
-			case sourceChannels == 1:
-				value = interpolatePCM16(readSample(lower, 0), readSample(upper, 0), fraction)
-			case targetChannels == 1:
-				var lowerSum, upperSum int64
-				for sourceChannel := 0; sourceChannel < sourceChannels; sourceChannel++ {
-					lowerSum += int64(readSample(lower, sourceChannel))
-					upperSum += int64(readSample(upper, sourceChannel))
-				}
-				value = interpolateFloat(float64(lowerSum)/float64(sourceChannels), float64(upperSum)/float64(sourceChannels), fraction)
-			case sourceChannels == targetChannels:
-				value = interpolatePCM16(readSample(lower, targetChannel), readSample(upper, targetChannel), fraction)
-			default:
-				sourceChannel := targetChannel
-				if sourceChannel >= sourceChannels {
-					sourceChannel = sourceChannels - 1
-				}
-				value = interpolatePCM16(readSample(lower, sourceChannel), readSample(upper, sourceChannel), fraction)
-			}
-			if value > 32767 {
-				value = 32767
-			} else if value < -32768 {
-				value = -32768
-			}
-			outputSamples[outputFrame*targetChannels+targetChannel] = int16(math.Round(value))
+			value := source.interpolate(lower, upper, fraction, targetChannel, targetChannels)
+			outputSamples[outputFrame*targetChannels+targetChannel] = int16(math.Round(clampPCM16Float(value)))
 		}
 	}
 	return codec.EncodePCM16(outputSamples), nil
+}
+
+// pcm16FrameSource reads interleaved decoded PCM16 frames for
+// ConvertPCM16Bytes.
+type pcm16FrameSource struct {
+	samples  []int16
+	channels int
+	frames   int
+}
+
+func (s pcm16FrameSource) sample(frame, channel int) int16 {
+	return s.samples[frame*s.channels+channel]
+}
+
+// interpolate returns the unclamped value for one target channel between the
+// lower and upper source frames, applying mono expansion, downmixing, or
+// final-channel repetition as documented on ConvertPCM16Bytes.
+func (s pcm16FrameSource) interpolate(lower, upper int, fraction float64, targetChannel, targetChannels int) float64 {
+	switch {
+	case s.channels == 1:
+		return interpolatePCM16(s.sample(lower, 0), s.sample(upper, 0), fraction)
+	case targetChannels == 1:
+		var lowerSum, upperSum int64
+		for sourceChannel := 0; sourceChannel < s.channels; sourceChannel++ {
+			lowerSum += int64(s.sample(lower, sourceChannel))
+			upperSum += int64(s.sample(upper, sourceChannel))
+		}
+		return interpolateFloat(float64(lowerSum)/float64(s.channels), float64(upperSum)/float64(s.channels), fraction)
+	case s.channels == targetChannels:
+		return interpolatePCM16(s.sample(lower, targetChannel), s.sample(upper, targetChannel), fraction)
+	default:
+		sourceChannel := targetChannel
+		if sourceChannel >= s.channels {
+			sourceChannel = s.channels - 1
+		}
+		return interpolatePCM16(s.sample(lower, sourceChannel), s.sample(upper, sourceChannel), fraction)
+	}
+}
+
+func clampPCM16Float(value float64) float64 {
+	if value > math.MaxInt16 {
+		return math.MaxInt16
+	} else if value < math.MinInt16 {
+		return math.MinInt16
+	}
+	return value
 }
 
 func invalidPCM16ConversionChannels(sourceChannels, targetChannels int) bool {
