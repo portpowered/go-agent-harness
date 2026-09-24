@@ -1,7 +1,6 @@
 package service
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -109,8 +108,12 @@ func (r *runLoop) retry(msg messages.StreamMessage) error {
 	if !ok {
 		return errors.New("session duration loop does not support provider session events")
 	}
-	if err := r.waitForRetry(decision.Delay); err != nil {
+	waited, err := r.waitForRetry(decision.Delay)
+	if err != nil {
 		return err
+	}
+	if !waited {
+		return r.finish(false, nil)
 	}
 	control := messages.StreamMessage{Type: messages.StreamTypeResponseCreate, Value: messages.NewResponseCreateValue()}
 	if err := sender.SendSessionEvent(r.runCtx, control); err != nil {
@@ -122,31 +125,28 @@ func (r *runLoop) retry(msg messages.StreamMessage) error {
 	return nil
 }
 
-func (r *runLoop) waitForRetry(delay time.Duration) error {
+func (r *runLoop) waitForRetry(delay time.Duration) (bool, error) {
 	if delay <= 0 {
-		return nil
+		return true, nil
 	}
 	if r.request.Clock == nil {
-		return sessionduration.ErrSchedulerUnavailable
+		return false, sessionduration.ErrSchedulerUnavailable
 	}
 	timer := r.request.Clock.NewTimer(delay)
 	if timer == nil {
-		return errors.New("session duration clock returned a nil retry timer")
+		return false, errors.New("session duration clock returned a nil retry timer")
 	}
 	defer timer.Stop()
 	select {
 	case <-timer.C():
-		return nil
+		return true, nil
 	case err := <-r.controller.Errors():
-		return err
+		return false, err
 	case <-r.request.Done:
-		if err := runLoopDoneError(r.request); err != nil {
-			return err
-		}
-		return context.Canceled
+		return false, runLoopDoneError(r.request)
 	case <-r.ctx.Done():
-		return r.ctx.Err()
+		return false, r.ctx.Err()
 	case <-r.runCtx.Done():
-		return r.runCtx.Err()
+		return false, r.runCtx.Err()
 	}
 }
