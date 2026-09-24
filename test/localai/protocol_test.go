@@ -357,7 +357,6 @@ func readResponse(ctx context.Context, conn *websocket.Conn) (responseObservatio
 			observation.responseStatus = firstString(event.data, "response.status", "status")
 			statusReason := firstString(event.data, "response.status_details.reason", "status_details.reason")
 			if observation.responseStatus == "cancelled" || statusReason == "turn_detected" || statusReason == "client_cancelled" {
-				cancelled = true
 				observation.cancellationObserved = true
 			}
 			return observation, nil

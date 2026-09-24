@@ -7,6 +7,7 @@ import (
 	"os"
 	"runtime"
 	"runtime/debug"
+	"strings"
 	"time"
 
 	"github.com/chromedp/cdproto/browser"
@@ -151,83 +152,73 @@ func printJSON(value any) {
 	fmt.Println(string(encoded))
 }
 
+// probeCommand describes one subcommand: the operands it requires after its
+// name and the probe it runs. A nil report prints nothing.
+type probeCommand struct {
+	operands []string
+	run      func(operands []string) (any, error)
+}
+
+const endpointOperand = "<browser-websocket-endpoint>"
+
+func probeCommands() map[string]probeCommand {
+	return map[string]probeCommand{
+		"cdp-version": {operands: []string{endpointOperand}, run: func(operands []string) (any, error) {
+			return readCDPVersion(operands[0])
+		}},
+		"webmcp-matrix": {operands: []string{endpointOperand}, run: func(operands []string) (any, error) {
+			return runWebMCPMatrix(operands[0])
+		}},
+		"detach-probe": {operands: []string{endpointOperand, "<target-id>", "<initial|reattach>"}, run: func(operands []string) (any, error) {
+			return runDetachProbe(operands[0], operands[1], operands[2])
+		}},
+		"serve-detach-fixture": {run: func([]string) (any, error) {
+			return nil, serveDetachFixture()
+		}},
+		"hermetic": {operands: []string{endpointOperand}, run: func(operands []string) (any, error) {
+			return runHermeticProbe(operands[0])
+		}},
+		"watch-cross-process": {operands: []string{endpointOperand, "<agent-cli-binary>"}, run: func(operands []string) (any, error) {
+			return runWatchCrossProcessProbe(operands[0], operands[1])
+		}},
+	}
+}
+
+const (
+	exitProbeFailed = 1
+	exitUsage       = 2
+)
+
+// runProbeCommand runs the subcommand named by args[1] and returns the
+// process exit status.
+func runProbeCommand(args []string) int {
+	command, ok := probeCommands()[args[1]]
+	if !ok {
+		fmt.Fprintln(os.Stderr, "usage: go run . [cdp-version <browser-websocket-endpoint> | webmcp-matrix <browser-websocket-endpoint> | detach-probe <browser-websocket-endpoint> <target-id> <initial|reattach> | serve-detach-fixture | hermetic <browser-websocket-endpoint> | watch-cross-process <browser-websocket-endpoint> <agent-cli-binary>]")
+		return exitUsage
+	}
+	operands := args[2:]
+	if len(operands) != len(command.operands) {
+		fmt.Fprintln(os.Stderr, "usage: go run . "+strings.Join(append([]string{args[1]}, command.operands...), " "))
+		return exitUsage
+	}
+	report, err := command.run(operands)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s: %v\n", args[1], err)
+		return exitProbeFailed
+	}
+	if report != nil {
+		printJSON(report)
+	}
+	return 0
+}
+
 func main() {
 	if len(os.Args) > 1 {
-		switch os.Args[1] {
-		case "cdp-version":
-			if len(os.Args) != 3 {
-				fmt.Fprintln(os.Stderr, "usage: go run . cdp-version <browser-websocket-endpoint>")
-				os.Exit(2)
-			}
-			report, err := readCDPVersion(os.Args[2])
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "cdp-version: %v\n", err)
-				os.Exit(1)
-			}
-			printJSON(report)
-			return
-		case "webmcp-matrix":
-			if len(os.Args) != 3 {
-				fmt.Fprintln(os.Stderr, "usage: go run . webmcp-matrix <browser-websocket-endpoint>")
-				os.Exit(2)
-			}
-			report, err := runWebMCPMatrix(os.Args[2])
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "webmcp-matrix: %v\n", err)
-				os.Exit(1)
-			}
-			printJSON(report)
-			return
-		case "detach-probe":
-			if len(os.Args) != 5 {
-				fmt.Fprintln(os.Stderr, "usage: go run . detach-probe <browser-websocket-endpoint> <target-id> <initial|reattach>")
-				os.Exit(2)
-			}
-			report, err := runDetachProbe(os.Args[2], os.Args[3], os.Args[4])
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "detach-probe: %v\n", err)
-				os.Exit(1)
-			}
-			printJSON(report)
-			return
-		case "serve-detach-fixture":
-			if len(os.Args) != 2 {
-				fmt.Fprintln(os.Stderr, "usage: go run . serve-detach-fixture")
-				os.Exit(2)
-			}
-			if err := serveDetachFixture(); err != nil {
-				fmt.Fprintf(os.Stderr, "serve-detach-fixture: %v\n", err)
-				os.Exit(1)
-			}
-			return
-		case "hermetic":
-			if len(os.Args) != 3 {
-				fmt.Fprintln(os.Stderr, "usage: go run . hermetic <browser-websocket-endpoint>")
-				os.Exit(2)
-			}
-			report, err := runHermeticProbe(os.Args[2])
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "hermetic: %v\n", err)
-				os.Exit(1)
-			}
-			printJSON(report)
-			return
-		case "watch-cross-process":
-			if len(os.Args) != 4 {
-				fmt.Fprintln(os.Stderr, "usage: go run . watch-cross-process <browser-websocket-endpoint> <agent-cli-binary>")
-				os.Exit(2)
-			}
-			report, err := runWatchCrossProcessProbe(os.Args[2], os.Args[3])
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "watch-cross-process: %v\n", err)
-				os.Exit(1)
-			}
-			printJSON(report)
-			return
-		default:
-			fmt.Fprintln(os.Stderr, "usage: go run . [cdp-version <browser-websocket-endpoint> | webmcp-matrix <browser-websocket-endpoint> | detach-probe <browser-websocket-endpoint> <target-id> <initial|reattach> | serve-detach-fixture | hermetic <browser-websocket-endpoint> | watch-cross-process <browser-websocket-endpoint> <agent-cli-binary>]")
-			os.Exit(2)
+		if status := runProbeCommand(os.Args); status != 0 {
+			os.Exit(status)
 		}
+		return
 	}
 
 	printJSON(bindingSmoke())

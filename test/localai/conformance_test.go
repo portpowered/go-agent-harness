@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 type behaviorObservation struct {
@@ -229,78 +231,120 @@ func runVADBargeIn(t *testing.T, ctx context.Context, endpoint endpointConfig) (
 		return behaviorObservation{}, fmt.Errorf("append initial VAD silence: %w", err)
 	}
 
-	var observation responseObservation
-	playback := &playbackConsumer{}
-	bargeSent := false
-	vadStarted := false
-	cancelled := false
-	flushPlayback := func() {
-		if cancelled {
-			return
-		}
-		cancelled = true
-		playback.flush()
-	}
-	sendBargeAudio := func() error {
-		if bargeSent {
-			return nil
-		}
-		if err := appendAudio(ctx, conn, audio, endpoint.inputRate); err != nil {
-			return fmt.Errorf("append barge-in audio: %w", err)
-		}
-		if err := appendAudio(ctx, conn, silence, endpoint.inputRate); err != nil {
-			return fmt.Errorf("append barge-in silence: %w", err)
-		}
-		bargeSent = true
-		return nil
+	run := &bargeInRun{
+		ctx:      ctx,
+		conn:     conn,
+		rate:     endpoint.inputRate,
+		audio:    audio,
+		silence:  silence,
+		started:  started,
+		playback: &playbackConsumer{},
 	}
 	for {
 		event, err := readEvent(ctx, conn)
 		if err != nil {
 			return behaviorObservation{}, fmt.Errorf("read barge-in event: %w", err)
 		}
-		observation.events = append(observation.events, fmt.Sprintf("%s@%s", event.typeName, time.Since(started).Round(time.Millisecond)))
-		switch event.typeName {
-		case "error":
-			return behaviorObservation{}, fmt.Errorf("server error during barge-in: %s", eventErrorMessage(event.data))
-		case "input_audio_buffer.speech_started":
-			if bargeSent {
-				vadStarted = true
-			}
-		case "response.output_audio.delta", "response.audio.delta", "response.audio.output.delta":
-			encoded := stringAt(event.data, "delta")
-			chunk, decodeErr := decodePCMDelta(encoded)
-			if decodeErr != nil {
-				return behaviorObservation{}, decodeErr
-			}
-			if cancelled {
-				observation.audioDeltasAfterCancel++
-			} else {
-				observation.audioDeltasBeforeCancel++
-			}
-			observation.audio = append(observation.audio, chunk...)
-			playback.enqueue(chunk)
-			if err := sendBargeAudio(); err != nil {
-				return behaviorObservation{}, err
-			}
-		case "response.cancelled":
-			flushPlayback()
-		case "response.done":
-			status := firstString(event.data, "response.status", "status")
-			reason := firstString(event.data, "response.status_details.reason", "status_details.reason")
-			if status == "cancelled" || reason == "turn_detected" || reason == "client_cancelled" {
-				flushPlayback()
-			}
-			playbackErr := requirePlaybackFlushed(playback)
-			if !bargeSent || !vadStarted || !cancelled || playbackErr != nil || observation.audioDeltasBeforeCancel == 0 || observation.audioDeltasAfterCancel != 0 {
-				return behaviorObservation{}, fmt.Errorf("barge-in assertion failed: barge_audio=%t vad_started=%t cancelled=%t playback=%v audio_before_cancel=%d audio_after_cancel=%d events=%v", bargeSent, vadStarted, cancelled, playbackErr, observation.audioDeltasBeforeCancel, observation.audioDeltasAfterCancel, observation.events)
-			}
-			return behaviorObservation{
-				latency:  time.Since(started),
-				evidence: fmt.Sprintf("vad_speech_started=true cancellation=true playback_flush_bytes=%d playback_pending_bytes=%d audio_before_cancel=%d", playback.flushedBytes, playback.pendingBytes(), observation.audioDeltasBeforeCancel),
-			}, nil
+		result, done, err := run.handle(event)
+		if err != nil {
+			return behaviorObservation{}, err
+		}
+		if done {
+			return result, nil
 		}
 	}
+}
+
+// bargeInRun tracks one server-VAD barge-in exchange: the barge-in audio is
+// sent once the first response audio arrives, and local playback is flushed
+// exactly once when the server reports cancellation.
+type bargeInRun struct {
+	ctx         context.Context
+	conn        *websocket.Conn
+	rate        int
+	audio       []byte
+	silence     []byte
+	started     time.Time
+	observation responseObservation
+	playback    *playbackConsumer
+	bargeSent   bool
+	vadStarted  bool
+	cancelled   bool
+}
+
+func (r *bargeInRun) flushPlayback() {
+	if r.cancelled {
+		return
+	}
+	r.cancelled = true
+	r.playback.flush()
+}
+
+func (r *bargeInRun) sendBargeAudio() error {
+	if r.bargeSent {
+		return nil
+	}
+	if err := appendAudio(r.ctx, r.conn, r.audio, r.rate); err != nil {
+		return fmt.Errorf("append barge-in audio: %w", err)
+	}
+	if err := appendAudio(r.ctx, r.conn, r.silence, r.rate); err != nil {
+		return fmt.Errorf("append barge-in silence: %w", err)
+	}
+	r.bargeSent = true
+	return nil
+}
+
+// handle applies one server event and reports whether the exchange finished.
+func (r *bargeInRun) handle(event realtimeEvent) (behaviorObservation, bool, error) {
+	r.observation.events = append(r.observation.events, fmt.Sprintf("%s@%s", event.typeName, time.Since(r.started).Round(time.Millisecond)))
+	switch event.typeName {
+	case "error":
+		return behaviorObservation{}, false, fmt.Errorf("server error during barge-in: %s", eventErrorMessage(event.data))
+	case "input_audio_buffer.speech_started":
+		if r.bargeSent {
+			r.vadStarted = true
+		}
+	case "response.output_audio.delta", "response.audio.delta", "response.audio.output.delta":
+		return behaviorObservation{}, false, r.observeAudioDelta(event)
+	case "response.cancelled":
+		r.flushPlayback()
+	case "response.done":
+		result, err := r.finish(event)
+		return result, err == nil, err
+	}
+	return behaviorObservation{}, false, nil
+}
+
+func (r *bargeInRun) observeAudioDelta(event realtimeEvent) error {
+	chunk, err := decodePCMDelta(stringAt(event.data, "delta"))
+	if err != nil {
+		return err
+	}
+	if r.cancelled {
+		r.observation.audioDeltasAfterCancel++
+	} else {
+		r.observation.audioDeltasBeforeCancel++
+	}
+	r.observation.audio = append(r.observation.audio, chunk...)
+	r.playback.enqueue(chunk)
+	return r.sendBargeAudio()
+}
+
+func (r *bargeInRun) finish(event realtimeEvent) (behaviorObservation, error) {
+	status := firstString(event.data, "response.status", "status")
+	reason := firstString(event.data, "response.status_details.reason", "status_details.reason")
+	if status == "cancelled" || reason == "turn_detected" || reason == "client_cancelled" {
+		r.flushPlayback()
+	}
+	playbackErr := requirePlaybackFlushed(r.playback)
+	observation := r.observation
+	if !r.bargeSent || !r.vadStarted || !r.cancelled || playbackErr != nil || observation.audioDeltasBeforeCancel == 0 || observation.audioDeltasAfterCancel != 0 {
+		return behaviorObservation{}, fmt.Errorf("barge-in assertion failed: barge_audio=%t vad_started=%t cancelled=%t playback=%s audio_before_cancel=%d audio_after_cancel=%d events=%v", r.bargeSent, r.vadStarted, r.cancelled, fmt.Sprint(playbackErr), observation.audioDeltasBeforeCancel, observation.audioDeltasAfterCancel, observation.events)
+	}
+	return behaviorObservation{
+		latency:  time.Since(r.started),
+		evidence: fmt.Sprintf("vad_speech_started=true cancellation=true playback_flush_bytes=%d playback_pending_bytes=%d audio_before_cancel=%d", r.playback.flushedBytes, r.playback.pendingBytes(), observation.audioDeltasBeforeCancel),
+	}, nil
 }
 
 var lookupWeatherTool = toolDefinition{
