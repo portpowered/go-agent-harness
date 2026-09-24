@@ -17,12 +17,13 @@ const (
 )
 
 type controller struct {
-	mu      sync.Mutex
-	armMu   sync.Mutex
-	options sessionduration.Options
-	ctx     context.Context
-	cancel  context.CancelFunc
-	errors  chan error
+	mu                sync.Mutex
+	armMu             sync.Mutex
+	livenessWatchOnce sync.Once
+	options           sessionduration.Options
+	ctx               context.Context
+	cancel            context.CancelFunc
+	errors            chan error
 
 	maxTimer sessionTimer
 
@@ -34,6 +35,8 @@ type controller struct {
 	livenessFailure    error
 	livenessReported   bool
 	livenessResponseID string
+	livenessCancelled  bool
+	livenessCancelID   string
 	firstCauseOnce     sync.Once
 	responseOutput     bool
 	responseComplete   bool
@@ -225,11 +228,8 @@ func (c *controller) observeCloseLocked(msg messages.StreamMessage) (sessiondura
 }
 
 func (c *controller) observeLivenessLocked(msg messages.StreamMessage) (arm, reset, disarm bool, failure error) {
-	if msg.Type == messages.StreamTypeResponseCancel {
-		return false, false, true, nil
-	}
-	if isNonProviderRole(msg.Role) || isToolAcknowledgementResponse(msg) {
-		return false, false, false, nil
+	if handled, disarm := c.prepareLivenessObservationLocked(msg); handled {
+		return false, false, disarm, nil
 	}
 	c.observeLivenessResponseIDLocked(msg)
 	if !c.options.Liveness.Enabled {
@@ -329,8 +329,9 @@ func (c *controller) EndLocalToolExecution() {
 	c.mu.Lock()
 	wasActive := c.localToolActive
 	c.localToolActive = false
+	rearm := wasActive && !c.livenessCancelled
 	c.mu.Unlock()
-	if wasActive {
+	if rearm {
 		c.armLiveness(false)
 	}
 }

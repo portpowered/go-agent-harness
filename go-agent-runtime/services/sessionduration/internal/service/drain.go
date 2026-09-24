@@ -22,10 +22,14 @@ func (c *controller) drainLoop(ctx context.Context, loop sessionduration.Loop, p
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if err := c.drainAvailable(loop); err != nil {
+	more, err := c.drainAvailable(loop)
+	if err != nil {
 		return err
 	}
 	if policy.Clock == nil {
+		if more {
+			return errors.New("session duration drain has buffered output but no timer scheduler")
+		}
 		return nil
 	}
 	quietPeriod, wallSafety := drainDurations(policy)
@@ -84,16 +88,18 @@ func (c *controller) drainUntilQuiet(ctx context.Context, deltas *messages.Typed
 	}
 }
 
-func (c *controller) drainAvailable(loop sessionduration.Loop) error {
-	for {
-		msg, ok := loop.Deltas().Read()
+func (c *controller) drainAvailable(loop sessionduration.Loop) (bool, error) {
+	deltas := loop.Deltas()
+	for remaining := deltas.Cap(); remaining > 0; remaining-- {
+		msg, ok := deltas.Read()
 		if !ok {
-			return nil
+			return false, nil
 		}
 		if err := c.admitAndPublishDrain(msg); err != nil {
-			return err
+			return false, err
 		}
 	}
+	return deltas.HasData(), nil
 }
 
 func (c *controller) admitAndPublishDrain(msg messages.StreamMessage) error {

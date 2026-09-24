@@ -102,8 +102,10 @@ func TestPublicLivenessSeparatesToolAcknowledgementFromNewResponse(t *testing.T)
 	if got := controller.OutputState(); got != messages.TerminalOutputNone {
 		t.Fatalf("new response retained prior output state %q", got)
 	}
-	controller.Observe(messages.StreamMessage{Type: messages.StreamTypeResponseCancel, Role: messages.RoleUser})
-	assertNoPublicLivenessError(t, controller, clock.AdvanceBy, "cancelled response")
+	controller.BeginLocalToolExecution()
+	controller.Observe(messages.StreamMessage{Type: messages.StreamTypeResponseCancel, Role: messages.RoleUser, ResponseID: "provider-response-cancelled"})
+	controller.EndLocalToolExecution()
+	assertNoPublicLivenessError(t, controller, clock.AdvanceBy, "cancelled response after local tool")
 
 	controller.Observe(messages.StreamMessage{
 		Type:       messages.StreamTypeResponseCreate,
@@ -275,6 +277,44 @@ func TestPublicRunDoneSignalInterruptsRateLimitBackoff(t *testing.T) {
 	if loop.sentEvents != 0 {
 		t.Fatalf("Run dispatched %d retry events after Done", loop.sentEvents)
 	}
+}
+
+func TestPublicRunBoundsContinuouslyReplenishedDrain(t *testing.T) {
+	scheduler := &publicManualScheduler{created: make(chan *publicManualTimer, 1)}
+	loop := &publicLoop{deltas: messages.NewTypedBuffer[messages.StreamMessage](1)}
+	stop := make(chan struct{})
+	producerDone := make(chan struct{})
+	go func() {
+		defer close(producerDone)
+		message := messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant}
+		for loop.deltas.WriteWaitContextOrDone(context.Background(), stop, message).OK() {
+		}
+	}()
+	done := make(chan struct{})
+	close(done)
+	runDone := make(chan error, 1)
+	go func() {
+		runDone <- NewService().Run(sessionduration.RunRequest{
+			Context: context.Background(), Inferencer: publicInferencer{session: newPublicSession()}, Done: done,
+			DrainPolicy: sessionduration.DrainPolicy{Clock: scheduler, QuietPeriod: time.Minute, WallSafety: 30 * time.Millisecond},
+			LoopFactory: func(context.Context, sessionduration.AdmissionInferencer, sessionduration.Controller) (sessionduration.Loop, error) {
+				return loop, nil
+			},
+		})
+	}()
+	select {
+	case err := <-runDone:
+		if err != nil {
+			t.Errorf("Run: %v", err)
+		}
+	case <-time.After(time.Second):
+		close(stop)
+		<-producerDone
+		<-runDone
+		t.Fatal("Run did not stop draining a continuously replenished buffer")
+	}
+	close(stop)
+	<-producerDone
 }
 
 func TestPublicRunDeadlineInterruptsRateLimitBackoff(t *testing.T) {
@@ -492,7 +532,10 @@ type publicManualScheduler struct {
 
 func (s *publicManualScheduler) NewTimer(duration time.Duration) sessionduration.Timer {
 	timer := &publicManualTimer{duration: duration, events: make(chan time.Time, 1)}
-	s.created <- timer
+	select {
+	case s.created <- timer:
+	default:
+	}
 	return timer
 }
 

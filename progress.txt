@@ -5165,3 +5165,30 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   coverage-only tests or weaken the 90.00% floor. After behavior repairs, run
   the full C276-05/06 suite and `make prepush` on one committed exact candidate.
   Decision remains CONTINUE.
+
+# C276 session-duration cancellation and drain checkpoint — 2026-09-24
+
+- Canonical Factory Work remains `init`; the session has no concluded C276 or
+  C270 review Work/findings. Reconfirmed the PRD branch matches this isolated
+  branch, required startup/C270/C234/C217/main ancestry is present, the 13
+  retired paths are absent, and the two stateless adapters total 63 lines.
+- Found three public lifecycle defects while reviewing duration paths: each
+  liveness rearm could leave another watcher parked; cancellation during local
+  tool execution could rearm the canceled response; and the pre-timer drain
+  loop could starve shutdown under continuous buffer replenishment. Fixed these
+  and found a cancellation race when `NewTimer` is blocked: a cancel could
+  arrive before timer installation and the returned timer would still arm.
+  Liveness arming now respects the cancellation latch. Added a public race case
+  proving cancel disarms that timer while a later response starts normally, and
+  a public continuously-replenished-buffer shutdown case. Tests use existing
+  public service/Wire seams; no fixture or coverage-only test was added.
+- Focused sessionduration normal/race checks pass (80 tests / 3 packages), and
+  `rtk make verify-architecture` passes (230 packages, 2,016 files, 29,787
+  functions). Wire generation left no tracked changes. `make prepush`, C276-05/06
+  accumulated checks, and a fresh coverage measurement remain pending on a
+  committed exact candidate; no push, PR, hosted CI, or review handoff occurred.
+- Exact next action: commit only the intended duration implementation/tests and
+  this checkpoint, preserving the two unrelated untracked integration fixtures;
+  then run the entire C276-05/06 gate and `make prepush` on that exact SHA and
+  repair any locally reproducible failure before handoff. Decision remains
+  CONTINUE.

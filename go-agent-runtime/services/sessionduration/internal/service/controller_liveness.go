@@ -56,6 +56,40 @@ func (c *controller) observeLivenessResponseIDLocked(msg messages.StreamMessage)
 	}
 }
 
+func (c *controller) observeCancellationLocked(msg messages.StreamMessage) (handled, disarm bool) {
+	cancelledID := strings.TrimSpace(msg.ResponseID)
+	if cancelledID != "" && c.livenessResponseID != "" && cancelledID != c.livenessResponseID {
+		return true, false
+	}
+	if cancelledID == "" {
+		cancelledID = c.livenessResponseID
+	}
+	c.livenessCancelled = true
+	c.livenessCancelID = cancelledID
+	return true, true
+}
+
+func (c *controller) prepareLivenessObservationLocked(msg messages.StreamMessage) (handled, disarm bool) {
+	if msg.Type == messages.StreamTypeResponseCancel {
+		return c.observeCancellationLocked(msg)
+	}
+	if isNonProviderRole(msg.Role) || isToolAcknowledgementResponse(msg) {
+		return true, false
+	}
+	if msg.Type == messages.StreamTypeResponseCreate || msg.Type == messages.StreamTypeMessageStart {
+		c.prepareLivenessResponseLocked(msg)
+	}
+	return false, false
+}
+
+func (c *controller) prepareLivenessResponseLocked(msg messages.StreamMessage) {
+	responseID := strings.TrimSpace(msg.ResponseID)
+	if msg.Type == messages.StreamTypeResponseCreate || c.livenessCancelID == "" || responseID != c.livenessCancelID {
+		c.livenessCancelled = false
+		c.livenessCancelID = ""
+	}
+}
+
 func isProviderOutput(msg messages.StreamMessage) bool {
 	if isNonProviderRole(msg.Role) {
 		return false
@@ -120,11 +154,11 @@ func (c *controller) armLiveness(onlyIfArmed bool) {
 	case wake <- struct{}{}:
 	default:
 	}
-	go c.watchLiveness()
+	c.livenessWatchOnce.Do(func() { go c.watchLiveness() })
 }
 
 func (c *controller) canArmLivenessLocked(onlyIfArmed bool) bool {
-	return !c.closed && !c.livenessStopped && !c.localToolActive &&
+	return !c.closed && !c.livenessStopped && !c.localToolActive && !c.livenessCancelled && c.livenessFailure == nil &&
 		(onlyIfArmed && c.livenessArmed || !onlyIfArmed && !c.livenessArmed)
 }
 
@@ -139,7 +173,7 @@ func (c *controller) installLivenessLocked(timer sessionTimer) (sessionTimer, ch
 func (c *controller) watchLiveness() {
 	for {
 		c.mu.Lock()
-		if c.closed || c.livenessStopped || !c.livenessArmed || c.livenessTimer == nil {
+		if c.closed || c.livenessStopped {
 			c.mu.Unlock()
 			return
 		}
@@ -147,11 +181,19 @@ func (c *controller) watchLiveness() {
 		timer := c.livenessTimer
 		wake := c.livenessWake
 		ctx := c.ctx
+		armed := c.livenessArmed && timer != nil
 		c.mu.Unlock()
+		if !armed {
+			select {
+			case <-wake:
+				continue
+			case <-ctx.Done():
+				return
+			}
+		}
 		select {
 		case <-timer.C():
 			c.expireLiveness(generation)
-			return
 		case <-wake:
 		case <-ctx.Done():
 			return
@@ -161,12 +203,15 @@ func (c *controller) watchLiveness() {
 
 func (c *controller) expireLiveness(generation uint64) {
 	c.mu.Lock()
-	if c.closed || c.livenessStopped || c.localToolActive || !c.livenessArmed || c.livenessGeneration != generation || c.livenessFailure != nil {
+	if c.closed || c.livenessStopped || c.localToolActive || !c.livenessArmed || c.livenessGeneration != generation {
 		c.mu.Unlock()
 		return
 	}
-	err := c.makeLivenessErrorLocked(messages.StreamMessage{}, true)
-	c.livenessFailure = err
+	var err error
+	if c.livenessFailure == nil {
+		err = c.makeLivenessErrorLocked(messages.StreamMessage{}, true)
+		c.livenessFailure = err
+	}
 	c.livenessArmed = false
 	timer := c.livenessTimer
 	c.livenessTimer = nil
@@ -175,7 +220,9 @@ func (c *controller) expireLiveness(generation uint64) {
 	if timer != nil {
 		timer.Stop()
 	}
-	c.reportLiveness(err)
+	if err != nil {
+		c.reportLiveness(err)
+	}
 }
 
 func (c *controller) stopLiveness() {
