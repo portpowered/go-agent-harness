@@ -258,7 +258,11 @@ func TestManagedBrowserLauncherRejectsSymlinkedProfileAndPortOutsideLoopback(t *
 		if err != nil {
 			t.Fatalf("reserve test port: %v", err)
 		}
-		defer listener.Close()
+		defer func() {
+			if err := listener.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
+				t.Errorf("close reserved test port: %v", err)
+			}
+		}()
 		process := &managedLaunchTestProcess{}
 		launcher := newManagedLaunchTestLauncher(t, process, nil, nil)
 		launcher.options.PortAllocator = func() (net.Listener, error) {

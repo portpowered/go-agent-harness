@@ -171,7 +171,7 @@ func (l *ManagedBrowserLauncher) Launch(ctx context.Context) (*ManagedBrowser, e
 		ctx = context.Background()
 	}
 	if err := ctx.Err(); err != nil {
-		return nil, newManagedBrowserLaunchError("startup", "unknown", nil, err)
+		return nil, newManagedBrowserLaunchError(managedBrowserPhaseStartup, "unknown", nil, err)
 	}
 
 	startupURL, err := normalizeManagedStartupURL(l.options.StartupURL)
@@ -232,9 +232,9 @@ func (l *ManagedBrowserLauncher) Launch(ctx context.Context) (*ManagedBrowser, e
 		if cleanupErr != nil {
 			readinessErr = errors.Join(readinessErr, cleanupErr)
 		}
-		phase := "readiness"
+		phase := managedBrowserPhaseReadiness
 		if errors.Is(readinessErr, context.Canceled) || errors.Is(readinessErr, context.DeadlineExceeded) {
-			phase = "startup"
+			phase = managedBrowserPhaseStartup
 		}
 		return nil, newManagedBrowserLaunchError(phase, mode, state.waitError(), readinessErr)
 	}
@@ -512,59 +512,59 @@ func waitForManagedBrowser(ctx context.Context, client *http.Client, port int, p
 	var lastErr error
 	for {
 		if err := startupCtx.Err(); err != nil {
-			if lastErr != nil {
-				return ManagedBrowserEndpoint{}, errors.Join(err, lastErr)
-			}
-			return ManagedBrowserEndpoint{}, err
+			return ManagedBrowserEndpoint{}, managedBrowserStartupError(err, lastErr)
 		}
 		if managedBrowserDone(processDone) {
 			if lastErr == nil {
-				lastErr = errors.New("managed Chrome exited before DevTools became ready")
+				lastErr = errors.New(managedChromeExitedMessage)
 			}
 			return ManagedBrowserEndpoint{}, lastErr
 		}
 
-		requestCtx, requestCancel := context.WithTimeout(startupCtx, managedBrowserRequestTimeout)
-		request, requestErr := http.NewRequestWithContext(requestCtx, http.MethodGet, versionURL, nil)
-		if requestErr == nil {
-			response, doErr := client.Do(request)
-			if doErr == nil {
-				endpoint, decodeErr := decodeManagedBrowserVersion(response, port)
-				if response.Body != nil {
-					_ = response.Body.Close()
-				}
-				requestCancel()
-				if decodeErr == nil {
-					if managedBrowserDone(processDone) {
-						return ManagedBrowserEndpoint{}, errors.New("managed Chrome exited before DevTools became ready")
-					}
-					return endpoint, nil
-				}
-				lastErr = decodeErr
-			} else {
-				lastErr = doErr
+		endpoint, probeErr := probeManagedBrowserVersion(startupCtx, client, versionURL, port)
+		if probeErr == nil {
+			if managedBrowserDone(processDone) {
+				return ManagedBrowserEndpoint{}, errors.New(managedChromeExitedMessage)
 			}
-		} else {
-			lastErr = requestErr
+			return endpoint, nil
 		}
-		requestCancel()
+		lastErr = probeErr
 
 		timer := time.NewTimer(poll)
 		select {
 		case <-startupCtx.Done():
-			if lastErr != nil {
-				return ManagedBrowserEndpoint{}, errors.Join(startupCtx.Err(), lastErr)
-			}
-			return ManagedBrowserEndpoint{}, startupCtx.Err()
+			return ManagedBrowserEndpoint{}, managedBrowserStartupError(startupCtx.Err(), lastErr)
 		case <-processDone:
-			if lastErr == nil {
-				lastErr = errors.New("managed Chrome exited before DevTools became ready")
-			}
 			timer.Stop()
 			return ManagedBrowserEndpoint{}, lastErr
 		case <-timer.C:
 		}
 	}
+}
+
+const managedChromeExitedMessage = "managed Chrome exited before DevTools became ready"
+
+func managedBrowserStartupError(err, lastErr error) error {
+	if lastErr != nil {
+		return errors.Join(err, lastErr)
+	}
+	return err
+}
+
+// probeManagedBrowserVersion performs one bounded DevTools version request.
+func probeManagedBrowserVersion(startupCtx context.Context, client *http.Client, versionURL string, port int) (ManagedBrowserEndpoint, error) {
+	requestCtx, requestCancel := context.WithTimeout(startupCtx, managedBrowserRequestTimeout)
+	defer requestCancel()
+	request, err := http.NewRequestWithContext(requestCtx, http.MethodGet, versionURL, nil)
+	if err != nil {
+		return ManagedBrowserEndpoint{}, err
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return ManagedBrowserEndpoint{}, err
+	}
+	defer closeAfterRead(response.Body)
+	return decodeManagedBrowserVersion(response, port)
 }
 
 func decodeManagedBrowserVersion(response *http.Response, port int) (ManagedBrowserEndpoint, error) {
@@ -675,7 +675,7 @@ func prepareManagedBrowserProfile(profileDir string) error {
 func normalizeManagedStartupURL(raw string) (string, error) {
 	value := strings.TrimSpace(raw)
 	if value == "" {
-		return "about:blank", nil
+		return aboutBlankURL, nil
 	}
 	if strings.ContainsAny(value, "\r\n") {
 		return "", errors.New("startup URL contains a control character")
@@ -756,72 +756,6 @@ func isManagedLoopbackHost(host string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-func newManagedBrowserLaunchError(phase, mode string, processExit, cause error) error {
-	if phase == "" {
-		phase = "startup"
-	}
-	if mode == "" {
-		mode = "unknown"
-	}
-	details := errors.Join(cause, processExit)
-	return &ManagedBrowserLaunchError{Phase: phase, Mode: mode, Cause: details}
-}
-
-// ManagedBrowserLaunchError is the single safe operator-facing launch error.
-// Phase and Mode are bounded labels; Cause is retained for errors.Is and
-// diagnostics but is never interpolated into Error, preventing profile paths,
-// URLs, command output, and nested process details from leaking.
-type ManagedBrowserLaunchError struct {
-	Phase string
-	Mode  string
-	Cause error
-}
-
-func (e *ManagedBrowserLaunchError) Error() string {
-	if e == nil {
-		return ErrManagedBrowserLaunch.Error()
-	}
-	phase := safeManagedBrowserLabel(e.Phase, "startup")
-	mode := safeManagedBrowserLabel(e.Mode, "unknown")
-	remediation := "check the Chrome prerequisite, writable agent config directory, and loopback DevTools availability, or supply an explicit browser endpoint"
-	switch phase {
-	case "configuration":
-		remediation = "fix the managed browser startup URL and retry"
-	case "profile":
-		remediation = "make the agent config directory writable and retry"
-	case "acquisition":
-		remediation = fmt.Sprintf("install Chrome %d or newer, or supply an explicit browser endpoint", MinimumManagedChromeMajor)
-	case "port":
-		remediation = "retry so the agent can reserve a free loopback DevTools port"
-	case "start":
-		remediation = "check that the qualified Chrome executable can start with an agent-owned profile"
-	case "readiness", "startup":
-		remediation = "check that Chrome can publish a loopback DevTools endpoint and retry"
-	}
-	return fmt.Sprintf("managed WebMCP browser launch failed during %s in %s mode; %s", phase, mode, remediation)
-}
-
-func (e *ManagedBrowserLaunchError) Unwrap() error {
-	if e == nil {
-		return ErrManagedBrowserLaunch
-	}
-	return errors.Join(ErrManagedBrowserLaunch, e.Cause)
-}
-
-func safeManagedBrowserLabel(value, fallback string) string {
-	value = strings.TrimSpace(value)
-	if value == "" || len(value) > 32 {
-		return fallback
-	}
-	for _, character := range value {
-		if (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') || (character >= '0' && character <= '9') || character == '_' || character == '-' {
-			continue
-		}
-		return fallback
-	}
-	return value
-}
-
 type osManagedBrowserProcess struct {
 	command *exec.Cmd
 }
@@ -865,4 +799,66 @@ func (p *osManagedBrowserProcess) PID() int {
 		return 0
 	}
 	return p.command.Process.Pid
+}
+
+// reattachedManagedBrowserPollInterval bounds how often a reattached,
+// non-child Chrome process is re-inspected for exit.
+const reattachedManagedBrowserPollInterval = 250 * time.Millisecond
+
+type reattachedManagedBrowserProcess struct {
+	state     ManagedBrowserState
+	inspector ManagedBrowserProcessInspector
+}
+
+func (p *reattachedManagedBrowserProcess) Wait() error {
+	if p == nil {
+		return errors.New("managed browser process is unavailable")
+	}
+	ticker := time.NewTicker(reattachedManagedBrowserPollInterval)
+	defer ticker.Stop()
+	failures := 0
+	for {
+		if _, err := p.inspector.Inspect(context.Background(), p.state); err != nil {
+			failures++
+			if failures >= managedBrowserReattachFailureLimit {
+				return nil
+			}
+		} else {
+			failures = 0
+		}
+		<-ticker.C
+	}
+}
+
+func (p *reattachedManagedBrowserProcess) Terminate() error {
+	return signalManagedBrowserPID(p.pid(), false)
+}
+
+func (p *reattachedManagedBrowserProcess) Kill() error {
+	return signalManagedBrowserPID(p.pid(), true)
+}
+
+func (p *reattachedManagedBrowserProcess) PID() int {
+	if p == nil {
+		return 0
+	}
+	return p.pid()
+}
+
+func (p *reattachedManagedBrowserProcess) pid() int {
+	if p == nil {
+		return 0
+	}
+	return p.state.PID
+}
+
+func signalManagedBrowserPID(pid int, kill bool) error {
+	process, err := os.FindProcess(pid)
+	if err != nil || process == nil {
+		return os.ErrProcessDone
+	}
+	if kill || runtime.GOOS == "windows" {
+		return process.Kill()
+	}
+	return process.Signal(syscall.SIGTERM)
 }

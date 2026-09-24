@@ -329,7 +329,7 @@ func (m *ManagedBrowserManager) reuse(ctx context.Context, options ManagedBrowse
 		endpoint:   endpoint,
 		executable: ChromeExecutable{Path: state.ExecutablePath},
 		profileDir: profileDir,
-		startupURL: "about:blank",
+		startupURL: aboutBlankURL,
 		process:    newManagedBrowserProcessState(process),
 		shutdown:   normalizedManagedShutdown(options.ShutdownTimeout),
 		pid:        state.PID,
@@ -383,7 +383,7 @@ func managedBrowserLaunchNeedsProfileRecovery(err error) bool {
 	if !errors.As(err, &launchErr) || launchErr == nil {
 		return false
 	}
-	return launchErr.Phase == "readiness" || launchErr.Phase == "startup"
+	return launchErr.Phase == managedBrowserPhaseReadiness || launchErr.Phase == managedBrowserPhaseStartup
 }
 
 func (m *ManagedBrowserManager) restartVerifiedProfileOwner(ctx context.Context, profileDir string, shutdown time.Duration) (bool, error) {
@@ -529,7 +529,7 @@ func fetchManagedBrowserEndpoint(ctx context.Context, client *http.Client, rawCD
 		return ManagedBrowserEndpoint{}, errors.New("managed browser endpoint redirected")
 	}
 	if response.Body != nil {
-		defer response.Body.Close()
+		defer closeAfterRead(response.Body)
 	}
 	endpoint, err := decodeManagedBrowserVersion(response, port)
 	if err != nil {
@@ -553,7 +553,7 @@ func readManagedBrowserState(path string) (ManagedBrowserState, bool, error) {
 	if err != nil {
 		return ManagedBrowserState{}, false, err
 	}
-	defer file.Close()
+	defer closeAfterRead(file)
 	var state ManagedBrowserState
 	decoder := json.NewDecoder(io.LimitReader(file, managedBrowserStateResponseLimit))
 	decoder.DisallowUnknownFields()
@@ -924,64 +924,6 @@ func stringSetContains(values []string, expected string) bool {
 		}
 	}
 	return false
-}
-
-type reattachedManagedBrowserProcess struct {
-	state     ManagedBrowserState
-	inspector ManagedBrowserProcessInspector
-}
-
-func (p *reattachedManagedBrowserProcess) Wait() error {
-	if p == nil {
-		return errors.New("managed browser process is unavailable")
-	}
-	ticker := time.NewTicker(250 * time.Millisecond)
-	defer ticker.Stop()
-	failures := 0
-	for {
-		if _, err := p.inspector.Inspect(context.Background(), p.state); err != nil {
-			failures++
-			if failures >= managedBrowserReattachFailureLimit {
-				return nil
-			}
-		} else {
-			failures = 0
-		}
-		<-ticker.C
-	}
-}
-
-func (p *reattachedManagedBrowserProcess) Terminate() error {
-	return signalManagedBrowserPID(p.pid(), false)
-}
-
-func (p *reattachedManagedBrowserProcess) Kill() error {
-	return signalManagedBrowserPID(p.pid(), true)
-}
-
-func (p *reattachedManagedBrowserProcess) PID() int {
-	if p == nil {
-		return 0
-	}
-	return p.pid()
-}
-
-func (p *reattachedManagedBrowserProcess) pid() int {
-	if p == nil {
-		return 0
-	}
-	return p.state.PID
-}
-
-func signalManagedBrowserPID(pid int, kill bool) error {
-	process, err := os.FindProcess(pid)
-	if err != nil || process == nil {
-		return os.ErrProcessDone
-	}
-	if kill || runtime.GOOS == "windows" {
-		return process.Kill()
-	}
-	return process.Signal(syscall.SIGTERM)
 }
 
 func normalizedManagedShutdown(timeout time.Duration) time.Duration {

@@ -54,40 +54,7 @@ func nextBrowserEvent(t *testing.T, events <-chan webmcp.BrowserEvent) webmcp.Br
 }
 
 func TestWebMCPEnablePublishesExplicitEmptyCatalogEvidence(t *testing.T) {
-	baseExecutor := &recordingExecutor{}
-	protocolExecutor := &callbackExecutor{base: baseExecutor}
-	protocolExecutor.onResult = func(method string, result any) {
-		if method != runtime.CommandEvaluate {
-			return
-		}
-		returns, ok := result.(*runtime.EvaluateReturns)
-		if !ok {
-			t.Fatalf("Runtime.evaluate result = %T, want *runtime.EvaluateReturns", result)
-		}
-		returns.Result = &runtime.RemoteObject{Value: jsontext.Value([]byte(`{"producer_present":true,"catalog_ready":true,"tool_count":0}`))}
-	}
-	handle := testHandle(baseExecutor)
-	handle.browserExecutor = protocolExecutor
-	targetContext, rawCancel := chromedp.NewContext(context.Background())
-	protocolTarget := &chromedp.Target{SessionID: "session-empty-catalog", TargetID: "target-empty-catalog"}
-	chromedp.FromContext(targetContext).Target = protocolTarget
-	session := newTargetSession(handle, targetContext, rawCancel, webmcp.Target{
-		BrowserID: handle.candidate.ID,
-		ID:        webmcp.TargetID(protocolTarget.TargetID),
-		Type:      "page",
-		URL:       "https://example.test/empty",
-	}, webmcp.TargetOwnershipExternal)
-	session.setProtocolTarget(protocolTarget)
-	session.runAction = func(ctx context.Context, actions ...chromedp.Action) error {
-		actionContext := cdp.WithExecutor(ctx, protocolExecutor)
-		for _, action := range actions {
-			if err := action.Do(actionContext); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-	handle.sessions[session] = struct{}{}
+	session := newProbeTargetSession(t, []byte(`{"producer_present":true,"catalog_ready":true,"tool_count":0}`), "session-empty-catalog", "target-empty-catalog", "https://example.test/empty")
 	defer func() {
 		if err := session.Close(); err != nil {
 			t.Errorf("close empty-catalog session: %v", err)
@@ -107,14 +74,16 @@ func TestWebMCPEnablePublishesExplicitEmptyCatalogEvidence(t *testing.T) {
 	}
 }
 
+type documentReadinessCase struct {
+	name            string
+	readyState      string
+	loading         bool
+	loadingKnown    bool
+	producerPresent bool
+}
+
 func TestWebMCPEnableReportsDocumentReadinessWithoutPageData(t *testing.T) {
-	tests := []struct {
-		name            string
-		readyState      string
-		loading         bool
-		loadingKnown    bool
-		producerPresent bool
-	}{
+	tests := []documentReadinessCase{
 		{
 			name:            "loading_without_producer",
 			readyState:      webmcp.DocumentReadyStateLoading,
@@ -140,71 +109,91 @@ func TestWebMCPEnableReportsDocumentReadinessWithoutPageData(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			baseExecutor := &recordingExecutor{}
-			protocolExecutor := &callbackExecutor{base: baseExecutor}
-			probeResult, err := json.Marshal(map[string]any{
-				"producer_present":       test.producerPresent,
-				"catalog_ready":          test.producerPresent,
-				"tool_count":             0,
-				"document_ready_state":   test.readyState,
-				"document_loading":       test.loading,
-				"document_loading_known": test.loadingKnown,
-			})
-			if err != nil {
-				t.Fatalf("marshal probe result: %v", err)
-			}
-			protocolExecutor.onResult = func(method string, result any) {
-				if method != runtime.CommandEvaluate {
-					return
-				}
-				returns, ok := result.(*runtime.EvaluateReturns)
-				if !ok {
-					t.Fatalf("Runtime.evaluate result = %T, want *runtime.EvaluateReturns", result)
-				}
-				returns.Result = &runtime.RemoteObject{Value: jsontext.Value(probeResult)}
-			}
-			handle := testHandle(baseExecutor)
-			handle.browserExecutor = protocolExecutor
-			targetContext, rawCancel := chromedp.NewContext(context.Background())
-			protocolTarget := &chromedp.Target{
-				SessionID: cdpTarget.SessionID("session-readiness-" + test.name),
-				TargetID:  cdpTarget.ID("target-readiness-" + test.name),
-			}
-			chromedp.FromContext(targetContext).Target = protocolTarget
-			session := newTargetSession(handle, targetContext, rawCancel, webmcp.Target{
-				BrowserID: handle.candidate.ID,
-				ID:        webmcp.TargetID(protocolTarget.TargetID),
-				Type:      "page",
-				URL:       "https://example.test/readiness/" + test.name,
-			}, webmcp.TargetOwnershipExternal)
-			session.setProtocolTarget(protocolTarget)
-			session.runAction = func(ctx context.Context, actions ...chromedp.Action) error {
-				actionContext := cdp.WithExecutor(ctx, protocolExecutor)
-				for _, action := range actions {
-					if err := action.Do(actionContext); err != nil {
-						return err
-					}
-				}
-				return nil
-			}
-			handle.sessions[session] = struct{}{}
-			defer func() {
-				if err := session.Close(); err != nil {
-					t.Errorf("close readiness session: %v", err)
-				}
-			}()
-
-			if err := session.EnableWebMCP(context.Background()); err != nil {
-				t.Fatalf("enable WebMCP: %v", err)
-			}
-			page := session.Context()
-			if page.DocumentReadyState != test.readyState || page.DocumentLoading != test.loading || page.DocumentLoadingKnown != test.loadingKnown {
-				t.Fatalf("document readiness = %+v, want state=%q loading=%t known=%t", page, test.readyState, test.loading, test.loadingKnown)
-			}
-			if page.CatalogReady || page.Ready {
-				t.Fatalf("page readiness = %+v, want no catalog readiness from producer-less probe", page)
-			}
+			assertDocumentReadinessWithoutPageData(t, test)
 		})
+	}
+}
+
+// executeTargetActions runs chromedp actions directly against a fake executor.
+func executeTargetActions(ctx context.Context, executor cdp.Executor, actions []chromedp.Action) error {
+	actionContext := cdp.WithExecutor(ctx, executor)
+	for _, action := range actions {
+		if err := action.Do(actionContext); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// injectEvaluateResult replaces every Runtime.evaluate result with value.
+func injectEvaluateResult(t *testing.T, value []byte) func(string, any) {
+	return func(method string, result any) {
+		if method != runtime.CommandEvaluate {
+			return
+		}
+		returns, ok := result.(*runtime.EvaluateReturns)
+		if !ok {
+			t.Fatalf("Runtime.evaluate result = %T, want *runtime.EvaluateReturns", result)
+		}
+		returns.Result = &runtime.RemoteObject{Value: jsontext.Value(value)}
+	}
+}
+
+// newProbeTargetSession builds an attached target session whose
+// Runtime.evaluate catalog probe always returns probeResult.
+func newProbeTargetSession(t *testing.T, probeResult []byte, sessionID, targetID, pageURL string) *targetSession {
+	t.Helper()
+	baseExecutor := &recordingExecutor{}
+	protocolExecutor := &callbackExecutor{base: baseExecutor}
+	protocolExecutor.onResult = injectEvaluateResult(t, probeResult)
+	handle := testHandle(baseExecutor)
+	handle.browserExecutor = protocolExecutor
+	targetContext, rawCancel := chromedp.NewContext(context.Background())
+	protocolTarget := &chromedp.Target{SessionID: cdpTarget.SessionID(sessionID), TargetID: cdpTarget.ID(targetID)}
+	chromedp.FromContext(targetContext).Target = protocolTarget
+	session := newTargetSession(handle, targetContext, rawCancel, webmcp.Target{
+		BrowserID: handle.candidate.ID,
+		ID:        webmcp.TargetID(protocolTarget.TargetID),
+		Type:      pageTargetType,
+		URL:       pageURL,
+	}, webmcp.TargetOwnershipExternal)
+	session.setProtocolTarget(protocolTarget)
+	session.runAction = func(ctx context.Context, actions ...chromedp.Action) error {
+		return executeTargetActions(ctx, protocolExecutor, actions)
+	}
+	handle.sessions[session] = struct{}{}
+	return session
+}
+
+func assertDocumentReadinessWithoutPageData(t *testing.T, test documentReadinessCase) {
+	t.Helper()
+	probeResult, err := json.Marshal(map[string]any{
+		"producer_present":       test.producerPresent,
+		"catalog_ready":          test.producerPresent,
+		"tool_count":             0,
+		"document_ready_state":   test.readyState,
+		"document_loading":       test.loading,
+		"document_loading_known": test.loadingKnown,
+	})
+	if err != nil {
+		t.Fatalf("marshal probe result: %v", err)
+	}
+	session := newProbeTargetSession(t, probeResult, "session-readiness-"+test.name, "target-readiness-"+test.name, "https://example.test/readiness/"+test.name)
+	defer func() {
+		if err := session.Close(); err != nil {
+			t.Errorf("close readiness session: %v", err)
+		}
+	}()
+
+	if err := session.EnableWebMCP(context.Background()); err != nil {
+		t.Fatalf("enable WebMCP: %v", err)
+	}
+	page := session.Context()
+	if page.DocumentReadyState != test.readyState || page.DocumentLoading != test.loading || page.DocumentLoadingKnown != test.loadingKnown {
+		t.Fatalf("document readiness = %+v, want state=%q loading=%t known=%t", page, test.readyState, test.loading, test.loadingKnown)
+	}
+	if page.CatalogReady || page.Ready {
+		t.Fatalf("page readiness = %+v, want no catalog readiness from producer-less probe", page)
 	}
 }
 
@@ -215,90 +204,25 @@ func assertIncreasingSequence(t *testing.T, previous, current webmcp.BrowserEven
 	}
 }
 
+const (
+	eventsTestTargetID  = "target-events"
+	eventsTestFrameID   = "frame-events"
+	eventsTestToolName  = "submit_form"
+	eventsTestInputJSON = `{"count":9007199254740993,"nested":{"ok":true}}`
+	eventsTestSchema    = `{"type":"object","properties":{"count":{"type":"integer"}}}`
+	eventsTestOutput    = `{"ok":true,"value":9007199254740993}`
+)
+
 func TestWebMCPEventsListenBeforeEnableAndPreserveOrder(t *testing.T) {
-	const (
-		targetID  = "target-events"
-		frameID   = "frame-events"
-		toolName  = "submit_form"
-		inputJSON = `{"count":9007199254740993,"nested":{"ok":true}}`
-		schema    = `{"type":"object","properties":{"count":{"type":"integer"}}}`
-		output    = `{"ok":true,"value":9007199254740993}`
-	)
-
-	baseExecutor := &recordingExecutor{}
-	protocolExecutor := &callbackExecutor{base: baseExecutor}
-	handle := testHandle(baseExecutor)
-	handle.browserExecutor = protocolExecutor
-	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if request.URL.Path != "/json/list" {
-			http.NotFound(writer, request)
-			return
-		}
-		writer.Header().Set("Content-Type", "application/json")
-		_, _ = writer.Write([]byte(`[{"id":"target-events","type":"page","title":"Events","url":"https://example.test/events","webSocketDebuggerUrl":"ws://127.0.0.1/devtools/page/target-events"}]`))
-	}))
-	defer server.Close()
-	handle.candidate.HTTPURL = server.URL
-
-	protocolTarget := &chromedp.Target{SessionID: "session-events", TargetID: targetID}
-	var listener func(any)
-	var registeredListener func(any)
-	var browserListener func(any)
-	var phases []string
-	runCalls := 0
-	added := &cdpWebMCP.EventToolsAdded{Tools: []*cdpWebMCP.Tool{{
-		Name:        toolName,
-		Description: "Submit the page form",
-		InputSchema: jsontext.Value([]byte(schema)),
-		Annotations: &cdpWebMCP.Annotation{ReadOnly: false, UntrustedContent: true, Autosubmit: true},
-		FrameID:     frameID,
-	}}}
-	protocolExecutor.onExecute = func(method string) error {
-		if method != cdpWebMCP.CommandEnable {
-			return nil
-		}
-		phases = append(phases, "enable-command")
-		if listener == nil {
-			return errors.New("WebMCP.enable ran before target listener registration")
-		}
-		listener(added)
-		return nil
-	}
-	handle.targetOps = targetContextOps{
-		newContext: func(context.Context, cdpTarget.ID) (context.Context, context.CancelFunc) {
-			return context.WithCancel(context.Background())
-		},
-		listen: func(context.Context, func(any)) {},
-		run: func(ctx context.Context, actions ...chromedp.Action) error {
-			runCalls++
-			phases = append(phases, "run")
-			actionContext := cdp.WithExecutor(ctx, protocolExecutor)
-			for _, action := range actions {
-				if err := action.Do(actionContext); err != nil {
-					return err
-				}
-			}
-			return nil
-		},
-		target: func(context.Context) *chromedp.Target {
-			return protocolTarget
-		},
-	}
-	handle.targetOps.listen = func(_ context.Context, callback func(any)) {
-		phases = append(phases, "listen")
-		registeredListener = callback
-		listener = callback
-	}
-	handle.targetOps.listenBrowser = func(_ context.Context, callback func(any)) {
-		phases = append(phases, "listen-browser")
-		browserListener = callback
-	}
-
-	sessionValue, err := handle.Attach(context.Background(), targetID, webmcp.TargetOwnershipExternal)
+	h := newListenBeforeEnableHarness(t)
+	sessionValue, err := h.handle.Attach(context.Background(), eventsTestTargetID, webmcp.TargetOwnershipExternal)
 	if err != nil {
 		t.Fatalf("attach event target: %v", err)
 	}
-	session := sessionValue.(*targetSession)
+	session, ok := sessionValue.(*targetSession)
+	if !ok {
+		t.Fatalf("attached session = %T, want *targetSession", sessionValue)
+	}
 	defer func() {
 		if err := session.Close(); err != nil {
 			t.Errorf("close event target: %v", err)
@@ -308,36 +232,105 @@ func TestWebMCPEventsListenBeforeEnableAndPreserveOrder(t *testing.T) {
 	if err := session.EnableWebMCP(context.Background()); err != nil {
 		t.Fatalf("enable WebMCP: %v", err)
 	}
-	if runCalls != 2 {
-		t.Fatalf("target action runs = %d, want attach/bootstrap and enable", runCalls)
+	if h.runCalls != 2 {
+		t.Fatalf("target action runs = %d, want attach/bootstrap and enable", h.runCalls)
 	}
-	if len(phases) < 3 || phases[0] != "listen" || phases[len(phases)-1] != "enable-command" {
-		t.Fatalf("listener/enable phases = %v, want listener before enable command", phases)
+	if len(h.phases) < 3 || h.phases[0] != "listen" || h.phases[len(h.phases)-1] != "enable-command" {
+		t.Fatalf("listener/enable phases = %v, want listener before enable command", h.phases)
 	}
-	if registeredListener == nil || listener == nil {
+	if h.registeredListener == nil || h.listener == nil {
 		t.Fatal("target listener was not retained")
 	}
 
-	removed := &cdpWebMCP.EventToolsRemoved{Tools: []*cdpWebMCP.RemovedTool{{Name: toolName, FrameID: frameID}}}
-	invoked := &cdpWebMCP.EventToolInvoked{
-		ToolName:     toolName,
-		FrameID:      frameID,
-		InvocationID: "invocation-events",
-		Input:        inputJSON,
-	}
-	respondedOutput := jsontext.Value([]byte(output))
-	responded := &cdpWebMCP.EventToolResponded{
-		InvocationID: "invocation-events",
-		Status:       cdpWebMCP.InvocationStatusCompleted,
-		Output:       respondedOutput,
-	}
+	initialAdded := h.assertInitialToolsAdded(t, session)
+	h.assertCopiedToolEvents(t, session, initialAdded)
+	h.assertBrowserDetachClosesEvents(t, session)
+}
 
-	// The first add arrives while WebMCP.enable is in flight. Mutating the
-	// published value must not affect a later conversion from the generated
-	// event storage.
+// listenBeforeEnableHarness records the order in which the target session
+// registers listeners and runs protocol actions against a fake executor.
+type listenBeforeEnableHarness struct {
+	handle             *handle
+	protocolTarget     *chromedp.Target
+	added              *cdpWebMCP.EventToolsAdded
+	listener           func(any)
+	registeredListener func(any)
+	browserListener    func(any)
+	phases             []string
+	runCalls           int
+}
+
+func newListenBeforeEnableHarness(t *testing.T) *listenBeforeEnableHarness {
+	t.Helper()
+	baseExecutor := &recordingExecutor{}
+	protocolExecutor := &callbackExecutor{base: baseExecutor}
+	h := &listenBeforeEnableHarness{handle: testHandle(baseExecutor)}
+	h.handle.browserExecutor = protocolExecutor
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/json/list" {
+			http.NotFound(writer, request)
+			return
+		}
+		writer.Header().Set("Content-Type", "application/json")
+		if _, err := writer.Write([]byte(`[{"id":"target-events","type":"page","title":"Events","url":"https://example.test/events","webSocketDebuggerUrl":"ws://127.0.0.1/devtools/page/target-events"}]`)); err != nil {
+			t.Errorf("write target list: %v", err)
+		}
+	}))
+	t.Cleanup(server.Close)
+	h.handle.candidate.HTTPURL = server.URL
+
+	h.protocolTarget = &chromedp.Target{SessionID: "session-events", TargetID: eventsTestTargetID}
+	h.added = &cdpWebMCP.EventToolsAdded{Tools: []*cdpWebMCP.Tool{{
+		Name:        eventsTestToolName,
+		Description: "Submit the page form",
+		InputSchema: jsontext.Value([]byte(eventsTestSchema)),
+		Annotations: &cdpWebMCP.Annotation{ReadOnly: false, UntrustedContent: true, Autosubmit: true},
+		FrameID:     eventsTestFrameID,
+	}}}
+	protocolExecutor.onExecute = func(method string) error {
+		if method != cdpWebMCP.CommandEnable {
+			return nil
+		}
+		h.phases = append(h.phases, "enable-command")
+		if h.listener == nil {
+			return errors.New("WebMCP.enable ran before target listener registration")
+		}
+		h.listener(h.added)
+		return nil
+	}
+	h.handle.targetOps = targetContextOps{
+		newContext: func(context.Context, cdpTarget.ID) (context.Context, context.CancelFunc) {
+			return context.WithCancel(context.Background())
+		},
+		run: func(ctx context.Context, actions ...chromedp.Action) error {
+			h.runCalls++
+			h.phases = append(h.phases, "run")
+			return executeTargetActions(ctx, protocolExecutor, actions)
+		},
+		target: func(context.Context) *chromedp.Target {
+			return h.protocolTarget
+		},
+		listen: func(_ context.Context, callback func(any)) {
+			h.phases = append(h.phases, "listen")
+			h.registeredListener = callback
+			h.listener = callback
+		},
+		listenBrowser: func(_ context.Context, callback func(any)) {
+			h.phases = append(h.phases, "listen-browser")
+			h.browserListener = callback
+		},
+	}
+	return h
+}
+
+// assertInitialToolsAdded checks the add that arrives while WebMCP.enable is
+// in flight. Mutating the published value must not affect a later conversion
+// from the generated event storage.
+func (h *listenBeforeEnableHarness) assertInitialToolsAdded(t *testing.T, session *targetSession) webmcp.BrowserEvent {
+	t.Helper()
 	attached := nextBrowserEvent(t, session.Events())
 	initialAdded := nextBrowserEvent(t, session.Events())
-	if attached.Type != webmcp.EventTargetAttached || initialAdded.Type != webmcp.EventToolsAdded || initialAdded.FrameID != frameID || initialAdded.Generation != 1 {
+	if attached.Type != webmcp.EventTargetAttached || initialAdded.Type != webmcp.EventToolsAdded || initialAdded.FrameID != eventsTestFrameID || initialAdded.Generation != 1 {
 		t.Fatalf("initial event order = %s, %s; want target_attached, tools_added", attached.Type, initialAdded.Type)
 	}
 	assertIncreasingSequence(t, attached, initialAdded)
@@ -345,25 +338,47 @@ func TestWebMCPEventsListenBeforeEnableAndPreserveOrder(t *testing.T) {
 		t.Fatalf("initial tools = %+v, want one tool", initialAdded.Tools)
 	}
 	initialTool := initialAdded.Tools[0]
-	if initialTool.BrowserID != handle.candidate.ID || initialTool.TargetID != targetID || initialTool.FrameID != frameID || initialTool.Name != toolName {
+	if initialTool.BrowserID != h.handle.candidate.ID || initialTool.TargetID != eventsTestTargetID || initialTool.FrameID != eventsTestFrameID || initialTool.Name != eventsTestToolName {
 		t.Fatalf("initial tool identity = %+v, want browser/target/frame/name preserved", initialTool)
 	}
-	if string(initialTool.InputSchema) != schema || initialTool.Description != "Submit the page form" || initialTool.Generation != 1 {
+	if string(initialTool.InputSchema) != eventsTestSchema || initialTool.Description != "Submit the page form" || initialTool.Generation != 1 {
 		t.Fatalf("initial tool metadata = %+v, want schema/description/generation preserved", initialTool)
 	}
-	if initialTool.Annotations.ReadOnly == nil || *initialTool.Annotations.ReadOnly || initialTool.Annotations.UntrustedContent == nil || !*initialTool.Annotations.UntrustedContent || initialTool.Annotations.AutoSubmit == nil || !*initialTool.Annotations.AutoSubmit {
-		t.Fatalf("initial annotations = %+v, want all generated annotation values", initialTool.Annotations)
-	}
+	assertGeneratedEventAnnotations(t, initialTool.Annotations)
 	initialTool.InputSchema[0] = 'X'
 	*initialTool.Annotations.ReadOnly = true
-	if string(added.Tools[0].InputSchema) != schema || added.Tools[0].Annotations.ReadOnly {
+	if string(h.added.Tools[0].InputSchema) != eventsTestSchema || h.added.Tools[0].Annotations.ReadOnly {
 		t.Fatal("consumer mutation leaked into generated toolsAdded storage")
 	}
+	return initialAdded
+}
 
-	listener(added)
-	listener(removed)
-	listener(invoked)
-	listener(responded)
+func assertGeneratedEventAnnotations(t *testing.T, annotations webmcp.ToolAnnotations) {
+	t.Helper()
+	if annotations.ReadOnly == nil || *annotations.ReadOnly || annotations.UntrustedContent == nil || !*annotations.UntrustedContent || annotations.AutoSubmit == nil || !*annotations.AutoSubmit {
+		t.Fatalf("initial annotations = %+v, want all generated annotation values", annotations)
+	}
+}
+
+func (h *listenBeforeEnableHarness) assertCopiedToolEvents(t *testing.T, session *targetSession, initialAdded webmcp.BrowserEvent) {
+	t.Helper()
+	removed := &cdpWebMCP.EventToolsRemoved{Tools: []*cdpWebMCP.RemovedTool{{Name: eventsTestToolName, FrameID: eventsTestFrameID}}}
+	invoked := &cdpWebMCP.EventToolInvoked{
+		ToolName:     eventsTestToolName,
+		FrameID:      eventsTestFrameID,
+		InvocationID: "invocation-events",
+		Input:        eventsTestInputJSON,
+	}
+	respondedOutput := jsontext.Value([]byte(eventsTestOutput))
+	responded := &cdpWebMCP.EventToolResponded{
+		InvocationID: "invocation-events",
+		Status:       cdpWebMCP.InvocationStatusCompleted,
+		Output:       respondedOutput,
+	}
+	h.listener(h.added)
+	h.listener(removed)
+	h.listener(invoked)
+	h.listener(responded)
 
 	repeatedAdded := nextBrowserEvent(t, session.Events())
 	removedEvent := nextBrowserEvent(t, session.Events())
@@ -373,26 +388,35 @@ func TestWebMCPEventsListenBeforeEnableAndPreserveOrder(t *testing.T) {
 	assertIncreasingSequence(t, repeatedAdded, removedEvent)
 	assertIncreasingSequence(t, removedEvent, invokedEvent)
 	assertIncreasingSequence(t, invokedEvent, respondedEvent)
-	if repeatedAdded.Type != webmcp.EventToolsAdded || string(repeatedAdded.Tools[0].InputSchema) != schema || *repeatedAdded.Tools[0].Annotations.ReadOnly {
+	if repeatedAdded.Type != webmcp.EventToolsAdded || string(repeatedAdded.Tools[0].InputSchema) != eventsTestSchema || *repeatedAdded.Tools[0].Annotations.ReadOnly {
 		t.Fatalf("repeated toolsAdded = %+v, want an unchanged defensive copy", repeatedAdded)
 	}
-	if removedEvent.Type != webmcp.EventToolsRemoved || removedEvent.FrameID != frameID || removedEvent.Generation != 1 || len(removedEvent.RemovedToolNames) != 1 || removedEvent.RemovedToolNames[0] != toolName {
+	if removedEvent.Type != webmcp.EventToolsRemoved || removedEvent.FrameID != eventsTestFrameID || removedEvent.Generation != 1 || len(removedEvent.RemovedToolNames) != 1 || removedEvent.RemovedToolNames[0] != eventsTestToolName {
 		t.Fatalf("toolsRemoved event = %+v, want frame and tool name", removedEvent)
 	}
-	if invokedEvent.Type != webmcp.EventToolInvoked || invokedEvent.Generation != 1 || invokedEvent.FrameID != frameID || invokedEvent.ToolName != toolName || invokedEvent.InvocationID != "invocation-events" || string(invokedEvent.Input) != inputJSON {
+	assertCopiedInvocationEvents(t, invokedEvent, respondedEvent, respondedOutput)
+}
+
+func assertCopiedInvocationEvents(t *testing.T, invokedEvent, respondedEvent webmcp.BrowserEvent, respondedOutput jsontext.Value) {
+	t.Helper()
+	if invokedEvent.Type != webmcp.EventToolInvoked || invokedEvent.Generation != 1 || invokedEvent.FrameID != eventsTestFrameID || invokedEvent.ToolName != eventsTestToolName || invokedEvent.InvocationID != "invocation-events" || string(invokedEvent.Input) != eventsTestInputJSON {
 		t.Fatalf("toolInvoked event = %+v, want correlated copied input", invokedEvent)
 	}
-	if respondedEvent.Type != webmcp.EventToolResponded || respondedEvent.Generation != 1 || respondedEvent.InvocationID != "invocation-events" || respondedEvent.Status != string(cdpWebMCP.InvocationStatusCompleted) || string(respondedEvent.Output) != output || respondedEvent.ErrorCode != "" {
+	if respondedEvent.Type != webmcp.EventToolResponded || respondedEvent.Generation != 1 || respondedEvent.InvocationID != "invocation-events" || respondedEvent.Status != string(cdpWebMCP.InvocationStatusCompleted) || string(respondedEvent.Output) != eventsTestOutput || respondedEvent.ErrorCode != "" {
 		t.Fatalf("toolResponded event = %+v, want completed copied output", respondedEvent)
 	}
 	respondedEvent.Output[0] = 'X'
-	if string(respondedOutput) != output {
+	if string(respondedOutput) != eventsTestOutput {
 		t.Fatal("consumer mutation leaked into generated toolResponded output")
 	}
-	if browserListener == nil {
+}
+
+func (h *listenBeforeEnableHarness) assertBrowserDetachClosesEvents(t *testing.T, session *targetSession) {
+	t.Helper()
+	if h.browserListener == nil {
 		t.Fatal("browser lifecycle listener was not registered")
 	}
-	browserListener(&cdpTarget.EventDetachedFromTarget{SessionID: protocolTarget.SessionID})
+	h.browserListener(&cdpTarget.EventDetachedFromTarget{SessionID: h.protocolTarget.SessionID})
 	detached := nextBrowserEvent(t, session.Events())
 	if detached.Type != webmcp.EventTargetDetached || detached.ErrorCode != string(webmcp.ErrorTargetDetached) {
 		t.Fatalf("browser listener detach event = %+v, want target_detached terminal event", detached)

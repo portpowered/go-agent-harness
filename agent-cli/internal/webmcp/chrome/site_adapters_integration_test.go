@@ -185,9 +185,10 @@ func testWikipediaAdapterJourney(t *testing.T) {
 	handler := func(writer http.ResponseWriter, request *http.Request) {
 		adapterFixtureHeaders(writer)
 		body := `<h1>Wikipedia</h1>`
-		if request.URL.Path == "/w/index.php" {
+		switch request.URL.Path {
+		case "/w/index.php":
 			body = `<div class="mw-search-result"><div class="mw-search-result-heading"><a href="/wiki/Go_(programming_language)">Go (programming language)</a></div><div class="searchresult">A programming language.</div></div>`
-		} else if request.URL.Path == "/wiki/Go_(programming_language)" {
+		case "/wiki/Go_(programming_language)":
 			body = `<h1 id="firstHeading">Go (programming language)</h1><div class="mw-parser-output"><p>Go is a statically typed programming language designed at Google.</p><h2>History</h2></div>`
 		}
 		_, _ = fmt.Fprint(writer, `<!doctype html><body>`+body+`</body>`)

@@ -187,7 +187,7 @@ func LoadChromeForTestingLock(lockPath string) (ChromeForTestingLock, error) {
 	if err != nil {
 		return ChromeForTestingLock{}, err
 	}
-	defer file.Close()
+	defer closeAfterRead(file)
 	var lock ChromeForTestingLock
 	decoder := json.NewDecoder(io.LimitReader(file, 64<<10))
 	if err := decoder.Decode(&lock); err != nil {
@@ -290,7 +290,7 @@ func (a *ChromeForTestingAcquirer) acquireCached(ctx context.Context, client *ht
 	if err != nil {
 		return ChromeExecutable{}, newChromeForTestingError("cache_unavailable", err)
 	}
-	defer os.RemoveAll(stagingDir)
+	defer removeBestEffort(os.RemoveAll, stagingDir)
 	if err := os.Chmod(stagingDir, 0o700); err != nil {
 		return ChromeExecutable{}, newChromeForTestingError("cache_unavailable", err)
 	}
@@ -335,7 +335,7 @@ func (a *ChromeForTestingAcquirer) acquireCached(ctx context.Context, client *ht
 		return ChromeExecutable{}, newChromeForTestingError("cache_unavailable", err)
 	}
 	markerTempName := markerTemp.Name()
-	defer os.Remove(markerTempName)
+	defer removeBestEffort(os.Remove, markerTempName)
 	if chmodErr := markerTemp.Chmod(0o600); chmodErr != nil {
 		_ = markerTemp.Close()
 		return ChromeExecutable{}, newChromeForTestingError("cache_unavailable", chmodErr)
@@ -433,7 +433,7 @@ func fetchManagedChromeManifest(ctx context.Context, client *http.Client, endpoi
 	if err != nil {
 		return ChromeForTestingManifest{}, err
 	}
-	defer response.Body.Close()
+	defer closeAfterRead(response.Body)
 	if response.StatusCode != http.StatusOK {
 		return ChromeForTestingManifest{}, fmt.Errorf("chrome for testing manifest returned HTTP status %d", response.StatusCode)
 	}
@@ -453,7 +453,7 @@ func downloadAndVerifyManagedChrome(ctx context.Context, client *http.Client, en
 	if err != nil {
 		return err
 	}
-	defer response.Body.Close()
+	defer closeAfterRead(response.Body)
 	if response.StatusCode != http.StatusOK {
 		return fmt.Errorf("chrome for testing archive returned HTTP status %d", response.StatusCode)
 	}
@@ -485,7 +485,7 @@ func verifyManagedChromeArchive(archivePath, expectedSHA string) bool {
 	if err != nil {
 		return false
 	}
-	defer file.Close()
+	defer closeAfterRead(file)
 	hasher := sha256.New()
 	bytesRead, err := io.Copy(io.MultiWriter(hasher), io.LimitReader(file, chromeForTestingArchiveLimit))
 	if err != nil || bytesRead >= chromeForTestingArchiveLimit {
@@ -499,87 +499,97 @@ func extractManagedChromeArchive(archivePath, destination string) error {
 	if err != nil {
 		return err
 	}
-	defer archive.Close()
+	defer closeAfterRead(archive)
 	var symlinks []*zip.File
 	for _, entry := range archive.File {
 		name, err := validateChromeArchivePathValue(entry.Name)
 		if err != nil {
 			return err
 		}
-		target := filepath.Join(destination, filepath.FromSlash(name))
 		if entry.Mode()&os.ModeSymlink != 0 {
 			symlinks = append(symlinks, entry)
 			continue
 		}
-		if entry.FileInfo().IsDir() {
-			if err := os.MkdirAll(target, 0o700); err != nil {
-				return err
-			}
-			continue
-		}
-		if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
-			return err
-		}
-		reader, err := entry.Open()
-		if err != nil {
-			return err
-		}
-		file, createErr := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
-		if createErr == nil {
-			_, createErr = io.Copy(file, reader)
-			closeErr := file.Close()
-			if createErr == nil {
-				createErr = closeErr
-			}
-		}
-		_ = reader.Close()
-		if createErr != nil {
-			return createErr
-		}
-		mode := entry.Mode().Perm()
-		if mode == 0 {
-			mode = 0o600
-		}
-		if err := os.Chmod(target, mode); err != nil {
+		if err := extractManagedChromeEntry(entry, filepath.Join(destination, filepath.FromSlash(name))); err != nil {
 			return err
 		}
 	}
 	for _, entry := range symlinks {
-		name, err := validateChromeArchivePathValue(entry.Name)
-		if err != nil {
-			return err
-		}
-		linkPath := filepath.Join(destination, filepath.FromSlash(name))
-		reader, err := entry.Open()
-		if err != nil {
-			return err
-		}
-		linkTargetBytes, readErr := io.ReadAll(io.LimitReader(reader, 4096))
-		closeErr := reader.Close()
-		if readErr != nil {
-			return readErr
-		}
-		if closeErr != nil {
-			return closeErr
-		}
-		linkTarget := strings.TrimSpace(string(linkTargetBytes))
-		if linkTarget == "" || filepath.IsAbs(filepath.FromSlash(linkTarget)) {
-			return errors.New("chrome archive symlink target is unsafe")
-		}
-		resolvedTarget := filepath.Clean(filepath.Join(filepath.Dir(linkPath), filepath.FromSlash(linkTarget)))
-		relativeTarget, err := filepath.Rel(destination, resolvedTarget)
-		if err != nil || relativeTarget == ".." || strings.HasPrefix(relativeTarget, ".."+string(os.PathSeparator)) {
-			return errors.New("chrome archive symlink escapes extraction directory")
-		}
-		if err := os.MkdirAll(filepath.Dir(linkPath), 0o700); err != nil {
-			return err
-		}
-		if err := os.Symlink(linkTarget, linkPath); err != nil {
+		if err := extractManagedChromeSymlink(entry, destination); err != nil {
 			return err
 		}
 	}
 	return nil
 }
+
+func extractManagedChromeEntry(entry *zip.File, target string) error {
+	if entry.FileInfo().IsDir() {
+		return os.MkdirAll(target, chromeArchiveDirMode)
+	}
+	if err := os.MkdirAll(filepath.Dir(target), chromeArchiveDirMode); err != nil {
+		return err
+	}
+	reader, err := entry.Open()
+	if err != nil {
+		return err
+	}
+	file, createErr := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, chromeArchiveDefaultFileMode)
+	if createErr == nil {
+		_, createErr = io.Copy(file, reader)
+		closeErr := file.Close()
+		if createErr == nil {
+			createErr = closeErr
+		}
+	}
+	closeAfterRead(reader)
+	if createErr != nil {
+		return createErr
+	}
+	mode := entry.Mode().Perm()
+	if mode == 0 {
+		mode = chromeArchiveDefaultFileMode
+	}
+	return os.Chmod(target, mode)
+}
+
+func extractManagedChromeSymlink(entry *zip.File, destination string) error {
+	name, err := validateChromeArchivePathValue(entry.Name)
+	if err != nil {
+		return err
+	}
+	linkPath := filepath.Join(destination, filepath.FromSlash(name))
+	reader, err := entry.Open()
+	if err != nil {
+		return err
+	}
+	linkTargetBytes, readErr := io.ReadAll(io.LimitReader(reader, chromeArchiveSymlinkTargetLimit))
+	closeErr := reader.Close()
+	if readErr != nil {
+		return readErr
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	linkTarget := strings.TrimSpace(string(linkTargetBytes))
+	if linkTarget == "" || filepath.IsAbs(filepath.FromSlash(linkTarget)) {
+		return errors.New("chrome archive symlink target is unsafe")
+	}
+	resolvedTarget := filepath.Clean(filepath.Join(filepath.Dir(linkPath), filepath.FromSlash(linkTarget)))
+	relativeTarget, err := filepath.Rel(destination, resolvedTarget)
+	if err != nil || relativeTarget == ".." || strings.HasPrefix(relativeTarget, ".."+string(os.PathSeparator)) {
+		return errors.New("chrome archive symlink escapes extraction directory")
+	}
+	if err := os.MkdirAll(filepath.Dir(linkPath), chromeArchiveDirMode); err != nil {
+		return err
+	}
+	return os.Symlink(linkTarget, linkPath)
+}
+
+const chromeArchiveDefaultFileMode os.FileMode = 0o600
+
+const chromeArchiveDirMode os.FileMode = 0o700
+
+const chromeArchiveSymlinkTargetLimit = 4096
 
 func validateChromeArchivePath(raw string) error {
 	_, err := validateChromeArchivePathValue(raw)
@@ -630,35 +640,6 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
-}
-
-func newChromeForTestingError(category string, cause error) error {
-	return &ChromeForTestingError{Category: category, Cause: cause}
-}
-
-// ChromeForTestingError classifies an internal fallback failure without
-// rendering URLs, paths, command output, or HTTP details.
-type ChromeForTestingError struct {
-	Category string
-	Cause    error
-}
-
-func (e *ChromeForTestingError) Error() string {
-	if e == nil {
-		return "Chrome for Testing fallback failed"
-	}
-	category := safeAcquisitionCategory(e.Category)
-	if category == "" {
-		category = "acquisition_failed"
-	}
-	return "Chrome for Testing fallback failed: " + category
-}
-
-func (e *ChromeForTestingError) Unwrap() error {
-	if e == nil {
-		return nil
-	}
-	return e.Cause
 }
 
 func chromeSourceDirectory() (string, bool) {

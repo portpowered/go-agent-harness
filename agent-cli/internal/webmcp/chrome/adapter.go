@@ -229,7 +229,7 @@ func (r *Runtime) resolveBrowserWebSocket(ctx context.Context, endpoint string) 
 	}
 
 	requestURL := *parsed
-	requestURL.Path = "/json/version"
+	requestURL.Path = devToolsVersionPath
 	requestURL.RawQuery = ""
 	requestURL.Fragment = ""
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL.String(), nil)
@@ -244,7 +244,7 @@ func (r *Runtime) resolveBrowserWebSocket(ctx context.Context, endpoint string) 
 	if err != nil {
 		return "", err
 	}
-	defer response.Body.Close()
+	defer closeAfterRead(response.Body)
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 		return "", errors.New("browser version endpoint is unavailable")
 	}
@@ -291,3 +291,62 @@ var (
 	_ webmcp.BrowserRuntime  = (*Runtime)(nil)
 	_ webmcp.DevToolsCatalog = (*Runtime)(nil)
 )
+
+// DevTools HTTP endpoint schemes and the browser version discovery path.
+const (
+	schemeHTTP          = "http"
+	schemeHTTPS         = "https"
+	devToolsVersionPath = "/json/version"
+)
+
+func httpEndpoint(candidate webmcp.BrowserCandidate) (string, error) {
+	endpoint := strings.TrimSpace(candidate.HTTPURL)
+	if endpoint == "" {
+		endpoint = strings.TrimSpace(candidate.BrowserWSURL)
+	}
+	parsed, err := url.Parse(endpoint)
+	if err != nil || parsed.Host == "" {
+		return "", errors.New("browser http endpoint is invalid")
+	}
+	scheme := parsed.Scheme
+	switch scheme {
+	case "ws":
+		scheme = schemeHTTP
+	case "wss":
+		scheme = schemeHTTPS
+	}
+	if scheme != schemeHTTP && scheme != schemeHTTPS {
+		return "", errors.New("browser http endpoint scheme is invalid")
+	}
+	return (&url.URL{Scheme: scheme, Host: parsed.Host}).String(), nil
+}
+
+func targetWebSocketURL(candidate webmcp.BrowserCandidate, targetID string) string {
+	endpoint := strings.TrimSpace(candidate.BrowserWSURL)
+	if endpoint == "" {
+		endpoint = strings.TrimSpace(candidate.HTTPURL)
+	}
+	parsed, err := url.Parse(endpoint)
+	if err != nil || parsed.Host == "" || targetID == "" {
+		return ""
+	}
+	scheme := parsed.Scheme
+	switch scheme {
+	case schemeHTTP:
+		scheme = "ws"
+	case schemeHTTPS:
+		scheme = "wss"
+	}
+	if scheme != "ws" && scheme != "wss" {
+		return ""
+	}
+	return (&url.URL{Scheme: scheme, Host: parsed.Host, Path: "/devtools/page/" + url.PathEscape(targetID)}).String()
+}
+
+func targetOrigin(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return ""
+	}
+	return parsed.Scheme + "://" + parsed.Host
+}

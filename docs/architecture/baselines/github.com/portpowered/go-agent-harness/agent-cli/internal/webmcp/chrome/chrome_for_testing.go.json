@@ -23,16 +23,6 @@
       "phase": "P0"
     },
     {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome",
-      "file": "internal/webmcp/chrome/chrome_for_testing.go",
-      "symbol": "extractManagedChromeArchive",
-      "value": 45,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
       "rule": "cyclomatic-complexity",
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome",
@@ -67,16 +57,6 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome",
       "file": "internal/webmcp/chrome/chrome_for_testing.go",
-      "symbol": "extractManagedChromeArchive",
-      "value": 26,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cyclomatic-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome",
-      "file": "internal/webmcp/chrome/chrome_for_testing.go",
       "symbol": "readReadyChromeCache",
       "value": 16,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
@@ -87,7 +67,7 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome",
       "file": "internal/webmcp/chrome/chrome_for_testing.go",
-      "value": 691,
+      "value": 672,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -102,32 +82,12 @@
       "phase": "P0"
     },
     {
-      "rule": "function-lines",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome",
-      "file": "internal/webmcp/chrome/chrome_for_testing.go",
-      "symbol": "extractManagedChromeArchive",
-      "value": 86,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
       "rule": "function-statements",
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome",
       "file": "internal/webmcp/chrome/chrome_for_testing.go",
       "symbol": "*ChromeForTestingAcquirer.acquireCached",
       "value": 76,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "function-statements",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome",
-      "file": "internal/webmcp/chrome/chrome_for_testing.go",
-      "symbol": "extractManagedChromeArchive",
-      "value": 67,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },

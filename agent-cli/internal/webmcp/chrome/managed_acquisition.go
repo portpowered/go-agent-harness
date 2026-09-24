@@ -515,7 +515,7 @@ func safePlatformLabel(value string) string {
 		value = value[:32]
 	}
 	for _, r := range value {
-		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '/' || r == '-' || r == '_') {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '/' && r != '-' && r != '_' {
 			return "current platform"
 		}
 	}

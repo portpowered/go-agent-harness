@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -29,7 +30,40 @@ func TestManagedBrowserLauncherWithStockChrome(t *testing.T) {
 	}
 
 	chromeExecutable, version := findQualifiedStockChromeForIntegration(t)
-	fixture := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+	fixture := newManagedLaunchFixture(t)
+	t.Cleanup(fixture.Close)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	browser := launchManagedStockChrome(t, ctx, chromeExecutable, version, fixture.URL)
+
+	runtimeAdapter := NewRuntime()
+	handle, err := runtimeAdapter.Open(ctx, webmcp.BrowserCandidate{
+		ID:           "managed-integration-browser",
+		HTTPURL:      browser.Endpoint().CDPURL,
+		BrowserWSURL: browser.Endpoint().BrowserWSEndpoint,
+		Loopback:     true,
+	})
+	if err != nil {
+		t.Fatalf("attach managed browser runtime: %v", err)
+	}
+	t.Cleanup(func() { discardSecondaryError(handle.Close) })
+	second, secondURL := openManagedLaunchTabs(t, ctx, handle, fixture.URL)
+
+	session, err := handle.Attach(ctx, second.ID, webmcp.TargetOwnershipHarnessOwned)
+	if err != nil {
+		t.Fatalf("attach second managed target: %v", err)
+	}
+	t.Cleanup(func() { discardSecondaryError(session.Close) })
+	if err := session.EnableWebMCP(ctx); err != nil {
+		t.Fatalf("enable WebMCP on opened target: %v", err)
+	}
+	exerciseManagedLaunchCast(t, ctx, handle, session, second.ID, fixture.URL, secondURL)
+	invokeManagedLaunchProbe(t, ctx, session)
+}
+
+func newManagedLaunchFixture(t *testing.T) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.URL.Path != "/managed-start" && request.URL.Path != "/opened-by-agent" && request.URL.Path != "/webmcp-tool" && request.URL.Path != "/cast-navigation" {
 			http.NotFound(writer, request)
 			return
@@ -37,19 +71,21 @@ func TestManagedBrowserLauncherWithStockChrome(t *testing.T) {
 		writer.Header().Set("Content-Type", "text/html; charset=utf-8")
 		writer.Header().Set("Origin-Agent-Cluster", "?1")
 		writer.Header().Set("Permissions-Policy", "tools=(self)")
+		page := "<!doctype html><title>Managed WebMCP launch</title><main>managed launch ready</main>"
 		if request.URL.Path == "/webmcp-tool" {
-			_, _ = fmt.Fprint(writer, managedLaunchWebMCPFixture)
-			return
+			page = managedLaunchWebMCPFixture
 		}
-		_, _ = fmt.Fprint(writer, "<!doctype html><title>Managed WebMCP launch</title><main>managed launch ready</main>")
+		if _, err := fmt.Fprint(writer, page); err != nil {
+			t.Errorf("write managed launch fixture: %v", err)
+		}
 	}))
-	t.Cleanup(fixture.Close)
+}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
-	defer cancel()
+func launchManagedStockChrome(t *testing.T, ctx context.Context, chromeExecutable, version, fixtureURL string) *ManagedBrowser {
+	t.Helper()
 	launcher := NewManagedBrowserLauncher(ManagedBrowserLaunchOptions{
 		ConfigDir:  t.TempDir(),
-		StartupURL: fixture.URL + "/managed-start",
+		StartupURL: fixtureURL + "/managed-start",
 		Acquirer: ManagedChromeExecutableAcquirerFunc(func(context.Context) (ChromeExecutable, error) {
 			return ChromeExecutable{Path: chromeExecutable, Version: version, Major: MinimumManagedChromeMajor, Source: ExecutableSourceStock}, nil
 		}),
@@ -72,7 +108,7 @@ func TestManagedBrowserLauncherWithStockChrome(t *testing.T) {
 	if browser.Executable().Major < MinimumManagedChromeMajor {
 		t.Fatalf("launched Chrome major = %d, want at least %d", browser.Executable().Major, MinimumManagedChromeMajor)
 	}
-	if err := waitForManagedLaunchTarget(ctx, browser.Endpoint().CDPURL, fixture.URL+"/managed-start"); err != nil {
+	if err := waitForManagedLaunchTarget(ctx, browser.Endpoint().CDPURL, fixtureURL+"/managed-start"); err != nil {
 		t.Fatalf("wait for managed startup page: %v", err)
 	}
 	select {
@@ -80,26 +116,21 @@ func TestManagedBrowserLauncherWithStockChrome(t *testing.T) {
 		t.Fatal("managed Chrome exited during ordinary detach proof")
 	default:
 	}
-	if err := waitForManagedLaunchTarget(ctx, browser.Endpoint().CDPURL, fixture.URL+"/managed-start"); err != nil {
+	if err := waitForManagedLaunchTarget(ctx, browser.Endpoint().CDPURL, fixtureURL+"/managed-start"); err != nil {
 		t.Fatalf("managed startup page was not reusable after detach: %v", err)
 	}
+	return browser
+}
 
-	runtimeAdapter := NewRuntime()
-	handle, err := runtimeAdapter.Open(ctx, webmcp.BrowserCandidate{
-		ID:           "managed-integration-browser",
-		HTTPURL:      browser.Endpoint().CDPURL,
-		BrowserWSURL: browser.Endpoint().BrowserWSEndpoint,
-		Loopback:     true,
-	})
-	if err != nil {
-		t.Fatalf("attach managed browser runtime: %v", err)
-	}
-	t.Cleanup(func() { _ = handle.Close() })
+// openManagedLaunchTabs opens and activates two agent tabs and returns the
+// second, which serves the WebMCP fixture.
+func openManagedLaunchTabs(t *testing.T, ctx context.Context, handle webmcp.BrowserHandle, fixtureURL string) (webmcp.Target, string) {
+	t.Helper()
 	opener, ok := handle.(webmcp.BrowserTabOpener)
 	if !ok {
 		t.Fatalf("managed browser handle %T does not expose tab creation", handle)
 	}
-	openedURL := fixture.URL + "/opened-by-agent"
+	openedURL := fixtureURL + "/opened-by-agent"
 	opened, err := opener.OpenTab(ctx, openedURL)
 	if err != nil {
 		t.Fatalf("open managed browser tab: %v", err)
@@ -114,18 +145,17 @@ func TestManagedBrowserLauncherWithStockChrome(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list managed targets after open: %v", err)
 	}
-	found := false
-	for _, candidate := range targets {
-		if candidate.ID == opened.ID && candidate.URL == openedURL {
-			found = true
-			break
-		}
-	}
-	if !found {
+	if !slices.ContainsFunc(targets, func(candidate webmcp.Target) bool { return candidate.ID == opened.ID && candidate.URL == openedURL }) {
 		t.Fatalf("opened target %q not found in %+v", opened.ID, targets)
 	}
 
-	secondURL := fixture.URL + "/webmcp-tool"
+	return openSecondManagedLaunchTab(t, ctx, handle, opener, opened, fixtureURL)
+}
+
+func openSecondManagedLaunchTab(t *testing.T, ctx context.Context, handle webmcp.BrowserHandle, opener webmcp.BrowserTabOpener, opened webmcp.Target, fixtureURL string) (webmcp.Target, string) {
+	t.Helper()
+	openedURL := opened.URL
+	secondURL := fixtureURL + "/webmcp-tool"
 	second, err := opener.OpenTab(ctx, secondURL)
 	if err != nil {
 		t.Fatalf("open second managed browser tab: %v", err)
@@ -136,7 +166,7 @@ func TestManagedBrowserLauncherWithStockChrome(t *testing.T) {
 	if err := handle.Activate(ctx, second.ID); err != nil {
 		t.Fatalf("activate second managed browser tab: %v", err)
 	}
-	targets, err = handle.ListTargets(ctx)
+	targets, err := handle.ListTargets(ctx)
 	if err != nil {
 		t.Fatalf("list managed targets after second open: %v", err)
 	}
@@ -148,15 +178,11 @@ func TestManagedBrowserLauncherWithStockChrome(t *testing.T) {
 	if !foundFirst || !foundSecond {
 		t.Fatalf("managed targets after repeated open = %+v, want both %q and %q", targets, opened.ID, second.ID)
 	}
+	return second, secondURL
+}
 
-	session, err := handle.Attach(ctx, second.ID, webmcp.TargetOwnershipHarnessOwned)
-	if err != nil {
-		t.Fatalf("attach second managed target: %v", err)
-	}
-	t.Cleanup(func() { _ = session.Close() })
-	if err := session.EnableWebMCP(ctx); err != nil {
-		t.Fatalf("enable WebMCP on opened target: %v", err)
-	}
+func exerciseManagedLaunchCast(t *testing.T, ctx context.Context, handle webmcp.BrowserHandle, session webmcp.TargetSession, targetID webmcp.TargetID, fixtureURL, secondURL string) {
+	t.Helper()
 	castController, ok := session.(webmcp.TargetCastController)
 	if !ok {
 		t.Fatalf("managed target session %T does not expose Cast controls", session)
@@ -168,40 +194,45 @@ func TestManagedBrowserLauncherWithStockChrome(t *testing.T) {
 	t.Logf("real Chrome Cast domain enabled; discovered_devices=%d names=%v", len(castDevices), castDeviceNames(castDevices))
 	assertExpectedCastDevices(t, castDevices, os.Getenv(managedBrowserExpectedCastDevicesEnv))
 	castDeviceName := strings.TrimSpace(os.Getenv(managedBrowserCastDeviceEnv))
-	if castDeviceName != "" {
-		assertExpectedCastDevices(t, castDevices, castDeviceName)
-		if err := castController.CastTab(ctx, castDeviceName); err != nil {
-			t.Fatalf("cast opened managed tab to %q: %v", castDeviceName, err)
-		}
-		if _, err := waitForActiveCastSession(ctx, castController, castDeviceName); err != nil {
-			t.Fatal(err)
-		}
-		t.Logf("real Chrome tab cast established on device %q", castDeviceName)
-		navigator, ok := session.(webmcp.TargetTabNavigator)
-		if !ok {
-			t.Fatalf("managed target session %T does not expose in-place tab navigation", session)
-		}
-		navigationURL := fixture.URL + "/cast-navigation"
-		if err := navigator.NavigateTab(ctx, navigationURL); err != nil {
-			t.Fatalf("navigate actively cast tab: %v", err)
-		}
-		if err := waitForManagedTargetURL(ctx, handle, second.ID, navigationURL); err != nil {
-			t.Fatalf("wait for cast target navigation: %v", err)
-		}
-		if _, err := waitForActiveCastSession(ctx, castController, castDeviceName); err != nil {
-			t.Fatalf("cast session did not survive in-place navigation: %v", err)
-		}
-		t.Logf("real Chrome cast navigation preserved target=%s device=%q", second.ID, castDeviceName)
-		if err := castController.StopCasting(ctx, castDeviceName); err != nil {
-			t.Fatalf("stop real Chrome tab cast on %q: %v", castDeviceName, err)
-		}
-		if err := navigator.NavigateTab(ctx, secondURL); err != nil {
-			t.Fatalf("restore WebMCP fixture after cast navigation: %v", err)
-		}
-		if err := waitForManagedTargetURL(ctx, handle, second.ID, secondURL); err != nil {
-			t.Fatalf("wait for restored WebMCP fixture: %v", err)
-		}
+	if castDeviceName == "" {
+		return
 	}
+	assertExpectedCastDevices(t, castDevices, castDeviceName)
+	if err := castController.CastTab(ctx, castDeviceName); err != nil {
+		t.Fatalf("cast opened managed tab to %q: %v", castDeviceName, err)
+	}
+	if _, err := waitForActiveCastSession(ctx, castController, castDeviceName); err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("real Chrome tab cast established on device %q", castDeviceName)
+	navigator, ok := session.(webmcp.TargetTabNavigator)
+	if !ok {
+		t.Fatalf("managed target session %T does not expose in-place tab navigation", session)
+	}
+	navigationURL := fixtureURL + "/cast-navigation"
+	if err := navigator.NavigateTab(ctx, navigationURL); err != nil {
+		t.Fatalf("navigate actively cast tab: %v", err)
+	}
+	if err := waitForManagedTargetURL(ctx, handle, targetID, navigationURL); err != nil {
+		t.Fatalf("wait for cast target navigation: %v", err)
+	}
+	if _, err := waitForActiveCastSession(ctx, castController, castDeviceName); err != nil {
+		t.Fatalf("cast session did not survive in-place navigation: %v", err)
+	}
+	t.Logf("real Chrome cast navigation preserved target=%s device=%q", targetID, castDeviceName)
+	if err := castController.StopCasting(ctx, castDeviceName); err != nil {
+		t.Fatalf("stop real Chrome tab cast on %q: %v", castDeviceName, err)
+	}
+	if err := navigator.NavigateTab(ctx, secondURL); err != nil {
+		t.Fatalf("restore WebMCP fixture after cast navigation: %v", err)
+	}
+	if err := waitForManagedTargetURL(ctx, handle, targetID, secondURL); err != nil {
+		t.Fatalf("wait for restored WebMCP fixture: %v", err)
+	}
+}
+
+func invokeManagedLaunchProbe(t *testing.T, ctx context.Context, session webmcp.TargetSession) {
+	t.Helper()
 	added, err := waitForIntegrationEvent(ctx, session.Events(), "managed opened-tab tools", func(event webmcp.BrowserEvent) bool {
 		return event.Type == webmcp.EventToolsAdded && hasTool(event.Tools, "managed_open_tab_probe")
 	})
@@ -457,7 +488,7 @@ func findQualifiedStockChromeForIntegration(t *testing.T) (string, string) {
 
 func waitForManagedLaunchTarget(ctx context.Context, cdpURL, wantURL string) error {
 	client := &http.Client{Timeout: 2 * time.Second}
-	lastObservation := "no response"
+	var lastObservation string
 	for {
 		baseURL := strings.TrimSuffix(strings.TrimRight(cdpURL, "/"), "/json/version")
 		request, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/json/list", nil)

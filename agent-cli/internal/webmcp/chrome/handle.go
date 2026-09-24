@@ -289,7 +289,7 @@ func (h *handle) OpenTab(ctx context.Context, rawURL string) (webmcp.Target, err
 			if opened.ID != webmcp.TargetID(targetID) {
 				continue
 			}
-			if opened.Eligible || rawURL == "about:blank" && opened.Type == "page" && opened.WebSocketURL != "" {
+			if opened.Eligible || rawURL == aboutBlankURL && opened.Type == pageTargetType && opened.WebSocketURL != "" {
 				return opened, nil
 			}
 			break
@@ -304,35 +304,21 @@ func (h *handle) OpenTab(ctx context.Context, rawURL string) (webmcp.Target, err
 
 var _ webmcp.BrowserTabOpener = (*handle)(nil)
 
+const (
+	// pageTargetType is the DevTools target type of an ordinary browser tab.
+	pageTargetType = "page"
+	// aboutBlankURL is the empty document a fresh or bootstrap tab shows.
+	aboutBlankURL = "about:blank"
+)
+
 func (h *handle) Attach(ctx context.Context, targetID webmcp.TargetID, ownership webmcp.TargetOwnership) (webmcp.TargetSession, error) {
-	if err := contextError(ctx); err != nil {
-		return nil, classifiedTargetError(h.candidate, targetID, "attach", err)
-	}
-	if targetID == "" {
-		return nil, classifiedTargetError(h.candidate, targetID, "attach", errors.New("target ID is empty"))
-	}
-	if ownership != webmcp.TargetOwnershipExternal && ownership != webmcp.TargetOwnershipHarnessOwned {
-		return nil, classifiedTargetError(h.candidate, targetID, "attach", errors.New("target ownership is invalid"))
+	if err := h.validateAttachRequest(ctx, targetID, ownership); err != nil {
+		return nil, err
 	}
 
-	targets, err := h.ListTargets(ctx)
+	selected, err := h.lookupAttachTarget(ctx, targetID)
 	if err != nil {
-		if errors.Is(err, webmcp.ErrClosed) {
-			return nil, err
-		}
-		return nil, classifiedTargetError(h.candidate, targetID, "lookup", err)
-	}
-	var selected webmcp.Target
-	found := false
-	for _, candidateTarget := range targets {
-		if candidateTarget.ID == targetID {
-			selected = candidateTarget
-			found = true
-			break
-		}
-	}
-	if !found {
-		return nil, classifiedTargetError(h.candidate, targetID, "lookup", webmcp.ErrTargetNotFound)
+		return nil, err
 	}
 
 	h.mu.Lock()
@@ -423,19 +409,39 @@ func (h *handle) Attach(ctx context.Context, targetID webmcp.TargetID, ownership
 	return session, nil
 }
 
+func (h *handle) validateAttachRequest(ctx context.Context, targetID webmcp.TargetID, ownership webmcp.TargetOwnership) error {
+	if err := contextError(ctx); err != nil {
+		return classifiedTargetError(h.candidate, targetID, "attach", err)
+	}
+	if targetID == "" {
+		return classifiedTargetError(h.candidate, targetID, "attach", errors.New("target ID is empty"))
+	}
+	if ownership != webmcp.TargetOwnershipExternal && ownership != webmcp.TargetOwnershipHarnessOwned {
+		return classifiedTargetError(h.candidate, targetID, "attach", errors.New("target ownership is invalid"))
+	}
+	return nil
+}
+
+func (h *handle) lookupAttachTarget(ctx context.Context, targetID webmcp.TargetID) (webmcp.Target, error) {
+	targets, err := h.ListTargets(ctx)
+	if err != nil {
+		if errors.Is(err, webmcp.ErrClosed) {
+			return webmcp.Target{}, err
+		}
+		return webmcp.Target{}, classifiedTargetError(h.candidate, targetID, "lookup", err)
+	}
+	for _, candidateTarget := range targets {
+		if candidateTarget.ID == targetID {
+			return candidateTarget, nil
+		}
+	}
+	return webmcp.Target{}, classifiedTargetError(h.candidate, targetID, "lookup", webmcp.ErrTargetNotFound)
+}
+
 func hasCustomTargetContext(h *handle) bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return h.targetOps.newContext != nil
-}
-
-func (h *handle) timeout() time.Duration {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	if h.commandTimeout > 0 {
-		return h.commandTimeout
-	}
-	return defaultCommandTimeout
 }
 
 func (h *handle) Close() error {
@@ -630,7 +636,7 @@ func (h *handle) listTargetsHTTP(ctx context.Context) ([]webmcp.Target, error) {
 		}
 		return nil, errHTTPUnavailable
 	}
-	defer response.Body.Close()
+	defer closeAfterRead(response.Body)
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 		return nil, errHTTPUnavailable
 	}
@@ -647,9 +653,9 @@ func (h *handle) listTargetsHTTP(ctx context.Context) ([]webmcp.Target, error) {
 
 func normalizeTarget(candidate webmcp.BrowserCandidate, info targetInfo) webmcp.Target {
 	origin := targetOrigin(info.URL)
-	eligible := info.Type == "page" && info.ID != "" && info.WSURL != "" && !isInternalURL(info.URL)
+	eligible := info.Type == pageTargetType && info.ID != "" && info.WSURL != "" && !isInternalURL(info.URL)
 	reason := ""
-	if info.Type != "page" {
+	if info.Type != pageTargetType {
 		reason = "target is not a page"
 	} else if info.ID == "" {
 		reason = "target ID is empty"
@@ -670,56 +676,6 @@ func normalizeTarget(candidate webmcp.BrowserCandidate, info targetInfo) webmcp.
 		Eligible:          eligible,
 		EligibilityReason: reason,
 	}
-}
-
-func httpEndpoint(candidate webmcp.BrowserCandidate) (string, error) {
-	endpoint := strings.TrimSpace(candidate.HTTPURL)
-	if endpoint == "" {
-		endpoint = strings.TrimSpace(candidate.BrowserWSURL)
-	}
-	parsed, err := url.Parse(endpoint)
-	if err != nil || parsed.Host == "" {
-		return "", errors.New("browser http endpoint is invalid")
-	}
-	scheme := parsed.Scheme
-	if scheme == "ws" {
-		scheme = "http"
-	} else if scheme == "wss" {
-		scheme = "https"
-	}
-	if scheme != "http" && scheme != "https" {
-		return "", errors.New("browser http endpoint scheme is invalid")
-	}
-	return (&url.URL{Scheme: scheme, Host: parsed.Host}).String(), nil
-}
-
-func targetWebSocketURL(candidate webmcp.BrowserCandidate, targetID string) string {
-	endpoint := strings.TrimSpace(candidate.BrowserWSURL)
-	if endpoint == "" {
-		endpoint = strings.TrimSpace(candidate.HTTPURL)
-	}
-	parsed, err := url.Parse(endpoint)
-	if err != nil || parsed.Host == "" || targetID == "" {
-		return ""
-	}
-	scheme := parsed.Scheme
-	if scheme == "http" {
-		scheme = "ws"
-	} else if scheme == "https" {
-		scheme = "wss"
-	}
-	if scheme != "ws" && scheme != "wss" {
-		return ""
-	}
-	return (&url.URL{Scheme: scheme, Host: parsed.Host, Path: "/devtools/page/" + url.PathEscape(targetID)}).String()
-}
-
-func targetOrigin(rawURL string) string {
-	parsed, err := url.Parse(rawURL)
-	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
-		return ""
-	}
-	return parsed.Scheme + "://" + parsed.Host
 }
 
 func isInternalURL(rawURL string) bool {

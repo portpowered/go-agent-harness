@@ -5,12 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
-	"net/url"
 	"os"
 	"runtime"
 	"strconv"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -272,14 +269,7 @@ func testRecoveryLossAndReplacement(t *testing.T, ctx context.Context, pinned pi
 	if err := selection.browser.Kill(); err != nil {
 		t.Fatalf("kill owned Chrome during invocation: %v", err)
 	}
-	terminalEvent, err := waitForRecoveryTerminalEvent(ctx, selection.watch, oldAdmission.InvocationID)
-	if err != nil {
-		t.Fatalf("wait for browser-loss terminal event: %v", err)
-	}
-	oldTerminal, err := selection.broker.WaitInvocation(ctx, oldAdmission.InvocationID)
-	if err != nil {
-		t.Fatalf("wait for browser-loss terminal result: %v", err)
-	}
+	terminalEvent, oldTerminal := selection.awaitTerminal(t, ctx, oldAdmission.InvocationID, "wait for browser-loss terminal event", "wait for browser-loss terminal result")
 	assertRecoveryLossTerminal(t, oldTerminal, terminalEvent)
 	if extra := matchingRecoveryTerminalEvents(selection.watch, oldAdmission.InvocationID); len(extra) != 0 {
 		t.Fatalf("browser-loss terminal duplicated: count=%d", len(extra))
@@ -289,36 +279,7 @@ func testRecoveryLossAndReplacement(t *testing.T, ctx context.Context, pinned pi
 		t.Fatalf("selection after browser loss = %v, want a classified loss", selectionFailure)
 	}
 
-	replacementPinned := pinned
-	replacementPinned.WorkDir = t.TempDir()
-	replacement, err := launchPinnedChromeAtPort(ctx, replacementPinned, fixture.URL(), oldPort)
-	if err != nil {
-		t.Fatalf("launch same-port replacement Chrome: %v", err)
-	}
-	t.Cleanup(func() {
-		if closeErr := replacement.Close(); closeErr != nil {
-			t.Logf("replacement Chrome cleanup: %v", closeErr)
-		}
-	})
-	replacementVersion, err := waitForDevToolsVersion(ctx, browserHTTPURL(replacement.endpoint()), lockedChromeVersion)
-	if err != nil {
-		t.Fatalf("read replacement Chrome identity: %v", err)
-	}
-	replacementCandidate, err := recoveryCandidate(ctx, selection.discovery, replacement, replacementVersion)
-	if err != nil {
-		t.Fatalf("normalize replacement Chrome candidate: %v", err)
-	}
-	if replacementCandidate.ID == selection.candidate.ID || replacementCandidate.BrowserInstanceID == selection.candidate.BrowserInstanceID {
-		t.Fatal("same-port replacement retained the retired browser identity")
-	}
-	replacementPort, err := recoveryEndpointPort(replacement.endpoint())
-	if err != nil || replacementPort != oldPort {
-		t.Fatalf("replacement Chrome port = %d err=%v, want original port %d", replacementPort, err, oldPort)
-	}
-	selection.discoverer.Set(replacementCandidate)
-	if candidates, err := selection.broker.Discover(ctx, webmcp.DiscoverOptions{}); err != nil || len(candidates) != 1 || candidates[0].ID != replacementCandidate.ID {
-		t.Fatalf("discover same-port replacement: candidates=%v err=%v", len(candidates), err)
-	}
+	replacementCandidate := selection.launchSamePortReplacement(t, ctx, pinned, fixture, oldPort)
 	replacementTarget, err := recoveryFixtureTarget(ctx, selection.adapter, replacementCandidate, fixture.URL())
 	if err != nil {
 		t.Fatalf("discover replacement fixture target: %v", err)
@@ -334,7 +295,7 @@ func testRecoveryLossAndReplacement(t *testing.T, ctx context.Context, pinned pi
 	if err != nil {
 		t.Fatalf("find replacement complete tool: %v", err)
 	}
-	assertRecoveryStaleToolRef(t, selection.broker, selection.initialCancel.Ref)
+	assertRecoveryStaleToolRef(t, ctx, selection.broker, selection.initialCancel.Ref)
 	if _, err := waitForFixtureOracle(ctx, fixture.StateURL(), func(oracle fixtureOracle) bool {
 		return oracle.Ready && !oracle.Pending && oracle.Value == "initial"
 	}); err != nil {
@@ -360,6 +321,58 @@ func testRecoveryLossAndReplacement(t *testing.T, ctx context.Context, pinned pi
 	t.Logf("case=kill_mid_invocation_same_port_reselect old_terminal=%s new_terminal=%s old_browser=%s new_browser=%s generation=%d", oldTerminal.ErrorCode, freshTerminal.State, selection.candidate.ID, replacementCandidate.ID, replacementCatalog.Generation)
 }
 
+// launchSamePortReplacement starts a fresh Chrome on the retired browser's
+// port and publishes it as the only discoverable candidate.
+func (s *recoverySelection) launchSamePortReplacement(t *testing.T, ctx context.Context, pinned pinnedChrome, fixture *fixtureServer, oldPort int) webmcp.BrowserCandidate {
+	t.Helper()
+	replacementPinned := pinned
+	replacementPinned.WorkDir = t.TempDir()
+	replacement, err := launchPinnedChromeAtPort(ctx, replacementPinned, fixture.URL(), oldPort)
+	if err != nil {
+		t.Fatalf("launch same-port replacement Chrome: %v", err)
+	}
+	t.Cleanup(func() {
+		if closeErr := replacement.Close(); closeErr != nil {
+			t.Logf("replacement Chrome cleanup: %v", closeErr)
+		}
+	})
+	replacementVersion, err := waitForDevToolsVersion(ctx, browserHTTPURL(replacement.endpoint()), lockedChromeVersion)
+	if err != nil {
+		t.Fatalf("read replacement Chrome identity: %v", err)
+	}
+	replacementCandidate, err := recoveryCandidate(ctx, s.discovery, replacement, replacementVersion)
+	if err != nil {
+		t.Fatalf("normalize replacement Chrome candidate: %v", err)
+	}
+	if replacementCandidate.ID == s.candidate.ID || replacementCandidate.BrowserInstanceID == s.candidate.BrowserInstanceID {
+		t.Fatal("same-port replacement retained the retired browser identity")
+	}
+	replacementPort, err := recoveryEndpointPort(replacement.endpoint())
+	if err != nil || replacementPort != oldPort {
+		t.Fatalf("replacement Chrome port = %d err=%v, want original port %d", replacementPort, err, oldPort)
+	}
+	s.discoverer.Set(replacementCandidate)
+	if candidates, err := s.broker.Discover(ctx, webmcp.DiscoverOptions{}); err != nil || len(candidates) != 1 || candidates[0].ID != replacementCandidate.ID {
+		t.Fatalf("discover same-port replacement: candidates=%v err=%v", len(candidates), err)
+	}
+	return replacementCandidate
+}
+
+// awaitTerminal waits for the broker terminal event and then the terminal
+// result of one admitted invocation.
+func (s *recoverySelection) awaitTerminal(t *testing.T, ctx context.Context, id webmcp.InvocationID, eventFailure, resultFailure string) (webmcp.BrokerEvent, webmcp.InvokeResult) {
+	t.Helper()
+	event, err := waitForRecoveryTerminalEvent(ctx, s.watch, id)
+	if err != nil {
+		t.Fatalf("%s: %v", eventFailure, err)
+	}
+	result, err := s.broker.WaitInvocation(ctx, id)
+	if err != nil {
+		t.Fatalf("%s: %v", resultFailure, err)
+	}
+	return event, result
+}
+
 func testRecoveryNavigationStorm(t *testing.T, ctx context.Context, pinned pinnedChrome) {
 	fixture := newFixtureServer()
 	t.Cleanup(fixture.Close)
@@ -383,14 +396,7 @@ func testRecoveryNavigationStorm(t *testing.T, ctx context.Context, pinned pinne
 	if err := navigateRecoveryTarget(ctx, selection.browser.endpoint(), selection.target.ID, firstURL); err != nil {
 		t.Fatalf("navigate selected target for terminal reconciliation: %v", err)
 	}
-	firstTerminalEvent, err := waitForRecoveryTerminalEvent(ctx, selection.watch, admitted.InvocationID)
-	if err != nil {
-		t.Fatalf("wait for page-navigation terminal event: %v", err)
-	}
-	firstTerminal, err := selection.broker.WaitInvocation(ctx, admitted.InvocationID)
-	if err != nil {
-		t.Fatalf("wait for page-navigation terminal result: %v", err)
-	}
+	firstTerminalEvent, firstTerminal := selection.awaitTerminal(t, ctx, admitted.InvocationID, "wait for page-navigation terminal event", "wait for page-navigation terminal result")
 	assertRecoveryNavigationTerminal(t, firstTerminal, firstTerminalEvent, previousGeneration)
 	firstCatalog, err := waitForRecoveryCatalog(ctx, selection.broker, previousGeneration+1)
 	if err != nil {
@@ -399,54 +405,23 @@ func testRecoveryNavigationStorm(t *testing.T, ctx context.Context, pinned pinne
 	if firstCatalog.Generation <= previousGeneration {
 		t.Fatalf("first navigation generation = %d, want > %d", firstCatalog.Generation, previousGeneration)
 	}
-	assertRecoveryStaleToolRef(t, selection.broker, selection.initialComplete.Ref)
+	assertRecoveryStaleToolRef(t, ctx, selection.broker, selection.initialComplete.Ref)
 	generations := []uint64{firstCatalog.Generation}
 	navigationEvents := drainRecoveryEvents(selection.watch)
 	currentCatalog := firstCatalog
 	for cycle := 2; cycle <= 6; cycle++ {
-		before := currentCatalog.Generation
 		previousRefs := recoveryCatalogRefs(currentCatalog)
-		destination := fixture.URL() + "?recovery=storm-" + strconv.Itoa(cycle)
-		if err := navigateRecoveryTarget(ctx, selection.browser.endpoint(), selection.target.ID, destination); err != nil {
-			t.Fatalf("navigate storm cycle %d: %v", cycle, err)
-		}
-		currentCatalog, err = waitForRecoveryCatalog(ctx, selection.broker, before+1)
-		if err != nil {
-			t.Fatalf("wait for storm cycle %d catalog: %v", cycle, err)
-		}
-		if currentCatalog.Generation <= before {
-			t.Fatalf("storm cycle %d generation = %d, previous = %d", cycle, currentCatalog.Generation, before)
-		}
-		for _, tool := range currentCatalog.Tools {
-			if tool.Generation != currentCatalog.Generation {
-				t.Fatalf("storm cycle %d tool generation = %d, catalog = %d", cycle, tool.Generation, currentCatalog.Generation)
-			}
-		}
-		if len(currentCatalog.Tools) == 0 {
-			t.Fatalf("storm cycle %d produced an empty catalog", cycle)
-		}
-		for _, ref := range previousRefs {
-			assertRecoveryStaleToolRef(t, selection.broker, ref)
-		}
+		currentCatalog = selection.navigateStormCycle(t, ctx, fixture, cycle, currentCatalog, previousRefs)
 		retiredRefs = append(retiredRefs, previousRefs...)
 		generations = append(generations, currentCatalog.Generation)
 		navigationEvents = append(navigationEvents, drainRecoveryEvents(selection.watch)...)
 	}
-	lastGeneration := previousGeneration
-	for _, event := range navigationEvents {
-		if event.Type != webmcp.BrokerEventGenerationChanged || event.Generation <= lastGeneration {
-			if event.Type == webmcp.BrokerEventGenerationChanged {
-				t.Fatalf("navigation event generation regressed from %d to %d", lastGeneration, event.Generation)
-			}
-			continue
-		}
-		lastGeneration = event.Generation
-	}
+	lastGeneration := lastRecoveryGeneration(t, navigationEvents, previousGeneration)
 	if len(generations) != 6 || lastGeneration < generations[len(generations)-1] {
 		t.Fatalf("navigation generations = %v, events ended at %d", generations, lastGeneration)
 	}
 	for _, ref := range retiredRefs {
-		assertRecoveryStaleToolRef(t, selection.broker, ref)
+		assertRecoveryStaleToolRef(t, ctx, selection.broker, ref)
 	}
 	finalComplete, _, _, err := findIntegrationTools(currentCatalog.Tools)
 	if err != nil {
@@ -464,6 +439,53 @@ func testRecoveryNavigationStorm(t *testing.T, ctx context.Context, pinned pinne
 		t.Fatalf("final storm terminal = state=%s code=%s valid_output=%t", freshTerminal.State, freshTerminal.ErrorCode, json.Valid(freshTerminal.Output))
 	}
 	t.Logf("case=navigation_storm cycles=%d generations=%v terminal=%s refs_retired=%d target_preserved=true", len(generations), generations, freshTerminal.State, len(retiredRefs))
+}
+
+// navigateStormCycle navigates once and verifies the fresh catalog retired
+// every tool reference from the previous generation.
+func (s *recoverySelection) navigateStormCycle(t *testing.T, ctx context.Context, fixture *fixtureServer, cycle int, previous webmcp.ToolCatalogSnapshot, previousRefs []webmcp.ToolRef) webmcp.ToolCatalogSnapshot {
+	t.Helper()
+	before := previous.Generation
+	destination := fixture.URL() + "?recovery=storm-" + strconv.Itoa(cycle)
+	if err := navigateRecoveryTarget(ctx, s.browser.endpoint(), s.target.ID, destination); err != nil {
+		t.Fatalf("navigate storm cycle %d: %v", cycle, err)
+	}
+	currentCatalog, err := waitForRecoveryCatalog(ctx, s.broker, before+1)
+	if err != nil {
+		t.Fatalf("wait for storm cycle %d catalog: %v", cycle, err)
+	}
+	if currentCatalog.Generation <= before {
+		t.Fatalf("storm cycle %d generation = %d, previous = %d", cycle, currentCatalog.Generation, before)
+	}
+	for _, tool := range currentCatalog.Tools {
+		if tool.Generation != currentCatalog.Generation {
+			t.Fatalf("storm cycle %d tool generation = %d, catalog = %d", cycle, tool.Generation, currentCatalog.Generation)
+		}
+	}
+	if len(currentCatalog.Tools) == 0 {
+		t.Fatalf("storm cycle %d produced an empty catalog", cycle)
+	}
+	for _, ref := range previousRefs {
+		assertRecoveryStaleToolRef(t, ctx, s.broker, ref)
+	}
+	return currentCatalog
+}
+
+// lastRecoveryGeneration returns the final generation announced by the
+// events and fails if any generation change regressed.
+func lastRecoveryGeneration(t *testing.T, events []webmcp.BrokerEvent, previousGeneration uint64) uint64 {
+	t.Helper()
+	lastGeneration := previousGeneration
+	for _, event := range events {
+		if event.Type != webmcp.BrokerEventGenerationChanged || event.Generation <= lastGeneration {
+			if event.Type == webmcp.BrokerEventGenerationChanged {
+				t.Fatalf("navigation event generation regressed from %d to %d", lastGeneration, event.Generation)
+			}
+			continue
+		}
+		lastGeneration = event.Generation
+	}
+	return lastGeneration
 }
 
 func testRecoverySpokenCorrection(t *testing.T, ctx context.Context, pinned pinnedChrome) {
@@ -635,20 +657,13 @@ func testRecoveryTargetClosure(t *testing.T, ctx context.Context, pinned pinnedC
 	if err := navigateRecoveryTarget(ctx, selection.browser.endpoint(), selection.target.ID, navigationURL); err != nil {
 		t.Fatalf("navigate target in closure comparison: %v", err)
 	}
-	navigationEvent, err := waitForRecoveryTerminalEvent(ctx, selection.watch, admitted.InvocationID)
-	if err != nil {
-		t.Fatalf("wait for navigation comparison event: %v", err)
-	}
-	navigationTerminal, err := selection.broker.WaitInvocation(ctx, admitted.InvocationID)
-	if err != nil {
-		t.Fatalf("wait for navigation comparison result: %v", err)
-	}
+	navigationEvent, navigationTerminal := selection.awaitTerminal(t, ctx, admitted.InvocationID, "wait for navigation comparison event", "wait for navigation comparison result")
 	assertRecoveryNavigationTerminal(t, navigationTerminal, navigationEvent, selection.initialCatalog.Generation)
 	currentCatalog, err := waitForRecoveryCatalog(ctx, selection.broker, selection.initialCatalog.Generation+1)
 	if err != nil {
 		t.Fatalf("wait for catalog after live navigation: %v", err)
 	}
-	assertRecoveryStaleToolRef(t, selection.broker, selection.initialCancel.Ref)
+	assertRecoveryStaleToolRef(t, ctx, selection.broker, selection.initialCancel.Ref)
 	if _, err := waitForFixtureOracle(ctx, fixture.StateURL(), func(oracle fixtureOracle) bool {
 		return oracle.Ready && !oracle.Pending && oracle.Value == "initial"
 	}); err != nil {
@@ -672,14 +687,7 @@ func testRecoveryTargetClosure(t *testing.T, ctx context.Context, pinned pinnedC
 	if err := closeRecoveryTarget(ctx, browserHTTPURL(selection.browser.endpoint()), selection.target.ID); err != nil {
 		t.Fatalf("close selected target through browser control: %v", err)
 	}
-	closeEvent, err := waitForRecoveryTerminalEvent(ctx, selection.watch, closeAdmission.InvocationID)
-	if err != nil {
-		t.Fatalf("wait for target-close terminal event: %v", err)
-	}
-	closeTerminal, err := selection.broker.WaitInvocation(ctx, closeAdmission.InvocationID)
-	if err != nil {
-		t.Fatalf("wait for target-close terminal result: %v", err)
-	}
+	closeEvent, closeTerminal := selection.awaitTerminal(t, ctx, closeAdmission.InvocationID, "wait for target-close terminal event", "wait for target-close terminal result")
 	if closeTerminal.ErrorCode != string(webmcp.ErrorTargetDetached) && closeTerminal.ErrorCode != string(webmcp.ErrorInvocationOrphaned) {
 		t.Fatalf("target-close terminal code = %s, want target_detached or invocation_orphaned", closeTerminal.ErrorCode)
 	}
@@ -837,9 +845,9 @@ func recoveryErrorCode(err error, code webmcp.ErrorCode) bool {
 	return errors.As(err, &classified) && classified != nil && classified.Code == code
 }
 
-func assertRecoveryStaleToolRef(t *testing.T, broker *webmcp.StatefulBroker, ref webmcp.ToolRef) {
+func assertRecoveryStaleToolRef(t *testing.T, ctx context.Context, broker *webmcp.StatefulBroker, ref webmcp.ToolRef) {
 	t.Helper()
-	_, err := broker.Invoke(context.Background(), webmcp.InvokeRequest{ToolRef: ref, Input: recoveryInput("stale")})
+	_, err := broker.Invoke(context.WithoutCancel(ctx), webmcp.InvokeRequest{ToolRef: ref, Input: recoveryInput("stale")})
 	if !recoveryErrorCode(err, webmcp.ErrorStaleToolRef) {
 		t.Fatalf("retired tool ref result = %v, want stale_tool_ref", err)
 	}
@@ -851,18 +859,6 @@ func recoveryCatalogRefs(catalog webmcp.ToolCatalogSnapshot) []webmcp.ToolRef {
 		refs = append(refs, tool.Ref)
 	}
 	return refs
-}
-
-func recoveryEndpointPort(endpoint string) (int, error) {
-	parsed, err := url.Parse(endpoint)
-	if err != nil || parsed.Port() == "" {
-		return 0, fmt.Errorf("parse Chrome endpoint port")
-	}
-	port, err := strconv.Atoi(parsed.Port())
-	if err != nil || port < 1 || port > 65535 {
-		return 0, fmt.Errorf("invalid Chrome endpoint port")
-	}
-	return port, nil
 }
 
 func navigateRecoveryTarget(ctx context.Context, endpoint string, targetID webmcp.TargetID, destination string) (err error) {
@@ -913,23 +909,6 @@ func mutateExternalTarget(ctx context.Context, endpoint, targetID, value string)
 	}
 	if mutated != value {
 		return fmt.Errorf("post-detach probe mutation returned %q, want %q", mutated, value)
-	}
-	return nil
-}
-
-func closeRecoveryTarget(ctx context.Context, baseURL string, targetID webmcp.TargetID) error {
-	requestURL := strings.TrimRight(baseURL, "/") + "/json/close/" + url.PathEscape(string(targetID))
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
-	if err != nil {
-		return err
-	}
-	response, err := http.DefaultClient.Do(request)
-	if err != nil {
-		return err
-	}
-	defer response.Body.Close()
-	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return fmt.Errorf("target close HTTP status: %s", response.Status)
 	}
 	return nil
 }
