@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"sync"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/internal/stream"
 )
 
 // Service is the private implementation of the sessionduration contract.
@@ -127,6 +129,34 @@ func (s *Service) IsDurationForwardMessage(msg messages.StreamMessage) bool {
 
 func (s *Service) RecordingTerminalSummaryFromMessage(msg messages.StreamMessage) (*transcript.RecordingTerminalSummary, bool, error) {
 	return RecordingTerminalSummaryFromMessage(msg)
+}
+
+func (s *Service) NewTranscript(out io.Writer, observer sessionduration.TranscriptObserver) sessionduration.Transcript {
+	return stream.New(out, observer)
+}
+
+func (s *Service) WriteMessage(out io.Writer, msg messages.StreamMessage) error {
+	return stream.Write(out, msg)
+}
+
+func (s *Service) TerminationError(ctx context.Context, err error) error {
+	return stream.TerminationError(ctx, err)
+}
+
+func (s *Service) ShouldStop(msg messages.StreamMessage, policy sessionduration.StopPolicy) bool {
+	return stream.ShouldStop(msg, policy)
+}
+
+func (s *Service) DrainStragglers(ctx context.Context, drain sessionduration.StragglerDrain) error {
+	return stream.DrainStragglers(ctx, drain)
+}
+
+func (s *Service) DrainBuffered(deltas *messages.TypedBuffer[messages.StreamMessage], handle func(messages.StreamMessage) (bool, error)) (bool, error) {
+	return stream.DrainBuffered(deltas, handle)
+}
+
+func (s *Service) CloseLoop(ctx context.Context, loop sessionduration.Loop) error {
+	return sendLoopClose(ctx, loop)
 }
 
 func phaseError(phase string, err error) error { return fmt.Errorf("%s: %w", phase, err) }

@@ -83,20 +83,39 @@ type RunRequest struct {
 	// RetryDispatched observes a successfully sent retry control for tracing.
 	// It must not make policy decisions or perform another transport write.
 	RetryDispatched func(messages.StreamMessage)
-	Terminal        TerminalSource
-	Publication     Publication
-	Artifacts       ArtifactLifecycle
-	LoopFactory     LoopFactory
-	Handle          MessageHandler
-	Drain           func(context.Context, Loop, Controller) error
-	DrainPolicy     DrainPolicy
-	Close           func() error
-	Binding         func() error
-	ExternalErrors  <-chan error
-	Wake            <-chan struct{}
-	OnWake          func(context.Context, Loop, Controller) error
-	Done            <-chan struct{}
-	DoneError       func() error
+	// RetryClaim, when present, replaces the Retry policy with a host-observed
+	// eligibility fact for one admitted provider terminal. The service still
+	// owns the bounded wait, its interruption, and the dispatch.
+	RetryClaim     func(responseID string, terminal *messages.MessageEndValue) (time.Duration, bool)
+	Terminal       TerminalSource
+	Publication    Publication
+	Artifacts      ArtifactLifecycle
+	LoopFactory    LoopFactory
+	Handle         MessageHandler
+	Drain          func(context.Context, Loop, Controller) error
+	DrainPolicy    DrainPolicy
+	Close          func() error
+	Binding        func() error
+	ExternalErrors <-chan error
+	Wake           <-chan struct{}
+	OnWake         func(context.Context, Loop, Controller) error
+	Done           <-chan struct{}
+	DoneError      func() error
+	// ExternalErrorSources and DoneSources are evaluated once after
+	// LoopFactory returns, when host resource signals exist. The service owns
+	// their bounded fan-in and stops forwarding when the run ends.
+	ExternalErrorSources func() []<-chan error
+	DoneSources          func() []<-chan struct{}
+	// SessionUpdated bounds a configuration acknowledgement after an admitted
+	// SESSION.OPEN on the Clock scheduler.
+	SessionUpdated SessionUpdatedWait
+	// AwaitAdmissionClose waits for the admitted provider session to finish
+	// closing after the loop joins, so a provider terminal published while
+	// closing is retained. Hosts set it when their loop closes its session.
+	AwaitAdmissionClose bool
+	// Completion observes the finalized snapshot and the joined run result.
+	// Its error is joined with that result.
+	Completion func(Result, error) error
 }
 
 // Result is the controller's terminal snapshot after cleanup.

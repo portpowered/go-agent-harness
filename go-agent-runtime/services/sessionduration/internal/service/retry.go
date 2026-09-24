@@ -103,7 +103,7 @@ func (r *runLoop) retry(msg messages.StreamMessage) error {
 	if !ok || terminal == nil {
 		return nil
 	}
-	decision := r.controller.Retry(sessionduration.RetryRequest{Terminal: terminal})
+	decision := r.retryDecision(msg.ResponseID, terminal)
 	if !decision.Eligible {
 		return nil
 	}
@@ -145,11 +145,21 @@ func (r *runLoop) waitForRetry(delay time.Duration) (bool, error) {
 		return true, nil
 	case err := <-r.controller.Errors():
 		return false, err
-	case <-r.request.Done:
+	case <-r.done:
 		return false, runLoopDoneError(r.request)
 	case <-r.ctx.Done():
 		return false, r.ctx.Err()
 	case <-r.runCtx.Done():
 		return false, r.runCtx.Err()
 	}
+}
+
+// retryDecision prefers a host-observed claim over the configured policy. The
+// claim reports eligibility only; the wait and dispatch remain service-owned.
+func (r *runLoop) retryDecision(responseID string, terminal *messages.MessageEndValue) sessionduration.RetryDecision {
+	if r.request.RetryClaim == nil {
+		return r.controller.Retry(sessionduration.RetryRequest{Terminal: terminal})
+	}
+	delay, eligible := r.request.RetryClaim(responseID, terminal)
+	return sessionduration.RetryDecision{Delay: delay, Eligible: eligible}
 }
