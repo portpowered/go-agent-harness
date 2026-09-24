@@ -349,7 +349,7 @@ func runSessionWithAudioInputPlan(ctx context.Context, out io.Writer, input Sess
 	var audioWrapped sessionturn.AudioOutputRuntime
 	if audioOutPath != "" {
 		var sinkErr error
-		audioOutput, sinkErr = newSessionAudioOutputForPlan(&plan, audioOutPath, out, nil)
+		audioOutput, sinkErr = newSessionAudioOutputForPlan(ctx, &plan, audioOutPath, out, nil)
 		if sinkErr != nil {
 			return fmt.Errorf("--audio-out %q: %w", audioOutPath, sinkErr)
 		}

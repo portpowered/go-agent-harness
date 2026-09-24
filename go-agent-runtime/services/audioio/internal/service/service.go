@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -205,6 +207,57 @@ func validateRate(rate int) error {
 	}
 	if _, err := wavio.Resample(nil, rate, rate); err != nil {
 		return fmt.Errorf("%w: %w", audioio.ErrUnsupportedRate, err)
+	}
+	return nil
+}
+
+func fileOutputError(path, operation string, err error) error {
+	if err == nil {
+		return nil
+	}
+	var streamErr *sharedaudio.StreamError
+	if errors.As(err, &streamErr) {
+		copyErr := *streamErr
+		copyErr.Operation = operation
+		copyErr.Path = path
+		copyErr.Format = fileOutputFormat(path)
+		return &copyErr
+	}
+	return &sharedaudio.StreamError{Operation: operation, Path: path, Format: fileOutputFormat(path), Err: err}
+}
+
+func fileOutputFormat(path string) string {
+	if strings.EqualFold(filepath.Ext(path), ".wav") {
+		return "wav"
+	}
+	return "raw PCM16"
+}
+
+func fileOutputContextError(ctx context.Context) error {
+	if ctx == nil {
+		return nil
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+		return nil
+	}
+}
+
+func writeFileOutputAll(writer io.Writer, data []byte) error {
+	for len(data) > 0 {
+		written, err := writer.Write(data)
+		if written < 0 || written > len(data) {
+			return fmt.Errorf("%w: writer returned invalid byte count %d", io.ErrShortWrite, written)
+		}
+		if err != nil {
+			return err
+		}
+		if written == 0 {
+			return io.ErrShortWrite
+		}
+		data = data[written:]
 	}
 	return nil
 }

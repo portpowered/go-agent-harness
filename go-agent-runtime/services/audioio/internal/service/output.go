@@ -3,12 +3,21 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
+
+const fileOutputWAVMaxDataSize = uint64(^uint32(0)) - 36
 
 type output struct {
 	sink       sharedaudio.AudioSink
@@ -186,6 +195,160 @@ func (o *output) Close() error {
 		}
 	})
 	return o.closeErr
+}
+
+type pcm16FileOutput struct {
+	mu         sync.Mutex
+	path       string
+	raw        sharedaudio.AudioSink
+	writer     io.Writer
+	file       *os.File
+	wav        bool
+	sampleRate int
+	samples    uint64
+	closed     bool
+	closeErr   error
+}
+
+var _ audioio.PCM16FileOutput = (*pcm16FileOutput)(nil)
+
+func (s *Service) OpenPCM16FileOutput(ctx context.Context, request audioio.PCM16FileOutputRequest) (audioio.PCM16FileOutput, error) {
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+	}
+	if request.SampleRate <= 0 {
+		return nil, fmt.Errorf("audio output sample rate must be positive; got %d Hz", request.SampleRate)
+	}
+	if uint64(request.SampleRate)*2 > uint64(^uint32(0)) {
+		return nil, fmt.Errorf("audio output sample rate %d Hz exceeds WAV header limits", request.SampleRate)
+	}
+	if request.Path == "-" {
+		raw, err := sharedaudio.NewFileSink(request.Path, request.Writer)
+		if err != nil {
+			return nil, err
+		}
+		return &pcm16FileOutput{path: request.Path, raw: raw, writer: request.Writer, sampleRate: request.SampleRate}, nil
+	}
+	probe, err := sharedaudio.NewFileSink(request.Path, request.Writer)
+	if err != nil {
+		return nil, err
+	}
+	_ = probe.Close()
+	file, err := os.OpenFile(request.Path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := sharedaudio.NewFileSink("-", file)
+	if err != nil {
+		_ = file.Close()
+		return nil, err
+	}
+	sink := &pcm16FileOutput{
+		path: request.Path, raw: raw, writer: file, file: file,
+		wav: strings.EqualFold(filepath.Ext(request.Path), ".wav"), sampleRate: request.SampleRate,
+	}
+	if sink.wav {
+		if err := sink.updateWAVHeaderLocked(); err != nil {
+			_ = file.Close()
+			return nil, err
+		}
+	}
+	return sink, nil
+}
+
+func (s *pcm16FileOutput) WriteFrame(ctx context.Context, frame []int16) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return contract.ErrClosed
+	}
+	if s.wav && !fileOutputWAVSizeFits(s.samples+uint64(len(frame))) {
+		return fmt.Errorf("WAV audio output %q exceeds the 32-bit data chunk limit", s.path)
+	}
+	if err := s.raw.WriteFrame(ctx, frame); err != nil {
+		return fileOutputError(s.path, "write", err)
+	}
+	s.samples += uint64(len(frame))
+	return s.updateWAVHeaderLocked()
+}
+
+func (s *pcm16FileOutput) WriteSamples(ctx context.Context, samples []int16) error {
+	if err := fileOutputContextError(ctx); err != nil {
+		return err
+	}
+	if len(samples) == 0 {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return contract.ErrClosed
+	}
+	if s.wav && !fileOutputWAVSizeFits(s.samples+uint64(len(samples))) {
+		return fmt.Errorf("WAV audio output %q exceeds the 32-bit data chunk limit", s.path)
+	}
+	encoded := make([]byte, len(samples)*2)
+	if err := codec.EncodePCM16Into(encoded, samples); err != nil {
+		return fileOutputError(s.path, "encode", err)
+	}
+	if err := writeFileOutputAll(s.writer, encoded); err != nil {
+		return fileOutputError(s.path, "write", err)
+	}
+	s.samples += uint64(len(samples))
+	return s.updateWAVHeaderLocked()
+}
+
+func (s *pcm16FileOutput) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return s.closeErr
+	}
+	s.closed = true
+	var closeErr error
+	if err := s.raw.Close(); err != nil {
+		closeErr = errors.Join(closeErr, fileOutputError(s.path, "close", err))
+	}
+	if s.wav && s.samples > 0 {
+		closeErr = errors.Join(closeErr, fileOutputError(s.path, "write", s.updateWAVHeaderLocked()))
+	}
+	if s.file != nil {
+		closeErr = errors.Join(closeErr, fileOutputError(s.path, "close", s.file.Close()))
+		if s.wav && s.samples == 0 {
+			if err := os.Remove(s.path); err != nil && !errors.Is(err, os.ErrNotExist) {
+				closeErr = errors.Join(closeErr, fileOutputError(s.path, "remove", err))
+			}
+		}
+	}
+	s.closeErr = closeErr
+	return closeErr
+}
+
+func (s *pcm16FileOutput) updateWAVHeaderLocked() error {
+	if !s.wav {
+		return nil
+	}
+	if !fileOutputWAVSizeFits(s.samples) {
+		return fmt.Errorf("WAV audio output %q exceeds the 32-bit data chunk limit", s.path)
+	}
+	if _, err := s.file.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+	header, err := wavio.PCM16Header(s.sampleRate, s.samples*2)
+	if err != nil {
+		return err
+	}
+	if err := writeFileOutputAll(s.file, header[:]); err != nil {
+		return err
+	}
+	_, err = s.file.Seek(0, io.SeekEnd)
+	return err
+}
+
+func fileOutputWAVSizeFits(samples uint64) bool {
+	return samples <= fileOutputWAVMaxDataSize/2
 }
 
 var _ audioio.Output = (*output)(nil)

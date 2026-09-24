@@ -191,7 +191,7 @@ func runSessionInstructionsWithAudio(ctx context.Context, out io.Writer, plan se
 	if err != nil {
 		return err
 	}
-	audioOut, err := newSessionAudioOutputForPlan(&plan, audioPath, out, nil)
+	audioOut, err := newSessionAudioOutputForPlan(ctx, &plan, audioPath, out, nil)
 	if err != nil {
 		return fmt.Errorf("--audio-out %q: %w", audioPath, err)
 	}

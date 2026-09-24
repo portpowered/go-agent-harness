@@ -93,14 +93,14 @@ func prepareSessionRecordingTurnRuntime(ctx context.Context, plan *sessionRuntim
 	return prepareSessionTurnSeed(ctx, plan, seed)
 }
 
-func prepareSessionRecordingOutputs(plan *sessionRuntimePlan, out io.Writer, audioOutPath string, seed SessionTextSeed, turnRuntime sessionturn.Runtime) (*sessionAudioOutput, sessionturn.AudioOutputRuntime, sessionturn.Output, error) {
+func prepareSessionRecordingOutputs(ctx context.Context, plan *sessionRuntimePlan, out io.Writer, audioOutPath string, seed SessionTextSeed, turnRuntime sessionturn.Runtime) (*sessionAudioOutput, sessionturn.AudioOutputRuntime, sessionturn.Output, error) {
 	if audioOutPath == "" {
 		if seed.Present && turnRuntime != nil {
 			return nil, nil, turnRuntime.NewOutput(out), nil
 		}
 		return nil, nil, nil, nil
 	}
-	audioOutput, err := newSessionAudioOutputForPlan(plan, audioOutPath, out, nil)
+	audioOutput, err := newSessionAudioOutputForPlan(ctx, plan, audioOutPath, out, nil)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("--audio-out %q: %w", audioOutPath, err)
 	}

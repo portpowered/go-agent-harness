@@ -4,6 +4,7 @@ package audioio
 
 import (
 	"context"
+	"io"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
@@ -95,6 +96,21 @@ type OutputRequest struct {
 	Continuous   bool
 }
 
+// PCM16FileOutputRequest describes a PCM16 file or writer output. A path of
+// "-" writes headerless PCM16 to Writer; other paths create raw PCM16 or WAV
+// output according to the file extension.
+type PCM16FileOutputRequest struct {
+	Path       string
+	Writer     io.Writer
+	SampleRate int
+}
+
+// PCM16FileOutput is the native-rate sink used by file and device playback.
+type PCM16FileOutput interface {
+	audio.AudioSink
+	WriteSamples(context.Context, []int16) error
+}
+
 type Input interface {
 	Pump(context.Context, audio.OutboundMedia) error
 	Close() error
@@ -126,6 +142,7 @@ type Service interface {
 	ConvertScheduledInputs(context.Context, []ScheduledAudioInput, int) ([]ScheduledAudioInput, error)
 	OpenInput(context.Context, InputRequest) (Input, error)
 	OpenOutput(context.Context, OutputRequest) (Output, error)
+	OpenPCM16FileOutput(context.Context, PCM16FileOutputRequest) (PCM16FileOutput, error)
 	ApplyVoicePCM16(context.Context, VoicePCMRequest) ([]byte, error)
 	NewClock(clock.Source) (clock.TimerSource, error)
 	NewTimer(clock.Source, time.Duration) (clock.Timer, error)

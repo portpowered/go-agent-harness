@@ -208,7 +208,7 @@ func runSessionImagePlan(ctx context.Context, out io.Writer, plan sessionRuntime
 }
 
 func runSessionImageWithAudioOutput(ctx context.Context, out io.Writer, plan sessionRuntimePlan, opts SessionImageRunOptions) (runErr error) {
-	audioOut, err := newSessionAudioOutputForPlan(&plan, opts.AudioOutPath, out, nil)
+	audioOut, err := newSessionAudioOutputForPlan(ctx, &plan, opts.AudioOutPath, out, nil)
 	if err != nil {
 		return fmt.Errorf("--audio-out %q: %w", opts.AudioOutPath, err)
 	}

@@ -5914,3 +5914,72 @@ before any push or PR.
   regressions; identify the canonical owner/integration route for inherited
   peer-path findings, then rerun the full exact-head preflight and every
   C251-04 check on the repaired clean candidate before any push or PR.
+
+
+## C251 current-main reconciliation checkpoint — 2026-09-23
+
+- Admission and branch identity still verify for the sole `audio-runtime`
+  project. Fetched and merged current `origin/main=afd918cdc09a739181531cba8d8b603a7376ed26`
+  on the same branch in merge commit `94b77c4d622f5450fbac69069d00c50994743da9`;
+  checkpoint `ee9b6826`, startup `8bdafc7f`, and current main are ancestors.
+  The worktree is clean at source checkpoint
+  `a7c07574a390bb5a86fa7e03ad2fdc8137a493f6`. C251 has no PR or prior C251
+  review findings.
+- Resolved current-main integration conflicts by retaining its self-play
+  service retirement and generated Wire graph, resolving the duration test
+  aliases against public contracts, and repairing two existing typed status
+  assertions. Removed obsolete agentruntime self-play tests and the internal
+  construction-path assertion that referenced the retired implementation;
+  existing service-owned self-play tests remain in the main tree.
+- On this source checkpoint, `make wire-check` passes. The normal and race
+  sessionduration/session suites each pass 271 tests across 19 packages. The
+  focused CLI selection passes 454 tests across 20 packages; its race selection
+  passes 223 tests across 19 packages. The exact 14-path legacy absence audit
+  passes, and the sole adapter remains one file / 59 lines. `git diff --check`
+  is clean.
+- Exact `rtk make prepush` on `a7c07574` fails at `verify-architecture` with
+  398 findings across 231 packages; log:
+  `~/Library/Application Support/rtk/tee/1790225428_make_prepush.log`.
+  A detached temporary worktree at the same fetched main passes
+  `make architecture-size-check` (221 packages, 1,967 files, 28,805 functions),
+  confirming the failures are in the candidate branch delta. No baseline was
+  changed. No push, PR, SCRIPT CI, independent review, or guarded merge is
+  claimed.
+- Exact next action: repair the C251-owned architecture findings and remove
+  the remaining duration/finalization composition from `agentruntime` by
+  cutting those callers over to the service-owned run contract. Then reconcile
+  the remaining branch-only architecture findings without dropping peer
+  behavior or changing baselines, and rerun `make prepush` plus every C251-04
+  functional, integration, race, hermetic, Wire, embed, deletion, duplicate,
+  adapter, ancestry, and diff command on one exact clean candidate before any
+  push or PR.
+
+
+## C251 audio output ownership repair checkpoint — 2026-09-23
+
+- Continued on the same branch and worktree, based on source commit
+  `a7c07574a390bb5a86fa7e03ad2fdc8137a493f6`; preserved the current-main merge
+  and predecessor ancestry. No C251 review findings, PR, push, SCRIPT CI, or
+  independent review are claimed.
+- Moved PCM16 file/WAV sink construction, state, encoding, header updates,
+  bounded-size checks, and close errors from `agentruntime/session_audio_out.go`
+  into the existing `audioio` public contract and internal service. Cut over
+  the audio, image, instruction, and recording callers through that contract.
+  The existing audio output tests remain in place; no new test or test fixture
+  was added.
+- Passing checks on the changed worktree: normal and race focused audio output
+  tests (25 each across 4 packages); `rtk go test -count=1
+  ./agent-cli/internal/services/...` (1,043 tests / 18 packages); `rtk go test
+  -count=1 ./go-agent-runtime/services/audioio/...` (12 / 3); `rtk make
+  wire-check`; `rtk git diff --check`; exact legacy absence audit (16/16); sole
+  adapter audit (one file / 59 lines). Wire generation left no tracked changes.
+- Required `rtk make prepush` formats cleanly and still fails at
+  `verify-architecture` with 397 findings across 231 packages. Log:
+  `~/Library/Application Support/rtk/tee/1790226447_make_prepush.log`.
+  The oversized `session_audio_out.go` finding is gone; no baseline was edited.
+- Decision remains `CONTINUE`. Exact next action: complete the remaining
+  sessionduration ownership/caller cutover, including removing the
+  `runSessionDurationPlan` composition from agentruntime, then repair all
+  locally reproducible architecture findings without dropping C229/C234/C248
+  behavior or changing baselines. Rerun the full C251-04 local gate against one
+  clean exact candidate before any push or PR.

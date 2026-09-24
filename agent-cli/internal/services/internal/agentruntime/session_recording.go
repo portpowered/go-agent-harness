@@ -415,7 +415,7 @@ func runSessionWithRecordingDirectory(
 		return err
 	}
 
-	audioOutput, audioWrapper, textOutput, err := prepareSessionRecordingOutputs(&plan, out, audioOutPath, seed, turnRuntime)
+	audioOutput, audioWrapper, textOutput, err := prepareSessionRecordingOutputs(ctx, &plan, out, audioOutPath, seed, turnRuntime)
 	if err != nil {
 		return err
 	}

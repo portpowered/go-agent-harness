@@ -447,7 +447,7 @@ func TestRunSessionWithAudioOut_FinalizesOnMaxDuration(t *testing.T) {
 			SessionInferencer: inf,
 		}, path, 50*time.Millisecond, SessionTextSeed{})
 	}()
-	_ = waitForSessionAudioFileGrowth(t, path, sessionAudioWAVHeaderSize+len(first)*2)
+	_ = waitForSessionAudioFileGrowth(t, path, 44+len(first)*2)
 	select {
 	case err := <-errCh:
 		if err != nil {
@@ -603,7 +603,7 @@ func waitForSessionAudioWAVSamples(t *testing.T, path string, want []int16) []by
 	defer ticker.Stop()
 	for {
 		data, err := os.ReadFile(path)
-		if err == nil && len(data) >= sessionAudioWAVHeaderSize+len(want)*2 {
+		if err == nil && len(data) >= 44+len(want)*2 {
 			_, samples, readErr := wavio.Read(bytes.NewReader(data))
 			if readErr == nil && equalInt16(samples, want) {
 				return data
