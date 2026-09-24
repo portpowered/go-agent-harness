@@ -262,6 +262,62 @@ func TestPublicTerminalRecorderPreservesArtifactPathsDuringPreparation(t *testin
 	}
 }
 
+func TestPublicTerminalRecorderRejectsIncompleteSummaryWithoutInventingOne(t *testing.T) {
+	service := NewService()
+	recorder := &publicCapturingTerminalRecorder{}
+	artifacts := service.ArtifactsFromContext(service.WithTerminalRecorder(context.Background(), recorder))
+	if artifacts == nil {
+		t.Fatal("WithTerminalRecorder did not attach a lifecycle")
+	}
+
+	for _, event := range []messages.StreamMessage{
+		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant},
+		{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValue("session", "legacy close")},
+	} {
+		if err := artifacts.Accept(event); err != nil {
+			t.Fatalf("Accept unstructured event %q: %v", event.Type, err)
+		}
+	}
+	if len(recorder.summaries) != 0 {
+		t.Fatalf("unstructured events fabricated terminal summaries: %+v", recorder.summaries)
+	}
+
+	invalid := messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValueWithTerminal(
+		"session", "done", "provider_close", messages.TerminalReasonProviderClose,
+		messages.TerminalProvenanceProvider, "",
+	)}
+	if err := artifacts.Accept(invalid); err == nil {
+		t.Fatal("incomplete structured terminal summary was accepted")
+	}
+	if len(recorder.summaries) != 0 {
+		t.Fatalf("invalid terminal summary was recorded: %+v", recorder.summaries)
+	}
+}
+
+func TestPublicArtifactLifecycleTakesPrecedenceOverConfiguredPaths(t *testing.T) {
+	service := NewService()
+	directory := t.TempDir()
+	paths := sessionduration.SessionDurationArtifactPaths{
+		AudioPath:      filepath.Join(directory, "unused.wav"),
+		TranscriptPath: filepath.Join(directory, "unused.jsonl"),
+	}
+	existing := &publicArtifactLifecycleProbe{}
+	ctx := service.WithArtifacts(context.Background(), existing)
+	ctx = service.WithArtifactPaths(ctx, paths)
+	prepared, err := service.PrepareArtifacts(ctx)
+	if err != nil {
+		t.Fatalf("PrepareArtifacts: %v", err)
+	}
+	if got := service.ArtifactsFromContext(prepared); got != existing {
+		t.Fatalf("prepared lifecycle = %T, want injected lifecycle", got)
+	}
+	for _, path := range []string{paths.AudioPath, paths.TranscriptPath} {
+		if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("configured path %q was opened despite injected lifecycle: %v", path, err)
+		}
+	}
+}
+
 func TestPublicRunBoundsLoopThatIgnoresCancellation(t *testing.T) {
 	done := make(chan struct{})
 	close(done)
@@ -325,6 +381,12 @@ func (r *publicCapturingTerminalRecorder) RecordTerminalSummary(summary transcri
 	r.summaries = append(r.summaries, summary)
 	return nil
 }
+
+type publicArtifactLifecycleProbe struct{}
+
+func (*publicArtifactLifecycleProbe) Accept(messages.StreamMessage) error { return nil }
+func (*publicArtifactLifecycleProbe) Flush() error                        { return nil }
+func (*publicArtifactLifecycleProbe) Close() error                        { return nil }
 
 type publicNilTimerScheduler struct{}
 
