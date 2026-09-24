@@ -6,7 +6,7 @@
       "rule": "package-files",
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "value": 111,
+      "value": 107,
       "rationale": "Pre-existing P0 debt reduced by the integrated C276 recording/replay and C280 room-evidence retirements; retain remaining debt only through the owning package migration.",
       "phase": "P0"
     }

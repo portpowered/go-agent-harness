@@ -239,8 +239,8 @@ func configureSessionRuntimeLoop(plan *sessionRuntimePlan, opts SessionRunOption
 	plan.loop.ToolExecutor = bindSessionImageToolExecutor(opts, *plan)
 	plan.loop.ToolDefinitions = append([]messages.ToolDefinition(nil), opts.ToolDefinitions...)
 	policySnapshot := interactivePolicy.Clone()
-	plan.interactivePolicy = &policySnapshot
-	plan.loop.InteractiveToolPolicy = &policySnapshot
+	plan.interactivePolicy = policySnapshot
+	plan.loop.InteractiveToolPolicy = policySnapshot
 	// Zero keeps production on the class-specific policy timeout; nonzero is
 	// the hermetic per-invocation adapter seam.
 	plan.loop.ToolDefinitionBase = append([]messages.ToolDefinition(nil), opts.ToolDefinitionBase...)

@@ -300,9 +300,9 @@ func TestSessionToolExecutorRecordsProviderObligationBeforeLocalExecution(t *tes
 	observer.SetToolResultsEnabled(true)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	executor := newSessionToolExecutorWithTimeoutAndObserverAndCancellationIntent(
-		cancellingToolExecutor{cancel: cancel}, time.Minute, composeSessionToolLifecycleObserver(nil, observer, nil), nil,
-	)
+	executor := newSessionLoopToolExecutor(sessionLoopOptions{
+		ToolExecutor: cancellingToolExecutor{cancel: cancel}, ToolExecutionTimeout: time.Minute, observer: observer,
+	})
 	//nolint:errcheck // The cancelled execution result is not delivered; the obligation is asserted below.
 	executor.Execute(ctx, messages.ToolCall{ID: "call-before-stream", Name: "lookup"})
 

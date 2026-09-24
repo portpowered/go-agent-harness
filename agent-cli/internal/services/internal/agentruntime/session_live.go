@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
+
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
@@ -211,7 +213,7 @@ type sessionLoopOptions struct {
 
 	// InteractiveToolPolicy is the immutable per-session class and timeout
 	// snapshot paired with ToolDefinitions and ToolExecutor.
-	InteractiveToolPolicy *InteractiveToolPolicy
+	InteractiveToolPolicy InteractiveToolPolicy
 	// ToolDefinitionBase is the immutable static and stable broker surface
 	// retained by the dynamic publisher while page definitions change.
 	ToolDefinitionBase []messages.ToolDefinition
@@ -224,7 +226,7 @@ type sessionLoopOptions struct {
 	// PublicationTimerFactory controls dynamic catalog settle boundaries. Nil
 	// selects the production wall-clock timer; tests may provide a deterministic
 	// fake-clock implementation.
-	PublicationTimerFactory webmcp.TimerFactory
+	PublicationTimerFactory sessionturn.TimerFactory
 
 	// AdvertiseToolDefinitions sends the definitions through the generic
 	// SESSION.UPDATE seam used by injected sessions. Live provider-backed
@@ -327,18 +329,11 @@ func duplexSessionLoopOptions(observedInferencer messages.SessionInferencer, opt
 				}))
 			}
 		}
-		loopOpts = append(loopOpts, agentloop.WithToolExecutor(newSessionToolExecutorWithInteractivePolicyAndObserverAndCancellationIntentAndDiagnostics(
-			opts.ToolExecutor,
-			opts.InteractiveToolPolicy,
-			opts.ToolExecutionTimeout,
-			composeSessionToolLifecycleObserver(opts.toolLifecycleObserver, opts.observer, opts.runtime),
-			opts.cancellationIntent,
-			opts.toolDiagnostics,
-		)))
+		loopOpts = append(loopOpts, agentloop.WithToolExecutor(newSessionLoopToolExecutor(opts)))
 		if opts.InteractiveToolPolicy != nil {
 			policy := opts.InteractiveToolPolicy.Clone()
 			loopOpts = append(loopOpts, agentloop.WithToolAcknowledgementPolicy(agentloop.ToolAcknowledgementPolicy{
-				Threshold: policy.AcknowledgementThreshold,
+				Threshold: policy.Settings().AcknowledgementThreshold,
 				IsLongRunning: func(name string) bool {
 					return policy.ClassForTool(name) == InteractiveToolClassBoundedLongRunning
 				},
@@ -792,7 +787,7 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 		livenessErrors = opts.observer.LivenessErrors(runCtx)
 	}
 	publisherErrors = sessiontracewire.MergeErrorChannels(runCtx, publisherErrors, livenessErrors)
-	defer publisher.stop()
+	defer publisher.Stop()
 	if err := bindSessionLoopInputs(runCtx, loop, opts); err != nil {
 		return err
 	}
@@ -869,7 +864,7 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 		if msg.Type == messages.StreamTypeSessionCreated {
 			// SESSION.UPDATE is sent while handling SESSION.CREATED. Release
 			// dynamic publication only after that bootstrap boundary is observed.
-			publisher.markSessionReady()
+			publisher.MarkSessionReady()
 		}
 		if msg.Type == messages.StreamTypeSessionOpen {
 			sessionUpdatedTimer, sessionUpdatedTimeout, sessionUpdatedTimerErr = startLiveSessionUpdatedTimer(opts, sessionUpdatedTimer)

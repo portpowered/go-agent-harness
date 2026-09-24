@@ -327,7 +327,7 @@ type SessionRunOptions struct {
 	// snapshot. When nil, runtime planning resolves one from LoadedConfig, an
 	// existing ConfigDir file, or the documented defaults before provider
 	// construction.
-	InteractiveToolPolicy *InteractiveToolPolicy
+	InteractiveToolPolicy InteractiveToolPolicy
 
 	// CapabilityClose is the optional cleanup hook transferred from the CLI
 	// session capability factory. The service wraps it in one shared
