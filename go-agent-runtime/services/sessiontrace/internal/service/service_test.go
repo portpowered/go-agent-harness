@@ -593,3 +593,8 @@ func readTraceEvents(t *testing.T, path string) []recording.Event {
 	}
 	return events
 }
+func checkSinkCloseError(t *testing.T, err error) {
+	if err != nil {
+		t.Errorf("Close sink device: %v", err)
+	}
+}

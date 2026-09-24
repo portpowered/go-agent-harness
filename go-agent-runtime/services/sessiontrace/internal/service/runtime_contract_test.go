@@ -202,11 +202,7 @@ func TestPlaybackDiagnosticsPublicContractReportsParticipantQueueOverflow(t *tes
 	if err != nil {
 		t.Fatalf("NewDeviceSinkAtRate: %v", err)
 	}
-	t.Cleanup(func() {
-		if err := sinkDevice.Close(); err != nil {
-			t.Errorf("Close sink device: %v", err)
-		}
-	})
+	t.Cleanup(func() { checkSinkCloseError(t, sinkDevice.Close()) })
 	capacity := sinkDevice.PlaybackStats().CapacitySamples
 	if err := sinkDevice.WriteSamples(context.Background(), make([]int16, capacity+audio.FrameSize)); err != nil {
 		t.Fatalf("WriteSamples: %v", err)
