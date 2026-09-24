@@ -147,6 +147,7 @@ func TestToolContinuationRequiresAcceptedResultAndRetainsTerminalFacts(t *testin
 }
 
 func TestToolLifecycleReconcilesRejectedResultBeforeCompletion(t *testing.T) {
+	const rejectedStatus = "cancelled"
 	service := New(lifecycle.Options{})
 	orphan := applyEvent(t, service, lifecycle.Event{
 		Kind:       lifecycle.EventToolCall,
@@ -160,13 +161,13 @@ func TestToolLifecycleReconcilesRejectedResultBeforeCompletion(t *testing.T) {
 	rejected := applyEvent(t, service, lifecycle.Event{
 		Kind:         lifecycle.EventToolResultRejected,
 		CallID:       "call-1",
-		ResultStatus: "cancelled",
+		ResultStatus: rejectedStatus,
 	})
 	if !rejected.Accepted {
 		t.Fatalf("tool result rejection = %+v, want accepted lifecycle evidence", rejected)
 	}
 	snapshot := service.Snapshot().ContinuationStates
-	if len(snapshot) != 1 || !snapshot[0].ProviderCallObserved || !snapshot[0].ResultRejected || snapshot[0].ResultRejectionStatus != "cancelled" {
+	if len(snapshot) != 1 || !snapshot[0].ProviderCallObserved || !snapshot[0].ResultRejected || snapshot[0].ResultRejectionStatus != rejectedStatus {
 		t.Fatalf("rejected continuation = %+v, want retained provider failure", snapshot)
 	}
 	if accepted := applyEvent(t, service, lifecycle.Event{Kind: lifecycle.EventToolResultAccepted, CallID: "call-1"}); !accepted.Accepted {

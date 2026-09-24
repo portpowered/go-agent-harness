@@ -169,11 +169,12 @@ func assertPublicImageSend(t *testing.T, service *Service, prepared sessionturn.
 		t.Fatalf("sent image message = %+v, without-response=%v", target.message, target.withoutResponse)
 	}
 	part, ok := target.message.ContentParts[1].(messages.ImagePart)
-	if !ok || part.MediaType != "image/png" || !bytes.Equal(part.Bytes, original) {
+	if !ok || part.MediaType != runtimeContractImageMediaType || !bytes.Equal(part.Bytes, original) {
 		t.Fatalf("sent image content part = %#v", target.message.ContentParts[1])
 	}
 	prepared.Parts[0].Bytes[0] ^= 0xff
-	if bytes.Equal(target.message.ContentParts[1].(messages.ImagePart).Bytes, prepared.Parts[0].Bytes) {
+	copiedPart, ok := target.message.ContentParts[1].(messages.ImagePart)
+	if !ok || bytes.Equal(copiedPart.Bytes, prepared.Parts[0].Bytes) {
 		t.Fatal("sent image message retained the mutable preparation buffer")
 	}
 	target.accept = false

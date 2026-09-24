@@ -18,6 +18,13 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 )
 
+const (
+	runtimeContractToolCallID     = "call-1"
+	runtimeContractCompleteID     = "complete"
+	runtimeContractDeferredID     = "deferred"
+	runtimeContractImageMediaType = "image/png"
+)
+
 type runtimeToolObservations struct {
 	call   messages.ToolCall
 	result messages.ToolCallResponse
@@ -58,11 +65,11 @@ func assertRuntimeToolSnapshots(t *testing.T, runtime sessionturn.Runtime, defin
 	if _, ok := runtime.ToolExecutor().(sessionturn.ServiceOwnedToolExecutor); !ok {
 		t.Fatal("prepared executor does not identify its service-owned lifecycle")
 	}
-	response, err := runtime.ToolExecutor().Execute(context.Background(), messages.ToolCall{ID: "call-1", Name: "lookup"})
-	if err != nil || response.ToolCallID != "call-1" || response.Name != "lookup" || tool.calls != 1 {
+	response, err := runtime.ToolExecutor().Execute(context.Background(), messages.ToolCall{ID: runtimeContractToolCallID, Name: "lookup"})
+	if err != nil || response.ToolCallID != runtimeContractToolCallID || response.Name != "lookup" || tool.calls != 1 {
 		t.Fatalf("tool result = %+v, %v; calls=%d", response, err, tool.calls)
 	}
-	if observed.call.ID != "call-1" || observed.result.ToolCallID != "call-1" || observed.failed {
+	if observed.call.ID != runtimeContractToolCallID || observed.result.ToolCallID != runtimeContractToolCallID || observed.failed {
 		t.Fatalf("tool observations = call:%+v result:%+v failed:%v", observed.call, observed.result, observed.failed)
 	}
 }
@@ -370,10 +377,10 @@ func assertAudioOutputForwards(t *testing.T, session sessionturn.Session, provid
 	if (<-provider.sent).Type != messages.StreamTypeTextDelta || (<-provider.sent).Type != messages.StreamTypeTextDelta {
 		t.Fatal("audio output session changed a forwarded stream send")
 	}
-	if !session.SendMessage(context.Background(), messages.Message{ToolCallID: "complete"}) || !session.SendMessageWithoutResponse(context.Background(), messages.Message{ToolCallID: "deferred"}) {
+	if !session.SendMessage(context.Background(), messages.Message{ToolCallID: runtimeContractCompleteID}) || !session.SendMessageWithoutResponse(context.Background(), messages.Message{ToolCallID: runtimeContractDeferredID}) {
 		t.Fatal("audio output session did not forward complete-message sends")
 	}
-	if (<-provider.complete).ToolCallID != "complete" || (<-provider.completeDeferred).ToolCallID != "deferred" {
+	if (<-provider.complete).ToolCallID != runtimeContractCompleteID || (<-provider.completeDeferred).ToolCallID != runtimeContractDeferredID {
 		t.Fatal("audio output session changed a complete-message send")
 	}
 }
@@ -411,7 +418,7 @@ func prepareImageInferencerScenario(t *testing.T, deferResponse bool) (sessiontu
 	original := []byte{10, 20, 30}
 	expected := append([]byte(nil), original...)
 	request := &sessionturn.ImageRequest{
-		Parts:         []messages.ImagePart{{Bytes: original, MediaType: "image/png"}},
+		Parts:         []messages.ImagePart{{Bytes: original, MediaType: runtimeContractImageMediaType}},
 		DeferResponse: deferResponse, FirstTurn: firstTurn,
 		PromptSentinel: "image-only", DeferredInstruction: sessionturn.DeferredImageInstruction,
 	}
@@ -485,17 +492,17 @@ func assertPreparedImageMessage(t *testing.T, provider *runtimeProbeSession, def
 		t.Fatalf("image turn = %+v", sent)
 	}
 	part, ok := sent.ContentParts[len(sent.ContentParts)-1].(messages.ImagePart)
-	if !ok || part.MediaType != "image/png" || !bytes.Equal(part.Bytes, original) {
+	if !ok || part.MediaType != runtimeContractImageMediaType || !bytes.Equal(part.Bytes, original) {
 		t.Fatalf("copied image part = %#v", sent.ContentParts[len(sent.ContentParts)-1])
 	}
 }
 
 func assertImageSessionForwardsToolResults(t *testing.T, session sessionturn.Session, provider *runtimeProbeSession) {
 	t.Helper()
-	if !session.SendMessage(context.Background(), messages.Message{ToolCallID: "complete"}) || !session.SendMessageWithoutResponse(context.Background(), messages.Message{ToolCallID: "deferred"}) {
+	if !session.SendMessage(context.Background(), messages.Message{ToolCallID: runtimeContractCompleteID}) || !session.SendMessageWithoutResponse(context.Background(), messages.Message{ToolCallID: runtimeContractDeferredID}) {
 		t.Fatal("image session did not forward complete tool results")
 	}
-	if (<-provider.complete).ToolCallID != "complete" || (<-provider.completeDeferred).ToolCallID != "deferred" {
+	if (<-provider.complete).ToolCallID != runtimeContractCompleteID || (<-provider.completeDeferred).ToolCallID != runtimeContractDeferredID {
 		t.Fatal("image session changed the forwarded complete tool result")
 	}
 }
