@@ -6349,3 +6349,11 @@ before any push or PR.
   hermetic/Wire/embed/deletion/adapter/ancestry matrix on the exact clean head.
   After repairing any local failures, push the same branch, update PR #546 with
   the exact SHA and evidence, and rerun the canonical SCRIPT CI gate.
+
+- First repaired-head `rtk make prepush` on `e215c6e` stopped at the
+  architecture line cap: `session_tools.go` was 402 lines against a 400-line
+  limit. Removed the explanatory comment while retaining the service observer
+  notification; the behavior remains covered by the 60-run cancellation stress
+  check above.
+- Exact next action: checkpoint this line-cap repair, then rerun the full
+  prepush and complete C251-04 matrix on its exact SHA before updating PR #546.
