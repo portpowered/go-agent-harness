@@ -6265,3 +6265,20 @@ before any push or PR.
   the full coverage gate, then rerun `make prepush` plus the complete C251-04
   matrix on that exact head. Do not push or open a PR before every local gate
   passes.
+
+
+## C251 architecture and contract-test checkpoint — 2026-09-24
+
+- Exact `rtk make prepush` on `9abef01` stopped at the architecture gate with
+  33 findings. Replaced four cross-service Wire imports in contract tests with
+  service-owned or public-port test doubles. Refactored over-complex contract
+  assertions into bounded helpers and placed shared fixtures in existing test
+  files, preserving package placement and the set of test functions.
+- `rtk make architecture-size-check` now passes: 233 packages, 2,043 files,
+  30,105 functions. Focused `rtk go test ./services/sessionduration/internal/service
+  ./services/sessiontrace/internal/service ./services/sessionturn/internal/service
+  -count=1 -timeout=180s` passes 124 tests. `git diff --check` passes.
+- Exact next action: commit this checkpoint, then rerun `rtk make prepush` and
+  the complete C251-04 vertical functional/race/integration/hermetic/Wire/
+  embed/deletion/adapter/ancestry matrix on the exact clean candidate. Repair
+  every locally reproducible failure before any push or PR.

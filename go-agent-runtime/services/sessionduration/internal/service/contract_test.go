@@ -349,6 +349,19 @@ func TestSessionDurationArtifactsPreserveWriteFailuresAndSequence(t *testing.T) 
 }
 
 func TestArtifactContextPreparationAndTerminalRecording(t *testing.T) {
+	assertEmptyArtifactContext(t)
+	var nilContext context.Context
+	directory := t.TempDir()
+	paths := sessionduration.SessionDurationArtifactPaths{
+		AudioPath: filepath.Join(directory, "audio.wav"), TranscriptPath: filepath.Join(directory, "transcript.jsonl"),
+	}
+	assertPreparedPathArtifacts(t, nilContext, paths)
+	assertTerminalRecorderLifecycle(t)
+	assertPreparedTerminalRecorderFiles(t, directory)
+}
+
+func assertEmptyArtifactContext(t *testing.T) {
+	t.Helper()
 	var nilContext context.Context
 	if ArtifactsFromContext(nilContext) != nil {
 		t.Fatal("nil context unexpectedly returned artifacts")
@@ -362,9 +375,10 @@ func TestArtifactContextPreparationAndTerminalRecording(t *testing.T) {
 	if got, err := PrepareArtifacts(context.Background()); err != nil || got == nil {
 		t.Fatalf("empty artifact preparation = %v, %v", got, err)
 	}
+}
 
-	directory := t.TempDir()
-	paths := sessionduration.SessionDurationArtifactPaths{AudioPath: filepath.Join(directory, "audio.wav"), TranscriptPath: filepath.Join(directory, "transcript.jsonl")}
+func assertPreparedPathArtifacts(t *testing.T, nilContext context.Context, paths sessionduration.SessionDurationArtifactPaths) {
+	t.Helper()
 	ctx := WithSessionDurationArtifactPaths(nilContext, paths)
 	prepared, err := PrepareArtifacts(ctx)
 	if err != nil {
@@ -393,48 +407,6 @@ func TestArtifactContextPreparationAndTerminalRecording(t *testing.T) {
 		if info.Size() == 0 {
 			t.Fatalf("artifact %s is empty", path)
 		}
-	}
-
-	recorder := &terminalRecorderProbe{}
-	base := NewSessionDurationArtifactSetWithSinks(nil, &artifactTranscriptSink{})
-	recorded := WithTerminalRecorder(WithSessionDurationArtifacts(context.Background(), base), recorder)
-	lifecycle := ArtifactsFromContext(recorded)
-	terminal := messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValueWithTerminal(
-		"session", "done", "provider_close", messages.TerminalReasonProviderClose,
-		messages.TerminalProvenanceProvider, messages.TerminalOutputComplete,
-	)}
-	if err := lifecycle.Accept(terminal); err != nil {
-		t.Fatalf("terminal Accept: %v", err)
-	}
-	if len(recorder.summaries) != 1 || recorder.summaries[0].Classification != "provider_close" {
-		t.Fatalf("terminal summaries = %+v", recorder.summaries)
-	}
-	if err := lifecycle.Flush(); err != nil {
-		t.Fatalf("terminal lifecycle Flush: %v", err)
-	}
-	if err := lifecycle.Close(); err != nil {
-		t.Fatalf("terminal lifecycle Close: %v", err)
-	}
-
-	pathRecorder := &terminalRecorderProbe{}
-	recordedPaths := sessionduration.SessionDurationArtifactPaths{
-		AudioPath:      filepath.Join(directory, "recorded-audio.wav"),
-		TranscriptPath: filepath.Join(directory, "recorded-transcript.jsonl"),
-	}
-	recordedPathContext := WithTerminalRecorder(WithSessionDurationArtifactPaths(context.Background(), recordedPaths), pathRecorder)
-	preparedRecording, err := PrepareArtifacts(recordedPathContext)
-	if err != nil {
-		t.Fatalf("PrepareArtifacts with terminal recorder: %v", err)
-	}
-	recordedLifecycle := ArtifactsFromContext(preparedRecording)
-	if err := recordedLifecycle.Accept(terminal); err != nil {
-		t.Fatalf("prepared terminal lifecycle Accept: %v", err)
-	}
-	if err := FinalizeArtifacts(recordedLifecycle); err != nil {
-		t.Fatalf("FinalizeArtifacts with terminal recorder: %v", err)
-	}
-	if len(pathRecorder.summaries) != 1 || pathRecorder.summaries[0].Classification != "provider_close" {
-		t.Fatalf("prepared path terminal summaries = %+v", pathRecorder.summaries)
 	}
 }
 
@@ -527,7 +499,12 @@ func TestSessionDurationArtifactSetWritesAcceptedAudioAndTerminalTranscript(t *t
 	if err := FinalizeArtifacts(artifacts); err != nil {
 		t.Fatalf("FinalizeArtifacts: %v", err)
 	}
+	assertRecordedWAVSamples(t, audioPath)
+	assertTerminalTranscriptTypes(t, transcriptPath)
+}
 
+func assertRecordedWAVSamples(t *testing.T, audioPath string) {
+	t.Helper()
 	wavBytes, err := os.ReadFile(audioPath)
 	if err != nil {
 		t.Fatalf("read WAV artifact: %v", err)
@@ -536,6 +513,10 @@ func TestSessionDurationArtifactSetWritesAcceptedAudioAndTerminalTranscript(t *t
 	if err != nil || rate != audio.SampleRate || len(samples) != 2 || samples[0] != 42 || samples[1] != -13 {
 		t.Fatalf("recorded WAV = rate %d samples %v err %v, want exact accepted PCM at %d Hz", rate, samples, err, audio.SampleRate)
 	}
+}
+
+func assertTerminalTranscriptTypes(t *testing.T, transcriptPath string) {
+	t.Helper()
 	transcriptBytes, err := os.ReadFile(transcriptPath)
 	if err != nil {
 		t.Fatalf("read transcript artifact: %v", err)
@@ -582,65 +563,3 @@ func (r *terminalRecorderProbe) RecordTerminalSummary(summary transcript.Recordi
 	r.summaries = append(r.summaries, summary)
 	return nil
 }
-
-type runLoopProbe struct {
-	deltas *messages.TypedBuffer[messages.StreamMessage]
-	ran    chan struct{}
-	close  sync.Once
-}
-
-func newRunLoopProbe() *runLoopProbe {
-	return &runLoopProbe{deltas: messages.NewTypedBuffer[messages.StreamMessage](4), ran: make(chan struct{})}
-}
-
-func (l *runLoopProbe) Run(context.Context) error {
-	l.close.Do(func() { close(l.ran) })
-	return nil
-}
-func (l *runLoopProbe) Deltas() *messages.TypedBuffer[messages.StreamMessage] { return l.deltas }
-func (l *runLoopProbe) Send(context.Context, []messages.Message) error        { return nil }
-
-type gatedRunLoopProbe struct {
-	deltas *messages.TypedBuffer[messages.StreamMessage]
-	sent   bool
-}
-
-func (l *gatedRunLoopProbe) Run(ctx context.Context) error {
-	if !l.deltas.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: &messages.MessageEndValue{}}) {
-		return errors.New("could not publish loop delta")
-	}
-	<-ctx.Done()
-	return ctx.Err()
-}
-func (l *gatedRunLoopProbe) Deltas() *messages.TypedBuffer[messages.StreamMessage] { return l.deltas }
-func (l *gatedRunLoopProbe) Send(context.Context, []messages.Message) error {
-	l.sent = true
-	return nil
-}
-
-type idleRunLoopProbe struct {
-	deltas *messages.TypedBuffer[messages.StreamMessage]
-}
-
-func (l *idleRunLoopProbe) Run(ctx context.Context) error {
-	<-ctx.Done()
-	return ctx.Err()
-}
-func (l *idleRunLoopProbe) Deltas() *messages.TypedBuffer[messages.StreamMessage] { return l.deltas }
-func (l *idleRunLoopProbe) Send(context.Context, []messages.Message) error        { return nil }
-
-type contextWaitingRunLoopProbe struct {
-	deltas  *messages.TypedBuffer[messages.StreamMessage]
-	started chan struct{}
-	once    sync.Once
-}
-
-func (l *contextWaitingRunLoopProbe) Run(ctx context.Context) error {
-	l.once.Do(func() { close(l.started) })
-	<-ctx.Done()
-	return ctx.Err()
-}
-func (l *contextWaitingRunLoopProbe) Deltas() *messages.TypedBuffer[messages.StreamMessage] {
-	return l.deltas
-}
-func (l *contextWaitingRunLoopProbe) Send(context.Context, []messages.Message) error { return nil }

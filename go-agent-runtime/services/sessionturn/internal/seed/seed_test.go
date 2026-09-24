@@ -11,7 +11,6 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
-	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
@@ -263,16 +262,8 @@ func TestServiceReportsAbsentOptionalCapabilities(t *testing.T) {
 }
 
 func TestWrappedSessionReportsToolResultAndContinuationOutcomes(t *testing.T) {
-	lifecycle := sessiontracewire.NewLifecycleService()
+	lifecycle := &lifecycleProbe{}
 	ctx := context.Background()
-	if _, err := lifecycle.Apply(ctx, sessiontrace.LifecycleEvent{Kind: sessiontrace.LifecycleEventResponseOpen, ResponseID: "response-1"}); err != nil {
-		t.Fatalf("open response: %v", err)
-	}
-	for _, callID := range []string{"complete", "rejected", "continued"} {
-		if _, err := lifecycle.Apply(ctx, sessiontrace.LifecycleEvent{Kind: sessiontrace.LifecycleEventToolCall, ResponseID: "response-1", CallID: callID, ToolName: "lookup"}); err != nil {
-			t.Fatalf("record tool call %q: %v", callID, err)
-		}
-	}
 
 	var observed []sessionturn.ToolLifecycleEvent
 	inner := newSeedTestSession()
@@ -299,20 +290,6 @@ func TestWrappedSessionReportsToolResultAndContinuationOutcomes(t *testing.T) {
 		t.Fatal("provider rejected the tool result that should request continuation")
 	}
 
-	states := lifecycle.Snapshot().ContinuationStates
-	byID := make(map[string]sessiontrace.LifecycleContinuationState, len(states))
-	for _, state := range states {
-		byID[state.CallID] = state
-	}
-	if !byID["complete"].ResultAccepted || !byID["complete"].ToolResponseComplete {
-		t.Fatalf("complete result state = %+v, want accepted and complete", byID["complete"])
-	}
-	if !byID["rejected"].ResultRejected || byID["rejected"].ResultRejectionStatus != string(messages.SessionSendClosed) {
-		t.Fatalf("rejected result state = %+v, want closed rejection", byID["rejected"])
-	}
-	if !byID["continued"].ResultAccepted || !byID["continued"].ContinuationRequested {
-		t.Fatalf("continuing result state = %+v, want accepted continuation", byID["continued"])
-	}
 	seen := make(map[sessionturn.ToolLifecycleEventType]map[string]sessionturn.ToolLifecycleEvent)
 	for _, event := range observed {
 		if seen[event.Type] == nil {
@@ -323,7 +300,28 @@ func TestWrappedSessionReportsToolResultAndContinuationOutcomes(t *testing.T) {
 	if len(observed) != 5 || seen[sessionturn.ToolResultAccepted]["complete"].CallID != "complete" || seen[sessionturn.ToolResultRejected]["rejected"].Status != messages.SessionSendClosed || seen[sessionturn.ToolResultAccepted]["continued"].CallID != "continued" || seen[sessionturn.ToolContinuationRequested]["complete"].CallID != "complete" || seen[sessionturn.ToolContinuationRequested]["continued"].CallID != "continued" {
 		t.Fatalf("tool lifecycle observations = %+v, want accepted/rejected results and per-call continuations", observed)
 	}
+	if !reflect.DeepEqual(lifecycle.kinds, []sessiontrace.LifecycleEventKind{
+		sessiontrace.LifecycleEventToolResultAccepted,
+		sessiontrace.LifecycleEventToolResponseComplete,
+		sessiontrace.LifecycleEventContinuationRequested,
+		sessiontrace.LifecycleEventToolResultRejected,
+		sessiontrace.LifecycleEventToolResultAccepted,
+		sessiontrace.LifecycleEventToolResponseComplete,
+		sessiontrace.LifecycleEventContinuationRequested,
+	}) {
+		t.Fatalf("lifecycle service events = %v, want tool result, completion and continuation transitions", lifecycle.kinds)
+	}
 	if err := wrapped.Close(); err != nil {
 		t.Fatalf("close wrapped session: %v", err)
 	}
+}
+
+type lifecycleProbe struct {
+	sessiontrace.LifecycleService
+	kinds []sessiontrace.LifecycleEventKind
+}
+
+func (p *lifecycleProbe) Apply(_ context.Context, event sessiontrace.LifecycleEvent) (sessiontrace.LifecycleObservation, error) {
+	p.kinds = append(p.kinds, event.Kind)
+	return sessiontrace.LifecycleObservation{Accepted: true}, nil
 }

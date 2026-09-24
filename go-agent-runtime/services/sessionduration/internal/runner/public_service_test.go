@@ -7,12 +7,12 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
-	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
+	durationservice "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/internal/service"
 )
 
 func TestPublicDurationServicePreservesLoopCreationFailure(t *testing.T) {
 	want := errors.New("loop unavailable")
-	service := durationwire.NewService()
+	service := durationservice.New()
 	_, err := service.RunWithResult(sessionduration.RunRequest{
 		Context:    context.Background(),
 		Inferencer: unusedInferencer{},

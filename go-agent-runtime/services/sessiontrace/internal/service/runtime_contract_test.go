@@ -513,34 +513,26 @@ type traceContractDeviceService struct {
 	openErr error
 	bindErr error
 }
-
 func (s *traceContractDeviceService) Open(_ context.Context, _ runtimeDevices.Request) (runtimeDevices.Handle, error) {
 	return s.handle, s.openErr
 }
-
 func (s *traceContractDeviceService) BindRTC(context.Context, runtimeDevices.RTCBindingRequest) (runtimeDevices.RTCBinding, error) {
 	if s.bindErr != nil {
 		return nil, s.bindErr
 	}
 	return nil, runtimeDevices.ErrUnavailable
 }
-
 type traceContractHandle struct {
 	ports      runtimeDevices.MediaPorts
 	closeCount int
 }
-
 func (h *traceContractHandle) Media() runtimeDevices.MediaPorts { return h.ports }
-func (h *traceContractHandle) Close() error {
-	h.closeCount++
-	return nil
-}
+func (h *traceContractHandle) Close() error                     { h.closeCount++; return nil }
 
 type traceContractCapture struct {
 	preGate    func(int, []int16)
 	closeCount int
 }
-
 func (c *traceContractCapture) Pump(ctx context.Context, outbound audio.OutboundMedia) error {
 	return outbound.WriteFrame(ctx, audio.PCMFrame{Samples: []int16{3, 4}, Format: audio.PCM16DeviceFormat(24_000)})
 }
@@ -553,21 +545,17 @@ type traceContractUploadedCapture struct {
 	traceContractCapture
 	uploadedObserver func(int, []int16)
 }
-
 func (c *traceContractUploadedCapture) SetUploadedSamplesObserver(observer func(int, []int16)) {
 	c.uploadedObserver = observer
 }
 
-type traceContractOutbound struct {
-	frames []audio.PCMFrame
-}
-
+type traceContractOutbound struct{ frames []audio.PCMFrame }
 func (o *traceContractOutbound) WriteFrame(_ context.Context, frame audio.PCMFrame) error {
 	frame.Samples = append([]int16(nil), frame.Samples...)
 	o.frames = append(o.frames, frame)
 	return nil
 }
-func (o *traceContractOutbound) Close() error { return nil }
+func (*traceContractOutbound) Close() error { return nil }
 
 type traceContractPlayback struct {
 	renderedSupported bool
@@ -575,8 +563,8 @@ type traceContractPlayback struct {
 	renderedObserver  func(int, []int16)
 }
 
-func (p *traceContractPlayback) Pump(context.Context, audio.InboundMedia) error { return nil }
-func (p *traceContractPlayback) Close() error                                   { return nil }
+func (*traceContractPlayback) Pump(context.Context, audio.InboundMedia) error { return nil }
+func (*traceContractPlayback) Close() error                                   { return nil }
 func (p *traceContractPlayback) SetPlaybackSamplesObserver(observer func(context.Context, int, []int16) error) {
 	p.playbackObserver = observer
 }
@@ -585,10 +573,7 @@ func (p *traceContractPlayback) SetRenderedSamplesObserver(observer func(int, []
 	return p.renderedSupported
 }
 
-type traceContractLegacyPlayback struct {
-	renderedObserver func(int, []int16)
-}
-
+type traceContractLegacyPlayback struct{ renderedObserver func(int, []int16) }
 func (traceContractLegacyPlayback) Pump(context.Context, audio.InboundMedia) error { return nil }
 func (traceContractLegacyPlayback) Close() error                                   { return nil }
 func (p *traceContractLegacyPlayback) SetPlaybackRenderObserver(observer audio.PlaybackRenderObserver) {
@@ -596,24 +581,19 @@ func (p *traceContractLegacyPlayback) SetPlaybackRenderObserver(observer audio.P
 }
 
 type traceContractBarePlayback struct{}
-
 func (traceContractBarePlayback) Pump(context.Context, audio.InboundMedia) error { return nil }
 func (traceContractBarePlayback) Close() error                                   { return nil }
 func (traceContractBarePlayback) DeviceSampleRate() int                          { return 24_000 }
 
-type traceContractSource struct {
-	samples []int16
-}
+type traceContractSource struct{ samples []int16 }
 
 func (s *traceContractSource) ReadFrame(_ context.Context, buf []int16) error {
 	copy(buf, s.samples)
 	return nil
 }
-func (s *traceContractSource) Close() error { return nil }
+func (*traceContractSource) Close() error { return nil }
 
-type traceContractSampleSource struct {
-	traceContractSource
-}
+type traceContractSampleSource struct{ traceContractSource }
 
 func (s *traceContractSampleSource) ReadSamples(_ context.Context, buf []int16) (int, error) {
 	return copy(buf, s.samples), nil

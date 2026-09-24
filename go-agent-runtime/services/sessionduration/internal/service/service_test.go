@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -10,6 +11,57 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 )
+
+func providerCloseTerminalMessage() messages.StreamMessage {
+	return messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValueWithTerminal(
+		"session", "done", "provider_close", messages.TerminalReasonProviderClose,
+		messages.TerminalProvenanceProvider, messages.TerminalOutputComplete,
+	)}
+}
+
+func assertTerminalRecorderLifecycle(t *testing.T) {
+	t.Helper()
+	recorder := &terminalRecorderProbe{}
+	base := NewSessionDurationArtifactSetWithSinks(nil, &artifactTranscriptSink{})
+	ctx := WithTerminalRecorder(WithSessionDurationArtifacts(context.Background(), base), recorder)
+	lifecycle := ArtifactsFromContext(ctx)
+	if err := lifecycle.Accept(providerCloseTerminalMessage()); err != nil {
+		t.Fatalf("terminal Accept: %v", err)
+	}
+	if len(recorder.summaries) != 1 || recorder.summaries[0].Classification != "provider_close" {
+		t.Fatalf("terminal summaries = %+v", recorder.summaries)
+	}
+	if err := lifecycle.Flush(); err != nil {
+		t.Fatalf("terminal lifecycle Flush: %v", err)
+	}
+	if err := lifecycle.Close(); err != nil {
+		t.Fatalf("terminal lifecycle Close: %v", err)
+	}
+}
+
+func assertPreparedTerminalRecorderFiles(t *testing.T, directory string) {
+	t.Helper()
+	recorder := &terminalRecorderProbe{}
+	paths := sessionduration.SessionDurationArtifactPaths{
+		AudioPath:      filepath.Join(directory, "recorded-audio.wav"),
+		TranscriptPath: filepath.Join(directory, "recorded-transcript.jsonl"),
+	}
+	ctx := WithTerminalRecorder(WithSessionDurationArtifactPaths(context.Background(), paths), recorder)
+	prepared, err := PrepareArtifacts(ctx)
+	if err != nil {
+		t.Fatalf("PrepareArtifacts with terminal recorder: %v", err)
+	}
+	artifacts := ArtifactsFromContext(prepared)
+	if err := artifacts.Accept(providerCloseTerminalMessage()); err != nil {
+		t.Fatalf("prepared terminal lifecycle Accept: %v", err)
+	}
+	if err := FinalizeArtifacts(artifacts); err != nil {
+		t.Fatalf("FinalizeArtifacts with terminal recorder: %v", err)
+	}
+	if len(recorder.summaries) != 1 || recorder.summaries[0].Classification != "provider_close" {
+		t.Fatalf("prepared path terminal summaries = %+v", recorder.summaries)
+	}
+}
 
 func TestStateProjectsOutputStates(t *testing.T) {
 	cases := []struct {

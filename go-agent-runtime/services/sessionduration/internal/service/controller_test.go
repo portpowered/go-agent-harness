@@ -14,6 +14,67 @@ import (
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
+type runLoopProbe struct {
+	deltas *messages.TypedBuffer[messages.StreamMessage]
+	ran    chan struct{}
+	close  sync.Once
+}
+
+func newRunLoopProbe() *runLoopProbe {
+	return &runLoopProbe{deltas: messages.NewTypedBuffer[messages.StreamMessage](4), ran: make(chan struct{})}
+}
+func (l *runLoopProbe) Run(context.Context) error {
+	l.close.Do(func() { close(l.ran) })
+	return nil
+}
+func (l *runLoopProbe) Deltas() *messages.TypedBuffer[messages.StreamMessage] { return l.deltas }
+func (l *runLoopProbe) Send(context.Context, []messages.Message) error        { return nil }
+
+type gatedRunLoopProbe struct {
+	deltas *messages.TypedBuffer[messages.StreamMessage]
+	sent   bool
+}
+
+func (l *gatedRunLoopProbe) Run(ctx context.Context) error {
+	if !l.deltas.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: &messages.MessageEndValue{}}) {
+		return errors.New("could not publish loop delta")
+	}
+	<-ctx.Done()
+	return ctx.Err()
+}
+func (l *gatedRunLoopProbe) Deltas() *messages.TypedBuffer[messages.StreamMessage] { return l.deltas }
+func (l *gatedRunLoopProbe) Send(context.Context, []messages.Message) error {
+	l.sent = true
+	return nil
+}
+
+type idleRunLoopProbe struct {
+	deltas *messages.TypedBuffer[messages.StreamMessage]
+}
+
+func (l *idleRunLoopProbe) Run(ctx context.Context) error {
+	<-ctx.Done()
+	return ctx.Err()
+}
+func (l *idleRunLoopProbe) Deltas() *messages.TypedBuffer[messages.StreamMessage] { return l.deltas }
+func (l *idleRunLoopProbe) Send(context.Context, []messages.Message) error        { return nil }
+
+type contextWaitingRunLoopProbe struct {
+	deltas  *messages.TypedBuffer[messages.StreamMessage]
+	started chan struct{}
+	once    sync.Once
+}
+
+func (l *contextWaitingRunLoopProbe) Run(ctx context.Context) error {
+	l.once.Do(func() { close(l.started) })
+	<-ctx.Done()
+	return ctx.Err()
+}
+func (l *contextWaitingRunLoopProbe) Deltas() *messages.TypedBuffer[messages.StreamMessage] {
+	return l.deltas
+}
+func (l *contextWaitingRunLoopProbe) Send(context.Context, []messages.Message) error { return nil }
+
 func TestBeginRejectsNegativeDurationBeforeTimingOrPublication(t *testing.T) {
 	clock := platformclock.NewDeterministic(time.Unix(1, 0), time.Millisecond)
 	controller, err := New().Begin(sessionduration.Options{

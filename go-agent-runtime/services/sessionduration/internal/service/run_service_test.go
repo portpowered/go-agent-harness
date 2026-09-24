@@ -109,31 +109,6 @@ func TestRunHandlesWakeAndDoneBoundaryFailures(t *testing.T) {
 	}
 }
 
-type promptSessionOpenLoop struct {
-	deltas *messages.TypedBuffer[messages.StreamMessage]
-	sent   chan []messages.Message
-}
-
-func (l *promptSessionOpenLoop) Run(ctx context.Context) error {
-	if !l.deltas.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeSessionOpen, Role: messages.RoleSystem, Value: messages.NewSessionOpenValue("session-1", "audio")}) {
-		return errors.New("publish session-open event")
-	}
-	<-ctx.Done()
-	return ctx.Err()
-}
-
-func (l *promptSessionOpenLoop) Deltas() *messages.TypedBuffer[messages.StreamMessage] {
-	return l.deltas
-}
-func (l *promptSessionOpenLoop) Send(ctx context.Context, sent []messages.Message) error {
-	select {
-	case l.sent <- append([]messages.Message(nil), sent...):
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
 func TestRunSendsConfiguredPromptOnceWhenSessionOpens(t *testing.T) {
 	loop := &promptSessionOpenLoop{deltas: messages.NewTypedBuffer[messages.StreamMessage](2), sent: make(chan []messages.Message, 1)}
 	done := make(chan struct{})
@@ -181,34 +156,6 @@ func TestRunSendsConfiguredPromptOnceWhenSessionOpens(t *testing.T) {
 		t.Fatal("Run did not finish after the host completion signal")
 	}
 }
-
-type artifactFailureRunLoop struct {
-	deltas *messages.TypedBuffer[messages.StreamMessage]
-}
-
-func (l *artifactFailureRunLoop) Run(ctx context.Context) error {
-	if !l.deltas.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("persist before publish")}) {
-		return errors.New("publish text delta")
-	}
-	<-ctx.Done()
-	return ctx.Err()
-}
-func (l *artifactFailureRunLoop) Deltas() *messages.TypedBuffer[messages.StreamMessage] {
-	return l.deltas
-}
-func (*artifactFailureRunLoop) Send(context.Context, []messages.Message) error { return nil }
-
-type artifactFailureLifecycle struct {
-	acceptErr, flushErr, closeErr error
-	accepts, flushes, closes      int
-}
-
-func (a *artifactFailureLifecycle) Accept(messages.StreamMessage) error {
-	a.accepts++
-	return a.acceptErr
-}
-func (a *artifactFailureLifecycle) Flush() error { a.flushes++; return a.flushErr }
-func (a *artifactFailureLifecycle) Close() error { a.closes++; return a.closeErr }
 
 func TestRunKeepsArtifactWriteFailureAndJoinsAllArtifactCleanupCauses(t *testing.T) {
 	acceptErr := errors.New("artifact write failed")
@@ -319,79 +266,6 @@ func TestRunRejectsRetryWhenLoopCannotSendSessionEvents(t *testing.T) {
 	}
 }
 
-type retryRunLoopProbe struct {
-	deltas *messages.TypedBuffer[messages.StreamMessage]
-	sent   chan messages.StreamMessage
-}
-
-func (l *retryRunLoopProbe) Run(ctx context.Context) error {
-	terminal := messages.StreamMessage{
-		Type: messages.StreamTypeMessageEnd,
-		Role: messages.RoleAssistant,
-		Value: &messages.MessageEndValue{
-			Status:               "failed",
-			ProviderErrorCode:    "rate_limit_exceeded",
-			ProviderErrorMessage: "retry after 1s",
-		},
-	}
-	if !l.deltas.Write(ctx, terminal) {
-		return ctx.Err()
-	}
-	<-ctx.Done()
-	return ctx.Err()
-}
-
-func (l *retryRunLoopProbe) Deltas() *messages.TypedBuffer[messages.StreamMessage] { return l.deltas }
-func (l *retryRunLoopProbe) Send(context.Context, []messages.Message) error        { return nil }
-func (l *retryRunLoopProbe) SendSessionEvent(ctx context.Context, msg messages.StreamMessage) error {
-	select {
-	case l.sent <- msg:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-type retryRunLoopWithoutSessionEvents struct {
-	deltas *messages.TypedBuffer[messages.StreamMessage]
-}
-
-func (l *retryRunLoopWithoutSessionEvents) Run(ctx context.Context) error {
-	terminal := messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: &messages.MessageEndValue{
-		Status:            "failed",
-		ProviderErrorCode: "rate_limit_exceeded",
-	}}
-	if !l.deltas.Write(ctx, terminal) {
-		return ctx.Err()
-	}
-	<-ctx.Done()
-	return ctx.Err()
-}
-
-func (l *retryRunLoopWithoutSessionEvents) Deltas() *messages.TypedBuffer[messages.StreamMessage] {
-	return l.deltas
-}
-func (l *retryRunLoopWithoutSessionEvents) Send(context.Context, []messages.Message) error {
-	return nil
-}
-
-type triggerScheduler struct {
-	created chan *triggerTimer
-}
-
-type triggerTimer struct {
-	events chan time.Time
-}
-
-func (s *triggerScheduler) NewTimer(time.Duration) sessionduration.Timer {
-	timer := &triggerTimer{events: make(chan time.Time, 1)}
-	s.created <- timer
-	return timer
-}
-func (t *triggerTimer) C() <-chan time.Time      { return t.events }
-func (t *triggerTimer) Stop() bool               { return false }
-func (t *triggerTimer) Reset(time.Duration) bool { return true }
-
 func TestRunExpiresAtMaxDurationAndClosesLoop(t *testing.T) {
 	scheduler := &triggerScheduler{created: make(chan *triggerTimer, 1)}
 	type runResult struct {
@@ -463,21 +337,6 @@ func TestRunFinalizesProviderPlaybackAfterHostResourcesClose(t *testing.T) {
 	}
 }
 
-type blockedProviderCloseSession struct {
-	*contractSession
-	started  chan struct{}
-	release  <-chan struct{}
-	finished chan struct{}
-}
-
-func (s *blockedProviderCloseSession) Close() error {
-	close(s.started)
-	<-s.release
-	err := s.contractSession.Close()
-	close(s.finished)
-	return err
-}
-
 func TestRunBoundsProviderCloseAndPreservesTimeoutCause(t *testing.T) {
 	release := make(chan struct{})
 	released := false
@@ -529,18 +388,6 @@ func TestRunBoundsProviderCloseAndPreservesTimeoutCause(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("provider close did not finish after the test released it")
 	}
-}
-
-type providerTerminalOnCloseSession struct {
-	*contractSession
-	terminal messages.StreamMessage
-}
-
-func (s *providerTerminalOnCloseSession) Close() error {
-	if !s.receive.Write(context.Background(), s.terminal) {
-		return errors.New("provider terminal buffer is full")
-	}
-	return s.contractSession.Close()
 }
 
 func TestRunRetainsProviderTerminalPublishedDuringDurationExpiryClose(t *testing.T) {
@@ -606,27 +453,6 @@ func TestRunRetainsProviderTerminalPublishedDuringDurationExpiryClose(t *testing
 	if !ok || value.TerminalProvenance != messages.TerminalProvenanceProvider || value.TerminalReason != messages.TerminalReasonProviderClose {
 		t.Fatalf("published terminal = %#v, want provider-close provenance", published[0].Value)
 	}
-}
-
-type orderedPlaybackInferencer struct{ session messages.Session }
-
-func (i orderedPlaybackInferencer) ConnectSession(context.Context) (messages.Session, error) {
-	return i.session, nil
-}
-
-type orderedPlaybackSession struct {
-	*contractSession
-	order *[]string
-}
-
-func (s *orderedPlaybackSession) DrainPlayback(context.Context) error {
-	*s.order = append(*s.order, "playback")
-	return nil
-}
-
-func (s *orderedPlaybackSession) Close() error {
-	*s.order = append(*s.order, "provider")
-	return s.contractSession.Close()
 }
 
 func TestRunDispatchesAudioInterruptionAndJoinsItsPump(t *testing.T) {
