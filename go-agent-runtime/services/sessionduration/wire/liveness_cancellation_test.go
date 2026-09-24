@@ -272,6 +272,7 @@ func TestPublicTerminalRecorderRejectsIncompleteSummaryWithoutInventingOne(t *te
 
 	for _, event := range []messages.StreamMessage{
 		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant},
+		{Type: messages.StreamTypeSessionClose},
 		{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValue("session", "legacy close")},
 	} {
 		if err := artifacts.Accept(event); err != nil {
@@ -291,6 +292,46 @@ func TestPublicTerminalRecorderRejectsIncompleteSummaryWithoutInventingOne(t *te
 	}
 	if len(recorder.summaries) != 0 {
 		t.Fatalf("invalid terminal summary was recorded: %+v", recorder.summaries)
+	}
+}
+
+func TestPublicArtifactFailurePreventsTerminalSummaryRecording(t *testing.T) {
+	recordErr := errors.New("artifact write failed")
+	service := NewService()
+	underlying := &publicArtifactLifecycleProbe{acceptErr: recordErr}
+	recorder := &publicCapturingTerminalRecorder{}
+	ctx := service.WithArtifacts(context.Background(), underlying)
+	ctx = service.WithTerminalRecorder(ctx, recorder)
+	artifacts := service.ArtifactsFromContext(ctx)
+	terminal := messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValueWithTerminal(
+		"session", "done", "provider_close", messages.TerminalReasonProviderClose,
+		messages.TerminalProvenanceProvider, messages.TerminalOutputPartial,
+	)}
+	if err := artifacts.Accept(terminal); !errors.Is(err, recordErr) {
+		t.Fatalf("terminal Accept() = %v, want artifact error", err)
+	}
+	if underlying.accepts != 1 {
+		t.Fatalf("underlying artifact Accept calls = %d, want 1", underlying.accepts)
+	}
+	if len(recorder.summaries) != 0 {
+		t.Fatalf("terminal summary recorded after artifact failure: %+v", recorder.summaries)
+	}
+}
+
+func TestPublicPrepareArtifactsReportsAudioOpenFailure(t *testing.T) {
+	service := NewService()
+	directory := t.TempDir()
+	paths := sessionduration.SessionDurationArtifactPaths{
+		AudioPath:      filepath.Join(directory, "missing", "audio.wav"),
+		TranscriptPath: filepath.Join(directory, "transcript.jsonl"),
+	}
+	ctx := service.WithArtifactPaths(context.Background(), paths)
+	prepared, err := service.PrepareArtifacts(ctx)
+	if err == nil || prepared != nil {
+		t.Fatalf("PrepareArtifacts() = (%v, %v), want an open error and nil context", prepared, err)
+	}
+	if _, err := os.Stat(paths.TranscriptPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("transcript path %q opened after audio setup failed: %v", paths.TranscriptPath, err)
 	}
 }
 
@@ -315,6 +356,18 @@ func TestPublicArtifactLifecycleTakesPrecedenceOverConfiguredPaths(t *testing.T)
 		if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
 			t.Fatalf("configured path %q was opened despite injected lifecycle: %v", path, err)
 		}
+	}
+}
+
+func TestPublicArtifactLifecycleAcceptsNilContext(t *testing.T) {
+	service := NewService()
+	existing := &publicArtifactLifecycleProbe{}
+	ctx := service.WithArtifacts(nil, existing)
+	if ctx == nil {
+		t.Fatal("WithArtifacts(nil, lifecycle) returned a nil context")
+	}
+	if got := service.ArtifactsFromContext(ctx); got != existing {
+		t.Fatalf("attached lifecycle = %T, want injected lifecycle", got)
 	}
 }
 
@@ -382,11 +435,17 @@ func (r *publicCapturingTerminalRecorder) RecordTerminalSummary(summary transcri
 	return nil
 }
 
-type publicArtifactLifecycleProbe struct{}
+type publicArtifactLifecycleProbe struct {
+	acceptErr error
+	accepts   int
+}
 
-func (*publicArtifactLifecycleProbe) Accept(messages.StreamMessage) error { return nil }
-func (*publicArtifactLifecycleProbe) Flush() error                        { return nil }
-func (*publicArtifactLifecycleProbe) Close() error                        { return nil }
+func (p *publicArtifactLifecycleProbe) Accept(messages.StreamMessage) error {
+	p.accepts++
+	return p.acceptErr
+}
+func (*publicArtifactLifecycleProbe) Flush() error { return nil }
+func (*publicArtifactLifecycleProbe) Close() error { return nil }
 
 type publicNilTimerScheduler struct{}
 

@@ -5296,3 +5296,21 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   this checkpoint, measure the updated behavioral coverage, and then run every
   C276 functional/integration/race/hermetic/Wire command plus `make prepush` on
   one clean exact SHA. Keep decision CONTINUE unless all local gates pass.
+
+# C276 artifact/liveness boundary checkpoint — 2026-09-24
+
+- The exact coverage run on `5fe1f988d32f93c4b69f9caf57a66c13d8b73b91` remained
+  at 89.70%. Added public regressions for artifact-write failure ordering,
+  audio-path open failure, stale and ID-less response cancellation, usage-bearing
+  partial responses, and nil-context artifact setup. These cases protect the
+  public artifact and liveness contracts. Focused checks pass; full sessionduration
+  normal/race suites pass (97 tests / 3 packages each). A combined profile of the
+  full prior runtime corpus and current Wire tests measures 90.03% (1,192/1,324);
+  the full coverage gate still must confirm that result on the committed head.
+- No production implementation changed in this checkpoint. The 13 retired paths,
+  63-line adapter total, and browser boundary audit remain unchanged. No push,
+  PR, hosted CI, or review handoff occurred; unrelated fixtures remain preserved.
+- Exact next action: commit these tests and this checkpoint, run every C276
+  functional/integration/race/hermetic/Wire command plus the full `make prepush`
+  on the new exact SHA, then repair any locally reproducible failure before
+  considering handoff. Decision remains CONTINUE.
