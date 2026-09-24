@@ -15,14 +15,14 @@ func TestOpenInterruptibleInputDuplicatesPipeAndHonorsDeadline(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer read.Close()
-	defer write.Close()
+	defer closeForTest(t, "read", read)
+	defer closeForTest(t, "write", write)
 
 	dup, err := OpenInterruptibleInput(read)
 	if err != nil {
 		t.Fatalf("OpenInterruptibleInput() = %v", err)
 	}
-	defer dup.Close()
+	defer closeForTest(t, "dup", dup)
 	if err := dup.SetReadDeadline(time.Now().Add(100 * time.Millisecond)); err != nil {
 		t.Fatalf("SetReadDeadline() = %v", err)
 	}
@@ -51,12 +51,12 @@ func TestOpenInterruptibleInputInheritedPipeSubprocess(t *testing.T) {
 		if inherited == nil {
 			os.Exit(2)
 		}
-		defer inherited.Close()
+		defer closeForTest(t, "inherited", inherited)
 		dup, err := OpenInterruptibleInput(inherited)
 		if err != nil {
 			os.Exit(3)
 		}
-		defer dup.Close()
+		defer closeForTest(t, "dup", dup)
 		if err := dup.SetReadDeadline(time.Now().Add(100 * time.Millisecond)); err != nil {
 			os.Exit(4)
 		}
@@ -71,8 +71,8 @@ func TestOpenInterruptibleInputInheritedPipeSubprocess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer read.Close()
-	defer write.Close()
+	defer closeForTest(t, "read", read)
+	defer closeForTest(t, "write", write)
 	cmd := exec.Command(os.Args[0], "-test.run", "^TestOpenInterruptibleInputInheritedPipeSubprocess$")
 	cmd.Env = append(os.Environ(), "GO_AGENT_INTERRUPTIBLE_INPUT_CHILD=1")
 	cmd.ExtraFiles = []*os.File{read}

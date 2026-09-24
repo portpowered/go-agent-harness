@@ -132,7 +132,52 @@ func TestDeviceRegistryErrorContracts(t *testing.T) {
 	}
 }
 
+const validDisplay = "Display"
+
 func TestDeviceMetadataValidationAndIDs(t *testing.T) {
+	assertDeviceDirectionAndIDContracts(t)
+	assertNewDeviceRejectsInvalidMetadata(t)
+
+	valid, err := devicegw.NewDevice("backend", "native", validDisplay, devicegw.DirectionInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if valid.Display() != validDisplay || valid.Name != valid.DisplayName {
+		t.Fatalf("valid device display fields=%#v, want matching Display", valid)
+	}
+	nameOnly := valid
+	nameOnly.DisplayName = ""
+	if err := nameOnly.Validate(); err != nil || nameOnly.Display() != validDisplay {
+		t.Fatalf("Name-only device Validate/Display=(%v, %q), want valid/Display", err, nameOnly.Display())
+	}
+	displayOnly := valid
+	displayOnly.Name = ""
+	if err := displayOnly.Validate(); err != nil || displayOnly.Display() != validDisplay {
+		t.Fatalf("DisplayName-only device Validate/Display=(%v, %q), want valid/Display", err, displayOnly.Display())
+	}
+
+	invalidDevices := []struct {
+		name   string
+		device devicegw.Device
+	}{
+		{name: "invalid direction", device: devicegw.Device{ID: valid.ID, Backend: valid.Backend, NativeID: valid.NativeID, Name: valid.Name, DisplayName: valid.DisplayName, Direction: devicegw.Direction("invalid")}},
+		{name: "empty backend", device: devicegw.Device{ID: valid.ID, Backend: "", NativeID: valid.NativeID, Name: valid.Name, DisplayName: valid.DisplayName, Direction: valid.Direction}},
+		{name: "empty native ID", device: devicegw.Device{ID: valid.ID, Backend: valid.Backend, NativeID: "", Name: valid.Name, DisplayName: valid.DisplayName, Direction: valid.Direction}},
+		{name: "mismatched ID", device: devicegw.Device{ID: "backend:other", Backend: valid.Backend, NativeID: valid.NativeID, Name: valid.Name, DisplayName: valid.DisplayName, Direction: valid.Direction}},
+		{name: "empty display", device: devicegw.Device{ID: valid.ID, Backend: valid.Backend, NativeID: valid.NativeID, Direction: valid.Direction}},
+		{name: "mismatched display fields", device: devicegw.Device{ID: valid.ID, Backend: valid.Backend, NativeID: valid.NativeID, Name: "First", DisplayName: "Second", Direction: valid.Direction}},
+	}
+	for _, testCase := range invalidDevices {
+		t.Run("invalid metadata/"+testCase.name, func(t *testing.T) {
+			if err := testCase.device.Validate(); err == nil || !errors.Is(err, devicegw.ErrInvalidDevice) && !errors.Is(err, devicegw.ErrInvalidDirection) {
+				t.Fatalf("Validate(%#v)=%v, want typed metadata/direction error", testCase.device, err)
+			}
+		})
+	}
+}
+
+func assertDeviceDirectionAndIDContracts(t *testing.T) {
+	t.Helper()
 	if got := (devicegw.Direction("")).String(); got != "invalid" {
 		t.Fatalf("empty direction String()=%q, want invalid", got)
 	}
@@ -178,7 +223,10 @@ func TestDeviceMetadataValidationAndIDs(t *testing.T) {
 			}
 		})
 	}
+}
 
+func assertNewDeviceRejectsInvalidMetadata(t *testing.T) {
+	t.Helper()
 	if _, err := devicegw.NewDevice("backend", "native", "name", devicegw.Direction("invalid")); err == nil || !errors.Is(err, devicegw.ErrInvalidDirection) {
 		t.Fatalf("invalid direction NewDevice error=%v, want ErrInvalidDirection", err)
 	}
@@ -187,43 +235,6 @@ func TestDeviceMetadataValidationAndIDs(t *testing.T) {
 	}
 	if _, err := devicegw.NewDevice("Backend", "native", "name", devicegw.DirectionInput); err == nil || !errors.Is(err, devicegw.ErrInvalidDeviceID) {
 		t.Fatalf("invalid backend NewDevice error=%v, want ErrInvalidDeviceID", err)
-	}
-
-	valid, err := devicegw.NewDevice("backend", "native", "Display", devicegw.DirectionInput)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if valid.Display() != "Display" || valid.Name != valid.DisplayName {
-		t.Fatalf("valid device display fields=%#v, want matching Display", valid)
-	}
-	nameOnly := valid
-	nameOnly.DisplayName = ""
-	if err := nameOnly.Validate(); err != nil || nameOnly.Display() != "Display" {
-		t.Fatalf("Name-only device Validate/Display=(%v, %q), want valid/Display", err, nameOnly.Display())
-	}
-	displayOnly := valid
-	displayOnly.Name = ""
-	if err := displayOnly.Validate(); err != nil || displayOnly.Display() != "Display" {
-		t.Fatalf("DisplayName-only device Validate/Display=(%v, %q), want valid/Display", err, displayOnly.Display())
-	}
-
-	invalidDevices := []struct {
-		name   string
-		device devicegw.Device
-	}{
-		{name: "invalid direction", device: devicegw.Device{ID: valid.ID, Backend: valid.Backend, NativeID: valid.NativeID, Name: valid.Name, DisplayName: valid.DisplayName, Direction: devicegw.Direction("invalid")}},
-		{name: "empty backend", device: devicegw.Device{ID: valid.ID, Backend: "", NativeID: valid.NativeID, Name: valid.Name, DisplayName: valid.DisplayName, Direction: valid.Direction}},
-		{name: "empty native ID", device: devicegw.Device{ID: valid.ID, Backend: valid.Backend, NativeID: "", Name: valid.Name, DisplayName: valid.DisplayName, Direction: valid.Direction}},
-		{name: "mismatched ID", device: devicegw.Device{ID: "backend:other", Backend: valid.Backend, NativeID: valid.NativeID, Name: valid.Name, DisplayName: valid.DisplayName, Direction: valid.Direction}},
-		{name: "empty display", device: devicegw.Device{ID: valid.ID, Backend: valid.Backend, NativeID: valid.NativeID, Direction: valid.Direction}},
-		{name: "mismatched display fields", device: devicegw.Device{ID: valid.ID, Backend: valid.Backend, NativeID: valid.NativeID, Name: "First", DisplayName: "Second", Direction: valid.Direction}},
-	}
-	for _, testCase := range invalidDevices {
-		t.Run("invalid metadata/"+testCase.name, func(t *testing.T) {
-			if err := testCase.device.Validate(); err == nil || !errors.Is(err, devicegw.ErrInvalidDevice) && !errors.Is(err, devicegw.ErrInvalidDirection) {
-				t.Fatalf("Validate(%#v)=%v, want typed metadata/direction error", testCase.device, err)
-			}
-		})
 	}
 }
 

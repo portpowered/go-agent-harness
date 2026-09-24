@@ -585,12 +585,12 @@ func (r *RemoteDeviceRegistry) doMetadata(method, path string, request, response
 	return r.do(req, response)
 }
 
-func (r *RemoteDeviceRegistry) do(req *http.Request, response any) error {
+func (r *RemoteDeviceRegistry) do(req *http.Request, response any) (err error) {
 	result, err := r.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("audio-device server %s: %w", req.URL.Host, err)
 	}
-	defer result.Body.Close()
+	defer func() { joinCleanupError(&err, result.Body.Close()) }()
 	if result.StatusCode < 200 || result.StatusCode >= 300 {
 		var payload remoteErrorResponse
 		_ = json.NewDecoder(io.LimitReader(result.Body, 1<<20)).Decode(&payload)
@@ -627,7 +627,7 @@ type remoteOpenedDevice struct {
 func (d *remoteOpenedDevice) DeviceDirection() Direction       { return d.direction }
 func (d *remoteOpenedDevice) DeviceFormat() audio.DeviceFormat { return d.format }
 
-func (d *remoteOpenedDevice) ReadFrame(ctx context.Context, frame []int16) error {
+func (d *remoteOpenedDevice) ReadFrame(ctx context.Context, frame []int16) (err error) {
 	if err := audio.ValidateFrame("read", frame); err != nil {
 		return err
 	}
@@ -639,7 +639,7 @@ func (d *remoteOpenedDevice) ReadFrame(ctx context.Context, frame []int16) error
 	if err != nil {
 		return err
 	}
-	defer result.Body.Close()
+	defer func() { joinCleanupError(&err, result.Body.Close()) }()
 	if result.StatusCode < 200 || result.StatusCode >= 300 {
 		return decodeRemoteDeviceError(result)
 	}

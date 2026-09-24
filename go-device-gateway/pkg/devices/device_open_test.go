@@ -145,6 +145,13 @@ func TestDuplexDeviceOpenLifecycleFailuresAndSuccess(t *testing.T) {
 		})
 	}
 
+	assertDuplexOpenValidationClosesGraph(t, format, newHandle)
+	assertDuplexOpenTransfersOwnership(t, format, newHandle)
+}
+
+// assertDuplexOpenValidationClosesGraph covers the post-open validation
+// failures that must release both halves of the graph.
+func assertDuplexOpenValidationClosesGraph(t *testing.T, format audio.DeviceFormat, newHandle func(Direction) *adapterFormatHandle) {
 	t.Run("output validation closes graph", func(t *testing.T) {
 		input, output := newHandle(DirectionInput), newHandle(DirectionInput)
 		_, _, err := NewDuplexDeviceSourceSinkWithFormat(&adversarialDuplexRegistry{input: input, output: output}, "input", format, "output", format)
@@ -179,7 +186,11 @@ func TestDuplexDeviceOpenLifecycleFailuresAndSuccess(t *testing.T) {
 			t.Fatalf("duplex error=%v close counts=%d,%d", err, input.closeCount, output.closed)
 		}
 	})
+}
 
+// assertDuplexOpenTransfersOwnership checks that a validated duplex graph is
+// handed to the returned source and sink with resolved default IDs.
+func assertDuplexOpenTransfersOwnership(t *testing.T, format audio.DeviceFormat, newHandle func(Direction) *adapterFormatHandle) {
 	t.Run("success transfers graph ownership", func(t *testing.T) {
 		input, output := newHandle(DirectionInput), newHandle(DirectionOutput)
 		source, sink, err := NewDuplexDeviceSourceSinkWithFormat(&adversarialDuplexRegistry{input: input, output: output}, "", format, "", format)

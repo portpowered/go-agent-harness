@@ -55,7 +55,7 @@ type DuplexFailureCapsule struct {
 // WriteDuplexFailureCapsule atomically finalizes a deterministic multi-tap
 // failure bundle. The manifest is written last in a sibling temporary
 // directory, then renamed into place.
-func WriteDuplexFailureCapsule(dir string, scenario DuplexScenario, providerInput []int16, registry *SimulatedDuplexRegistry) error {
+func WriteDuplexFailureCapsule(dir string, scenario DuplexScenario, providerInput []int16, registry *SimulatedDuplexRegistry) (err error) {
 	if registry == nil {
 		return fmt.Errorf("nil simulated duplex registry")
 	}
@@ -67,7 +67,8 @@ func WriteDuplexFailureCapsule(dir string, scenario DuplexScenario, providerInpu
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(tmp)
+	// After a successful rename tmp is gone and RemoveAll is a no-op.
+	defer func() { joinCleanupError(&err, os.RemoveAll(tmp)) }()
 	events := registry.Trace()
 	rendered := registry.RenderedSamples()
 	captured := registry.CapturedSamples()
@@ -206,7 +207,7 @@ func LoadDuplexFailureCapsule(dir string) (*DuplexFailureCapsule, error) {
 	return &DuplexFailureCapsule{Manifest: manifest, ProviderInput: provider, Rendered: rendered, Captured: captured, NearEnd: near, Background: background, Events: events}, nil
 }
 
-func ReplayDuplexFailureCapsule(dir string) (*SimulatedDuplexRegistry, error) {
+func ReplayDuplexFailureCapsule(dir string) (_ *SimulatedDuplexRegistry, err error) {
 	capsule, err := LoadDuplexFailureCapsule(dir)
 	if err != nil {
 		return nil, err
@@ -219,7 +220,7 @@ func ReplayDuplexFailureCapsule(dir string) (*SimulatedDuplexRegistry, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer opened.Close()
+	defer func() { joinCleanupError(&err, opened.Close()) }()
 	if err := opened.(*SimulatedDuplexStream).WriteSamples(context.Background(), capsule.ProviderInput); err != nil {
 		return nil, err
 	}

@@ -81,3 +81,12 @@ func assertSourceFrames(t *testing.T, source audio.AudioSource, samples []int16)
 		t.Fatalf("ReadFrame after %d frames = %v, want io.EOF", wantFrames, err)
 	}
 }
+
+// closeForTest closes a test-owned resource and reports a close failure
+// without aborting the remaining deferred cleanup.
+func closeForTest(t testing.TB, name string, closer io.Closer) {
+	t.Helper()
+	if err := closer.Close(); err != nil {
+		t.Errorf("close %s: %v", name, err)
+	}
+}

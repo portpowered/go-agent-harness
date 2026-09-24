@@ -28,7 +28,7 @@
       "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
       "file": "pkg/devices/device_virtual.go",
       "symbol": "NewVirtualRegistry",
-      "value": 33,
+      "value": 29,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -48,7 +48,7 @@
       "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
       "file": "pkg/devices/device_virtual.go",
       "symbol": "NewVirtualRegistry",
-      "value": 21,
+      "value": 19,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -57,7 +57,7 @@
       "module": "github.com/portpowered/go-agent-harness/go-device-gateway",
       "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
       "file": "pkg/devices/device_virtual.go",
-      "value": 732,
+      "value": 731,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },

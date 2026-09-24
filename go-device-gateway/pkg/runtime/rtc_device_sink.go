@@ -313,7 +313,7 @@ func (s *RTCDeviceSink) interruptPlayback(requested audio.PlaybackResponse, requ
 	found := false
 	for _, span := range s.playbackSpans {
 		if requireRequested {
-			if span.response.equal(requestedIdentity) && current > span.start && !(span.complete && current >= span.end) {
+			if span.response.equal(requestedIdentity) && current > span.start && (!span.complete || current < span.end) {
 				active = span
 				found = true
 				break
