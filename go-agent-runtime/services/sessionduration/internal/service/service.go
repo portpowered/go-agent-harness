@@ -52,6 +52,9 @@ func (s *Service) Execute(request sessionduration.ExecutionRequest) (runErr erro
 	if request.Finalization.Artifacts == nil {
 		request.Finalization.Artifacts = s.ArtifactsFromContext(ctx)
 	}
+	if request.Run != nil {
+		ctx = withSessionDurationArtifactOwner(ctx)
+	}
 	finalizer := s.NewFinalizer(request.Finalization)
 	defer func() {
 		runErr = finalizer.Finish(ctx, request.Output, runErr)
@@ -80,7 +83,7 @@ func (s *Service) RunWithResult(request sessionduration.RunRequest) (sessiondura
 		return sessionduration.Result{}, err
 	}
 	request.Context = preparedContext
-	if request.Artifacts == nil {
+	if request.Artifacts == nil && !hasSessionDurationArtifactOwner(preparedContext) {
 		request.Artifacts = s.ArtifactsFromContext(preparedContext)
 	}
 	admitted, err := s.runAdmission(request)

@@ -6186,3 +6186,23 @@ before any push or PR.
 - Exact next action: commit these repairs and this checkpoint, then rerun
   `make prepush` and all C251-04 checks against that exact clean SHA before
   push or PR.
+
+
+## C251 shared artifact finalization checkpoint — 2026-09-24
+
+- Exact `rtk make prepush` on `f9954c0eac75ff30bf74af427fba809cd3eede39`
+  passed formatting, architecture (234 packages, 2,038 files, 29,927
+  functions), Wire generation, vet, lint, staticcheck, build, and embed-check.
+  The full agent-cli test phase found that nested `Execute` and
+  `RunWithResult` each finalized the same context-owned artifact lifecycle
+  (`flush:2 close:2` instead of once). It also recorded one 3-second room
+  liveness timeout. Log:
+  `~/Library/Application Support/rtk/tee/1790251922_make_prepush.log`.
+- Added a request-context ownership marker so nested `RunWithResult` leaves
+  lifecycle cleanup to `Execute`; direct duration runs still finalize their
+  own artifacts. Focused results pass: 62 sessionduration service tests, the
+  existing common-finalizer regression, four CLI partial-artifact cases, and
+  the room liveness case repeated three times.
+- No tests were added or moved. Exact next action: commit this repair and
+  checkpoint, rerun full prepush and every C251-04 command on the exact clean
+  candidate before any push or PR.
