@@ -6296,3 +6296,27 @@ before any push or PR.
 - Exact next action: commit the formatting repair, then rerun the full
   `rtk make prepush` on the clean head and repair each local failure before
   continuing through the required C251-04 matrix.
+
+
+## C251 public coverage repair checkpoint — 2026-09-24
+
+- `rtk make prepush` on `33715a8c5d6ee937d64d5b3fbe49ab0ceda8c566` passed
+  formatting, architecture, Wire, vet, lint, staticcheck, module tests and
+  test tools, then failed the coverage floor: sessionduration service was
+  89.30% against 90.00%. Log:
+  `~/Library/Application Support/rtk/tee/1790271276_make_prepush.log`.
+- Added public-contract cases for bounded `SessionUpdated` timeout cause
+  preservation, late shutdown output that creates pending work after the quiet
+  boundary, drain publication failure with ordered close, and unavailable
+  liveness/first-response schedulers. The cases assert externally observable
+  behavior and do not add fixtures, move tests, or production lines.
+- Focused service/runner tests pass:
+  `rtk go test -count=1 -timeout=120s ./go-agent-runtime/services/sessionduration/internal/runner ./go-agent-runtime/services/sessionduration/internal/service`.
+  The runtime behavioral coverage profile was regenerated with
+  `rtk proxy env CGO_ENABLED=0 go test ./... -count=1 -tags=nomicrophone -timeout=300s -coverpkg=./... -coverprofile=../coverage/go-agent-runtime.out`
+  from `go-agent-runtime`; `rtk make coverage-gate` now passes all 223
+  registered packages across 7 profiles.
+- Exact next action: commit these behavior regressions and this checkpoint
+  together, then rerun `rtk make prepush` plus every C251-04 vertical command
+  on that exact clean SHA. No push or PR exists; keep repairs on this task and
+  branch until the full local gate passes.
