@@ -216,6 +216,14 @@ func TestPublicFinalizeNilResetTimerPreservesUnavailableSchedulerIdentity(t *tes
 	}
 }
 
+func TestPublicNilArtifactLifecycleIsNoop(t *testing.T) {
+	service := NewService()
+	ctx := service.WithArtifacts(context.Background(), nil)
+	if service.ArtifactsFromContext(ctx) != nil {
+		t.Fatal("nil artifact lifecycle was attached to the context")
+	}
+}
+
 func TestPublicRunBoundsLoopThatIgnoresCancellation(t *testing.T) {
 	done := make(chan struct{})
 	close(done)

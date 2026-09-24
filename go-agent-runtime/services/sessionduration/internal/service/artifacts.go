@@ -98,6 +98,9 @@ func WithSessionDurationArtifacts(ctx context.Context, artifacts sessionduration
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	if artifacts == nil {
+		return ctx
+	}
 	return context.WithValue(ctx, sessionDurationArtifactsContextKey{}, artifacts)
 }
 
