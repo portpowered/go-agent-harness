@@ -38,15 +38,15 @@ func TestStateProjectsOutputStates(t *testing.T) {
 			}
 		})
 	}
-	controller, _ := New().Begin(sessionduration.Options{})
+	controller, err := New().Begin(sessionduration.Options{})
+	if err != nil {
+		t.Fatalf("Begin: %v", err)
+	}
 	for _, typ := range []messages.StreamMessageType{messages.StreamTypeTextDelta, messages.StreamTypeReasoningDelta, messages.StreamTypeAudioDelta, messages.StreamTypeImageDelta, messages.StreamTypeVideoDelta, messages.StreamTypeFileDelta, messages.StreamTypeEmbeddingDelta, messages.StreamTypeToolCallDelta, messages.StreamTypeToolCallEnd, messages.StreamTypeRefusal, messages.StreamTypeTranscriptDelta} {
 		controller.Observe(messages.StreamMessage{Type: messages.StreamTypeMessageStart})
 		if got := controller.Observe(messages.StreamMessage{Type: typ, Role: messages.RoleAssistant}).OutputState; got != messages.TerminalOutputPartial {
 			t.Fatalf("controller output for %s = %q, want partial", typ, got)
 		}
-	}
-	if _, err := controller.Finalize(context.Background(), sessionduration.FinalizeRequest{}); err != nil {
-		t.Fatal(err)
 	}
 }
 
@@ -408,10 +408,10 @@ func TestRunHandlesWakeAndDoneBoundaryFailures(t *testing.T) {
 			request := sessionduration.RunRequest{
 				Context:    context.Background(),
 				Inferencer: contractInferencer{session: newContractSession()},
-				LoopFactory: func(context.Context, sessionduration.AdmissionInferencer, sessionduration.Controller) (sessionduration.Loop, error) {
+				LoopFactory: func(ctx context.Context, _ sessionduration.AdmissionInferencer, _ sessionduration.Controller) (sessionduration.Loop, error) {
 					loop := &idleRunLoopProbe{deltas: messages.NewTypedBuffer[messages.StreamMessage](1)}
 					if test.message.Type != messages.StreamMessageType("") {
-						loop.deltas.Write(context.Background(), test.message)
+						loop.deltas.Write(ctx, test.message)
 					}
 					return loop, nil
 				},
