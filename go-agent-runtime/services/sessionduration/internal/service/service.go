@@ -26,8 +26,8 @@ func hasSessionDurationArtifactOwner(ctx context.Context) bool {
 	if ctx == nil {
 		return false
 	}
-	owned, _ := ctx.Value(sessionDurationArtifactOwnerContextKey{}).(bool)
-	return owned
+	owned, ok := ctx.Value(sessionDurationArtifactOwnerContextKey{}).(bool)
+	return ok && owned
 }
 
 func New() *Service { return &Service{} }

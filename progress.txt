@@ -6222,3 +6222,15 @@ before any push or PR.
 - Exact next action: commit this layout correction and checkpoint, rerun full
   `make prepush`, then finish the C251-04 matrix on that clean SHA before push
   or PR.
+
+
+## C251 context-marker lint checkpoint — 2026-09-24
+
+- Exact `rtk make prepush` on `5bbd20b00ebf2dd5b65dd2844eaf755e39a76ecd`
+  passed architecture (234 packages, 2,038 files, 29,929 functions), Wire,
+  and vet, then lint reported one unchecked type assertion result in the new
+  internal artifact-owner marker helper. Log:
+  `~/Library/Application Support/rtk/tee/1790252240_make_prepush.log`.
+- The helper now checks the assertion boolean while preserving false for nil
+  or non-owned contexts. Exact next action: commit this lint repair and
+  checkpoint, then rerun the full gate on the exact clean SHA.
