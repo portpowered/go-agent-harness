@@ -254,7 +254,7 @@ func TestTeePreservesLiveResultAndRecordsAcceptedFrames(t *testing.T) {
 	for index, input := range inputs {
 		gotCount, gotErr := tee.Write(input)
 		wantCount, wantErr := baseline.results[index].count, baseline.results[index].err
-		if gotCount != wantCount || !errors.Is(gotErr, wantErr) {
+		if gotCount != wantCount || !sameErrorValue(gotErr, wantErr) {
 			t.Fatalf("input %d result = (%d, %v), want (%d, %v)", index, gotCount, gotErr, wantCount, wantErr)
 		}
 	}
@@ -356,7 +356,7 @@ func TestTeeRotationPreservesLiveResultAndTranscript(t *testing.T) {
 	for index, input := range inputs {
 		wantCount, wantErr := baselineLive.Write(input)
 		gotCount, gotErr := tee.Write(input)
-		if gotCount != wantCount || !errors.Is(gotErr, wantErr) {
+		if gotCount != wantCount || !sameErrorValue(gotErr, wantErr) {
 			t.Fatalf("input %d result = (%d, %v), want (%d, %v)", index, gotCount, gotErr, wantCount, wantErr)
 		}
 		if wantCount > 0 {
@@ -482,4 +482,11 @@ func recordsEqual(left, right Record) bool {
 	return left.Version == right.Version && left.Tick == right.Tick && left.Timestamp == right.Timestamp &&
 		left.Peer == right.Peer && left.Direction == right.Direction && left.Stream == right.Stream &&
 		bytes.Equal(left.Payload, right.Payload)
+}
+
+// sameErrorValue reports whether got is the identical error value as want.
+// Tee must hand back the live consumer's error unchanged, so wrapping is a
+// failure that errors.Is would hide.
+func sameErrorValue(got, want error) bool {
+	return got == want //nolint:errorlint // identity, not chain membership, is the contract under test
 }
