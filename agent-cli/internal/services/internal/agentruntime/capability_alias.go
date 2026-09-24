@@ -3,6 +3,7 @@ package agentruntime
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
@@ -89,4 +90,11 @@ func invokeScreenPermissionRecheck(ctx context.Context, rechecker cliTools.Scree
 		}
 	}()
 	return rechecker.RecheckScreenRecordingPermission(ctx)
+}
+
+func wrapSessionPhaseError(phase string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("%s: %w", phase, err)
 }

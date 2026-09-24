@@ -15,6 +15,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -22,6 +23,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	duration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
@@ -68,44 +70,8 @@ func TestRunSessionWithMaxDuration_ZeroDoesNotCreateTimer(t *testing.T) {
 	if clock.calls != 0 {
 		t.Fatalf("zero max duration created %d timers, want 0", clock.calls)
 	}
-	if !strings.Contains(out.String(), "accepted output") || strings.Contains(out.String(), string(SessionMaxDurationReason)) {
+	if !strings.Contains(out.String(), "accepted output") || strings.Contains(out.String(), string(sessionterminal.MaxDurationReason)) {
 		t.Fatalf("zero duration did not preserve natural output/reason: %q", out.String())
-	}
-}
-func TestSessionDurationAdmission_PreservesCompleteMessageCapabilities(t *testing.T) {
-	inner := &durationCompleteMessageSession{
-		complete:        true,
-		withoutResponse: true,
-	}
-	wrapped := durationwire.NewService().NewAdmissionSession(context.Background(), inner, durationwire.NewService().NewEventAdmission(), nil)
-	message := messages.NewTextMessage(messages.RoleUser, "image result")
-
-	if !wrapped.SendMessage(context.Background(), message) {
-		t.Fatal("duration admission rejected a complete message")
-	}
-	if !wrapped.SendMessageWithoutResponse(context.Background(), message) {
-		t.Fatal("duration admission rejected a deferred complete message")
-	}
-	if !wrapped.SupportsCompleteMessages() {
-		t.Fatal("duration admission hid complete-message capability")
-	}
-	if !wrapped.SupportsCompleteMessagesWithoutResponse() {
-		t.Fatal("duration admission hid deferred complete-message capability")
-	}
-	if len(inner.messages) != 1 || len(inner.deferredMessages) != 1 {
-		t.Fatalf("forwarded complete messages = %d/%d, want one of each", len(inner.messages), len(inner.deferredMessages))
-	}
-}
-func TestSessionDurationAdmission_ForwardsNonTerminalDiagnosticWithoutShutdown(t *testing.T) {
-	msg := messages.StreamMessage{
-		Type:  messages.StreamTypeError,
-		Value: messages.NewNonTerminalErrorValue("response is not active", "response_cancel_not_active"),
-	}
-	if durationwire.NewService().IsDurationShutdownMessage(msg) {
-		t.Fatal("nonterminal provider diagnostic is a shutdown message")
-	}
-	if !durationwire.NewService().IsDurationForwardMessage(msg) {
-		t.Fatal("nonterminal provider diagnostic was not retained for forwarding")
 	}
 }
 func TestSessionCommandHelpAndOmittedDurationBehavior(t *testing.T) {
@@ -159,8 +125,8 @@ func TestRunSessionWithMaxDuration_S2Table(t *testing.T) {
 		{name: "omitted", maxDuration: 0, wantTimerCall: 0, wantReason: "provider_close"},
 		{name: "zero", maxDuration: 0, wantTimerCall: 0, wantReason: "provider_close"},
 		{name: "negative", maxDuration: -time.Millisecond, wantTimerCall: 0},
-		{name: "shorter_than_one_frame", maxDuration: time.Nanosecond, wantTimerCall: 1, wantReason: string(SessionMaxDurationReason)},
-		{name: "deadline_during_output", maxDuration: time.Minute, wantTimerCall: 1, wantReason: string(SessionMaxDurationReason)},
+		{name: "shorter_than_one_frame", maxDuration: time.Nanosecond, wantTimerCall: 1, wantReason: string(sessionterminal.MaxDurationReason)},
+		{name: "deadline_during_output", maxDuration: time.Minute, wantTimerCall: 1, wantReason: string(sessionterminal.MaxDurationReason)},
 		{name: "longer_than_session", maxDuration: time.Hour, wantTimerCall: 1, wantReason: "provider_close"},
 	}
 
@@ -179,7 +145,7 @@ func runDurationS2Case(t *testing.T, testCase durationS2Case) {
 	} else {
 		runBoundedDurationCase(t, testCase, clock)
 	}
-	if clock.calls != testCase.wantTimerCall || testCase.maxDuration > 0 && (clock.timer == nil || !clock.timer.stopped) {
+	if clock.calls != testCase.wantTimerCall || testCase.maxDuration > 0 && (clock.timer == nil || !clock.timer.stopped.Load()) {
 		t.Fatalf("timer lifecycle calls=%d timer=%v", clock.calls, clock.timer)
 	}
 }
@@ -211,7 +177,7 @@ func runBoundedDurationCase(t *testing.T, testCase durationS2Case, clock *durati
 	inferencer := &durationTestInferencer{events: events, connectedCh: make(chan struct{}), closeAfterEvents: closeAfterEvents}
 	runErrCh := make(chan error, 1)
 	go func() {
-		runErrCh <- runAgentLoopSessionWithDurationClock(context.Background(), writer, inferencer, sessionLoopOptions{}, testCase.maxDuration, clock)
+		runErrCh <- runBoundedLoopForTest(context.Background(), writer, inferencer, sessionLoopOptions{}, testCase.maxDuration, clock)
 	}()
 	select {
 	case <-inferencer.connectedCh:
@@ -242,7 +208,7 @@ func TestRunSessionWithMaxDuration_GracefullyClosesAtDeadline(t *testing.T) {
 	writer := newDurationTestWriter()
 	runErrCh := make(chan error, 1)
 	go func() {
-		runErrCh <- runAgentLoopSessionWithDurationClock(
+		runErrCh <- runBoundedLoopForTest(
 			context.Background(),
 			writer,
 			&durationTestInferencer{events: durationOutputEvents()},
@@ -273,14 +239,14 @@ func TestRunSessionWithMaxDuration_GracefullyClosesAtDeadline(t *testing.T) {
 			t.Fatalf("duration output missing %q: %q", want, got)
 		}
 	}
-	if clock.calls != 1 || !clock.timer.stopped {
-		t.Fatalf("duration timer lifecycle = calls:%d stopped:%v, want one stopped timer", clock.calls, clock.timer.stopped)
+	if clock.calls != 1 || !clock.timer.stopped.Load() {
+		t.Fatalf("duration timer lifecycle = calls:%d stopped:%v, want one stopped timer", clock.calls, clock.timer.stopped.Load())
 	}
 }
 func TestRunSessionWithMaxDuration_NaturalCompletionKeepsNaturalReason(t *testing.T) {
 	clock := &durationTestClock{}
 	var out bytes.Buffer
-	err := runAgentLoopSessionWithDurationClock(
+	err := runBoundedLoopForTest(
 		context.Background(),
 		&out,
 		&durationTestInferencer{events: durationNaturalEvents()},
@@ -295,11 +261,11 @@ func TestRunSessionWithMaxDuration_NaturalCompletionKeepsNaturalReason(t *testin
 	if !strings.Contains(got, "terminal_reason=provider_close") {
 		t.Fatalf("natural completion lost provider reason: %q", got)
 	}
-	if strings.Contains(got, string(SessionMaxDurationReason)) {
+	if strings.Contains(got, string(sessionterminal.MaxDurationReason)) {
 		t.Fatalf("natural completion was mislabeled as max duration: %q", got)
 	}
-	if clock.calls != 1 || !clock.timer.stopped {
-		t.Fatalf("natural timer lifecycle = calls:%d stopped:%v, want one stopped timer", clock.calls, clock.timer.stopped)
+	if clock.calls != 1 || !clock.timer.stopped.Load() {
+		t.Fatalf("natural timer lifecycle = calls:%d stopped:%v, want one stopped timer", clock.calls, clock.timer.stopped.Load())
 	}
 }
 
@@ -323,7 +289,7 @@ func TestRunSessionWithMaxDuration_PreservesProviderTerminalDuringShutdown(t *te
 	}
 	runErrCh := make(chan error, 1)
 	go func() {
-		runErrCh <- runAgentLoopSessionWithDurationClock(
+		runErrCh <- runBoundedLoopForTest(
 			context.Background(),
 			writer,
 			inferencer,
@@ -404,7 +370,7 @@ type durationTestClock struct {
 	calls   int
 }
 
-func (c *durationTestClock) NewTimer(time.Duration) SessionDurationTimer {
+func (c *durationTestClock) NewTimer(time.Duration) duration.Timer {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	// The production duration controller uses this seam for both the overall
@@ -444,7 +410,7 @@ func (c *durationTestClock) fire() {
 
 type durationTestTimer struct {
 	ch         chan time.Time
-	stopped    bool
+	stopped    atomic.Bool
 	wake       *time.Timer
 	signalOnce sync.Once
 }
@@ -452,7 +418,7 @@ type durationTestTimer struct {
 func (t *durationTestTimer) C() <-chan time.Time { return t.ch }
 
 func (t *durationTestTimer) Stop() bool {
-	t.stopped = true
+	t.stopped.Store(true)
 	if t.wake != nil {
 		t.wake.Stop()
 	}
@@ -582,7 +548,7 @@ func (w *durationTestWriter) waitFor(t *testing.T, want string) {
 func TestRunAgentLoopSessionWithDuration_ProviderDoneDrainsAcceptedOutput(t *testing.T) {
 	clock := &durationTestClock{}
 	var out bytes.Buffer
-	err := runAgentLoopSessionWithDurationClock(
+	err := runBoundedLoopForTest(
 		context.Background(),
 		&out,
 		&durationTestInferencer{
@@ -824,7 +790,7 @@ func TestRunSessionWithMaxDuration_PreservesArtifactFlushAndCloseIdentity(t *tes
 
 func TestRunAgentLoopSessionWithDuration_PreservesFailureIdentity(t *testing.T) {
 	providerErr := errors.New("provider failed")
-	providerRunErr := runAgentLoopSessionWithDurationClock(
+	providerRunErr := runBoundedLoopForTest(
 		context.Background(),
 		io.Discard,
 		&durationTestInferencer{connectErr: providerErr},
@@ -832,12 +798,12 @@ func TestRunAgentLoopSessionWithDuration_PreservesFailureIdentity(t *testing.T) 
 		time.Hour,
 		&durationTestClock{},
 	)
-	if !errors.Is(providerRunErr, providerErr) || strings.Contains(providerRunErr.Error(), string(SessionMaxDurationReason)) {
+	if !errors.Is(providerRunErr, providerErr) || strings.Contains(providerRunErr.Error(), string(sessionterminal.MaxDurationReason)) {
 		t.Fatalf("provider failure = %v, want provider identity without max_duration", providerRunErr)
 	}
 
 	drainErr := errors.New("sink write failed")
-	drainRunErr := runAgentLoopSessionWithDurationClock(
+	drainRunErr := runBoundedLoopForTest(
 		context.Background(),
 		failingDurationWriter{err: drainErr},
 		&durationTestInferencer{events: durationOutputEvents()},
@@ -845,7 +811,7 @@ func TestRunAgentLoopSessionWithDuration_PreservesFailureIdentity(t *testing.T) 
 		time.Hour,
 		&durationTestClock{},
 	)
-	if !errors.Is(drainRunErr, drainErr) || strings.Contains(drainRunErr.Error(), string(SessionMaxDurationReason)) {
+	if !errors.Is(drainRunErr, drainErr) || strings.Contains(drainRunErr.Error(), string(sessionterminal.MaxDurationReason)) {
 		t.Fatalf("drain failure = %v, want drain identity without max_duration", drainRunErr)
 	}
 
@@ -858,14 +824,14 @@ func TestRunAgentLoopSessionWithDuration_PreservesFailureIdentity(t *testing.T) 
 	closeWriter := newDurationTestWriter()
 	closeRunErrCh := make(chan error, 1)
 	go func() {
-		closeRunErrCh <- runAgentLoopSessionWithDurationClock(
+		closeRunErrCh <- runBoundedLoopForTest(
 			context.Background(), closeWriter, closeInferencer, sessionLoopOptions{}, time.Hour, closeClock,
 		)
 	}()
 	closeWriter.waitFor(t, "accepted output")
 	closeClock.fire()
 	closeRunErr := <-closeRunErrCh
-	if !errors.Is(closeRunErr, closeErr) || strings.Contains(closeRunErr.Error(), string(SessionMaxDurationReason)) {
+	if !errors.Is(closeRunErr, closeErr) || strings.Contains(closeRunErr.Error(), string(sessionterminal.MaxDurationReason)) {
 		t.Fatalf("close failure = %v, want close identity without max_duration", closeRunErr)
 	}
 }
@@ -879,7 +845,7 @@ func TestRunSessionDurationPlan_PreservesFlushAndFinalizeFailures(t *testing.T) 
 			return flushErr
 		},
 	}
-	if err := runSessionDurationPlan(context.Background(), io.Discard, flushPlan, time.Hour, &durationTestClock{}); !errors.Is(err, flushErr) {
+	if err := runSessionPlanWithDuration(context.Background(), io.Discard, flushPlan, time.Hour, &durationTestClock{}, nil); !errors.Is(err, flushErr) {
 		t.Fatalf("flush failure = %v, want %v", err, flushErr)
 	}
 
@@ -891,7 +857,7 @@ func TestRunSessionDurationPlan_PreservesFlushAndFinalizeFailures(t *testing.T) 
 			return finalizeErr
 		},
 	}
-	if err := runSessionDurationPlan(context.Background(), io.Discard, finalizePlan, time.Hour, &durationTestClock{}); !errors.Is(err, finalizeErr) {
+	if err := runSessionPlanWithDuration(context.Background(), io.Discard, finalizePlan, time.Hour, &durationTestClock{}, nil); !errors.Is(err, finalizeErr) {
 		t.Fatalf("finalize failure = %v, want %v", err, finalizeErr)
 	}
 }
@@ -925,7 +891,7 @@ func TestRunSessionWithMaxDuration_ReleasesTimerSessionAndProductionArtifacts(t 
 	if inferencer.session == nil || inferencer.session.closeCount != 1 {
 		t.Fatalf("session close count = %v, want exactly one", inferencer.session)
 	}
-	if clock.timer == nil || !clock.timer.stopped {
+	if clock.timer == nil || !clock.timer.stopped.Load() {
 		t.Fatal("duration timer was not stopped")
 	}
 
@@ -963,43 +929,6 @@ type durationArtifactLifecycleProbe struct {
 	closed   bool
 }
 
-type durationCompleteMessageSession struct {
-	messages         []messages.Message
-	deferredMessages []messages.Message
-	complete         bool
-	withoutResponse  bool
-}
-
-func (s *durationCompleteMessageSession) Send(context.Context, messages.StreamMessage) bool {
-	return true
-}
-
-func (s *durationCompleteMessageSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
-	return messages.NewTypedBuffer[messages.StreamMessage](1)
-}
-
-func (s *durationCompleteMessageSession) Done() <-chan struct{} { return nil }
-
-func (s *durationCompleteMessageSession) Close() error { return nil }
-
-func (s *durationCompleteMessageSession) SendMessage(_ context.Context, message messages.Message) bool {
-	s.messages = append(s.messages, message)
-	return true
-}
-
-func (s *durationCompleteMessageSession) SendMessageWithoutResponse(_ context.Context, message messages.Message) bool {
-	s.deferredMessages = append(s.deferredMessages, message)
-	return true
-}
-
-func (s *durationCompleteMessageSession) SupportsCompleteMessages() bool {
-	return s.complete
-}
-
-func (s *durationCompleteMessageSession) SupportsCompleteMessagesWithoutResponse() bool {
-	return s.withoutResponse
-}
-
 func (p *durationArtifactLifecycleProbe) Accept(messages.StreamMessage) error {
 	p.accepted++
 	return nil
@@ -1014,9 +943,12 @@ func (p *durationArtifactLifecycleProbe) Close() error {
 
 var _ messages.SessionInferencer = (*durationTestInferencer)(nil)
 var _ messages.Session = (*durationTestSession)(nil)
-var _ messages.Session = (*durationCompleteMessageSession)(nil)
-var _ SessionImageMessageSender = (*durationCompleteMessageSession)(nil)
-var _ SessionImageMessageSenderWithoutResponse = (*durationCompleteMessageSession)(nil)
-var _ SessionDurationClock = (*durationTestClock)(nil)
-var _ SessionDurationTimer = (*durationTestTimer)(nil)
+var _ duration.TimerScheduler = (*durationTestClock)(nil)
+var _ duration.Timer = (*durationTestTimer)(nil)
 var _ duration.ArtifactLifecycle = (*durationArtifactLifecycleProbe)(nil)
+
+// runBoundedLoopForTest runs one loop under the sessionduration service.
+func runBoundedLoopForTest(ctx context.Context, out io.Writer, inferencer messages.SessionInferencer, opts sessionLoopOptions, maxDuration time.Duration, clock duration.TimerScheduler) error {
+	opts.durationBound, opts.durationClock = maxDuration, clock
+	return runAgentLoopSession(ctx, out, inferencer, opts)
+}

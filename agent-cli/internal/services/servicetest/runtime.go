@@ -16,6 +16,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
@@ -84,8 +86,8 @@ type ScheduledAudioInput = audioio.ScheduledAudioInput
 type SessionAudioInTurnBargeError = sessioncontract.SessionAudioInTurnBargeError
 type SessionTextSeed = impl.SessionTextSeed
 type SessionDiagnosticRecord = impl.SessionDiagnosticRecord
-type SessionDurationTimer = impl.SessionDurationTimer
-type SessionDurationClock = impl.SessionDurationClock
+type SessionDurationTimer = sessionduration.Timer
+type SessionDurationClock = sessionduration.TimerScheduler
 type SessionImageContinuationError = runtimeSession.LiveImageContinuationError
 type SessionRTCComponents = impl.SessionRTCComponents
 type SessionRTCDataPlane = impl.SessionRTCDataPlane
@@ -96,7 +98,7 @@ type SessionToolContinuationError = impl.SessionToolContinuationError
 type SessionToolDiagnostic = impl.SessionToolDiagnostic
 type SessionUnresolvedToolResultsError = sessioncontract.SessionUnresolvedToolResultsError
 
-const SessionMaxDurationReason = impl.SessionMaxDurationReason
+const SessionMaxDurationReason = sessionterminal.MaxDurationReason
 const SessionSilentProviderTimeoutClassification = impl.SessionSilentProviderTimeoutClassification
 const SessionTransportWebRTC = impl.SessionTransportWebRTC
 const SessionDiagnosticEventFailure = impl.SessionDiagnosticEventFailure

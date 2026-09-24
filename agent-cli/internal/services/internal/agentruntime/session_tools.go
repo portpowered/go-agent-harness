@@ -42,9 +42,8 @@ type sessionToolLifecycleObserver interface {
 	observeToolResult(messages.ToolCall, messages.ToolCallResponse, bool)
 }
 
-// sessionToolLifecycleMux preserves the optional recording hook while adding
-// the participant-owned liveness boundary. A running local tool must suppress
-// the provider watchdog; the next accepted response.create re-arms it.
+// sessionToolLifecycleMux adds the participant liveness boundary to the recording hook; the provider
+// call obligation is recorded before local execution so cancellation cannot outrun stream publication.
 type sessionToolLifecycleMux struct {
 	recording sessionToolLifecycleObserver
 	progress  sessiontrace.Observer
@@ -56,6 +55,7 @@ func (m sessionToolLifecycleMux) observeToolCall(call messages.ToolCall) {
 		m.runtime.ObserveToolCall(call)
 	}
 	if m.progress != nil {
+		m.progress.ObserveProviderToolCallWithID(call.ID, call.Name)
 		m.progress.BeginLocalToolExecution()
 	}
 	if m.recording != nil {
