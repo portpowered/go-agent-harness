@@ -5314,3 +5314,23 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   functional/integration/race/hermetic/Wire command plus the full `make prepush`
   on the new exact SHA, then repair any locally reproducible failure before
   considering handoff. Decision remains CONTINUE.
+
+# C276 public test file-budget repair checkpoint — 2026-09-24
+
+- Exact-head architecture verification on `00f6eddb815726679051656e555f6dc275c06635`
+  found `services/sessionduration/wire/wire_test.go` at 734 lines against the
+  600-line cap. Separated only the newly authored liveness-contract regressions
+  into `liveness_contract_test.go`; the existing file is now 599 lines and the
+  new file is 147 lines. No legacy-cluster tests were moved and no production
+  source changed. Focused liveness regressions pass, and architecture plus Wire
+  passes (2,017 files / 29,823 functions).
+- On `00f6eddb`, recording/replay functional and race, no-microphone normal/race,
+  sessionduration normal/race, tagged CLI/e2e selection, actual public cast-device
+  WAV regression, session race, Wire, embedding, hermetic, integration (312.718s),
+  and replay-regression checks passed. The exact-head architecture issue kept
+  prepush/handoff pending. The planned untagged e2e selection again failed at
+  package build constraints; tagged selection passed, with no e2e test match.
+- No push, PR, hosted CI, or review handoff occurred; unrelated integration
+  fixtures remain preserved. Exact next action: commit the file-budget repair and
+  this checkpoint, then rerun all C276 local commands and full `make prepush` on
+  the new exact SHA. Decision remains CONTINUE.
