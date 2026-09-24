@@ -27,13 +27,13 @@ func NewService() sessiontrace.Service {
 }
 
 func NewLifecycleService() sessiontrace.LifecycleService {
-	options := _wireOptionsValue
-	v := service2.New(options)
-	return v
+	v := _wireValue
+	lifecycleService := service2.New(v)
+	return lifecycleService
 }
 
 var (
-	_wireOptionsValue = lifecycle.Options{}
+	_wireValue = lifecycle.Options{}
 )
 
 func NewLiveRecorder(options sessiontrace.LiveRecorderOptions) session.LiveRecorder {
