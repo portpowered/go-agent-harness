@@ -3,9 +3,11 @@ package agentruntime
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -14,13 +16,12 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
-	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
-	terminalwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
-	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
+	sessionterminalwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	gwproviders "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
@@ -31,6 +32,7 @@ import (
 type sessionRuntimeMode string
 
 const (
+	defaultSessionAudioDevice                          = "default"
 	sessionRuntimeModeBareLive      sessionRuntimeMode = "bare-live"
 	sessionRuntimeModeInjectedLive  sessionRuntimeMode = "injected-live"
 	sessionRuntimeModeReplayGeneric sessionRuntimeMode = "replay-generic"
@@ -52,9 +54,19 @@ type sessionReplayDialer interface {
 	Model() string
 }
 
+type runtimeAudioOutputConfigurer interface {
+	SetSessionAudioOutput(models.AudioFormat, models.SampleRate)
+}
+
+type runtimeAudioInputConfigurer interface {
+	SetSessionAudioInput(models.AudioFormat, models.SampleRate)
+}
+
+type sessionAudioRequestProvider interface {
+	Request() inference.SessionRequest
+}
+
 type sessionRuntimeFactory struct {
-	durationService                    sessionduration.Service
-	durationRunner                     runtimeSession.DurationRunner
 	newDefaultLiveDialer               func() transport.Dialer
 	newRecordingDialer                 func(transport.Dialer, string, string) sessionRecordingDialer
 	newReplayDialer                    func(string) (sessionReplayDialer, error)
@@ -74,28 +86,11 @@ type sessionRuntimeFactory struct {
 // instance, keeping provider construction out of request dispatch.
 type SessionRuntimeFactory = sessionRuntimeFactory
 
-func NewSessionRuntimeFactory(service sessionduration.Service, runner runtimeSession.DurationRunner) SessionRuntimeFactory {
-	factory := newDefaultSessionRuntimeFactory()
-	factory.durationService = service
-	factory.durationRunner = runner
-	return factory
-}
-
-func durationServiceForOptions(opts SessionRunOptions) (sessionduration.Service, error) {
-	factory := opts.RuntimeFactory
-	if !factory.configured() {
-		factory = newDefaultSessionRuntimeFactory()
-	}
-	if factory.durationService == nil {
-		return nil, fmt.Errorf("session duration service is required")
-	}
-	return factory.durationService, nil
-}
+func NewSessionRuntimeFactory() SessionRuntimeFactory { return newDefaultSessionRuntimeFactory() }
 
 func (f sessionRuntimeFactory) configured() bool {
-	return f.durationService != nil || f.durationRunner != nil || f.newDefaultLiveDialer != nil || f.newReplayDialer != nil || f.newBareLiveSessionInferencer != nil || f.newRTCRuntime != nil
+	return f.newDefaultLiveDialer != nil || f.newReplayDialer != nil || f.newBareLiveSessionInferencer != nil || f.newRTCRuntime != nil
 }
-
 func newDefaultSessionRuntimeFactory() sessionRuntimeFactory {
 	return sessionRuntimeFactory{
 		newDefaultLiveDialer: func() transport.Dialer {
@@ -159,14 +154,12 @@ func (f sessionRuntimeFactory) newOpenAISessionInferencerForTools(sessionCfg con
 }
 
 type sessionRuntimePlan struct {
-	durationService        sessionduration.Service
-	durationRunner         runtimeSession.DurationRunner
 	mode                   sessionRuntimeMode
 	provider               string
 	model                  string
+	voice                  string
 	inputAudioSampleRate   int
 	outputAudioSampleRate  int
-	voiceGainDB            float64
 	capturePath            string
 	loopOut                io.Writer
 	inferencer             messages.SessionInferencer
@@ -184,7 +177,7 @@ type sessionRuntimePlan struct {
 	audioInputs            []ScheduledAudioInput
 	scheduledAudioDispatch ScheduledAudioDispatchPolicy
 	clockSource            platformclock.Source
-	runtime                *sessionRuntimeObservationRecorder
+	runtime                sessiontrace.RuntimeRecorder
 	rtcRuntime             SessionRTCRuntime
 	closeSession           func() error
 	selection              SessionRuntimeSelection
@@ -197,8 +190,7 @@ type sessionRuntimePlan struct {
 	capabilityCoordinator  SessionCapabilityCoordinator
 	captureClaim           *sessionRecordingClaim
 	captureClaimWired      bool
-	interactivePolicy      runtimeTools.InteractiveToolPolicy
-	turnRuntime            sessionturn.Runtime
+	interactivePolicy      *InteractiveToolPolicy
 	filesystemPolicy       *tools.FilesystemPolicy
 }
 
@@ -219,13 +211,13 @@ func (p sessionRuntimePlan) liveOutput(prefix string) (string, string) {
 	if p.rtcDeviceRequest.HasInput() {
 		inputDevice = p.rtcDeviceRequest.InputDevice
 		if inputDevice == "" {
-			inputDevice = "default"
+			inputDevice = defaultSessionAudioDevice
 		}
 	}
 	if p.rtcDeviceRequest.HasOutput() {
 		outputDevice = p.rtcDeviceRequest.OutputDevice
 		if outputDevice == "" {
-			outputDevice = "default"
+			outputDevice = defaultSessionAudioDevice
 		}
 	}
 	identity := fmt.Sprintf("provider=%s model=%s transport=%s input-device=%s output-device=%s", p.provider, p.model, transport, inputDevice, outputDevice)
@@ -235,22 +227,22 @@ func (p sessionRuntimePlan) liveOutput(prefix string) (string, string) {
 func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr error) {
 	reporter := p.loop.terminalReporter
 	if reporter == nil {
-		reporter = terminalwire.NewReporter()
+		reporter = sessionterminalwire.NewReporter()
 		p.loop.terminalReporter = reporter
 	}
-	if p.durationService == nil {
-		return fmt.Errorf("session duration service is required")
-	}
-	finalizer := p.durationService.NewFinalizer(p.finalizationPorts(nil, false))
+	finalizer := newSessionRuntimeFinalizer(p)
 	defer func() {
-		runErr = finalizer.Finish(ctx, out, runErr)
+		runErr = finalizer.finish(ctx, out, runErr)
+		if !sessionterminalwire.HasIndependentFailure(runErr) && p.replayCompletion != nil {
+			p.replayCompletion(reporter)
+		}
+		runErr = errors.Join(runErr, reporter.Publish(out, runErr))
 	}()
 	if p.replayIntegrityWarning != "" {
 		if _, err := fmt.Fprintln(out, p.replayIntegrityWarning); err != nil {
 			return err
 		}
 	}
-
 	if err := p.bindRTC(ctx, finalizer); err != nil {
 		return err
 	}
@@ -303,6 +295,30 @@ func writeSessionToolAnnouncement(out io.Writer, definitions []messages.ToolDefi
 	_, _ = fmt.Fprintln(out, "Tools: "+strings.Join(names, ", "))
 }
 
+// configureLoopObserver installs the shared stream observer for every session
+// runner mode, including the duration-bounded path which executes plan.loop
+// directly instead of calling plan.run.
+func (p sessionRuntimePlan) configureLoopObserver(loop *sessionLoopOptions) {
+	if loop == nil {
+		return
+	}
+	obs := sessiontracewire.NewObserver(sessiontrace.NewObserverOptions{
+		Sink:                   p.diagnostics,
+		Recorder:               p.metricsRecorder,
+		Provider:               p.provider,
+		Model:                  p.model,
+		StreamObserver:         p.streamObserver,
+		RuntimeRecorder:        p.runtime,
+		TerminalService:        sessionterminalwire.NewService(),
+		CancellationIntent:     loop.cancellationIntent,
+		LivenessClock:          loop.livenessClock,
+		RequireSessionUpdated:  loop.RequireSessionUpdated,
+		ScheduledAudioDispatch: sessiontrace.ScheduledAudioDispatchPolicy(loop.ScheduledAudioDispatch),
+	})
+	obs.ScheduleAudioInputs(p.audioInputs)
+	loop.observer = obs
+}
+
 // wireSessionRecordingClaim redirects one recording plan's capture flush
 // through its destination claim. It is kept separate from planning because an
 // injected session can add its fixture recorder after the generic runtime plan
@@ -336,6 +352,47 @@ func wireSessionRecordingClaim(plan sessionRuntimePlan, claim *sessionRecordingC
 	}
 	plan.captureClaimWired = true
 	return plan
+}
+
+func resolveSessionInteractiveToolPolicy(opts SessionRunOptions, definitions []messages.ToolDefinition) (InteractiveToolPolicy, error) {
+	if opts.InteractiveToolPolicy != nil {
+		policy := opts.InteractiveToolPolicy.Clone()
+		if err := policy.Validate(); err != nil {
+			return InteractiveToolPolicy{}, fmt.Errorf("resolve interactive tool policy: %w", err)
+		}
+		return policy, nil
+	}
+
+	loadedConfig := opts.LoadedConfig
+	if loadedConfig == nil && opts.ConfigDir != "" {
+		// The CLI composition root supplies LoadedConfig alongside its tool
+		// definitions. Direct service callers may only provide ConfigDir; honor
+		// an existing file there without creating a new config as a planning
+		// side effect. Provider resolution retains ownership of default-file
+		// creation when no file exists.
+		configPath := filepath.Join(opts.ConfigDir, config.ConfigFileName)
+		if _, err := os.Stat(configPath); err == nil {
+			storage, storageErr := config.NewDefaultConfigStorage(opts.ConfigDir)
+			if storageErr != nil {
+				return InteractiveToolPolicy{}, fmt.Errorf("initialize interactive tool configuration: %w", storageErr)
+			}
+			loadedConfig, storageErr = storage.Load()
+			if storageErr != nil {
+				return InteractiveToolPolicy{}, fmt.Errorf("load interactive tool configuration: %w", storageErr)
+			}
+		} else if !os.IsNotExist(err) {
+			return InteractiveToolPolicy{}, fmt.Errorf("inspect interactive tool configuration: %w", err)
+		}
+	}
+	settings := config.DefaultInteractiveToolConfig()
+	if loadedConfig != nil {
+		resolved, err := loadedConfig.ResolveInteractiveToolConfig()
+		if err != nil {
+			return InteractiveToolPolicy{}, fmt.Errorf("resolve interactive tool policy: %w", err)
+		}
+		settings = resolved
+	}
+	return NewInteractiveToolPolicyForSession(settings, definitions, opts.ToolDefinitionBase, opts.BrowserToolsEnabled)
 }
 
 func planSessionRuntimeMode(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {

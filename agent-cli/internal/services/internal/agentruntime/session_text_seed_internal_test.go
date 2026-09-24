@@ -3,23 +3,18 @@ package agentruntime
 import (
 	"context"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
-	sessionturnwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn/wire"
 )
 
+// capturingSeedSession records every message forwarded past the seed
+// substitution boundary so tests can assert on what would reach the wire.
 type capturingSeedSession struct {
-	mu   sync.Mutex
 	sent []messages.StreamMessage
-	done chan struct{}
 }
 
 func (s *capturingSeedSession) Send(_ context.Context, msg messages.StreamMessage) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.sent = append(s.sent, msg)
 	return true
 }
@@ -28,44 +23,24 @@ func (s *capturingSeedSession) Receive() *messages.TypedBuffer[messages.StreamMe
 	return messages.NewTypedBuffer[messages.StreamMessage](1)
 }
 
-func (s *capturingSeedSession) Done() <-chan struct{} { return s.done }
-
-func (s *capturingSeedSession) Close() error {
-	select {
-	case <-s.done:
-	default:
-		close(s.done)
-	}
-	return nil
+func (s *capturingSeedSession) Done() <-chan struct{} {
+	done := make(chan struct{})
+	return done
 }
 
-type capturingSeedInferencer struct{ session messages.Session }
+func (s *capturingSeedSession) Close() error { return nil }
 
-func (i *capturingSeedInferencer) ConnectSession(context.Context) (messages.Session, error) {
-	return i.session, nil
-}
-
-func TestSessionTextSeedAdapterDelegatesReplacementToRuntimeService(t *testing.T) {
+func TestSessionTextSeedSessionSubstitutesEverySendPath(t *testing.T) {
 	const seedValue = "Say hello in one short sentence."
-	const wirePrompt = "\x00agent-cli-session-text-seed:test:1"
-	capturing := &capturingSeedSession{done: make(chan struct{})}
-	service := sessionturnwire.NewService(sessionturnwire.Dependencies{Allocator: sessionturn.AllocatorFunc(func() string { return wirePrompt })})
-	runtime, err := service.Prepare(context.Background(), sessionturn.Request{
-		SessionInferencer: &capturingSeedInferencer{session: capturing},
-		Seed:              sessionturn.Seed{Value: seedValue, Present: true},
-	})
-	if err != nil {
-		t.Fatalf("Prepare: %v", err)
+	wirePrompt := nextSessionTextWirePrompt()
+	capturing := &capturingSeedSession{}
+	session := &sessionTextSeedSession{
+		inner:      capturing,
+		wirePrompt: wirePrompt,
+		value:      seedValue,
+		receive:    messages.NewTypedBuffer[messages.StreamMessage](16),
 	}
-	session, err := runtime.Inferencer().ConnectSession(context.Background())
-	if err != nil {
-		t.Fatalf("ConnectSession: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := session.Close(); err != nil {
-			t.Errorf("cleanup close: %v", err)
-		}
-	})
+	go session.forwardIncoming()
 
 	ctx := context.Background()
 	if !session.Send(ctx, messages.StreamMessage{
@@ -82,23 +57,20 @@ func TestSessionTextSeedAdapterDelegatesReplacementToRuntimeService(t *testing.T
 		t.Fatal("second send rejected")
 	}
 
-	capturing.mu.Lock()
-	sent := append([]messages.StreamMessage(nil), capturing.sent...)
-	capturing.mu.Unlock()
-	if len(sent) != 2 {
-		t.Fatalf("forwarded message count = %d, want 2", len(sent))
+	if len(capturing.sent) != 2 {
+		t.Fatalf("forwarded message count = %d, want 2", len(capturing.sent))
 	}
-	first, ok := sent[0].Value.(*messages.TextDeltaValue)
+	first, ok := capturing.sent[0].Value.(*messages.TextDeltaValue)
 	if !ok || first.Content != seedValue {
-		t.Fatalf("connect-time prompt = %#v, want %q", sent[0].Value, seedValue)
+		t.Fatalf("connect-time prompt = %#v, want %q", capturing.sent[0].Value, seedValue)
 	}
-	second, ok := sent[1].Value.(*messages.TextDeltaValue)
+	second, ok := capturing.sent[1].Value.(*messages.TextDeltaValue)
 	if !ok || second.Content != followUp {
-		t.Fatalf("runtime Send text = %#v, want %q", sent[1].Value, followUp)
+		t.Fatalf("runtime Send text = %#v, want %q", capturing.sent[1].Value, followUp)
 	}
-	for i, msg := range sent {
+	for i, msg := range capturing.sent {
 		value, _ := msg.Value.(*messages.TextDeltaValue)
-		if value != nil && strings.Contains(value.Content, "agent-cli-session-text-seed:") && value.Content != seedValue {
+		if value != nil && strings.Contains(value.Content, sessionTextWirePrefix) {
 			t.Fatalf("forwarded message %d still carries the wire sentinel: %q", i, value.Content)
 		}
 	}

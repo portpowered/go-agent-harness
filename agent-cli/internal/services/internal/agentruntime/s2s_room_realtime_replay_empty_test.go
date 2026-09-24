@@ -118,10 +118,9 @@ func TestRunRoomWithResult_EmptyResponseDoesNotAdvanceTurnLedger(t *testing.T) {
 	roomCtx, cancel := context.WithTimeout(context.Background(), roomRealtimeReplayTestTimeout)
 	defer cancel()
 
-	opts := newTestRoomRunOptions(RoomRunOptions{
-		AudioService: newTestAudioIOService(),
-		Manifest:     manifest,
-		ConfigDir:    configDir, ModelCatalog: testModelCatalog(),
+	opts := RoomRunOptions{
+		Manifest: manifest, AudioService: newTestAudioIOService(),
+		ConfigDir: configDir, ModelCatalog: testModelCatalog(),
 		BaseURL:     "wss://room-replay.invalid/v1/realtime",
 		MixerConfig: mixerConfig,
 		CredentialLookup: func(name string) (string, bool) {
@@ -142,7 +141,7 @@ func TestRunRoomWithResult_EmptyResponseDoesNotAdvanceTurnLedger(t *testing.T) {
 				turns <- participantID
 			}
 		},
-	})
+	}
 
 	runDone := make(chan roomTestRunOutcome, 1)
 	go func() {

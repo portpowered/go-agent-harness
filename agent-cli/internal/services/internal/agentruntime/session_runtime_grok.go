@@ -9,9 +9,41 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
+	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
+
+func newGrokDeviceProbeSessionInferencer(opts SessionRunOptions, instructions string) (messages.SessionInferencer, string, error) {
+	sessionConfig, err := resolveGrokSessionConfig(opts)
+	if err != nil {
+		return nil, "", err
+	}
+	model := sessionConfig.Model
+	request := deviceProbeSessionConfig(model, instructions, models.AudioFormatPCM16, models.AudioFormatPCM16)
+	request.TurnDetection = cloneSessionTurnDetection(opts.TurnDetection)
+	transcription, err := resolveSessionTranscription(opts, sessionProviderGrok, true)
+	if err != nil {
+		return nil, "", err
+	}
+	request.InputAudioTranscription = &transcription
+	request.Tools = append([]messages.ToolDefinition(nil), opts.ToolDefinitions...)
+	dialer, recorder := resolveSessionWebSocketDialer(opts, sessionProviderGrok, model, func() transport.Dialer { return grok.NewDefaultWebSocketDialer() })
+	providerOpts := []grok.Option{grok.WithAPIKey(sessionConfig.APIKey), grok.WithWebSocketDialer(dialer)}
+	if strings.TrimSpace(sessionConfig.BaseURL) != "" {
+		providerOpts = append(providerOpts, grok.WithBaseURL(sessionConfig.BaseURL))
+	}
+	providerGateway, err := gateway.NewSessionGateway(gateway.WithSessionProvider(grok.New(providerOpts...)))
+	if err != nil {
+		return nil, "", fmt.Errorf("create Grok realtime session gateway: %w", err)
+	}
+	inferencer := inference.NewSessionGatewayInferencer(providerGateway, inference.WithSessionRequest(inference.SessionRequest{Config: request}))
+	return wrapSessionInferencerCaptureFlush(inferencer, recorder, opts.RecordSessionCapturePath), model, nil
+}
 
 func planGrokRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
 	sessionCfg, err := resolveGrokSessionConfig(opts)
@@ -26,7 +58,7 @@ func planGrokRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFactory
 	if liveDialer == nil {
 		return sessionRuntimePlan{}, missingOwnedSessionDialerError(sessionProviderGrok)
 	}
-	liveDialer = observeSessionWire(liveDialer, opts)
+	liveDialer = wire.NewProviderWireDialer(liveDialer, opts.RuntimeObserver, platformclock.Ensure(opts.Clock))
 	recordingDialer := factory.newRecordingDialer(liveDialer, sessionProviderGrok, sessionCfg.Model)
 	sessionInferencer, err := factory.newGrokSessionInferencerForTools(sessionCfg, recordingDialer, opts.ToolDefinitions)
 	if err != nil {

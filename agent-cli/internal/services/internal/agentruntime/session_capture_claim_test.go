@@ -30,7 +30,7 @@ func TestSessionRecordingClaimConcurrentPlansHaveOneProviderBuilder(t *testing.T
 			dialerCalls.Add(1)
 			return &stubRuntimeDialer{id: "claim-test"}
 		},
-		newRecordingDialer: defaultSessionRuntimeFactory.newRecordingDialer,
+		newRecordingDialer: defaultSessionRuntimeFactory().newRecordingDialer,
 		newGrokSessionWithTools: func(_ config.GrokConfig, _ transport.Dialer, _ []messages.ToolDefinition) (messages.SessionInferencer, error) {
 			builderCalls.Add(1)
 			return &captureClaimNeverConnectInferencer{}, nil
@@ -48,11 +48,11 @@ func TestSessionRecordingClaimConcurrentPlansHaveOneProviderBuilder(t *testing.T
 		go func() {
 			defer wait.Done()
 			<-start
-			plan, err := planSessionRuntimeWithFactory(context.Background(), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+			plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 				RecordPath:   path,
 				Provider:     config.ProviderGrok,
 				LoadedConfig: loaded,
-			}), factory)
+			}, factory)
 			results <- struct {
 				plan sessionRuntimePlan
 				err  error
@@ -100,10 +100,10 @@ func TestSessionRecordingClaimRejectsExistingCaptureWithoutChangingBytes(t *test
 		t.Fatalf("write existing capture: %v", err)
 	}
 
-	err := RunSession(context.Background(), io.Discard, newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+	err := RunSession(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		RecordPath: path,
 		Provider:   config.ProviderGrok,
-	}))
+	})
 	if err == nil || !errors.Is(err, ErrSessionRecordingDestinationOccupied) {
 		t.Fatalf("existing capture error = %v, want occupied destination", err)
 	}
@@ -161,11 +161,11 @@ func TestSessionRecordingClaimReleasesAfterPreDialAndWriteFailure(t *testing.T) 
 		Provider: config.ProviderGrok,
 		Grok:     &config.GrokConfig{Model: "grok-pre-dial-test", APIKey: "test-key"},
 	}}
-	plan, err := planSessionRuntimeWithFactory(context.Background(), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		RecordPath:   path,
 		Provider:     config.ProviderGrok,
 		LoadedConfig: loaded,
-	}), factory)
+	}, factory)
 	if err != nil {
 		t.Fatalf("plan pre-dial failure: %v", err)
 	}

@@ -25,7 +25,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/sight"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
+	runtimeBrowser "github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -34,7 +34,7 @@ import (
 // RunSessionWithRecordingDirectory is the directory-recording entry point for
 // callers that do not need the optional audio-out, prompt, or duration seams.
 func RunSessionWithRecordingDirectory(ctx context.Context, out io.Writer, opts SessionRunOptions, directory string) error {
-	return runSessionWithRecordingDirectory(ctx, out, opts, directory, "", 0, SessionTextSeed{}, "", false, nil)
+	return runSessionWithRecordingDirectory(ctx, out, opts, directory, "", 0, SessionTextSeed{}, "", false)
 }
 
 // RunSessionWithRecordingDirectoryAndAudioOutAndTextSeedAndMaxDuration runs the
@@ -50,7 +50,7 @@ func RunSessionWithRecordingDirectoryAndAudioOutAndTextSeedAndMaxDuration(
 	maxDuration time.Duration,
 	seed SessionTextSeed,
 ) (runErr error) {
-	return runSessionWithRecordingDirectory(ctx, out, opts, directory, audioOutPath, maxDuration, seed, "", false, nil)
+	return runSessionWithRecordingDirectory(ctx, out, opts, directory, audioOutPath, maxDuration, seed, "", false)
 }
 
 // RunSessionWithRecordingDirectoryAndInstructionsAndAudioOutAndTextSeedAndMaxDuration
@@ -67,137 +67,7 @@ func RunSessionWithRecordingDirectoryAndInstructionsAndAudioOutAndTextSeedAndMax
 	seed SessionTextSeed,
 	systemPrompt string,
 ) (runErr error) {
-	return runSessionWithRecordingDirectory(ctx, out, opts, directory, audioOutPath, maxDuration, seed, systemPrompt, true, nil)
-}
-
-// RunSessionWithRecordingDirectoryAndInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration
-// composes the directory observer with the production file/stdin audio-input
-// source. Audio frames travel through sessionLoopOptions.AudioIn, so the
-// recorder observes the same outbound stream that the provider receives.
-func RunSessionWithRecordingDirectoryAndInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(
-	ctx context.Context,
-	out io.Writer,
-	opts SessionRunOptions,
-	directory string,
-	audioOutPath string,
-	maxDuration time.Duration,
-	seed SessionTextSeed,
-	input SessionAudioInput,
-	systemPrompt string,
-) (runErr error) {
-	if !sessionAudioInputSelected(input) {
-		return RunSessionWithRecordingDirectoryAndInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx, out, opts, directory, audioOutPath, maxDuration, seed, systemPrompt)
-	}
-	return runSessionWithRecordingDirectory(ctx, out, opts, directory, audioOutPath, maxDuration, seed, systemPrompt, true, &input)
-}
-
-// RunSessionWithRecordingDirectoryAndInstructionsAndAudioFilesAndOutputAndTextSeedAndMaxDuration
-// drives multiple finite audio files through one persistent recorded session.
-// The existing singular audio-input entry point remains unchanged for callers
-// that want one paced source and one response.
-func RunSessionWithRecordingDirectoryAndInstructionsAndAudioFilesAndOutputAndTextSeedAndMaxDuration(
-	ctx context.Context,
-	out io.Writer,
-	opts SessionRunOptions,
-	directory string,
-	audioOutPath string,
-	maxDuration time.Duration,
-	seed SessionTextSeed,
-	audioPaths []string,
-	systemPrompt string,
-) (runErr error) {
-	if err := sessioncontract.ValidateSessionAudioInTurnBarge(opts.AudioInTurnBarge, len(audioPaths)); err != nil {
-		return err
-	}
-	var coordinator SessionCapabilityCoordinator
-	opts, coordinator = prepareSessionCapabilityCoordinator(opts)
-	defer func() {
-		closeSessionCapabilityIfNeeded(coordinator, &runErr)
-	}()
-
-	if len(audioPaths) == 0 {
-		return RunSessionWithRecordingDirectoryAndInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx, out, opts, directory, audioOutPath, maxDuration, seed, systemPrompt)
-	}
-	if err := validateSessionRecordingOptions(opts); err != nil {
-		return err
-	}
-	claim, err := ensureSessionRecordingClaim(&opts)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = claim.release() }()
-	scheduled, err := prepareScheduledAudioInputs(audioPaths)
-	if err != nil {
-		return err
-	}
-	// The positional message (or explicit --prompt seed) is the first user
-	// turn. Delay scheduled audio until that response completes so the two
-	// caller-provided input surfaces cannot race each other on the provider
-	// session's outbound queue.
-	if strings.TrimSpace(opts.Prompt) != "" || seed.Present {
-		for index := range scheduled {
-			scheduled[index].AfterCompletedTurns++
-		}
-	}
-	opts.AudioInputs = scheduled
-	opts.WaitForClose = true
-	return runSessionWithRecordingDirectory(ctx, out, opts, directory, audioOutPath, maxDuration, seed, systemPrompt, true, nil)
-}
-
-// RunSessionWithImagesAndRecordingDirectoryAndAudioFilesAndOutputAndTextSeedAndMaxDuration
-// composes one ordered image turn with the repeatable finite spoken-turn path.
-// The image wrapper queues its complete user item without requesting a response;
-// the first scheduled audio input then supplies the response boundary, so the
-// image is consumed exactly once as part of scheduled turn one.
-func RunSessionWithImagesAndRecordingDirectoryAndAudioFilesAndOutputAndTextSeedAndMaxDuration(
-	ctx context.Context,
-	out io.Writer,
-	opts SessionImageRunOptions,
-	directory string,
-	audioOutPath string,
-	maxDuration time.Duration,
-	seed SessionTextSeed,
-	audioPaths []string,
-	systemPrompt string,
-) (runErr error) {
-	if len(audioPaths) == 0 {
-		opts.AudioOutPath = audioOutPath
-		opts.MaxDuration = maxDuration
-		opts.TextSeed = seed
-		opts.SystemPrompt = systemPrompt
-		return RunSessionWithImagesAndRecordingDirectory(ctx, out, opts, directory)
-	}
-	if err := sessioncontract.ValidateSessionAudioInTurnBarge(opts.AudioInTurnBarge, len(audioPaths)); err != nil {
-		return err
-	}
-	if err := validateSessionRecordingOptions(opts.SessionRunOptions); err != nil {
-		return err
-	}
-	claim, err := ensureSessionRecordingClaim(&opts.SessionRunOptions)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = claim.release() }()
-	directoryClaim, _, err := ensureSessionRecordingDirectoryClaim(&opts.SessionRunOptions, directory)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = directoryClaim.release() }()
-	scheduled, err := prepareScheduledAudioInputs(audioPaths)
-	if err != nil {
-		return err
-	}
-	// Unlike the ordinary text-plus-scheduled-audio composition, the image
-	// wrapper deliberately defers its response. Keep scheduled turn one at
-	// AfterCompletedTurns=0 so its audio completes the image turn rather than
-	// waiting for a response that has not been requested.
-	opts.SessionRunOptions.AudioInputs = scheduled
-	opts.SessionRunOptions.WaitForClose = true
-	opts.AudioOutPath = audioOutPath
-	opts.MaxDuration = maxDuration
-	opts.TextSeed = seed
-	opts.SystemPrompt = systemPrompt
-	return runSessionWithImagesAndRecordingDirectory(ctx, out, opts, directory, nil)
+	return runSessionWithRecordingDirectory(ctx, out, opts, directory, audioOutPath, maxDuration, seed, systemPrompt, true)
 }
 
 // RunSessionWithImagesAndRecordingDirectory composes the image-turn wrapper
@@ -210,22 +80,10 @@ func RunSessionWithImagesAndRecordingDirectory(
 	opts SessionImageRunOptions,
 	directory string,
 ) (runErr error) {
-	return runSessionWithImagesAndRecordingDirectory(ctx, out, opts, directory, nil)
-}
-
-// RunSessionWithImagesAndRecordingDirectoryAndAudioInput adds the production
-// file/stdin audio source to the composed image and directory-recording path.
-func RunSessionWithImagesAndRecordingDirectoryAndAudioInput(
-	ctx context.Context,
-	out io.Writer,
-	opts SessionImageRunOptions,
-	directory string,
-	input SessionAudioInput,
-) (runErr error) {
-	if !sessionAudioInputSelected(input) {
-		return RunSessionWithImagesAndRecordingDirectory(ctx, out, opts, directory)
+	if opts.AudioOutPath != "" {
+		return ErrLegacyAudioRuntimeRetired
 	}
-	return runSessionWithImagesAndRecordingDirectory(ctx, out, opts, directory, &input)
+	return runSessionWithImagesAndRecordingDirectory(ctx, out, opts, directory)
 }
 
 func runSessionWithImagesAndRecordingDirectory(
@@ -233,7 +91,6 @@ func runSessionWithImagesAndRecordingDirectory(
 	out io.Writer,
 	opts SessionImageRunOptions,
 	directory string,
-	audioInput *SessionAudioInput,
 ) (runErr error) {
 	var coordinator SessionCapabilityCoordinator
 	opts.SessionRunOptions, coordinator = prepareSessionCapabilityCoordinator(opts.SessionRunOptions)
@@ -243,7 +100,7 @@ func runSessionWithImagesAndRecordingDirectory(
 
 	paths := append([]string(nil), opts.ImagePaths...)
 	if len(paths) == 0 {
-		return runSessionWithRecordingDirectory(ctx, out, opts.SessionRunOptions, directory, opts.AudioOutPath, opts.MaxDuration, opts.TextSeed, opts.SystemPrompt, true, audioInput)
+		return runSessionWithRecordingDirectory(ctx, out, opts.SessionRunOptions, directory, "", opts.MaxDuration, opts.TextSeed, opts.SystemPrompt, true)
 	}
 	if err := sessioncontract.ValidateSessionMaxDuration(opts.MaxDuration); err != nil {
 		return err
@@ -261,54 +118,32 @@ func runSessionWithImagesAndRecordingDirectory(
 		return err
 	}
 	defer func() { _ = directoryClaim.release() }()
-	var parts []messages.ImagePart
-	var imageCleanup func() error
-	opts.SessionRunOptions, parts, imageCleanup, err = prepareSessionImageRun(ctx, opts.SessionRunOptions, paths, opts.TextSeed)
+	metadata, err := resolveSessionImageCapabilities(opts.SessionRunOptions)
 	if err != nil {
 		return err
 	}
-	opts.SessionRunOptions.sessionImageCleanup = imageCleanup
-	imageCleanupOwned := true
-	defer func() {
-		if imageCleanupOwned {
-			runErr = errors.Join(runErr, imageCleanup())
-		}
-	}()
-	var audioSource *sessionAudioSource
-	if audioInput != nil {
-		if err := validateSessionAudioInput(*audioInput); err != nil {
-			return err
-		}
-		audioSource, err = openSessionAudioInput(*audioInput)
-		if err != nil {
-			return err
-		}
-		defer func() {
-			if closeErr := audioSource.Close(); closeErr != nil {
-				runErr = errors.Join(runErr, closeErr)
-			}
-		}()
-		opts.SessionRunOptions.ClientOwnsAudioTurnBoundaries = true
-	}
-	plan, _, cleanup, err := planSessionImageRuntimeForDirectory(ctx, opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, audioSource != nil || len(opts.SessionRunOptions.AudioInputs) > 0)
+	opts.SessionRunOptions.sessionImageCapabilities = cloneSessionImageCapabilities(&metadata)
+	parts, err := PrepareSessionImageParts(paths, metadata)
 	if err != nil {
 		return err
 	}
-	imageCleanupOwned = false
+	if opts.TextSeed.Present {
+		opts.SessionRunOptions.Prompt = opts.TextSeed.Value
+		opts.SessionRunOptions.PromptProvided = true
+	}
+	var imageCleanup func()
+	opts.SessionRunOptions, imageCleanup, err = prepareSessionImageToolAccess(opts.SessionRunOptions, paths, parts)
+	if err != nil {
+		return err
+	}
+	defer imageCleanup()
+	plan, wirePrompt, cleanup, err := planSessionImageRuntimeForDirectory(ctx, opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, len(opts.SessionRunOptions.AudioInputs) > 0)
+	if err != nil {
+		return err
+	}
 	defer cleanup()
-	if audioSource != nil {
-		audioSource.bindRuntime(plan.runtime, plan.clockSource)
-		plan.loop.CloseAfterOpen = false
-		plan.loop.AudioIn = audioSource
-		plan.loop.MaxDuration = opts.MaxDuration
-		// A finite image-plus-audio source can produce an intermediate provider
-		// response containing a tool call. Keep the session open through the
-		// tool result and the follow-up assistant response.
-		plan.loop.RequireAssistantResponse = true
-		plan.loop.RequireTerminalAssistantResponse = true
-	}
 	recording := newSessionDirectoryRecording(destination, plan, opts.SessionRunOptions)
-	recording.browser.start(ctx)
+	recording.startBrowser(ctx)
 	plan.loop.toolLifecycleObserver = recording
 	plan.loop.terminalSummaryRecorder = recording
 	if plan.inferencer != nil {
@@ -317,7 +152,7 @@ func runSessionWithImagesAndRecordingDirectory(
 			recording: recording,
 		}
 	}
-	runErr = runSessionImagePlan(ctx, out, plan, opts)
+	runErr = runSessionImagePlan(ctx, out, plan, opts, wirePrompt)
 	return finalizeSessionDirectoryRecording(runErr, recording)
 }
 func runSessionWithRecordingDirectory(
@@ -330,7 +165,6 @@ func runSessionWithRecordingDirectory(
 	seed SessionTextSeed,
 	systemPrompt string,
 	withInstructions bool,
-	audioInput *SessionAudioInput,
 ) (runErr error) {
 	opts, coordinator := prepareSessionCapabilityCoordinator(opts)
 	defer func() {
@@ -338,10 +172,19 @@ func runSessionWithRecordingDirectory(
 	}()
 
 	if strings.TrimSpace(directory) == "" {
-		if withInstructions {
-			return RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx, out, opts, audioOutPath, maxDuration, seed, systemPrompt)
+		if audioOutPath != "" {
+			return ErrLegacyAudioRuntimeRetired
 		}
-		return RunSessionWithAudioOutAndTextSeedAndMaxDuration(ctx, out, opts, audioOutPath, maxDuration, seed)
+		if withInstructions {
+			return RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx, out, opts, "", maxDuration, seed, systemPrompt)
+		}
+		if maxDuration == 0 {
+			return RunSessionWithTextSeed(ctx, out, opts, seed)
+		}
+		return RunSessionWithTextSeedAndMaxDuration(ctx, out, opts, maxDuration, seed)
+	}
+	if audioOutPath != "" {
+		return ErrLegacyAudioRuntimeRetired
 	}
 	if err := sessioncontract.ValidateSessionMaxDuration(maxDuration); err != nil {
 		return err
@@ -360,47 +203,14 @@ func runSessionWithRecordingDirectory(
 	}
 	defer func() { _ = directoryClaim.release() }()
 
-	if audioInput != nil {
-		// The finite source sends MESSAGE.END after its final frame. Keep the
-		// provider from auto-committing the same buffer through server VAD.
-		opts.ClientOwnsAudioTurnBoundaries = true
-	}
-	if audioOutPath != "" {
-		opts.AudioOutputRequested = true
-	}
-	plan, cleanup, err := planSessionForDirectoryRecordingWithInstructions(ctx, opts, systemPrompt, withInstructions)
+	plan, cleanup, err := planSessionForDirectoryRecordingWithInstructionsAndContext(ctx, opts, systemPrompt, withInstructions)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
-	var audioSource *sessionAudioSource
-	if audioInput != nil {
-		if err := validateSessionAudioInput(*audioInput); err != nil {
-			return err
-		}
-		audioSource, err = openSessionAudioInput(*audioInput)
-		if err != nil {
-			return err
-		}
-		defer func() {
-			if closeErr := audioSource.Close(); closeErr != nil {
-				runErr = errors.Join(runErr, closeErr)
-			}
-		}()
-		plan.loop.CloseAfterOpen = false
-		plan.loop.AudioIn = audioSource
-		plan.loop.MaxDuration = maxDuration
-		// A finite audio source can produce an intermediate provider response
-		// containing a tool call. Keep the session open through the tool result
-		// and the follow-up assistant response before treating MESSAGE.END as
-		// terminal.
-		plan.loop.RequireAssistantResponse = true
-		audioSource.bindRuntime(plan.runtime, plan.clockSource)
-	}
-
 	recording := newSessionDirectoryRecording(destination, plan, opts)
-	recording.browser.start(ctx)
+	recording.startBrowser(ctx)
 	plan.loop.toolLifecycleObserver = recording
 	plan.loop.terminalSummaryRecorder = recording
 	if plan.inferencer != nil {
@@ -409,62 +219,44 @@ func runSessionWithRecordingDirectory(
 			recording: recording,
 		}
 	}
-	turnRuntime, err := prepareSessionRecordingTurnRuntime(ctx, &plan, seed)
-	if err != nil {
-		return err
-	}
 
-	audioOutput, audioWrapper, textOutput, err := prepareSessionRecordingOutputs(ctx, &plan, out, audioOutPath, seed, turnRuntime)
-	if err != nil {
-		return err
+	var textOutput *sessionTextOutput
+	if seed.Present {
+		wirePrompt := nextSessionTextWirePrompt()
+		plan.loop.Prompt = wirePrompt
+		if plan.inferencer != nil {
+			textOutput = &sessionTextOutput{writer: out}
+			plan.inferencer = &sessionTextSeedInferencer{
+				inner:      plan.inferencer,
+				wirePrompt: wirePrompt,
+				value:      seed.Value,
+			}
+		}
 	}
 
 	sessionOut := out
 	if textOutput != nil {
 		sessionOut = textOutput
 	}
-	if audioOutPath == "-" {
-		sessionOut = io.Discard
-	}
-	if audioSource != nil {
-		// The duration runner predates the shared AudioIn producer; keep the
-		// audio-enabled path on the loop that starts and joins that producer;
-		// its MaxDuration timeout provides the same bounded session lifetime.
-		runErr = plan.run(ctx, sessionOut)
-	} else if maxDuration == 0 {
+	if maxDuration == 0 {
 		runErr = plan.run(ctx, sessionOut)
 	} else {
-		durationCtx, durationErr := plan.durationService.PrepareArtifacts(ctx)
+		durationCtx, durationErr := prepareSessionDurationArtifacts(ctx)
 		if durationErr != nil {
 			runErr = durationErr
-			if audioOutput != nil {
-				if closeErr := audioOutput.close(); closeErr != nil {
-					runErr = errors.Join(runErr, closeErr)
-				}
-			}
 			return finalizeSessionDirectoryRecording(runErr, recording)
 		}
-		durationCtx = plan.durationService.WithTerminalRecorder(durationCtx, recording)
+		durationCtx = withSessionDurationTerminalRecorder(durationCtx, recording)
 		runErr = runSessionDurationPlan(durationCtx, sessionOut, plan, maxDuration, nil)
 	}
 
-	if audioWrapper != nil {
-		if outputErr := audioWrapper.Wait(); outputErr != nil {
-			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", audioOutPath, outputErr))
-		}
-	}
-	if audioOutput != nil {
-		if closeErr := audioOutput.close(); closeErr != nil {
-			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", audioOutPath, closeErr))
-		}
-	}
-	if textOutput != nil {
-		runErr = errors.Join(runErr, textOutput.Err())
-	}
 	return finalizeSessionDirectoryRecording(runErr, recording)
 }
 
-// finalizeSessionDirectoryRecording preserves both run and recording failures.
+// finalizeSessionDirectoryRecording joins provider, cancellation, or runtime
+// failures with every recording validation and persistence failure. A caller
+// can therefore distinguish a failed session from a recording that was not
+// published, even when both failures happen during the same shutdown.
 func finalizeSessionDirectoryRecording(runErr error, recording *sessionDirectoryRecording) error {
 	return errors.Join(runErr, recording.Finalize())
 }
@@ -478,28 +270,9 @@ func validateSessionRecordingOptions(opts SessionRunOptions) error {
 	return validateSessionRunOptions(opts)
 }
 
-func planSessionForDirectoryRecording(opts SessionRunOptions) (sessionRuntimePlan, func(), error) {
-	return planSessionForDirectoryRecordingWithInstructions(context.Background(), opts, "", false)
-}
-
-func planSessionForDirectoryRecordingWithInstructions(ctx context.Context, opts SessionRunOptions, systemPrompt string, withInstructions bool) (sessionRuntimePlan, func(), error) {
-	planOpts := opts
-	cleanup := func() {}
-
-	var plan sessionRuntimePlan
-	var err error
-	if !withInstructions || (opts.ReplayPath != "" && opts.SessionInferencer == nil) {
-		plan, err = planSessionRuntimeWithContext(ctx, planOpts)
-	} else {
-		instructions, instructionErr := sessionInstructionText(ctx, opts, systemPrompt)
-		if instructionErr != nil {
-			cleanup()
-			return sessionRuntimePlan{}, func() {}, instructionErr
-		}
-		plan, err = planSessionWithResolvedInstructionsContext(ctx, planOpts, instructions)
-	}
+func planSessionForDirectoryRecordingWithInstructionsAndContext(ctx context.Context, opts SessionRunOptions, systemPrompt string, withInstructions bool) (sessionRuntimePlan, func(), error) {
+	plan, err := buildSessionDirectoryRecordingPlan(ctx, opts, systemPrompt, withInstructions)
 	if err != nil {
-		cleanup()
 		return sessionRuntimePlan{}, func() {}, err
 	}
 	if opts.RecordPath != "" && opts.SessionInferencer != nil {
@@ -526,7 +299,18 @@ func planSessionForDirectoryRecordingWithInstructions(ctx context.Context, opts 
 		}
 		plan = wireSessionRecordingClaim(plan, plan.captureClaim)
 	}
-	return plan, cleanup, nil
+	return plan, func() {}, nil
+}
+
+func buildSessionDirectoryRecordingPlan(ctx context.Context, opts SessionRunOptions, systemPrompt string, withInstructions bool) (sessionRuntimePlan, error) {
+	if !withInstructions || (opts.ReplayPath != "" && opts.SessionInferencer == nil) {
+		return planSessionRuntimeWithContext(ctx, opts)
+	}
+	instructions, err := resolveSessionInstructionsContext(ctx, opts, systemPrompt)
+	if err != nil {
+		return sessionRuntimePlan{}, err
+	}
+	return planSessionWithResolvedInstructionsContext(ctx, opts, instructions)
 }
 
 func prepareSessionRecordingDestination(path string) (string, error) {
@@ -607,7 +391,8 @@ type sessionDirectoryRecording struct {
 	terminal         *transcript.RecordingTerminalSummary
 	conversation     sessionConversationCollector
 	imageArtifacts   []transcript.RecordingArtifact
-	browser          *sessionBrowserRecording
+	browser          runtimeBrowser.Recorder
+	browserErr       error
 
 	finalizeOnce sync.Once
 	finalizeErr  error
@@ -633,23 +418,24 @@ func newSessionDirectoryRecording(destination string, plan sessionRuntimePlan, o
 	// time. A fixed base makes paired captures comparable while the shared
 	// deterministic clock keeps both transcript sides on the same timeline.
 	base := sessionRecordingClockBase
-	return &sessionDirectoryRecording{
+	recording := &sessionDirectoryRecording{
 		destination:    destination,
 		directoryClaim: opts.recordingDirectoryClaim,
 		base:           base,
 		clock:          platformclock.NewDeterministic(base, time.Nanosecond),
 		conversation:   sessionConversationCollector{now: time.Now},
 		metadata: transcript.RecordingMetadata{
-			Transport: "websocket",
-			Model:     sessionRecordingModel(opts, plan),
-			ClockBase: base.Format(time.RFC3339Nano),
-			// The tick clock above is deliberately deterministic; the real
-			// wall-clock start anchors bundle timing for latency analysis.
+			Transport:      "websocket",
+			Model:          sessionRecordingModel(opts, plan),
+			ClockBase:      base.Format(time.RFC3339Nano),
 			WallClockStart: time.Now().UTC().Format(time.RFC3339Nano),
 		},
 		credentials: sessionRecordingCredentials(opts, plan),
-		browser:     newSessionBrowserRecording(opts, plan),
 	}
+	if opts.LoadedConfig != nil && opts.LoadedConfig.Browser.Recording.Enabled && opts.BrowserEventWatch != nil && opts.BrowserConversation != nil {
+		recording.browser, recording.browserErr = opts.BrowserConversation.NewRecorder(runtimeBrowser.RecordingRequest{Watch: opts.BrowserEventWatch, IncludeArguments: opts.LoadedConfig.Browser.Recording.IncludeArguments, IncludeResults: opts.LoadedConfig.Browser.Recording.IncludeResults, RedactURLQuery: opts.LoadedConfig.Browser.Recording.RedactURLQuery, RedactURLFragment: opts.LoadedConfig.Browser.Recording.RedactURLFragment, Credentials: recording.credentials})
+	}
+	return recording
 }
 
 func sessionRecordingCredentials(opts SessionRunOptions, plan sessionRuntimePlan) []string {
@@ -756,23 +542,23 @@ func (s *sessionDirectoryRecordingSession) Send(ctx context.Context, msg message
 }
 
 func (s *sessionDirectoryRecordingSession) SendMessage(ctx context.Context, msg messages.Message) bool {
-	sender, ok := s.inner.(sessionturn.CompleteMessageSender)
+	sender, ok := s.inner.(SessionImageMessageSender)
 	return ok && sender.SendMessage(ctx, msg)
 }
 
 func (s *sessionDirectoryRecordingSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
-	sender, ok := s.inner.(sessionturn.CompleteMessageWithoutResponseSender)
+	sender, ok := s.inner.(SessionImageMessageSenderWithoutResponse)
 	return ok && sender.SendMessageWithoutResponse(ctx, msg)
 }
 
 func (s *sessionDirectoryRecordingSession) SupportsCompleteMessages() bool {
-	_, ok := s.inner.(sessionturn.CompleteMessageSender)
-	return ok
+	complete, _ := completeMessageCapabilities(s.inner)
+	return complete
 }
 
 func (s *sessionDirectoryRecordingSession) SupportsCompleteMessagesWithoutResponse() bool {
-	_, ok := s.inner.(sessionturn.CompleteMessageWithoutResponseSender)
-	return ok
+	_, withoutResponse := completeMessageCapabilities(s.inner)
+	return withoutResponse
 }
 
 func (s *sessionDirectoryRecordingSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
@@ -813,13 +599,11 @@ func (s *sessionDirectoryRecordingSession) Done() <-chan struct{} {
 }
 
 func (s *sessionDirectoryRecordingSession) rtcMedia() (audio.MediaEndpoints, bool) {
-	return rtcMediaFromSession(s.inner)
+	return sessionMediaFromSession(s.inner)
 }
-
 func (s *sessionDirectoryRecordingSession) TerminalError() error {
 	return terminalSessionError(s.inner)
 }
-
 func (s *sessionDirectoryRecordingSession) Close() error {
 	err := s.inner.Close()
 	select {

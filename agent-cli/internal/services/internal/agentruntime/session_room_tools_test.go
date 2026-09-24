@@ -59,9 +59,8 @@ func TestBuildRoomParticipantPlans_LoadedManifestWiresExactParticipantToolContra
 
 	requests := make(map[string]inference.SessionRequest, len(manifest.Participants))
 	configDir := t.TempDir()
-	opts := newTestRoomRunOptions(RoomRunOptions{
-		AudioService: newTestAudioIOService(),
-		Manifest:     manifest, ModelCatalog: testModelCatalog(),
+	opts := RoomRunOptions{
+		Manifest: manifest, AudioService: newTestAudioIOService(), ModelCatalog: testModelCatalog(),
 		CredentialLookup: lookupCredential,
 		ConfigDir:        configDir,
 		BaseURL:          "ws://room.test/realtime",
@@ -79,7 +78,7 @@ func TestBuildRoomParticipantPlans_LoadedManifestWiresExactParticipantToolContra
 			requests[participant.ID] = requester.Request()
 			return inferencer, nil
 		},
-	})
+	}
 
 	plans, _, err := buildRoomParticipantPlans(opts, room.ValidationOptions{LookupCredential: lookupCredential})
 	if err != nil {
@@ -507,14 +506,14 @@ func TestNewLiveSessionInferencerCarriesToolDefinitionsToProviderRequest(t *test
 	}
 	for _, provider := range []string{"openai", "grok"} {
 		t.Run(provider, func(t *testing.T) {
-			inferencer, _, err := NewLiveSessionInferencer(newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+			inferencer, _, err := NewLiveSessionInferencer(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 				Provider:        provider,
 				Model:           map[string]string{"openai": openAIRealtimeDefaultModel, "grok": "grok-session-model"}[provider],
 				APIKey:          "room-test-key",
 				BaseURL:         "ws://room.test/realtime",
 				ConfigDir:       t.TempDir(),
 				ToolDefinitions: []messages.ToolDefinition{definition},
-			}), "participant instructions")
+			}, "participant instructions")
 			if err != nil {
 				t.Fatalf("NewLiveSessionInferencer: %v", err)
 			}

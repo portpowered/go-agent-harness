@@ -7,10 +7,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"testing"
-	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
@@ -113,21 +111,9 @@ func threeRecordingDigits(index int) string {
 var _ messages.Session = (*sessionRecordingTestSession)(nil)
 var _ messages.SessionInferencer = (*countingSessionRecordingInferencer)(nil)
 
-func assertGoroutinesSettled(t *testing.T, baseline int, operation string) {
-	t.Helper()
-	deadline := time.Now().Add(750 * time.Millisecond)
-	for time.Now().Before(deadline) {
-		if runtime.NumGoroutine() <= baseline+2 {
-			return
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	t.Fatalf("goroutines after %s = %d, baseline = %d; lifecycle did not settle", operation, runtime.NumGoroutine(), baseline)
-}
-
 func TestSessionDirectoryRecordingCloseDrainsPendingProviderOutput(t *testing.T) {
 	destination := filepath.Join(t.TempDir(), "pending-output")
-	recording := newSessionDirectoryRecording(destination, newTestSessionRuntimePlan(sessionRuntimePlan{provider: sessionProviderOpenAI}), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), Model: "gpt-realtime"}))
+	recording := newSessionDirectoryRecording(destination, sessionRuntimePlan{provider: sessionProviderOpenAI}, SessionRunOptions{ModelCatalog: testModelCatalog(), Model: "gpt-realtime"})
 	inner := newSessionRecordingTestSession()
 	ctx := context.Background()
 	wrapper := &sessionDirectoryRecordingSession{

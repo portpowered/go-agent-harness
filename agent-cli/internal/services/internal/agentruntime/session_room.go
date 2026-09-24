@@ -149,9 +149,6 @@ type RoomObserver func(RoomResult)
 type RoomRunOptions struct {
 	AudioService audioio.Service
 	Manifest     room.Manifest
-	// RuntimeFactory is installed by service composition and shares provider
-	// construction and session duration dependencies across participants.
-	RuntimeFactory SessionRuntimeFactory
 	// ReplayPath selects a finalized room evidence directory (or its
 	// run-manifest.json) as the sole source of participant runtime settings.
 	// Replay admission never resolves credentials, live config, host devices,

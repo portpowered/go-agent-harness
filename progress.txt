@@ -6009,3 +6009,30 @@ before any push or PR.
   files with current main's service-owned contracts, resolve those build
   errors without restoring duplicate policy, then run the focused C251 checks
   and full exact-head C251-04 preflight before any push or PR.
+
+
+## C251 current-main runtime reconciliation checkpoint — 2026-09-23
+
+- Kept the merge commit and branch ancestry. Restored `agentruntime`, service
+  Wire, CLI tool contract, preflight helper, and livehost source to current
+  main where C251's older snapshot had retained now-retired peer
+  implementations. Preserved the C251 `shutdown_adapter.go` and routed the
+  current-main livehost run through its stateless duration translation while
+  retaining main's trace and terminal compatibility seams.
+- On the reconciled worktree,
+  `rtk go test -count=1 -timeout 300s
+  ./agent-cli/internal/services/internal/agentruntime
+  ./agent-cli/internal/services/wire` passes 648 tests in 2 packages.
+- The full 16-path C251 absence census no longer passes: current main restores
+  seven owned legacy production files (`session_drain.go`, `session_duration.go`,
+  `session_duration_artifacts.go`, `session_duration_admission.go`,
+  `session_duration_loop.go`, `session_duration_terminal_adapter.go`,
+  and `session_finalizer.go`).
+  Production search still finds `runSessionDurationPlan` in the duration,
+  instruction, image, and recording callers. These are actionable C251
+  repairs; no completion or handoff is claimed.
+- No push, PR, SCRIPT CI, independent review, or guarded merge is claimed.
+  Exact next action: port the C251 public duration service/runner into current
+  main's caller path, remove every owned legacy file and duplicate caller,
+  verify all production callers use the service contract, then run the exact
+  C251-04 local gate before any push or PR.

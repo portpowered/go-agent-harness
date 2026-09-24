@@ -115,10 +115,9 @@ func TestRunRoomWithResult_SilenceCadenceDoesNotCancelActiveResponse(t *testing.
 	roomCtx, cancel := context.WithTimeout(context.Background(), roomRealtimeReplayTestTimeout)
 	defer cancel()
 
-	opts := newTestRoomRunOptions(RoomRunOptions{
-		AudioService: newTestAudioIOService(),
-		Manifest:     manifest,
-		ConfigDir:    configDir, ModelCatalog: testModelCatalog(),
+	opts := RoomRunOptions{
+		Manifest: manifest, AudioService: newTestAudioIOService(),
+		ConfigDir: configDir, ModelCatalog: testModelCatalog(),
 		BaseURL:     "wss://room-replay.invalid/v1/realtime",
 		MixerConfig: mixerConfig,
 		CredentialLookup: func(name string) (string, bool) {
@@ -135,7 +134,7 @@ func TestRunRoomWithResult_SilenceCadenceDoesNotCancelActiveResponse(t *testing.
 			}
 			return nil
 		},
-	})
+	}
 
 	runDone := make(chan roomTestRunOutcome, 1)
 	go func() {
@@ -259,5 +258,25 @@ func (c *roomRealtimeReplayCadence) Advance() {
 	select {
 	case c.ticks <- time.Time{}:
 	case <-c.stopped:
+	}
+}
+
+func gatedRoomAudioOutput(ctx context.Context, release <-chan struct{}, outputs chan<- roomSpeechOverlapFanout) func(string, []byte) error {
+	return func(participantID string, pcm []byte) error {
+		select {
+		case <-release:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		outputs <- roomSpeechOverlapFanout{targetID: participantID, pcm: append([]byte(nil), pcm...)}
+		return nil
+	}
+}
+
+func awaitRoomBidirectionalInputs(t *testing.T, inputs <-chan roomSpeechOverlapFanout, participant func(string) *roomRealtimeReplayParticipant, wants map[string][]byte) {
+	t.Helper()
+	awaitRoomBidirectionalFrames(t, inputs, wants)
+	for id, pcm := range wants {
+		assertRoomSpeechOverlapAppend(t, participant(id), pcm)
 	}
 }

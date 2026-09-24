@@ -12,10 +12,10 @@ func TestPlanSessionRuntimeClosesTransferredCapabilityOnPlanningFailure(t *testi
 	closeErr := errors.New("capability close failed")
 	closeCalls := 0
 
-	_, err := planSessionRuntimeWithFactory(context.Background(), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
+	_, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		Transport:       "unsupported",
 		CapabilityClose: func() error { closeCalls++; return closeErr },
-	}), sessionRuntimeFactory{})
+	}, sessionRuntimeFactory{})
 	if err == nil || !errors.Is(err, closeErr) {
 		t.Fatalf("planning error = %v, want capability cleanup failure joined", err)
 	}
@@ -26,12 +26,12 @@ func TestPlanSessionRuntimeClosesTransferredCapabilityOnPlanningFailure(t *testi
 
 func TestSessionRuntimePlanClosesTransferredCapabilityOnNormalExit(t *testing.T) {
 	closeCalls := 0
-	plan := newTestSessionRuntimePlan(sessionRuntimePlan{
+	plan := sessionRuntimePlan{
 		capabilityCoordinator: NewSessionCapabilityCoordinator(func() error {
 			closeCalls++
 			return nil
 		}),
-	})
+	}
 
 	if err := plan.run(context.Background(), io.Discard); err != nil {
 		t.Fatalf("plan run: %v", err)
@@ -43,16 +43,16 @@ func TestSessionRuntimePlanClosesTransferredCapabilityOnNormalExit(t *testing.T)
 
 func TestSessionDurationPlanClosesTransferredCapabilityOnPreflightExit(t *testing.T) {
 	closeCalls := 0
-	plan := newTestSessionRuntimePlan(sessionRuntimePlan{
+	plan := sessionRuntimePlan{
 		capabilityCoordinator: NewSessionCapabilityCoordinator(func() error {
 			closeCalls++
 			return nil
 		}),
-		loop: newTestSessionLoopOptions(sessionLoopOptions{audioService: newTestAudioIOService()}),
+		loop: sessionLoopOptions{audioService: newTestAudioIOService()},
 		rtcDeviceRequest: runtimedevices.RTCBindingRequest{
 			InputPresent: true,
 		},
-	})
+	}
 
 	err := runSessionDurationPlan(context.Background(), io.Discard, plan, 1, nil)
 	if err == nil {

@@ -1,7 +1,5 @@
 package agentruntime
 
-import "context"
-
 import sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 
 import (
@@ -27,7 +25,7 @@ func TestPlanSessionRuntimeScheduledAudioDispatchPolicy(t *testing.T) {
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			plan, err := planSessionRuntimeWithFactory(context.Background(), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
+			plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 				Provider:          sessionProviderOpenAI,
 				Model:             "gpt-realtime",
 				APIKey:            "test-key",
@@ -35,7 +33,7 @@ func TestPlanSessionRuntimeScheduledAudioDispatchPolicy(t *testing.T) {
 				SessionInferencer: &scriptedSessionInferencer{},
 				AudioInTurnBarge:  testCase.barge,
 				AudioInputs:       []ScheduledAudioInput{{AfterCompletedTurns: 0, PCM: []byte{1}, EndOfTurn: true}, {AfterCompletedTurns: 1, PCM: []byte{2}, EndOfTurn: true}},
-			}), sessionRuntimeFactory{})
+			}, sessionRuntimeFactory{})
 			if err != nil {
 				t.Fatalf("plan session runtime: %v", err)
 			}

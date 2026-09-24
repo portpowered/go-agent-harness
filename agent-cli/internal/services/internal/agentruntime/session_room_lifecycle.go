@@ -3,19 +3,16 @@ package agentruntime
 import (
 	"context"
 	"errors"
-	"fmt"
+	"sync"
+	"time"
+
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	runtimeRoomsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
-	duration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
-	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-	"sort"
-	"strings"
-	"sync"
-	"time"
+	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 )
 
 const (
@@ -40,27 +37,26 @@ type roomParticipantPlan struct {
 	capabilityCoordinator SessionCapabilityCoordinator
 }
 type roomParticipantRuntime struct {
-	plan             *roomParticipantPlan
-	ctx              context.Context
-	cancel           context.CancelFunc
-	admissionCtx     context.Context
-	admissionCancel  context.CancelFunc
-	loopReady        chan *agentloop.AgentLoop
-	participantDone  chan struct{}
-	mixerDone        chan struct{}
-	observerDone     chan struct{}
-	observerOnce     sync.Once
-	replayFrameAcks  chan struct{}
-	mixer            *room.PCM16Mixer
-	ingress          *roomAudioIngressLedger
-	deviceHandle     runtimeDevices.Handle
-	input            runtimeDevices.Capture
-	output           runtimeDevices.Playback
-	inputDeviceID    string
-	outputDeviceID   string
-	lifecycle        *roomParticipantLifecycle
-	diagnosticSink   SessionDiagnosticSink
-	outboundLoudness *audio.LoudnessNormalizer
+	plan            *roomParticipantPlan
+	ctx             context.Context
+	cancel          context.CancelFunc
+	admissionCtx    context.Context
+	admissionCancel context.CancelFunc
+	loopReady       chan *agentloop.AgentLoop
+	participantDone chan struct{}
+	mixerDone       chan struct{}
+	observerDone    chan struct{}
+	observerOnce    sync.Once
+	replayFrameAcks chan struct{}
+	mixer           *room.PCM16Mixer
+	ingress         *roomAudioIngressLedger
+	deviceHandle    runtimeDevices.Handle
+	input           runtimeDevices.Capture
+	output          runtimeDevices.Playback
+	inputDeviceID   string
+	outputDeviceID  string
+	lifecycle       *roomParticipantLifecycle
+	diagnosticSink  SessionDiagnosticSink
 }
 
 func (r *roomParticipantRuntime) markObserverDone() {
@@ -71,66 +67,34 @@ func (r *roomParticipantRuntime) markObserverDone() {
 }
 
 type roomCleanupWaiter struct {
-	timer   *time.Timer
-	expired chan struct{}
+	timer *time.Timer
 }
 
 func (w *roomCleanupWaiter) start() {
 	if w == nil || w.timer != nil {
 		return
 	}
-	w.expired = make(chan struct{})
-	w.timer = time.AfterFunc(roomCleanupTimeout, func() { close(w.expired) })
+	w.timer = time.NewTimer(roomCleanupTimeout)
 }
-func (w *roomCleanupWaiter) done() <-chan struct{} {
-	if w == nil || w.expired == nil {
+func (w *roomCleanupWaiter) done() <-chan time.Time {
+	if w == nil || w.timer == nil {
 		return nil
 	}
-	return w.expired
+	return w.timer.C
 }
 func (w *roomCleanupWaiter) stop() {
 	if w == nil || w.timer == nil {
 		return
 	}
-	w.timer.Stop()
+	if !w.timer.Stop() {
+		select {
+		case <-w.timer.C:
+		default:
+		}
+	}
 	w.timer = nil
 }
 
-type roomLifecycleWorkError struct {
-	outstanding []string
-}
-
-func (e *roomLifecycleWorkError) Error() string {
-	if e == nil || len(e.outstanding) == 0 {
-		return "room lifecycle work did not complete"
-	}
-	return "room lifecycle work did not complete: " + strings.Join(e.outstanding, "; ")
-}
-func newRoomLifecycleWorkError(outstanding ...string) error {
-	seen := make(map[string]struct{}, len(outstanding))
-	ordered := make([]string, 0, len(outstanding))
-	for _, item := range outstanding {
-		if item == "" {
-			continue
-		}
-		if _, exists := seen[item]; exists {
-			continue
-		}
-		seen[item] = struct{}{}
-		ordered = append(ordered, item)
-	}
-	if len(ordered) == 0 {
-		return nil
-	}
-	sort.Strings(ordered)
-	return &roomLifecycleWorkError{outstanding: ordered}
-}
-func roomLifecycleWorkLabel(participantID, phase string) string {
-	if participantID == "" {
-		return phase
-	}
-	return fmt.Sprintf("participant %q phase %s", participantID, phase)
-}
 func roomParticipantOutstandingWork(runtime *roomParticipantRuntime) []string {
 	if runtime == nil || runtime.plan == nil {
 		return []string{"participant runtime"}
@@ -226,7 +190,7 @@ func (l *roomParticipantLifecycle) markParticipantFailure(err error) {
 }
 func (l *roomParticipantLifecycle) markLivenessFailure(err error) {
 	if backend := l.backendLifecycle(); backend != nil {
-		classification, reason, provenance, output := sessionLivenessMetadata(err)
+		classification, reason, provenance, output := sessiontracewire.LivenessMetadata(err)
 		backend.MarkLivenessFailure(err, runtimeRooms.ParticipantLivenessMetadata{
 			Classification: classification, TerminalReason: reason,
 			TerminalProvenance: provenance, OutputState: output,
@@ -247,7 +211,7 @@ func (l *roomParticipantLifecycle) observeTerminal(observation sessionTerminalOb
 	if backend == nil {
 		return false
 	}
-	return backend.ObserveTerminal(runtimeRooms.SessionTerminalObservation{ResponseID: observation.ResponseID, Classification: observation.Classification, TerminalReason: observation.TerminalReason, TerminalProvenance: observation.TerminalProvenance, OutputState: observation.OutputState, Err: observation.Err, Failure: observation.Failure, RoomBound: observation.RoomBound, Code: observation.Code, FailingEvent: observation.FailingEvent})
+	return backend.ObserveTerminal(runtimeRooms.SessionTerminalObservation{ResponseID: observation.ResponseID, Classification: observation.Classification, TerminalReason: string(observation.TerminalReason), TerminalProvenance: string(observation.TerminalProvenance), OutputState: string(observation.OutputState), Err: observation.Err, Failure: observation.Failure, RoomBound: observation.RoomBound, Code: observation.Code, FailingEvent: observation.FailingEvent})
 }
 func (l *roomParticipantLifecycle) observe(msg messages.StreamMessage) int {
 	if backend := l.backendLifecycle(); backend != nil {
@@ -318,34 +282,6 @@ func (l *roomParticipantLifecycle) terminalMetadata() (string, messages.Terminal
 		return "", "", "", ""
 	}
 	return backend.TerminalMetadata()
-}
-
-func sessionLivenessMetadata(err error) (string, messages.TerminalReason, messages.TerminalProvenance, messages.TerminalOutputState) {
-	var failure *duration.LivenessError
-	if !errors.As(err, &failure) || failure == nil {
-		return "", "", "", ""
-	}
-	return failure.Classification, failure.TerminalReason, failure.TerminalProvenance, failure.OutputState
-}
-
-func applyRoomParticipantTerminalMetadata(result *RoomParticipantResult, lifecycle *roomParticipantLifecycle, err error) {
-	if result == nil {
-		return
-	}
-	classification, terminalReason, provenance, outputState := "", messages.TerminalReason(""), messages.TerminalProvenance(""), messages.TerminalOutputState("")
-	if lifecycle != nil {
-		classification, terminalReason, provenance, outputState = lifecycle.terminalMetadata()
-	}
-	if classification == "" {
-		classification, terminalReason, provenance, outputState = sessionLivenessMetadata(err)
-	}
-	if classification == "" {
-		return
-	}
-	result.Classification = classification
-	result.TerminalReason = string(terminalReason)
-	result.TerminalProvenance = string(provenance)
-	result.OutputState = string(outputState)
 }
 func (l *roomParticipantLifecycle) terminalObservationSnapshot() roomParticipantTerminalObservation {
 	backend := l.backendLifecycle()

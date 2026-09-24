@@ -3,13 +3,10 @@ package agentruntime
 import (
 	"context"
 	"errors"
-	"io"
 	"testing"
 	"time"
 
 	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
-	duration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
-	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -57,7 +54,7 @@ func TestAwaitSessionFirstTurnUsesVirtualTimerAndParentCancellation(t *testing.T
 	defer cancel()
 	ack := make(chan error)
 	result := make(chan error, 1)
-	go func() { result <- awaitSessionFirstTurnWithClock(ctx, ack, audioiowire.NewService(), virtual) }()
+	go func() { result <- awaitSessionFirstTurnWithClock(audioiowire.NewService(), ctx, ack, virtual) }()
 	virtual.AdvanceBy(sessionFirstTurnAckTimeout - time.Nanosecond)
 	select {
 	case err := <-result:
@@ -75,39 +72,21 @@ func TestAwaitSessionFirstTurnUsesVirtualTimerAndParentCancellation(t *testing.T
 	}
 }
 
-func TestDurationServiceSelectsPlanClockAndHonorsExplicitOverride(t *testing.T) {
-	service := durationwire.NewService()
+func TestEffectiveSessionDurationClockUsesPlanSource(t *testing.T) {
 	virtual := platformclock.NewDeterministic(time.Unix(0, 0).UTC(), time.Second)
-	var selected duration.TimerScheduler
-	err := service.Execute(duration.ExecutionRequest{
-		MaxDuration: 0,
-		SourceClock: virtual,
-		Run: func(_ context.Context, _ io.Writer, clock duration.TimerScheduler) error {
-			selected = clock
-			return nil
-		},
-	})
+	clock, err := effectiveSessionDurationClock(sessionRuntimePlan{clockSource: virtual, loop: sessionLoopOptions{audioService: audioiowire.NewService()}}, nil)
 	if err != nil {
-		t.Fatalf("Execute with source clock: %v", err)
+		t.Fatal(err)
 	}
-	if selected != virtual {
-		t.Fatalf("duration clock=%T, want shared virtual clock", selected)
+	if clock != virtual {
+		t.Fatalf("duration clock=%T, want shared virtual clock", clock)
 	}
 	custom := &durationTestClock{}
-	selected = nil
-	err = service.Execute(duration.ExecutionRequest{
-		MaxDuration: 0,
-		Clock:       custom,
-		SourceClock: virtual,
-		Run: func(_ context.Context, _ io.Writer, clock duration.TimerScheduler) error {
-			selected = clock
-			return nil
-		},
-	})
+	clock, err = effectiveSessionDurationClock(sessionRuntimePlan{clockSource: virtual}, custom)
 	if err != nil {
-		t.Fatalf("Execute with explicit clock: %v", err)
+		t.Fatal(err)
 	}
-	if selected != custom {
+	if clock != custom {
 		t.Fatal("explicit test duration clock was replaced")
 	}
 }

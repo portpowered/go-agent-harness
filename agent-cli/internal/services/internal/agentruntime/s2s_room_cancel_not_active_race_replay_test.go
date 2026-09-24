@@ -87,10 +87,9 @@ func newRoomCancelRaceScenario(
 	roomCtx, cancel := context.WithTimeout(context.Background(), roomRealtimeReplayTestTimeout)
 	t.Cleanup(cancel)
 
-	opts := newTestRoomRunOptions(RoomRunOptions{
-		AudioService: newTestAudioIOService(),
-		Manifest:     manifest,
-		ConfigDir:    configDir, ModelCatalog: testModelCatalog(),
+	opts := RoomRunOptions{
+		Manifest: manifest, AudioService: newTestAudioIOService(),
+		ConfigDir: configDir, ModelCatalog: testModelCatalog(),
 		BaseURL:     "wss://room-replay.invalid/v1/realtime",
 		MixerConfig: mixerConfig,
 		CredentialLookup: func(name string) (string, bool) {
@@ -132,7 +131,7 @@ func newRoomCancelRaceScenario(
 				diagnostic <- participantID
 			}
 		},
-	})
+	}
 	runDone := make(chan roomTestRunOutcome, 1)
 	go func() {
 		result, err := RunRoomWithResult(roomCtx, io.Discard, opts)

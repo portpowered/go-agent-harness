@@ -34,6 +34,8 @@ import (
 	runtimeSelfPlayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/selfplay/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	sessionwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
+	runtimeSessionTrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+	runtimeSessionTraceWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -255,12 +257,16 @@ func provideRoomClock(source Clock) clock.Scheduler {
 // provideFileDeviceService keeps finite file conversion and pump ownership in
 // the reusable runtime device service. The CLI opens paths into canonical
 // audio ports, then injects those ports at invocation time.
-func provideFileDeviceService(source Clock, audioService runtimeAudioIO.Service) cli.FileDeviceService {
+func provideSessionTraceService() runtimeSessionTrace.Service {
+	return runtimeSessionTraceWire.NewService()
+}
+
+func provideFileDeviceService(source Clock, audioService runtimeAudioIO.Service, traceService runtimeSessionTrace.Service) cli.FileDeviceService {
 	var scheduler clock.Scheduler
 	if value, ok := source.(clock.Scheduler); ok {
 		scheduler = value
 	}
-	return cli.FileDeviceService{Service: runtimeDevicesWire.NewFileService(audioService), Scheduler: scheduler}
+	return cli.FileDeviceService{Service: runtimeDevicesWire.NewFileService(audioService), Scheduler: scheduler, TraceService: traceService}
 }
 
 func provideToolCapabilitiesService(override toolServiceOverride, toolExecutor messages.ToolExecutor, browserFactory serviceTools.BrowserFactory, displaySurface cliTools.DisplaySurface, runtimeService runtimeTools.Service) serviceTools.Service {
@@ -306,12 +312,13 @@ var CliSet = wire.NewSet(
 	servicewire.SessionSet,
 	wire.NewSet(servicewire.NewBrowserConversationService),
 	servicewire.NewReplayService,
-	servicewire.NewMetricsCollector,
+	servicewire.NewProbeMetrics,
 	provideDefaultRuntimeToolService,
 	provideRuntimeToolService,
 	sessionwire.NewFileStoreFactory,
 	provideRecordingService,
 	provideProviderCaptureService,
+	provideSessionTraceService,
 	provideSessionBrowserCapabilityFactory,
 	provideSessionDisplaySurface,
 	provideTextSessionService,

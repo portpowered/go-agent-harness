@@ -168,7 +168,7 @@ func TestSessionCommandWiresBothRTCDeviceSelectorsBeforeProviderConnect(t *testi
 func TestRunSessionRTCDevicePreflightHappensBeforeProviderConnect(t *testing.T) {
 	registry := virtualRTCRegistry(t)
 	inferencer := &countingSessionInferencer{}
-	err := agentruntime.RunSession(context.Background(), io.Discard, newTestSessionRunOptions(agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(), ReplayPath: "synthetic.json", SessionInferencer: inferencer, DeviceService: newTestDeviceService(registry), RTCBinding: runtimedevices.RTCBindingRequest{InputDevice: "virtual:missing", InputPresent: true}}))
+	err := agentruntime.RunSession(context.Background(), io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(), ReplayPath: "synthetic.json", SessionInferencer: inferencer, DeviceService: newTestDeviceService(registry), RTCBinding: runtimedevices.RTCBindingRequest{InputDevice: "virtual:missing", InputPresent: true}})
 	if err == nil || !errors.Is(err, devicegw.ErrDeviceNotFound) {
 		t.Fatalf("session error = %v, want typed preflight not-found", err)
 	}

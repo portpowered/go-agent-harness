@@ -101,7 +101,6 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 		}
 		sessionOptions := SessionRunOptions{
 			AudioService:  opts.AudioService,
-			RuntimeFactory: opts.RuntimeFactory,
 			Provider:      participant.Provider,
 			Model:         participant.Model,
 			ModelProvided: true,
@@ -249,7 +248,6 @@ func buildRoomReplayParticipantPlans(ctx context.Context, replay roomreplay.Room
 		}
 		sessionOptions := SessionRunOptions{
 			AudioService:   opts.AudioService,
-			RuntimeFactory: opts.RuntimeFactory,
 			Provider:       recorded.Provider,
 			Model:          recorded.Model,
 			ModelProvided:  true,

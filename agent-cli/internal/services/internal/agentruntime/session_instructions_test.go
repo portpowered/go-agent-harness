@@ -48,10 +48,8 @@ func TestRunSessionWithInstructions_SourceMatrix(t *testing.T) {
 		skipWorkspace     bool
 	}{
 		{
-			name: "absent AGENTS.md sends no instructions and creates no file",
-			setup: func(*testing.T, string) string {
-				return ""
-			},
+			name:  "absent AGENTS.md sends no instructions and creates no file",
+			setup: func(*testing.T, string) string { return "" },
 			want: func(t *testing.T, workspaceDir, _ string) string {
 				t.Helper()
 				if _, err := os.Stat(filepath.Join(workspaceDir, workspace.AgentsMDFileName)); !os.IsNotExist(err) {
@@ -163,12 +161,12 @@ func TestRunSessionWithInstructions_SourceMatrix(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 
-			err := agentruntime.RunSessionWithInstructions(ctx, bytes.NewBuffer(nil), newTestSessionRunOptions(agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
+			err := agentruntime.RunSessionWithInstructions(ctx, bytes.NewBuffer(nil), agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
 				ReplayPath:        filepath.Join(workspaceDir, "session.json"),
 				ConfigDir:         workspaceDir,
 				Prompt:            userTurnMarker,
 				SessionInferencer: inferencer,
-			}), explicit)
+			}, explicit)
 			if tt.wantError {
 				if err == nil {
 					t.Fatal("expected prompt-resolution error")
@@ -205,13 +203,13 @@ func TestRunSessionWithInstructions_MissingAgentsMDSendsNoToolGroundingOrFile(t 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	err := agentruntime.RunSessionWithInstructions(ctx, bytes.NewBuffer(nil), newTestSessionRunOptions(agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
+	err := agentruntime.RunSessionWithInstructions(ctx, bytes.NewBuffer(nil), agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
 		ReplayPath:        filepath.Join(workspaceDir, "session.json"),
 		ConfigDir:         workspaceDir,
 		Prompt:            userTurnMarker,
 		SessionInferencer: inferencer,
 		ToolDefinitions:   toolDefinitions,
-	}), "")
+	}, "")
 	if err != nil {
 		t.Fatalf("RunSessionWithInstructions: %v", err)
 	}
@@ -234,7 +232,7 @@ func TestRunSessionWithInstructions_ExplicitPromptDoesNotReconcileAgentsMD(t *te
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	err := agentruntime.RunSessionWithInstructions(ctx, bytes.NewBuffer(nil), newTestSessionRunOptions(agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
+	err := agentruntime.RunSessionWithInstructions(ctx, bytes.NewBuffer(nil), agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
 		ReplayPath:        filepath.Join(workspaceDir, "session.json"),
 		ConfigDir:         workspaceDir,
 		Prompt:            userTurnMarker,
@@ -243,7 +241,7 @@ func TestRunSessionWithInstructions_ExplicitPromptDoesNotReconcileAgentsMD(t *te
 			Name:        "read_file",
 			Description: "Read a UTF-8 file from the workspace.",
 		}},
-	}), promptPath)
+	}, promptPath)
 	if err != nil {
 		t.Fatalf("RunSessionWithInstructions: %v", err)
 	}
@@ -262,7 +260,7 @@ func TestRunSessionWithInstructions_OpenAIInitialConfigCarriesGroundingWithTools
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	err := agentruntime.RunSessionWithInstructions(ctx, io.Discard, newTestSessionRunOptions(agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
+	err := agentruntime.RunSessionWithInstructions(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
 		RecordPath:      recordPath,
 		Provider:        config.ProviderOpenAI,
 		Model:           "gpt-realtime",
@@ -272,7 +270,7 @@ func TestRunSessionWithInstructions_OpenAIInitialConfigCarriesGroundingWithTools
 		ToolExecutor:    &messages.DefaultToolExecutor{},
 		ToolDefinitions: []messages.ToolDefinition{{Name: "inspect_machine", Description: "Inspect machine state"}},
 		WebSocketDialer: &recordingRealtimeTestDialer{conn: realtimeConn},
-	}), "")
+	}, "")
 	if err != nil {
 		t.Fatalf("RunSessionWithInstructions: %v", err)
 	}
@@ -461,11 +459,11 @@ func TestRunSessionWithInstructionsAndOptions_PreservesExplicitSeed(t *testing.T
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	err := agentruntime.RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx, io.Discard, newTestSessionRunOptions(agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
+	err := agentruntime.RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
 		ReplayPath:        filepath.Join(workspaceDir, "session.json"),
 		ConfigDir:         workspaceDir,
 		SessionInferencer: inferencer,
-	}), "", 0, agentruntime.SessionTextSeed{Value: userTurnMarker, Present: true}, "")
+	}, "", 0, agentruntime.SessionTextSeed{Value: userTurnMarker, Present: true}, "")
 	if err != nil {
 		t.Fatalf("RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration: %v", err)
 	}
@@ -482,7 +480,7 @@ func TestRunSessionWithInstructions_OpenAIInitialConfigPrecedesUserTurn(t *testi
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	err := agentruntime.RunSessionWithInstructions(ctx, io.Discard, newTestSessionRunOptions(agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
+	err := agentruntime.RunSessionWithInstructions(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
 		RecordPath:      recordPath,
 		Provider:        config.ProviderOpenAI,
 		Model:           "gpt-realtime",
@@ -491,7 +489,7 @@ func TestRunSessionWithInstructions_OpenAIInitialConfigPrecedesUserTurn(t *testi
 		Prompt:          userTurnMarker,
 		Voice:           "marin",
 		WebSocketDialer: realtimeDialer,
-	}), "")
+	}, "")
 	if err != nil {
 		t.Fatalf("RunSessionWithInstructions: %v", err)
 	}
@@ -585,7 +583,7 @@ model:
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	err := agentruntime.RunSessionWithInstructions(ctx, io.Discard, newTestSessionRunOptions(agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
+	err := agentruntime.RunSessionWithInstructions(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
 		RecordPath:      filepath.Join(t.TempDir(), "grok-session.json"),
 		Provider:        config.ProviderGrok,
 		Model:           "grok-3-mini",
@@ -593,7 +591,7 @@ model:
 		ConfigDir:       workspaceDir,
 		Prompt:          userTurnMarker,
 		WebSocketDialer: dialer,
-	}), "")
+	}, "")
 	if err != nil {
 		t.Fatalf("RunSessionWithInstructions: %v", err)
 	}
@@ -611,12 +609,12 @@ func TestRunSessionWithInstructions_ConfigurationSendFailureStopsBeforeUserTurn(
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	err := agentruntime.RunSessionWithInstructions(ctx, &out, newTestSessionRunOptions(agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
+	err := agentruntime.RunSessionWithInstructions(ctx, &out, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
 		ReplayPath:        filepath.Join(workspaceDir, "session.json"),
 		ConfigDir:         workspaceDir,
 		Prompt:            userTurnMarker,
 		SessionInferencer: inferencer,
-	}), "")
+	}, "")
 	if err == nil {
 		t.Fatal("expected session configuration send failure")
 	}

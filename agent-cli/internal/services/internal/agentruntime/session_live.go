@@ -9,22 +9,96 @@ import (
 	"strings"
 	"time"
 
-	sessiontransport "github.com/portpowered/go-agent-harness/agent-cli/internal/transport"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
-	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
-	terminalwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
-	sessionturnwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn/wire"
-	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
+	sessionterminalwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
+
+var errSessionMaxDurationExpired = sessionterminal.ErrDurationExpired
+
+// ErrSessionScheduledAudioIncomplete identifies a live scheduled-audio run
+// that ended before every queued input received an assistant response.
+var ErrSessionScheduledAudioIncomplete = errors.New("scheduled audio session ended before all turns completed")
+
+func assistantAudioDelta(msg messages.StreamMessage) bool {
+	return msg.Role == "" || msg.Role == messages.RoleAssistant
+}
+
+func sendEventDrivenAudioInput(ctx context.Context, loop *agentloop.AgentLoop, opts sessionLoopOptions, input sessiontrace.ScheduledAudioInput) error {
+	if len(input.PCM) == 0 {
+		return errors.New("event-driven audio input is empty")
+	}
+	if opts.audioService == nil {
+		return errors.New("audio service is required for event-driven audio conversion")
+	}
+	pcm, err := opts.audioService.ConvertPCM16(ctx, audioio.PCM16Request{
+		PCM: input.PCM, SourceRate: input.SourceSampleRate, TargetRate: opts.InputAudioSampleRate,
+	})
+	if err != nil {
+		return fmt.Errorf("convert event-driven audio input: convert session input from %d Hz to provider rate %d Hz: %w", input.SourceSampleRate, opts.InputAudioSampleRate, err)
+	}
+	if err := loop.SendAudioInput(ctx, pcm); err != nil {
+		return fmt.Errorf("send event-driven audio input: %w", err)
+	}
+	if opts.observer != nil {
+		opts.observer.Account(metrics.DirectionInput, metrics.ModalityAudio, len(pcm))
+	}
+	if input.EndOfTurn {
+		if err := loop.SendSessionEvent(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd}); err != nil {
+			return fmt.Errorf("send event-driven audio input end-of-turn: %w", err)
+		}
+	}
+	return nil
+}
+
+// SessionScheduledAudioIncompleteError carries the deterministic schedule
+// counts observed at a terminal boundary. When a provider terminal caused the
+// incomplete lifecycle, its bounded status, error code, and detail are retained
+// as well. It unwraps to ErrSessionScheduledAudioIncomplete so callers can use
+// errors.Is while still retaining any provider, timeout, cancellation, or
+// cleanup cause joined with it.
+type SessionScheduledAudioIncompleteError struct {
+	Completed         int
+	Dispatched        int
+	Scheduled         int
+	ProviderStatus    string
+	ProviderErrorCode string
+	ProviderDetails   string
+}
+
+func (e *SessionScheduledAudioIncompleteError) Error() string {
+	if e == nil {
+		return ErrSessionScheduledAudioIncomplete.Error()
+	}
+	message := fmt.Sprintf("%s: completed=%d dispatched=%d scheduled=%d", ErrSessionScheduledAudioIncomplete, e.Completed, e.Dispatched, e.Scheduled)
+	annotations := make([]string, 0, 3)
+	if status := strings.TrimSpace(e.ProviderStatus); status != "" {
+		annotations = append(annotations, "status="+status)
+	}
+	if code := strings.TrimSpace(e.ProviderErrorCode); code != "" {
+		annotations = append(annotations, "code="+code)
+	}
+	if detail := strings.TrimSpace(e.ProviderDetails); detail != "" {
+		annotations = append(annotations, "detail="+detail)
+	}
+	if len(annotations) > 0 {
+		message += " (" + strings.Join(annotations, "; ") + ")"
+	}
+	return message
+}
+
+func (e *SessionScheduledAudioIncompleteError) Unwrap() error {
+	return ErrSessionScheduledAudioIncomplete
+}
 
 // ErrSessionScheduledAudioConfigTimeout identifies a live scheduled-audio run
 // whose current session never acknowledged its initial configuration.
@@ -40,10 +114,7 @@ const sessionFirstTurnAckTimeout = 30 * time.Second
 // per-loop override exists only for deterministic service tests.
 const sessionScheduledAudioConfigTimeout = 30 * time.Second
 
-func awaitSessionFirstTurnWithClock(ctx context.Context, ack <-chan error, audioService audioio.Service, source platformclock.Source) error {
-	if audioService == nil {
-		return errors.New("audio service is required for first-turn timing")
-	}
+func awaitSessionFirstTurnWithClock(audioService audioio.Service, ctx context.Context, ack <-chan error, source platformclock.Source) error {
 	timer, err := audioService.NewTimer(source, sessionFirstTurnAckTimeout)
 	if err != nil {
 		return err
@@ -60,13 +131,12 @@ func awaitSessionFirstTurnWithClock(ctx context.Context, ack <-chan error, audio
 }
 
 type sessionLoopOptions struct {
-	durationService sessionduration.Service
-	durationRunner  runtimeSession.DurationRunner
-	Prompt          string
-	PromptProvided  bool
-	CloseAfterOpen  bool
-	WaitForClose    bool
-	MaxDuration     time.Duration
+	audioService   audioio.Service
+	Prompt         string
+	PromptProvided bool
+	CloseAfterOpen bool
+	WaitForClose   bool
+	MaxDuration    time.Duration
 	// BareLive keeps a default-device voice session open until its owner
 	// cancels it instead of applying the ordinary single-turn close policy.
 	BareLive bool
@@ -98,11 +168,6 @@ type sessionLoopOptions struct {
 	// distinct from ordinary context cancellation so incomplete-response guards
 	// can preserve clean room-owned cancellation semantics.
 	BoundCancellation <-chan struct{}
-	// AudioIn optionally streams a bounded file or stdin audio source into
-	// the loop after SESSION.OPEN. When nil, every session path behaves
-	// exactly as it did before audio input existed.
-	AudioIn *sessionAudioSource
-
 	// awaitFirstTurn optionally blocks the SESSION.OPEN handler until the
 	// session's first user turn (the realtime image turn) has been accepted
 	// by the provider session's outbound queue. Without it, streamed user
@@ -113,16 +178,15 @@ type sessionLoopOptions struct {
 
 	// observer optionally records per-turn and terminal diagnostics from the
 	// consumed delta stream; nil keeps runtime behavior unchanged.
-	observer *sessionProgressObserver
+	observer sessiontrace.Observer
 
 	// livenessClock is the participant-owned watchdog timer seam. Runtime plans
 	// derive it from the public session clock when a caller does not inject one.
-	livenessClock sessionduration.TimerScheduler
+	livenessClock SessionLivenessClock
 	// clockSource is the shared session timing domain. It is populated by the
 	// runtime plan and is used for max-duration, acknowledgement, retry, and
 	// configuration timers in the live stream path.
-	clockSource  platformclock.Source
-	audioService audioio.Service
+	clockSource platformclock.Source
 
 	// toolLifecycleObserver records the exact call/result boundary owned by the
 	// composed session executor. It is separate from the provider progress
@@ -145,7 +209,7 @@ type sessionLoopOptions struct {
 
 	// InteractiveToolPolicy is the immutable per-session class and timeout
 	// snapshot paired with ToolDefinitions and ToolExecutor.
-	InteractiveToolPolicy runtimeTools.InteractiveToolPolicy
+	InteractiveToolPolicy *InteractiveToolPolicy
 	// ToolDefinitionBase is the immutable static and stable broker surface
 	// retained by the dynamic publisher while page definitions change.
 	ToolDefinitionBase []messages.ToolDefinition
@@ -159,8 +223,6 @@ type sessionLoopOptions struct {
 	// selects the production wall-clock timer; tests may provide a deterministic
 	// fake-clock implementation.
 	PublicationTimerFactory webmcp.TimerFactory
-	turnRuntime             sessionturn.Runtime
-	turnBrowser             sessionturn.BrowserRequest
 
 	// AdvertiseToolDefinitions sends the definitions through the generic
 	// SESSION.UPDATE seam used by injected sessions. Live provider-backed
@@ -174,7 +236,7 @@ type sessionLoopOptions struct {
 
 	// runtime stamps audio input and lifecycle observations from inside the
 	// session command. Nil keeps the existing runtime path unchanged.
-	runtime *sessionRuntimeObservationRecorder
+	runtime sessiontrace.RuntimeRecorder
 
 	// cancellationIntent is the CLI-owned run marker used to distinguish an
 	// operator SIGINT from ordinary caller cancellation.
@@ -183,7 +245,7 @@ type sessionLoopOptions struct {
 	// terminalSummaryRecorder receives a synthetic user-cancellation terminal
 	// summary on the non-duration path. Duration artifacts already receive the
 	// same summary through writeDurationSessionReplayMessage.
-	terminalSummaryRecorder sessionduration.TerminalRecorder
+	terminalSummaryRecorder sessionDurationTerminalRecorder
 
 	// terminalReporter is the services-owned consume-once boundary for the
 	// customer-facing terminal announcement. Stream consumers only contribute
@@ -241,14 +303,14 @@ type sessionLoopOptions struct {
 }
 
 // duplexSessionLoopOptions is the single duplex loop construction seam. Both
-// session runners build their loops here so an injected executor is configured once.
+// the plain and duration-bounded session runners build their loops here so an
+// injected executor enables tool execution exactly once per session.
 func duplexSessionLoopOptions(observedInferencer messages.SessionInferencer, opts sessionLoopOptions) []agentloop.Option {
 	loopOpts := []agentloop.Option{
 		agentloop.WithMode(engine.DuplexSession),
 		agentloop.WithSessionInferencer(observedInferencer),
 	}
-	toolExecutor := sessionLoopToolExecutor(opts)
-	if toolExecutor != nil {
+	if opts.ToolExecutor != nil {
 		if len(opts.ToolDefinitions) > 0 {
 			loopOpts = append(loopOpts,
 				agentloop.WithTools(opts.ToolDefinitions),
@@ -259,13 +321,20 @@ func duplexSessionLoopOptions(observedInferencer messages.SessionInferencer, opt
 				}))
 			}
 		}
-		loopOpts = append(loopOpts, agentloop.WithToolExecutor(toolExecutor))
+		loopOpts = append(loopOpts, agentloop.WithToolExecutor(newSessionToolExecutorWithInteractivePolicyAndObserverAndCancellationIntentAndDiagnostics(
+			opts.ToolExecutor,
+			opts.InteractiveToolPolicy,
+			opts.ToolExecutionTimeout,
+			composeSessionToolLifecycleObserver(opts.toolLifecycleObserver, opts.observer, opts.runtime),
+			opts.cancellationIntent,
+			opts.toolDiagnostics,
+		)))
 		if opts.InteractiveToolPolicy != nil {
 			policy := opts.InteractiveToolPolicy.Clone()
 			loopOpts = append(loopOpts, agentloop.WithToolAcknowledgementPolicy(agentloop.ToolAcknowledgementPolicy{
-				Threshold: policy.Settings().AcknowledgementThreshold,
+				Threshold: policy.AcknowledgementThreshold,
 				IsLongRunning: func(name string) bool {
-					return policy.ClassForTool(name) == runtimeTools.InteractiveToolClassBoundedLongRunning
+					return policy.ClassForTool(name) == InteractiveToolClassBoundedLongRunning
 				},
 			}))
 		}
@@ -276,27 +345,33 @@ func duplexSessionLoopOptions(observedInferencer messages.SessionInferencer, opt
 }
 
 func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions) (runErr error) {
-	return runSessionDurationInvocation(ctx, out, sessionInferencer, opts, opts.MaxDuration, opts.livenessClock, nil)
-}
-
-type realSessionDurationClock struct{}
-
-func (realSessionDurationClock) NewTimer(interval time.Duration) sessionduration.Timer {
-	return platformclock.Real{}.NewTimer(interval)
-}
-
-func runSessionDurationInvocation(ctx context.Context, out io.Writer, inferencer messages.SessionInferencer, opts sessionLoopOptions, maxDuration time.Duration, clock sessionduration.TimerScheduler, admitted sessionduration.AdmissionInferencer) (runErr error) {
 	reporter := opts.terminalReporter
 	ownsReporter := reporter == nil
 	if reporter == nil {
-		reporter = terminalwire.NewReporter()
+		reporter = sessionterminalwire.NewReporter()
 		opts.terminalReporter = reporter
 	}
 	reporter.MarkRunStarted()
-	renderer := terminalwire.NewService().NewTranscriptRenderer(out, reporter.ObserveStreamMessage)
-	_, runErr = executeDurationRequest(ctx, renderer, inferencer, opts, maxDuration, clock, admitted)
+	renderer := newSessionReplayRenderer(out, reporter)
+	runErr = runAgentLoopSessionStream(ctx, renderer, sessionInferencer, opts)
+	if !roomChannelClosed(opts.BoundCancellation) {
+		runErr = audioResponseCompletionError(runErr, opts)
+		runErr = scheduledAudioCompletionError(runErr, opts)
+	} else if opts.observer != nil {
+		// A bound cancellation is an intentional room-owned terminal path. Mark
+		// it before finish so unresolved tool work and incomplete-response guards
+		// cannot turn the deliberate teardown into a session failure.
+		opts.observer.MarkRoomBoundCancellation()
+	}
+	cleanSIGINT := sessionSIGINTCleanForObserver(runErr, opts.cancellationIntent, opts.observer)
+	if opts.observer != nil {
+		runErr = opts.observer.Finish(runErr)
+	}
+	if cleanSIGINT {
+		runErr = errors.Join(runErr, publishSessionUserCancellation(renderer, opts, writeSessionReplayMessage))
+	}
 	if ownsReporter {
-		if err := renderer.Finish(); err != nil {
+		if err := renderer.finishTranscript(); err != nil {
 			runErr = errors.Join(runErr, err)
 		}
 		runErr = errors.Join(runErr, reporter.Publish(out, runErr))
@@ -304,234 +379,12 @@ func runSessionDurationInvocation(ctx context.Context, out io.Writer, inferencer
 	return runErr
 }
 
-func writeDurationSessionReplayMessage(out io.Writer, msg messages.StreamMessage, artifacts sessionduration.ArtifactLifecycle) error {
-	if artifacts != nil {
-		if err := artifacts.Accept(msg); err != nil {
-			return wrapSessionPhaseError("write duration artifacts", err)
-		}
-	}
-	return terminalwire.NewService().WriteTranscriptMessage(out, msg)
-}
-
-func executeDurationRequest(ctx context.Context, out io.Writer, inferencer messages.SessionInferencer, opts sessionLoopOptions, maxDuration time.Duration, clock sessionduration.TimerScheduler, admitted sessionduration.AdmissionInferencer) (sessionduration.Result, error) {
-	if opts.durationService == nil {
-		return sessionduration.Result{}, errors.New("session duration service is required")
-	}
-	if opts.durationRunner == nil {
-		return sessionduration.Result{}, errors.New("session duration runner is required")
-	}
-	builder := newDurationRequestBuilder(ctx, out, inferencer, opts, maxDuration, clock, admitted, opts.durationService)
-	request := builder.Build()
-	return opts.durationRunner.RunDuration(request)
-}
-
-type durationRequestBuilder struct {
-	ctx         context.Context
-	out         io.Writer
-	inferencer  messages.SessionInferencer
-	opts        sessionLoopOptions
-	maxDuration time.Duration
-	clock       sessionduration.TimerScheduler
-	admitted    sessionduration.AdmissionInferencer
-	service     sessionduration.Service
-	artifacts   sessionduration.ArtifactLifecycle
-	browser     sessionturn.BrowserRequest
-}
-
-func newDurationRequestBuilder(ctx context.Context, out io.Writer, inferencer messages.SessionInferencer, opts sessionLoopOptions, maxDuration time.Duration, clock sessionduration.TimerScheduler, admitted sessionduration.AdmissionInferencer, service sessionduration.Service) *durationRequestBuilder {
-	browser := opts.turnBrowser
-	if browser.Watch == nil && opts.BrowserWatch != nil {
-		browser = sessiontransport.SessionTurnBrowserRequest(opts.BrowserWatch, opts.RefreshToolDefinitions)
-	}
-	return &durationRequestBuilder{
-		ctx: ctx, out: out, inferencer: inferencer, opts: opts, maxDuration: maxDuration,
-		clock: clock, admitted: admitted, service: service,
-		artifacts: service.ArtifactsFromContext(ctx), browser: browser,
-	}
-}
-
-func (b *durationRequestBuilder) Build() runtimeSession.DurationRunRequest {
-	request := runtimeSession.DurationRunRequest{
-		Context:                    b.ctx,
-		Inferencer:                 b.inferencer,
-		Admission:                  b.admitted,
-		Clock:                      b.clock,
-		LivenessClock:              b.opts.livenessClock,
-		MaxDuration:                b.maxDuration,
-		Prompt:                     b.opts.Prompt,
-		PromptProvided:             b.opts.PromptProvided,
-		CloseAfterOpen:             b.opts.CloseAfterOpen,
-		WaitForClose:               b.opts.WaitForClose,
-		RequireAssistantResponse:   b.opts.RequireAssistantResponse,
-		RequireTerminalReply:       b.opts.RequireTerminalAssistantResponse,
-		CloseAfterScheduledAudio:   b.opts.CloseAfterScheduledAudio,
-		ScheduledAudioDispatch:     sessionduration.ScheduledAudioDispatch(b.opts.ScheduledAudioDispatch),
-		Observer:                   b.opts.observer,
-		CompletionObserver:         b.opts.observer,
-		SessionUpdatedTimeout:      b.opts.SessionUpdatedTimeout,
-		SessionUpdatedTimeoutError: sessionScheduledAudioConfigTimeoutError(b.opts),
-		Effects:                    b.effects(),
-		Publication:                b.publication(),
-		Done:                       b.opts.Done,
-		DoneError:                  b.doneError(),
-		Completion:                 b.completion(),
-		ToolExecutor:               sessionLoopToolExecutor(b.opts),
-		ToolDefinitions:            append([]messages.ToolDefinition(nil), b.opts.ToolDefinitions...),
-		AdvertiseToolDefinitions:   b.opts.AdvertiseToolDefinitions,
-		InteractiveToolPolicy:      b.opts.InteractiveToolPolicy,
-		Binding:                    b.opts.rtcDeviceBinding,
-		CloseProviderOnShutdown:    b.opts.BareLive,
-		QuiesceUpstream:            b.opts.quiesceUpstream,
-		StartPublication:           b.startPublication(),
-		WrapInferencer:             b.wrapInferencer(),
-		LoopReady:                  b.loopReady(),
-		FinishObserver:             b.opts.observer.finishDuration,
-		PublishUserCancellation:    b.publishUserCancellation(),
-		AudioInput:                 b.audioInput(),
-		AudioInterruptions:         b.audioInterruptions(),
-	}
-	return request
-}
-
-func (b *durationRequestBuilder) effects() sessionduration.RunEffects {
-	return sessionduration.RunEffects{
-		SessionCreated: func(_ context.Context, _ sessionduration.Loop) error {
-			if b.opts.ListeningBanner != "" && b.out != nil {
-				_, err := fmt.Fprintln(b.out, b.opts.ListeningBanner)
-				return err
-			}
-			return nil
-		},
-		AwaitFirstTurn: func(waitCtx context.Context) error {
-			if b.opts.awaitFirstTurn == nil {
-				return nil
-			}
-			return awaitSessionFirstTurnWithClock(waitCtx, b.opts.awaitFirstTurn, b.opts.audioService, b.opts.clockSource)
-		},
-	}
-}
-
-func (b *durationRequestBuilder) publication() sessionduration.Publication {
-	return sessionduration.Publication{Write: func(msg messages.StreamMessage) error {
-		return writeDurationSessionReplayMessage(b.out, msg, b.artifacts)
-	}}
-}
-
-func (b *durationRequestBuilder) doneError() func() error {
-	return func() error {
-		if b.opts.DoneErr == nil {
-			return nil
-		}
-		return b.opts.DoneErr()
-	}
-}
-
-func (b *durationRequestBuilder) completion() runtimeSession.DurationCompletionOptions {
-	return runtimeSession.DurationCompletionOptions{
-		AudioOutputError:              b.opts.AudioOutputError,
-		AssistantResponseIncomplete:   runtimeSession.ErrLiveAudioResponseIncomplete,
-		ScheduledAudioIncompleteCause: runtimeSession.ErrLiveScheduledAudioIncomplete,
-		BoundCancellation:             b.opts.BoundCancellation,
-	}
-}
-
-func (b *durationRequestBuilder) startPublication() func(context.Context, sessionduration.Loop) (runtimeSession.DurationPublication, error) {
-	return func(publishCtx context.Context, loop sessionduration.Loop) (runtimeSession.DurationPublication, error) {
-		if b.browser.Watch == nil || b.browser.Refresh == nil {
-			return nil, nil
-		}
-		sender, ok := loop.(sessionduration.SessionEventSender)
-		if !ok {
-			return nil, errors.New("session loop does not support tool publication")
-		}
-		publicationRequest := sessionturn.PublicationRequest{
-			BaseDefinitions:    append([]messages.ToolDefinition(nil), b.opts.ToolDefinitionBase...),
-			InitialDefinitions: append([]messages.ToolDefinition(nil), b.opts.ToolDefinitions...),
-			Browser:            b.browser,
-			Publish: func(ctx context.Context, definitions []messages.ToolDefinition) error {
-				return sender.SendSessionEvent(ctx, messages.StreamMessage{
-					Type:  messages.StreamTypeSessionUpdate,
-					Value: messages.NewSessionUpdateValue(&messages.SessionUpdateConfig{Tools: append([]messages.ToolDefinition(nil), definitions...)}),
-				})
-			},
-		}
-		if b.opts.turnRuntime != nil {
-			return b.opts.turnRuntime.StartPublication(publishCtx, publicationRequest)
-		}
-		return sessionturnwire.NewDefaultService().StartPublication(publishCtx, publicationRequest)
-	}
-}
-
-func (b *durationRequestBuilder) wrapInferencer() func(messages.SessionInferencer) (messages.SessionInferencer, runtimeSession.DurationSessionLifecycle, error) {
-	return func(admitted messages.SessionInferencer) (messages.SessionInferencer, runtimeSession.DurationSessionLifecycle, error) {
-		observed := newObservedSessionInferencer(admitted, b.opts.runtime)
-		observed.progress = b.opts.observer
-		return observed, observed, nil
-	}
-}
-
-func (b *durationRequestBuilder) loopReady() func(sessionduration.Loop) error {
-	return func(loop sessionduration.Loop) error {
-		if b.opts.loopReady == nil {
-			return nil
-		}
-		concrete, ok := loop.(*agentloop.AgentLoop)
-		if !ok || concrete == nil {
-			return errors.New("session loop adapter is invalid")
-		}
-		select {
-		case b.opts.loopReady <- concrete:
-			return nil
-		case <-b.ctx.Done():
-			return b.ctx.Err()
-		}
-	}
-}
-
-func (b *durationRequestBuilder) publishUserCancellation() func() error {
-	return func() error {
-		return publishSessionUserCancellation(b.out, b.opts, func(out io.Writer, msg messages.StreamMessage) error {
-			return writeDurationSessionReplayMessage(out, msg, b.artifacts)
-		})
-	}
-}
-
-func (b *durationRequestBuilder) audioInput() sessionduration.AudioInputPort {
-	if b.opts.AudioIn == nil {
-		return sessionduration.AudioInputPort{}
-	}
-	return sessionduration.AudioInputPort{
-		BindContext: b.opts.AudioIn.bindContext,
-		Run: func(audioCtx context.Context, loop sessionduration.Loop) error {
-			audioLoop, ok := loop.(sessionAudioLoop)
-			if !ok || audioLoop == nil {
-				return errors.New("session loop does not support audio input")
-			}
-			return streamSessionAudioInput(audioCtx, audioLoop, b.opts.AudioIn)
-		},
-	}
-}
-
-func (b *durationRequestBuilder) audioInterruptions() sessionduration.AudioInterruptionPort {
-	return sessionduration.AudioInterruptionPort{
-		Source: b.opts.AudioInterruptions,
-		Dispatch: func(dispatchCtx context.Context, loop sessionduration.Loop, input ScheduledAudioInput) error {
-			audioLoop, ok := loop.(sessionAudioLoop)
-			if !ok || audioLoop == nil {
-				return errors.New("session loop does not support audio interruption")
-			}
-			return sendEventDrivenAudioInput(dispatchCtx, audioLoop, b.opts, input)
-		},
-	}
-}
-
 func publishSessionUserCancellation(out io.Writer, opts sessionLoopOptions, write func(io.Writer, messages.StreamMessage) error) error {
 	terminal := sessionUserCancelledTerminalMessage(opts.observer)
 	var errs []error
 	if opts.terminalSummaryRecorder != nil {
-		if opts.durationService == nil {
-			errs = append(errs, errors.New("session duration service is required for terminal recording"))
-		} else if summary, present, err := opts.durationService.RecordingTerminalSummaryFromMessage(terminal); err != nil {
+		summary, present, err := recordingTerminalSummaryFromMessage(terminal)
+		if err != nil {
 			errs = append(errs, fmt.Errorf("record user cancellation terminal summary: %w", err))
 		} else if present {
 			if err := opts.terminalSummaryRecorder.RecordTerminalSummary(*summary); err != nil {
@@ -540,7 +393,7 @@ func publishSessionUserCancellation(out io.Writer, opts sessionLoopOptions, writ
 		}
 	}
 	if opts.terminalReporter != nil {
-		if _, ok := out.(sessionterminal.TranscriptRenderer); ok && write != nil {
+		if _, ok := out.(sessionReplayMessageWriter); ok && write != nil {
 			if err := write(out, terminal); err != nil {
 				errs = append(errs, err)
 			}
@@ -555,10 +408,10 @@ func publishSessionUserCancellation(out io.Writer, opts sessionLoopOptions, writ
 	return errors.Join(errs...)
 }
 
-func sessionUserCancelledTerminalMessage(observer *sessionProgressObserver) messages.StreamMessage {
+func sessionUserCancelledTerminalMessage(observer sessiontrace.Observer) messages.StreamMessage {
 	outputState := messages.TerminalOutputNone
 	if observer != nil {
-		outputState = observer.userCancellationOutputState()
+		outputState = observer.UserCancellationOutputState()
 	}
 	return messages.StreamMessage{
 		Type: messages.StreamTypeSessionClose,
@@ -571,6 +424,33 @@ func sessionUserCancelledTerminalMessage(observer *sessionProgressObserver) mess
 			outputState,
 		),
 	}
+}
+
+// audioResponseCompletionError prevents an audio-input session from reporting
+// clean success without a terminal assistant response. It also preserves the
+// older tool-continuation guard for callers that do not set RequireAssistantResponse.
+func audioResponseCompletionError(err error, opts sessionLoopOptions) error {
+	if opts.AudioOutputError != nil {
+		// Await output before applying incomplete-response precedence.
+		if outputErr := opts.AudioOutputError(); outputErr != nil {
+			err = errors.Join(err, outputErr)
+		}
+	}
+	if opts.RequireTerminalAssistantResponse && (opts.observer == nil || !opts.observer.AssistantResponseCompleted()) {
+		incomplete := ErrSessionAudioResponseIncomplete
+		if err == nil {
+			return incomplete
+		}
+		return errors.Join(err, incomplete)
+	}
+	if opts.observer == nil || !opts.observer.ProviderToolCallObserved() || opts.observer.AssistantResponseCompleted() {
+		return err
+	}
+	incomplete := ErrSessionAudioResponseIncomplete
+	if err == nil {
+		return incomplete
+	}
+	return errors.Join(err, incomplete)
 }
 
 // sessionRunTerminationError preserves a caller cancellation observed after
@@ -606,7 +486,7 @@ func decorateSessionStreamTerminalError(err error) error {
 	if !errors.As(err, &deltaErr) || deltaErr.Value == nil {
 		return err
 	}
-	fields := terminalwire.NewService().ErrorFields(deltaErr.Value)
+	fields := sessionErrorFields(deltaErr.Value)
 	if fields == "" || strings.Contains(err.Error(), "classification=") {
 		return err
 	}
@@ -617,12 +497,189 @@ func decorateSessionStreamTerminalError(err error) error {
 	return &sessionStreamTerminalError{cause: err, text: fmt.Sprintf("%s [%s]", message, fields)}
 }
 
+func scheduledAudioCompletionError(err error, opts sessionLoopOptions) error {
+	if !opts.CloseAfterScheduledAudio || opts.observer == nil || !opts.observer.ScheduledAudioIncomplete() {
+		return err
+	}
+	if errors.Is(err, ErrSessionScheduledAudioIncomplete) {
+		return err
+	}
+	completed, dispatched, scheduled := opts.observer.ScheduledAudioCounts()
+	providerStatus, providerCode, providerDetails := opts.observer.ScheduledAudioFailureMetadata()
+	incomplete := &SessionScheduledAudioIncompleteError{
+		Completed:         completed,
+		Dispatched:        dispatched,
+		Scheduled:         scheduled,
+		ProviderStatus:    providerStatus,
+		ProviderErrorCode: providerCode,
+		ProviderDetails:   providerDetails,
+	}
+	if err == nil {
+		return incomplete
+	}
+	return errors.Join(err, incomplete)
+}
+
+func sessionSIGINTCleanForObserver(err error, intent SessionCancellationIntent, observer sessiontrace.Observer) bool {
+	if intent == nil || !intent.SIGINTReceived() || observer == nil {
+		return false
+	}
+	return observer.CancellationClean(err)
+}
+
+func sessionErrorIsCancellation(err error) bool {
+	if err == nil || sessionterminalwire.HasIndependentFailure(err) {
+		return false
+	}
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+}
+
 func sessionScheduledAudioConfigTimeoutError(opts sessionLoopOptions) error {
 	timeout := opts.SessionUpdatedTimeout
 	if timeout <= 0 {
 		timeout = sessionScheduledAudioConfigTimeout
 	}
 	return fmt.Errorf("%w after %s", ErrSessionScheduledAudioConfigTimeout, timeout)
+}
+
+type sessionLoopMessageState struct {
+	promptSent            bool
+	closeSent             bool
+	closeAfterOpenPending bool
+	listeningReported     bool
+}
+
+type playbackDrainingSession interface {
+	DrainPlayback(context.Context) error
+}
+
+func closeBareSessionIfNeeded(bare bool, inferencer *observedSessionInferencer) error {
+	if !bare || inferencer == nil {
+		return nil
+	}
+	return inferencer.CloseSession()
+}
+
+func handleSessionLoopMessage(ctx context.Context, sessionDone <-chan struct{}, deadline <-chan time.Time, out io.Writer, loop *agentloop.AgentLoop, opts sessionLoopOptions, msg messages.StreamMessage, state sessionLoopMessageState, terminate func(error) error) (sessionLoopMessageState, bool, error) {
+	if opts.observer != nil {
+		opts.observer.Observe(msg)
+	}
+	if err := writeSessionReplayMessage(out, msg); err != nil {
+		return state, false, terminate(err)
+	}
+	if opts.observer != nil {
+		if livenessErr := opts.observer.LivenessFailure(); livenessErr != nil {
+			return state, false, terminate(livenessErr)
+		}
+	}
+	if msg.Type == messages.StreamTypeSessionCreated && (opts.BareLive || opts.BrowserToolsInteractive) && opts.ListeningBanner != "" && !state.listeningReported {
+		if _, err := fmt.Fprintln(out, opts.ListeningBanner); err != nil {
+			return state, false, terminate(err)
+		}
+		state.listeningReported = true
+	}
+	if err := retryScheduledRateLimitedResponseWithClock(ctx, sessionDone, deadline, loop, opts.observer, msg, opts.clockSource); err != nil {
+		if errors.Is(err, errSessionMaxDurationExpired) {
+			// The caller owns the clean terminal transition for a stop result.
+			// Returning the internal deadline sentinel here would both expose an
+			// implementation detail and make the caller skip its single shared
+			// termination boundary.
+			return state, true, nil
+		}
+		return state, false, terminate(err)
+	}
+	if msg.Type == messages.StreamTypeSessionOpen {
+		var openErr error
+		state, openErr = handleLiveSessionOpen(ctx, loop, opts, state)
+		if openErr != nil {
+			return state, false, terminate(openErr)
+		}
+	}
+	if shouldDispatchScheduledAudioForMessage(msg, opts.ScheduledAudioDispatch) {
+		if opts.observer != nil {
+			if err := opts.observer.DispatchScheduledInputs(ctx, loop); err != nil {
+				return state, false, terminate(err)
+			}
+		}
+	}
+	if opts.CloseAfterOpen && (opts.PromptProvided || opts.Prompt != "") && msg.Type == messages.StreamTypeMessageEnd && !state.closeSent && (opts.observer == nil || opts.observer.LastMessageEndAdmitted()) {
+		state.closeAfterOpenPending = true
+		var closeErr error
+		state, closeErr = closePendingSessionIfReady(ctx, loop, opts, state)
+		if closeErr != nil {
+			return state, false, terminate(closeErr)
+		}
+	}
+	if opts.CloseAfterScheduledAudio && msg.Type == messages.StreamTypeMessageEnd && (opts.observer == nil || opts.observer.LastMessageEndAdmitted()) {
+		var closeErr error
+		state, closeErr = closePendingSessionIfReady(ctx, loop, opts, state)
+		if closeErr != nil {
+			return state, false, terminate(closeErr)
+		}
+	}
+	if shouldStopSessionLoop(msg, opts) {
+		return state, true, nil
+	}
+	return state, false, nil
+}
+
+func retryScheduledRateLimitedResponseWithClock(ctx context.Context, sessionDone <-chan struct{}, deadline <-chan time.Time, loop *agentloop.AgentLoop, observer sessiontrace.Observer, msg messages.StreamMessage, source platformclock.Source) error {
+	if observer == nil || loop == nil || msg.Type != messages.StreamTypeMessageEnd {
+		return nil
+	}
+	terminal, ok := msg.Value.(*messages.MessageEndValue)
+	if !ok || terminal == nil {
+		return nil
+	}
+	if sessionDurationTimerReady(deadline) {
+		return errSessionMaxDurationExpired
+	}
+	delay, retry := observer.ClaimScheduledRateLimitRetry(msg.ResponseID, terminal)
+	if !retry {
+		return nil
+	}
+	timerSource, err := platformclock.RequireTimerSource(source)
+	if err != nil {
+		return err
+	}
+	timer := timerSource.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-timer.C():
+		if sessionDurationTimerReady(deadline) {
+			return errSessionMaxDurationExpired
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		select {
+		case <-sessionDone:
+			return context.Canceled
+		default:
+		}
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-sessionDone:
+		return context.Canceled
+	case <-deadline:
+		return errSessionMaxDurationExpired
+	}
+	if sessionDurationTimerReady(deadline) {
+		return errSessionMaxDurationExpired
+	}
+	select {
+	case <-sessionDone:
+		return context.Canceled
+	default:
+	}
+	if err := loop.SendSessionEvent(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeResponseCreate,
+		Value: messages.NewResponseCreateValue(),
+	}); err != nil {
+		return fmt.Errorf("send rate-limit retry response: %w", err)
+	}
+	observer.ObserveProviderDispatch(messages.StreamMessage{Type: messages.StreamTypeResponseCreate})
+	return nil
 }
 
 // shouldDispatchScheduledAudioForMessage identifies stream boundaries that can
@@ -638,5 +695,338 @@ func shouldDispatchScheduledAudioForMessage(msg messages.StreamMessage, policy S
 		return policy == ScheduledAudioDispatchActiveResponse
 	default:
 		return false
+	}
+}
+
+// newSessionLiveTerminationBoundary builds the shared termination boundary
+// for the live session loop. It is factored out of runAgentLoopSessionStream
+// so that function's select loop — which owns a dozen distinct terminal exit
+// paths — stays under the enforced length limit; the boundary itself is what
+// keeps every one of those paths consistent through the public terminal
+// service boundary.
+func newSessionLiveTerminationBoundary(
+	ctx context.Context,
+	quiesceUpstream func() error,
+	stopOwnedResources func() error,
+	out io.Writer,
+	loop *agentloop.AgentLoop,
+	opts sessionLoopOptions,
+	observedInferencer *observedSessionInferencer,
+) sessionterminal.TerminationBoundary {
+	return sessionterminalwire.NewTerminationBoundary(sessionterminal.TerminationOptions{
+		Context:         ctx,
+		QuiesceUpstream: quiesceUpstream,
+		WaitForStragglers: func() error {
+			// Keep the injected clock as the canonical quiet-period source so
+			// runtime timestamps and scheduling remain in one domain. The drain
+			// itself also has a wall-time safety bound for deterministic clocks:
+			// teardown can begin after the last virtual tick, and cleanup must not
+			// wait forever for a timer that no owner can advance anymore.
+			source := opts.clockSource
+			return waitForSessionLoopStragglersWithContext(ctx, out, loop, sessionStragglerDrainPolicy{quietPeriod: sessionterminal.StragglerDrainQuietPeriod}, opts.observer, source, opts.audioService)
+		},
+		StopOwnedResources: stopOwnedResources,
+		FlushBuffered: func() error {
+			flushErr := flushBufferedSessionLoopMessages(out, loop, opts.observer)
+			if opts.observer != nil {
+				// The engine may have committed a provider tool delta to conversation
+				// history before cancellation prevented the consumer-facing outbox from
+				// delivering it. Recover only provider tool lifecycle identity after the
+				// hot loop is stopped, avoiding duplicate output accounting.
+				opts.observer.ObserveBufferedProviderToolLifecycle(loop.GetConversationDeltas())
+			}
+			if sessionErr := observedInferencer.sessionFailure(); sessionErr != nil {
+				flushErr = errors.Join(flushErr, fmt.Errorf("session transport: %w", sessionErr))
+			}
+			return flushErr
+		},
+	})
+}
+
+func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions) (runErr error) {
+	var finishOutput func(error) error
+	out, finishOutput = prepareSessionStreamOutput(out, &opts)
+	defer func() { runErr = finishOutput(runErr) }()
+	if opts.observer != nil {
+		defer opts.observer.StopLiveness()
+	}
+	loop, observedInferencer, rtcPumpErrors, err := newObservedSessionLoop(sessionInferencer, opts)
+	if err != nil {
+		return err
+	}
+
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	// Audio input is an upstream producer owned by this session, but it must
+	// stop before the shared terminal boundary begins waiting for provider
+	// stragglers. Keep its cancellation scope separate from runCtx so the
+	// provider output drain can still run after the producer is quiesced.
+	publisher, publisherErrors := startSessionDynamicToolPublisher(runCtx, loop, opts)
+	var livenessErrors <-chan error
+	if opts.observer != nil {
+		livenessErrors = opts.observer.LivenessErrors(runCtx)
+	}
+	publisherErrors = sessiontracewire.MergeErrorChannels(runCtx, publisherErrors, livenessErrors)
+	defer publisher.stop()
+	if err := bindSessionLoopInputs(runCtx, loop, opts); err != nil {
+		return err
+	}
+
+	timeout, stopTimeout, err := sessionStreamDeadline(opts)
+	if err != nil {
+		return err
+	}
+	defer stopTimeout()
+	runErrCh := make(chan error, 1)
+	go func() {
+		runErrCh <- loop.Run(runCtx)
+	}()
+
+	runDone := false
+	runErrSelectCh := (<-chan error)(runErrCh)
+	waitRun := func() error {
+		if !runDone {
+			select {
+			case runErr = <-runErrCh:
+				runDone = true
+			case <-ctx.Done():
+				// Bound provider close waits by the owning context.
+				return ctx.Err()
+			}
+		}
+		return runErr
+	}
+	quiesceUpstream := opts.quiesceUpstream
+	drainDevicePlayback := false
+	stopOwnedResources := func() error {
+		var drainErr error
+		if drainDevicePlayback {
+			drainErr = observedInferencer.DrainSessionPlayback(ctx)
+		}
+		cancel()
+		providerErr := closeBareSessionIfNeeded(opts.BareLive, observedInferencer)
+		var runTerminationErr error
+		if runErr := waitRun(); runErr != nil && !sessionErrorIsCancellation(runErr) {
+			runTerminationErr = fmt.Errorf("session error: %w", runErr)
+		}
+		return errors.Join(drainErr, providerErr, runTerminationErr)
+	}
+	termination := newSessionLiveTerminationBoundary(ctx, quiesceUpstream, stopOwnedResources, out, loop, opts, observedInferencer)
+	terminate := termination.Terminate
+	terminateWithPlaybackDrain := func(err error) error {
+		drainDevicePlayback = err == nil && ctx.Err() == nil
+		return terminate(err)
+	}
+
+	var sessionUpdatedTimer platformclock.Timer
+	var sessionUpdatedTimeout <-chan time.Time
+	var sessionUpdatedTimerErr error
+	defer func() { stopLiveSessionUpdatedTimer(&sessionUpdatedTimer, &sessionUpdatedTimeout) }()
+
+	state := sessionLoopMessageState{}
+	// awaitingResponse keeps finite audio EOF from ending an admitted turn early.
+	awaitingResponse := true
+	done := opts.Done
+	providerDone := observedInferencer.Done()
+	admissionClosed := opts.AdmissionClosed
+	boundCancellation := opts.BoundCancellation
+	audioInterruptions := opts.AudioInterruptions
+	var toolLifecycleEvents <-chan struct{}
+	if opts.observer != nil {
+		toolLifecycleEvents = opts.observer.ToolLifecycleEvents()
+	}
+	handleDelta := func(msg messages.StreamMessage) (bool, error) {
+		nextState, stopLoop, msgErr := handleSessionLoopMessage(runCtx, providerDone, timeout, out, loop, opts, msg, state, terminate)
+		state = nextState
+		if msgErr != nil {
+			return false, msgErr
+		}
+		if msg.Type == messages.StreamTypeSessionCreated {
+			// SESSION.UPDATE is sent while handling SESSION.CREATED. Release
+			// dynamic publication only after that bootstrap boundary is observed.
+			publisher.markSessionReady()
+		}
+		if msg.Type == messages.StreamTypeSessionOpen {
+			sessionUpdatedTimer, sessionUpdatedTimeout, sessionUpdatedTimerErr = startLiveSessionUpdatedTimer(opts, sessionUpdatedTimer)
+		}
+		if sessionUpdatedTimerErr != nil {
+			return false, terminate(sessionUpdatedTimerErr)
+		}
+		if opts.observer != nil && opts.observer.ScheduledAudioReady() {
+			stopLiveSessionUpdatedTimer(&sessionUpdatedTimer, &sessionUpdatedTimeout)
+		}
+		return stopLoop, nil
+	}
+	drainPublishedDeltas := func() (bool, error) {
+		return drainPublishedSessionDeltas(loop.Deltas().Read, handleDelta)
+	}
+	for {
+		select {
+		case <-admissionClosed:
+			admissionClosed = nil
+			audioInterruptions = nil
+			toolLifecycleEvents = nil
+		case <-boundCancellation:
+			boundCancellation = nil
+			return terminate(nil)
+		case publicationErr := <-publisherErrors:
+			return terminate(publicationErr)
+		case input, ok := <-audioInterruptions:
+			if !ok {
+				audioInterruptions = nil
+				continue
+			}
+			if err := sendEventDrivenAudioInput(runCtx, loop, opts, input); err != nil {
+				return terminate(err)
+			}
+		case <-toolLifecycleEvents:
+			// A tool lifecycle transition can make the next scheduled audio
+			// input eligible without producing a provider delta. Re-run the
+			// scheduler on the same serialized session-loop goroutine before
+			// evaluating close, so result acceptance and continuation
+			// completion cannot strand the next turn.
+			if opts.observer != nil {
+				if err := opts.observer.DispatchScheduledInputs(runCtx, loop); err != nil {
+					return terminate(err)
+				}
+			}
+			var closeErr error
+			state, closeErr = closePendingSessionIfReady(runCtx, loop, opts, state)
+			if closeErr != nil {
+				return terminate(closeErr)
+			}
+		case pumpErr := <-rtcPumpErrors:
+			return terminate(pumpErr)
+		case <-done:
+			doneErr := error(nil)
+			if opts.DoneErr != nil {
+				doneErr = opts.DoneErr()
+			}
+			return terminate(doneErr)
+		case <-timeout:
+			return terminate(nil)
+		case <-sessionUpdatedTimeout:
+			stopLiveSessionUpdatedTimer(&sessionUpdatedTimer, &sessionUpdatedTimeout)
+			return terminate(sessionScheduledAudioConfigTimeoutError(opts))
+		case <-ctx.Done():
+			if awaitingResponse {
+				return terminate(fmt.Errorf("session cancelled while awaiting model response after end-of-turn: %w", ctx.Err()))
+			}
+			return sessionRunTerminationError(ctx, terminate(nil))
+		case <-providerDone:
+			if connectErr := observedInferencer.connectFailure(); connectErr != nil {
+				return terminate(fmt.Errorf("session connect: %w", connectErr))
+			}
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				if awaitingResponse {
+					return terminate(fmt.Errorf("session cancelled while awaiting model response after end-of-turn: %w", ctxErr))
+				}
+				return sessionRunTerminationError(ctx, terminate(nil))
+			}
+			// The session runner emits a synthetic provider-close delta after it
+			// drains any messages already queued by the provider. AgentLoop.Run
+			// may report its hot-loop completion before the delta-forwarding
+			// goroutine publishes that final message. Keep the provider signal
+			// disabled after observing it and let the terminal delta reach this
+			// loop, so a final audio frame cannot be discarded by teardown.
+			providerDone = nil
+			continue
+		case err := <-runErrSelectCh:
+			runErr = err
+			runDone = true
+			runErrSelectCh = nil
+			if runErr == nil {
+				// AgentLoop.Run joins its forwarding worker before returning, so
+				// every kernel delta is already in the public buffer. Consume it
+				// before teardown. Waiting for providerDone is unsafe because a
+				// clean loop completion cancels the model runner while its provider
+				// transport may intentionally keep the socket open.
+				stopLoop, drainErr := drainPublishedDeltas()
+				if drainErr != nil {
+					return drainErr
+				}
+				if stopLoop {
+					return terminateWithPlaybackDrain(nil)
+				}
+			}
+			if ctxErr := ctx.Err(); ctxErr != nil && awaitingResponse {
+				return terminate(fmt.Errorf("session cancelled while awaiting model response after end-of-turn: %w", ctxErr))
+			}
+			if runErr == nil && ctx.Err() == nil {
+				return sessionRunTerminationError(ctx, terminateWithPlaybackDrain(nil))
+			}
+			return sessionRunTerminationError(ctx, terminate(nil))
+		case msg := <-loop.Deltas().Chan():
+			stopLoop, msgErr := handleDelta(msg)
+			if msgErr != nil {
+				return msgErr
+			}
+			if stopLoop {
+				return terminateWithPlaybackDrain(nil)
+			}
+		}
+	}
+}
+
+// closePendingSessionIfReady is shared by response handling and the
+// asynchronous tool-result acceptance wake-up. A final accepted result may
+// arrive after the final response.done, so closure must be re-evaluated from
+// both paths.
+func closePendingSessionIfReady(ctx context.Context, loop *agentloop.AgentLoop, opts sessionLoopOptions, state sessionLoopMessageState) (sessionLoopMessageState, error) {
+	if state.closeSent {
+		return state, nil
+	}
+	if opts.observer != nil && opts.observer.HasToolLifecycleObligation() {
+		return state, nil
+	}
+	closeAfterOpen := opts.CloseAfterOpen && state.closeAfterOpenPending
+	closeAfterScheduled := opts.CloseAfterScheduledAudio && opts.observer != nil && opts.observer.ScheduledAudioComplete()
+	if !closeAfterOpen && !closeAfterScheduled {
+		return state, nil
+	}
+	if err := sendSessionClose(ctx, loop); err != nil {
+		return state, err
+	}
+	state.closeSent = true
+	return state, nil
+}
+
+func newDurationStragglerTimer(clock SessionDurationClock, quiet time.Duration) (SessionDurationTimer, error) {
+	if clock == nil {
+		return nil, errors.New("session duration clock is required for straggler drain")
+	}
+	timer := clock.NewTimer(quiet)
+	if timer == nil {
+		return nil, errors.New("session duration clock returned a nil straggler timer")
+	}
+	return timer, nil
+}
+
+func resetDurationStragglerTimer(timer SessionDurationTimer, clock SessionDurationClock, quiet time.Duration) (SessionDurationTimer, error) {
+	stopAndDrainSessionTimer(timer)
+	return newDurationStragglerTimer(clock, quiet)
+}
+
+func (s *observedSession) markDone() {
+	s.once.Do(s.closeDone)
+}
+
+// drainPublishedSessionDeltas consumes the finite set of messages already
+// published to the session loop's public delta buffer. AgentLoop.Run's clean
+// completion is a publication barrier, so callers must inspect this buffer
+// before treating the run result as the terminal boundary.
+func drainPublishedSessionDeltas(read func() (messages.StreamMessage, bool), handle func(messages.StreamMessage) (bool, error)) (bool, error) {
+	if read == nil || handle == nil {
+		return false, nil
+	}
+	for {
+		msg, ok := read()
+		if !ok {
+			return false, nil
+		}
+		stopLoop, err := handle(msg)
+		if err != nil || stopLoop {
+			return stopLoop, err
+		}
 	}
 }

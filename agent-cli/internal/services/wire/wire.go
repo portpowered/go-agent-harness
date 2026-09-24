@@ -30,8 +30,6 @@ import (
 	runtimeRoomReplayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay/wire"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
-	sessionwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
-	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
@@ -161,23 +159,17 @@ func NewSessionService(deps SessionDependencies) serviceSession.SessionService {
 // NewSessionRuntime builds the private runtime implementation behind its
 // public contract. Application Wire never imports services/internal.
 func NewSessionRuntime(audioService audioio.Service, clockSource clock.Source, resolver serviceTools.Service, planFactory agentruntime.SessionRuntimeFactory, runtimeFactory agentruntime.SessionRTCRuntimeFactory, inferencer messages.SessionInferencer, toolExecutor messages.ToolExecutor, deviceService runtimeDevices.Service, observer agentruntime.SessionRuntimeObserver, metricSampler observability.MetricSampler, logger observability.Logger, modelCatalog runtimeProviders.ModelCatalog, browserConversation runtimeBrowser.Service) serviceRuntime.Runtime {
-	_ = browserConversation
 	return agentruntime.New(agentruntime.Dependencies{
 		AudioService: audioService, Clock: clockSource, PlanFactory: planFactory, ToolService: resolver, RuntimeFactory: runtimeFactory,
 		SessionInferencer: inferencer, ToolExecutor: toolExecutor,
 		DeviceService: deviceService, RuntimeObserver: observer,
 		Observability: observability.NewDependencies(metricSampler, logger),
-		ModelCatalog:  modelCatalog,
+		ModelCatalog:  modelCatalog, BrowserConversation: browserConversation,
 	})
 }
 
 func NewSessionRuntimeFactory() agentruntime.SessionRuntimeFactory {
-	durationService := durationwire.NewService()
-	durationRunner := sessionwire.NewDurationRunner(sessionwire.DurationDependencies{
-		DurationService: durationService,
-		LoopFactory:     sessionwire.NewDuplexLoopFactory(),
-	})
-	return agentruntime.NewSessionRuntimeFactory(durationService, durationRunner)
+	return agentruntime.NewSessionRuntimeFactory()
 }
 
 var SessionSet = wire.NewSet(NewSessionRuntimeFactory, NewSessionRuntime, NewSessionService)

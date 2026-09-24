@@ -116,7 +116,7 @@ func TestModelAdmissionAdaptersPreserveSessionBoundaries(t *testing.T) {
 	const customModelID = "custom-only"
 
 	custom := sessionModelCatalog{models: []OpenAIRealtimeModel{{ID: customModelID, SupportsAudio: true}}}
-	options := newTestSessionRunOptions(SessionRunOptions{ModelCatalog: custom})
+	options := SessionRunOptions{ModelCatalog: custom}
 
 	model, ok := lookupOpenAIRealtimeModel(options, " custom-only ")
 	if !ok || model.ID != customModelID {
@@ -148,7 +148,7 @@ func TestModelAdmissionAdaptersPreserveSessionBoundaries(t *testing.T) {
 }
 
 func TestModelAdmissionAdaptersPreserveNilCatalogContexts(t *testing.T) {
-	if err := unsupportedOpenAIRealtimeModelErrorFor(newTestSessionRunOptions(SessionRunOptions{}), "gpt-realtime"); !errors.Is(err, runtimeproviders.ErrModelCatalogRequired) || !strings.Contains(err.Error(), "OpenAI realtime model admission") {
+	if err := unsupportedOpenAIRealtimeModelErrorFor(SessionRunOptions{}, "gpt-realtime"); !errors.Is(err, runtimeproviders.ErrModelCatalogRequired) || !strings.Contains(err.Error(), "OpenAI realtime model admission") {
 		t.Fatalf("session nil-catalog error = %v", err)
 	}
 }
@@ -168,11 +168,11 @@ func TestNewOpenAIRealtimeSessionInferencer_UnsupportedModelsRejectBeforeDial(t 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dialer := &recordingOpenAIRealtimeDialer{}
-			_, _, err := NewLiveSessionInferencer(newTestSessionRunOptions(SessionRunOptions{
+			_, _, err := NewLiveSessionInferencer(SessionRunOptions{
 				AudioService: newTestAudioIOService(),
 				Provider:     "openai", Model: tt.model, ModelProvided: true,
 				APIKey: "test-key", ModelCatalog: testModelCatalog(), WebSocketDialer: dialer,
-			}), "")
+			}, "")
 			if err == nil {
 				t.Fatal("expected unsupported model error")
 			}
@@ -226,13 +226,13 @@ func TestNewOpenAIRealtimeSessionInferencer_SupportedModelsReachDialer(t *testin
 }
 
 func TestNewLiveSessionInferencer_GPTRealtime21CarriesReasoningEffort(t *testing.T) {
-	inferencer, model, err := NewLiveSessionInferencer(newTestSessionRunOptions(SessionRunOptions{
+	inferencer, model, err := NewLiveSessionInferencer(SessionRunOptions{
 		ModelCatalog: testModelCatalog(),
 		AudioService: newTestAudioIOService(),
 		Provider:     config.ProviderOpenAI, Model: openAIRealtime21Model, ModelProvided: true,
 		APIKey: "sk-test", BaseURL: "ws://openai.test/realtime", ConfigDir: t.TempDir(),
 		ReasoningEffort: "high",
-	}), "test")
+	}, "test")
 	if err != nil {
 		t.Fatalf("NewLiveSessionInferencer: %v", err)
 	}
@@ -269,7 +269,7 @@ func TestNewLiveSessionInferencerBuildsAudioSessionRequest(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			inferencer, model, err := NewLiveSessionInferencer(newTestSessionRunOptions(SessionRunOptions{
+			inferencer, model, err := NewLiveSessionInferencer(SessionRunOptions{
 				ModelCatalog: testModelCatalog(),
 				AudioService: newTestAudioIOService(),
 				Provider:     tt.provider,
@@ -278,7 +278,7 @@ func TestNewLiveSessionInferencerBuildsAudioSessionRequest(t *testing.T) {
 				BaseURL:      tt.baseURL,
 				ConfigDir:    t.TempDir(),
 				Voice:        tt.voice,
-			}), "respond with the device probe phrase")
+			}, "respond with the device probe phrase")
 			if err != nil {
 				t.Fatalf("NewLiveSessionInferencer: %v", err)
 			}
@@ -416,12 +416,12 @@ model:
   provider: openai
 `)
 
-	got, err := resolveOpenAIRealtimeSessionConfig(newTestSessionRunOptions(SessionRunOptions{
+	got, err := resolveOpenAIRealtimeSessionConfig(SessionRunOptions{
 		ModelCatalog: testModelCatalog(),
 		Provider:     config.ProviderOpenAI,
 		APIKey:       "sk-test-key",
 		ConfigDir:    configDir,
-	}))
+	})
 	if err != nil {
 		t.Fatalf("resolveOpenAIRealtimeSessionConfig: %v", err)
 	}
@@ -447,11 +447,11 @@ model:
   provider: openai
 `)
 
-	_, err := resolveOpenAIRealtimeSessionConfig(newTestSessionRunOptions(SessionRunOptions{
+	_, err := resolveOpenAIRealtimeSessionConfig(SessionRunOptions{
 		ModelCatalog: testModelCatalog(),
 		Provider:     config.ProviderOpenAI,
 		ConfigDir:    configDir,
-	}))
+	})
 	if err == nil {
 		t.Fatal("resolveOpenAIRealtimeSessionConfig() = nil error, want a missing-credential error")
 	}
@@ -473,7 +473,7 @@ model:
 `)
 	dialer := &recordingGrokRealtimeDialer{dialErr: errors.New("dial should not be reached")}
 
-	err := RunSession(context.Background(), &strings.Builder{}, newTestSessionRunOptions(SessionRunOptions{
+	err := RunSession(context.Background(), &strings.Builder{}, SessionRunOptions{
 		ModelCatalog:    testModelCatalog(),
 		AudioService:    newTestAudioIOService(),
 		RecordPath:      filepath.Join(t.TempDir(), "openai-session.json"),
@@ -481,7 +481,7 @@ model:
 		ModelProvided:   true,
 		ConfigDir:       configDir,
 		WebSocketDialer: dialer,
-	}))
+	})
 	if err == nil {
 		t.Fatal("expected explicit empty model rejection")
 	}
@@ -509,12 +509,12 @@ model:
     api_key: sk-test-key
 `)
 
-	_, err := resolveOpenAIRealtimeSessionConfig(newTestSessionRunOptions(SessionRunOptions{
+	_, err := resolveOpenAIRealtimeSessionConfig(SessionRunOptions{
 		ModelCatalog: testModelCatalog(),
 		Provider:     config.ProviderOpenAI,
 		Model:        "   ",
 		ConfigDir:    configDir,
-	}))
+	})
 	if err == nil {
 		t.Fatal("expected whitespace model rejection")
 	}
@@ -526,7 +526,7 @@ model:
 func runOpenAIRealtimeWithDialer(t *testing.T, configDir, model string, dialer transport.Dialer) (string, error) {
 	t.Helper()
 	var out strings.Builder
-	err := RunSession(context.Background(), &out, newTestSessionRunOptions(SessionRunOptions{
+	err := RunSession(context.Background(), &out, SessionRunOptions{
 		ModelCatalog:    testModelCatalog(),
 		AudioService:    newTestAudioIOService(),
 		RecordPath:      filepath.Join(t.TempDir(), "openai-session.json"),
@@ -534,7 +534,7 @@ func runOpenAIRealtimeWithDialer(t *testing.T, configDir, model string, dialer t
 		Model:           model,
 		ConfigDir:       configDir,
 		WebSocketDialer: dialer,
-	}))
+	})
 	return out.String(), err
 }
 

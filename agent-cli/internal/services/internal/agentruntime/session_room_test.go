@@ -1275,7 +1275,6 @@ func newRoomTestRunOptions(ids []string, inferencers map[string]*roomTestInferen
 		}
 		return inferencer, nil
 	}
-	opts = newTestRoomRunOptions(opts)
 	return opts, factoryCalls
 }
 

@@ -36,7 +36,6 @@ type roomEvidenceDiagnosticLine struct {
 
 func withRoomTestEvidence(options RoomRunOptions) RoomRunOptions {
 	options.evidenceService, options.latencyService = roomevidencewire.NewService(), roomevidencewire.NewLatencyService()
-	options.RuntimeFactory = newTestSessionRuntimeFactory()
 	return options
 }
 

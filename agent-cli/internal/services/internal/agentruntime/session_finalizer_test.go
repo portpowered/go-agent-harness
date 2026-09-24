@@ -8,19 +8,7 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
-	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 )
-
-type testSessionRuntimeFinalizer struct{ inner sessionduration.Finalizer }
-
-func newSessionRuntimeFinalizer(plan sessionRuntimePlan) *testSessionRuntimeFinalizer {
-	return &testSessionRuntimeFinalizer{inner: durationwire.NewService().NewFinalizer(plan.finalizationPorts(nil, false))}
-}
-
-func (f *testSessionRuntimeFinalizer) finish(ctx context.Context, out io.Writer, primary error) error {
-	return f.inner.Finish(ctx, out, primary)
-}
 
 type sessionFinalizerRuntimeProbe struct {
 	close func() error
@@ -49,7 +37,7 @@ func TestSessionRuntimeFinalizerRunsOrderedStagesOnceAndJoinsFailures(t *testing
 	flushCalls := 0
 	finalizeCalls := 0
 
-	plan := newTestSessionRuntimePlan(sessionRuntimePlan{
+	plan := sessionRuntimePlan{
 		mode:        sessionRuntimeModeRecordGrok,
 		capturePath: "capture.json",
 		capabilityCoordinator: NewSessionCapabilityCoordinator(func() error {
@@ -75,7 +63,7 @@ func TestSessionRuntimeFinalizerRunsOrderedStagesOnceAndJoinsFailures(t *testing
 			order = append(order, "finalize")
 			return finalizeErr
 		},
-	})
+	}
 
 	finalizer := newSessionRuntimeFinalizer(plan)
 	gotErr := finalizer.finish(context.Background(), io.Discard, primaryErr)
@@ -105,7 +93,7 @@ func TestSessionRuntimeFinalizerRunsOrderedStagesOnceAndJoinsFailures(t *testing
 func TestSessionRuntimeFinalizerContinuesAfterCleanupPanic(t *testing.T) {
 	primaryErr := errors.New("session loop failed")
 	var order []string
-	plan := newTestSessionRuntimePlan(sessionRuntimePlan{
+	plan := sessionRuntimePlan{
 		closeSession: func() error {
 			order = append(order, "provider")
 			panic("provider cleanup panic")
@@ -122,10 +110,10 @@ func TestSessionRuntimeFinalizerContinuesAfterCleanupPanic(t *testing.T) {
 			order = append(order, "finalize")
 			return nil
 		},
-	})
+	}
 
 	gotErr := newSessionRuntimeFinalizer(plan).finish(context.Background(), io.Discard, primaryErr)
-	if !errors.Is(gotErr, primaryErr) || !errors.Is(gotErr, sessionduration.ErrFinalizationPanic) {
+	if !errors.Is(gotErr, primaryErr) || !errors.Is(gotErr, ErrSessionFinalizationPanic) {
 		t.Fatalf("panic finalization error = %v, want primary and panic identities", gotErr)
 	}
 	if want := []string{"provider", "runtime", "capture", "finalize"}; !reflect.DeepEqual(order, want) {
@@ -142,7 +130,7 @@ func TestSessionRuntimePlanFinalizesAfterAnnouncementOutputFailure(t *testing.T)
 	capabilityCalls := 0
 	flushCalls := 0
 	finalizeCalls := 0
-	plan := newTestSessionRuntimePlan(sessionRuntimePlan{
+	plan := sessionRuntimePlan{
 		mode:        sessionRuntimeModeRecordGrok,
 		announce:    "starting session",
 		capturePath: "capture.json",
@@ -158,7 +146,7 @@ func TestSessionRuntimePlanFinalizesAfterAnnouncementOutputFailure(t *testing.T)
 			finalizeCalls++
 			return nil
 		},
-	})
+	}
 
 	gotErr := plan.run(context.Background(), sessionFinalizerFailingWriter{err: primaryErr})
 	if !errors.Is(gotErr, primaryErr) {
@@ -200,8 +188,8 @@ func TestRunSessionDurationPlanUsesCommonFinalizerOnLoopFailure(t *testing.T) {
 	capabilityCalls := 0
 	flushCalls := 0
 	finalizeCalls := 0
-	plan := newTestSessionRuntimePlan(sessionRuntimePlan{
-		loop:        newTestSessionLoopOptions(sessionLoopOptions{audioService: newTestAudioIOService()}),
+	plan := sessionRuntimePlan{
+		loop:        sessionLoopOptions{audioService: newTestAudioIOService()},
 		mode:        sessionRuntimeModeRecordOpenAI,
 		capturePath: "capture.json",
 		inferencer:  &durationTestInferencer{connectErr: primaryErr},
@@ -217,9 +205,9 @@ func TestRunSessionDurationPlanUsesCommonFinalizerOnLoopFailure(t *testing.T) {
 			finalizeCalls++
 			return finalizeErr
 		},
-	})
+	}
 
-	ctx := durationwire.NewService().WithArtifacts(context.Background(), artifacts)
+	ctx := WithSessionDurationArtifacts(context.Background(), artifacts)
 	gotErr := runSessionDurationPlan(ctx, io.Discard, plan, 0, nil)
 	for _, wantErr := range []error{primaryErr, capabilityErr, captureErr, finalizeErr, artifacts.closeErr} {
 		if !errors.Is(gotErr, wantErr) {

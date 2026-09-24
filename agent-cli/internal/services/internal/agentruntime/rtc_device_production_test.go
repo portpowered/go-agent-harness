@@ -109,14 +109,14 @@ func exerciseRTCDeviceAudioPass(t *testing.T, registry *devicegw.VirtualRegistry
 	defer cancel()
 	runErr := make(chan error, 1)
 	go func() {
-		runErr <- agentruntime.RunSession(ctx, io.Discard, newTestSessionRunOptions(agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
+		runErr <- agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
 			ReplayPath: "device-record-replay.json", SessionInferencer: inferencer,
 			DeviceService: newTestDeviceService(registry),
 			RTCBinding: runtimedevices.RTCBindingRequest{
 				InputDevice: rtcRoundtripInputID, OutputDevice: rtcRoundtripOutputID,
 				InputPresent: true, OutputPresent: true,
 			},
-		}))
+		})
 	}()
 	want := rtcRoundtripPCMFrame(0)
 	readResult := make(chan []int16, 1)
@@ -217,7 +217,7 @@ func TestRunSessionRTCBindingUsesProductionProviderMediaOwner(t *testing.T) {
 
 	runErrCh := make(chan error, 1)
 	go func() {
-		runErrCh <- agentruntime.RunSession(ctx, io.Discard, newTestSessionRunOptions(agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
+		runErrCh <- agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: audioiowire.NewService(),
 			ReplayPath:        "synthetic.json",
 			SessionInferencer: inferencer,
 			DeviceService:     newTestDeviceService(registry),
@@ -227,7 +227,7 @@ func TestRunSessionRTCBindingUsesProductionProviderMediaOwner(t *testing.T) {
 				InputPresent:  true,
 				OutputPresent: true,
 			},
-		}))
+		})
 	}()
 
 	want := rtcRoundtripPCMFrame(0)

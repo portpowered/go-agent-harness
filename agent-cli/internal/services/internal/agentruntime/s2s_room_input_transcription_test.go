@@ -87,7 +87,7 @@ func runRoomInputTranscriptionScenario(t *testing.T, model string, servers map[s
 }
 
 func roomInputTranscriptionRunOptions(manifest room.Manifest, configDir string, servers map[string]*roomInputTranscriptionServer, credentials map[string]string, cadenceReady chan<- *roomRealtimeReplayCadence, opened chan<- string, observations chan<- roomTranscriptObservation) RoomRunOptions {
-	return newTestRoomRunOptions(RoomRunOptions{
+	return RoomRunOptions{
 		AudioService: newTestAudioIOService(),
 		Manifest:     manifest,
 		ConfigDir:    configDir, ModelCatalog: testModelCatalog(), MixerConfig: room.PCM16MixerConfig{
@@ -126,7 +126,7 @@ func roomInputTranscriptionRunOptions(manifest room.Manifest, configDir string, 
 			}
 			observations <- observation
 		},
-	})
+	}
 }
 
 func advanceRoomInputTranscriptionMedia(t *testing.T, ctx context.Context, servers map[string]*roomInputTranscriptionServer, cadenceReady <-chan *roomRealtimeReplayCadence, opened <-chan string, runDone <-chan roomTestRunOutcome) {

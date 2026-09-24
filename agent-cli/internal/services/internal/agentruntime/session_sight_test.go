@@ -195,13 +195,13 @@ func TestRunAgentLoopSession_PageSightUsesOneSourceForSuccessiveQuestions(t *tes
 		scriptedTurn{events: toolCallEvents("broad-page-call", runtimeTools.ScreenToolID, `{}`)},
 		scriptedTurn{events: toolCallEvents("literal-page-call", cliTools.PageSightToolID, `{}`), after: `"source":"browser_page"`},
 	)
-	if err := runAgentLoopSession(context.Background(), out, inferencer, newTestSessionLoopOptions(sessionLoopOptions{
+	if err := runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
 		audioService:    newTestAudioIOService(),
 		MaxDuration:     2 * time.Second,
 		WaitForClose:    true,
 		ToolExecutor:    capability.Executor,
 		ToolDefinitions: capability.Definitions,
-	})); err != nil {
+	}); err != nil {
 		t.Fatalf("runAgentLoopSession: %v\noutput:\n%s", err, out.String())
 	}
 	if static.calls != 0 || static.rechecks != 0 {
@@ -230,7 +230,7 @@ func TestSessionDirectoryRecordingPersistsScreenCaptureEvidence(t *testing.T) {
 	}
 	imageBytes := append([]byte(nil), pixels.Bytes()...)
 	call := messages.ToolCall{ID: "screen-call-1", Name: "show", Arguments: `{"action":"screenshot"}`}
-	recording := newSessionDirectoryRecording(filepath.Join(t.TempDir(), "screen-recording"), newTestSessionRuntimePlan(sessionRuntimePlan{provider: sessionProviderOpenAI}), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), Model: "gpt-realtime"}))
+	recording := newSessionDirectoryRecording(filepath.Join(t.TempDir(), "screen-recording"), sessionRuntimePlan{provider: sessionProviderOpenAI}, SessionRunOptions{ModelCatalog: testModelCatalog(), Model: "gpt-realtime"})
 	writeSyntheticRecordingTranscript(t, recording, "client", "agent")
 	recording.observeToolCall(call)
 	recording.observeToolResult(call, messages.ToolCallResponse{

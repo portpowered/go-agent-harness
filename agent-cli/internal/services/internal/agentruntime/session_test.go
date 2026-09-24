@@ -21,7 +21,6 @@ import (
 	services "github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	sessionwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
-	terminalwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -46,14 +45,14 @@ model:
 	var gotCfg config.OpenAIConfig
 	var gotDialer transport.Dialer
 
-	plan, err := planSessionRuntimeWithFactory(context.Background(), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		RecordPath: filepath.Join(t.TempDir(), "openai.session.json"),
 		Provider:   config.ProviderOpenAI,
 		Model:      "gpt-realtime",
 		APIKey:     "sk-override-key",
 		ConfigDir:  configDir,
 		Voice:      "marin",
-	}), sessionRuntimeFactory{
+	}, sessionRuntimeFactory{
 		newDefaultLiveDialer: func() transport.Dialer { return defaultDialer },
 		newRecordingDialer: func(inner transport.Dialer, providerName string, model string) sessionRecordingDialer {
 			gotInner = inner
@@ -138,7 +137,7 @@ func TestPlanSessionRuntime_ScheduledAudioUsesPersistentLiveLifecycle(t *testing
 			}
 			testCase.configure(&factory)
 
-			plan, err := testCase.plan(newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
+			plan, err := testCase.plan(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 				RecordPath: recordPath,
 				Provider:   testCase.provider,
 				Model:      testCase.model,
@@ -148,7 +147,7 @@ func TestPlanSessionRuntime_ScheduledAudioUsesPersistentLiveLifecycle(t *testing
 					{AfterCompletedTurns: 0, PCM: []byte{1, 2}, EndOfTurn: true},
 					{AfterCompletedTurns: 1, PCM: []byte{3, 4}, EndOfTurn: true},
 				},
-			}), factory)
+			}, factory)
 			if err != nil {
 				t.Fatalf("plan scheduled %s runtime: %v", testCase.provider, err)
 			}
@@ -188,14 +187,14 @@ model:
 	var gotCfg config.GrokConfig
 	var gotDialer transport.Dialer
 
-	plan, err := planSessionRuntimeWithFactory(context.Background(), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		RecordPath:      filepath.Join(t.TempDir(), "grok.session.json"),
 		Provider:        config.ProviderGrok,
 		Model:           "grok-override-model",
 		APIKey:          "xai-override-key",
 		ConfigDir:       configDir,
 		WebSocketDialer: callerDialer,
-	}), sessionRuntimeFactory{
+	}, sessionRuntimeFactory{
 		newDefaultLiveDialer: func() transport.Dialer {
 			defaultDialerCalled = true
 			return &stubRuntimeDialer{id: "unexpected-default"}
@@ -241,11 +240,11 @@ model:
     api_key: xai-config-key
 `)
 
-	_, err := planSessionRuntimeWithFactory(context.Background(), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
+	_, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		RecordPath: filepath.Join(t.TempDir(), "grok.session.json"),
 		Provider:   config.ProviderGrok,
 		ConfigDir:  configDir,
-	}), sessionRuntimeFactory{
+	}, sessionRuntimeFactory{
 		newDefaultLiveDialer: func() transport.Dialer { return nil },
 	})
 	if err == nil {
@@ -266,11 +265,11 @@ func TestPlanSessionRuntime_OpenAIReplayRoutesThroughOpenAIRuntimeSeam(t *testin
 		done:              make(chan struct{}),
 	}
 
-	plan, err := planSessionRuntimeWithFactory(context.Background(), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		ReplayPath: filepath.Join("..", "..", "..", "..", "test", "integration", "testdata", "openai_realtime_text.session.json"),
 		Prompt:     "hello realtime",
 		Voice:      "cedar",
-	}), sessionRuntimeFactory{
+	}, sessionRuntimeFactory{
 		newReplayDialer: func(path string) (sessionReplayDialer, error) {
 			if !strings.Contains(path, "openai_realtime_text.session.json") {
 				t.Fatalf("unexpected replay path: %s", path)
@@ -347,10 +346,10 @@ func TestPlanSessionRuntime_OpenAIReplayUsesCapturedHandshakeAndKeepsLoopToolDef
 				done:              make(chan struct{}),
 			}
 			var gotProviderDefinitions []messages.ToolDefinition
-			plan, err := planSessionRuntimeWithFactory(context.Background(), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
+			plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 				ReplayPath:      path,
 				ToolDefinitions: []messages.ToolDefinition{definition},
-			}), sessionRuntimeFactory{
+			}, sessionRuntimeFactory{
 				newReplayDialer: func(string) (sessionReplayDialer, error) {
 					return replayDialer, nil
 				},
@@ -823,7 +822,7 @@ func (w failingWriter) Write([]byte) (int, error) {
 func TestWriteSessionReplayMessage_PrintsSessionTerminalFields(t *testing.T) {
 	var out bytes.Buffer
 
-	err := terminalwire.NewService().WriteTranscriptMessage(&out, messages.StreamMessage{
+	err := writeSessionReplayMessage(&out, messages.StreamMessage{
 		Type: messages.StreamTypeSessionClose,
 		Value: messages.NewSessionCloseValueWithTerminal(
 			"session-1",
@@ -857,7 +856,7 @@ func TestWriteSessionReplayMessage_PrintsSessionTerminalFields(t *testing.T) {
 func TestWriteSessionReplayMessage_PrintsTranscriptDelta(t *testing.T) {
 	var out bytes.Buffer
 
-	err := terminalwire.NewService().WriteTranscriptMessage(&out, messages.StreamMessage{
+	err := writeSessionReplayMessage(&out, messages.StreamMessage{
 		Type:  messages.StreamTypeTranscriptDelta,
 		Value: messages.NewTranscriptDeltaValue("spoken image description"),
 	})
@@ -871,7 +870,7 @@ func TestWriteSessionReplayMessage_PrintsTranscriptDelta(t *testing.T) {
 
 func TestSessionReplayRendererKeepsInterleavedTranscriptRolesSeparate(t *testing.T) {
 	var out bytes.Buffer
-	renderer := terminalwire.NewService().NewTranscriptRenderer(&out, nil)
+	renderer := newSessionReplayRenderer(&out)
 	events := []messages.StreamMessage{
 		{Type: messages.StreamTypeTranscriptStart, Role: messages.RoleUser, Value: messages.NewTranscriptStartValue()},
 		{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleUser, Value: messages.NewTranscriptDeltaValue("heard ")},
@@ -881,7 +880,7 @@ func TestSessionReplayRendererKeepsInterleavedTranscriptRolesSeparate(t *testing
 		{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleUser, Value: messages.NewTranscriptEndValue("again")},
 	}
 	for _, event := range events {
-		if err := terminalwire.NewService().WriteTranscriptMessage(renderer, event); err != nil {
+		if err := writeSessionReplayMessage(renderer, event); err != nil {
 			t.Fatalf("write transcript event: %v", err)
 		}
 	}
@@ -893,7 +892,7 @@ func TestSessionReplayRendererKeepsInterleavedTranscriptRolesSeparate(t *testing
 
 func TestSessionReplayRendererKeepsActorChunksOnOneLineAcrossToolContinuation(t *testing.T) {
 	var out bytes.Buffer
-	renderer := terminalwire.NewService().NewTranscriptRenderer(&out, nil)
+	renderer := newSessionReplayRenderer(&out)
 	events := []messages.StreamMessage{
 		{Type: messages.StreamTypeTranscriptStart, Role: messages.RoleAssistant, Value: messages.NewTranscriptStartValue()},
 		{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleAssistant, Value: messages.NewTranscriptDeltaValue("I will check ")},
@@ -911,7 +910,7 @@ func TestSessionReplayRendererKeepsActorChunksOnOneLineAcrossToolContinuation(t 
 		{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleAssistant, Value: messages.NewTranscriptEndValue("It is sunny and warm.")},
 	}
 	for _, event := range events {
-		if err := terminalwire.NewService().WriteTranscriptMessage(renderer, event); err != nil {
+		if err := writeSessionReplayMessage(renderer, event); err != nil {
 			t.Fatalf("write event %s: %v", event.Type, err)
 		}
 	}
@@ -927,14 +926,14 @@ func TestSessionReplayRendererKeepsActorChunksOnOneLineAcrossToolContinuation(t 
 
 func TestSessionReplayRendererKeepsTextDeltasOnOneActorLine(t *testing.T) {
 	var out bytes.Buffer
-	renderer := terminalwire.NewService().NewTranscriptRenderer(&out, nil)
+	renderer := newSessionReplayRenderer(&out)
 	for _, event := range []messages.StreamMessage{
 		{Type: messages.StreamTypeTextStart, Role: messages.RoleAssistant, Value: messages.NewTextStartValue()},
 		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("first ")},
 		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("second")},
 		{Type: messages.StreamTypeTextEnd, Role: messages.RoleAssistant, Value: messages.NewTextEndValue()},
 	} {
-		if err := terminalwire.NewService().WriteTranscriptMessage(renderer, event); err != nil {
+		if err := writeSessionReplayMessage(renderer, event); err != nil {
 			t.Fatalf("write event %s: %v", event.Type, err)
 		}
 	}
@@ -945,7 +944,7 @@ func TestSessionReplayRendererKeepsTextDeltasOnOneActorLine(t *testing.T) {
 
 func TestSessionReplayRendererKeepsTranscriptContiguousAcrossAudioPackets(t *testing.T) {
 	var out bytes.Buffer
-	renderer := terminalwire.NewService().NewTranscriptRenderer(&out, nil)
+	renderer := newSessionReplayRenderer(&out)
 	events := []messages.StreamMessage{
 		{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleAssistant, ResponseID: "response-1", Value: messages.NewTranscriptDeltaValue("Incorrect. ")},
 		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, ResponseID: "response-1", Value: messages.NewAudioDeltaValue([]byte{0x01, 0x02})},
@@ -956,7 +955,7 @@ func TestSessionReplayRendererKeepsTranscriptContiguousAcrossAudioPackets(t *tes
 		{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleAssistant, ResponseID: "response-1", Value: messages.NewTranscriptEndValue("Incorrect. Me llamo means my name is.")},
 	}
 	for _, event := range events {
-		if err := terminalwire.NewService().WriteTranscriptMessage(renderer, event); err != nil {
+		if err := writeSessionReplayMessage(renderer, event); err != nil {
 			t.Fatalf("write event %s: %v", event.Type, err)
 		}
 	}
@@ -968,7 +967,7 @@ func TestSessionReplayRendererKeepsTranscriptContiguousAcrossAudioPackets(t *tes
 
 func TestSessionReplayRendererBreaksOnlyWhenVisibleActorChanges(t *testing.T) {
 	var out bytes.Buffer
-	renderer := terminalwire.NewService().NewTranscriptRenderer(&out, nil)
+	renderer := newSessionReplayRenderer(&out)
 	events := []messages.StreamMessage{
 		{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleAssistant, Value: messages.NewTranscriptDeltaValue("assistant ")},
 		{Type: messages.StreamTypeAudioStart, Role: messages.RoleAssistant, Value: messages.NewAudioStartValue()},
@@ -986,7 +985,7 @@ func TestSessionReplayRendererBreaksOnlyWhenVisibleActorChanges(t *testing.T) {
 		{Type: messages.StreamTypeTextEnd, Role: messages.RoleTool, Value: messages.NewTextEndValue()},
 	}
 	for _, event := range events {
-		if err := terminalwire.NewService().WriteTranscriptMessage(renderer, event); err != nil {
+		if err := writeSessionReplayMessage(renderer, event); err != nil {
 			t.Fatalf("write event %s: %v", event.Type, err)
 		}
 	}
@@ -1030,9 +1029,9 @@ func TestSessionReplayRendererIgnoresLateCompletionForInactiveRole(t *testing.T)
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			var out bytes.Buffer
-			renderer := terminalwire.NewService().NewTranscriptRenderer(&out, nil)
+			renderer := newSessionReplayRenderer(&out)
 			for _, event := range testCase.events {
-				if err := terminalwire.NewService().WriteTranscriptMessage(renderer, event); err != nil {
+				if err := writeSessionReplayMessage(renderer, event); err != nil {
 					t.Fatalf("write transcript event: %v", err)
 				}
 			}
@@ -1077,9 +1076,9 @@ func TestSessionReplayRendererRendersInactiveCompletionOnly(t *testing.T) {
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			var out bytes.Buffer
-			renderer := terminalwire.NewService().NewTranscriptRenderer(&out, nil)
+			renderer := newSessionReplayRenderer(&out)
 			for _, event := range testCase.events {
-				if err := terminalwire.NewService().WriteTranscriptMessage(renderer, event); err != nil {
+				if err := writeSessionReplayMessage(renderer, event); err != nil {
 					t.Fatalf("write transcript event: %v", err)
 				}
 			}
@@ -1092,7 +1091,7 @@ func TestSessionReplayRendererRendersInactiveCompletionOnly(t *testing.T) {
 }
 
 func TestWriteSessionReplayMessage_ReturnsSessionErrorTerminalFields(t *testing.T) {
-	err := terminalwire.NewService().WriteTranscriptMessage(io.Discard, messages.StreamMessage{
+	err := writeSessionReplayMessage(io.Discard, messages.StreamMessage{
 		Type: messages.StreamTypeError,
 		Value: messages.NewErrorValueWithTerminal(
 			"provider rejected request",
@@ -1121,7 +1120,7 @@ func TestWriteSessionReplayMessage_ReturnsSessionErrorTerminalFields(t *testing.
 }
 
 func TestWrapSessionRuntimeErrorClassifiesQuotaMessage(t *testing.T) {
-	err := wrapSessionRuntimeError(newTestSessionRuntimePlan(sessionRuntimePlan{mode: sessionRuntimeModeReplayOpenAI}), errors.New("session error: You have no credits remaining."))
+	err := wrapSessionRuntimeError(sessionRuntimePlan{mode: sessionRuntimeModeReplayOpenAI}, errors.New("session error: You have no credits remaining."))
 	if err == nil || !strings.Contains(err.Error(), "classification=rate_limited") {
 		t.Fatalf("quota runtime error = %v, want rate_limited classification", err)
 	}
@@ -1147,7 +1146,7 @@ func TestWriteSessionToolAnnouncementEnumeratesCanonicalSurface(t *testing.T) {
 }
 
 func TestWriteSessionReplayMessage_IgnoresNonTerminalDiagnostic(t *testing.T) {
-	err := terminalwire.NewService().WriteTranscriptMessage(io.Discard, messages.StreamMessage{
+	err := writeSessionReplayMessage(io.Discard, messages.StreamMessage{
 		Type:  messages.StreamTypeError,
 		Value: messages.NewNonTerminalErrorValue("response is not active", "response_cancel_not_active"),
 	})
@@ -1222,11 +1221,11 @@ func TestRunSession_WithInjectedSessionInferencer_UsesAgentLoopSessionPath(t *te
 	}
 	var out bytes.Buffer
 
-	if err := RunSession(context.Background(), &out, newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
+	if err := RunSession(context.Background(), &out, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		ReplayPath:        "synthetic.json",
 		Prompt:            "hello session",
 		SessionInferencer: sessionInf,
-	})); err != nil {
+	}); err != nil {
 		t.Fatalf("RunSession: %v", err)
 	}
 
@@ -1251,7 +1250,7 @@ func TestRunSession_OpenAIRealtimeRecordWithInjectedInferencer_UsesSessionPath(t
 	}
 	var out bytes.Buffer
 
-	if err := RunSession(context.Background(), &out, newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
+	if err := RunSession(context.Background(), &out, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		RecordPath:        filepath.Join(t.TempDir(), "openai-session.json"),
 		Provider:          config.ProviderOpenAI,
 		Model:             "gpt-realtime",
@@ -1259,7 +1258,7 @@ func TestRunSession_OpenAIRealtimeRecordWithInjectedInferencer_UsesSessionPath(t
 		ConfigDir:         t.TempDir(),
 		Prompt:            "hello realtime",
 		SessionInferencer: sessionInf,
-	})); err != nil {
+	}); err != nil {
 		t.Fatalf("RunSession: %v", err)
 	}
 
@@ -1275,14 +1274,14 @@ func TestRunSession_SessionProviderCloseExitsPromptly(t *testing.T) {
 	sessionInf := &closingSessionInferencer{}
 	started := time.Now()
 
-	if err := RunSession(context.Background(), io.Discard, newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
+	if err := RunSession(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		RecordPath:        filepath.Join(t.TempDir(), "openai-session.json"),
 		Provider:          config.ProviderOpenAI,
 		Model:             "gpt-realtime",
 		APIKey:            "sk-test-key",
 		ConfigDir:         t.TempDir(),
 		SessionInferencer: sessionInf,
-	})); err != nil {
+	}); err != nil {
 		t.Fatalf("RunSession: %v", err)
 	}
 
@@ -1297,14 +1296,14 @@ func TestRunSession_SessionProviderCloseExitsPromptly(t *testing.T) {
 func TestRunSession_OpenAISessionRejectsNonRealtimeModelBeforeDial(t *testing.T) {
 	dialer := &failingDialer{}
 
-	err := RunSession(context.Background(), io.Discard, newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
+	err := RunSession(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		RecordPath:      filepath.Join(t.TempDir(), "openai-session.json"),
 		Provider:        config.ProviderOpenAI,
 		Model:           "gpt-4o",
 		APIKey:          "sk-test-key",
 		ConfigDir:       t.TempDir(),
 		WebSocketDialer: dialer,
-	}))
+	})
 	if err == nil {
 		t.Fatal("expected non-realtime OpenAI model to be rejected")
 	}
@@ -1329,7 +1328,7 @@ func TestRunSession_RecordFlushesCaptureWhenContextCanceled(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	err := RunSession(ctx, &out, newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
+	err := RunSession(ctx, &out, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		RecordPath:      recordPath,
 		Provider:        config.ProviderGrok,
 		Model:           "grok-record-test",
@@ -1337,7 +1336,7 @@ func TestRunSession_RecordFlushesCaptureWhenContextCanceled(t *testing.T) {
 		ConfigDir:       t.TempDir(),
 		Prompt:          "keep the recorded session open until cancellation",
 		WebSocketDialer: dialer,
-	}))
+	})
 	if err == nil {
 		t.Fatal("expected canceled record session error")
 	}
@@ -1391,9 +1390,9 @@ func TestPlanSessionRuntime_GenericReplayHonorsCallerCancellation(t *testing.T) 
 		capturedStreamEvent(gwtesting.DirectionServerToClient, 2, 200, messages.StreamTypeTextDelta, messages.NewTextDeltaValue("after cancel")),
 	})
 
-	plan, err := planSessionRuntimeWithFactory(context.Background(), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		ReplayPath: capturePath,
-	}), sessionRuntimeFactory{
+	}, sessionRuntimeFactory{
 		newReplayInferencer: func(path string) messages.SessionInferencer {
 			return gwtesting.NewReplaySessionInferencer(path, gwtesting.WithReplayTiming())
 		},
@@ -1469,13 +1468,13 @@ func TestRunAgentLoopSession_ReturnsOnCleanDoneSignal(t *testing.T) {
 	var out bytes.Buffer
 
 	start := time.Now()
-	err := runAgentLoopSession(context.Background(), &out, sessionInf, newTestSessionLoopOptions(sessionLoopOptions{
-		MaxDuration: time.Second,
-		Done:        done,
+	err := runAgentLoopSession(context.Background(), &out, sessionInf, sessionLoopOptions{
+		audioService: newTestAudioIOService(), MaxDuration: time.Second,
+		Done: done,
 		DoneErr: func() error {
 			return nil
 		},
-	}))
+	})
 	if err != nil {
 		t.Fatalf("runAgentLoopSession: %v", err)
 	}
@@ -1498,9 +1497,9 @@ func TestRunAgentLoopSession_TimeoutCancelsLoopWithoutCallerCancellationError(t 
 	var out bytes.Buffer
 
 	start := time.Now()
-	err := runAgentLoopSession(context.Background(), &out, sessionInf, newTestSessionLoopOptions(sessionLoopOptions{
-		MaxDuration: 75 * time.Millisecond,
-	}))
+	err := runAgentLoopSession(context.Background(), &out, sessionInf, sessionLoopOptions{
+		audioService: newTestAudioIOService(), MaxDuration: 75 * time.Millisecond,
+	})
 	if err != nil {
 		t.Fatalf("runAgentLoopSession timeout should not report caller cancellation: %v", err)
 	}

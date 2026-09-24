@@ -8,69 +8,49 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	duration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
-	terminalwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
+	sessionterminal "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
+	sessionterminalwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
 )
 
 func TestSessionTerminalReporterReconcilesCompetingCandidatesOnce(t *testing.T) {
 	var out bytes.Buffer
-	reporter := terminalwire.NewReporter()
+	reporter := sessionterminalwire.NewReporter()
 	reporter.MarkRunStarted()
-	terminalService := terminalwire.NewService()
-	renderer := terminalService.NewTranscriptRenderer(&out, reporter.ObserveStreamMessage)
-
-	if err := terminalService.WriteTranscriptMessage(renderer, messages.StreamMessage{
+	reporter.ObserveStreamMessage(messages.StreamMessage{
 		Type:  messages.StreamTypeTextDelta,
 		Value: messages.NewTextDeltaValue("accepted output"),
-	}); err != nil {
-		t.Fatalf("write accepted output: %v", err)
-	}
-	if err := terminalService.WriteTranscriptMessage(renderer, messages.StreamMessage{
+	}, false)
+	reporter.ObserveStreamMessage(messages.StreamMessage{
 		Type: messages.StreamTypeSessionClose,
 		Value: messages.NewSessionCloseValueWithTerminal(
 			"",
-			string(duration.MaxDurationReason),
-			string(duration.MaxDurationReason),
-			duration.MaxDurationReason,
+			string(sessionterminal.MaxDurationReason),
+			string(sessionterminal.MaxDurationReason),
+			sessionterminal.MaxDurationReason,
 			messages.TerminalProvenanceLoop,
 			messages.TerminalOutputPartial,
 		),
-	}); err != nil {
-		t.Fatalf("observe pre-drain duration candidate: %v", err)
-	}
-	if got := out.String(); got != "Assistant: accepted output\n" {
-		t.Fatalf("terminal candidate was emitted before reconciliation: %q", got)
-	}
-
-	// Replay exhaustion is discovered only after the stream and finalization
-	// evidence arrive. It must replace the earlier planned candidate at the
-	// single reporting boundary.
+	}, true)
 	reporter.MarkReplayComplete()
+
 	if err := reporter.Publish(&out, nil); err != nil {
 		t.Fatalf("publish reconciled terminal: %v", err)
 	}
 	got := out.String()
-	if strings.Count(got, "[session terminal:") != 1 || strings.Count(got, "[session replay complete]") != 1 {
-		t.Fatalf("reconciled output has more than one terminal announcement: %q", got)
-	}
-	if !strings.Contains(got, "classification=replay_complete terminal_reason=replay_complete terminal_provenance=replay output_state=complete") {
-		t.Fatalf("reconciled output lost replay completion fields: %q", got)
+	if strings.Count(got, "[session terminal:") != 1 || !strings.Contains(got, "terminal_reason=replay_complete") {
+		t.Fatalf("reconciled output = %q", got)
 	}
 	if strings.Contains(got, "terminal_reason=max_duration") || strings.Contains(got, "output_state=partial") {
-		t.Fatalf("reconciled output retained the superseded duration candidate: %q", got)
+		t.Fatalf("superseded duration candidate survived: %q", got)
 	}
 	if err := reporter.Publish(&out, nil); !errors.Is(err, sessionterminal.ErrAlreadyPublished) {
 		t.Fatalf("second publish error = %v, want ErrAlreadyPublished", err)
-	}
-	if strings.Count(out.String(), "[session terminal:") != 1 {
-		t.Fatalf("second publish emitted another terminal block: %q", out.String())
 	}
 }
 
 func TestSessionTerminalReporterAcceptsValidPartialArtifactAfterCancellation(t *testing.T) {
 	var out bytes.Buffer
-	reporter := terminalwire.NewReporter()
+	reporter := sessionterminalwire.NewReporter()
 	reporter.MarkRunStarted()
 	reporter.MarkDurationExpiry(true, messages.TerminalOutputPartial)
 	reporter.RecordArtifactFinalization(true, nil)
@@ -89,14 +69,14 @@ func TestSessionTerminalReporterAcceptsValidPartialArtifactAfterCancellation(t *
 
 func TestSessionTerminalReporterPreservesIndependentArtifactFailure(t *testing.T) {
 	var out bytes.Buffer
-	reporter := terminalwire.NewReporter()
+	reporter := sessionterminalwire.NewReporter()
 	reporter.MarkRunStarted()
 	reporter.MarkDurationExpiry(true, messages.TerminalOutputPartial)
 	artifactErr := errors.New("artifact verification failed")
 	reporter.RecordArtifactFinalization(true, artifactErr)
 
 	if err := reporter.Publish(&out, nil); !errors.Is(err, artifactErr) {
-		t.Fatalf("publish artifact failure = %v, want artifact cause", err)
+		t.Fatalf("publish artifact failure = %v, want %v", err, artifactErr)
 	}
 	got := out.String()
 	if !strings.Contains(got, "terminal_reason=terminal_failure") || strings.Contains(got, "terminal_reason=max_duration") {

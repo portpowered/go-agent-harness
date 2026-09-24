@@ -24,8 +24,8 @@ import (
 
 func TestSessionDirectoryRecordingCapturesBothPerspectivesAndExactPCM(t *testing.T) {
 	destination := filepath.Join(t.TempDir(), "nested", "capture")
-	plan := newTestSessionRuntimePlan(sessionRuntimePlan{provider: sessionProviderOpenAI})
-	recording := newSessionDirectoryRecording(destination, plan, newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), Model: "gpt-realtime"}))
+	plan := sessionRuntimePlan{provider: sessionProviderOpenAI}
+	recording := newSessionDirectoryRecording(destination, plan, SessionRunOptions{ModelCatalog: testModelCatalog(), Model: "gpt-realtime"})
 	recording.metadata.InputDevice = transcript.DeviceMetadata{
 		ID: "input-test", Name: "Deterministic microphone", Driver: "test", SampleRateHz: 16000, Channels: 1,
 	}
@@ -257,7 +257,7 @@ func writeSyntheticRecordingAudio(t *testing.T, recording *sessionDirectoryRecor
 
 func TestSessionDirectoryRecordingUsesDiskSpoolUntilFinalize(t *testing.T) {
 	destination := filepath.Join(t.TempDir(), "spooled-recording")
-	recording := newSessionDirectoryRecording(destination, newTestSessionRuntimePlan(sessionRuntimePlan{provider: sessionProviderOpenAI}), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), Model: "gpt-realtime"}))
+	recording := newSessionDirectoryRecording(destination, sessionRuntimePlan{provider: sessionProviderOpenAI}, SessionRunOptions{ModelCatalog: testModelCatalog(), Model: "gpt-realtime"})
 	recording.observe(messages.StreamMessage{
 		Type:  messages.StreamTypeTextDelta,
 		Role:  messages.RoleAssistant,
@@ -289,7 +289,7 @@ func TestSessionDirectoryRecordingUsesDiskSpoolUntilFinalize(t *testing.T) {
 }
 
 func TestSessionDirectoryRecordingSpoolOverflowIsPartialEvidence(t *testing.T) {
-	recording := newSessionDirectoryRecording(filepath.Join(t.TempDir(), "overflow-recording"), newTestSessionRuntimePlan(sessionRuntimePlan{provider: sessionProviderOpenAI}), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), Model: "gpt-realtime"}))
+	recording := newSessionDirectoryRecording(filepath.Join(t.TempDir(), "overflow-recording"), sessionRuntimePlan{provider: sessionProviderOpenAI}, SessionRunOptions{ModelCatalog: testModelCatalog(), Model: "gpt-realtime"})
 	recording.mu.Lock()
 	recording.spoolQueue = make(chan sessionRecordingSpoolEvent, sessionRecordingSpoolQueueCapacity)
 	for index := 0; index < sessionRecordingSpoolQueueCapacity; index++ {
@@ -313,7 +313,7 @@ func TestSessionDirectoryRecordingSpoolOverflowIsPartialEvidence(t *testing.T) {
 }
 
 func TestSessionDirectoryRecordingSpoolByteBoundIsPartialEvidence(t *testing.T) {
-	recording := newSessionDirectoryRecording(filepath.Join(t.TempDir(), "byte-overflow-recording"), newTestSessionRuntimePlan(sessionRuntimePlan{provider: sessionProviderOpenAI}), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), Model: "gpt-realtime"}))
+	recording := newSessionDirectoryRecording(filepath.Join(t.TempDir(), "byte-overflow-recording"), sessionRuntimePlan{provider: sessionProviderOpenAI}, SessionRunOptions{ModelCatalog: testModelCatalog(), Model: "gpt-realtime"})
 	recording.mu.Lock()
 	recording.spoolQueue = make(chan sessionRecordingSpoolEvent, sessionRecordingSpoolQueueCapacity)
 	recording.spoolQueuedBytes = sessionRecordingSpoolQueueMaxBytes
@@ -336,7 +336,7 @@ func TestSessionDirectoryRecordingSpoolByteBoundIsPartialEvidence(t *testing.T) 
 
 func TestSessionDirectoryRecordingPersistsOneAuthoritativeTerminalSummary(t *testing.T) {
 	destination := filepath.Join(t.TempDir(), "terminal-summary")
-	recording := newSessionDirectoryRecording(destination, newTestSessionRuntimePlan(sessionRuntimePlan{provider: sessionProviderOpenAI}), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), Model: "gpt-realtime"}))
+	recording := newSessionDirectoryRecording(destination, sessionRuntimePlan{provider: sessionProviderOpenAI}, SessionRunOptions{ModelCatalog: testModelCatalog(), Model: "gpt-realtime"})
 	writeSyntheticRecordingTranscript(t, recording, "client\n", "agent\n")
 	want := transcript.RecordingTerminalSummary{
 		Reason:             "max_duration",
@@ -374,10 +374,10 @@ func TestSessionDirectoryRecordingPersistsOneAuthoritativeTerminalSummary(t *tes
 func TestSessionDirectoryRecordingFinalizesBufferedEvidenceAfterRecordingError(t *testing.T) {
 	const credential = "session-recording-secret"
 	destination := filepath.Join(t.TempDir(), "partial-recording")
-	recording := newSessionDirectoryRecording(destination, newTestSessionRuntimePlan(sessionRuntimePlan{provider: sessionProviderOpenAI}), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
+	recording := newSessionDirectoryRecording(destination, sessionRuntimePlan{provider: sessionProviderOpenAI}, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		Model:  "gpt-realtime",
 		APIKey: credential,
-	}))
+	})
 	recording.observe(messages.StreamMessage{
 		Type:  messages.StreamTypeTextDelta,
 		Role:  messages.RoleAssistant,
@@ -475,13 +475,13 @@ func TestRunSessionWithRecordingDirectoryRejectsNonEmptyDestinationBeforeConnect
 		t.Fatal(err)
 	}
 	inferencer := &countingSessionRecordingInferencer{}
-	err := RunSessionWithRecordingDirectory(context.Background(), io.Discard, newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+	err := RunSessionWithRecordingDirectory(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		Provider:          config.ProviderOpenAI,
 		Model:             "gpt-realtime",
 		APIKey:            "test-key",
 		ConfigDir:         t.TempDir(),
 		SessionInferencer: inferencer,
-	}), destination)
+	}, destination)
 	if !errors.Is(err, transcript.ErrRecordingDestinationNotEmpty) || !errors.Is(err, transcript.ErrRecordingDestination) {
 		t.Fatalf("error = %v, want destination identities", err)
 	}
@@ -496,13 +496,13 @@ func TestRunSessionWithRecordingDirectoryRejectsNonEmptyDestinationBeforeConnect
 func TestRunSessionWithRecordingDirectoryPreservesProviderAndRecordingErrorsOverEmptyRecording(t *testing.T) {
 	authErr := errors.New("openai realtime authentication failed")
 	destination := filepath.Join(t.TempDir(), "auth-failure")
-	err := RunSessionWithRecordingDirectory(context.Background(), io.Discard, newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
+	err := RunSessionWithRecordingDirectory(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(), AudioService: newTestAudioIOService(),
 		Provider:          config.ProviderOpenAI,
 		Model:             "gpt-realtime",
 		APIKey:            "invalid-test-key",
 		ConfigDir:         t.TempDir(),
 		SessionInferencer: &failingSessionRecordingInferencer{err: authErr},
-	}), destination)
+	}, destination)
 	if !errors.Is(err, authErr) {
 		t.Fatalf("error = %v, want provider authentication error", err)
 	}
@@ -532,13 +532,13 @@ func TestRunSessionWithRecordingDirectoryRejectsUnwritableDestinationBeforeConne
 
 	destination := filepath.Join(parent, "capture")
 	inferencer := &countingSessionRecordingInferencer{}
-	err := RunSessionWithRecordingDirectory(context.Background(), io.Discard, newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
+	err := RunSessionWithRecordingDirectory(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		Provider:          config.ProviderOpenAI,
 		Model:             "gpt-realtime",
 		APIKey:            "test-key",
 		ConfigDir:         t.TempDir(),
 		SessionInferencer: inferencer,
-	}), destination)
+	}, destination)
 	if err == nil || !errors.Is(err, transcript.ErrRecordingDestination) || !strings.Contains(err.Error(), destination) {
 		t.Fatalf("unwritable destination error = %v, want path-qualified destination error", err)
 	}
@@ -553,7 +553,7 @@ func TestRunSessionWithRecordingDirectoryRejectsUnwritableDestinationBeforeConne
 func TestSessionDirectoryRecordingFinalizePreservesWriteFailureAndNoPartialBundle(t *testing.T) {
 	destination := filepath.Join(t.TempDir(), "capture")
 	writeErr := errors.New("injected recording write failure")
-	recording := newSessionDirectoryRecording(destination, newTestSessionRuntimePlan(sessionRuntimePlan{provider: sessionProviderOpenAI}), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), Model: "gpt-realtime"}))
+	recording := newSessionDirectoryRecording(destination, sessionRuntimePlan{provider: sessionProviderOpenAI}, SessionRunOptions{ModelCatalog: testModelCatalog(), Model: "gpt-realtime"})
 	writeSyntheticRecordingTranscript(t, recording, "client\n", "agent\n")
 	writeSyntheticRecordingAudio(t, recording, [][]byte{{0x01, 0x00}}, [][]byte{{0x02, 0x00}})
 	recording.writeStream = func(string, io.Reader, os.FileMode) (int64, error) {
@@ -579,7 +579,7 @@ func TestFinalizeSessionDirectoryRecordingJoinsRunLatchedAndBundleWriteErrors(t 
 	latchedRecordErr := recordingDestinationError(transcript.ErrRecordingWrite, "capture transcript", destination, latchedCause)
 	bundleWriteErr := errors.New("recording bundle write failed")
 
-	recording := newSessionDirectoryRecording(destination, newTestSessionRuntimePlan(sessionRuntimePlan{provider: sessionProviderOpenAI}), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), Model: "gpt-realtime"}))
+	recording := newSessionDirectoryRecording(destination, sessionRuntimePlan{provider: sessionProviderOpenAI}, SessionRunOptions{ModelCatalog: testModelCatalog(), Model: "gpt-realtime"})
 	writeSyntheticRecordingTranscript(t, recording, "client\n", "agent\n")
 	recording.fail(latchedRecordErr)
 	recording.writeFile = func(string, []byte, os.FileMode) (int, error) {
@@ -634,7 +634,7 @@ func TestFinalizeSessionDirectoryRecordingReportsRecordingFailureWhenBundleIsNot
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
 			destination := filepath.Join(t.TempDir(), "capture")
-			recording := newSessionDirectoryRecording(destination, newTestSessionRuntimePlan(sessionRuntimePlan{provider: sessionProviderOpenAI}), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), Model: "gpt-realtime"}))
+			recording := newSessionDirectoryRecording(destination, sessionRuntimePlan{provider: sessionProviderOpenAI}, SessionRunOptions{ModelCatalog: testModelCatalog(), Model: "gpt-realtime"})
 			if testCase.prepare != nil {
 				testCase.prepare(recording)
 			}
@@ -656,7 +656,7 @@ func TestFinalizeSessionDirectoryRecordingReportsRecordingFailureWhenBundleIsNot
 
 func TestSessionDirectoryRecordingReportsTimingShortWrite(t *testing.T) {
 	destination := filepath.Join(t.TempDir(), "capture")
-	recording := newSessionDirectoryRecording(destination, newTestSessionRuntimePlan(sessionRuntimePlan{provider: sessionProviderOpenAI}), newTestSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), Model: "gpt-realtime"}))
+	recording := newSessionDirectoryRecording(destination, sessionRuntimePlan{provider: sessionProviderOpenAI}, SessionRunOptions{ModelCatalog: testModelCatalog(), Model: "gpt-realtime"})
 	writeSyntheticRecordingTranscript(t, recording, "client\n", "agent\n")
 	recording.conversation.observe(messages.StreamMessage{
 		Type:  messages.StreamTypeAudioDelta,
@@ -685,94 +685,5 @@ func TestSessionDirectoryRecordingReportsTimingShortWrite(t *testing.T) {
 	}
 	if _, statErr := os.Stat(filepath.Join(destination, "manifest.json")); statErr != nil {
 		t.Fatalf("bundle manifest missing after timing diagnostic failure: %v", statErr)
-	}
-}
-
-func recordingFileBytes(t *testing.T, root string) map[string][]byte {
-	t.Helper()
-	files := make(map[string][]byte)
-	for _, relative := range recordingEntries(t, root) {
-		if relative == "audio" || relative == "timing.json" {
-			continue
-		}
-		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(relative)))
-		if err != nil {
-			t.Fatalf("read recording file %s: %v", relative, err)
-		}
-		files[relative] = normalizeRunSpecificTiming(relative, data)
-	}
-	return files
-}
-
-// normalizeRunSpecificTiming strips real wall-clock observations from bundle
-// artifacts before comparability checks. Bundles stay flag-composition
-// invariant; genuine timing measurements legitimately differ between two live
-// runs of the same scripted session.
-func normalizeRunSpecificTiming(relative string, data []byte) []byte {
-	switch relative {
-	case "manifest.json":
-		var doc map[string]any
-		if json.Unmarshal(data, &doc) != nil {
-			return data
-		}
-		delete(doc, "wall_clock_start")
-		normalized, err := json.Marshal(doc)
-		if err != nil {
-			return data
-		}
-		return normalized
-	}
-	return data
-}
-
-func assertSessionCaptureEquivalent(t *testing.T, want, got gwtesting.SessionCapture) {
-	t.Helper()
-	if want.Version != got.Version || !reflect.DeepEqual(want.Provider, got.Provider) || len(want.Records) != len(got.Records) {
-		t.Fatalf("capture envelopes differ: want=%+v got=%+v", want, got)
-	}
-	want.Session.StartedAtUTC = ""
-	got.Session.StartedAtUTC = ""
-	if !reflect.DeepEqual(want.Session, got.Session) {
-		t.Fatalf("capture session metadata differs: want=%+v got=%+v", want.Session, got.Session)
-	}
-	for index := range want.Records {
-		left, right := want.Records[index], got.Records[index]
-		left.TimestampMs = 0
-		right.TimestampMs = 0
-		if !reflect.DeepEqual(left, right) {
-			t.Fatalf("capture record %d differs: want=%+v got=%+v", index, left, right)
-		}
-	}
-}
-
-func assertManifestArtifacts(t *testing.T, destination string, manifest transcript.RecordingManifest, wantPaths []string) {
-	t.Helper()
-	seen := make(map[string]struct{}, len(manifest.Artifacts))
-	for _, artifact := range manifest.Artifacts {
-		if _, ok := seen[artifact.Path]; ok {
-			t.Fatalf("manifest references %q more than once", artifact.Path)
-		}
-		seen[artifact.Path] = struct{}{}
-		if filepath.IsAbs(artifact.Path) || filepath.Clean(filepath.FromSlash(artifact.Path)) != filepath.FromSlash(artifact.Path) {
-			t.Fatalf("manifest artifact path is not relative and normalized: %q", artifact.Path)
-		}
-		data, err := os.ReadFile(filepath.Join(destination, filepath.FromSlash(artifact.Path)))
-		if err != nil {
-			t.Fatalf("read manifest artifact %q: %v", artifact.Path, err)
-		}
-		digest := sha256.Sum256(data)
-		if got := hex.EncodeToString(digest[:]); got != artifact.SHA256 {
-			t.Fatalf("manifest hash for %q = %s, want %s", artifact.Path, got, artifact.SHA256)
-		}
-	}
-	gotPaths := make([]string, 0, len(seen))
-	for path := range seen {
-		gotPaths = append(gotPaths, path)
-	}
-	sort.Strings(gotPaths)
-	want := append([]string(nil), wantPaths...)
-	sort.Strings(want)
-	if !reflect.DeepEqual(gotPaths, want) {
-		t.Fatalf("manifest artifact paths = %v, want %v", gotPaths, want)
 	}
 }

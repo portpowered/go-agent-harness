@@ -225,7 +225,6 @@ func newRoomSpeechOverlapScenario(t *testing.T, peerOutput []byte) *roomSpeechOv
 			}
 		},
 	}
-	opts = newTestRoomRunOptions(opts)
 	runDone := make(chan roomTestRunOutcome, 1)
 	go func() {
 		result, err := RunRoomWithResult(roomCtx, io.Discard, opts)

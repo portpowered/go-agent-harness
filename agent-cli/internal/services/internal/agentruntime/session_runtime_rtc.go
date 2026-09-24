@@ -13,7 +13,6 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -73,22 +72,13 @@ func validateSessionRTCComponents(c SessionRTCComponents) error {
 
 // planWebRTCSessionRuntime keeps provider-specific configuration and capture
 // construction behind the existing provider seams while replacing only the
-// live transport owner. Runtime startup remains lazy until the session loop asks
-// the inferencer to connect, keeping planning free of network and media effects.
+// live transport owner. Runtime startup remains lazy until the session loop
+// asks the inferencer to connect, which keeps planning free of network and
+// media-source side effects.
 func planWebRTCSessionRuntime(opts SessionRunOptions, selection SessionRuntimeSelection, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
-	runtimeFactory := opts.RTCRuntimeFactory
-	if runtimeFactory == nil {
-		runtimeFactory = factory.newRTCRuntime
-	}
-	if runtimeFactory == nil {
-		return sessionRuntimePlan{}, wrapSessionRTCRuntimeError("create runtime", ErrSessionRTCRuntimeUnavailable)
-	}
-	runtime, err := runtimeFactory(selection)
+	runtime, err := newSessionRTCRuntimeForPlan(opts, selection, factory)
 	if err != nil {
-		return sessionRuntimePlan{}, wrapSessionRTCRuntimeError("create runtime", err)
-	}
-	if runtime == nil {
-		return sessionRuntimePlan{}, wrapSessionRTCRuntimeError("create runtime", ErrSessionRTCRuntimeUnavailable)
+		return sessionRuntimePlan{}, err
 	}
 	rtcInferencer := &sessionRTCRuntimeInferencer{runtime: runtime}
 
@@ -107,6 +97,15 @@ func planWebRTCSessionRuntime(opts SessionRunOptions, selection SessionRuntimeSe
 		finalize       func(context.Context, io.Writer) error
 		mode           = sessionRuntimeModeInjectedLive
 	)
+	prepareCapture := func(dialer sessionRecordingDialer, announcement string) {
+		flushCapture = func() error { return dialer.FlushToFile(opts.RecordPath) }
+		flushCaptureTo = dialer.FlushToFile
+		announce = announcement
+		finalize = func(_ context.Context, out io.Writer) error {
+			_, writeErr := fmt.Fprintf(out, "Wrote session capture to %s\n", opts.RecordPath)
+			return writeErr
+		}
+	}
 
 	if opts.SessionInferencer != nil {
 		inner = opts.SessionInferencer
@@ -125,19 +124,13 @@ func planWebRTCSessionRuntime(opts SessionRunOptions, selection SessionRuntimeSe
 		}
 		inputAudioTranscription, resolveErr := resolveSessionTranscription(opts, provider, opts.RTCBinding.HasInput())
 		if resolveErr != nil {
-			return sessionRuntimePlan{}, resolveErr
+			return closeOnPlanError(resolveErr)
 		}
 		inner, err = factory.newOpenAISessionInferencerForTools(sessionCfg, opts.Voice, recordingDialer, opts.ToolDefinitions, false, inputAudioTranscription)
 		if err != nil {
 			return closeOnPlanError(err)
 		}
-		flushCapture = func() error { return recordingDialer.FlushToFile(opts.RecordPath) }
-		flushCaptureTo = func(path string) error { return recordingDialer.FlushToFile(path) }
-		announce = fmt.Sprintf("Starting OpenAI realtime session recording to %s", opts.RecordPath)
-		finalize = func(_ context.Context, out io.Writer) error {
-			_, writeErr := fmt.Fprintf(out, "Wrote session capture to %s\n", opts.RecordPath)
-			return writeErr
-		}
+		prepareCapture(recordingDialer, fmt.Sprintf("Starting OpenAI realtime session recording to %s", opts.RecordPath))
 	} else {
 		sessionCfg, resolveErr := resolveGrokSessionConfig(opts)
 		if resolveErr != nil {
@@ -155,13 +148,7 @@ func planWebRTCSessionRuntime(opts SessionRunOptions, selection SessionRuntimeSe
 		if err != nil {
 			return closeOnPlanError(err)
 		}
-		flushCapture = func() error { return recordingDialer.FlushToFile(opts.RecordPath) }
-		flushCaptureTo = func(path string) error { return recordingDialer.FlushToFile(path) }
-		announce = fmt.Sprintf("Starting Grok session recording to %s", opts.RecordPath)
-		finalize = func(_ context.Context, out io.Writer) error {
-			_, writeErr := fmt.Fprintf(out, "Wrote session capture to %s\n", opts.RecordPath)
-			return writeErr
-		}
+		prepareCapture(recordingDialer, fmt.Sprintf("Starting Grok session recording to %s", opts.RecordPath))
 	}
 	if inner == nil {
 		return closeOnPlanError(wrapSessionRTCRuntimeError("create provider session", ErrSessionRTCRuntimeUnavailable))
@@ -436,7 +423,7 @@ func (i *sessionRTCRuntimeInferencer) SetSessionAudioOutput(format models.AudioF
 	if i == nil || i.inner == nil {
 		return
 	}
-	if configurer, ok := i.inner.(sessionAudioOutputConfigurer); ok {
+	if configurer, ok := i.inner.(runtimeAudioOutputConfigurer); ok {
 		configurer.SetSessionAudioOutput(format, rate)
 	}
 }
@@ -445,7 +432,7 @@ func (i *sessionRTCRuntimeInferencer) SetSessionAudioInput(format models.AudioFo
 	if i == nil || i.inner == nil {
 		return
 	}
-	if configurer, ok := i.inner.(sessionAudioInputConfigurer); ok {
+	if configurer, ok := i.inner.(runtimeAudioInputConfigurer); ok {
 		configurer.SetSessionAudioInput(format, rate)
 	}
 }
@@ -523,23 +510,23 @@ func (s *sessionRTCRuntimeSession) SupportsResponseRequests() bool {
 }
 
 func (s *sessionRTCRuntimeSession) SendMessage(ctx context.Context, msg messages.Message) bool {
-	sender, ok := s.Session.(sessionturn.CompleteMessageSender)
+	sender, ok := s.Session.(SessionImageMessageSender)
 	return ok && sender.SendMessage(ctx, msg)
 }
 
 func (s *sessionRTCRuntimeSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
-	sender, ok := s.Session.(sessionturn.CompleteMessageWithoutResponseSender)
+	sender, ok := s.Session.(SessionImageMessageSenderWithoutResponse)
 	return ok && sender.SendMessageWithoutResponse(ctx, msg)
 }
 
 func (s *sessionRTCRuntimeSession) SupportsCompleteMessages() bool {
-	_, ok := s.Session.(sessionturn.CompleteMessageSender)
-	return ok
+	complete, _ := completeMessageCapabilities(s.Session)
+	return complete
 }
 
 func (s *sessionRTCRuntimeSession) SupportsCompleteMessagesWithoutResponse() bool {
-	_, ok := s.Session.(sessionturn.CompleteMessageWithoutResponseSender)
-	return ok
+	_, withoutResponse := completeMessageCapabilities(s.Session)
+	return withoutResponse
 }
 
 // SendWithOutcome preserves the provider's typed send lifecycle through the
