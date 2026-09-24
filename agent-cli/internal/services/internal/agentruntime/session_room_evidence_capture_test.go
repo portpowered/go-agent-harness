@@ -49,11 +49,7 @@ func TestRoomEvidence_RecordsAudioDroppedIsExplicitNotSilent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open room evidence: %v", err)
 	}
-	t.Cleanup(func() {
-		if err := evidence.Close(); err != nil {
-			t.Errorf("close room evidence: %v", err)
-		}
-	})
+	cleanupRoomEvidence(t, evidence.Close)
 	if err := evidence.Observe(roomevidence.Observation{
 		Kind: roomevidence.ObservationAudioDropped, ParticipantID: "listener",
 		Artifact: "send mixed PCM: session not in duplex mode", DroppedBytes: 480,
@@ -106,4 +102,13 @@ func TestRoomEvidence_RecordsAudioDroppedIsExplicitNotSilent(t *testing.T) {
 	if !timelineFound {
 		t.Fatalf("room-timeline.jsonl has no audio_input_dropped entry: %v", timeline)
 	}
+}
+
+func cleanupRoomEvidence(t *testing.T, closeEvidence func() error) {
+	t.Helper()
+	t.Cleanup(func() {
+		if err := closeEvidence(); err != nil {
+			t.Errorf("close room evidence: %v", err)
+		}
+	})
 }

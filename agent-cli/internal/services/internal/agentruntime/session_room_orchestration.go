@@ -96,9 +96,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 			return finalizeRoomEvidence(evidence, roomClock, result, safeErr)
 		}
 		if evidence != nil {
-			if err := evidence.RecordTimeline("participant_joined", plan.manifest.ID, nil); err != nil {
-				evidence.MarkError(plan.manifest.ID, roomevidence.TimelinePath, err)
-			}
+			evidence.MarkError(plan.manifest.ID, roomevidence.TimelinePath, evidence.RecordTimeline("participant_joined", plan.manifest.ID, nil))
 		}
 	}
 
@@ -107,9 +105,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		onParticipantTerminated = func(result RoomParticipantResult) {
 			recordRoomParticipantBoundDiagnostic(opts, evidence, result)
 			if evidence != nil {
-				if err := evidence.RecordTimeline("participant_terminated", result.ParticipantID, participantTerminalFields(result)); err != nil {
-					evidence.MarkError(result.ParticipantID, roomevidence.TimelinePath, err)
-				}
+				evidence.MarkError(result.ParticipantID, roomevidence.TimelinePath, evidence.RecordTimeline("participant_terminated", result.ParticipantID, participantTerminalFields(result)))
 			}
 			if opts.OnParticipantTerminated != nil {
 				opts.OnParticipantTerminated(result)
@@ -119,9 +115,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 	coordinator := newRoomCoordinator(roomCancel, opts.Manifest.Room.MaxTurns, opts.BoundShutdownGrace, onParticipantTerminated, opts.onRoomBoundShutdown)
 	coordinator.setParticipantFailureObserver(func(participantID, reason string) {
 		if evidence != nil {
-			if err := evidence.RecordTimeline("participant_failed", participantID, map[string]string{"reason": reason}); err != nil {
-				evidence.MarkError(participantID, roomevidence.TimelinePath, err)
-			}
+			evidence.MarkError(participantID, roomevidence.TimelinePath, evidence.RecordTimeline("participant_failed", participantID, map[string]string{"reason": reason}))
 		}
 	})
 	coordinator.blockEmptyStop()
@@ -288,12 +282,8 @@ func publishRoomParticipantsReady(coordinator *roomCoordinator, plans []*roomPar
 		}
 		ready := roomParticipantReady(plan)
 		if evidence != nil {
-			if err := evidence.SetParticipantReady(ready); err != nil {
-				evidence.MarkError(ready.ParticipantID, roomevidence.ManifestPath, err)
-			}
-			if err := evidence.RecordTimeline("participant_ready", ready.ParticipantID, nil); err != nil {
-				evidence.MarkError(ready.ParticipantID, roomevidence.TimelinePath, err)
-			}
+			evidence.MarkError(ready.ParticipantID, roomevidence.ManifestPath, evidence.SetParticipantReady(ready))
+			evidence.MarkError(ready.ParticipantID, roomevidence.TimelinePath, evidence.RecordTimeline("participant_ready", ready.ParticipantID, nil))
 		}
 		if opts.OnParticipantReady != nil {
 			opts.OnParticipantReady(ready)

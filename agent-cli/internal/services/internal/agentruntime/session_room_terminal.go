@@ -183,9 +183,7 @@ func recordRoomParticipantBoundDiagnostic(opts RoomRunOptions, evidence roomevid
 	record := participantTerminationDiagnostic(result)
 	if evidence != nil {
 		evidence.RecordSessionDiagnostic(roomevidence.DiagnosticRecord{ParticipantID: result.ParticipantID, Event: record.Event, Fields: record.Fields})
-		if err := evidence.RecordTimeline("room_bound_shutdown", result.ParticipantID, record.Fields); err != nil {
-			evidence.MarkError(result.ParticipantID, roomevidence.TimelinePath, err)
-		}
+		evidence.MarkError(result.ParticipantID, roomevidence.TimelinePath, evidence.RecordTimeline("room_bound_shutdown", result.ParticipantID, record.Fields))
 	}
 	if opts.OnDiagnostic != nil {
 		opts.OnDiagnostic(result.ParticipantID, record)

@@ -262,9 +262,7 @@ func (m *roomHumanCaptureMedia) WriteFrame(ctx context.Context, frame audio.PCMF
 	}
 	pcm := encodeRoomPCM16(frame.Samples)
 	if m.evidence != nil {
-		if err := m.evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationSentAudio, ParticipantID: participantID, PCM: pcm}); err != nil {
-			m.evidence.MarkError(participantID, "", err)
-		}
+		m.evidence.MarkError(participantID, "", m.evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationSentAudio, ParticipantID: participantID, PCM: pcm}))
 	}
 	sourceRate := m.runtime.mixer.Format().SampleRate
 	return m.fanOutPCM(ctx, participantID, pcm, sourceRate)
@@ -375,9 +373,7 @@ func (m *roomHumanPlaybackMedia) resolvePending(accepted bool) error {
 	var err error
 	if accepted && m.evidence != nil {
 		participantID := m.runtime.plan.manifest.ID
-		if err := m.evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationReceivedParticipantAudio, ParticipantID: participantID, PCM: m.pcm}); err != nil {
-			m.evidence.MarkError(participantID, m.evidence.Artifacts(participantID).ReceivedPCM, err)
-		}
+		m.evidence.MarkError(participantID, m.evidence.Artifacts(participantID).ReceivedPCM, m.evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationReceivedParticipantAudio, ParticipantID: participantID, PCM: m.pcm}))
 	}
 	m.pending = false
 	m.sources = nil
