@@ -258,7 +258,7 @@ func TestDeadSessionGuardEvaluatesTypedExpectationControls(t *testing.T) {
 		{name: "event-mismatch", expectation: ExpectedBehavior{Type: ExpectEvent, Value: "ready"}, observation: full, wantErr: ErrExpectationMismatch},
 		{name: "tool-call-mismatch", expectation: ExpectedBehavior{Type: ExpectToolCall, ToolCallID: "weather"}, observation: full, wantErr: ErrExpectationMismatch},
 		{name: "tool-result-mismatch", expectation: ExpectedBehavior{Type: ExpectToolResult, ToolCallID: "calendar"}, observation: full, wantErr: ErrExpectationMismatch},
-		{name: "unknown-expectation", expectation: ExpectedBehavior{Type: "unknown"}, observation: full, wantErr: ErrInvalidExpectation},
+		{name: "unknown-expectation", expectation: ExpectedBehavior{Type: unknownLabel}, observation: full, wantErr: ErrInvalidExpectation},
 		{name: "tool-call-invalid", expectation: ExpectedBehavior{Type: ExpectToolCall}, observation: full, wantErr: ErrInvalidExpectation},
 		{name: "time-invalid", expectation: ExpectedBehavior{Type: ExpectTime}, observation: full, wantErr: ErrInvalidExpectation},
 		{name: "contains-alias-conflict", expectation: ExpectedBehavior{Type: ExpectContains, Text: "a", Value: "b"}, observation: full, wantErr: ErrInvalidExpectation},
@@ -315,7 +315,7 @@ func exerciseScenarioRegistryLifecycle(t *testing.T) *ScenarioRegistry {
 	if got := registry.Snapshot(); len(got) != 1 || got[0].ID != scenario.ID {
 		t.Fatalf("registry snapshot: %#v", got)
 	}
-	if err := registry.Register(scenario, DeadSessionControl("unknown")); !errors.Is(err, ErrInvalidScenarioRegistration) {
+	if err := registry.Register(scenario, DeadSessionControl(unknownLabel)); !errors.Is(err, ErrInvalidScenarioRegistration) {
 		t.Fatalf("unknown control error: %v", err)
 	}
 	registry.Unregister(scenario.ID)
@@ -491,7 +491,7 @@ func TestDeadSessionGuardFailsClosedForSetupAndEvidenceFailures(t *testing.T) {
 		t.Fatal("empty guard error contract changed")
 	}
 	var nilError *DeadSessionGuardError
-	if nilError.Error() != "<nil>" {
+	if nilError.Error() != nilErrorText {
 		t.Fatalf("nil error text: %q", nilError.Error())
 	}
 	if errors.Is(&DeadSessionGuardError{}, errors.New("unrelated")) {

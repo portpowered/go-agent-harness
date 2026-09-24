@@ -173,7 +173,7 @@ type ExpectationMismatchError struct {
 
 func (e *ExpectationMismatchError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	return fmt.Sprintf("probe expectation %q mismatch: expected %s, actual %s",
 		e.Kind, diagnosticValue(e.Expected), diagnosticValue(e.Actual))
@@ -190,7 +190,7 @@ type ExpectationValidationError struct {
 
 func (e *ExpectationValidationError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	return fmt.Sprintf("invalid probe expectation %q at %s: %s", e.Kind, e.Field, e.Reason)
 }

@@ -511,7 +511,7 @@ func TestBargeInLedgerRejectsMalformedResponseEvidence(t *testing.T) {
 		}},
 		{name: "undocumented response disposition", want: "undocumented terminal disposition", run: func(s *bargeInTestStream) {
 			s.response("r1", "i1", "t1")
-			s.observe(BargeInEvent{Kind: BargeInEventResponseTerminal, ResponseID: "r1", Disposition: "unknown"})
+			s.observe(BargeInEvent{Kind: BargeInEventResponseTerminal, ResponseID: "r1", Disposition: unknownLabel})
 		}},
 		{name: "failed response without reason", want: "has no reason", run: func(s *bargeInTestStream) {
 			s.response("r1", "i1", "t1")
@@ -574,7 +574,7 @@ func TestBargeInLedgerRejectsMalformedToolContinuationAndSessionEvidence(t *test
 		{name: "undocumented tool disposition", want: "undocumented result disposition", run: func(s *bargeInTestStream) {
 			s.response("r1", "i1", "t1")
 			s.observe(BargeInEvent{Kind: BargeInEventToolCall, ToolCallID: "c1", ResponseID: "r1", TurnID: "t1"})
-			s.observe(BargeInEvent{Kind: BargeInEventToolResult, ToolCallID: "c1", ResponseID: "r1", TurnID: "t1", Disposition: "unknown"})
+			s.observe(BargeInEvent{Kind: BargeInEventToolResult, ToolCallID: "c1", ResponseID: "r1", TurnID: "t1", Disposition: unknownLabel})
 		}},
 		{name: "rejected tool result without reason", want: "no rejection or cancellation reason", run: func(s *bargeInTestStream) {
 			s.response("r1", "i1", "t1")
@@ -603,7 +603,7 @@ func TestBargeInLedgerRejectsMalformedToolContinuationAndSessionEvidence(t *test
 			s.observe(BargeInEvent{Kind: BargeInEventSessionTerminal, Disposition: BargeInDispositionFailed})
 		}},
 		{name: "undocumented session disposition", want: "undocumented session terminal disposition", run: func(s *bargeInTestStream) {
-			s.observe(BargeInEvent{Kind: BargeInEventSessionTerminal, Disposition: "unknown"})
+			s.observe(BargeInEvent{Kind: BargeInEventSessionTerminal, Disposition: unknownLabel})
 		}},
 		{name: "clean disposition without clean assertion", want: "did not assert clean success", run: func(s *bargeInTestStream) {
 			s.observe(BargeInEvent{Kind: BargeInEventSessionTerminal, Disposition: BargeInDispositionClean})
@@ -729,11 +729,11 @@ func TestBargeInLedgerOptionalTerminalAndNilSafety(t *testing.T) {
 	}
 
 	var nilValidationError *BargeInValidationError
-	if got := nilValidationError.Error(); got != "<nil>" {
+	if got := nilValidationError.Error(); got != nilErrorText {
 		t.Fatalf("nil validation error string = %q, want <nil>", got)
 	}
 	var nilWaitError *BargeInWaitError
-	if got := nilWaitError.Error(); got != "<nil>" {
+	if got := nilWaitError.Error(); got != nilErrorText {
 		t.Fatalf("nil wait error string = %q, want <nil>", got)
 	}
 	if !errors.Is(nilWaitError, ErrBargeInWait) {

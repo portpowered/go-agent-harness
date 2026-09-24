@@ -7,6 +7,13 @@ import (
 	"fmt"
 )
 
+const (
+	// nilErrorText is the Error() text reported by nil typed error receivers.
+	nilErrorText = "<nil>"
+	// unknownLabel classifies values that match no known category.
+	unknownLabel = "unknown"
+)
+
 type StepKind string
 
 const (
@@ -155,7 +162,7 @@ func makeError(category ErrorCategory, location, format string, args ...any) *Sc
 }
 func (e *ScenarioError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	if e.Location == "" {
 		return fmt.Sprintf("%s: %s", e.Category, e.Message)

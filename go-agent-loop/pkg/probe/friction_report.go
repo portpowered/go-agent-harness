@@ -113,7 +113,7 @@ type FrictionReportError struct {
 
 func (e *FrictionReportError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	if e.Line > 0 {
 		return fmt.Sprintf("probe report %s:%d: %v", e.Source, e.Line, e.Err)
@@ -178,7 +178,7 @@ type frictionAggregator struct {
 func (a *frictionAggregator) addFriction(category, key, scenario string) {
 	key = strings.TrimSpace(key)
 	if key == "" {
-		key = "unknown"
+		key = unknownLabel
 	}
 	identity := frictionIdentity{Category: category, Key: key}
 	bucket := a.frictions[identity]
@@ -231,7 +231,7 @@ func (a *frictionAggregator) addExpectationMisses(result ScenarioResult) {
 		}
 		kind := outcome.Kind
 		if strings.TrimSpace(string(kind)) == "" {
-			kind = ExpectationKind("unknown")
+			kind = ExpectationKind(unknownLabel)
 		}
 		misses := a.expectationMisses[kind]
 		if misses == nil {
@@ -259,7 +259,7 @@ func (a *frictionAggregator) addFailureFrictions(result ScenarioResult, stuck bo
 		a.addFriction(FrictionCategoryErrorClass, class, result.Name)
 	}
 	if !stuck && reason == "" && class == "" && len(result.ScenarioExpectationOutcomes) == 0 {
-		a.addFriction(FrictionCategoryFailure, "unknown", result.Name)
+		a.addFriction(FrictionCategoryFailure, unknownLabel, result.Name)
 	}
 }
 
@@ -491,6 +491,6 @@ func classifyProbeError(message string) string {
 	case strings.Contains(text, "panic"):
 		return "panic"
 	default:
-		return "unknown"
+		return unknownLabel
 	}
 }

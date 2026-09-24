@@ -122,7 +122,7 @@ func TestEvaluateAcceptanceRequiresEvidenceRatingAndKnownTerminalState(t *testin
 			name: "unknown terminal state",
 			report: AcceptanceAgentReport{
 				SubjectiveRating: SubjectiveEasy,
-				TerminalState:    AcceptanceTerminalState("unknown"),
+				TerminalState:    AcceptanceTerminalState(unknownLabel),
 			},
 			evidence: ObjectiveEvidence{Verified: true},
 			want:     ErrAcceptanceTerminalState.Error(),

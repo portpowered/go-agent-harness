@@ -577,8 +577,8 @@ func TestScenarioV2TypedValidationRejectsInvalidValues(t *testing.T) {
 		{"missing steps", func(s *ScenarioV2) { s.Steps = nil }},
 		{"missing expectations", func(s *ScenarioV2) { s.Expectations = nil }},
 		{"fixture without root", func(s *ScenarioV2) { s.BrowserFixture = "browser.json" }},
-		{"unknown step", func(s *ScenarioV2) { s.Steps[0].Type = "unknown" }},
-		{"unknown expectation", func(s *ScenarioV2) { s.Expectations[0].Type = "unknown" }},
+		{"unknown step", func(s *ScenarioV2) { s.Steps[0].Type = unknownLabel }},
+		{"unknown expectation", func(s *ScenarioV2) { s.Expectations[0].Type = unknownLabel }},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) { requireInvalidTypedScenarioV2(t, test.mutate) })

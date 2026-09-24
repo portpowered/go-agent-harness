@@ -217,7 +217,7 @@ type BargeInValidationError struct {
 
 func (e *BargeInValidationError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	violations := make([]string, 0, len(e.Report.Violations))
 	for _, violation := range e.Report.Violations {
@@ -902,7 +902,7 @@ type BargeInWaitError struct {
 
 func (e *BargeInWaitError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	observed := make([]string, 0, len(e.Observed))
 	for _, event := range e.Observed {

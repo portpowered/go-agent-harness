@@ -158,7 +158,7 @@ type GoalCatalogValidationError struct {
 // Error returns an actionable catalog validation diagnostic.
 func (e *GoalCatalogValidationError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	location := "catalog"
 	if e.Index >= 0 {

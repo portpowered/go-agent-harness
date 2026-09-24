@@ -397,7 +397,7 @@ type DeadSessionGuardError struct {
 
 func (e *DeadSessionGuardError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	if len(e.Findings) == 0 {
 		return ErrDeadSessionGuard.Error()
