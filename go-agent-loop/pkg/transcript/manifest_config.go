@@ -183,7 +183,7 @@ func (n *normalizedRecording) planArtifactLayout(config RecordingConfig, redacto
 	if len(config.SessionLog) > 0 {
 		appendArtifact("session-log.jsonl")
 	}
-	expectedPaths = append(expectedPaths, "audio")
+	expectedPaths = append(expectedPaths, recordingAudioDir)
 	for index := 0; index < len(n.inputSegments)+len(n.inputSegmentPaths); index++ {
 		appendArtifact(fmt.Sprintf("audio/in-%03d.pcm", index))
 	}
@@ -305,13 +305,16 @@ func reservedRecordingPaths(capacity int, artifactPaths, expectedPaths []string)
 	return seen
 }
 
+// recordingAudioDir is the bundle directory reserved for captured audio.
+const recordingAudioDir = "audio"
+
 // claimAdditionalArtifactPath validates one additional artifact path and
 // records it so a later artifact cannot duplicate it.
 func claimAdditionalArtifactPath(artifactPath string, seen map[string]struct{}) error {
 	if err := validateRecordingArtifactPath(artifactPath); err != nil {
 		return fmt.Errorf("%q: %w", artifactPath, err)
 	}
-	if artifactPath == "audio" || strings.HasPrefix(artifactPath, "audio/") {
+	if artifactPath == recordingAudioDir || strings.HasPrefix(artifactPath, recordingAudioDir+"/") {
 		return fmt.Errorf("%q: audio paths are reserved", artifactPath)
 	}
 	if _, exists := seen[artifactPath]; exists {

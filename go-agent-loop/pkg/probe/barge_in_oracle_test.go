@@ -795,39 +795,35 @@ func TestBargeInCoordinatorCoversSignalAndBoundedTeardown(t *testing.T) {
 	}
 
 	release := make(chan struct{})
-	workerDone := make(chan struct{})
 	workerCoordinator, err := NewBargeInCoordinator(context.Background(), 20*time.Millisecond, ledger)
 	if err != nil {
 		t.Fatal(err)
 	}
 	workerCoordinator.Go(func(context.Context) {
-		defer close(workerDone)
 		<-release
 	})
 	if err := workerCoordinator.WaitForWorkers("blocked worker"); err == nil || !errors.Is(err, context.DeadlineExceeded) || !strings.Contains(err.Error(), "blocked worker") {
 		t.Fatalf("blocked worker wait error = %v, want bounded deadline diagnostic", err)
 	}
 	close(release)
-	<-workerDone
+	awaitCoordinatorWorkerAccounting(t, workerCoordinator)
 	if err := workerCoordinator.WaitForWorkers("released worker"); err != nil {
 		t.Fatalf("released worker join returned error: %v", err)
 	}
 
 	stopRelease := make(chan struct{})
-	stopWorkerDone := make(chan struct{})
 	stopCoordinator, err := NewBargeInCoordinator(context.Background(), 20*time.Millisecond, ledger)
 	if err != nil {
 		t.Fatal(err)
 	}
 	stopCoordinator.Go(func(context.Context) {
-		defer close(stopWorkerDone)
 		<-stopRelease
 	})
 	if err := stopCoordinator.StopAndWait("blocked stop"); err == nil || !errors.Is(err, context.DeadlineExceeded) || !strings.Contains(err.Error(), "blocked stop") {
 		t.Fatalf("blocked stop error = %v, want bounded deadline diagnostic", err)
 	}
 	close(stopRelease)
-	<-stopWorkerDone
+	awaitCoordinatorWorkerAccounting(t, stopCoordinator)
 	if err := stopCoordinator.WaitForWorkers("released stop"); err != nil {
 		t.Fatalf("released stop worker join returned error: %v", err)
 	}
