@@ -21,7 +21,7 @@ import (
 func TestExternalRoomRejectsMissingProviderTrace(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	scheduler := clock.NewDeterministic(time.Unix(123, 0), time.Millisecond)
+	scheduler := clock.NewDeterministic(time.Unix(1_700_000_000, 0), time.Millisecond)
 	live := sessionwire.NewLiveService(sessionwire.LiveDependencies{
 		Clock:     scheduler.Now,
 		Scheduler: scheduler,

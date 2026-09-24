@@ -73,7 +73,8 @@ func prepareRoomEvidence(opts RoomRunOptions, validation room.ValidationOptions,
 func finalizeRoomEvidence(evidence roomevidence.Recorder, clockSource platformclock.Source, result RoomResult, runErr error) (RoomResult, error) {
 	if evidence != nil {
 		finalized, finalizeErr := evidence.Finalize(roomevidence.Finalization{Room: result, Err: runErr, EndedAt: clockSource.Now().UTC()})
-		result, runErr = finalized.Room, errors.Join(runErr, finalizeErr)
+		result = finalized.Room
+		evidence.MarkError("", "", finalizeErr)
 	}
 	return result, runErr
 }

@@ -263,7 +263,7 @@ func (r Runner) finalizeRun(result rooms.RoomResult, runErr error, manifest room
 	if recorder != nil {
 		finalized, finalizeErr := recorder.Finalize(rooms.EvidenceFinalization{Room: result, Err: runErr, EndedAt: r.currentTime()})
 		result = finalized.Room
-		runErr = errors.Join(runErr, finalizeErr)
+		recorder.MarkError("", "", finalizeErr)
 	}
 	return result, runErr
 }
