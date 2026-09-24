@@ -6133,3 +6133,18 @@ before any push or PR.
 - Exact next action: commit the source repair and this checkpoint, rerun
   `make prepush` on its exact clean SHA, then run every C251-04 local command
   before push or PR.
+
+
+## C251 staticcheck result-order repair checkpoint — 2026-09-24
+
+- Exact `rtk make prepush` on `1be4b5add94ac3d14adfbdb83dbce04488ec4486`
+  passed architecture (234 packages, 2,038 files, 29,927 functions), generated
+  Wire verification, vet, and lint. Staticcheck no longer reports the removed
+  connect-failure cache; it identified two `ST1008` result-order findings in
+  `session/internal/live/replay.go` and `sessionduration/internal/runner/signals.go`.
+  Log: `~/Library/Application Support/rtk/tee/1790250404_make_prepush.log`.
+- Reordered those internal helper results so `error` is last and updated their
+  callers; the underlying finish-cleanup and channel-read behavior is unchanged.
+- Exact next action: commit this correction and checkpoint, rerun full prepush
+  on the exact SHA, then complete all remaining C251-04 commands before push
+  or PR.

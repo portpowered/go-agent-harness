@@ -16,7 +16,7 @@ func (h *handle) finish(err error) {
 
 func (h *handle) finishOnceBody(err error) {
 	var cleanup finishCleanup
-	err, cleanup = h.captureFinishCleanup(err)
+	cleanup, err = h.captureFinishCleanup(err)
 	err = cleanup.apply(err)
 	err = h.finishMedia(err, cleanup.userCancelled)
 	err = h.finalizeDuration(err)

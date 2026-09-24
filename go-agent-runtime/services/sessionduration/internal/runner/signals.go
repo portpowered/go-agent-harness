@@ -76,7 +76,7 @@ func errorSources(first <-chan error, rest []<-chan error) []<-chan error {
 
 func forwardErrors(ctx context.Context, source <-chan error, merged chan<- error) {
 	for {
-		err, ok, stopped := nextError(ctx, source)
+		ok, stopped, err := nextError(ctx, source)
 		if stopped || !ok {
 			return
 		}
@@ -91,12 +91,12 @@ func forwardErrors(ctx context.Context, source <-chan error, merged chan<- error
 	}
 }
 
-func nextError(ctx context.Context, source <-chan error) (error, bool, bool) {
+func nextError(ctx context.Context, source <-chan error) (bool, bool, error) {
 	select {
 	case err, ok := <-source:
-		return err, ok, false
+		return ok, false, err
 	case <-ctx.Done():
-		return nil, false, true
+		return false, true, nil
 	}
 }
 

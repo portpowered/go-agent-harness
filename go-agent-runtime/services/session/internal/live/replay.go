@@ -336,7 +336,7 @@ type finishCleanup struct {
 	flushCapture      func() error
 }
 
-func (h *handle) captureFinishCleanup(err error) (error, finishCleanup) {
+func (h *handle) captureFinishCleanup(err error) (finishCleanup, error) {
 	h.mu.Lock()
 	h.clearPendingToolCallsLocked()
 	if err == nil {
@@ -349,7 +349,7 @@ func (h *handle) captureFinishCleanup(err error) (error, finishCleanup) {
 	}
 	h.capabilityClose, h.captureFlush = nil, nil
 	h.mu.Unlock()
-	return err, cleanup
+	return cleanup, err
 }
 
 func (c finishCleanup) apply(err error) error {
