@@ -6320,3 +6320,32 @@ before any push or PR.
   together, then rerun `rtk make prepush` plus every C251-04 vertical command
   on that exact clean SHA. No push or PR exists; keep repairs on this task and
   branch until the full local gate passes.
+
+
+## C251 hosted coverage repair checkpoint — 2026-09-24
+
+- The first SCRIPT CI gate rejected PR #546 at candidate
+  `3f5ad182102ad96064f87c26b8328dd21a2209a8`: only required check
+  `CI (coverage)` failed. The failing shard was `CI (coverage agent-cli)`,
+  job `107785853370`, with
+  `TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic/caller_cancellation`
+  returning only caller cancellation plus scheduled-audio incompletion instead
+  of `SessionUnresolvedToolResultsError`.
+- Reproduced the intermittent failure locally under the shard's coverage and
+  stress environment. The stream observer could lag tool dispatch, so a caller
+  cancellation could finish the run before it recorded the call ID. The
+  executor boundary already has the provider call ID; the session observer now
+  records that fact before starting local execution, keeping unresolved state
+  service-owned and cancellation-safe.
+- Exact stress command passed 60 repetitions:
+  `rtk proxy env CGO_ENABLED=0 YUI_AUDIO_STRESS=1 go test ./test/integration
+  -count=60 -tags=nomicrophone -timeout=480s
+  -coverpkg=github.com/portpowered/go-agent-harness/agent-cli/...,github.com/portpowered/go-agent-harness/go-agent-runtime/...
+  -coverprofile=/tmp/c251-agentcli-cancel-stress-fixed.out
+  -run '^TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic/caller_cancellation$'`
+  from `agent-cli`. `rtk gofmt` and `rtk git diff --check` also pass.
+- Exact next action: commit this repair and checkpoint, then run
+  `rtk make prepush` plus the complete C251-04 functional/race/integration/
+  hermetic/Wire/embed/deletion/adapter/ancestry matrix on the exact clean head.
+  After repairing any local failures, push the same branch, update PR #546 with
+  the exact SHA and evidence, and rerun the canonical SCRIPT CI gate.

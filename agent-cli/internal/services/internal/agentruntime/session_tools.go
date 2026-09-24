@@ -49,6 +49,9 @@ func (m sessionToolLifecycleMux) observeToolCall(call messages.ToolCall) {
 		m.runtime.ObserveToolCall(call)
 	}
 	if m.progress != nil {
+		// Establish the provider call obligation before the executor can be
+		// interrupted; stream publication may lag the tool dispatch boundary.
+		m.progress.ObserveProviderToolCallWithID(call.ID, call.Name)
 		m.progress.BeginLocalToolExecution()
 	}
 	if m.recording != nil {
