@@ -1,0 +1,138 @@
+{
+  "schema": "audio-runtime-c109-ci-rejection-v1",
+  "repository": "portpowered/go-agent-harness",
+  "pull_request": 495,
+  "run": 34732547786,
+  "event": "pull_request",
+  "workflow": "CI",
+  "head": {
+    "sha": "0185f03afbd2bf81e6d2cdb32d3a1586576aad7d",
+    "branch": "codex/audio-runtime-c109-characterize-browser-retirement-integration"
+  },
+  "run_status": "completed",
+  "run_conclusion": "failure",
+  "run_created_at": "2026-09-13T02:14:19Z",
+  "run_updated_at": "2026-09-13T02:25:55Z",
+  "passing_jobs": [
+    {"name": "CI (Windows audio portable)", "job_id": "103657892762", "conclusion": "success"},
+    {"name": "CI (WebMCP Chrome)", "job_id": "103657892843", "conclusion": "success"},
+    {"name": "CI (static)", "job_id": "103657892850", "conclusion": "success"},
+    {"name": "CI (coverage)", "job_id": "103657892859", "conclusion": "success"},
+    {"name": "CI (unit)", "job_id": "103657892866", "conclusion": "success"},
+    {"name": "CI (hermetic)", "job_id": "103657892874", "conclusion": "success"},
+    {"name": "CI (race)", "job_id": "103657892877", "conclusion": "success"},
+    {"name": "CI (macOS audio release)", "job_id": "103657892880", "conclusion": "success"}
+  ],
+  "failed_job": {
+    "name": "CI (integration)",
+    "job_id": "103657892852",
+    "conclusion": "failure",
+    "completed_at": "2026-09-13T02:25:24.9448472Z",
+    "log_url": "https://github.com/portpowered/go-agent-harness/actions/runs/34732547786/job/103657892852",
+    "command": "make test-audio-device-server-integration",
+    "package": "github.com/portpowered/go-agent-harness/agent-cli/test/integration",
+    "duration_seconds": 125.761,
+    "failure": {
+      "test": "TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst",
+      "source": "agent-cli/test/integration/session_tool_audio_remote_e2e_test.go:183",
+      "signature": "remote playback did not reach final PCM marker before the scenario deadline: context deadline exceeded",
+      "expected_pcm": 174391,
+      "rendered_pcm": 464160,
+      "nonzero_pcm": 150871,
+      "final_marker": false,
+      "playback": {
+        "queued": 0,
+        "dropped": 0,
+        "overflow": 0,
+        "discarded": 0,
+        "discard_events": 0,
+        "callbacks": 967,
+        "rendered": 464160
+      },
+      "capture": {"queued": 0, "captured": 464160, "dropped": 0},
+      "provider": {
+        "responses_sent": 9,
+        "response_creates": 7,
+        "initial_requests": 0,
+        "input_histories": 0,
+        "input_samples_seen": 696239,
+        "tool_results": 7,
+        "protocol_error": ""
+      },
+      "trace_last": {
+        "tap": "capture",
+        "sequence": 966,
+        "clock_epoch": 0,
+        "sample_rate": 16000,
+        "start_sample": 463680,
+        "sample_count": 480,
+        "device_tick": 966,
+        "host_mono_samples": 463680,
+        "queue_before": 0,
+        "queue_after": 480,
+        "flags": [],
+        "fault_id": "",
+        "payload_sha256": "3dc463a76fc170607c07b104c3cb531362ce7d6e10c1a34e0c0f370aeae08ce8"
+      },
+      "trace_render": {
+        "tap": "render",
+        "sequence": 966,
+        "clock_epoch": 0,
+        "sample_rate": 16000,
+        "start_sample": 463680,
+        "sample_count": 480,
+        "device_tick": 966,
+        "host_mono_samples": 463680,
+        "queue_before": 0,
+        "queue_after": 0,
+        "flags": ["underflow"],
+        "fault_id": "",
+        "payload_sha256": "3dc463a76fc170607c07b104c3cb531362ce7d6e10c1a34e0c0f370aeae08ce8"
+      },
+      "trace_capture": {
+        "tap": "capture",
+        "sequence": 966,
+        "clock_epoch": 0,
+        "sample_rate": 16000,
+        "start_sample": 463680,
+        "sample_count": 480,
+        "device_tick": 966,
+        "host_mono_samples": 463680,
+        "queue_before": 0,
+        "queue_after": 480,
+        "flags": [],
+        "fault_id": "",
+        "payload_sha256": "3dc463a76fc170607c07b104c3cb531362ce7d6e10c1a34e0c0f370aeae08ce8"
+      },
+      "expected_tool_calls": 7,
+      "child": "still running at timeout",
+      "stderr": "<child still running>",
+      "callback_advances": 967
+    }
+  },
+  "other_steps": {
+    "deterministic_agent_cli": "passed",
+    "deterministic_go_agent_loop": "passed",
+    "committed_agent_cli_replay": "passed",
+    "committed_go_llm_gateway_replay": "passed"
+  },
+  "expected_negative_diagnostics": "Replay mismatch, missing-key, invalid-voice, and malformed-fixture lines preceding the failure are intentional integration negative controls; they are not C109 failures.",
+  "ownership": {
+    "kind": "provider-audio-terminal-drain",
+    "owner": "C79/provider-audio",
+    "status": "EXTERNAL_OWNER_DO_NOT_DUPLICATE_REPAIR_OR_RELABEL",
+    "related_historical_evidence": "c83-integration-provider-audio-loss-6400",
+    "c109_mutated_paths": [],
+    "c109_repair_authorized": false,
+    "reason": "The failing assertion is an unowned process-boundary remote test. C109 owns evidence only and does not include provider, device, transport, integration source, Wire registry, or architecture baseline paths."
+  },
+  "local_control": {
+    "command": "rtk proxy sh -c 'cd agent-cli && CGO_ENABLED=0 go test ./test/integration -run ^TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio$/test46/provider_burst$ -count=1 -timeout=150s'",
+    "status": "passed",
+    "exit_code": 0,
+    "elapsed_seconds": 15.617,
+    "interpretation": "The exact inherited failure did not reproduce locally; this is not a C109 fix or a waiver of the CI failure."
+  },
+  "raw_job_log_sha256": "3ec0d3acb03405b376f2ef7a6e4fe32fbfdd968939811d9e2ae3fdb73dbc13a1",
+  "next_action": "Preserve the negative evidence and route provider-audio terminal-drain repair to C79. Push only the changed C109 evidence head and resubmit the same task to script CI; do not edit or relabel C79-owned source or shared files."
+}

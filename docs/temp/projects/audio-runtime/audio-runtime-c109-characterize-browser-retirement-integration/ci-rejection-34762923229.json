@@ -1,0 +1,66 @@
+{
+  "schema": "audio-runtime-c109-ci-rejection-v2",
+  "project": "audio-runtime",
+  "contractRevision": "audio-runtime-v1",
+  "task": "audio-runtime-c109-characterize-browser-retirement-integration",
+  "factorySession": "~default",
+  "factoryServer": "http://127.0.0.1:7439",
+  "repository": "portpowered/go-agent-harness",
+  "pullRequest": 495,
+  "run": 34762923229,
+  "workflow": "CI",
+  "event": "pull_request",
+  "candidateHead": "64613f656f642b26bc09f670a3f677239ac74364",
+  "runStatus": "completed",
+  "runConclusion": "failure",
+  "rawRunMetadataSha256": "c07f3e589221bf46f613e258022401c9e880665648ad10cac85b4f37b983ac5c",
+  "rawJobLogSha256": "ee40a5c9b463542dde7977fa52d19e8cbd2893857e61f6701a16110a800490cf",
+  "passingLanes": [
+    "CI (WebMCP Chrome)",
+    "CI (Windows audio portable)",
+    "CI (hermetic)",
+    "CI (race)",
+    "CI (coverage)",
+    "CI (static)",
+    "CI (unit)",
+    "CI (macOS audio release)"
+  ],
+  "failedJob": {
+    "name": "CI (integration)",
+    "jobId": 103738782236,
+    "conclusion": "failure",
+    "test": "TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test48_matched_healthy_control/provider_burst",
+    "path": "agent-cli/test/integration/session_tool_audio_remote_e2e_test.go:183",
+    "signature": "remote device rendered 114395/120795 compared samples (lost 6400, 94.7% retained)",
+    "playback": {
+      "queuedSamples": 0,
+      "droppedSamples": 0,
+      "overflowEvents": 0,
+      "discardedSamples": 0,
+      "discardEvents": 0,
+      "callbackCount": 257,
+      "renderedSamples": 123360,
+      "underflowEvents": 19,
+      "underflowSamples": 8960,
+      "zeroFilledSamples": 8960
+    },
+    "provider": {
+      "responsesSent": 6,
+      "responseCreates": 5,
+      "toolResults": 5,
+      "inputSamplesSeen": 185039,
+      "protocolError": ""
+    }
+  },
+  "ownership": {
+    "owner": "C127/work-task-3; provider-audio terminal-drain family",
+    "status": "external-failure-before-C127-accepted-main",
+    "action": "preserved as historical CI evidence; C109 did not edit, duplicate, waive or relabel the provider-audio path"
+  },
+  "postRejectionRecovery": {
+    "acceptedOriginMain": "915ed982d23f2e549e529ff43c4f370b4b51e394",
+    "integrationCommit": "ca618fe68ef181b2c75ccf7efaada0cf2b328760",
+    "dependencyStatus": "released by C127 reviewed delivery and C138 independent vertical repro"
+  },
+  "decision": "Do not resubmit the unchanged rejected head. After C127 reached accepted origin/main, C109 integrated it, regenerated its evidence, and will submit the changed evidence-only head to script CI without polling."
+}

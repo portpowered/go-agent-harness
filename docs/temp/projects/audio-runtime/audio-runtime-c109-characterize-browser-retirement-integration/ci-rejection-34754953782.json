@@ -1,0 +1,108 @@
+{
+  "schema": "audio-runtime-c109-ci-rejection-v2",
+  "project": "audio-runtime",
+  "contractRevision": "audio-runtime-v1",
+  "task": "audio-runtime-c109-characterize-browser-retirement-integration",
+  "factorySession": "~default",
+  "factoryServer": "http://127.0.0.1:7439",
+  "pullRequest": 495,
+  "candidateHead": "ab0ada54292b9682879a98fc3b470e3b8c30df6a",
+  "acceptedMain": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+  "reviewTimeOriginMain": "071b0abfd67501db61e3c1929971c6dd6e77eb62",
+  "preservedCandidates": {
+    "c61": "8e8177c031a7b3b9322d712af19970e13fa7a1bc",
+    "c83": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371"
+  },
+  "ci": {
+    "runId": 34754953782,
+    "status": "completed",
+    "conclusion": "failure",
+    "mergeCheckout": "5222672fe985c95f9f32128905fe687959887d0b",
+    "logEvidence": {
+      "runJsonSha256": "b99b4090e62bc7083a978792e0415de991f30b23f5255a62d3a89eab42747d18",
+      "hermeticJobId": 103717656008,
+      "hermeticLogSha256": "7719277870eb8adbb680dc2f22a6a93379e804b89754922e717f35a39a7c1e17"
+    },
+    "checks": {
+      "CI (coverage)": "success",
+      "CI (hermetic)": "failure",
+      "CI (integration)": "success",
+      "CI (macOS audio release)": "success",
+      "CI (race)": "success",
+      "CI (static)": "success",
+      "CI (unit)": "success",
+      "CI (WebMCP Chrome)": "success",
+      "CI (Windows audio portable)": "success"
+    }
+  },
+  "failures": [
+    {
+      "job": "CI (hermetic)",
+      "jobId": 103717656008,
+      "classification": "out-of-scope-inherited",
+      "signature": {
+        "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+        "test": "TestRunRoomWithResult_BidirectionalOverlapRecordsPeerOnlyEvidence",
+        "file": "agent-cli/internal/services/internal/agentruntime/s2s_room_realtime_replay_overlap_test.go",
+        "line": 624,
+        "message": "bidirectional room did not reach its explicit max-turn boundary: context deadline exceeded",
+        "command": "make test-hermetic",
+        "sourceChangedFromOriginMain": false
+      },
+      "ownership": "outside C109; route to the existing room/liveness owner",
+      "action": "not modified, waived, relabeled, or claimed repaired by C109"
+    },
+    {
+      "job": "CI (hermetic)",
+      "jobId": 103717656008,
+      "classification": "out-of-scope-inherited",
+      "signature": {
+        "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+        "test": "TestRunSessionWithAudioOut_FinalizesPlayableWAV",
+        "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out_test.go",
+        "line": 79,
+        "message": "WAV samples = 480 samples, want exact ordered response",
+        "command": "make test-hermetic",
+        "sourceChangedFromOriginMain": false
+      },
+      "ownership": "outside C109; route to the existing audio-output owner",
+      "action": "not modified, waived, relabeled, or claimed repaired by C109"
+    }
+  ],
+  "c109Evidence": {
+    "ownedDiffOnly": "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/",
+    "sourceDiffAgainstOriginMain": "none outside the owned evidence directory",
+    "analyzerRegression": "test_analyze.py: 4 passed",
+    "verifier": {
+      "command": "verify.py --mode all --write runs/final/verification.json",
+      "status": "passed",
+      "checks": 8,
+      "negativeFixtures": 19,
+      "verificationSha256": "eb352a6de2507562858895fef4d63315b7839a7e706bbf6a274cb37b86e9d3b8"
+    },
+    "publicControls": {
+      "browserAudioTool": {
+        "command": "run_public_checks.py --case browser-audio-tool --child-timeout 90 --aggregate-timeout 300 --output runs/final/public/browser-audio-tool.json",
+        "status": "passed",
+        "checks": 18,
+        "elapsedSeconds": 253.568,
+        "reportSha256": "3e70f03799481439fc68a7bad33adecb99e26a06d49eeee60d86f6402f21a830",
+        "runnerSha256": "705bc3167678b83158fc925e132fe39d1fdd4315c845360a8686eee8db9b6efe"
+      },
+      "malformedOrCanceled": {
+        "command": "run_public_checks.py --case malformed-or-canceled --child-timeout 60 --aggregate-timeout 180 --output runs/final/public/malformed-or-canceled.json",
+        "status": "passed",
+        "checks": 3,
+        "elapsedSeconds": 29.471,
+        "reportSha256": "1c10cd36152489d529c94c0b108ad5fa7dafa74d9aef1bccd865936244a16280",
+        "runnerSha256": "705bc3167678b83158fc925e132fe39d1fdd4315c845360a8686eee8db9b6efe"
+      }
+    }
+  },
+  "decision": {
+    "c109OwnedRepairRemaining": false,
+    "ciGreen": false,
+    "candidateAcceptance": "not claimed",
+    "nextAction": "Do not retry this unchanged C109 implementation. The primary routes the two exact hermetic failures to their existing owners; after accepted repairs reach main, resume this same task for current-head revalidation."
+  }
+}

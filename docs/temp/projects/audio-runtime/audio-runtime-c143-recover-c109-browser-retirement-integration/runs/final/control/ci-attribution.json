@@ -1,0 +1,269 @@
+{
+  "acceptance": {
+    "candidate_head_green": false,
+    "merged": false,
+    "project_acceptance": false,
+    "reviewed": false,
+    "vertical_probe": false
+  },
+  "conclusion": "failure",
+  "event": "pull_request",
+  "evidence_id": "c83-ci-34713381619",
+  "failed_jobs": [
+    {
+      "conclusion": "failure",
+      "job_id": "103606090554",
+      "name": "CI (static)"
+    },
+    {
+      "conclusion": "failure",
+      "job_id": "103606090561",
+      "name": "CI (integration)"
+    }
+  ],
+  "failures": [
+    {
+      "id": "c83-static-wire-registration",
+      "job": "CI (static)",
+      "job_id": "103606090554",
+      "kind": "shared-registry",
+      "owner": "C79/work-task-114",
+      "path": "scripts/wire-packages.txt",
+      "signature": "wire-check: Wire registry mismatch: unregistered=['go-agent-runtime/services/browserrunner/wire/wire_gen.go'], outside modules=[]"
+    },
+    {
+      "count": 9,
+      "id": "c83-static-baseline-nine-entries",
+      "job": "CI (static)",
+      "job_id": "103606090554",
+      "kind": "shared-baseline",
+      "owner": "C79/work-task-114",
+      "path": "docs/architecture/architecture-size-baseline.json",
+      "signature": "baseline entry is stale; the symbol no longer describes a current violation | baseline entry is stale; the symbol no longer describes a current violation | baseline entry is stale; the symbol no longer describes a current violation | baseline entry is stale; the file no longer describes a current violation | baseline entry is stale; the symbol no longer describes a current violation | baseline entry is stale; the symbol no longer describes a current violation | baseline entry is stale; the symbol no longer describes a current violation | baseline entry is stale; the symbol no longer describes a current violation | baseline entry is stale; the symbol no longer describes a current violation",
+      "signatures": [
+        "baseline entry is stale; the symbol no longer describes a current violation",
+        "baseline entry is stale; the symbol no longer describes a current violation",
+        "baseline entry is stale; the symbol no longer describes a current violation",
+        "baseline entry is stale; the file no longer describes a current violation",
+        "baseline entry is stale; the symbol no longer describes a current violation",
+        "baseline entry is stale; the symbol no longer describes a current violation",
+        "baseline entry is stale; the symbol no longer describes a current violation",
+        "baseline entry is stale; the symbol no longer describes a current violation",
+        "baseline entry is stale; the symbol no longer describes a current violation"
+      ]
+    },
+    {
+      "count": 3,
+      "id": "c83-static-instrumentation-three",
+      "job": "CI (static)",
+      "job_id": "103606090554",
+      "kind": "candidate-instrumentation-baseline-drift",
+      "owner": "C83/work-task-125 with C79/work-task-114 baseline serialization",
+      "signature": "baseline-drift internal/services/internal/agentruntime/session_browser_scenario_run.go (995 > 956) | baseline-drift internal/services/internal/agentruntime/session_browser_scenario_runner.go (1285 > 1280) | baseline-drift internal/services/internal/agentruntime/session_browser_scenario_runner.go:*browserConversationBroker.Invoke (41 > 38)",
+      "signatures": [
+        "baseline-drift internal/services/internal/agentruntime/session_browser_scenario_run.go (995 > 956)",
+        "baseline-drift internal/services/internal/agentruntime/session_browser_scenario_runner.go (1285 > 1280)",
+        "baseline-drift internal/services/internal/agentruntime/session_browser_scenario_runner.go:*browserConversationBroker.Invoke (41 > 38)"
+      ]
+    },
+    {
+      "do_not_duplicate": true,
+      "id": "c83-integration-provider-audio-loss-6400",
+      "job": "CI (integration)",
+      "job_id": "103606090561",
+      "kind": "provider-audio-terminal-drain",
+      "owner": "C79/provider-audio",
+      "path": "agent-cli/test/integration/session_tool_audio_remote_e2e_test.go:219",
+      "signature": "test46_high_rate process-boundary audio verification: remote device rendered 167991/174391 compared samples (lost 6400, 96.3% retained)"
+    }
+  ],
+  "head": {
+    "branch": "codex/audio-runtime-c83-retire-cli-browser-scenario-runner",
+    "identity_verified": true,
+    "sha": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371"
+  },
+  "integration_loss": {
+    "discard_events": 0,
+    "discards": 0,
+    "drops": 0,
+    "evidence_id": "c83-integration-provider-audio-loss-6400",
+    "lost_samples": 6400,
+    "overflows": 0,
+    "owner": "C79/provider-audio",
+    "provider_response_creates": 7,
+    "provider_responses_sent": 9,
+    "provider_tool_results": 7,
+    "rendered_samples": 167991,
+    "retained_ratio": 0.963,
+    "status": "EXTERNAL_OWNER_DO_NOT_DUPLICATE_REPAIR_OR_RELABEL",
+    "total_samples": 174391,
+    "underflow_events": 10,
+    "underflow_samples": 4800,
+    "zero_filled_samples": 4800
+  },
+  "observed_at": "2026-09-12T19:22:11Z",
+  "passing_jobs": [
+    {
+      "conclusion": "success",
+      "job_id": "103606090483",
+      "name": "CI (race)"
+    },
+    {
+      "conclusion": "success",
+      "job_id": "103606090524",
+      "name": "CI (WebMCP Chrome)"
+    },
+    {
+      "conclusion": "success",
+      "job_id": "103606090530",
+      "name": "CI (hermetic)"
+    },
+    {
+      "conclusion": "success",
+      "job_id": "103606090544",
+      "name": "CI (coverage)"
+    },
+    {
+      "conclusion": "success",
+      "job_id": "103606090574",
+      "name": "CI (Windows audio portable)"
+    },
+    {
+      "conclusion": "success",
+      "job_id": "103606090597",
+      "name": "CI (unit)"
+    },
+    {
+      "conclusion": "success",
+      "job_id": "103606090844",
+      "name": "CI (macOS audio release)"
+    }
+  ],
+  "passing_lanes": [
+    "CI (race)",
+    "CI (WebMCP Chrome)",
+    "CI (hermetic)",
+    "CI (coverage)",
+    "CI (Windows audio portable)",
+    "CI (unit)",
+    "CI (macOS audio release)"
+  ],
+  "repository": "portpowered/go-agent-harness",
+  "run": "34713381619",
+  "schema": "audio-runtime-c109-ci-attribution-v1",
+  "static_findings": {
+    "intentional_instrumentation_drifts": {
+      "check": "CI (static)",
+      "count": 3,
+      "entries": [
+        {
+          "baseline": 956,
+          "kind": "file-lines",
+          "observed": 995,
+          "path": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_run.go",
+          "signature": "baseline-drift internal/services/internal/agentruntime/session_browser_scenario_run.go (995 > 956)"
+        },
+        {
+          "baseline": 1280,
+          "kind": "file-lines",
+          "observed": 1285,
+          "path": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go",
+          "signature": "baseline-drift internal/services/internal/agentruntime/session_browser_scenario_runner.go (1285 > 1280)"
+        },
+        {
+          "baseline": 38,
+          "kind": "cognitive-complexity",
+          "observed": 41,
+          "path": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go",
+          "signature": "baseline-drift internal/services/internal/agentruntime/session_browser_scenario_runner.go:*browserConversationBroker.Invoke (41 > 38)",
+          "symbol": "*browserConversationBroker.Invoke"
+        }
+      ],
+      "evidence_id": "c83-static-intentional-instrumentation-three",
+      "job_id": "103606090554",
+      "owner": "C83/work-task-125; C79/work-task-114 for shared baseline",
+      "paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_run.go",
+        "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go",
+        "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go"
+      ],
+      "status": "C83_SOURCE_WITH_C79_SHARED_BASELINE_RECONCILIATION"
+    },
+    "stale_downward_baseline_entries": {
+      "check": "CI (static)",
+      "count": 9,
+      "entries": [
+        {
+          "kind": "cognitive-complexity",
+          "path": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_interrupt.go",
+          "signature": "baseline entry is stale; the symbol no longer describes a current violation",
+          "symbol": "*browserConversationInterruptionController.nextEligibleInterruption"
+        },
+        {
+          "kind": "cyclomatic-complexity",
+          "path": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_interrupt.go",
+          "signature": "baseline entry is stale; the symbol no longer describes a current violation",
+          "symbol": "*browserConversationInterruptionController.nextEligibleInterruption"
+        },
+        {
+          "kind": "cognitive-complexity",
+          "path": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_interrupt.go",
+          "signature": "baseline entry is stale; the symbol no longer describes a current violation",
+          "symbol": "partitionBrowserConversationAudio"
+        },
+        {
+          "kind": "file-lines",
+          "path": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_tracker.go",
+          "signature": "baseline entry is stale; the file no longer describes a current violation",
+          "symbol": "file"
+        },
+        {
+          "kind": "cognitive-complexity",
+          "path": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_tracker.go",
+          "signature": "baseline entry is stale; the symbol no longer describes a current violation",
+          "symbol": "*browserConversationEvidenceTracker.invocationStep"
+        },
+        {
+          "kind": "cognitive-complexity",
+          "path": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_tracker.go",
+          "signature": "baseline entry is stale; the symbol no longer describes a current violation",
+          "symbol": "*browserConversationEvidenceTracker.observe"
+        },
+        {
+          "kind": "cyclomatic-complexity",
+          "path": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_tracker.go",
+          "signature": "baseline entry is stale; the symbol no longer describes a current violation",
+          "symbol": "*browserConversationEvidenceTracker.observe"
+        },
+        {
+          "kind": "function-lines",
+          "path": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_tracker.go",
+          "signature": "baseline entry is stale; the symbol no longer describes a current violation",
+          "symbol": "*browserConversationEvidenceTracker.observe"
+        },
+        {
+          "kind": "function-statements",
+          "path": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_tracker.go",
+          "signature": "baseline entry is stale; the symbol no longer describes a current violation",
+          "symbol": "*browserConversationEvidenceTracker.observe"
+        }
+      ],
+      "evidence_id": "c83-static-baseline-nine-entries",
+      "job_id": "103606090554",
+      "owner": "C79/work-task-114",
+      "path": "docs/architecture/architecture-size-baseline.json",
+      "status": "C79_SHARED_BASELINE_OWNER"
+    },
+    "wire_registration": {
+      "check": "CI (static)",
+      "claim": "browserrunner generated Wire package registration is required; C109 does not edit the shared registry.",
+      "evidence_id": "c83-static-wire-registration",
+      "job_id": "103606090554",
+      "owner": "C79/work-task-114",
+      "path": "scripts/wire-packages.txt",
+      "signature": "wire-check: Wire registry mismatch: unregistered=['go-agent-runtime/services/browserrunner/wire/wire_gen.go'], outside modules=[]",
+      "status": "C79_SHARED_REGISTRY_OWNER"
+    }
+  },
+  "status": "completed"
+}
