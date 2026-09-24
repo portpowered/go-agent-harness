@@ -356,7 +356,7 @@ func TestRoomEvidence_FinalizeIsIdempotent(t *testing.T) {
 	}}
 	firstErr := evidence.finalize(result, nil, time.Now())
 	secondErr := evidence.finalize(RoomResult{TerminationReason: RoomTerminationFailed}, errors.New("must not replace first finalization"), time.Now())
-	if firstErr != nil || secondErr != firstErr {
+	if firstErr != nil || secondErr != nil {
 		t.Fatalf("finalize errors = %v/%v, want the same nil result", firstErr, secondErr)
 	}
 	manifestData := readRoomEvidenceFile(t, filepath.Join(evidence.destination, RoomEvidenceManifestPath))

@@ -5016,3 +5016,22 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   on that exact commit and continue with the planned C276 functional,
   integration, race, hermetic, and Wire gates. Do not hand off while a local
   preflight remains red. Decision remains CONTINUE.
+
+# C276 local lint repair checkpoint — 2026-09-24
+
+- `rtk make prepush` on `41ec4dfa871ac9b1dd9c778f70c929657f12c9cd` passed
+  format, architecture, Wire, vet, then failed lint with 38 diagnostics. The
+  source issues were locally reproducible error handling, context propagation,
+  magic constants, and stream projection exhaustiveness; the original log is
+  `/Users/abdifamily/Library/Application Support/rtk/tee/1790233757_make_prepush.log`.
+- Repaired evidence cleanup to retain close/remove failures, tightened nil
+  context handling, and documented intentional evidence-observer error
+  retention. Updated the termination contract assertion to test wrapped
+  primary-error preservation with `errors.Is`. `rtk make lint` now passes all
+  modules (0 issues). `rtk go test -count=1
+  ./agent-cli/internal/services/internal/agentruntime` passes (602 tests / 1
+  package).
+- No push or PR handoff. Exact next action: commit this checkpoint, run
+  `rtk make prepush` on that exact SHA, and repair every locally reproducible
+  failure before running the remaining planned C276 functional, integration,
+  race, hermetic, and Wire checks. Decision remains CONTINUE.

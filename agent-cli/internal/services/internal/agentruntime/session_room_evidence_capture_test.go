@@ -67,8 +67,12 @@ func TestRoomMixBuffer_SumsOverlapAndPadsToSpan(t *testing.T) {
 	// Two participants speaking the same 5 samples starting at t=0 must sum,
 	// not concatenate or overwrite.
 	chunk := roomPCM16(10000, 5)
-	buffer.mixAt(0, chunk)
-	buffer.mixAt(0, chunk)
+	if err := buffer.mixAt(0, chunk); err != nil {
+		t.Fatalf("mix first participant audio: %v", err)
+	}
+	if err := buffer.mixAt(0, chunk); err != nil {
+		t.Fatalf("mix second participant audio: %v", err)
+	}
 
 	path := filepath.Join(t.TempDir(), "room-mix.wav")
 	span := 2 * time.Second // room ran longer than any recorded audio

@@ -31,12 +31,12 @@ func buildRoomParticipantPlans(opts RoomRunOptions, validation room.ValidationOp
 // replay, it is used to wire each live provider participant's websocket
 // dialer for capture recording; see the loop below.
 func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptions, validation room.ValidationOptions, evidences ...*roomEvidence) (plans []*roomParticipantPlan, secrets []string, planErr error) {
+	if ctx == nil {
+		return nil, nil, errors.New("room planning context is required")
+	}
 	var evidence *roomEvidence
 	if len(evidences) > 0 {
 		evidence = evidences[0]
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	filesystemPolicy := opts.FilesystemPolicy
 	if filesystemPolicy == nil {

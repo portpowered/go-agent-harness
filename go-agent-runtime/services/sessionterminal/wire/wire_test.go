@@ -56,7 +56,7 @@ func TestTerminationBoundaryPreservesCleanupOrderAndRunsOnce(t *testing.T) {
 	primary := errors.New("session failed")
 	first := boundary.Terminate(primary)
 	second := boundary.Terminate(errors.New("later failure"))
-	if !errors.Is(first, primary) || second != first {
+	if !errors.Is(first, primary) || !errors.Is(second, primary) {
 		t.Fatalf("termination results = (%v, %v), want stable primary failure", first, second)
 	}
 	want := []string{"quiesce", "drain", "stop", "flush"}

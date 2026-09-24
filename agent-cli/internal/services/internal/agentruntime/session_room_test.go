@@ -53,7 +53,9 @@ func TestObserveRoomParticipantStream_FansOutBeforeDurableAudioEvidence(t *testi
 	audioPath := filepath.Join(t.TempDir(), "source.wav")
 	audio, err := newRoomWAVRecorder(audioPath, 1000)
 	if err != nil {
-		_ = deltasFile.Close()
+		if closeErr := deltasFile.Close(); closeErr != nil {
+			t.Fatalf("create audio evidence: %v; close delta evidence: %v", err, closeErr)
+		}
 		t.Fatalf("create audio evidence: %v", err)
 	}
 	participantEvidence := &roomParticipantEvidence{
@@ -66,8 +68,12 @@ func TestObserveRoomParticipantStream_FansOutBeforeDurableAudioEvidence(t *testi
 		audio: audio,
 	}
 	t.Cleanup(func() {
-		_ = participantEvidence.deltas.close()
-		_ = participantEvidence.audio.close()
+		if err := participantEvidence.deltas.close(); err != nil {
+			t.Errorf("close delta evidence: %v", err)
+		}
+		if err := participantEvidence.audio.close(); err != nil {
+			t.Errorf("close audio evidence: %v", err)
+		}
 	})
 
 	source := &roomParticipantRuntime{

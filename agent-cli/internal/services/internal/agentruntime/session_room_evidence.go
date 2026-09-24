@@ -43,6 +43,7 @@ const (
 	roomEvidenceAudioEncoding        = "pcm_s16le"
 	roomEvidenceAudioSampleWidthBits = 16
 	roomEvidenceAudioByteOrder       = "little"
+	roomEvidenceOutputDirectoryMode  = 0o700
 )
 
 // roomEvidence owns all file-backed observations for one room. Participant
@@ -367,35 +368,44 @@ func (e *roomEvidence) err() error {
 	return e.recordErr
 }
 
-func (e *roomEvidence) cleanupSetup() {
+func (e *roomEvidence) cleanupSetup() error {
 	if e == nil {
-		return
+		return nil
+	}
+	var failures []error
+	appendFailure := func(label string, err error) {
+		if err != nil {
+			failures = append(failures, fmt.Errorf("cleanup %s: %w", label, err))
+		}
 	}
 	if e.timeline != nil {
-		_ = e.timeline.close()
-		_ = os.Remove(filepath.Join(e.destination, RoomEvidenceTimelinePath))
+		appendFailure("room timeline", e.timeline.close())
+		path := filepath.Join(e.destination, RoomEvidenceTimelinePath)
+		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			appendFailure(path, err)
+		}
 	}
 	for _, participant := range e.participants {
 		if participant == nil {
 			continue
 		}
 		if participant.audio != nil {
-			_ = participant.audio.close()
+			appendFailure("participant audio", participant.audio.close())
 		}
 		if participant.diagnostics != nil {
-			_ = participant.diagnostics.close()
+			appendFailure("participant diagnostics", participant.diagnostics.close())
 		}
 		if participant.deltas != nil {
-			_ = participant.deltas.close()
+			appendFailure("participant deltas", participant.deltas.close())
 		}
 		if participant.events != nil {
-			_ = participant.events.close()
+			appendFailure("participant events", participant.events.close())
 		}
 		if participant.sentPCM != nil {
-			_ = participant.sentPCM.close()
+			appendFailure("participant sent PCM", participant.sentPCM.close())
 		}
 		if participant.receivedPCM != nil {
-			_ = participant.receivedPCM.close()
+			appendFailure("participant received PCM", participant.receivedPCM.close())
 		}
 		for _, path := range []string{
 			filepath.Join(e.destination, participant.artifacts.WAV),
@@ -405,9 +415,12 @@ func (e *roomEvidence) cleanupSetup() {
 			filepath.Join(e.destination, participant.artifacts.ReceivedPCM),
 			filepath.Join(e.destination, participant.artifacts.Events),
 		} {
-			_ = os.Remove(path)
+			if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+				appendFailure(path, err)
+			}
 		}
 	}
+	return errors.Join(failures...)
 }
 
 // RecordSessionDiagnostic implements SessionDiagnosticSink. The diagnostic
@@ -421,7 +434,8 @@ func (p *roomParticipantEvidence) RecordSessionDiagnostic(record SessionDiagnost
 		return
 	}
 	if p.diagnostics == nil {
-		p.recordError(p.artifacts.Diagnostics, errors.New("diagnostics sink is not initialized"))
+		//nolint:errcheck // The evidence owner retains this error for status projection.
+		_ = p.recordError(p.artifacts.Diagnostics, errors.New("diagnostics sink is not initialized"))
 		return
 	}
 	data, err := json.Marshal(roomDiagnosticLine{
@@ -429,16 +443,19 @@ func (p *roomParticipantEvidence) RecordSessionDiagnostic(record SessionDiagnost
 		Fields: cloneRoomStringMap(record.Fields),
 	})
 	if err != nil {
-		p.recordError(p.artifacts.Diagnostics, fmt.Errorf("marshal diagnostic record: %w", err))
+		//nolint:errcheck // The evidence owner retains this error for status projection.
+		_ = p.recordError(p.artifacts.Diagnostics, fmt.Errorf("marshal diagnostic record: %w", err))
 		return
 	}
 	data = p.owner.redactJSON(data)
 	stamped, stampErr := p.owner.stampWallClock(data)
 	if stampErr != nil {
-		p.recordError(p.artifacts.Diagnostics, fmt.Errorf("stamp diagnostic wall clock: %w", stampErr))
+		//nolint:errcheck // The evidence owner retains this error for status projection.
+		_ = p.recordError(p.artifacts.Diagnostics, fmt.Errorf("stamp diagnostic wall clock: %w", stampErr))
 		return
 	}
 	if err := p.diagnostics.writeRaw(stamped); err != nil {
+		//nolint:errcheck // The evidence owner retains this error for status projection.
 		p.recordError(p.artifacts.Diagnostics, err)
 	}
 }
@@ -932,7 +949,7 @@ func (e *roomEvidence) writeLatencyBundle() error {
 	return e.latency.Write(filepath.Join(e.destination, runtimeRooms.RoomLatencyArtifactPath))
 }
 
-func writeRoomEvidenceManifestFile(path string, manifest roomEvidenceManifest, secrets []string) error {
+func writeRoomEvidenceManifestFile(path string, manifest roomEvidenceManifest, secrets []string) (resultErr error) {
 	data, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal room run manifest: %w", err)
@@ -949,16 +966,16 @@ func writeRoomEvidenceManifestFile(path string, manifest roomEvidenceManifest, s
 	removeTemporary := true
 	defer func() {
 		if removeTemporary {
-			_ = os.Remove(temporaryPath)
+			if err := os.Remove(temporaryPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+				resultErr = errors.Join(resultErr, fmt.Errorf("remove temporary room manifest: %w", err))
+			}
 		}
 	}()
 	if err := writeRoomEvidenceAll(temporary, data); err != nil {
-		_ = temporary.Close()
-		return fmt.Errorf("write room run manifest temporary file: %w", err)
+		return errors.Join(fmt.Errorf("write room run manifest temporary file: %w", err), temporary.Close())
 	}
 	if err := temporary.Sync(); err != nil {
-		_ = temporary.Close()
-		return fmt.Errorf("sync room run manifest temporary file: %w", err)
+		return errors.Join(fmt.Errorf("sync room run manifest temporary file: %w", err), temporary.Close())
 	}
 	if err := temporary.Close(); err != nil {
 		return fmt.Errorf("close room run manifest temporary file: %w", err)
@@ -1008,7 +1025,7 @@ func prepareRoomEvidenceOutput(path string) (string, error) {
 	if err := ValidateRoomEvidenceOutput(path); err != nil {
 		return "", err
 	}
-	if err := os.MkdirAll(destination, 0o700); err != nil {
+	if err := os.MkdirAll(destination, roomEvidenceOutputDirectoryMode); err != nil {
 		return "", fmt.Errorf("create room evidence output directory %q: %w", destination, err)
 	}
 	return destination, nil
@@ -1029,7 +1046,7 @@ func ValidateRoomEvidenceOutput(path string) error {
 
 func validateRoomEvidenceOutputTarget(destination string) error {
 	parent := filepath.Dir(destination)
-	if err := os.MkdirAll(parent, 0o700); err != nil {
+	if err := os.MkdirAll(parent, roomEvidenceOutputDirectoryMode); err != nil {
 		return fmt.Errorf("prepare room evidence output parent %q: %w", destination, err)
 	}
 	info, err := os.Lstat(destination)

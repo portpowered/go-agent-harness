@@ -30,6 +30,7 @@ func recordRoomTimelineEvent(evidence *roomEvidence, participantID string, msg m
 	if evidence == nil || evidence.timeline == nil {
 		return
 	}
+	//nolint:exhaustive // The timeline is a bounded projection of selected lifecycle events; other stream types are intentionally omitted.
 	switch msg.Type {
 	case messages.StreamTypeMessageStart:
 		evidence.recordTimelineEvent("response_start", participantID, map[string]string{"response_id": msg.ResponseID})
@@ -70,6 +71,8 @@ func recordRoomTimelineEvent(evidence *roomEvidence, participantID string, msg m
 		evidence.recordTimelineEvent("tool_call_start", participantID, map[string]string{"tool_call_id": msg.ToolCallId})
 	case messages.StreamTypeToolCallEnd:
 		evidence.recordTimelineEvent("tool_call_end", participantID, map[string]string{"tool_call_id": msg.ToolCallId})
+	default:
+		return
 	}
 }
 
@@ -315,7 +318,8 @@ func runRoomParticipant(
 	// instead of a possibly-truncated one.
 	if flusher, ok := runtime.plan.inferencer.(SessionInferencerCaptureFlusher); ok {
 		if flushErr := flusher.FlushCapture(); flushErr != nil && participantEvidence != nil {
-			participantEvidence.recordError(participantEvidence.artifacts.Capture, flushErr)
+			//nolint:errcheck // The evidence owner latches this as recording degradation without failing the participant.
+			_ = participantEvidence.recordError(participantEvidence.artifacts.Capture, flushErr)
 		}
 	}
 	if closeErr := closeRoomParticipantCapability(runtime.plan); closeErr != nil {
@@ -408,6 +412,7 @@ func observeRoomParticipantStream(
 		// A recording sink is observational. Its failure is retained by the
 		// participant evidence status, but never changes this participant's
 		// runtime outcome or cancellation context.
+		//nolint:errcheck // The observer latches evidence errors; stream processing remains independent.
 		_ = participantEvidence.observeDelta(msg)
 	}
 	runtime.lifecycle.observe(msg)
@@ -452,6 +457,7 @@ func observeRoomParticipantStream(
 	}
 	if participantEvidence != nil {
 		// Keep offset-anchored evidence on the handoff path; defer only WAV I/O.
+		//nolint:errcheck // The observer latches evidence errors; live playback remains independent.
 		_ = participantEvidence.observeSentStream(pcm)
 	}
 	if opts.OnAudioOutput != nil {
@@ -471,7 +477,7 @@ func observeRoomParticipantStream(
 			if target == nil || target.mixer == nil {
 				continue
 			}
-			if writeErr := routeRoomPeerPCM(runtime.ctx, plan.manifest.ID, target, pcm); writeErr != nil {
+			if writeErr := routeRoomPeerPCM(ctx, plan.manifest.ID, target, pcm); writeErr != nil {
 				if coordinator.isActive(target.plan.manifest.ID) {
 					coordinator.failParticipant(target.plan.manifest.ID, roomParticipantFailure(target.plan.manifest.ID, fmt.Errorf("receive fan out PCM from %s: %w", plan.manifest.ID, writeErr), secretsForPlan(target.plan)))
 				}
@@ -915,6 +921,7 @@ func pumpRoomMixer(ctx context.Context, coordinator *roomCoordinator, runtime *r
 			// received.pcm is the provider-bound artifact. Record it only after
 			// SendAudioInput succeeds so a downstream rejection cannot create a
 			// false received frame.
+			//nolint:errcheck // The observer latches evidence errors without turning accepted audio into a runtime failure.
 			_ = participantEvidence.observeReceivedAudio(providerFrame)
 		}
 		if observer != nil {

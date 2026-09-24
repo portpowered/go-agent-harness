@@ -14,6 +14,12 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
+const (
+	roomEvidenceCaptureFileMode = 0o600
+	roomEvidencePCM16MaxSample  = int32(1<<15 - 1)
+	roomEvidencePCM16MinSample  = -int32(1 << 15)
+)
+
 type roomDiagnosticLine struct {
 	Event  string            `json:"event"`
 	Fields map[string]string `json:"fields,omitempty"`
@@ -155,7 +161,7 @@ type rawPCMWriter struct {
 }
 
 func newRawPCMWriter(path string) (*rawPCMWriter, error) {
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, roomEvidenceCaptureFileMode)
 	if err != nil {
 		return nil, err
 	}
@@ -286,40 +292,57 @@ func (b *roomMixBuffer) finalize(span time.Duration, path string) error {
 
 	pcmSamples := make([]int16, len(samples))
 	for index, sample := range samples {
-		if sample > 32767 {
-			sample = 32767
-		} else if sample < -32768 {
-			sample = -32768
+		if sample > roomEvidencePCM16MaxSample {
+			sample = roomEvidencePCM16MaxSample
+		} else if sample < roomEvidencePCM16MinSample {
+			sample = roomEvidencePCM16MinSample
 		}
 		pcmSamples[index] = int16(sample)
 	}
 	pcm := codec.EncodePCM16(pcmSamples)
 
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, roomEvidenceCaptureFileMode)
 	if err != nil {
 		return err
+	}
+	cleanup := func(primary error) error {
+		closeErr := file.Close()
+		removeErr := os.Remove(path)
+		if errors.Is(removeErr, os.ErrNotExist) {
+			removeErr = nil
+		}
+		if closeErr != nil {
+			closeErr = fmt.Errorf("close incomplete room mix WAV: %w", closeErr)
+		}
+		if removeErr != nil {
+			removeErr = fmt.Errorf("remove incomplete room mix WAV: %w", removeErr)
+		}
+		return errors.Join(primary, closeErr, removeErr)
 	}
 	header, err := wavio.PCM16Header(b.sampleRate, uint64(len(pcm)))
 	if err != nil {
-		_ = file.Close()
-		_ = os.Remove(path)
-		return err
+		return cleanup(fmt.Errorf("construct room mix WAV header: %w", err))
 	}
 	if _, err := writeRoomEvidenceAllCount(file, header[:]); err != nil {
-		_ = file.Close()
-		_ = os.Remove(path)
-		return fmt.Errorf("write room mix WAV header: %w", err)
+		return cleanup(fmt.Errorf("write room mix WAV header: %w", err))
 	}
 	if _, err := writeRoomEvidenceAllCount(file, pcm); err != nil {
-		_ = file.Close()
-		_ = os.Remove(path)
-		return fmt.Errorf("write room mix WAV data: %w", err)
+		return cleanup(fmt.Errorf("write room mix WAV data: %w", err))
 	}
 	if err := file.Sync(); err != nil {
-		_ = file.Close()
-		return fmt.Errorf("sync room mix WAV: %w", err)
+		return cleanup(fmt.Errorf("sync room mix WAV: %w", err))
 	}
-	return file.Close()
+	if err := file.Close(); err != nil {
+		removeErr := os.Remove(path)
+		if errors.Is(removeErr, os.ErrNotExist) {
+			removeErr = nil
+		}
+		if removeErr != nil {
+			removeErr = fmt.Errorf("remove incomplete room mix WAV: %w", removeErr)
+		}
+		return errors.Join(fmt.Errorf("close room mix WAV: %w", err), removeErr)
+	}
+	return nil
 }
 
 // roomTimelineEntry is one machine-readable room-timeline.jsonl record: an
