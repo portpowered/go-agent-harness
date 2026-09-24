@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -8,7 +9,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 )
 
 func validateRoomReplayArtifacts(root string, refs []roomReplayArtifactRef, metadata map[string]roomReplayArtifactRef) ([]RoomReplayArtifact, map[string]RoomReplayArtifact, error) {
@@ -99,44 +100,44 @@ func statRoomReplayArtifact(ref roomReplayArtifactRef, normalized, absolute stri
 	return nil, newRoomReplayBundleError(kind, ref.Field, normalized, fmt.Sprintf("size %d", declaredSize), fmt.Sprintf("size %d", info.Size()), cause)
 }
 
-func validateRoomReplayCaptures(plan *RoomReplayPlan) error {
+func validateRoomReplayCaptures(replayService replay.Service, plan *RoomReplayPlan) error {
+	if replayService == nil {
+		return newRoomReplayBundleError(RoomReplayBundleMismatch, "participants.capture", "", "replay service", "unavailable", ErrInvalidRoomReplayBundle)
+	}
 	for index := range plan.Participants {
 		participant := &plan.Participants[index]
 		if participant.Kind == "human" {
 			continue
 		}
-		if err := validateRoomReplayCapture(*participant); err != nil {
+		if err := validateRoomReplayCapture(replayService, *participant); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func validateRoomReplayCapture(participant RoomReplayParticipant) error {
+func validateRoomReplayCapture(replayService replay.Service, participant RoomReplayParticipant) error {
 	if participant.Capture.AbsolutePath == "" {
 		return newRoomReplayBundleError(RoomReplayBundleIncomplete, "participants["+participant.ID+"].capture", "", "provider capture", "missing", ErrRoomReplayBundleIncomplete)
 	}
 	if participant.Capture.Size > roomReplayMaxCaptureBytes {
 		return newRoomReplayBundleError(RoomReplayBundleMismatch, "participants["+participant.ID+"].capture", participant.Capture.Path, fmt.Sprintf("capture size at most %d", roomReplayMaxCaptureBytes), fmt.Sprintf("size %d", participant.Capture.Size), ErrInvalidRoomReplayBundle)
 	}
-	capture, err := testing.LoadSessionCapture(participant.Capture.AbsolutePath)
+	inspection, err := replayService.InspectCapture(context.Background(), participant.Capture.AbsolutePath)
 	if err != nil {
 		return newRoomReplayBundleError(RoomReplayBundleMismatch, "participants["+participant.ID+"].capture", participant.Capture.Path, "valid session capture", err.Error(), err)
 	}
-	if capture.Version != 0 && capture.Version != testing.SessionCaptureVersion {
-		return newRoomReplayBundleError(RoomReplayBundleMismatch, "participants["+participant.ID+"].capture.version", participant.Capture.Path, fmt.Sprintf("%d", testing.SessionCaptureVersion), fmt.Sprintf("%d", capture.Version), ErrInvalidRoomReplayBundle)
-	}
-	if len(capture.Records) == 0 {
+	if inspection.Facts.EventCount == 0 {
 		return newRoomReplayBundleError(RoomReplayBundleIncomplete, "participants["+participant.ID+"].capture.records", participant.Capture.Path, "at least one provider event", "empty", ErrRoomReplayBundleIncomplete)
 	}
-	if capture.Provider.Name != "" && participant.Provider != "" && !strings.EqualFold(capture.Provider.Name, participant.Provider) {
-		return newRoomReplayBundleError(RoomReplayBundleMismatch, "participants["+participant.ID+"].provider", participant.Capture.Path, participant.Provider, capture.Provider.Name, ErrInvalidRoomReplayBundle)
+	if inspection.Provider != "" && participant.Provider != "" && !strings.EqualFold(inspection.Provider, participant.Provider) {
+		return newRoomReplayBundleError(RoomReplayBundleMismatch, "participants["+participant.ID+"].provider", participant.Capture.Path, participant.Provider, inspection.Provider, ErrInvalidRoomReplayBundle)
 	}
-	if capture.Provider.Model != "" && participant.Model != "" && capture.Provider.Model != participant.Model {
-		return newRoomReplayBundleError(RoomReplayBundleMismatch, "participants["+participant.ID+"].model", participant.Capture.Path, participant.Model, capture.Provider.Model, ErrInvalidRoomReplayBundle)
+	if inspection.Model != "" && participant.Model != "" && inspection.Model != participant.Model {
+		return newRoomReplayBundleError(RoomReplayBundleMismatch, "participants["+participant.ID+"].model", participant.Capture.Path, participant.Model, inspection.Model, ErrInvalidRoomReplayBundle)
 	}
-	if _, err := testing.NewReplayWebSocketDialerFromCapture(capture); err != nil {
-		return newRoomReplayBundleError(RoomReplayBundleMismatch, "participants["+participant.ID+"].capture", participant.Capture.Path, "provider websocket payloads", err.Error(), err)
+	if !inspection.Facts.RealtimeWebSocketReplayable {
+		return newRoomReplayBundleError(RoomReplayBundleMismatch, "participants["+participant.ID+"].capture", participant.Capture.Path, "provider websocket payloads", string(inspection.Kind), ErrInvalidRoomReplayBundle)
 	}
 	return nil
 }

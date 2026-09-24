@@ -7,6 +7,7 @@
 package wire
 
 import (
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay/internal/service"
 )
@@ -14,6 +15,7 @@ import (
 // Injectors from providers.go:
 
 func NewService() roomreplay.Service {
-	serviceService := service.New()
+	replayService := wire.NewService()
+	serviceService := service.New(replayService)
 	return serviceService
 }

@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 const (
@@ -50,7 +50,7 @@ type participantFrameState struct {
 
 // Build admits capture barriers and file-backed sent PCM before producing an
 // immutable schedule. Text-only captures intentionally return a nil schedule.
-func (*Service) Build(ctx context.Context, request roomreplay.BuildRequest) (roomreplay.Schedule, error) {
+func (s *Service) Build(ctx context.Context, request roomreplay.BuildRequest) (roomreplay.Schedule, error) {
 	ctx = nonNilContext(ctx)
 	request, err := prepareReplayBuildRequest(request)
 	if err != nil {
@@ -64,7 +64,7 @@ func (*Service) Build(ctx context.Context, request roomreplay.BuildRequest) (roo
 	if err != nil {
 		return nil, err
 	}
-	targetIDs, expectedFrames, hasInboundAudio, err := inspectTargets(ctx, request.TargetIDs, participants)
+	targetIDs, expectedFrames, hasInboundAudio, err := inspectTargets(ctx, request.TargetIDs, participants, s.replayService)
 	if err != nil {
 		return nil, err
 	}
@@ -112,13 +112,13 @@ func participantIndex(participants []roomreplay.Participant) (map[string]roomrep
 	return index, nil
 }
 
-func inspectTargets(ctx context.Context, ids []string, participants map[string]roomreplay.Participant) ([]string, int, bool, error) {
+func inspectTargets(ctx context.Context, ids []string, participants map[string]roomreplay.Participant, replayService replay.Service) ([]string, int, bool, error) {
 	targetIDs := make([]string, 0, len(ids))
 	seen := make(map[string]struct{}, len(ids))
 	expectedFrames := 0
 	hasInboundAudio := false
 	for _, rawID := range ids {
-		id, appendCount, err := inspectTarget(ctx, rawID, seen, participants)
+		id, appendCount, err := inspectTarget(ctx, rawID, seen, participants, replayService)
 		if err != nil {
 			return nil, 0, false, err
 		}
@@ -133,7 +133,7 @@ func inspectTargets(ctx context.Context, ids []string, participants map[string]r
 	return targetIDs, expectedFrames, hasInboundAudio, nil
 }
 
-func inspectTarget(ctx context.Context, rawID string, seen map[string]struct{}, participants map[string]roomreplay.Participant) (string, int, error) {
+func inspectTarget(ctx context.Context, rawID string, seen map[string]struct{}, participants map[string]roomreplay.Participant, replayService replay.Service) (string, int, error) {
 	if err := ctx.Err(); err != nil {
 		return "", 0, err
 	}
@@ -152,21 +152,14 @@ func inspectTarget(ctx context.Context, rawID string, seen map[string]struct{}, 
 	if strings.TrimSpace(participant.CapturePath) == "" {
 		return "", 0, fmt.Errorf("%w for participant %q", roomreplay.ErrCaptureUnavailable, id)
 	}
-	capture, err := gwtesting.LoadSessionCapture(participant.CapturePath)
+	if replayService == nil {
+		return "", 0, fmt.Errorf("%w: replay service is unavailable", roomreplay.ErrInvalidRequest)
+	}
+	inspection, err := replayService.InspectCapture(ctx, participant.CapturePath)
 	if err != nil {
 		return "", 0, fmt.Errorf("%w for participant %q: %w", roomreplay.ErrCaptureUnavailable, id, err)
 	}
-	return id, inboundAudioAppendCount(capture), nil
-}
-
-func inboundAudioAppendCount(capture gwtesting.SessionCapture) int {
-	count := 0
-	for _, record := range capture.Records {
-		if record.Direction == gwtesting.DirectionClientToServer && strings.EqualFold(strings.TrimSpace(record.Type), "input_audio_buffer.append") {
-			count++
-		}
-	}
-	return count
+	return id, inspection.Facts.ClientAudioAppendCount, nil
 }
 
 func buildParticipantContributions(ctx context.Context, request roomreplay.BuildRequest, targetFormat roomreplay.PCM16Format, frameBytes int) (map[int][]contribution, int, error) {

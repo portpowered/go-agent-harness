@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay/internal/audiobundle"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay/internal/support"
@@ -36,9 +37,13 @@ const (
 // Service owns the private parser, filesystem admission, and integrity
 // validation implementation. It has no invocation state and is safe to share
 // as a constructor across independent hosts.
-type Service struct{}
+type Service struct {
+	replayService replay.Service
+}
 
-func New() *Service { return &Service{} }
+func New(replayService replay.Service) *Service {
+	return &Service{replayService: replayService}
+}
 
 func (s *Service) Load(bundle string) (RoomReplayPlan, error) {
 	root, manifestPath, manifestRelative, err := resolveRoomReplayBundle(bundle)
@@ -53,7 +58,7 @@ func (s *Service) Load(bundle string) (RoomReplayPlan, error) {
 		}
 		return RoomReplayPlan{}, newRoomReplayBundleError(kind, "run-manifest.json", manifestRelative, "readable JSON manifest", err.Error(), err)
 	}
-	return validateRoomReplayManifest(root, manifestPath, data)
+	return validateRoomReplayManifest(root, manifestPath, data, s.replayService)
 }
 
 func (s *Service) LoadAudioBundle(bundle string) (roomreplay.RoomReplayAudioBundle, error) {

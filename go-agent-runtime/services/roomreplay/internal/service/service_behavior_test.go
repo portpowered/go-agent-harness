@@ -12,12 +12,13 @@ import (
 	"testing"
 	"time"
 
+	replaywire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
-func roomReplayServiceForTest() roomreplay.Service { return New() }
+func roomReplayServiceForTest() roomreplay.Service { return New(replaywire.NewService()) }
 
 func TestLoadRoomReplayPlanValidatesCompleteBundleBeforeRuntime(t *testing.T) {
 	bundle, manifest := writeRoomReplayBundle(t)
