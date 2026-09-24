@@ -8,6 +8,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle"
@@ -19,14 +20,14 @@ type Dependencies struct {
 	Planner  planning.Planner
 	Replay   roomreplay.Service
 	Runner   lifecycle.Runner
-	Evidence rooms.EvidenceService
+	Evidence roomevidence.OutputService
 }
 
 type Service struct {
 	planner  planning.Planner
 	replay   roomreplay.Service
 	runner   lifecycle.Runner
-	evidence rooms.EvidenceService
+	evidence roomevidence.OutputService
 }
 
 func New(dependencies Dependencies) rooms.Service {

@@ -25,10 +25,6 @@ type evidenceServiceStub struct {
 	validationErr error
 }
 
-func (evidenceServiceStub) Open(rooms.EvidenceRecordingRequest) (rooms.EvidenceRecorder, error) {
-	return nil, nil
-}
-
 func (s evidenceServiceStub) ValidateEvidenceOutput(string) error { return s.validationErr }
 
 func (evidenceServiceStub) CreateFreshRunDirectory(configDir string) (string, error) {

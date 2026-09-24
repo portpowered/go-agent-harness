@@ -4,9 +4,12 @@
 package roomevidence
 
 import (
+	"time"
+
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 const (
@@ -62,15 +65,28 @@ type RecordingRequest = rooms.EvidenceRecordingRequest
 // Service is an inert factory. It performs no filesystem or host discovery
 // work until PrepareOutput or Open is called.
 type Service interface {
+	RecorderService
+	OutputService
 	ValidateOutput(string) error
 	PrepareOutput(string) (string, error)
-	Open(RecordingRequest) (Recorder, error)
 	LoadPlan(string) (RoomReplayPlan, error)
 	ValidateReplayOutput(RoomReplayPlan, string) error
-	ValidateEvidenceOutput(string) error
-	CreateFreshRunDirectory(string) (string, error)
 	Load(RoomReplayPlan) (Bundle, error)
 	Analyze(Bundle) (Analysis, error)
+}
+
+// RecorderService owns the room recording lifecycle behind the evidence
+// contract. Room execution code may depend on this smaller role while the
+// application graph supplies the complete service.
+type RecorderService interface {
+	Open(RecordingRequest) (Recorder, error)
+}
+
+// OutputService owns validation and fresh-directory creation for recording
+// destinations. It is a focused role for the room service boundary.
+type OutputService interface {
+	ValidateEvidenceOutput(string) error
+	CreateFreshRunDirectory(string) (string, error)
 }
 
 type LatencyService interface {
@@ -78,7 +94,29 @@ type LatencyService interface {
 	NewRuntimeObserver(rooms.LatencyRecorder, string) sessiontrace.RuntimeObserver
 }
 
-type Recorder = rooms.EvidenceRecorder
+type Recorder interface {
+	Destination() string
+	StartedAt() time.Time
+	AudioFormat() AudioFormat
+	Artifacts(string) ArtifactPaths
+	LatencyRecorder() rooms.LatencyRecorder
+	RecordTimeline(string, string, map[string]string) error
+	RecordFinalTimeline(string, string, map[string]string) (time.Time, error)
+	RecordProviderErrorTimeline(string, map[string]string) error
+	SetParticipantReady(rooms.RoomParticipantReady) error
+	SetParticipantTerminated(rooms.RoomParticipantResult) error
+	MarkError(string, string, error)
+	RecordSource(string, audio.PCMFrame)
+	RecordReceived(string, audio.PCMFrame)
+	ObserveSpeakerAudio(string, []string, audio.PCMFrame)
+	ObservePeerAudio(string, string, audio.PCMFrame)
+	Observe(Observation) error
+	RecordSessionDiagnostic(DiagnosticRecord)
+	Error() error
+	Health() Health
+	Finalize(Finalization) (Result, error)
+	Close() error
+}
 type Observation = rooms.EvidenceObservation
 type ObservationKind = rooms.EvidenceObservationKind
 type Finalization = rooms.EvidenceFinalization
@@ -198,5 +236,3 @@ const (
 	ObservationAudioDropped             = rooms.EvidenceObservationAudioDropped
 	ObservationParticipantError         = rooms.EvidenceObservationParticipantError
 )
-
-var _ rooms.EvidenceService = (Service)(nil)

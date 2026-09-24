@@ -11,7 +11,7 @@ import (
 )
 
 // EvidenceRecordingRequest is the room lifecycle's transport-neutral request
-// to the evidence owner. Storage policy remains behind EvidenceService.
+// to the evidence owner. Storage policy remains with the roomevidence service.
 type EvidenceRecordingRequest struct {
 	Destination     string
 	Manifest        Manifest
@@ -21,38 +21,6 @@ type EvidenceRecordingRequest struct {
 	Clock           platformclock.Source
 	Latency         LatencyService
 	LatencyRecorder LatencyRecorder
-}
-
-// EvidenceService opens and validates recordings through their owning service.
-type EvidenceService interface {
-	Open(EvidenceRecordingRequest) (EvidenceRecorder, error)
-	ValidateEvidenceOutput(string) error
-	CreateFreshRunDirectory(string) (string, error)
-}
-
-// EvidenceRecorder is the public recording lifecycle used by room callers.
-type EvidenceRecorder interface {
-	Destination() string
-	StartedAt() time.Time
-	AudioFormat() AudioFormat
-	Artifacts(string) EvidenceArtifactPaths
-	LatencyRecorder() LatencyRecorder
-	RecordTimeline(string, string, map[string]string) error
-	RecordFinalTimeline(string, string, map[string]string) (time.Time, error)
-	RecordProviderErrorTimeline(string, map[string]string) error
-	SetParticipantReady(RoomParticipantReady) error
-	SetParticipantTerminated(RoomParticipantResult) error
-	MarkError(string, string, error)
-	RecordSource(string, audio.PCMFrame)
-	RecordReceived(string, audio.PCMFrame)
-	ObserveSpeakerAudio(string, []string, audio.PCMFrame)
-	ObservePeerAudio(string, string, audio.PCMFrame)
-	Observe(EvidenceObservation) error
-	RecordSessionDiagnostic(EvidenceDiagnosticRecord)
-	Error() error
-	Health() EvidenceHealth
-	Finalize(EvidenceFinalization) (EvidenceResult, error)
-	Close() error
 }
 
 type EvidenceObservationKind string

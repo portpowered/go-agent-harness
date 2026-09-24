@@ -7,6 +7,7 @@
 package wire
 
 import (
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle"
@@ -33,7 +34,7 @@ type Dependencies struct {
 	Media    rooms.MediaFactory
 	Replay   roomreplay.Service
 	Clock    clock.Scheduler
-	Evidence rooms.EvidenceService
+	Evidence roomevidence.Service
 	Latency  rooms.LatencyService
 }
 
