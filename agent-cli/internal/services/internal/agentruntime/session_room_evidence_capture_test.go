@@ -73,7 +73,7 @@ func TestRoomEvidence_RecordsAudioDroppedIsExplicitNotSilent(t *testing.T) {
 	diagnostics := readRoomEvidenceJSONLLines(t, filepath.Join(preparedDir, artifacts.Diagnostics))
 	found := false
 	for _, line := range diagnostics {
-		var record roomDiagnosticLine
+		var record roomEvidenceDiagnosticLine
 		if err := json.Unmarshal(line, &record); err != nil {
 			t.Fatalf("decode diagnostic: %v", err)
 		}

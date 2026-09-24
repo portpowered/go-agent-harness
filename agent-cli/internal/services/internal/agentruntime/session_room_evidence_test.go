@@ -29,6 +29,11 @@ type (
 	roomTimelineEntry               = roomevidence.TimelineEntry
 )
 
+type roomEvidenceDiagnosticLine struct {
+	Event  string            `json:"event"`
+	Fields map[string]string `json:"fields"`
+}
+
 func withRoomTestEvidence(options RoomRunOptions) RoomRunOptions {
 	options.evidenceService, options.latencyService = roomevidencewire.NewService(), roomevidencewire.NewLatencyService()
 	return options
@@ -143,7 +148,7 @@ func TestRunRoom_WritesPerParticipantEvidenceAndManifest(t *testing.T) {
 		diagnostics := readRoomEvidenceJSONLLines(t, filepath.Join(outputDir, participantManifest.Artifacts.Diagnostics))
 		diagnosticTurns := 0
 		for _, line := range diagnostics {
-			var record roomDiagnosticLine
+			var record roomEvidenceDiagnosticLine
 			if err := json.Unmarshal(line, &record); err != nil {
 				t.Fatalf("decode participant %q diagnostic: %v", id, err)
 			}
