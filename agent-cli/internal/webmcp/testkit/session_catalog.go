@@ -29,6 +29,12 @@ func (s *ScriptedTargetSession) ReleaseNextInvocation(output json.RawMessage) (w
 // EmitToolResponse deliberately permits a response after cancellation or a
 // previous response. The broker must treat that event as bounded late
 // reconciliation rather than a second delivery.
+// Tool response statuses shared by scripted sessions and fixture validation.
+const (
+	toolResponseStatusCompleted = "Completed"
+	toolResponseStatusCanceled  = "Canceled"
+)
+
 func (s *ScriptedTargetSession) EmitToolResponse(id webmcp.InvocationID, status string, output json.RawMessage) error {
 	s.mu.Lock()
 	record := s.invokes[id]
@@ -38,11 +44,12 @@ func (s *ScriptedTargetSession) EmitToolResponse(id webmcp.InvocationID, status 
 	}
 	record.Status = status
 	generation := record.Generation
-	if !record.Terminal || status == "Completed" {
+	if !record.Terminal || status == toolResponseStatusCompleted {
 		record.Output = cloneBytes(output)
-		if status == "Completed" {
+		switch status {
+		case toolResponseStatusCompleted:
 			record.State = webmcp.InvocationCompleted
-		} else if status == "Canceled" || status == "Cancelled" {
+		case toolResponseStatusCanceled, "Cancelled":
 			record.State = webmcp.InvocationCanceled
 		}
 		record.Terminal = true
@@ -231,4 +238,16 @@ func (s *ScriptedTargetSession) Navigate(url, origin string) error {
 
 func (s *ScriptedTargetSession) EmitNavigation(url, origin string) error {
 	return s.Navigate(url, origin)
+}
+
+// terminalEventErrorCode classifies the terminal session event emitted when a
+// scripted session ends; other terminal events carry no error code.
+func terminalEventErrorCode(eventType webmcp.BrowserEventType) string {
+	if eventType == webmcp.EventBrowserDisconnected {
+		return string(webmcp.ErrorBrowserDisconnected)
+	}
+	if eventType == webmcp.EventTargetDetached {
+		return string(webmcp.ErrorTargetDetached)
+	}
+	return ""
 }

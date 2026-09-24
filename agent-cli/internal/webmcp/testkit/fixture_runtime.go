@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"sort"
 	"strings"
 	"sync"
 )
@@ -303,35 +302,8 @@ func (r *BrowserScriptRuntime) Execute(ctx context.Context, request OperationReq
 		Generation:  r.generation,
 		MonotonicMS: now,
 	}
-	if request.Type == OperationInvokeTool {
-		invocationID, err := r.invocationIDForResult(operation.Result)
-		if err != nil {
-			return RuntimeExecution{}, r.failLocked(BrowserScriptDiverged, wrapScriptError(fmt.Sprintf("operations[%d].result", r.position-1), err))
-		}
-		execution.InvocationID = invocationID
-		r.pending[invocationID] = struct{}{}
-		if len(operation.Result) == 0 {
-			execution.Result = MustJSONValue(map[string]any{"invocation_id": invocationID})
-		}
-	}
-	if request.Type == OperationNavigate {
-		if operation.Expect.URL != "" {
-			r.target.URL = operation.Expect.URL
-		}
-		r.generation++
-		execution.Generation = r.generation
-	}
-	if request.Type == OperationEnableLifecycle {
-		r.enabledLifecycle = true
-	}
-	if request.Type == OperationEnableWebMCP {
-		r.enabledWebMCP = true
-	}
-	if request.Type == OperationDetachTarget {
-		r.detached = true
-	}
-	if request.Type == OperationCloseTarget {
-		r.targetClosed = true
+	if err := r.applyOperationEffectsLocked(request.Type, operation, &execution); err != nil {
+		return RuntimeExecution{}, r.failLocked(BrowserScriptDiverged, err)
 	}
 
 	execution.Events = make([]FixtureEvent, 0, len(operation.Emit))
@@ -353,6 +325,43 @@ func (r *BrowserScriptRuntime) Execute(ctx context.Context, request OperationReq
 	r.operations = append(r.operations, cloneOperationRequest(request))
 	r.maybeCompleteLocked()
 	return execution, nil
+}
+
+// applyOperationEffectsLocked mutates the runtime and execution for the
+// operation type that was just consumed. The returned error is the scripted
+// result failure that diverges the runtime.
+func (r *BrowserScriptRuntime) applyOperationEffectsLocked(operationType OperationType, operation BrowserScriptOperation, execution *RuntimeExecution) error {
+	if operationType == OperationInvokeTool {
+		invocationID, err := r.invocationIDForResult(operation.Result)
+		if err != nil {
+			return wrapScriptError(fmt.Sprintf("operations[%d].result", r.position-1), err)
+		}
+		execution.InvocationID = invocationID
+		r.pending[invocationID] = struct{}{}
+		if len(operation.Result) == 0 {
+			execution.Result = MustJSONValue(map[string]any{"invocation_id": invocationID})
+		}
+	}
+	if operationType == OperationNavigate {
+		if operation.Expect.URL != "" {
+			r.target.URL = operation.Expect.URL
+		}
+		r.generation++
+		execution.Generation = r.generation
+	}
+	if operationType == OperationEnableLifecycle {
+		r.enabledLifecycle = true
+	}
+	if operationType == OperationEnableWebMCP {
+		r.enabledWebMCP = true
+	}
+	if operationType == OperationDetachTarget {
+		r.detached = true
+	}
+	if operationType == OperationCloseTarget {
+		r.targetClosed = true
+	}
+	return nil
 }
 
 // ExecuteOperation is an alias for Execute.
@@ -957,52 +966,4 @@ func (o *FixtureStateOracle) Reset() error {
 	o.value = cloneRaw(o.initial)
 	o.mu.Unlock()
 	return nil
-}
-
-func pendingIDs(pending map[string]struct{}) []string {
-	result := make([]string, 0, len(pending))
-	for id := range pending {
-		result = append(result, id)
-	}
-	sort.Strings(result)
-	return result
-}
-
-func cloneOperationRequest(request OperationRequest) OperationRequest {
-	if request.Type == OperationInvokeTool && len(request.Input) == 0 {
-		request.Input = json.RawMessage(`{}`)
-	}
-	request.Input = cloneRaw(request.Input)
-	return request
-}
-
-func cloneRuntimeExecution(execution RuntimeExecution) RuntimeExecution {
-	execution.Request = cloneOperationRequest(execution.Request)
-	execution.Result = cloneRaw(execution.Result)
-	events := execution.Events
-	execution.Events = make([]FixtureEvent, len(events))
-	for index, event := range events {
-		execution.Events[index] = cloneFixtureEvent(event)
-	}
-	return execution
-}
-
-func cloneFixtureEvent(event FixtureEvent) FixtureEvent {
-	event.Tools = cloneToolDescriptors(event.Tools)
-	event.Output = cloneRaw(event.Output)
-	event.Error = cloneRaw(event.Error)
-	return event
-}
-
-func cloneToolDescriptors(tools []ToolDescriptor) []ToolDescriptor {
-	if tools == nil {
-		return nil
-	}
-	result := make([]ToolDescriptor, len(tools))
-	for index, tool := range tools {
-		result[index] = tool
-		result[index].InputSchema = cloneRaw(tool.InputSchema)
-		result[index].Annotations = cloneRaw(tool.Annotations)
-	}
-	return result
 }

@@ -414,6 +414,20 @@ func TestTopologyChurnPublishesTargetCloseWhenSessionBufferIsFull(t *testing.T) 
 	}
 }
 
+// assertRetiredBrowserOpenDisconnected requires reopening a replaced endpoint
+// identity to fail with the browser-disconnected classification.
+func assertRetiredBrowserOpenDisconnected(t *testing.T, runtime *ScriptedBrowserRuntime, candidate webmcp.BrowserCandidate) {
+	t.Helper()
+	_, err := runtime.Open(context.Background(), candidate)
+	if err == nil {
+		t.Fatal("open retired browser succeeded, want browser disconnected classification")
+	}
+	var classified *webmcp.ClassifiedError
+	if !errors.As(err, &classified) || classified.Code != webmcp.ErrorBrowserDisconnected {
+		t.Fatalf("open retired browser error = %v, want browser disconnected classification", err)
+	}
+}
+
 func TestTopologyChurnReplacesIdentityPreservesLateSourceAndEmitsNavigationBurst(t *testing.T) {
 	oldCandidate := webmcp.BrowserCandidate{
 		ID:           "browser-old",
@@ -463,14 +477,7 @@ func TestTopologyChurnReplacesIdentityPreservesLateSourceAndEmitsNavigationBurst
 	if got := oldSession.Context(); got.Key != oldContext.Key || got.Generation != oldContext.Generation || got.Title != oldContext.Title || got.URL != oldContext.URL || got.Origin != oldContext.Origin {
 		t.Fatalf("retired session identity context = %#v, want unchanged identity fields from %#v", got, oldContext)
 	}
-	if _, err := runtime.Open(context.Background(), oldCandidate); err == nil {
-		t.Fatal("open retired browser succeeded, want browser disconnected classification")
-	} else {
-		var classified *webmcp.ClassifiedError
-		if !errors.As(err, &classified) || classified.Code != webmcp.ErrorBrowserDisconnected {
-			t.Fatalf("open retired browser error = %v, want browser disconnected classification", err)
-		}
-	}
+	assertRetiredBrowserOpenDisconnected(t, runtime, oldCandidate)
 
 	newHandleValue, err := runtime.Open(context.Background(), newCandidate)
 	if err != nil {
@@ -510,27 +517,34 @@ func TestTopologyChurnReplacesIdentityPreservesLateSourceAndEmitsNavigationBurst
 		t.Fatalf("replacement catalog after late event = %#v, want unchanged empty fake catalog", newSession.Catalog())
 	}
 
-	previousSequence := uint64(0)
-	previousGeneration := oldContext.Generation
-	for _, step := range []Navigation{{URL: "https://fixture.test/one", Origin: "https://fixture.test"}, {URL: "https://fixture.test/two", Origin: "https://fixture.test"}, {URL: "https://fixture.test/three", Origin: "https://fixture.test"}} {
-		cursor := runtime.EventCursor()
-		if err := newSession.NavigateSequence(step); err != nil {
-			t.Fatalf("navigate burst step: %v", err)
-		}
-		navigation := waitPublishedEventAfter(t, runtime, cursor, func(event webmcp.BrowserEvent) bool {
-			return event.Type == webmcp.EventPageNavigated && event.BrowserID == newCandidate.ID
-		})
-		if navigation.Event.Generation <= previousGeneration || navigation.Event.PreviousGeneration != previousGeneration || navigation.Event.Sequence <= previousSequence || navigation.Event.TargetID != newTarget.ID {
-			t.Fatalf("navigation event = %#v, previous generation=%d sequence=%d", navigation, previousGeneration, previousSequence)
-		}
-		previousGeneration = navigation.Event.Generation
-		previousSequence = navigation.Event.Sequence
-	}
+	assertMonotonicNavigationBurst(t, runtime, newSession, newTarget, oldContext.Generation)
 	if got := newSession.Context().Generation; got != 4 {
 		t.Fatalf("replacement generation = %d, want three monotonic navigations from one", got)
 	}
 	if countOperations(runtime.Operations(), OperationReplace) != 1 {
 		t.Fatalf("replace operations = %#v, want one", runtime.Operations())
+	}
+}
+
+// assertMonotonicNavigationBurst drives three navigations on the replacement
+// session and requires strictly increasing generations and sequences.
+func assertMonotonicNavigationBurst(t *testing.T, runtime *ScriptedBrowserRuntime, session *ScriptedTargetSession, target webmcp.Target, startGeneration uint64) {
+	t.Helper()
+	previousSequence := uint64(0)
+	previousGeneration := startGeneration
+	for _, step := range []Navigation{{URL: "https://fixture.test/one", Origin: "https://fixture.test"}, {URL: "https://fixture.test/two", Origin: "https://fixture.test"}, {URL: "https://fixture.test/three", Origin: "https://fixture.test"}} {
+		cursor := runtime.EventCursor()
+		if err := session.NavigateSequence(step); err != nil {
+			t.Fatalf("navigate burst step: %v", err)
+		}
+		navigation := waitPublishedEventAfter(t, runtime, cursor, func(event webmcp.BrowserEvent) bool {
+			return event.Type == webmcp.EventPageNavigated && event.BrowserID == target.BrowserID
+		})
+		if navigation.Event.Generation <= previousGeneration || navigation.Event.PreviousGeneration != previousGeneration || navigation.Event.Sequence <= previousSequence || navigation.Event.TargetID != target.ID {
+			t.Fatalf("navigation event = %#v, previous generation=%d sequence=%d", navigation, previousGeneration, previousSequence)
+		}
+		previousGeneration = navigation.Event.Generation
+		previousSequence = navigation.Event.Sequence
 	}
 }
 

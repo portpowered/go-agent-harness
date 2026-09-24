@@ -132,30 +132,7 @@ func replayValueDifference(left, right any, path string) string {
 		if !ok {
 			return path
 		}
-		keys := make([]string, 0, len(leftValue)+len(rightValue))
-		seen := make(map[string]struct{}, len(leftValue)+len(rightValue))
-		for key := range leftValue {
-			seen[key] = struct{}{}
-			keys = append(keys, key)
-		}
-		for key := range rightValue {
-			if _, ok := seen[key]; !ok {
-				keys = append(keys, key)
-			}
-		}
-		sort.Strings(keys)
-		for _, key := range keys {
-			leftChild, leftOK := leftValue[key]
-			rightChild, rightOK := rightValue[key]
-			childPath := replayJSONFieldPath(path, key)
-			if !leftOK || !rightOK {
-				return childPath
-			}
-			if difference := replayValueDifference(leftChild, rightChild, childPath); difference != "" {
-				return difference
-			}
-		}
-		return ""
+		return replayObjectDifference(leftValue, rightValue, path)
 	case []any:
 		rightValue, ok := right.([]any)
 		if !ok || len(leftValue) != len(rightValue) {
@@ -182,14 +159,45 @@ func replayValueDifference(left, right any, path string) string {
 	}
 }
 
+func replayObjectDifference(leftValue, rightValue map[string]any, path string) string {
+	keys := make([]string, 0, len(leftValue)+len(rightValue))
+	seen := make(map[string]struct{}, len(leftValue)+len(rightValue))
+	for key := range leftValue {
+		seen[key] = struct{}{}
+		keys = append(keys, key)
+	}
+	for key := range rightValue {
+		if _, ok := seen[key]; !ok {
+			keys = append(keys, key)
+		}
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		leftChild, leftOK := leftValue[key]
+		rightChild, rightOK := rightValue[key]
+		childPath := replayJSONFieldPath(path, key)
+		if !leftOK || !rightOK {
+			return childPath
+		}
+		if difference := replayValueDifference(leftChild, rightChild, childPath); difference != "" {
+			return difference
+		}
+	}
+	return ""
+}
+
 func replayJSONFieldPath(base, key string) string {
 	if key == "" {
 		return base + `[""]`
 	}
 	for index, char := range key {
-		if !(char == '_' || char == '-' || char == '.' || char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || index > 0 && char >= '0' && char <= '9') {
+		if !replayJSONIdentifierRune(index, char) {
 			return base + "[" + strconv.Quote(key) + "]"
 		}
 	}
 	return base + "." + key
+}
+
+func replayJSONIdentifierRune(index int, char rune) bool {
+	return char == '_' || char == '-' || char == '.' || char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || index > 0 && char >= '0' && char <= '9'
 }

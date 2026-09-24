@@ -107,3 +107,41 @@ func parseUint(raw json.RawMessage) (uint64, error) {
 	}
 	return value, nil
 }
+
+func scriptArray(raw json.RawMessage) ([]json.RawMessage, error) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || trimmed[0] != '[' {
+		return nil, errors.New("must be a JSON array")
+	}
+	var values []json.RawMessage
+	if err := json.Unmarshal(trimmed, &values); err != nil {
+		return nil, err
+	}
+	if values == nil {
+		return nil, errors.New("must be a JSON array")
+	}
+	for index := range values {
+		values[index] = cloneRaw(values[index])
+	}
+	return values, nil
+}
+
+func isJSONObject(raw json.RawMessage) bool {
+	trimmed := bytes.TrimSpace(raw)
+	return len(trimmed) > 0 && trimmed[0] == '{' && json.Valid(trimmed)
+}
+
+func parseScriptString(raw json.RawMessage) (string, error) {
+	value, err := parseString(raw)
+	if err != nil {
+		return "", errors.New("must be a string")
+	}
+	return value, nil
+}
+
+func validateScriptID(value string) error {
+	if err := validateOpaqueID(value); err != nil {
+		return err
+	}
+	return nil
+}

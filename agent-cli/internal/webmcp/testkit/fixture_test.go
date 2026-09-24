@@ -311,7 +311,10 @@ func TestScriptedBrowserRuntimeReportsIncompleteCancellationAndClockErrors(t *te
 	}
 }
 
-func TestBrowserScriptLoadAliasesOptionsAndStateOracle(t *testing.T) {
+// loadBrowserScriptThroughAliases proves every loading alias accepts the
+// valid fixture and returns the decoded script for further checks.
+func loadBrowserScriptThroughAliases(t *testing.T) BrowserScript {
+	t.Helper()
 	loaded, err := DecodeBrowserScript([]byte(validBrowserScriptJSON))
 	if err != nil {
 		t.Fatalf("DecodeBrowserScript: %v", err)
@@ -333,7 +336,13 @@ func TestBrowserScriptLoadAliasesOptionsAndStateOracle(t *testing.T) {
 	if _, err := LoadScriptFile(path); err != nil {
 		t.Fatalf("LoadScriptFile: %v", err)
 	}
+	return loaded
+}
 
+// newCheckedStateOracle exercises the state oracle round trip and returns
+// the oracle reset to its initial value.
+func newCheckedStateOracle(t *testing.T) *FixtureStateOracle {
+	t.Helper()
 	oracle, err := NewStateOracle(map[string]any{"value": 1})
 	if err != nil {
 		t.Fatalf("NewStateOracle: %v", err)
@@ -356,6 +365,12 @@ func TestBrowserScriptLoadAliasesOptionsAndStateOracle(t *testing.T) {
 	if _, err := NewFixtureStateOracle(struct{ Bad chan int }{}); err == nil {
 		t.Fatal("unmarshalable state unexpectedly accepted")
 	}
+	return oracle
+}
+
+func TestBrowserScriptLoadAliasesOptionsAndStateOracle(t *testing.T) {
+	loaded := loadBrowserScriptThroughAliases(t)
+	oracle := newCheckedStateOracle(t)
 
 	options := []FixtureRuntimeOption{
 		WithRuntimeClock(NewFakeClock(3)),

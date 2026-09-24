@@ -66,6 +66,9 @@ func TestRedactionPolicyHasStrictDeterministicWireShape(t *testing.T) {
 	}
 }
 
+// redactedJSONString is the redaction marker encoded as a JSON string value.
+const redactedJSONString = `"REDACTED"`
+
 func TestRedactorSanitizesURLsCredentialsArgumentsAndResultPointers(t *testing.T) {
 	const secret = "webmcp-sentinel-credential-20260828"
 	policy := RedactionPolicy{
@@ -127,68 +130,20 @@ func TestRedactorSanitizesURLsCredentialsArgumentsAndResultPointers(t *testing.T
 		t.Fatalf("RedactEvents: %v", err)
 	}
 
-	var targetPayload struct {
-		Targets []struct {
-			URL   string `json:"url"`
-			Title string `json:"title"`
-		} `json:"targets"`
-	}
-	if err := json.Unmarshal(redacted[0].Payload, &targetPayload); err != nil {
-		t.Fatalf("decode target payload: %v", err)
-	}
-	if got := targetPayload.Targets[0].URL; got != "https://operator:REDACTED@fixture.test/path" {
-		t.Fatalf("redacted target URL = %q", got)
-	}
-	if targetPayload.Targets[0].Title != RedactionMarker {
-		t.Fatalf("redacted target title = %q", targetPayload.Targets[0].Title)
-	}
-	if redacted[0].Redaction.Mode != RedactionRedacted || !sameStrings(redacted[0].Redaction.Rules, []string{RedactionRuleURLQuery, RedactionRuleURLFragment, RedactionRuleRawCDPDisabled}) {
-		t.Fatalf("target redaction metadata = %#v", redacted[0].Redaction)
-	}
+	assertURLRedactedTargets(t, redacted[0])
 
 	var dispatched map[string]json.RawMessage
 	if err := json.Unmarshal(redacted[2].Payload, &dispatched); err != nil {
 		t.Fatalf("decode dispatched payload: %v", err)
 	}
-	if string(dispatched["input"]) != `"REDACTED"` {
+	if string(dispatched["input"]) != redactedJSONString {
 		t.Fatalf("redacted invocation input = %s", dispatched["input"])
 	}
 	if redacted[2].Redaction.Mode != RedactionRedacted || !sameStrings(redacted[2].Redaction.Rules, []string{RedactionRuleToolArguments, RedactionRuleRawCDPDisabled}) {
 		t.Fatalf("argument redaction metadata = %#v", redacted[2].Redaction)
 	}
 
-	var completed map[string]json.RawMessage
-	if err := json.Unmarshal(redacted[3].Payload, &completed); err != nil {
-		t.Fatalf("decode completed payload: %v", err)
-	}
-	var output map[string]json.RawMessage
-	if err := json.Unmarshal(completed["output"], &output); err != nil {
-		t.Fatalf("decode output: %v", err)
-	}
-	var nested map[string]json.RawMessage
-	if err := json.Unmarshal(output["nested"], &nested); err != nil {
-		t.Fatalf("decode nested output: %v", err)
-	}
-	if string(nested["token"]) != `"REDACTED"` {
-		t.Fatalf("pointer-redacted token = %s", nested["token"])
-	}
-	var escaped map[string]json.RawMessage
-	if err := json.Unmarshal(nested["a/b"], &escaped); err != nil {
-		t.Fatalf("decode escaped pointer object: %v", err)
-	}
-	var values []json.RawMessage
-	if err := json.Unmarshal(escaped["~key"], &values); err != nil {
-		t.Fatalf("decode escaped pointer array: %v", err)
-	}
-	if string(values[0]) != `"keep"` || string(values[1]) != `9007199254740993` || string(values[2]) != `"REDACTED"` {
-		t.Fatalf("escaped pointer result = %s", values)
-	}
-	if string(output["large"]) != `9007199254740993` {
-		t.Fatalf("large output number changed = %s", output["large"])
-	}
-	if redacted[3].Redaction.Mode != RedactionRedacted || !sameStrings(redacted[3].Redaction.Rules, []string{RedactionRuleResultJSONPointers, RedactionRuleRawCDPDisabled}) {
-		t.Fatalf("result redaction metadata = %#v", redacted[3].Redaction)
-	}
+	assertPointerRedactedResult(t, redacted[3])
 
 	first, digest, err := redactor.HashEvents(events)
 	if err != nil {
@@ -201,7 +156,7 @@ func TestRedactorSanitizesURLsCredentialsArgumentsAndResultPointers(t *testing.T
 	if !bytes.Equal(first, second) || digest != secondDigest {
 		t.Fatalf("redacted artifact is not byte stable: %q vs %q", digest, secondDigest)
 	}
-	if !strings.Contains(string(first), `"REDACTED"`) || bytes.Contains(first, []byte(secret)) {
+	if !strings.Contains(string(first), redactedJSONString) || bytes.Contains(first, []byte(secret)) {
 		t.Fatalf("final artifact did not contain only safe redaction: %s", first)
 	}
 	decoded, err := ValidateEventStream(first)
@@ -210,6 +165,69 @@ func TestRedactorSanitizesURLsCredentialsArgumentsAndResultPointers(t *testing.T
 	}
 	if len(decoded) != len(events) {
 		t.Fatalf("redacted artifact has %d events, want %d", len(decoded), len(events))
+	}
+}
+
+// assertURLRedactedTargets checks URL credential, query, and fragment
+// redaction in a target snapshot event.
+func assertURLRedactedTargets(t *testing.T, event Event) {
+	t.Helper()
+	var targetPayload struct {
+		Targets []struct {
+			URL   string `json:"url"`
+			Title string `json:"title"`
+		} `json:"targets"`
+	}
+	if err := json.Unmarshal(event.Payload, &targetPayload); err != nil {
+		t.Fatalf("decode target payload: %v", err)
+	}
+	if got := targetPayload.Targets[0].URL; got != "https://operator:REDACTED@fixture.test/path" {
+		t.Fatalf("redacted target URL = %q", got)
+	}
+	if targetPayload.Targets[0].Title != RedactionMarker {
+		t.Fatalf("redacted target title = %q", targetPayload.Targets[0].Title)
+	}
+	if event.Redaction.Mode != RedactionRedacted || !sameStrings(event.Redaction.Rules, []string{RedactionRuleURLQuery, RedactionRuleURLFragment, RedactionRuleRawCDPDisabled}) {
+		t.Fatalf("target redaction metadata = %#v", event.Redaction)
+	}
+}
+
+// assertPointerRedactedResult checks that configured result JSON pointers,
+// including escaped segments, redact only their targets and keep large
+// numbers byte-exact.
+func assertPointerRedactedResult(t *testing.T, event Event) {
+	t.Helper()
+	var completed map[string]json.RawMessage
+	if err := json.Unmarshal(event.Payload, &completed); err != nil {
+		t.Fatalf("decode completed payload: %v", err)
+	}
+	var output map[string]json.RawMessage
+	if err := json.Unmarshal(completed["output"], &output); err != nil {
+		t.Fatalf("decode output: %v", err)
+	}
+	var nested map[string]json.RawMessage
+	if err := json.Unmarshal(output["nested"], &nested); err != nil {
+		t.Fatalf("decode nested output: %v", err)
+	}
+	if string(nested["token"]) != redactedJSONString {
+		t.Fatalf("pointer-redacted token = %s", nested["token"])
+	}
+	var escaped map[string]json.RawMessage
+	if err := json.Unmarshal(nested["a/b"], &escaped); err != nil {
+		t.Fatalf("decode escaped pointer object: %v", err)
+	}
+	var values []json.RawMessage
+	if err := json.Unmarshal(escaped["~key"], &values); err != nil {
+		t.Fatalf("decode escaped pointer array: %v", err)
+	}
+	if string(values[0]) != `"keep"` || string(values[1]) != `9007199254740993` || string(values[2]) != redactedJSONString {
+		t.Fatalf("escaped pointer result = %s", values)
+	}
+	if string(output["large"]) != `9007199254740993` {
+		t.Fatalf("large output number changed = %s", output["large"])
+	}
+	if event.Redaction.Mode != RedactionRedacted || !sameStrings(event.Redaction.Rules, []string{RedactionRuleResultJSONPointers, RedactionRuleRawCDPDisabled}) {
+		t.Fatalf("result redaction metadata = %#v", event.Redaction)
 	}
 }
 
