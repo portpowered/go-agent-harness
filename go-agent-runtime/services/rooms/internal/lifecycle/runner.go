@@ -186,10 +186,12 @@ func (r Runner) openOneParticipant(ctx context.Context, state *runState, partici
 		state.add(active)
 	}
 	if recorder != nil {
-		_ = recorder.Observe(rooms.EvidenceObservation{
+		if err := recorder.Observe(rooms.EvidenceObservation{
 			Kind: rooms.EvidenceObservationTimeline, Event: "participant_joined", ParticipantID: participant.ID,
 			Fields: map[string]string{"kind": string(roommanifest.NormalizeParticipantKind(participant.Kind))}, At: r.currentTime(),
-		})
+		}); err != nil {
+			recorder.MarkError(participant.ID, "", err)
+		}
 	}
 	if request.OnParticipantReady != nil {
 		request.OnParticipantReady(rooms.RoomParticipantReady{
@@ -261,8 +263,9 @@ func (r Runner) finalizeRun(result rooms.RoomResult, runErr error, manifest room
 		}
 	}
 	if recorder != nil {
-		finalized, _ := recorder.Finalize(rooms.EvidenceFinalization{Room: result, Err: runErr, EndedAt: r.currentTime()})
+		finalized, finalizeErr := recorder.Finalize(rooms.EvidenceFinalization{Room: result, Err: runErr, EndedAt: r.currentTime()})
 		result = finalized.Room
+		runErr = errors.Join(runErr, finalizeErr)
 	}
 	return result, runErr
 }
@@ -286,24 +289,30 @@ func installRecorder(request rooms.RoomRunOptions, recorder rooms.EvidenceRecord
 	}
 	diagnosticCallback := request.OnDiagnostic
 	request.OnDiagnostic = func(participantID string, record rooms.RoomDiagnosticRecord) {
-		_ = recorder.Observe(rooms.EvidenceObservation{
+		if err := recorder.Observe(rooms.EvidenceObservation{
 			Kind: rooms.EvidenceObservationDiagnostic, ParticipantID: participantID,
 			Diagnostic: rooms.EvidenceDiagnosticRecord{ParticipantID: participantID, Event: record.Event, Fields: record.Fields, At: record.At},
-		})
+		}); err != nil {
+			recorder.MarkError(participantID, "", err)
+		}
 		if diagnosticCallback != nil {
 			diagnosticCallback(participantID, record)
 		}
 	}
 	readyCallback := request.OnParticipantReady
 	request.OnParticipantReady = func(value rooms.RoomParticipantReady) {
-		_ = recorder.Observe(rooms.EvidenceObservation{Kind: rooms.EvidenceObservationParticipantReady, ParticipantID: value.ParticipantID, ParticipantReady: value})
+		if err := recorder.Observe(rooms.EvidenceObservation{Kind: rooms.EvidenceObservationParticipantReady, ParticipantID: value.ParticipantID, ParticipantReady: value}); err != nil {
+			recorder.MarkError(value.ParticipantID, "", err)
+		}
 		if readyCallback != nil {
 			readyCallback(value)
 		}
 	}
 	terminatedCallback := request.OnParticipantTerminated
 	request.OnParticipantTerminated = func(value rooms.RoomParticipantResult) {
-		_ = recorder.Observe(rooms.EvidenceObservation{Kind: rooms.EvidenceObservationParticipantTerminated, ParticipantID: value.ParticipantID, ParticipantResult: value})
+		if err := recorder.Observe(rooms.EvidenceObservation{Kind: rooms.EvidenceObservationParticipantTerminated, ParticipantID: value.ParticipantID, ParticipantResult: value}); err != nil {
+			recorder.MarkError(value.ParticipantID, "", err)
+		}
 		if terminatedCallback != nil {
 			terminatedCallback(value)
 		}
@@ -325,7 +334,9 @@ func (s recordingEventSink) Publish(ctx context.Context, participantID string, e
 	if s.recorder != nil {
 		// Evidence errors remain in recorder health. The host sink remains the
 		// only room-failure signal.
-		_ = s.recorder.Observe(rooms.EvidenceObservation{Kind: rooms.EvidenceObservationLiveEvent, ParticipantID: participantID, LiveEvent: event})
+		if err := s.recorder.Observe(rooms.EvidenceObservation{Kind: rooms.EvidenceObservationLiveEvent, ParticipantID: participantID, LiveEvent: event}); err != nil {
+			s.recorder.MarkError(participantID, "", err)
+		}
 	}
 	return hostErr
 }

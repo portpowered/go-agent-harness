@@ -29,11 +29,12 @@ func ReadBundle(path string) (RoomLatencyBundle, error) {
 	}
 	info, err := file.Stat()
 	if err != nil {
-		_ = file.Close()
-		return RoomLatencyBundle{}, fmt.Errorf("inspect room latency artifact: %w", err)
+		return RoomLatencyBundle{}, fmt.Errorf("inspect room latency artifact: %w", errors.Join(err, file.Close()))
 	}
 	if info.Size() < 0 || info.Size() > maxRoomLatencyBundleBytes {
-		_ = file.Close()
+		if closeErr := file.Close(); closeErr != nil {
+			return RoomLatencyBundle{}, fmt.Errorf("room latency artifact exceeds %d-byte limit: %w", maxRoomLatencyBundleBytes, closeErr)
+		}
 		return RoomLatencyBundle{}, fmt.Errorf("room latency artifact exceeds %d-byte limit", maxRoomLatencyBundleBytes)
 	}
 	data, readErr := io.ReadAll(io.LimitReader(file, maxRoomLatencyBundleBytes+1))

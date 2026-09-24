@@ -61,7 +61,9 @@ func roomParticipantFailureObserver(coordinator *roomCoordinator, runtime *roomP
 			if observation.Code != "" {
 				fields["code"] = observation.Code
 			}
-			_ = evidence.RecordProviderErrorTimeline(runtime.plan.manifest.ID, fields)
+			if err := evidence.RecordProviderErrorTimeline(runtime.plan.manifest.ID, fields); err != nil {
+				evidence.MarkError(runtime.plan.manifest.ID, roomevidence.TimelinePath, err)
+			}
 		}
 		failure := roomParticipantTerminalFailure(runtime, observation)
 		if observation.TerminalProvenance == messages.TerminalProvenanceProvider && observation.FailingEvent == string(messages.StreamTypeError) {

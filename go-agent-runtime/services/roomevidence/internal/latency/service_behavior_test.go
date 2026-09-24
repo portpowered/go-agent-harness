@@ -88,8 +88,7 @@ func TestServiceRejectsInvalidLatencyArtifacts(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := file.Truncate(maxRoomLatencyBundleBytes + 1); err != nil {
-		_ = file.Close()
-		t.Fatal(err)
+		t.Fatalf("truncate oversized artifact: %v (close: %v)", err, file.Close())
 	}
 	if err := file.Close(); err != nil {
 		t.Fatal(err)

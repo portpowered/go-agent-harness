@@ -96,7 +96,9 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 			return finalizeRoomEvidence(evidence, roomClock, result, safeErr)
 		}
 		if evidence != nil {
-			_ = evidence.RecordTimeline("participant_joined", plan.manifest.ID, nil)
+			if err := evidence.RecordTimeline("participant_joined", plan.manifest.ID, nil); err != nil {
+				evidence.MarkError(plan.manifest.ID, roomevidence.TimelinePath, err)
+			}
 		}
 	}
 
@@ -105,7 +107,9 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		onParticipantTerminated = func(result RoomParticipantResult) {
 			recordRoomParticipantBoundDiagnostic(opts, evidence, result)
 			if evidence != nil {
-				_ = evidence.RecordTimeline("participant_terminated", result.ParticipantID, participantTerminalFields(result))
+				if err := evidence.RecordTimeline("participant_terminated", result.ParticipantID, participantTerminalFields(result)); err != nil {
+					evidence.MarkError(result.ParticipantID, roomevidence.TimelinePath, err)
+				}
 			}
 			if opts.OnParticipantTerminated != nil {
 				opts.OnParticipantTerminated(result)
@@ -115,7 +119,9 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 	coordinator := newRoomCoordinator(roomCancel, opts.Manifest.Room.MaxTurns, opts.BoundShutdownGrace, onParticipantTerminated, opts.onRoomBoundShutdown)
 	coordinator.setParticipantFailureObserver(func(participantID, reason string) {
 		if evidence != nil {
-			_ = evidence.RecordTimeline("participant_failed", participantID, map[string]string{"reason": reason})
+			if err := evidence.RecordTimeline("participant_failed", participantID, map[string]string{"reason": reason}); err != nil {
+				evidence.MarkError(participantID, roomevidence.TimelinePath, err)
+			}
 		}
 	})
 	coordinator.blockEmptyStop()
@@ -282,8 +288,12 @@ func publishRoomParticipantsReady(coordinator *roomCoordinator, plans []*roomPar
 		}
 		ready := roomParticipantReady(plan)
 		if evidence != nil {
-			_ = evidence.SetParticipantReady(ready)
-			_ = evidence.RecordTimeline("participant_ready", ready.ParticipantID, nil)
+			if err := evidence.SetParticipantReady(ready); err != nil {
+				evidence.MarkError(ready.ParticipantID, roomevidence.ManifestPath, err)
+			}
+			if err := evidence.RecordTimeline("participant_ready", ready.ParticipantID, nil); err != nil {
+				evidence.MarkError(ready.ParticipantID, roomevidence.TimelinePath, err)
+			}
 		}
 		if opts.OnParticipantReady != nil {
 			opts.OnParticipantReady(ready)

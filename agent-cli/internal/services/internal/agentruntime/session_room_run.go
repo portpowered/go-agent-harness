@@ -72,8 +72,9 @@ func prepareRoomEvidence(opts RoomRunOptions, validation room.ValidationOptions,
 
 func finalizeRoomEvidence(evidence roomevidence.Recorder, clockSource platformclock.Source, result RoomResult, runErr error) (RoomResult, error) {
 	if evidence != nil {
-		finalized, _ := evidence.Finalize(roomevidence.Finalization{Room: result, Err: runErr, EndedAt: clockSource.Now().UTC()})
+		finalized, finalizeErr := evidence.Finalize(roomevidence.Finalization{Room: result, Err: runErr, EndedAt: clockSource.Now().UTC()})
 		result = finalized.Room
+		runErr = errors.Join(runErr, finalizeErr)
 	}
 	return result, runErr
 }
@@ -88,7 +89,10 @@ func newRoomParticipantObserver(coordinator *roomCoordinator, runtime *roomParti
 		runtime.lifecycle.markLivenessFailure(err)
 		classification, _, _, _ := sessiontracewire.LivenessMetadata(err)
 		if classification != "" && evidence != nil {
-			_ = evidence.RecordTimeline("participant_liveness_fault", runtime.plan.manifest.ID, map[string]string{"reason": classification})
+			participantID := runtime.plan.manifest.ID
+			if recordErr := evidence.RecordTimeline("participant_liveness_fault", participantID, map[string]string{"reason": classification}); recordErr != nil {
+				evidence.MarkError(participantID, roomevidence.TimelinePath, recordErr)
+			}
 		}
 	})
 	observer.SetTerminalObserver(runtime.lifecycle.observeTerminal)
@@ -163,7 +167,9 @@ type roomParticipantDiagnosticSink struct {
 
 func (s roomParticipantDiagnosticSink) RecordSessionDiagnostic(record SessionDiagnosticRecord) {
 	if s.evidence != nil && record.Event == SessionDiagnosticEventTurn {
-		_ = s.evidence.RecordTimeline("turn_completed", s.participantID, map[string]string{fieldTurnIndex: record.Fields[fieldTurnIndex]})
+		if err := s.evidence.RecordTimeline("turn_completed", s.participantID, map[string]string{fieldTurnIndex: record.Fields[fieldTurnIndex]}); err != nil {
+			s.evidence.MarkError(s.participantID, roomevidence.TimelinePath, err)
+		}
 	}
 	if s.evidence != nil {
 		s.evidence.RecordSessionDiagnostic(roomevidence.DiagnosticRecord{ParticipantID: s.participantID, Event: record.Event, Fields: record.Fields})
@@ -378,7 +384,9 @@ func observeRoomParticipantStream(
 ) {
 	plan := runtime.plan
 	if evidence != nil && msg.Type == messages.StreamTypeVADSpeechStopped {
-		_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationSpeechStopped, ParticipantID: plan.manifest.ID})
+		if err := evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationSpeechStopped, ParticipantID: plan.manifest.ID}); err != nil {
+			evidence.MarkError(plan.manifest.ID, roomevidence.LatencyPath, err)
+		}
 	}
 	if opts.onParticipantStream != nil {
 		opts.onParticipantStream(plan.manifest.ID, msg)
@@ -404,17 +412,23 @@ func observeRoomParticipantStream(
 	}
 	recordRoomParticipantDelta(evidence, plan, msg)
 	if evidence != nil {
-		_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationParticipantAudio, ParticipantID: plan.manifest.ID, PCM: pcm})
+		if err := evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationParticipantAudio, ParticipantID: plan.manifest.ID, PCM: pcm}); err != nil {
+			evidence.MarkError(plan.manifest.ID, evidence.Artifacts(plan.manifest.ID).WAV, err)
+		}
 	}
 }
 
 func observeRoomParticipantStreamLifecycle(runtime *roomParticipantRuntime, opts RoomRunOptions, evidence roomevidence.Recorder, plan *roomParticipantPlan, msg messages.StreamMessage) {
 	runtime.lifecycle.observe(msg)
 	if evidence != nil {
-		_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationStreamMessage, ParticipantID: plan.manifest.ID, StreamMessage: msg})
+		if err := evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationStreamMessage, ParticipantID: plan.manifest.ID, StreamMessage: msg}); err != nil {
+			evidence.MarkError(plan.manifest.ID, evidence.Artifacts(plan.manifest.ID).Deltas, err)
+		}
 		if msg.Type == messages.StreamTypeAudioEnd && assistantAudioDelta(msg) {
 			// AUDIO.END closes a segment when no silent trailing chunk arrives.
-			_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationCloseSentSpeechSegment, ParticipantID: plan.manifest.ID})
+			if err := evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationCloseSentSpeechSegment, ParticipantID: plan.manifest.ID}); err != nil {
+				evidence.MarkError(plan.manifest.ID, evidence.Artifacts(plan.manifest.ID).SentPCM, err)
+			}
 		}
 	}
 	if msg.Type == messages.StreamTypeSessionOpen && opts.onParticipantSessionOpen != nil {
@@ -424,7 +438,9 @@ func observeRoomParticipantStreamLifecycle(runtime *roomParticipantRuntime, opts
 
 func recordRoomParticipantDelta(evidence roomevidence.Recorder, plan *roomParticipantPlan, msg messages.StreamMessage) {
 	if evidence != nil {
-		_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationDelta, ParticipantID: plan.manifest.ID, StreamMessage: msg})
+		if err := evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationDelta, ParticipantID: plan.manifest.ID, StreamMessage: msg}); err != nil {
+			evidence.MarkError(plan.manifest.ID, evidence.Artifacts(plan.manifest.ID).Deltas, err)
+		}
 	}
 }
 
@@ -437,12 +453,19 @@ func deliverRoomParticipantAudio(coordinator *roomCoordinator, runtime *roomPart
 		}
 	}
 	if evidence != nil {
-		_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationSpeakerAudio, ParticipantID: plan.manifest.ID, TargetIDs: targetIDs, PCM: pcm})
+		participantID := plan.manifest.ID
+		if err := evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationSpeakerAudio, ParticipantID: participantID, TargetIDs: targetIDs, PCM: pcm}); err != nil {
+			evidence.MarkError(participantID, roomevidence.LatencyPath, err)
+		}
 		if len(pcm) > 0 {
-			_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationProviderAudio, ParticipantID: plan.manifest.ID, RelatedID: msg.ResponseID})
+			if err := evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationProviderAudio, ParticipantID: participantID, RelatedID: msg.ResponseID}); err != nil {
+				evidence.MarkError(participantID, roomevidence.LatencyPath, err)
+			}
 		}
 		// Keep offset-anchored evidence on the provider-to-peer handoff path.
-		_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationSentStream, ParticipantID: plan.manifest.ID, PCM: pcm})
+		if err := evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationSentStream, ParticipantID: participantID, PCM: pcm}); err != nil {
+			evidence.MarkError(participantID, evidence.Artifacts(participantID).SentPCM, err)
+		}
 	}
 	if opts.OnAudioOutput != nil {
 		if outputErr := opts.OnAudioOutput(plan.manifest.ID, append([]byte(nil), pcm...)); outputErr != nil {
@@ -477,7 +500,9 @@ func fanoutRoomParticipantAudioToPeer(coordinator *roomCoordinator, runtime *roo
 		return
 	}
 	if evidence != nil {
-		_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationPeerAudio, ParticipantID: plan.manifest.ID, RelatedID: targetID, PCM: pcm})
+		if err := evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationPeerAudio, ParticipantID: plan.manifest.ID, RelatedID: targetID, PCM: pcm}); err != nil {
+			evidence.MarkError(plan.manifest.ID, roomevidence.LatencyPath, err)
+		}
 	}
 	if opts.onParticipantAudioFanned != nil {
 		opts.onParticipantAudioFanned(plan.manifest.ID, targetID, append([]byte(nil), pcm...))
@@ -888,7 +913,10 @@ func pumpRoomMixer(ctx context.Context, coordinator *roomCoordinator, runtime *r
 			// explicit, diagnosable event instead of leaving it
 			// indistinguishable from ordinary silence.
 			if evidence != nil && audio.PCM16HasSignal(frame) {
-				_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationAudioDropped, ParticipantID: runtime.plan.manifest.ID, Artifact: err.Error(), DroppedBytes: len(frame)})
+				participantID := runtime.plan.manifest.ID
+				if recordErr := evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationAudioDropped, ParticipantID: participantID, Artifact: err.Error(), DroppedBytes: len(frame)}); recordErr != nil {
+					evidence.MarkError(participantID, roomevidence.TimelinePath, recordErr)
+				}
 			}
 			coordinator.failParticipant(runtime.plan.manifest.ID, roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("send mixed PCM: %w", err), secretsForPlan(runtime.plan)))
 			return
@@ -903,7 +931,10 @@ func pumpRoomMixer(ctx context.Context, coordinator *roomCoordinator, runtime *r
 			// received.pcm is the provider-bound artifact. Record it only after
 			// SendAudioInput succeeds so a downstream rejection cannot create a
 			// false received frame.
-			_ = evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationReceivedParticipantAudio, ParticipantID: runtime.plan.manifest.ID, PCM: providerFrame})
+			participantID := runtime.plan.manifest.ID
+			if recordErr := evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationReceivedParticipantAudio, ParticipantID: participantID, PCM: providerFrame}); recordErr != nil {
+				evidence.MarkError(participantID, evidence.Artifacts(participantID).ReceivedPCM, recordErr)
+			}
 		}
 		if observer != nil {
 			if err := observer(runtime.plan.manifest.ID, append([]byte(nil), providerFrame...)); err != nil {

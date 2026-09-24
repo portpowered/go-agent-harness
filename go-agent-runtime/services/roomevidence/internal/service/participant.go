@@ -111,10 +111,6 @@ func (p *participantRecorder) ObserveSentStream(pcm []byte) error {
 	return p.observeSentStream(pcm)
 }
 
-func (p *participantRecorder) observeSentAudio(pcm []byte) error {
-	return errors.Join(p.observeAudio(pcm), p.observeSentStream(pcm))
-}
-
 func (p *participantRecorder) observeSentStream(pcm []byte) error {
 	if err := p.openCheck(); err != nil {
 		return err
@@ -295,6 +291,7 @@ func (r *recorder) observeRoomAudio(observation roomevidence.Observation) error 
 }
 
 func (r *recorder) recordStreamMessageTimeline(participantID string, msg messages.StreamMessage) error {
+	//nolint:exhaustive // only response and tool lifecycle messages project to room timeline events.
 	switch msg.Type {
 	case messages.StreamTypeMessageStart:
 		return r.RecordTimeline("response_start", participantID, map[string]string{"response_id": msg.ResponseID})

@@ -23,6 +23,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
+const redactedMarker = "[REDACTED]"
+
 func testManifest() rooms.Manifest {
 	return rooms.Manifest{
 		SchemaVersion: rooms.SchemaVersion,
@@ -198,7 +200,7 @@ func TestServiceRecordsEffectsAndIntegrity(t *testing.T) {
 		if bytesContain(data, timelineSecret) {
 			t.Fatalf("evidence %s leaked live timeline secret", path)
 		}
-		if !bytesContain(data, "[REDACTED]") {
+		if !bytesContain(data, redactedMarker) {
 			t.Fatalf("evidence %s omitted redaction marker", path)
 		}
 	}
@@ -260,14 +262,14 @@ func TestServiceRedactsCredentialFieldsWithoutConfiguredSecrets(t *testing.T) {
 	if err := json.Unmarshal([]byte(delta.Value.Arguments), &arguments); err != nil {
 		t.Fatalf("decode recorded tool arguments: %v", err)
 	}
-	if arguments["api_key"] != "[REDACTED]" {
+	if arguments["api_key"] != redactedMarker {
 		t.Errorf("api_key evidence = %v, want redaction marker", arguments["api_key"])
 	}
 	if arguments["api_key_env"] != "ROOM_KEY" {
 		t.Errorf("api_key_env evidence = %v, want environment variable name preserved", arguments["api_key_env"])
 	}
 	nested, ok := arguments["nested"].(map[string]any)
-	if !ok || nested["Authorization"] != "[REDACTED]" {
+	if !ok || nested["Authorization"] != redactedMarker {
 		t.Errorf("authorization evidence = %v, want redaction marker", arguments["nested"])
 	}
 	if arguments["token_count"] != float64(12) {
@@ -281,14 +283,14 @@ func TestServiceRedactsCredentialFieldsWithoutConfiguredSecrets(t *testing.T) {
 	if err := json.Unmarshal(deltaLines[1], &partialRecord); err != nil {
 		t.Fatalf("decode partial delta evidence: %v", err)
 	}
-	if partialRecord.Value.PartialJSON != "[REDACTED]" {
+	if partialRecord.Value.PartialJSON != redactedMarker {
 		t.Errorf("partial credential-bearing JSON = %q, want fail-closed redaction", partialRecord.Value.PartialJSON)
 	}
 	diagnosticData, err := os.ReadFile(filepath.Join(destination, filepath.FromSlash(artifacts.Diagnostics)))
 	if err != nil {
 		t.Fatalf("read diagnostic evidence: %v", err)
 	}
-	if bytesContain(diagnosticData, "unconfigured-client-secret") || !bytesContain(diagnosticData, "[REDACTED]") {
+	if bytesContain(diagnosticData, "unconfigured-client-secret") || !bytesContain(diagnosticData, redactedMarker) {
 		t.Fatalf("diagnostic evidence did not redact credential field: %s", diagnosticData)
 	}
 }

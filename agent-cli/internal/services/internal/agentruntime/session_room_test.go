@@ -68,7 +68,11 @@ func TestObserveRoomParticipantStream_FansOutBeforeDurableAudioEvidence(t *testi
 	if err != nil {
 		t.Fatalf("open room evidence: %v", err)
 	}
-	t.Cleanup(func() { _ = owner.Close() })
+	t.Cleanup(func() {
+		if err := owner.Close(); err != nil {
+			t.Errorf("close room evidence: %v", err)
+		}
+	})
 	deltasPath := filepath.Join(outputDir, owner.Artifacts("source").Deltas)
 
 	source := &roomParticipantRuntime{

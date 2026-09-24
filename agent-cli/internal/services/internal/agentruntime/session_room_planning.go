@@ -35,9 +35,6 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 	if len(evidences) > 0 {
 		evidence = evidences[0]
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	filesystemPolicy := opts.FilesystemPolicy
 	if filesystemPolicy == nil {
 		var policyErr error

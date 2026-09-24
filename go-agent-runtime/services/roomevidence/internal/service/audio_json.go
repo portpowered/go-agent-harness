@@ -309,7 +309,7 @@ func redactValue(value any, secrets []string) any {
 
 func redactValueAtDepth(value any, secrets []string, depth int) any {
 	if depth >= maxRedactedJSONDepth {
-		return "[REDACTED]"
+		return redactedMarker
 	}
 	switch typed := value.(type) {
 	case string:
@@ -321,7 +321,7 @@ func redactValueAtDepth(value any, secrets []string, depth int) any {
 	case map[string]any:
 		for key, nested := range typed {
 			if sensitiveJSONKey(key) {
-				typed[key] = "[REDACTED]"
+				typed[key] = redactedMarker
 				continue
 			}
 			if text, ok := nested.(string); ok && jsonPayloadField(key) {
@@ -337,7 +337,7 @@ func redactValueAtDepth(value any, secrets []string, depth int) any {
 func redactText(value string, secrets []string) string {
 	for _, secret := range secrets {
 		if secret != "" {
-			value = strings.ReplaceAll(value, secret, "[REDACTED]")
+			value = strings.ReplaceAll(value, secret, redactedMarker)
 		}
 	}
 	return value

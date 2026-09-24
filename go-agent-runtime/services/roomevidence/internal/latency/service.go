@@ -53,6 +53,13 @@ func (o runtimeObserver) ObserveSessionRuntime(observation sessiontrace.SessionR
 		kind = rooms.LatencyObservationInputCommit
 	case sessiontrace.SessionRuntimeObservationResponseCreate:
 		kind = rooms.LatencyObservationResponseCreate
+	case sessiontrace.SessionRuntimeObservationAudioOutput,
+		sessiontrace.SessionRuntimeObservationAudioInput,
+		sessiontrace.SessionRuntimeObservationAudioPlaybackReceipt,
+		sessiontrace.SessionRuntimeObservationAudioRenderTapUnavailable,
+		sessiontrace.SessionRuntimeObservationTurnCompleted,
+		sessiontrace.SessionRuntimeObservationTerminal:
+		return
 	default:
 		return
 	}

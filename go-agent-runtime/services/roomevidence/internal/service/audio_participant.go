@@ -13,6 +13,8 @@ import (
 	"time"
 )
 
+const redactedMarker = "[REDACTED]"
+
 func audioSamples(pcm []byte) ([]int16, error) {
 	if len(pcm) > maxAudioFrameBytes {
 		return nil, fmt.Errorf("PCM16 audio frame exceeds %d-byte bound", maxAudioFrameBytes)
@@ -346,7 +348,7 @@ func jsonPayloadField(key string) bool {
 
 func redactJSONPayload(text string, secrets []string, depth int) string {
 	if len(text) > roomReplayJSONLScannerMaxTokenBytes || depth >= maxRedactedJSONDepth {
-		return "[REDACTED]"
+		return redactedMarker
 	}
 	trimmed := strings.TrimSpace(text)
 	if !strings.HasPrefix(trimmed, "{") && !strings.HasPrefix(trimmed, "[") {
@@ -355,7 +357,7 @@ func redactJSONPayload(text string, secrets []string, depth int) string {
 	var nested any
 	if err := json.Unmarshal([]byte(text), &nested); err != nil {
 		if containsSensitiveJSONField(text) {
-			return "[REDACTED]"
+			return redactedMarker
 		}
 		return redactText(text, secrets)
 	}
@@ -366,7 +368,7 @@ func redactJSONPayload(text string, secrets []string, depth int) string {
 		if err == nil {
 			return string(encoded)
 		}
-		return "[REDACTED]"
+		return redactedMarker
 	default:
 		return redactText(text, secrets)
 	}
@@ -376,7 +378,7 @@ func redactFields(values map[string]string, secrets []string) map[string]string 
 	fields := cloneFields(values)
 	for key, value := range fields {
 		if sensitiveJSONKey(key) {
-			fields[key] = "[REDACTED]"
+			fields[key] = redactedMarker
 			continue
 		}
 		if jsonPayloadField(key) {
