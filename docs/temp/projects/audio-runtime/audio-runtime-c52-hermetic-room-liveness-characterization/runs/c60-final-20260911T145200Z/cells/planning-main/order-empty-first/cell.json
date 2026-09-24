@@ -1,0 +1,315 @@
+{
+  "attempt": 1,
+  "cell": {
+    "args": [
+      "test",
+      "-json",
+      "-count=10",
+      "-run",
+      "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+      "./services/rooms/internal/lifecycle"
+    ],
+    "env": {
+      "C52_CASE_ORDER": "empty-first"
+    },
+    "id": "order-empty-first",
+    "kind": "explicit-order"
+  },
+  "command": [
+    "go",
+    "test",
+    "-tags=nomicrophone",
+    "-json",
+    "-count=10",
+    "-run",
+    "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+    "./services/rooms/internal/lifecycle"
+  ],
+  "environment": {
+    "C52_CASE_ORDER": "empty-first",
+    "C52_MATRIX_CELL": "order-empty-first",
+    "C52_OVERLAY_HASH": "434704414ff5a3c1dd65fac12a5dbf6657fe1fa07f9f6a70b63fda4dcfb7c6b1",
+    "C52_REVISION": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+    "C52_RUN_ID": "c60-final-20260911T145200Z",
+    "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/c60-final-20260911T145200Z/cells/planning-main/order-empty-first/trace.jsonl",
+    "CGO_ENABLED": "0",
+    "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/c60-final-20260911T145200Z/cache/gocache",
+    "GOENV": "off",
+    "GOFLAGS": "",
+    "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/c60-final-20260911T145200Z/cache/gomodcache",
+    "GONOPROXY": "",
+    "GONOSUMDB": "",
+    "GOPRIVATE": "",
+    "GOPROXY": "https://proxy.golang.org,direct",
+    "GOSUMDB": "sum.golang.org",
+    "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/c60-final-20260911T145200Z/cache/gotmp",
+    "GOTOOLCHAIN": "auto",
+    "GOTRACEBACK": "all",
+    "GOWORK": "",
+    "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/c60-final-20260911T145200Z/cache/home",
+    "LANG": "C",
+    "LC_ALL": "C",
+    "PATH": "/usr/local/go/bin:/usr/bin:/usr/local/bin:/opt/homebrew/bin:/bin:/usr/sbin:/sbin",
+    "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/c60-final-20260911T145200Z/cache/gotmp",
+    "TZ": "UTC"
+  },
+  "process": {
+    "cleanup": {
+      "group_survivor": false,
+      "kill_error": null,
+      "kill_sent": false,
+      "parent_exit_code": 0,
+      "reason": "parent_exit",
+      "term_error": null,
+      "term_sent": false
+    },
+    "command": [
+      "go",
+      "test",
+      "-tags=nomicrophone",
+      "-json",
+      "-count=10",
+      "-run",
+      "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+      "./services/rooms/internal/lifecycle"
+    ],
+    "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/c60-final-20260911T145200Z/scratch/planning-main/go-agent-runtime",
+    "duration_seconds": 0.4976278329268098,
+    "ended_at": "2026-09-11T14:52:12.096048+00:00",
+    "exit_code": 0,
+    "first_failure": null,
+    "output_overflow": false,
+    "reader_survivor": false,
+    "started_at": "2026-09-11T14:52:11.598432+00:00",
+    "stderr_bytes": 0,
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stdout_bytes": 34005,
+    "stdout_sha256": "5f1afcb5c07c3f792b7856daba5f8af1c4e546a5e55e4e456fee37bf12781859",
+    "timed_out": false
+  },
+  "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+  "revision_label": "planning-main",
+  "selection": {
+    "action_package_mismatches": [],
+    "behavior_passed": true,
+    "cached_marker": false,
+    "first_assertion": "",
+    "invalid_json_lines": 0,
+    "invalid_json_samples": [],
+    "json_line_count": 124,
+    "no_tests_marker": false,
+    "package": "./services/rooms/internal/lifecycle",
+    "package_events": [
+      {
+        "Action": "start",
+        "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+        "Time": "2026-09-11T14:52:11.837039Z"
+      },
+      {
+        "Action": "output",
+        "Output": "PASS\n",
+        "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+        "Time": "2026-09-11T14:52:12.061876Z"
+      },
+      {
+        "Action": "output",
+        "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.225s\n",
+        "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+        "Time": "2026-09-11T14:52:12.062257Z"
+      },
+      {
+        "Action": "pass",
+        "Elapsed": 0.225,
+        "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+        "Time": "2026-09-11T14:52:12.062266Z"
+      }
+    ],
+    "raw_action_binding": {
+      "matrix_cell": "order-empty-first",
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+      "parent_test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer",
+      "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+      "run_id": "c60-final-20260911T145200Z",
+      "subtests": [
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout",
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response"
+      ]
+    },
+    "relevant_test_names": [
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer",
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response",
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"
+    ],
+    "requested_count": 10,
+    "required_test_fail_counts": {
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 0,
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 0
+    },
+    "required_test_pass_counts": {
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10,
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
+    },
+    "required_test_run_counts": {
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10,
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
+    },
+    "required_test_skip_counts": {
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 0,
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 0
+    },
+    "required_test_terminal_actions": {
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": [
+        {
+          "action": "pass",
+          "ordinal": 0,
+          "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+          "test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response"
+        },
+        {
+          "action": "pass",
+          "ordinal": 1,
+          "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+          "test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response"
+        },
+        {
+          "action": "pass",
+          "ordinal": 2,
+          "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+          "test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response"
+        },
+        {
+          "action": "pass",
+          "ordinal": 3,
+          "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+          "test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response"
+        },
+        {
+          "action": "pass",
+          "ordinal": 4,
+          "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+          "test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response"
+        },
+        {
+          "action": "pass",
+          "ordinal": 5,
+          "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+          "test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response"
+        },
+        {
+          "action": "pass",
+          "ordinal": 6,
+          "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+          "test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response"
+        },
+        {
+          "action": "pass",
+          "ordinal": 7,
+          "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+          "test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response"
+        },
+        {
+          "action": "pass",
+          "ordinal": 8,
+          "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+          "test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response"
+        },
+        {
+          "action": "pass",
+          "ordinal": 9,
+          "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+          "test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response"
+        }
+      ],
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": [
+        {
+          "action": "pass",
+          "ordinal": 0,
+          "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+          "test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"
+        },
+        {
+          "action": "pass",
+          "ordinal": 1,
+          "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+          "test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"
+        },
+        {
+          "action": "pass",
+          "ordinal": 2,
+          "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+          "test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"
+        },
+        {
+          "action": "pass",
+          "ordinal": 3,
+          "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+          "test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"
+        },
+        {
+          "action": "pass",
+          "ordinal": 4,
+          "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+          "test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"
+        },
+        {
+          "action": "pass",
+          "ordinal": 5,
+          "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+          "test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"
+        },
+        {
+          "action": "pass",
+          "ordinal": 6,
+          "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+          "test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"
+        },
+        {
+          "action": "pass",
+          "ordinal": 7,
+          "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+          "test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"
+        },
+        {
+          "action": "pass",
+          "ordinal": 8,
+          "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+          "test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"
+        },
+        {
+          "action": "pass",
+          "ordinal": 9,
+          "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+          "test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"
+        }
+      ]
+    },
+    "required_test_terminal_counts": {
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10,
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
+    },
+    "selection_valid": true,
+    "test_events": {
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer": {
+        "fail": 0,
+        "pass": 10,
+        "run": 10,
+        "skip": 0
+      },
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": {
+        "fail": 0,
+        "pass": 10,
+        "run": 10,
+        "skip": 0
+      },
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": {
+        "fail": 0,
+        "pass": 10,
+        "run": 10,
+        "skip": 0
+      }
+    }
+  },
+  "status": "PASS",
+  "trace_path": "runs/c60-final-20260911T145200Z/cells/planning-main/order-empty-first/trace.jsonl",
+  "trace_sha256": "bcf449d339eea6a988bd9ecb66820504cfc705e72f750887191cc7957d61b6bb"
+}

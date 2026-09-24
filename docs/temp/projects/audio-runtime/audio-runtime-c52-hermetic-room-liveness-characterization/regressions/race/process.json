@@ -17,17 +17,17 @@
     "-timeout=180s",
     "./services/rooms/internal/lifecycle"
   ],
-  "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/go-agent-runtime",
-  "duration_seconds": 7.859593333210796,
-  "ended_at": "2026-09-11T11:51:26.686600+00:00",
+  "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/go-agent-runtime",
+  "duration_seconds": 7.816209333948791,
+  "ended_at": "2026-09-11T22:38:12.104147+00:00",
   "exit_code": 0,
   "first_failure": null,
   "output_overflow": false,
   "reader_survivor": false,
-  "started_at": "2026-09-11T11:51:18.826956+00:00",
+  "started_at": "2026-09-11T22:38:04.287903+00:00",
   "stderr_bytes": 0,
   "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   "stdout_bytes": 103,
-  "stdout_sha256": "ed41daf99d8a286f1ddb30300adea2743acbf91138bfe4ce8c238622547e9829",
+  "stdout_sha256": "b1201a1a2362c7003451445ed3fc87cb96ef43b1c4908baadf7c0ae3b1a6b0ca",
   "timed_out": false
 }

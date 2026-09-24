@@ -54,6 +54,7 @@ FIXED_ENV_KEYS = frozenset({
 RUNNER_ENV_KEYS = frozenset({
     "C52_REVISION",
     "C52_MATRIX_CELL",
+    "C52_RUN_ID",
     "C52_TRACE_PATH",
     "C52_OVERLAY_HASH",
     "GOCACHE",
@@ -70,6 +71,9 @@ PATH_FALLBACKS = (
     "/usr/sbin",
     "/sbin",
 )
+
+FULL_PACKAGE = "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle"
+TEST_PARENT = "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer"
 
 
 def utc_now() -> str:
@@ -422,7 +426,13 @@ def first_failure(stdout: bytes, stderr: bytes) -> dict[str, object] | None:
     return None
 
 
-def parse_go_json(stdout_path: Path, required_tests: list[str], package: str, expected_count: int | None = None) -> dict[str, object]:
+def parse_go_json(
+    stdout_path: Path,
+    required_tests: list[str],
+    package: str,
+    expected_count: int | None = None,
+    binding: dict[str, object] | None = None,
+) -> dict[str, object]:
     events: list[dict[str, object]] = []
     invalid_lines: list[str] = []
     for raw in stdout_path.read_text(encoding="utf-8", errors="replace").splitlines():
@@ -434,6 +444,8 @@ def parse_go_json(stdout_path: Path, required_tests: list[str], package: str, ex
         if isinstance(value, dict):
             events.append(value)
     test_events: dict[str, dict[str, int]] = {}
+    required_test_terminal_actions: dict[str, list[dict[str, object]]] = {test: [] for test in required_tests}
+    action_package_mismatches: list[dict[str, object]] = []
     for event in events:
         test = event.get("Test")
         if not isinstance(test, str) or not test:
@@ -442,6 +454,16 @@ def parse_go_json(stdout_path: Path, required_tests: list[str], package: str, ex
         counts = test_events.setdefault(test, {"run": 0, "pass": 0, "fail": 0, "skip": 0})
         if action in counts:
             counts[action] += 1
+        if test in required_test_terminal_actions and action in {"pass", "fail", "skip"}:
+            event_package = event.get("Package")
+            if event_package != FULL_PACKAGE:
+                action_package_mismatches.append({"test": test, "action": action, "package": event_package})
+            required_test_terminal_actions[test].append({
+                "ordinal": len(required_test_terminal_actions[test]),
+                "action": action,
+                "package": event_package,
+                "test": test,
+            })
     selected = {test: test_events.get(test, {}).get("run", 0) for test in required_tests}
     package_events = [event for event in events if event.get("Package") == "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle" and not event.get("Test")]
     output = "\n".join(str(event.get("Output", "")) for event in events if event.get("Action") == "output")
@@ -459,8 +481,8 @@ def parse_go_json(stdout_path: Path, required_tests: list[str], package: str, ex
         test: required_pass_counts[test] + required_fail_counts[test]
         for test in required_tests
     }
-    relevant_names = sorted(name for name in test_events if name.startswith("TestRunnerRoutesTypedLivenessFaultAndPreservesPeer"))
-    expected_relevant_names = sorted({"TestRunnerRoutesTypedLivenessFaultAndPreservesPeer", *required_tests})
+    relevant_names = sorted(name for name in test_events if name.startswith(TEST_PARENT))
+    expected_relevant_names = sorted({TEST_PARENT, *required_tests})
     selection_valid = (
         requested_count is not None
         and requested_count > 0
@@ -471,6 +493,7 @@ def parse_go_json(stdout_path: Path, required_tests: list[str], package: str, ex
         and all(terminal_counts[test] == requested_count for test in required_tests)
         and all(required_skip_counts[test] == 0 for test in required_tests)
         and relevant_names == expected_relevant_names
+        and not action_package_mismatches
     )
     behavior_passed = (
         selection_valid
@@ -496,6 +519,9 @@ def parse_go_json(stdout_path: Path, required_tests: list[str], package: str, ex
         "no_tests_marker": no_tests_marker,
         "first_assertion": next((line for line in output.splitlines() if "browser_parity_test.go:" in line), ""),
         "package": package,
+        "required_test_terminal_actions": required_test_terminal_actions,
+        "action_package_mismatches": action_package_mismatches,
+        "raw_action_binding": binding,
     }
 
 
@@ -582,7 +608,7 @@ def overlay_replacements() -> list[tuple[str, list[tuple[str, str]]]]:
                 ),
                 (
                     "func runTypedLivenessCase(t *testing.T, classification string) {\n\tsilent := newFakeLiveHandle()",
-                    "func runTypedLivenessCase(t *testing.T, classification string) {\n\tc52Trace(\"case_started\", typedLivenessSilentID, map[string]string{\"classification\": classification})\n\tsilent := newFakeLiveHandle()",
+                    "func runTypedLivenessCase(t *testing.T, classification string) {\n\tc52Trace(\"case_started\", typedLivenessSilentID, map[string]string{\"classification\": classification, \"parent_test\": \"TestRunnerRoutesTypedLivenessFaultAndPreservesPeer\", \"subtest\": t.Name()})\n\tsilent := newFakeLiveHandle()",
                 ),
                 (
                     "\tresultCh := startTypedLivenessRun(ctx, &runner, sink, faultSeen, &faultOnce)\n\twaitForTypedLivenessFault(t, faultSeen)\n\tif got := peer.cancelCallsSnapshot(); got != 0 {",
@@ -744,6 +770,7 @@ def environment_for(
     cache_root: Path,
     overlay_hash: str,
     host_environment: Mapping[str, str] | None = None,
+    run_id: str | None = None,
 ) -> dict[str, str]:
     host = os.environ if host_environment is None else host_environment
     env = hermetic_base_environment(host, cache_root)
@@ -752,6 +779,8 @@ def environment_for(
     apply_declared_environment(env, cell.get("env", {}), f"matrix.cell[{cell.get('id')}].env")
     env["C52_REVISION"] = revision
     env["C52_MATRIX_CELL"] = str(cell["id"])
+    if run_id is not None:
+        env["C52_RUN_ID"] = run_id
     env["C52_TRACE_PATH"] = str(trace_path)
     env["C52_OVERLAY_HASH"] = overlay_hash
     env["GOCACHE"] = str(cache_root / "gocache")
@@ -828,7 +857,8 @@ def run_matrix(matrix: dict[str, object], repo: Path, run_dir: Path, aggregate_t
                 continue
             cell_dir = run_dir / "cells" / label / str(cell["id"])
             trace_path = cell_dir / "trace.jsonl"
-            env = environment_for(matrix, cell, revision, trace_path, cache_root, overlay_hash)
+            required_tests = required_tests_for(cell)
+            env = environment_for(matrix, cell, revision, trace_path, cache_root, overlay_hash, run_id=run_dir.name)
             command = actual_command(cell, matrix)
             timeout = float(matrix.get("race_child_timeout_seconds", 180) if cell.get("kind") == "race" else matrix.get("child_timeout_seconds", 90))
             remaining = max(1.0, deadline - time.monotonic())
@@ -836,9 +866,17 @@ def run_matrix(matrix: dict[str, object], repo: Path, run_dir: Path, aggregate_t
             process = run_bounded(command, module_root, env, timeout, int(matrix.get("output_cap_bytes", DEFAULT_OUTPUT_CAP)), cell_dir)
             parsed = parse_go_json(
                 cell_dir / "stdout.log",
-                required_tests_for(cell),
+                required_tests,
                 "./services/rooms/internal/lifecycle",
                 requested_count_for(cell),
+                {
+                    "revision": revision,
+                    "run_id": run_dir.name,
+                    "matrix_cell": str(cell["id"]),
+                    "package": FULL_PACKAGE,
+                    "parent_test": TEST_PARENT,
+                    "subtests": required_tests,
+                },
             )
             record = {
                 "attempt": 1,
@@ -954,13 +992,13 @@ def run_negative_controls(
         zero_dir = controls_dir / "zero-test-selection"
         zero_command = ["go", "test", "-json", "-tags=nomicrophone", "-count=1", "-run", "^C52NoSuchTest$", "./services/rooms/internal/lifecycle"]
         zero = run_bounded(zero_command, module_root, env, 45, int(matrix.get("output_cap_bytes", DEFAULT_OUTPUT_CAP)), zero_dir)
-        zero_parsed = parse_go_json(zero_dir / "stdout.log", ["TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"], "./services/rooms/internal/lifecycle", 1)
+        zero_parsed = parse_go_json(zero_dir / "stdout.log", [f"{TEST_PARENT}/provider_timeout"], "./services/rooms/internal/lifecycle", 1)
         controls["zero_test_selection"] = {"process": zero, "selection": zero_parsed, "rejected": int(zero_parsed["required_test_run_counts"]["TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"]) == 0}
     if time.monotonic() < deadline:
         wrong_dir = controls_dir / "wrong-package-selection"
         wrong_command = ["go", "test", "-json", "-tags=nomicrophone", "-count=1", "-run", "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$", "./services/session/internal/live"]
         wrong = run_bounded(wrong_command, module_root, env, 45, int(matrix.get("output_cap_bytes", DEFAULT_OUTPUT_CAP)), wrong_dir)
-        wrong_parsed = parse_go_json(wrong_dir / "stdout.log", ["TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"], "./services/session/internal/live", 1)
+        wrong_parsed = parse_go_json(wrong_dir / "stdout.log", [f"{TEST_PARENT}/provider_timeout"], "./services/session/internal/live", 1)
         controls["wrong_test_selection"] = {"process": wrong, "selection": wrong_parsed, "rejected": int(wrong_parsed["required_test_run_counts"]["TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"]) == 0}
     if time.monotonic() < deadline:
         survivor_dir = controls_dir / "survivor-process"
@@ -1050,8 +1088,11 @@ def main() -> int:
         raise SystemExit("matrix.json must be frozen before execution")
     repo = args.repo_root.resolve() if args.repo_root else Path(git_output(Path.cwd(), "rev-parse", "--show-toplevel"))
     dirty = allowed_worktree_dirty(repo)
-    owned_prefix = "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/"
-    outside = [path for path in dirty if not path.startswith(owned_prefix)]
+    owned_prefixes = (
+        "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/",
+        "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/",
+    )
+    outside = [path for path in dirty if not any(path.startswith(prefix) for prefix in owned_prefixes)]
     if outside:
         raise SystemExit(f"unexpected dirty paths outside C52 ownership: {outside}")
     run_id = args.run_id or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
