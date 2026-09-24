@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
+	roomevidencewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	roomswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
@@ -34,6 +36,7 @@ func TestServicePreservesHermeticTurnToTurnLatency(t *testing.T) {
 	outcome := run.waitOutcome(t)
 	assertPublicRoomLatencyOutcome(t, run, outcome)
 	assertPublicRoomLatencyReport(t, run)
+	assertPublicRoomEvidenceBundle(t, run)
 }
 
 type publicRoomLatencyRun struct {
@@ -65,7 +68,10 @@ func newPublicRoomLatencyRun(t *testing.T) *publicRoomLatencyRun {
 		fanouts:        make(chan publicRoomLatencyFanout, 8),
 	}
 	run.provider = newPublicRoomLatencyProvider([]string{run.speakerID, run.listenerID}, run.clock)
-	run.roomService = roomswire.NewService(roomswire.Dependencies{Live: &publicRoomLatencyLiveService{provider: run.provider}, Clock: run.clock})
+	run.roomService = roomswire.NewService(roomswire.Dependencies{
+		Live: &publicRoomLatencyLiveService{provider: run.provider}, Clock: run.clock,
+		Evidence: roomevidencewire.NewService(), Latency: roomevidencewire.NewLatencyService(),
+	})
 	run.manifest = runtimeRooms.Manifest{
 		SchemaVersion: runtimeRooms.SchemaVersion,
 		Room:          runtimeRooms.Room{MaxTurns: 2, MaxDuration: publicRoomLatencyTestTimeout},
@@ -188,25 +194,61 @@ func assertPublicRoomLatencyOutcome(t *testing.T, run *publicRoomLatencyRun, out
 
 func assertPublicRoomLatencyReport(t *testing.T, run *publicRoomLatencyRun) {
 	t.Helper()
-	report, err := roomswire.NewLatencyService().Report(run.outputDir)
+	report, err := roomevidencewire.NewLatencyService().Report(run.outputDir)
 	if err != nil {
 		t.Fatalf("read finalized room latency report: %v", err)
 	}
 	assertPublicRoomLatencyCounts(t, report)
 	assertPublicRoomLatencyTransitions(t, report)
-	bundle, err := roomswire.NewLatencyService().ReadBundle(filepath.Join(run.outputDir, runtimeRooms.RoomLatencyArtifactPath))
+	bundle, err := roomevidencewire.NewLatencyService().ReadBundle(filepath.Join(run.outputDir, roomevidence.LatencyPath))
 	if err != nil {
 		t.Fatalf("read finalized latency bundle: %v", err)
 	}
 	if len(bundle.Events) == 0 {
 		t.Fatal("finalized latency bundle has no events")
 	}
-	derived, err := roomswire.NewLatencyService().AnalyzeBundle(bundle)
+	derived, err := roomevidencewire.NewLatencyService().AnalyzeBundle(bundle)
 	if err != nil {
 		t.Fatalf("reanalyze finalized latency bundle: %v", err)
 	}
 	if derived.EligibleCount != report.EligibleCount || derived.Summary != report.Summary {
 		t.Fatalf("report is not reproducible from finalized bundle: read=%+v derived=%+v", report.Summary, derived.Summary)
+	}
+}
+
+func assertPublicRoomEvidenceBundle(t *testing.T, run *publicRoomLatencyRun) {
+	t.Helper()
+	evidence := roomevidencewire.NewService()
+	plan, err := evidence.LoadPlan(run.outputDir)
+	if err != nil {
+		t.Fatalf("load room-produced evidence without credentials: %v", err)
+	}
+	bundle, err := evidence.Load(plan)
+	if err != nil {
+		t.Fatalf("load room-produced evidence bundle: %v", err)
+	}
+	analysis, err := evidence.Analyze(bundle)
+	if err != nil {
+		t.Fatalf("analyze room-produced evidence bundle: %v", err)
+	}
+	if len(bundle.Participants) != len(run.manifest.Participants) {
+		t.Fatalf("room evidence participants = %d, want %d", len(bundle.Participants), len(run.manifest.Participants))
+	}
+	for _, participant := range bundle.Participants {
+		wantPCM := bytes.Repeat(run.pcmFixture, 2)
+		if participant.WAV.Role != roomevidence.RoomReplayAudioRoleWAV || !bytes.Equal(participant.WAV.PCM, wantPCM) {
+			t.Fatalf("participant %q WAV role=%q bytes=%d, want role %q and %d exact bytes", participant.ID, participant.WAV.Role, len(participant.WAV.PCM), roomevidence.RoomReplayAudioRoleWAV, len(wantPCM))
+		}
+		found := false
+		for _, stream := range analysis.Result.Streams {
+			if stream.StreamID == participant.WAV.StreamID {
+				found = stream.SampleCount == participant.WAV.SampleCount
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("analysis omitted exact WAV stream %q", participant.WAV.StreamID)
+		}
 	}
 }
 

@@ -4,17 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/evidence"
 	roommanifest "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/manifest"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 )
 
-func (r Runner) openParticipant(ctx context.Context, state *runState, participant rooms.Participant, request rooms.RoomRunOptions, recorder *evidence.Recorder) (*activeParticipant, error) {
+func (r Runner) openParticipant(ctx context.Context, state *runState, participant rooms.Participant, request rooms.RoomRunOptions, recorder roomevidence.Recorder) (*activeParticipant, error) {
 	kind := roommanifest.NormalizeParticipantKind(participant.Kind)
 	if kind == rooms.ParticipantKindHuman && request.ReplayPlan != nil {
 		return &activeParticipant{participant: participant, finished: make(chan struct{})}, nil
@@ -50,7 +51,7 @@ func humanParticipant(participant rooms.Participant, local rooms.MediaPorts) (*a
 	return &activeParticipant{participant: participant, media: local, finished: make(chan struct{})}, nil
 }
 
-func (r Runner) openAgent(ctx context.Context, state *runState, participant rooms.Participant, request rooms.RoomRunOptions, recorder *evidence.Recorder, local rooms.MediaPorts) (*activeParticipant, error) {
+func (r Runner) openAgent(ctx context.Context, state *runState, participant rooms.Participant, request rooms.RoomRunOptions, recorder roomevidence.Recorder, local rooms.MediaPorts) (*activeParticipant, error) {
 	liveRequest := newLiveRequest(participant)
 	release, err := r.configureCapabilities(ctx, participant, request, &liveRequest)
 	if err != nil {
@@ -64,7 +65,9 @@ func (r Runner) openAgent(ctx context.Context, state *runState, participant room
 		liveRequest.Replay = replay
 	}
 	if recorder != nil && strings.TrimSpace(liveRequest.Replay.OutputCapturePath) == "" {
-		liveRequest.Replay.OutputCapturePath = recorder.CapturePath(participant.ID)
+		if artifact := recorder.Artifacts(participant.ID).Capture; artifact != "" {
+			liveRequest.Replay.OutputCapturePath = filepath.Join(recorder.Destination(), artifact)
+		}
 	}
 	return r.admitLive(ctx, state, participant, request, local, liveRequest, release)
 }

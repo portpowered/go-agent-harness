@@ -10,6 +10,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
@@ -87,11 +88,12 @@ func roomFormatForOptions(opts RoomRunOptions) room.PCM16Format {
 	return format
 }
 
-func roomParticipantEvidenceForRuntime(evidence *roomEvidence, runtime *roomParticipantRuntime) *roomParticipantEvidence {
-	if evidence == nil {
-		return nil
+func roomMixerConfigForOptions(opts RoomRunOptions) room.PCM16MixerConfig {
+	config := opts.MixerConfig
+	if config.Format == (room.PCM16Format{}) {
+		config.Format = room.DefaultPCM16Format()
 	}
-	return evidence.participant(runtime.plan.manifest.ID)
+	return config
 }
 
 func configureRoomParticipantBrowserOptions(ctx context.Context, opts RoomRunOptions, participant room.Participant, plan *roomParticipantPlan, sessionOptions SessionRunOptions, staticCapabilities RoomParticipantToolCapabilities, secret string) (SessionRunOptions, bool, error) {
@@ -194,7 +196,7 @@ func closeRoomParticipantDevices(runtime *roomParticipantRuntime, cleanup *roomC
 	return boundedRoomCleanupOperation(cleanup, roomLifecycleWorkLabel(id, "devices"), runtime.deviceHandle.Close)
 }
 
-func runRoomHumanCapture(ctx, roomCtx context.Context, coordinator *roomCoordinator, runtime *roomParticipantRuntime, startGate <-chan struct{}, participantEvidence *roomParticipantEvidence, opts RoomRunOptions, secrets []string) error {
+func runRoomHumanCapture(ctx, roomCtx context.Context, coordinator *roomCoordinator, runtime *roomParticipantRuntime, startGate <-chan struct{}, evidence roomevidence.Recorder, opts RoomRunOptions, secrets []string) error {
 	if runtime == nil || runtime.plan == nil || runtime.input == nil || runtime.mixer == nil {
 		return errors.New("human participant input device is not ready")
 	}
@@ -206,7 +208,7 @@ func runRoomHumanCapture(ctx, roomCtx context.Context, coordinator *roomCoordina
 		return nil
 	}
 	participantID := runtime.plan.manifest.ID
-	media := &roomHumanCaptureMedia{coordinator: coordinator, runtime: runtime, opts: opts, evidence: participantEvidence, secrets: secrets}
+	media := &roomHumanCaptureMedia{coordinator: coordinator, runtime: runtime, opts: opts, evidence: evidence, secrets: secrets}
 	if err := runtime.input.Pump(ctx, media); err != nil {
 		if ctx.Err() != nil || coordinator.isStopping() || errors.Is(err, context.Canceled) {
 			return nil //nolint:nilerr // participant and room shutdown are expected cancellation paths
@@ -218,7 +220,7 @@ func runRoomHumanCapture(ctx, roomCtx context.Context, coordinator *roomCoordina
 	return nil
 }
 
-func pumpRoomHumanOutput(ctx, roomCtx context.Context, coordinator *roomCoordinator, runtime *roomParticipantRuntime, startGate <-chan struct{}, participantEvidence *roomParticipantEvidence, secrets []string) {
+func pumpRoomHumanOutput(ctx, roomCtx context.Context, coordinator *roomCoordinator, runtime *roomParticipantRuntime, startGate <-chan struct{}, evidence roomevidence.Recorder, secrets []string) {
 	if runtime == nil || runtime.mixer == nil || runtime.output == nil {
 		return
 	}
@@ -229,7 +231,7 @@ func pumpRoomHumanOutput(ctx, roomCtx context.Context, coordinator *roomCoordina
 	case <-roomCtx.Done():
 		return
 	}
-	media := newRoomHumanPlaybackMedia(runtime, participantEvidence)
+	media := newRoomHumanPlaybackMedia(runtime, evidence)
 	err := runtime.output.Pump(ctx, media)
 	if finishErr := media.finish(); finishErr != nil {
 		err = errors.Join(err, finishErr)
@@ -244,7 +246,7 @@ type roomHumanCaptureMedia struct {
 	coordinator *roomCoordinator
 	runtime     *roomParticipantRuntime
 	opts        RoomRunOptions
-	evidence    *roomParticipantEvidence
+	evidence    roomevidence.Recorder
 	secrets     []string
 }
 
@@ -260,9 +262,7 @@ func (m *roomHumanCaptureMedia) WriteFrame(ctx context.Context, frame audio.PCMF
 	}
 	pcm := encodeRoomPCM16(frame.Samples)
 	if m.evidence != nil {
-		if err := m.evidence.observeSentAudio(ctx, pcm); err != nil {
-			return fmt.Errorf("record human capture evidence: %w", err)
-		}
+		m.evidence.MarkError(participantID, "", m.evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationSentAudio, ParticipantID: participantID, PCM: pcm}))
 	}
 	sourceRate := m.runtime.mixer.Format().SampleRate
 	return m.fanOutPCM(ctx, participantID, pcm, sourceRate)
@@ -317,14 +317,14 @@ func (m *roomHumanCaptureMedia) convertPCMForTarget(ctx context.Context, sourceR
 
 type roomHumanPlaybackMedia struct {
 	runtime  *roomParticipantRuntime
-	evidence *roomParticipantEvidence
+	evidence roomevidence.Recorder
 
 	pending bool
 	sources []string
 	pcm     []byte
 }
 
-func newRoomHumanPlaybackMedia(runtime *roomParticipantRuntime, evidence *roomParticipantEvidence) *roomHumanPlaybackMedia {
+func newRoomHumanPlaybackMedia(runtime *roomParticipantRuntime, evidence roomevidence.Recorder) *roomHumanPlaybackMedia {
 	return &roomHumanPlaybackMedia{runtime: runtime, evidence: evidence}
 }
 
@@ -372,7 +372,8 @@ func (m *roomHumanPlaybackMedia) resolvePending(accepted bool) error {
 	}
 	var err error
 	if accepted && m.evidence != nil {
-		err = m.evidence.observeReceivedAudio(m.pcm)
+		participantID := m.runtime.plan.manifest.ID
+		m.evidence.MarkError(participantID, m.evidence.Artifacts(participantID).ReceivedPCM, m.evidence.Observe(roomevidence.Observation{Kind: roomevidence.ObservationReceivedParticipantAudio, ParticipantID: participantID, PCM: m.pcm}))
 	}
 	m.pending = false
 	m.sources = nil

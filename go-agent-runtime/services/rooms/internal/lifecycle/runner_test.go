@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -98,26 +97,6 @@ func TestRunnerPassesOpeningPromptAndReplayCaptureToLive(t *testing.T) {
 		if request.Replay.Timing != session.LiveReplayTimingFast {
 			t.Errorf("%s replay timing = %q, want fast", request.SessionID, request.Replay.Timing)
 		}
-	}
-}
-
-func TestRunnerRecordsBoundedRoomEvidenceThroughGraphLifecycle(t *testing.T) {
-	service := &fakeLiveService{handles: map[string]*fakeLiveHandle{
-		"alice": newFakeLiveHandle(),
-		"bob":   newFakeLiveHandle(),
-	}}
-	output := t.TempDir()
-	clock := platformclock.NewDeterministic(time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC), time.Millisecond)
-	runner := New(Dependencies{Live: service, Clock: clock})
-	result, err := runner.Run(context.Background(), nil, rooms.RoomRunOptions{Manifest: testManifest(), OutputDir: output})
-	if err != nil {
-		t.Fatalf("Run error = %v", err)
-	}
-	if result.RecordingStatus != nil {
-		t.Fatalf("recording status = %+v, want healthy evidence", result.RecordingStatus)
-	}
-	if _, err := os.Stat(filepath.Join(output, rooms.RoomReplayBundleManifestPath)); err != nil {
-		t.Fatalf("runner evidence manifest missing: %v", err)
 	}
 }
 

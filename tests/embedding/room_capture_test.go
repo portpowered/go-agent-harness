@@ -9,7 +9,8 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	replaywire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
+	roomevidencewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
+	captureReplayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
 	runtimeRoomReplayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	roomswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
@@ -21,7 +22,7 @@ import (
 func TestExternalRoomRejectsMissingProviderTrace(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	scheduler := clock.NewDeterministic(time.Unix(123, 0), time.Millisecond)
+	scheduler := clock.NewDeterministic(time.Unix(1_700_000_000, 0), time.Millisecond)
 	live := sessionwire.NewLiveService(sessionwire.LiveDependencies{
 		Clock:     scheduler.Now,
 		Scheduler: scheduler,
@@ -29,7 +30,10 @@ func TestExternalRoomRejectsMissingProviderTrace(t *testing.T) {
 			return newEmbeddedLiveProvider(), nil
 		},
 	})
-	host := roomswire.NewService(roomswire.Dependencies{Clock: scheduler, Live: live, Replay: runtimeRoomReplayWire.NewService(replaywire.NewService())})
+	host := roomswire.NewService(roomswire.Dependencies{
+		Clock: scheduler, Live: live, Replay: runtimeRoomReplayWire.NewService(captureReplayWire.NewService()),
+		Evidence: roomevidencewire.NewService(), Latency: roomevidencewire.NewLatencyService(),
+	})
 	manifest := rooms.Manifest{SchemaVersion: rooms.SchemaVersion, Room: rooms.Room{MaxDuration: time.Second}}
 	for _, id := range []string{"alice", "bob"} {
 		manifest.Participants = append(manifest.Participants, rooms.Participant{ID: id, SystemPrompt: "agent", OpeningPrompt: "start", Provider: "fixture", Model: "fixture", APIKeyEnv: "UNRESOLVED_TEST_SELECTOR", Tools: []string{}})

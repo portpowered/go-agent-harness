@@ -492,8 +492,8 @@ func TestRunRoomWithResult_BidirectionalOverlapRecordsPeerOnlyEvidence(t *testin
 	t.Cleanup(cancel)
 	responseAudioRelease := make(chan struct{})
 
-	opts := RoomRunOptions{
-		AudioService: newTestAudioIOService(), RecordingService: newTestRecordingService(), ProviderCaptureService: newTestProviderCaptureService(), ReplayMessageCodec: newTestReplayService(), Manifest: manifest,
+	opts := withRoomTestEvidence(RoomRunOptions{
+		AudioService: newTestAudioIOService(), Manifest: manifest,
 		ConfigDir: configDir, ModelCatalog: testModelCatalog(),
 		OutputDir:   outputDir,
 		BaseURL:     "wss://room-replay.invalid/v1/realtime",
@@ -535,7 +535,7 @@ func TestRunRoomWithResult_BidirectionalOverlapRecordsPeerOnlyEvidence(t *testin
 			}
 			diagnosticMu.Unlock()
 		},
-	}
+	})
 	runDone := make(chan roomTestRunOutcome, 1)
 	go func() {
 		result, err := RunRoomWithResult(roomCtx, io.Discard, opts)
