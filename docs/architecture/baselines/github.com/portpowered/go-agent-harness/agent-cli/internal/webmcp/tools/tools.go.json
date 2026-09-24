@@ -7,16 +7,6 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/tools",
       "file": "internal/webmcp/tools/tools.go",
-      "symbol": "*BrokerToolSet.executeValidated",
-      "value": 44,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/tools",
-      "file": "internal/webmcp/tools/tools.go",
       "symbol": "*Executor.Execute",
       "value": 21,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
@@ -58,7 +48,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/tools",
       "file": "internal/webmcp/tools/tools.go",
       "symbol": "*BrokerToolSet.executeValidated",
-      "value": 35,
+      "value": 17,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -87,27 +77,7 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/tools",
       "file": "internal/webmcp/tools/tools.go",
-      "value": 1065,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "function-lines",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/tools",
-      "file": "internal/webmcp/tools/tools.go",
-      "symbol": "*BrokerToolSet.executeValidated",
-      "value": 160,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "function-statements",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/tools",
-      "file": "internal/webmcp/tools/tools.go",
-      "symbol": "*BrokerToolSet.executeValidated",
-      "value": 78,
+      "value": 989,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     }

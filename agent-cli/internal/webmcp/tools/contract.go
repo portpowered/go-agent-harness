@@ -16,6 +16,9 @@ type ToolResultIssue = runtimeTools.ToolResultIssue
 type ToolResultError = runtimeTools.ToolResultError
 type ToolResultEnvelope = runtimeTools.ToolResultEnvelope
 
+// Result serialization is owned by the reusable tools service. These aliases
+// keep this CLI package source-compatible for its Lane B adapter and tests
+// while avoiding a second envelope implementation.
 type ResultEnvelope = runtimeTools.ResultEnvelope
 type ResultError = runtimeTools.ResultError
 type ResultIssue = runtimeTools.ResultIssue

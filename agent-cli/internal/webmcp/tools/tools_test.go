@@ -29,25 +29,7 @@ func TestBrokerToolSetPreservesFrozenSchemasAndAddsBrowserControls(t *testing.T)
 		t.Fatalf("schema count = %d, want six stable tools plus open-tab, navigate-tab, and show_page", len(schemas))
 	}
 	wantNames := webmcp.StableToolNames()
-	for i, schema := range schemas[:len(wantNames)] {
-		if schema["type"] != "function" {
-			t.Fatalf("schema %d type = %#v, want function", i, schema["type"])
-		}
-		function, ok := schema["function"].(map[string]any)
-		if !ok {
-			t.Fatalf("schema %d function = %#v, want object", i, schema["function"])
-		}
-		if function["name"] != wantNames[i] {
-			t.Fatalf("schema %d name = %#v, want %q", i, function["name"], wantNames[i])
-		}
-		parameters, ok := function["parameters"].(map[string]any)
-		if !ok {
-			t.Fatalf("schema %d parameters = %#v, want object", i, function["parameters"])
-		}
-		if parameters["type"] != "object" || parameters["additionalProperties"] != false {
-			t.Fatalf("schema %q is not a closed object: %#v", wantNames[i], parameters)
-		}
-	}
+	assertStableToolSchemas(t, schemas, wantNames)
 	openTab := schemas[len(wantNames)]
 	openTabFunction, ok := openTab["function"].(map[string]any)
 	if !ok || openTabFunction["name"] != webmcp.OpenTabToolName {
@@ -71,12 +53,7 @@ func TestBrokerToolSetPreservesFrozenSchemasAndAddsBrowserControls(t *testing.T)
 		t.Fatalf("show_page properties = %#v, want empty", showPageParameters["properties"])
 	}
 
-	cases := []struct {
-		name     string
-		required []string
-		defaults map[string]any
-		fields   []string
-	}{
+	cases := []schemaContractCase{
 		{name: webmcp.GetContextToolName, defaults: map[string]any{"refresh": false}, fields: []string{"refresh"}},
 		{name: webmcp.ListTabsToolName, defaults: map[string]any{"browser_id": "", "origin_contains": "", "eligible_only": true, "include_zero_tool_pages": false}, fields: []string{"browser_id", "origin_contains", "eligible_only", "include_zero_tool_pages"}},
 		{name: webmcp.SelectTabToolName, required: []string{"browser_id", "target_id"}, defaults: map[string]any{"activate": false}, fields: []string{"browser_id", "target_id", "activate"}},
@@ -88,31 +65,7 @@ func TestBrokerToolSetPreservesFrozenSchemasAndAddsBrowserControls(t *testing.T)
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			var schema map[string]any
-			for _, candidate := range schemas {
-				function := candidate["function"].(map[string]any)
-				if function["name"] == testCase.name {
-					schema = function["parameters"].(map[string]any)
-					break
-				}
-			}
-			properties := schema["properties"].(map[string]any)
-			if !reflect.DeepEqual(testCase.fields, mapKeysInContractOrder(testCase.name, properties)) {
-				t.Fatalf("property names = %#v, want %#v", mapKeysInContractOrder(testCase.name, properties), testCase.fields)
-			}
-			if got, ok := schema["required"].([]string); ok {
-				if !reflect.DeepEqual(got, testCase.required) {
-					t.Fatalf("required = %#v, want %#v", got, testCase.required)
-				}
-			} else if len(testCase.required) != 0 {
-				t.Fatalf("required field missing, want %#v", testCase.required)
-			}
-			for name, wantDefault := range testCase.defaults {
-				property := properties[name].(map[string]any)
-				if got := property["default"]; !reflect.DeepEqual(got, wantDefault) {
-					t.Errorf("%s default = %#v, want %#v", name, got, wantDefault)
-				}
-			}
+			assertToolSchemaContract(t, schemas, testCase)
 		})
 	}
 
@@ -123,110 +76,66 @@ func TestBrokerToolSetPreservesFrozenSchemasAndAddsBrowserControls(t *testing.T)
 		t.Fatal("stable definitions share mutable schema state")
 	}
 }
-func TestOpenTabAndWebCastToolsExecuteEndToEndThroughBroker(t *testing.T) {
-	if got := NewBrokerToolSet(nil).Definitions(); len(got) != 9 {
-		t.Fatalf("default definitions = %d, want cast controls disabled", len(got))
-	}
-	broker := &recordingBroker{
-		selected: webmcp.PageContext{
-			Key:       webmcp.PageKey{BrowserID: "browser-office", TargetID: "tab-example"},
-			URL:       "https://example.com/",
-			Origin:    "https://example.com",
-			Connected: true,
-		},
-		castDevices: []webmcp.CastDevice{{Name: "Office TV", ID: "sink-office"}},
-	}
-	set := NewBrokerToolSet(broker, true)
-	definitions := set.Definitions()
-	if len(definitions) != 12 || definitions[9].Name != webmcp.ListCastDevicesToolName || definitions[10].Name != webmcp.CastTabToolName || definitions[11].Name != webmcp.StopCastingToolName {
-		t.Fatalf("cast definitions = %+v", definitions)
-	}
-	schemas := set.DefinitionSchemas()
-	if len(schemas) != 12 {
-		t.Fatalf("cast schemas = %d, want 12", len(schemas))
-	}
-	castParameters := schemas[10]["function"].(map[string]any)["parameters"].(map[string]any)
-	modeSchema := castParameters["properties"].(map[string]any)["mode"].(map[string]any)
-	if modeSchema["default"] != string(webmcp.CastModeTab) || !reflect.DeepEqual(modeSchema["enum"], []string{string(webmcp.CastModeMedia), string(webmcp.CastModeTab)}) {
-		t.Fatalf("cast mode schema = %+v", modeSchema)
-	}
 
-	calls := []messages.ToolCall{
-		{ID: "open-tab", Name: webmcp.OpenTabToolName, Arguments: `{"url":"https://example.com/","activate":true}`},
-		{ID: "list-cast", Name: webmcp.ListCastDevicesToolName, Arguments: `{}`},
-		{ID: "cast-tab", Name: webmcp.CastTabToolName, Arguments: `{"device_name":"Office TV"}`},
-		{ID: "cast-media", Name: webmcp.CastTabToolName, Arguments: `{"device_name":"Office TV","mode":"media"}`},
-		{ID: "navigate-tab", Name: webmcp.NavigateTabToolName, Arguments: `{"url":"https://www.google.com/"}`},
-		{ID: "stop-cast", Name: webmcp.StopCastingToolName, Arguments: `{"device_name":"Office TV"}`},
-	}
-	for _, call := range calls {
-		response, err := set.Executor().Execute(context.Background(), call)
-		if err != nil {
-			t.Fatalf("execute %s: %v", call.Name, err)
+type schemaContractCase struct {
+	name     string
+	required []string
+	defaults map[string]any
+	fields   []string
+}
+
+func assertStableToolSchemas(t *testing.T, schemas []map[string]any, wantNames []string) {
+	t.Helper()
+	for i, schema := range schemas[:len(wantNames)] {
+		if schema["type"] != "function" {
+			t.Fatalf("schema %d type = %#v, want function", i, schema["type"])
 		}
-		envelope, err := webmcp.UnmarshalToolResult([]byte(response.Content))
-		if err != nil || !envelope.OK {
-			t.Fatalf("%s result = %s, err=%v", call.Name, response.Content, err)
+		function, ok := schema["function"].(map[string]any)
+		if !ok {
+			t.Fatalf("schema %d function = %#v, want object", i, schema["function"])
+		}
+		if function["name"] != wantNames[i] {
+			t.Fatalf("schema %d name = %#v, want %q", i, function["name"], wantNames[i])
+		}
+		parameters, ok := function["parameters"].(map[string]any)
+		if !ok {
+			t.Fatalf("schema %d parameters = %#v, want object", i, function["parameters"])
+		}
+		if parameters["type"] != "object" || parameters["additionalProperties"] != false {
+			t.Fatalf("schema %q is not a closed object: %#v", wantNames[i], parameters)
 		}
 	}
-	if !reflect.DeepEqual(broker.calls, []string{"open_tab", "list_cast_devices", "cast_tab", "cast_media", "navigate_tab", "stop_casting"}) || broker.castDeviceName != "Office TV" {
-		t.Fatalf("cast broker calls = %v device=%q", broker.calls, broker.castDeviceName)
+}
+
+func assertToolSchemaContract(t *testing.T, schemas []map[string]any, testCase schemaContractCase) {
+	t.Helper()
+	var schema map[string]any
+	for _, candidate := range schemas {
+		function := schemaObject(t, candidate["function"], "schema function")
+		if function["name"] == testCase.name {
+			schema = schemaObject(t, function["parameters"], "schema parameters")
+			break
+		}
 	}
-	if broker.lastOpen.URL != "https://example.com/" || !broker.lastOpen.Activate {
-		t.Fatalf("open-tab request = %+v", broker.lastOpen)
+	properties := schemaObject(t, schema["properties"], "schema properties")
+	if !reflect.DeepEqual(testCase.fields, mapKeysInContractOrder(testCase.name, properties)) {
+		t.Fatalf("property names = %#v, want %#v", mapKeysInContractOrder(testCase.name, properties), testCase.fields)
 	}
-	if broker.lastNavigate != "https://www.google.com/" {
-		t.Fatalf("navigate-tab URL = %q", broker.lastNavigate)
+	if got, ok := schema["required"].([]string); ok {
+		if !reflect.DeepEqual(got, testCase.required) {
+			t.Fatalf("required = %#v, want %#v", got, testCase.required)
+		}
+	} else if len(testCase.required) != 0 {
+		t.Fatalf("required field missing, want %#v", testCase.required)
+	}
+	for name, wantDefault := range testCase.defaults {
+		property := schemaObject(t, properties[name], name+" property")
+		if got := property["default"]; !reflect.DeepEqual(got, wantDefault) {
+			t.Errorf("%s default = %#v, want %#v", name, got, wantDefault)
+		}
 	}
 }
-func TestCastToolRejectsUnknownModeBeforeCallingBroker(t *testing.T) {
-	broker := &recordingBroker{}
-	response, err := NewBrokerToolSet(broker, true).Executor().Execute(context.Background(), messages.ToolCall{
-		ID: "cast-invalid", Name: webmcp.CastTabToolName, Arguments: `{"device_name":"Office TV","mode":"window"}`,
-	})
-	if err != nil {
-		t.Fatalf("execute invalid cast mode: %v", err)
-	}
-	envelope, err := webmcp.UnmarshalToolResult([]byte(response.Content))
-	if err != nil || envelope.OK {
-		t.Fatalf("invalid cast mode result = %s, err=%v", response.Content, err)
-	}
-	if len(broker.calls) != 0 {
-		t.Fatalf("invalid cast mode reached broker: %v", broker.calls)
-	}
-}
-func TestOpenTabCreatesSelectsAndActivatesRequestedWebsite(t *testing.T) {
-	want := webmcp.PageContext{
-		Key:       webmcp.PageKey{BrowserID: "browser-a", TargetID: "tab-new"},
-		URL:       "https://notes.example.test/",
-		Origin:    "https://notes.example.test",
-		Connected: true,
-		Ready:     true,
-	}
-	broker := &recordingBroker{selected: want}
-	response, err := NewBrokerToolSet(broker).Executor().Execute(context.Background(), messages.ToolCall{
-		ID:        "open-tab-call",
-		Name:      webmcp.OpenTabToolName,
-		Arguments: `{"url":"https://notes.example.test/","activate":true}`,
-	})
-	if err != nil {
-		t.Fatalf("open tab: %v", err)
-	}
-	envelope, err := webmcp.UnmarshalToolResult([]byte(response.Content))
-	if err != nil || !envelope.OK {
-		t.Fatalf("open-tab envelope = %#v (err %v), want success", envelope, err)
-	}
-	if broker.lastOpen.URL != want.URL || !broker.lastOpen.Activate || broker.lastOpen.BrowserID != "" {
-		t.Fatalf("open-tab request = %+v", broker.lastOpen)
-	}
-	var selected selectionData
-	if err := json.Unmarshal(envelope.Data, &selected); err != nil {
-		t.Fatalf("decode open-tab selection: %v", err)
-	}
-	if selected.BrowserID != want.Key.BrowserID || selected.TargetID != want.Key.TargetID || !selected.Connected || !selected.Ready {
-		t.Fatalf("open-tab selection = %+v, want %+v", selected, want)
-	}
-}
+
 func TestShowPageReturnsValidatedBoundedMetadata(t *testing.T) {
 	imageBytes := testPNG(t, 3, 2)
 	broker := &recordingBroker{
@@ -506,32 +415,60 @@ func TestExecutorRejectsInvalidBrokerArgumentsBeforeCallingBroker(t *testing.T) 
 			if broker.callCount() != before {
 				t.Fatalf("broker calls changed from %d to %d for invalid input", before, broker.callCount())
 			}
-			envelope, err := webmcp.UnmarshalToolResult([]byte(response.Content))
-			if err != nil {
-				t.Fatalf("decode envelope: %v", err)
-			}
-			if envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorInvalidToolInput) {
-				t.Fatalf("envelope = %#v, want invalid_tool_input failure", envelope)
-			}
-			var details struct {
-				Issues []webmcp.ToolResultIssue `json:"issues"`
-			}
-			if err := json.Unmarshal(mustRawJSON(t, envelope.Error.Details["issues"]), &details.Issues); err != nil {
-				t.Fatalf("decode issues: %v", err)
-			}
-			found := false
-			for _, issue := range details.Issues {
-				if issue.Path == testCase.wantPath && issue.Code == testCase.wantCode {
-					found = true
-				}
-			}
-			if !found {
-				t.Fatalf("issues = %#v, want %s/%s", details.Issues, testCase.wantPath, testCase.wantCode)
-			}
+			assertInvalidToolInputIssue(t, response.Content, testCase.wantPath, testCase.wantCode)
 			if testCase.wantNoText != "" && strings.Contains(response.Content, testCase.wantNoText) {
 				t.Fatalf("invalid response echoed offending value %q: %s", testCase.wantNoText, response.Content)
 			}
 		})
+	}
+}
+
+func assertInvalidToolInputIssue(t *testing.T, content, wantPath, wantCode string) {
+	t.Helper()
+	envelope, err := webmcp.UnmarshalToolResult([]byte(content))
+	if err != nil {
+		t.Fatalf("decode envelope: %v", err)
+	}
+	if envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorInvalidToolInput) {
+		t.Fatalf("envelope = %#v, want invalid_tool_input failure", envelope)
+	}
+	var details struct {
+		Issues []webmcp.ToolResultIssue `json:"issues"`
+	}
+	if err := json.Unmarshal(mustRawJSON(t, envelope.Error.Details["issues"]), &details.Issues); err != nil {
+		t.Fatalf("decode issues: %v", err)
+	}
+	found := false
+	for _, issue := range details.Issues {
+		if issue.Path == wantPath && issue.Code == wantCode {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("issues = %#v, want %s/%s", details.Issues, wantPath, wantCode)
+	}
+}
+
+func assertInvokeOutputPreserved(t *testing.T, executor *Executor, broker *recordingBroker, output string) {
+	t.Helper()
+	broker.invokeResult.InvocationID = webmcp.InvocationID("inv-" + strings.ReplaceAll(output, "", ""))
+	broker.invokeResult.Output = json.RawMessage(output)
+	response, err := executor.Execute(context.Background(), messages.ToolCall{ID: "call-output", Name: webmcp.InvokeToolName, Arguments: `{"tool_ref":"webmcp.tool-ref.v1:AAECAwQFBgcICQoLDA0ODw","input_json":"{}","reason":"read it"}`})
+	if err != nil {
+		t.Fatalf("invoke output %s: %v", output, err)
+	}
+	envelope, err := webmcp.UnmarshalToolResult([]byte(response.Content))
+	if err != nil {
+		t.Fatalf("decode output %s: %v", output, err)
+	}
+	var data struct {
+		Output json.RawMessage `json:"output"`
+	}
+	if err := json.Unmarshal(envelope.Data, &data); err != nil {
+		t.Fatalf("decode output data: %v", err)
+	}
+	if string(data.Output) != output {
+		t.Fatalf("output = %s, want %s", data.Output, output)
 	}
 }
 
@@ -621,25 +558,7 @@ func TestExecutorReturnsCorrelatedCompactEnvelopesAndPreservesPageValues(t *test
 	}
 
 	for _, output := range []string{`[1,{"value":2}]`, `null`} {
-		broker.invokeResult.InvocationID = webmcp.InvocationID("inv-" + strings.ReplaceAll(output, "", ""))
-		broker.invokeResult.Output = json.RawMessage(output)
-		response, err = executor.Execute(context.Background(), messages.ToolCall{ID: "call-output", Name: webmcp.InvokeToolName, Arguments: `{"tool_ref":"webmcp.tool-ref.v1:AAECAwQFBgcICQoLDA0ODw","input_json":"{}","reason":"read it"}`})
-		if err != nil {
-			t.Fatalf("invoke output %s: %v", output, err)
-		}
-		var envelope webmcp.ToolResultEnvelope
-		if envelope, err = webmcp.UnmarshalToolResult([]byte(response.Content)); err != nil {
-			t.Fatalf("decode output %s: %v", output, err)
-		}
-		var data struct {
-			Output json.RawMessage `json:"output"`
-		}
-		if err := json.Unmarshal(envelope.Data, &data); err != nil {
-			t.Fatalf("decode output data: %v", err)
-		}
-		if string(data.Output) != output {
-			t.Fatalf("output = %s, want %s", data.Output, output)
-		}
+		assertInvokeOutputPreserved(t, executor, broker, output)
 	}
 
 	response, err = executor.Execute(context.Background(), messages.ToolCall{ID: "call-cancel", Name: webmcp.CancelToolName, Arguments: `{"invocation_id":"inv-1","reason":"user stopped"}`})

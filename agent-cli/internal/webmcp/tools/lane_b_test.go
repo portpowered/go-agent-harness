@@ -178,32 +178,37 @@ func TestLaneBInputValidationHasNoDiscoverySideEffects(t *testing.T) {
 			if fake.callCount() != before {
 				t.Fatalf("discovery calls changed from %d to %d", before, fake.callCount())
 			}
-			envelope, err := UnmarshalToolResult([]byte(response.Content))
-			if err != nil {
-				t.Fatalf("decode result: %v", err)
-			}
-			if envelope.OK || envelope.Error == nil || envelope.Error.Code != string(ErrorInvalidToolInput) {
-				t.Fatalf("envelope = %#v, want invalid_tool_input", envelope)
-			}
-			var details struct {
-				Issues []ToolResultIssue `json:"issues"`
-			}
-			if err := json.Unmarshal(mustJSON(t, envelope.Error.Details["issues"]), &details.Issues); err != nil {
-				t.Fatalf("decode issues: %v", err)
-			}
-			found := false
-			for _, issue := range details.Issues {
-				if issue.Path == testCase.path && issue.Code == testCase.code {
-					found = true
-				}
-			}
-			if !found {
-				t.Fatalf("issues = %#v, want %s/%s", details.Issues, testCase.path, testCase.code)
-			}
+			assertLaneBInvalidInputIssue(t, response.Content, testCase.path, testCase.code)
 			if strings.Contains(response.Content, "not returned") || strings.Contains(response.Content, "bad/id") {
 				t.Fatalf("invalid input echoed into result: %s", response.Content)
 			}
 		})
+	}
+}
+
+func assertLaneBInvalidInputIssue(t *testing.T, content, wantPath, wantCode string) {
+	t.Helper()
+	envelope, err := UnmarshalToolResult([]byte(content))
+	if err != nil {
+		t.Fatalf("decode result: %v", err)
+	}
+	if envelope.OK || envelope.Error == nil || envelope.Error.Code != string(ErrorInvalidToolInput) {
+		t.Fatalf("envelope = %#v, want invalid_tool_input", envelope)
+	}
+	var details struct {
+		Issues []ToolResultIssue `json:"issues"`
+	}
+	if err := json.Unmarshal(mustJSON(t, envelope.Error.Details["issues"]), &details.Issues); err != nil {
+		t.Fatalf("decode issues: %v", err)
+	}
+	found := false
+	for _, issue := range details.Issues {
+		if issue.Path == wantPath && issue.Code == wantCode {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("issues = %#v, want %s/%s", details.Issues, wantPath, wantCode)
 	}
 }
 
@@ -528,4 +533,25 @@ func equalStrings(left, right []string) bool {
 		}
 	}
 	return true
+}
+
+func TestLaneBGetContextReportsNoPageSelected(t *testing.T) {
+	response, err := New(Options{Service: &fakeDiscovery{}}).Executor().Execute(context.Background(), messages.ToolCall{
+		ID:        "lane-b-no-page",
+		Name:      GetContextToolName,
+		Arguments: `{}`,
+	})
+	if err != nil {
+		t.Fatalf("get context without selection: %v", err)
+	}
+	envelope, err := UnmarshalToolResult([]byte(response.Content))
+	if err != nil {
+		t.Fatalf("decode no-page context: %v", err)
+	}
+	if envelope.OK || envelope.Error == nil || envelope.Error.Code != string(ErrorStaleSelection) || envelope.Error.Message != "no page is selected" {
+		t.Fatalf("no-page context envelope = %+v, want truthful no-selection failure", envelope)
+	}
+	if details := envelope.Error.Details; details["browser_id"] != "" || details["target_id"] != "" || details["selected_generation"] != float64(0) || details["reason"] != "selection_not_connected" {
+		t.Fatalf("no-page context details = %#v, want empty identity at generation zero", details)
+	}
 }
