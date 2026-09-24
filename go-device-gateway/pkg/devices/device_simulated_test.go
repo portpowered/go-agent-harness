@@ -110,7 +110,7 @@ func TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum(t *testing.T) {
 			}
 			trace := r.Trace()
 			for i, event := range trace {
-				if i%2 == 0 && event.Tap != "render" {
+				if i%2 == 0 && event.Tap != duplexTapRender {
 					t.Fatalf("event ordering = %+v", trace)
 				}
 			}
@@ -153,7 +153,7 @@ func TestSimulatedDuplexClockJitterFaultsAndEpochsAreDeterministic(t *testing.T)
 	}
 	var renders []DeviceTraceEvent
 	for _, event := range r.Trace() {
-		if event.Tap == "render" {
+		if event.Tap == duplexTapRender {
 			renders = append(renders, event)
 		}
 	}

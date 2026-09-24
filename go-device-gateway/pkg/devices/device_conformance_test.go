@@ -307,10 +307,10 @@ func TestDeviceErrorEdges(t *testing.T) {
 		t.Fatal(err)
 	}
 	thirdSameID := outputSameID
-	thirdSameID.Name = "Another Output"
-	thirdSameID.DisplayName = "Another Output"
+	thirdSameID.Name = anotherOutputDisplayName
+	thirdSameID.DisplayName = anotherOutputDisplayName
 	ordered := devicegw.NewAmbiguousDeviceNameError("same", []devicegw.Device{thirdSameID, outputSameID, inputSameID})
-	if len(ordered.Candidates) != 3 || ordered.Candidates[0].Direction != devicegw.DirectionInput || ordered.Candidates[1].Display() != "Another Output" || ordered.Candidates[2].Display() != "Output" {
+	if len(ordered.Candidates) != 3 || ordered.Candidates[0].Direction != devicegw.DirectionInput || ordered.Candidates[1].Display() != anotherOutputDisplayName || ordered.Candidates[2].Display() != "Output" {
 		t.Fatalf("same-ID candidates=%#v, want direction/name tie-break ordering", ordered.Candidates)
 	}
 
@@ -582,3 +582,6 @@ func TestDeviceRegistryConformanceRejectsBrokenFixtures(t *testing.T) {
 		})
 	}
 }
+
+// anotherOutputDisplayName names the second output device in metadata fixtures.
+const anotherOutputDisplayName = "Another Output"

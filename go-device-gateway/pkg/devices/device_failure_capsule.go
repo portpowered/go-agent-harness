@@ -98,7 +98,7 @@ func WriteDuplexFailureCapsule(dir string, scenario DuplexScenario, providerInpu
 	}
 	callbacks := 0
 	for _, event := range events {
-		if event.Tap == "render" && int(event.Sequence)+1 > callbacks {
+		if event.Tap == duplexTapRender && int(event.Sequence)+1 > callbacks {
 			callbacks = int(event.Sequence) + 1
 		}
 	}
@@ -251,3 +251,6 @@ func marshalJSONLines(events []DeviceTraceEvent) ([]byte, error) {
 	}
 	return out.Bytes(), nil
 }
+
+// duplexTapRender is the trace tap name for playback render callbacks.
+const duplexTapRender = "render"

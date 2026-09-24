@@ -35,7 +35,7 @@ type RTCDeviceSourceError struct {
 
 func (e *RTCDeviceSourceError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilValueString
 	}
 	return fmt.Sprintf("RTC device source %q %s failed: %v", e.DeviceID, e.Operation, e.Err)
 }
@@ -60,7 +60,7 @@ type RTCDeviceSourceRateError struct {
 
 func (e *RTCDeviceSourceRateError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilValueString
 	}
 	if e.SourceRate > 0 {
 		return fmt.Sprintf("RTC device source %q cannot convert captured audio from %d Hz to provider input rate %d Hz: %v", e.DeviceID, e.SourceRate, e.ProviderRate, e.Err)
@@ -393,3 +393,6 @@ func nilRTCOutboundMedia(media audio.OutboundMedia) bool {
 // IsNilOutboundMedia reports whether an outbound endpoint is nil, including a
 // typed nil hidden behind the media interface.
 func IsNilOutboundMedia(media audio.OutboundMedia) bool { return nilRTCOutboundMedia(media) }
+
+// nilValueString is the diagnostic rendering of an absent value.
+const nilValueString = "<nil>"

@@ -160,18 +160,18 @@ func parseSDP(sdp string) (audio, video bool, codec string, rate, channels int) 
 		line := strings.TrimSpace(raw)
 		switch {
 		case strings.HasPrefix(line, "m=audio "):
-			audio, section = true, "audio"
+			audio, section = true, sdpMediaAudio
 		case strings.HasPrefix(line, "m=video "):
-			video, section = true, "video"
+			video, section = true, sdpMediaVideo
 		case strings.HasPrefix(line, "m="):
 			section = ""
-		case section == "audio" && isSDPMediaDirection(line):
+		case section == sdpMediaAudio && isSDPMediaDirection(line):
 			audioDirection = strings.TrimPrefix(line, "a=")
-		case section == "video" && isSDPMediaDirection(line):
+		case section == sdpMediaVideo && isSDPMediaDirection(line):
 			videoDirection = strings.TrimPrefix(line, "a=")
-		case section == "video" && (strings.HasPrefix(line, "a=ssrc:") || strings.HasPrefix(line, "a=msid:")):
+		case section == sdpMediaVideo && (strings.HasPrefix(line, "a=ssrc:") || strings.HasPrefix(line, "a=msid:")):
 			videoSenderEvidence = true
-		case section == "audio" && strings.HasPrefix(line, "a=rtpmap:"):
+		case section == sdpMediaAudio && strings.HasPrefix(line, "a=rtpmap:"):
 			parts := strings.Fields(strings.TrimPrefix(line, "a=rtpmap:"))
 			if len(parts) != 2 {
 				continue
@@ -201,7 +201,7 @@ func parseSDP(sdp string) (audio, video bool, codec string, rate, channels int) 
 		video = false
 	}
 	if audio && codec == "" {
-		codec, rate, channels = "PCMU", 8000, 1
+		codec, rate, channels = go2rtcCodecPCMU, 8000, 1
 	}
 	if channels <= 0 {
 		channels = 1
@@ -217,3 +217,12 @@ func isSDPMediaDirection(line string) bool {
 		return false
 	}
 }
+
+// go2rtcCodecPCMU is the G.711 mu-law codec name used in SDP.
+const go2rtcCodecPCMU = "PCMU"
+
+// sdpMediaAudio is the SDP media and track kind for audio.
+const sdpMediaAudio = "audio"
+
+// sdpMediaVideo is the SDP media and track kind for video.
+const sdpMediaVideo = "video"

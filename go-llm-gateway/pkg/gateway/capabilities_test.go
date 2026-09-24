@@ -116,7 +116,7 @@ func TestGatewayCapabilitiesUsesProviderReporterWithoutInference(t *testing.T) {
 	t.Parallel()
 
 	provider := &capabilityProvider{
-		name: "fake-provider",
+		name: capabilityTestProviderName,
 		caps: ProviderCapabilities{
 			Provider: "",
 			Stateless: capabilities.StatelessCapabilities{
@@ -135,7 +135,7 @@ func TestGatewayCapabilitiesUsesProviderReporterWithoutInference(t *testing.T) {
 
 	got := gw.Capabilities()
 
-	if got.Provider != "fake-provider" {
+	if got.Provider != capabilityTestProviderName {
 		t.Fatalf("Provider = %q, want fake-provider", got.Provider)
 	}
 	if got.Stateless.Tools.State != CapabilityStateSupported {
@@ -702,3 +702,6 @@ func TestGatewayAllowsUnknownCapabilitiesWithoutClaimingSupport(t *testing.T) {
 		t.Fatalf("unknown streaming capability must not report support")
 	}
 }
+
+// capabilityTestProviderName is the provider name the capability fixtures report.
+const capabilityTestProviderName = "fake-provider"

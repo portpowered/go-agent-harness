@@ -49,7 +49,7 @@ func TestGo2RTCMediaSourceStubNegotiatesAndStreams(t *testing.T) {
 		t.Fatalf("frame = %#v, error = %v", frame, err)
 	}
 	sourceName := fixture.requestedSource()
-	if sourceName != "tuya-main" || stream.Capabilities.AudioCodec != "PCMU" || stream.Capabilities.SampleRate != 8000 || stream.Capabilities.Channels != 1 || stream.Capabilities.Video || !equalSamples(frame.Samples, []int16{0, -32124, 0}) {
+	if sourceName != "tuya-main" || stream.Capabilities.AudioCodec != go2rtcCodecPCMU || stream.Capabilities.SampleRate != 8000 || stream.Capabilities.Channels != 1 || stream.Capabilities.Video || !equalSamples(frame.Samples, []int16{0, -32124, 0}) {
 		t.Fatalf("source/capabilities/frame = %q/%#v/%#v", sourceName, stream.Capabilities, frame.Samples)
 	}
 }
@@ -77,7 +77,7 @@ func TestGo2RTCVisualLookReturnsCopiedVideoAndPreservesAudio(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if observation.Source != source.Identity() || observation.Status != VisualObservationAvailable || observation.Reason != "" || observation.MediaType != "video/H264" || !bytes.Equal(observation.Bytes, []byte{0x65, 1, 2, 3}) {
+	if observation.Source != source.Identity() || observation.Status != VisualObservationAvailable || observation.Reason != "" || observation.MediaType != testVideoH264MimeType || !bytes.Equal(observation.Bytes, []byte{0x65, 1, 2, 3}) {
 		t.Fatalf("visual observation = %#v", observation)
 	}
 	observation.Bytes[0] = 0
@@ -302,7 +302,7 @@ func (p *go2rtcFixturePeer) addTracks(options go2rtcFixtureOptions, pcmu, h264 w
 			connectedOnce.Do(func() { close(p.connected) })
 		}
 	})
-	audio, err := webrtc.NewTrackLocalStaticRTP(pcmu, "audio", options.trackStream)
+	audio, err := webrtc.NewTrackLocalStaticRTP(pcmu, sdpMediaAudio, options.trackStream)
 	if err != nil {
 		return err
 	}
@@ -313,7 +313,7 @@ func (p *go2rtcFixturePeer) addTracks(options go2rtcFixtureOptions, pcmu, h264 w
 	if !options.withVideo {
 		return nil
 	}
-	video, err := webrtc.NewTrackLocalStaticRTP(h264, "video", options.trackStream)
+	video, err := webrtc.NewTrackLocalStaticRTP(h264, sdpMediaVideo, options.trackStream)
 	if err != nil {
 		return err
 	}

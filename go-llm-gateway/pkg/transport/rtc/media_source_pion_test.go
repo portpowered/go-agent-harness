@@ -106,13 +106,13 @@ func TestPionInboundLookHandlesNilTrackStates(t *testing.T) {
 	waiting := newPionInbound(nil, "waiting")
 	waiting.setVideoNegotiated(true)
 	waiting.mu.Lock()
-	waiting.videoMediaType = "video/H264"
+	waiting.videoMediaType = testVideoH264MimeType
 	waiting.mu.Unlock()
 	close(waiting.videoReady)
 	waiting.visuals <- pionVisualFrame{}
 	waiting.visuals <- pionVisualFrame{bytes: []byte{1, 2, 3}}
 	observation, err = waiting.Look(context.Background())
-	if err != nil || !observation.Available() || observation.Source != "waiting" || observation.MediaType != "video/H264" || !bytes.Equal(observation.Bytes, []byte{1, 2, 3}) {
+	if err != nil || !observation.Available() || observation.Source != "waiting" || observation.MediaType != testVideoH264MimeType || !bytes.Equal(observation.Bytes, []byte{1, 2, 3}) {
 		t.Fatalf("ready visual look = %#v, error = %v", observation, err)
 	}
 	requireClosed(t, "waiting", waiting)

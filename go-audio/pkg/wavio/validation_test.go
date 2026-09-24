@@ -44,7 +44,7 @@ func TestReadValidationErrors(t *testing.T) {
 		{name: "stereo input", input: stereo, want: matchesTypedWAVError[*UnsupportedError](ErrUnsupportedChannels), fragments: []string{"channels", "2", "mono"}},
 		{name: "8-bit input", input: eightBit, want: matchesTypedWAVError[*UnsupportedError](ErrUnsupportedBitDepth), fragments: []string{"bit depth", "8", "16"}},
 		{name: "44100 Hz input", input: fortyFourOne, want: matchesTypedWAVError[*UnsupportedError](ErrUnsupportedRate), fragments: []string{"sample rate", "44100", "16000"}},
-		{name: "zero-length data", input: buildWAV(makeChunk("fmt ", pcmFormatPayload(Rate16kHz)), makeChunk("data", nil)), want: matchesTypedWAVError[*EmptyError](ErrEmptyData), fragments: []string{"data", "0", "read"}},
+		{name: "zero-length data", input: buildWAV(makeChunk("fmt ", pcmFormatPayload(Rate16kHz)), makeChunk(dataChunkID, nil)), want: matchesTypedWAVError[*EmptyError](ErrEmptyData), fragments: []string{dataChunkID, "0", "read"}},
 		{name: "malformed container", input: badContainer, want: matchesTypedWAVError[*MalformedError](ErrMalformed), fragments: []string{"container", "RIFX", "RIFF"}},
 		{name: "odd PCM data length", input: oddData, want: matchesTypedWAVError[*MalformedError](ErrMalformed), fragments: []string{"data length", "1", "even"}},
 		{name: "missing format chunk", input: missingFormat, want: matchesTypedWAVError[*MalformedError](ErrMalformed), fragments: []string{"fmt chunk", "missing"}},

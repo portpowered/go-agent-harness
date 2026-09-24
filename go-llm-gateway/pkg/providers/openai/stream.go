@@ -277,7 +277,7 @@ func (s *sseStreamState) emitToolCallEnd(idx int, acc sseToolCallAccumulator) {
 }
 
 func emitSSEScanError(ch chan<- messages.StreamMessage, scanErr error) {
-	streamErr := gateway.NewTransportError("openai", "chat completions stream", scanErr)
+	streamErr := gateway.NewTransportError(openAIProviderName, "chat completions stream", scanErr)
 	classification := providers.ErrorClassTransport
 	if cancellationErr := gateway.CancellationErrorOrNil("openai: chat completions stream cancelled", scanErr); cancellationErr != nil {
 		streamErr = cancellationErr
@@ -307,3 +307,6 @@ func closeResponseBody(closeBody []func() error, ch chan<- messages.StreamMessag
 	}
 	sendMessageEnd()
 }
+
+// openAIProviderName is the provider name reported in transport errors.
+const openAIProviderName = "openai"

@@ -25,6 +25,9 @@ const (
 	chunkHeaderBytes = 8
 	// pcmFormatChunkBytes is the mandatory PCM portion of a fmt chunk.
 	pcmFormatChunkBytes = 16
+	// fmtChunkID and dataChunkID are the RIFF IDs of the chunks WAV requires.
+	fmtChunkID  = "fmt "
+	dataChunkID = "data"
 )
 
 var errInvalidReadCount = errors.New("reader returned an invalid byte count")
@@ -95,7 +98,7 @@ func Write(w io.Writer, sampleRate int, samples []int16) error {
 		maximumDataSize = maximumIntSize
 	}
 	if dataSize > maximumDataSize {
-		return &SizeError{Property: "data", Observed: dataSize, Maximum: maximumDataSize}
+		return &SizeError{Property: dataChunkID, Observed: dataSize, Maximum: maximumDataSize}
 	}
 
 	header, err := PCM16Header(sampleRate, dataSize)
@@ -194,9 +197,9 @@ func (s *chunkScan) next(remaining uint64) (uint64, error) {
 
 func (s *chunkScan) readBody(chunkID string, chunkSize uint64) error {
 	switch chunkID {
-	case "fmt ":
+	case fmtChunkID:
 		return s.readFormat(chunkSize)
-	case "data":
+	case dataChunkID:
 		return s.readDataChunk(chunkSize)
 	default:
 		return skipPart(s.r, chunkSize, chunkID+" chunk")
@@ -231,7 +234,7 @@ func (s *chunkScan) readDataChunk(chunkSize uint64) error {
 		return &MalformedError{Property: "data chunk", Observed: "duplicate", Reason: "only one data chunk is supported"}
 	}
 	if chunkSize == 0 {
-		return &EmptyError{Property: "data", Operation: "read"}
+		return &EmptyError{Property: dataChunkID, Operation: "read"}
 	}
 	if chunkSize&1 == 1 {
 		return &MalformedError{Property: "data length", Observed: chunkSize, Reason: "PCM16 data must contain an even number of bytes"}
@@ -277,7 +280,7 @@ func validatePCM16Format(payload [16]byte) (waveFormat, error) {
 func readData(r io.Reader, size uint64) ([]byte, error) {
 	maxInt := uint64(^uint(0) >> 1)
 	if size > maxInt {
-		return nil, &SizeError{Property: "data", Observed: size, Maximum: maxInt}
+		return nil, &SizeError{Property: dataChunkID, Observed: size, Maximum: maxInt}
 	}
 
 	data := make([]byte, 0, minUint(size, readBufferSize))

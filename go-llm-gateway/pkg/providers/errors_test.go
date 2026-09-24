@@ -37,11 +37,11 @@ func TestS4ProviderHTTPErrorTable(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := NewProviderHTTPError("openai", tc.status, tc.detail)
+			err := NewProviderHTTPError(openAIProviderName, tc.status, tc.detail)
 			if got := err.Error(); got != tc.wantMessage {
 				t.Fatalf("Error() = %q, want %q", got, tc.wantMessage)
 			}
-			if err.Provider != "openai" || err.StatusCode != tc.status || err.Detail != tc.detail {
+			if err.Provider != openAIProviderName || err.StatusCode != tc.status || err.Detail != tc.detail {
 				t.Fatalf("ProviderError fields = %+v, want provider openai status %d detail %q", err, tc.status, tc.detail)
 			}
 			if !errors.Is(err, ErrProviderRejected) {
@@ -101,28 +101,28 @@ func TestS4ValidationErrorConstructorsAndFormatting(t *testing.T) {
 	}{
 		{
 			name:      "invalid constructor detail",
-			err:       NewInvalidRequestError("openai", "messages", "messages are required"),
+			err:       NewInvalidRequestError(openAIProviderName, "messages", "messages are required"),
 			want:      "messages are required",
 			wantCause: ErrInvalidRequest,
 			wantClass: ErrorClassInvalidRequest,
 		},
 		{
 			name:      "invalid constructor generated text",
-			err:       NewInvalidRequestError("openai", "temperature", ""),
+			err:       NewInvalidRequestError(openAIProviderName, "temperature", ""),
 			want:      "openai: temperature is invalid",
 			wantCause: ErrInvalidRequest,
 			wantClass: ErrorClassInvalidRequest,
 		},
 		{
 			name:      "unsupported constructor generated text",
-			err:       NewUnsupportedRequestError("openai", "model", "gpt-xyz", []string{"gpt-4o", "gpt-4.1"}, ""),
+			err:       NewUnsupportedRequestError(openAIProviderName, "model", "gpt-xyz", []string{"gpt-4o", "gpt-4.1"}, ""),
 			want:      `openai: model "gpt-xyz" is not supported (supported: gpt-4o, gpt-4.1)`,
 			wantCause: ErrUnsupportedRequest,
 			wantClass: ErrorClassUnsupportedRequest,
 		},
 		{
 			name:      "unsupported constructor detail",
-			err:       NewUnsupportedRequestError("openai", "audio", "pcm", []string{"opus"}, "audio format rejected"),
+			err:       NewUnsupportedRequestError(openAIProviderName, "audio", "pcm", []string{"opus"}, "audio format rejected"),
 			want:      "audio format rejected",
 			wantCause: ErrUnsupportedRequest,
 			wantClass: ErrorClassUnsupportedRequest,
@@ -178,12 +178,12 @@ func TestS4ValidationErrorConstructorsAndFormatting(t *testing.T) {
 		})
 	}
 
-	invalid := NewInvalidRequestError("openai", "messages", "bad messages")
-	if invalid.Provider != "openai" || invalid.Feature != "messages" || invalid.Detail != "bad messages" || invalid.Requested != "" || len(invalid.Supported) != 0 {
+	invalid := NewInvalidRequestError(openAIProviderName, "messages", "bad messages")
+	if invalid.Provider != openAIProviderName || invalid.Feature != "messages" || invalid.Detail != "bad messages" || invalid.Requested != "" || len(invalid.Supported) != 0 {
 		t.Fatalf("NewInvalidRequestError fields = %+v", invalid)
 	}
-	unsupported := NewUnsupportedRequestError("openai", "model", "unknown", []string{"gpt-4o"}, "")
-	if unsupported.Provider != "openai" || unsupported.Feature != "model" || unsupported.Requested != "unknown" || strings.Join(unsupported.Supported, ",") != "gpt-4o" {
+	unsupported := NewUnsupportedRequestError(openAIProviderName, "model", "unknown", []string{"gpt-4o"}, "")
+	if unsupported.Provider != openAIProviderName || unsupported.Feature != "model" || unsupported.Requested != "unknown" || strings.Join(unsupported.Supported, ",") != "gpt-4o" {
 		t.Fatalf("NewUnsupportedRequestError fields = %+v", unsupported)
 	}
 }
@@ -475,3 +475,6 @@ func TestErrorClassification_DistinguishesRuntimeOutcomes(t *testing.T) {
 		})
 	}
 }
+
+// openAIProviderName is the provider name used by the error and conformance fixtures.
+const openAIProviderName = "openai"

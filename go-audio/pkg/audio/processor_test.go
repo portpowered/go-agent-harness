@@ -84,7 +84,7 @@ func TestProcessorResetDiscardsPendingWithoutPadding(t *testing.T) {
 }
 
 func TestProcessorRejectsCrossStreamHistoryWithoutReset(t *testing.T) {
-	for _, change := range []func(*audio.PCMFrame){func(f *audio.PCMFrame) { f.StreamID = "other" }, func(f *audio.PCMFrame) { f.Epoch++ }, func(f *audio.PCMFrame) { f.PlaybackResponse.ResponseID = "other" }} {
+	for _, change := range []func(*audio.PCMFrame){func(f *audio.PCMFrame) { f.StreamID = otherTestLabel }, func(f *audio.PCMFrame) { f.Epoch++ }, func(f *audio.PCMFrame) { f.PlaybackResponse.ResponseID = otherTestLabel }} {
 		processor, err := audio.NewProcessor(audio.PCM16DeviceFormat(16000), audio.PCM16DeviceFormat(24000), 480)
 		if err != nil {
 			t.Fatal(err)
@@ -168,9 +168,9 @@ func TestFrameAccumulatorRejectsOversizeAndMetadataDiscontinuity(t *testing.T) {
 	}
 	mutations := []func(*audio.PCMFrame){
 		func(frame *audio.PCMFrame) { frame.Format = audio.PCM16DeviceFormat(16000) },
-		func(frame *audio.PCMFrame) { frame.StreamID = "other" },
+		func(frame *audio.PCMFrame) { frame.StreamID = otherTestLabel },
 		func(frame *audio.PCMFrame) { frame.Epoch = 3 },
-		func(frame *audio.PCMFrame) { frame.PlaybackResponse.ResponseID = "other" },
+		func(frame *audio.PCMFrame) { frame.PlaybackResponse.ResponseID = otherTestLabel },
 	}
 	for _, mutate := range mutations {
 		next := base
@@ -282,3 +282,6 @@ func (target *recordingFrameTarget) WriteFrame(_ context.Context, frame audio.PC
 }
 
 func (*recordingFrameTarget) Close() error { return nil }
+
+// otherTestLabel is the non-matching label used by processor fixtures.
+const otherTestLabel = "other"

@@ -62,7 +62,7 @@ func parseWireFrames(t *testing.T, payloads [][]byte) []wireFrame {
 func findFunctionCallOutput(frames []wireFrame) []int {
 	idx := make([]int, 0, 1)
 	for i, frame := range frames {
-		if frame.Type == "conversation.item.create" && frame.Item["type"] == "function_call_output" {
+		if frame.Type == conversationItemCreateType && frame.Item["type"] == realtimeFunctionCallOutputType {
 			idx = append(idx, i)
 		}
 	}
@@ -181,10 +181,10 @@ func TestComposed_LoopDeliversToolResultOnOpenAIRealtimeWire(t *testing.T) {
 	wantTypes := []string{
 		"session.update",
 		"input_audio_buffer.append",
-		"conversation.item.create", // function_call_output
-		"response.create",          // grounded continuation after tool result
-		"conversation.item.create", // user text turn
-		"response.create",
+		conversationItemCreateType, // function_call_output
+		wireResponseCreate,         // grounded continuation after tool result
+		conversationItemCreateType, // user text turn
+		wireResponseCreate,
 	}
 	if !slices.Equal(gotTypes, wantTypes) {
 		t.Fatalf("client event sequence = %v, want %v", gotTypes, wantTypes)
@@ -241,7 +241,7 @@ func TestComposed_LoopDeliversTimeoutToolErrorOnceBeforeContinuation(t *testing.
 		t.Fatalf("observed %d timeout function_call_output frames, want exactly one", len(outputs))
 	}
 	outputIndex := outputs[0]
-	if outputIndex+1 >= len(frames) || frames[outputIndex+1].Type != "response.create" {
+	if outputIndex+1 >= len(frames) || frames[outputIndex+1].Type != wireResponseCreate {
 		t.Fatalf("timeout output index = %d in wire sequence %#v, want response.create immediately after it", outputIndex, frames)
 	}
 	item := frames[outputIndex].Item
@@ -349,10 +349,10 @@ func TestComposed_LoopDeliversMixedToolBatchExactlyOnceOnOpenAIRealtimeWire(t *t
 	wantTypes := []string{
 		"session.update",
 		"input_audio_buffer.append",
-		"conversation.item.create", // text function_call_output
-		"conversation.item.create", // image function_call_output
-		"conversation.item.create", // image input message
-		"response.create",
+		conversationItemCreateType, // text function_call_output
+		conversationItemCreateType, // image function_call_output
+		conversationItemCreateType, // image input message
+		wireResponseCreate,
 	}
 	gotTypes := wireFrameTypes(frames)
 	if len(gotTypes) != len(wantTypes) {
@@ -431,7 +431,7 @@ func wireFrameTypes(frames []wireFrame) []string {
 func countResponseCreateFrames(frames []wireFrame) int {
 	responseCreates := 0
 	for _, frame := range frames {
-		if frame.Type == "response.create" {
+		if frame.Type == wireResponseCreate {
 			responseCreates++
 		}
 	}
@@ -472,11 +472,11 @@ func collectComposedToolBatchItems(t *testing.T, frames []wireFrame, wantURL str
 	outputs := map[string]string{}
 	imageItems := 0
 	for _, frame := range frames {
-		if frame.Type != "conversation.item.create" {
+		if frame.Type != conversationItemCreateType {
 			continue
 		}
 		switch frame.Item["type"] {
-		case "function_call_output":
+		case realtimeFunctionCallOutputType:
 			outputs[wireItemString(frame.Item, "call_id")] = wireItemString(frame.Item, "output")
 		case wireItemTypeMessage:
 			imageItems += countComposedImageParts(t, frame.Item, wantURL)
@@ -498,7 +498,7 @@ func countComposedImageParts(t *testing.T, item map[string]any, wantURL string) 
 			continue
 		}
 		imageItems++
-		if got := wireItemString(part, "image_url"); got != wantURL {
+		if got := wireItemString(part, realtimeImageURLField); got != wantURL {
 			t.Fatalf("image URL = %q, want original image bytes", got)
 		}
 	}

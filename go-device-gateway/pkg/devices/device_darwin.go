@@ -188,7 +188,7 @@ func enumerateCoreAudioDevices() (endpoints []coreAudioEndpoint, err error) {
 		}
 		return nil, fmt.Errorf("initialize CoreAudio: %w", err)
 	}
-	defer func() { joinCleanupError(&err, releaseCoreAudioContext(ctx)) }()
+	defer func() { joinCleanupErrorOnFailure(&err, releaseCoreAudioContext(ctx)) }()
 	return enumerateCoreAudioEndpoints(ctx)
 }
 func openCoreAudioDevice(endpoint coreAudioEndpoint) (OpenedDevice, error) {

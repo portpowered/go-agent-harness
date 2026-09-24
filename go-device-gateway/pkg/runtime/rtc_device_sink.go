@@ -59,7 +59,7 @@ type RTCDevicePlaybackReceiptObserver func(audio.PlaybackReceipt)
 
 func (e *RTCDeviceSinkError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilValueString
 	}
 	return fmt.Sprintf("RTC device sink %q %s failed: %v", e.DeviceID, e.Operation, e.Err)
 }

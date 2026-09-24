@@ -356,10 +356,10 @@ func testMediaSourceSDPAndControlContracts(t *testing.T) {
 	if !audio || !video || codec != "PCMA" || rate != 16000 || channels != 2 {
 		t.Fatalf("complex SDP = %t/%t/%q/%d/%d", audio, video, codec, rate, channels)
 	}
-	if _, _, codec, rate, channels = parseSDP("m=audio 0 RTP/AVP 0\na=rtpmap:0 PCMU/8000/0"); codec != "PCMU" || rate != 8000 || channels != 1 {
+	if _, _, codec, rate, channels = parseSDP("m=audio 0 RTP/AVP 0\na=rtpmap:0 PCMU/8000/0"); codec != go2rtcCodecPCMU || rate != 8000 || channels != 1 {
 		t.Fatalf("zero-channel SDP = %q/%d/%d", codec, rate, channels)
 	}
-	if _, _, codec, rate, channels = parseSDP("m=audio 0 RTP/AVP 0"); codec != "PCMU" || rate != 8000 || channels != 1 {
+	if _, _, codec, rate, channels = parseSDP("m=audio 0 RTP/AVP 0"); codec != go2rtcCodecPCMU || rate != 8000 || channels != 1 {
 		t.Fatalf("default audio SDP = %q/%d/%d", codec, rate, channels)
 	}
 
@@ -432,14 +432,14 @@ func testRTSPProtocolFramingContracts(t *testing.T) {
 		t.Fatal(err)
 	}
 	videoInterleaved := append([]byte{'$', 1, byte(len(packet) >> 8), byte(len(packet))}, packet...)
-	videoInbound := &rtspInbound{client: &rtspClient{reader: bufio.NewReader(bytes.NewReader(videoInterleaved))}, audioChannel: 0, codec: "PCMU"}
+	videoInbound := &rtspInbound{client: &rtspClient{reader: bufio.NewReader(bytes.NewReader(videoInterleaved))}, audioChannel: 0, codec: go2rtcCodecPCMU}
 	if _, err := videoInbound.ReadFrame(context.Background()); err == nil {
 		t.Fatal("video-only RTSP frame read returned nil error")
 	}
 	if _, _, err := (&rtspInbound{client: &rtspClient{reader: bufio.NewReader(bytes.NewReader([]byte{'$', 0, 0, 2, 0}))}}).readPacket(); err == nil {
 		t.Fatal("short RTP body returned nil error")
 	}
-	if got := audiocodec.DecodeRTPAudioPayload("PCMU", nil); got != nil {
+	if got := audiocodec.DecodeRTPAudioPayload(go2rtcCodecPCMU, nil); got != nil {
 		t.Fatalf("empty audio decode = %v", got)
 	}
 	if got := audiocodec.DecodeRTPAudioPayload("PCMA", []byte{0xd4}); len(got) != 1 || got[0] <= 0 {

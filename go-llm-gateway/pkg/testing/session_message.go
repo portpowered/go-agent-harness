@@ -71,7 +71,7 @@ func UnmarshalStreamMessage(data json.RawMessage) (messages.StreamMessage, error
 		LoopPassID:         raw.LoopPassID,
 	}
 
-	if len(raw.Value) > 0 && string(raw.Value) != "null" {
+	if len(raw.Value) > 0 && string(raw.Value) != jsonNullLiteral {
 		val, err := unmarshalValue(msg.Type, raw.Value)
 		if err != nil {
 			return messages.StreamMessage{}, err
@@ -316,3 +316,6 @@ func websocketPayloadType(payload []byte) string {
 	}
 	return envelope.Type
 }
+
+// jsonNullLiteral is the JSON encoding of null.
+const jsonNullLiteral = "null"

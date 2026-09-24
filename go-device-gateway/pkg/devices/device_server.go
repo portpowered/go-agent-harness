@@ -590,7 +590,7 @@ func (r *RemoteDeviceRegistry) do(req *http.Request, response any) (err error) {
 	if err != nil {
 		return fmt.Errorf("audio-device server %s: %w", req.URL.Host, err)
 	}
-	defer func() { joinCleanupError(&err, result.Body.Close()) }()
+	defer func() { joinCleanupErrorOnFailure(&err, result.Body.Close()) }()
 	if result.StatusCode < 200 || result.StatusCode >= 300 {
 		var payload remoteErrorResponse
 		_ = json.NewDecoder(io.LimitReader(result.Body, 1<<20)).Decode(&payload)
@@ -639,7 +639,7 @@ func (d *remoteOpenedDevice) ReadFrame(ctx context.Context, frame []int16) (err 
 	if err != nil {
 		return err
 	}
-	defer func() { joinCleanupError(&err, result.Body.Close()) }()
+	defer func() { joinCleanupErrorOnFailure(&err, result.Body.Close()) }()
 	if result.StatusCode < 200 || result.StatusCode >= 300 {
 		return decodeRemoteDeviceError(result)
 	}

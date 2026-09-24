@@ -61,8 +61,8 @@ func realtimeCompleteMessageEvents(msg messages.Message, requestResponse bool) (
 		case messages.ImagePart:
 			encoded := base64.StdEncoding.EncodeToString(part.Bytes)
 			content = append(content, map[string]any{
-				"type":      "input_image",
-				"image_url": "data:" + part.MediaType + ";base64," + encoded,
+				"type":                "input_image",
+				realtimeImageURLField: "data:" + part.MediaType + ";base64," + encoded,
 			})
 		default:
 			return nil, false
@@ -144,8 +144,8 @@ func realtimeToolResultEvents(msg messages.Message, requestResponse bool) ([]mod
 		}
 		encoded := base64.StdEncoding.EncodeToString(part.Bytes)
 		imageContent = append(imageContent, map[string]any{
-			"type":      "input_image",
-			"image_url": "data:" + mediaType + ";base64," + encoded,
+			"type":                "input_image",
+			realtimeImageURLField: "data:" + mediaType + ";base64," + encoded,
 		})
 	}
 	if len(imageParts) > 0 {
@@ -383,3 +383,6 @@ func settleResponseIntent(intent responseIntent, outcome messages.SessionSendOut
 	default:
 	}
 }
+
+// realtimeImageURLField is the realtime input_image content field carrying the image URL.
+const realtimeImageURLField = "image_url"

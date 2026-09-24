@@ -34,7 +34,7 @@ func TestRTSPMediaSourceStubNegotiatesAndStreams(t *testing.T) {
 	if err != nil || !equalSamples(frame.Samples, []int16{32124, -32124, -716}) {
 		t.Fatalf("frame = %#v, error = %v", frame, err)
 	}
-	if stream.Capabilities.AudioCodec != "PCMU" || stream.Capabilities.SampleRate != 8000 || stream.Capabilities.Channels != 1 || !stream.Capabilities.Video {
+	if stream.Capabilities.AudioCodec != go2rtcCodecPCMU || stream.Capabilities.SampleRate != 8000 || stream.Capabilities.Channels != 1 || !stream.Capabilities.Video {
 		t.Fatalf("capabilities = %#v", stream.Capabilities)
 	}
 	if strings.Contains(fmt.Sprint(stream.Capabilities), secret) || strings.Contains(stream.Capabilities.Source, secret) {
@@ -45,7 +45,7 @@ func TestRTSPMediaSourceStubNegotiatesAndStreams(t *testing.T) {
 	if !strings.Contains(observed.path, "/camera/main") || observed.auth != "Basic "+base64.StdEncoding.EncodeToString([]byte("camera:"+secret)) {
 		t.Fatalf("observed path/auth = %q/%q", observed.path, observed.auth)
 	}
-	if len(observed.methods) < 4 || observed.methods[0] != "DESCRIBE" || observed.methods[1] != "DESCRIBE" || observed.methods[2] != "SETUP" || observed.methods[3] != "SETUP" {
+	if len(observed.methods) < 4 || observed.methods[0] != rtspTestMethodDescribe || observed.methods[1] != rtspTestMethodDescribe || observed.methods[2] != rtspTestMethodSetup || observed.methods[3] != rtspTestMethodSetup {
 		t.Fatalf("RTSP method order = %v", observed.methods)
 	}
 	requireClosed(t, "stream", stream)
@@ -105,7 +105,7 @@ func TestRTSPVisualLookQueuesAudioAndReturnsCopiedVideo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if observation.Source != source.Identity() || observation.Status != VisualObservationAvailable || observation.MediaType != "video/H264" || !bytes.Equal(observation.Bytes, []byte{0x65, 4, 5, 6}) {
+	if observation.Source != source.Identity() || observation.Status != VisualObservationAvailable || observation.MediaType != testVideoH264MimeType || !bytes.Equal(observation.Bytes, []byte{0x65, 4, 5, 6}) {
 		t.Fatalf("RTSP visual observation = %#v", observation)
 	}
 	observation.Bytes[0] = 0
@@ -130,7 +130,7 @@ func TestLookMediaSourceUsesPublicRTSPContract(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	observation, err := LookMediaSource(ctx, rawURL)
-	if err != nil || observation.Source != rawURL || !observation.Available() || observation.MediaType != "video/H264" || !bytes.Equal(observation.Bytes, []byte{0x65, 7, 8, 9}) {
+	if err != nil || observation.Source != rawURL || !observation.Available() || observation.MediaType != testVideoH264MimeType || !bytes.Equal(observation.Bytes, []byte{0x65, 7, 8, 9}) {
 		t.Fatalf("public RTSP look = %#v, error = %v", observation, err)
 	}
 	awaitFixtureDone(t, serverDone, "public RTSP look fixture")
@@ -202,9 +202,9 @@ func serveRTSPFixture(listener net.Listener, observed *rtspFixtureObservation, s
 		}
 		observed.record(method, path, headers)
 		switch method {
-		case "DESCRIBE":
+		case rtspTestMethodDescribe:
 			err = session.describe(path, headers)
-		case "SETUP":
+		case rtspTestMethodSetup:
 			err = session.write("RTSP/1.0 200 OK\r\nCSeq: %s\r\nSession: fixture-session\r\nTransport: RTP/AVP/TCP;unicast;interleaved=%s\r\nContent-Length: 0\r\n\r\n", headers["cseq"], interleavedForSetup(headers["transport"]))
 		case "PLAY":
 			return session.play(headers)
@@ -322,8 +322,8 @@ func TestRTSPReadQueuesVideoForTheFollowingLook(t *testing.T) {
 		client:         &rtspClient{reader: bufio.NewReader(bytes.NewReader(interleaved))},
 		audioChannel:   0,
 		videoChannel:   2,
-		codec:          "PCMU",
-		videoMediaType: "video/H264",
+		codec:          go2rtcCodecPCMU,
+		videoMediaType: testVideoH264MimeType,
 		source:         "rtsp://fixture/camera",
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -336,7 +336,7 @@ func TestRTSPReadQueuesVideoForTheFollowingLook(t *testing.T) {
 		t.Fatal("RTSP read after video unexpectedly returned a frame")
 	}
 	observation, err := inbound.Look(ctx)
-	if err != nil || observation.Status != VisualObservationAvailable || observation.MediaType != "video/H264" || !bytes.Equal(observation.Bytes, []byte{0x65, 1, 2, 3}) {
+	if err != nil || observation.Status != VisualObservationAvailable || observation.MediaType != testVideoH264MimeType || !bytes.Equal(observation.Bytes, []byte{0x65, 1, 2, 3}) {
 		t.Fatalf("queued RTSP visual observation = %#v, error = %v", observation, err)
 	}
 }
@@ -362,7 +362,7 @@ func TestRTSPLookHonorsCancellationAndSkipsNonVideoPackets(t *testing.T) {
 	inbound := &rtspInbound{
 		client:         &rtspClient{reader: bufio.NewReader(bytes.NewReader(interleaved))},
 		videoChannel:   2,
-		videoMediaType: "video/H264",
+		videoMediaType: testVideoH264MimeType,
 		source:         "rtsp://fixture/camera",
 	}
 	observation, err := inbound.Look(context.Background())
@@ -372,7 +372,7 @@ func TestRTSPLookHonorsCancellationAndSkipsNonVideoPackets(t *testing.T) {
 }
 
 func TestDecodeAudioProducesNonEmptySamples(t *testing.T) {
-	for _, codecName := range []string{"PCMU", "PCMA", "L16", "opus"} {
+	for _, codecName := range []string{go2rtcCodecPCMU, "PCMA", "L16", "opus"} {
 		if got := audiocodec.DecodeRTPAudioPayload(codecName, []byte{0, 1, 2, 3}); len(got) == 0 {
 			t.Errorf("DecodeRTPAudioPayload(%q) returned no samples", codecName)
 		}
@@ -412,3 +412,12 @@ func equalSamples(got, want []int16) bool {
 	}
 	return true
 }
+
+// testVideoH264MimeType is the H.264 codec MIME type used by the video fixtures.
+const testVideoH264MimeType = "video/H264"
+
+// rtspTestMethodDescribe is the RTSP DESCRIBE method the fixture server handles.
+const rtspTestMethodDescribe = "DESCRIBE"
+
+// rtspTestMethodSetup is the RTSP SETUP method the fixture server handles.
+const rtspTestMethodSetup = "SETUP"

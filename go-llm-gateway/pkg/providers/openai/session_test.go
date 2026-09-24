@@ -355,7 +355,7 @@ func assertGARealtimeAudioConfig(t *testing.T, sessionPayload map[string]any) {
 	if !ok {
 		t.Fatalf("audio.input.format missing or wrong type: %T", input["format"])
 	}
-	assertStringField(t, inputFormat, "type", "audio/pcm")
+	assertStringField(t, inputFormat, "type", realtimePCMAudioFormat)
 	if got := inputFormat["rate"]; got != float64(models.SampleRate24000) {
 		t.Errorf("audio.input.format.rate: got %v, want %d", got, models.SampleRate24000)
 	}
@@ -602,7 +602,7 @@ func TestConnectSession_SendsResponseCreateAfterTextInput(t *testing.T) {
 	}
 	wantTypes := []string{
 		string(models.SessionEventSessionUpdate),
-		"conversation.item.create",
+		conversationItemCreateType,
 		string(models.SessionEventResponseCreate),
 	}
 	if strings.Join(gotTypes, ",") != strings.Join(wantTypes, ",") {

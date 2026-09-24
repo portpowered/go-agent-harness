@@ -83,9 +83,9 @@ func (s *layoutScan) next(remaining uint64) (uint64, error) {
 	}
 	var err error
 	switch string(header[:4]) {
-	case "fmt ":
+	case fmtChunkID:
 		err = s.inspectFormat(n, padded)
-	case "data":
+	case dataChunkID:
 		err = s.inspectData(n, padded)
 	default:
 		_, err = s.r.Seek(int64(padded), io.SeekCurrent)

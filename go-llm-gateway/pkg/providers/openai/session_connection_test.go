@@ -80,7 +80,7 @@ func TestConnectSession_NormalizesOpenAIRealtimeEventsInOrder(t *testing.T) {
 	if string(audio.Content) != "audio-chunk" {
 		t.Fatalf("audio content: got %q", string(audio.Content))
 	}
-	if audio.MediaType != "audio/pcm" {
+	if audio.MediaType != realtimePCMAudioFormat {
 		t.Fatalf("audio media type: got %q, want audio/pcm", audio.MediaType)
 	}
 	if gotMessages[7].ToolCallId != "call-weather" {
@@ -267,7 +267,7 @@ func TestConnectSession_IgnoresInactiveCancelRejectionAndContinuesResponse(t *te
 	var cancelEvent struct {
 		Type string `json:"type"`
 	}
-	if err := json.Unmarshal(waitForClientMessage(t, ctx, conn, "response.cancel"), &cancelEvent); err != nil {
+	if err := json.Unmarshal(waitForClientMessage(t, ctx, conn, wireResponseCancel), &cancelEvent); err != nil {
 		t.Fatalf("unmarshal response.cancel event: %v", err)
 	}
 	if cancelEvent.Type != string(models.SessionEventResponseCancel) {
@@ -278,7 +278,7 @@ func TestConnectSession_IgnoresInactiveCancelRejectionAndContinuesResponse(t *te
 		"error": map[string]any{
 			"type":     "invalid_request_error",
 			"code":     "response_cancel_not_active",
-			"param":    "response.cancel",
+			"param":    wireResponseCancel,
 			"event_id": "evt-cancel-1",
 			"message":  "Can only cancel an active response.",
 		},
@@ -293,7 +293,7 @@ func TestConnectSession_IgnoresInactiveCancelRejectionAndContinuesResponse(t *te
 	}
 	if diagnostic.IsTerminal() || diagnostic.Classification != providers.ErrorClassResponseCancelNotActive ||
 		diagnostic.ErrorType != "invalid_request_error" || diagnostic.Code != "response_cancel_not_active" ||
-		diagnostic.Param != "response.cancel" || diagnostic.EventID != "evt-cancel-1" {
+		diagnostic.Param != wireResponseCancel || diagnostic.EventID != "evt-cancel-1" {
 		t.Fatalf("inactive-cancel diagnostic = %#v", diagnostic)
 	}
 	select {
@@ -364,7 +364,7 @@ func TestRealtimeSession_QueuesLateToolContinuationUntilResponseDone(t *testing.
 	}
 	waitForFrameCount(t, conn, 3, time.Now().Add(time.Second))
 	frames := parseWireFrames(t, conn.getClientMessages())
-	if frames[0].Type != "response.create" || frames[1].Type != "conversation.item.create" || frames[2].Type != "response.create" {
+	if frames[0].Type != wireResponseCreate || frames[1].Type != conversationItemCreateType || frames[2].Type != wireResponseCreate {
 		t.Fatalf("wire order = %#v, want response.create, function_call_output item, response.create", frames)
 	}
 }
@@ -420,7 +420,7 @@ func TestRealtimeSession_DropsStaleResponseCreateBeforeReplacementToolResult(t *
 	}
 	waitForFrameCount(t, conn, 2, time.Now().Add(time.Second))
 	frames := parseWireFrames(t, conn.getClientMessages())
-	if len(frames) != 2 || frames[0].Type != "response.create" || frames[1].Type != string(conversationItemCreateEvent) {
+	if len(frames) != 2 || frames[0].Type != wireResponseCreate || frames[1].Type != string(conversationItemCreateEvent) {
 		t.Fatalf("wire order after replacement = %#v, want response.create then function_call_output", frames)
 	}
 }
@@ -443,7 +443,7 @@ func TestRealtimeSession_CancelClearsFunctionCallResponseSuppression(t *testing.
 	}); !outcome.OK() {
 		t.Fatalf("response.cancel admission: %#v", outcome)
 	}
-	waitForClientMessage(t, ctx, conn, "response.cancel")
+	waitForClientMessage(t, ctx, conn, wireResponseCancel)
 	session.observeResponseDone(models.SessionEvent{
 		Type: models.SessionEventResponseDone,
 		Data: []byte(`{"response":{"id":"resp-tool","status":"cancelled"}}`),
@@ -453,7 +453,7 @@ func TestRealtimeSession_CancelClearsFunctionCallResponseSuppression(t *testing.
 	}
 	waitForFrameCount(t, conn, 2, time.Now().Add(time.Second))
 	frames := parseWireFrames(t, conn.getClientMessages())
-	if frames[0].Type != "response.cancel" || frames[1].Type != "response.create" {
+	if frames[0].Type != wireResponseCancel || frames[1].Type != wireResponseCreate {
 		t.Fatalf("wire order after cancelled function response = %#v, want cancel then fresh response.create", frames)
 	}
 }
@@ -523,7 +523,7 @@ func TestRealtimeSession_PreservesAudioCommitWhenSuppressingStaleResponse(t *tes
 	}
 	waitForFrameCount(t, conn, 3, time.Now().Add(time.Second))
 	frames := parseWireFrames(t, conn.getClientMessages())
-	if len(frames) != 3 || frames[0].Type != string(conversationItemCreateEvent) || frames[1].Type != "input_audio_buffer.commit" || frames[2].Type != "response.create" {
+	if len(frames) != 3 || frames[0].Type != string(conversationItemCreateEvent) || frames[1].Type != "input_audio_buffer.commit" || frames[2].Type != wireResponseCreate {
 		t.Fatalf("wire frames = %#v, want tool result then commit then response.create", frames)
 	}
 }
@@ -561,7 +561,7 @@ func TestRealtimeSession_PreservesFreshAudioResponseAfterFunctionCall(t *testing
 	}
 	waitForFrameCount(t, conn, 3, time.Now().Add(time.Second))
 	frames := parseWireFrames(t, conn.getClientMessages())
-	if len(frames) != 3 || frames[0].Type != "input_audio_buffer.commit" || frames[1].Type != string(conversationItemCreateEvent) || frames[2].Type != "response.create" {
+	if len(frames) != 3 || frames[0].Type != "input_audio_buffer.commit" || frames[1].Type != string(conversationItemCreateEvent) || frames[2].Type != wireResponseCreate {
 		t.Fatalf("fresh audio wire frames = %#v, want commit then tool result then response.create", frames)
 	}
 }
@@ -595,7 +595,7 @@ func TestRealtimeSession_AllowsMultipleToolResultsBeforeContinuation(t *testing.
 	}
 	waitForFrameCount(t, conn, 3, time.Now().Add(time.Second))
 	frames := parseWireFrames(t, conn.getClientMessages())
-	if len(frames) != 3 || frames[0].Type != string(conversationItemCreateEvent) || frames[1].Type != string(conversationItemCreateEvent) || frames[2].Type != "response.create" {
+	if len(frames) != 3 || frames[0].Type != string(conversationItemCreateEvent) || frames[1].Type != string(conversationItemCreateEvent) || frames[2].Type != wireResponseCreate {
 		t.Fatalf("wire order after multiple tool results = %#v, want two items then response.create", frames)
 	}
 }
@@ -619,7 +619,7 @@ func TestRealtimeSession_CancellingQueuedContinuationInvalidatesIt(t *testing.T)
 	if outcome := session.SendWithOutcome(ctx, messages.StreamMessage{Type: messages.StreamTypeResponseCancel, Value: messages.NewResponseCancelValue()}); !outcome.OK() {
 		t.Fatalf("response.cancel admission = %#v", outcome)
 	}
-	waitForClientMessage(t, ctx, conn, "response.cancel")
+	waitForClientMessage(t, ctx, conn, wireResponseCancel)
 	if got := len(conn.getClientMessages()); got != 2 {
 		t.Fatalf("wire frames after cancelled queued continuation = %d, want 2 including cancel", got)
 	}
@@ -689,7 +689,7 @@ func TestRealtimeSession_CancelWaitsForPoppedContinuationAdmission(t *testing.T)
 	}
 	waitForFrameCount(t, conn, 3, time.Now().Add(time.Second))
 	frames := parseWireFrames(t, conn.getClientMessages())
-	if frames[0].Type != "response.create" || frames[1].Type != "response.create" || frames[2].Type != "response.cancel" {
+	if frames[0].Type != wireResponseCreate || frames[1].Type != wireResponseCreate || frames[2].Type != wireResponseCancel {
 		t.Fatalf("wire order = %#v, want initial response.create, popped continuation, response.cancel", frames)
 	}
 }
@@ -779,10 +779,10 @@ func TestRealtimeSession_CancelRejectionInvalidatesQueuedContinuation(t *testing
 	}); !outcome.OK() {
 		t.Fatalf("response.cancel: %#v", outcome)
 	}
-	waitForClientMessage(t, ctx, conn, "response.cancel")
+	waitForClientMessage(t, ctx, conn, wireResponseCancel)
 	conn.addServerEvent("error", map[string]any{"error": map[string]any{
 		"type": "invalid_request_error", "code": "response_cancel_not_active",
-		"param": "response.cancel", "message": "Can only cancel an active response.",
+		"param": wireResponseCancel, "message": "Can only cancel an active response.",
 	}})
 	if got := readRealtimeMessage(t, session, ctx, "response.cancel rejection"); got.Type != messages.StreamTypeError {
 		t.Fatalf("cancel rejection normalized as %s, want ERROR", got.Type)
@@ -824,7 +824,7 @@ func TestRealtimeSession_RetriesOwnedCreateAfterActiveResponseRejection(t *testi
 	conn.addServerEvent("response.done", map[string]any{"response": map[string]any{"id": "resp-auto", "status": "completed"}})
 	readRealtimeMessage(t, session, ctx, "automatic response.done")
 	frames := waitForFrameCount(t, conn, 3, time.Now().Add(time.Second))
-	if frames[0].Type != "response.create" || frames[1].Type != "response.create" || frames[2].Type != "response.create" {
+	if frames[0].Type != wireResponseCreate || frames[1].Type != wireResponseCreate || frames[2].Type != wireResponseCreate {
 		t.Fatalf("response create retry wire sequence = %#v, want initial, rejected, retry", frames)
 	}
 }
@@ -936,3 +936,9 @@ func TestConnectSession_ReplaysOpenAIRealtimeTextFixture(t *testing.T) {
 		t.Fatalf("replay diverged: %v", err)
 	}
 }
+
+// wireResponseCreate is the realtime client event type that requests a response.
+const wireResponseCreate = "response.create"
+
+// wireResponseCancel is the realtime client event type that cancels a response.
+const wireResponseCancel = "response.cancel"

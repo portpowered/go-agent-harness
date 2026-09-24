@@ -210,3 +210,14 @@ func joinCleanupError(result *error, cleanupErr error) {
 		*result = errors.Join(*result, cleanupErr)
 	}
 }
+
+// joinCleanupErrorOnFailure attaches a failed cleanup only to an operation that
+// already failed. After a successful operation whose data was fully consumed
+// (a decoded response body, a completed device listing) a release failure has
+// no effect on the caller's result, so it is deliberately not reported and the
+// original success semantics are kept.
+func joinCleanupErrorOnFailure(result *error, cleanupErr error) {
+	if *result != nil && cleanupErr != nil {
+		*result = errors.Join(*result, cleanupErr)
+	}
+}

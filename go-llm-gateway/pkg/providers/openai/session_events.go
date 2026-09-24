@@ -14,7 +14,11 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
-const conversationItemCreateEvent = models.SessionEventType("conversation.item.create")
+// conversationItemCreateType is the realtime client event type that adds an
+// item to the conversation.
+const conversationItemCreateType = "conversation.item.create"
+
+const conversationItemCreateEvent = models.SessionEventType(conversationItemCreateType)
 
 const (
 	realtimeInvalidRequestErrorType     = "invalid_request_error"
