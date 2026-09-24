@@ -5056,3 +5056,32 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   `rtk make prepush` on that clean exact SHA, then execute the C276-05/06
   verification commands on the same candidate before any handoff. Decision
   remains CONTINUE.
+
+# C276 session-duration lifecycle repair checkpoint — 2026-09-24
+
+- Reverified admission with `project-control.py verify-work --type task`;
+  `prd.json.branchName` matches the isolated C276 branch. The exact seven-file
+  recording/replay production cluster remains absent, both CLI adapters remain
+  stateless and total 63 lines, and fetched `origin/main` remains an ancestor.
+- Repaired a controller lifecycle defect: `EndLocalToolExecution` now rearms
+  provider liveness after a local tool ends. Extended the public liveness
+  regression to cover a timeout during the tool interval, rearming afterward,
+  and an assistant audio event resetting the timer. The retry wait regression
+  now proves caller cancellation stops `Run` within one second; artifact tests
+  preserve both sink flush causes and verify a failed transcript write does not
+  consume the next transcript tick.
+- Focused normal and race tests pass for
+  `services/sessionduration/internal/service`; full `make lint` and
+  `make verify-architecture` pass, with the three capped test files at no more
+  than 600 lines. Direct `-tags=nomicrophone -cover` remains 86.0% against the
+  existing 90.0% floor. The prior exact-base `make prepush` reached all earlier
+  phases and failed only that package coverage floor at 85.50%; this full gate
+  has not been rerun on the current worktree changes. No push, PR, hosted CI,
+  or review handoff occurred. The two unrelated untracked integration fixtures
+  remain untouched.
+- Exact next action: continue inspecting session-duration public failure and
+  bounded-shutdown paths for real defects that justify regression coverage;
+  do not add coverage-only tests or weaken floors. Once every locally
+  reproducible behavior repair is complete, commit the candidate and rerun
+  `make prepush` plus every C276 functional, integration, race, hermetic, and
+  Wire command on that exact SHA. Decision remains CONTINUE.

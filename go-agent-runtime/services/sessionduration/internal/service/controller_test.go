@@ -80,7 +80,7 @@ func TestControllerExpiresOnceAndRejectsLateOutput(t *testing.T) {
 
 func TestControllerLivenessUsesGenerationAndPreservesTypedCause(t *testing.T) {
 	clock := platformclock.NewDeterministic(time.Unix(3, 0), time.Millisecond)
-	controller, err := New().Begin(sessionduration.Options{
+	ctrl, err := New().Begin(sessionduration.Options{
 		Context:  context.Background(),
 		Clock:    clock,
 		Liveness: sessionduration.LivenessOptions{Enabled: true, Timeout: 5 * time.Millisecond},
@@ -88,22 +88,22 @@ func TestControllerLivenessUsesGenerationAndPreservesTypedCause(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Begin: %v", err)
 	}
-	controller.Observe(messages.StreamMessage{Type: messages.StreamTypeMessageStart})
-	controller.Observe(messages.StreamMessage{Type: messages.StreamTypeTextDelta})
-	clock.AdvanceBy(4 * time.Millisecond)
-	controller.Observe(messages.StreamMessage{Type: messages.StreamTypeTextDelta})
-	clock.AdvanceBy(4 * time.Millisecond)
+	ctrl.Observe(messages.StreamMessage{Type: messages.StreamTypeMessageStart})
+	ctrl.BeginLocalToolExecution()
+	clock.AdvanceBy(20 * time.Millisecond)
+	ctrl.EndLocalToolExecution()
+	ctrl.Observe(messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant})
 	select {
-	case got := <-controller.Errors():
+	case got := <-ctrl.Errors():
 		t.Fatalf("stale liveness timer reported %v", got)
 	default:
 	}
-	clock.AdvanceBy(time.Millisecond)
+	clock.AdvanceBy(6 * time.Millisecond)
 	var got error
 	deadline := time.After(time.Second)
 	for got == nil {
 		select {
-		case got = <-controller.Errors():
+		case got = <-ctrl.Errors():
 		case <-deadline:
 			t.Fatal("liveness error was not reported")
 		}
@@ -115,7 +115,7 @@ func TestControllerLivenessUsesGenerationAndPreservesTypedCause(t *testing.T) {
 	if !errors.As(got, &typed) || typed.Classification != "silent_provider_timeout" {
 		t.Fatalf("liveness error = %T/%v, want typed timeout", got, got)
 	}
-	if _, err := controller.Finalize(context.Background(), sessionduration.FinalizeRequest{}); err != nil {
+	if _, err := ctrl.Finalize(context.Background(), sessionduration.FinalizeRequest{}); err != nil {
 		t.Fatalf("Finalize: %v", err)
 	}
 }

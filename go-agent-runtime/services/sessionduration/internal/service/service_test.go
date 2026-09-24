@@ -51,8 +51,7 @@ func TestStateProjectsOutputStates(t *testing.T) {
 }
 
 func TestArtifactsRejectMalformedPCMWithoutLosingLaterTranscript(t *testing.T) {
-	audio := &artifactAudioSink{}
-	transcriptSink := &artifactTranscriptSink{}
+	audio, transcriptSink := &artifactAudioSink{}, &artifactTranscriptSink{}
 	artifacts := NewSessionDurationArtifactSetWithSinks(audio, transcriptSink)
 	if err := artifacts.Accept(messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue([]byte{0x01})}); err == nil {
 		t.Fatal("odd-length PCM frame was accepted")
@@ -60,11 +59,15 @@ func TestArtifactsRejectMalformedPCMWithoutLosingLaterTranscript(t *testing.T) {
 	if len(audio.samples) != 0 {
 		t.Fatalf("malformed PCM produced samples: %v", audio.samples)
 	}
-	if err := artifacts.Accept(messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("transcript remains usable")}); err != nil {
-		t.Fatalf("Accept transcript after malformed PCM: %v", err)
+	writeErr := errors.New("transcript write failure")
+	transcriptSink.writeErr = writeErr
+	textDelta := messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("transcript remains usable")}
+	if err := artifacts.Accept(textDelta); !errors.Is(err, writeErr) {
+		t.Fatalf("transcript write error = %v, want original cause", err)
 	}
-	if len(transcriptSink.records) != 1 {
-		t.Fatalf("transcript records = %d, want one after rejected PCM", len(transcriptSink.records))
+	transcriptSink.writeErr = nil
+	if err := artifacts.Accept(textDelta); err != nil || len(transcriptSink.records) != 1 || transcriptSink.records[0].Tick != 1 {
+		t.Fatalf("Accept transcript after a failed write = %v, records %+v; want one record with tick 1", err, transcriptSink.records)
 	}
 }
 
@@ -432,18 +435,19 @@ func TestRunHandlesWakeAndDoneBoundaryFailures(t *testing.T) {
 
 func TestRunOwnsRateLimitRetryWaitAndDispatch(t *testing.T) {
 	scheduler := &triggerScheduler{created: make(chan *triggerTimer, 1)}
+	ctx, cancel := context.WithCancel(t.Context())
 	loop := &retryRunLoopProbe{deltas: messages.NewTypedBuffer[messages.StreamMessage](1), sent: make(chan messages.StreamMessage, 1)}
-	dispatched, done, result := make(chan messages.StreamMessage, 1), make(chan struct{}), make(chan error, 1)
-	go func() {
-		result <- New().Run(sessionduration.RunRequest{
-			Context: context.Background(), Inferencer: contractInferencer{session: newContractSession()}, Clock: scheduler,
+	dispatched, result := make(chan messages.StreamMessage, 1), make(chan error, 1)
+	go func(runCtx context.Context) {
+		result <- New().Run(sessionduration.RunRequest{ //nolint:contextcheck // Run receives context through RunRequest.Context.
+			Context: runCtx, Inferencer: contractInferencer{session: newContractSession()}, Clock: scheduler,
 			Retry: sessionduration.RetryPolicy{Enabled: true, MaxRetries: 2, DefaultDelay: time.Second},
 			LoopFactory: func(context.Context, sessionduration.AdmissionInferencer, sessionduration.Controller) (sessionduration.Loop, error) {
 				return loop, nil
 			},
-			RetryDispatched: func(msg messages.StreamMessage) { dispatched <- msg }, Done: done,
+			RetryDispatched: func(msg messages.StreamMessage) { dispatched <- msg },
 		})
-	}()
+	}(ctx)
 	timer := receiveRetryTimer(t, scheduler)
 	select {
 	case msg := <-loop.sent:
@@ -457,8 +461,15 @@ func TestRunOwnsRateLimitRetryWaitAndDispatch(t *testing.T) {
 		t.Fatal("second rate-limit terminal was not queued")
 	}
 	receiveRetryTimer(t, scheduler)
-	close(done)
-	assertRunStopped(t, result)
+	cancel()
+	select {
+	case err := <-result:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("Run after caller cancellation = %v, want context.Canceled", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Run did not stop within its bounded shutdown interval")
+	}
 	select {
 	case msg := <-loop.sent:
 		t.Fatalf("Run dispatched a retry after its completion signal: %+v", msg)
@@ -486,17 +497,6 @@ func assertRetryControl(t *testing.T, got <-chan messages.StreamMessage, timeout
 		}
 	case <-time.After(time.Second):
 		t.Fatal(timeoutMessage)
-	}
-}
-
-func assertRunStopped(t *testing.T, result <-chan error) {
-	select {
-	case err := <-result:
-		if err != nil {
-			t.Fatalf("Run after completion signal = %v, want nil", err)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("Run did not stop after its completion signal")
 	}
 }
 

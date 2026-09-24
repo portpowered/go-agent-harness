@@ -314,6 +314,10 @@ func (c *controller) EndLocalToolExecution() {
 		return
 	}
 	c.mu.Lock()
+	wasActive := c.localToolActive
 	c.localToolActive = false
 	c.mu.Unlock()
+	if wasActive {
+		c.armLiveness(false)
+	}
 }

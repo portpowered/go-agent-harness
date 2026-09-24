@@ -228,9 +228,9 @@ func TestControllerReportsUnavailableLivenessScheduler(t *testing.T) {
 
 func TestArtifactsPreserveAcceptedAudioTranscriptAndLifecycleErrors(t *testing.T) {
 	audioErr := errors.New("audio flush")
-	transcriptErr := errors.New("transcript close")
+	transcriptErr := errors.New("transcript lifecycle")
 	audio := &artifactAudioSink{flushErr: audioErr, closeErr: audioErr}
-	transcriptSink := &artifactTranscriptSink{closeErr: transcriptErr}
+	transcriptSink := &artifactTranscriptSink{flushErr: transcriptErr, closeErr: transcriptErr}
 	artifacts := NewSessionDurationArtifactSetWithSinks(audio, transcriptSink)
 	pcm := make([]byte, 4)
 	binary.LittleEndian.PutUint16(pcm[0:2], 12)
@@ -248,8 +248,8 @@ func TestArtifactsPreserveAcceptedAudioTranscriptAndLifecycleErrors(t *testing.T
 	if len(audio.samples) != 2 || audio.samples[0] != 12 || audio.samples[1] != -13 || len(transcriptSink.records) != 2 {
 		t.Fatalf("accepted artifacts = samples:%v records:%d", audio.samples, len(transcriptSink.records))
 	}
-	if err := artifacts.Flush(); !errors.Is(err, audioErr) {
-		t.Fatalf("Flush error = %v, want audio identity", err)
+	if err := artifacts.Flush(); !errors.Is(err, audioErr) || !errors.Is(err, transcriptErr) {
+		t.Fatalf("Flush error = %v, want both sink identities", err)
 	}
 	if err := artifacts.Close(); !errors.Is(err, audioErr) || !errors.Is(err, transcriptErr) {
 		t.Fatalf("Close error = %v, want both sink identities", err)
