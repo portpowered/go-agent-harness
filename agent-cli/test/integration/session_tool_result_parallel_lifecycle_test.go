@@ -582,7 +582,7 @@ func TestSessionParallelToolResultsTerminalFailureNamesOnlyRemainingCall(t *test
 	go func() {
 		runErr <- servicetest.RunSession(ctx, io.Discard, servicetest.SessionRunOptions{
 			AudioService:      newTestAudioService(),
-			RecordPath:        "parallel-tool-result-terminal-failure.session.json",
+			RecordPath:        t.TempDir() + "/parallel-tool-result-terminal-failure.session.json",
 			Provider:          "openai",
 			Model:             "gpt-realtime",
 			APIKey:            "test-key",
