@@ -33,6 +33,7 @@ type controller struct {
 	livenessStopped    bool
 	livenessFailure    error
 	livenessReported   bool
+	livenessResponseID string
 	firstCauseOnce     sync.Once
 	responseOutput     bool
 	responseComplete   bool
@@ -224,7 +225,14 @@ func (c *controller) observeCloseLocked(msg messages.StreamMessage) (sessiondura
 }
 
 func (c *controller) observeLivenessLocked(msg messages.StreamMessage) (arm, reset, disarm bool, failure error) {
-	if !c.options.Liveness.Enabled || msg.Role == messages.RoleTool || msg.ResponsePurpose == messages.ResponsePurposeToolAcknowledgement {
+	if msg.Type == messages.StreamTypeResponseCancel {
+		return false, false, true, nil
+	}
+	if isNonProviderRole(msg.Role) || isToolAcknowledgementResponse(msg) {
+		return false, false, false, nil
+	}
+	c.observeLivenessResponseIDLocked(msg)
+	if !c.options.Liveness.Enabled {
 		return false, false, false, nil
 	}
 	switch {
@@ -250,20 +258,25 @@ func (c *controller) observeLivenessLocked(msg messages.StreamMessage) (arm, res
 }
 
 func (c *controller) observeOutputLocked(msg messages.StreamMessage) {
+	if isNonProviderRole(msg.Role) {
+		return
+	}
 	//nolint:exhaustive // only response output boundaries affect this state.
 	switch msg.Type {
 	case messages.StreamTypeMessageStart:
 		c.responseOutput = false
 		c.responseComplete = false
 		c.toolObligation = false
+	case messages.StreamTypeResponseCreate:
+		if !isToolAcknowledgementResponse(msg) {
+			c.responseOutput = false
+			c.responseComplete = false
+			c.toolObligation = false
+		}
 	case messages.StreamTypeTextDelta, messages.StreamTypeReasoningDelta, messages.StreamTypeAudioDelta, messages.StreamTypeImageDelta, messages.StreamTypeVideoDelta, messages.StreamTypeFileDelta, messages.StreamTypeEmbeddingDelta, messages.StreamTypeToolCallDelta, messages.StreamTypeToolCallEnd, messages.StreamTypeRefusal:
-		if msg.Role != messages.RoleUser && msg.Role != messages.RoleTool {
-			c.responseOutput = true
-		}
+		c.responseOutput = true
 	case messages.StreamTypeTranscriptDelta:
-		if msg.Role != messages.RoleUser && msg.Role != messages.RoleTool {
-			c.responseOutput = true
-		}
+		c.responseOutput = true
 	case messages.StreamTypeToolCallStart:
 		c.toolObligation = true
 	case messages.StreamTypeMessageEnd:

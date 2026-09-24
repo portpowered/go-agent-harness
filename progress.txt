@@ -5085,3 +5085,61 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   reproducible behavior repair is complete, commit the candidate and rerun
   `make prepush` plus every C276 functional, integration, race, hermetic, and
   Wire command on that exact SHA. Decision remains CONTINUE.
+
+# C276 public-runtime repair checkpoint — 2026-09-24
+
+- On the same admitted branch, repaired four public runtime defects: user/system
+  messages no longer start liveness timers or clear provider output state;
+  retry fallback respects `MaxDelay`; closed wake channels are disabled instead
+  of repeatedly invoking `OnWake`; liveness timeout errors retain the active
+  provider response ID. Added public regressions for those behaviors, retry
+  scheduler failure/deadline interruption, terminal-recorder error propagation,
+  and host/publication/loop-close error propagation.
+- `rtk go test -count=1 ./go-agent-runtime/services/sessionduration/...` and
+  its `-race` form pass (75 tests / 3 packages); `rtk make lint` passes all
+  modules; `rtk make verify-architecture` passes (230 packages, 2,015 files,
+  29,765 functions). The fresh runtime coverage profile measures
+  `sessionduration/internal/service` at 87.43% (1,106/1,265), still below the
+  required 90.00% floor. The prior full prepush at `3b13b1d1` also stopped only
+  at that package floor (86.4% on that earlier candidate).
+- Rechecked all 13 retirement/checkpoint paths are absent, both stateless
+  adapters total 63 lines, the browser recording boundary matches `origin/main`,
+  and fetched `origin/main` is an ancestor. The two unrelated integration
+  fixtures remain untouched. No push, PR, hosted CI, or review handoff occurred.
+- Exact next action: inspect the remaining uncovered session-duration paths for
+  concrete public failures or bounded-shutdown defects; do not add tests only to
+  reach the floor. Repair any confirmed defect, then rerun local focused and
+  full C276-05/06 checks plus `make prepush` on one committed exact SHA before
+  any push. Decision remains CONTINUE.
+
+# C276 response/cancellation boundary checkpoint — 2026-09-24
+
+- Further public-path review found two liveness defects: tool acknowledgement
+  purpose arrives in `ResponseCreateValue`, so checking only the stream metadata
+  armed the provider watchdog during tool work; and user-role `RESPONSE.CANCEL`
+  did not disarm the watchdog. The service now ignores acknowledgements in both
+  liveness and output projection, clears prior output on a normal new response,
+  and disarms on cancellation. Public regressions cover cancellation, fresh
+  response identity, timeout identity, and prior-output isolation.
+- The focused session-duration normal and race suites pass (76 tests / 3
+  packages), `rtk make lint` passes all modules, and `rtk make
+  verify-architecture` passes (230 packages, 2,015 files, 29,769 functions).
+  Fresh runtime coverage is 87.86% (1,122/1,277) for
+  `sessionduration/internal/service`, below the required 90.00% floor.
+- No caller or retirement paths changed: all 13 named paths remain absent, the
+  stateless adapters remain 63 lines, and browser preservation and main ancestry
+  checks pass. No push, PR, hosted CI, or review handoff occurred.
+- Exact next action: continue the code review of remaining uncovered paths for
+  concrete public behavior defects, then commit the causal repairs and rerun the
+  complete C276-05/06 suite and `make prepush` on the same exact candidate. Keep
+  coverage floors unchanged and add no coverage-only tests. Decision remains
+  CONTINUE.
+
+- Follow-up: a tool-acknowledgement response request is not a provider turn;
+  normal `RESPONSE.CREATE` begins a fresh output projection, while user-role
+  `RESPONSE.CANCEL` stops the silence watchdog. Added a public regression for
+  all three boundaries and for rearming with the subsequent response ID.
+  Normal/race focused checks now pass (76 tests / 3 packages), lint and
+  architecture pass, and the refreshed service coverage is 87.86%
+  (1,122/1,277). This remains below the unchanged 90.00% floor; no prepush or
+  C276-05/06 full suite has been run on checkpoint `e8c481d`.

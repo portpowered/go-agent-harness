@@ -37,6 +37,9 @@ func EvaluateRetry(policy sessionduration.RetryPolicy, terminal *messages.Messag
 	if maxDelay <= 0 {
 		maxDelay = defaultRetryMaxDelay
 	}
+	if defaultDelay > maxDelay {
+		defaultDelay = maxDelay
+	}
 	return sessionduration.RetryDecision{Delay: retryDelay(retryMessage(terminal), defaultDelay, maxDelay), Eligible: true}
 }
 

@@ -28,9 +28,13 @@ func (c *controller) makeLivenessErrorLocked(msg messages.StreamMessage, timeout
 		classification = "silent_provider_timeout"
 		cause = sessionduration.ErrProviderLivenessTimeout
 	}
+	responseID := strings.TrimSpace(msg.ResponseID)
+	if responseID == "" {
+		responseID = c.livenessResponseID
+	}
 	err := &sessionduration.LivenessError{
 		Classification:     classification,
-		ResponseID:         strings.TrimSpace(msg.ResponseID),
+		ResponseID:         responseID,
 		TerminalReason:     messages.TerminalReasonTerminalFailure,
 		TerminalProvenance: messages.TerminalProvenanceSession,
 		OutputState:        messages.TerminalOutputNone,
@@ -42,8 +46,18 @@ func (c *controller) makeLivenessErrorLocked(msg messages.StreamMessage, timeout
 	return err
 }
 
+func (c *controller) observeLivenessResponseIDLocked(msg messages.StreamMessage) {
+	if msg.Type == messages.StreamTypeMessageStart || msg.Type == messages.StreamTypeResponseCreate {
+		c.livenessResponseID = strings.TrimSpace(msg.ResponseID)
+		return
+	}
+	if responseID := strings.TrimSpace(msg.ResponseID); responseID != "" {
+		c.livenessResponseID = responseID
+	}
+}
+
 func isProviderOutput(msg messages.StreamMessage) bool {
-	if msg.Role == messages.RoleUser || msg.Role == messages.RoleTool {
+	if isNonProviderRole(msg.Role) {
 		return false
 	}
 	//nolint:exhaustive // only provider output boundaries affect liveness.
@@ -53,6 +67,21 @@ func isProviderOutput(msg messages.StreamMessage) bool {
 	default:
 		return false
 	}
+}
+
+func isToolAcknowledgementResponse(msg messages.StreamMessage) bool {
+	if msg.ResponsePurpose == messages.ResponsePurposeToolAcknowledgement {
+		return true
+	}
+	if msg.Type != messages.StreamTypeResponseCreate {
+		return false
+	}
+	value, ok := msg.Value.(*messages.ResponseCreateValue)
+	return ok && value.IsToolAcknowledgement()
+}
+
+func isNonProviderRole(role messages.Role) bool {
+	return role == messages.RoleUser || role == messages.RoleSystem || role == messages.RoleTool
 }
 
 func (c *controller) armLiveness(onlyIfArmed bool) {

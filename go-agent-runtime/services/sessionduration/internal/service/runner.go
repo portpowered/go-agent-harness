@@ -158,6 +158,7 @@ const (
 	runLoopDone
 	runLoopMessage
 	runLoopContext
+	runLoopWakeClosed
 )
 
 func (r *runLoop) run() error {
@@ -184,7 +185,11 @@ func (r *runLoop) nextEvent() runLoopEvent {
 		return runLoopEvent{kind: runLoopError, err: err}
 	case err := <-r.request.ExternalErrors:
 		return runLoopEvent{kind: runLoopExternalError, err: err}
-	case <-r.request.Wake:
+	case _, ok := <-r.request.Wake:
+		if !ok {
+			r.request.Wake = nil
+			return runLoopEvent{kind: runLoopWakeClosed}
+		}
 		return runLoopEvent{kind: runLoopWake}
 	case <-r.request.Done:
 		return runLoopEvent{kind: runLoopDone}
@@ -207,6 +212,8 @@ func (r *runLoop) handleEvent(event runLoopEvent) (error, bool) {
 		return r.finish(false, event.err), true
 	case runLoopWake:
 		return r.handleWake()
+	case runLoopWakeClosed:
+		return nil, false
 	case runLoopDone:
 		return r.finish(false, runLoopDoneError(r.request)), true
 	case runLoopMessage:
