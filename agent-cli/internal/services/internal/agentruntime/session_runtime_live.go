@@ -9,6 +9,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimedevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
@@ -26,7 +27,7 @@ func RunSessionWithRuntimeFactory(ctx context.Context, out io.Writer, opts Sessi
 	return RunSession(ctx, out, opts)
 }
 
-func (p *sessionRuntimePlan) bindRTC(ctx context.Context, finalizer *sessionRuntimeFinalizer) error {
+func (p *sessionRuntimePlan) bindRTC(ctx context.Context, finalizer sessionduration.Finalizer) error {
 	if p.deviceService == nil {
 		if p.rtcDeviceRequest.HasDevices() {
 			return runtimedevices.ErrUnavailable
@@ -44,7 +45,7 @@ func (p *sessionRuntimePlan) bindRTC(ctx context.Context, finalizer *sessionRunt
 	}
 	p.inferencer = binding.Inferencer()
 	p.loop.rtcDeviceBinding = binding
-	finalizer.setRTCBinding(binding)
+	finalizer.SetDeviceBinding(binding.Close)
 	if selected, ok := binding.(runtimedevices.RTCBindingDeviceSelection); ok {
 		inputDevice, outputDevice := selected.SelectedDeviceIDs()
 		if p.rtcDeviceRequest.InputDevice == "" {

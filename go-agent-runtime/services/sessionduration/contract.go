@@ -316,6 +316,17 @@ type Service interface {
 	IsDurationShutdownMessage(messages.StreamMessage) bool
 	IsDurationForwardMessage(messages.StreamMessage) bool
 	RecordingTerminalSummaryFromMessage(messages.StreamMessage) (*transcript.RecordingTerminalSummary, bool, error)
+	// NewTranscript and WriteMessage own operator-facing stream rendering for
+	// bounded and unbounded session loops.
+	NewTranscript(io.Writer, TranscriptObserver) Transcript
+	WriteMessage(io.Writer, messages.StreamMessage) error
+	// ShouldStop, DrainStragglers, DrainBuffered, CloseLoop, and
+	// TerminationError own the shared shutdown decisions of a session loop.
+	ShouldStop(messages.StreamMessage, StopPolicy) bool
+	DrainStragglers(context.Context, StragglerDrain) error
+	DrainBuffered(*messages.TypedBuffer[messages.StreamMessage], func(messages.StreamMessage) (bool, error)) (bool, error)
+	CloseLoop(context.Context, Loop) error
+	TerminationError(context.Context, error) error
 }
 
 // TerminalRecorder receives the normalized terminal summary emitted by a

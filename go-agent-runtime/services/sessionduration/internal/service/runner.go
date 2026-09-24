@@ -8,6 +8,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/internal/stream"
 )
 
 const defaultLoopJoinTimeout = 5 * time.Second
@@ -63,6 +64,7 @@ func (s *Service) Run(request sessionduration.RunRequest) error {
 		runErrs:    make(chan error, 1),
 		service:    s,
 	}
+	runner.bindSources()
 	runner.start()
 	if err := durationController.Start(); err != nil {
 		return runner.finish(false, err)
@@ -133,6 +135,9 @@ type runLoop struct {
 	runErrs    chan error
 	loopErr    error
 	loopDone   bool
+	external   <-chan error
+	done       <-chan struct{}
+	updated    sessionTimer
 	pending    []messages.StreamMessage
 	finishOnce sync.Once
 	startOnce  sync.Once
@@ -159,10 +164,12 @@ const (
 	runLoopMessage
 	runLoopContext
 	runLoopWakeClosed
+	runLoopSessionUpdated
 )
 
 func (r *runLoop) run() error {
 	defer r.cancelRun()
+	defer r.stopSessionUpdated()
 	r.start()
 	for {
 		if result, done := r.handleEvent(r.nextEvent()); done {
@@ -183,7 +190,7 @@ func (r *runLoop) nextEvent() runLoopEvent {
 		return runLoopEvent{kind: runLoopControllerError, err: err}
 	case err := <-r.runErrs:
 		return runLoopEvent{kind: runLoopError, err: err}
-	case err := <-r.request.ExternalErrors:
+	case err := <-r.external:
 		return runLoopEvent{kind: runLoopExternalError, err: err}
 	case _, ok := <-r.request.Wake:
 		if !ok {
@@ -191,8 +198,10 @@ func (r *runLoop) nextEvent() runLoopEvent {
 			return runLoopEvent{kind: runLoopWakeClosed}
 		}
 		return runLoopEvent{kind: runLoopWake}
-	case <-r.request.Done:
+	case <-r.done:
 		return runLoopEvent{kind: runLoopDone}
+	case <-r.sessionUpdatedC():
+		return runLoopEvent{kind: runLoopSessionUpdated}
 	case msg, ok := <-r.loop.Deltas().Chan():
 		return runLoopEvent{kind: runLoopMessage, msg: msg, valid: ok}
 	case <-r.ctx.Done():
@@ -229,6 +238,9 @@ func (r *runLoop) handleEvent(event runLoopEvent) (error, bool) {
 		return nil, false
 	case runLoopContext:
 		return r.finish(false, event.err), true
+	case runLoopSessionUpdated:
+		r.stopSessionUpdated()
+		return r.finish(false, r.request.SessionUpdated.TimeoutError), true
 	default:
 		return nil, false
 	}
@@ -280,7 +292,7 @@ func (r *runLoop) process(msg messages.StreamMessage) error {
 		return nil
 	}
 	if r.request.Handle == nil {
-		return nil
+		return r.observeSessionUpdated(admission.Message)
 	}
 	result, err := r.request.Handle(r.runCtx, r.loop, r.controller, admission.Message)
 	if err != nil {
@@ -290,7 +302,7 @@ func (r *runLoop) process(msg messages.StreamMessage) error {
 		return err
 	}
 	if !result.Stop {
-		return nil
+		return r.observeSessionUpdated(admission.Message)
 	}
 	return r.finish(result.Planned, nil)
 }
@@ -305,7 +317,8 @@ func (r *runLoop) finish(planned bool, primary error) error {
 		if drainPolicy.Clock == nil {
 			drainPolicy.Clock = r.request.Clock
 		}
-		_, finalizeErr := r.controller.Finalize(r.ctx, sessionduration.FinalizeRequest{
+		r.stopSessionUpdated()
+		result, finalizeErr := r.controller.Finalize(r.ctx, sessionduration.FinalizeRequest{
 			Primary: primary,
 			Drain: func(ctx context.Context) error {
 				drainErr := r.drainPending()
@@ -328,6 +341,7 @@ func (r *runLoop) finish(planned bool, primary error) error {
 				if errors.Is(primary, loopErr) {
 					loopErr = nil
 				}
+				r.awaitAdmissionClose()
 				return errors.Join(closeErr, loopErr)
 			},
 			Binding:   r.request.Binding,
@@ -337,7 +351,23 @@ func (r *runLoop) finish(planned bool, primary error) error {
 			Runtime: r.admitted.RuntimeError(),
 			Close:   r.admitted.CloseError(),
 		}))
+		r.finishErr = r.complete(result, r.finishErr)
 		r.finished = true
 	})
 	return r.finishErr
+}
+
+// bindSources evaluates host signal sources once the loop exists. Forwarding
+// workers stop with the run context, so no worker outlives the run.
+func (r *runLoop) bindSources() {
+	errorSources := []<-chan error{r.request.ExternalErrors}
+	if r.request.ExternalErrorSources != nil {
+		errorSources = append(errorSources, r.request.ExternalErrorSources()...)
+	}
+	r.external = stream.FanInErrors(r.runCtx, errorSources)
+	doneSources := []<-chan struct{}{r.request.Done}
+	if r.request.DoneSources != nil {
+		doneSources = append(doneSources, r.request.DoneSources()...)
+	}
+	r.done = stream.FanInDone(r.runCtx, doneSources)
 }

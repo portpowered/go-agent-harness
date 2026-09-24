@@ -14,6 +14,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
@@ -310,6 +311,6 @@ func runReplayCapture(ctx context.Context, out io.Writer, service replay.Service
 		return err
 	}
 	defer func() { runErr = errors.Join(runErr, capture.Close()) }()
-	runErr = capture.Drain(ctx, func(msg messages.StreamMessage) error { return writeSessionReplayMessage(out, msg) })
+	runErr = capture.Drain(ctx, func(msg messages.StreamMessage) error { return durationwire.NewService().WriteMessage(out, msg) })
 	return errors.Join(runErr, capture.Err())
 }

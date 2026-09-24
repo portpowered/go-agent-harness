@@ -201,3 +201,56 @@ func (r *runLoop) drainPending() error {
 	r.pending = nil
 	return nil
 }
+
+// complete lets the host observe the finalized snapshot and joined result.
+func (r *runLoop) complete(result sessionduration.Result, err error) error {
+	if r.request.Completion == nil {
+		return err
+	}
+	return errors.Join(err, r.request.Completion(result, err))
+}
+
+// awaitAdmissionClose waits for the admitted provider session to finish
+// closing once the loop that owns it has joined.
+func (r *runLoop) awaitAdmissionClose() {
+	if r.request.AwaitAdmissionClose && r.loopDone {
+		r.admitted.WaitForClose()
+	}
+}
+
+// observeSessionUpdated arms the configuration acknowledgement bound after an
+// admitted SESSION.OPEN and disarms it once the host reports readiness.
+func (r *runLoop) observeSessionUpdated(msg messages.StreamMessage) error {
+	wait := r.request.SessionUpdated
+	if wait.Timeout <= 0 {
+		return nil
+	}
+	if msg.Type == messages.StreamTypeSessionOpen && r.updated == nil && (wait.Pending == nil || wait.Pending()) {
+		if r.request.Clock == nil {
+			return fmt.Errorf("session-updated wait: %w", sessionduration.ErrSchedulerUnavailable)
+		}
+		timer := r.request.Clock.NewTimer(wait.Timeout)
+		if timer == nil {
+			return fmt.Errorf("session duration clock returned a nil session-updated timer: %w", sessionduration.ErrSchedulerUnavailable)
+		}
+		r.updated = timer
+	}
+	if r.updated != nil && wait.Ready != nil && wait.Ready() {
+		r.stopSessionUpdated()
+	}
+	return nil
+}
+
+func (r *runLoop) sessionUpdatedC() <-chan time.Time {
+	if r.updated == nil {
+		return nil
+	}
+	return r.updated.C()
+}
+
+func (r *runLoop) stopSessionUpdated() {
+	if r.updated != nil {
+		r.updated.Stop()
+		r.updated = nil
+	}
+}

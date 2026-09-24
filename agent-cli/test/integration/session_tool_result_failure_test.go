@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -156,23 +157,25 @@ func runUnresolvedFailureSession(t *testing.T, session *unresolvedFailureSession
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
 	return runUnresolvedFailureSessionWithContext(ctx, &sessionRunInputs{
-		session:  session,
-		executor: executor,
-		sink:     sink,
+		recordDir: t.TempDir(),
+		session:   session,
+		executor:  executor,
+		sink:      sink,
 	})
 }
 
 type sessionRunInputs struct {
-	session  *unresolvedFailureSession
-	executor *unresolvedFailureToolExecutor
-	sink     *unresolvedToolDiagnosticSink
+	recordDir string
+	session   *unresolvedFailureSession
+	executor  *unresolvedFailureToolExecutor
+	sink      *unresolvedToolDiagnosticSink
 }
 
 func runUnresolvedFailureSessionWithContext(ctx context.Context, inputs *sessionRunInputs) error {
 	var out bytes.Buffer
 	return servicetest.RunSession(ctx, &out, servicetest.SessionRunOptions{
 		AudioService:      newTestAudioService(),
-		RecordPath:        "unresolved-tool-result.session.json",
+		RecordPath:        filepath.Join(inputs.recordDir, "unresolved-tool-result.session.json"),
 		Provider:          "grok",
 		Model:             "grok-realtime",
 		APIKey:            "test-key",
@@ -271,9 +274,10 @@ func TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic(t *tes
 		runErr := make(chan error, 1)
 		go func() {
 			runErr <- runUnresolvedFailureSessionWithContext(ctx, &sessionRunInputs{
-				session:  session,
-				executor: executor,
-				sink:     sink,
+				recordDir: t.TempDir(),
+				session:   session,
+				executor:  executor,
+				sink:      sink,
 			})
 		}()
 		waitLifecycleSignal(t, executor.started, "unresolved tool executor to start before cancellation")
@@ -302,9 +306,10 @@ func TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic(t *tes
 		runErr := make(chan error, 1)
 		go func() {
 			runErr <- runUnresolvedFailureSessionWithContext(ctx, &sessionRunInputs{
-				session:  session,
-				executor: executor,
-				sink:     sink,
+				recordDir: t.TempDir(),
+				session:   session,
+				executor:  executor,
+				sink:      sink,
 			})
 		}()
 		waitLifecycleSignal(t, executor.started, "unresolved tool executor to start before deadline")
@@ -329,9 +334,10 @@ func TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic(t *tes
 		runErr := make(chan error, 1)
 		go func() {
 			runErr <- runUnresolvedFailureSessionWithContext(ctx, &sessionRunInputs{
-				session:  session,
-				executor: executor,
-				sink:     sink,
+				recordDir: t.TempDir(),
+				session:   session,
+				executor:  executor,
+				sink:      sink,
 			})
 		}()
 		waitLifecycleSignal(t, executor.started, "unresolved tool executor to start before client close")

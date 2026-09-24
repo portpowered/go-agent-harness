@@ -229,9 +229,9 @@ func (p sessionRuntimePlan) runPrepared(ctx context.Context, out io.Writer) (run
 		reporter = sessionterminalwire.NewReporter()
 		p.loop.terminalReporter = reporter
 	}
-	finalizer := newSessionRuntimeFinalizer(p)
+	finalizer := p.newFinalizer(reporter)
 	defer func() {
-		runErr = finalizer.finish(ctx, out, runErr)
+		runErr = p.finishDurationArtifacts(ctx, reporter, finalizer.Finish(ctx, out, runErr))
 		if !sessionterminalwire.HasIndependentFailure(runErr) && p.replayCompletion != nil {
 			p.replayCompletion(reporter)
 		}
@@ -245,7 +245,7 @@ func (p sessionRuntimePlan) runPrepared(ctx context.Context, out io.Writer) (run
 	if err := p.bindRTC(ctx, finalizer); err != nil {
 		return err
 	}
-	if err := p.writeAnnouncements(out, true); err != nil {
+	if err := p.writeAnnouncements(out, p.loop.durationBound <= 0); err != nil {
 		return err
 	}
 	loopOut := out
@@ -254,6 +254,7 @@ func (p sessionRuntimePlan) runPrepared(ctx context.Context, out io.Writer) (run
 	}
 	loop := p.loop
 	p.configureLoopObserver(&loop)
+	loop.durationCompletionPublisher = p.durationCompletionPublisher(ctx, loop.observer)
 	if p.inferencer != nil {
 		reporter.MarkRunStarted()
 		if err := runAgentLoopSession(ctx, loopOut, p.inferencer, loop); err != nil {
@@ -295,8 +296,7 @@ func writeSessionToolAnnouncement(out io.Writer, definitions []messages.ToolDefi
 }
 
 // configureLoopObserver installs the shared stream observer for every session
-// runner mode, including the duration-bounded path which executes plan.loop
-// directly instead of calling plan.run.
+// runner mode, including the service-owned duration-bounded path.
 func (p sessionRuntimePlan) configureLoopObserver(loop *sessionLoopOptions) {
 	if loop == nil {
 		return

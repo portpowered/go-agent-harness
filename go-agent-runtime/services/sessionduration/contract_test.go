@@ -2,6 +2,7 @@ package sessionduration
 
 import (
 	"context"
+	"io"
 	"testing"
 	"time"
 
@@ -69,4 +70,13 @@ func (serviceProbe) IsDurationShutdownMessage(messages.StreamMessage) bool { ret
 func (serviceProbe) IsDurationForwardMessage(messages.StreamMessage) bool  { return false }
 func (serviceProbe) RecordingTerminalSummaryFromMessage(messages.StreamMessage) (*transcript.RecordingTerminalSummary, bool, error) {
 	return nil, false, nil
+}
+func (serviceProbe) NewTranscript(io.Writer, TranscriptObserver) Transcript { return nil }
+func (serviceProbe) WriteMessage(io.Writer, messages.StreamMessage) error   { return nil }
+func (serviceProbe) ShouldStop(messages.StreamMessage, StopPolicy) bool     { return false }
+func (serviceProbe) DrainStragglers(context.Context, StragglerDrain) error  { return nil }
+func (serviceProbe) CloseLoop(context.Context, Loop) error                  { return nil }
+func (serviceProbe) TerminationError(context.Context, error) error          { return nil }
+func (serviceProbe) DrainBuffered(*messages.TypedBuffer[messages.StreamMessage], func(messages.StreamMessage) (bool, error)) (bool, error) {
+	return false, nil
 }
