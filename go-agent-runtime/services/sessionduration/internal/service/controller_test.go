@@ -124,6 +124,8 @@ func TestControllerArbitratesFirstCauseOnce(t *testing.T) {
 	clock := platformclock.NewDeterministic(time.Unix(30, 0), time.Millisecond)
 	var causes []error
 	causeCalled := make(chan struct{}, 2)
+	causeRelease := make(chan struct{}, 1)
+	t.Cleanup(func() { close(causeRelease) })
 	controller, err := New().Begin(sessionduration.Options{
 		Clock:       clock,
 		MaxDuration: time.Second,
@@ -131,6 +133,7 @@ func TestControllerArbitratesFirstCauseOnce(t *testing.T) {
 		FirstCause: func(cause error) {
 			causes = append(causes, cause)
 			causeCalled <- struct{}{}
+			<-causeRelease
 		},
 	})
 	if err != nil {
@@ -139,15 +142,18 @@ func TestControllerArbitratesFirstCauseOnce(t *testing.T) {
 	controller.Observe(messages.StreamMessage{Type: messages.StreamTypeMessageStart})
 	clock.AdvanceBy(5 * time.Millisecond)
 	select {
-	case <-controller.Errors():
-	case <-time.After(time.Second):
-		t.Fatal("liveness failure was not reported")
-	}
-	select {
 	case <-causeCalled:
 	case <-time.After(time.Second):
 		t.Fatal("first-cause callback was not called")
 	}
+	err = <-controller.Errors()
+	if !errors.Is(err, sessionduration.ErrProviderLivenessTimeout) {
+		t.Fatalf("liveness error = %v, want timeout identity", err)
+	}
+	if got := controller.LivenessFailure(); !errors.Is(got, sessionduration.ErrProviderLivenessTimeout) {
+		t.Fatalf("LivenessFailure() while its published error callback is blocked = %v, want timeout identity", got)
+	}
+	causeRelease <- struct{}{}
 	if err := controller.Expire(); !errors.Is(err, sessionduration.ErrMaxDurationExceeded) {
 		t.Fatalf("Expire: %v", err)
 	}

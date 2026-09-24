@@ -99,6 +99,20 @@ func TestAdmissionDrainRetainsOutputAndTerminalAfterAdmissionCloses(t *testing.T
 	if !wrapped.IsProviderTerminalMessage(gotTerminal) {
 		t.Fatal("close drain lost provider terminal identity")
 	}
+	for wrapped.receive.Len() < wrapped.receive.Cap() {
+		wrapped.receive.Write(context.Background(), output)
+	}
+	if !inner.receive.Write(context.Background(), terminal) {
+		t.Fatal("could not queue terminal for close drain")
+	}
+	wrapped.drainSourceAfterClose()
+	foundTerminal := false
+	for drained, ok := wrapped.receive.Read(); ok; drained, ok = wrapped.receive.Read() {
+		foundTerminal = foundTerminal || drained.Type == messages.StreamTypeSessionClose
+	}
+	if !foundTerminal {
+		t.Fatal("buffer pressure dropped the provider terminal")
+	}
 }
 
 func TestAdmissionInferencerRecordsConnectionFailureAndClosesEmptyBoundary(t *testing.T) {
@@ -215,7 +229,7 @@ func TestControllerReportsUnavailableLivenessScheduler(t *testing.T) {
 func TestArtifactsPreserveAcceptedAudioTranscriptAndLifecycleErrors(t *testing.T) {
 	audioErr := errors.New("audio flush")
 	transcriptErr := errors.New("transcript close")
-	audio := &artifactAudioSink{flushErr: audioErr}
+	audio := &artifactAudioSink{flushErr: audioErr, closeErr: audioErr}
 	transcriptSink := &artifactTranscriptSink{closeErr: transcriptErr}
 	artifacts := NewSessionDurationArtifactSetWithSinks(audio, transcriptSink)
 	pcm := make([]byte, 4)
@@ -237,8 +251,8 @@ func TestArtifactsPreserveAcceptedAudioTranscriptAndLifecycleErrors(t *testing.T
 	if err := artifacts.Flush(); !errors.Is(err, audioErr) {
 		t.Fatalf("Flush error = %v, want audio identity", err)
 	}
-	if err := artifacts.Close(); !errors.Is(err, transcriptErr) {
-		t.Fatalf("Close error = %v, want transcript identity", err)
+	if err := artifacts.Close(); !errors.Is(err, audioErr) || !errors.Is(err, transcriptErr) {
+		t.Fatalf("Close error = %v, want both sink identities", err)
 	}
 	if err := artifacts.Close(); !errors.Is(err, transcriptErr) {
 		t.Fatalf("second Close error = %v, want cached identity", err)
@@ -451,8 +465,10 @@ func TestControllerDrainsExpiredOutputAndReportsEmptyProviderResponse(t *testing
 	if admission := controller.Observe(messages.StreamMessage{Type: messages.StreamTypeTextDelta}); admission.Accepted {
 		t.Fatal("closed controller admitted output")
 	}
-	if admission := controller.ObserveDrain(messages.StreamMessage{Type: messages.StreamTypeTextDelta}); admission.Accepted {
-		t.Fatal("closed controller admitted output after finalization")
+	for _, msg := range []messages.StreamMessage{{Type: messages.StreamTypeTextDelta}, {Type: messages.StreamTypeSessionClose}} {
+		if admission := controller.ObserveDrain(msg); admission.Accepted {
+			t.Fatalf("closed controller admitted %s after finalization", msg.Type)
+		}
 	}
 
 	liveness, err := New().Begin(sessionduration.Options{
@@ -462,7 +478,6 @@ func TestControllerDrainsExpiredOutputAndReportsEmptyProviderResponse(t *testing
 	if err != nil {
 		t.Fatalf("Begin liveness: %v", err)
 	}
-	liveness.Observe(messages.StreamMessage{Type: messages.StreamTypeMessageStart})
 	empty := messages.StreamMessage{
 		Type: messages.StreamTypeMessageEnd,
 		Value: &messages.MessageEndValue{
@@ -470,15 +485,14 @@ func TestControllerDrainsExpiredOutputAndReportsEmptyProviderResponse(t *testing
 			OutputState:    messages.TerminalOutputNone,
 		},
 	}
-	admission := liveness.Observe(empty)
-	if !errors.Is(admission.LivenessErr, sessionduration.ErrProviderEmptyResponse) {
-		t.Fatalf("empty response admission = %+v, want typed liveness failure", admission)
+	deltas := messages.NewTypedBuffer[messages.StreamMessage](1)
+	deltas.Write(context.Background(), empty)
+	_, err = liveness.Finalize(context.Background(), sessionduration.FinalizeRequest{DrainLoop: &idleRunLoopProbe{deltas: deltas}})
+	if !errors.Is(err, sessionduration.ErrProviderEmptyResponse) {
+		t.Fatalf("Finalize drain error = %v, want typed empty-response failure", err)
 	}
 	if !errors.Is(liveness.LivenessFailure(), sessionduration.ErrProviderEmptyResponse) {
 		t.Fatalf("LivenessFailure() = %v, want empty-response identity", liveness.LivenessFailure())
-	}
-	if _, err := liveness.Finalize(context.Background(), sessionduration.FinalizeRequest{}); err != nil {
-		t.Fatalf("Finalize liveness: %v", err)
 	}
 }
 

@@ -215,10 +215,10 @@ func (c *controller) report(err error) {
 }
 
 func (c *controller) reportLiveness(err error) {
-	c.report(err)
 	c.mu.Lock()
 	c.livenessReported = true
 	c.mu.Unlock()
+	c.report(err)
 }
 
 func (c *controller) Expire() error {

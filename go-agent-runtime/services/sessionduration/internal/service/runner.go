@@ -260,6 +260,9 @@ func (r *runLoop) process(msg messages.StreamMessage) error {
 	if err := publish(r.request.Publication, admission.Message); err != nil {
 		return err
 	}
+	if admission.LivenessErr != nil {
+		return admission.LivenessErr
+	}
 	if err := r.retry(admission.Message); err != nil {
 		if errors.Is(err, sessionduration.ErrMaxDurationExceeded) {
 			return r.finish(true, nil)

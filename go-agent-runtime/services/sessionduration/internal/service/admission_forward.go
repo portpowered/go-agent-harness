@@ -34,6 +34,13 @@ func isTerminalErrorMessage(msg messages.StreamMessage) bool {
 	return !ok || value.IsTerminal()
 }
 
+func writeAdmittedMessage(receive *messages.TypedBuffer[messages.StreamMessage], ctx context.Context, msg messages.StreamMessage) bool {
+	if IsDurationShutdownMessage(msg) {
+		return receive.WriteTerminal(msg)
+	}
+	return receive.Write(ctx, msg)
+}
+
 var _ messages.SessionInferencer = (*AdmissionInferencer)(nil)
 var _ messages.Session = (*AdmissionSession)(nil)
 
@@ -74,7 +81,7 @@ func (s *AdmissionSession) drainSourceAfterClose() {
 		}
 		s.observeProviderMessage(msg)
 		if IsDurationForwardMessage(msg) {
-			s.receive.Write(context.Background(), msg)
+			writeAdmittedMessage(s.receive, context.Background(), msg)
 		}
 	}
 }
@@ -96,7 +103,7 @@ func (s *AdmissionSession) drainSource(ctx context.Context, source *messages.Typ
 		// close became visible to this forwarding worker. Retain it for the
 		// service controller to classify during the bounded drain; that boundary
 		// rejects late nonterminal output without losing an already-read delta.
-		s.receive.Write(ctx, msg)
+		writeAdmittedMessage(s.receive, ctx, msg)
 	}
 }
 
@@ -110,5 +117,5 @@ func (s *AdmissionSession) forwardMessage(ctx context.Context, msg messages.Stre
 	}
 	// Preserve a provider message already removed by this worker so the
 	// service controller can classify it during its bounded drain.
-	s.receive.Write(ctx, msg)
+	writeAdmittedMessage(s.receive, ctx, msg)
 }

@@ -35,7 +35,7 @@ func (a *EventAdmission) closeWithDrain(receive, source *messages.TypedBuffer[me
 		if receive != nil && source != nil {
 			for {
 				msg, ok := source.Read()
-				if !ok || !receive.Write(context.Background(), msg) {
+				if !ok || !writeAdmittedMessage(receive, context.Background(), msg) {
 					break
 				}
 				if onAdmit != nil {
@@ -55,7 +55,7 @@ func (a *EventAdmission) admit(ctx context.Context, receive *messages.TypedBuffe
 	if a.closed {
 		return false
 	}
-	return receive.Write(ctx, msg)
+	return writeAdmittedMessage(receive, ctx, msg)
 }
 
 // AdmissionInferencer inserts the admission boundary between

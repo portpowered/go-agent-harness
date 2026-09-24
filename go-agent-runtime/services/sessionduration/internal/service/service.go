@@ -175,9 +175,11 @@ func (s *terminalState) observe(msg messages.StreamMessage) {
 		messages.StreamTypeToolCallDelta,
 		messages.StreamTypeToolCallEnd,
 		messages.StreamTypeRefusal:
-		s.responseOutput = true
+		if msg.Role != messages.RoleUser && msg.Role != messages.RoleTool {
+			s.responseOutput = true
+		}
 	case messages.StreamTypeTranscriptDelta:
-		if msg.Role != messages.RoleUser {
+		if msg.Role != messages.RoleUser && msg.Role != messages.RoleTool {
 			s.responseOutput = true
 		}
 	case messages.StreamTypeMessageEnd:

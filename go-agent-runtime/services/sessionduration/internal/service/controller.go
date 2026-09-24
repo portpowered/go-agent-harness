@@ -178,6 +178,10 @@ func (c *controller) ObserveDrain(msg messages.StreamMessage) sessionduration.Ad
 		return sessionduration.Admission{Message: msg}
 	}
 	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return sessionduration.Admission{Message: msg}
+	}
 	if !c.expired {
 		c.mu.Unlock()
 		return c.Observe(msg)
@@ -189,10 +193,6 @@ func (c *controller) ObserveDrain(msg messages.StreamMessage) sessionduration.Ad
 			c.stopLiveness()
 		}
 		return admission
-	}
-	if c.closed {
-		c.mu.Unlock()
-		return sessionduration.Admission{Message: msg}
 	}
 	if msg.Type == messages.StreamTypeError {
 		admission := sessionduration.Admission{Message: msg, OutputState: c.outputState}

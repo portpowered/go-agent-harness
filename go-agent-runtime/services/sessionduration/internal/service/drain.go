@@ -101,7 +101,10 @@ func (c *controller) admitAndPublishDrain(msg messages.StreamMessage) error {
 	if !admission.Accepted {
 		return nil
 	}
-	return publish(c.options.Publication, admission.Message)
+	if err := publish(c.options.Publication, admission.Message); err != nil {
+		return err
+	}
+	return admission.LivenessErr
 }
 
 func resetDrainTimer(clock sessionduration.TimerScheduler, timer sessionduration.Timer, duration time.Duration) (sessionduration.Timer, error) {

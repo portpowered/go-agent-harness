@@ -25,6 +25,7 @@ func TestStateProjectsOutputStates(t *testing.T) {
 		{name: "complete", seen: []messages.StreamMessage{{Type: messages.StreamTypeTextDelta}, {Type: messages.StreamTypeMessageEnd}}, want: messages.TerminalOutputComplete},
 		{name: "user transcript is not output", seen: []messages.StreamMessage{{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleUser}}, want: messages.TerminalOutputNone},
 		{name: "assistant transcript is output", seen: []messages.StreamMessage{{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleAssistant}}, want: messages.TerminalOutputPartial},
+		{name: "tool output after message start is not assistant output", seen: []messages.StreamMessage{{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant}, {Type: messages.StreamTypeMessageStart}, {Type: messages.StreamTypeToolCallEnd, Role: messages.RoleTool}, {Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleTool}}, want: messages.TerminalOutputNone},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -37,11 +38,15 @@ func TestStateProjectsOutputStates(t *testing.T) {
 			}
 		})
 	}
-	state := New().NewState(sessionduration.TerminalSource{})
-	state.Observe(messages.StreamMessage{Type: messages.StreamTypeTextDelta})
-	state.Observe(messages.StreamMessage{Type: messages.StreamTypeMessageStart})
-	if got := state.OutputState(); got != messages.TerminalOutputNone {
-		t.Fatalf("message start did not reset output state: %q", got)
+	controller, _ := New().Begin(sessionduration.Options{})
+	for _, typ := range []messages.StreamMessageType{messages.StreamTypeTextDelta, messages.StreamTypeReasoningDelta, messages.StreamTypeAudioDelta, messages.StreamTypeImageDelta, messages.StreamTypeVideoDelta, messages.StreamTypeFileDelta, messages.StreamTypeEmbeddingDelta, messages.StreamTypeToolCallDelta, messages.StreamTypeToolCallEnd, messages.StreamTypeRefusal, messages.StreamTypeTranscriptDelta} {
+		controller.Observe(messages.StreamMessage{Type: messages.StreamTypeMessageStart})
+		if got := controller.Observe(messages.StreamMessage{Type: typ, Role: messages.RoleAssistant}).OutputState; got != messages.TerminalOutputPartial {
+			t.Fatalf("controller output for %s = %q, want partial", typ, got)
+		}
+	}
+	if _, err := controller.Finalize(context.Background(), sessionduration.FinalizeRequest{}); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -380,34 +385,23 @@ func TestServiceFacadeClassifiesRetryAndTerminalMessages(t *testing.T) {
 func TestRunHandlesWakeAndDoneBoundaryFailures(t *testing.T) {
 	wakeErr := errors.New("wake failed")
 	doneErr := errors.New("done failed")
+	wake := make(chan struct{}, 1)
+	wake <- struct{}{}
+	done := make(chan struct{})
+	close(done)
 	tests := []struct {
 		name      string
 		wake      <-chan struct{}
 		done      <-chan struct{}
 		onWake    func(context.Context, sessionduration.Loop, sessionduration.Controller) error
 		doneError func() error
+		message   messages.StreamMessage
+		liveness  bool
 		want      error
 	}{
-		{
-			name: "wake",
-			wake: func() <-chan struct{} {
-				wake := make(chan struct{}, 1)
-				wake <- struct{}{}
-				return wake
-			}(),
-			onWake: func(context.Context, sessionduration.Loop, sessionduration.Controller) error { return wakeErr },
-			want:   wakeErr,
-		},
-		{
-			name: "done",
-			done: func() <-chan struct{} {
-				done := make(chan struct{})
-				close(done)
-				return done
-			}(),
-			doneError: func() error { return doneErr },
-			want:      doneErr,
-		},
+		{name: "wake", wake: wake, onWake: func(context.Context, sessionduration.Loop, sessionduration.Controller) error { return wakeErr }, want: wakeErr},
+		{name: "done", done: done, doneError: func() error { return doneErr }, want: doneErr},
+		{name: "empty provider response", message: messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: &messages.MessageEndValue{TerminalReason: messages.TerminalReasonPartialOutput, OutputState: messages.TerminalOutputNone}}, liveness: true, want: sessionduration.ErrProviderEmptyResponse},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -415,8 +409,14 @@ func TestRunHandlesWakeAndDoneBoundaryFailures(t *testing.T) {
 				Context:    context.Background(),
 				Inferencer: contractInferencer{session: newContractSession()},
 				LoopFactory: func(context.Context, sessionduration.AdmissionInferencer, sessionduration.Controller) (sessionduration.Loop, error) {
-					return &idleRunLoopProbe{deltas: messages.NewTypedBuffer[messages.StreamMessage](1)}, nil
+					loop := &idleRunLoopProbe{deltas: messages.NewTypedBuffer[messages.StreamMessage](1)}
+					if test.message.Type != messages.StreamMessageType("") {
+						loop.deltas.Write(context.Background(), test.message)
+					}
+					return loop, nil
 				},
+				Clock:     testNoopScheduler{},
+				Liveness:  sessionduration.LivenessOptions{Enabled: test.liveness, Timeout: time.Second},
 				Wake:      test.wake,
 				OnWake:    test.onWake,
 				Done:      test.done,
