@@ -15,6 +15,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	roomevidencewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
@@ -495,9 +496,11 @@ func TestRunRoomWithResult_BidirectionalOverlapRecordsPeerOnlyEvidence(t *testin
 	opts := RoomRunOptions{
 		AudioService: newTestAudioIOService(), Manifest: manifest,
 		ConfigDir: configDir, ModelCatalog: testModelCatalog(),
-		OutputDir:   outputDir,
-		BaseURL:     "wss://room-replay.invalid/v1/realtime",
-		MixerConfig: mixerConfig,
+		OutputDir:       outputDir,
+		evidenceService: roomevidencewire.NewService(),
+		latencyService:  roomevidencewire.NewLatencyService(),
+		BaseURL:         "wss://room-replay.invalid/v1/realtime",
+		MixerConfig:     mixerConfig,
 		CredentialLookup: func(name string) (string, bool) {
 			value, ok := credentials[name]
 			return value, ok

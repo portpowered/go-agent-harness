@@ -15,6 +15,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	roomevidencewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
@@ -95,6 +96,8 @@ func TestRunRoomWithResult_LongConversationEndsBothParticipantsCleanly(t *testin
 		BaseURL:            "wss://room-replay.invalid/v1/realtime",
 		MixerConfig:        mixerConfig,
 		OutputDir:          outputDir,
+		evidenceService:    roomevidencewire.NewService(),
+		latencyService:     roomevidencewire.NewLatencyService(),
 		BoundShutdownGrace: 25 * time.Millisecond,
 		CredentialLookup: func(name string) (string, bool) {
 			value, ok := credentials[name]
