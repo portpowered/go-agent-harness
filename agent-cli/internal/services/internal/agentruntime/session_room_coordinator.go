@@ -10,6 +10,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
@@ -47,7 +48,7 @@ type roomCoordinator struct {
 	onBoundShutdown     func(RoomTerminationReason)
 }
 
-func roomParticipantFailureObserver(coordinator *roomCoordinator, runtime *roomParticipantRuntime, evidence *roomEvidence) func(sessiontrace.TerminalObservation) {
+func roomParticipantFailureObserver(coordinator *roomCoordinator, runtime *roomParticipantRuntime, evidence roomevidence.Recorder) func(sessiontrace.TerminalObservation) {
 	return func(observation sessiontrace.TerminalObservation) {
 		if !observation.Failure || observation.Classification == providers.ErrorClassCancellation {
 			return
@@ -60,7 +61,7 @@ func roomParticipantFailureObserver(coordinator *roomCoordinator, runtime *roomP
 			if observation.Code != "" {
 				fields["code"] = observation.Code
 			}
-			evidence.recordProviderErrorTimeline(runtime.plan.manifest.ID, fields)
+			evidence.MarkError(runtime.plan.manifest.ID, roomevidence.TimelinePath, evidence.RecordProviderErrorTimeline(runtime.plan.manifest.ID, fields))
 		}
 		failure := roomParticipantTerminalFailure(runtime, observation)
 		if observation.TerminalProvenance == messages.TerminalProvenanceProvider && observation.FailingEvent == string(messages.StreamTypeError) {
@@ -69,19 +70,6 @@ func roomParticipantFailureObserver(coordinator *roomCoordinator, runtime *roomP
 		}
 		coordinator.failParticipant(runtime.plan.manifest.ID, failure)
 	}
-}
-
-func roomParticipantTerminalFailure(runtime *roomParticipantRuntime, observation sessiontrace.TerminalObservation) error {
-	failureErr := observation.Err
-	if runtime.lifecycle != nil {
-		if transportErr := runtime.lifecycle.transportTerminalErrorSnapshot(); transportErr != nil {
-			failureErr = transportErr
-		}
-	}
-	if failureErr == nil {
-		failureErr = errors.New("session stream error")
-	}
-	return roomParticipantFailure(runtime.plan.manifest.ID, failureErr, secretsForPlan(runtime.plan))
 }
 
 func newRoomCoordinator(cancel context.CancelFunc, maxTurns int, args ...interface{}) *roomCoordinator {

@@ -10,17 +10,17 @@ import (
 	"strings"
 
 	servicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
-	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 )
 
 func main() {
-	if err := run(os.Args[1:], os.Stdout, os.Stderr, servicewire.NewRoomReportingService()); err != nil {
+	if err := run(os.Args[1:], os.Stdout, os.Stderr, servicewire.NewRoomLatencyService()); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-func run(args []string, stdout, stderr io.Writer, service runtimeRooms.ReportingService) error {
+func run(args []string, stdout, stderr io.Writer, service roomevidence.LatencyService) error {
 	flags := flag.NewFlagSet("room-latency-report", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	destination := flags.String("out", "", "finalized room evidence directory")
@@ -34,7 +34,7 @@ func run(args []string, stdout, stderr io.Writer, service runtimeRooms.Reporting
 		return fmt.Errorf("unexpected arguments: %s", strings.Join(flags.Args(), " "))
 	}
 
-	report, err := service.LatencyReport(*destination)
+	report, err := service.Report(*destination)
 	if err != nil {
 		return err
 	}

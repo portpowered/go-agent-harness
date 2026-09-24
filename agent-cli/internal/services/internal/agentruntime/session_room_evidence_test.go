@@ -4,22 +4,45 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
-	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
-	runtimeRoomsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
+	roomevidencewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+)
+
+// These test aliases decode the service-owned recording contract. They keep
+// the existing room behavior checks focused on produced artifacts while the
+// CLI package no longer owns their schema.
+type (
+	roomEvidenceManifest            = roomevidence.RunManifest
+	roomEvidenceParticipantManifest = roomevidence.ManifestParticipant
+	roomEvidenceArtifactPaths       = roomevidence.ArtifactPaths
+	roomTimelineEntry               = roomevidence.TimelineEntry
+)
+
+type roomEvidenceDiagnosticLine struct {
+	Event  string            `json:"event"`
+	Fields map[string]string `json:"fields"`
+}
+
+func withRoomTestEvidence(options RoomRunOptions) RoomRunOptions {
+	options.evidenceService, options.latencyService = roomevidencewire.NewService(), roomevidencewire.NewLatencyService()
+	return options
+}
+
+const (
+	RoomEvidenceManifestPath  = roomevidence.ManifestPath
+	RoomEvidenceTimelinePath  = roomevidence.TimelinePath
+	roomEvidenceSchemaVersion = roomevidence.SchemaVersion
 )
 
 func TestRunRoom_WritesPerParticipantEvidenceAndManifest(t *testing.T) {
@@ -64,10 +87,10 @@ func TestRunRoom_WritesPerParticipantEvidenceAndManifest(t *testing.T) {
 	if manifest.Timing.StartedAt == "" || manifest.Timing.EndedAt == "" || !strings.HasSuffix(manifest.Timing.StartedAt, "Z") || !strings.HasSuffix(manifest.Timing.EndedAt, "Z") {
 		t.Fatalf("manifest timing = %+v, want UTC start/end", manifest.Timing)
 	}
-	if manifest.RoomLatency != runtimeRooms.RoomLatencyArtifactPath {
-		t.Fatalf("room latency artifact = %q, want %q", manifest.RoomLatency, runtimeRooms.RoomLatencyArtifactPath)
+	if manifest.RoomLatency != roomevidence.LatencyPath {
+		t.Fatalf("room latency artifact = %q, want %q", manifest.RoomLatency, roomevidence.LatencyPath)
 	}
-	if _, err := runtimeRoomsWire.NewLatencyService().ReadBundle(filepath.Join(outputDir, runtimeRooms.RoomLatencyArtifactPath)); err != nil {
+	if _, err := roomevidencewire.NewLatencyService().ReadBundle(filepath.Join(outputDir, roomevidence.LatencyPath)); err != nil {
 		t.Fatalf("read finalized room latency artifact: %v", err)
 	}
 
@@ -125,7 +148,7 @@ func TestRunRoom_WritesPerParticipantEvidenceAndManifest(t *testing.T) {
 		diagnostics := readRoomEvidenceJSONLLines(t, filepath.Join(outputDir, participantManifest.Artifacts.Diagnostics))
 		diagnosticTurns := 0
 		for _, line := range diagnostics {
-			var record roomDiagnosticLine
+			var record roomEvidenceDiagnosticLine
 			if err := json.Unmarshal(line, &record); err != nil {
 				t.Fatalf("decode participant %q diagnostic: %v", id, err)
 			}
@@ -219,185 +242,6 @@ func TestRunRoom_PreservesFailedEvidenceAndRedactsSecrets(t *testing.T) {
 			if bytes.Contains(data, []byte(secret)) {
 				t.Fatalf("participant artifact %q contains credential material: %s", relativePath, data)
 			}
-		}
-	}
-}
-
-func TestRoomEvidence_RedactsJSONStringsWithoutCorruptingDeltas(t *testing.T) {
-	const secret = "sk-json-redaction-secret"
-	manifest := room.Manifest{
-		SchemaVersion: room.SchemaVersion,
-		Room:          room.Room{MaxTurns: 1},
-		Participants: []room.Participant{{
-			ID:           "participant",
-			SystemPrompt: "authorization: Bearer " + secret,
-			Provider:     "provider",
-			Model:        "model",
-			APIKeyEnv:    "ROOM_KEY",
-			Tools:        []string{},
-		}},
-	}
-	evidence, err := newRoomEvidence(t.TempDir(), manifest, room.DefaultPCM16Format(), []string{secret}, time.Now())
-	if err != nil {
-		t.Fatalf("newRoomEvidence: %v", err)
-	}
-	delta := messages.StreamMessage{
-		Type:  messages.StreamTypeError,
-		Value: messages.NewErrorValue("authorization: Bearer " + secret),
-	}
-	if err := evidence.participant("participant").observeDelta(delta); err != nil {
-		t.Fatalf("observeDelta: %v", err)
-	}
-	if err := evidence.finalize(RoomResult{
-		TerminationReason: RoomTerminationFailed,
-		Participants: map[string]RoomParticipantResult{
-			"participant": {ID: "participant", TerminationReason: ParticipantTerminationError},
-		},
-	}, errors.New("authorization: Bearer "+secret), time.Now()); err != nil {
-		t.Fatalf("finalize evidence: %v", err)
-	}
-
-	deltaLines := readRoomEvidenceJSONLLines(t, filepath.Join(evidence.destination, evidence.participant("participant").artifacts.Deltas))
-	decodedDelta, err := gwtesting.UnmarshalStreamMessage(deltaLines[0])
-	if err != nil {
-		t.Fatalf("decode redacted delta: %v", err)
-	}
-	errorValue, ok := decodedDelta.Value.(*messages.ErrorValue)
-	if !ok || strings.Contains(errorValue.Message, secret) || !strings.Contains(errorValue.Message, "[REDACTED]") {
-		t.Fatalf("redacted error value = %+v", decodedDelta.Value)
-	}
-	manifestData := readRoomEvidenceFile(t, filepath.Join(evidence.destination, RoomEvidenceManifestPath))
-	if !json.Valid(manifestData) || bytes.Contains(manifestData, []byte(secret)) {
-		t.Fatalf("redacted manifest is invalid or contains secret: %s", manifestData)
-	}
-}
-
-func TestRoomEvidence_RecordingHealthRetainsFirstSanitizedFailure(t *testing.T) {
-	const secret = "room-evidence-health-secret"
-	manifest := room.Manifest{
-		SchemaVersion: room.SchemaVersion,
-		Room:          room.Room{MaxTurns: 1},
-		Participants: []room.Participant{{
-			ID:        "participant",
-			Provider:  "provider",
-			Model:     "model",
-			APIKeyEnv: "ROOM_KEY",
-			Tools:     []string{},
-		}},
-	}
-	evidence, err := newRoomEvidence(t.TempDir(), manifest, room.DefaultPCM16Format(), []string{secret}, time.Now())
-	if err != nil {
-		t.Fatalf("newRoomEvidence: %v", err)
-	}
-	paths := evidence.participant("participant").artifacts
-	first := fmt.Errorf("recording sink unavailable for %s", secret)
-	evidence.recordError("participant", paths.Deltas, first)
-	evidence.recordError("participant", paths.WAV, errors.New("later recording failure"))
-
-	roomStatus, degradedArtifacts, participantStatuses, participantArtifacts := evidence.recordingHealth()
-	if roomStatus == nil || roomStatus.State != transcript.RecordingStatusPartial {
-		t.Fatalf("room recording status = %+v, want partial", roomStatus)
-	}
-	if roomStatus.Reason == "" || strings.Contains(roomStatus.Reason, secret) || !strings.Contains(roomStatus.Reason, "REDACTED") {
-		t.Fatalf("room recording reason = %q, want first sanitized failure", roomStatus.Reason)
-	}
-	if !strings.Contains(roomStatus.Reason, "recording sink unavailable") || strings.Contains(roomStatus.Reason, "later recording failure") {
-		t.Fatalf("room recording reason = %q, want first failure only", roomStatus.Reason)
-	}
-	if participantStatuses["participant"] == nil || participantStatuses["participant"].Reason != roomStatus.Reason {
-		t.Fatalf("participant recording status = %+v, want same first sanitized reason", participantStatuses["participant"])
-	}
-	if got := degradedArtifacts[paths.Deltas]; strings.Contains(got, secret) || got == "" {
-		t.Fatalf("degraded delta artifact reason = %q, want non-empty sanitized reason", got)
-	}
-	if got := participantArtifacts["participant"][paths.Deltas]; got == "" || strings.Contains(got, secret) {
-		t.Fatalf("participant degraded delta artifact reason = %q, want sanitized reason", got)
-	}
-	if _, ok := participantArtifacts["participant"][paths.WAV]; !ok {
-		t.Fatal("participant degraded artifacts omitted later WAV failure")
-	}
-
-	if err := evidence.finalize(RoomResult{
-		TerminationReason: RoomTerminationStopped,
-		Participants: map[string]RoomParticipantResult{
-			"participant": {ID: "participant", TerminationReason: ParticipantTerminationEnded},
-		},
-	}, nil, time.Now()); err == nil {
-		// Evidence failures are surfaced through recording_status, not as a
-		// room runtime error. The finalizer's direct return still preserves the
-		// private diagnostic for callers that inspect it.
-		t.Fatal("finalize unexpectedly discarded the private recording diagnostic")
-	}
-}
-
-func TestRoomEvidence_FinalizeIsIdempotent(t *testing.T) {
-	manifest := room.Manifest{
-		SchemaVersion: room.SchemaVersion,
-		Room:          room.Room{MaxTurns: 1},
-		Participants: []room.Participant{{
-			ID:           "participant",
-			SystemPrompt: "test",
-			Provider:     "provider",
-			Model:        "model",
-			APIKeyEnv:    "ROOM_KEY",
-			Tools:        []string{},
-		}},
-	}
-	evidence, err := newRoomEvidence(t.TempDir(), manifest, room.DefaultPCM16Format(), nil, time.Now())
-	if err != nil {
-		t.Fatalf("newRoomEvidence: %v", err)
-	}
-	result := RoomResult{TerminationReason: RoomTerminationStopped, Participants: map[string]RoomParticipantResult{
-		"participant": {ID: "participant", TerminationReason: ParticipantTerminationEnded},
-	}}
-	firstErr := evidence.finalize(result, nil, time.Now())
-	secondErr := evidence.finalize(RoomResult{TerminationReason: RoomTerminationFailed}, errors.New("must not replace first finalization"), time.Now())
-	if firstErr != nil || secondErr != firstErr {
-		t.Fatalf("finalize errors = %v/%v, want the same nil result", firstErr, secondErr)
-	}
-	manifestData := readRoomEvidenceFile(t, filepath.Join(evidence.destination, RoomEvidenceManifestPath))
-	var written roomEvidenceManifest
-	if err := json.Unmarshal(manifestData, &written); err != nil {
-		t.Fatalf("decode finalized manifest: %v", err)
-	}
-	if written.TerminationReason != RoomTerminationStopped {
-		t.Fatalf("second finalize replaced manifest reason with %q", written.TerminationReason)
-	}
-}
-
-func TestRoomEvidenceManifest_RecordsSanitizedParticipantBrowserTools(t *testing.T) {
-	browser := room.DefaultBrowserToolsConfig()
-	browser.Connection.CDPURL = "http://127.0.0.1:9222/json/version?query-secret=hide#fragment-secret"
-	browser.Connection.WSEndpoint = "ws://127.0.0.1:9222/devtools/browser/browser-secret?query-secret=hide"
-	manifest := room.Manifest{
-		SchemaVersion: room.SchemaVersion,
-		Room:          room.Room{MaxTurns: 1},
-		Participants: []room.Participant{
-			{ID: "browser", SystemPrompt: "browser", Provider: "openai", Model: "model", APIKeyEnv: "ROOM_KEY", Tools: []string{}, BrowserTools: &browser},
-			{ID: "other", SystemPrompt: "other", Provider: "openai", Model: "model", APIKeyEnv: "ROOM_KEY", Tools: []string{}},
-		},
-	}
-	evidence, err := newRoomEvidence(t.TempDir(), manifest, room.DefaultPCM16Format(), nil, time.Now())
-	if err != nil {
-		t.Fatalf("newRoomEvidence: %v", err)
-	}
-	if err := evidence.finalize(RoomResult{
-		TerminationReason: RoomTerminationStopped,
-		Participants: map[string]RoomParticipantResult{
-			"browser": {ID: "browser", TerminationReason: ParticipantTerminationEnded},
-			"other":   {ID: "other", TerminationReason: ParticipantTerminationEnded},
-		},
-	}, nil, time.Now()); err != nil {
-		t.Fatalf("finalize evidence: %v", err)
-	}
-	data := readRoomEvidenceFile(t, filepath.Join(evidence.destination, RoomEvidenceManifestPath))
-	serialized := string(data)
-	if !strings.Contains(serialized, `"browser_tools"`) {
-		t.Fatalf("room evidence omitted browser configuration: %s", serialized)
-	}
-	for _, forbidden := range []string{"query-secret", "fragment-secret", "browser-secret", "token="} {
-		if strings.Contains(serialized, forbidden) {
-			t.Fatalf("room evidence leaked browser endpoint material %q: %s", forbidden, serialized)
 		}
 	}
 }

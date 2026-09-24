@@ -11,10 +11,10 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeProviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -24,13 +24,13 @@ import (
 
 // RoomTerminationReason is the room-level terminal taxonomy. A room has one
 // reason even when individual participants finish at different times.
-type RoomTerminationReason string
+type RoomTerminationReason = runtimeRooms.RoomTerminationReason
 
 const (
-	RoomTerminationStopped            RoomTerminationReason = "stopped"
-	RoomTerminationMaxTurnsReached    RoomTerminationReason = "max_turns_reached"
-	RoomTerminationMaxDurationReached RoomTerminationReason = "max_duration_reached"
-	RoomTerminationFailed             RoomTerminationReason = "failed"
+	RoomTerminationStopped            = runtimeRooms.RoomTerminationStopped
+	RoomTerminationMaxTurnsReached    = runtimeRooms.RoomTerminationMaxTurnsReached
+	RoomTerminationMaxDurationReached = runtimeRooms.RoomTerminationMaxDurationReached
+	RoomTerminationFailed             = runtimeRooms.RoomTerminationFailed
 )
 
 // RoomStopReason is a descriptive alias used by callers that name the room
@@ -50,12 +50,12 @@ const (
 
 // ParticipantTerminationReason is the participant-level terminal taxonomy.
 // It intentionally remains independent of the room reason.
-type ParticipantTerminationReason string
+type ParticipantTerminationReason = runtimeRooms.ParticipantTerminationReason
 
 const (
-	ParticipantTerminationEnded        ParticipantTerminationReason = "ended"
-	ParticipantTerminationDisconnected ParticipantTerminationReason = "disconnected"
-	ParticipantTerminationError        ParticipantTerminationReason = "error"
+	ParticipantTerminationEnded        = runtimeRooms.ParticipantTerminationEnded
+	ParticipantTerminationDisconnected = runtimeRooms.ParticipantTerminationDisconnected
+	ParticipantTerminationError        = runtimeRooms.ParticipantTerminationError
 )
 
 // ParticipantTerminationTrigger identifies the event that caused a
@@ -93,42 +93,11 @@ const RoomBoundCancelledClassification = providers.ErrorClassRoomBoundCancelled
 // RoomParticipantResult contains the observable outcome for one participant.
 // Error is already sanitized; the resolved API-key value is never retained in
 // the result.
-type RoomParticipantResult struct {
-	// ID and TerminationReason are the joined run-manifest names. The
-	// ParticipantID and Reason aliases keep the result convenient for runtime
-	// callers that use the same terminology as RoomParticipantEvent.
-	ID                     string                       `json:"id"`
-	ParticipantID          string                       `json:"participant_id,omitempty"`
-	TerminationReason      ParticipantTerminationReason `json:"termination_reason"`
-	Reason                 ParticipantTerminationReason `json:"reason,omitempty"`
-	TerminationTrigger     string                       `json:"termination_trigger"`
-	TerminationDisposition string                       `json:"termination_disposition"`
-	Classification         string                       `json:"classification"`
-	TerminalReason         string                       `json:"terminal_reason"`
-	TerminalProvenance     string                       `json:"terminal_provenance"`
-	OutputState            string                       `json:"output_state"`
-	TurnsCompleted         int                          `json:"turns_completed"`
-	Connected              bool                         `json:"connected"`
-	Error                  string                       `json:"error,omitempty"`
-	// RecordingStatus is nil for a healthy evidence bundle and partial when
-	// one or more participant-owned recording artifacts degraded. It is
-	// independent from the participant runtime termination reason.
-	RecordingStatus *transcript.RecordingStatus `json:"recording_status,omitempty"`
-}
+type RoomParticipantResult = runtimeRooms.RoomParticipantResult
 
 // RoomResult contains the room outcome and every participant outcome. The map
 // is keyed by the manifest's stable participant ID.
-type RoomResult struct {
-	TerminationReason  RoomTerminationReason            `json:"termination_reason"`
-	Reason             RoomTerminationReason            `json:"reason,omitempty"`
-	Participants       map[string]RoomParticipantResult `json:"participants"`
-	ActiveParticipants []string                         `json:"active_participants,omitempty"`
-	Error              string                           `json:"error,omitempty"`
-	// RecordingStatus reports evidence health separately from the room's live
-	// termination taxonomy. Recording failures never change TerminationReason.
-	RecordingStatus   *transcript.RecordingStatus `json:"recording_status,omitempty"`
-	DegradedArtifacts map[string]string           `json:"degraded_artifacts,omitempty"`
-}
+type RoomResult = runtimeRooms.RoomResult
 
 // RoomRunResult is the descriptive result name used by callers that model a
 // room execution as a value rather than a generic room state.
@@ -164,15 +133,7 @@ type RoomParticipantObserver func(RoomParticipantResult)
 // participant. Human participants report their selected device IDs; provider
 // participants report their provider/model. The resolved credential value is
 // intentionally absent.
-type RoomParticipantReady struct {
-	ID            string               `json:"id"`
-	ParticipantID string               `json:"participant_id"`
-	Kind          room.ParticipantKind `json:"kind"`
-	InputDevice   string               `json:"input_device,omitempty"`
-	OutputDevice  string               `json:"output_device,omitempty"`
-	Provider      string               `json:"provider,omitempty"`
-	Model         string               `json:"model,omitempty"`
-}
+type RoomParticipantReady = runtimeRooms.RoomParticipantReady
 
 // RoomParticipantReadyObserver receives one event for each participant after
 // all required human devices and provider sessions have passed admission.
@@ -223,6 +184,10 @@ type RoomRunOptions struct {
 	// the service's observational-only mode for callers that do not need
 	// artifacts; the room CLI supplies a concrete, empty directory.
 	OutputDir string
+	// Evidence services are supplied by the application composition root. The
+	// room runner consumes only the service-owned public contract.
+	evidenceService roomevidence.Service
+	latencyService  roomevidence.LatencyService
 	// DeviceService admits and owns human participant capture and playback
 	// workers for the duration of the room.
 	DeviceService runtimeDevices.Service
@@ -299,7 +264,7 @@ type RoomRunOptions struct {
 	// onRoomEvidenceReady is an internal deterministic test seam. It runs after
 	// all room evidence sinks are opened and before participant work starts, so
 	// package tests can inject a sink failure without changing live APIs.
-	onRoomEvidenceReady func(*roomEvidence)
+	onRoomEvidenceReady func(roomevidence.Recorder)
 	// onRoomBoundShutdown is an internal deterministic lifecycle seam used by
 	// package tests to release a response after bound admission has closed.
 	onRoomBoundShutdown func(RoomTerminationReason)

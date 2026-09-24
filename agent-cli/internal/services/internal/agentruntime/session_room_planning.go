@@ -11,6 +11,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 )
 
@@ -19,24 +20,20 @@ func roomParticipantIsHuman(plan *roomParticipantPlan) bool {
 }
 
 //lint:ignore U1000 package tests exercise the context-free planning seam.
-func buildRoomParticipantPlans(opts RoomRunOptions, validation room.ValidationOptions, evidences ...*roomEvidence) ([]*roomParticipantPlan, []string, error) {
+func buildRoomParticipantPlans(opts RoomRunOptions, validation room.ValidationOptions, evidences ...roomevidence.Recorder) ([]*roomParticipantPlan, []string, error) {
 	return buildRoomParticipantPlansWithContext(context.Background(), opts, validation, evidences...)
 }
 
 // buildRoomParticipantPlansWithContext accepts the room's evidence sink as an
-// optional trailing argument (mirroring newRoomEvidence's own sources
-// ...platformclock.Source pattern) so every existing two-argument call site
+// optional trailing argument so existing two-argument test seam calls
 // -- almost all of them deterministic tests with no evidence bundle -- keeps
 // compiling unchanged. When evidence is supplied and recording is not a
 // replay, it is used to wire each live provider participant's websocket
 // dialer for capture recording; see the loop below.
-func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptions, validation room.ValidationOptions, evidences ...*roomEvidence) (plans []*roomParticipantPlan, secrets []string, planErr error) {
-	var evidence *roomEvidence
+func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptions, validation room.ValidationOptions, evidences ...roomevidence.Recorder) (plans []*roomParticipantPlan, secrets []string, planErr error) {
+	var evidence roomevidence.Recorder
 	if len(evidences) > 0 {
 		evidence = evidences[0]
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	filesystemPolicy := opts.FilesystemPolicy
 	if filesystemPolicy == nil {
@@ -163,8 +160,8 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 		// deterministic-test seams) ignore it, exactly like solo session
 		// recording never applies to an injected inferencer either.
 		if evidence != nil {
-			if participantEvidence := evidence.participant(participant.ID); participantEvidence != nil && participantEvidence.artifacts.Capture != "" {
-				sessionOptions.RecordSessionCapturePath = filepath.Join(evidence.destination, participantEvidence.artifacts.Capture)
+			if capture := evidence.Artifacts(participant.ID).Capture; capture != "" {
+				sessionOptions.RecordSessionCapturePath = filepath.Join(evidence.Destination(), capture)
 			}
 		}
 		sessionOptions, skipParticipant, capabilityErr := configureRoomParticipantBrowserOptions(ctx, opts, participant, plan, sessionOptions, staticCapabilities, value)

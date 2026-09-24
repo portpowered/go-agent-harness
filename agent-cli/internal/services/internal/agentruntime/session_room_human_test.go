@@ -15,7 +15,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimedeviceswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
-	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
@@ -263,7 +263,7 @@ customerAudioRecorded:
 	if len(entries) != 11 {
 		t.Fatalf("finalized room output entries = %d, want 11: %v", len(entries), entries)
 	}
-	if _, statErr := os.Stat(filepath.Join(opts.OutputDir, runtimeRooms.RoomLatencyArtifactPath)); statErr != nil {
+	if _, statErr := os.Stat(filepath.Join(opts.OutputDir, roomevidence.LatencyPath)); statErr != nil {
 		t.Fatalf("finalized room output missing latency artifact: %v", statErr)
 	}
 	for _, id := range []string{"customer", "agent"} {
@@ -496,7 +496,7 @@ func TestRunRoom_HumanProviderFailureFailsOnlyParticipant(t *testing.T) {
 }
 
 func newRoomHumanRunOptions(registry *roomHumanTestRegistry, inferencer *roomTestInferencer) RoomRunOptions {
-	return RoomRunOptions{
+	return withRoomTestEvidence(RoomRunOptions{
 		AudioService: newTestAudioIOService(), Manifest: room.Manifest{
 			SchemaVersion: room.SchemaVersion,
 			Room:          room.Room{Interactive: true},
@@ -530,7 +530,7 @@ func newRoomHumanRunOptions(registry *roomHumanTestRegistry, inferencer *roomTes
 		SessionInferencers: map[string]messages.SessionInferencer{
 			"agent": inferencer,
 		},
-	}
+	})
 }
 
 func waitRoomHumanTestSession(t *testing.T, inferencer *roomTestInferencer) *roomTestSession {

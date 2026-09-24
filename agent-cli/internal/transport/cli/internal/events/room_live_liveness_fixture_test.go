@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
+	runtimeRoomEvidenceWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	runtimeRoomWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
@@ -56,8 +58,9 @@ func newRoomLiveLivenessFixture(t *testing.T, timeoutCase bool) *roomLiveLivenes
 	}
 	fixture.manifest = roomLiveLivenessManifest()
 	fixture.roomService = runtimeRoomWire.NewService(runtimeRoomWire.Dependencies{
-		Live:  fixture.liveService(t),
-		Clock: fixture.clock,
+		Live:     fixture.liveService(t),
+		Clock:    fixture.clock,
+		Evidence: runtimeRoomEvidenceWire.NewService(),
 	})
 	fixture.destination = filepath.Join(t.TempDir(), "evidence")
 	fixture.broker = fixture.newBroker(t)
@@ -393,7 +396,7 @@ func (f *roomLiveLivenessFixture) assertEvidence(t *testing.T) {
 
 func (f *roomLiveLivenessFixture) assertTimeline(t *testing.T) {
 	t.Helper()
-	path := filepath.Join(f.destination, runtimeRooms.RoomEvidenceTimelinePath)
+	path := filepath.Join(f.destination, roomevidence.TimelinePath)
 	timelineFile, err := os.Open(path)
 	if err != nil {
 		t.Fatalf("open room timeline: %v", err)

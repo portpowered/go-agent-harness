@@ -170,8 +170,13 @@ func (p *publicRoomLatencyProvider) enqueueResponseBoundaries(participantID stri
 	}
 	handle.emit(session.LiveEvent{Kind: "input_commit"})
 	handle.emit(session.LiveEvent{Kind: "response_create", ResponseID: responseID})
-	handle.emit(session.LiveEvent{Kind: "message_start", ResponseID: responseID, Role: messages.RoleAssistant})
+	handle.emit(publicRoomLatencyMessageEvent("message_start", responseID, messages.StreamTypeMessageStart, messages.NewMessageStartValue()))
 	return responseID, nil
+}
+
+func publicRoomLatencyMessageEvent(kind, responseID string, messageType messages.StreamMessageType, value messages.StreamMessageValue) session.LiveEvent {
+	message := &messages.StreamMessage{Type: messageType, ResponseID: responseID, Role: messages.RoleAssistant, Value: value}
+	return session.LiveEvent{Kind: kind, ResponseID: responseID, Role: messages.RoleAssistant, Message: message}
 }
 
 func (p *publicRoomLatencyProvider) releaseResponse(participantID, responseID string, pcm []byte) error {
@@ -194,8 +199,8 @@ func (p *publicRoomLatencyProvider) releaseResponse(participantID, responseID st
 	// Publish the provider landmark before the media frame. The room recorder
 	// can therefore correlate this response even if the graph worker is
 	// scheduled immediately after the inbound frame is admitted.
-	handle.emit(session.LiveEvent{Kind: "audio_delta", ResponseID: responseID, Role: messages.RoleAssistant})
-	handle.emit(session.LiveEvent{Kind: "message_end", ResponseID: responseID, Role: messages.RoleAssistant})
+	handle.emit(publicRoomLatencyMessageEvent("audio_delta", responseID, messages.StreamTypeAudioDelta, messages.NewAudioDeltaValue(append([]byte(nil), pcm...))))
+	handle.emit(publicRoomLatencyMessageEvent("message_end", responseID, messages.StreamTypeMessageEnd, messages.NewMessageEndValue(messages.TokenUsage{})))
 	// Keep the provider landmark causally before the mixed peer emission even
 	// when both are observed during one logical scheduler tick.
 	p.clock.AdvanceBy(time.Millisecond)

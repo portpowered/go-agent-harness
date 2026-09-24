@@ -89,7 +89,7 @@ func TestRunRoomWithResult_LongConversationEndsBothParticipantsCleanly(t *testin
 	defer cancel()
 
 	outputDir := filepath.Join(t.TempDir(), "long-room")
-	opts := RoomRunOptions{
+	opts := withRoomTestEvidence(RoomRunOptions{
 		Manifest: manifest, AudioService: newTestAudioIOService(),
 		ConfigDir: configDir, ModelCatalog: testModelCatalog(),
 		BaseURL:            "wss://room-replay.invalid/v1/realtime",
@@ -113,7 +113,7 @@ func TestRunRoomWithResult_LongConversationEndsBothParticipantsCleanly(t *testin
 			participantTerminals <- result
 		},
 		OnDiagnostic: longConversationDiagnosticObserver(t, filepath.Join(outputDir, RoomEvidenceTimelinePath), diagnostics, turnDiagnostics),
-	}
+	})
 
 	runDone := make(chan roomTestRunOutcome, 1)
 	go func() {

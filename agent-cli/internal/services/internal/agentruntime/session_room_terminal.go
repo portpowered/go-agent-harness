@@ -10,6 +10,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
@@ -175,16 +176,14 @@ func isRoomBoundParticipantTrigger(trigger string) bool {
 	return strings.HasPrefix(trigger, "max_duration_reached") || strings.HasPrefix(trigger, "max_turns_reached")
 }
 
-func recordRoomParticipantBoundDiagnostic(opts RoomRunOptions, evidence *roomEvidence, result RoomParticipantResult) {
+func recordRoomParticipantBoundDiagnostic(opts RoomRunOptions, evidence roomevidence.Recorder, result RoomParticipantResult) {
 	if !isRoomBoundParticipantTrigger(result.TerminationTrigger) {
 		return
 	}
 	record := participantTerminationDiagnostic(result)
 	if evidence != nil {
-		if participant := evidence.participant(result.ParticipantID); participant != nil {
-			participant.RecordSessionDiagnostic(record)
-		}
-		evidence.recordTimelineEvent("room_bound_shutdown", result.ParticipantID, record.Fields)
+		evidence.RecordSessionDiagnostic(roomevidence.DiagnosticRecord{ParticipantID: result.ParticipantID, Event: record.Event, Fields: record.Fields})
+		evidence.MarkError(result.ParticipantID, roomevidence.TimelinePath, evidence.RecordTimeline("room_bound_shutdown", result.ParticipantID, record.Fields))
 	}
 	if opts.OnDiagnostic != nil {
 		opts.OnDiagnostic(result.ParticipantID, record)

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	runtimeEvidenceWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	runtimeReplayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay/wire"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
@@ -25,7 +26,10 @@ func (deviceServiceStub) BindRTC(context.Context, runtimeDevices.RTCBindingReque
 
 func TestNewServiceDelegatesPublicRoomContract(t *testing.T) {
 	replay := runtimeReplayWire.NewService()
-	service := NewService(Dependencies{Replay: replay, Devices: deviceServiceStub{}})
+	service := NewService(Dependencies{
+		Replay: replay, Devices: deviceServiceStub{}, Evidence: runtimeEvidenceWire.NewService(),
+		Latency: runtimeEvidenceWire.NewLatencyService(),
+	})
 	if service == nil {
 		t.Fatal("NewService() returned nil")
 	}
