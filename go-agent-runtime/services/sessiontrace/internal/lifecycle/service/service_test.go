@@ -146,6 +146,61 @@ func TestToolContinuationRequiresAcceptedResultAndRetainsTerminalFacts(t *testin
 	}
 }
 
+func TestToolLifecycleReconcilesRejectedResultBeforeCompletion(t *testing.T) {
+	service := New(lifecycle.Options{})
+	orphan := applyEvent(t, service, lifecycle.Event{
+		Kind:       lifecycle.EventToolCall,
+		ResponseID: "foreign-response",
+		CallID:     "call-1",
+		ToolName:   "lookup",
+	})
+	if orphan.Accepted {
+		t.Fatalf("foreign tool call = %+v, want rejection", orphan)
+	}
+	rejected := applyEvent(t, service, lifecycle.Event{
+		Kind:         lifecycle.EventToolResultRejected,
+		CallID:       "call-1",
+		ResultStatus: "cancelled",
+	})
+	if !rejected.Accepted {
+		t.Fatalf("tool result rejection = %+v, want accepted lifecycle evidence", rejected)
+	}
+	snapshot := service.Snapshot().ContinuationStates
+	if len(snapshot) != 1 || !snapshot[0].ProviderCallObserved || !snapshot[0].ResultRejected || snapshot[0].ResultRejectionStatus != "cancelled" {
+		t.Fatalf("rejected continuation = %+v, want retained provider failure", snapshot)
+	}
+	if accepted := applyEvent(t, service, lifecycle.Event{Kind: lifecycle.EventToolResultAccepted, CallID: "call-1"}); !accepted.Accepted {
+		t.Fatalf("later tool result acceptance = %+v", accepted)
+	}
+	if completed := applyEvent(t, service, lifecycle.Event{Kind: lifecycle.EventToolResponseComplete, CallID: "call-1"}); !completed.Accepted {
+		t.Fatalf("tool response completion = %+v", completed)
+	}
+	snapshot = service.Snapshot().ContinuationStates
+	if len(snapshot) != 1 || !snapshot[0].ToolResponseComplete || snapshot[0].ResultRejected || snapshot[0].ResultRejectionStatus != "" {
+		t.Fatalf("completed continuation = %+v, want accepted completed result", snapshot)
+	}
+}
+
+func TestScheduledLifecycleClearsTerminalFailureWhenRetryIsDispatched(t *testing.T) {
+	service := New(lifecycle.Options{})
+	applyEvent(t, service, lifecycle.Event{Kind: lifecycle.EventEnsureScheduled, Count: 1})
+	applyEvent(t, service, lifecycle.Event{Kind: lifecycle.EventBindScheduledBoundary, ResponseID: "scheduled-1"})
+	failure := terminal("failed", "terminal_failure", "rate_limit_exceeded", "Please try again in 2s")
+	applyEvent(t, service, lifecycle.Event{Kind: lifecycle.EventNoteScheduledTerminal, ResponseID: "scheduled-1", Terminal: failure})
+	remembered := applyEvent(t, service, lifecycle.Event{Kind: lifecycle.EventRememberRetry, ResponseID: "scheduled-1", Terminal: failure})
+	if !remembered.Accepted || !remembered.Retry.Accepted {
+		t.Fatalf("retry candidate = %+v, want an eligible retry", remembered)
+	}
+	dispatched := applyEvent(t, service, lifecycle.Event{Kind: lifecycle.EventRetryDispatched})
+	if !dispatched.Accepted || !dispatched.HasScheduledIndex || dispatched.ScheduledIndex != 0 {
+		t.Fatalf("retry dispatch = %+v, want scheduled index 0", dispatched)
+	}
+	snapshot := service.Snapshot()
+	if len(snapshot.Scheduled) != 1 || !snapshot.Scheduled[0].RetryUsed || !snapshot.Scheduled[0].RetryPending || snapshot.Scheduled[0].TerminalFailure {
+		t.Fatalf("retry-dispatched schedule = %+v, want pending retry without stale failure", snapshot.Scheduled)
+	}
+}
+
 func TestScheduledLifecycleHandlesDispositionAndRetryBoundaries(t *testing.T) {
 	var scheduledDelay time.Duration
 	service := New(lifecycle.Options{RetryScheduler: func(_ context.Context, delay time.Duration) error {

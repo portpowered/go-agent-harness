@@ -51,7 +51,7 @@ func configureProviderRequest(inferencer messages.SessionInferencer, instruction
 
 func (i *instructionsInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
 	if i == nil || i.inner == nil {
-		return nil, errors.New("session turn inferencer is not configured")
+		return nil, sessionturn.ErrMissingTurnInferencer
 	}
 	s, err := i.inner.ConnectSession(ctx)
 	if err != nil {

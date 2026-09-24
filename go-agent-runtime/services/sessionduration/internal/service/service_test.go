@@ -85,13 +85,19 @@ func TestServiceCompletesBoundedResponseAndScheduleFailures(t *testing.T) {
 
 func TestServiceDoesNotPromoteBoundOrDurationShutdownToIncompleteResponse(t *testing.T) {
 	var service sessionduration.Service = New()
+	boundCancellation := make(chan struct{})
+	close(boundCancellation)
 	for _, request := range []sessionduration.CompletionRequest{
 		{RequireTerminalAssistantReply: true, RoomBoundCancellation: true},
+		{RequireTerminalAssistantReply: true, BoundCancellation: boundCancellation},
 		{RequireTerminalAssistantReply: true, DurationExpired: true, CloseAfterScheduledAudio: true, ScheduledAudioIncomplete: true},
 	} {
 		if err := service.Complete(request); err != nil {
 			t.Fatalf("shutdown completion = %v, want clean bounded terminal", err)
 		}
+	}
+	if err := service.Complete(sessionduration.CompletionRequest{RequireTerminalAssistantReply: true, BoundCancellation: make(chan struct{})}); !errors.Is(err, sessionduration.ErrAssistantResponseIncomplete) {
+		t.Fatalf("ordinary completion = %v, want incomplete assistant response", err)
 	}
 }
 

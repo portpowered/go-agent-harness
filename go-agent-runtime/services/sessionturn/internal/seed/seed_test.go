@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
@@ -257,5 +259,71 @@ func TestServiceReportsAbsentOptionalCapabilities(t *testing.T) {
 	}
 	if err := wrapped.Close(); err != nil {
 		t.Fatalf("close: %v", err)
+	}
+}
+
+func TestWrappedSessionReportsToolResultAndContinuationOutcomes(t *testing.T) {
+	lifecycle := sessiontracewire.NewLifecycleService()
+	ctx := context.Background()
+	if _, err := lifecycle.Apply(ctx, sessiontrace.LifecycleEvent{Kind: sessiontrace.LifecycleEventResponseOpen, ResponseID: "response-1"}); err != nil {
+		t.Fatalf("open response: %v", err)
+	}
+	for _, callID := range []string{"complete", "rejected", "continued"} {
+		if _, err := lifecycle.Apply(ctx, sessiontrace.LifecycleEvent{Kind: sessiontrace.LifecycleEventToolCall, ResponseID: "response-1", CallID: callID, ToolName: "lookup"}); err != nil {
+			t.Fatalf("record tool call %q: %v", callID, err)
+		}
+	}
+
+	var observed []sessionturn.ToolLifecycleEvent
+	inner := newSeedTestSession()
+	wrapped := New(nil, Options{Lifecycle: lifecycle, Observer: func(event sessionturn.ToolLifecycleEvent) {
+		observed = append(observed, event)
+	}}).WrapSession(ctx, inner, "", sessionturn.Seed{})
+	if !wrapped.SendMessage(ctx, messages.Message{ToolCallID: "complete"}) {
+		t.Fatal("provider rejected the complete tool result")
+	}
+	inner.mu.Lock()
+	inner.outcome = messages.SessionSendOutcome{Status: messages.SessionSendClosed}
+	inner.mu.Unlock()
+	rejected := wrapped.SendWithOutcome(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeToolCallEnd,
+		Value: messages.NewToolCallEndValue("rejected", "lookup", "{}"),
+	})
+	if rejected.Status != messages.SessionSendClosed {
+		t.Fatalf("rejected tool result outcome = %+v, want closed status", rejected)
+	}
+	inner.mu.Lock()
+	inner.outcome = messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
+	inner.mu.Unlock()
+	if !wrapped.SendMessage(ctx, messages.Message{ToolCallID: "continued"}) {
+		t.Fatal("provider rejected the tool result that should request continuation")
+	}
+
+	states := lifecycle.Snapshot().ContinuationStates
+	byID := make(map[string]sessiontrace.LifecycleContinuationState, len(states))
+	for _, state := range states {
+		byID[state.CallID] = state
+	}
+	if !byID["complete"].ResultAccepted || !byID["complete"].ToolResponseComplete {
+		t.Fatalf("complete result state = %+v, want accepted and complete", byID["complete"])
+	}
+	if !byID["rejected"].ResultRejected || byID["rejected"].ResultRejectionStatus != string(messages.SessionSendClosed) {
+		t.Fatalf("rejected result state = %+v, want closed rejection", byID["rejected"])
+	}
+	if !byID["continued"].ResultAccepted || !byID["continued"].ContinuationRequested {
+		t.Fatalf("continuing result state = %+v, want accepted continuation", byID["continued"])
+	}
+	seen := make(map[sessionturn.ToolLifecycleEventType]map[string]sessionturn.ToolLifecycleEvent)
+	for _, event := range observed {
+		if seen[event.Type] == nil {
+			seen[event.Type] = make(map[string]sessionturn.ToolLifecycleEvent)
+		}
+		seen[event.Type][event.CallID] = event
+	}
+	if len(observed) != 5 || seen[sessionturn.ToolResultAccepted]["complete"].CallID != "complete" || seen[sessionturn.ToolResultRejected]["rejected"].Status != messages.SessionSendClosed || seen[sessionturn.ToolResultAccepted]["continued"].CallID != "continued" || seen[sessionturn.ToolContinuationRequested]["complete"].CallID != "complete" || seen[sessionturn.ToolContinuationRequested]["continued"].CallID != "continued" {
+		t.Fatalf("tool lifecycle observations = %+v, want accepted/rejected results and per-call continuations", observed)
+	}
+	if err := wrapped.Close(); err != nil {
+		t.Fatalf("close wrapped session: %v", err)
 	}
 }

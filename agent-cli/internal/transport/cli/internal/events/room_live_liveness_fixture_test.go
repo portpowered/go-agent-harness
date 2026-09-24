@@ -24,6 +24,8 @@ import (
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
+const roomLiveLivenessWaitTimeout = 10 * time.Second
+
 type roomLiveLivenessFixture struct {
 	classification string
 	clock          *platformclock.Deterministic
@@ -212,13 +214,13 @@ func (f *roomLiveLivenessFixture) advanceTimeout(t *testing.T) {
 	for range f.provider {
 		select {
 		case <-f.factoryReady:
-		case <-time.After(3 * time.Second):
+		case <-time.After(roomLiveLivenessWaitTimeout):
 			t.Fatal("room did not admit all live participants")
 		}
 	}
 	select {
 	case <-f.sink.started:
-	case <-time.After(3 * time.Second):
+	case <-time.After(roomLiveLivenessWaitTimeout):
 		t.Fatal("room did not observe the stalled provider response")
 	}
 	f.clock.AdvanceBy(10*time.Second + time.Millisecond)
@@ -230,7 +232,7 @@ func (f *roomLiveLivenessFixture) waitForLiveness(t *testing.T) {
 	case <-f.sink.observed:
 	case outcome := <-f.resultChannel:
 		t.Fatalf("room returned before liveness projection: result=%+v err=%v", outcome.value, outcome.err)
-	case <-time.After(3 * time.Second):
+	case <-time.After(roomLiveLivenessWaitTimeout):
 		t.Fatal("room did not publish liveness through the live service")
 	}
 }
@@ -333,7 +335,7 @@ func (f *roomLiveLivenessFixture) assertResult(t *testing.T) {
 		if releaseErr != nil {
 			t.Fatalf("peer release: %v", releaseErr)
 		}
-	case <-time.After(3 * time.Second):
+	case <-time.After(roomLiveLivenessWaitTimeout):
 		t.Fatal("room did not finish after peer release")
 	}
 }

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -119,6 +120,34 @@ func TestControllerLivenessUsesGenerationAndPreservesTypedCause(t *testing.T) {
 	}
 }
 
+func TestControllerReportsFirstResponseTimeoutAfterSessionOpen(t *testing.T) {
+	clock := platformclock.NewDeterministic(time.Unix(31, 0), time.Millisecond)
+	controller, err := New().Begin(sessionduration.Options{
+		Context: context.Background(),
+		Clock:   clock,
+		Liveness: sessionduration.LivenessOptions{
+			RequireFirstResponse: true,
+			FirstResponseTimeout: 5 * time.Millisecond,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Begin: %v", err)
+	}
+	controller.Observe(messages.StreamMessage{Type: messages.StreamTypeSessionOpen})
+	clock.AdvanceBy(5 * time.Millisecond)
+	select {
+	case got := <-controller.Errors():
+		if !errors.Is(got, sessionduration.ErrFirstResponseTimeout) {
+			t.Fatalf("first-response error = %v, want timeout identity", got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("controller did not report the bounded first-response timeout")
+	}
+	if _, err := controller.Finalize(context.Background(), sessionduration.FinalizeRequest{}); err != nil {
+		t.Fatalf("Finalize: %v", err)
+	}
+}
+
 func TestControllerArbitratesFirstCauseOnce(t *testing.T) {
 	clock := platformclock.NewDeterministic(time.Unix(30, 0), time.Millisecond)
 	var causes []error
@@ -170,6 +199,115 @@ func TestControllerRetryIsBoundedAndNeverSleeps(t *testing.T) {
 	}
 	if exhausted := controller.Retry(sessionduration.RetryRequest{Terminal: terminal}); !exhausted.Exhausted || exhausted.Eligible {
 		t.Fatalf("second retry decision = %+v, want exhausted", exhausted)
+	}
+	if _, err := controller.Finalize(context.Background(), sessionduration.FinalizeRequest{}); err != nil {
+		t.Fatalf("Finalize: %v", err)
+	}
+}
+
+func TestControllerReportsRetryDispatchFailureAfterInjectedDelay(t *testing.T) {
+	scheduler := &triggerScheduler{created: make(chan *triggerTimer, 1)}
+	controller, err := New().Begin(sessionduration.Options{
+		Clock: scheduler,
+		Retry: sessionduration.RetryPolicy{Enabled: true, MaxRetries: 1},
+	})
+	if err != nil {
+		t.Fatalf("Begin: %v", err)
+	}
+	dispatchErr := errors.New("retry dispatch failed")
+	dispatched := make(chan struct{}, 1)
+	decision := controller.Retry(sessionduration.RetryRequest{
+		Terminal: &messages.MessageEndValue{
+			Status:               "failed",
+			ProviderErrorCode:    "rate_limit_exceeded",
+			ProviderErrorMessage: "please try again in 1s",
+		},
+		Dispatch: func(context.Context) error {
+			dispatched <- struct{}{}
+			return dispatchErr
+		},
+	})
+	if !decision.Eligible || decision.Delay != time.Second {
+		t.Fatalf("retry decision = %+v, want eligible with a one-second delay", decision)
+	}
+	var timer *triggerTimer
+	select {
+	case timer = <-scheduler.created:
+	case <-time.After(time.Second):
+		t.Fatal("controller did not schedule the retry delay")
+	}
+	select {
+	case <-dispatched:
+		t.Fatal("controller dispatched the retry before its timer fired")
+	default:
+	}
+	timer.events <- time.Now()
+	select {
+	case <-dispatched:
+	case <-time.After(time.Second):
+		t.Fatal("controller did not dispatch retry after the timer fired")
+	}
+	select {
+	case got := <-controller.Errors():
+		if !errors.Is(got, dispatchErr) || !strings.Contains(got.Error(), "send rate-limit retry response") {
+			t.Fatalf("retry error = %v, want wrapped dispatch failure", got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("controller did not report the retry dispatch failure")
+	}
+	if _, err := controller.Finalize(context.Background(), sessionduration.FinalizeRequest{}); err != nil {
+		t.Fatalf("Finalize: %v", err)
+	}
+}
+
+func TestControllerStopsFirstResponseDeadlineWhenProviderStartsResponse(t *testing.T) {
+	clock := platformclock.NewDeterministic(time.Unix(32, 0), time.Millisecond)
+	controller, err := New().Begin(sessionduration.Options{
+		Context: context.Background(),
+		Clock:   clock,
+		Liveness: sessionduration.LivenessOptions{
+			RequireFirstResponse: true,
+			FirstResponseTimeout: 5 * time.Millisecond,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Begin: %v", err)
+	}
+	controller.Observe(messages.StreamMessage{Type: messages.StreamTypeSessionOpen})
+	controller.Observe(messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant})
+	clock.AdvanceBy(5 * time.Millisecond)
+	select {
+	case got := <-controller.Errors():
+		t.Fatalf("controller reported %v after the provider started its response", got)
+	default:
+	}
+	if _, err := controller.Finalize(context.Background(), sessionduration.FinalizeRequest{}); err != nil {
+		t.Fatalf("Finalize: %v", err)
+	}
+}
+
+func TestControllerDoesNotTreatUserOrToolTrafficAsProviderProgress(t *testing.T) {
+	clock := platformclock.NewDeterministic(time.Unix(33, 0), time.Millisecond)
+	controller, err := New().Begin(sessionduration.Options{
+		Context:  context.Background(),
+		Clock:    clock,
+		Liveness: sessionduration.LivenessOptions{Enabled: true, Timeout: 5 * time.Millisecond},
+	})
+	if err != nil {
+		t.Fatalf("Begin: %v", err)
+	}
+	controller.ExpectProviderProgress()
+	clock.AdvanceBy(4 * time.Millisecond)
+	controller.Observe(messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Role: messages.RoleUser})
+	controller.Observe(messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleTool})
+	clock.AdvanceBy(time.Millisecond)
+	select {
+	case got := <-controller.Errors():
+		if !errors.Is(got, sessionduration.ErrProviderLivenessTimeout) {
+			t.Fatalf("provider liveness error = %v, want timeout identity", got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("user or tool traffic incorrectly reset the provider-progress deadline")
 	}
 	if _, err := controller.Finalize(context.Background(), sessionduration.FinalizeRequest{}); err != nil {
 		t.Fatalf("Finalize: %v", err)

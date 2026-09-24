@@ -24,6 +24,27 @@ func TestNewServiceBuildsIndependentFactories(t *testing.T) {
 	}
 }
 
+func TestPublicWireLifecycleServiceTracksAndResetsResponse(t *testing.T) {
+	lifecycle := NewLifecycleService()
+	if lifecycle == nil {
+		t.Fatal("NewLifecycleService returned nil")
+	}
+	opened, err := lifecycle.Apply(context.Background(), sessiontrace.LifecycleEvent{
+		Kind:       sessiontrace.LifecycleEventResponseOpen,
+		ResponseID: "response-1",
+	})
+	if err != nil || !opened.NewResponse || opened.ResponseID != "response-1" {
+		t.Fatalf("response open = %+v, %v; want response-1", opened, err)
+	}
+	if got := lifecycle.Snapshot().ActiveResponseID; got != "response-1" {
+		t.Fatalf("active response = %q, want response-1", got)
+	}
+	lifecycle.Reset()
+	if got := lifecycle.Snapshot().ActiveResponseID; got != "" {
+		t.Fatalf("active response after reset = %q, want empty", got)
+	}
+}
+
 func TestPublicWireFactoriesExposeIndependentContracts(t *testing.T) {
 	t.Run("constructors", testPublicWireConstructors)
 	t.Run("diagnostics", testPublicWireDiagnostics)

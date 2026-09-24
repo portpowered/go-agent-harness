@@ -324,3 +324,67 @@ func TestObserverPublicLivenessBoundaryPublishesTypedFailureAndStops(t *testing.
 	observer.ResetProviderProgress()
 	observer.StopLiveness()
 }
+
+func TestObserverPublicEmptyResponseBoundaryLatchesAndReportsTypedFailure(t *testing.T) {
+	sink := &observerTestSink{}
+	observer := newObserverForTest(sink)
+	var failure, terminal sessiontrace.TerminalObservation
+	terminalCalls := 0
+	failureCalls := 0
+	observer.SetTerminalObserver(func(observation sessiontrace.TerminalObservation) bool {
+		terminal = observation
+		terminalCalls++
+		return true
+	})
+	observer.SetFailureObserver(func(observation sessiontrace.TerminalObservation) {
+		failure = observation
+		failureCalls++
+	})
+	end := messages.NewMessageEndValue(messages.TokenUsage{})
+	end.TerminalReason = messages.TerminalReasonPartialOutput
+	end.OutputState = messages.TerminalOutputNone
+	observer.ObserveSilentProviderEmptyResponse(messages.StreamMessage{
+		Type:       messages.StreamTypeMessageEnd,
+		Role:       messages.RoleAssistant,
+		ResponseID: "empty-response",
+		Value:      end,
+	}, end, false, false)
+
+	var liveness *sessiontrace.LivenessError
+	if !errors.As(observer.LivenessFailure(), &liveness) || liveness.Classification != sessiontrace.SilentProviderEmptyResponseClassification || liveness.ResponseID != "empty-response" {
+		t.Fatalf("empty-response liveness failure = %v, want a typed response-scoped failure", observer.LivenessFailure())
+	}
+	if err := observer.Finish(nil); !errors.As(err, &liveness) || !errors.Is(err, sessiontrace.ErrSilentProviderEmptyResponse) {
+		t.Fatalf("Finish error = %v, want the latched public liveness cause", err)
+	}
+	if terminalCalls != 1 || failureCalls != 1 || !terminal.Failure || !failure.Failure || failure.Classification != sessiontrace.SilentProviderEmptyResponseClassification || failure.FailingEvent != string(messages.StreamTypeMessageEnd) {
+		t.Fatalf("terminal/failure observations = %+v/%+v, calls=%d/%d", terminal, failure, terminalCalls, failureCalls)
+	}
+	if len(sink.recordsFor(sessiontrace.SessionDiagnosticEventFailure)) != 1 {
+		t.Fatal("empty provider response did not produce one failure diagnostic")
+	}
+}
+
+func TestObserverRoomBoundCancellationRemainsTerminalWithoutFailure(t *testing.T) {
+	sink := &observerTestSink{}
+	observer := newObserverForTest(sink)
+	var terminal sessiontrace.TerminalObservation
+	terminalCalls, failureCalls := 0, 0
+	observer.SetTerminalObserver(func(got sessiontrace.TerminalObservation) bool {
+		terminal = got
+		terminalCalls++
+		return true
+	})
+	observer.SetFailureObserver(func(sessiontrace.TerminalObservation) { failureCalls++ })
+	observer.MarkRoomBoundCancellation()
+
+	if err := observer.Finish(context.Canceled); err != nil {
+		t.Fatalf("Finish(room-bound cancellation): %v", err)
+	}
+	if terminalCalls != 1 || terminal.Failure || !terminal.RoomBound || terminal.TerminalReason != messages.TerminalReasonCancellation || terminal.TerminalProvenance != messages.TerminalProvenanceRoom {
+		t.Fatalf("terminal observation = %+v, calls=%d; want one room-bound cancellation", terminal, terminalCalls)
+	}
+	if failureCalls != 0 || len(sink.recordsFor(sessiontrace.SessionDiagnosticEventFailure)) != 0 {
+		t.Fatalf("failure notifications/records = %d/%d, want none", failureCalls, len(sink.recordsFor(sessiontrace.SessionDiagnosticEventFailure)))
+	}
+}

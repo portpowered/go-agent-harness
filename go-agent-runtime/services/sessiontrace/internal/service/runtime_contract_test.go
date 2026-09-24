@@ -169,11 +169,54 @@ func TestPlaybackDiagnosticsPublicContractFansOutQueueAndReceiptObservations(t *
 	}
 	receiptObserver := diagnostics.PlaybackReceiptObserver(nil)
 	receiptObserver(audio.PlaybackReceipt{CommandID: 7, Epoch: 2, Applied: true})
+	existingReceiptCalls := 0
+	withoutRuntime := NewPlaybackDiagnostics(sessiontrace.PlaybackDiagnosticsOptions{}).PlaybackReceiptObserver(func(audio.PlaybackReceipt) {
+		existingReceiptCalls++
+	})
+	withoutRuntime(audio.PlaybackReceipt{CommandID: 8, Epoch: 3, Applied: false})
+	if existingReceiptCalls != 1 {
+		t.Fatalf("optional runtime changed the existing receipt observer: calls=%d", existingReceiptCalls)
+	}
 	captureObserver := diagnostics.CaptureObserver(nil)
 	captureObserver(devicegw.DeviceID("virtual:input"), audio.CaptureQueueStats{CapturedSamples: 4, DroppedSamples: 1, DropPolicy: "drop_oldest"})
 	diagnostics.RecordParticipantPlaybackOverflow("participant-1", nil)
 	if len(runtimeObserver.snapshot()) != 1 {
 		t.Fatalf("receipt observations = %d, want one", len(runtimeObserver.snapshot()))
+	}
+}
+
+func TestPlaybackDiagnosticsPublicContractReportsParticipantQueueOverflow(t *testing.T) {
+	const rate = 24000
+	capability := devicegw.VirtualCapability{SampleRate: rate, Channels: 1, BitDepth: 16, Format: audio.DeviceEncodingPCM16}
+	registry, err := devicegw.NewVirtualRegistry(devicegw.VirtualBackendConfig{
+		Devices: []devicegw.VirtualDeviceConfig{
+			{ID: "input", Name: "Input", Direction: devicegw.DirectionInput, Capabilities: []devicegw.VirtualCapability{capability}, LoopbackID: "output"},
+			{ID: "output", Name: "Output", Direction: devicegw.DirectionOutput, Capabilities: []devicegw.VirtualCapability{capability}, LoopbackID: "input"},
+		},
+		Defaults: map[devicegw.Direction]string{devicegw.DirectionInput: "input", devicegw.DirectionOutput: "output"},
+	})
+	if err != nil {
+		t.Fatalf("NewVirtualRegistry: %v", err)
+	}
+	sinkDevice, err := devicegw.NewDeviceSinkAtRate(registry, "virtual:output", rate)
+	if err != nil {
+		t.Fatalf("NewDeviceSinkAtRate: %v", err)
+	}
+	t.Cleanup(func() { _ = sinkDevice.Close() })
+	capacity := sinkDevice.PlaybackStats().CapacitySamples
+	if err := sinkDevice.WriteSamples(context.Background(), make([]int16, capacity+audio.FrameSize)); err != nil {
+		t.Fatalf("WriteSamples: %v", err)
+	}
+
+	sink := &playbackContractSink{}
+	diagnostics := NewPlaybackDiagnostics(sessiontrace.PlaybackDiagnosticsOptions{Sink: sink})
+	diagnostics.RecordParticipantPlaybackOverflow("participant-7", sinkDevice)
+	if len(sink.records) != 1 || sink.records[0].Event != SessionDiagnosticEventPlaybackOverflow {
+		t.Fatalf("participant overflow diagnostics = %+v, want one playback overflow", sink.records)
+	}
+	fields := sink.records[0].Fields
+	if fields[SessionDiagnosticFieldPlaybackParticipantID] != "participant-7" || fields[SessionDiagnosticFieldPlaybackDroppedSamples] == "0" || fields[SessionDiagnosticFieldPlaybackOverflowEvents] == "0" {
+		t.Fatalf("participant overflow fields = %+v", fields)
 	}
 }
 

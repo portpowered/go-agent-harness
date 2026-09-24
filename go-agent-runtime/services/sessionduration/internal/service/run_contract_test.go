@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -67,6 +68,39 @@ func TestRunSelectsPlannedStopAfterAdmittedMessageEnd(t *testing.T) {
 	}
 	if !loop.sent {
 		t.Fatal("planned stop did not send the loop close control message")
+	}
+}
+
+func TestRunUsesCallerAdmissionWithoutCreatingAnotherBoundary(t *testing.T) {
+	service := New()
+	provided := service.NewAdmissionInferencer(
+		contractInferencer{session: newContractSession()},
+		service.NewEventAdmission(),
+		nil,
+	)
+	done := make(chan struct{})
+	close(done)
+	factoryCalled := false
+	err := service.Run(sessionduration.RunRequest{
+		Context:   context.Background(),
+		Admission: provided,
+		Done:      done,
+		LoopFactory: func(ctx context.Context, admitted sessionduration.AdmissionInferencer, _ sessionduration.Controller) (sessionduration.Loop, error) {
+			factoryCalled = true
+			if admitted != provided {
+				return nil, errors.New("duration service replaced the caller's admission boundary")
+			}
+			if _, err := admitted.ConnectSession(ctx); err != nil {
+				return nil, err
+			}
+			return &idleRunLoopProbe{deltas: messages.NewTypedBuffer[messages.StreamMessage](1)}, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("Run with caller admission: %v", err)
+	}
+	if !factoryCalled {
+		t.Fatal("duration service did not invoke the loop factory")
 	}
 }
 
@@ -263,6 +297,98 @@ func TestExecuteValidatesBeforeEffectsAndFinalizesAfterInvocation(t *testing.T) 
 	}
 	if len(order) < 4 || order[0] != "prepare" || order[1] != "run" || order[len(order)-2] != "close" || order[len(order)-1] != "publish" {
 		t.Fatalf("execution/finalization order = %v, want prepare, run, close, publish", order)
+	}
+}
+
+func TestExecuteReportsArtifactFailureBeforeTerminalAndSkipsReplayCompletion(t *testing.T) {
+	runErr := errors.New("provider invocation failed")
+	flushErr := errors.New("artifact flush failed")
+	closeErr := errors.New("artifact close failed")
+	terminalErr := errors.New("terminal publication failed")
+	var order []string
+	replayCompleted := false
+	artifactRecorded := false
+	err := New().Execute(sessionduration.ExecutionRequest{
+		Context:       context.Background(),
+		MaxDuration:   0,
+		FallbackClock: testNoopScheduler{},
+		Prepare: func(context.Context, io.Writer) error {
+			order = append(order, "prepare")
+			return nil
+		},
+		Run: func(context.Context, io.Writer, sessionduration.TimerScheduler) error {
+			order = append(order, "run")
+			return runErr
+		},
+		Finalization: sessionduration.FinalizationPorts{
+			Artifacts: artifactLifecycleFunc{
+				flush: func() error { order = append(order, "flush"); return flushErr },
+				close: func() error { order = append(order, "close"); return closeErr },
+			},
+			RecordArtifactFinalization: func(hasArtifacts bool, artifactErr error) {
+				order = append(order, "record")
+				artifactRecorded = hasArtifacts && errors.Is(artifactErr, flushErr) && errors.Is(artifactErr, closeErr)
+			},
+			HasIndependentFailure: func(failure error) bool {
+				order = append(order, "failure-check")
+				return errors.Is(failure, runErr) && errors.Is(failure, flushErr) && errors.Is(failure, closeErr)
+			},
+			CompleteReplay: func() { replayCompleted = true },
+			PublishTerminal: func(_ io.Writer, failure error) error {
+				order = append(order, "publish")
+				if !errors.Is(failure, runErr) || !errors.Is(failure, flushErr) || !errors.Is(failure, closeErr) {
+					t.Fatalf("terminal failure = %v, want invocation and artifact failures", failure)
+				}
+				return terminalErr
+			},
+		},
+	})
+	for _, cause := range []error{runErr, flushErr, closeErr, terminalErr} {
+		if !errors.Is(err, cause) {
+			t.Errorf("Execute error %v does not preserve %v", err, cause)
+		}
+	}
+	if !artifactRecorded || replayCompleted {
+		t.Fatalf("artifact recorded=%v replay completed=%v, want artifact failure recorded and replay skipped", artifactRecorded, replayCompleted)
+	}
+	if want := []string{"prepare", "run", "flush", "close", "record", "failure-check", "publish"}; !reflect.DeepEqual(order, want) {
+		t.Fatalf("execution/finalization order = %v, want %v", order, want)
+	}
+}
+
+func TestExecuteRejectsPartialArtifactConfigurationBeforeInvocation(t *testing.T) {
+	service := New()
+	var invocationCalled bool
+	var artifactStatusRecorded bool
+	var terminalPublished bool
+	err := service.Execute(sessionduration.ExecutionRequest{
+		MaxDuration: 0,
+		Context: service.WithArtifactPaths(context.Background(), sessionduration.SessionDurationArtifactPaths{
+			AudioPath: "audio-only.wav",
+		}),
+		Prepare: func(context.Context, io.Writer) error {
+			invocationCalled = true
+			return nil
+		},
+		Run: func(context.Context, io.Writer, sessionduration.TimerScheduler) error {
+			invocationCalled = true
+			return nil
+		},
+		Finalization: sessionduration.FinalizationPorts{
+			RecordArtifactFinalization: func(hasArtifacts bool, artifactErr error) {
+				artifactStatusRecorded = !hasArtifacts && artifactErr == nil
+			},
+			PublishTerminal: func(_ io.Writer, runErr error) error {
+				terminalPublished = runErr != nil && strings.Contains(runErr.Error(), "both audio and transcript paths")
+				return nil
+			},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "both audio and transcript paths") {
+		t.Fatalf("Execute error = %v, want partial-artifact configuration failure", err)
+	}
+	if invocationCalled || !artifactStatusRecorded || !terminalPublished {
+		t.Fatalf("invocation=%v artifact-status=%v terminal-published=%v", invocationCalled, artifactStatusRecorded, terminalPublished)
 	}
 }
 

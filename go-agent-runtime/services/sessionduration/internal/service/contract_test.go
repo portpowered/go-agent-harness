@@ -1,8 +1,10 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -14,6 +16,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
 type contractSession struct {
@@ -241,11 +244,15 @@ func TestControllerReportsUnavailableLivenessScheduler(t *testing.T) {
 
 type artifactAudioSink struct {
 	samples  []int16
+	writeErr error
 	flushErr error
 	closeErr error
 }
 
 func (s *artifactAudioSink) WriteSamples(samples []int16) error {
+	if s.writeErr != nil {
+		return s.writeErr
+	}
 	s.samples = append(s.samples, samples...)
 	return nil
 }
@@ -305,6 +312,39 @@ func TestArtifactsPreserveAcceptedAudioTranscriptAndLifecycleErrors(t *testing.T
 	}
 	if err := FinalizeArtifacts(artifacts); !errors.Is(err, transcriptErr) {
 		t.Fatalf("FinalizeArtifacts error = %v, want cached close identity", err)
+	}
+}
+
+func TestSessionDurationArtifactsPreserveWriteFailuresAndSequence(t *testing.T) {
+	malformed := NewSessionDurationArtifactSetWithSinks(&artifactAudioSink{}, &artifactTranscriptSink{})
+	if err := malformed.Accept(messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue([]byte{1})}); err == nil {
+		t.Fatal("malformed PCM was accepted")
+	}
+
+	audioErr := errors.New("audio write failed")
+	transcriptSink := &artifactTranscriptSink{}
+	audioFailure := NewSessionDurationArtifactSetWithSinks(&artifactAudioSink{writeErr: audioErr}, transcriptSink)
+	pcm := make([]byte, 2)
+	binary.LittleEndian.PutUint16(pcm, 21)
+	if err := audioFailure.Accept(messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue(pcm)}); !errors.Is(err, audioErr) {
+		t.Fatalf("audio artifact error = %v, want write identity", err)
+	}
+	if len(transcriptSink.records) != 0 {
+		t.Fatal("transcript recorded audio whose WAV write failed")
+	}
+
+	transcriptErr := errors.New("transcript write failed")
+	transcriptSink = &artifactTranscriptSink{writeErr: transcriptErr}
+	transcriptFailure := NewSessionDurationArtifactSetWithSinks(nil, transcriptSink)
+	if err := transcriptFailure.Accept(messages.StreamMessage{Type: messages.StreamTypeTextDelta}); !errors.Is(err, transcriptErr) {
+		t.Fatalf("transcript artifact error = %v, want write identity", err)
+	}
+	transcriptSink.writeErr = nil
+	if err := transcriptFailure.Accept(messages.StreamMessage{Type: messages.StreamTypeTextDelta}); err != nil {
+		t.Fatalf("transcript retry after write failure: %v", err)
+	}
+	if len(transcriptSink.records) != 1 || transcriptSink.records[0].Tick != 1 {
+		t.Fatalf("transcript records after retry = %+v, want sequence to advance only on successful write", transcriptSink.records)
 	}
 }
 
@@ -374,6 +414,163 @@ func TestArtifactContextPreparationAndTerminalRecording(t *testing.T) {
 	}
 	if err := lifecycle.Close(); err != nil {
 		t.Fatalf("terminal lifecycle Close: %v", err)
+	}
+
+	pathRecorder := &terminalRecorderProbe{}
+	recordedPaths := sessionduration.SessionDurationArtifactPaths{
+		AudioPath:      filepath.Join(directory, "recorded-audio.wav"),
+		TranscriptPath: filepath.Join(directory, "recorded-transcript.jsonl"),
+	}
+	recordedPathContext := WithTerminalRecorder(WithSessionDurationArtifactPaths(context.Background(), recordedPaths), pathRecorder)
+	preparedRecording, err := PrepareArtifacts(recordedPathContext)
+	if err != nil {
+		t.Fatalf("PrepareArtifacts with terminal recorder: %v", err)
+	}
+	recordedLifecycle := ArtifactsFromContext(preparedRecording)
+	if err := recordedLifecycle.Accept(terminal); err != nil {
+		t.Fatalf("prepared terminal lifecycle Accept: %v", err)
+	}
+	if err := FinalizeArtifacts(recordedLifecycle); err != nil {
+		t.Fatalf("FinalizeArtifacts with terminal recorder: %v", err)
+	}
+	if len(pathRecorder.summaries) != 1 || pathRecorder.summaries[0].Classification != "provider_close" {
+		t.Fatalf("prepared path terminal summaries = %+v", pathRecorder.summaries)
+	}
+}
+
+type admissionPolicySessionProbe struct {
+	*contractSession
+	closed bool
+}
+
+func (s *admissionPolicySessionProbe) Receive() *messages.TypedBuffer[messages.StreamMessage] {
+	return nil
+}
+func (s *admissionPolicySessionProbe) Done() <-chan struct{}        { return nil }
+func (s *admissionPolicySessionProbe) SessionAdmissionClosed() bool { return s.closed }
+func (*admissionPolicySessionProbe) SessionAdmissionAllows(msg messages.StreamMessage) bool {
+	return msg.Type == messages.StreamTypeResponseCancel
+}
+func (*admissionPolicySessionProbe) SessionAdmissionAllowsCompleteMessage(msg messages.Message) bool {
+	return msg.Role == messages.RoleTool
+}
+
+type admissionClosedSessionProbe struct {
+	*contractSession
+	closed bool
+}
+
+func (s *admissionClosedSessionProbe) Receive() *messages.TypedBuffer[messages.StreamMessage] {
+	return nil
+}
+func (s *admissionClosedSessionProbe) Done() <-chan struct{}        { return nil }
+func (s *admissionClosedSessionProbe) SessionAdmissionClosed() bool { return s.closed }
+
+func TestAdmissionSessionPreservesNestedAdmissionPolicy(t *testing.T) {
+	service := New()
+	ctx := context.Background()
+	t.Run("explicit policy", func(t *testing.T) {
+		inner := &admissionPolicySessionProbe{contractSession: newContractSession(), closed: true}
+		session := service.NewAdmissionSession(ctx, inner, nil, nil)
+		if !session.SessionAdmissionClosed() {
+			t.Fatal("nested closed admission state was not preserved")
+		}
+		if !session.SessionAdmissionAllows(messages.StreamMessage{Type: messages.StreamTypeResponseCancel}) || session.SessionAdmissionAllows(messages.StreamMessage{Type: messages.StreamTypeResponseCreate}) {
+			t.Fatal("nested stream admission policy was not preserved")
+		}
+		if !session.SessionAdmissionAllowsCompleteMessage(messages.Message{Role: messages.RoleTool}) || session.SessionAdmissionAllowsCompleteMessage(messages.Message{Role: messages.RoleUser}) {
+			t.Fatal("nested complete-message admission policy was not preserved")
+		}
+	})
+	t.Run("closed fallback", func(t *testing.T) {
+		session := service.NewAdmissionSession(ctx, &admissionClosedSessionProbe{contractSession: newContractSession(), closed: true}, nil, nil)
+		if !session.SessionAdmissionClosed() {
+			t.Fatal("nested closed state was not preserved")
+		}
+		if !session.SessionAdmissionAllows(messages.StreamMessage{Type: messages.StreamTypeResponseCancel}) || !session.SessionAdmissionAllows(messages.StreamMessage{Type: messages.StreamTypeSessionClose}) || session.SessionAdmissionAllows(messages.StreamMessage{Type: messages.StreamTypeTextDelta}) {
+			t.Fatal("closed session stream fallback admitted an ordinary output")
+		}
+		if session.SessionAdmissionAllowsCompleteMessage(messages.Message{Role: messages.RoleUser}) {
+			t.Fatal("closed session fallback admitted a complete message")
+		}
+	})
+	t.Run("open fallback", func(t *testing.T) {
+		session := service.NewAdmissionSession(ctx, &admissionClosedSessionProbe{contractSession: newContractSession()}, nil, nil)
+		if session.SessionAdmissionClosed() || !session.SessionAdmissionAllows(messages.StreamMessage{Type: messages.StreamTypeTextDelta}) || !session.SessionAdmissionAllowsCompleteMessage(messages.Message{Role: messages.RoleUser}) {
+			t.Fatal("open session fallback did not preserve ordinary admission")
+		}
+	})
+}
+
+func TestSessionDurationArtifactSetWritesAcceptedAudioAndTerminalTranscript(t *testing.T) {
+	directory := t.TempDir()
+	audioPath := filepath.Join(directory, "accepted.wav")
+	transcriptPath := filepath.Join(directory, "accepted.jsonl")
+	artifacts, err := NewSessionDurationArtifactSet(audioPath, transcriptPath)
+	if err != nil {
+		t.Fatalf("NewSessionDurationArtifactSet: %v", err)
+	}
+	pcm := make([]byte, 4)
+	binary.LittleEndian.PutUint16(pcm[:2], 42)
+	negative := int16(-13)
+	binary.LittleEndian.PutUint16(pcm[2:], uint16(negative))
+	for _, message := range []messages.StreamMessage{
+		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue(pcm)},
+		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("accepted response")},
+		{Type: messages.StreamTypeSessionClose, Role: messages.RoleSystem, Value: messages.NewSessionCloseValueWithTerminal("session-1", "expired", string(sessionduration.MaxDurationReason), sessionduration.MaxDurationReason, messages.TerminalProvenanceLoop, messages.TerminalOutputPartial)},
+		{Type: messages.StreamTypeLoopEnd, Role: messages.RoleSystem},
+	} {
+		if err := artifacts.Accept(message); err != nil {
+			t.Fatalf("Accept(%s): %v", message.Type, err)
+		}
+	}
+	if err := FinalizeArtifacts(artifacts); err != nil {
+		t.Fatalf("FinalizeArtifacts: %v", err)
+	}
+
+	wavBytes, err := os.ReadFile(audioPath)
+	if err != nil {
+		t.Fatalf("read WAV artifact: %v", err)
+	}
+	rate, samples, err := wavio.Read(bytes.NewReader(wavBytes))
+	if err != nil || rate != audio.SampleRate || len(samples) != 2 || samples[0] != 42 || samples[1] != -13 {
+		t.Fatalf("recorded WAV = rate %d samples %v err %v, want exact accepted PCM at %d Hz", rate, samples, err, audio.SampleRate)
+	}
+	transcriptBytes, err := os.ReadFile(transcriptPath)
+	if err != nil {
+		t.Fatalf("read transcript artifact: %v", err)
+	}
+	var eventTypes []messages.StreamMessageType
+	for _, line := range bytes.Split(transcriptBytes, []byte("\n")) {
+		if len(line) == 0 {
+			continue
+		}
+		var record transcript.Record
+		if err := json.Unmarshal(line, &record); err != nil {
+			t.Fatalf("decode transcript record: %v", err)
+		}
+		var event struct {
+			Type messages.StreamMessageType `json:"type"`
+		}
+		if err := json.Unmarshal(record.Payload, &event); err != nil {
+			t.Fatalf("decode transcript event: %v", err)
+		}
+		eventTypes = append(eventTypes, event.Type)
+		if event.Type == messages.StreamTypeTextDelta && !bytes.Contains(record.Payload, []byte("accepted response")) {
+			t.Fatalf("text transcript event = %q", record.Payload)
+		}
+		if event.Type == messages.StreamTypeSessionClose && !bytes.Contains(record.Payload, []byte("max_duration")) {
+			t.Fatalf("terminal transcript event = %q", record.Payload)
+		}
+	}
+	wantTypes := []messages.StreamMessageType{messages.StreamTypeAudioDelta, messages.StreamTypeTextDelta, messages.StreamTypeSessionClose}
+	if len(eventTypes) != len(wantTypes) {
+		t.Fatalf("transcript event types = %v, want %v", eventTypes, wantTypes)
+	}
+	for i, want := range wantTypes {
+		if eventTypes[i] != want {
+			t.Fatalf("transcript event types = %v, want %v", eventTypes, wantTypes)
+		}
 	}
 }
 
