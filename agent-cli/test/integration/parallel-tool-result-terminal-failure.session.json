@@ -1,0 +1,260 @@
+{
+  "version": 2,
+  "provider": {},
+  "session": {
+    "started_at_utc": "2026-09-24T21:42:27.010126Z"
+  },
+  "records": [
+    {
+      "sequence": 1,
+      "direction": "server_to_client",
+      "timestamp_ms": 0,
+      "type": "SESSION.OPEN",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "SESSION.OPEN",
+        "value": {
+          "type": "session_open",
+          "session_id": "parallel-tool-lifecycle",
+          "mode": "test"
+        }
+      }
+    },
+    {
+      "sequence": 2,
+      "direction": "server_to_client",
+      "timestamp_ms": 0,
+      "type": "SESSION.UPDATED",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "SESSION.UPDATED",
+        "value": {
+          "type": "session_updated",
+          "session_id": "parallel-tool-lifecycle"
+        }
+      }
+    },
+    {
+      "sequence": 3,
+      "direction": "client_to_server",
+      "timestamp_ms": 0,
+      "type": "AUDIO.DELTA",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "AUDIO.DELTA",
+        "value": {
+          "type": "delta_audio",
+          "content": "AQIDBA=="
+        }
+      }
+    },
+    {
+      "sequence": 4,
+      "direction": "client_to_server",
+      "timestamp_ms": 0,
+      "type": "MESSAGE.END",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "MESSAGE.END"
+      }
+    },
+    {
+      "sequence": 5,
+      "direction": "server_to_client",
+      "timestamp_ms": 0,
+      "type": "MESSAGE.START",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "MESSAGE.START",
+        "role": "assistant",
+        "value": {
+          "type": "message_start"
+        }
+      }
+    },
+    {
+      "sequence": 6,
+      "direction": "server_to_client",
+      "timestamp_ms": 0,
+      "type": "TOOLCALL.START",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "TOOLCALL.START",
+        "role": "assistant",
+        "tool_call_id": "call_lifecycle_alpha",
+        "value": {
+          "type": "tool_use_start",
+          "tool_call_id": "call_lifecycle_alpha",
+          "name": "lookup_weather"
+        }
+      }
+    },
+    {
+      "sequence": 7,
+      "direction": "server_to_client",
+      "timestamp_ms": 0,
+      "type": "TOOLCALL.END",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "TOOLCALL.END",
+        "role": "assistant",
+        "tool_call_id": "call_lifecycle_alpha",
+        "value": {
+          "type": "tool_use_end",
+          "arguments": "{\"city\":\"Lisbon\"}",
+          "tool_call_id": "call_lifecycle_alpha",
+          "name": "lookup_weather"
+        }
+      }
+    },
+    {
+      "sequence": 8,
+      "direction": "server_to_client",
+      "timestamp_ms": 0,
+      "type": "MESSAGE.START",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "MESSAGE.START",
+        "role": "assistant",
+        "value": {
+          "type": "message_start"
+        }
+      }
+    },
+    {
+      "sequence": 9,
+      "direction": "server_to_client",
+      "timestamp_ms": 0,
+      "type": "TOOLCALL.START",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "TOOLCALL.START",
+        "role": "assistant",
+        "tool_call_id": "call_lifecycle_bravo",
+        "value": {
+          "type": "tool_use_start",
+          "tool_call_id": "call_lifecycle_bravo",
+          "name": "lookup_time"
+        }
+      }
+    },
+    {
+      "sequence": 10,
+      "direction": "server_to_client",
+      "timestamp_ms": 0,
+      "type": "TOOLCALL.END",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "TOOLCALL.END",
+        "role": "assistant",
+        "tool_call_id": "call_lifecycle_bravo",
+        "value": {
+          "type": "tool_use_end",
+          "arguments": "{\"zone\":\"UTC\"}",
+          "tool_call_id": "call_lifecycle_bravo",
+          "name": "lookup_time"
+        }
+      }
+    },
+    {
+      "sequence": 11,
+      "direction": "server_to_client",
+      "timestamp_ms": 0,
+      "type": "AUDIO.START",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "AUDIO.START",
+        "role": "assistant",
+        "value": {
+          "type": "audio_start"
+        }
+      }
+    },
+    {
+      "sequence": 12,
+      "direction": "server_to_client",
+      "timestamp_ms": 0,
+      "type": "AUDIO.DELTA",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "AUDIO.DELTA",
+        "role": "assistant",
+        "value": {
+          "type": "delta_audio",
+          "content": "AQACAA=="
+        }
+      }
+    },
+    {
+      "sequence": 13,
+      "direction": "server_to_client",
+      "timestamp_ms": 0,
+      "type": "AUDIO.END",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "AUDIO.END",
+        "role": "assistant",
+        "value": {
+          "type": "audio_end"
+        }
+      }
+    },
+    {
+      "sequence": 14,
+      "direction": "server_to_client",
+      "timestamp_ms": 0,
+      "type": "MESSAGE.END",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "MESSAGE.END",
+        "role": "assistant",
+        "value": {
+          "type": "message_end",
+          "usage": {
+            "PromptTokens": 0,
+            "CompletionTokens": 0,
+            "TotalTokens": 0,
+            "ReasoningTokens": 0
+          }
+        }
+      }
+    },
+    {
+      "sequence": 15,
+      "direction": "client_to_server",
+      "timestamp_ms": 0,
+      "type": "TOOLCALL.END",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "TOOLCALL.END",
+        "value": {
+          "type": "tool_use_end",
+          "arguments": "{\"temperature_c\":24,\"origin\":\"alpha\"}",
+          "tool_call_id": "call_lifecycle_alpha",
+          "name": "lookup_weather"
+        }
+      }
+    },
+    {
+      "sequence": 16,
+      "direction": "client_to_server",
+      "timestamp_ms": 0,
+      "type": "TOOLCALL.END",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "TOOLCALL.END",
+        "value": {
+          "type": "tool_use_end",
+          "arguments": "{\"utc\":\"12:34\",\"origin\":\"bravo\"}",
+          "tool_call_id": "call_lifecycle_bravo",
+          "name": "lookup_time"
+        }
+      }
+    }
+  ],
+  "integrity": {
+    "algorithm": "sha256",
+    "coverage": "session_capture.v2:json(version,provider,session,records,ends_with_disconnect)",
+    "digest": "f0468d2d41819da59d7ab933018a928eee77ab1901d1cfe9f6bb5c431d382214"
+  }
+}

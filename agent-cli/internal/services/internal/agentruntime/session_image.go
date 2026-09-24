@@ -20,7 +20,6 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/input"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
@@ -196,39 +195,15 @@ func attachSessionImageRuntime(plan sessionRuntimePlan, parts []messages.ImagePa
 	return plan, "", nil
 }
 func runSessionImagePlan(ctx context.Context, out io.Writer, plan sessionRuntimePlan, opts SessionImageRunOptions, wirePrompt string) (runErr error) {
-	if opts.TextSeed.Present {
-		output := &sessionTextOutput{writer: out}
-		if opts.MaxDuration == 0 {
-			plan.inferencer = &sessionTextSeedInferencer{inner: plan.inferencer, wirePrompt: wirePrompt, value: opts.TextSeed.Value}
-			return errors.Join(plan.run(ctx, output), output.errorValue())
-		}
-		durationService := durationwire.NewService()
-		durationCtx, err := durationService.PrepareArtifacts(ctx)
-		if err != nil {
-			return err
-		}
-		return plan.withLiveEvidence(durationCtx, func(runCtx context.Context, prepared sessionRuntimePlan) error {
-			inner := &sessionTextSeedInferencer{inner: prepared.inferencer, wirePrompt: wirePrompt, value: opts.TextSeed.Value}
-			admission := durationService.NewEventAdmission()
-			admittedInferencer := durationService.NewAdmissionInferencer(inner, admission, make(chan struct{}))
-			prepared.inferencer = admittedInferencer
-			err := runSessionDurationPlanWithAdmission(runCtx, output, prepared, opts.MaxDuration, nil, nil)
-			return errors.Join(err, output.errorValue())
-		})
+	if !opts.TextSeed.Present {
+		return runSessionPlanWithDuration(ctx, out, plan, opts.MaxDuration, nil, nil)
 	}
-	if opts.MaxDuration == 0 {
-		return plan.run(ctx, out)
+	if opts.MaxDuration > 0 {
+		return runSessionPlanWithTextSeed(ctx, out, plan, opts.MaxDuration, opts.TextSeed.Value, wirePrompt)
 	}
-	return runSessionImageDuration(ctx, out, plan, opts.MaxDuration)
-}
-func runSessionImageDuration(ctx context.Context, out io.Writer, plan sessionRuntimePlan, maxDuration time.Duration) error {
-	durationCtx, err := durationwire.NewService().PrepareArtifacts(ctx)
-	if err != nil {
-		return err
-	}
-	return plan.withLiveEvidence(durationCtx, func(runCtx context.Context, prepared sessionRuntimePlan) error {
-		return runSessionDurationPlan(runCtx, out, prepared, maxDuration, nil)
-	})
+	output := &sessionTextOutput{writer: out}
+	plan.inferencer = &sessionTextSeedInferencer{inner: plan.inferencer, wirePrompt: wirePrompt, value: opts.TextSeed.Value}
+	return errors.Join(plan.run(ctx, output), output.errorValue())
 }
 func PrepareSessionImageParts(paths []string, metadata SessionImageCapabilities) ([]messages.ImagePart, error) {
 	if !metadata.SupportsImageInput {

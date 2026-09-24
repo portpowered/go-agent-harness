@@ -15,8 +15,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	durationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/wire"
 	sessionterminalwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
-	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
@@ -326,9 +326,9 @@ func prepareSessionStreamOutput(out io.Writer, opts *sessionLoopOptions) (io.Wri
 	reporter := sessionterminalwire.NewReporter()
 	opts.terminalReporter = reporter
 	reporter.MarkRunStarted()
-	renderer := newSessionReplayRenderer(out, reporter)
+	renderer := durationwire.NewService().NewTranscript(out, reporter)
 	return renderer, func(runErr error) error {
-		runErr = errors.Join(runErr, renderer.finishTranscript())
+		runErr = errors.Join(runErr, renderer.Finish())
 		return errors.Join(runErr, reporter.Publish(out, runErr))
 	}
 }
@@ -374,14 +374,4 @@ func bindSessionLoopInputs(runCtx context.Context, loop *agentloop.AgentLoop, op
 		}
 	}
 	return nil
-}
-
-func stopAndDrainSessionTimer(timer platformclock.Timer) {
-	if timer.Stop() {
-		return
-	}
-	select {
-	case <-timer.C():
-	default:
-	}
 }

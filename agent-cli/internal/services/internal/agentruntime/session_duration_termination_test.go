@@ -17,6 +17,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	duration "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
@@ -31,7 +33,7 @@ type durationTerminalDrainFixture struct {
 	inferencer *durationTerminalDrainInferencer
 	loopReady  chan *agentloop.AgentLoop
 	loop       *agentloop.AgentLoop
-	clock      SessionDurationClock
+	clock      duration.TimerScheduler
 	done       chan struct{}
 
 	options      sessionLoopOptions
@@ -72,15 +74,9 @@ func (f *durationTerminalDrainFixture) run(t *testing.T, setup func(*durationTer
 	trigger := setup(f)
 	result := make(chan error, 1)
 	go func() {
-		result <- runAgentLoopSessionWithDurationAdmissionClockStream(
-			f.ctx,
-			f.writer,
-			f.inferencer,
-			f.options,
-			time.Hour,
-			f.clock,
-			nil,
-		)
+		options := f.options
+		options.durationBound, options.durationClock = time.Hour, f.clock
+		result <- runBoundedSessionStream(f.ctx, f.writer, f.inferencer, options)
 	}()
 
 	select {
@@ -195,7 +191,7 @@ func durationTerminalDrainControlCases(publicationErr, schedulerErr error) []dur
 				f.clock = clock
 				return func() { f.acceptedOutput(); clock.fire(); clock.releaseTimer() }
 			},
-			wantOutput: string(SessionMaxDurationReason),
+			wantOutput: string(sessionterminal.MaxDurationReason),
 		},
 		{
 			name: "duration clock construction failure",
@@ -246,7 +242,7 @@ func durationTerminalDrainControlCases(publicationErr, schedulerErr error) []dur
 					f.clock.(*durationTestClock).fire()
 				}
 			},
-			wantOutput: string(SessionMaxDurationReason),
+			wantOutput: string(sessionterminal.MaxDurationReason),
 		},
 		{
 			name: "session updated timeout",
@@ -405,7 +401,7 @@ func newGatedDurationTerminalDrainClock(returnNil bool) *gatedDurationTerminalDr
 	}
 }
 
-func (c *gatedDurationTerminalDrainClock) NewTimer(duration time.Duration) SessionDurationTimer {
+func (c *gatedDurationTerminalDrainClock) NewTimer(duration time.Duration) duration.Timer {
 	c.createdOnce.Do(func() { close(c.created) })
 	<-c.release
 	if c.returnNil {
@@ -506,7 +502,7 @@ func (w *durationTerminalDrainFailingWriter) Write(data []byte) (int, error) {
 
 var _ messages.SessionInferencer = (*durationTerminalDrainInferencer)(nil)
 var _ messages.Session = (*durationTerminalDrainSession)(nil)
-var _ SessionDurationClock = (*gatedDurationTerminalDrainClock)(nil)
+var _ duration.TimerScheduler = (*gatedDurationTerminalDrainClock)(nil)
 
 func waitForDurationTextOrError(t *testing.T, writer *durationTestWriter, runErr <-chan error, want string) {
 	t.Helper()

@@ -946,25 +946,3 @@ func roomProviderInputPCM(runtime *roomParticipantRuntime, pcm []byte) ([]byte, 
 	}
 	return converted, nil
 }
-
-func resolveSessionDurationFinishError(terminationErr, lifecycleErr, sessionErr, transportErr, runErr error, planned bool, out io.Writer, artifacts SessionDurationArtifactLifecycle, terminalState *sessionDurationTerminalState, terminalWritten *bool) error {
-	if terminationErr != nil {
-		return errors.Join(terminationErr, lifecycleErr, transportErr)
-	}
-	if lifecycleErr != nil {
-		return lifecycleErr
-	}
-	if sessionErr != nil {
-		return transportErr
-	}
-	if runErr != nil && !errors.Is(runErr, context.Canceled) {
-		return fmt.Errorf("session error: %w", runErr)
-	}
-	if planned && !terminalState.written() {
-		if err := terminalState.writeMaxDurationTerminal(out, artifacts, terminalState.outputState()); err != nil {
-			return err
-		}
-		*terminalWritten = terminalState.written()
-	}
-	return nil
-}
