@@ -5212,3 +5212,26 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
 - Exact next action: commit these causal source/test changes and this checkpoint,
   then run the complete C276-05/06 suite and `make prepush` against that SHA.
   Decision remains CONTINUE.
+
+# C276 duration lifecycle and scheduler-error checkpoint — 2026-09-24
+
+- Continued source review found that a canceled controller could rearm an
+  unwatched provider timer, and a scheduler that returned a nil retry/drain
+  timer lost the public `ErrSchedulerUnavailable` identity. Liveness now
+  respects the controller context through arming and expiration, canceled
+  liveness watchers stop their timer, max-duration watchers stop timers on
+  exit, and nil or missing retry/drain timers preserve the stable scheduler
+  error. Added public regressions for cancellation, nil retry/initial-drain/
+  reset-drain timers, and an uncooperative loop bounded by the join timeout.
+- Focused Wire regressions pass in normal and race modes (6 cases each). Full
+  sessionduration normal/race suites pass (86 tests / 3 packages each). The
+  exact `make prepush` on `a2622b51866d758bcae83c5e9b283f3171acfa67` passed all
+  earlier phases and stopped at the unchanged sessionduration coverage floor:
+  88.40% against 90.00%. This source change invalidates that result; the exact
+  candidate gate must run again after checkpointing.
+- The 13 retired paths remain absent, adapters remain 63 lines, browser
+  preservation remains clean, and the two unrelated untracked fixtures are
+  preserved. No push, PR, hosted CI, or review handoff occurred.
+- Exact next action: commit the causal duration source/tests and this progress
+  checkpoint, then rerun all C276-01 through C276-06 checks plus `make prepush`
+  on the new exact SHA. Decision remains CONTINUE.

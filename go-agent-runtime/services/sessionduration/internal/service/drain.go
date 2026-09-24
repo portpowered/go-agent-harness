@@ -28,7 +28,7 @@ func (c *controller) drainLoop(ctx context.Context, loop sessionduration.Loop, p
 	}
 	if policy.Clock == nil {
 		if more {
-			return errors.New("session duration drain has buffered output but no timer scheduler")
+			return fmt.Errorf("session duration drain has buffered output but no timer scheduler: %w", sessionduration.ErrSchedulerUnavailable)
 		}
 		return nil
 	}
@@ -55,7 +55,7 @@ func drainDurations(policy sessionduration.DrainPolicy) (quietPeriod, wallSafety
 func newDrainTimer(clock sessionduration.TimerScheduler, duration time.Duration) (sessionduration.Timer, error) {
 	timer := clock.NewTimer(duration)
 	if timer == nil {
-		return nil, errors.New("session duration clock returned a nil drain timer")
+		return nil, fmt.Errorf("session duration clock returned a nil drain timer: %w", sessionduration.ErrSchedulerUnavailable)
 	}
 	return timer, nil
 }
@@ -122,7 +122,7 @@ func resetDrainTimer(clock sessionduration.TimerScheduler, timer sessionduration
 	}
 	next := clock.NewTimer(duration)
 	if next == nil {
-		return nil, errors.New("session duration clock returned a nil drain timer")
+		return nil, fmt.Errorf("session duration clock returned a nil drain timer: %w", sessionduration.ErrSchedulerUnavailable)
 	}
 	return next, nil
 }

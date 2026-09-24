@@ -122,6 +122,7 @@ func (c *controller) startMaxDuration(maxDuration time.Duration) error {
 }
 
 func (c *controller) watchMaxDuration(timer sessionTimer) {
+	defer timer.Stop()
 	select {
 	case <-timer.C():
 		if err := c.Expire(); err != nil && !errors.Is(err, sessionduration.ErrMaxDurationExceeded) {

@@ -137,7 +137,7 @@ func (r *runLoop) waitForRetry(delay time.Duration) (bool, error) {
 	}
 	timer := r.request.Clock.NewTimer(delay)
 	if timer == nil {
-		return false, errors.New("session duration clock returned a nil retry timer")
+		return false, fmt.Errorf("session duration clock returned a nil retry timer: %w", sessionduration.ErrSchedulerUnavailable)
 	}
 	defer timer.Stop()
 	select {
