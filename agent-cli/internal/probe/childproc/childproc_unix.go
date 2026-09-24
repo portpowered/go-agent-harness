@@ -1,6 +1,6 @@
 //go:build !windows
 
-package probe
+package childproc
 
 import (
 	"errors"
@@ -9,13 +9,17 @@ import (
 	"time"
 )
 
-const duplexDescendantCheckGrace = 100 * time.Millisecond
+const descendantCheckGrace = 100 * time.Millisecond
 
-func prepareDuplexCommand(command *exec.Cmd) {
+// Prepare places the child in its own process group so Terminate can reach
+// its descendants.
+func Prepare(command *exec.Cmd) {
 	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 }
 
-func terminateDuplexCommand(command *exec.Cmd) error {
+// Terminate kills the child's process group, falling back to the child
+// itself. An already-exited process is not an error.
+func Terminate(command *exec.Cmd) error {
 	if command == nil || command.Process == nil {
 		return nil
 	}
@@ -28,7 +32,9 @@ func terminateDuplexCommand(command *exec.Cmd) error {
 	return nil
 }
 
-func duplexDescendantsAlive(command *exec.Cmd, childWaited bool) bool {
+// DescendantsAlive reports whether any member of the child's process group
+// remains after the child was reaped.
+func DescendantsAlive(command *exec.Cmd, childWaited bool) bool {
 	if command == nil || command.Process == nil {
 		return false
 	}
@@ -38,7 +44,7 @@ func duplexDescendantsAlive(command *exec.Cmd, childWaited bool) bool {
 	// A SIGINT can reap the group leader before the kernel tears down its
 	// process group. Give that teardown a short bounded grace period so a
 	// transient group membership is not recorded as an orphan.
-	deadline := time.Now().Add(duplexDescendantCheckGrace)
+	deadline := time.Now().Add(descendantCheckGrace)
 	for {
 		err := syscall.Kill(-command.Process.Pid, 0)
 		if err != nil && !errors.Is(err, syscall.EPERM) {

@@ -212,6 +212,22 @@ func (m Manifest) EntryCount() int { return len(m.Entries) }
 // reconciliation with its declared cross product. This makes a partially
 // populated manifest unusable by a future runner.
 func (m Manifest) Validate() error {
+	if err := m.validateSettings(); err != nil {
+		return err
+	}
+	if err := m.validateScenarios(); err != nil {
+		return err
+	}
+	if err := m.validateTransports(); err != nil {
+		return err
+	}
+	if err := m.validateEntryCount(); err != nil {
+		return err
+	}
+	return m.validateEntryCoordinates()
+}
+
+func (m Manifest) validateSettings() error {
 	if m.SchemaVersion != SchemaVersion {
 		return validation("schema_version", fmt.Sprint(m.SchemaVersion),
 			fmt.Sprintf("must be %d", SchemaVersion), ErrInvalidManifest)
@@ -234,7 +250,10 @@ func (m Manifest) Validate() error {
 	if m.EntryLimit > DefaultMaxEntries && !m.EntryLimitOverridden {
 		return newEntryLimitOverrideError("entry_limit", m.EntryLimit)
 	}
+	return nil
+}
 
+func (m Manifest) validateScenarios() error {
 	for index, scenario := range m.Scenarios {
 		field := fmt.Sprintf("scenarios[%d]", index)
 		if strings.TrimSpace(scenario.ID) == "" {
@@ -247,7 +266,10 @@ func (m Manifest) Validate() error {
 			return validation(field+".id", scenario.ID, "scenarios must be sorted by ID and unique", ErrDuplicateScenario)
 		}
 	}
+	return nil
+}
 
+func (m Manifest) validateTransports() error {
 	for index, rawTransport := range m.Transports {
 		transport, err := ParseTransport(string(rawTransport))
 		if err != nil {
@@ -260,7 +282,10 @@ func (m Manifest) Validate() error {
 			return validation(fmt.Sprintf("transports[%d]", index), string(rawTransport), "transports must be sorted and unique", ErrDuplicateTransport)
 		}
 	}
+	return nil
+}
 
+func (m Manifest) validateEntryCount() error {
 	wantCount, err := crossProductCount(len(m.Scenarios), len(m.Transports), m.RepeatCount)
 	if err != nil {
 		return validation("entries", "", "declared cross product is too large", ErrEntryCountOverflow)
@@ -278,7 +303,12 @@ func (m Manifest) Validate() error {
 	if wantCount > limit && !m.EntryLimitOverridden {
 		return newEntryLimitError("entry_limit", wantCount, limit)
 	}
+	return nil
+}
 
+// validateEntryCoordinates requires the entries to enumerate the declared
+// cross product in scenario, transport, repeat order.
+func (m Manifest) validateEntryCoordinates() error {
 	seen := make(map[string]struct{}, len(m.Entries))
 	entryIndex := 0
 	for _, scenario := range m.Scenarios {

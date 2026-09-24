@@ -78,6 +78,13 @@ func TestRunnerProvidesBlindInputAndRecordsArtifacts(t *testing.T) {
 		t.Fatalf("working directories = %#v, want fresh distinct directories", calls)
 	}
 
+	assertRecordedAcceptanceArtifacts(t, lastArtifacts.Root)
+}
+
+// assertRecordedAcceptanceArtifacts checks the artifacts recorded for the
+// last simulated launch.
+func assertRecordedAcceptanceArtifacts(t *testing.T, root string) {
+	t.Helper()
 	for _, file := range []struct {
 		name string
 		want string
@@ -87,7 +94,7 @@ func TestRunnerProvidesBlindInputAndRecordsArtifacts(t *testing.T) {
 		{name: "stderr.txt", want: "probe stderr\n"},
 		{name: "transcript.jsonl", want: "{\"event\":\"completed\"}\n"},
 	} {
-		data, err := os.ReadFile(filepath.Join(lastArtifacts.Root, file.name))
+		data, err := os.ReadFile(filepath.Join(root, file.name))
 		if err != nil {
 			t.Fatalf("read %s: %v", file.name, err)
 		}
@@ -95,7 +102,7 @@ func TestRunnerProvidesBlindInputAndRecordsArtifacts(t *testing.T) {
 			t.Errorf("%s = %q, want %q", file.name, data, file.want)
 		}
 	}
-	statusData, err := os.ReadFile(filepath.Join(lastArtifacts.Root, "exit-status.json"))
+	statusData, err := os.ReadFile(filepath.Join(root, "exit-status.json"))
 	if err != nil {
 		t.Fatalf("read exit status: %v", err)
 	}
@@ -108,7 +115,7 @@ func TestRunnerProvidesBlindInputAndRecordsArtifacts(t *testing.T) {
 	if status.ExitCode != 0 {
 		t.Fatalf("recorded exit code = %d, want 0", status.ExitCode)
 	}
-	reportData, err := os.ReadFile(filepath.Join(lastArtifacts.Root, "agent-report.json"))
+	reportData, err := os.ReadFile(filepath.Join(root, "agent-report.json"))
 	if err != nil {
 		t.Fatalf("read report: %v", err)
 	}
@@ -352,6 +359,14 @@ func TestAcceptanceProbeTypedErrorPaths(t *testing.T) {
 		})
 	}
 
+	testAcceptanceProbeTransportErrorPaths(t, binary)
+	testAcceptanceProbeGoalAndDeadlineErrorPaths(t, binary)
+}
+
+// testAcceptanceProbeTransportErrorPaths covers crash and exit failures
+// reported by the transport after input validation succeeds.
+func testAcceptanceProbeTransportErrorPaths(t *testing.T, binary string) {
+	t.Helper()
 	t.Run("probe crash", func(t *testing.T) {
 		runner := NewRunner(TransportFunc(func(context.Context, loopprobe.AcceptanceInput, ArtifactSet) (RunResult, error) {
 			return RunResult{}, errors.New("simulated crash")
@@ -388,7 +403,12 @@ func TestAcceptanceProbeTypedErrorPaths(t *testing.T) {
 			t.Fatalf("verdict = %+v, want errored failure", verdict)
 		}
 	})
+}
 
+// testAcceptanceProbeGoalAndDeadlineErrorPaths covers goal catalog, deadline,
+// and replay fixture failures.
+func testAcceptanceProbeGoalAndDeadlineErrorPaths(t *testing.T, binary string) {
+	t.Helper()
 	t.Run("unknown goal from validator", func(t *testing.T) {
 		runner := NewRunner(TransportFunc(func(context.Context, loopprobe.AcceptanceInput, ArtifactSet) (RunResult, error) {
 			t.Fatal("transport ran for an unknown goal")

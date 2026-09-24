@@ -379,7 +379,11 @@ func TestCustomerEvidenceRecordValidationRejectsMalformedFacts(t *testing.T) {
 			}
 		})
 	}
+	testProcessFactsRejectMalformedValues(t)
+}
 
+func testProcessFactsRejectMalformedValues(t *testing.T) {
+	t.Helper()
 	process := ProcessFacts{PID: 1, ExitCode: 0, ExitClassification: "normal", StartedAt: time.Second, EndedAt: 2 * time.Second}
 	for _, test := range []struct {
 		name string
@@ -524,15 +528,6 @@ func TestCustomerEvidenceRecordDirectoryAndManifestParsing(t *testing.T) {
 	if err := manifest.Validate(); !errors.Is(err, ErrInvalidCustomerEvidence) {
 		t.Fatalf("manifest validation-error state = %v, want invalid-evidence error", err)
 	}
-}
-
-func findArtifact(entries []ArtifactEntry, path string) ArtifactEntry {
-	for _, entry := range entries {
-		if entry.Path == path {
-			return entry
-		}
-	}
-	return ArtifactEntry{}
 }
 
 func minimalCustomerEvidenceManifest(scenarioID string) CustomerEvidenceManifest {

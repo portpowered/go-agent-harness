@@ -90,6 +90,16 @@ func TestCustomerSimulationEvidenceHelpersPreserveFallbackStates(t *testing.T) {
 		t.Fatal("recorded response statuses did not preserve cancelled, completed, and incomplete states")
 	}
 
+	result := testCustomerSimulationRecordedTimeFallbacks(t)
+	product := testCustomerSimulationInputAndIntervalFallbacks(t, result)
+	testCustomerSimulationFamilyEvidenceFallbacks(t, product)
+	testCustomerSimulationPatienceEvidenceFallbacks(t)
+}
+
+// testCustomerSimulationRecordedTimeFallbacks covers wall-clock and recorded
+// time conversion, returning the duplex result used by later checks.
+func testCustomerSimulationRecordedTimeFallbacks(t *testing.T) DuplexRunResult {
+	t.Helper()
 	base := time.Unix(200, 0).UTC()
 	result := DuplexRunResult{
 		Input: []DuplexInputEvent{{SegmentID: "first", At: 2 * time.Second, Timestamp: base.Add(2 * time.Second)}, {SegmentID: "first", At: 3 * time.Second, Timestamp: base.Add(3 * time.Second)}, {SegmentID: "second", At: 4 * time.Second, Timestamp: base.Add(4 * time.Second)}},
@@ -119,6 +129,13 @@ func TestCustomerSimulationEvidenceHelpersPreserveFallbackStates(t *testing.T) {
 	if _, ok := customerSimulationDuplexWallOrigin(DuplexRunResult{}); ok {
 		t.Fatal("empty duplex result unexpectedly had a wall origin")
 	}
+	return result
+}
+
+// testCustomerSimulationInputAndIntervalFallbacks covers input start and
+// product interval fallbacks, returning the product transcript it built.
+func testCustomerSimulationInputAndIntervalFallbacks(t *testing.T, result DuplexRunResult) []TranscriptEvent {
+	t.Helper()
 	if got := customerSimulationInputStart(result, "second", 0); got != 4*time.Second {
 		t.Fatalf("named input start = %s, want 4s", got)
 	}
@@ -138,7 +155,11 @@ func TestCustomerSimulationEvidenceHelpersPreserveFallbackStates(t *testing.T) {
 	if start, end := customerSimulationResponseInterval(product, -1); start != 0 || end != 0 {
 		t.Fatalf("invalid product interval = %s-%s, want zero interval", start, end)
 	}
+	return product
+}
 
+func testCustomerSimulationFamilyEvidenceFallbacks(t *testing.T, product []TranscriptEvent) {
+	t.Helper()
 	mixed := customerSimulationMixedModalEvidence(NewFamilyCScenario(), PairedTranscripts{Product: product}, DuplexRunResult{})
 	if mixed.PriorActionCompletedAt != 5*time.Second || mixed.Delivery != MixedModalDeliveryUnsupported || mixed.Supported {
 		t.Fatalf("mixed-modal fallback evidence = %+v, want explicit unsupported gap", mixed)
@@ -163,7 +184,10 @@ func TestCustomerSimulationEvidenceHelpersPreserveFallbackStates(t *testing.T) {
 	if sigintEvidence.ActiveResponseStatus != string(DispositionCancelled) {
 		t.Fatalf("cancelled termination evidence = %+v, want cancelled", sigintEvidence)
 	}
+}
 
+func testCustomerSimulationPatienceEvidenceFallbacks(t *testing.T) {
+	t.Helper()
 	eScenario := NewFamilyEScenario()
 	fallback := customerSimulationPatienceEvidence(eScenario, nil, ProcessFacts{ExitClassification: "normal", EndedAt: 5 * time.Millisecond}, DuplexRunResult{Output: []DuplexOutputEvent{{Read: 1, Bytes: 4, At: 2 * time.Millisecond}}}, nil, customerSimulationRecordingFacts{}, nil)
 	if fallback.Outcome == PatienceOutcomeCompleted || fallback.FirstProgressAt != 2*time.Millisecond || len(fallback.Events) < 3 {
@@ -433,12 +457,6 @@ func TestDuplexProgressExposesOutputAndExpectedCloseBoundaries(t *testing.T) {
 	}
 	if isExpectedDuplexWaitClose(result, errors.New("other wait failure")) {
 		t.Fatal("unrelated wait error was recognized as expected cleanup")
-	}
-	if !isExpectedDuplexPipeClosure(errors.New("write: broken pipe")) || !isExpectedDuplexPipeClosure(io.ErrClosedPipe) {
-		t.Fatal("closed input pipe errors were not recognized")
-	}
-	if isExpectedDuplexPipeClosure(errors.New("permission denied")) {
-		t.Fatal("unrelated pipe error was recognized as closed input")
 	}
 	if got := duplexExitClassification(result, TerminationNatural, io.ErrClosedPipe); got != "normal" {
 		t.Fatalf("zero-exit close classification = %q, want normal", got)

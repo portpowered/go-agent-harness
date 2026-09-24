@@ -75,16 +75,19 @@ func TestCustomerSimulationValidatorPreservesSubstantiveBrokenJudgment(t *testin
 	}
 }
 
-func TestCustomerSimulationValidatorFailsClosedAndPreservesAttemptedJudgment(t *testing.T) {
-	tests := []struct {
-		name        string
-		input       func(ValidatorInput) ValidatorInput
-		agent       CustomerSimulationValidatorAgent
-		timeout     time.Duration
-		wantStatus  CustomerSimulationValidatorStatus
-		wantError   error
-		wantAttempt bool
-	}{
+// validatorFailClosedCase is one validator outcome that must fail closed.
+type validatorFailClosedCase struct {
+	name        string
+	input       func(ValidatorInput) ValidatorInput
+	agent       CustomerSimulationValidatorAgent
+	timeout     time.Duration
+	wantStatus  CustomerSimulationValidatorStatus
+	wantError   error
+	wantAttempt bool
+}
+
+func validatorFailClosedCases() []validatorFailClosedCase {
+	return []validatorFailClosedCase{
 		{
 			name: "mechanical disagreement",
 			input: func(input ValidatorInput) ValidatorInput {
@@ -164,7 +167,10 @@ func TestCustomerSimulationValidatorFailsClosedAndPreservesAttemptedJudgment(t *
 			wantAttempt: false,
 		},
 	}
+}
 
+func TestCustomerSimulationValidatorFailsClosedAndPreservesAttemptedJudgment(t *testing.T) {
+	tests := validatorFailClosedCases()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			input := test.input(validatorTestInput(t))

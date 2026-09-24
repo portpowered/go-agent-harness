@@ -16,370 +16,46 @@ import (
 	"time"
 )
 
-type TranscriptSpeaker string
-
-const (
-	TranscriptCustomer TranscriptSpeaker = "customer"
-	TranscriptProduct  TranscriptSpeaker = "product"
-)
-
-type TranscriptEvent struct {
-	ID      string            `json:"id"`
-	TurnID  string            `json:"turn_id"`
-	Speaker TranscriptSpeaker `json:"speaker"`
-	Text    string            `json:"text"`
-	At      time.Duration     `json:"at"`
-	Final   bool              `json:"final"`
+// familyEvidenceSlot names the family-specific evidence a Family C, D, or E
+// scenario must carry.
+type familyEvidenceSlot struct {
+	field string
+	noun  string
+	kind  ArtifactKind
 }
 
-type PairedTranscripts struct {
-	Customer []TranscriptEvent `json:"customer"`
-	Product  []TranscriptEvent `json:"product"`
+func familyEvidenceSlotFor(family ScenarioFamily) (familyEvidenceSlot, bool) {
+	if family == ScenarioFamilyC {
+		return familyEvidenceSlot{field: "mixed_modal", noun: "mixed-modal evidence", kind: ArtifactKindMixedModalEvidence}, true
+	}
+	if family == ScenarioFamilyD {
+		return familyEvidenceSlot{field: "termination", noun: "termination evidence", kind: ArtifactKindTerminationEvidence}, true
+	}
+	if family == ScenarioFamilyE {
+		return familyEvidenceSlot{field: "patience", noun: "patience evidence", kind: ArtifactKindPatienceEvidence}, true
+	}
+	return familyEvidenceSlot{}, false
 }
 
-func (p PairedTranscripts) validate() error {
-	if err := validateTranscriptEvents("transcripts.customer", p.Customer, TranscriptCustomer); err != nil {
-		return err
-	}
-	return validateTranscriptEvents("transcripts.product", p.Product, TranscriptProduct)
-}
-func validateTranscriptEvents(field string, events []TranscriptEvent, speaker TranscriptSpeaker) error {
-	seen := map[string]struct{}{}
-	var previous time.Duration
-	for i, event := range events {
-		item := fmt.Sprintf("%s[%d]", field, i)
-		if strings.TrimSpace(event.ID) == "" || strings.TrimSpace(event.TurnID) == "" {
-			return contractFieldError(ErrInvalidCustomerEvidence, item, "id and turn_id must not be empty")
-		}
-		if _, ok := seen[event.ID]; ok {
-			return contractFieldError(ErrInvalidCustomerEvidence, item+".id", "must be unique")
-		}
-		seen[event.ID] = struct{}{}
-		if event.Speaker != speaker {
-			return contractFieldError(ErrInvalidCustomerEvidence, item+".speaker", fmt.Sprintf("must be %q", speaker))
-		}
-		if event.At < 0 || (i > 0 && event.At < previous) {
-			return contractFieldError(ErrInvalidCustomerEvidence, item+".at", "timestamps must be non-negative and monotonic")
-		}
-		previous = event.At
-	}
-	return nil
+// familyEvidence is the family-specific evidence value selected for a
+// scenario family, if present.
+type familyEvidence struct {
+	present  bool
+	validate func(CustomerScenario) error
+	refs     []string
 }
 
-type AudioTurnEvent struct {
-	ID        string        `json:"id"`
-	TurnID    string        `json:"turn_id"`
-	Direction string        `json:"direction"`
-	Kind      string        `json:"kind"`
-	At        time.Duration `json:"at"`
-	Duration  time.Duration `json:"duration"`
-	Bytes     int           `json:"bytes"`
-}
-
-func (e AudioTurnEvent) validate(field string) error {
-	if strings.TrimSpace(e.ID) == "" || strings.TrimSpace(e.TurnID) == "" || strings.TrimSpace(e.Kind) == "" {
-		return contractFieldError(ErrInvalidCustomerEvidence, field, "id, turn_id, and kind must not be empty")
+func selectFamilyEvidence(family ScenarioFamily, mixed *MixedModalEvidence, termination *TerminationEvidence, patience *PatienceEvidence) familyEvidence {
+	if family == ScenarioFamilyC && mixed != nil {
+		return familyEvidence{present: true, validate: mixed.Validate, refs: mixed.EvidenceRefs}
 	}
-	if e.Direction != "input" && e.Direction != "output" {
-		return contractFieldError(ErrInvalidCustomerEvidence, field+".direction", "must be input or output")
+	if family == ScenarioFamilyD && termination != nil {
+		return familyEvidence{present: true, validate: termination.Validate, refs: termination.EvidenceRefs}
 	}
-	if e.At < 0 || e.Duration < 0 || e.Bytes < 0 {
-		return contractFieldError(ErrInvalidCustomerEvidence, field, "at, duration, and bytes must not be negative")
+	if family == ScenarioFamilyE && patience != nil {
+		return familyEvidence{present: true, validate: patience.Validate, refs: patience.EvidenceRefs}
 	}
-	return nil
-}
-
-type ToolObservation struct {
-	ID         string        `json:"id"`
-	ActionID   string        `json:"action_id"`
-	TurnID     string        `json:"turn_id"`
-	Tool       string        `json:"tool"`
-	Status     string        `json:"status"`
-	At         time.Duration `json:"at"`
-	Duration   time.Duration `json:"duration"`
-	ResultSeen bool          `json:"result_seen"`
-	Summary    string        `json:"summary,omitempty"`
-}
-
-func (o ToolObservation) validate(field string) error {
-	if strings.TrimSpace(o.ID) == "" || strings.TrimSpace(o.ActionID) == "" || strings.TrimSpace(o.TurnID) == "" || strings.TrimSpace(o.Tool) == "" {
-		return contractFieldError(ErrInvalidCustomerEvidence, field, "id, action_id, turn_id, and tool must not be empty")
-	}
-	switch o.Status {
-	case "started", "completed", "failed", "cancelled":
-	default:
-		return contractFieldError(ErrInvalidCustomerEvidence, field+".status", fmt.Sprintf("%q is invalid", o.Status))
-	}
-	if o.At < 0 || o.Duration < 0 {
-		return contractFieldError(ErrInvalidCustomerEvidence, field, "at and duration must not be negative")
-	}
-	return nil
-}
-
-type FilesystemCheckpoint struct {
-	ID       string                      `json:"id"`
-	ActionID string                      `json:"action_id"`
-	At       time.Duration               `json:"at"`
-	Entries  []FilesystemCheckpointEntry `json:"entries"`
-}
-type FilesystemCheckpointEntry struct {
-	Path   string   `json:"path"`
-	Type   FileType `json:"type"`
-	SHA256 string   `json:"sha256,omitempty"`
-	Size   int64    `json:"size"`
-	Target string   `json:"target,omitempty"`
-}
-type FilesystemObservation = FilesystemCheckpointEntry
-
-func (c FilesystemCheckpoint) validate(field string) error {
-	if strings.TrimSpace(c.ID) == "" || strings.TrimSpace(c.ActionID) == "" {
-		return contractFieldError(ErrInvalidCustomerEvidence, field, "id and action_id must not be empty")
-	}
-	if c.At < 0 {
-		return contractFieldError(ErrInvalidCustomerEvidence, field+".at", "must not be negative")
-	}
-	if len(c.Entries) == 0 {
-		return contractFieldError(ErrInvalidCustomerEvidence, field+".entries", "must not be empty")
-	}
-	seen := map[string]struct{}{}
-	for i, entry := range c.Entries {
-		item := fmt.Sprintf("%s.entries[%d]", field, i)
-		if err := validateRelativePath(item+".path", entry.Path, false); err != nil {
-			return err
-		}
-		if _, ok := seen[entry.Path]; ok {
-			return contractFieldError(ErrInvalidCustomerEvidence, item+".path", "must be unique")
-		}
-		seen[entry.Path] = struct{}{}
-		if !entry.Type.valid() {
-			return contractFieldError(ErrInvalidCustomerEvidence, item+".type", fmt.Sprintf("%q is invalid", entry.Type))
-		}
-		if entry.Type == FileTypeAbsent {
-			if entry.SHA256 != "" || entry.Size != 0 {
-				return contractFieldError(ErrInvalidCustomerEvidence, item, "absent facts must have zero size and no hash")
-			}
-			continue
-		}
-		if entry.Size < 0 {
-			return contractFieldError(ErrInvalidCustomerEvidence, item+".size", "must not be negative")
-		}
-		if err := validateSHA256(item+".sha256", entry.SHA256, true); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-type ProcessFacts struct {
-	PID                int           `json:"pid"`
-	ExitCode           int           `json:"exit_code"`
-	ExitClassification string        `json:"exit_classification"`
-	Signal             string        `json:"signal,omitempty"`
-	SignalSent         bool          `json:"signal_sent"`
-	SignalAt           time.Duration `json:"signal_at,omitempty"`
-	ChildWaited        bool          `json:"child_waited"`
-	WaitCount          int           `json:"wait_count"`
-	DescendantsAlive   bool          `json:"descendants_alive"`
-	InputClosed        bool          `json:"input_closed"`
-	InputFinished      bool          `json:"input_finished"`
-	OutputClosed       bool          `json:"output_closed"`
-	StartedAt          time.Duration `json:"started_at"`
-	EndedAt            time.Duration `json:"ended_at"`
-}
-
-func (p ProcessFacts) validate(field string) error {
-	if p.PID < -1 {
-		return contractFieldError(ErrInvalidCustomerEvidence, field+".pid", "must be -1 or greater")
-	}
-	switch p.ExitClassification {
-	case "normal", "sigint", "cancelled", "timeout", "failed":
-	default:
-		return contractFieldError(ErrInvalidCustomerEvidence, field+".exit_classification", fmt.Sprintf("%q is invalid", p.ExitClassification))
-	}
-	if p.SignalSent && strings.TrimSpace(p.Signal) == "" {
-		return contractFieldError(ErrInvalidCustomerEvidence, field+".signal", "must be present when signal_sent is true")
-	}
-	if p.ExitClassification == "sigint" && !p.SignalSent {
-		return contractFieldError(ErrInvalidCustomerEvidence, field+".signal_sent", "must be true for sigint classification")
-	}
-	if p.SignalAt < 0 || p.WaitCount < 0 {
-		return contractFieldError(ErrInvalidCustomerEvidence, field, "signal_at and wait_count must not be negative")
-	}
-	if p.SignalSent && p.SignalAt > p.EndedAt {
-		return contractFieldError(ErrInvalidCustomerEvidence, field+".signal_at", "must not follow process end")
-	}
-	if p.StartedAt < 0 || p.EndedAt < p.StartedAt {
-		return contractFieldError(ErrInvalidCustomerEvidence, field, "timestamps must be non-negative and ordered")
-	}
-	return nil
-}
-
-type ActionResult struct {
-	ActionID           string              `json:"action_id"`
-	TurnID             string              `json:"turn_id,omitempty"`
-	Confirmed          bool                `json:"confirmed"`
-	ConfirmedAt        time.Duration       `json:"confirmed_at,omitempty"`
-	Disposition        TerminalDisposition `json:"disposition"`
-	OutcomeReason      string              `json:"outcome_reason,omitempty"`
-	EvidenceRefs       []string            `json:"evidence_refs"`
-	CheckpointIDs      []string            `json:"checkpoint_ids,omitempty"`
-	ToolObservationIDs []string            `json:"tool_observation_ids,omitempty"`
-}
-type MechanicalFinding struct {
-	Code         string   `json:"code"`
-	ActionID     string   `json:"action_id,omitempty"`
-	TurnID       string   `json:"turn_id,omitempty"`
-	Message      string   `json:"message"`
-	EvidenceRefs []string `json:"evidence_refs"`
-}
-type MechanicalVerdict struct {
-	Pass          bool                `json:"pass"`
-	Summary       string              `json:"summary"`
-	ActionResults []ActionResult      `json:"action_results"`
-	Findings      []MechanicalFinding `json:"findings"`
-}
-
-func (v MechanicalVerdict) validate(scenario CustomerScenario, field string) error {
-	if strings.TrimSpace(v.Summary) == "" {
-		return contractFieldError(ErrInvalidCustomerEvidence, field+".summary", "must not be empty")
-	}
-	if len(v.ActionResults) != len(scenario.Actions) {
-		return contractFieldError(ErrMissingEvidence, field+".action_results", "must cover every declared action")
-	}
-	actions := map[string]ActionIntent{}
-	for _, action := range scenario.Actions {
-		actions[action.ID] = action
-	}
-	seen := map[string]struct{}{}
-	for i, result := range v.ActionResults {
-		item := fmt.Sprintf("%s.action_results[%d]", field, i)
-		action, ok := actions[result.ActionID]
-		if !ok {
-			return contractFieldError(ErrUnknownActionIntent, item+".action_id", result.ActionID)
-		}
-		if _, ok := seen[result.ActionID]; ok {
-			return contractFieldError(ErrDuplicateActionIntent, item+".action_id", "must be unique")
-		}
-		seen[result.ActionID] = struct{}{}
-		if result.Confirmed && result.Disposition == "" {
-			return contractFieldError(ErrConfirmationWithoutDisposition, item+".disposition", "confirmed action must have a terminal disposition")
-		}
-		if result.ConfirmedAt < 0 {
-			return contractFieldError(ErrInvalidCustomerEvidence, item+".confirmed_at", "must not be negative")
-		}
-		if !result.Disposition.valid() {
-			return contractFieldError(ErrInvalidCustomerEvidence, item+".disposition", fmt.Sprintf("%q is invalid", result.Disposition))
-		}
-		allowed := false
-		for _, candidate := range action.AllowedDispositions {
-			if result.Disposition == candidate {
-				allowed = true
-				break
-			}
-		}
-		if !allowed {
-			return contractFieldError(ErrInvalidCustomerEvidence, item+".disposition", "disposition is not allowed by the scenario")
-		}
-		if len(result.EvidenceRefs) == 0 {
-			return contractFieldError(ErrMissingEvidence, item+".evidence_refs", "must not be empty")
-		}
-		if (result.Disposition == DispositionFailed || result.Disposition == DispositionCancelled) && strings.TrimSpace(result.OutcomeReason) == "" {
-			return contractFieldError(ErrInvalidCustomerEvidence, item+".outcome_reason", "must explain the terminal outcome")
-		}
-	}
-	for i, finding := range v.Findings {
-		item := fmt.Sprintf("%s.findings[%d]", field, i)
-		if strings.TrimSpace(finding.Code) == "" || strings.TrimSpace(finding.Message) == "" {
-			return contractFieldError(ErrInvalidCustomerEvidence, item, "code and message must not be empty")
-		}
-		if len(finding.EvidenceRefs) == 0 {
-			return contractFieldError(ErrMissingEvidence, item+".evidence_refs", "must not be empty")
-		}
-	}
-	return nil
-}
-
-type ValidatorInput struct {
-	Scenario              CustomerScenario       `json:"scenario"`
-	CustomerTranscript    []TranscriptEvent      `json:"customer_transcript"`
-	ProductTranscript     []TranscriptEvent      `json:"product_transcript"`
-	AudioTurnEvents       []AudioTurnEvent       `json:"audio_turn_events"`
-	ToolObservations      []ToolObservation      `json:"tool_observations"`
-	FilesystemCheckpoints []FilesystemCheckpoint `json:"filesystem_checkpoints"`
-	Process               ProcessFacts           `json:"process"`
-	Mechanical            MechanicalVerdict      `json:"mechanical"`
-	MixedModal            *MixedModalEvidence    `json:"mixed_modal,omitempty"`
-	Termination           *TerminationEvidence   `json:"termination,omitempty"`
-	Patience              *PatienceEvidence      `json:"patience,omitempty"`
-	EvidenceRefs          []string               `json:"evidence_refs"`
-}
-
-func (i ValidatorInput) validate(scenario CustomerScenario, field string) error {
-	if i.Scenario.ID != scenario.ID || i.Scenario.SchemaVersion != scenario.SchemaVersion {
-		return contractFieldError(ErrInvalidCustomerEvidence, field+".scenario", "must identify the same scenario")
-	}
-	if err := (PairedTranscripts{Customer: i.CustomerTranscript, Product: i.ProductTranscript}).validate(); err != nil {
-		return err
-	}
-	for n, event := range i.AudioTurnEvents {
-		if err := event.validate(fmt.Sprintf("%s.audio_turn_events[%d]", field, n)); err != nil {
-			return err
-		}
-	}
-	tools := map[string]struct{}{}
-	for n, observation := range i.ToolObservations {
-		if err := observation.validate(fmt.Sprintf("%s.tool_observations[%d]", field, n)); err != nil {
-			return err
-		}
-		if _, ok := tools[observation.ID]; ok {
-			return contractFieldError(ErrInvalidCustomerEvidence, field+".tool_observations", "IDs must be unique")
-		}
-		tools[observation.ID] = struct{}{}
-	}
-	checkpoints := map[string]struct{}{}
-	for n, checkpoint := range i.FilesystemCheckpoints {
-		if err := checkpoint.validate(fmt.Sprintf("%s.filesystem_checkpoints[%d]", field, n)); err != nil {
-			return err
-		}
-		if _, ok := checkpoints[checkpoint.ID]; ok {
-			return contractFieldError(ErrInvalidCustomerEvidence, field+".filesystem_checkpoints", "IDs must be unique")
-		}
-		checkpoints[checkpoint.ID] = struct{}{}
-	}
-	if err := i.Process.validate(field + ".process"); err != nil {
-		return err
-	}
-	if err := i.Mechanical.validate(scenario, field+".mechanical"); err != nil {
-		return err
-	}
-	if scenario.Family == ScenarioFamilyC {
-		if i.MixedModal == nil {
-			return contractFieldError(ErrMissingEvidence, field+".mixed_modal", "Family C validator input requires mixed-modal evidence")
-		}
-		if err := i.MixedModal.Validate(scenario); err != nil {
-			return err
-		}
-	}
-	if scenario.Family == ScenarioFamilyD {
-		if i.Termination == nil {
-			return contractFieldError(ErrMissingEvidence, field+".termination", "Family D validator input requires termination evidence")
-		}
-		if err := i.Termination.Validate(scenario); err != nil {
-			return err
-		}
-	}
-	if scenario.Family == ScenarioFamilyE {
-		if i.Patience == nil {
-			return contractFieldError(ErrMissingEvidence, field+".patience", "Family E validator input requires patience evidence")
-		}
-		if err := i.Patience.Validate(scenario); err != nil {
-			return err
-		}
-	}
-	if len(i.EvidenceRefs) == 0 {
-		return contractFieldError(ErrMissingEvidence, field+".evidence_refs", "must not be empty")
-	}
-	return nil
+	return familyEvidence{}
 }
 
 type ValidatorVerdictKind string
@@ -624,66 +300,14 @@ func (b CustomerEvidenceBundle) Validate() error {
 	if err := b.Transcripts.validate(); err != nil {
 		return err
 	}
-	for i, event := range b.AudioTurnEvents {
-		if err := event.validate(fmt.Sprintf("audio_turn_events[%d]", i)); err != nil {
-			return err
-		}
-	}
-	tools := map[string]struct{}{}
-	for i, observation := range b.ToolObservations {
-		if err := observation.validate(fmt.Sprintf("tool_observations[%d]", i)); err != nil {
-			return err
-		}
-		if _, ok := tools[observation.ID]; ok {
-			return contractFieldError(ErrInvalidCustomerEvidence, "tool_observations", "IDs must be unique")
-		}
-		tools[observation.ID] = struct{}{}
-	}
-	checkpoints := map[string]struct{}{}
-	for i, checkpoint := range b.FilesystemCheckpoints {
-		if err := checkpoint.validate(fmt.Sprintf("filesystem_checkpoints[%d]", i)); err != nil {
-			return err
-		}
-		if _, ok := checkpoints[checkpoint.ID]; ok {
-			return contractFieldError(ErrInvalidCustomerEvidence, "filesystem_checkpoints", "IDs must be unique")
-		}
-		checkpoints[checkpoint.ID] = struct{}{}
+	if err := validateObservedFacts("", b.AudioTurnEvents, b.ToolObservations, b.FilesystemCheckpoints); err != nil {
+		return err
 	}
 	if b.MechanicalVerdict == nil || b.ValidatorInput == nil || b.ValidatorVerdict == nil {
 		return contractFieldError(ErrMissingEvidence, "bundle", "mechanical verdict, validator input, and validator verdict are required")
 	}
-	if b.Scenario.Family == ScenarioFamilyC {
-		if b.MixedModal == nil {
-			return contractFieldError(ErrMissingEvidence, "mixed_modal", "Family C bundles require mixed-modal evidence")
-		}
-		if err := b.MixedModal.Validate(b.Scenario); err != nil {
-			return err
-		}
-		if !hasArtifactKind(b.Artifacts, ArtifactKindMixedModalEvidence) {
-			return contractFieldError(ErrMissingEvidence, "artifacts", "Family C bundles require a hash-verified mixed-modal evidence artifact")
-		}
-	}
-	if b.Scenario.Family == ScenarioFamilyD {
-		if b.Termination == nil {
-			return contractFieldError(ErrMissingEvidence, "termination", "Family D bundles require termination evidence")
-		}
-		if err := b.Termination.Validate(b.Scenario); err != nil {
-			return err
-		}
-		if !hasArtifactKind(b.Artifacts, ArtifactKindTerminationEvidence) {
-			return contractFieldError(ErrMissingEvidence, "artifacts", "Family D bundles require a hash-verified termination evidence artifact")
-		}
-	}
-	if b.Scenario.Family == ScenarioFamilyE {
-		if b.Patience == nil {
-			return contractFieldError(ErrMissingEvidence, "patience", "Family E bundles require patience evidence")
-		}
-		if err := b.Patience.Validate(b.Scenario); err != nil {
-			return err
-		}
-		if !hasArtifactKind(b.Artifacts, ArtifactKindPatienceEvidence) {
-			return contractFieldError(ErrMissingEvidence, "artifacts", "Family E bundles require a hash-verified patience evidence artifact")
-		}
+	if err := b.validateFamilyEvidence(); err != nil {
+		return err
 	}
 	if err := b.Process.validate("process"); err != nil {
 		return err
@@ -691,32 +315,9 @@ func (b CustomerEvidenceBundle) Validate() error {
 	if err := b.MechanicalVerdict.validate(b.Scenario, "mechanical_verdict"); err != nil {
 		return err
 	}
+	// Validator input validation also enforces its own family evidence.
 	if err := b.ValidatorInput.validate(b.Scenario, "validator_input"); err != nil {
 		return err
-	}
-	if b.Scenario.Family == ScenarioFamilyC {
-		if b.ValidatorInput.MixedModal == nil {
-			return contractFieldError(ErrMissingEvidence, "validator_input.mixed_modal", "Family C validator input requires mixed-modal evidence")
-		}
-		if err := b.ValidatorInput.MixedModal.Validate(b.Scenario); err != nil {
-			return err
-		}
-	}
-	if b.Scenario.Family == ScenarioFamilyD {
-		if b.ValidatorInput.Termination == nil {
-			return contractFieldError(ErrMissingEvidence, "validator_input.termination", "Family D validator input requires termination evidence")
-		}
-		if err := b.ValidatorInput.Termination.Validate(b.Scenario); err != nil {
-			return err
-		}
-	}
-	if b.Scenario.Family == ScenarioFamilyE {
-		if b.ValidatorInput.Patience == nil {
-			return contractFieldError(ErrMissingEvidence, "validator_input.patience", "Family E validator input requires patience evidence")
-		}
-		if err := b.ValidatorInput.Patience.Validate(b.Scenario); err != nil {
-			return err
-		}
 	}
 	if err := b.ValidatorVerdict.Validate(); err != nil {
 		return err
@@ -730,52 +331,62 @@ func (b CustomerEvidenceBundle) Validate() error {
 	if err := validateRequiredArtifactKinds(b.Artifacts); err != nil {
 		return err
 	}
-	available := availableArtifactPaths(b.Artifacts)
 	if b.MechanicalVerdict.Pass && (len(b.Transcripts.Customer) == 0 || len(b.Transcripts.Product) == 0 || len(b.AudioTurnEvents) == 0 || len(b.FilesystemCheckpoints) == 0) {
 		return contractFieldError(ErrMissingEvidence, "bundle", "a passing run needs paired transcripts, audio/turn events, and checkpoints")
 	}
+	return b.validateEvidenceRefs(availableArtifactPaths(b.Artifacts))
+}
+
+func (b CustomerEvidenceBundle) validateFamilyEvidence() error {
+	slot, ok := familyEvidenceSlotFor(b.Scenario.Family)
+	if !ok {
+		return nil
+	}
+	evidence := selectFamilyEvidence(b.Scenario.Family, b.MixedModal, b.Termination, b.Patience)
+	if !evidence.present {
+		return contractFieldError(ErrMissingEvidence, slot.field, fmt.Sprintf("Family %s bundles require %s", b.Scenario.Family, slot.noun))
+	}
+	if err := evidence.validate(b.Scenario); err != nil {
+		return err
+	}
+	if !hasArtifactKind(b.Artifacts, slot.kind) {
+		return contractFieldError(ErrMissingEvidence, "artifacts", fmt.Sprintf("Family %s bundles require a hash-verified %s artifact", b.Scenario.Family, slot.noun))
+	}
+	return nil
+}
+
+// validateEvidenceRefs requires every verdict and family evidence reference to
+// name an available artifact. It runs after all structural validation.
+func (b CustomerEvidenceBundle) validateEvidenceRefs(available map[string]struct{}) error {
 	for i, result := range b.MechanicalVerdict.ActionResults {
 		if !allEvidenceRefsAvailable(result.EvidenceRefs, available) {
-			return contractFieldError(ErrMissingEvidence, fmt.Sprintf("mechanical_verdict.action_results[%d].evidence_refs", i), "references unavailable evidence")
+			return contractFieldError(ErrMissingEvidence, fmt.Sprintf("mechanical_verdict.action_results[%d].evidence_refs", i), unavailableEvidenceMessage)
 		}
 	}
 	for i, finding := range b.MechanicalVerdict.Findings {
 		if !allEvidenceRefsAvailable(finding.EvidenceRefs, available) {
-			return contractFieldError(ErrMissingEvidence, fmt.Sprintf("mechanical_verdict.findings[%d].evidence_refs", i), "references unavailable evidence")
+			return contractFieldError(ErrMissingEvidence, fmt.Sprintf("mechanical_verdict.findings[%d].evidence_refs", i), unavailableEvidenceMessage)
 		}
 	}
 	if !allEvidenceRefsAvailable(b.ValidatorInput.EvidenceRefs, available) {
-		return contractFieldError(ErrMissingEvidence, "validator_input.evidence_refs", "references unavailable evidence")
+		return contractFieldError(ErrMissingEvidence, "validator_input.evidence_refs", unavailableEvidenceMessage)
 	}
-	if b.Scenario.Family == ScenarioFamilyC {
-		if !allEvidenceRefsAvailable(b.MixedModal.EvidenceRefs, available) {
-			return contractFieldError(ErrMissingEvidence, "mixed_modal.evidence_refs", "references unavailable evidence")
+	if slot, ok := familyEvidenceSlotFor(b.Scenario.Family); ok {
+		if !allEvidenceRefsAvailable(selectFamilyEvidence(b.Scenario.Family, b.MixedModal, b.Termination, b.Patience).refs, available) {
+			return contractFieldError(ErrMissingEvidence, slot.field+".evidence_refs", unavailableEvidenceMessage)
 		}
-		if !allEvidenceRefsAvailable(b.ValidatorInput.MixedModal.EvidenceRefs, available) {
-			return contractFieldError(ErrMissingEvidence, "validator_input.mixed_modal.evidence_refs", "references unavailable evidence")
-		}
-	}
-	if b.Scenario.Family == ScenarioFamilyD {
-		if !allEvidenceRefsAvailable(b.Termination.EvidenceRefs, available) {
-			return contractFieldError(ErrMissingEvidence, "termination.evidence_refs", "references unavailable evidence")
-		}
-		if !allEvidenceRefsAvailable(b.ValidatorInput.Termination.EvidenceRefs, available) {
-			return contractFieldError(ErrMissingEvidence, "validator_input.termination.evidence_refs", "references unavailable evidence")
-		}
-	}
-	if b.Scenario.Family == ScenarioFamilyE {
-		if !allEvidenceRefsAvailable(b.Patience.EvidenceRefs, available) {
-			return contractFieldError(ErrMissingEvidence, "patience.evidence_refs", "references unavailable evidence")
-		}
-		if !allEvidenceRefsAvailable(b.ValidatorInput.Patience.EvidenceRefs, available) {
-			return contractFieldError(ErrMissingEvidence, "validator_input.patience.evidence_refs", "references unavailable evidence")
+		input := b.ValidatorInput
+		if !allEvidenceRefsAvailable(selectFamilyEvidence(b.Scenario.Family, input.MixedModal, input.Termination, input.Patience).refs, available) {
+			return contractFieldError(ErrMissingEvidence, "validator_input."+slot.field+".evidence_refs", unavailableEvidenceMessage)
 		}
 	}
 	if !allEvidenceRefsAvailable(b.ValidatorVerdict.EvidenceRefs, available) {
-		return contractFieldError(ErrMissingEvidence, "validator_verdict.evidence_refs", "references unavailable evidence")
+		return contractFieldError(ErrMissingEvidence, "validator_verdict.evidence_refs", unavailableEvidenceMessage)
 	}
 	return nil
 }
+
+const unavailableEvidenceMessage = "references unavailable evidence"
 
 func (b CustomerEvidenceBundle) Manifest() CustomerEvidenceManifest {
 	artifacts := append([]ArtifactEntry(nil), b.Artifacts...)
@@ -855,7 +466,7 @@ func (b *CustomerEvidenceBundle) AddArtifactBytes(path string, kind ArtifactKind
 		return err
 	}
 	name := temporary.Name()
-	defer os.Remove(name)
+	defer removeTemporaryEvidenceFile(name)
 	if _, err := temporary.Write(data); err != nil {
 		_ = temporary.Close()
 		return err
@@ -1261,6 +872,16 @@ func safeEvidencePath(root, relative string) (string, error) {
 	}
 	return path, nil
 }
+
+// removeTemporaryEvidenceFile is deferred after an atomic write. Once the
+// rename succeeds the temporary name no longer exists, so a removal failure is
+// expected and must not turn a successful write into an error.
+func removeTemporaryEvidenceFile(name string) {
+	if err := os.Remove(name); err != nil {
+		return
+	}
+}
+
 func writePrivateFile(path string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
@@ -1270,7 +891,7 @@ func writePrivateFile(path string, data []byte) error {
 		return err
 	}
 	name := temporary.Name()
-	defer os.Remove(name)
+	defer removeTemporaryEvidenceFile(name)
 	if _, err := temporary.Write(data); err != nil {
 		_ = temporary.Close()
 		return err
@@ -1283,4 +904,68 @@ func writePrivateFile(path string, data []byte) error {
 		return err
 	}
 	return os.Rename(name, path)
+}
+
+func addCustomerSimulationProductRecord(bundle *CustomerEvidenceBundle, recordRoot string) error {
+	if bundle == nil {
+		return ErrMissingEvidence
+	}
+	err := bundle.AddProductRecordDir(recordRoot)
+	if err == nil && customerSimulationProductRecordFileCount(bundle) > 0 {
+		return nil
+	}
+	if err == nil {
+		err = fmt.Errorf("%w: product record directory contained no files", ErrMissingEvidence)
+	}
+	// A failed child may not have created a record directory. Preserve a
+	// hash-verified, explicit absence marker so the bundle remains readable and
+	// the mechanical/validator verdict can report missing product evidence.
+	if markerErr := bundle.AddArtifactBytes("product-record-dir/index.json", ArtifactKindProductRecordDir, []byte(`{"source_registered":false,"files":[],"reason":"product record directory was unavailable"}`+"\n"), true); markerErr != nil {
+		return errors.Join(err, markerErr)
+	}
+	return fmt.Errorf("%w: product record directory was unavailable", ErrMissingEvidence)
+}
+
+func customerSimulationProductRecordFileCount(bundle *CustomerEvidenceBundle) int {
+	if bundle == nil {
+		return 0
+	}
+	count := 0
+	for _, artifact := range bundle.Artifacts {
+		if artifact.Kind == ArtifactKindProductRecordDir && strings.HasPrefix(artifact.Path, "product-record-dir/") && artifact.Path != "product-record-dir/index.json" && artifact.State == ArtifactStateAvailable {
+			count++
+		}
+	}
+	return count
+}
+
+// validateObservedFacts validates the audio, tool, and filesystem facts shared
+// by evidence bundles and validator input. prefix is empty or ends in ".".
+func validateObservedFacts(prefix string, audio []AudioTurnEvent, tools []ToolObservation, checkpoints []FilesystemCheckpoint) error {
+	for n, event := range audio {
+		if err := event.validate(fmt.Sprintf("%saudio_turn_events[%d]", prefix, n)); err != nil {
+			return err
+		}
+	}
+	toolIDs := map[string]struct{}{}
+	for n, observation := range tools {
+		if err := observation.validate(fmt.Sprintf("%stool_observations[%d]", prefix, n)); err != nil {
+			return err
+		}
+		if _, ok := toolIDs[observation.ID]; ok {
+			return contractFieldError(ErrInvalidCustomerEvidence, prefix+"tool_observations", "IDs must be unique")
+		}
+		toolIDs[observation.ID] = struct{}{}
+	}
+	checkpointIDs := map[string]struct{}{}
+	for n, checkpoint := range checkpoints {
+		if err := checkpoint.validate(fmt.Sprintf("%sfilesystem_checkpoints[%d]", prefix, n)); err != nil {
+			return err
+		}
+		if _, ok := checkpointIDs[checkpoint.ID]; ok {
+			return contractFieldError(ErrInvalidCustomerEvidence, prefix+"filesystem_checkpoints", "IDs must be unique")
+		}
+		checkpointIDs[checkpoint.ID] = struct{}{}
+	}
+	return nil
 }
