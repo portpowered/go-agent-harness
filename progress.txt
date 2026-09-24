@@ -6099,3 +6099,20 @@ before any push or PR.
 - Exact next action: commit these source repairs and this checkpoint on the
   same branch, then run `make prepush` and every C251-04 command on the exact
   clean commit; repair every locally reproducible failure before push or PR.
+
+
+## C251 architecture-count repair checkpoint — 2026-09-24
+
+- Exact `rtk make prepush` on `21b238dda62d21757cbb8ea319baf164850c9fee`
+  passed formatting and stopped at `verify-architecture`. The gate found the
+  real two-line reduction in `session_recording.go` (949 physical lines versus
+  its 951-line baseline) and `session/internal/live/service_test.go` at 602
+  lines versus its 600-line cap. Log:
+  `~/Library/Application Support/rtk/tee/1790250155_make_prepush.log`.
+- The lint-only test-helper error check is compacted by two physical lines,
+  restoring the existing file to its 600-line cap. The recorded
+  `session_recording.go` line baseline is reduced from 951 to 949 to match the
+  measured source cleanup. No other baseline or size allowance is changed.
+- Exact next action: commit these measured repairs and this checkpoint, then
+  rerun `make prepush` and the complete C251-04 gate on that exact clean SHA
+  before any push or PR.

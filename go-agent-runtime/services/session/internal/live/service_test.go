@@ -88,10 +88,8 @@ func (c *testDurationController) Retry(request sessionduration.RetryRequest) ses
 	if request.Terminal == nil || request.Terminal.ProviderErrorCode != "rate_limit_exceeded" || !c.options.Retry.Enabled {
 		return sessionduration.RetryDecision{}
 	}
-	if request.Dispatch != nil {
-		if err := request.Dispatch(c.options.Context); err != nil {
-			return sessionduration.RetryDecision{}
-		}
+	if request.Dispatch != nil && request.Dispatch(c.options.Context) != nil {
+		return sessionduration.RetryDecision{}
 	}
 	return sessionduration.RetryDecision{Eligible: true, Delay: c.options.Retry.DefaultDelay}
 }
