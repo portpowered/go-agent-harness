@@ -1,1 +1,1 @@
-{"package":"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/internal/lifecycle","minimum":80.00}
+{"package":"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/internal/lifecycle","exception":"Host-neutral aliases and constants only; no executable statements."}

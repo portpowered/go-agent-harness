@@ -6234,3 +6234,34 @@ before any push or PR.
 - The helper now checks the assertion boolean while preserving false for nil
   or non-owned contexts. Exact next action: commit this lint repair and
   checkpoint, then rerun the full gate on the exact clean SHA.
+
+
+## C251 duplicate implementation and coverage checkpoint — 2026-09-24
+
+- Starting source checkpoint: `f17c66fb71a3e6528aab2ac787fa75a92eb64116`.
+  Tracing the coverage gap showed `session/internal/live/sessionadapter` had no
+  production callers and duplicated `sessionwrap`. Removed its two production
+  files and returned the existing ordered-send regression test to the live
+  production wrapper. Added two public-contract failure checks that assert
+  loop-construction error identity through `session.DurationRunner` and
+  `sessionduration.Service`; no tests were moved.
+- Focused checks pass: the ordered-send regression (1 package), the two new
+  contract checks (2 packages), `coverage-registration` (223 packages), all
+  16 shutdown/duration legacy-file absences, the one-file/300-line adapter
+  budget, and `git diff --check`.
+- `rtk make coverage-changed` expanded to full multi-module coverage and ran
+  all six module suites plus embedding. The profile gate then failed with one
+  unmeasured declarations-only package (`sessiontrace/internal/lifecycle`)
+  and ten measured floors: duration service 83.90/90.00; sessionterminal
+  service 74.30/80.00 and Wire 70.00/95.00; sessiontrace lifecycle service
+  74.70/80.00, observer 79.50/80.00, service 89.80/90.00 and Wire
+  87.50/95.00; sessionturn seed 62.10/80.00, service 22.70/70.00 and Wire
+  0.00/95.00. The new invocation and runner packages measured 86.36% and
+  78.35%; their manifest floors now use those full-profile measurements.
+  Log: `~/Library/Application Support/rtk/tee/1790254413_make_coverage-changed.log`.
+- Registered `sessiontrace/internal/lifecycle` as a no-statements contract
+  package, with its aliases/constants-only reason. Exact next action: repair
+  the ten numeric coverage floor deficits with public-behavior coverage, rerun
+  the full coverage gate, then rerun `make prepush` plus the complete C251-04
+  matrix on that exact head. Do not push or open a PR before every local gate
+  passes.
