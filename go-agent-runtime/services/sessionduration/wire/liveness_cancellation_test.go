@@ -362,7 +362,8 @@ func TestPublicArtifactLifecycleTakesPrecedenceOverConfiguredPaths(t *testing.T)
 func TestPublicArtifactLifecycleAcceptsNilContext(t *testing.T) {
 	service := NewService()
 	existing := &publicArtifactLifecycleProbe{}
-	ctx := service.WithArtifacts(nil, existing)
+	var nilContext context.Context
+	ctx := service.WithArtifacts(nilContext, existing)
 	if ctx == nil {
 		t.Fatal("WithArtifacts(nil, lifecycle) returned a nil context")
 	}
