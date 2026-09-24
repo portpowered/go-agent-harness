@@ -142,7 +142,59 @@ func sanitizeRoomError(err error, secrets []string) string {
 			value = strings.ReplaceAll(value, secret, "[REDACTED]")
 		}
 	}
-	return redactSelfPlayError(value, "")
+	return redactRoomErrorText(value, "")
+}
+
+func withRoomEvidenceContext(operation string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("%s: %w", operation, err)
+}
+
+func redactRoomErrorText(value, secret string) string {
+	if value == "" {
+		return ""
+	}
+	if secret != "" {
+		value = strings.ReplaceAll(value, secret, "[REDACTED]")
+	}
+	for _, marker := range []string{
+		"authorization: bearer ", "authorization=bearer ", "authorization: ", "authorization=",
+		"x-api-key: ", "x-api-key=", "api-key: ", "api-key=", "api_key: ", "api_key=", "bearer ",
+	} {
+		value = redactRoomMarker(value, marker)
+	}
+	return value
+}
+
+func redactRoomMarker(value, marker string) string {
+	searchFrom := 0
+	for searchFrom < len(value) {
+		start := strings.Index(strings.ToLower(value[searchFrom:]), marker)
+		if start < 0 {
+			return value
+		}
+		markerEnd := searchFrom + start + len(marker)
+		if strings.HasPrefix(value[markerEnd:], "[REDACTED]") {
+			searchFrom = markerEnd + len("[REDACTED]")
+			continue
+		}
+		end := roomTokenEnd(value, markerEnd)
+		value = value[:markerEnd] + "[REDACTED]" + value[end:]
+		searchFrom = markerEnd + len("[REDACTED]")
+	}
+	return value
+}
+
+func roomTokenEnd(value string, start int) int {
+	for end := start; end < len(value); end++ {
+		switch value[end] {
+		case ' ', '\t', '\r', '\n', ',', ';', ')', ']', '}':
+			return end
+		}
+	}
+	return len(value)
 }
 
 func secretsForPlan(plan *roomParticipantPlan) []string {

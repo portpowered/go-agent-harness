@@ -31,6 +31,7 @@ import (
 	recordingwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/wire"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	runtimeReplayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
+	runtimeSelfPlayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/selfplay/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	sessionwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
 	runtimeSessionTrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
@@ -347,7 +348,8 @@ var CliSet = wire.NewSet(
 	provideSessionRTCRuntimeFactory,
 	cli.NewSessionToolCapabilitiesFactoryFromService,
 	cli.NewSessionCommandWithLive,
-	servicewire.SelfPlaySet,
+	runtimeSelfPlayWire.NewDependencies,
+	runtimeSelfPlayWire.NewService,
 	cli.NewSessionReplayCommand,
 	cli.NewRoomRunCommand,
 	cli.NewSessionShowCommand,

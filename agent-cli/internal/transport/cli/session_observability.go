@@ -16,7 +16,6 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
-	serviceSelfPlay "github.com/portpowered/go-agent-harness/agent-cli/internal/services/selfplay"
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/livehost"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -24,6 +23,7 @@ import (
 	runtimeProviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	runtimeRecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
+	runtimeSelfPlay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/selfplay"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	runtimeSessionWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
 	runtimeSessionTrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
@@ -52,7 +52,7 @@ func NewSessionCommand(
 	askFlags *flags.AskFlags,
 	globalFlags *flags.GlobalFlags,
 	sessionService serviceSession.Service,
-	selfPlayService serviceSelfPlay.Service,
+	selfPlayService runtimeSelfPlay.Service,
 ) *SessionCommand {
 	return &SessionCommand{
 		askFlags: askFlags, globalFlags: globalFlags, sessionService: sessionService,
@@ -68,7 +68,7 @@ func NewSessionCommandWithLive(
 	askFlags *flags.AskFlags,
 	globalFlags *flags.GlobalFlags,
 	sessionService serviceSession.Service,
-	selfPlayService serviceSelfPlay.Service,
+	selfPlayService runtimeSelfPlay.Service,
 	liveService runtimeSession.LiveService,
 	liveReplayService runtimeReplay.Service,
 	deviceService runtimeDevices.Service,

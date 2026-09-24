@@ -1,22 +1,144 @@
 package agentruntime
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	runtimeReplayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
-const roomEvidenceDirectoryMode = 0o700
+type roomJSONLWriter struct {
+	path   string
+	file   *os.File
+	mu     sync.Mutex
+	closed bool
+	err    error
+}
+
+func newRoomJSONLWriter(path string) (*roomJSONLWriter, error) {
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL|os.O_APPEND, roomEvidenceFileMode)
+	if err != nil {
+		return nil, err
+	}
+	return &roomJSONLWriter{path: path, file: file}, nil
+}
+
+func (w *roomJSONLWriter) write(value any) error {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return fmt.Errorf("marshal room JSONL record: %w", err)
+	}
+	return w.writeRaw(data)
+}
+
+func (w *roomJSONLWriter) writeRaw(data []byte) error {
+	if !json.Valid(data) {
+		return errors.New("room JSONL record is not valid JSON")
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.closed {
+		return errors.Join(w.err, errors.New("room JSONL writer is closed"))
+	}
+	if w.err != nil {
+		return w.err
+	}
+	if err := writeRoomEvidenceAll(w.file, append(data, '\n')); err != nil {
+		w.err = fmt.Errorf("write %s: %w", w.path, err)
+	}
+	return w.err
+}
+
+func (w *roomJSONLWriter) close() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.closed {
+		return w.err
+	}
+	w.closed = true
+	w.err = errors.Join(w.err, withRoomEvidenceContext("sync "+w.path, w.file.Sync()), withRoomEvidenceContext("close "+w.path, w.file.Close()))
+	return w.err
+}
+
+type roomWAVRecorder struct {
+	path   string
+	file   *os.File
+	writer *wavio.StreamWriter
+	mu     sync.Mutex
+	closed bool
+	err    error
+}
+
+func newRoomWAVRecorder(path string, sampleRate int) (*roomWAVRecorder, error) {
+	if sampleRate <= 0 {
+		return nil, fmt.Errorf("room WAV sample rate must be positive, got %d", sampleRate)
+	}
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, roomEvidenceFileMode)
+	if err != nil {
+		return nil, err
+	}
+	writer, err := wavio.NewStreamWriter(file, sampleRate)
+	if err != nil {
+		return nil, errors.Join(
+			fmt.Errorf("write room WAV header: %w", err),
+			withRoomEvidenceContext("close "+path, file.Close()),
+			withRoomEvidenceContext("remove "+path, os.Remove(path)),
+		)
+	}
+	return &roomWAVRecorder{path: path, file: file, writer: writer}, nil
+}
+
+func (w *roomWAVRecorder) write(ctx context.Context, pcm []byte) error {
+	if ctx != nil && ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if len(pcm) == 0 {
+		return nil
+	}
+	if len(pcm)%2 != 0 {
+		return fmt.Errorf("room PCM16 audio delta has odd byte length %d", len(pcm))
+	}
+	samples, err := codec.DecodePCM16WithLimit(pcm, len(pcm))
+	if err != nil {
+		return fmt.Errorf("decode room PCM16 audio delta: %w", err)
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.closed {
+		return errors.New("room WAV recorder is closed")
+	}
+	if err := w.writer.WriteSamples(samples); err != nil {
+		return fmt.Errorf("write %s: %w", w.path, err)
+	}
+	return nil
+}
+
+func (w *roomWAVRecorder) close() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.closed {
+		return w.err
+	}
+	w.closed = true
+	w.err = errors.Join(withRoomEvidenceContext("finalize "+w.path+" WAV header", w.writer.Close()), withRoomEvidenceContext("sync "+w.path, w.file.Sync()), withRoomEvidenceContext("close "+w.path, w.file.Close()))
+	return w.err
+}
+
+const roomEvidenceDirectoryMode, roomEvidenceFileMode os.FileMode = 0o700, 0o600
 
 // roomEvidenceArtifactIntegrity is one entry of roomEvidenceManifest's
 // artifact_integrity map: the declared size and sha256 digest of one
@@ -60,17 +182,7 @@ func (e *roomEvidence) hashArtifactInto(integrity map[string]roomEvidenceArtifac
 	}
 }
 
-// roomEvidenceSource and roomEvidenceStart establish one timestamp source for
-// every evidence writer. Keeping admission here with artifact integrity makes
-// the evidence lifecycle explicit: all resources are opened from one admitted
-// state, then finalized and hashed from that same state.
-func roomEvidenceSource(sources []platformclock.Source) platformclock.Source {
-	if len(sources) == 0 {
-		return nil
-	}
-	return sources[0]
-}
-
+// roomEvidenceStart establishes the initial UTC timestamp for room evidence.
 func roomEvidenceStart(startedAt time.Time, source platformclock.Source) time.Time {
 	if startedAt.IsZero() {
 		startedAt = source.Now()
@@ -148,19 +260,19 @@ func (e *roomEvidence) openParticipant(participant room.Participant, stem string
 		return fmt.Errorf("create room participant %q evidence directory: %w", participant.ID, err)
 	}
 	var err error
-	participantEvidence.audio, err = newSelfPlayWAVRecorder(filepath.Join(e.destination, paths.WAV), e.audioFormat.SampleRate)
+	participantEvidence.audio, err = newRoomWAVRecorder(filepath.Join(e.destination, paths.WAV), e.audioFormat.SampleRate)
 	if err != nil {
 		return fmt.Errorf("create room participant %q WAV evidence: %w", participant.ID, err)
 	}
-	participantEvidence.diagnostics, err = newSelfPlayJSONLWriter(filepath.Join(e.destination, paths.Diagnostics))
+	participantEvidence.diagnostics, err = newRoomJSONLWriter(filepath.Join(e.destination, paths.Diagnostics))
 	if err != nil {
 		return fmt.Errorf("create room participant %q diagnostics evidence: %w", participant.ID, err)
 	}
-	participantEvidence.deltas, err = newSelfPlayJSONLWriter(filepath.Join(e.destination, paths.Deltas))
+	participantEvidence.deltas, err = newRoomJSONLWriter(filepath.Join(e.destination, paths.Deltas))
 	if err != nil {
 		return fmt.Errorf("create room participant %q delta evidence: %w", participant.ID, err)
 	}
-	participantEvidence.events, err = newSelfPlayJSONLWriter(filepath.Join(e.destination, paths.Events))
+	participantEvidence.events, err = newRoomJSONLWriter(filepath.Join(e.destination, paths.Events))
 	if err != nil {
 		return fmt.Errorf("create room participant %q event evidence: %w", participant.ID, err)
 	}
