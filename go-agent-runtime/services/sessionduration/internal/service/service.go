@@ -18,6 +18,18 @@ type Service struct{}
 
 const maxDurationReason = sessionduration.MaxDurationReason
 
+func withSessionDurationArtifactOwner(ctx context.Context) context.Context {
+	return context.WithValue(ctx, sessionDurationArtifactOwnerContextKey{}, true)
+}
+
+func hasSessionDurationArtifactOwner(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	owned, _ := ctx.Value(sessionDurationArtifactOwnerContextKey{}).(bool)
+	return owned
+}
+
 func New() *Service { return &Service{} }
 
 // Run executes one bounded session through the service-owned invocation loop.

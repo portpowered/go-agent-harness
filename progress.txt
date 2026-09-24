@@ -6206,3 +6206,19 @@ before any push or PR.
 - No tests were added or moved. Exact next action: commit this repair and
   checkpoint, rerun full prepush and every C251-04 command on the exact clean
   candidate before any push or PR.
+
+
+## C251 architecture file-cap repair checkpoint — 2026-09-24
+
+- Exact `rtk make prepush` on `40a6b287c389af84b7cc66da91637f6ab2982bc8`
+  passed formatting, then stopped at architecture because the artifact context
+  file reached 410 lines against its existing 400-line cap. Log:
+  `~/Library/Application Support/rtk/tee/1790252103_make_prepush.log`.
+- Moved the execution-owner context helpers into the existing
+  `sessionduration/internal/service/service.go`, next to Execute/RunWithResult;
+  the artifact context key remains with the other service artifact keys.
+  Current measured files are 396 and 398 lines respectively. No file budget or
+  baseline was changed.
+- Exact next action: commit this layout correction and checkpoint, rerun full
+  `make prepush`, then finish the C251-04 matrix on that clean SHA before push
+  or PR.

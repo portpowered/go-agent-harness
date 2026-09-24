@@ -90,6 +90,7 @@ func (a *sessionDurationArtifactLifecycleWithTerminal) Close() error {
 type sessionDurationArtifactsContextKey struct{}
 
 type sessionDurationArtifactPathsContextKey struct{}
+
 type sessionDurationArtifactOwnerContextKey struct{}
 
 // WithSessionDurationArtifacts attaches production-owned output resources to a
@@ -140,21 +141,6 @@ func ArtifactPathsFromContext(ctx context.Context) (sessionduration.SessionDurat
 	}
 	paths, ok := ctx.Value(sessionDurationArtifactPathsContextKey{}).(sessionduration.SessionDurationArtifactPaths)
 	return paths, ok
-}
-
-func withSessionDurationArtifactOwner(ctx context.Context) context.Context {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	return context.WithValue(ctx, sessionDurationArtifactOwnerContextKey{}, true)
-}
-
-func hasSessionDurationArtifactOwner(ctx context.Context) bool {
-	if ctx == nil {
-		return false
-	}
-	owned, _ := ctx.Value(sessionDurationArtifactOwnerContextKey{}).(bool)
-	return owned
 }
 
 func PrepareArtifacts(ctx context.Context) (context.Context, error) {
