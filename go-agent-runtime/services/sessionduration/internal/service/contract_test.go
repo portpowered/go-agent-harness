@@ -521,13 +521,23 @@ type retryRunLoopProbe struct {
 }
 
 func (l *retryRunLoopProbe) Run(ctx context.Context) error {
-	terminal := messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: &messages.MessageEndValue{Status: "failed", ProviderErrorCode: "rate_limit_exceeded", ProviderErrorMessage: "retry after 1s"}}
-	if !l.deltas.Write(ctx, terminal) {
+	if !l.deltas.Write(ctx, retryRateLimitTerminal()) {
 		return ctx.Err()
 	}
 	<-ctx.Done()
 	return ctx.Err()
 }
+
+func retryRateLimitTerminal() messages.StreamMessage {
+	return messages.StreamMessage{
+		Type: messages.StreamTypeMessageEnd,
+		Role: messages.RoleAssistant,
+		Value: &messages.MessageEndValue{
+			Status: "failed", ProviderErrorCode: "rate_limit_exceeded", ProviderErrorMessage: "retry after 1s",
+		},
+	}
+}
+
 func (l *retryRunLoopProbe) Deltas() *messages.TypedBuffer[messages.StreamMessage] { return l.deltas }
 func (l *retryRunLoopProbe) Send(context.Context, []messages.Message) error        { return nil }
 func (l *retryRunLoopProbe) SendSessionEvent(ctx context.Context, msg messages.StreamMessage) error {

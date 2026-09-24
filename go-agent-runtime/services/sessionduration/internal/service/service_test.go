@@ -432,62 +432,68 @@ func TestRunHandlesWakeAndDoneBoundaryFailures(t *testing.T) {
 
 func TestRunOwnsRateLimitRetryWaitAndDispatch(t *testing.T) {
 	scheduler := &triggerScheduler{created: make(chan *triggerTimer, 1)}
-	loop := &retryRunLoopProbe{
-		deltas: messages.NewTypedBuffer[messages.StreamMessage](1),
-		sent:   make(chan messages.StreamMessage, 1),
-	}
-	dispatched := make(chan messages.StreamMessage, 1)
-	done := make(chan struct{})
-	result := make(chan error, 1)
+	loop := &retryRunLoopProbe{deltas: messages.NewTypedBuffer[messages.StreamMessage](1), sent: make(chan messages.StreamMessage, 1)}
+	dispatched, done, result := make(chan messages.StreamMessage, 1), make(chan struct{}), make(chan error, 1)
 	go func() {
 		result <- New().Run(sessionduration.RunRequest{
-			Context:    context.Background(),
-			Inferencer: contractInferencer{session: newContractSession()},
-			Clock:      scheduler,
-			Retry:      sessionduration.RetryPolicy{Enabled: true, MaxRetries: 1, DefaultDelay: time.Second},
+			Context: context.Background(), Inferencer: contractInferencer{session: newContractSession()}, Clock: scheduler,
+			Retry: sessionduration.RetryPolicy{Enabled: true, MaxRetries: 2, DefaultDelay: time.Second},
 			LoopFactory: func(context.Context, sessionduration.AdmissionInferencer, sessionduration.Controller) (sessionduration.Loop, error) {
 				return loop, nil
 			},
-			RetryDispatched: func(msg messages.StreamMessage) { dispatched <- msg },
-			Done:            done,
+			RetryDispatched: func(msg messages.StreamMessage) { dispatched <- msg }, Done: done,
 		})
 	}()
-
-	var timer *triggerTimer
-	select {
-	case timer = <-scheduler.created:
-	case <-time.After(time.Second):
-		t.Fatal("retry scheduler was not created")
-	}
+	timer := receiveRetryTimer(t, scheduler)
 	select {
 	case msg := <-loop.sent:
 		t.Fatalf("retry was sent before its delay elapsed: %+v", msg)
 	default:
 	}
 	timer.events <- time.Now()
-
+	assertRetryControl(t, loop.sent, "retry control was not sent after the injected timer fired")
+	assertRetryControl(t, dispatched, "successful retry dispatch was not reported")
+	if !loop.deltas.Write(context.Background(), retryRateLimitTerminal()) {
+		t.Fatal("second rate-limit terminal was not queued")
+	}
+	receiveRetryTimer(t, scheduler)
+	close(done)
+	assertRunStopped(t, result)
 	select {
 	case msg := <-loop.sent:
+		t.Fatalf("Run dispatched a retry after its completion signal: %+v", msg)
+	default:
+	}
+}
+
+func receiveRetryTimer(t *testing.T, scheduler *triggerScheduler) *triggerTimer {
+	t.Helper()
+	var timer *triggerTimer
+	select {
+	case timer = <-scheduler.created:
+	case <-time.After(time.Second):
+		t.Fatal("retry scheduler was not created")
+	}
+	return timer
+}
+
+func assertRetryControl(t *testing.T, got <-chan messages.StreamMessage, timeoutMessage string) {
+	t.Helper()
+	select {
+	case msg := <-got:
 		if msg.Type != messages.StreamTypeResponseCreate {
 			t.Fatalf("retry control type = %q, want response.create", msg.Type)
 		}
 	case <-time.After(time.Second):
-		t.Fatal("retry control was not sent after the injected timer fired")
+		t.Fatal(timeoutMessage)
 	}
-	select {
-	case msg := <-dispatched:
-		if msg.Type != messages.StreamTypeResponseCreate {
-			t.Fatalf("observed retry type = %q, want response.create", msg.Type)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("successful retry dispatch was not reported")
-	}
+}
 
-	close(done)
+func assertRunStopped(t *testing.T, result <-chan error) {
 	select {
 	case err := <-result:
 		if err != nil {
-			t.Fatalf("Run after retry completion = %v, want nil", err)
+			t.Fatalf("Run after completion signal = %v, want nil", err)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("Run did not stop after its completion signal")
