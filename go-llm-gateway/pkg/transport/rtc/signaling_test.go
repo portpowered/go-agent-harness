@@ -75,7 +75,9 @@ func runFailure(kind int, ctx context.Context, o, a *rtc.LoopbackEndpoint) error
 			return phase(ctx, o, a, rtc.SessionDescription{Type: "answer", SDP: "not-sdp"}, true)
 		}
 		if kind == 2 {
-			o.CompleteCandidateGathering(ctx)
+			if err := o.CompleteCandidateGathering(ctx); err != nil {
+				return err
+			}
 			return o.WaitCandidateGathering(ctx)
 		}
 		return a.WaitCandidateGathering(ctx)

@@ -202,3 +202,22 @@ type OpenedDevice interface {
 
 // DeviceHandle is a descriptive alias for OpenedDevice.
 type DeviceHandle = OpenedDevice
+
+// joinCleanupError reports a failed deferred cleanup alongside the operation
+// result. A nil cleanup result leaves the result, including its identity, as is.
+func joinCleanupError(result *error, cleanupErr error) {
+	if cleanupErr != nil {
+		*result = errors.Join(*result, cleanupErr)
+	}
+}
+
+// joinCleanupErrorOnFailure attaches a failed cleanup only to an operation that
+// already failed. After a successful operation whose data was fully consumed
+// (a decoded response body, a completed device listing) a release failure has
+// no effect on the caller's result, so it is deliberately not reported and the
+// original success semantics are kept.
+func joinCleanupErrorOnFailure(result *error, cleanupErr error) {
+	if *result != nil && cleanupErr != nil {
+		*result = errors.Join(*result, cleanupErr)
+	}
+}

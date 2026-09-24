@@ -180,7 +180,7 @@ func releaseCoreAudioContext(ctx *malgo.AllocatedContext) error {
 	defer ctx.Free()
 	return ctx.Uninit()
 }
-func enumerateCoreAudioDevices() ([]coreAudioEndpoint, error) {
+func enumerateCoreAudioDevices() (endpoints []coreAudioEndpoint, err error) {
 	ctx, err := malgo.InitContext(coreAudioBackends, malgo.ContextConfig{}, nil)
 	if err != nil {
 		if isCoreAudioUnavailable(err) {
@@ -188,7 +188,7 @@ func enumerateCoreAudioDevices() ([]coreAudioEndpoint, error) {
 		}
 		return nil, fmt.Errorf("initialize CoreAudio: %w", err)
 	}
-	defer releaseCoreAudioContext(ctx)
+	defer func() { joinCleanupErrorOnFailure(&err, releaseCoreAudioContext(ctx)) }()
 	return enumerateCoreAudioEndpoints(ctx)
 }
 func openCoreAudioDevice(endpoint coreAudioEndpoint) (OpenedDevice, error) {

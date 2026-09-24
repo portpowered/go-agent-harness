@@ -1,6 +1,21 @@
 package wavio
 
-import "encoding/binary"
+import (
+	"encoding/binary"
+	"os"
+	"testing"
+)
+
+// closeFileOnCleanup closes f when the test finishes and reports a close
+// failure.
+func closeFileOnCleanup(t *testing.T, f *os.File) {
+	t.Helper()
+	t.Cleanup(func() {
+		if err := f.Close(); err != nil {
+			t.Errorf("close %s: %v", f.Name(), err)
+		}
+	})
+}
 
 type testChunk struct {
 	id   string

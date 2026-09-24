@@ -186,3 +186,79 @@ func TestRemoteDeviceErrorPreservesClosedIdentity(t *testing.T) {
 		t.Fatalf("remote closed read error = %v, want audio.ErrClosed", err)
 	}
 }
+
+// stubBodyCloseError is the failure every closeFailingBody.Close returns.
+type stubBodyCloseError struct{}
+
+func (stubBodyCloseError) Error() string { return "stub body close failed" }
+
+// closeFailingBody is a response body whose reads succeed and whose Close
+// always fails, proving close failures do not rewrite a consumed success.
+type closeFailingBody struct{ *bytes.Reader }
+
+func (closeFailingBody) Close() error { return stubBodyCloseError{} }
+
+// stubResponseTransport answers every request with one fixed status and body.
+type stubResponseTransport struct {
+	status int
+	body   []byte
+}
+
+func (s stubResponseTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	return &http.Response{
+		StatusCode: s.status,
+		Status:     http.StatusText(s.status),
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       closeFailingBody{bytes.NewReader(s.body)},
+		Request:    req,
+	}, nil
+}
+
+func newStubResponseRegistry(t *testing.T, status int, body []byte) *RemoteDeviceRegistry {
+	t.Helper()
+	remote, err := NewRemoteDeviceRegistry("127.0.0.1:1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	remote.client = &http.Client{Transport: stubResponseTransport{status: status, body: body}}
+	return remote
+}
+
+func TestRemoteDeviceSuccessIgnoresBodyCloseFailure(t *testing.T) {
+	encoded, err := json.Marshal(Device{ID: "stub:out", Backend: "stub", NativeID: "out", Direction: DirectionOutput})
+	if err != nil {
+		t.Fatal(err)
+	}
+	device, err := newStubResponseRegistry(t, http.StatusOK, encoded).Default(DirectionOutput)
+	if err != nil {
+		t.Fatalf("Default with failing body close error = %v, want success", err)
+	}
+	if device.ID != "stub:out" {
+		t.Fatalf("Default device ID = %q, want stub:out", device.ID)
+	}
+
+	frame := make([]int16, audio.FrameSize)
+	pcm := make([]byte, len(frame)*2)
+	pcm[0] = 1
+	opened := &remoteOpenedDevice{registry: newStubResponseRegistry(t, http.StatusOK, pcm), id: "in", direction: DirectionInput, format: audio.DefaultDeviceFormat()}
+	if err := opened.ReadFrame(context.Background(), frame); err != nil {
+		t.Fatalf("ReadFrame with failing body close error = %v, want success", err)
+	}
+	if frame[0] != 1 {
+		t.Fatalf("ReadFrame frame[0] = %d, want 1", frame[0])
+	}
+}
+
+func TestRemoteDeviceFailureJoinsBodyCloseFailure(t *testing.T) {
+	var closeErr stubBodyCloseError
+	_, err := newStubResponseRegistry(t, http.StatusOK, []byte("not-json")).Default(DirectionOutput)
+	if !errors.As(err, &closeErr) {
+		t.Fatalf("Default decode failure error = %v, want joined body close failure", err)
+	}
+	opened := &remoteOpenedDevice{registry: newStubResponseRegistry(t, http.StatusOK, []byte{1}), id: "in", direction: DirectionInput, format: audio.DefaultDeviceFormat()}
+	err = opened.ReadFrame(context.Background(), make([]int16, audio.FrameSize))
+	var sizeErr *audio.FrameSizeError
+	if !errors.As(err, &sizeErr) || !errors.As(err, &closeErr) {
+		t.Fatalf("ReadFrame short body error = %v, want FrameSizeError joined with body close failure", err)
+	}
+}

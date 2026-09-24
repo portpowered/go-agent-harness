@@ -1,6 +1,7 @@
 package devices_test
 
 import (
+	"errors"
 	"testing"
 
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
@@ -112,14 +113,17 @@ func TestSelectionValidationAndAcquisition(t *testing.T) {
 		require.Equal(t, devicegw.DeviceRegistryObservations{ListCalls: 2, OpenCount: 1, ReleaseCount: 1}, r.observations())
 	})
 }
+
+type deviceLossCase struct {
+	name, replacement  string
+	policy             devicegw.DeviceLossPolicy
+	unavailable, stale bool
+	wantOutcome        devicegw.DeviceLossOutcome
+	wantErr            error
+}
+
 func TestHandleDeviceLossPolicies(t *testing.T) {
-	for _, tc := range []struct {
-		name, replacement  string
-		policy             devicegw.DeviceLossPolicy
-		unavailable, stale bool
-		wantOutcome        devicegw.DeviceLossOutcome
-		wantErr            error
-	}{
+	for _, tc := range []deviceLossCase{
 		{"fail by default", "", "", false, false, devicegw.DeviceLossOutcomeFailed, devicegw.ErrDeviceLost},
 		{"fail explicitly", "", devicegw.DeviceLossPolicyFail, false, false, devicegw.DeviceLossOutcomeFailed, devicegw.ErrDeviceLost},
 		{"default opens current replacement", "virtual:input-replacement", devicegw.DeviceLossPolicyDefault, false, false, devicegw.DeviceLossOutcomeDefaulted, nil},
@@ -128,63 +132,81 @@ func TestHandleDeviceLossPolicies(t *testing.T) {
 		{"default is lost device", "virtual:input-default", devicegw.DeviceLossPolicyDefault, false, true, devicegw.DeviceLossOutcomeFailed, devicegw.ErrDeviceLost},
 		{"replacement is unavailable", "virtual:input-replacement", devicegw.DeviceLossPolicyDefault, true, true, devicegw.DeviceLossOutcomeFailed, devicegw.ErrDeviceNotFound},
 	} {
-		t.Run(tc.name, func(t *testing.T) {
-			r := newSelectionRegistry(t)
-			selection, err := devicegw.OpenDeviceSelection(r, devicegw.DeviceSelectionRequest{})
-			require.NoError(t, err)
-			lost := selection.Input
-			var stale devicegw.Device
-			if tc.replacement != "" {
-				stale = r.devices[tc.replacement]
-			}
-			r.remove(lost.ID)
-			var registry devicegw.DeviceRegistry = r
-			if tc.replacement != "" {
-				r.defaults[devicegw.DirectionInput] = tc.replacement
-				if tc.unavailable {
-					r.remove(tc.replacement)
-				}
-				if tc.stale {
-					registry = &staleDefaultRegistry{fixtureRegistry: r, device: stale}
-				}
-			}
-			before := r.observations()
-			result, err := devicegw.HandleDeviceLoss(registry, lost, tc.policy)
-			require.Equal(t, lost, result.Lost)
-			require.Equal(t, tc.wantOutcome, result.Outcome)
-			if tc.wantErr != nil {
-				require.ErrorIs(t, err, tc.wantErr)
-				if tc.wantErr == devicegw.ErrDeviceLost {
-					var typed *devicegw.DeviceLostError
-					require.ErrorAs(t, err, &typed)
-					require.Equal(t, lost.ID, typed.ID)
-					require.Equal(t, devicegw.DirectionInput, typed.Direction)
-				}
-				require.Nil(t, result.Handle)
-			} else {
-				require.NoError(t, err)
-				if tc.replacement != "" {
-					require.Equal(t, devicegw.DeviceID(tc.replacement), result.Device.ID)
-					require.NotEmpty(t, result.Device.ID)
-					require.NotNil(t, result.Handle)
-				} else {
-					require.Nil(t, result.Handle)
-				}
-			}
-			after := r.observations()
-			if tc.policy == devicegw.DeviceLossPolicyDefault {
-				require.Equal(t, before.DefaultCalls+1, after.DefaultCalls)
-				if tc.wantErr == nil {
-					require.Equal(t, before.OpenCount+1, after.OpenCount)
-				} else {
-					require.Equal(t, before.OpenCount, after.OpenCount)
-				}
-			} else {
-				require.Equal(t, before, after)
-			}
-			require.NoError(t, result.Close())
-			require.NoError(t, selection.Close())
-		})
+		t.Run(tc.name, func(t *testing.T) { runDeviceLossCase(t, tc) })
+	}
+}
+
+func runDeviceLossCase(t *testing.T, tc deviceLossCase) {
+	r := newSelectionRegistry(t)
+	selection, err := devicegw.OpenDeviceSelection(r, devicegw.DeviceSelectionRequest{})
+	require.NoError(t, err)
+	lost := selection.Input
+	registry := tc.lossRegistry(r, lost)
+	before := r.observations()
+	result, err := devicegw.HandleDeviceLoss(registry, lost, tc.policy)
+	require.Equal(t, lost, result.Lost)
+	require.Equal(t, tc.wantOutcome, result.Outcome)
+	tc.assertResult(t, lost, result, err)
+	tc.assertObservations(t, before, r.observations())
+	require.NoError(t, result.Close())
+	require.NoError(t, selection.Close())
+}
+
+// lossRegistry removes the lost device and installs the case's replacement
+// default, optionally unavailable or served through a stale default view.
+func (tc deviceLossCase) lossRegistry(r *fixtureRegistry, lost devicegw.Device) devicegw.DeviceRegistry {
+	var stale devicegw.Device
+	if tc.replacement != "" {
+		stale = r.devices[tc.replacement]
+	}
+	r.remove(lost.ID)
+	var registry devicegw.DeviceRegistry = r
+	if tc.replacement != "" {
+		r.defaults[devicegw.DirectionInput] = tc.replacement
+		if tc.unavailable {
+			r.remove(tc.replacement)
+		}
+		if tc.stale {
+			registry = &staleDefaultRegistry{fixtureRegistry: r, device: stale}
+		}
+	}
+	return registry
+}
+
+func (tc deviceLossCase) assertResult(t *testing.T, lost devicegw.Device, result devicegw.DeviceLossResult, err error) {
+	t.Helper()
+	if tc.wantErr != nil {
+		require.ErrorIs(t, err, tc.wantErr)
+		if errors.Is(tc.wantErr, devicegw.ErrDeviceLost) {
+			var typed *devicegw.DeviceLostError
+			require.ErrorAs(t, err, &typed)
+			require.Equal(t, lost.ID, typed.ID)
+			require.Equal(t, devicegw.DirectionInput, typed.Direction)
+		}
+		require.Nil(t, result.Handle)
+		return
+	}
+	require.NoError(t, err)
+	if tc.replacement != "" {
+		require.Equal(t, devicegw.DeviceID(tc.replacement), result.Device.ID)
+		require.NotEmpty(t, result.Device.ID)
+		require.NotNil(t, result.Handle)
+	} else {
+		require.Nil(t, result.Handle)
+	}
+}
+
+func (tc deviceLossCase) assertObservations(t *testing.T, before, after devicegw.DeviceRegistryObservations) {
+	t.Helper()
+	if tc.policy != devicegw.DeviceLossPolicyDefault {
+		require.Equal(t, before, after)
+		return
+	}
+	require.Equal(t, before.DefaultCalls+1, after.DefaultCalls)
+	if tc.wantErr == nil {
+		require.Equal(t, before.OpenCount+1, after.OpenCount)
+	} else {
+		require.Equal(t, before.OpenCount, after.OpenCount)
 	}
 }
 func newSelectionRegistry(t *testing.T) *fixtureRegistry {

@@ -50,110 +50,95 @@ func (g *DefaultGateway) Interact(ctx context.Context, req InteractionRequest) (
 			return
 		}
 
-		for _, result := range req.ToolResults {
-			result := result
-			if err := emitter.emit(ctx, InteractionEvent{
-				Type:        InteractionEventToolResultAccepted,
-				Correlation: InteractionCorrelation{ToolCallID: result.ToolCallID},
-				ToolResult:  &result,
-			}); err != nil {
-				emitter.emitTerminalForErr(err)
-				return
-			}
-		}
-
-		if err := validateStatelessRequest(g.Capabilities(), interactionInferenceRequest(req), capabilities.RequestedModeStateless); err != nil {
+		if err := g.interact(ctx, req, emitter); err != nil {
 			emitter.emitTerminalForErr(err)
 			return
 		}
-
-		providerReq := interactionProviderRequest(req)
-		resp, err := g.provider.Infer(ctx, providerReq)
-		if err != nil {
-			emitter.emitTerminalForErr(err)
+		if err := emitter.emitTerminal(ctx, InteractionEvent{Type: InteractionEventEnd}); err != nil {
+			// emit fails only when the caller cancelled before accepting END;
+			// that caller has stopped receiving, so END is intentionally dropped.
 			return
 		}
-
-		text := resp.Message.TextContent()
-		if text != "" {
-			if err := emitter.emit(ctx, InteractionEvent{
-				Type:      InteractionEventTextDelta,
-				TextDelta: &TextDeltaEvent{Content: text},
-			}); err != nil {
-				emitter.emitTerminalForErr(err)
-				return
-			}
-			emitter.markOutputEmitted()
-			if err := ctx.Err(); err != nil {
-				emitter.emitTerminalForErr(err)
-				return
-			}
-		}
-
-		toolCalls := normalizedInteractionToolCallsFromModel(resp.Message.ToolCalls)
-		if len(toolCalls) > 0 {
-			for _, call := range toolCalls {
-				call := call
-				if err := emitter.emit(ctx, InteractionEvent{
-					Type:        InteractionEventToolCallRequest,
-					Correlation: InteractionCorrelation{ToolCallID: call.ID},
-					ToolCall:    &call,
-				}); err != nil {
-					emitter.emitTerminalForErr(err)
-					return
-				}
-				if err := ctx.Err(); err != nil {
-					emitter.emitTerminalForErr(err)
-					return
-				}
-			}
-			if usage, ok := interactionUsageFromModel(resp.Usage); ok {
-				if err := emitter.emit(ctx, InteractionEvent{
-					Type:  InteractionEventUsage,
-					Usage: &usage,
-				}); err != nil {
-					emitter.emitTerminalForErr(err)
-					return
-				}
-				if err := ctx.Err(); err != nil {
-					emitter.emitTerminalForErr(err)
-					return
-				}
-			}
-			_ = emitter.emitTerminal(ctx, InteractionEvent{Type: InteractionEventEnd})
-			return
-		}
-
-		if err := emitter.emit(ctx, InteractionEvent{
-			Type:         InteractionEventFinalMessage,
-			FinalMessage: interactionMessageFromModel(resp.Message),
-		}); err != nil {
-			emitter.emitTerminalForErr(err)
-			return
-		}
-		if err := ctx.Err(); err != nil {
-			emitter.emitTerminalForErr(err)
-			return
-		}
-
-		if usage, ok := interactionUsageFromModel(resp.Usage); ok {
-			if err := emitter.emit(ctx, InteractionEvent{
-				Type:  InteractionEventUsage,
-				Usage: &usage,
-			}); err != nil {
-				emitter.emitTerminalForErr(err)
-				return
-			}
-			if err := ctx.Err(); err != nil {
-				emitter.emitTerminalForErr(err)
-				return
-			}
-		}
-
-		_ = emitter.emitTerminal(ctx, InteractionEvent{Type: InteractionEventEnd})
 	}()
 
 	return out, nil
+}
+
+// interact runs the provider call after the start event and tool-result
+// validation. A non-nil error must be reported through emitTerminalForErr; a
+// nil return means the caller emits the END terminal.
+func (g *DefaultGateway) interact(ctx context.Context, req InteractionRequest, emitter *interactionEventEmitter) error {
+	for _, result := range req.ToolResults {
+		result := result
+		if err := emitter.emit(ctx, InteractionEvent{
+			Type:        InteractionEventToolResultAccepted,
+			Correlation: InteractionCorrelation{ToolCallID: result.ToolCallID},
+			ToolResult:  &result,
+		}); err != nil {
+			return err
+		}
+	}
+	if err := validateStatelessRequest(g.Capabilities(), interactionInferenceRequest(req), capabilities.RequestedModeStateless); err != nil {
+		return err
+	}
+	resp, err := g.provider.Infer(ctx, interactionProviderRequest(req))
+	if err != nil {
+		return err
+	}
+	if err := emitter.emitText(ctx, resp.Message.TextContent()); err != nil {
+		return err
+	}
+	if toolCalls := normalizedInteractionToolCallsFromModel(resp.Message.ToolCalls); len(toolCalls) > 0 {
+		for _, call := range toolCalls {
+			call := call
+			if err := emitter.emitLive(ctx, InteractionEvent{
+				Type:        InteractionEventToolCallRequest,
+				Correlation: InteractionCorrelation{ToolCallID: call.ID},
+				ToolCall:    &call,
+			}); err != nil {
+				return err
+			}
+		}
+		return emitter.emitUsage(ctx, resp.Usage)
+	}
+	if err := emitter.emitLive(ctx, InteractionEvent{
+		Type:         InteractionEventFinalMessage,
+		FinalMessage: interactionMessageFromModel(resp.Message),
+	}); err != nil {
+		return err
+	}
+	return emitter.emitUsage(ctx, resp.Usage)
+}
+
+// emitText emits non-empty response text as one delta, marking output as
+// emitted before checking for cancellation.
+func (e *interactionEventEmitter) emitText(ctx context.Context, text string) error {
+	if text == "" {
+		return nil
+	}
+	if err := e.emit(ctx, InteractionEvent{Type: InteractionEventTextDelta, TextDelta: &TextDeltaEvent{Content: text}}); err != nil {
+		return err
+	}
+	e.markOutputEmitted()
+	return ctx.Err()
+}
+
+// emitLive emits event and then reports any cancellation observed after the
+// consumer accepted it.
+func (e *interactionEventEmitter) emitLive(ctx context.Context, event InteractionEvent) error {
+	if err := e.emit(ctx, event); err != nil {
+		return err
+	}
+	return ctx.Err()
+}
+
+// emitUsage emits the usage event when the provider reported any token usage.
+func (e *interactionEventEmitter) emitUsage(ctx context.Context, usage models.TokenUsage) error {
+	value, ok := interactionUsageFromModel(usage)
+	if !ok {
+		return nil
+	}
+	return e.emitLive(ctx, InteractionEvent{Type: InteractionEventUsage, Usage: &value})
 }
 
 type interactionEventEmitter struct {

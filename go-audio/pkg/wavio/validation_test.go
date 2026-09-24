@@ -39,116 +39,50 @@ func TestReadValidationErrors(t *testing.T) {
 		want      func(error) bool
 		fragments []string
 	}{
-		{
-			name:  "truncated header",
-			input: valid[:11],
-			want: func(err error) bool {
-				var typed *TruncatedError
-				return errors.As(err, &typed) && errors.Is(err, ErrTruncated)
-			},
-			fragments: []string{"RIFF header", "11", "12"},
-		},
-		{
-			name:  "truncated data chunk",
-			input: truncatedData,
-			want: func(err error) bool {
-				var typed *TruncatedError
-				return errors.As(err, &typed) && errors.Is(err, ErrTruncated)
-			},
-			fragments: []string{"data chunk", "5", "6"},
-		},
-		{
-			name:  "stereo input",
-			input: stereo,
-			want: func(err error) bool {
-				var typed *UnsupportedError
-				return errors.As(err, &typed) && errors.Is(err, ErrUnsupportedChannels)
-			},
-			fragments: []string{"channels", "2", "mono"},
-		},
-		{
-			name:  "8-bit input",
-			input: eightBit,
-			want: func(err error) bool {
-				var typed *UnsupportedError
-				return errors.As(err, &typed) && errors.Is(err, ErrUnsupportedBitDepth)
-			},
-			fragments: []string{"bit depth", "8", "16"},
-		},
-		{
-			name:  "44100 Hz input",
-			input: fortyFourOne,
-			want: func(err error) bool {
-				var typed *UnsupportedError
-				return errors.As(err, &typed) && errors.Is(err, ErrUnsupportedRate)
-			},
-			fragments: []string{"sample rate", "44100", "16000"},
-		},
-		{
-			name:  "zero-length data",
-			input: buildWAV(makeChunk("fmt ", pcmFormatPayload(Rate16kHz)), makeChunk("data", nil)),
-			want: func(err error) bool {
-				var typed *EmptyError
-				return errors.As(err, &typed) && errors.Is(err, ErrEmptyData)
-			},
-			fragments: []string{"data", "0", "read"},
-		},
-		{
-			name:  "malformed container",
-			input: badContainer,
-			want: func(err error) bool {
-				var typed *MalformedError
-				return errors.As(err, &typed) && errors.Is(err, ErrMalformed)
-			},
-			fragments: []string{"container", "RIFX", "RIFF"},
-		},
-		{
-			name:  "odd PCM data length",
-			input: oddData,
-			want: func(err error) bool {
-				var typed *MalformedError
-				return errors.As(err, &typed) && errors.Is(err, ErrMalformed)
-			},
-			fragments: []string{"data length", "1", "even"},
-		},
-		{
-			name:  "missing format chunk",
-			input: missingFormat,
-			want: func(err error) bool {
-				var typed *MalformedError
-				return errors.As(err, &typed) && errors.Is(err, ErrMalformed)
-			},
-			fragments: []string{"fmt chunk", "missing"},
-		},
-		{
-			name:  "incomplete chunk header inside RIFF",
-			input: shortChunkHeader,
-			want: func(err error) bool {
-				var typed *MalformedError
-				return errors.As(err, &typed) && errors.Is(err, ErrMalformed)
-			},
-			fragments: []string{"chunk header", "fewer than 8"},
-		},
+		{name: "truncated header", input: valid[:11], want: matchesTypedWAVError[*TruncatedError](ErrTruncated), fragments: []string{"RIFF header", "11", "12"}},
+		{name: "truncated data chunk", input: truncatedData, want: matchesTypedWAVError[*TruncatedError](ErrTruncated), fragments: []string{"data chunk", "5", "6"}},
+		{name: "stereo input", input: stereo, want: matchesTypedWAVError[*UnsupportedError](ErrUnsupportedChannels), fragments: []string{"channels", "2", "mono"}},
+		{name: "8-bit input", input: eightBit, want: matchesTypedWAVError[*UnsupportedError](ErrUnsupportedBitDepth), fragments: []string{"bit depth", "8", "16"}},
+		{name: "44100 Hz input", input: fortyFourOne, want: matchesTypedWAVError[*UnsupportedError](ErrUnsupportedRate), fragments: []string{"sample rate", "44100", "16000"}},
+		{name: "zero-length data", input: buildWAV(makeChunk("fmt ", pcmFormatPayload(Rate16kHz)), makeChunk(dataChunkID, nil)), want: matchesTypedWAVError[*EmptyError](ErrEmptyData), fragments: []string{dataChunkID, "0", "read"}},
+		{name: "malformed container", input: badContainer, want: matchesTypedWAVError[*MalformedError](ErrMalformed), fragments: []string{"container", "RIFX", "RIFF"}},
+		{name: "odd PCM data length", input: oddData, want: matchesTypedWAVError[*MalformedError](ErrMalformed), fragments: []string{"data length", "1", "even"}},
+		{name: "missing format chunk", input: missingFormat, want: matchesTypedWAVError[*MalformedError](ErrMalformed), fragments: []string{"fmt chunk", "missing"}},
+		{name: "incomplete chunk header inside RIFF", input: shortChunkHeader, want: matchesTypedWAVError[*MalformedError](ErrMalformed), fragments: []string{"chunk header", "fewer than 8"}},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			gotRate, gotSamples, err := Read(bytes.NewReader(test.input))
-			if err == nil {
-				t.Fatal("Read() error = nil, want validation error")
-			}
-			if gotRate != 0 || gotSamples != nil {
-				t.Fatalf("Read() failure returned rate %d samples %#v, want zero and nil", gotRate, gotSamples)
-			}
-			if !test.want(err) {
-				t.Fatalf("Read() error = %T %v, did not match expected typed error", err, err)
-			}
-			for _, fragment := range test.fragments {
-				if !strings.Contains(err.Error(), fragment) {
-					t.Errorf("Read() error %q does not contain %q", err, fragment)
-				}
-			}
+			assertReadValidationError(t, test.input, test.want, test.fragments)
 		})
+	}
+}
+
+// matchesTypedWAVError reports whether err carries both the typed error T and
+// the sentinel classification.
+func matchesTypedWAVError[T error](sentinel error) func(error) bool {
+	return func(err error) bool {
+		var typed T
+		return errors.As(err, &typed) && errors.Is(err, sentinel)
+	}
+}
+
+func assertReadValidationError(t *testing.T, input []byte, want func(error) bool, fragments []string) {
+	t.Helper()
+	gotRate, gotSamples, err := Read(bytes.NewReader(input))
+	if err == nil {
+		t.Fatal("Read() error = nil, want validation error")
+	}
+	if gotRate != 0 || gotSamples != nil {
+		t.Fatalf("Read() failure returned rate %d samples %#v, want zero and nil", gotRate, gotSamples)
+	}
+	if !want(err) {
+		t.Fatalf("Read() error = %T %v, did not match expected typed error", err, err)
+	}
+	for _, fragment := range fragments {
+		if !strings.Contains(err.Error(), fragment) {
+			t.Errorf("Read() error %q does not contain %q", err, fragment)
+		}
 	}
 }
 

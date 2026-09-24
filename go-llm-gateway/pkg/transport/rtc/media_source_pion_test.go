@@ -15,7 +15,7 @@ type visualContextKey struct{}
 func TestVisualLookPreservesCallerDeadlineIdentityWhenTrackNeverAttaches(t *testing.T) {
 	inbound := newPionInbound(nil, "go2rtc://fixture/api/ws?src=camera")
 	inbound.setVideoNegotiated(true)
-	defer inbound.Close()
+	defer requireClosed(t, "inbound", inbound)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
 	_, err := inbound.Look(ctx)
@@ -101,21 +101,21 @@ func TestPionInboundLookHandlesNilTrackStates(t *testing.T) {
 	if err != nil || observation.Source != "no-track" || observation.Status != VisualObservationUnavailable || observation.Reason != VisualObservationReasonNoVideoTrack {
 		t.Fatalf("nil-context no-track look = %#v, error = %v", observation, err)
 	}
-	noTrack.Close()
+	requireClosed(t, "noTrack", noTrack)
 
 	waiting := newPionInbound(nil, "waiting")
 	waiting.setVideoNegotiated(true)
 	waiting.mu.Lock()
-	waiting.videoMediaType = "video/H264"
+	waiting.videoMediaType = testVideoH264MimeType
 	waiting.mu.Unlock()
 	close(waiting.videoReady)
 	waiting.visuals <- pionVisualFrame{}
 	waiting.visuals <- pionVisualFrame{bytes: []byte{1, 2, 3}}
 	observation, err = waiting.Look(context.Background())
-	if err != nil || !observation.Available() || observation.Source != "waiting" || observation.MediaType != "video/H264" || !bytes.Equal(observation.Bytes, []byte{1, 2, 3}) {
+	if err != nil || !observation.Available() || observation.Source != "waiting" || observation.MediaType != testVideoH264MimeType || !bytes.Equal(observation.Bytes, []byte{1, 2, 3}) {
 		t.Fatalf("ready visual look = %#v, error = %v", observation, err)
 	}
-	waiting.Close()
+	requireClosed(t, "waiting", waiting)
 
 	canceled := newPionInbound(nil, "canceled")
 	canceled.setVideoNegotiated(true)
@@ -124,11 +124,11 @@ func TestPionInboundLookHandlesNilTrackStates(t *testing.T) {
 	if _, err := canceled.Look(canceledContext); !errors.Is(err, context.Canceled) {
 		t.Fatalf("canceled visual look error = %v", err)
 	}
-	canceled.Close()
+	requireClosed(t, "canceled", canceled)
 
 	closedBeforeAttach := newPionInbound(nil, "closed-before-attach")
 	closedBeforeAttach.setVideoNegotiated(true)
-	closedBeforeAttach.Close()
+	requireClosed(t, "closedBeforeAttach", closedBeforeAttach)
 	if observation, err := closedBeforeAttach.Look(context.Background()); err != nil || observation.Status != VisualObservationUnavailable || observation.Reason != VisualObservationReasonNoVideoTrack {
 		t.Fatalf("closed pre-attach visual look = %#v, error = %v", observation, err)
 	}
@@ -138,7 +138,7 @@ func TestPionInboundLookHandlesNilTrackStates(t *testing.T) {
 	closedAfterAttach.videoNegotiated = true
 	closedAfterAttach.videoSeen = true
 	closedAfterAttach.mu.Unlock()
-	closedAfterAttach.Close()
+	requireClosed(t, "closedAfterAttach", closedAfterAttach)
 	if observation, err := closedAfterAttach.Look(context.Background()); err != nil || observation.Status != VisualObservationUnavailable || observation.Reason != VisualObservationReasonNoVideoTrack {
 		t.Fatalf("closed attached visual look = %#v, error = %v", observation, err)
 	}
@@ -152,7 +152,7 @@ func TestPionInboundLookHandlesNilTrackStates(t *testing.T) {
 func TestPionInboundLookReturnsUnavailableAfterObservationTimeout(t *testing.T) {
 	inbound := newPionInbound(nil, "timeout")
 	inbound.setVideoNegotiated(true)
-	defer inbound.Close()
+	defer requireClosed(t, "inbound", inbound)
 	started := time.Now()
 	observation, err := inbound.Look(context.Background())
 	if err != nil || observation.Source != "timeout" || observation.Status != VisualObservationUnavailable || observation.Reason != VisualObservationReasonNoVideoTrack || len(observation.Bytes) != 0 {
@@ -172,5 +172,5 @@ func TestPionInboundAttachIgnoresNilAndDuplicateAudio(t *testing.T) {
 	inbound.audioSeen = true
 	inbound.mu.Unlock()
 	inbound.attach(&webrtc.TrackRemote{})
-	inbound.Close()
+	requireClosed(t, "inbound", inbound)
 }

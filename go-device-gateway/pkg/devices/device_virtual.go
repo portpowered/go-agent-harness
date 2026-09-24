@@ -86,6 +86,7 @@ func virtualID(ref string) (DeviceID, error) {
 	}
 	return NewDeviceID(VirtualBackendName, strings.TrimPrefix(ref, VirtualBackendName+":"))
 }
+func isNonFinite(value float64) bool { return math.IsNaN(value) || math.IsInf(value, 0) }
 func compatible(a, b []VirtualCapability) bool {
 	return slices.ContainsFunc(a, func(c VirtualCapability) bool { return slices.Contains(b, c) })
 }
@@ -196,10 +197,8 @@ func NewVirtualRegistry(c VirtualBackendConfig) (*VirtualRegistry, error) {
 			return nil, bad(output.ID, "loopback delay samples must not be negative")
 		}
 		impulse := append([]float64(nil), output.spec.LoopbackImpulse...)
-		for _, coefficient := range impulse {
-			if math.IsNaN(coefficient) || math.IsInf(coefficient, 0) {
-				return nil, bad(output.ID, "loopback impulse coefficients must be finite")
-			}
+		if slices.ContainsFunc(impulse, isNonFinite) {
+			return nil, bad(output.ID, "loopback impulse coefficients must be finite")
 		}
 		p := &virtualPair{changed: make(chan struct{}), coupling: virtualLoopbackCoupling{
 			delayLine: make([]int16, output.spec.LoopbackDelaySamples),

@@ -353,14 +353,14 @@ func (s MediaSource) Open(ctx context.Context) (*MediaStream, error) {
 		return nil, sourceError(SourceErrorMalformed, s.identity, nil)
 	}
 }
-func (s MediaSource) Probe(ctx context.Context) (MediaCapabilities, error) {
+func (s MediaSource) Probe(ctx context.Context) (_ MediaCapabilities, err error) {
 	ctx, cancel := boundedSourceContext(ctx)
 	defer cancel()
 	stream, err := s.Open(ctx)
 	if err != nil {
 		return MediaCapabilities{}, err
 	}
-	defer stream.Close()
+	defer func() { err = releaseTemporaryStream(stream, err) }()
 	frame, err := stream.ReadFrame(ctx)
 	if err != nil {
 		if ctx.Err() != nil {
@@ -378,12 +378,12 @@ func (s MediaSource) Probe(ctx context.Context) (MediaCapabilities, error) {
 // resource owned by the temporary stream before returning. An audio-only
 // source is represented by a successful unavailable result rather than a
 // source error.
-func (s MediaSource) Look(ctx context.Context) (VisualObservation, error) {
+func (s MediaSource) Look(ctx context.Context) (_ VisualObservation, err error) {
 	stream, err := s.Open(ctx)
 	if err != nil {
 		return VisualObservation{Source: s.identity}, err
 	}
-	defer stream.Close()
+	defer func() { err = releaseTemporaryStream(stream, err) }()
 	return stream.Look(ctx)
 }
 

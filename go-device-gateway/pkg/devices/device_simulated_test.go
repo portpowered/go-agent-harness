@@ -110,7 +110,7 @@ func TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum(t *testing.T) {
 			}
 			trace := r.Trace()
 			for i, event := range trace {
-				if i%2 == 0 && event.Tap != "render" {
+				if i%2 == 0 && event.Tap != duplexTapRender {
 					t.Fatalf("event ordering = %+v", trace)
 				}
 			}
@@ -153,7 +153,7 @@ func TestSimulatedDuplexClockJitterFaultsAndEpochsAreDeterministic(t *testing.T)
 	}
 	var renders []DeviceTraceEvent
 	for _, event := range r.Trace() {
-		if event.Tap == "render" {
+		if event.Tap == duplexTapRender {
 			renders = append(renders, event)
 		}
 	}
@@ -266,12 +266,10 @@ func TestDeviceFrameDuration16_24_48k(t *testing.T) {
 	}
 }
 
-func TestSimulatedDuplexRegistryAndStreamContracts(t *testing.T) {
-	s := simulatedScenario(16000, []int{480})
-	r, err := NewSimulatedDuplexRegistry(s)
-	if err != nil {
-		t.Fatal(err)
-	}
+// assertSimulatedRegistryContracts checks listing, directional defaults, and
+// typed open rejections before any stream is acquired.
+func assertSimulatedRegistryContracts(t *testing.T, r *SimulatedDuplexRegistry) {
+	t.Helper()
 	devices, err := r.List()
 	if err != nil || len(devices) != 2 {
 		t.Fatalf("List = %v/%v", devices, err)
@@ -290,6 +288,15 @@ func TestSimulatedDuplexRegistryAndStreamContracts(t *testing.T) {
 	if _, err := r.OpenWithFormat(r.output.ID, audio.PCM16DeviceFormat(24000)); !errors.Is(err, audio.ErrUnsupportedDeviceFormat) {
 		t.Fatalf("wrong format = %v", err)
 	}
+}
+
+func TestSimulatedDuplexRegistryAndStreamContracts(t *testing.T) {
+	s := simulatedScenario(16000, []int{480})
+	r, err := NewSimulatedDuplexRegistry(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertSimulatedRegistryContracts(t, r)
 	outRaw, _ := r.Open(r.output.ID)
 	inRaw, _ := r.Open(r.input.ID)
 	out := outRaw.(*SimulatedDuplexStream)

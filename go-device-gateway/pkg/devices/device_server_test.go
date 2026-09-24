@@ -107,11 +107,27 @@ func TestRemoteDeviceServerRoundTripUsesExplicitCallbackClock(t *testing.T) {
 	if err := sink.WaitForPlayback(context.Background()); err != nil {
 		t.Fatalf("wait for remote playback: %v", err)
 	}
+	assertRemoteRenderedSnapshot(t, endpoint, append(append([]int16(nil), want...), tail...))
+	opened, err := remote.Open(output.ID)
+	if err != nil {
+		t.Fatalf("open remote default-format device: %v", err)
+	}
+	if err := opened.Close(); err != nil {
+		t.Fatalf("close remote default-format device: %v", err)
+	}
+	if _, err := remote.Default(devicegw.Direction("sideways")); err == nil {
+		t.Fatal("invalid remote default direction succeeded")
+	}
+}
+
+// assertRemoteRenderedSnapshot checks that the device server rendered exactly
+// the written PCM prefix followed by callback-owned underflow silence.
+func assertRemoteRenderedSnapshot(t *testing.T, endpoint string, wantRendered []int16) {
+	t.Helper()
 	snapshot, err := devicegw.ReadRemoteDeviceServerSnapshot(context.Background(), endpoint)
 	if err != nil {
 		t.Fatalf("read remote snapshot: %v", err)
 	}
-	wantRendered := append(append([]int16(nil), want...), tail...)
 	if len(snapshot.RenderedSamples) != audio.FrameSize*2 || !reflect.DeepEqual(snapshot.RenderedSamples[:len(wantRendered)], wantRendered) {
 		t.Fatalf("rendered device PCM prefix differs from callback consumption: got_len=%d want_prefix_len=%d", len(snapshot.RenderedSamples), len(wantRendered))
 	}
@@ -122,16 +138,6 @@ func TestRemoteDeviceServerRoundTripUsesExplicitCallbackClock(t *testing.T) {
 	}
 	if snapshot.Playback.QueuedSamples != 0 || snapshot.Playback.DroppedSamples != 0 || snapshot.Playback.CallbackCount != 2 {
 		t.Fatalf("remote playback evidence = %+v", snapshot.Playback)
-	}
-	opened, err := remote.Open(output.ID)
-	if err != nil {
-		t.Fatalf("open remote default-format device: %v", err)
-	}
-	if err := opened.Close(); err != nil {
-		t.Fatalf("close remote default-format device: %v", err)
-	}
-	if _, err := remote.Default(devicegw.Direction("sideways")); err == nil {
-		t.Fatal("invalid remote default direction succeeded")
 	}
 }
 
@@ -266,7 +272,7 @@ func TestRemoteDeviceServerRejectsAmbiguousAndOversizedRequests(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer response.Body.Close()
+			defer closeResponseBodyForTest(t, response.Body)
 			if response.StatusCode != test.status {
 				t.Fatalf("status = %d, want %d", response.StatusCode, test.status)
 			}
@@ -304,7 +310,7 @@ func TestRemoteDeviceServerHTTPContractRejectsInvalidHandleOperations(t *testing
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer response.Body.Close()
+		defer closeResponseBodyForTest(t, response.Body)
 		if response.StatusCode != http.StatusOK {
 			data, _ := io.ReadAll(response.Body)
 			t.Fatalf("open %s status=%d body=%q", deviceID, response.StatusCode, data)
@@ -351,7 +357,7 @@ func TestRemoteDeviceServerHTTPContractRejectsInvalidHandleOperations(t *testing
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer response.Body.Close()
+			defer closeResponseBodyForTest(t, response.Body)
 			if response.StatusCode != test.status {
 				data, _ := io.ReadAll(response.Body)
 				t.Fatalf("status = %d, want %d; body=%q", response.StatusCode, test.status, data)
@@ -390,5 +396,14 @@ func TestRemoteDeviceHandleReportsServerSideClose(t *testing.T) {
 	}
 	if err := source.Close(); err == nil || !strings.Contains(err.Error(), "closed or unknown") {
 		t.Fatalf("client close after server-side close error = %v", err)
+	}
+}
+
+// closeResponseBodyForTest reports a response body close failure without
+// aborting the remaining deferred cleanup.
+func closeResponseBodyForTest(t *testing.T, body io.Closer) {
+	t.Helper()
+	if err := body.Close(); err != nil {
+		t.Errorf("close response body: %v", err)
 	}
 }

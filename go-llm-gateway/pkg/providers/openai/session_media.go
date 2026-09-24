@@ -128,7 +128,7 @@ func (s *realtimeSession) publishRTCMedia(ctx context.Context, event models.Sess
 		}
 	case models.SessionEventResponseOutputAudioDelta:
 		format := realtimeAudioMediaType(event.Data)
-		if format != "" && format != "audio/pcm" {
+		if format != "" && format != realtimePCMAudioFormat {
 			err = fmt.Errorf("OpenAI Realtime RTC audio format %q is not PCM16", format)
 			break
 		}
@@ -236,3 +236,32 @@ func (s *realtimeSession) enqueueWireEventWithMode(ctx context.Context, event mo
 	}
 	return outcome
 }
+
+func realtimeAudioBytes(data json.RawMessage) []byte {
+	encoded := firstStringField(data, "delta")
+	if encoded == "" {
+		return nil
+	}
+	decoded, err := codec.DecodeBase64(encoded)
+	if err != nil {
+		return nil
+	}
+	return decoded
+}
+
+func realtimeAudioMediaType(data json.RawMessage) string {
+	format := firstStringField(data, "format", "format.type", "audio_format", "response.audio.output.format.type", "response.output_audio_format")
+	switch format {
+	case "pcm16":
+		return realtimePCMAudioFormat
+	case "g711_ulaw":
+		return "audio/g711-ulaw"
+	case "g711_alaw":
+		return "audio/g711-alaw"
+	default:
+		return format
+	}
+}
+
+// realtimePCMAudioFormat is the realtime wire name for raw PCM16 audio.
+const realtimePCMAudioFormat = "audio/pcm"

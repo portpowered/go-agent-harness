@@ -36,3 +36,38 @@ func pcm16FeedbackContextError(ctx context.Context) error {
 		return nil
 	}
 }
+
+func (g *PCM16FeedbackGate) captureNeedsReanchorLocked() bool {
+	if !g.playbackSeen {
+		return true
+	}
+	leadBound := g.config.AnalysisWindow
+	if lag := g.config.CorrelationLagWindow.Min; lag < 0 && -lag > leadBound {
+		leadBound = -lag
+	}
+	if lag := g.config.CorrelationLagWindow.Max; lag > leadBound {
+		leadBound = lag
+	}
+	return g.capturePosition > addPCM16FeedbackDuration(g.playbackPosition, leadBound)
+}
+
+func (g *PCM16FeedbackGate) playbackIsRelevantLocked(captureStart time.Duration) bool {
+	if !g.playbackSeen {
+		return false
+	}
+	// Capture can be ahead of the sink by one bounded correlation lag. The
+	// acoustic tail then covers late speaker bleed after the last accepted
+	// playback frame.
+	horizon := g.suppressUntil
+	if horizon < g.playbackTailEndLocked() {
+		horizon = g.playbackTailEndLocked()
+	}
+	if maxLag := g.config.CorrelationLagWindow.Max; maxLag > 0 {
+		horizon += maxLag
+	}
+	return captureStart < horizon
+}
+
+func (g *PCM16FeedbackGate) playbackTailEndLocked() time.Duration {
+	return addPCM16FeedbackDuration(g.lastPlaybackEnd, g.config.PostPlaybackAcousticTail)
+}

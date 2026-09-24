@@ -113,3 +113,57 @@ func PumpBufferedCaptureWithBuffer(ctx context.Context, source *RTCDeviceSource,
 		}
 	}
 }
+
+// rtcCaptureUploader converts filtered device capture to the provider rate and
+// writes each non-empty converted frame to the outbound media, reporting the
+// uploaded samples to the optional observer after each successful write.
+type rtcCaptureUploader struct {
+	source    *RTCDeviceSource
+	processor *audio.Processor
+	outbound  audio.OutboundMedia
+	observer  RTCDeviceCaptureSamplesObserver
+}
+
+func (u rtcCaptureUploader) writeAll(ctx context.Context, batches [][]int16) error {
+	for _, samples := range batches {
+		if len(samples) == 0 {
+			continue
+		}
+		if err := u.write(ctx, samples, false); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (u rtcCaptureUploader) write(ctx context.Context, samples []int16, final bool) error {
+	frames, err := u.processor.ProcessAvailable(audio.PCMFrame{Samples: samples, EndOfResponse: final})
+	if err != nil {
+		return &RTCDeviceSourceError{DeviceID: u.source.id, Operation: "resample", Err: err}
+	}
+	for _, converted := range frames {
+		if len(converted.Samples) == 0 {
+			continue
+		}
+		if err := u.outbound.WriteFrame(ctx, converted); err != nil {
+			return &RTCDeviceSourceError{DeviceID: u.source.id, Operation: "write", Err: err}
+		}
+		if u.observer != nil {
+			u.observer(u.source.providerRate, converted.Samples)
+		}
+	}
+	return nil
+}
+
+// filteredCapture returns the capture batches to upload for one device frame:
+// an owned copy of the frame without a filter, otherwise the filter's output.
+func (s *RTCDeviceSource) filteredCapture(ctx context.Context, frame []int16) ([][]int16, error) {
+	if s.filter == nil {
+		return [][]int16{append([]int16(nil), frame...)}, nil
+	}
+	samples, err := s.filter.FilterCapture(ctx, frame)
+	if err != nil {
+		return nil, &RTCDeviceSourceError{DeviceID: s.id, Operation: "filter", Err: err}
+	}
+	return samples, nil
+}

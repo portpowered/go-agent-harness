@@ -18,7 +18,7 @@
       "package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok",
       "file": "pkg/providers/grok/events.go",
       "symbol": "translateInbound",
-      "value": 25,
+      "value": 22,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -37,17 +37,7 @@
       "module": "github.com/portpowered/go-agent-harness/go-llm-gateway",
       "package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok",
       "file": "pkg/providers/grok/events.go",
-      "value": 501,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "function-lines",
-      "module": "github.com/portpowered/go-agent-harness/go-llm-gateway",
-      "package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok",
-      "file": "pkg/providers/grok/events.go",
-      "symbol": "translateInbound",
-      "value": 150,
+      "value": 495,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -58,16 +48,6 @@
       "file": "pkg/providers/grok/events.go",
       "symbol": "translateOutbound",
       "value": 89,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "function-statements",
-      "module": "github.com/portpowered/go-agent-harness/go-llm-gateway",
-      "package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok",
-      "file": "pkg/providers/grok/events.go",
-      "symbol": "translateInbound",
-      "value": 52,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     }

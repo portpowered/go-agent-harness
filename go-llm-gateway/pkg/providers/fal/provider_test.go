@@ -78,21 +78,11 @@ func TestFalProvider_Infer_InvalidRequests(t *testing.T) {
 			wantField: "model",
 		},
 		{
-			name: "no user message",
-			req: providers.InferenceRequest{
-				Model:    ModelLTXAudioToVideo,
-				Messages: []models.Message{models.NewTextMessage(models.RoleAssistant, "ok")},
-			},
+			name:    "no user message",
+			req:     providers.InferenceRequest{Model: ModelLTXAudioToVideo, Messages: []models.Message{models.NewTextMessage(models.RoleAssistant, "ok")}},
 			wantErr: "no user message with audio or text found",
 		},
-		{
-			name: "empty messages",
-			req: providers.InferenceRequest{
-				Model:    ModelLTXAudioToVideo,
-				Messages: []models.Message{},
-			},
-			wantErr: "no user message with audio or text found",
-		},
+		{name: "empty messages", req: providers.InferenceRequest{Model: ModelLTXAudioToVideo, Messages: []models.Message{}}, wantErr: "no user message with audio or text found"},
 		{
 			name: "LTX with text only (no audio)",
 			req: providers.InferenceRequest{
@@ -123,25 +113,32 @@ func TestFalProvider_Infer_InvalidRequests(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := p.Infer(ctx, tt.req)
-			if err == nil {
-				t.Fatalf("Infer() expected error containing %q, got nil", tt.wantErr)
-			}
-			if !strings.Contains(err.Error(), tt.wantErr) {
-				t.Errorf("Infer() error = %v, want substring %q", err, tt.wantErr)
-			}
-			if tt.wantClass != nil && !errors.Is(err, tt.wantClass) {
-				t.Fatalf("Infer() error = %v, want class %v", err, tt.wantClass)
-			}
-			if tt.wantField != "" {
-				var validationErr *providers.ValidationError
-				if !errors.As(err, &validationErr) {
-					t.Fatalf("Infer() error = %T, want ValidationError", err)
-				}
-				if validationErr.Provider != "fal" || validationErr.Feature != tt.wantField {
-					t.Fatalf("ValidationError = %+v, want provider fal feature %q", validationErr, tt.wantField)
-				}
-			}
+			assertFalInvalidRequestError(t, err, tt.wantErr, tt.wantClass, tt.wantField)
 		})
+	}
+}
+
+// assertFalInvalidRequestError checks that err carries wantErr, wraps
+// wantClass when set, and is a fal ValidationError for wantField when set.
+func assertFalInvalidRequestError(t *testing.T, err error, wantErr string, wantClass error, wantField string) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("Infer() expected error containing %q, got nil", wantErr)
+	}
+	if !strings.Contains(err.Error(), wantErr) {
+		t.Errorf("Infer() error = %v, want substring %q", err, wantErr)
+	}
+	if wantClass != nil && !errors.Is(err, wantClass) {
+		t.Fatalf("Infer() error = %v, want class %v", err, wantClass)
+	}
+	if wantField != "" {
+		var validationErr *providers.ValidationError
+		if !errors.As(err, &validationErr) {
+			t.Fatalf("Infer() error = %T, want ValidationError", err)
+		}
+		if validationErr.Provider != "fal" || validationErr.Feature != wantField {
+			t.Fatalf("ValidationError = %+v, want provider fal feature %q", validationErr, wantField)
+		}
 	}
 }
 
@@ -177,7 +174,7 @@ func TestFalProvider_Infer_LTXAudioToVideo_ValidRequestAndResponse(t *testing.T)
 	if transport.lastReq.URL.Path != "/fal-ai/ltx-2-19b/audio-to-video" {
 		t.Errorf("request URL path = %q, want /fal-ai/ltx-2-19b/audio-to-video", transport.lastReq.URL.Path)
 	}
-	if auth := transport.lastReq.Header.Get("Authorization"); auth != "Key test-key" {
+	if auth := transport.lastReq.Header.Get("Authorization"); auth != falTestAuthorization {
 		t.Errorf("Authorization header = %q, want Key test-key", auth)
 	}
 	var body ltxAudioToVideoRequest
@@ -205,7 +202,7 @@ func TestFalProvider_Infer_LTXAudioToVideo_ValidRequestAndResponse(t *testing.T)
 	if vp.URL != "https://storage.example.com/out.mp4" {
 		t.Errorf("VideoPart.URL = %q, want https://storage.example.com/out.mp4", vp.URL)
 	}
-	if vp.MediaType != "video/mp4" {
+	if vp.MediaType != falTestVideoMediaType {
 		t.Errorf("VideoPart.MediaType = %q, want video/mp4", vp.MediaType)
 	}
 	if resp.Message.TextContent() != "https://storage.example.com/out.mp4" {
@@ -524,7 +521,7 @@ func TestFalProvider_Infer_GrokImagineVideo_ValidRequestAndResponse(t *testing.T
 	if transport.lastReq.URL.Path != "/xai/grok-imagine-video/image-to-video" {
 		t.Errorf("request URL path = %q, want /xai/grok-imagine-video/image-to-video", transport.lastReq.URL.Path)
 	}
-	if auth := transport.lastReq.Header.Get("Authorization"); auth != "Key test-key" {
+	if auth := transport.lastReq.Header.Get("Authorization"); auth != falTestAuthorization {
 		t.Errorf("Authorization header = %q, want Key test-key", auth)
 	}
 	var body grokImagineVideoRequest
@@ -552,7 +549,7 @@ func TestFalProvider_Infer_GrokImagineVideo_ValidRequestAndResponse(t *testing.T
 	if vp.URL != "https://storage.example.com/grok-out.mp4" {
 		t.Errorf("VideoPart.URL = %q, want https://storage.example.com/grok-out.mp4", vp.URL)
 	}
-	if vp.MediaType != "video/mp4" {
+	if vp.MediaType != falTestVideoMediaType {
 		t.Errorf("VideoPart.MediaType = %q, want video/mp4", vp.MediaType)
 	}
 	if resp.Message.TextContent() != "https://storage.example.com/grok-out.mp4" {
@@ -700,7 +697,7 @@ func TestFalProvider_Infer_KlingVideoV3_ValidRequestAndResponse(t *testing.T) {
 	if transport.lastReq.URL.Path != "/fal-ai/kling-video/v3/standard/image-to-video" {
 		t.Errorf("request URL path = %q, want /fal-ai/kling-video/v3/standard/image-to-video", transport.lastReq.URL.Path)
 	}
-	if auth := transport.lastReq.Header.Get("Authorization"); auth != "Key test-key" {
+	if auth := transport.lastReq.Header.Get("Authorization"); auth != falTestAuthorization {
 		t.Errorf("Authorization header = %q, want Key test-key", auth)
 	}
 	var body klingVideoV3Request
@@ -728,7 +725,7 @@ func TestFalProvider_Infer_KlingVideoV3_ValidRequestAndResponse(t *testing.T) {
 	if vp.URL != "https://storage.example.com/kling-out.mp4" {
 		t.Errorf("VideoPart.URL = %q, want https://storage.example.com/kling-out.mp4", vp.URL)
 	}
-	if vp.MediaType != "video/mp4" {
+	if vp.MediaType != falTestVideoMediaType {
 		t.Errorf("VideoPart.MediaType = %q, want video/mp4", vp.MediaType)
 	}
 	if resp.Message.TextContent() != "https://storage.example.com/kling-out.mp4" {
@@ -842,3 +839,6 @@ func TestFalProvider_Infer_KlingVideoV3_PromptOnlyNoImage(t *testing.T) {
 		t.Errorf("Infer() error = %v, want image_url is required", err)
 	}
 }
+
+// Fixture values: the test API key's Authorization header and the video media type.
+const falTestAuthorization, falTestVideoMediaType = "Key test-key", "video/mp4"

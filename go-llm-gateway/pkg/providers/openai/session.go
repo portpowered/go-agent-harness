@@ -4,7 +4,6 @@ import sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -170,17 +169,6 @@ func (s *realtimeSession) sendEvents(ctx context.Context, events []models.Sessio
 	return s.enqueueWireEvents(ctx, events)
 }
 
-func cloneSessionEvents(events []models.SessionEvent) []models.SessionEvent {
-	cloned := make([]models.SessionEvent, len(events))
-	for index, event := range events {
-		cloned[index] = event
-		if event.Data != nil {
-			cloned[index].Data = append(json.RawMessage(nil), event.Data...)
-		}
-	}
-	return cloned
-}
-
 func (s *realtimeSession) admitResponseIntent(ctx context.Context, events []models.SessionEvent, reservesResponse bool) messages.SessionSendOutcome {
 	select {
 	case <-ctx.Done():
@@ -195,93 +183,117 @@ func (s *realtimeSession) admitResponseIntent(ctx context.Context, events []mode
 	intent := responseIntent{events: events}
 	standalone := standaloneDefaultResponseIntent(intent)
 	hasFunctionCallOutput := responseIntentHasFunctionCallOutput(intent)
-	if standalone && s.suppressStandaloneResponseCreate && !s.toolResultAdmitted && !s.responseActive && !responseIntentHasAudioCommit(intent) {
+	hasAudioCommit := responseIntentHasAudioCommit(intent)
+	awaitingToolResult := standalone && s.suppressStandaloneResponseCreate && !s.toolResultAdmitted
+	if awaitingToolResult && !s.responseActive && !hasAudioCommit {
 		// A completed function-call response is followed by its tool result,
 		// whose combined intent owns the continuation request. A standalone
 		// response.create from the interrupted turn is stale after the
 		// function-call response has ended. Combined audio intents are handled
 		// below so their input_audio_buffer.commit is retained.
-		s.responseMu.Unlock()
-		s.responseWireMu.Unlock()
-		return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
+		return s.unlockResponseAdmission(messages.SessionSendSucceeded)
 	}
-	if standalone && s.suppressStandaloneResponseCreate && !s.toolResultAdmitted && responseIntentHasAudioCommit(intent) {
-		// The audio commit is real user input and can be delivered while the
-		// provider finishes the function-call response. Defer only its paired
-		// response.create until the function_call_output arrives; dispatching
-		// that request first would reserve a local response slot and strand the
-		// tool result behind it.
-		if len(s.pendingResponseIntents) >= maxPendingResponseIntents {
-			s.responseMu.Unlock()
-			s.responseWireMu.Unlock()
-			return messages.SessionSendOutcome{Status: messages.SessionSendBufferFull}
-		}
-		commitEvents := withoutDefaultResponseCreate(events)
-		responseEvents := responseCreateEvents(events)
-		s.responseMu.Unlock()
-		outcome := s.enqueueWireEvents(ctx, commitEvents)
-		if !outcome.OK() {
-			s.responseWireMu.Unlock()
-			return outcome
-		}
-		s.responseMu.Lock()
-		if len(responseEvents) > 0 {
-			s.pendingResponseIntents = append(s.pendingResponseIntents, responseIntent{
-				events: responseEvents, generation: s.responseGeneration, deferredAudioResponse: true,
-			})
-		}
-		s.responseMu.Unlock()
-		s.responseWireMu.Unlock()
-		s.signalResponseIntentWorker()
-		return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
+	if awaitingToolResult && hasAudioCommit {
+		return s.admitAudioCommitDeferringResponseLocked(ctx, events)
 	}
 	if len(s.pendingResponseIntents) >= maxPendingResponseIntents {
-		s.responseMu.Unlock()
-		s.responseWireMu.Unlock()
-		return messages.SessionSendOutcome{Status: messages.SessionSendBufferFull}
+		return s.unlockResponseAdmission(messages.SessionSendBufferFull)
 	}
 	intent = newResponseIntent(events, s.responseGeneration)
 	clearFunctionCallSuppression := standalone && s.suppressStandaloneResponseCreate && s.toolResultAdmitted
 	if s.responseActive || s.responseDispatching || len(s.pendingResponseIntents) > 0 {
-		if standalone && s.responseActive && s.responseHasFunctionCall && !s.toolResultAdmitted && !responseIntentHasAudioCommit(intent) {
+		if standalone && s.responseActive && s.responseHasFunctionCall && !s.toolResultAdmitted && !hasAudioCommit {
 			// The provider chose a function-call response for this turn. A
 			// standalone response.create that arrives afterward is stale; the
 			// tool result's combined item-plus-create intent is the continuation
 			// that must be admitted.
-			s.responseMu.Unlock()
-			s.responseWireMu.Unlock()
-			return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
+			return s.unlockResponseAdmission(messages.SessionSendSucceeded)
 		}
-		if hasFunctionCallOutput {
-			s.dropDeferredAudioResponseIntentsLocked()
-			// Tool results must precede any continuation request already queued
-			// for the same response. Keep existing tool results in arrival order,
-			// then place this result before user/audio response intents.
-			insertAt := len(s.pendingResponseIntents)
-			for index, pending := range s.pendingResponseIntents {
-				if !responseIntentHasFunctionCallOutput(pending) {
-					insertAt = index
-					break
-				}
-			}
-			s.pendingResponseIntents = append(s.pendingResponseIntents, responseIntent{})
-			copy(s.pendingResponseIntents[insertAt+1:], s.pendingResponseIntents[insertAt:])
-			s.pendingResponseIntents[insertAt] = intent
-		} else {
-			s.pendingResponseIntents = append(s.pendingResponseIntents, intent)
-		}
-		if hasFunctionCallOutput {
-			s.toolResultAdmitted = true
-		}
-		if clearFunctionCallSuppression {
-			s.suppressStandaloneResponseCreate = false
-			s.toolResultAdmitted = false
-		}
-		s.responseMu.Unlock()
-		s.responseWireMu.Unlock()
+		s.queueResponseIntentLocked(intent, hasFunctionCallOutput)
+		s.markToolResultAdmissionLocked(hasFunctionCallOutput, clearFunctionCallSuppression)
+		s.unlockResponseAdmission(messages.SessionSendSucceeded)
 		s.signalResponseIntentWorker()
 		return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
 	}
+	return s.dispatchResponseIntentNowLocked(ctx, events, reservesResponse, hasFunctionCallOutput, clearFunctionCallSuppression)
+}
+
+// unlockResponseAdmission releases responseMu then responseWireMu, both held
+// by the caller, and returns an outcome with status.
+func (s *realtimeSession) unlockResponseAdmission(status messages.SessionSendStatus) messages.SessionSendOutcome {
+	s.responseMu.Unlock()
+	s.responseWireMu.Unlock()
+	return messages.SessionSendOutcome{Status: status}
+}
+
+// admitAudioCommitDeferringResponseLocked delivers the audio commit while the
+// provider finishes the function-call response. The audio commit is real user
+// input; only its paired response.create is deferred until the
+// function_call_output arrives, because dispatching that request first would
+// reserve a local response slot and strand the tool result behind it. The
+// caller holds responseWireMu and responseMu; both are released on return.
+func (s *realtimeSession) admitAudioCommitDeferringResponseLocked(ctx context.Context, events []models.SessionEvent) messages.SessionSendOutcome {
+	if len(s.pendingResponseIntents) >= maxPendingResponseIntents {
+		return s.unlockResponseAdmission(messages.SessionSendBufferFull)
+	}
+	commitEvents := withoutDefaultResponseCreate(events)
+	responseEvents := responseCreateEvents(events)
+	s.responseMu.Unlock()
+	outcome := s.enqueueWireEvents(ctx, commitEvents)
+	if !outcome.OK() {
+		s.responseWireMu.Unlock()
+		return outcome
+	}
+	s.responseMu.Lock()
+	if len(responseEvents) > 0 {
+		s.pendingResponseIntents = append(s.pendingResponseIntents, responseIntent{
+			events: responseEvents, generation: s.responseGeneration, deferredAudioResponse: true,
+		})
+	}
+	s.unlockResponseAdmission(messages.SessionSendSucceeded)
+	s.signalResponseIntentWorker()
+	return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
+}
+
+// queueResponseIntentLocked queues intent behind the active response. Tool
+// results must precede any continuation request already queued for the same
+// response: existing tool results keep arrival order, then this result is
+// placed before user/audio response intents. Caller holds responseMu.
+func (s *realtimeSession) queueResponseIntentLocked(intent responseIntent, hasFunctionCallOutput bool) {
+	if !hasFunctionCallOutput {
+		s.pendingResponseIntents = append(s.pendingResponseIntents, intent)
+		return
+	}
+	s.dropDeferredAudioResponseIntentsLocked()
+	insertAt := len(s.pendingResponseIntents)
+	for index, pending := range s.pendingResponseIntents {
+		if !responseIntentHasFunctionCallOutput(pending) {
+			insertAt = index
+			break
+		}
+	}
+	s.pendingResponseIntents = append(s.pendingResponseIntents, responseIntent{})
+	copy(s.pendingResponseIntents[insertAt+1:], s.pendingResponseIntents[insertAt:])
+	s.pendingResponseIntents[insertAt] = intent
+}
+
+// markToolResultAdmissionLocked records an admitted tool result and clears
+// function-call suppression once its continuation is admitted. Caller holds
+// responseMu.
+func (s *realtimeSession) markToolResultAdmissionLocked(hasFunctionCallOutput, clearFunctionCallSuppression bool) {
+	if hasFunctionCallOutput {
+		s.toolResultAdmitted = true
+	}
+	if clearFunctionCallSuppression {
+		s.suppressStandaloneResponseCreate = false
+		s.toolResultAdmitted = false
+	}
+}
+
+// dispatchResponseIntentNowLocked writes an intent directly when no response
+// is active or queued. The caller holds responseWireMu and responseMu; both
+// are released on return.
+func (s *realtimeSession) dispatchResponseIntentNowLocked(ctx context.Context, events []models.SessionEvent, reservesResponse, hasFunctionCallOutput, clearFunctionCallSuppression bool) messages.SessionSendOutcome {
 	if reservesResponse {
 		s.responseActive = true
 	}
@@ -289,24 +301,15 @@ func (s *realtimeSession) admitResponseIntent(ctx context.Context, events []mode
 	s.responseMu.Unlock()
 
 	if reservesResponse {
-		for _, event := range events {
-			if event.Type == models.SessionEventResponseCreate && !realtimeResponseCreateIsOutOfBand(event) {
-				s.rememberResponseRequest(event)
-				break
-			}
+		if create, ok := firstReservingResponseCreate(events); ok {
+			s.rememberResponseRequest(create)
 		}
 	}
 	outcome := s.enqueueWireEvents(ctx, events)
 	s.responseMu.Lock()
 	s.responseDispatching = false
 	if outcome.OK() {
-		if hasFunctionCallOutput {
-			s.toolResultAdmitted = true
-		}
-		if clearFunctionCallSuppression {
-			s.suppressStandaloneResponseCreate = false
-			s.toolResultAdmitted = false
-		}
+		s.markToolResultAdmissionLocked(hasFunctionCallOutput, clearFunctionCallSuppression)
 	}
 	s.responseMu.Unlock()
 	s.responseWireMu.Unlock()
@@ -336,75 +339,73 @@ func (s *realtimeSession) responseIntentLoop() {
 }
 
 func (s *realtimeSession) dispatchPendingResponseIntents() {
-	for {
-		s.responseWireMu.Lock()
-		s.responseMu.Lock()
-		if s.responseActive || s.responseDispatching || len(s.pendingResponseIntents) == 0 {
-			s.responseMu.Unlock()
-			s.responseWireMu.Unlock()
-			return
-		}
-		intent, ok := s.popPendingResponseIntentLocked()
-		if !ok {
-			s.responseMu.Unlock()
-			s.responseWireMu.Unlock()
-			return
-		}
-		s.activeResponseIntent = &intent
-		if intent.generation != s.responseGeneration {
-			s.activeResponseIntent = nil
-			s.responseMu.Unlock()
-			s.responseWireMu.Unlock()
-			settleResponseIntent(intent, messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: context.Canceled})
-			continue
-		}
-		reservesResponse := false
-		for _, event := range intent.events {
-			if event.Type == models.SessionEventResponseCreate && !realtimeResponseCreateIsOutOfBand(event) {
-				reservesResponse = true
-				break
-			}
-		}
-		s.responseDispatching = true
-		if reservesResponse {
-			s.responseActive = true
-		}
-		s.responseMu.Unlock()
-
-		if reservesResponse {
-			for _, event := range intent.events {
-				if event.Type == models.SessionEventResponseCreate && !realtimeResponseCreateIsOutOfBand(event) {
-					s.rememberResponseRequest(event)
-					break
-				}
-			}
-		}
-		if s.responseDispatchBarrier != nil {
-			s.responseDispatchBarrier()
-		}
-		outcome := s.enqueueWireEvents(context.Background(), intent.events)
-		s.responseMu.Lock()
-		s.responseDispatching = false
-		s.activeResponseIntent = nil
-		s.responseMu.Unlock()
-		settleResponseIntent(intent, outcome)
-		if !outcome.OK() {
-			// A failed dispatch invalidates the remainder of this intent chain;
-			// continuing would create an ungrounded response or hide a lost tool
-			// result behind a later successful wire write.
-			if s.responseDispatchFailureBarrier != nil {
-				s.responseDispatchFailureBarrier()
-			}
-			s.invalidatePendingResponseIntents()
-			if reservesResponse {
-				s.releaseResponseAdmission()
-			}
-			s.responseWireMu.Unlock()
-			s.publishResponseIntentFailure(outcome)
-			continue
-		}
-		s.responseWireMu.Unlock()
+	for s.dispatchNextPendingResponseIntent() {
 	}
+}
+
+// dispatchNextPendingResponseIntent dispatches or settles one queued intent
+// and reports whether the dispatcher should look for another one.
+func (s *realtimeSession) dispatchNextPendingResponseIntent() bool {
+	s.responseWireMu.Lock()
+	s.responseMu.Lock()
+	if s.responseActive || s.responseDispatching || len(s.pendingResponseIntents) == 0 {
+		s.unlockResponseAdmission(messages.SessionSendSucceeded)
+		return false
+	}
+	intent, ok := s.popPendingResponseIntentLocked()
+	if !ok {
+		s.unlockResponseAdmission(messages.SessionSendSucceeded)
+		return false
+	}
+	s.activeResponseIntent = &intent
+	if intent.generation != s.responseGeneration {
+		s.activeResponseIntent = nil
+		s.unlockResponseAdmission(messages.SessionSendCancelled)
+		settleResponseIntent(intent, messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: context.Canceled})
+		return true
+	}
+	create, reservesResponse := firstReservingResponseCreate(intent.events)
+	s.responseDispatching = true
+	if reservesResponse {
+		s.responseActive = true
+	}
+	s.responseMu.Unlock()
+
+	if reservesResponse {
+		s.rememberResponseRequest(create)
+	}
+	if s.responseDispatchBarrier != nil {
+		s.responseDispatchBarrier()
+	}
+	outcome := s.enqueueWireEvents(context.Background(), intent.events)
+	s.responseMu.Lock()
+	s.responseDispatching = false
+	s.activeResponseIntent = nil
+	s.responseMu.Unlock()
+	settleResponseIntent(intent, outcome)
+	if !outcome.OK() {
+		s.failResponseIntentDispatch(outcome, reservesResponse)
+		return true
+	}
+	s.responseWireMu.Unlock()
+	return true
+}
+
+// failResponseIntentDispatch handles a failed dispatch while the caller holds
+// responseWireMu, which is released before the failure is published. A failed
+// dispatch invalidates the remainder of this intent chain; continuing would
+// create an ungrounded response or hide a lost tool result behind a later
+// successful wire write.
+func (s *realtimeSession) failResponseIntentDispatch(outcome messages.SessionSendOutcome, reservesResponse bool) {
+	if s.responseDispatchFailureBarrier != nil {
+		s.responseDispatchFailureBarrier()
+	}
+	s.invalidatePendingResponseIntents()
+	if reservesResponse {
+		s.releaseResponseAdmission()
+	}
+	s.responseWireMu.Unlock()
+	s.publishResponseIntentFailure(outcome)
 }
 
 func (s *realtimeSession) popPendingResponseIntentLocked() (responseIntent, bool) {
@@ -584,53 +585,6 @@ func standaloneDefaultResponseIntent(intent responseIntent) bool {
 		}
 	}
 	return hasResponseCreate
-}
-
-func withoutDefaultResponseCreate(events []models.SessionEvent) []models.SessionEvent {
-	kept := make([]models.SessionEvent, 0, len(events))
-	for _, event := range events {
-		if event.Type == models.SessionEventResponseCreate && !realtimeResponseCreateIsOutOfBand(event) {
-			continue
-		}
-		kept = append(kept, event)
-	}
-	return kept
-}
-
-func responseCreateEvents(events []models.SessionEvent) []models.SessionEvent {
-	kept := make([]models.SessionEvent, 0, 1)
-	for _, event := range events {
-		if event.Type == models.SessionEventResponseCreate && !realtimeResponseCreateIsOutOfBand(event) {
-			kept = append(kept, event)
-		}
-	}
-	return kept
-}
-
-func responseIntentHasAudioCommit(intent responseIntent) bool {
-	for _, event := range intent.events {
-		if event.Type == models.SessionEventInputAudioBufferCommit {
-			return true
-		}
-	}
-	return false
-}
-
-func responseIntentSettlement(intent responseIntent) chan messages.SessionSendOutcome {
-	if !responseIntentHasAudioCommit(intent) {
-		return nil
-	}
-	return make(chan messages.SessionSendOutcome, 1)
-}
-
-func settleResponseIntent(intent responseIntent, outcome messages.SessionSendOutcome) {
-	if intent.settled == nil {
-		return
-	}
-	select {
-	case intent.settled <- outcome:
-	default:
-	}
 }
 
 func (s *realtimeSession) observeResponseDone(event models.SessionEvent) {

@@ -15,7 +15,7 @@ func TestStreamWriterCheckpointAndExactTail(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	closeFileOnCleanup(t, f)
 	w, err := NewStreamWriter(f, Rate24kHz)
 	if err != nil {
 		t.Fatal(err)
@@ -81,7 +81,7 @@ func TestStreamWriterRetainsFirstFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	closeFileOnCleanup(t, f)
 	dst := &failingSeekWriter{file: f}
 	w, err := NewStreamWriter(dst, Rate16kHz)
 	if err != nil {

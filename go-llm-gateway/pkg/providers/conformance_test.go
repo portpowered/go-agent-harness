@@ -471,16 +471,7 @@ func TestS11OfflineSessionProviderContract(t *testing.T) {
 			if session == nil {
 				t.Fatal("ConnectSession() returned nil session")
 			}
-			dialCalls, writes, url, headers := probe.snapshot()
-			if dialCalls != 1 || writes == 0 {
-				t.Fatalf("session setup = dial calls %d, writes %d; want one dial and initial protocol write", dialCalls, writes)
-			}
-			if !strings.Contains(headers["Authorization"], "Bearer "+conformanceSecret) {
-				t.Fatalf("authorization header = %q, want injected bearer token", headers["Authorization"])
-			}
-			if !strings.Contains(url, "s2s-conformance.invalid") {
-				t.Fatalf("dial URL = %q, want deterministic offline endpoint", url)
-			}
+			assertOfflineSessionDial(t, probe)
 			if session.Receive() == nil || session.Done() == nil {
 				t.Fatal("session did not expose receive buffer and done channel")
 			}
@@ -491,18 +482,42 @@ func TestS11OfflineSessionProviderContract(t *testing.T) {
 			if !outcome.OK() {
 				t.Fatalf("SendSessionWithOutcome() = %+v, want success", outcome)
 			}
-			if err := session.Close(); err != nil {
-				t.Fatalf("Close() error = %v", err)
-			}
-			if err := session.Close(); err != nil {
-				t.Fatalf("second Close() error = %v", err)
-			}
-			select {
-			case <-session.Done():
-			case <-time.After(time.Second):
-				t.Fatal("session Done channel did not close")
-			}
+			assertSessionClosesIdempotently(t, session)
 		})
+	}
+}
+
+// assertOfflineSessionDial checks that session setup dialed the deterministic
+// offline endpoint exactly once with the injected bearer token and wrote the
+// initial protocol frame.
+func assertOfflineSessionDial(t *testing.T, probe *sessionProbe) {
+	t.Helper()
+	dialCalls, writes, url, headers := probe.snapshot()
+	if dialCalls != 1 || writes == 0 {
+		t.Fatalf("session setup = dial calls %d, writes %d; want one dial and initial protocol write", dialCalls, writes)
+	}
+	if !strings.Contains(headers["Authorization"], "Bearer "+conformanceSecret) {
+		t.Fatalf("authorization header = %q, want injected bearer token", headers["Authorization"])
+	}
+	if !strings.Contains(url, "s2s-conformance.invalid") {
+		t.Fatalf("dial URL = %q, want deterministic offline endpoint", url)
+	}
+}
+
+// assertSessionClosesIdempotently closes session twice without error and waits
+// for its Done channel.
+func assertSessionClosesIdempotently(t *testing.T, session messages.Session) {
+	t.Helper()
+	if err := session.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	if err := session.Close(); err != nil {
+		t.Fatalf("second Close() error = %v", err)
+	}
+	select {
+	case <-session.Done():
+	case <-time.After(time.Second):
+		t.Fatal("session Done channel did not close")
 	}
 }
 

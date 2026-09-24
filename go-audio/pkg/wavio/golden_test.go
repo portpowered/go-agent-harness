@@ -41,12 +41,7 @@ func TestGoldenFixtures(t *testing.T) {
 
 			path := filepath.Join("testdata", test.filename)
 			if *updateGoldens {
-				if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-					t.Fatalf("MkdirAll() error = %v", err)
-				}
-				if err := os.WriteFile(path, encoded.Bytes(), 0o644); err != nil {
-					t.Fatalf("WriteFile() error = %v", err)
-				}
+				writeGoldenFixture(t, path, encoded.Bytes())
 			}
 
 			want, err := os.ReadFile(path)
@@ -73,6 +68,17 @@ func TestGoldenFixtures(t *testing.T) {
 				t.Fatalf("re-encoded golden bytes differ from %s", path)
 			}
 		})
+	}
+}
+
+// writeGoldenFixture rewrites one golden WAV fixture when -update is set.
+func writeGoldenFixture(t *testing.T, path string, data []byte) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
 	}
 }
 

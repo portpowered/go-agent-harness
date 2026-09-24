@@ -116,7 +116,7 @@ func TestGatewayCapabilitiesUsesProviderReporterWithoutInference(t *testing.T) {
 	t.Parallel()
 
 	provider := &capabilityProvider{
-		name: "fake-provider",
+		name: capabilityTestProviderName,
 		caps: ProviderCapabilities{
 			Provider: "",
 			Stateless: capabilities.StatelessCapabilities{
@@ -135,7 +135,7 @@ func TestGatewayCapabilitiesUsesProviderReporterWithoutInference(t *testing.T) {
 
 	got := gw.Capabilities()
 
-	if got.Provider != "fake-provider" {
+	if got.Provider != capabilityTestProviderName {
 		t.Fatalf("Provider = %q, want fake-provider", got.Provider)
 	}
 	if got.Stateless.Tools.State != CapabilityStateSupported {
@@ -221,12 +221,42 @@ func TestSessionGatewayCapabilitiesUsesProviderReporterWithoutConnecting(t *test
 func TestSessionGatewayRejectsUnsupportedSessionFeaturesBeforeProviderConnect(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name    string
-		caps    capabilities.SessionCapabilities
-		config  models.SessionConfig
-		feature Feature
-	}{
+	for _, tt := range unsupportedSessionFeatureCases() {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			provider := &capabilitySessionProvider{
+				name: "session-validation-provider",
+				caps: ProviderCapabilities{
+					Provider: "session-validation-provider",
+					Session:  tt.caps,
+				},
+			}
+			gw, err := NewSessionGateway(WithSessionProvider(provider))
+			if err != nil {
+				t.Fatalf("NewSessionGateway: %v", err)
+			}
+
+			_, err = gw.ConnectSession(context.Background(), tt.config)
+
+			assertUnsupportedFeatureError(t, err, "session-validation-provider", tt.feature, capabilities.RequestedModeSession)
+			if provider.connectCalls != 0 {
+				t.Fatalf("validation connected session provider %d times", provider.connectCalls)
+			}
+		})
+	}
+}
+
+type unsupportedSessionFeatureCase struct {
+	name    string
+	caps    capabilities.SessionCapabilities
+	config  models.SessionConfig
+	feature Feature
+}
+
+func unsupportedSessionFeatureCases() []unsupportedSessionFeatureCase {
+	return []unsupportedSessionFeatureCase{
 		{
 			name: "sessions",
 			caps: capabilities.SessionCapabilities{
@@ -315,46 +345,27 @@ func TestSessionGatewayRejectsUnsupportedSessionFeaturesBeforeProviderConnect(t 
 			feature: FeatureProviderSpecificConfig,
 		},
 	}
+}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			provider := &capabilitySessionProvider{
-				name: "session-validation-provider",
-				caps: ProviderCapabilities{
-					Provider: "session-validation-provider",
-					Session:  tt.caps,
-				},
-			}
-			gw, err := NewSessionGateway(WithSessionProvider(provider))
-			if err != nil {
-				t.Fatalf("NewSessionGateway: %v", err)
-			}
-
-			_, err = gw.ConnectSession(context.Background(), tt.config)
-
-			var unsupported *UnsupportedFeatureError
-			if !errors.As(err, &unsupported) {
-				t.Fatalf("error = %v, want UnsupportedFeatureError", err)
-			}
-			if unsupported.Provider != "session-validation-provider" {
-				t.Fatalf("provider = %q, want session-validation-provider", unsupported.Provider)
-			}
-			if unsupported.Feature != tt.feature {
-				t.Fatalf("feature = %q, want %q", unsupported.Feature, tt.feature)
-			}
-			if unsupported.RequestedMode != capabilities.RequestedModeSession {
-				t.Fatalf("mode = %q, want %q", unsupported.RequestedMode, capabilities.RequestedModeSession)
-			}
-			if unsupported.Capability.State != CapabilityStateUnsupported {
-				t.Fatalf("capability state = %q, want unsupported", unsupported.Capability.State)
-			}
-			if provider.connectCalls != 0 {
-				t.Fatalf("validation connected session provider %d times", provider.connectCalls)
-			}
-		})
+// assertUnsupportedFeatureError checks that err is an UnsupportedFeatureError
+// for provider, feature, and mode backed by an unsupported capability.
+func assertUnsupportedFeatureError(t *testing.T, err error, provider string, feature Feature, mode string) {
+	t.Helper()
+	var unsupported *UnsupportedFeatureError
+	if !errors.As(err, &unsupported) {
+		t.Fatalf("error = %v, want UnsupportedFeatureError", err)
+	}
+	if unsupported.Provider != provider {
+		t.Fatalf("provider = %q, want %s", unsupported.Provider, provider)
+	}
+	if unsupported.Feature != feature {
+		t.Fatalf("feature = %q, want %q", unsupported.Feature, feature)
+	}
+	if unsupported.RequestedMode != mode {
+		t.Fatalf("mode = %q, want %q", unsupported.RequestedMode, mode)
+	}
+	if unsupported.Capability.State != CapabilityStateUnsupported {
+		t.Fatalf("capability state = %q, want unsupported", unsupported.Capability.State)
 	}
 }
 
@@ -461,126 +472,7 @@ func TestSessionGatewayAllowsUnknownCapabilitiesWithoutClaimingSupport(t *testin
 func TestGatewayRejectsUnsupportedStatelessFeaturesBeforeProviderCall(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name    string
-		caps    capabilities.StatelessCapabilities
-		req     InferenceRequest
-		stream  bool
-		feature Feature
-		mode    string
-	}{
-		{
-			name: "tools",
-			caps: capabilities.StatelessCapabilities{
-				Tools: capabilities.Unsupported("tools unavailable"),
-			},
-			req: InferenceRequest{
-				Tools: []models.ToolDefinition{{Name: "lookup"}},
-			},
-			feature: FeatureTools,
-			mode:    capabilities.RequestedModeStateless,
-		},
-		{
-			name: "streaming",
-			caps: capabilities.StatelessCapabilities{
-				Streaming: capabilities.Unsupported("stream API unavailable"),
-			},
-			stream:  true,
-			feature: FeatureStreaming,
-			mode:    capabilities.RequestedModeStatelessStream,
-		},
-		{
-			name: "image input",
-			caps: capabilities.StatelessCapabilities{
-				ImageInput: capabilities.Unsupported("image input unavailable"),
-			},
-			req: InferenceRequest{
-				Messages: []models.Message{{
-					Role:         models.RoleUser,
-					ContentParts: []models.ContentPart{models.ImagePart{URL: "https://example.com/image.png"}},
-				}},
-			},
-			feature: FeatureImageInput,
-			mode:    capabilities.RequestedModeStateless,
-		},
-		{
-			name: "audio input",
-			caps: capabilities.StatelessCapabilities{
-				AudioInput: capabilities.Unsupported("audio input unavailable"),
-			},
-			req: InferenceRequest{
-				Messages: []models.Message{{
-					Role:         models.RoleUser,
-					ContentParts: []models.ContentPart{models.AudioPart{URL: "https://example.com/audio.mp3"}},
-				}},
-			},
-			feature: FeatureAudioInput,
-			mode:    capabilities.RequestedModeStateless,
-		},
-		{
-			name: "audio output in history",
-			caps: capabilities.StatelessCapabilities{
-				AudioOutput: capabilities.Unsupported("audio output unavailable"),
-			},
-			req: InferenceRequest{
-				Messages: []models.Message{{
-					Role:         models.RoleAssistant,
-					ContentParts: []models.ContentPart{models.AudioPart{Bytes: []byte("wav"), MediaType: "audio/wav"}},
-				}},
-			},
-			feature: FeatureAudioOutput,
-			mode:    capabilities.RequestedModeStateless,
-		},
-		{
-			name: "video output in history",
-			caps: capabilities.StatelessCapabilities{
-				VideoOutput: capabilities.Unsupported("video output unavailable"),
-			},
-			req: InferenceRequest{
-				Messages: []models.Message{{
-					Role:         models.RoleAssistant,
-					ContentParts: []models.ContentPart{models.VideoPart{URL: "https://example.com/video.mp4"}},
-				}},
-			},
-			feature: FeatureVideoOutput,
-			mode:    capabilities.RequestedModeStateless,
-		},
-		{
-			name: "reasoning",
-			caps: capabilities.StatelessCapabilities{
-				Reasoning: capabilities.Unsupported("reasoning unavailable"),
-			},
-			req: InferenceRequest{
-				Thinking: &providers.ThinkingConfig{Mode: providers.ThinkingEnabled, BudgetTokens: 4096},
-			},
-			feature: FeatureReasoning,
-			mode:    capabilities.RequestedModeStateless,
-		},
-		{
-			name: "prompt caching",
-			caps: capabilities.StatelessCapabilities{
-				PromptCaching: capabilities.Unsupported("prompt caching unavailable"),
-			},
-			req: InferenceRequest{
-				CacheControl: &providers.CacheControlConfig{CacheRetentionPolicy: providers.CacheRetentionInMemory},
-			},
-			feature: FeaturePromptCaching,
-			mode:    capabilities.RequestedModeStateless,
-		},
-		{
-			name: "provider config",
-			caps: capabilities.StatelessCapabilities{
-				ProviderSpecificConfig: capabilities.Unsupported("raw config unavailable"),
-			},
-			req: InferenceRequest{
-				Config: json.RawMessage(`{"duration":"5s"}`),
-			},
-			feature: FeatureProviderSpecificConfig,
-			mode:    capabilities.RequestedModeStateless,
-		},
-	}
-
-	for _, tt := range tests {
+	for _, tt := range unsupportedStatelessFeatureCases() {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
@@ -603,26 +495,116 @@ func TestGatewayRejectsUnsupportedStatelessFeaturesBeforeProviderCall(t *testing
 				_, err = gw.Infer(context.Background(), tt.req)
 			}
 
-			var unsupported *UnsupportedFeatureError
-			if !errors.As(err, &unsupported) {
-				t.Fatalf("error = %v, want UnsupportedFeatureError", err)
-			}
-			if unsupported.Provider != "validation-provider" {
-				t.Fatalf("provider = %q, want validation-provider", unsupported.Provider)
-			}
-			if unsupported.Feature != tt.feature {
-				t.Fatalf("feature = %q, want %q", unsupported.Feature, tt.feature)
-			}
-			if unsupported.RequestedMode != tt.mode {
-				t.Fatalf("mode = %q, want %q", unsupported.RequestedMode, tt.mode)
-			}
-			if unsupported.Capability.State != CapabilityStateUnsupported {
-				t.Fatalf("capability state = %q, want unsupported", unsupported.Capability.State)
-			}
+			assertUnsupportedFeatureError(t, err, "validation-provider", tt.feature, tt.mode)
 			if provider.inferCalls != 0 || provider.streamCalls != 0 {
 				t.Fatalf("validation called provider execution: infer=%d stream=%d", provider.inferCalls, provider.streamCalls)
 			}
 		})
+	}
+}
+
+type unsupportedStatelessFeatureCase struct {
+	name    string
+	caps    capabilities.StatelessCapabilities
+	req     InferenceRequest
+	stream  bool
+	feature Feature
+	mode    string
+}
+
+func unsupportedStatelessFeatureCases() []unsupportedStatelessFeatureCase {
+	return []unsupportedStatelessFeatureCase{
+		{
+			name: "tools",
+			caps: capabilities.StatelessCapabilities{Tools: capabilities.Unsupported("tools unavailable")},
+			req: InferenceRequest{
+				Tools: []models.ToolDefinition{{Name: "lookup"}},
+			},
+			feature: FeatureTools,
+			mode:    capabilities.RequestedModeStateless,
+		},
+		{
+			name:    "streaming",
+			caps:    capabilities.StatelessCapabilities{Streaming: capabilities.Unsupported("stream API unavailable")},
+			stream:  true,
+			feature: FeatureStreaming,
+			mode:    capabilities.RequestedModeStatelessStream,
+		},
+		{
+			name: "image input",
+			caps: capabilities.StatelessCapabilities{ImageInput: capabilities.Unsupported("image input unavailable")},
+			req: InferenceRequest{
+				Messages: []models.Message{{
+					Role:         models.RoleUser,
+					ContentParts: []models.ContentPart{models.ImagePart{URL: "https://example.com/image.png"}},
+				}},
+			},
+			feature: FeatureImageInput,
+			mode:    capabilities.RequestedModeStateless,
+		},
+		{
+			name: "audio input",
+			caps: capabilities.StatelessCapabilities{AudioInput: capabilities.Unsupported("audio input unavailable")},
+			req: InferenceRequest{
+				Messages: []models.Message{{
+					Role:         models.RoleUser,
+					ContentParts: []models.ContentPart{models.AudioPart{URL: "https://example.com/audio.mp3"}},
+				}},
+			},
+			feature: FeatureAudioInput,
+			mode:    capabilities.RequestedModeStateless,
+		},
+		{
+			name: "audio output in history",
+			caps: capabilities.StatelessCapabilities{AudioOutput: capabilities.Unsupported("audio output unavailable")},
+			req: InferenceRequest{
+				Messages: []models.Message{{
+					Role:         models.RoleAssistant,
+					ContentParts: []models.ContentPart{models.AudioPart{Bytes: []byte("wav"), MediaType: "audio/wav"}},
+				}},
+			},
+			feature: FeatureAudioOutput,
+			mode:    capabilities.RequestedModeStateless,
+		},
+		{
+			name: "video output in history",
+			caps: capabilities.StatelessCapabilities{VideoOutput: capabilities.Unsupported("video output unavailable")},
+			req: InferenceRequest{
+				Messages: []models.Message{{
+					Role:         models.RoleAssistant,
+					ContentParts: []models.ContentPart{models.VideoPart{URL: "https://example.com/video.mp4"}},
+				}},
+			},
+			feature: FeatureVideoOutput,
+			mode:    capabilities.RequestedModeStateless,
+		},
+		{
+			name: "reasoning",
+			caps: capabilities.StatelessCapabilities{Reasoning: capabilities.Unsupported("reasoning unavailable")},
+			req: InferenceRequest{
+				Thinking: &providers.ThinkingConfig{Mode: providers.ThinkingEnabled, BudgetTokens: 4096},
+			},
+			feature: FeatureReasoning,
+			mode:    capabilities.RequestedModeStateless,
+		},
+		{
+			name: "prompt caching",
+			caps: capabilities.StatelessCapabilities{PromptCaching: capabilities.Unsupported("prompt caching unavailable")},
+			req: InferenceRequest{
+				CacheControl: &providers.CacheControlConfig{CacheRetentionPolicy: providers.CacheRetentionInMemory},
+			},
+			feature: FeaturePromptCaching,
+			mode:    capabilities.RequestedModeStateless,
+		},
+		{
+			name: "provider config",
+			caps: capabilities.StatelessCapabilities{ProviderSpecificConfig: capabilities.Unsupported("raw config unavailable")},
+			req: InferenceRequest{
+				Config: json.RawMessage(`{"duration":"5s"}`),
+			},
+			feature: FeatureProviderSpecificConfig,
+			mode:    capabilities.RequestedModeStateless,
+		},
 	}
 }
 
@@ -720,3 +702,6 @@ func TestGatewayAllowsUnknownCapabilitiesWithoutClaimingSupport(t *testing.T) {
 		t.Fatalf("unknown streaming capability must not report support")
 	}
 }
+
+// capabilityTestProviderName is the provider name the capability fixtures report.
+const capabilityTestProviderName = "fake-provider"

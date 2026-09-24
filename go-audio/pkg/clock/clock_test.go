@@ -424,26 +424,8 @@ func FuzzS7DeterministicMapping(f *testing.F) {
 		clock := NewDeterministic(base, duration)
 		modelTick := uint64(0)
 		for index, value := range sequence {
-			target := uint64(value) + uint64(index)
 			var returnedTick uint64
-			switch value % 3 {
-			case 0:
-				if modelTick < math.MaxUint64 {
-					modelTick++
-				}
-				returnedTick = clock.Advance()
-			case 1:
-				if target > modelTick {
-					modelTick = target
-				}
-				returnedTick = clock.AdvanceTo(target)
-			case 2:
-				target /= 2
-				if target > modelTick {
-					modelTick = target
-				}
-				returnedTick = clock.AdvanceTo(target)
-			}
+			returnedTick, modelTick = applyS7Step(clock, modelTick, index, value)
 
 			if returnedTick != modelTick {
 				t.Fatalf("step %d: returned tick got %d, want %d", index, returnedTick, modelTick)
@@ -460,6 +442,57 @@ func FuzzS7DeterministicMapping(f *testing.F) {
 			}
 		}
 	})
+}
+
+// s7OperationCount is the number of clock operations the S7 fuzz sequence
+// selects between: Advance, AdvanceTo(target), and AdvanceTo(target/2).
+const s7OperationCount = 3
+
+// applyS7Step applies one fuzzed operation to clock and to the reference model,
+// returning the clock's reported tick and the model's expected tick.
+func applyS7Step(clock *Deterministic, modelTick uint64, index int, value byte) (uint64, uint64) {
+	target := uint64(value) + uint64(index)
+	var returnedTick uint64
+	switch value % s7OperationCount {
+	case 0:
+		if modelTick < math.MaxUint64 {
+			modelTick++
+		}
+		returnedTick = clock.Advance()
+	case 1:
+		if target > modelTick {
+			modelTick = target
+		}
+		returnedTick = clock.AdvanceTo(target)
+	case 2:
+		target /= 2
+		if target > modelTick {
+			modelTick = target
+		}
+		returnedTick = clock.AdvanceTo(target)
+	}
+	return returnedTick, modelTick
+}
+
+// observeS8MonotonicLattice reads clock repeatedly and returns a description
+// of the first monotonicity or tick-lattice violation, or "" when none occurs.
+func observeS8MonotonicLattice(clock *Deterministic, base time.Time, tickDuration time.Duration, iterations int) string {
+	var previous time.Time
+	for i := 0; i < iterations; i++ {
+		observed := clock.Now()
+		if i > 0 && observed.Before(previous) {
+			return "reader observed time moving backward"
+		}
+		previous = observed
+		if observed.Before(base) {
+			return "reader observed time before base"
+		}
+		delta := observed.Sub(base)
+		if delta%tickDuration != 0 {
+			return "reader observed a timestamp off the tick lattice"
+		}
+	}
+	return ""
 }
 
 func TestS8ConcurrentReadersAndAdvancers(t *testing.T) {
@@ -482,23 +515,8 @@ func TestS8ConcurrentReadersAndAdvancers(t *testing.T) {
 		go func() {
 			defer readers.Done()
 			<-start
-			var previous time.Time
-			for i := 0; i < iterations; i++ {
-				observed := clock.Now()
-				if i > 0 && observed.Before(previous) {
-					readerErrors <- "reader observed time moving backward"
-					return
-				}
-				previous = observed
-				if observed.Before(base) {
-					readerErrors <- "reader observed time before base"
-					return
-				}
-				delta := observed.Sub(base)
-				if delta%tickDuration != 0 {
-					readerErrors <- "reader observed a timestamp off the tick lattice"
-					return
-				}
+			if message := observeS8MonotonicLattice(clock, base, tickDuration, iterations); message != "" {
+				readerErrors <- message
 			}
 		}()
 	}

@@ -152,9 +152,7 @@ func TestInteractionEventsJSONRoundTrip(t *testing.T) {
 			Provider:      "test-provider",
 			Model:         "test-model",
 			CreatedAt:     &now,
-			Metadata: map[string]json.RawMessage{
-				"finished": json.RawMessage(`true`),
-			},
+			Metadata:      map[string]json.RawMessage{"finished": json.RawMessage(`true`)},
 		},
 	}
 

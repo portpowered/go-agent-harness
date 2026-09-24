@@ -275,29 +275,35 @@ func TestModels_S11JSONTags(t *testing.T) {
 			typ := reflect.TypeOf(testCase.value)
 			value := reflect.ValueOf(testCase.value)
 			for fieldIndex := 0; fieldIndex < typ.NumField(); fieldIndex++ {
-				field := typ.Field(fieldIndex)
-				tag := field.Tag.Get("json")
-				if tag == "" || tag == "-" {
-					continue
-				}
-				key := strings.Split(tag, ",")[0]
-				if key == "" {
-					key = field.Name
-				}
-				got, ok := object[key]
-				if !ok {
-					t.Errorf("field %s must be present under declared JSON key %q in %s", field.Name, key, encoded)
-					continue
-				}
-				want, err := json.Marshal(value.Field(fieldIndex).Interface())
-				if err != nil {
-					t.Fatalf("marshal field %s: %v", field.Name, err)
-				}
-				if !bytes.Equal(got, want) {
-					t.Errorf("field %s under JSON key %q: want %s, got %s", field.Name, key, want, got)
-				}
+				assertModelFieldJSON(t, encoded, object, typ.Field(fieldIndex), value.Field(fieldIndex))
 			}
 		})
+	}
+}
+
+// assertModelFieldJSON checks that a json-tagged struct field is encoded under
+// its declared key with the same bytes as marshaling the field on its own.
+func assertModelFieldJSON(t *testing.T, encoded []byte, object map[string]json.RawMessage, field reflect.StructField, fieldValue reflect.Value) {
+	t.Helper()
+	tag := field.Tag.Get("json")
+	if tag == "" || tag == "-" {
+		return
+	}
+	key := strings.Split(tag, ",")[0]
+	if key == "" {
+		key = field.Name
+	}
+	got, ok := object[key]
+	if !ok {
+		t.Errorf("field %s must be present under declared JSON key %q in %s", field.Name, key, encoded)
+		return
+	}
+	want, err := json.Marshal(fieldValue.Interface())
+	if err != nil {
+		t.Fatalf("marshal field %s: %v", field.Name, err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Errorf("field %s under JSON key %q: want %s, got %s", field.Name, key, want, got)
 	}
 }
 

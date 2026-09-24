@@ -62,7 +62,7 @@ func parseWireFrames(t *testing.T, payloads [][]byte) []wireFrame {
 func findFunctionCallOutput(frames []wireFrame) []int {
 	idx := make([]int, 0, 1)
 	for i, frame := range frames {
-		if frame.Type == "conversation.item.create" && frame.Item["type"] == "function_call_output" {
+		if frame.Type == conversationItemCreateType && frame.Item["type"] == realtimeFunctionCallOutputType {
 			idx = append(idx, i)
 		}
 	}
@@ -121,34 +121,9 @@ func TestComposed_LoopDeliversToolResultOnOpenAIRealtimeWire(t *testing.T) {
 		continuationResponseID = "resp_composed_continuation"
 	)
 
-	conn := newMockWebSocketConn()
-	dialer := &mockWebSocketDialer{conn: conn}
-	provider := New(
-		WithAPIKey("test-key"),
-		WithRealtimeBaseURL("wss://mock.openai.test/v1/realtime"),
-		WithWebSocketDialer(dialer),
-	)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	session, err := provider.ConnectSession(ctx, models.SessionConfig{Model: "gpt-realtime"})
-	if err != nil {
-		t.Fatalf("ConnectSession: %v", err)
-	}
-	defer func() { _ = session.Close() }()
-
-	al, err := agentloop.New(
-		agentloop.WithMode(engine.DuplexSession),
-		agentloop.WithSessionInferencer(composedSessionInferencer{session: session.(*realtimeSession)}),
-		agentloop.WithToolExecutor(composedToolExecutor{responses: map[string]messages.ToolCallResponse{
-			callID: {ToolCallID: callID, Name: toolName, Content: toolOut},
-		}}),
-		agentloop.WithTools([]messages.ToolDefinition{{Name: toolName, Description: "weather lookup"}}),
-	)
-	if err != nil {
-		t.Fatalf("agentloop.New: %v", err)
-	}
+	conn, session, al, ctx := startComposedToolLoop(t, map[string]messages.ToolCallResponse{
+		callID: {ToolCallID: callID, Name: toolName, Content: toolOut},
+	}, []messages.ToolDefinition{{Name: toolName, Description: "weather lookup"}})
 
 	go func() { _ = al.Run(ctx) }()
 
@@ -202,17 +177,14 @@ func TestComposed_LoopDeliversToolResultOnOpenAIRealtimeWire(t *testing.T) {
 	frames = waitForFrameCount(t, conn, 6, deadline)
 
 	// Full deterministic client-to-server event sequence.
-	gotTypes := make([]string, 0, len(frames))
-	for _, frame := range frames {
-		gotTypes = append(gotTypes, frame.Type)
-	}
+	gotTypes := wireFrameTypes(frames)
 	wantTypes := []string{
 		"session.update",
 		"input_audio_buffer.append",
-		"conversation.item.create", // function_call_output
-		"response.create",          // grounded continuation after tool result
-		"conversation.item.create", // user text turn
-		"response.create",
+		conversationItemCreateType, // function_call_output
+		wireResponseCreate,         // grounded continuation after tool result
+		conversationItemCreateType, // user text turn
+		wireResponseCreate,
 	}
 	if !slices.Equal(gotTypes, wantTypes) {
 		t.Fatalf("client event sequence = %v, want %v", gotTypes, wantTypes)
@@ -224,30 +196,11 @@ func TestComposed_LoopDeliversToolResultOnOpenAIRealtimeWire(t *testing.T) {
 	}
 
 	// The user-text item keeps its byte-compatible shape.
-	textItem := frames[4].Item
-	if got, _ := textItem["type"].(string); got != "message" {
-		t.Errorf("text turn item.type = %q, want message", got)
-	}
-	if got, _ := textItem["role"].(string); got != "user" {
-		t.Errorf("text turn item.role = %q, want user", got)
-	}
-	content, ok := textItem["content"].([]any)
-	if !ok || len(content) != 1 {
-		t.Fatalf("text turn item.content = %#v, want one part", textItem["content"])
-	}
-	part, _ := content[0].(map[string]any)
-	if part["type"] != "input_text" || part["text"] != userReply {
-		t.Errorf("text turn content part = %#v, want input_text %q", part, userReply)
-	}
+	assertComposedUserTextItem(t, frames[4].Item, userReply)
 
 	// The tool result and the later plain-text turn each own exactly one
 	// response.create boundary.
-	responseCreates := 0
-	for _, frame := range frames {
-		if frame.Type == "response.create" {
-			responseCreates++
-		}
-	}
+	responseCreates := countResponseCreateFrames(frames)
 	if responseCreates != 2 {
 		t.Fatalf("response.create count = %d, want exactly 2 (tool continuation and plain-text turn)", responseCreates)
 	}
@@ -263,31 +216,9 @@ func TestComposed_LoopDeliversTimeoutToolErrorOnceBeforeContinuation(t *testing.
 		timeoutOut = `tool "lookup_weather" failed (classification=interactive_tool_timeout): tool execution timed out after 20s`
 	)
 
-	conn := newMockWebSocketConn()
-	provider := New(
-		WithAPIKey("test-key"),
-		WithRealtimeBaseURL("wss://mock.openai.test/v1/realtime"),
-		WithWebSocketDialer(&mockWebSocketDialer{conn: conn}),
-	)
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	session, err := provider.ConnectSession(ctx, models.SessionConfig{Model: "gpt-realtime"})
-	if err != nil {
-		t.Fatalf("ConnectSession: %v", err)
-	}
-	defer func() { _ = session.Close() }()
-
-	al, err := agentloop.New(
-		agentloop.WithMode(engine.DuplexSession),
-		agentloop.WithSessionInferencer(composedSessionInferencer{session: session.(*realtimeSession)}),
-		agentloop.WithToolExecutor(composedToolExecutor{responses: map[string]messages.ToolCallResponse{
-			callID: {ToolCallID: callID, Name: toolName, Content: timeoutOut},
-		}}),
-		agentloop.WithTools([]messages.ToolDefinition{{Name: toolName, Description: "weather lookup"}}),
-	)
-	if err != nil {
-		t.Fatalf("agentloop.New: %v", err)
-	}
+	conn, _, al, ctx := startComposedToolLoop(t, map[string]messages.ToolCallResponse{
+		callID: {ToolCallID: callID, Name: toolName, Content: timeoutOut},
+	}, []messages.ToolDefinition{{Name: toolName, Description: "weather lookup"}})
 	go func() { _ = al.Run(ctx) }()
 	if err := al.SendAudioInput(ctx, []byte{1, 2, 3, 4}); err != nil {
 		t.Fatalf("SendAudioInput: %v", err)
@@ -310,7 +241,7 @@ func TestComposed_LoopDeliversTimeoutToolErrorOnceBeforeContinuation(t *testing.
 		t.Fatalf("observed %d timeout function_call_output frames, want exactly one", len(outputs))
 	}
 	outputIndex := outputs[0]
-	if outputIndex+1 >= len(frames) || frames[outputIndex+1].Type != "response.create" {
+	if outputIndex+1 >= len(frames) || frames[outputIndex+1].Type != wireResponseCreate {
 		t.Fatalf("timeout output index = %d in wire sequence %#v, want response.create immediately after it", outputIndex, frames)
 	}
 	item := frames[outputIndex].Item
@@ -339,12 +270,7 @@ func TestComposed_LoopDeliversTimeoutToolErrorOnceBeforeContinuation(t *testing.
 	if got := len(findFunctionCallOutput(frames)); got != 1 {
 		t.Fatalf("duplicate timeout provider event produced %d function_call_output frames, want one", got)
 	}
-	responseCreates := 0
-	for _, frame := range frames {
-		if frame.Type == "response.create" {
-			responseCreates++
-		}
-	}
+	responseCreates := countResponseCreateFrames(frames)
 	if responseCreates != 1 {
 		t.Fatalf("duplicate timeout provider event produced %d response.create frames, want one", responseCreates)
 	}
@@ -387,38 +313,13 @@ func TestComposed_LoopDeliversMixedToolBatchExactlyOnceOnOpenAIRealtimeWire(t *t
 	)
 	imageBytes := []byte("committed image bytes")
 
-	conn := newMockWebSocketConn()
-	dialer := &mockWebSocketDialer{conn: conn}
-	provider := New(
-		WithAPIKey("test-key"),
-		WithRealtimeBaseURL("wss://mock.openai.test/v1/realtime"),
-		WithWebSocketDialer(dialer),
-	)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	session, err := provider.ConnectSession(ctx, models.SessionConfig{Model: "gpt-realtime"})
-	if err != nil {
-		t.Fatalf("ConnectSession: %v", err)
-	}
-	defer func() { _ = session.Close() }()
-
-	al, err := agentloop.New(
-		agentloop.WithMode(engine.DuplexSession),
-		agentloop.WithSessionInferencer(composedSessionInferencer{session: session.(*realtimeSession)}),
-		agentloop.WithToolExecutor(composedToolExecutor{responses: map[string]messages.ToolCallResponse{
-			textCallID:  {ToolCallID: textCallID, Content: textOutput},
-			imageCallID: {ToolCallID: imageCallID, ContentParts: []messages.ContentPart{messages.ImagePart{Bytes: imageBytes, MediaType: "image/png"}}},
-		}}),
-		agentloop.WithTools([]messages.ToolDefinition{
-			{Name: textTool, Description: "text lookup"},
-			{Name: imageTool, Description: "image lookup"},
-		}),
-	)
-	if err != nil {
-		t.Fatalf("agentloop.New: %v", err)
-	}
+	conn, _, al, ctx := startComposedToolLoop(t, map[string]messages.ToolCallResponse{
+		textCallID:  {ToolCallID: textCallID, Content: textOutput},
+		imageCallID: {ToolCallID: imageCallID, ContentParts: []messages.ContentPart{messages.ImagePart{Bytes: imageBytes, MediaType: "image/png"}}},
+	}, []messages.ToolDefinition{
+		{Name: textTool, Description: "text lookup"},
+		{Name: imageTool, Description: "image lookup"},
+	})
 
 	go func() { _ = al.Run(ctx) }()
 	if err := al.SendAudioInput(ctx, []byte{1, 2, 3, 4}); err != nil {
@@ -448,15 +349,12 @@ func TestComposed_LoopDeliversMixedToolBatchExactlyOnceOnOpenAIRealtimeWire(t *t
 	wantTypes := []string{
 		"session.update",
 		"input_audio_buffer.append",
-		"conversation.item.create", // text function_call_output
-		"conversation.item.create", // image function_call_output
-		"conversation.item.create", // image input message
-		"response.create",
+		conversationItemCreateType, // text function_call_output
+		conversationItemCreateType, // image function_call_output
+		conversationItemCreateType, // image input message
+		wireResponseCreate,
 	}
-	gotTypes := make([]string, 0, len(frames))
-	for _, frame := range frames {
-		gotTypes = append(gotTypes, frame.Type)
-	}
+	gotTypes := wireFrameTypes(frames)
 	if len(gotTypes) != len(wantTypes) {
 		t.Fatalf("client event sequence = %v, want %v", gotTypes, wantTypes)
 	}
@@ -466,35 +364,8 @@ func TestComposed_LoopDeliversMixedToolBatchExactlyOnceOnOpenAIRealtimeWire(t *t
 		}
 	}
 
-	outputs := map[string]string{}
-	imageItems := 0
-	for _, frame := range frames {
-		if frame.Type != "conversation.item.create" {
-			continue
-		}
-		switch frame.Item["type"] {
-		case "function_call_output":
-			callID, _ := frame.Item["call_id"].(string)
-			output, _ := frame.Item["output"].(string)
-			outputs[callID] = output
-		case "message":
-			content, ok := frame.Item["content"].([]any)
-			if !ok {
-				continue
-			}
-			for _, rawPart := range content {
-				part, _ := rawPart.(map[string]any)
-				if part["type"] != "input_image" {
-					continue
-				}
-				imageItems++
-				wantURL := "data:image/png;base64," + base64.StdEncoding.EncodeToString(imageBytes)
-				if got, _ := part["image_url"].(string); got != wantURL {
-					t.Fatalf("image URL = %q, want original image bytes", got)
-				}
-			}
-		}
-	}
+	wantURL := "data:image/png;base64," + base64.StdEncoding.EncodeToString(imageBytes)
+	outputs, imageItems := collectComposedToolBatchItems(t, frames, wantURL)
 	if len(outputs) != 2 {
 		t.Fatalf("function_call_output call IDs = %#v, want one result for each call", outputs)
 	}
@@ -507,13 +378,129 @@ func TestComposed_LoopDeliversMixedToolBatchExactlyOnceOnOpenAIRealtimeWire(t *t
 	if imageItems != 1 {
 		t.Fatalf("image input items = %d, want exactly 1", imageItems)
 	}
-	responseCreates := 0
-	for _, frame := range frames {
-		if frame.Type == "response.create" {
-			responseCreates++
-		}
-	}
+	responseCreates := countResponseCreateFrames(frames)
 	if responseCreates != 1 {
 		t.Fatalf("response.create count = %d, want exactly 1 for the mixed batch", responseCreates)
 	}
+}
+
+// startComposedToolLoop connects a realtime session over a mock websocket and
+// builds a DuplexSession agent loop that executes the scripted tool responses.
+// The session is closed, then the context cancelled, when the test ends.
+func startComposedToolLoop(t *testing.T, responses map[string]messages.ToolCallResponse, tools []messages.ToolDefinition) (*mockWebSocketConn, messages.Session, *agentloop.AgentLoop, context.Context) {
+	t.Helper()
+	conn := newMockWebSocketConn()
+	provider := newMockRealtimeProvider(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), composedLoopTimeout)
+	t.Cleanup(cancel)
+	session, err := provider.ConnectSession(ctx, models.SessionConfig{Model: "gpt-realtime"})
+	if err != nil {
+		t.Fatalf("ConnectSession: %v", err)
+	}
+	t.Cleanup(func() { closeRealtimeTestSession(t, session) })
+	realtime, ok := session.(*realtimeSession)
+	if !ok {
+		t.Fatalf("session type = %T, want *realtimeSession", session)
+	}
+	al, err := agentloop.New(
+		agentloop.WithMode(engine.DuplexSession),
+		agentloop.WithSessionInferencer(composedSessionInferencer{session: realtime}),
+		agentloop.WithToolExecutor(composedToolExecutor{responses: responses}),
+		agentloop.WithTools(tools),
+	)
+	if err != nil {
+		t.Fatalf("agentloop.New: %v", err)
+	}
+	return conn, session, al, ctx
+}
+
+// wireItemTypeMessage is the conversation item type of user messages.
+const wireItemTypeMessage = "message"
+
+// composedLoopTimeout bounds one composed agent-loop and provider run.
+const composedLoopTimeout = 15 * time.Second
+
+func wireFrameTypes(frames []wireFrame) []string {
+	types := make([]string, 0, len(frames))
+	for _, frame := range frames {
+		types = append(types, frame.Type)
+	}
+	return types
+}
+
+func countResponseCreateFrames(frames []wireFrame) int {
+	responseCreates := 0
+	for _, frame := range frames {
+		if frame.Type == wireResponseCreate {
+			responseCreates++
+		}
+	}
+	return responseCreates
+}
+
+// wireItemString returns item[key] when it is a string and "" otherwise.
+func wireItemString(item map[string]any, key string) string {
+	value, ok := item[key].(string)
+	if !ok {
+		return ""
+	}
+	return value
+}
+
+func assertComposedUserTextItem(t *testing.T, textItem map[string]any, userReply string) {
+	t.Helper()
+	if got := wireItemString(textItem, "type"); got != wireItemTypeMessage {
+		t.Errorf("text turn item.type = %q, want message", got)
+	}
+	if got := wireItemString(textItem, "role"); got != string(messages.RoleUser) {
+		t.Errorf("text turn item.role = %q, want user", got)
+	}
+	content, ok := textItem["content"].([]any)
+	if !ok || len(content) != 1 {
+		t.Fatalf("text turn item.content = %#v, want one part", textItem["content"])
+	}
+	part, isMap := content[0].(map[string]any)
+	if !isMap || part["type"] != "input_text" || part["text"] != userReply {
+		t.Errorf("text turn content part = %#v, want input_text %q", content[0], userReply)
+	}
+}
+
+// collectComposedToolBatchItems returns function_call_output results by call
+// ID and counts input_image parts, requiring each image to carry wantURL.
+func collectComposedToolBatchItems(t *testing.T, frames []wireFrame, wantURL string) (map[string]string, int) {
+	t.Helper()
+	outputs := map[string]string{}
+	imageItems := 0
+	for _, frame := range frames {
+		if frame.Type != conversationItemCreateType {
+			continue
+		}
+		switch frame.Item["type"] {
+		case realtimeFunctionCallOutputType:
+			outputs[wireItemString(frame.Item, "call_id")] = wireItemString(frame.Item, "output")
+		case wireItemTypeMessage:
+			imageItems += countComposedImageParts(t, frame.Item, wantURL)
+		}
+	}
+	return outputs, imageItems
+}
+
+func countComposedImageParts(t *testing.T, item map[string]any, wantURL string) int {
+	t.Helper()
+	content, ok := item["content"].([]any)
+	if !ok {
+		return 0
+	}
+	imageItems := 0
+	for _, rawPart := range content {
+		part, isMap := rawPart.(map[string]any)
+		if !isMap || part["type"] != realtimeImageTypedProjection {
+			continue
+		}
+		imageItems++
+		if got := wireItemString(part, realtimeImageURLField); got != wantURL {
+			t.Fatalf("image URL = %q, want original image bytes", got)
+		}
+	}
+	return imageItems
 }

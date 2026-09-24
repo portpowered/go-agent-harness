@@ -25,48 +25,14 @@ import (
 // session.update) and one server-to-client message (session.created translated into
 // SESSION.CREATED) through the resulting transport.Conn, and closes cleanly.
 func TestTransportSeam_DefaultDialerRoundTripsOverLocalWebSocket(t *testing.T) {
-	upgrader := websocket.Upgrader{}
-	serverReceived := make(chan string, 1)
-	serverDone := make(chan struct{})
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer close(serverDone)
-		conn, err := upgrader.Upgrade(w, r, nil)
-		if err != nil {
-			t.Errorf("upgrade websocket: %v", err)
-			return
-		}
-		defer conn.Close()
-
-		// Client-to-server: ConnectSession's initial session.update.
-		messageType, data, err := conn.ReadMessage()
-		if err != nil {
-			t.Errorf("server read client message: %v", err)
-			return
-		}
-		serverReceived <- string(data)
-
-		// Server-to-client: session.created, which grok must translate into
-		// SESSION.OPEN / SESSION.CREATED StreamMessages.
-		if err := conn.WriteMessage(messageType, []byte(`{"type":"session.created","session_id":"seam-1","model":"grok-seam"}`)); err != nil {
-			t.Errorf("server write session.created: %v", err)
-			return
-		}
-
-		// Drain until the client closes the connection.
-		for {
-			if _, _, err := conn.ReadMessage(); err != nil {
-				return
-			}
-		}
-	}))
+	srv, serverReceived, serverDone := startSeamWebSocketServer(t)
 	defer srv.Close()
 	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
 
 	// Assignment compatibility of grok's constructor result with the shared
-	// transport.Dialer interface is exercised right here: this compiles only if
-	// NewDefaultWebSocketDialer satisfies the provider-neutral contract.
-	var d transport.Dialer = grok.NewDefaultWebSocketDialer()
+	// transport.Dialer interface is exercised right here: this conversion compiles
+	// only if NewDefaultWebSocketDialer satisfies the provider-neutral contract.
+	d := transport.Dialer(grok.NewDefaultWebSocketDialer())
 
 	provider := grok.New(
 		grok.WithAPIKey("seam-key"),
@@ -99,9 +65,74 @@ func TestTransportSeam_DefaultDialerRoundTripsOverLocalWebSocket(t *testing.T) {
 	}
 
 	// Observe the server-to-client message through the session's inbound buffer.
-	recv := session.Receive()
+	awaitSeamSessionCreated(ctx, t, session.Receive())
+
+	// Close cleanly: no error from Close, and the server handler observes the
+	// connection terminate (no leaked connection or handler goroutine).
+	if err := session.Close(); err != nil {
+		t.Fatalf("session close: %v", err)
+	}
+	select {
+	case <-serverDone:
+	case <-ctx.Done():
+		t.Fatalf("timed out waiting for server-side connection teardown: %v", ctx.Err())
+	}
+}
+
+// startSeamWebSocketServer starts a local WebSocket server that records the first
+// client message, answers with session.created, and drains until the client
+// closes. serverDone closes once the handler has fully torn down its connection.
+func startSeamWebSocketServer(t *testing.T) (*httptest.Server, <-chan string, <-chan struct{}) {
+	t.Helper()
+	upgrader := websocket.Upgrader{}
+	serverReceived := make(chan string, 1)
+	serverDone := make(chan struct{})
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer close(serverDone)
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			t.Errorf("upgrade websocket: %v", err)
+			return
+		}
+		defer func() {
+			if err := conn.Close(); err != nil {
+				t.Errorf("server close websocket: %v", err)
+			}
+		}()
+
+		// Client-to-server: ConnectSession's initial session.update.
+		messageType, data, err := conn.ReadMessage()
+		if err != nil {
+			t.Errorf("server read client message: %v", err)
+			return
+		}
+		serverReceived <- string(data)
+
+		// Server-to-client: session.created, which grok must translate into
+		// SESSION.OPEN / SESSION.CREATED StreamMessages.
+		if err := conn.WriteMessage(messageType, []byte(`{"type":"session.created","session_id":"seam-1","model":"grok-seam"}`)); err != nil {
+			t.Errorf("server write session.created: %v", err)
+			return
+		}
+
+		// Drain until the client closes the connection.
+		for {
+			if _, _, err := conn.ReadMessage(); err != nil {
+				return
+			}
+		}
+	}))
+	return srv, serverReceived, serverDone
+}
+
+// awaitSeamSessionCreated reads the session's inbound buffer until both
+// SESSION.OPEN and SESSION.CREATED have been observed, asserting the created
+// payload carries the server-provided identity.
+func awaitSeamSessionCreated(ctx context.Context, t *testing.T, recv *messages.TypedBuffer[messages.StreamMessage]) {
+	t.Helper()
 	sawOpen, sawCreated := false, false
-	for !(sawOpen && sawCreated) {
+	for !sawOpen || !sawCreated {
 		msg, ok := recv.ReadBlockingContext(ctx)
 		if !ok {
 			t.Fatal("session ended before SESSION.CREATED was delivered")
@@ -119,16 +150,5 @@ func TestTransportSeam_DefaultDialerRoundTripsOverLocalWebSocket(t *testing.T) {
 				t.Errorf("SESSION.CREATED = {session_id:%q model:%q}, want {seam-1 grok-seam}", value.SessionID, value.Model)
 			}
 		}
-	}
-
-	// Close cleanly: no error from Close, and the server handler observes the
-	// connection terminate (no leaked connection or handler goroutine).
-	if err := session.Close(); err != nil {
-		t.Fatalf("session close: %v", err)
-	}
-	select {
-	case <-serverDone:
-	case <-ctx.Done():
-		t.Fatalf("timed out waiting for server-side connection teardown: %v", ctx.Err())
 	}
 }

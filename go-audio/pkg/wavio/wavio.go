@@ -20,6 +20,14 @@ const (
 	pcm16BlockAlign = 2
 	readBufferSize  = 32 * 1024
 	maxUint32       = ^uint32(0)
+
+	// chunkHeaderBytes is the RIFF chunk ID plus its little-endian size.
+	chunkHeaderBytes = 8
+	// pcmFormatChunkBytes is the mandatory PCM portion of a fmt chunk.
+	pcmFormatChunkBytes = 16
+	// fmtChunkID and dataChunkID are the RIFF IDs of the chunks WAV requires.
+	fmtChunkID  = "fmt "
+	dataChunkID = "data"
 )
 
 var errInvalidReadCount = errors.New("reader returned an invalid byte count")
@@ -90,7 +98,7 @@ func Write(w io.Writer, sampleRate int, samples []int16) error {
 		maximumDataSize = maximumIntSize
 	}
 	if dataSize > maximumDataSize {
-		return &SizeError{Property: "data", Observed: dataSize, Maximum: maximumDataSize}
+		return &SizeError{Property: dataChunkID, Observed: dataSize, Maximum: maximumDataSize}
 	}
 
 	header, err := PCM16Header(sampleRate, dataSize)
@@ -125,93 +133,119 @@ type waveFormat struct {
 }
 
 func readChunks(r io.Reader, remaining uint64) (waveFormat, []byte, error) {
-	var format waveFormat
-	var data []byte
-	formatFound := false
-	dataFound := false
-
+	scan := chunkScan{r: r}
 	for remaining > 0 {
-		if remaining < 8 {
-			return waveFormat{}, nil, &MalformedError{Property: "chunk header", Observed: remaining, Reason: "fewer than 8 bytes remain in RIFF"}
-		}
-
-		var chunkHeader [8]byte
-		if err := readPart(r, chunkHeader[:], "chunk header"); err != nil {
+		consumed, err := scan.next(remaining)
+		if err != nil {
 			return waveFormat{}, nil, err
 		}
-		remaining -= 8
-		chunkID := string(chunkHeader[0:4])
-		chunkSize := uint64(binary.LittleEndian.Uint32(chunkHeader[4:8]))
-		if chunkSize > remaining {
-			return waveFormat{}, nil, &MalformedError{Property: chunkID + " chunk size", Observed: chunkSize, Reason: fmt.Sprintf("RIFF has only %d bytes remaining", remaining)}
-		}
-		if chunkSize&1 == 1 && chunkSize == remaining {
-			return waveFormat{}, nil, &MalformedError{Property: chunkID + " padding", Observed: chunkSize, Reason: "odd chunks require a padding byte"}
-		}
-
-		switch chunkID {
-		case "fmt ":
-			if formatFound {
-				return waveFormat{}, nil, &MalformedError{Property: "fmt chunk", Observed: "duplicate", Reason: "only one format chunk is supported"}
-			}
-			if chunkSize < 16 {
-				return waveFormat{}, nil, &MalformedError{Property: "fmt chunk size", Observed: chunkSize, Reason: "PCM format requires at least 16 bytes"}
-			}
-			var payload [16]byte
-			if err := readPart(r, payload[:], "fmt chunk"); err != nil {
-				return waveFormat{}, nil, err
-			}
-			remaining -= 16
-			validatedFormat, err := validateFormat(payload)
-			if err != nil {
-				return waveFormat{}, nil, err
-			}
-			format = validatedFormat
-			if err := skipPart(r, chunkSize-16, "fmt chunk extension"); err != nil {
-				return waveFormat{}, nil, err
-			}
-			remaining -= chunkSize - 16
-			formatFound = true
-		case "data":
-			if dataFound {
-				return waveFormat{}, nil, &MalformedError{Property: "data chunk", Observed: "duplicate", Reason: "only one data chunk is supported"}
-			}
-			if chunkSize == 0 {
-				return waveFormat{}, nil, &EmptyError{Property: "data", Operation: "read"}
-			}
-			if chunkSize&1 == 1 {
-				return waveFormat{}, nil, &MalformedError{Property: "data length", Observed: chunkSize, Reason: "PCM16 data must contain an even number of bytes"}
-			}
-			readDataValue, err := readData(r, chunkSize)
-			if err != nil {
-				return waveFormat{}, nil, err
-			}
-			data = readDataValue
-			remaining -= chunkSize
-			dataFound = true
-		default:
-			if err := skipPart(r, chunkSize, chunkID+" chunk"); err != nil {
-				return waveFormat{}, nil, err
-			}
-			remaining -= chunkSize
-		}
-
-		if chunkSize&1 == 1 {
-			var padding [1]byte
-			if err := readPart(r, padding[:], chunkID+" padding"); err != nil {
-				return waveFormat{}, nil, err
-			}
-			remaining--
-		}
+		remaining -= consumed
 	}
 
-	if !formatFound {
+	if !scan.formatFound {
 		return waveFormat{}, nil, &MalformedError{Property: "fmt chunk", Observed: "missing", Reason: "PCM format is required"}
 	}
-	if !dataFound {
+	if !scan.dataFound {
 		return waveFormat{}, nil, &MalformedError{Property: "data chunk", Observed: "missing", Reason: "audio data is required"}
 	}
-	return format, data, nil
+	return scan.format, scan.data, nil
+}
+
+// chunkScan accumulates the format and data chunks while readChunks walks the
+// RIFF payload sequentially.
+type chunkScan struct {
+	r           io.Reader
+	format      waveFormat
+	data        []byte
+	formatFound bool
+	dataFound   bool
+}
+
+// next reads one chunk, including its padding byte, and returns the number of
+// RIFF payload bytes consumed.
+func (s *chunkScan) next(remaining uint64) (uint64, error) {
+	if remaining < chunkHeaderBytes {
+		return 0, &MalformedError{Property: "chunk header", Observed: remaining, Reason: "fewer than 8 bytes remain in RIFF"}
+	}
+
+	var chunkHeader [chunkHeaderBytes]byte
+	if err := readPart(s.r, chunkHeader[:], "chunk header"); err != nil {
+		return 0, err
+	}
+	remaining -= chunkHeaderBytes
+	chunkID := string(chunkHeader[0:4])
+	chunkSize := uint64(binary.LittleEndian.Uint32(chunkHeader[4:8]))
+	if chunkSize > remaining {
+		return 0, &MalformedError{Property: chunkID + " chunk size", Observed: chunkSize, Reason: fmt.Sprintf("RIFF has only %d bytes remaining", remaining)}
+	}
+	if chunkSize&1 == 1 && chunkSize == remaining {
+		return 0, &MalformedError{Property: chunkID + " padding", Observed: chunkSize, Reason: "odd chunks require a padding byte"}
+	}
+	if err := s.readBody(chunkID, chunkSize); err != nil {
+		return 0, err
+	}
+	consumed := chunkHeaderBytes + chunkSize
+	if chunkSize&1 == 1 {
+		var padding [1]byte
+		if err := readPart(s.r, padding[:], chunkID+" padding"); err != nil {
+			return 0, err
+		}
+		consumed++
+	}
+	return consumed, nil
+}
+
+func (s *chunkScan) readBody(chunkID string, chunkSize uint64) error {
+	switch chunkID {
+	case fmtChunkID:
+		return s.readFormat(chunkSize)
+	case dataChunkID:
+		return s.readDataChunk(chunkSize)
+	default:
+		return skipPart(s.r, chunkSize, chunkID+" chunk")
+	}
+}
+
+func (s *chunkScan) readFormat(chunkSize uint64) error {
+	if s.formatFound {
+		return &MalformedError{Property: "fmt chunk", Observed: "duplicate", Reason: "only one format chunk is supported"}
+	}
+	if chunkSize < pcmFormatChunkBytes {
+		return &MalformedError{Property: "fmt chunk size", Observed: chunkSize, Reason: "PCM format requires at least 16 bytes"}
+	}
+	var payload [pcmFormatChunkBytes]byte
+	if err := readPart(s.r, payload[:], "fmt chunk"); err != nil {
+		return err
+	}
+	validatedFormat, err := validateFormat(payload)
+	if err != nil {
+		return err
+	}
+	s.format = validatedFormat
+	if err := skipPart(s.r, chunkSize-pcmFormatChunkBytes, "fmt chunk extension"); err != nil {
+		return err
+	}
+	s.formatFound = true
+	return nil
+}
+
+func (s *chunkScan) readDataChunk(chunkSize uint64) error {
+	if s.dataFound {
+		return &MalformedError{Property: "data chunk", Observed: "duplicate", Reason: "only one data chunk is supported"}
+	}
+	if chunkSize == 0 {
+		return &EmptyError{Property: dataChunkID, Operation: "read"}
+	}
+	if chunkSize&1 == 1 {
+		return &MalformedError{Property: "data length", Observed: chunkSize, Reason: "PCM16 data must contain an even number of bytes"}
+	}
+	readDataValue, err := readData(s.r, chunkSize)
+	if err != nil {
+		return err
+	}
+	s.data = readDataValue
+	s.dataFound = true
+	return nil
 }
 
 func validatePCM16Format(payload [16]byte) (waveFormat, error) {
@@ -246,7 +280,7 @@ func validatePCM16Format(payload [16]byte) (waveFormat, error) {
 func readData(r io.Reader, size uint64) ([]byte, error) {
 	maxInt := uint64(^uint(0) >> 1)
 	if size > maxInt {
-		return nil, &SizeError{Property: "data", Observed: size, Maximum: maxInt}
+		return nil, &SizeError{Property: dataChunkID, Observed: size, Maximum: maxInt}
 	}
 
 	data := make([]byte, 0, minUint(size, readBufferSize))

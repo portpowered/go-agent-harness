@@ -68,7 +68,18 @@ func verifyRealtimeAudioContext(ctx context.Context, endpoint string) (realtimeA
 	if err := waitForRealtimeEvent(ctx, conn, "session.created"); err != nil {
 		return proof, fmt.Errorf("wait for session.created: %w", err)
 	}
+	if err := configureRealtimeAudioSession(ctx, conn); err != nil {
+		return proof, err
+	}
+	if err := sendRealtimePCM16Turn(ctx, conn); err != nil {
+		return proof, err
+	}
+	return readRealtimeAudioResponse(ctx, conn, started, time.Now())
+}
 
+// configureRealtimeAudioSession requests an audio-only PCM session with manual
+// turn boundaries and waits for the server to confirm it.
+func configureRealtimeAudioSession(ctx context.Context, conn *websocket.Conn) error {
 	if err := writeRealtimeEvent(ctx, conn, map[string]any{
 		"type": "session.update",
 		"session": map[string]any{
@@ -86,12 +97,17 @@ func verifyRealtimeAudioContext(ctx context.Context, endpoint string) (realtimeA
 			},
 		},
 	}); err != nil {
-		return proof, fmt.Errorf("send session.update: %w", err)
+		return fmt.Errorf("send session.update: %w", err)
 	}
 	if err := waitForRealtimeEvent(ctx, conn, "session.updated"); err != nil {
-		return proof, fmt.Errorf("wait for session.updated: %w", err)
+		return fmt.Errorf("wait for session.updated: %w", err)
 	}
+	return nil
+}
 
+// sendRealtimePCM16Turn appends the deterministic utterance in bounded chunks
+// and commits it as one user turn.
+func sendRealtimePCM16Turn(ctx context.Context, conn *websocket.Conn) error {
 	audio := deterministicPCM16Utterance()
 	for start := 0; start < len(audio); start += pcmChunkSamples * 2 {
 		end := start + pcmChunkSamples*2
@@ -102,18 +118,22 @@ func verifyRealtimeAudioContext(ctx context.Context, endpoint string) (realtimeA
 			"type":  "input_audio_buffer.append",
 			"audio": codec.EncodeBase64(audio[start:end]),
 		}); err != nil {
-			return proof, fmt.Errorf("append PCM16 audio at byte %d: %w", start, err)
+			return fmt.Errorf("append PCM16 audio at byte %d: %w", start, err)
 		}
 	}
 
 	if err := writeRealtimeEvent(ctx, conn, map[string]any{
 		"type": "input_audio_buffer.commit",
 	}); err != nil {
-		return proof, fmt.Errorf("commit PCM16 audio: %w", err)
+		return fmt.Errorf("commit PCM16 audio: %w", err)
 	}
+	return nil
+}
 
-	turnCommittedAt := time.Now()
-
+// readRealtimeAudioResponse collects audio deltas until the response finishes
+// and proves the decoded PCM16 is non-silent.
+func readRealtimeAudioResponse(ctx context.Context, conn *websocket.Conn, started, turnCommittedAt time.Time) (realtimeAudioProof, error) {
+	var proof realtimeAudioProof
 	var decodedAudio []byte
 	for {
 		event, messageType, err := readRealtimeEvent(ctx, conn)
@@ -128,18 +148,9 @@ func verifyRealtimeAudioContext(ctx context.Context, endpoint string) (realtimeA
 		case "error":
 			return proof, fmt.Errorf("server error: %s", eventErrorMessage(event.Payload))
 		case "response.output_audio.delta", "response.audio.delta":
-			if event.Delta == "" {
-				return proof, errors.New("server sent an empty audio delta")
-			}
-			chunk, err := codec.DecodeBase64(event.Delta)
+			chunk, err := decodeRealtimeAudioDelta(event.Delta)
 			if err != nil {
-				return proof, fmt.Errorf("decode audio delta: %w", err)
-			}
-			if len(chunk) == 0 {
-				return proof, errors.New("server sent a zero-byte audio delta")
-			}
-			if len(chunk)%2 != 0 {
-				return proof, fmt.Errorf("audio delta has odd PCM16 byte count %d", len(chunk))
+				return proof, err
 			}
 			if proof.AudioDeltaCount == 0 {
 				proof.FirstAudioLatency = time.Since(turnCommittedAt)
@@ -147,21 +158,47 @@ func verifyRealtimeAudioContext(ctx context.Context, endpoint string) (realtimeA
 			proof.AudioDeltaCount++
 			decodedAudio = append(decodedAudio, chunk...)
 		case "response.output_audio.done", "response.audio.done", "response.done":
-			if len(decodedAudio) == 0 {
-				return proof, fmt.Errorf("%s arrived without an audio delta", event.Type)
-			}
-			proof.AudioBytes = len(decodedAudio)
-			proof.AudioRMS, err = pcm16RMS(decodedAudio)
-			if err != nil {
-				return proof, fmt.Errorf("calculate decoded PCM16 RMS: %w", err)
-			}
-			if proof.AudioRMS <= pcmSilenceRMSThreshold {
-				return proof, fmt.Errorf("decoded PCM16 RMS %.6f is at or below silence threshold %.6f", proof.AudioRMS, pcmSilenceRMSThreshold)
-			}
-			proof.TotalDuration = time.Since(started)
-			return proof, nil
+			return finishRealtimeAudioProof(proof, event.Type, decodedAudio, started)
 		}
 	}
+}
+
+// decodeRealtimeAudioDelta decodes one base64 audio delta and rejects empty or
+// misaligned PCM16 chunks.
+func decodeRealtimeAudioDelta(delta string) ([]byte, error) {
+	if delta == "" {
+		return nil, errors.New("server sent an empty audio delta")
+	}
+	chunk, err := codec.DecodeBase64(delta)
+	if err != nil {
+		return nil, fmt.Errorf("decode audio delta: %w", err)
+	}
+	if len(chunk) == 0 {
+		return nil, errors.New("server sent a zero-byte audio delta")
+	}
+	if len(chunk)%2 != 0 {
+		return nil, fmt.Errorf("audio delta has odd PCM16 byte count %d", len(chunk))
+	}
+	return chunk, nil
+}
+
+// finishRealtimeAudioProof completes proof once the response terminal event
+// arrives, requiring audible decoded PCM16.
+func finishRealtimeAudioProof(proof realtimeAudioProof, eventType string, decodedAudio []byte, started time.Time) (realtimeAudioProof, error) {
+	if len(decodedAudio) == 0 {
+		return proof, fmt.Errorf("%s arrived without an audio delta", eventType)
+	}
+	proof.AudioBytes = len(decodedAudio)
+	rms, err := pcm16RMS(decodedAudio)
+	proof.AudioRMS = rms
+	if err != nil {
+		return proof, fmt.Errorf("calculate decoded PCM16 RMS: %w", err)
+	}
+	if proof.AudioRMS <= pcmSilenceRMSThreshold {
+		return proof, fmt.Errorf("decoded PCM16 RMS %.6f is at or below silence threshold %.6f", proof.AudioRMS, pcmSilenceRMSThreshold)
+	}
+	proof.TotalDuration = time.Since(started)
+	return proof, nil
 }
 
 type realtimeEvent struct {

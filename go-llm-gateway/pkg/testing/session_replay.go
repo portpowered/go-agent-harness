@@ -316,91 +316,121 @@ func (r *SessionReplayer) replayLoop() {
 
 	var lastTimestamp int64
 	for {
-		r.mu.Lock()
-		for r.validateOutbound && !r.closed && r.err == nil && r.replayCtx.Err() == nil && r.index < len(r.events) && r.events[r.index].Direction == DirectionClientToServer && r.validatedOutbound == 0 {
-			r.cond.Wait()
-		}
-		if !r.closed && r.err == nil && r.replayCtx.Err() != nil {
-			r.setOutcomeLocked(SessionReplayCancelled, r.replayCtx.Err())
-			r.mu.Unlock()
+		evt, eventIndex, deliver, stop := r.nextReplayEvent()
+		if stop {
 			return
 		}
-		if r.closed || r.err != nil || r.index >= len(r.events) {
-			if r.err == nil && r.index >= len(r.events) && r.validatedOutbound == 0 {
-				r.setOutcomeLocked(SessionReplayCompleted, nil)
-			}
-			r.mu.Unlock()
-			return
-		}
-		evt := r.events[r.index]
-		eventIndex := r.index
-		if evt.Direction != DirectionServerToClient {
-			// With validation enabled, Send has already checked this record and
-			// reserved one admission. Consume it in capture order. Validation is
-			// disabled for transcript rendering, so client records are skipped.
-			if r.validateOutbound {
-				r.validatedOutbound--
-			}
-			r.index++
-			r.cond.Broadcast()
-			r.mu.Unlock()
+		if !deliver {
 			continue
 		}
-		r.mu.Unlock()
-
-		if r.useTiming && evt.TimestampMs > lastTimestamp {
-			delay := time.Duration(evt.TimestampMs-lastTimestamp) * time.Millisecond
-			select {
-			case <-r.done:
-				return
-			case <-r.replayCtx.Done():
-				r.mu.Lock()
-				r.setOutcomeLocked(SessionReplayCancelled, r.replayCtx.Err())
-				r.mu.Unlock()
-				return
-			case <-time.After(delay):
-			}
+		if !r.waitReplayTiming(evt.TimestampMs, lastTimestamp) {
+			return
 		}
 		lastTimestamp = evt.TimestampMs
-
-		if evt.Direction != DirectionServerToClient {
-			continue
-		}
-
-		msg, err := deserializeStreamMessage(evt)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "session replayer: skipping event (type=%s): %v\n", evt.Type, err)
-			r.mu.Lock()
-			if !r.closed && r.err == nil && r.index == eventIndex && r.events[r.index].Sequence == evt.Sequence {
-				r.index++
-				r.cond.Broadcast()
-			}
-			r.mu.Unlock()
-			continue
-		}
-
-		// Write to the bounded outbound buffer with cancellation-aware
-		// backpressure. A dropped server event would falsely advance the
-		// capture cursor and let a later client send diverge. Client admission is
-		// tracked separately, so this wait cannot strand the sending goroutine.
-		outcome := r.outbound.WriteWaitContextOrDone(r.replayCtx, r.done, msg)
-		if !outcome.OK() {
-			r.mu.Lock()
-			if r.replayCtx.Err() != nil {
-				r.setOutcomeLocked(SessionReplayCancelled, r.replayCtx.Err())
-			}
-			r.mu.Unlock()
+		if !r.deliverReplayEvent(evt, eventIndex) {
 			return
 		}
+	}
+}
+
+// nextReplayEvent waits for the chronological cursor to reach a deliverable
+// server record. Client records consume their Send admission and are skipped
+// (deliver=false); stop reports that replay has finished or been cancelled.
+func (r *SessionReplayer) nextReplayEvent() (evt CapturedSessionEvent, eventIndex int, deliver, stop bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for r.awaitingOutboundAdmissionLocked() {
+		r.cond.Wait()
+	}
+	if !r.closed && r.err == nil && r.replayCtx.Err() != nil {
+		r.setOutcomeLocked(SessionReplayCancelled, r.replayCtx.Err())
+		return evt, 0, false, true
+	}
+	if r.closed || r.err != nil || r.index >= len(r.events) {
+		if r.err == nil && r.index >= len(r.events) && r.validatedOutbound == 0 {
+			r.setOutcomeLocked(SessionReplayCompleted, nil)
+		}
+		return evt, 0, false, true
+	}
+	evt, eventIndex = r.events[r.index], r.index
+	if evt.Direction != DirectionServerToClient {
+		// With validation enabled, Send has already checked this record and
+		// reserved one admission. Consume it in capture order. Validation is
+		// disabled for transcript rendering, so client records are skipped.
+		if r.validateOutbound {
+			r.validatedOutbound--
+		}
+		r.index++
+		r.cond.Broadcast()
+		return evt, eventIndex, false, false
+	}
+	return evt, eventIndex, true, false
+}
+
+// awaitingOutboundAdmissionLocked reports whether the cursor is parked on a
+// client record that Send has not yet validated and admitted.
+func (r *SessionReplayer) awaitingOutboundAdmissionLocked() bool {
+	if !r.validateOutbound || r.closed || r.err != nil || r.replayCtx.Err() != nil {
+		return false
+	}
+	return r.index < len(r.events) && r.events[r.index].Direction == DirectionClientToServer && r.validatedOutbound == 0
+}
+
+// waitReplayTiming sleeps for the captured inter-event delay when timing is
+// enabled; it returns false when replay closed or was cancelled meanwhile.
+func (r *SessionReplayer) waitReplayTiming(timestampMs, lastTimestamp int64) bool {
+	if !r.useTiming || timestampMs <= lastTimestamp {
+		return true
+	}
+	select {
+	case <-r.done:
+		return false
+	case <-r.replayCtx.Done():
 		r.mu.Lock()
-		// The replay loop owns the chronological index. Advance only after the
-		// normalized message is in the public buffer, so chronological
-		// publication cannot advance beyond an undelivered server event.
-		if !r.closed && r.err == nil && r.index == eventIndex && r.events[r.index].Sequence == evt.Sequence {
-			r.index++
-			r.cond.Broadcast()
+		r.setOutcomeLocked(SessionReplayCancelled, r.replayCtx.Err())
+		r.mu.Unlock()
+		return false
+	case <-time.After(time.Duration(timestampMs-lastTimestamp) * time.Millisecond):
+		return true
+	}
+}
+
+// deliverReplayEvent publishes one server record and advances the cursor; it
+// returns false when delivery stopped because replay closed or was cancelled.
+func (r *SessionReplayer) deliverReplayEvent(evt CapturedSessionEvent, eventIndex int) bool {
+	msg, err := deserializeStreamMessage(evt)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "session replayer: skipping event (type=%s): %v\n", evt.Type, err)
+		r.advanceReplayCursor(evt, eventIndex)
+		return true
+	}
+
+	// Write to the bounded outbound buffer with cancellation-aware
+	// backpressure. A dropped server event would falsely advance the
+	// capture cursor and let a later client send diverge. Client admission is
+	// tracked separately, so this wait cannot strand the sending goroutine.
+	outcome := r.outbound.WriteWaitContextOrDone(r.replayCtx, r.done, msg)
+	if !outcome.OK() {
+		r.mu.Lock()
+		if r.replayCtx.Err() != nil {
+			r.setOutcomeLocked(SessionReplayCancelled, r.replayCtx.Err())
 		}
 		r.mu.Unlock()
+		return false
+	}
+	// The replay loop owns the chronological index. Advance only after the
+	// normalized message is in the public buffer, so chronological
+	// publication cannot advance beyond an undelivered server event.
+	r.advanceReplayCursor(evt, eventIndex)
+	return true
+}
+
+func (r *SessionReplayer) advanceReplayCursor(evt CapturedSessionEvent, eventIndex int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if !r.closed && r.err == nil && r.index == eventIndex && r.events[r.index].Sequence == evt.Sequence {
+		r.index++
+		r.cond.Broadcast()
 	}
 }
 
@@ -492,47 +522,6 @@ func newReplayIncompleteError(expected, actual string, err error) error {
 		gateway.NewReplayIncompleteError(expected, actual, err),
 		providers.ErrReplayIncomplete,
 	)
-}
-
-// deserializeStreamMessage converts a CapturedSessionEvent back into a
-// StreamMessage using the type-aware UnmarshalStreamMessage helper.
-func deserializeStreamMessage(evt CapturedSessionEvent) (messages.StreamMessage, error) {
-	payload := evt.Payload
-	if len(payload) == 0 {
-		payload = evt.Data
-	}
-	if len(payload) == 0 {
-		return messages.StreamMessage{}, fmt.Errorf("missing payload")
-	}
-	if evt.PayloadType != "" && evt.PayloadType != SessionPayloadTypeStreamMessage {
-		return messages.StreamMessage{}, fmt.Errorf("unsupported payload type: %s", evt.PayloadType)
-	}
-	return UnmarshalStreamMessage(payload)
-}
-
-func compareCapturedStreamMessage(expected CapturedSessionEvent, actual messages.StreamMessage) error {
-	expectedPayload := expected.Payload
-	if len(expectedPayload) == 0 {
-		expectedPayload = expected.Data
-	}
-	if len(expectedPayload) == 0 {
-		return fmt.Errorf("expected outbound event %s is missing payload", expected.Type)
-	}
-	if expected.PayloadType != "" && expected.PayloadType != SessionPayloadTypeStreamMessage {
-		return fmt.Errorf("expected outbound event %s has unsupported payload type %s", expected.Type, expected.PayloadType)
-	}
-
-	actualPayload, err := MarshalStreamMessage(actual)
-	if err != nil {
-		return fmt.Errorf("marshal outbound event %s: %w", actual.Type, err)
-	}
-	if err := compareReplayPayloads(expectedPayload, actualPayload); err != nil {
-		return err
-	}
-	if expected.Type != "" && expected.Type != string(actual.Type) {
-		return fmt.Errorf("expected event type %q, got %q", expected.Type, actual.Type)
-	}
-	return nil
 }
 
 func decodeLegacySessionCaptureEvents(data []byte) ([]CapturedSessionEvent, error) {

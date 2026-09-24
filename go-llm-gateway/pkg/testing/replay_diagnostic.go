@@ -77,76 +77,14 @@ func firstReplayJSONDifference(expected, actual any, pointer string) *replayJSON
 		if !ok {
 			return &replayJSONDifference{pointer: pointer, expected: expected, actual: actual}
 		}
-
-		keys := make(map[string]struct{}, len(expectedValue)+len(actualValue))
-		for key := range expectedValue {
-			keys[key] = struct{}{}
-		}
-		for key := range actualValue {
-			keys[key] = struct{}{}
-		}
-		orderedKeys := make([]string, 0, len(keys))
-		for key := range keys {
-			orderedKeys = append(orderedKeys, key)
-		}
-		sort.Strings(orderedKeys)
-
-		for _, key := range orderedKeys {
-			expectedChild, expectedOK := expectedValue[key]
-			actualChild, actualOK := actualValue[key]
-			childPointer := appendReplayJSONPointer(pointer, key)
-			if !expectedOK {
-				return &replayJSONDifference{
-					pointer:  childPointer,
-					expected: replayMissingJSONValue{},
-					actual:   actualChild,
-				}
-			}
-			if !actualOK {
-				return &replayJSONDifference{
-					pointer:  childPointer,
-					expected: expectedChild,
-					actual:   replayMissingJSONValue{},
-				}
-			}
-			if difference := firstReplayJSONDifference(expectedChild, actualChild, childPointer); difference != nil {
-				return difference
-			}
-		}
-		return nil
+		return firstReplayJSONObjectDifference(expectedValue, actualValue, pointer)
 
 	case []any:
 		actualValue, ok := actual.([]any)
 		if !ok {
 			return &replayJSONDifference{pointer: pointer, expected: expected, actual: actual}
 		}
-
-		commonLength := len(expectedValue)
-		if len(actualValue) < commonLength {
-			commonLength = len(actualValue)
-		}
-		for index := 0; index < commonLength; index++ {
-			childPointer := appendReplayJSONPointer(pointer, strconv.Itoa(index))
-			if difference := firstReplayJSONDifference(expectedValue[index], actualValue[index], childPointer); difference != nil {
-				return difference
-			}
-		}
-		if len(expectedValue) != len(actualValue) {
-			childPointer := appendReplayJSONPointer(pointer, strconv.Itoa(commonLength))
-			if len(expectedValue) < len(actualValue) {
-				return &replayJSONDifference{
-					pointer:  childPointer,
-					expected: replayMissingJSONValue{},
-					actual:   actualValue[commonLength],
-				}
-			}
-			return &replayJSONDifference{
-				pointer:  childPointer,
-				expected: expectedValue[commonLength],
-				actual:   replayMissingJSONValue{},
-			}
-		}
-		return nil
+		return firstReplayJSONArrayDifference(expectedValue, actualValue, pointer)
 
 	default:
 		if reflect.DeepEqual(expected, actual) {
@@ -154,6 +92,78 @@ func firstReplayJSONDifference(expected, actual any, pointer string) *replayJSON
 		}
 		return &replayJSONDifference{pointer: pointer, expected: expected, actual: actual}
 	}
+}
+
+// firstReplayJSONObjectDifference compares two decoded JSON objects in sorted
+// key order and reports the first missing, extra, or differing member.
+func firstReplayJSONObjectDifference(expectedValue, actualValue map[string]any, pointer string) *replayJSONDifference {
+	keys := make(map[string]struct{}, len(expectedValue)+len(actualValue))
+	for key := range expectedValue {
+		keys[key] = struct{}{}
+	}
+	for key := range actualValue {
+		keys[key] = struct{}{}
+	}
+	orderedKeys := make([]string, 0, len(keys))
+	for key := range keys {
+		orderedKeys = append(orderedKeys, key)
+	}
+	sort.Strings(orderedKeys)
+
+	for _, key := range orderedKeys {
+		expectedChild, expectedOK := expectedValue[key]
+		actualChild, actualOK := actualValue[key]
+		childPointer := appendReplayJSONPointer(pointer, key)
+		if !expectedOK {
+			return &replayJSONDifference{
+				pointer:  childPointer,
+				expected: replayMissingJSONValue{},
+				actual:   actualChild,
+			}
+		}
+		if !actualOK {
+			return &replayJSONDifference{
+				pointer:  childPointer,
+				expected: expectedChild,
+				actual:   replayMissingJSONValue{},
+			}
+		}
+		if difference := firstReplayJSONDifference(expectedChild, actualChild, childPointer); difference != nil {
+			return difference
+		}
+	}
+	return nil
+}
+
+// firstReplayJSONArrayDifference compares two decoded JSON arrays element by
+// element and then reports the first missing or extra trailing element.
+func firstReplayJSONArrayDifference(expectedValue, actualValue []any, pointer string) *replayJSONDifference {
+	commonLength := len(expectedValue)
+	if len(actualValue) < commonLength {
+		commonLength = len(actualValue)
+	}
+	for index := 0; index < commonLength; index++ {
+		childPointer := appendReplayJSONPointer(pointer, strconv.Itoa(index))
+		if difference := firstReplayJSONDifference(expectedValue[index], actualValue[index], childPointer); difference != nil {
+			return difference
+		}
+	}
+	if len(expectedValue) != len(actualValue) {
+		childPointer := appendReplayJSONPointer(pointer, strconv.Itoa(commonLength))
+		if len(expectedValue) < len(actualValue) {
+			return &replayJSONDifference{
+				pointer:  childPointer,
+				expected: replayMissingJSONValue{},
+				actual:   actualValue[commonLength],
+			}
+		}
+		return &replayJSONDifference{
+			pointer:  childPointer,
+			expected: expectedValue[commonLength],
+			actual:   replayMissingJSONValue{},
+		}
+	}
+	return nil
 }
 
 func appendReplayJSONPointer(pointer, token string) string {

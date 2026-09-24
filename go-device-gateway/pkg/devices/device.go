@@ -229,150 +229,150 @@ func RunDeviceRegistryConformance[T deviceRegistryConformanceTester[T]](t T, fac
 	if factory == nil {
 		t.Fatal("device registry conformance factory is nil")
 	}
+	t.Run("list is stable and validated", func(t T) { conformanceListIsStable(t, newConformanceFixture(t, factory)) })
+	t.Run("directional defaults are listed and observational", func(t T) { conformanceDefaultsAreObservational(t, newConformanceFixture(t, factory)) })
+	t.Run("missing default is typed", func(t T) { conformanceMissingDefaultIsTyped(t, newConformanceFixture(t, factory)) })
+	t.Run("listed ID opens and close is idempotent", func(t T) { conformanceListedIDOpensOnce(t, newConformanceFixture(t, factory)) })
+	t.Run("unknown ID is typed not found", func(t T) { conformanceUnknownIDIsNotFound(t, newConformanceFixture(t, factory)) })
+	t.Run("disappeared ID is typed not found", func(t T) { conformanceDisappearedIDIsNotFound(t, newConformanceFixture(t, factory)) })
+	t.Run("exclusive device reports in use and reopens after close", func(t T) { conformanceExclusiveDeviceReopens(t, newConformanceFixture(t, factory)) })
+}
 
-	t.Run("list is stable and validated", func(t T) {
-		fixture := newConformanceFixture(t, factory)
-		first := listDevices(t, fixture.Registry)
-		second := listDevices(t, fixture.Registry)
-		if len(first) == 0 {
-			t.Fatal("List returned no devices")
-		}
-		firstByID := snapshotByID(t, first)
-		secondByID := snapshotByID(t, second)
-		if !reflect.DeepEqual(firstByID, secondByID) {
-			t.Fatalf("repeated List snapshots differ: first=%#v second=%#v", firstByID, secondByID)
-		}
-		if got := fixture.Observations(); got.OpenCount != 0 || got.ReleaseCount != 0 {
-			t.Fatalf("List acquired resources: observations=%+v", got)
-		}
-	})
+func conformanceListIsStable[T deviceRegistryConformanceTester[T]](t T, fixture DeviceRegistryConformanceFixture) {
+	first := listDevices(t, fixture.Registry)
+	second := listDevices(t, fixture.Registry)
+	if len(first) == 0 {
+		t.Fatal("List returned no devices")
+	}
+	firstByID := snapshotByID(t, first)
+	secondByID := snapshotByID(t, second)
+	if !reflect.DeepEqual(firstByID, secondByID) {
+		t.Fatalf("repeated List snapshots differ: first=%#v second=%#v", firstByID, secondByID)
+	}
+	if got := fixture.Observations(); got.OpenCount != 0 || got.ReleaseCount != 0 {
+		t.Fatalf("List acquired resources: observations=%+v", got)
+	}
+}
 
-	t.Run("directional defaults are listed and observational", func(t T) {
-		fixture := newConformanceFixture(t, factory)
-		listed := snapshotByID(t, listDevices(t, fixture.Registry))
-		for _, want := range []struct {
-			name      string
-			direction Direction
-			id        DeviceID
-		}{
-			{name: "input", direction: DirectionInput, id: fixture.InputDefault},
-			{name: "output", direction: DirectionOutput, id: fixture.OutputDefault},
-		} {
-			device, err := fixture.Registry.Default(want.direction)
-			if err != nil {
-				t.Fatalf("Default(%s): %v", want.direction, err)
-			}
-			if device.ID != want.id || device.Direction != want.direction {
-				t.Fatalf("Default(%s)=%#v, want ID %q and direction %s", want.direction, device, want.id, want.direction)
-			}
-			if listed[device.ID].Direction != want.direction {
-				t.Fatalf("Default(%s) returned device absent or mismatched in List: %#v", want.direction, device)
-			}
-		}
-		if _, err := fixture.Registry.Default(Direction("invalid")); err == nil {
-			t.Fatal("Default(invalid) silently resolved a device")
-		}
-		if got := fixture.Observations(); got.OpenCount != 0 || got.ReleaseCount != 0 {
-			t.Fatalf("Default acquired resources: observations=%+v", got)
-		}
-	})
-
-	t.Run("missing default is typed", func(t T) {
-		fixture := newConformanceFixture(t, factory)
-		fixture.RemoveDevice(fixture.InputDefault)
-		if _, err := fixture.Registry.Default(DirectionInput); err == nil {
-			t.Fatal("Default(input) succeeded after its device disappeared")
-		} else {
-			assertNoDefault(t, err, DirectionInput)
-		}
-	})
-
-	t.Run("listed ID opens and close is idempotent", func(t T) {
-		fixture := newConformanceFixture(t, factory)
-		listed := snapshotByID(t, listDevices(t, fixture.Registry))
-		if _, ok := listed[fixture.ExclusiveID]; !ok {
-			t.Fatalf("fixture ExclusiveID %q is not listed", fixture.ExclusiveID)
-		}
-		opened, err := fixture.Registry.Open(fixture.ExclusiveID)
-		if err != nil || opened == nil {
-			t.Fatalf("Open(%q)=(%v, %v), want a handle", fixture.ExclusiveID, opened, err)
-		}
-		if got := fixture.Observations().OpenCount; got != 1 {
-			t.Fatalf("successful opens=%d, want 1", got)
-		}
-		if err := opened.Close(); err != nil {
-			t.Fatalf("first Close: %v", err)
-		}
-		if err := opened.Close(); err != nil {
-			t.Fatalf("second Close: %v", err)
-		}
-		if got := fixture.Observations().ReleaseCount; got != 1 {
-			t.Fatalf("backend releases=%d, want exactly 1 after two closes", got)
-		}
-	})
-
-	t.Run("unknown ID is typed not found", func(t T) {
-		fixture := newConformanceFixture(t, factory)
-		unknown := DeviceID("missing:never-listed")
-		if _, err := fixture.Registry.Open(unknown); err == nil {
-			t.Fatal("Open(unknown) succeeded")
-		} else {
-			assertNotFound(t, err, unknown)
-		}
-		if got := fixture.Observations().OpenCount; got != 0 {
-			t.Fatalf("successful opens=%d after rejected unknown ID, want 0", got)
-		}
-	})
-
-	t.Run("disappeared ID is typed not found", func(t T) {
-		fixture := newConformanceFixture(t, factory)
-		listed := snapshotByID(t, listDevices(t, fixture.Registry))
-		if _, ok := listed[fixture.ExclusiveID]; !ok {
-			t.Fatalf("fixture ExclusiveID %q is not listed", fixture.ExclusiveID)
-		}
-		fixture.RemoveDevice(fixture.ExclusiveID)
-		if _, err := fixture.Registry.Open(fixture.ExclusiveID); err == nil {
-			t.Fatal("Open(disappeared ID) succeeded")
-		} else {
-			assertNotFound(t, err, fixture.ExclusiveID)
-		}
-		if got := fixture.Observations().OpenCount; got != 0 {
-			t.Fatalf("successful opens=%d after disappeared ID, want 0", got)
-		}
-	})
-
-	t.Run("exclusive device reports in use and reopens after close", func(t T) {
-		fixture := newConformanceFixture(t, factory)
-		first, err := fixture.Registry.Open(fixture.ExclusiveID)
+func conformanceDefaultsAreObservational[T deviceRegistryConformanceTester[T]](t T, fixture DeviceRegistryConformanceFixture) {
+	listed := snapshotByID(t, listDevices(t, fixture.Registry))
+	for _, want := range []struct {
+		name      string
+		direction Direction
+		id        DeviceID
+	}{
+		{name: "input", direction: DirectionInput, id: fixture.InputDefault},
+		{name: "output", direction: DirectionOutput, id: fixture.OutputDefault},
+	} {
+		device, err := fixture.Registry.Default(want.direction)
 		if err != nil {
-			t.Fatalf("first Open(%q): %v", fixture.ExclusiveID, err)
+			t.Fatalf("Default(%s): %v", want.direction, err)
 		}
-		if _, err := fixture.Registry.Open(fixture.ExclusiveID); err == nil {
-			t.Fatal("second exclusive Open succeeded")
-		} else {
-			assertInUse(t, err, fixture.ExclusiveID)
+		if device.ID != want.id || device.Direction != want.direction {
+			t.Fatalf("Default(%s)=%#v, want ID %q and direction %s", want.direction, device, want.id, want.direction)
 		}
-		if got := fixture.Observations().OpenCount; got != 1 {
-			t.Fatalf("successful opens after rejected second open=%d, want 1", got)
+		if listed[device.ID].Direction != want.direction {
+			t.Fatalf("Default(%s) returned device absent or mismatched in List: %#v", want.direction, device)
 		}
-		if err := first.Close(); err != nil {
-			t.Fatalf("first handle Close: %v", err)
-		}
-		second, err := fixture.Registry.Open(fixture.ExclusiveID)
-		if err != nil {
-			t.Fatalf("reopen(%q): %v", fixture.ExclusiveID, err)
-		}
-		if err := second.Close(); err != nil {
-			t.Fatalf("reopened handle Close: %v", err)
-		}
-		if err := second.Close(); err != nil {
-			t.Fatalf("reopened handle second Close: %v", err)
-		}
-		got := fixture.Observations()
-		if got.OpenCount != 2 || got.ReleaseCount != 2 {
-			t.Fatalf("exclusive observations=%+v, want two successful opens and two releases", got)
-		}
-	})
+	}
+	if _, err := fixture.Registry.Default(Direction("invalid")); err == nil {
+		t.Fatal("Default(invalid) silently resolved a device")
+	}
+	if got := fixture.Observations(); got.OpenCount != 0 || got.ReleaseCount != 0 {
+		t.Fatalf("Default acquired resources: observations=%+v", got)
+	}
+}
+
+func conformanceMissingDefaultIsTyped[T deviceRegistryConformanceTester[T]](t T, fixture DeviceRegistryConformanceFixture) {
+	fixture.RemoveDevice(fixture.InputDefault)
+	if _, err := fixture.Registry.Default(DirectionInput); err == nil {
+		t.Fatal("Default(input) succeeded after its device disappeared")
+	} else {
+		assertNoDefault(t, err, DirectionInput)
+	}
+}
+
+func conformanceListedIDOpensOnce[T deviceRegistryConformanceTester[T]](t T, fixture DeviceRegistryConformanceFixture) {
+	listed := snapshotByID(t, listDevices(t, fixture.Registry))
+	if _, ok := listed[fixture.ExclusiveID]; !ok {
+		t.Fatalf("fixture ExclusiveID %q is not listed", fixture.ExclusiveID)
+	}
+	opened, err := fixture.Registry.Open(fixture.ExclusiveID)
+	if err != nil || opened == nil {
+		t.Fatalf("Open(%q)=(%v, %v), want a handle", fixture.ExclusiveID, opened, err)
+	}
+	if got := fixture.Observations().OpenCount; got != 1 {
+		t.Fatalf("successful opens=%d, want 1", got)
+	}
+	if err := opened.Close(); err != nil {
+		t.Fatalf("first Close: %v", err)
+	}
+	if err := opened.Close(); err != nil {
+		t.Fatalf("second Close: %v", err)
+	}
+	if got := fixture.Observations().ReleaseCount; got != 1 {
+		t.Fatalf("backend releases=%d, want exactly 1 after two closes", got)
+	}
+}
+
+func conformanceUnknownIDIsNotFound[T deviceRegistryConformanceTester[T]](t T, fixture DeviceRegistryConformanceFixture) {
+	unknown := DeviceID("missing:never-listed")
+	if _, err := fixture.Registry.Open(unknown); err == nil {
+		t.Fatal("Open(unknown) succeeded")
+	} else {
+		assertNotFound(t, err, unknown)
+	}
+	if got := fixture.Observations().OpenCount; got != 0 {
+		t.Fatalf("successful opens=%d after rejected unknown ID, want 0", got)
+	}
+}
+
+func conformanceDisappearedIDIsNotFound[T deviceRegistryConformanceTester[T]](t T, fixture DeviceRegistryConformanceFixture) {
+	listed := snapshotByID(t, listDevices(t, fixture.Registry))
+	if _, ok := listed[fixture.ExclusiveID]; !ok {
+		t.Fatalf("fixture ExclusiveID %q is not listed", fixture.ExclusiveID)
+	}
+	fixture.RemoveDevice(fixture.ExclusiveID)
+	if _, err := fixture.Registry.Open(fixture.ExclusiveID); err == nil {
+		t.Fatal("Open(disappeared ID) succeeded")
+	} else {
+		assertNotFound(t, err, fixture.ExclusiveID)
+	}
+	if got := fixture.Observations().OpenCount; got != 0 {
+		t.Fatalf("successful opens=%d after disappeared ID, want 0", got)
+	}
+}
+
+func conformanceExclusiveDeviceReopens[T deviceRegistryConformanceTester[T]](t T, fixture DeviceRegistryConformanceFixture) {
+	first, err := fixture.Registry.Open(fixture.ExclusiveID)
+	if err != nil {
+		t.Fatalf("first Open(%q): %v", fixture.ExclusiveID, err)
+	}
+	if _, err := fixture.Registry.Open(fixture.ExclusiveID); err == nil {
+		t.Fatal("second exclusive Open succeeded")
+	} else {
+		assertInUse(t, err, fixture.ExclusiveID)
+	}
+	if got := fixture.Observations().OpenCount; got != 1 {
+		t.Fatalf("successful opens after rejected second open=%d, want 1", got)
+	}
+	if err := first.Close(); err != nil {
+		t.Fatalf("first handle Close: %v", err)
+	}
+	second, err := fixture.Registry.Open(fixture.ExclusiveID)
+	if err != nil {
+		t.Fatalf("reopen(%q): %v", fixture.ExclusiveID, err)
+	}
+	if err := second.Close(); err != nil {
+		t.Fatalf("reopened handle Close: %v", err)
+	}
+	if err := second.Close(); err != nil {
+		t.Fatalf("reopened handle second Close: %v", err)
+	}
+	got := fixture.Observations()
+	if got.OpenCount != 2 || got.ReleaseCount != 2 {
+		t.Fatalf("exclusive observations=%+v, want two successful opens and two releases", got)
+	}
 }
 
 func newConformanceFixture[T deviceRegistryConformanceTester[T]](t T, factory DeviceRegistryConformanceFactory) DeviceRegistryConformanceFixture {

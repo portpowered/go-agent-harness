@@ -37,11 +37,11 @@ func TestS4ProviderHTTPErrorTable(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := NewProviderHTTPError("openai", tc.status, tc.detail)
+			err := NewProviderHTTPError(openAIProviderName, tc.status, tc.detail)
 			if got := err.Error(); got != tc.wantMessage {
 				t.Fatalf("Error() = %q, want %q", got, tc.wantMessage)
 			}
-			if err.Provider != "openai" || err.StatusCode != tc.status || err.Detail != tc.detail {
+			if err.Provider != openAIProviderName || err.StatusCode != tc.status || err.Detail != tc.detail {
 				t.Fatalf("ProviderError fields = %+v, want provider openai status %d detail %q", err, tc.status, tc.detail)
 			}
 			if !errors.Is(err, ErrProviderRejected) {
@@ -101,28 +101,28 @@ func TestS4ValidationErrorConstructorsAndFormatting(t *testing.T) {
 	}{
 		{
 			name:      "invalid constructor detail",
-			err:       NewInvalidRequestError("openai", "messages", "messages are required"),
+			err:       NewInvalidRequestError(openAIProviderName, "messages", "messages are required"),
 			want:      "messages are required",
 			wantCause: ErrInvalidRequest,
 			wantClass: ErrorClassInvalidRequest,
 		},
 		{
 			name:      "invalid constructor generated text",
-			err:       NewInvalidRequestError("openai", "temperature", ""),
+			err:       NewInvalidRequestError(openAIProviderName, "temperature", ""),
 			want:      "openai: temperature is invalid",
 			wantCause: ErrInvalidRequest,
 			wantClass: ErrorClassInvalidRequest,
 		},
 		{
 			name:      "unsupported constructor generated text",
-			err:       NewUnsupportedRequestError("openai", "model", "gpt-xyz", []string{"gpt-4o", "gpt-4.1"}, ""),
+			err:       NewUnsupportedRequestError(openAIProviderName, "model", "gpt-xyz", []string{"gpt-4o", "gpt-4.1"}, ""),
 			want:      `openai: model "gpt-xyz" is not supported (supported: gpt-4o, gpt-4.1)`,
 			wantCause: ErrUnsupportedRequest,
 			wantClass: ErrorClassUnsupportedRequest,
 		},
 		{
 			name:      "unsupported constructor detail",
-			err:       NewUnsupportedRequestError("openai", "audio", "pcm", []string{"opus"}, "audio format rejected"),
+			err:       NewUnsupportedRequestError(openAIProviderName, "audio", "pcm", []string{"opus"}, "audio format rejected"),
 			want:      "audio format rejected",
 			wantCause: ErrUnsupportedRequest,
 			wantClass: ErrorClassUnsupportedRequest,
@@ -178,12 +178,12 @@ func TestS4ValidationErrorConstructorsAndFormatting(t *testing.T) {
 		})
 	}
 
-	invalid := NewInvalidRequestError("openai", "messages", "bad messages")
-	if invalid.Provider != "openai" || invalid.Feature != "messages" || invalid.Detail != "bad messages" || invalid.Requested != "" || len(invalid.Supported) != 0 {
+	invalid := NewInvalidRequestError(openAIProviderName, "messages", "bad messages")
+	if invalid.Provider != openAIProviderName || invalid.Feature != "messages" || invalid.Detail != "bad messages" || invalid.Requested != "" || len(invalid.Supported) != 0 {
 		t.Fatalf("NewInvalidRequestError fields = %+v", invalid)
 	}
-	unsupported := NewUnsupportedRequestError("openai", "model", "unknown", []string{"gpt-4o"}, "")
-	if unsupported.Provider != "openai" || unsupported.Feature != "model" || unsupported.Requested != "unknown" || strings.Join(unsupported.Supported, ",") != "gpt-4o" {
+	unsupported := NewUnsupportedRequestError(openAIProviderName, "model", "unknown", []string{"gpt-4o"}, "")
+	if unsupported.Provider != openAIProviderName || unsupported.Feature != "model" || unsupported.Requested != "unknown" || strings.Join(unsupported.Supported, ",") != "gpt-4o" {
 		t.Fatalf("NewUnsupportedRequestError fields = %+v", unsupported)
 	}
 }
@@ -338,12 +338,7 @@ func TestS4StreamValueTablePreservesTerminalContractAndCauses(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			value := tc.build(tc.err)
-			if value == nil || value.Type != "error" {
-				t.Fatalf("stream value = %#v, want error value", value)
-			}
-			if got := value.Classification; got != tc.wantClass {
-				t.Fatalf("classification = %q, want %q", got, tc.wantClass)
-			}
+			assertTerminalStreamErrorValue(t, value, tc.wantClass)
 			if got := IsRetryable(tc.err); got != tc.wantRetry {
 				t.Fatalf("IsRetryable(%v) = %v, want %v", tc.err, got, tc.wantRetry)
 			}
@@ -359,18 +354,37 @@ func TestS4StreamValueTablePreservesTerminalContractAndCauses(t *testing.T) {
 					t.Fatalf("preserved cause = %v, want original %v", value.Err, tc.err)
 				}
 			}
-			if value.TerminalReason != messages.TerminalReasonTerminalFailure {
-				t.Fatalf("terminal reason = %q, want %q", value.TerminalReason, messages.TerminalReasonTerminalFailure)
-			}
-			if value.TerminalProvenance != messages.TerminalProvenanceProvider {
-				t.Fatalf("terminal provenance = %q, want %q", value.TerminalProvenance, messages.TerminalProvenanceProvider)
-			}
-			if value.OutputState != messages.TerminalOutputNone {
-				t.Fatalf("output state = %q, want %q", value.OutputState, messages.TerminalOutputNone)
-			}
 		})
 	}
 
+	assertStreamValuesPreserveProviderTaxonomy(t, providerErr, wrappedTransport)
+}
+
+// assertTerminalStreamErrorValue checks the classification and provider
+// terminal contract shared by every stream error value.
+func assertTerminalStreamErrorValue(t *testing.T, value *messages.ErrorValue, wantClass string) {
+	t.Helper()
+	if value == nil || value.Type != "error" {
+		t.Fatalf("stream value = %#v, want error value", value)
+	}
+	if got := value.Classification; got != wantClass {
+		t.Fatalf("classification = %q, want %q", got, wantClass)
+	}
+	if value.TerminalReason != messages.TerminalReasonTerminalFailure {
+		t.Fatalf("terminal reason = %q, want %q", value.TerminalReason, messages.TerminalReasonTerminalFailure)
+	}
+	if value.TerminalProvenance != messages.TerminalProvenanceProvider {
+		t.Fatalf("terminal provenance = %q, want %q", value.TerminalProvenance, messages.TerminalProvenanceProvider)
+	}
+	if value.OutputState != messages.TerminalOutputNone {
+		t.Fatalf("output state = %q, want %q", value.OutputState, messages.TerminalOutputNone)
+	}
+}
+
+// assertStreamValuesPreserveProviderTaxonomy checks that stream values keep
+// provider sentinels, typed details, retryability, and wrapped reader causes.
+func assertStreamValuesPreserveProviderTaxonomy(t *testing.T, providerErr, wrappedTransport error) {
+	t.Helper()
 	value := NewStreamErrorValue(providerErr)
 	if !errors.Is(value.Err, ErrProviderRejected) || !errors.Is(value.Err, ErrRateLimited) {
 		t.Fatal("stream value lost provider taxonomy")
@@ -461,3 +475,6 @@ func TestErrorClassification_DistinguishesRuntimeOutcomes(t *testing.T) {
 		})
 	}
 }
+
+// openAIProviderName is the provider name used by the error and conformance fixtures.
+const openAIProviderName = "openai"

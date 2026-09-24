@@ -7,7 +7,11 @@ import (
 
 func TestSessionMediaRetiresCompletedResponseAccounting(t *testing.T) {
 	media := NewSessionMediaAtRate(nil, 24000)
-	defer media.Close()
+	t.Cleanup(func() {
+		if err := media.Close(); err != nil {
+			t.Errorf("SessionMedia.Close() = %v", err)
+		}
+	})
 	for i := 0; i < 10000; i++ {
 		response := PlaybackResponse{ResponseID: string(rune(i + 1)), ItemID: string(rune(i + 1))}
 		media.StartInboundResponse(response)
@@ -37,7 +41,11 @@ func TestSessionMediaOutboundPreservesFrameIdentity(t *testing.T) {
 		frame.Samples[0] = 99
 		return nil
 	}, 24000)
-	defer media.Close()
+	t.Cleanup(func() {
+		if err := media.Close(); err != nil {
+			t.Errorf("SessionMedia.Close() = %v", err)
+		}
+	})
 	if err := media.Endpoints().Outbound.WriteFrame(context.Background(), want); err != nil {
 		t.Fatal(err)
 	}
