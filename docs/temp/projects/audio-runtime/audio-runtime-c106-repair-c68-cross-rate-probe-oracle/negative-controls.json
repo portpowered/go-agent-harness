@@ -1,0 +1,31 @@
+{
+  "controls": [
+    {
+      "name": "wrong declared public rate",
+      "expectedRejection": true,
+      "stableClass": "errC106OracleRateMismatch"
+    },
+    {
+      "name": "odd PCM16 byte count",
+      "expectedRejection": true,
+      "stableClass": "errC106OracleOddPCM"
+    },
+    {
+      "name": "one-sample same-length mutation",
+      "expectedRejection": true,
+      "stableClass": "errC106OracleSampleMismatch",
+      "stableDiagnostic": true
+    },
+    {
+      "name": "replay capture payload mutation",
+      "expectedRejection": true,
+      "stableClass": "gwtesting.ErrSessionCaptureIntegrity",
+      "rejectedBeforeProviderUse": true
+    }
+  ],
+  "canonicalPositive": {
+    "expectedAcceptance": true,
+    "ratesHz": [24000, 16000],
+    "durationEquation": "2400 * 16000 == 1600 * 24000"
+  }
+}

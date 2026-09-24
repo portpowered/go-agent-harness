@@ -1,0 +1,15 @@
+{
+  "ownerAction": "C106 repairs the C68/C102 cross-rate validation oracle only; no production audio path or historical C102 artifact is mutated.",
+  "c102": {
+    "decision": "FAILED",
+    "sha256": "be9653bda364f5017516d049c06e13ebae6527759b6a4f5eb549b31c03f0001e",
+    "immutable": true
+  },
+  "c106": {
+    "crossRateOracle": "PASS",
+    "sameRateConsumerIdentity": "PASS",
+    "recordingObserverOmission": "UNRESOLVED",
+    "nativeWindowsHardwareOrAcousticProof": "OUT_OF_SCOPE",
+    "projectCompletion": "NOT_CLAIMED"
+  }
+}

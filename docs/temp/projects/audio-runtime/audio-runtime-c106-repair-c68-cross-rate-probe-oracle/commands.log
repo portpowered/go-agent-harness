@@ -1,0 +1,67 @@
+C106 bounded implementation evidence
+
+$ rtk proxy python3 "$FACTORY_ROOT/factory/scripts/project-control.py" verify-work --type task --name audio-runtime-c106-repair-c68-cross-rate-probe-oracle
+{"status": "admitted", "project": "audio-runtime", "name": "audio-runtime-c106-repair-c68-cross-rate-probe-oracle"}
+
+$ rtk git rev-parse --abbrev-ref HEAD
+codex/audio-runtime-c106-repair-c68-cross-rate-probe-oracle
+
+$ rtk git rev-parse origin/main
+d4766c3dbbf2c198142047ead4449d58dd47d485
+
+$ rtk go test -count=1 -timeout=120s ./agent-cli/internal/services/internal/agentruntime -run '^TestSessionReplayRateDomainContractYUI24kTo16k$'
+Go test: 1 passed in 1 packages
+
+$ rtk go test -count=1 -timeout=120s ./agent-cli/internal/services/internal/agentruntime -run '^TestSessionReplayRateDomainContractRejectsWrongRateOddBytesAndMutation$'
+Go test: 1 passed in 1 packages
+
+$ rtk go test -count=1 -timeout=120s ./agent-cli/internal/services/internal/agentruntime -run '^TestSessionReplayRateDomainContractC68SameRateAndObserverOmission$'
+Go test: 1 passed in 1 packages
+
+$ rtk go test -count=1 -timeout=180s ./agent-cli/internal/services/internal/agentruntime -run '^TestSessionReplayRateDomainContract'
+Go test: 3 passed in 1 packages
+
+Focused causal result:
+provider 24000 Hz / 2400 samples / 4800 bytes / sha256 92b09984282be8a9cf7900c6659b5ee3c42fbe496eb38cd22f2457a34d1d6fd7
+public   16000 Hz / 1600 samples / 3200 bytes / sha256 f8e8572a333e96b573b345430748df9bba3e9b39251f23fcd690607c1b343cc8
+same-rate provider/public 128 bytes / sha256 fedd7e0ffdfa5db0a0b6b051f924834f7be1507b8f9c9bfaec49039590b61d9e
+recording observer control: RECORDING_OBSERVER_OMISSION_UNRESOLVED accepted_audio=0 audio_bytes=0
+terminal cleanup: fixture_complete/provider_close; replay Done closed; surviving replay workers 0
+
+$ rtk go test -count=1 -timeout=120s ./agent-cli/test/integration -run '^TestSessionCommand_CreditsConsecutiveScheduledToolContinuations$'
+Go test: 1 passed in 1 packages
+
+$ rtk go test -count=1 -timeout=120s ./agent-cli/test/integration -run '^TestS2SV3CBargeInRepeatedReconcilesViaCLIReplay$'
+Go test: 1 passed in 1 packages
+
+$ rtk python3 docs/temp/projects/audio-runtime/audio-runtime-c106-repair-c68-cross-rate-probe-oracle/verify.py --mode vertical-report
+C106 verifier PASS mode=vertical-report task=audio-runtime-c106-repair-c68-cross-rate-probe-oracle
+
+$ rtk python3 docs/temp/projects/audio-runtime/audio-runtime-c106-repair-c68-cross-rate-probe-oracle/verify.py --mode all
+C106 verifier PASS mode=all task=audio-runtime-c106-repair-c68-cross-rate-probe-oracle
+
+$ rtk git status --porcelain --untracked-files=all
+ok
+
+Final staged-artifact scope: only the owned C106 regression test and evidence directory differ from d4766c3d; required startup and main ancestors are present.
+
+CI-static repair checkpoint from rejected head d8f3cb273afe3bd1738577dcf6d94b590aca32fe:
+
+$ rtk make lint
+Pinned golangci-lint 2.9.0: all 15 modules reported 0 issues.
+
+$ rtk make staticcheck
+Pinned staticcheck 2026.1: all 15 modules completed with no findings.
+
+$ rtk go test -count=1 -timeout=180s ./agent-cli/internal/services/internal/agentruntime -run '^TestSessionReplayRateDomainContract'
+Go test: 3 passed in 1 packages
+
+$ rtk go test -count=1 -timeout=180s ./agent-cli/test/integration -run '^TestSessionCommand_CreditsConsecutiveScheduledToolContinuations$'
+Go test: 1 passed in 1 packages
+
+$ rtk go test -count=1 -timeout=180s ./agent-cli/test/integration -run '^TestS2SV3CBargeInRepeatedReconcilesViaCLIReplay$'
+Go test: 1 passed in 1 packages
+
+$ rtk make architecture-size-check
+FAIL: baseline-drift github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime (238 > 237).
+The shared architecture-size baseline is owned by active predecessor C79 and was not changed by C106.
