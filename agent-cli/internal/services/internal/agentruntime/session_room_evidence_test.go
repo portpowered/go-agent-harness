@@ -29,6 +29,11 @@ type (
 	roomTimelineEntry               = roomevidence.TimelineEntry
 )
 
+func withRoomTestEvidence(options RoomRunOptions) RoomRunOptions {
+	options.evidenceService, options.latencyService = roomevidencewire.NewService(), roomevidencewire.NewLatencyService()
+	return options
+}
+
 const (
 	RoomEvidenceManifestPath  = roomevidence.ManifestPath
 	RoomEvidenceTimelinePath  = roomevidence.TimelinePath

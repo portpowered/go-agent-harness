@@ -16,7 +16,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimedeviceswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
-	roomevidencewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
@@ -497,7 +496,7 @@ func TestRunRoom_HumanProviderFailureFailsOnlyParticipant(t *testing.T) {
 }
 
 func newRoomHumanRunOptions(registry *roomHumanTestRegistry, inferencer *roomTestInferencer) RoomRunOptions {
-	return RoomRunOptions{
+	return withRoomTestEvidence(RoomRunOptions{
 		AudioService: newTestAudioIOService(), Manifest: room.Manifest{
 			SchemaVersion: room.SchemaVersion,
 			Room:          room.Room{Interactive: true},
@@ -527,13 +526,11 @@ func newRoomHumanRunOptions(registry *roomHumanTestRegistry, inferencer *roomTes
 			}
 			return "", false
 		},
-		evidenceService: roomevidencewire.NewService(),
-		latencyService:  roomevidencewire.NewLatencyService(),
-		DeviceService:   runtimedeviceswire.NewService(registry, newTestAudioIOService()),
+		DeviceService: runtimedeviceswire.NewService(registry, newTestAudioIOService()),
 		SessionInferencers: map[string]messages.SessionInferencer{
 			"agent": inferencer,
 		},
-	}
+	})
 }
 
 func waitRoomHumanTestSession(t *testing.T, inferencer *roomTestInferencer) *roomTestSession {

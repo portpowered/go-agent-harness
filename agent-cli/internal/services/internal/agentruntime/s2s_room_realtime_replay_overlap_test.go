@@ -15,7 +15,6 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	roomevidencewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/wire"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
@@ -493,14 +492,12 @@ func TestRunRoomWithResult_BidirectionalOverlapRecordsPeerOnlyEvidence(t *testin
 	t.Cleanup(cancel)
 	responseAudioRelease := make(chan struct{})
 
-	opts := RoomRunOptions{
+	opts := withRoomTestEvidence(RoomRunOptions{
 		AudioService: newTestAudioIOService(), Manifest: manifest,
 		ConfigDir: configDir, ModelCatalog: testModelCatalog(),
-		OutputDir:       outputDir,
-		evidenceService: roomevidencewire.NewService(),
-		latencyService:  roomevidencewire.NewLatencyService(),
-		BaseURL:         "wss://room-replay.invalid/v1/realtime",
-		MixerConfig:     mixerConfig,
+		OutputDir:   outputDir,
+		BaseURL:     "wss://room-replay.invalid/v1/realtime",
+		MixerConfig: mixerConfig,
 		CredentialLookup: func(name string) (string, bool) {
 			value, ok := credentials[name]
 			return value, ok
@@ -538,7 +535,7 @@ func TestRunRoomWithResult_BidirectionalOverlapRecordsPeerOnlyEvidence(t *testin
 			}
 			diagnosticMu.Unlock()
 		},
-	}
+	})
 	runDone := make(chan roomTestRunOutcome, 1)
 	go func() {
 		result, err := RunRoomWithResult(roomCtx, io.Discard, opts)
