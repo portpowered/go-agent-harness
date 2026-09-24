@@ -165,17 +165,22 @@ func finishRun(result selfplay.Result, runErr error, source platformclock.TimerS
 
 type redactedError struct {
 	message string
-	cause   error
+	matches func(error) bool
 }
 
 func (e *redactedError) Error() string { return e.message }
-func (e *redactedError) Unwrap() error { return e.cause }
+func (e *redactedError) Is(target error) bool {
+	return e.matches != nil && e.matches(target)
+}
 
 func redactReturnedError(err error, secret string) error {
 	if err == nil {
 		return nil
 	}
-	return &redactedError{message: redactError(err.Error(), secret), cause: err}
+	return &redactedError{
+		message: redactError(err.Error(), secret),
+		matches: func(target error) bool { return errors.Is(err, target) },
+	}
 }
 
 func providersRequiredError() error {

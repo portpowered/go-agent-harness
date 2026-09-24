@@ -2,6 +2,8 @@ package wire
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +15,52 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/selfplay"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
+
+var errSensitiveProviderFailure = errors.New("sensitive provider failure")
+
+func TestSelfPlayServiceRedactsReturnedProviderErrorWithoutExposingCause(t *testing.T) {
+	const secret = "provider-credential-that-must-not-escape"
+	service := NewService(Dependencies{
+		SessionService: sensitiveFailureSessionService{err: &sensitiveProviderError{secret: secret}},
+		ModelCatalog:   testModelCatalog{},
+		Clock:          clock.Real{},
+	})
+	_, err := service.Run(context.Background(), selfplay.Request{
+		APIKey:      secret,
+		OutputDir:   filepath.Join(t.TempDir(), "run"),
+		MaxDuration: 10 * time.Second,
+		MaxTurns:    1,
+	})
+	if err == nil || !strings.Contains(err.Error(), "[REDACTED]") || strings.Contains(err.Error(), secret) {
+		t.Fatalf("provider failure = %v, want a redacted error", err)
+	}
+	if errors.Unwrap(err) != nil {
+		t.Fatalf("returned error exposes an unwrap cause: %v", errors.Unwrap(err))
+	}
+	var providerErr *sensitiveProviderError
+	if errors.As(err, &providerErr) {
+		t.Fatalf("returned error exposes the provider error through errors.As: %#v", providerErr)
+	}
+	if errors.Is(err, errSensitiveProviderFailure) == false {
+		t.Fatalf("returned error lost its provider category: %v", err)
+	}
+	if formatted := fmt.Sprintf("%#v", err); strings.Contains(formatted, secret) {
+		t.Fatalf("formatted returned error leaked the credential: %s", formatted)
+	}
+}
+
+type sensitiveProviderError struct{ secret string }
+
+func (e *sensitiveProviderError) Error() string { return "provider rejected credential " + e.secret }
+func (e *sensitiveProviderError) Is(target error) bool {
+	return target == errSensitiveProviderFailure
+}
+
+type sensitiveFailureSessionService struct{ err error }
+
+func (s sensitiveFailureSessionService) BuildSession(context.Context, providers.SessionConfig) (messages.SessionInferencer, error) {
+	return nil, s.err
+}
 
 func TestSelfPlayServiceRedactsUnmarkedSensitiveFieldsFromStreamEvidence(t *testing.T) {
 	const secret = "unmarked-stream-credential"
