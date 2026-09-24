@@ -14,7 +14,6 @@ import (
 	devicesservice "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/devices"
 	toolsservice "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/tools"
 	roomwire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/rooms/wire"
-	serviceSelfPlay "github.com/portpowered/go-agent-harness/agent-cli/internal/services/selfplay"
 	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -113,12 +112,6 @@ func (s legacyToolCapabilitiesService) Resolve(cfg *config.Config) (serviceTools
 	return capabilities, nil
 }
 
-// NewSelfPlayService keeps the self-play runtime implementation private while
-// exposing only its value-oriented application contract to the CLI graph.
-func NewSelfPlayService(audioService audioio.Service, factory agentruntime.SessionRuntimeFactory, clockSource clock.Source, modelCatalog runtimeProviders.ModelCatalog) serviceSelfPlay.Service {
-	return agentruntime.NewSelfPlayService(audioService, factory, clockSource, modelCatalog)
-}
-
 // DeviceSet is the device service's complete provider set. Application Wire
 // composition includes this set alongside the existing registry provider.
 var DeviceSet = wire.NewSet(NewDeviceService, NewDeviceProbeSessionFactory, NewDeviceProbeService, audioiowire.NewService, runtimeDevicesWire.NewService) //nolint:gochecknoglobals // immutable Wire provider metadata
@@ -149,22 +142,14 @@ func NewSessionService(deps SessionDependencies) serviceSession.SessionService {
 
 // NewSessionRuntime builds the private runtime implementation behind its
 // public contract. Application Wire never imports services/internal.
-
 func NewSessionRuntime(audioService audioio.Service, clockSource clock.Source, resolver serviceTools.Service, planFactory agentruntime.SessionRuntimeFactory, runtimeFactory agentruntime.SessionRTCRuntimeFactory, inferencer messages.SessionInferencer, toolExecutor messages.ToolExecutor, deviceService runtimeDevices.Service, observer agentruntime.SessionRuntimeObserver, metricSampler observability.MetricSampler, logger observability.Logger, modelCatalog runtimeProviders.ModelCatalog, browserConversation runtimeBrowser.Service) serviceRuntime.Runtime {
-	_ = browserConversation
 	return agentruntime.New(agentruntime.Dependencies{
 		AudioService: audioService, Clock: clockSource, PlanFactory: planFactory, ToolService: resolver, RuntimeFactory: runtimeFactory,
 		SessionInferencer: inferencer, ToolExecutor: toolExecutor,
 		DeviceService: deviceService, RuntimeObserver: observer,
 		Observability: observability.NewDependencies(metricSampler, logger),
-		ModelCatalog:  modelCatalog,
+		ModelCatalog:  modelCatalog, BrowserConversation: browserConversation,
 	})
-}
-
-// NewBrowserConversationService exposes the main-side browser contract to
-// composition tests while keeping its implementation behind the service wire.
-func NewBrowserConversationService() runtimeBrowser.Service {
-	return runtimeBrowserWire.NewService()
 }
 
 func NewSessionRuntimeFactory() agentruntime.SessionRuntimeFactory {
@@ -173,5 +158,11 @@ func NewSessionRuntimeFactory() agentruntime.SessionRuntimeFactory {
 
 var SessionSet = wire.NewSet(NewSessionRuntimeFactory, NewSessionRuntime, NewSessionService)
 
-// SelfPlaySet is the self-play service's complete provider set.
-var SelfPlaySet = wire.NewSet(NewSelfPlayService)
+// NewBrowserConversationService exposes the complete browser-conversation
+// vertical through its service-owned Wire provider. The CLI graph receives
+// only the public contract and never imports the private implementation.
+func NewBrowserConversationService() runtimeBrowser.Service {
+	return runtimeBrowserWire.NewService()
+}
+
+func BrowserConversationSet() wire.ProviderSet { return wire.NewSet(NewBrowserConversationService) }

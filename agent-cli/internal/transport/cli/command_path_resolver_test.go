@@ -16,12 +16,12 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe"
-	serviceSelfPlay "github.com/portpowered/go-agent-harness/agent-cli/internal/services/selfplay"
 	sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
 	sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeSelfPlay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/selfplay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	sessionwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -227,15 +227,15 @@ func TestRouterPreRunRejectsAskTildeAttachmentBeforeCommandExecution(t *testing.
 }
 
 func TestRouterPreRunNormalizesSelfPlayOutputDirectory(t *testing.T) {
-	currentHome := t.TempDir()
-	namedHome := t.TempDir()
+	currentHome, namedHome := t.TempDir(), t.TempDir()
 	globalFlags := flags.NewGlobalFlags()
-	owner := NewSessionSelfPlayCommand(globalFlags, nil)
-	var got serviceSelfPlay.RunOptions
-	owner.SetRunner(func(_ context.Context, _ io.Writer, options serviceSelfPlay.RunOptions) error {
-		got = options
-		return nil
+	globalFlags.ConfigDirPath = t.TempDir()
+	var got runtimeSelfPlay.Request
+	runner := selfPlayRuntimeFunc(func(_ context.Context, request runtimeSelfPlay.Request) (runtimeSelfPlay.Result, error) {
+		got = request
+		return runtimeSelfPlay.Result{}, nil
 	})
+	owner := NewSessionSelfPlayCommand(globalFlags, runner)
 
 	sessionGroup := &cobra.Command{Use: "session"}
 	sessionGroup.AddCommand(owner.Generate())
