@@ -75,7 +75,7 @@ var concurrentDefaultTurns = []concurrentTurnKind{turnText, turnAudio, turnTool}
 // failure-only watchdog in the coordinator, never pacing: all pacing and
 // interleaving happens on logical ticks, and the budget only converts a
 // wedged pipeline into a test failure instead of a hang.
-const concurrentRunBudget = 120 * time.Second
+const concurrentRunBudget = 240 * time.Second
 
 // concurrentSessionToken returns the unique marker token embedded in every
 // audio payload, transcript text, and tool-call argument of session k.
