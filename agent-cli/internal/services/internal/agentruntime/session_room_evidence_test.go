@@ -143,7 +143,7 @@ func TestRunRoom_WritesPerParticipantEvidenceAndManifest(t *testing.T) {
 		diagnostics := readRoomEvidenceJSONLLines(t, filepath.Join(outputDir, participantManifest.Artifacts.Diagnostics))
 		diagnosticTurns := 0
 		for _, line := range diagnostics {
-			var record selfPlayDiagnosticLine
+			var record roomDiagnosticLine
 			if err := json.Unmarshal(line, &record); err != nil {
 				t.Fatalf("decode participant %q diagnostic: %v", id, err)
 			}
@@ -190,7 +190,7 @@ func TestRunRoom_PreservesFailedEvidenceAndRedactsSecrets(t *testing.T) {
 	const secret = "sk-room-evidence-secret"
 	ids := []string{"a", "b", "c"}
 	inferencers := map[string]*roomTestInferencer{
-		"a": {connectErr: fmt.Errorf("provider authorization: Bearer %s", secret)},
+		"a": {connectErr: fmt.Errorf("provider authorization: Bearer %s; retry authorization: Bearer %s", secret, secret)},
 		"b": {events: []messages.StreamMessage{roomTestSessionOpen("b")}},
 		"c": {events: []messages.StreamMessage{roomTestSessionOpen("c")}},
 	}

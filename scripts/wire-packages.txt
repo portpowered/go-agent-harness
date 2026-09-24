@@ -14,3 +14,4 @@ go-agent-runtime/services/roomreplay/wire
 go-agent-runtime/services/tools/wire
 go-agent-runtime/services/replay/wire
 go-agent-runtime/services/recording/wire
+go-agent-runtime/services/selfplay/wire
