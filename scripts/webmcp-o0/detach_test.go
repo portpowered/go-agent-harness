@@ -8,7 +8,7 @@ func TestDetachTransition(t *testing.T) {
 		expected string
 		next     string
 	}{
-		{phase: "initial", expected: "initial", next: "attached"},
+		{phase: hermeticInitialValue, expected: hermeticInitialValue, next: "attached"},
 		{phase: "reattach", expected: "attached", next: "reattached"},
 	}
 

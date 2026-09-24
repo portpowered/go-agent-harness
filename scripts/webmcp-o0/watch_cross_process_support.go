@@ -334,7 +334,7 @@ func targetIDFromContext(ctx context.Context) (string, error) {
 
 func isLoopbackWatchFixtureURL(value string) bool {
 	parsed, err := url.Parse(value)
-	return err == nil && parsed.Scheme == "http" && parsed.Hostname() == "127.0.0.1" && parsed.Path == "/" && parsed.RawQuery == "" && parsed.Fragment == ""
+	return err == nil && parsed.Scheme == schemeHTTP && parsed.Hostname() == "127.0.0.1" && parsed.Path == "/" && parsed.RawQuery == "" && parsed.Fragment == ""
 }
 
 func stateHasInvocation(state crossProcessPageState, value string) bool {

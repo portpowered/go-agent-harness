@@ -16,6 +16,12 @@ import (
 const (
 	hermeticInitialValue = "initial"
 	hermeticFinalValue   = "transitioned"
+
+	outcomeSuccess               = "success"
+	outcomeError                 = "error"
+	verdictPass                  = "PASS"
+	verdictCompleteTypedCoverage = "complete typed coverage"
+	schemeHTTP                   = "http"
 )
 
 //go:embed hermetic-fixture.html
@@ -166,11 +172,11 @@ func runHermeticProbe(endpoint string) (report hermeticProbeReport, err error) {
 	action := hermeticActionReport{Attempted: true}
 	var actionResult hermeticActionResult
 	if err := chromedp.Run(targetContext, chromedp.Evaluate(hermeticTransitionExpression(), &actionResult)); err != nil {
-		action.Outcome = "error"
+		action.Outcome = outcomeError
 		action.Error = err.Error()
 		return hermeticProbeReport{}, fmt.Errorf("evaluate hermetic fixture transition: %w", err)
 	}
-	action.Outcome = "success"
+	action.Outcome = outcomeSuccess
 	action.Returned = actionResult
 	if actionResult.Value != hermeticFinalValue || actionResult.VisibleText != hermeticFinalValue {
 		return hermeticProbeReport{}, fmt.Errorf("transition result = %+v, want value and visible text %q", actionResult, hermeticFinalValue)
@@ -200,6 +206,6 @@ func runHermeticProbe(endpoint string) (report hermeticProbeReport, err error) {
 		StateMatch:    stateMatch,
 		ControlPath:   "chromedp.Navigate + WaitReady + Evaluate over pinned CDP",
 		WebMCPPath:    "not exercised; this row proves generic CDP fixture control only",
-		Verdict:       "PASS",
+		Verdict:       verdictPass,
 	}, nil
 }

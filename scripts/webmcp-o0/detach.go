@@ -138,8 +138,8 @@ func detachExternalTarget(targetContext context.Context, cancelTarget context.Ca
 
 func detachTransition(phase string) (expected, next string, err error) {
 	switch phase {
-	case "initial":
-		return "initial", "attached", nil
+	case hermeticInitialValue:
+		return hermeticInitialValue, "attached", nil
 	case "reattach":
 		return "attached", "reattached", nil
 	default:
@@ -215,13 +215,13 @@ func runDetachProbe(endpoint, targetID, phase string) (report detachProbeReport,
 		FixtureURL: before.URL,
 		Before:     before,
 		After:      after,
-		Verdict:    "PASS",
+		Verdict:    verdictPass,
 	}, nil
 }
 
 func isLoopbackFixtureURL(value string) bool {
 	parsed, err := url.Parse(value)
-	return err == nil && parsed.Scheme == "http" && parsed.Hostname() == "127.0.0.1" && parsed.Path == "/" && parsed.RawQuery == "" && parsed.Fragment == ""
+	return err == nil && parsed.Scheme == schemeHTTP && parsed.Hostname() == "127.0.0.1" && parsed.Path == "/" && parsed.RawQuery == "" && parsed.Fragment == ""
 }
 
 func serveDetachFixture() (err error) {

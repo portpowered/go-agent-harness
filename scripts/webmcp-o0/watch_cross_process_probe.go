@@ -147,12 +147,12 @@ func (p *crossProcessProbe) attachInitialTarget() error {
 	if err != nil {
 		return err
 	}
-	if !initialState.Ready || initialState.Value != "initial" || initialState.VisibleText != "initial" {
+	if !initialState.Ready || initialState.Value != hermeticInitialValue || initialState.VisibleText != hermeticInitialValue {
 		return fmt.Errorf("initial page state = %+v, want ready initial state", initialState)
 	}
 	initialOracleContext, cancelInitialOracle := context.WithTimeout(p.root, crossProcessOracleTimeout)
 	initialOracle, err := waitForHTTPOracle(initialOracleContext, p.fixture.StateURL(), func(state crossProcessPageState) bool {
-		return state.Ready && state.Value == "initial" && state.VisibleText == "initial" && len(state.Invocations) == 0
+		return state.Ready && state.Value == hermeticInitialValue && state.VisibleText == hermeticInitialValue && len(state.Invocations) == 0
 	})
 	cancelInitialOracle()
 	if err != nil {
@@ -392,6 +392,6 @@ func (p *crossProcessProbe) finishReport() error {
 	p.report.FinalOracle = finalOracle
 	p.report.TargetChecks = p.checks
 	p.report.Cleanup = "watcher and invoker detached external target; independent CDP verifier reattached and detached it; browser remained launcher-owned"
-	p.report.Verdict = "PASS"
+	p.report.Verdict = verdictPass
 	return nil
 }

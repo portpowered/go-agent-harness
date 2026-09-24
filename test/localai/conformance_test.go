@@ -298,7 +298,7 @@ func (r *bargeInRun) sendBargeAudio() error {
 func (r *bargeInRun) handle(event realtimeEvent) (behaviorObservation, bool, error) {
 	r.observation.events = append(r.observation.events, fmt.Sprintf("%s@%s", event.typeName, time.Since(r.started).Round(time.Millisecond)))
 	switch event.typeName {
-	case "error":
+	case serverEventError:
 		return behaviorObservation{}, false, fmt.Errorf("server error during barge-in: %s", eventErrorMessage(event.data))
 	case "input_audio_buffer.speech_started":
 		if r.bargeSent {

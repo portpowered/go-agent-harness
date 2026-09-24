@@ -282,10 +282,10 @@ func fetchProtocol(endpoint string) (report advertisedProtocolReport, err error)
 	}
 	switch parsed.Scheme {
 	case "ws":
-		parsed.Scheme = "http"
+		parsed.Scheme = schemeHTTP
 	case "wss":
 		parsed.Scheme = "https"
-	case "http", "https":
+	case schemeHTTP, "https":
 	default:
 		return advertisedProtocolReport{}, fmt.Errorf("unsupported browser endpoint scheme %q", parsed.Scheme)
 	}
@@ -366,7 +366,7 @@ func typedCoverage(advertised advertisedProtocolReport) typedCoverageReport {
 	case len(coverage.MissingCommands) > 0 || len(coverage.MissingEvents) > 0:
 		coverage.Verdict = "partial typed coverage"
 	default:
-		coverage.Verdict = "complete typed coverage"
+		coverage.Verdict = verdictCompleteTypedCoverage
 	}
 	return coverage
 }
@@ -393,13 +393,13 @@ func runCDPInvocation(ctx context.Context, targetContext context.Context, eventL
 	report.Invocation = cdpInvocationReport{Attempted: true, ToolName: missingProbeToolName}
 	client := chromedp.FromContext(targetContext)
 	if client == nil || client.Target == nil {
-		report.Invocation.Outcome = "error"
+		report.Invocation.Outcome = outcomeError
 		report.Invocation.Error = "target context has no attached target"
 		return
 	}
 	frameTree, err := page.GetFrameTree().Do(cdp.WithExecutor(targetContext, client.Target))
 	if err != nil || frameTree == nil || frameTree.Frame == nil {
-		report.Invocation.Outcome = "error"
+		report.Invocation.Outcome = outcomeError
 		report.Invocation.Error = fmt.Sprintf("get main frame: %v", err)
 		return
 	}
@@ -409,7 +409,7 @@ func runCDPInvocation(ctx context.Context, targetContext context.Context, eventL
 	input := jsontext.Value([]byte(`{"value":"cdp"}`))
 	invocationID, err := webmcp.InvokeTool(frameTree.Frame.ID, report.Invocation.ToolName, input).Do(cdp.WithExecutor(targetContext, client.Target))
 	if err != nil {
-		report.Invocation.Outcome = "error"
+		report.Invocation.Outcome = outcomeError
 		report.Invocation.Error = err.Error()
 		return
 	}
@@ -418,7 +418,7 @@ func runCDPInvocation(ctx context.Context, targetContext context.Context, eventL
 	defer cancel()
 	response, err := eventLog.waitForResponse(responseContext, invocationID)
 	if err != nil {
-		report.Invocation.Outcome = "error"
+		report.Invocation.Outcome = outcomeError
 		report.Invocation.Error = err.Error()
 		return
 	}
@@ -431,18 +431,18 @@ func runCDPInvocation(ctx context.Context, targetContext context.Context, eventL
 func nativeVerdict(pageReport pageProbeReport, cdpReport cdpProbeReport) string {
 	nativeProducer := (pageReport.DocumentModelContext.Present || pageReport.NavigatorModelContext.Present) &&
 		pageReport.Fixture.Registration.Outcome == "registered" &&
-		pageReport.ProducerDiscovery.Outcome == "success" &&
-		pageReport.ProducerInvocation.Outcome == "success"
+		pageReport.ProducerDiscovery.Outcome == outcomeSuccess &&
+		pageReport.ProducerInvocation.Outcome == outcomeSuccess
 	cdpUsable := cdpReport.Advertised.Available &&
-		cdpReport.Typed.Verdict == "complete typed coverage" &&
-		cdpReport.Enable.Outcome == "success" &&
+		cdpReport.Typed.Verdict == verdictCompleteTypedCoverage &&
+		cdpReport.Enable.Outcome == outcomeSuccess &&
 		cdpReport.Invocation.Outcome == "response" &&
 		cdpReport.Invocation.Status == webmcp.InvocationStatusCompleted.String()
 	testingSurface := pageReport.NavigatorModelContextTest.Present &&
 		pageReport.TestingDiscovery.Attempted
 	switch {
 	case nativeProducer && cdpUsable:
-		return "PASS"
+		return verdictPass
 	case nativeProducer || cdpUsable || testingSurface:
 		return "PARTIAL"
 	default:
@@ -489,13 +489,13 @@ func runWebMCPMatrix(endpoint string) (webmcpMatrixReport, error) {
 	}
 	client := chromedp.FromContext(targetContext)
 	if client == nil || client.Target == nil {
-		cdpReport.Enable.Outcome = "error"
+		cdpReport.Enable.Outcome = outcomeError
 		cdpReport.Enable.Error = "target context has no attached target"
 	} else if err := webmcp.Enable().Do(cdp.WithExecutor(targetContext, client.Target)); err != nil {
-		cdpReport.Enable.Outcome = "error"
+		cdpReport.Enable.Outcome = outcomeError
 		cdpReport.Enable.Error = err.Error()
 	} else {
-		cdpReport.Enable.Outcome = "success"
+		cdpReport.Enable.Outcome = outcomeSuccess
 		waitForToolEvent(eventLog, pageReport.Fixture.ToolName, 750*time.Millisecond)
 		runCDPInvocation(rootContext, targetContext, eventLog, pageReport, &cdpReport)
 	}
