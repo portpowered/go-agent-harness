@@ -27,21 +27,22 @@ type controller struct {
 
 	maxTimer sessionTimer
 
-	livenessTimer      sessionTimer
-	livenessWake       chan struct{}
-	livenessGeneration uint64
-	livenessArmed      bool
-	livenessStopped    bool
-	livenessFailure    error
-	livenessReported   bool
-	livenessResponseID string
-	livenessCancelled  bool
-	livenessCancelID   string
-	firstCauseOnce     sync.Once
-	responseOutput     bool
-	responseComplete   bool
-	toolObligation     bool
-	localToolActive    bool
+	livenessTimer       sessionTimer
+	livenessWake        chan struct{}
+	livenessGeneration  uint64
+	livenessArmed       bool
+	livenessStopped     bool
+	livenessFailure     error
+	livenessReported    bool
+	livenessResponseID  string
+	livenessCancelled   bool
+	livenessCancelID    string
+	firstCauseOnce      sync.Once
+	responseOutput      bool
+	responseComplete    bool
+	toolObligation      bool
+	localToolActive     bool
+	localToolExecutions int
 
 	terminalWritten bool
 	expired         bool
@@ -317,6 +318,7 @@ func (c *controller) BeginLocalToolExecution() {
 		return
 	}
 	c.mu.Lock()
+	c.localToolExecutions++
 	c.localToolActive = true
 	c.mu.Unlock()
 	c.stopLiveness()
@@ -327,9 +329,12 @@ func (c *controller) EndLocalToolExecution() {
 		return
 	}
 	c.mu.Lock()
-	wasActive := c.localToolActive
-	c.localToolActive = false
-	rearm := wasActive && !c.livenessCancelled
+	wasActive := c.localToolExecutions > 0
+	if wasActive {
+		c.localToolExecutions--
+	}
+	c.localToolActive = c.localToolExecutions > 0
+	rearm := wasActive && !c.localToolActive && !c.livenessCancelled
 	c.mu.Unlock()
 	if rearm {
 		c.armLiveness(false)

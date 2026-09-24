@@ -5192,3 +5192,23 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   then run the entire C276-05/06 gate and `make prepush` on that exact SHA and
   repair any locally reproducible failure before handoff. Decision remains
   CONTINUE.
+
+# C276 parallel-tool liveness checkpoint — 2026-09-24
+
+- Further review found a public concurrency defect: parallel local tool calls
+  share the provider watchdog, but ending the first call cleared a boolean and
+  rearmed liveness while a sibling call was still active. The controller now
+  counts active local executions and rearms only when the final call completes.
+  Added a public Wire regression proving both suppression during overlap and
+  rearming after all calls finish.
+- Full sessionduration normal and race suites pass (81 tests / 3 packages each).
+  The focused public cancellation and parallel-tool Wire cases also pass in
+  normal and race modes. The previous exact-head `make prepush` stopped only at
+  sessionduration coverage (88.30% versus the 90.00% floor); the full C276-05/06
+  checks and prepush must be rerun on the new committed candidate.
+- No caller or retirement paths changed: the 13 retired paths remain absent,
+  adapters remain 63 lines, and the unrelated untracked integration fixtures
+  are preserved. No push, PR, hosted CI, or review handoff occurred.
+- Exact next action: commit these causal source/test changes and this checkpoint,
+  then run the complete C276-05/06 suite and `make prepush` against that SHA.
+  Decision remains CONTINUE.

@@ -68,6 +68,46 @@ func TestPublicCancellationDisarmsTimerCreatedConcurrently(t *testing.T) {
 	}
 }
 
+func TestPublicParallelLocalToolsKeepProviderWatchdogDisarmed(t *testing.T) {
+	scheduler := &publicManualScheduler{created: make(chan *publicManualTimer, 4)}
+	controller, err := NewService().Begin(sessionduration.Options{
+		Liveness:      sessionduration.LivenessOptions{Enabled: true, Timeout: time.Millisecond},
+		LivenessClock: scheduler,
+	})
+	if err != nil {
+		t.Fatalf("Begin: %v", err)
+	}
+	t.Cleanup(func() {
+		if _, err := controller.Finalize(context.Background(), sessionduration.FinalizeRequest{}); err != nil {
+			t.Errorf("Finalize: %v", err)
+		}
+	})
+
+	controller.Observe(messages.StreamMessage{Type: messages.StreamTypeResponseCreate, Role: messages.RoleAssistant, ResponseID: "parallel-tools"})
+	_ = receivePublicTimer(t, scheduler)
+	controller.BeginLocalToolExecution()
+	controller.BeginLocalToolExecution()
+	controller.EndLocalToolExecution()
+	select {
+	case timer := <-scheduler.created:
+		timer.Fire()
+		t.Fatal("one completed tool rearmed liveness while its sibling ran")
+	default:
+	}
+
+	controller.EndLocalToolExecution()
+	resumedTimer := receivePublicTimer(t, scheduler)
+	resumedTimer.Fire()
+	select {
+	case err := <-controller.Errors():
+		if !errors.Is(err, sessionduration.ErrProviderLivenessTimeout) {
+			t.Fatalf("resumed liveness error = %v, want timeout", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("liveness did not resume after all local tools completed")
+	}
+}
+
 type publicGatedScheduler struct {
 	entered chan struct{}
 	release chan struct{}
