@@ -151,8 +151,7 @@ func TestLiveStartSendsOpeningPromptAndPreservesCancelCause(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenLive: %v", err)
 	}
-	//lint:ignore SA1012 Verify invalid admission leaves the handle available for a valid Start.
-	if err := handle.Start(nil); err == nil {
+	if err := handle.Start(nil); err == nil { //nolint:staticcheck // SA1012: invalid admission must leave the handle available for a valid Start.
 		t.Fatal("nil Start context accepted")
 	}
 	if err := handle.Wait(); !errors.Is(err, session.ErrLiveNotStarted) {

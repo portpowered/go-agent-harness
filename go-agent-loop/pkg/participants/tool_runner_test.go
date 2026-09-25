@@ -132,15 +132,15 @@ func TestToolRunner_EmptyResultPreservesCallID(t *testing.T) {
 	if len(deltas) != 4 {
 		t.Fatalf("empty result deltas = %d, want MESSAGE.START, TEXT.START, TEXT.END, MESSAGE.END", len(deltas))
 	}
-	if _, ok := deltas[1].Value.(*messages.TextStartValue); !ok || deltas[1].ToolCallId != "tc-empty" {
+	if _, ok := deltas[1].Value.(*messages.TextStartValue); !ok || deltas[1].ToolCallId != callID {
 		t.Fatalf("empty result start = %#v, want correlated TEXT.START", deltas[1])
 	}
-	if _, ok := deltas[2].Value.(*messages.TextEndValue); !ok || deltas[2].ToolCallId != "tc-empty" {
+	if _, ok := deltas[2].Value.(*messages.TextEndValue); !ok || deltas[2].ToolCallId != callID {
 		t.Fatalf("empty result end = %#v, want correlated TEXT.END", deltas[2])
 	}
 
 	results := messages.ReconstructToolMessagesFromDeltas(deltas)
-	if len(results) != 1 || results[0].ToolCallID != "tc-empty" {
+	if len(results) != 1 || results[0].ToolCallID != callID {
 		t.Fatalf("reconstructed empty results = %#v, want one result for tc-empty", results)
 	}
 	if len(results[0].ContentParts) != 1 || results[0].TextContent() != "" {
@@ -322,12 +322,17 @@ func TestExecuteBatch_MultipleFailures(t *testing.T) {
 	}
 }
 
+const (
+	slowToolName = "slow"
+	slowCallID   = "slow-call"
+)
+
 type acknowledgementGateExecutor struct {
 	release <-chan struct{}
 }
 
 func (e acknowledgementGateExecutor) Execute(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
-	if call.Name == "slow" {
+	if call.Name == slowToolName {
 		select {
 		case <-e.release:
 		case <-ctx.Done():
@@ -342,7 +347,7 @@ func TestToolRunner_AcknowledgesOnlyPendingLongRunningCalls(t *testing.T) {
 	acknowledgements := make(chan []messages.ToolCall, 2)
 	runner := NewToolRunner(acknowledgementGateExecutor{release: release}, 8)
 	runner.ConfigureAcknowledgement(10*time.Millisecond, func(name string) bool {
-		return name == "slow"
+		return name == slowToolName
 	}, nil, func(_ context.Context, calls []messages.ToolCall) {
 		acknowledgements <- calls
 	})
@@ -352,7 +357,7 @@ func TestToolRunner_AcknowledgesOnlyPendingLongRunningCalls(t *testing.T) {
 	go func() {
 		results, err := runner.executeBatch(context.Background(), []messages.ToolCall{
 			{ID: "fast-call", Name: "fast"},
-			{ID: "slow-call", Name: "slow"},
+			{ID: slowCallID, Name: slowToolName},
 		})
 		resultCh <- results
 		errCh <- err
@@ -360,7 +365,7 @@ func TestToolRunner_AcknowledgesOnlyPendingLongRunningCalls(t *testing.T) {
 
 	select {
 	case calls := <-acknowledgements:
-		if len(calls) != 1 || calls[0].ID != "slow-call" {
+		if len(calls) != 1 || calls[0].ID != slowCallID {
 			t.Fatalf("acknowledged calls = %#v, want only slow-call", calls)
 		}
 	case <-time.After(2 * time.Second):
@@ -376,7 +381,7 @@ func TestToolRunner_AcknowledgesOnlyPendingLongRunningCalls(t *testing.T) {
 		t.Fatal("executeBatch did not complete after release")
 	}
 	results := <-resultCh
-	if len(results) != 2 || results[0].ToolCallID != "fast-call" || results[1].ToolCallID != "slow-call" {
+	if len(results) != 2 || results[0].ToolCallID != "fast-call" || results[1].ToolCallID != slowCallID {
 		t.Fatalf("results = %#v, want stable call order", results)
 	}
 	select {
@@ -406,12 +411,12 @@ func TestToolRunner_AcknowledgementThresholdFollowsConfiguredClock(t *testing.T)
 	release := make(chan struct{})
 	acknowledged := make(chan []messages.ToolCall, 1)
 	runner := NewToolRunner(acknowledgementGateExecutor{release: release}, 8)
-	runner.ConfigureAcknowledgement(threshold, func(name string) bool { return name == "slow" }, source, func(_ context.Context, calls []messages.ToolCall) {
+	runner.ConfigureAcknowledgement(threshold, func(name string) bool { return name == slowToolName }, source, func(_ context.Context, calls []messages.ToolCall) {
 		acknowledged <- calls
 	})
 	errCh := make(chan error, 1)
 	go func() {
-		_, err := runner.executeBatch(context.Background(), []messages.ToolCall{{ID: "slow-call", Name: "slow"}})
+		_, err := runner.executeBatch(context.Background(), []messages.ToolCall{{ID: slowCallID, Name: slowToolName}})
 		errCh <- err
 	}()
 	select {
@@ -428,7 +433,7 @@ func TestToolRunner_AcknowledgementThresholdFollowsConfiguredClock(t *testing.T)
 	source.AdvanceBy(time.Millisecond)
 	select {
 	case calls := <-acknowledged:
-		if len(calls) != 1 || calls[0].ID != "slow-call" {
+		if len(calls) != 1 || calls[0].ID != slowCallID {
 			t.Fatalf("acknowledged calls = %#v, want slow-call", calls)
 		}
 	case <-time.After(2 * time.Second):

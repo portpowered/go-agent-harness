@@ -145,7 +145,7 @@ func expectedResponses(request serviceSession.Request, promptPresent bool, openi
 		return 0
 	}
 	total := len(request.AudioTurns)
-	if promptPresent && !(len(openingParts) > 0 && openingResponse == runtimeSession.LiveOpeningMessageQueued) {
+	if promptPresent && (len(openingParts) == 0 || openingResponse != runtimeSession.LiveOpeningMessageQueued) {
 		total++
 	}
 	return total

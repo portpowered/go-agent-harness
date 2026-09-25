@@ -12,6 +12,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/test/test_logging"
 )
 
+const londonWeatherText = "The weather in London is sunny."
+
 // streamTextFromEventStream drains stream and returns concatenated TEXT.DELTA and REASONING.DELTA content.
 func streamTextFromEventStream(stream Stream) string {
 	var buf strings.Builder
@@ -301,7 +303,7 @@ func TestExecute_WithToolCall(t *testing.T) {
 			},
 			// Second call: model produces final response with tool results
 			{
-				Message: messages.NewTextMessage(messages.RoleAssistant, "The weather in London is sunny."),
+				Message: messages.NewTextMessage(messages.RoleAssistant, londonWeatherText),
 			},
 		},
 	}
@@ -328,7 +330,7 @@ func TestExecute_WithToolCall(t *testing.T) {
 		t.Fatalf("Execute failed: %v", err)
 	}
 
-	if result.Text() != "The weather in London is sunny." {
+	if result.Text() != londonWeatherText {
 		t.Errorf("unexpected result: %q", result.Text())
 	}
 
@@ -479,7 +481,7 @@ func TestExecute_MultiTurn(t *testing.T) {
 			},
 			// Turn 1, call 2: model produces final response after tool result
 			{
-				Message: messages.NewTextMessage(messages.RoleAssistant, "The weather in London is sunny."),
+				Message: messages.NewTextMessage(messages.RoleAssistant, londonWeatherText),
 			},
 			// Turn 2, call 1: model requests tool call
 			{
@@ -520,8 +522,8 @@ func TestExecute_MultiTurn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first Execute failed: %v", err)
 	}
-	if result1.Text() != "The weather in London is sunny." {
-		t.Errorf("first turn: got %q, want %q", result1.Text(), "The weather in London is sunny.")
+	if result1.Text() != londonWeatherText {
+		t.Errorf("first turn: got %q, want %q", result1.Text(), londonWeatherText)
 	}
 	if inf.callCount != 2 {
 		t.Errorf("first turn: expected 2 inference calls, got %d", inf.callCount)
@@ -547,7 +549,7 @@ func TestExecute_MultiTurn(t *testing.T) {
 	turn2FirstCallMsgs := inf.capturedMessages[2]
 	hasTurn1Result := false
 	for _, msg := range turn2FirstCallMsgs {
-		if msg.Role == messages.RoleAssistant && msg.TextContent() == "The weather in London is sunny." {
+		if msg.Role == messages.RoleAssistant && msg.TextContent() == londonWeatherText {
 			hasTurn1Result = true
 			break
 		}
