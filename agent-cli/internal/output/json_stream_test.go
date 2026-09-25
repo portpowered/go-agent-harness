@@ -168,16 +168,53 @@ func TestWriteStreamEventJSON_RefusalNotMixedWithTextEvents(t *testing.T) {
 	}
 }
 
+// terminalMetadataCase is one stream message and the terminal metadata its
+// JSON encoding must carry.
+type terminalMetadataCase struct {
+	name               string
+	msg                messages.StreamMessage
+	wantType           string
+	wantClassification string
+	wantReason         messages.TerminalReason
+	wantProvenance     messages.TerminalProvenance
+	wantOutputState    messages.TerminalOutputState
+}
+
+func assertTerminalMetadataEventJSON(t *testing.T, tt terminalMetadataCase) {
+	t.Helper()
+	var buf bytes.Buffer
+	if err := WriteStreamEventJSON(&buf, tt.msg); err != nil {
+		t.Fatalf("WriteStreamEventJSON: %v", err)
+	}
+
+	var evt streamEventJSON
+	if err := json.Unmarshal(buf.Bytes(), &evt); err != nil {
+		t.Fatalf("unmarshal event: %v", err)
+	}
+	if evt.Type != tt.wantType {
+		t.Fatalf("event type = %q, want %q", evt.Type, tt.wantType)
+	}
+
+	var value map[string]any
+	if err := json.Unmarshal(evt.Value, &value); err != nil {
+		t.Fatalf("unmarshal value: %v", err)
+	}
+	if tt.wantClassification != "" && value["classification"] != tt.wantClassification {
+		t.Fatalf("classification = %v, want %q", value["classification"], tt.wantClassification)
+	}
+	if value["terminal_reason"] != string(tt.wantReason) {
+		t.Fatalf("terminal_reason = %v, want %q", value["terminal_reason"], tt.wantReason)
+	}
+	if value["terminal_provenance"] != string(tt.wantProvenance) {
+		t.Fatalf("terminal_provenance = %v, want %q", value["terminal_provenance"], tt.wantProvenance)
+	}
+	if value["output_state"] != string(tt.wantOutputState) {
+		t.Fatalf("output_state = %v, want %q", value["output_state"], tt.wantOutputState)
+	}
+}
+
 func TestWriteStreamEventJSON_TerminalMetadataFields(t *testing.T) {
-	tests := []struct {
-		name               string
-		msg                messages.StreamMessage
-		wantType           string
-		wantClassification string
-		wantReason         messages.TerminalReason
-		wantProvenance     messages.TerminalProvenance
-		wantOutputState    messages.TerminalOutputState
-	}{
+	tests := []terminalMetadataCase{
 		{
 			name: "provider authored completion",
 			msg: messages.StreamMessage{
@@ -269,35 +306,7 @@ func TestWriteStreamEventJSON_TerminalMetadataFields(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var buf bytes.Buffer
-			if err := WriteStreamEventJSON(&buf, tt.msg); err != nil {
-				t.Fatalf("WriteStreamEventJSON: %v", err)
-			}
-
-			var evt streamEventJSON
-			if err := json.Unmarshal(buf.Bytes(), &evt); err != nil {
-				t.Fatalf("unmarshal event: %v", err)
-			}
-			if evt.Type != tt.wantType {
-				t.Fatalf("event type = %q, want %q", evt.Type, tt.wantType)
-			}
-
-			var value map[string]any
-			if err := json.Unmarshal(evt.Value, &value); err != nil {
-				t.Fatalf("unmarshal value: %v", err)
-			}
-			if tt.wantClassification != "" && value["classification"] != tt.wantClassification {
-				t.Fatalf("classification = %v, want %q", value["classification"], tt.wantClassification)
-			}
-			if value["terminal_reason"] != string(tt.wantReason) {
-				t.Fatalf("terminal_reason = %v, want %q", value["terminal_reason"], tt.wantReason)
-			}
-			if value["terminal_provenance"] != string(tt.wantProvenance) {
-				t.Fatalf("terminal_provenance = %v, want %q", value["terminal_provenance"], tt.wantProvenance)
-			}
-			if value["output_state"] != string(tt.wantOutputState) {
-				t.Fatalf("output_state = %v, want %q", value["output_state"], tt.wantOutputState)
-			}
+			assertTerminalMetadataEventJSON(t, tt)
 		})
 	}
 }

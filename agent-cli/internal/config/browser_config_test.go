@@ -156,6 +156,36 @@ browser:
 	}
 }
 
+// assertEnvironmentBrowserConnectionAndSelection checks the environment-sourced
+// tools, connection, managed, and selection values.
+func assertEnvironmentBrowserConnectionAndSelection(t *testing.T, got BrowserConfig) {
+	t.Helper()
+	if !got.BrowserBackendEnabled() || got.Connection.CDPURL != "http://env.example:9222" || got.Connection.WSEndpoint == "" || got.Connection.UserDataDir != "/env/profile" || !got.Connection.AllowProcessScan || !got.Connection.AllowRemoteCDP {
+		t.Errorf("environment connection/tools = %+v/%+v", got.Connection, got.Tools)
+	}
+	if !got.Managed.Headless || got.Managed.Open != "https://env.example/start" || !got.Managed.CloseOnExit {
+		t.Errorf("environment managed = %+v", got.Managed)
+	}
+	if got.Selection.Browser != "env-browser" || got.Selection.Tab != "env-tab" || got.Selection.Origin != "https://env.example" || got.Selection.AutoSelect != BrowserAutoSelectSingle || !got.Selection.ActivateTab || got.Selection.Persist {
+		t.Errorf("environment selection = %+v", got.Selection)
+	}
+}
+
+// assertEnvironmentBrowserPolicyAndLimits checks the environment-sourced
+// policy, limits, recording, and replay values.
+func assertEnvironmentBrowserPolicyAndLimits(t *testing.T, got BrowserConfig) {
+	t.Helper()
+	if len(got.Policy.AllowedOrigins) != 2 || got.Policy.AllowedOrigins[0] != "https://allowed.example" || len(got.Policy.DeniedOrigins) != 1 || got.Policy.Approval != BrowserApprovalNever || got.Policy.CancelOnInterrupt != BrowserCancelOnInterruptNever {
+		t.Errorf("environment policy = %+v", got.Policy)
+	}
+	if got.Limits.InvocationTimeout != 45*time.Second || got.Limits.MaxInputBytes != 100 || got.Limits.MaxResultBytes != 200 || got.Limits.SerializePerTarget {
+		t.Errorf("environment limits = %+v", got.Limits)
+	}
+	if !got.Recording.Enabled || got.Recording.IncludeArguments || got.Recording.IncludeResults || got.Recording.RedactURLQuery || got.Recording.RedactURLFragment || got.Replay.Path != "/env/replay.jsonl" || got.Replay.Strict {
+		t.Errorf("environment recording/replay = %+v/%+v", got.Recording, got.Replay)
+	}
+}
+
 func TestLoadBrowserConfig_EnvironmentOverridesEachNestedValue(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, ConfigFileName)
@@ -218,24 +248,8 @@ browser:
 		t.Fatalf("Load(): %v", err)
 	}
 	got := cfg.Browser
-	if !got.BrowserBackendEnabled() || got.Connection.CDPURL != "http://env.example:9222" || got.Connection.WSEndpoint == "" || got.Connection.UserDataDir != "/env/profile" || !got.Connection.AllowProcessScan || !got.Connection.AllowRemoteCDP {
-		t.Errorf("environment connection/tools = %+v/%+v", got.Connection, got.Tools)
-	}
-	if !got.Managed.Headless || got.Managed.Open != "https://env.example/start" || !got.Managed.CloseOnExit {
-		t.Errorf("environment managed = %+v", got.Managed)
-	}
-	if got.Selection.Browser != "env-browser" || got.Selection.Tab != "env-tab" || got.Selection.Origin != "https://env.example" || got.Selection.AutoSelect != BrowserAutoSelectSingle || !got.Selection.ActivateTab || got.Selection.Persist {
-		t.Errorf("environment selection = %+v", got.Selection)
-	}
-	if len(got.Policy.AllowedOrigins) != 2 || got.Policy.AllowedOrigins[0] != "https://allowed.example" || len(got.Policy.DeniedOrigins) != 1 || got.Policy.Approval != BrowserApprovalNever || got.Policy.CancelOnInterrupt != BrowserCancelOnInterruptNever {
-		t.Errorf("environment policy = %+v", got.Policy)
-	}
-	if got.Limits.InvocationTimeout != 45*time.Second || got.Limits.MaxInputBytes != 100 || got.Limits.MaxResultBytes != 200 || got.Limits.SerializePerTarget {
-		t.Errorf("environment limits = %+v", got.Limits)
-	}
-	if !got.Recording.Enabled || got.Recording.IncludeArguments || got.Recording.IncludeResults || got.Recording.RedactURLQuery || got.Recording.RedactURLFragment || got.Replay.Path != "/env/replay.jsonl" || got.Replay.Strict {
-		t.Errorf("environment recording/replay = %+v/%+v", got.Recording, got.Replay)
-	}
+	assertEnvironmentBrowserConnectionAndSelection(t, got)
+	assertEnvironmentBrowserPolicyAndLimits(t, got)
 
 	// Values not supplied by the environment retain their YAML values only if
 	// the environment did not override them; this is checked independently by

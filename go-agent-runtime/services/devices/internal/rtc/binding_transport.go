@@ -70,7 +70,7 @@ func (s *boundSession) forwardMessages(ctx context.Context, source *messages.Typ
 			if !ok || !s.forwardSessionMessage(ctx, msg) {
 				return
 			}
-		case <-s.Session.Done():
+		case <-s.Done():
 			s.drainMessages(ctx, source)
 			return
 		case <-s.forwardStop:

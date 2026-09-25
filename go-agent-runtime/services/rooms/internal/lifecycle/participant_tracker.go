@@ -218,7 +218,7 @@ func (l *pl) finishSuccess(o E) bool {
 	return true
 }
 func (l *pl) observeSuccess(o E) bool {
-	ok := !l.has(ff) && !(l.has(fbs) && l.has(fbc) && !l.has(fbr) && l.has(ft)) && !(l.has(fbs) && !l.has(fbr) && l.has(fte)) && !(l.has(fbs) && l.has(fbc) && !o.RoomBound && o.TerminalReason != string(rCancel))
+	ok := !l.has(ff) && (!l.has(fbs) || !l.has(fbc) || l.has(fbr) || !l.has(ft)) && (!l.has(fbs) || l.has(fbr) || !l.has(fte)) && (!l.has(fbs) || !l.has(fbc) || o.RoomBound || o.TerminalReason == string(rCancel))
 	return pickCall(ok, func() bool { return l.finishSuccess(o) }, func() bool { return false })
 }
 
@@ -244,7 +244,7 @@ func (l *pl) observeEnd(msg M) {
 func (l *pl) closeValue(v *CV) {
 	l.x[tc], l.x[tt] = v.Reason, string(v.TerminalReason)
 	doIf(l.x[tt] == "" && v.Reason == providerClosed, func() { l.x[tt] = string(rProviderClose) })
-	doIf(!l.has(ff) && !l.has(ft) && !(l.has(fbs) && l.has(fbc)), func() { l.setObservation(closeObservation(v)) })
+	doIf(!l.has(ff) && !l.has(ft) && (!l.has(fbs) || !l.has(fbc)), func() { l.setObservation(closeObservation(v)) })
 }
 func (l *pl) observeClose(msg M) {
 	v, ok := msg.Value.(*CV)

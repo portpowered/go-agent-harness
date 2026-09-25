@@ -28,7 +28,7 @@ type Paths struct {
 func RunPlanOptions(paths Paths, registry devicegw.DeviceRegistry) rooms.RoomRunPlanOptions {
 	launch := rooms.RoomLaunchOptions{
 		ConfigPath: paths.Config, ManifestPath: paths.Manifest, ConfigDir: paths.ConfigDir,
-		ConfigCredential: configCredential(paths.ConfigDir),
+		ConfigCredential: ConfigCredential(paths.ConfigDir),
 	}
 	if registry != nil {
 		launch.Devices = devices{registry: registry}
@@ -72,7 +72,10 @@ func launchDevice(device devicegw.Device) rooms.LaunchDevice {
 	return rooms.LaunchDevice{ID: device.ID, Direction: rooms.LaunchDeviceDirection(device.Direction)}
 }
 
-func configCredential(configDir string) rooms.ConfigCredentialLookup {
+// ConfigCredential reads the host-configured fallback credential for a room
+// credential reference. Launch planning uses it to admit the bare room, and
+// the run uses it so evidence redacts the configured key.
+func ConfigCredential(configDir string) rooms.ConfigCredentialLookup {
 	return func(name string) (string, error) {
 		storage, err := config.NewDefaultConfigStorage(configDir)
 		if err != nil {

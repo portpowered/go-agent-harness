@@ -68,81 +68,27 @@ func (c Config) ApplyOverrides(apiKey, model, provider, baseURL string) Config {
 
 	// Ensure we have the right provider config struct and apply overrides.
 	// Copy structs to avoid mutating cached config.
+	endpoint := endpointOverrides{apiKey: apiKey, model: model, baseURL: baseURL}
 	switch effProvider {
 	case ProviderOpenAI:
-		cfg := copyOpenAIConfig(out.Model.OpenAI)
-		if cfg == nil {
-			cfg = &OpenAIConfig{Model: DefaultModelModel}
-		}
-		if apiKey != "" {
-			cfg.APIKey = apiKey
-		}
-		if model != "" {
-			cfg.Model = model
-		}
-		if baseURL != "" {
-			cfg.BaseURL = baseURL
-		}
-		out.Model.OpenAI = cfg
+		out.Model.OpenAI = overrideOpenAICompatibleConfig(out.Model.OpenAI, endpoint)
 	case ProviderOpenRouter:
-		cfg := copyOpenAIConfig(out.Model.OpenRouter)
-		if cfg == nil {
-			cfg = &OpenAIConfig{Model: DefaultModelModel}
-		}
-		if apiKey != "" {
-			cfg.APIKey = apiKey
-		}
-		if model != "" {
-			cfg.Model = model
-		}
-		if baseURL != "" {
-			cfg.BaseURL = baseURL
-		}
-		out.Model.OpenRouter = cfg
+		out.Model.OpenRouter = overrideOpenAICompatibleConfig(out.Model.OpenRouter, endpoint)
 	case ProviderLocal:
-		cfg := copyOpenAIConfig(out.Model.Local)
-		if cfg == nil {
-			cfg = &OpenAIConfig{Model: DefaultModelModel}
-		}
-		if apiKey != "" {
-			cfg.APIKey = apiKey
-		}
-		if model != "" {
-			cfg.Model = model
-		}
-		if baseURL != "" {
-			cfg.BaseURL = baseURL
-		}
-		out.Model.Local = cfg
+		out.Model.Local = overrideOpenAICompatibleConfig(out.Model.Local, endpoint)
 	case ProviderFal:
 		cfg := copyFalConfig(out.Model.Fal)
 		if cfg == nil {
 			cfg = &FalConfig{}
 		}
-		if apiKey != "" {
-			cfg.APIKey = apiKey
-		}
-		if model != "" {
-			cfg.Model = model
-		}
-		if baseURL != "" {
-			cfg.BaseURL = baseURL
-		}
+		endpoint.apply(&cfg.APIKey, &cfg.Model, &cfg.BaseURL)
 		out.Model.Fal = cfg
 	case ProviderGrok:
 		cfg := copyGrokConfig(out.Model.Grok)
 		if cfg == nil {
 			cfg = &GrokConfig{}
 		}
-		if apiKey != "" {
-			cfg.APIKey = apiKey
-		}
-		if model != "" {
-			cfg.Model = model
-		}
-		if baseURL != "" {
-			cfg.BaseURL = baseURL
-		}
+		endpoint.apply(&cfg.APIKey, &cfg.Model, &cfg.BaseURL)
 		out.Model.Grok = cfg
 	}
 
@@ -159,4 +105,32 @@ func copyFalConfig(f *FalConfig) *FalConfig {
 		APIKey:  f.APIKey,
 		BaseURL: f.BaseURL,
 	}
+}
+
+// endpointOverrides holds CLI endpoint flags; empty values mean no override.
+type endpointOverrides struct {
+	apiKey, model, baseURL string
+}
+
+func (o endpointOverrides) apply(apiKey, model, baseURL *string) {
+	overrideNonEmpty(apiKey, o.apiKey)
+	overrideNonEmpty(model, o.model)
+	overrideNonEmpty(baseURL, o.baseURL)
+}
+
+func overrideNonEmpty(dst *string, value string) {
+	if value != "" {
+		*dst = value
+	}
+}
+
+// overrideOpenAICompatibleConfig copies cfg (defaulting the model when absent)
+// and applies the endpoint overrides to the copy.
+func overrideOpenAICompatibleConfig(cfg *OpenAIConfig, endpoint endpointOverrides) *OpenAIConfig {
+	out := copyOpenAIConfig(cfg)
+	if out == nil {
+		out = &OpenAIConfig{Model: DefaultModelModel}
+	}
+	endpoint.apply(&out.APIKey, &out.Model, &out.BaseURL)
+	return out
 }

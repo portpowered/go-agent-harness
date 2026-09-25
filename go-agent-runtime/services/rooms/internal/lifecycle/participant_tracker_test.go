@@ -552,7 +552,7 @@ func testParticipantTaxonomyDefaults(t *testing.T) {
 	}
 	local.set(fbr, true)
 	local.set(fbc, true)
-	if !(local.has(fbr) && local.has(fbc)) {
+	if !local.has(fbr) || !local.has(fbc) {
 		t.Fatal("cancelled bound was not classified after grace")
 	}
 	local.setObservation(obs{b: "stopped"})

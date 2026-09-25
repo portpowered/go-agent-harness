@@ -227,9 +227,10 @@ func TestDirectoryRecorderMalformedProviderSourceIsPartial(t *testing.T) {
 			t.Fatal(err)
 		}
 		var createErr error
-		if sourceKind == "directory" {
+		switch sourceKind {
+		case "directory":
 			createErr = os.Mkdir(r.ProviderCapturePath(), evidenceDirectoryMode)
-		} else if sourceKind == "empty" {
+		case "empty":
 			createErr = os.WriteFile(r.ProviderCapturePath(), nil, evidenceFileMode)
 		}
 		if createErr != nil {

@@ -85,5 +85,5 @@ func (p *capturedProvider) Capabilities() llmproviders.ProviderCapabilities {
 	if reporter, ok := p.Provider.(llmproviders.CapabilityReporter); ok {
 		return reporter.Capabilities()
 	}
-	return llmproviders.UnknownProviderCapabilities(p.Provider.Name())
+	return llmproviders.UnknownProviderCapabilities(p.Name())
 }

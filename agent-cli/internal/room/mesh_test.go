@@ -421,33 +421,20 @@ func TestMeshExplicitCloseAndParentCancellationConvergeWithPendingPair(t *testin
 			startExplicitClose := func() {
 				go func() { closeResults <- mesh.Close() }()
 			}
+			var firstClosed *gatedClosePair
 			if test.explicitFirst {
 				startExplicitClose()
-				firstClosed := awaitFirstCloseStarted(t, connected, pending)
+				firstClosed = awaitFirstCloseStarted(t, connected, pending)
 				cancelParent()
 				startExplicitClose()
-				awaitClosed(t, pending.connectCanceled)
-				firstClosed.releaseClose()
-				secondClosed := connected
-				if firstClosed == connected {
-					secondClosed = pending
-				}
-				awaitClosed(t, secondClosed.closeStarted)
-				secondClosed.releaseClose()
 			} else {
 				cancelParent()
-				firstClosed := awaitFirstCloseStarted(t, connected, pending)
+				firstClosed = awaitFirstCloseStarted(t, connected, pending)
 				startExplicitClose()
 				startExplicitClose()
-				awaitClosed(t, pending.connectCanceled)
-				firstClosed.releaseClose()
-				secondClosed := connected
-				if firstClosed == connected {
-					secondClosed = pending
-				}
-				awaitClosed(t, secondClosed.closeStarted)
-				secondClosed.releaseClose()
 			}
+			awaitClosed(t, pending.connectCanceled)
+			releaseGatedClosesInOrder(t, firstClosed, connected, pending)
 			awaitClosed(t, mesh.Done())
 			var firstResult error
 			for index := 0; index < 2; index++ {
@@ -463,20 +450,7 @@ func TestMeshExplicitCloseAndParentCancellationConvergeWithPendingPair(t *testin
 					t.Fatalf("explicit Close caller %d did not complete", index)
 				}
 			}
-			if got := connected.closeCount.Load(); got != 1 {
-				t.Fatalf("connected pair close count at Done boundary = %d, want 1", got)
-			}
-			if got := pending.closeCount.Load(); got != 1 {
-				t.Fatalf("pending pair close count at Done boundary = %d, want 1", got)
-			}
-			select {
-			case err := <-joinResult:
-				if err == nil || !errors.Is(err, context.Canceled) {
-					t.Fatalf("pending Join error = %v, want context.Canceled", err)
-				}
-			case <-time.After(time.Second):
-				t.Fatal("pending Join did not finish after shutdown")
-			}
+			assertGatedPairsClosedOnceAndJoinCanceled(t, connected, pending, joinResult)
 			if got := mesh.Participants(); len(got) != 0 {
 				t.Fatalf("membership after shutdown = %#v, want empty", got)
 			}
@@ -486,6 +460,7 @@ func TestMeshExplicitCloseAndParentCancellationConvergeWithPendingPair(t *testin
 		})
 	}
 }
+
 func TestMeshDoneRejectsPendingJoinAndMembershipAliases(t *testing.T) {
 	parentContext, cancelParent := context.WithCancel(context.Background())
 	mesh, connected, pending, joinResult := newConnectedAndPendingMesh(

@@ -120,8 +120,9 @@ func (*providerCaptureSinkStub) Abort() error { return nil }
 
 func TestProviderAdmissionRejectsNilContext(t *testing.T) {
 	service := New(nil, nil, clock.Real{}, nil, catalog.New(), nil)
-	//lint:ignore SA1012 Exercise the public admission contract's nil-context rejection.
-	if _, err := service.Build(nil, providers.Config{}); err == nil {
+	// A typed nil exercises the public admission contract's nil-context rejection.
+	var nilContext context.Context
+	if _, err := service.Build(nilContext, providers.Config{}); err == nil {
 		t.Fatal("nil context accepted")
 	}
 }

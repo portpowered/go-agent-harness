@@ -5,9 +5,11 @@ package services
 import (
 	"strings"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mattn/go-runewidth"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 // styles for the chat UI (safe when terminal has no color)
@@ -229,4 +231,89 @@ func wrapSingleLine(s string, width int) []string {
 		out = append(out, line)
 	}
 	return out
+}
+
+// finishTurn finalizes the session handle, commits the turn's lines to the
+// scrollback, and clears streaming state.
+func (m *ChatModel) finishTurn() tea.Cmd {
+	cleanupErr := finalizeChatHandle(m.handle, m.askFlags.RecordCapturePath)
+	reportChatHandleError(m, "finalizing session", cleanupErr)
+	// Flush any remaining tool text (in case TEXT.END was not received), then commit current turn
+	if m.toolTextPartial != "" {
+		m.currentTurnLines = append(m.currentTurnLines, chatLine{kind: chatLineToolResult, content: m.toolTextPartial})
+	}
+
+	// Collect lines to commit and flush to scrollback.
+	width := m.effectiveWidth()
+	var cmds []tea.Cmd
+	for _, ln := range m.currentTurnLines {
+		m.lines = append(m.lines, ln)
+		rendered := strings.TrimSuffix(renderChatLineWrapped(ln, width), "\n")
+		cmds = append(cmds, tea.Println(rendered))
+	}
+	if m.assistantPartial != "" {
+		assistantLine := chatLine{kind: chatLineAssistant, content: m.assistantPartial}
+		m.lines = append(m.lines, assistantLine)
+		rendered := strings.TrimSuffix(renderChatLineWrapped(assistantLine, width), "\n")
+		cmds = append(cmds, tea.Println(rendered))
+	}
+
+	// Clear streaming state.
+	m.stream = nil
+	m.handle = nil
+	m.assistantPartial = ""
+	m.toolTextPartial = ""
+	m.reasoningPartial = ""
+	m.thinkingActive = false
+	m.currentTurnLines = nil
+
+	if len(cmds) > 0 {
+		return tea.Batch(cmds...)
+	}
+	return nil
+}
+
+// appendToolMediaLine records a media placeholder for media returned by a tool;
+// assistant media is not summarized in the transcript.
+func (m *ChatModel) appendToolMediaLine(evt messages.StreamMessage, label string) {
+	if isFromTool(evt) {
+		m.currentTurnLines = append(m.currentTurnLines, chatLine{kind: chatLineMedia, content: label})
+	}
+}
+
+func toolFileLabel(evt messages.StreamMessage) string {
+	if v, ok := evt.Value.(*messages.FileStartValue); ok && v.Name != "" {
+		return "[File returned: " + v.Name + "]"
+	}
+	return "[File returned]"
+}
+
+// appendTextDelta routes a text delta to the tool or assistant partial.
+func (m *ChatModel) appendTextDelta(evt messages.StreamMessage) {
+	v, ok := evt.Value.(*messages.TextDeltaValue)
+	if !ok {
+		return
+	}
+	if isFromTool(evt) {
+		m.toolTextPartial += v.Content
+	} else {
+		m.assistantPartial += v.Content
+	}
+}
+
+// chatMinWidth is the narrowest terminal width the chat layout wraps to.
+const chatMinWidth = 20
+
+// resize records the terminal size, clamping narrow terminals and leaving
+// room for the input prompt.
+func (m *ChatModel) resize(msg tea.WindowSizeMsg) {
+	m.width = msg.Width
+	m.height = msg.Height
+	if m.width < chatMinWidth {
+		m.width = chatMinWidth
+	}
+	w := m.width - 2 // leave room for "> "
+	if w > 0 {
+		m.input.Width = w
+	}
 }
