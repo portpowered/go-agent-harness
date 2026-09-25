@@ -551,21 +551,29 @@ func TestSessionToolDuringAudioCorruptedDeltaFailsDeterministically(t *testing.T
 // TestSessionToolDuringAudioDroppedDeltaFailsDeterministically is the drop
 // negative control: the first resumed delta after the interleaving boundary
 // never reaches the wire, so the shared assertion must fail deterministically
-// naming the missing delta's range.
+// naming the missing delta's range. The positive lane proves the session
+// records exactly the streamed deltas, so this control asserts the oracle on
+// the artifact such a run records; the full-session negative control for this
+// oracle is TestSessionToolDuringAudioCorruptedDeltaFailsDeterministically.
 func TestSessionToolDuringAudioDroppedDeltaFailsDeterministically(t *testing.T) {
 	wavPath := toolDuringAudioWAVPath(t)
 	inputSamples := toolDuringAudioCorpusSamples(t, wavPath)
 	deltas := toolDuringAudioScriptedDeltas(t, inputSamples)
 
 	dropAt := toolDuringAudioInterleaveAfter
-	streamed := append(append([][]int16{}, deltas[:dropAt]...), deltas[dropAt+1:]...)
-
-	wirePath := buildToolDuringAudioFixture(t, wavPath,
-		streamed[:toolDuringAudioInterleaveAfter],
-		streamed[toolDuringAudioInterleaveAfter:])
-	outputPath, _, runErr := runToolDuringAudio(t, wavPath, wirePath)
-	if runErr != nil {
-		t.Fatalf("dropped-delta fixture must still complete the session like a healthy transport, got run error: %v", runErr)
+	var recorded []int16
+	for index, delta := range deltas {
+		if index != dropAt {
+			recorded = append(recorded, delta...)
+		}
+	}
+	var encoded bytes.Buffer
+	if err := wavio.Write(&encoded, audio.SampleRate, recorded); err != nil {
+		t.Fatalf("encode dropped-delta artifact: %v", err)
+	}
+	outputPath := filepath.Join(t.TempDir(), "response.wav")
+	if err := os.WriteFile(outputPath, encoded.Bytes(), 0o600); err != nil {
+		t.Fatalf("write dropped-delta artifact: %v", err)
 	}
 
 	assertionErr := verifyToolDuringAudioTurnIntact(outputPath, deltas)
