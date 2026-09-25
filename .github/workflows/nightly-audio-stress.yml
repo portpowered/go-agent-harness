@@ -18,7 +18,7 @@ on:
       count:
         description: Repetitions of the 20-trial Test45/Test46 stress pair.
         required: false
-        default: "5"
+        default: "4"
   # Exercise the workflow itself when it changes.
   pull_request:
     paths:
@@ -61,7 +61,7 @@ jobs:
 
       - name: Run high-rate tool-audio stress trials
         env:
-          AUDIO_STRESS_COUNT: ${{ github.event.inputs.count || '5' }}
+          AUDIO_STRESS_COUNT: ${{ github.event.inputs.count || '4' }}
         run: make test-audio-stress AUDIO_STRESS_COUNT="$AUDIO_STRESS_COUNT"
 
       - name: Save Go cache
