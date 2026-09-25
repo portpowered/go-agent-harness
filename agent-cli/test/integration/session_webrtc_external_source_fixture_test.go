@@ -35,6 +35,12 @@ type webrtcSourceOptions struct {
 	// set. They are returned unchanged by cameraSourceRTPPackets so the test
 	// can derive the exact decoded PCM stream independently.
 	packets [][]byte
+
+	// videoFirst writes the video burst before the audio packets. A client
+	// that disconnects once it holds the audio it waits for (media probe, the
+	// audio bridge) would otherwise race the later video writes, which then
+	// fail on the closed connection and are never recorded.
+	videoFirst bool
 }
 
 // webrtcSourceObservation independently records what the fixture saw:
@@ -48,10 +54,16 @@ type webrtcSourceObservation struct {
 	offerAudioTracks, offerVideoTracks   int
 	answerAudioTracks, answerVideoTracks int
 	frameCount, videoFrameCount          int
+	connections                          int
+	videoWriteErr                        string
 
 	negotiated          chan struct{}
 	frameDelivered      chan struct{}
 	videoFrameDelivered chan struct{}
+	// streamed closes once every requested packet has been written and
+	// recorded. A client can hold the last frame before the fixture records
+	// it, so counts are complete only after streamed.
+	streamed chan struct{}
 
 	negotiatedOnce, frameOnce, videoFrameOnce sync.Once
 }
@@ -61,6 +73,8 @@ type webrtcSourceObservationSnapshot struct {
 	offerAudioTracks, offerVideoTracks   int
 	answerAudioTracks, answerVideoTracks int
 	frameCount, videoFrameCount          int
+	connections                          int
+	videoWriteErr                        string
 }
 
 func (o *webrtcSourceObservation) snapshot() webrtcSourceObservationSnapshot {
@@ -71,7 +85,16 @@ func (o *webrtcSourceObservation) snapshot() webrtcSourceObservationSnapshot {
 		offerAudioTracks: o.offerAudioTracks, offerVideoTracks: o.offerVideoTracks,
 		answerAudioTracks: o.answerAudioTracks, answerVideoTracks: o.answerVideoTracks,
 		frameCount: o.frameCount, videoFrameCount: o.videoFrameCount,
+		connections: o.connections, videoWriteErr: o.videoWriteErr,
 	}
+}
+
+// streamedSnapshot waits until the fixture finished streaming, so every
+// written packet is counted, and then returns its evidence.
+func (o *webrtcSourceObservation) streamedSnapshot(t *testing.T, name string) webrtcSourceObservationSnapshot {
+	t.Helper()
+	waitForExternalSourceEvent(t, o.streamed, name+" fixture stream completion")
+	return o.snapshot()
 }
 
 func (o *webrtcSourceObservation) recordNegotiation(offerSDP, answerSDP string) {
@@ -104,6 +127,7 @@ func startWebrtcSourceFixture(t *testing.T, opts webrtcSourceOptions) (string, *
 	t.Helper()
 	observed := &webrtcSourceObservation{
 		negotiated:          make(chan struct{}),
+		streamed:            make(chan struct{}),
 		frameDelivered:      make(chan struct{}),
 		videoFrameDelivered: make(chan struct{}),
 	}
@@ -123,6 +147,7 @@ func startWebrtcSourceFixture(t *testing.T, opts webrtcSourceOptions) (string, *
 			}
 		}()
 		observed.Lock()
+		observed.connections++
 		observed.path = r.URL.Path
 		observed.source = r.URL.Query().Get("src")
 		observed.Unlock()
@@ -194,7 +219,8 @@ func serveWebrtcSource(t *testing.T, ctx context.Context, conn *websocket.Conn, 
 		return
 	}
 	if opts.sendFrames {
-		streamFixtureAudio(t, audio, video, opts.packets, observed)
+		streamFixtureMedia(t, audio, video, opts, observed)
+		close(observed.streamed)
 	}
 	<-ctx.Done()
 }
@@ -301,11 +327,22 @@ func closeWebrtcSourceFixture(t *testing.T, cancelFixture context.CancelFunc, se
 	}
 }
 
-// streamFixtureAssets writes every precomputed audio packet once, then a small
-// burst of H.264 packets on the video track when one is negotiated. Delivery
-// is recorded per track so the tests can prove real media activity rather
-// than a declared-but-unused capability.
-func streamFixtureAudio(t *testing.T, audio, video *webrtc.TrackLocalStaticRTP, packets [][]byte, observed *webrtcSourceObservation) {
+// streamFixtureMedia writes every precomputed audio packet once and a small
+// burst of H.264 packets on the video track when one is negotiated, in the
+// order opts asks for. Delivery is recorded per track so the tests can prove
+// real media activity rather than a declared-but-unused capability.
+func streamFixtureMedia(t *testing.T, audio, video *webrtc.TrackLocalStaticRTP, opts webrtcSourceOptions, observed *webrtcSourceObservation) {
+	t.Helper()
+	if opts.videoFirst {
+		streamFixtureVideo(video, observed)
+		streamFixtureAudio(t, audio, opts.packets, observed)
+		return
+	}
+	streamFixtureAudio(t, audio, opts.packets, observed)
+	streamFixtureVideo(video, observed)
+}
+
+func streamFixtureAudio(t *testing.T, audio *webrtc.TrackLocalStaticRTP, packets [][]byte, observed *webrtcSourceObservation) {
 	t.Helper()
 	for i, payload := range packets {
 		packet := &rtp.Packet{Header: rtp.Header{
@@ -325,6 +362,9 @@ func streamFixtureAudio(t *testing.T, audio, video *webrtc.TrackLocalStaticRTP, 
 		}
 		observed.recordAudioFrame()
 	}
+}
+
+func streamFixtureVideo(video *webrtc.TrackLocalStaticRTP, observed *webrtcSourceObservation) {
 	for i := 0; i < externalSourceVideoPackets && video != nil; i++ {
 		packet := &rtp.Packet{Header: rtp.Header{
 			Version:        2,
@@ -338,6 +378,9 @@ func streamFixtureAudio(t *testing.T, audio, video *webrtc.TrackLocalStaticRTP, 
 			return
 		}
 		if _, err := video.Write(data); err != nil {
+			observed.Lock()
+			observed.videoWriteErr = err.Error()
+			observed.Unlock()
 			return
 		}
 		observed.recordVideoFrame()
@@ -391,4 +434,15 @@ func wrapMediaFieldError(name, value string, err error) error {
 		return fmt.Errorf("parse %s %q: %w", name, value, err)
 	}
 	return nil
+}
+
+// waitForVideoDelivery bounds the video delivery observation like
+// waitForExternalSourceEvent and reports what the fixture saw on timeout.
+func waitForVideoDelivery(t *testing.T, observed *webrtcSourceObservation, name string) {
+	t.Helper()
+	select {
+	case <-observed.videoFrameDelivered:
+	case <-time.After(20 * time.Second):
+		t.Fatalf("timed out waiting for %s\n%s", name, sourceObservationDiagnostics(observed.snapshot()))
+	}
 }

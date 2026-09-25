@@ -234,6 +234,47 @@ class PrepushTargetTests(unittest.TestCase):
 
             self.assertEqual(self._loose_objects(repo), objects_before, "hashing must not write objects into the repository")
 
+    def test_racily_clean_same_size_edit_invalidates_the_phase_cache(self):
+        # A same-size edit made in the second the index was written keeps the
+        # entry's stat data (mtime seconds, size, inode); git then re-hashes
+        # the file only because the entry is not older than the index file.
+        # Pin every timestamp so that case holds regardless of the clock.
+        # core.trustctime=false removes the ctime the test cannot set.
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fake_make, log_path = self._fake_make(root)
+            repo = root / "repo"
+            repo.mkdir()
+            tracked = repo / "tracked.txt"
+            tracked.write_text("one\n", encoding="utf-8")
+            written = 1_600_000_000
+            os.utime(tracked, (written, written))
+            for arguments in (
+                ["init", "-q"],
+                ["config", "user.email", "prepush-test@example.test"],
+                ["config", "user.name", "prepush test"],
+                ["config", "core.trustctime", "false"],
+                ["add", "-A"],
+                ["commit", "-qm", "baseline"],
+            ):
+                subprocess.run(["git", "-C", str(repo), *arguments], check=True)
+            index = repo / ".git" / "index"
+            os.utime(index, (written, written))
+            env = {"PREPUSH_JOBS": "1", "PREPUSH_CACHE": "1", "PREPUSH_CACHE_DIR": str(root / "cache")}
+
+            def run():
+                if log_path.exists():
+                    log_path.unlink()
+                result = self._run_script(fake_make, log_path, env, cwd=repo)
+                self.assertEqual(result.returncode, 0, result.output)
+                return log_path.read_text(encoding="utf-8").splitlines() if log_path.exists() else []
+
+            self.assertEqual(run(), list(PHASES))
+            os.utime(index, (written, written))
+            tracked.write_text("two\n", encoding="utf-8")
+            os.utime(tracked, (written, written))
+            self.assertEqual(run(), list(PHASES), "a racily clean edit must invalidate the cache")
+
     @staticmethod
     def _loose_objects(repo):
         objects = repo / ".git" / "objects"

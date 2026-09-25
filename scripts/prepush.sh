@@ -100,7 +100,14 @@ compute_content_key() {
 	(
 		set -e
 		private="$(mktemp -d "$work_dir/key.XXXXXX")"
-		cp "$(git rev-parse --git-path index)" "$private/index"
+		index="$(git rev-parse --git-path index)"
+		cp "$index" "$private/index"
+		# Keep the index's timestamp. Git re-hashes an entry whose stat data
+		# still matches only when the entry is "racily clean" (its mtime is
+		# not older than the index file), so a fresh copy that looks newer
+		# than every entry would hash a same-size edit made in the second the
+		# index was written as the old content.
+		touch -r "$index" "$private/index"
 		objects="$(cd "$(git rev-parse --git-path objects)" && pwd)"
 		export GIT_INDEX_FILE="$private/index" GIT_OBJECT_DIRECTORY="$private/objects" \
 			GIT_ALTERNATE_OBJECT_DIRECTORIES="$objects${GIT_ALTERNATE_OBJECT_DIRECTORIES:+:$GIT_ALTERNATE_OBJECT_DIRECTORIES}"
