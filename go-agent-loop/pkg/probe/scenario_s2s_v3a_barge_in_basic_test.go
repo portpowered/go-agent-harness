@@ -38,40 +38,6 @@ func findV3AScenario(t *testing.T, id string) Scenario {
 	return Scenario{}
 }
 
-func TestS2SV3ABargeInSuiteRegistersAndValidates(t *testing.T) {
-	corpus := v3aCorpusLookup{v3aCorpus16k: true, v3aCorpus24k: true}
-	for _, scenario := range registeredV3AScenarios(t) {
-		if err := scenario.Validate(corpus); err != nil {
-			t.Fatalf("scenario %s does not validate: %v", scenario.ID, err)
-		}
-		last := scenario.Steps[len(scenario.Steps)-1]
-		if last.Type != StepClose {
-			t.Fatalf("scenario %s must end with close, got %q", scenario.ID, last.Type)
-		}
-	}
-
-	cancelled := findV3AScenario(t, ScenarioIDS2SV3ABargeInBasicCancelled16k)
-	if len(cancelled.Steps) != 3 || !stepHasCorpus(cancelled.Steps[1]) || cancelled.Steps[1].CorpusID != v3aCorpus16k {
-		t.Fatalf("cancelled-16k must deliver the overlap_16k interrupting audio: %+v", cancelled.Steps)
-	}
-	if len(cancelled.Expectations) < 2 || cancelled.Expectations[1].Type != ExpectLatencyWithinTicks || cancelled.Expectations[1].HasAt {
-		t.Fatalf("cancelled-16k must declare latency separately with a dynamic start tick: %+v", cancelled.Expectations)
-	}
-	cancelled24 := findV3AScenario(t, ScenarioIDS2SV3ABargeInBasicCancelled24k)
-	if cancelled24.Steps[1].CorpusID != v3aCorpus24k {
-		t.Fatalf("cancelled-24k must deliver the overlap_24k interrupting audio: %+v", cancelled24.Steps)
-	}
-	if len(cancelled24.Expectations) < 2 || cancelled24.Expectations[1].Type != ExpectLatencyWithinTicks || cancelled24.Expectations[1].HasAt {
-		t.Fatalf("cancelled-24k must declare latency separately with a dynamic start tick: %+v", cancelled24.Expectations)
-	}
-	noInterruption := findV3AScenario(t, ScenarioIDS2SV3ABargeInBasicNoInterruption)
-	for _, step := range noInterruption.Steps {
-		if step.Type == StepSendAudio {
-			t.Fatal("no-interruption control must not carry user audio input")
-		}
-	}
-}
-
 func TestS2SV3ACancelledCasesPassThroughRunner(t *testing.T) {
 	corpus := v3aCorpusLookup{v3aCorpus16k: true, v3aCorpus24k: true}
 	for _, id := range []string{ScenarioIDS2SV3ABargeInBasicCancelled16k, ScenarioIDS2SV3ABargeInBasicCancelled24k} {

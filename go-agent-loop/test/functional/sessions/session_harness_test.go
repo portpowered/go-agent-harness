@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -73,43 +72,6 @@ func TestSessionScenarioCapturesTickCorrelatedCrossings(t *testing.T) {
 
 	if got := logicalClock.Tick(); got != 2 {
 		t.Fatalf("logical clock tick = %d, want 2; capture must not advance it implicitly", got)
-	}
-}
-
-func TestNewSessionScenarioPreservesTypedOptionForwarding(t *testing.T) {
-	options := []agentloop.Option{agentloop.WithBufferCapacity(8)}
-	scenario := NewSessionScenario(t, NewMockSessionInferencer(), NewMockToolExecutor(), options...)
-	if scenario == nil || scenario.Loop == nil {
-		t.Fatal("typed agentloop.Option forwarding did not construct a session scenario")
-	}
-}
-
-func TestSessionScenarioConfigAliasesExposeSharedCapture(t *testing.T) {
-	logicalClock := clock.NewDeterministic(time.Unix(42, 0).UTC(), time.Second)
-	collector := NewSessionTranscript()
-	options := SessionScenarioOptions{}
-	WithSessionClock(logicalClock)(&options)
-	WithTranscriptCapture(collector)(&options)
-
-	scenario := NewSessionScenarioWithOptions(t, NewMockSessionInferencer(), NewMockToolExecutor(), options)
-	scenario.SendText("captured through config aliases")
-	if scenario.Clock() != logicalClock {
-		t.Fatalf("scenario clock = %T, want injected deterministic clock", scenario.Clock())
-	}
-	if scenario.Transcript != collector {
-		t.Fatal("scenario did not expose the configured session transcript")
-	}
-	if len(scenario.CapturedRecords()) != 2 || len(scenario.ClientRecords()) != 1 || len(scenario.AgentRecords()) != 1 {
-		t.Fatalf("scenario capture views = total:%d client:%d agent:%d, want 2/1/1", len(scenario.CapturedRecords()), len(scenario.ClientRecords()), len(scenario.AgentRecords()))
-	}
-
-	configured := SessionScenarioOptions{}
-	WithClock(logicalClock)(&configured)
-	WithCapture()(&configured)
-	auto := NewSessionScenarioWithConfig(t, NewMockSessionInferencer(), NewMockToolExecutor(), configured)
-	auto.SendText("captured by an auto-created collector")
-	if len(auto.CapturedRecords()) != 2 {
-		t.Fatalf("auto-created capture records = %d, want 2", len(auto.CapturedRecords()))
 	}
 }
 

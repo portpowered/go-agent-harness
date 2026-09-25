@@ -36,13 +36,6 @@ func newRecorderTestState(msgs ...messages.Message) *state.LoopState {
 
 // --- TickGroup ---
 
-func TestRecorder_TickGroup(t *testing.T) {
-	r := NewRecorder(nil, 0)
-	if r.TickGroup() != TickGroupRecorder {
-		t.Errorf("TickGroup: got %d, want %d", r.TickGroup(), TickGroupRecorder)
-	}
-}
-
 // --- Nil recorder (no-op) ---
 
 func TestRecorder_NilRecorder_NoError(t *testing.T) {

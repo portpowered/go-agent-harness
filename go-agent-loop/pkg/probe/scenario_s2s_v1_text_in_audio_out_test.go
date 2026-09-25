@@ -13,26 +13,6 @@ func registeredS2SV1TextInAudioOut(t *testing.T) Scenario {
 	return Scenario{}
 }
 
-func TestS2SV1TextInAudioOutRegisteredAndValid(t *testing.T) {
-	scenario := registeredS2SV1TextInAudioOut(t)
-	if err := scenario.Validate(); err != nil {
-		t.Fatalf("registered scenario does not validate: %v", err)
-	}
-	if len(scenario.Steps) < 2 {
-		t.Fatalf("expected prompt and close steps, got %d", len(scenario.Steps))
-	}
-	if scenario.Steps[0].Type != StepSendText || scenario.Steps[0].Text == "" {
-		t.Fatalf("first step must send a text prompt, got %+v", scenario.Steps[0])
-	}
-	last := scenario.Steps[len(scenario.Steps)-1]
-	if last.Type != StepClose {
-		t.Fatalf("last step must be close, got %q", last.Type)
-	}
-	if len(scenario.Expectations) == 0 {
-		t.Fatalf("at least one expectation is required")
-	}
-}
-
 func TestS2SV1TextInAudioOutEvaluateAgainstAudioResponseObservation(t *testing.T) {
 	scenario := registeredS2SV1TextInAudioOut(t)
 

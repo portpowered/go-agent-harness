@@ -32,14 +32,6 @@ type SessionTranscript struct {
 // NewSessionTranscript creates an empty both-side transcript collector.
 func NewSessionTranscript() *SessionTranscript { return &SessionTranscript{} }
 
-// NewSessionCapture is a descriptive alias for NewSessionTranscript.
-func NewSessionCapture() *SessionTranscript { return NewSessionTranscript() }
-
-// TranscriptCapture and SessionCapture are compatibility aliases for callers
-// that name the capability rather than the storage implementation.
-type TranscriptCapture = SessionTranscript
-type SessionCapture = SessionTranscript
-
 // Write appends an owned copy of record. Capture failures must never alter the
 // live session path, so the in-memory collector always accepts the record.
 func (c *SessionTranscript) Write(record transcript.Record) error {
@@ -63,9 +55,6 @@ func (c *SessionTranscript) Records() []transcript.Record {
 	return cloneTranscriptRecords(c.records)
 }
 
-// Snapshot is an alias for Records.
-func (c *SessionTranscript) Snapshot() []transcript.Record { return c.Records() }
-
 // ClientRecords returns only client-authored records while preserving order.
 func (c *SessionTranscript) ClientRecords() []transcript.Record {
 	return filterTranscriptRecords(c.Records(), transcript.PeerClient)
@@ -81,44 +70,6 @@ func (c *SessionTranscript) AgentRecords() []transcript.Record {
 type SessionScenarioOptions struct {
 	Clock   clock.Source
 	Capture transcript.RecordSink
-}
-
-// SessionScenarioConfig is a descriptive alias for SessionScenarioOptions.
-type SessionScenarioConfig = SessionScenarioOptions
-
-// SessionScenarioOption configures a SessionScenario without changing the
-// agentloop.Option contract used by existing callers.
-type SessionScenarioOption func(*SessionScenarioOptions)
-
-// WithClock injects the clock used for transcript metadata. Nil is resolved
-// to clock.Real by the scenario constructor.
-func WithClock(source clock.Source) SessionScenarioOption {
-	return func(options *SessionScenarioOptions) { options.Clock = source }
-}
-
-// WithSessionClock is an explicit alias for WithClock.
-func WithSessionClock(source clock.Source) SessionScenarioOption { return WithClock(source) }
-
-// WithCapture enables both-side capture. With no sink it creates a collector
-// that can be read through SessionScenario.CapturedRecords.
-func WithCapture(sinks ...transcript.RecordSink) SessionScenarioOption {
-	return func(options *SessionScenarioOptions) {
-		if len(sinks) == 0 {
-			options.Capture = NewSessionTranscript()
-			return
-		}
-		options.Capture = sinks[0]
-	}
-}
-
-// WithSessionCapture is an explicit alias for WithCapture.
-func WithSessionCapture(sinks ...transcript.RecordSink) SessionScenarioOption {
-	return WithCapture(sinks...)
-}
-
-// WithTranscriptCapture is an explicit alias for WithCapture.
-func WithTranscriptCapture(sink transcript.RecordSink) SessionScenarioOption {
-	return WithCapture(sink)
 }
 
 // ---------------------------------------------------------------------------
@@ -158,12 +109,6 @@ func NewSessionScenario(t *testing.T, inf *MockSessionInferencer, tool *MockTool
 func NewSessionScenarioWithConfig(t *testing.T, inf *MockSessionInferencer, tool *MockToolExecutor, options SessionScenarioOptions, opts ...agentloop.Option) *SessionScenario {
 	t.Helper()
 	return newSessionScenario(t, inf, tool, options, opts...)
-}
-
-// NewSessionScenarioWithOptions is a naming alias for
-// NewSessionScenarioWithConfig.
-func NewSessionScenarioWithOptions(t *testing.T, inf *MockSessionInferencer, tool *MockToolExecutor, options SessionScenarioOptions, opts ...agentloop.Option) *SessionScenario {
-	return NewSessionScenarioWithConfig(t, inf, tool, options, opts...)
 }
 
 func newSessionScenario(t *testing.T, inf *MockSessionInferencer, tool *MockToolExecutor, options SessionScenarioOptions, opts ...agentloop.Option) *SessionScenario {

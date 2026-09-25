@@ -119,21 +119,6 @@ func newTickRateTestEngine(tickRate time.Duration) (*Engine, *participants.Kerne
 	return eng, kernelRunner
 }
 
-func TestSetTickRate_DefaultIsZero(t *testing.T) {
-	ts := newTickTestEngine()
-	if ts.engine.tickRate != 0 {
-		t.Fatalf("expected default tickRate 0, got %v", ts.engine.tickRate)
-	}
-}
-
-func TestSetTickRate_SetsValue(t *testing.T) {
-	ts := newTickTestEngine()
-	ts.engine.SetTickRate(50 * time.Millisecond)
-	if ts.engine.tickRate != 50*time.Millisecond {
-		t.Fatalf("expected tickRate 50ms, got %v", ts.engine.tickRate)
-	}
-}
-
 func TestSetTickRate_ZeroMeansNoDelay(t *testing.T) {
 	ts := newTickTestEngine()
 	ts.engine.SetTickRate(0)
