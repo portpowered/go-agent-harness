@@ -281,6 +281,13 @@ const (
 	InvocationPolicyDenied     InvocationState = "policy_denied"
 )
 
+// Failed reports whether s is a terminal failure: error, canceled, timed
+// out, orphaned, or denied by policy.
+func (s InvocationState) Failed() bool {
+	return s == InvocationError || s == InvocationCanceled || s == InvocationTimedOut ||
+		s == InvocationOrphaned || s == InvocationPolicyDenied
+}
+
 type OperationClass string
 
 const (

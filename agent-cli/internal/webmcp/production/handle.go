@@ -129,7 +129,8 @@ func (h *handle) Attach(ctx context.Context, targetID webmcp.TargetID, ownership
 		Reason:    "broker_exact_selection",
 	})
 	if selectErr != nil {
-		_ = rawSession.Close() //nolint:errcheck // The selection failure is the primary error; the raw session is only released.
+		// The selection failure is the primary error; the raw session is only released.
+		releaseBestEffort(rawSession)
 		return nil, normalize.DiscoveryError(selectErr)
 	}
 	publicTarget := normalize.NeutralTarget(h.candidate.ID, selection.Target)

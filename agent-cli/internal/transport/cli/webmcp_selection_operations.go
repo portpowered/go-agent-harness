@@ -7,6 +7,8 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/direct"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/production/normalize"
 	"github.com/spf13/cobra"
 )
 
@@ -46,7 +48,7 @@ func (c *WebMCPOperationsCommand) selectDirectTarget(ctx context.Context, cmd *c
 			BrowserID:         string(page.Key.BrowserID),
 			BrowserInstanceID: candidate.BrowserInstanceID,
 			TargetID:          string(page.Key.TargetID),
-			Origin:            safeOrigin(page.Origin),
+			Origin:            normalize.RedactedOrigin(page.Origin),
 			ContinuityMarker:  target.ContinuityMarker,
 			Generation:        page.Generation,
 			SelectedAt:        time.Now().UTC(),
@@ -64,7 +66,7 @@ func selectDirectTarget(ctx context.Context, broker webmcp.Broker, selector webm
 		return selectorWithOptions.SelectWithOptions(ctx, selector, webmcp.SelectOptions{Activate: activate})
 	}
 	if activate {
-		return webmcp.PageContext{}, webmcpRuntimeUnavailableError("target_activation")
+		return webmcp.PageContext{}, direct.RuntimeUnavailableError("target_activation")
 	}
 	return broker.Select(ctx, selector)
 }
