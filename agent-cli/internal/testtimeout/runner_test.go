@@ -72,7 +72,9 @@ func TestTimeoutContractSuccessControlUsesSameBoundary(t *testing.T) {
 	moduleRoot := moduleRootPath(t)
 	fixtureBinary := buildTimeoutFixture(t, moduleRoot)
 	marker := filepath.Join(t.TempDir(), "success.markers")
-	result, err := runFixture(t, fixtureBinary, marker, "success", "TestTimeoutFixtureSuccess", 3*time.Second)
+	// The success control shares the blocked fixture's boundary: a 3s bound
+	// failed on loaded workstations while the fresh fixture binary started.
+	result, err := runFixture(t, fixtureBinary, marker, "success", "TestTimeoutFixtureSuccess", blockedFixtureTimeoutBudget)
 	if err != nil {
 		t.Fatalf("success fixture: %v\noutput:\n%s", err, result.Output)
 	}
@@ -101,6 +103,18 @@ func buildTimeoutFixture(t *testing.T, moduleRoot string) string {
 	})
 	if err != nil {
 		t.Fatalf("compile timeout fixture: %v\noutput:\n%s", err, result.Output)
+	}
+	// The first exec of a freshly linked binary on macOS waits for a code
+	// assessment that can exceed the fixture budgets on a loaded machine; pay
+	// it once here, outside the timed runs.
+	warmup, err := Run(context.Background(), Config{
+		Command: fixtureBinary,
+		Args:    []string{"-test.list", "^$"},
+		Label:   "timeout fixture warm-up",
+		Timeout: time.Minute,
+	})
+	if err != nil {
+		t.Fatalf("warm up timeout fixture: %v\noutput:\n%s", err, warmup.Output)
 	}
 	return fixtureBinary
 }
