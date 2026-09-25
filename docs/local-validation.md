@@ -6,11 +6,17 @@ enforces, each once, in three fail-fast stages:
 | Stage | Phases (run concurrently, at most `PREPUSH_JOBS`) |
 | --- | --- |
 | format | `fmt` |
-| static | `lint` (its golangci config enables govet and staticcheck, so `make vet` and `make staticcheck` stay manual-only), `verify-architecture`, `build`, `coverage-registration`, `check-ci-test-partition`, and `test-factory-scripts` when `factory/` or the `Makefile` changed (always in the full scope) |
+| static | `lint` (its golangci config enables govet and staticcheck, so `make vet` and `make staticcheck` stay manual-only), `verify-architecture`, `build BUILD_LIBRARY_PACKAGES=0` (links the binaries; lint already type-checks every package), `coverage-registration`, `check-ci-test-partition`, `verify-standalone-checkout`, and `test-factory-scripts` when `factory/` or the `Makefile` changed (always in the full scope) |
 | tests | `coverage COVERAGE_SCOPE=<scope>`, `test-cgo-delta`, `test-tools` (it runs a real golangci-lint, whose machine-wide lock must not overlap `lint`) |
 
 A failed stage stops the gate; the phases already running in that stage finish
 and their output is printed as one block per phase with its time.
+
+A phase that passed for exactly the same content (the working tree including
+untracked files, the `COVERAGE_BASE` commit, the Go version and the platform)
+is reported as cached and skipped, so re-running the gate after a flaky or
+unrelated failure repeats only what has not passed (`PREPUSH_CACHE=0` turns
+this off; results live in `.cache/prepush/`).
 
 ## One test pass
 
@@ -59,6 +65,7 @@ scope selection alone is `make coverage-changed` (or
 | `PREPUSH_JOBS` | `4` | phases of one stage run at once; `1` runs them serially with live output |
 | `COVERAGE_BASE` | `origin/main` | comparison base for the changed scope |
 | `COVERAGE_COUNT` | empty locally, `1` in CI | set `1` to bypass Go's test cache |
+| `PREPUSH_CACHE` | `1` | skip phases that passed for identical content |
 | `PREPUSH_FACTORY_SCRIPTS` | `auto` | `always`/`never` overrides when factory script tests run |
 | `TEST_MODULE_JOBS` | `3` | modules the coverage pass runs at once |
 

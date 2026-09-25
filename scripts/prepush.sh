@@ -32,9 +32,10 @@ readonly stage_format=("fmt")
 stage_static=(
 	"lint"
 	"verify-architecture"
-	"build"
+	"build BUILD_LIBRARY_PACKAGES=0"
 	"coverage-registration"
 	"check-ci-test-partition"
+	"verify-standalone-checkout"
 )
 
 # changed_since_base PATTERN: whether a committed, staged, unstaged or

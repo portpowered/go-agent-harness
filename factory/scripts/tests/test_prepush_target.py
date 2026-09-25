@@ -17,6 +17,7 @@ STATIC_STAGE = (
     "build",
     "coverage-registration",
     "check-ci-test-partition",
+    "verify-standalone-checkout",
 )
 TEST_STAGE = ("coverage", "test-cgo-delta", "test-tools")
 PHASES = FORMAT_STAGE + STATIC_STAGE + TEST_STAGE
@@ -51,6 +52,8 @@ class PrepushTargetTests(unittest.TestCase):
                 self.assertNotIn(duplicate, phase_log)
             arguments = self._arguments(log_path)
             self.assertIn("TEST_TOOLS_ARCHITECTURE_GATE=0 test-tools", arguments)
+            # lint type-checks every library package; build only links binaries.
+            self.assertIn("BUILD_LIBRARY_PACKAGES=0 build", arguments)
 
     def test_scope_defaults_to_changed_and_full_is_selectable(self):
         with tempfile.TemporaryDirectory() as temp_dir:
