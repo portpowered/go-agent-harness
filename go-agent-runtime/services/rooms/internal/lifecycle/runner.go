@@ -211,7 +211,7 @@ func (r Runner) startGraph(ctx context.Context, state *runState, request rooms.R
 	if !needsRoomGraph(active) {
 		return nil
 	}
-	graph, err := newRoomGraph(ctx, r.clock, request.AudioFormat, active, state.setFailure, recorder)
+	graph, err := newRoomGraph(ctx, r.clock, request.AudioFormat, active, state.setFailure, state.delivery, recorder)
 	if err == nil {
 		for _, participant := range active {
 			if participant == nil {
