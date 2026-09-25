@@ -119,108 +119,118 @@ func newTickRateTestEngine(tickRate time.Duration) (*Engine, *participants.Kerne
 	return eng, kernelRunner
 }
 
-func TestSetTickRate_ZeroMeansNoDelay(t *testing.T) {
-	ts := newTickTestEngine()
-	ts.engine.SetTickRate(0)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	deltas := fullTextDeltas("hello")
-	ts.writeModelDeltas(ctx, deltas)
-
-	start := time.Now()
-	err := ts.engine.TickN(ctx, len(deltas))
-	elapsed := time.Since(start)
-
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if elapsed > 50*time.Millisecond {
-		t.Fatalf("expected fast execution with zero tick rate, took %v", elapsed)
+func newObservedTickClock() *observedTickClock {
+	return &observedTickClock{
+		Deterministic: clock.NewDeterministic(time.Unix(42, 0), time.Millisecond),
+		admitted:      make(chan time.Duration, 64),
 	}
 }
 
+// runTurnAdvancingPacing runs one hot-loop turn to completion on the
+// injected clock. Every pacing timer the loop admits is released by
+// advancing virtual time by exactly its delay; the requested delays are
+// returned in order. No wall-clock time bounds the pacing itself.
+func runTurnAdvancingPacing(t *testing.T, eng *Engine, kernelRunner *participants.KernelRunner, source *observedTickClock) []time.Duration {
+	t.Helper()
+	eng.SetClock(source)
+	eventCh := kernelRunner.NewDeltaEventReader(64)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	loopDone := make(chan error, 1)
+	go func() { loopDone <- eng.RunHotLoop(ctx) }()
+	turnDone := make(chan struct{})
+	go func() {
+		defer close(turnDone)
+		for range eventCh {
+		}
+	}()
+
+	var delays []time.Duration
+	failure := time.NewTimer(5 * time.Second)
+	defer failure.Stop()
+	for waiting := true; waiting; {
+		select {
+		case delay := <-source.admitted:
+			delays = append(delays, delay)
+			source.AdvanceBy(delay)
+		case <-turnDone:
+			waiting = false
+		case <-failure.C:
+			t.Fatalf("turn did not complete; pacing delays so far: %v", delays)
+		}
+	}
+	cancel()
+	select {
+	case <-loopDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("hot loop did not stop after cancellation")
+	}
+	return delays
+}
+
+// A configured tick rate paces every hot-loop tick of a turn by exactly
+// that interval on the injected clock.
+func TestRunHotLoop_TickRateThrottlesLoop(t *testing.T) {
+	const tickRate = 25 * time.Millisecond
+	eng, kernelRunner := newTickRateTestEngine(tickRate)
+	delays := runTurnAdvancingPacing(t, eng, kernelRunner, newObservedTickClock())
+
+	// Each tick consumes one of MESSAGE.START, TEXT.START, TEXT.DELTA,
+	// TEXT.END and MESSAGE.END, and the next tick cannot start until the
+	// previous pacing timer is released, so the four ticks before the one
+	// that ends the turn are always paced. (The last tick's timer may be
+	// admitted after the turn is observed complete.)
+	if len(delays) < 4 {
+		t.Fatalf("paced ticks = %d (%v), want at least 4", len(delays), delays)
+	}
+	for index, delay := range delays {
+		if delay != tickRate {
+			t.Fatalf("pacing delay[%d] = %v, want %v", index, delay, tickRate)
+		}
+	}
+}
+
+// Without a tick rate (the default, or reset to zero) the hot loop never
+// requests a pacing timer.
+func TestRunHotLoop_ZeroTickRateNeverPaces(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		setup func(*Engine)
+	}{
+		{name: "default", setup: func(*Engine) {}},
+		{name: "reset to zero", setup: func(eng *Engine) { eng.SetTickRate(50 * time.Millisecond); eng.SetTickRate(0) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			eng, kernelRunner := newTickRateTestEngine(0)
+			tc.setup(eng)
+			if delays := runTurnAdvancingPacing(t, eng, kernelRunner, newObservedTickClock()); len(delays) != 0 {
+				t.Fatalf("pacing delays = %v, want none without a tick rate", delays)
+			}
+		})
+	}
+}
+
+// Manual ticks (TickN) are never paced, even with a tick rate configured.
 func TestManualTick_NotAffectedByTickRate(t *testing.T) {
 	ts := newTickTestEngine()
+	source := newObservedTickClock()
+	ts.engine.SetClock(source)
 	ts.engine.SetTickRate(500 * time.Millisecond)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := tickCtx(t)
 	defer cancel()
 
 	deltas := fullTextDeltas("manual")
 	ts.writeModelDeltas(ctx, deltas)
-
-	start := time.Now()
-	err := ts.engine.TickN(ctx, len(deltas))
-	elapsed := time.Since(start)
-
-	if err != nil {
+	if err := ts.engine.TickN(ctx, len(deltas)); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if elapsed > 100*time.Millisecond {
-		t.Fatalf("manual ticks should not be throttled by tick rate, took %v", elapsed)
+	if got := ts.engine.TickState().TickCount; got != len(deltas) {
+		t.Fatalf("tick count = %d, want %d", got, len(deltas))
 	}
-}
-
-func TestRunHotLoop_TickRateThrottlesLoop(t *testing.T) {
-	tickRate := 25 * time.Millisecond
-	eng, kernelRunner := newTickRateTestEngine(tickRate)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Set up kernel event reader to detect turn completion.
-	eventCh := kernelRunner.NewDeltaEventReader(64)
-
-	errCh := make(chan error, 1)
-	start := time.Now()
-	go func() {
-		errCh <- eng.RunHotLoop(ctx)
-	}()
-
-	// Drain kernel events until channel closes (LOOP.END processed).
-	for range eventCh {
-	}
-	elapsed := time.Since(start)
-	cancel()
-
-	// Wait for hot loop to exit.
-	<-errCh
-
-	// The engine processes at least 5 ticks (MESSAGE.START → TEXT.START → TEXT.DELTA
-	// → TEXT.END → MESSAGE.END) plus coordinator ticks. With a 25ms tick rate,
-	// elapsed should be measurably longer than without tick rate.
-	// Use a conservative lower bound: at least 3 * tickRate.
-	minExpected := 3 * tickRate
-	if elapsed < minExpected {
-		t.Fatalf("expected at least %v with tick rate %v, got %v", minExpected, tickRate, elapsed)
-	}
-}
-
-func TestRunHotLoop_NoTickRateRunsFast(t *testing.T) {
-	eng, kernelRunner := newTickRateTestEngine(0)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	eventCh := kernelRunner.NewDeltaEventReader(64)
-
-	errCh := make(chan error, 1)
-	start := time.Now()
-	go func() {
-		errCh <- eng.RunHotLoop(ctx)
-	}()
-
-	for range eventCh {
-	}
-	elapsed := time.Since(start)
-	cancel()
-
-	<-errCh
-
-	// Without tick rate, the turn should complete quickly.
-	if elapsed > 500*time.Millisecond {
-		t.Fatalf("expected fast execution without tick rate, took %v", elapsed)
+	select {
+	case delay := <-source.admitted:
+		t.Fatalf("manual tick requested a %v pacing timer", delay)
+	default:
 	}
 }
