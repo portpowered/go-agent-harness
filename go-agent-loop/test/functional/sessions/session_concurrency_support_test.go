@@ -17,10 +17,10 @@ import (
 )
 
 // This file provides the shared machinery for the multi-session concurrency
-// proofs: unique per-session markers, an isolation checker that detects any
-// cross-session leakage in captures or deltas, and a tick-driven driver that
-// runs N independent agent-loop sessions over replay-backed mock transports
-// under one shared clock.Deterministic instance.
+// proofs: unique per-session markers, a global capture trace, and a
+// tick-driven driver that runs N independent agent-loop sessions over
+// replay-backed mock transports under one shared clock.Deterministic instance.
+// The isolation checker lives beside its proof in session_isolation_test.go.
 //
 // Synchronization rules (S15):
 //   - All interleaving comes from advancing the timeharness clock in logical
@@ -207,130 +207,6 @@ func (s *tracedSink) Write(record transcript.Record) error {
 }
 
 // ---------------------------------------------------------------------------
-// Isolation checker
-// ---------------------------------------------------------------------------
-
-// isolationFinding describes one detected cross-session contamination.
-type isolationFinding struct {
-	Owner        string // session whose capture was scanned
-	ForeignToken string // another session's marker found in the capture
-	Where        string // location of the offending record
-	Snippet      string // printable snippet of the offending payload
-}
-
-func (f isolationFinding) String() string {
-	return fmt.Sprintf("session %q capture contains foreign marker %q at %s (payload %q)", f.Owner, f.ForeignToken, f.Where, f.Snippet)
-}
-
-// containsSessionMarker reports whether payload contains token as a whole
-// marker: an occurrence whose neighboring bytes are not themselves marker
-// characters. Plain substring matching misfires at large session counts where
-// one token is a prefix of another ("sess-10" inside "sess-100"), which would
-// fabricate leakage findings during the ceiling ramp.
-func containsSessionMarker(payload []byte, token string) bool {
-	if len(token) == 0 {
-		return false
-	}
-	isMarkerByte := func(b byte) bool {
-		return b == '-' || b == '_' ||
-			(b >= '0' && b <= '9') ||
-			(b >= 'A' && b <= 'Z') ||
-			(b >= 'a' && b <= 'z')
-	}
-	for start := 0; start+len(token) <= len(payload); start++ {
-		if !bytes.Equal(payload[start:start+len(token)], []byte(token)) {
-			continue
-		}
-		beforeOK := start == 0 || !isMarkerByte(payload[start-1])
-		end := start + len(token)
-		afterOK := end == len(payload) || !isMarkerByte(payload[end])
-		if beforeOK && afterOK {
-			return true
-		}
-	}
-	return false
-}
-
-// checkRecordsIsolation scans one session's captured records for foreign
-// session tokens.
-func checkRecordsIsolation(ownerToken string, foreignTokens []string, records []transcript.Record) []isolationFinding {
-	findings := []isolationFinding{}
-	for idx, record := range records {
-		for _, foreign := range foreignTokens {
-			if foreign != ownerToken && containsSessionMarker(record.Payload, foreign) {
-				findings = append(findings, isolationFinding{
-					Owner:        ownerToken,
-					ForeignToken: foreign,
-					Where:        fmt.Sprintf("record[%d] peer=%s dir=%s stream=%s", idx, record.Peer, record.Direction, record.Stream),
-					Snippet:      printableSnippet(record.Payload),
-				})
-			}
-		}
-	}
-	return findings
-}
-
-// checkDeltasIsolation scans one session's collected delta stream. Values are
-// reduced to comparable bytes through the same projection the capture sink
-// uses, plus the marshaled message for structured values such as tool calls.
-func checkDeltasIsolation(ownerToken string, foreignTokens []string, deltas []messages.StreamMessage) []isolationFinding {
-	findings := []isolationFinding{}
-	for idx, delta := range deltas {
-		payload := streamPayload(delta)
-		if len(payload) == 0 || bytes.Equal(payload, []byte(delta.Type)) {
-			payload = marshalPayload(delta, []byte(delta.Type))
-		}
-		for _, foreign := range foreignTokens {
-			if foreign != ownerToken && containsSessionMarker(payload, foreign) {
-				findings = append(findings, isolationFinding{
-					Owner:        ownerToken,
-					ForeignToken: foreign,
-					Where:        fmt.Sprintf("delta[%d] type=%s role=%s", idx, delta.Type, delta.Role),
-					Snippet:      printableSnippet(payload),
-				})
-			}
-		}
-	}
-	return findings
-}
-
-// checkSessionIsolation runs both projections for one session and fails t with
-// named findings when any foreign marker appears.
-func checkSessionIsolation(t *testing.T, ownerToken string, tokens []string, records []transcript.Record, deltas []messages.StreamMessage) {
-	t.Helper()
-	foreign := make([]string, 0, len(tokens))
-	for _, token := range tokens {
-		if token != ownerToken {
-			foreign = append(foreign, token)
-		}
-	}
-	findings := checkRecordsIsolation(ownerToken, foreign, records)
-	findings = append(findings, checkDeltasIsolation(ownerToken, foreign, deltas)...)
-	if len(findings) != 0 {
-		rendered := make([]string, 0, len(findings))
-		for _, finding := range findings {
-			rendered = append(rendered, finding.String())
-		}
-		t.Fatalf("cross-session leakage detected in session %q:\n%s", ownerToken, strings.Join(rendered, "\n"))
-	}
-}
-
-func printableSnippet(payload []byte) string {
-	const maxSnippet = 96
-	end := len(payload)
-	if end > maxSnippet {
-		end = maxSnippet
-	}
-	snippet := bytes.Map(func(r rune) rune {
-		if r >= 32 && r < 127 {
-			return r
-		}
-		return '.'
-	}, payload[:end])
-	return string(snippet)
-}
-
-// ---------------------------------------------------------------------------
 // Scripted turns
 // ---------------------------------------------------------------------------
 
@@ -426,12 +302,6 @@ func messageEndProgress(result *concurrentSessionResult) int {
 	})
 }
 
-// turnProgress is the monotone completion counter polled for every turn
-// kind. It must be allocation-free: workers poll it once per logical tick.
-func turnProgress(result *concurrentSessionResult, kind concurrentTurnKind) int {
-	return messageEndProgress(result)
-}
-
 // ---------------------------------------------------------------------------
 // Driver
 // ---------------------------------------------------------------------------
@@ -449,6 +319,33 @@ type concurrentSessionResult struct {
 	// reached MESSAGE.END. Written only by the owning worker before the
 	// coordinator's workers.Wait, so no extra synchronization is required.
 	turnCompletedAt []uint64
+
+	// progress is the worker's live script position, published atomically so
+	// the coordinator can name stuck sessions when the run budget expires.
+	progress scriptProgress
+}
+
+// scriptProgress is the atomically published position of one script walker.
+type scriptProgress struct {
+	nextStep atomic.Int64 // index of the scripted turn being sent or awaited
+	awaiting atomic.Bool  // inputs sent; waiting for the turn's MESSAGE.END
+	baseline atomic.Int64 // completion counter sampled before the turn's inputs
+}
+
+// describeScriptProgress renders every unfinished session's script position
+// for the run-budget failure message.
+func describeScriptProgress(results []*concurrentSessionResult, turns []concurrentTurnKind) string {
+	lines := []string{}
+	for _, result := range results {
+		next := int(result.progress.nextStep.Load())
+		if next >= len(turns) {
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("session %s: turn %d/%d (%s) awaiting=%t baseline=%d message_end=%d deltas=%d",
+			result.Token, next+1, len(turns), turns[next], result.progress.awaiting.Load(),
+			result.progress.baseline.Load(), messageEndProgress(result), len(result.Scenario.Deltas())))
+	}
+	return strings.Join(lines, "\n")
 }
 
 // snapshot freezes the post-run observations of one session.
@@ -584,7 +481,8 @@ func (d *concurrentDriver) advanceUntilScriptsFinish() {
 	deadline := time.Now().Add(concurrentRunBudget)
 	for atomic.LoadInt64(&d.live) > 0 {
 		if time.Now().After(deadline) {
-			d.t.Fatalf("concurrent run did not finish within %v (stuck sessions likely)", concurrentRunBudget)
+			d.t.Fatalf("concurrent run did not finish within %v at logical tick %d; unfinished sessions:\n%s",
+				concurrentRunBudget, d.tick, describeScriptProgress(d.results, d.options.Turns))
 		}
 		if _, err := d.functionalTime.AdvanceTo(d.tick); err != nil {
 			d.t.Fatalf("advance to logical tick %d: %v", d.tick, err)
@@ -708,9 +606,50 @@ func sessionScriptPlan(result *concurrentSessionResult, turns []concurrentTurnKi
 // report exactly once so the coordinator fails the test from its own
 // goroutine; done runs exactly once after the full scripted prefix succeeds.
 func runSessionScript(participant *timeharness.Participant, result *concurrentSessionResult, turns []concurrentTurnKind, done func(), report func(error)) {
-	token := result.Token
-	plan := sessionScriptPlan(result, turns)
+	ops := sessionScriptOps{
+		token: result.Token,
+		open:  func() bool { return sessionOpen(result) },
+		send: func(kind concurrentTurnKind) {
+			queueServerEvents(result.Inferencer, result.Token, kind)
+			sendClientInputs(result, kind)
+		},
+		completions: func() int { return messageEndProgress(result) },
+		completed:   func(tick uint64) { result.turnCompletedAt = append(result.turnCompletedAt, tick) },
+		progress:    &result.progress,
+	}
+	walkSessionScript(participant, ops, sessionScriptPlan(result, turns), done, report)
+}
 
+// sessionScriptOps is the session surface one script walker drives. It is
+// separated from the live scenario so the walker's completion detection can
+// be proven against adversarial interleavings deterministically.
+type sessionScriptOps struct {
+	token string
+	// open reports whether the session observed SESSION.OPEN.
+	open func() bool
+	// send queues the scripted provider response and performs the client
+	// inputs of one turn. The engine consumes both concurrently, so the turn
+	// may complete before send even returns.
+	send func(kind concurrentTurnKind)
+	// completions is the monotone turn-completion counter (assistant
+	// MESSAGE.END deltas). It must be allocation-free: it is polled once per
+	// logical tick.
+	completions func() int
+	// completed records the logical tick on which a turn completed.
+	completed func(tick uint64)
+	// progress publishes the walker position for stuck-run diagnostics.
+	progress *scriptProgress
+}
+
+// walkSessionScript is the tick-driven state machine behind runSessionScript.
+//
+// The completion baseline is sampled BEFORE send: the scripted provider
+// response is injected straight into the provider receive buffer, so the
+// engine can emit the turn's MESSAGE.END while send is still performing the
+// client inputs. Sampling after send would fold that MESSAGE.END into the
+// baseline and the walker would wait forever for a completion it already
+// consumed, observing logical ticks until the coordinator's run budget fires.
+func walkSessionScript(participant *timeharness.Participant, ops sessionScriptOps, plan []sessionScriptStep, done func(), report func(error)) {
 	var reportedErr error
 	reportOnce := func(err error) {
 		if reportedErr == nil {
@@ -720,12 +659,12 @@ func runSessionScript(participant *timeharness.Participant, result *concurrentSe
 	}
 
 	nextStep := 0
-	observedBefore := 0
+	baseline := 0
 	awaitingCompletion := false
 	tick := uint64(concurrentOpenTick)
 	for {
 		if _, err := participant.Observe(tick); err != nil {
-			reportOnce(fmt.Errorf("session %s: %w", token, err))
+			reportOnce(fmt.Errorf("session %s: %w", ops.token, err))
 			return
 		}
 		tick++
@@ -739,20 +678,22 @@ func runSessionScript(participant *timeharness.Participant, result *concurrentSe
 		}
 		step := plan[nextStep]
 		if !awaitingCompletion {
-			if tick-1 < step.sendTick || !sessionOpen(result) {
+			if tick-1 < step.sendTick || !ops.open() {
 				continue
 			}
-			queueServerEvents(result.Inferencer, token, step.kind)
-			sendClientInputs(result, step.kind)
-			observedBefore = turnProgress(result, step.kind)
+			baseline = ops.completions()
+			ops.progress.baseline.Store(int64(baseline))
+			ops.progress.awaiting.Store(true)
+			ops.send(step.kind)
 			awaitingCompletion = true
 			continue
 		}
-		if turnProgress(result, step.kind) > observedBefore {
-			result.turnCompletedAt = append(result.turnCompletedAt, tick-1)
+		if ops.completions() > baseline {
+			ops.completed(tick - 1)
 			awaitingCompletion = false
 			nextStep++
-			continue
+			ops.progress.awaiting.Store(false)
+			ops.progress.nextStep.Store(int64(nextStep))
 		}
 	}
 }
