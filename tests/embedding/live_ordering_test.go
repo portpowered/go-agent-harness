@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -152,4 +153,86 @@ func TestExternalFiniteCaptureTurnsRemainOrderedAndResponseGated(t *testing.T) {
 	if commits != 2 {
 		t.Fatalf("provider commits = %d, want two ordered finite turns; sent=%#v", commits, sent)
 	}
+}
+
+// slowAudioProvider models a provider whose audio sends take network time, so
+// an unpaced capture outruns it and fills the ordered session ingress. It
+// answers a commit after a short provider delay, as a realtime model would.
+type slowAudioProvider struct {
+	*embeddedLiveProvider
+	mu         sync.Mutex
+	audioBytes int
+	commits    int
+}
+
+func (provider *slowAudioProvider) Send(ctx context.Context, message messages.StreamMessage) bool {
+	if ctx.Err() != nil {
+		return false
+	}
+	provider.mu.Lock()
+	defer provider.mu.Unlock()
+	switch value := message.Value.(type) {
+	case *messages.AudioDeltaValue:
+		time.Sleep(time.Millisecond)
+		provider.audioBytes += len(value.Content)
+	case *messages.MessageEndValue:
+		provider.commits++
+		go provider.respond(context.WithoutCancel(ctx), "unpaced-response")
+	}
+	return true
+}
+
+func (provider *slowAudioProvider) respond(ctx context.Context, responseID string) {
+	time.Sleep(10 * time.Millisecond)
+	for _, message := range []messages.StreamMessage{
+		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: responseID, Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, ResponseID: responseID, Value: messages.NewTextDeltaValue("ok")},
+		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: responseID, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+	} {
+		provider.receive.Write(ctx, message)
+	}
+}
+
+func TestUnpacedFileCaptureCommitWaitsForSessionIngress(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const samples, providerRate = 83 * audio.SampleRate / 10, 24000 // one 8.3s utterance
+		utterance := make([]int16, samples)
+		for index := range utterance {
+			utterance[index] = int16(1000 - 2000*(index%2))
+		}
+		provider := &slowAudioProvider{embeddedLiveProvider: newEmbeddedLiveProvider()}
+		defer closeForTest(t, provider)
+		if !provider.receive.Write(t.Context(), messages.StreamMessage{
+			Type: messages.StreamTypeSessionOpen, Value: messages.NewSessionOpenValue("provider", "audio"),
+		}) {
+			t.Fatal("queue provider SESSION.OPEN")
+		}
+		service := sessionwire.NewLiveService(sessionwire.LiveDependencies{InferencerFactory: func(context.Context, session.LiveRequest) (messages.SessionInferencer, error) {
+			return &finiteTurnsInferencer{session: provider}, nil
+		}})
+		runner, ok := service.(session.LiveRunner)
+		if !ok {
+			t.Fatalf("live service type %T does not expose the finite runner contract", service)
+		}
+		err := runner.RunLive(t.Context(), session.LiveRunOptions{
+			Request: session.LiveRequest{SessionID: "unpaced-capture", FinishAfterResponse: true, ExpectedResponses: 1},
+			Devices: devicewire.NewFileService(audioiowire.NewService()),
+			DeviceRequest: devices.Request{
+				SampleRate: providerRate, Channels: audio.Channels, CaptureEnabled: true,
+				FileInput: &devices.FileInput{Source: audio.NewSliceSource(utterance), SampleRate: audio.SampleRate},
+			},
+			CaptureCompleteControls: []session.LiveControl{{Kind: session.LiveControlAudioCommit}},
+		})
+		if err != nil {
+			t.Fatalf("RunLive with unpaced 8.3s capture: %v", err)
+		}
+		provider.mu.Lock()
+		defer provider.mu.Unlock()
+		if provider.commits != 1 {
+			t.Fatalf("provider commits = %d, want one committed turn", provider.commits)
+		}
+		if want := 2 * samples * providerRate / audio.SampleRate; provider.audioBytes != want {
+			t.Fatalf("provider audio bytes = %d, want the whole 8.3s utterance (%d bytes) before the commit", provider.audioBytes, want)
+		}
+	})
 }

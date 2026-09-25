@@ -114,3 +114,16 @@ func (al *AgentLoop) SendSessionMessage(ctx context.Context, msg messages.Messag
 	}
 	return mr.EnqueueSessionMessage(ctx, msg, requestResponse)
 }
+
+// SendSessionEventWaiting is SendSessionEvent with backpressure: when the
+// ordered session ingress is full (for example right after an unpaced audio
+// burst admitted through SendAudioInput), it waits for capacity or ctx
+// cancellation instead of failing with ErrSessionInputQueueFull. Callers that
+// sequence turn boundaries after audio use it.
+func (al *AgentLoop) SendSessionEventWaiting(ctx context.Context, msg messages.StreamMessage) error {
+	mr := al.engine.GetModelRunner()
+	if mr == nil || mr.UserEventInbox == nil {
+		return fmt.Errorf("SendSessionEventWaiting: not in session mode")
+	}
+	return mr.EnqueueSessionEventWaiting(ctx, msg)
+}

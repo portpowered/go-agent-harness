@@ -175,34 +175,6 @@ func (r *ModelRunner) enqueueSessionAudioInput(ctx context.Context, pcm []byte, 
 	return r.enqueueSessionAudioInputLocked(ctx, pcm, policy, false)
 }
 
-// EnqueueSessionEvent queues a control-plane event in the same ordered ingress
-// as audio admitted by EnqueueSessionAudioInput.
-func (r *ModelRunner) EnqueueSessionEvent(ctx context.Context, msg messages.StreamMessage) error {
-	if r == nil || r.sessionInputInbox == nil {
-		return fmt.Errorf("EnqueueSessionEvent: not in session mode")
-	}
-
-	r.sessionInputMu.Lock()
-	defer r.sessionInputMu.Unlock()
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	r.markSessionToolEventQueued(msg)
-	select {
-	case r.sessionInputInbox <- sessionInput{kind: sessionInputEvent, event: msg}:
-		return nil
-	case <-ctx.Done():
-		r.markSessionToolEventConsumed(msg)
-		return ctx.Err()
-	default:
-		r.markSessionToolEventConsumed(msg)
-		return ErrSessionInputQueueFull
-	}
-}
-
 func isSessionToolEvent(msg messages.StreamMessage) bool {
 	return msg.Type == messages.StreamTypeToolCallEnd || msg.Type == messages.StreamTypeResponseCreate
 }

@@ -120,7 +120,7 @@ func (r *coreRuntime) runInput(ctx context.Context, action replayInputAction) er
 		}
 	}
 	if len(action.audio) > 0 {
-		return r.loop.SendSessionEvent(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{})})
+		return r.loop.SendSessionEventWaiting(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{})})
 	}
 	return nil
 }

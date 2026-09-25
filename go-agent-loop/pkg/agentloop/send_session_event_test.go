@@ -57,6 +57,26 @@ func TestSendSessionEvent_ContextCancelled(t *testing.T) {
 	}
 }
 
+func TestSendSessionEventWaiting_EnqueuesAndRequiresSessionMode(t *testing.T) {
+	al, err := New(
+		WithMode(engine.DuplexSession),
+		WithSessionInferencer(noopSessionInferencer{}),
+	)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if err := al.SendSessionEventWaiting(context.Background(), messages.StreamMessage{Type: messages.StreamTypeMessageEnd}); err != nil {
+		t.Fatalf("SendSessionEventWaiting: %v", err)
+	}
+	turnBased, err := New(WithInferencer(&mockInferencer{}))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if err := turnBased.SendSessionEventWaiting(context.Background(), messages.StreamMessage{}); err == nil {
+		t.Fatal("expected error when not in session mode")
+	}
+}
+
 func TestSendSessionMessage_EnqueuesRichOrderedInput(t *testing.T) {
 	al, err := New(
 		WithMode(engine.DuplexSession),

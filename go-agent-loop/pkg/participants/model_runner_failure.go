@@ -83,6 +83,65 @@ func (r *ModelRunner) endSession(ctx context.Context, state *sessionRunState, er
 	return err
 }
 
+// EnqueueSessionEvent queues a control-plane event in the same ordered ingress
+// as audio admitted by EnqueueSessionAudioInput. It never waits for capacity:
+// a full ingress returns ErrSessionInputQueueFull so internal producers such as
+// tool-result forwarding cannot stall behind the provider.
+func (r *ModelRunner) EnqueueSessionEvent(ctx context.Context, msg messages.StreamMessage) error {
+	return r.enqueueSessionEvent(ctx, msg, false, "EnqueueSessionEvent")
+}
+
+// EnqueueSessionEventWaiting queues a control-plane event behind previously
+// admitted audio, applying the same backpressure as
+// EnqueueSessionAudioInputWithPolicyWaiting. Caller-driven turn boundaries
+// (for example an audio commit sent right after an unpaced audio burst) use
+// it so a temporarily full ingress delays the boundary instead of failing the
+// session. It returns ctx.Err() if the context ends before capacity frees up.
+func (r *ModelRunner) EnqueueSessionEventWaiting(ctx context.Context, msg messages.StreamMessage) error {
+	return r.enqueueSessionEvent(ctx, msg, true, "EnqueueSessionEventWaiting")
+}
+
+func (r *ModelRunner) enqueueSessionEvent(ctx context.Context, msg messages.StreamMessage, waitForCapacity bool, operation string) error {
+	if r == nil || r.sessionInputInbox == nil {
+		return fmt.Errorf("%s: not in session mode", operation)
+	}
+	if ctx == nil && waitForCapacity {
+		return fmt.Errorf("%s: nil context", operation)
+	}
+	r.sessionInputMu.Lock()
+	defer r.sessionInputMu.Unlock()
+	// A nil context on the non-waiting path means "no cancellation"; its nil
+	// done channel never becomes ready.
+	var done <-chan struct{}
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		done = ctx.Done()
+	}
+	r.markSessionToolEventQueued(msg)
+	input := sessionInput{kind: sessionInputEvent, event: msg}
+	if waitForCapacity {
+		select {
+		case r.sessionInputInbox <- input:
+			return nil
+		case <-done:
+			r.markSessionToolEventConsumed(msg)
+			return ctx.Err()
+		}
+	}
+	select {
+	case r.sessionInputInbox <- input:
+		return nil
+	case <-done:
+		r.markSessionToolEventConsumed(msg)
+		return ctx.Err()
+	default:
+		r.markSessionToolEventConsumed(msg)
+		return ErrSessionInputQueueFull
+	}
+}
+
 func (r *ModelRunner) EnqueueSessionAudioInput(ctx context.Context, pcm []byte) error {
 	return r.enqueueSessionAudioInput(ctx, pcm, messages.SessionAudioInputPolicyDefault, "EnqueueSessionAudioInput")
 }

@@ -199,7 +199,7 @@ func (h *handle) sendRateLimitRetry(ctx context.Context, defaultLoop *agentloop.
 	if loop == nil {
 		return errors.New("rate-limit retry loop is unavailable")
 	}
-	if err := loop.SendSessionEvent(ctx, messages.StreamMessage{
+	if err := loop.SendSessionEventWaiting(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeResponseCreate,
 		Value: messages.NewResponseCreateValue(),
 	}); err != nil {
