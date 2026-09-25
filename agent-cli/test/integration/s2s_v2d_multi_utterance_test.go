@@ -44,6 +44,11 @@ func runIntegrationTests(m *testing.M) int {
 		// it needs none of the process-boundary binaries.
 		return m.Run()
 	}
+	if os.Getenv(toolErrorPanicHelperEnv) != "" {
+		// The panic control's re-executed helper runs one in-process test and
+		// execs no process-boundary binary.
+		return m.Run()
+	}
 
 	// A shared directory (scripts/go-test-shards.sh --shared-dir-env) lets
 	// every shard process of one run reuse a single build of the binaries.
