@@ -87,13 +87,27 @@ def check(root, modules, go):
         print(f"==> Wire {entry}", flush=True)
         subprocess.run([go, "generate", "."], cwd=root / entry, env=env, check=True)
 
-    # Each package regenerates independently; Wire's package loading is
-    # mostly single-threaded, so run them concurrently. Entries are sorted, so
-    # the largest graph (agent-cli) starts first. list() re-raises the first
-    # generator failure after every started run has finished.
+    # Each package regenerates independently and Wire's package loading is
+    # mostly single-threaded, so run them concurrently. A module's first
+    # package runs alone so its generator (`go run ...wire`) is built once and
+    # cached before that module's other packages start; modules proceed
+    # independently. Entries are sorted, so the largest graph (agent-cli)
+    # starts first. The first generator failure is re-raised.
+    module_names = sorted((Path(module).as_posix() for module in modules), key=len, reverse=True)
+    groups = {}
+    for entry in entries:
+        owner = next((name for name in module_names if entry.startswith(name + "/")), entry)
+        groups.setdefault(owner, []).append(entry)
     workers = max(1, min(len(entries), os.cpu_count() or 1))
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-        list(pool.map(regenerate, entries))
+        def regenerate_module(group):
+            regenerate(group[0])
+            return [pool.submit(regenerate, entry) for entry in group[1:]]
+
+        heads = [pool.submit(regenerate_module, group) for group in groups.values()]
+        followers = [future for head in heads for future in head.result()]
+        for future in followers:
+            future.result()
     if discovered_packages(root, modules) != entries:
         raise ValueError("Wire package inventory changed during regeneration")
     changed = False
