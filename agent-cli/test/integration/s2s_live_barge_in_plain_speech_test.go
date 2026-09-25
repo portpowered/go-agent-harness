@@ -431,7 +431,7 @@ func runPlainSpeechCLI(t *testing.T) plainSpeechRun {
 		"--max-duration", plainSpeechRunTimeout.String(),
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), plainSpeechRunTimeout)
+	ctx, cancel := diagnosticDeadline(t, plainSpeechRunTimeout)
 	defer cancel()
 	done := make(chan error, 1)
 	go func() { done <- root.ExecuteContext(ctx) }()

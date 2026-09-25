@@ -222,7 +222,7 @@ func runToolSingleCallWithDefinitions(t *testing.T, wavPath, wirePath string, ex
 		"--wait-for-close",
 		"--max-duration", "3s",
 	})
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := diagnosticDeadline(t, 5*time.Second)
 	defer cancel()
 	err = rootCmd.ExecuteContext(ctx)
 	return outputPath, err

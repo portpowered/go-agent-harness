@@ -3,7 +3,6 @@ package integration
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -494,7 +493,7 @@ func executeProductionSessionCommand(t *testing.T, args []string) (string, strin
 	root.SetOut(writer.Stdout())
 	root.SetErr(writer.Stderr())
 	root.SetArgs(args)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := diagnosticDeadline(t, 5*time.Second)
 	defer cancel()
 	err = root.ExecuteContext(ctx)
 	return writer.StdoutString(), writer.StderrString(), err

@@ -2,7 +2,6 @@ package integration
 
 import (
 	"bufio"
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -54,7 +53,7 @@ func TestSessionCommand_MaxDurationKeepsRawCaptureAndSidecarHonest(t *testing.T)
 		"respond while streaming",
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := diagnosticDeadline(t, 5*time.Second)
 	defer cancel()
 	errCh := make(chan error, 1)
 	go func() { errCh <- rootCmd.ExecuteContext(ctx) }()
@@ -148,7 +147,7 @@ func TestSessionCommand_MaxDurationRecordOnlyWritesSemanticSidecar(t *testing.T)
 		"respond while streaming",
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := diagnosticDeadline(t, 5*time.Second)
 	defer cancel()
 	errCh := make(chan error, 1)
 	go func() { errCh <- rootCmd.ExecuteContext(ctx) }()
@@ -198,7 +197,7 @@ func TestSessionCommand_PromptOnlyRecordDirFinalizesCompleteBundle(t *testing.T)
 		"--prompt", "prompt-only request",
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := diagnosticDeadline(t, 5*time.Second)
 	defer cancel()
 	if err := rootCmd.ExecuteContext(ctx); err != nil {
 		t.Fatalf("prompt-only record-dir CLI returned an error: %v; stdout=%q stderr=%q", err, testWriter.StdoutString(), testWriter.StderrString())
