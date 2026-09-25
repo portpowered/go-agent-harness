@@ -1,7 +1,6 @@
 package probe
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -11,11 +10,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe/childproc"
 )
 
 const (
@@ -152,95 +152,6 @@ type DuplexOutputEvent struct {
 	Timestamp time.Time     `json:"timestamp"`
 }
 
-// DuplexProgressSnapshot is a point-in-time view available to segment gates.
-type DuplexProgressSnapshot struct {
-	At            time.Duration
-	InputBytes    int64
-	InputFrames   int
-	OutputBytes   int64
-	OutputReads   int
-	InputSegments int
-	OutputClosed  bool
-}
-
-// DuplexProgress exposes only observable stream progress to a segment gate.
-// It does not expose the child process or a direct product/runtime call.
-type DuplexProgress struct {
-	state *duplexProgressState
-}
-
-// Snapshot returns the progress observed so far.
-func (p *DuplexProgress) Snapshot() DuplexProgressSnapshot {
-	if p == nil || p.state == nil {
-		return DuplexProgressSnapshot{}
-	}
-	return p.state.snapshot()
-}
-
-// WaitForOutputBytes waits until at least minimum output bytes crossed the
-// child stdout boundary. A non-positive minimum returns immediately.
-func (p *DuplexProgress) WaitForOutputBytes(ctx context.Context, minimum int64) error {
-	if minimum <= 0 {
-		return nil
-	}
-	if p == nil || p.state == nil {
-		return fmt.Errorf("%w: output progress is unavailable", ErrDuplexPipe)
-	}
-	return p.state.waitForOutput(ctx, minimum, false)
-}
-
-// WaitForOutputReads waits until at least minimum stdout reads have completed.
-func (p *DuplexProgress) WaitForOutputReads(ctx context.Context, minimum int) error {
-	if minimum <= 0 {
-		return nil
-	}
-	if p == nil || p.state == nil {
-		return fmt.Errorf("%w: output progress is unavailable", ErrDuplexPipe)
-	}
-	return p.state.waitForOutput(ctx, int64(minimum), true)
-}
-
-// Elapsed returns the runner's monotonic elapsed time at the instant of the
-// snapshot. Segment gates use this to drive event-based policies while the
-// child remains open.
-func (p *DuplexProgress) Elapsed() time.Duration {
-	if p == nil || p.state == nil {
-		return 0
-	}
-	return p.state.elapsed()
-}
-
-// OutputEvents returns a copy of every stdout read observed so far. The
-// events retain their process-relative timestamps so callers can correlate
-// incremental output with another event ledger without assuming one read is
-// one response.
-func (p *DuplexProgress) OutputEvents() []DuplexOutputEvent {
-	if p == nil || p.state == nil {
-		return nil
-	}
-	return p.state.outputEvents()
-}
-
-// WaitForChange blocks until the child produces another observed output read
-// or the stdout pump closes. It is the non-polling wake-up primitive used by
-// the patience controller while the input pump keeps the process alive.
-func (p *DuplexProgress) WaitForChange(ctx context.Context) error {
-	if p == nil || p.state == nil {
-		return fmt.Errorf("%w: progress is unavailable", ErrDuplexPipe)
-	}
-	return p.state.waitForChange(ctx)
-}
-
-// OutputClosed reports that the stdout pump has observed EOF or stopped after
-// cancellation. It is an observable terminal boundary, not a claim that the
-// child has been reaped.
-func (p *DuplexProgress) OutputClosed() bool {
-	if p == nil || p.state == nil {
-		return false
-	}
-	return p.state.outputIsClosed()
-}
-
 // DuplexRunResult contains process, pipe, and timing evidence. Stdout and
 // Stderr are bounded captures; Output and ErrorOutput, when configured, still
 // receive the complete drained streams until their own writer reports an
@@ -295,7 +206,7 @@ func (r *DuplexRunner) Run(ctx context.Context, config DuplexSessionConfig) (Dup
 	args := duplexSessionArgs(normalized)
 	sanitizedArgs := SanitizeDuplexArgs(args, normalized.APIKey)
 	result := DuplexRunResult{
-		Command:       formatDuplexCommand(normalized.BinaryPath, sanitizedArgs),
+		Command:       childproc.FormatCommand(normalized.BinaryPath, sanitizedArgs),
 		SanitizedArgs: sanitizedArgs,
 		PID:           -1,
 		ExitCode:      -1,
@@ -304,7 +215,7 @@ func (r *DuplexRunner) Run(ctx context.Context, config DuplexSessionConfig) (Dup
 	child := exec.Command(normalized.BinaryPath, args...)
 	child.Dir = normalized.WorkingDirectory
 	child.Env = duplexChildEnvironment(normalized)
-	prepareDuplexCommand(child)
+	childproc.Prepare(child)
 
 	stdin, err := child.StdinPipe()
 	if err != nil {
@@ -334,279 +245,26 @@ func (r *DuplexRunner) Run(ctx context.Context, config DuplexSessionConfig) (Dup
 
 	runCtx, cancelRun := context.WithCancel(ctx)
 	defer cancelRun()
-	var deadlineReached atomic.Bool
+	session := newDuplexSession(runCtx, cancelRun, normalized, child, stdin, startedAt)
 	deadline := time.AfterFunc(normalized.MaxDuration, func() {
-		deadlineReached.Store(true)
+		session.deadlineReached.Store(true)
 		cancelRun()
 	})
 	defer deadline.Stop()
 
-	progress := newDuplexProgressState()
-	progress.setStartedAt(startedAt)
-	stdoutCapture := newDuplexCapture(normalized.MaxCapturedOutputBytes)
-	stderrCapture := newDuplexCapture(normalized.MaxCapturedOutputBytes)
-	var inputEventsMu sync.Mutex
-	var inputEvents []DuplexInputEvent
-	var inputFinished atomic.Bool
-	var inputClosed atomic.Bool
-	var stdoutClosed atomic.Bool
-	var stderrClosed atomic.Bool
-	var waitCount atomic.Int32
-
-	var closeStdinOnce sync.Once
-	var closeStdinErr error
-	closeStdin := func() error {
-		closeStdinOnce.Do(func() {
-			closeStdinErr = stdin.Close()
-			inputClosed.Store(true)
-		})
-		return closeStdinErr
-	}
-
-	var terminateOnce sync.Once
-	var terminateErr error
-	terminate := func() error {
-		terminateOnce.Do(func() { terminateErr = terminateDuplexCommand(child) })
-		return terminateErr
-	}
-
-	var signalSent atomic.Bool
-	var terminationRequested atomic.Bool
-	var signalAt time.Duration
-	var signalMu sync.Mutex
-
-	failureCh := make(chan error, 4)
-	var failureOnce sync.Once
-	recordFailure := func(failure error) {
-		if errors.Is(failure, errDuplexInputClosed) {
-			// A provider SESSION.CLOSE can make the shipped child exit while the
-			// runner is still writing the trailing PCM frame. Let child.Wait
-			// establish the terminal process result; an early child exit with no
-			// observable output still fails closed as ErrDuplexInputIncomplete.
-			return
-		}
-		if failure == nil || isExpectedDuplexCancellation(failure, runCtx) || (terminationRequested.Load() && isExpectedDuplexSignalShutdown(failure)) {
-			return
-		}
-		failureOnce.Do(func() {
-			failureCh <- failure
-			cancelRun()
-		})
-	}
-
-	var pumps sync.WaitGroup
-	var outputPumps sync.WaitGroup
-	pumps.Add(3)
-	outputPumps.Add(2)
-	go func() {
-		defer pumps.Done()
-		defer outputPumps.Done()
-		if err := pumpDuplexOutput(runCtx, stdout, normalized.Output, stdoutCapture, progress, startedAt, true); err != nil {
-			recordFailure(err)
-		}
-		progress.noteOutputClosed()
-		stdoutClosed.Store(true)
-	}()
-	go func() {
-		defer pumps.Done()
-		defer outputPumps.Done()
-		if err := pumpDuplexOutput(runCtx, stderr, normalized.ErrorOutput, stderrCapture, progress, startedAt, false); err != nil {
-			recordFailure(err)
-		}
-		stderrClosed.Store(true)
-	}()
-	go func() {
-		defer pumps.Done()
-		if err := pumpDuplexInput(runCtx, stdin, normalized, progress, startedAt, &inputEventsMu, &inputEvents, &inputFinished, closeStdin); err != nil {
-			recordFailure(err)
-		}
-	}()
-
-	var terminationWG sync.WaitGroup
+	session.startPumps(stdout, stderr)
 	if normalized.Termination == TerminationSIGINT {
-		terminationWG.Add(1)
-		go func() {
-			defer terminationWG.Done()
-			var waitErr error
-			switch {
-			case normalized.TerminationAfterOutputBytes > 0:
-				waitErr = progress.waitForOutput(runCtx, normalized.TerminationAfterOutputBytes, false)
-			case normalized.TerminationAfterOutputReads > 0:
-				waitErr = progress.waitForOutput(runCtx, int64(normalized.TerminationAfterOutputReads), true)
-			}
-			if waitErr != nil {
-				return
-			}
-			terminationRequested.Store(true)
-			sent, err := sendDuplexSIGINT(child)
-			if err != nil {
-				terminationRequested.Store(false)
-				recordFailure(duplexPipeError("send SIGINT", err))
-				return
-			}
-			if !sent {
-				terminationRequested.Store(false)
-				return
-			}
-			signalSent.Store(true)
-			signalMu.Lock()
-			signalAt = time.Since(startedAt)
-			signalMu.Unlock()
-			// Stop feeding a process that has been asked to terminate. The input
-			// pump treats the resulting closed-pipe write as expected signal
-			// shutdown, while stdout/stderr continue draining concurrently.
-			_ = closeStdin()
-		}()
+		session.terminationWG.Add(1)
+		go session.runSIGINTTermination()
 	}
+	waitDone := session.startWait()
 
-	waitDone := make(chan error, 1)
-	go func() {
-		// StdoutPipe and StderrPipe require their readers to reach EOF before
-		// Wait closes the pipe descriptors. Reaping concurrently can otherwise
-		// discard the child's final audio/output chunk under scheduler load.
-		outputPumps.Wait()
-		waitCount.Add(1)
-		waitDone <- child.Wait()
-	}()
+	processWaitOK, pumpsJoined, waitErr := waitForDuplexChild(runCtx, session.closeStdin, session.terminate, waitDone, &session.pumps, &session.terminationWG, cancelRun, normalized.ShutdownGrace)
 
-	processWaitOK, pumpsJoined, waitErr := waitForDuplexChild(runCtx, closeStdin, terminate, waitDone, &pumps, &terminationWG, cancelRun, normalized.ShutdownGrace)
-
-	result.Duration = time.Since(startedAt)
-	result.ExitCode = duplexExitCode(child, waitErr)
-	result.TimedOut = deadlineReached.Load()
-	result.Cancelled = ctx.Err() != nil && !result.TimedOut
-	result.SignalSent = signalSent.Load()
-	if result.SignalSent {
-		result.Signal = duplexSIGINTName
-		signalMu.Lock()
-		result.SignalAt = signalAt
-		signalMu.Unlock()
-	}
-	result.ChildWaited = processWaitOK
-	result.WaitCount = int(waitCount.Load())
-	result.InputClosed = inputClosed.Load()
-	result.InputFinished = inputFinished.Load()
-	result.StdoutClosed = stdoutClosed.Load()
-	result.StderrClosed = stderrClosed.Load()
-	result.DescendantsAlive = duplexDescendantsAlive(child, processWaitOK)
-	result.ExitClassification = duplexExitClassification(result, normalized.Termination, waitErr)
-	result.Output = progress.outputEvents()
-	if !inputFinished.Load() && result.ExitClassification == "normal" && result.StdoutClosed && len(result.Output) > 0 {
-		// A normal child exit after observable stdout is a provider-owned
-		// session boundary. The input pump may have been cancelled by the
-		// runner's post-wait cleanup before it could mark the final byte as
-		// finished, but the product response itself crossed the boundary.
-		result.InputFinished = true
-	}
-	result.CapturedOutputTruncated = stdoutCapture.truncated() || stderrCapture.truncated()
-	result.Stdout = stdoutCapture.bytes()
-	result.Stderr = stderrCapture.bytes()
-	inputEventsMu.Lock()
-	result.Input = append([]DuplexInputEvent(nil), inputEvents...)
-	inputEventsMu.Unlock()
-
-	var failures []error
-	select {
-	case failure := <-failureCh:
-		failures = append(failures, failure)
-	default:
-	}
-	// exec.Cmd.Wait closes the child-side pipe after the process exits. An
-	// explicit close racing that cleanup can therefore report os.ErrClosed even
-	// though the process was fully reaped; only surface close failures while the
-	// child is still alive.
-	if closeStdinErr != nil && !processWaitOK {
-		failures = append(failures, duplexPipeError("close stdin", closeStdinErr))
-	}
-	if terminateErr != nil && !processWaitOK {
-		failures = append(failures, duplexPipeError("terminate child", terminateErr))
-	}
-	if !processWaitOK {
-		if result.TimedOut {
-			failures = append(failures, fmt.Errorf("%w after %s", ErrDuplexChildSurvivedDeadline, normalized.MaxDuration))
-		} else {
-			failures = append(failures, fmt.Errorf("%w: %v", ErrDuplexShutdown, waitErr))
-		}
-	} else if result.TimedOut {
-		failures = append(failures, fmt.Errorf("%w after %s", ErrDuplexDeadline, normalized.MaxDuration))
-	}
-	if waitErr != nil && processWaitOK && !result.TimedOut && result.ExitClassification != "sigint" && !isExpectedDuplexWaitClose(result, waitErr) {
-		if result.ExitCode != 0 {
-			failures = append(failures, fmt.Errorf("%w: exit code %d", ErrDuplexProcessExit, result.ExitCode))
-		} else {
-			failures = append(failures, duplexPipeError("wait for child", waitErr))
-		}
-	}
-	if result.Cancelled {
-		failures = append(failures, ctx.Err())
-	}
-	if processWaitOK && !result.InputFinished && !result.TimedOut && !result.Cancelled && result.ExitClassification != "sigint" {
-		failures = append(failures, ErrDuplexInputIncomplete)
-	}
-	if !pumpsJoined {
-		failures = append(failures, fmt.Errorf("%w after %s", ErrDuplexShutdown, normalized.ShutdownGrace))
-	}
-	if result.CapturedOutputTruncated {
-		failures = append(failures, ErrDuplexOutputCaptureLimit)
-	}
+	session.fillResult(ctx, &result, processWaitOK, waitErr)
+	failures := session.shutdownFailures(result, processWaitOK, waitErr)
+	failures = append(failures, session.exitFailures(ctx, result, processWaitOK, pumpsJoined, waitErr)...)
 	return result, errors.Join(failures...)
-}
-
-func waitForDuplexChild(
-	runCtx context.Context,
-	closeStdin func() error,
-	terminate func() error,
-	waitDone <-chan error,
-	pumps *sync.WaitGroup,
-	terminationWG *sync.WaitGroup,
-	cancelRun context.CancelFunc,
-	shutdownGrace time.Duration,
-) (processWaitOK, pumpsJoined bool, waitErr error) {
-	// A pipe write or a segment gate cannot be left waiting after cancellation.
-	// Closing stdin unblocks an in-flight write, and killing the process group
-	// closes inherited stdout/stderr descriptors held by descendants.
-	watchDone := make(chan struct{})
-	var watchWG sync.WaitGroup
-	watchWG.Add(1)
-	go func() {
-		defer watchWG.Done()
-		select {
-		case <-runCtx.Done():
-			_ = closeStdin()
-			_ = terminate()
-		case <-watchDone:
-		}
-	}()
-
-	select {
-	case waitErr = <-waitDone:
-		processWaitOK = true
-	case <-runCtx.Done():
-		processWaitOK, waitErr = waitForDuplexProcess(waitDone, shutdownGrace, terminate)
-	}
-
-	// The process may exit before the script has delivered every segment. Close
-	// the caller-owned write end so the input pump observes the premature EOF
-	// rather than remaining blocked on a dead child.
-	_ = closeStdin()
-	if processWaitOK {
-		cancelRun()
-	}
-	close(watchDone)
-	watchWG.Wait()
-
-	pumpsDone := make(chan struct{})
-	go func() {
-		pumps.Wait()
-		close(pumpsDone)
-	}()
-	select {
-	case <-pumpsDone:
-		pumpsJoined = true
-	case <-time.After(shutdownGrace):
-	}
-	terminationWG.Wait()
-	return processWaitOK, pumpsJoined, waitErr
 }
 
 // RunDuplexSession is the convenient function form for callers that do not
@@ -621,69 +279,15 @@ type normalizedDuplexConfig struct {
 }
 
 func normalizeDuplexConfig(config DuplexSessionConfig) (normalizedDuplexConfig, func(), error) {
-	if strings.TrimSpace(config.BinaryPath) == "" {
-		return normalizedDuplexConfig{}, func() {}, fmt.Errorf("%w: binary path is empty", ErrDuplexConfigInvalid)
-	}
-	binaryPath, err := resolveBinary(config.BinaryPath)
+	binaryPath, err := validateDuplexConfigRequirements(config)
 	if err != nil {
-		return normalizedDuplexConfig{}, func() {}, fmt.Errorf("%w: %v", ErrDuplexConfigInvalid, err)
+		return normalizedDuplexConfig{}, func() {}, err
 	}
-	if strings.TrimSpace(config.RecordDir) == "" {
-		return normalizedDuplexConfig{}, func() {}, fmt.Errorf("%w: record directory is empty", ErrDuplexConfigInvalid)
+	if err := applyDuplexConfigDefaults(&config); err != nil {
+		return normalizedDuplexConfig{}, func() {}, err
 	}
-	if strings.TrimSpace(config.Provider) == "" || strings.TrimSpace(config.Model) == "" {
-		return normalizedDuplexConfig{}, func() {}, fmt.Errorf("%w: provider and model are required", ErrDuplexConfigInvalid)
-	}
-	if config.MaxDuration <= 0 {
-		return normalizedDuplexConfig{}, func() {}, fmt.Errorf("%w: maximum duration must be positive", ErrDuplexConfigInvalid)
-	}
-	if len(config.Segments) == 0 {
-		return normalizedDuplexConfig{}, func() {}, fmt.Errorf("%w: at least one audio segment is required", ErrDuplexConfigInvalid)
-	}
-	if config.FrameDuration == 0 {
-		config.FrameDuration = DefaultDuplexFrameDuration
-	}
-	if config.FrameDuration <= 0 {
-		return normalizedDuplexConfig{}, func() {}, fmt.Errorf("%w: frame duration must be positive", ErrDuplexConfigInvalid)
-	}
-	if config.SampleRate == 0 {
-		config.SampleRate = DefaultDuplexSampleRate
-	}
-	if config.SampleRate <= 0 {
-		return normalizedDuplexConfig{}, func() {}, fmt.Errorf("%w: sample rate must be positive", ErrDuplexConfigInvalid)
-	}
-	if config.SampleRate != DefaultDuplexSampleRate {
-		return normalizedDuplexConfig{}, func() {}, fmt.Errorf("%w: sample rate must be %d Hz", ErrDuplexConfigInvalid, DefaultDuplexSampleRate)
-	}
-	if config.MaxCapturedOutputBytes == 0 {
-		config.MaxCapturedOutputBytes = DefaultDuplexCaptureLimit
-	}
-	if config.MaxCapturedOutputBytes < 0 {
-		return normalizedDuplexConfig{}, func() {}, fmt.Errorf("%w: output capture limit must not be negative", ErrDuplexConfigInvalid)
-	}
-	if config.ShutdownGrace == 0 {
-		config.ShutdownGrace = DefaultDuplexShutdownGrace
-	}
-	if config.ShutdownGrace <= 0 {
-		return normalizedDuplexConfig{}, func() {}, fmt.Errorf("%w: shutdown grace must be positive", ErrDuplexConfigInvalid)
-	}
-	if config.Termination == "" {
-		config.Termination = TerminationNatural
-	}
-	if !config.Termination.valid() {
-		return normalizedDuplexConfig{}, func() {}, fmt.Errorf("%w: termination must be natural or sigint", ErrDuplexConfigInvalid)
-	}
-	if config.TerminationAfterOutputBytes < 0 || config.TerminationAfterOutputReads < 0 {
-		return normalizedDuplexConfig{}, func() {}, fmt.Errorf("%w: termination output gates must not be negative", ErrDuplexConfigInvalid)
-	}
-	if config.TerminationAfterOutputBytes > 0 && config.TerminationAfterOutputReads > 0 {
-		return normalizedDuplexConfig{}, func() {}, fmt.Errorf("%w: configure one termination output gate", ErrDuplexConfigInvalid)
-	}
-	if config.Termination == TerminationSIGINT && config.TerminationAfterOutputBytes == 0 && config.TerminationAfterOutputReads == 0 {
-		return normalizedDuplexConfig{}, func() {}, fmt.Errorf("%w: sigint termination requires an output gate", ErrDuplexConfigInvalid)
-	}
-	if config.Termination == TerminationNatural && (config.TerminationAfterOutputBytes > 0 || config.TerminationAfterOutputReads > 0) {
-		return normalizedDuplexConfig{}, func() {}, fmt.Errorf("%w: natural termination cannot configure an output gate", ErrDuplexConfigInvalid)
+	if err := normalizeDuplexTermination(&config); err != nil {
+		return normalizedDuplexConfig{}, func() {}, err
 	}
 	if err := validateDuplexAdditionalArgs(config.AdditionalArgs, config.APIKey); err != nil {
 		return normalizedDuplexConfig{}, func() {}, err
@@ -702,39 +306,14 @@ func normalizeDuplexConfig(config DuplexSessionConfig) (normalizedDuplexConfig, 
 			return normalizedDuplexConfig{}, func() {}, err
 		}
 	}
-
-	cleanup := func() {}
-	configDir := config.ConfigDir
-	if strings.TrimSpace(configDir) == "" {
-		configDir, err = os.MkdirTemp("", "agent-cli-duplex-config-")
-		if err != nil {
-			return normalizedDuplexConfig{}, func() {}, fmt.Errorf("%w: create isolated config directory: %v", ErrDuplexConfigInvalid, err)
-		}
-		cleanup = func() { _ = os.RemoveAll(configDir) }
-	} else {
-		configDir, err = prepareDuplexDirectory(configDir, "config directory")
-		if err != nil {
-			return normalizedDuplexConfig{}, func() {}, err
-		}
+	configDir, cleanup, err := prepareDuplexConfigDirectory(config.ConfigDir)
+	if err != nil {
+		return normalizedDuplexConfig{}, func() {}, err
 	}
-
-	seenIDs := make(map[string]struct{}, len(config.Segments))
-	segments := make([]DuplexAudioSegment, len(config.Segments))
-	for index, segment := range config.Segments {
-		if strings.TrimSpace(segment.ID) == "" {
-			segment.ID = fmt.Sprintf("segment-%d", index+1)
-		}
-		if _, exists := seenIDs[segment.ID]; exists {
-			cleanup()
-			return normalizedDuplexConfig{}, func() {}, fmt.Errorf("%w: duplicate segment ID %q", ErrDuplexConfigInvalid, segment.ID)
-		}
-		seenIDs[segment.ID] = struct{}{}
-		if err := validateDuplexSegment(segment); err != nil {
-			cleanup()
-			return normalizedDuplexConfig{}, func() {}, err
-		}
-		segment.PCM16 = append([]byte(nil), segment.PCM16...)
-		segments[index] = segment
+	segments, err := normalizeDuplexSegments(config.Segments)
+	if err != nil {
+		cleanup()
+		return normalizedDuplexConfig{}, func() {}, err
 	}
 	config.Segments = segments
 	config.RecordDir = recordDir
@@ -742,6 +321,128 @@ func normalizeDuplexConfig(config DuplexSessionConfig) (normalizedDuplexConfig, 
 	config.ConfigDir = configDir
 	config.BinaryPath = binaryPath
 	return normalizedDuplexConfig{DuplexSessionConfig: config, BinaryPath: binaryPath}, cleanup, nil
+}
+
+// validateDuplexConfigRequirements checks the mandatory fields and returns
+// the resolved binary path.
+func validateDuplexConfigRequirements(config DuplexSessionConfig) (string, error) {
+	if strings.TrimSpace(config.BinaryPath) == "" {
+		return "", fmt.Errorf("%w: binary path is empty", ErrDuplexConfigInvalid)
+	}
+	binaryPath, err := resolveBinary(config.BinaryPath)
+	if err != nil {
+		return "", fmt.Errorf("%w: %w", ErrDuplexConfigInvalid, err)
+	}
+	if strings.TrimSpace(config.RecordDir) == "" {
+		return "", fmt.Errorf("%w: record directory is empty", ErrDuplexConfigInvalid)
+	}
+	if strings.TrimSpace(config.Provider) == "" || strings.TrimSpace(config.Model) == "" {
+		return "", fmt.Errorf("%w: provider and model are required", ErrDuplexConfigInvalid)
+	}
+	if config.MaxDuration <= 0 {
+		return "", fmt.Errorf("%w: maximum duration must be positive", ErrDuplexConfigInvalid)
+	}
+	if len(config.Segments) == 0 {
+		return "", fmt.Errorf("%w: at least one audio segment is required", ErrDuplexConfigInvalid)
+	}
+	return binaryPath, nil
+}
+
+func applyDuplexConfigDefaults(config *DuplexSessionConfig) error {
+	if config.FrameDuration == 0 {
+		config.FrameDuration = DefaultDuplexFrameDuration
+	}
+	if config.FrameDuration <= 0 {
+		return fmt.Errorf("%w: frame duration must be positive", ErrDuplexConfigInvalid)
+	}
+	if config.SampleRate == 0 {
+		config.SampleRate = DefaultDuplexSampleRate
+	}
+	if config.SampleRate <= 0 {
+		return fmt.Errorf("%w: sample rate must be positive", ErrDuplexConfigInvalid)
+	}
+	if config.SampleRate != DefaultDuplexSampleRate {
+		return fmt.Errorf("%w: sample rate must be %d Hz", ErrDuplexConfigInvalid, DefaultDuplexSampleRate)
+	}
+	if config.MaxCapturedOutputBytes == 0 {
+		config.MaxCapturedOutputBytes = DefaultDuplexCaptureLimit
+	}
+	if config.MaxCapturedOutputBytes < 0 {
+		return fmt.Errorf("%w: output capture limit must not be negative", ErrDuplexConfigInvalid)
+	}
+	if config.ShutdownGrace == 0 {
+		config.ShutdownGrace = DefaultDuplexShutdownGrace
+	}
+	if config.ShutdownGrace <= 0 {
+		return fmt.Errorf("%w: shutdown grace must be positive", ErrDuplexConfigInvalid)
+	}
+	return nil
+}
+
+func normalizeDuplexTermination(config *DuplexSessionConfig) error {
+	if config.Termination == "" {
+		config.Termination = TerminationNatural
+	}
+	if !config.Termination.valid() {
+		return fmt.Errorf("%w: termination must be natural or sigint", ErrDuplexConfigInvalid)
+	}
+	if config.TerminationAfterOutputBytes < 0 || config.TerminationAfterOutputReads < 0 {
+		return fmt.Errorf("%w: termination output gates must not be negative", ErrDuplexConfigInvalid)
+	}
+	if config.TerminationAfterOutputBytes > 0 && config.TerminationAfterOutputReads > 0 {
+		return fmt.Errorf("%w: configure one termination output gate", ErrDuplexConfigInvalid)
+	}
+	gated := config.TerminationAfterOutputBytes > 0 || config.TerminationAfterOutputReads > 0
+	if config.Termination == TerminationSIGINT && !gated {
+		return fmt.Errorf("%w: sigint termination requires an output gate", ErrDuplexConfigInvalid)
+	}
+	if config.Termination == TerminationNatural && gated {
+		return fmt.Errorf("%w: natural termination cannot configure an output gate", ErrDuplexConfigInvalid)
+	}
+	return nil
+}
+
+// prepareDuplexConfigDirectory returns the child's config directory and a
+// cleanup for an isolated temporary directory created on the caller's behalf.
+func prepareDuplexConfigDirectory(raw string) (string, func(), error) {
+	if strings.TrimSpace(raw) != "" {
+		configDir, err := prepareDuplexDirectory(raw, "config directory")
+		return configDir, func() {}, err
+	}
+	configDir, err := os.MkdirTemp("", "agent-cli-duplex-config-")
+	if err != nil {
+		return "", func() {}, fmt.Errorf("%w: create isolated config directory: %w", ErrDuplexConfigInvalid, err)
+	}
+	return configDir, func() { removeDuplexConfigDirectory(configDir) }, nil
+}
+
+// removeDuplexConfigDirectory is best-effort cleanup of the isolated config
+// directory after the run result has been captured; a leftover temporary
+// directory must not change the reported session outcome.
+func removeDuplexConfigDirectory(dir string) {
+	if err := os.RemoveAll(dir); err != nil {
+		return
+	}
+}
+
+func normalizeDuplexSegments(input []DuplexAudioSegment) ([]DuplexAudioSegment, error) {
+	seenIDs := make(map[string]struct{}, len(input))
+	segments := make([]DuplexAudioSegment, len(input))
+	for index, segment := range input {
+		if strings.TrimSpace(segment.ID) == "" {
+			segment.ID = fmt.Sprintf("segment-%d", index+1)
+		}
+		if _, exists := seenIDs[segment.ID]; exists {
+			return nil, fmt.Errorf("%w: duplicate segment ID %q", ErrDuplexConfigInvalid, segment.ID)
+		}
+		seenIDs[segment.ID] = struct{}{}
+		if err := validateDuplexSegment(segment); err != nil {
+			return nil, err
+		}
+		segment.PCM16 = append([]byte(nil), segment.PCM16...)
+		segments[index] = segment
+	}
+	return segments, nil
 }
 
 func prepareDuplexDirectory(raw, label string) (string, error) {
@@ -871,61 +572,19 @@ func duplexChildEnvironment(config normalizedDuplexConfig) []string {
 	return environment
 }
 
-type duplexCapture struct {
-	mu             sync.Mutex
-	limit          int64
-	data           bytes.Buffer
-	truncatedValue bool
-}
-
-func newDuplexCapture(limit int64) *duplexCapture { return &duplexCapture{limit: limit} }
-
-func (c *duplexCapture) append(data []byte) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.limit < 0 {
-		return
-	}
-	remaining := c.limit - int64(c.data.Len())
-	if remaining <= 0 {
-		if len(data) > 0 {
-			c.truncatedValue = true
-		}
-		return
-	}
-	if int64(len(data)) > remaining {
-		_, _ = c.data.Write(data[:remaining])
-		c.truncatedValue = true
-		return
-	}
-	_, _ = c.data.Write(data)
-}
-
-func (c *duplexCapture) bytes() []byte {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return append([]byte(nil), c.data.Bytes()...)
-}
-
-func (c *duplexCapture) truncated() bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.truncatedValue
-}
-
-func pumpDuplexOutput(ctx context.Context, source io.Reader, destination io.Writer, capture *duplexCapture, progress *duplexProgressState, startedAt time.Time, observe bool) error {
+func pumpDuplexOutput(ctx context.Context, source io.Reader, destination io.Writer, capture *childproc.Capture, progress *duplexProgressState, startedAt time.Time, observe bool) error {
 	buffer := make([]byte, 32*1024)
 	for {
 		count, readErr := source.Read(buffer)
 		if count > 0 {
 			data := append([]byte(nil), buffer[:count]...)
-			capture.append(data)
+			capture.Append(data)
 			if observe {
 				now := time.Now()
 				progress.noteOutput(DuplexOutputEvent{Bytes: count, At: now.Sub(startedAt), Timestamp: now}, data)
 			}
 			if destination != nil {
-				if err := writeDuplexAll(destination, data); err != nil {
+				if err := childproc.WriteAll(destination, data); err != nil {
 					return duplexPipeError("write output sink", err)
 				}
 			}
@@ -938,10 +597,10 @@ func pumpDuplexOutput(ctx context.Context, source io.Reader, destination io.Writ
 			// exited. A blocked reader can observe that close as os.ErrClosed
 			// instead of EOF; it is the same completed pipe boundary and must
 			// not cancel a run that is still collecting final evidence.
-			if isExpectedDuplexPipeClosure(readErr) {
+			if childproc.IsPipeClosure(readErr) {
 				return nil
 			}
-			if isExpectedDuplexCancellation(readErr, ctx) {
+			if childproc.IsCancellation(ctx, readErr) {
 				return nil
 			}
 			return duplexPipeError("read child output", readErr)
@@ -950,106 +609,139 @@ func pumpDuplexOutput(ctx context.Context, source io.Reader, destination io.Writ
 }
 
 func pumpDuplexInput(ctx context.Context, destination io.Writer, config normalizedDuplexConfig, progress *duplexProgressState, startedAt time.Time, eventsMu *sync.Mutex, events *[]DuplexInputEvent, finished *atomic.Bool, closeStdin func() error) error {
-	progressView := &DuplexProgress{state: progress}
-	frameBytes := DefaultDuplexFrameSamples * 2
-	frameDuration := config.FrameDuration
-	frameNumber := 0
+	pump := &duplexInputPump{
+		ctx: ctx, destination: destination, progress: progress, progressView: &DuplexProgress{state: progress},
+		startedAt: startedAt, eventsMu: eventsMu, events: events, finished: finished, closeStdin: closeStdin,
+		frameBytes: DefaultDuplexFrameSamples * 2, frameDuration: config.FrameDuration,
+	}
 	for _, segment := range config.Segments {
-		if err := progressView.waitForSegmentOutput(ctx, segment); err != nil {
+		if done, err := pump.deliverSegment(segment); done {
 			return err
-		}
-		if segment.Before != nil {
-			if err := segment.Before(ctx, progressView); err != nil {
-				if errors.Is(err, errDuplexInputComplete) {
-					finished.Store(true)
-					if closeErr := closeStdin(); closeErr != nil && !isExpectedDuplexPipeClosure(closeErr) {
-						return duplexPipeError("close stdin after segment boundary", closeErr)
-					}
-					return nil
-				}
-				return duplexPipeError("run segment gate", err)
-			}
-		}
-		if segment.DelayBefore > 0 {
-			timer := time.NewTimer(segment.DelayBefore)
-			select {
-			case <-timer.C:
-			case <-ctx.Done():
-				timer.Stop()
-				return duplexPipeError("delay segment", ctx.Err())
-			}
-		}
-
-		data := append([]byte(nil), segment.PCM16...)
-		if segment.SilenceFor > 0 {
-			silenceBytes := duplexSilenceBytes(segment.SilenceFor, frameBytes, frameDuration)
-			data = append(data, silenceBytes...)
-		}
-		if len(data) == 0 {
-			return duplexPipeError("prepare segment", fmt.Errorf("segment %q has no frames", segment.ID))
-		}
-		if len(data)%2 != 0 {
-			return fmt.Errorf("%w: segment %q produced odd PCM16 length %d", ErrDuplexInputInvalid, segment.ID, len(data))
-		}
-		progress.noteInputSegment()
-
-		// A gate or deliberate inter-segment delay means the previous schedule
-		// is no longer a useful wall-clock origin. Resetting here avoids a burst
-		// of catch-up frames that would defeat the streaming proof.
-		nextFrameAt := time.Now()
-		for segmentFrame, offset := 0, 0; offset < len(data); segmentFrame, offset = segmentFrame+1, offset+frameBytes {
-			if segmentFrame > 0 {
-				nextFrameAt = nextFrameAt.Add(frameDuration)
-				if err := waitDuplexUntil(ctx, nextFrameAt); err != nil {
-					return duplexPipeError("pace input frame", err)
-				}
-			}
-			frame := make([]byte, frameBytes)
-			copy(frame, data[offset:minInt(offset+frameBytes, len(data))])
-			if err := writeDuplexAll(destination, frame); err != nil {
-				if isExpectedDuplexCancellation(err, ctx) {
-					return nil
-				}
-				if isExpectedDuplexPipeClosure(err) {
-					return fmt.Errorf("%w: %v", errDuplexInputClosed, err)
-				}
-				return duplexPipeError("write child stdin", err)
-			}
-			frameNumber++
-			hash := sha256.Sum256(frame)
-			now := time.Now()
-			event := DuplexInputEvent{
-				SegmentID: segment.ID,
-				Frame:     frameNumber,
-				Bytes:     len(frame),
-				At:        now.Sub(startedAt),
-				Timestamp: now,
-				Silent:    isDuplexSilence(frame),
-				SHA256:    hex.EncodeToString(hash[:]),
-			}
-			eventsMu.Lock()
-			*events = append(*events, event)
-			eventsMu.Unlock()
-			progress.noteInput(frame)
 		}
 	}
 	if config.BeforeInputClose != nil {
-		if err := config.BeforeInputClose(ctx, progressView); err != nil {
+		if err := config.BeforeInputClose(ctx, pump.progressView); err != nil {
 			if errors.Is(err, errDuplexInputComplete) {
-				finished.Store(true)
-				if closeErr := closeStdin(); closeErr != nil && !isExpectedDuplexPipeClosure(closeErr) {
-					return duplexPipeError("close stdin after input boundary", closeErr)
-				}
-				return nil
+				return pump.finish("close stdin after input boundary")
 			}
 			return duplexPipeError("run before-input-close gate", err)
 		}
 	}
-	finished.Store(true)
-	if closeErr := closeStdin(); closeErr != nil && !isExpectedDuplexPipeClosure(closeErr) {
-		return duplexPipeError("close stdin after input", closeErr)
+	return pump.finish("close stdin after input")
+}
+
+// duplexInputPump paces scripted PCM16 segments into the child's stdin and
+// records one input event per written frame.
+type duplexInputPump struct {
+	ctx           context.Context
+	destination   io.Writer
+	progress      *duplexProgressState
+	progressView  *DuplexProgress
+	startedAt     time.Time
+	eventsMu      *sync.Mutex
+	events        *[]DuplexInputEvent
+	finished      *atomic.Bool
+	closeStdin    func() error
+	frameBytes    int
+	frameDuration time.Duration
+	frameNumber   int
+}
+
+// finish marks input complete and closes stdin; operation names the boundary.
+func (p *duplexInputPump) finish(operation string) error {
+	p.finished.Store(true)
+	if closeErr := p.closeStdin(); closeErr != nil && !childproc.IsPipeClosure(closeErr) {
+		return duplexPipeError(operation, closeErr)
 	}
 	return nil
+}
+
+// deliverSegment gates, delays, and writes one segment. done reports that the
+// pump must stop and return err.
+func (p *duplexInputPump) deliverSegment(segment DuplexAudioSegment) (bool, error) {
+	if err := p.progressView.waitForSegmentOutput(p.ctx, segment); err != nil {
+		return true, err
+	}
+	if segment.Before != nil {
+		if err := segment.Before(p.ctx, p.progressView); err != nil {
+			if errors.Is(err, errDuplexInputComplete) {
+				return true, p.finish("close stdin after segment boundary")
+			}
+			return true, duplexPipeError("run segment gate", err)
+		}
+	}
+	if segment.DelayBefore > 0 {
+		timer := time.NewTimer(segment.DelayBefore)
+		select {
+		case <-timer.C:
+		case <-p.ctx.Done():
+			timer.Stop()
+			return true, duplexPipeError("delay segment", p.ctx.Err())
+		}
+	}
+	data := append([]byte(nil), segment.PCM16...)
+	if segment.SilenceFor > 0 {
+		silenceBytes := duplexSilenceBytes(segment.SilenceFor, p.frameBytes, p.frameDuration)
+		data = append(data, silenceBytes...)
+	}
+	if len(data) == 0 {
+		return true, duplexPipeError("prepare segment", fmt.Errorf("segment %q has no frames", segment.ID))
+	}
+	if len(data)%2 != 0 {
+		return true, fmt.Errorf("%w: segment %q produced odd PCM16 length %d", ErrDuplexInputInvalid, segment.ID, len(data))
+	}
+	p.progress.noteInputSegment()
+	return p.writeFrames(segment.ID, data)
+}
+
+func (p *duplexInputPump) writeFrames(segmentID string, data []byte) (bool, error) {
+	// A gate or deliberate inter-segment delay means the previous schedule
+	// is no longer a useful wall-clock origin. Resetting here avoids a burst
+	// of catch-up frames that would defeat the streaming proof.
+	nextFrameAt := time.Now()
+	for segmentFrame, offset := 0, 0; offset < len(data); segmentFrame, offset = segmentFrame+1, offset+p.frameBytes {
+		if segmentFrame > 0 {
+			nextFrameAt = nextFrameAt.Add(p.frameDuration)
+			if err := childproc.WaitUntil(p.ctx, nextFrameAt); err != nil {
+				return true, duplexPipeError("pace input frame", err)
+			}
+		}
+		frame := make([]byte, p.frameBytes)
+		copy(frame, data[offset:min(offset+p.frameBytes, len(data))])
+		if done, err := p.writeFrame(segmentID, frame); done {
+			return true, err
+		}
+	}
+	return false, nil
+}
+
+func (p *duplexInputPump) writeFrame(segmentID string, frame []byte) (bool, error) {
+	if err := childproc.WriteAll(p.destination, frame); err != nil {
+		if childproc.IsCancellation(p.ctx, err) {
+			return true, nil
+		}
+		if childproc.IsPipeClosure(err) {
+			return true, fmt.Errorf("%w: %w", errDuplexInputClosed, err)
+		}
+		return true, duplexPipeError("write child stdin", err)
+	}
+	p.frameNumber++
+	hash := sha256.Sum256(frame)
+	now := time.Now()
+	event := DuplexInputEvent{
+		SegmentID: segmentID,
+		Frame:     p.frameNumber,
+		Bytes:     len(frame),
+		At:        now.Sub(p.startedAt),
+		Timestamp: now,
+		Silent:    isDuplexSilence(frame),
+		SHA256:    hex.EncodeToString(hash[:]),
+	}
+	p.eventsMu.Lock()
+	*p.events = append(*p.events, event)
+	p.eventsMu.Unlock()
+	p.progress.noteInput(frame)
+	return false, nil
 }
 
 func duplexSilenceBytes(duration time.Duration, frameBytes int, frameDuration time.Duration) []byte {
@@ -1069,67 +761,6 @@ func isDuplexSilence(data []byte) bool {
 	return true
 }
 
-func waitDuplexUntil(ctx context.Context, target time.Time) error {
-	delay := time.Until(target)
-	if delay <= 0 {
-		return nil
-	}
-	timer := time.NewTimer(delay)
-	defer timer.Stop()
-	select {
-	case <-timer.C:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-func writeDuplexAll(destination io.Writer, data []byte) error {
-	for len(data) > 0 {
-		written, err := destination.Write(data)
-		if written > 0 {
-			data = data[written:]
-		}
-		if err != nil {
-			return err
-		}
-		if written == 0 {
-			return io.ErrShortWrite
-		}
-	}
-	return nil
-}
-
-func waitForDuplexProcess(waitDone <-chan error, grace time.Duration, terminate func() error) (bool, error) {
-	timer := time.NewTimer(grace)
-	defer timer.Stop()
-	select {
-	case err := <-waitDone:
-		return true, err
-	case <-timer.C:
-		_ = terminate()
-	}
-	timer.Reset(grace)
-	defer timer.Stop()
-	select {
-	case err := <-waitDone:
-		return true, err
-	case <-timer.C:
-		return false, fmt.Errorf("%w after %s", ErrDuplexChildSurvivedDeadline, grace)
-	}
-}
-
-func duplexExitCode(child *exec.Cmd, waitErr error) int {
-	if child != nil && child.ProcessState != nil {
-		return child.ProcessState.ExitCode()
-	}
-	var exitErr *exec.ExitError
-	if errors.As(waitErr, &exitErr) {
-		return exitErr.ExitCode()
-	}
-	return -1
-}
-
 func duplexProcessError(kind error, operation string, cause error) error {
 	return fmt.Errorf("%w: %s: %w", kind, operation, cause)
 }
@@ -1142,13 +773,6 @@ func isExpectedDuplexWaitClose(result DuplexRunResult, waitErr error) bool {
 	return result.ExitCode == 0 && (errors.Is(waitErr, os.ErrClosed) || errors.Is(waitErr, io.ErrClosedPipe))
 }
 
-func isExpectedDuplexPipeClosure(err error) bool {
-	if err == nil {
-		return false
-	}
-	return errors.Is(err, os.ErrClosed) || errors.Is(err, io.ErrClosedPipe) || strings.Contains(strings.ToLower(err.Error()), "broken pipe")
-}
-
 func duplexPipeError(operation string, cause error) error {
 	if cause == nil {
 		return nil
@@ -1156,14 +780,17 @@ func duplexPipeError(operation string, cause error) error {
 	return fmt.Errorf("%w: %s: %w", ErrDuplexPipe, operation, cause)
 }
 
-func isExpectedDuplexCancellation(err error, ctx context.Context) bool {
-	if err == nil || ctx == nil || ctx.Err() == nil {
-		return false
-	}
-	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, os.ErrClosed) || errors.Is(err, io.ErrClosedPipe)
-}
-
 const DuplexSIGINTName = "SIGINT"
+
+// Process exit classifications recorded in DuplexRunResult and ProcessFacts.
+const (
+	duplexExitNormal  = "normal"
+	duplexExitFailed  = "failed"
+	duplexExitTimeout = "timeout"
+	duplexExitSIGINT  = "sigint"
+	// duplexExitCancelled matches the cancelled terminal disposition.
+	duplexExitCancelled = string(DispositionCancelled)
+)
 
 const duplexSIGINTName = DuplexSIGINTName
 
@@ -1180,38 +807,39 @@ func sendDuplexSIGINT(command *exec.Cmd) (bool, error) {
 	return true, nil
 }
 
-func isExpectedDuplexSignalShutdown(err error) bool {
-	return errors.Is(err, os.ErrClosed) || errors.Is(err, io.ErrClosedPipe)
-}
-
 func duplexExitClassification(result DuplexRunResult, termination TerminationMethod, waitErr error) string {
 	if result.TimedOut {
-		return "timeout"
+		return duplexExitTimeout
 	}
 	if result.Cancelled {
-		return string(DispositionCancelled)
+		return duplexExitCancelled
 	}
 	if result.SignalSent && termination == TerminationSIGINT {
-		return "sigint"
+		return duplexExitSIGINT
 	}
 	if result.ChildWaited && result.ExitCode == 0 && (waitErr == nil || isExpectedDuplexWaitClose(result, waitErr)) {
-		return "normal"
+		return duplexExitNormal
 	}
-	return "failed"
+	return duplexExitFailed
 }
 
-func formatDuplexCommand(command string, args []string) string {
-	parts := make([]string, 0, len(args)+1)
-	parts = append(parts, command)
-	for _, arg := range args {
-		parts = append(parts, strconv.Quote(arg))
+// ProcessFactsFromDuplexResult keeps the runner's lifecycle fields and the
+// evidence schema in lockstep for both termination shapes.
+func ProcessFactsFromDuplexResult(result DuplexRunResult) ProcessFacts {
+	return ProcessFacts{
+		PID:                result.PID,
+		ExitCode:           result.ExitCode,
+		ExitClassification: result.ExitClassification,
+		Signal:             result.Signal,
+		SignalSent:         result.SignalSent,
+		SignalAt:           result.SignalAt,
+		ChildWaited:        result.ChildWaited,
+		WaitCount:          result.WaitCount,
+		DescendantsAlive:   result.DescendantsAlive,
+		InputClosed:        result.InputClosed,
+		InputFinished:      result.InputFinished,
+		OutputClosed:       result.StdoutClosed && result.StderrClosed,
+		StartedAt:          0,
+		EndedAt:            result.Duration,
 	}
-	return strings.Join(parts, " ")
-}
-
-func minInt(left, right int) int {
-	if left < right {
-		return left
-	}
-	return right
 }

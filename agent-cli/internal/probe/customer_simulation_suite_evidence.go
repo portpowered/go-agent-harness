@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -135,7 +136,7 @@ func readCustomerSimulationStream(recordRoot string, scenario CustomerScenario, 
 		}
 		return facts, fmt.Errorf("open product transcript: %v", err)
 	}
-	defer file.Close()
+	defer closeReadOnlyFile(file)
 	var records []customerSimulationRecordedMessage
 	var base time.Time
 	completedToolIDs := make(map[string]time.Duration)
@@ -381,8 +382,8 @@ func (p *customerSimulationStreamParser) finish() {
 		}
 		turnID := customerSimulationTurnID(p.scenario, actionIndex)
 		resultAt, resultSeen := p.completedToolIDs[tool.ID]
-		status := "started"
-		duration := maxDuration(0, resultAt-tool.Start)
+		status := toolStatusStarted
+		duration := max(0, resultAt-tool.Start)
 		if resultSeen {
 			status = string(DispositionCompleted)
 		}
@@ -429,27 +430,6 @@ func fullMessageToolID(payload []byte) (string, bool) {
 	return envelope.Value.Message.ToolCallID, envelope.Value.Message.ToolCallID != ""
 }
 
-func maxDuration(left, right time.Duration) time.Duration {
-	if right > left {
-		return right
-	}
-	return left
-}
-
-func customerSimulationMixedModalEvidence(scenario CustomerScenario, transcripts PairedTranscripts, result DuplexRunResult) MixedModalEvidence {
-	priorAt := time.Duration(0)
-	if len(transcripts.Product) > 1 {
-		priorAt = transcripts.Product[1].At
-	}
-	customerAt := priorAt + time.Millisecond
-	return MixedModalEvidence{
-		ImageEventID: FamilyCImageEventID, PriorActionID: FamilyCTextActionID, PriorTurnID: customerSimulationTurnID(scenario, 1), ImageTurnID: customerSimulationTurnID(scenario, 2),
-		PriorActionCompletedAt: priorAt, CustomerTurnStartedAt: customerAt, ImageObserved: false, ExpectedSHA256: FamilyCImageFixtureSHA256,
-		Delivery: MixedModalDeliveryUnsupported, Supported: false, ImageMeaningInCustomerSpeech: false, ProductGapCode: FamilyCMidSessionImageGapCode, ProductGap: FamilyCMidSessionImageGap,
-		EvidenceRefs: []string{"events/mixed-modal.json", "transcripts/product.jsonl", "process.json"},
-	}
-}
-
 func customerSimulationTerminationEvidence(scenario CustomerScenario, product []TranscriptEvent, process ProcessFacts, result DuplexRunResult, facts customerSimulationRecordingFacts) TerminationEvidence {
 	start, end := customerSimulationResponseInterval(product, 0)
 	if start == 0 && len(result.Output) > 0 {
@@ -458,7 +438,7 @@ func customerSimulationTerminationEvidence(scenario CustomerScenario, product []
 	status := customerSimulationResponseIncomplete
 	if scenario.Termination == TerminationSIGINT {
 		if process.SignalSent {
-			status = "interrupted"
+			status = terminationStatusInterrupted
 			if facts.cancelObserved {
 				status = string(DispositionCancelled)
 			}
@@ -497,93 +477,109 @@ func factsOutstandingToolIDs(facts customerSimulationRecordingFacts) []string {
 	return result
 }
 
-func customerSimulationPatienceEvidence(scenario CustomerScenario, product []TranscriptEvent, process ProcessFacts, result DuplexRunResult, tools []ToolObservation, facts customerSimulationRecordingFacts, controller *PatienceController) PatienceEvidence {
+func customerSimulationPatienceEvidence(_ CustomerScenario, _ []TranscriptEvent, process ProcessFacts, result DuplexRunResult, tools []ToolObservation, _ customerSimulationRecordingFacts, controller *PatienceController) PatienceEvidence {
 	if controller != nil {
-		controllerProcess := process
-		// The controller and runner share the OnStart origin. Keep this small
-		// guard for a process that exits during the callback itself, where the
-		// scheduler can otherwise make the two terminal observations differ by
-		// a few nanoseconds.
-		if controller.outcome == "" {
-			// A child failure before the patience gate reaches a terminal product
-			// boundary is not evidence of completion. Preserve a typed cancellation
-			// outcome so the mechanical evaluator reports the missing terminal
-			// observation instead of fabricating success from stdout.
-			if result.TimedOut || process.ExitClassification == "timeout" {
-				_ = controller.Timeout()
-			} else {
-				_ = controller.Cancel()
-			}
-		}
-		if controllerProcess.EndedAt < controller.terminalAt {
-			controllerProcess.EndedAt = controller.terminalAt
-		}
-		if evidence, err := controller.Evidence(controllerProcess, toolObservationIDsNotComplete(tools), FamilyEPatienceEvidenceRefs()); err == nil {
+		if evidence, ok := controllerPatienceEvidence(controller, process, result, tools); ok {
 			return evidence
 		}
 	}
+	return fallbackPatienceEvidence(process, result, tools)
+}
 
+func controllerPatienceEvidence(controller *PatienceController, process ProcessFacts, result DuplexRunResult, tools []ToolObservation) (PatienceEvidence, bool) {
+	controllerProcess := process
+	// The controller and runner share the OnStart origin. Keep this small
+	// guard for a process that exits during the callback itself, where the
+	// scheduler can otherwise make the two terminal observations differ by
+	// a few nanoseconds.
+	if controller.outcome == "" {
+		// A child failure before the patience gate reaches a terminal product
+		// boundary is not evidence of completion. Preserve a typed cancellation
+		// outcome so the mechanical evaluator reports the missing terminal
+		// observation instead of fabricating success from stdout.
+		settleUnfinishedPatience(controller, result.TimedOut || process.ExitClassification == duplexExitTimeout)
+	}
+	if controllerProcess.EndedAt < controller.terminalAt {
+		controllerProcess.EndedAt = controller.terminalAt
+	}
+	evidence, err := controller.Evidence(controllerProcess, toolObservationIDsNotComplete(tools), FamilyEPatienceEvidenceRefs())
+	return evidence, err == nil
+}
+
+// settleUnfinishedPatience records a terminal outcome for a controller that
+// never reached one. A rejected transition leaves the controller's ledger
+// unchanged, and the subsequent Evidence call reports that state, so the
+// transition error carries no additional information here.
+func settleUnfinishedPatience(controller *PatienceController, timedOut bool) {
+	var err error
+	if timedOut {
+		err = controller.Timeout()
+	} else {
+		err = controller.Cancel()
+	}
+	if err != nil {
+		return
+	}
+}
+
+// fallbackPatienceEvidence is only a fail-closed compatibility fallback for
+// callers that do not have a live PatienceController. Product runs always
+// construct the controller; without it, stdout alone cannot prove completion
+// or distinguish a terminal response from a stalled one.
+func fallbackPatienceEvidence(process ProcessFacts, result DuplexRunResult, tools []ToolObservation) PatienceEvidence {
 	turnID := FamilyETurnID
 	terminal := process.EndedAt
 	if terminal <= 0 {
 		terminal = time.Millisecond
 	}
-	events := []PatienceEvent{{ID: "listen-started", TurnID: turnID, Kind: PatienceEventListenStarted, At: 0}}
-	responseStart := time.Duration(0)
-	firstProgress := time.Duration(0)
-	lastProgress := time.Duration(0)
+	events, responseStart, firstProgress, lastProgress := fallbackPatienceProgressEvents(result, terminal)
+	outcome := PatienceOutcomeCancelled
+	if result.TimedOut {
+		outcome = PatienceOutcomeTimeout
+	}
+	switch outcome {
+	case PatienceOutcomeCompleted:
+		events = append(events, PatienceEvent{ID: "response-completed", TurnID: turnID, Kind: PatienceEventResponseCompleted, At: terminal})
+	case PatienceOutcomeTimeout:
+		events = append(events, PatienceEvent{ID: "timeout", TurnID: turnID, Kind: PatienceEventTimeout, At: terminal, Detail: "the shipped session reached its deadline before a terminal customer response"})
+	case PatienceOutcomeCancelled, PatienceOutcomeDeadAir:
+		events = append(events, PatienceEvent{ID: string(PatienceEventCancelled), TurnID: turnID, Kind: PatienceEventCancelled, At: terminal, Detail: "the shipped session was cancelled before a terminal customer response"})
+	}
+	return PatienceEvidence{
+		ActionID: FamilyEActionID, TurnID: turnID, ListenStartedAt: 0, ResponseStartedAt: responseStart, FirstProgressAt: firstProgress, LastProgressAt: lastProgress,
+		TerminalAt: terminal, Outcome: outcome, ActivityState: PatienceActivityDeadAir, Events: events, Process: process,
+		OutstandingToolIDs: toolObservationIDsNotComplete(tools), CustomerImpact: "The customer could not rely on a timely, observable response.", EvidenceRefs: FamilyEPatienceEvidenceRefs(),
+	}
+}
+
+func fallbackPatienceProgressEvents(result DuplexRunResult, terminal time.Duration) (events []PatienceEvent, responseStart, firstProgress, lastProgress time.Duration) {
+	turnID := FamilyETurnID
+	events = []PatienceEvent{{ID: "listen-started", TurnID: turnID, Kind: PatienceEventListenStarted, At: 0}}
 	for index, output := range result.Output {
 		if output.Bytes <= 0 {
 			continue
 		}
-		at := output.At
-		if at < 0 {
-			at = 0
-		}
-		if at > terminal {
-			at = terminal
-		}
+		at := min(max(output.At, 0), terminal)
 		if len(events) == 1 {
 			responseStart = at
 			events = append(events, PatienceEvent{ID: "response-started", TurnID: turnID, Kind: PatienceEventResponseStarted, At: at})
 		}
-		if at < lastProgress {
-			at = lastProgress
-		}
+		at = max(at, lastProgress)
 		events = append(events, PatienceEvent{ID: fmt.Sprintf("product-speech-%03d", index+1), TurnID: turnID, Kind: PatienceEventProductSpeech, At: at, Detail: fmt.Sprintf("stdout read %d carried %d product PCM bytes", output.Read, output.Bytes)})
 		if firstProgress == 0 && len(events) > 2 {
 			firstProgress = at
 		}
-		if at > lastProgress {
-			lastProgress = at
-		}
+		lastProgress = max(lastProgress, at)
 	}
+	return events, responseStart, firstProgress, lastProgress
+}
 
-	// This path is only a fail-closed compatibility fallback for callers that
-	// do not have a live PatienceController. Product runs always construct the
-	// controller above; without it, stdout alone cannot prove completion or
-	// distinguish a terminal response from a stalled one.
-	outcome := PatienceOutcomeCancelled
-	state := PatienceActivityDeadAir
-	deadAirAt := time.Duration(0)
-	deadAirDuration := time.Duration(0)
-	if result.TimedOut {
-		outcome = PatienceOutcomeTimeout
-	}
-	if outcome == PatienceOutcomeCompleted {
-		events = append(events, PatienceEvent{ID: "response-completed", TurnID: turnID, Kind: PatienceEventResponseCompleted, At: terminal})
-	} else if outcome == PatienceOutcomeTimeout {
-		events = append(events, PatienceEvent{ID: "timeout", TurnID: turnID, Kind: PatienceEventTimeout, At: terminal, Detail: "the shipped session reached its deadline before a terminal customer response"})
-	} else {
-		events = append(events, PatienceEvent{ID: string(PatienceEventCancelled), TurnID: turnID, Kind: PatienceEventCancelled, At: terminal, Detail: "the shipped session was cancelled before a terminal customer response"})
-	}
-	_ = scenario
-	_ = product
-	_ = facts
-	return PatienceEvidence{
-		ActionID: FamilyEActionID, TurnID: turnID, ListenStartedAt: 0, ResponseStartedAt: responseStart, FirstProgressAt: firstProgress, LastProgressAt: lastProgress,
-		TerminalAt: terminal, Outcome: outcome, ActivityState: state, Events: events, DeadAirAt: deadAirAt, DeadAirDuration: deadAirDuration, Process: process,
-		OutstandingToolIDs: toolObservationIDsNotComplete(tools), CustomerImpact: "The customer could not rely on a timely, observable response.", EvidenceRefs: FamilyEPatienceEvidenceRefs(),
+// closeReadOnlyFile closes a file that was only read. Every byte used by the
+// caller has already been consumed, so a close failure cannot invalidate the
+// result and is deliberately not reported.
+func closeReadOnlyFile(file io.Closer) {
+	if err := file.Close(); err != nil {
+		return
 	}
 }
 

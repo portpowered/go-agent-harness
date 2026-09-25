@@ -42,7 +42,7 @@ func TestDuplexRunnerStreamsFramesAndSanitizesCredentials(t *testing.T) {
 		t.Fatalf("RunDuplexSession() error = %v", err)
 	}
 
-	if result.ExitCode != 0 || result.ExitClassification != "normal" || !result.ChildWaited || result.WaitCount != 1 || result.DescendantsAlive {
+	if result.ExitCode != 0 || result.ExitClassification != duplexExitNormal || !result.ChildWaited || result.WaitCount != 1 || result.DescendantsAlive {
 		t.Fatalf("process result = %+v, want a waited zero-exit child", result)
 	}
 	if !result.InputClosed || !result.InputFinished || !result.StdoutClosed || !result.StderrClosed {
@@ -108,7 +108,7 @@ func TestDuplexRunnerSendsSIGINTAtOutputBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RunDuplexSession() error = %v; result = %+v", err, result)
 	}
-	if result.ExitClassification != "sigint" || !result.SignalSent || result.Signal != duplexSIGINTName {
+	if result.ExitClassification != duplexExitSIGINT || !result.SignalSent || result.Signal != duplexSIGINTName {
 		t.Fatalf("SIGINT result = %+v, want recorded SIGINT classification", result)
 	}
 	if result.SignalAt <= 0 || result.SignalAt > result.Duration {

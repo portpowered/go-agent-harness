@@ -2,6 +2,7 @@ package probe
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 )
@@ -133,33 +134,36 @@ func (e MixedModalEvidence) Validate(scenario CustomerScenario) error {
 	if e.Supported && !e.ImageObserved {
 		return contractFieldError(ErrMissingEvidence, "mixed_modal.image_observed", "supported image delivery needs an observed provider event")
 	}
-	if !e.Supported {
-		if e.Delivery != MixedModalDeliveryUnsupported {
-			return contractFieldError(ErrInvalidCustomerEvidence, "mixed_modal.delivery", "unsupported evidence must use delivery=unsupported")
-		}
-		if strings.TrimSpace(e.ProductGapCode) == "" || strings.TrimSpace(e.ProductGap) == "" {
-			return contractFieldError(ErrInvalidCustomerEvidence, "mixed_modal.product_gap", "unsupported delivery needs a precise product gap code and description")
-		}
-		if e.ImageObserved {
-			return contractFieldError(ErrInvalidCustomerEvidence, "mixed_modal.image_observed", "unsupported delivery cannot claim an observed image")
-		}
+	if err := e.validateUnsupportedDelivery(); err != nil {
+		return err
 	}
 	if len(e.EvidenceRefs) == 0 {
 		return contractFieldError(ErrMissingEvidence, "mixed_modal.evidence_refs", "must not be empty")
 	}
-	var image *ScenarioImageEvent
-	for index := range scenario.ImageEvents {
-		candidate := &scenario.ImageEvents[index]
-		if candidate.ID == e.ImageEventID {
-			image = candidate
-			break
-		}
-	}
-	if image == nil {
+	index := slices.IndexFunc(scenario.ImageEvents, func(candidate ScenarioImageEvent) bool { return candidate.ID == e.ImageEventID })
+	if index < 0 {
 		return contractFieldError(ErrUnknownActionIntent, "mixed_modal.image_event_id", e.ImageEventID)
 	}
-	if image.SHA256 != e.ExpectedSHA256 {
+	if scenario.ImageEvents[index].SHA256 != e.ExpectedSHA256 {
 		return contractFieldError(ErrInvalidCustomerEvidence, "mixed_modal.expected_sha256", "does not match the declared image event")
+	}
+	return nil
+}
+
+// validateUnsupportedDelivery requires an explicit product gap whenever the
+// image could not be delivered.
+func (e MixedModalEvidence) validateUnsupportedDelivery() error {
+	if e.Supported {
+		return nil
+	}
+	if e.Delivery != MixedModalDeliveryUnsupported {
+		return contractFieldError(ErrInvalidCustomerEvidence, "mixed_modal.delivery", "unsupported evidence must use delivery=unsupported")
+	}
+	if strings.TrimSpace(e.ProductGapCode) == "" || strings.TrimSpace(e.ProductGap) == "" {
+		return contractFieldError(ErrInvalidCustomerEvidence, "mixed_modal.product_gap", "unsupported delivery needs a precise product gap code and description")
+	}
+	if e.ImageObserved {
+		return contractFieldError(ErrInvalidCustomerEvidence, "mixed_modal.image_observed", "unsupported delivery cannot claim an observed image")
 	}
 	return nil
 }
@@ -360,4 +364,18 @@ func EvaluateCustomerSimulationMixedModal(
 // identity for the image-grounded request.
 func (e MixedModalEvidence) ImageActionID() string {
 	return FamilyCImageActionID
+}
+
+func customerSimulationMixedModalEvidence(scenario CustomerScenario, transcripts PairedTranscripts, result DuplexRunResult) MixedModalEvidence {
+	priorAt := time.Duration(0)
+	if len(transcripts.Product) > 1 {
+		priorAt = transcripts.Product[1].At
+	}
+	customerAt := priorAt + time.Millisecond
+	return MixedModalEvidence{
+		ImageEventID: FamilyCImageEventID, PriorActionID: FamilyCTextActionID, PriorTurnID: customerSimulationTurnID(scenario, 1), ImageTurnID: customerSimulationTurnID(scenario, 2),
+		PriorActionCompletedAt: priorAt, CustomerTurnStartedAt: customerAt, ImageObserved: false, ExpectedSHA256: FamilyCImageFixtureSHA256,
+		Delivery: MixedModalDeliveryUnsupported, Supported: false, ImageMeaningInCustomerSpeech: false, ProductGapCode: FamilyCMidSessionImageGapCode, ProductGap: FamilyCMidSessionImageGap,
+		EvidenceRefs: []string{"events/mixed-modal.json", "transcripts/product.jsonl", "process.json"},
+	}
 }

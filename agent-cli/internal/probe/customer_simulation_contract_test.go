@@ -111,7 +111,7 @@ func TestCustomerScenarioRejectsMalformedDeclarations(t *testing.T) {
 		{"duplicate allowed disposition", func(s *CustomerScenario) {
 			s.Actions[0].AllowedDispositions = []TerminalDisposition{DispositionCompleted, DispositionCompleted}
 		}, ErrInvalidCustomerScenario},
-		{"bad side effect policy", func(s *CustomerScenario) { s.Actions[0].PartialSideEffectPolicy = "unknown" }, ErrInvalidCustomerScenario},
+		{"bad side effect policy", func(s *CustomerScenario) { s.Actions[0].PartialSideEffectPolicy = unknownFixtureValue }, ErrInvalidCustomerScenario},
 		{"missing side effect rule", func(s *CustomerScenario) { s.Actions[0].SideEffectRule = "" }, ErrInvalidCustomerScenario},
 		{"empty action oracle", func(s *CustomerScenario) { s.Actions[0].Oracle = ActionOracle{} }, ErrInvalidCustomerScenario},
 		{"unsafe oracle path", func(s *CustomerScenario) { s.Actions[0].Oracle.Checkpoints[0].Path = "../README.md" }, ErrUnsafeEvidenceArtifactPath},
@@ -349,7 +349,7 @@ func TestCustomerEvidenceRecordValidationRejectsMalformedFacts(t *testing.T) {
 			t.Fatalf("tool status %q unexpectedly validated", status)
 		}
 	}
-	tool.Status, tool.ID = "completed", ""
+	tool.Status, tool.ID = toolStatusCompleted, ""
 	if err := tool.validate("tool"); err == nil {
 		t.Fatal("tool without ID unexpectedly validated")
 	}
@@ -379,16 +379,20 @@ func TestCustomerEvidenceRecordValidationRejectsMalformedFacts(t *testing.T) {
 			}
 		})
 	}
+	testProcessFactsRejectMalformedValues(t)
+}
 
+func testProcessFactsRejectMalformedValues(t *testing.T) {
+	t.Helper()
 	process := ProcessFacts{PID: 1, ExitCode: 0, ExitClassification: "normal", StartedAt: time.Second, EndedAt: 2 * time.Second}
 	for _, test := range []struct {
 		name string
 		edit func(*ProcessFacts)
 	}{
-		{"bad classification", func(p *ProcessFacts) { p.ExitClassification = "unknown" }},
+		{"bad classification", func(p *ProcessFacts) { p.ExitClassification = unknownFixtureValue }},
 		{"bad pid", func(p *ProcessFacts) { p.PID = -2 }},
 		{"signal without value", func(p *ProcessFacts) { p.SignalSent = true }},
-		{"sigint without signal", func(p *ProcessFacts) { p.ExitClassification = "sigint" }},
+		{"sigint without signal", func(p *ProcessFacts) { p.ExitClassification = duplexExitSIGINT }},
 		{"reversed timestamps", func(p *ProcessFacts) { p.EndedAt = 0 }},
 	} {
 		t.Run("process/"+test.name, func(t *testing.T) {
@@ -440,7 +444,7 @@ func TestCustomerEvidenceValidatorVerdictsAndMechanicalFailuresAreStructured(t *
 		name string
 		edit func(*MechanicalVerdict)
 	}{
-		{"unknown action", func(v *MechanicalVerdict) { v.ActionResults[0].ActionID = "unknown" }},
+		{"unknown action", func(v *MechanicalVerdict) { v.ActionResults[0].ActionID = unknownFixtureValue }},
 		{"duplicate action", func(v *MechanicalVerdict) { v.ActionResults[1].ActionID = "create" }},
 		{"failed without reason", func(v *MechanicalVerdict) { v.ActionResults[0].OutcomeReason = "" }},
 		{"finding without code", func(v *MechanicalVerdict) { v.Findings[0].Code = "" }},
@@ -524,15 +528,6 @@ func TestCustomerEvidenceRecordDirectoryAndManifestParsing(t *testing.T) {
 	if err := manifest.Validate(); !errors.Is(err, ErrInvalidCustomerEvidence) {
 		t.Fatalf("manifest validation-error state = %v, want invalid-evidence error", err)
 	}
-}
-
-func findArtifact(entries []ArtifactEntry, path string) ArtifactEntry {
-	for _, entry := range entries {
-		if entry.Path == path {
-			return entry
-		}
-	}
-	return ArtifactEntry{}
 }
 
 func minimalCustomerEvidenceManifest(scenarioID string) CustomerEvidenceManifest {

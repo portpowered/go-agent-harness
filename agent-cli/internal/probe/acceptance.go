@@ -43,7 +43,7 @@ type InputError struct {
 
 func (e *InputError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	if e.Cause != nil {
 		return fmt.Sprintf("acceptance probe %s: %v: %v", e.Field, e.Kind, e.Cause)
@@ -70,7 +70,7 @@ type ExecutionError struct {
 
 func (e *ExecutionError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	if e.Kind == nil {
 		if e.Cause == nil {
@@ -319,9 +319,8 @@ func (r *Runner) Run(ctx context.Context, input loopprobe.AcceptanceInput) (loop
 	if transport == nil {
 		transport = LiveTransport{}
 	}
-	report := loopprobe.AcceptanceAgentReport{}
 	runResult, transportErr := transport.Run(ctx, resolved, artifacts)
-	report = runResult.Report
+	report := runResult.Report
 	if report.TerminalState == "" {
 		report.TerminalState = inferredTerminalState(ctx, runResult.ExitCode, transportErr)
 	}
@@ -351,12 +350,12 @@ func (r *Runner) Run(ctx context.Context, input loopprobe.AcceptanceInput) (loop
 	verdict.RunDirectory = artifacts.Root
 	if verifyErr != nil {
 		verdict.Pass = false
-		verdict.ScenarioResult.Error = joinVerdictError(verdict.ScenarioResult.Error, verifyErr.Error())
+		verdict.Error = joinVerdictError(verdict.Error, verifyErr.Error())
 	}
 	if transportErr != nil {
 		verdict.Pass = false
 		kind := classifyTransportError(ctx, transportErr, report.TerminalState)
-		verdict.ScenarioResult.Error = joinVerdictError(verdict.ScenarioResult.Error, (&ExecutionError{Kind: kind, Cause: transportErr}).Error())
+		verdict.Error = joinVerdictError(verdict.Error, (&ExecutionError{Kind: kind, Cause: transportErr}).Error())
 		return verdict, &ExecutionError{Kind: kind, Cause: transportErr}
 	}
 	return verdict, nil

@@ -1,23 +1,21 @@
 package probe
 
-// This file owns the opt-in customer-simulation process harness. The harness
-// deliberately composes the shipped session CLI, the existing duplex runner,
-// and the versioned evidence bundle; it does not add a second session runtime.
-
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 )
+
+// This file owns the opt-in customer-simulation process harness. The harness
+// deliberately composes the shipped session CLI, the existing duplex runner,
+// and the versioned evidence bundle; it does not add a second session runtime.
 
 const (
 	// DefaultCustomerSimulationMaxDuration is the per-child deadguard. It is
@@ -157,56 +155,47 @@ func CustomerSimulationScenariosForSelectors(selectors ...string) ([]CustomerSce
 	}
 	seen := make(map[string]struct{}, len(selectors))
 	result := make([]CustomerScenario, 0, len(selectors))
-	appendScenario := func(scenario CustomerScenario) error {
-		if err := scenario.Validate(); err != nil {
-			return err
-		}
-		if _, duplicate := seen[scenario.ID]; duplicate {
-			return fmt.Errorf("%w: scenario %q was selected more than once", ErrCustomerSimulationSelection, scenario.ID)
-		}
-		seen[scenario.ID] = struct{}{}
-		result = append(result, scenario)
-		return nil
-	}
 	for _, raw := range selectors {
-		selector := strings.ToLower(strings.TrimSpace(raw))
-		switch selector {
-		case "a", "family-a", FamilyAScenarioID:
-			if err := appendScenario(byID[FamilyAScenarioID]); err != nil {
-				return nil, err
-			}
-		case "b", "family-b", FamilyBScenarioID:
-			if err := appendScenario(byID[FamilyBScenarioID]); err != nil {
-				return nil, err
-			}
-		case "c", "family-c", FamilyCScenarioID:
-			if err := appendScenario(byID[FamilyCScenarioID]); err != nil {
-				return nil, err
-			}
-		case "d", "family-d":
-			if err := appendScenario(byID[FamilyDScenarioSIGINTID]); err != nil {
-				return nil, err
-			}
-			if err := appendScenario(byID[FamilyDScenarioNaturalID]); err != nil {
-				return nil, err
-			}
-		case "d-sigint", FamilyDScenarioSIGINTID:
-			if err := appendScenario(byID[FamilyDScenarioSIGINTID]); err != nil {
-				return nil, err
-			}
-		case "d-natural", FamilyDScenarioNaturalID:
-			if err := appendScenario(byID[FamilyDScenarioNaturalID]); err != nil {
-				return nil, err
-			}
-		case "e", "family-e", FamilyEScenarioID:
-			if err := appendScenario(byID[FamilyEScenarioID]); err != nil {
-				return nil, err
-			}
-		default:
+		ids, ok := customerSimulationSelectorScenarioIDs(strings.ToLower(strings.TrimSpace(raw)))
+		if !ok {
 			return nil, fmt.Errorf("%w: unknown family selector %q", ErrCustomerSimulationSelection, raw)
+		}
+		for _, id := range ids {
+			scenario := byID[id]
+			if err := scenario.Validate(); err != nil {
+				return nil, err
+			}
+			if _, duplicate := seen[scenario.ID]; duplicate {
+				return nil, fmt.Errorf("%w: scenario %q was selected more than once", ErrCustomerSimulationSelection, scenario.ID)
+			}
+			seen[scenario.ID] = struct{}{}
+			result = append(result, scenario)
 		}
 	}
 	return result, nil
+}
+
+// customerSimulationSelectorScenarioIDs maps one normalized selector to the
+// built-in scenario IDs it selects, in run order.
+func customerSimulationSelectorScenarioIDs(selector string) ([]string, bool) {
+	switch selector {
+	case "a", "family-a", FamilyAScenarioID:
+		return []string{FamilyAScenarioID}, true
+	case "b", "family-b", FamilyBScenarioID:
+		return []string{FamilyBScenarioID}, true
+	case "c", "family-c", FamilyCScenarioID:
+		return []string{FamilyCScenarioID}, true
+	case "d", "family-d":
+		return []string{FamilyDScenarioSIGINTID, FamilyDScenarioNaturalID}, true
+	case "d-sigint", FamilyDScenarioSIGINTID:
+		return []string{FamilyDScenarioSIGINTID}, true
+	case "d-natural", FamilyDScenarioNaturalID:
+		return []string{FamilyDScenarioNaturalID}, true
+	case "e", "family-e", FamilyEScenarioID:
+		return []string{FamilyEScenarioID}, true
+	default:
+		return nil, false
+	}
 }
 
 // RunCustomerSimulationSuite runs every selected scenario, retaining a
@@ -252,30 +241,44 @@ func validateCustomerSimulationOptions(options CustomerSimulationSuiteOptions) e
 		return fmt.Errorf("%w: live session provider %q is unsupported; want openai or grok", ErrCustomerSimulationSelection, options.Provider)
 	}
 	for index, spec := range options.Runs {
-		if err := spec.Scenario.Validate(); err != nil {
-			return fmt.Errorf("%w: scenario %d: %v", ErrCustomerSimulationSelection, index+1, err)
+		if err := validateCustomerSimulationRunSpec(index, spec); err != nil {
+			return err
 		}
-		script := spec.Script
-		if len(script) == 0 {
-			script = CustomerSimulationScenarioScript(spec.Scenario)
+	}
+	return nil
+}
+
+func validateCustomerSimulationRunSpec(index int, spec CustomerSimulationRunSpec) error {
+	if err := spec.Scenario.Validate(); err != nil {
+		return fmt.Errorf("%w: scenario %d: %w", ErrCustomerSimulationSelection, index+1, err)
+	}
+	script := spec.Script
+	if len(script) == 0 {
+		script = CustomerSimulationScenarioScript(spec.Scenario)
+	}
+	if len(script) != len(spec.Scenario.Actions) || len(spec.Audio) != len(script) {
+		return fmt.Errorf("%w: scenario %q needs one PCM16 turn per declared action (%d), got script=%d audio=%d", ErrCustomerSimulationAudio, spec.Scenario.ID, len(spec.Scenario.Actions), len(script), len(spec.Audio))
+	}
+	if err := validateCustomerSimulationTurnAudio(spec, script); err != nil {
+		return err
+	}
+	if spec.Scenario.Family == ScenarioFamilyE {
+		if len(spec.PatienceRepromptAudio) == 0 || len(spec.PatienceRepromptAudio)%2 != 0 {
+			return fmt.Errorf("%w: Family E scenario %q needs non-empty even-length patience re-prompt PCM16", ErrCustomerSimulationAudio, spec.Scenario.ID)
 		}
-		if len(script) != len(spec.Scenario.Actions) || len(spec.Audio) != len(script) {
-			return fmt.Errorf("%w: scenario %q needs one PCM16 turn per declared action (%d), got script=%d audio=%d", ErrCustomerSimulationAudio, spec.Scenario.ID, len(spec.Scenario.Actions), len(script), len(spec.Audio))
+	} else if len(spec.PatienceRepromptAudio) > 0 {
+		return fmt.Errorf("%w: patience re-prompt audio is only valid for Family E scenario %q", ErrCustomerSimulationAudio, spec.Scenario.ID)
+	}
+	return nil
+}
+
+func validateCustomerSimulationTurnAudio(spec CustomerSimulationRunSpec, script []CustomerScriptTurn) error {
+	for audioIndex, audio := range spec.Audio {
+		if len(audio) == 0 || len(audio)%2 != 0 {
+			return fmt.Errorf("%w: scenario %q turn %d must contain non-empty even-length PCM16", ErrCustomerSimulationAudio, spec.Scenario.ID, audioIndex+1)
 		}
-		for audioIndex, audio := range spec.Audio {
-			if len(audio) == 0 || len(audio)%2 != 0 {
-				return fmt.Errorf("%w: scenario %q turn %d must contain non-empty even-length PCM16", ErrCustomerSimulationAudio, spec.Scenario.ID, audioIndex+1)
-			}
-			if strings.TrimSpace(script[audioIndex].ActionID) == "" || strings.TrimSpace(script[audioIndex].Text) == "" {
-				return fmt.Errorf("%w: scenario %q turn %d needs a visible action ID and customer wording", ErrCustomerSimulationAudio, spec.Scenario.ID, audioIndex+1)
-			}
-		}
-		if spec.Scenario.Family == ScenarioFamilyE {
-			if len(spec.PatienceRepromptAudio) == 0 || len(spec.PatienceRepromptAudio)%2 != 0 {
-				return fmt.Errorf("%w: Family E scenario %q needs non-empty even-length patience re-prompt PCM16", ErrCustomerSimulationAudio, spec.Scenario.ID)
-			}
-		} else if len(spec.PatienceRepromptAudio) > 0 {
-			return fmt.Errorf("%w: patience re-prompt audio is only valid for Family E scenario %q", ErrCustomerSimulationAudio, spec.Scenario.ID)
+		if strings.TrimSpace(script[audioIndex].ActionID) == "" || strings.TrimSpace(script[audioIndex].Text) == "" {
+			return fmt.Errorf("%w: scenario %q turn %d needs a visible action ID and customer wording", ErrCustomerSimulationAudio, spec.Scenario.ID, audioIndex+1)
 		}
 	}
 	return nil
@@ -305,256 +308,6 @@ func customerSimulationRunRoot(raw string) (string, func(), error) {
 		return "", func() {}, fmt.Errorf("%w: inspect run root: %v", ErrCustomerSimulationRun, statErr)
 	}
 	return root, func() {}, nil
-}
-
-func runCustomerSimulation(ctx context.Context, suiteRoot string, index int, spec CustomerSimulationRunSpec, options CustomerSimulationSuiteOptions) (CustomerSimulationRunResult, error) {
-	runID := fmt.Sprintf("%s-%03d", customerSimulationSlug(spec.Scenario.ID), index+1)
-	runRoot := filepath.Join(suiteRoot, runID)
-	workspaceRoot := filepath.Join(runRoot, "workspace")
-	recordRoot := filepath.Join(runRoot, "product-record")
-	configRoot := filepath.Join(runRoot, "config")
-	bundleRoot := filepath.Join(runRoot, "evidence")
-	if _, err := os.Lstat(runRoot); err == nil {
-		failure := fmt.Errorf("run directory %q already exists; use a fresh --run-root", runRoot)
-		return failedCustomerSimulationResult(runID, spec.Scenario, bundleRoot, recordRoot, workspaceRoot, failure), fmt.Errorf("%w %q: %v", ErrCustomerSimulationRun, spec.Scenario.ID, failure)
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return failedCustomerSimulationResult(runID, spec.Scenario, bundleRoot, recordRoot, workspaceRoot, err), fmt.Errorf("%w %q: inspect run directory: %v", ErrCustomerSimulationRun, spec.Scenario.ID, err)
-	}
-	for _, path := range []string{workspaceRoot, recordRoot, configRoot, bundleRoot} {
-		if err := os.MkdirAll(path, 0o700); err != nil {
-			return failedCustomerSimulationResult(runID, spec.Scenario, bundleRoot, recordRoot, workspaceRoot, fmt.Errorf("create run directory: %v", err)), fmt.Errorf("%w %q: %v", ErrCustomerSimulationRun, spec.Scenario.ID, err)
-		}
-	}
-	// The shipped CLI reports this safety setting on stdout when its config is
-	// absent. Since --audio-out - is the runner's binary PCM boundary, seed the
-	// isolated config with the same explicit deny-pattern setting used by the
-	// hermetic shipped-process fixtures instead of allowing a warning to look
-	// like product audio progress.
-	if err := os.WriteFile(filepath.Join(configRoot, "config.yaml"), []byte("tools:\n  exec:\n    enable_deny_patterns: true\n"), 0o600); err != nil {
-		failure := fmt.Errorf("write isolated session config: %v", err)
-		return failedCustomerSimulationResult(runID, spec.Scenario, bundleRoot, recordRoot, workspaceRoot, failure), fmt.Errorf("%w %q: %v", ErrCustomerSimulationRun, spec.Scenario.ID, failure)
-	}
-	bundle, bundleErr := NewCustomerEvidenceBundle(bundleRoot, spec.Scenario, runID, options.APIKey)
-	if bundleErr != nil {
-		return failedCustomerSimulationResult(runID, spec.Scenario, bundleRoot, recordRoot, workspaceRoot, bundleErr), fmt.Errorf("%w %q: create evidence bundle: %v", ErrCustomerSimulationRun, spec.Scenario.ID, bundleErr)
-	}
-	oracle, oracleErr := NewFilesystemOracle(workspaceRoot)
-	if oracleErr != nil {
-		return failedCustomerSimulationResult(runID, spec.Scenario, bundleRoot, recordRoot, workspaceRoot, oracleErr), fmt.Errorf("%w %q: create filesystem oracle: %v", ErrCustomerSimulationRun, spec.Scenario.ID, oracleErr)
-	}
-
-	script := spec.Script
-	if len(script) == 0 {
-		script = CustomerSimulationScenarioScript(spec.Scenario)
-	}
-	started := time.Now()
-	var checkpointMu sync.Mutex
-	checkpoints := make([]FilesystemCheckpoint, 0, len(spec.Scenario.Actions))
-	captureCheckpoint := func(actionIndex int, at time.Duration) error {
-		if actionIndex < 0 || actionIndex >= len(spec.Scenario.Actions) {
-			return fmt.Errorf("checkpoint action index %d is out of range", actionIndex)
-		}
-		action := spec.Scenario.Actions[actionIndex]
-		checkpointID := fmt.Sprintf("checkpoint-%02d-%s", actionIndex+1, customerSimulationSlug(action.ID))
-		checkpoint, err := oracle.CaptureCheckpoint(checkpointID, action.ID, at, action.Oracle.Checkpoints)
-		if err != nil {
-			return err
-		}
-		checkpointMu.Lock()
-		defer checkpointMu.Unlock()
-		for _, existing := range checkpoints {
-			if existing.ID == checkpoint.ID {
-				return nil
-			}
-		}
-		checkpoints = append(checkpoints, checkpoint)
-		return nil
-	}
-
-	var patienceController *PatienceController
-	patienceOutputIndex := 0
-	patienceRepromptOutputIndex := -1
-	if spec.Scenario.Family == ScenarioFamilyE {
-		var controllerErr error
-		patienceController, controllerErr = NewPatienceController(spec.Scenario, FamilyEActionID, FamilyETurnID, RealPatienceClock{})
-		if controllerErr != nil {
-			return failedCustomerSimulationResult(runID, spec.Scenario, bundleRoot, recordRoot, workspaceRoot, controllerErr), fmt.Errorf("%w %q: create patience controller: %v", ErrCustomerSimulationRun, spec.Scenario.ID, controllerErr)
-		}
-	}
-
-	segments := make([]DuplexAudioSegment, 0, len(spec.Audio)+1)
-	if spec.Scenario.Family == ScenarioFamilyE {
-		segments = append(segments, DuplexAudioSegment{
-			ID: "customer-request", PCM16: append([]byte(nil), spec.Audio[0]...), SilenceFor: options.SilenceDuration,
-		})
-		segments = append(segments, DuplexAudioSegment{
-			ID: "patience-reprompt-1", PCM16: append([]byte(nil), spec.PatienceRepromptAudio...), SilenceFor: options.SilenceDuration,
-			Before: func(ctx context.Context, progress *DuplexProgress) error {
-				if err := waitForCustomerSimulationPatienceReprompt(ctx, patienceController, progress, &patienceOutputIndex, &patienceRepromptOutputIndex); err != nil {
-					return err
-				}
-				return nil
-			},
-		})
-	} else {
-		segments = make([]DuplexAudioSegment, len(spec.Audio))
-		for index, audio := range spec.Audio {
-			segment := DuplexAudioSegment{ID: script[index].ActionID, PCM16: append([]byte(nil), audio...), SilenceFor: options.SilenceDuration}
-			if index > 0 {
-				segment.Before = func(actionIndex int) DuplexSegmentGate {
-					return func(_ context.Context, _ *DuplexProgress) error {
-						return captureCheckpoint(actionIndex-1, time.Since(started))
-					}
-				}(index)
-			}
-			if spec.Scenario.Family == ScenarioFamilyB && index == 1 {
-				// A tool-only continuation can be delivered or suppressed separately.
-				// Gate on the original response's marker itself.
-				segment.WaitForOutputSequence = []byte{1, 0x42, 0x52, 0x42}
-			}
-			segments[index] = segment
-		}
-	}
-
-	terminationBytes := int64(0)
-	if spec.Scenario.Termination == TerminationSIGINT {
-		terminationBytes = 1
-	}
-	maxDuration := options.MaxDuration
-	if maxDuration <= 0 || (spec.Scenario.Deadline > 0 && spec.Scenario.Deadline < maxDuration) {
-		maxDuration = spec.Scenario.Deadline
-	}
-	duplexResult, processErr := RunDuplexSession(ctx, DuplexSessionConfig{
-		BinaryPath:       options.BinaryPath,
-		RecordDir:        recordRoot,
-		WorkingDirectory: workspaceRoot,
-		ConfigDir:        configRoot,
-		Provider:         options.Provider,
-		Model:            options.Model,
-		BaseURL:          options.BaseURL,
-		APIKey:           options.APIKey,
-		SystemPrompt:     options.SystemPrompt,
-		MaxDuration:      maxDuration,
-		// Patience and correction gates may need to keep the same provider
-		// session open after an otherwise terminal response, so all suite runs
-		// explicitly retain the shipped session until the provider closes it.
-		AdditionalArgs: []string{"--wait-for-close"},
-		OnStart: func(startedAt time.Time) {
-			if patienceController == nil {
-				return
-			}
-			patienceController.startedAt = startedAt
-			_ = patienceController.StartListening()
-		},
-		FrameDuration: options.FrameDuration,
-		Segments:      segments,
-		BeforeInputClose: func(ctx context.Context, progress *DuplexProgress) error {
-			if spec.Scenario.Family != ScenarioFamilyE {
-				return nil
-			}
-			return waitForCustomerSimulationPatienceCompletion(ctx, patienceController, progress, &patienceOutputIndex, patienceRepromptOutputIndex)
-		},
-		Termination:                 spec.Scenario.Termination,
-		TerminationAfterOutputBytes: terminationBytes,
-		Output:                      options.CaptureOutputSink,
-		ErrorOutput:                 options.CaptureErrorSink,
-		ShutdownGrace:               options.ShutdownGrace,
-	})
-
-	checkpointMu.Lock()
-	sortFilesystemCheckpoints(checkpoints)
-	checkpointSnapshot := append([]FilesystemCheckpoint(nil), checkpoints...)
-	checkpointMu.Unlock()
-	if processErr == nil && len(spec.Scenario.Actions) > 0 {
-		lastAction := len(spec.Scenario.Actions) - 1
-		if err := captureCheckpoint(lastAction, duplexResult.Duration); err != nil {
-			processErr = errors.Join(processErr, err)
-		}
-		checkpointMu.Lock()
-		sortFilesystemCheckpoints(checkpoints)
-		checkpointSnapshot = append([]FilesystemCheckpoint(nil), checkpoints...)
-		checkpointMu.Unlock()
-	}
-
-	recordingFacts, recordingErr := readCustomerSimulationRecording(recordRoot, spec.Scenario, options.ReplayService)
-	transcripts := buildCustomerSimulationTranscripts(spec.Scenario, script, duplexResult, recordingFacts)
-	audioEvents := customerSimulationAudioEvents(spec.Scenario, duplexResult, options.FrameDuration, recordingFacts)
-	toolObservations := recordingFacts.tools
-	process := ProcessFactsFromDuplexResult(duplexResult)
-	if process.ExitClassification == "" {
-		process.ExitClassification = "failed"
-	}
-	actionResults := customerSimulationActionResults(spec.Scenario, transcripts.Product, checkpointSnapshot, toolObservations, process, recordingFacts)
-
-	bundle.Transcripts = transcripts
-	bundle.AudioTurnEvents = audioEvents
-	bundle.ToolObservations = toolObservations
-	bundle.FilesystemCheckpoints = checkpointSnapshot
-	bundle.Process = process
-	var patience *PatienceEvidence
-	if spec.Scenario.Family == ScenarioFamilyE {
-		value := customerSimulationPatienceEvidence(spec.Scenario, transcripts.Product, process, duplexResult, toolObservations, recordingFacts, patienceController)
-		patience = &value
-	}
-	mechanical := customerSimulationMechanicalVerdict(spec.Scenario, actionResults, checkpointSnapshot, toolObservations, transcripts.Product, recordingFacts, process, duplexResult, patience)
-	bundle.MechanicalVerdict = &mechanical
-	if spec.Scenario.Family == ScenarioFamilyC {
-		mixed := customerSimulationMixedModalEvidence(spec.Scenario, transcripts, duplexResult)
-		bundle.MixedModal = &mixed
-	}
-	if spec.Scenario.Family == ScenarioFamilyD {
-		termination := customerSimulationTerminationEvidence(spec.Scenario, transcripts.Product, process, duplexResult, recordingFacts)
-		bundle.Termination = &termination
-	}
-	if patience != nil {
-		bundle.Patience = patience
-	}
-	var correction *CorrectionEvidence
-	if spec.Scenario.Family == ScenarioFamilyB {
-		value := customerSimulationCorrectionEvidence(spec.Scenario, transcripts.Product, process, recordingFacts)
-		correction = &value
-	}
-	if recordErr := addCustomerSimulationProductRecord(bundle, recordRoot); recordErr != nil {
-		processErr = errors.Join(processErr, recordErr)
-		mechanical.Pass = false
-		mechanical.Summary = mechanicalSummary(len(mechanical.Findings)+1, len(spec.Scenario.Actions))
-		mechanical.Findings = append(mechanical.Findings, MechanicalFinding{
-			Code: "missing_product_record", Message: "the product record directory was unavailable; the run is not independently reviewable",
-			EvidenceRefs: []string{"product-record-dir/index.json", "process.json"},
-		})
-	}
-	if err := registerCustomerSimulationEvidenceRefs(bundle, correction); err != nil {
-		processErr = errors.Join(processErr, err)
-	}
-
-	validatorResult, finalizeErr := bundle.FinalizeWithValidator(ctx, options.Validator, options.ValidatorTimeout)
-	if finalizeErr != nil {
-		processErr = errors.Join(processErr, finalizeErr)
-	}
-	if recordingErr != nil {
-		processErr = errors.Join(processErr, recordingErr)
-	}
-	if processErr == nil && !validatorResult.Pass() {
-		processErr = fmt.Errorf("validator returned %s", validatorResult.Status)
-	}
-
-	runResult := CustomerSimulationRunResult{
-		RunID: runID, ScenarioID: spec.Scenario.ID, Family: spec.Scenario.Family, Termination: spec.Scenario.Termination,
-		BundleRoot: bundleRoot, RecordRoot: recordRoot, WorkspaceRoot: workspaceRoot,
-		Duration: duplexResult.Duration, Process: process, Mechanical: *bundle.MechanicalVerdict, Validator: validatorResult,
-	}
-	if processErr != nil {
-		runResult.Error = customerSimulationSafeError(processErr, options.APIKey)
-	}
-	return runResult, processErr
-}
-
-func failedCustomerSimulationResult(runID string, scenario CustomerScenario, bundleRoot, recordRoot, workspaceRoot string, err error) CustomerSimulationRunResult {
-	return CustomerSimulationRunResult{
-		RunID: runID, ScenarioID: scenario.ID, Family: scenario.Family, Termination: scenario.Termination,
-		BundleRoot: bundleRoot, RecordRoot: recordRoot, WorkspaceRoot: workspaceRoot,
-		Process: ProcessFacts{PID: -1, ExitClassification: "failed"}, Error: customerSimulationSafeError(err, ""),
-	}
 }
 
 func customerSimulationSlug(raw string) string {
@@ -708,7 +461,7 @@ func customerSimulationResponseTurnIndices(scenario CustomerScenario, responses 
 	}
 	for index := range responses {
 		if strings.TrimSpace(responses[index].Text) != "" {
-			indices[index] = minInt(textAction[index], len(scenario.Actions)-1)
+			indices[index] = min(textAction[index], len(scenario.Actions)-1)
 			continue
 		}
 		nextText := -1
@@ -727,7 +480,7 @@ func customerSimulationResponseTurnIndices(scenario CustomerScenario, responses 
 		if actionIndex < 0 {
 			actionIndex = 0
 		}
-		indices[index] = minInt(actionIndex, len(scenario.Actions)-1)
+		indices[index] = min(actionIndex, len(scenario.Actions)-1)
 	}
 	return indices
 }
@@ -738,8 +491,8 @@ func customerSimulationOutputPartsForRanges(start, end int64, ranges []customerS
 	}
 	parts := make([]customerSimulationOutputPart, 0, 1)
 	for _, response := range ranges {
-		overlapStart := maxInt64(start, response.Start)
-		overlapEnd := minInt64(end, response.End)
+		overlapStart := max(start, response.Start)
+		overlapEnd := min(end, response.End)
 		if overlapEnd <= overlapStart {
 			continue
 		}
@@ -778,20 +531,6 @@ func customerSimulationPCM16Duration(bytes int) time.Duration {
 	return time.Duration(bytes) * time.Second / (2 * DefaultDuplexSampleRate)
 }
 
-func maxInt64(left, right int64) int64 {
-	if right > left {
-		return right
-	}
-	return left
-}
-
-func minInt64(left, right int64) int64 {
-	if right < left {
-		return right
-	}
-	return left
-}
-
 const customerSimulationPatienceWakeInterval = 25 * time.Millisecond
 
 // waitForCustomerSimulationPatienceReprompt keeps the input pump at the
@@ -809,34 +548,8 @@ func waitForCustomerSimulationPatienceReprompt(
 		return fmt.Errorf("%w: patience runner is incomplete", ErrCustomerSimulationRun)
 	}
 	for {
-		if err := observeCustomerSimulationOutput(controller, progress, outputIndex); err != nil {
+		if done, err := stepCustomerSimulationPatienceReprompt(controller, progress, outputIndex, repromptOutputIndex); done {
 			return err
-		}
-		if progress.OutputClosed() {
-			if err := completeCustomerSimulationPatience(controller); err != nil {
-				return err
-			}
-			// A normal child boundary is a valid end to the one-turn patience
-			// conversation. Stop the not-yet-delivered re-prompt segment without
-			// misclassifying the intentionally short input script as premature EOF.
-			return errDuplexInputComplete
-		}
-		decision, err := controller.Decision()
-		if err != nil {
-			return err
-		}
-		switch decision.Kind {
-		case PatienceDecisionReprompt:
-			if _, err := controller.Reprompt(FamilyEReprompt(decision.RepromptCount)); err != nil {
-				return err
-			}
-			*repromptOutputIndex = len(progress.OutputEvents())
-			return nil
-		case PatienceDecisionDeadAir:
-			if err := controller.DeclareDeadAir(); err != nil {
-				return err
-			}
-			return fmt.Errorf("family E patience dead air: no observable progress for %s", decision.SinceLastProgress)
 		}
 		if err := waitForCustomerSimulationPatienceChange(ctx, progress); err != nil {
 			// A shipped child may close its provider stream immediately after a
@@ -859,6 +572,43 @@ func waitForCustomerSimulationPatienceReprompt(
 	}
 }
 
+// stepCustomerSimulationPatienceReprompt performs one observation and policy
+// decision before the re-prompt. done reports that the wait has ended with
+// the returned result.
+func stepCustomerSimulationPatienceReprompt(controller *PatienceController, progress *DuplexProgress, outputIndex, repromptOutputIndex *int) (bool, error) {
+	if err := observeCustomerSimulationOutput(controller, progress, outputIndex); err != nil {
+		return true, err
+	}
+	if progress.OutputClosed() {
+		if err := completeCustomerSimulationPatience(controller); err != nil {
+			return true, err
+		}
+		// A normal child boundary is a valid end to the one-turn patience
+		// conversation. Stop the not-yet-delivered re-prompt segment without
+		// misclassifying the intentionally short input script as premature EOF.
+		return true, errDuplexInputComplete
+	}
+	decision, err := controller.Decision()
+	if err != nil {
+		return true, err
+	}
+	switch decision.Kind {
+	case PatienceDecisionReprompt:
+		if _, err := controller.Reprompt(FamilyEReprompt(decision.RepromptCount)); err != nil {
+			return true, err
+		}
+		*repromptOutputIndex = len(progress.OutputEvents())
+		return true, nil
+	case PatienceDecisionDeadAir:
+		if err := controller.DeclareDeadAir(); err != nil {
+			return true, err
+		}
+		return true, fmt.Errorf("family E patience dead air: no observable progress for %s", decision.SinceLastProgress)
+	case PatienceDecisionWait, PatienceDecisionComplete:
+	}
+	return false, nil
+}
+
 // waitForCustomerSimulationPatienceCompletion waits for a terminal stdout
 // boundary after the re-prompt. A close without any post-re-prompt product
 // output is recorded as cancellation, preventing an earlier response from
@@ -874,119 +624,90 @@ func waitForCustomerSimulationPatienceCompletion(
 		return fmt.Errorf("%w: patience runner is incomplete", ErrCustomerSimulationRun)
 	}
 	for {
-		before := *outputIndex
-		if err := observeCustomerSimulationOutput(controller, progress, outputIndex); err != nil {
+		if done, err := stepCustomerSimulationPatienceCompletion(controller, progress, outputIndex, repromptOutputIndex); done {
 			return err
-		}
-		if repromptOutputIndex >= 0 && *outputIndex > repromptOutputIndex {
-			// A post-re-prompt product audio boundary is the terminal response
-			// signal for Family E's one-response script. Close the owned input
-			// stream now so the shipped child can deliver its end-of-turn and
-			// provider-close controls; waiting for stdout to close first would
-			// deadlock when --wait-for-close is enabled.
-			if err := completeCustomerSimulationPatience(controller); err != nil {
-				return err
-			}
-			return errDuplexInputComplete
-		}
-		if progress.OutputClosed() {
-			if repromptOutputIndex >= 0 && *outputIndex <= repromptOutputIndex && before == *outputIndex {
-				if err := controller.Cancel(); err != nil {
-					return err
-				}
-				return fmt.Errorf("family E patience ended without post-re-prompt product output")
-			}
-			return completeCustomerSimulationPatience(controller)
-		}
-		decision, err := controller.Decision()
-		if err != nil {
-			return err
-		}
-		if decision.Kind == PatienceDecisionDeadAir {
-			if err := controller.DeclareDeadAir(); err != nil {
-				return err
-			}
-			// Close the input boundary after recording the policy breach. This
-			// lets the shipped session flush its product record and terminate at
-			// its normal end-of-input boundary; the finalized patience evidence
-			// remains BROKEN, so graceful process cleanup cannot hide the dead air.
-			return errDuplexInputComplete
 		}
 		if err := waitForCustomerSimulationPatienceChange(ctx, progress); err != nil {
 			if progress.OutputClosed() {
-				if observeErr := observeCustomerSimulationOutput(controller, progress, outputIndex); observeErr != nil {
-					return observeErr
-				}
-				if repromptOutputIndex >= 0 && *outputIndex <= repromptOutputIndex {
-					if cancelErr := controller.Cancel(); cancelErr != nil {
-						return cancelErr
-					}
-					return fmt.Errorf("family E patience ended without post-re-prompt product output")
-				}
-				if completeErr := completeCustomerSimulationPatience(controller); completeErr != nil {
-					return completeErr
-				}
-				return errDuplexInputComplete
+				return settleCustomerSimulationPatienceClose(controller, progress, outputIndex, repromptOutputIndex)
 			}
 			return finishCustomerSimulationPatienceOnContext(controller, ctx, err)
 		}
 	}
 }
 
-func observeCustomerSimulationOutput(controller *PatienceController, progress *DuplexProgress, outputIndex *int) error {
-	events := progress.OutputEvents()
-	if *outputIndex > len(events) {
-		*outputIndex = len(events)
+// stepCustomerSimulationPatienceCompletion performs one observation and
+// policy decision after the re-prompt. done reports that the wait has ended
+// with the returned result.
+func stepCustomerSimulationPatienceCompletion(controller *PatienceController, progress *DuplexProgress, outputIndex *int, repromptOutputIndex int) (bool, error) {
+	before := *outputIndex
+	if err := observeCustomerSimulationOutput(controller, progress, outputIndex); err != nil {
+		return true, err
 	}
-	for *outputIndex < len(events) {
-		event := events[*outputIndex]
-		*outputIndex = *outputIndex + 1
-		if event.Bytes <= 0 {
-			continue
+	if repromptOutputIndex >= 0 && *outputIndex > repromptOutputIndex {
+		// A post-re-prompt product audio boundary is the terminal response
+		// signal for Family E's one-response script. Close the owned input
+		// stream now so the shipped child can deliver its end-of-turn and
+		// provider-close controls; waiting for stdout to close first would
+		// deadlock when --wait-for-close is enabled.
+		if err := completeCustomerSimulationPatience(controller); err != nil {
+			return true, err
 		}
-		if !controller.responseStarted {
-			if err := controller.ObserveResponseStart(fmt.Sprintf("stdout read %d crossed the product audio boundary", event.Read)); err != nil {
-				return err
-			}
-		}
-		if err := controller.ObserveProductSpeech(0, fmt.Sprintf("stdout read %d carried %d product PCM bytes", event.Read, event.Bytes)); err != nil {
-			return err
-		}
+		return true, errDuplexInputComplete
 	}
-	return nil
+	if progress.OutputClosed() {
+		if repromptOutputIndex >= 0 && *outputIndex <= repromptOutputIndex && before == *outputIndex {
+			return true, cancelCustomerSimulationPatienceWithoutOutput(controller)
+		}
+		return true, completeCustomerSimulationPatience(controller)
+	}
+	decision, err := controller.Decision()
+	if err != nil {
+		return true, err
+	}
+	if decision.Kind == PatienceDecisionDeadAir {
+		if err := controller.DeclareDeadAir(); err != nil {
+			return true, err
+		}
+		// Close the input boundary after recording the policy breach. This
+		// lets the shipped session flush its product record and terminate at
+		// its normal end-of-input boundary; the finalized patience evidence
+		// remains BROKEN, so graceful process cleanup cannot hide the dead air.
+		return true, errDuplexInputComplete
+	}
+	return false, nil
 }
 
-func waitForCustomerSimulationPatienceChange(ctx context.Context, progress *DuplexProgress) error {
-	waitContext, cancel := context.WithTimeout(ctx, customerSimulationPatienceWakeInterval)
-	defer cancel()
-	err := progress.WaitForChange(waitContext)
-	if errors.Is(err, context.DeadlineExceeded) {
-		return nil
+// settleCustomerSimulationPatienceClose classifies a closed stdout boundary
+// observed while waiting for post-re-prompt output.
+func settleCustomerSimulationPatienceClose(controller *PatienceController, progress *DuplexProgress, outputIndex *int, repromptOutputIndex int) error {
+	if observeErr := observeCustomerSimulationOutput(controller, progress, outputIndex); observeErr != nil {
+		return observeErr
 	}
-	return err
+	if repromptOutputIndex >= 0 && *outputIndex <= repromptOutputIndex {
+		return cancelCustomerSimulationPatienceWithoutOutput(controller)
+	}
+	if completeErr := completeCustomerSimulationPatience(controller); completeErr != nil {
+		return completeErr
+	}
+	return errDuplexInputComplete
 }
 
-func completeCustomerSimulationPatience(controller *PatienceController) error {
-	if controller.outcome == "" {
-		return controller.Complete()
+func cancelCustomerSimulationPatienceWithoutOutput(controller *PatienceController) error {
+	if err := controller.Cancel(); err != nil {
+		return err
 	}
-	return nil
-}
-
-func finishCustomerSimulationPatienceOnContext(controller *PatienceController, ctx context.Context, waitErr error) error {
-	if ctx.Err() != nil && controller.outcome == "" {
-		var terminalErr error
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			terminalErr = controller.Timeout()
-		} else {
-			terminalErr = controller.Cancel()
-		}
-		return errors.Join(waitErr, terminalErr)
-	}
-	return waitErr
+	return errors.New("family E patience ended without post-re-prompt product output")
 }
 
 func buildCustomerSimulationTranscripts(scenario CustomerScenario, script []CustomerScriptTurn, result DuplexRunResult, facts customerSimulationRecordingFacts) PairedTranscripts {
+	return PairedTranscripts{
+		Customer: buildCustomerSimulationCustomerTranscript(scenario, script, result),
+		Product:  buildCustomerSimulationProductTranscript(scenario, result, facts),
+	}
+}
+
+func buildCustomerSimulationCustomerTranscript(scenario CustomerScenario, script []CustomerScriptTurn, result DuplexRunResult) []TranscriptEvent {
 	customer := make([]TranscriptEvent, 0, len(script))
 	for index, turn := range script {
 		at := time.Duration(0)
@@ -1001,23 +722,32 @@ func buildCustomerSimulationTranscripts(scenario CustomerScenario, script []Cust
 		}
 		customer = append(customer, TranscriptEvent{ID: fmt.Sprintf("customer-%02d", index+1), TurnID: customerSimulationTurnID(scenario, index), Speaker: TranscriptCustomer, Text: turn.Text, At: at, Final: true})
 	}
-	if scenario.Family == ScenarioFamilyE {
-		for _, input := range result.Input {
-			if input.SegmentID != "patience-reprompt-1" {
-				continue
-			}
-			at := input.At
-			if len(customer) > 0 && at < customer[len(customer)-1].At {
-				at = customer[len(customer)-1].At
-			}
-			customer = append(customer, TranscriptEvent{
-				ID: "customer-patience-reprompt-1", TurnID: FamilyETurnID, Speaker: TranscriptCustomer,
-				Text: FamilyEReprompt(0), At: at, Final: true,
-			})
-			break
-		}
+	if scenario.Family != ScenarioFamilyE {
+		return customer
 	}
+	return appendCustomerSimulationRepromptTranscript(customer, result)
+}
 
+// appendCustomerSimulationRepromptTranscript records the Family E patience
+// re-prompt, if it was delivered, after the scripted customer turns.
+func appendCustomerSimulationRepromptTranscript(customer []TranscriptEvent, result DuplexRunResult) []TranscriptEvent {
+	for _, input := range result.Input {
+		if input.SegmentID != "patience-reprompt-1" {
+			continue
+		}
+		at := input.At
+		if len(customer) > 0 && at < customer[len(customer)-1].At {
+			at = customer[len(customer)-1].At
+		}
+		return append(customer, TranscriptEvent{
+			ID: "customer-patience-reprompt-1", TurnID: FamilyETurnID, Speaker: TranscriptCustomer,
+			Text: FamilyEReprompt(0), At: at, Final: true,
+		})
+	}
+	return customer
+}
+
+func buildCustomerSimulationProductTranscript(scenario CustomerScenario, result DuplexRunResult, facts customerSimulationRecordingFacts) []TranscriptEvent {
 	recordedResponses := make([]customerSimulationResponse, 0, len(facts.responses))
 	for _, response := range facts.responses {
 		if strings.TrimSpace(response.Text) != "" {
@@ -1044,11 +774,13 @@ func buildCustomerSimulationTranscripts(scenario CustomerScenario, script []Cust
 	if len(product) == 0 && len(result.Output) > 0 {
 		product = append(product, TranscriptEvent{ID: "product-01", TurnID: customerSimulationTurnID(scenario, 0), Speaker: TranscriptProduct, Text: "", At: result.Output[0].At, Final: false})
 	}
-	return PairedTranscripts{Customer: customer, Product: product}
+	return product
 }
 
 func customerSimulationActionResults(scenario CustomerScenario, product []TranscriptEvent, checkpoints []FilesystemCheckpoint, tools []ToolObservation, process ProcessFacts, facts customerSimulationRecordingFacts) []ActionResult {
 	results := make([]ActionResult, 0, len(scenario.Actions))
+	processCompleted := process.ExitClassification == duplexExitNormal && process.ChildWaited && process.WaitCount == 1 && process.InputFinished
+	sigintTermination := scenario.Family == ScenarioFamilyD && scenario.Termination == TerminationSIGINT
 	for index, action := range scenario.Actions {
 		turnID := customerSimulationTurnID(scenario, index)
 		text := transcriptTextForTurn(product, turnID)
@@ -1064,23 +796,11 @@ func customerSimulationActionResults(scenario CustomerScenario, product []Transc
 				toolIDs = append(toolIDs, observation.ID)
 			}
 		}
-		completed := process.ExitClassification == "normal" && process.ChildWaited && process.WaitCount == 1 && process.InputFinished
-		if scenario.Family == ScenarioFamilyD && scenario.Termination == TerminationSIGINT {
-			completed = false
-		}
-		if action.PartialSideEffectPolicy != PartialSideEffectsForbid && len(toolIDs) == 0 {
-			completed = false
-		}
-		if action.Oracle.RequireConfirmation {
-			for _, required := range action.Oracle.RequiredText {
-				if !strings.Contains(strings.ToLower(text), strings.ToLower(required)) {
-					completed = false
-				}
-			}
-		}
-		if scenario.Family == ScenarioFamilyC && action.ID == FamilyCImageActionID {
-			completed = false
-		}
+		textConfirmed := customerSimulationTextConfirmsAction(action, text)
+		completed := processCompleted && !sigintTermination &&
+			(action.PartialSideEffectPolicy == PartialSideEffectsForbid || len(toolIDs) > 0) &&
+			(!action.Oracle.RequireConfirmation || textConfirmed) &&
+			(scenario.Family != ScenarioFamilyC || action.ID != FamilyCImageActionID)
 		disposition := DispositionFailed
 		reason := "the shipped session did not produce a complete, independently evidenced action"
 		if completed {
@@ -1090,29 +810,31 @@ func customerSimulationActionResults(scenario CustomerScenario, product []Transc
 		if scenario.Family == ScenarioFamilyB && action.ID == FamilyBOriginalActionID && facts.cancelObserved && len(checkpointIDs) > 0 {
 			disposition = DispositionCancelled
 			reason = "the original response was cancelled by the customer's correction after its side effect was observed"
-			completed = false
 		}
-		if scenario.Family == ScenarioFamilyD && scenario.Termination == TerminationSIGINT {
+		if sigintTermination {
 			disposition = DispositionCancelled
 			reason = "the active response was interrupted by the selected SIGINT termination"
 		}
-		confirmed := false
+		confirmed := action.Oracle.RequireConfirmation && textConfirmed
 		confirmedAt := time.Duration(0)
-		if action.Oracle.RequireConfirmation {
-			confirmed = true
-			for _, required := range action.Oracle.RequiredText {
-				if !strings.Contains(strings.ToLower(text), strings.ToLower(required)) {
-					confirmed = false
-				}
-			}
-			if confirmed && index < len(product) {
-				confirmedAt = product[index].At
-			}
+		if confirmed && index < len(product) {
+			confirmedAt = product[index].At
 		}
 		refs := customerSimulationActionEvidenceRefs(scenario)
 		results = append(results, ActionResult{ActionID: action.ID, TurnID: turnID, Confirmed: confirmed, ConfirmedAt: confirmedAt, Disposition: disposition, OutcomeReason: reason, EvidenceRefs: refs, CheckpointIDs: checkpointIDs, ToolObservationIDs: toolIDs})
 	}
 	return results
+}
+
+// customerSimulationTextConfirmsAction reports whether the product text
+// contains every fact the action oracle requires.
+func customerSimulationTextConfirmsAction(action ActionIntent, text string) bool {
+	for _, required := range action.Oracle.RequiredText {
+		if !strings.Contains(strings.ToLower(text), strings.ToLower(required)) {
+			return false
+		}
+	}
+	return true
 }
 
 func customerSimulationActionEvidenceRefs(scenario CustomerScenario) []string {
@@ -1234,56 +956,4 @@ func registerCustomerSimulationEvidenceRefs(bundle *CustomerEvidenceBundle, corr
 		bundle.ValidatorInput.Patience = bundle.Patience
 	}
 	return nil
-}
-
-func addCustomerSimulationProductRecord(bundle *CustomerEvidenceBundle, recordRoot string) error {
-	if bundle == nil {
-		return ErrMissingEvidence
-	}
-	err := bundle.AddProductRecordDir(recordRoot)
-	if err == nil && customerSimulationProductRecordFileCount(bundle) > 0 {
-		return nil
-	}
-	if err == nil {
-		err = fmt.Errorf("%w: product record directory contained no files", ErrMissingEvidence)
-	}
-	// A failed child may not have created a record directory. Preserve a
-	// hash-verified, explicit absence marker so the bundle remains readable and
-	// the mechanical/validator verdict can report missing product evidence.
-	if markerErr := bundle.AddArtifactBytes("product-record-dir/index.json", ArtifactKindProductRecordDir, []byte(`{"source_registered":false,"files":[],"reason":"product record directory was unavailable"}`+"\n"), true); markerErr != nil {
-		return errors.Join(err, markerErr)
-	}
-	return fmt.Errorf("%w: product record directory was unavailable", ErrMissingEvidence)
-}
-
-func customerSimulationProductRecordFileCount(bundle *CustomerEvidenceBundle) int {
-	if bundle == nil {
-		return 0
-	}
-	count := 0
-	for _, artifact := range bundle.Artifacts {
-		if artifact.Kind == ArtifactKindProductRecordDir && strings.HasPrefix(artifact.Path, "product-record-dir/") && artifact.Path != "product-record-dir/index.json" && artifact.State == ArtifactStateAvailable {
-			count++
-		}
-	}
-	return count
-}
-
-func mustCustomerSimulationJSON(value any) []byte {
-	data, err := json.MarshalIndent(value, "", "  ")
-	if err != nil {
-		return []byte(`{"error":"could not encode evidence"}` + "\n")
-	}
-	return append(data, '\n')
-}
-
-func customerSimulationSafeError(err error, secret string) string {
-	if err == nil {
-		return ""
-	}
-	detail := strings.TrimSpace(err.Error())
-	if secret != "" {
-		detail = strings.ReplaceAll(detail, secret, "<redacted>")
-	}
-	return safeValidatorFailureDetail(errors.New(detail))
 }
