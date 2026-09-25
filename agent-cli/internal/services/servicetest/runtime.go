@@ -76,9 +76,6 @@ func withDefaultRuntimeServices(opts SessionRunOptions) SessionRunOptions {
 	return opts
 }
 
-const ParticipantTerminationEnded = impl.ParticipantTerminationEnded
-const ParticipantTerminationError = impl.ParticipantTerminationError
-
 type InvalidOpenAIRealtimeVoiceError = sessioncontract.InvalidOpenAIRealtimeVoiceError
 type RTCMediaEndpoints = sharedaudio.MediaEndpoints
 type RTCMediaSession = sharedaudio.MediaSession

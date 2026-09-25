@@ -22,7 +22,10 @@ import (
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
 
-const defaultRoomCredentialEnv = "AGENT_MODEL__OPENAI__API_KEY"
+const (
+	defaultRoomCredentialEnv = "AGENT_MODEL__OPENAI__API_KEY"
+	roomTestAliceID          = "alice"
+)
 
 func TestRoomRunCommandBareInvocationPassesResolvedPlanToRunner(t *testing.T) {
 	t.Setenv(defaultRoomCredentialEnv, "fake-openai-key")
@@ -403,7 +406,7 @@ func TestRoomRunCommandConfiguredHumanDeviceValidationPrecedesRunner(t *testing.
 	if err == nil || !strings.Contains(err.Error(), "participants[0].input_device") {
 		t.Fatalf("error = %v, want field-specific configured input-device error", err)
 	}
-	if !errors.Is(err, devicegw.ErrDeviceDirectionMismatch) {
+	if !errors.Is(err, rooms.ErrLaunchDeviceDirectionMismatch) {
 		t.Fatalf("error = %v, want direction mismatch", err)
 	}
 	if runnerCalls != 0 || registry.openCalls != 0 {

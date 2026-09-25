@@ -26,7 +26,6 @@ type SessionStreamObserver = sessiontrace.StreamObserver
 type ScheduledAudioInput = sessiontrace.ScheduledAudioInput
 type SessionLivenessClock = sessiontrace.LivenessClock
 type SessionLivenessTimer = sessiontrace.LivenessTimer
-type sessionTerminalObservation = sessiontrace.TerminalObservation
 type SessionToolDiagnostic = sessiontrace.ToolDiagnostic
 type SessionToolDiagnosticSink = sessiontrace.ToolDiagnosticSink
 type SessionToolDiagnosticFunc = sessiontrace.ToolDiagnosticFunc

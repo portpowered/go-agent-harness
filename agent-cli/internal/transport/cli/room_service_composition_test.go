@@ -12,8 +12,8 @@ import (
 
 func newTestRoomRunCommand(globalFlags *flags.GlobalFlags, registry devicegw.DeviceRegistry) *RoomRunCommand {
 	return NewRoomRunCommand(globalFlags, servicewire.NewRoomServiceWithDevices(
-		nil, runtimeDevicesWire.NewService(registry, audioiowire.NewService()), registry, clock.Real{},
+		nil, runtimeDevicesWire.NewService(registry, audioiowire.NewService()), clock.Real{},
 		servicewire.NewRoomReplayService(captureReplayWire.NewService()),
 		servicewire.NewRoomEvidenceService(), servicewire.NewRoomLatencyService(),
-	))
+	), registry)
 }

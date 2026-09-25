@@ -94,8 +94,8 @@ func TestServiceExposesReplayAndEvidenceBoundaries(t *testing.T) {
 		t.Fatalf("run directory = %q, stat error = %v, want fresh directory under %q", runDir, err, configDir)
 	}
 
-	if _, err := svc.ResolveLaunchPlan(rooms.RoomLaunchOptions{}); !errors.Is(err, rooms.ErrRoomServiceUnavailable) {
-		t.Fatalf("ResolveLaunchPlan() error = %v, want unavailable without a host plan", err)
+	if _, err := svc.ResolveLaunchPlan(rooms.RoomLaunchOptions{}); !errors.Is(err, rooms.ErrLaunchDeviceInventoryUnavailable) {
+		t.Fatalf("ResolveLaunchPlan() error = %v, want a bare launch without host devices rejected", err)
 	}
 	if _, err := svc.Run(context.Background(), nil, rooms.RoomRunOptions{ReplayPath: "bundle"}); !errors.Is(err, loadErr) {
 		t.Fatalf("Run() replay admission error = %v, want stub error", err)
@@ -130,7 +130,7 @@ func TestPublicRunRejectsNonEmptyReplayOutputBeforeParticipantEffects(t *testing
 		Runner:   lifecycle.New(lifecycle.Dependencies{Clock: platformclock.Real{}}),
 		Evidence: evidenceServiceStub{validationErr: errors.New("room evidence output must be empty")},
 	})
-	var public rooms.Service = service
+	public := service
 
 	output := filepath.Join(t.TempDir(), "output")
 	if err := os.Mkdir(output, 0o700); err != nil {

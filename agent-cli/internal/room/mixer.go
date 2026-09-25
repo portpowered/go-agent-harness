@@ -248,24 +248,6 @@ type PCM16Mixer struct {
 // Mixer is a descriptive alias for PCM16Mixer.
 type Mixer = PCM16Mixer
 
-// NewPCM16Mixer creates a mixer with the default room format and bounded
-// queues. A nil context is treated as context.Background.
-func NewPCM16Mixer(ctx context.Context, format ...PCM16Format) (*PCM16Mixer, error) {
-	config := PCM16MixerConfig{}
-	if len(format) > 1 {
-		return nil, fmt.Errorf("%w: at most one format is supported", ErrMixerInvalidFormat)
-	}
-	if len(format) == 1 {
-		config.Format = format[0]
-	}
-	return NewPCM16MixerWithConfig(ctx, config)
-}
-
-// NewMixer is an alias for NewPCM16MixerWithConfig.
-func NewMixer(ctx context.Context, config PCM16MixerConfig) (*PCM16Mixer, error) {
-	return NewPCM16MixerWithConfig(ctx, config)
-}
-
 // NewPCM16MixerWithConfig creates a cadence-controlled mixer.
 func NewPCM16MixerWithConfig(ctx context.Context, config PCM16MixerConfig) (*PCM16Mixer, error) {
 	config, frameBytes, inputCapacityBytes, err := config.normalized()
@@ -389,34 +371,6 @@ func (m *PCM16Mixer) AddInput(inputID string) error {
 	return nil
 }
 
-// AddInputWriter registers an input and returns its scoped writer.
-func (m *PCM16Mixer) AddInputWriter(inputID string) (*PCM16Input, error) {
-	if err := m.AddInput(inputID); err != nil {
-		return nil, err
-	}
-	return &PCM16Input{mixer: m, id: strings.TrimSpace(inputID)}, nil
-}
-
-// Input returns a scoped writer for an already registered input.
-func (m *PCM16Mixer) Input(inputID string) (*PCM16Input, error) {
-	if m == nil {
-		return nil, ErrMixerClosed
-	}
-	inputID, err := normalizeMixerInputID(inputID)
-	if err != nil {
-		return nil, err
-	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.closed {
-		return nil, ErrMixerClosed
-	}
-	if _, exists := m.inputs[inputID]; !exists {
-		return nil, fmt.Errorf("%w: %q", ErrMixerInputMissing, inputID)
-	}
-	return &PCM16Input{mixer: m, id: inputID}, nil
-}
-
 // RemoveInput removes one input and discards only its queued samples. Later
 // frames no longer contain that participant; other inputs remain untouched.
 func (m *PCM16Mixer) RemoveInput(inputID string) error {
@@ -465,15 +419,6 @@ func (m *PCM16Mixer) WriteContext(ctx context.Context, inputID string, pcm []byt
 // whether bounded input capacity caused the caller to wait before admission.
 func (m *PCM16Mixer) WriteContextWithDisposition(ctx context.Context, inputID string, pcm []byte) (PCM16WriteDisposition, error) {
 	return m.writeContextWithDisposition(ctx, inputID, pcm, nil)
-}
-
-// WriteContextWithDispositionAndObserver is the diagnostics-aware write seam
-// for owners that need admission metadata to stay atomic with the mixer
-// queue. observer runs while the mixer holds its input lock, immediately after
-// the complete chunk is appended. It must only record bounded in-memory state
-// and must not block or call back into the mixer.
-func (m *PCM16Mixer) WriteContextWithDispositionAndObserver(ctx context.Context, inputID string, pcm []byte, observer func(PCM16WriteDisposition)) (PCM16WriteDisposition, error) {
-	return m.writeContextWithDisposition(ctx, inputID, pcm, observer)
 }
 
 func (m *PCM16Mixer) writeContextWithDisposition(ctx context.Context, inputID string, pcm []byte, observer func(PCM16WriteDisposition)) (PCM16WriteDisposition, error) {
@@ -550,30 +495,6 @@ func (m *PCM16Mixer) writeContextWithDisposition(ctx context.Context, inputID st
 		case <-wake:
 		}
 	}
-}
-
-// Write is the io.Writer-compatible spelling for a scoped input.
-func (i *PCM16Input) Write(pcm []byte) (int, error) {
-	return i.WriteContext(context.Background(), pcm)
-}
-
-// WriteContext is the cancellation-aware spelling for a scoped input.
-func (i *PCM16Input) WriteContext(ctx context.Context, pcm []byte) (int, error) {
-	if i == nil || i.mixer == nil {
-		return 0, ErrMixerClosed
-	}
-	if err := i.mixer.WriteContext(ctx, i.id, pcm); err != nil {
-		return 0, err
-	}
-	return len(pcm), nil
-}
-
-// InputID returns the participant ID associated with a scoped input.
-func (i *PCM16Input) InputID() string {
-	if i == nil {
-		return ""
-	}
-	return i.id
 }
 
 // Inputs returns a sorted snapshot of active input IDs.
@@ -880,12 +801,3 @@ func normalizeMixerInputID(inputID string) (string, error) {
 	}
 	return normalized, nil
 }
-
-// PCM16Input is a participant-scoped writer returned by AddInputWriter or
-// Input. It does not own membership and must not be closed independently.
-type PCM16Input struct {
-	mixer *PCM16Mixer
-	id    string
-}
-
-var _ io.Writer = (*PCM16Input)(nil)
