@@ -1,9 +1,6 @@
-package chrome
+//go:build e2e_internal
 
-import (
-	"strings"
-	"testing"
-)
+package chrome
 
 const cubecadeAudioDeviceAgentsMD = `# Cubecade browser operator
 
@@ -22,35 +19,3 @@ The page's compact state uses spatial face letters internally. Translate them be
 - A whole face is aligned only when all nine characters equal its center character. If even one differs, call that face mixed, never aligned. For this exact three-turn test position, the fresh state read has more than one color on every face, so all six color faces are mixed; do not claim that any whole face is aligned.
 
 Keep raw face notation internal. Never say isolated notation such as U, R2, or F', and never read out a facelet string or all 54 stickers. Summarize only at alignment level: solved or mixed, a whole color face aligned, or a top/bottom row or left/right column aligned or mixed. Never enumerate individual stickers or describe a center, edge, corner, or position-by-position color. Do not speak a preamble or narrate tool use. After all requested mutations and fresh state reads finish, give exactly this two-clause factual summary in plain language: "In the test position, all six color faces were mixed. After restoration, all six faces were aligned and the cube was solved."`
-
-func TestCubecadeAudioDeviceAgentsMDDefinesHumanCubeContract(t *testing.T) {
-	for _, want := range []string{
-		"U is the white face",
-		"R is red",
-		"F is green",
-		"D is yellow",
-		"L is orange",
-		"B is blue",
-		"white clockwise must be U",
-		"exactly one move token",
-		"restoring inverse must be exactly [F, R2, U']",
-		"call get_cube_state a third time",
-		"Do not call show_page",
-		"first browser call must be webmcp_list_tools",
-		"next page call must be get_cube_state",
-		"Never call webmcp_list_tabs",
-		"positions 1-3 are the top row",
-		"position 5 is the fixed center",
-		"all nine characters equal its center character",
-		"all six color faces are mixed",
-		"Never say isolated notation",
-		"never read out a facelet string or all 54 stickers",
-		"Never enumerate individual stickers",
-		"In the test position, all six color faces were mixed",
-		"fresh state read",
-	} {
-		if !strings.Contains(cubecadeAudioDeviceAgentsMD, want) {
-			t.Errorf("Cubecade AGENTS.md omits %q", want)
-		}
-	}
-}

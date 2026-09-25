@@ -8,6 +8,7 @@ import (
 )
 
 func TestSessionTranscriptDelta(t *testing.T) {
+	t.Parallel()
 	inf := NewMockSessionInferencer()
 	tool := NewMockToolExecutor()
 	scenario := NewSessionScenario(t, inf, tool)
@@ -41,6 +42,7 @@ func TestSessionTranscriptDelta(t *testing.T) {
 }
 
 func TestSessionTranscriptWithAudio(t *testing.T) {
+	t.Parallel()
 	inf := NewMockSessionInferencer()
 	tool := NewMockToolExecutor()
 	scenario := NewSessionScenario(t, inf, tool)
@@ -91,6 +93,7 @@ func TestSessionTranscriptWithAudio(t *testing.T) {
 }
 
 func TestSessionTranscriptReconstruction(t *testing.T) {
+	t.Parallel()
 	// Unit test: verify reconstruction produces TranscriptPart.
 	deltas := []messages.StreamMessage{
 		{Type: messages.StreamTypeTranscriptStart, Value: messages.NewTranscriptStartValue()},
@@ -116,6 +119,7 @@ func TestSessionTranscriptReconstruction(t *testing.T) {
 }
 
 func TestSessionTranscriptSeparateFromText(t *testing.T) {
+	t.Parallel()
 	// Verify TranscriptPart and TextPart are separate.
 	deltas := []messages.StreamMessage{
 		{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("LLM response")},
@@ -146,6 +150,7 @@ func TestSessionTranscriptSeparateFromText(t *testing.T) {
 }
 
 func TestSessionTranscriptAndVAD(t *testing.T) {
+	t.Parallel()
 	// Verify audio → AudioPart, transcript → TranscriptPart, VAD → not in reconstruction.
 	deltas := []messages.StreamMessage{
 		{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue([]byte{0x01})},

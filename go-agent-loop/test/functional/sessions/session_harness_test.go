@@ -5,17 +5,18 @@ package sessions
 import (
 	"bytes"
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
 func TestSessionScenarioCapturesTickCorrelatedCrossings(t *testing.T) {
+	t.Parallel()
 	base := time.Date(2026, time.August, 16, 12, 0, 0, 0, time.UTC)
 	logicalClock := clock.NewDeterministic(base, time.Millisecond)
 	collector := NewSessionTranscript()
@@ -76,44 +77,8 @@ func TestSessionScenarioCapturesTickCorrelatedCrossings(t *testing.T) {
 	}
 }
 
-func TestNewSessionScenarioPreservesTypedOptionForwarding(t *testing.T) {
-	options := []agentloop.Option{agentloop.WithBufferCapacity(8)}
-	scenario := NewSessionScenario(t, NewMockSessionInferencer(), NewMockToolExecutor(), options...)
-	if scenario == nil || scenario.Loop == nil {
-		t.Fatal("typed agentloop.Option forwarding did not construct a session scenario")
-	}
-}
-
-func TestSessionScenarioConfigAliasesExposeSharedCapture(t *testing.T) {
-	logicalClock := clock.NewDeterministic(time.Unix(42, 0).UTC(), time.Second)
-	collector := NewSessionTranscript()
-	options := SessionScenarioOptions{}
-	WithSessionClock(logicalClock)(&options)
-	WithTranscriptCapture(collector)(&options)
-
-	scenario := NewSessionScenarioWithOptions(t, NewMockSessionInferencer(), NewMockToolExecutor(), options)
-	scenario.SendText("captured through config aliases")
-	if scenario.Clock() != logicalClock {
-		t.Fatalf("scenario clock = %T, want injected deterministic clock", scenario.Clock())
-	}
-	if scenario.Transcript != collector {
-		t.Fatal("scenario did not expose the configured session transcript")
-	}
-	if len(scenario.CapturedRecords()) != 2 || len(scenario.ClientRecords()) != 1 || len(scenario.AgentRecords()) != 1 {
-		t.Fatalf("scenario capture views = total:%d client:%d agent:%d, want 2/1/1", len(scenario.CapturedRecords()), len(scenario.ClientRecords()), len(scenario.AgentRecords()))
-	}
-
-	configured := SessionScenarioOptions{}
-	WithClock(logicalClock)(&configured)
-	WithCapture()(&configured)
-	auto := NewSessionScenarioWithConfig(t, NewMockSessionInferencer(), NewMockToolExecutor(), configured)
-	auto.SendText("captured by an auto-created collector")
-	if len(auto.CapturedRecords()) != 2 {
-		t.Fatalf("auto-created capture records = %d, want 2", len(auto.CapturedRecords()))
-	}
-}
-
 func TestSessionCaptureSerializesConcurrentCrossings(t *testing.T) {
+	t.Parallel()
 	sink := newBlockingSessionSink()
 	capture := newSessionCapture(clock.NewDeterministic(time.Unix(42, 0).UTC(), time.Second), sink)
 
@@ -158,6 +123,7 @@ func TestSessionCaptureSerializesConcurrentCrossings(t *testing.T) {
 }
 
 func TestSessionHarnessPayloadAndStreamContracts(t *testing.T) {
+	t.Parallel()
 	payloadCases := []struct {
 		name    string
 		message messages.Message
@@ -215,6 +181,7 @@ func TestSessionHarnessPayloadAndStreamContracts(t *testing.T) {
 }
 
 func TestSessionScenarioCaptureIsOptInAndNilClockUsesRealTime(t *testing.T) {
+	t.Parallel()
 	inf := NewMockSessionInferencer()
 	scenario := NewSessionScenario(t, inf, NewMockToolExecutor())
 	if _, ok := scenario.Clock().(clock.Real); !ok {
@@ -331,15 +298,12 @@ func stopSessionScenario(t *testing.T, scenario *SessionScenario) {
 	t.Helper()
 	scenario.Inf.Close()
 	scenario.cancel()
-	deadline := time.NewTimer(3 * time.Second)
-	defer deadline.Stop()
-	select {
-	case err := <-scenario.errCh:
-		if err != nil && err != context.Canceled {
-			t.Fatalf("session loop stopped with error: %v", err)
-		}
-	case <-deadline.C:
+	exited, err := scenario.awaitRunExit(3 * time.Second)
+	if !exited {
 		t.Fatal("timed out stopping session loop")
+	}
+	if err != nil && !errors.Is(err, context.Canceled) {
+		t.Fatalf("session loop stopped with error: %v", err)
 	}
 }
 

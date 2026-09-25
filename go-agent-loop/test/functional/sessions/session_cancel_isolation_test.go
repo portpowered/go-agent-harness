@@ -124,6 +124,7 @@ func stabilizePayload(payload []byte) []byte {
 // provider reply is injected before the client's request, so the reply's
 // assistant MESSAGE.END can be captured before or after that request.
 func TestScriptRecordBucketsIgnoreCrossPathInterleaving(t *testing.T) {
+	t.Parallel()
 	record := func(peer transcript.Peer, direction transcript.Direction, payload string) transcript.Record {
 		return transcript.Record{Peer: peer, Direction: direction, Stream: transcript.StreamWS, Payload: []byte(payload)}
 	}

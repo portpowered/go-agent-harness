@@ -172,9 +172,9 @@ go test ./agent-cli/internal/webmcp/siteadapter \
 Run the credential-free stock-Chrome integration journey:
 
 ```bash
-WEBMCP_X_ADAPTER_INTEGRATION=1 \
+WEBMCP_SITE_ADAPTER_INTEGRATION=1 \
   go test ./agent-cli/internal/webmcp/chrome \
-  -run '^TestXAdapterStockChromeJourney$' -count=1 -v
+  -run '^TestBundledSiteAdaptersStockChromeJourneys$/^x$' -count=1 -v
 ```
 
 The fixture verifies signed-in context, exact text preparation, confirmation

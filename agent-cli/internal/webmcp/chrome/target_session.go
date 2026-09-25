@@ -36,8 +36,7 @@ type targetSession struct {
 	page             webmcp.PageContext
 	ownership        webmcp.TargetOwnership
 	closed           bool
-	err              error
-	closeErr         error
+	err, closeErr    error
 	protocolEvents   chan any
 	events           chan webmcp.BrowserEvent
 	eventBuffer      int
@@ -58,6 +57,7 @@ type targetSession struct {
 	castSinks        []webmcp.CastDevice
 	castUpdate       chan struct{}
 	castIssue        string
+	castTiming       castDiscoveryTiming
 }
 
 func newTargetSession(
