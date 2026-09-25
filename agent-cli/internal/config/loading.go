@@ -362,84 +362,20 @@ func validateBrowserRawValue(spec browserConfigFieldSpec, value interface{}, sou
 		if _, ok := value.(string); !ok {
 			return fmt.Errorf("%s: expected a string", source)
 		}
+		return nil
 	case browserConfigBool:
-		switch typed := value.(type) {
-		case bool:
-			if fromEnvironment {
-				return fmt.Errorf("%s: expected strict boolean true or false", source)
-			}
-		case string:
-			if !fromEnvironment || (typed != "true" && typed != "false") {
-				return fmt.Errorf("%s: expected strict boolean true or false", source)
-			}
-		default:
-			return fmt.Errorf("%s: expected strict boolean true or false", source)
-		}
+		return validateBrowserRawBool(value, source, fromEnvironment)
 	case browserConfigEnum:
-		text, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("%s: expected one of %s", source, strings.Join(spec.allowed, ", "))
-		}
-		if !containsString(spec.allowed, text) {
-			return fmt.Errorf("%s: invalid value %q (want one of %s)", source, text, strings.Join(spec.allowed, ", "))
-		}
+		return validateBrowserRawEnum(spec.allowed, value, source)
 	case browserConfigDuration:
-		text, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("%s: expected a positive Go duration such as 30s", source)
-		}
-		duration, err := time.ParseDuration(text)
-		if err != nil || duration <= 0 {
-			if err != nil {
-				return fmt.Errorf("%s: invalid Go duration %q: %w", source, text, err)
-			}
-			return fmt.Errorf("%s: duration must be positive", source)
-		}
+		return validateBrowserRawDuration(value, source)
 	case browserConfigSize:
-		if text, ok := value.(string); ok {
-			if !fromEnvironment {
-				return fmt.Errorf("%s: expected a non-negative decimal integer", source)
-			}
-			if _, err := parseNonNegativeDecimalSize(text); err != nil {
-				return fmt.Errorf("%s: %w", source, err)
-			}
-			return nil
-		}
-		if err := validateYAMLInteger(value); err != nil {
-			return fmt.Errorf("%s: %w", source, err)
-		}
+		return validateBrowserRawSize(value, source, fromEnvironment)
 	case browserConfigStringList:
-		if text, ok := value.(string); ok {
-			if !fromEnvironment {
-				return fmt.Errorf("%s: expected a YAML list of strings", source)
-			}
-			var values []interface{}
-			if err := json.Unmarshal([]byte(text), &values); err != nil {
-				return fmt.Errorf("%s: expected a JSON array of strings: %w", source, err)
-			}
-			if values == nil {
-				return fmt.Errorf("%s: expected a JSON array of strings", source)
-			}
-			for index, item := range values {
-				if _, ok := item.(string); !ok {
-					return fmt.Errorf("%s: item %d must be a string", source, index)
-				}
-			}
-			return nil
-		}
-		values, ok := value.([]interface{})
-		if !ok {
-			return fmt.Errorf("%s: expected a YAML list of strings", source)
-		}
-		for index, item := range values {
-			if _, ok := item.(string); !ok {
-				return fmt.Errorf("%s: item %d must be a string", source, index)
-			}
-		}
+		return validateBrowserRawStringList(value, source, fromEnvironment)
 	default:
 		return fmt.Errorf("%s: unsupported browser configuration value", source)
 	}
-	return nil
 }
 
 func parseNonNegativeDecimalSize(value string) (int, error) {

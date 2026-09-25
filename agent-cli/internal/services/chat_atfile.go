@@ -91,57 +91,12 @@ func parseAtReferences(input string) (cleanedText string, parts []messages.Conte
 		if !filepath.IsAbs(absPath) {
 			absPath = filepath.Join(workDir, absPath)
 		}
-		info, statErr := os.Stat(absPath)
-		if statErr != nil {
-			errors = append(errors, "File not found: "+refPath)
+		part, refErr := loadAtReference(absPath, refPath)
+		if refErr != "" {
+			errors = append(errors, refErr)
 			continue
 		}
-		if info.IsDir() {
-			entries, dirErr := os.ReadDir(absPath)
-			if dirErr != nil {
-				errors = append(errors, "Cannot read directory: "+refPath)
-				continue
-			}
-			var listing []string
-			for _, entry := range entries {
-				name := entry.Name()
-				if entry.IsDir() {
-					name += "/"
-				}
-				listing = append(listing, name)
-			}
-			content := fmt.Sprintf("[Directory: %s]\n%s", refPath, strings.Join(listing, "\n"))
-			parts = append(parts, messages.TextPart{Text: content})
-			continue
-		}
-		// Check if image by file extension before reading.
-		if isImageExtension(absPath) {
-			data, readErr := os.ReadFile(absPath)
-			if readErr != nil {
-				errors = append(errors, "Cannot read file: "+refPath)
-				continue
-			}
-			parts = append(parts, messages.ImagePart{
-				Bytes:     data,
-				MediaType: imageMediaType(absPath),
-			})
-			continue
-		}
-		data, readErr := os.ReadFile(absPath)
-		if readErr != nil {
-			errors = append(errors, "Cannot read file: "+refPath)
-			continue
-		}
-		mediaType := http.DetectContentType(data)
-		if strings.HasPrefix(mediaType, "text/") || mediaType == "application/octet-stream" {
-			// Include text files as TextPart with filename context.
-			content := fmt.Sprintf("[File: %s]\n%s", filepath.Base(absPath), string(data))
-			parts = append(parts, messages.TextPart{Text: content})
-		} else {
-			// Unknown binary file — include as text reference.
-			content := fmt.Sprintf("[Binary file: %s (%d bytes)]", filepath.Base(absPath), len(data))
-			parts = append(parts, messages.TextPart{Text: content})
-		}
+		parts = append(parts, part)
 	}
 
 	if len(errors) > 0 {
@@ -149,6 +104,57 @@ func parseAtReferences(input string) (cleanedText string, parts []messages.Conte
 	}
 
 	return strings.Join(textWords, " "), parts, ""
+}
+
+// loadAtReference reads one @path reference as a content part, or returns the
+// user-facing error message when the path cannot be read.
+func loadAtReference(absPath, refPath string) (messages.ContentPart, string) {
+	info, statErr := os.Stat(absPath)
+	if statErr != nil {
+		return nil, "File not found: " + refPath
+	}
+	if info.IsDir() {
+		return loadAtDirectoryReference(absPath, refPath)
+	}
+	data, readErr := os.ReadFile(absPath)
+	if readErr != nil {
+		return nil, "Cannot read file: " + refPath
+	}
+	// Images are recognized by file extension rather than content sniffing.
+	if isImageExtension(absPath) {
+		return messages.ImagePart{
+			Bytes:     data,
+			MediaType: imageMediaType(absPath),
+		}, ""
+	}
+	mediaType := http.DetectContentType(data)
+	if strings.HasPrefix(mediaType, "text/") || mediaType == "application/octet-stream" {
+		// Include text files as TextPart with filename context.
+		content := fmt.Sprintf("[File: %s]\n%s", filepath.Base(absPath), string(data))
+		return messages.TextPart{Text: content}, ""
+	}
+	// Unknown binary file — include as text reference.
+	content := fmt.Sprintf("[Binary file: %s (%d bytes)]", filepath.Base(absPath), len(data))
+	return messages.TextPart{Text: content}, ""
+}
+
+// loadAtDirectoryReference lists a referenced directory, marking
+// subdirectories with a trailing slash.
+func loadAtDirectoryReference(absPath, refPath string) (messages.ContentPart, string) {
+	entries, dirErr := os.ReadDir(absPath)
+	if dirErr != nil {
+		return nil, "Cannot read directory: " + refPath
+	}
+	var listing []string
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() {
+			name += "/"
+		}
+		listing = append(listing, name)
+	}
+	content := fmt.Sprintf("[Directory: %s]\n%s", refPath, strings.Join(listing, "\n"))
+	return messages.TextPart{Text: content}, ""
 }
 
 // imageExtensions maps file extensions to MIME media types for image files.
