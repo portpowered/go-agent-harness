@@ -261,12 +261,12 @@ func TestRunSessionWithInstructions_OpenAIInitialConfigCarriesGroundingWithTools
 			t.Fatalf("decode outbound event %q: %v", string(payload), err)
 		}
 		switch envelope.Type {
-		case "session.update":
+		case wireSessionUpdate:
 			configCount++
 			configIndex = index
 			gotInstructions = envelope.Session.Instructions
 			toolCount = len(envelope.Session.Tools)
-		case "conversation.item.create":
+		case wireConversationItemCreate:
 			userIndex = index
 		}
 	}

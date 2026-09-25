@@ -270,7 +270,7 @@ func (c *scriptedRealtimeConn) WriteMessage(_ int, payload []byte) error {
 		return err
 	}
 	switch envelope.Type {
-	case "session.update":
+	case wireSessionUpdate:
 		c.dialer.enqueue([]byte(`{"type":"session.created","session":{"id":"sess_wire","model":"gpt-realtime-2.1-mini"}}`))
 	case "response.create":
 		c.dialer.enqueue([]byte(`{"type":"response.created"}`))
@@ -335,7 +335,7 @@ func TestWireCapturePromptReachesConversationItemCreate(t *testing.T) {
 		if strings.Contains(payload, "agent-cli-session-text-seed") {
 			t.Fatalf("sentinel leaked to the wire in frame %q: %s", record.Type, payload)
 		}
-		if record.Direction == gwtesting.DirectionClientToServer && record.Type == "conversation.item.create" {
+		if record.Direction == gwtesting.DirectionClientToServer && record.Type == wireConversationItemCreate {
 			itemCreates = append(itemCreates, payload)
 		}
 	}
@@ -395,7 +395,7 @@ func TestWireCapturePromptReachesWireWithDurationBound(t *testing.T) {
 		if strings.Contains(payload, "agent-cli-session-text-seed") {
 			t.Fatalf("sentinel leaked to the wire in frame %q: %s", record.Type, payload)
 		}
-		if record.Direction == gwtesting.DirectionClientToServer && record.Type == "conversation.item.create" {
+		if record.Direction == gwtesting.DirectionClientToServer && record.Type == wireConversationItemCreate {
 			itemCreates = append(itemCreates, payload)
 			var decoded struct {
 				Item struct {

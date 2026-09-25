@@ -18,6 +18,11 @@ import (
 )
 
 const (
+	wireSessionUpdate          = "session.update"
+	wireConversationItemCreate = "conversation.item.create"
+)
+
+const (
 	agentsInstructionsMarker = "AGENTS_INSTRUCTIONS_MARKER"
 	fileInstructionsMarker   = "FILE_INSTRUCTIONS_MARKER"
 	rawInstructionsMarker    = "RAW_INSTRUCTIONS_MARKER"
@@ -193,7 +198,7 @@ func (c *recordingRealtimeTestConn) WriteMessage(_ int, payload []byte) error {
 	var envelope struct {
 		Type string `json:"type"`
 	}
-	if err := json.Unmarshal(payload, &envelope); err == nil && (envelope.Type == "response.create" || (c.respondToConversationItem && envelope.Type == "conversation.item.create")) {
+	if err := json.Unmarshal(payload, &envelope); err == nil && (envelope.Type == "response.create" || (c.respondToConversationItem && envelope.Type == wireConversationItemCreate)) {
 		// A bare response.done is an empty provider response and is not a
 		// successful session turn. Keep this test transport contentful so the
 		// instruction assertions exercise the normal completion path.
@@ -389,12 +394,12 @@ func summarizeOpenAIInitialTurn(t *testing.T, records []gwtesting.CapturedSessio
 			t.Fatalf("decode outbound event %q: %v", string(payload), err)
 		}
 		switch envelope.Type {
-		case "session.update":
+		case wireSessionUpdate:
 			summary.configCount++
 			summary.configIndex = index
 			summary.instructions = envelope.Session.Instructions
 			summary.voice = envelope.Session.Audio.Output.Voice
-		case "conversation.item.create":
+		case wireConversationItemCreate:
 			summary.userCount++
 			summary.userIndex = index
 			if len(envelope.Item.Content) == 1 {
