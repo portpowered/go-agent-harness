@@ -7,6 +7,20 @@ import (
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
+// ReadFrame returns the next queued frame. Frames of a response the provider
+// has interrupted are discarded here, so they never leave the gate.
+func (p *inboundPort) ReadFrame(ctx context.Context) (sharedaudio.PCMFrame, error) {
+	if ctx == nil {
+		return sharedaudio.PCMFrame{}, mediaContextRequired()
+	}
+	for {
+		frame, err := p.readQueuedFrame(ctx)
+		if err != nil || p.interruptions.admit(frame) {
+			return frame, err
+		}
+	}
+}
+
 // interruptionFilter keeps the frames of an interrupted provider response
 // inside the gate.
 //
@@ -22,28 +36,16 @@ import (
 // further frame can be handed out. The identities recorded between two
 // interruptions are therefore exactly the responses whose frames may still be
 // inside the gate when the second interruption lands.
-// ReadFrame returns the next queued frame. Frames of a response the provider
-// has interrupted are discarded here, so they never leave the gate.
-func (p *inboundPort) ReadFrame(ctx context.Context) (sharedaudio.PCMFrame, error) {
-	if ctx == nil {
-		return sharedaudio.PCMFrame{}, mediaContextRequired()
-	}
-	for {
-		frame, err := p.readQueuedFrame(ctx)
-		if err != nil || p.interruptions.admit(frame) {
-			return frame, err
-		}
-	}
-}
-
 type interruptionFilter struct {
 	mu sync.Mutex
 	// started lists, in FIFO order, the responses handed out by the provider
 	// since the last interruption whose frames may still be in the gate.
 	started []sharedaudio.PlaybackResponse
-	// interrupted holds the responses cut off by the latest interruption.
-	// Response identities are unique, so the set only needs replacing at the
-	// next interruption.
+	// interrupted holds the responses cut off by every interruption whose
+	// frames may still be in the gate. A later interruption adds to it, so a
+	// stalled device cannot release an earlier response's frames. It is
+	// cleared once a response started after the latest interruption leaves
+	// the gate, because every interrupted frame is ahead of that frame.
 	interrupted map[sharedaudio.PlaybackResponse]struct{}
 }
 
@@ -59,15 +61,12 @@ func (f *interruptionFilter) start(response sharedaudio.PlaybackResponse) {
 	f.started = append(f.started, response)
 }
 
-// interrupt marks every response handed out since the last interruption, and
-// the named responses, as interrupted.
+// interrupt adds every response handed out since the last interruption, and
+// the named responses, to the interrupted set.
 func (f *interruptionFilter) interrupt(responses ...sharedaudio.PlaybackResponse) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.interrupted = make(map[sharedaudio.PlaybackResponse]struct{}, len(f.started)+len(responses))
-	for _, response := range f.started {
-		f.interrupted[response] = struct{}{}
-	}
+	f.addInterruptedLocked(f.started...)
 	f.started = nil
 	f.addInterruptedLocked(responses...)
 }
@@ -104,10 +103,13 @@ func (f *interruptionFilter) admit(frame sharedaudio.PCMFrame) bool {
 		return false
 	}
 	// Frames leave in provider order. Responses started before this one have
-	// no frames left in the gate, so they need not be remembered.
+	// no frames left in the gate, so they need not be remembered. A response
+	// recorded since the latest interruption was handed out after every
+	// interrupted frame, so none of those frames remain either.
 	for index, started := range f.started {
 		if started == response {
 			f.started = append(f.started[:0], f.started[index:]...)
+			f.interrupted = nil
 			break
 		}
 	}

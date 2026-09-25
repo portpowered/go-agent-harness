@@ -239,3 +239,56 @@ func TestGateInterruptionKeepsFramesWithoutResponseIdentity(t *testing.T) {
 		t.Fatalf("ReadFrame = (%+v, %v), want %+v", got, err, want)
 	}
 }
+
+// TestGateDiscardsFramesOfEveryInterruptionWhileDeviceIsStalled keeps an
+// earlier interrupted response's frames inside the gate when a second
+// response starts and is interrupted before the stalled device has read them.
+func TestGateDiscardsFramesOfEveryInterruptionWhileDeviceIsStalled(t *testing.T) {
+	first := sharedaudio.PlaybackResponse{ResponseID: "response-a", ItemID: "item-a"}
+	second := sharedaudio.PlaybackResponse{ResponseID: "response-c", ItemID: "item-c"}
+	next := interruptionTestNext()
+	port := newInboundPort(16)
+	port.SetPlaybackController(&recordingPlaybackController{})
+	controller := port.getPlaybackController()
+
+	controller.StartPlayback(first)
+	pushResponseFrames(t, port, first, 1, 2)
+	controller.InterruptPlayback(first)
+	controller.StartPlayback(second)
+	pushResponseFrames(t, port, second, 3, 4)
+	controller.InterruptPlayback(second)
+	controller.StartPlayback(next)
+	pushResponseFrames(t, port, next, 5, 6)
+	port.close()
+
+	var got []int16
+	for {
+		frame, err := port.ReadFrame(context.Background())
+		if err != nil {
+			break
+		}
+		if frame.PlaybackResponse != next {
+			t.Fatalf("device read a frame of %+v, want only %+v", frame.PlaybackResponse, next)
+		}
+		got = append(got, frame.Samples...)
+	}
+	if want := []int16{5, 6}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("device read %v, want the next response's %v", got, want)
+	}
+	// The next response has left the gate, so no interrupted identity needs
+	// to be remembered.
+	if remembered := len(port.interruptions.interrupted); remembered != 0 {
+		t.Fatalf("interrupted set holds %d responses after they drained, want 0", remembered)
+	}
+}
+
+// pushResponseFrames queues one single-sample frame per sample for response.
+func pushResponseFrames(t *testing.T, port *inboundPort, response sharedaudio.PlaybackResponse, samples ...int16) {
+	t.Helper()
+	for _, sample := range samples {
+		frame := sharedaudio.PCMFrame{Samples: []int16{sample}, PlaybackResponse: response}
+		if err := port.push(context.Background(), frame, nil); err != nil {
+			t.Fatalf("push %s frame: %v", response.ItemID, err)
+		}
+	}
+}
