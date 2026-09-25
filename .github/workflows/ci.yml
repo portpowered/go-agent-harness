@@ -349,11 +349,14 @@ jobs:
 
       # The integration shards run first, on a fresh runner as they did in
       # a job of their own (they are timing-bound); the unit packages then
-      # reuse the integration build's coverage-instrumented compiles.
+      # reuse the integration build's coverage-instrumented compiles. The
+      # unit step runs even when an integration test fails, so that failure
+      # does not hide the unit results (the job still fails).
       - name: Run hermetic agent-cli integration tests with coverage
         run: make coverage-ci-agent-cli AGENT_CLI_COVERAGE_SHARD=integration
 
       - name: Run hermetic agent-cli unit tests with coverage
+        if: always()
         run: make coverage-ci-agent-cli AGENT_CLI_COVERAGE_SHARD=unit
 
       - name: Wait for coverage libraries
@@ -521,7 +524,10 @@ jobs:
   # The job also lints the cgo-constrained darwin packages (CoreAudio
   # capture, display permission), which need the macOS SDK: on its own macOS
   # runner that lane was mostly setup, and CI (static) had to wait for it
-  # behind the macOS runner queue. Together they took 91-113s cold.
+  # behind the macOS runner queue. Together they took 124-141s cold in real
+  # CI runs (91-113s in an isolated experiment). Adding the golangci-lint
+  # cache to extra-paths changed this job's cache version, so the first run
+  # after that change restored nothing and ran cold.
   webmcp-chrome:
     name: CI (WebMCP Chrome)
     runs-on: macos-14
