@@ -13,6 +13,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -365,4 +366,27 @@ func (h *handle) waitOpeningReady(ctx context.Context) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+// toolAcknowledgementOption asks the provider for one spoken progress
+// acknowledgement when a bounded long-running call outlives the policy's
+// acknowledgement threshold. The threshold runs in the loop's clock domain.
+func toolAcknowledgementOption(policy tools.InteractiveToolPolicy) agentloop.Option {
+	snapshot := policy.Clone()
+	return agentloop.WithToolAcknowledgementPolicy(agentloop.ToolAcknowledgementPolicy{
+		Threshold: snapshot.Settings().AcknowledgementThreshold,
+		IsLongRunning: func(name string) bool {
+			return snapshot.ClassForTool(name) == tools.InteractiveToolClassBoundedLongRunning
+		},
+	})
+}
+
+// consumeToolAcknowledgement publishes the spoken progress acknowledgement
+// for an in-flight tool. It is customer-visible output, but not a response of
+// the session's turn accounting: it must not complete a finite response, the
+// first turn, or the pending tool continuation.
+func (h *handle) consumeToolAcknowledgement(ctx context.Context, msg messages.StreamMessage) {
+	h.observeProviderLiveness(ctx, msg)
+	h.publishMessage(msg) //nolint:contextcheck // recording owns the invocation evidence context.
+	h.observeRuntimeMessage(msg)
 }

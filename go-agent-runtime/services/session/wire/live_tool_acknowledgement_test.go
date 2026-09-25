@@ -1,4 +1,4 @@
-package live
+package wire
 
 import (
 	"context"
@@ -79,7 +79,58 @@ func (tool *releasedTool) Execute(ctx context.Context, call messages.ToolCall) (
 	}
 }
 
-func (s *testSession) responseCreates() (acknowledgements, ordinary int) {
+// recordingLiveSession is a provider session double that records every
+// client send; the test writes provider messages to its receive buffer.
+type recordingLiveSession struct {
+	receive *messages.TypedBuffer[messages.StreamMessage]
+	done    chan struct{}
+	close   sync.Once
+	mu      sync.Mutex
+	sent    []messages.StreamMessage
+}
+
+func newRecordingLiveSession() *recordingLiveSession {
+	return &recordingLiveSession{receive: messages.NewTypedBuffer[messages.StreamMessage](32), done: make(chan struct{})}
+}
+
+func (s *recordingLiveSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
+	if ctx.Err() != nil {
+		return false
+	}
+	s.mu.Lock()
+	s.sent = append(s.sent, msg)
+	s.mu.Unlock()
+	return true
+}
+
+func (s *recordingLiveSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
+	return s.receive
+}
+
+func (s *recordingLiveSession) Done() <-chan struct{} { return s.done }
+
+func (s *recordingLiveSession) Close() error {
+	s.close.Do(func() { close(s.done) })
+	return nil
+}
+
+func (s *recordingLiveSession) hasText(text string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, msg := range s.sent {
+		if value, ok := msg.Value.(*messages.TextDeltaValue); ok && value.Content == text {
+			return true
+		}
+	}
+	return false
+}
+
+func waitForSentText(t *testing.T, provider *recordingLiveSession, text string) {
+	t.Helper()
+	waitForCondition(t, "delivery of "+text, func() bool { return provider.hasText(text) })
+}
+
+func (s *recordingLiveSession) responseCreates() (acknowledgements, ordinary int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, msg := range s.sent {
@@ -95,7 +146,7 @@ func (s *testSession) responseCreates() (acknowledgements, ordinary int) {
 	return acknowledgements, ordinary
 }
 
-func (s *testSession) toolResultSent(callID string) bool {
+func (s *recordingLiveSession) toolResultSent(callID string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, msg := range s.sent {
@@ -117,7 +168,7 @@ func waitForCondition(t *testing.T, label string, condition func() bool) {
 	}
 }
 
-func writeProvider(t *testing.T, provider *testSession, stream ...messages.StreamMessage) {
+func writeProvider(t *testing.T, provider *recordingLiveSession, stream ...messages.StreamMessage) {
 	t.Helper()
 	for _, msg := range stream {
 		if !provider.receive.Write(context.Background(), msg) {
@@ -144,7 +195,7 @@ func toolCallResponse(callID, name string) []messages.StreamMessage {
 }
 
 type acknowledgementRun struct {
-	provider  *testSession
+	provider  *recordingLiveSession
 	tool      *releasedTool
 	scheduler *thresholdScheduler
 	clock     *platformclock.Deterministic
@@ -158,7 +209,7 @@ func startAcknowledgementRun(t *testing.T, toolName string, policy tools.Interac
 	t.Helper()
 	clock := platformclock.NewDeterministic(time.Unix(700, 0), time.Millisecond)
 	run := &acknowledgementRun{
-		provider:  newTestSession(),
+		provider:  newRecordingLiveSession(),
 		tool:      &releasedTool{started: make(chan struct{}), release: make(chan struct{})},
 		scheduler: &thresholdScheduler{Scheduler: clock, armed: make(chan struct{})},
 		clock:     clock,
@@ -172,9 +223,9 @@ func startAcknowledgementRun(t *testing.T, toolName string, policy tools.Interac
 		}
 	})
 	writeProvider(t, run.provider, messages.StreamMessage{Type: messages.StreamTypeSessionOpen, Value: messages.NewSessionOpenValue("provider-session", "audio_inference")})
-	service := New(Dependencies{
+	service := NewLiveService(LiveDependencies{
 		InferencerFactory: func(context.Context, session.LiveRequest) (messages.SessionInferencer, error) {
-			return &testInferencer{session: run.provider}, nil
+			return sessionInferencer{session: run.provider}, nil
 		},
 		Clock: clock.Now, Scheduler: run.scheduler,
 	})

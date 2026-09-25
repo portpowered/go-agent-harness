@@ -58,20 +58,14 @@ func NewToolRunner(executor messages.ToolExecutor, bufferCapacity int) *ToolRunn
 }
 
 // ConfigureAcknowledgement enables a one-shot callback when at least one
-// admitted long-running call remains pending after the configured threshold.
-// It is configured before Run starts and is intentionally independent from the
-// tool executor's timeout policy.
-func (r *ToolRunner) ConfigureAcknowledgement(threshold time.Duration, isLongRunning func(string) bool, send func(context.Context, []messages.ToolCall)) {
+// admitted long-running call remains pending after the configured threshold,
+// measured on source (nil selects the real clock). It is configured before Run
+// starts and is intentionally independent from the tool executor's timeout policy.
+func (r *ToolRunner) ConfigureAcknowledgement(threshold time.Duration, isLongRunning func(string) bool, source clock.TimerSource, send func(context.Context, []messages.ToolCall)) {
 	r.acknowledgementThreshold = threshold
 	r.isLongRunningTool = isLongRunning
 	r.sendAcknowledgement = send
-}
-
-// ConfigureAcknowledgementClock places the acknowledgement threshold in the
-// owning loop's time domain. Nil selects the real clock. It is configured
-// before Run starts.
-func (r *ToolRunner) ConfigureAcknowledgementClock(source clock.TimerSource) {
-	r.acknowledgementClock = source
+	r.acknowledgementClock, _ = clock.Ensure(source).(clock.TimerSource)
 }
 
 func (r *ToolRunner) Run(ctx context.Context) error {
@@ -342,11 +336,7 @@ func (r *ToolRunner) collectBatch(ctx context.Context, batch *toolBatch, resultC
 	var acknowledgementTimer clock.Timer
 	var acknowledgementCh <-chan time.Time
 	if len(batch.pendingLongRunning) > 0 {
-		source := r.acknowledgementClock
-		if source == nil {
-			source = clock.Real{}
-		}
-		acknowledgementTimer = source.NewTimer(r.acknowledgementThreshold)
+		acknowledgementTimer = r.acknowledgementClock.NewTimer(r.acknowledgementThreshold)
 		acknowledgementCh = acknowledgementTimer.C()
 		defer acknowledgementTimer.Stop()
 	}
@@ -365,9 +355,6 @@ func (r *ToolRunner) collectBatch(ctx context.Context, batch *toolBatch, resultC
 			// semantics remain intact, but never send an acknowledgement after
 			// cancellation.
 			ctxDone = nil
-			if acknowledgementTimer != nil {
-				acknowledgementTimer.Stop()
-			}
 			acknowledgementCh = nil
 		}
 	}

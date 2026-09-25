@@ -343,7 +343,7 @@ func TestToolRunner_AcknowledgesOnlyPendingLongRunningCalls(t *testing.T) {
 	runner := NewToolRunner(acknowledgementGateExecutor{release: release}, 8)
 	runner.ConfigureAcknowledgement(10*time.Millisecond, func(name string) bool {
 		return name == "slow"
-	}, func(_ context.Context, calls []messages.ToolCall) {
+	}, nil, func(_ context.Context, calls []messages.ToolCall) {
 		acknowledgements <- calls
 	})
 
@@ -406,10 +406,9 @@ func TestToolRunner_AcknowledgementThresholdFollowsConfiguredClock(t *testing.T)
 	release := make(chan struct{})
 	acknowledged := make(chan []messages.ToolCall, 1)
 	runner := NewToolRunner(acknowledgementGateExecutor{release: release}, 8)
-	runner.ConfigureAcknowledgement(threshold, func(name string) bool { return name == "slow" }, func(_ context.Context, calls []messages.ToolCall) {
+	runner.ConfigureAcknowledgement(threshold, func(name string) bool { return name == "slow" }, source, func(_ context.Context, calls []messages.ToolCall) {
 		acknowledged <- calls
 	})
-	runner.ConfigureAcknowledgementClock(source)
 	errCh := make(chan error, 1)
 	go func() {
 		_, err := runner.executeBatch(context.Background(), []messages.ToolCall{{ID: "slow-call", Name: "slow"}})
@@ -444,7 +443,7 @@ func TestToolRunner_AcknowledgementThresholdFollowsConfiguredClock(t *testing.T)
 func TestToolRunner_FastCallCompletingBeforeThresholdDoesNotAcknowledge(t *testing.T) {
 	acknowledged := make(chan struct{}, 1)
 	runner := NewToolRunner(&testToolExecutor{results: map[string]string{"fast": "done"}}, 8)
-	runner.ConfigureAcknowledgement(100*time.Millisecond, func(string) bool { return true }, func(context.Context, []messages.ToolCall) {
+	runner.ConfigureAcknowledgement(100*time.Millisecond, func(string) bool { return true }, nil, func(context.Context, []messages.ToolCall) {
 		acknowledged <- struct{}{}
 	})
 

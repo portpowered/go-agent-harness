@@ -1,4 +1,4 @@
-package live
+package wire
 
 import (
 	"context"
@@ -19,7 +19,7 @@ const (
 // completeMessageSession is a provider session that accepts image-bearing
 // tool results through the complete-message path.
 type completeMessageSession struct {
-	*testSession
+	*recordingLiveSession
 	accepted chan struct{}
 	once     sync.Once
 	mu       sync.Mutex
@@ -91,12 +91,10 @@ func assertStillOpen(t *testing.T, done <-chan error, label string) {
 // stay open until the correlated complete message is accepted by the provider
 // and its grounded continuation terminates.
 func TestFinitePromptSessionClosesOnlyAfterAcceptedRichResultAndContinuation(t *testing.T) {
-	provider := &completeMessageSession{testSession: newTestSession(), accepted: make(chan struct{})}
+	provider := &completeMessageSession{recordingLiveSession: newRecordingLiveSession(), accepted: make(chan struct{})}
 	tool := &richResultTool{started: make(chan struct{}), release: make(chan struct{})}
-	writeProvider(t, provider.testSession, messages.StreamMessage{Type: messages.StreamTypeSessionOpen, Value: messages.NewSessionOpenValue("provider-session", "audio_inference")})
-	service := New(Dependencies{InferencerFactory: func(context.Context, session.LiveRequest) (messages.SessionInferencer, error) {
-		return &testInferencer{session: provider}, nil
-	}})
+	writeProvider(t, provider.recordingLiveSession, messages.StreamMessage{Type: messages.StreamTypeSessionOpen, Value: messages.NewSessionOpenValue("provider-session", "audio_inference")})
+	service := newScriptedLiveService(sessionInferencer{session: provider})
 	handle, err := service.OpenLive(context.Background(), session.LiveRequest{
 		SessionID: "close-after-open", OpeningPrompt: "inspect the screen", FinishAfterResponse: true,
 		Capabilities: &session.LiveCapabilities{Executor: tool, Definitions: []messages.ToolDefinition{{Name: richToolName}}},
@@ -115,8 +113,8 @@ func TestFinitePromptSessionClosesOnlyAfterAcceptedRichResultAndContinuation(t *
 	done := make(chan error, 1)
 	go func() { done <- handle.Wait() }()
 
-	waitForSentText(t, provider.testSession, "inspect the screen")
-	writeProvider(t, provider.testSession, toolCallResponse(richCallID, richToolName)...)
+	waitForSentText(t, provider.recordingLiveSession, "inspect the screen")
+	writeProvider(t, provider.recordingLiveSession, toolCallResponse(richCallID, richToolName)...)
 	awaitSignal(t, tool.started, "rich tool to start")
 	assertStillOpen(t, done, "while the rich tool was running")
 
@@ -124,7 +122,7 @@ func TestFinitePromptSessionClosesOnlyAfterAcceptedRichResultAndContinuation(t *
 	awaitSignal(t, provider.accepted, "provider acceptance of the rich tool result")
 	assertStillOpen(t, done, "after result acceptance but before its continuation")
 
-	writeProvider(t, provider.testSession, assistantResponse("response-continuation", "", "final grounded continuation")...)
+	writeProvider(t, provider.recordingLiveSession, assistantResponse("response-continuation", "", "final grounded continuation")...)
 	select {
 	case err := <-done:
 		if err != nil {

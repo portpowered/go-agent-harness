@@ -2,11 +2,10 @@ package live
 
 import (
 	"errors"
-	"sort"
-	"strings"
-
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"sort"
+	"strings"
 )
 
 const continuationStatusFailed = "failed"

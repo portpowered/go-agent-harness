@@ -121,8 +121,7 @@ func newToolRunner(cfg AgentLoopConfig, modelRunner *participants.ModelRunner) *
 	}
 	if cfg.SessionInferencer != nil && cfg.ToolAcknowledgement != nil {
 		policy := *cfg.ToolAcknowledgement
-		toolRunner.ConfigureAcknowledgementClock(cfg.Clock)
-		toolRunner.ConfigureAcknowledgement(policy.Threshold, policy.IsLongRunning, func(ctx context.Context, _ []messages.ToolCall) {
+		toolRunner.ConfigureAcknowledgement(policy.Threshold, policy.IsLongRunning, cfg.Clock, func(ctx context.Context, _ []messages.ToolCall) {
 			if err := modelRunner.EnqueueSessionEvent(ctx, messages.StreamMessage{
 				Type:  messages.StreamTypeResponseCreate,
 				Value: messages.NewToolAcknowledgementResponseCreateValue(),
