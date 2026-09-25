@@ -1151,6 +1151,18 @@
       "file": "services/session/internal/live/mediagate/gate.go",
       "name": "ErrProviderInboundMedia",
       "reason": "sentinel preserves provider failure identity while ordered response messages drain"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/probe/scenariov2",
+      "file": "internal/probe/scenariov2/mode.go",
+      "name": "ErrInvalidBrowserExecutorMode",
+      "reason": "public sentinel error identity classifies an unsupported probe.scenario.v2 browser executor mode"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/probe/scenariov2",
+      "file": "internal/probe/scenariov2/mode.go",
+      "name": "ErrRealAdapterUnavailable",
+      "reason": "public sentinel error identity classifies an unavailable probe.scenario.v2 real browser adapter"
     }
   ],
   "limits": {
