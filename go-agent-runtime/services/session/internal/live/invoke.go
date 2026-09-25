@@ -47,6 +47,11 @@ type liveInvocation struct {
 	stopPumps                 context.CancelFunc
 	pumps                     chan error
 	count                     int
+	// playbackDone closes when the playback pump started by
+	// startPlaybackPump returns. It exists from the moment the pump is
+	// scheduled, so a graceful drain joins a pump whose goroutine has not
+	// begun yet instead of mistaking it for an idle device.
+	playbackDone chan struct{}
 }
 
 func newLiveInvocation(s *Service, ctx context.Context, options session.LiveRunOptions) (*liveInvocation, error) {
@@ -259,19 +264,6 @@ func (i *liveInvocation) startCaptureInterruptionPump() {
 		return
 	}
 	i.startPump("capture interruption", i.runCaptureInterruptions)
-}
-
-func (i *liveInvocation) startPlaybackPump() {
-	if i.ports.Playback == nil {
-		return
-	}
-	if i.endpoints.Inbound == nil {
-		i.handle.Cancel(errors.New("live provider has no inbound media endpoint"))
-		return
-	}
-	i.startPump("playback", func(ctx context.Context) error {
-		return i.ports.Playback.Pump(ctx, i.endpoints.Inbound)
-	})
 }
 
 func (i *liveInvocation) startPump(name string, run func(context.Context) error) {
