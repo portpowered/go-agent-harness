@@ -14,6 +14,7 @@ import (
 	runtimeDevicesWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
 
@@ -86,7 +87,10 @@ func TestServiceRunVirtualProbeUsesInputAndOutputContracts(t *testing.T) {
 		}
 	}()
 	inputFrame := serviceProbeVoicedFrame()
-	for i := 0; i < 10; i++ {
+	// 8 frames (240 ms) all survive the virtual output-to-input loopback, so
+	// the forwarded byte count below is exact; ten frames forward only 240 ms.
+	const seededFrames = 8
+	for i := 0; i < seededFrames; i++ {
 		if err := seed.WriteFrame(context.Background(), inputFrame); err != nil {
 			t.Fatalf("seed input frame %d: %v", i, err)
 		}
@@ -103,7 +107,7 @@ func TestServiceRunVirtualProbeUsesInputAndOutputContracts(t *testing.T) {
 	observation, err := probeService.Run(ctx, serviceDevices.DeviceProbeRequest{
 		Scenario: serviceProbeScenario(),
 		// The capture window runs on wall time. The virtual source delivers
-		// the ten seeded frames immediately, so a short window still proves
+		// the seeded frames immediately, so a short window still proves
 		// the microphone path without waiting out a live-length capture.
 		CaptureTime:          150 * time.Millisecond,
 		SessionInferencer:    serviceProbeInferencer{session: session},
@@ -117,6 +121,14 @@ func TestServiceRunVirtualProbeUsesInputAndOutputContracts(t *testing.T) {
 	}
 	if session.audioMessages == 0 {
 		t.Fatal("Run did not forward any microphone audio through the session")
+	}
+	// Every seeded 16 kHz sample reaches the provider as 24 kHz PCM16: the
+	// forwarded payload is exactly the seeded audio after rate conversion.
+	const inputFrameSamples = audio.SampleRate / 50
+	const providerFrameSamples = wavio.Rate24kHz / 50
+	wantAudioBytes := seededFrames * audio.FrameSize / inputFrameSamples * providerFrameSamples * 2
+	if session.audioBytes != wantAudioBytes {
+		t.Fatalf("forwarded microphone audio = %d bytes, want exactly %d", session.audioBytes, wantAudioBytes)
 	}
 	if observation.Transcript != "virtual response" {
 		t.Fatalf("transcript = %q, want provider transcript", observation.Transcript)
@@ -181,6 +193,7 @@ type serviceProbeSession struct {
 	receive       *messages.TypedBuffer[messages.StreamMessage]
 	done          chan struct{}
 	audioMessages int
+	audioBytes    int
 }
 
 func newServiceProbeSession() *serviceProbeSession {
@@ -192,6 +205,9 @@ func newServiceProbeSession() *serviceProbeSession {
 func (s *serviceProbeSession) Send(ctx context.Context, message messages.StreamMessage) bool {
 	if message.Type == messages.StreamTypeAudioDelta {
 		s.audioMessages++
+		if value, ok := message.Value.(*messages.AudioDeltaValue); ok && value != nil {
+			s.audioBytes += len(value.Content)
+		}
 	}
 	select {
 	case s.sent <- message:
