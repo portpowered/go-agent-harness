@@ -55,6 +55,11 @@ type Dependencies struct {
 // this function joins the runtime. Provider, media, and terminal lifecycle
 // policy remains in runtimeSession.LiveRunner.
 func Run(ctx context.Context, out io.Writer, request serviceSession.Request, deps Dependencies) (runErr error) {
+	// Registered first so it runs after every cleanup join: provider and
+	// admission failures can echo the session credential, and the CLI renders
+	// this error to stderr.
+	redactor := newRunRedactor(request, deps.CredentialValues)
+	defer func() { runErr = redactor.error(runErr) }()
 	admission, err := prepareLiveRun(ctx, request, deps)
 	if err != nil {
 		return err
@@ -108,7 +113,7 @@ func Run(ctx context.Context, out io.Writer, request serviceSession.Request, dep
 	if traceRun != nil {
 		wrapTraceFilePorts(traceRun, filePorts)
 	}
-	options := liveRunOptions(out, request, liveRequest, recorder, filePorts, deps, traceRun)
+	options := liveRunOptions(out, request, liveRequest, recorder, filePorts, deps, traceRun, redactor)
 	return suppressExpectedDuration(runner.RunLive(ctx, options))
 }
 
@@ -268,7 +273,7 @@ func configureLegacyReplayInput(filePorts *FilePorts, request serviceSession.Req
 	}
 }
 
-func liveRunOptions(out io.Writer, request serviceSession.Request, liveRequest runtimeSession.LiveRequest, recorder runtimeSession.LiveRecorder, filePorts *FilePorts, deps Dependencies, traceRun runtimeSessionTrace.Prepared) runtimeSession.LiveRunOptions {
+func liveRunOptions(out io.Writer, request serviceSession.Request, liveRequest runtimeSession.LiveRequest, recorder runtimeSession.LiveRecorder, filePorts *FilePorts, deps Dependencies, traceRun runtimeSessionTrace.Prepared, redactor runRedactor) runtimeSession.LiveRunOptions {
 	terminalRenderer := newTerminalEventRenderer(request.ReplayPath != "")
 	deviceService := deps.DeviceService
 	deviceRequest := devicesRequest(request, liveRequest)
@@ -301,7 +306,7 @@ func liveRunOptions(out io.Writer, request serviceSession.Request, liveRequest r
 		CaptureCompleteControls: captureCompleteControls(request, deps.CaptureComplete),
 		Events: runtimeSession.LiveEventSinkFunc(func(eventContext context.Context, event runtimeSession.LiveEvent) error {
 			eventOut := outputWriter(request, out)
-			if err := renderTerminalEventWithRenderer(eventContext, eventOut, terminalRenderer, event); err != nil {
+			if err := renderTerminalEventWithRenderer(eventContext, eventOut, terminalRenderer, redactor.event(event)); err != nil {
 				return err
 			}
 			if request.StreamObserver != nil && event.Message != nil {
