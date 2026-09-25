@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -194,10 +195,9 @@ func (s *SessionScenario) awaitRunExit(timeout time.Duration) (exited bool, err 
 	}
 }
 
-const (
-	sessionOpenWait = 50 * time.Millisecond  // Start: bounds sessions that never publish SESSION.OPEN.
-	loopEndWait     = 200 * time.Millisecond // Stop: bounds loops that never publish LOOP.END.
-)
+// sessionOpenWait bounds Start for sessions that never publish SESSION.OPEN;
+// callers that need the event assert it with their own WaitForEvent.
+const sessionOpenWait = 50 * time.Millisecond
 
 // SendControlPlane sends a control plane message to the session (e.g. session_close, stop, ping).
 func (s *SessionScenario) SendControlPlane(cpType messages.ControlPlaneMessageType) {
@@ -239,12 +239,15 @@ func (s *SessionScenario) SendText(text string) {
 }
 
 // Stop triggers a graceful session close. It sends session_close, waits
-// for LOOP.END (the last delta), then cancels the context and
-// closes the mock inferencer.
+// for LOOP.END (the last delta) to be collected, then closes the mock
+// inferencer and cancels the context. The LOOP.END wait wakes on the
+// collected delta itself; timeout is only a wall-clock failure bound for
+// each of that wait and the loop exit. A missing LOOP.END is an error, so
+// a nil return guarantees the delta stream is complete.
 func (s *SessionScenario) Stop(timeout time.Duration) error {
 	s.SendControlPlane(messages.ControlPlaneMessageTypeSessionClose)
 
-	s.WaitForEvent(messages.StreamTypeLoopEnd, loopEndWait)
+	loopEnded := s.WaitForEvent(messages.StreamTypeLoopEnd, timeout)
 
 	// Close the mock session (unblocks runSession if it's blocked on session.Done()).
 	s.Inf.Close()
@@ -253,14 +256,17 @@ func (s *SessionScenario) Stop(timeout time.Duration) error {
 	s.cancel()
 
 	exited, err := s.awaitRunExit(timeout)
-	if !exited {
-		return context.DeadlineExceeded
-	}
-	// context.Canceled is expected — the loop was cancelled by us.
-	if errors.Is(err, context.Canceled) {
+	switch {
+	case !loopEnded:
+		return fmt.Errorf("SessionScenario.Stop: LOOP.END was not collected within %v after session_close", timeout)
+	case !exited:
+		return fmt.Errorf("SessionScenario.Stop: loop did not exit within %v after cancellation: %w", timeout, context.DeadlineExceeded)
+	case errors.Is(err, context.Canceled):
+		// Expected: the loop was cancelled by us.
 		return nil
+	default:
+		return err
 	}
-	return err
 }
 
 // Deltas returns a copy of all collected delta events.
