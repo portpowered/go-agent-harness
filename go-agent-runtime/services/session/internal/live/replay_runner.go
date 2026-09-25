@@ -165,7 +165,9 @@ func (h *handle) waitForOpeningResponse(ctx context.Context, target int) error {
 // so it re-evaluates its condition against the state just observed.
 func (h *handle) wakeResponseWaiters() {
 	h.mu.Lock()
-	close(h.replayResponseWake)
+	if h.replayResponseWake != nil {
+		close(h.replayResponseWake)
+	}
 	h.replayResponseWake = make(chan struct{})
 	h.mu.Unlock()
 }

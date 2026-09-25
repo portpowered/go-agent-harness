@@ -545,6 +545,11 @@ func TestOpeningResponseGateHoldsFirstTurnUntilToolContinuationCompletes(t *test
 	toolErr, _ := end("", messages.RoleTool)
 	require.NoError(t, toolErr)
 	require.False(t, h.openingResponseSettled(1), "settled before the continuation terminal")
+	select {
+	case err := <-result:
+		t.Fatalf("first scheduled turn released before the continuation terminal: %v", err)
+	default:
+	}
 	h.markContinuationOutput()
 	continuationErr, complete := end("response-continuation", messages.RoleAssistant)
 	require.NoError(t, continuationErr)

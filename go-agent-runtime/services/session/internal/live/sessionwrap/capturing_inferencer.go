@@ -121,7 +121,7 @@ func (i *CapturingInferencer) SyncReceive(ctx context.Context) {
 	i.captureMu.Lock()
 	connected := i.connectedSession
 	i.captureMu.Unlock()
-	if syncer, ok := connected.(interface{ SyncReceive(context.Context) }); ok {
+	if syncer, ok := connected.(ReceiveSyncer); ok {
 		syncer.SyncReceive(ctx)
 	}
 }
