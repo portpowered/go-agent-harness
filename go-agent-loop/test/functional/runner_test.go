@@ -88,7 +88,10 @@ func TestFunctionalSuite_ExternalManifestControlsRecursiveInvocation(t *testing.
 	manifestPath := writeProofManifest(t)
 	cmd := exec.Command("go", goCommandArgs(
 		"test",
-		"./test/functional/...",
+		// Only the package owning the selectors: every other functional
+		// package matches none of the -run filter, so compiling and
+		// discovering it in the subprocess proved nothing extra.
+		"./test/functional/orchestration",
 		"-v",
 		"-run", "^TestBasic_(SimpleRequestResponse|SimpleRequestResponseWithSystemPrompt)$",
 		"-count=1",
@@ -127,7 +130,10 @@ func TestFunctionalSuite_ExternalManifestRejectsUnknownSelectorBeforeFilteredRec
 	manifestPath := writeUnknownSelectorManifest(t)
 	cmd := exec.Command("go", goCommandArgs(
 		"test",
-		"./test/functional/...",
+		// Only the package owning the selectors: every other functional
+		// package matches none of the -run filter, so compiling and
+		// discovering it in the subprocess proved nothing extra.
+		"./test/functional/orchestration",
 		"-v",
 		"-run", "^TestBasic_SimpleRequestResponse$",
 		"-count=1",

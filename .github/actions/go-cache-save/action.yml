@@ -1,0 +1,53 @@
+name: Save the per-job Go cache
+description: >-
+  Prune the Go build cache to the entries this job used and save it under the
+  key go-cache resolved. Pushes to main save every commit so pull requests
+  restore a recent main cache; pull requests only save when they found no
+  cache at all, so they neither upload on every push nor evict main's caches.
+
+inputs:
+  primary-key:
+    description: go-cache primary-key output.
+    required: true
+  matched-key:
+    description: go-cache matched-key output.
+    required: true
+  gocache:
+    description: go-cache gocache output.
+    required: true
+  gomodcache:
+    description: go-cache gomodcache output.
+    required: true
+  token:
+    description: >-
+      Token with actions: write, used on main to delete this job's superseded
+      caches after a save.
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    - name: Prune Go build cache to this job's working set
+      if: inputs.matched-key != inputs.primary-key && (github.ref == 'refs/heads/main' || inputs.matched-key == '')
+      shell: bash
+      run: |
+        if [ "$RUNNER_OS" = Windows ]; then python=python; else python=python3; fi
+        "$python" "$GITHUB_ACTION_PATH/../go-cache/gocache_working_set.py" prune "${{ inputs.gocache }}"
+
+    - name: Save Go build and module caches
+      if: inputs.matched-key != inputs.primary-key && (github.ref == 'refs/heads/main' || inputs.matched-key == '')
+      uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
+      with:
+        path: |
+          ${{ inputs.gocache }}
+          ${{ inputs.gomodcache }}
+        key: ${{ inputs.primary-key }}
+
+    # Keep one main cache per job: restores fall back to the newest entry, so
+    # older entries only consume the repository's 10 GB quota.
+    - name: Delete superseded main Go caches
+      if: github.ref == 'refs/heads/main' && inputs.matched-key != inputs.primary-key
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+      run: bash "$GITHUB_ACTION_PATH/delete_superseded_caches.sh" "${{ inputs.primary-key }}" || true

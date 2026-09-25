@@ -1,13 +1,15 @@
 package functional
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io"
 	"os"
 	"os/exec"
@@ -21,6 +23,7 @@ import (
 
 type goListPackage struct {
 	ImportPath   string
+	Dir          string
 	TestGoFiles  []string
 	XTestGoFiles []string
 }
@@ -49,7 +52,7 @@ func DiscoverFunctionalInventory(ctx context.Context, moduleRoot string) (Invent
 		if !isFunctionalTestPackage(listed) {
 			continue
 		}
-		tests, err := listPackageTests(ctx, moduleRoot, listed.ImportPath)
+		tests, err := listPackageTests(listed)
 		if err != nil {
 			return Inventory{}, err
 		}
@@ -77,39 +80,59 @@ func isFunctionalTestPackage(listed goListPackage) bool {
 	return !strings.Contains(listed.ImportPath, "/test/functional/internal/")
 }
 
-func listPackageTests(ctx context.Context, moduleRoot, packagePath string) ([]string, error) {
-	args := goCommandArgs("test", "-list", "^Test", "-count=1", packagePath)
-	cmd := exec.CommandContext(ctx, "go", args...)
-	cmd.Dir = moduleRoot
-	cmd.Env = setEnv(os.Environ(), DiscoveryEnv, "1")
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return nil, fmt.Errorf("list functional tests in %s: %w", packagePath, commandError(cmd, err, output))
-	}
-
+// listPackageTests returns the package's sorted top-level tests. It reads
+// the test files `go list` resolved for the active build tags instead of
+// linking a test binary for `go test -list`, which made discovery cost one
+// link per package.
+func listPackageTests(listed goListPackage) ([]string, error) {
+	files := make([]string, 0, len(listed.TestGoFiles)+len(listed.XTestGoFiles))
+	files = append(files, listed.TestGoFiles...)
+	files = append(files, listed.XTestGoFiles...)
+	fileSet := token.NewFileSet()
 	seen := make(map[string]struct{})
 	var tests []string
-	scanner := bufio.NewScanner(bytes.NewReader(output))
-	for scanner.Scan() {
-		name := strings.TrimSpace(scanner.Text())
-		if !isTopLevelTestName(name) {
-			continue
+	for _, name := range files {
+		parsed, err := parser.ParseFile(fileSet, filepath.Join(listed.Dir, name), nil, parser.SkipObjectResolution)
+		if err != nil {
+			return nil, fmt.Errorf("list functional tests in %s: %w", listed.ImportPath, err)
 		}
-		if _, exists := seen[name]; exists {
-			return nil, &ValidationError{
-				Field:    "inventory.tests",
-				Selector: packagePath + "/" + name,
-				Problem:  "is ambiguous because the test is duplicated",
+		for _, decl := range parsed.Decls {
+			testName, ok := topLevelTestFunc(decl)
+			if !ok {
+				continue
 			}
+			if _, exists := seen[testName]; exists {
+				return nil, &ValidationError{
+					Field:    "inventory.tests",
+					Selector: listed.ImportPath + "/" + testName,
+					Problem:  "is ambiguous because the test is duplicated",
+				}
+			}
+			seen[testName] = struct{}{}
+			tests = append(tests, testName)
 		}
-		seen[name] = struct{}{}
-		tests = append(tests, name)
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("read functional test listing for %s: %w", packagePath, err)
 	}
 	sort.Strings(tests)
 	return tests, nil
+}
+
+// topLevelTestFunc reports the name of a `func TestXxx(t *testing.T)`
+// declaration, the shape `go test` runs as a top-level test.
+func topLevelTestFunc(decl ast.Decl) (string, bool) {
+	fn, ok := decl.(*ast.FuncDecl)
+	if !ok || fn.Recv != nil || fn.Type.TypeParams != nil || !isTopLevelTestName(fn.Name.Name) {
+		return "", false
+	}
+	params := fn.Type.Params.List
+	if len(params) != 1 || len(params[0].Names) > 1 || fn.Type.Results != nil {
+		return "", false
+	}
+	star, ok := params[0].Type.(*ast.StarExpr)
+	if !ok {
+		return "", false
+	}
+	selector, ok := star.X.(*ast.SelectorExpr)
+	return fn.Name.Name, ok && selector.Sel.Name == "T"
 }
 
 func goCommandArgs(command string, args ...string) []string {
@@ -134,7 +157,7 @@ func commandError(cmd *exec.Cmd, err error, output []byte) error {
 // this hook is what makes direct `go test ./test/functional/...` invocations
 // honor the same subtractive manifest.
 func RunPackageTests(m *testing.M, packagePath string) {
-	if os.Getenv(SelectionAppliedEnv) == "1" || os.Getenv(DiscoveryEnv) == "1" {
+	if os.Getenv(SelectionAppliedEnv) == "1" {
 		os.Exit(m.Run())
 	}
 	if !flag.Parsed() {

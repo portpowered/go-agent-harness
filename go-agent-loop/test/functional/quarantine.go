@@ -33,11 +33,6 @@ const (
 	// hook uses this to avoid applying the manifest a second time.
 	SelectionAppliedEnv = "FUNCTIONAL_QUARANTINE_SELECTION_APPLIED"
 
-	// DiscoveryEnv is used only while a package test binary lists its own
-	// top-level tests. It prevents the package TestMain hook from recursively
-	// applying a manifest during discovery.
-	DiscoveryEnv = "FUNCTIONAL_QUARANTINE_DISCOVERY"
-
 	BucketEnvironmentDependent = "ENVIRONMENT-DEPENDENT"
 	BucketGenuinelyFailing     = "GENUINELY FAILING"
 )
