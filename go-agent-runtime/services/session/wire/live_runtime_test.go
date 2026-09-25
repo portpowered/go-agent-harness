@@ -134,7 +134,11 @@ func TestProviderInferencerFactoryProjectsLiveRequest(t *testing.T) {
 	if len(references) != 1 || references[0] != "vault:1" {
 		t.Fatalf("credential references = %v, want the opaque request reference once", references)
 	}
-	config := provider.configs[0]
+	assertProjectedProviderConfig(t, provider.configs[0], dialer, &createResponse)
+}
+
+func assertProjectedProviderConfig(t *testing.T, config providers.SessionConfig, dialer unusedDialer, createResponse *bool) {
+	t.Helper()
 	if config.APIKey != "resolved-key" || config.Provider != "openai" || config.Model != "gpt-realtime" || config.Voice != "marin" || config.Instructions != "be brief" {
 		t.Fatalf("provider identity = %+v", config)
 	}
@@ -147,7 +151,7 @@ func TestProviderInferencerFactoryProjectsLiveRequest(t *testing.T) {
 	if config.InputTranscription == nil || !config.InputTranscription.Enabled || config.InputTranscription.Model != "whisper" {
 		t.Fatalf("input transcription = %+v", config.InputTranscription)
 	}
-	if config.TurnDetection == nil || config.TurnDetection.CreateResponse == &createResponse || !*config.TurnDetection.CreateResponse {
+	if config.TurnDetection == nil || config.TurnDetection.CreateResponse == createResponse || !*config.TurnDetection.CreateResponse {
 		t.Fatalf("turn detection = %+v, want an independent copy", config.TurnDetection)
 	}
 }
