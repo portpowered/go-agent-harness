@@ -801,20 +801,20 @@ func (p *osManagedBrowserProcess) PID() int {
 	return p.command.Process.Pid
 }
 
-// reattachedManagedBrowserPollInterval bounds how often a reattached,
-// non-child Chrome process is re-inspected for exit.
 const reattachedManagedBrowserPollInterval = 250 * time.Millisecond
 
 type reattachedManagedBrowserProcess struct {
 	state     ManagedBrowserState
 	inspector ManagedBrowserProcessInspector
+	// pollInterval is the exit re-inspection period (default reattachedManagedBrowserPollInterval).
+	pollInterval time.Duration
 }
 
 func (p *reattachedManagedBrowserProcess) Wait() error {
 	if p == nil {
 		return errors.New("managed browser process is unavailable")
 	}
-	ticker := time.NewTicker(reattachedManagedBrowserPollInterval)
+	ticker := time.NewTicker(durationOrDefault(p.pollInterval, reattachedManagedBrowserPollInterval))
 	defer ticker.Stop()
 	failures := 0
 	for {
