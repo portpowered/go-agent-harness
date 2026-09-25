@@ -5,9 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
-	"time"
 )
 
 func (h *handle) finish(err error) {
@@ -341,30 +339,7 @@ func (s finishState) terminalError() error {
 	}
 	return nil
 }
-func drainPlayback(parent context.Context, playback devices.Playback, timeout time.Duration) error {
-	if playback == nil {
-		return nil
-	}
-	if parent == nil {
-		return errors.New("live playback drain context is required")
-	}
-	drainer, ok := playback.(interface{ WaitForPump(context.Context) error })
-	if !ok {
-		return nil
-	}
-	if timeout == 0 {
-		timeout = defaultPlaybackDrainTimeout
-	}
-	if timeout < 0 {
-		return errors.New("live playback drain timeout must not be negative")
-	}
-	ctx, cancel := context.WithTimeout(parent, timeout)
-	defer cancel()
-	if err := drainer.WaitForPump(ctx); err != nil {
-		return fmt.Errorf("drain live playback: %w", err)
-	}
-	return nil
-}
+
 func (h *handle) finishMessageObservation(msg messages.StreamMessage) {
 	if msg.Type == messages.StreamTypeSessionClose && !h.deferProviderClose() {
 		h.stopGracefully()
