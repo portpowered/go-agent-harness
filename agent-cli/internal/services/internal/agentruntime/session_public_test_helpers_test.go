@@ -6,7 +6,6 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -106,15 +105,6 @@ func (o *recordingSessionRuntimeObserver) ObserveSessionRuntime(observation Sess
 	o.mu.Lock()
 	o.observations = append(o.observations, observation)
 	o.mu.Unlock()
-}
-
-func sessionTerminalObservationForCancellation(outputState messages.TerminalOutputState, roomBound bool) sessionTerminalObservation {
-	return sessionTerminalObservation{
-		TerminalReason:     messages.TerminalReasonCancellation,
-		TerminalProvenance: messages.TerminalProvenanceRoom,
-		OutputState:        outputState,
-		RoomBound:          roomBound,
-	}
 }
 
 func defaultSessionRuntimeFactory() SessionRuntimeFactory { return newDefaultSessionRuntimeFactory() }

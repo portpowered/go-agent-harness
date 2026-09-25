@@ -33,10 +33,6 @@ var errSessionMaxDurationExpired = sessionterminal.ErrDurationExpired
 // that ended before every queued input received an assistant response.
 var ErrSessionScheduledAudioIncomplete = errors.New("scheduled audio session ended before all turns completed")
 
-func assistantAudioDelta(msg messages.StreamMessage) bool {
-	return msg.Role == "" || msg.Role == messages.RoleAssistant
-}
-
 func sendEventDrivenAudioInput(ctx context.Context, loop *agentloop.AgentLoop, opts sessionLoopOptions, input sessiontrace.ScheduledAudioInput) error {
 	if len(input.PCM) == 0 {
 		return errors.New("event-driven audio input is empty")
