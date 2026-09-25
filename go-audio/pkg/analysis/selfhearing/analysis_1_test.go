@@ -169,7 +169,12 @@ func TestPCM16SelfHearingDetectsContinuousClockedFarFieldDelay(t *testing.T) {
 }
 
 func TestPCM16SelfHearingDetectsFarFieldAfterSilentCaptureResets(t *testing.T) {
-	detector := newSelfHearingDetector(t, selfhearing.DefaultSelfHearingConfig())
+	// The echo arrives 240ms late. A lag window around that delay keeps the
+	// far-field reset behavior under test while avoiding a correlation scan
+	// over the default -200ms..500ms range for every 16kHz frame.
+	config := selfhearing.DefaultSelfHearingConfig()
+	config.CorrelationLagWindow = selfhearing.PCM16LagWindow{Min: 200 * time.Millisecond, Max: 280 * time.Millisecond}
+	detector := newSelfHearingDetector(t, config)
 	const rate, frameSamples, delayedFrames = 16000, coreaudio.FrameSize, 8
 	playback := testSignal(24*frameSamples, 313)
 	var observation selfhearing.PCM16SelfHearingObservation
