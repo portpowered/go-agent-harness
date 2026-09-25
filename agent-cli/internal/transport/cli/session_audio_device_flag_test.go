@@ -8,7 +8,11 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/spf13/cobra"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 )
 
 func TestSessionAudioOutputDeviceFlagErrors(t *testing.T) {
@@ -74,3 +78,46 @@ func (i *flagErrorSessionInferencer) ConnectSession(context.Context) (messages.S
 }
 
 var _ messages.SessionInferencer = (*flagErrorSessionInferencer)(nil)
+
+// TestSessionAudioInPacingFlagReachesTheSessionRequest proves the hidden
+// test-harness option parses every documented spelling, rejects an invalid
+// one at flag parsing, and is carried onto the session request the live host
+// maps onto the runtime file media request.
+func TestSessionAudioInPacingFlagReachesTheSessionRequest(t *testing.T) {
+	for _, testCase := range []struct {
+		args []string
+		want runtimeDevices.FilePacing
+	}{
+		{args: nil, want: runtimeDevices.FilePacing{}},
+		{args: []string{"--audio-in-pacing=realtime"}, want: runtimeDevices.FilePacing{}},
+		{args: []string{"--audio-in-pacing=unpaced"}, want: runtimeDevices.FilePacing{Unpaced: true}},
+		{args: []string{"--audio-in-pacing", "20x"}, want: runtimeDevices.FilePacing{Speed: 20}},
+	} {
+		command := NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil)
+		cmd := command.Generate()
+		if err := cmd.ParseFlags(testCase.args); err != nil {
+			t.Fatalf("parse %v: %v", testCase.args, err)
+		}
+		request, err := command.buildSessionRequest(cmd, nil, sessionCommandRunState{}, SessionTransportWebSocket, false, false, false, nil, nil)
+		if err != nil {
+			t.Fatalf("build request for %v: %v", testCase.args, err)
+		}
+		if request.AudioInputPacing != testCase.want {
+			t.Fatalf("%v request pacing = %+v, want %+v", testCase.args, request.AudioInputPacing, testCase.want)
+		}
+	}
+
+	cmd := NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil).Generate()
+	if err := cmd.ParseFlags([]string{"--audio-in-pacing=fast"}); err == nil {
+		t.Fatal("--audio-in-pacing=fast parsed; want an invalid pacing error")
+	}
+	assertSessionFlagHidden(t, cmd, sessionAudioInPacingFlag)
+}
+
+func assertSessionFlagHidden(t *testing.T, cmd *cobra.Command, name string) {
+	t.Helper()
+	flag := cmd.Flags().Lookup(name)
+	if flag == nil || !flag.Hidden {
+		t.Fatalf("--%s = %+v, want a registered hidden flag", name, flag)
+	}
+}
