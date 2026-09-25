@@ -96,6 +96,12 @@ the changed scope matters most when a diff does not reach it.
 - The changed scope does not re-check the floor of a package the diff does not
   touch or import, even when a changed caller stopped exercising it; the full
   scope and CI do.
+- Cross-package data references are found only when the path is a string
+  literal, a constant, or a literal `filepath.Join`/`path.Join`. A test that
+  builds another package's fixture path at runtime (from variables or
+  `fmt.Sprintf`) is not detected, so changing that fixture does not widen the
+  changed scope; `make prepush-full` and CI still run it. Prefer literal paths
+  for shared fixtures.
 - CI-only jobs stay CI-only: the race corpus (`test-rtc-race`,
   `test-audio-stability-race`, `test-sessions-race`), `lint-cross`,
   `lint-darwin-cgo`, the WebMCP Chrome and macOS audio release jobs.
