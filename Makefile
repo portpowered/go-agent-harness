@@ -16,6 +16,17 @@ LINT_LIBRARY_MODULES := $(filter-out agent-cli,$(LINT_MODULES))
 LINT_SELECTED_MODULES = $(if $(filter agent-cli,$(LINT_SHARD)),agent-cli,$(if $(filter libraries,$(LINT_SHARD)),$(LINT_LIBRARY_MODULES),$(LINT_MODULES)))
 # Operating systems cross-linted by `make lint-cross` with cgo disabled.
 LINT_CROSS_GOOS ?= windows darwin
+# Extra build tags appended to the configured ones for one cross GOOS.
+# nomicrophone on darwin with cgo disabled adds the files that only build
+# with the tag and removes none: every `!nomicrophone` darwin file also
+# needs cgo.
+LINT_CROSS_TAGS_darwin := nomicrophone
+# Modules `make lint` and `make lint-cross` run at once. Each golangci-lint
+# run is itself parallel, but small modules are dominated by per-run startup
+# and package loading, so overlapping them shortens the run.
+LINT_JOBS ?= 4
+# Parallel module runs share the analysis cache; skip the start-up lock.
+LINT_RUN_FLAGS := --allow-parallel-runners
 BUILD_CGO_ENABLED ?= 0
 AGENT_CLI_OUTPUT ?= agent-cli/bin/yui
 AGENT_AUDIO_DEVICE_SERVER_OUTPUT ?= agent-cli/bin/audio-device-server
@@ -107,7 +118,7 @@ endef
 
 .DEFAULT_GOAL := help
 .PHONY: architecture-check size-check architecture-size-check test-architecture-gate verify-architecture embed-check
-.PHONY: help deps fmt fmt-fix wire-check typecheck vet lint lint-wireinject lint-cross lint-darwin-cgo staticcheck test test-module coverage-module test-tools test-audio-stability test-audio-stability-race test-audio-device-server-integration test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage coverage-ci-agent-cli coverage-agent-cli-shard coverage-ci-libraries coverage-gate coverage-registration coverage-changed check-ci-test-partition prepush validate ci release-check release-tags release-push release-dry-run release clean test-budget test-hermetic
+.PHONY: help deps fmt fmt-fix wire-check typecheck vet lint lint-module lint-wireinject lint-cross lint-cross-module lint-darwin-cgo staticcheck test test-module coverage-module test-tools test-audio-stability test-audio-stability-race test-audio-device-server-integration test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage coverage-ci-agent-cli coverage-agent-cli-shard coverage-ci-libraries coverage-gate coverage-registration coverage-changed check-ci-test-partition prepush validate ci release-check release-tags release-push release-dry-run release clean test-budget test-hermetic
 
 help: ## Show available targets.
 	@awk 'BEGIN {FS = ":.*## "; printf "Available targets:\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -162,13 +173,16 @@ vet: ## Run go vet across all workspace modules.
 	done
 
 # golangci_resolve resolves the pinned golangci-lint into $$analyzer, or exits
-# early when SKIP_LINT=1 outside CI.
+# early when SKIP_LINT=1 outside CI. A parent lint target exports the
+# resolved path as LINT_ANALYZER so per-module sub-makes skip resolution.
 golangci_resolve = if [ "$${SKIP_LINT:-0}" = "1" ]; then \
 		case "$${CI:-}" in true|1) echo "SKIP_LINT is not allowed in CI." >&2; exit 1 ;; esac; \
 		echo "==> lint skipped via SKIP_LINT=1"; \
 		exit 0; \
 	fi; \
-	if ! analyzer="$$(cd tools/analyzergate && GOWORK=off $(GO) run . \
+	if [ -n "$${LINT_ANALYZER:-}" ]; then \
+		analyzer="$$LINT_ANALYZER"; \
+	elif ! analyzer="$$(cd tools/analyzergate && GOWORK=off $(GO) run . \
 		--tool golangci-lint \
 		--expected-version "$(GOLANGCI_LINT_VERSION)" \
 		--candidate "$(GOLANGCI_LINT)" \
@@ -179,24 +193,31 @@ golangci_resolve = if [ "$${SKIP_LINT:-0}" = "1" ]; then \
 		echo "golangci-lint resolution failed for pinned version $(GOLANGCI_LINT_VERSION)." >&2; \
 		echo "Install with: $(GOLANGCI_LINT_INSTALL)" >&2; \
 		exit 1; \
-	fi; \
-	echo "==> lint using $$analyzer (pinned $(GOLANGCI_LINT_VERSION))"
+	else \
+		echo "==> lint using $$analyzer (pinned $(GOLANGCI_LINT_VERSION))"; \
+	fi
 # golangci_run runs the working-tree lint script for $$module.
 golangci_run = GOWORK=off scripts/golangci-lint-working-tree.sh --analyzer "$$analyzer" --module "$$module" --repo "$(CURDIR)"
 # golangci_tagged_dirs prints ./dir for each package directory in the current
 # module holding a Go file whose build constraint matches the ERE $(1).
 golangci_tagged_dirs = { git grep -l -E '^//go:build .*$(1)' -- '*.go' ':!:**/testdata/**' || true; } | sed -E 's\#(^|/)[^/]*$$\#\#; s\#^\#./\#' | sort -u
 
-lint: ## Run golangci-lint (default and opt-in test build tags, then wireinject) on LINT_SHARD modules.
+lint: ## Run golangci-lint (default and opt-in test build tags, then wireinject) on LINT_SHARD modules, LINT_JOBS at once.
 	@set -euo pipefail; \
 	$(golangci_resolve); \
-	for module in $(LINT_SELECTED_MODULES); do \
-		echo "==> lint $$module (hard limits, all code: $(LINT_CONFIG))"; \
-		$(golangci_run) --all-code --config "$(LINT_CONFIG)" -- ./...; \
-		echo "==> lint $$module (new code since $(LINT_BASE): $(LINT_NEW_CONFIG))"; \
-		$(golangci_run) --config "$(LINT_NEW_CONFIG)" --base "$(LINT_BASE)" -- ./...; \
-	done; \
+	export LINT_ANALYZER="$$analyzer"; \
+	bash scripts/run-bounded.sh --jobs $(LINT_JOBS) -- $(foreach module,$(LINT_SELECTED_MODULES),'lint $(module)::$(MAKE) --no-print-directory lint-module LINT_MODULE=$(module)'); \
 	$(MAKE) --no-print-directory lint-wireinject
+
+# lint-module runs both lint passes for one LINT_MODULE (used by `make lint`).
+lint-module:
+	@set -euo pipefail; \
+	$(golangci_resolve); \
+	module="$(LINT_MODULE)"; \
+	echo "==> lint $$module (hard limits, all code: $(LINT_CONFIG))"; \
+	$(golangci_run) --all-code --config "$(LINT_CONFIG)" -- $(LINT_RUN_FLAGS) ./...; \
+	echo "==> lint $$module (new code since $(LINT_BASE): $(LINT_NEW_CONFIG))"; \
+	$(golangci_run) --config "$(LINT_NEW_CONFIG)" --base "$(LINT_BASE)" -- $(LINT_RUN_FLAGS) ./...
 
 # Wire injector files (//go:build wireinject) replace their package's
 # !wireinject files, so they load in a separate pass restricted to the
@@ -213,15 +234,20 @@ lint-wireinject: ## Run golangci-lint on Wire injector (wireinject) packages of 
 		$(golangci_run) --config "$(LINT_NEW_CONFIG)" --base "$(LINT_BASE)" -- --build-tags wireinject $$packages; \
 	done
 
-lint-cross: ## Run the hard golangci-lint pass for each LINT_CROSS_GOOS (cgo disabled) on LINT_SHARD modules.
+lint-cross: ## Run the hard golangci-lint pass for each LINT_CROSS_GOOS (cgo disabled) on LINT_SHARD modules, LINT_JOBS at once.
 	@set -euo pipefail; \
 	$(golangci_resolve); \
-	for goos in $(LINT_CROSS_GOOS); do \
-		for module in $(LINT_SELECTED_MODULES); do \
-			echo "==> lint $$module GOOS=$$goos CGO_ENABLED=0 (hard limits, all code: $(LINT_CONFIG))"; \
-			GOOS="$$goos" CGO_ENABLED=0 $(golangci_run) --all-code --config "$(LINT_CONFIG)" -- ./...; \
-		done; \
-	done
+	export LINT_ANALYZER="$$analyzer"; \
+	bash scripts/run-bounded.sh --jobs $(LINT_JOBS) -- $(foreach goos,$(LINT_CROSS_GOOS),$(foreach module,$(LINT_SELECTED_MODULES),'lint $(module) GOOS=$(goos)::$(MAKE) --no-print-directory lint-cross-module LINT_MODULE=$(module) LINT_CROSS_TARGET=$(goos)'))
+
+# lint-cross-module runs the hard pass for one LINT_MODULE and LINT_CROSS_TARGET
+# GOOS with cgo disabled (used by `make lint-cross`).
+lint-cross-module:
+	@set -euo pipefail; \
+	$(golangci_resolve); \
+	module="$(LINT_MODULE)"; \
+	echo "==> lint $$module GOOS=$(LINT_CROSS_TARGET) CGO_ENABLED=0$(if $(LINT_CROSS_TAGS_$(LINT_CROSS_TARGET)), +tags $(LINT_CROSS_TAGS_$(LINT_CROSS_TARGET))) (hard limits, all code: $(LINT_CONFIG))"; \
+	GOOS="$(LINT_CROSS_TARGET)" CGO_ENABLED=0 $(golangci_run) --all-code --config "$(LINT_CONFIG)" -- $(LINT_RUN_FLAGS) $(if $(LINT_CROSS_TAGS_$(LINT_CROSS_TARGET)),--build-tags $(LINT_CROSS_TAGS_$(LINT_CROSS_TARGET))) ./...
 
 lint-darwin-cgo: ## On macOS, run the hard golangci-lint pass with cgo on packages holding cgo-constrained files.
 	@set -euo pipefail; \
