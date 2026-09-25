@@ -94,31 +94,48 @@ func (e SessionIngressError) Error() string { return string(e) }
 // because the session runner stopped and will never drain the ingress again.
 const ErrSessionClosed SessionIngressError = "session runner stopped; input was not admitted"
 
-// sessionIngressStop is closed once when the session runner returns, so
-// admissions parked on a full ingress are released instead of waiting for a
-// consumer that no longer exists.
+// sessionIngressStop is closed when the session runner returns, so admissions
+// parked on a full ingress are released instead of waiting for a consumer that
+// no longer exists. A later runSession on the same runner re-arms it.
 type sessionIngressStop struct {
-	init, closeOnce sync.Once
-	ch              chan struct{}
+	mu     sync.Mutex
+	ch     chan struct{}
+	closed bool
 }
 
 func (s *sessionIngressStop) done() <-chan struct{} {
-	s.init.Do(func() { s.ch = make(chan struct{}) })
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.ch == nil {
+		s.ch = make(chan struct{})
+	}
 	return s.ch
 }
 
+func (s *sessionIngressStop) start() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		s.ch, s.closed = make(chan struct{}), false
+	}
+}
+
 func (s *sessionIngressStop) stop() {
-	s.done()
-	s.closeOnce.Do(func() { close(s.ch) })
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.ch == nil {
+		s.ch = make(chan struct{})
+	}
+	if !s.closed {
+		close(s.ch)
+		s.closed = true
+	}
 }
 
 func (s *sessionIngressStop) stopped() bool {
-	select {
-	case <-s.done():
-		return true
-	default:
-		return false
-	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.closed
 }
 
 // EnqueueSessionEvent queues a control-plane event in the same ordered ingress

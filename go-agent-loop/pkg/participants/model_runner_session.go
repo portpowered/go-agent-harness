@@ -8,6 +8,7 @@ import (
 )
 
 func (r *ModelRunner) runSession(ctx context.Context) (err error) {
+	r.ingressStop.start()
 	defer r.ingressStop.stop()
 	session, err := r.sessionInferencer.ConnectSession(ctx)
 	if err != nil {

@@ -153,6 +153,10 @@ func TestSessionModelRunnerStopReleasesParkedWaitingAdmissions(t *testing.T) {
 		if !errors.Is(err, ErrSessionClosed) {
 			t.Fatalf("waiting audio admission after runner stop = %v, want ErrSessionClosed", err)
 		}
+		runner.ingressStop.start()
+		if runner.ingressStop.stopped() {
+			t.Fatal("a new runSession did not re-arm waiting admission")
+		}
 	})
 }
 
