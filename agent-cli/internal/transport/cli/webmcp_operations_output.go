@@ -2,393 +2,31 @@ package cli
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"net/url"
-	"sort"
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/direct"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/operations"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/production/normalize"
 )
 
-// Display bounds for direct-command output text fields.
 const (
-	directMaxTextLength      = 160
-	directMaxProtocolText    = 80
-	directMaxLabelText       = 40
-	directMaxDescriptionText = 500
-	directMaxURLText         = 240
+	displayUnknown = "unknown"
+	jsonNullText   = "null"
 )
 
-// WebMCPDirectInvocationReceipt is the bounded stderr handoff emitted once a
-// browser invocation has been dispatched. It intentionally contains no page
-// input/output, schema, endpoint, or credential data.
-type WebMCPDirectInvocationReceipt struct {
-	Version      string `json:"version"`
-	InvocationID string `json:"invocation_id"`
-	ToolRef      string `json:"tool_ref"`
-	State        string `json:"state"`
-}
-
-func writeWebMCPDirectInvocationReceipt(out io.Writer, result webmcp.InvokeResult, toolRef webmcp.ToolRef) (webmcp.InvocationID, error) {
-	invocationID := result.BrowserInvocationID
-	if invocationID == "" {
-		invocationID = result.InvocationID
-	}
-	if invocationID == "" {
-		return "", directInvocationReceiptError(invocationID, toolRef, errors.New("browser returned no invocation ID"))
-	}
-	if out == nil {
-		return "", directInvocationReceiptError(invocationID, toolRef, errors.New("stderr writer is unavailable"))
-	}
-	receipt, err := json.Marshal(WebMCPDirectInvocationReceipt{
-		Version:      webmcpDirectInvocationReceiptVersion,
-		InvocationID: string(invocationID),
-		ToolRef:      string(toolRef),
-		State:        string(webmcp.InvocationDispatched),
-	})
-	if err != nil {
-		return "", directInvocationReceiptError(invocationID, toolRef, err)
-	}
-	if len(receipt)+1 > webmcpDirectInvocationReceiptMaxBytes {
-		return "", directInvocationReceiptError(invocationID, toolRef, errors.New("receipt exceeds the bounded size"))
-	}
-	receipt = append(receipt, '\n')
-	for len(receipt) > 0 {
-		written, writeErr := out.Write(receipt)
-		if written > 0 {
-			receipt = receipt[written:]
-		}
-		if writeErr != nil {
-			return "", directInvocationReceiptError(invocationID, toolRef, writeErr)
-		}
-		if written == 0 {
-			return "", directInvocationReceiptError(invocationID, toolRef, io.ErrShortWrite)
-		}
-	}
-	if flusher, ok := out.(interface{ Flush() error }); ok {
-		if err := flusher.Flush(); err != nil {
-			return "", directInvocationReceiptError(invocationID, toolRef, err)
-		}
-	}
-	return invocationID, nil
-}
-
-func directInvocationReceiptError(invocationID webmcp.InvocationID, toolRef webmcp.ToolRef, cause error) error {
-	err := webmcp.NewClassifiedError(webmcp.ErrorInvocationFailed, "the WebMCP dispatch receipt could not be written", map[string]any{
-		"invocation_id":       string(invocationID),
-		"tool_ref":            string(toolRef),
-		"phase":               "dispatch_receipt",
-		"side_effect_unknown": true,
-	})
-	err.Cause = cause
-	return err
-}
-
-func (c *WebMCPOperationsCommand) contextWithCatalog(ctx context.Context, broker webmcp.Broker, page webmcp.PageContext, refresh bool) (WebMCPDirectContext, error) {
-	if refresh {
-		refreshed, err := selectedDirectContext(ctx, broker, true)
-		if err != nil {
-			return WebMCPDirectContext{}, err
-		}
-		page = refreshed
-	}
-	snapshot, err := broker.ListTools(ctx, webmcp.ListToolsOptions{IncludeSchemas: false})
-	if err != nil {
-		return WebMCPDirectContext{}, err
-	}
-	if snapshot.Context.Key.BrowserID != "" {
-		page = snapshot.Context
-	}
-	return directContextDataWithCatalog(page, snapshot), nil
-}
-
-func directContextData(page webmcp.PageContext) WebMCPDirectContext {
-	return WebMCPDirectContext{
-		BrowserID:  string(page.Key.BrowserID),
-		TargetID:   string(page.Key.TargetID),
-		Title:      normalize.BoundedText(page.Title, directMaxTextLength),
-		URL:        redactedDirectPageURL(page.URL),
-		Origin:     normalize.RedactedOrigin(page.Origin),
-		Generation: page.Generation,
-		Connected:  page.Connected,
-		Ready:      page.Ready,
-	}
-}
-
-func directContextDataWithCatalog(page webmcp.PageContext, snapshot webmcp.ToolCatalogSnapshot) WebMCPDirectContext {
-	data := directContextData(page)
-	data.CatalogGeneration = snapshot.Generation
-	data.ToolCount = len(snapshot.Tools)
-	data.CatalogReady = snapshot.Context.Ready && snapshot.Context.Connected
-	if data.BrowserID == "" {
-		data.BrowserID = string(snapshot.Context.Key.BrowserID)
-	}
-	if data.TargetID == "" {
-		data.TargetID = string(snapshot.Context.Key.TargetID)
-	}
-	if data.Generation == 0 {
-		data.Generation = snapshot.Context.Generation
-	}
-	if data.Origin == "" {
-		data.Origin = normalize.RedactedOrigin(snapshot.Context.Origin)
-	}
-	return data
-}
-
-func directTabFromTarget(target webmcp.Target) WebMCPDirectTab {
-	typeName := target.Type
-	if typeName == "" {
-		typeName = "page"
-	}
-	return WebMCPDirectTab{
-		BrowserID:         string(target.BrowserID),
-		TargetID:          string(target.ID),
-		Type:              normalize.BoundedText(typeName, directMaxLabelText),
-		Title:             normalize.BoundedText(target.Title, directMaxTextLength),
-		Origin:            normalize.RedactedOrigin(target.Origin),
-		Eligible:          target.Eligible,
-		EligibilityReason: normalize.BoundedText(target.EligibilityReason, directMaxTextLength),
-		Attached:          target.Attached,
-	}
-}
-
-func directToolsData(page webmcp.PageContext, snapshot webmcp.ToolCatalogSnapshot, includeSchemas bool) WebMCPDirectToolsData {
-	contextValue := snapshot.Context
-	if contextValue.Key.BrowserID == "" {
-		contextValue = page
-	}
-	tools := make([]WebMCPDirectTool, 0, len(snapshot.Tools))
-	for _, descriptor := range snapshot.Tools {
-		tools = append(tools, directToolFromDescriptor(descriptor, includeSchemas))
-	}
-	sort.SliceStable(tools, func(i, j int) bool {
-		if tools[i].Frame.ID != tools[j].Frame.ID {
-			return tools[i].Frame.ID < tools[j].Frame.ID
-		}
-		return tools[i].Name < tools[j].Name
-	})
-	return WebMCPDirectToolsData{
-		BrowserID:  string(contextValue.Key.BrowserID),
-		TargetID:   string(contextValue.Key.TargetID),
-		Generation: snapshot.Generation,
-		Tools:      tools,
-	}
-}
-
-func directToolFromDescriptor(descriptor webmcp.ToolDescriptor, includeSchemas bool) WebMCPDirectTool {
-	schema := json.RawMessage(nil)
-	if includeSchemas {
-		schema = append(json.RawMessage(nil), descriptor.InputSchema...)
-		if len(bytes.TrimSpace(schema)) == 0 || !json.Valid(schema) {
-			schema = json.RawMessage("null")
-		}
-	}
-	annotations := make(map[string]any)
-	if descriptor.Annotations.ReadOnly != nil {
-		annotations["read_only"] = *descriptor.Annotations.ReadOnly
-	}
-	if descriptor.Annotations.UntrustedContent != nil {
-		annotations["untrusted_content"] = *descriptor.Annotations.UntrustedContent
-	}
-	if descriptor.Annotations.AutoSubmit != nil {
-		annotations["autosubmit"] = *descriptor.Annotations.AutoSubmit
-	}
-	return WebMCPDirectTool{
-		Ref:         string(descriptor.Ref),
-		Name:        normalize.BoundedText(descriptor.Name, directMaxTextLength),
-		Description: normalize.BoundedText(descriptor.Description, directMaxDescriptionText),
-		InputSchema: schema,
-		Annotations: annotations,
-		Frame:       WebMCPDirectFrame{ID: string(descriptor.FrameID), Origin: normalize.RedactedOrigin(descriptor.Origin)},
-		Generation:  descriptor.Generation,
-	}
-}
-
-func resolveDirectInvocation(args []string, values *webmcpDirectFlags, broker webmcp.Broker, ctx context.Context) (webmcp.ToolRef, json.RawMessage, error) {
-	if values == nil {
-		return "", nil, errors.New("invoke flags are required")
-	}
-	if values.toolRef != "" && len(args) > 0 {
-		return "", nil, direct.InvalidInputError("--tool-ref cannot be combined with a positional tool name", "/tool_ref")
-	}
-	if len(args) > 1 && values.inputJSON != "" {
-		return "", nil, direct.InvalidInputError("--input-json cannot be combined with key=value arguments", "/input_json")
-	}
-	input := json.RawMessage(values.inputJSON)
-	if len(bytes.TrimSpace(input)) == 0 {
-		input = json.RawMessage(`{}`)
-	}
-	// Keep malformed input opaque until the broker has resolved the exact
-	// descriptor. The broker owns page-schema validation and can therefore
-	// include the selected tool's complete schema in its retryable error.
-	// Performing json.Valid here would lose that descriptor context and would
-	// also make positional tool names behave differently from --tool-ref.
-	if values.toolRef != "" {
-		return webmcp.ToolRef(values.toolRef), append(json.RawMessage(nil), input...), nil
-	}
-	if len(args) == 0 {
-		return "", nil, webmcp.NewClassifiedError(webmcp.ErrorInvalidToolInput, "a tool reference or unique tool name is required", map[string]any{
-			"issues": []webmcp.ToolResultIssue{{Path: "/tool_ref", Code: "required"}},
-		})
-	}
-	toolName := args[0]
-	keyValues, err := parseKeyValueArgs(args[1:])
-	if err != nil {
-		return "", nil, err
-	}
-	if len(args) > 1 {
-		encoded, err := json.Marshal(keyValues)
-		if err != nil {
-			return "", nil, webmcp.NewClassifiedError(webmcp.ErrorInvalidToolInput, "key=value arguments could not be encoded as JSON", map[string]any{
-				"issues": []webmcp.ToolResultIssue{{Path: "/arguments", Code: "invalid_json"}},
-			})
-		}
-		input = encoded
-	}
-	snapshot, err := broker.ListTools(ctx, webmcp.ListToolsOptions{IncludeSchemas: false})
-	if err != nil {
-		return "", nil, err
-	}
-	var match *webmcp.ToolDescriptor
-	for index := range snapshot.Tools {
-		if snapshot.Tools[index].Name != toolName {
-			continue
-		}
-		if match != nil {
-			return "", nil, webmcp.NewClassifiedError(webmcp.ErrorInvalidToolInput, "the positional tool name is ambiguous; use --tool-ref", map[string]any{
-				"issues": []webmcp.ToolResultIssue{{Path: "/tool_name", Code: "ambiguous"}},
-			})
-		}
-		selected := snapshot.Tools[index]
-		match = &selected
-	}
-	if match == nil {
-		return "", nil, webmcp.NewClassifiedError(webmcp.ErrorInvalidToolInput, "the positional tool name was not found in the current catalog", map[string]any{
-			"issues": []webmcp.ToolResultIssue{{Path: "/tool_name", Code: "unknown_tool"}},
-		})
-	}
-	return match.Ref, append(json.RawMessage(nil), input...), nil
-}
-
-type directInvocationWaiter interface {
-	WaitInvocation(context.Context, webmcp.InvocationID) (webmcp.InvokeResult, error)
-}
-
-// waitDirectInvocation adapts the broker's non-blocking Invoke contract to the
-// CLI contract: a direct command returns only after a live broker has emitted
-// the correlated terminal result. Keeping this as an optional seam preserves
-// compatibility with small command fakes whose Invoke result is already
-// terminal.
-func waitDirectInvocation(ctx context.Context, broker webmcp.Broker, result webmcp.InvokeResult) (webmcp.InvokeResult, error) {
-	if broker == nil || result.InvocationID == "" || result.ErrorCode != "" || directInvocationTerminal(result.State) {
-		return result, nil
-	}
-	waiter, ok := broker.(directInvocationWaiter)
-	if !ok {
-		return result, nil
-	}
-	return waiter.WaitInvocation(ctx, result.InvocationID)
-}
-
-func directInvocationTerminal(state webmcp.InvocationState) bool {
-	switch state {
-	case webmcp.InvocationCompleted, webmcp.InvocationError, webmcp.InvocationCanceled, webmcp.InvocationTimedOut, webmcp.InvocationOrphaned, webmcp.InvocationPolicyDenied:
-		return true
-	default:
-		return false
-	}
-}
-
-func directInvocationResultError(result webmcp.InvokeResult, toolRef webmcp.ToolRef) error {
-	code := webmcp.ErrorCode(result.ErrorCode)
-	if !webmcp.IsKnownErrorCode(code) {
-		switch result.State {
-		case webmcp.InvocationCanceled:
-			code = webmcp.ErrorInvocationCanceled
-		case webmcp.InvocationTimedOut:
-			code = webmcp.ErrorInvocationTimedOut
-		case webmcp.InvocationOrphaned:
-			code = webmcp.ErrorInvocationOrphaned
-		default:
-			code = webmcp.ErrorInvocationFailed
-		}
-	}
-	details := make(map[string]any, len(result.ErrorDetails)+3)
-	for key, value := range result.ErrorDetails {
-		details[key] = value
-	}
-	if len(details) == 0 {
-		details = map[string]any{"invocation_id": string(result.InvocationID), "tool_ref": string(toolRef), "phase": "invoke"}
-	}
-	retryable, _ := details["safe_retryable"].(bool)
-	delete(details, "safe_retryable")
-	if result.BrowserInvocationID != "" {
-		details["invocation_id"] = string(result.BrowserInvocationID)
-	}
-	classified := webmcp.NewClassifiedError(code, "the WebMCP invocation could not be completed", details)
-	classified.Retryable = retryable
-	return classified
-}
-
-func runDirectWatchStream(ctx context.Context, stream <-chan webmcp.BrokerEvent, once bool) (WebMCPDirectWatchData, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	data := WebMCPDirectWatchData{Status: webmcpDirectWatchStatusEnded, Events: []WebMCPDirectEvent{}}
-	for {
-		if ctx.Err() != nil {
-			data.Status = webmcpDirectWatchStatusCanceled
-			return data, nil
-		}
-		select {
-		case <-ctx.Done():
-			data.Status = webmcpDirectWatchStatusCanceled
-			return data, nil
-		case event, ok := <-stream:
-			if !ok {
-				if ctx.Err() != nil {
-					data.Status = webmcpDirectWatchStatusCanceled
-				}
-				return data, nil
-			}
-			data.Events = append(data.Events, directEventFrom(event))
-			if event.Type == webmcp.BrokerEventSessionClosed &&
-				(event.Reason == webmcp.BrokerWatchBufferFullReason || event.Reason == webmcp.BrowserEventBufferFullReason) {
-				data.Status = webmcpDirectWatchStatusFailed
-				return data, nil
-			}
-			if once {
-				data.Status = webmcpDirectWatchStatusOnce
-				return data, nil
-			}
-		}
-	}
-}
-
-func directEventFrom(event webmcp.BrokerEvent) WebMCPDirectEvent {
-	return WebMCPDirectEvent{
-		Version:      event.Version,
-		Type:         string(event.Type),
-		Sequence:     event.Sequence,
-		BrowserID:    string(event.BrowserID),
-		TargetID:     string(event.TargetID),
-		Generation:   event.Generation,
-		InvocationID: string(event.InvocationID),
-		ToolRef:      string(event.ToolRef),
-		State:        string(event.State),
-		Reason:       normalize.BoundedText(event.Reason, directMaxTextLength),
-	}
+// errDirectOutputWriterRequired reports a command without an output writer.
+func errDirectOutputWriterRequired() error {
+	return errors.New("WebMCP command output writer is required")
 }
 
 func writeWebMCPDirectJSON(out io.Writer, data any, operationErr error, fallback webmcp.ErrorCode) error {
 	if out == nil {
-		return errors.New("WebMCP command output writer is required")
+		return errDirectOutputWriterRequired()
 	}
 	var encoded []byte
 	var err error
@@ -411,123 +49,134 @@ func writeWebMCPDirectJSON(out io.Writer, data any, operationErr error, fallback
 	return nil
 }
 
-func writeWebMCPDirectHuman(out io.Writer, kind string, data any, operationErr error, fallback webmcp.ErrorCode) error {
+func writeWebMCPDirectHuman(out io.Writer, _ string, data any, operationErr error, fallback webmcp.ErrorCode) error {
 	if out == nil {
-		return errors.New("WebMCP command output writer is required")
+		return errDirectOutputWriterRequired()
 	}
 	if operationErr != nil {
-		resultError := webmcpDirectErrorFor(operationErr, fallback)
-		_, err := fmt.Fprintf(out, "Error: %s — %s", resultError.Code, resultError.Message)
-		if err == nil {
-			if invocationID, ok := resultError.Details["invocation_id"].(string); ok && invocationID != "" {
-				_, err = fmt.Fprintf(out, " invocation_id=%s", normalize.BoundedText(invocationID, directMaxTextLength))
-			}
-		}
-		if err == nil {
-			if cancelSource, ok := resultError.Details["cancel_source"].(string); ok && cancelSource != "" {
-				_, err = fmt.Fprintf(out, " cancel_source=%s", normalize.BoundedText(cancelSource, directMaxLabelText))
-			}
-		}
-		if err == nil && resultError.Details["side_effect_unknown"] == true {
-			_, err = io.WriteString(out, " side_effect_unknown=true; rollback and retry safety are unknown")
-		}
-		if err == nil {
-			err = writeDirectAmbiguityDetails(out, resultError)
-		}
-		if err == nil {
-			_, err = fmt.Fprintln(out)
-		}
-		if err != nil {
+		if err := writeDirectHumanError(out, webmcpDirectErrorFor(operationErr, fallback)); err != nil {
 			return fmt.Errorf("write WebMCP command error: %w", err)
 		}
 		return nil
 	}
-
-	var err error
-	switch value := data.(type) {
-	case WebMCPDirectBrowsersData:
-		_, err = io.WriteString(out, "Browsers:\n")
-		for _, browser := range value.Browsers {
-			if err != nil {
-				break
-			}
-			_, err = fmt.Fprintf(out, "  %s  %s  source=%s scope=%s", browser.ID, displayDoctorValue(browser.Product, "unknown"), browser.Source, browser.Scope)
-			if browser.Endpoint != "" {
-				if err == nil {
-					_, err = fmt.Fprintf(out, " endpoint=%s", browser.Endpoint)
-				}
-			}
-			if err == nil {
-				_, err = fmt.Fprintln(out)
-			}
-		}
-	case WebMCPDirectTabsData:
-		_, err = io.WriteString(out, "Tabs:\n")
-		for _, tab := range value.Tabs {
-			if err != nil {
-				break
-			}
-			marker := " "
-			if tab.Selected {
-				marker = "*"
-			}
-			_, err = fmt.Fprintf(out, "  %s %s/%s  %q  origin=%s eligible=%t connected=%t", marker, tab.BrowserID, tab.TargetID, tab.Title, displayDoctorValue(tab.Origin, "unknown"), tab.Eligible, tab.Attached)
-			if tab.Generation > 0 {
-				if err == nil {
-					_, err = fmt.Fprintf(out, " generation=%d", tab.Generation)
-				}
-			}
-			if tab.ToolCount != nil && err == nil {
-				_, err = fmt.Fprintf(out, " tools=%d", *tab.ToolCount)
-			}
-			if err == nil {
-				_, err = fmt.Fprintln(out)
-			}
-		}
-	case WebMCPDirectContext:
-		_, err = fmt.Fprintf(out, "Context: %s/%s\n  Title:      %q\n  Origin:     %s\n  URL:        %s\n  Generation: %d\n  Connected:  %t\n  Ready:      %t\n  Catalog:    %t (%d tools)\n", value.BrowserID, value.TargetID, value.Title, displayDoctorValue(value.Origin, "unknown"), displayDoctorValue(value.URL, "unknown"), value.Generation, value.Connected, value.Ready, value.CatalogReady, value.ToolCount)
-	case WebMCPDirectToolsData:
-		_, err = fmt.Fprintf(out, "Tools: %s/%s generation=%d\n", value.BrowserID, value.TargetID, value.Generation)
-		for _, tool := range value.Tools {
-			if err != nil {
-				break
-			}
-			_, err = fmt.Fprintf(out, "  %s  %s  frame=%s origin=%s\n", tool.Ref, tool.Name, tool.Frame.ID, displayDoctorValue(tool.Frame.Origin, "unknown"))
-		}
-	case WebMCPDirectInvocation:
-		_, err = fmt.Fprintf(out, "Invocation: %s status=%s tool_ref=%s\nOutput: %s\n", value.InvocationID, value.Status, value.ToolRef, compactDirectJSON(value.Output))
-	case WebMCPDirectCancelData:
-		_, err = fmt.Fprintf(out, "Invocation %s: %s\n", value.InvocationID, value.Status)
-	case WebMCPDirectWatchData:
-		_, err = fmt.Fprintf(out, "Watch: %s (%d events)\n", value.Status, len(value.Events))
-		for _, event := range value.Events {
-			if err != nil {
-				break
-			}
-			_, err = fmt.Fprintf(out, "  #%d %s", event.Sequence, event.Type)
-			if event.BrowserID != "" || event.TargetID != "" {
-				if err == nil {
-					_, err = fmt.Fprintf(out, " %s/%s", event.BrowserID, event.TargetID)
-				}
-			}
-			if event.Reason != "" && err == nil {
-				_, err = fmt.Fprintf(out, " (%s)", event.Reason)
-			}
-			if err == nil {
-				_, err = fmt.Fprintln(out)
-			}
-		}
-	default:
-		var encoded []byte
-		encoded, err = json.MarshalIndent(data, "", "  ")
-		if err == nil {
-			_, err = fmt.Fprintln(out, string(encoded))
-		}
-	}
-	if err != nil {
+	if err := writeDirectHumanData(out, data); err != nil {
 		return fmt.Errorf("write WebMCP command result: %w", err)
 	}
 	return nil
+}
+
+// humanWriter writes a sequence of fragments and remembers the first
+// failure, after which every further write is skipped.
+type humanWriter struct {
+	out io.Writer
+	err error
+}
+
+func (w *humanWriter) printf(format string, args ...any) {
+	if w.err == nil {
+		_, w.err = fmt.Fprintf(w.out, format, args...)
+	}
+}
+
+func (w *humanWriter) printfIf(condition bool, format string, args ...any) {
+	if condition {
+		w.printf(format, args...)
+	}
+}
+
+func writeDirectHumanError(out io.Writer, resultError webmcp.ToolResultError) error {
+	w := &humanWriter{out: out}
+	w.printf("Error: %s — %s", resultError.Code, resultError.Message)
+	if invocationID, ok := resultError.Details["invocation_id"].(string); ok && invocationID != "" {
+		w.printf(" invocation_id=%s", normalize.BoundedText(invocationID, operations.MaxTextLength))
+	}
+	if cancelSource, ok := resultError.Details["cancel_source"].(string); ok && cancelSource != "" {
+		w.printf(" cancel_source=%s", normalize.BoundedText(cancelSource, operations.MaxLabelText))
+	}
+	w.printfIf(resultError.Details["side_effect_unknown"] == true, " side_effect_unknown=true; rollback and retry safety are unknown")
+	if w.err == nil {
+		w.err = writeDirectAmbiguityDetails(out, resultError)
+	}
+	w.printf("\n")
+	return w.err
+}
+
+func writeDirectHumanData(out io.Writer, data any) error {
+	switch value := data.(type) {
+	case WebMCPDirectBrowsersData:
+		return writeDirectHumanBrowsers(out, value)
+	case WebMCPDirectTabsData:
+		return writeDirectHumanTabs(out, value)
+	case WebMCPDirectContext:
+		_, err := fmt.Fprintf(out, "Context: %s/%s\n  Title:      %q\n  Origin:     %s\n  URL:        %s\n  Generation: %d\n  Connected:  %t\n  Ready:      %t\n  Catalog:    %t (%d tools)\n", value.BrowserID, value.TargetID, value.Title, displayDoctorValue(value.Origin, displayUnknown), displayDoctorValue(value.URL, displayUnknown), value.Generation, value.Connected, value.Ready, value.CatalogReady, value.ToolCount)
+		return err
+	case WebMCPDirectToolsData:
+		return writeDirectHumanTools(out, value)
+	case WebMCPDirectInvocation:
+		_, err := fmt.Fprintf(out, "Invocation: %s status=%s tool_ref=%s\nOutput: %s\n", value.InvocationID, value.Status, value.ToolRef, compactDirectJSON(value.Output))
+		return err
+	case WebMCPDirectCancelData:
+		_, err := fmt.Fprintf(out, "Invocation %s: %s\n", value.InvocationID, value.Status)
+		return err
+	case WebMCPDirectWatchData:
+		return writeDirectHumanWatch(out, value)
+	default:
+		encoded, err := json.MarshalIndent(data, "", "  ")
+		if err == nil {
+			_, err = fmt.Fprintln(out, string(encoded))
+		}
+		return err
+	}
+}
+
+func writeDirectHumanBrowsers(out io.Writer, value WebMCPDirectBrowsersData) error {
+	w := &humanWriter{out: out}
+	w.printf("Browsers:\n")
+	for _, browser := range value.Browsers {
+		w.printf("  %s  %s  source=%s scope=%s", browser.ID, displayDoctorValue(browser.Product, displayUnknown), browser.Source, browser.Scope)
+		w.printfIf(browser.Endpoint != "", " endpoint=%s", browser.Endpoint)
+		w.printf("\n")
+	}
+	return w.err
+}
+
+func writeDirectHumanTabs(out io.Writer, value WebMCPDirectTabsData) error {
+	w := &humanWriter{out: out}
+	w.printf("Tabs:\n")
+	for _, tab := range value.Tabs {
+		marker := " "
+		if tab.Selected {
+			marker = "*"
+		}
+		w.printf("  %s %s/%s  %q  origin=%s eligible=%t connected=%t", marker, tab.BrowserID, tab.TargetID, tab.Title, displayDoctorValue(tab.Origin, displayUnknown), tab.Eligible, tab.Attached)
+		w.printfIf(tab.Generation > 0, " generation=%d", tab.Generation)
+		if tab.ToolCount != nil {
+			w.printf(" tools=%d", *tab.ToolCount)
+		}
+		w.printf("\n")
+	}
+	return w.err
+}
+
+func writeDirectHumanTools(out io.Writer, value WebMCPDirectToolsData) error {
+	w := &humanWriter{out: out}
+	w.printf("Tools: %s/%s generation=%d\n", value.BrowserID, value.TargetID, value.Generation)
+	for _, tool := range value.Tools {
+		w.printf("  %s  %s  frame=%s origin=%s\n", tool.Ref, tool.Name, tool.Frame.ID, displayDoctorValue(tool.Frame.Origin, displayUnknown))
+	}
+	return w.err
+}
+
+func writeDirectHumanWatch(out io.Writer, value WebMCPDirectWatchData) error {
+	w := &humanWriter{out: out}
+	w.printf("Watch: %s (%d events)\n", value.Status, len(value.Events))
+	for _, event := range value.Events {
+		w.printf("  #%d %s", event.Sequence, event.Type)
+		w.printfIf(event.BrowserID != "" || event.TargetID != "", " %s/%s", event.BrowserID, event.TargetID)
+		w.printfIf(event.Reason != "", " (%s)", event.Reason)
+		w.printf("\n")
+	}
+	return w.err
 }
 
 func webmcpDirectErrorFor(err error, fallback webmcp.ErrorCode) webmcp.ToolResultError {
@@ -537,17 +186,10 @@ func webmcpDirectErrorFor(err error, fallback webmcp.ErrorCode) webmcp.ToolResul
 	}
 	switch webmcp.ErrorCode(result.Code) {
 	case webmcp.ErrorAmbiguousBrowser:
-		ids := direct.SafeIDList(result.Details["candidate_browser_ids"])
-		if len(ids) > direct.MaxAmbiguityCandidates {
-			ids = ids[:direct.MaxAmbiguityCandidates]
-		}
-		result.Details["candidate_browser_ids"] = ids
+		result.Details["candidate_browser_ids"] = boundedAmbiguityIDs(result.Details["candidate_browser_ids"])
 	case webmcp.ErrorAmbiguousTab:
 		browserID := direct.NormalizeOpaqueID(stringValue(result.Details["browser_id"]))
-		ids := direct.SafeIDList(result.Details["candidate_target_ids"])
-		if len(ids) > direct.MaxAmbiguityCandidates {
-			ids = ids[:direct.MaxAmbiguityCandidates]
-		}
+		ids := boundedAmbiguityIDs(result.Details["candidate_target_ids"])
 		result.Details["browser_id"] = browserID
 		result.Details["candidate_target_ids"] = ids
 		if choices := direct.SafeCandidateChoices(result.Details["candidate_choices"], browserID, ids); len(choices) > 0 {
@@ -557,6 +199,14 @@ func webmcpDirectErrorFor(err error, fallback webmcp.ErrorCode) webmcp.ToolResul
 		}
 	}
 	return result
+}
+
+func boundedAmbiguityIDs(value any) []string {
+	ids := direct.SafeIDList(value)
+	if len(ids) > direct.MaxAmbiguityCandidates {
+		ids = ids[:direct.MaxAmbiguityCandidates]
+	}
+	return ids
 }
 
 func writeDirectAmbiguityDetails(out io.Writer, result webmcp.ToolResultError) error {
@@ -590,33 +240,15 @@ func stringValue(value any) string {
 
 func compactDirectJSON(raw json.RawMessage) string {
 	if len(bytes.TrimSpace(raw)) == 0 {
-		return "null"
+		return jsonNullText
 	}
 	var value any
 	if err := json.Unmarshal(raw, &value); err != nil {
-		return "null"
+		return jsonNullText
 	}
 	encoded, err := json.Marshal(value)
 	if err != nil {
-		return "null"
+		return jsonNullText
 	}
 	return string(encoded)
-}
-
-func redactedDirectPageURL(raw string) string {
-	if raw == "" {
-		return ""
-	}
-	parsed, err := url.Parse(raw)
-	if err != nil {
-		if index := strings.IndexAny(raw, "?#"); index >= 0 {
-			raw = raw[:index]
-		}
-		return normalize.BoundedText(raw, directMaxURLText)
-	}
-	parsed.User = nil
-	parsed.RawQuery = ""
-	parsed.ForceQuery = false
-	parsed.Fragment = ""
-	return normalize.BoundedText(parsed.String(), directMaxURLText)
 }

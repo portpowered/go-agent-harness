@@ -1,6 +1,7 @@
 package doctor
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
@@ -45,6 +46,25 @@ func TestEndpointForCandidateAndBrowserScope(t *testing.T) {
 		if got := browserFromCandidate(testCase.candidate).Scope; got != testCase.scope {
 			t.Fatalf("browser scope for %+v = %q, want %q", testCase.candidate, got, testCase.scope)
 		}
+	}
+}
+
+func TestCheckEndpointPolicyDeniesRemoteEndpointsUnlessPermitted(t *testing.T) {
+	if err := CheckEndpointPolicy(config.BrowserConfig{Connection: config.BrowserConnectionConfig{CDPURL: "http://127.0.0.1:9222"}}); err != nil {
+		t.Fatalf("loopback endpoint denied: %v", err)
+	}
+	if err := CheckEndpointPolicy(config.BrowserConfig{Connection: config.BrowserConnectionConfig{CDPURL: "ws://host.test"}}); err == nil {
+		t.Fatal("invalid endpoint accepted")
+	}
+	remote := config.BrowserConfig{Connection: config.BrowserConnectionConfig{CDPURL: "http://remote.test:9222"}}
+	err := CheckEndpointPolicy(remote)
+	var classified *webmcp.ClassifiedError
+	if !errors.As(err, &classified) || classified.Code != webmcp.ErrorRemoteEndpointDenied || classified.Details[keyRequiredFlag] != requiredRemoteFlag {
+		t.Fatalf("remote endpoint error = %v, want remote_endpoint_denied naming %s", err, requiredRemoteFlag)
+	}
+	remote.Connection.AllowRemoteCDP = true
+	if err := CheckEndpointPolicy(remote); err != nil {
+		t.Fatalf("permitted remote endpoint denied: %v", err)
 	}
 }
 

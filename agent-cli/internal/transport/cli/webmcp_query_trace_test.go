@@ -10,6 +10,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/direct"
+	directops "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/operations"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
 	webmcpTools "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -193,7 +194,7 @@ func TestWebMCPQueryTraceReproducesLiveDirectDivergence(t *testing.T) {
 		if err := session.ReleaseInvocation(directResult.BrowserInvocationID, freshOutput); err != nil {
 			return nil, err
 		}
-		directResult, err = waitDirectInvocation(ctx, directBroker, directResult)
+		directResult, err = directops.WaitInvocation(ctx, directBroker, directResult)
 		if err != nil {
 			return nil, err
 		}
