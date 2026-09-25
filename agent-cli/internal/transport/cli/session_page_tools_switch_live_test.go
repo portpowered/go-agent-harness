@@ -2,8 +2,6 @@
 
 package cli
 
-import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
-
 import (
 	"bytes"
 	"context"
@@ -24,6 +22,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -123,20 +122,10 @@ func TestSessionPageToolsSwitchAgainstLiveChrome(t *testing.T) {
 	sessionCtx, cancelSession := context.WithCancel(ctx)
 	runErr := make(chan error, 1)
 	go func() {
-		runErr <- servicetest.RunSessionWithMaxDuration(sessionCtx, io.Discard, servicetest.SessionRunOptions{
-			Provider:               config.ProviderGrok,
-			Model:                  "session-shape-fake",
-			APIKey:                 "unused",
-			LoadedConfig:           cfg,
-			BrowserToolsEnabled:    true,
-			WaitForClose:           true,
-			ToolExecutor:           capabilities.Executor,
-			ToolDefinitions:        initialDefinitions,
-			ToolDefinitionBase:     base,
-			RefreshToolDefinitions: capabilities.RefreshDefinitionsWithError,
-			BrowserWatch:           capabilities.BrowserWatch,
-			SessionInferencer:      provider,
-		}, 4*time.Minute)
+		runErr <- newTestSessionCommand(nil, nil, testSessionDeps{Inferencer: provider, Capabilities: borrowedTestCapabilities(capabilities)}).runSessionRequest(sessionCtx, io.Discard, io.Discard, serviceSession.Request{
+			Provider: config.ProviderGrok, Model: "session-shape-fake", APIKey: "unused",
+			LoadedConfig: cfg, BrowserToolsEnabled: true, WaitForClose: true, MaxDuration: 4 * time.Minute,
+		})
 	}()
 	defer func() {
 		cancelSession()

@@ -1,11 +1,5 @@
 package cli
 
-import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
-
-import sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
-
-import sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
-
 import (
 	"bytes"
 	"context"
@@ -16,6 +10,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
 )
 
 // TestSessionHasExplicitModeMatrix pins the fix for "session --prompt exits 0
@@ -50,7 +45,7 @@ func TestSessionHasExplicitModeMatrix(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			command := NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}}), nil).Generate()
+			command := newTestSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), testSessionDeps{}).Generate()
 			if err := command.ParseFlags(tt.args); err != nil {
 				t.Fatalf("parse flags %v: %v", tt.args, err)
 			}
@@ -69,7 +64,7 @@ func TestSessionHasExplicitModeMatrix(t *testing.T) {
 func TestSessionPromptOnlyExitsNonZeroAndNamesTheProblem(t *testing.T) {
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = t.TempDir()
-	command := NewSessionCommand(flags.NewAskFlags(), globalFlags, newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}}), nil).Generate()
+	command := newTestSessionCommand(flags.NewAskFlags(), globalFlags, testSessionDeps{}).Generate()
 	var stdout, stderr bytes.Buffer
 	command.SetOut(&stdout)
 	command.SetErr(&stderr)
@@ -150,7 +145,7 @@ browser:
 			}
 			globalFlags := flags.NewGlobalFlags()
 			globalFlags.ConfigDirPath = configDir
-			command := NewSessionCommand(flags.NewAskFlags(), globalFlags, newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}}), nil).Generate()
+			command := newTestSessionCommand(flags.NewAskFlags(), globalFlags, testSessionDeps{}).Generate()
 			var out bytes.Buffer
 			command.SetOut(&out)
 			command.SetArgs(tt.args)

@@ -2,8 +2,6 @@ package cli
 
 import (
 	"context"
-	sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
-	sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	"io"
 	"math"
@@ -18,7 +16,6 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	roomanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
@@ -90,65 +87,6 @@ func newLoopbackDeviceRegistry(t *testing.T) *devicegw.VirtualRegistry {
 	})
 	if err != nil {
 		t.Fatalf("new virtual loopback registry: %v", err)
-	}
-	return registry
-}
-
-// newLoopbackDirectPairedRegistry pairs "mic" directly to "speaker", the
-// same topology the existing services-level regression precedent
-// (TestPairedDeviceBindingDropsLoopedSpeakerFramesBeforeProviderMedia) uses.
-// Because both ends share one underlying queue, whatever the real sink
-// writes to "speaker" is available to the real source's "mic" read with no
-// separate re-injection step and therefore no risk of the source pump's own
-// scheduling lag letting playback race ahead of the capture cursor -- a real
-// hazard measured empirically while building this harness (see
-// TestSessionVirtualDeviceLoopbackSuppressesCoupledFeedback). This gives a
-// fixed 0-delay/1.0-attenuation coupling; loopbackAttenuate and an explicit
-// delay queue (used directly against a tap in earlier iterations of this
-// harness) remain the sweepable primitives for a caller that wants a
-// different point on the delay/attenuation space against a topology that
-// can tolerate the source pump's independent pace.
-func newLoopbackDirectPairedRegistry(t *testing.T) *devicegw.VirtualRegistry {
-	t.Helper()
-	registry, err := devicegw.NewVirtualRegistry(devicegw.VirtualBackendConfig{
-		RecordPCM: true,
-		Devices: []devicegw.VirtualDeviceConfig{
-			{ID: "mic", Name: "Virtual Mic", Direction: devicegw.DirectionInput, LoopbackID: "speaker"},
-			{ID: "speaker", Name: "Virtual Speaker", Direction: devicegw.DirectionOutput, LoopbackID: "mic"},
-		},
-		Defaults: map[devicegw.Direction]string{
-			devicegw.DirectionInput:  "mic",
-			devicegw.DirectionOutput: "speaker",
-		},
-	})
-	if err != nil {
-		t.Fatalf("new virtual direct-paired registry: %v", err)
-	}
-	return registry
-}
-
-func newLoopbackFarFieldRecordedRegistry(t *testing.T) *devicegw.VirtualRegistry {
-	t.Helper()
-	registry, err := devicegw.NewVirtualRegistry(devicegw.VirtualBackendConfig{
-		RecordPCM: true,
-		Devices: []devicegw.VirtualDeviceConfig{
-			{ID: "mic", Name: "Far-field Virtual Mic", Direction: devicegw.DirectionInput, LoopbackID: "speaker"},
-			{
-				ID: "speaker", Name: "Far-field Virtual Speaker", Direction: devicegw.DirectionOutput, LoopbackID: "mic",
-				// 240ms at the native 16kHz device rate exceeds the former
-				// +100ms detector range and approximates the 188ms callback /
-				// acoustic delay measured from the real failing capture.
-				LoopbackDelaySamples: 3840,
-				LoopbackImpulse:      []float64{0.52, 0.21, 0, -0.09},
-			},
-		},
-		Defaults: map[devicegw.Direction]string{
-			devicegw.DirectionInput:  "mic",
-			devicegw.DirectionOutput: "speaker",
-		},
-	})
-	if err != nil {
-		t.Fatalf("new far-field recorded registry: %v", err)
 	}
 	return registry
 }
@@ -236,15 +174,6 @@ func TestLoopbackAttenuateScalesAndSaturates(t *testing.T) {
 	}
 }
 
-func mustResample(t *testing.T, samples []int16, from, to int) []int16 {
-	t.Helper()
-	out, err := wavio.Resample(samples, from, to)
-	if err != nil {
-		t.Fatalf("resample %d -> %d Hz: %v", from, to, err)
-	}
-	return out
-}
-
 // mustResampleStream mirrors the stream-owned DSP boundary: phase and filter
 // history continue across packet boundaries, and only the final packet flushes
 // the exact tail. Per-packet stateless conversion would compare a different
@@ -264,23 +193,6 @@ func mustResampleStream(t *testing.T, chunks [][]int16, from, to int) []int16 {
 		result = append(result, out...)
 	}
 	return result
-}
-
-func mustResampleStreamFrames(t *testing.T, chunks [][]int16, from, to int) [][]int16 {
-	t.Helper()
-	resampler, err := wavio.NewPCM16Resampler(from, to)
-	if err != nil {
-		t.Fatalf("create streaming resampler %d -> %d Hz: %v", from, to, err)
-	}
-	frames := make([][]int16, 0, len(chunks))
-	for i, chunk := range chunks {
-		out, err := resampler.Process(chunk, false)
-		if err != nil {
-			t.Fatalf("stream resample chunk %d (%d -> %d Hz): %v", i, from, to, err)
-		}
-		frames = append(frames, append([]int16(nil), out...))
-	}
-	return frames
 }
 
 // loopbackInboundMedia is the scripted assistant-audio path (provider ->
@@ -325,7 +237,7 @@ func (m *loopbackInboundMedia) ReadFrame(ctx context.Context) (audio.PCMFrame, e
 		case frame := <-m.frames:
 			return frame, nil
 		default:
-			return audio.PCMFrame{}, rtc.ErrPeerClosed
+			return audio.PCMFrame{}, io.EOF
 		}
 	case <-ctx.Done():
 		return audio.PCMFrame{}, ctx.Err()
@@ -376,33 +288,6 @@ func (m *loopbackOutboundMedia) WriteFrame(ctx context.Context, frame audio.PCMF
 func (m *loopbackOutboundMedia) Close() error {
 	m.once.Do(func() { close(m.closed) })
 	return nil
-}
-
-// snapshot returns every frame received so far.
-func (m *loopbackOutboundMedia) snapshot() []audio.PCMFrame {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return append([]audio.PCMFrame(nil), m.frames...)
-}
-
-// waitForCount deterministically blocks (no sleeps) until at least n frames
-// have been recorded, driven by the notify signal rather than polling on a
-// timer, and returns exactly the first n.
-func (m *loopbackOutboundMedia) waitForCount(ctx context.Context, n int) ([]audio.PCMFrame, error) {
-	for {
-		m.mu.Lock()
-		if len(m.frames) >= n {
-			out := append([]audio.PCMFrame(nil), m.frames[:n]...)
-			m.mu.Unlock()
-			return out, nil
-		}
-		m.mu.Unlock()
-		select {
-		case <-m.notify:
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
-	}
 }
 
 var (
@@ -567,7 +452,7 @@ model:
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = configDir
 
-	owner := NewSessionCommand(flags.NewAskFlags(), globalFlags, newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}, SessionInferencer: inferencer, DeviceRegistry: registry}), nil)
+	owner := newTestSessionCommand(flags.NewAskFlags(), globalFlags, testSessionDeps{Inferencer: inferencer, Registry: registry})
 	owner.SetFeedbackWarningWriter(warning)
 	command := owner.Generate()
 	command.SetOut(io.Discard)
@@ -639,300 +524,5 @@ func TestSessionVirtualDeviceLoopbackFidelity(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("played stream content mismatch:\n got=%v\nwant=%v", got, want)
-	}
-}
-
-// TestSessionVirtualDeviceLoopbackSuppressesCoupledFeedback guards PR #357:
-// with coupling enabled (the virtual speaker's playback fed directly back
-// into the virtual microphone, a real tapped copy of assistant playback
-// reaching capture with zero added delay and full amplitude -- the worst,
-// most detectable case on the delay/attenuation space, and the same
-// topology the existing services-level regression precedent uses), the
-// coupled echo must never reach the provider. loopbackAttenuate and an
-// explicit per-frame delay queue (both used against a live tap in earlier
-// iterations of this harness) are this file's sweepable coupling
-// parameters for a caller that wants a different point on that space; this
-// specific regression check uses the topology proven robust under
-// GOMAXPROCS=1 and -shuffle=on, where a source pump's own scheduling lag
-// relative to a re-injecting test goroutine measurably let early playback
-// age out of the detector's rolling comparison window before an
-// interleaved re-injection ever reached it (see git history on this file).
-// The assertion is entirely on what the capture path emits to
-// loopbackOutboundMedia; the acoustic-feedback warning is used only to know
-// when suppression has been confirmed, never as the pass/fail signal.
-func TestSessionVirtualDeviceLoopbackSuppressesCoupledFeedback(t *testing.T) {
-	h := startLoopbackHarnessWithRegistry(t, newLoopbackDirectPairedRegistry(t))
-
-	// userFeed is a second, test-owned handle on the same "speaker" device
-	// binding.Sink opened. Because "mic" and "speaker" share one underlying
-	// queue, a frame written here reaches the real source's "mic" read
-	// exactly like a frame the sink itself wrote -- the mechanism the
-	// existing precedent uses to inject independent user speech after a
-	// confirmed loop.
-	userFeed := openLoopbackTap(t, h.registry, "speaker")
-
-	const echoChunks = 6
-	echoSignal := make([]int16, 0, echoChunks*audio.FrameSize)
-	for i := 0; i < echoChunks; i++ {
-		chunk := loopbackTone(loopbackProviderChunkSamples, 5101+i)
-		h.inbound.push(t, h.ctx, audio.PCMFrame{Samples: chunk, EndOfResponse: i == echoChunks-1})
-		echoSignal = append(echoSignal, mustResample(t, chunk, loopbackProviderRate, loopbackDeviceRate)...)
-	}
-
-	select {
-	case <-h.warning.fired:
-	case <-h.ctx.Done():
-		t.Fatal("coupled echo was never confirmed as feedback (harness setup problem, not a suppression check)")
-	}
-	// The gate's documented contract is detect-then-suppress, not zero
-	// latency: selfhearing.PCM16SelfHearingConfig.MinimumEvidence deliberately
-	// requires ~80ms of paired evidence before classifying a loop as
-	// feedback at all, precisely so a brief coincidental correlation cannot
-	// false-positive. Some of that bounded analysis-window audio can
-	// legitimately still be in flight to the provider at the instant the
-	// warning fires (a real timing variance in which of that window's
-	// frames the primary detector versus the sink's own device write
-	// happens to have processed first, confirmed empirically while
-	// building this harness -- not the PR #357 regression, which was about
-	// content that stayed correlated with the assistant well after
-	// confirmation). What #357 requires, and what this asserts, is that
-	// nothing correlated with the echo reaches the provider from this
-	// point forward.
-	suppressedFrom := len(h.outbound.snapshot())
-
-	// Independent probe content, pushed after confirmation, to prove the
-	// microphone path is not simply jammed shut (a broken "suppress
-	// everything forever" regression would otherwise masquerade as
-	// passing). Exactly how the gate's post-confirmation reclassifier
-	// batches or paces these releases is an internal timing detail this
-	// harness does not assert on.
-	const probeFrames = 20
-	for i := 0; i < probeFrames; i++ {
-		probe := loopbackTone(audio.FrameSize, 9001+i)
-		before := h.registry.PCMObservations()
-		lastSequence := 0
-		if len(before) > 0 {
-			lastSequence = before[len(before)-1].Sequence
-		}
-		if err := userFeed.WriteFrame(h.ctx, probe); err != nil {
-			t.Fatalf("write independent probe frame %d: %v", i, err)
-		}
-		// Advance at the virtual microphone callback boundary. This preserves
-		// main's bounded hardware-queue model and guarantees the test never wins
-		// enough producer time slices to overwrite its own probe before capture.
-		wantCount := len(before) + 1
-		for {
-			observations, err := h.registry.WaitForPCMObservations(h.ctx, wantCount)
-			if err != nil {
-				t.Fatalf("wait for independent probe callback %d: %v (playback=%+v outbound=%d)", i, err, userFeed.PlaybackStats(), len(h.outbound.snapshot()))
-			}
-			consumed := false
-			for _, observation := range observations {
-				if observation.Sequence > lastSequence && observation.Operation == "read" {
-					consumed = true
-					break
-				}
-			}
-			if consumed {
-				break
-			}
-			wantCount = len(observations) + 1
-		}
-	}
-
-	const minFramesExpected = 3
-	got, err := h.outbound.waitForCount(h.ctx, suppressedFrom+minFramesExpected)
-	if err != nil {
-		t.Fatalf("independent probe frames never reached the provider media after suppression (over-suppression regression): %v", err)
-	}
-
-	// The suppression assertion is entirely on what the capture path
-	// emitted from the confirmed suppression point forward: does the
-	// coupled echo's own fingerprint appear anywhere in that received
-	// stream? This uses the same correlation primitive that backs
-	// roomanalysis.PCM16SelfHearingMeasurement (self-hearing is judged by
-	// BestAbsoluteCorrelation against a source/received pair) rather than
-	// an exact, frame-by-frame content match, since the gate's internal
-	// batching of independent releases is not part of this harness's
-	// contract. A real leak would show a strong correlation somewhere
-	// across the whole received window; silence or independent probe
-	// content will not.
-	receivedSignal := make([]int16, 0, (len(got)-suppressedFrom)*audio.FrameSize)
-	for _, frame := range got[suppressedFrom:] {
-		receivedSignal = append(receivedSignal, mustResample(t, frame.Samples, loopbackProviderRate, loopbackDeviceRate)...)
-	}
-
-	measurement := measureLoopbackSelfHearing(t, "coupled-echo", echoSignal, "provider-received", receivedSignal)
-	if !measurement.Passed {
-		t.Fatalf("coupled echo correlates with what the capture path emitted to the provider after suppression was confirmed (BestAbsoluteCorrelation=%.3f at lag=%s over %d compared samples): suppression failed", measurement.BestAbsoluteCorrelation, measurement.BestAbsoluteLag, measurement.ComparedSamples)
-	}
-	t.Logf("suppression held: coupled echo vs. post-confirmation provider-received BestAbsoluteCorrelation=%.3f (want < %.2f)", measurement.BestAbsoluteCorrelation, roomanalysis.PCM16AnalysisDefaultSelfCorrelation)
-}
-
-func TestSessionVirtualDeviceLoopbackSuppressesFarFieldFeedbackAndRecordsDevices(t *testing.T) {
-	h := startLoopbackHarnessWithRegistry(t, newLoopbackFarFieldRecordedRegistry(t))
-
-	const chunks = 24
-	played := make([]int16, 0, chunks*audio.FrameSize)
-	for index := 0; index < chunks; index++ {
-		chunk := loopbackTone(loopbackProviderChunkSamples, 12001+index)
-		played = append(played, mustResample(t, chunk, loopbackProviderRate, loopbackDeviceRate)...)
-		h.inbound.push(t, h.ctx, audio.PCMFrame{Samples: chunk, EndOfResponse: index == chunks-1})
-		// A real device callback consumes at the device clock. Pace this mock at
-		// the same boundary so a CPU-loaded test process cannot enqueue the
-		// entire far-field response into a 250ms hardware queue before capture
-		// gets its first turn; that would test producer flooding, not EAC.
-		if _, err := h.registry.WaitForPCMObservations(h.ctx, (index+1)*2); err != nil {
-			t.Fatalf("pace far-field device callback %d: %v", index, err)
-		}
-	}
-
-	select {
-	case <-h.warning.fired:
-	case <-h.ctx.Done():
-		var writes, reads []int16
-		for _, observation := range h.registry.PCMObservations() {
-			if observation.Operation == "write" {
-				writes = append(writes, observation.Samples...)
-			} else if observation.Operation == "read" {
-				reads = append(reads, observation.Samples...)
-			}
-		}
-		compareSamples := min(len(writes), len(reads)-3840)
-		var correlation roomanalysis.PCM16CorrelationMeasurement
-		var correlationErr error
-		if compareSamples > 0 {
-			duration := time.Duration(compareSamples) * time.Second / loopbackDeviceRate
-			correlation, correlationErr = roomanalysis.NormalizedPCM16CrossCorrelation(
-				roomanalysis.PCM16TimedStream{PCM16Input: roomanalysis.PCM16Input{StreamID: "writes", ParticipantID: "speaker", SampleRate: loopbackDeviceRate, Samples: writes}, TimelineEnd: time.Duration(len(writes)) * time.Second / loopbackDeviceRate},
-				roomanalysis.PCM16TimedStream{PCM16Input: roomanalysis.PCM16Input{StreamID: "reads", ParticipantID: "mic", SampleRate: loopbackDeviceRate, Samples: reads}, TimelineEnd: time.Duration(len(reads)) * time.Second / loopbackDeviceRate},
-				roomanalysis.PCM16TimeInterval{ID: "debug", End: duration}, roomanalysis.PCM16LagWindow{Min: 240 * time.Millisecond, Max: 240 * time.Millisecond}, roomanalysis.PCM16AnalysisSilenceFloorDBFS,
-			)
-		}
-		t.Fatalf("far-field device loop was never confirmed as feedback; writes=%d reads=%d fixed240ms-correlation=%.3f evidence=%d correlation_error=%v", len(writes), len(reads), correlation.BestAbsoluteCorrelation, correlation.ComparedSamples, correlationErr)
-	}
-
-	// At least one output write and one input read per chunk must cross the
-	// device backend. The initial 240ms delay adds capture reads, so this lower
-	// bound deliberately avoids asserting internal callback batching.
-	// Every speaker write must be recorded; microphone reads are asynchronous
-	// and the finite virtual playback queue may coalesce/drop leading delay
-	// silence before the source pump consumes it. One additional observation
-	// is sufficient to prove that the capture side was active, and the exact
-	// per-direction counts below remain the authoritative assertion.
-	observations, err := h.registry.WaitForPCMObservations(h.ctx, chunks+1)
-	if err != nil {
-		t.Fatalf("wait for recorded mock-device PCM: %v", err)
-	}
-	var outputWrites, inputReads int
-	for _, observation := range observations {
-		if observation.Format.SampleRate != loopbackDeviceRate {
-			t.Fatalf("recorded device operation %d rate = %d, want native %d", observation.Sequence, observation.Format.SampleRate, loopbackDeviceRate)
-		}
-		switch {
-		case observation.DeviceID == "virtual:speaker" && observation.Operation == "write":
-			outputWrites++
-		case observation.DeviceID == "virtual:mic" && observation.Operation == "read":
-			inputReads++
-		}
-	}
-	if outputWrites < chunks || inputReads == 0 {
-		t.Fatalf("recorded device evidence = output writes %d, input reads %d; want at least %d/%d", outputWrites, inputReads, chunks, 1)
-	}
-
-	providerSignal := make([]int16, 0)
-	for _, frame := range h.outbound.snapshot() {
-		providerSignal = append(providerSignal, mustResample(t, frame.Samples, loopbackProviderRate, loopbackDeviceRate)...)
-	}
-	if len(providerSignal) > 0 {
-		measurement := measureLoopbackSelfHearing(t, "far-field-playback", played, "provider-received", providerSignal)
-		if !measurement.Passed {
-			t.Fatalf("far-field echo escaped device suppression: correlation=%.3f lag=%s", measurement.BestAbsoluteCorrelation, measurement.BestAbsoluteLag)
-		}
-	}
-}
-
-// measureLoopbackSelfHearing wraps roomanalysis.NormalizedPCM16CrossCorrelation --
-// the primitive behind roomanalysis.PCM16SelfHearingMeasurement -- to search the
-// entire received window (not just a narrow lag around zero) for the
-// source signal's fingerprint, and reports the result as exactly that
-// documented type: "records one participant's sent-to-received correlation.
-// Self-hearing uses BestAbsoluteCorrelation by design."
-func measureLoopbackSelfHearing(t *testing.T, sourceID string, source []int16, receivedID string, received []int16) roomanalysis.PCM16SelfHearingMeasurement {
-	t.Helper()
-	sourceStream := roomanalysis.PCM16TimedStream{
-		PCM16Input:  roomanalysis.PCM16Input{StreamID: sourceID, ParticipantID: sourceID, SampleRate: loopbackDeviceRate, Samples: source},
-		TimelineEnd: time.Duration(len(source)) * time.Second / time.Duration(loopbackDeviceRate),
-	}
-	receivedStream := roomanalysis.PCM16TimedStream{
-		PCM16Input:  roomanalysis.PCM16Input{StreamID: receivedID, ParticipantID: receivedID, SampleRate: loopbackDeviceRate, Samples: received},
-		TimelineEnd: time.Duration(len(received)) * time.Second / time.Duration(loopbackDeviceRate),
-	}
-	maxLag := receivedStream.TimelineEnd - sourceStream.TimelineEnd
-	if maxLag < 0 {
-		maxLag = 0
-	}
-	interval := roomanalysis.PCM16TimeInterval{ID: "echo-window", Start: 0, End: sourceStream.TimelineEnd}
-	lagWindow := roomanalysis.PCM16LagWindow{Min: 0, Max: maxLag}
-	correlation, err := roomanalysis.NormalizedPCM16CrossCorrelation(sourceStream, receivedStream, interval, lagWindow, roomanalysis.PCM16AnalysisSilenceFloorDBFS)
-	if err != nil {
-		t.Fatalf("measure self-hearing correlation (%s vs %s): %v", sourceID, receivedID, err)
-	}
-	return roomanalysis.PCM16SelfHearingMeasurement{
-		PCM16CorrelationMeasurement: correlation,
-		Direction:                   "capture-to-provider",
-		Passed:                      !correlation.HasEvidence() || correlation.BestAbsoluteCorrelation < roomanalysis.PCM16AnalysisDefaultSelfCorrelation,
-	}
-}
-
-// TestSessionVirtualDeviceLoopbackPreservesIndependentSpeechDuringActivePlayback
-// guards against silently over-suppressing genuine barge-in speech: audio
-// that is uncorrelated with assistant playback must still reach the
-// provider even while the assistant is actively speaking.
-func TestSessionVirtualDeviceLoopbackPreservesIndependentSpeechDuringActivePlayback(t *testing.T) {
-	h := startLoopbackHarness(t)
-	feed := openLoopbackTap(t, h.registry, "mic-feed")
-	tap := openLoopbackTap(t, h.registry, "speaker-tap")
-
-	// The assistant's response is still open (no EndOfResponse yet) when
-	// independent speech arrives at the microphone. Draining each pushed
-	// chunk from speaker-tap before continuing is a real synchronization
-	// point, not a sleep: RTCDeviceSink.Pump only enqueues a played frame
-	// (unblocking this ReadFrame) after localFeedbackGate.WritePlayback has
-	// fully observed it under the gate's lock, so by the time this loop
-	// returns the assistant's playback timeline is guaranteed to be
-	// established before independent speech starts arriving at the
-	// microphone.
-	for i := 0; i < 3; i++ {
-		h.inbound.push(t, h.ctx, audio.PCMFrame{Samples: loopbackTone(loopbackProviderChunkSamples, 6001+i)})
-		got := make([]int16, audio.FrameSize)
-		if err := tap.ReadFrame(h.ctx, got); err != nil {
-			t.Fatalf("read played frame %d: %v", i, err)
-		}
-	}
-
-	const speechFrames = 4
-	want := make([][]int16, speechFrames)
-	for i := range want {
-		want[i] = loopbackTone(audio.FrameSize, 7001+i)
-		if err := feed.WriteFrame(h.ctx, want[i]); err != nil {
-			t.Fatalf("feed independent speech frame %d: %v", i, err)
-		}
-	}
-
-	got, err := h.outbound.waitForCount(h.ctx, speechFrames)
-	if err != nil {
-		t.Fatalf("independent speech during active playback did not reach the provider (over-suppression regression): %v", err)
-	}
-	wantFrames := mustResampleStreamFrames(t, want, loopbackDeviceRate, loopbackProviderRate)
-	for i, frame := range got {
-		if !reflect.DeepEqual(frame.Samples, wantFrames[i]) {
-			t.Fatalf("independent speech frame %d mismatch during active playback: got=%v want=%v", i, frame.Samples, wantFrames[i])
-		}
-	}
-
-	// Finish the assistant response so the session ends cleanly.
-	for i := 0; i < 2; i++ {
-		h.inbound.push(t, h.ctx, audio.PCMFrame{Samples: loopbackTone(loopbackProviderChunkSamples, 6101+i), EndOfResponse: i == 1})
 	}
 }

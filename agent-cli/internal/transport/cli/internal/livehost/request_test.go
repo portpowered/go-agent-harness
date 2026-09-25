@@ -60,7 +60,7 @@ func TestBuildRequestUsesWireInstructionCompositionBeforeProviderStartup(t *test
 	got, err := BuildRequest(context.Background(), request, nil, RequestDependencies{
 		InstructionService: runtimeSessionWire.NewInstructionService(),
 		PageSightToolID:    "show_page",
-		Capabilities: func(*config.Config) (*runtimeSession.LiveCapabilities, error) {
+		Capabilities: func(context.Context, *config.Config) (*runtimeSession.LiveCapabilities, error) {
 			return &runtimeSession.LiveCapabilities{Definitions: []messages.ToolDefinition{{Name: "read_file"}}}, nil
 		},
 	})
@@ -79,7 +79,7 @@ func TestBuildRequestUsesWireInstructionCompositionBeforeProviderStartup(t *test
 }
 
 func TestBuildRequestPreservesEmptyAndRejectsInvalidWorkspace(t *testing.T) {
-	capabilities := func(*config.Config) (*runtimeSession.LiveCapabilities, error) {
+	capabilities := func(context.Context, *config.Config) (*runtimeSession.LiveCapabilities, error) {
 		return nil, nil
 	}
 	empty, err := BuildRequest(context.Background(), serviceSession.Request{

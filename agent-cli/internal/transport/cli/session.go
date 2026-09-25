@@ -275,12 +275,10 @@ type SessionCommand struct {
 	globalFlags     *flags.GlobalFlags
 	storeFactory    runtimeSession.FileStoreFactory
 	streamObserver  serviceSession.SessionStreamObserver
-	sessionService  serviceSession.Service
 	selfPlayService runtimeSelfPlay.Service
-	// liveService and deviceService are the embeddable runtime path used by
-	// production composition for continuous sessions. The legacy service
-	// remains optional so focused CLI tests can inject only the text/session
-	// contract without constructing audio or provider transports.
+	// liveService and deviceService are the embeddable runtime path that owns
+	// every session invocation. Commands built without them still serve help,
+	// flag, and preflight paths.
 	liveService             runtimeSession.LiveService
 	liveReplayService       runtimeReplay.Service
 	deviceService           runtimeDevices.Service

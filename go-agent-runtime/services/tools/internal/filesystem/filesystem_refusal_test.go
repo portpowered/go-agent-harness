@@ -14,6 +14,10 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
+// redactedRefusalValue is the placeholder a refusal reports for a path it
+// must not disclose.
+const redactedRefusalValue = "[unavailable]"
+
 func TestFilesystemPolicyReturnsStableRefusalForEveryFilesystemOperation(t *testing.T) {
 	primary := t.TempDir()
 	outside := t.TempDir()
@@ -323,5 +327,131 @@ func assertExternalSymlinkWrite(t *testing.T, f writeRootsFixture, writeTool cor
 	}
 	if _, statErr := os.Stat(filepath.Join(f.outside, "created.txt")); !os.IsNotExist(statErr) {
 		t.Fatalf("symlink target = %v, want absent", statErr)
+	}
+}
+
+func validTestRefusal() FilesystemRefusal {
+	return newFilesystemRefusal("read_file", "notes.txt", "/work", FilesystemRefusalOutsidePermittedRoots)
+}
+
+func TestFilesystemRefusalValidateRejectsMalformedEnvelopes(t *testing.T) {
+	cases := map[string]func(*FilesystemRefusal){
+		"unsupported filesystem refusal type":    func(r *FilesystemRefusal) { r.Type = "other" },
+		"unsupported filesystem refusal version": func(r *FilesystemRefusal) { r.Version = "v0" },
+		"ok=false":                               func(r *FilesystemRefusal) { r.OK = true },
+		"operation, path, and workdir":           func(r *FilesystemRefusal) { r.WorkDir = " " },
+		"unsupported filesystem refusal reason":  func(r *FilesystemRefusal) { r.Reason = "bogus" },
+		"message and remediation":                func(r *FilesystemRefusal) { r.Remediation = "" },
+	}
+	for want, mutate := range cases {
+		refusal := validTestRefusal()
+		mutate(&refusal)
+		if err := refusal.Validate(); err == nil || !strings.Contains(err.Error(), want) {
+			t.Fatalf("Validate after %q mutation = %v", want, err)
+		}
+		if _, err := MarshalFilesystemRefusal(refusal); err == nil {
+			t.Fatalf("MarshalFilesystemRefusal accepted a malformed envelope (%s)", want)
+		}
+	}
+}
+
+func TestFilesystemRefusalRoundTripsThroughContent(t *testing.T) {
+	refusal := validTestRefusal()
+	encoded, err := MarshalFilesystemRefusal(refusal)
+	if err != nil {
+		t.Fatalf("MarshalFilesystemRefusal: %v", err)
+	}
+	decoded, err := DecodeFilesystemRefusal(encoded)
+	if err != nil || decoded != refusal {
+		t.Fatalf("decoded = %+v (%v), want %+v", decoded, err, refusal)
+	}
+	if rejected, err := DecodeFilesystemRefusal([]byte("{not json")); err == nil {
+		t.Fatalf("DecodeFilesystemRefusal accepted invalid JSON as %+v", rejected)
+	}
+	wrapped, err := json.Marshal(map[string]any{"refusal": refusal})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := FilesystemRefusalFromContent(string(wrapped)); !ok || got != refusal {
+		t.Fatalf("wrapped content = %+v/%v", got, ok)
+	}
+	invalid := refusal
+	invalid.Status = "ok"
+	invalidWrapped, err := json.Marshal(map[string]any{"refusal": invalid})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, content := range []string{"plain text result", `{"refusal":null}`, string(invalidWrapped)} {
+		if recognized, ok := FilesystemRefusalFromContent(content); ok {
+			t.Fatalf("FilesystemRefusalFromContent(%q) recognized a non-refusal: %+v", content, recognized)
+		}
+	}
+}
+
+func TestFilesystemRefusalErrorsCarryOperationAndSentinel(t *testing.T) {
+	refusal := validTestRefusal()
+	if got := refusal.Error(); got != `filesystem operation "read_file" refused: outside_permitted_roots` {
+		t.Fatalf("refusal Error() = %q", got)
+	}
+	if got := (FilesystemRefusal{}).Error(); got != ErrFilesystemRefused.Error() {
+		t.Fatalf("empty refusal Error() = %q", got)
+	}
+	wrapped := &FilesystemRefusalError{Refusal: refusal}
+	if !errors.Is(wrapped, ErrFilesystemRefused) || wrapped.Error() != refusal.Error() {
+		t.Fatalf("refusal error = %q, want the refusal text and sentinel", wrapped.Error())
+	}
+	var nilErr *FilesystemRefusalError
+	if nilErr.Error() != ErrFilesystemRefused.Error() || (&FilesystemRefusalError{}).Error() != ErrFilesystemRefused.Error() {
+		t.Fatal("empty refusal errors must render the sentinel text")
+	}
+}
+
+func TestNewFilesystemRefusalMasksProtectedAndMissingValues(t *testing.T) {
+	sensitive := newFilesystemRefusal("read_file", "/etc/secret", "", FilesystemRefusalSensitiveRead)
+	if sensitive.Path != filesystemProtectedPath || sensitive.WorkDir != redactedRefusalValue || strings.Contains(sensitive.Message, "secret") {
+		t.Fatalf("sensitive refusal leaked details: %+v", sensitive)
+	}
+	scope := newFilesystemRefusal("write_file", " ", "/work", FilesystemRefusalInvalidScope)
+	if scope.Path != redactedRefusalValue || scope.Message != "invalid filesystem scope" || !strings.Contains(scope.Remediation, "--workdir") {
+		t.Fatalf("invalid scope refusal = %+v", scope)
+	}
+	unknown := newFilesystemRefusal("list_dir", "x", "/work", "unknown")
+	if !strings.Contains(unknown.Message, "path escapes workspace") || !strings.Contains(unknown.Remediation, "--allow-path") {
+		t.Fatalf("unknown reason refusal = %+v, want the outside-roots guidance", unknown)
+	}
+}
+
+func TestFilesystemPolicyScopeAndRootValidation(t *testing.T) {
+	primary := t.TempDir()
+	extra := t.TempDir()
+	policy, err := NewFilesystemPolicyFromRoots(primary, []string{extra, extra})
+	if err != nil {
+		t.Fatalf("NewFilesystemPolicyFromRoots: %v", err)
+	}
+	if roots := policy.AdditionalRoots(); len(roots) != 1 {
+		t.Fatalf("additional roots = %v, want the duplicate collapsed", roots)
+	}
+	if desc := policy.ScopeDescription(); !strings.Contains(desc, "workdir="+policy.PrimaryRoot()) || !strings.Contains(desc, policy.AdditionalRoots()[0]) {
+		t.Fatalf("scope description = %q", desc)
+	}
+	solo, err := NewFilesystemPolicy(primary)
+	if err != nil || !strings.HasSuffix(solo.ScopeDescription(), "additional_allowed_roots=none") {
+		t.Fatalf("single-root description = %q (%v)", solo.ScopeDescription(), err)
+	}
+	var nilPolicy *FilesystemPolicy
+	if nilPolicy.ScopeDescription() != "filesystem scope unavailable" || nilPolicy.PrimaryRoot() != "" || nilPolicy.AdditionalRoots() != nil || nilPolicy.ProtectedReadRoots() != nil || nilPolicy.AuthorizeRead("x") != nil {
+		t.Fatal("nil policy accessors must be inert")
+	}
+	file := filepath.Join(primary, "file.txt")
+	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, root := range []string{"", filepath.Join(primary, "missing"), file} {
+		if _, err := NewFilesystemPolicy(root); !errors.Is(err, ErrInvalidFilesystemRoot) {
+			t.Fatalf("NewFilesystemPolicy(%q) = %v, want ErrInvalidFilesystemRoot", root, err)
+		}
+	}
+	if _, err := NewFilesystemPolicy(primary, file); !errors.Is(err, ErrInvalidFilesystemRoot) {
+		t.Fatalf("file additional root = %v, want ErrInvalidFilesystemRoot", err)
 	}
 }

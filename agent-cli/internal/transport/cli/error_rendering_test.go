@@ -66,8 +66,8 @@ func TestSessionCLIRendersMissingCredentialOnceWithRemediation(t *testing.T) {
 	if result.exitCode != 1 {
 		t.Fatalf("exit code = %d, want 1; stdout=%q stderr=%q", result.exitCode, result.stdout, result.stderr)
 	}
-	for _, want := range []string{"API key", "AGENT_MODEL__OPENAI__API_KEY"} {
-		if got := strings.Count(result.stderr, want); got != 1 {
+	for _, want := range []string{"api key", "agent_model__openai__api_key"} {
+		if got := strings.Count(strings.ToLower(result.stderr), want); got != 1 {
 			t.Fatalf("missing-key stderr count for %q = %d, want 1; stderr=%q", want, got, result.stderr)
 		}
 	}

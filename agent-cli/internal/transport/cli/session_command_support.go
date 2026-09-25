@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -183,15 +184,81 @@ func validateAudioInterrupt(state sessionCommandRunState) error {
 }
 
 func (c *SessionCommand) runSessionRequest(ctx context.Context, out, errOut io.Writer, request serviceSession.Request) error {
-	useLive, replayInspection, err := c.runtimeLiveAdmission(ctx, request)
+	if c.liveService == nil {
+		return errors.New("session live service is not configured")
+	}
+	replayInspection, err := c.inspectSessionReplay(ctx, request)
 	if err != nil {
 		return err
 	}
-	if useLive {
-		return c.runRuntimeLiveSessionWithAnnouncements(ctx, out, errOut, request, replayInspection)
+	if replaysTurnTranscript(request, replayInspection) {
+		return c.runReplayTranscript(ctx, out, request, replayInspection)
 	}
-	if c.sessionService == nil {
-		return fmt.Errorf("session service is not configured")
+	return c.runRuntimeLiveSessionWithAnnouncements(ctx, out, errOut, request, replayInspection)
+}
+
+// NewSessionRequestService exposes the session command's live admission path
+// through the request-level session contract used by probe owners. Requests
+// without a loaded configuration resolve one from their config directory; a
+// replay without a directory uses an empty in-memory snapshot and never
+// creates host configuration as a side effect.
+func NewSessionRequestService(command *SessionCommand) serviceSession.SessionService {
+	return sessionRequestService{command: command}
+}
+
+type sessionRequestService struct{ command *SessionCommand }
+
+func (s sessionRequestService) Run(ctx context.Context, out io.Writer, request serviceSession.Request) error {
+	if s.command == nil {
+		return errors.New("session command is not configured")
 	}
-	return c.sessionService.Run(ctx, out, request)
+	if out == nil {
+		return errors.New("session output is required")
+	}
+	if request.LoadedConfig == nil {
+		loaded, err := sessionRequestConfig(request)
+		if err != nil {
+			return err
+		}
+		request.LoadedConfig = loaded
+	}
+	return s.command.runSessionRequest(ctx, out, out, request)
+}
+
+func sessionRequestConfig(request serviceSession.Request) (*config.Config, error) {
+	if strings.TrimSpace(request.ReplayPath) != "" && strings.TrimSpace(request.ConfigDir) == "" {
+		return &config.Config{}, nil
+	}
+	storage, err := config.NewDefaultConfigStorage(request.ConfigDir)
+	if err != nil {
+		return nil, fmt.Errorf("load session config: %w", err)
+	}
+	loaded, err := storage.Load()
+	if err != nil {
+		return nil, fmt.Errorf("load session config: %w", err)
+	}
+	return loaded, nil
+}
+
+// initializeRuntimeLiveCapabilities completes capability initialization
+// before the live request is composed. The browser state observed after
+// initialization grounds the provider instructions, so the provider never
+// receives browser tools whose connection or selection state is still
+// unknown. A failed initialization closes the capability it constructed.
+func initializeRuntimeLiveCapabilities(ctx context.Context, capabilities *SessionToolCapabilities) error {
+	if capabilities.Initialize != nil {
+		if err := capabilities.Initialize(ctx); err != nil {
+			if capabilities.Close != nil {
+				err = errors.Join(err, capabilities.Close())
+			}
+			return fmt.Errorf("initialize session tools: %w", err)
+		}
+		capabilities.Initialize = nil
+	}
+	if capabilities.Status != nil {
+		if state := capabilities.Status().BrowserCapabilityState; state != "" {
+			capabilities.BrowserCapabilityState = state
+		}
+	}
+	return nil
 }

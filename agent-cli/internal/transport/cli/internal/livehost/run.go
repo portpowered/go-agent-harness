@@ -293,6 +293,7 @@ func liveRunOptions(out io.Writer, request serviceSession.Request, liveRequest r
 		Devices:                 deviceService,
 		DeviceRequest:           deviceRequest,
 		AudioTurnAdmission:      audioTurnAdmission(request),
+		Metrics:                 request.MetricsRecorder,
 		Recorder:                recorder,
 		CaptureTurns:            captureTurns(filePorts),
 		CaptureInterruptions:    captureInterruptions(filePorts),

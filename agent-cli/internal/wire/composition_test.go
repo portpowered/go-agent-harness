@@ -1,9 +1,5 @@
 package wire
 
-import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
-
-import sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-
 import (
 	"bytes"
 	"context"
@@ -30,7 +26,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
 )
 
 type recordingToolExecutor struct {
@@ -254,23 +249,11 @@ func TestComposeAgentCLI_ValidDependenciesReturnRoot(t *testing.T) {
 	}
 }
 
-func TestComposeAgentCLI_RejectsWebRTCBeforeRuntimeFactoryInGeneratedGraph(t *testing.T) {
-	resolverErr := errors.New("resolver edge reached")
-	components := servicetest.SessionRTCComponents{
-		ResolveSignaling: func(context.Context, string) (rtc.Signaling, error) {
-			return nil, resolverErr
-		},
-		NewDataPlane: func(context.Context, rtc.Signaling) (servicetest.SessionRTCDataPlane, error) {
-			return nil, errors.New("data-plane edge should not run")
-		},
-		OpenMediaSource: func(context.Context, string) (sharedaudio.InboundMedia, error) {
-			return nil, errors.New("media edge should not run")
-		},
-	}
+func TestComposeAgentCLI_RejectsWebRTCBeforeSessionSetupInGeneratedGraph(t *testing.T) {
+	provider := &recordingSessionInferencer{}
 	root, err := composeTestAgentCLI(
 		&recordingToolExecutor{},
-		WithSessionInferencer(&recordingSessionInferencer{}),
-		WithSessionRTCComponents(components),
+		WithSessionInferencer(provider),
 	)
 	if err != nil {
 		t.Fatalf("ComposeAgentCLI: %v", err)
@@ -293,42 +276,8 @@ func TestComposeAgentCLI_RejectsWebRTCBeforeRuntimeFactoryInGeneratedGraph(t *te
 	if !errors.Is(err, cli.ErrSessionWebRTCUnavailable) {
 		t.Fatalf("WebRTC command error = %v, want customer capability error", err)
 	}
-	if errors.Is(err, resolverErr) {
-		t.Fatalf("WebRTC command reached the signaling resolver before capability rejection: %v", err)
-	}
-}
-
-func TestDefaultSessionRTCRuntimeCompositionConstructsLazily(t *testing.T) {
-	composition := newProductionRTCComposition()
-	components := composition.components()
-	if components.ResolveSignaling == nil || components.NewDataPlane == nil || components.OpenMediaSource == nil {
-		t.Fatal("default RTC composition omitted a required production component")
-	}
-	composition.mu.Lock()
-	if got := len(composition.answerers); got != 0 {
-		composition.mu.Unlock()
-		t.Fatalf("RTC signaling resolver ran during composition: %d pending answerers", got)
-	}
-	composition.mu.Unlock()
-
-	runtime, err := provideSessionRTCRuntimeFactory(components, observability.NewNoopMetricSampler(), observability.NewNoopLogger())(servicetest.SessionRuntimeSelection{
-		Transport:         servicetest.SessionTransportWebRTC,
-		SignalingEndpoint: "loopback://lazy",
-		MediaSource:       "fixture://lazy",
-	})
-	if err != nil {
-		t.Fatalf("construct RTC runtime factory: %v", err)
-	}
-	if runtime == nil {
-		t.Fatal("production RTC factory returned a nil runtime")
-	}
-	if err := runtime.Close(); err != nil {
-		t.Fatalf("close unstarted RTC runtime: %v", err)
-	}
-	composition.mu.Lock()
-	defer composition.mu.Unlock()
-	if got := len(composition.answerers); got != 0 {
-		t.Fatalf("RTC signaling resolver ran during factory construction: %d pending answerers", got)
+	if provider.connects != 0 {
+		t.Fatalf("provider session connects = %d, want zero before capability rejection", provider.connects)
 	}
 }
 

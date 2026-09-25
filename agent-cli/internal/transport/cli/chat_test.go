@@ -1,9 +1,5 @@
 package cli
 
-import sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
-
-import sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
-
 import (
 	"bytes"
 	"context"
@@ -136,7 +132,7 @@ func newTestAgentCLIAtWithFlags(t *testing.T, inferencer messages.Inferencer, co
 		NewProbeGateCommand(),
 		NewProbeReportCommand(),
 		NewProbeFleetCommand(nil, nil, newReplayRuntimeServiceForTest()),
-		NewSessionCommand(askFlags, globalFlags, newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}}), nil),
+		newTestSessionCommand(askFlags, globalFlags, testSessionDeps{}),
 		NewSessionShowCommand(globalFlags, testFileStoreFactory()),
 		NewSessionListCommand(globalFlags, testFileStoreFactory()),
 		NewSessionDeleteCommand(globalFlags, testFileStoreFactory()),

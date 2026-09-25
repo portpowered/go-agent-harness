@@ -12,6 +12,7 @@ import (
 type streamAccounting struct {
 	mu           sync.Mutex
 	sink         *metrics.InMemorySink
+	recorder     metrics.Recorder
 	usage        messages.TokenUsage
 	outputInTurn bool
 	toolDeltas   map[string]struct{}
@@ -93,17 +94,24 @@ func (a *streamAccounting) accountToolDelta(id string, byteCount int) {
 	}
 }
 
+// accountToolEnd counts complete arguments only for a call whose deltas were
+// not already accounted. Providers may identify streamed deltas only by the
+// message ID or not at all, so both identities and the anonymous stream are
+// consulted before the arguments are treated as unstreamed output.
 func (a *streamAccounting) accountToolEnd(id string, value *messages.ToolCallEndValue) {
 	if value == nil {
 		return
 	}
-	if value.ToolCallID != "" {
-		id = value.ToolCallID
+	streamed := false
+	for _, key := range []string{value.ToolCallID, id, ""} {
+		if _, ok := a.toolDeltas[key]; ok {
+			streamed = true
+			delete(a.toolDeltas, key)
+		}
 	}
-	if _, streamed := a.toolDeltas[id]; !streamed {
+	if !streamed {
 		a.record(metrics.DirectionOutput, metrics.ModalityTool, len(value.Arguments))
 	}
-	delete(a.toolDeltas, id)
 }
 
 func (a *streamAccounting) accountUsage(usage messages.TokenUsage) {
@@ -114,6 +122,15 @@ func (a *streamAccounting) accountUsage(usage messages.TokenUsage) {
 		a.usage.ReasoningTokens += usage.ReasoningTokens
 	}
 	a.outputInTurn = false
+}
+
+func (a *streamAccounting) inputText(byteCount int) {
+	if a == nil || a.sink == nil {
+		return
+	}
+	a.mu.Lock()
+	a.record(metrics.DirectionInput, metrics.ModalityText, byteCount)
+	a.mu.Unlock()
 }
 
 func (a *streamAccounting) inputAudio(byteCount int) {
@@ -131,6 +148,12 @@ func (a *streamAccounting) record(direction metrics.Direction, modality metrics.
 	}
 	if err := a.sink.Record(direction, modality, int64(byteCount)); err != nil && a.err == nil {
 		a.err = fmt.Errorf("record %s/%s live metrics: %w", direction, modality, err)
+	}
+	if a.recorder == nil {
+		return
+	}
+	if err := a.recorder.Record(direction, modality, int64(byteCount)); err != nil && a.err == nil {
+		a.err = fmt.Errorf("record %s/%s invocation metrics: %w", direction, modality, err)
 	}
 }
 

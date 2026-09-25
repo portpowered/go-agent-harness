@@ -1,11 +1,10 @@
 package cli
 
-import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
-
 import (
 	"context"
 	"encoding/json"
 	"errors"
+	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"io"
 	"strings"
 	"sync"
@@ -17,8 +16,6 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
-	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
-	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
@@ -125,24 +122,7 @@ func TestSessionAdvertisesConnectedPageToolsOnTheProviderWire(t *testing.T) {
 
 	wire := newSessionUpdateWire()
 	sessionCtx, cancelSession := context.WithCancel(ctx)
-	runErr := make(chan error, 1)
-	go func() {
-		runErr <- servicetest.RunSessionWithInstructions(sessionCtx, io.Discard, servicetest.SessionRunOptions{
-			Provider: config.ProviderOpenAI, AudioService: audioiowire.NewService(),
-			Model:                  "gpt-realtime",
-			ModelCatalog:           providerswire.NewModelCatalog(),
-			APIKey:                 "unused",
-			LoadedConfig:           cfg,
-			BrowserToolsEnabled:    true,
-			WaitForClose:           true,
-			WebSocketDialer:        sessionUpdateDialer{wire: wire},
-			ToolExecutor:           surface.executor,
-			ToolDefinitions:        surface.definitions,
-			ToolDefinitionBase:     surface.base,
-			RefreshToolDefinitions: surface.refresh,
-			BrowserWatch:           surface.browserWatch,
-		}, "You help the customer with the cube on the connected page.")
-	}()
+	runErr := runTestBrowserLiveSession(sessionCtx, cfg, capabilities, sessionUpdateDialer{wire: wire}, "You help the customer with the cube on the connected page.")
 	defer func() {
 		cancelSession()
 		select {
@@ -434,28 +414,11 @@ func TestSessionRepublishesLateConnectedPageToolsOnTheProviderWire(t *testing.T)
 		}
 	}()
 
-	surface := resolveSessionToolSurface(ctx, capabilities)
+	resolveSessionToolSurface(ctx, capabilities)
 
 	wire := newSessionUpdateWire()
 	sessionCtx, cancelSession := context.WithCancel(ctx)
-	runErr := make(chan error, 1)
-	go func() {
-		runErr <- servicetest.RunSessionWithInstructions(sessionCtx, io.Discard, servicetest.SessionRunOptions{
-			Provider: config.ProviderOpenAI, AudioService: audioiowire.NewService(),
-			Model:                  "gpt-realtime",
-			ModelCatalog:           providerswire.NewModelCatalog(),
-			APIKey:                 "unused",
-			LoadedConfig:           cfg,
-			BrowserToolsEnabled:    true,
-			WaitForClose:           true,
-			WebSocketDialer:        sessionUpdateDialer{wire: wire},
-			ToolExecutor:           surface.executor,
-			ToolDefinitions:        surface.definitions,
-			ToolDefinitionBase:     surface.base,
-			RefreshToolDefinitions: surface.refresh,
-			BrowserWatch:           surface.browserWatch,
-		}, "You help the customer with the cube on the connected page.")
-	}()
+	runErr := runTestBrowserLiveSession(sessionCtx, cfg, capabilities, sessionUpdateDialer{wire: wire}, "You help the customer with the cube on the connected page.")
 	defer func() {
 		cancelSession()
 		select {
@@ -628,24 +591,7 @@ func TestSessionAdvertisesPageToolsOnTheWireAfterMidSessionSelection(t *testing.
 
 	wire := newSessionUpdateWire()
 	sessionCtx, cancelSession := context.WithCancel(ctx)
-	runErr := make(chan error, 1)
-	go func() {
-		runErr <- servicetest.RunSessionWithInstructions(sessionCtx, io.Discard, servicetest.SessionRunOptions{
-			Provider: config.ProviderOpenAI, AudioService: audioiowire.NewService(),
-			Model:                  "gpt-realtime",
-			ModelCatalog:           providerswire.NewModelCatalog(),
-			APIKey:                 "unused",
-			LoadedConfig:           cfg,
-			BrowserToolsEnabled:    true,
-			WaitForClose:           true,
-			WebSocketDialer:        sessionUpdateDialer{wire: wire},
-			ToolExecutor:           surface.executor,
-			ToolDefinitions:        surface.definitions,
-			ToolDefinitionBase:     surface.base,
-			RefreshToolDefinitions: surface.refresh,
-			BrowserWatch:           surface.browserWatch,
-		}, "You help the customer with the cube on the connected page.")
-	}()
+	runErr := runTestBrowserLiveSession(sessionCtx, cfg, capabilities, sessionUpdateDialer{wire: wire}, "You help the customer with the cube on the connected page.")
 	defer func() {
 		cancelSession()
 		select {
@@ -687,5 +633,32 @@ func TestSessionAdvertisesPageToolsOnTheWireAfterMidSessionSelection(t *testing.
 			}
 			return
 		}
+	}
+}
+
+// runTestBrowserLiveSession runs one browser-enabled OpenAI session through
+// the composed live session command, with the provider writing to the test's
+// websocket double. The test constructed and initialized capabilities itself
+// and keeps ownership of Close; the session borrows the same broker.
+func runTestBrowserLiveSession(ctx context.Context, cfg *config.Config, capabilities SessionToolCapabilities, dialer transport.Dialer, systemPrompt string) <-chan error {
+	command := newTestSessionCommand(nil, nil, testSessionDeps{Dialer: dialer, Capabilities: borrowedTestCapabilities(capabilities)})
+	runErr := make(chan error, 1)
+	go func() {
+		runErr <- command.runSessionRequest(ctx, io.Discard, io.Discard, serviceSession.Request{
+			Provider: config.ProviderOpenAI, Model: "gpt-realtime", APIKey: "unused", LoadedConfig: cfg,
+			BrowserToolsEnabled: true, WaitForClose: true, SystemPrompt: systemPrompt,
+		})
+	}()
+	return runErr
+}
+
+// borrowedTestCapabilities lends an already-initialized capability set to a
+// session without transferring its initialization or close ownership.
+func borrowedTestCapabilities(capabilities SessionToolCapabilities) SessionToolCapabilitiesFactory {
+	return func(*config.Config) (SessionToolCapabilities, error) {
+		borrowed := capabilities
+		borrowed.Initialize = nil
+		borrowed.Close = nil
+		return borrowed, nil
 	}
 }

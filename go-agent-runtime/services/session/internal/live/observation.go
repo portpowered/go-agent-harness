@@ -150,6 +150,7 @@ func (h *handle) sendOpeningMessage(ctx context.Context, loop *agentloop.AgentLo
 			h.failOpeningMessage(err)
 			return
 		}
+		h.runtimeTrace.UserTextInput(prompt)
 		if requestResponse && h.request.FinishAfterResponse && !h.captureSourceIsActive() {
 			h.markCaptureComplete()
 		}
@@ -159,6 +160,7 @@ func (h *handle) sendOpeningMessage(ctx context.Context, loop *agentloop.AgentLo
 		h.failOpeningMessage(err)
 		return
 	}
+	h.runtimeTrace.UserTextInput(prompt)
 	if h.request.FinishAfterResponse && !h.captureSourceIsActive() {
 		h.markCaptureComplete()
 	}
@@ -177,14 +179,6 @@ func (h *handle) claimOpeningMessage() (string, []messages.ContentPart, session.
 		prompt = deferredImageOpeningPrompt
 	}
 	return prompt, parts, h.request.OpeningMessageResponse, true
-}
-func hasImageContentPart(parts []messages.ContentPart) bool {
-	for _, part := range parts {
-		if _, ok := part.(messages.ImagePart); ok {
-			return true
-		}
-	}
-	return false
 }
 func (h *handle) failOpeningMessage(err error) {
 	if err == nil {

@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	audiosubsystem "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems/audio"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
@@ -218,3 +220,53 @@ func appendToolAcknowledgementOption(options []agentloop.Option, policy *session
 }
 
 var _ sessionduration.DuplexLoopFactory = (*DuplexLoopFactory)(nil)
+
+// joinWorkerError adds a media worker failure to the invocation result unless
+// it is a context termination or already produced that result, so one failure
+// is reported once.
+func joinWorkerError(err, workerErr error) error {
+	if isContextTermination(workerErr) || errors.Is(err, workerErr) {
+		return err
+	}
+	return errors.Join(err, workerErr)
+}
+
+const (
+	// playbackQueueStallTimeout bounds a graceful drain whose device consumer
+	// stops advancing the local playback queue.
+	playbackQueueStallTimeout = 250 * time.Millisecond
+	playbackQueuePollInterval = 5 * time.Millisecond
+)
+
+// drainInvocationPlayback joins the playback pump and then lets the device
+// consumer empty the local queue, so closing the device does not discard the
+// response tail. Native devices already drain inside the pump; a consumer
+// that stops advancing is abandoned after a bounded stall.
+func (i *liveInvocation) drainInvocationPlayback() error {
+	if err := drainPlayback(i.ctx, i.ports.Playback, i.options.PlaybackDrainTimeout); err != nil {
+		return err
+	}
+	if provider, ok := i.device.(devices.PlaybackStatsProvider); ok {
+		waitForPlaybackQueue(i.ctx, provider)
+	}
+	return nil
+}
+
+func waitForPlaybackQueue(ctx context.Context, provider devices.PlaybackStatsProvider) {
+	_, stats := provider.PlaybackStats()
+	queued, progressed := stats.QueuedSamples, time.Now()
+	for queued > 0 && time.Since(progressed) < playbackQueueStallTimeout {
+		timer := time.NewTimer(playbackQueuePollInterval)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
+		_, stats = provider.PlaybackStats()
+		if stats.QueuedSamples < queued {
+			progressed = time.Now()
+		}
+		queued = stats.QueuedSamples
+	}
+}

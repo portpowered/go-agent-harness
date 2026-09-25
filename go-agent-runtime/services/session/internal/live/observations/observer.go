@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	sessiontrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
@@ -33,10 +34,19 @@ type RuntimeTrace struct {
 
 // NewRuntimeTrace constructs an inert observer for one live invocation.
 func NewRuntimeTrace(observer sessiontrace.RuntimeObserver, clock session.LiveClock, tick func() uint64) *RuntimeTrace {
-	if observer == nil {
+	return NewInvocationTrace(observer, nil, clock, tick)
+}
+
+// NewInvocationTrace constructs the observer for one live invocation whose
+// host also collects per-invocation stream accounting. The recorder receives
+// every accounted observation even when no service observer is installed.
+func NewInvocationTrace(observer sessiontrace.RuntimeObserver, recorder metrics.Recorder, clock session.LiveClock, tick func() uint64) *RuntimeTrace {
+	if observer == nil && recorder == nil {
 		return nil
 	}
-	return &RuntimeTrace{observer: observer, clock: clock, tick: tick, accounting: newStreamAccounting()}
+	accounting := newStreamAccounting()
+	accounting.recorder = recorder
+	return &RuntimeTrace{observer: observer, clock: clock, tick: tick, accounting: accounting}
 }
 
 func (r *RuntimeTrace) observe(kind sessiontrace.SessionRuntimeObservationKind, payload []byte, turns, commit int, response messages.StreamMessage, clean bool, runErr error) {
@@ -134,6 +144,15 @@ func (r *RuntimeTrace) InputCommit(providerCreated bool) {
 	}
 	r.inputMu.Unlock()
 	r.observe(sessiontrace.SessionRuntimeObservationInputCommit, payload, 0, commit, messages.StreamMessage{}, true, nil)
+}
+
+// UserTextInput accounts caller text admitted to the provider as user input,
+// such as an opening prompt or a text control.
+func (r *RuntimeTrace) UserTextInput(text string) {
+	if r == nil {
+		return
+	}
+	r.accounting.inputText(len(text))
 }
 
 // ResponseCreate records a response-request control accepted by the provider.

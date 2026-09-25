@@ -2,35 +2,27 @@ package integration
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
-	sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	agentwire "github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	runtimeAudioIO "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 	runtimedeviceswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
-	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
 	recordingwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/wire"
 	replaywire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	sessionwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
+	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
+	sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	"github.com/spf13/cobra"
 )
-
-// Tests compose the same runtime and use-case services as the application graph.
-func newTestSessionService(deps sessionservicewire.SessionDependencies) agentsession.SessionService {
-	deps.Runtime = sessionservicewire.NewSessionRuntime(audioiowire.NewService(), deps.Clock, deps.ToolService, sessionservicewire.NewSessionRuntimeFactory(), deps.RuntimeFactory, deps.SessionInferencer, deps.ToolExecutor, runtimedeviceswire.NewService(deps.DeviceRegistry, audioiowire.NewService()), deps.RuntimeObserver, deps.MetricSampler, deps.Logger, providerswire.NewModelCatalog(), sessionservicewire.NewBrowserConversationService(), recordingwire.NewService(deps.Clock), recordingwire.NewProviderCaptureService(deps.Clock), replaywire.NewService())
-	return sessionservicewire.NewSessionService(deps)
-}
-
-func newTestAudioService() runtimeAudioIO.Service { return audioiowire.NewService() }
 
 func newTestSessionRootCommand(t testing.TB, swaps ...agentwire.PortSwap) *cobra.Command {
 	t.Helper()
@@ -47,6 +39,32 @@ func newTestSessionRootCommand(t testing.TB, swaps ...agentwire.PortSwap) *cobra
 	return agentCLI.Generate()
 }
 
+// newTestLiveSessionCommand composes the session command with the same live,
+// replay, recording, and device services as the application graph. The
+// injected inferencer replaces provider construction like the application's
+// session-inferencer port.
+func newTestLiveSessionCommand(globalFlags *flags.GlobalFlags, registry devicegw.DeviceRegistry, inferencer messages.SessionInferencer, capabilities cli.SessionToolCapabilitiesFactory) *cli.SessionCommand {
+	clockSource := sessionclock.Real{}
+	audioService := audioiowire.NewService()
+	recordingService := recordingwire.NewService(clockSource)
+	liveService := sessionwire.NewLiveService(sessionwire.LiveDependencies{
+		InferencerFactory: func(_ context.Context, request session.LiveRequest) (messages.SessionInferencer, error) {
+			path := strings.TrimSpace(request.Replay.OutputCapturePath)
+			if path == "" || !request.Replay.InjectedCaptureAllowed {
+				return inferencer, nil
+			}
+			return recordingService.TrackInjectedSession(inferencer, path)
+		},
+		Clock:     clockSource.Now,
+		Scheduler: clockSource,
+	})
+	return cli.NewSessionCommandWithLive(
+		flags.NewAskFlags(), globalFlags, nil,
+		liveService, replaywire.NewService(), runtimedeviceswire.NewService(registry, audioService),
+		cli.FileDeviceService{Service: runtimedeviceswire.NewFileService(audioService), Scheduler: clockSource, TraceService: sessiontracewire.NewService()},
+		capabilities, nil, nil, recordingService, nil,
+	)
+}
 func newChatSessionID(t interface {
 	Helper()
 	Fatalf(string, ...any)

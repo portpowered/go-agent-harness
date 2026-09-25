@@ -292,3 +292,28 @@ func observationKinds(values []sessiontrace.SessionRuntimeObservation) []session
 	}
 	return kinds
 }
+
+func TestInvocationTraceFeedsRecorderWithoutServiceObserver(t *testing.T) {
+	recorder, err := metrics.NewInMemorySink()
+	require.NoError(t, err)
+	trace := NewInvocationTrace(nil, recorder, nil, nil)
+	require.NotNil(t, trace, "a per-invocation recorder alone must enable accounting")
+
+	trace.UserTextInput("hello")
+	trace.UserTextInput("")
+	// A provider may identify streamed argument deltas only on the final
+	// tool-call end value; the arguments must still be counted once.
+	trace.Message(messages.StreamMessage{Type: messages.StreamTypeToolCallDelta, Role: messages.RoleAssistant, Value: &messages.ToolCallDeltaValue{PartialJSON: `{"city":`}}, false)
+	trace.Message(messages.StreamMessage{Type: messages.StreamTypeToolCallDelta, Role: messages.RoleAssistant, Value: &messages.ToolCallDeltaValue{PartialJSON: `"Paris"}`}}, false)
+	trace.Message(messages.StreamMessage{Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant, Value: messages.NewToolCallEndValue("call-1", "get_weather", `{"city":"Paris"}`)}, false)
+	// An unstreamed call is counted from its complete arguments.
+	trace.Message(messages.StreamMessage{Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant, Value: messages.NewToolCallEndValue("call-2", "get_time", `{}`)}, false)
+	trace.Message(messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("sunny")}, false)
+	trace.Terminal(0, nil)
+
+	snapshot := recorder.Snapshot()
+	require.Equal(t, uint64(5), snapshot.SeriesFor(metrics.DirectionInput, metrics.ModalityText).TotalBytes)
+	require.Equal(t, uint64(len(`{"city":"Paris"}`)+len(`{}`)), snapshot.SeriesFor(metrics.DirectionOutput, metrics.ModalityTool).TotalBytes)
+	require.Equal(t, uint64(5), snapshot.SeriesFor(metrics.DirectionOutput, metrics.ModalityText).TotalBytes)
+	require.NoError(t, trace.Error())
+}

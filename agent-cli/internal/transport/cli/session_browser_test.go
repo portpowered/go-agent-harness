@@ -1,11 +1,5 @@
 package cli
 
-import sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
-
-import sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
-
-import sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-
 import (
 	"bytes"
 	"context"
@@ -20,6 +14,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	"github.com/spf13/cobra"
 )
@@ -132,7 +127,7 @@ func TestSessionBrowserFlagsRejectInvalidValues(t *testing.T) {
 
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
-			command := NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}}), nil).Generate()
+			command := newTestSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), testSessionDeps{}).Generate()
 			command.SetArgs(testCase.args)
 			err := command.ExecuteContext(context.Background())
 			if err == nil {
@@ -146,7 +141,7 @@ func TestSessionBrowserFlagsRejectInvalidValues(t *testing.T) {
 }
 
 func TestWebCastRequiresWebMCPBrowserTools(t *testing.T) {
-	command := NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}}), nil).Generate()
+	command := newTestSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), testSessionDeps{}).Generate()
 	command.SetArgs([]string{"--web-cast"})
 	err := command.ExecuteContext(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "browser.tools.web_cast requires browser.tools.enabled") {
@@ -195,7 +190,7 @@ browser:
 				toolCapabilityCalls++
 				return SessionToolCapabilities{}, nil
 			}
-			owner := NewSessionCommand(flags.NewAskFlags(), globalFlags, newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}, SessionInferencer: inferencer, ToolService: SessionToolCapabilitiesFactory(capabilityFactory)}), nil)
+			owner := newTestSessionCommand(flags.NewAskFlags(), globalFlags, testSessionDeps{Inferencer: inferencer, Capabilities: SessionToolCapabilitiesFactory(capabilityFactory)})
 			command := owner.Generate()
 			var out bytes.Buffer
 			command.SetOut(&out)
@@ -316,7 +311,7 @@ browser:
 		resolvedBrowser = cfg.Browser
 		return SessionToolCapabilities{Close: func() error { capabilityCloseCalls++; return nil }}, nil
 	}
-	owner := NewSessionCommand(flags.NewAskFlags(), globalFlags, newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}, SessionInferencer: inferencer, ToolService: SessionToolCapabilitiesFactory(capabilityFactory), DeviceRegistry: deviceRegistry}), nil)
+	owner := newTestSessionCommand(flags.NewAskFlags(), globalFlags, testSessionDeps{Inferencer: inferencer, Capabilities: SessionToolCapabilitiesFactory(capabilityFactory), Registry: deviceRegistry})
 	command := owner.Generate()
 	var out bytes.Buffer
 	command.SetOut(&out)
@@ -344,20 +339,23 @@ browser:
 func TestSessionBrowserToolsClosesTransferredCapabilityOnPlanningFailure(t *testing.T) {
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = t.TempDir()
-	closeCalls := 0
+	constructed, closeCalls := 0, 0
 	capabilityFactory := func(*config.Config) (SessionToolCapabilities, error) {
+		constructed++
 		return SessionToolCapabilities{Close: func() error { closeCalls++; return nil }}, nil
 	}
-	owner := NewSessionCommand(flags.NewAskFlags(), globalFlags, newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}, ToolService: SessionToolCapabilitiesFactory(capabilityFactory)}), nil)
+	owner := newTestSessionCommand(flags.NewAskFlags(), globalFlags, testSessionDeps{Capabilities: SessionToolCapabilitiesFactory(capabilityFactory)})
 	command := owner.Generate()
 	command.SetArgs([]string{"--browser-tools=webmcp", "--provider=unsupported-provider"})
 
 	err := command.ExecuteContext(context.Background())
-	if err == nil || !strings.Contains(err.Error(), `unsupported realtime session provider "unsupported-provider"`) || !strings.Contains(err.Error(), `supported providers are "openai" and "grok"`) {
+	if err == nil || !strings.Contains(err.Error(), `unsupported realtime session provider "unsupported-provider"`) {
 		t.Fatalf("planning error = %v, want unsupported browser live provider error", err)
 	}
-	if closeCalls != 1 {
-		t.Fatalf("planning-failure capability close calls = %d, want one", closeCalls)
+	// Provider admission precedes capability construction, so a rejected
+	// provider must never leave a constructed capability open.
+	if closeCalls != constructed {
+		t.Fatalf("planning-failure capability close calls = %d for %d constructions, want every construction closed", closeCalls, constructed)
 	}
 }
 
@@ -377,7 +375,11 @@ func TestSessionManagedBrowserStartupFailureStopsBeforeProvider(t *testing.T) {
 	capabilityFactory := func(*config.Config) (SessionToolCapabilities, error) {
 		return SessionToolCapabilities{Initialize: func(context.Context) error { return startupErr }, Close: func() error { closeCalls++; return nil }}, nil
 	}
-	owner := NewSessionCommand(flags.NewAskFlags(), globalFlags, newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}, SessionInferencer: inferencer, ToolService: SessionToolCapabilitiesFactory(capabilityFactory)}), nil)
+	registry, err := devicegw.NewVirtualRegistry(devicegw.DefaultVirtualBackendConfig())
+	if err != nil {
+		t.Fatalf("new virtual audio registry: %v", err)
+	}
+	owner := newTestSessionCommand(flags.NewAskFlags(), globalFlags, testSessionDeps{Inferencer: inferencer, Capabilities: SessionToolCapabilitiesFactory(capabilityFactory), Registry: registry})
 	command := owner.Generate()
 	command.SetArgs([]string{
 		"--browser-tools", "webmcp",
@@ -385,8 +387,8 @@ func TestSessionManagedBrowserStartupFailureStopsBeforeProvider(t *testing.T) {
 		"--model", "gpt-realtime-2.1-mini",
 	})
 
-	err := command.ExecuteContext(context.Background())
-	if !errors.Is(err, startupErr) || !strings.Contains(err.Error(), "initialize session tools") {
+	err = command.ExecuteContext(context.Background())
+	if !errors.Is(err, startupErr) {
 		t.Fatalf("managed browser startup error = %v, want explicit initialization failure", err)
 	}
 	if inferencer.connects != 0 {

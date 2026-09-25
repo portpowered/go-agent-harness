@@ -1,11 +1,5 @@
 package integration
 
-import sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
-
-import sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
-
-import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-
 import (
 	"bytes"
 	"context"
@@ -25,7 +19,7 @@ import (
 	webmcpTools "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
 
 // TestSessionWebMCPDeviceLoopbackRecordsAndReplaysAudio proves the customer
@@ -42,14 +36,14 @@ func TestSessionWebMCPDeviceLoopbackRecordsAndReplaysAudio(t *testing.T) {
 	provider := newWebMCPDeviceProvider()
 	capabilityFactory := func(*config.Config) (cli.SessionToolCapabilities, error) {
 		return cli.SessionToolCapabilities{
-			Executor: toolSet.Executor(), Definitions: toolSet.Definitions(),
+			Executor: toolSet.Executor(), Definitions: append(toolSet.Definitions(), toolSet.PageToolDefinitions(context.Background())...),
 			BrowserWatch: broker.Watch, Close: broker.Close,
 		}, nil
 	}
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = t.TempDir()
 	globalFlags.WorkDirPath = t.TempDir()
-	owner := cli.NewSessionCommand(flags.NewAskFlags(), globalFlags, newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}, SessionInferencer: provider, ToolService: cli.SessionToolCapabilitiesFactory(capabilityFactory), DeviceRegistry: registry}), nil)
+	owner := newTestLiveSessionCommand(globalFlags, registry, provider, cli.SessionToolCapabilitiesFactory(capabilityFactory))
 	command := owner.Generate()
 	command.SetOut(io.Discard)
 	command.SetErr(io.Discard)
@@ -221,7 +215,7 @@ func (m *webMCPDeviceInbound) ReadFrame(ctx context.Context) (audio.PCMFrame, er
 		case frame := <-m.frames:
 			return frame, nil
 		default:
-			return audio.PCMFrame{}, rtc.ErrPeerClosed
+			return audio.PCMFrame{}, io.EOF
 		}
 	case <-ctx.Done():
 		return audio.PCMFrame{}, ctx.Err()
@@ -260,6 +254,14 @@ func (s *webMCPDeviceSession) RTCMedia() audio.MediaEndpoints {
 func (s *webMCPDeviceSession) Send(ctx context.Context, message messages.StreamMessage) bool {
 	if err := ctx.Err(); err != nil {
 		return false
+	}
+	// The live session admits local capture through its ordered audio
+	// ingress, so the first microphone PCM reaches the provider as an audio
+	// delta rather than through the provider media endpoint.
+	if message.Type == messages.StreamTypeAudioDelta {
+		if err := s.outbound.WriteFrame(ctx, audio.PCMFrame{}); err != nil {
+			return false
+		}
 	}
 	if message.Type == messages.StreamTypeToolCallEnd {
 		if value, ok := message.Value.(*messages.ToolCallEndValue); ok && value != nil && value.ToolCallID == "cube-call" {

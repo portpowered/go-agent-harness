@@ -1,180 +1,25 @@
 package integration
 
-import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
-
 import (
 	"context"
 	"errors"
 	"io"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/spf13/cobra"
 )
 
-const (
-	sessionToolLifecycleCallID    = "call_lifecycle_slow"
-	sessionLifecycleSafetyTimeout = 10 * time.Second
-)
-
-// lifecycleSession is a small provider-facing session double. It emits one
-// scheduled assistant response containing a tool call, then reports the
-// result accepted only through SendWithOutcome. The local SESSION.CLOSE delta
-// is observed through the normal session runner lifecycle.
-type lifecycleSession struct {
-	recv *messages.TypedBuffer[messages.StreamMessage]
-	done chan struct{}
-
-	closeOnce          sync.Once
-	responseOnce       sync.Once
-	resultAcceptedOnce sync.Once
-	continuationOnce   sync.Once
-
-	mu   sync.Mutex
-	sent []messages.StreamMessage
-
-	resultAccepted        chan struct{}
-	continuationRequested chan struct{}
-	continuationRelease   chan struct{}
-}
-
-func newLifecycleSession() *lifecycleSession {
-	return &lifecycleSession{
-		recv:                  messages.NewTypedBuffer[messages.StreamMessage](32),
-		done:                  make(chan struct{}),
-		resultAccepted:        make(chan struct{}),
-		continuationRequested: make(chan struct{}),
-		continuationRelease:   make(chan struct{}),
-	}
-}
-
-func (s *lifecycleSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
-	return s.SendWithOutcome(ctx, msg).OK()
-}
-
-func (s *lifecycleSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
-	if err := ctx.Err(); err != nil {
-		return lifecycleSessionContextOutcome(err)
-	}
-	s.mu.Lock()
-	s.sent = append(s.sent, msg)
-	s.mu.Unlock()
-
-	switch msg.Type {
-	case messages.StreamTypeMessageEnd:
-		s.responseOnce.Do(func() {
-			s.emitProviderToolTurn()
-		})
-	case messages.StreamTypeToolCallEnd:
-		value, ok := msg.Value.(*messages.ToolCallEndValue)
-		if ok && value != nil && value.ToolCallID == sessionToolLifecycleCallID {
-			s.resultAcceptedOnce.Do(func() { close(s.resultAccepted) })
-		}
-	case messages.StreamTypeResponseCreate:
-		s.continuationOnce.Do(func() { close(s.continuationRequested) })
-		select {
-		case <-s.continuationRelease:
-			s.emitProviderContinuation()
-		case <-ctx.Done():
-			return lifecycleSessionContextOutcome(ctx.Err())
-		}
-	}
-	return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
-}
-
-func lifecycleSessionContextOutcome(err error) messages.SessionSendOutcome {
-	if errors.Is(err, context.DeadlineExceeded) {
-		return messages.SessionSendOutcome{Status: messages.SessionSendTimedOut, Err: err}
-	}
-	return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: err}
-}
-
-func (s *lifecycleSession) emitProviderToolTurn() {
-	for _, msg := range []messages.StreamMessage{
-		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
-		{Type: messages.StreamTypeToolCallStart, Role: messages.RoleAssistant, Value: messages.NewToolCallStartValue(sessionToolLifecycleCallID, "slow_tool")},
-		{Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant, Value: messages.NewToolCallEndValue(sessionToolLifecycleCallID, "slow_tool", `{"value":"wait"}`)},
-		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
-	} {
-		s.recv.Write(context.Background(), msg)
-	}
-}
-
-func (s *lifecycleSession) emitProviderContinuation() {
-	for _, msg := range []messages.StreamMessage{
-		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
-		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("grounded lifecycle continuation")},
-		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
-	} {
-		s.recv.Write(context.Background(), msg)
-	}
-}
-
-func (s *lifecycleSession) Receive() *messages.TypedBuffer[messages.StreamMessage] { return s.recv }
-
-func (s *lifecycleSession) Done() <-chan struct{} { return s.done }
-
-func (s *lifecycleSession) Close() error {
-	s.closeOnce.Do(func() { close(s.done) })
-	return nil
-}
-
-func (s *lifecycleSession) sentSnapshot() []messages.StreamMessage {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return append([]messages.StreamMessage(nil), s.sent...)
-}
-
-func (s *lifecycleSession) releaseContinuation() {
-	select {
-	case <-s.continuationRelease:
-	default:
-		close(s.continuationRelease)
-	}
-}
-
-type lifecycleSessionInferencer struct {
-	mu      sync.Mutex
-	session *lifecycleSession
-	ready   chan struct{}
-}
-
-func (i *lifecycleSessionInferencer) ConnectSession(context.Context) (messages.Session, error) {
-	session := newLifecycleSession()
-	session.recv.Write(context.Background(), messages.StreamMessage{
-		Type:  messages.StreamTypeSessionOpen,
-		Value: messages.NewSessionOpenValue("lifecycle-session", "test"),
-	})
-	i.mu.Lock()
-	i.session = session
-	i.mu.Unlock()
-	close(i.ready)
-	return session, nil
-}
-
-func (i *lifecycleSessionInferencer) connectedSession() *lifecycleSession {
-	i.mu.Lock()
-	defer i.mu.Unlock()
-	return i.session
-}
-
-type lifecycleToolExecutor struct {
-	started chan struct{}
-	release chan struct{}
-	once    sync.Once
-}
-
-func (e *lifecycleToolExecutor) Execute(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
-	e.once.Do(func() { close(e.started) })
-	select {
-	case <-e.release:
-		return messages.ToolCallResponse{Content: "lifecycle-result"}, nil
-	case <-ctx.Done():
-		return messages.ToolCallResponse{}, ctx.Err()
-	}
-}
+// sessionLifecycleSafetyTimeout bounds each lifecycle wait in the hermetic
+// tool-result session tests.
+const sessionLifecycleSafetyTimeout = 10 * time.Second
 
 func waitLifecycleSignal(t *testing.T, signal <-chan struct{}, name string) {
 	t.Helper()
@@ -185,128 +30,244 @@ func waitLifecycleSignal(t *testing.T, signal <-chan struct{}, name string) {
 	}
 }
 
-// TestScheduledSessionWaitsForAcceptedToolResultAfterResponseDone drives the
-// real session composition boundary with one scheduled turn. The provider's
-// response.done is observed while the executor is still blocked; result
-// acceptance alone cannot close the session. A second barrier then releases
-// the explicit continuation, after which the normal close is emitted once.
-func TestScheduledSessionWaitsForAcceptedToolResultAfterResponseDone(t *testing.T) {
-	inferencer := &lifecycleSessionInferencer{}
-	inferencer.ready = make(chan struct{})
-	executor := &lifecycleToolExecutor{
-		started: make(chan struct{}),
-		release: make(chan struct{}),
-	}
-	providerResponseDone := make(chan struct{})
-	var responseDoneOnce sync.Once
-	var localSessionCloseOnce sync.Once
-	localSessionClose := make(chan struct{})
-	var traceMu sync.Mutex
-	var trace []messages.StreamMessage
+// liveToolSessionOptions describes one hermetic session run through the
+// composed CLI with the application's session-inferencer and tool-service
+// ports replaced by test doubles.
+type liveToolSessionOptions struct {
+	inferencer messages.SessionInferencer
+	executor   messages.ToolExecutor
+	toolNames  []string
+	observer   func(messages.StreamMessage)
+	output     io.Writer
+	// inputPCM, when present, is admitted as one scheduled customer audio
+	// turn (--audio-in-turn, which requires a --record-dir bundle).
+	inputPCM []byte
+	args     []string
+}
 
-	ctx, cancel := context.WithTimeout(context.Background(), sessionLifecycleSafetyTimeout)
+// newLiveToolSessionRoot composes the production CLI root with hermetic
+// session ports and the invocation arguments for one live tool session.
+func newLiveToolSessionRoot(t *testing.T, options liveToolSessionOptions) *cobra.Command {
+	t.Helper()
+	definitions := make([]messages.ToolDefinition, 0, len(options.toolNames))
+	for _, name := range options.toolNames {
+		definitions = append(definitions, messages.ToolDefinition{Name: name, Description: "Hermetic " + name + " fixture."})
+	}
+	capabilities := serviceTools.Factory(func(*config.Config) (serviceTools.Capabilities, error) {
+		return serviceTools.Capabilities{Executor: options.executor, Definitions: definitions}, nil
+	})
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
+		wire.NewToolServicePort(capabilities),
+		wire.NewPortSwap(wire.PortInferencer, &mockInferencer{response: "unused"}),
+		wire.NewPortSwap(wire.PortSessionInferencer, options.inferencer),
+	)
+	if err != nil {
+		t.Fatalf("initialize live tool session CLI: %v", err)
+	}
+	if options.observer != nil {
+		agentCLI.SetSessionStreamObserver(options.observer)
+	}
+	output := options.output
+	if output == nil {
+		output = io.Discard
+	}
+	root := agentCLI.Generate()
+	root.SetOut(output)
+	root.SetErr(io.Discard)
+	args := append([]string{"--config-dir", t.TempDir(), "session"}, options.args...)
+	if len(options.inputPCM) > 0 {
+		inputPath := filepath.Join(t.TempDir(), "customer-turn.wav")
+		writeAsyncCollisionInputWAV(t, inputPath, options.inputPCM)
+		args = append(args, "--audio-in-turn", inputPath, "--record-dir", filepath.Join(t.TempDir(), "recording"))
+	}
+	root.SetArgs(args)
+	return root
+}
+
+// Live-runtime port of the v4d tool-timeout vertical: the configured
+// tools.interactive policy bounds every live tool call through the composed
+// CLI. A fast/read call whose executor ignores its context is ended by the
+// fast deadline and returned to the provider as a correlated failure, while a
+// bounded-long-running call slower than that deadline still completes under
+// the long budget, and the session keeps serving to a clean finish.
+
+const (
+	interactiveFastCallID   = "call_interactive_fast"
+	interactiveFastToolName = "get_weather"
+	interactiveLongCallID   = "call_interactive_long"
+	interactiveLongToolName = "sleep"
+	interactiveLongPayload  = `{"slept":"ok"}`
+	interactiveTimeoutText  = "tool execution timed out"
+
+	interactiveFastTimeout = 100 * time.Millisecond
+	// interactiveLongWork exceeds the fast deadline but stays well inside the
+	// long-running budget, so only the class-specific bound lets it finish.
+	interactiveLongWork   = 300 * time.Millisecond
+	interactiveRunTimeout = 10 * time.Second
+)
+
+// interactiveTimeoutSession requests one fast/read and one long-running call,
+// records the provider-visible results, and answers the continuation.
+type interactiveTimeoutSession struct {
+	recv         *messages.TypedBuffer[messages.StreamMessage]
+	done         chan struct{}
+	closeOnce    sync.Once
+	responseOnce sync.Once
+	continueOnce sync.Once
+	started      time.Time
+	mu           sync.Mutex
+	results      map[string]string
+	elapsed      map[string]time.Duration
+}
+
+func newInteractiveTimeoutSession() *interactiveTimeoutSession {
+	return &interactiveTimeoutSession{
+		recv: messages.NewTypedBuffer[messages.StreamMessage](64), done: make(chan struct{}),
+		started: time.Now(), results: map[string]string{}, elapsed: map[string]time.Duration{},
+	}
+}
+
+func (s *interactiveTimeoutSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
+	if ctx.Err() != nil {
+		return false
+	}
+	switch msg.Type {
+	case messages.StreamTypeMessageEnd:
+		s.responseOnce.Do(s.emitToolCalls)
+	case messages.StreamTypeResponseCreate:
+		s.continueOnce.Do(s.emitContinuation)
+	case messages.StreamTypeToolCallEnd:
+		if value, ok := msg.Value.(*messages.ToolCallEndValue); ok && value != nil {
+			s.mu.Lock()
+			s.results[value.ToolCallID] = value.Arguments
+			s.elapsed[value.ToolCallID] = time.Since(s.started)
+			s.mu.Unlock()
+		}
+	}
+	return true
+}
+
+func (s *interactiveTimeoutSession) emitToolCalls() {
+	s.mu.Lock()
+	s.started = time.Now()
+	s.mu.Unlock()
+	s.write(messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()})
+	for _, call := range [][2]string{{interactiveFastCallID, interactiveFastToolName}, {interactiveLongCallID, interactiveLongToolName}} {
+		s.write(
+			messages.StreamMessage{Type: messages.StreamTypeToolCallStart, Role: messages.RoleAssistant, ToolCallId: call[0], Value: messages.NewToolCallStartValue(call[0], call[1])},
+			messages.StreamMessage{Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant, ToolCallId: call[0], Value: messages.NewToolCallEndValue(call[0], call[1], `{}`)},
+		)
+	}
+	s.write(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})})
+}
+
+func (s *interactiveTimeoutSession) emitContinuation() {
+	s.write(
+		messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
+		messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("Recovered from the delayed lookup.")},
+		messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+	)
+}
+
+func (s *interactiveTimeoutSession) write(msgs ...messages.StreamMessage) {
+	for _, msg := range msgs {
+		s.recv.Write(context.Background(), msg)
+	}
+}
+
+func (s *interactiveTimeoutSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
+	return s.recv
+}
+
+func (s *interactiveTimeoutSession) Done() <-chan struct{} { return s.done }
+
+func (s *interactiveTimeoutSession) Close() error {
+	s.closeOnce.Do(func() { close(s.done) })
+	return nil
+}
+
+func (s *interactiveTimeoutSession) result(callID string) (string, time.Duration, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	content, ok := s.results[callID]
+	return content, s.elapsed[callID], ok
+}
+
+type interactiveTimeoutInferencer struct{ session *interactiveTimeoutSession }
+
+func (i interactiveTimeoutInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
+	for _, msg := range []messages.StreamMessage{
+		{Type: messages.StreamTypeSessionOpen, Value: messages.NewSessionOpenValue("interactive-timeout", "test")},
+		{Type: messages.StreamTypeSessionUpdated, Value: messages.NewSessionUpdatedValue("interactive-timeout")},
+	} {
+		i.session.recv.Write(ctx, msg)
+	}
+	return i.session, nil
+}
+
+// interactiveTimeoutExecutor hangs the fast/read call without honoring its
+// context, so only the session deadline can end it, and makes the
+// long-running call outlast the fast deadline.
+type interactiveTimeoutExecutor struct{ release chan struct{} }
+
+func (e interactiveTimeoutExecutor) Execute(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
+	if call.Name == interactiveFastToolName {
+		<-e.release
+		return messages.ToolCallResponse{}, errors.New("released after the test")
+	}
+	timer := time.NewTimer(interactiveLongWork)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name, Content: interactiveLongPayload}, nil
+	case <-ctx.Done():
+		return messages.ToolCallResponse{}, ctx.Err()
+	}
+}
+
+func TestSessionInteractiveToolPolicyBoundsLiveToolCalls(t *testing.T) {
+	t.Setenv("AGENT_TOOLS__INTERACTIVE__FAST_READ_TIMEOUT", interactiveFastTimeout.String())
+	t.Setenv("AGENT_TOOLS__INTERACTIVE__LONG_RUNNING_TIMEOUT", "5s")
+	t.Setenv("AGENT_TOOLS__INTERACTIVE__ACKNOWLEDGEMENT_THRESHOLD", "50ms")
+	session := newInteractiveTimeoutSession()
+	executor := interactiveTimeoutExecutor{release: make(chan struct{})}
+	defer close(executor.release)
+	root := newLiveToolSessionRoot(t, liveToolSessionOptions{
+		inferencer: interactiveTimeoutInferencer{session: session},
+		executor:   executor,
+		toolNames:  []string{interactiveFastToolName, interactiveLongToolName},
+		output:     io.Discard,
+		inputPCM:   []byte{1, 2, 3, 4},
+		args: []string{
+			"--provider", "openai", "--model", "gpt-realtime", "--api-key", "test-key", "--experimental-tools",
+			"--record", filepath.Join(t.TempDir(), "interactive-timeout.session.json"),
+		},
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), interactiveRunTimeout)
 	defer cancel()
 	runErr := make(chan error, 1)
-	go func() {
-		runErr <- servicetest.RunSession(ctx, io.Discard, servicetest.SessionRunOptions{
-			AudioService:      newTestAudioService(),
-			RecordPath:        filepath.Join(t.TempDir(), "scheduled-tool-lifecycle.session.json"),
-			Provider:          "grok",
-			Model:             "grok-realtime",
-			APIKey:            "test-key",
-			SessionInferencer: inferencer,
-			ToolExecutor:      executor,
-			AudioInputs: []servicetest.ScheduledAudioInput{{
-				AfterCompletedTurns: 0,
-				PCM:                 []byte{1, 2, 3, 4},
-				EndOfTurn:           true,
-			}},
-			StreamObserver: func(msg messages.StreamMessage) {
-				traceMu.Lock()
-				trace = append(trace, msg)
-				traceMu.Unlock()
-				if msg.Type == messages.StreamTypeSessionClose {
-					localSessionCloseOnce.Do(func() { close(localSessionClose) })
-				}
-				if msg.Type == messages.StreamTypeMessageEnd && msg.Role == messages.RoleAssistant {
-					responseDoneOnce.Do(func() { close(providerResponseDone) })
-				}
-			},
-		})
-	}()
-
-	select {
-	case <-inferencer.ready:
-	case <-time.After(2 * time.Second):
-		t.Fatal("session was not connected")
-	}
-	sessionReady := inferencer.connectedSession()
-	if sessionReady == nil {
-		t.Fatal("connected session was not retained")
-	}
-
-	waitLifecycleSignal(t, executor.started, "tool executor to start")
-	waitLifecycleSignal(t, providerResponseDone, "provider response.done")
-	select {
-	case <-localSessionClose:
-		t.Fatal("session emitted SESSION.CLOSE before the outstanding tool result was accepted")
-	default:
-	}
-
-	close(executor.release)
-	waitLifecycleSignal(t, sessionReady.resultAccepted, "correlated tool result acceptance")
-	select {
-	case <-localSessionClose:
-		t.Fatal("session emitted SESSION.CLOSE after result acceptance but before continuation")
-	default:
-	}
-	waitLifecycleSignal(t, sessionReady.continuationRequested, "provider continuation request")
-	select {
-	case <-localSessionClose:
-		t.Fatal("session emitted SESSION.CLOSE before continuation terminal response")
-	default:
-	}
-	sessionReady.releaseContinuation()
-	waitLifecycleSignal(t, localSessionClose, "SESSION.CLOSE after continuation")
-
+	go func() { runErr <- root.ExecuteContext(ctx) }()
 	select {
 	case err := <-runErr:
 		if err != nil {
-			t.Fatalf("scheduled session returned an error: %v", err)
+			t.Fatalf("session with a timed-out tool must keep serving to a clean finish: %v", err)
 		}
-	case <-time.After(sessionLifecycleSafetyTimeout):
-		t.Fatalf("scheduled session did not finish after client close within %s", sessionLifecycleSafetyTimeout)
+	case <-time.After(2 * interactiveRunTimeout):
+		// A context-ignoring tool can only be ended by the interactive bound.
+		t.Fatalf("session did not finish within %s; the interactive policy did not bound the hanging call", 2*interactiveRunTimeout)
 	}
-
-	var resultCount int
-	var continuationCount int
-	for _, msg := range sessionReady.sentSnapshot() {
-		switch msg.Type {
-		case messages.StreamTypeToolCallEnd:
-			value, ok := msg.Value.(*messages.ToolCallEndValue)
-			if ok && value != nil && value.ToolCallID == sessionToolLifecycleCallID {
-				resultCount++
-			}
-		case messages.StreamTypeResponseCreate:
-			continuationCount++
-		}
+	fast, fastElapsed, ok := session.result(interactiveFastCallID)
+	if !ok || !strings.Contains(fast, interactiveTimeoutText) {
+		t.Fatalf("fast/read result = %q (delivered=%v), want the correlated %q failure", fast, ok, interactiveTimeoutText)
 	}
-	if resultCount != 1 {
-		t.Fatalf("provider sends contained %d correlated tool results, want exactly one", resultCount)
+	if fastElapsed < interactiveFastTimeout || fastElapsed >= interactiveLongWork+interactiveFastTimeout {
+		t.Fatalf("fast/read timeout crossed after %s, want the configured %s bound", fastElapsed, interactiveFastTimeout)
 	}
-	if continuationCount != 1 {
-		t.Fatalf("provider sends contained %d continuation requests, want exactly one", continuationCount)
+	long, longElapsed, ok := session.result(interactiveLongCallID)
+	if !ok || long != interactiveLongPayload {
+		t.Fatalf("long-running result = %q (delivered=%v), want %q under the long budget", long, ok, interactiveLongPayload)
 	}
-	traceMu.Lock()
-	observed := append([]messages.StreamMessage(nil), trace...)
-	traceMu.Unlock()
-	var closeCount int
-	for _, msg := range observed {
-		if msg.Type == messages.StreamTypeSessionClose {
-			closeCount++
-		}
-	}
-	if closeCount != 1 {
-		t.Fatalf("session emitted %d SESSION.CLOSE events, want exactly one", closeCount)
+	if longElapsed < interactiveLongWork {
+		t.Fatalf("long-running result crossed after %s, before its %s of work", longElapsed, interactiveLongWork)
 	}
 }

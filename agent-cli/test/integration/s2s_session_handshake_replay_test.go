@@ -1,7 +1,5 @@
 package integration
 
-import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
-
 import (
 	"context"
 	"encoding/json"
@@ -12,9 +10,10 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
@@ -26,8 +25,8 @@ const (
 	sessionHandshakeReplayResponse     = "recorded response"
 )
 
-// TestSessionCommand_RecordThenReplayUsesCapturedHandshake exercises the
-// normal recording boundary and then sends the resulting capture through the
+// TestSessionCommand_RecordThenReplayUsesCapturedHandshake records through
+// the composed production CLI and then sends the resulting capture through the
 // shipped production CLI. The replay deliberately changes the current
 // instruction/tool inputs and omits provider credentials; the captured raw
 // session.update remains authoritative while the later outbound prompt stays
@@ -36,16 +35,8 @@ func TestSessionCommand_RecordThenReplayUsesCapturedHandshake(t *testing.T) {
 	recordPath := filepath.Join(t.TempDir(), "recorded.session.json")
 	recordDialer := newHandshakeReplayDialer()
 
-	err := servicetest.RunSessionWithInstructions(context.Background(), io.Discard, servicetest.SessionRunOptions{
-		AudioService: newTestAudioService(),
-		RecordPath:   recordPath,
-		Provider:     "openai",
-		Model:        "gpt-realtime",
-		APIKey:       "synthetic-recording-key",
-		ConfigDir:    t.TempDir(),
-		ModelCatalog: providerswire.NewModelCatalog(),
-		Prompt:       sessionHandshakeReplayPrompt,
-		ToolDefinitions: []messages.ToolDefinition{{
+	recordTools := serviceTools.Factory(func(*config.Config) (serviceTools.Capabilities, error) {
+		return serviceTools.Capabilities{Definitions: []messages.ToolDefinition{{
 			Name:        sessionHandshakeReplayTool,
 			Description: "recorded schema",
 			Parameters: []messages.ToolParameter{{
@@ -53,10 +44,28 @@ func TestSessionCommand_RecordThenReplayUsesCapturedHandshake(t *testing.T) {
 				Type:     "string",
 				Required: true,
 			}},
-		}},
-		WebSocketDialer: recordDialer,
-	}, sessionHandshakeReplayInstructions)
+		}}}, nil
+	})
+	recordCLI, err := wire.InitializeMockAgentCLIWithPorts(
+		wire.NewPortSwap(wire.PortTransportDialer, recordDialer),
+		wire.NewToolServicePort(recordTools),
+		wire.NewPortSwap(wire.PortInferencer, &mockInferencer{response: "unused"}),
+	)
 	if err != nil {
+		t.Fatalf("initialize recording agent CLI: %v", err)
+	}
+	recordRoot := recordCLI.Generate()
+	recordRoot.SetOut(io.Discard)
+	recordRoot.SetErr(io.Discard)
+	recordRoot.SetArgs([]string{
+		"--config-dir", t.TempDir(),
+		"session",
+		"--record", recordPath,
+		"--provider", "openai", "--model", "gpt-realtime", "--api-key", "synthetic-recording-key",
+		"--system-prompt", sessionHandshakeReplayInstructions,
+		sessionHandshakeReplayPrompt,
+	})
+	if err := recordRoot.ExecuteContext(context.Background()); err != nil {
 		t.Fatalf("record hermetic OpenAI session: %v", err)
 	}
 

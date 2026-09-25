@@ -3,10 +3,13 @@ package wire
 
 import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/providerbuild"
 	sessiontrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 // LiveDependencies describes the provider, tool, and evidence edges for a
@@ -37,5 +40,26 @@ func NewLiveService(deps LiveDependencies) session.LiveService {
 		Scheduler:         deps.Scheduler,
 		RuntimeObserver:   deps.RuntimeObserver,
 		Tick:              deps.Tick,
+	})
+}
+
+// ProviderInferenceDependencies are the host edges for provider-backed live
+// sessions: the provider service, the resolver for opaque credential
+// references, an optional transport override, and the default tool surface
+// advertised when a request carries no participant capabilities.
+type ProviderInferenceDependencies struct {
+	Providers       providers.SessionService
+	Credentials     session.LiveCredentialResolver
+	Dialer          transport.Dialer
+	ToolDefinitions []messages.ToolDefinition
+}
+
+// NewProviderInferencerFactory assembles the session-owned projection from a
+// live request to a provider session. Hosts keep secret storage and test
+// seams; provider configuration translation stays in the session service.
+func NewProviderInferencerFactory(deps ProviderInferenceDependencies) session.LiveInferencerFactory {
+	return providerbuild.NewFactory(providerbuild.Dependencies{
+		Providers: deps.Providers, Credentials: deps.Credentials,
+		Dialer: deps.Dialer, ToolDefinitions: deps.ToolDefinitions,
 	})
 }
