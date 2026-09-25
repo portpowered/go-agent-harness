@@ -118,18 +118,61 @@ func capacityWaiterRemainsBlockedAboveLowWatermark(t *testing.T) {
 		t.Fatal(err)
 	}
 	primeVirtualPlayback(t, output, high)
-	wait := startCapacityWait(output, context.Background(), audio.FrameSize)
+	waitCtx := newBlockObservingContext()
+	wait := startCapacityWait(output, waitCtx, audio.FrameSize)
+	// The waiter must sample the full queue before the first read. If it
+	// started after a read it would correctly be admitted unthrottled
+	// (queued+frame <= high), which is the flake this handshake removes.
+	awaitCapacityWaitReblocked(t, wait, waitCtx, output)
 	for output.PlaybackStats().QueuedSamples-audio.FrameSize > low {
 		if err := input.ReadSamples(context.Background(), make([]int16, audio.FrameSize)); err != nil {
 			t.Fatal(err)
 		}
-		assertCapacityWaitBlocked(t, wait)
+		awaitCapacityWaitReblocked(t, wait, waitCtx, output)
 	}
 	if err := input.ReadSamples(context.Background(), make([]int16, audio.FrameSize)); err != nil {
 		t.Fatal(err)
 	}
 	if err := awaitCapacityWait(t, wait); err != nil {
 		t.Fatalf("wait at low watermark: %v", err)
+	}
+	if queued := output.PlaybackStats().QueuedSamples; queued > low {
+		t.Fatalf("waiter admitted at queued=%d, want at or below low watermark %d", queued, low)
+	}
+}
+
+// blockObservingContext reports each time a capacity waiter reaches its
+// blocking select: WaitForPlaybackCapacity reads ctx.Done() only there, after
+// it has sampled the queue and decided to wait. This synchronizes the test
+// with the waiter through the public context contract, without production
+// hooks or timing assumptions.
+type blockObservingContext struct {
+	context.Context
+	blocked chan struct{}
+}
+
+func newBlockObservingContext() *blockObservingContext {
+	return &blockObservingContext{Context: context.Background(), blocked: make(chan struct{}, 64)}
+}
+
+func (c *blockObservingContext) Done() <-chan struct{} {
+	select {
+	case c.blocked <- struct{}{}:
+	default:
+	}
+	return c.Context.Done()
+}
+
+// awaitCapacityWaitReblocked waits until the waiter has re-evaluated the
+// queue and blocked again, failing if it returns instead.
+func awaitCapacityWaitReblocked(t *testing.T, done <-chan error, ctx *blockObservingContext, output *VirtualStream) {
+	t.Helper()
+	select {
+	case err := <-done:
+		t.Fatalf("capacity wait returned at queued=%d while it should be blocked: %v", output.PlaybackStats().QueuedSamples, err)
+	case <-ctx.blocked:
+	case <-time.After(10 * time.Second):
+		t.Fatalf("capacity waiter did not block at queued=%d", output.PlaybackStats().QueuedSamples)
 	}
 }
 
