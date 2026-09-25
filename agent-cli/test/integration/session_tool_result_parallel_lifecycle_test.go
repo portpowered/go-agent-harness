@@ -489,7 +489,7 @@ func runParallelLifecycleCLI(t *testing.T, executor *parallelLifecycleExecutor, 
 		"--model", "gpt-realtime",
 		"--api-key", "test-key",
 		"--system-prompt", "none",
-		"--audio-in-turn", locateCLIFixture(t, "multiturn_turn1.wav"),
+		"--audio-in-turn", multiturnTurnSliceWAV(t, "multiturn_turn1.wav"),
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)

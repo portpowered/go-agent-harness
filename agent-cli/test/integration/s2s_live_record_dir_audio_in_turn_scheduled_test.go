@@ -6,6 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
@@ -14,12 +21,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
-	"io"
-	"os"
-	"path/filepath"
-	"strings"
-	"testing"
-	"time"
 )
 
 func newCLIScheduledBoundaryAgent(t *testing.T, server transport.Dialer) *cli.AgentCLI {
@@ -114,7 +115,7 @@ func TestSessionCommand_LiveScheduledAudioWithoutPromptSendsToolsWithoutGroundin
 	rootCmd.SetArgs(scheduledBoundaryArgs(
 		configDir,
 		recordDir,
-		locateCLIFixture(t, "multiturn_turn1.wav"),
+		multiturnTurnSliceWAV(t, "multiturn_turn1.wav"),
 	))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -195,8 +196,8 @@ func TestSessionCommand_LiveScheduledImageAudioAttachesImagesToFirstTurn(t *test
 		t.Fatalf("second image fixture: %v", err)
 	}
 	recordDir := filepath.Join(t.TempDir(), "image-scheduled-recording")
-	firstAudio := locateCLIFixture(t, "multiturn_turn1.wav")
-	secondAudio := locateCLIFixture(t, "multiturn_turn2.wav")
+	firstAudio := multiturnTurnSliceWAV(t, "multiturn_turn1.wav")
+	secondAudio := multiturnTurnSliceWAV(t, "multiturn_turn2.wav")
 	rootCmd := agentCLI.Generate()
 	rootCmd.SetOut(io.Discard)
 	rootCmd.SetErr(io.Discard)
@@ -306,6 +307,15 @@ func scheduledGroundedToolUpdateIndex(t *testing.T, updates []json.RawMessage) i
 	return groundedUpdateIndex
 }
 
+// scheduledSpeechSliceWAV returns a 0.3s voiced slice of the committed 24 kHz
+// speech corpus. The boundary server detects speech from non-zero PCM and the
+// assertions compare the streamed turns against whatever WAV was scheduled,
+// so the real-time-paced speech and its equal-duration silence stay short.
+func scheduledSpeechSliceWAV(t *testing.T) string {
+	t.Helper()
+	return writeVoicedWAVSlice(t, locateCorpusWAV(t, "truncated_24k"), shortVoicedSlice)
+}
+
 func equalDuration24kSilenceFixture(t *testing.T, speechPath string) string {
 	t.Helper()
 	wavBytes, err := os.ReadFile(speechPath)
@@ -351,7 +361,7 @@ func TestSessionCommand_LiveScheduledAudioDoesNotCrossDelayedSessionUpdated(t *t
 	rootCmd.SetArgs(scheduledBoundaryArgs(
 		t.TempDir(),
 		recordDir,
-		locateCLIFixture(t, "multiturn_turn1.wav"),
+		multiturnTurnSliceWAV(t, "multiturn_turn1.wav"),
 	))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -418,7 +428,7 @@ func TestSessionCommand_LiveScheduledAudioDoesNotCrossDelayedSessionUpdated(t *t
 // stop while Server VAD is enabled, but explicit null keeps both turns under
 // the client's one-commit/one-response boundary.
 func TestSessionCommand_LiveScheduledAudioSpeechThenExactSilence(t *testing.T) {
-	speechPath := locateCorpusWAV(t, "truncated_24k")
+	speechPath := scheduledSpeechSliceWAV(t)
 	silencePath := equalDuration24kSilenceFixture(t, speechPath)
 	server := newCLILiveScheduledBoundaryServer(false)
 	t.Cleanup(server.shutdown)
@@ -488,7 +498,7 @@ func TestSessionCommand_LiveScheduledAudioSpeechThenExactSilence(t *testing.T) {
 // and clears a speech buffer at speech stop, so the later client commit must
 // be rejected as input_audio_buffer_commit_empty.
 func TestSessionCommand_LiveScheduledAudioServerVADCreateResponseFalseNegativeControl(t *testing.T) {
-	speechPath := locateCorpusWAV(t, "truncated_24k")
+	speechPath := scheduledSpeechSliceWAV(t)
 	silencePath := equalDuration24kSilenceFixture(t, speechPath)
 	server := newCLILiveScheduledBoundaryServer(false)
 	t.Cleanup(server.shutdown)

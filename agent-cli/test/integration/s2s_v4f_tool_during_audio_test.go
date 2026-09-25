@@ -75,15 +75,17 @@ const (
 	toolDuringAudioMaxDuration = 5 * time.Second
 )
 
-// toolDuringAudioWAVPath resolves the committed corpus WAV reused as the
-// spoken input fixture.
+// toolDuringAudioWAVPath returns a short voiced slice of the committed corpus
+// WAV reused as the spoken input fixture. The lane asserts the output-audio
+// turn around the interleaved tool call, which does not depend on how long
+// the real-time-paced input is.
 func toolDuringAudioWAVPath(t *testing.T) string {
 	t.Helper()
 	path := filepath.Join("..", "..", "..", "go-agent-loop", "testdata", "audio", toolDuringAudioCorpusWAV)
 	if _, err := os.Stat(path); err != nil {
 		t.Fatalf("committed corpus WAV %s not found: %v", toolDuringAudioCorpusWAV, err)
 	}
-	return path
+	return writeVoicedWAVSlice(t, path, shortVoicedSlice)
 }
 
 // toolDuringAudioCorpusSamples reads and validates the committed corpus WAV.

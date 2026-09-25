@@ -6,7 +6,6 @@ package integration
 // transport shutdown cannot hide a broken causal link.
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -15,7 +14,6 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
@@ -26,21 +24,18 @@ const (
 	conversationContradictoryReply = "The weather in Lisbon is 99 degrees with stormy skies."
 )
 
-// conversationFixtureInputs returns the committed input corpus and a voiced
-// reply window. The reply audio is deliberately kept identical across controls
-// so grounding controls change transcript content only.
+// conversationFixtureInputs returns a short voiced slice of the committed
+// input corpus as the streamed input, and a voiced reply window carved from the
+// full corpus. The reply audio is deliberately kept identical across controls
+// so grounding controls change transcript content only. No control depends on
+// the input's duration (they assert call identity, result pairing and
+// grounding), so the real-time-paced input stays short; the positive
+// TestSessionToolCallConversationSpokenReplyReflectsRealToolResult streams the
+// full corpus.
 func conversationFixtureInputs(t *testing.T) (wavPath string, reply []int16) {
 	t.Helper()
-	wavPath = toolSingleCallWAVPath(t)
-	wavBytes, err := os.ReadFile(wavPath)
-	if err != nil {
-		t.Fatalf("read committed corpus WAV: %v", err)
-	}
-	_, samples, err := wavio.Read(bytes.NewReader(wavBytes))
-	if err != nil {
-		t.Fatalf("parse committed corpus WAV: %v", err)
-	}
-	return wavPath, loudestWindowSamplesIntegration(t, samples, toolSingleCallReplySamples)
+	fullPath := toolSingleCallWAVPath(t)
+	return writeVoicedWAVSlice(t, fullPath, shortVoicedSlice), toolSingleCallReplyWindow(t, fullPath)
 }
 
 // buildConversationControlFixture starts from the passing depth-5 capture and

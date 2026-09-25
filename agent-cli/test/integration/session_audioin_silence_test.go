@@ -272,6 +272,9 @@ func containsFold(s, substr string) bool {
 func TestSessionAudioInSilenceFixturesProduceZeroCommitsAndTurns(t *testing.T) {
 	for _, name := range []string{"silence_16k", "silence_24k"} {
 		t.Run(name, func(t *testing.T) {
+			// Each subtest is an independent session over its own replay
+			// fixture; running them together halves the real-time wait.
+			t.Parallel()
 			assertNoCommitsOrTurns(t, name)
 		})
 	}
@@ -283,6 +286,7 @@ func TestSessionAudioInSilenceFixturesProduceZeroCommitsAndTurns(t *testing.T) {
 func TestSessionAudioInNoiseFixturesProduceZeroCommitsAndTurns(t *testing.T) {
 	for _, name := range []string{"noise_16k", "noise_24k"} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			assertNoCommitsOrTurns(t, name)
 		})
 	}
@@ -293,7 +297,10 @@ func TestSessionAudioInNoiseFixturesProduceZeroCommitsAndTurns(t *testing.T) {
 // commit-requiring fixture must produce at least one real commit whose turn
 // completes, proving the zero-commit assertions discriminate speech.
 func TestSessionAudioInUtteranceFixtureProducesRealCommit(t *testing.T) {
-	wavPath := locateCorpusWAV(t, "utt_short_16k")
+	// A 0.6s voiced slice of the 8.3s utterance is enough to prove a real
+	// commit; the full-length real-time audio-in session is
+	// TestS2SV2BAudioInLongCLIStaysOneTurn.
+	wavPath := writeVoicedWAVSlice(t, locateCorpusWAV(t, "utt_short_16k"), 2*shortVoicedSlice)
 	samples := loadCorpusHarnessSamples(t, wavPath)
 	wirePath := buildSpeechCommitFixture(t, samples)
 	recordedReplyPath := filepath.Join(t.TempDir(), "response.wav")

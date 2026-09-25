@@ -220,7 +220,7 @@ func runObservabilityConversation(t *testing.T, fixturePath, recordDir string) [
 	args := []string{"--replay", fixturePath, "--record-dir", recordDir}
 	references := make([][]byte, 0, observabilityTurnCount)
 	for turn := 1; turn <= observabilityTurnCount; turn++ {
-		wavPath := locateCLIFixture(t, multiturnTurnWAVs[turn-1])
+		wavPath := multiturnTurnSliceWAV(t, multiturnTurnWAVs[turn-1])
 		references = append(references, observabilityReferenceUtterance(t, turn))
 		args = append(args, "--audio-in-turn", wavPath)
 	}
@@ -240,7 +240,7 @@ func runObservabilityConversation(t *testing.T, fixturePath, recordDir string) [
 func observabilityReferenceUtterance(t *testing.T, turn int) []byte {
 	t.Helper()
 
-	frames := multiturnAudioFrames(t, locateCLIFixture(t, multiturnTurnWAVs[turn-1]))
+	frames := multiturnAudioFrames(t, multiturnTurnSliceWAV(t, multiturnTurnWAVs[turn-1]))
 	total := 0
 	for _, frame := range frames {
 		total += len(frame)

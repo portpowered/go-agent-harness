@@ -55,6 +55,16 @@ var visionDescribeContentMarkers = []string{
 	"cyan pixel in the bottom right corner",
 }
 
+// visionDescribeQuestionWAVPath returns a short voiced slice of the committed
+// 4.84s spoken question. The fixture builders expand the capture's append
+// marker into one frame per frame of whatever WAV they are given, and no
+// vision or read_image assertion depends on the question's duration, so the
+// real-time-paced input stays short.
+func visionDescribeQuestionWAVPath(t *testing.T) string {
+	t.Helper()
+	return writeVoicedWAVSlice(t, locateCLIFixture(t, visionDescribeQuestionWAV), shortVoicedSlice)
+}
+
 // visionDescribeFixturePath locates the committed lane fixture.
 func visionDescribeFixturePath(t *testing.T) string {
 	t.Helper()
@@ -127,12 +137,12 @@ func visionRewritePayload(t *testing.T, raw json.RawMessage, mutate func(payload
 // data URL, the append marker expands into one real frame per corpus WAV
 // frame, and the scripted spoken reply audio is injected. When transcript is
 // non-nil it replaces the recorded reply text (negative control variant).
-func buildVisionDescribeFixture(t *testing.T, transcript []string) string {
+func buildVisionDescribeFixture(t *testing.T, wavPath string, transcript []string) string {
 	t.Helper()
 
 	capture := captureCopy(t, visionDescribeFixturePath(t))
 	dataURL := "data:image/png;base64," + base64.StdEncoding.EncodeToString(visionDescribePNG(t))
-	frames := multiturnAudioFrames(t, locateCLIFixture(t, visionDescribeQuestionWAV))
+	frames := multiturnAudioFrames(t, wavPath)
 	replyAudio := base64.StdEncoding.EncodeToString(visionPCMBytes(visionReplySamples()))
 
 	records := make([]gwtesting.CapturedSessionEvent, 0, len(capture.Records)+len(frames))
@@ -278,8 +288,8 @@ func injectVisionImagePart(t *testing.T, raw json.RawMessage, dataURL string) js
 // the real session CLI over record/replay, the reply names the image's
 // authored pixel facts, and the recorded spoken reply is non-silent.
 func TestSessionCommandVisionDescribeGroundsReplyInCommittedImage(t *testing.T) {
-	fixture := buildVisionDescribeFixture(t, nil)
-	wavPath := locateCLIFixture(t, visionDescribeQuestionWAV)
+	wavPath := visionDescribeQuestionWAVPath(t)
+	fixture := buildVisionDescribeFixture(t, wavPath, nil)
 	imagePath := filepath.Join(t.TempDir(), "vision-describe.png")
 	if err := os.WriteFile(imagePath, visionDescribePNG(t), 0o600); err != nil {
 		t.Fatalf("write synthetic image: %v", err)
@@ -322,8 +332,8 @@ func TestSessionCommandVisionDescribeGroundsReplyInCommittedImage(t *testing.T) 
 // image-only response or an omitted audio commit fails this test before the
 // grounded transcript can be observed.
 func TestVisionDescribeFixtureDrivesPublicSessionCommand(t *testing.T) {
-	fixture := buildVisionDescribeFixture(t, nil)
-	wavPath := locateCLIFixture(t, visionDescribeQuestionWAV)
+	wavPath := visionDescribeQuestionWAVPath(t)
+	fixture := buildVisionDescribeFixture(t, wavPath, nil)
 	imagePath := filepath.Join(t.TempDir(), "vision-describe.png")
 	if err := os.WriteFile(imagePath, visionDescribePNG(t), 0o600); err != nil {
 		t.Fatalf("write synthetic image: %v", err)
@@ -343,8 +353,8 @@ func TestVisionDescribeFixtureDrivesPublicSessionCommand(t *testing.T) {
 // replay diverges with the typed mismatch error instead of producing a
 // grounded reply. This proves the grounded outcome requires the image path.
 func TestSessionCommandVisionDescribeWithoutImageFailsTypedReplay(t *testing.T) {
-	fixture := buildVisionDescribeFixture(t, nil)
-	wavPath := locateCLIFixture(t, visionDescribeQuestionWAV)
+	wavPath := visionDescribeQuestionWAVPath(t)
+	fixture := buildVisionDescribeFixture(t, wavPath, nil)
 
 	stdout := &syncBuffer{}
 	cmd := newTestSessionRootCommand(t)
@@ -371,8 +381,8 @@ func TestSessionCommandVisionDescribeWithoutImageFailsTypedReplay(t *testing.T) 
 // names no image content) must FAIL the grounding assertion, proving the
 // assertion discriminates image-grounded answers from any successful reply.
 func TestVisionGroundingAssertionFailsOnGenericReply(t *testing.T) {
-	fixture := buildVisionDescribeFixture(t, []string{"I hear your question ", "clearly."})
-	wavPath := locateCLIFixture(t, visionDescribeQuestionWAV)
+	wavPath := visionDescribeQuestionWAVPath(t)
+	fixture := buildVisionDescribeFixture(t, wavPath, []string{"I hear your question ", "clearly."})
 	imagePath := filepath.Join(t.TempDir(), "vision-describe.png")
 	if err := os.WriteFile(imagePath, visionDescribePNG(t), 0o600); err != nil {
 		t.Fatalf("write synthetic image: %v", err)

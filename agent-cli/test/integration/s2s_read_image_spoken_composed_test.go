@@ -1,14 +1,5 @@
 package integration
 
-import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
-
-// Story 004 proves the complete credential-free voice-to-vision composition.
-// The public session command receives a file-backed spoken request, the
-// production tool executor reads one deterministic image, and strict replay
-// gates the grounded continuation on the compact result plus one typed image
-// projection. The negative control keeps that accepted transaction intact but
-// supplies an empty token-limit-style provider failure.
-
 import (
 	"context"
 	"encoding/base64"
@@ -20,10 +11,19 @@ import (
 	"testing"
 	"time"
 
+	servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
+
+	// Story 004 proves the complete credential-free voice-to-vision composition.
+	// The public session command receives a file-backed spoken request, the
+	// production tool executor reads one deterministic image, and strict replay
+	// gates the grounded continuation on the compact result plus one typed image
+	// projection. The negative control keeps that accepted transaction intact but
+	// supplies an empty token-limit-style provider failure.
+
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
@@ -392,7 +392,7 @@ func TestReadImageSpokenProductionComposition(t *testing.T) {
 	if err := assertReadImageFixturePixels(imageBytes); err != nil {
 		t.Fatal(err)
 	}
-	wavPath := locateCLIFixture(t, visionDescribeQuestionWAV)
+	wavPath := visionDescribeQuestionWAVPath(t)
 	configDir := writeReadImageModelConfig(t, true, readImageSpokenModel)
 	materialized := materializeReadImageReplayFixture(t, readImageReplayFixturePath(t, readImagePositiveFixtureName), imagePath, imageBytes)
 	fixture := buildSpokenReadImageFixture(t, materialized, wavPath, false)
@@ -421,7 +421,7 @@ func TestReadImageSpokenFailedContinuationIsActionable(t *testing.T) {
 	if err := assertReadImageFixturePixels(imageBytes); err != nil {
 		t.Fatal(err)
 	}
-	wavPath := locateCLIFixture(t, visionDescribeQuestionWAV)
+	wavPath := visionDescribeQuestionWAVPath(t)
 	configDir := writeReadImageModelConfig(t, true, readImageSpokenModel)
 	materialized := materializeReadImageReplayFixture(t, readImageReplayFixturePath(t, readImagePositiveFixtureName), imagePath, imageBytes)
 	fixture := buildSpokenReadImageFixture(t, materialized, wavPath, true)
@@ -443,7 +443,7 @@ func TestReadImageSpokenStrictReplayRejectsUnboundedAndDuplicatedPixels(t *testi
 	if err := os.WriteFile(imagePath, imageBytes, 0o600); err != nil {
 		t.Fatalf("write deterministic strict-gate image: %v", err)
 	}
-	wavPath := locateCLIFixture(t, visionDescribeQuestionWAV)
+	wavPath := visionDescribeQuestionWAVPath(t)
 	configDir := writeReadImageModelConfig(t, true, readImageSpokenModel)
 	validMaterialized := materializeReadImageReplayFixture(t, readImageReplayFixturePath(t, readImagePositiveFixtureName), imagePath, imageBytes)
 	validFixture := buildSpokenReadImageFixture(t, validMaterialized, wavPath, false)

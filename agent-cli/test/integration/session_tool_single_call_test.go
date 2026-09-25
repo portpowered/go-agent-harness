@@ -72,6 +72,21 @@ func toolSingleCallWAVPath(t *testing.T) string {
 	return path
 }
 
+// toolSingleCallReplyWindow carves the scripted voiced reply window from the
+// committed corpus at wavPath.
+func toolSingleCallReplyWindow(t *testing.T, wavPath string) []int16 {
+	t.Helper()
+	wavBytes, err := os.ReadFile(wavPath)
+	if err != nil {
+		t.Fatalf("read committed corpus WAV: %v", err)
+	}
+	_, samples, err := wavio.Read(bytes.NewReader(wavBytes))
+	if err != nil {
+		t.Fatalf("parse committed corpus WAV: %v", err)
+	}
+	return loudestWindowSamplesIntegration(t, samples, toolSingleCallReplySamples)
+}
+
 // buildToolSingleCallFixture writes a synthetic record/replay capture for the
 // spoken single-tool-request scenario. The client-to-server side expects every
 // paced frame of wavPath streamed via input_audio_buffer.append followed by
@@ -335,7 +350,7 @@ func validateExactlyOneToolCall(calls []messages.ToolCall) error {
 // the service advertises no definition for it, so the runtime must reject the
 // call without invoking the paired executor.
 func TestSessionToolSingleCallRejectsOmittedCustomDefinition(t *testing.T) {
-	wavPath := toolSingleCallWAVPath(t)
+	wavPath := writeVoicedWAVSlice(t, toolSingleCallWAVPath(t), shortVoicedSlice)
 	wirePath := buildToolSingleCallFixture(t, wavPath, []int16{1200, 1201}, true)
 	executor := &toolCallRecordingExecutor{}
 	_, runErr := runToolSingleCallWithDefinitions(t, wavPath, wirePath, executor, nil)
@@ -352,16 +367,9 @@ func TestSessionToolSingleCallRejectsOmittedCustomDefinition(t *testing.T) {
 // exactly-one invocation assertion deterministically — never via timeout or
 // transport error — proving the positive assertion cannot pass vacuously.
 func TestSessionToolSingleCallSuppressedFailsDeterministically(t *testing.T) {
-	wavPath := toolSingleCallWAVPath(t)
-	wavBytes, err := os.ReadFile(wavPath)
-	if err != nil {
-		t.Fatalf("read committed corpus WAV: %v", err)
-	}
-	_, samples, err := wavio.Read(bytes.NewReader(wavBytes))
-	if err != nil {
-		t.Fatalf("parse committed corpus WAV: %v", err)
-	}
-	reply := loudestWindowSamplesIntegration(t, samples, toolSingleCallReplySamples)
+	fullPath := toolSingleCallWAVPath(t)
+	wavPath := writeVoicedWAVSlice(t, fullPath, shortVoicedSlice)
+	reply := toolSingleCallReplyWindow(t, fullPath)
 
 	executor := &toolCallRecordingExecutor{}
 	wirePath := buildToolSingleCallFixture(t, wavPath, reply, false)
