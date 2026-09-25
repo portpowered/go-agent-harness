@@ -11,7 +11,7 @@ import (
 
 func TestLoadProbeScenarioV2UsesOfflineCorpusLookup(t *testing.T) {
 	data := []byte(`{"schema_version":"probe.scenario.v2","id":"cli-v2","steps":[{"type":"send_audio","corpus_id":"utterance-hello-there"}],"expectations":[{"type":"no_pending_invocations"}]}`)
-	scenario, err := loadProbeScenarioV2(data, "")
+	scenario, err := probe.LoadScenarioV2(data, "", replayCorpusLookup{})
 	if err != nil {
 		t.Fatalf("load v2 scenario: %v", err)
 	}
@@ -20,7 +20,7 @@ func TestLoadProbeScenarioV2UsesOfflineCorpusLookup(t *testing.T) {
 	}
 
 	unknown := []byte(`{"schema_version":"probe.scenario.v2","id":"cli-v2-unknown","steps":[{"type":"send_audio","corpus_id":"not-committed"}],"expectations":[{"type":"no_pending_invocations"}]}`)
-	if _, err := loadProbeScenarioV2(unknown, ""); err == nil || !errors.Is(err, probe.ErrScenarioV2UnknownCorpus) {
+	if _, err := probe.LoadScenarioV2(unknown, "", replayCorpusLookup{}); err == nil || !errors.Is(err, probe.ErrScenarioV2UnknownCorpus) {
 		t.Fatalf("unknown corpus error = %v", err)
 	}
 
