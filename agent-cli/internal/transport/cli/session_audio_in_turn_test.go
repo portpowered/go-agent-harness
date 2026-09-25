@@ -1,7 +1,5 @@
 package cli
 
-import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
-
 import (
 	"bytes"
 	"context"
@@ -10,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
 )
 
 func TestSessionCommandAudioInTurnBargeHelpExplainsExplicitPolicy(t *testing.T) {

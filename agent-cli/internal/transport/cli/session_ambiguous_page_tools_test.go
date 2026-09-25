@@ -60,7 +60,7 @@ func TestSessionAmbiguousTabsPublishOnlySelectedPageTools(t *testing.T) {
 		Eligible:              true,
 	}
 	cubeTool := webmcp.ToolDescriptor{
-		Name:        "get_cube_state",
+		Name:        ambiguousCubeStateTool,
 		Description: "Read the Cubecade state.",
 		FrameID:     "cube-frame",
 		InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
@@ -278,7 +278,7 @@ func TestSessionAmbiguousCubeConversationRequiresChoiceBeforePageWork(t *testing
 		Eligible:              true,
 	}
 	cubeTool := webmcp.ToolDescriptor{
-		Name:        "get_cube_state",
+		Name:        ambiguousCubeStateTool,
 		Description: "Read the Cubecade state.",
 		FrameID:     "cube-frame",
 		InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
@@ -606,7 +606,7 @@ func (s *ambiguousCubeConversationSession) Send(ctx context.Context, message mes
 			case s.updates <- &update:
 			default:
 			}
-			if containsAmbiguousDefinition(update.Tools, "get_cube_state") {
+			if containsAmbiguousDefinition(update.Tools, ambiguousCubeStateTool) {
 				s.pageToolsReadyOnce.Do(func() { close(s.pageToolsReady) })
 			}
 		}
@@ -637,7 +637,7 @@ func (s *ambiguousCubeConversationSession) Send(ctx context.Context, message mes
 			emitQuestion = true
 		case s.phase == ambiguousCubeConversationWaitingForPageTools && s.lastToolResult == webmcp.SelectTabToolName:
 			emitPageCall = true
-		case s.phase == ambiguousCubeConversationAwaitingPageResult && s.lastToolResult == "get_cube_state":
+		case s.phase == ambiguousCubeConversationAwaitingPageResult && s.lastToolResult == ambiguousCubeStateTool:
 			s.phase = ambiguousCubeConversationComplete
 			emitFinal = true
 		}
@@ -688,7 +688,7 @@ func (s *ambiguousCubeConversationSession) emitAssistantToolCall(id, name, argum
 	if name == webmcp.SelectTabToolName {
 		s.selectionCallOnce.Do(func() { close(s.selectionCallSent) })
 	}
-	if name == "get_cube_state" {
+	if name == ambiguousCubeStateTool {
 		s.pageCallOnce.Do(func() { close(s.pageCallSent) })
 	}
 	s.write(
@@ -728,7 +728,7 @@ func (s *ambiguousCubeConversationSession) emitPageToolWhenReady(ctx context.Con
 	}
 	s.phase = ambiguousCubeConversationAwaitingPageResult
 	s.mu.Unlock()
-	s.emitAssistantToolCall("call-cube-state", "get_cube_state", `{}`)
+	s.emitAssistantToolCall("call-cube-state", ambiguousCubeStateTool, `{}`)
 }
 
 func (s *ambiguousCubeConversationSession) emitAssistantText(text string) {
@@ -794,7 +794,10 @@ func (i *ambiguousCubeConversationInferencer) connections() int {
 	return i.connectionN
 }
 
-const webmcpSelectionCallID = "call-select-tab"
+const (
+	webmcpSelectionCallID  = "call-select-tab"
+	ambiguousCubeStateTool = "get_cube_state"
+)
 
 func assertAmbiguousPageSurface(t *testing.T, definitions, base []messages.ToolDefinition, pageNames []string, label string) {
 	t.Helper()

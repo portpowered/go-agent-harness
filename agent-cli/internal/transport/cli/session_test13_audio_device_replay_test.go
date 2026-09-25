@@ -1,7 +1,5 @@
 package cli
 
-import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-
 import (
 	"bufio"
 	"bytes"
@@ -21,6 +19,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 

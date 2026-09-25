@@ -2,23 +2,23 @@
 
 package integration
 
-import runtimecontract "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
-
 import (
 	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
-	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
+	runtimecontract "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 const (

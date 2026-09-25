@@ -1,18 +1,20 @@
 package integration
 
-import runtimecontract "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
-
 import (
 	"context"
 	"fmt"
-	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"strings"
 	"sync"
 	"time"
+
+	runtimecontract "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
 const (
+	v8DirectionAToB                      = "A-to-B"
+	v8DirectionBToA                      = "B-to-A"
 	v8OverlapTick                 uint64 = 7
 	v8OverlapTickLimit            uint64 = 8
 	v8TickDuration                       = 10 * time.Millisecond
@@ -72,7 +74,7 @@ type v8CrossingCoordinator struct {
 func newV8CrossingCoordinator() *v8CrossingCoordinator {
 	return &v8CrossingCoordinator{
 		overlapTick:   v8OverlapTick,
-		nextDirection: "A-to-B",
+		nextDirection: v8DirectionAToB,
 		aToBReady:     make(chan struct{}),
 		deliveryReady: make(chan struct{}),
 		abort:         make(chan struct{}),
@@ -88,7 +90,7 @@ func (c *v8CrossingCoordinator) releaseDelivery() {
 }
 
 func (c *v8CrossingCoordinator) record(direction string, tick uint64, timestamp time.Time, emitted, delivered []byte) (v8Crossing, error) {
-	if direction == "B-to-A" {
+	if direction == v8DirectionBToA {
 		select {
 		case <-c.aToBReady:
 		case <-c.abort:
@@ -122,8 +124,8 @@ func (c *v8CrossingCoordinator) record(direction string, tick uint64, timestamp 
 		Delivered: append([]byte(nil), delivered...),
 	}
 	c.crossings = append(c.crossings, crossing)
-	if direction == "A-to-B" {
-		c.nextDirection = "B-to-A"
+	if direction == v8DirectionAToB {
+		c.nextDirection = v8DirectionBToA
 		close(c.aToBReady)
 	}
 	return crossing, nil
@@ -154,12 +156,12 @@ type v8MultiTurnScheduleEntry struct {
 // bridge path proves both multiplexed and ordinary boundaries.
 func v8MultiTurnSchedule() []v8MultiTurnScheduleEntry {
 	return []v8MultiTurnScheduleEntry{
-		{Turn: 1, Tick: 7, Direction: "A-to-B", Overlapping: true},
-		{Turn: 1, Tick: 7, Direction: "B-to-A", Overlapping: true},
-		{Turn: 2, Tick: 8, Direction: "A-to-B", Overlapping: true},
-		{Turn: 2, Tick: 8, Direction: "B-to-A", Overlapping: true},
-		{Turn: 3, Tick: 9, Direction: "A-to-B"},
-		{Turn: 3, Tick: 10, Direction: "B-to-A"},
+		{Turn: 1, Tick: 7, Direction: v8DirectionAToB, Overlapping: true},
+		{Turn: 1, Tick: 7, Direction: v8DirectionBToA, Overlapping: true},
+		{Turn: 2, Tick: 8, Direction: v8DirectionAToB, Overlapping: true},
+		{Turn: 2, Tick: 8, Direction: v8DirectionBToA, Overlapping: true},
+		{Turn: 3, Tick: 9, Direction: v8DirectionAToB},
+		{Turn: 3, Tick: 10, Direction: v8DirectionBToA},
 	}
 }
 
@@ -357,7 +359,7 @@ func (c *v8MultiTurnCoordinator) snapshot() []v8Crossing {
 
 func v8MultiTurnKey(direction string, turn int) string {
 	harness := strings.TrimSuffix(direction, "-to-B")
-	if direction == "B-to-A" {
+	if direction == v8DirectionBToA {
 		harness = "B"
 	}
 	return fmt.Sprintf("%s-turn-%d", harness, turn)

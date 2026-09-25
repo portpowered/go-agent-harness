@@ -1,7 +1,5 @@
 package integration
 
-import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-
 import (
 	"bytes"
 	"context"
@@ -21,6 +19,7 @@ import (
 	webmcpTools "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
 
 // TestSessionWebMCPDeviceLoopbackRecordsAndReplaysAudio proves the customer

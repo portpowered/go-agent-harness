@@ -1,7 +1,5 @@
 package cli
 
-import sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-
 import (
 	"context"
 	"io"
@@ -14,6 +12,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
 

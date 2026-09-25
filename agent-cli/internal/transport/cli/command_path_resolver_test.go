@@ -1,7 +1,5 @@
 package cli
 
-import rooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
-
 import (
 	"bytes"
 	"context"
@@ -16,9 +14,9 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe"
-
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	rooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	runtimeSelfPlay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/selfplay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	sessionwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
@@ -39,7 +37,7 @@ func testPathResolver(currentHome, namedHome string) *pathResolver {
 	return &pathResolver{
 		currentHome: func() (string, error) { return currentHome, nil },
 		lookupUser: func(name string) (string, error) {
-			if name != "alice" {
+			if name != roomTestAliceID {
 				return "", errors.New("unknown test user")
 			}
 			return namedHome, nil

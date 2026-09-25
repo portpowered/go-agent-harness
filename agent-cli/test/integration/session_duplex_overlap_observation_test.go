@@ -1,14 +1,14 @@
 package integration
 
-import runtimecontract "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
-
 import (
 	"context"
 	"fmt"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimecontract "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 )
 
 type v8RuntimeObserver struct {

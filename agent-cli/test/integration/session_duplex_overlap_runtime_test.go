@@ -1,15 +1,8 @@
 package integration
 
-import runtimecontract "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
-
 import (
 	"bytes"
 	"context"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
-	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	"io"
 	"os"
 	"path/filepath"
@@ -17,6 +10,13 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
+	runtimecontract "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
 type v8DuplexRun struct {
@@ -116,8 +116,8 @@ func runV8Duplex(t *testing.T, aToB, bToA []byte, mutateFirst bool) v8DuplexRun 
 		"B/client": {Harness: "B", Role: "client"},
 		"B/agent":  {Harness: "B", Role: "agent"},
 	}
-	aToBBridge := newV8PCMBridge(coordinator, "A-to-B", views["A/client"], views["B/agent"], silenceFrame, mutateFirst)
-	bToABridge := newV8PCMBridge(coordinator, "B-to-A", views["B/client"], views["A/agent"], silenceFrame, false)
+	aToBBridge := newV8PCMBridge(coordinator, v8DirectionAToB, views["A/client"], views["B/agent"], silenceFrame, mutateFirst)
+	bToABridge := newV8PCMBridge(coordinator, v8DirectionBToA, views["B/client"], views["A/agent"], silenceFrame, false)
 	aObserver := &v8RuntimeObserver{outputBridge: aToBBridge}
 	bObserver := &v8RuntimeObserver{outputBridge: bToABridge}
 
@@ -263,8 +263,8 @@ func runV8MultiTurnDuplex(t *testing.T, aToB, bToA [][]byte) v8DuplexRun {
 		"B/client": {Harness: "B", Role: "client"},
 		"B/agent":  {Harness: "B", Role: "agent"},
 	}
-	aToBBridge := newV8MultiTurnBridge(coordinator, "A-to-B", views["A/client"], views["B/agent"], bTurnTwoReady)
-	bToABridge := newV8MultiTurnBridge(coordinator, "B-to-A", views["B/client"], views["A/agent"], aTurnTwoReady)
+	aToBBridge := newV8MultiTurnBridge(coordinator, v8DirectionAToB, views["A/client"], views["B/agent"], bTurnTwoReady)
+	bToABridge := newV8MultiTurnBridge(coordinator, v8DirectionBToA, views["B/client"], views["A/agent"], aTurnTwoReady)
 	aObserver := &v8RuntimeObserver{outputBridge: aToBBridge, inputBridge: bToABridge, turnTwoReady: aTurnTwoReady}
 	bObserver := &v8RuntimeObserver{outputBridge: bToABridge, inputBridge: aToBBridge, turnTwoReady: bTurnTwoReady}
 	aStream := &v8StreamRecorder{}
@@ -381,8 +381,8 @@ func runV8MultiTurnDuplex(t *testing.T, aToB, bToA [][]byte) v8DuplexRun {
 func waitForV8MultiTurnEOFs(t *testing.T, ctx context.Context, aToBBridge, bToABridge *v8MultiTurnBridge) {
 	t.Helper()
 	for name, bridge := range map[string]*v8MultiTurnBridge{
-		"A-to-B": aToBBridge,
-		"B-to-A": bToABridge,
+		v8DirectionAToB: aToBBridge,
+		v8DirectionBToA: bToABridge,
 	} {
 		if !bridge.waitForEOFSeen(ctx) {
 			t.Logf("multi-turn bridge %s did not observe consumed EOF before run context ended: %s", name, bridge.eofState())

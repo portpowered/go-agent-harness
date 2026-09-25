@@ -25,7 +25,7 @@ func TestSessionCLI_DuplexPCMOverlap(t *testing.T) {
 	baselineGoroutines := runtime.NumGoroutine()
 	aToB, bToA := v8LoudFrames(t, v8AudioFixturePath(t, "overlap_16k.wav"))
 	run := runV8Duplex(t, aToB, bToA, false)
-	if err := verifyV8Run(run, map[string][]byte{"A-to-B": aToB, "B-to-A": bToA}); err != nil {
+	if err := verifyV8Run(run, map[string][]byte{v8DirectionAToB: aToB, v8DirectionBToA: bToA}); err != nil {
 		t.Fatalf("positive v8 duplex proof failed: %v", err)
 	}
 	assertV8GoroutinesSettled(t, baselineGoroutines, "positive duplex run")
@@ -36,12 +36,12 @@ func TestSessionCLI_DuplexPCMOverlapRejectsSilenceControl(t *testing.T) {
 	baselineGoroutines := runtime.NumGoroutine()
 	aToB, bToA := v8LoudFrames(t, v8AudioFixturePath(t, "overlap_16k.wav"))
 	run := runV8Duplex(t, aToB, bToA, true)
-	err := verifyV8Run(run, map[string][]byte{"A-to-B": aToB, "B-to-A": bToA})
+	err := verifyV8Run(run, map[string][]byte{v8DirectionAToB: aToB, v8DirectionBToA: bToA})
 	if err == nil {
 		t.Fatal("silence negative control passed the positive audio verification")
 	}
 	diagnostic := err.Error()
-	if !strings.Contains(diagnostic, "A-to-B") || !strings.Contains(diagnostic, fmt.Sprintf("logical tick %d", v8OverlapTick)) || !strings.Contains(diagnostic, "RMS") || !strings.Contains(diagnostic, "hash=") {
+	if !strings.Contains(diagnostic, v8DirectionAToB) || !strings.Contains(diagnostic, fmt.Sprintf("logical tick %d", v8OverlapTick)) || !strings.Contains(diagnostic, "RMS") || !strings.Contains(diagnostic, "hash=") {
 		t.Fatalf("negative control diagnostic lacks direction/tick/hash/RMS details: %v", err)
 	}
 	assertV8GoroutinesSettled(t, baselineGoroutines, "silence negative control")
@@ -117,7 +117,7 @@ func TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls(t *testing.
 			t.Fatal("missing later-turn input commit negative control passed the positive multi-turn verifier")
 		}
 		diagnostic := err.Error()
-		for _, part := range []string{"harness A", "B-to-A", "B-turn-2", "input commit", "expected=2", "observed=3"} {
+		for _, part := range []string{"harness A", v8DirectionBToA, "B-turn-2", "input commit", "expected=2", "observed=3"} {
 			if !strings.Contains(diagnostic, part) {
 				t.Fatalf("missing input commit diagnostic lacks %q: %v", part, err)
 			}
@@ -139,7 +139,7 @@ func TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls(t *testing.
 			t.Fatal("cross-attributed later-turn input commit negative control passed the positive multi-turn verifier")
 		}
 		diagnostic := err.Error()
-		for _, part := range []string{"harness A", "B-to-A", "B-turn-2", "input commit", "expected hash=", "observed hash="} {
+		for _, part := range []string{"harness A", v8DirectionBToA, "B-turn-2", "input commit", "expected hash=", "observed hash="} {
 			if !strings.Contains(diagnostic, part) {
 				t.Fatalf("cross-attributed input commit diagnostic lacks %q: %v", part, err)
 			}

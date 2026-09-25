@@ -1,7 +1,5 @@
 package cli
 
-import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
-
 import (
 	"bytes"
 	"context"
@@ -16,7 +14,7 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
-
+	servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"

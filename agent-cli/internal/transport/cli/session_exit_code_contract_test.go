@@ -1,7 +1,5 @@
 package cli
 
-import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
-
 import (
 	"bytes"
 	"context"
@@ -12,6 +10,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
 )
 
 // TestSessionHasExplicitModeMatrix pins the fix for "session --prompt exits 0

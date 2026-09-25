@@ -1,7 +1,5 @@
 package integration
 
-import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
-
 import (
 	"context"
 	"errors"
@@ -11,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
