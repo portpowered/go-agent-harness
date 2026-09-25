@@ -11,6 +11,7 @@ import (
 	"image/color"
 	"image/gif"
 	"io"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -276,5 +277,44 @@ func TestScreenRecordingSlowCaptureHonorsDeadlineWithoutPartialSuccess(t *testin
 	case <-captureStarted:
 	default:
 		t.Fatal("slow capture did not start")
+	}
+}
+
+func TestScreenRecordingOptionsAcceptEveryNumericArgumentType(t *testing.T) {
+	for _, value := range []any{
+		float64(2), float32(2), int(2), int8(2), int16(2), int32(2), int64(2),
+		uint(2), uint8(2), uint16(2), uint32(2), uint64(2), json.Number("2"),
+	} {
+		options, err := parseScreenRecordingOptions(map[string]any{"duration": value, "fps": value})
+		if err != nil {
+			t.Fatalf("parseScreenRecordingOptions(%T) = %v", value, err)
+		}
+		if options.durationSeconds != 2 || options.fps != 2 || options.maxFrames != 4 || options.frameInterval != 500*time.Millisecond {
+			t.Fatalf("options for %T = %+v", value, options)
+		}
+	}
+}
+
+func TestScreenRecordingOptionsRejectNonNumericArguments(t *testing.T) {
+	for field, value := range map[string]any{"duration": "long", "fps": json.Number("fast")} {
+		_, err := parseScreenRecordingOptions(map[string]any{field: value})
+		var validation *ScreenRecordingValidationError
+		if !errors.As(err, &validation) || validation.Field != field || validation.Reason != "must be a finite number" {
+			t.Fatalf("argument %s=%v error = %v, want a finite-number validation error", field, value, err)
+		}
+	}
+	if _, err := newScreenRecordingOptions(math.Inf(1), 1); err == nil {
+		t.Fatal("infinite duration accepted")
+	}
+}
+
+func TestParseDisplayIndexRejectsNonIntegralValues(t *testing.T) {
+	if index, err := parseDisplayIndex(3); err != nil || index != 3 {
+		t.Fatalf("parseDisplayIndex(3) = %d, %v", index, err)
+	}
+	for _, value := range []float64{-1, 1.5, math.NaN(), math.Inf(1)} {
+		if _, err := parseDisplayIndex(value); err == nil {
+			t.Fatalf("parseDisplayIndex(%v) accepted an invalid display", value)
+		}
 	}
 }

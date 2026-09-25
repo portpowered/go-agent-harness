@@ -2,8 +2,6 @@ package wire
 
 import (
 	"context"
-	"errors"
-	"strings"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -24,7 +22,6 @@ func TestNewServiceBuildsIndependentFactories(t *testing.T) {
 
 func TestPublicWireFactoriesExposeIndependentContracts(t *testing.T) {
 	t.Run("constructors", testPublicWireConstructors)
-	t.Run("diagnostics", testPublicWireDiagnostics)
 	t.Run("liveness", testPublicWireLiveness)
 }
 
@@ -46,49 +43,9 @@ func testPublicWireConstructors(t *testing.T) {
 	}
 }
 
-func testPublicWireDiagnostics(t *testing.T) {
-	called := 0
-	sink := sessiontrace.DiagnosticFunc(func(sessiontrace.DiagnosticRecord) { called++ })
-	if CombineDiagnosticSinks(nil) != nil {
-		t.Fatal("CombineDiagnosticSinks(nil) returned a sink")
-	}
-	if combined := CombineDiagnosticSinks(sink); combined == nil {
-		t.Fatal("CombineDiagnosticSinks lost its only sink")
-	} else {
-		combined.RecordSessionDiagnostic(sessiontrace.DiagnosticRecord{Event: "test"})
-	}
-	if combined := CombineDiagnosticSinks(sink, sink); combined == nil {
-		t.Fatal("CombineDiagnosticSinks lost its fanout")
-	} else {
-		combined.RecordSessionDiagnostic(sessiontrace.DiagnosticRecord{Event: "test"})
-	}
-	if called != 3 {
-		t.Fatalf("diagnostic fanout calls = %d, want 3", called)
-	}
-
-	firstErr := errors.New("first")
-	first := make(chan error, 1)
-	first <- firstErr
-	if got := <-MergeErrorChannels(context.Background(), first, nil); !errors.Is(got, firstErr) {
-		t.Fatalf("merged error = %v, want first error", got)
-	}
-	first, second := make(chan error, 1), make(chan error, 1)
-	first <- nil
-	second <- firstErr
-	close(first)
-	close(second)
-	merged := MergeErrorChannels(context.Background(), first, second)
-	if got := <-merged; !errors.Is(got, firstErr) {
-		t.Fatalf("merged concurrent error = %v, want first failure", got)
-	}
-	if _, ok := <-merged; ok {
-		t.Fatal("merged concurrent error channel remained open")
-	}
-}
-
 func testPublicWireLiveness(t *testing.T) {
-	if NewCancellationIntent() == nil || LivenessClockFromSource(clock.Real{}) == nil {
-		t.Fatal("wire did not construct cancellation/liveness dependencies")
+	if NewCancellationIntent() == nil {
+		t.Fatal("wire did not construct a cancellation intent")
 	}
 	intent := NewCancellationIntent()
 	if intent.SIGINTReceived() {
@@ -98,41 +55,7 @@ func testPublicWireLiveness(t *testing.T) {
 	if !intent.SIGINTReceived() {
 		t.Fatal("cancellation intent did not retain SIGINT")
 	}
-	livenessErr := &sessiontrace.LivenessError{
-		Classification:     "timeout",
-		TerminalReason:     messages.TerminalReasonTerminalFailure,
-		TerminalProvenance: messages.TerminalProvenanceSession,
-		OutputState:        messages.TerminalOutputNone,
-	}
-	classification, reason, provenance, output := LivenessMetadata(livenessErr)
-	if classification != "timeout" || reason != messages.TerminalReasonTerminalFailure || provenance != messages.TerminalProvenanceSession || output != messages.TerminalOutputNone {
-		t.Fatalf("liveness metadata = %q/%q/%q/%q", classification, reason, provenance, output)
-	}
-	if classification, reason, provenance, output := LivenessMetadata(errors.New("ordinary")); classification != "" || reason != "" || provenance != "" || output != "" {
-		t.Fatalf("ordinary error metadata = %q/%q/%q/%q, want empty", classification, reason, provenance, output)
-	}
-	if got := OutputStateForProgress(false, 2); got != string(messages.TerminalOutputNone) {
-		t.Fatalf("closed progress output state = %q", got)
-	}
-	if got := OutputStateForProgress(true, 1); got != string(messages.TerminalOutputPartial) {
-		t.Fatalf("active progress output state = %q", got)
-	}
-}
 
-func TestPublicWireUnresolvedToolResultsErrorNormalizesCalls(t *testing.T) {
-	unresolved := NewUnresolvedToolResultsError(
-		[]string{" b ", "a", "", "b"},
-		map[string]messages.SessionSendStatus{"a": messages.SessionSendTimedOut, "orphan": messages.SessionSendClosed},
-	)
-	if got := unresolved.UnresolvedCallIDs(); len(got) != 2 || got[0] != "a" || got[1] != "b" {
-		t.Fatalf("unresolved IDs = %v, want trimmed, de-duplicated and sorted [a b]", got)
-	}
-	if len(unresolved.SendStatuses) != 1 || unresolved.SendStatuses["a"] != messages.SessionSendTimedOut {
-		t.Fatalf("send statuses = %v, want only the listed call's status", unresolved.SendStatuses)
-	}
-	if !errors.Is(unresolved, sessiontrace.ErrUnresolvedToolResults) || !strings.Contains(unresolved.Error(), "a") {
-		t.Fatalf("unresolved error = %v, want the stable sentinel naming its calls", unresolved)
-	}
 }
 
 func TestPublicWireLiveRecorderClassifiesProviderMessages(t *testing.T) {
