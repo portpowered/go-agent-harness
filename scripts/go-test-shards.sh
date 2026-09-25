@@ -115,10 +115,13 @@ run_shard() {
 		/^--- (PASS|SKIP): / {
 			duration = $NF
 			gsub(/[()s]/, "", duration)
+			tests++
+			total += duration
 			if (duration + 0 >= slow) print "slow test: " $3 " " $NF
 			next
 		}
 		/^(PASS|FAIL|ok|coverage:)/ { print }
+		END { printf "shard summary: %d top-level tests, %.1fs summed test time\n", tests, total }
 	' "$log"
 }
 

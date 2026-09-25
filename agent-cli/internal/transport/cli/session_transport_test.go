@@ -5,6 +5,7 @@ import sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 import sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	"github.com/spf13/cobra"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
@@ -238,4 +240,25 @@ type cliSideEffectSessionInferencer struct {
 func (i *cliSideEffectSessionInferencer) ConnectSession(context.Context) (messages.Session, error) {
 	i.connects++
 	return nil, errors.New("provider session should not be connected")
+}
+
+// TestFilesystemScopeHelpOmitsUnrestrictedCommandClaim guards security
+// wording: filesystem scoping is not command allow-listing, so neither the
+// direct tool nor the session command may claim every command is allowed.
+func TestFilesystemScopeHelpOmitsUnrestrictedCommandClaim(t *testing.T) {
+	commands := map[string]*cobra.Command{
+		"tool":    NewToolCommand(flags.NewGlobalFlags()).Generate(),
+		"session": NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}}), nil).Generate(),
+	}
+	for name, command := range commands {
+		var help bytes.Buffer
+		command.SetOut(&help)
+		command.SetArgs([]string{"--help"})
+		if err := command.ExecuteContext(context.Background()); err != nil {
+			t.Fatalf("%s --help: %v", name, err)
+		}
+		if strings.Contains(help.String(), "All commands will be allowed") {
+			t.Fatalf("%s help contains the removed unrestricted-command claim:\n%s", name, help.String())
+		}
+	}
 }
