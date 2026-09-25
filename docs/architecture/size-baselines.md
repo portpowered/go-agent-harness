@@ -7,7 +7,8 @@ The architecture tool also covers its own implementation and the independent
 runtime consumer module. Test files and inactive platform source files are
 included in its physical source inventory.
 
-The older root `.golangci.yml` remains an additional production-only ceiling.
+The root golangci-lint configuration is a second, repository-wide hard limit
+(see [golangci-lint limits](#golangci-lint-limits) below).
 The Makefile pins golangci-lint v2.9.0 and Staticcheck 2026.1; it resolves and
 checks those versions before running them. Do not infer current maximum holders
 from historical filenames: extraction changes both owners and measurements.
@@ -27,17 +28,39 @@ and cyclomatic scores use the pinned libraries in `tools/architecturegate/go.mod
 Only registered, recognized generated output is excluded. These budgets do not
 establish correctness; behavioral, race, replay, and platform checks remain required.
 
-The retained golangci-lint limits are 1,307 physical file lines, 296 function
-lines, and 124 cognitive-complexity points. They do not override the stronger
-architecture gate or permit new code to grow to those ceilings.
+## golangci-lint limits
 
-An availability check against the repository-cached v2.9.0 binary confirmed
-`errcheck`, `bodyclose`, `contextcheck`, `durationcheck`, `errorlint`, `exhaustive`,
-`goconst`, `mnd`, `nilerr`, and `nolintlint`. Availability is separate from
-enforcement: the root configuration still enables the three legacy linters.
-The runtime plan tracks staged configuration and no-new-debt enforcement for
-additional checks. The `golangci-lint` executable on PATH may be older; use the
-Makefile resolver rather than assuming PATH matches the repository pin.
+`make lint` runs two passes per `LINT_MODULES` module with the pinned binary:
+
+1. **Hard pass, all code** (`.golangci.yml`, `--all-code`). No `new-from-rev`
+   filter and no baseline: every production and test file must be clean.
+   - `linters.default: standard` (`errcheck`, `govet`, `ineffassign`,
+     `staticcheck`, `unused`). `errcheck` also checks blank assignments and
+     type assertions. Only Win32 `LazyProc.Call`/`SyscallN` are excluded,
+     because their error is always non-nil and success is in the return value.
+   - `revive` `file-length-limit`: 1,000 physical lines per file.
+   - `funlen`: 100 lines per function (statements not counted).
+   - `gocyclo` and `gocognit`: 30.
+   - `goconst`, `nilerr`, `bodyclose`, `durationcheck`, `gochecknoinits`, and
+     `nolintlint` (a `//nolint` must name one linter and give a reason).
+2. **New-code pass** (`.golangci.new.yml`, `--new-from-rev $(LINT_BASE)`).
+   These linters still have legacy findings, so they apply only to changed
+   code: `errorlint`, `contextcheck`, `mnd`, `exhaustive`,
+   `gochecknoglobals`, and `forbidigo`. When a linter's repository-wide count
+   reaches zero, move it to `.golangci.yml`.
+
+These ceilings are looser than the architecture gate budgets above and do not
+replace them. Run them locally with `make lint`, or run one module directly:
+
+```sh
+scripts/golangci-lint-working-tree.sh --analyzer <pinned golangci-lint> \
+  --all-code --config .golangci.yml --module agent-cli --repo . -- ./...
+```
+
+Findings depend on the target platform, so check `GOOS=linux`, `darwin`, and
+`windows` when you change platform-tagged files. CI runs the Linux pass.
+The `golangci-lint` executable on PATH may be an older version. Use the
+Makefile resolver instead of assuming PATH matches the repository pin.
 
 ## Exact baseline and ratchet
 

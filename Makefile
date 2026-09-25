@@ -5,6 +5,9 @@ MODULES := agent-cli go-agent-loop go-llm-gateway go-audio go-device-gateway go-
 COVERAGE_LIBRARY_MODULES := $(filter-out agent-cli,$(MODULES))
 LINT_MODULES := $(MODULES) tests/embedding tools/architecturegate tools/analyzergate tools/coveragegate tools/rtc-race-gate tools/session-race-gate tools/timingate scripts/webmcp-o0 test/localai
 LINT_BASE ?= origin/main
+# Hard limits for all code, then linters with legacy debt for new code only.
+LINT_CONFIG ?= .golangci.yml
+LINT_NEW_CONFIG ?= .golangci.new.yml
 BUILD_CGO_ENABLED ?= 0
 AGENT_CLI_OUTPUT ?= agent-cli/bin/yui
 AGENT_AUDIO_DEVICE_SERVER_OUTPUT ?= agent-cli/bin/audio-device-server
@@ -171,8 +174,10 @@ lint: ## Run golangci-lint across all workspace modules.
 	fi; \
 	echo "==> lint using $$analyzer (pinned $(GOLANGCI_LINT_VERSION))"; \
 	for module in $(LINT_MODULES); do \
-		echo "==> lint $$module"; \
-		GOWORK=off scripts/golangci-lint-working-tree.sh --analyzer "$$analyzer" --base "$(LINT_BASE)" --module "$$module" --repo "$(CURDIR)" -- ./...; \
+		echo "==> lint $$module (hard limits, all code: $(LINT_CONFIG))"; \
+		GOWORK=off scripts/golangci-lint-working-tree.sh --analyzer "$$analyzer" --all-code --config "$(LINT_CONFIG)" --module "$$module" --repo "$(CURDIR)" -- ./...; \
+		echo "==> lint $$module (new code since $(LINT_BASE): $(LINT_NEW_CONFIG))"; \
+		GOWORK=off scripts/golangci-lint-working-tree.sh --analyzer "$$analyzer" --config "$(LINT_NEW_CONFIG)" --base "$(LINT_BASE)" --module "$$module" --repo "$(CURDIR)" -- ./...; \
 	done
 
 staticcheck: ## Run staticcheck across all workspace modules.

@@ -147,9 +147,9 @@ jobs:
         uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
         with:
           path: ~/.cache/golangci-lint
-          key: golangci-lint-v2.9.0-${{ runner.os }}-${{ hashFiles('.golangci.yml') }}-${{ github.sha }}
+          key: golangci-lint-v2.9.0-${{ runner.os }}-${{ hashFiles('.golangci.yml', '.golangci.new.yml') }}-${{ github.sha }}
           restore-keys: |
-            golangci-lint-v2.9.0-${{ runner.os }}-${{ hashFiles('.golangci.yml') }}-
+            golangci-lint-v2.9.0-${{ runner.os }}-${{ hashFiles('.golangci.yml', '.golangci.new.yml') }}-
 
       - name: Install golangci-lint
         env:

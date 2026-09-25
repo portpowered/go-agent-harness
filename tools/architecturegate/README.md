@@ -93,21 +93,16 @@ migration from the former monolith. A pre-migration branch should generate into
 a temporary directory named `baselines`, then apply only its owned fragment
 diffs after rebasing so newer reductions are not overwritten.
 
-The pinned `golangci-lint` configuration enables the staged correctness and
-policy checks (`errcheck`, `ineffassign`, `unused`, `nilerr`, `errorlint`,
-`bodyclose`, `contextcheck`, `durationcheck`, `goconst`, `mnd`, `exhaustive`,
-`gochecknoglobals`, `gochecknoinits`, `forbidigo`, and `nolintlint`). Verify the
-configuration with the resolver's v2.9.0 binary before a run:
+The pinned `golangci-lint` configuration is separate from this gate. It has two
+passes: `.golangci.yml` applies hard limits to all code, and
+`.golangci.new.yml` applies to new code only. See
+[size-baselines.md](../../docs/architecture/size-baselines.md#golangci-lint-limits).
+Verify both configurations with the resolver's v2.9.0 binary:
 
 ```sh
 golangci-lint config verify --config .golangci.yml
-(cd go-agent-runtime && GOWORK=off golangci-lint run --new-from-rev origin/main ./...)
+golangci-lint config verify --config .golangci.new.yml
 ```
-
-The config carries the same `origin/main` no-new-debt default for direct
-invocations. CI should pass its fetched merge-base explicitly when the
-selected base differs; the existing analyzer resolver remains the only
-installation path and checks the pinned version and digest.
 
 The service shape is recognized only under `services/<name>/`: contracts live
 at the root, private implementation packages under `internal/`, construction
