@@ -98,10 +98,11 @@ change is always loaded. On a `main` push, where `origin/main` is the
 checked-out commit, the pass has nothing to check.
 
 Every lint entry point (`make lint`, `make lint-cross`, `make
-lint-darwin-cgo`) first checks both configurations, including on `main`
-pushes. `golangci-lint config verify` validates them against the pinned
-version's JSON schema, which it downloads from GitHub. `golangci-lint linters`
-loads them and rejects unknown linters.
+lint-darwin-cgo`) first loads both configurations with `golangci-lint
+linters`, including on `main` pushes. This rejects unknown linters and
+configurations that fail to load, and works offline. `golangci-lint config
+verify` is not used because it downloads its JSON schema from GitHub. Unknown
+keys under a linter's settings are therefore not rejected, as before.
 
 ## go vet and staticcheck
 

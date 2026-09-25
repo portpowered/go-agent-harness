@@ -222,13 +222,13 @@ golangci_run = GOWORK=off scripts/golangci-lint-working-tree.sh --analyzer "$$an
 LINT_NEW_RUN_INPUTS := $(LINT_CONFIG) $(LINT_NEW_CONFIG) Makefile scripts/golangci-lint-working-tree.sh scripts/run-bounded.sh
 # golangci_new_run runs the new-code pass for $$module.
 golangci_new_run = $(golangci_run) --config "$(LINT_NEW_CONFIG)" --base "$(LINT_BASE)" $(foreach input,$(LINT_NEW_RUN_INPUTS),--run-if-changed $(input))
-# golangci_config_check validates both configurations: `config verify` checks
-# them against the pinned version's JSON schema (fetched from GitHub) and
-# `linters` loads them, which rejects unknown linters. It runs on every lint
-# entry point, so a configuration error fails even when no module is linted.
+# golangci_config_check loads both configurations with `golangci-lint
+# linters`, which rejects unknown linters and unloadable configurations
+# offline. It runs on every lint entry point, so a configuration error fails
+# even when no module is linted. (`config verify` is not used: it downloads
+# its JSON schema from GitHub.)
 golangci_config_check = for config in "$(LINT_CONFIG)" "$(LINT_NEW_CONFIG)"; do \
 		echo "==> lint config $$config"; \
-		"$$analyzer" config verify --config "$$config"; \
 		"$$analyzer" linters --config "$$config" >/dev/null; \
 	done
 # golangci_tagged_dirs prints ./dir for each package directory in the current
