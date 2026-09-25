@@ -17,17 +17,18 @@ import (
 type jsonlWriter struct {
 	path   string
 	file   *os.File
+	sync   roomevidence.FileSync
 	mu     sync.Mutex
 	closed bool
 	err    error
 }
 
-func newJSONLWriter(path string) (*jsonlWriter, error) {
+func newJSONLWriter(path string, sync roomevidence.FileSync) (*jsonlWriter, error) {
 	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL|os.O_APPEND, evidenceFileMode)
 	if err != nil {
 		return nil, err
 	}
-	return &jsonlWriter{path: path, file: file}, nil
+	return &jsonlWriter{path: path, file: file, sync: sync}, nil
 }
 
 func (w *jsonlWriter) write(value any) error {
@@ -84,7 +85,7 @@ func (w *jsonlWriter) close() error {
 		}
 		return w.err
 	}
-	if err := w.file.Sync(); err != nil {
+	if err := w.sync.Sync(w.file); err != nil {
 		w.err = errors.Join(w.err, fmt.Errorf("sync %s: %w", w.path, err))
 	}
 	if err := w.file.Close(); err != nil {
@@ -96,18 +97,19 @@ func (w *jsonlWriter) close() error {
 type pcmWriter struct {
 	path   string
 	file   *os.File
+	sync   roomevidence.FileSync
 	mu     sync.Mutex
 	bytes  uint64
 	closed bool
 	err    error
 }
 
-func newPCMWriter(path string) (*pcmWriter, error) {
+func newPCMWriter(path string, sync roomevidence.FileSync) (*pcmWriter, error) {
 	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, evidenceFileMode)
 	if err != nil {
 		return nil, err
 	}
-	return &pcmWriter{path: path, file: file}, nil
+	return &pcmWriter{path: path, file: file, sync: sync}, nil
 }
 
 func (w *pcmWriter) write(pcm []byte) error {
@@ -155,7 +157,7 @@ func (w *pcmWriter) close() error {
 		}
 		return w.err
 	}
-	if err := w.file.Sync(); err != nil {
+	if err := w.sync.Sync(w.file); err != nil {
 		w.err = errors.Join(w.err, fmt.Errorf("sync %s: %w", w.path, err))
 	}
 	if err := w.file.Close(); err != nil {
@@ -168,13 +170,14 @@ type wavWriter struct {
 	path       string
 	sampleRate int
 	file       *os.File
+	sync       roomevidence.FileSync
 	mu         sync.Mutex
 	dataBytes  uint64
 	closed     bool
 	err        error
 }
 
-func newWAVWriter(path string, sampleRate int) (*wavWriter, error) {
+func newWAVWriter(path string, sampleRate int, syncFile roomevidence.FileSync) (*wavWriter, error) {
 	if sampleRate <= 0 {
 		return nil, fmt.Errorf("WAV sample rate must be positive, got %d", sampleRate)
 	}
@@ -189,7 +192,7 @@ func newWAVWriter(path string, sampleRate int) (*wavWriter, error) {
 	if err != nil {
 		return nil, fmt.Errorf("write WAV header: %w", errors.Join(err, file.Close(), os.Remove(path)))
 	}
-	return &wavWriter{path: path, sampleRate: sampleRate, file: file}, nil
+	return &wavWriter{path: path, sampleRate: sampleRate, file: file, sync: syncFile}, nil
 }
 
 func (w *wavWriter) write(pcm []byte) error {
@@ -245,7 +248,7 @@ func (w *wavWriter) close() error {
 	} else if _, err := writeAllCount(w.file, header[:]); err != nil {
 		w.err = errors.Join(w.err, fmt.Errorf("finalize %s WAV header: %w", w.path, err))
 	}
-	if err := w.file.Sync(); err != nil {
+	if err := w.sync.Sync(w.file); err != nil {
 		w.err = errors.Join(w.err, fmt.Errorf("sync %s: %w", w.path, err))
 	}
 	if err := w.file.Close(); err != nil {

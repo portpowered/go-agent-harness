@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 )
 
 type evidenceLogEntry struct {
@@ -33,10 +34,11 @@ func (c evidenceConversation) json() ([]byte, error) {
 	if !c.turn.observed() && len(c.closed) == 0 {
 		return nil, nil
 	}
-	// A fixed-capacity buffer prevents append growth from doubling a large
-	// summary during finalization. The normalized bundle writer makes one
-	// bounded copy; both copies are bounded by this explicit limit.
-	data := make([]byte, 0, int(directorySummaryMaxBytes))
+	// The buffer grows on demand but never beyond the summary limit, so append
+	// growth cannot double a large summary during finalization. The normalized
+	// bundle writer makes one bounded copy; both copies are bounded by this
+	// explicit limit.
+	var data []byte
 	for index, turn := range c.closed {
 		var err error
 		data, err = c.appendJSONTurn(data, index, turn)
@@ -56,9 +58,11 @@ func (c evidenceConversation) appendJSONTurn(data []byte, index int, turn eviden
 	if err != nil {
 		return data, fmt.Errorf("encode session log entry %d: %w", index+1, err)
 	}
-	if len(data) > int(directorySummaryMaxBytes)-len(line)-1 {
+	limit := int(c.budget.limit())
+	if len(data) > limit-len(line)-1 {
 		return data, summaryBudgetError(false)
 	}
+	data = growSummaryBuffer(data, len(line)+1, limit)
 	data = append(data, line...)
 	return append(data, '\n'), nil
 }
@@ -277,8 +281,8 @@ func maxInt(value, floor int) int {
 // entries and slice capacity. This keeps finalization bounded without making
 // the public recording contract depend on the caller's input lifetime.
 const (
-	directorySummaryMaxBytes int64 = 2 << 20
-	directorySummaryMaxItems       = 4096
+	directorySummaryMaxBytes = recording.DefaultSummaryBytes
+	directorySummaryMaxItems = 4096
 
 	// encoding/json can emit a six-byte \\u00xx escape for one input byte. The
 	// fixed charge also covers a retained string header and JSON punctuation.
@@ -321,13 +325,27 @@ func (kind summaryBudgetErrorKind) Is(target error) bool {
 type summaryBudget struct {
 	bytes int64
 	items int
+	// maxBytes is the normalized recording.ResourceLimits.SummaryBytes. Zero
+	// selects the protected default.
+	maxBytes int64
+}
+
+func newSummaryBudget(maxBytes int64) *summaryBudget {
+	return &summaryBudget{maxBytes: maxBytes}
+}
+
+func (b *summaryBudget) limit() int64 {
+	if b == nil || b.maxBytes <= 0 || b.maxBytes > directorySummaryMaxBytes {
+		return directorySummaryMaxBytes
+	}
+	return b.maxBytes
 }
 
 func (b *summaryBudget) reserve(bytes int64, items int) bool {
 	if b == nil || bytes < 0 || items < 0 {
 		return false
 	}
-	if bytes > directorySummaryMaxBytes-b.bytes || items > directorySummaryMaxItems-b.items {
+	if bytes > b.limit()-b.bytes || items > directorySummaryMaxItems-b.items {
 		return false
 	}
 	b.bytes += bytes

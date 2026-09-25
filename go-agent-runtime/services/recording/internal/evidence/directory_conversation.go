@@ -58,8 +58,8 @@ type evidenceToolEvent struct {
 	retainedBytes int64
 }
 
-func newEvidenceConversation() evidenceConversation {
-	conversation := evidenceConversation{budget: &summaryBudget{}}
+func newEvidenceConversation(summaryBytes int64) evidenceConversation {
+	conversation := evidenceConversation{budget: newSummaryBudget(summaryBytes)}
 	conversation.bindTurn()
 	return conversation
 }
@@ -90,7 +90,7 @@ func (c *evidenceConversation) failBudget(bytes int64, items int) {
 	// Prefer the item identity when both dimensions are exhausted. The error
 	// is fixed text and never includes caller payloads or credentials.
 	itemLimit := items > directorySummaryMaxItems-c.budget.items
-	byteLimit := bytes > directorySummaryMaxBytes-c.budget.bytes
+	byteLimit := bytes > c.budget.limit()-c.budget.bytes
 	c.summaryErr = summaryBudgetError(itemLimit && !byteLimit)
 }
 
@@ -366,4 +366,19 @@ func (c *evidenceConversation) observeAudio(input bool, bytes int, offset uint64
 		}
 		c.turn.outputSegments = []string{segment}
 	}
+}
+
+const summaryInitialBufferBytes = 4 << 10
+
+// growSummaryBuffer reserves room for extra bytes with amortized doubling that
+// is capped at limit. Callers have already checked len(data)+extra <= limit.
+func growSummaryBuffer(data []byte, extra, limit int) []byte {
+	needed := len(data) + extra
+	if needed <= cap(data) {
+		return data
+	}
+	capacity := min(max(2*cap(data), needed, summaryInitialBufferBytes), limit)
+	grown := make([]byte, len(data), capacity)
+	copy(grown, data)
+	return grown
 }

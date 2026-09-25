@@ -18,6 +18,7 @@ import (
 )
 
 func TestServiceRejectsOversizedReplayManifest(t *testing.T) {
+	t.Parallel()
 	bundle := t.TempDir()
 	path := filepath.Join(bundle, roomevidence.ManifestPath)
 	file, err := os.Create(path)
@@ -34,48 +35,92 @@ func TestServiceRejectsOversizedReplayManifest(t *testing.T) {
 		t.Fatalf("close manifest: %v", err)
 	}
 
-	_, err = NewService().LoadPlan(bundle)
+	_, err = newTestService().LoadPlan(bundle)
 	assertAdmissionLimitError(t, err, "manifest")
 }
 
-func TestServiceBoundsReplayTimelineBytesAndEventCount(t *testing.T) {
-	t.Run("total bytes", func(t *testing.T) {
-		bundle, _ := finalizedReplayBundle(t)
-		rewriteReplayTimeline(t, bundle, writeOversizedWhitespaceTimeline)
+// Small admission limits keep the timeline boundary fixtures in kilobytes; the
+// production defaults are asserted in the admission package and by the
+// oversized-file tests below.
+const (
+	testTimelineBytes  = 16 << 10
+	testTimelineEvents = 64
+)
 
-		_, err := NewService().LoadPlan(bundle)
-		assertAdmissionLimitError(t, err, "room_timeline")
-		if !strings.Contains(err.Error(), "byte limit") {
-			t.Fatalf("timeline error = %v, want total byte limit", err)
-		}
-	})
-
-	t.Run("event count", func(t *testing.T) {
-		bundle, _ := finalizedReplayBundle(t)
-		rewriteReplayTimeline(t, bundle, writeOversizedEventTimeline)
-
-		_, err := NewService().LoadPlan(bundle)
-		assertAdmissionLimitError(t, err, "room_timeline")
-		if !strings.Contains(err.Error(), "event limit") {
-			t.Fatalf("timeline error = %v, want event count limit", err)
-		}
+func newLimitedTestService() roomevidence.Service {
+	return NewServiceWithOptions(roomevidence.ServiceOptions{
+		SyncFile:        skipFileSync,
+		AdmissionLimits: roomevidence.AdmissionLimits{TimelineBytes: testTimelineBytes, TimelineEvents: testTimelineEvents},
 	})
 }
 
+func TestServiceBoundsReplayTimelineBytesAndEventCount(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name   string
+		events int
+		size   int
+		reject string
+	}{
+		{name: "total bytes", size: testTimelineBytes + 1, reject: "byte limit"},
+		{name: "bytes at limit", events: 1, size: testTimelineBytes},
+		{name: "event count", events: testTimelineEvents + 1, reject: "event limit"},
+		{name: "events at limit", events: testTimelineEvents},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			bundle, _ := finalizedReplayBundle(t)
+			rewriteReplayTimeline(t, bundle, func(dst io.Writer) error { return writeTestTimeline(dst, tc.events, tc.size) })
+
+			plan, err := newLimitedTestService().LoadPlan(bundle)
+			if tc.reject == "" {
+				if err != nil || len(plan.Timeline) != tc.events {
+					t.Fatalf("at-limit timeline: events=%d err=%v, want %d admitted", len(plan.Timeline), err, tc.events)
+				}
+				return
+			}
+			assertAdmissionLimitError(t, err, "room_timeline")
+			if !strings.Contains(err.Error(), tc.reject) {
+				t.Fatalf("timeline error = %v, want %s", err, tc.reject)
+			}
+		})
+	}
+}
+
+// writeTestTimeline writes events valid timeline records, then pads with
+// whitespace-only lines (which admission skips) to exactly size bytes.
+func writeTestTimeline(dst io.Writer, events, size int) error {
+	var data bytes.Buffer
+	for sequence := 0; sequence < events; sequence++ {
+		fmt.Fprintf(&data, `{"sequence":%d,"monotonic_offset_ms":0,"participant_id":"speaker","event":"test"}`+"\n", sequence)
+	}
+	for data.Len() < size {
+		line := min(size-data.Len(), 1<<10)
+		data.Write(bytes.Repeat([]byte(" "), line-1))
+		data.WriteByte('\n')
+	}
+	_, err := dst.Write(data.Bytes())
+	return err
+}
+
 func TestServiceRejectsOversizedReplayFilesBeforeHashing(t *testing.T) {
+	t.Parallel()
 	t.Run("timeline", func(t *testing.T) {
+		t.Parallel()
 		bundle, _ := finalizedReplayBundle(t)
 		rewriteOversizedReplayFile(t, bundle, roomevidence.TimelinePath, admission.MaxTimelineBytes+1)
 
-		_, err := NewService().LoadPlan(bundle)
+		_, err := newTestService().LoadPlan(bundle)
 		assertAdmissionLimitError(t, err, "room_timeline")
 	})
 	t.Run("artifact", func(t *testing.T) {
+		t.Parallel()
 		bundle, recorder := finalizedReplayBundle(t)
 		artifact := recorder.Artifacts("speaker").SentPCM
 		rewriteOversizedReplayFile(t, bundle, artifact, admission.MaxArtifactBytes+1)
 
-		_, err := NewService().LoadPlan(bundle)
+		_, err := newTestService().LoadPlan(bundle)
 		assertAdmissionLimitError(t, err, "participant:speaker:sent_pcm")
 	})
 }
@@ -110,32 +155,6 @@ func assertAdmissionLimitError(t *testing.T, err error, field string) {
 	if !strings.Contains(err.Error(), "limit") {
 		t.Fatalf("admission error = %v, want limit diagnostic", err)
 	}
-}
-
-func writeOversizedWhitespaceTimeline(dst io.Writer) error {
-	spaces := bytes.Repeat([]byte(" "), 64<<10)
-	// Thirty-five scanner-sized whitespace records exceed the total byte cap
-	// without reaching the event-count cap or allocating the whole file.
-	for line := 0; line < 35; line++ {
-		for chunk := 0; chunk < 15; chunk++ {
-			if _, err := dst.Write(spaces); err != nil {
-				return err
-			}
-		}
-		if _, err := io.WriteString(dst, "\n"); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func writeOversizedEventTimeline(dst io.Writer) error {
-	for sequence := 0; sequence <= admission.MaxTimelineEvents; sequence++ {
-		if _, err := fmt.Fprintf(dst, `{"sequence":%d,"monotonic_offset_ms":0,"participant_id":"speaker","event":"test"}`+"\n", sequence); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func rewriteReplayTimeline(t *testing.T, bundle string, write func(io.Writer) error) {

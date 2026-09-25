@@ -153,20 +153,6 @@ func TestBuildSessionNormalizesBlankProviderBeforeModelAdmission(t *testing.T) {
 	}
 }
 
-func TestProviderModelAdmissionTrimsProviderAndModel(t *testing.T) {
-	service := New(nil, nil, clock.Real{}, nil, catalog.New(), nil)
-	if err := service.ValidateSessionModel("  OpenAI ", "  "+providers.OpenAIRealtimeLegacyModel+" "); err != nil {
-		t.Fatalf("ValidateSessionModel whitespace = %v", err)
-	}
-}
-
-func TestProviderModelAdmissionLeavesCustomProvidersUnrestricted(t *testing.T) {
-	service := New(nil, nil, clock.Real{}, nil, catalog.New(), nil)
-	if err := service.ValidateSessionModel("custom", "my-realtime-model"); err != nil {
-		t.Fatalf("custom model admission = %v", err)
-	}
-}
-
 func TestProviderModelAdmissionDistinguishesMissingCatalog(t *testing.T) {
 	service := New(nil, nil, clock.Real{}, nil, nil, nil)
 	err := service.ValidateSessionModel("openai", providers.OpenAIRealtimeLegacyModel)

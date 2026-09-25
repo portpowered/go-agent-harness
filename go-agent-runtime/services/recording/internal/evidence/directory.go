@@ -107,7 +107,7 @@ func newDirectoryRecorder(options recording.LiveEvidenceOptions, source clock.So
 	if options.WallClockStart.IsZero() {
 		options.WallClockStart = observed
 	}
-	admitted, err := Claim(recording.ClaimOptions{Destination: options.Destination, Kind: recording.ClaimKindDirectory})
+	admitted, err := claimDestination(recording.ClaimOptions{Destination: options.Destination, Kind: recording.ClaimKindDirectory}, options.SyncFile)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +131,7 @@ func newDirectoryRecorder(options recording.LiveEvidenceOptions, source clock.So
 		spool:        spool,
 		queue:        make(chan directoryEvidenceItem, directoryEvidenceQueueCapacity),
 		done:         make(chan struct{}),
-		conversation: newEvidenceConversation(),
+		conversation: newEvidenceConversation(budget.limits.SummaryBytes),
 	}
 	go recorder.run()
 	return recorder, nil

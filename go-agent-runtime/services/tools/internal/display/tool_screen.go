@@ -13,6 +13,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/sight"
+	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
 // ScreenTool captures the screen as a screenshot or a timed recording.
@@ -21,6 +22,7 @@ import (
 type ScreenTool struct {
 	surface       DisplaySurface
 	recordEncoder ScreenRecordingEncoder
+	clock         platformclock.TimerSource
 }
 
 const (
@@ -201,10 +203,12 @@ func (standardScreenRecordingEncoder) Encode(ctx context.Context, w io.Writer, r
 }
 
 // ScreenToolOptions configures the display and recording boundaries used by
-// ScreenTool. The encoder is optional and defaults to GIF encoding.
+// ScreenTool. The encoder is optional and defaults to GIF encoding. Clock
+// paces recording frames and defaults to the host clock.
 type ScreenToolOptions struct {
 	DisplaySurface   DisplaySurface
 	RecordingEncoder ScreenRecordingEncoder
+	Clock            platformclock.TimerSource
 }
 
 func NewScreenTool() *ScreenTool {
@@ -228,7 +232,11 @@ func NewScreenToolWithOptions(options ScreenToolOptions) *ScreenTool {
 	if encoder == nil {
 		encoder = standardScreenRecordingEncoder{}
 	}
-	return &ScreenTool{surface: surface, recordEncoder: encoder}
+	clock := options.Clock
+	if clock == nil {
+		clock = platformclock.Real{}
+	}
+	return &ScreenTool{surface: surface, recordEncoder: encoder, clock: clock}
 }
 
 func (t *ScreenTool) Name() string { return ScreenToolID }

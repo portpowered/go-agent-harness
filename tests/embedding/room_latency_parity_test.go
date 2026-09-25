@@ -122,6 +122,68 @@ func (run *publicRoomLatencyRun) waitReady(t *testing.T) {
 			t.Fatal("room participants did not reach the public ready boundary")
 		}
 	}
+	// The room builds its media graph after the ready callbacks. Start the
+	// virtual clock only once every peer mixer armed its first cadence timer,
+	// so the mixer cadence stays aligned with the room clock's origin.
+	run.waitMixersIdle(t, publicRoomLatencyIdleTimers)
+}
+
+// publicRoomLatencyIdleTimers is the number of room-clock timers pending
+// while the room is idle between clock advances: the room's max-duration
+// deadline plus one cadence timer per peer mixer (speaker and listener).
+const publicRoomLatencyIdleTimers = 3
+
+// publicRoomLatencyFramePeriod is the negotiated mixer cadence.
+const publicRoomLatencyFramePeriod = 20 * time.Millisecond
+
+// waitMixersIdle blocks until the room has armed timers pending timers.
+// Deterministic timers are never pending once due, so a re-armed mixer
+// timer proves the mixer processed every cadence up to the current tick and
+// will not mix again until the test advances the clock.
+func (run *publicRoomLatencyRun) waitMixersIdle(t *testing.T, timers int) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(run.roomCtx, publicRoomLatencyTestTimeout)
+	defer cancel()
+	if err := run.clock.WaitForTimers(ctx, timers); err != nil {
+		t.Fatalf("room did not arm %d room-clock timers: %v", timers, err)
+	}
+}
+
+// deliverResponse releases one provider response at the provider latency
+// landmark and drives it through the peer mixer: the response frame is
+// admitted to the peer's mixer input, then exactly one mixer period elapses.
+func (run *publicRoomLatencyRun) deliverResponse(t *testing.T, participantID, peerID string, start publicRoomLatencyResponseStart) {
+	t.Helper()
+	run.releaseResponse(t, participantID, start)
+	run.advanceMixer(t, participantID)
+	waitPublicRoomLatencyFanout(t, run.fanouts, participantID, peerID, run.pcmFixture)
+}
+
+// releaseResponse advances to the provider landmark, lets the mixers drain
+// that advance, and publishes the response audio.
+func (run *publicRoomLatencyRun) releaseResponse(t *testing.T, participantID string, start publicRoomLatencyResponseStart) {
+	t.Helper()
+	advancePublicRoomLatencyResponse(run.clock, start)
+	run.waitMixersIdle(t, publicRoomLatencyIdleTimers)
+	if err := run.provider.releaseResponse(participantID, start.responseID, run.pcmFixture); err != nil {
+		t.Fatalf("release %s response %s: %v", participantID, start.responseID, err)
+	}
+	waitPublicRoomLatencyAudio(t, run.audioEvents, participantID, start.responseID, run.pcmFixture, start.tick+600)
+}
+
+// advanceMixer waits until the source's released frame sits in its peers'
+// mixer inputs, then advances one mixer period. Every mixer's next cadence
+// deadline is at most one period after the current tick, and a mixer that
+// has not re-armed yet fires immediately when it does, so this single
+// advance mixes the admitted frame without real-time settling.
+func (run *publicRoomLatencyRun) advanceMixer(t *testing.T, sourceID string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(run.roomCtx, publicRoomLatencyTestTimeout)
+	defer cancel()
+	if err := run.provider.participant(sourceID).handle.inbound.waitAdmitted(ctx); err != nil {
+		t.Fatalf("room did not admit %s audio to its peer mixers: %v", sourceID, err)
+	}
+	run.clock.AdvanceBy(publicRoomLatencyFramePeriod)
 }
 
 func (run *publicRoomLatencyRun) playOpening(t *testing.T) {
@@ -131,13 +193,7 @@ func (run *publicRoomLatencyRun) playOpening(t *testing.T) {
 		t.Fatalf("start opening response: %v", err)
 	}
 	openingStart := waitPublicRoomLatencyResponseStart(t, run.responseStarts, run.speakerID, openingID)
-	advancePublicRoomLatencyResponse(run.clock, openingStart)
-	if err := run.provider.releaseResponse(run.speakerID, openingID, run.pcmFixture); err != nil {
-		t.Fatalf("release opening response: %v", err)
-	}
-	waitPublicRoomLatencyAudio(t, run.audioEvents, run.speakerID, openingID, run.pcmFixture, openingStart.tick+600)
-	advancePublicRoomLatencyMixer(run.clock)
-	waitPublicRoomLatencyFanout(t, run.clock, run.fanouts, run.speakerID, run.listenerID, run.pcmFixture)
+	run.deliverResponse(t, run.speakerID, run.listenerID, openingStart)
 	run.provider.completeTurn(run.speakerID)
 }
 
@@ -151,11 +207,27 @@ func (run *publicRoomLatencyRun) playTurns(t *testing.T) {
 		{run.listenerID, run.speakerID, "response-listener-02"},
 	}
 	for _, turn := range turns {
-		responseID := publicRoomLatencyTurn(t, run.provider, run.clock, run.responseStarts, run.audioEvents, run.fanouts, turn.participantID, turn.peerID, turn.responseID, run.pcmFixture)
-		if responseID == "" {
-			t.Fatalf("%s did not produce a response", turn.responseID)
-		}
+		run.playTurn(t, turn.participantID, turn.peerID, turn.responseID)
 	}
+}
+
+func (run *publicRoomLatencyRun) playTurn(t *testing.T, participantID, peerID, responseID string) {
+	t.Helper()
+	start := run.startTurn(t, participantID, responseID)
+	run.deliverResponse(t, participantID, peerID, start)
+	run.provider.completeTurn(participantID)
+}
+
+// startTurn waits for the peer audio to reach the participant, ends its
+// speech after 60 ms, and waits for the resulting response to start.
+func (run *publicRoomLatencyRun) startTurn(t *testing.T, participantID, responseID string) publicRoomLatencyResponseStart {
+	t.Helper()
+	waitPublicRoomLatencyInput(t, run.provider.inputEvents, participantID, run.pcmFixture)
+	run.clock.AdvanceTo(run.clock.Tick() + 60)
+	if err := run.provider.stopSpeech(participantID); err != nil {
+		t.Fatalf("stop %s speech: %v", participantID, err)
+	}
+	return waitPublicRoomLatencyResponseStart(t, run.responseStarts, participantID, responseID)
 }
 
 func (run *publicRoomLatencyRun) waitOutcome(t *testing.T) publicRoomLatencyRunOutcome {
@@ -300,25 +372,6 @@ func assertPublicRoomLatencyTransition(t *testing.T, transition runtimeRooms.Roo
 	}
 }
 
-func publicRoomLatencyTurn(t *testing.T, provider *publicRoomLatencyProvider, clock *platformclock.Deterministic, starts <-chan publicRoomLatencyResponseStart, audioEvents <-chan publicRoomLatencyAudio, fanouts <-chan publicRoomLatencyFanout, participantID, peerID, responseID string, pcm []byte) string {
-	t.Helper()
-	waitPublicRoomLatencyInput(t, provider.inputEvents, participantID, pcm)
-	clock.AdvanceTo(clock.Tick() + 60)
-	if err := provider.stopSpeech(participantID); err != nil {
-		t.Fatalf("stop %s speech: %v", participantID, err)
-	}
-	start := waitPublicRoomLatencyResponseStart(t, starts, participantID, responseID)
-	advancePublicRoomLatencyResponse(clock, start)
-	if err := provider.releaseResponse(participantID, start.responseID, pcm); err != nil {
-		t.Fatalf("release %s response: %v", participantID, err)
-	}
-	waitPublicRoomLatencyAudio(t, audioEvents, participantID, start.responseID, pcm, start.tick+600)
-	advancePublicRoomLatencyMixer(clock)
-	waitPublicRoomLatencyFanout(t, clock, fanouts, participantID, peerID, pcm)
-	provider.completeTurn(participantID)
-	return start.responseID
-}
-
 func publicRoomLatencyPCMFixture() []byte {
 	samples := []int16{0, 1, -1, 0, 2, -2, 0, 3, -3, 0, 4, -4, 0, 5, -5, 0, 1600, -1600, 0, 0}
 	pcm := make([]byte, len(samples)*2)
@@ -382,51 +435,23 @@ func waitPublicRoomLatencyAudio(t *testing.T, audioEvents <-chan publicRoomLaten
 	}
 }
 
-func advancePublicRoomLatencyMixer(clock *platformclock.Deterministic) {
-	// Mixer timers are created asynchronously. A few bounded cadence advances
-	// make the test independent of whether the worker installed its first timer
-	// before or after the provider frame was admitted.
-	for index := 0; index < 4; index++ {
-		clock.AdvanceBy(20 * time.Millisecond)
-		time.Sleep(time.Millisecond)
-	}
-}
-
-// waitPublicRoomLatencyFanout waits for the provider frame to reach its peer.
-// A loaded scheduler can admit the frame to the mixer only after the bounded
-// cadence advances already fired; the mixer then needs another period, so a
-// quiet settle window drives one more frame period instead of stalling the
-// virtual clock forever.
-func waitPublicRoomLatencyFanout(t *testing.T, clock *platformclock.Deterministic, fanouts <-chan publicRoomLatencyFanout, sourceID, targetID string, wantPCM []byte) {
+// waitPublicRoomLatencyFanout waits for the mixed provider frame to reach its
+// peer. The caller has already advanced the one mixer period that emits it;
+// the timeout only bounds a broken run.
+func waitPublicRoomLatencyFanout(t *testing.T, fanouts <-chan publicRoomLatencyFanout, sourceID, targetID string, wantPCM []byte) {
 	t.Helper()
-	deadline := time.After(publicRoomLatencyTestTimeout)
-	for {
-		select {
-		case fanout := <-fanouts:
-			if fanout.sourceID != sourceID || fanout.targetID != targetID {
-				t.Fatalf("fanout = %+v, want %s -> %s", fanout, sourceID, targetID)
-			}
-			if !bytes.Equal(fanout.pcm, wantPCM) {
-				t.Fatalf("fanout PCM = %v, want exact fixture %v", fanout.pcm, wantPCM)
-			}
-			return
-		case <-deadline:
-			t.Fatalf("timed out waiting for fanout %s -> %s", sourceID, targetID)
-		case <-time.After(publicRoomLatencyMixerSettle):
-			clock.AdvanceBy(20 * time.Millisecond)
+	select {
+	case fanout := <-fanouts:
+		if fanout.sourceID != sourceID || fanout.targetID != targetID {
+			t.Fatalf("fanout = %+v, want %s -> %s", fanout, sourceID, targetID)
 		}
+		if !bytes.Equal(fanout.pcm, wantPCM) {
+			t.Fatalf("fanout PCM = %v, want exact fixture %v", fanout.pcm, wantPCM)
+		}
+	case <-time.After(publicRoomLatencyTestTimeout):
+		t.Fatalf("timed out waiting for fanout %s -> %s", sourceID, targetID)
 	}
 }
-
-// publicRoomLatencyMixerSettle is the real-time quiet window after which a
-// missing fan-out gets one more mixer period.
-const publicRoomLatencyMixerSettle = 100 * time.Millisecond
-
-// publicRoomFinalTurnHoldWindow is the real-time window in which a room that
-// ignores undelivered final audio would already have stopped. The room clock
-// is deterministic and not advanced during it, so the final frame stays in
-// the peer's mixer until the test releases it.
-const publicRoomFinalTurnHoldWindow = 200 * time.Millisecond
 
 // TestServiceDeliversFinalTurnAudioWhenMessageEndPrecedesPlayback pins the
 // max_turns stop against real provider ordering: response.done (MESSAGE.END)
@@ -441,57 +466,86 @@ func TestServiceDeliversFinalTurnAudioWhenMessageEndPrecedesPlayback(t *testing.
 	run.provider.audioEvents = run.audioEvents
 	run.provider.fanouts = run.fanouts
 	run.playOpening(t)
-	for _, turn := range []struct{ participantID, peerID, responseID string }{
-		{run.listenerID, run.speakerID, "response-listener-01"},
-		{run.speakerID, run.listenerID, "response-speaker-02"},
-	} {
-		if responseID := publicRoomLatencyTurn(t, run.provider, run.clock, run.responseStarts, run.audioEvents, run.fanouts, turn.participantID, turn.peerID, turn.responseID, run.pcmFixture); responseID == "" {
-			t.Fatalf("%s did not produce a response", turn.responseID)
-		}
-	}
+	run.playTurn(t, run.listenerID, run.speakerID, "response-listener-01")
+	run.playTurn(t, run.speakerID, run.listenerID, "response-speaker-02")
 
-	// Final turn: the provider publishes the audio and then MESSAGE.END before
-	// the room clock lets the mixer hand the audio to the peer.
-	waitPublicRoomLatencyInput(t, run.provider.inputEvents, run.listenerID, run.pcmFixture)
-	run.clock.AdvanceTo(run.clock.Tick() + 60)
-	if err := run.provider.stopSpeech(run.listenerID); err != nil {
-		t.Fatalf("stop listener speech: %v", err)
-	}
-	start := waitPublicRoomLatencyResponseStart(t, run.responseStarts, run.listenerID, "response-listener-02")
-	advancePublicRoomLatencyResponse(run.clock, start)
-	// Let mixer wakes due at the advanced tick drain so the final frame waits
-	// for the next room-clock period.
-	time.Sleep(publicRoomLatencyMixerSettle)
-	if err := run.provider.releaseResponse(run.listenerID, start.responseID, run.pcmFixture); err != nil {
-		t.Fatalf("release final listener response: %v", err)
-	}
-	waitPublicRoomLatencyAudio(t, run.audioEvents, run.listenerID, start.responseID, run.pcmFixture, start.tick+600)
+	// Final turn: the provider publishes the audio and then MESSAGE.END. The
+	// mixers already drained the release tick, so the frame stays in the
+	// peer's mixer input until the test advances the room clock.
+	start := run.startTurn(t, run.listenerID, "response-listener-02")
+	run.releaseResponse(t, run.listenerID, start)
 	run.provider.completeTurn(run.listenerID)
+	run.assertFinalTurnHeld(t)
 
-	select {
-	case outcome := <-run.runDone:
-		// Stopping is correct only once the peer already holds the audio.
-		assertPublicRoomFinalFanoutDelivered(t, run)
-		assertPublicRoomLatencyOutcome(t, run, outcome)
-		return
-	case <-time.After(publicRoomFinalTurnHoldWindow):
-	}
-
-	waitPublicRoomLatencyFanout(t, run.clock, run.fanouts, run.listenerID, run.speakerID, run.pcmFixture)
+	run.advanceMixer(t, run.listenerID)
+	waitPublicRoomLatencyFanout(t, run.fanouts, run.listenerID, run.speakerID, run.pcmFixture)
 	assertPublicRoomLatencyOutcome(t, run, run.waitOutcome(t))
 }
 
-func assertPublicRoomFinalFanoutDelivered(t *testing.T, run *publicRoomLatencyRun) {
+// assertFinalTurnHeld proves the room reached max_turns and holds its stop
+// for the undelivered final audio. The final-turn delivery wait arms one room
+// clock timer beside the idle ones; a room that ignored the queued audio
+// stops instead. The mixers drained the release tick before the frame was
+// published, so the peer cannot hold the frame until the clock advances.
+func (run *publicRoomLatencyRun) assertFinalTurnHeld(t *testing.T) {
 	t.Helper()
+	ctx, cancel := context.WithTimeout(run.roomCtx, publicRoomLatencyTestTimeout)
+	defer cancel()
+	held := make(chan error, 1)
+	go func() { held <- run.clock.WaitForTimers(ctx, publicRoomLatencyIdleTimers+1) }()
+	select {
+	case <-run.runDone:
+		t.Fatal("room stopped before the final response reached the peer")
+	case err := <-held:
+		if err != nil {
+			t.Fatalf("room did not hold the max_turns stop for final audio: %v", err)
+		}
+	}
 	select {
 	case fanout := <-run.fanouts:
-		if fanout.sourceID != run.listenerID || fanout.targetID != run.speakerID {
-			t.Fatalf("final fanout = %+v, want %s -> %s", fanout, run.listenerID, run.speakerID)
-		}
+		t.Fatalf("final fanout %+v reached the peer before the room clock advanced", fanout)
 	default:
-		t.Fatal("room stopped before the final response reached the peer")
 	}
 }
 
 var _ session.LiveService = (*publicRoomLatencyLiveService)(nil)
 var _ session.LiveHandle = (*publicRoomLatencyLiveHandle)(nil)
+
+// waitAdmitted blocks until the room's source worker has fanned every pushed
+// frame out to the peer mixer inputs and come back for the next frame.
+func (i *publicRoomLatencyInbound) waitAdmitted(ctx context.Context) error {
+	for {
+		i.admission.Lock()
+		if i.reads > i.pushed {
+			i.admission.Unlock()
+			return nil
+		}
+		if i.readEntered == nil {
+			i.readEntered = make(chan struct{})
+		}
+		entered := i.readEntered
+		i.admission.Unlock()
+		select {
+		case <-entered:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
+func publicRoomLatencyPCMBytes(samples []int16) []byte {
+	pcm := make([]byte, len(samples)*2)
+	for index, sample := range samples {
+		binary.LittleEndian.PutUint16(pcm[index*2:], uint16(sample))
+	}
+	return pcm
+}
+
+func publicRoomLatencySamplesSilent(samples []int16) bool {
+	for _, sample := range samples {
+		if sample != 0 {
+			return false
+		}
+	}
+	return true
+}

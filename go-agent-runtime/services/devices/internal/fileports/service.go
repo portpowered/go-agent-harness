@@ -28,6 +28,9 @@ func (s *Service) OpenFileMedia(request devices.FileMediaRequest) (devices.FileM
 	if request.Input == nil && len(request.InputTurns) == 0 && len(request.Interruptions) == 0 && request.OutputPath == "" {
 		return nil, nil
 	}
+	if err := request.Pacing.Validate(); err != nil {
+		return nil, err
+	}
 	labels := resolvedLabels(request.Labels)
 	handle := &handle{}
 	if err := openInputs(handle, request, labels); err != nil {
@@ -41,7 +44,7 @@ func (s *Service) OpenFileMedia(request devices.FileMediaRequest) (devices.FileM
 		handle.media.Output = &devices.FileOutput{Sink: sink, SampleRate: request.OutputSampleRate, Continuous: request.OutputPath == stdinPath}
 	}
 	observeSources(&handle.media, request)
-	applyScheduler(&handle.media, request)
+	applyPacing(&handle.media, request)
 	return handle, nil
 }
 
@@ -99,15 +102,26 @@ func observeSources(media *devices.FileMedia, request devices.FileMediaRequest) 
 	}
 }
 
-func applyScheduler(media *devices.FileMedia, request devices.FileMediaRequest) {
+// applyPacing gives every file input the request's pacing policy. Real time
+// uses the host scheduler unchanged; a speed multiplier runs the same pacing
+// on an accelerated view of that scheduler; Unpaced releases frames without
+// waiting. Stdin inputs were admitted unpaced and stay that way.
+func applyPacing(media *devices.FileMedia, request devices.FileMediaRequest) {
+	scheduler := pacingScheduler(request.Scheduler, request.Pacing)
+	apply := func(input *devices.FileInput) {
+		input.Scheduler = scheduler
+		if request.Pacing.Unpaced {
+			input.Pace = false
+		}
+	}
 	if media.Input != nil {
-		media.Input.Scheduler = request.Scheduler
+		apply(media.Input)
 	}
 	for index := range media.InputTurns {
-		media.InputTurns[index].Scheduler = request.Scheduler
+		apply(&media.InputTurns[index])
 	}
 	for index := range media.Interruptions {
-		media.Interruptions[index].Scheduler = request.Scheduler
+		apply(&media.Interruptions[index])
 	}
 }
 

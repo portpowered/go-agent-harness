@@ -51,8 +51,13 @@ type FileMediaRequest struct {
 	// example with an evidence tap). The wrapper is closed in place of the
 	// source it wraps.
 	ObserveSource func(source audio.AudioSource, sampleRate int) audio.AudioSource
-	Scheduler     clock.Scheduler
-	Labels        FileMediaLabels
+	// Scheduler paces file inputs. It is the host's canonical clock; a
+	// deterministic scheduler lets a test drive paced delivery virtually.
+	Scheduler clock.Scheduler
+	// Pacing selects how file inputs are delivered. The zero value is the
+	// production default: real-time cadence on Scheduler.
+	Pacing FilePacing
+	Labels FileMediaLabels
 }
 
 // FileMedia is the admitted finite media bundle for one invocation.

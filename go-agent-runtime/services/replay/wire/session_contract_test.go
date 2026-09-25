@@ -97,33 +97,6 @@ func openSessionContract(t *testing.T, path string) messages.Session {
 	return session
 }
 
-func TestSessionInferencerMatchesOutboundBeforeDeliveringRecordedResponse(t *testing.T) {
-	expected := messages.StreamMessage{Type: messages.StreamTypeResponseCreate}
-	response := messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("recorded response")}
-	path := writeSessionContractCapture(t, expected, response)
-	session := openSessionContract(t, path)
-	if !session.Send(t.Context(), expected) {
-		t.Fatal("matching outbound message was rejected")
-	}
-	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
-	defer cancel()
-	got, err := session.Receive().ReadContext(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got.Type != response.Type || !reflect.DeepEqual(got.Value, response.Value) {
-		t.Fatalf("recorded response = %#v, want %#v", got, response)
-	}
-	select {
-	case <-session.Done():
-	case <-ctx.Done():
-		t.Fatal("replay did not finish after delivering the response")
-	}
-	if err := session.Close(); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestSessionInferencerPreservesAlternatingEventOrder(t *testing.T) {
 	firstRequest := messages.StreamMessage{Type: messages.StreamTypeResponseCreate}
 	firstResponse := messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("first")}

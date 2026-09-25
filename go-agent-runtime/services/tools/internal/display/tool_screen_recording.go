@@ -17,6 +17,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/sight"
+	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
 type screenRecordingOptions struct {
@@ -182,11 +183,12 @@ func (t *ScreenTool) recordScreenWithOptions(ctx context.Context, display int, o
 func (t *ScreenTool) captureRecordingFrames(ctx context.Context, display int, bounds image.Rectangle, options screenRecordingOptions) ([]*image.Paletted, []int, error) {
 	frames := make([]*image.Paletted, 0, options.maxFrames)
 	delays := make([]int, 0, options.maxFrames)
-	startedAt := time.Now()
+	clock := t.recordingClock()
+	startedAt := clock.Now()
 	for i := 0; i < options.maxFrames; i++ {
 		if i > 0 {
 			target := startedAt.Add(time.Duration(i) * options.frameInterval)
-			if err := waitForScreenRecordingFrame(ctx, target); err != nil {
+			if err := waitForScreenRecordingFrame(ctx, clock, target); err != nil {
 				return nil, nil, screenRecordingContextError("show recording wait", "screen recording stopped before the next frame", err)
 			}
 		}
@@ -274,20 +276,23 @@ func screenImageMessageFromResult(result sight.Result, pixels []byte) (messages.
 	}, nil
 }
 
-func waitForScreenRecordingFrame(ctx context.Context, target time.Time) error {
+func waitForScreenRecordingFrame(ctx context.Context, clock platformclock.TimerSource, target time.Time) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	wait := time.Until(target)
+	wait := target.Sub(clock.Now())
 	if wait <= 0 {
 		return nil
 	}
-	timer := time.NewTimer(wait)
+	timer := clock.NewTimer(wait)
+	if timer == nil {
+		return platformclock.ErrTimerSourceUnavailable
+	}
 	defer timer.Stop()
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case <-timer.C:
+	case <-timer.C():
 		return nil
 	}
 }
@@ -341,6 +346,13 @@ func (t *ScreenTool) displaySurface() DisplaySurface {
 		return t.surface
 	}
 	return NewHostDisplaySurface()
+}
+
+func (t *ScreenTool) recordingClock() platformclock.TimerSource {
+	if t != nil && t.clock != nil {
+		return t.clock
+	}
+	return platformclock.Real{}
 }
 
 func (t *ScreenTool) recordingEncoder() ScreenRecordingEncoder {

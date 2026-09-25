@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	roomanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room"
 	streamanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/stream"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
@@ -142,11 +143,11 @@ func TestRoomReplayBoundsAndPCMHelpers(t *testing.T) {
 	if err := Validate(nil, RoomReplayPlan{}); err == nil {
 		t.Fatal("nil service was accepted")
 	}
-	if _, err := New().Load(RoomReplayPlan{}); err == nil {
+	if _, err := New(roomevidence.ServiceOptions{}).Load(RoomReplayPlan{}); err == nil {
 		t.Fatal("empty plan was accepted")
 	}
 	invalid := RoomReplayPlan{ManifestPath: path, ClockBase: time.Unix(2, 0), EndedAt: time.Unix(1, 0)}
-	if _, err := New().Load(invalid); err == nil || !errors.Is(err, ErrRoomReplayAudioTimeline) {
+	if _, err := New(roomevidence.ServiceOptions{}).Load(invalid); err == nil || !errors.Is(err, ErrRoomReplayAudioTimeline) {
 		t.Fatalf("negative room duration = %v", err)
 	}
 }
@@ -163,14 +164,14 @@ func TestRoomReplayServiceRejectsUnadmittedShape(t *testing.T) {
 		t.Fatal(err)
 	}
 	plan := RoomReplayPlan{ManifestPath: manifestPath, ClockBase: time.Unix(0, 0), EndedAt: time.Unix(0, int64(time.Second)), PCMFormat: RoomReplayPCMFormat{SampleRate: 24000, Channels: 1, SampleWidthBits: 16, ByteOrder: "little", Encoding: "pcm_s16le"}}
-	if _, err := New().Load(plan); err == nil || !errors.Is(err, ErrRoomReplayBundleIncomplete) {
+	if _, err := New(roomevidence.ServiceOptions{}).Load(plan); err == nil || !errors.Is(err, ErrRoomReplayBundleIncomplete) {
 		t.Fatalf("missing room mix = %v", err)
 	}
 	plan.Participants = []RoomReplayParticipant{{ID: "alpha"}}
-	if _, err := New().Load(plan); err == nil || !errors.Is(err, ErrRoomReplayBundleIncomplete) {
+	if _, err := New(roomevidence.ServiceOptions{}).Load(plan); err == nil || !errors.Is(err, ErrRoomReplayBundleIncomplete) {
 		t.Fatalf("missing participant manifest object = %v", err)
 	}
-	if err := Validate(New(), plan); err == nil {
+	if err := Validate(New(roomevidence.ServiceOptions{}), plan); err == nil {
 		t.Fatal("Validate accepted an unadmitted plan")
 	}
 }
@@ -366,7 +367,7 @@ func loadTestRoomReplayAudioBundle(bundle string) (Bundle, error) {
 	if err != nil {
 		return Bundle{}, err
 	}
-	return New().Load(plan)
+	return New(roomevidence.ServiceOptions{}).Load(plan)
 }
 
 func testRoomReplayPlan(bundle string) (RoomReplayPlan, error) {

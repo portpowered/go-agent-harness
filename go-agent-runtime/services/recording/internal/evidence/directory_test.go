@@ -22,25 +22,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
-func newEvidenceRecorder(t *testing.T) *directoryRecorder {
-	t.Helper()
-	r, err := newDirectoryRecorder(recording.LiveEvidenceOptions{Destination: filepath.Join(t.TempDir(), "capture"), ClockBase: evidenceTime(), WallClockStart: evidenceTime()}, clock.Real{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	// A completed fake provider writes its actual fixture observation. Tests
-	// exercising missing evidence remove this source explicitly.
-	if err := os.WriteFile(r.ProviderCapturePath(), []byte(`{"fixture_observation":"session.created"}`), evidenceFileMode); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := r.Finalize(t.Context(), nil); err != nil {
-			t.Logf("recording cleanup: %v", err)
-		}
-	})
-	return r
-}
-
 func evidenceTime() time.Time { return time.Unix(1_750_000_000, 123) }
 
 func recordEvidenceText(t *testing.T, r *directoryRecorder, text string) {
@@ -97,6 +78,7 @@ func waitForEvidenceWriter(t *testing.T, entered <-chan struct{}) {
 }
 
 func TestDirectoryRecorderAdmissionDoesNotWaitForDiskAndOwnsPayloads(t *testing.T) {
+	t.Parallel()
 	r := newEvidenceRecorder(t)
 	entered, release := blockEvidenceWriter(r)
 	defer release()
@@ -172,6 +154,7 @@ func assertEvidenceAudioBoundary(t *testing.T, r *directoryRecorder, want shared
 }
 
 func TestDirectoryRecorderMissingTerminalCannotClaimProviderCompletion(t *testing.T) {
+	t.Parallel()
 	r := newEvidenceRecorder(t)
 	recordEvidenceText(t, r, "unfinished")
 	if err := r.Finalize(t.Context(), nil); err == nil {
@@ -187,12 +170,13 @@ func TestDirectoryRecorderMissingTerminalCannotClaimProviderCompletion(t *testin
 }
 
 func TestDirectoryRecorderWritesOneDurationSidecarTerminal(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	rawPath := filepath.Join(root, "cutoff.session.json")
 	if err := os.WriteFile(rawPath, []byte(`{"provider":"partial"}`), evidenceFileMode); err != nil {
 		t.Fatal(err)
 	}
-	r, err := newDirectoryRecorder(recording.LiveEvidenceOptions{
+	r, err := newTestDirectoryRecorder(recording.LiveEvidenceOptions{
 		Destination:         filepath.Join(root, "recording"),
 		ProviderCapturePath: rawPath,
 		ClockBase:           evidenceTime(),
@@ -239,6 +223,7 @@ func TestDirectoryRecorderWritesOneDurationSidecarTerminal(t *testing.T) {
 }
 
 func TestDirectoryRecorderReplayProviderSourceDoesNotClaimExistingSidecar(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	rawPath := filepath.Join(root, "source.session.json")
 	if err := os.WriteFile(rawPath, []byte(`{"provider":"replayed"}`), evidenceFileMode); err != nil {
@@ -249,7 +234,7 @@ func TestDirectoryRecorderReplayProviderSourceDoesNotClaimExistingSidecar(t *tes
 	if err := os.WriteFile(sidecarPath, originalSidecar, evidenceFileMode); err != nil {
 		t.Fatal(err)
 	}
-	r, err := newDirectoryRecorder(recording.LiveEvidenceOptions{
+	r, err := newTestDirectoryRecorder(recording.LiveEvidenceOptions{
 		Destination:                   filepath.Join(root, "recording"),
 		ProviderCapturePath:           rawPath,
 		DisableProviderCaptureSidecar: true,
@@ -312,9 +297,10 @@ func decodeDurationSidecarTerminal(t *testing.T, line []byte) (messages.SessionC
 }
 
 func TestSemanticSidecarPreservesInvalidTimestampAndRuntimeStream(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	rawPath := filepath.Join(root, "cutoff.session.json")
-	r, err := NewSemanticSidecar(rawPath)
+	r, err := newTestSemanticSidecar(rawPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -356,8 +342,9 @@ func TestSemanticSidecarPreservesInvalidTimestampAndRuntimeStream(t *testing.T) 
 }
 
 func TestSemanticSidecarAdmissionDoesNotWaitForDisk(t *testing.T) {
+	t.Parallel()
 	rawPath := filepath.Join(t.TempDir(), "cutoff.session.json")
-	value, err := NewSemanticSidecar(rawPath)
+	value, err := newTestSemanticSidecar(rawPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -401,6 +388,7 @@ func TestSemanticSidecarAdmissionDoesNotWaitForDisk(t *testing.T) {
 }
 
 func TestDirectoryRecorderOverflowIsDurablyPartial(t *testing.T) {
+	t.Parallel()
 	r := newEvidenceRecorder(t)
 	entered, release := blockEvidenceWriter(r)
 	defer release()
@@ -421,6 +409,7 @@ func TestDirectoryRecorderOverflowIsDurablyPartial(t *testing.T) {
 }
 
 func TestDirectoryRecorderDiskFailurePreservesCauseAndPartialManifest(t *testing.T) {
+	t.Parallel()
 	r := newEvidenceRecorder(t)
 	failure := errors.New("fixture disk full")
 	writes := 0
@@ -446,6 +435,7 @@ func TestDirectoryRecorderDiskFailurePreservesCauseAndPartialManifest(t *testing
 }
 
 func TestDirectoryRecorderRetainsLifecycleErrorTextAndCorrelation(t *testing.T) {
+	t.Parallel()
 	r := newEvidenceRecorder(t)
 	err := r.RecordEvent(t.Context(), session.LiveEvent{Kind: "tool.failure", Timestamp: evidenceTime(), ToolCallID: "call-fixture", ResponseID: "response-fixture", Error: errors.New("execution timed out")})
 	if err != nil {
@@ -474,6 +464,7 @@ func TestDirectoryRecorderRetainsLifecycleErrorTextAndCorrelation(t *testing.T) 
 }
 
 func TestDirectoryRecorderTurnOffsetsAndToolResultsRemainCorrelated(t *testing.T) {
+	t.Parallel()
 	r := newEvidenceRecorder(t)
 	send := func(direction session.LiveRecordDirection, msg messages.StreamMessage) {
 		t.Helper()
@@ -539,8 +530,9 @@ func assertEvidencePCM(t *testing.T, r *directoryRecorder, path string, samples 
 }
 
 func TestDirectoryRecorderCumulativeTranscriptBudgetKeepsTerminalEvidence(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
-	r, err := newDirectoryRecorder(recording.LiveEvidenceOptions{
+	r, err := newTestDirectoryRecorder(recording.LiveEvidenceOptions{
 		Destination: filepath.Join(root, "capture"),
 		ClockBase:   evidenceTime(), WallClockStart: evidenceTime(),
 		Limits: recording.ResourceLimits{TranscriptItems: 1},

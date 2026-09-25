@@ -193,11 +193,3 @@ func TestProviderServiceSharesInjectedAdmissionDecision(t *testing.T) {
 		t.Fatalf("non-OpenAI admission = %v", err)
 	}
 }
-
-func TestProviderAdmissionNilCatalogRemainsTypedDependencyFailure(t *testing.T) {
-	service := New(nil, nil, clock.Real{}, nil, nil, nil)
-	err := service.ValidateSessionModel("openai", runtimeproviders.OpenAIRealtimeLegacyModel)
-	if !errors.Is(err, runtimeproviders.ErrModelCatalogRequired) || errors.Is(err, runtimeproviders.ErrUnsupportedRealtimeModel) {
-		t.Fatalf("nil catalog error = %v, want only catalog-required", err)
-	}
-}

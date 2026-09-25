@@ -27,7 +27,7 @@ func (e *Executor) deniedScreenPermission(ctx context.Context, call messages.Too
 	if !ok || !recheckSupported(rechecker) {
 		return tools.DisplayPermission{}, false
 	}
-	recheckCtx, cancel := context.WithTimeout(ctx, sessionturn.ScreenPermissionRecheckTimeout)
+	recheckCtx, cancel := context.WithTimeout(ctx, e.recheckLimit)
 	defer cancel()
 	resultCh := make(chan recheckResult, 1)
 	go func() {

@@ -13,16 +13,6 @@ import (
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
-func TestNewServiceReturnsPublicContract(t *testing.T) {
-	service := NewService()
-	if service == nil {
-		t.Fatal("NewService returned nil")
-	}
-	if service.NewState(sessionduration.TerminalSource{}) == nil {
-		t.Fatal("NewService did not construct state")
-	}
-}
-
 func TestPublicStatePreservesProviderOutputAcrossNonProviderEvents(t *testing.T) {
 	state := NewService().NewState(sessionduration.TerminalSource{})
 	state.Observe(messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant})

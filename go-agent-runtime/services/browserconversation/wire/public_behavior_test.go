@@ -193,8 +193,8 @@ func TestServiceRunBoundsPostSessionObservationsAfterCancellation(t *testing.T) 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			scenario := testBrowserConversationScenario()
-			scenario.RunTimeout = 100 * time.Millisecond
-			scenario.Steps[0].Deadline = 50 * time.Millisecond
+			scenario.RunTimeout = 20 * time.Millisecond
+			scenario.Steps[0].Deadline = 10 * time.Millisecond
 			fixture := &behaviorFixture{}
 			callerContext, cancelCaller := context.WithCancel(context.Background())
 			defer cancelCaller()
@@ -223,8 +223,8 @@ func TestServiceRunBoundsPostSessionObservationsAfterCancellation(t *testing.T) 
 
 func TestServiceRunBoundsFixtureCloseAfterCancellation(t *testing.T) {
 	scenario := testBrowserConversationScenario()
-	scenario.RunTimeout = 100 * time.Millisecond
-	scenario.Steps[0].Deadline = 50 * time.Millisecond
+	scenario.RunTimeout = 20 * time.Millisecond
+	scenario.Steps[0].Deadline = 10 * time.Millisecond
 	fixture := &behaviorFixture{close: func(ctx context.Context) error {
 		if _, ok := ctx.Deadline(); !ok {
 			return errors.New("fixture close context has no deadline")

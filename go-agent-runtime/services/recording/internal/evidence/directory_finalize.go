@@ -37,7 +37,7 @@ func (r *directoryRecorder) finalize(runErr error) error {
 	result := errors.Join(r.recordErr, r.workerErr)
 	for _, file := range []*os.File{r.client, r.agent, r.inputFile, r.outputFile, r.sidecar} {
 		if file != nil {
-			result = errors.Join(result, file.Sync(), file.Close())
+			result = errors.Join(result, r.options.SyncFile.Sync(file), file.Close())
 		}
 	}
 	terminal := cloneTerminal(r.terminal)

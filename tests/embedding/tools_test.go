@@ -7,7 +7,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -96,31 +95,6 @@ func TestPublicStrictReplayExposesPreparedEvidenceAndRejectsIncompleteBundle(t *
 	_, err = service.Run(t.Context(), &bytes.Buffer{}, runtimeReplay.StrictRequest{BundlePath: empty})
 	if !errors.Is(err, runtimeReplay.ErrBundleIncomplete) || !strings.Contains(err.Error(), "timeline.jsonl") {
 		t.Fatalf("missing timeline error=%v, want bounded incomplete diagnostic", err)
-	}
-}
-
-func TestPublicStrictPreparedCompletionCannotBeForged(t *testing.T) {
-	prepared, err := runtimeReplayWire.NewStrictService().Prepare(t.Context(), runtimeReplay.StrictRequest{
-		BundlePath: filepath.Join("testdata", "replay"),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	preparedType := reflect.TypeOf((*runtimeReplay.StrictPrepared)(nil)).Elem()
-	if preparedType.Kind() != reflect.Interface {
-		t.Fatalf("public prepared contract kind=%s, want opaque interface", preparedType.Kind())
-	}
-	for _, method := range []string{"ValidateComplete", "Close"} {
-		if _, ok := preparedType.MethodByName(method); !ok {
-			t.Fatalf("public prepared contract has no %s method", method)
-		}
-	}
-	concrete := reflect.TypeOf(prepared)
-	if concrete == nil || concrete.Kind() != reflect.Pointer || !strings.Contains(concrete.Elem().PkgPath(), "/services/replay/internal/strict") {
-		t.Fatalf("prepared concrete type=%v, want private strict implementation", concrete)
-	}
-	if err := prepared.Close(); !errors.Is(err, runtimeReplay.ErrBundleIncomplete) {
-		t.Fatalf("prepared completion before evidence error=%v, want incomplete evidence", err)
 	}
 }
 

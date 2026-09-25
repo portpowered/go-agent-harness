@@ -62,6 +62,46 @@ const (
 
 type RecordingRequest = rooms.EvidenceRecordingRequest
 
+// FileSync commits one finished evidence file to stable storage before it is
+// closed or renamed into place. Nil selects the file's own Sync (fsync), the
+// production default. Tests may substitute a no-op or counting hook.
+type FileSync func(DurableFile) error
+
+// DurableFile is the surface of an evidence file that a FileSync hook sees;
+// *os.File satisfies it.
+type DurableFile interface {
+	Name() string
+	Sync() error
+}
+
+// Sync applies the hook, falling back to the file's own Sync when it is nil.
+func (s FileSync) Sync(file DurableFile) error {
+	if s == nil {
+		return file.Sync()
+	}
+	return s(file)
+}
+
+// ServiceOptions configures one room evidence service. The zero value selects
+// the production defaults.
+type ServiceOptions struct {
+	// SyncFile overrides the durability hook for every recorded artifact.
+	SyncFile FileSync
+	// AdmissionLimits bounds LoadPlan reads of a replay bundle.
+	AdmissionLimits AdmissionLimits
+}
+
+// AdmissionLimits bounds replay admission. Zero fields keep the protected
+// defaults (8 MiB manifest, 64 MiB artifact, 32 MiB and 100,000 events of
+// timeline); positive values may only lower them, for example to exercise
+// overflow handling with small fixtures.
+type AdmissionLimits struct {
+	ManifestBytes  int64
+	ArtifactBytes  int64
+	TimelineBytes  int64
+	TimelineEvents int
+}
+
 // Service is an inert factory. It performs no filesystem or host discovery
 // work until PrepareOutput or Open is called.
 type Service interface {

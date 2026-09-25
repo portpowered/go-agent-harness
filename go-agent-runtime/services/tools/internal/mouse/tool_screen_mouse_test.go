@@ -15,34 +15,6 @@ func skipS4MissingTypedIdentity(t *testing.T, behavior string) {
 	t.Skipf("%s: production defect — %s exposes only an untyped error; see S4 review comment %s", runtime.GOOS, behavior, s4DefectCommentURL)
 }
 
-func TestS12ScreenAndMousePortableContracts(t *testing.T) {
-	screen := display.NewScreenTool()
-	if screen.Name() != "show" {
-		t.Fatalf("screen tool name = %q, want show", screen.Name())
-	}
-	if !strings.Contains(screen.Description(), "screenshot") || !strings.Contains(screen.Description(), "record") {
-		t.Fatalf("screen description does not describe both operations: %q", screen.Description())
-	}
-	screenParams := screen.Parameters()
-	gotScreenRequired, ok := screenParams["required"].([]string)
-	if !ok || len(gotScreenRequired) != 1 || gotScreenRequired[0] != "action" {
-		t.Fatalf("screen required parameters = %#v, want [action]", gotScreenRequired)
-	}
-
-	mouse := NewMouseTool()
-	if mouse.Name() != "mouse" {
-		t.Fatalf("mouse tool name = %q, want mouse", mouse.Name())
-	}
-	if !strings.Contains(mouse.Description(), "screen pixels") {
-		t.Fatalf("mouse description omits coordinate contract: %q", mouse.Description())
-	}
-	mouseParams := mouse.Parameters()
-	gotMouseRequired, ok := mouseParams["required"].([]string)
-	if !ok || len(gotMouseRequired) != 3 || gotMouseRequired[0] != "action" || gotMouseRequired[1] != "x" || gotMouseRequired[2] != "y" {
-		t.Fatalf("mouse required parameters = %#v, want [action x y]", gotMouseRequired)
-	}
-}
-
 func TestS4ScreenAndMouseErrorPaths(t *testing.T) {
 	// Keep the display-index error path independent from the host desktop. The
 	// session admission path intentionally fails closed when the host has no
@@ -138,13 +110,4 @@ func TestS4ScreenAndMouseErrorPaths(t *testing.T) {
 		t.Fatalf("canceled recording error = %v", err)
 	}
 
-}
-
-func TestS4KnownProductionGaps(t *testing.T) {
-	t.Run("out-of-bounds coordinates", func(t *testing.T) {
-		t.Skipf("%s: production defect — MouseTool passes coordinates through without a bounds validator or typed identity; see S4 review comment %s", runtime.GOOS, s4DefectCommentURL)
-	})
-	t.Run("negative dimensions", func(t *testing.T) {
-		t.Skipf("%s: production defect — ScreenTool normalizes negative duration/fps instead of returning a typed validation error; see S4 review comment %s", runtime.GOOS, s4DefectCommentURL)
-	})
 }

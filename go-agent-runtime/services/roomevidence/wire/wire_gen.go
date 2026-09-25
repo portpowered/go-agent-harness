@@ -13,7 +13,9 @@ import (
 
 // Injectors from wire.go:
 
-func NewService() roomevidence.Service {
-	serviceService := service.New()
+// NewServiceWithOptions composes a service with caller-selected options.
+// Zero-valued fields keep the production defaults.
+func NewServiceWithOptions(options roomevidence.ServiceOptions) roomevidence.Service {
+	serviceService := service.New(options)
 	return serviceService
 }
