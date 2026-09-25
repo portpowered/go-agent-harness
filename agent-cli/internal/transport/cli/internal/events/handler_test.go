@@ -101,7 +101,10 @@ func closeResource(t *testing.T, resource io.Closer) {
 func TestHandlerServesRedactedFramesWithSSEContractHeaders(t *testing.T) {
 	stream := newTestStream(t, "alice", "bob")
 	server := httptest.NewServer(NewHandler(stream))
-	defer server.Close()
+	// Registered before openSSE so the SSE bodies (closed by later cleanups)
+	// are released first; a deferred Close would block until the request
+	// contexts expire.
+	t.Cleanup(server.Close)
 	header, all := openSSE(t, server, Path)
 	_, bob := openSSE(t, server, Path+"?participant=bob")
 	if got := header.Get("Content-Type"); !strings.HasPrefix(got, "text/event-stream") || header.Get("Access-Control-Allow-Origin") != "*" {
