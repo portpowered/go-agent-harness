@@ -157,6 +157,15 @@ func (s *recordingLiveSession) toolResultSent(callID string) bool {
 	return false
 }
 
+// closeLiveHandle releases a handle at test end; a finished handle closes
+// idempotently, so any error is a teardown defect.
+func closeLiveHandle(t *testing.T, handle session.LiveHandle) {
+	t.Helper()
+	if err := handle.Close(); err != nil {
+		t.Errorf("close live handle: %v", err)
+	}
+}
+
 func waitForCondition(t *testing.T, label string, condition func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(ackSignalTimeout)
@@ -240,7 +249,7 @@ func startAcknowledgementRun(t *testing.T, toolName string, policy tools.Interac
 	if err != nil {
 		t.Fatalf("OpenLive: %v", err)
 	}
-	t.Cleanup(func() { _ = handle.Close() })
+	t.Cleanup(func() { closeLiveHandle(t, handle) })
 	run.handle = handle
 	if err := handle.Start(context.Background()); err != nil {
 		t.Fatalf("Start: %v", err)

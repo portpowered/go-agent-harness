@@ -102,7 +102,7 @@ func TestFinitePromptSessionClosesOnlyAfterAcceptedRichResultAndContinuation(t *
 	if err != nil {
 		t.Fatalf("OpenLive: %v", err)
 	}
-	t.Cleanup(func() { _ = handle.Close() })
+	t.Cleanup(func() { closeLiveHandle(t, handle) })
 	if err := handle.Start(context.Background()); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
