@@ -47,7 +47,7 @@ func runIntegrationTests(m *testing.M) int {
 	if err != nil {
 		panic(err)
 	}
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 
 	agentBinaryPath = filepath.Join(dir, "agent")
 	audioDeviceServerBinaryPath = filepath.Join(dir, "audio-device-server")
