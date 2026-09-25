@@ -9,11 +9,20 @@ LINT_BASE ?= origin/main
 LINT_CONFIG ?= .golangci.yml
 LINT_NEW_CONFIG ?= .golangci.new.yml
 # LINT_SHARD selects the modules `make lint` and `make lint-cross` check:
-# all (default), agent-cli, or libraries (every other lint module). CI lints
-# all modules in one lane; the cached run takes seconds.
+# all (default), agent-cli, libraries (every other lint module), or one half
+# of libraries: runtime (go-agent-runtime and the modules it builds on) or
+# support (gateways, tools and scripts). CI runs shards in parallel lanes so
+# that each lane stays under three minutes even with a cold build cache.
 LINT_SHARD ?= all
 LINT_LIBRARY_MODULES := $(filter-out agent-cli,$(LINT_MODULES))
-LINT_SELECTED_MODULES = $(if $(filter agent-cli,$(LINT_SHARD)),agent-cli,$(if $(filter libraries,$(LINT_SHARD)),$(LINT_LIBRARY_MODULES),$(LINT_MODULES)))
+LINT_RUNTIME_MODULES := go-agent-runtime go-agent-loop go-audio tests/embedding
+LINT_SUPPORT_MODULES := $(filter-out $(LINT_RUNTIME_MODULES),$(LINT_LIBRARY_MODULES))
+LINT_SHARD_MODULES_all := $(LINT_MODULES)
+LINT_SHARD_MODULES_agent-cli := agent-cli
+LINT_SHARD_MODULES_libraries := $(LINT_LIBRARY_MODULES)
+LINT_SHARD_MODULES_runtime := $(LINT_RUNTIME_MODULES)
+LINT_SHARD_MODULES_support := $(LINT_SUPPORT_MODULES)
+LINT_SELECTED_MODULES = $(or $(LINT_SHARD_MODULES_$(LINT_SHARD)),$(error unknown LINT_SHARD '$(LINT_SHARD)'; use all, agent-cli, libraries, runtime or support))
 # Operating systems cross-linted by `make lint-cross` with cgo disabled.
 LINT_CROSS_GOOS ?= windows darwin
 # Extra build tags appended to the configured ones for one cross GOOS.

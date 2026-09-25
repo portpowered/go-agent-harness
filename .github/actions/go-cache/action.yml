@@ -12,6 +12,12 @@ inputs:
   cache-name:
     description: Stable per-job cache name, e.g. coverage-libraries.
     required: true
+  extra-paths:
+    description: >-
+      Newline-separated extra directories cached with the Go caches, e.g. a
+      golangci-lint analysis cache. Pass the same value to go-cache-save.
+    required: false
+    default: ""
 
 outputs:
   primary-key:
@@ -60,6 +66,7 @@ runs:
         path: |
           ${{ steps.paths.outputs.gocache }}
           ${{ steps.paths.outputs.gomodcache }}
+          ${{ inputs.extra-paths }}
         key: go-${{ inputs.cache-name }}-${{ runner.os }}-${{ runner.arch }}-go1.26.7-${{ hashFiles('go.work.sum', '*/go.sum', 'tests/embedding/go.sum', 'tools/*/go.sum') }}-${{ github.sha }}
         restore-keys: |
           go-${{ inputs.cache-name }}-${{ runner.os }}-${{ runner.arch }}-go1.26.7-${{ hashFiles('go.work.sum', '*/go.sum', 'tests/embedding/go.sum', 'tools/*/go.sum') }}-

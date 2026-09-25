@@ -82,8 +82,10 @@ toolchain because cgo is disabled. Darwin cgo files need the macOS SDK, so
 configuration changes. The cross lanes run only the hard pass. The new-code
 pass runs on Linux.
 
-`LINT_SHARD=agent-cli|libraries` limits `make lint` and `make lint-cross` to
-agent-cli or to every other lint module, for example to split a local run.
+`LINT_SHARD` limits `make lint` and `make lint-cross` to `agent-cli`, to
+`libraries` (every other lint module), or to one half of the libraries:
+`runtime` (`go-agent-runtime`, `go-agent-loop`, `go-audio`, `tests/embedding`)
+or `support` (the gateways, tools and scripts).
 `make lint` and `make lint-cross` lint `LINT_JOBS` modules at once (default
 4). Each module's output prints as one block when that module finishes.
 
@@ -138,15 +140,31 @@ scripts/golangci-lint-working-tree.sh --analyzer <pinned golangci-lint> \
 
 Findings depend on the target platform. When you change platform-tagged files,
 run `make lint-cross` as well as `make lint`, and run `make lint-darwin-cgo` on
-macOS when you change cgo files. CI runs every lane: `CI (static lint linux)`
-(`make lint`), `CI (static lint cross)` (`make lint-cross`, both operating
-systems) and `CI (static lint darwin cgo)`. All of them are aggregated under
-the required `CI (static)` check. The `golangci-lint` on PATH
-may be a different version, so use the Makefile resolver.
+macOS when you change cgo files. The `golangci-lint` on PATH may be a
+different version, so use the Makefile resolver.
 
-Each CI lane keeps its own Go build cache and golangci-lint cache in one
-`actions/cache` entry. golangci-lint loads dependencies from compiled export
-data, so a cold lane spends most of its time compiling, not analyzing. `main`
-pushes prune the build cache to the entries the run used
-(`scripts/prune-go-build-cache.sh`) and save it. Pull requests restore the
-newest `main` entry. They save only when nothing could be restored.
+## CI lanes
+
+Every static CI job must finish within three minutes even with a cold build
+cache, so the lanes are sized for a cold run:
+
+| Lane | Command |
+| --- | --- |
+| `CI (static lint linux agent-cli)` | `make lint LINT_SHARD=agent-cli`, then `make architecture-size-check` |
+| `CI (static lint linux runtime)` | `make lint LINT_SHARD=runtime` |
+| `CI (static lint linux support)` | `make lint LINT_SHARD=support` |
+| `CI (static lint windows agent-cli)` | `make lint-cross LINT_CROSS_GOOS=windows LINT_SHARD=agent-cli` |
+| `CI (static lint windows libraries)` | `make lint-cross LINT_CROSS_GOOS=windows LINT_SHARD=libraries` |
+| `CI (static lint darwin)` | `make lint-cross LINT_CROSS_GOOS=darwin` |
+| `CI (static lint darwin cgo)` | `make lint-darwin-cgo` on macOS |
+
+`CI (static gates)` runs `make fmt`, `make wire-check` and `make
+check-ci-test-partition`. The required `CI (static)` check aggregates all of
+them. The architecture gate runs in the linux agent-cli lane because its type
+loading reuses the export data that lint compiled.
+
+Each lane restores its own Go build, module and golangci-lint caches through
+`.github/actions/go-cache` (the golangci-lint cache is passed as
+`extra-paths`). golangci-lint loads dependencies from compiled export data, so
+a cold lane spends most of its time compiling, not analyzing.
+
