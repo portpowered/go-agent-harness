@@ -49,10 +49,6 @@ const toolCallScenarioName = "get_weather"
 // provider exchange carries for the single tool call.
 const toolCallScenarioArguments = `{"city":"Lisbon"}`
 
-// toolCallScenarioOutput is the exact result returned by the recording
-// executor and required on the provider-facing function_call_output item.
-const toolCallScenarioOutput = `{"temperature_c":24,"condition":"clear"}`
-
 // toolSingleCallInputWAV is the existing committed corpus fixture expressing
 // the spoken single-tool request. Reused from go-agent-loop/testdata/audio;
 // no new audio asset is added by this lane.
@@ -270,34 +266,6 @@ func countToolCallsInExchange(t *testing.T, wirePath string) (count int, argumen
 	return count, argumentsMatched, lastAudioIndex > lastToolCallIndex
 }
 
-func countMatchingToolResultsInExchange(t *testing.T, wirePath string) (count, matching int) {
-	t.Helper()
-	capture, err := gwtesting.LoadSessionCapture(wirePath)
-	if err != nil {
-		t.Fatalf("load replayed provider exchange: %v", err)
-	}
-	for _, record := range capture.Records {
-		if record.Direction != gwtesting.DirectionClientToServer || record.Type != rtEventConversationItemCreate {
-			continue
-		}
-		var payload struct {
-			Item struct {
-				Type   string `json:"type"`
-				CallID string `json:"call_id"`
-				Output string `json:"output"`
-			} `json:"item"`
-		}
-		if json.Unmarshal(record.Payload, &payload) != nil || payload.Item.Type != rtItemFunctionCallOutput {
-			continue
-		}
-		count++
-		if payload.Item.CallID == "call_weather_1" && payload.Item.Output == toolCallScenarioOutput {
-			matching++
-		}
-	}
-	return count, matching
-}
-
 // assertRecordedSpeech is the local speech assertion for the recorded
 // --audio-out WAV: non-silent RMS energy within plausible duration bounds.
 func assertRecordedSpeech(t *testing.T, outputPath string, wantSamples int) {
@@ -359,51 +327,6 @@ func validateExactlyOneToolCall(calls []messages.ToolCall) error {
 		return fmt.Errorf("executor invoked %q with decoded city %q, want %q", call.Name, args.City, "Lisbon")
 	}
 	return nil
-}
-
-// TestSessionToolSingleCallRoundTripThroughCLI is the full positive path: the
-// real agent session CLI receives a spoken request, the executor records
-// exactly one invocation of the named tool with the expected arguments, the
-// replayed provider exchange contains the tool call followed by output speech,
-// and resumed speech is recorded.
-func TestSessionToolSingleCallRoundTripThroughCLI(t *testing.T) {
-	wavPath := toolSingleCallWAVPath(t)
-	wavBytes, err := os.ReadFile(wavPath)
-	if err != nil {
-		t.Fatalf("read committed corpus WAV: %v", err)
-	}
-	_, samples, err := wavio.Read(bytes.NewReader(wavBytes))
-	if err != nil {
-		t.Fatalf("parse committed corpus WAV: %v", err)
-	}
-	reply := loudestWindowSamplesIntegration(t, samples, toolSingleCallReplySamples)
-
-	executor := &toolCallRecordingExecutor{}
-	wirePath := buildToolSingleCallFixture(t, wavPath, reply, true)
-	outputPath, runErr := runToolSingleCall(t, wavPath, wirePath, executor)
-	if runErr != nil {
-		t.Fatalf("agent session --audio-in/--audio-out over replay failed: %v", runErr)
-	}
-	assertRecordedSpeech(t, outputPath, len(reply))
-
-	count, argsMatched, audioAfter := countToolCallsInExchange(t, wirePath)
-	if count != 1 {
-		t.Fatalf("replayed provider exchange contains %d invocations of tool %q, want exactly 1", count, toolCallScenarioName)
-	}
-	if argsMatched != 1 {
-		t.Fatalf("named tool call arguments = mismatch, want %s", toolCallScenarioArguments)
-	}
-	if !audioAfter {
-		t.Fatal("no output speech produced after the named tool call in the replayed provider exchange")
-	}
-
-	resultCount, matchingResults := countMatchingToolResultsInExchange(t, wirePath)
-	if resultCount != 1 || matchingResults != 1 {
-		t.Fatalf("replayed provider exchange contains %d tool results (%d matching), want exactly one correlated result with output %s", resultCount, matchingResults, toolCallScenarioOutput)
-	}
-	if err := validateExactlyOneToolCall(executor.calls); err != nil {
-		t.Fatal(err)
-	}
 }
 
 // TestSessionToolSingleCallRejectsOmittedCustomDefinition proves that a

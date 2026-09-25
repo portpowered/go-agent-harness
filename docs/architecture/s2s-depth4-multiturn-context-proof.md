@@ -1,6 +1,16 @@
-# s2s depth-4 milestone — multiturn context-carrying conversation is ACHIEVED
+# s2s depth-4 milestone — multiturn context-carrying conversation
 
-Status: **achieved and formally proven in-repo** (2026-08-24).
+Status: **proof tests retired** (2026-09-25). The two tests described below
+were removed: each turn was a separate `session --replay` invocation over a
+slice of the committed capture, so the "carried" codeword was scripted
+provider text and the CLI carried no context between turns; the tests only
+exercised their own oracle. The committed fixtures remain (the positive
+capture and its turn WAVs still drive
+`TestSessionCommandConversationObservabilityProvesConversationFromArtifactsOnly`).
+Genuine cross-turn behavior needs one persistent session that replays every
+turn, which this proof never did. The original record follows.
+
+Original status: achieved (2026-08-24).
 
 The depth-4 milestone of the s2s program — a multi-turn spoken conversation
 that holds context across turns — is no longer limited to informal live

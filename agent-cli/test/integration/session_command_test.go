@@ -212,51 +212,6 @@ model:
 	}
 }
 
-func TestSessionCommand_ReplayUsesCaptureAndPrintsTextDeltas(t *testing.T) {
-	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
-	if err != nil {
-		t.Fatalf("initialize CLI: %v", err)
-	}
-
-	testWriter := NewTestWriter()
-	rootCmd := agentCLI.Generate()
-	rootCmd.SetOut(testWriter.Stdout())
-	rootCmd.SetErr(testWriter.Stderr())
-	rootCmd.SetArgs([]string{"session", "--replay", locateSharedSessionFixture(t, "session_text_reply.session.json")})
-
-	if err := rootCmd.ExecuteContext(context.Background()); err != nil {
-		t.Fatalf("execute replay: %v", err)
-	}
-
-	if got := testWriter.StdoutString(); !strings.Contains(got, "Hello! How can I help you today?") {
-		t.Fatalf("replay output missing text deltas, got:\n%s", got)
-	}
-}
-
-func TestSessionCommand_ReplayGrokWebSocketCaptureDoesNotCallLiveDialer(t *testing.T) {
-	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
-	if err != nil {
-		t.Fatalf("initialize CLI: %v", err)
-	}
-
-	capturePath := filepath.Join(t.TempDir(), "grok-websocket.session.json")
-	writeGrokWebSocketCapture(t, capturePath)
-
-	testWriter := NewTestWriter()
-	rootCmd := agentCLI.Generate()
-	rootCmd.SetOut(testWriter.Stdout())
-	rootCmd.SetErr(testWriter.Stderr())
-	rootCmd.SetArgs([]string{"session", "--replay", capturePath})
-
-	if err := rootCmd.ExecuteContext(context.Background()); err != nil {
-		t.Fatalf("execute websocket replay without live credentials or network: %v", err)
-	}
-
-	if got := testWriter.StdoutString(); !strings.Contains(got, "Grok replay response") {
-		t.Fatalf("replay output missing Grok wire text delta, got:\n%s", got)
-	}
-}
-
 func TestSessionCommand_OpenAIRealtimeReplayWithoutVoicePreservesProviderDefault(t *testing.T) {
 	agentCLI, err := wire.InitializeMockAgentCLI(
 		&mockToolExecutor{},

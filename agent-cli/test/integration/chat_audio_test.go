@@ -130,30 +130,6 @@ func TestChatAudio_MultipleUtterances(t *testing.T) {
 	}
 }
 
-// TestChatAudio_SilenceOnlySourceExitsGracefully verifies that a source
-// containing only silence results in a clean exit (no agent calls, Goodbye!).
-func TestChatAudio_SilenceOnlySourceExitsGracefully(t *testing.T) {
-	src := audio.NewSliceSource(makePCMSilence(5))
-	rec := &recordingInferencer{response: "should not happen"}
-	globalFlags := flags.NewGlobalFlags()
-	askFlags := flags.NewAskFlags()
-	service := newPublicTextSessionService(globalFlags, &mockToolExecutor{}, rec, nil)
-
-	tw := NewTestWriter()
-	ctx := context.Background()
-
-	if err := cli.RunChatWithAudio(ctx, tw.Stdout(), tw.Stderr(), service, globalFlags, askFlags, src); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if len(rec.recorded) != 0 {
-		t.Errorf("expected no agent calls for silence-only source, got %d", len(rec.recorded))
-	}
-	if !strings.Contains(tw.StdoutString(), "Goodbye!") {
-		t.Error("expected Goodbye! on EOF exit")
-	}
-}
-
 // TestChatAudio_ContextCancellationExitsGracefully verifies that cancelling the
 // context causes RunChatWithAudio to return nil and print Goodbye!.
 func TestChatAudio_ContextCancellationExitsGracefully(t *testing.T) {

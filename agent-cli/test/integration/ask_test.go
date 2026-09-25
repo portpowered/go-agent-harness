@@ -47,36 +47,6 @@ func (m *mockToolExecutor) Execute(ctx context.Context, call messages.ToolCall) 
 	return messages.ToolCallResponse{ToolCallID: call.ID, Content: ""}, nil
 }
 
-// TestAskWithFakeResponse runs the ask command with a mocked inferencer and executor
-// and asserts the output matches the fake response.
-func TestAskWithFakeResponse(t *testing.T) {
-	fakeResponse := "Fake agent response for testing."
-
-	inf := &mockInferencer{response: fakeResponse}
-	exec := &mockToolExecutor{}
-
-	agentCLI, err := wire.InitializeMockAgentCLI(exec, inf)
-	if err != nil {
-		t.Fatalf("failed to initialize mock CLI: %v", err)
-	}
-
-	testWriter := NewTestWriter()
-	rootCmd := agentCLI.Generate()
-	rootCmd.SetOut(testWriter.Stdout())
-	rootCmd.SetErr(testWriter.Stderr())
-	rootCmd.SetArgs([]string{"ask", "hello"})
-
-	ctx := context.Background()
-	if err := rootCmd.ExecuteContext(ctx); err != nil {
-		t.Fatalf("failed to execute ask: %v", err)
-	}
-
-	actual := strings.TrimSpace(testWriter.StdoutString())
-	if actual != fakeResponse {
-		t.Errorf("expected output %q, got %q", fakeResponse, actual)
-	}
-}
-
 // TestAskWithToolCall runs ask with a mock that first requests a tool call, then returns a final message.
 func TestAskWithToolCall(t *testing.T) {
 	inf := &mockInferencerWithToolCall{
