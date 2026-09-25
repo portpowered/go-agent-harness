@@ -949,7 +949,7 @@ func (e *ManagedBrowserLifecycleError) Error() string {
 	if e == nil {
 		return ErrManagedBrowserLifecycle.Error()
 	}
-	phase := safeManagedBrowserLabel(e.Phase, "lifecycle")
+	phase := SafeManagedBrowserLabel(e.Phase, "lifecycle")
 	return fmt.Sprintf("managed WebMCP browser lifecycle failed during %s; retry the managed browser operation", phase)
 }
 

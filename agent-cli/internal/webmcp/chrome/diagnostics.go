@@ -358,22 +358,11 @@ func (e *ManagedBrowserLaunchError) Error() string {
 	if e == nil {
 		return ErrManagedBrowserLaunch.Error()
 	}
-	phase := safeManagedBrowserLabel(e.Phase, managedBrowserPhaseStartup)
-	mode := safeManagedBrowserLabel(e.Mode, "unknown")
-	remediation := "check the Chrome prerequisite, writable agent config directory, and loopback DevTools availability, or supply an explicit browser endpoint"
-	switch phase {
-	case "configuration":
-		remediation = "fix the managed browser startup URL and retry"
-	case "profile":
-		remediation = "make the agent config directory writable and retry"
-	case "acquisition":
-		remediation = fmt.Sprintf("install Chrome %d or newer, or supply an explicit browser endpoint", MinimumManagedChromeMajor)
-	case "port":
-		remediation = "retry so the agent can reserve a free loopback DevTools port"
-	case "start":
-		remediation = "check that the qualified Chrome executable can start with an agent-owned profile"
-	case managedBrowserPhaseReadiness, managedBrowserPhaseStartup:
-		remediation = "check that Chrome can publish a loopback DevTools endpoint and retry"
+	phase := SafeManagedBrowserLabel(e.Phase, managedBrowserPhaseStartup)
+	mode := SafeManagedBrowserLabel(e.Mode, "unknown")
+	remediation, known := ManagedBrowserRemediation(phase)
+	if !known {
+		remediation = "check the Chrome prerequisite, writable agent config directory, and loopback DevTools availability, or supply an explicit browser endpoint"
 	}
 	return fmt.Sprintf("managed WebMCP browser launch failed during %s in %s mode; %s", phase, mode, remediation)
 }
@@ -385,15 +374,26 @@ func (e *ManagedBrowserLaunchError) Unwrap() error {
 	return errors.Join(ErrManagedBrowserLaunch, e.Cause)
 }
 
-func safeManagedBrowserLabel(value, fallback string) string {
+// ManagedBrowserRemediation returns operator guidance for a known phase label.
+func ManagedBrowserRemediation(phase string) (string, bool) {
+	remediation, known := map[string]string{
+		"configuration":              "fix the managed browser startup URL and retry",
+		"profile":                    "make the agent config directory writable and retry",
+		"acquisition":                fmt.Sprintf("install Chrome %d or newer, or supply an explicit browser endpoint", MinimumManagedChromeMajor),
+		"port":                       "retry so the agent can reserve a free loopback DevTools port",
+		"start":                      "check that the qualified Chrome executable can start with an agent-owned profile",
+		managedBrowserPhaseReadiness: "check that Chrome can publish a loopback DevTools endpoint and retry",
+		managedBrowserPhaseStartup:   "check that Chrome can publish a loopback DevTools endpoint and retry",
+	}[phase]
+	return remediation, known
+}
+
+const managedLabelCharacters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"
+
+// SafeManagedBrowserLabel bounds a label to a short identifier-safe token.
+func SafeManagedBrowserLabel(value, fallback string) string {
 	value = strings.TrimSpace(value)
-	if value == "" || len(value) > 32 {
-		return fallback
-	}
-	for _, character := range value {
-		if (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') || (character >= '0' && character <= '9') || character == '_' || character == '-' {
-			continue
-		}
+	if value == "" || len(value) > 32 || strings.Trim(value, managedLabelCharacters) != "" {
 		return fallback
 	}
 	return value

@@ -32,49 +32,21 @@ func (e *BrowserToolsBackendError) Error() string {
 
 func (e *BrowserToolsBackendError) Unwrap() error { return ErrInvalidBrowserToolsBackend }
 
-// sessionBrowserFlagNames is the complete session browser flag set. Keeping
-// the list next to registration makes presence-aware config loading auditable
-// and prevents a new browser flag from being omitted from config resolution.
-var sessionBrowserFlagNames = []string{
-	"browser-tools",
-	"web-cast",
-	"browser-cdp-url",
-	"browser-ws-endpoint",
-	"browser-user-data-dir",
-	"browser-headless",
-	"browser-open",
-	"browser-close-on-exit",
-	"browser-allow-process-scan",
-	"browser-allow-remote-cdp",
-	"browser-browser",
-	"browser-tab",
-	"browser-origin",
-	"browser-auto-select",
-	"browser-activate-tab",
-	"browser-persist-selection",
-	"browser-allowed-origin",
-	"browser-denied-origin",
-	"browser-approval",
-	"browser-cancel-on-interrupt",
-	"browser-invocation-timeout",
-	"browser-max-input-bytes",
-	"browser-max-result-bytes",
-	"browser-serialize-per-target",
-	"browser-record",
-	"browser-record-arguments",
-	"browser-record-results",
-	"browser-redact-url-query",
-	"browser-redact-url-fragment",
-	"browser-replay",
-	"browser-replay-strict",
+// browserOverrideBinding maps one session browser flag to its config
+// override. The binding table is the complete session browser flag set:
+// presence-aware config loading and non-admission detection both read it, so
+// a new browser flag cannot be omitted from either.
+type browserOverrideBinding struct {
+	name  string
+	apply func(*config.BrowserOverrides, *flags.BrowserFlags)
 }
 
 func hasSessionBrowserFlag(cmd *cobra.Command) bool {
 	if cmd == nil {
 		return false
 	}
-	for _, name := range sessionBrowserFlagNames {
-		if cmd.Flags().Changed(name) {
+	for _, binding := range browserOverrideBindings() {
+		if cmd.Flags().Changed(binding.name) {
 			return true
 		}
 	}
@@ -96,101 +68,48 @@ func browserOverridesFromFlags(cmd *cobra.Command, values *flags.BrowserFlags) c
 	if cmd == nil || values == nil {
 		return overrides
 	}
-	changed := func(name string) bool { return cmd.Flags().Changed(name) }
-	if changed("browser-tools") {
-		overrides.ToolsBackend = &values.Tools
-	}
-	if changed("web-cast") {
-		overrides.WebCast = &values.WebCast
-	}
-	if changed("browser-cdp-url") {
-		overrides.CDPURL = &values.CDPURL
-	}
-	if changed("browser-ws-endpoint") {
-		overrides.WSEndpoint = &values.WSEndpoint
-	}
-	if changed("browser-user-data-dir") {
-		overrides.UserDataDir = &values.UserDataDir
-	}
-	if changed("browser-headless") {
-		overrides.ManagedHeadless = &values.Headless
-	}
-	if changed("browser-open") {
-		overrides.ManagedOpen = &values.Open
-	}
-	if changed("browser-close-on-exit") {
-		overrides.ManagedCloseOnExit = &values.CloseOnExit
-	}
-	if changed("browser-allow-process-scan") {
-		overrides.AllowProcessScan = &values.AllowProcessScan
-	}
-	if changed("browser-allow-remote-cdp") {
-		overrides.AllowRemoteCDP = &values.AllowRemoteCDP
-	}
-	if changed("browser-browser") {
-		overrides.Browser = &values.Browser
-	}
-	if changed("browser-tab") {
-		overrides.Tab = &values.Tab
-	}
-	if changed("browser-origin") {
-		overrides.Origin = &values.Origin
-	}
-	if changed("browser-auto-select") {
-		overrides.AutoSelect = &values.AutoSelect
-	}
-	if changed("browser-activate-tab") {
-		overrides.ActivateTab = &values.ActivateTab
-	}
-	if changed("browser-persist-selection") {
-		overrides.PersistSelection = &values.PersistSelection
-	}
-	if changed("browser-allowed-origin") {
-		overrides.AllowedOrigins = &values.AllowedOrigins
-	}
-	if changed("browser-denied-origin") {
-		overrides.DeniedOrigins = &values.DeniedOrigins
-	}
-	if changed("browser-approval") {
-		overrides.Approval = &values.Approval
-	}
-	if changed("browser-cancel-on-interrupt") {
-		overrides.CancelOnInterrupt = &values.CancelOnInterrupt
-	}
-	if changed("browser-invocation-timeout") {
-		overrides.InvocationTimeout = &values.InvocationTimeout
-	}
-	if changed("browser-max-input-bytes") {
-		overrides.MaxInputBytes = &values.MaxInputBytes
-	}
-	if changed("browser-max-result-bytes") {
-		overrides.MaxResultBytes = &values.MaxResultBytes
-	}
-	if changed("browser-serialize-per-target") {
-		overrides.SerializePerTarget = &values.SerializePerTarget
-	}
-	if changed("browser-record") {
-		overrides.Record = &values.Record
-	}
-	if changed("browser-record-arguments") {
-		overrides.RecordArguments = &values.RecordArguments
-	}
-	if changed("browser-record-results") {
-		overrides.RecordResults = &values.RecordResults
-	}
-	if changed("browser-redact-url-query") {
-		overrides.RedactURLQuery = &values.RedactURLQuery
-	}
-	if changed("browser-redact-url-fragment") {
-		overrides.RedactURLFragment = &values.RedactURLFragment
-	}
-	if changed("browser-replay") {
-		overrides.Replay = &values.Replay
-	}
-	if changed("browser-replay-strict") {
-		overrides.ReplayStrict = &values.ReplayStrict
+	for _, binding := range browserOverrideBindings() {
+		if cmd.Flags().Changed(binding.name) {
+			binding.apply(&overrides, values)
+		}
 	}
 	return overrides
+}
+
+func browserOverrideBindings() []browserOverrideBinding {
+	return []browserOverrideBinding{
+		{"browser-tools", func(o *config.BrowserOverrides, v *flags.BrowserFlags) { o.ToolsBackend = &v.Tools }},
+		{"web-cast", func(o *config.BrowserOverrides, v *flags.BrowserFlags) { o.WebCast = &v.WebCast }},
+		{"browser-cdp-url", func(o *config.BrowserOverrides, v *flags.BrowserFlags) { o.CDPURL = &v.CDPURL }},
+		{"browser-ws-endpoint", func(o *config.BrowserOverrides, v *flags.BrowserFlags) { o.WSEndpoint = &v.WSEndpoint }},
+		{"browser-user-data-dir", func(o *config.BrowserOverrides, v *flags.BrowserFlags) { o.UserDataDir = &v.UserDataDir }},
+		{"browser-headless", func(o *config.BrowserOverrides, v *flags.BrowserFlags) { o.ManagedHeadless = &v.Headless }},
+		{"browser-open", func(o *config.BrowserOverrides, v *flags.BrowserFlags) { o.ManagedOpen = &v.Open }},
+		{"browser-close-on-exit", func(o *config.BrowserOverrides, v *flags.BrowserFlags) { o.ManagedCloseOnExit = &v.CloseOnExit }},
+		{"browser-allow-process-scan", func(o *config.BrowserOverrides, v *flags.BrowserFlags) { o.AllowProcessScan = &v.AllowProcessScan }},
+		{"browser-allow-remote-cdp", func(o *config.BrowserOverrides, v *flags.BrowserFlags) { o.AllowRemoteCDP = &v.AllowRemoteCDP }},
+		{"browser-browser", func(o *config.BrowserOverrides, v *flags.BrowserFlags) { o.Browser = &v.Browser }},
+		{"browser-tab", func(o *config.BrowserOverrides, v *flags.BrowserFlags) { o.Tab = &v.Tab }},
+		{"browser-origin", func(o *config.BrowserOverrides, v *flags.BrowserFlags) { o.Origin = &v.Origin }},
+		{"browser-auto-select", func(o *config.BrowserOverrides, v *flags.BrowserFlags) { o.AutoSelect = &v.AutoSelect }},
+		{"browser-activate-tab", func(o *config.BrowserOverrides, v *flags.BrowserFlags) { o.ActivateTab = &v.ActivateTab }},
+		{"browser-persist-selection", func(o *config.BrowserOverrides, v *flags.BrowserFlags) { o.PersistSelection = &v.PersistSelection }},
+		{"browser-allowed-origin", func(o *config.BrowserOverrides, v *flags.BrowserFlags) { o.AllowedOrigins = &v.AllowedOrigins }},
+		{"browser-denied-origin", func(o *config.BrowserOverrides, v *flags.BrowserFlags) { o.DeniedOrigins = &v.DeniedOrigins }},
+		{"browser-approval", func(o *config.BrowserOverrides, v *flags.BrowserFlags) { o.Approval = &v.Approval }},
+		{"browser-cancel-on-interrupt", func(o *config.BrowserOverrides, v *flags.BrowserFlags) { o.CancelOnInterrupt = &v.CancelOnInterrupt }},
+		{"browser-invocation-timeout", func(o *config.BrowserOverrides, v *flags.BrowserFlags) { o.InvocationTimeout = &v.InvocationTimeout }},
+		{"browser-max-input-bytes", func(o *config.BrowserOverrides, v *flags.BrowserFlags) { o.MaxInputBytes = &v.MaxInputBytes }},
+		{"browser-max-result-bytes", func(o *config.BrowserOverrides, v *flags.BrowserFlags) { o.MaxResultBytes = &v.MaxResultBytes }},
+		{"browser-serialize-per-target", func(o *config.BrowserOverrides, v *flags.BrowserFlags) { o.SerializePerTarget = &v.SerializePerTarget }},
+		{"browser-record", func(o *config.BrowserOverrides, v *flags.BrowserFlags) { o.Record = &v.Record }},
+		{"browser-record-arguments", func(o *config.BrowserOverrides, v *flags.BrowserFlags) { o.RecordArguments = &v.RecordArguments }},
+		{"browser-record-results", func(o *config.BrowserOverrides, v *flags.BrowserFlags) { o.RecordResults = &v.RecordResults }},
+		{"browser-redact-url-query", func(o *config.BrowserOverrides, v *flags.BrowserFlags) { o.RedactURLQuery = &v.RedactURLQuery }},
+		{"browser-redact-url-fragment", func(o *config.BrowserOverrides, v *flags.BrowserFlags) { o.RedactURLFragment = &v.RedactURLFragment }},
+		{"browser-replay", func(o *config.BrowserOverrides, v *flags.BrowserFlags) { o.Replay = &v.Replay }},
+		{"browser-replay-strict", func(o *config.BrowserOverrides, v *flags.BrowserFlags) { o.ReplayStrict = &v.ReplayStrict }},
+	}
 }
 
 // resolveSessionBrowserConfig loads the normal defaults/YAML/environment
@@ -225,6 +144,12 @@ func resolveSessionBrowserConfig(globalFlags *flags.GlobalFlags, cmd *cobra.Comm
 	return &resolved, nil
 }
 
+// The only accepted spellings of a strict browser bool flag.
+const (
+	strictBrowserBoolTrue  = "true"
+	strictBrowserBoolFalse = "false"
+)
+
 // strictBrowserBoolValue prevents pflag's permissive bool spellings (1, t,
 // and their case variants) from widening the C0 true/false contract.
 type strictBrowserBoolValue struct {
@@ -234,16 +159,16 @@ type strictBrowserBoolValue struct {
 
 func (v *strictBrowserBoolValue) String() string {
 	if v == nil || v.target == nil {
-		return "false"
+		return strictBrowserBoolFalse
 	}
 	return strconv.FormatBool(*v.target)
 }
 
 func (v *strictBrowserBoolValue) Set(raw string) error {
 	switch raw {
-	case "true":
+	case strictBrowserBoolTrue:
 		*v.target = true
-	case "false":
+	case strictBrowserBoolFalse:
 		*v.target = false
 	default:
 		return fmt.Errorf("--%s must be true or false; got %q", v.name, raw)
@@ -255,7 +180,7 @@ func (*strictBrowserBoolValue) Type() string { return "bool" }
 
 func bindStrictBrowserBool(flagSet *pflag.FlagSet, target *bool, name, usage string) {
 	flagSet.Var(&strictBrowserBoolValue{target: target, name: name}, name, usage)
-	flagSet.Lookup(name).NoOptDefVal = "true"
+	flagSet.Lookup(name).NoOptDefVal = strictBrowserBoolTrue
 }
 
 // singleBrowserOpenValue prevents a repeatable command source from silently
