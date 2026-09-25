@@ -141,15 +141,18 @@ func TestRunSelectedPackageTestsAppliesExternalManifest(t *testing.T) {
 			if got := runFlag.Value.String(); got != tc.wantFilter {
 				t.Fatalf("test.run = %q, want %q", got, tc.wantFilter)
 			}
-			for _, want := range tc.wantStdout {
-				if !strings.Contains(stdout.String(), want) {
-					t.Fatalf("stdout missing %q:\n%s", want, stdout.String())
-				}
-			}
-			if !strings.Contains(stderr.String(), tc.wantStderr) {
-				t.Fatalf("stderr missing %q:\n%s", tc.wantStderr, stderr.String())
-			}
+			assertOutputContains(t, "stdout", stdout.String(), tc.wantStdout...)
+			assertOutputContains(t, "stderr", stderr.String(), tc.wantStderr)
 		})
+	}
+}
+
+func assertOutputContains(t *testing.T, stream, output string, fragments ...string) {
+	t.Helper()
+	for _, want := range fragments {
+		if !strings.Contains(output, want) {
+			t.Fatalf("%s missing %q:\n%s", stream, want, output)
+		}
 	}
 }
 
