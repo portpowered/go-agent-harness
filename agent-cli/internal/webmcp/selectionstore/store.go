@@ -10,11 +10,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/production/normalize"
 )
 
 const (
@@ -28,7 +29,6 @@ const (
 	fileMode      = 0o600
 
 	maxContinuityMarkerLength = 128
-	maxFallbackOriginLength   = 200
 
 	errPathUnavailable = "WebMCP selection path is unavailable"
 	errDecodePrefix    = "decode WebMCP selection: %w"
@@ -85,7 +85,7 @@ func (s *FileStore) Load() (Selection, error) {
 		return Selection{}, err
 	}
 	if selection.Origin != "" {
-		selection.Origin = safeOrigin(selection.Origin)
+		selection.Origin = normalize.RedactedOrigin(selection.Origin)
 	}
 	return selection, nil
 }
@@ -119,7 +119,7 @@ func (s *FileStore) Save(selection Selection) error {
 		selection.SelectedAt = time.Now().UTC()
 	}
 	if selection.Origin != "" {
-		selection.Origin = safeOrigin(selection.Origin)
+		selection.Origin = normalize.RedactedOrigin(selection.Origin)
 	}
 	if err := validate(selection); err != nil {
 		return err
@@ -179,7 +179,7 @@ func validate(selection Selection) error {
 	if selection.BrowserInstanceID != "" && !isNormalizedBrowserInstanceID(selection.BrowserInstanceID) {
 		return errors.New("WebMCP selection browser_instance_id is invalid")
 	}
-	if selection.Origin != "" && safeOrigin(selection.Origin) == "" {
+	if selection.Origin != "" && normalize.RedactedOrigin(selection.Origin) == "" {
 		return errors.New("WebMCP selection origin is invalid")
 	}
 	if selection.ContinuityMarker != "" && !validContinuityMarker(selection.ContinuityMarker) {
@@ -207,32 +207,4 @@ func isNormalizedBrowserInstanceID(value string) bool {
 		}
 	}
 	return true
-}
-
-// safeOrigin matches the doctor's origin redaction: a parseable URL reduces
-// to its lower-cased scheme://host, while any other value loses its query
-// and fragment and is bounded to printable text.
-func safeOrigin(raw string) string {
-	parsed, err := url.Parse(raw)
-	if err == nil && parsed.Scheme != "" && parsed.Host != "" {
-		return strings.ToLower(parsed.Scheme) + "://" + strings.ToLower(parsed.Host)
-	}
-	cleaned := raw
-	if index := strings.IndexAny(cleaned, "?#"); index >= 0 {
-		cleaned = cleaned[:index]
-	}
-	return boundedText(cleaned, maxFallbackOriginLength)
-}
-
-func boundedText(value string, limit int) string {
-	value = strings.Map(func(r rune) rune {
-		if r == '\n' || r == '\r' || r == '\t' || r >= ' ' {
-			return r
-		}
-		return -1
-	}, value)
-	if limit > 0 && len(value) > limit {
-		return value[:limit]
-	}
-	return value
 }

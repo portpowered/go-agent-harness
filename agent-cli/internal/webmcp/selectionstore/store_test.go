@@ -93,15 +93,6 @@ func TestFileStoreRejectsMalformedFiles(t *testing.T) {
 	}
 }
 
-func TestSafeOriginFallsBackToBoundedPrintableText(t *testing.T) {
-	if got := safeOrigin("plain\x01text?query#frag"); got != "plaintext" {
-		t.Fatalf("safeOrigin fallback = %q", got)
-	}
-	if got := safeOrigin(strings.Repeat("a", maxFallbackOriginLength+10)); len(got) != maxFallbackOriginLength {
-		t.Fatalf("safeOrigin length = %d", len(got))
-	}
-}
-
 type memoryStore struct {
 	selection Selection
 	loadErr   error

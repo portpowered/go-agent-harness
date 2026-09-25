@@ -11,33 +11,6 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 )
 
-func TestSplitCompositeTargetRef(t *testing.T) {
-	cases := []struct {
-		name      string
-		value     string
-		browserID string
-		targetID  string
-		composite bool
-	}{
-		{name: "listed reference", value: "browser-43ad63a7d6b3aa5b025bd9a2/target-19c4534b68cb15fa63723a47", browserID: "browser-43ad63a7d6b3aa5b025bd9a2", targetID: "target-19c4534b68cb15fa63723a47", composite: true},
-		{name: "bare target", value: "target-19c4534b68cb15fa63723a47", composite: false},
-		{name: "empty", value: "", composite: false},
-		{name: "empty browser half", value: "/target-a", composite: false},
-		{name: "empty target half", value: "browser-a/", composite: false},
-		{name: "unsafe characters", value: "browser a/target b", composite: false},
-		{name: "extra separator", value: "browser-a/target-b/extra", composite: false},
-	}
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			browserID, targetID, composite := splitCompositeTargetRef(testCase.value)
-			if composite != testCase.composite || browserID != testCase.browserID || targetID != testCase.targetID {
-				t.Fatalf("splitCompositeTargetRef(%q) = (%q, %q, %t), want (%q, %q, %t)",
-					testCase.value, browserID, targetID, composite, testCase.browserID, testCase.targetID, testCase.composite)
-			}
-		})
-	}
-}
-
 // TestProductionWebMCPCLISelectAcceptsListedCompositeReference locks the
 // tabs->select contract for the exact "browserID/targetID" token that the
 // human-readable tabs listing prints: handing that token back verbatim to

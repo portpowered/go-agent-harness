@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
@@ -9,6 +8,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/doctor"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/production"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/production/normalize"
 )
@@ -107,7 +107,7 @@ func NewProductionWebMCPDoctorFactory(options ...WebMCPProductionOption) WebMCPD
 		if err := browser.Validate(); err != nil {
 			return WebMCPDoctorRuntime{}, fmt.Errorf("resolve browser config: %w", err)
 		}
-		if err := validateDoctorEndpoints(browser); err != nil {
+		if err := doctor.ValidateEndpoints(browser); err != nil {
 			return WebMCPDoctorRuntime{}, err
 		}
 		runtime, err := build(browser)
@@ -143,25 +143,6 @@ func defaultWebMCPDoctorFactory(globalFlags *flags.GlobalFlags) WebMCPDoctorFact
 			return NewFileWebMCPSelectionStore(configDirForGlobalFlags(globalFlags))
 		}),
 	)
-}
-
-func webmcpRuntimeUnavailableError(phase string) error {
-	return webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "the WebMCP browser runtime is unavailable", map[string]any{
-		"phase": phase,
-	})
-}
-
-func webmcpRuntimeFactoryError(err error) error {
-	if err == nil {
-		return nil
-	}
-	var classified *webmcp.ClassifiedError
-	if errors.As(err, &classified) && classified != nil {
-		return err
-	}
-	return webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "the WebMCP browser runtime could not be constructed", map[string]any{
-		"phase": "runtime_factory",
-	})
 }
 
 func productionDiscoveryInputs(browser config.BrowserConfig) discovery.ConnectionInputs {

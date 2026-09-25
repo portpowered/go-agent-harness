@@ -56,7 +56,8 @@ func (p *composition) listRawTargetDescriptors(ctx context.Context, lane discove
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = raw.Close() }() //nolint:errcheck // Listing is read-only; a release failure never invalidates the listed targets.
+	// Listing is read-only; a release failure never invalidates the listed targets.
+	defer releaseBestEffort(raw)
 	targets, err := raw.ListTargets(ctx)
 	if err != nil {
 		return nil, err
@@ -110,17 +111,32 @@ func (p *composition) attachProbe(ctx context.Context, lane discovery.BrowserCan
 	if err != nil {
 		return nil, nil, err
 	}
-	rawTarget, err := p.rawTargetForPublicID(ctx, raw, lane.ID, webmcp.TargetID(target.ID))
+	session, err := p.attachExternal(ctx, raw, lane.ID, webmcp.TargetID(target.ID))
 	if err != nil {
-		_ = raw.Close() //nolint:errcheck // The lookup/attach failure is the primary error; the raw handle is only released.
-		return nil, nil, err
-	}
-	session, err := raw.Attach(ctx, rawTarget.ID, webmcp.TargetOwnershipExternal)
-	if err != nil {
-		_ = raw.Close() //nolint:errcheck // The lookup/attach failure is the primary error; the raw handle is only released.
+		// The lookup/attach failure is the primary error; the raw handle is
+		// only released.
+		releaseBestEffort(raw)
 		return nil, nil, err
 	}
 	return raw, session, nil
+}
+
+// attachExternal resolves the public target ID on raw and attaches to it as
+// an external observer.
+func (p *composition) attachExternal(ctx context.Context, raw webmcp.BrowserHandle, browserID string, targetID webmcp.TargetID) (webmcp.TargetSession, error) {
+	rawTarget, err := p.rawTargetForPublicID(ctx, raw, browserID, targetID)
+	if err != nil {
+		return nil, err
+	}
+	return raw.Attach(ctx, rawTarget.ID, webmcp.TargetOwnershipExternal)
+}
+
+// releaseBestEffort closes a resource on a path where another result is
+// primary: a listing that already succeeded or a failure that is already
+// being returned. The release error carries no additional information for
+// the caller, so this is the package's single deliberate discard.
+func releaseBestEffort(resource interface{ Close() error }) {
+	_ = resource.Close() //nolint:errcheck // Best-effort release; the caller's primary result or error is already determined.
 }
 
 // observedCapabilities reads the enabled session's page context and then
