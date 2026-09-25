@@ -20,12 +20,17 @@ import (
 // independent recorder with no process-wide ownership or mutable globals.
 type Service struct {
 	syncFile roomevidence.FileSync
+	loader   admission.Loader
 }
 
 // New builds a service from options; the zero value selects production
 // defaults, including a real fsync for every artifact.
 func New(options roomevidence.ServiceOptions) *Service {
-	return &Service{syncFile: options.SyncFile}
+	limits := options.AdmissionLimits
+	return &Service{syncFile: options.SyncFile, loader: admission.New(admission.Limits{
+		ManifestBytes: limits.ManifestBytes, ArtifactBytes: limits.ArtifactBytes,
+		TimelineBytes: limits.TimelineBytes, TimelineEvents: limits.TimelineEvents,
+	})}
 }
 
 func (s *Service) ValidateOutput(path string) error {
@@ -58,7 +63,7 @@ func (s *Service) Open(options roomevidence.RecordingRequest) (roomevidence.Reco
 }
 
 func (s *Service) LoadPlan(bundle string) (roomevidence.RoomReplayPlan, error) {
-	return admission.New().Load(bundle)
+	return s.loader.Load(bundle)
 }
 
 func (s *Service) ValidateReplayOutput(plan roomevidence.RoomReplayPlan, destination string) error {

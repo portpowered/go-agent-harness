@@ -34,18 +34,49 @@ func requiredParticipantRoles() []string {
 	return []string{"wav", "diagnostics", "deltas", "sent_pcm", "received_pcm", "events", "capture"}
 }
 
+// Limits bounds admission reads. Zero or negative fields select the protected
+// defaults; positive values may only lower them.
+type Limits struct {
+	ManifestBytes  int64
+	ArtifactBytes  int64
+	TimelineBytes  int64
+	TimelineEvents int
+}
+
+// DefaultLimits returns the production admission bounds.
+func DefaultLimits() Limits {
+	return Limits{ManifestBytes: MaxManifestBytes, ArtifactBytes: MaxArtifactBytes, TimelineBytes: MaxTimelineBytes, TimelineEvents: MaxTimelineEvents}
+}
+
+func (l Limits) normalized() Limits {
+	return Limits{
+		ManifestBytes:  lowerLimit(l.ManifestBytes, MaxManifestBytes),
+		ArtifactBytes:  lowerLimit(l.ArtifactBytes, MaxArtifactBytes),
+		TimelineBytes:  lowerLimit(l.TimelineBytes, MaxTimelineBytes),
+		TimelineEvents: lowerLimit(l.TimelineEvents, MaxTimelineEvents),
+	}
+}
+
+func lowerLimit[T int | int64](requested, maximum T) T {
+	if requested > 0 && requested < maximum {
+		return requested
+	}
+	return maximum
+}
+
 // Loader validates one complete bundle before returning. It retains no open
 // files or references to mutable decode buffers.
-type Loader struct{}
+type Loader struct{ limits Limits }
 
-func New() Loader { return Loader{} }
+// New returns a loader bounded by the normalized limits.
+func New(limits Limits) Loader { return Loader{limits: limits.normalized()} }
 
-func (Loader) Load(bundle string) (rooms.RoomReplayPlan, error) {
+func (l Loader) Load(bundle string) (rooms.RoomReplayPlan, error) {
 	root, err := resolveBundleRoot(bundle)
 	if err != nil {
 		return rooms.RoomReplayPlan{}, err
 	}
-	object, manifestPath, err := loadManifestObject(root)
+	object, manifestPath, err := loadManifestObject(root, l.limits.ManifestBytes)
 	if err != nil {
 		return rooms.RoomReplayPlan{}, err
 	}
@@ -68,12 +99,12 @@ func (Loader) Load(bundle string) (rooms.RoomReplayPlan, error) {
 		return rooms.RoomReplayPlan{}, err
 	}
 	refs = append(refs, roomArtifacts...)
-	validated, err := validateArtifacts(root, refs, metadata)
+	validated, err := validateArtifacts(root, refs, metadata, l.limits)
 	if err != nil {
 		return rooms.RoomReplayPlan{}, err
 	}
 	assignArtifacts(&plan, validated)
-	timeline, err := loadTimeline(plan.TimelinePath, plan.Participants, plan.ClockBase, plan.StartedAt, plan.EndedAt)
+	timeline, err := loadTimeline(plan.TimelinePath, plan.Participants, plan.ClockBase, plan.StartedAt, plan.EndedAt, l.limits)
 	if err != nil {
 		return rooms.RoomReplayPlan{}, err
 	}

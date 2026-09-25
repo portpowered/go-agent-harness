@@ -28,7 +28,7 @@ const (
 	MaxTimelineEvents       = 100_000
 )
 
-func loadTimeline(path string, participants []rooms.RoomReplayParticipant, clockBase, started, ended time.Time) (result []rooms.RoomReplayTimelineEvent, err error) {
+func loadTimeline(path string, participants []rooms.RoomReplayParticipant, clockBase, started, ended time.Time, limits Limits) (result []rooms.RoomReplayTimelineEvent, err error) {
 	if err := pathguard.ValidateRegularFile(path); err != nil {
 		return nil, incomplete("room_timeline", err)
 	}
@@ -42,7 +42,7 @@ func loadTimeline(path string, participants []rooms.RoomReplayParticipant, clock
 		}
 	}()
 	known := timelineParticipants(participants)
-	limited := &io.LimitedReader{R: file, N: MaxTimelineBytes + 1}
+	limited := &io.LimitedReader{R: file, N: limits.TimelineBytes + 1}
 	scanner := bufio.NewScanner(limited)
 	scanner.Buffer(make([]byte, timelineScannerInitialBytes), timelineScannerMaxBytes)
 	result = make([]rooms.RoomReplayTimelineEvent, 0, timelineInitialCapacity)
@@ -52,8 +52,8 @@ func loadTimeline(path string, participants []rooms.RoomReplayParticipant, clock
 		if strings.TrimSpace(string(raw)) == "" {
 			continue
 		}
-		if len(result) >= MaxTimelineEvents {
-			return nil, mismatch("room_timeline", fmt.Errorf("timeline exceeds the %d-event limit", MaxTimelineEvents))
+		if len(result) >= limits.TimelineEvents {
+			return nil, mismatch("room_timeline", fmt.Errorf("timeline exceeds the %d-event limit", limits.TimelineEvents))
 		}
 		event, err := parseTimelineLine(raw, line, int64(len(result)), previous, known, clockBase, started, ended)
 		if err != nil {
@@ -66,7 +66,7 @@ func loadTimeline(path string, participants []rooms.RoomReplayParticipant, clock
 		return nil, incomplete("room_timeline", err)
 	}
 	if limited.N == 0 {
-		return nil, mismatch("room_timeline", fmt.Errorf("timeline exceeds the %d-byte limit", MaxTimelineBytes))
+		return nil, mismatch("room_timeline", fmt.Errorf("timeline exceeds the %d-byte limit", limits.TimelineBytes))
 	}
 	return result, nil
 }

@@ -87,6 +87,19 @@ func (s FileSync) Sync(file DurableFile) error {
 type ServiceOptions struct {
 	// SyncFile overrides the durability hook for every recorded artifact.
 	SyncFile FileSync
+	// AdmissionLimits bounds LoadPlan reads of a replay bundle.
+	AdmissionLimits AdmissionLimits
+}
+
+// AdmissionLimits bounds replay admission. Zero fields keep the protected
+// defaults (8 MiB manifest, 64 MiB artifact, 32 MiB and 100,000 events of
+// timeline); positive values may only lower them, for example to exercise
+// overflow handling with small fixtures.
+type AdmissionLimits struct {
+	ManifestBytes  int64
+	ArtifactBytes  int64
+	TimelineBytes  int64
+	TimelineEvents int
 }
 
 // Service is an inert factory. It performs no filesystem or host discovery

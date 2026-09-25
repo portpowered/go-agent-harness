@@ -19,11 +19,11 @@ type artifactMetadata struct {
 	SHA256 string
 }
 
-func validateArtifacts(root string, refs []artifactRef, metadata map[string]artifactMetadata) ([]rooms.RoomReplayArtifact, error) {
+func validateArtifacts(root string, refs []artifactRef, metadata map[string]artifactMetadata, limits Limits) ([]rooms.RoomReplayArtifact, error) {
 	seen := make(map[string]string, len(refs))
 	result := make([]rooms.RoomReplayArtifact, 0, len(refs))
 	for _, ref := range refs {
-		artifact, err := validateArtifact(root, seen, ref, metadata)
+		artifact, err := validateArtifact(root, seen, ref, metadata, limits)
 		if err != nil {
 			return nil, err
 		}
@@ -32,7 +32,7 @@ func validateArtifacts(root string, refs []artifactRef, metadata map[string]arti
 	return result, nil
 }
 
-func validateArtifact(root string, seen map[string]string, ref artifactRef, metadata map[string]artifactMetadata) (rooms.RoomReplayArtifact, error) {
+func validateArtifact(root string, seen map[string]string, ref artifactRef, metadata map[string]artifactMetadata, limits Limits) (rooms.RoomReplayArtifact, error) {
 	artifact := ref.artifact
 	relative, absolute, err := safePath(root, artifact.Path)
 	if err != nil {
@@ -57,7 +57,7 @@ func validateArtifact(root string, seen map[string]string, ref artifactRef, meta
 	if err != nil {
 		return rooms.RoomReplayArtifact{}, err
 	}
-	limit, field := artifactSizeLimit(ref)
+	limit, field := artifactSizeLimit(ref, limits)
 	if info.Size() > limit {
 		return rooms.RoomReplayArtifact{}, mismatch(field, fmt.Errorf("artifact exceeds the %d-byte limit", limit))
 	}
@@ -71,11 +71,11 @@ func validateArtifact(root string, seen map[string]string, ref artifactRef, meta
 	return artifact, nil
 }
 
-func artifactSizeLimit(ref artifactRef) (int64, string) {
+func artifactSizeLimit(ref artifactRef, limits Limits) (int64, string) {
 	if ref.role == roomTimelineRole {
-		return MaxTimelineBytes, roomTimelineRole
+		return limits.TimelineBytes, roomTimelineRole
 	}
-	return MaxArtifactBytes, ref.owner
+	return limits.ArtifactBytes, ref.owner
 }
 
 func regularArtifactInfo(absolute, relative, owner string) (os.FileInfo, error) {

@@ -18,8 +18,6 @@ func (e manifestLimitError) Error() string {
 	return fmt.Sprintf("room replay manifest exceeds the %d-byte limit", int64(e))
 }
 
-const errManifestTooLarge = manifestLimitError(MaxManifestBytes)
-
 func resolveBundleRoot(bundle string) (string, error) {
 	root, err := filepath.Abs(strings.TrimSpace(bundle))
 	if err != nil {
@@ -35,7 +33,7 @@ func resolveBundleRoot(bundle string) (string, error) {
 	return root, nil
 }
 
-func loadManifestObject(root string) (object, string, error) {
+func loadManifestObject(root string, maxBytes int64) (object, string, error) {
 	manifestPath := filepath.Join(root, rooms.RoomReplayBundleManifestPath)
 	if err := pathguard.ValidateNoSymlink(root, manifestPath); err != nil {
 		return nil, "", mismatch("manifest", err)
@@ -43,9 +41,10 @@ func loadManifestObject(root string) (object, string, error) {
 	if err := validateManifestRegularFile(manifestPath); err != nil {
 		return nil, "", err
 	}
-	data, err := readManifest(manifestPath)
+	data, err := readManifest(manifestPath, maxBytes)
 	if err != nil {
-		if errors.Is(err, errManifestTooLarge) {
+		var limitErr manifestLimitError
+		if errors.As(err, &limitErr) {
 			return nil, "", mismatch("manifest", err)
 		}
 		return nil, "", incomplete("manifest", err)
@@ -57,12 +56,12 @@ func loadManifestObject(root string) (object, string, error) {
 	return decoded, manifestPath, nil
 }
 
-func readManifest(path string) ([]byte, error) {
+func readManifest(path string, maxBytes int64) ([]byte, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
-	data, readErr := io.ReadAll(io.LimitReader(file, MaxManifestBytes+1))
+	data, readErr := io.ReadAll(io.LimitReader(file, maxBytes+1))
 	closeErr := file.Close()
 	if readErr != nil {
 		return nil, readErr
@@ -70,8 +69,8 @@ func readManifest(path string) ([]byte, error) {
 	if closeErr != nil {
 		return nil, closeErr
 	}
-	if int64(len(data)) > MaxManifestBytes {
-		return nil, errManifestTooLarge
+	if int64(len(data)) > maxBytes {
+		return nil, manifestLimitError(maxBytes)
 	}
 	return data, nil
 }
