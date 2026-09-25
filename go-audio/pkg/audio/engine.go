@@ -76,7 +76,7 @@ func (e *RouteEngine) Run(ctx context.Context) (runErr error) {
 		FrameProducer{q: e.input.q}.Close()
 		if runErr != nil {
 			e.Invalidate(e.outControl.Snapshot().Epoch + 1)
-			runErr = errors.Join(runErr, e.resetProcessor())
+			runErr = joinOnFailure(runErr, e.resetProcessor())
 		}
 		e.output.Close()
 		e.mu.Lock()
@@ -151,4 +151,14 @@ func (e *RouteEngine) Snapshot() (ingress, egress BufferStats) {
 func (e *RouteEngine) resetProcessor() error {
 	_, err := e.processor.Reset()
 	return err
+}
+
+// joinOnFailure attaches cleanupErr only to an operation that already failed.
+// A cleanup failure after a successful operation does not turn that success
+// into a failure, and a nil cleanup error leaves err's identity unchanged.
+func joinOnFailure(err, cleanupErr error) error {
+	if err == nil || cleanupErr == nil {
+		return err
+	}
+	return errors.Join(err, cleanupErr)
 }

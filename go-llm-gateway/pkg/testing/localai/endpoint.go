@@ -5,7 +5,6 @@ package localai
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"os"
 	"sync"
@@ -84,7 +83,7 @@ func probe(endpoint string) bool {
 	conn, response, err := dialer.DialContext(ctx, endpoint, http.Header{})
 	if response != nil && response.Body != nil {
 		// Gorilla buffers the handshake body in memory; releasing it cannot fail after a successful dial.
-		err = errors.Join(err, response.Body.Close())
+		err = joinOnFailure(err, response.Body.Close())
 	}
 	if err != nil || conn == nil {
 		return false

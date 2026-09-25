@@ -2,6 +2,7 @@ package participants
 
 import (
 	"context"
+	"errors"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
@@ -68,4 +69,14 @@ func (p *ActiveParticipant) Err() error {
 	default:
 		return nil
 	}
+}
+
+// joinOnFailure attaches cleanupErr only to an operation that already failed.
+// A cleanup failure after a successful operation does not turn that success
+// into a failure, and a nil cleanup error leaves err's identity unchanged.
+func joinOnFailure(err, cleanupErr error) error {
+	if err == nil || cleanupErr == nil {
+		return err
+	}
+	return errors.Join(err, cleanupErr)
 }

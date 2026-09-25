@@ -57,7 +57,7 @@ func verifyRealtimeAudioContext(ctx context.Context, endpoint string) (realtimeA
 	conn, response, err := dialer.DialContext(ctx, endpoint, http.Header{})
 	if response != nil && response.Body != nil {
 		// Gorilla buffers the handshake body in memory; releasing it cannot fail after a successful dial.
-		err = errors.Join(err, response.Body.Close())
+		err = joinOnFailure(err, response.Body.Close())
 	}
 	if err != nil {
 		return proof, fmt.Errorf("dial realtime endpoint %s: %w", endpoint, err)
@@ -350,4 +350,14 @@ func discardClose(resource io.Closer) {
 	if err := resource.Close(); err != nil {
 		return
 	}
+}
+
+// joinOnFailure attaches cleanupErr only to an operation that already failed.
+// A cleanup failure after a successful operation does not turn that success
+// into a failure, and a nil cleanup error leaves err's identity unchanged.
+func joinOnFailure(err, cleanupErr error) error {
+	if err == nil || cleanupErr == nil {
+		return err
+	}
+	return errors.Join(err, cleanupErr)
 }
