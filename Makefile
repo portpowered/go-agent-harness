@@ -52,7 +52,10 @@ GO_TEST_TIMEOUT ?= 300s
 AGENT_CLI_INTEGRATION_TIMEOUT ?= 480s
 # agent-cli/test/integration is the slowest package; it is compiled once and
 # its top-level tests run as disjoint shards (scripts/go-test-shards.sh).
-AGENT_CLI_INTEGRATION_SHARDS ?= 5
+# The shards wait on paced audio far more than they compute (~200s of summed
+# test time on a 4-vCPU CI runner), so more shards than cores shortens the
+# run until the longest single test (~25s) bounds it.
+AGENT_CLI_INTEGRATION_SHARDS ?= 8
 # Recorded test durations that balance the shards (path relative to agent-cli).
 AGENT_CLI_INTEGRATION_WEIGHTS := test/integration/testdata/shard-weights.txt
 # Local runs of every shard execute at most this many at once. All shards run
