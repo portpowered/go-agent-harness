@@ -14,7 +14,6 @@ import (
 	"time"
 
 	serviceDevices "github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices"
-	servicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
@@ -137,90 +136,6 @@ func TestDeviceProbeReadyPathUsesDeadguard(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "deadguard") && !strings.Contains(stderr.String(), "deadguard") {
 		t.Fatalf("deadguard diagnostic missing from command output: stdout=%q stderr=%q", stdout.String(), stderr.String())
-	}
-}
-
-func TestDeviceProbeRuntimeUsesBoundDevicesAndSessionOutput(t *testing.T) {
-	registry, err := devicegw.NewVirtualRegistry(devicegw.DefaultVirtualBackendConfig())
-	if err != nil {
-		t.Fatalf("create virtual registry: %v", err)
-	}
-	availability, err := devicegw.ProbeDeviceAvailability(registry)
-	if err != nil {
-		t.Fatalf("probe virtual availability: %v", err)
-	}
-	scenario, err := loadProbeScenario(mustReadDeviceProbeScenario(t))
-	if err != nil {
-		t.Fatalf("load device scenario: %v", err)
-	}
-	inputPlan := authoredDeviceProbeInput(t, scenario)
-	corpusSamples := readDeviceProbeCorpus(t, inputPlan.CorpusID)
-	input, err := registry.Default(devicegw.DirectionInput)
-	if err != nil {
-		t.Fatalf("select input: %v", err)
-	}
-	if availability.InputDevices[0].ID != input.ID {
-		t.Fatalf("availability input = %q, default input = %q", availability.InputDevices[0].ID, input.ID)
-	}
-	output, err := registry.Default(devicegw.DirectionOutput)
-	if err != nil {
-		t.Fatalf("select output: %v", err)
-	}
-	seed, err := devicegw.NewDeviceSink(registry, output.ID)
-	if err != nil {
-		t.Fatalf("open seeded input source: %v", err)
-	}
-	// The seed is closed and checked explicitly below; this deferred close only
-	// releases it on an early failure, where a repeat close error is expected.
-	defer releaseForTest(seed.Close)
-	const seededDeviceFrameCount = 8
-	seedVoicedDeviceProbeFrames(t, seed, corpusSamples, seededDeviceFrameCount)
-
-	session := newDeviceProbeSession()
-	if !session.receive.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeSessionOpen}) {
-		t.Fatal("queue session open")
-	}
-	if !session.receive.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeSessionCreated}) {
-		t.Fatal("queue session created")
-	}
-	const deviceProbeInputFrameSamples = audio.SampleRate / 50
-	const deviceProbeProviderFrameSamples = wavio.Rate24kHz / 50
-	response, err := wavio.Resample(voicedDeviceProbeFrame()[:deviceProbeInputFrameSamples], audio.SampleRate, wavio.Rate24kHz)
-	if err != nil {
-		t.Fatalf("resample response: %v", err)
-	}
-	responsePCM := pcm16ProbeBytes(response)
-	audioObserved := make(chan []byte, 32)
-	var observedInstructions string
-	runContext, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-	defer cancel()
-	go answerDeviceProbeTurn(runContext, session, audioObserved, responsePCM)
-
-	observation, err := servicewire.NewDeviceProbeService(registry, nil).Run(runContext, serviceDevices.DeviceProbeRequest{
-		Scenario:             scenario,
-		SessionInferencer:    &deviceProbeSessionInferencer{session: session},
-		CaptureTime:          750 * time.Millisecond,
-		InstructionsObserved: func(instructions string) { observedInstructions = instructions },
-	})
-	if err != nil {
-		t.Fatalf("run device probe runtime: %v", err)
-	}
-	wantProviderFrames := seededDeviceFrameCount * audio.FrameSize / deviceProbeInputFrameSamples
-	assertForwardedDeviceProbeAudio(t, drainDeviceProbeAudio(audioObserved), wantProviderFrames*deviceProbeProviderFrameSamples*2)
-	if !strings.Contains(observedInstructions, inputPlan.CorpusID) || !strings.Contains(observedInstructions, inputPlan.Text) {
-		t.Fatalf("session instructions = %q, want authored corpus %q and utterance %q", observedInstructions, inputPlan.CorpusID, inputPlan.Text)
-	}
-	if len(observation.PCM16Samples) == 0 || audio.PCM16RMSEnergy(observation.PCM16Samples) <= audio.DefaultVADConfig.EnergyThreshold {
-		t.Fatalf("runtime output samples/RMS = %d/%.2f, want non-silent output", len(observation.PCM16Samples), audio.PCM16RMSEnergy(observation.PCM16Samples))
-	}
-	if observation.Transcript != "device round trip" {
-		t.Fatalf("runtime transcript = %q, want provider session transcript", observation.Transcript)
-	}
-	if err := seed.Close(); err != nil {
-		t.Fatalf("close seeded input source: %v", err)
-	}
-	if got := registry.Observations(); got.OpenCount != 3 || got.ReleaseCount != 3 {
-		t.Fatalf("device lifecycle observations = %+v, want seed plus bound input/output", got)
 	}
 }
 

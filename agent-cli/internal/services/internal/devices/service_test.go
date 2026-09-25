@@ -121,6 +121,11 @@ func TestServiceRunVirtualProbeUsesInputAndOutputContracts(t *testing.T) {
 	if len(observation.PCM16Samples) == 0 || audio.PCM16RMSEnergy(observation.PCM16Samples) <= audio.DefaultVADConfig.EnergyThreshold {
 		t.Fatalf("output samples/RMS = %d/%.2f, want voiced output", len(observation.PCM16Samples), audio.PCM16RMSEnergy(observation.PCM16Samples))
 	}
+	// Run must release the input and output it bound; only the test's seed
+	// sink is still open here.
+	if got := registry.Observations(); got.OpenCount != 3 || got.ReleaseCount != 2 {
+		t.Fatalf("device lifecycle observations = %+v, want seed plus bound input/output opened and both bound devices released", got)
+	}
 }
 
 func TestServiceRunVirtualProbeRejectsUnavailableAndCancelledRuns(t *testing.T) {

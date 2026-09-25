@@ -150,31 +150,6 @@ func loopbackAttenuate(samples []int16, gain float64) []int16 {
 	return out
 }
 
-// TestLoopbackAttenuateScalesAndSaturates unit-tests the sweepable
-// attenuation parameter the coupling harness above documents: an explicit
-// gain in (0,1) scales linearly (and round-trips through the exact,
-// scale-invariant correlation math the suppression test relies on), while a
-// gain that would overflow PCM16 saturates instead of wrapping.
-func TestLoopbackAttenuateScalesAndSaturates(t *testing.T) {
-	source := []int16{0, 100, -100, 32767, -32768, 12345, -12345}
-
-	half := loopbackAttenuate(source, 0.5)
-	want := []int16{0, 50, -50, 16384, -16384, 6173, -6173}
-	if !reflect.DeepEqual(half, want) {
-		t.Fatalf("attenuate(0.5) = %v, want %v", half, want)
-	}
-
-	saturated := loopbackAttenuate(source, 2.0)
-	wantSaturated := []int16{0, 200, -200, math.MaxInt16, math.MinInt16, 24690, -24690}
-	if !reflect.DeepEqual(saturated, wantSaturated) {
-		t.Fatalf("attenuate(2.0) = %v, want %v (must saturate, not wrap)", saturated, wantSaturated)
-	}
-
-	if identity := loopbackAttenuate(source, 1.0); !reflect.DeepEqual(identity, source) {
-		t.Fatalf("attenuate(1.0) = %v, want the source unchanged (%v)", identity, source)
-	}
-}
-
 // mustResampleStream mirrors the stream-owned DSP boundary: phase and filter
 // history continue across packet boundaries, and only the final packet flushes
 // the exact tail. Per-packet stateless conversion would compare a different

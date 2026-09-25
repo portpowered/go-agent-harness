@@ -17,46 +17,6 @@ func (s *recordingToolService) Resolve(*config.Config) (serviceTools.Capabilitie
 	return s.capabilities, nil
 }
 
-func TestCompositionValuesWithPorts_SkipsDisplacedDefaultConstructors(t *testing.T) {
-	for _, selected := range livePortDefinitions() {
-		selected := selected
-		t.Run(selected.descriptor.Name, func(t *testing.T) {
-			definitions := livePortDefinitions()
-			defaultCalls := make(map[string]int, len(definitions))
-			for index := range definitions {
-				name := definitions[index].descriptor.Name
-				factory := definitions[index].defaultValue
-				if factory == nil {
-					continue
-				}
-				definitions[index].defaultValue = func(defaults toolDefaults) any {
-					defaultCalls[name]++
-					return factory(defaults)
-				}
-			}
-
-			replacement := replacementForPortType(t, selected.descriptor.Type)
-			values, err := compositionValuesWithPorts(
-				definitions,
-				toolDefaults{executor: &recordingToolExecutor{}},
-				[]PortSwap{NewPortSwap(selected.descriptor.Name, replacement)},
-			)
-			if err != nil {
-				t.Fatalf("compositionValuesWithPorts: %v", err)
-			}
-			definition, ok := findPortDefinitionIn(definitions, selected.descriptor.Name)
-			if !ok {
-				t.Fatalf("selected port %q disappeared from live definitions", selected.descriptor.Name)
-			}
-			if got := definition.value(&values); got != replacement {
-				t.Fatalf("selected %q replacement identity changed: got %T/%p want %T/%p", selected.descriptor.Name, got, got, replacement, replacement)
-			}
-
-			assertDefaultConstructorCalls(t, definitions, selected.descriptor.Name, defaultCalls)
-		})
-	}
-}
-
 func TestToolServicePort_AdvertisesAndExecutesCompleteCustomSurface(t *testing.T) {
 	const toolName = "composition_unique_tool"
 

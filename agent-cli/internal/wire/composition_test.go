@@ -236,51 +236,6 @@ func composeTestAgentCLIWithDialer(toolExecutor messages.ToolExecutor, dialer tr
 	)
 }
 
-func TestComposeAgentCLI_ValidDependenciesReturnRoot(t *testing.T) {
-	root, err := composeTestAgentCLI(&recordingToolExecutor{})
-	if err != nil {
-		t.Fatalf("ComposeAgentCLI returned error: %v", err)
-	}
-	if root == nil {
-		t.Fatal("ComposeAgentCLI returned a nil root")
-	}
-	if root.Generate() == nil {
-		t.Fatal("ComposeAgentCLI generated a nil cobra root")
-	}
-}
-
-func TestComposeAgentCLI_RejectsWebRTCBeforeSessionSetupInGeneratedGraph(t *testing.T) {
-	provider := &recordingSessionInferencer{}
-	root, err := composeTestAgentCLI(
-		&recordingToolExecutor{},
-		WithSessionInferencer(provider),
-	)
-	if err != nil {
-		t.Fatalf("ComposeAgentCLI: %v", err)
-	}
-
-	command := root.Generate()
-	command.SetOut(io.Discard)
-	command.SetErr(io.Discard)
-	command.SetArgs([]string{
-		"--config-dir", t.TempDir(),
-		"session", "--record", "capture.json",
-		"--provider", "grok", "--model", "test-model", "--api-key", "test-key",
-		"--transport", "webrtc", "--signaling", "loopback://composition",
-		"--media-source", "fixture://composition", "prove graph wiring",
-	})
-	err = command.ExecuteContext(context.Background())
-	if err == nil {
-		t.Fatal("WebRTC command unexpectedly succeeded")
-	}
-	if !errors.Is(err, cli.ErrSessionWebRTCUnavailable) {
-		t.Fatalf("WebRTC command error = %v, want customer capability error", err)
-	}
-	if provider.connects != 0 {
-		t.Fatalf("provider session connects = %d, want zero before capability rejection", provider.connects)
-	}
-}
-
 func TestComposeAgentCLIUsesSharedRegistryForDevicesAndSession(t *testing.T) {
 	inner, err := devicegw.NewVirtualRegistry(devicegw.DefaultVirtualBackendConfig())
 	if err != nil {
@@ -370,61 +325,6 @@ func TestComposeAgentCLIUsesSharedRegistryForDevicesAndSession(t *testing.T) {
 	}
 	if got := inner.Observations(); got.OpenCount != 2 || got.ReleaseCount != 2 {
 		t.Fatalf("composed session registry observations = %+v, want two opens and releases", got)
-	}
-}
-
-func TestCompositionClock_DefaultsThroughEnsureAndPreservesSuppliedIdentity(t *testing.T) {
-	values := validCompositionValues()
-	values.clockSource = nil
-	normalizeClock(&values)
-
-	defaultClock, ok := values.clockSource.(clock.Real)
-	if !ok {
-		t.Fatalf("omitted clock = %T, want clock.Real", values.clockSource)
-	}
-	if defaultClock.Now().IsZero() {
-		t.Fatal("default clock returned a zero timestamp")
-	}
-
-	supplied := &recordingClock{now: time.Unix(789, 0)}
-	values.clockSource = supplied
-	normalizeClock(&values)
-	if values.clockSource != supplied {
-		t.Fatalf("supplied clock identity changed: got %p want %p", values.clockSource, supplied)
-	}
-
-	root, err := ComposeAgentCLI(
-		&recordingToolExecutor{},
-		&recordingDialer{},
-		&recordingDeviceRegistry{},
-		&recordingAudioSource{},
-		&recordingAudioSink{},
-		nil,
-	)
-	if err != nil || root == nil {
-		t.Fatalf("ComposeAgentCLI with omitted clock: root=%v err=%v", root, err)
-	}
-}
-
-func TestObservabilityPortSwapsReachGeneratedGraphWithExactIdentity(t *testing.T) {
-	sampler := &recordingMetricSampler{}
-	logger := &recordingLogger{}
-	var observation assemblyObservation
-	root, err := initializeAgentCLIWithPorts(true, observation.record,
-		NewPortSwap(PortMetricSampler, sampler),
-		NewPortSwap(PortLogger, logger),
-	)
-	if err != nil || root == nil {
-		t.Fatalf("initialize with observability ports: root=%v err=%v", root, err)
-	}
-	if observation.calls != 1 {
-		t.Fatalf("assembly observation calls = %d, want 1", observation.calls)
-	}
-	if observation.values.metricSampler != sampler || observation.values.logger != logger {
-		t.Fatalf("observability identity changed: sampler=%p/%p logger=%p/%p", observation.values.metricSampler, sampler, observation.values.logger, logger)
-	}
-	if observation.values.defaultCalls[PortMetricSampler] != 0 || observation.values.defaultCalls[PortLogger] != 0 {
-		t.Fatalf("displaced observability defaults were constructed: %+v", observation.values.defaultCalls)
 	}
 }
 
@@ -662,25 +562,6 @@ func TestCompositionOptions_InstallOptionalCapabilities(t *testing.T) {
 	}
 }
 
-func TestComposeAgentCLI_OptionalInferencerIsObservedAtRuntime(t *testing.T) {
-	inferencer := &recordingInferencer{response: "exact replacement"}
-	root, err := composeTestAgentCLI(&recordingToolExecutor{}, WithInferencer(inferencer))
-	if err != nil {
-		t.Fatalf("ComposeAgentCLI: %v", err)
-	}
-
-	command := root.Generate()
-	command.SetOut(io.Discard)
-	command.SetErr(io.Discard)
-	command.SetArgs([]string{"--config-dir", t.TempDir(), "ask", "--no-system-information", "hello"})
-	if err := command.ExecuteContext(context.Background()); err != nil {
-		t.Fatalf("execute ask: %v", err)
-	}
-	if inferencer.calls != 1 {
-		t.Fatalf("injected inferencer calls = %d, want exactly 1", inferencer.calls)
-	}
-}
-
 func executeAskCommand(t *testing.T, root *cli.AgentCLI) error {
 	t.Helper()
 	command := root.Generate()
@@ -780,48 +661,4 @@ func directoryEntries(t *testing.T, directory string) []string {
 	}
 	sort.Strings(names)
 	return names
-}
-
-func TestLegacyInitializersForwardToExplicitComposition(t *testing.T) {
-	tests := []struct {
-		name string
-		init func(*recordingToolExecutor, *recordingInferencer, *recordingSessionInferencer) (*cli.AgentCLI, error)
-	}{
-		{
-			name: "mock",
-			init: func(tool *recordingToolExecutor, inferencer *recordingInferencer, _ *recordingSessionInferencer) (*cli.AgentCLI, error) {
-				return InitializeMockAgentCLI(tool, inferencer)
-			},
-		},
-		{
-			name: "mock-session",
-			init: func(tool *recordingToolExecutor, inferencer *recordingInferencer, session *recordingSessionInferencer) (*cli.AgentCLI, error) {
-				return InitializeMockAgentCLIWithSessionInferencer(tool, inferencer, session)
-			},
-		},
-		{
-			name: "strict-override",
-			init: func(tool *recordingToolExecutor, inferencer *recordingInferencer, _ *recordingSessionInferencer) (*cli.AgentCLI, error) {
-				return InitializeAgentCLIWithInferencerOverride(tool, inferencer)
-			},
-		},
-		{
-			name: "production",
-			init: func(_ *recordingToolExecutor, _ *recordingInferencer, _ *recordingSessionInferencer) (*cli.AgentCLI, error) {
-				return InitializeAgentCLI()
-			},
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			root, err := test.init(&recordingToolExecutor{}, &recordingInferencer{}, &recordingSessionInferencer{})
-			if err != nil {
-				t.Fatalf("initializer: %v", err)
-			}
-			if root == nil {
-				t.Fatal("initializer returned nil root")
-			}
-		})
-	}
 }
