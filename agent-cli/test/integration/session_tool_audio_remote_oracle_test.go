@@ -430,6 +430,18 @@ func remoteToolAudioTraceTail(trace []devicegw.DeviceTraceEvent, tap string) str
 	return "none"
 }
 
+// requireRemoteToolAudioCadenceSlot skips device-cadence deliveries other
+// than test45/captured_cadence unless YUI_AUDIO_STRESS=1. Each drains in real
+// time (18-22s), so pull requests keep that one as the representative
+// real-pace tool continuation over remote device audio and the nightly audio
+// stress workflow runs the rest.
+func requireRemoteToolAudioCadenceSlot(t *testing.T, caseName string, delivery remoteToolAudioDelivery) {
+	t.Helper()
+	if delivery.deviceCadence && (caseName != "test45" || delivery.name != "captured_cadence") {
+		requireRemoteToolAudioStress(t)
+	}
+}
+
 // remoteToolAudioDelivery is one provider/tool/device timing variant of the
 // tool-continuation topology.
 type remoteToolAudioDelivery struct {

@@ -6,13 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 
-	"io"
-	"os"
-	"path/filepath"
-	"strings"
-	"testing"
-	"time"
-
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
@@ -21,6 +14,12 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
 )
 
 func newCLIScheduledBoundaryAgent(t *testing.T, server transport.Dialer) *cli.AgentCLI {
@@ -305,15 +304,6 @@ func scheduledGroundedToolUpdateIndex(t *testing.T, updates []json.RawMessage) i
 		t.Fatalf("no-prompt scheduled route sent no tool update: %v", updates)
 	}
 	return groundedUpdateIndex
-}
-
-// scheduledSpeechSliceWAV returns a 0.3s voiced slice of the committed 24 kHz
-// speech corpus. The boundary server detects speech from non-zero PCM and the
-// assertions compare the streamed turns against whatever WAV was scheduled,
-// so the real-time-paced speech and its equal-duration silence stay short.
-func scheduledSpeechSliceWAV(t *testing.T) string {
-	t.Helper()
-	return writeVoicedWAVSlice(t, locateCorpusWAV(t, "truncated_24k"), shortVoicedSlice)
 }
 
 func equalDuration24kSilenceFixture(t *testing.T, speechPath string) string {
