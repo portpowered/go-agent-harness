@@ -23,12 +23,6 @@ const (
 	SessionAudioOutDeviceFlag = "audio-out-device"
 )
 
-// ErrSessionAudioOutputConflict is retained for source compatibility with
-// callers that classified the old output-selection conflict. File capture
-// and RTC device playback are now independent observations and are allowed
-// together, so new validation does not return this error.
-const ErrSessionAudioOutputConflict sessionAudioConflictError = "--audio-out and --audio-out-device (audio device output) cannot be used together"
-
 // SessionAudioDeviceConflictError describes a file/device selection conflict
 // while preserving both the direction-specific session error and the shared
 // audio selection-conflict identity.
