@@ -74,42 +74,12 @@ func (o *GlobalOrdering) assignMessageOrdering(ts *state.LoopState, m messages.M
 	return m
 }
 
-// tickInputKind identifies which participant outbox produced a tickInput.
-type tickInputKind int
-
-const (
-	tickInputModelDelta tickInputKind = iota
-	tickInputToolDelta
-	tickInputInteraction
-	tickInputUser
-)
-
-// tickInput is one item received from a participant outbox before it is
-// applied to loop state. Receiving and applying are separate so the engine can
-// block waiting for input without holding the loop-state lock.
-type tickInput struct {
-	kind  tickInputKind
-	delta messages.StreamMessage
-	event messages.InteractionEvent
-	user  messages.UserResponse
-}
-
 // ReadTick consumes one item from the participant outboxes (deltas preferred, then
 // full messages), assigns global ordering, and appends to ts.Inputs. When a delta
 // completes a message (MESSAGE.END) the assembled Message is reconstructed from
 // delta history and appended to the appropriate Inputs slice. Returns an error on
 // context cancellation or when a runner signals failure via an ERROR delta.
 func (o *GlobalOrdering) ReadTick(ctx context.Context, ts *state.LoopState) error {
-	input, err := o.receiveTickInput(ctx)
-	if err != nil {
-		return err
-	}
-	return o.applyTickInput(ts, input)
-}
-
-// receiveTickInput blocks until one participant outbox item is available,
-// preferring deltas over full messages. It does not read or mutate loop state.
-func (o *GlobalOrdering) receiveTickInput(ctx context.Context) (tickInput, error) {
 	modelDeltaOut := o.modelRunner.DeltaOutbox.Chan()
 
 	var toolDeltaOut <-chan messages.StreamMessage
@@ -130,56 +100,46 @@ func (o *GlobalOrdering) receiveTickInput(ctx context.Context) (tickInput, error
 	// Prefer deltas over full messages for ordering.
 	select {
 	case <-ctx.Done():
-		return tickInput{}, ctx.Err()
+		return ctx.Err()
 	case delta := <-modelDeltaOut:
-		return tickInput{kind: tickInputModelDelta, delta: delta}, nil
+		if o.logger != nil {
+			o.logger.Debug("engine: model delta", logging.Field{Key: "delta", Value: delta})
+		}
+		return o.consumeModelDelta(ts, delta)
 	case delta := <-toolDeltaOut:
-		return tickInput{kind: tickInputToolDelta, delta: delta}, nil
+		return o.consumeToolDelta(ts, delta)
 	case event := <-interactionOut:
-		return tickInput{kind: tickInputInteraction, event: event}, nil
+		ts.Inputs.InteractionEvents = append(ts.Inputs.InteractionEvents, event)
+		return nil
 	default:
 	}
 
 	// Then full messages.
 	select {
 	case <-ctx.Done():
-		return tickInput{}, ctx.Err()
+		return ctx.Err()
 	case delta := <-modelDeltaOut:
-		return tickInput{kind: tickInputModelDelta, delta: delta}, nil
-	case delta := <-toolDeltaOut:
-		return tickInput{kind: tickInputToolDelta, delta: delta}, nil
-	case event := <-interactionOut:
-		return tickInput{kind: tickInputInteraction, event: event}, nil
-	case userResp := <-userOut:
-		return tickInput{kind: tickInputUser, user: userResp}, nil
-	}
-}
-
-// applyTickInput assigns global ordering to a received item and appends it to
-// ts.Inputs. Callers must hold the loop-state lock.
-func (o *GlobalOrdering) applyTickInput(ts *state.LoopState, input tickInput) error {
-	switch input.kind {
-	case tickInputModelDelta:
 		if o.logger != nil {
-			o.logger.Debug("engine: model delta", logging.Field{Key: "delta", Value: input.delta})
+			o.logger.Debug("engine: model delta", logging.Field{Key: "delta", Value: delta})
 		}
-		return o.consumeModelDelta(ts, input.delta)
-	case tickInputToolDelta:
-		return o.consumeToolDelta(ts, input.delta)
-	case tickInputInteraction:
-		ts.Inputs.InteractionEvents = append(ts.Inputs.InteractionEvents, input.event)
+		return o.consumeModelDelta(ts, delta)
+	case delta := <-toolDeltaOut:
+		return o.consumeToolDelta(ts, delta)
+	case event := <-interactionOut:
+		ts.Inputs.InteractionEvents = append(ts.Inputs.InteractionEvents, event)
 		return nil
-	case tickInputUser:
-		if input.user.Error != nil {
-			return input.user.Error
+	case userResp := <-userOut:
+		if userResp.Error != nil {
+			return userResp.Error
 		}
-		msg := o.assignMessageOrdering(ts, input.user.Message, messages.User)
+		msg := o.assignMessageOrdering(ts, userResp.Message, messages.User)
 		if hasControlPlanePart(msg) {
 			ts.Inputs.UserControlPlaneMessage = append(ts.Inputs.UserControlPlaneMessage, msg)
 		} else {
 			ts.Inputs.UserOutputMessage = append(ts.Inputs.UserOutputMessage, msg)
 		}
 	}
+
 	return nil
 }
 

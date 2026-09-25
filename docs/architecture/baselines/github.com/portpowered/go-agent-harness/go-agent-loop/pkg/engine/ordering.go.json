@@ -17,6 +17,16 @@
       "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
       "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine",
       "file": "pkg/engine/ordering.go",
+      "symbol": "*GlobalOrdering.ReadTick",
+      "value": 17,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cyclomatic-complexity",
+      "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
+      "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine",
+      "file": "pkg/engine/ordering.go",
       "symbol": "*GlobalOrdering.consumeModelDelta",
       "value": 16,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",

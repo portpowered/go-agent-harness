@@ -21,9 +21,7 @@ type Engine struct {
 	// loopMu protects the mutable LoopState owned by the hot loop. Public
 	// snapshots take its read lock so history cannot be copied while a tick is
 	// appending or truncating the conversation buffers.
-	loopMu sync.RWMutex
-	// tickMu serializes whole ticks; Tick waits for input without loopMu.
-	tickMu    sync.Mutex
+	loopMu    sync.RWMutex
 	mode      ExecutionMode
 	logger    logging.Logger
 	tickCount int
@@ -237,16 +235,10 @@ func (e *Engine) runHotLoop(ctx context.Context, sendInitialInference bool) erro
 }
 
 func (e *Engine) Tick(ctx context.Context) error {
-	e.tickMu.Lock()
-	defer e.tickMu.Unlock()
-
-	input, err := e.ordering.receiveTickInput(ctx) // idle wait must not block readers
 	e.loopMu.Lock()
 	defer e.loopMu.Unlock()
 
-	if err == nil {
-		err = e.ordering.applyTickInput(e.state.LoopState, input)
-	}
+	err := e.ordering.ReadTick(ctx, e.state.LoopState)
 	if err != nil {
 		e.logError("engine: hot loop failed reading data buffer", err)
 		e.state.SetError(err)
