@@ -96,21 +96,126 @@ func testHoldToneSinkConfig() audio.HoldToneConfig {
 	}
 }
 
-func readUntilSignalOrDeadline(t *testing.T, source *devicegw.DeviceSource, deadline time.Time) bool {
+// holdToneTestTick is the hold-tone worker cadence used by these tests. The
+// worker runs on an injected deterministic clock, so the tick only sets the
+// virtual time step; no test waits for it in real time.
+const holdToneTestTick = 5 * time.Millisecond
+
+// holdToneHarness drives an RTCDeviceSink's hold-tone worker on a
+// deterministic clock and observes every PCM write on the virtual output.
+type holdToneHarness struct {
+	registry *devicegw.VirtualRegistry
+	source   *devicegw.DeviceSource
+	sink     *RTCDeviceSink
+	clock    *platformclock.Deterministic
+	inbound  *stepRTCInboundMedia
+	ctx      context.Context
+	cancel   context.CancelFunc
+	pumpDone chan error
+}
+
+// startHoldToneHarness starts Pump with one real provider frame queued and
+// consumes that frame from the device, so the gap clock starts from it.
+// config nil keeps the sink's production hold-tone configuration.
+func startHoldToneHarness(t *testing.T, config *audio.HoldToneConfig) *holdToneHarness {
 	t.Helper()
-	for time.Now().Before(deadline) {
-		frame := make([]int16, audio.FrameSize)
-		readCtx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-		err := source.ReadFrame(readCtx, frame)
-		cancel()
-		if err != nil {
-			continue
-		}
-		if hasNonZeroSamples(frame) {
+	backend := devicegw.DefaultVirtualBackendConfig()
+	backend.RecordPCM = true
+	registry, err := devicegw.NewVirtualRegistry(backend)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := devicegw.NewDeviceSource(registry, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { closeForTest(t, "source", source) })
+	sink, err := NewDefaultRTCDeviceSink(registry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { closeForTest(t, "sink", sink) })
+	if config != nil {
+		sink.SetHoldToneConfig(*config)
+	}
+	sink.SetHoldToneTick(holdToneTestTick)
+
+	h := &holdToneHarness{
+		registry: registry, source: source, sink: sink,
+		clock:    platformclock.NewDeterministic(time.Unix(1700000000, 0).UTC(), holdToneTestTick),
+		inbound:  newStepRTCInboundMedia(),
+		pumpDone: make(chan error, 1),
+	}
+	first := make([]int16, audio.FrameSize)
+	for i := range first {
+		first[i] = int16(i%50 + 1)
+	}
+	h.inbound.frames <- audio.PCMFrame{Samples: first}
+	h.ctx, h.cancel = context.WithCancel(WithTimingClock(context.Background(), h.clock))
+	t.Cleanup(h.cancel)
+	go func() { h.pumpDone <- sink.Pump(h.ctx, h.inbound) }()
+
+	got := make([]int16, audio.FrameSize)
+	readCtx, readCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer readCancel()
+	if err := source.ReadFrame(readCtx, got); err != nil {
+		t.Fatalf("read initial real frame: %v", err)
+	}
+	return h
+}
+
+// advance moves virtual time forward one worker tick at a time. Before each
+// step it waits for the worker to arm its next timer, which it does only
+// after the previous tick's write has completed, so every write caused by a
+// step is recorded when advance returns or calls until.
+func (h *holdToneHarness) advance(t *testing.T, total time.Duration, until func() bool) bool {
+	t.Helper()
+	for elapsed := time.Duration(0); elapsed < total; elapsed += holdToneTestTick {
+		h.awaitWorkerIdle(t)
+		h.clock.AdvanceBy(holdToneTestTick)
+		h.awaitWorkerIdle(t)
+		if until != nil && until() {
 			return true
 		}
 	}
 	return false
+}
+
+func (h *holdToneHarness) awaitWorkerIdle(t *testing.T) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := h.clock.WaitForTimers(ctx, 1); err != nil {
+		t.Fatalf("hold-tone worker did not arm its next tick: %v", err)
+	}
+}
+
+// writes returns the number of recorded PCM operations, for use as a
+// signalWrittenSince cursor.
+func (h *holdToneHarness) writes() int {
+	return len(h.registry.PCMObservations())
+}
+
+// signalWrittenSince reports whether any non-silent PCM was written to the
+// virtual output after cursor.
+func (h *holdToneHarness) signalWrittenSince(cursor int) bool {
+	observations := h.registry.PCMObservations()
+	for _, observation := range observations[min(cursor, len(observations)):] {
+		if observation.Operation == "write" && hasNonZeroSamples(observation.Samples) {
+			return true
+		}
+	}
+	return false
+}
+
+func (h *holdToneHarness) stop(t *testing.T) {
+	t.Helper()
+	h.cancel()
+	select {
+	case <-h.pumpDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Pump did not stop after cancellation")
+	}
 }
 
 // TestRTCDeviceSinkHoldToneFillsGapLongerThanThreshold pins the primary
@@ -118,110 +223,30 @@ func readUntilSignalOrDeadline(t *testing.T, source *devicegw.DeviceSource, dead
 // local device for longer than GapThreshold, the sink must produce audible,
 // non-silent PCM on that device, not true digital silence.
 func TestRTCDeviceSinkHoldToneFillsGapLongerThanThreshold(t *testing.T) {
-	registry, err := devicegw.NewVirtualRegistry(devicegw.DefaultVirtualBackendConfig())
-	if err != nil {
-		t.Fatal(err)
+	config := testHoldToneSinkConfig()
+	h := startHoldToneHarness(t, &config)
+	cursor := h.writes()
+	if !h.advance(t, config.GapThreshold+config.PulseInterval+config.PulseDuration, func() bool { return h.signalWrittenSince(cursor) }) {
+		t.Fatal("no hold-tone content written to the device after the gap exceeded GapThreshold")
 	}
-	source, err := devicegw.NewDeviceSource(registry, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer closeForTest(t, "source", source)
-	sink, err := NewDefaultRTCDeviceSink(registry)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer closeForTest(t, "sink", sink)
-	sink.SetHoldToneConfig(testHoldToneSinkConfig())
-	sink.SetHoldToneTick(5 * time.Millisecond)
-
-	inbound := newStepRTCInboundMedia()
-	first := make([]int16, audio.FrameSize)
-	for i := range first {
-		first[i] = int16(i%50 + 1)
-	}
-	inbound.frames <- audio.PCMFrame{Samples: first}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	pumpDone := make(chan error, 1)
-	go func() { pumpDone <- sink.Pump(ctx, inbound) }()
-
-	// Drain the initial real frame so the gap clock starts from it.
-	got := make([]int16, audio.FrameSize)
-	readCtx, readCancel := context.WithTimeout(context.Background(), time.Second)
-	err = source.ReadFrame(readCtx, got)
-	readCancel()
-	if err != nil {
-		t.Fatalf("read initial real frame: %v", err)
-	}
-
-	if !readUntilSignalOrDeadline(t, source, time.Now().Add(700*time.Millisecond)) {
-		t.Fatal("no hold-tone content observed on the device after the gap exceeded GapThreshold")
-	}
-
-	cancel()
-	select {
-	case <-pumpDone:
-	case <-time.After(time.Second):
-		t.Fatal("Pump did not stop after cancellation")
-	}
+	h.stop(t)
 }
 
 // TestRTCDeviceSinkHoldToneStaysSilentForShortGap pins the complementary
-// requirement: an ordinary short gap -- well under the production
-// GapThreshold -- must never produce filler content. This uses the sink's
-// default (production) configuration so the assertion reflects real
-// behavior, not a test-only threshold.
+// requirement: an ordinary gap shorter than the production GapThreshold must
+// never produce filler content. It uses the sink's default (production)
+// configuration and walks virtual time up to just below that threshold.
 func TestRTCDeviceSinkHoldToneStaysSilentForShortGap(t *testing.T) {
-	registry, err := devicegw.NewVirtualRegistry(devicegw.DefaultVirtualBackendConfig())
-	if err != nil {
-		t.Fatal(err)
+	h := startHoldToneHarness(t, nil)
+	cursor := h.writes()
+	gap := h.sink.holdToneConfig.GapThreshold - holdToneTestTick
+	if gap < time.Second {
+		t.Fatalf("production GapThreshold = %v, want a multi-second natural-pause allowance", h.sink.holdToneConfig.GapThreshold)
 	}
-	source, err := devicegw.NewDeviceSource(registry, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer closeForTest(t, "source", source)
-	sink, err := NewDefaultRTCDeviceSink(registry)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer closeForTest(t, "sink", sink)
-	// Tick quickly so a bug that ignores GapThreshold would show up fast;
-	// GapThreshold itself is left at its production default (2.5s).
-	sink.SetHoldToneTick(5 * time.Millisecond)
-
-	inbound := newStepRTCInboundMedia()
-	first := make([]int16, audio.FrameSize)
-	for i := range first {
-		first[i] = int16(i%50 + 1)
-	}
-	inbound.frames <- audio.PCMFrame{Samples: first}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	pumpDone := make(chan error, 1)
-	go func() { pumpDone <- sink.Pump(ctx, inbound) }()
-
-	got := make([]int16, audio.FrameSize)
-	readCtx, readCancel := context.WithTimeout(context.Background(), time.Second)
-	err = source.ReadFrame(readCtx, got)
-	readCancel()
-	if err != nil {
-		t.Fatalf("read initial real frame: %v", err)
-	}
-
-	if readUntilSignalOrDeadline(t, source, time.Now().Add(200*time.Millisecond)) {
+	if h.advance(t, gap, func() bool { return h.signalWrittenSince(cursor) }) {
 		t.Fatal("hold-tone content appeared before GapThreshold elapsed, want silence for an ordinary short gap")
 	}
-
-	cancel()
-	select {
-	case <-pumpDone:
-	case <-time.After(time.Second):
-		t.Fatal("Pump did not stop after cancellation")
-	}
+	h.stop(t)
 }
 
 // TestRTCDeviceSinkHoldToneRealAudioReachesDeviceUnmodifiedAfterGap proves
@@ -229,44 +254,11 @@ func TestRTCDeviceSinkHoldToneStaysSilentForShortGap(t *testing.T) {
 // audio resumes after a long gap, it must reach the device byte-for-byte,
 // not mixed, delayed, or overlaid with filler content.
 func TestRTCDeviceSinkHoldToneRealAudioReachesDeviceUnmodifiedAfterGap(t *testing.T) {
-	registry, err := devicegw.NewVirtualRegistry(devicegw.DefaultVirtualBackendConfig())
-	if err != nil {
-		t.Fatal(err)
-	}
-	source, err := devicegw.NewDeviceSource(registry, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer closeForTest(t, "source", source)
-	sink, err := NewDefaultRTCDeviceSink(registry)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer closeForTest(t, "sink", sink)
-	sink.SetHoldToneConfig(testHoldToneSinkConfig())
-	sink.SetHoldToneTick(5 * time.Millisecond)
-
-	inbound := newStepRTCInboundMedia()
-	first := make([]int16, audio.FrameSize)
-	for i := range first {
-		first[i] = int16(i%50 + 1)
-	}
-	inbound.frames <- audio.PCMFrame{Samples: first}
-
-	ctx := context.Background()
-	pumpDone := make(chan error, 1)
-	go func() { pumpDone <- sink.Pump(ctx, inbound) }()
-
-	got := make([]int16, audio.FrameSize)
-	readCtx, readCancel := context.WithTimeout(context.Background(), time.Second)
-	err = source.ReadFrame(readCtx, got)
-	readCancel()
-	if err != nil {
-		t.Fatalf("read initial real frame: %v", err)
-	}
-
-	if !readUntilSignalOrDeadline(t, source, time.Now().Add(700*time.Millisecond)) {
-		t.Fatal("no hold-tone content observed before resuming real audio")
+	config := testHoldToneSinkConfig()
+	h := startHoldToneHarness(t, &config)
+	cursor := h.writes()
+	if !h.advance(t, config.GapThreshold+config.PulseInterval+config.PulseDuration, func() bool { return h.signalWrittenSince(cursor) }) {
+		t.Fatal("no hold-tone content written before resuming real audio")
 	}
 
 	second := make([]int16, audio.FrameSize)
@@ -282,37 +274,33 @@ func TestRTCDeviceSinkHoldToneRealAudioReachesDeviceUnmodifiedAfterGap(t *testin
 	for i := range padding {
 		padding[i] = 777
 	}
-	inbound.frames <- audio.PCMFrame{Samples: second}
-	inbound.frames <- audio.PCMFrame{Samples: padding}
-	close(inbound.frames)
+	h.inbound.frames <- audio.PCMFrame{Samples: second}
+	h.inbound.frames <- audio.PCMFrame{Samples: padding}
+	close(h.inbound.frames)
 
 	// The device exposes a fixed-size read window over a running playback
-	// queue; the short fade-out tail ahead of "second" can shift it off a
-	// clean FrameSize boundary even though every sample still reaches the
-	// device in order. Accumulate reads and look for "second" as a
-	// contiguous subsequence instead of requiring frame alignment.
+	// queue; the short fade-out tail and any hold-tone chunk ahead of
+	// "second" can shift it off a clean FrameSize boundary even though every
+	// sample still reaches the device in order. Accumulate reads and look for
+	// "second" as a contiguous subsequence instead of requiring alignment.
 	var accumulated []int16
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) && !containsInt16Subsequence(accumulated, second) {
+	for !containsInt16Subsequence(accumulated, second) {
 		frame := make([]int16, audio.FrameSize)
-		readCtx, readCancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-		err := source.ReadFrame(readCtx, frame)
+		readCtx, readCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		err := h.source.ReadFrame(readCtx, frame)
 		readCancel()
 		if err != nil {
-			continue
+			t.Fatalf("the real frame written after the gap never reached the device unmodified: %v", err)
 		}
 		accumulated = append(accumulated, frame...)
 	}
-	if !containsInt16Subsequence(accumulated, second) {
-		t.Fatal("the real frame written after the gap never reached the device unmodified")
-	}
 
 	select {
-	case err := <-pumpDone:
+	case err := <-h.pumpDone:
 		if err != nil {
 			t.Fatalf("Pump returned an error after EOF: %v", err)
 		}
-	case <-time.After(time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatal("Pump did not stop after EOF")
 	}
 }
@@ -325,75 +313,24 @@ func TestRTCDeviceSinkHoldToneRealAudioReachesDeviceUnmodifiedAfterGap(t *testin
 // playback already does -- proving the cue can never delay or mask a
 // genuine interruption.
 func TestRTCDeviceSinkHoldToneStopsImmediatelyOnDiscardPlayback(t *testing.T) {
-	registry, err := devicegw.NewVirtualRegistry(devicegw.DefaultVirtualBackendConfig())
-	if err != nil {
-		t.Fatal(err)
-	}
-	source, err := devicegw.NewDeviceSource(registry, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer closeForTest(t, "source", source)
-	sink, err := NewDefaultRTCDeviceSink(registry)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer closeForTest(t, "sink", sink)
-	sink.SetHoldToneConfig(testHoldToneSinkConfig())
-	sink.SetHoldToneTick(5 * time.Millisecond)
-
-	inbound := newStepRTCInboundMedia()
-	first := make([]int16, audio.FrameSize)
-	for i := range first {
-		first[i] = int16(i%50 + 1)
-	}
-	inbound.frames <- audio.PCMFrame{Samples: first}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	pumpDone := make(chan error, 1)
-	go func() { pumpDone <- sink.Pump(ctx, inbound) }()
-
-	got := make([]int16, audio.FrameSize)
-	readCtx, readCancel := context.WithTimeout(context.Background(), time.Second)
-	err = source.ReadFrame(readCtx, got)
-	readCancel()
-	if err != nil {
-		t.Fatalf("read initial real frame: %v", err)
-	}
-
-	if !readUntilSignalOrDeadline(t, source, time.Now().Add(700*time.Millisecond)) {
-		t.Fatal("no hold-tone content observed before simulated barge-in")
+	config := testHoldToneSinkConfig()
+	h := startHoldToneHarness(t, &config)
+	cursor := h.writes()
+	if !h.advance(t, config.GapThreshold+config.PulseInterval+config.PulseDuration, func() bool { return h.signalWrittenSince(cursor) }) {
+		t.Fatal("no hold-tone content written before simulated barge-in")
 	}
 
 	// Simulate the exact barge-in path: a RESPONSE.CANCEL discards queued
-	// local playback and blocks the current playback generation.
-	discarded := sink.DiscardPlayback()
-	if discarded < 0 {
+	// local playback and blocks the current playback generation. The worker
+	// is idle between ticks here, so no write can straddle the discard.
+	if discarded := h.sink.DiscardPlayback(); discarded < 0 {
 		t.Fatalf("DiscardPlayback returned %d, want a non-negative discarded-sample count", discarded)
 	}
-
-	// Drain whatever was already physically queued before the discard took
-	// effect, then confirm nothing new (filler or otherwise) arrives.
-	drainDeadline := time.Now().Add(150 * time.Millisecond)
-	for time.Now().Before(drainDeadline) {
-		frame := make([]int16, audio.FrameSize)
-		readCtx, readCancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
-		readErr := source.ReadFrame(readCtx, frame)
-		readCancel()
-		if readErr != nil && !errors.Is(readErr, context.DeadlineExceeded) {
-			t.Fatalf("drain queued playback: %v", readErr)
-		}
-	}
-	settledDeadline := time.Now().Add(150 * time.Millisecond)
-	if readUntilSignalOrDeadline(t, source, settledDeadline) {
+	cursor = h.writes()
+	// Several pulse intervals of virtual time would each emit a pulse if the
+	// cue ignored the discard.
+	if h.advance(t, 4*(config.PulseInterval+config.PulseDuration), func() bool { return h.signalWrittenSince(cursor) }) {
 		t.Fatal("hold-tone content kept arriving after DiscardPlayback, want the cue to stop immediately like real playback")
 	}
-
-	cancel()
-	select {
-	case <-pumpDone:
-	case <-time.After(time.Second):
-		t.Fatal("Pump did not stop after cancellation")
-	}
+	h.stop(t)
 }
