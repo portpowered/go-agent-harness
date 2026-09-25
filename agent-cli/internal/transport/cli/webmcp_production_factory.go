@@ -10,7 +10,6 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/doctor"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/production"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/production/normalize"
 )
 
 // The production WebMCP composition lives in internal/webmcp/production.
@@ -143,12 +142,4 @@ func defaultWebMCPDoctorFactory(globalFlags *flags.GlobalFlags) WebMCPDoctorFact
 			return NewFileWebMCPSelectionStore(configDirForGlobalFlags(globalFlags))
 		}),
 	)
-}
-
-func productionDiscoveryInputs(browser config.BrowserConfig) discovery.ConnectionInputs {
-	return production.DiscoveryInputs(browser)
-}
-
-func productionDiscoveryError(err error) error {
-	return normalize.DiscoveryError(err)
 }
