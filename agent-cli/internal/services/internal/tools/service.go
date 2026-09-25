@@ -17,7 +17,9 @@ import (
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
-const displayCapabilityProbeTimeout = 3 * time.Second
+// DefaultDisplayProbeTimeout bounds the session display capability probe
+// when no WithDisplayProbeTimeout option overrides it.
+const DefaultDisplayProbeTimeout = 3 * time.Second
 
 // Service owns static tool registry creation and browser surface composition.
 // The browser factory is injected so transport code only adapts its existing
@@ -28,6 +30,23 @@ type Service struct {
 	displaySurface cliTools.DisplaySurface
 	displayProbe   cliTools.DisplayCapabilityProbe
 	runtimeService runtimeTools.Service
+	// displayProbeTimeout bounds resolveDisplayCapability; a probe that has
+	// not answered by then fails closed.
+	displayProbeTimeout time.Duration
+}
+
+// Option configures optional Service behavior.
+type Option func(*Service)
+
+// WithDisplayProbeTimeout bounds how long Resolve waits for the display
+// capability probe before failing closed. A non-positive timeout keeps
+// DefaultDisplayProbeTimeout.
+func WithDisplayProbeTimeout(timeout time.Duration) Option {
+	return func(service *Service) {
+		if timeout > 0 {
+			service.displayProbeTimeout = timeout
+		}
+	}
 }
 
 // runtimeDisplayExecutor adapts the CLI's display permission value contract
@@ -77,8 +96,14 @@ func adaptRuntimeDisplayExecutor(executor messages.ToolExecutor) messages.ToolEx
 
 var _ serviceTools.Service = (*Service)(nil)
 
-func New(staticExecutor messages.ToolExecutor, brokerFactory serviceTools.BrowserFactory, displaySurface cliTools.DisplaySurface, displayProbe cliTools.DisplayCapabilityProbe, runtimeService runtimeTools.Service) *Service {
-	return &Service{staticExecutor: staticExecutor, brokerFactory: brokerFactory, displaySurface: displaySurface, displayProbe: displayProbe, runtimeService: runtimeService}
+func New(staticExecutor messages.ToolExecutor, brokerFactory serviceTools.BrowserFactory, displaySurface cliTools.DisplaySurface, displayProbe cliTools.DisplayCapabilityProbe, runtimeService runtimeTools.Service, options ...Option) *Service {
+	service := &Service{staticExecutor: staticExecutor, brokerFactory: brokerFactory, displaySurface: displaySurface, displayProbe: displayProbe, runtimeService: runtimeService, displayProbeTimeout: DefaultDisplayProbeTimeout}
+	for _, option := range options {
+		if option != nil {
+			option(service)
+		}
+	}
+	return service
 }
 
 func (s *Service) Resolve(cfg *config.Config) (serviceTools.Capabilities, error) {
@@ -87,7 +112,7 @@ func (s *Service) Resolve(cfg *config.Config) (serviceTools.Capabilities, error)
 			return serviceTools.Capabilities{}, fmt.Errorf("resolve browser config: %w", err)
 		}
 	}
-	displayCapability := resolveDisplayCapability(cfg, s.displayProbe)
+	displayCapability := resolveDisplayCapability(cfg, s.displayProbe, s.displayProbeTimeout)
 	resolvedStatic, definitions, err := s.resolveStatic(cfg, displayCapability)
 	if err != nil {
 		return serviceTools.Capabilities{}, err
@@ -250,14 +275,14 @@ func (s *Service) resolveStatic(cfg *config.Config, display cliTools.DisplayCapa
 	return capability.Executor, capability.Definitions, nil
 }
 
-func resolveDisplayCapability(cfg *config.Config, probe cliTools.DisplayCapabilityProbe) cliTools.DisplayCapability {
+func resolveDisplayCapability(cfg *config.Config, probe cliTools.DisplayCapabilityProbe, timeout time.Duration) cliTools.DisplayCapability {
 	if cfg != nil && !cfg.Tools.ToolEnabled("show") && !cfg.Tools.ToolEnabled("mouse") {
 		return cliTools.UnavailableDisplayCapability("display-dependent tools are disabled by configuration")
 	}
 	if probe == nil {
 		return cliTools.UnavailableDisplayCapability("display capability probe is not configured")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), displayCapabilityProbeTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	type result struct {
 		capability cliTools.DisplayCapability

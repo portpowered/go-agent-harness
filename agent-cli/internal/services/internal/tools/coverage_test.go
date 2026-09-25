@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
@@ -90,30 +91,47 @@ func TestResolveDisplayCapabilityCoversConfigurationAndProbeOutcomes(t *testing.
 	if capability := resolveDisplayCapability(disabled, cliTools.DisplayCapabilityProbeFunc(func(context.Context) (cliTools.DisplayCapability, error) {
 		t.Fatal("disabled display tools invoked the probe")
 		return cliTools.DisplayCapability{}, nil
-	})); capability.Reason == "" || capability.State != cliTools.DisplayCapabilityUnavailable {
+	}), DefaultDisplayProbeTimeout); capability.Reason == "" || capability.State != cliTools.DisplayCapabilityUnavailable {
 		t.Fatalf("disabled display capability = %+v", capability)
 	}
 
-	if capability := resolveDisplayCapability(&config.Config{}, nil); capability.Reason == "" || capability.State != cliTools.DisplayCapabilityUnavailable {
+	if capability := resolveDisplayCapability(&config.Config{}, nil, DefaultDisplayProbeTimeout); capability.Reason == "" || capability.State != cliTools.DisplayCapabilityUnavailable {
 		t.Fatalf("missing probe capability = %+v", capability)
 	}
 	usable := resolveDisplayCapability(&config.Config{}, cliTools.DisplayCapabilityProbeFunc(func(context.Context) (cliTools.DisplayCapability, error) {
 		return cliTools.DisplayCapability{Available: true, DisplayCount: 2}, nil
-	}))
+	}), DefaultDisplayProbeTimeout)
 	if !usable.Usable() || usable.State != cliTools.DisplayCapabilityUsable {
 		t.Fatalf("usable display capability = %+v", usable)
 	}
 	failure := resolveDisplayCapability(&config.Config{}, cliTools.DisplayCapabilityProbeFunc(func(context.Context) (cliTools.DisplayCapability, error) {
 		return cliTools.DisplayCapability{}, errors.New("probe failed")
-	}))
+	}), DefaultDisplayProbeTimeout)
 	if failure.State != cliTools.DisplayCapabilityUnavailable || failure.Reason == "" {
 		t.Fatalf("failed display capability = %+v", failure)
 	}
 	unknown := resolveDisplayCapability(&config.Config{}, cliTools.DisplayCapabilityProbeFunc(func(context.Context) (cliTools.DisplayCapability, error) {
 		return cliTools.DisplayCapability{Reason: "not usable"}, nil
-	}))
+	}), DefaultDisplayProbeTimeout)
 	if unknown.State != cliTools.DisplayCapabilityUnavailable || unknown.Available || unknown.Reason != "not usable" {
 		t.Fatalf("unusable display capability = %+v", unknown)
+	}
+}
+
+func TestDisplayProbeTimeoutOptionBoundsAdmission(t *testing.T) {
+	if got := New(nil, nil, nil, nil, nil, WithDisplayProbeTimeout(0), nil).displayProbeTimeout; got != DefaultDisplayProbeTimeout {
+		t.Fatalf("non-positive timeout = %s, want default %s", got, DefaultDisplayProbeTimeout)
+	}
+	const timeout = 10 * time.Millisecond
+	release := make(chan struct{})
+	t.Cleanup(func() { close(release) })
+	service := New(nil, nil, nil, cliTools.DisplayCapabilityProbeFunc(func(context.Context) (cliTools.DisplayCapability, error) {
+		<-release
+		return cliTools.UsableDisplayCapability(1), nil
+	}), nil, WithDisplayProbeTimeout(timeout))
+	got := resolveDisplayCapability(&config.Config{}, service.displayProbe, service.displayProbeTimeout)
+	if got.Usable() || got.Reason != "display capability probe timed out" {
+		t.Fatalf("stalled probe capability = %+v, want timed-out fail-closed result", got)
 	}
 }
 

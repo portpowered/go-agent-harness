@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
-
+	servicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/sight"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -230,14 +230,18 @@ func TestSessionDisplayAdmissionProbeIsBoundedAndFailsClosed(t *testing.T) {
 		return tools.UnavailableDisplayCapability("released after timeout"), nil
 	})
 	t.Cleanup(func() { close(release) })
-	factory := NewSessionToolCapabilitiesFactoryWithDisplayProbe(nil, nil, probe)
+	const probeTimeout = 20 * time.Millisecond
+	factory := NewSessionToolCapabilitiesFactoryWithDisplayProbe(nil, nil, probe, servicewire.WithDisplayProbeTimeout(probeTimeout))
 	startedAt := time.Now()
 	capabilities, err := factory(displayAdmissionConfig(t))
 	if err != nil {
 		t.Fatalf("factory: %v", err)
 	}
-	if elapsed := time.Since(startedAt); elapsed >= 2*sessionDisplayCapabilityProbeTimeout {
-		t.Fatalf("bounded probe took %s", elapsed)
+	// The probe never answers on its own, so returning at all proves the
+	// bound; the generous ceiling only guards against a regression that
+	// ignores the configured timeout.
+	if elapsed := time.Since(startedAt); elapsed >= 50*probeTimeout {
+		t.Fatalf("bounded probe took %s with a %s timeout", elapsed, probeTimeout)
 	}
 	select {
 	case <-started:
