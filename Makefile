@@ -373,7 +373,7 @@ test-module:
 test-tools: ## Run tests for standalone repository helper modules.
 	@set -euo pipefail; \
 	python3 -B -m unittest discover -s scripts -p test_check_wire.py; \
-	python3 -B -m unittest scripts.test_check_ci_test_partition; \
+	python3 -B -m unittest scripts.test_check_ci_test_partition scripts.test_ci_await_jobs; \
 	python3 -B -m unittest factory.scripts.tests.test_golangci_lint_working_tree; \
 	echo "==> test tools/analyzergate"; \
 	(cd tools/analyzergate && GOWORK=off $(GO) test ./... -timeout "$(GO_TEST_TIMEOUT)"); \

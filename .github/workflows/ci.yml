@@ -305,28 +305,26 @@ jobs:
           gocache: ${{ steps.go.outputs.gocache }}
           gomodcache: ${{ steps.go.outputs.gomodcache }}
 
-  # The Linux package corpus has one owner: coverage. agent-cli is isolated
-  # because its deterministic integration and replay tests are the long pole;
-  # the other modules and embedding consumer run concurrently on one runner.
-  # The agent-cli corpus is further split into two disjoint matrix jobs: every
-  # package except test/integration, and test/integration. The integration
-  # job compiles its coverage-instrumented test binary and helper binaries
-  # once and runs AGENT_CLI_INTEGRATION_SHARDS duration-balanced shards of its
-  # top-level tests concurrently: the shards mostly wait on paced audio, so
-  # one runner overlaps them instead of paying setup and a compile per shard.
-  # The coverage gate unions all profiles.
-  coverage-agent-cli:
-    name: CI (coverage agent-cli ${{ matrix.shard }})
+  # The Linux package corpus has one owner: coverage, as three disjoint jobs
+  # that run concurrently. agent-cli is isolated because its deterministic
+  # integration and replay tests are the long pole, and split into every
+  # package except test/integration (coverage agent-cli unit) and
+  # test/integration (coverage); the other modules and the embedding consumer
+  # share one runner (coverage libraries).
+  #
+  # The integration job compiles its coverage-instrumented test binary once
+  # (building the helper binaries alongside) and runs
+  # AGENT_CLI_INTEGRATION_SHARDS duration-balanced shards of its top-level
+  # tests concurrently: the shards mostly wait on paced audio, so one runner
+  # overlaps them instead of paying setup and a compile per shard.
+  coverage-agent-cli-unit:
+    name: CI (coverage agent-cli unit)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     # actions: write lets go-cache-save delete superseded main caches.
     permissions:
       contents: read
       actions: write
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [unit, integration]
 
     steps:
       - name: Check out repository
@@ -338,7 +336,7 @@ jobs:
             /*
             !/docs/temp/
 
-      # Each shard keeps its own build cache: the unit and integration test
+      # Each coverage job keeps its own build cache: the agent-cli test
       # binaries are built with coverage instrumentation, which setup-go's
       # shared cache (written once by whichever job finishes first) never
       # holds.
@@ -346,16 +344,16 @@ jobs:
         id: go
         uses: ./.github/actions/go-cache
         with:
-          cache-name: coverage-agent-cli-${{ matrix.shard }}
+          cache-name: coverage-agent-cli-unit
 
-      - name: Run hermetic agent-cli tests with coverage
-        run: make coverage-ci-agent-cli AGENT_CLI_COVERAGE_SHARD=${{ matrix.shard }}
+      - name: Run hermetic agent-cli unit tests with coverage
+        run: make coverage-ci-agent-cli AGENT_CLI_COVERAGE_SHARD=unit
 
       - name: Upload agent-cli coverage profile
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-agent-cli-${{ matrix.shard }}
-          path: coverage/agent-cli*.out
+          name: coverage-agent-cli-unit
+          path: coverage/agent-cli.out
           if-no-files-found: error
           retention-days: 1
 
@@ -415,31 +413,23 @@ jobs:
           gocache: ${{ steps.go.outputs.gocache }}
           gomodcache: ${{ steps.go.outputs.gomodcache }}
 
-  # Preserve the existing required-check name while aggregating the two
-  # disjoint profile shards. `always()` ensures a failed shard reports this
-  # check as failed rather than leaving it skipped.
+  # The required "CI (coverage)" check: the agent-cli integration shards, then
+  # the coverage gate over every profile. The integration job is the longest
+  # coverage job, so running the gate at its end (after waiting for the two
+  # sibling coverage jobs, which fails if either failed) replaces a separate
+  # `needs:` gate job that paid a runner start, checkout and Go setup after
+  # the slowest shard. The gate does not run if the integration tests fail.
   coverage:
     name: CI (coverage)
-    needs:
-      - coverage-agent-cli
-      - coverage-libraries
-    if: always()
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    # actions: write lets go-cache-save delete superseded main caches.
+    timeout-minutes: 30
+    # actions: write lets go-cache-save delete superseded main caches (and
+    # lets ci-await-jobs read the sibling jobs).
     permissions:
       contents: read
       actions: write
 
     steps:
-      - name: Verify coverage shards completed
-        env:
-          AGENT_CLI_RESULT: ${{ needs.coverage-agent-cli.result }}
-          LIBRARIES_RESULT: ${{ needs.coverage-libraries.result }}
-        run: |
-          test "$AGENT_CLI_RESULT" = success
-          test "$LIBRARIES_RESULT" = success
-
       - name: Check out repository
         uses: actions/checkout@v4
         with:
@@ -453,7 +443,15 @@ jobs:
         id: go
         uses: ./.github/actions/go-cache
         with:
-          cache-name: coverage-gate
+          cache-name: coverage-agent-cli-integration
+
+      - name: Run hermetic agent-cli integration tests with coverage
+        run: make coverage-ci-agent-cli AGENT_CLI_COVERAGE_SHARD=integration
+
+      - name: Wait for the other coverage jobs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/ci-await-jobs.sh "CI (coverage agent-cli unit)" "CI (coverage libraries)"
 
       - name: Download coverage profiles
         uses: actions/download-artifact@v4
@@ -466,6 +464,7 @@ jobs:
         run: make coverage-gate
 
       - name: Save Go cache
+        if: always()
         uses: ./.github/actions/go-cache-save
         with:
           primary-key: ${{ steps.go.outputs.primary-key }}
