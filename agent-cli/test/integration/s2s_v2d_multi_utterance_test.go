@@ -47,7 +47,11 @@ func runIntegrationTests(m *testing.M) int {
 	if err != nil {
 		panic(err)
 	}
-	defer func() { _ = os.RemoveAll(dir) }()
+	defer func() {
+		if err := os.RemoveAll(dir); err != nil {
+			fmt.Fprintf(os.Stderr, "remove integration binary directory: %v\n", err)
+		}
+	}()
 
 	agentBinaryPath = filepath.Join(dir, "agent")
 	audioDeviceServerBinaryPath = filepath.Join(dir, "audio-device-server")
