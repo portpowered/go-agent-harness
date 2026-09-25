@@ -20,6 +20,12 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
+const (
+	bundleAlphaID     = "alpha"
+	bundleAlphaOutput = "alpha:output"
+	bundleAlphaSent   = "alpha:sent"
+)
+
 func roomReplayAudioTestService() roomreplay.Service {
 	return NewService(fixtureCaptureInspector{})
 }
@@ -51,24 +57,24 @@ func assertAudioBundleMetadata(t *testing.T, got roomreplay.RoomReplayAudioBundl
 	if got.Tolerances.StreamConfig != roomanalysis.DefaultPCM16AnalysisConfig() || got.Tolerances.RoomConfig != roomanalysis.DefaultPCM16RoomAnalysisConfig() {
 		t.Fatalf("default tolerance profile = %+v, want suite defaults", got.Tolerances)
 	}
-	if len(got.Participants) != 2 || got.Participants[0].ID != "alpha" || got.Participants[1].ID != "beta" {
+	if len(got.Participants) != 2 || got.Participants[0].ID != bundleAlphaID || got.Participants[1].ID != "beta" {
 		t.Fatalf("participants = %+v, want stable manifest identities", got.Participants)
 	}
 }
 
 func assertAlphaAudioStreams(t *testing.T, got roomreplay.RoomReplayAudioBundle, want map[string][]int16) {
 	t.Helper()
-	alpha, ok := got.Participant("alpha")
+	alpha, ok := got.Participant(bundleAlphaID)
 	if !ok {
 		t.Fatal("alpha participant missing")
 	}
-	if alpha.WAV.StreamID != "alpha:output" || alpha.Sent.StreamID != "alpha:sent" || alpha.Received.StreamID != "alpha:received" {
+	if alpha.WAV.StreamID != bundleAlphaOutput || alpha.Sent.StreamID != bundleAlphaSent || alpha.Received.StreamID != "alpha:received" {
 		t.Fatalf("alpha stream identities = %q/%q/%q", alpha.WAV.StreamID, alpha.Sent.StreamID, alpha.Received.StreamID)
 	}
 	if !bytes.Equal(alpha.WAV.PCM, roomReplayAudioPCM16Bytes(want["alpha:wav"])) || len(alpha.WAV.Deltas) != 2 || alpha.WAV.SampleCount != len(want["alpha:wav"]) {
 		t.Fatalf("alpha WAV evidence = bytes:%v deltas:%d samples:%d", alpha.WAV.PCM, len(alpha.WAV.Deltas), alpha.WAV.SampleCount)
 	}
-	if !bytes.Equal(alpha.Sent.PCM, roomReplayAudioPCM16Bytes(want["alpha:sent"])) || !bytes.Equal(alpha.Received.PCM, roomReplayAudioPCM16Bytes(want["alpha:received"])) {
+	if !bytes.Equal(alpha.Sent.PCM, roomReplayAudioPCM16Bytes(want[bundleAlphaSent])) || !bytes.Equal(alpha.Received.PCM, roomReplayAudioPCM16Bytes(want["alpha:received"])) {
 		t.Fatalf("alpha sent/received PCM was not resolved exactly")
 	}
 	if len(alpha.Events) != 2 || len(alpha.Diagnostics) != 1 {
@@ -84,11 +90,11 @@ func assertAudioBundleRoomEvidence(t *testing.T, got roomreplay.RoomReplayAudioB
 	if len(got.Plan.Timeline) != 2 || got.Plan.Timeline[0].OffsetMS != 0 || got.Plan.Timeline[1].ParticipantID != "beta" {
 		t.Fatalf("timeline = %+v, want ordered room timeline", got.Plan.Timeline)
 	}
-	if len(got.Overlaps) != 1 || got.Overlaps[0].A.SentStreamID != "alpha:sent" || got.Overlaps[0].B.ReceivedStreamID != "beta:received" {
+	if len(got.Overlaps) != 1 || got.Overlaps[0].A.SentStreamID != bundleAlphaSent || got.Overlaps[0].B.ReceivedStreamID != "beta:received" {
 		t.Fatalf("overlap annotations = %+v, want independent sent/received identities", got.Overlaps)
 	}
 	input := got.AnalysisInput()
-	if len(input.Streams) != 7 || len(input.Overlaps) != 1 || input.Streams[0].StreamID != "alpha:output" {
+	if len(input.Streams) != 7 || len(input.Overlaps) != 1 || input.Streams[0].StreamID != bundleAlphaOutput {
 		t.Fatalf("analysis input = streams:%d overlaps:%d first:%q, want all resolved streams", len(input.Streams), len(input.Overlaps), input.Streams[0].StreamID)
 	}
 }
@@ -96,7 +102,7 @@ func assertAudioBundleRoomEvidence(t *testing.T, got roomreplay.RoomReplayAudioB
 func TestLoadRoomReplayAudioBundleRejectsMissingHashTimelineAndFormatEvidence(t *testing.T) {
 	t.Run("missing artifact", func(t *testing.T) {
 		bundle, _, _ := writeRoomReplayAudioBundle(t)
-		if err := os.Remove(filepath.Join(bundle, "participants", "alpha", "sent.pcm")); err != nil {
+		if err := os.Remove(filepath.Join(bundle, "participants", bundleAlphaID, "sent.pcm")); err != nil {
 			t.Fatalf("remove sent PCM: %v", err)
 		}
 		_, err := roomReplayAudioTestService().LoadAudioBundle(bundle)
@@ -153,7 +159,7 @@ func TestLoadRoomReplayAudioBundleRejectsMissingHashTimelineAndFormatEvidence(t 
 		bundle, manifest, _ := writeRoomReplayAudioBundle(t)
 		participants := manifest["participants"].(map[string]any)
 		betaStreams := participants["beta"].(map[string]any)["streams"].(map[string]any)
-		betaStreams["sent"].(map[string]any)["stream_id"] = "alpha:sent"
+		betaStreams["sent"].(map[string]any)["stream_id"] = bundleAlphaSent
 		writeRoomReplayAudioManifest(t, bundle, manifest)
 		_, err := roomReplayAudioTestService().LoadAudioBundle(bundle)
 		assertRoomReplayAudioError(t, err, roomreplay.ErrInvalidRoomReplayBundle, "streams.alpha:sent")
@@ -203,7 +209,7 @@ func TestLoadRoomReplayAudioBundleRejectsEveryDeltaReconstructionMutation(t *tes
 func assertDeltaMutationRejected(t *testing.T, name string, drop bool, mutate func([]map[string]any)) {
 	t.Helper()
 	bundle, manifest, _ := writeRoomReplayAudioBundle(t)
-	path := filepath.Join(bundle, "participants", "alpha", "deltas.jsonl")
+	path := filepath.Join(bundle, "participants", bundleAlphaID, "deltas.jsonl")
 	lines := []map[string]any{
 		{"type": "AUDIO.DELTA", "sequence": 0, "delta_id": "alpha-delta-0", "delta": base64.StdEncoding.EncodeToString(roomReplayAudioPCM16Bytes([]int16{1000, 2000}))},
 		{"type": "AUDIO.DELTA", "sequence": 1, "delta_id": "alpha-delta-1", "delta": base64.StdEncoding.EncodeToString(roomReplayAudioPCM16Bytes([]int16{3000, 4000}))},
@@ -217,7 +223,7 @@ func assertDeltaMutationRejected(t *testing.T, name string, drop bool, mutate fu
 	if err := os.WriteFile(path, data, 0o600); err != nil {
 		t.Fatalf("rewrite deltas: %v", err)
 	}
-	updateRoomReplayParticipantArtifact(t, manifest, "alpha", "deltas", data)
+	updateRoomReplayParticipantArtifact(t, manifest, bundleAlphaID, "deltas", data)
 	writeRoomReplayAudioManifest(t, bundle, manifest)
 
 	_, err := roomReplayAudioTestService().LoadAudioBundle(bundle)
@@ -228,7 +234,7 @@ func assertDeltaMutationRejected(t *testing.T, name string, drop bool, mutate fu
 	if !errors.As(err, &reconstruction) {
 		t.Fatalf("%s error = %v, want first-divergence details", name, err)
 	}
-	if reconstruction.ParticipantID != "alpha" || reconstruction.StreamID != "alpha:output" || reconstruction.DeltaID == "" {
+	if reconstruction.ParticipantID != bundleAlphaID || reconstruction.StreamID != bundleAlphaOutput || reconstruction.DeltaID == "" {
 		t.Fatalf("reconstruction = %+v, want stable participant/stream/delta identity", reconstruction)
 	}
 	if !strings.Contains(err.Error(), "first divergent byte") || !strings.Contains(err.Error(), "expected") || !strings.Contains(err.Error(), "reconstructed") {
@@ -238,7 +244,7 @@ func assertDeltaMutationRejected(t *testing.T, name string, drop bool, mutate fu
 
 func TestLoadRoomReplayAudioBundleRejectsDuplicateDeltaIdentity(t *testing.T) {
 	bundle, manifest, _ := writeRoomReplayAudioBundle(t)
-	path := filepath.Join(bundle, "participants", "alpha", "deltas.jsonl")
+	path := filepath.Join(bundle, "participants", bundleAlphaID, "deltas.jsonl")
 	data := jsonLines(t, []map[string]any{
 		{"type": "AUDIO.DELTA", "sequence": 0, "delta_id": "same-delta", "delta": base64.StdEncoding.EncodeToString(roomReplayAudioPCM16Bytes([]int16{1000, 2000}))},
 		{"type": "AUDIO.DELTA", "sequence": 1, "delta_id": "same-delta", "delta": base64.StdEncoding.EncodeToString(roomReplayAudioPCM16Bytes([]int16{3000, 4000}))},
@@ -246,7 +252,7 @@ func TestLoadRoomReplayAudioBundleRejectsDuplicateDeltaIdentity(t *testing.T) {
 	if err := os.WriteFile(path, data, 0o600); err != nil {
 		t.Fatalf("rewrite duplicate deltas: %v", err)
 	}
-	updateRoomReplayParticipantArtifact(t, manifest, "alpha", "deltas", data)
+	updateRoomReplayParticipantArtifact(t, manifest, bundleAlphaID, "deltas", data)
 	writeRoomReplayAudioManifest(t, bundle, manifest)
 
 	_, err := roomReplayAudioTestService().LoadAudioBundle(bundle)
@@ -256,7 +262,7 @@ func TestLoadRoomReplayAudioBundleRejectsDuplicateDeltaIdentity(t *testing.T) {
 func TestLoadRoomReplayAudioBundleEnforcesAnnotationIdentityAndToleranceBounds(t *testing.T) {
 	t.Run("unknown overlap participant", func(t *testing.T) {
 		bundle, manifest, _ := writeRoomReplayAudioBundle(t)
-		manifest["annotations"] = []any{map[string]any{"kind": "overlap", "id": "bad-overlap", "start_ms": 10, "end_ms": 20, "participants": []any{"alpha", "missing"}}}
+		manifest["annotations"] = []any{map[string]any{"kind": "overlap", "id": "bad-overlap", "start_ms": 10, "end_ms": 20, "participants": []any{bundleAlphaID, "missing"}}}
 		writeRoomReplayAudioManifest(t, bundle, manifest)
 		_, err := roomReplayAudioTestService().LoadAudioBundle(bundle)
 		assertRoomReplayAudioError(t, err, roomreplay.ErrInvalidRoomReplayBundle, "bad-overlap")
@@ -295,7 +301,7 @@ func TestLoadRoomReplayAudioBundleEnforcesAnnotationIdentityAndToleranceBounds(t
 		// four-sample payload (about 167us at 24kHz) exceed the room by 67us.
 		manifest["timing"].(map[string]any)["ended_at"] = clock.Add(100 * time.Microsecond).Format(time.RFC3339Nano)
 		participants := manifest["participants"].(map[string]any)
-		for _, participantID := range []string{"alpha", "beta"} {
+		for _, participantID := range []string{bundleAlphaID, "beta"} {
 			streams := participants[participantID].(map[string]any)["streams"].(map[string]any)
 			streams["wav"].(map[string]any)["timeline_end_ms"] = "100us"
 		}
@@ -322,7 +328,7 @@ func assertRoomReplayAudioError(t *testing.T, err, target error, context string)
 func writeRoomReplayAudioBundle(t *testing.T) (string, map[string]any, map[string][]int16) {
 	t.Helper()
 	bundle := filepath.Join(t.TempDir(), "bundle")
-	if err := os.MkdirAll(filepath.Join(bundle, "participants", "alpha"), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Join(bundle, "participants", bundleAlphaID), 0o700); err != nil {
 		t.Fatalf("create alpha directory: %v", err)
 	}
 	if err := os.MkdirAll(filepath.Join(bundle, "participants", "beta"), 0o700); err != nil {
@@ -330,7 +336,7 @@ func writeRoomReplayAudioBundle(t *testing.T) (string, map[string]any, map[strin
 	}
 	want := map[string][]int16{
 		"alpha:wav":      {1000, 2000, 3000, 4000},
-		"alpha:sent":     {1100, 2100, 3100, 4100},
+		bundleAlphaSent:  {1100, 2100, 3100, 4100},
 		"alpha:received": {1200, 2200, 3200, 4200},
 		"beta:wav":       {1400, 2400, 3400, 4400},
 		"beta:sent":      {1500, 2500, 3500, 4500},
@@ -338,7 +344,7 @@ func writeRoomReplayAudioBundle(t *testing.T) (string, map[string]any, map[strin
 		"room:mix":       {1700, 2700, 3700, 4700},
 	}
 	paths := make(map[string][]byte)
-	for _, participantID := range []string{"alpha", "beta"} {
+	for _, participantID := range []string{bundleAlphaID, "beta"} {
 		wav := mustRoomReplayWAV(t, want[participantID+":wav"])
 		paths["participants/"+participantID+"/agent.wav"] = wav
 		paths["participants/"+participantID+"/sent.pcm"] = roomReplayAudioPCM16Bytes(want[participantID+":sent"])
@@ -374,10 +380,10 @@ func writeRoomReplayAudioBundle(t *testing.T) (string, map[string]any, map[strin
 		"pcm_format":   map[string]any{"sample_rate_hz": 24000, "channels": 1, "sample_width_bits": 16, "byte_order": "little", "encoding": "signed_pcm16"},
 		"participants": map[string]any{},
 		"artifacts":    map[string]any{"room_timeline": roomReplayAudioArtifactValue(paths["room-timeline.jsonl"], "room-timeline.jsonl"), "room_mix": roomReplayAudioArtifactValue(paths["room-mix.wav"], "room-mix.wav")},
-		"annotations":  map[string]any{"overlaps": []any{map[string]any{"kind": "overlap", "id": "overlap-1", "start_ms": 10, "end_ms": 90, "participants": []any{"alpha", "beta"}}}},
+		"annotations":  map[string]any{"overlaps": []any{map[string]any{"kind": "overlap", "id": "overlap-1", "start_ms": 10, "end_ms": 90, "participants": []any{bundleAlphaID, "beta"}}}},
 	}
 	participants := manifest["participants"].(map[string]any)
-	for _, participantID := range []string{"alpha", "beta"} {
+	for _, participantID := range []string{bundleAlphaID, "beta"} {
 		artifactValues := map[string]any{}
 		for role, name := range map[string]string{
 			roomreplay.ArtifactRoleWAV:         "participants/" + participantID + "/agent.wav",
@@ -390,8 +396,8 @@ func writeRoomReplayAudioBundle(t *testing.T) (string, map[string]any, map[strin
 			artifactValues[role] = roomReplayAudioArtifactValue(paths[name], name)
 		}
 		participantObject := map[string]any{"id": participantID, "kind": "human", "artifacts": artifactValues}
-		if participantID == "alpha" {
-			participantObject["streams"] = map[string]any{"wav": map[string]any{"stream_id": "alpha:output", "timeline_start_ms": 0, "timeline_end_ms": 100}, "sent": map[string]any{"stream_id": "alpha:sent"}, "received": map[string]any{"stream_id": "alpha:received"}}
+		if participantID == bundleAlphaID {
+			participantObject["streams"] = map[string]any{"wav": map[string]any{"stream_id": bundleAlphaOutput, "timeline_start_ms": 0, "timeline_end_ms": 100}, "sent": map[string]any{"stream_id": bundleAlphaSent}, "received": map[string]any{"stream_id": "alpha:received"}}
 		} else {
 			participantObject["streams"] = map[string]any{"wav": map[string]any{"stream_id": "beta:output", "timeline_start_ms": 0, "timeline_end_ms": 100}, "sent": map[string]any{"stream_id": "beta:sent"}, "received": map[string]any{"stream_id": "beta:received"}}
 		}

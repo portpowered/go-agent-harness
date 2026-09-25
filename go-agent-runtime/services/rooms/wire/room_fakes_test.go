@@ -13,11 +13,15 @@ import (
 )
 
 const (
-	contractWait     = 5 * time.Second
-	fakeProvider     = "fixture"
-	fakeModel        = "fixture-model"
-	humanCustomerID  = "customer"
-	agentID          = "agent"
+	contractWait    = 5 * time.Second
+	fakeProvider    = "fixture"
+	fakeModel       = "fixture-model"
+	humanCustomerID = "customer"
+	agentID         = "agent"
+	alphaID         = "alpha"
+	betaID          = "beta"
+	gammaID         = "gamma"
+	bravoID         = "bravo"
 )
 
 // contractLive is a public session.LiveService fake. Each participant gets

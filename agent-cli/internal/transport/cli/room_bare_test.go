@@ -22,7 +22,10 @@ import (
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
 
-const defaultRoomCredentialEnv = "AGENT_MODEL__OPENAI__API_KEY"
+const (
+	defaultRoomCredentialEnv = "AGENT_MODEL__OPENAI__API_KEY"
+	roomTestAliceID          = "alice"
+)
 
 func TestRoomRunCommandBareInvocationPassesResolvedPlanToRunner(t *testing.T) {
 	t.Setenv(defaultRoomCredentialEnv, "fake-openai-key")

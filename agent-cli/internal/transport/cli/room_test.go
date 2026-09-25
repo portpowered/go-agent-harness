@@ -540,11 +540,11 @@ func TestRoomRunCommandSurfacesAllParticipantsFailedAsNonZeroExit(t *testing.T) 
 		return rooms.RoomResult{
 				TerminationReason: rooms.RoomTerminationStopped,
 				Participants: map[string]rooms.RoomParticipantResult{
-					"alice": {ID: "alice", ParticipantID: "alice", TerminationReason: rooms.ParticipantTerminationError, Error: "provider dial failed"},
-					"bob":   {ID: "bob", ParticipantID: "bob", TerminationReason: rooms.ParticipantTerminationError, Error: "provider dial failed"},
+					roomTestAliceID: {ID: roomTestAliceID, ParticipantID: roomTestAliceID, TerminationReason: rooms.ParticipantTerminationError, Error: "provider dial failed"},
+					"bob":           {ID: "bob", ParticipantID: "bob", TerminationReason: rooms.ParticipantTerminationError, Error: "provider dial failed"},
 				},
 			}, &rooms.AllParticipantsFailedError{Participants: []rooms.ParticipantFailureDetail{
-				{ParticipantID: "alice", Error: "provider dial failed"}, {ParticipantID: "bob", Error: "provider dial failed"},
+				{ParticipantID: roomTestAliceID, Error: "provider dial failed"}, {ParticipantID: "bob", Error: "provider dial failed"},
 			}}
 	})
 	var output bytes.Buffer
@@ -555,10 +555,10 @@ func TestRoomRunCommandSurfacesAllParticipantsFailedAsNonZeroExit(t *testing.T) 
 	if !errors.Is(err, rooms.ErrAllParticipantsFailed) {
 		t.Fatalf("room run with every participant failing returned %v; want a named non-zero failure; output=%q", err, output.String())
 	}
-	if !strings.Contains(output.String(), `participant "alice": error`) {
+	if !strings.Contains(output.String(), `participant roomTestAliceID: error`) {
 		t.Fatalf("output = %q, want the failed participant results", output.String())
 	}
-	for _, want := range []string{"alice", "bob", "all 2 participant"} {
+	for _, want := range []string{roomTestAliceID, "bob", "all 2 participant"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("error = %q, want it to name %q", err, want)
 		}
