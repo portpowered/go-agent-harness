@@ -238,7 +238,7 @@ jobs:
   # the other modules and embedding consumer run concurrently on one runner.
   # The agent-cli corpus is further split into disjoint matrix shards: every
   # package except test/integration, plus AGENT_CLI_INTEGRATION_SHARDS
-  # round-robin shards of test/integration's top-level tests. The coverage
+  # duration-balanced shards of test/integration's top-level tests. The coverage
   # gate unions all shard profiles.
   coverage-agent-cli:
     name: CI (coverage agent-cli ${{ matrix.shard }})
@@ -247,7 +247,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [unit, integration-1, integration-2, integration-3, integration-4]
+        shard: [unit, integration-1, integration-2, integration-3, integration-4, integration-5]
 
     steps:
       - name: Check out repository

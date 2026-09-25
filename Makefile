@@ -12,7 +12,12 @@ GO_TEST_TIMEOUT ?= 300s
 AGENT_CLI_INTEGRATION_TIMEOUT ?= 480s
 # agent-cli/test/integration is the slowest package; it is compiled once and
 # its top-level tests run as disjoint shards (scripts/go-test-shards.sh).
-AGENT_CLI_INTEGRATION_SHARDS ?= 4
+AGENT_CLI_INTEGRATION_SHARDS ?= 5
+# Recorded test durations that balance the shards (path relative to agent-cli).
+AGENT_CLI_INTEGRATION_WEIGHTS := test/integration/testdata/shard-weights.txt
+# Local runs of every shard execute at most this many at once so timing-bound
+# tests stay reliable on a loaded workstation.
+AGENT_CLI_INTEGRATION_JOBS ?= 3
 # Which part of the agent-cli coverage corpus to run: all, unit (every package
 # except test/integration), or integration-K for shard K of the integration
 # package. CI runs each part as a separate matrix job.
@@ -65,7 +70,7 @@ define agent_cli_split_tests
 	packages="$$($(2) $(GO) list $(1) ./... | grep -v '/test/integration$$')"; \
 	$(2) $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" --label "agent-cli packages" -- $(GO) test $$packages $(1) -timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" & unit_pid=$$!; \
 	integration_status=0; \
-	$(2) $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" --label "agent-cli integration shards" -- bash ../scripts/go-test-shards.sh --go "$(GO)" --dir . --package $(AGENT_CLI_INTEGRATION_PACKAGE) --shards $(AGENT_CLI_INTEGRATION_SHARDS) $(foreach flag,$(1),--build-flag $(flag)) -- -test.timeout=$(AGENT_CLI_INTEGRATION_TIMEOUT) || integration_status=$$?; \
+	$(2) $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" --label "agent-cli integration shards" -- bash ../scripts/go-test-shards.sh --go "$(GO)" --dir . --package $(AGENT_CLI_INTEGRATION_PACKAGE) --shards $(AGENT_CLI_INTEGRATION_SHARDS) --weights $(AGENT_CLI_INTEGRATION_WEIGHTS) --jobs $(AGENT_CLI_INTEGRATION_JOBS) $(foreach flag,$(1),--build-flag $(flag)) -- -test.timeout=$(AGENT_CLI_INTEGRATION_TIMEOUT) || integration_status=$$?; \
 	wait "$$unit_pid"; \
 	exit "$$integration_status")
 endef
@@ -284,7 +289,7 @@ test-factory-scripts: ## Run deterministic factory script tests without writing 
 test-integration: ## Run deterministic integration tests for agent-cli and go-agent-loop without live credentials.
 	@set -euo pipefail; \
 	echo "==> test-integration agent-cli ($(AGENT_CLI_INTEGRATION_PACKAGE), timeout $(AGENT_CLI_INTEGRATION_TIMEOUT))"; \
-	(cd agent-cli && $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" -- bash ../scripts/go-test-shards.sh --go "$(GO)" --dir . --package $(AGENT_CLI_INTEGRATION_PACKAGE) --shards $(AGENT_CLI_INTEGRATION_SHARDS) -- -test.timeout=$(AGENT_CLI_INTEGRATION_TIMEOUT)); \
+	(cd agent-cli && $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" -- bash ../scripts/go-test-shards.sh --go "$(GO)" --dir . --package $(AGENT_CLI_INTEGRATION_PACKAGE) --shards $(AGENT_CLI_INTEGRATION_SHARDS) --weights $(AGENT_CLI_INTEGRATION_WEIGHTS) --jobs $(AGENT_CLI_INTEGRATION_JOBS) -- -test.timeout=$(AGENT_CLI_INTEGRATION_TIMEOUT)); \
 	echo "==> test-integration go-agent-loop ($(GO_AGENT_LOOP_FUNCTIONAL_PACKAGE), timeout $(GO_TEST_TIMEOUT))"; \
 	(cd go-agent-loop && $(GO) test $(GO_AGENT_LOOP_FUNCTIONAL_PACKAGE) -timeout "$(GO_TEST_TIMEOUT)")
 
@@ -370,7 +375,7 @@ coverage-agent-cli-shard:
 	}; \
 	run_integration() { \
 		(cd agent-cli && CGO_ENABLED=$(BUILD_CGO_ENABLED) YUI_AUDIO_STRESS=1 $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" --report-budget --label "agent-cli coverage (integration $${1:-all})" -- \
-			bash ../scripts/go-test-shards.sh --go "$(GO)" --dir . --package $(AGENT_CLI_INTEGRATION_PACKAGE) --shards $(AGENT_CLI_INTEGRATION_SHARDS) $${1:+--shard "$$1"} \
+			bash ../scripts/go-test-shards.sh --go "$(GO)" --dir . --package $(AGENT_CLI_INTEGRATION_PACKAGE) --shards $(AGENT_CLI_INTEGRATION_SHARDS) --weights $(AGENT_CLI_INTEGRATION_WEIGHTS) --jobs $(AGENT_CLI_INTEGRATION_JOBS) $${1:+--shard "$$1"} \
 			--build-flag -tags=nomicrophone --build-flag -coverpkg=$(AGENT_CLI_COVERPKG) --cover-prefix "$(abspath $(COVERAGE_DIR))/agent-cli-integration" -- -test.timeout=$(AGENT_CLI_INTEGRATION_TIMEOUT)); \
 	}; \
 	echo "==> coverage agent-cli shard $$shard"; \
