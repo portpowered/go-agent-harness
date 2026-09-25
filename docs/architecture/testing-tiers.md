@@ -81,13 +81,14 @@ budget from a blocked child keeping Go test output pipes open; it does not
 change the integration tests' command-level deadlines or selection.
 
 The runner's focused cleanup contract lives in
-`agent-cli/internal/testtimeout`. Its intentionally blocking fixture is under
-`internal/testtimeout/testdata/blockedchild`, which Go excludes from ordinary
-`./...` package discovery. The contract invokes that fixture explicitly with
-a short two-second test-only watchdog (with startup headroom for cold or
-contended workers), checks the active test and child identities, and verifies
-that the child and grandchild no longer run. The success control uses the same
-runner and reports its executed fixture test.
+`agent-cli/internal/testtimeout`. Its intentionally blocking fixture tests
+(`fixture_process_test.go`) skip unless the contract re-executes the test
+binary with a fixture mode, so no separate fixture is compiled. One case lets a
+short real budget expire on a blocked process and checks the timeout
+diagnostic. Another waits until the blocked parent reports its child and
+grandchild, ends the run through the same process-group termination, checks the
+active test and child identities, and verifies that no descendant still runs.
+The success control uses the same runner and reports its executed fixture test.
 
 ## Microphone build configurations
 

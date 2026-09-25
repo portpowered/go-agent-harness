@@ -14,7 +14,6 @@ import (
 )
 
 const (
-	timeoutFixturePackage = "./internal/testtimeout/testdata/blockedchild"
 	// fixtureSafetyBudget is the outer bound for runs that finish on their own
 	// or are cancelled once the fixture reports readiness. It only fails a run
 	// that never becomes ready, so it can be generous for cold or contended
@@ -23,14 +22,17 @@ const (
 	// expiryBudget is the real timeout exercised by the budget-expiry case.
 	// That case asserts nothing about startup, so a short budget cannot flake
 	// on a slow fixture start.
-	expiryBudget        = 300 * time.Millisecond
-	fixtureBuildTimeout = 2 * time.Minute
+	expiryBudget = 300 * time.Millisecond
 )
 
-// TestTimeoutContract compiles the fixture once and runs every contract case
-// against it in parallel.
+// TestTimeoutContract runs every contract case in parallel against this test
+// binary, which re-executes itself as the fixture process tree (see
+// fixture_process_test.go), so no fixture has to be compiled first.
 func TestTimeoutContract(t *testing.T) {
-	fixtureBinary := buildTimeoutFixture(t, moduleRootPath(t))
+	fixtureBinary, err := os.Executable()
+	if err != nil {
+		t.Fatalf("resolve fixture binary: %v", err)
+	}
 
 	t.Run("BudgetExpiryFailsClosed", func(t *testing.T) {
 		t.Parallel()
@@ -140,40 +142,9 @@ func testSuccessControlUsesSameBoundary(t *testing.T, fixtureBinary string) {
 	}
 }
 
-func buildTimeoutFixture(t *testing.T, moduleRoot string) string {
-	t.Helper()
-	fixtureBinary := filepath.Join(t.TempDir(), "blockedchild.test")
-	result, err := Run(context.Background(), Config{
-		Command: "go",
-		Dir:     moduleRoot,
-		Args:    []string{"test", "-c", "-o", fixtureBinary, timeoutFixturePackage},
-		Label:   "timeout fixture preflight",
-		// Compiling the fixture is setup, not the timeout contract under test.
-		// A cold-cache build measured 5-10s at load average ~100, so a 10s
-		// bound failed the preflight before the contract ran.
-		Timeout: fixtureBuildTimeout,
-	})
-	if err != nil {
-		t.Fatalf("compile timeout fixture: %v\noutput:\n%s", err, result.Output)
-	}
-	// The first exec of a freshly linked binary on macOS waits for a code
-	// assessment that can exceed the fixture budgets on a loaded machine; pay
-	// it once here, outside the timed runs.
-	warmup, err := Run(context.Background(), Config{
-		Command: fixtureBinary,
-		Args:    []string{"-test.list", "^$"},
-		Label:   "timeout fixture warm-up",
-		Timeout: time.Minute,
-	})
-	if err != nil {
-		t.Fatalf("warm up timeout fixture: %v\noutput:\n%s", err, warmup.Output)
-	}
-	return fixtureBinary
-}
-
 func runFixture(ctx context.Context, fixtureBinary, marker, mode, testName string, timeout time.Duration) (Result, error) {
-	env := replaceEnv(os.Environ(), "AGENT_CLI_TIMEOUT_FIXTURE_MODE", mode)
-	env = replaceEnv(env, "AGENT_CLI_TIMEOUT_FIXTURE_MARKER", marker)
+	env := replaceEnv(os.Environ(), fixtureModeEnv, mode)
+	env = replaceEnv(env, fixtureMarkerEnv, marker)
 	return Run(ctx, Config{
 		Command: fixtureBinary,
 		Env:     env,
@@ -245,15 +216,6 @@ func waitForProcessesToExit(t *testing.T, pids fixturePIDs) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatalf("fixture processes remain after timeout: %+v", pids)
-}
-
-func moduleRootPath(t *testing.T) string {
-	t.Helper()
-	_, source, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("resolve testtimeout module root: runtime.Caller failed")
-	}
-	return filepath.Clean(filepath.Join(filepath.Dir(source), "..", ".."))
 }
 
 func replaceEnv(environment []string, key, value string) []string {
