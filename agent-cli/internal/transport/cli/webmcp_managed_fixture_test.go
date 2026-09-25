@@ -21,6 +21,12 @@ import (
 // CLI's browser fixtures.
 const testDevToolsVersionPath = "/json/version"
 
+// Fixture values compared by the WebMCP doctor command tests.
+const (
+	testDoctorTabID    = "tab-a"
+	testDoctorLoopback = "loopback"
+)
+
 func newManagedCompositionTestManager(configDir string, control *managedCompositionTestControl, starts *atomic.Int32) *chrome.ManagedBrowserManager {
 	return chrome.NewManagedBrowserManager(chrome.ManagedBrowserManagerOptions{
 		ConfigDir: configDir,

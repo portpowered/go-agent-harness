@@ -8,6 +8,15 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/selectionstore"
 )
 
+const (
+	// WebMCPSelectionFileName names the persisted selection file; it is
+	// selectionstore.FileName.
+	WebMCPSelectionFileName = selectionstore.FileName
+	// WebMCPSelectionVersion is the persisted record version; it is
+	// selectionstore.Version.
+	WebMCPSelectionVersion = selectionstore.Version
+)
+
 // WebMCPSelection is the small persisted record shared by separate direct
 // command invocations. Persistence lives in internal/webmcp/selectionstore.
 type WebMCPSelection = selectionstore.Selection

@@ -16,6 +16,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/doctor"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
 	"github.com/spf13/cobra"
 )
@@ -65,7 +66,7 @@ browser:
 	factoryCalls := 0
 	factory := func(browser config.BrowserConfig) (WebMCPDoctorRuntime, error) {
 		factoryCalls++
-		if browser.Selection.Tab != "tab-a" {
+		if browser.Selection.Tab != testDoctorTabID {
 			t.Fatalf("factory received selection %+v", browser.Selection)
 		}
 		return WebMCPDoctorRuntime{
@@ -87,10 +88,10 @@ browser:
 		t.Fatalf("doctor stderr = %q, want empty", stderr.String())
 	}
 	report := decodeDoctorReport(t, stdout.String())
-	if report.Status != doctorStatusReady || report.Error != nil {
+	if report.Status != doctor.StatusReady || report.Error != nil {
 		t.Fatalf("report status/error = %s/%+v, want ready/nil", report.Status, report.Error)
 	}
-	if report.WebMCP != "supported" || !report.Catalog.Ready || report.Catalog.ToolCount != 1 {
+	if report.WebMCP != doctor.ValueSupported || !report.Catalog.Ready || report.Catalog.ToolCount != 1 {
 		t.Fatalf("WebMCP/catalog report = %+v/%+v", report.WebMCP, report.Catalog)
 	}
 	if report.PageTargets != 1 || report.EligiblePages != 1 || report.SelectedPage == nil || !report.SelectedPage.Selected {
@@ -99,7 +100,7 @@ browser:
 	if report.Endpoint.Address != "http://127.0.0.1:9222/json/version" {
 		t.Fatalf("redacted endpoint = %q", report.Endpoint.Address)
 	}
-	if report.Endpoint.Scope != "loopback" {
+	if report.Endpoint.Scope != testDoctorLoopback {
 		t.Fatalf("endpoint scope = %q, want loopback", report.Endpoint.Scope)
 	}
 	encoded := stdout.String()
@@ -108,7 +109,7 @@ browser:
 			t.Fatalf("doctor JSON exposed %q: %s", secret, encoded)
 		}
 	}
-	if check := doctorCheckByName(report, "cleanup"); check.Status != doctorCheckPass {
+	if check := doctorCheckByName(report, "cleanup"); check.Status != doctor.CheckPass {
 		t.Fatalf("cleanup check = %+v, want pass", check)
 	}
 
@@ -251,13 +252,13 @@ browser:
 
 func assertUnselectedDoctorReport(t *testing.T, report WebMCPDoctorReport, browserID, targetID string) {
 	t.Helper()
-	if report.Status != doctorStatusNotReady || report.Error != nil {
+	if report.Status != doctor.StatusNotReady || report.Error != nil {
 		t.Fatalf("unselected report status/error = %s/%+v, want not_ready/nil", report.Status, report.Error)
 	}
-	if report.PageTools != "not_checked" || report.Catalog.Ready || report.Catalog.ToolCountKnown || report.Catalog.Evidence != "not_checked" {
+	if report.PageTools != doctor.ValueNotChecked || report.Catalog.Ready || report.Catalog.ToolCountKnown || report.Catalog.Evidence != doctor.ValueNotChecked {
 		t.Fatalf("unselected page-tool state = page_tools:%q catalog:%+v, want unchecked/not ready", report.PageTools, report.Catalog)
 	}
-	if report.WebMCP != "not_checked" || report.WebMCPDomain != "not_checked" {
+	if report.WebMCP != doctor.ValueNotChecked || report.WebMCPDomain != doctor.ValueNotChecked {
 		t.Fatalf("unselected domain state = webmcp:%q domain:%q, want not_checked", report.WebMCP, report.WebMCPDomain)
 	}
 	if report.SelectedPage != nil {
@@ -269,19 +270,19 @@ func assertUnselectedDoctorReport(t *testing.T, report WebMCPDoctorReport, brows
 	if len(report.Targets) != 1 || report.Targets[0].TargetID != targetID || !report.Targets[0].Eligible {
 		t.Fatalf("unselected targets = %+v", report.Targets)
 	}
-	if endpoint := doctorCheckByName(report, "endpoint"); endpoint.Status != doctorCheckPass {
+	if endpoint := doctorCheckByName(report, "endpoint"); endpoint.Status != doctor.CheckPass {
 		t.Fatalf("endpoint check = %+v, want pass", endpoint)
 	}
-	if discovery := doctorCheckByName(report, "discovery"); discovery.Status != doctorCheckPass {
+	if discovery := doctorCheckByName(report, "discovery"); discovery.Status != doctor.CheckPass {
 		t.Fatalf("discovery check = %+v, want pass", discovery)
 	}
-	if selection := doctorCheckByName(report, "selection"); selection.Status != doctorCheckWarn || selection.Details["selection_required"] != true {
+	if selection := doctorCheckByName(report, "selection"); selection.Status != doctor.CheckWarn || selection.Details["selection_required"] != true {
 		t.Fatalf("selection check = %+v, want actionable warning", selection)
 	}
-	if webmcpCheck := doctorCheckByName(report, "webmcp"); webmcpCheck.Status != doctorCheckSkipped {
+	if webmcpCheck := doctorCheckByName(report, "webmcp"); webmcpCheck.Status != doctor.CheckSkipped {
 		t.Fatalf("webmcp check = %+v, want skipped", webmcpCheck)
 	}
-	if catalog := doctorCheckByName(report, "catalog"); catalog.Status != doctorCheckSkipped {
+	if catalog := doctorCheckByName(report, "catalog"); catalog.Status != doctor.CheckSkipped {
 		t.Fatalf("catalog check = %+v, want skipped", catalog)
 	}
 	if len(report.Warnings) != 1 || !strings.Contains(report.Warnings[0], "Endpoint is ready, but page tools are unverified") || !strings.Contains(report.Warnings[0], "yui webmcp select") {
@@ -321,24 +322,24 @@ browser:
 	}
 	_ = stderr
 	report := decodeDoctorReport(t, stdout.String())
-	if report.Status != doctorStatusNotReady || report.Error == nil {
+	if report.Status != doctor.StatusNotReady || report.Error == nil {
 		t.Fatalf("report status/error = %s/%+v, want not_ready with error", report.Status, report.Error)
 	}
-	if report.WebMCP != "supported" || report.WebMCPDomain != "supported" || report.PageTools != "unverified" {
+	if report.WebMCP != doctor.ValueSupported || report.WebMCPDomain != doctor.ValueSupported || report.PageTools != doctor.ValueUnverified {
 		t.Fatalf("independent readiness = webmcp:%q domain:%q page_tools:%q", report.WebMCP, report.WebMCPDomain, report.PageTools)
 	}
-	if report.Catalog.Ready || report.Catalog.ToolCountKnown || report.Catalog.Evidence != "unverified" {
+	if report.Catalog.Ready || report.Catalog.ToolCountKnown || report.Catalog.Evidence != doctor.ValueUnverified {
 		t.Fatalf("unverified catalog = %+v", report.Catalog)
 	}
 	if report.Error.Code != string(webmcp.ErrorBrowserProtocol) {
 		t.Fatalf("doctor error code = %q, want %s", report.Error.Code, webmcp.ErrorBrowserProtocol)
 	}
-	for _, want := range []string{doctorTestedChromeRow, doctorTestedChromeFlags, "Permissions-Policy: tools=(self)"} {
+	for _, want := range []string{doctor.TestedChromeRow, doctor.TestedChromeFlags, "Permissions-Policy: tools=(self)"} {
 		if !strings.Contains(report.Error.Message, want) {
 			t.Fatalf("doctor error message missing %q: %s", want, report.Error.Message)
 		}
 	}
-	if report.Error.Details["webmcp_domain"] != "supported" || report.Error.Details["page_tools"] != "unverified" {
+	if report.Error.Details["webmcp_domain"] != doctor.ValueSupported || report.Error.Details["page_tools"] != doctor.ValueUnverified {
 		t.Fatalf("doctor error details = %#v", report.Error.Details)
 	}
 }
@@ -356,14 +357,14 @@ browser:
 	}
 	root, stdout, _ := executeDoctorCommand(t, configDir, factory, "--json")
 	err := root.ExecuteContext(context.Background())
-	if err == nil || !strings.Contains(err.Error(), doctorErrorInvalidConfiguration) {
+	if err == nil || !strings.Contains(err.Error(), doctor.ErrorInvalidConfiguration) {
 		t.Fatalf("doctor error = %v, want invalid configuration", err)
 	}
 	if factoryCalls != 0 {
 		t.Fatalf("factory calls = %d, want zero", factoryCalls)
 	}
 	report := decodeDoctorReport(t, stdout.String())
-	if report.Status != doctorStatusInvalidConfiguration || report.Error == nil || report.Error.Code != doctorErrorInvalidConfiguration {
+	if report.Status != doctor.StatusInvalidConfiguration || report.Error == nil || report.Error.Code != doctor.ErrorInvalidConfiguration {
 		t.Fatalf("invalid config report = %+v", report)
 	}
 }
@@ -375,10 +376,10 @@ func TestWebMCPDoctorDefaultRuntimeReportsClassifiedDiscoveryFailure(t *testing.
 		t.Fatalf("doctor error = %v, want classified endpoint-not-found failure", err)
 	}
 	report := decodeDoctorReport(t, stdout.String())
-	if report.Status != doctorStatusNotReady || report.Error == nil || report.Error.Code != string(webmcp.ErrorEndpointNotFound) {
+	if report.Status != doctor.StatusNotReady || report.Error == nil || report.Error.Code != string(webmcp.ErrorEndpointNotFound) {
 		t.Fatalf("default runtime report = %+v, want not-ready endpoint_not_found", report)
 	}
-	if discovery := doctorCheckByName(report, "discovery"); discovery.Status != doctorCheckFail {
+	if discovery := doctorCheckByName(report, "discovery"); discovery.Status != doctor.CheckFail {
 		t.Fatalf("discovery check = %+v, want discovery failure", discovery)
 	}
 	if strings.Contains(stdout.String(), "Lane B") || strings.Contains(stdout.String(), "Lane D") {
@@ -514,7 +515,7 @@ func TestWebMCPDoctorReportsUnsupportedWebMCPDisconnectAndCleanup(t *testing.T) 
 				catalog:    webmcp.ToolCatalogSnapshot{Context: webmcp.PageContext{Key: webmcp.PageKey{BrowserID: "browser-a", TargetID: "tab-a"}, Generation: 1, Connected: true, Ready: true}, Generation: 1},
 				closeErr:   errors.New("cleanup failed"),
 			},
-			wantCode: doctorErrorCleanupFailed,
+			wantCode: doctor.ErrorCleanupFailed,
 		},
 	}
 	for _, tc := range tests {
@@ -653,7 +654,7 @@ func TestWebMCPDoctorRejectsNegativeCommandTimeoutAtCLIBoundary(t *testing.T) {
 		t.Fatalf("factory calls = %d, want zero for invalid input", factoryCalls)
 	}
 	report := decodeDoctorReport(t, stdout.String())
-	if report.Status != doctorStatusInvalidConfiguration || report.Error == nil || report.Error.Code != string(webmcp.ErrorInvalidToolInput) {
+	if report.Status != doctor.StatusInvalidConfiguration || report.Error == nil || report.Error.Code != string(webmcp.ErrorInvalidToolInput) {
 		t.Fatalf("negative timeout report = %+v, want invalid_tool_input", report)
 	}
 	if report.Error.Details["issues"] == nil {
@@ -716,7 +717,7 @@ browser:
     browser: browser-a
     tab: tab-a
 `)
-			root, stdout, stderr := executeDoctorCommand(t, configDir, directFactory(broker), "--command-timeout", "250ms", "--json")
+			root, stdout, _ := executeDoctorCommand(t, configDir, directFactory(broker), "--command-timeout", "250ms", "--json")
 			done := make(chan error, 1)
 			started := time.Now()
 			go func() { done <- root.ExecuteContext(context.Background()) }()
@@ -748,13 +749,9 @@ browser:
 			if elapsed := time.Since(started); elapsed > time.Second {
 				t.Fatalf("doctor %s took %s after browser death", testCase.name, elapsed)
 			}
-			_ = stderr
 			report := decodeDoctorReport(t, stdout.String())
-			if report.Error == nil || report.Error.Code != string(webmcp.ErrorBrowserDisconnected) {
-				t.Fatalf("doctor %s report = %+v, want browser_disconnected", testCase.name, report.Error)
-			}
-			if report.Error.Details["browser_id"] != string(candidate.ID) {
-				t.Fatalf("doctor %s browser_id = %#v", testCase.name, report.Error.Details["browser_id"])
+			if report.Error == nil || report.Error.Code != string(webmcp.ErrorBrowserDisconnected) || report.Error.Details["browser_id"] != string(candidate.ID) {
+				t.Fatalf("doctor %s report = %+v, want browser_disconnected for %s", testCase.name, report.Error, candidate.ID)
 			}
 		})
 	}

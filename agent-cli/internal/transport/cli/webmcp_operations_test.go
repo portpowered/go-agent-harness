@@ -21,6 +21,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/direct"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
 	"github.com/spf13/cobra"
 )
@@ -224,7 +225,6 @@ func TestWebMCPDirectSelectReplacesStalePersistedSelectionAndActivateRestoresIt(
 	if err := store.Save(oldSelection); err != nil {
 		t.Fatalf("save stale selection: %v", err)
 	}
-
 	page, target, candidate, tool := directFixture()
 	candidate.ID = webmcp.BrowserID(randomizedWebMCPTestID(t, "browser-new-"))
 	candidate.BrowserInstanceID = randomizedWebMCPInstanceID(t)
@@ -538,7 +538,7 @@ func TestWebMCPDirectDiscoveryUsesOnlyExactPageTargets(t *testing.T) {
 	if ambiguousEnvelope.OK || ambiguousEnvelope.Error == nil || ambiguousEnvelope.Error.Code != string(webmcp.ErrorAmbiguousTab) {
 		t.Fatalf("multi-page ambiguity envelope = %+v", ambiguousEnvelope)
 	}
-	if ids := directSafeIDList(ambiguousEnvelope.Error.Details["candidate_target_ids"]); !reflect.DeepEqual(ids, []string{"tab-a", "tab-b"}) {
+	if ids := direct.SafeIDList(ambiguousEnvelope.Error.Details["candidate_target_ids"]); !reflect.DeepEqual(ids, []string{"tab-a", "tab-b"}) {
 		t.Fatalf("multi-page ambiguity candidates = %v", ids)
 	}
 	if len(ambiguousBroker.selectCalls) != 0 {
@@ -662,7 +662,7 @@ func TestWebMCPDirectAmbiguousTabReturnsSortedCandidatesWithoutSelection(t *test
 				if envelope.Error.Details["browser_id"] != browserID {
 					t.Fatalf("ambiguous target browser ID = %#v", envelope.Error.Details["browser_id"])
 				}
-				ids := directSafeIDList(envelope.Error.Details["candidate_target_ids"])
+				ids := direct.SafeIDList(envelope.Error.Details["candidate_target_ids"])
 				if !reflect.DeepEqual(ids, wantIDs) {
 					t.Fatalf("ambiguous target IDs = %v, want %v", ids, wantIDs)
 				}
@@ -738,7 +738,7 @@ func TestWebMCPDirectAmbiguousBrowserReturnsSortedCandidatesWithoutFallback(t *t
 				if envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorAmbiguousBrowser) {
 					t.Fatalf("ambiguous browser envelope = %+v", envelope)
 				}
-				ids := directSafeIDList(envelope.Error.Details["candidate_browser_ids"])
+				ids := direct.SafeIDList(envelope.Error.Details["candidate_browser_ids"])
 				if !reflect.DeepEqual(ids, wantIDs) {
 					t.Fatalf("ambiguous browser IDs = %v, want %v", ids, wantIDs)
 				}

@@ -13,16 +13,13 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/direct"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/doctor"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/production/normalize"
 	"github.com/spf13/cobra"
 )
 
 const (
-	// WebMCPSelectionFileName is deliberately separate from config.yaml. A
-	// selection is ephemeral browser state, not configuration, and the file
-	// contains only opaque IDs and redacted origin metadata.
-	WebMCPSelectionFileName = "webmcp-selection.json"
-	WebMCPSelectionVersion  = 1
-
 	webmcpDirectWatchStatusEnded    = "ended"
 	webmcpDirectWatchStatusCanceled = "canceled"
 	webmcpDirectWatchStatusOnce     = "one_event"
@@ -244,18 +241,18 @@ func (c *WebMCPOperationsCommand) browsersCommand() *cobra.Command {
 				if directBrowserFlagChanged(cmd) {
 					browserID = values.browser.Browser
 				}
-				candidates, err := discoverDirectBrowsers(ctx, broker, browser, browserID)
+				candidates, err := direct.DiscoverBrowsers(ctx, broker, browser, browserID)
 				if err != nil {
 					return nil, err
 				}
 				rows := make([]WebMCPDirectBrowser, 0, len(candidates))
 				for _, candidate := range candidates {
-					endpoint := doctorEndpointForCandidate(candidate)
+					endpoint := doctor.EndpointForCandidate(candidate)
 					rows = append(rows, WebMCPDirectBrowser{
 						ID:           string(candidate.ID),
 						Source:       string(candidate.Source),
-						Product:      boundedDoctorText(candidate.Product, 160),
-						Protocol:     boundedDoctorText(candidate.Protocol, 80),
+						Product:      normalize.BoundedText(candidate.Product, directMaxTextLength),
+						Protocol:     normalize.BoundedText(candidate.Protocol, directMaxProtocolText),
 						Scope:        endpoint.Scope,
 						Endpoint:     endpoint.Address,
 						HarnessOwned: candidate.HarnessOwned,
@@ -281,7 +278,7 @@ func (c *WebMCPOperationsCommand) tabsCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return c.executeDirect(cmd, values, "tabs", webmcp.ErrorEndpointNotFound, func(ctx context.Context, broker webmcp.Broker, browser config.BrowserConfig) (any, error) {
 				browserID := browser.Selection.Browser
-				candidates, err := discoverDirectBrowsers(ctx, broker, browser, browserID)
+				candidates, err := direct.DiscoverBrowsers(ctx, broker, browser, browserID)
 				if err != nil {
 					return nil, err
 				}
@@ -298,12 +295,12 @@ func (c *WebMCPOperationsCommand) tabsCommand() *cobra.Command {
 					if listErr != nil {
 						return nil, listErr
 					}
-					targets := directPageTargetCandidates(rawTargets)
+					targets := direct.PageTargetCandidates(rawTargets)
 					for _, target := range targets {
 						if target.BrowserID == "" {
 							target.BrowserID = candidate.ID
 						}
-						if values.originContains != "" && !strings.Contains(safeOrigin(target.Origin), values.originContains) {
+						if values.originContains != "" && !strings.Contains(normalize.RedactedOrigin(target.Origin), values.originContains) {
 							continue
 						}
 						if values.eligible || values.eligibleOnly {
@@ -389,7 +386,7 @@ func (c *WebMCPOperationsCommand) activateCommand() *cobra.Command {
 					SelectWithOptions(context.Context, webmcp.TargetSelector, webmcp.SelectOptions) (webmcp.PageContext, error)
 				})
 				if !ok {
-					return nil, webmcpRuntimeUnavailableError("target_activation")
+					return nil, direct.RuntimeUnavailableError("target_activation")
 				}
 				page, err := selectorWithOptions.SelectWithOptions(ctx, selector, webmcp.SelectOptions{Activate: true})
 				if err != nil {
@@ -558,7 +555,7 @@ within %v; cancellation does not claim rollback or safe retry.`, webmcpDirectInt
 					}
 					return nil, err
 				}
-				if result.ErrorCode != "" || directInvocationFailed(result.State) {
+				if result.ErrorCode != "" || result.State.Failed() {
 					return nil, directInvocationResultError(result, toolRef)
 				}
 				output := result.Output
@@ -615,10 +612,10 @@ cancel_requested is never terminal confirmation.`,
 					invocationID = args[0]
 				}
 				if invocationID == "" {
-					return nil, directInvalidInputError("an invocation ID is required (use --invocation or a positional ID)", "/invocation_id")
+					return nil, direct.InvalidInputError("an invocation ID is required (use --invocation or a positional ID)", "/invocation_id")
 				}
 				if values.invocationID != "" && len(args) == 1 {
-					return nil, directInvalidInputError("invocation ID must be supplied by --invocation or positionally, not both", "/invocation_id")
+					return nil, direct.InvalidInputError("invocation ID must be supplied by --invocation or positionally, not both", "/invocation_id")
 				}
 				candidate, target, stored, err := c.resolveDirectTarget(ctx, cmd, values, broker, browser)
 				if err != nil {
@@ -709,7 +706,7 @@ func (c *WebMCPOperationsCommand) watchCommand() *cobra.Command {
 	return cmd
 }
 
-type webmcpDirectOperation func(context.Context, webmcp.Broker, config.BrowserConfig) (any, error)
+type webmcpDirectOperation = direct.Operation
 
 func (c *WebMCPOperationsCommand) executeDirect(cmd *cobra.Command, values *webmcpDirectFlags, kind string, fallback webmcp.ErrorCode, operation webmcpDirectOperation) error {
 	return c.executeDirectWithContext(cmd, values, kind, fallback, operation)
@@ -737,9 +734,9 @@ func (c *WebMCPOperationsCommand) executeDirectWithParentContext(cmd *cobra.Comm
 	var data any
 	var operationErr error
 	if values != nil && values.commandTimeout < 0 {
-		operationErr = directInvalidInputError("--command-timeout must not be negative", "/command_timeout")
+		operationErr = direct.InvalidInputError("--command-timeout must not be negative", "/command_timeout")
 	} else if values != nil && values.timeout < 0 {
-		operationErr = directInvalidInputError("--timeout must be positive", "/timeout")
+		operationErr = direct.InvalidInputError("--timeout must be positive", "/timeout")
 	} else {
 		commandCtx, cancel := context.WithTimeout(ctx, commandTimeout)
 		if kind == "watch" && commandCtx.Err() != nil {
@@ -753,7 +750,7 @@ func (c *WebMCPOperationsCommand) executeDirectWithParentContext(cmd *cobra.Comm
 		}
 		cancel()
 	}
-	operationErr = preferDirectBrowserDisconnected(operationErr)
+	operationErr = direct.PreferBrowserDisconnected(operationErr)
 	var writeErr error
 	if values != nil && values.json {
 		writeErr = writeWebMCPDirectJSON(cmd.OutOrStdout(), data, operationErr, fallback)
@@ -781,15 +778,15 @@ func (c *WebMCPOperationsCommand) runDirect(ctx context.Context, cmd *cobra.Comm
 	if factory == nil {
 		factory = defaultWebMCPDoctorFactory(c.globalFlags)
 	}
-	runtime, factoryErr := constructWebMCPDoctorRuntime(ctx, factory, browser)
+	runtime, factoryErr := direct.ConstructRuntime(ctx, factory, browser)
 	if factoryErr != nil {
-		return nil, preferDirectBrowserDisconnected(errors.Join(directRuntimeFactoryFailure(factoryErr), closeWebMCPDoctorRuntimeBounded(runtime)))
+		return nil, direct.PreferBrowserDisconnected(errors.Join(direct.RuntimeFactoryFailure(factoryErr), direct.CloseRuntimeBounded(runtime)))
 	}
 	if runtime.Broker == nil {
-		return nil, preferDirectBrowserDisconnected(errors.Join(webmcpRuntimeUnavailableError("runtime_factory"), closeWebMCPDoctorRuntimeBounded(runtime)))
+		return nil, direct.PreferBrowserDisconnected(errors.Join(direct.RuntimeUnavailableError("runtime_factory"), direct.CloseRuntimeBounded(runtime)))
 	}
-	data, err = runWebMCPDirectOperation(ctx, operation, runtime.Broker, browser)
-	return data, preferDirectBrowserDisconnected(errors.Join(err, closeWebMCPDoctorRuntimeBounded(runtime)))
+	data, err = direct.RunOperation(ctx, operation, runtime.Broker, browser)
+	return data, direct.PreferBrowserDisconnected(errors.Join(err, direct.CloseRuntimeBounded(runtime)))
 }
 
 func (c *WebMCPOperationsCommand) resolveDirectBrowserConfig(cmd *cobra.Command, values *webmcpDirectFlags) (config.BrowserConfig, error) {
@@ -804,13 +801,13 @@ func (c *WebMCPOperationsCommand) resolveDirectBrowserConfig(cmd *cobra.Command,
 	if err != nil {
 		return config.BrowserConfig{}, fmt.Errorf("resolve WebMCP command flags: %w", err)
 	}
-	if err := validateDoctorEndpoints(resolved); err != nil {
+	if err := doctor.ValidateEndpoints(resolved); err != nil {
 		return config.BrowserConfig{}, err
 	}
-	endpoint := doctorEndpointFor(resolved)
+	endpoint := doctor.EndpointFor(resolved)
 	if endpoint.Scope == "non_loopback" && !resolved.Connection.AllowRemoteCDP {
 		return config.BrowserConfig{}, webmcp.NewClassifiedError(webmcp.ErrorRemoteEndpointDenied, "remote browser endpoints require explicit permission", map[string]any{
-			"endpoint_kind": endpointKindFor(resolved),
+			"endpoint_kind": direct.EndpointKind(resolved),
 			"network_class": "non_loopback",
 			"required_flag": "browser-allow-remote-cdp",
 		})
@@ -934,11 +931,11 @@ func (c *WebMCPOperationsCommand) resolveDirectReplacementTarget(ctx context.Con
 func (c *WebMCPOperationsCommand) resolveDirectTargetWithPersistence(ctx context.Context, cmd *cobra.Command, values *webmcpDirectFlags, broker webmcp.Broker, browser config.BrowserConfig, allowPersisted bool) (webmcp.BrowserCandidate, webmcp.Target, *WebMCPSelection, error) {
 	browserID := browser.Selection.Browser
 	targetID := browser.Selection.Tab
-	if refBrowserID, refTargetID, composite := splitCompositeTargetRef(targetID); composite {
+	if refBrowserID, refTargetID, composite := normalize.SplitCompositeTargetRef(targetID); composite {
 		if browserID != "" && browserID != refBrowserID {
 			return webmcp.BrowserCandidate{}, webmcp.Target{}, nil, webmcp.NewClassifiedError(webmcp.ErrorStaleSelection, "the target reference names a different browser than the explicit browser selector", map[string]any{
-				"browser_id":          normalizeDirectOpaqueID(browserID),
-				"target_id":           normalizeDirectOpaqueID(refTargetID),
+				"browser_id":          direct.NormalizeOpaqueID(browserID),
+				"target_id":           direct.NormalizeOpaqueID(refTargetID),
 				"selected_generation": uint64(0),
 				"reason":              "selector_browser_mismatch",
 			})
@@ -976,7 +973,7 @@ func (c *WebMCPOperationsCommand) resolveDirectTargetWithPersistence(ctx context
 		}
 	}
 
-	candidates, err := discoverDirectCandidates(ctx, broker, browser)
+	candidates, err := direct.DiscoverCandidates(ctx, broker, browser)
 	if err != nil {
 		if stored != nil {
 			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, stalePersistedSelectionErrorAtGeneration(browserID, targetID, stored.Generation, "browser_not_found", err)
@@ -984,7 +981,7 @@ func (c *WebMCPOperationsCommand) resolveDirectTargetWithPersistence(ctx context
 		return webmcp.BrowserCandidate{}, webmcp.Target{}, nil, err
 	}
 	if browserID == "" {
-		ids := directBrowserCandidateIDs(candidates)
+		ids := direct.BrowserCandidateIDs(candidates)
 		if len(ids) != 1 {
 			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, webmcp.NewClassifiedError(webmcp.ErrorAmbiguousBrowser, "multiple browsers matched; an exact browser ID is required", map[string]any{
 				"candidate_browser_ids": ids,
@@ -1001,7 +998,7 @@ func (c *WebMCPOperationsCommand) resolveDirectTargetWithPersistence(ctx context
 	}
 	if candidate.ID == "" {
 		if stored != nil {
-			if reason, replacement := directReplacementReason(candidates, browser, *stored); replacement {
+			if reason, replacement := direct.ReplacementReason(candidates, browser, *stored); replacement {
 				return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, stalePersistedSelectionErrorAtGeneration(browserID, targetID, stored.Generation, reason, nil)
 			}
 		}
@@ -1032,7 +1029,7 @@ func (c *WebMCPOperationsCommand) resolveDirectTargetWithPersistence(ctx context
 		}
 		return webmcp.BrowserCandidate{}, webmcp.Target{}, nil, err
 	}
-	targets = directPageTargetCandidates(targets)
+	targets = direct.PageTargetCandidates(targets)
 	for index := range targets {
 		if targets[index].BrowserID == "" {
 			targets[index].BrowserID = candidate.ID
@@ -1061,15 +1058,15 @@ func (c *WebMCPOperationsCommand) resolveDirectTargetWithPersistence(ctx context
 			return webmcp.BrowserCandidate{}, webmcp.Target{}, nil, err
 		}
 	} else {
-		matches := directEligibleTargetMatches(targets, browser)
+		matches := direct.EligibleTargetMatches(targets, browser)
 		switch {
 		case len(matches) == 0:
-			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, directNoEligibleTabError(browserID, browser, len(targets), "")
+			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, direct.NoEligibleTabError(browserID, browser, len(targets), "")
 		case len(matches) > 1:
 			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, webmcp.NewClassifiedError(webmcp.ErrorAmbiguousTab, "multiple eligible browser targets matched; an exact target ID is required", map[string]any{
-				"browser_id":           normalizeDirectOpaqueID(browserID),
-				"candidate_target_ids": directAmbiguityTargetIDs(matches),
-				"candidate_choices":    directCandidateChoicesForTargets(browserID, matches),
+				"browser_id":           direct.NormalizeOpaqueID(browserID),
+				"candidate_target_ids": direct.AmbiguityTargetIDs(matches),
+				"candidate_choices":    direct.CandidateChoicesForTargets(browserID, matches),
 			})
 		case browser.Selection.AutoSelect == config.BrowserAutoSelectPersisted:
 			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, webmcp.NewClassifiedError(webmcp.ErrorStaleSelection, "persisted browser target selection is not current", map[string]any{
@@ -1092,10 +1089,10 @@ func (c *WebMCPOperationsCommand) resolveDirectTargetWithPersistence(ctx context
 	}
 
 	if target == nil {
-		return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, directNoEligibleTabError(browserID, browser, len(targets), "")
+		return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, direct.NoEligibleTabError(browserID, browser, len(targets), "")
 	}
 	if stored != nil {
-		if stored.Origin != "" && safeOrigin(stored.Origin) != safeOrigin(target.Origin) {
+		if stored.Origin != "" && normalize.RedactedOrigin(stored.Origin) != normalize.RedactedOrigin(target.Origin) {
 			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, stalePersistedSelectionErrorAtGeneration(browserID, targetID, stored.Generation, "origin_changed", nil)
 		}
 		if stored.ContinuityMarker != "" && target.ContinuityMarker != "" && stored.ContinuityMarker != target.ContinuityMarker {
@@ -1105,11 +1102,11 @@ func (c *WebMCPOperationsCommand) resolveDirectTargetWithPersistence(ctx context
 			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, stalePersistedSelectionErrorAtGeneration(browserID, targetID, stored.Generation, "generation_changed", nil)
 		}
 	}
-	if err := directTargetPolicyError(*target, browser); err != nil {
+	if err := direct.TargetPolicyError(*target, browser); err != nil {
 		return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, err
 	}
 	if target.Type != "" && !strings.EqualFold(target.Type, "page") {
-		return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, directNoEligibleTabError(browserID, browser, len(targets), "not_page")
+		return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, direct.NoEligibleTabError(browserID, browser, len(targets), "not_page")
 	}
 	if !target.Eligible {
 		if strings.EqualFold(target.EligibilityReason, "unsupported_webmcp") {
@@ -1119,10 +1116,10 @@ func (c *WebMCPOperationsCommand) resolveDirectTargetWithPersistence(ctx context
 				"required_capability": "webmcp",
 			})
 		}
-		return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, directNoEligibleTabError(browserID, browser, len(targets), boundedDirectReason(target.EligibilityReason))
+		return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, direct.NoEligibleTabError(browserID, browser, len(targets), direct.BoundedReason(target.EligibilityReason))
 	}
-	if browser.Selection.Origin != "" && safeOrigin(target.Origin) != safeOrigin(browser.Selection.Origin) {
-		return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, directNoEligibleTabError(browserID, browser, len(targets), "origin_mismatch")
+	if browser.Selection.Origin != "" && normalize.RedactedOrigin(target.Origin) != normalize.RedactedOrigin(browser.Selection.Origin) {
+		return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, direct.NoEligibleTabError(browserID, browser, len(targets), "origin_mismatch")
 	}
 	return candidate, *target, stored, nil
 }
@@ -1135,22 +1132,6 @@ func directCancelHasExactTarget(cmd *cobra.Command, browser config.BrowserConfig
 		return true
 	}
 	return directFlagChanged(cmd, "tab", "browser-tab")
-}
-
-func boundedDirectReason(value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return "ineligible"
-	}
-	if len(value) > 80 {
-		return value[:80]
-	}
-	for _, r := range value {
-		if r < 0x20 || r == 0x7f {
-			return "ineligible"
-		}
-	}
-	return value
 }
 
 func stalePersistedSelectionErrorAtGeneration(browserID, targetID string, generation uint64, reason string, cause error) error {
@@ -1273,21 +1254,4 @@ func safePersistedPhase(value any) (string, bool) {
 		}
 	}
 	return phase, true
-}
-
-func directTargetPolicyError(target webmcp.Target, browser config.BrowserConfig) error {
-	origin := safeOrigin(target.Origin)
-	if deniedOrigin(origin, browser.Policy) {
-		return webmcp.NewClassifiedError(webmcp.ErrorOriginDenied, "the selected page origin is denied by policy", map[string]any{
-			"origin_digest": originDigest(origin),
-			"policy":        "denied_origins",
-		})
-	}
-	if len(browser.Policy.AllowedOrigins) > 0 && !allowedOrigin(origin, browser.Policy.AllowedOrigins) {
-		return webmcp.NewClassifiedError(webmcp.ErrorOriginDenied, "the selected page origin is not in the allowed policy", map[string]any{
-			"origin_digest": originDigest(origin),
-			"policy":        "allowed_origins",
-		})
-	}
-	return nil
 }

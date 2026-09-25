@@ -15,12 +15,12 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/doctor"
 )
 
 func TestProductionWebMCPDoctorUsesLaneBTargetsAndNeutralRuntime(t *testing.T) {
 	server, browserID, targetID, runtime := newProductionTestEndpoint(t)
 	defer server.Close()
-
 	configDir := writeDoctorConfig(t, fmt.Sprintf(`
 browser:
   tools:
@@ -46,7 +46,7 @@ browser:
 		t.Fatalf("production doctor stderr = %q", stderr.String())
 	}
 	report := decodeDoctorReport(t, stdout.String())
-	if report.Status != doctorStatusReady || report.Error != nil {
+	if report.Status != doctor.StatusReady || report.Error != nil {
 		t.Fatalf("production doctor status/error = %s/%+v", report.Status, report.Error)
 	}
 	if len(report.Browsers) != 1 || report.Browsers[0].ID != browserID {

@@ -662,15 +662,6 @@ func invocationMessage(code webmcp.ErrorCode) string {
 	}
 }
 
-func isFailedInvocationState(state webmcp.InvocationState) bool {
-	switch state {
-	case webmcp.InvocationError, webmcp.InvocationCanceled, webmcp.InvocationTimedOut, webmcp.InvocationOrphaned, webmcp.InvocationPolicyDenied:
-		return true
-	default:
-		return false
-	}
-}
-
 func invocationNeedsTerminalResult(state webmcp.InvocationState) bool {
 	switch state {
 	case webmcp.InvocationCompleted,
@@ -963,7 +954,7 @@ func (s *BrokerToolSet) invokeToolRef(ctx context.Context, request webmcp.Invoke
 			}
 		}
 	}
-	if result.ErrorCode != "" || isFailedInvocationState(result.State) {
+	if result.ErrorCode != "" || result.State.Failed() {
 		return invocationFailure(result, request.ToolRef)
 	}
 	output, err := compactJSONOrNull(result.Output)

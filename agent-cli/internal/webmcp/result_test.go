@@ -113,3 +113,16 @@ func TestResultErrorForAddsSafeAmbiguityRecoveryAndChoices(t *testing.T) {
 type assertionError string
 
 func (e assertionError) Error() string { return string(e) }
+
+func TestInvocationStateFailedCoversTerminalFailures(t *testing.T) {
+	for _, state := range []InvocationState{InvocationError, InvocationCanceled, InvocationTimedOut, InvocationOrphaned, InvocationPolicyDenied} {
+		if !state.Failed() {
+			t.Fatalf("%s.Failed() = false, want true", state)
+		}
+	}
+	for _, state := range []InvocationState{InvocationCreated, InvocationAwaitingApproval, InvocationQueued, InvocationDispatching, InvocationDispatched, InvocationCompleted} {
+		if state.Failed() {
+			t.Fatalf("%s.Failed() = true, want false", state)
+		}
+	}
+}
