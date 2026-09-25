@@ -1,9 +1,13 @@
 package cli
 
 import (
+	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 // The committed s2s-v3c fixtures live with the integration suite's replay
@@ -141,4 +145,136 @@ func TestProbeRunS2SV3CSuiteSelectionSplitsPositiveFromControls(t *testing.T) {
 	if summary["total"] != float64(4) || summary["status"] != probeStatusFail {
 		t.Fatalf("unexpected summary: %v", summary)
 	}
+}
+
+// TestProbeRunS2SV3CRuntimeMutatedPositiveFixtureFails guards the committed
+// negative controls against drifting from the pristine fixture: the same
+// violations applied at runtime to a copy of the positive capture must fail
+// under the positive scenario ID, naming the same invariant.
+func TestProbeRunS2SV3CRuntimeMutatedPositiveFixtureFails(t *testing.T) {
+	for _, testCase := range []struct {
+		name        string
+		mutate      func(t *testing.T, records []map[string]any) []map[string]any
+		failingKind string
+		detail      string
+	}{
+		{
+			name: "duplicate first cancel",
+			mutate: func(t *testing.T, records []map[string]any) []map[string]any {
+				first := v3cRecordIndexes(t, records, "response.cancel")[0]
+				doubled := append(append([]map[string]any{}, records[:first+1]...), v3cRecordCopy(t, records[first]))
+				return append(doubled, records[first+1:]...)
+			},
+			failingKind: "barge-in-cancel-once",
+			detail:      "stray or duplicate cancels",
+		},
+		{
+			name: "drop closing-turn commit",
+			mutate: func(t *testing.T, records []map[string]any) []map[string]any {
+				commits := v3cRecordIndexes(t, records, "input_audio_buffer.commit")
+				closing := commits[len(commits)-1]
+				return append(append([]map[string]any{}, records[:closing]...), records[closing+1:]...)
+			},
+			failingKind: "message-counts-reconcile",
+			detail:      "user_turns: expected 7, actual 6",
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			fixture := writeMutatedV3CFixture(t, testCase.mutate)
+			run := executeCLI("probe", "run", "--replay", fixture, "--json", "--scenario", "s2s-v3c-barge-in-repeated")
+			if run.exitCode == 0 {
+				t.Fatalf("mutated positive fixture passed; stdout=%q", run.stdout)
+			}
+			results, _ := decodeProbeLines(t, 1, run.stdout, run.stderr)
+			assertV3CFailingKind(t, results[0], testCase.failingKind, testCase.detail)
+		})
+	}
+}
+
+func assertV3CFailingKind(t *testing.T, result map[string]any, kind, detail string) {
+	t.Helper()
+	for _, expectation := range jsonSlice(t, result["expectations"]) {
+		outcome := jsonObject(t, expectation)
+		if outcome["kind"] != kind || outcome["passed"] != false {
+			continue
+		}
+		if !strings.Contains(jsonText(outcome["actual"]), detail) && !strings.Contains(jsonText(outcome["error"]), detail) {
+			t.Fatalf("%s failure must name %q: %v", kind, detail, outcome)
+		}
+		return
+	}
+	t.Fatalf("%s must fail: %v", kind, result["expectations"])
+}
+
+// writeMutatedV3CFixture copies the pristine positive capture, applies a
+// record-level mutation, renumbers sequences and timestamps, reseals it, and
+// writes it to a temp dir.
+func writeMutatedV3CFixture(t *testing.T, mutate func(*testing.T, []map[string]any) []map[string]any) string {
+	t.Helper()
+	data, err := os.ReadFile(v3cFixture("s2s-v3c-barge-in-repeated.session.json"))
+	if err != nil {
+		t.Fatalf("read pristine fixture: %v", err)
+	}
+	var capture map[string]any
+	if err := json.Unmarshal(data, &capture); err != nil {
+		t.Fatalf("decode pristine fixture: %v", err)
+	}
+	var records []map[string]any
+	for _, raw := range jsonSlice(t, capture["records"]) {
+		records = append(records, jsonObject(t, raw))
+	}
+	records = mutate(t, records)
+	for index, record := range records {
+		record["sequence"] = index + 1
+		record["timestamp_ms"] = index + 1
+	}
+	capture["records"] = records
+	encoded, err := json.Marshal(capture)
+	if err != nil {
+		t.Fatalf("encode mutated capture: %v", err)
+	}
+	var mutated gwtesting.SessionCapture
+	if err := json.Unmarshal(encoded, &mutated); err != nil {
+		t.Fatalf("decode mutated capture: %v", err)
+	}
+	sealed, err := gwtesting.SealSessionCapture(mutated)
+	if err != nil {
+		t.Fatalf("seal mutated capture: %v", err)
+	}
+	out, err := json.Marshal(sealed)
+	if err != nil {
+		t.Fatalf("encode sealed capture: %v", err)
+	}
+	path := filepath.Join(t.TempDir(), "mutated.session.json")
+	if err := os.WriteFile(path, out, 0o600); err != nil {
+		t.Fatalf("write mutated capture: %v", err)
+	}
+	return path
+}
+
+func v3cRecordIndexes(t *testing.T, records []map[string]any, eventType string) []int {
+	t.Helper()
+	var indexes []int
+	for index, record := range records {
+		if record["type"] == eventType {
+			indexes = append(indexes, index)
+		}
+	}
+	if len(indexes) == 0 {
+		t.Fatalf("pristine fixture has no %s record", eventType)
+	}
+	return indexes
+}
+
+func v3cRecordCopy(t *testing.T, record map[string]any) map[string]any {
+	t.Helper()
+	encoded, err := json.Marshal(record)
+	if err != nil {
+		t.Fatalf("copy record: %v", err)
+	}
+	var clone map[string]any
+	if err := json.Unmarshal(encoded, &clone); err != nil {
+		t.Fatalf("copy record: %v", err)
+	}
+	return clone
 }

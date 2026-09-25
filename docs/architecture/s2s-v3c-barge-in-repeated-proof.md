@@ -78,9 +78,14 @@ match fixture stems:
 `TestProbeRunS2SV3CNegativeControlsFailNamingTheirInvariant`
 (`agent-cli/internal/transport/cli/probe_v3c_barge_in_repeated_test.go`) runs
 each committed negative control through the same `probe run --replay` CLI path
-and requires it to fail naming its invariant. (The integration-suite copies of
-these checks, including runtime-mutated clones of the pristine fixture that
-reproduced the committed controls, were retired as duplicates.)
+and requires it to fail naming its invariant.
+
+`TestProbeRunS2SV3CRuntimeMutatedPositiveFixtureFails` (same file) guards the
+committed controls against drifting from the pristine fixture: it applies the
+violations at test time to a copy of the positive capture (duplicate the first
+`response.cancel`; drop the closing turn's `input_audio_buffer.commit`) and
+requires both to fail under the positive scenario ID, naming
+`barge-in-cancel-once` and `user_turns: expected 7, actual 6`.
 
 ## Reproduction
 
@@ -88,7 +93,7 @@ reproduced the committed controls, were retired as duplicates.)
 # Probe-package unit coverage (registration + evaluation semantics)
 go test ./go-agent-loop/pkg/probe -run 'TestS2SV3C' -count=1 -v
 
-# CLI replay derivation, entrypoint behavior and committed negative controls
+# CLI replay derivation, entrypoint behavior, committed and runtime-mutated negative controls
 go test ./agent-cli/internal/transport/cli -run 'TestProbeRunS2SV3C' -count=1 -v
 
 # Direct CLI surface, single positive case
