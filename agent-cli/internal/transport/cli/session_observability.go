@@ -1,25 +1,22 @@
 package cli
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"image"
-	_ "image/jpeg"
-	_ "image/png"
 	"io"
-	"net/http"
-	"os"
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/output"
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/services/livehost"
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/livehost"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/sessionbroker"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	runtimeDevicesWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
 	runtimeProviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	runtimeProvidersWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
 	runtimeRecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
@@ -28,7 +25,6 @@ import (
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	runtimeSessionWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
 	runtimeSessionTrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
-	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -135,7 +131,10 @@ func (c *SessionCommand) runRuntimeLiveSessionWithAnnouncements(ctx context.Cont
 		FileDeviceService:  livehost.FileDeviceService{Service: c.fileDeviceService.Service, Scheduler: c.fileDeviceService.Scheduler},
 		RecordingService:   c.recordingService,
 		TraceService:       c.fileDeviceService.TraceService,
-		CredentialValues:   runtimeLiveCredentialValues,
+		CredentialValues:   livehost.CredentialValues,
+		FileMediaService:   runtimeDevicesWire.NewFileMediaService(),
+		ImageStager:        runtimeSessionWire.NewLiveImageStager(),
+		NewEventRenderer:   newLiveEventRenderer,
 	}))
 }
 
@@ -161,8 +160,8 @@ func (c *SessionCommand) runtimeLiveRequest(ctx context.Context, request service
 		PageSightToolID:     cliTools.PageSightToolID,
 		Capabilities:        c.runtimeLiveCapabilities,
 		ModelCatalog:        c.liveModelCatalog(),
-		BindImagePreparer:   bindRuntimeLiveImagePreparer,
-		OpenImages:          openRuntimeLiveImages,
+		BindImagePreparer:   livehost.BindImagePreparer,
+		OpenImages:          livehost.OpenImages,
 	})
 }
 
@@ -174,21 +173,6 @@ func (c *SessionCommand) liveModelCatalog() runtimeProviders.ModelCatalog {
 		return catalog
 	}
 	return runtimeProvidersWire.NewModelCatalog()
-}
-
-func runtimeLiveCredentialValues(request serviceSession.Request) ([]string, error) {
-	if request.LoadedConfig == nil {
-		return nil, errors.New("live session configuration is unavailable")
-	}
-	effective := request.LoadedConfig.ApplyOverrides("", request.Model, request.Provider, request.BaseURL)
-	_, _, apiKey, _, err := livehost.ProviderValues(effective, request, nil)
-	if err != nil {
-		return nil, err
-	}
-	if strings.TrimSpace(apiKey) == "" {
-		return nil, nil
-	}
-	return []string{apiKey}, nil
 }
 
 func (c *SessionCommand) runtimeLiveCapabilities(ctx context.Context, cfg *config.Config) (*runtimeSession.LiveCapabilities, error) {
@@ -217,11 +201,16 @@ func (c *SessionCommand) runtimeLiveCapabilities(ctx context.Context, cfg *confi
 		}
 	}
 	if capabilities.BrowserEventWatch != nil {
-		binding.BrowserWatch = livehost.MapBrowserEvents(capabilities.BrowserEventWatch)
+		binding.BrowserWatch = sessionbroker.LiveBrowserEvents(capabilities.BrowserEventWatch)
 	} else if capabilities.BrowserWatch != nil {
-		binding.BrowserWatch = livehost.MapBrokerEvents(capabilities.BrowserWatch)
+		binding.BrowserWatch = sessionbroker.LiveBrokerEvents(capabilities.BrowserWatch)
 	}
 	return binding, nil
+}
+
+// newLiveEventRenderer is the operator-facing presentation of live events.
+func newLiveEventRenderer(replay bool) livehost.EventRenderer {
+	return output.NewLiveEventRenderer(replay).Render
 }
 
 // writeRuntimeLiveAnnouncements preserves the CLI's operator-facing startup
@@ -275,77 +264,6 @@ func writeRuntimeLiveAnnouncements(out io.Writer, request serviceSession.Request
 	}
 	_, err = fmt.Fprintln(out, "Tools: "+strings.Join(names, ", "))
 	return err
-}
-
-// openRuntimeLiveImages resolves the command's image paths at the host edge.
-// The reusable live runtime receives immutable content parts and never reads
-// host paths or performs MIME discovery itself.
-func openRuntimeLiveImages(paths []string) ([]messages.ContentPart, error) {
-	if len(paths) == 0 {
-		return nil, nil
-	}
-	parts := make([]messages.ContentPart, 0, len(paths))
-	for _, path := range paths {
-		part, err := openRuntimeLiveImage(path)
-		if err != nil {
-			return nil, err
-		}
-		parts = append(parts, part)
-	}
-	return parts, nil
-}
-
-func openRuntimeLiveImage(path string) (messages.ImagePart, error) {
-	if strings.TrimSpace(path) == "" {
-		return messages.ImagePart{}, fmt.Errorf("--image path is empty")
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return messages.ImagePart{}, fmt.Errorf("session image %q is missing: %w", path, err)
-		}
-		return messages.ImagePart{}, fmt.Errorf("session image %q cannot be read: %w", path, err)
-	}
-	if len(data) == 0 {
-		return messages.ImagePart{}, fmt.Errorf("image %q is empty", path)
-	}
-	mediaType := http.DetectContentType(data)
-	if mediaType != "image/png" && mediaType != "image/jpeg" {
-		return messages.ImagePart{}, fmt.Errorf("image %q has unsupported MIME type %q (supported: image/png, image/jpeg)", path, mediaType)
-	}
-	if _, _, err := image.Decode(bytes.NewReader(data)); err != nil {
-		return messages.ImagePart{}, fmt.Errorf("image %q is not valid %s content: %w", path, mediaType, err)
-	}
-	return messages.ImagePart{Bytes: data, MediaType: mediaType}, nil
-}
-
-// bindRuntimeLiveImagePreparer gives a live participant's read_image route the
-// same host-side image validation used for opening an initial image turn. The
-// runtime service performs the filesystem authorization before invoking this
-// callback; the callback only resolves the already-authorized bytes into the
-// provider-neutral typed part. open is the capability-guarded opener, so a
-// model without image input yields a correlated tool failure.
-func bindRuntimeLiveImagePreparer(executor messages.ToolExecutor, open livehost.ImageOpener) messages.ToolExecutor {
-	binder, ok := executor.(runtimeTools.SessionImagePreparerBinder)
-	if !ok {
-		return executor
-	}
-	return binder.WithSessionImagePreparer(func(paths []string) ([]messages.ImagePart, error) {
-		content, err := open(paths)
-		if err != nil {
-			return nil, err
-		}
-		parts := make([]messages.ImagePart, 0, len(content))
-		for _, item := range content {
-			part, ok := item.(messages.ImagePart)
-			if !ok {
-				return nil, fmt.Errorf("live image preparer received unexpected content part %T", item)
-			}
-			part.Bytes = append([]byte(nil), part.Bytes...)
-			parts = append(parts, part)
-		}
-		return parts, nil
-	})
 }
 
 // announcedReplayTools shows the initially advertised tools that the current

@@ -2,12 +2,8 @@ package devices
 
 import (
 	"context"
-	"fmt"
-	"math"
-	"strings"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 )
 
@@ -97,13 +93,6 @@ type DeviceService interface {
 	ProbeAvailability(context.Context) (DeviceProbeAvailability, error)
 }
 
-// DeviceProbeInputPlan is the authored microphone contract for a device-tier
-// scenario. It carries presentation-safe text and corpus identity only.
-type DeviceProbeInputPlan struct {
-	CorpusID  string
-	Utterance string
-}
-
 // DeviceProbeRequest carries runtime configuration for one physical device
 // probe. The reusable runtime owns media execution and registry access.
 type DeviceProbeRequest = runtimeDevices.ProbeRequest
@@ -119,52 +108,3 @@ type DeviceProbeService = runtimeDevices.ProbeService
 // DefaultDeviceProbeCaptureDuration is the default microphone capture window
 // used by the device probe transport when a request omits one.
 const DefaultDeviceProbeCaptureDuration = 5 * time.Second
-
-// ProbeInputPlan validates and returns the authored input contract for a
-// scenario without opening a device.
-func ProbeInputPlan(scenario probe.Scenario) (DeviceProbeInputPlan, error) {
-	var corpusID string
-	count := 0
-	var utterance string
-	for _, step := range scenario.Steps {
-		kind := step.Kind
-		if kind == "" {
-			kind = step.Type
-		}
-		if kind != probe.StepSendAudio {
-			continue
-		}
-		count++
-		candidate := step.CorpusID
-		if candidate == "" {
-			candidate = step.Corpus.CorpusID
-		}
-		if corpusID == "" {
-			corpusID = candidate
-		}
-		if corpusID != candidate {
-			return DeviceProbeInputPlan{}, fmt.Errorf("device probe scenario must contain exactly one send_audio step with one committed audio corpus")
-		}
-		utterance = strings.TrimSpace(step.Text)
-	}
-	if count != 1 || strings.TrimSpace(corpusID) == "" {
-		return DeviceProbeInputPlan{}, fmt.Errorf("device probe scenario must contain exactly one send_audio step with a committed audio corpus")
-	}
-	if utterance == "" {
-		return DeviceProbeInputPlan{}, fmt.Errorf("device probe send_audio step for corpus %q must declare text for the manual microphone utterance", corpusID)
-	}
-	return DeviceProbeInputPlan{CorpusID: corpusID, Utterance: utterance}, nil
-}
-
-// ProbeRMS computes the capture energy used by device-tier assertions.
-func ProbeRMS(samples []int16) float64 {
-	if len(samples) == 0 {
-		return 0
-	}
-	var sum float64
-	for _, sample := range samples {
-		value := float64(sample)
-		sum += value * value
-	}
-	return math.Sqrt(sum / float64(len(samples)))
-}

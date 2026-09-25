@@ -8,17 +8,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
       "file": "internal/transport/cli/device_probe_test.go",
       "symbol": "TestDeviceProbeRuntimeUsesBoundDevicesAndSessionOutput",
-      "value": 68,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
-      "file": "internal/transport/cli/device_probe_test.go",
-      "symbol": "func-literal@227:5",
-      "value": 21,
+      "value": 61,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -28,7 +18,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
       "file": "internal/transport/cli/device_probe_test.go",
       "symbol": "TestDeviceProbeRuntimeUsesBoundDevicesAndSessionOutput",
-      "value": 46,
+      "value": 43,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -38,7 +28,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
       "file": "internal/transport/cli/device_probe_test.go",
       "symbol": "TestDeviceProbeRuntimeUsesBoundDevicesAndSessionOutput",
-      "value": 166,
+      "value": 160,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -48,7 +38,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
       "file": "internal/transport/cli/device_probe_test.go",
       "symbol": "TestDeviceProbeRuntimeUsesBoundDevicesAndSessionOutput",
-      "value": 120,
+      "value": 115,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     }

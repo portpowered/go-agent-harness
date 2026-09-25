@@ -16,6 +16,7 @@ import (
 const (
 	timeoutFixturePackage       = "./internal/testtimeout/testdata/blockedchild"
 	blockedFixtureTimeoutBudget = 8 * time.Second
+	fixtureBuildTimeout         = 2 * time.Minute
 )
 
 func TestTimeoutContractBlockedChildFailsClosedAndCleansDescendants(t *testing.T) {
@@ -99,7 +100,10 @@ func buildTimeoutFixture(t *testing.T, moduleRoot string) string {
 		Dir:     moduleRoot,
 		Args:    []string{"test", "-c", "-o", fixtureBinary, timeoutFixturePackage},
 		Label:   "timeout fixture preflight",
-		Timeout: 10 * time.Second,
+		// Compiling the fixture is setup, not the timeout contract under test.
+		// A cold-cache build measured 5-10s at load average ~100, so a 10s
+		// bound failed the preflight before the contract ran.
+		Timeout: fixtureBuildTimeout,
 	})
 	if err != nil {
 		t.Fatalf("compile timeout fixture: %v\noutput:\n%s", err, result.Output)

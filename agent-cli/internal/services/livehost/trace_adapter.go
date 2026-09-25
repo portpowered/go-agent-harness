@@ -54,18 +54,6 @@ func finishTrace(prepared sessiontrace.Prepared, ctx context.Context, bundle str
 	return prepared.Finish(ctx, bundle, published)
 }
 
-func wrapTraceFilePorts(prepared sessiontrace.Prepared, filePorts *FilePorts) {
-	if prepared == nil || filePorts == nil {
-		return
-	}
-	if filePorts.Input != nil {
-		filePorts.Input.Source = prepared.WrapAudioSource(filePorts.Input.Source, filePorts.Input.SampleRate)
-	}
-	for index := range filePorts.InputTurns {
-		filePorts.InputTurns[index].Source = prepared.WrapAudioSource(filePorts.InputTurns[index].Source, filePorts.InputTurns[index].SampleRate)
-	}
-}
-
 // wrapTraceDeviceService delegates device instrumentation to sessiontrace;
 // no device policy or lifecycle state remains at the CLI boundary.
 func wrapTraceDeviceService(service runtimeDevices.Service, prepared sessiontrace.Prepared) runtimeDevices.Service {

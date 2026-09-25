@@ -6,7 +6,53 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	runtime "github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 )
+
+// liveCapabilityEventBuffer bounds each live capability projection queue.
+const liveCapabilityEventBuffer = 32
+
+// LiveBrowserEvents adapts a WebMCP browser observer to the provider-neutral
+// live capability stream. Each subscription owns a bounded queue and exits
+// with its context so browser resources cannot outlive the session.
+func LiveBrowserEvents(source func(context.Context) <-chan webmcp.BrowserEvent) func(context.Context) <-chan session.LiveCapabilityEvent {
+	return liveCapabilityEvents(source, browserCapabilityEvent)
+}
+
+// LiveBrokerEvents adapts the legacy broker observer to the same live
+// capability stream while retaining its typed lifecycle state.
+func LiveBrokerEvents(source func(context.Context) <-chan webmcp.BrokerEvent) func(context.Context) <-chan session.LiveCapabilityEvent {
+	return liveCapabilityEvents(source, brokerCapabilityEvent)
+}
+
+func liveCapabilityEvents[Event any](source func(context.Context) <-chan Event, convert func(Event) session.LiveCapabilityEvent) func(context.Context) <-chan session.LiveCapabilityEvent {
+	return func(ctx context.Context) <-chan session.LiveCapabilityEvent {
+		if source == nil || ctx == nil {
+			return nil
+		}
+		return projectBufferedEvents(ctx, source(ctx), convert, liveCapabilityEventBuffer)
+	}
+}
+
+func browserCapabilityEvent(event webmcp.BrowserEvent) session.LiveCapabilityEvent {
+	return session.LiveCapabilityEvent{
+		Type: string(event.Type), Sequence: event.Sequence, Timestamp: event.At,
+		BrowserID: string(event.BrowserID), TargetID: string(event.TargetID),
+		Generation: event.Generation, PreviousGeneration: event.PreviousGeneration,
+		InvocationID: string(event.InvocationID), ToolName: event.ToolName,
+		Status: event.Status, ErrorCode: event.ErrorCode, Reason: event.Reason,
+		CatalogReady: event.CatalogReady, ToolCount: event.ToolCount, ToolCountKnown: event.ToolCountKnown,
+	}
+}
+
+func brokerCapabilityEvent(event webmcp.BrokerEvent) session.LiveCapabilityEvent {
+	return session.LiveCapabilityEvent{
+		Type: string(event.Type), Sequence: event.Sequence, Timestamp: event.At,
+		BrowserID: string(event.BrowserID), TargetID: string(event.TargetID),
+		Generation: event.Generation, InvocationID: string(event.InvocationID),
+		ToolName: event.ToolName, State: string(event.State), Reason: event.Reason,
+	}
+}
 
 // ToRuntimeEvents projects an already-owned WebMCP event stream onto the
 // runtime browser-conversation contract without retaining subscription state.
@@ -23,10 +69,15 @@ func ToWebMCPEvents(ctx context.Context, source <-chan runtime.BrowserEvent) <-c
 // projectEvents converts every event from source until source closes or ctx
 // ends. A nil source yields a nil stream.
 func projectEvents[From, To any](ctx context.Context, source <-chan From, convert func(From) To) <-chan To {
+	return projectBufferedEvents(ctx, source, convert, 0)
+}
+
+// projectBufferedEvents is projectEvents with a bounded output queue.
+func projectBufferedEvents[From, To any](ctx context.Context, source <-chan From, convert func(From) To, buffer int) <-chan To {
 	if source == nil {
 		return nil
 	}
-	out := make(chan To)
+	out := make(chan To, buffer)
 	go func() {
 		defer close(out)
 		for {

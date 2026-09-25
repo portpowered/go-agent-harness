@@ -1,6 +1,7 @@
 package wire
 
 import (
+	"bytes"
 	"context"
 	"testing"
 
@@ -26,5 +27,23 @@ func TestPublicRTCBindingOwnsCloseableDeviceLifecycle(t *testing.T) {
 	}
 	if err := binding.Close(); err != nil {
 		t.Fatalf("second Close() error = %v", err)
+	}
+}
+
+func TestFileMediaServiceOpensStdoutSinkAndSkipsEmptyRequests(t *testing.T) {
+	service := NewFileMediaService()
+	if handle, err := service.OpenFileMedia(devices.FileMediaRequest{}); handle != nil || err != nil {
+		t.Fatalf("empty request = (%v, %v), want no media", handle, err)
+	}
+	var stdout bytes.Buffer
+	handle, err := service.OpenFileMedia(devices.FileMediaRequest{OutputPath: "-", Stdout: &stdout, OutputSampleRate: 24000})
+	if err != nil {
+		t.Fatalf("OpenFileMedia: %v", err)
+	}
+	if output := handle.Media().Output; output == nil || !output.Continuous || output.SampleRate != 24000 {
+		t.Fatalf("stdout output = %+v, want continuous 24 kHz sink", output)
+	}
+	if err := handle.Close(); err != nil {
+		t.Fatalf("close: %v", err)
 	}
 }

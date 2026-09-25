@@ -18,16 +18,19 @@ type inboundPort struct {
 	controllerMu       sync.Mutex
 	playbackController sharedaudio.PlaybackController
 	onController       func(sharedaudio.PlaybackController)
+	interruptions      interruptionFilter
 }
 
 // SetPlaybackController preserves the optional provider/device interruption
 // capability across the pre-Start proxy. A room can register its device clock
 // before the provider connects; attach forwards it when the provider endpoint
-// becomes available.
+// becomes available. The provider receives a controller that also lets this
+// port discard the queued frames of a response the provider interrupts.
 func (p *inboundPort) SetPlaybackController(controller sharedaudio.PlaybackController) {
 	if p == nil {
 		return
 	}
+	controller = p.interruptions.wrap(controller)
 	p.controllerMu.Lock()
 	p.playbackController = controller
 	onController := p.onController
@@ -50,10 +53,7 @@ func newInboundPort(capacity int) *inboundPort {
 	return &inboundPort{frames: make(chan inboundFrame, capacity), done: make(chan struct{}), space: make(chan struct{})}
 }
 
-func (p *inboundPort) ReadFrame(ctx context.Context) (sharedaudio.PCMFrame, error) {
-	if ctx == nil {
-		return sharedaudio.PCMFrame{}, mediaContextRequired()
-	}
+func (p *inboundPort) readQueuedFrame(ctx context.Context) (sharedaudio.PCMFrame, error) {
 	// Prefer already buffered media at teardown so a caller can drain a
 	// provider's final frame before observing the terminal operation error.
 	select {

@@ -202,10 +202,7 @@ func (m *ManagedBrowserManager) Acquire(ctx context.Context, request ManagedBrow
 	if present {
 		browser, reusable := m.reuse(ctx, launchOptions, profileDir, state)
 		if reusable {
-			browser.closeHook = func() error {
-				return m.closeManagedBrowser(browser, statePath, state)
-			}
-			go m.watchManagedBrowser(browser, statePath, state)
+			m.trackManagedBrowser(browser, statePath, state)
 			return browser, nil
 		}
 		// State can be stale because the process exited between inspection and
@@ -371,10 +368,7 @@ func (m *ManagedBrowserManager) launchFresh(ctx context.Context, options Managed
 		_ = browser.Close()
 		return nil, newManagedBrowserLifecycleError("state", err)
 	}
-	browser.closeHook = func() error {
-		return m.closeManagedBrowser(browser, statePath, state)
-	}
-	go m.watchManagedBrowser(browser, statePath, state)
+	m.trackManagedBrowser(browser, statePath, state) //nolint:contextcheck // Close outlives the launch request by design.
 	return browser, nil
 }
 
@@ -439,11 +433,31 @@ func (m *ManagedBrowserManager) closeManagedBrowser(browser *ManagedBrowser, sta
 	return stopErr
 }
 
-func (m *ManagedBrowserManager) watchManagedBrowser(browser *ManagedBrowser, statePath string, expected ManagedBrowserState) {
+// trackManagedBrowser installs Close and the exit watcher. Close joins the
+// watcher, so a closed handle never touches the profile directory afterwards.
+func (m *ManagedBrowserManager) trackManagedBrowser(browser *ManagedBrowser, statePath string, state ManagedBrowserState) {
+	closing, watcherDone := make(chan struct{}), make(chan struct{})
+	browser.closeHook = func() error {
+		err := m.closeManagedBrowser(browser, statePath, state)
+		close(closing)
+		<-watcherDone
+		return err
+	}
+	go m.watchManagedBrowser(browser, statePath, state, closing, watcherDone)
+}
+
+// watchManagedBrowser removes the exact state record once the process exits
+// on its own; an explicit Close owns that cleanup instead.
+func (m *ManagedBrowserManager) watchManagedBrowser(browser *ManagedBrowser, statePath string, expected ManagedBrowserState, closing <-chan struct{}, done chan<- struct{}) {
+	defer close(done)
 	if browser == nil || browser.Done() == nil {
 		return
 	}
-	<-browser.Done()
+	select {
+	case <-browser.Done():
+	case <-closing:
+		return
+	}
 	lease, err := acquireManagedBrowserLease(context.Background(), filepath.Join(expected.ProfileDir, managedBrowserLockName), m.options.LockTimeout, m.options.LockPoll, m.options.LockStaleAfter)
 	if err != nil {
 		return
@@ -915,22 +929,6 @@ func managedBrowserProfileOwnerState(pid int, profileDir string, commandLine []s
 		ProfileDir: profile,
 		CDPURL:     fmt.Sprintf("http://127.0.0.1:%d/json/version", port),
 	}, true
-}
-
-func stringSetContains(values []string, expected string) bool {
-	for _, value := range values {
-		if strings.TrimSpace(value) == expected {
-			return true
-		}
-	}
-	return false
-}
-
-func normalizedManagedShutdown(timeout time.Duration) time.Duration {
-	if timeout <= 0 {
-		return defaultManagedBrowserShutdownTimeout
-	}
-	return timeout
 }
 
 func newManagedBrowserLifecycleError(phase string, cause error) error {
