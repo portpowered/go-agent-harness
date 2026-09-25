@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"math"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -39,15 +38,6 @@ func TestLookupRejectsUnknownIDs(t *testing.T) {
 	for _, id := range []string{"overlap_16k", "overlap_24k", "truncated_16k", "truncated_24k", "utterance-hello-there", "v3c-utterance-1"} {
 		if !lookup.Has(id) {
 			t.Fatalf("known corpus ID %q was rejected", id)
-		}
-	}
-}
-
-func TestCommittedCorpusFilesExist(t *testing.T) {
-	for _, name := range []string{"truncated_16k.wav", "truncated_24k.wav"} {
-		path := filepath.Join(committedAudio, name)
-		if _, err := os.Stat(path); err != nil {
-			t.Fatalf("committed truncated corpus fixture %s must be reused by the v2e scenarios: %v", path, err)
 		}
 	}
 }

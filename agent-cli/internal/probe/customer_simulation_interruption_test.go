@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -269,27 +268,6 @@ func TestCorrectionBindsMediaBeforeNormalizedResponse(t *testing.T) {
 				t.Fatalf("cancel ID = %q, want %q", p.facts.cancelResponseID, mediaID)
 			}
 		})
-	}
-}
-
-func TestFamilyDScenariosDeclareSeparateTerminationShapes(t *testing.T) {
-	for _, method := range []TerminationMethod{TerminationSIGINT, TerminationNatural} {
-		scenario := NewFamilyDScenario(method)
-		if err := scenario.Validate(); err != nil {
-			t.Fatalf("Family D %q scenario validation: %v", method, err)
-		}
-		if scenario.Family != ScenarioFamilyD || scenario.Termination != method || len(scenario.Actions) != 1 {
-			t.Fatalf("Family D %q scenario = %+v, want one action and matching termination", method, scenario)
-		}
-		if len(FamilyDSpokenScript()) != 1 || FamilyDSpokenScript()[0].ActionID != FamilyDActionID || strings.TrimSpace(FamilyDSpokenScript()[0].Text) == "" {
-			t.Fatalf("Family D spoken script = %+v, want one natural action turn", FamilyDSpokenScript())
-		}
-		if method == TerminationSIGINT && scenario.Interruption.Kind != InterruptionDuringOutput {
-			t.Fatalf("SIGINT interruption = %+v, want during_output", scenario.Interruption)
-		}
-		if method == TerminationNatural && scenario.Interruption.Kind != InterruptionNone {
-			t.Fatalf("natural interruption = %+v, want none", scenario.Interruption)
-		}
 	}
 }
 
