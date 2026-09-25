@@ -1,15 +1,31 @@
-package cli
+package selectionstore
 
 import (
 	"context"
 	"errors"
+
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
 )
 
-type productionCLISelectionStore struct{ store WebMCPSelectionStore }
+// discoveryStore adapts a Store to the context-aware discovery persistence
+// contract used by the neutral discovery service.
+type discoveryStore struct{ store Store }
 
-func (s productionCLISelectionStore) Load(ctx context.Context) (discovery.PersistedSelection, error) {
-	if err := contextErrorForProduction(ctx); err != nil {
+// ForDiscovery adapts value to discovery persistence when it is a Store.
+// A nil value stays nil and any other value is returned unchanged so callers
+// may inject a discovery.SelectionStore directly.
+func ForDiscovery(value any) any {
+	if value == nil {
+		return nil
+	}
+	if store, ok := value.(Store); ok {
+		return discoveryStore{store: store}
+	}
+	return value
+}
+
+func (s discoveryStore) Load(ctx context.Context) (discovery.PersistedSelection, error) {
+	if err := contextError(ctx); err != nil {
 		return discovery.PersistedSelection{}, err
 	}
 	if s.store == nil {
@@ -35,14 +51,14 @@ func (s productionCLISelectionStore) Load(ctx context.Context) (discovery.Persis
 	}, nil
 }
 
-func (s productionCLISelectionStore) Save(ctx context.Context, record discovery.PersistedSelection) error {
-	if err := contextErrorForProduction(ctx); err != nil {
+func (s discoveryStore) Save(ctx context.Context, record discovery.PersistedSelection) error {
+	if err := contextError(ctx); err != nil {
 		return err
 	}
 	if s.store == nil {
 		return errors.New("WebMCP selection store is unavailable")
 	}
-	return s.store.Save(WebMCPSelection{
+	return s.store.Save(Selection{
 		Version:           int(record.Version),
 		EndpointID:        record.EndpointID,
 		BrowserID:         record.BrowserID,
@@ -55,17 +71,7 @@ func (s productionCLISelectionStore) Save(ctx context.Context, record discovery.
 	})
 }
 
-func productionSelectionStore(value any) any {
-	if value == nil {
-		return nil
-	}
-	if store, ok := value.(WebMCPSelectionStore); ok {
-		return productionCLISelectionStore{store: store}
-	}
-	return value
-}
-
-func contextErrorForProduction(ctx context.Context) error {
+func contextError(ctx context.Context) error {
 	if ctx == nil {
 		return nil
 	}
