@@ -9,8 +9,8 @@ LINT_BASE ?= origin/main
 LINT_CONFIG ?= .golangci.yml
 LINT_NEW_CONFIG ?= .golangci.new.yml
 # LINT_SHARD selects the modules `make lint` and `make lint-cross` check:
-# all (default), agent-cli, or libraries (every other lint module). CI runs
-# the shards in parallel.
+# all (default), agent-cli, or libraries (every other lint module). CI lints
+# all modules in one lane; the cached run takes seconds.
 LINT_SHARD ?= all
 LINT_LIBRARY_MODULES := $(filter-out agent-cli,$(LINT_MODULES))
 LINT_SELECTED_MODULES = $(if $(filter agent-cli,$(LINT_SHARD)),agent-cli,$(if $(filter libraries,$(LINT_SHARD)),$(LINT_LIBRARY_MODULES),$(LINT_MODULES)))

@@ -97,11 +97,13 @@ jobs:
 
   # golangci-lint lanes. Every lane enforces the hard limits in .golangci.yml
   # (which also loads the opt-in live/e2e/e2e_internal/stress/
-  # sessioncapacityramp test tags). The Linux lanes add the new-code pass and
-  # the wireinject pass; the cross lanes lint GOOS=windows and GOOS=darwin
+  # sessioncapacityramp test tags). The linux lane adds the new-code pass and
+  # the wireinject pass; the cross lane lints GOOS=windows and GOOS=darwin
   # with cgo disabled (darwin also with the nomicrophone tag), and the darwin
-  # cgo lane lints cgo-constrained packages natively on macOS. See
-  # docs/architecture/lint-policy.md.
+  # cgo lane lints cgo-constrained packages natively on macOS. With a warm
+  # build cache each lane's lint step takes seconds and job setup dominates,
+  # so the Linux modules share one lane and both cross targets share another.
+  # See docs/architecture/lint-policy.md.
   static-lint:
     name: CI (static lint ${{ matrix.lane }})
     runs-on: ${{ matrix.runner }}
@@ -110,26 +112,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - lane: agent-cli
-            cache: agent-cli
+          - lane: linux
+            cache: linux
             runner: ubuntu-latest
             fetch-depth: 0
-            command: make lint LINT_SHARD=agent-cli
-          - lane: libraries
-            cache: libraries
-            runner: ubuntu-latest
-            fetch-depth: 0
-            command: make lint LINT_SHARD=libraries
-          - lane: windows
-            cache: windows
+            command: make lint
+          - lane: cross
+            cache: cross
             runner: ubuntu-latest
             fetch-depth: 1
-            command: make lint-cross LINT_CROSS_GOOS=windows
-          - lane: darwin
-            cache: darwin
-            runner: ubuntu-latest
-            fetch-depth: 1
-            command: make lint-cross LINT_CROSS_GOOS=darwin
+            command: make lint-cross
           # cgo-constrained darwin files (CoreAudio capture, display
           # permission) need the macOS SDK.
           - lane: darwin cgo

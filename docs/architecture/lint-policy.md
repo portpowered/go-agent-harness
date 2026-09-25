@@ -83,7 +83,7 @@ configuration changes. The cross lanes run only the hard pass. The new-code
 pass runs on Linux.
 
 `LINT_SHARD=agent-cli|libraries` limits `make lint` and `make lint-cross` to
-agent-cli or to every other lint module. CI uses it to keep each lane short.
+agent-cli or to every other lint module, for example to split a local run.
 `make lint` and `make lint-cross` lint `LINT_JOBS` modules at once (default
 4). Each module's output prints as one block when that module finishes.
 
@@ -138,10 +138,10 @@ scripts/golangci-lint-working-tree.sh --analyzer <pinned golangci-lint> \
 
 Findings depend on the target platform. When you change platform-tagged files,
 run `make lint-cross` as well as `make lint`, and run `make lint-darwin-cgo` on
-macOS when you change cgo files. CI runs every lane: `CI (static lint
-agent-cli)`, `CI (static lint libraries)`, `CI (static lint windows)`,
-`CI (static lint darwin)` and `CI (static lint darwin cgo)`. All of them are
-aggregated under the required `CI (static)` check. The `golangci-lint` on PATH
+macOS when you change cgo files. CI runs every lane: `CI (static lint linux)`
+(`make lint`), `CI (static lint cross)` (`make lint-cross`, both operating
+systems) and `CI (static lint darwin cgo)`. All of them are aggregated under
+the required `CI (static)` check. The `golangci-lint` on PATH
 may be a different version, so use the Makefile resolver.
 
 Each CI lane keeps its own Go build cache and golangci-lint cache in one
