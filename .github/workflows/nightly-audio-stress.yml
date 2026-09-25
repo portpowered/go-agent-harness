@@ -27,9 +27,12 @@ on:
 permissions:
   contents: read
 
+# One group per trigger: a manual dispatch or a pull request never cancels an
+# in-progress scheduled run. Only a newer push to the same pull request
+# cancels its older run.
 concurrency:
-  group: nightly-audio-stress-${{ github.ref }}
-  cancel-in-progress: true
+  group: nightly-audio-stress-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   audio-stress:
@@ -62,7 +65,11 @@ jobs:
       - name: Run high-rate tool-audio stress trials
         env:
           AUDIO_STRESS_COUNT: ${{ github.event.inputs.count || '4' }}
-        run: make test-audio-stress AUDIO_STRESS_COUNT="$AUDIO_STRESS_COUNT"
+        run: |
+          case "$AUDIO_STRESS_COUNT" in
+            '' | *[!0-9]* | 0*) echo "::error::count must be a positive integer, got '$AUDIO_STRESS_COUNT'"; exit 2 ;;
+          esac
+          make test-audio-stress AUDIO_STRESS_COUNT="$AUDIO_STRESS_COUNT"
 
       - name: Save Go cache
         if: always()
@@ -89,5 +96,5 @@ jobs:
           else
             gh issue create --title "$TITLE" --body "$body
 
-          Reproduce locally with \`make test-audio-stress AUDIO_STRESS_COUNT=5\`. Close this issue once the stress trials pass again."
+          Reproduce locally with \`make test-audio-stress AUDIO_STRESS_COUNT=4\`. Close this issue once the stress trials pass again."
           fi
