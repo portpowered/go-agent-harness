@@ -149,7 +149,7 @@ class AwaitJobsTest(unittest.TestCase):
             timeout=60,
         )
         self.assertEqual(result.returncode, 1)
-        self.assertIn("no job matched after 0s: Lint *", result.stdout)
+        self.assertIn("jobs still unmatched after 0s: Lint *", result.stdout)
         self.assertEqual(self.calls(), 1)
 
     def test_missing_timeout_does_not_fail_a_matched_pending_job(self) -> None:
@@ -162,6 +162,29 @@ class AwaitJobsTest(unittest.TestCase):
             timeout=60,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def run_min_matches(self, minimum: str, *names: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["bash", str(SCRIPT), "--interval", "0", "--timeout", "30", "--missing-timeout", "0", "--min-matches", minimum, *names],
+            env=dict(os.environ, GH=str(self.dir / "gh"), FAKE_GH_DIR=str(self.dir), GITHUB_REPOSITORY="owner/repo", GITHUB_RUN_ID="42"),
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+
+    def test_min_matches_fails_when_a_prefix_lane_is_dropped(self) -> None:
+        self.listings(row("Lint a", "completed", "success") + row("Lint b", "completed", "success"))
+        result = self.run_min_matches("3", "Lint *")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("jobs still unmatched after 0s: Lint * (fewer than 3 jobs)", result.stdout)
+
+    def test_min_matches_passes_with_enough_lanes_and_ignores_exact_names(self) -> None:
+        self.listings(row("Lint a", "completed", "success") + row("Lint b", "completed", "success") + row("A", "completed", "success"))
+        result = self.run_min_matches("2", "Lint *", "A")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_min_matches_rejects_a_non_positive_count(self) -> None:
+        self.assertEqual(self.run_min_matches("0", "Lint *").returncode, 2)
 
     def test_retries_a_failed_listing(self) -> None:
         self.listings(None, row("A", "completed", "success"))

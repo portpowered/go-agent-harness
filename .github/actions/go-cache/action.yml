@@ -25,7 +25,12 @@ inputs:
       merges those jobs), tried in order after this job's own keys. The
       restored build cache is a superset or near-superset of what the job
       compiles, so only a toolchain bump leaves it truly cold; the next save
-      prunes it to this job's working set under its own name.
+      prunes it to this job's working set under its own name. A fallback
+      only hits a cache saved with the same paths: actions/cache versions
+      every entry by its path list, so the fallback job must have cached
+      exactly this job's paths, including the same extra-paths (a lint
+      lane's cache never restores into a job without its golangci-lint
+      directory, or the other way around).
     required: false
     default: ""
 

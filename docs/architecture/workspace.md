@@ -95,23 +95,21 @@ and pushes to `main`, and every job starts at once (no `needs:`):
 | Job | Runs |
 | --- | --- |
 | `CI (static)` (required) | `fmt`, `check-ci-test-partition`, `architecture-size-check`, then waits for every lint lane |
-| `CI (static lint …)` | ten golangci-lint lanes (linux, windows and darwin by agent-cli, runtime and support, plus darwin cgo on macOS); see [lint-policy.md](lint-policy.md) |
+| `CI (static lint …)` | nine golangci-lint lanes (linux, windows and darwin by agent-cli, runtime and support); see [lint-policy.md](lint-policy.md) |
 | `CI (unit)` (required) | `test-tools`, `test-factory-scripts`, the agent-cli build, the standalone-checkout check, `wire-check` |
-| `CI (coverage agent-cli unit)` | agent-cli coverage without `test/integration` |
 | `CI (coverage libraries)` | every other module's and the embedding consumer's coverage |
-| `CI (coverage)` (required) | agent-cli `test/integration` (sharded on one runner), then the coverage gate over every profile |
+| `CI (coverage)` (required) | agent-cli coverage: `test/integration` (sharded on one runner), then the unit packages, then the coverage gate over every profile |
 | `CI (race)` (required) | the race-detector targets and the native Linux device backend |
 | `CI (macOS audio release)` (required) | macOS audio units, darwin release cross-build and GoReleaser check |
-| `CI (WebMCP Chrome)` (required) | the pinned mac-arm64 Chrome cancellation acceptance |
+| `CI (WebMCP Chrome)` (required) | the pinned mac-arm64 Chrome cancellation acceptance, and `make lint-darwin-cgo` (the cgo-constrained darwin packages need the macOS SDK) |
 | `CI (Windows audio portable)` | the Windows device backend regressions |
 
 Each job must finish within three minutes with a cold build cache, which is
-what bounds merging jobs further: the two non-integration coverage jobs merged
-into one took 143-183s cold, and `CI (coverage)`, which waits for it,
-183-194s. A new or renamed job lists the jobs it replaced in `go-cache`'s
+what bounds merging jobs further: all of coverage in one job took 194-251s
+cold. A new or renamed job lists the jobs it replaced in `go-cache`'s
 `fallback-cache-names`, so only a toolchain bump leaves it truly cold. A
 required check that aggregates other jobs (`CI (static)` over the lint lanes,
-`CI (coverage)` over the other two coverage jobs) waits for them at its end
+`CI (coverage)` over coverage libraries) waits for them at its end
 with `scripts/ci-await-jobs.sh` rather than through a relay job. `make check-ci-test-partition` keeps each Linux test
 corpus owned by exactly one job. Every job restores a per-job Go build and
 module cache (`.github/actions/go-cache`) that main pushes save as the job's
