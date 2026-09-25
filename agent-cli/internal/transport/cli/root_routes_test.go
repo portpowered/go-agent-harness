@@ -1,7 +1,5 @@
 package cli
 
-import sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
-
 import sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
 
 import (
@@ -12,9 +10,6 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe/fleet"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
-	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
-	recordingwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/wire"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	"github.com/spf13/cobra"
 )
@@ -40,13 +35,7 @@ func newTestRootCommandWithProbeFleetCommand(probeFleetCommand *ProbeFleetComman
 	}
 	registry := defaultTestDeviceRegistry{}
 	probeReplay := newReplayRuntimeServiceForTest()
-	probeClock := sessionclock.Real{}
-	probeRuntime := sessionservicewire.NewSessionRuntime(
-		audioiowire.NewService(), probeClock, nil, sessionservicewire.NewSessionRuntimeFactory(), nil,
-		nil, nil, nil, nil, nil, nil, providerswire.NewModelCatalog(),
-		sessionservicewire.NewBrowserConversationService(), recordingwire.NewService(probeClock),
-		recordingwire.NewProviderCaptureService(probeClock), probeReplay,
-	)
+	sessionCommand := newTestSessionCommand(askFlags, globalFlags, testSessionDeps{Inferencer: injectedSessionInferencer, Registry: registry})
 
 	router := NewRouter(
 		globalFlags,
@@ -57,11 +46,11 @@ func newTestRootCommandWithProbeFleetCommand(probeFleetCommand *ProbeFleetComman
 		NewInteractionCommand(),
 		NewInteractionReplayCommand(),
 		NewProbeCommand(),
-		NewProbeRunCommandWithDeviceService(newDevicesTestService(), nil, sessionservicewire.NewMetricsCollector(probeRuntime, probeReplay), probeReplay),
+		NewProbeRunCommandWithDeviceService(newDevicesTestService(), nil, sessionservicewire.NewMetricsCollector(NewSessionRequestService(sessionCommand), probeReplay), probeReplay),
 		NewProbeGateCommand(),
 		NewProbeReportCommand(),
 		probeFleetCommand,
-		NewSessionCommand(askFlags, globalFlags, newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}, SessionInferencer: injectedSessionInferencer, DeviceRegistry: registry}), nil),
+		sessionCommand,
 		NewSessionShowCommand(globalFlags, testFileStoreFactory()),
 		NewSessionListCommand(globalFlags, testFileStoreFactory()),
 		NewSessionDeleteCommand(globalFlags, testFileStoreFactory()),

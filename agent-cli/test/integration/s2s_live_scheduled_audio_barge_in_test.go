@@ -2,7 +2,7 @@
 
 package integration
 
-import runtimecontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime"
+import runtimecontract "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 
 import (
 	"bufio"

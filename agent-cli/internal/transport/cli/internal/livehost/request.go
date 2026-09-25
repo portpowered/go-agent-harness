@@ -29,7 +29,7 @@ type RequestDependencies struct {
 	CredentialReference func(string) string
 	InstructionService  runtimeSession.InstructionService
 	PageSightToolID     string
-	Capabilities        func(*config.Config) (*runtimeSession.LiveCapabilities, error)
+	Capabilities        func(context.Context, *config.Config) (*runtimeSession.LiveCapabilities, error)
 	BindImagePreparer   func(messages.ToolExecutor) messages.ToolExecutor
 	OpenImages          func([]string) ([]messages.ContentPart, error)
 }
@@ -93,7 +93,7 @@ func resolveProviderInputs(ctx context.Context, request serviceSession.Request, 
 			return requestInputs{}, err
 		}
 	}
-	capabilities, err := buildCapabilities(loaded, request, deps)
+	capabilities, err := buildCapabilities(ctx, loaded, request, deps)
 	if err != nil {
 		return requestInputs{}, err
 	}
@@ -273,6 +273,7 @@ func assembleLiveRequest(request serviceSession.Request, inputs requestInputs) r
 		ReplayPlan:            inputs.replayPlan,
 		MaxDuration:           request.MaxDuration,
 		SessionUpdatedTimeout: request.SessionUpdatedTimeout,
+		ToolExecutionTimeout:  request.ToolExecutionTimeout,
 		Capabilities:          inputs.capabilities,
 		// --wait-for-close is an explicit persistent-session policy. It must
 		// override the ordinary finite audio/output policy so a completed
@@ -317,11 +318,11 @@ func resolveCredentialReference(apiKey string, resolve func(string) string) stri
 	return resolve(apiKey)
 }
 
-func buildCapabilities(cfg *config.Config, request serviceSession.Request, deps RequestDependencies) (*runtimeSession.LiveCapabilities, error) {
+func buildCapabilities(ctx context.Context, cfg *config.Config, request serviceSession.Request, deps RequestDependencies) (*runtimeSession.LiveCapabilities, error) {
 	if deps.Capabilities == nil {
 		return nil, nil
 	}
-	capabilities, err := deps.Capabilities(ToolConfig(cfg, request))
+	capabilities, err := deps.Capabilities(ctx, ToolConfig(cfg, request))
 	if err != nil {
 		return nil, err
 	}

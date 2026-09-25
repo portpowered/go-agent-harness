@@ -1,180 +1,21 @@
 package integration
 
-import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
-
 import (
 	"context"
-	"errors"
 	"io"
 	"path/filepath"
-	"sync"
 	"testing"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
-const (
-	sessionToolLifecycleCallID    = "call_lifecycle_slow"
-	sessionLifecycleSafetyTimeout = 10 * time.Second
-)
-
-// lifecycleSession is a small provider-facing session double. It emits one
-// scheduled assistant response containing a tool call, then reports the
-// result accepted only through SendWithOutcome. The local SESSION.CLOSE delta
-// is observed through the normal session runner lifecycle.
-type lifecycleSession struct {
-	recv *messages.TypedBuffer[messages.StreamMessage]
-	done chan struct{}
-
-	closeOnce          sync.Once
-	responseOnce       sync.Once
-	resultAcceptedOnce sync.Once
-	continuationOnce   sync.Once
-
-	mu   sync.Mutex
-	sent []messages.StreamMessage
-
-	resultAccepted        chan struct{}
-	continuationRequested chan struct{}
-	continuationRelease   chan struct{}
-}
-
-func newLifecycleSession() *lifecycleSession {
-	return &lifecycleSession{
-		recv:                  messages.NewTypedBuffer[messages.StreamMessage](32),
-		done:                  make(chan struct{}),
-		resultAccepted:        make(chan struct{}),
-		continuationRequested: make(chan struct{}),
-		continuationRelease:   make(chan struct{}),
-	}
-}
-
-func (s *lifecycleSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
-	return s.SendWithOutcome(ctx, msg).OK()
-}
-
-func (s *lifecycleSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
-	if err := ctx.Err(); err != nil {
-		return lifecycleSessionContextOutcome(err)
-	}
-	s.mu.Lock()
-	s.sent = append(s.sent, msg)
-	s.mu.Unlock()
-
-	switch msg.Type {
-	case messages.StreamTypeMessageEnd:
-		s.responseOnce.Do(func() {
-			s.emitProviderToolTurn()
-		})
-	case messages.StreamTypeToolCallEnd:
-		value, ok := msg.Value.(*messages.ToolCallEndValue)
-		if ok && value != nil && value.ToolCallID == sessionToolLifecycleCallID {
-			s.resultAcceptedOnce.Do(func() { close(s.resultAccepted) })
-		}
-	case messages.StreamTypeResponseCreate:
-		s.continuationOnce.Do(func() { close(s.continuationRequested) })
-		select {
-		case <-s.continuationRelease:
-			s.emitProviderContinuation()
-		case <-ctx.Done():
-			return lifecycleSessionContextOutcome(ctx.Err())
-		}
-	}
-	return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
-}
-
-func lifecycleSessionContextOutcome(err error) messages.SessionSendOutcome {
-	if errors.Is(err, context.DeadlineExceeded) {
-		return messages.SessionSendOutcome{Status: messages.SessionSendTimedOut, Err: err}
-	}
-	return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: err}
-}
-
-func (s *lifecycleSession) emitProviderToolTurn() {
-	for _, msg := range []messages.StreamMessage{
-		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
-		{Type: messages.StreamTypeToolCallStart, Role: messages.RoleAssistant, Value: messages.NewToolCallStartValue(sessionToolLifecycleCallID, "slow_tool")},
-		{Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant, Value: messages.NewToolCallEndValue(sessionToolLifecycleCallID, "slow_tool", `{"value":"wait"}`)},
-		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
-	} {
-		s.recv.Write(context.Background(), msg)
-	}
-}
-
-func (s *lifecycleSession) emitProviderContinuation() {
-	for _, msg := range []messages.StreamMessage{
-		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
-		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("grounded lifecycle continuation")},
-		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
-	} {
-		s.recv.Write(context.Background(), msg)
-	}
-}
-
-func (s *lifecycleSession) Receive() *messages.TypedBuffer[messages.StreamMessage] { return s.recv }
-
-func (s *lifecycleSession) Done() <-chan struct{} { return s.done }
-
-func (s *lifecycleSession) Close() error {
-	s.closeOnce.Do(func() { close(s.done) })
-	return nil
-}
-
-func (s *lifecycleSession) sentSnapshot() []messages.StreamMessage {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return append([]messages.StreamMessage(nil), s.sent...)
-}
-
-func (s *lifecycleSession) releaseContinuation() {
-	select {
-	case <-s.continuationRelease:
-	default:
-		close(s.continuationRelease)
-	}
-}
-
-type lifecycleSessionInferencer struct {
-	mu      sync.Mutex
-	session *lifecycleSession
-	ready   chan struct{}
-}
-
-func (i *lifecycleSessionInferencer) ConnectSession(context.Context) (messages.Session, error) {
-	session := newLifecycleSession()
-	session.recv.Write(context.Background(), messages.StreamMessage{
-		Type:  messages.StreamTypeSessionOpen,
-		Value: messages.NewSessionOpenValue("lifecycle-session", "test"),
-	})
-	i.mu.Lock()
-	i.session = session
-	i.mu.Unlock()
-	close(i.ready)
-	return session, nil
-}
-
-func (i *lifecycleSessionInferencer) connectedSession() *lifecycleSession {
-	i.mu.Lock()
-	defer i.mu.Unlock()
-	return i.session
-}
-
-type lifecycleToolExecutor struct {
-	started chan struct{}
-	release chan struct{}
-	once    sync.Once
-}
-
-func (e *lifecycleToolExecutor) Execute(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
-	e.once.Do(func() { close(e.started) })
-	select {
-	case <-e.release:
-		return messages.ToolCallResponse{Content: "lifecycle-result"}, nil
-	case <-ctx.Done():
-		return messages.ToolCallResponse{}, ctx.Err()
-	}
-}
+// sessionLifecycleSafetyTimeout bounds each lifecycle wait in the hermetic
+// tool-result session tests.
+const sessionLifecycleSafetyTimeout = 10 * time.Second
 
 func waitLifecycleSignal(t *testing.T, signal <-chan struct{}, name string) {
 	t.Helper()
@@ -185,128 +26,56 @@ func waitLifecycleSignal(t *testing.T, signal <-chan struct{}, name string) {
 	}
 }
 
-// TestScheduledSessionWaitsForAcceptedToolResultAfterResponseDone drives the
-// real session composition boundary with one scheduled turn. The provider's
-// response.done is observed while the executor is still blocked; result
-// acceptance alone cannot close the session. A second barrier then releases
-// the explicit continuation, after which the normal close is emitted once.
-func TestScheduledSessionWaitsForAcceptedToolResultAfterResponseDone(t *testing.T) {
-	inferencer := &lifecycleSessionInferencer{}
-	inferencer.ready = make(chan struct{})
-	executor := &lifecycleToolExecutor{
-		started: make(chan struct{}),
-		release: make(chan struct{}),
-	}
-	providerResponseDone := make(chan struct{})
-	var responseDoneOnce sync.Once
-	var localSessionCloseOnce sync.Once
-	localSessionClose := make(chan struct{})
-	var traceMu sync.Mutex
-	var trace []messages.StreamMessage
+// liveToolSessionOptions describes one hermetic session run through the
+// composed CLI with the application's session-inferencer and tool-service
+// ports replaced by test doubles.
+type liveToolSessionOptions struct {
+	inferencer messages.SessionInferencer
+	executor   messages.ToolExecutor
+	toolNames  []string
+	observer   func(messages.StreamMessage)
+	output     io.Writer
+	// inputPCM, when present, is admitted as one scheduled customer audio
+	// turn (--audio-in-turn, which requires a --record-dir bundle).
+	inputPCM []byte
+	args     []string
+}
 
-	ctx, cancel := context.WithTimeout(context.Background(), sessionLifecycleSafetyTimeout)
-	defer cancel()
-	runErr := make(chan error, 1)
-	go func() {
-		runErr <- servicetest.RunSession(ctx, io.Discard, servicetest.SessionRunOptions{
-			AudioService:      newTestAudioService(),
-			RecordPath:        filepath.Join(t.TempDir(), "scheduled-tool-lifecycle.session.json"),
-			Provider:          "grok",
-			Model:             "grok-realtime",
-			APIKey:            "test-key",
-			SessionInferencer: inferencer,
-			ToolExecutor:      executor,
-			AudioInputs: []servicetest.ScheduledAudioInput{{
-				AfterCompletedTurns: 0,
-				PCM:                 []byte{1, 2, 3, 4},
-				EndOfTurn:           true,
-			}},
-			StreamObserver: func(msg messages.StreamMessage) {
-				traceMu.Lock()
-				trace = append(trace, msg)
-				traceMu.Unlock()
-				if msg.Type == messages.StreamTypeSessionClose {
-					localSessionCloseOnce.Do(func() { close(localSessionClose) })
-				}
-				if msg.Type == messages.StreamTypeMessageEnd && msg.Role == messages.RoleAssistant {
-					responseDoneOnce.Do(func() { close(providerResponseDone) })
-				}
-			},
-		})
-	}()
-
-	select {
-	case <-inferencer.ready:
-	case <-time.After(2 * time.Second):
-		t.Fatal("session was not connected")
+// runLiveToolSession runs the production live session path for one
+// invocation and returns its command result.
+func runLiveToolSession(ctx context.Context, t *testing.T, options liveToolSessionOptions) error {
+	t.Helper()
+	definitions := make([]messages.ToolDefinition, 0, len(options.toolNames))
+	for _, name := range options.toolNames {
+		definitions = append(definitions, messages.ToolDefinition{Name: name, Description: "Hermetic " + name + " fixture."})
 	}
-	sessionReady := inferencer.connectedSession()
-	if sessionReady == nil {
-		t.Fatal("connected session was not retained")
+	capabilities := serviceTools.Factory(func(*config.Config) (serviceTools.Capabilities, error) {
+		return serviceTools.Capabilities{Executor: options.executor, Definitions: definitions}, nil
+	})
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
+		wire.NewToolServicePort(capabilities),
+		wire.NewPortSwap(wire.PortInferencer, &mockInferencer{response: "unused"}),
+		wire.NewPortSwap(wire.PortSessionInferencer, options.inferencer),
+	)
+	if err != nil {
+		t.Fatalf("initialize live tool session CLI: %v", err)
 	}
-
-	waitLifecycleSignal(t, executor.started, "tool executor to start")
-	waitLifecycleSignal(t, providerResponseDone, "provider response.done")
-	select {
-	case <-localSessionClose:
-		t.Fatal("session emitted SESSION.CLOSE before the outstanding tool result was accepted")
-	default:
+	if options.observer != nil {
+		agentCLI.SetSessionStreamObserver(options.observer)
 	}
-
-	close(executor.release)
-	waitLifecycleSignal(t, sessionReady.resultAccepted, "correlated tool result acceptance")
-	select {
-	case <-localSessionClose:
-		t.Fatal("session emitted SESSION.CLOSE after result acceptance but before continuation")
-	default:
+	output := options.output
+	if output == nil {
+		output = io.Discard
 	}
-	waitLifecycleSignal(t, sessionReady.continuationRequested, "provider continuation request")
-	select {
-	case <-localSessionClose:
-		t.Fatal("session emitted SESSION.CLOSE before continuation terminal response")
-	default:
+	root := agentCLI.Generate()
+	root.SetOut(output)
+	root.SetErr(io.Discard)
+	args := append([]string{"--config-dir", t.TempDir(), "session"}, options.args...)
+	if len(options.inputPCM) > 0 {
+		inputPath := filepath.Join(t.TempDir(), "customer-turn.wav")
+		writeAsyncCollisionInputWAV(t, inputPath, options.inputPCM)
+		args = append(args, "--audio-in-turn", inputPath, "--record-dir", filepath.Join(t.TempDir(), "recording"))
 	}
-	sessionReady.releaseContinuation()
-	waitLifecycleSignal(t, localSessionClose, "SESSION.CLOSE after continuation")
-
-	select {
-	case err := <-runErr:
-		if err != nil {
-			t.Fatalf("scheduled session returned an error: %v", err)
-		}
-	case <-time.After(sessionLifecycleSafetyTimeout):
-		t.Fatalf("scheduled session did not finish after client close within %s", sessionLifecycleSafetyTimeout)
-	}
-
-	var resultCount int
-	var continuationCount int
-	for _, msg := range sessionReady.sentSnapshot() {
-		switch msg.Type {
-		case messages.StreamTypeToolCallEnd:
-			value, ok := msg.Value.(*messages.ToolCallEndValue)
-			if ok && value != nil && value.ToolCallID == sessionToolLifecycleCallID {
-				resultCount++
-			}
-		case messages.StreamTypeResponseCreate:
-			continuationCount++
-		}
-	}
-	if resultCount != 1 {
-		t.Fatalf("provider sends contained %d correlated tool results, want exactly one", resultCount)
-	}
-	if continuationCount != 1 {
-		t.Fatalf("provider sends contained %d continuation requests, want exactly one", continuationCount)
-	}
-	traceMu.Lock()
-	observed := append([]messages.StreamMessage(nil), trace...)
-	traceMu.Unlock()
-	var closeCount int
-	for _, msg := range observed {
-		if msg.Type == messages.StreamTypeSessionClose {
-			closeCount++
-		}
-	}
-	if closeCount != 1 {
-		t.Fatalf("session emitted %d SESSION.CLOSE events, want exactly one", closeCount)
-	}
+	root.SetArgs(args)
+	return root.ExecuteContext(ctx)
 }

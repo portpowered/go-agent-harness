@@ -1,9 +1,5 @@
 package integration
 
-import sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
-
-import sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
-
 import (
 	"context"
 	"encoding/json"
@@ -236,7 +232,7 @@ func runOverrideCLI(t *testing.T, executor messages.ToolExecutor) (string, strin
 		cli.NewProbeGateCommand(),
 		cli.NewProbeReportCommand(),
 		cli.NewProbeFleetCommand(nil, nil, nil),
-		cli.NewSessionCommand(askFlags, globalFlags, newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}}), nil),
+		cli.NewSessionCommand(askFlags, globalFlags, nil),
 		cli.NewSessionShowCommand(globalFlags, runtimeSessionWire.NewFileStoreFactory()),
 		cli.NewSessionListCommand(globalFlags, runtimeSessionWire.NewFileStoreFactory()),
 		cli.NewSessionDeleteCommand(globalFlags, runtimeSessionWire.NewFileStoreFactory()),

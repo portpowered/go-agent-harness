@@ -1,9 +1,5 @@
 package cli
 
-import sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
-
-import sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
-
 import (
 	"bytes"
 	"context"
@@ -20,7 +16,7 @@ import (
 )
 
 func TestSessionCommandTransportHelpDocumentsDeferredWebRTCCapability(t *testing.T) {
-	command := NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}}), nil).Generate()
+	command := newTestSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), testSessionDeps{}).Generate()
 	var out bytes.Buffer
 	command.SetOut(&out)
 	command.SetArgs([]string{"--help"})
@@ -53,7 +49,7 @@ func TestSessionCommandTransportHelpDocumentsDeferredWebRTCCapability(t *testing
 }
 
 func TestSessionCommandTransportRejectsUnknownValueBeforeSessionSetup(t *testing.T) {
-	command := NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}}), nil).Generate()
+	command := newTestSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), testSessionDeps{}).Generate()
 	command.SetArgs([]string{"--transport", "quic"})
 
 	err := command.ExecuteContext(context.Background())
@@ -96,7 +92,7 @@ func TestValidateSessionTransportNormalizesSupportedValues(t *testing.T) {
 }
 
 func TestSessionCommandSignalingWithoutWebRTCIsRejectedBeforeSessionSetup(t *testing.T) {
-	command := NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}}), nil).Generate()
+	command := newTestSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), testSessionDeps{}).Generate()
 	command.SetArgs([]string{"--signaling", "loopback"})
 
 	err := command.ExecuteContext(context.Background())
@@ -118,7 +114,7 @@ func TestSessionCommandSignalingWithoutWebRTCIsRejectedBeforeSessionSetup(t *tes
 }
 
 func TestSessionCommandWebRTCWithoutSignalingIsRejectedBeforeSessionSetup(t *testing.T) {
-	command := NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}}), nil).Generate()
+	command := newTestSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), testSessionDeps{}).Generate()
 	command.SetArgs([]string{"--transport", "webrtc"})
 
 	err := command.ExecuteContext(context.Background())
@@ -148,7 +144,7 @@ func TestSessionCommandRejectsValidWebRTCBeforeSessionSetup(t *testing.T) {
 	}
 	inferencer := &cliSideEffectSessionInferencer{}
 	toolCapabilityCalls := 0
-	owner := NewSessionCommand(flags.NewAskFlags(), globalFlags, newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}}), nil)
+	owner := newTestSessionCommand(flags.NewAskFlags(), globalFlags, testSessionDeps{})
 	recordPath := filepath.Join(t.TempDir(), "must-not-be-created.session.json")
 	command := owner.Generate()
 	command.SetArgs([]string{
@@ -200,7 +196,7 @@ func TestSessionCommandRejectsValidWebRTCBeforeSessionSetup(t *testing.T) {
 }
 
 func TestSessionCommandMediaSourceWithoutWebRTCIsRejectedBeforeSessionSetup(t *testing.T) {
-	command := NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}}), nil).Generate()
+	command := newTestSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), testSessionDeps{}).Generate()
 	command.SetArgs([]string{"--media-source", "rtsp://fixture/camera"})
 
 	err := command.ExecuteContext(context.Background())
@@ -222,7 +218,7 @@ func TestSessionCommandMediaSourceWithoutWebRTCIsRejectedBeforeSessionSetup(t *t
 }
 
 func TestSessionCommandMediaSourceWithAudioInIsRejectedBeforeSessionSetup(t *testing.T) {
-	command := NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}}), nil).Generate()
+	command := newTestSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), testSessionDeps{}).Generate()
 	command.SetArgs([]string{
 		"--transport", "webrtc",
 		"--signaling", "loopback",

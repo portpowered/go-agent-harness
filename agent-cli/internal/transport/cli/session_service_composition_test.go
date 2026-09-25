@@ -3,90 +3,199 @@ package cli
 import (
 	"context"
 	"errors"
+	"fmt"
+	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"strings"
+	"sync"
 	"testing"
-	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
-	sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 	runtimedeviceswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
 	runtimeProviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
+	runtimeRecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	runtimeRecordingWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/wire"
 	runtimeReplayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	runtimeSessionWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
+	runtimeSessionTraceWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-	runtimeModels "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
-// Tests compose the same runtime and use-case services as the application graph.
-func newTestSessionService(deps sessionservicewire.SessionDependencies) agentsession.SessionService {
+// testSessionDeps are the per-test seams of a composed session command. A
+// nil Inferencer builds provider sessions through the provider service, as
+// production composition does; a non-nil value replaces provider
+// construction exactly like the application's session-inferencer port.
+type testSessionDeps struct {
+	Inferencer     messages.SessionInferencer
+	Registry       devicegw.DeviceRegistry
+	Capabilities   SessionToolCapabilitiesFactory
+	ModelAdmission runtimeProviders.ModelAdmission
+	// Dialer optionally replaces the provider transport for provider-built
+	// sessions, like the application's transport-dialer port.
+	Dialer transport.Dialer
+}
+
+// newTestSessionCommand composes the session command with the same live,
+// replay, recording, provider, and device services as the application graph.
+func newTestSessionCommand(askFlags *flags.AskFlags, globalFlags *flags.GlobalFlags, deps testSessionDeps) *SessionCommand {
+	if askFlags == nil {
+		askFlags = flags.NewAskFlags()
+	}
+	if globalFlags == nil {
+		globalFlags = flags.NewGlobalFlags()
+	}
+	clockSource := clock.Real{}
 	audioService := audioiowire.NewService()
-	deps.Runtime = sessionservicewire.NewSessionRuntime(audioService, deps.Clock, deps.ToolService, sessionservicewire.NewSessionRuntimeFactory(), deps.RuntimeFactory, deps.SessionInferencer, deps.ToolExecutor, runtimedeviceswire.NewService(deps.DeviceRegistry, audioService), deps.RuntimeObserver, deps.MetricSampler, deps.Logger, providerswire.NewModelCatalog(), sessionservicewire.NewBrowserConversationService(), runtimeRecordingWire.NewService(deps.Clock), runtimeRecordingWire.NewProviderCaptureService(deps.Clock), runtimeReplayWire.NewService())
-	return sessionservicewire.NewSessionService(deps)
+	replayService := runtimeReplayWire.NewService()
+	recordingService := runtimeRecordingWire.NewService(clockSource)
+	providerService := providerswire.NewService(providerswire.Dependencies{
+		Recording: recordingService, ProviderCapture: runtimeRecordingWire.NewProviderCaptureService(clockSource),
+		Replay: replayService, Clock: clockSource,
+	})
+	credentials := &testCredentialVault{values: make(map[string]string)}
+	liveService := runtimeSessionWire.NewLiveService(runtimeSessionWire.LiveDependencies{
+		InferencerFactory: testLiveInferencerFactory(deps, providerService, recordingService, credentials),
+		Clock:             clockSource.Now,
+		Scheduler:         clockSource,
+	})
+	return NewSessionCommandWithLive(
+		askFlags, globalFlags, nil,
+		liveService, replayService, runtimedeviceswire.NewService(deps.Registry, audioService),
+		FileDeviceService{Service: runtimedeviceswire.NewFileService(audioService), Scheduler: clockSource, TraceService: runtimeSessionTraceWire.NewService()},
+		deps.Capabilities, credentials.put, nil, recordingService, deps.ModelAdmission,
+	)
 }
 
 func newTestReplaySessionCommand(globalFlags *flags.GlobalFlags, registry devicegw.DeviceRegistry) *SessionCommand {
-	replayService := runtimeReplayWire.NewService()
-	providerService := providerswire.NewService(providerswire.Dependencies{Replay: replayService})
-	liveService := runtimeSessionWire.NewLiveService(runtimeSessionWire.LiveDependencies{
-		InferencerFactory: func(ctx context.Context, request runtimeSession.LiveRequest) (messages.SessionInferencer, error) {
-			var tools []messages.ToolDefinition
-			if request.Capabilities != nil {
-				tools = append(tools, request.Capabilities.Definitions...)
-			}
-			return providerService.BuildSession(ctx, runtimeProviders.SessionConfig{
-				Provider: request.Provider, Model: request.Model, APIKey: "replay", BaseURL: request.BaseURL,
-				RealtimeURL: request.RealtimeURL, Instructions: request.Instructions, Voice: request.Voice,
-				ReasoningEffort: request.ReasoningEffort, InputAudioFormat: runtimeModels.AudioFormat(request.InputAudioFormat),
-				OutputAudioFormat:     runtimeModels.AudioFormat(request.OutputAudioFormat),
-				InputAudioSampleRate:  runtimeModels.SampleRate(request.InputAudioSampleRate),
-				OutputAudioSampleRate: runtimeModels.SampleRate(request.OutputAudioSampleRate),
-				Tools:                 tools, ClientOwnsAudioTurnBoundaries: request.ClientOwnsAudioTurnBoundaries,
-				ReplayPath: request.Replay.InputCapturePath, ReplayTiming: "fast",
-				SessionMessageReplay: request.Replay.Kind == runtimeSession.LiveReplayKindTurn,
-			})
-		},
-		Clock: func() time.Time { return time.Now() }, Scheduler: clock.Real{},
-	})
-	audioService := audioiowire.NewService()
-	return NewSessionCommandWithLive(
-		flags.NewAskFlags(), globalFlags,
-		newTestSessionService(sessionservicewire.SessionDependencies{Clock: clock.Real{}, DeviceRegistry: registry}), nil,
-		liveService, replayService, runtimedeviceswire.NewService(registry, audioService),
-		FileDeviceService{Service: runtimedeviceswire.NewFileService(audioService), Scheduler: clock.Real{}},
-		nil, nil, nil, nil, nil,
-	)
+	return newTestSessionCommand(nil, globalFlags, testSessionDeps{Registry: registry})
 }
 
 func newTestLiveSessionCommand(askFlags *flags.AskFlags, globalFlags *flags.GlobalFlags, inferencer messages.SessionInferencer, registry devicegw.DeviceRegistry, capabilities ...SessionToolCapabilitiesFactory) *SessionCommand {
-	audioService := audioiowire.NewService()
-	clockSource := clock.Real{}
-	var liveCapabilities SessionToolCapabilitiesFactory
+	deps := testSessionDeps{Inferencer: inferencer, Registry: registry}
 	if len(capabilities) > 0 {
-		liveCapabilities = capabilities[0]
+		deps.Capabilities = capabilities[0]
 	}
-	liveService := runtimeSessionWire.NewLiveService(runtimeSessionWire.LiveDependencies{
-		InferencerFactory: func(context.Context, runtimeSession.LiveRequest) (messages.SessionInferencer, error) {
-			return inferencer, nil
-		},
-		Clock:     clockSource.Now,
-		Scheduler: clockSource,
-	})
-	deviceService := runtimedeviceswire.NewService(registry, audioService)
-	fileDeviceService := runtimedeviceswire.NewFileService(audioService)
-	return NewSessionCommandWithLive(
-		askFlags, globalFlags,
-		newTestSessionService(sessionservicewire.SessionDependencies{Clock: clockSource, SessionInferencer: inferencer, ToolService: liveCapabilities, DeviceRegistry: registry}), nil,
-		liveService, runtimeReplayWire.NewService(), deviceService,
-		FileDeviceService{Service: fileDeviceService, Scheduler: clockSource},
-		liveCapabilities, nil, nil, runtimeRecordingWire.NewService(clockSource), nil,
-	)
+	return newTestSessionCommand(askFlags, globalFlags, deps)
+}
+
+func testLiveInferencerFactory(deps testSessionDeps, providers runtimeProviders.SessionService, recording runtimeRecording.Service, credentials *testCredentialVault) runtimeSession.LiveInferencerFactory {
+	injected := deps.Inferencer
+	if injected == nil {
+		return runtimeSessionWire.NewProviderInferencerFactory(runtimeSessionWire.ProviderInferenceDependencies{
+			Providers: providers, Credentials: credentials.take, Dialer: deps.Dialer,
+		})
+	}
+	return func(_ context.Context, request runtimeSession.LiveRequest) (messages.SessionInferencer, error) {
+		path := strings.TrimSpace(request.Replay.OutputCapturePath)
+		if path == "" || !request.Replay.InjectedCaptureAllowed {
+			return injected, nil
+		}
+		return recording.TrackInjectedSession(injected, path)
+	}
+}
+
+// testCredentialVault mirrors the application's one-time credential vault so
+// raw keys never enter a live request.
+type testCredentialVault struct {
+	mu     sync.Mutex
+	values map[string]string
+	next   int
+}
+
+func (v *testCredentialVault) put(value string) string {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	v.next++
+	reference := fmt.Sprintf("test-credential:%d", v.next)
+	v.values[reference] = value
+	return reference
+}
+
+func (v *testCredentialVault) take(_ context.Context, reference string) (string, error) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	value, ok := v.values[reference]
+	if !ok {
+		return "", errors.New("test credential reference is unavailable")
+	}
+	return value, nil
+}
+
+// testLiveConversation is one live handle driven directly by a test that
+// must inject customer turns while the provider conversation is in flight.
+type testLiveConversation struct {
+	handle      runtimeSession.LiveHandle
+	output      *strings.Builder
+	runErr      chan error
+	runComplete chan struct{}
+}
+
+// startTestLiveConversation builds the command's live request, opens the
+// live handle, and starts it. Assistant text and customer transcripts are
+// rendered into output as the CLI transcript does.
+func startTestLiveConversation(t *testing.T, ctx context.Context, deps testSessionDeps, request serviceSession.Request) testLiveConversation {
+	t.Helper()
+	command := newTestSessionCommand(nil, nil, deps)
+	liveRequest, err := command.runtimeLiveRequest(ctx, request, nil)
+	if err != nil {
+		t.Fatalf("build live conversation request: %v", err)
+	}
+	handle, err := command.liveService.OpenLive(ctx, liveRequest)
+	if err != nil {
+		t.Fatalf("open live conversation: %v", err)
+	}
+	t.Cleanup(func() { _ = handle.Close() })
+	conversation := testLiveConversation{handle: handle, output: &strings.Builder{}, runErr: make(chan error, 1), runComplete: make(chan struct{})}
+	transcript := collectLiveTranscript(handle, conversation.output)
+	go func() {
+		err := handle.Start(ctx)
+		if err == nil {
+			err = handle.Wait()
+		}
+		<-transcript
+		conversation.runErr <- err
+		close(conversation.runComplete)
+	}()
+	return conversation
+}
+
+// commitCustomerTurn commits the customer's spoken turn through the live
+// handle's ordered control ingress.
+func (c testLiveConversation) commitCustomerTurn(t *testing.T, ctx context.Context) {
+	t.Helper()
+	if err := c.handle.Send(ctx, runtimeSession.LiveControl{Kind: runtimeSession.LiveControlAudioCommit}); err != nil {
+		t.Fatalf("commit the customer's spoken turn: %v", err)
+	}
+}
+
+// collectLiveTranscript renders assistant text and customer transcripts from
+// a live handle and closes the returned channel once the event stream ends.
+func collectLiveTranscript(handle runtimeSession.LiveHandle, output *strings.Builder) <-chan struct{} {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for event := range handle.Events() {
+			if event.Message == nil {
+				continue
+			}
+			switch value := event.Message.Value.(type) {
+			case *messages.TextDeltaValue:
+				if value != nil {
+					output.WriteString(value.Content)
+				}
+			case *messages.TranscriptEndValue:
+				if value != nil {
+					output.WriteString(value.FullText)
+				}
+			}
+		}
+	}()
+	return done
 }
 
 type chatFlagMatrixCase struct {

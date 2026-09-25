@@ -1,7 +1,5 @@
 package cli
 
-import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
-
 import (
 	"context"
 	"encoding/json"
@@ -14,12 +12,12 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 )
 
 func TestSessionAmbiguousTabsPublishOnlySelectedPageTools(t *testing.T) {
@@ -137,19 +135,9 @@ func TestSessionAmbiguousTabsPublishOnlySelectedPageTools(t *testing.T) {
 	sessionCtx, cancelSession := context.WithCancel(ctx)
 	runErr := make(chan error, 1)
 	go func() {
-		runErr <- servicetest.RunSession(sessionCtx, io.Discard, servicetest.SessionRunOptions{
-			Provider: config.ProviderGrok, AudioService: audioiowire.NewService(),
-			Model:                  "ambiguous-session",
-			APIKey:                 "unused",
-			LoadedConfig:           cfg,
-			BrowserToolsEnabled:    true,
-			WaitForClose:           true,
-			ToolExecutor:           surface.executor,
-			ToolDefinitions:        surface.definitions,
-			ToolDefinitionBase:     surface.base,
-			RefreshToolDefinitions: surface.refresh,
-			BrowserWatch:           surface.browserWatch,
-			SessionInferencer:      provider,
+		runErr <- newTestSessionCommand(nil, nil, testSessionDeps{Inferencer: provider, Capabilities: borrowedTestCapabilities(capabilities)}).runSessionRequest(sessionCtx, io.Discard, io.Discard, serviceSession.Request{
+			Provider: config.ProviderGrok, Model: "ambiguous-session", APIKey: "unused",
+			LoadedConfig: cfg, BrowserToolsEnabled: true, WaitForClose: true,
 		})
 	}()
 	defer func() {
@@ -363,34 +351,13 @@ func TestSessionAmbiguousCubeConversationRequiresChoiceBeforePageWork(t *testing
 
 	providerSession := newAmbiguousCubeConversationSession()
 	provider := &ambiguousCubeConversationInferencer{session: providerSession}
-	answer := make(chan servicetest.ScheduledAudioInput, 1)
-	var output strings.Builder
 	sessionCtx, cancelSession := context.WithCancel(ctx)
-	runErr := make(chan error, 1)
-	runComplete := make(chan struct{})
-	go func() {
-		err := servicetest.RunSessionWithInstructions(sessionCtx, &output, servicetest.SessionRunOptions{
-			Provider: config.ProviderGrok, AudioService: audioiowire.NewService(),
-			Model:                  "ambiguous-session",
-			APIKey:                 "unused",
-			ConfigDir:              t.TempDir(),
-			Prompt:                 "Inspect the cube on the connected browser.",
-			PromptProvided:         true,
-			LoadedConfig:           cfg,
-			BrowserToolsEnabled:    true,
-			WaitForClose:           true,
-			ToolExecutor:           surface.executor,
-			ToolDefinitions:        surface.definitions,
-			ToolDefinitionBase:     surface.base,
-			RefreshToolDefinitions: surface.refresh,
-			BrowserWatch:           surface.browserWatch,
-			BrowserCapabilityState: surface.browserState,
-			AudioInterruptions:     answer,
-			SessionInferencer:      provider,
-		}, "You are a careful cube assistant.")
-		runErr <- err
-		close(runComplete)
-	}()
+	conversation := startTestLiveConversation(t, sessionCtx, testSessionDeps{Inferencer: provider, Capabilities: borrowedTestCapabilities(capabilities)}, serviceSession.Request{
+		Provider: config.ProviderGrok, Model: "ambiguous-session", APIKey: "unused", ConfigDir: t.TempDir(),
+		Prompt: "Inspect the cube on the connected browser.", PromptProvided: true, LoadedConfig: cfg,
+		BrowserToolsEnabled: true, WaitForClose: true, SystemPrompt: "You are a careful cube assistant.",
+	})
+	runErr, runComplete := conversation.runErr, conversation.runComplete
 	defer func() {
 		cancelSession()
 		select {
@@ -437,7 +404,7 @@ func TestSessionAmbiguousCubeConversationRequiresChoiceBeforePageWork(t *testing
 	}
 	assertRuntimeHasNoOperation(t, runtime, testkit.OperationAttach, testkit.OperationEnableWebMCP, testkit.OperationInvoke)
 
-	answer <- servicetest.ScheduledAudioInput{PCM: []byte{1, 2, 3}, EndOfTurn: true}
+	conversation.commitCustomerTurn(t, ctx)
 	waitAmbiguousConversationSignal(t, ctx, runComplete, providerSession.selectionCallSent, "exact tab selection call")
 	assistantCalls = providerSession.assistantCallsSnapshot()
 	if len(assistantCalls) != 2 || assistantCalls[1].Name != webmcp.SelectTabToolName {
@@ -476,7 +443,7 @@ func TestSessionAmbiguousCubeConversationRequiresChoiceBeforePageWork(t *testing
 		t.Fatalf("waiting for ambiguous cube conversation completion: %v", ctx.Err())
 	}
 
-	outputText := output.String()
+	outputText := conversation.output.String()
 	for _, expected := range []string{"Cubecade", "https://cube.example.test", "Margin", "https://margin.example.test", "Use Cubecade", "Cubecade is ready for inspection."} {
 		if !strings.Contains(outputText, expected) {
 			t.Fatalf("conversation output missing %q: %s", expected, outputText)

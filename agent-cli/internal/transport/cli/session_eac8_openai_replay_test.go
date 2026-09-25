@@ -1,9 +1,5 @@
 package cli
 
-import sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
-
-import sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
-
 import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 
 import (
@@ -71,7 +67,7 @@ func TestSessionCommandReplaysEAC8OpenAIAudioTo16kLoopback(t *testing.T) {
 
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = t.TempDir()
-	command := NewSessionCommand(flags.NewAskFlags(), globalFlags, newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}, DeviceRegistry: registry}), nil).Generate()
+	command := newTestSessionCommand(flags.NewAskFlags(), globalFlags, testSessionDeps{Registry: registry}).Generate()
 	command.SetOut(io.Discard)
 	var stderr bytes.Buffer
 	command.SetErr(&stderr)

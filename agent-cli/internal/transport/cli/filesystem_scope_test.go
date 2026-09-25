@@ -1,9 +1,5 @@
 package cli
 
-import sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
-
-import sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
-
 import (
 	"bytes"
 	"context"
@@ -21,7 +17,7 @@ func TestFilesystemScopeHelpIsExplicitOnToolAndSessionCommands(t *testing.T) {
 	}{
 		{name: "direct tool", command: func() *cobra.Command { return NewToolCommand(flags.NewGlobalFlags()).Generate() }},
 		{name: "session", command: func() *cobra.Command {
-			return NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}}), nil).Generate()
+			return newTestSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), testSessionDeps{}).Generate()
 		}},
 	}
 	wants := []string{

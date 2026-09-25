@@ -2,10 +2,6 @@ package cli
 
 import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
 
-import sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
-
-import sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
-
 import (
 	"bytes"
 	"context"
@@ -17,7 +13,7 @@ import (
 )
 
 func TestSessionCommandAudioInTurnBargeHelpExplainsExplicitPolicy(t *testing.T) {
-	command := NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}}), nil).Generate()
+	command := newTestSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), testSessionDeps{}).Generate()
 	var out bytes.Buffer
 	command.SetOut(&out)
 	command.SetArgs([]string{"--help"})
@@ -50,7 +46,7 @@ func TestSessionCommandAudioInTurnBargeRequiresTwoTurnsBeforeSetup(t *testing.T)
 		{name: "one scheduled turn", args: []string{"--audio-in-turn-barge", "--audio-in-turn", "turn-one.wav"}, want: "got 1"},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			command := NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}}), nil).Generate()
+			command := newTestSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), testSessionDeps{}).Generate()
 			command.SetArgs(testCase.args)
 
 			err := command.ExecuteContext(context.Background())

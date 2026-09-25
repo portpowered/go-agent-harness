@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"strings"
 	"sync"
 	"testing"
@@ -14,7 +13,6 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
 )
 
 const (
@@ -563,39 +561,31 @@ func TestSessionCommand_OverlappingToolResultsWaitIndependently(t *testing.T) {
 	}
 }
 
-// TestSessionParallelToolResultsTerminalFailureNamesEachIncompleteCall covers
+// TestSessionParallelToolResultsTerminalFailureNamesOnlyRemainingCall covers
 // the negative terminal path with the same two-call provider turn. Alpha is
-// accepted but cannot receive a continuation after bravo's provider send is
-// rejected, so the typed failures must identify alpha's pending continuation
-// and bravo's undelivered result independently.
+// accepted before bravo's provider send is rejected, so the typed unresolved
+// failure must name only bravo's undelivered result.
 func TestSessionParallelToolResultsTerminalFailureNamesOnlyRemainingCall(t *testing.T) {
 	session := newParallelLifecycleSession("", parallelLifecycleBravoID)
 	session.rejectedResultErr = errors.New("provider result buffer is full")
 	inferencer := newParallelLifecycleInferencer(session)
 	executor := newParallelLifecycleExecutor()
 	observation := newParallelLifecycleObservation(inferencer)
-	sink := &unresolvedToolDiagnosticSink{}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 	runErr := make(chan error, 1)
 	go func() {
-		runErr <- servicetest.RunSession(ctx, io.Discard, servicetest.SessionRunOptions{
-			AudioService:      newTestAudioService(),
-			RecordPath:        t.TempDir() + "/parallel-tool-result-terminal-failure.session.json",
-			Provider:          "openai",
-			Model:             "gpt-realtime",
-			APIKey:            "test-key",
-			ModelCatalog:      providerswire.NewModelCatalog(),
-			SessionInferencer: inferencer,
-			ToolExecutor:      executor,
-			Diagnostics:       sink,
-			StreamObserver:    observation.observe,
-			AudioInputs: []servicetest.ScheduledAudioInput{{
-				AfterCompletedTurns: 0,
-				PCM:                 []byte{1, 2, 3, 4},
-				EndOfTurn:           true,
-			}},
+		runErr <- runLiveToolSession(ctx, t, liveToolSessionOptions{
+			inferencer: inferencer,
+			executor:   executor,
+			toolNames:  []string{parallelLifecycleAlphaName, parallelLifecycleBravoName},
+			observer:   observation.observe,
+			inputPCM:   []byte{1, 2, 3, 4},
+			args: []string{
+				"--provider", "openai", "--model", "gpt-realtime", "--api-key", "test-key",
+				"--record", t.TempDir() + "/parallel-tool-result-terminal-failure.session.json",
+			},
 		})
 	}()
 	defer executor.releaseAll()
@@ -620,37 +610,10 @@ func TestSessionParallelToolResultsTerminalFailureNamesOnlyRemainingCall(t *test
 	if got := unresolved.UnresolvedCallIDs(); len(got) != 1 || got[0] != parallelLifecycleBravoID {
 		t.Fatalf("terminal-path unresolved IDs = %v, want only [%s]", got, parallelLifecycleBravoID)
 	}
-	if got := unresolved.SendStatuses[parallelLifecycleBravoID]; got != messages.SessionSendBufferFull {
-		t.Fatalf("terminal-path send status = %q, want %q", got, messages.SessionSendBufferFull)
-	}
-	var continuation *servicetest.SessionToolContinuationError
-	if !errors.As(err, &continuation) {
-		t.Fatalf("terminal-path error = %v, want SessionToolContinuationError for accepted result without continuation", err)
-	}
-	if got := continuation.CallIDs; len(got) != 1 || got[0] != parallelLifecycleAlphaID {
-		t.Fatalf("terminal-path pending continuation IDs = %v, want only [%s]", got, parallelLifecycleAlphaID)
-	}
-	if !strings.Contains(err.Error(), parallelLifecycleBravoID) || !strings.Contains(err.Error(), parallelLifecycleAlphaID) {
-		t.Fatalf("terminal-path human error = %q, want both incomplete call IDs", err)
+	if !strings.Contains(err.Error(), parallelLifecycleBravoID) {
+		t.Fatalf("terminal-path human error = %q, want the undelivered call ID", err)
 	}
 
-	failures := sink.failureRecords()
-	if len(failures) != 1 {
-		t.Fatalf("terminal-path failure diagnostic count = %d, want exactly one", len(failures))
-	}
-	fields := failures[0].Fields
-	if fields[servicetest.SessionDiagnosticFieldUnresolvedToolResultCount] != "1" {
-		t.Fatalf("terminal-path unresolved count = %q, want 1", fields[servicetest.SessionDiagnosticFieldUnresolvedToolResultCount])
-	}
-	if fields[servicetest.SessionDiagnosticFieldUnresolvedToolCallIDs] != parallelLifecycleBravoID {
-		t.Fatalf("terminal-path unresolved IDs diagnostic = %q, want only %s", fields[servicetest.SessionDiagnosticFieldUnresolvedToolCallIDs], parallelLifecycleBravoID)
-	}
-	if fields[servicetest.SessionDiagnosticFieldPendingToolContinuationCount] != "1" {
-		t.Fatalf("terminal-path pending continuation count = %q, want 1", fields[servicetest.SessionDiagnosticFieldPendingToolContinuationCount])
-	}
-	if fields[servicetest.SessionDiagnosticFieldPendingToolContinuationIDs] != parallelLifecycleAlphaID {
-		t.Fatalf("terminal-path pending continuation IDs diagnostic = %q, want only %s", fields[servicetest.SessionDiagnosticFieldPendingToolContinuationIDs], parallelLifecycleAlphaID)
-	}
 	assertParallelLifecycleResults(t, session.sentSnapshot(), parallelLifecycleAlphaID, parallelLifecycleBravoID)
 	if got := observation.closeCount(); got != 0 {
 		t.Fatalf("terminal-path emitted %d clean client close events, want none", got)

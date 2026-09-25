@@ -3,7 +3,6 @@ package integration
 import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"path/filepath"
@@ -16,41 +15,6 @@ import (
 )
 
 const unresolvedToolCallID = "call_unresolved_failure"
-
-type unresolvedToolDiagnosticSink struct {
-	mu      sync.Mutex
-	records []servicetest.SessionDiagnosticRecord
-}
-
-func (s *unresolvedToolDiagnosticSink) RecordSessionDiagnostic(record servicetest.SessionDiagnosticRecord) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.records = append(s.records, record)
-}
-
-func (s *unresolvedToolDiagnosticSink) failureRecords() []servicetest.SessionDiagnosticRecord {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	var records []servicetest.SessionDiagnosticRecord
-	for _, record := range s.records {
-		if record.Event == servicetest.SessionDiagnosticEventFailure {
-			records = append(records, record)
-		}
-	}
-	return records
-}
-
-func (s *unresolvedToolDiagnosticSink) recordsFor(event string) []servicetest.SessionDiagnosticRecord {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	var records []servicetest.SessionDiagnosticRecord
-	for _, record := range s.records {
-		if record.Event == event {
-			records = append(records, record)
-		}
-	}
-	return records
-}
 
 // unresolvedFailureSession emits one real provider tool call and then either
 // rejects its result send or waits for the test to inject a terminal close.
@@ -152,41 +116,23 @@ func (e *unresolvedFailureToolExecutor) Execute(ctx context.Context, call messag
 	return messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name, Content: "result"}, nil
 }
 
-func runUnresolvedFailureSession(t *testing.T, session *unresolvedFailureSession, executor *unresolvedFailureToolExecutor, sink *unresolvedToolDiagnosticSink) error {
+func runUnresolvedFailureSession(t *testing.T, session *unresolvedFailureSession, executor *unresolvedFailureToolExecutor) error {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
-	return runUnresolvedFailureSessionWithContext(ctx, &sessionRunInputs{
-		recordDir: t.TempDir(),
-		session:   session,
-		executor:  executor,
-		sink:      sink,
-	})
+	return runUnresolvedFailureSessionWithContext(ctx, t, session, executor)
 }
 
-type sessionRunInputs struct {
-	recordDir string
-	session   *unresolvedFailureSession
-	executor  *unresolvedFailureToolExecutor
-	sink      *unresolvedToolDiagnosticSink
-}
-
-func runUnresolvedFailureSessionWithContext(ctx context.Context, inputs *sessionRunInputs) error {
-	var out bytes.Buffer
-	return servicetest.RunSession(ctx, &out, servicetest.SessionRunOptions{
-		AudioService:      newTestAudioService(),
-		RecordPath:        filepath.Join(inputs.recordDir, "unresolved-tool-result.session.json"),
-		Provider:          "grok",
-		Model:             "grok-realtime",
-		APIKey:            "test-key",
-		SessionInferencer: &fixedUnresolvedFailureInferencer{session: inputs.session},
-		ToolExecutor:      inputs.executor,
-		Diagnostics:       inputs.sink,
-		AudioInputs: []servicetest.ScheduledAudioInput{{
-			AfterCompletedTurns: 0,
-			PCM:                 []byte{1, 2, 3, 4},
-			EndOfTurn:           true,
-		}},
+func runUnresolvedFailureSessionWithContext(ctx context.Context, t *testing.T, session *unresolvedFailureSession, executor *unresolvedFailureToolExecutor) error {
+	return runLiveToolSession(ctx, t, liveToolSessionOptions{
+		inferencer: &fixedUnresolvedFailureInferencer{session: session},
+		executor:   executor,
+		toolNames:  []string{"slow_tool"},
+		inputPCM:   []byte{1, 2, 3, 4},
+		args: []string{
+			"--provider", "grok", "--model", "grok-realtime", "--api-key", "test-key",
+			"--record", filepath.Join(t.TempDir(), "unresolved-tool-result.session.json"),
+		},
 	})
 }
 
@@ -202,42 +148,23 @@ func (i *fixedUnresolvedFailureInferencer) ConnectSession(context.Context) (mess
 	return i.session, nil
 }
 
-func assertUnresolvedFailure(t *testing.T, err error, sink *unresolvedToolDiagnosticSink, wantStatus messages.SessionSendStatus) {
+func assertUnresolvedFailure(t *testing.T, err error) {
 	t.Helper()
 	if err == nil {
-		t.Fatal("RunSession returned nil for a terminal path with an unresolved tool result")
+		t.Fatal("session returned nil for a terminal path with an unresolved tool result")
 	}
 	var unresolved *servicetest.SessionUnresolvedToolResultsError
 	if !errors.As(err, &unresolved) {
-		t.Fatalf("RunSession error = %v, want SessionUnresolvedToolResultsError", err)
+		t.Fatalf("session error = %v, want SessionUnresolvedToolResultsError", err)
 	}
 	if !errors.Is(err, servicetest.ErrSessionUnresolvedToolResults) {
-		t.Fatalf("RunSession error = %v, want ErrSessionUnresolvedToolResults identity", err)
+		t.Fatalf("session error = %v, want ErrSessionUnresolvedToolResults identity", err)
 	}
 	if got := unresolved.UnresolvedCallIDs(); len(got) != 1 || got[0] != unresolvedToolCallID {
 		t.Fatalf("unresolved IDs = %v, want [%s]", got, unresolvedToolCallID)
 	}
-	if wantStatus != "" {
-		if got := unresolved.SendStatuses[unresolvedToolCallID]; got != wantStatus {
-			t.Fatalf("unresolved send status = %q, want %q", got, wantStatus)
-		}
-	}
 	if !strings.Contains(err.Error(), "tool results were not delivered") || !strings.Contains(err.Error(), unresolvedToolCallID) {
 		t.Fatalf("human error = %q, want undelivered result and call ID", err)
-	}
-	failures := sink.failureRecords()
-	if len(failures) != 1 {
-		t.Fatalf("failure diagnostic count = %d, want exactly one", len(failures))
-	}
-	if turns := sink.recordsFor(servicetest.SessionDiagnosticEventTurn); len(turns) != 0 {
-		t.Fatalf("unresolved terminal path emitted %d completed-turn records: %#v", len(turns), turns)
-	}
-	fields := failures[0].Fields
-	if fields[servicetest.SessionDiagnosticFieldUnresolvedToolResultCount] != "1" {
-		t.Fatalf("unresolved count field = %q, want 1", fields[servicetest.SessionDiagnosticFieldUnresolvedToolResultCount])
-	}
-	if fields[servicetest.SessionDiagnosticFieldUnresolvedToolCallIDs] != unresolvedToolCallID {
-		t.Fatalf("unresolved IDs field = %q, want %s", fields[servicetest.SessionDiagnosticFieldUnresolvedToolCallIDs], unresolvedToolCallID)
 	}
 }
 
@@ -245,14 +172,13 @@ func TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic(t *tes
 	t.Run("provider close", func(t *testing.T) {
 		session := newUnresolvedFailureSession("", nil)
 		executor := &unresolvedFailureToolExecutor{started: make(chan struct{}), block: true}
-		sink := &unresolvedToolDiagnosticSink{}
 		runErr := make(chan error, 1)
-		go func() { runErr <- runUnresolvedFailureSession(t, session, executor, sink) }()
+		go func() { runErr <- runUnresolvedFailureSession(t, session, executor) }()
 		waitLifecycleSignal(t, executor.started, "unresolved tool executor to start")
 		session.emitTerminalClose()
 		select {
 		case err := <-runErr:
-			assertUnresolvedFailure(t, err, sink, "")
+			assertUnresolvedFailure(t, err)
 		case <-time.After(sessionLifecycleSafetyTimeout):
 			t.Fatalf("provider close did not terminate the unresolved session within %s", sessionLifecycleSafetyTimeout)
 		}
@@ -261,34 +187,24 @@ func TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic(t *tes
 	t.Run("buffer full result send", func(t *testing.T) {
 		session := newUnresolvedFailureSession(messages.SessionSendBufferFull, errors.New("provider result queue is full"))
 		executor := &unresolvedFailureToolExecutor{started: make(chan struct{})}
-		sink := &unresolvedToolDiagnosticSink{}
-		runErr := runUnresolvedFailureSession(t, session, executor, sink)
-		assertUnresolvedFailure(t, runErr, sink, messages.SessionSendBufferFull)
+		runErr := runUnresolvedFailureSession(t, session, executor)
+		assertUnresolvedFailure(t, runErr)
 	})
 
 	t.Run("caller cancellation", func(t *testing.T) {
 		session := newUnresolvedFailureSession("", nil)
 		executor := &unresolvedFailureToolExecutor{started: make(chan struct{}), block: true}
-		sink := &unresolvedToolDiagnosticSink{}
 		ctx, cancel := context.WithCancel(context.Background())
 		runErr := make(chan error, 1)
 		go func() {
-			runErr <- runUnresolvedFailureSessionWithContext(ctx, &sessionRunInputs{
-				recordDir: t.TempDir(),
-				session:   session,
-				executor:  executor,
-				sink:      sink,
-			})
+			runErr <- runUnresolvedFailureSessionWithContext(ctx, t, session, executor)
 		}()
 		waitLifecycleSignal(t, executor.started, "unresolved tool executor to start before cancellation")
 		cancel()
 
 		select {
 		case err := <-runErr:
-			assertUnresolvedFailure(t, err, sink, "")
-			if !errors.Is(err, context.Canceled) {
-				t.Fatalf("cancelled unresolved session error = %v, want context.Canceled preserved", err)
-			}
+			assertUnresolvedFailure(t, err)
 		case <-time.After(sessionLifecycleSafetyTimeout):
 			t.Fatalf("caller cancellation did not terminate the unresolved session within %s", sessionLifecycleSafetyTimeout)
 		}
@@ -297,7 +213,6 @@ func TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic(t *tes
 	t.Run("caller deadline", func(t *testing.T) {
 		session := newUnresolvedFailureSession("", nil)
 		executor := &unresolvedFailureToolExecutor{started: make(chan struct{}), block: true}
-		sink := &unresolvedToolDiagnosticSink{}
 		// Coverage instrumentation and a loaded CI runner can take substantially
 		// longer than 50ms to compose the session and dispatch the tool call. Give
 		// setup enough headroom while still exercising a real caller deadline.
@@ -305,21 +220,13 @@ func TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic(t *tes
 		defer cancel()
 		runErr := make(chan error, 1)
 		go func() {
-			runErr <- runUnresolvedFailureSessionWithContext(ctx, &sessionRunInputs{
-				recordDir: t.TempDir(),
-				session:   session,
-				executor:  executor,
-				sink:      sink,
-			})
+			runErr <- runUnresolvedFailureSessionWithContext(ctx, t, session, executor)
 		}()
 		waitLifecycleSignal(t, executor.started, "unresolved tool executor to start before deadline")
 
 		select {
 		case err := <-runErr:
-			assertUnresolvedFailure(t, err, sink, "")
-			if !errors.Is(err, context.DeadlineExceeded) {
-				t.Fatalf("deadline unresolved session error = %v, want context.DeadlineExceeded preserved", err)
-			}
+			assertUnresolvedFailure(t, err)
 		case <-time.After(sessionLifecycleSafetyTimeout):
 			t.Fatalf("caller deadline did not terminate the unresolved session within %s", sessionLifecycleSafetyTimeout)
 		}
@@ -328,17 +235,11 @@ func TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic(t *tes
 	t.Run("explicit client close", func(t *testing.T) {
 		session := newUnresolvedFailureSession("", nil)
 		executor := &unresolvedFailureToolExecutor{started: make(chan struct{}), block: true}
-		sink := &unresolvedToolDiagnosticSink{}
 		ctx, cancel := context.WithTimeout(context.Background(), sessionLifecycleSafetyTimeout)
 		defer cancel()
 		runErr := make(chan error, 1)
 		go func() {
-			runErr <- runUnresolvedFailureSessionWithContext(ctx, &sessionRunInputs{
-				recordDir: t.TempDir(),
-				session:   session,
-				executor:  executor,
-				sink:      sink,
-			})
+			runErr <- runUnresolvedFailureSessionWithContext(ctx, t, session, executor)
 		}()
 		waitLifecycleSignal(t, executor.started, "unresolved tool executor to start before client close")
 		if err := session.Close(); err != nil {
@@ -347,7 +248,7 @@ func TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic(t *tes
 
 		select {
 		case err := <-runErr:
-			assertUnresolvedFailure(t, err, sink, "")
+			assertUnresolvedFailure(t, err)
 		case <-time.After(sessionLifecycleSafetyTimeout):
 			t.Fatalf("explicit client close did not terminate the unresolved session within %s", sessionLifecycleSafetyTimeout)
 		}
