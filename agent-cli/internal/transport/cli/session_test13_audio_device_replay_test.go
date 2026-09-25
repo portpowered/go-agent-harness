@@ -299,7 +299,11 @@ func TestSessionCommandBackpressuresPlaybackBurstWithoutOverflow(t *testing.T) {
 	if !ok {
 		t.Fatalf("loopback observer = %T, want *devices.VirtualStream", opened)
 	}
-	defer func() { _ = observer.Close() }()
+	t.Cleanup(func() {
+		if err := observer.Close(); err != nil {
+			t.Errorf("close loopback observer: %v", err)
+		}
+	})
 
 	inferencer := &playbackBurstInferencer{frames: frames, connected: make(chan *playbackBurstSession, 1), closed: make(chan struct{})}
 	globalFlags := flags.NewGlobalFlags()
@@ -440,26 +444,31 @@ func (s *playbackBurstSession) Send(ctx context.Context, msg messages.StreamMess
 		case <-ctx.Done():
 			return false
 		}
-		s.receive.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValue("playback-burst", "test complete")})
+		s.receive.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValue("playback-burst", "test complete")})
 		return s.Close() == nil
 	}
-	s.audioOnce.Do(func() {
-		for _, message := range []messages.StreamMessage{
-			{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: "burst", Value: messages.NewMessageStartValue()},
-			{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, ResponseID: "burst", Value: messages.NewAudioDeltaValue(cliPCM16Bytes(s.inbound.frames[0]))},
-		} {
-			s.receive.Write(context.Background(), message)
-		}
-		go func() {
-			select {
-			case <-s.inbound.drained:
-			case <-s.done:
-				return
-			}
-			s.receive.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: "burst", Value: messages.NewMessageEndValue(messages.TokenUsage{})})
-		}()
-	})
+	s.audioOnce.Do(func() { s.startBurst(ctx) })
 	return true
+}
+
+// startBurst opens the response and ends it once the media path took every
+// frame; the terminal outlives the triggering send.
+func (s *playbackBurstSession) startBurst(ctx context.Context) {
+	detached := context.WithoutCancel(ctx)
+	for _, message := range []messages.StreamMessage{
+		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: "burst", Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, ResponseID: "burst", Value: messages.NewAudioDeltaValue(cliPCM16Bytes(s.inbound.frames[0]))},
+	} {
+		s.receive.Write(ctx, message)
+	}
+	go func() {
+		select {
+		case <-s.inbound.drained:
+		case <-s.done:
+			return
+		}
+		s.receive.Write(detached, messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: "burst", Value: messages.NewMessageEndValue(messages.TokenUsage{})})
+	}()
 }
 
 func (s *playbackBurstSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {

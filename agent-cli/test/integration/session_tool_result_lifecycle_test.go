@@ -149,7 +149,7 @@ func (s *interactiveTimeoutSession) Send(ctx context.Context, msg messages.Strea
 		s.responseOnce.Do(s.emitToolCalls)
 	case messages.StreamTypeResponseCreate:
 		if value, ok := msg.Value.(*messages.ResponseCreateValue); ok && value.IsToolAcknowledgement() {
-			s.emitAcknowledgement()
+			s.emitAcknowledgement(ctx)
 			break
 		}
 		s.continueOnce.Do(s.emitContinuation)
@@ -180,17 +180,19 @@ func (s *interactiveTimeoutSession) emitToolCalls() {
 
 // emitAcknowledgement answers an acknowledgement request with a response of
 // the same purpose, as the realtime provider adapter tags it.
-func (s *interactiveTimeoutSession) emitAcknowledgement() {
+func (s *interactiveTimeoutSession) emitAcknowledgement(ctx context.Context) {
 	s.mu.Lock()
 	s.acks++
 	s.ackElapsed = time.Since(s.started)
 	s.mu.Unlock()
 	purpose := messages.ResponsePurposeToolAcknowledgement
-	s.write(
-		messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: "response-ack", ResponsePurpose: purpose, Value: messages.NewMessageStartValue()},
-		messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, ResponseID: "response-ack", ResponsePurpose: purpose, Value: messages.NewTextDeltaValue(interactiveAckText)},
-		messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: "response-ack", ResponsePurpose: purpose, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
-	)
+	for _, msg := range []messages.StreamMessage{
+		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: "response-ack", ResponsePurpose: purpose, Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, ResponseID: "response-ack", ResponsePurpose: purpose, Value: messages.NewTextDeltaValue(interactiveAckText)},
+		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: "response-ack", ResponsePurpose: purpose, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+	} {
+		s.recv.Write(ctx, msg)
+	}
 }
 
 func (s *interactiveTimeoutSession) acknowledgements() (int, time.Duration) {
