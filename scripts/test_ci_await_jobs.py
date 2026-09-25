@@ -113,6 +113,56 @@ class AwaitJobsTest(unittest.TestCase):
         self.assertIn("timed out", result.stdout)
         self.assertIn("CI (coverage agent-cli unit) (not started)", result.stdout)
 
+    def test_prefix_pattern_waits_for_every_matching_job(self) -> None:
+        self.listings(
+            row("Other", "queued"),
+            row("Lint a", "in_progress") + row("Lint b", "completed", "success") + row("Other", "in_progress"),
+            row("Lint a", "completed", "success") + row("Lint b", "completed", "success") + row("Other", "in_progress"),
+        )
+        result = self.run_script("Lint *")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.calls(), 3)
+        self.assertIn("Lint a (in_progress)", result.stdout)
+
+    def test_prefix_pattern_fails_on_any_failed_match_and_waits_for_one(self) -> None:
+        self.listings(row("Lint a", "completed", "success") + row("Lint b", "completed", "failure", 1) + row("Lint b", "in_progress", "", 2))
+        self.assertEqual(self.run_script("Lint *", timeout=0).returncode, 1)
+        self.setUp()
+        self.listings(row("Lint a", "completed", "success") + row("Lint b", "completed", "failure"))
+        result = self.run_script("Lint *")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("sibling job Lint b (failure) did not succeed", result.stdout)
+        self.setUp()
+        self.listings(row("Other", "completed", "success"))
+        result = self.run_script("Lint *", timeout=0)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("Lint * (not started)", result.stdout)
+
+    def test_fails_fast_when_no_job_matches(self) -> None:
+        self.listings(row("Other", "in_progress"))
+        env_args = ["--missing-timeout", "0"]
+        result = subprocess.run(
+            ["bash", str(SCRIPT), "--interval", "0", "--timeout", "30", *env_args, "Lint *"],
+            env=dict(os.environ, GH=str(self.dir / "gh"), FAKE_GH_DIR=str(self.dir), GITHUB_REPOSITORY="owner/repo", GITHUB_RUN_ID="42"),
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no job matched after 0s: Lint *", result.stdout)
+        self.assertEqual(self.calls(), 1)
+
+    def test_missing_timeout_does_not_fail_a_matched_pending_job(self) -> None:
+        self.listings(row("A", "queued"), row("A", "completed", "success"))
+        result = subprocess.run(
+            ["bash", str(SCRIPT), "--interval", "0", "--timeout", "30", "--missing-timeout", "0", "A"],
+            env=dict(os.environ, GH=str(self.dir / "gh"), FAKE_GH_DIR=str(self.dir), GITHUB_REPOSITORY="owner/repo", GITHUB_RUN_ID="42"),
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_retries_a_failed_listing(self) -> None:
         self.listings(None, row("A", "completed", "success"))
         result = self.run_script("A")

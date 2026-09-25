@@ -10,76 +10,35 @@ permissions:
   contents: read
 
 jobs:
-  # Static checks run as parallel shards; `static` below aggregates them under
-  # the required "CI (static)" check name. Every shard must finish within the
-  # three-minute budget even when its build cache is cold (first main run
-  # after a toolchain or cache-key change, or an evicted cache), which is what
-  # sets the lane sizes below. Each check step runs with `if: always()` so an
-  # early failure does not hide later results in the same shard.
+  # Every job starts at once (no `needs:`), and each must finish within three
+  # minutes even with a cold build cache (the first main run after a
+  # toolchain or cache-key change, or an evicted cache): that, not the warm
+  # time, bounds how far jobs can be merged. A job that must report after
+  # its siblings (CI (static), CI (coverage)) waits for them at its end with
+  # scripts/ci-await-jobs.sh instead of adding a relay job behind them.
+  #
+  # Every job restores its own Go build and module caches through
+  # .github/actions/go-cache and skips docs/temp (about 90% of the
+  # checkout's bytes; no check reads it): a blobless clone fetches only the
+  # sparse tree's blobs.
+
+  # The required "CI (static)" check: gofmt, the CI test partition and the
+  # architecture and size gate (which needs full history for its baseline
+  # merge-base check), then every lint lane. (make wire-check runs in CI
+  # (unit), which has cold-budget room for it.)
+  # Each check step runs with `if: always()` so an early failure does not
+  # hide later results.
   #
   # go vet and standalone staticcheck do not run here: golangci-lint's
   # standard linters (govet with the go vet analyzer set, staticcheck with
   # every SA/S/ST/QF check staticcheck enables by default, and unused)
   # enforce them on every lint lane. See docs/architecture/lint-policy.md.
-  #
-  # Every shard restores its own Go build, module and golangci-lint caches
-  # through .github/actions/go-cache. golangci-lint and the architecture gate
-  # load dependencies from compiled export data, so the build cache is what
-  # keeps these jobs short. The checkouts skip docs/temp like the test jobs.
-  static-gates:
-    name: CI (static gates)
+  static:
+    name: CI (static)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    # actions: write lets go-cache-save delete superseded main caches.
-    permissions:
-      contents: read
-      actions: write
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-        with:
-          filter: blob:none
-          sparse-checkout-cone-mode: false
-          sparse-checkout: |
-            /*
-            !/docs/temp/
-
-      - name: Set up Go
-        id: go
-        uses: ./.github/actions/go-cache
-        with:
-          cache-name: static-gates
-
-      - name: Run gofmt check
-        if: always()
-        run: make fmt
-
-      - name: Verify generated service composition
-        if: always()
-        run: make wire-check
-
-      - name: Verify CI test partition
-        if: always()
-        run: make check-ci-test-partition
-
-      - name: Save Go cache
-        if: always()
-        uses: ./.github/actions/go-cache-save
-        with:
-          primary-key: ${{ steps.go.outputs.primary-key }}
-          matched-key: ${{ steps.go.outputs.matched-key }}
-          gocache: ${{ steps.go.outputs.gocache }}
-          gomodcache: ${{ steps.go.outputs.gomodcache }}
-
-  # The architecture gate type-loads every module from compiled export data,
-  # so it keeps its own build cache instead of adding its cold compile to the
-  # gates job. It needs full history for the baseline merge-base check.
-  static-architecture:
-    name: CI (static architecture)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    # actions: write lets go-cache-save delete superseded main caches.
+    timeout-minutes: 30
+    # actions: write lets go-cache-save delete superseded main caches (and
+    # lets ci-await-jobs read the lint lanes).
     permissions:
       contents: read
       actions: write
@@ -99,9 +58,23 @@ jobs:
         id: go
         uses: ./.github/actions/go-cache
         with:
-          cache-name: static-architecture
+          cache-name: static
+          # Before this job existed its checks ran in two jobs; the
+          # architecture gate's cache holds most of what it compiles.
+          fallback-cache-names: |
+            static-architecture
+            static-gates
+
+      - name: Run gofmt check
+        if: always()
+        run: make fmt
+
+      - name: Verify CI test partition
+        if: always()
+        run: make check-ci-test-partition
 
       - name: Verify service architecture and size budgets
+        if: always()
         run: make architecture-size-check
 
       - name: Save Go cache
@@ -113,13 +86,26 @@ jobs:
           gocache: ${{ steps.go.outputs.gocache }}
           gomodcache: ${{ steps.go.outputs.gomodcache }}
 
-  # golangci-lint lanes. Every lane enforces the hard limits in .golangci.yml
-  # (which also loads the opt-in live/e2e/e2e_internal/stress/
-  # sessioncapacityramp test tags). The linux lanes add the new-code pass and
-  # the wireinject pass; the windows and darwin lanes lint with cgo disabled
-  # (darwin also with the nomicrophone tag), and the darwin cgo lane lints
-  # cgo-constrained packages natively on macOS. See
-  # docs/architecture/lint-policy.md.
+      - name: Wait for the lint lanes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/ci-await-jobs.sh "CI (static lint *"
+
+  # golangci-lint lanes. CI (static) waits for every job whose name starts
+  # with "CI (static lint ", so lanes are merged or split here alone: change
+  # a lane's LINT_SHARD (agent-cli, runtime, support, libraries, all) or
+  # LINT_CROSS_GOOS (e.g. "windows darwin") once the merged lane fits the
+  # cold budget. golangci-lint loads dependencies from compiled export data,
+  # so a cold lane spends most of its time compiling: every lane here takes
+  # 80-140s cold, while the merged lanes measured in #591 (linux libraries,
+  # windows all, darwin all) took 130-225s cold, over the three-minute budget.
+  #
+  # Every lane enforces the hard limits in .golangci.yml (which also loads the
+  # opt-in live/e2e/e2e_internal/stress/sessioncapacityramp test tags). The
+  # linux lanes add the new-code pass and the wireinject pass; the windows
+  # and darwin lanes lint with cgo disabled (darwin also with the
+  # nomicrophone tag), and the darwin cgo lane lints cgo-constrained packages
+  # natively on macOS. See docs/architecture/lint-policy.md.
   static-lint:
     name: CI (static lint ${{ matrix.lane }})
     runs-on: ${{ matrix.runner }}
@@ -229,33 +215,9 @@ jobs:
           gomodcache: ${{ steps.go.outputs.gomodcache }}
           extra-paths: ${{ runner.temp }}/golangci-lint
 
-  # Preserve the required "CI (static)" check name while aggregating the
-  # parallel static shards. `always()` reports a failed shard as a failed
-  # check rather than leaving it skipped.
-  static:
-    name: CI (static)
-    needs:
-      - static-gates
-      - static-architecture
-      - static-lint
-    if: always()
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-
-    steps:
-      - name: Verify static shards completed
-        env:
-          GATES_RESULT: ${{ needs.static-gates.result }}
-          ARCHITECTURE_RESULT: ${{ needs.static-architecture.result }}
-          LINT_RESULT: ${{ needs.static-lint.result }}
-        run: |
-          test "$GATES_RESULT" = success
-          test "$ARCHITECTURE_RESULT" = success
-          test "$LINT_RESULT" = success
-
-  # Fast unit-level checks and the agent-cli link gate. No analyzer binaries
-  # needed. Library packages are not compiled here: the coverage libraries
-  # shard compiles every one of them.
+  # Fast unit-level checks, the agent-cli link gate and the generated Wire
+  # composition check. No analyzer binaries needed. Library packages are not
+  # compiled here: the coverage libraries job compiles every one of them.
   unit:
     name: CI (unit)
     runs-on: ubuntu-latest
@@ -296,6 +258,12 @@ jobs:
       - name: Verify standalone checkout dependency graph
         if: always()
         run: scripts/verify-standalone-checkout.sh
+
+      # wire-check runs here rather than in CI (static): together with the
+      # architecture gate it took CI (static) to ~170s with a cold cache.
+      - name: Verify generated service composition
+        if: always()
+        run: make wire-check
 
       - name: Save Go cache
         uses: ./.github/actions/go-cache-save
@@ -365,10 +333,6 @@ jobs:
           gocache: ${{ steps.go.outputs.gocache }}
           gomodcache: ${{ steps.go.outputs.gomodcache }}
 
-  # The unit, coverage libraries, coverage, race and OS jobs skip docs/temp
-  # (about 90% of the checkout's bytes; no Go package, helper-module or
-  # factory-script test reads it): a blobless clone fetches only the sparse
-  # tree's blobs.
   coverage-libraries:
     name: CI (coverage libraries)
     runs-on: ubuntu-latest
@@ -414,11 +378,8 @@ jobs:
           gomodcache: ${{ steps.go.outputs.gomodcache }}
 
   # The required "CI (coverage)" check: the agent-cli integration shards, then
-  # the coverage gate over every profile. The integration job is the longest
-  # coverage job, so running the gate at its end (after waiting for the two
-  # sibling coverage jobs, which fails if either failed) replaces a separate
-  # `needs:` gate job that paid a runner start, checkout and Go setup after
-  # the slowest shard. The gate does not run if the integration tests fail.
+  # the coverage gate over every profile once the two sibling coverage jobs
+  # have succeeded. The gate does not run if the integration tests fail.
   coverage:
     name: CI (coverage)
     runs-on: ubuntu-latest

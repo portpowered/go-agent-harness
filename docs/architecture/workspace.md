@@ -89,37 +89,35 @@ The root Makefile exposes these deterministic and opt-in test tiers:
 
 ## GitHub Actions
 
-Repository CI lives in `.github/workflows/ci.yml`. It:
+Repository CI lives in `.github/workflows/ci.yml`. It runs on pull requests
+and pushes to `main`, and every job starts at once (no `needs:`):
 
-- Triggers on pull requests and pushes to `main`.
-- Installs Go 1.24.2 plus pinned `golangci-lint` and `staticcheck` versions that match the root Makefile guidance, so the CI toolchain does not drift under the same commit.
-- Splits the `make ci` step list (`fmt vet lint staticcheck test-tools
-  test-factory-scripts test-integration test-regressions build coverage`)
-  plus the two race-acceptance steps across five parallel Ubuntu jobs —
-  `static`, `unit`, `integration`, `coverage`, `race` — so the ~14-minute
-  strictly serial pipeline runs concurrently instead. Every job invokes the
-  same root Makefile targets `make ci` composes locally, just grouped
-  differently and run on separate runners, so nothing is duplicated or
-  reimplemented in workflow YAML. None of these jobs `needs:` another, so a
-  failure in one (for example a `gofmt` or lint failure in `static`) does not
-  prevent the others from completing and reporting their own results in the
-  same run. Only `static` installs `golangci-lint`/`staticcheck`, since it is
-  the only job that runs `lint`/`staticcheck`.
-- Contributors still run the complete pipeline locally in one command with
-  `make ci`; the Makefile itself is unchanged.
+| Job | Runs |
+| --- | --- |
+| `CI (static)` (required) | `fmt`, `check-ci-test-partition`, `architecture-size-check`, then waits for every lint lane |
+| `CI (static lint …)` | ten golangci-lint lanes (linux, windows and darwin by agent-cli, runtime and support, plus darwin cgo on macOS); see [lint-policy.md](lint-policy.md) |
+| `CI (unit)` (required) | `test-tools`, `test-factory-scripts`, the agent-cli build, the standalone-checkout check, `wire-check` |
+| `CI (coverage agent-cli unit)` | agent-cli coverage without `test/integration` |
+| `CI (coverage libraries)` | every other module's and the embedding consumer's coverage |
+| `CI (coverage)` (required) | agent-cli `test/integration` (sharded on one runner), then the coverage gate over every profile |
+| `CI (race)` (required) | the race-detector targets and the native Linux device backend |
+| `CI (macOS audio release)` (required) | macOS audio units, darwin release cross-build and GoReleaser check |
+| `CI (WebMCP Chrome)` (required) | the pinned mac-arm64 Chrome cancellation acceptance |
+| `CI (Windows audio portable)` | the Windows device backend regressions |
 
-`hermetic` (`make test-hermetic`) and `webmcp-chrome` remain separate
-required jobs alongside the five `make ci`-derived jobs above, so all
-required outcomes must pass for the workflow to succeed. `webmcp-chrome` is
-intentionally macOS-only to match its locked mac-arm64 Chrome artifact. It
-runs on its own macOS runner, concurrently with `macos-audio-release` (the
-two share no build outputs, and together they exceeded the three-minute job
-budget with a cold cache). The required "CI (coverage)" check is the
-agent-cli integration job, which waits for the other coverage jobs and runs
-the coverage gate at its end. The static, unit, coverage, race and OS jobs
-restore a per-job Go build and
-module cache (`.github/actions/go-cache`) that main pushes save as each job's
-exact working set, instead of setup-go's single shared cache entry. The
-race-detector steps are intentionally Linux-only, since the current Windows
-`runtime/cgo: cgo.exe: exit status 2` failure is an environment limitation
-and Ubuntu CI is the authoritative reproduction environment.
+Each job must finish within three minutes with a cold build cache, which is
+what bounds merging jobs further: the two non-integration coverage jobs merged
+into one took 143-183s cold, and `CI (coverage)`, which waits for it,
+183-194s. A new or renamed job lists the jobs it replaced in `go-cache`'s
+`fallback-cache-names`, so only a toolchain bump leaves it truly cold. A
+required check that aggregates other jobs (`CI (static)` over the lint lanes,
+`CI (coverage)` over the other two coverage jobs) waits for them at its end
+with `scripts/ci-await-jobs.sh` rather than through a relay job. `make check-ci-test-partition` keeps each Linux test
+corpus owned by exactly one job. Every job restores a per-job Go build and
+module cache (`.github/actions/go-cache`) that main pushes save as the job's
+exact working set. `CI (WebMCP Chrome)` runs on its own macOS runner beside
+`CI (macOS audio release)`: the two share no build outputs and together
+exceeded the three-minute budget with a cold cache. The race-detector steps
+are intentionally Linux-only, since the current Windows `runtime/cgo: cgo.exe:
+exit status 2` failure is an environment limitation and Ubuntu CI is the
+authoritative reproduction environment.

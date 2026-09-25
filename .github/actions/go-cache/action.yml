@@ -18,6 +18,16 @@ inputs:
       golangci-lint analysis cache. Pass the same value to go-cache-save.
     required: false
     default: ""
+  fallback-cache-names:
+    description: >-
+      Newline-separated cache names of other jobs whose newest cache to
+      restore when this job has none yet (a new or renamed job, e.g. one that
+      merges those jobs), tried in order after this job's own keys. The
+      restored build cache is a superset or near-superset of what the job
+      compiles, so only a toolchain bump leaves it truly cold; the next save
+      prunes it to this job's working set under its own name.
+    required: false
+    default: ""
 
 outputs:
   primary-key:
@@ -59,6 +69,25 @@ runs:
         echo "gocache=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
         echo "gomodcache=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
 
+    - name: Resolve cache keys
+      id: keys
+      shell: bash
+      env:
+        SUMS: ${{ hashFiles('go.work.sum', '*/go.sum', 'tests/embedding/go.sum', 'tools/*/go.sum') }}
+        NAME: ${{ inputs.cache-name }}
+        FALLBACKS: ${{ inputs.fallback-cache-names }}
+      run: |
+        platform="$RUNNER_OS-$RUNNER_ARCH-go1.26.7"
+        echo "primary=go-$NAME-$platform-$SUMS-$GITHUB_SHA" >>"$GITHUB_OUTPUT"
+        {
+          echo "restore<<EOF"
+          for name in "$NAME" $FALLBACKS; do
+            echo "go-$name-$platform-$SUMS-"
+            echo "go-$name-$platform-"
+          done
+          echo "EOF"
+        } >>"$GITHUB_OUTPUT"
+
     - name: Restore Go build and module caches
       id: restore
       uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
@@ -67,10 +96,8 @@ runs:
           ${{ steps.paths.outputs.gocache }}
           ${{ steps.paths.outputs.gomodcache }}
           ${{ inputs.extra-paths }}
-        key: go-${{ inputs.cache-name }}-${{ runner.os }}-${{ runner.arch }}-go1.26.7-${{ hashFiles('go.work.sum', '*/go.sum', 'tests/embedding/go.sum', 'tools/*/go.sum') }}-${{ github.sha }}
-        restore-keys: |
-          go-${{ inputs.cache-name }}-${{ runner.os }}-${{ runner.arch }}-go1.26.7-${{ hashFiles('go.work.sum', '*/go.sum', 'tests/embedding/go.sum', 'tools/*/go.sum') }}-
-          go-${{ inputs.cache-name }}-${{ runner.os }}-${{ runner.arch }}-go1.26.7-
+        key: ${{ steps.keys.outputs.primary }}
+        restore-keys: ${{ steps.keys.outputs.restore }}
 
     - name: Backdate restored build cache entries
       if: steps.restore.outputs.cache-matched-key != ''
