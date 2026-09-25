@@ -123,13 +123,17 @@ func TestAgentBinarySerialToolTimingAtProcessEdges(t *testing.T) {
 //
 // The shipped session command talks to a real local WebSocket provider and a
 // separately built fixture-controlled tool executor. Playback crosses the
-// audio-device-server HTTP boundary; its manual clock follows each delivery's
-// cadence until every response is sent, then drains the queued tail. The
+// audio-device-server HTTP boundary while its manual callback clock advances.
+// captured_cadence and slow_device keep that clock at their device cadence for
+// the whole run: the provider finishes sending within a few ticks, so nearly
+// all playback, including every response boundary at the device edge, happens
+// while the queue drains. The other deliveries vary the provider/tool side
+// and drain on the accelerated clock (remoteToolAudioDrainInterval). The
 // assertion sees only network protocol observations, process-owned tool
 // observations, and device-rendered PCM; it does not inspect a session queue,
 // sink generation, or any other playback implementation state.
 func TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio(t *testing.T) {
-	scenarioSlots := make(chan struct{}, 2)
+	scenarioSlots := make(chan struct{}, remoteToolAudioScenarioSlots)
 	cases := []remoteToolAudioCase{
 		{
 			name:            "test45",
@@ -158,22 +162,7 @@ func TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio(t *testing.T) {
 		},
 	}
 	for _, testCase := range cases {
-		testCase.drainInterval = remoteToolAudioDrainInterval
-		for _, delivery := range []struct {
-			name             string
-			deltaDelay       time.Duration
-			toolDelay        time.Duration
-			callbackInterval time.Duration
-			promptBytes      int
-			toolResultBytes  int
-			inputFrames      int
-		}{
-			{name: "provider_burst", toolDelay: 3 * time.Millisecond, callbackInterval: 30 * time.Millisecond},
-			{name: "captured_cadence", deltaDelay: 50 * time.Millisecond, toolDelay: 25 * time.Millisecond, callbackInterval: 30 * time.Millisecond},
-			{name: "slow_device", toolDelay: 3 * time.Millisecond, callbackInterval: 45 * time.Millisecond},
-			{name: "large_text_and_tool_results", toolDelay: 3 * time.Millisecond, callbackInterval: 30 * time.Millisecond, promptBytes: 64 << 10, toolResultBytes: 64 << 10},
-			{name: "long_prior_input_61s", toolDelay: 3 * time.Millisecond, callbackInterval: 30 * time.Millisecond, inputFrames: 2048},
-		} {
+		for _, delivery := range remoteToolAudioDeliveries() {
 			if testCase.healthyControl && delivery.name != "provider_burst" {
 				continue
 			}
@@ -182,7 +171,11 @@ func TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio(t *testing.T) {
 				t.Parallel()
 				scenarioSlots <- struct{}{}
 				defer func() { <-scenarioSlots }()
-				runRemoteToolAudioScenario(t, testCase, delivery.deltaDelay, delivery.toolDelay, delivery.callbackInterval, delivery.promptBytes, delivery.toolResultBytes, delivery.inputFrames)
+				scenario := testCase
+				if !delivery.deviceCadence {
+					scenario.drainInterval = remoteToolAudioDrainInterval
+				}
+				runRemoteToolAudioScenario(t, scenario, delivery.deltaDelay, delivery.toolDelay, delivery.callbackInterval, delivery.promptBytes, delivery.toolResultBytes, delivery.inputFrames)
 			})
 		}
 	}

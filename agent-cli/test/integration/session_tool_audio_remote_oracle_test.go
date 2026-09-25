@@ -392,11 +392,15 @@ func corruptRemoteToolAudioSample(index int) func([]int16) []int16 {
 // regressions already prove the agent sustains.
 const remoteToolAudioDrainInterval = time.Millisecond
 
+// remoteToolAudioScenarioSlots bounds concurrent agent/device process pairs.
+// Device-cadence scenarios are mostly idle between clock ticks, so four pairs
+// keep their callback clocks on time while the real-cadence runs overlap.
+const remoteToolAudioScenarioSlots = 4
+
 // drainCadence is the manual clock interval used once the provider has sent
-// the complete topology. Every response boundary and tool continuation still
-// happens at the scenario's device cadence; only the final drain of
-// already-accepted PCM may run on the accelerated clock, and only scenarios
-// whose oracle ignores device underflow silence set drainInterval.
+// the complete topology. Scenarios that exercise a device cadence leave
+// drainInterval unset and play the whole queue at that cadence; only
+// scenarios whose oracle ignores device underflow silence set it.
 func (c remoteToolAudioCase) drainCadence(callbackInterval time.Duration) time.Duration {
 	if c.drainInterval > 0 {
 		return c.drainInterval
@@ -415,4 +419,27 @@ func remoteToolAudioTraceTail(trace []devicegw.DeviceTraceEvent, tap string) str
 		}
 	}
 	return "none"
+}
+
+// remoteToolAudioDelivery is one provider/tool/device timing variant of the
+// tool-continuation topology.
+type remoteToolAudioDelivery struct {
+	name             string
+	deltaDelay       time.Duration
+	toolDelay        time.Duration
+	callbackInterval time.Duration
+	promptBytes      int
+	toolResultBytes  int
+	inputFrames      int
+	deviceCadence    bool // play the whole queue at callbackInterval
+}
+
+func remoteToolAudioDeliveries() []remoteToolAudioDelivery {
+	return []remoteToolAudioDelivery{
+		{name: "provider_burst", toolDelay: 3 * time.Millisecond, callbackInterval: 30 * time.Millisecond},
+		{name: "captured_cadence", deltaDelay: 50 * time.Millisecond, toolDelay: 25 * time.Millisecond, callbackInterval: 30 * time.Millisecond, deviceCadence: true},
+		{name: "slow_device", toolDelay: 3 * time.Millisecond, callbackInterval: 45 * time.Millisecond, deviceCadence: true},
+		{name: "large_text_and_tool_results", toolDelay: 3 * time.Millisecond, callbackInterval: 30 * time.Millisecond, promptBytes: 64 << 10, toolResultBytes: 64 << 10},
+		{name: "long_prior_input_61s", toolDelay: 3 * time.Millisecond, callbackInterval: 30 * time.Millisecond, inputFrames: 2048},
+	}
 }
