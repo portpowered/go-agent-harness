@@ -488,7 +488,7 @@ func TestWebrtcCameraSourceDrivesReplaySessionThroughRealCLI(t *testing.T) {
 	sourcePCM := bridgeExternalSourceAudio(t, bridgeURL, len(packets), 10*time.Second)
 	waitForExternalSourceEvent(t, bridgeObserved.negotiated, "camera offer/answer completion")
 	waitForVideoDelivery(t, bridgeObserved, "camera video frame delivery")
-	bridgeSnapshot := bridgeObserved.snapshot()
+	bridgeSnapshot := bridgeObserved.streamedSnapshot(t, "camera")
 	bridgeCleanup()
 	if bridgeSnapshot.offerAudioTracks != 1 || bridgeSnapshot.answerAudioTracks != 1 || bridgeSnapshot.offerVideoTracks != 1 || bridgeSnapshot.answerVideoTracks != 1 {
 		t.Fatalf("camera fixture negotiated tracks = offer audio/video %d/%d, answer audio/video %d/%d; want 1/1 in both", bridgeSnapshot.offerAudioTracks, bridgeSnapshot.offerVideoTracks, bridgeSnapshot.answerAudioTracks, bridgeSnapshot.answerVideoTracks)
@@ -578,7 +578,7 @@ func TestWebrtcAudioOnlySourceKeepsReplaySessionHealthy(t *testing.T) {
 	sourcePCM := bridgeExternalSourceAudio(t, bridgeURL, len(packets), 10*time.Second)
 	waitForExternalSourceEvent(t, bridgeObserved.negotiated, "audio-only offer/answer completion")
 	waitForExternalSourceEvent(t, bridgeObserved.frameDelivered, "audio-only audio frame delivery")
-	bridgeSnapshot := bridgeObserved.snapshot()
+	bridgeSnapshot := bridgeObserved.streamedSnapshot(t, "audio-only")
 	bridgeCleanup()
 	if bridgeSnapshot.answerAudioTracks != 1 || bridgeSnapshot.answerVideoTracks != 0 || bridgeSnapshot.videoFrameCount != 0 {
 		t.Fatalf("audio-only fixture negotiated/sent tracks = answer audio/video %d/%d, video frames %d; want 1/0 and 0 video frames", bridgeSnapshot.answerAudioTracks, bridgeSnapshot.answerVideoTracks, bridgeSnapshot.videoFrameCount)

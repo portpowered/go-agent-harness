@@ -54,6 +54,10 @@ type webrtcSourceObservation struct {
 	negotiated          chan struct{}
 	frameDelivered      chan struct{}
 	videoFrameDelivered chan struct{}
+	// streamed closes once every requested packet has been written and
+	// recorded. A client can hold the last frame before the fixture records
+	// it, so counts are complete only after streamed.
+	streamed chan struct{}
 
 	negotiatedOnce, frameOnce, videoFrameOnce sync.Once
 }
@@ -77,6 +81,14 @@ func (o *webrtcSourceObservation) snapshot() webrtcSourceObservationSnapshot {
 		frameCount: o.frameCount, videoFrameCount: o.videoFrameCount,
 		connections: o.connections, videoWriteErr: o.videoWriteErr,
 	}
+}
+
+// streamedSnapshot waits until the fixture finished streaming, so every
+// written packet is counted, and then returns its evidence.
+func (o *webrtcSourceObservation) streamedSnapshot(t *testing.T, name string) webrtcSourceObservationSnapshot {
+	t.Helper()
+	waitForExternalSourceEvent(t, o.streamed, name+" fixture stream completion")
+	return o.snapshot()
 }
 
 func (o *webrtcSourceObservation) recordNegotiation(offerSDP, answerSDP string) {
@@ -109,6 +121,7 @@ func startWebrtcSourceFixture(t *testing.T, opts webrtcSourceOptions) (string, *
 	t.Helper()
 	observed := &webrtcSourceObservation{
 		negotiated:          make(chan struct{}),
+		streamed:            make(chan struct{}),
 		frameDelivered:      make(chan struct{}),
 		videoFrameDelivered: make(chan struct{}),
 	}
@@ -201,6 +214,7 @@ func serveWebrtcSource(t *testing.T, ctx context.Context, conn *websocket.Conn, 
 	}
 	if opts.sendFrames {
 		streamFixtureAudio(t, audio, video, opts.packets, observed)
+		close(observed.streamed)
 	}
 	<-ctx.Done()
 }
