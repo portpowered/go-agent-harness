@@ -136,7 +136,7 @@ Path(os.environ[\"FAKE_RESULT\"]).write_text(json.dumps({
             self.skipTest("golangci-lint is not installed")
 
         with tempfile.TemporaryDirectory(prefix="golangci-working-tree-test-") as temp_dir:
-            root = Path(temp_dir)
+            root = Path(temp_dir).resolve()  # macOS: /tmp and /var are symlinks under /private
             (root / "fixture").mkdir()
             index_dir = root / "temporary-indexes"
             index_dir.mkdir()
@@ -198,7 +198,7 @@ Path(os.environ[\"FAKE_RESULT\"]).write_text(json.dumps({
 
     def test_config_selects_new_code_or_all_code_arguments(self):
         with tempfile.TemporaryDirectory(prefix="golangci-working-tree-modes-") as temp_dir:
-            root = Path(temp_dir)
+            root = Path(temp_dir).resolve()  # macOS: /tmp and /var are symlinks under /private
             (root / "fixture").mkdir()
             index_dir = root / "temporary-indexes"
             index_dir.mkdir()
@@ -280,7 +280,7 @@ print(\"0 issues.\")
 
     def test_new_code_pass_skips_module_without_go_changes(self):
         with tempfile.TemporaryDirectory(prefix="golangci-working-tree-skip-") as temp_dir:
-            root = Path(temp_dir)
+            root = Path(temp_dir).resolve()  # macOS: /tmp and /var are symlinks under /private
             for module in ("alpha", "beta"):
                 (root / module).mkdir()
                 (root / module / "go.mod").write_text(
@@ -381,7 +381,7 @@ print(\"0 issues.\")
 
     def test_loader_error_fails_even_when_analyzer_returns_zero(self):
         with tempfile.TemporaryDirectory(prefix="golangci-working-tree-loader-") as temp_dir:
-            root = Path(temp_dir)
+            root = Path(temp_dir).resolve()  # macOS: /tmp and /var are symlinks under /private
             (root / "fixture").mkdir()
             index_dir = root / "temporary-indexes"
             index_dir.mkdir()
