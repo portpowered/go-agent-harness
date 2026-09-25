@@ -120,6 +120,9 @@ func newInvocationTestSession(t *testing.T, executor cdp.Executor) *targetSessio
 		URL:       "https://example.test/invocation",
 		Origin:    "https://example.test",
 	}, webmcp.TargetOwnershipExternal)
+	// Scripted sink snapshots never change after the test posts them, so a
+	// short settle keeps Cast discovery tests from waiting out real time.
+	session.castTiming.settle = time.Millisecond
 	session.runAction = func(ctx context.Context, actions ...chromedp.Action) error {
 		actionContext := cdp.WithExecutor(ctx, executor)
 		for _, action := range actions {

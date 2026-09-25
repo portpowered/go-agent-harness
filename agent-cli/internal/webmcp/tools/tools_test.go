@@ -663,26 +663,6 @@ func TestExecutorSelectsAndListsAfterLiveActivationFailure(t *testing.T) {
 	}
 }
 
-func TestToolSetExecutorUsesTheSameTextualContract(t *testing.T) {
-	broker := &recordingBroker{selected: webmcp.PageContext{Key: webmcp.PageKey{BrowserID: testBrowserID, TargetID: testTargetID}, Generation: 1}}
-	set := NewToolSet(broker)
-	if got := len(set.Definitions()); got != 9 {
-		t.Fatalf("definition count = %d, want six stable tools plus open-tab, navigate-tab, and show_page", got)
-	}
-	response, err := set.Executor().Execute(context.Background(), messages.ToolCall{
-		ID: "call-get-context", Name: webmcp.GetContextToolName, Arguments: `{"refresh":false}`,
-	})
-	if err != nil {
-		t.Fatalf("executor execute: %v", err)
-	}
-	if response.Content == "" {
-		t.Fatalf("executor result = %#v, want one textual tool response", response)
-	}
-	if _, err := webmcp.UnmarshalToolResult([]byte(response.Content)); err != nil {
-		t.Fatalf("executor result envelope: %v", err)
-	}
-}
-
 func TestToolSetExecutorPreservesShowPageImageProjection(t *testing.T) {
 	imageBytes := testPNG(t, 1, 1)
 	set := NewToolSet(&recordingBroker{

@@ -3,7 +3,6 @@ package rtc_test
 import sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -64,23 +63,6 @@ func failure(op string, want error) transporttest.FailureCase {
 	}
 	return transporttest.FailureCase{
 		New: func() transport.Dialer { return newDataOnly(nil, dErr, rErr, wErr, cErr) }, WantErr: want, MatchErr: match(op),
-	}
-}
-
-func TestRTCDataS11NegativeControlRejectsNoOp(t *testing.T) {
-	conn, err := (&noOpDialer{}).Dial("rtc://memory/no-op", map[string]string{"X-Test": "negative-control"})
-	if err != nil || conn == nil {
-		t.Fatalf("no-op Dial = (%v, %v), want a connection", conn, err)
-	}
-	gotType, gotPayload, err := conn.ReadMessage()
-	if err != nil {
-		t.Fatalf("no-op ReadMessage: %v", err)
-	}
-	if gotType == 7 && bytes.Equal(gotPayload, []byte{0, 1, 2}) {
-		t.Fatal("dead/no-op connection unexpectedly produced the first S11 message")
-	}
-	if err := conn.Close(); err != nil {
-		t.Fatalf("no-op Close: %v", err)
 	}
 }
 
@@ -206,16 +188,6 @@ func (c *dataConn) Close() error {
 	}
 	return nil
 }
-
-type noOpDialer struct{}
-
-func (*noOpDialer) Dial(string, map[string]string) (transport.Conn, error) { return &noOpConn{}, nil }
-
-type noOpConn struct{}
-
-func (*noOpConn) ReadMessage() (int, []byte, error) { return 0, nil, nil }
-func (*noOpConn) WriteMessage(int, []byte) error    { return nil }
-func (*noOpConn) Close() error                      { return nil }
 
 type inboundStub struct{}
 

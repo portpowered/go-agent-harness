@@ -270,42 +270,6 @@ func TestAssertPCM16ReturnsStructuredActionableFailure(t *testing.T) {
 	}
 }
 
-func TestAnalyzeAndValidatePCM16AreConciseAliases(t *testing.T) {
-	clean := cleanAnalysisInput()
-	config := stream.DefaultAnalysisConfig()
-
-	want, err := stream.AnalyzePCM16(clean, config)
-	if err != nil {
-		t.Fatalf("AnalyzePCM16() error = %v", err)
-	}
-	got, err := stream.Analyze(clean, config)
-	if err != nil {
-		t.Fatalf("Analyze() error = %v", err)
-	}
-	if got.StreamID != want.StreamID || len(got.Failures) != len(want.Failures) || !got.Passed() {
-		t.Fatalf("Analyze() = %+v, want the same report as AnalyzePCM16() = %+v", got, want)
-	}
-	if failures := got.FailuresCopy(); len(failures) != 0 {
-		t.Fatalf("FailuresCopy() on a passing analysis = %v, want empty", failures)
-	}
-	if err := stream.ValidatePCM16(clean, config); err != nil {
-		t.Fatalf("ValidatePCM16() error = %v, want clean input to pass", err)
-	}
-
-	clipped := cleanAnalysisInput()
-	clipped.Samples[800] = 32700
-	if err := stream.ValidatePCM16(clipped, config); err == nil || !errors.Is(err, stream.ErrPCM16AnalysisFailed) {
-		t.Fatalf("ValidatePCM16() error = %v, want ErrPCM16AnalysisFailed for a clipped stream", err)
-	}
-	clippedAnalysis, err := stream.Analyze(clipped, config)
-	if err != nil {
-		t.Fatalf("Analyze() error = %v", err)
-	}
-	if failures := clippedAnalysis.FailuresCopy(); len(failures) != 1 || failures[0].Property != clippingProperty {
-		t.Fatalf("FailuresCopy() on a clipped analysis = %v, want one clipping failure", failures)
-	}
-}
-
 func TestPCM16AnalysisErrorTypesHandleNilAndEmptyState(t *testing.T) {
 	var nilAssertionErr *stream.PCM16AssertionError
 	if got, want := nilAssertionErr.Error(), "<nil>"; got != want {

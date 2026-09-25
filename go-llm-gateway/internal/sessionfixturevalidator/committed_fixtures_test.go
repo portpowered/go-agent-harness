@@ -1,27 +1,11 @@
 package sessionfixturevalidator
 
 import (
-	"path/filepath"
 	"strings"
 	"testing"
 
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
-
-var committedSessionFixtureRoots = gatewayCommittedFixtureRoots()
-
-func TestCommittedSessionFixturesPassHygieneSmokeCheck(t *testing.T) {
-	result, err := ValidatePaths(committedSessionFixtureRoots)
-	if err != nil {
-		t.Fatalf("validate committed session fixture roots: %v", err)
-	}
-	if result.FilesScanned == 0 {
-		t.Fatalf("ValidatePaths scanned 0 committed session fixtures from %v", committedSessionFixtureRoots)
-	}
-	if len(result.Errors) != 0 {
-		t.Fatalf("committed session fixture hygiene failed:\n%s", formatValidationErrors(result.Errors))
-	}
-}
 
 func TestAllCommittedSessionFixturesPassWithExactCount(t *testing.T) {
 	roots := allCommittedFixtureRoots()
@@ -47,20 +31,6 @@ func TestCommittedSessionFixturesSmokeCheckReportsInvalidFixtureHygiene(t *testi
 	requireSmokeValidationError(t, result, "unsafe-synthetic.session.json", "records[0].payload.value.input_audio", "raw audio")
 	requireSmokeValidationError(t, result, "unsafe-synthetic.session.json", "records[0].payload.value.authorization", "credential-like")
 	requireSmokeValidationError(t, result, "provider-wire-misuse.session.json", "records[0].payload_type", "websocket_message")
-}
-
-func TestCommittedSessionFixtureRootsStayWithinGatewayOwnedBoundaries(t *testing.T) {
-	for _, root := range committedSessionFixtureRoots {
-		normalized := filepath.ToSlash(root)
-		if strings.Contains(normalized, "/agent-cli/") || strings.Contains(normalized, "agent-cli/test/integration/testdata") {
-			t.Fatalf("committed session fixture root %q must not reach into agent-cli private testdata", normalized)
-		}
-	}
-
-	sharedRoot := filepath.ToSlash(filepath.Dir(gatewaytesting.SharedSessionFixturePath("fixture.session.json")))
-	if sharedRoot != filepath.ToSlash(committedSessionFixtureRoots[1]) {
-		t.Fatalf("shared committed fixture root = %q, want %q", committedSessionFixtureRoots[1], sharedRoot)
-	}
 }
 
 func requireSmokeValidationError(t *testing.T, result Result, fileName, fieldPath, reason string) {

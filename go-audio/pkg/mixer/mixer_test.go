@@ -211,9 +211,16 @@ func TestMixerRejectsSourceLimitBeforeConsumingQueuedFrame(t *testing.T) {
 
 	// Nil entries stand in for registered sources whose consumers are not
 	// reached: the regression is specifically that the queued source must not
-	// be received before the source-count rejection.
+	// be received before the source-count rejection. The production limit is
+	// lowered so the test does not register MaxPCM16MixSources inputs.
+	const sourceLimit = 2
 	mixer.mu.Lock()
-	for index := 0; index < MaxPCM16MixSources; index++ {
+	if mixer.sourceLimit != MaxPCM16MixSources {
+		mixer.mu.Unlock()
+		t.Fatalf("mixer source limit = %d, want MaxPCM16MixSources", mixer.sourceLimit)
+	}
+	mixer.sourceLimit = sourceLimit
+	for index := 0; index < sourceLimit; index++ {
 		mixer.inputs["overflow-"+strconv.Itoa(index)] = nil
 	}
 	mixer.mu.Unlock()

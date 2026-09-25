@@ -390,16 +390,6 @@ func TestSessionGatewayInferencer_CancelledConnectDoesNotMutatePersistentRequest
 	}
 }
 
-func TestSessionGatewayInferencer_ConnectSessionError(t *testing.T) {
-	gw := &mockSessionGateway{err: errors.New("connection refused")}
-	si := NewSessionGatewayInferencer(gw, WithSessionModel("grok-3-mini"))
-
-	_, err := si.ConnectSession(context.Background())
-	if err == nil {
-		t.Fatal("expected error from gateway")
-	}
-}
-
 func TestSessionGatewayInferencer_ConnectSessionErrorClassification(t *testing.T) {
 	gw := &mockSessionGateway{
 		err: providers.NewUnsupportedRequestError("fake-session", "session", "audio", []string{"text"}, "fake-session: audio sessions are not supported"),
@@ -484,22 +474,6 @@ func TestSessionGatewayInferencer_SendRouted(t *testing.T) {
 	}
 	if received.Type != messages.StreamTypeAudioDelta {
 		t.Errorf("type: got %q, want %q", received.Type, messages.StreamTypeAudioDelta)
-	}
-}
-
-func TestSessionGatewayInferencer_ImplementsLoopOwnedContractAtRuntime(t *testing.T) {
-	sess := newMockSession()
-	gw := &mockSessionGateway{session: sess}
-	var inferencer messages.SessionInferencer = NewSessionGatewayInferencer(gw, WithSessionModel("grok-3-mini"))
-
-	session, err := inferencer.ConnectSession(context.Background())
-	if err != nil {
-		t.Fatalf("ConnectSession via messages.SessionInferencer: %v", err)
-	}
-	defer closeForTest(t, session)
-
-	if session != sess {
-		t.Fatal("ConnectSession should expose the loop-owned session contract without wrapping it in a second shared session surface")
 	}
 }
 

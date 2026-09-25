@@ -63,14 +63,6 @@ func allCommittedFixtureRoots() []string {
 	return paths
 }
 
-// gatewayCommittedFixtureRoots returns the two gateway-owned roots used by
-// the existing hygiene smoke check. The complete committed-fixture check uses
-// allCommittedFixtureRoots, including the agent-cli integration root.
-func gatewayCommittedFixtureRoots() []string {
-	roots := allCommittedFixtureRoots()
-	return roots[:2]
-}
-
 // repositoryRootPath derives the checkout root from a real filesystem anchor.
 // Go's -trimpath build mode can replace runtime.Caller filenames with import
 // paths, so the working-directory walk is preferred and the caller filename is

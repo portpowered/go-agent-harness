@@ -41,12 +41,15 @@ func (b *latencyBroker) Invoke(ctx context.Context, request webmcp.InvokeRequest
 // browser setup - the page tool never ran - instead of silently consuming the
 // interactive budget and blaming the tool.
 func TestPageToolSlowSetupClassifiedDistinctly(t *testing.T) {
+	t.Parallel()
+	// ListTools outlasts the whole call, so only the setup reserve (one third
+	// of the remaining budget) decides the outcome; the scale is irrelevant.
 	broker := &latencyBroker{listToolsDelay: 2 * time.Second}
 	broker.catalog = pageCatalog()
 	set := NewBrokerToolSet(broker)
 	set.SetReservedToolNames([]string{"exec"})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 900*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Millisecond)
 	defer cancel()
 	response, err := set.Executor().Execute(ctx, messages.ToolCall{ID: "slow-setup", Name: "get_cube_state", Arguments: `{}`})
 	if err != nil {
@@ -67,13 +70,16 @@ func TestPageToolSlowSetupClassifiedDistinctly(t *testing.T) {
 // With the long-running budget, a realistic cold-start plus a real page-tool
 // delay completes: setup latency and a multi-second invoke both fit.
 func TestPageToolColdStartFitsLongRunningBudget(t *testing.T) {
-	broker := &latencyBroker{listToolsDelay: 700 * time.Millisecond, invokeDelay: 900 * time.Millisecond}
+	t.Parallel()
+	// Scaled 10x down from a 700ms setup and 900ms invoke under a 4s budget:
+	// the setup reserve is proportional, so the ratios are what is tested.
+	broker := &latencyBroker{listToolsDelay: 70 * time.Millisecond, invokeDelay: 90 * time.Millisecond}
 	broker.catalog = pageCatalog()
 	broker.invokeResult = webmcp.InvokeResult{InvocationID: "inv-cold", State: webmcp.InvocationCompleted, Output: json.RawMessage(`{"solved":true}`)}
 	set := NewBrokerToolSet(broker)
 	set.SetReservedToolNames([]string{"exec"})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 400*time.Millisecond)
 	defer cancel()
 	started := time.Now()
 	response, err := set.Executor().Execute(ctx, messages.ToolCall{ID: "cold-ok", Name: "get_cube_state", Arguments: `{}`})

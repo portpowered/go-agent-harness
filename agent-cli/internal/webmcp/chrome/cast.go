@@ -41,6 +41,11 @@ const (
 	castDiscoverySettleWait = 500 * time.Millisecond
 )
 
+// castDiscoveryTiming bounds ListCastDevices: it waits up to wait for a first
+// sink snapshot and returns once a non-empty snapshot is unchanged for
+// settle. Zero fields use castDiscoveryWait and castDiscoverySettleWait.
+type castDiscoveryTiming struct{ wait, settle time.Duration }
+
 // observeCastProtocolEvent owns Cast's asynchronous sink snapshot. These
 // events are operational state for the cast tools, not WebMCP page events, so
 // they deliberately do not enter the broker recording/catalog stream.
@@ -100,7 +105,7 @@ func (s *targetSession) ListCastDevices(ctx context.Context) ([]webmcp.CastDevic
 	if err != nil {
 		return nil, classifySessionError(s, webmcp.ErrorBrowserProtocol, "list_cast_devices", err)
 	}
-	timer := time.NewTimer(castDiscoveryWait)
+	timer := time.NewTimer(durationOrDefault(s.castTiming.wait, castDiscoveryWait))
 	defer timer.Stop()
 	var settleTimer *time.Timer
 	var settle <-chan time.Time
@@ -128,7 +133,7 @@ func (s *targetSession) ListCastDevices(ctx context.Context) ([]webmcp.CastDevic
 			return nil, webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "Chrome could not discover Cast devices.", map[string]any{"phase": "list_cast_devices", "reason_code": "cast_issue", "issue": issue})
 		}
 		if len(devices) > 0 && settleTimer == nil {
-			settleTimer = time.NewTimer(castDiscoverySettleWait)
+			settleTimer = time.NewTimer(durationOrDefault(s.castTiming.settle, castDiscoverySettleWait))
 			settle = settleTimer.C
 		}
 		select {

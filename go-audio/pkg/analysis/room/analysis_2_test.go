@@ -106,48 +106,6 @@ func TestPCM16RoomAnalysisConfigRejectsInvalidBounds(t *testing.T) {
 	}
 }
 
-func TestPCM16RoomCorrelationAndValidateAreConciseAliases(t *testing.T) {
-	room := roomAnalysisFixture()
-	interval := roomanalysis.PCM16TimeInterval{ID: "standalone-overlap", Start: 600 * time.Millisecond, End: 2 * time.Second}
-	lagWindow := roomanalysis.PCM16LagWindow{Min: -100 * time.Millisecond, Max: 100 * time.Millisecond}
-
-	want, err := roomanalysis.NormalizedPCM16CrossCorrelation(room.Streams[0], room.Streams[3], interval, lagWindow, -50)
-	if err != nil {
-		t.Fatalf("NormalizedPCM16CrossCorrelation() error = %v", err)
-	}
-	got, err := roomanalysis.MeasurePCM16Correlation(room.Streams[0], room.Streams[3], interval, lagWindow, -50)
-	if err != nil {
-		t.Fatalf("MeasurePCM16Correlation() error = %v", err)
-	}
-	if got.BestCorrelation != want.BestCorrelation || got.BestLag != want.BestLag || got.ComparedSamples != want.ComparedSamples {
-		t.Fatalf("MeasurePCM16Correlation() = %+v, want the same measurement as NormalizedPCM16CrossCorrelation() = %+v", got, want)
-	}
-
-	config := roomanalysis.DefaultRoomAnalysisConfig()
-	if err := roomanalysis.ValidatePCM16Room(room, config); err != nil {
-		t.Fatalf("ValidatePCM16Room() error = %v, want the fixture room to pass", err)
-	}
-
-	broken := roomAnalysisFixture()
-	broken.Streams[3].Samples = make([]int16, len(broken.Streams[3].Samples))
-	broken.Streams[3].ExpectedSpeech = nil
-	err = roomanalysis.ValidatePCM16Room(broken, config)
-	if err == nil || !errors.Is(err, roomanalysis.ErrPCM16AnalysisFailed) {
-		t.Fatalf("ValidatePCM16Room() error = %v, want ErrPCM16AnalysisFailed", err)
-	}
-	var assertionErr *roomanalysis.PCM16RoomAssertionError
-	if !errors.As(err, &assertionErr) {
-		t.Fatalf("ValidatePCM16Room() error = %T, want *PCM16RoomAssertionError", err)
-	}
-	if failures := assertionErr.FailuresCopy(); len(failures) == 0 {
-		t.Fatalf("FailuresCopy() = %v, want the room's typed failures", failures)
-	}
-	var nilAssertionErr *roomanalysis.PCM16RoomAssertionError
-	if failures := nilAssertionErr.FailuresCopy(); failures != nil {
-		t.Fatalf("FailuresCopy() on a nil *PCM16RoomAssertionError = %v, want nil", failures)
-	}
-}
-
 func TestPCM16RoomExplicitLoudnessIntervalValidatesAndMeasures(t *testing.T) {
 	valid := roomanalysis.PCM16LoudnessInterval{
 		PCM16TimeInterval: roomanalysis.PCM16TimeInterval{Start: 600 * time.Millisecond, End: 2 * time.Second},

@@ -25,7 +25,9 @@ func TestVerifyRealtimeAudioRejectsNonSpeakingListener(t *testing.T) {
 	}()
 
 	endpoint := "ws://" + listener.Addr().String() + "/v1/realtime?model=non-speaking"
-	ctx, cancel := context.WithTimeout(context.Background(), 750*time.Millisecond)
+	// The listener never completes the handshake, so the probe can only end
+	// at this deadline; a short one keeps the bounded-failure proof cheap.
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
 	started := time.Now()

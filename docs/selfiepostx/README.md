@@ -305,8 +305,8 @@ Passed:
 ```powershell
 go build -o <output>/yui-selfiepostx.exe ./agent-cli/cmd/yui
 go test ./agent-cli/internal/transport/cli -run 'Test(ReadXVideo|DecodeXVideoReply|WebMCPDirectCommandTreeIsFrozen|WebMCPDirectFlagsUseOneUnprefixedSpelling)$' -count=1
-$env:WEBMCP_X_ADAPTER_INTEGRATION='1'
-go test ./agent-cli/internal/webmcp/chrome -run '^TestXAdapterStockChromeJourney$' -count=1 -v
+$env:WEBMCP_SITE_ADAPTER_INTEGRATION='1'
+go test ./agent-cli/internal/webmcp/chrome -run '^TestBundledSiteAdaptersStockChromeJourneys$/^x$' -count=1 -v
 ```
 
 The fixture covers text publishing, missing confirmation, mismatched text,

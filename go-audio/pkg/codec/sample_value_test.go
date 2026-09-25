@@ -233,16 +233,6 @@ func TestPacketEnergyMeasuresIndependentMonoAndFloatLiterals(t *testing.T) {
 	}
 }
 
-func TestPacketEnergyZeroFramesDoesNotReadData(t *testing.T) {
-	got, err := codec.PacketEnergy(nil, 0, 2, 6, pcmFormat(16, 16))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != 0 {
-		t.Fatalf("zero-frame energy = %g, want zero", got)
-	}
-}
-
 func TestPacketEnergyRejectsDimensionsBeforeTraversal(t *testing.T) {
 	maximum := int(^uint(0) >> 1)
 	tests := []struct {

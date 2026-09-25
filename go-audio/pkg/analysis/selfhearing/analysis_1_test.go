@@ -169,7 +169,12 @@ func TestPCM16SelfHearingDetectsContinuousClockedFarFieldDelay(t *testing.T) {
 }
 
 func TestPCM16SelfHearingDetectsFarFieldAfterSilentCaptureResets(t *testing.T) {
-	detector := newSelfHearingDetector(t, selfhearing.DefaultSelfHearingConfig())
+	// The echo arrives 240ms late. A lag window around that delay keeps the
+	// far-field reset behavior under test while avoiding a correlation scan
+	// over the default -200ms..500ms range for every 16kHz frame.
+	config := selfhearing.DefaultSelfHearingConfig()
+	config.CorrelationLagWindow = selfhearing.PCM16LagWindow{Min: 200 * time.Millisecond, Max: 280 * time.Millisecond}
+	detector := newSelfHearingDetector(t, config)
 	const rate, frameSamples, delayedFrames = 16000, coreaudio.FrameSize, 8
 	playback := testSignal(24*frameSamples, 313)
 	var observation selfhearing.PCM16SelfHearingObservation
@@ -366,48 +371,6 @@ func TestPCM16SelfHearingStorageRemainsBoundedForLargeFrames(t *testing.T) {
 	}
 	if stats.PlaybackSamples > stats.MaxPlaybackSamples || stats.CaptureSamples > stats.MaxCaptureSamples {
 		t.Fatalf("buffered samples exceed bounds: %+v", stats)
-	}
-}
-
-func TestPCM16SelfHearingControllerAliasesMatchDetectorConstructors(t *testing.T) {
-	config := selfhearing.DefaultSelfHearingConfig()
-	controller, err := selfhearing.NewPCM16SelfHearingController(config)
-	if err != nil || controller == nil {
-		t.Fatalf("NewPCM16SelfHearingController() = (%v, %v), want a detector", controller, err)
-	}
-	t.Cleanup(func() {
-		if err := controller.Close(); err != nil {
-			t.Errorf("controller.Close(): %v", err)
-		}
-	})
-
-	invalid := config
-	invalid.AnalysisWindow = -time.Nanosecond
-	if _, err := selfhearing.NewPCM16SelfHearingController(invalid); !errors.Is(err, selfhearing.ErrInvalidPCM16SelfHearingConfig) {
-		t.Fatalf("NewPCM16SelfHearingController(invalid) error = %v, want ErrInvalidPCM16SelfHearingConfig", err)
-	}
-
-	paired := selfhearing.PCM16SelfHearingTopology{LiveMicrophone: true, LiveSpeaker: true}
-	if !paired.EnablesPCM16SelfHearing() {
-		t.Fatalf("paired topology EnablesPCM16SelfHearing() = false, want true")
-	}
-	pairedController, err := selfhearing.NewPCM16SelfHearingControllerForTopology(paired, config)
-	if err != nil || pairedController == nil {
-		t.Fatalf("NewPCM16SelfHearingControllerForTopology(paired) = (%v, %v), want a detector", pairedController, err)
-	}
-	t.Cleanup(func() {
-		if err := pairedController.Close(); err != nil {
-			t.Errorf("pairedController.Close(): %v", err)
-		}
-	})
-
-	bypass := selfhearing.PCM16SelfHearingTopology{LiveMicrophone: true, LiveSpeaker: true, RoomPeerIngress: true}
-	if bypass.EnablesPCM16SelfHearing() {
-		t.Fatalf("bypass topology EnablesPCM16SelfHearing() = true, want false")
-	}
-	bypassController, err := selfhearing.NewPCM16SelfHearingControllerForTopology(bypass, config)
-	if err != nil || bypassController != nil {
-		t.Fatalf("NewPCM16SelfHearingControllerForTopology(bypass) = (%v, %v), want (nil, nil)", bypassController, err)
 	}
 }
 

@@ -65,27 +65,50 @@ func TestCustomerSimulationScenarioScriptUsesVisibleWordingForBuiltInsAndCustoms
 	}
 }
 
-func TestRunCustomerSimulationSuiteLeavesTypedBrokenBundleWithoutProductRecord(t *testing.T) {
+// TestRunCustomerSimulationSuiteLeavesTypedBrokenBundles runs every required
+// family against a child that exits after its first input byte, before any
+// product record exists. Each run must still leave a verifiable bundle with a
+// structured BROKEN verdict and a bounded, non-secret diagnosis.
+func TestRunCustomerSimulationSuiteLeavesTypedBrokenBundles(t *testing.T) {
 	binaryPath := filepath.Join(t.TempDir(), "child.sh")
-	if err := os.WriteFile(binaryPath, []byte("#!/bin/sh\nwhile IFS= read -r -n 1 byte; do :; done\nexit 1\n"), 0o700); err != nil {
+	if err := os.WriteFile(binaryPath, []byte("#!/bin/sh\nhead -c 1 >/dev/null\nexit 1\n"), 0o700); err != nil {
 		t.Fatalf("write child: %v", err)
 	}
-	scenario := NewFamilyAScenario()
-	script := FamilyASpokenScript()
-	audio := make([][]byte, len(script))
-	for index := range audio {
-		audio[index] = []byte{byte(index + 1), 0}
-	}
 	validator := CustomerSimulationValidatorAgentFunc(func(_ context.Context, request CustomerSimulationValidatorRequest) ([]byte, error) {
-		return json.Marshal(ValidatorVerdict{Verdict: ValidatorBroken, FirstFailingTurn: "turn-1", Behavior: "the fake child exited before producing product evidence", Violation: "the session did not finish", EvidenceRefs: []string{"scenario.json", "process.json"}, CustomerImpact: "the customer received no verified response"})
+		return json.Marshal(ValidatorVerdict{
+			Verdict: ValidatorBroken, FirstFailingTurn: request.Input.Scenario.Actions[0].ID,
+			Behavior: "the fake child exited before producing product evidence", Violation: "the session did not finish",
+			EvidenceRefs: []string{"scenario.json", "process.json"}, CustomerImpact: "the customer received no verified response",
+		})
 	})
-	result, err := RunCustomerSimulationSuite(context.Background(), CustomerSimulationSuiteOptions{
-		BinaryPath: binaryPath, RunRoot: t.TempDir(), Provider: "openai", Model: "gpt-realtime", APIKey: "test-key", Runs: []CustomerSimulationRunSpec{{Scenario: scenario, Script: script, Audio: audio}},
-		Validator: validator, MaxDuration: time.Second, FrameDuration: time.Millisecond, SilenceDuration: 0, ShutdownGrace: 100 * time.Millisecond,
-	})
-	if err == nil {
-		t.Fatal("RunCustomerSimulationSuite error = nil, want failed child/non-passing run")
+	for _, scenario := range []CustomerScenario{
+		NewFamilyAScenario(),
+		NewFamilyBScenario(),
+		NewFamilyDScenario(TerminationSIGINT),
+		NewFamilyDScenario(TerminationNatural),
+	} {
+		t.Run(scenario.ID, func(t *testing.T) {
+			t.Parallel()
+			script := CustomerSimulationScenarioScript(scenario)
+			audio := make([][]byte, len(script))
+			for index := range audio {
+				audio[index] = []byte{byte(index + 1), 0}
+			}
+			result, err := RunCustomerSimulationSuite(context.Background(), CustomerSimulationSuiteOptions{
+				BinaryPath: binaryPath, RunRoot: filepath.Join(t.TempDir(), "runs"), Provider: "openai", Model: "gpt-realtime", APIKey: "test-key",
+				Runs: []CustomerSimulationRunSpec{{Scenario: scenario, Script: script, Audio: audio}}, Validator: validator,
+				MaxDuration: time.Second, FrameDuration: time.Millisecond, SilenceDuration: 0, ShutdownGrace: 100 * time.Millisecond,
+			})
+			if err == nil {
+				t.Fatal("RunCustomerSimulationSuite error = nil, want failed child/non-passing run")
+			}
+			assertTypedBrokenCustomerSimulationRun(t, result)
+		})
 	}
+}
+
+func assertTypedBrokenCustomerSimulationRun(t *testing.T, result CustomerSimulationSuiteResult) {
+	t.Helper()
 	if len(result.Runs) != 1 {
 		t.Fatalf("run count = %d, want 1", len(result.Runs))
 	}
@@ -101,54 +124,6 @@ func TestRunCustomerSimulationSuiteLeavesTypedBrokenBundleWithoutProductRecord(t
 	}
 	if strings.Contains(run.Error, "test-key") {
 		t.Fatalf("run error leaked API key: %q", run.Error)
-	}
-}
-
-func TestRunCustomerSimulationSuiteLeavesTypedBrokenTerminationBundles(t *testing.T) {
-	binaryPath := filepath.Join(t.TempDir(), "child.sh")
-	if err := os.WriteFile(binaryPath, []byte("#!/bin/sh\nwhile IFS= read -r -n 1 byte; do :; done\nexit 1\n"), 0o700); err != nil {
-		t.Fatalf("write child: %v", err)
-	}
-	validator := CustomerSimulationValidatorAgentFunc(func(_ context.Context, request CustomerSimulationValidatorRequest) ([]byte, error) {
-		return json.Marshal(ValidatorVerdict{
-			Verdict: ValidatorBroken, FirstFailingTurn: request.Input.Scenario.Actions[0].ID,
-			Behavior: "the fake child exited before producing product evidence", Violation: "the session did not finish",
-			EvidenceRefs: []string{"scenario.json", "process.json"}, CustomerImpact: "the customer received no verified response",
-		})
-	})
-	for _, scenario := range []CustomerScenario{
-		NewFamilyBScenario(),
-		NewFamilyDScenario(TerminationSIGINT),
-		NewFamilyDScenario(TerminationNatural),
-	} {
-		t.Run(scenario.ID, func(t *testing.T) {
-			script := CustomerSimulationScenarioScript(scenario)
-			audio := make([][]byte, len(script))
-			for index := range audio {
-				audio[index] = []byte{byte(index + 1), 0}
-			}
-			result, err := RunCustomerSimulationSuite(context.Background(), CustomerSimulationSuiteOptions{
-				BinaryPath: binaryPath, RunRoot: filepath.Join(t.TempDir(), "runs"), Provider: "openai", Model: "gpt-realtime", APIKey: "test-key",
-				Runs: []CustomerSimulationRunSpec{{Scenario: scenario, Script: script, Audio: audio}}, Validator: validator,
-				MaxDuration: time.Second, FrameDuration: time.Millisecond, SilenceDuration: 0, ShutdownGrace: 100 * time.Millisecond,
-			})
-			if err == nil {
-				t.Fatal("RunCustomerSimulationSuite error = nil, want failed child/non-passing run")
-			}
-			if len(result.Runs) != 1 {
-				t.Fatalf("run count = %d, want 1", len(result.Runs))
-			}
-			run := result.Runs[0]
-			if run.Validator.Verdict.Verdict != ValidatorBroken || run.Validator.Pass() {
-				t.Fatalf("validator result = %+v, want structured BROKEN", run.Validator)
-			}
-			if _, err := VerifyCustomerEvidenceBundle(run.BundleRoot); err != nil {
-				t.Fatalf("VerifyCustomerEvidenceBundle(%q): %v", run.BundleRoot, err)
-			}
-			if strings.Contains(run.Error, "test-key") {
-				t.Fatalf("run error leaked API key: %q", run.Error)
-			}
-		})
 	}
 }
 

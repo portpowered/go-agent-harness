@@ -144,7 +144,7 @@ func attachCrossProcessExternalClient(t *testing.T, watch crossProcessWatch) (we
 	// duplicate semantic catalog event.
 	_, err = watch.broker.ListTools(context.Background(), webmcp.ListToolsOptions{IncludeSchemas: true})
 	requireBrokerStep(t, err, "flush external initial catalog")
-	assertNoBrokerEvent(t, watch.events, "duplicate initial catalog descriptor")
+	assertNoBrokerEvent(t, watch, "duplicate initial catalog descriptor")
 	return externalHandleValue, externalSession
 }
 
@@ -158,7 +158,7 @@ func assertCrossProcessEarlyResponseBuffered(t *testing.T, watch crossProcessWat
 		Status:       "Completed",
 		Output:       []byte(`{"early":true}`),
 	}), "emit response before invocation")
-	assertNoBrokerEvent(t, watch.events, "response before invocation")
+	assertNoBrokerEvent(t, watch, "response before invocation")
 	requireBrokerStep(t, externalSession.Emit(webmcp.BrowserEvent{
 		Type:         webmcp.EventToolInvoked,
 		Generation:   1,
@@ -209,7 +209,7 @@ func assertCrossProcessExternalInvocation(t *testing.T, watch crossProcessWatch,
 		t.Fatalf("external invocation terminal event = %#v, want one correlated completion", terminal)
 	}
 	requireBrokerStep(t, externalSession.EmitToolResponse(externalInvocationID, "Completed", []byte(`{"duplicate":true}`)), "emit duplicate external response")
-	assertNoBrokerEvent(t, watch.events, "duplicate external response")
+	assertNoBrokerEvent(t, watch, "duplicate external response")
 }
 
 // assertCrossProcessUnresolvedInvocation covers a protocol invocation that
@@ -243,7 +243,7 @@ func assertCrossProcessUnresolvedInvocation(t *testing.T, watch crossProcessWatc
 		t.Fatalf("unresolved terminal event = %#v, want completed event without ref", unresolvedTerminal)
 	}
 	requireBrokerStep(t, externalSession.EmitToolsRemoved("frame-1", writeTool.Name), "emit repeated external catalog removal")
-	assertNoBrokerEvent(t, watch.events, "repeated catalog removal")
+	assertNoBrokerEvent(t, watch, "repeated catalog removal")
 	requireBrokerStep(t, externalSession.EmitToolsAdded(writeTool), "re-add external catalog tool")
 	requireWatchedCatalogEvent(t, watch, "tools_added", "catalog re-add event")
 	requireBrokerStep(t, externalSession.EmitToolsRemoved("frame-1", writeTool.Name), "emit external catalog removal")
@@ -262,7 +262,7 @@ func assertCrossProcessStaleGenerationIgnored(t *testing.T, watch crossProcessWa
 		Generation: 1,
 		Tools:      []webmcp.ToolDescriptor{pageTool("stale_tool", "frame-1", `{}`)},
 	}), "emit stale catalog event")
-	assertNoBrokerEvent(t, watch.events, "stale generation catalog event")
+	assertNoBrokerEvent(t, watch, "stale generation catalog event")
 	current, err := watch.broker.ListTools(context.Background(), webmcp.ListToolsOptions{IncludeSchemas: true})
 	requireBrokerStep(t, err, "list catalog after stale event")
 	if current.Generation != 2 || len(current.Tools) != 0 {
@@ -276,7 +276,7 @@ func assertCrossProcessOtherTargetsIgnored(t *testing.T, watch crossProcessWatch
 	requireBrokerStep(t, err, "attach other target")
 	otherTarget := mustAs[*testkit.ScriptedTargetSession](t, otherTargetValue)
 	requireBrokerStep(t, otherTarget.EmitToolsAdded(pageTool("other_target_tool", "frame-1", `{}`)), "emit other-target catalog event")
-	assertNoBrokerEvent(t, watch.events, "other-target catalog event")
+	assertNoBrokerEvent(t, watch, "other-target catalog event")
 
 	otherBrowserHandle, err := watch.runtime.Open(context.Background(), otherCandidate)
 	requireBrokerStep(t, err, "open other browser client")
@@ -284,7 +284,7 @@ func assertCrossProcessOtherTargetsIgnored(t *testing.T, watch crossProcessWatch
 	requireBrokerStep(t, err, "attach other browser target")
 	otherBrowserSession := mustAs[*testkit.ScriptedTargetSession](t, otherBrowserSessionValue)
 	requireBrokerStep(t, otherBrowserSession.EmitToolsAdded(pageTool("other_browser_tool", "frame-1", `{}`)), "emit other-browser catalog event")
-	assertNoBrokerEvent(t, watch.events, "other-browser catalog event")
+	assertNoBrokerEvent(t, watch, "other-browser catalog event")
 }
 
 func waitForBrokerEvent(t *testing.T, events <-chan webmcp.BrokerEvent, want webmcp.BrokerEventType) webmcp.BrokerEvent {
@@ -303,14 +303,19 @@ func waitForBrokerEvent(t *testing.T, events <-chan webmcp.BrokerEvent, want web
 	}
 }
 
-func assertNoBrokerEvent(t *testing.T, events <-chan webmcp.BrokerEvent, label string) {
+// assertNoBrokerEvent proves an emitted browser event produced no broker
+// observation. Scripted sessions deliver events synchronously into the
+// broker's session queue, and Selected drains that queue before returning, so
+// any observation the event caused is already buffered in the watch stream.
+func assertNoBrokerEvent(t *testing.T, watch crossProcessWatch, label string) {
 	t.Helper()
-	timer := time.NewTimer(250 * time.Millisecond)
-	defer timer.Stop()
+	if _, err := watch.broker.Selected(context.Background()); err != nil {
+		t.Fatalf("flush broker after %s: %v", label, err)
+	}
 	select {
-	case event := <-events:
+	case event := <-watch.events:
 		t.Fatalf("%s produced broker event %#v", label, event)
-	case <-timer.C:
+	default:
 	}
 }
 
