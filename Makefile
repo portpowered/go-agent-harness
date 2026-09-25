@@ -52,7 +52,10 @@ GO_TEST_TIMEOUT ?= 300s
 AGENT_CLI_INTEGRATION_TIMEOUT ?= 480s
 # agent-cli/test/integration is the slowest package; it is compiled once and
 # its top-level tests run as disjoint shards (scripts/go-test-shards.sh).
-AGENT_CLI_INTEGRATION_SHARDS ?= 5
+# The shards wait on paced audio far more than they compute (~200s of summed
+# test time on a 4-vCPU CI runner), so more shards than cores shortens the
+# run until the longest single test (~25s) bounds it.
+AGENT_CLI_INTEGRATION_SHARDS ?= 8
 # Recorded test durations that balance the shards (path relative to agent-cli).
 AGENT_CLI_INTEGRATION_WEIGHTS := test/integration/testdata/shard-weights.txt
 # Local runs of every shard execute at most this many at once. All shards run
@@ -64,7 +67,12 @@ AGENT_CLI_INTEGRATION_JOBS ?= $(AGENT_CLI_INTEGRATION_SHARDS)
 # package's process-boundary binaries (agent, audio-device-server, mock tool
 # agent) through this directory instead of linking them once per shard.
 AGENT_CLI_INTEGRATION_SHARED_DIR_ENV := AGENT_CLI_INTEGRATION_SHARED_DIR
-AGENT_CLI_INTEGRATION_SHARD_ARGS = --go "$(GO)" --dir . --package $(AGENT_CLI_INTEGRATION_PACKAGE) --shards $(AGENT_CLI_INTEGRATION_SHARDS) --weights $(AGENT_CLI_INTEGRATION_WEIGHTS) --jobs $(AGENT_CLI_INTEGRATION_JOBS) --shared-dir-env $(AGENT_CLI_INTEGRATION_SHARED_DIR_ENV)
+# The same binaries, built into that directory while the test binary
+# compiles (the package's TestMain builds any that are missing, with the same
+# `go build -o NAME SOURCE` from the package directory, so a name that drifts
+# from TestMain's costs a rebuild, never correctness).
+AGENT_CLI_INTEGRATION_PREBUILDS := agent=../../cmd/agent audio-device-server=../../cmd/audio-device-server mock-tool-agent=./testcmd/mock-tool-agent
+AGENT_CLI_INTEGRATION_SHARD_ARGS = --go "$(GO)" --dir . --package $(AGENT_CLI_INTEGRATION_PACKAGE) --shards $(AGENT_CLI_INTEGRATION_SHARDS) --weights $(AGENT_CLI_INTEGRATION_WEIGHTS) --jobs $(AGENT_CLI_INTEGRATION_JOBS) --shared-dir-env $(AGENT_CLI_INTEGRATION_SHARED_DIR_ENV) $(foreach prebuild,$(AGENT_CLI_INTEGRATION_PREBUILDS),--prebuild $(prebuild))
 # Independent module test runs (make test, test-hermetic, coverage) execute at
 # most this many at once, longest first: agent-cli takes one slot and the
 # library modules rotate through the others.
@@ -122,6 +130,9 @@ ARCHITECTURE_BASELINE := docs/architecture/baselines
 ARCHITECTURE_BASE ?= origin/main
 GORELEASER ?= goreleaser
 RTC_RACE_TIMEOUT ?= 30s
+# Race test binaries sleep 1s at exit by default (GORACE atexit_sleep_ms);
+# across the race targets' ~20 binaries that was a third of their time.
+RACE_GORACE ?= atexit_sleep_ms=0
 SESSIONS_RACE_TIMEOUT ?= 600s
 GOLANGCI_LINT_VERSION ?= v2.9.0
 STATICCHECK_VERSION ?= 2026.1
@@ -159,7 +170,7 @@ endef
 
 .DEFAULT_GOAL := help
 .PHONY: architecture-check size-check architecture-size-check test-architecture-gate verify-architecture embed-check
-.PHONY: help deps fmt fmt-fix wire-check typecheck vet lint lint-module lint-wireinject lint-cross lint-cross-module lint-darwin-cgo staticcheck test test-module coverage-module test-tools test-audio-stability test-audio-stability-race test-audio-device-server-integration test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage coverage-ci-agent-cli coverage-agent-cli-shard coverage-ci-libraries coverage-gate coverage-registration coverage-changed check-ci-test-partition verify-standalone-checkout prepush prepush-full test-cgo-delta validate ci release-check release-tags release-push release-dry-run release clean test-budget test-hermetic
+.PHONY: help deps fmt fmt-fix wire-check typecheck vet lint lint-module lint-wireinject lint-cross lint-cross-module lint-darwin-cgo staticcheck test test-module coverage-module test-tools test-audio-stability test-audio-stability-race test-audio-device-server-integration test-audio-stress test-loop-race test-linux-devices-race test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage coverage-ci-agent-cli coverage-agent-cli-shard coverage-ci-libraries coverage-gate coverage-registration coverage-changed check-ci-test-partition verify-standalone-checkout prepush prepush-full test-cgo-delta validate ci release-check release-tags release-push release-dry-run release clean test-budget test-hermetic
 
 help: ## Show available targets.
 	@awk 'BEGIN {FS = ":.*## "; printf "Available targets:\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -365,7 +376,7 @@ test-module:
 test-tools: ## Run tests for standalone repository helper modules.
 	@set -euo pipefail; \
 	python3 -B -m unittest discover -s scripts -p test_check_wire.py; \
-	python3 -B -m unittest scripts.test_check_ci_test_partition; \
+	python3 -B -m unittest scripts.test_check_ci_test_partition scripts.test_ci_await_jobs; \
 	python3 -B -m unittest factory.scripts.tests.test_golangci_lint_working_tree; \
 	echo "==> test tools/analyzergate"; \
 	(cd tools/analyzergate && GOWORK=off $(GO) test ./... -timeout "$(GO_TEST_TIMEOUT)"); \
@@ -373,6 +384,10 @@ test-tools: ## Run tests for standalone repository helper modules.
 	(cd tools/session-race-gate && GOWORK=off $(GO) test ./... -timeout "$(GO_TEST_TIMEOUT)"); \
 	echo "==> test tools/coveragegate"; \
 	(cd tools/coveragegate && GOWORK=off $(GO) test ./... -timeout "$(GO_TEST_TIMEOUT)"); \
+	for module in tools/rtc-race-gate tools/timingate scripts/webmcp-o0 test/localai; do \
+		echo "==> test $$module"; \
+		(cd "$$module" && GOWORK=off $(GO) test ./... -timeout "$(GO_TEST_TIMEOUT)"); \
+	done; \
 	if [ "$(TEST_TOOLS_ARCHITECTURE_GATE)" = "1" ]; then \
 		$(MAKE) test-architecture-gate; \
 	fi
@@ -413,11 +428,36 @@ test-audio-stability: ## Run deterministic duplex, queue, resampler, capsule, an
 	(cd agent-cli && $(GO) test ./internal/services/... -count=1 -timeout "$(GO_TEST_TIMEOUT)"); \
 	(cd agent-cli && $(GO) test ./test/integration -run '^TestSessionWebMCPDeviceLoopbackRecordsAndReplaysAudio$$' -count=1 -timeout "$(GO_TEST_TIMEOUT)")
 
+# Only the packages that hold tests matching the pattern: race-compiling all
+# of go-audio, go-device-gateway and agent-cli/internal/services (26 test
+# binaries) to run tests from two of them cost most of the target's time.
+# `make test-audio-stability-race AUDIO_STABILITY_RACE_PACKAGES="../go-audio/... ../go-device-gateway/... ./internal/services/..."`
+# re-checks that no other package matches.
+AUDIO_STABILITY_RACE_PACKAGES ?= ../go-device-gateway/pkg/devices ../go-device-gateway/pkg/runtime
 test-audio-stability-race: ## Run callback, cancellation, queue, and replay audio paths under the race detector.
 	@set -euo pipefail; \
-	(cd agent-cli && CGO_ENABLED=1 $(GO) test -race -tags=nomicrophone ../go-audio/... ../go-device-gateway/... ./internal/services/... \
+	(cd agent-cli && CGO_ENABLED=1 GORACE="$(RACE_GORACE)" $(GO) test -race -tags=nomicrophone $(AUDIO_STABILITY_RACE_PACKAGES) \
 		-run 'Test(SimulatedDuplex|RemoteDeviceServer|SessionAudioFailureCapsule|FailureCapsule|VirtualPlaybackCapacityAdversarial|RTCDeviceSinkSerializes|RTCDeviceSinkDiscard|RTCDeviceBoundSessionDrops)' \
 		-count=1 -timeout "$(RTC_RACE_TIMEOUT)")
+
+# The go-agent-loop packages whose tests drive concurrent sessions, the engine
+# hot loop, participant runners and duplex turns. The six capacity tests that
+# test-sessions-race gates (with its own retry and event verification) are
+# skipped here so each runs once.
+LOOP_RACE_PACKAGES := ./test/functional/sessions ./test/functional/duplex ./pkg/engine ./pkg/participants ./pkg/agentloop
+test-loop-race: ## Run the go-agent-loop session, engine, participant, agent-loop and duplex tests with the race detector.
+	@set -euo pipefail; \
+	echo "==> test-loop-race go-agent-loop $(LOOP_RACE_PACKAGES)"; \
+	skip="$$(cd tools/session-race-gate && GOWORK=off $(GO) run . -print-run-pattern)"; \
+	(cd go-agent-loop && CGO_ENABLED=1 GORACE="$(RACE_GORACE)" $(GO) test -race -tags=nomicrophone $(LOOP_RACE_PACKAGES) -skip "$$skip" -count=1 -timeout "$(SESSIONS_RACE_TIMEOUT)")
+
+# The native (cgo, real malgo backend) Linux device tests: the hermetic
+# coverage build uses the nomicrophone stub, so no other job compiles them.
+test-linux-devices-race: ## Run the native Linux cgo device backend tests with the race detector (Linux only).
+	@set -euo pipefail; \
+	if [ "$$($(GO) env GOOS)" != linux ]; then echo "==> test-linux-devices-race skipped: Linux only"; exit 0; fi; \
+	echo "==> test-linux-devices-race go-device-gateway/pkg/devices (cgo)"; \
+	(cd go-device-gateway && CGO_ENABLED=1 GORACE="$(RACE_GORACE)" $(GO) test -race ./pkg/devices -run '^TestLinux' -count=1 -timeout "$(RTC_RACE_TIMEOUT)")
 
 test-audio-device-server-integration: ## Build both binaries and run the process-boundary OpenAI audio replay.
 	@set -euo pipefail; \
@@ -425,15 +465,29 @@ test-audio-device-server-integration: ## Build both binaries and run the process
 	(cd agent-cli && YUI_AUDIO_STRESS=1 $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" -- $(GO) test ./test/integration \
 		-run '^Test(AgentBinaryOpenAIServerVADBargeInUsesRemoteAudioDevice|AgentBinaryAudioOutRecordsRemoteDevicePCM|AgentBinaryToolContinuationPreservesRemoteDeviceAudio|AgentBinaryTest45HighRateToolAudioRegression|AgentBinaryTest46HighRateToolAudioRegression|AudioDeviceServerBinaryDefaultClockRunsWithoutController)$$' -count=1 -timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)")
 
+# The fresh-process high-rate tool-audio stress trials (Test45/Test46, 20
+# trials each per repetition) skip unless YUI_AUDIO_STRESS=1. They hunt rare
+# races rather than prove behavior, so pull requests do not run them (their
+# test45/test46 topologies run once per delivery in
+# TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio); the scheduled
+# Nightly audio stress workflow runs this target with the coverage job's
+# build (hermetic tags, CGO_ENABLED=$(BUILD_CGO_ENABLED)).
+AUDIO_STRESS_COUNT ?= 1
+test-audio-stress: ## Run the fresh-process high-rate tool-audio stress trials (AUDIO_STRESS_COUNT repetitions).
+	@set -euo pipefail; \
+	echo "==> test-audio-stress Test45/Test46 high-rate tool audio, $(AUDIO_STRESS_COUNT) repetition(s) of 20 trials each"; \
+	(cd agent-cli && CGO_ENABLED=$(BUILD_CGO_ENABLED) YUI_AUDIO_STRESS=1 $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" -- $(GO) test ./test/integration -tags=nomicrophone \
+		-run '^TestAgentBinaryTest4[56]HighRateToolAudioRegression$$' -count=$(AUDIO_STRESS_COUNT) -v -timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)")
+
 test-rtc-race: ## Run the focused RTC concurrency acceptance tests with the race detector.
 	@set -euo pipefail; \
 	echo "==> test-rtc-race go-llm-gateway/pkg/transport/rtc"; \
-	(cd tools/rtc-race-gate && GOWORK=off CGO_ENABLED=1 $(GO) run . -go "$(GO)" -module-dir "../../go-llm-gateway" -timeout "$(RTC_RACE_TIMEOUT)")
+	(cd tools/rtc-race-gate && GOWORK=off CGO_ENABLED=1 GORACE="$(RACE_GORACE)" $(GO) run . -go "$(GO)" -module-dir "../../go-llm-gateway" -timeout "$(RTC_RACE_TIMEOUT)")
 
 test-sessions-race: ## Run the concurrent session capacity acceptance tests with the race detector.
 	@set -euo pipefail; \
 	echo "==> test-sessions-race go-agent-loop/test/functional/sessions"; \
-	(cd tools/session-race-gate && GOWORK=off CGO_ENABLED=1 $(GO) run . -go "$(GO)" -module-dir "../../go-agent-loop" -timeout "$(SESSIONS_RACE_TIMEOUT)")
+	(cd tools/session-race-gate && GOWORK=off CGO_ENABLED=1 GORACE="$(RACE_GORACE)" $(GO) run . -go "$(GO)" -module-dir "../../go-agent-loop" -timeout "$(SESSIONS_RACE_TIMEOUT)")
 
 test-factory-scripts: ## Run deterministic factory script tests without writing Python bytecode into the repo checkout.
 	@set -euo pipefail; \
@@ -561,11 +615,11 @@ coverage-agent-cli-shard:
 	run_unit() { \
 		(cd agent-cli && packages="$(AGENT_CLI_COVERAGE_UNIT_PACKAGES)" && \
 			if [ -z "$$packages" ]; then packages="$$(CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) list -tags=nomicrophone ./... | grep -v '/test/integration$$')"; fi && \
-			CGO_ENABLED=$(BUILD_CGO_ENABLED) YUI_AUDIO_STRESS=1 $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" --report-budget --label "agent-cli coverage (unit packages)" -- \
+			CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" --report-budget --label "agent-cli coverage (unit packages)" -- \
 			$(GO) test $$packages $(COVERAGE_COUNT_FLAG) -tags=nomicrophone -timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" -coverpkg=$(AGENT_CLI_COVERPKG) -coverprofile="$(abspath $(COVERAGE_DIR))/agent-cli.out"); \
 	}; \
 	run_integration() { \
-		(cd agent-cli && CGO_ENABLED=$(BUILD_CGO_ENABLED) YUI_AUDIO_STRESS=1 $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" --report-budget --label "agent-cli coverage (integration $${1:-all})" -- \
+		(cd agent-cli && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" --report-budget --label "agent-cli coverage (integration $${1:-all})" -- \
 			bash ../scripts/go-test-shards.sh $(AGENT_CLI_INTEGRATION_SHARD_ARGS) $${1:+--shard "$$1"} \
 			--build-flag -tags=nomicrophone --build-flag -coverpkg=$(AGENT_CLI_COVERPKG) --cover-prefix "$(abspath $(COVERAGE_DIR))/agent-cli-integration" -- -test.timeout=$(AGENT_CLI_INTEGRATION_TIMEOUT)); \
 	}; \
