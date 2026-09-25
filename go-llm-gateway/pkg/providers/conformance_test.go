@@ -78,7 +78,7 @@ func s11StatelessProviderCases() []statelessProviderCase {
 		{
 			name: "anthropic",
 			new: func(client *http.Client, secret string) providers.Provider {
-				return anthropic.New(anthropic.WithAPIKey(secret), anthropic.WithHTTPClient(client))
+				return anthropic.New(anthropic.WithAPIKey(secret), anthropic.WithHTTPClient(client), anthropic.WithMaxRetries(0))
 			},
 			request: request,
 		},
