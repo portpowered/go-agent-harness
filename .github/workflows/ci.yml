@@ -356,7 +356,7 @@ jobs:
         run: make coverage-ci-agent-cli AGENT_CLI_COVERAGE_SHARD=integration
 
       - name: Run hermetic agent-cli unit tests with coverage
-        if: always()
+        if: ${{ !cancelled() }}
         run: make coverage-ci-agent-cli AGENT_CLI_COVERAGE_SHARD=unit
 
       - name: Wait for coverage libraries
